@@ -426,6 +426,18 @@ later(function () { section('Gate'); });
     return call(c[1], c[2], c[3] || {}).then(function (r) { ok(c[0], c[4](r), { status: r.status, body: r.body && (r.body.error || r.body.errors) }); });
   });
 });
+/* options answers the org the server resolved, which the page saves under:
+   the rules fold fenecon.de/.us into fenecon.com, and so does verify-token */
+var JO = { uid: 'u2', email: 'jo@fenecon.de', emailVerified: true, orgId: 'fenecon.com', staff: false, claims: {} };
+[
+  ['options answers the caller\'s org', docs(undefined, { tier: 'standard' }), { action: 'options' }, null, function (r) { return r.status === 200 && r.body.orgId === ORG; }],
+  ['options answers the FOLDED org for an aliased address (fenecon.de → fenecon.com)', {}, { action: 'options' }, { caller: JO }, function (r) { return r.status === 200 && r.body.orgId === 'fenecon.com'; }],
+  ['an estimate names no org (only options does)', docs(undefined, { tier: 'standard' }), EST, null, function (r) { return r.status === 200 && r.body.orgId === undefined; }]
+].forEach(function (c) {
+  later(function () {
+    return call(c[1], c[2], c[3] || {}).then(function (r) { ok(c[0], c[4](r), { status: r.status, orgId: r.body && r.body.orgId, body: r.body && (r.body.error || r.body.errors) }); });
+  });
+});
 
 later(function () {
   console.log('\n' + pass + ' passed, ' + fail + ' failed');

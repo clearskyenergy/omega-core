@@ -26,7 +26,13 @@
   pre-fills the form, so the editor or a project can hand a site over.
 
   SAVED DATA.  toolData/{orgId}/tools/vppsim as { v:1, scenarios:[…] } —
-  the inputs and the headline of each run, at most 30, newest first.
+  the inputs and the headline of each run, at most 30, newest first. The
+  orgId is the one the server resolved (options answers it, aliases folded,
+  as the rules fold them). A URDB tariff is kept as its JSON text
+  (tariff.urdbJson): Firestore refuses the arrays inside arrays it is made
+  of. The interval file is never stored; its unit and the split are.
+  Another person signing in, or signing out, reloads the page.
+  Rendered and checked by scripts/render-vpp-earnings.js (check:pages).
   ═══════════════════════════════════════════════════════════════════════════════
 -->
 <html lang="en">
@@ -204,7 +210,7 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
           <button type="button" class="btn btn-t" data-act="fill-24">Last 24 months</button>
         </div>
         <details class="more"><summary>Paste from a spreadsheet</summary>
-          <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0">Rows of <i>month, kWh, peak kW, $</i> (month as 2025-07). Tabs or commas.</p>
+          <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0">Rows of <i>month, kWh, peak kW, $</i> (month as 2025-07, 7/2025, or a bill date such as 7/15/2025). Tabs or commas.</p>
           <textarea id="paste" placeholder="2025-07	41200	180	6230"></textarea>
           <button type="button" class="btn btn-s" data-act="paste" style="margin-top:6px">Use these rows</button>
         </details>
@@ -272,7 +278,7 @@ var ENDPOINT = '/api/vpp-estimate';
 var TOOL_KEY = 'vppsim';
 var MAX_SAVED = 30;
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] };
+var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] }, LEAVING = false;
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -325,33 +331,52 @@ function readBills() {
   return out;
 }
 function cellNum(x) { var v = String(x == null ? '' : x).replace(/[$,\s]/g, ''); return v === '' || !isFinite(Number(v)) ? null : Number(v); }
+/* The month of a pasted bill's first cell, as { y, m } (m 1-based, not yet
+   checked), or null when the cell is not a date (a header row).
+   2025-07 · 2025/7 · 2025-07-15 · 7/2025 · and a full US date 7/15/2025
+   (or 7/15/25), whose FIRST number is the month: the M/YYYY form alone read
+   the day as the month, '15/2025'. */
+function billMonth(cell) {
+  var s = String(cell == null ? '' : cell), m;
+  if ((m = /^\s*(\d{4})[-\/](\d{1,2})(?:[-\/]\d{1,2})?(?:\D|$)/.exec(s))) return { y: m[1], m: +m[2] };
+  if ((m = /^\s*(\d{1,2})[-\/](\d{1,2})[-\/](\d{4}|\d{2})(?:\D|$)/.exec(s))) return { y: (m[3].length === 2 ? '20' : '') + m[3], m: +m[1] };
+  if ((m = /^\s*(\d{1,2})[-\/](\d{4})\s*$/.exec(s))) return { y: m[2], m: +m[1] };
+  return null;
+}
 function pasteBills() {
-  var lines = $('paste').value.split(/\r?\n/), rows = [];
+  var lines = $('paste').value.split(/\r?\n/), rows = [], bad = [];
   for (var i = 0; i < lines.length; i++) {
     var c = lines[i].split(/[\t,;]/);
     if (c.length < 2) continue;
-    var m = /(\d{4})[-\/](\d{1,2})/.exec(c[0]) || /(\d{1,2})[-\/](\d{4})/.exec(c[0]);
-    if (!m) continue;
-    var yr = m[1].length === 4 ? m[1] : m[2], mo = m[1].length === 4 ? m[2] : m[1];
-    rows.push({ month: yr + '-' + (mo.length < 2 ? '0' : '') + mo, kwh: cellNum(c[1]), peakKw: cellNum(c[2]), cost: cellNum(c[3]) });
+    var d = billMonth(c[0]);
+    if (!d) continue;
+    if (!(d.m >= 1 && d.m <= 12)) { bad.push('row ' + (i + 1) + ' ("' + String(c[0]).trim().slice(0, 20) + '")'); continue; }
+    rows.push({ month: d.y + '-' + (d.m < 10 ? '0' : '') + d.m, kwh: cellNum(c[1]), peakKw: cellNum(c[2]), cost: cellNum(c[3]) });
   }
-  if (!rows.length) { formMsg('No rows with a month were found in the pasted text.', 'warn'); return; }
+  var badText = bad.length ? ' Left out, no month 1–12 in the date: ' + bad.slice(0, 5).join(', ') + (bad.length > 5 ? ' and ' + (bad.length - 5) + ' more' : '') + '.' : '';
+  if (!rows.length) { formMsg((bad.length ? 'No row had a readable month.' : 'No rows with a month were found in the pasted text.') + badText, 'warn'); return; }
   if (rows.length > 24) rows = rows.slice(rows.length - 24);
   $('bills').innerHTML = '';
-  for (var r = 0; r < rows.length; r++) billRow(rows[r]);
-  formMsg(rows.length + ' month(s) read from the paste.', 'ok');
+  var seen = {}, months = 0;
+  for (var r = 0; r < rows.length; r++) { billRow(rows[r]); if (!seen[rows[r].month]) { seen[rows[r].month] = 1; months++; } }
+  /* twelve rows that all land on one month read as a valid year and are not one */
+  var dupText = months < rows.length ? ' ' + rows.length + ' rows cover only ' + months + ' month' + (months > 1 ? 's' : '') + '; check the date column.' : '';
+  formMsg(rows.length + ' month(s) read from the paste.' + dupText + badText, bad.length || dupText ? 'warn' : 'ok');
 }
-function readFile(f) {
+/* done(), when given, is called once the read has settled either way */
+function readFile(f, done) {
   INTERVAL = null; $('fileinfo').textContent = '';
-  if (!f) return;
-  if (f.size > 4000000) { $('fileinfo').textContent = 'That file is larger than one year of readings (4 MB).'; return; }
+  function settle() { if (done) done(); }
+  if (!f) return settle();
+  if (f.size > 4000000) { $('fileinfo').textContent = 'That file is larger than one year of readings (4 MB).'; return settle(); }
   var r = new FileReader();
   r.onload = function () {
     INTERVAL = String(r.result || '');
     var n = INTERVAL.split(/\r?\n/).filter(function (l) { return /\d/.test(l); }).length;
     $('fileinfo').textContent = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
+    settle();
   };
-  r.onerror = function () { $('fileinfo').textContent = 'The file could not be read.'; };
+  r.onerror = function () { $('fileinfo').textContent = 'The file could not be read.'; settle(); };
   r.readAsText(f);
 }
 
@@ -371,9 +396,22 @@ function collect() {
   var u = $('urdb').value.trim();
   if (u) { try { t.urdb = JSON.parse(u); any = true; if (t.urdb && t.urdb.items && t.urdb.items[0]) t.urdb = t.urdb.items[0]; } catch (e) { return { error: 'The URDB tariff is not valid JSON.' }; } }
   if (any) site.tariff = t;
-  var so = numOrNull('sown'), sp = numOrNull('splat'), si = numOrNull('sins');
-  if (so != null && sp != null && si != null && !(so === 70 && sp === 20 && si === 10)) site.split = { owner: so / 100, platform: sp / 100, installer: si / 100 };
+  /* the split: all three shares, or none. A partly filled split is said,
+     never quietly swapped for the published 70 / 20 / 10. */
+  var so = numOrNull('sown'), sp = numOrNull('splat'), si = numOrNull('sins'), blank = [];
+  if (so == null) blank.push('sown');
+  if (sp == null) blank.push('splat');
+  if (si == null) blank.push('sins');
+  markSplit(blank.length < 3 ? blank : []);
+  if (blank.length && blank.length < 3) {
+    var box = closest($('sown'), 'details'); if (box) box.open = true;
+    return { error: 'Enter all three revenue shares (use 0 for none); together they must make 100%.' };
+  }
+  if (!blank.length && !(so === 70 && sp === 20 && si === 10)) site.split = { owner: so / 100, platform: sp / 100, installer: si / 100 };
   return { site: site };
+}
+function markSplit(bad) {
+  ['sown', 'splat', 'sins'].forEach(function (id) { $(id).className = bad.indexOf(id) >= 0 ? 'bad' : ''; });
 }
 
 function formMsg(text, kind) {
@@ -418,14 +456,23 @@ function run() {
   if (c.error) { formMsg(c.error); return; }
   if (!/^\d{5}(-\d{4})?$/.test(c.site.zip)) { $('zip').className = 'bad'; formMsg('A five-digit US ZIP code is needed.'); $('zip').focus(); return; }
   $('zip').className = '';
-  if (MODE === 'interval' && !INTERVAL) { formMsg('Attach the interval file, or pick another load option.'); return; }
+  if (MODE === 'interval' && !INTERVAL) {
+    /* a file still in the picker (a read not finished yet) is read now,
+       and the run goes on only if that produced readings */
+    var picked = $('file').files && $('file').files[0];
+    if (picked) {
+      readFile(picked, function () { if (INTERVAL) run(); else formMsg($('fileinfo').textContent || 'The interval file could not be read; attach it again.'); });
+      return;
+    }
+    formMsg('Attach the interval file, or pick another load option.'); return;
+  }
   if (MODE === 'bills' && !c.site.load.bills.length) { formMsg('Enter at least one month of bills (kWh or $).'); return; }
   formMsg('');
   var btn = $('run'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Simulating 8,760 hours…';
   api({ action: 'estimate', site: c.site }).then(function (j) {
     LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
     render(j.result);
-    $('save').disabled = !(DB && ORG);
+    canSave();
   }, function (e) {
     formMsg(e.message);
   }).then(function () { btn.disabled = false; btn.textContent = 'Simulate earnings'; });
@@ -538,6 +585,7 @@ function monthChart(months) {
 }
 
 /* ── saved scenarios: toolData/{org}/tools/vppsim ─────────────────────── */
+function canSave() { $('save').disabled = !(LAST && DB && ORG); }
 function paintSaved() {
   var sel = $('scen'), h = '<option value="">Saved scenarios…</option>';
   for (var i = 0; i < STORE.scenarios.length; i++) {
@@ -546,17 +594,32 @@ function paintSaved() {
   }
   sel.innerHTML = h;
 }
+/* Firestore refuses an array inside an array, and the compat SDK says so by
+   THROWING from set() before any promise exists. An OpenEI URDB record is
+   made of them (energyratestructure [[{rate}]], the 12×24 schedules), so the
+   tariff is stored as the JSON text the person pasted and parsed again on
+   load. The new list becomes STORE only once the write has landed: a record
+   that cannot be stored never sits in memory spoiling the next save. */
+var MAX_DOC_CHARS = 900000; /* under Firestore's 1 MiB document limit */
 function save() {
   if (!LAST || !DB || !ORG) return;
   var site = JSON.parse(JSON.stringify(LAST.site));
   if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit }; }
+  if (site.tariff && site.tariff.urdb) { site.tariff.urdbJson = JSON.stringify(site.tariff.urdb); delete site.tariff.urdb; }
   var rec = { name: LAST.name || ('ZIP ' + site.zip), site: site, gross: LAST.result.totals.gross, owner: LAST.result.totals.owner,
               market: LAST.result.site.market, at: new Date().toISOString() };
-  STORE.scenarios = [rec].concat(STORE.scenarios.filter(function (s) { return s.name !== rec.name; })).slice(0, MAX_SAVED);
+  var next = { v: 1, scenarios: [rec].concat(STORE.scenarios.filter(function (s) { return s.name !== rec.name; })).slice(0, MAX_SAVED) };
+  var dropped = 0;
+  while (next.scenarios.length > 1 && JSON.stringify(next).length > MAX_DOC_CHARS) { next.scenarios.pop(); dropped++; }
+  var tail = (rec.site.load.type === 'interval' ? ' (the interval file is not stored; attach it again to re-run).' : '.') +
+    (dropped ? ' The ' + dropped + ' oldest scenario' + (dropped > 1 ? 's were' : ' was') + ' dropped to make room.' : '');
+  function failed() { $('savemsg').textContent = 'Could not save right now.'; }
   $('savemsg').textContent = 'Saving…';
-  OMEGATools.saveToolData(DB, firebase, ORG, TOOL_KEY, STORE).then(function () {
-    paintSaved(); $('savemsg').textContent = 'Saved to your workspace' + (rec.site.load.type === 'interval' ? ' (the interval file is not stored; attach it again to re-run).' : '.');
-  }, function () { $('savemsg').textContent = 'Could not save right now.'; });
+  var write;
+  try { write = OMEGATools.saveToolData(DB, firebase, ORG, TOOL_KEY, next); } catch (e) { failed(); return; }
+  Promise.resolve(write).then(function () {
+    STORE = next; paintSaved(); $('savemsg').textContent = 'Saved to your workspace' + tail;
+  }, failed);
 }
 function loadScenario(i) {
   var s = STORE.scenarios[i]; if (!s) return;
@@ -570,17 +633,40 @@ function loadScenario(i) {
   setMode(L.type);
   if (L.type === 'bills') { $('bills').innerHTML = ''; (L.bills || []).forEach(billRow); }
   if (L.type === 'profile') $('akwh').value = L.annualKwh != null ? L.annualKwh : '';
-  if (L.type === 'interval') { INTERVAL = null; $('fileinfo').textContent = 'Attach the interval file again to re-run this scenario.'; }
+  if (L.type === 'interval') {
+    /* the file is never stored: clear the picker so choosing the same file
+       again fires 'change', and put back the unit the readings were in
+       (kWh per 15-minute interval is four times the kW it reads as) */
+    INTERVAL = null; $('file').value = ''; $('iunit').value = L.unit === 'kwh' ? 'kwh' : 'kw';
+    $('fileinfo').textContent = 'Attach the interval file again to re-run this scenario.';
+  }
   var t = site.tariff || {};
   $('ron').value = t.onPeakRate != null ? t.onPeakRate : ''; $('roff').value = t.offPeakRate != null ? t.offPeakRate : '';
   $('rdem').value = t.demandCharge != null ? t.demandCharge : ''; $('rps').value = t.peakStart != null ? t.peakStart : '';
-  $('rpe').value = t.peakEnd != null ? t.peakEnd : ''; $('urdb').value = t.urdb ? JSON.stringify(t.urdb) : '';
+  $('rpe').value = t.peakEnd != null ? t.peakEnd : '';
+  $('urdb').value = typeof t.urdbJson === 'string' ? t.urdbJson : (t.urdb ? JSON.stringify(t.urdb) : '');
+  /* the split the scenario ran with, or the published default when it had
+     none, so a re-run never carries over whatever the form last held */
+  var sp = site.split;
+  $('sown').value = sp && sp.owner != null ? share(sp.owner) : 70;
+  $('splat').value = sp && sp.platform != null ? share(sp.platform) : 20;
+  $('sins').value = sp && sp.installer != null ? share(sp.installer) : 10;
+  markSplit([]);
 }
+/* 0.7 → 70, not 70.00000000000001, so collect()'s default check still matches */
+function share(f) { return +(Number(f) * 100).toFixed(4); }
 
 /* ── URL hand-off: ?zip=&segment=&kw=&kwh=&solar=&name= ─────────────── */
+/* One malformed escape ('50% solar', sent as 50%%20solar) must not throw and
+   lose every parameter, the ZIP included: a '%' that starts no escape is
+   read as itself, and a value that still cannot be decoded is kept raw. */
+function dec(s) {
+  try { return decodeURIComponent(s); } catch (e) {}
+  try { return decodeURIComponent(s.replace(/%(?![0-9a-fA-F]{2})/g, '%25')); } catch (e2) { return s; }
+}
 function prefill() {
   var q = {}; (location.search || '').replace(/^\?/, '').split('&').forEach(function (p) {
-    if (!p) return; var a = p.split('='); q[decodeURIComponent(a[0])] = decodeURIComponent((a[1] || '').replace(/\+/g, ' '));
+    if (!p) return; var a = p.split('='); q[dec(a[0])] = dec((a[1] || '').replace(/\+/g, ' '));
   });
   if (q.zip) $('zip').value = q.zip.slice(0, 10);
   if (q.segment && /^(residential|commercial|industrial)$/.test(q.segment)) setSeg(q.segment);
@@ -609,19 +695,30 @@ $('file').addEventListener('change', function () { readFile(this.files && this.f
 $('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });
 $('zip').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
 
+function orgFallback(u) {
+  return (root.OMEGATools && OMEGATools.orgFromUrl) ? OMEGATools.orgFromUrl(u.email) : (String(u.email || '').toLowerCase().split('@')[1] || null);
+}
+function loadSaved() {
+  if (!(DB && ORG && root.OMEGATools && OMEGATools.loadToolData)) return;
+  OMEGATools.loadToolData(DB, ORG, TOOL_KEY).then(function (doc) {
+    var d = doc && doc.data;
+    if (d && d.v === 1 && Array.isArray(d.scenarios)) { STORE = { v: 1, scenarios: d.scenarios.slice(0, MAX_SAVED) }; paintSaved(); }
+  }, function () {});
+}
 function onSignedIn(u) {
   $('who').textContent = u.email || '';
-  ORG = (root.OMEGATools && OMEGATools.orgFromUrl) ? OMEGATools.orgFromUrl(u.email) : String(u.email || '').toLowerCase().split('@')[1];
+  /* The org the server resolved (aliases folded, as the rules fold them:
+     fenecon.de → fenecon.com) is the one whose toolData the rules let this
+     person read and write; the email domain only when the server did not
+     answer. The saved scenarios load once it is known. */
   api({ action: 'options' }).then(function (j) {
+    ORG = (j && typeof j.orgId === 'string' && j.orgId) || orgFallback(u);
     var sel = $('mkt'), ms = (j.options && j.options.markets) || [];
     for (var i = 0; i < ms.length; i++) { var o = document.createElement('option'); o.value = ms[i].key; o.textContent = ms[i].name; sel.appendChild(o); }
-  }, function (e) { formMsg(e.message, e.status === 403 ? 'bad' : 'warn'); });
-  if (DB && ORG && root.OMEGATools && OMEGATools.loadToolData) {
-    OMEGATools.loadToolData(DB, ORG, TOOL_KEY).then(function (doc) {
-      var d = doc && doc.data;
-      if (d && d.v === 1 && Array.isArray(d.scenarios)) { STORE = { v: 1, scenarios: d.scenarios.slice(0, MAX_SAVED) }; paintSaved(); }
-    }, function () {});
-  }
+  }, function (e) {
+    ORG = orgFallback(u);
+    formMsg(e.message, e.status === 403 ? 'bad' : 'warn');
+  }).then(function () { canSave(); loadSaved(); });
   if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
   if (prefill()) run();
 }
@@ -634,6 +731,13 @@ function startAuth() {
   try { DB = firebase.firestore(); } catch (e) { DB = null; }
   var wait = null;
   AUTH.onAuthStateChanged(function (u) {
+    /* Another person signing in, or this one signing out (in this tab or
+       another: Firebase shares the session), after a sign-in: start again
+       as a new page. What is on screen, the saved list, the last result and
+       the file all belonged to the last person, and must never be saved
+       under the next one's workspace. */
+    if (LEAVING) return;
+    if (ME && (!u || u.uid !== ME.uid)) { LEAVING = true; $('save').disabled = true; $('run').disabled = true; root.location.reload(); return; }
     if (u) {
       if (wait) { clearInterval(wait); wait = null; }
       if (ME && ME.uid === u.uid) return;
