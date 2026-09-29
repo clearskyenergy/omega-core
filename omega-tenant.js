@@ -819,20 +819,30 @@
     if (document.getElementById('omega-pending')) return;
     var esc = function (x) { return String(x == null ? '' : x).replace(/</g, '&lt;'); };
     var who = (org && org.name) || (req && req.company) || 'Your workspace';
+    /* a signup started on /start.html and not finished (the account made,
+       the workspace not yet): the way back to it, not a wait on ClearSky */
+    var inSignup = !org && !!(req && req.source === 'signup');
     var d = document.createElement('div');
     d.id = 'omega-pending';
     d.setAttribute('style', 'position:sticky;top:0;z-index:9998;background:#7C4A00;color:#FFF3E0;'
       + 'font:600 13px/1.5 system-ui,-apple-system,Segoe UI,sans-serif;padding:10px 16px;'
       + 'display:flex;gap:12px;align-items:center;flex-wrap:wrap');
     d.innerHTML = '<span style="font-size:11px;letter-spacing:.14em;background:rgba(255,255,255,.16);'
-      + 'padding:3px 8px;border-radius:999px">AWAITING APPROVAL</span>'
+      + 'padding:3px 8px;border-radius:999px">' + (inSignup ? 'FINISH YOUR SIGNUP' : 'AWAITING APPROVAL') + '</span>'
       + '<span style="flex:1;min-width:240px;font-weight:500">'
-      + esc(who) + ' is with the ClearSky team. Tools stay locked until it is approved \u2014 '
-      + 'usually one business day. We will email '
-      + '<b>' + esc(user && user.email) + '</b> the moment it is live.</span>'
-      + '<button id="omega-upgrade" style="background:rgba(255,255,255,.16);border:1px solid '
-      + 'rgba(255,255,255,.35);color:#FFF3E0;font:inherit;font-weight:700;padding:5px 12px;'
-      + 'border-radius:7px;cursor:pointer">Upgrade</button>'
+      + (inSignup
+          ? 'Your signup is not finished: pick your system and pay your first invoice, and the workspace opens the moment it is paid. Tools stay locked until then.'
+          : esc(who) + ' is with the ClearSky team. Tools stay locked until it is approved \u2014 '
+            + 'usually one business day. We will email '
+            + '<b>' + esc(user && user.email) + '</b> the moment it is live.')
+      + '</span>'
+      + (inSignup
+          ? '<a id="omega-continue-signup" href="/start.html" style="background:rgba(255,255,255,.16);border:1px solid '
+            + 'rgba(255,255,255,.35);color:#FFF3E0;font:inherit;font-weight:700;padding:5px 12px;'
+            + 'border-radius:7px;text-decoration:none">Continue signup</a>'
+          : '<button id="omega-upgrade" style="background:rgba(255,255,255,.16);border:1px solid '
+            + 'rgba(255,255,255,.35);color:#FFF3E0;font:inherit;font-weight:700;padding:5px 12px;'
+            + 'border-radius:7px;cursor:pointer">Upgrade</button>')
       + '<span id="omega-upgrade-msg" style="font-weight:500"></span>';
     function attach() {
       if (!document.body) return;

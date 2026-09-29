@@ -75,10 +75,11 @@ ok(/OmegaDashProfiles\.wants\(ws,\s*'assets'\)/.test(assets), 'owned assets asks
 const tenant = read('omega-tenant.js');
 ok(/ws\.dashboardProfile/.test(tenant) && /ws\.dashboardBlocks/.test(tenant), 'omega-tenant publishes the two org fields');
 
-console.log('tdashprofiles: the admin console sets it');
-const adm = read('admin/admin-console.js');
-ok(/<script src="\/omega-dashboard-profiles\.js\?v=\d+"><\/script>/.test(read('admin/index.html')), 'admin/index.html loads the same table');
-ok(adm.indexOf('h+=_dashProfileHtml(orgId, org);') >= 0, 'the Manage card carries the control');
+console.log('tdashprofiles: the admin account page sets it (2026-09-28: the console\'s Manage drawer moved to admin/account.html)');
+const adm = read('admin/account.js');
+ok(/<script src="\/omega-dashboard-profiles\.js\?v=\d+"><\/script>/.test(read('admin/account.html')), 'admin/account.html loads the same table');
+ok(!/omega-dashboard-profiles/.test(read('admin/index.html')) && !/_dashProfileHtml/.test(read('admin/admin-console.js')), 'the console itself no longer draws the control');
+ok(adm.indexOf('h+=_dashProfileHtml(orgId, org);') >= 0, 'the account page carries the control');
 ok(/function saveDashProfile/.test(adm) && /dashboardProfile: key \|\| FV\['delete'\]\(\)/.test(adm),
    'a blank profile deletes the field instead of writing ""');
 ok(/if \(cb\.checked !== \(base\[b\] === true\)\) ov\[b\] = cb\.checked;/.test(adm),

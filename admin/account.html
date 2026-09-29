@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Account · ClearSky-OMEGA Admin</title>
+<!-- ══════════════════════════════════════════════════════════════════════════
+     admin/account.html — ONE account, everything ClearSky runs for it
+     © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     Opened as /admin/account.html?org=<orgId> from every list on the admin
+     console (Tommy, 2026-09-28: "i should click an account and it opens a
+     page for them so i can manage them and edit them and see if they paid
+     and etc. and edit their account or remove it"). The header says what
+     the account is, whether it is on and whether it has paid; the cards
+     under it are the actions; the Package panel (admin/package-panel.js)
+     is the package, its price and its activation; the controls below it
+     are the console's Manage drawer, moved here unchanged (admin/account.js).
+     Same session and the same gate as the console (admin/admin-shared.js).
+     ══════════════════════════════════════════════════════════════════════ -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/admin/package-panel.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cs-navy:#16202B;--cs-dark:#0F1720;--cs-blue:#2B5FA8;--cs-sky:#2B5FA8;
+  --cs-accent:#2B5FA8;--cs-gold:#3F76C4;--cs-text:#14171A;--cs-sub:#5B6672;
+  --cs-bg:#F5F4F0;--cs-surface:#FFFFFF;--cs-border:#E1E7EB;
+  --cs-green:#2E7D5B;--cs-red:#D9482B;--cs-amber:#D97706;--cs-purple:#7C3AED;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-text);min-height:100vh}
+a{color:var(--cs-sky)}
+#auth-screen{display:none;align-items:center;justify-content:center;min-height:100vh;background:linear-gradient(135deg,#0B1E35 0%,#1B4F8A 50%,#0D2440 100%)}
+.auth-card{background:rgba(255,255,255,.96);border-radius:20px;padding:44px 40px;width:420px;max-width:92vw;text-align:center;box-shadow:0 40px 80px rgba(0,0,0,.3)}
+.auth-card h1{font-size:20px;margin-bottom:6px}
+.auth-note{font-size:12px;color:var(--cs-sub);line-height:1.5;margin-bottom:14px}
+#topbar{height:60px;background:var(--cs-navy);display:flex;align-items:center;padding:0 24px;gap:16px;position:sticky;top:0;z-index:200;border-bottom:1px solid rgba(255,255,255,.08)}
+.tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.tb-omega{height:26px;width:auto;display:block}
+.tb-logo-txt{color:#fff;font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-logo-txt span{color:var(--cs-gold)}
+.tb-sep{width:1px;height:24px;background:rgba(255,255,255,.12)}
+.tb-portal{color:rgba(255,255,255,.45);font-size:12px;font-weight:500;letter-spacing:.5px;text-transform:uppercase}
+.tb-back{color:#9FC5F0;font-size:13px;text-decoration:none;font-weight:600}
+.tb-back:hover{color:#fff}
+.tb-spacer{flex:1}
+.tb-name{color:rgba(255,255,255,.85);font-size:13px;font-weight:500}
+.btn-signout{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.15);color:rgba(255,255,255,.6);border-radius:7px;padding:6px 13px;cursor:pointer;font-size:12px;font-weight:500;font-family:'DM Sans',sans-serif}
+.btn-signout:hover{background:rgba(255,255,255,.14);color:#fff}
+#main{max-width:1280px;margin:0 auto;padding:28px 24px 64px}
+.acct-head{display:flex;flex-wrap:wrap;align-items:flex-end;gap:10px 16px;margin-bottom:8px}
+.acct-head h1{font-size:26px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px}
+.acct-head .mono{font-family:'DM Mono',monospace;font-size:12.5px;color:var(--cs-sub)}
+.acct-sub{font-size:12.5px;color:var(--cs-sub);margin-bottom:14px}
+.tools{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px}
+.tools .btn-ghost{text-decoration:none;display:inline-block}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(360px,1fr));gap:16px;margin-bottom:18px}
+.chip{display:inline-block;font-size:10px;font-weight:700;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.chip.neutral{background:var(--cs-bg);color:var(--cs-sub);border:1px solid var(--cs-border)}
+.chip.good{background:rgba(46,125,91,.13);color:#1F6B47}
+.chip.warn{background:rgba(217,119,6,.14);color:#8A4B00}
+.chip.bad{background:rgba(217,72,43,.13);color:#A3321C}
+.chip.gray{background:rgba(107,122,141,.12);color:#556}
+.info-card{background:#fff;border:1px solid var(--cs-border);border-radius:14px;padding:18px;box-shadow:0 2px 8px rgba(0,0,0,.04)}
+.ic-top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px}
+.ic-name{font-size:15px;font-weight:700;color:var(--cs-navy)}
+.ic-sub{font-size:11.5px;color:var(--cs-sub);margin-top:2px}
+.ic-body{font-size:12.5px;color:var(--cs-text);line-height:1.5;margin-top:8px}
+.ic-row{display:flex;justify-content:space-between;gap:14px;font-size:12px;padding:5px 0;border-bottom:1px dashed var(--cs-border)}
+.ic-row:last-child{border-bottom:none}
+.ic-row .lbl{color:var(--cs-sub);white-space:nowrap}
+.ic-row .val{color:var(--cs-navy);font-weight:600}
+.ic-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.ic-actions button{font-size:11.5px;padding:7px 12px;border-radius:8px;border:1px solid var(--cs-border);background:#fff;color:var(--cs-sub);cursor:pointer;font-family:'DM Sans',sans-serif;font-weight:600;transition:all .12s}
+.ic-actions button:hover{border-color:var(--cs-sky);color:var(--cs-sky)}
+.ic-actions button.danger:hover{border-color:var(--cs-red);color:var(--cs-red)}
+.btn-ghost{background:#fff;color:var(--cs-navy);border:1.5px solid var(--cs-border);border-radius:9px;padding:8px 15px;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;transition:all .12s}
+.btn-ghost:hover{border-color:var(--cs-sky);color:var(--cs-sky)}
+.btn-add{background:var(--cs-navy);color:#fff;border:none;border-radius:9px;padding:9px 16px;cursor:pointer;font-size:13px;font-weight:600;font-family:'DM Sans',sans-serif;text-decoration:none;display:inline-block}
+.block-title{font-size:18px;font-weight:700;color:var(--cs-navy)}
+.sub-txt{font-size:11.5px;color:var(--cs-sub)}
+.mono{font-family:'DM Mono',monospace}
+.empty{text-align:center;padding:44px 20px;color:var(--cs-sub);background:#fff;border:1px dashed var(--cs-border);border-radius:14px;font-size:13px}
+.table-wrap{background:#fff;border:1px solid var(--cs-border);border-radius:14px;overflow-x:auto}
+.ptable{width:100%;border-collapse:collapse;font-size:12.5px}
+.ptable thead th{background:var(--cs-navy);color:rgba(255,255,255,.85);text-align:left;padding:10px 12px;font-size:10.5px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;white-space:nowrap}
+.ptable tbody td{padding:10px 12px;border-bottom:1px solid var(--cs-border);vertical-align:middle}
+.ptable tbody tr:last-child td{border-bottom:none}
+.ptable .sub-txt{font-size:11px}
+#acct-detail button,#acct-detail select,#acct-detail input[type=file]{font-family:'DM Sans',sans-serif}
+#acct-detail button{font-size:12px;padding:7px 12px;border-radius:8px;border:1px solid var(--cs-border);background:#fff;color:var(--cs-navy);cursor:pointer;font-weight:600}
+#acct-detail button:hover{border-color:var(--cs-sky);color:var(--cs-sky)}
+#acct-detail select{font-size:12.5px}
+#package-panel{margin:0 0 18px}
+.section-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--cs-accent);margin:22px 0 8px}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:var(--cs-navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:13px;opacity:0;pointer-events:none;transition:all .2s;z-index:500;max-width:92vw}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+@media(max-width:640px){#main{padding:18px 14px 48px}.acct-head h1{font-size:21px}}
+</style>
+</head>
+<body class="package-admin">
+
+<div id="auth-screen"><div class="auth-card"><h1>Checking your session…</h1></div></div>
+
+<div id="app" style="display:none">
+  <div id="topbar">
+    <a href="/" class="tb-logo">
+      <img src="/clearsky-omega-mark.svg" alt="OMEGA" class="tb-omega">
+      <span class="tb-logo-txt">Clear<span>Sky</span> OMEGA</span>
+    </a>
+    <div class="tb-sep"></div>
+    <span class="tb-portal">Admin Console</span>
+    <a class="tb-back" href="/admin/#tenants">&larr; All accounts</a>
+    <div class="tb-spacer"></div>
+    <span class="tb-name" id="tb-name"></span>
+    <button class="btn-signout" onclick="signOut()">Sign Out</button>
+  </div>
+
+  <div id="main">
+    <div class="acct-head">
+      <h1 id="acct-name">Loading…</h1>
+      <span class="mono" id="acct-org"></span>
+      <span id="acct-chips"></span>
+    </div>
+    <div class="acct-sub" id="acct-sub"></div>
+    <div class="tools" id="acct-tools"></div>
+
+    <!-- no tenant record: the signup in progress, or nothing yet -->
+    <div class="info-card" id="acct-signup" style="display:none;margin-bottom:18px"></div>
+
+    <div id="acct-body" style="display:none">
+      <div class="grid2">
+        <div class="info-card" id="acct-status"></div>
+        <div class="info-card" id="acct-pay"></div>
+      </div>
+      <div class="section-title">Package, price &amp; activation</div>
+      <section id="package-panel" aria-label="Subscription package"></section>
+      <div class="section-title">Terms, identity, people</div>
+      <div class="info-card" id="acct-detail"></div>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-dashboard-profiles.js?v=1"></script>
+<script src="/omega-tools.js?v=9"></script>
+<script src="/omega-caps.js"></script>
+<script src="/omega-workspace-hub.js"></script>
+<script src="/omega-package-menu.js"></script>
+<script src="/omega-billing-profile.js"></script>
+<script src="/admin/package-panel.js"></script>
+<script src="/admin/admin-shared.js"></script>
+<script src="/admin/account.js"></script>
+<!-- The drawing-set identity, applied last on purpose (see omega-theme.css). -->
+<link rel="stylesheet" href="/omega-theme.css">
+</body>
+</html>

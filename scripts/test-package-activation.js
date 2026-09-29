@@ -60,6 +60,27 @@ async function run() {
   var activation = await S.apply(db, orgId, body, staff, now);
   equal(activation.packagingState, 'awaiting_payment');
   equal(db.data.get(root + '/billing/current').modules, ['lite']);
+  /* A NEGOTIATED TIER PRICE (2026-09-28): set at activation with a reason, stamped by whom and when, on the first invoice and every renewal; Logic on top at list */
+  var Mx = require('../api/_lib/modules'), Policy = require('../api/_lib/package-billing-policy'), evKeys = Mx.starters().ev;
+  db = fixture(); db.data.get(root).status = 'active';
+  var negotiatedInput = { action: 'activate', modules: evKeys.concat(['logic-office']), plan: 'field', priceOverride: { amountDollars: '999', reason: 'Launch partner' }, pricebookVersion: B.VERSION };
+  body = await request(db, negotiatedInput);
+  var negotiatedPreview = await S.preview(db, orgId, body, now);
+  equal([negotiatedPreview.billingPatch.priceOverride.plan, negotiatedPreview.billingPatch.priceOverride.amountCents, negotiatedPreview.billingPatch.priceOverride.listCents, negotiatedPreview.billingPatch.priceOverride.reason], ['field', 99900, 129900, 'Launch partner']);
+  equal(negotiatedPreview.billingPatch.monthlyCents, 99900 + 150000); equal(negotiatedPreview.quote.display.negotiated, 'Negotiated: $999/month for Field (list $1,299/month). Launch partner');
+  var firstPlanLine = negotiatedPreview.invoice.lines.filter(function (l) { return l.itemKey === 'plan:field'; })[0];
+  equal([firstPlanLine.name, firstPlanLine.listCents, firstPlanLine.amountCents > 0 && firstPlanLine.amountCents <= 99900], ['Field (negotiated)', 129900, true], 'the first invoice bills the negotiated price (prorated to the cycle, as every first invoice is)');
+  await S.apply(db, orgId, body, staff, now);
+  var negotiatedBill = db.data.get(root + '/billing/current');
+  equal([negotiatedBill.priceOverride.by, negotiatedBill.priceOverride.at, negotiatedBill.priceOverride.amountCents], [staff.email, now, 99900], 'stamped by whom and when');
+  var renewal = Policy.invoice(negotiatedBill, db.data.get('pricebook/' + B.VERSION), negotiatedBill.nextInvoiceOn);
+  equal(renewal.lines.filter(function (l) { return l.itemKey === 'plan:field'; })[0].amountCents, 99900, 'and every renewal reads it off the record');
+  await refused(function () { return S.preview(db, orgId, Object.assign({}, negotiatedInput, { plan: 'alacarte', modules: ['lite', 'storage'] }), now); }, /plan tier/);
+  await refused(function () { return S.preview(db, orgId, Object.assign({}, negotiatedInput, { priceOverride: { amountDollars: '100', reason: 'x' } }), now); }, /negotiated monthly price/);
+  db = fixture(); db.data.get(root).status = 'active';
+  body = await request(db, Object.assign({}, input, { action: 'activate' }));
+  await S.apply(db, orgId, body, staff, now);
+  equal(db.data.get(root + '/billing/current').priceOverride, null, 'no negotiation: the record says none');
   equal(db.data.get(root + '/billing/current').proposedPackage.modules, ['lite', 'storage']);
   equal(db.data.get(root + '/billing/current/invoices/2026-09-26').state, 'unpaid');
   equal(db.data.get(root + '/billing/current').trialStartedAt, undefined);

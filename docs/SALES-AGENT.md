@@ -36,7 +36,7 @@ when it steps up.
 | Piece | Where | What it gives the agent |
 |---|---|---|
 | Self-serve signup, approval | `start.html`, `api/tenant-signup.js`, `api/tenant-approve.js` | `omega_orgs/{org}` with `createdAt`, `approvedAt`, `signup.email`; `billing/current.trialEndsAt`; the person to talk to |
-| Access requests | `access_requests/{uid}` | a person who signed up before a tenant record existed; `upgradeRequested`, `nudges` when they press Upgrade on the pending strip |
+| Access requests | `access_requests/{uid}` | a person who signed up before a tenant record existed; `upgradeRequested`, `nudges` when they press Upgrade on the pending strip. Since 2026-09-28 also the SIGNUP IN PROGRESS: `source: 'signup'`, `signup{stage, modules, interval, priceDisplay, emailVerified, updatedAt}` written by `api/tenant-signup` `progress` from the moment the account is made on `/start.html`, `status: 'converted'` (+ `orgId`) once the workspace exists — the funnel's first step, before `omega_orgs` |
 | Presence | `team_members/{org}__{email}.lastSeen` | the last time anyone opened the dashboard (written by `index.html` only, §2) |
 | Projects | `projects` (`orgId`, `createdAt`) | activation: did they build anything |
 | Payment | `billing/current.lastPaidAt`, `subscriptionDue`, `amountDue`, `status`, `paymentFailedAt` (`api/stripe-webhook.js`, `tenant-billing.js`) | paying, past due |

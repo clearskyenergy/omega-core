@@ -25,11 +25,13 @@ module.exports = A.handler(async function (req, res) {
   var result = { orgId: org, pricebookVersion: version, modules: rows, starters: M.starters(), starterLabels: M.starterLabels(), canManage: await A.isTenantAdmin(caller, org) };
   if (req.method === 'POST') {
     var allowed = ['orgId', 'modules', 'plan', 'builders', 'viewers', 'interval'];
-    if (caller.staff) allowed = allowed.concat(['pricebookVersion', 'credit', 'serviceFee']);
+    if (caller.staff) allowed = allowed.concat(['pricebookVersion', 'credit', 'serviceFee', 'priceOverride']);
     if (Object.keys(body).some(function (k) { return allowed.indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported quote field');
     var now = Date.now(), selected = Policy.terms({ modules: body.modules, plan: body.plan, builders: body.builders, viewers: body.viewers,
       interval: body.interval || billing.interval, credit: caller.staff ? body.credit : billing.credit,
-      serviceFee: caller.staff ? body.serviceFee : billing.serviceFee }, book, now);
+      serviceFee: caller.staff ? body.serviceFee : billing.serviceFee,
+      /* a negotiated tier price is staff's to name; a customer's own quote carries the one on their record */
+      priceOverride: caller.staff ? body.priceOverride : (billing.priceOverride || null) }, book, now);
     result.quote = P.quote(selected.modules, book, Object.assign({}, selected, { now: now }));
   }
   return result;

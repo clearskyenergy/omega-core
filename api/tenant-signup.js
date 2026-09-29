@@ -14,6 +14,8 @@
    Returns:
      { exists: true,  host, status }          — domain already has a tenant
      { created: true, host, reserved, status:'pending', orgId }
+   Body: { action: 'progress', stage, modules?, interval?, company?, vertical?, note? }
+     — the signup in progress, for ClearSky's admin console (below)
    `host` is where the person SIGNS IN (api/_lib/kit.js home(): the open host
    until TENANT_WILDCARD_LIVE says *.clearskyomega.com serves); `reserved`
    is the slug host held on the record for that day.
@@ -121,6 +123,7 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
   });
   if (!result.created) return result;
   await A.init().auth().setCustomUserClaims(caller.uid, { orgId: domain, role: 'owner' });
+  await markConverted(db, caller.uid, domain);
   /* Pay at the end (2026-09-26; Stripe under PACKAGING_PROVIDER=stripe since 2026-09-27, Tommy:
      "they add billing and that's all done through Stripe"). The workspace
      is opened by its owner's payment, nobody's approval: the engine's own
@@ -166,6 +169,60 @@ async function packagedSignup(req, caller, domain, b, slug, host) {
   return result;
 }
 
+/* ── THE SIGNUP IN PROGRESS, FOR THE ADMIN CONSOLE (2026-09-28, Tommy: "if
+   they are creating a new account it should ... send them to my admin
+   tenant account portal and then also allow them to build out their
+   package on this and then we should be able to see that on my admin
+   portal so I can manage what they are paying and signed into").
+   The signup page reports each step it reaches (the account made, what the
+   team does, the system chosen, the email confirmed, billing, the first
+   invoice) and this keeps ONE row per account in the queue the console
+   already lists, access_requests/{uid}, with the stage and the system chosen
+   so far — priced HERE, by the book the signup prices with, never a figure
+   of the browser's. Identity is the token's. A row that ClearSky already
+   answered (declined, approved) is never revived, and a domain that already
+   has a workspace records nothing: that person is a colleague joining it.
+   The row leaves the queue (status 'converted') when the workspace is made,
+   by Subscribe, the trial or the reviewed request, where the tenant record
+   takes over. An unverified address may report: nothing here claims a
+   domain. Best effort on the page's side; a refusal changes nothing. */
+var STAGES = ['account', 'work', 'system', 'verify', 'billing', 'pay'];
+async function recordProgress(req, db, caller, domain, b, verified) {
+  var stage = STAGES.indexOf(b.stage) >= 0 ? b.stage : 'account';
+  if ((await db.collection('omega_orgs').doc(domain).get()).exists) return { recorded: false, exists: true };
+  var ref = db.collection('access_requests').doc(caller.uid), cur = await ref.get(), was = cur.exists ? (cur.data() || {}) : null;
+  if (was && (was.status || 'pending') !== 'pending') return { recorded: false, status: was.status };
+  var modules = Array.isArray(b.modules) ? b.modules.filter(function (k) { return typeof k === 'string' && /^[a-z0-9_-]{1,40}$/.test(k); }).slice(0, 40) : null;
+  var interval = ['monthly', 'annual'].indexOf(b.interval) >= 0 ? b.interval : null;
+  var signup = { stage: stage, modules: modules, interval: interval, plan: null, planDisplay: null, priceDisplay: null, emailVerified: verified === true, updatedAt: new Date().toISOString() };
+  if (modules && modules.length) {
+    try {
+      var book = await PB.load(db, PB.VERSION), known = PR.catalog(book).map(function (m) { return m.key; }), keep = modules.filter(function (k) { return known.indexOf(k) >= 0; });
+      if (keep.indexOf('lite') < 0) keep.unshift('lite');
+      var sel = SP.selection({ modules: keep, interval: interval || 'monthly' }, book, Date.now()), pr = SP.pricing(sel, book, Date.now());
+      signup.modules = sel.selected.modules; signup.plan = pr.plan; signup.planDisplay = pr.planDisplay;
+      signup.priceDisplay = (interval === 'annual' ? pr.display.annual : pr.display.recurring) || null;
+    } catch (e) { /* no book, or a selection the book refuses: the keys stand, unpriced */ }
+  }
+  var FV = A.FieldValue(), patch = { email: String(caller.email || '').toLowerCase(), domain: domain, uid: caller.uid, status: 'pending', source: 'signup', signup: signup,
+    userAgent: req.headers['user-agent'] || null, updatedAt: FV.serverTimestamp() };
+  if (typeof b.company === 'string' && b.company.trim().length > 1) patch.company = b.company.trim().slice(0, 119);
+  if (['oem', 'developer', 'epc', 'installer'].indexOf(b.vertical) >= 0) patch.vertical = b.vertical;
+  if (typeof b.note === 'string' && b.note.trim()) patch.note = b.note.trim().slice(0, 500);
+  if (!was) patch.createdAt = FV.serverTimestamp();
+  await ref.set(patch, { merge: true });
+  return { recorded: true, stage: stage, priceDisplay: signup.priceDisplay };
+}
+/* the workspace exists now: the request row is history, and the tenant record is where the console manages the account */
+function markConverted(db, uid, domain) {
+  var ref = db.collection('access_requests').doc(uid);
+  return ref.get().then(function (s) {
+    if (!s.exists || ((s.data() || {}).status || 'pending') !== 'pending') return;
+    var signup = Object.assign({}, (s.data() || {}).signup || {}, { stage: 'done' });
+    return ref.set({ status: 'converted', orgId: domain, convertedAt: new Date().toISOString(), signup: signup }, { merge: true });
+  })['catch'](function () {});
+}
+
 async function checkPayment(db, caller, domain, ref) {
   var snap = await ref.get(); if (!snap.exists) throw A.httpError(404, 'No workspace yet for ' + domain);
   var org = snap.data() || {}, member = await ref.collection('members').doc(caller.uid).get();
@@ -189,6 +246,7 @@ module.exports = A.handler(function (req) {
        domain, still needs the verified address, and the page is told which
        it is (2026-09-27). */
     if (req.method === 'GET') return signupOptions(A.db()).then(function (o) { return Object.assign(o, { emailVerified: verified }); });
+    if (b.action === 'progress') return recordProgress(req, A.db(), caller, domain, b, verified);
     if (!verified) throw A.httpError(403, 'verify your email address first, then try again');
 
     var db = A.db(), FV = A.FieldValue();
@@ -245,7 +303,7 @@ module.exports = A.handler(function (req) {
         batch.set(db.collection('omega_orgs').doc('clearsky-usa.com').collection('notifications').doc(), { kind: 'signup', text: 'New workspace request: ' + name + ' (' + domain + ') by ' + email + ' — ' + vertical, orgId: domain, read: false, createdAt: FV.serverTimestamp() });
         return batch.commit().then(function () {
           return A.init().auth().setCustomUserClaims(caller.uid, Object.assign({}, caller.claims.orgId ? {} : {}, { orgId: domain, role: 'owner' }));
-        }).then(function () {
+        }).then(function () { return markConverted(db, caller.uid, domain); }).then(function () {
           /* Courtesy copies. Best-effort; the Firestore rows are the record. */
           var first = (caller.claims.name || email.split('@')[0]).split(' ')[0];
           return Promise.all([

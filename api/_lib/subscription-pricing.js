@@ -7,6 +7,11 @@
 var M = require('./modules'), B = require('./pricebook');
 function fail(message) { var e = new Error(message); e.status = 400; throw e; }
 function money(n) { return '$' + (n / 100).toLocaleString('en-US', { minimumFractionDigits: n % 100 ? 2 : 0, maximumFractionDigits: 2 }); }
+function dollarsToCents(value, label) {
+  if (typeof value === 'number') value = String(value);
+  if (typeof value !== 'string' || !/^\d{1,7}(\.\d{1,2})?$/.test(value.trim())) fail((label || 'Amount') + ' must be dollars, like 999 or 999.50');
+  var parts = value.trim().split('.'); return B.integer(Number(parts[0]) * 100 + Number(((parts[1] || '') + '00').slice(0, 2)), label || 'amount');
+}
 function dollarInput(value) {
   if (typeof value !== 'string' || !/^\d{1,8}(\.\d{1,2})?$/.test(value)) fail('Enter a dollar amount with at most two decimal places');
   var parts = value.split('.'); return B.integer(Number(parts[0]) * 100 + Number(((parts[1] || '') + '00').slice(0, 2)), 'custom service fee');
@@ -41,15 +46,37 @@ function quote(keys, book, options) {
     var p = book.plans[k];
     if (editor <= p.capCents && deliverables <= p.maxDeliverables) choices.push({ plan: k, priceCents: p.priceCents });
   });
+  var requested = options.plan || 'auto';
+  /* A NEGOTIATED TIER PRICE (2026-09-28, Tommy: "the cost of the account
+     should then reflect in the page in my admin console but i can override
+     it if they are on a tier otherwise they pay for what they add"). Staff
+     set a plan tier's monthly price by hand, with a reason; it replaces
+     THAT tier's list price and nothing else: Omega Logic, extra logins, the
+     credit and the floor stay as the book has them, and Lite + modules is
+     never overridden — it pays for what it adds. The price names its tier;
+     on any other plan it does not apply. It comes from the billing record
+     or a staff body, never a customer's quote (api/package-catalog.js). */
+  var po = options.priceOverride || null, override = null;
+  if (po) {
+    if (typeof po !== 'object') fail('Invalid negotiated price');
+    var tier = po.plan || (requested !== 'auto' ? requested : null);
+    if (!tier || tier === 'alacarte' || !book.plans[tier]) fail('A negotiated price applies to a plan tier (Field or Pro); Lite + modules pays for what it adds');
+    var negotiatedCents = B.integer(po.amountCents, 'negotiated monthly price', book.floorCents);
+    if (typeof po.reason !== 'string' || !po.reason.trim() || po.reason.length > 300) fail('A negotiated price needs a reason');
+    choices.forEach(function (c) { if (c.plan === tier) { c.listCents = c.priceCents; c.priceCents = negotiatedCents; } });
+    override = { plan: tier, amountCents: negotiatedCents, reason: po.reason.trim() };
+  }
   choices.sort(function (a, b) { return a.priceCents - b.priceCents; });
-  var requested = options.plan || 'auto', chosen = choices[0];
+  var chosen = choices[0];
   if (requested !== 'auto') {
     chosen = choices.filter(function (c) { return c.plan === requested; })[0];
     if (!chosen) fail('Selected modules do not fit this plan; quote Enterprise separately');
   }
+  var negotiated = override && chosen.plan === override.plan ? Object.assign({}, override, { listCents: chosen.listCents }) : null;
   if (chosen.plan === 'alacarte') {
     modules.forEach(function (k) { if (M.get(k).shelf !== 'platform') lines.push({ itemKey: 'module:' + k, name: M.get(k).name, quantity: 1, amountCents: book.modules[k].priceCents }); });
-  } else lines.push({ itemKey: 'plan:' + chosen.plan, name: book.plans[chosen.plan].name, quantity: 1, amountCents: chosen.priceCents, modules: modules.filter(function (k) { return M.get(k).shelf !== 'platform'; }) });
+  } else lines.push(Object.assign({ itemKey: 'plan:' + chosen.plan, name: book.plans[chosen.plan].name + (negotiated ? ' (negotiated)' : ''), quantity: 1, amountCents: chosen.priceCents, modules: modules.filter(function (k) { return M.get(k).shelf !== 'platform'; }) },
+    negotiated ? { listCents: negotiated.listCents } : {}));
   if (logicCount === 5) lines.push({ itemKey: 'logic-bundle', name: book.logicBundle.name, quantity: 1, amountCents: logic });
   else modules.forEach(function (k) { if (M.get(k).shelf === 'platform') lines.push({ itemKey: 'module:' + k, name: M.get(k).name, quantity: 1, amountCents: book.modules[k].priceCents }); });
   var builders = options.builders == null ? book.logins.builders : B.integer(options.builders, 'builder logins');
@@ -75,14 +102,15 @@ function quote(keys, book, options) {
     editorListCents: editor, alacarteCents: list + logic + extra, logicCents: logic, loginCents: extra,
     recurringCents: recurring, creditCents: creditCents, monthlyCents: monthly,
     annualPrepayBeforeCreditCents: recurring * book.annualPaidMonths,
-    serviceFee: service, lines: lines, grants: M.resolve(modules),
+    serviceFee: service, lines: lines, grants: M.resolve(modules), priceOverride: negotiated,
     recommendation: { plan: choices[0].plan, monthlyCents: choices[0].priceCents + logic + extra,
       savingsCents: chosen.priceCents - choices[0].priceCents },
     display: { monthly: money(monthly) + '/month', recurring: money(recurring) + '/month', list: money(list + logic + extra) + '/month',
       plan: chosen.plan === 'alacarte' ? 'Lite + modules' : book.plans[chosen.plan].name,
       fit: chosen.plan === 'alacarte' ? (choices[0].plan !== 'alacarte' ? 'Switch to ' + book.plans[choices[0].plan].name + ' and save ' + money(chosen.priceCents - choices[0].priceCents) + '/month.' : 'Lite plus the modules selected is the lowest monthly price.') : money(book.plans[chosen.plan].capCents - editor) + ' of module capacity remains in ' + book.plans[chosen.plan].name + '.',
       usage: Object.keys(book.usage).filter(function (k) { return modules.indexOf(book.usage[k].module) >= 0; }).map(function (k) { return book.usage[k].included + ' ' + book.usage[k].name + '/cycle'; }),
-      annualBeforeCredit: money(recurring * book.annualPaidMonths) + '/year; annual prepay excludes transformation credit', serviceFee: service.display } };
+      annualBeforeCredit: money(recurring * book.annualPaidMonths) + '/year; annual prepay excludes transformation credit', serviceFee: service.display,
+      negotiated: negotiated ? 'Negotiated: ' + money(negotiated.amountCents) + '/month for ' + book.plans[negotiated.plan].name + ' (list ' + money(negotiated.listCents) + '/month). ' + negotiated.reason : null } };
 }
 function catalog(book) {
   return M.catalog().map(function (m) {
@@ -92,4 +120,4 @@ function catalog(book) {
     return m;
   });
 }
-module.exports = { quote: quote, serviceFee: fee, money: money, catalog: catalog, dollarInput: dollarInput };
+module.exports = { quote: quote, serviceFee: fee, money: money, catalog: catalog, dollarInput: dollarInput, dollarsToCents: dollarsToCents };

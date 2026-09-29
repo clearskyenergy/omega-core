@@ -245,6 +245,53 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.equal(mails.filter(function (m) { return m[0] === 'received'; })[0][1].name, 'Kim', 'the welcome mail has a name');
   });
 
+  console.log('\nthe signup in progress (2026-09-28: the admin console sees an account from the moment it is made)');
+  await test('each step reaches the queue the console lists: one row per account, the stage, the system priced by the book, identity from the token; an unconfirmed address may report', async function () {
+    seed(); caller = who('kim@newco.example', { claims: { email_verified: false, name: 'Kim Sato' } });
+    var r1 = await signup({ method: 'POST', headers: { 'user-agent': 'Safari' }, body: { action: 'progress', stage: 'account', email: 'forged@other.example', uid: 'u-forged' } }, RES);
+    assert.equal(r1.recorded, true); assert.equal(r1.stage, 'account');
+    var row = db.data.get('access_requests/u-kim');
+    assert.equal(row.email, 'kim@newco.example'); assert.equal(row.domain, 'newco.example'); assert.equal(row.uid, 'u-kim', 'identity is the token\'s, never the body\'s');
+    assert.equal(row.status, 'pending'); assert.equal(row.source, 'signup'); assert.equal(row.signup.stage, 'account'); assert.equal(row.signup.emailVerified, false); assert.ok(row.createdAt, 'created once');
+    assert.equal(row.company, undefined, 'no company until they give one');
+    var r2 = await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'system', modules: ['gridatlas', 'lite', 'nope'], interval: 'monthly', company: 'Newco Energy', vertical: 'epc', note: 'two sites' } }, RES);
+    assert.equal(r2.recorded, true); assert.match(r2.priceDisplay, /^\$[\d,]+\/month$/);
+    row = db.data.get('access_requests/u-kim');
+    assert.equal(row.signup.stage, 'system'); assert.deepEqual(row.signup.modules.slice().sort(), ['gridatlas', 'lite'], 'an unknown key is dropped, Lite is always in');
+    assert.equal(row.signup.priceDisplay, r2.priceDisplay); assert.ok(row.signup.planDisplay); assert.equal(row.signup.interval, 'monthly');
+    assert.equal(row.company, 'Newco Energy'); assert.equal(row.vertical, 'epc'); assert.equal(row.note, 'two sites'); assert.equal(row.createdAt, db.data.get('access_requests/u-kim').createdAt);
+    var r3 = await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'verify', modules: ['lite', 'gridatlas'], interval: 'annual' } }, RES);
+    assert.match(r3.priceDisplay, /^\$[\d,]+\/year$/, 'yearly is priced as the year');
+    var r4 = await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'bogus', modules: 'lite' } }, RES);
+    assert.equal(r4.stage, 'account', 'an unknown stage reads as the first'); assert.equal(db.data.get('access_requests/u-kim').signup.modules, null, 'modules that are not a list are not a list');
+    assert.ok(!db.data.get('omega_orgs/newco.example'), 'progress never makes a workspace');
+  });
+  await test('a row ClearSky already answered is never revived, and a domain with a workspace records nothing', async function () {
+    seed(); caller = who('kim@newco.example');
+    db.seed('access_requests/u-kim', { status: 'declined', email: 'kim@newco.example', company: 'Newco' });
+    var r = await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'work' } }, RES);
+    assert.equal(r.recorded, false); assert.equal(r.status, 'declined'); assert.equal(db.data.get('access_requests/u-kim').status, 'declined');
+    seed(); caller = who('lee@acme.example'); db.seed('omega_orgs/acme.example', { name: 'Acme', status: 'active' });
+    var r2 = await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'work' } }, RES);
+    assert.equal(r2.recorded, false); assert.equal(r2.exists, true); assert.ok(!db.data.get('access_requests/u-lee'), 'a colleague of an existing workspace is not a signup');
+  });
+  await test('the row leaves the queue when the workspace is made: Subscribe, the trial and the reviewed request all mark it converted', async function () {
+    seed(); caller = who('kim@newco.example');
+    await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'billing', modules: ['lite', 'gridatlas'], interval: 'monthly' } }, RES);
+    await signup({ method: 'POST', body: body({ payNow: true }) }, RES);
+    var row = db.data.get('access_requests/u-kim');
+    assert.equal(row.status, 'converted'); assert.equal(row.orgId, 'newco.example'); assert.equal(row.signup.stage, 'done'); assert.deepEqual(row.signup.modules.slice().sort(), ['gridatlas', 'lite'], 'what they chose stays on the row');
+    seed(); caller = who('kim@newco.example');
+    await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'billing' } }, RES);
+    await signup({ method: 'POST', body: body() }, RES);
+    assert.equal(db.data.get('access_requests/u-kim').status, 'converted', 'the trial too');
+    seed(); process.env.PACKAGING_SIGNUP_ENABLED = 'false'; caller = who('kim@newco.example');
+    await signup({ method: 'POST', headers: {}, body: { action: 'progress', stage: 'account' } }, RES);
+    await signup({ method: 'POST', headers: {}, body: { companyName: 'Newco Energy', vertical: 'epc' } }, RES);
+    assert.equal(db.data.get('omega_orgs/newco.example').status, 'pending'); assert.equal(db.data.get('access_requests/u-kim').status, 'converted', 'and the reviewed request');
+    process.env.PACKAGING_SIGNUP_ENABLED = 'true';
+  });
+
   console.log('\nthe pages');
   await test('signup, login and the workspace carry the path: pay and start, the pay step, the offerings link, "I\'ve paid"', async function () {
     var st = read('start.html'), lg = read('login.html'), of = read('offerings.html'), ot = read('omega-tenant.js');
@@ -254,13 +301,19 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.match(st, /id="build-continue" onclick="buildContinue\(\)"/); assert.match(st, /id="discovery-skip" onclick="discoverySkip\(\)"/); assert.match(st, /<div id="step-verify" class="hide">/); assert.match(st, /<div id="step-build" class="hide">/); assert.match(st, /name="signup-interval" value="annual"/); assert.match(st, /two months free/);
     assert.match(st, /if \(j\.emailVerified === false\) \{ emailOk = false; checkVerified\(u\); \}/); assert.ok(!/holdForVerification/.test(st), 'an unverified address is not held at the company form'); assert.match(st, /omega:signup-draft/); assert.ok(!/start\.html\?company=/.test(lg), 'the company never travels in a link');
     assert.ok(!/Roam Energy|Acme Energy|placeholder="acme"/.test(lg + st), 'no example company names on the forms');
-    assert.match(lg, /window\.__packagedSignup = true/); assert.match(lg, /id="blockedNext"/); assert.match(lg, /sendEmailVerification\(user, \{ url: location\.origin \+ next \}\)/); assert.match(st, /if \(j\.payNow\) \{ showPay\(j, name\); return; \}/); assert.match(st, /function wantedModules\(\)/); assert.match(st, /if \(payNow\) payload\.payNow = true;/);
-    /* 2026-09-27: making the account signs it in; the "already signed in" listener stands aside so the new company goes to signup, not a derived workspace (scripts/render-signup.js drives it) */
-    assert.match(lg, /creatingAccount = true;/); assert.match(lg, /if \(user && !creatingAccount\) route\(/); assert.match(lg, /return toSignup\(\);/); assert.match(lg, /if \(found\.signup && await packagedSignup\) return toSignup\(\);/);
+    assert.match(lg, /window\.__packagedSignup = true/); assert.match(lg, /id="blockedNext"/); assert.match(st, /u\.sendEmailVerification\(\{ url: location\.origin \+ '\/start\.html' \}\)/); assert.match(st, /if \(j\.payNow\) \{ showPay\(j, name\); return; \}/); assert.match(st, /function wantedModules\(\)/); assert.match(st, /if \(payNow\) payload\.payNow = true;/);
+    /* 2026-09-28: Create an account IS the signup page (Tommy: "it should go to the page that is the start and helps them purchase and buy an account and pay for it and create their account"):
+       the login page makes no account and has no signup form; its button goes to /start.html, whose first step makes the account (scripts/render-signup.js drives it) */
+    assert.ok(!/createUserWithEmailAndPassword|paneSignup|signupForm|access_requests", user\.uid/.test(lg), 'the login page makes no account and files no request: the signup page is the one door');
+    assert.match(lg, /\$\("createBtn"\)\.addEventListener\("click", \(\) => \{[\s\S]{0,400}?toSignup\(\);\s*\}\);/); assert.match(lg, /if \(user\) route\(/); assert.match(lg, /if \(found\.signup && \(found\.inSignup \|\| await packagedSignup\)\) return toSignup\(\);/); assert.match(lg, /inSignup = !!\(req && req\.source === 'signup' && \(req\.status \|\| 'pending'\) === 'pending'\);/);
+    /* 2026-09-28: a signup started on /start.html and not finished goes back to it (login), and the pending strip says so (omega-tenant.js); the page reports each step (start.html) */
+    assert.match(ot, /FINISH YOUR SIGNUP/); assert.match(ot, /id="omega-continue-signup" href="\/start\.html"/); assert.match(st, /action: 'progress'/); assert.match(st, /function reportProgress\(stage\)/);
+    assert.match(st, /<h1 tabindex="-1">Create your account<\/h1>/); assert.match(st, /id="create-btn">Create account</); assert.match(st, /auth\.createUserWithEmailAndPassword\(em, pw\)\.then\(function \(c\) \{ return sendLink\(c\.user\); \}\)/); assert.match(st, /email-already-in-use[\s\S]{0,80}signInWithEmailAndPassword\(em, pw\)/); assert.match(st, /PUBLIC_MAIL\.indexOf\(domainOf\(em\)\) >= 0/);
+    assert.match(st, /href="\/login\.html">Sign in</); assert.ok(!/toggleEmail|signInEmail|The same button creates your account/.test(st), 'one form, one button on the account step');
     assert.match(st, /u\.getIdToken\(true\)/); assert.match(st, /watchVerification\(u\)/);
     /* the signup opens before the email link; Subscribe waits for it (render-signup.js drives it) */
     assert.match(st, /if \(!emailOk\) \{/); assert.match(st, /skipForm = !qp\('proposal'\);/); assert.match(st, /if \(name\.length < 2\) name = String\(payload\.billingProfile\.legalName \|\| ''\)\.trim\(\);/); assert.match(st, /id="f-submit" onclick="companyContinue\(\)">Continue</);
-    assert.match(lg, /id="suPackaged"/); assert.match(lg, /fetch\('\/api\/offerings'/); assert.match(lg, /href="\/offerings\.html"/);
+    assert.match(lg, /fetch\('\/api\/offerings'/); assert.match(st, /fetch\('\/api\/offerings'/); assert.match(st, /href="\/offerings\.html"/); assert.match(st, /id="auth-next"/);
     assert.match(of, /XMLHttpRequest\(\); x\.open\('GET', '\/api\/offerings'\)/); assert.ok(!/firebase|omega-tenant\.js/.test(of), 'the price list is a public page: no sign-in, no tenant runtime');
     assert.ok(!/=>|\blet\s|\bconst\s|`/.test(of.replace(/<!--[\s\S]*?-->/g, '')), 'ES5');
     assert.match(ot, /action: 'reconcile-now'/); assert.match(ot, /paid\.textContent = "I've paid"/);

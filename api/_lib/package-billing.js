@@ -112,7 +112,7 @@ function prepare(c, input, now) {
   var source = basis(c), id = Q.key(B.stable({ source: source, action: action, patch: patch, plan: plan }));
   return { id: id, source: source, action: action, effectiveAt: at, profile: profile, selected: selected, patch: patch, plan: plan,
     quote: P.quote(selected.modules, c.book, { plan: selected.plan, builders: selected.builders, viewers: selected.viewers,
-      serviceFee: selected.serviceFee, credit: selected.credit, interval: selected.interval, now: at }) };
+      serviceFee: selected.serviceFee, credit: selected.credit, interval: selected.interval, priceOverride: selected.priceOverride, now: at }) };
 }
 function display(c, p) {
   return { dryRun: true, orgId: c.root.id, previewId: p.id, effectiveAt: p.effectiveAt,
@@ -169,6 +169,8 @@ async function apply(db, orgId, input, caller, now, deps) {
       var patch = Object.assign({}, p.patch, D.customerFields(provider, customer, c.book), {
         activationLock: null, updatedAt: now, updatedBy: caller.email });
       patch.serviceFee = Object.assign({}, patch.serviceFee, { by: caller.email, at: now });
+      /* a negotiated tier price keeps who set it and when (null clears an earlier one) */
+      if (patch.priceOverride) patch.priceOverride = Object.assign({}, patch.priceOverride, { by: caller.email, at: now });
       if (issued) {
         patch.paymentLink = issued.payUrl; patch.amountDue = issued.totalCents / 100;
         patch.nextInvoiceOn = p.plan.nextInvoiceOn; patch.firstInvoiceOn = p.plan.date; patch.serviceFeeNextOn = p.plan.serviceFeeNextOn;
@@ -347,7 +349,7 @@ function subscriptionAfterChange(billing, record, from, to, subs, changes) {
 function displayAfter(patch, billing, book, now) {
   if (!patch.modules) return patch;
   var q = P.quote(patch.modules, book, { plan: patch.plan || billing.plan, builders: billing.builders, viewers: billing.viewers,
-    serviceFee: billing.serviceFee, credit: billing.credit, interval: billing.interval, now: now });
+    serviceFee: billing.serviceFee, credit: billing.credit, interval: billing.interval, priceOverride: billing.priceOverride || null, now: now });
   patch.monthlyCents = q.monthlyCents; patch.monthlyDisplay = q.display.monthly; return patch;
 }
 async function reconcile(db, orgId, now, deps, options) {

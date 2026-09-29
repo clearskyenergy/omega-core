@@ -238,16 +238,24 @@ folded under More billing options) → pay. A package named by the offerings
 page (`?modules=`, `?plan=`) or a proposal skips the question screen. There
 is no company screen (2026-09-28, Tommy: "i want whats in the slide show"):
 a signed-in visit goes straight into the run, and the workspace is named
-after the billing form's Legal company name unless Create account carried
-one; only a proposal link and a server without packaging keep that form.
-Create account goes straight into that signup on `/start.html` with the
-company carried over (making the account signs it in, so login's auth
-listener stands aside while the form routes it); the options and quotes
-open before the email link is clicked, and only creating the workspace
-(Subscribe or the trial) needs the verified address: its step moves on by
-itself, and the draft (`omega:signup-draft`, this browser only) keeps the
-taps, the system and the step, so the link reopening the page resumes
-there. A signed-in person with no `omega_orgs` record,
+after the billing form's Legal company name; only a proposal link and a
+server without packaging keep that form. **Create an account IS the signup
+page** (2026-09-28, Tommy: "when we click create new account it should go
+to the page that is the start and helps them purchase and buy an account
+and pay for it and create their account"): login.html has no account form
+and makes no account; its button goes to `/start.html`, whose FIRST step
+makes the account (work email and password, or Google; a personal address
+is refused before one is made; an address that already has an account
+signs in from the same button, so the verification link and a proposal
+link open the page in any browser), and the address typed on the sign-in
+page is carried in this browser only (`omega:signup-draft`), never in a
+link. Making the account signs it in and the hub routing on the page takes
+it from there (a colleague of an existing workspace goes in). The options
+and quotes open before the email link is clicked, and only creating the
+workspace (Subscribe, the trial, or the reviewed request when packaged
+signup is off) needs the verified address: its step moves on by itself,
+and the draft keeps the taps, the system and the step, so the link
+reopening the page resumes there. A signed-in person with no `omega_orgs` record,
 grant or access request, not a named tenant, and without both accepted
 terms and a project under the company, is sent there too instead of a
 derived workspace; `scripts/render-signup.js` (in `check:pages`) holds it.
@@ -337,6 +345,28 @@ recorded once by the webhook (answered before the tier path) or I've paid;
 An owner or admin of an ACTIVE client needs no verified email here either
 (`admin.clientAdmin`, as on `plan-change`). Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
 book it twice). `scripts/test-stripe-customer.js`.
+
+**A negotiated tier price** (2026-09-28, Tommy: "the cost of the account
+should then reflect in the page in my admin console but i can override it
+if they are on a tier otherwise they pay for what they add"): staff may set a
+plan tier's (Field, Pro) monthly price by hand, with a reason, on the Package
+panel — `priceOverride: { plan, amountCents, listCents, reason, by, at }` on
+`billing/current`, written only by approve/activate (`tenant-package`,
+`tenant-approve`, staff) and cleared by an activation without one. In
+`subscription-pricing.js quote()` it replaces THAT tier's list price and
+nothing else: Omega Logic, extra logins, the credit and the floor stay as the
+book has them (they pay for what they add); Lite + modules is never
+overridden; on any other plan it does not apply; under `plan: 'auto'` the
+tier competes at its negotiated price. Every re-quote reads it off the RECORD
+(`Policy.invoice` for the first invoice and each renewal, `displayAfter`,
+`plan-change` quote/apply/summary, a customer's own `package-catalog` quote);
+a customer body never names one (`package-catalog` accepts it from staff
+only; `plan-change` refuses the field). The plan line reads "Field
+(negotiated)" and keeps `listCents`; the account page's Payment card and the
+panel's standing strip say who set it and when. A legacy plan's terms
+(Amount due, Next payment…) already are its override. Held by
+`scripts/test-subscription-pricing.js`, `test-package-activation.js`,
+`test-plan-change.js`, `test-package-catalog-api.js`.
 
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
@@ -1254,9 +1284,46 @@ tenant. Treat it that way.
   The master console (`admin/admin-console.js`) reads a packaged tenant
   by its state machine: `_standing` has a key per state, plan and module
   keys become the price book's words from `GET /api/offerings`
-  (`STATE.priceBook`, fetched at boot, never a copy), Manage sends a
-  packaged workspace to its Package tab, and Client Inventory carries the
-  book above the legacy roster tiers (`scripts/tests/tadminstanding.js`). It fails on an error, an unanswered
+  (`STATE.priceBook`, fetched at boot, never a copy), and Client Inventory
+  carries the book above the legacy roster tiers
+  (`scripts/tests/tadminstanding.js`). **ONE PAGE PER ACCOUNT**
+  (2026-09-28, Tommy: "i should click an account and it opens a page for
+  them so i can manage them and edit them and see if they paid and etc. and
+  edit their account or remove it etc. other wise its so disorganized"):
+  `/admin/account.html?org=` (`admin/account.js`) is where an account is
+  managed, and every row on the console (Tenants, Pending signups, Access
+  requests) links there; the console's inline Manage drawer
+  (`openTenantDetail`) is gone. Its header answers what the account is,
+  whether it is on and whether it has paid (standing); the Account card
+  holds Approve / Suspend / Reactivate / Cancel (tenant-approve `reject`:
+  status cancelled, hostname released, nothing deleted — `omega_orgs` is
+  never deleted) and Message; the Payment card holds the packaged facts
+  with *Look at the payment now* (`plan-change` reconcile-now, staff) or
+  the legacy terms; the Package panel (`admin/package-panel.js`) is mounted
+  on the page; the controls the drawer had (commercial terms, identity and
+  branding, the relationship and shared projects, the dashboard profile,
+  the people and their accounts, the Omega Logic bundle) moved there
+  UNCHANGED, posting where they always did. What both pages read is
+  `admin/admin-shared.js`, loaded before each (`ADMIN_EMAILS`/`accessFor`,
+  `_standing`, `_tnStatusChip`, the book's words, `tenantAction`,
+  `openBroadcast`, `_accountHref`, the signup in progress) — never a copy in
+  a page. A domain with no record shows the SIGNUP IN PROGRESS: `POST
+  /api/tenant-signup {action:'progress'}` keeps one `access_requests/{uid}`
+  row per account from the moment it is made on `/start.html` (source
+  `signup`, the stage, the system chosen so far PRICED BY THE SERVER, the
+  email's verified state; identity from the token; an unverified address
+  may report; a declined or approved row is never revived; a domain with a
+  workspace records nothing) and marks it `converted` when the workspace is
+  made, by Subscribe, the trial or the reviewed request. The console's
+  Access requests card reads it as "in signup" with the stage and the
+  system (`_reqSignupLine`), the account page opens it by domain with Set
+  up (`/admin/?setup=<id>` fills the New tenant form) and Decline; login
+  sends an unfinished signup back to `/start.html` (`inSignup`), and the
+  dashboard's pending strip says *Finish your signup* with the way back
+  instead of "with the ClearSky team" (`tpending.js`). Held by
+  `scripts/render-admin-account.js` (in `check:pages`: the real page and the
+  real console on the Firebase double, the real endpoints on the Firestore
+  double) and `tadminstanding.js`. It fails on an error, an unanswered
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
