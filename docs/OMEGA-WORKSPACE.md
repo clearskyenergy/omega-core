@@ -102,7 +102,15 @@ decided 2026-09-26.
   Stripe app, never through OMEGA; `docs/PAYMENTS-STRIPE.md`); *Billing
   history* (the engine's invoices from `GET /api/plan-change`, which every
   verified member, and an active client's owner or admin, may read; a
-  Stripe plan's from `POST /api/stripe-invoices`). *Changes in progress* (a
+  Stripe plan's own from `POST /api/stripe-invoices`, whose rows say who
+  made each: one made by hand in the dashboard or the amount due paid by
+  card is the plan's; one the engine made there is listed once, from its
+  own record, never by Stripe's status; and a purchase withdrawn before
+  anything was paid is not history). What a legacy plan owes is its TIER
+  (ClearSky's `amountDue`, or the invoice Stripe already holds open for
+  it) beside the MODULES it bought by card (the engine's unpaid add-on
+  records); an engine-made invoice left open on Stripe never stands in for
+  the tier (Concord, 2026-09-28). *Changes in progress* (a
   packaged change waiting for payment or queued for the review, a legacy
   add-on waiting for payment or ending, a recorded opt-in or opt-out, each
   with when and by whom it was asked) are listed between them, read from

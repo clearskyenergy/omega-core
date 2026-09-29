@@ -321,7 +321,16 @@ links the legacy tier's own `stripeCustomerId` once (a Stripe TEST key
 only for a `packagingSandbox` workspace, because the one database is
 production's; a binding made in the other mode is never overwritten) and
 opens the portal's add-a-payment-method flow, back to `/workspace#billing`;
-the card is read back from Stripe, never stored. Pay $X with Stripe is one
+the card is read back from Stripe, never stored. What you owe on a legacy
+plan is the TIER (ClearSky's `amountDue`, or the invoice Stripe already
+holds open for it: hand-made, or the one Pay with Stripe made) beside the
+MODULES bought by card (the engine's unpaid add-on records); an invoice the
+engine made on Stripe (`/api/stripe-invoices` `omega`) is judged by its own
+record, never by Stripe's status, never listed twice, and never stands in
+for the tier, and `pay` never mistakes it for the plan's invoice (Concord,
+2026-09-28: a withdrawn $500 opt-in read as what was owed and the $1,299
+plan vanished; a purchase withdrawn before anything was paid is not
+history). Pay $X with Stripe is one
 `send_invoice` invoice per due date and amount (`metadata.omegaDue`),
 recorded once by the webhook (answered before the tier path) or I've paid;
 `subscriptionDue` stays ClearSky's. A package keeps the engine's rules.

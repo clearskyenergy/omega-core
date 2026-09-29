@@ -1186,155 +1186,384 @@ function ngTier(){
 }
 function ngIsMUD(){ return /MUD|Multi-Unit/i.test(d('category')); }
 
-/* ── NATIONAL GRID PRICE PROFILE ──────────────────────────────────────
-   National Grid reimburses more per port than the other programmes, so a
-   National Grid job is priced to the sheets the reps have signed off —
-   33 Hermon St, 145 West St, 160 S Main St and 750 Union (Sep 2026, 4-10
-   ports). Where they agree it is a rule; where they do not, it is not:
+/* ── NATIONAL GRID PRICE BOOK — Concord Energy, v2 (2026-09-28) ──────
+   National Grid's feasibility team compares line-item unit prices across
+   every Concord submission, so every job, past and future, uses the SAME
+   unit prices and only the quantities change: trench and conduit footage,
+   station count, service scope. The rules the book comes with:
 
-     Design/engineering/permitting  $1,424/port        3 of 3 (4, 6, 10 ports)
-     Trench, continuously paved     $30 + $100 per LF  2 of 3 (S Main $40)
-     Pedestals & mounting           $1,150 per pedestal, ONE PER TWO PORTS
-                                                       3 of 3, and Menachem's
-                                                       Hermon correction: the
-                                                       pedestal COUNT is half
-                                                       the charger count
-     Concrete pads                  $500 + $1,000, one per pedestal   2 of 3
-     EVSE hardware                  $2,000/port 50 A, $3,050/port 80 A
-                                    ($4,000 / $6,100 per dual pedestal)
-     Freight, activation, install   folded into the prices above
-     Panels, new service            +$200 labor (Hermon)
+     Never scale, mark up or adjust a rate to hit a total. The old per-port
+     floor (x1.101, x1.41, x1.476; totals of exactly $133,500) is what made
+     submissions look inconsistent. It is gone, and the markup knob does
+     not apply here.
+     Price per plug is a CHECK, not a lever: H53 / P against the
+     $10,500-$13,500 band; a job outside it names the driver.
+     Never invent a price, amperage, brand or service type. Where the book
+     has no rate (unpaved trench, handholes, the 80 A unit, a service other
+     than 200 A) the job ASKS -- a flag the rep answers -- and never guesses.
+     Sales tax is 6.25% of make-ready MATERIAL (F12-F19) plus signage
+     material (F34), rounded half-up; never on EVSE hardware, pedestals,
+     freight, networking or any labour.
+     S (stations) = P / 2: every station is dual-port. Bollards, pads and
+     pedestals are one per station; freight, networking and install labour
+     are per port; signage is P + 1 labels as one lump sum.
 
-   Hardware is fitted, not copied. West St (1 x 80 A + 2 x 50 A pedestals,
-   $14,100) and Union (1 x 80 A + 4 x 50 A, $22,100) solve EXACTLY to
-   $4,000 per 50 A pedestal and $6,100 per 80 A — two independent sheets,
-   one answer. Hermon (3 x 50 A at $3,700) sits $300 a pedestal under it,
-   and Menachem's note on Hermon was to squeeze more; S Main (2 x 80 A at
-   $5,050) is the one sheet below the fit. The per-port floor below
-   settles the job total either way.
-
-   It is a JOB price, not a sheet price: jobLines() hands the same lines to
-   the customer proposal and to the utility sheet, so what National Grid
-   is shown is what the customer is charged. Conduit, bollards, networking
-   and the rest keep the rate card. */
+   Source: Concord_Energy_NG_Estimate_Engine_Instructions v2 -- s4 price
+   book, s6 calculation rules, s14 reference jobs. The five reference jobs
+   are pinned by scripts/tests/tngpricebook.js: a rate change here moves
+   them on purpose, with a commit message. What the instructions describe
+   and this page does NOT do: the Column C note templates (s8), the client
+   proposal layout (s9) and editing an uploaded workbook in place (s10) --
+   docs/NATIONAL-GRID-PRICE-BOOK.md. */
 var NG_PRICE = {
-  hardware: { a50:2000, a80:3050 },
-  /* kW at or above this is an 80 A unit (19.2 kW); below it, 50 A (~9.6-11.5 kW) */
-  kw80: 15,
-  perPedestal: 1150,
-  portsPerPedestal: 2,
-  pad: { mat:500, lab:1000 },
-  designPerPort: 1424,
-  trenchPaved: { mat:30, lab:100 },
-  newServicePanelLab: 200,
-  /* The customer's all-in price floor, per port, sales tax included:
-     $13,300-$13,400 keeps about $8,500 a plug after expenses (6 plugs
-     ~ $80k). Overridable per job under Program details. */
-  allInPerPort: 13350
+  version:'v2 (2026-09-28)',
+  designPerPort:1423,                            /* row 10: labour x P     */
+  trenchPaved:{ mat:30, lab:110 },                /* row 12: per LF ($100 labour before 2026-09-28) */
+  trenchUnpaved:null,                            /* row 13: NO RATE -- ask  */
+  conduit:{ matPerFt:1.90, labBase:1100, labPerFt:2.50 },   /* row 14   */
+  bollard:{ mat:250, lab:300 },                  /* row 15: x S (was two a station) */
+  handhole:null,                                 /* row 16: NO RATE -- ask  */
+  pad:{ mat:500, lab:1000 },                     /* row 17: x S            */
+  panel:{                                        /* row 18                 */
+    standard:{ key:'standard', mat:1451.22, lab:621,   qty:2, label:'Standard panel package (no new service)' },
+    single:  { key:'single',   mat:6600,    lab:12550, qty:1, label:'New 200A single-phase service' },
+    three:   { key:'three',    mat:8910,    lab:12550, qty:1, label:'New 200A three-phase service' }  /* 6,600 x 1.35 */
+  },
+  other:{ mat:1200, labPerPort:2360 },           /* row 19: materials flat, install labour x P */
+  hardware:{ a50:2000, a80:null },               /* row 27: x P; the 80 A unit has NO confirmed rate */
+  kw80:15,                                       /* kW at or above this is an 80 A (19.2 kW) unit */
+  pedestal:1150,                                 /* row 28: x S            */
+  freightPerPort:50,                             /* row 29: x P            */
+  networkPerPort:480,                            /* row 32 (MUD, Public) or 45: x P */
+  signage:{ mat:400, lab:190 },                  /* row 34: lump sum, P + 1 labels */
+  taxRate:0.0625,
+  band:{ lo:10500, hi:13500, target:12000 }
 };
-
-/* The markup that brings the job to its all-in floor. The total is linear
-   in the markup (every line and the tax on it scale together), so one
-   unfloored build gives the base and the factor is target / base. 0 when
-   the job is not National Grid or is already above the floor. */
-function ngFloorTarget(){ return num(DATA.ngTargetPerPort) || NG_PRICE.allInPerPort; }
-function ngFloorFactor(form){
-  if(!ngProgramActive()) return 0;
-  var ports=num(DATA.plugs); if(!(ports>0)) return 0;
-  var base=buildModel(form, true), mkU=1+nval('p_markup')/100;
-  var t1=num(base.total)/mkU;
-  return t1>0 ? (ngFloorTarget()*ports)/t1 : 0;
+/* The row-18 question, asked on the form. The first option is the answer
+   "nobody has said", which prices the standard package and flags it. */
+var NG_SERVICE_OPTIONS = [
+  'Not confirmed — ask before pricing',
+  'Standard panel package (no new service)',
+  'New 200A single-phase service',
+  'New 200A three-phase service'
+];
+var NG_SERVICE_KEYS = ['', 'standard', 'single', 'three'];
+function ngServiceKey(){
+  var i=NG_SERVICE_OPTIONS.indexOf(d('ngService'));
+  return i>0 ? NG_SERVICE_KEYS[i] : '';
 }
-var NG_FOLDED     = { install:1, shipping:1, activation:1 };   /* inside the two prices above */
-var NG_MOUNT_ROWS = { pedestal:1, charger2:1, mount:1 };
-var NG_PANEL_ROWS = { panel:1, boards:1, meter:1 };
 
-function ngProgramActive(){ return !!(FORM && FORM.writer==='nationalgrid'); }
-function jobLines(){ return ngProgramActive() ? ngPriceLines(LINES) : LINES; }
+/* Half-up to cents, the book's own arithmetic ($843.725 -> $843.73).
+   Binary floating point puts 843.725 a hair under the half and a plain
+   Math.round reads it down, which is the one-cent disagreement a reviewer
+   notices. */
+function ngRound(x){ x=+x||0; return Math.round(Number((x*100).toFixed(6)))/100; }
+function ngStationsFor(ports){ ports=num(ports); return ports>0 ? Math.max(1, Math.ceil(ports/2)) : 0; }
 
-/* Hardware per port: from the drawing's fleet when it names kW (each unit
-   priced by its amperage, scaled to the port count), else 50 A. */
-function ngHardwarePerPort(){
-  var H=NG_PRICE.hardware, n=0, t=0, i, u, q;
+/* Which sheet row a line lands on, by its bucket and row key -- the same
+   map ngRollup walks, so the tax base and the change table agree with
+   the sheet. */
+var NG_ROW_ALIAS = { conduitAG:'conduit', wireAG:'wire', restore:'trench', pad:'concrete',
+                     commission:'other', mount:'pedestal', permit:'design' };
+function ngRowOf(l){
+  var b=null, bi, i;
+  for(bi=0;bi<BLOCKS_NG_MA.length;bi++) if(BLOCKS_NG_MA[bi].id===l.bucket) b=BLOCKS_NG_MA[bi];
+  if(!b) return 0;
+  function find(key){
+    if(!key) return 0;
+    for(i=0;i<b.rows.length;i++) if(b.rows[i].k===key && b.rows[i].ng) return b.rows[i].ng.row;
+    return 0;
+  }
+  return find(l.row) || find(NG_ROW_ALIAS[l.row]) || find('other') || (b.rows[b.rows.length-1].ng||{}).row || 0;
+}
+
+/* s6.3: 6.25% of make-ready material (F12-F19) plus signage material
+   (F34). Nothing else -- one upload had taxed the EVSE hardware. */
+function ngTaxBase(lines){
+  var i, l, r, mat=0;
+  for(i=0;i<lines.length;i++){
+    l=lines[i];
+    if(l.util) continue;
+    r=ngRowOf(l);
+    if((r>=12 && r<=19) || r===34) mat+=num(l.mat);
+  }
+  return { mat:ngRound(mat), lab:0 };
+}
+
+/* THE JOB PRICED TO THE BOOK, from its quantities alone. Pure: the page
+   hands it what it knows (ngQuantities) and the test hands it the five
+   reference jobs. Returns the lines the sheet and the proposal are built
+   from, the flags a person has to see (ask:true is a hard stop the rep
+   answers on the form), and the Submitted | Corrected changes. */
+function ngPriceBook(Q){
+  var B=NG_PRICE, P=num(Q.ports), S=ngStationsFor(P), lines=[], flags=[];
+  function add(bucket,row,desc,qty,unit,mat,lab,note){
+    var o={ desc:desc, bucket:bucket, row:row, qty:qty, unit:unit||'', size:'', cat:'',
+            mat:ngRound(mat), lab:ngRound(lab), fp:0, src:'ngbook', note:note||'' };
+    lines.push(o); return o;
+  }
+  function ask(t){ flags.push({ ask:true, text:t }); }
+  function note(t){ flags.push({ ask:false, text:t }); }
+  function $(n){ return money(n); }
+  if(!(P>0)){
+    ask('Number of Ports is not set — every quantity in the price book is P or P ÷ 2.');
+    return { lines:lines, flags:flags, changes:[], P:P, S:S };
+  }
+  if(P%2) note(P+' ports is not an even number. Every station is dual-port, so S is rounded up to '+S+'.');
+
+  /* row 10 */
+  add('mr','design','Design/Engineering/Permitting', P, 'ports', 0, B.designPerPort*P,
+      P+' ports × $'+B.designPerPort);
+  /* row 12 */
+  var paved=num(Q.paved), unpaved=num(Q.unpaved), cond=num(Q.conduit), hh=num(Q.handholes);
+  if(paved>0)
+    add('mr','trench','Trenching & Backfill — paved (asphalt/concrete)', paved, 'ft',
+        B.trenchPaved.mat*paved, B.trenchPaved.lab*paved,
+        paved+' LF × $'+B.trenchPaved.mat+' / $'+B.trenchPaved.lab);
+  /* row 13: no rate */
+  if(unpaved>0){
+    var ut=Q.unpavedTyped||null;
+    add('mr','trenchTurf','Trenching & Backfill — unpaved (grass)', unpaved, 'ft',
+        ut?ut.mat:0, ut?ut.lab:0, ut?'typed — no price-book rate':'NO RATE — ask');
+    ask(unpaved+' LF of unpaved trench (row 13) has no price-book rate. '
+        +(ut ? 'Priced at the typed '+$(ut.mat)+' material / '+$(ut.lab)+' labour — confirm it, and the split (it moves the sales tax).'
+             : 'It is on the sheet at $0 until a rate is confirmed: type the material and labour over the line.'));
+  }
+  /* row 14 */
+  if(cond>0)
+    add('mr','conduit','Conduit & Cable — underground/above ground/indoor', cond, 'ft',
+        B.conduit.matPerFt*cond, B.conduit.labBase+B.conduit.labPerFt*cond,
+        cond+' LF × $'+B.conduit.matPerFt+'; labour $'+B.conduit.labBase+' + $'+B.conduit.labPerFt+'/LF');
+  else note('No conduit footage — row 14 is blank. Measure the runs, or type Total Feet of Conduit under Program details.');
+  /* row 15 */
+  add('mr','bollard','Protective Bollards', S, 'ea', B.bollard.mat*S, B.bollard.lab*S, S+' — one per station');
+  /* row 16: no rate */
+  if(hh>0){
+    var ht=Q.handholeTyped||null;
+    add('mr','handhole','Handholes/Manholes', hh, 'ea', ht?ht.mat:0, ht?ht.lab:0,
+        ht?'typed — no price-book rate':'NO RATE — ask');
+    ask(hh+' handhole'+(hh>1?'s':'')+' (row 16): no price-book rate. '
+        +(ht ? 'Priced at the typed '+$(ht.mat)+' / '+$(ht.lab)+' — confirm it.'
+             : 'On the sheet at $0 until a rate is confirmed: type the material and labour over the line.'));
+  }
+  /* row 17 */
+  add('mr','concrete','Concrete Work/Bases/Pads', S, 'ea', B.pad.mat*S, B.pad.lab*S, S+' pads — one per station');
+  /* row 18 */
+  var svc=B.panel[Q.service]||null, opt=B.panel, nsp=num(Q.servicePedestals);
+  if(!svc){
+    svc=opt.standard;
+    ask((nsp ? 'The drawing has '+nsp+' service pedestal'+(nsp>1?'s':'')+' — a new utility service — but the phase is not confirmed. '
+             : '')
+        +'Service scope (row 18) is not confirmed — priced as the standard panel package ('
+        +$(opt.standard.mat+opt.standard.lab)+'). Choose under Program details: standard '
+        +$(opt.standard.mat+opt.standard.lab)+' · new 200A single-phase '+$(opt.single.mat+opt.single.lab)
+        +' · new 200A three-phase '+$(opt.three.mat+opt.three.lab)+'. "A new meter is being added" still needs the phase.');
+  }
+  if(svc.key==='standard' && nsp)
+    note('Row 18 is the standard package, but the drawing has '+nsp+' service pedestal'+(nsp>1?'s':'')
+        +' (a new utility service). Confirm the service scope.');
+  add('mr','panel',
+      svc.key==='standard' ? 'Utility service point and utility service meter equipment'
+                           : svc.label+' — utility service point and new utility service meter',
+      svc.qty, svc.qty===2?'ea':'lump', svc.mat, svc.lab, svc.label);
+  /* row 19 */
+  add('mr','install','Installation and commissioning of all ports (site grounding, fire-stop and seal-off)',
+      P, 'ports', B.other.mat, B.other.labPerPort*P,
+      'materials $'+B.other.mat+' flat; install labour '+P+' × $'+B.other.labPerPort);
+  /* row 27 */
+  var p80=Math.min(P, Math.round(num(Q.ports80))), p50=P-p80, hw80=num(Q.hw80PerPort);
+  add('evse','charger',
+      p80 ? 'Level 2 charging hardware — '+p50+' × 50 A and '+p80+' × 80 A ports'
+          : 'Level 2 charging hardware — Autel AC Elite 50A dual-port (12 kW)',
+      P, 'ports', B.hardware.a50*p50 + (hw80 ? hw80*p80 : 0), 0,
+      p50+' × $'+B.hardware.a50+(p80 ? ' + '+p80+' × '+(hw80 ? '$'+hw80 : 'no rate') : ''));
+  if(p80 && !hw80)
+    ask(p80+' port'+(p80>1?'s are':' is')+' on an 80 A (19.2 kW) unit, which has no confirmed price — the old '
+        +'$6,100 a station is not confirmed. Those ports are on the sheet at $0 until a price per port is entered under Program details.');
+  /* row 28 */
+  add('evse','pedestal','Pedestals and mounting hardware', S, 'ea', B.pedestal*S, 0, S+' × $'+B.pedestal);
+  /* row 29 */
+  add('evse','shipping','EVSE Freight/Shipping', P, 'ports', B.freightPerPort*P, 0, P+' × $'+B.freightPerPort);
+  /* row 32 */
+  add('evse','network','Network service (Green Joulez)', P, 'ports', B.networkPerPort*P, 0, P+' × $'+B.networkPerPort);
+  if(/workplace|fleet|dcfc/i.test(String(Q.segment||'')))
+    note('A '+Q.segment+' site: networking belongs on row 45 (ineligible), not row 32. Left on row 32 pending the decision '
+        +'— moving it shifts '+$(B.networkPerPort*P)+' from Eligible to Ineligible without changing the total.');
+  /* row 34 */
+  add('ne','striping','Fire/arc-flash warning and equipment labels', P+1, 'ea', B.signage.mat, B.signage.lab,
+      (P+1)+' labels — lump sum');
+
+  /* what the book has no row for passes through, and says so */
+  var i, l, util=0, utilNames=[], nobook=[], ex=Q.extras||[];
+  for(i=0;i<ex.length;i++){
+    l=ex[i]; lines.push(l);
+    if(l.util){ util+=num(l.mat)+num(l.lab); utilNames.push(l.desc); }
+    else if(l.bucket!=='fp' && (num(l.mat)||num(l.lab))) nobook.push(l.desc+' '+$(num(l.mat)+num(l.lab)));
+  }
+  if(util>0)
+    note('Utility-side rows 21–25 carry '+$(util)+' ('+utilNames.join(', ')+'): kept on the sheet in H54, out of H53 '
+        +'and out of the proposal. Ask whether to remove them or include them in the client proposal.');
+  if(nobook.length) note('Not in the price book, carried as submitted: '+nobook.join('; ')+'.');
+  /* the counts the sheet asks for */
+  if(num(Q.stationsTyped) && num(Q.stationsTyped)!==S)
+    note('Number of Stations was '+num(Q.stationsTyped)+'; C7 is written as S = '+S+' (P ÷ 2, dual-port pedestals). '
+        +'Open question whether National Grid expects C7 to count ports.');
+  if(num(Q.pedestalsDrawn) && num(Q.pedestalsDrawn)!==S)
+    note('The drawing placed '+num(Q.pedestalsDrawn)+' pedestals; the book prices S = '+S+' (one dual-port pedestal per two ports).');
+  if(num(Q.padsDrawn) && num(Q.padsDrawn)!==S)
+    note('The drawing placed '+num(Q.padsDrawn)+' pads; the book prices S = '+S+', one per station.');
+  if(num(Q.markupPct))
+    note('The '+num(Q.markupPct)+'% markup is not applied on National Grid: the book’s unit prices are never scaled.');
+  return { lines:lines, flags:flags, changes:ngChanges(Q.submitted||[], lines), P:P, S:S };
+}
+
+/* Mode 2's table: Line | Submitted | Corrected, by sheet row, for every
+   row the book moved. */
+function ngChanges(submitted, corrected){
+  var by={}, i, l, r, out=[], rows=[], k;
+  function acc(l, side){
+    r=ngRowOf(l); if(!r) return;
+    if(!by[r]) by[r]={ row:r, sub:{mat:0,lab:0}, cor:{mat:0,lab:0} };
+    by[r][side].mat+=num(l.mat); by[r][side].lab+=num(l.lab);
+  }
+  for(i=0;i<submitted.length;i++) acc(submitted[i],'sub');
+  for(i=0;i<corrected.length;i++) if(!corrected[i].util && corrected[i].bucket!=='fp') acc(corrected[i],'cor');
+  for(k in by) if(by.hasOwnProperty(k)) rows.push(by[k]);
+  rows.sort(function(a,b){ return a.row-b.row; });
+  for(i=0;i<rows.length;i++){
+    l=rows[i];
+    if(Math.abs(r2(l.sub.mat+l.sub.lab)-r2(l.cor.mat+l.cor.lab))<0.005
+       && Math.abs(r2(l.sub.mat)-r2(l.cor.mat))<0.005) continue;
+    out.push({ row:l.row, label:ngRowLabel(l.row), submitted:r2(l.sub.mat+l.sub.lab), corrected:r2(l.cor.mat+l.cor.lab),
+               subMat:r2(l.sub.mat), subLab:r2(l.sub.lab), corMat:r2(l.cor.mat), corLab:r2(l.cor.lab) });
+  }
+  return out;
+}
+function ngRowLabel(row){
+  var i;
+  if(typeof NG_LAYOUT!=='undefined')
+    for(i=0;i<NG_LAYOUT.length;i++) if(NG_LAYOUT[i][0]===row && NG_LAYOUT[i][1]==='row') return String(NG_LAYOUT[i][2]).replace(/\n.*$/,'');
+  return 'Row '+row;
+}
+
+/* What the page knows about the job, in the shape the book prices. The
+   rows the book prices are REPLACED (their money shows in the change
+   table); future proofing, the utility-side rows and anything the book
+   has no rate for pass through. A typed figure on a no-rate row is the
+   answer to its ask. */
+var NG_BOOK_ROWS = { design:1, permit:1, trench:1, trenchTurf:1, restore:1, conduit:1, wire:1, conduitAG:1,
+                     wireAG:1, bollard:1, handhole:1, concrete:1, pad:1, panel:1, boards:1, meter:1, install:1,
+                     commission:1, other:1, charger:1, charger2:1, pedestal:1, mount:1, shipping:1,
+                     activation:1, network:1, striping:1, signage:1 };
+var NG_UTIL_ROWS = { trenchPri:1, conduitPri:1, xfmrpad:1, bollardUtil:1, riser:1, otherUtil:1 };
+function ngPorts80(ports){
+  var n=0, n80=0, i, u, q;
   if(typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length){
     for(i=0;i<EDITOR_FLEET.length;i++){
-      u=EDITOR_FLEET[i]; q=num(u.qty)||0;
-      if(!q) continue;
-      n+=q; t+=q*((num(u.kw)>=NG_PRICE.kw80) ? H.a80 : H.a50);
+      u=EDITOR_FLEET[i]; q=num(u.qty)||0; if(!q) continue;
+      n+=q; if(num(u.kw)>=NG_PRICE.kw80) n80+=q;
     }
   }
-  return n ? t/n : H.a50;
+  return n ? Math.round(ports*n80/n) : 0;
 }
-function ngPedestals(ports){
-  return num(DATA.nPedestal) || Math.max(1, Math.ceil(ports/NG_PRICE.portsPerPedestal));
-}
-
-function ngPriceLines(src){
-  var ports=num(DATA.plugs), out=[], i, l, c, k;
-  var charger=false, mounting=false, pad=false, panel=false, design=false, newSvc=isNewService();
-  var peds=ngPedestals(ports), hw=ngHardwarePerPort();
-  var pads=num(DATA.nPad) || peds;
-  function copy(o){ var n={}; for(k in o) if(o.hasOwnProperty(k)) n[k]=o[k]; return n; }
-  function money(o){ return num(o.mat)||num(o.lab); }
-  function padLine(base){
-    var p=base?copy(base):{ desc:'EVSE concrete pads', bucket:'mr', row:'concrete' };
-    p.qty=pads; p.fp=0; p.mat=r2(NG_PRICE.pad.mat*pads); p.lab=r2(NG_PRICE.pad.lab*pads);
-    p.note=pads+' pads \u2014 one per pedestal'; return p;
-  }
-  function designLine(base){
-    var p=base?copy(base):{ desc:'Design Costs, Permitting Costs', bucket:'mr', row:'design' };
-    p.row='design'; p.qty=ports; p.fp=0; p.mat=0; p.lab=r2(NG_PRICE.designPerPort*ports);
-    return p;
-  }
+function ngQuantities(src){
+  var ports=num(DATA.plugs), ts=trenchSplit(), i, l, k, u;
+  var paved=ts.paved, unpaved=ts.turf, cond=num(DATA.ftConduit), hh=0;
+  var sum={ trench:0, trenchTurf:0, conduit:0 }, extras=[], submitted=[], typed={};
   for(i=0;i<src.length;i++){
     l=src[i];
-    /* held-out and future-proofing lines pass through untouched */
-    if(l.bucket==='fp' || panelHeldOut(l) || civilHeldOut(l)){ out.push(l); continue; }
-    if(NG_FOLDED[l.row]) continue;
-    /* design and permitting are ONE per-port figure on every filed sheet */
-    if(l.row==='design' || l.row==='permit'){
-      if(design) continue;
-      design=true; out.push(designLine(l)); continue;
+    if(l.bucket==='fp'){ extras.push(l); continue; }
+    if(NG_UTIL_ROWS[l.row]){
+      u={}; for(k in l) if(l.hasOwnProperty(k)) u[k]=l[k];
+      u.util=true; extras.push(u); continue;
     }
-    if(l.row==='charger'){
-      if(charger) continue;
-      charger=true; c=copy(l);
-      c.mat=r2(hw*ports); c.lab=0; c.qty=ports; c.fp=0;
-      out.push(c); continue;
-    }
-    if(NG_MOUNT_ROWS[l.row]){
-      if(mounting) continue;
-      mounting=true; c=copy(l);
-      c.row='pedestal'; c.bucket='evse'; c.desc='Pedestals & mounting';
-      c.mat=r2(NG_PRICE.perPedestal*peds); c.lab=0; c.qty=peds; c.fp=0;
-      c.note=peds+' pedestals, one per '+NG_PRICE.portsPerPedestal+' ports';
-      out.push(c); continue;
-    }
-    if(l.row==='concrete' && l.bucket==='mr'){
-      if(pad) continue;
-      pad=true; out.push(padLine(l)); continue;
-    }
-    if(l.row==='trench' && l.bucket==='mr' && num(l.qty)>0){
-      c=copy(l);
-      c.mat=r2(NG_PRICE.trenchPaved.mat*num(l.qty)); c.lab=r2(NG_PRICE.trenchPaved.lab*num(l.qty));
-      out.push(c); continue;
-    }
-    if(newSvc && !panel && l.bucket==='mr' && NG_PANEL_ROWS[l.row] && money(l)){
-      panel=true; c=copy(l); c.lab=r2(num(c.lab)+NG_PRICE.newServicePanelLab);
-      out.push(c); continue;
-    }
-    out.push(l);
+    submitted.push(l);
+    if(l.row==='handhole') hh+=num(l.qty);
+    if(l.row==='trench'||l.row==='restore') sum.trench+=num(l.qty);
+    if(l.row==='trenchTurf') sum.trenchTurf+=num(l.qty);
+    if(l.row==='conduit'||l.row==='conduitAG') sum.conduit+=num(l.qty);
+    if(l.pinned && (l.row==='trenchTurf'||l.row==='handhole')) typed[l.row]={ mat:num(l.mat), lab:num(l.lab) };
+    /* "Other" is row 19's in make-ready; an EVSE kit or an ineligible
+       other has no book rate and passes through */
+    if(!NG_BOOK_ROWS[l.row] || (l.row==='other' && l.bucket!=='mr')) extras.push(l);
   }
-  if(ports>0 && !design) out.push(designLine(null));
-  if(ports>0 && !charger)
-    out.push({ desc:'EVSE hardware', bucket:'evse', row:'charger', qty:ports, fp:0,
-               mat:r2(hw*ports), lab:0 });
-  if(ports>0 && !mounting)
-    out.push({ desc:'Pedestals & mounting', bucket:'evse', row:'pedestal', qty:peds, fp:0,
-               mat:r2(NG_PRICE.perPedestal*peds), lab:0,
-               note:peds+' pedestals, one per '+NG_PRICE.portsPerPedestal+' ports' });
-  if(ports>0 && !pad) out.push(padLine(null));
-  return out;
+  if(!paved && !unpaved){ paved=sum.trench; unpaved=sum.trenchTurf; }
+  if(!cond) cond=sum.conduit;
+  return { ports:ports, paved:paved, unpaved:unpaved, conduit:cond, handholes:hh,
+           service:ngServiceKey(), hw80PerPort:num(DATA.ng80PerPort), ports80:ngPorts80(ports),
+           segment:d('category'), stationsTyped:num(DATA.stations),
+           servicePedestals:num(DATA.nServicePedestal),
+           pedestalsDrawn:num(DATA.nPedestal), padsDrawn:num(DATA.nPad),
+           markupPct:nval('p_markup'),
+           unpavedTyped:typed.trenchTurf||null, handholeTyped:typed.handhole||null,
+           extras:extras, submitted:submitted };
+}
+var NG_LAST = null;     /* the last pricing's flags and changes, for the panel */
+function ngProgramActive(){ return !!(FORM && FORM.writer==='nationalgrid'); }
+function jobLines(){ return ngProgramActive() ? ngPriceLines(LINES) : LINES; }
+function ngPriceLines(src){
+  var R=ngPriceBook(ngQuantities(src));
+  NG_LAST=R;
+  return R.lines;
+}
+
+/* The check, not the lever: H53 / P against the band, with the driver. */
+function ngGross(m){
+  var byRow=ngRollup(m);
+  return r2(ngSum(byRow,10,19)+ngSum(byRow,27,30)+ngSum(byRow,32,32)+ngSum(byRow,34,46)+num(m.taxTotal));
+}
+function ngBandDriver(pp, byRow, P){
+  var B=NG_PRICE.band, why=[];
+  if(pp>B.hi){
+    var p18=byRow[18] ? r2(byRow[18].mat+byRow[18].lab) : 0;
+    if(p18>=NG_PRICE.panel.single.mat+NG_PRICE.panel.single.lab-1) why.push('a new 200A service ('+money(p18)+') spread over '+P+' plugs');
+    var lf=(byRow[12]?num(byRow[12].qty):0)+(byRow[13]?num(byRow[13].qty):0);
+    if(lf>100) why.push('a long trench run ('+lf+' LF)');
+    if(!why.length) why.push('check the quantities against the drawing');
+    return why.join(' and ');
+  }
+  return 'small scope — a short trench and no new service push the price under the floor';
+}
+function ngPriceCheckHTML(m){
+  var R=NG_LAST||{ flags:[], changes:[] }, byRow=ngRollup(m), P=num(DATA.plugs), B=NG_PRICE.band, h='', i, f;
+  var gross=ngGross(m), pp=P>0 ? ngRound(gross/P) : 0, inBand=P>0 && pp>=B.lo && pp<=B.hi;
+  h+='<div class="card" style="margin-top:12px"><h3>National Grid price check'
+    +'<span class="hint">price book '+esc(NG_PRICE.version)+'</span></h3><div class="body">';
+  h+='<div class="note">Grand total (H53) '+money(gross)+' = <b>'+money(pp)+' per plug</b>'
+    +(P>0 ? (inBand ? ' — inside the '+money(B.lo)+'–'+money(B.hi)+' band.'
+                    : ' — <b>outside</b> the '+money(B.lo)+'–'+money(B.hi)+' band: '+esc(ngBandDriver(pp, byRow, P))+'.')
+          : '')
+    +' The book’s unit prices are never scaled to move it.</div>';
+  var asks=[], notes=[];
+  for(i=0;i<R.flags.length;i++){ f=R.flags[i]; (f.ask?asks:notes).push(f.text); }
+  var blank=[];
+  if(!d('company')) blank.push('Company name (E4)'); if(!d('phone')) blank.push('Telephone (E5)');
+  if(!d('email')) blank.push('Email (E6)'); if(!d('city')) blank.push('City, State, ZIP (C5)');
+  if(!d('ngAppNo')) blank.push('Application # (B4)'); if(!d('ngWR')) blank.push('WR # (B5)');
+  if(blank.length) notes.push('Blank header fields: '+blank.join(', ')+'.');
+  if(asks.length){
+    h+='<div class="warn" style="margin-top:8px"><b>Ask before submitting</b> — the book has no answer for these:'
+      +'<ul style="margin:5px 0 0;padding-left:17px">';
+    for(i=0;i<asks.length;i++) h+='<li>'+esc(asks[i])+'</li>';
+    h+='</ul></div>';
+  }
+  if(notes.length){
+    h+='<div class="note" style="margin-top:8px"><b>Flags</b><ul style="margin:5px 0 0;padding-left:17px">';
+    for(i=0;i<notes.length;i++) h+='<li>'+esc(notes[i])+'</li>';
+    h+='</ul></div>';
+  }
+  if(R.changes.length){
+    h+='<table class="pv" style="margin-top:8px"><tr><td><b>Line</b></td><td class="num"><b>Submitted</b></td>'
+      +'<td class="num"><b>Corrected</b></td><td class="num"><b>Change</b></td></tr>';
+    for(i=0;i<R.changes.length;i++){
+      f=R.changes[i];
+      h+='<tr><td>'+f.row+' · '+esc(f.label)+'</td><td class="num">'+money(f.submitted)+'</td>'
+        +'<td class="num">'+money(f.corrected)+'</td><td class="num">'+money(f.corrected-f.submitted)+'</td></tr>';
+    }
+    h+='</table>';
+  }
+  h+='</div></div>';
+  return h;
 }
 
 /* What National Grid pays on this sheet, bucket by bucket, off the same
@@ -1370,7 +1599,7 @@ function ngIncentive(m, tierKey){
 }
 
 function ngIncentiveHTML(m){
-  var I=ngIncentive(m), h='', i, L;
+  var I=ngIncentive(m), h=ngPriceCheckHTML(m), i, L;
   function $(n){ return money(r2(n)); }
   h+='<div class="card" style="margin-top:12px"><h3>National Grid MUD incentive'
     +'<span class="hint">table effective 15 Nov 2025</span></h3><div class="body">';
@@ -1380,12 +1609,6 @@ function ngIncentiveHTML(m){
       +'schedule, so treat the figures below as not applying until the category is MUD (5+ residential units).</div>';
   if(!(I.ports>0))
     h+='<div class="warn" style="margin-bottom:8px">Set Number of Ports — every cap is per port.</div>';
-  var _base=buildModel(FORM_NG_MA, true), _pp=I.ports>0 ? I.cost/I.ports : 0;
-  h+='<div class="note" style="margin-bottom:8px">All-in '+$(I.cost)+' = '+$(_pp)+' per port. '
-    +(r2(_base.total)<r2(I.cost)
-      ? 'Raised from '+$(_base.total)+' to the '+$(ngFloorTarget())+'/port floor — every line scaled '
-        +(Math.round((I.cost/_base.total-1)*1000)/10)+'% alike, proposal included.'
-      : 'Already at or above the '+$(ngFloorTarget())+'/port floor.')+'</div>';
   h+='<table class="pv"><tr><td><b>Bucket</b></td><td class="num"><b>Eligible cost</b></td>'
     +'<td><b>Rule</b></td><td class="num"><b>Rebate</b></td><td class="num"><b>Room under cap</b></td></tr>';
   for(i=0;i<I.lines.length;i++){
@@ -1503,11 +1726,13 @@ var FORM_NG_MA = {
   headers:{ type:'Desciption', desc:'Detail/Notes', mat:'Material Total $',
             lab:'Labor Total $', tot:'Total Cost $' },
   totalLabel:'Total for Eligible and Ineligible Costs',
-  /* Their sheet carries one Sales Tax line at row 52, below the eligible and
-     ineligible totals, and MA is 6.25%. Same shape as Eversource: one line,
-     in the ineligible section, over the taxable EVSE rows. */
+  /* Their sheet carries one Sales Tax line at row 52, a typed value. The
+     price book (s6.3): 6.25% of make-ready MATERIAL (F12-F19) plus signage
+     material (F34), rounded half-up — never EVSE hardware, pedestals,
+     freight, networking or labour (one upload had taxed the EVSE; that is
+     wrong). `base` reads it off the priced lines by sheet row. */
   tax:{ rate:6.25, label:'Sales Tax', mode:'single', section:'ne',
-        matRows:['charger','charger2','pedestal'], labRows:['install'] },
+        base:ngTaxBase, round:ngRound, matRows:[], labRows:[] },
   left:[
     { title:'Project Details', fields:[
         {k:'ngAppNo',   label:'National Grid Application #:'},
@@ -1531,7 +1756,9 @@ var FORM_NG_MA = {
       options:['Multi-Unit Dwelling (MUD)','Workplace','Public Parking','Fleet','Destination'] },
     { type:'stack', label:'Environmental Justice Community', k:'ngEjc', type2:'select',
       options:NG_EJC_OPTIONS },
-    { type:'stack', label:'All-in price per port, minimum (blank = $13,350)', k:'ngTargetPerPort',
+    { type:'stack', label:'Service scope (row 18) — ask, never assume', k:'ngService',
+      type2:'select', options:NG_SERVICE_OPTIONS },
+    { type:'stack', label:'Autel AC Pro 80A — price per port (no book rate; ask)', k:'ng80PerPort',
       type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Trenching', k:'ftTrench',  type2:'number', fmt:'#,##0' },
     { type:'stack', label:'Total Feet of Conduit',   k:'ftConduit', type2:'number', fmt:'#,##0' },
@@ -3807,6 +4034,7 @@ function civilFromCard(){ return String(d('civilSource')||'').indexOf('estimate'
 function civilMeasured(){ return num(DATA.ftTrench)>0 || num(DATA.ftConduit)>0; }
 function civilHeldOut(l){
   if(!l || l.bucket!=='mr' || !CIVIL_ROWS[l.row]) return false;
+  if(l.src==='ngbook') return false;               /* priced to the book, by quantity */
   if(l.src==='standard' || l.baseline) return false;   /* the card's own rows */
   return civilFromCard() && civilMeasured();
 }
@@ -3845,6 +4073,7 @@ function serviceNeedsGear(){ return serviceScenario()!==SERVICE_SCENARIOS[0]; }
 
 function panelHeldOut(l){
   if(!l || l.bucket!=='mr' || l.row!=='panel') return false;
+  if(l.src==='ngbook') return false;               /* the book prices row 18 on every job */
   /* The tie-in to existing service is work every job does; it sits on the
      same row as new switchgear but is not new gear, so it stays priced when
      the site is marked as needing no new panel. */
@@ -3903,9 +4132,9 @@ function buildModel(form, noFloor){
   form = form || proposalForm();
   var BL=form.blocks;
   var mk=1+nval('p_markup')/100;
-  /* A National Grid job never prices below its per-port floor. The floor
-     lifts the markup, never lowers it, and scales every line alike. */
-  if(!noFloor){ var _fl=ngFloorFactor(form); if(_fl>mk) mk=_fl; }
+  /* National Grid: the book's unit prices are never scaled or marked up
+     (s1.2). The old per-port floor that lifted every line alike is gone. */
+  if(form.writer==='nationalgrid') mk=1;
   /* Each form carries its own rate and labor rule. The knob overrides only
      the form it was edited against, so exporting two programs at once can't
      apply one utility's tax treatment to the other's sheet. */
@@ -3971,6 +4200,9 @@ function buildModel(form, noFloor){
        mapping, and switching the control back puts them straight in. */
     if(panelHeldOut(l)) continue;
     if(civilHeldOut(l)) continue;
+    /* utility-side rows (21-25) are on National Grid's sheet in H54 and
+       nowhere else: not in the proposal, not on another program's form */
+    if(l.util && form.writer!=='nationalgrid') continue;
     mm=num(l.mat)*mk; ll=num(l.lab)*mk;
     /* Design is priced for the form being WRITTEN, not the one on screen:
        a flat-rate form gets its flat figure even when another program's
@@ -4017,7 +4249,12 @@ function buildModel(form, noFloor){
      carry the canonical row key, so every form computes an identical base
      and the sheets foot to the same number. */
   var singleMat=0, singleLab=0;
-  if(single){
+  if(single && taxCfg.base){
+    /* the form names its own base (National Grid: make-ready material and
+       signage, by sheet row) */
+    var _tb=taxCfg.base(JL);
+    singleMat=r2(num(_tb.mat)*mk); singleLab=r2(num(_tb.lab)*mk);
+  } else if(single){
     var q, ln;
     for(q=0;q<JL.length;q++){
       ln=JL[q];
@@ -4050,8 +4287,8 @@ function buildModel(form, noFloor){
     var tm, tl;
     if(single){
       /* only the sink section carries tax; every other block gets none */
-      tm = (b.id===sinkId) ? r2(singleMat*rate) : 0;
-      tl = (b.id===sinkId) ? r2(singleLab*rate) : 0;
+      tm = (b.id===sinkId) ? (taxCfg.round ? taxCfg.round(singleMat*rate) : r2(singleMat*rate)) : 0;
+      tl = (b.id===sinkId) ? (taxCfg.round ? taxCfg.round(singleLab*rate) : r2(singleLab*rate)) : 0;
     } else {
       tm = r2(sm*rate);
       tl = taxLab ? r2(sl*rate) : 0;
@@ -7473,7 +7710,8 @@ function ngFillTemplate(ws, m){
   lbl('C4','Project Site Street Address: ', d('address')||'');
   lbl('C5','Project City, State, ZIP Code: ', d('city')||'');
   lbl('C6','Number of Ports: ', num(DATA.plugs)||'');
-  lbl('C7','Number of Stations: ', num(DATA.stations)||num(DATA.plugs)||'');
+  /* s6.1: S = P / 2, every station dual-port; a typed count that differs is flagged */
+  lbl('C7','Number of Stations: ', num(DATA.plugs)>0 ? ngStationsFor(num(DATA.plugs)) : (num(DATA.stations)||''));
   lbl('E4','Company Name: ', d('company')||'');
   lbl('E5','Telephone Number: ', d('phone')||'');
   lbl('E6','Email: ', d('email')||'');

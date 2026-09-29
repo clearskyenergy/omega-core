@@ -2514,7 +2514,11 @@ far end.
   not the far end of the run it was placed on.
 - `scripts/tests/ttrenchkeep.js` holds both; `api/jarvis-help.js` tells
   Jarvis.
-- The guide with screenshots is `docs/guides/Site-Map-Level-2-Two-Trenches.pdf`,
+- The guide with screenshots is `guides/editor/Site-Map-Level-2-Two-Trenches.pdf`
+  (moved from `docs/`, which Vercel does not serve, on 2026-09-29 so a field
+  rep can be sent a link: `/guides/editor/` holds the editor's own guides,
+  built by their own scripts; `guides/*.pdf` stays the Omega Logic set that
+  `build.js` writes and `tguides.js` and the kit judge),
   made by `scripts/guides/site-map-level-2.js`: it runs the real Level 2
   build in Chromium on the offline harness (clicks and keys, the state
   asserted after each step) and prints the pages, so it can never show a
