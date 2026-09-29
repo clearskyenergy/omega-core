@@ -12,7 +12,7 @@ module.exports = A.handler(async function (req, res) {
   if (!caller.staff && !(verified ? await A.isTenantAdmin(caller, orgId) : await A.clientAdmin(caller, orgId))) throw A.httpError(403, 'Tenant administrator required');
   if (req.method === 'POST') {
     if (!caller.staff) throw A.httpError(403, 'Staff only');
-    var fields = ['orgId', 'modules', 'pricebookVersion', 'plan', 'credit', 'builders', 'viewers', 'serviceFee', 'interval', 'action', 'dryRun', 'previewId', 'effectiveAt'];
+    var fields = ['orgId', 'modules', 'pricebookVersion', 'plan', 'credit', 'builders', 'viewers', 'serviceFee', 'priceOverride', 'interval', 'action', 'dryRun', 'previewId', 'effectiveAt'];
     if (Object.keys(input).some(function (k) { return fields.indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported package field');
     if (input.dryRun !== false) return S.preview(A.db(), orgId, input, Date.now());
     return S.apply(A.db(), orgId, input, caller, Date.now());

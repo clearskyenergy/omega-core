@@ -129,6 +129,8 @@ if (SHOTS && !fs.existsSync(SHOTS)) fs.mkdirSync(SHOTS, { recursive: true });
 async function shot(p, name) { if (!SHOTS) return; await new Promise(function (r) { setTimeout(r, 700); }); await p.screenshot({ path: path.join(SHOTS, name + '.png'), fullPage: true }); }
 var fails = 0; function ok(n, c, d) { console.log((c ? 'ok   ' : 'FAIL ') + n + (c ? '' : ' ' + JSON.stringify(d))); if (!c) fails++; }
 function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+/* the page reports in its own time (debounced): look a few times before saying no */
+async function until(fn, ms) { var end = Date.now() + (ms || 4000), v = fn(); while (!v && Date.now() < end) { await wait(120); v = fn(); } return v; }
 (async function () {
   process.env.PACKAGING_SIGNUP_ENABLED = 'true'; process.env.PACKAGING_BILLING_ENABLED = 'true'; process.env.QBO_ENV = 'sandbox';
   await new Promise(function (r) { srv.listen(0, '127.0.0.1', r); });
@@ -205,6 +207,10 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   ok('Create account makes the account and sends the link whose Continue button opens this page again', st.created.join() === 'kim@newco.example' && st.sends.length === 1 && /\/start\.html$/.test(st.sends[0] || ''), st);
   ok('never visited /workspace on the way', !t.nav.some(function (u) { return /\/workspace/.test(u); }), t.nav);
   ok('then it opens on one question, a tile per answer (no radio rows), on step 1 of the stepper, with a way to skip, signed in as the new account, and nothing says "Request my workspace"', st.discovery && !st.form && !st.auth && st.tiles === 12 && st.radios === 0 && st.steps && st.step === 'work' && st.skip && st.who === 'kim@newco.example' && !st.reqWorkspace, st);
+  /* the admin console sees the account from this moment (2026-09-28): one row in its queue, the stage, no workspace */
+  var uid = await p.evaluate(function () { return window.__firebaseDouble.auth.currentUser.uid; });
+  var row = await until(function () { var r = sdb.data.get('access_requests/' + uid); return r && r.signup && r.signup.stage === 'work' ? r : null; });
+  ok('the signup in progress is in the console\'s queue from the account on: one row per account, source signup, the stage, nothing made', !!row && row.status === 'pending' && row.source === 'signup' && row.email === 'kim@newco.example' && row.domain === 'newco.example' && row.signup.emailVerified === false && !sdb.data.get('omega_orgs/newco.example'), row);
   await shot(p, 'signup-1-work');
   /* two taps and a chip: the dock shows the server's own recommendation as they tap */
   await p.click('.sq-tile[data-q="sites"]'); await p.click('.sq-tile[data-q="storage"]');
@@ -214,17 +220,19 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   var live = await p.$eval('#signup-live', function (e) { return e.textContent; });
   ok('the dock under the tiles is the server\'s recommendation, priced, as they tap', /Grid Atlas|Omega Grid|Intel/.test(live) && /\$[\d,]+\/month/.test(live), live);
   await shot(p, 'signup-1-work-picked');
-  ok('nothing is created or requested while choosing', !posts.some(function (x) { return /tenant-signup/.test(x); }), posts);
+  ok('nothing is created or requested while choosing', !posts.some(function (x) { return /tenant-signup (create|pay-now)/.test(x); }), posts);
   await p.click('#discovery-continue');
   await p.waitForSelector('#step-build:not(.hide)', { timeout: 6000 }).catch(function () {});
   await p.waitForFunction(function () { return /^\$[\d,]+\/month$/.test(document.getElementById('signup-package-price').textContent); }, null, { timeout: 8000 }).catch(function () {});
   var build = await p.evaluate(function () { return { cards: document.querySelectorAll('#signup-package-menu [data-module-card]').length, checked: Array.prototype.map.call(document.querySelectorAll('#signup-package-menu [data-module-card] input:checked'), function (i) { return i.closest('[data-module-card]').getAttribute('data-module-card'); }), price: document.getElementById('signup-package-price').textContent, next: document.getElementById('build-next').textContent, cont: document.getElementById('build-continue').textContent.trim(), step: document.querySelector('#signup-steps li.on').getAttribute('data-step'), work: document.querySelector('#signup-steps li[data-step="work"]').className }; });
   ok('Your system: the menu, priced by the server, starting from what they tapped (Lite, Grid Atlas, Site Intel, Storage)', build.cards > 0 && ['lite', 'gridatlas', 'siteintel', 'storage'].every(function (k) { return build.checked.indexOf(k) >= 0; }) && /^\$[\d,]+\/month$/.test(build.price) && build.step === 'system' && build.work === 'done', build);
   ok('the cart says what is next: the email, then billing', build.cont === 'Continue' && /confirm your email, then billing/.test(build.next), build);
+  row = await until(function () { var r = sdb.data.get('access_requests/' + uid); return r && r.signup.stage === 'system' && r.signup.priceDisplay ? r : null; });
+  ok('the system they build is on the row, priced by the server (never a figure of the page\'s)', !!row && ['lite', 'gridatlas', 'siteintel', 'storage'].every(function (k) { return row.signup.modules.indexOf(k) >= 0; }) && /^\$[\d,]+\/month$/.test(row.signup.priceDisplay) && row.signup.interval === 'monthly', row && row.signup);
   await shot(p, 'signup-2-system');
   await p.click('#build-continue'); await wait(400);
   var ver = await p.evaluate(function () { return { verify: !document.getElementById('step-verify').classList.contains('hide'), email: document.getElementById('verify-email').textContent, step: document.querySelector('#signup-steps li.on').getAttribute('data-step'), billing: !document.getElementById('step-billing').classList.contains('hide') }; });
-  ok('an unconfirmed address meets one step for it, between the system and billing, and nothing is created', ver.verify && !ver.billing && ver.email === 'kim@newco.example' && ver.step === 'verify' && !posts.some(function (x) { return /tenant-signup/.test(x); }) && !sdb.data.get('omega_orgs/newco.example'), { ver: ver, posts: posts });
+  ok('an unconfirmed address meets one step for it, between the system and billing, and nothing is created', ver.verify && !ver.billing && ver.email === 'kim@newco.example' && ver.step === 'verify' && !posts.some(function (x) { return /tenant-signup (create|pay-now)/.test(x); }) && !sdb.data.get('omega_orgs/newco.example'), { ver: ver, posts: posts });
   await shot(p, 'signup-3-verify');
   /* the email link opens this page again: a reload in the tab lands on the same step, not the start */
   await p.reload({ waitUntil: 'domcontentloaded' });
@@ -237,13 +245,13 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   /* "I've clicked it" before the click: said plainly, nothing made */
   await p.click('#verify-check'); await wait(300);
   var early = await p.evaluate(function () { return document.getElementById('verify-status-text').textContent; });
-  ok('"I\'ve clicked it" before the click says it is not confirmed yet and makes nothing', /^Not yet/.test(early) && !posts.some(function (x) { return /tenant-signup/.test(x); }), { status: early, posts: posts });
+  ok('"I\'ve clicked it" before the click says it is not confirmed yet and makes nothing', /^Not yet/.test(early) && !posts.some(function (x) { return /tenant-signup (create|pay-now)/.test(x); }), { status: early, posts: posts });
   /* away in the mail app: the tab is hidden and asks nobody; the click happens there */
   await p.evaluate(function () { window.__hidden = true; Object.defineProperty(document, 'hidden', { configurable: true, get: function () { return window.__hidden === true; } }); window.__reloads = 0; });
   await p.evaluate(function () { localStorage.setItem('dbl-clicked', '1'); });
   await wait(5600);
   var away = await p.evaluate(function () { return { reloads: window.__reloads, verify: !document.getElementById('step-verify').classList.contains('hide') }; });
-  ok('while the tab is hidden it asks Firebase nothing and makes nothing', away.reloads === 0 && away.verify && !posts.some(function (x) { return /tenant-signup/.test(x); }), { away: away, posts: posts });
+  ok('while the tab is hidden it asks Firebase nothing and makes nothing', away.reloads === 0 && away.verify && !posts.some(function (x) { return /tenant-signup (create|pay-now)/.test(x); }), { away: away, posts: posts });
   /* back on the tab: it looks at once (not at the next tick) and the page moves on by itself */
   var back = await p.evaluate(function () { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); return window.__reloads; });
   ok('coming back to the tab asks Firebase at once', back === 1, back);
@@ -261,6 +269,8 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   ok('Subscribe makes the workspace, named after the billing form\'s company, on a verified token and issues the first invoice for what they chose', await visible(p, 'step-pay') && org && org.status === 'active' && org.name === 'NewCo Energy' && bill && bill.packagingState === 'awaiting_payment' && invoices === 1 && bill.proposedPackage && ['gridatlas', 'siteintel', 'storage'].every(function (k) { return bill.proposedPackage.modules.indexOf(k) >= 0; }) && posts.filter(function (x) { return /tenant-signup pay-now/.test(x); }).every(function (x) { return /verified$/.test(x) && !/unverified/.test(x); }), { posts: posts, org: org && org.status, state: bill && bill.packagingState, invoices: invoices, modules: bill && bill.proposedPackage && bill.proposedPackage.modules });
   ok('the answers travel with the signup for the rep (tapped = this quarter)', bill && bill.signupDiscovery && bill.signupDiscovery.discovery.answers.sites === 'quarter' && bill.signupDiscovery.discovery.answers.storage === 'quarter' && bill.signupDiscovery.discovery.answers.ev === 'no' && bill.signupDiscovery.discovery.flags.sitesMany === true, bill && bill.signupDiscovery);
   ok('the company draft is forgotten', await p.evaluate(function () { return localStorage.getItem('omega:signup-draft') === null; }));
+  row = sdb.data.get('access_requests/' + uid);
+  ok('the workspace made, the row leaves the queue: converted, naming the workspace, the system kept', !!row && row.status === 'converted' && row.orgId === 'newco.example' && row.signup.stage === 'done' && row.signup.modules.indexOf('gridatlas') >= 0, row);
   await shot(p, 'signup-5-pay');
   ok('no page errors', !t.errs.length, t.errs);
   await ctx.close();
@@ -299,7 +309,7 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   await p.click('#createBtn'); await p.waitForURL(/start\.html/, { timeout: 6000 }).catch(function () {}); await p.waitForSelector('#create-btn', { timeout: 6000 }).catch(function () {});
   await p.fill('#em', 'lee@acme.example'); await p.fill('#pw', 'longenough1'); await p.click('#create-btn');
   await p.waitForURL(function (u) { return !/start\.html/.test(u.pathname); }, { timeout: 6000 }).catch(function () {});
-  ok('colleague of an existing workspace goes in, never into the signup', !/start\.html/.test(p.url()) && !posts.some(function (x) { return /tenant-signup/.test(x); }), t.nav);
+  ok('colleague of an existing workspace goes in, never into the signup', !/start\.html/.test(p.url()) && !posts.some(function (x) { return /tenant-signup (create|pay-now)/.test(x); }), t.nav);
   await ctx.close();
   /* 2b. an address that already has an account signs in from the same button (the verification link opens this page in any browser) */
   ctx = await ctxFor({}); p = await ctx.newPage(); t = track(p);

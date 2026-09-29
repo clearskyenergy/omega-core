@@ -59,6 +59,28 @@ async function main() {
   bad = B.proposed(); bad.policy.trialDays = 15; rejects(function () { B.validate(bad); });
   bad = B.proposed(); bad.modules.storage.priceCents = NaN; rejects(function () { B.validate(bad); });
   bad = B.proposed(); bad.qbo.env = 'production'; rejects(function () { B.validate(bad); });
+  /* A NEGOTIATED TIER PRICE (2026-09-28, Tommy: "i can override it if they are on a tier otherwise they pay for what they add") */
+  var ev = M.starters().ev, deal = { amountCents: 99900, reason: 'Launch partner' };
+  var nq = P.quote(ev, b, { plan: 'field', priceOverride: deal });
+  eq([nq.monthlyCents, nq.recurringCents, nq.plan], [99900, 99900, 'field'], 'a negotiated Field price replaces the tier price');
+  eq(nq.lines.filter(function (l) { return l.itemKey === 'plan:field'; }).map(function (l) { return [l.amountCents, l.listCents, l.name]; }), [[99900, 129900, 'Field (negotiated)']], 'the plan line carries it, and remembers the list price');
+  eq([nq.priceOverride.plan, nq.priceOverride.amountCents, nq.priceOverride.listCents, nq.priceOverride.reason], ['field', 99900, 129900, 'Launch partner']);
+  eq(nq.display.negotiated, 'Negotiated: $999/month for Field (list $1,299/month). Launch partner');
+  eq(nq.annualPrepayBeforeCreditCents, 99900 * 10, 'the year follows it');
+  eq(P.quote(ev.concat(logic), b, { plan: 'field', priceOverride: deal }).monthlyCents, 99900 + 250000, 'Omega Logic is added on top at list: they pay for what they add');
+  eq(P.quote(ev, b, { plan: 'field', builders: 4, priceOverride: deal }).monthlyCents, 99900 + b.logins.builderCents, 'and so are extra logins');
+  eq(P.quote(ev, b, { plan: 'field', priceOverride: Object.assign({ plan: 'pro' }, deal) }).monthlyCents, 129900, 'a price negotiated for another tier does not apply');
+  eq(P.quote(ev, b, { plan: 'field', priceOverride: Object.assign({ plan: 'pro' }, deal) }).priceOverride, null);
+  eq(P.quote(ev, b, { plan: 'auto', priceOverride: Object.assign({ plan: 'field' }, deal) }).monthlyCents, 99900, 'under auto the negotiated tier competes at its negotiated price');
+  eq(P.quote(['lite', 'storage'], b, { plan: 'auto', priceOverride: Object.assign({ plan: 'field' }, deal) }).plan, 'alacarte', 'and a selection that is cheaper à la carte stays there');
+  eq(P.quote(['lite', 'storage'], b, { plan: 'auto', priceOverride: Object.assign({ plan: 'field' }, deal) }).priceOverride, null);
+  rejects(function () { P.quote(['lite', 'storage'], b, { plan: 'alacarte', priceOverride: deal }); });                 /* never à la carte: they pay for what they add */
+  rejects(function () { P.quote(ev, b, { plan: 'auto', priceOverride: deal }); });                                       /* a tier must be named */
+  rejects(function () { P.quote(ev, b, { plan: 'field', priceOverride: { amountCents: 10000, reason: 'x' } }); });        /* never below the floor */
+  rejects(function () { P.quote(ev, b, { plan: 'field', priceOverride: { amountCents: 99900 } }); });                     /* a reason */
+  rejects(function () { P.quote(ev, b, { plan: 'field', priceOverride: { amountCents: 999.5, reason: 'x' } }); });        /* whole cents */
+  eq(P.dollarsToCents('999', 'x'), 99900); eq(P.dollarsToCents('999.5', 'x'), 99950); rejects(function () { P.dollarsToCents('nine', 'x'); }); rejects(function () { P.dollarsToCents('-1', 'x'); });
+  eq(P.quote(ev, b, { plan: 'field' }).priceOverride, null, 'no negotiation: nothing on the quote');
   console.log('Subscription pricing and version safety: ' + count + ' passed.');
 }
 main().catch(function (e) { console.error(e); process.exitCode = 1; });

@@ -393,7 +393,7 @@
     $('pay-where').textContent = '';
     var a = $('pay-link'); a.textContent = j.amountDueDisplay ? 'Pay ' + j.amountDueDisplay + ' securely' : 'Pay securely';
     if (j.paymentLink) { a.href = j.paymentLink; a.className = 'btn'; } else { a.removeAttribute('href'); a.className = 'btn ghost'; a.textContent = 'Pay from the invoice ' + (payWith() || 'we') + ' emailed' + (j.billingEmail ? ' to ' + j.billingEmail : ' you'); $('pay-status').textContent = (payWith() || 'We') + ' emailed the invoice itself, with its Pay button. Pay it there, then press I\'ve paid; we check your payment every few seconds while this page is open.'; }
-    show('step-pay'); if (payTimer) clearInterval(payTimer); payTimer = setInterval(function () { if (!document.hidden) checkPayment(false); }, 8000);
+    show('step-pay'); reportProgress('pay'); if (payTimer) clearInterval(payTimer); payTimer = setInterval(function () { if (!document.hidden) checkPayment(false); }, 8000);
   }
   window.checkPayment = function(byHand){
     var u = auth.currentUser; if (!u || !PAY) return; var btn = $('pay-check'); if (byHand) { btn.disabled = true; btn.textContent = 'Checking your payment…'; }
@@ -435,6 +435,29 @@
     var u = auth.currentUser; if (!u || !draft) return;
     for (var k in patch) if (patch.hasOwnProperty(k)) draft[k] = patch[k];
     try { localStorage.setItem(DRAFT, JSON.stringify(draft)); } catch (e) {}
+    if (patch.stage || patch.modules || patch.interval || patch.company) reportProgress();
+  }
+
+  /* THE SIGNUP IN PROGRESS, FOR CLEARSKY (2026-09-28, Tommy: "if they are
+     creating a new account it should ... send them to my admin tenant
+     account portal ... then we should be able to see that on my admin
+     portal"). Each step reached is reported to the server (tenant-signup
+     'progress'), which keeps one row per account in the admin console's
+     queue with the stage and the system chosen so far, priced by the
+     server; the row leaves the queue when the workspace is made. Debounced,
+     never repeated for the same facts, and never in the way: a refusal
+     changes nothing on this page. */
+  var progressTimer = null, progressSent = '';
+  function reportProgress(stage){
+    if (!auth.currentUser) return;
+    var body = { action: 'progress', stage: stage || (draft && draft.stage) || 'account' };
+    var mods = signupPicker ? signupPicker.value() : (draft && draft.modules) || null;
+    if (mods && mods.length) { body.modules = mods; body.interval = signupPicker ? intervalValue() : (draft && draft.interval) || 'monthly'; }
+    var name = $('f-name').value.trim(); if (name) body.company = name;
+    if (draft && draft.vertical) body.vertical = draft.vertical;
+    var key = JSON.stringify(body); if (key === progressSent) return;
+    if (progressTimer) clearTimeout(progressTimer);
+    progressTimer = setTimeout(function () { api('/api/tenant-signup', body).then(function () { progressSent = key; }, function () {}); }, 400);
   }
 
   /* THE EMAIL LINK. The server makes no workspace for an unconfirmed address
@@ -554,6 +577,7 @@
       } else if (saved) forgetDraft();
     } catch (e) {}
     if (!draft) draft = { email: String(u.email || '').toLowerCase(), at: Date.now() };
+    reportProgress(draft.stage || 'account');
     /* The signup goes straight into the guided run, whether or not Create
        account carried the company over (Tommy, 2026-09-28: "i want whats in
        the slide show"): the company is the Legal company name that Billing &

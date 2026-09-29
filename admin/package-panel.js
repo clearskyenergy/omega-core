@@ -35,9 +35,12 @@
     var fee = { mode: $('fee-mode').value, appliesTo: $('fee-scope').value };
     if (fee.mode !== 'standard') fee.reason = $('fee-reason').value.trim();
     if (fee.mode === 'custom') fee.amountDollars = $('fee-amount').value.trim();
+    var negotiated = $('override') ? $('override').value.trim() : '';
     return { orgId: orgId, modules: picker.value(), pricebookVersion: record.pricebookVersion,
       plan: $('plan').value, interval: $('interval').value, credit: $('credit').checked,
-      builders: Number($('builders').value), viewers: Number($('viewers').value), serviceFee: fee };
+      builders: Number($('builders').value), viewers: Number($('viewers').value), serviceFee: fee,
+      /* A NEGOTIATED TIER PRICE (2026-09-28, Tommy: "i can override it if they are on a tier otherwise they pay for what they add"): dollars and a reason, for the tier picked above; blank clears the one on record */
+      priceOverride: negotiated ? { amountDollars: negotiated, reason: $('override-reason').value.trim(), plan: $('plan').value !== 'auto' ? $('plan').value : undefined } : null };
   }
   function refreshQuote() {
     preview = null; $('apply').disabled = true; var ticket = ++quoteSequence;
@@ -45,8 +48,12 @@
     $('fee-reason').parentNode.hidden = $('fee-mode').value === 'standard';
     $('fee-scope').hidden = $('fee-mode').value === 'standard';
     if ($('interval').value === 'annual') { $('credit').checked = false; $('credit').disabled = true; } else $('credit').disabled = false;
+    var tierPicked = ['field', 'pro'].indexOf($('plan').value) >= 0;
+    $('override').disabled = !tierPicked; $('override-reason').disabled = !tierPicked;
+    $('negotiated').textContent = tierPicked ? '' : 'A negotiated price applies to a plan tier (Field or Pro). Lite + modules pays for what it adds.';
     request('/api/package-catalog', terms()).then(function (data) {
       if (ticket !== quoteSequence) return; var q = data.quote;
+      if (tierPicked) $('negotiated').textContent = q.display.negotiated || ($('override').value.trim() ? 'Not applied: the negotiated price names another tier.' : 'List price. Enter a monthly figure and a reason to negotiate this tier.');
       $('list').textContent = q.display.list; $('fits').textContent = q.display.plan;
       $('monthly').textContent = q.display.recurring; $('first').textContent = q.display.monthly;
       $('fee').textContent = q.display.serviceFee; $('fit').textContent = q.display.fit;
@@ -227,6 +234,8 @@
       if (out.on.slice().sort().join() !== out.bought.slice().sort().join()) out.lines.push('Switched on: ' + names(out.on));
       var pays = []; if (b.monthlyDisplay) pays.push(String(b.monthlyDisplay)); if (b.nextInvoiceOn) pays.push('next invoice ' + dayOf(b.nextInvoiceOn)); if (b.paidThrough) pays.push('paid through ' + dayOf(b.paidThrough)); if (b.packagingState) pays.push(b.packagingState);
       if (pays.length) out.lines.push('Pays ' + pays.join(' · '));
+      var po = b.priceOverride;
+      if (po && po.amountCents != null) out.lines.push('Negotiated: $' + (po.amountCents / 100).toLocaleString('en-US') + '/month for ' + (byKey[po.plan] ? byKey[po.plan].name : po.plan === 'field' ? 'Field' : po.plan === 'pro' ? 'Pro' : po.plan) + (po.listCents != null ? ' (list $' + (po.listCents / 100).toLocaleString('en-US') + '/month)' : '') + (po.reason ? ' · ' + po.reason : '') + (po.by ? ' · by ' + po.by : '') + (po.at ? ' ' + dayOf(po.at) : ''));
     } else {
       /* the tenant's own reading, piece by piece (review finding 24): the
          tool levels omega-tenant.js gives a billed tier (OmegaTenant.tierLevels:
@@ -350,6 +359,10 @@
       input('fee-amount', 'Custom service fee (USD)', fee.amountDollars, 'text', rail).inputMode = 'decimal';
       input('fee-reason', 'Reason for fee change', fee.reason, 'text', rail);
       rail.appendChild(choice('fee-scope', [['first-year', 'First year only'], ['every-year', 'Every year']], fee.appliesTo || 'first-year'));
+      var negotiated = selected.priceOverride || {};
+      input('override', 'Negotiated monthly price (USD), plan tier only', negotiated.amountCents != null ? String(negotiated.amountCents / 100) : '', 'text', rail).inputMode = 'decimal';
+      input('override-reason', 'Reason for the negotiated price', negotiated.reason || '', 'text', rail);
+      var negotiatedNote = el('div', '', 'pp-note'); negotiatedNote.id = 'pp-negotiated'; rail.appendChild(negotiatedNote);
       input('builders', 'Builder logins', selected.builders == null ? data.defaults.builders : selected.builders, 'number', rail);
       input('viewers', 'Viewer logins', selected.viewers == null ? data.defaults.viewers : selected.viewers, 'number', rail);
       var annual = el('div', '', 'pp-note'); annual.id = 'pp-annual'; rail.appendChild(annual);

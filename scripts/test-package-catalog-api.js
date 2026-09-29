@@ -28,6 +28,7 @@ async function main() {
   assert(!JSON.stringify(out).includes('qboItemId')); count++;
   await denied('POST', { modules: ['lite'], monthlyCents: 1 }, 400);
   await denied('POST', { modules: ['lite'], serviceFee: { mode: 'waived', reason: 'Forged' } }, 400);
+  await denied('POST', { modules: ['lite'], priceOverride: { amountCents: 99900, reason: 'Forged' } }, 400);   /* a negotiated price is staff's to name (2026-09-28) */
   await denied('POST', { modules: ['lite'], credit: { pct: 100 } }, 400);
   await denied('DELETE', {}, 405);
   /* the email link: the owner of an active client reads the priced menu without it; anyone else is asked (admin.clientAdmin) */
@@ -35,7 +36,13 @@ async function main() {
   caller.uid = 'm1'; db.seed('omega_orgs/example.com/members/m1', { role: 'member', status: 'active' }); await denied('GET', {}, 403); caller.uid = 'owner'; caller.claims.email_verified = true;
   db.seed('omega_orgs/example.com/members/owner', { status: 'disabled' }); await denied('GET', {}, 403);
   caller.staff = true; out = await req(); assert.equal(out.quote.monthlyCents, 50000); count++;
+  var Mx = require('../api/_lib/modules'), evKeys = Mx.starters().ev;
+  out = await req('POST', { modules: evKeys, plan: 'field', priceOverride: { amountDollars: '999', reason: 'Launch partner' } }); assert.equal(out.quote.monthlyCents, 99900); count++;
   assert.equal(db.data.has('omega_orgs/example.com/billing/current'), false); count++;
+  /* a customer's own quote carries the negotiated price on their record, and cannot change it */
+  caller.staff = false; db.seed('omega_orgs/example.com/members/owner', { role: 'owner', status: 'active' }); db.seed('omega_orgs/example.com/billing/current', { plan: 'field', priceOverride: { plan: 'field', amountCents: 99900, reason: 'Launch partner' } });
+  out = await req('POST', { modules: evKeys, plan: 'field' }); assert.equal(out.quote.monthlyCents, 99900); count++; assert.equal(out.quote.priceOverride.reason, 'Launch partner'); count++;
+  out = await req('POST', { modules: evKeys.concat(['logic-office']), plan: 'field' }); assert.equal(out.quote.monthlyCents, 99900 + 150000); count++;
   caller.staff = false; db.seed('omega_orgs/example.com', { status: 'suspended' }); await denied('GET', {}, 403);
   console.log('Package catalog authorization: ' + count + ' passed; no network calls.');
 }

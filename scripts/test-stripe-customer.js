@@ -365,9 +365,9 @@ async function reviewed() {
   var oct = await call(owner, { action: 'pay' }, s);
   ok(oct.state === 'open' && oct.invoiceId !== a.invoiceId && s.invoices_[oct.invoiceId].total === 129900 && s.invoices_[oct.invoiceId].metadata.omegaDueDate === '2026-10-02', '...and October is paid as before', oct);
 
-  /* the master console's own save, run from its source as tadminstanding.js reads it */
+  /* the admin's own save (Save terms on /admin/account.html, moved there from the console 2026-09-28), run from its source as tadminstanding.js reads it */
   await heldOctober();
-  var SRC = fs.readFileSync(path.join(__dirname, '../admin/admin-console.js'), 'utf8'), at = SRC.indexOf('function saveTenantBilling('), end = SRC.indexOf('{', at), depth = 0;
+  var SRC = fs.readFileSync(path.join(__dirname, '../admin/account.js'), 'utf8'), at = SRC.indexOf('function saveTenantBilling('), end = SRC.indexOf('{', at), depth = 0;
   for (;; end++) { if (SRC[end] === '{') depth++; else if (SRC[end] === '}' && !--depth) break; }
   var form = { 'tb-tier': 'standard', 'tb-amt': '1299', 'tb-due': '2026-10-02', 'tb-paid': String(bill().amountPaid), 'tb-paidat': bill().lastPaidAt, 'tb-jarvis': 'on' }, msg = { textContent: '' };
   var page = { getElementById: function (id) { if (id === 'tb-msg-' + ORG) return msg; var f = id.slice(0, -(ORG.length + 1)); return Object.prototype.hasOwnProperty.call(form, f) ? { value: form[f] } : null; } };

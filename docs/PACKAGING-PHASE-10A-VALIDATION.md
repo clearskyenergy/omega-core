@@ -104,7 +104,13 @@ the year with two months of savings."* The pages now walk exactly that:
    continue address is `/start.html`. The typed address travels in the
    browser (`omega:signup-draft`), never in a link. A colleague of an
    existing tenant still just goes in; an address that already has an
-   account signs in from the same button.
+   account signs in from the same button. From that moment the account is
+   in ClearSky's admin console: the page reports each step it reaches
+   (`POST /api/tenant-signup {action:'progress'}` → `access_requests/{uid}`,
+   source `signup`, the stage and the system chosen so far, priced by the
+   server), the console's Access requests card reads it as *in signup* and
+   `/admin/account.html?org=` opens it; the row reads `converted` once the
+   workspace is made and the tenant record takes over.
 2. **Verify** (`start.html`): a password account is not verified until its
    link is clicked and the server refuses an unverified one, so the page
    holds there, names the address, and offers *Resend* and *I've verified*.

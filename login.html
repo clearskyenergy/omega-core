@@ -820,7 +820,7 @@
          to move a customer. route() sends them on only while packaged
          signup is on, and /start.html re-reads the record itself, so a
          record this read missed opens the workspace from there. */
-      let signup = false;
+      let signup = false, inSignup = false;
       if (!logicOrg && !grantOrg && !isAdminDomain && !staffActive && !TENANT_NAMES[homeOrg] &&
           dests.length === 1 && dests[0].key === "workspace") {
         const [req, terms, hasWork] = await Promise.all([
@@ -829,10 +829,15 @@
           fs.getDocs(fs.query(fs.collection(db, "projects"), fs.where("orgId", "==", homeOrg), fs.limit(1)))
             .then((snap) => !snap.empty, () => true)
         ]);
-        signup = !req && (!terms || !hasWork);
+        /* a signup this account started on /start.html and has not finished
+           (the account made there, the workspace not yet: access_requests
+           source 'signup', still pending) goes back to it, whatever else
+           is true and whether or not packaged signup is on */
+        inSignup = !!(req && req.source === 'signup' && (req.status || 'pending') === 'pending');
+        signup = inSignup || (!req && (!terms || !hasWork));
       }
 
-      return { dests: dests, org: homeOrg, signup: signup };
+      return { dests: dests, org: homeOrg, signup: signup, inSignup: inSignup };
     }
 
     /* ---- Hand the session to the destination ------------------------------ */
@@ -890,7 +895,7 @@
 
         const found = await resolve(user);
         if (found.blocked) { routing = false; return blockedPane(found.blocked, found.role); }
-        if (found.signup && await packagedSignup) return toSignup();
+        if (found.signup && (found.inSignup || await packagedSignup)) return toSignup();
 
         /* ── ALWAYS ASK WHEN THERE IS MORE THAN ONE ────────────────────
            This used to remember the last choice and go straight there,

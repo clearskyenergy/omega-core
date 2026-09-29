@@ -337,6 +337,28 @@ An owner or admin of an ACTIVE client needs no verified email here either
 (`admin.clientAdmin`, as on `plan-change`). Stripe → QuickBooks is the Connect to Stripe app, never OMEGA (that would
 book it twice). `scripts/test-stripe-customer.js`.
 
+**A negotiated tier price** (2026-09-28, Tommy: "the cost of the account
+should then reflect in the page in my admin console but i can override it
+if they are on a tier otherwise they pay for what they add"): staff may set a
+plan tier's (Field, Pro) monthly price by hand, with a reason, on the Package
+panel — `priceOverride: { plan, amountCents, listCents, reason, by, at }` on
+`billing/current`, written only by approve/activate (`tenant-package`,
+`tenant-approve`, staff) and cleared by an activation without one. In
+`subscription-pricing.js quote()` it replaces THAT tier's list price and
+nothing else: Omega Logic, extra logins, the credit and the floor stay as the
+book has them (they pay for what they add); Lite + modules is never
+overridden; on any other plan it does not apply; under `plan: 'auto'` the
+tier competes at its negotiated price. Every re-quote reads it off the RECORD
+(`Policy.invoice` for the first invoice and each renewal, `displayAfter`,
+`plan-change` quote/apply/summary, a customer's own `package-catalog` quote);
+a customer body never names one (`package-catalog` accepts it from staff
+only; `plan-change` refuses the field). The plan line reads "Field
+(negotiated)" and keeps `listCents`; the account page's Payment card and the
+panel's standing strip say who set it and when. A legacy plan's terms
+(Amount due, Next payment…) already are its override. Held by
+`scripts/test-subscription-pricing.js`, `test-package-activation.js`,
+`test-plan-change.js`, `test-package-catalog-api.js`.
+
 Module display names are Omega-branded (2026-09-27): `lite` reads Omega
 Design, the Logic parts Logic Office/Plant/Purchasing/Logistics/Customer App;
 `name`, `shelfLabel` (Core · Add-on · Plus · Advanced · By the piece · Omega
@@ -1236,9 +1258,46 @@ tenant. Treat it that way.
   The master console (`admin/admin-console.js`) reads a packaged tenant
   by its state machine: `_standing` has a key per state, plan and module
   keys become the price book's words from `GET /api/offerings`
-  (`STATE.priceBook`, fetched at boot, never a copy), Manage sends a
-  packaged workspace to its Package tab, and Client Inventory carries the
-  book above the legacy roster tiers (`scripts/tests/tadminstanding.js`). It fails on an error, an unanswered
+  (`STATE.priceBook`, fetched at boot, never a copy), and Client Inventory
+  carries the book above the legacy roster tiers
+  (`scripts/tests/tadminstanding.js`). **ONE PAGE PER ACCOUNT**
+  (2026-09-28, Tommy: "i should click an account and it opens a page for
+  them so i can manage them and edit them and see if they paid and etc. and
+  edit their account or remove it etc. other wise its so disorganized"):
+  `/admin/account.html?org=` (`admin/account.js`) is where an account is
+  managed, and every row on the console (Tenants, Pending signups, Access
+  requests) links there; the console's inline Manage drawer
+  (`openTenantDetail`) is gone. Its header answers what the account is,
+  whether it is on and whether it has paid (standing); the Account card
+  holds Approve / Suspend / Reactivate / Cancel (tenant-approve `reject`:
+  status cancelled, hostname released, nothing deleted — `omega_orgs` is
+  never deleted) and Message; the Payment card holds the packaged facts
+  with *Look at the payment now* (`plan-change` reconcile-now, staff) or
+  the legacy terms; the Package panel (`admin/package-panel.js`) is mounted
+  on the page; the controls the drawer had (commercial terms, identity and
+  branding, the relationship and shared projects, the dashboard profile,
+  the people and their accounts, the Omega Logic bundle) moved there
+  UNCHANGED, posting where they always did. What both pages read is
+  `admin/admin-shared.js`, loaded before each (`ADMIN_EMAILS`/`accessFor`,
+  `_standing`, `_tnStatusChip`, the book's words, `tenantAction`,
+  `openBroadcast`, `_accountHref`, the signup in progress) — never a copy in
+  a page. A domain with no record shows the SIGNUP IN PROGRESS: `POST
+  /api/tenant-signup {action:'progress'}` keeps one `access_requests/{uid}`
+  row per account from the moment it is made on `/start.html` (source
+  `signup`, the stage, the system chosen so far PRICED BY THE SERVER, the
+  email's verified state; identity from the token; an unverified address
+  may report; a declined or approved row is never revived; a domain with a
+  workspace records nothing) and marks it `converted` when the workspace is
+  made, by Subscribe, the trial or the reviewed request. The console's
+  Access requests card reads it as "in signup" with the stage and the
+  system (`_reqSignupLine`), the account page opens it by domain with Set
+  up (`/admin/?setup=<id>` fills the New tenant form) and Decline; login
+  sends an unfinished signup back to `/start.html` (`inSignup`), and the
+  dashboard's pending strip says *Finish your signup* with the way back
+  instead of "with the ClearSky team" (`tpending.js`). Held by
+  `scripts/render-admin-account.js` (in `check:pages`: the real page and the
+  real console on the Firebase double, the real endpoints on the Firestore
+  double) and `tadminstanding.js`. It fails on an error, an unanswered
   `/api/` call, a stray write, sideways scroll, or a lock overlay outside its
   tile. `check:pages` does not cover the dashboard; run this after any
   change to `index.html` or the runtime it loads. The double's own test is
