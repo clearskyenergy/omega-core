@@ -26,12 +26,19 @@
   pre-fills the form, so the editor or a project can hand a site over.
 
   SAVED DATA.  toolData/{orgId}/tools/vppsim as { v:1, scenarios:[…] } —
-  the inputs and the headline of each run, at most 30, newest first. The
-  orgId is the one the server resolved (options answers it, aliases folded,
-  as the rules fold them). A URDB tariff is kept as its JSON text
+  at most 30, newest first, each { name, site, gross, owner, market, at }:
+  the inputs (site) and the headline of the run (gross is the saved list's
+  label; owner and market are kept beside it), never the streams or rates.
+  The orgId is the one the server resolved (options answers it, aliases
+  folded, as the rules fold them). A URDB tariff is kept as its JSON text
   (tariff.urdbJson): Firestore refuses the arrays inside arrays it is made
-  of. The interval file is never stored; its unit and the split are.
+  of. The interval file is never stored; its unit, first-reading date and
+  the split are. A save writes the whole list, so Save refuses (and says
+  why) until the stored list has been read in this session, a missing
+  document counting as read, and while another save is on its way.
   Another person signing in, or signing out, reloads the page.
+  An interval file over the server's cap (4,300,000 characters) is refused
+  here, with the limit named, before anything is posted.
   Rendered and checked by scripts/render-vpp-earnings.js (check:pages).
   ═══════════════════════════════════════════════════════════════════════════════
 -->
@@ -282,7 +289,16 @@ var ENDPOINT = '/api/vpp-estimate';
 var TOOL_KEY = 'vppsim';
 var MAX_SAVED = 30;
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+/* the server's cap on an interval file, in its own measure (characters of
+   text): api/_lib/vpp-sim.js MAX_TEXT. The page refuses past it, before posting. */
+var MAX_TEXT = 4300000;
+var TOO_BIG = 'The interval file is larger than 4.3 MB (4,300,000 characters), the most one estimate accepts. Export one year of hourly or 15-minute readings without extra columns.';
 var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] }, LEAVING = false;
+/* The stored list in this session: 'idle' · 'loading' · 'loaded' (a missing
+   document counts) · 'failed'. Save writes the WHOLE list, so it writes only
+   once this is 'loaded' and no other save is on its way (SAVING); a Save
+   refused meanwhile is REFUSED_SAVE, and the page says when to press again. */
+var SAVED = 'idle', SAVING = false, REFUSED_SAVE = false;
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -372,10 +388,15 @@ function readFile(f, done) {
   INTERVAL = null; $('fileinfo').textContent = '';
   function settle() { if (done) done(); }
   if (!f) return settle();
-  if (f.size > 4000000) { $('fileinfo').textContent = 'That file is larger than one year of readings (4 MB).'; return settle(); }
+  /* judged on the text, as the server judges it; a UTF-8 file has at least a
+     third as many characters as bytes, so one past three times the cap is
+     refused without reading it */
+  if (f.size > MAX_TEXT * 3) { $('fileinfo').textContent = TOO_BIG; return settle(); }
   var r = new FileReader();
   r.onload = function () {
-    INTERVAL = String(r.result || '');
+    var text = String(r.result || '');
+    if (text.length > MAX_TEXT) { $('fileinfo').textContent = TOO_BIG; return settle(); }
+    INTERVAL = text;
     var n = INTERVAL.split(/\r?\n/).filter(function (l) { return /\d/.test(l); }).length;
     $('fileinfo').textContent = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
     settle();
@@ -609,10 +630,22 @@ function paintSaved() {
    made of them (energyratestructure [[{rate}]], the 12×24 schedules), so the
    tariff is stored as the JSON text the person pasted and parsed again on
    load. The new list becomes STORE only once the write has landed: a record
-   that cannot be stored never sits in memory spoiling the next save. */
+   that cannot be stored never sits in memory spoiling the next save.
+   The write REPLACES the stored list with STORE plus this record, so it is
+   refused while STORE is not the stored list: before the list has been read
+   in this session (still loading, or the read failed: it is read again), and
+   while another save is on its way (the next list would leave it out). */
 var MAX_DOC_CHARS = 900000; /* under Firestore's 1 MiB document limit */
 function save() {
   if (!LAST || !DB || !ORG) return;
+  if (SAVING) { $('savemsg').textContent = 'Still saving the last scenario. Press Save again once it is saved.'; return; }
+  if (SAVED !== 'loaded') {
+    REFUSED_SAVE = true;
+    if (SAVED === 'loading') { $('savemsg').textContent = 'Not saved yet: your saved scenarios are still loading, and saving now would write over them. Press Save again once they are loaded.'; return; }
+    $('savemsg').textContent = 'Not saved: your saved scenarios have not loaded, and saving now would write over them. Loading them again…';
+    loadSaved();
+    return;
+  }
   var site = JSON.parse(JSON.stringify(LAST.site));
   if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit, startDate: site.load.startDate || null }; }
   if (site.tariff && site.tariff.urdb) { site.tariff.urdbJson = JSON.stringify(site.tariff.urdb); delete site.tariff.urdb; }
@@ -623,12 +656,13 @@ function save() {
   while (next.scenarios.length > 1 && JSON.stringify(next).length > MAX_DOC_CHARS) { next.scenarios.pop(); dropped++; }
   var tail = (rec.site.load.type === 'interval' ? ' (the interval file is not stored; attach it again to re-run).' : '.') +
     (dropped ? ' The ' + dropped + ' oldest scenario' + (dropped > 1 ? 's were' : ' was') + ' dropped to make room.' : '');
-  function failed() { $('savemsg').textContent = 'Could not save right now.'; }
+  function failed() { SAVING = false; $('savemsg').textContent = 'Could not save right now.'; }
   $('savemsg').textContent = 'Saving…';
   var write;
   try { write = OMEGATools.saveToolData(DB, firebase, ORG, TOOL_KEY, next); } catch (e) { failed(); return; }
+  SAVING = true;
   Promise.resolve(write).then(function () {
-    STORE = next; paintSaved(); $('savemsg').textContent = 'Saved to your workspace' + tail;
+    SAVING = false; STORE = next; paintSaved(); $('savemsg').textContent = 'Saved to your workspace' + tail;
   }, failed);
 }
 function loadScenario(i) {
@@ -643,13 +677,17 @@ function loadScenario(i) {
   setMode(L.type);
   if (L.type === 'bills') { $('bills').innerHTML = ''; (L.bills || []).forEach(billRow); }
   if (L.type === 'profile') $('akwh').value = L.annualKwh != null ? L.annualKwh : '';
-  if (L.type === 'interval') {
-    /* the file is never stored: clear the picker so choosing the same file
-       again fires 'change', and put back the unit the readings were in
-       (kWh per 15-minute interval is four times the kW it reads as) */
-    INTERVAL = null; $('file').value = ''; $('iunit').value = L.unit === 'kwh' ? 'kwh' : 'kw'; $('istart').value = L.startDate || '';
-    $('fileinfo').textContent = 'Attach the interval file again to re-run this scenario.';
-  }
+  /* The interval fields go together, for EVERY scenario: the file is never
+     stored, so the picker is cleared (choosing the same file again fires
+     'change'), and the unit (kWh per 15-minute interval is four times the kW
+     it reads as) and the first-reading date are this scenario's, or blank.
+     A date or unit left by an earlier scenario is never posted with a file
+     it was not given for. */
+  var iv = L.type === 'interval';
+  INTERVAL = null; $('file').value = '';
+  $('iunit').value = iv && L.unit === 'kwh' ? 'kwh' : 'kw';
+  $('istart').value = iv && typeof L.startDate === 'string' ? L.startDate : '';
+  $('fileinfo').textContent = iv ? 'Attach the interval file again to re-run this scenario.' : '';
   var t = site.tariff || {};
   $('ron').value = t.onPeakRate != null ? t.onPeakRate : ''; $('roff').value = t.offPeakRate != null ? t.offPeakRate : '';
   $('rdem').value = t.demandCharge != null ? t.demandCharge : ''; $('rps').value = t.peakStart != null ? t.peakStart : '';
@@ -708,12 +746,28 @@ $('zip').addEventListener('keydown', function (e) { if (e.key === 'Enter') run()
 function orgFallback(u) {
   return (root.OMEGATools && OMEGATools.orgFromUrl) ? OMEGATools.orgFromUrl(u.email) : (String(u.email || '').toLowerCase().split('@')[1] || null);
 }
+/* Reads the stored list, once per session: never a second read beside one on
+   its way, never again once read (a late read must not undo a save). A
+   missing document is an empty list, read; a refused read is said, never
+   drawn as an empty list, and the next Save reads it again. */
 function loadSaved() {
-  if (!(DB && ORG && root.OMEGATools && OMEGATools.loadToolData)) return;
-  OMEGATools.loadToolData(DB, ORG, TOOL_KEY).then(function (doc) {
+  if (SAVED === 'loading' || SAVED === 'loaded') return;
+  function refused() {
+    SAVED = 'failed';
+    $('savemsg').textContent = REFUSED_SAVE
+      ? 'Not saved: your saved scenarios could not be loaded, and saving now would write over them. Press Save to try again.'
+      : 'Your saved scenarios could not be loaded. Save loads them first, so none is written over.';
+  }
+  if (!(DB && ORG && root.OMEGATools && OMEGATools.loadToolData)) { refused(); return; }
+  SAVED = 'loading';
+  var read;
+  try { read = OMEGATools.loadToolData(DB, ORG, TOOL_KEY); } catch (e) { refused(); return; }
+  Promise.resolve(read).then(function (doc) {
     var d = doc && doc.data;
-    if (d && d.v === 1 && Array.isArray(d.scenarios)) { STORE = { v: 1, scenarios: d.scenarios.slice(0, MAX_SAVED) }; paintSaved(); }
-  }, function () {});
+    STORE = { v: 1, scenarios: d && d.v === 1 && Array.isArray(d.scenarios) ? d.scenarios.slice(0, MAX_SAVED) : [] };
+    SAVED = 'loaded'; paintSaved();
+    if (REFUSED_SAVE) { REFUSED_SAVE = false; $('savemsg').textContent = 'Your saved scenarios are loaded. Press Save again to add this one.'; }
+  }, refused);
 }
 function onSignedIn(u) {
   $('who').textContent = u.email || '';

@@ -19,9 +19,12 @@
      - the store and the signed-in user survive a reload of the tab (through
        sessionStorage), as Firestore and Firebase Auth do, so a reload is a
        reload and not a fresh tenant.
+   And one thing a slow network does: a read or write of toolData/ can be
+   held until the check releases it (window.__vppHold, __vppRelease).
 
-   What it holds (the review of 2026-09-29, c12–c18, d1/d2), each step in its
-   own browser context so one failure never hides the next:
+   What it holds (the reviews of 2026-09-29, c12–c18, d1/d2, then R15, R16,
+   S3 and the size cap), each step in its own browser context so one failure
+   never hides the next:
      c18  a stray '%' in a hand-off URL still prefills the ZIP (and the name)
           and the auto-run happens
      c12  a URDB-tariff run saves (the tariff stored as text, no nested
@@ -32,6 +35,17 @@
           a split puts back 70 / 20 / 10
      c14  loading an interval scenario restores the unit and clears the file
           picker; the re-run on the same file is the engine's own figure
+     R16  the first-reading date: a malformed one is refused with nothing
+          posted, a good one is POSTED with the file and named in the
+          result, SAVED with the scenario (never the file) and put back
+     R15  loading a profile scenario blanks the date, unit and file, and an
+          undated file run after it posts no date
+     size the page's file check is the server's cap in the server's measure:
+          4,300,000 characters read, one more refused with nothing posted
+     S3   Save writes the whole list, so it never writes over a stored list
+          it has not read: a refused read is said and read again on Save, a
+          slow one makes Save wait (the hand-off's auto-run included), and a
+          save still on its way makes the next one wait
      c15  bills pasted with US M/D/YYYY dates read the month, not the day;
           a row with no month 1–12 is named, one month three times is said
      c16  another person signing in reloads the page: none of the last
@@ -100,7 +114,10 @@ var srv = http.createServer(function (req, res) {
     req.on('end', function () {
       var raw = Buffer.concat(chunks).toString('utf8'), body = null;
       try { body = raw ? JSON.parse(raw) : null; } catch (e) { body = raw; }
-      apiCalls.push({ route: req.method + ' ' + u, action: body && body.action });
+      /* an estimate's load is kept as it was posted, its file as a length */
+      var L = body && body.site && body.site.load, load = null;
+      if (L && typeof L === 'object') { load = {}; for (var lk in L) load[lk] = lk === 'text' ? (typeof L.text === 'string' ? L.text.length : L.text) : L[lk]; }
+      apiCalls.push({ route: req.method + ' ' + u, action: body && body.action, load: load });
       if (u === '/api/vpp-estimate') {
         var out = { status: 200 };
         var r = {
@@ -184,11 +201,28 @@ function installDouble(cfg) {
     if (v && typeof v === 'object') { for (var k in v) if (Object.prototype.hasOwnProperty.call(v, k) && nested(v[k], false)) return true; }
     return false;
   }
-  var proto = Object.getPrototypeOf(h.db.doc('probe/x')), set0 = proto.set;
+  /* A slow network, on the check's say-so: a read or a write of toolData/
+     waits while hold.read / hold.write is on (a read from the first page
+     load when cfg.holdRead), until window.__vppRelease(); hold.reads counts
+     the reads of toolData/ the page started. */
+  var hold = window.__vppHold = { read: !!cfg.holdRead, write: false, reads: 0, waiting: [] };
+  window.__vppRelease = function () { var w = hold.waiting; hold.waiting = []; hold.read = hold.write = false; w.forEach(function (go) { go(); }); };
+  function held(kind, docPath, go) {
+    if (String(docPath).indexOf('toolData/') !== 0) return go();
+    if (kind === 'read') hold.reads++;
+    if (!hold[kind]) return go();
+    return new Promise(function (ok) { hold.waiting.push(ok); }).then(go);
+  }
+  var proto = Object.getPrototypeOf(h.db.doc('probe/x')), set0 = proto.set, get0 = proto.get;
   proto.set = function (data) {
     /* firebase-firestore-compat 9.x validates inside set() and throws before any promise exists */
     if (nested(data, false)) throw new Error('Function DocumentReference.set() called with invalid data. Nested arrays are not supported (found in document ' + this.path + ')');
-    return set0.apply(this, arguments);
+    var self = this, args = arguments;
+    return held('write', this.path, function () { return set0.apply(self, args); });
+  };
+  proto.get = function () {
+    var self = this, args = arguments;
+    return held('read', this.path, function () { return get0.apply(self, args); });
   };
   window.addEventListener('pagehide', function () {
     try {
@@ -213,7 +247,7 @@ function installDouble(cfg) {
       external.push(url); return route.abort();
     });
     await ctx.addInitScript(DOUBLE_SRC);
-    await ctx.addInitScript(installDouble, { user: opts.user, docs: opts.docs || ORG_DOCS, failures: opts.failures });
+    await ctx.addInitScript(installDouble, { user: opts.user, docs: opts.docs || ORG_DOCS, failures: opts.failures, holdRead: !!opts.holdRead });
     var page = await ctx.newPage(), errs = [];
     page.on('pageerror', function (e) { errs.push('pageerror: ' + e.message); });
     page.on('console', function (m) { if (m.type() === 'error') errs.push('console: ' + m.text().slice(0, 300)); });
@@ -230,6 +264,22 @@ function installDouble(cfg) {
   function splitNow(p) { return Promise.all([val(p, '#sown'), val(p, '#splat'), val(p, '#sins')]).then(function (a) { return a.join('/'); }); }
   function billMonths(p) { return p.$$eval('#bills input[data-k=month]', function (is) { return is.map(function (i) { return i.value; }); }); }
   function estimates() { return apiCalls.filter(function (c) { return c.action === 'estimate'; }).length; }
+  /* the load of the last estimate posted, as the server received it */
+  function lastLoad() { var e = apiCalls.filter(function (c) { return c.action === 'estimate'; }); return e.length ? e[e.length - 1].load : null; }
+  function storedNames(p) { return doc(p, ANA_DOC).then(function (d) { return d && d.data ? d.data.scenarios.map(function (x) { return x.name; }) : null; }); }
+  function writesTo(p, docPath) { return p.evaluate(function (dp) { return window.__firebaseDouble.store.log.filter(function (w) { return w.path === dp; }).length; }, docPath); }
+  function readsStarted(p) { return p.evaluate(function () { return window.__vppHold.reads; }); }
+  /* press Save and wait for #savemsg to match (its text, or what it held when the wait ran out) */
+  async function pressSave(p, re, ms) {
+    await p.click('#save');
+    return until(function () { return text(p, '#savemsg').then(function (t) { return re.test(t) ? t : null; }); }, ms || 6000)
+      .then(function (t) { return t || text(p, '#savemsg'); });
+  }
+  /* an interval file of exactly n characters (ASCII: as many bytes) */
+  function sizedCsv(n) {
+    var head = 'timestamp,kw\n', line = '1,5.00\n', s = head + line.repeat(Math.floor((n - head.length) / line.length));
+    return s + '\n'.repeat(n - s.length);
+  }
   function grossOnPage(p) { return p.$eval('.kpi.hl .v', function (e) { return e.textContent; }).catch(function () { return null; }); }
   async function shot(p, name) { if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'vpp-' + name + '.png'), fullPage: true }); }
   /* Simulate, and wait for the estimate to come back and be drawn */
@@ -374,11 +424,116 @@ function installDouble(cfg) {
     ok('c12: a URDB tariff stored as text comes back into the form', parses(await val(p, '#urdb'), function (o) { return o.energyratestructure[0][0].rate === 0.12; }), (await val(p, '#urdb')).slice(0, 60));
     await simulate(p);
     ok('c12: and drives the re-run', /Your tariff: Render URDB/.test(await text(p, '#out')));
-    /* an undated file's first day (engine c3): saved with the scenario, put back on load, cleared by one without it */
+    /* an undated file's first day (engine c3): put back on load, cleared by an
+       interval scenario without one (a profile scenario, what is posted and
+       what is stored: the 'First-reading date' step below) */
     await pick(p, 'Dated interval');
     ok('c3: loading an interval scenario restores the first-reading date of an undated file', (await val(p, '#istart')) === '2025-07-02', await val(p, '#istart'));
     await pick(p, 'Interval kWh');
-    ok('c3: a scenario without one clears it, so it is never sent by mistake', (await val(p, '#istart')) === '', await val(p, '#istart'));
+    ok('c3: an interval scenario without one clears it', (await val(p, '#istart')) === '', await val(p, '#istart'));
+  });
+
+  /* ── R15 · R16 · size: the first-reading date sent, saved, put back and
+        never carried over; the file-size check is the server's cap ──── */
+  await step('First-reading date and file size (desktop)', async function (use) {
+    var saved = {}; saved[ANA_DOC] = { data: { v: 1, scenarios: [scenario('Plain site', { zip: '19103', segment: 'commercial', load: { type: 'profile', annualKwh: null } })] } };
+    var t = await use({ user: userOf('u-ana'), docs: withDocs(saved) }), p = t.page;
+    await p.goto(base + '/vpp-earnings.html', { waitUntil: 'load' });
+    await until(function () { return scenNames(p).then(function (n) { return n.length === 2; }); });
+    await p.fill('#zip', '60601'); await p.fill('#nm', 'Dated site'); await p.fill('#bkw', '100'); await p.fill('#bkwh', '400');
+    await p.click('[data-mode=interval]');
+    await p.selectOption('#iunit', 'kwh');
+    var file = { name: 'meter-undated.csv', mimeType: 'text/csv', buffer: Buffer.from(INTERVAL_CSV) };
+    function rowsRead() { return until(function () { return text(p, '#fileinfo').then(function (x) { return /rows with numbers/.test(x) ? x : null; }); }); }
+    await p.setInputFiles('#file', file);
+    await rowsRead();
+    await p.fill('#istart', '2025/07/02');
+    var before = estimates();
+    await p.click('#run'); await p.waitForTimeout(400);
+    ok('R16: a first-reading date not written YYYY-MM-DD is refused, and nothing is posted', (await text(p, '#formmsg')) === 'The first reading date is YYYY-MM-DD.' && estimates() === before, { msg: await text(p, '#formmsg'), posted: estimates() - before });
+    await p.fill('#istart', '2025-07-02');
+    await simulate(p);
+    var sent = lastLoad();
+    ok('R16: the estimate posts the first-reading date with the file and its unit', !!sent && sent.type === 'interval' && sent.startDate === '2025-07-02' && sent.unit === 'kwh' && sent.text === INTERVAL_CSV.length, sent);
+    ok('R16: and the result says the readings were laid from 2 Jul 2025', /Your readings start on 2 Jul 2025/.test(await text(p, '#out')), (await text(p, '#out')).slice(0, 200));
+    var msg = await saveAs(p);
+    var stored = await doc(p, ANA_DOC), s0 = stored && stored.data.scenarios[0];
+    ok('R16: Save keeps the date and the unit with the scenario, never the file', /^Saved to your workspace/.test(msg) && !!s0 && s0.name === 'Dated site' && s0.site.load.startDate === '2025-07-02' && s0.site.load.unit === 'kwh' && !('text' in s0.site.load), { msg: msg, load: s0 && s0.site.load });
+    ok('the saved list is the new scenario and the one stored before', stored.data.scenarios.map(function (x) { return x.name; }).join() === 'Dated site,Plain site');
+    await pick(p, 'Plain site');
+    var cleared = { start: await val(p, '#istart'), unit: await val(p, '#iunit'), files: await p.$eval('#file', function (e) { return e.files.length; }), info: await text(p, '#fileinfo') };
+    ok('R15: loading a scenario without a file clears the first-reading date, and the unit and file it went with', cleared.start === '' && cleared.unit === 'kw' && cleared.files === 0 && cleared.info === '', cleared);
+    await pick(p, 'Dated site');
+    ok('R16: loading the saved scenario puts its date and unit back', (await val(p, '#istart')) === '2025-07-02' && (await val(p, '#iunit')) === 'kwh', { start: await val(p, '#istart'), unit: await val(p, '#iunit') });
+    await pick(p, 'Plain site');
+    await p.click('[data-mode=interval]');
+    await p.setInputFiles('#file', file);
+    await rowsRead();
+    await simulate(p);
+    sent = lastLoad();
+    ok('R15: an undated file run after it posts no date the person did not give, and is read from 1 January', !!sent && sent.type === 'interval' && !('startDate' in sent) && /read as starting on 1 January/.test(await text(p, '#out')), sent);
+
+    /* the page's file check is the server's cap (vpp-sim MAX_TEXT), in the server's measure: characters */
+    await p.setInputFiles('#file', { name: 'at-cap.csv', mimeType: 'text/csv', buffer: Buffer.from(sizedCsv(4300000)) });
+    var readAtCap = await rowsRead();
+    ok('size: a file of 4,300,000 characters, the server\'s cap, is read and not refused', !!readAtCap, await text(p, '#fileinfo'));
+    await p.setInputFiles('#file', { name: 'over-cap.csv', mimeType: 'text/csv', buffer: Buffer.from(sizedCsv(4300001)) });
+    var refused = await until(function () { return text(p, '#fileinfo').then(function (x) { return /4,300,000 characters/.test(x) ? x : null; }); });
+    before = estimates();
+    await p.click('#run'); await p.waitForTimeout(600);
+    ok('size: one character more is refused, the limit named, and nothing is posted', !!refused && /4,300,000 characters/.test(await text(p, '#formmsg')) && estimates() === before, { info: await text(p, '#fileinfo'), msg: await text(p, '#formmsg'), posted: estimates() - before });
+  });
+
+  /* ── S3: Save writes the WHOLE list, so never before the stored list is read ── */
+  function stored3(names) {
+    var s = {}; s[ANA_DOC] = { data: { v: 1, scenarios: names.map(function (n) { return scenario(n, { zip: '19103', segment: 'commercial', load: { type: 'profile', annualKwh: null } }); }) } };
+    return withDocs(s);
+  }
+  await step('Saved list refused: Save never writes over it (desktop)', async function (use) {
+    var t = await use({ user: userOf('u-ana'), docs: stored3(['Old one', 'Old two', 'Old three']),
+      failures: { 'toolData/example-energy.com/tools/vppsim': { op: 'read', message: 'Failed to get document because the client is offline.' } } }), p = t.page;
+    await p.goto(base + '/vpp-earnings.html', { waitUntil: 'load' });
+    await signedIn(p);
+    var said = await until(function () { return text(p, '#savemsg').then(function (x) { return /could not be loaded/.test(x) ? x : null; }); });
+    ok('S3: a saved list that could not be read says so, never reads as an empty one', !!said, await text(p, '#savemsg'));
+    await p.fill('#zip', '60601'); await p.fill('#nm', 'New one');
+    await simulate(p);
+    var m1 = await pressSave(p, /Press Save to try again/);
+    ok('S3: Save with the list unread is refused, says why, and reads the list again', /^Not saved/.test(m1) && /Press Save to try again/.test(m1) && (await readsStarted(p)) >= 2, { msg: m1, reads: await readsStarted(p) });
+    ok('S3: nothing is written: the three stored scenarios are all still there', (await writesTo(p, ANA_DOC)) === 0 && (await storedNames(p)).join() === 'Old one,Old two,Old three', { writes: await writesTo(p, ANA_DOC), names: await storedNames(p) });
+    /* the network comes back */
+    await p.evaluate(function () { delete window.__firebaseDouble.store.failures['toolData/example-energy.com/tools/vppsim']; });
+    var m2 = await pressSave(p, /loaded\. Press Save again/);
+    ok('S3: the next Save reads the list first, draws it, and still writes nothing', /loaded\. Press Save again/.test(m2) && (await scenNames(p)).length === 4 && (await writesTo(p, ANA_DOC)) === 0, { msg: m2, list: await scenNames(p) });
+    var m3 = await pressSave(p, /^(Saved|Could not)/);
+    ok('S3: then Save adds the new scenario to the stored ones', /^Saved/.test(m3) && (await storedNames(p)).join() === 'New one,Old one,Old two,Old three', { msg: m3, names: await storedNames(p) });
+  });
+  await step('Saved list slow: Save waits for it, and for the last save (hand-off, desktop)', async function (use) {
+    var t = await use({ user: userOf('u-ana'), docs: stored3(['Old one', 'Old two']), holdRead: true }), p = t.page;
+    await p.goto(base + '/vpp-earnings.html?zip=60601&segment=commercial&name=Handoff%20site', { waitUntil: 'load' });
+    await until(function () { return p.$('.kpis'); }, 20000);
+    var on = await until(function () { return p.$eval('#save', function (b) { return !b.disabled; }); }, 5000);
+    ok('(the hand-off ran, and Save is on while the list is still on its way)', !!on && (await readsStarted(p)) === 1, { on: on, reads: await readsStarted(p) });
+    var m1 = await pressSave(p, /still loading/);
+    var m1b = await pressSave(p, /still loading/);
+    ok('S3: Save while the list is still loading is refused, and says why', /^Not saved/.test(m1) && /still loading/.test(m1b), [m1, m1b]);
+    ok('S3: nothing is written, and no second read is started beside the first', (await writesTo(p, ANA_DOC)) === 0 && (await readsStarted(p)) === 1 && (await storedNames(p)).join() === 'Old one,Old two', { writes: await writesTo(p, ANA_DOC), reads: await readsStarted(p), names: await storedNames(p) });
+    await p.evaluate(function () { window.__vppRelease(); });
+    var landed = await until(function () { return scenNames(p).then(function (n) { return n.length === 3; }); });
+    ok('S3: when the list lands it is drawn, and the page says to Save again', !!landed && /loaded\. Press Save again/.test(await text(p, '#savemsg')), { list: await scenNames(p), msg: await text(p, '#savemsg') });
+    var m2 = await pressSave(p, /^(Saved|Could not)/);
+    ok('S3: Save then keeps what was stored', /^Saved/.test(m2) && (await storedNames(p)).join() === 'Handoff site,Old one,Old two' && (await scenNames(p))[1].indexOf('Handoff site ·') === 0, { msg: m2, names: await storedNames(p), list: await scenNames(p) });
+    /* a save still on its way: a second one built beside it would leave it out */
+    await p.evaluate(function () { window.__vppHold.write = true; });
+    await p.fill('#nm', 'Second'); await simulate(p);
+    await p.click('#save');
+    await p.fill('#nm', 'Third'); await simulate(p);
+    var m3 = await pressSave(p, /still saving/i);
+    ok('S3: a Save while the last one is still on its way is refused, and says why', /still saving/i.test(m3), m3);
+    await p.evaluate(function () { window.__vppRelease(); });
+    await until(function () { return text(p, '#savemsg').then(function (x) { return /^Saved/.test(x); }); });
+    var m4 = await pressSave(p, /^(Saved|Could not)/);
+    ok('S3: the save that was on its way is kept, and the next Save adds to it', /^Saved/.test(m4) && (await storedNames(p)).join() === 'Third,Second,Handoff site,Old one,Old two', { msg: m4, names: await storedNames(p) });
   });
 
   /* ── c15: bills pasted with US dates ─────────────────────────────────── */
