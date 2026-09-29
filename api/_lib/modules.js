@@ -15,7 +15,7 @@ function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
     requires: requires || (key === 'lite' ? [] : ['lite']) };
 }
 var CATALOG = [
-  record('lite', 'Omega Design', 'floor', 'editor sandbox sales intake opportunity financing signal',
+  record('lite', 'Omega Design', 'floor', 'editor sandbox sales intake opportunity financing signal vppsim',
     'design view export.blueprint',
     'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
@@ -97,7 +97,7 @@ BY_KEY.sitefinder.coverage = 'Northern Illinois (ComEd) only.';
 BY_KEY.whitelabel.agreement = 'Reseller addendum required';
 /* Customer menu copy belongs to the catalog, never to a second UI list. */
 var FEATURES = {
-  lite: ['Site drawing and equipment placement', 'Guided project builds', 'Blueprints and customer proposals'],
+  lite: ['Site drawing and equipment placement', 'Guided project builds', 'Blueprints, proposals and VPP earnings'],
   gridatlas: ['Grid Atlas maps', 'Utility capacity screening', 'Substation context'],
   storage: ['Battery sizing', 'Revenue and value stack', 'Storage pro forma'],
   estimate: ['Electrical estimates', 'Bill of materials', 'Procurement requests'],

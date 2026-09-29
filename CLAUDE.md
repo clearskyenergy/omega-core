@@ -1141,6 +1141,20 @@ forward to the Modules page. Enterprise is "Contact for pricing":
 no Enterprise figure (the book keeps it for the contract). Design, launch
 order and the honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
 
+## VPP Earnings Simulator (2026-09-29)
+
+`vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
+(Omega Design, every tier from trial; Tommy: "base function … we can upsell
+this"; its Take it further card sells Omega Storage). It simulates what a
+managed VPP (the DividendVPP model) could stack at a site from a ZIP and an
+8760, 12–24 months of bills, or nothing. The math is `api/_lib/vpp-sim.js`
+behind `POST /api/vpp-estimate`; `api/_lib/vpp-provider.js` is the ONE seam
+for a live operator quote (`DIVIDENDVPP_API_URL`/`_KEY`, Vercel only), which
+rides BESIDE the simulation, never blended. Bills go through `bess-tariff.js`
+and PJM capacity through `value-stack.js` — never a second copy. Every stream
+is computed, published or planning. `docs/VPP-SIMULATOR.md`,
+`scripts/tests/tvppsim.js`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
