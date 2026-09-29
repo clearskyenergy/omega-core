@@ -317,6 +317,7 @@ body.ows a.bh-mod{color:#EAF7FB}a.bh-mod:hover{background:rgba(255,255,255,.12)}
      page): the Modules page judges a legacy plan by what Site Map opens -->
 <script src="/omega-caps.js"></script>
 <script src="/omega-workspace-hub.js"></script>
+<script src="/omega-workspaces.js"></script>
 <script src="/omega-workspace-today.js"></script>
 <script src="/omega-workspace-shell.js"></script>
 <script src="/omega-package-menu.js"></script>
@@ -925,9 +926,11 @@ function renderFlight() {
   if (!cards.length) { b.innerHTML = '<div class="empty"><b>No projects yet.</b> Start one and it appears here with its stage, its owner and how far along it is.</div>'; return; }
   b.innerHTML = '<div class="proj">' + cards.map(function (c) {
     if (c.kind === 'finance') return '<article class="pc fin-only" data-fin="' + esc(c.id) + '"><a class="pc-main" href="/portals/finance/"><span class="stage">Finance marketplace</span><b>' + esc(c.name) + '</b><div class="meta"><span>' + esc(c.finance.note) + '</span></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div></a><div class="who"><span class="av">$</span><span class="nm">Deal room</span></div></article>';
-    var p = byPid[c.id] || {}, i = Math.max(0, STAGE_KEYS.indexOf(p.stage)), pct = Math.round(i / (STAGE_KEYS.length - 1) * 100);
+    /* the bar is the work done on the design (designed 50, designed and run 100; the stage when further) and the meta line names the kind of job, never a battery on a Level 2 site (OmegaWorkspaceToday.progress / kindLabels, 2026-09-29) */
+    var p = byPid[c.id] || {}, pct = TODAY.progress(p).pct;
     var owner = ownerOf(p), mine = String(p.ownerEmail || '').toLowerCase() === ME, ours = !p.orgId || p.orgId === WS.orgId;
-    var size = p.bessKwh ? (p.bessKwh >= 1000 ? (p.bessKwh / 1000).toFixed(1) + ' MWh' : p.bessKwh + ' kWh') : (p.address || p.utility || '');
+    var kind = TODAY.kindLabels(p).join(' · '), addr = String(p.address || p.utility || ''), where = addr && addr !== String(p.name || '') ? addr : '';
+    var size = p.bessKwh ? (p.bessKwh >= 1000 ? (p.bessKwh / 1000).toFixed(1) + ' MWh' : p.bessKwh + ' kWh') : (kind ? kind + (where ? ' · ' + where : '') : addr);
     return '<article class="pc" data-proj="' + esc(c.id) + '"><button class="pc-main" type="button" data-open="' + esc(c.id) + '"><span class="stage">' + esc(STAGE_LABEL[p.stage] || 'Candidate') + '</span><b>' + esc(p.name || 'Untitled') + '</b><div class="meta"><span>' + esc(size) + '</span><span class="num">' + pct + '%</span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div>' + (c.finance ? '<span class="fin">Finance marketplace · ' + esc(c.finance.note) + '</span>' : '') + '</button>'
       + '<div class="who"><span class="av' + (mine ? ' me' : '') + '">' + esc(ini(owner || '?')) + '</span><span class="nm">' + (mine ? 'You' : esc(owner || 'Unassigned')) + '</span>' + (ours ? '<button class="ows-pill sm' + (owner ? ' ghost' : ' primary') + '" type="button" data-assign="' + esc(c.id) + '">' + (owner ? 'Reassign' : 'Assign') + '</button>' : '<span class="ows-chip">Partner\'s project</span>') + '</div></article>';
   }).join('') + '</div>';

@@ -2602,3 +2602,82 @@ right side" (Thomas, 2026-09-28).
   under a run that kept the bend. `tundoleg.js` still passes.
 - The Level 2 guide (`scripts/guides/site-map-level-2.js`) gains step 7,
   *Move a trench after it is drawn*, with two screenshots; Jarvis knows.
+
+## Project capex is what Site Map's Run costed — September 29, 2026
+
+The workspace home read "Pipeline capex —, 63 projects not priced yet"
+over sixty-three sites whose cost sheets had priced every one (Tommy,
+2026-09-28: "project capex should reflect the costs that are calculated
+by the run function in the project site map editor"). The workspace
+(`omega-workspace-today.js`), the dashboard rollup (`index.html`) and the
+asset book (`omega-assets.js`) read `capex`, `incentive`, `annualRevenue`
+and `bessKwh` straight off `projects/{id}`, and nothing the editor did
+wrote them: `saveProject()`'s payload is an allowlist, and the only
+writers of those fields were the demo seeds and NextNRG's backfill.
+
+- `omegaRunRollup()` (beside `omegaRunDesign` in `editor.html`) captures
+  the run's OWN totals once the engines have recomputed: Total install
+  (`window._COST_TOTAL`, the contracted number when one is entered), the
+  incentives netted (`_INC_TOTAL`), the net figure, year-one revenue
+  (`_YR1_REV`) and the fleet `omegaBessFleet()` reads (placed, else the
+  Config dialog's, as the cost sheet falls back). Kept on `S.costRollup`;
+  a run that priced nothing (`_COST_TOTAL` 0: nothing placed, or out of
+  scope) clears it and records nothing.
+- `omegaRollupFields()` is what the record gets: `capex`, `incentive`,
+  `capexAt`, `capexSource: 'site-map'`, plus `annualRevenue` only when the
+  streams gave one and `bessKwh`/`bessKw` only when a battery is there.
+  `saveProject()` names each field in its payload literal from that
+  object, so undefined is stripped and an unpriced save never blanks a
+  figure someone entered or backfilled. `_loadProject` resets the capture,
+  as it does `vendorOverride`, so a figure never leaks between projects.
+- `omegaRunSave()`: a priced run marks the record unsaved and saves at
+  once (signed in, a project open, the load finished — the plot commit's
+  condition), so the workspace shows it without waiting for the autosave;
+  a read-only or unchecked plan (`OmegaCaps.packageAccess()`) waits, and
+  the totals ride the next allowed save. `saveProject()` stays the one
+  writer of the record.
+- Not built: the Battery Sizer's `bessSizing` record still does not feed
+  the flat fields, so a site sized there but never run in Site Map still
+  reads "No battery size yet" on the home; a rail row naming the figure
+  on the record.
+- Tests: `scripts/tests/tcostrollup.js` (npm test) runs the three
+  functions out of the editor against the sheet's totals, pins the payload
+  literal and the load-side reset, and hands the fields to the real
+  workspace rule: `$1.2M`, the site nobody ran the one "not priced yet".
+
+## In flight reads the work done on the design — September 29, 2026
+
+Eight Level 2 jobs on the Concord home each read "No battery size yet ·
+0%" (Tommy: "these are all batteries these are l2's so the details that
+show on the in flight tab should show the amount of work done on them, if
+they have been designed and run then they are 100%"). The card's bar was
+the pipeline stage (candidate = 0), and the Today rule asked every
+candidate without a size for a battery, whatever kind of job it was.
+
+- `omega-workspace-today.js` reads what KIND a job is through
+  `omega-workspaces.js`, the ONE type table (the dialog's type and
+  scopes, legacy names folded, the EV wizard's L2 / EVSE mark as the
+  editor's Projects list reads it), never a second alias map;
+  `workspace.html` now loads that library (its ribbon and rail hooks are
+  no-ops without the editor's DOM). `wantsBattery` is true only for a
+  kind whose focus carries storage (BESS, Solar + Storage, DCFC, a
+  microgrid) or a record that declares no kind, so every legacy project
+  reads as before.
+- `progress(p)`: designed when equipment or conduit is on the site map,
+  run when Site Map's Run costed it (`capexSource: 'site-map'` /
+  `capexAt`, the mark the previous entry added), else priced when a
+  figure is on the record; 50 and 100; a project past candidate reads the
+  further of that and its stage, so a job in construction never reads 0.
+  The card's bar is that percent, its meta line the kind of job
+  (`kindLabels`) where there is no battery size, and its why the
+  progress phrase — "Nothing on the site map yet", "Designed, not run
+  yet" (a candidate that still needs something), "Designed and run ·
+  Touched today". A battery candidate with no size still reads "No
+  battery size yet" and opens the sizer.
+- Today folds every non-battery job with nothing on the site map into
+  ONE row (`design`, opening the oldest in Site Map), the twin of the
+  size row; a Level 2 job is never asked for a battery size.
+- Tests: `scripts/tests/tworkspacetoday.js` §10 (kinds off the one
+  table, the percent, the phrases, the row, the card order);
+  `tcostrollup.js` now hands the workspace a Level 2 site the run priced
+  and reads "Designed and run" at 100%.

@@ -40,9 +40,14 @@ decided 2026-09-26.
   a request nobody answered in five days. Six rows, highest first. The four
   numbers are projects in flight (the board's own set, every project not yet
   online; new this week, else how many are past candidate), awaiting your
-  review, pipeline capex (the capex people entered, online sites apart; a
-  project nobody priced is counted as "not priced yet", never as $0, and a
-  pipeline with nothing priced reads "—"), and a fourth that fits the workspace:
+  review, pipeline capex (what Site Map's Run costed: the editor's
+  `omegaRunRollup` writes the run's Total install, incentives, year-one
+  revenue and placed battery onto the record as `capex`, `incentive`,
+  `annualRevenue`, `bessKwh`/`bessKw` with `capexAt`/`capexSource`, saved
+  at once; a figure entered by hand or backfilled stands until a run prices
+  the site; online sites apart; a project nobody priced is counted as "not
+  priced yet", never as $0, and a pipeline with nothing priced reads "—";
+  `scripts/tests/tcostrollup.js` holds both ends), and a fourth that fits the workspace:
   quotes back of sent, requests to price, new quote requests, or sites
   online. The referral inbox itself stays on the classic dashboard;
   `?stay=classic` visits it once without changing the browser's home.
@@ -207,11 +212,25 @@ decided 2026-09-26.
   **Assign** (or Reassign): the workspace's people from `team_members`,
   and one merge of `ownerEmail`, `ownerName`, `assignedBy`, `assignedAt`
   onto the project (the rules allow a same-org update that leaves `orgId`
-  and the roster alone).
+  and the roster alone). **The bar is the work done on the design**
+  (`OmegaWorkspaceToday.progress`, 2026-09-29, Tommy over eight Level 2
+  jobs reading "No battery size yet · 0%": "if they have been designed and
+  run then they are 100%"): designed is equipment or conduit on the site
+  map, run is Site Map's Run having costed it (`capexSource`/`capexAt`,
+  else a figure on the record reads priced); 50 and 100, and a project
+  past candidate reads the further of that and its stage. The meta line
+  names the kind of job (`kindLabels`) where there is no battery size, and
+  the why is that progress. What kind a job is comes through
+  `omega-workspaces.js`, the ONE type table (the page loads it): a
+  battery belongs only on a kind whose focus carries storage, or on a
+  record that declares no kind, so a Level 2, compute or building job is
+  never asked for a battery size — it is asked for a design.
 - **Needs you** adds the finance marketplace (offers waiting for an
   answer, a review at ClearSky older than a week, an awarded room not
   finished, a draft, an open deal with no offer in ten days) and folds
-  every unsized candidate into ONE row. The whole row is the target.
+  every unsized candidate into ONE row, and every job that is not a
+  battery job with nothing on the site map into ONE row of its own
+  (`design`, opening the oldest in Site Map). The whole row is the target.
 - **Around you**: the workspace feed (messages, project saves and
   assignments), People (presence from the later of `team_members.lastSeen`
   and the person's last message: in the workspace under 15 minutes, seen

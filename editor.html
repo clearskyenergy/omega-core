@@ -25774,6 +25774,12 @@ async function saveProject(){
       hasImage: !!SCHEM.dataUrl,
     } : null;
 
+    /* What the last Run costed, for the workspace and the dashboard
+       (omegaRunRollup / omegaRollupFields, beside the Results rail). Empty
+       until a run in this session priced the site; each field below is
+       then undefined and stripped, so a save never blanks a figure. */
+    const _rollup = (typeof omegaRollupFields==='function') ? omegaRollupFields(S.costRollup) : {};
+
     const payload = {
       name, address,
       /* The project type chosen in the editor (Design with AI dropdown, the
@@ -25822,6 +25828,18 @@ async function saveProject(){
          written forever and read never. */
       omegaFiber:    S.omegaFiber    || null,
       omegaFiberAt:  S.omegaFiberAt  || null,
+      /* The run's totals as the record's rollup fields — the ones the
+         workspace's Pipeline capex, the dashboard's portfolio table and
+         charts, and the asset book read (2026-09-29). Written only from a
+         run here (omegaRunRollup), never re-typed; a project nobody ran
+         keeps whatever it had. */
+      capex:         _rollup.capex,
+      incentive:     _rollup.incentive,
+      annualRevenue: _rollup.annualRevenue,
+      bessKwh:       _rollup.bessKwh,
+      bessKw:        _rollup.bessKw,
+      capexAt:       _rollup.capexAt,
+      capexSource:   _rollup.capexSource,
       /* Price decks are project data. An 8760 x 7 products is large, so
          only the metadata and series descriptors are guaranteed here --
          see _pdStripForSave for what is dropped when it will not fit. */
@@ -26174,6 +26192,10 @@ async function _loadProject(id){
     S.omegaSizingAt = d.omegaSizingAt || null;
     S.omegaFiber    = (d.omegaFiber    && typeof d.omegaFiber==='object')    ? d.omegaFiber    : null;
     S.omegaFiberAt  = d.omegaFiberAt  || null;
+    /* The last run's totals (omegaRunRollup) are this session's, never the
+       previously open project's: the record's own capex stands until a run
+       HERE prices this site. Same reasoning as vendorOverride above. */
+    S.costRollup    = null;
     try{ window._omegaComputeLast = (S.omegaSizing && S.omegaSizing.facKw > 0) ? S.omegaSizing : null; }catch(e){}
     try{ if(window.OmegaRecord && OmegaRecord.restore) setTimeout(function(){ try{ OmegaRecord.restore(); }catch(e){} }, 0); }catch(e){}
     /* Same reasoning as vendorOverride: reset to {} when the project has
@@ -36647,13 +36669,94 @@ function omegaRunDesign(){
     }catch(e){
       if(window.console) console.warn('[omega] run failed', e);
     }
-    try{ omegaRenderResults(); }catch(e){}
     S.lastRunAt = Date.now();
+    try{ omegaRunRollup(); }catch(e){}
+    try{ omegaRenderResults(); }catch(e){}
     S.running   = false;
     if(btn) btn.classList.remove('rr-busy');
     try{ omegaSetStale(false); }catch(e){}
+    try{ omegaRunSave(); }catch(e){}
   }, 30);
 }
+
+/* What the run costed, onto the project record (2026-09-29). The
+   workspace's Pipeline capex (omega-workspace-today.js), the dashboard's
+   portfolio (index.html) and the asset book (omega-assets.js) read
+   `capex`, `incentive`, `annualRevenue` and `bessKwh` straight off
+   projects/{id}. Nothing the editor did wrote them, so every site designed
+   here read "not priced yet" beside a cost sheet that had priced it
+   (Tommy, 2026-09-28: "project capex should reflect the costs that are
+   calculated by the run function in the project site map editor").
+
+   Captured from the run's OWN totals, the ones the Results rail shows:
+   Total install (window._COST_TOTAL, the contracted number when one is
+   entered), the incentives netted (window._INC_TOTAL), the year-one
+   revenue when the streams are filled in (window._YR1_REV) and the placed
+   fleet (omegaBessFleet, else the Config dialog's, as the cost sheet
+   itself falls back). saveProject() carries them through its allowlist
+   (omegaRollupFields), and omegaRunSave() saves at once so the figure
+   lands without waiting for the next autosave. A run that priced nothing
+   (nothing placed, or out of scope) records nothing and erases nothing:
+   a figure on the record, entered by hand or backfilled, stands until a
+   run prices the site. Rounded to the dollar, as the sheet prints. */
+function omegaRunRollup(){
+  var gross = +window._COST_TOTAL || 0;
+  if(!(gross > 0)){ S.costRollup = null; return null; }
+  var inc = +window._INC_TOTAL || 0;
+  var net = +window._NET_COST; if(!isFinite(net)) net = gross - inc;
+  var fleet = null;
+  try{ fleet = (typeof omegaBessFleet==='function') ? omegaBessFleet() : null; }catch(e){}
+  var r = {
+    capex:         Math.round(gross),
+    netCost:       Math.round(net),
+    incentive:     Math.round(inc),
+    annualRevenue: Math.round(+window._YR1_REV || 0),
+    bessKw:        Math.round((fleet && +fleet.kw)  || 0),
+    bessKwh:       Math.round((fleet && +fleet.kwh) || 0),
+    contracted:    !!window._COST_IS_CONTRACTED,
+    at:            S.lastRunAt || Date.now()
+  };
+  S.costRollup = r;
+  return r;
+}
+window.omegaRunRollup = omegaRunRollup;
+
+/* The record's fields, from a captured run. A field the run did not
+   produce is left out (undefined is stripped before the write), so a save
+   never puts a zero over a figure someone entered: revenue only when the
+   streams gave one, the battery only when one is placed or configured.
+   capexAt / capexSource say where the number came from and when, the
+   way bessSizing carries its basis. */
+function omegaRollupFields(r){
+  if(!r || !(r.capex > 0)) return {};
+  var f = { capex: r.capex, incentive: r.incentive, capexAt: r.at, capexSource: 'site-map' };
+  if(r.annualRevenue > 0) f.annualRevenue = r.annualRevenue;
+  if(r.bessKwh > 0) f.bessKwh = r.bessKwh;
+  if(r.bessKw  > 0) f.bessKw  = r.bessKw;
+  return f;
+}
+window.omegaRollupFields = omegaRollupFields;
+
+/* A run that priced the site is project data the record does not have
+   yet: mark it unsaved and save now, on the same condition the plot
+   commit saves on (signed in, a project open, the load finished). A plan
+   whose producing controls wait (read-only, or the billing read failed)
+   is left alone: the totals stay in S and ride the next save that is
+   allowed. Never a second writer of the record — saveProject() is the
+   one write. */
+function omegaRunSave(){
+  if(!S.costRollup) return false;
+  if(!(window._currentUser && window._projectId && window._loadReady)) return false;
+  try{
+    var pk = (window.OmegaCaps && typeof OmegaCaps.packageAccess==='function') ? OmegaCaps.packageAccess() : null;
+    if(pk && (pk.readOnly || pk.unverified)) return false;
+  }catch(e){}
+  if(typeof _setSaved==='function') _setSaved('unsaved');
+  if(typeof saveProject!=='function') return false;
+  saveProject();
+  return true;
+}
+window.omegaRunSave = omegaRunSave;
 
 /* ---- rail chrome ---------------------------------------------------- */
 
