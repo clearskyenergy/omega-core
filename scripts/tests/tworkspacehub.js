@@ -54,7 +54,9 @@ ok('the two-tool product earns Design and Grid and nothing else of the tools', t
 
 var liteTools = M.get('lite').tools.slice();
 var lite = HUB.compose(ctxFor({ orgId: 'x', packaged: true, packageAccess: { packaged: true, toolAccess: liteTools, modules: ['lite'] }, modules: ['lite'] }));
-ok('a packaged Lite workspace opens Design, Sales, Market and Permits (intake) from Lite\'s tools alone', lite.ring.map(function (a) { return a.key; }).join() === 'projects,design,sales,market,permits,team', lite.ring.map(function (a) { return a.key; }));
+/* the VPP Earnings Simulator is in the base (2026-09-29, Tommy: "included with every account as we can upsell this"),
+   so every workspace earns Finance, which outranks Permits for the sixth cell; intake stays under All tools */
+ok('a packaged Lite workspace opens Design, Finance (the VPP simulator), Sales and Market from Lite\'s tools alone', lite.ring.map(function (a) { return a.key; }).join() === 'projects,design,money,sales,market,team', lite.ring.map(function (a) { return a.key; }));
 
 var logic = HUB.compose(ctxFor({ orgId: 'x', tierLevel: 3, packaged: false, modules: ['lite', 'logic-office', 'logic-plant', 'logic-logistics'] }));
 ok('a workspace holding Omega Logic leads with Orders, Plant and Deliver', logic.ring.map(function (a) { return a.key; }).slice(0, 4).join() === 'projects,orders,plant,deliver', logic.ring.map(function (a) { return a.key; }));

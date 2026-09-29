@@ -1082,7 +1082,25 @@ ONE type table (workspace.html loads it; its ribbon hooks are no-ops
 there): a battery belongs only on a kind whose focus carries storage or on
 a record with no kind, so a Level 2, compute or building job is never
 asked for a battery size, it is asked for a design (ONE Today row,
-`design`, opening the oldest). `tworkspacetoday.js` §10 holds it. Plan & billing is
+`design`, opening the oldest). `tworkspacetoday.js` §10 holds it.
+**A capital partner's home is the finance marketplace** (2026-09-29, Tommy,
+of Helios: "in the good morning and in the omega pulse information about
+the financing opportunities and they can then click on them and it takes
+them into the opportunities and deal room"): a person whose own
+`fin_profiles/{uid}` is an approved `partner` has the workspace read
+`fin_projects` the four ways the rules grant a partner (open, firstLookUids,
+awardedTo, `room.forOrgId` = the profile's `orgId`) plus their own
+`offers/{uid}`; `OmegaWorkspaceToday` `capital` ranks it (a first look ending
+in two days, a room deal with no offer, an award, what opened this week as
+ONE row), puts the room on In flight and the fourth number, and
+`/api/pulse` `finance` adds the platform's open deals and megawatts (counts
+only). Every row, card and pulse link is `OmegaWorkspaceToday.dealHref`
+(`/finance#deal=<id>&tab=room|market`, `#room`, `#market`) — the ONE
+address, which the portal's `readLink()` reads once, clears and opens in the
+drawer when the listeners return the deal (a deal the account cannot read is
+said once, never guessed). The sponsor's rows use it too. Held by
+`tworkspacetoday.js` §11, `tfinancelink.js` (the portal's reader cut from the
+page, against the producer), `tpulse.js` and `check:workspace` `capital`. Plan & billing is
 a page (`#billing`), phone first: the subscription, what is owed and when
 with the invoice's own Pay, the payment method as a card (linked to Stripe
 for a plan billed outside the engine: the card read back, Add a card with
@@ -1122,6 +1140,20 @@ forward to the Modules page. Enterprise is "Contact for pricing":
 `/api/offerings`, the price page and the Modules page's plans shelf publish
 no Enterprise figure (the book keeps it for the contract). Design, launch
 order and the honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
+
+## VPP Earnings Simulator (2026-09-29)
+
+`vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
+(Omega Design, every tier from trial; Tommy: "base function … we can upsell
+this"; its Take it further card sells Omega Storage). It simulates what a
+managed VPP (the DividendVPP model) could stack at a site from a ZIP and an
+8760, 12–24 months of bills, or nothing. The math is `api/_lib/vpp-sim.js`
+behind `POST /api/vpp-estimate`; `api/_lib/vpp-provider.js` is the ONE seam
+for a live operator quote (`DIVIDENDVPP_API_URL`/`_KEY`, Vercel only), which
+rides BESIDE the simulation, never blended. Bills go through `bess-tariff.js`
+and PJM capacity through `value-stack.js` — never a second copy. Every stream
+is computed, published or planning. `docs/VPP-SIMULATOR.md`,
+`scripts/tests/tvppsim.js`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

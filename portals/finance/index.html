@@ -5168,6 +5168,49 @@ let editingId = null;
 
    Read once and cleared, so a reload does not silently re-open a half-filled
    dialog over whatever the person is doing by then. */
+/* A LINK FROM THE WORKSPACE (2026-09-29, Tommy: a capital partner's Good
+   morning and Omega pulse "click on them and it takes them into the
+   opportunities and deal room"). The workspace writes ONE address for it,
+   omega-workspace-today.js dealHref():
+
+       /finance#deal=<fin_projects id>&tab=room|market|deals
+       /finance#room   /finance#market   /finance#deals
+
+   Read once at boot and cleared from the address bar, like #new?, and kept
+   in this tab's sessionStorage so a sign-in in between does not lose it.
+   The tab applies when this person's role has it; the deal opens in the
+   drawer the moment the live listeners return it, and a deal they cannot
+   read is said plainly once every listener has answered, never guessed at.
+   Nothing here widens a read: the drawer shows what the rules returned. */
+let LINK = null;
+function readLink() {
+  let h = String(location.hash || '').replace(/^#/, ''), out = null;
+  if (/^(deal=|room$|market$|deals$|tab=)/.test(h)) {
+    const q = new URLSearchParams(h.indexOf('=') > 0 ? h : 'tab=' + h);
+    out = { deal: q.get('deal') || null, tab: q.get('tab') || null };
+    history.replaceState(null, '', location.pathname + location.search);
+    try { sessionStorage.setItem('omega:finance-link', JSON.stringify(out)); } catch (e) {}
+  } else {
+    try { out = JSON.parse(sessionStorage.getItem('omega:finance-link') || 'null'); } catch (e) { out = null; }
+  }
+  return out && (out.deal || out.tab) ? out : null;
+}
+function clearLink() { LINK = null; try { sessionStorage.removeItem('omega:finance-link'); } catch (e) {} }
+/* the tab the link names, when this role has it */
+function linkTab() {
+  if (!LINK || !LINK.tab) return;
+  const valid = TABS[S.role].map(t => t[0]);
+  if (valid.includes(LINK.tab)) S.tab = LINK.tab;
+}
+/* the deal the link names, once the listeners have it (or all have answered) */
+function openLinkedDeal(allAnswered) {
+  if (!LINK || !LINK.deal) { if (LINK && allAnswered) clearLink(); return; }
+  const d = allDeals().find(x => x.id === LINK.deal);
+  if (d) { clearLink(); openDeal(d.id); return; }
+  if (allAnswered) { clearLink(); toast('That deal is not open to your account any more.', true); }
+}
+LINK = readLink();
+
 function prefillFromHash() {
   var h = String(location.hash || '');
   if (h.indexOf('new?') !== 0 && h.indexOf('#new?') !== 0) return null;
@@ -10372,7 +10415,7 @@ function watchDeals() {
                 : [['org', col.where('orgKey', '==', myOrgKey())],
                    ['own', col.where('developerUid', '==', uid)]];
 
-  const buckets = {}, failed = {};
+  const buckets = {}, failed = {}, answered = {};
   const emit = () => {
     const merged = {};
     Object.keys(buckets).forEach(k => buckets[k].forEach(doc => { merged[doc.id] = doc; }));
@@ -10416,6 +10459,8 @@ function watchDeals() {
     }
     seenIds = ids;
     if (SESSION) render();
+    /* a deal named by a workspace link opens once it is here */
+    if (LINK) openLinkedDeal(Object.keys(answered).length === queries.length);
     /* A hold whose clock ran out while nobody was looking is cleared here, by
        whichever entitled client notices first. */
     sweepFirstLook();
@@ -10424,11 +10469,11 @@ function watchDeals() {
   queries.forEach(([key, q]) => {
     buckets[key] = [];
     dealsUnsubs.push(q.onSnapshot(
-      snap => { delete failed[key]; buckets[key] = snap.docs; emit(); },
+      snap => { delete failed[key]; answered[key] = true; buckets[key] = snap.docs; emit(); },
       err => {
         /* One query failing is survivable — the other may still return data. */
         console.error('[OMEGA] fin_projects listener (' + key + ') failed:', err);
-        failed[key] = true; buckets[key] = []; emit();
+        failed[key] = true; answered[key] = true; buckets[key] = []; emit();
         if (Object.keys(failed).length === queries.length) toast(explain(err)[0], true);
       }
     ));
@@ -11070,6 +11115,7 @@ async function signIn(acct) {
   const meta = ROLE_META[SESSION.role] || ROLE_META.developer;
   S.role = meta.side === 'partner' ? 'partner' : 'dev';
   S.tab = TABS[S.role][0][0];
+  linkTab();
   S.group = 'state';
   mapSel = null;
   S.f = {q:'', state:'', tech:'', status:'', stage:'', dev:'', orig:'', minMw:0};

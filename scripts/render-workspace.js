@@ -245,7 +245,7 @@ var srv = http.createServer(function (req, res) {
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
     if (u === '/api/offerings' && !post) return json(OFFERINGS.view(BOOK.proposed(), 'proposed'));
-    if (u === '/api/pulse' && !post) { var PL = require('../api/_lib/pulse'), nowP = Date.now(); return json(PL.build({ projects: [{ updatedAt: nowP - 3600e3, stage: 'candidate', bessKwh: 2000, bessKw: 1000, orgId: 'a' }, { updatedAt: nowP - 86400e3, stage: 'finance', bessKwh: 4000, bessKw: 1000, orgId: 'b' }, { updatedAt: nowP - 9 * 86400e3, stage: 'online', orgId: 'a' }], rfqs: [{ createdAt: nowP - 7200e3 }], members: [{ lastSeen: nowP - 60e3 }, { lastSeen: nowP - 40 * 86400e3 }] }, nowP, { projects: 500, rfqs: 500, members: 500 })); }
+    if (u === '/api/pulse' && !post) { var PL = require('../api/_lib/pulse'), nowP = Date.now(); return json(PL.build({ projects: [{ updatedAt: nowP - 3600e3, stage: 'candidate', bessKwh: 2000, bessKw: 1000, orgId: 'a' }, { updatedAt: nowP - 86400e3, stage: 'finance', bessKwh: 4000, bessKw: 1000, orgId: 'b' }, { updatedAt: nowP - 9 * 86400e3, stage: 'online', orgId: 'a' }], rfqs: [{ createdAt: nowP - 7200e3 }], members: [{ lastSeen: nowP - 60e3 }, { lastSeen: nowP - 40 * 86400e3 }], deals: [{ status: 'open', mw: 12.4, approvedAt: nowP - 20 * 86400e3 }, { status: 'open', mw: 2, approvedAt: nowP - 2 * 86400e3 }, { status: 'open', mw: 6, approvedAt: nowP - 86400e3 }], filed: [{ createdAt: nowP - 3 * 86400e3 }] }, nowP, { projects: 500, rfqs: 500, members: 500, deals: 500 })); }
     if (u === '/api/package-access' && post) {
       /* the staff preview, as api/package-access.js projects it (the real projection, staff only) */
       var pc = []; req.on('data', function (c) { pc.push(c); }); req.on('end', function () {
@@ -415,11 +415,13 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok(name + ': the rail wears the product name', product === 'Omega Workspace', product);
     var rail = await p.$$eval('#side-nav .sn-item', function (r) { return r.filter(function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return a.querySelector('span').textContent.trim(); }); });
     ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
-    var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: document.querySelectorAll('#pulse .stats .stat').length, spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '', homeMods: Array.prototype.filter.call(document.querySelectorAll('.mod'), function (e) { return e.getClientRects().length > 0; }).length, mymods: !!document.getElementById('mymods') }; });
+    var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: (function () { var g = document.querySelector('#pulse .stats'); return g ? g.querySelectorAll('.stat').length : 0; })(), fin: document.querySelectorAll('#pulse .stats')[1] ? document.querySelectorAll('#pulse .stats')[1].querySelectorAll('.stat').length : 0, finLink: (document.querySelector('#pulse a[data-pulse="market"]') || { getAttribute: function () { return null; } }).getAttribute('href'), spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '', homeMods: Array.prototype.filter.call(document.querySelectorAll('.mod'), function (e) { return e.getClientRects().length > 0; }).length, mymods: !!document.getElementById('mymods') }; });
     ok(name + ': the module cards live on the Modules page, never on the home', board.homeMods === 0 && !board.mymods, board);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '-home-' + p.viewportSize().width + '.png'), fullPage: true });
     ok(name + ': the home shows the board (In flight and Around you with the hub) and All tools stays its own page', board.flight && board.team && !board.tools, board);
     ok(name + ': the Omega pulse draws four counts, the eight-week line and the insight from /api/pulse', board.pulse && board.stats === 4 && board.spark && /hour duration|Not enough/.test(board.insight), board);
+    /* the finance marketplace in the pulse, for every workspace: its counts, and the open deals as a way into the portal (2026-09-29) */
+    ok(name + ': the Omega pulse counts the financing opportunities and links into the finance portal', board.fin === 2 && /^\/finance(#market)?$/.test(board.finLink || ''), board);
     var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (g) { return g.getAttribute('data-hub'); }); });
     ok(name + ': the hub has Today in the centre and a ring of at most six', hub[0] === 'today' && hub.length >= 3 && hub.length <= 7, hub);
     out.hub = hub;
@@ -639,6 +641,12 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: a hub cell opens the side panel with the area\'s tools, Deluxe ones locked', drawer && /Design/.test(drawer.title) && drawer.rows >= 4 && drawer.locked >= 1, drawer);
     await p.keyboard.press('Escape'); await wait(200);
     ok('northstar: Escape closes it', (await p.$('.ows-drawer')) === null);
+    /* the Finance hex lists the VPP Earnings Simulator beside the Value Stack (2026-09-29, Tommy: "i want it in the finance tab") */
+    await p.click('#hub .hx[data-hub="money"]'); await wait(300);
+    var fin = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, keys: Array.prototype.map.call(e.querySelectorAll('.ows-row'), function (r) { return r.getAttribute('data-row') + (r.classList.contains('locked') ? ':locked' : ''); }) }; }).catch(function () { return null; });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'workspace-finance-panel.png') });
+    ok('northstar: the Finance panel lists the VPP Earnings Simulator, open, right after the Value Stack', fin && /Finance/.test(fin.title) && fin.keys.indexOf('vppsim') === fin.keys.indexOf('valuestack') + 1 && fin.keys.indexOf('valuestack') >= 0, fin);
+    await p.keyboard.press('Escape'); await wait(200);
     /* every hex opens the side panel, never a spot on the page (2026-09-27) */
     for (var hx of [['today', /Today/], ['projects', /Projects/], ['team', /Team/]]) {
       await p.click('#hub .hx[data-hub="' + hx[0] + '"]'); await wait(300);
@@ -700,6 +708,34 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('#ows-signout'); var url = await nav; mute();
     ok('northstar: Sign out ends the session and goes to /login.html', /\/login\.html$/.test(url), url);
     return { afterSignOut: url.replace(/^https?:\/\/[^/]+/, '') };
+  } });
+
+  /* ══ 2b. A CAPITAL PARTNER — the deal room and the marketplace on the home (Tommy, 2026-09-29, Helios) ══ */
+  var capFx = FX.capital(HOST);
+  await scenario('capital', capFx, { steps: async function (p) {
+    var rows = await p.$$eval('#today .next .row[data-key]', function (rs) { return rs.map(function (r) { var a = r.querySelector('a.ows-pill'); return { key: r.getAttribute('data-key'), t: r.querySelector('b').textContent, href: a ? a.getAttribute('href') : null }; }); });
+    var byKey = {}; rows.forEach(function (r) { byKey[r.key] = r; });
+    ok('capital: Good morning leads with the first look ending, opening the deal room ON that deal', rows[0] && rows[0].key === 'first:fin-joliet' && /Joliet Storage ends in 2 days/.test(rows[0].t) && rows[0].href === '/finance#deal=fin-joliet&tab=room', rows);
+    ok('capital: the deal ClearSky delivered to the firm waits for an offer and opens on itself', byKey['room:fin-aurora'] && byKey['room:fin-aurora'].href === '/finance#deal=fin-aurora&tab=room', rows);
+    ok('capital: what opened this week is ONE row into the marketplace, never the old deal or a rival\'s hold', byKey.market && /2 new financing opportunities/.test(byKey.market.t) && byKey.market.href === '/finance#market' && !rows.some(function (r) { return /fin-old|fin-rival|fin-elgin/.test(r.key); }), rows);
+    var kpi = await p.$eval('#today [data-kpi="dealroom"]', function (k) { return { tag: k.tagName, href: k.getAttribute('href'), text: k.innerText }; }).catch(function () { return null; });
+    ok('capital: the fourth number is the deal room and links into it', kpi && kpi.tag === 'A' && kpi.href === '/finance#room' && /^3\s/.test(kpi.text) && /2 need an offer/.test(kpi.text), kpi);
+    var pulse = await p.waitForFunction(function () { var b = document.getElementById('pulse-body'); return b && /Financing opportunities/.test(b.textContent); }, null, { timeout: 4000 }).then(function () { return true; }, function () { return false; });
+    var links = await p.$$eval('#pulse-body a', function (as) { return as.map(function (a) { return a.getAttribute('href'); }); }).catch(function () { return []; });
+    ok('capital: the Omega pulse counts the open marketplace and links to the opportunities and the deal room', pulse && links.indexOf('/finance#market') >= 0 && links.indexOf('/finance#room') >= 0, links);
+    await p.evaluate(function () { window.location.hash = '#flight'; }); await wait(250);
+    var cards = await p.$$eval('#flight-body article[data-fin] a.pc-main', function (as) { return as.map(function (a) { return a.getAttribute('href'); }); });
+    ok('capital: In flight holds the deal room as cards, each into the room on its deal, never a rival\'s hold', cards.length === 3 && cards.indexOf('/finance#deal=fin-joliet&tab=room') >= 0 && cards.indexOf('/finance#deal=fin-elgin&tab=room') >= 0 && !cards.some(function (h) { return /fin-rival/.test(h); }), cards);
+    await p.evaluate(function () { window.location.hash = ''; }); await wait(200);
+    /* the row is the target: clicking it goes to the portal on the deal */
+    var goes = p.waitForRequest(function (r) { return /\/finance$/.test(r.url().split('#')[0]) && r.isNavigationRequest(); }, { timeout: 4000 }).then(function (r) { return r.url(); }, function () { return null; });
+    await p.click('#today .next .row[data-key="first:fin-joliet"] b');
+    var went = await goes;
+    /* a request carries no hash: the deal half of the address is the row's href, asserted above */
+    ok('capital: clicking the row (not only its pill) opens the finance portal', !!went, went);
+    /* the portal read the link once and cleared it; the rest of the scenario is the workspace's */
+    await p.goto(went.split('/finance')[0] + '/workspace?home=workspace', { waitUntil: 'domcontentloaded' }); await wait(1500);
+    return { rows: rows.map(function (r) { return r.key; }), dealroom: kpi && kpi.href };
   } });
 
   /* ══ 3. NORTHSTAR ON A PHONE ══ */

@@ -173723,7 +173723,7 @@ if (root.console && console.info) {
      the design tools and the sizing and cost tools. */
   var PLAN = {
     site:   ['@site-setup', '@trace-boundary', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
-    design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
+    design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', '@fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
     size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
   /* ── OMEGA DESIGN'S DRAWING TOOLS LIVE ON DRAW, ON EVERY PLAN ────────
@@ -173760,8 +173760,33 @@ if (root.console && console.info) {
       + '<span class="rb-lbl">Draw Site<br>Area</span>';
     return b;
   }
+  /* ── FENCE & TIE FROM THE COMPUTE TAB TOO ─────────────────────────────
+     Fence & Tie is Omega Design's and lives on Draw (above) for the same
+     reason as Trace Boundary. But it is the step after Design Site on a
+     compute campus: fence every block, place the master controller and
+     trench the duct banks back to it. With it gone the Design group ran
+     Design Site, Buildable Area, Supply Link and no way to fence what it
+     had just laid out (Tommy, 2026-09-29: "bring back the fence tie in
+     button as well"). So the tab carries its own button in that group,
+     a Compute command in api/_lib/modules.js, that runs the SAME pass
+     (bop: true, as the Draw button does). The Draw button stays. */
+  function fenceButton() {
+    var ex = document.getElementById('rb-compute-fence-tie');
+    if (ex) return ex;
+    if (!document.getElementById('rb-fence-tie')) return null;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = 'rb-compute-fence-tie';
+    b.setAttribute('onclick', 'OmegaFenceTie.run({bop:true})');
+    b.title = 'Fence & Tie \u2014 draws a security fence around every block of equipment on '
+      + 'the drawing, places a master controller, and trenches a duct bank from each '
+      + 'compound back to it. Runs on whatever is already there.';
+    b.innerHTML = '<span class="rb-ico" style="color:var(--green)">\u25a7</span>'
+      + '<span class="rb-lbl">Fence<br>&amp; Tie</span>';
+    return b;
+  }
   function find(id) {
     if (id === '@trace-boundary') return traceButton();
+    if (id === '@fence-tie') return fenceButton();
     if (id === '@site-setup') {
       var ex = document.getElementById('rb-compute-site-setup');
       if (ex) return ex;
@@ -173879,7 +173904,7 @@ if (root.console && console.info) {
   function keepInDesigner() {
     try {
       if (root.OmegaMode && root.OmegaMode.tabs) root.OmegaMode.tabs.compute = 1;
-      if (root.OmegaMode && root.OmegaMode.keep) root.OmegaMode.keep(/rb-compute-site-setup|rb-compute-trace-boundary|rb-dccluster/);
+      if (root.OmegaMode && root.OmegaMode.keep) root.OmegaMode.keep(/rb-compute-site-setup|rb-compute-trace-boundary|rb-compute-fence-tie|rb-dccluster/);
       if (root.OmegaMode && root.OmegaMode.retag) root.OmegaMode.retag();
     } catch (e) {}
   }
