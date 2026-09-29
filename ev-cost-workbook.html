@@ -1349,14 +1349,19 @@ function ngPriceBook(Q){
   /* row 17 */
   add('mr','concrete','Concrete Work/Bases/Pads', S, 'ea', B.pad.mat*S, B.pad.lab*S, S+' pads — one per station');
   /* row 18 */
-  var svc=B.panel[Q.service]||null, opt=B.panel;
+  var svc=B.panel[Q.service]||null, opt=B.panel, nsp=num(Q.servicePedestals);
   if(!svc){
     svc=opt.standard;
-    ask('Service scope (row 18) is not confirmed — priced as the standard panel package ('
+    ask((nsp ? 'The drawing has '+nsp+' service pedestal'+(nsp>1?'s':'')+' — a new utility service — but the phase is not confirmed. '
+             : '')
+        +'Service scope (row 18) is not confirmed — priced as the standard panel package ('
         +$(opt.standard.mat+opt.standard.lab)+'). Choose under Program details: standard '
         +$(opt.standard.mat+opt.standard.lab)+' · new 200A single-phase '+$(opt.single.mat+opt.single.lab)
         +' · new 200A three-phase '+$(opt.three.mat+opt.three.lab)+'. "A new meter is being added" still needs the phase.');
   }
+  if(svc.key==='standard' && nsp)
+    note('Row 18 is the standard package, but the drawing has '+nsp+' service pedestal'+(nsp>1?'s':'')
+        +' (a new utility service). Confirm the service scope.');
   add('mr','panel',
       svc.key==='standard' ? 'Utility service point and utility service meter equipment'
                            : svc.label+' — utility service point and new utility service meter',
@@ -1487,6 +1492,7 @@ function ngQuantities(src){
   return { ports:ports, paved:paved, unpaved:unpaved, conduit:cond, handholes:hh,
            service:ngServiceKey(), hw80PerPort:num(DATA.ng80PerPort), ports80:ngPorts80(ports),
            segment:d('category'), stationsTyped:num(DATA.stations),
+           servicePedestals:num(DATA.nServicePedestal),
            pedestalsDrawn:num(DATA.nPedestal), padsDrawn:num(DATA.nPad),
            markupPct:nval('p_markup'),
            unpavedTyped:typed.trenchTurf||null, handholeTyped:typed.handhole||null,
