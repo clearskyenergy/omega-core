@@ -273,65 +273,18 @@
         <p class="note">By continuing you agree to ClearSky's terms of use. Trouble signing in? Email <a href="mailto:dev@clearsky-usa.com">dev@clearsky-usa.com</a>.</p>
       </div>
 
-      <!-- STATE 1b · CREATE AN ACCOUNT
-           "Request access" used to be a link to a marketing contact form on
-           another site, which is not a door — somebody types their email into
-           a form and hears nothing, and there is no account to sign into when
-           ClearSky does get round to it.
-
-           This makes the Firebase Auth account immediately (that needs no
-           privilege) and files ONE access request the master console can see.
-           The account exists from that moment, so the person can sign in
-           while they wait; what they get until approval is the dashboard with
-           every tool locked, not a wall — see omega-tenant.js.
-
-           A COLLEAGUE OF AN EXISTING TENANT SKIPS THE QUEUE. If their domain
-           already has a workspace, there is nothing for ClearSky to approve;
-           omega-tenant.js self-registers them as a member on arrival. Asking
-           them to wait a business day for an account their company already
-           pays for would be an invented obstacle. -->
-      <div id="paneSignup" class="choose" style="display:none;">
-        <h2>Create an account</h2>
-        <p class="sub" id="suLede">Use your work email. A ClearSky administrator approves each new company before its tools open up.</p>
-        <!-- When packaged signup is on (api/offerings says so), the account is
-             made on the signup page: company and billing details, the package,
-             and the first invoice paid by card to open the workspace. The form
-             below is the older request path and stays for when it is off. -->
-        <div id="suPackaged" style="display:none">
-          <p class="sub">Create your account with your work email. Then your billing profile, the system you build from our menu, and your first invoice by card: your workspace opens the moment it is paid. A 14-day trial can be requested instead. <a href="/offerings.html">See plans and pricing</a>. Already started? <a id="suStart" href="/start.html">Continue where you left off</a>.</p>
-        </div>
-        <form id="signupForm" novalidate>
-          <div class="field">
-            <label for="suEmail">Work email</label>
-            <input id="suEmail" type="email" autocomplete="username" spellcheck="false" placeholder="you@yourcompany.com" required>
-          </div>
-          <div class="field">
-            <label for="suCompany">Company</label>
-            <input id="suCompany" type="text" autocomplete="off" placeholder="Your company's legal name" required>
-          </div>
-          <div class="field">
-            <label for="suVertical">What you do</label>
-            <select id="suVertical" style="width:100%">
-              <option value="installer">Installer &amp; sales channel</option>
-              <option value="developer">Developer, owner or capital</option>
-              <option value="epc">EPC &amp; engineering</option>
-              <option value="oem">OEM &amp; technology</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="suPass">Password</label>
-            <input id="suPass" type="password" autocomplete="new-password" placeholder="At least 8 characters" required>
-          </div>
-          <div class="field">
-            <label for="suNote">Anything we should know (optional)</label>
-            <input id="suNote" type="text" placeholder="Focus, timeline, who referred you">
-          </div>
-          <button type="submit" class="btn-primary" id="suSubmit" style="width:100%;justify-content:center">Create account</button>
-        </form>
-        <p class="form-msg" id="suMsg" role="status" aria-live="polite"></p>
-        <p class="note" style="text-align:left;"><button type="button" class="link-quiet" id="suBack">Back to sign in</button></p>
-      </div>
-
+      <!-- STATE 1b · CREATE AN ACCOUNT is the signup page (2026-09-28, Tommy:
+           "when we click create new account it should go to the page that is
+           the start and helps them purchase and buy an account and pay for
+           it and create their account"). This page used to open its own
+           account form here (work email, company, what you do, password, a
+           note) and only then send the new account on to /start.html, so a
+           new company met two forms and two places. /start.html is the ONE
+           signup: the account is made THERE, then what your team does, the
+           system priced as they choose it, billing, and the first invoice by
+           card; with packaged signup off it is the reviewed request. The
+           button only carries the address typed here across, in this
+           browser (omega:signup-draft), never in a link. -->
       <!-- STATE 2 · this account reaches more than one workspace -->
       <div id="paneChoose" class="choose" style="display:none;">
         <h2>Where to?</h2>
@@ -523,7 +476,6 @@
 
   const ui = {
     signIn:  $("paneSignIn"),
-    signup:  $("paneSignup"),
     choose:  $("paneChoose"),
     blocked: $("paneBlocked"),
     loading: $("omegaLoading"),
@@ -538,7 +490,6 @@
   function showPane(name) {
     if (window.OmegaSplash) OmegaSplash.done();   /* the page is known: a pane is what it shows */
     ui.signIn.style.display  = name === "signIn"  ? "" : "none";
-    ui.signup.style.display  = name === "signup"  ? "" : "none";
     ui.choose.style.display  = name === "choose"  ? "" : "none";
     ui.blocked.style.display = name === "blocked" ? "" : "none";
   }
@@ -928,7 +879,6 @@
 
     /* ---- The whole flow, once a user exists ------------------------------- */
     let routing = false;
-    let creatingAccount = false;   /* the signup form routes the account it makes */
     async function route(user, opts) {
       if (routing) return;
       routing = true;
@@ -1081,158 +1031,32 @@
     });
 
     /* Packaged signup on? The public price list says (no sign-in needed);
-       then the form gives way to the signup page, which pays at the end. */
+       then a signed-in person with no workspace yet is sent to the signup
+       page, which pays at the end. */
     const packagedSignup = fetch('/api/offerings', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
       if (!o || !o.signup || !o.signup.packaged) return false;
-      /* the account form stays: the account is step one; the signup page takes it from there */
       window.__packagedSignup = true;
-      $("suPackaged").style.display = ''; $("suLede").style.display = 'none';
-      $("suStart").href = o.signup.start || '/start.html';
       return true;
     }).catch(function () { return false; });
 
-    /* The signup page: company, how you work, billing profile, build your
-       system, pay. It holds an address that is not verified yet and moves on
-       by itself once the link is clicked. */
+    /* The signup page: the account, what your team does, the system, billing,
+       pay. It holds an address that is not verified yet and moves on by
+       itself once the link is clicked. */
     function toSignup() {
       loading(true, "Opening <b>your signup</b>");
       window.location.replace("/start.html");
     }
     /* ---- Create an account ------------------------------------------------
-       Two things happen and they are deliberately separate: a Firebase Auth
-       account (which needs no privilege and exists the moment it is made) and
-       an access request (a document ClearSky reads and acts on). Making the
-       account first means somebody can sign in and see where their request is
-       while they wait, instead of having nothing at all until an
-       administrator gets to it.
-
-       PUBLIC EMAIL PROVIDERS ARE REFUSED. orgId is the email domain, so a
-       workspace keyed on gmail.com would hold strangers who share a mail
-       provider. Mirrors api/_lib/public-domains.js — shortened to the ones
-       people actually type, because this is a courtesy check and the server
-       list is the control. */
-    const PUBLIC_MAIL = ["gmail.com","googlemail.com","yahoo.com","ymail.com","outlook.com",
-      "hotmail.com","hotmail.co.uk","live.com","msn.com","aol.com","icloud.com","me.com","mac.com",
-      "protonmail.com","proton.me","pm.me","zoho.com","gmx.com","gmx.de","web.de","mail.com",
-      "yandex.com","yandex.ru","fastmail.com","hey.com","duck.com","comcast.net","att.net",
-      "verizon.net","sbcglobal.net","cox.net","charter.net","qq.com","163.com","naver.com",
-      "mail.ru","example.com"];
-
-    function suSay(text, kind) {
-      const el = $("suMsg");
-      el.textContent = text || "";
-      el.className = "form-msg " + (kind || "info");
-    }
-
+       The signup page (/start.html) makes the account and walks the person
+       through what their team does, the system they build from the menu,
+       billing and the first invoice by card. Nothing is created here. The
+       address typed into the sign-in box travels in THIS browser only
+       (omega:signup-draft, the key the signup page already reads), never in
+       a link. */
     $("createBtn").addEventListener("click", () => {
-      const typed = ui.email.value.trim();
-      if (typed) $("suEmail").value = typed;
-      suSay("");
-      showPane("signup");
-      $("suEmail").focus();
-    });
-    $("suBack").addEventListener("click", () => { showPane("signIn"); say(""); });
-
-    $("signupForm").addEventListener("submit", async (e) => {
-      e.preventDefault();
-      const email   = $("suEmail").value.trim().toLowerCase();
-      const company = $("suCompany").value.trim();
-      const vertical= $("suVertical").value;
-      const pass    = $("suPass").value;
-      const note    = $("suNote").value.trim();
-      const domain  = domainOf(email);
-
-      if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return suSay("Check the email address — that one isn't valid.", "error");
-      if (PUBLIC_MAIL.indexOf(domain) > -1) {
-        return suSay("Use your work email. A workspace is keyed to your company's domain, so a "
-          + "personal address would put strangers in the same account.", "error");
-      }
-      if (company.length < 2) return suSay("Tell us the company name.", "error");
-      if (pass.length < 8)    return suSay("Passwords need at least 8 characters.", "error");
-
-      const btn = $("suSubmit");
-      btn.disabled = true;
-      suSay("Creating your account…");
-      /* Making the account signs it in, and the "already signed in" listener
-         below would route it at once: the new person was opened onto the
-         workspace before this handler could send them to signup. This
-         handler routes a new account, so the listener stands aside. */
-      creatingAccount = true;
-      let user = null;
-      try {
-        const cred = await auth.createUserWithEmailAndPassword(A, email, pass);
-        user = cred.user;
-      } catch (err) {
-        creatingAccount = false;
-        btn.disabled = false;
-        const c = (err && err.code) || "";
-        if (c.indexOf("email-already-in-use") > -1) {
-          showPane("signIn");
-          ui.email.value = email;
-          say("That email already has an OMEGA account — sign in, or use Forgot password.", "info");
-          ui.pass.focus();
-          return;
-        }
-        if (c.indexOf("weak-password") > -1) return suSay("That password is too easy to guess. Try a longer one.", "error");
-        return suSay(friendly(err), "error");
-      }
-
-      /* Packaged signup: the account is step one. The verification link
-         lands on the signup page with the company carried over; nothing is
-         requested of ClearSky, because paying the first invoice opens the
-         workspace. A colleague of an existing tenant still just goes in. */
-      if (await packagedSignup) {
-        /* The company travels in this person's own browser, never in a link
-           or an address that could be forwarded: these companies do not want
-           to be out there. */
-        const next = '/start.html';
-        try { localStorage.setItem('omega:signup-draft', JSON.stringify({ company: company, vertical: vertical, note: note, email: email, at: Date.now() })); } catch (_) {}
-        try { await auth.sendEmailVerification(user, { url: location.origin + next }); }
-        catch (_) { try { await auth.sendEmailVerification(user); } catch (_2) {} }
-        let joins = false;
-        try { joins = !!(await readDoc(["omega_orgs", domain])); } catch (_) {}
-        if (joins) { suSay("Your company is already on OMEGA — taking you in.", "info"); showPane("signIn"); return route(user, { quick: true }); }
-        /* Straight on to the signup page, which opens on the signup itself
-           (how you work, billing profile, build your system, pay) with the
-           company carried over; the link in the email is needed only to
-           subscribe, and the page carries on once it is clicked. */
-        return toSignup();
-      }
-      /* Best effort, and it must not block the flow: an unverified address
-         still gets an account, and ClearSky is approving the domain anyway. */
-      try { await auth.sendEmailVerification(user); } catch (_) {}
-
-      /* A colleague of an existing tenant has nothing to wait for. */
-      let orgExists = false;
-      try { orgExists = !!(await readDoc(["omega_orgs", domain])); } catch (_) {}
-      if (orgExists) {
-        suSay("Your company is already on OMEGA — taking you in.", "info");
-        showPane("signIn");
-        return route(user, { quick: true });
-      }
-
-      try {
-        await fs.setDoc(fs.doc(db, "access_requests", user.uid), {
-          email: email, company: company, vertical: vertical, domain: domain,
-          note: note || null, status: "pending",
-          uid: user.uid, userAgent: navigator.userAgent || null,
-          createdAt: fs.serverTimestamp()
-        });
-      } catch (err) {
-        /* The account is real either way. Say which half failed, because
-           "try again" would make a second account and fix nothing. */
-        btn.disabled = false;
-        return suSay("Your account was created, but we could not file the access request. "
-          + "Email dev@clearsky-usa.com and we will do it by hand — you can sign in with "
-          + "this email and password now.", "error");
-      }
-
-      blockedPane("unapproved", null);
-      $("blockedTitle").textContent = "Request received";
-      $("blockedBody").textContent = "Your account is created and " + company
-        + " is with the ClearSky team. Approval usually takes one business day, and we will email "
-        + email + " the moment it is through. You can sign in meanwhile — the tools stay locked "
-        + "until it is approved.";
+      const typed = ui.email.value.trim().toLowerCase();
+      if (typed) { try { localStorage.setItem('omega:signup-draft', JSON.stringify({ email: typed, at: Date.now() })); } catch (_) {} }
+      toSignup();
     });
 
     $("forgotBtn").addEventListener("click", async () => {
@@ -1270,7 +1094,7 @@
       say("Signed out. Enter your work email to continue.", "info");
     } else {
       auth.onAuthStateChanged(A, (user) => {
-        if (user && !creatingAccount) route(user, { quick: params.get("go") === "1" });
+        if (user) route(user, { quick: params.get("go") === "1" });
       });
     }
   }

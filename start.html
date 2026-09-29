@@ -57,6 +57,7 @@
   .host{font-family:ui-monospace,Menlo,monospace;font-size:13px;color:var(--gold)}
   .hide{display:none!important}
   .hint{font-size:12.5px;color:var(--sub);margin-top:8px}
+  .hint a{color:var(--teal2)}
   .step-in{animation:rise .35s ease both}
   /* a slide, never a fade: a step is never half-drawn (the render checks photograph it the moment it shows) */
   @keyframes rise{from{transform:translateY(8px)}to{transform:none}}
@@ -194,18 +195,24 @@
     <li data-step="billing"><span class="dot">4</span><span class="lbl">Billing &amp; pay</span></li>
   </ol>
 
-  <!-- sign in -->
+  <!-- the account. Made HERE (2026-09-28, Tommy: "when we click create new
+       account it should go to the page that is the start and helps them
+       purchase and buy an account and pay for it and create their account"):
+       the login page's Create an account lands on this step, with the address
+       typed there carried in this browser only (omega:signup-draft). One form
+       and one button: an address that already has an account signs in with
+       its password from the same button, so the link in the verification
+       email opens this page in any browser, and a proposal's link too. -->
   <div id="step-auth">
-    <h1 tabindex="-1">Create your workspace</h1>
-    <p>Site development tools for storage, EV charging, solar and data-center projects. Sign in with your <b>work</b> email to get started. Your company gets its own private workspace, and colleagues at your email domain join it automatically.</p>
-    <button class="btn" onclick="signInGoogle()">Continue with Google</button>
-    <button class="btn ghost" onclick="toggleEmail()">Use email &amp; password instead</button>
-    <div id="email-box" class="hide">
-      <label for="em">Work email</label><input id="em" type="email" autocomplete="email" placeholder="you@yourcompany.com">
-      <label for="pw">Password</label><input id="pw" type="password" autocomplete="new-password">
-      <button class="btn" onclick="signInEmail()">Continue</button>
-      <div class="hint">New here? The same button creates your account.</div>
-    </div>
+    <h1 tabindex="-1">Create your account</h1>
+    <p>Use your <b>work</b> email. Your company gets its own private workspace, and colleagues at your email domain join it automatically. <span id="auth-next"></span></p>
+    <form id="auth-form" novalidate>
+      <label for="em">Work email</label><input id="em" type="email" autocomplete="username" spellcheck="false" placeholder="you@yourcompany.com">
+      <label for="pw">Password</label><input id="pw" type="password" autocomplete="new-password" placeholder="At least 8 characters">
+      <button class="btn" type="submit" id="create-btn">Create account</button>
+    </form>
+    <button class="btn ghost" type="button" id="google-btn" onclick="signInGoogle()">Continue with Google</button>
+    <div class="hint" id="auth-hint">Already have an account? <a href="/login.html">Sign in</a>. <a href="/offerings.html">See plans and pricing</a>. By continuing you agree to ClearSky's terms of use.</div>
     <div class="err" id="auth-err"></div>
   </div>
 
@@ -479,19 +486,57 @@
   };
   function domainOf(email){ return String(email||'').toLowerCase().split('@')[1]||''; }
 
-  window.toggleEmail = function(){ var b=$('email-box'); b.className = b.className ? '' : 'hide'; };
   window.signInGoogle = function(){
     var p = new firebase.auth.GoogleAuthProvider();
     auth.signInWithPopup(p)['catch'](function(e){ err('auth-err', e.message); });
   };
-  window.signInEmail = function(){
-    var em=$('em').value.trim(), pw=$('pw').value;
-    if(!em||!pw){ err('auth-err','Email and password are required.'); return; }
-    auth.signInWithEmailAndPassword(em,pw)['catch'](function(e){
-      if (e.code==='auth/user-not-found') return auth.createUserWithEmailAndPassword(em,pw).then(function(c){ return sendLink(c.user); })['catch'](function(e2){ err('auth-err', e2.message); });
-      err('auth-err', e.message);
-    });
+  /* PUBLIC EMAIL PROVIDERS ARE REFUSED before an account is made for one:
+     the workspace is the email's domain, so one keyed on gmail.com would
+     hold strangers who share a mail provider. Mirrors api/_lib/public-domains.js,
+     shortened to the ones people type: a courtesy check; the server list is
+     the control (/api/tenant-signup refuses the domain either way). */
+  var PUBLIC_MAIL = ['gmail.com','googlemail.com','yahoo.com','ymail.com','outlook.com','hotmail.com','hotmail.co.uk','live.com','msn.com','aol.com','icloud.com','me.com','mac.com',
+    'protonmail.com','proton.me','pm.me','zoho.com','gmx.com','gmx.de','web.de','mail.com','yandex.com','yandex.ru','fastmail.com','hey.com','duck.com','comcast.net','att.net',
+    'verizon.net','sbcglobal.net','cox.net','charter.net','qq.com','163.com','naver.com','mail.ru','example.com'];
+  /* Create account: the Firebase Auth account (which needs no privilege and
+     exists the moment it is made) and the verification link, whose Continue
+     button opens this page again. Making it signs it in, and omega-tenant.js
+     runs the hub routing on this page: a colleague of an existing workspace
+     goes in, a new company hears omega:hub and walks into the signup. An
+     address that already has an account signs in with its password instead. */
+  window.createAccount = function(){
+    var em = $('em').value.trim().toLowerCase(), pw = $('pw').value, b = $('create-btn');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(em)) { err('auth-err', "Check the email address — that one isn't valid."); $('em').focus(); return; }
+    if (PUBLIC_MAIL.indexOf(domainOf(em)) >= 0) { err('auth-err', "Use your work email. A workspace is keyed to your company's domain, so a personal address would put strangers in the same account."); $('em').focus(); return; }
+    if (pw.length < 8) { err('auth-err', 'Passwords need at least 8 characters.'); $('pw').focus(); return; }
+    b.disabled = true; b.textContent = 'Creating your account…'; err('auth-err', '');
+    function done(){ b.disabled = false; b.textContent = 'Create account'; }
+    auth.createUserWithEmailAndPassword(em, pw).then(function (c) { return sendLink(c.user); })['catch'](function (e) {
+      var code = (e && e.code) || '';
+      if (/email-already-in-use/.test(code)) return auth.signInWithEmailAndPassword(em, pw)['catch'](function () { err('auth-err', 'That email already has an OMEGA account. Sign in with its password, or use Forgot password on the sign-in page.'); });
+      err('auth-err', /weak-password/.test(code) ? 'That password is too easy to guess. Try a longer one.' : (e && e.message) || 'Could not create the account.');
+    }).then(done, done);
   };
+  $('auth-form').onsubmit = function (e) { e.preventDefault(); window.createAccount(); };
+  /* what follows the account, as the public price list says: the guided run
+     and the first invoice by card, or the reviewed request when packaged
+     signup is off. Asked only when this step shows (a signed-in visit never
+     needs it). */
+  var nextAsked = false;
+  function sayNext(){
+    if (nextAsked) return; nextAsked = true;
+    fetch('/api/offerings', { cache: 'no-store' }).then(function (r) { return r.ok ? r.json() : null; }).then(function (o) {
+      var sg = o && o.signup; if (!sg) return;
+      $('auth-next').textContent = !sg.packaged ? 'ClearSky reviews each new workspace, usually within one business day.'
+        : sg.payNow ? 'Next: what your team does, your system priced as you choose it, billing, and your first invoice by card. Your workspace opens the moment it is paid; a 14-day trial can be requested instead.'
+        : 'Next: what your team does, your system and billing. A 14-day trial starts when ClearSky approves it.';
+    })['catch'](function () {});
+  }
+  /* the address typed on the sign-in page, carried in this browser (never a link) */
+  function prefillEmail(){
+    if ($('em').value) return;
+    try { var d = JSON.parse(localStorage.getItem(DRAFT) || 'null'); if (d && d.email && /@/.test(d.email) && Date.now() - (+d.at || 0) < 30 * 86400000) $('em').value = d.email; } catch (e) {}
+  }
   window.signOut = function(){ forgetDraft(); auth.signOut().then(function(){ location.reload(); }); };
 
   window.addEventListener('omega:hub', function(ev){
@@ -539,7 +584,7 @@
           err('form-err', e.message);
         });
   }
-  auth.onAuthStateChanged(function(u){ if(!u) show('step-auth'); });
+  auth.onAuthStateChanged(function(u){ if(!u) { prefillEmail(); sayNext(); show('step-auth'); } });
 
   /* where the guided run starts: a package named by the offerings page or a
      proposal goes straight to the system; a draft resumes where it was; else

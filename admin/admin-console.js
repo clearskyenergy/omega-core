@@ -1870,8 +1870,11 @@ function createTenant(){
 /* ══════════════════════════════════════════════════════════════════════════
    ACCESS REQUESTS  —  the other end of the front door
    --------------------------------------------------------------------------
-   /login creates the Firebase Auth account and files one access_requests row.
-   Nothing is granted by that: the person can sign in and sees the dashboard
+   access_requests rows were filed by the login page's own account form,
+   retired 2026-09-28 (Create an account is the signup page, which requests
+   or pays for a workspace through /api/tenant-signup); the dashboard's
+   Upgrade on the pending strip still writes one, and older rows remain.
+   Nothing is granted by a row: the person can sign in and sees the dashboard
    with every tool locked until a tenant exists for their domain. This is where
    somebody at ClearSky looks at the request and either sets the workspace up
    or declines it.

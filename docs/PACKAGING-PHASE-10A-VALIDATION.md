@@ -94,11 +94,17 @@ payment profile, then asks them to build their system (the menu, they opt
 in), it prices out their monthly membership, then they pay, monthly or for
 the year with two months of savings."* The pages now walk exactly that:
 
-1. **Create an account** (`login.html`, packaged mode): the account form
-   stays (work email, company, what you do, password). The verification
-   email's continue link is `/start.html?company=&vertical=`, and the pane
-   says what comes next with a *Continue to your billing profile* button.
-   A colleague of an existing tenant still just goes in.
+1. **Create an account** (`login.html` → `start.html`): the login page's
+   button goes straight to the signup page (2026-09-28, Tommy: "when we
+   click create new account it should go to the page that is the start and
+   helps them purchase and buy an account and pay for it and create their
+   account"); the login page keeps no account form. The signup's first step
+   makes the account (work email and password, or Google), says what comes
+   next as `/api/offerings` answers, and sends the verification link whose
+   continue address is `/start.html`. The typed address travels in the
+   browser (`omega:signup-draft`), never in a link. A colleague of an
+   existing tenant still just goes in; an address that already has an
+   account signs in from the same button.
 2. **Verify** (`start.html`): a password account is not verified until its
    link is clicked and the server refuses an unverified one, so the page
    holds there, names the address, and offers *Resend* and *I've verified*.

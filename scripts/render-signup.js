@@ -16,21 +16,30 @@
    onto /workspace (a workspace derived from the email domain) instead of
    the signup; then it opened the signup on a company form that asked again
    and waited behind the email link, which read as the old request path.
-   It holds that:
-     1. a new company's account goes from Create account straight into the
-        GUIDED signup (2026-09-27), company carried over: what your team
-        does (one screen of tiles, the server's recommendation in the dock
-        as they tap), your system (priced, the fee named), confirm your
-        email (only there; nothing is created before it; a reload resumes
-        at it; the click moves it on by itself), billing (the short form),
-        Subscribe → the first invoice; and Skip, on a phone, with a
-        confirmed address that never sees the email step, to the trial;
-     2. a colleague of an existing workspace still goes in;
+   2026-09-28 (Tommy: "when we click create new account it should go to the
+   page that is the start and helps them purchase and buy an account and
+   pay for it and create their account"): the login page's own account form
+   is gone; Create an account IS the signup page, whose first step makes
+   the account. It holds that:
+     1. Create an account on the login page lands on the signup page with
+        the typed address carried over (in this browser, never a link);
+        its first step makes the account (a personal address is refused
+        before one is made) and walks straight into the GUIDED signup: what
+        your team does (one screen of tiles, the server's recommendation in
+        the dock as they tap), your system (priced, the fee named), confirm
+        your email (only there; nothing is created before it; a reload
+        resumes at it; the click moves it on by itself), billing (the short
+        form, the company asked once, there), Subscribe → the first
+        invoice; and Skip, on a phone, with a confirmed address that never
+        sees the email step, to the trial;
+     2. a colleague of an existing workspace still goes in, from the same
+        form; an address that already has an account signs in from it;
      3. a signed-in person with no workspace yet goes to signup, including
         one who accepted terms on an empty derived workspace (no projects);
      4. a legacy person without a record who has projects keeps the
         workspace;
-     5. with packaged signup off, the older access request is unchanged.
+     5. with packaged signup off, the same door is the reviewed request
+        (a pending workspace), never a form on the login page.
 
      node scripts/render-signup.js
      npm run check:pages
@@ -167,23 +176,35 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   }
   function visible(p, id) { return p.evaluate(function (i) { var e = document.getElementById(i); return !!e && !e.classList.contains('hide') && getComputedStyle(e).display !== 'none'; }, id); }
 
-  /* 1. a new company: Create account → the guided signup, company carried over: what your team does (taps, a live
-        suggestion from the server), your system (priced), confirm your email (only here, moving on by itself, and
-        resumed after a reload), billing (the short form), Subscribe → the first invoice */
+  /* 1. a new company: Create an account → the signup page, whose first step makes the account → the guided signup:
+        what your team does (taps, a live suggestion from the server), your system (priced), confirm your email (only
+        here, moving on by itself, and resumed after a reload), billing (the short form), Subscribe → the first invoice */
   seedServer(); posts = [];
   var ctx = await ctxFor({}), p = await ctx.newPage(), t = track(p);
   await p.goto(base + '/login.html', { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('#createBtn'); await wait(300);
+  await p.fill('#email', 'kim@newco.example');
   await p.click('#createBtn');
-  await p.fill('#suEmail', 'kim@newco.example'); await p.fill('#suCompany', 'NewCo Energy'); await p.selectOption('#suVertical', 'epc'); await p.fill('#suPass', 'longenough1'); await p.fill('#suNote', 'Two BESS sites');
-  await p.click('#suSubmit');
   await p.waitForURL(/start\.html/, { timeout: 6000 }).catch(function () {});
-  ok('new account lands on /start.html', /\/start\.html$/.test(new URL(p.url()).pathname), t.nav);
-  ok('never visited /workspace on the way', !t.nav.some(function (u) { return /\/workspace/.test(u); }), t.nav);
+  ok('Create an account lands on /start.html at once, no form on the login page', /\/start\.html$/.test(new URL(p.url()).pathname) && t.nav.length === 2, t.nav);
+  await p.waitForSelector('#step-auth:not(.hide)', { timeout: 6000 }).catch(function () {});
+  await p.waitForFunction(function () { return /first invoice by card/.test(document.getElementById('auth-next').textContent); }, null, { timeout: 6000 }).catch(function () {});
+  var au = await p.evaluate(function () { return { title: document.querySelector('#step-auth h1').textContent, email: document.getElementById('em').value, btn: document.getElementById('create-btn').textContent.trim(), next: document.getElementById('auth-next').textContent, signin: !!document.querySelector('#auth-hint a[href="/login.html"]'), prices: !!document.querySelector('#auth-hint a[href="/offerings.html"]'), google: /Continue with Google/.test(document.getElementById('google-btn').textContent), created: window.__firebaseDouble.auth.log.filter(function (x) { return x.op === 'create'; }).length, url: location.href }; });
+  ok('its first step is Create your account: the typed address carried over, a password, Create account, Google, a way to sign in and the price list; nothing made yet', /^Create your account$/.test(au.title) && au.email === 'kim@newco.example' && au.btn === 'Create account' && au.signin && au.prices && au.google && au.created === 0, au);
+  ok('it says what comes next, as the price list says: the guided run and the first invoice by card', /what your team does/.test(au.next) && /first invoice by card/.test(au.next) && !/\?/.test(au.url), au);
+  await shot(p, 'signup-0-account');
+  /* a personal address is refused before an account is made for it; a short password too */
+  await p.fill('#em', 'kim@gmail.com'); await p.fill('#pw', 'longenough1'); await p.click('#create-btn'); await wait(200);
+  var refused = await p.evaluate(function () { return { err: document.getElementById('auth-err').textContent, created: window.__firebaseDouble.auth.log.filter(function (x) { return x.op === 'create'; }).length }; });
+  ok('a personal address is refused before any account is made', /work email/.test(refused.err) && refused.created === 0, refused);
+  await p.fill('#em', 'kim@newco.example'); await p.fill('#pw', 'short'); await p.click('#create-btn'); await wait(200);
+  ok('a short password is refused', /8 characters/.test(await p.$eval('#auth-err', function (e) { return e.textContent; })));
+  await p.fill('#pw', 'longenough1'); await p.click('#create-btn');
   await p.waitForFunction(function () { var e = document.getElementById('step-discovery'); return e && !e.classList.contains('hide'); }, null, { timeout: 8000 }).catch(function () {});
-  var st = await p.evaluate(function () { return { form: !document.getElementById('step-form').classList.contains('hide'), discovery: !document.getElementById('step-discovery').classList.contains('hide'), tiles: document.querySelectorAll('#signup-questions .sq-tile').length, radios: document.querySelectorAll('#step-discovery input[type=radio]').length, name: document.getElementById('f-name').value, vertical: document.getElementById('f-vertical').value, note: document.getElementById('f-note').value, step: (document.querySelector('#signup-steps li.on') || {}).getAttribute && document.querySelector('#signup-steps li.on').getAttribute('data-step'), steps: !document.getElementById('signup-steps').classList.contains('hide'), skip: !!document.getElementById('discovery-skip'), reqWorkspace: /Request my workspace/.test(document.body.innerText) }; });
-  ok('it opens on one question, a tile per answer (no radio rows), on step 1 of the stepper, with a way to skip', st.discovery && !st.form && st.tiles === 12 && st.radios === 0 && st.steps && st.step === 'work' && st.skip, st);
-  ok('the company, what they do and the note carried over from Create account, and nothing says "Request my workspace"', st.name === 'NewCo Energy' && st.vertical === 'epc' && st.note === 'Two BESS sites' && !st.reqWorkspace, st);
+  var st = await p.evaluate(function () { return { form: !document.getElementById('step-form').classList.contains('hide'), auth: !document.getElementById('step-auth').classList.contains('hide'), discovery: !document.getElementById('step-discovery').classList.contains('hide'), tiles: document.querySelectorAll('#signup-questions .sq-tile').length, radios: document.querySelectorAll('#step-discovery input[type=radio]').length, who: document.getElementById('discovery-who').textContent, step: (document.querySelector('#signup-steps li.on') || {}).getAttribute && document.querySelector('#signup-steps li.on').getAttribute('data-step'), steps: !document.getElementById('signup-steps').classList.contains('hide'), skip: !!document.getElementById('discovery-skip'), reqWorkspace: /Request my workspace/.test(document.body.innerText), created: window.__firebaseDouble.auth.log.filter(function (x) { return x.op === 'create'; }).map(function (x) { return x.email; }), sends: window.__verifySends || [] }; });
+  ok('Create account makes the account and sends the link whose Continue button opens this page again', st.created.join() === 'kim@newco.example' && st.sends.length === 1 && /\/start\.html$/.test(st.sends[0] || ''), st);
+  ok('never visited /workspace on the way', !t.nav.some(function (u) { return /\/workspace/.test(u); }), t.nav);
+  ok('then it opens on one question, a tile per answer (no radio rows), on step 1 of the stepper, with a way to skip, signed in as the new account, and nothing says "Request my workspace"', st.discovery && !st.form && !st.auth && st.tiles === 12 && st.radios === 0 && st.steps && st.step === 'work' && st.skip && st.who === 'kim@newco.example' && !st.reqWorkspace, st);
   await shot(p, 'signup-1-work');
   /* two taps and a chip: the dock shows the server's own recommendation as they tap */
   await p.click('.sq-tile[data-q="sites"]'); await p.click('.sq-tile[data-q="storage"]');
@@ -227,17 +248,17 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   var back = await p.evaluate(function () { window.__hidden = false; document.dispatchEvent(new Event('visibilitychange')); return window.__reloads; });
   ok('coming back to the tab asks Firebase at once', back === 1, back);
   await p.waitForSelector('#step-billing:not(.hide)', { timeout: 9000 }).catch(function () {});
-  var bl = await p.evaluate(function () { return { billing: !document.getElementById('step-billing').classList.contains('hide'), verifyDone: document.querySelector('#signup-steps li[data-step="verify"]').className, legal: document.querySelector('[data-profile-field="legalName"]').value, email: document.querySelector('[data-profile-field="email"]').value, more: document.querySelector('#signup-billing-profile details.obp-more').open, vertical: document.querySelector('[data-profile-field="vertical"]').value, shown: Array.prototype.filter.call(document.querySelectorAll('#signup-billing-profile [data-profile-field]'), function (e) { return !e.closest('details:not([open])'); }).length, lines: document.querySelectorAll('#summary-lines li').length, price: document.getElementById('summary-price').textContent, pay: document.getElementById('billing-pay').textContent.trim() }; });
+  var bl = await p.evaluate(function () { return { billing: !document.getElementById('step-billing').classList.contains('hide'), verifyDone: document.querySelector('#signup-steps li[data-step="verify"]').className, legal: document.querySelector('[data-profile-field="legalName"]').value, email: document.querySelector('[data-profile-field="email"]').value, more: document.querySelector('#signup-billing-profile details.obp-more').open, shown: Array.prototype.filter.call(document.querySelectorAll('#signup-billing-profile [data-profile-field]'), function (e) { return !e.closest('details:not([open])'); }).length, lines: document.querySelectorAll('#summary-lines li').length, price: document.getElementById('summary-price').textContent, pay: document.getElementById('billing-pay').textContent.trim() }; });
   ok('the click carries the page on by itself to billing, the email step ticked', bl.billing && bl.verifyDone === 'done', bl);
-  ok('billing is the short form: the company and billing email filled in, the optional fields folded away (company type kept there)', bl.legal === 'NewCo Energy' && bl.email === 'kim@newco.example' && bl.more === false && bl.vertical === 'epc' && bl.shown === 9, bl);
+  ok('billing is the short form: the billing email filled in, the company asked once (here, never on the login page), the optional fields folded away', bl.legal === '' && bl.email === 'kim@newco.example' && bl.more === false && bl.shown === 9, bl);
   ok('the summary carries the system and its price, and Subscribe is the one button', bl.lines === 4 && /^\$[\d,]+\/month$/.test(bl.price) && bl.pay === 'Subscribe', bl);
   ok('no surprise at the pay step: the first-year service fee the first invoice carries is named before Subscribe, as the server priced it', /first-year service fee of \$[\d,]+/.test(await p.$eval('#summary-fee', function (e) { return e.textContent; })) && /first-year service fee of \$[\d,]+/.test(await p.$eval('#signup-fee', function (e) { return e.textContent; })));
-  for (var pair of [['contactName', 'Kim Lee'], ['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await p.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
+  for (var pair of [['legalName', 'NewCo Energy'], ['contactName', 'Kim Lee'], ['phone', '555-0100'], ['teamSize', '3'], ['address.line1', '1 Main'], ['address.city', 'Chicago'], ['address.state', 'IL'], ['address.postalCode', '60601']]) await p.locator('[data-profile-field="' + pair[0] + '"]').fill(pair[1]);
   await shot(p, 'signup-4-billing');
   await p.click('#billing-pay');
   await p.waitForSelector('#step-pay:not(.hide)', { timeout: 9000 }).catch(function () {});
   var org = sdb.data.get('omega_orgs/newco.example'), bill = sdb.data.get('omega_orgs/newco.example/billing/current');
-  ok('Subscribe makes the workspace on a verified token and issues the first invoice for what they chose', await visible(p, 'step-pay') && org && org.status === 'active' && bill && bill.packagingState === 'awaiting_payment' && invoices === 1 && bill.proposedPackage && ['gridatlas', 'siteintel', 'storage'].every(function (k) { return bill.proposedPackage.modules.indexOf(k) >= 0; }) && posts.filter(function (x) { return /tenant-signup pay-now/.test(x); }).every(function (x) { return /verified$/.test(x) && !/unverified/.test(x); }), { posts: posts, org: org && org.status, state: bill && bill.packagingState, invoices: invoices, modules: bill && bill.proposedPackage && bill.proposedPackage.modules });
+  ok('Subscribe makes the workspace, named after the billing form\'s company, on a verified token and issues the first invoice for what they chose', await visible(p, 'step-pay') && org && org.status === 'active' && org.name === 'NewCo Energy' && bill && bill.packagingState === 'awaiting_payment' && invoices === 1 && bill.proposedPackage && ['gridatlas', 'siteintel', 'storage'].every(function (k) { return bill.proposedPackage.modules.indexOf(k) >= 0; }) && posts.filter(function (x) { return /tenant-signup pay-now/.test(x); }).every(function (x) { return /verified$/.test(x) && !/unverified/.test(x); }), { posts: posts, org: org && org.status, state: bill && bill.packagingState, invoices: invoices, modules: bill && bill.proposedPackage && bill.proposedPackage.modules });
   ok('the answers travel with the signup for the rep (tapped = this quarter)', bill && bill.signupDiscovery && bill.signupDiscovery.discovery.answers.sites === 'quarter' && bill.signupDiscovery.discovery.answers.storage === 'quarter' && bill.signupDiscovery.discovery.answers.ev === 'no' && bill.signupDiscovery.discovery.flags.sitesMany === true, bill && bill.signupDiscovery);
   ok('the company draft is forgotten', await p.evaluate(function () { return localStorage.getItem('omega:signup-draft') === null; }));
   await shot(p, 'signup-5-pay');
@@ -272,12 +293,24 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   ok('no page errors (skip, phone)', !t.errs.length, t.errs);
   await ctx.close();
 
-  /* 2. a colleague of an existing company still goes in */
-  ctx = await ctxFor({ 'omega_orgs/acme.example': { name: 'Acme', status: 'active' } }); p = await ctx.newPage(); t = track(p);
+  /* 2. a colleague of an existing company still goes in, from the same form (the hub routing on the signup page) */
+  posts = []; ctx = await ctxFor({ 'omega_orgs/acme.example': { name: 'Acme', status: 'active' } }); p = await ctx.newPage(); t = track(p);
   await p.goto(base + '/login.html', { waitUntil: 'domcontentloaded' }); await p.waitForSelector('#createBtn'); await wait(300);
-  await p.click('#createBtn'); await p.fill('#suEmail', 'lee@acme.example'); await p.fill('#suCompany', 'Acme'); await p.fill('#suPass', 'longenough1'); await p.click('#suSubmit');
-  await p.waitForURL(/workspace/, { timeout: 6000 }).catch(function () {});
-  ok('colleague of an existing workspace goes to it', /\/workspace/.test(p.url()), t.nav);
+  await p.click('#createBtn'); await p.waitForURL(/start\.html/, { timeout: 6000 }).catch(function () {}); await p.waitForSelector('#create-btn', { timeout: 6000 }).catch(function () {});
+  await p.fill('#em', 'lee@acme.example'); await p.fill('#pw', 'longenough1'); await p.click('#create-btn');
+  await p.waitForURL(function (u) { return !/start\.html/.test(u.pathname); }, { timeout: 6000 }).catch(function () {});
+  ok('colleague of an existing workspace goes in, never into the signup', !/start\.html/.test(p.url()) && !posts.some(function (x) { return /tenant-signup/.test(x); }), t.nav);
+  await ctx.close();
+  /* 2b. an address that already has an account signs in from the same button (the verification link opens this page in any browser) */
+  ctx = await ctxFor({}); p = await ctx.newPage(); t = track(p);
+  await p.addInitScript(function () { window.__accounts = { 'kim@newco.example': { email: 'kim@newco.example', password: 'longenough1', emailVerified: true, providerId: 'password' } }; });
+  await p.goto(base + '/start.html', { waitUntil: 'domcontentloaded' }); await p.waitForSelector('#create-btn', { timeout: 6000 }).catch(function () {});
+  await p.evaluate(function () { var a = window.__firebaseDouble.auth, accounts = window.__accounts; var create = a.createUserWithEmailAndPassword, sign = a.signInWithEmailAndPassword; a.createUserWithEmailAndPassword = function (e, p) { if (accounts[e]) return Promise.reject({ code: 'auth/email-already-in-use', message: 'in use' }); return create.call(a, e, p); }; a.signInWithEmailAndPassword = function (e, p) { var acct = accounts[e]; if (!acct) return sign.call(a, e, p); if (acct.password !== p) return Promise.reject({ code: 'auth/wrong-password', message: 'wrong' }); return a._become(acct); }; });
+  await p.fill('#em', 'kim@newco.example'); await p.fill('#pw', 'wrongpassword'); await p.click('#create-btn'); await wait(300);
+  ok('an existing account with the wrong password is told so, and nothing is made', /already has an OMEGA account/.test(await p.$eval('#auth-err', function (e) { return e.textContent; })) && !(await p.evaluate(function () { return !!window.__firebaseDouble.auth.currentUser; })));
+  await p.fill('#pw', 'longenough1'); await p.click('#create-btn');
+  await p.waitForSelector('#step-discovery:not(.hide)', { timeout: 8000 }).catch(function () {});
+  ok('with its password it signs in from the same button and walks into the signup', await visible(p, 'step-discovery') && !(await visible(p, 'step-auth')));
   await ctx.close();
 
   /* 3. returning: signed in, no workspace record → signup; also after accepting terms on an empty derived workspace */
@@ -299,14 +332,25 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   ok('legacy user without a record, with projects, keeps the workspace', /\/workspace/.test(p.url()), t.nav);
   await ctx.close();
 
-  /* 5. packaged signup off: the old request path is unchanged */
-  PACKAGED = false;
+  /* 5. packaged signup off: Create an account is the same door, and it is the reviewed request (a pending workspace) */
+  PACKAGED = false; process.env.PACKAGING_SIGNUP_ENABLED = 'false'; seedServer(); posts = [];
   ctx = await ctxFor({}); p = await ctx.newPage(); t = track(p);
   await p.goto(base + '/login.html', { waitUntil: 'domcontentloaded' }); await p.waitForSelector('#createBtn'); await wait(300);
-  await p.click('#createBtn'); await p.fill('#suEmail', 'max@other.example'); await p.fill('#suCompany', 'Other'); await p.fill('#suPass', 'longenough1'); await p.click('#suSubmit');
-  await wait(2500);
-  var r5 = await p.evaluate(function () { return { title: document.getElementById('blockedTitle').textContent, path: location.pathname, w: window.__firebaseDouble.store.log.map(function (x) { return x.op + ' ' + x.path; }) }; });
-  ok('signup off: "Request received" on the login page, access request filed', r5.title === 'Request received' && r5.path === '/login.html' && r5.w.some(function (x) { return /access_requests\//.test(x); }), r5);
+  await p.click('#createBtn'); await p.waitForURL(/start\.html/, { timeout: 6000 }).catch(function () {}); await p.waitForSelector('#create-btn', { timeout: 6000 }).catch(function () {});
+  await p.waitForFunction(function () { return /reviews each new workspace/.test(document.getElementById('auth-next').textContent); }, null, { timeout: 6000 }).catch(function () {});
+  ok('signup off: the account step says the workspace is reviewed, not paid', /reviews each new workspace/.test(await p.$eval('#auth-next', function (e) { return e.textContent; })));
+  await p.fill('#em', 'max@other.example'); await p.fill('#pw', 'longenough1'); await p.click('#create-btn');
+  await p.waitForSelector('#step-form:not(.hide)', { timeout: 8000 }).catch(function () {});
+  await p.waitForFunction(function () { return /Request my workspace/.test(document.getElementById('f-submit').textContent); }, null, { timeout: 6000 }).catch(function () {});
+  ok('signup off: the company form, "Request my workspace"', await visible(p, 'step-form') && /Request my workspace/.test(await p.$eval('#f-submit', function (e) { return e.textContent; })));
+  await p.fill('#f-name', 'Other'); await p.click('#f-submit');
+  /* the request claims a company's domain, so it waits on the confirmed address as the server requires; the click carries it on */
+  await p.waitForSelector('#step-verify:not(.hide)', { timeout: 6000 }).catch(function () {});
+  ok('signup off: the request waits on the confirmed address (nothing filed for an address nobody has shown they can read)', await visible(p, 'step-verify') && !posts.some(function (x) { return /tenant-signup create/.test(x); }), posts);
+  await p.evaluate(function () { localStorage.setItem('dbl-clicked', '1'); }); await p.click('#verify-check');
+  await p.waitForSelector('#step-done:not(.hide)', { timeout: 8000 }).catch(function () {});
+  var r5 = { done: await visible(p, 'step-done'), title: await p.$eval('#step-done h1', function (e) { return e.textContent; }), path: new URL(p.url()).pathname, org: sdb.data.get('omega_orgs/other.example'), w: await p.evaluate(function () { return window.__firebaseDouble.store.log.map(function (x) { return x.op + ' ' + x.path; }); }) };
+  ok('signup off: "Request received" on the signup page, a pending workspace, and no access request on the login page', r5.done && r5.title === 'Request received' && r5.path === '/start.html' && r5.org && r5.org.status === 'pending' && !r5.w.some(function (x) { return /access_requests\//.test(x); }), { done: r5.done, title: r5.title, path: r5.path, status: r5.org && r5.org.status, w: r5.w });
   await ctx.close();
 
   await browser.close(); srv.close();

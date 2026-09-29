@@ -238,16 +238,24 @@ folded under More billing options) → pay. A package named by the offerings
 page (`?modules=`, `?plan=`) or a proposal skips the question screen. There
 is no company screen (2026-09-28, Tommy: "i want whats in the slide show"):
 a signed-in visit goes straight into the run, and the workspace is named
-after the billing form's Legal company name unless Create account carried
-one; only a proposal link and a server without packaging keep that form.
-Create account goes straight into that signup on `/start.html` with the
-company carried over (making the account signs it in, so login's auth
-listener stands aside while the form routes it); the options and quotes
-open before the email link is clicked, and only creating the workspace
-(Subscribe or the trial) needs the verified address: its step moves on by
-itself, and the draft (`omega:signup-draft`, this browser only) keeps the
-taps, the system and the step, so the link reopening the page resumes
-there. A signed-in person with no `omega_orgs` record,
+after the billing form's Legal company name; only a proposal link and a
+server without packaging keep that form. **Create an account IS the signup
+page** (2026-09-28, Tommy: "when we click create new account it should go
+to the page that is the start and helps them purchase and buy an account
+and pay for it and create their account"): login.html has no account form
+and makes no account; its button goes to `/start.html`, whose FIRST step
+makes the account (work email and password, or Google; a personal address
+is refused before one is made; an address that already has an account
+signs in from the same button, so the verification link and a proposal
+link open the page in any browser), and the address typed on the sign-in
+page is carried in this browser only (`omega:signup-draft`), never in a
+link. Making the account signs it in and the hub routing on the page takes
+it from there (a colleague of an existing workspace goes in). The options
+and quotes open before the email link is clicked, and only creating the
+workspace (Subscribe, the trial, or the reviewed request when packaged
+signup is off) needs the verified address: its step moves on by itself,
+and the draft keeps the taps, the system and the step, so the link
+reopening the page resumes there. A signed-in person with no `omega_orgs` record,
 grant or access request, not a named tenant, and without both accepted
 terms and a project under the company, is sent there too instead of a
 derived workspace; `scripts/render-signup.js` (in `check:pages`) holds it.
