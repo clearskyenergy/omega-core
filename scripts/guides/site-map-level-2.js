@@ -12,7 +12,10 @@
    screenshot is of that run, so a guide can never show a screen the editor
    does not draw; the script asserts the build's state after each step.
 
-     node scripts/guides/site-map-level-2.js                 writes docs/guides/Site-Map-Level-2-Two-Trenches.pdf
+     node scripts/guides/site-map-level-2.js                 writes guides/editor/Site-Map-Level-2-Two-Trenches.pdf
+   (served: https://silmarillion.clearskyomega.com/guides/editor/Site-Map-Level-2-Two-Trenches.pdf;
+   guides/editor/ is the editor's own guides, built here, not by build.js,
+   so tguides.js and the kit, which judge guides/*.pdf, leave it alone)
      node scripts/guides/site-map-level-2.js --out FILE.pdf  somewhere else
      node scripts/guides/site-map-level-2.js --shots DIR     keep the screenshots
 
@@ -30,7 +33,7 @@ var chromium = require(PW).chromium;
 var CHROME = fs.existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : chromium.executablePath();
 var ROOT = path.join(__dirname, '..', '..');
 function arg(k, d) { var i = process.argv.indexOf(k); return i > 0 && process.argv[i + 1] ? process.argv[i + 1] : d; }
-var OUT = path.resolve(arg('--out', path.join(ROOT, 'docs', 'guides', 'Site-Map-Level-2-Two-Trenches.pdf')));
+var OUT = path.resolve(arg('--out', path.join(ROOT, 'guides', 'editor', 'Site-Map-Level-2-Two-Trenches.pdf')));
 var SHOTS = path.resolve(arg('--shots', path.join(os.tmpdir(), 'omega-site-map-level-2')));
 
 var server = http.createServer(function (req, res) {
