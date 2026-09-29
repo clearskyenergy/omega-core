@@ -875,7 +875,24 @@ real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
 a locked tile explains, never hides. Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
-unsized. Never a second copy of those rules in a page. The home is the BOARD: the hub and Today, then In flight and Around you
+unsized. Never a second copy of those rules in a page. A legacy plan more
+than fifteen days past its due date with the figure still owed (Tommy,
+2026-09-28: "over 15 days past due it says that on the dashboard to pay
+their account") is `OmegaTenant.pastDue`, the ONE rule (`omega-tenant.js`,
+cut out of the source by `scripts/tests/tpastdue.js`): the runtime's bar
+says it on every signed-in page, the home carries the notice and Today
+lists it first after read-only, paying on the invoice Stripe holds open for
+it, else ClearSky's link, else Plan & billing; a packaged workspace is the
+engine's own notice (grace, then past_due_lite or read-only). A legacy
+tier wears the PRICE BOOK's plan word (Tommy, 2026-09-28: "the tier needs
+to match"): `omega-tenant.js` `TIER_LABEL` (`OmegaTenant.tierLabels`) reads
+standard as Field and deluxe/pro as Pro, the keys unchanged; the editor's
+`omega-editor-plan.js` carries the same map (`teditorplan.js` holds them
+together). The plan's own Stripe invoice is dated the day it was DUE
+(`/api/stripe-invoices` `dueOn`, the card door's `omegaDueDate`), never the
+day Stripe made it, and while that payment is owed the NEXT invoice on a
+legacy plan is the following month's (`nextInvoice`, `monthAfter`), never
+the same date again. The home is the BOARD: the hub and Today, then In flight and Around you
 (feed, People, the Omega pulse, Partners, what Customize keeps on); All
 tools, Modules, Team (People and Partners) and Feed (the feed and the
 pulse) are their own pages (`data-view`; Tommy, 2026-09-27: "feed and team

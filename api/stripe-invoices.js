@@ -33,6 +33,17 @@ function madeBy(inv) {
   if (md.omegaPackage === 'true' || md.omegaMarker) return String(md.omegaKind || 'package');
   return null;
 }
+/* WHEN IT WAS DUE, which is the date the plan's own invoice carries on the
+   page (Tommy, 2026-09-28: the $1,299 was Sep 3's payment, not the day Pay
+   with Stripe made the invoice): the plan's due date the card door stamped
+   on it (metadata omegaDueDate, YYYY-MM-DD), else the due date Stripe holds
+   (a hand-made invoice's, in ms), else nothing (the created date stands). */
+function dueOnOf(inv) {
+  var md = (inv && inv.metadata) || {};
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(md.omegaDueDate || ''))) return md.omegaDueDate;
+  if (inv && typeof inv.due_date === 'number' && inv.due_date > 0) return inv.due_date * 1000;
+  return null;
+}
 
 module.exports = A.handler(function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
@@ -91,7 +102,9 @@ module.exports = A.handler(function (req) {
               hostedUrl: inv.hosted_invoice_url || null,
               pdfUrl: inv.invoice_pdf || null,
               /* who made it (madeBy, above): an engine-made one is its record's */
-              omega: madeBy(inv)
+              omega: madeBy(inv),
+              /* when it was due (dueOnOf, above): the date the page shows for the plan's own invoice */
+              dueOn: dueOnOf(inv)
             };
           });
           return { connected: true, orgId: orgId, customer: cust, invoices: rows };
@@ -101,3 +114,4 @@ module.exports = A.handler(function (req) {
   });
 });
 module.exports.madeBy = madeBy;
+module.exports.dueOnOf = dueOnOf;

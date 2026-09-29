@@ -178,7 +178,7 @@ function legacy(tier, billing) {
   return PLAN.summary({ tier: tier, billing: billing, offerings: OFFER, hub: HUB, tools: TOOLS, caps: CAPS, org: 'tenant.example' });
 }
 var del = legacy('deluxe', { tier: 'deluxe' });
-ok('legacy Performance: the chip says the tier\'s name', del.state === 'legacy' && del.plan === 'Performance' && del.pill === 'Live', del);
+ok('legacy Performance: the chip says the tier\'s name', del.state === 'legacy' && del.plan === 'Pro' && del.pill === 'Live', del);
 ok('Performance holds Plan Sets in Site Map (the editor prints them on this tier)', keys(del.inSiteMap).indexOf('plansets') >= 0);
 var compute = del.inSiteMap.filter(function (r) { return r.key === 'compute'; })[0];
 ok('Compute is only partly included: its tools open, Site Map\'s compute tab does not', compute && compute.pill === 'Partly included', compute);
@@ -216,11 +216,11 @@ ok('Enterprise without the add-on holds no Omega Logic part', !keys(ent.elsewher
 ok('the omega-logic add-on puts every part Elsewhere', ['logic-office', 'logic-plant', 'logic-materials', 'logic-logistics', 'logic-customer'].every(function (k) { return keys(entLogic.elsewhere).indexOf(k) >= 0; }));
 var two = legacy('enterprise', { tier: 'enterprise', toolAccess: ['editor', 'gridatlas'] });
 ok('the two-tool product: its allowlist narrows what is held', heldRows(two).indexOf('storage') < 0 && partRows(two).indexOf('storage') >= 0 && two.inSiteMap.some(function (r) { return r.key === 'gridatlas'; }), [heldRows(two), partRows(two)]);
-ok('a missing billing record reads as Standard, as the workspace reads it', legacy('trial', {}).plan === 'Standard');
-ok('an unreadable billing record names the tier Site Map is running', legacy('deluxe', { failed: true }).plan === 'Performance');
+ok('a missing billing record reads as Field, the price book\'s word for the standard tier, as the workspace reads it', legacy('trial', {}).plan === 'Field');
+ok('an unreadable billing record names the tier Site Map is running', legacy('deluxe', { failed: true }).plan === 'Pro');
 ok('the record on its way shows no chip yet', legacy('deluxe', null).state === 'checking');
 var capped = legacy('standard', { tier: 'enterprise', capTier: 'standard' });
-ok('capTier: billed Enterprise, Site Map scoped to Standard, and it says so', capped.plan === 'Enterprise' && /Site Map is set to Standard/.test(capped.note), capped);
+ok('capTier: billed Enterprise, Site Map scoped to the standard tier, and it says so in the price book\'s word', capped.plan === 'Enterprise' && /Site Map is set to Field/.test(capped.note), capped);
 var legacyTrial = legacy('trial', { tier: 'trial', trialEndsAt: '2026-10-09' });
 ok('a legacy trial names its end date', legacyTrial.pill === 'Trial' && /Oct 9, 2026/.test(legacyTrial.notice.text));
 var asked = legacy('standard', { tier: 'standard', optIns: { plansets: { status: 'requested' }, finance: { status: 'withdrawn' } }, optOuts: { gridatlas: { status: 'requested' } } });
@@ -271,7 +271,7 @@ var fresher = legacy('standard', { tier: 'standard' }), figsIn = PLAN.summary({ 
 ok('the plan-change summary, the fresher record, carries the requests when it has loaded', !fresher.changes.length && figsIn.changes.length === 1 && figsIn.changes[0].pill === 'Opt-in requested');
 ok('before the Modules page\'s libraries load, no request is listed that could contradict them', !PLAN.summary({ tier: 'standard', billing: STALE, offerings: OFFER }).changes.length);
 var bare = PLAN.summary({ tier: 'deluxe', billing: { tier: 'deluxe' } });
-ok('without the price list or the libraries the plan still shows, unlisted', bare.plan === 'Performance' && !bare.listed);
+ok('without the price list or the libraries the plan still shows, unlisted', bare.plan === 'Pro' && !bare.listed);
 ok('ClearSky staff with no record are staff', PLAN.summary({ tier: 'internal', offerings: OFFER }).state === 'staff');
 CAPS.setAddons([]);
 

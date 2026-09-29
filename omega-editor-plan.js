@@ -51,9 +51,10 @@
 
   /* The legacy tier's name and level as the workspace shows them. They are
      omega-tenant.js's TIER_LABEL and TIER_LEVEL, which this page cannot
-     load; teditorplan.js fails if the copies drift. Performance is the
-     product name of the deluxe tier. */
-  var TIER_LABEL = { trial: 'Trial', standard: 'Standard', pro: 'Pro', deluxe: 'Performance', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
+     load; teditorplan.js fails if the copies drift. A legacy tier wears the
+     PRICE BOOK's plan word (Tommy, 2026-09-28): tier 1 (standard) is Field,
+     tier 2 (deluxe, pro) is Pro; the record's keys never change. */
+  var TIER_LABEL = { trial: 'Trial', standard: 'Field', pro: 'Pro', deluxe: 'Pro', enterprise: 'Enterprise', internal: 'Internal', partner: 'Partner' };
   var TIER_LEVEL = { trial: 3, standard: 1, pro: 2, deluxe: 2, enterprise: 3, internal: 3, partner: 2 };
   var LINKS = [{ href: '/workspace#billing', text: 'Plan & billing ›' }, { href: '/workspace#modules', text: 'Modules ›' }];
   var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -237,7 +238,7 @@
        one without a tier is Standard, as the workspace reads it. */
     var b = input.billing.failed ? null : input.billing;
     var billed = b ? String(b.tier || 'standard').toLowerCase() : eff;
-    var label = function (t) { return TIER_LABEL[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Standard'); };
+    var label = function (t) { return TIER_LABEL[t] || (t ? t.charAt(0).toUpperCase() + t.slice(1) : 'Field'); };
     out.state = 'legacy'; out.tone = 'ok'; out.plan = label(billed); out.pill = billed === 'trial' ? 'Trial' : 'Live';
     if (billed === 'trial' && b && b.trialEndsAt && day(b.trialEndsAt)) out.notice = { text: 'Your trial ends on ' + day(b.trialEndsAt) + '.' };
     /* Which tier Site Map runs for this record and person: the ONE mirror
