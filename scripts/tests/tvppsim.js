@@ -56,9 +56,34 @@ ok('Beaumont (Entergy Texas, MISO) is offered no ERCOT 4CP or ERS', (function ()
   return r.ok && !stream(r, 'ercot.4cp') && !stream(r, 'ercot.ers') && !stream(r, 'ercot.ader');
 })());
 ok('El Paso 885 is offered no ERCOT ADER', !stream(S.simulate({ zip: '88510', segment: 'residential' }), 'ercot.ader'));
-ok('Dominion NC gets the PJM rows (PLC), not the Southeast BYOD rate', (function () {
-  var r = S.simulate({ zip: '27954', segment: 'commercial' });
-  return r.ok && !!stream(r, 'pjm.plc') && !stream(r, 'se.dr');
+/* R10: Dominion NC, I&M Indiana and Kentucky Power (and Duke Energy
+   Kentucky) are in PJM, but bundled: no PLC-set capacity charge on the bill,
+   and the state has closed PJM demand response to retail customers except
+   through the utility (NCUC E-22 Sub 418, IURC 43566, KY PSC 2017-00129).
+   Both PJM customer rows are listed with the reason, never priced; a
+   business gets the utility's own tariff as a planning row. */
+[['27954', /E-22, Sub 418/, /North Carolina has no retail choice/], ['27909', /E-22, Sub 418/, /North Carolina/], ['46802', /IURC Cause 43566/, /Indiana has no retail choice/],
+ ['47303', /IURC Cause 43566/, /Indiana/], ['41101', /2017-00129/, /Kentucky has no retail choice/], ['41011', /2017-00129/, /Kentucky/]].forEach(function (c) {
+  ['commercial', 'industrial', 'residential'].forEach(function (seg) {
+    var r = S.simulate({ zip: c[0], segment: seg }), u = stream(r, 'pjm.utility');
+    var capWhy = r.missing.filter(function (m) { return /^PJM capacity via curtailment/.test(m); })[0] || '';
+    var plcWhy = r.missing.filter(function (m) { return /^Capacity tag \(PLC\)/.test(m); })[0] || '';
+    ok(c[0] + ' ' + seg + ': still PJM, but no CSP capacity or PLC saving is priced; both are listed with the dated reason',
+       r.ok && r.site.market === 'PJM' && !stream(r, 'pjm.capacity') && !stream(r, 'pjm.plc') && r.totals.tagSavings === 0 &&
+       c[1].test(capWhy) && c[2].test(plcWhy) && !stream(r, 'se.dr') && !stream(r, 'miso.dr'), [r.site, capWhy, plcWhy]);
+    ok(c[0] + ' ' + seg + ': ' + (seg === 'residential' ? 'no utility route for a home battery is priced, and it says so' : 'the utility\'s own tariff is the route, a planning row'),
+       seg === 'residential' ? !u && r.missing.some(function (m) { return /^Utility demand-response tariff/.test(m) && /business customers/.test(m); })
+                             : !!u && u.counted && u.tier === 'planning' && /Rider D\.R\.S/.test(u.ref), u || r.missing);
+  });
+});
+ok('a PJM state with retail choice still prices CSP capacity and the PLC tag, and never offers the bundled-state utility row', (function () {
+  var r = S.simulate({ zip: '19103', segment: 'commercial' }), il = S.simulate({ zip: '60601', segment: 'industrial' });
+  return !!stream(r, 'pjm.capacity') && !!stream(r, 'pjm.plc') && !stream(r, 'pjm.utility') && !r.missing.some(function (m) { return /Utility demand-response tariff/.test(m); }) &&
+         !!stream(il, 'pjm.plc') && !stream(il, 'pjm.utility');
+})());
+ok('a bundled-state ZIP moved into PJM by the user is gated the same way (Raleigh, NC)', (function () {
+  var r = S.simulate({ zip: '27601', segment: 'commercial', market: 'PJM' });
+  return r.ok && r.site.market === 'PJM' && !stream(r, 'pjm.plc') && !stream(r, 'pjm.capacity') && !!stream(r, 'pjm.utility');
 })());
 ok('the US Virgin Islands (008) are refused, not priced as Puerto Rico', S.locate('00802').ok === false);
 /* R13: Murphy (289) is TVA-distributor country and Rocky Mount / Wilson

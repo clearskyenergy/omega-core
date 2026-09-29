@@ -140,6 +140,28 @@ var ZIP3_MARKET = [
   [289, 289, 'SE', 'TVA distributors (far western North Carolina: Murphy Electric Power Board and the area EMCs), not Duke'],
   [280, 288, 'SE', 'Duke Energy (North Carolina)']
 ];
+/* PJM states with no retail choice whose regulator has closed PJM demand
+   response to retail customers except through the utility (FERC Order 719
+   lets a state's retail regulator do that; FERC lists IN, KY and NC among
+   the states that did). The refinements above put Dominion North Carolina,
+   I&M Indiana and Kentucky Power (and Duke Energy Kentucky) in PJM, which
+   is right for the zone and the transmission, but there a bundled bill
+   carries no capacity charge set by a PJM capacity tag, and a curtailment
+   service provider cannot enrol the site: the one route is the utility's
+   own Commission-approved tariff. Dated as read; clearing a state here
+   reopens both rows. */
+var PJM_BUNDLED = {
+  NC: { name: 'North Carolina',
+        dr: 'Closed here: the North Carolina Utilities Commission opted Dominion Energy North Carolina\'s retail customers out of PJM wholesale demand response when Dominion moved its North Carolina transmission into PJM ("Order Opting Out of Retail Customer Participation in Wholesale Demand Response Programs", Docket E-22, Sub 418, 2010-03-11; PJM\'s list of RERRA orders, read 2026-09-29). Not counted.' },
+  IN: { name: 'Indiana',
+        dr: 'Closed here: Indiana end-use customers "shall not be enrolled or otherwise participate in RTO demand response programs directly or through curtailment service providers or other aggregators" — only through their utility\'s IURC-approved tariff (IURC Cause 43566, order of 2010-07-28; read 2026-09-29). Not counted.' },
+  KY: { name: 'Kentucky',
+        dr: 'Closed here: "No retail electric customer is authorized to participate directly or indirectly in any PJM wholesale market, including but not limited to DR programs … except under a tariff or special contract on file with the Commission" (Kentucky PSC Case 2017-00129, order of 2017-06-06, restating the conditions of the Kentucky Power, Duke Energy Kentucky and EKPC moves into PJM; read 2026-09-29). Not counted.' }
+};
+function bundledPlcWhy(st) {
+  return 'Not on this bill: ' + PJM_BUNDLED[st].name + ' has no retail choice, so a bundled bill carries no supply capacity charge set by a PJM capacity tag (PLC); the utility recovers its capacity in its rates. Not counted.';
+}
+
 /* New York by utility, because the two New York City rates follow two
    different territories: Con Edison's Dynamic Load Management follows its
    service territory (New York City and Westchester), the NYISO SCR price
@@ -204,6 +226,7 @@ function locate(zip, marketOverride) {
     area: area, conEd: ny.conEd, zoneJ: ny.zoneJ, li: ny.li,
     nyc: ny.zoneJ,          /* New York City proper (kept for callers of the old flag) */
     comed: state === 'IL' && z.z3 >= 600 && z.z3 <= 611,
+    pjmBundled: market === 'PJM' && has(PJM_BUNDLED, state) ? state : null,
     climate: STATE_CLIMATE[state] || 'mixed',
     solarYield: SOLAR_YIELD[state] || 1250,
     marketInferred: inferred
@@ -975,10 +998,14 @@ var PROGRAMS = [
     ref: 'An IDR-metered ERCOT customer\'s transmission charge is set by its load in the four summer coincident peaks; each kW off those intervals avoids roughly $5/kW-month for a year. A saving on the customer\'s own bill, so it stays with the owner. Planning figure; the TDSP\'s TCOS rate replaces it.' },
 
   { id: 'pjm.capacity', name: 'PJM capacity via curtailment service provider (Demand Resource)', markets: ['PJM'], group: 'pjm-cap',
-    segments: SEGMENTS, kind: 'pjm', minHours: 4 },
-  { id: 'pjm.plc', billSaving: true, name: 'Capacity tag (PLC) reduction — 5CP', markets: ['PJM'], group: 'pjm-cap',
+    segments: SEGMENTS, kind: 'pjm', minHours: 4, retailDr: true },
+  { id: 'pjm.plc', billSaving: true, choiceOnly: true, name: 'Capacity tag (PLC) reduction — 5CP', markets: ['PJM'], group: 'pjm-cap',
     segments: ['commercial', 'industrial'], kind: 'capacity', perKwYear: 100, minHours: 3,
     ref: 'Holding load down in PJM\'s five coincident summer peaks lowers the site\'s capacity tag and the supply bill\'s capacity charge for the next year — a saving on the customer\'s own bill, so it stays with the owner. Planning figure below the $325/MW-day clearing price, since not every peak is caught.' },
+  { id: 'pjm.utility', name: 'Utility demand-response tariff', markets: ['PJM'], bundledOnly: true, group: 'pjm-cap',
+    segments: ['commercial', 'industrial'], kind: 'capacity', perKwYear: 40, minHours: 4,
+    segWhy: 'The demand-response tariffs on file for this route are for business customers; no route for a home battery is on file here.',
+    ref: 'Where the state has closed PJM demand response to retail customers, a business reaches it only through the utility\'s own Commission-approved tariff: in Indiana, I&M\'s Rider D.R.S.1 (Demand Response Service – Emergency, IURC Cause 43566 PJM1); in Kentucky, a tariff or special contract on file with the PSC (Kentucky Power: Rider D.R.S.); in North Carolina, Dominion Energy North Carolina\'s own demand-side programmes. $40/kW-yr is the planning figure this platform carries for a utility load-response programme (as in MISO); the utility\'s tariff terms replace it.' },
   { id: 'pjm.comedvpp', exportOk: true, name: 'ComEd Rider SDVPP (Scheduled Dispatch VPP)', markets: ['PJM'], comedOnly: true, group: 'pjm-cap',
     segments: SEGMENTS, kind: 'capacity', perKwYear: 10, unit: 'kW-Season (one Season a year)', minHours: 2, tier: 'published',
     ref: 'ComEd Rider SDVPP, approved by the ICC (filed 2026-06-01 under Public Act 104-0458, effective 2026-07-16; service begins no later than 2027-03-01): $10 per kW-Season of average injection at the battery\'s smart inverter over the 4–6 pm CPT weekday window, 1 June–30 September, five-Season term. It replaced Rider VPP / BYODLR, which ComEd withdrew in ICC Docket 25-0678 on 2025-11-18. The daily summer dispatch is not taken out of the bill streams here.',
@@ -1034,8 +1061,11 @@ function gate(p, ctx) {
   if (p.markets.indexOf(loc.market) < 0) return false;
   if (p.states && p.states.indexOf(loc.state) < 0) return false;
   if (p.comedOnly && !loc.comed) return false;
+  if (p.bundledOnly && !loc.pjmBundled) return false;
   if (p.closed) return p.closed;
-  if (p.segments.indexOf(ctx.segment) < 0) return 'Not open to ' + ctx.segment + ' sites.';
+  if (p.retailDr && loc.pjmBundled) return PJM_BUNDLED[loc.pjmBundled].dr;
+  if (p.choiceOnly && loc.pjmBundled) return bundledPlcWhy(loc.pjmBundled);
+  if (p.segments.indexOf(ctx.segment) < 0) return p.segWhy || ('Not open to ' + ctx.segment + ' sites.');
   if (p.needsSolar && !(ctx.solarKw > 0)) return p.solarWhy || 'Needs storage charged from on-site renewables; no solar was entered.';
   if (p.minPeakKw && ctx.peakKw < p.minPeakKw) return 'Applies to interval-metered sites above ' + fmt(p.minPeakKw) + ' kW peak (this site: ' + fmt(ctx.peakKw) + ' kW).';
   return null;

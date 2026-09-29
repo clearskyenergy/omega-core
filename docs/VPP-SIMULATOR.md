@@ -63,14 +63,22 @@ Clean Cell's two tools) still wins: absent is not empty.
     over-target hours (and events) still to come need, less what the
     charging hours between can put back — so an evening's arbitrage never
     spends what tomorrow morning's demand shave needs, and every month holds
-    the target the bisection set.
+    the target the bisection set. The bisection tests each day alone, which
+    cannot see an over-target stretch that runs past midnight or a month's
+    end with no charging hour between, so each month's target is then
+    checked in order with that same reserve across the boundaries and a
+    month that breaks it is raised to the lowest target that holds.
   - **Events are priced off the dispatch.** ELRP (the one programme paid per
-    kWh delivered) runs its own event days through the dispatch: 3-hour
-    events for a home battery (sub-group A.4), 4-hour for a business (A.2),
-    from 4 pm. It is worth the kWh the battery gives in those hours *beyond
+    kWh delivered) runs its own event days through the dispatch: seven
+    3-hour events a year for a home battery (sub-group A.4), three 4-hour
+    events for a business (A.2), from 4 pm — the 2024 record (PG&E's and
+    SCE's PY2024 ELRP evaluations: seven A.4 events each, two and three
+    A.2), not the 60-hour cap. It is worth the kWh the battery gives in those hours *beyond
     its everyday dispatch* (ELRP pays incremental reduction against a
     baseline of similar days), × performance × $2/kWh; an event takes only
-    energy no later over-target hour needs; holding charge for the events is
+    energy no later over-target hour needs, and the battery never charges
+    from the grid inside an event (that would come off the reduction paid
+    for); holding charge for the events is
     a cost the TOU stream carries when ELRP is counted, and the group picks
     ELRP only if it pays net of that cost. A home battery that already
     empties into 4–9 pm for TOU savings has nothing extra to give and ELRP
@@ -91,19 +99,32 @@ Clean Cell's two tools) still wins: absent is not empty.
     summer peak read off a load shape (the typical load, or bills without
     peaks — load quality `low`), the row is `planning` and says why.
   - **Programme status is dated, not live** (read 2026-09-29): DSGS Option 3
-    is `closed` (CEC Guidelines 5th ed., April 2026: 2026 limited to
+    is `closed` (CEC Guidelines 5th ed., CEC-300-2026-001-CMF, adopted
+    2026-04-27: 2026 limited to
     aggregators from October 2025; no 2027 funding) and listed, never
     counted; ComEd is **Rider SDVPP** ($10/kW-Season of average injection
     4–6 pm weekdays Jun–Sep, ICC-approved, effective 2026-07-16, service by
     2027-03-01; Rider VPP/BYODLR was withdrawn in Docket 25-0678); Hawaii is
     **BYOD Plus** (Battery Bonus closed 2024-07-01), which takes only
-    batteries paired with renewables. CBP/DRAM and ELRP are not called
+    batteries paired with renewables: $60/kW-yr is a planning figure for
+    its recurring export credit (Rule 33's formula, zero beyond NEM's own
+    retail credit), and its $400/kW upfront incentive is one-time, listed
+    with the one-time incentives on the kW the estimate commits. CBP/DRAM and ELRP are not called
     exclusive: ELRP Group B would pay the reduction beyond a CBP/DRAM
     commitment, a top-up not modelled, so the better of the two is counted.
   - **Where.** ZIP3 → state → market, refined by prefix where a state
     straddles two markets (El Paso 885, Entergy Texas 776–777, SWEPCO,
     OG&E, I&M, Kentucky Power, Dominion NC 279; 201 is Virginia; 008, the
-    US Virgin Islands, is refused). New York is by utility: Con Edison
+    US Virgin Islands, is refused; 289 is TVA-distributor territory, and
+    278 names Rocky Mount and Wilson as municipal). Those PJM refinements
+    in North Carolina, Indiana and Kentucky are bundled: no retail choice,
+    so no PLC-set capacity charge on the bill, and the state has closed PJM
+    demand response to retail customers except through the utility (NCUC
+    E-22 Sub 418, 2010; IURC Cause 43566, 2010; KY PSC Case 2017-00129,
+    2017). There the CSP capacity row and the PLC row are listed with that
+    dated reason, never priced, and a business gets the utility's own
+    demand-response tariff as a planning row ($40/kW-yr; I&M Rider D.R.S.1,
+    Kentucky Power Rider D.R.S.); a home battery has no route on file. New York is by utility: Con Edison
     (100–104, 105–108, 111–114, 11004/11005) earns its DLM rate, New York
     City (Zone J) the NYC SCR price, and Long Island (the rest of 110,
     115–119: PSEG Long Island, Zone K) the upstate planning rates under its
@@ -184,6 +205,11 @@ a module and a `render-legacy-gates.js` pass).
 - The utility is inferred from the ZIP3, not a utility boundary; mixed
   prefixes (278, 105) say so in the area label and the market can be
   overridden.
+- The bundled-PJM rule covers North Carolina, Indiana and Kentucky (FERC's
+  Order 719 opt-out states in PJM). Virginia and West Virginia are also
+  largely bundled but not reviewed yet: their PLC row is still offered.
+  The utility demand-response tariff in the bundled states is a planning
+  figure, not the rider's terms.
 - `api/price-site.js` still carries ComEd's VPP at $150/kW-yr (the
   withdrawn Rider VPP's planning rate); it is not this engine's figure.
 - Wholesale (front-of-meter) participation, one-time incentives (SGIP, ITC)
