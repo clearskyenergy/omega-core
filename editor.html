@@ -17279,6 +17279,7 @@ window._cvClear=_cvClear;
 
 function _cvShow(cid){
   _cvClear();
+  try{ if(typeof window._trClear==='function') window._trClear(); }catch(e){}
   var c=(S.conduits||[]).filter(function(x){return x.id===cid;})[0];
   if(!c || !c.pts || !c.pts.length) return;
   /* Tidy any stacked points left behind by the duplicate-click-handler
@@ -17466,6 +17467,8 @@ window._cvSync=_cvSync;
 function _cvRaise(){
   var lay=document.getElementById('cond-verts');
   if(lay && lay.parentNode) lay.parentNode.appendChild(lay);
+  var tl=document.getElementById('trench-verts');      /* the trench editor's, same reason */
+  if(tl && tl.parentNode) tl.parentNode.appendChild(tl);
 }
 window._cvRaise=_cvRaise;
 
@@ -17926,6 +17929,19 @@ function renderConduit(c){
     var _auto = !!(c.cluster || c.spine || c.tap || c.mv || c.chainFromEms);
     var xy=_scXY(e);
     if(e.altKey && xy && !_auto){ _cvInsert(c.id, xy.x, xy.y); return; }
+    /* A leg the guided build laid in a drawn trench IS that trench on the
+       map. Editing the one conduit moved one line while the trench band
+       and every other leg stayed where they were drawn — "this weird
+       ghost line" (Thomas, 431 Sunderland Rd, 2026-09-28). So the click
+       opens the RUN's handles, and every conduit laid in it follows.
+       Shift-click still selects this one conduit; Alt-click still adds
+       a vertex to it alone. */
+    if(c.evRun && typeof window._trShow==='function' && window._trShow(c.evRun)){
+      var _re=window._trShow.relaid||0;
+      if(typeof showBanner==='function')
+        showBanner('cond',(_re?(_re+' conduit'+(_re===1?'':'s')+' laid back on the trench \u00b7 '):'')+'Drag a point to re-route the trench \u2014 every conduit laid in it follows \u00b7 Drag a faint midpoint to add a bend \u00b7 Double-click a point to remove it \u00b7 Esc to finish');
+      return;
+    }
     _cvShow(c.id);
     if(typeof showBanner==='function')
       showBanner('cond','Drag a point to re-route \u00b7 Drag a faint midpoint to add one \u00b7 Double-click a point to remove it \u00b7 Yellow ends stay bonded to their equipment \u2014 Shift-drag to detach \u00b7 Esc to finish');
@@ -23185,7 +23201,7 @@ function placeSLDElement(type) {
 
 // == UNDO ====================================================
 var _omHistHold=0;
-function pushHist(){if(_omHistHold>0){window._workDirty=true;try{omegaSetStale(true);}catch(e){}return;}try{if(typeof _geoStampAll==='function')_geoStampAll();}catch(e){}S.history.push({els:JSON.parse(JSON.stringify(S.elements)),conds:JSON.parse(JSON.stringify(S.conduits)),shps:JSON.parse(JSON.stringify(S.shapes||[]))});if(S.history.length>30)S.history.shift();window._workDirty=true;try{omegaSetStale(true);}catch(e){}/* Patch 8: the blanket restamp that used to live here re-anchored EVERY object on every pushHist, including the one the native layer fires straight after setting a correct anchor. Restamping is now done by whichever handler actually moved something. */}
+function pushHist(){if(_omHistHold>0){window._workDirty=true;try{omegaSetStale(true);}catch(e){}return;}try{if(typeof _geoStampAll==='function')_geoStampAll();}catch(e){}S.history.push({els:JSON.parse(JSON.stringify(S.elements)),conds:JSON.parse(JSON.stringify(S.conduits)),shps:JSON.parse(JSON.stringify(S.shapes||[])),/* the drawn trench runs travel with the legs laid in them: an undo after a run is re-routed (the trench editor) or extended (a charger past its end) puts both back together, never the legs on the old line under a run that kept the bend */trenches:JSON.parse(JSON.stringify(S._trenches||[]))});if(S.history.length>30)S.history.shift();window._workDirty=true;try{omegaSetStale(true);}catch(e){}/* Patch 8: the blanket restamp that used to live here re-anchored EVERY object on every pushHist, including the one the native layer fires straight after setting a correct anchor. Restamping is now done by whichever handler actually moved something. */}
 /* ── ONE UNDO ENTRY PER GUIDED-BUILD LEG ──────────────────────────────
    Placing a charger in the Level 2 build is three writes: addEl(charger)
    → pushHist, the branch conduit pushed straight onto S.conduits with NO
@@ -23239,6 +23255,8 @@ function undoLast(){
   if(S.history.length<2)return;S.history.pop();const prev=S.history[S.history.length-1];
   document.getElementById('els').innerHTML='';document.getElementById('csvg').innerHTML='';
   S.elements=prev.els;S.conduits=prev.conds;S.shapes=prev.shps||[];S.sel=null;
+  if(prev.trenches) S._trenches=JSON.parse(JSON.stringify(prev.trenches));   /* the runs as they were, with the legs as they were */
+  try{ if(typeof window._trClear==='function') window._trClear(); }catch(e){}
   if(typeof _selShapeId!=='undefined') _selShapeId=null;
   S.elements.forEach(el=>renderEl(el));S.conduits.forEach(c=>renderConduit(c));
   if(S._trench && typeof renderTrenchSpine==='function') renderTrenchSpine();
@@ -67087,6 +67105,269 @@ function _dcfcRenderTrenches(){
 }
 try{ window._dcfcRenderTrenches=_dcfcRenderTrenches; }catch(e){}
 
+/* ── THE TRENCH IS THE THING YOU DRAG ────────────────────────────────
+   A charger clicked off the trench makes a straight spur to it, and on a
+   real lot that line crosses the building. Dragging the charger's own
+   conduit then moved one leg while the spur's band and the other legs
+   stayed on the straight line — "this weird ghost line ... it should only
+   be one trench for the right side" (Thomas, 431 Sunderland Rd,
+   2026-09-28). What you see on the map is the trench, so the trench is
+   what you edit: a click on any leg laid in a drawn run opens the RUN's
+   handles (_trShow), a vertex drags, a faint midpoint becomes a bend, a
+   double-click removes a point, and every conduit laid in the run — and
+   every spur hanging off it, with their conduits — is re-laid along the
+   new line (_dcfcRelayRun). A root run's first point is where it leaves
+   the equipment and stays put; a spur's first point slides along its
+   parent. Esc puts the handles away. The geometry (_trMoveVertex,
+   _trInsertVertex, _trRemoveVertex, _dcfcRelayRun) is pure over S and is
+   what scripts/tests/ttrenchedit.js holds; the DOM is below it. */
+var _trSel=null, _trDrag=null, _trRaf=0;
+function _trRun(id){ return (S._trenches||[]).filter(function(t){ return t && t.id===id; })[0]||null; }
+function _trPpf(){ var p=(typeof _viewPxPerFt==='function')?_viewPxPerFt():0; return (p>0)?p:((typeof S!=='undefined'&&S.pxPerFt>0)?S.pxPerFt:6); }
+function _trTapFt(run, seg, pt){ return +(_polyLen(run.pts.slice(0,seg).concat([{x:pt.x,y:pt.y}]))/_trPpf()).toFixed(1); }
+
+/* Re-lay every conduit laid in `run` from its device, through the run as
+   it is now, back to the run's start; then every spur off the run, whose
+   tap slides to the nearest point on the new line. `final` re-cuts the
+   ground anchors, which a drag skips per frame and does once on release.
+   Returns how many conduits were re-laid. */
+/* The same line: as many points, none a pixel or more from where it was.
+   (A leg the build laid taps the run's own vertex, which sits on the
+   click's fraction of a pixel; the charger's centre is whole. That is
+   not a change, and neither is a rounding wobble.) */
+function _trSamePts(a, b){
+  a=a||[]; b=b||[];
+  if(a.length!==b.length) return false;
+  for(var i=0;i<a.length;i++){ if(!(Math.abs((+a[i].x)-(+b[i].x))<1 && Math.abs((+a[i].y)-(+b[i].y))<1)) return false; }
+  return true;
+}
+/* Re-lay every conduit laid in a run from its equipment to the run and
+   back to the source, and every spur hanging off it. Returns how many
+   legs were laid; _dcfcRelayRun.changed counts the ones whose line is
+   not what it was (a caller zeroes it first), so opening a trench whose
+   legs were dragged apart by hand can tell, and an untouched one writes
+   nothing. */
+function _dcfcRelayRun(run, final){
+  if(!run || !run.pts || run.pts.length<2) return 0;
+  var ppf=_trPpf(), n=0;
+  (S.conduits||[]).forEach(function(c){
+    if(!c || c.evRun!==run.id || !c.pts || c.pts.length<2) return;
+    var dev=c.pts[0], elId=dev.elId||c.fromId||null;
+    var ctr=(elId && typeof getCenter==='function') ? getCenter(elId) : null;
+    var cx=ctr?ctr.x:dev.x, cy=ctr?ctr.y:dev.y;
+    var tap=_dcfcNearestOnPoly(run.pts, {x:cx,y:cy}); if(!tap) return;
+    var head={x:cx,y:cy}; if(elId) head.elId=elId;
+    var pts=[head,{x:tap.x,y:tap.y}].concat(_dcfcPathBack(run, tap.seg));
+    for(var d=2; d<pts.length; d++){ if(Math.abs(pts[d].x-pts[d-1].x)<0.01 && Math.abs(pts[d].y-pts[d-1].y)<0.01){ pts.splice(d,1); d--; } }
+    if(c.toId && pts.length>1) pts[pts.length-1].elId=c.toId;
+    if(!_trSamePts(c.pts, pts)) _dcfcRelayRun.changed=(_dcfcRelayRun.changed||0)+1;
+    c.pts=pts; c.pxLen=_polyLen(pts); c.ftLen=+(c.pxLen/ppf).toFixed(1);
+    c.evRunFt=_trTapFt(run, tap.seg, tap);
+    if(final){ try{ if(typeof _geoRestampOne==='function') _geoRestampOne(c); }catch(e){} }
+    try{ var g=document.querySelector('[data-cid="'+c.id+'"]'); if(g&&g.parentNode) g.parentNode.removeChild(g); }catch(e){}
+    try{ if(typeof renderConduit==='function') renderConduit(c); }catch(e){}
+    n++;
+  });
+  (S._trenches||[]).forEach(function(t){
+    if(!t || t===run || t.spurOf!==run.id || !t.pts || t.pts.length<2) return;
+    var tap=_dcfcNearestOnPoly(run.pts, t.pts[0]); if(!tap) return;
+    t.pts[0]={x:tap.x,y:tap.y}; t.spurSeg=tap.seg; t.spurTapFt=_trTapFt(run, tap.seg, tap);
+    if(final) _dcfcReanchorRun(t);
+    n+=_dcfcRelayRun(t, final);
+  });
+  return n;
+}
+/* Move one vertex of a run by the run's own rules. Returns the point as
+   placed, or null when that vertex does not move (a root run's start is
+   where it leaves the equipment; a spur's start slides along its parent). */
+function _trMoveVertex(run, i, x, y){
+  if(!run || !run.pts || !run.pts[i]) return null;
+  if(i===0){
+    if(!run.spurOf) return null;
+    var par=_trRun(run.spurOf); if(!par || !par.pts || par.pts.length<2) return null;
+    var sn=_dcfcNearestOnPoly(par.pts, {x:x,y:y}); if(!sn) return null;
+    run.pts[0]={x:sn.x,y:sn.y}; run.spurSeg=sn.seg; run.spurTapFt=_trTapFt(par, sn.seg, sn);
+    return run.pts[0];
+  }
+  run.pts[i]={x:x,y:y};
+  return run.pts[i];
+}
+/* A bend born on the middle of segment si; returns its index, or -1. */
+function _trInsertVertex(run, si){
+  if(!run || !run.pts || si<0 || si+1>=run.pts.length) return -1;
+  var a=run.pts[si], b=run.pts[si+1];
+  run.pts.splice(si+1, 0, { x:(a.x+b.x)/2, y:(a.y+b.y)/2 });
+  return si+1;
+}
+/* Drop a point: never the start, never below two points. */
+function _trRemoveVertex(run, i){
+  if(!run || !run.pts || run.pts.length<=2 || i<=0 || i>=run.pts.length) return false;
+  run.pts.splice(i,1);
+  return true;
+}
+/* After the run changed shape: anchors, every leg, the layer, the totals, one undo step. */
+function _trCommit(run){
+  _dcfcReanchorRun(run);
+  try{ if(typeof window.__omegaCondPxSig==='function' && run._geoPts) run._geoSig=window.__omegaCondPxSig(run); }catch(e){}
+  _dcfcRelayRun(run, true);
+  _dcfcRenderTrenches();
+  try{ if(typeof renderTrenchCorridors==='function') renderTrenchCorridors(); }catch(e){}
+  try{ if(typeof updCondStat==='function') updCondStat(); }catch(e){}
+  try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
+  if(typeof pushHist==='function') pushHist();
+}
+function _trClear(){
+  var lay=document.getElementById('trench-verts');
+  if(lay && lay.parentNode) lay.parentNode.removeChild(lay);
+  _trSel=null; _trDrag=null;
+}
+function _trShow(runId){
+  var run=_trRun(runId); if(!run || !run.pts || run.pts.length<2) return false;
+  var svg=document.getElementById('csvg'); if(!svg) return false;
+  var fresh=(_trSel!==run.id);   /* opened by a click, not redrawn mid-edit (a born bend, a drag's end) */
+  _trClear();
+  try{ if(typeof _cvClear==='function') _cvClear(); }catch(e){}
+  /* A trench whose conduits were taken apart one by one (each leg dragged
+     off it by hand, which is all an earlier build let you do: Thomas,
+     Site Map 4 at 431 Sunderland Rd, 2026-09-28, "a trench only happens
+     once and then the run is on that") is put back together the moment
+     it is opened: every leg is laid on the trench again, one undo step.
+     A trench whose legs already ride it is left as it is, and nothing
+     is written. Only on a fresh open: the redraw after a bend is born
+     on a midpoint must not write a step of its own before the drag's. */
+  _trShow.relaid=0;
+  if(fresh) try{
+    _dcfcRelayRun.changed=0;
+    _dcfcRelayRun(run, true);
+    if(_dcfcRelayRun.changed>0){
+      _trShow.relaid=_dcfcRelayRun.changed;
+      _dcfcRenderTrenches();
+      try{ if(typeof renderTrenchCorridors==='function') renderTrenchCorridors(); }catch(e){}
+      try{ if(typeof updCondStat==='function') updCondStat(); }catch(e){}
+      try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
+      if(typeof pushHist==='function') pushHist();
+    }
+  }catch(e){}
+  _trSel=run.id;
+  var lay=_mkNS('g'); lay.setAttribute('id','trench-verts'); lay.setAttribute('data-for',run.id);
+  run.pts.forEach(function(pt,i){
+    var fixed=(i===0 && !run.spurOf);
+    var h=_mkNS('circle');
+    h.setAttribute('cx',pt.x); h.setAttribute('cy',pt.y);
+    h.setAttribute('r', i===0 ? 6 : 5);
+    h.setAttribute('fill', fixed ? '#64748B' : (i===0 ? '#FBBF24' : '#00FFFF'));
+    h.setAttribute('stroke','#08111F'); h.setAttribute('stroke-width','1.5');
+    h.setAttribute('style',(fixed?'cursor:not-allowed':'cursor:grab')+';pointer-events:all');
+    h.setAttribute('data-trv', i);
+    var grab=function(ev){
+      if(fixed) return false;
+      var m=_scXY(ev); if(!m) return false;
+      var p=run.pts[i]; if(!p) return false;
+      _trDrag={ id:run.id, i:i, ox:p.x-m.x, oy:p.y-m.y, moved:false };
+      h.setAttribute('style','cursor:grabbing;pointer-events:all');
+      return true;
+    };
+    h.addEventListener('mousedown', function(ev){ ev.stopPropagation(); ev.preventDefault(); grab(ev); });
+    h.addEventListener('dblclick', function(ev){
+      ev.stopPropagation(); ev.preventDefault(); _trDrag=null;
+      if(_trRemoveVertex(run, i)){ _trCommit(run); _trShow(run.id); }
+    });
+    var lastTap=0;
+    h.addEventListener('touchstart', function(ev){
+      ev.stopPropagation(); if(ev.cancelable) ev.preventDefault();
+      var now=Date.now();
+      if(now-lastTap<350){ lastTap=0; _trDrag=null; if(_trRemoveVertex(run, i)){ _trCommit(run); _trShow(run.id); } return; }
+      lastTap=now; grab(ev);
+    }, {passive:false});
+    lay.appendChild(h);
+  });
+  for(var s=0; s<run.pts.length-1; s++){
+    (function(si){
+      var a=run.pts[si], b=run.pts[si+1];
+      if(Math.hypot(b.x-a.x, b.y-a.y) < 18) return;
+      var gh=_mkNS('circle');
+      gh.setAttribute('cx',(a.x+b.x)/2); gh.setAttribute('cy',(a.y+b.y)/2); gh.setAttribute('r',4);
+      gh.setAttribute('fill','rgba(255,255,255,.55)'); gh.setAttribute('stroke','#08111F'); gh.setAttribute('stroke-width','1');
+      gh.setAttribute('style','cursor:copy;pointer-events:all'); gh.setAttribute('data-trmid', si);
+      var born=function(ev){
+        var m=_scXY(ev); if(!m) return false;
+        var ni=_trInsertVertex(run, si); if(ni<0) return false;
+        var np=run.pts[ni];
+        _dcfcRenderTrenches(); _trShow(run.id);
+        _trDrag={ id:run.id, i:ni, ox:np.x-m.x, oy:np.y-m.y, moved:false, born:true };
+        return true;
+      };
+      gh.addEventListener('mousedown', function(ev){ ev.stopPropagation(); ev.preventDefault(); born(ev); });
+      gh.addEventListener('touchstart', function(ev){ ev.stopPropagation(); if(ev.cancelable) ev.preventDefault(); born(ev); }, {passive:false});
+      lay.appendChild(gh);
+    })(s);
+  }
+  svg.appendChild(lay);
+  return true;
+}
+/* Nudge the handles that exist rather than rebuild them mid-gesture (the
+   grabbed circle must stay alive under the pointer), and keep the layer
+   above the linework renderConduit re-appends. */
+function _trSync(run){
+  var lay=document.getElementById('trench-verts');
+  if(!lay || lay.getAttribute('data-for')!==run.id) return;
+  var hs=lay.childNodes;
+  for(var i=0;i<hs.length;i++){
+    var nd=hs[i]; if(!nd || !nd.getAttribute) continue;
+    var vi=nd.getAttribute('data-trv'), mi=nd.getAttribute('data-trmid');
+    if(vi!=null){ var p=run.pts[+vi]; if(p){ nd.setAttribute('cx',p.x); nd.setAttribute('cy',p.y); } }
+    else if(mi!=null){ var a=run.pts[+mi], b=run.pts[+mi+1]; if(a&&b){ nd.setAttribute('cx',(a.x+b.x)/2); nd.setAttribute('cy',(a.y+b.y)/2); } }
+  }
+  if(lay.parentNode) lay.parentNode.appendChild(lay);
+}
+function _trMove(x,y){
+  if(!_trDrag) return false;
+  var run=_trRun(_trDrag.id); if(!run) return false;
+  if(!_trMoveVertex(run, _trDrag.i, x+(_trDrag.ox||0), y+(_trDrag.oy||0))) return false;
+  _trDrag.moved=true;
+  _dcfcRenderTrenches();
+  _trSync(run);
+  if(!_trRaf){
+    _trRaf=requestAnimationFrame(function(){
+      _trRaf=0;
+      var r=_trRun(_trDrag ? _trDrag.id : _trSel);
+      if(r){ _dcfcRelayRun(r, false); _trSync(r); }
+    });
+  }
+  return true;
+}
+function _trEnd(){
+  if(!_trDrag) return false;
+  var run=_trRun(_trDrag.id), moved=!!_trDrag.moved, born=!!_trDrag.born;
+  _trDrag=null;
+  if(!run) return false;
+  if(!moved && !born){
+    /* a press that never moved is not an edit: no undo step, no rebuild
+       (the second click of a double-click must find the same circle) */
+    try{
+      var lay=document.getElementById('trench-verts'), hs=lay?lay.childNodes:[];
+      for(var k=0;k<hs.length;k++){
+        var nd=hs[k]; if(!nd || !nd.getAttribute || nd.getAttribute('data-trv')==null) continue;
+        var fixed=(nd.getAttribute('data-trv')==='0' && !run.spurOf);
+        nd.setAttribute('style',(fixed?'cursor:not-allowed':'cursor:grab')+';pointer-events:all');
+      }
+    }catch(e){}
+    return false;
+  }
+  if(_trRaf){ cancelAnimationFrame(_trRaf); _trRaf=0; }
+  _trCommit(run);
+  _trShow(run.id);
+  return true;
+}
+document.addEventListener('mousemove', function(e){ if(!_trDrag) return; var xy=_scXY(e); if(xy){ e.preventDefault(); _trMove(xy.x, xy.y); } }, true);
+document.addEventListener('mouseup', function(){ _trEnd(); }, true);
+document.addEventListener('touchmove', function(e){ if(!_trDrag) return; var xy=_scXY(e); if(xy){ if(e.cancelable) e.preventDefault(); _trMove(xy.x, xy.y); } }, {passive:false, capture:true});
+document.addEventListener('touchend', function(){ _trEnd(); }, true);
+document.addEventListener('touchcancel', function(){ _trEnd(); }, true);
+document.addEventListener('keydown', function(e){ if(e.key==='Escape' && _trSel) _trClear(); });
+try{ window._trShow=_trShow; window._trClear=_trClear; window._dcfcRelayRun=_dcfcRelayRun;
+     window._trMoveVertex=_trMoveVertex; window._trInsertVertex=_trInsertVertex; window._trRemoveVertex=_trRemoveVertex; }catch(e){}
+
 /* Device tap → snap point → along the run back to its first-clicked (upstream) end. */
 function _dcfcConduitAlongRun(el, run, snap, condType, label){
   if(!el||!run||!run.pts||run.pts.length<2) return null;
@@ -95908,6 +96189,11 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           conds:     clone(S.conduits  || []),
           shps:      clone(S.shapes    || []),
           trench:    clone(S._trench   || null),
+          /* the drawn runs travel with the legs laid in them: an undo after a
+             run is re-routed (the trench editor) or extended (a charger past
+             its end) puts both back together, never the legs on the old line
+             under a run that kept the bend */
+          trenches:  clone(S._trenches || []),
           pxPerFt:   S.pxPerFt,
           unitLabel: S.unitLabel
         });
@@ -95937,6 +96223,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         S.conduits = clone(prev.conds || []);
         S.shapes   = clone(prev.shps  || []);
         S._trench  = prev.trench ? clone(prev.trench) : null;
+        if (prev.trenches) S._trenches = clone(prev.trenches);   /* the runs as they were, with the legs as they were */
+        try { if (typeof window._trClear === 'function') window._trClear(); } catch (e) {}
         /* THE SCALE IS NOT PART OF THE DRAWING'S HISTORY ON A MAP. On a live
            map it is the zoom; on a committed plot it was fixed at capture.
            Restoring the snapshot's pxPerFt after the user had zoomed between
