@@ -73,13 +73,13 @@ Clean Cell's two tools) still wins: absent is not empty.
     3-hour events a year for a home battery (sub-group A.4), three 4-hour
     events for a business (A.2), from 4 pm — the 2024 record (PG&E's and
     SCE's PY2024 ELRP evaluations: seven A.4 events each, two and three
-    A.2), not the 60-hour cap. It is worth the kWh the battery gives in those hours *beyond
-    its everyday dispatch* (ELRP pays incremental reduction against a
-    baseline of similar days), × performance × $2/kWh; an event takes only
-    energy no later over-target hour needs, and the battery never charges
-    from the grid inside an event (that would come off the reduction paid
-    for); holding charge for the events is
-    a cost the TOU stream carries when ELRP is counted, and the group picks
+    A.2), not the 60-hour cap. It is worth the kWh the battery gives in
+    those hours *beyond its everyday dispatch* (ELRP pays incremental
+    reduction against a baseline of similar days), × performance ×
+    $2/kWh; an event takes only energy no later over-target hour needs,
+    and the battery never charges from the grid inside an event (that
+    would come off the reduction paid for); holding charge for the events
+    is a cost the TOU stream carries when ELRP is counted, and the group picks
     ELRP only if it pays net of that cost. A home battery that already
     empties into 4–9 pm for TOU savings has nothing extra to give and ELRP
     is listed with that reason.
@@ -100,8 +100,8 @@ Clean Cell's two tools) still wins: absent is not empty.
     peaks — load quality `low`), the row is `planning` and says why.
   - **Programme status is dated, not live** (read 2026-09-29): DSGS Option 3
     is `closed` (CEC Guidelines 5th ed., CEC-300-2026-001-CMF, adopted
-    2026-04-27: 2026 limited to
-    aggregators from October 2025; no 2027 funding) and listed, never
+    2026-04-27: 2026 limited to aggregators from October 2025; no 2027
+    funding) and listed, never
     counted; ComEd is **Rider SDVPP** ($10/kW-Season of average injection
     4–6 pm weekdays Jun–Sep, ICC-approved, effective 2026-07-16, service by
     2027-03-01; Rider VPP/BYODLR was withdrawn in Docket 25-0678); Hawaii is
@@ -109,8 +109,9 @@ Clean Cell's two tools) still wins: absent is not empty.
     batteries paired with renewables: $60/kW-yr is a planning figure for
     its recurring export credit (Rule 33's formula, zero beyond NEM's own
     retail credit), and its $400/kW upfront incentive is one-time, listed
-    with the one-time incentives on the kW the estimate commits. CBP/DRAM and ELRP are not called
-    exclusive: ELRP Group B would pay the reduction beyond a CBP/DRAM
+    with the one-time incentives on the kW the estimate commits. CBP/DRAM
+    and ELRP are not called exclusive: ELRP Group B would pay the reduction
+    beyond a CBP/DRAM
     commitment, a top-up not modelled, so the better of the two is counted.
   - **Where.** ZIP3 → state → market, refined by prefix where a state
     straddles two markets (El Paso 885, Entergy Texas 776–777, SWEPCO,
@@ -124,8 +125,9 @@ Clean Cell's two tools) still wins: absent is not empty.
     2017). There the CSP capacity row and the PLC row are listed with that
     dated reason, never priced, and a business gets the utility's own
     demand-response tariff as a planning row ($40/kW-yr; I&M Rider D.R.S.1,
-    Kentucky Power Rider D.R.S.); a home battery has no route on file. New York is by utility: Con Edison
-    (100–104, 105–108, 111–114, 11004/11005) earns its DLM rate, New York
+    Kentucky Power Rider D.R.S.); a home battery has no route on file. New
+    York is by utility: Con Edison (100–104, 105–108, 111–114,
+    11004/11005) earns its DLM rate, New York
     City (Zone J) the NYC SCR price, and Long Island (the rest of 110,
     115–119: PSEG Long Island, Zone K) the upstate planning rates under its
     own label. A market override that changes the market drops the area.
