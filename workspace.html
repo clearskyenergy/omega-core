@@ -857,8 +857,13 @@ function renderPlans() {
   var cur = currentPlanKey(), pa = WS.packageAccess, co = WS.clientName || 'This workspace';
   var h = '<h3>Plans<small>A plan bundles modules at one monthly price. Lite with modules opted in one at a time is the other way; either is billed monthly, or yearly at ten months of twelve.</small></h3>';
   if (!(pa && pa.packaged)) h += '<p class="plans-note"><b>' + esc(co) + '</b> is on the ' + esc(planName()) + ' plan, priced by your agreement. These are the plans a workspace moves onto: opting in to a module starts that move, and ClearSky confirms it with you.</p>';
+  /* a legacy tier wears the price book's plan word (omega-tenant.js TIER_LABEL),
+     so the shelf marks THAT plan as the workspace's own: the strip, the
+     cards and the shelf name one plan (Tommy, 2026-09-28: "how we label the
+     pricing needs to be standardized and match") */
+  var legacyName = !(pa && pa.packaged) ? planName() : '';
   h += '<div class="plans">' + plans.map(function (p) {
-    var on = !!cur && cur === String(p.key).toLowerCase(), pr = String(p.monthlyDisplay || ''), cut = p.contact ? -1 : pr.lastIndexOf('/');
+    var on = cur ? cur === String(p.key).toLowerCase() : !!legacyName && String(p.name) === legacyName, pr = String(p.monthlyDisplay || ''), cut = p.contact ? -1 : pr.lastIndexOf('/');
     return '<div class="planc' + (on ? ' on' : '') + '" data-plan-card="' + esc(p.key) + '"><div class="band" style="background:' + (PLAN_BAND[p.key] || MOD_COVER.floor) + '"></div>'
       + '<div class="nm">' + esc(p.name) + (on ? '<span class="ows-chip on">Your plan</span>' : '') + '</div>'
       + '<div class="pr' + (p.contact ? ' ask' : '') + '">' + (cut > 0 ? esc(pr.slice(0, cut)) + '<span>' + esc(pr.slice(cut)) + '</span>' : esc(pr)) + '</div>'
