@@ -147,6 +147,14 @@ ok('a two-hour PJM battery is valued as a Demand Resource, at what it holds for 
 var fourHr = S.simulate({ zip: '19103', segment: 'commercial', battery: { kw: 50, kwh: 250 } });
 var pc = stream(fourHr, 'pjm.capacity');
 ok('a 4.5-hour PJM battery is its full rating at the published DR rating and clearing price', pc && pc.tier === 'published' && pc.usd > 0 && /91%/.test(pc.how) && /50 kW nominated/.test(pc.how), pc);
+/* S4: a kW capped at a summer peak read off an ASSUMED load is not a
+   published figure; the same cap on the site's own readings is. */
+var bigOnTypical = stream(S.simulate({ zip: '19103', segment: 'commercial', battery: { kw: 500, kwh: 4000 } }), 'pjm.capacity');
+ok('an oversized PJM battery capped at an ASSUMED load\'s peak is planning, and says why', bigOnTypical && bigOnTypical.tier === 'planning' &&
+   /Capped at the site/.test(bigOnTypical.how) && /load shape/.test(bigOnTypical.how), bigOnTypical);
+var flat80 = []; for (var fi = 0; fi < 8760; fi++) flat80.push(80);
+var bigOnOwn = stream(S.simulate({ zip: '19103', segment: 'commercial', battery: { kw: 500, kwh: 4000 }, load: { type: 'interval', values: flat80, startDate: '2025-01-01' } }), 'pjm.capacity');
+ok('…capped at the site\'s own interval peak it is published', bigOnOwn && bigOnOwn.tier === 'published' && /Capped at the site's 80 kW/.test(bigOnOwn.how) && !/load shape/.test(bigOnOwn.how), bigOnOwn);
 var pjmRes = S.simulate({ zip: '19103', segment: 'residential' });
 ok('a PJM home battery is no longer refused with a storage-class reason', !!stream(pjmRes, 'pjm.capacity') && !pjmRes.missing.some(function (m) { return /storage class|four hours/.test(m); }), pjmRes.missing);
 

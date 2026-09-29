@@ -1066,11 +1066,15 @@ function programValue(p, ctx) {
        can hold its reduction; that is the planning assumption here. */
     var PJ = V.PJM, H = p.minHours, limit = Eout / H, kwC = Math.min(shed, limit);
     if (!(kwC > 0)) return { skip: 'The site draws no load in the summer peak to reduce, so nothing is claimed.' };
-    var byDuration = limit < shed, ucap = kwC * PJ.drElcc;
-    return { usd: ucap / 1000 * PJ.price * 365 * perf, tier: byDuration ? 'planning' : 'published',
+    /* `published` only when a published figure or the site's own data sets
+       the kW: the four-hour nomination is a planning assumption, and so is
+       a summer peak read off an assumed load shape. */
+    var byDuration = limit < shed, byAssumedPeak = !byDuration && capped && ctx.loadAssumed, ucap = kwC * PJ.drElcc;
+    return { usd: ucap / 1000 * PJ.price * 365 * perf, tier: byDuration || byAssumedPeak ? 'planning' : 'published',
              how: r2(kwC) + ' kW nominated' + (byDuration ? ' (what the ' + r2(Eout) + ' kWh it delivers holds for ' + H + ' h)' : '') +
                   ' × ' + Math.round(PJ.drElcc * 100) + '% (PJM\'s Demand Resource class) = ' + r2(ucap) + ' kW UCAP, at $' +
-                  PJ.price.toFixed(2) + '/MW-day × ' + pct + '.' + capNote,
+                  PJ.price.toFixed(2) + '/MW-day × ' + pct + '.' + capNote +
+                  (byAssumedPeak ? ' That peak is read off a load shape, not metered or billed demand (' + ctx.loadLabel + '), so the kW is a planning figure; interval data or billed peaks replace it.' : ''),
              ref: 'Behind the meter, through a curtailment service provider, a battery is a Demand Resource, accredited at the Demand Resource class rating — not in the 4/6/8/10-hour storage classes. From 2027/28 a Demand Resource must be available in every hour with no limit on the number of events, and a battery that runs out mid-event pays Capacity Performance penalties, so it is nominated at what it can hold for ' + H + ' hours (the duration of PJM\'s shortest storage class) — a planning assumption the CSP\'s nomination replaces. ' + PJ.priceRef + ' ' + PJ.drElccRef,
              url: PJ.priceUrl };
   }
@@ -1226,7 +1230,8 @@ function simulate(input) {
      savings that holding charge for the events gives up. */
   var shedKw = 0;
   for (h = MONTH_START[SUMMER[0]]; h < MONTH_START[SUMMER[SUMMER.length - 1]] + DAYS[SUMMER[SUMMER.length - 1]] * 24; h++) if (netNoBat[h] > shedKw) shedKw = netNoBat[h];
-  var ctx = { loc: loc, segment: segment, battery: bat, performance: perf, solarKw: solarKw, peakKw: peakKw, shedKw: shedKw };
+  var ctx = { loc: loc, segment: segment, battery: bat, performance: perf, solarKw: solarKw, peakKw: peakKw, shedKw: shedKw,
+              loadAssumed: L.quality === 'low', loadLabel: L.label };
   var D0 = dispatch(load, solar, bat, t, [], 0);
   var before = bill(Array.prototype.slice.call(D0.net0), t);
   var after0 = bill(Array.prototype.slice.call(D0.net), t);

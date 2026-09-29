@@ -86,7 +86,10 @@ Clean Cell's two tools) still wins: absent is not empty.
     `value-stack.js`), not in the 4/6/8/10-hour storage classes. It is
     nominated at what the battery can hold for four hours (planning; the
     CSP's nomination replaces it) — `published` only when the battery's
-    rating, not that assumption, sets the kW.
+    rating, or the site's summer peak read from its own interval data or
+    billed peaks, sets the kW. When the four-hour assumption sets it, or a
+    summer peak read off a load shape (the typical load, or bills without
+    peaks — load quality `low`), the row is `planning` and says why.
   - **Programme status is dated, not live** (read 2026-09-29): DSGS Option 3
     is `closed` (CEC Guidelines 5th ed., April 2026: 2026 limited to
     aggregators from October 2025; no 2027 funding) and listed, never
