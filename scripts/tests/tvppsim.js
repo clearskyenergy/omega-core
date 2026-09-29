@@ -581,7 +581,23 @@ later(function () {
   function answer(body) { return function () { return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve(body); } }); }; }
   function named(name, message) { var e = new Error(message); e.name = name; return e; }
   var EST_IN = { zip: '94110', segment: 'residential' };
-  console.error = function () { logged.push([].slice.call(arguments).join(' ')); };
+  /* R18: the function log carries only words the provider wrote (the
+     error's class name, the cause's code, one fixed phrase, the endpoint's
+     origin). Every line logged in this section is held to that shape. */
+  var every = [];
+  var PHRASES = ['no answer before our timeout', 'invalid header value; check DIVIDENDVPP_API_KEY',
+    'the URL carries credentials, which fetch refuses; check DIVIDENDVPP_API_URL', 'invalid URL; check DIVIDENDVPP_API_URL',
+    'network or TLS failure', 'request failed'];
+  var LINE = new RegExp('^\\[vpp-provider\\] quote failed \\([A-Za-z][A-Za-z0-9_]*(, [A-Z][A-Z0-9_]*)?\\): (' +
+    PHRASES.map(function (p) { return p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }).join('|') +
+    ')\\. Endpoint: (https?://[A-Za-z0-9.\\-]+(:\\d+)?|\\[[A-Za-z ()_]+\\])$');
+  function none(line, parts) { return parts.every(function (p) { return line.indexOf(p) < 0; }); }
+  /* one failing call with this key, URL and fetch: { r, log, n } */
+  function failWith(key, url, f) {
+    process.env.DIVIDENDVPP_API_KEY = key; process.env.DIVIDENDVPP_API_URL = url; global.fetch = f; logged = [];
+    return P.estimate(EST_IN).then(function (r) { return { r: r, log: logged.join('\n'), n: logged.length }; });
+  }
+  console.error = function () { var l = [].slice.call(arguments).join(' '); logged.push(l); every.push(l); };
   global.fetch = function (u, o) {
     ok('the key goes in the header, never the body', o.headers.Authorization === 'Bearer k' && o.body.indexOf('"k"') < 0);
     return Promise.resolve({ ok: true, status: 200, json: function () { return Promise.resolve({ annualEarnings: 900, id: 'q1' }); } });
@@ -598,11 +614,12 @@ later(function () {
     ok('a provider failure never fails the estimate', r.ok && r.providerQuote.ok === false);
     ok('OUR timeout (an abort) reads "did not answer in time"', /did not answer in time/.test(r.providerQuote.error), r.providerQuote.error);
     logged = [];
-    global.fetch = function () { return Promise.reject(new Error('down')); };
+    global.fetch = function () { return Promise.reject(new Error('down-MESSAGE-TEXT')); };
     return P.estimate(EST_IN);
   }).then(function (r) {
     ok('any other failure reads "could not be reached", not a timeout', r.ok && /could not be reached/.test(r.providerQuote.error) && !/in time/.test(r.providerQuote.error), r.providerQuote.error);
-    ok('and it is logged with the error\'s name and message', logged.length === 1 && /\[vpp-provider\]/.test(logged[0]) && /Error/.test(logged[0]) && /down/.test(logged[0]), logged);
+    ok('it is logged with the error\'s name, a fixed phrase and the origin, never the runtime\'s message', logged.length === 1
+      && /^\[vpp-provider\] quote failed \(Error\): request failed\. Endpoint: https:\/\/example\.invalid$/.test(logged[0]) && logged[0].indexOf('MESSAGE-TEXT') < 0, logged);
     global.fetch = function () { throw new TypeError('Failed to parse URL from api.dividendvpp.com/estimate'); };
     return P.estimate(EST_IN);
   }).then(function (r) {
@@ -614,31 +631,73 @@ later(function () {
     return P.estimate(EST_IN);
   }).then(function (r) {
     ok('a key with a stray newline reads "could not be reached"', /could not be reached/.test(r.providerQuote.error), r.providerQuote.error);
-    ok('the log names the failure but never carries the key', logged.length === 1 && /invalid header value/.test(logged[0]) && logged[0].indexOf('SECRET') < 0 && logged[0].indexOf('partner-key') < 0, logged);
-    /* the key quoted with no "Bearer" before it: the literal key is cut */
-    logged = [];
-    global.fetch = function () { var e = new Error('credential rejected: partner-key-SECRET\nx'); e.cause = { code: 'EKEY partner-key-SECRET\nx' }; return Promise.reject(e); };
-    return P.estimate(EST_IN);
-  }).then(function () {
-    ok('a key quoted without "Bearer" is cut from the message and the cause', logged.length === 1 && logged[0].indexOf('SECRET') < 0 && /\[key\]/.test(logged[0]), logged);
-    /* the runtime printed the key altered (a control character as a space): everything after "Bearer" is cut */
-    logged = [];
-    global.fetch = function () { return Promise.reject(new TypeError('Headers.append: "Bearer partner-key-SECRET x" is an invalid header value.')); };
-    return P.estimate(EST_IN);
-  }).then(function () {
-    ok('a key the runtime altered is still cut after "Bearer"', logged.length === 1 && logged[0].indexOf('SECRET') < 0 && /Bearer \[key\]/.test(logged[0]), logged);
-    /* the same two faults through the REAL fetch, where the runtime has one: both fail before any network */
-    if (typeof saved !== 'function') return null;
-    global.fetch = saved; logged = [];
-    process.env.DIVIDENDVPP_API_KEY = 'partner-key-SECRET\u0000x';
-    return P.estimate(EST_IN).then(function (r2) {
-      ok('real fetch, a NUL in the key: "could not be reached", key not logged', /could not be reached/.test(r2.providerQuote.error) && logged.join(' ').indexOf('SECRET') < 0, [r2.providerQuote.error, logged]);
-      process.env.DIVIDENDVPP_API_KEY = 'k'; process.env.DIVIDENDVPP_API_URL = 'api.dividendvpp.com/estimate'; logged = [];
-      return P.estimate(EST_IN);
-    }).then(function (r3) {
-      ok('real fetch, a URL without a scheme: "could not be reached", and the log says why', /could not be reached/.test(r3.providerQuote.error) && /URL/.test(logged.join(' ')), [r3.providerQuote.error, logged]);
-      process.env.DIVIDENDVPP_API_URL = 'https://example.invalid/estimate';
+    ok('the log names the failure but never carries the key', logged.length === 1 && /invalid header value/.test(logged[0]) && none(logged[0], ['SECRET', 'partner-key']), logged);
+    /* the key quoted in the message and the cause with no "Bearer" before it */
+    return failWith('partner-key-SECRET\nx', 'https://example.invalid/estimate', function () {
+      var e = new Error('credential rejected: partner-key-SECRET\nx'); e.cause = { code: 'EKEY partner-key-SECRET\nx', message: 'partner-key-SECRET' }; return Promise.reject(e);
     });
+  }).then(function (o) {
+    ok('a key quoted anywhere in the message or the cause is never logged', o.n === 1 && none(o.log, ['SECRET', 'partner-key', 'EKEY', 'rejected']), o.log);
+    /* the runtime printed the key altered (a control character as a space) */
+    return failWith('partner-key-SECRET\nx', 'https://example.invalid/estimate', function () { return Promise.reject(new TypeError('Headers.append: "Bearer partner-key-SECRET x" is an invalid header value.')); });
+  }).then(function (o) {
+    ok('a key the runtime altered is not logged either', o.n === 1 && /invalid header value/.test(o.log) && none(o.log, ['SECRET', 'partner-key']), o.log);
+    /* the review's case: the runtime TRIMS the header value before quoting it, so a key with a quote
+       inside and space around it never matches verbatim, and a cut at the first quote leaves its tail */
+    return failWith('sk_live_9f3a"7Qz\nXK21 ', 'https://example.invalid/estimate', function (u, o) {
+      return Promise.reject(new TypeError('Headers.append: "' + o.headers.Authorization.trim() + '" is an invalid header value.'));
+    });
+  }).then(function (o) {
+    ok('a key with a quote inside and space around it: no part of it is logged', o.n === 1 && none(o.log, ['sk_live', '9f3a', '7Qz', 'XK21']), o.log);
+    /* a URL error quotes the whole URL: user:pass@ and ?key= */
+    return failWith('k', 'https://vppuser:vpppass1@example.invalid/estimate?key=QSECRETQ&token=TOK12345', function (u) {
+      return Promise.reject(new TypeError('Request cannot be constructed from a URL that includes credentials: ' + u));
+    });
+  }).then(function (o) {
+    ok('a credentialed URL: the log names the origin, never the userinfo, the path or the query', o.n === 1 && /credentials/.test(o.log)
+      && / Endpoint: https:\/\/example\.invalid$/.test(o.log) && none(o.log, ['vppuser', 'vpppass1', 'QSECRETQ', 'TOK12345', '/estimate', '@']), o.log);
+    /* a network failure: the cause's code is kept; its message, which can name the URL, is not */
+    return failWith('k', 'https://example.invalid:8443/estimate?key=QSECRETQ', function (u) {
+      var e = new TypeError('fetch failed'); e.cause = { code: 'ECONNREFUSED', message: 'connect ECONNREFUSED ' + u }; return Promise.reject(e);
+    });
+  }).then(function (o) {
+    ok('a network failure logs its code and the origin with its port, nothing else of the URL', o.n === 1
+      && /\(TypeError, ECONNREFUSED\): network or TLS failure\. Endpoint: https:\/\/example\.invalid:8443$/.test(o.log) && none(o.log, ['QSECRETQ', 'estimate']), o.log);
+    /* a variable part that carries the key is withheld: the key as the error's name and the cause's code */
+    return failWith('SK_LIVE_ABCDEF', 'https://example.invalid/estimate', function () {
+      var e = new Error('x'); e.name = 'SK_LIVE_ABCDEF'; e.cause = { code: 'SK_LIVE_ABCDEF' }; return Promise.reject(e);
+    });
+  }).then(function (o) {
+    ok('an error name or cause code that is the key is withheld (the name reads "Error")', o.n === 1 && /quote failed \(Error\): /.test(o.log) && o.log.indexOf('SK_LIVE') < 0, o.log);
+    return failWith('livekey-abcdef', 'https://livekey-abcdef.example.invalid/estimate', function () { return Promise.reject(new TypeError('fetch failed')); });
+  }).then(function (o) {
+    ok('a host that carries the key is withheld', o.n === 1 && /Endpoint: \[endpoint withheld\]$/.test(o.log) && o.log.indexOf('livekey') < 0, o.log);
+    return failWith('k', 'https://example.invalid/estimate', function () { var e = new Error('x'); e.name = 'Bad "name" k=QSECRETQ'; return Promise.reject(e); });
+  }).then(function (o) {
+    ok('an error name that is not an identifier reads "Error"', o.n === 1 && /quote failed \(Error\): /.test(o.log) && none(o.log, ['QSECRETQ', 'Bad']), o.log);
+    /* the same faults through the REAL fetch, where the runtime has one: each fails before any network */
+    if (typeof saved !== 'function') return null;
+    return failWith('partner-key-SECRET\u0000x', 'https://example.invalid/estimate', saved).then(function (o2) {
+      ok('real fetch, a NUL in the key: "could not be reached", key not logged', /could not be reached/.test(o2.r.providerQuote.error) && none(o2.log, ['SECRET', 'partner-key']), [o2.r.providerQuote.error, o2.log]);
+      return failWith('sk_live_9f3a"7Qz\nXK21 ', 'https://example.invalid/estimate', saved);
+    }).then(function (o2) {
+      ok('real fetch, the review\'s key (a quote inside, a newline, a trailing space): no part of it logged', o2.n === 1 && /invalid header value/.test(o2.log) && none(o2.log, ['sk_live', '9f3a', '7Qz', 'XK21']), o2.log);
+      return failWith('  "sk_live_ABC1\nDEF2"\n', 'https://example.invalid/estimate', saved);
+    }).then(function (o2) {
+      ok('real fetch, a key pasted with its quotes, wrapped, with a trailing newline: none of it logged', o2.n === 1 && none(o2.log, ['sk_live', 'ABC1', 'DEF2']), o2.log);
+      return failWith('k', 'https://vppuser:vpppass1@example.invalid/estimate?key=QSECRETQ', saved);
+    }).then(function (o2) {
+      ok('real fetch, a URL with user:pass@ and ?key=: "could not be reached", the origin logged and nothing else of it', /could not be reached/.test(o2.r.providerQuote.error)
+        && o2.n === 1 && / Endpoint: https:\/\/example\.invalid$/.test(o2.log) && none(o2.log, ['vppuser', 'vpppass1', 'QSECRETQ', '/estimate']), [o2.r.providerQuote.error, o2.log]);
+      return failWith('k', 'api.dividendvpp.com/estimate?key=QSECRETQ', saved);
+    }).then(function (o2) {
+      ok('real fetch, a URL without a scheme: "could not be reached", the log says why and never prints it', /could not be reached/.test(o2.r.providerQuote.error)
+        && /invalid URL/.test(o2.log) && none(o2.log, ['QSECRETQ', 'dividendvpp.com', 'estimate']), [o2.r.providerQuote.error, o2.log]);
+    });
+  }).then(function () {
+    ok('every line the provider logged is the fixed shape: name, code, one phrase, origin', every.length >= 10 && every.every(function (l) { return LINE.test(l); }),
+      every.filter(function (l) { return !LINE.test(l); }));
+    global.fetch = saved; process.env.DIVIDENDVPP_API_KEY = 'k'; process.env.DIVIDENDVPP_API_URL = 'https://example.invalid/estimate';
   }).then(function () {
     /* our clock runs out while the body is still arriving */
     var made = null;
