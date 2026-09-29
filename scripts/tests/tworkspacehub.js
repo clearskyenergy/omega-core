@@ -24,7 +24,7 @@ var moduleKeys = M.catalog().map(function (m) { return m.key; });
 
 /* 1 · every key the table names exists */
 HUB.AREAS.forEach(function (a) {
-  (a.tools || []).forEach(function (k) { ok('area ' + a.key + ' names a real tool: ' + k, keys.indexOf(k) >= 0); });
+  (a.also || []).concat(a.tools || []).forEach(function (k) { ok('area ' + a.key + ' names a real tool: ' + k, keys.indexOf(k) >= 0); });
   if (a.logic) ok('area ' + a.key + ' names a real module: ' + a.logic, moduleKeys.indexOf(a.logic) >= 0);
   ok('area ' + a.key + ' has a label, an icon and a hint', !!(a.label && a.icon && a.hint));
 });
@@ -66,6 +66,7 @@ ok('Office alone earns Orders and not Plant or Deliver', officeOnly.ring.some(fu
 /* 3 · the side panel */
 var rows = HUB.items('money', ctxFor({ orgId: 'x', tierLevel: 1 }));
 ok('Money lists the Standard sizers open and the Deluxe models locked, open first', rows.length > 3 && !rows[0].locked && rows.some(function (r) { return r.locked; }) && rows.filter(function (r) { return r.locked; }).every(function (r, i, arr) { return rows.indexOf(r) >= rows.length - arr.length; }), rows.map(function (r) { return r.key + (r.locked ? ':locked' : ''); }));
+ok('Finance leads with the financing portal, open on every plan', rows[0].key === 'financing' && !rows[0].locked && TOOLS.byKey('financing').file === '/finance', rows[0]);
 ok('a row carries the catalog\'s name', rows.every(function (r) { return r.name && TOOLS.byKey(r.key).name === r.name; }));
 ok('Projects panel names In flight and its page', (function (r) { return r[0].href === '#flight' && r[1].href === '/projects.html'; })(HUB.items('projects', ctxFor({ orgId: 'x' }))));
 ok('an unknown area is empty', HUB.items('nope', ctxFor({})).length === 0);
