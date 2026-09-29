@@ -79,21 +79,69 @@ function readQuote(j) {
   return { annualUsd: Math.round(total), streams: streams, id: j.id ? String(j.id).slice(0, 80) : null };
 }
 
-/* Why a call failed, for the function log only: the error's name, message
-   and cause. Never the request, its headers or the key — and Node's fetch
-   quotes a bad header VALUE in its message ('"Bearer <key>" is an invalid
-   header value'), so the key, and anything after "Bearer", are cut out
-   before the line is written. */
-function logFailure(e, timedOut) {
-  var key = process.env.DIVIDENDVPP_API_KEY || '';
-  function clean(v) {
-    var t = String(v == null ? '' : v);
-    if (key) t = t.split(key).join('[key]');
-    return t.replace(/Bearer[^"]*/g, 'Bearer [key]').slice(0, 200);
+/* Why a call failed, for the function log only, and only in words WE wrote.
+   A runtime's error text quotes what it was handed: Node's fetch puts a bad
+   header value in its message ('"Bearer <key>" is an invalid header value',
+   the value TRIMMED first, so no scrub of the raw key is reliable) and the
+   whole URL in a URL error, userinfo and query string included. So the
+   message is read to choose one of the fixed phrases below and is never
+   written. The line is exactly: the error's class name (an identifier,
+   else "Error"), the cause's code when it is one (ECONNREFUSED,
+   ERR_INVALID_URL…), the phrase, and the endpoint's ORIGIN: scheme, host
+   and port, never its userinfo, path or query. A variable part that still
+   carries a piece of the key or of the URL's credentials is withheld. */
+var FAILURE = {
+  timeout: 'no answer before our timeout',
+  header: 'invalid header value; check DIVIDENDVPP_API_KEY',
+  credentials: 'the URL carries credentials, which fetch refuses; check DIVIDENDVPP_API_URL',
+  url: 'invalid URL; check DIVIDENDVPP_API_URL',
+  network: 'network or TLS failure',
+  other: 'request failed'
+};
+function failureKind(e, timedOut) {
+  var msg = String((e && e.message) || ''), code = e && e.cause && e.cause.code;
+  if (timedOut) return 'timeout';
+  if (/header/i.test(msg)) return 'header';
+  if (/\bURL\b/.test(msg) && /credential/i.test(msg)) return 'credentials';
+  if (code === 'ERR_INVALID_URL' || (e && e.code === 'ERR_INVALID_URL') || /\bURL\b/.test(msg)) return 'url';
+  if (e && e.cause) return 'network';
+  return 'other';
+}
+/* scheme://host[:port] of the configured endpoint; nothing else of it */
+function originOf(u) {
+  if (typeof URL !== 'function') return '[endpoint]';
+  var x;
+  try { x = new URL(String(u || '').trim()); } catch (err) { return '[unparseable DIVIDENDVPP_API_URL]'; }
+  if (x.protocol !== 'https:' && x.protocol !== 'http:') return '[not an http(s) URL]';
+  return x.protocol + '//' + x.host;
+}
+function decoded(s) { try { return decodeURIComponent(s); } catch (err) { return s; } }
+/* every piece of a secret the configuration holds, as a runtime might print it */
+function secrets() {
+  var out = [], key = String(process.env.DIVIDENDVPP_API_KEY || ''), url = String(process.env.DIVIDENDVPP_API_URL || '');
+  out.push(key, key.trim());
+  key.split(/["'\s\u0000]+/).forEach(function (p) { out.push(p); });
+  if (typeof URL === 'function') {
+    try {
+      var x = new URL(url.trim());
+      out.push(x.username, decoded(x.username), x.password, decoded(x.password), x.search.slice(1));
+      x.searchParams.forEach(function (v) { out.push(v); });
+    } catch (err) { /* an unparseable URL is never printed: its origin is a fixed phrase */ }
   }
-  var cause = e && e.cause ? (e.cause.code || e.cause.message || '') : '';
-  console.error('[vpp-provider] quote failed' + (timedOut ? ' (timed out)' : '') + ':',
-    clean((e && e.name) || 'Error'), clean(e && e.message), clean(cause));
+  return out.filter(function (s) { return s && s.length >= 4; });
+}
+function identifier(v, re) { return typeof v === 'string' && re.test(v) ? v : ''; }
+function logFailure(e, timedOut) {
+  var hidden = secrets();
+  function safe(part, instead) {
+    for (var i = 0; i < hidden.length; i++) if (part.indexOf(hidden[i]) >= 0) return instead;
+    return part;
+  }
+  var name = safe(identifier(e && e.name, /^[A-Za-z][A-Za-z0-9_]{0,39}$/), '') || 'Error';
+  var code = safe(identifier(e && e.cause && e.cause.code, /^[A-Z][A-Z0-9_]{1,63}$/), '');
+  var origin = safe(originOf(process.env.DIVIDENDVPP_API_URL), '[endpoint withheld]');
+  console.error('[vpp-provider] quote failed (' + name + (code ? ', ' + code : '') + '): ' +
+    FAILURE[failureKind(e, timedOut)] + '. Endpoint: ' + origin);
 }
 
 function liveQuote(input, sim) {
