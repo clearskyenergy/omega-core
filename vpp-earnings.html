@@ -1,0 +1,643 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · VPP Earnings Simulator
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  WHAT THIS IS.
+  "What would this site's battery earn in a managed virtual power plant?"
+  The DividendVPP model (Molecule Systems + Lightsmith): bill savings the
+  battery makes on the site's own meter, plus the grid-service programmes
+  open at that ZIP, stacked one per exclusivity group, with the operator's
+  published revenue split. The intake is what such an estimator asks for:
+  a ZIP, the site type, the battery, and whatever load data exists — an 8760
+  interval file, 12–24 months of bills, or nothing (a typical load, labelled).
+
+  WHERE THE LOGIC LIVES.  Not here.  Every figure comes back from
+  POST /api/vpp-estimate (api/_lib/vpp-sim.js behind api/_lib/vpp-provider.js,
+  which will also carry DividendVPP's own quote once their API is connected).
+  This page collects inputs, reads a file as text, posts and draws.
+
+  OPENED FROM ELSEWHERE.  /vpp-earnings.html?zip=&segment=&kw=&kwh=&solar=&name=
+  pre-fills the form, so the editor or a project can hand a site over.
+
+  SAVED DATA.  toolData/{orgId}/tools/vppsim as { v:1, scenarios:[…] } —
+  the inputs and the headline of each run, at most 30, newest first.
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="author" content="ClearSky Energy Solutions LLC">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
+<meta name="robots" content="noindex">
+<title>VPP Earnings Simulator</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-tools.js"></script>
+<style>
+:root{
+  --acc:#2563EB;--acc-ink:#1D4ED8;--acc-tint:#EEF4FF;
+  --bg:#F3F5F8;--surface:#FFFFFF;--panel:#F8FAFC;--line:#E3E8EF;--line-2:#CBD3DE;
+  --ink:#0F172A;--text:#1E293B;--sub:#526071;--muted:#8A95A5;
+  --crit:#B42318;--crit-bg:#FEF3F2;--warn:#B54708;--warn-bg:#FFFAEB;--ok:#067647;--ok-bg:#ECFDF3;
+  --bill:#0E9384;--grid:#2563EB;--off:#CBD3DE;--load:#64748B;--net:#1D4ED8;--solar:#F79009;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--text);font:400 14px/1.5 Inter,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--acc-ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc-ink);outline-offset:2px}
+.hdr{position:sticky;top:0;z-index:40;height:60px;display:flex;align-items:center;gap:12px;padding:0 20px;background:#fff;border-bottom:1px solid var(--line)}
+.hdr-back{color:var(--sub);text-decoration:none;font-weight:600;font-size:13px;padding:8px;border-radius:8px;white-space:nowrap}
+.hdr-back:hover{color:var(--ink);background:var(--panel)}
+.hdr-title{font-weight:700;color:var(--ink);font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:10px;min-width:0}
+.who{font-size:12.5px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.wrap{max-width:1320px;margin:0 auto;padding:20px;display:grid;grid-template-columns:400px 1fr;gap:20px;align-items:start}
+@media (max-width:980px){.wrap{grid-template-columns:1fr;padding:12px}.hdr{padding:0 12px}.who{display:none}}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px}
+.card+.card{margin-top:16px}
+.card h2{margin:0 0 4px;font-size:15px;color:var(--ink)}
+.card h3{margin:0 0 10px;font-size:13px;color:var(--sub);text-transform:uppercase;letter-spacing:.04em}
+.lede{margin:0 0 12px;color:var(--sub);font-size:13px}
+.f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;min-width:0}
+.f label{font-size:12.5px;font-weight:600;color:var(--ink)}
+.f .hint{font-size:12px;color:var(--muted)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+input[type=text],input[type=number],select,textarea{width:100%;min-height:38px;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff}
+textarea{min-height:80px;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+input.bad{border-color:var(--crit);background:var(--crit-bg)}
+.seg{display:flex;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px}
+.seg button{flex:1 1 auto;border:0;background:transparent;padding:6px 10px;border-radius:7px;font-weight:600;font-size:13px;color:var(--sub);min-height:32px}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(15,23,42,.08),0 0 0 1px var(--line)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:9px;border:1px solid transparent;font-weight:600;font-size:14px;white-space:nowrap;text-decoration:none}
+.btn-p{background:var(--acc-ink);color:#fff}
+.btn-p:hover{filter:brightness(1.07)}
+.btn-s{background:#fff;color:var(--ink);border-color:var(--line-2)}
+.btn-s:hover{background:var(--panel)}
+.btn-t{background:transparent;color:var(--acc-ink);min-height:30px;padding:0 6px;border:0;font-size:13px}
+.btn:disabled{opacity:.55;cursor:not-allowed}
+.btn-wide{width:100%}
+details.more{border-top:1px solid var(--line);padding-top:10px;margin-top:4px}
+details.more summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--ink);padding:4px 0}
+table.bills{width:100%;border-collapse:collapse;font-size:12.5px}
+table.bills th{text-align:left;font-weight:600;color:var(--sub);padding:4px 3px}
+table.bills td{padding:2px 3px}
+table.bills input{min-height:32px;padding:4px 6px;font-size:12.5px}
+.bills-wrap{max-height:360px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px}
+.msg{border-radius:9px;padding:10px 12px;font-size:13px;margin-bottom:12px}
+.msg.bad{background:var(--crit-bg);color:var(--crit)}
+.msg.warn{background:var(--warn-bg);color:var(--warn)}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+.empty{padding:48px 24px;text-align:center;color:var(--sub)}
+.empty b{display:block;color:var(--ink);font-size:16px;margin-bottom:6px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+@media (max-width:700px){.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.kpi{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.kpi .k{font-size:12px;color:var(--sub);font-weight:600}
+.kpi .v{font-size:22px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;line-height:1.25;margin-top:2px}
+.kpi .s{font-size:12px;color:var(--muted)}
+.kpi.hl{background:var(--acc-tint);border-color:#C7D7FE}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 0}
+.chip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;border-radius:999px;padding:3px 10px;background:var(--panel);border:1px solid var(--line);color:var(--sub)}
+.chip.high{background:var(--ok-bg);color:var(--ok);border-color:#ABEFC6}
+.chip.medium{background:var(--warn-bg);color:var(--warn);border-color:#FEDF89}
+.chip.low{background:var(--crit-bg);color:var(--crit);border-color:#FECDCA}
+.streams{width:100%;border-collapse:collapse}
+.streams td{padding:9px 6px;border-top:1px solid var(--line);vertical-align:top}
+.streams tr:first-child td{border-top:0}
+.streams .nm{font-weight:600;color:var(--ink)}
+.streams .usd{text-align:right;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap;color:var(--ink)}
+.streams tr.off .nm,.streams tr.off .usd{color:var(--muted);font-weight:500}
+.streams .bar{height:8px;border-radius:4px;background:var(--line);margin-top:6px;overflow:hidden}
+.streams .bar i{display:block;height:100%;border-radius:4px}
+.streams .how{font-size:12px;color:var(--sub);margin-top:4px}
+.streams .ref{font-size:11.5px;color:var(--muted);margin-top:2px}
+.tier{font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:4px;padding:1px 5px;margin-left:6px;vertical-align:1px}
+.tier.computed{background:var(--ok-bg);color:var(--ok)}
+.tier.published{background:var(--acc-tint);color:var(--acc-ink)}
+.tier.planning{background:var(--warn-bg);color:var(--warn)}
+.split{display:flex;height:14px;border-radius:7px;overflow:hidden;margin:8px 0}
+.split i{display:block;height:100%}
+.legend{display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:var(--sub)}
+.legend span:before{content:'';display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px;background:var(--c)}
+ul.miss{margin:0;padding-left:18px;color:var(--sub);font-size:12.5px}
+ul.miss li{margin:3px 0}
+svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
+.charts{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:16px;align-items:start}
+.charts .card{margin-top:0}
+.charts+.card{margin-top:16px}
+@media (max-width:1100px){.charts{grid-template-columns:1fr}}
+.foot{max-width:1320px;margin:0 auto;padding:4px 20px 28px;font-size:12px;color:var(--muted);display:flex;flex-wrap:wrap;gap:6px}
+.saved{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.saved select{flex:1 1 180px;min-width:0}
+.spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <a class="hdr-back" href="/" title="Back to your workspace">&larr; Workspace</a>
+  <span class="hdr-title">VPP Earnings Simulator</span>
+  <div class="hdr-right"><span class="who" id="who"></span></div>
+</header>
+
+<div class="wrap">
+  <section aria-label="Site and data">
+    <div class="card">
+      <h2>The site</h2>
+      <p class="lede">What a managed virtual power plant (the DividendVPP model) could stack here: bill savings plus the grid programmes open at this ZIP.</p>
+      <div class="f"><label for="nm">Scenario name</label><input type="text" id="nm" maxlength="80" placeholder="e.g. Oak Street warehouse"></div>
+      <div class="row">
+        <div class="f"><label for="zip">ZIP code</label><input type="text" id="zip" inputmode="numeric" maxlength="10" placeholder="60601" autocomplete="postal-code"></div>
+        <div class="f"><label for="mkt">Market</label><select id="mkt"><option value="">From the ZIP</option></select></div>
+      </div>
+      <div class="f"><label>Site type</label>
+        <div class="seg" id="seg" role="group" aria-label="Site type">
+          <button type="button" data-seg="residential" aria-pressed="false">Residential</button>
+          <button type="button" data-seg="commercial" aria-pressed="true">Commercial</button>
+          <button type="button" data-seg="industrial" aria-pressed="false">Industrial</button>
+        </div>
+      </div>
+      <div class="row3">
+        <div class="f"><label for="bkw">Battery kW</label><input type="number" id="bkw" min="0" step="any" placeholder="auto"></div>
+        <div class="f"><label for="bkwh">Battery kWh</label><input type="number" id="bkwh" min="0" step="any" placeholder="auto"></div>
+        <div class="f"><label for="pv">Solar kW-dc</label><input type="number" id="pv" min="0" step="any" placeholder="0"></div>
+      </div>
+      <p class="hint" style="margin:-6px 0 0;font-size:12px;color:var(--muted)">Leave the battery blank for a suggested size (13.5 kWh home battery, or a quarter of the site's peak for two hours).</p>
+    </div>
+
+    <div class="card">
+      <h2>Load data</h2>
+      <p class="lede">The better the data, the tighter the answer. An 8760 is best; bills are good; nothing gives a typical site, labelled as such.</p>
+      <div class="seg" id="lmode" role="group" aria-label="Load data" style="margin-bottom:12px">
+        <button type="button" data-mode="profile" aria-pressed="true">None</button>
+        <button type="button" data-mode="bills" aria-pressed="false">Bills (12–24 mo)</button>
+        <button type="button" data-mode="interval" aria-pressed="false">8760 / interval</button>
+      </div>
+      <div id="m-profile">
+        <div class="f"><label for="akwh">Annual kWh (optional)</label><input type="number" id="akwh" min="0" step="any" placeholder="typical for the site type"></div>
+      </div>
+      <div id="m-bills" hidden>
+        <div class="bills-wrap"><table class="bills"><thead><tr><th>Month</th><th>kWh</th><th>Peak kW</th><th>$</th><th></th></tr></thead><tbody id="bills"></tbody></table></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px">
+          <button type="button" class="btn btn-t" data-act="add-bill">+ Month</button>
+          <button type="button" class="btn btn-t" data-act="fill-12">Last 12 months</button>
+          <button type="button" class="btn btn-t" data-act="fill-24">Last 24 months</button>
+        </div>
+        <details class="more"><summary>Paste from a spreadsheet</summary>
+          <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0">Rows of <i>month, kWh, peak kW, $</i> (month as 2025-07). Tabs or commas.</p>
+          <textarea id="paste" placeholder="2025-07	41200	180	6230"></textarea>
+          <button type="button" class="btn btn-s" data-act="paste" style="margin-top:6px">Use these rows</button>
+        </details>
+      </div>
+      <div id="m-interval" hidden>
+        <div class="f"><label for="file">Interval file (CSV)</label><input type="file" id="file" accept=".csv,.txt,text/csv,text/plain">
+          <span class="hint">One year: 8,760 hourly or 35,040 fifteen-minute readings. The last number on each row is read as the load.</span></div>
+        <div class="f"><label for="iunit">Readings are</label><select id="iunit"><option value="kw">kW (demand)</option><option value="kwh">kWh per interval</option></select></div>
+        <div id="fileinfo" class="hint" style="font-size:12px;color:var(--sub)"></div>
+      </div>
+      <details class="more"><summary>Tariff (optional)</summary>
+        <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0 8px">Without it a regional planning rate is used — calibrated to the bills' dollars when they carry any.</p>
+        <div class="row">
+          <div class="f"><label for="ron">On-peak $/kWh</label><input type="number" id="ron" min="0" step="any"></div>
+          <div class="f"><label for="roff">Off-peak $/kWh</label><input type="number" id="roff" min="0" step="any"></div>
+        </div>
+        <div class="row3">
+          <div class="f"><label for="rdem">Demand $/kW-mo</label><input type="number" id="rdem" min="0" step="any"></div>
+          <div class="f"><label for="rps">Peak starts</label><input type="number" id="rps" min="0" max="23" step="1" placeholder="hour"></div>
+          <div class="f"><label for="rpe">Peak ends</label><input type="number" id="rpe" min="1" max="24" step="1" placeholder="hour"></div>
+        </div>
+        <div class="f"><label for="urdb">…or an OpenEI URDB tariff (JSON)</label><textarea id="urdb" placeholder='{"name":"…","energyratestructure":[…]}'></textarea></div>
+      </details>
+      <details class="more"><summary>Revenue split</summary>
+        <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0 8px">Applies to grid-programme earnings; bill savings stay with the customer. Default: DividendVPP's published 70 / 20 / 10.</p>
+        <div class="row3">
+          <div class="f"><label for="sown">Owner %</label><input type="number" id="sown" min="0" max="100" step="any" value="70"></div>
+          <div class="f"><label for="splat">Platform %</label><input type="number" id="splat" min="0" max="100" step="any" value="20"></div>
+          <div class="f"><label for="sins">Installer %</label><input type="number" id="sins" min="0" max="100" step="any" value="10"></div>
+        </div>
+      </details>
+    </div>
+
+    <div class="card">
+      <div id="formmsg" hidden></div>
+      <button type="button" class="btn btn-p btn-wide" id="run" data-act="run">Simulate earnings</button>
+      <div class="saved" style="margin-top:12px">
+        <select id="scen" aria-label="Saved scenarios"><option value="">Saved scenarios…</option></select>
+        <button type="button" class="btn btn-s" data-act="save" id="save" disabled>Save</button>
+      </div>
+      <div id="savemsg" class="hint" style="font-size:12px;color:var(--muted);margin-top:6px"></div>
+    </div>
+  </section>
+
+  <section aria-label="Results" aria-live="polite">
+    <div id="out"><div class="card empty"><b>Enter a ZIP and simulate.</b>The value stack appears here: bill savings, the grid programmes open at that ZIP, what each pays and why, and the split.</div></div>
+  </section>
+</div>
+
+<footer class="foot">
+  <span>VPP Earnings Simulator</span><span aria-hidden="true">·</span><span data-omega-platform>ClearSky-OMEGA</span>
+  <span data-omega-attribution style="display:none"></span>
+  <span aria-hidden="true">·</span><span>A simulation, not an operator's quote or a guarantee of earnings. Planning figures are marked.</span>
+</footer>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · VPP Earnings Simulator — page script
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   ES5 only. Every money figure on this page came back from /api/vpp-estimate.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function (root) {
+'use strict';
+var ENDPOINT = '/api/vpp-estimate';
+var TOOL_KEY = 'vppsim';
+var MAX_SAVED = 30;
+var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] };
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function money(n) { var v = Math.round(Number(n) || 0); return (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US'); }
+function numOrNull(id) { var v = $(id).value; if (v === '' || v == null) return null; var n = Number(v); return isFinite(n) ? n : null; }
+function closest(el, sel) { while (el && el.nodeType === 1) { if (el.matches ? el.matches(sel) : el.msMatchesSelector(sel)) return el; el = el.parentNode; } return null; }
+
+/* ── the form ─────────────────────────────────────────────────────────── */
+function setSeg(v) {
+  SEG = v;
+  var b = $('seg').querySelectorAll('button');
+  for (var i = 0; i < b.length; i++) b[i].setAttribute('aria-pressed', b[i].getAttribute('data-seg') === v ? 'true' : 'false');
+}
+function setMode(v) {
+  MODE = v;
+  var b = $('lmode').querySelectorAll('button');
+  for (var i = 0; i < b.length; i++) b[i].setAttribute('aria-pressed', b[i].getAttribute('data-mode') === v ? 'true' : 'false');
+  $('m-profile').hidden = v !== 'profile'; $('m-bills').hidden = v !== 'bills'; $('m-interval').hidden = v !== 'interval';
+  if (v === 'bills' && !$('bills').children.length) fillMonths(12);
+}
+function ym(d) { var m = d.getMonth() + 1; return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m; }
+function billRow(b) {
+  b = b || {};
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><input type="text" data-k="month" maxlength="7" value="' + esc(b.month || '') + '" placeholder="2025-07" aria-label="Month"></td>' +
+    '<td><input type="number" data-k="kwh" min="0" step="any" value="' + esc(b.kwh == null ? '' : b.kwh) + '" aria-label="kWh"></td>' +
+    '<td><input type="number" data-k="peakKw" min="0" step="any" value="' + esc(b.peakKw == null ? '' : b.peakKw) + '" aria-label="Peak kW"></td>' +
+    '<td><input type="number" data-k="cost" min="0" step="any" value="' + esc(b.cost == null ? '' : b.cost) + '" aria-label="Dollars"></td>' +
+    '<td><button type="button" class="btn btn-t" data-act="del-bill" aria-label="Remove month">×</button></td>';
+  $('bills').appendChild(tr);
+}
+function fillMonths(n) {
+  var keep = readBills(), have = {}, i;
+  for (i = 0; i < keep.length; i++) have[keep[i].month] = keep[i];
+  $('bills').innerHTML = '';
+  var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n);
+  for (i = 0; i < n; i++) { var k = ym(d); billRow(have[k] || { month: k }); d.setMonth(d.getMonth() + 1); }
+}
+function readBills() {
+  var rows = $('bills').querySelectorAll('tr'), out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var b = {}, inp = rows[i].querySelectorAll('input'), any = false;
+    for (var j = 0; j < inp.length; j++) {
+      var k = inp[j].getAttribute('data-k'), v = inp[j].value.trim();
+      if (k === 'month') b.month = v;
+      else if (v !== '') { b[k] = Number(v); any = true; }
+    }
+    if (b.month && any) out.push(b);
+  }
+  return out;
+}
+function cellNum(x) { var v = String(x == null ? '' : x).replace(/[$,\s]/g, ''); return v === '' || !isFinite(Number(v)) ? null : Number(v); }
+function pasteBills() {
+  var lines = $('paste').value.split(/\r?\n/), rows = [];
+  for (var i = 0; i < lines.length; i++) {
+    var c = lines[i].split(/[\t,;]/);
+    if (c.length < 2) continue;
+    var m = /(\d{4})[-\/](\d{1,2})/.exec(c[0]) || /(\d{1,2})[-\/](\d{4})/.exec(c[0]);
+    if (!m) continue;
+    var yr = m[1].length === 4 ? m[1] : m[2], mo = m[1].length === 4 ? m[2] : m[1];
+    rows.push({ month: yr + '-' + (mo.length < 2 ? '0' : '') + mo, kwh: cellNum(c[1]), peakKw: cellNum(c[2]), cost: cellNum(c[3]) });
+  }
+  if (!rows.length) { formMsg('No rows with a month were found in the pasted text.', 'warn'); return; }
+  if (rows.length > 24) rows = rows.slice(rows.length - 24);
+  $('bills').innerHTML = '';
+  for (var r = 0; r < rows.length; r++) billRow(rows[r]);
+  formMsg(rows.length + ' month(s) read from the paste.', 'ok');
+}
+function readFile(f) {
+  INTERVAL = null; $('fileinfo').textContent = '';
+  if (!f) return;
+  if (f.size > 4000000) { $('fileinfo').textContent = 'That file is larger than one year of readings (4 MB).'; return; }
+  var r = new FileReader();
+  r.onload = function () {
+    INTERVAL = String(r.result || '');
+    var n = INTERVAL.split(/\r?\n/).filter(function (l) { return /\d/.test(l); }).length;
+    $('fileinfo').textContent = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
+  };
+  r.onerror = function () { $('fileinfo').textContent = 'The file could not be read.'; };
+  r.readAsText(f);
+}
+
+function collect() {
+  var site = { zip: $('zip').value.trim(), segment: SEG };
+  if ($('mkt').value) site.market = $('mkt').value;
+  var kw = numOrNull('bkw'), kwh = numOrNull('bkwh'), pv = numOrNull('pv');
+  if (kw != null || kwh != null) { site.battery = {}; if (kw != null) site.battery.kw = kw; if (kwh != null) site.battery.kwh = kwh; }
+  if (pv != null) site.solarKw = pv;
+  if (MODE === 'bills') site.load = { type: 'bills', bills: readBills() };
+  else if (MODE === 'interval') site.load = { type: 'interval', text: INTERVAL, unit: $('iunit').value };
+  else site.load = { type: 'profile', annualKwh: numOrNull('akwh') };
+  var t = {}, any = false;
+  ['ron:onPeakRate', 'roff:offPeakRate', 'rdem:demandCharge', 'rps:peakStart', 'rpe:peakEnd'].forEach(function (p) {
+    var a = p.split(':'), v = numOrNull(a[0]); if (v != null) { t[a[1]] = v; any = true; }
+  });
+  var u = $('urdb').value.trim();
+  if (u) { try { t.urdb = JSON.parse(u); any = true; if (t.urdb && t.urdb.items && t.urdb.items[0]) t.urdb = t.urdb.items[0]; } catch (e) { return { error: 'The URDB tariff is not valid JSON.' }; } }
+  if (any) site.tariff = t;
+  var so = numOrNull('sown'), sp = numOrNull('splat'), si = numOrNull('sins');
+  if (so != null && sp != null && si != null && !(so === 70 && sp === 20 && si === 10)) site.split = { owner: so / 100, platform: sp / 100, installer: si / 100 };
+  return { site: site };
+}
+
+function formMsg(text, kind) {
+  var el = $('formmsg');
+  if (!text) { el.hidden = true; return; }
+  el.className = 'msg ' + (kind || 'bad'); el.textContent = text; el.hidden = false;
+}
+
+/* ── the one place that talks to /api/vpp-estimate ────────────────────── */
+function idToken() {
+  var u = ME;
+  try { u = u || (root.firebase && firebase.auth && firebase.auth().currentUser); } catch (e) {}
+  if (!u || typeof u.getIdToken !== 'function') return Promise.resolve(null);
+  return u.getIdToken().then(null, function () { return null; });
+}
+function readable(status, j) {
+  var said = j && typeof j.error === 'string' ? j.error : '';
+  if (status === 401) return 'Your sign-in has expired. Reload the page to sign in again.';
+  if (status === 403) return said || 'Your plan does not include the VPP Earnings Simulator.';
+  if (status === 404) return 'The simulator service is not available at this address yet.';
+  if (status === 413) return 'That is more data than the server accepts in one request.';
+  if (status === 400 && j && j.errors && j.errors.length) return j.errors.map(function (e) { return e.message; }).join(' ');
+  if (status === 503) return said || 'Could not check your access right now. Try again in a minute.';
+  return said || ('The server answered ' + status + '.');
+}
+function api(body) {
+  return idToken().then(function (tok) {
+    if (!tok) { var e0 = new Error('Sign in to run the simulator — it runs on the server, behind your account.'); e0.status = 401; throw e0; }
+    return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify(body) })
+      .then(null, function () { throw new Error('Could not reach the simulator. Check your connection and try again.'); });
+  }).then(function (r) {
+    return r.text().then(function (t) {
+      var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) {}
+      if (r.ok && j && j.ok !== false) return j;
+      var err = new Error(readable(r.status, j)); err.status = r.status; err.errors = j && j.errors; throw err;
+    });
+  });
+}
+
+function run() {
+  var c = collect();
+  if (c.error) { formMsg(c.error); return; }
+  if (!/^\d{5}(-\d{4})?$/.test(c.site.zip)) { $('zip').className = 'bad'; formMsg('A five-digit US ZIP code is needed.'); $('zip').focus(); return; }
+  $('zip').className = '';
+  if (MODE === 'interval' && !INTERVAL) { formMsg('Attach the interval file, or pick another load option.'); return; }
+  if (MODE === 'bills' && !c.site.load.bills.length) { formMsg('Enter at least one month of bills (kWh or $).'); return; }
+  formMsg('');
+  var btn = $('run'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Simulating 8,760 hours…';
+  api({ action: 'estimate', site: c.site }).then(function (j) {
+    LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
+    render(j.result);
+    $('save').disabled = !(DB && ORG);
+  }, function (e) {
+    formMsg(e.message);
+  }).then(function () { btn.disabled = false; btn.textContent = 'Simulate earnings'; });
+}
+
+/* ── drawing ─────────────────────────────────────────────────────────── */
+function kpi(k, v, s, hl) { return '<div class="kpi' + (hl ? ' hl' : '') + '"><div class="k">' + esc(k) + '</div><div class="v">' + v + '</div>' + (s ? '<div class="s">' + s + '</div>' : '') + '</div>'; }
+
+function render(R) {
+  var T = R.totals, h = '';
+  h += '<div class="card"><h2>' + esc(LAST && LAST.name ? LAST.name : ('ZIP ' + R.site.zip)) + '</h2>';
+  h += '<p class="lede">' + esc(R.site.marketName) + (R.site.area ? ' · ' + esc(R.site.area) : '') + ' · ' + esc(R.site.state) + ' · ' + esc(R.site.segment) +
+       ' · ' + R.battery.kw.toLocaleString('en-US') + ' kW / ' + R.battery.kwh.toLocaleString('en-US') + ' kWh' + (R.battery.assumed ? ' (suggested)' : '') +
+       (R.solar ? ' · ' + R.solar.kwdc.toLocaleString('en-US') + ' kW-dc solar' : '') + '</p>';
+  h += '<div class="kpis">' +
+    kpi('Stacked earnings / yr', money(T.gross), money(T.perKw) + ' per kW', true) +
+    kpi('Owner keeps / yr', money(T.owner), 'bill savings + ' + Math.round(R.split.owner * 100) + '% of programmes') +
+    kpi('Bill savings / yr', money(T.billSavings), money(R.bill.before) + ' → ' + money(R.bill.after)) +
+    kpi('Grid programmes / yr', money(T.gridEarnings), T.stackUplift ? T.stackUplift + '× the best single stream' : '') + '</div>';
+  h += '<div class="chips"><span class="chip ' + esc(R.confidence) + '">Confidence: ' + esc(R.confidence) + '</span>' +
+       '<span class="chip">Load: ' + esc(R.load.label) + '</span>' +
+       '<span class="chip">' + R.battery.cyclesPerYear + ' cycles / yr</span>' +
+       (R.site.marketInferred ? '<span class="chip">Market from ZIP</span>' : '') + '</div></div>';
+
+  /* the stack */
+  var max = 1, i, s;
+  for (i = 0; i < R.streams.length; i++) max = Math.max(max, Math.abs(R.streams[i].usd || 0));
+  h += '<div class="card"><h3>The value stack</h3><table class="streams">';
+  for (i = 0; i < R.streams.length; i++) {
+    s = R.streams[i];
+    var col = s.category === 'bill' ? 'var(--bill)' : 'var(--grid)';
+    var w = Math.max(0, Math.round(Math.abs(s.usd || 0) / max * 100));
+    h += '<tr class="' + (s.counted ? '' : 'off') + '"><td><div class="nm">' + esc(s.name) + '<span class="tier ' + esc(s.tier) + '">' + esc(s.tier) + '</span></div>' +
+      '<div class="bar"><i style="width:' + w + '%;background:' + (s.counted ? col : 'var(--off)') + '"></i></div>' +
+      '<div class="how">' + esc(s.how) + (s.counted ? '' : ' <b>Not counted:</b> ' + esc(s.why || '')) + '</div>' +
+      (s.ref ? '<div class="ref">' + esc(s.ref) + (s.url ? ' <a href="' + esc(s.url) + '" target="_blank" rel="noopener">Source</a>' : '') + '</div>' : '') +
+      '</td><td class="usd">' + money(s.usd) + '</td></tr>';
+  }
+  h += '</table><div class="legend" style="margin-top:10px"><span style="--c:var(--bill)">Bill savings (customer\'s meter)</span><span style="--c:var(--grid)">Grid programme</span><span style="--c:var(--off)">Not counted</span></div></div>';
+
+  /* split */
+  var sp = R.split;
+  h += '<div class="card"><h3>Who earns what</h3>' +
+    '<div class="split"><i style="width:' + pct(T.billSavings, T.gross) + '%;background:var(--bill)"></i><i style="width:' + pct(T.gridEarnings * sp.owner, T.gross) + '%;background:#6172F3"></i>' +
+    '<i style="width:' + pct(T.platform, T.gross) + '%;background:#9E77ED"></i><i style="width:' + pct(T.installer, T.gross) + '%;background:#F79009"></i></div>' +
+    '<div class="legend"><span style="--c:var(--bill)">Customer bill savings ' + money(T.billSavings) + '</span><span style="--c:#6172F3">Owner ' + Math.round(sp.owner * 100) + '% ' + money(T.gridEarnings * sp.owner) + '</span>' +
+    '<span style="--c:#9E77ED">Platform ' + Math.round(sp.platform * 100) + '% ' + money(T.platform) + '</span><span style="--c:#F79009">Installer ' + Math.round(sp.installer * 100) + '% ' + money(T.installer) + '</span></div>' +
+    '<p class="lede" style="margin:8px 0 0">' + esc(sp.ref) + ' The split ' + esc(sp.appliesTo) + '.</p></div>';
+
+  h += '<div class="charts"><div class="card"><h3>Peak summer day</h3>' + dayChart(R.sampleDay.hours) + '</div>' +
+       '<div class="card"><h3>Monthly bill, before and after</h3>' + monthChart(R.monthly) + '</div></div>';
+
+  if (R.providerQuote) {
+    var q = R.providerQuote;
+    h += '<div class="card"><h3>DividendVPP quote</h3>' + (q.ok
+      ? '<p class="lede">DividendVPP estimates <b>' + money(q.quote.annualUsd) + ' / yr</b> for this site' + (q.quote.id ? ' (ref ' + esc(q.quote.id) + ')' : '') + ', beside this simulation\'s ' + money(T.gross) + '.</p>'
+      : '<p class="lede">' + esc(q.error) + ' The simulation above still stands.</p>') + '</div>';
+  }
+
+  h += '<div class="card"><h3>Assumptions and what is not counted</h3>' +
+    '<p class="lede" style="margin-bottom:6px"><b>Tariff:</b> ' + esc(R.tariff.label) + (R.tariff.calibration ? ' ' + esc(R.tariff.calibration.note) : '') + '</p>' +
+    (R.load.notes.length ? '<p class="lede" style="margin-bottom:6px"><b>Load:</b> ' + esc(R.load.notes.join(' ')) + '</p>' : '') +
+    '<ul class="miss">' + R.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>' +
+    '<p class="lede" style="margin:10px 0 0">' + esc(R.disclaimer) + '</p></div>';
+  $('out').innerHTML = h;
+}
+function pct(a, b) { return b > 0 ? Math.max(0, Math.min(100, a / b * 100)).toFixed(2) : 0; }
+
+function dayChart(hours) {
+  var W = 520, H = 220, L = 40, B = 24, top = 10, max = 0, i;
+  for (i = 0; i < hours.length; i++) max = Math.max(max, hours[i].load, hours[i].net, hours[i].solar);
+  max = max || 1;
+  function x(i) { return L + (W - L - 8) * i / 23; }
+  function y(v) { return top + (H - top - B) * (1 - Math.max(0, v) / max); }
+  function path(k) { var p = ''; for (var j = 0; j < hours.length; j++) p += (j ? 'L' : 'M') + x(j).toFixed(1) + ' ' + y(hours[j][k]).toFixed(1); return p; }
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Load and battery on the peak summer day">';
+  for (i = 0; i <= 4; i++) { var gy = top + (H - top - B) * i / 4; s += '<line x1="' + L + '" x2="' + (W - 8) + '" y1="' + gy + '" y2="' + gy + '" stroke="#E3E8EF"/><text x="' + (L - 6) + '" y="' + (gy + 4) + '" text-anchor="end">' + Math.round(max * (1 - i / 4)) + '</text>'; }
+  for (i = 0; i < hours.length; i++) {
+    if (hours[i].event) s += '<rect x="' + (x(i) - 8) + '" y="' + top + '" width="16" height="' + (H - top - B) + '" fill="#EEF4FF"/>';
+    if (i % 3 === 0) s += '<text x="' + x(i) + '" y="' + (H - 6) + '" text-anchor="middle">' + hours[i].hour + ':00</text>';
+  }
+  if (hours.some(function (hh) { return hh.solar > 0; })) s += '<path d="' + path('solar') + '" fill="none" stroke="var(--solar)" stroke-width="2" stroke-dasharray="4 3"/>';
+  s += '<path d="' + path('load') + '" fill="none" stroke="var(--load)" stroke-width="2"/>';
+  s += '<path d="' + path('net') + '" fill="none" stroke="var(--net)" stroke-width="2.5"/>';
+  s += '</svg><div class="legend"><span style="--c:var(--load)">Site load kW</span><span style="--c:var(--net)">Grid draw with battery</span><span style="--c:var(--solar)">Solar</span><span style="--c:#EEF4FF">Programme event</span></div>';
+  return s;
+}
+function monthChart(months) {
+  var W = 520, H = 220, L = 50, B = 24, top = 10, max = 1, i;
+  for (i = 0; i < months.length; i++) max = Math.max(max, months[i].billBefore, months[i].billAfter);
+  var bw = (W - L - 8) / 12;
+  var s = '<svg viewBox="0 0 ' + W + ' ' + H + '" width="100%" role="img" aria-label="Monthly bill before and after the battery">';
+  for (i = 0; i <= 4; i++) { var gy = top + (H - top - B) * i / 4; s += '<line x1="' + L + '" x2="' + (W - 8) + '" y1="' + gy + '" y2="' + gy + '" stroke="#E3E8EF"/><text x="' + (L - 6) + '" y="' + (gy + 4) + '" text-anchor="end">' + money(max * (1 - i / 4)) + '</text>'; }
+  for (i = 0; i < months.length; i++) {
+    var m = months[i], x0 = L + bw * i + 3, hb = (H - top - B) * m.billBefore / max, ha = (H - top - B) * m.billAfter / max;
+    s += '<rect x="' + x0 + '" y="' + (H - B - hb) + '" width="' + (bw / 2 - 3) + '" height="' + hb + '" fill="#CBD3DE"><title>' + MONTHS[m.month] + ' before ' + money(m.billBefore) + '</title></rect>';
+    s += '<rect x="' + (x0 + bw / 2 - 3) + '" y="' + (H - B - ha) + '" width="' + (bw / 2 - 3) + '" height="' + ha + '" fill="var(--bill)"><title>' + MONTHS[m.month] + ' after ' + money(m.billAfter) + '</title></rect>';
+    s += '<text x="' + (x0 + bw / 2 - 3) + '" y="' + (H - 6) + '" text-anchor="middle">' + MONTHS[m.month] + '</text>';
+  }
+  return s + '</svg><div class="legend"><span style="--c:#CBD3DE">Before</span><span style="--c:var(--bill)">With battery</span></div>';
+}
+
+/* ── saved scenarios: toolData/{org}/tools/vppsim ─────────────────────── */
+function paintSaved() {
+  var sel = $('scen'), h = '<option value="">Saved scenarios…</option>';
+  for (var i = 0; i < STORE.scenarios.length; i++) {
+    var s = STORE.scenarios[i];
+    h += '<option value="' + i + '">' + esc(s.name || ('ZIP ' + s.site.zip)) + ' · ' + money(s.gross) + '/yr</option>';
+  }
+  sel.innerHTML = h;
+}
+function save() {
+  if (!LAST || !DB || !ORG) return;
+  var site = JSON.parse(JSON.stringify(LAST.site));
+  if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit }; }
+  var rec = { name: LAST.name || ('ZIP ' + site.zip), site: site, gross: LAST.result.totals.gross, owner: LAST.result.totals.owner,
+              market: LAST.result.site.market, at: new Date().toISOString() };
+  STORE.scenarios = [rec].concat(STORE.scenarios.filter(function (s) { return s.name !== rec.name; })).slice(0, MAX_SAVED);
+  $('savemsg').textContent = 'Saving…';
+  OMEGATools.saveToolData(DB, firebase, ORG, TOOL_KEY, STORE).then(function () {
+    paintSaved(); $('savemsg').textContent = 'Saved to your workspace' + (rec.site.load.type === 'interval' ? ' (the interval file is not stored; attach it again to re-run).' : '.');
+  }, function () { $('savemsg').textContent = 'Could not save right now.'; });
+}
+function loadScenario(i) {
+  var s = STORE.scenarios[i]; if (!s) return;
+  var site = s.site || {};
+  $('nm').value = s.name || ''; $('zip').value = site.zip || ''; $('mkt').value = site.market || '';
+  setSeg(site.segment || 'commercial');
+  $('bkw').value = site.battery && site.battery.kw != null ? site.battery.kw : '';
+  $('bkwh').value = site.battery && site.battery.kwh != null ? site.battery.kwh : '';
+  $('pv').value = site.solarKw != null ? site.solarKw : '';
+  var L = site.load || { type: 'profile' };
+  setMode(L.type);
+  if (L.type === 'bills') { $('bills').innerHTML = ''; (L.bills || []).forEach(billRow); }
+  if (L.type === 'profile') $('akwh').value = L.annualKwh != null ? L.annualKwh : '';
+  if (L.type === 'interval') { INTERVAL = null; $('fileinfo').textContent = 'Attach the interval file again to re-run this scenario.'; }
+  var t = site.tariff || {};
+  $('ron').value = t.onPeakRate != null ? t.onPeakRate : ''; $('roff').value = t.offPeakRate != null ? t.offPeakRate : '';
+  $('rdem').value = t.demandCharge != null ? t.demandCharge : ''; $('rps').value = t.peakStart != null ? t.peakStart : '';
+  $('rpe').value = t.peakEnd != null ? t.peakEnd : ''; $('urdb').value = t.urdb ? JSON.stringify(t.urdb) : '';
+}
+
+/* ── URL hand-off: ?zip=&segment=&kw=&kwh=&solar=&name= ─────────────── */
+function prefill() {
+  var q = {}; (location.search || '').replace(/^\?/, '').split('&').forEach(function (p) {
+    if (!p) return; var a = p.split('='); q[decodeURIComponent(a[0])] = decodeURIComponent((a[1] || '').replace(/\+/g, ' '));
+  });
+  if (q.zip) $('zip').value = q.zip.slice(0, 10);
+  if (q.segment && /^(residential|commercial|industrial)$/.test(q.segment)) setSeg(q.segment);
+  if (q.kw && isFinite(+q.kw)) $('bkw').value = +q.kw;
+  if (q.kwh && isFinite(+q.kwh)) $('bkwh').value = +q.kwh;
+  if (q.solar && isFinite(+q.solar)) $('pv').value = +q.solar;
+  if (q.name) $('nm').value = q.name.slice(0, 80);
+  return !!q.zip;
+}
+
+/* ── wiring ──────────────────────────────────────────────────────────── */
+document.addEventListener('click', function (e) {
+  var sb = closest(e.target, '[data-seg]'); if (sb) { setSeg(sb.getAttribute('data-seg')); return; }
+  var mb = closest(e.target, '[data-mode]'); if (mb) { setMode(mb.getAttribute('data-mode')); return; }
+  var b = closest(e.target, '[data-act]'); if (!b) return;
+  var act = b.getAttribute('data-act');
+  if (act === 'run') run();
+  else if (act === 'save') save();
+  else if (act === 'add-bill') { if ($('bills').children.length < 24) billRow({}); }
+  else if (act === 'del-bill') { var tr = closest(b, 'tr'); if (tr) tr.parentNode.removeChild(tr); }
+  else if (act === 'fill-12') fillMonths(12);
+  else if (act === 'fill-24') fillMonths(24);
+  else if (act === 'paste') pasteBills();
+});
+$('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
+$('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });
+$('zip').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
+
+function onSignedIn(u) {
+  $('who').textContent = u.email || '';
+  ORG = (root.OMEGATools && OMEGATools.orgFromUrl) ? OMEGATools.orgFromUrl(u.email) : String(u.email || '').toLowerCase().split('@')[1];
+  api({ action: 'options' }).then(function (j) {
+    var sel = $('mkt'), ms = (j.options && j.options.markets) || [];
+    for (var i = 0; i < ms.length; i++) { var o = document.createElement('option'); o.value = ms[i].key; o.textContent = ms[i].name; sel.appendChild(o); }
+  }, function (e) { formMsg(e.message, e.status === 403 ? 'bad' : 'warn'); });
+  if (DB && ORG && root.OMEGATools && OMEGATools.loadToolData) {
+    OMEGATools.loadToolData(DB, ORG, TOOL_KEY).then(function (doc) {
+      var d = doc && doc.data;
+      if (d && d.v === 1 && Array.isArray(d.scenarios)) { STORE = { v: 1, scenarios: d.scenarios.slice(0, MAX_SAVED) }; paintSaved(); }
+    }, function () {});
+  }
+  if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
+  if (prefill()) run();
+}
+function startAuth() {
+  var cfg = root.CLEARSKY_CONFIG || {};
+  if (!root.firebase || !firebase.initializeApp) { formMsg('The sign-in service did not load. Check your connection and reload the page.'); return; }
+  try { if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg); } catch (e) {}
+  var AUTH;
+  try { AUTH = firebase.auth(); } catch (e) { formMsg('The sign-in service did not start. Reload the page.'); return; }
+  try { DB = firebase.firestore(); } catch (e) { DB = null; }
+  var wait = null;
+  AUTH.onAuthStateChanged(function (u) {
+    if (u) {
+      if (wait) { clearInterval(wait); wait = null; }
+      if (ME && ME.uid === u.uid) return;
+      ME = u; onSignedIn(u); return;
+    }
+    if (ME || wait) return;
+    var tries = (root.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession()) ? 20 : 4;
+    wait = setInterval(function () {
+      if (AUTH.currentUser) { clearInterval(wait); wait = null; return; }
+      if (--tries <= 0) {
+        clearInterval(wait); wait = null;
+        if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
+        $('out').innerHTML = '<div class="card empty"><b>You are signed out.</b>The simulator runs behind your account. <a class="btn btn-p" href="/" style="margin-left:8px">Sign in</a></div>';
+      }
+    }, 400);
+  });
+}
+startAuth();
+})(window);
+</script>
+</body>
+</html>
