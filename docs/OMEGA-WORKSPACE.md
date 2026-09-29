@@ -40,9 +40,14 @@ decided 2026-09-26.
   a request nobody answered in five days. Six rows, highest first. The four
   numbers are projects in flight (the board's own set, every project not yet
   online; new this week, else how many are past candidate), awaiting your
-  review, pipeline capex (the capex people entered, online sites apart; a
-  project nobody priced is counted as "not priced yet", never as $0, and a
-  pipeline with nothing priced reads "—"), and a fourth that fits the workspace:
+  review, pipeline capex (what Site Map's Run costed: the editor's
+  `omegaRunRollup` writes the run's Total install, incentives, year-one
+  revenue and placed battery onto the record as `capex`, `incentive`,
+  `annualRevenue`, `bessKwh`/`bessKw` with `capexAt`/`capexSource`, saved
+  at once; a figure entered by hand or backfilled stands until a run prices
+  the site; online sites apart; a project nobody priced is counted as "not
+  priced yet", never as $0, and a pipeline with nothing priced reads "—";
+  `scripts/tests/tcostrollup.js` holds both ends), and a fourth that fits the workspace:
   quotes back of sent, requests to price, new quote requests, or sites
   online. The referral inbox itself stays on the classic dashboard;
   `?stay=classic` visits it once without changing the browser's home.

@@ -2598,3 +2598,45 @@ right side" (Thomas, 2026-09-28).
   under a run that kept the bend. `tundoleg.js` still passes.
 - The Level 2 guide (`scripts/guides/site-map-level-2.js`) gains step 7,
   *Move a trench after it is drawn*, with two screenshots; Jarvis knows.
+
+## Project capex is what Site Map's Run costed — September 29, 2026
+
+The workspace home read "Pipeline capex —, 63 projects not priced yet"
+over sixty-three sites whose cost sheets had priced every one (Tommy,
+2026-09-28: "project capex should reflect the costs that are calculated
+by the run function in the project site map editor"). The workspace
+(`omega-workspace-today.js`), the dashboard rollup (`index.html`) and the
+asset book (`omega-assets.js`) read `capex`, `incentive`, `annualRevenue`
+and `bessKwh` straight off `projects/{id}`, and nothing the editor did
+wrote them: `saveProject()`'s payload is an allowlist, and the only
+writers of those fields were the demo seeds and NextNRG's backfill.
+
+- `omegaRunRollup()` (beside `omegaRunDesign` in `editor.html`) captures
+  the run's OWN totals once the engines have recomputed: Total install
+  (`window._COST_TOTAL`, the contracted number when one is entered), the
+  incentives netted (`_INC_TOTAL`), the net figure, year-one revenue
+  (`_YR1_REV`) and the fleet `omegaBessFleet()` reads (placed, else the
+  Config dialog's, as the cost sheet falls back). Kept on `S.costRollup`;
+  a run that priced nothing (`_COST_TOTAL` 0: nothing placed, or out of
+  scope) clears it and records nothing.
+- `omegaRollupFields()` is what the record gets: `capex`, `incentive`,
+  `capexAt`, `capexSource: 'site-map'`, plus `annualRevenue` only when the
+  streams gave one and `bessKwh`/`bessKw` only when a battery is there.
+  `saveProject()` names each field in its payload literal from that
+  object, so undefined is stripped and an unpriced save never blanks a
+  figure someone entered or backfilled. `_loadProject` resets the capture,
+  as it does `vendorOverride`, so a figure never leaks between projects.
+- `omegaRunSave()`: a priced run marks the record unsaved and saves at
+  once (signed in, a project open, the load finished — the plot commit's
+  condition), so the workspace shows it without waiting for the autosave;
+  a read-only or unchecked plan (`OmegaCaps.packageAccess()`) waits, and
+  the totals ride the next allowed save. `saveProject()` stays the one
+  writer of the record.
+- Not built: the Battery Sizer's `bessSizing` record still does not feed
+  the flat fields, so a site sized there but never run in Site Map still
+  reads "No battery size yet" on the home; a rail row naming the figure
+  on the record.
+- Tests: `scripts/tests/tcostrollup.js` (npm test) runs the three
+  functions out of the editor against the sheet's totals, pins the payload
+  literal and the load-side reset, and hands the fields to the real
+  workspace rule: `$1.2M`, the site nobody ran the one "not priced yet".

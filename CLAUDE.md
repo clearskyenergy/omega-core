@@ -1000,7 +1000,20 @@ and the editor strip's Try again), and the gate honours a legacy
 `billing.toolAccess` without `editor`. In flight is
 `OmegaWorkspaceToday.board` (what needs something, then what was touched
 last, never online, a finance-marketplace deal riding on its project) and
-Assign merges only the owner fields onto `projects/{id}`. Plan & billing is
+Assign merges only the owner fields onto `projects/{id}`. **Pipeline capex
+is what Site Map's Run costed** (2026-09-29, Tommy: "project capex should
+reflect the costs that are calculated by the run function in the project
+site map editor"): `omegaRunRollup()` in `editor.html` captures the run's
+own totals (Total install `_COST_TOTAL`, `_INC_TOTAL`, `_YR1_REV`, the
+placed fleet) and `saveProject()` carries them through its allowlist as the
+record's `capex`, `incentive`, `annualRevenue`, `bessKwh`, `bessKw`,
+`capexAt`, `capexSource: 'site-map'` — the ONE set the workspace
+(`omega-workspace-today.js`), the dashboard rollup (`index.html`) and the
+asset book (`omega-assets.js`) read; a priced run saves at once
+(`omegaRunSave`, read-only and unchecked plans wait); a run that priced
+nothing writes nothing and erases nothing, and a field the run did not
+produce (revenue with no streams, a battery not placed) is left out, never
+zeroed. `scripts/tests/tcostrollup.js` holds it end to end. Plan & billing is
 a page (`#billing`), phone first: the subscription, what is owed and when
 with the invoice's own Pay, the payment method as a card (linked to Stripe
 for a plan billed outside the engine: the card read back, Add a card with
