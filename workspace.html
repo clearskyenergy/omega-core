@@ -96,6 +96,7 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .today{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .today .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.today h2{font-size:18px}.today .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kpi.go{color:inherit;text-decoration:none;display:block;cursor:pointer}.kpi.go:hover{border-color:var(--ows-teal-d)}
 .kpi{background:var(--ows-sunk);border:1px solid var(--ows-line);border-radius:12px;padding:10px 12px;min-width:0}.kpi .v{font:500 20px/1.1 "DM Mono",monospace;font-variant-numeric:tabular-nums}.kpi .l{font-size:11.5px;color:var(--ows-ink2);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.kpi .d{font:400 11px "DM Mono",monospace;margin-top:4px;color:var(--ows-ink3)}.kpi .d.up{color:var(--ows-green)}.kpi .d.warn{color:var(--ows-amber)}
 .next{display:flex;flex-direction:column;gap:6px}
 .next .row{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;align-items:center;padding:9px 12px 9px 10px;border:1px solid var(--ows-line);border-radius:10px;background:var(--ows-paper)}
@@ -243,6 +244,7 @@ body.ows a.bh-mod{color:#EAF7FB}a.bh-mod:hover{background:rgba(255,255,255,.12)}
 .opt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--ows-line)}.opt b{display:block;font-weight:600}.opt small{color:var(--ows-ink2);font-size:12px;display:block;line-height:1.4}
 .tg{width:42px;height:24px;border-radius:999px;background:var(--ows-line2);position:relative;transition:background .15s;flex:none}.tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}.tg[aria-checked="true"]{background:var(--ows-teal-d)}.tg[aria-checked="true"]::after{left:21px}
 .pulse .spark{width:100%;height:44px;display:block}.pulse .spark path{fill:none;stroke:var(--ows-teal-d);stroke-width:2}.pulse .spark .fill{fill:var(--ows-teal-soft);stroke:none}
+.pulse a.stat.go{color:inherit;text-decoration:none;display:block}.pulse a.stat.go:hover{border-color:var(--ows-teal-d)}.pulse .insight a{color:var(--ows-teal-d);font-weight:600}
 .pulse .stats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.pulse .stat{background:var(--ows-sunk);border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px}.pulse .stat .v{font:500 18px "DM Mono",monospace}.pulse .stat .l{font-size:11.5px;color:var(--ows-ink2)}
 .pulse .insight{font-size:12.5px;color:var(--ows-ink2);background:var(--ows-sunk);border-radius:10px;padding:10px 12px;line-height:1.5}.pulse .insight b{color:var(--ows-ink)}
 .people .pr .ows-pill{margin-left:auto;flex:none}
@@ -332,7 +334,7 @@ var WORKSPACES = CFG.workspaces || {};
 var S = window.OmegaWorkspaceShell, HUB = window.OmegaWorkspaceHub, T = window.OMEGATools, TODAY = window.OmegaWorkspaceToday;
 var esc = S.esc, byId = function (id) { return document.getElementById(id); };
 var WS = null, USER = null, ME = '', PROFILE = null;
-var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [], finance: [] };
+var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [], finance: [], capital: null };
 var PREFS_DEFAULT = { presence: true, feed: true, pulse: true, partners: true, guides: false };
 var PULSE = null, PULSE_ASKED = false;
 var STAGE_KEYS = ['candidate', 'package', 'submitted', 'interconnect', 'permitting', 'finance', 'construction', 'online'];
@@ -538,6 +540,8 @@ function load() {
       return Promise.all(jobs).then(function () { return out; });
     })['catch'](function () { return []; }) : Promise.resolve([])
   ]).then(function (r) {
+    return loadCapital().then(function (cap) { DATA.capital = cap; return r; });
+  }).then(function (r) {
     var seen = {}; DATA.projects = [];
     r[0].concat(r[1]).forEach(function (p) { if (!seen[p.id]) { seen[p.id] = 1; DATA.projects.push(p); } });
     DATA.projects.sort(function (a, b) { return ms(b.updatedAt || b.createdAt) - ms(a.updatedAt || a.createdAt); });
@@ -545,6 +549,40 @@ function load() {
     S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() });
     render();
   });
+}
+/* ── the capital-partner side (Tommy, 2026-09-29, of a financing firm: "likes to find
+   these sites so i want them to have on their account in the good morning
+   and in the omega pulse information about the financing opportunities and
+   they can then click on them and it takes them into the opportunties and
+   deal room"). A person whose financing profile (fin_profiles/{uid}, their
+   own to read) is an approved capital partner reads fin_projects exactly the
+   four ways the rules grant a partner and the portal's watchDeals() asks:
+   open on the marketplace, held for them (firstLookUids), awarded to them,
+   and delivered to their organisation (room.forOrgId, only when the profile
+   carries the org id the rule compares). Their own offer on each room deal
+   and each deal opened this week is one get (offers/{uid}). Every query
+   fails soft on its own: a refusal reads as nothing, never as an error on
+   the home. OmegaWorkspaceToday classifies it; every row and card links
+   into the portal on the deal (dealHref), which checks for itself. */
+function loadCapital() {
+  if (!USER || !USER.uid) return Promise.resolve(null);
+  var uid = USER.uid, col = db.collection('fin_projects');
+  return db.collection('fin_profiles').doc(uid).get().then(function (d) {
+    var pr = d && d.exists ? d.data() || {} : null;
+    if (!pr || pr.role !== 'partner' || pr.suspended === true || pr.approved === false) return null;
+    /* the profile's own value, as the rule's myOrgId() compares it (and the portal's watchDeals queries it): a changed case would be refused */
+    var orgId = String(pr.orgId || '');
+    function rows(q) { return q.get().then(function (sn) { var out = []; sn.forEach(function (x) { var f = x.data() || {}; f.id = x.id; out.push(f); }); return out; })['catch'](function () { return []; }); }
+    return Promise.all([rows(col.where('status', '==', 'open')), rows(col.where('firstLookUids', 'array-contains', uid)), rows(col.where('awardedTo', '==', uid)), orgId ? rows(col.where('room.forOrgId', '==', orgId)) : Promise.resolve([])]).then(function (r) {
+      var by = {}, deals = [];
+      r.forEach(function (list) { list.forEach(function (f) { if (!by[f.id]) { by[f.id] = 1; deals.push(f); } }); });
+      var cap = { uid: uid, orgId: orgId || WS.orgId, orgKey: pr.orgKey || '', deals: deals, offers: {} }, week = Date.now() - 7 * 86400000;
+      var side = TODAY.capitalSide(cap, Date.now()), ask = side.room.concat(side.market.filter(function (x) { return (ms(x.d.approvedAt) || ms(x.d.createdAt)) >= week; }));
+      return Promise.all(ask.slice(0, 40).map(function (x) {
+        return col.doc(x.id).collection('offers').doc(uid).get().then(function (o) { if (o && o.exists) cap.offers[x.id] = o.data() || {}; })['catch'](function () {});
+      })).then(function () { return cap; });
+    });
+  })['catch'](function () { return null; });
 }
 function ms(t) { if (!t) return 0; if (t.toDate) return t.toDate().getTime(); if (t.seconds) return t.seconds * 1000; var d = new Date(t); return isNaN(d) ? 0 : d.getTime(); }
 function ago(t) { var m = (Date.now() - ms(t)) / 60000; if (m < 1) return 'now'; if (m < 60) return Math.round(m) + 'm'; if (m < 1440) return Math.round(m / 60) + 'h'; var d = Math.round(m / 1440); return d === 1 ? 'Yesterday' : d + 'd'; }
@@ -590,7 +628,7 @@ function today() {
   if (TODAY_CACHE) return TODAY_CACHE;
   var pa = WS.packageAccess;
   TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(), pastDue: pastDue(),
-    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, canOpen: function (k) { return open(tool(k)); } });
+    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, capital: DATA.capital, canOpen: function (k) { return open(tool(k)); } });
   return TODAY_CACHE;
 }
 function needs() { return today().needs; }
@@ -672,7 +710,8 @@ function renderToday() {
   var hour = new Date().getHours(), greet = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   var td = today(), rows = td.needs;
   var h = '<div class="hd"><div><h2 id="ows-greet">' + greet + ', ' + esc(first()) + '</h2><div class="sub">' + esc(WS.clientName || WS.orgId) + ' · ' + esc(planName()) + (WS.vertical ? ' · ' + esc(WS.vertical) : '') + '</div></div><span class="ows-pill ghost" id="ows-date">' + new Date().toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric', year: 'numeric' }) + '</span></div>';
-  h += '<div class="kpis">' + td.kpis.map(function (k) { return '<div class="kpi" data-kpi="' + esc(k.key) + '"><div class="v">' + esc(k.value) + '</div><div class="l">' + esc(k.label) + '</div>' + (k.delta ? '<div class="d ' + esc(k.tone || '') + '">' + esc(k.delta) + '</div>' : '') + '</div>'; }).join('') + '</div>';
+  /* a number that has a place to go is a link there (the deal room) */
+  h += '<div class="kpis">' + td.kpis.map(function (k) { var tag = k.href ? 'a' : 'div'; return '<' + tag + ' class="kpi' + (k.href ? ' go' : '') + '" data-kpi="' + esc(k.key) + '"' + (k.href ? ' href="' + esc(k.href) + '"' : '') + '><div class="v">' + esc(k.value) + '</div><div class="l">' + esc(k.label) + '</div>' + (k.delta ? '<div class="d ' + esc(k.tone || '') + '">' + esc(k.delta) + '</div>' : '') + '</' + tag + '>'; }).join('') + '</div>';
   h += '<div class="eyebrow">Needs you</div><div class="next">';
   if (!rows.length) h += '<div class="empty">Nothing is waiting on you. Start a project, or open Site Map and draw one.</div>';
   rows.forEach(function (r, i) { h += '<div class="row ' + esc(r.cls) + '" data-key="' + esc(r.key) + '" data-row="' + i + '"><i class="bar"></i><div><b>' + esc(r.t) + '</b><small>' + esc(r.s) + '</small></div>' + (r.href ? '<a class="ows-pill sm" href="' + esc(r.href) + '"' + (/^https?:/.test(r.href) ? ' target="_blank" rel="noopener"' : '') + '>' + esc(r.cta) + '</a>' : '<button class="ows-pill sm" type="button" data-need="' + i + '">' + esc(r.cta) + '</button>') + '</div>'; });
@@ -921,11 +960,13 @@ function ownerOf(p) { return p.ownerName || (p.ownerEmail ? String(p.ownerEmail)
    Every card says why it is there, and who has it, with Assign. ── */
 function renderFlight() {
   var b = byId('flight-body');
-  var cards = TODAY.board({ now: Date.now(), projects: DATA.projects, finance: DATA.finance, max: 8 }), byPid = {};
+  var cards = TODAY.board({ now: Date.now(), projects: DATA.projects, finance: DATA.finance, capital: DATA.capital, max: 8 }), byPid = {};
   DATA.projects.forEach(function (p) { byPid[p.id] = p; });
+  if (!cards.length && DATA.capital) { b.innerHTML = '<div class="empty"><b>Nothing in your deal room yet.</b> When ClearSky routes a deal to your firm it lands here and in the <a href="/finance#room">deal room</a>. <a href="/finance#market">Browse the marketplace</a>.</div>'; return; }
   if (!cards.length) { b.innerHTML = '<div class="empty"><b>No projects yet.</b> Start one and it appears here with its stage, its owner and how far along it is.</div>'; return; }
   b.innerHTML = '<div class="proj">' + cards.map(function (c) {
-    if (c.kind === 'finance') return '<article class="pc fin-only" data-fin="' + esc(c.id) + '"><a class="pc-main" href="/portals/finance/"><span class="stage">Finance marketplace</span><b>' + esc(c.name) + '</b><div class="meta"><span>' + esc(c.finance.note) + '</span></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div></a><div class="who"><span class="av">$</span><span class="nm">Deal room</span></div></article>';
+    if (c.kind === 'capital') return '<article class="pc fin-only" data-fin="' + esc(c.id) + '"><a class="pc-main" href="' + esc(c.href) + '"><span class="stage">Deal room</span><b>' + esc(c.name) + '</b><div class="meta"><span>' + esc(c.finance.teaser || c.finance.note) + '</span></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div></a><div class="who"><span class="av">$</span><span class="nm">' + esc(c.finance.note) + '</span></div></article>';
+    if (c.kind === 'finance') return '<article class="pc fin-only" data-fin="' + esc(c.id) + '"><a class="pc-main" href="' + esc(TODAY.dealHref(c.finance && c.finance.id)) + '"><span class="stage">Finance marketplace</span><b>' + esc(c.name) + '</b><div class="meta"><span>' + esc(c.finance.note) + '</span></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div></a><div class="who"><span class="av">$</span><span class="nm">Deal room</span></div></article>';
     /* the bar is the work done on the design (designed 50, designed and run 100; the stage when further) and the meta line names the kind of job, never a battery on a Level 2 site (OmegaWorkspaceToday.progress / kindLabels, 2026-09-29) */
     var p = byPid[c.id] || {}, pct = TODAY.progress(p).pct;
     var owner = ownerOf(p), mine = String(p.ownerEmail || '').toLowerCase() === ME, ours = !p.orgId || p.orgId === WS.orgId;
@@ -1039,7 +1080,24 @@ function pulseHtml() {
   if (PULSE.band && mine > 0) where = mine < PULSE.band[0] ? 'below' : mine > PULSE.band[1] ? 'above' : 'in';
   return sparkline(PULSE.weeks)
     + '<div class="stats"><div class="stat"><div class="v num">' + esc(String(st.projects || 0)) + '</div><div class="l">projects saved</div></div><div class="stat"><div class="v num">' + esc(String(st.rfqs || 0)) + '</div><div class="l">RFQs sent to vendors</div></div><div class="stat"><div class="v num">' + esc(String(st.financed || 0)) + '</div><div class="l">projects at finance or beyond</div></div><div class="stat"><div class="v num">' + esc(String(st.designers || 0)) + '</div><div class="l">designers active</div></div></div>'
-    + '<div class="insight">' + esc(PULSE.insight || '') + (where ? ' <b>Your latest sized design sits ' + (where === 'in' ? 'in that band' : where + ' it') + '.</b>' : '') + (st.companies ? ' ' + st.companies + ' compan' + (st.companies === 1 ? 'y' : 'ies') + ' building this week.' : '') + '</div>';
+    + '<div class="insight">' + esc(PULSE.insight || '') + (where ? ' <b>Your latest sized design sits ' + (where === 'in' ? 'in that band' : where + ' it') + '.</b>' : '') + (st.companies ? ' ' + st.companies + ' compan' + (st.companies === 1 ? 'y' : 'ies') + ' building this week.' : '') + '</div>'
+    + pulseFinance();
+}
+/* the finance marketplace in the pulse: platform counts from /api/pulse
+   (open deals, megawatts, opened this week), and for a capital partner
+   their own deal room beside it (their reads, DATA.capital); each goes to
+   the portal on the right tab, which checks for itself */
+function pulseFinance() {
+  var f = PULSE && PULSE.finance; if (!f) return '';
+  var cap = DATA.capital, side = cap ? TODAY.capitalSide(cap, Date.now()) : null, room = side ? side.room.length : 0;
+  var mwTxt = f.openMw ? (f.openMw >= 100 ? Math.round(f.openMw) : f.openMw) + ' MW' : '0 MW';
+  var h = '<div class="eyebrow" style="margin-top:4px">Financing opportunities</div><div class="stats">'
+    + '<a class="stat go" data-pulse="market" href="' + esc(TODAY.dealHref(null, cap ? 'market' : null)) + '"><div class="v num">' + esc(String(f.open || 0)) + '</div><div class="l">open on the marketplace · ' + esc(mwTxt) + '</div></a>'
+    + (cap ? '<a class="stat go" data-pulse="room" href="' + esc(TODAY.dealHref(null, 'room')) + '"><div class="v num">' + esc(String(room)) + '</div><div class="l">in your deal room</div></a>'
+           : '<div class="stat"><div class="v num">' + esc(String(f.openedThisWeek || 0)) + '</div><div class="l">opened this week</div></div>')
+    + '</div>';
+  var line = (f.openedThisWeek ? f.openedThisWeek + ' opened to capital partners this week' : 'Nothing new opened to capital partners this week') + (f.filedThisWeek ? ', ' + f.filedThisWeek + ' filed for financing' : '') + '.';
+  return h + '<div class="insight">' + esc(line) + (cap ? ' <a href="' + esc(TODAY.dealHref(null, 'market')) + '">Browse the opportunities</a> · <a href="' + esc(TODAY.dealHref(null, 'room')) + '">Open your deal room</a>' : '') + '</div>';
 }
 function pulsePanel(attrs) { return '<div class="panel pulse" id="pulse" data-in="feed"' + (attrs || '') + '><div class="hd"><h3>Omega pulse</h3><span class="ows-chip">This week · counts only</span></div><div id="pulse-body">' + pulseHtml() + '</div></div>'; }
 function renderPulseInto() { var b = byId('pulse-body'); if (b) b.innerHTML = pulseHtml(); }

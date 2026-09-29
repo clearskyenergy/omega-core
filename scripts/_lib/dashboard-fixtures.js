@@ -171,4 +171,33 @@ function legacyEnterprise(host) {
   docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Paige Cole', photo: '', lastSeen: ago(0.2) };
   return { org: org, name: 'NextGen Power', tier: 'enterprise', user: { uid: uid, email: me, displayName: 'Paige Cole', emailVerified: true }, docs: docs, termsAccepted: true, legacyAllOpen: true };
 }
-module.exports = { newco: newco, northstar: northstar, pending: pending, lite: lite, awaiting: awaiting, legacyEnterprise: legacyEnterprise, TERMS_VERSION: TERMS_VERSION };
+/* A CAPITAL PARTNER (the Helios shape, 2026-09-29): a workspace whose
+   people finance sites rather than develop them. Lee's financing profile is
+   an approved partner at the firm's org id, so the workspace reads the deals
+   the rules grant a partner: one held for Lee on first look ending in a day
+   and a half, one ClearSky delivered to the firm, one Lee has already bid
+   on, two opened on the marketplace this week, an old open one, and a
+   rival's hold the partner queries never return. Used by
+   scripts/render-workspace.js only. */
+function capital(host) {
+  var org = 'ridgeline-capital.example', uid = 'uid-ridgeline-lee', me = 'lee@ridgeline-capital.example', now = Date.now();
+  var docs = merge(pub(host, org, 'Ridgeline Capital', 'standard', 'developer'), {});
+  docs['omega_orgs/' + org] = { name: 'Ridgeline Capital', slug: 'ridgeline', domains: [host], logoUrl: '', vertical: 'developer', shell: 'classic', status: 'active', receivesFullBom: false, financeOrgKey: 'ridgeline',
+    exportBrand: { name: 'Ridgeline Capital', logo: '' }, createdAt: ago(60), approvedAt: ago(59), approvedBy: 'ops@clearsky-usa.com' };
+  docs['omega_orgs/' + org + '/billing/current'] = { tier: 'standard', addons: [], toolOverrides: {}, requiredTools: ['financing'], paymentProvider: 'manual', trialEndsAt: null, subscriptionDue: iso(20), amountDue: 0, createdAt: ago(60) };
+  docs['omega_orgs/' + org + '/members/' + uid] = { email: me, name: 'Lee Park', role: 'owner', status: 'active', createdAt: ago(60) };
+  docs['termsAcceptances/' + uid] = { uid: uid, email: me, orgId: org, version: TERMS_VERSION, acceptedAt: ago(30) };
+  docs['team_members/' + org + '__' + me] = { orgId: org, email: me, name: 'Lee Park', photo: '', lastSeen: ago(0.5) };
+  docs['fin_profiles/' + uid] = { role: 'partner', name: 'Lee Park', email: me, org: 'Ridgeline Capital', orgKey: 'ridgeline', orgId: org, approved: true, suspended: false };
+  docs['fin_projects/fin-joliet'] = { name: 'Joliet Storage', status: 'exclusive', tech: 'BESS', mw: 4, city: 'Joliet', state: 'IL', developerUid: 'uid-dev-a', firstLookUids: [uid], firstLookOrgKey: 'ridgeline', firstLookStartedAt: now - 3 * DAY, firstLookUntil: now + 1.5 * DAY, approvedAt: now - 3 * DAY, createdAt: now - 5 * DAY, updatedAt: now - 3 * DAY };
+  docs['fin_projects/fin-aurora'] = { name: 'Aurora Solar + Storage', status: 'open', tech: 'Solar + BESS', mw: 12.4, state: 'IL', developerUid: 'uid-dev-b', firstLookUids: [], room: { forOrg: 'Ridgeline Capital', forOrgId: org, state: 'delivered', deliveredAt: now - DAY }, approvedAt: now - 20 * DAY, createdAt: now - 21 * DAY, updatedAt: now - DAY };
+  docs['fin_projects/fin-elgin'] = { name: 'Elgin Depot', status: 'exclusive', mw: 1.5, state: 'IL', developerUid: 'uid-dev-c', firstLookUids: [uid], firstLookUntil: now + 4 * DAY, approvedAt: now - 2 * DAY, createdAt: now - 2 * DAY, updatedAt: now - 2 * DAY };
+  docs['fin_projects/fin-elgin/offers/' + uid] = { partnerUid: uid, uid: uid, status: 'submitted', amount: 2100000, createdAt: now - DAY };
+  docs['fin_projects/fin-rockford'] = { name: 'Rockford DCFC Hub', status: 'open', tech: 'DCFC', mw: 2, state: 'IL', developerUid: 'uid-dev-d', firstLookUids: [], approvedAt: now - 2 * DAY, createdAt: now - 3 * DAY, updatedAt: now - 2 * DAY };
+  docs['fin_projects/fin-peoria'] = { name: 'Peoria Microgrid', status: 'open', tech: 'Microgrid', mw: 6, state: 'IL', developerUid: 'uid-dev-e', firstLookUids: [], approvedAt: now - DAY, createdAt: now - 2 * DAY, updatedAt: now - DAY };
+  docs['fin_projects/fin-old'] = { name: 'Decatur Storage', status: 'open', mw: 3, state: 'IL', developerUid: 'uid-dev-f', firstLookUids: [], approvedAt: now - 40 * DAY, createdAt: now - 41 * DAY, updatedAt: now - 40 * DAY };
+  docs['fin_projects/fin-rival'] = { name: 'Held for another firm', status: 'exclusive', mw: 9, state: 'TX', developerUid: 'uid-dev-g', firstLookUids: ['uid-rival'], firstLookUntil: now + 5 * DAY, approvedAt: now - DAY, createdAt: now - DAY, updatedAt: now - DAY };
+  return { org: org, name: 'Ridgeline Capital', tier: 'standard', user: { uid: uid, email: me, displayName: 'Lee Park', emailVerified: true }, docs: docs, termsAccepted: true };
+}
+
+module.exports = { capital: capital, newco: newco, northstar: northstar, pending: pending, lite: lite, awaiting: awaiting, legacyEnterprise: legacyEnterprise, TERMS_VERSION: TERMS_VERSION };

@@ -3,7 +3,8 @@
    platform did this week, counts only. Any signed-in member of any
    workspace may read it; nothing in the answer names a company, a person
    or a project (api/_lib/pulse.js is the pure part and the tested one).
-   Reads the most recent rows, capped, and hands them to the library; a
+   Reads the most recent rows, capped (the finance marketplace's open deals
+   among them, by size and date only), and hands them to the library; a
    failed read counts as nothing rather than failing the page. Cached for
    five minutes per caller. */
 'use strict';
@@ -18,10 +19,14 @@ module.exports = A.handler(function (req, res) {
     return Promise.all([
       soft(db.collection('projects').orderBy('updatedAt', 'desc').limit(CAP).select('updatedAt', 'stage', 'bessKwh', 'bessKw', 'orgId').get()),
       soft(db.collection('rfqs').orderBy('createdAt', 'desc').limit(CAP).select('createdAt').get()),
-      soft(db.collection('team_members').orderBy('lastSeen', 'desc').limit(CAP).select('lastSeen').get())
+      soft(db.collection('team_members').orderBy('lastSeen', 'desc').limit(CAP).select('lastSeen').get()),
+      /* the finance marketplace: what is open now (size and when it opened,
+         nothing else), and the latest filed, for the week's count */
+      soft(db.collection('fin_projects').where('status', '==', 'open').limit(CAP).select('status', 'mw', 'sizeMw', 'approvedAt', 'createdAt').get()),
+      soft(db.collection('fin_projects').orderBy('createdAt', 'desc').limit(CAP).select('createdAt').get())
     ]).then(function (r) {
       res.setHeader('Cache-Control', 'private, max-age=300');
-      return P.build({ projects: r[0], rfqs: r[1], members: r[2] }, Date.now(), { projects: CAP, rfqs: CAP, members: CAP });
+      return P.build({ projects: r[0], rfqs: r[1], members: r[2], deals: r[3], filed: r[4] }, Date.now(), { projects: CAP, rfqs: CAP, members: CAP, deals: CAP });
     });
   });
 });
