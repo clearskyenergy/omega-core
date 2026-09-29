@@ -31,7 +31,14 @@
     elccRef: "PJM ELCC Class Ratings for the 2028/2029 Base Residual Auction: "
            + "4-hr storage 59%, 6-hr 68%, 8-hr 71%, 10-hr 78%.",
     elccUrl: "https://www.pjm.com/-/media/DotCom/planning/res-adeq/elcc/"
-           + "28-29-bra-elcc-class-ratings.pdf"
+           + "28-29-bra-elcc-class-ratings.pdf",
+    /* A battery behind a customer's meter, sold through a curtailment
+       service provider, is a DEMAND RESOURCE in RPM and is accredited at
+       the Demand Resource class rating — the same document, the same
+       auction — not in the storage duration classes above. */
+    drElcc: 0.91,
+    drElccRef: "PJM ELCC Class Ratings for the 2028/2029 Base Residual Auction: "
+             + "Demand Resource 91%."
   };
 
   /* PJM assigns a class by duration. A 6.5-hour battery does not get the
@@ -115,8 +122,10 @@
         tier: input.vppRef ? "published" : "planning",
         how: Math.round(kw).toLocaleString() + " kW at $" + vpp + " / kW-year.",
         ref: input.vppRef || "A planning figure carried by this platform, not a " +
-             "published tariff. ComEd's Rider VPP / BYODLR is still before the ICC, " +
-             "so treat it as indicative until the tariff is final."
+             "published tariff. ComEd withdrew Rider VPP / BYODLR (ICC Docket 25-0678, " +
+             "18 Nov 2025); the tariff that replaced it, Rider SDVPP (effective 16 Jul 2026, " +
+             "service by 1 Mar 2027), pays $10 per kW-Season of average injection 4-6 pm on " +
+             "summer weekdays. Treat this figure as indicative and confirm what it stands for."
       });
     } else {
       missing.push("Virtual power plant — no programme rate on file.");
