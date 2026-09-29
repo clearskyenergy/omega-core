@@ -10,7 +10,9 @@
      now, me (email, lower), orgId
      pendingApproval, readOnly, billingNotice {text, payUrl}, trialEndsAt (ms)
      projects[]      projects the workspace may read (stage, capex, bessKwh,
-                     nextAction, updatedAt, createdAt, ownerEmail)
+                     nextAction, updatedAt, createdAt, ownerEmail; the kind:
+                     type, siteScopes, wizMode; the design: elements,
+                     conduits; the run's mark: capexAt, capexSource)
      todos[]         team_todos (text, assignee, due, done, createdBy)
      rfqsSent[]      rfqs where sourceOrgId is this org, each with its
                      recipients[] (vendorOrgId, status sent|quoted|accepted|rejected)
@@ -41,6 +43,7 @@
       50 a project in flight that has not moved in 14 days
       47 a draft on the finance marketplace, never published
       45 candidates with no battery size, when Battery Sizer is open (ONE row)
+      45 jobs that are not battery jobs with nothing on the site map (ONE row)
       42 a deal open on the marketplace with no offer in 10 days
       40 a request I sent that nobody has answered in 5 days
 
@@ -57,7 +60,21 @@
    offers or a stall on the marketplace, a stall), then the most recently
    touched; a deal on the marketplace rides on its project's card (`finance`)
    or, with no project behind it, is a card of its own. Each card says why
-   it is there (`why`, `whyCls`). ES5. */
+   it is there (`why`, `whyCls`). ES5.
+
+     OmegaWorkspaceToday.progress(p) → { pct, phrase, designed, run, priced, done }
+     OmegaWorkspaceToday.kinds(p) / kindLabels(p) / wantsBattery(p)
+
+   The work done on a project, off the record (Tommy, 2026-09-29, over
+   eight Level 2 jobs each reading "No battery size yet · 0%": "these are
+   all batteries these are l2's so the details that show on the in flight
+   tab should show the amount of work done on them, if they have been
+   designed and run then they are 100%"). What KIND a job is comes through
+   the ONE type table, omega-workspaces.js (the dialog's type and scopes,
+   legacy names folded, the EV wizard's L2 / EVSE mark): a battery belongs
+   only on a kind whose focus carries storage, or on a record that declares
+   no kind. Designed is equipment or conduit on the site map; run is Site
+   Map's Run having costed it (its own mark on the record); 50 and 100. */
 (function (root) {
   'use strict';
   var DAY = 86400000, MAX = 6, STAGES = ['candidate', 'package', 'submitted', 'interconnect', 'permitting', 'finance', 'construction', 'online'];
@@ -71,7 +88,54 @@
   function dateOf(ms) { return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
   function inFlight(p) { var i = STAGES.indexOf(p.stage); return i >= 1 && i < 7; }
   function name(p) { return p.name || p.title || 'Untitled'; }
-  function needsSize(p) { return (!p.stage || p.stage === 'candidate') && !n(p.bessKwh) && !n(p.capex); }
+  /* ── what kind of work a project is, and how far its design has come ── */
+  var NODE_WS = null;
+  if (typeof module !== 'undefined' && module.exports) { try { NODE_WS = require('./omega-workspaces.js').OmegaWorkspaces; } catch (e) { NODE_WS = null; } }
+  /* the ONE type table (omega-workspaces.js): its aliases, and which kinds carry storage */
+  function ws() { return (root && root.OmegaWorkspaces) || NODE_WS; }
+  /* the kinds a record declares: the dialog's type and scopes through the
+     alias table, plus the EV wizard's own mark (wizMode L2 / EVSE, as the
+     editor's Projects list reads it); a record that declares nothing is []
+     and keeps the reading every legacy project had */
+  function kinds(p) {
+    var W = ws(), out = [];
+    if (!p) return out;
+    if (W && typeof W.normalize === 'function') { try { out = W.normalize(p.type, p.siteScopes).slice(); } catch (e) { out = []; } }
+    var wiz = p.wizMode === 'L2' ? 'l2' : p.wizMode === 'EVSE' ? 'dcfc' : null;
+    if (wiz && out.indexOf(wiz) < 0) out.push(wiz);
+    return out;
+  }
+  function kindLabels(p) { var W = ws(); return kinds(p).map(function (k) { return W && W.presets && W.presets[k] ? W.presets[k].label : k; }); }
+  /* a battery belongs on a kind whose focus carries storage (the preset's
+     own word: BESS, Solar + Storage, DCFC, a microgrid) and on a record that
+     declares no kind, which is every project made before there were types */
+  function wantsBattery(p) {
+    var W = ws(), k = kinds(p);
+    if (!k.length) return true;
+    return k.some(function (key) { var pr = W && W.presets && W.presets[key]; return !!(pr && (pr.focus || []).indexOf('storage') >= 0); });
+  }
+  function count(a) { return Array.isArray(a) ? a.length : 0; }
+  function candidate(p) { return !p.stage || p.stage === 'candidate'; }
+  /* The work done on the design, off the record: DESIGNED when equipment or
+     conduit is on the site map (elements, conduits), RUN when Site Map's
+     Run costed it (capexSource 'site-map' / capexAt, the editor's own mark),
+     else PRICED when a figure is on the record however it got there. Two
+     steps: designed is 50, designed and run is 100. A project that has
+     moved past candidate reads the further of that and its stage, so a job
+     in construction never reads 0. */
+  function progress(p) {
+    p = p || {};
+    var designed = count(p.elements) + count(p.conduits) + count(p.geoElements) + count(p.geoConduits) > 0;
+    var run = p.capexSource === 'site-map' || !!p.capexAt, priced = run || n(p.capex) > 0;
+    var design = (designed ? 50 : 0) + (priced ? 50 : 0), i = STAGES.indexOf(p.stage), stagePct = i > 0 ? Math.round(i / (STAGES.length - 1) * 100) : 0;
+    var phrase = designed ? (run ? 'Designed and run' : priced ? 'Designed and priced' : 'Designed, not run yet')
+                          : (run ? 'Run, nothing placed on the site map' : priced ? 'Priced, nothing on the site map yet' : 'Nothing on the site map yet');
+    return { pct: Math.max(design, stagePct), design: design, designed: designed, run: run, priced: priced, done: designed && priced, phrase: phrase };
+  }
+  /* a battery job with no size and no figure asks for the sizer; any other
+     job with nothing on the site map asks for a design */
+  function needsSize(p) { return candidate(p) && !n(p.bessKwh) && !n(p.capex) && wantsBattery(p); }
+  function needsDesign(p) { return candidate(p) && !wantsBattery(p) && !progress(p).designed; }
   var PORTAL = '/portals/finance/';
   /* offers on a deal that are still the sponsor's to answer */
   function openOffers(f) { return (f.offers || []).filter(function (o) { return !o.status || o.status === 'submitted' || o.status === 'active'; }); }
@@ -151,13 +215,14 @@
     });
 
     /* projects */
-    var unsized = [];
+    var unsized = [], undesigned = [];
     projects.forEach(function (p) {
       var pn = name(p), upd = at(p.updatedAt) || at(p.createdAt), id = p.id;
       if (p.nextAction && p.stage !== 'online') push({ key: 'next:' + id, cls: 'good', score: 58, when: upd, t: pn + ': ' + p.nextAction, s: (STAGE_LABEL[p.stage] || 'Candidate') + (upd ? ' · updated ' + plural(days(upd, now), 'day', 'days') + ' ago' : ''), cta: 'Open', act: { kind: 'project', id: id } });
       else if (p.stage === 'package') push({ key: 'submit:' + id, cls: 'good', score: 55, when: upd, t: pn + ' is ready to submit to the utility', s: 'Site package complete' + (upd ? ' · ' + plural(days(upd, now), 'day', 'days') + ' ago' : ''), cta: 'Open', act: { kind: 'project', id: id } });
       else if (inFlight(p) && upd && now - upd >= 14 * DAY) push({ key: 'stalled:' + id, cls: '', score: 50, when: upd, t: pn + ' has not moved in ' + plural(days(upd, now), 'day', 'days'), s: STAGE_LABEL[p.stage] || p.stage, cta: 'Open', act: { kind: 'project', id: id } });
       else if (needsSize(p) && canOpen('batterysizer')) unsized.push(p);
+      else if (needsDesign(p)) undesigned.push(p);
     });
     /* ONE row for the candidates with no size, however many (2026-09-27):
        six of them used to fill the whole list and hide a to-do */
@@ -165,6 +230,14 @@
     else if (unsized.length > 1) {
       var oldestU = unsized.reduce(function (m, p) { var a = at(p.updatedAt) || at(p.createdAt); return a && (!m || a < m) ? a : m; }, 0), namedU = unsized.slice(0, 3).map(name);
       push({ key: 'size', cls: '', score: 45, when: oldestU, t: plural(unsized.length, 'candidate has', 'candidates have') + ' no battery size', s: namedU.join(', ') + (unsized.length > 3 ? ' and ' + (unsized.length - 3) + ' more' : '') + '. Battery Sizer is open on your plan.', cta: 'Size', act: { kind: 'tool', id: 'batterysizer' }, projects: unsized.map(function (p) { return p.id; }) });
+    }
+    /* the same ONE row for the jobs that are not battery jobs (a Level 2
+       site, a compute campus, a building) with nothing on the site map:
+       the next thing is a design, never a battery size (2026-09-29) */
+    if (undesigned.length === 1) push({ key: 'design:' + undesigned[0].id, cls: '', score: 45, when: at(undesigned[0].updatedAt) || at(undesigned[0].createdAt), t: 'Design ' + name(undesigned[0]), s: 'Nothing on the site map yet. Open it in Site Map and run it.', cta: 'Design', act: { kind: 'project', id: undesigned[0].id }, project: undesigned[0].id });
+    else if (undesigned.length > 1) {
+      var firstD = undesigned.reduce(function (m, p) { var a = at(p.updatedAt) || at(p.createdAt); return !m || (a && a < (at(m.updatedAt) || at(m.createdAt))) ? p : m; }, null), namedD = undesigned.slice(0, 3).map(name);
+      push({ key: 'design', cls: '', score: 45, when: at(firstD.updatedAt) || at(firstD.createdAt), t: plural(undesigned.length, 'project has', 'projects have') + ' nothing on the site map yet', s: namedD.join(', ') + (undesigned.length > 3 ? ' and ' + (undesigned.length - 3) + ' more' : '') + '. Open one in Site Map and run it.', cta: 'Design', act: { kind: 'project', id: firstD.id }, projects: undesigned.map(function (p) { return p.id; }) });
     }
 
     rows.sort(function (a, b) { return b.score - a.score || (a.when || Infinity) - (b.when || Infinity) || String(a.key).localeCompare(String(b.key)); });
@@ -209,7 +282,14 @@
       else if (p.stage === 'package') { why = 'Ready to submit to the utility'; cls = 'good'; rank = 55; }
       else if (inFlight(p) && upd && now - upd >= 14 * DAY) { why = 'Not moved in ' + plural(days(upd, now), 'day', 'days'); cls = 'warn'; rank = 50; }
       else if (needsSize(p)) { why = 'No battery size yet'; cls = ''; rank = 30; }
-      else { why = upd ? 'Touched ' + (now - upd < DAY ? 'today' : plural(days(upd, now), 'day', 'days') + ' ago') : 'New'; cls = ''; rank = 10; }
+      else if (needsDesign(p)) { why = 'Nothing on the site map yet'; cls = ''; rank = 30; }
+      else {
+        /* the work done on the design, then when it was touched: a candidate
+           designed but never run still needs something (its run) */
+        var pg = progress(p), touched = upd ? 'Touched ' + (now - upd < DAY ? 'today' : plural(days(upd, now), 'day', 'days') + ' ago') : 'New';
+        if (candidate(p) && pg.designed && !pg.priced) { why = pg.phrase; cls = ''; rank = 28; }
+        else { why = (candidate(p) || pg.done ? pg.phrase + ' · ' : '') + touched; cls = ''; rank = 10; }
+      }
       cards.push({ kind: 'project', id: p.id, name: name(p), stage: p.stage || 'candidate', touched: upd, why: why, whyCls: cls, rank: rank,
         finance: f ? { id: f.id || null, status: f.status || 'draft', note: financeNote(f, now), offers: openOffers(f).length } : null });
     });
@@ -223,7 +303,7 @@
     cards.sort(function (a, b) { return (b.rank > 20 ? 1 : 0) - (a.rank > 20 ? 1 : 0) || (b.rank > 20 && a.rank > 20 ? b.rank - a.rank : 0) || (b.touched || 0) - (a.touched || 0) || String(a.name).localeCompare(String(b.name)); });
     return cards.slice(0, max);
   }
-  var API = { build: build, board: board, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
+  var API = { build: build, board: board, progress: progress, kinds: kinds, kindLabels: kindLabels, wantsBattery: wantsBattery, STAGES: STAGES, STAGE_LABEL: STAGE_LABEL, MAX: MAX, at: at, money: money };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceToday = API;
 })(typeof window !== 'undefined' ? window : null);

@@ -203,11 +203,25 @@ decided 2026-09-26.
   **Assign** (or Reassign): the workspace's people from `team_members`,
   and one merge of `ownerEmail`, `ownerName`, `assignedBy`, `assignedAt`
   onto the project (the rules allow a same-org update that leaves `orgId`
-  and the roster alone).
+  and the roster alone). **The bar is the work done on the design**
+  (`OmegaWorkspaceToday.progress`, 2026-09-29, Tommy over eight Level 2
+  jobs reading "No battery size yet · 0%": "if they have been designed and
+  run then they are 100%"): designed is equipment or conduit on the site
+  map, run is Site Map's Run having costed it (`capexSource`/`capexAt`,
+  else a figure on the record reads priced); 50 and 100, and a project
+  past candidate reads the further of that and its stage. The meta line
+  names the kind of job (`kindLabels`) where there is no battery size, and
+  the why is that progress. What kind a job is comes through
+  `omega-workspaces.js`, the ONE type table (the page loads it): a
+  battery belongs only on a kind whose focus carries storage, or on a
+  record that declares no kind, so a Level 2, compute or building job is
+  never asked for a battery size — it is asked for a design.
 - **Needs you** adds the finance marketplace (offers waiting for an
   answer, a review at ClearSky older than a week, an awarded room not
   finished, a draft, an open deal with no offer in ten days) and folds
-  every unsized candidate into ONE row. The whole row is the target.
+  every unsized candidate into ONE row, and every job that is not a
+  battery job with nothing on the site map into ONE row of its own
+  (`design`, opening the oldest in Site Map). The whole row is the target.
 - **Around you**: the workspace feed (messages, project saves and
   assignments), People (presence from the later of `team_members.lastSeen`
   and the person's last message: in the workspace under 15 minutes, seen

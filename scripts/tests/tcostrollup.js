@@ -151,7 +151,7 @@ console.log('\nthe readers read exactly those names');
   const NOW = Date.UTC(2026, 8, 29, 12, 0, 0);
   fleet = { kw: 1000, kwh: 2000, units: 2, source: 'placed' };
   sheet({ _COST_TOTAL: 1234567.8, _NET_COST: 864197.8, _INC_TOTAL: 370370 });
-  const priced = Object.assign({ id: 'p1', name: '431 Sunderland Rd', stage: 'candidate', createdAt: NOW - 3 * 86400000, updatedAt: NOW - 3600000 }, omegaRollupFields(omegaRunRollup()));
+  const priced = Object.assign({ id: 'p1', name: '431 Sunderland Rd', type: 'l2', stage: 'candidate', elements: [{ type: 'evgear', evKind: 'charger' }], createdAt: NOW - 3 * 86400000, updatedAt: NOW - 3600000 }, omegaRollupFields(omegaRunRollup()));
   const unpriced = { id: 'p2', name: '33 Hermon St', stage: 'candidate', createdAt: NOW - 3 * 86400000, updatedAt: NOW - 7200000 };
   const both = T.build({ now: NOW, me: 'admin@concordenergyusa.com', projects: [priced, unpriced], canOpen: () => true });
   const capex = both.kpis.filter(k => k.key === 'capex')[0];
@@ -160,7 +160,7 @@ console.log('\nthe readers read exactly those names');
   const one = T.build({ now: NOW, me: 'admin@concordenergyusa.com', projects: [priced], canOpen: () => true });
   chk('a pipeline of priced sites has no dash and no "not priced yet"', one.kpis[2].value === '$1.2M' && one.kpis[2].delta === '', JSON.stringify(one.kpis[2]));
   const card = T.board({ now: NOW, projects: [priced, unpriced] });
-  chk('the In flight card of the priced site no longer reads "No battery size yet"', card.filter(c => c.id === 'p1')[0].why !== 'No battery size yet' && card.filter(c => c.id === 'p2')[0].why === 'No battery size yet', JSON.stringify(card.map(c => c.why)));
+  chk('the In flight card of the priced Level 2 site reads designed and run at 100%; the site nobody ran still asks for a size', card.filter(c => c.id === 'p1')[0].why === 'Designed and run · Touched today' && T.progress(priced).pct === 100 && card.filter(c => c.id === 'p2')[0].why === 'No battery size yet', JSON.stringify(card.map(c => c.why)));
 }
 
 console.log(all ? '\nALL PASS' : '\nFAILURES');

@@ -2644,3 +2644,40 @@ writers of those fields were the demo seeds and NextNRG's backfill.
   functions out of the editor against the sheet's totals, pins the payload
   literal and the load-side reset, and hands the fields to the real
   workspace rule: `$1.2M`, the site nobody ran the one "not priced yet".
+
+## In flight reads the work done on the design — September 29, 2026
+
+Eight Level 2 jobs on the Concord home each read "No battery size yet ·
+0%" (Tommy: "these are all batteries these are l2's so the details that
+show on the in flight tab should show the amount of work done on them, if
+they have been designed and run then they are 100%"). The card's bar was
+the pipeline stage (candidate = 0), and the Today rule asked every
+candidate without a size for a battery, whatever kind of job it was.
+
+- `omega-workspace-today.js` reads what KIND a job is through
+  `omega-workspaces.js`, the ONE type table (the dialog's type and
+  scopes, legacy names folded, the EV wizard's L2 / EVSE mark as the
+  editor's Projects list reads it), never a second alias map;
+  `workspace.html` now loads that library (its ribbon and rail hooks are
+  no-ops without the editor's DOM). `wantsBattery` is true only for a
+  kind whose focus carries storage (BESS, Solar + Storage, DCFC, a
+  microgrid) or a record that declares no kind, so every legacy project
+  reads as before.
+- `progress(p)`: designed when equipment or conduit is on the site map,
+  run when Site Map's Run costed it (`capexSource: 'site-map'` /
+  `capexAt`, the mark the previous entry added), else priced when a
+  figure is on the record; 50 and 100; a project past candidate reads the
+  further of that and its stage, so a job in construction never reads 0.
+  The card's bar is that percent, its meta line the kind of job
+  (`kindLabels`) where there is no battery size, and its why the
+  progress phrase — "Nothing on the site map yet", "Designed, not run
+  yet" (a candidate that still needs something), "Designed and run ·
+  Touched today". A battery candidate with no size still reads "No
+  battery size yet" and opens the sizer.
+- Today folds every non-battery job with nothing on the site map into
+  ONE row (`design`, opening the oldest in Site Map), the twin of the
+  size row; a Level 2 job is never asked for a battery size.
+- Tests: `scripts/tests/tworkspacetoday.js` §10 (kinds off the one
+  table, the percent, the phrases, the row, the card order);
+  `tcostrollup.js` now hands the workspace a Level 2 site the run priced
+  and reads "Designed and run" at 100%.
