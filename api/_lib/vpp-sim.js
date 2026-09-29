@@ -135,9 +135,10 @@ var ZIP3_MARKET = [
   [411, 412, 'PJM', 'Kentucky Power (Ashland)'],
   [415, 418, 'PJM', 'Kentucky Power (Pikeville / Hazard)'],
   [279, 279, 'PJM', 'Dominion Energy North Carolina (PJM DOM zone)'],
-  [278, 278, 'SE', 'Duke Energy Progress (Rocky Mount / Wilson; Roanoke Rapids and Halifax are Dominion, in PJM — correct the market there)'],
+  [278, 278, 'SE', 'Duke Energy Progress area (Rocky Mount and Wilson are municipal systems, not Duke; Roanoke Rapids and Halifax are Dominion, in PJM — correct the utility or the market there)'],
   [270, 277, 'SE', 'Duke Energy (North Carolina)'],
-  [280, 289, 'SE', 'Duke Energy (North Carolina)']
+  [289, 289, 'SE', 'TVA distributors (far western North Carolina: Murphy Electric Power Board and the area EMCs), not Duke'],
+  [280, 288, 'SE', 'Duke Energy (North Carolina)']
 ];
 /* New York by utility, because the two New York City rates follow two
    different territories: Con Edison's Dynamic Load Management follows its
@@ -947,14 +948,15 @@ function pickEvents(load, count, win) {
                  estimate models) */
 var PROGRAMS = [
   { id: 'ca.elrp', name: 'Emergency Load Reduction Program (ELRP)', markets: ['CAISO'], group: 'ca-dr',
-    segments: SEGMENTS, kind: 'event', perKwh: 2.00, events: 12, win: [16, 21],
+    segments: SEGMENTS, kind: 'event', perKwh: 2.00, win: [16, 21],
+    eventsBySegment: { residential: 7, commercial: 3, industrial: 3 },
     hoursBySegment: { residential: 3, commercial: 4, industrial: 4 },
     pairWith: 'ca.ra',
     pairWhy: 'CBP / DRAM pays more for the same hours. Enrolled there, the site could add ELRP through Group B (B.2 for CBP, B.1 for DRAM), which pays only the reduction beyond the CBP/DRAM commitment — that top-up is not modelled, so only the better of the two is counted.',
-    ref: 'CPUC ELRP pays $2/kWh of verified incremental load reduction in events called 4–9 pm, May–October. A home battery enrols through a VPP aggregator in sub-group A.4 (behind-the-meter storage, at least 500 kW aggregated, events of 1–3 h: 3 h here); a non-residential site through an aggregator in A.2 (events of 1–5 h: 4 h here). It pays incremental reduction against a baseline of similar non-event days, so a battery is paid for what it gives BEYOND its everyday discharge — here, the dispatch with the events minus the dispatch without them. The event count varies with the summer — 12 events is a planning year (elrp.sdge.com, read 2026-09-29).' },
+    ref: 'CPUC ELRP pays $2/kWh of verified incremental load reduction in events called 4–9 pm, May–October, up to 60 hours a season; the pilot is approved through 2027 (elrp.sdge.com, read 2026-09-29). A home battery enrols through a VPP aggregator in sub-group A.4 (behind-the-meter storage, at least 500 kW aggregated, events of 1–3 h: 3 h here); a non-residential site through an aggregator in A.2 (events of 1–5 h: 4 h here). It pays incremental reduction against a baseline of similar non-event days, so a battery is paid for what it gives BEYOND its everyday discharge — here, the dispatch with the events minus the dispatch without them. The planning year is the recent record, not the 60-hour cap: PG&E and SCE each called seven A.4 events in 2024 (about 20 event-hours), and two (PG&E) and three (SCE) A.2 events — so 7 events for a home battery and 3 for a business here (PG&E and SCE PY2024 ELRP load-impact evaluations, Demand Side Analytics, calmac.org, read 2026-09-29). The utility\'s event record for the season replaces it.' },
   { id: 'ca.dsgs', exportOk: true, name: 'Demand Side Grid Support (DSGS) Option 3', markets: ['CAISO'], group: 'ca-dr',
     segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 60, minHours: 2,
-    closed: 'Closed to a new aggregation: the CEC\'s DSGS Guidelines, 5th edition (April 2026, CEC-300-2026-001-CM), limit Option 3 in the 2026 season to storage VPP aggregators that took part in October 2025, and the 2026–27 state budget funds no 2027 season (status read 2026-09-29). Not counted.',
+    closed: 'Closed to a new aggregation: the CEC\'s DSGS Guidelines, 5th edition (adopted 2026-04-27, CEC-300-2026-001-CMF), limit Option 3 in the 2026 season to storage VPP aggregators that took part in October 2025, and the 2026–27 state budget funds no 2027 season (status read 2026-09-29). Not counted.',
     ref: 'CEC DSGS Option 3 (storage VPP) pays per kW of verified summer-season capacity. Planning figure; the season\'s published rate replaces it if the CEC reopens Option 3.' },
   { id: 'ca.ra', name: 'Resource Adequacy via DR aggregator (CBP / DRAM)', markets: ['CAISO'], group: 'ca-dr',
     segments: ['commercial', 'industrial'], kind: 'capacity', perKwYear: 42, minHours: 4,
@@ -1021,7 +1023,7 @@ var PROGRAMS = [
   { id: 'hi.bb', exportOk: true, name: 'Hawaiian Electric Bring Your Own Device Plus (BYOD Plus)', markets: ['HI'], group: 'hi',
     segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 60, minHours: 2,
     needsSolar: true, solarWhy: 'BYOD Plus takes only batteries paired with renewable generation; no solar was entered.',
-    ref: 'Battery Bonus closed to new participants on 2024-07-01; its successor, Bring Your Own Device Plus (from 2025-05-15), pays $400 per kW committed up front plus a monthly export credit for a daily two-hour window, over a five-year agreement (hawaiianelectric.com, read 2026-09-29). $60/kW-yr is a planning annualisation of that; the utility\'s terms replace it.' }
+    ref: 'Battery Bonus closed to new participants on 2024-07-01; its successor, Bring Your Own Device Plus (Rule 33, effective 2025-05-15, a five-year programme to 2030-05-14), asks a two-hour discharge every day and pays two things (hawaiianelectric.com Rule 33, Sheets 49.41-K and -L, read 2026-09-29). The ONE-TIME upfront incentive of $400 per kW committed ($800 for a qualifying low-to-moderate-income customer) is not counted here: it is listed with the other one-time incentives. The RECURRING part is a monthly Grid Service Export Credit: on a tariff other than NEM it is fixed at (retail rate − the DER tariff\'s export rate) × committed kW × 70% × 2 h × 30 days; a NEM customer already exports at the retail rate and gets nothing beyond it. $60/kW-yr is a planning figure for that recurring credit, not derived from those terms; the customer\'s own rates in that formula replace it.' }
 ];
 
 /* Whether a programme is open to this site: false when it is not offered
@@ -1046,6 +1048,7 @@ function eventProgram(ctx) {
   return null;
 }
 function eventHours(p, segment) { return (p.hoursBySegment && p.hoursBySegment[segment]) || 4; }
+function eventCount(p, segment) { return (p.eventsBySegment && p.eventsBySegment[segment]) || p.events || 0; }
 
 /* A behind-the-meter battery sells a reduction in the site's own load, so
    the kW it can commit is capped at what the site draws in the summer
@@ -1095,7 +1098,7 @@ function programValue(p, ctx) {
   if (loc.li && (p.perKwYearConEd || p.perKwYearZoneJ))
     rateNote = ' Long Island (PSEG Long Island, NYISO Zone K): the upstate planning rate is used, not Con Edison\'s or New York City\'s; PSEG Long Island\'s own terms replace it.';
   var kwCommitted = Math.min(shed, Eout / (p.minHours || 1));
-  return { usd: kwCommitted * rate * perf, tier: p.tier || 'planning', url: p.url,
+  return { usd: kwCommitted * rate * perf, tier: p.tier || 'planning', url: p.url, kw: kwCommitted,
            how: r2(kwCommitted) + ' kW committed (' + fmt(shed) + ' kW for ' + (p.minHours || 1) + ' h' +
                 (kwCommitted < shed ? ', limited by the ' + r2(Eout) + ' kWh it delivers' : '') + ') × $' + rate + '/' + (p.unit || 'kW-yr') + ' × ' +
                 pct + '.' + capNote + rateNote, ref: p.ref };
@@ -1112,6 +1115,7 @@ function programs(ctx) {
     if (!v) { row.eligible = false; row.why = why; missing.push(row.name + ' — ' + why); all.push(row); continue; }
     row.eligible = true; row.usd = r0(v.usd); row.tier = v.tier; row.how = v.how; row.ref = v.ref; if (v.url) row.url = v.url;
     if (v.deliveredKwh != null) { row.deliveredKwh = v.deliveredKwh; row.eventHoursKwh = v.eventHoursKwh; row.billCost = r0(v.cost); }
+    if (v.kw != null) row.committedKw = r2(v.kw);
     all.push(row);
     /* What an operator weighs: an event programme net of the bill savings
        that holding charge for it costs. */
@@ -1238,7 +1242,7 @@ function simulate(input) {
   var evP = eventProgram(ctx), D1 = null, after1 = null;
   if (evP) {
     var evH = eventHours(evP, segment), evWin = [evP.win[0], Math.min(evP.win[1], evP.win[0] + evH)];
-    var evs = pickEvents(netNoBat, evP.events, evWin);
+    var evs = pickEvents(netNoBat, eventCount(evP, segment), evWin);
     D1 = dispatch(load, solar, bat, t, evs, evWin[1] - evWin[0]);
     after1 = bill(Array.prototype.slice.call(D1.net), t);
     ctx.event = { id: evP.id, hours: evWin[1] - evWin[0], win: evWin, days: evs.length / (evWin[1] - evWin[0]),
@@ -1305,7 +1309,10 @@ function simulate(input) {
   var missing = G.missing.slice();
   missing.push('Wholesale energy arbitrage — a behind-the-meter battery reaches wholesale prices only through a retail or aggregator programme; not counted beyond those listed.');
   missing.push('Backup power / resilience — real value, but it is paid in avoided outage cost, not a cheque; not counted.');
-  missing.push('One-time incentives (SGIP, state rebates, the federal ITC) — see the Pro Forma; this is recurring earnings only.');
+  var byod = null; for (i = 0; i < G.all.length; i++) if (G.all[i].id === 'hi.bb' && G.all[i].eligible) byod = G.all[i];
+  missing.push('One-time incentives (SGIP, state rebates, the federal ITC' +
+               (byod ? '; here BYOD Plus\'s upfront incentive of $400 per kW committed, $' + fmt(400 * byod.committedKw) + ' on the ' + byod.committedKw + ' kW this estimate commits' : '') +
+               ') — see the Pro Forma; this is recurring earnings only.');
 
   return {
     ok: true, version: VERSION, provider: 'simulated',

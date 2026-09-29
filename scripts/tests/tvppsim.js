@@ -61,6 +61,10 @@ ok('Dominion NC gets the PJM rows (PLC), not the Southeast BYOD rate', (function
   return r.ok && !!stream(r, 'pjm.plc') && !stream(r, 'se.dr');
 })());
 ok('the US Virgin Islands (008) are refused, not priced as Puerto Rico', S.locate('00802').ok === false);
+/* R13: Murphy (289) is TVA-distributor country and Rocky Mount / Wilson
+   (278) are municipal systems: the label never says they are Duke's. */
+ok('Murphy, NC (289) reads TVA distributors, not Duke', /TVA/.test(S.locate('28906').area) && !/^Duke/.test(S.locate('28906').area) && S.locate('28906').market === 'SE' && /^Duke Energy \(North Carolina\)$/.test(S.locate('28801').area), S.locate('28906').area);
+ok('Rocky Mount / Wilson (278) are named municipal, not Duke Energy Progress customers', /municipal/.test(S.locate('27804').area) && /Duke Energy Progress area/.test(S.locate('27804').area), S.locate('27804').area);
 /* New York by utility (c5, c23): Con Edison's DLM follows its territory,
    the NYC SCR price follows Zone J, Long Island is PSEG Long Island. */
 [['10001', true, true, false], ['11201', true, true, false], ['11004', true, true, false], ['10601', true, false, false],
@@ -109,7 +113,8 @@ ok('TOU arbitrage earns on a California TOU rate', stream(caRes, 'bill.tou').usd
    2027 (c22): listed with the reason, never priced or counted. */
 ok('DSGS is not priced and is listed as closed', !stream(caRes, 'ca.dsgs') &&
    caRes.missing.some(function (m) { return /^Demand Side Grid Support/.test(m) && /Closed to a new aggregation/.test(m) && /October 2025/.test(m) && /2027/.test(m); }), caRes.missing);
-ok('ELRP is never told it lost to the closed DSGS', !caRes.streams.some(function (x) { return x.why && /DSGS/.test(x.why); }));
+ok('DSGS cites the adopted 5th-edition guidelines by their number (CEC-300-2026-001-CMF)', caRes.missing.some(function (m) { return /^Demand Side Grid Support/.test(m) && /CEC-300-2026-001-CMF\b/.test(m); }), caRes.missing);
+ok('ELRP is never told it lost to the closed DSGS',!caRes.streams.some(function (x) { return x.why && /DSGS/.test(x.why); }));
 ok('ELRP on a TOU home battery that already empties into 4–9 pm is listed with the reason, not priced', !stream(caRes, 'ca.elrp') &&
    caRes.missing.some(function (m) { return /^Emergency Load Reduction/.test(m) && /beyond the site's usual load/.test(m); }), caRes.missing);
 ok('CA RA is not open to a residential site', !stream(caRes, 'ca.ra') && caRes.missing.some(function (m) { return m.indexOf('Resource Adequacy') === 0; }));
@@ -239,11 +244,26 @@ ok('where ELRP is not counted, no event is drawn', !el1.counted && !hasEvent(ev1
 /* R1: on a day with no price spread every hour is a charging hour, so a
    dispatch free to buy inside a called event would buy there and have it
    taken off the reduction ELRP pays for. */
-var evFlat = S.simulate({ zip: '94110', segment: 'industrial', battery: { kw: 100, kwh: 200 }, tariff: { demandCharge: 15, onPeakRate: 0.3, offPeakRate: 0.3 } });
+var flatLoad = [], CUM0 = [0, 31, 59, 90, 120, 151, 181, 212, 243, 273, 304, 334];
+for (var fh = 0; fh < 8760; fh++) {
+  /* summer weekdays: a midday and an evening stretch over the target, the
+     event window between them (a touch higher in July, so July's first
+     weekday — the day drawn — is an event day) */
+  var fd = Math.floor(fh / 24), fhr = fh % 24, fdw = (3 + fd) % 7, fm = 0, fx = 1;
+  while (fm < 11 && fd >= CUM0[fm + 1]) fm++;
+  if (fm >= 5 && fm <= 8 && fdw !== 0 && fdw !== 6) fx = fhr >= 12 && fhr < 16 ? 6 : (fhr >= 16 && fhr < 19 ? (fm === 6 ? 3.2 : 3) : (fhr >= 19 && fhr < 22 ? 6 : 1));
+  flatLoad.push(fx);
+}
+var evFlat = S.simulate({ zip: '94110', segment: 'residential', battery: { kw: 5, kwh: 10 }, tariff: { demandCharge: 15, onPeakRate: 0.3, offPeakRate: 0.3 },
+  load: { type: 'interval', values: flatLoad, startDate: '2025-01-01' } });
 var evFlatHours = evFlat.sampleDay.hours.filter(function (x) { return x.event; });
 ok('the battery never charges from the grid inside a called ELRP event (flat energy price)', stream(evFlat, 'ca.elrp').counted && evFlatHours.length > 0 &&
    evFlatHours.every(function (x) { return x.battery >= -1e-9 || x.load - x.solar < 0; }), evFlatHours);
 ok('a home battery\'s ELRP events are 3 h (sub-group A.4), a business\'s 4 h (A.2)', /× 3 h/.test(el2.how) && /× 4 h/.test(el1.how) && /A\.4/.test(el2.ref) && /A\.2/.test(el2.ref) && !/A\.6/.test(el2.ref));
+/* R12: the planning year is the recent dispatch record (PG&E and SCE PY2024
+   evaluations: seven A.4 events, two and three A.2), not twelve. */
+ok('ELRP\'s planning year is the 2024 record: 7 events for a home battery, 3 for a business', /^7 events × 3 h/.test(el2.how) && /^3 events × 4 h/.test(el1.how) &&
+   /2024/.test(el2.ref) && /calmac/.test(el2.ref) && /through 2027/.test(el2.ref) && !/12 events/.test(el2.ref), [el2.how, el1.how]);
 /* d3: CBP/DRAM and ELRP are not mutually exclusive (ELRP Group B), only
    the top-up is not modelled. */
 var loser = el1.counted ? stream(ev1, 'ca.ra') : el1;
@@ -355,6 +375,12 @@ var hiNo = S.simulate({ zip: '96813', segment: 'residential' }), hiPv = S.simula
 ok('BYOD Plus needs a battery paired with solar; without it the row is listed, not priced', !stream(hiNo, 'hi.bb') && hiNo.missing.some(function (m) { return /BYOD Plus/.test(m) && /renewable/.test(m); }), hiNo.missing);
 var hb = stream(hiPv, 'hi.bb');
 ok('with solar it is BYOD Plus, and Battery Bonus is said to be closed', hb && /BYOD Plus/.test(hb.name) && !/Battery Bonus/.test(hb.name) && /Battery Bonus closed/.test(hb.ref) && /2024-07-01/.test(hb.ref), hb);
+/* R11: $400/kW up front over five years is $80/kW-yr, so $60 is no
+   annualisation of it; the upfront is one-time and listed as such. */
+ok('BYOD Plus: the $60 is a planning figure for the recurring export credit, never an "annualisation" of the one-time upfront', hb && !/annualis/i.test(hb.ref) &&
+   /one-time/i.test(hb.ref) && /70% × 2 h × 30 days/.test(hb.ref) && /NEM/.test(hb.ref), hb && hb.ref);
+ok('…and its $400/kW upfront is listed with the one-time incentives, on the kW it commits', hiPv.missing.some(function (m) { return /^One-time incentives/.test(m) && /BYOD Plus/.test(m) && /\$2,000 on the 5 kW this estimate commits/.test(m); }) &&
+   !caRes.missing.some(function (m) { return /^One-time incentives/.test(m) && /BYOD/.test(m); }), hiPv.missing);
 
 /* ── included with every account ─────────────────────────────────────── */
 section('Base: included with every account');
