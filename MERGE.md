@@ -51,6 +51,13 @@ Dropped: nine superseded Cloudflare worker versions, `_test_overlay.js`,
 `overlay-demo.html`, duplicate PDFs/PPTX/XLSX binaries (kept in `/docs/`
 where referenced), `sunesol-portal.zip`, `demo-clearskyomega.zip`.
 
+2026-09-30 edge compute: the Compute tab's new Site Screen (editor patch
+"EDGE SITE SCREEN", `rb-site-screen`) carries no logic of its own. It
+gathers the drawing's chargers (`evChargerTotals`), battery
+(`omegaBessFleet`), solar, the BTM panel's service inputs and the Battery
+Sizer's bills, and posts them to `/api/compute-proforma` `screen`; the
+hourly load balance was born server-side in `api/_lib/compute-site.js`.
+
 ## NEW in omega-core
 
 **Self-serve signup (decided 2026-09-06):** `start.html` on the hub host

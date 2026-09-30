@@ -823,7 +823,7 @@ var BACKFILLED = {
   'siteintel': '',
   'engineering': 'conductorsizing powerflow siteoptimizer',
   'finance': 'investment dcfc fleet apartment degradation',
-  'compute': 'datacenter computepower computelease',
+  'compute': 'datacenter computepower computelease computeproforma',
   'ops': 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand',
   'whitelabel': '',
   'permitting': '',

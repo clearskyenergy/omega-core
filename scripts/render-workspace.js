@@ -646,6 +646,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var fin = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, keys: Array.prototype.map.call(e.querySelectorAll('.ows-row'), function (r) { return r.getAttribute('data-row') + (r.classList.contains('locked') ? ':locked' : ''); }) }; }).catch(function () { return null; });
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'workspace-finance-panel.png') });
     ok('northstar: the Finance panel lists the VPP Earnings Simulator, open, right after the Value Stack', fin && /Finance/.test(fin.title) && fin.keys.indexOf('vppsim') === fin.keys.indexOf('valuestack') + 1 && fin.keys.indexOf('valuestack') >= 0, fin);
+    /* the Compute Site Pro Forma sits beside it (2026-09-30: "a pro forma that sits in the finance hexagon like we did for dividend VPP") */
+    ok('northstar: the Finance panel lists the Compute Site Pro Forma right after the VPP Earnings Simulator', fin && fin.keys.indexOf('computeproforma') === fin.keys.indexOf('vppsim') + 1, fin);
     await p.keyboard.press('Escape'); await wait(200);
     /* every hex opens the side panel, never a spot on the page (2026-09-27) */
     for (var hx of [['today', /Today/], ['projects', /Projects/], ['team', /Team/]]) {
