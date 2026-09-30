@@ -89,7 +89,18 @@ function readQuote(j) {
    else "Error"), the cause's code when it is one (ECONNREFUSED,
    ERR_INVALID_URL…), the phrase, and the endpoint's ORIGIN: scheme, host
    and port, never its userinfo, path or query. A variable part that still
-   carries a piece of the key or of the URL's credentials is withheld. */
+   carries a piece of the key or of the URL's credentials is withheld, in
+   any case: the URL parser LOWERCASES a host (and writes a non-ASCII one
+   as punycode), so the comparison folds case and also reads the host
+   back as Unicode (U3).
+
+   The message decides the phrase in a fixed order, URL faults first: the
+   runtime quotes the URL in a URL error and the key in a header error,
+   and either may carry any word, so a URL holding "header" is still a
+   URL fault (R18) and a key holding "URL" is still a header fault. Only
+   the runtime's own words are matched where it has them: the cause code
+   ERR_INVALID_URL, the credentials refusal's opening, "is an invalid
+   header value"; a loose word is the last resort. */
 var FAILURE = {
   timeout: 'no answer before our timeout',
   header: 'invalid header value; check DIVIDENDVPP_API_KEY',
@@ -101,9 +112,12 @@ var FAILURE = {
 function failureKind(e, timedOut) {
   var msg = String((e && e.message) || ''), code = e && e.cause && e.cause.code;
   if (timedOut) return 'timeout';
-  if (/header/i.test(msg)) return 'header';
+  if (code === 'ERR_INVALID_URL' || (e && e.code === 'ERR_INVALID_URL')) return 'url';
+  if (/^Request cannot be constructed from a URL that includes credentials/.test(msg)) return 'credentials';
+  if (/^[\w.]*:? ?"[\s\S]*" is an invalid header value\.?$/.test(msg) || /^Invalid header value\b/i.test(msg)) return 'header';
   if (/\bURL\b/.test(msg) && /credential/i.test(msg)) return 'credentials';
-  if (code === 'ERR_INVALID_URL' || (e && e.code === 'ERR_INVALID_URL') || /\bURL\b/.test(msg)) return 'url';
+  if (/\bURL\b/.test(msg)) return 'url';
+  if (/header/i.test(msg)) return 'header';
   if (e && e.cause) return 'network';
   return 'other';
 }
@@ -131,10 +145,23 @@ function secrets() {
   return out.filter(function (s) { return s && s.length >= 4; });
 }
 function identifier(v, re) { return typeof v === 'string' && re.test(v) ? v : ''; }
+/* a part as it may be read: itself, lower case, and a punycode host as Unicode */
+function readings(part) {
+  var out = [part, part.toLowerCase()];
+  if (/xn--/i.test(part)) {
+    try {
+      var U = require('url');
+      out.push(part.replace(/[^\/:]*xn--[^\/:]*/ig, function (h) { return U.domainToUnicode(h) || h; }).toLowerCase());
+    } catch (err) { /* no url module: the ASCII readings still stand */ }
+  }
+  return out;
+}
 function logFailure(e, timedOut) {
-  var hidden = secrets();
+  var hidden = secrets().map(function (h) { return h.toLowerCase(); });
   function safe(part, instead) {
-    for (var i = 0; i < hidden.length; i++) if (part.indexOf(hidden[i]) >= 0) return instead;
+    var seen = readings(part);
+    for (var i = 0; i < hidden.length; i++)
+      for (var j = 0; j < seen.length; j++) if (seen[j].indexOf(hidden[i]) >= 0) return instead;
     return part;
   }
   var name = safe(identifier(e && e.name, /^[A-Za-z][A-Za-z0-9_]{0,39}$/), '') || 'Error';
