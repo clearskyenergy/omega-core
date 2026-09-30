@@ -864,6 +864,7 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
   function footerCell(t) { t = t.trim(); return !!t && t.length <= 60 && (FOOTER.test(t) || dateRange(t)); }
   var perRow = {}, perSpan = {}, perCount = {};
   function footerRow(r) {
+    for (var a = 0; a < always.length; a++) if (!r[always[a]] || !r[always[a]].s.trim()) return true;
     for (var q = 0; q < r.length; q++) {
       if (!footerCell(r[q].s)) continue;
       if (!perRow[q]) return true;
@@ -886,17 +887,38 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
            '. Export the readings as plain numbers, or fix that cell.';
   }
 
-  var vals = [], dataRows = [], stamps = null, v, why2, cands = [], hits = {};
+  var vals = [], dataRows = [], stamps = null, v, why2, cands = [], hits = {}, rHits = {}, filled = {}, stampy = {};
+  var headText = head >= 0 ? rows[head].map(function (c) { return c.s.trim().toLowerCase(); }).join('|') : null;
   if (col >= 0) for (i = from; i < rows.length; i++) {
     var row = rows[i], st = stampedRow(row);
     v = numOf(row[col]);
+    if (stamps !== null && v == null && looksCount(row) === 0) {
+      /* a row of words that is not the header again (a per-day header is):
+         a second table below the readings (a billing summary) ends them */
+      var words = 0, digits = false;
+      for (j = 0; j < row.length; j++) { var wt = row[j].s.trim(); if (wt) words++; if (/\d/.test(wt)) digits = true; }
+      if (words >= 2 && !digits && row.map(function (c) { return c.s.trim().toLowerCase(); }).join('|') !== headText) break;
+    }
     if (stamps === null) {
       if (v == null && !st) continue;                               /* a units line or a note before the readings */
       stamps = st;
     } else if (stamps ? !st : (v == null && looksCount(row) === 0)) continue;   /* a note, a blank or an unstamped footer */
     cands.push(i);
-    for (j = 0; j < row.length; j++) if (j !== col && footerCell(row[j].s)) hits[j] = (hits[j] || 0) + 1;
+    for (j = 0; j < row.length; j++) {
+      if (j === col) continue;
+      var cs = row[j].s.trim();
+      if (!cs) continue;
+      filled[j] = (filled[j] || 0) + 1;
+      if (footerCell(cs)) { hits[j] = (hits[j] || 0) + 1; if (dateRange(cs)) rHits[j] = (rHits[j] || 0) + 1; }
+      if (CLOCK.test(cs) || dateOf(cs)) stampy[j] = (stampy[j] || 0) + 1;
+    }
   }
+  /* a period column may be filled on a cycle's first row only: judged on its filled cells */
+  for (j in rHits) if (has(rHits, j) && !(hits[j] > cands.length / 2) && rHits[j] >= 6 && rHits[j] > filled[j] / 2) hits[j] = cands.length;
+  /* a date or time column filled on (nearly) every reading: a row with it blank is a subtotal */
+  var always = [];
+  for (j in stampy) if (has(stampy, j) && stampy[j] >= cands.length * 0.95 && !perRowCandidate(j)) always.push(+j);
+  function perRowCandidate(q) { return hits[q] > cands.length / 2; }
   for (j in hits) if (has(hits, j) && hits[j] > cands.length / 2) {
     perRow[j] = true;
     /* the median over DISTINCT periods: an hourly file's first 200 rows are one billing cycle */
@@ -922,7 +944,7 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
   var n = vals.length;
 
   /* The dates. */
-  var notes = [], start = null, dateCol = -1, dated = false, datesOff = false, undatedWhy = null, per = 0, spanDays = 0;
+  var orderedRows = null, notes = [], start = null, dateCol = -1, dated = false, datesOff = false, undatedWhy = null, per = 0, spanDays = 0;
   /* a column of dates beats a column of periods: a "Billing Period" beside
      the reading's own date spans a month; a period is the time only where
      it is all the file has (SCE's "… to …") */
@@ -964,6 +986,14 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
           times.push(tv);
         }
         var hasT = !!tSrc && tNull <= n * 0.02;
+        /* among timed readings, a dated row with no time is a summary (a day's
+           or the year's total), never a reading at midnight */
+        if (hasT && tNull) {
+          var kv = [], kd = [], kt = [], kr = [];
+          for (i = 0; i < n; i++) if (times[i] != null) { kv.push(vals[i]); kd.push(days[i]); kt.push(times[i]); kr.push(dataRows[i]); }
+          notes.push(fmt(n - kv.length) + ' dated row' + (n - kv.length === 1 ? '' : 's') + ' with no time among timed readings ' + (n - kv.length === 1 ? 'was' : 'were') + ' read as a summary and left out.');
+          vals = kv; days = kd; times = kt; dataRows = kr; n = vals.length;
+        }
 
         /* forward or backward — never both: a file whose dates run on and
            then start again is two meters or two channels one after another */
@@ -986,12 +1016,12 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
           /* the autumn clock change repeats an hour between 01:00 and 03:00
              (the hour-number column's 2 or 3); a repeat anywhere else is a
              re-read, allowed as before up to four */
-          var dups = 0, dupAt = -1, dupDays = {}, nDupDays = 0, worst = 0, other = 0, fbAt = [];
+          var dups = 0, dupAt = -1, dupDays = {}, nDupDays = 0, worst = 0, other = 0, fbAt = [], fbDay = [];
           for (i = 1; i < n; i++) if (days[idx[i]] === days[idx[i - 1]] && times[idx[i]] === times[idx[i - 1]]) {
             dups++; if (dupAt < 0) dupAt = idx[i];
             var tm = times[idx[i]], fallBack = tSrc.clock ? (tm >= 60 && tm < 180) : (tm >= 1 && tm <= 3);
             if (!fallBack) { other++; continue; }
-            fbAt.push(i);
+            fbAt.push(i); fbDay.push(days[idx[i]]);
             var dk = days[idx[i]];
             if (!has(dupDays, dk)) { dupDays[dk] = 0; nDupDays++; }
             worst = Math.max(worst, ++dupDays[dk]);
@@ -1002,6 +1032,7 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
           }
         }
         var sorted = []; for (i = 0; i < n; i++) sorted.push(vals[idx[i]]);
+        orderedRows = idx.map(function (x) { return dataRows[x]; });
         vals = sorted;
         /* the interval: readings per day, the most common count */
         var perDay = {}, runDay = null, runN = 0, bestC = 0, bestN = 0;
@@ -1012,8 +1043,11 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
         if (!per) return { ok: false, error: 'The file has ' + fmt(bestC) + ' reading' + (bestC === 1 ? '' : 's') + ' on most days; this simulator reads hourly (24 a day), half-hourly (48) or 15-minute (96) readings for one year.' };
         /* a twelve-month span with two fall-backs holds one hour of readings
            too many: the later day's repeated readings are left out */
-        var want = [365 * 24 * per, 366 * 24 * per], extra = n - want[0];
-        if (hasT && extra > 0 && want.indexOf(n) < 0 && extra <= fbAt.length) {
+        var spanD = days[idx[idx.length - 1]] - days[idx[0]] + 1, target = (spanD >= 366 ? 366 : 365) * 24 * per, extra = n - target, lateN = 0, fbDays = [];
+        if (hasT) for (i = 0; i < fbDay.length; i++) if (fbDays.indexOf(fbDay[i]) < 0) fbDays.push(fbDay[i]);
+        var autumnBoth = fbDays.length === 2 && fbDays.every(function (dn) { return clockChange(addDays({ y: 1970, m: 1, d: 1 }, dn)) === 'autumn'; });
+        if (autumnBoth) for (i = 0; i < fbDay.length; i++) if (fbDay[i] === Math.max(fbDays[0], fbDays[1])) lateN++;
+        if (hasT && autumnBoth && extra > 0 && extra <= lateN) {
           var drop = {}; for (i = fbAt.length - extra; i < fbAt.length; i++) drop[fbAt[i]] = 1;
           var kept = []; for (i = 0; i < n; i++) if (!drop[i]) kept.push(vals[i]);
           vals = kept; n = vals.length;
@@ -1059,7 +1093,7 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
       notes.push('The load column ("' + headName + '") looks like ' + (hint === 'kwh' ? 'kWh per interval' : 'kW') +
                  ', but it was read as ' + (unit === 'kwh' ? 'kWh per interval' : 'kW') + ' as chosen; change the unit if that is wrong.');
   }
-  var ch = channels(rows, head, dataRows, [col], lineNo);
+  var ch = channels(rows, head, orderedRows || dataRows, [col], lineNo);
   if (ch.error) return { ok: false, error: ch.error };
   if (ch.note) notes.push(ch.note);
   var out = intervalToHourly(vals, unit, dated ? start : null, { undatedWhy: undatedWhy, per: per, spanDays: spanDays });

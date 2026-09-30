@@ -342,6 +342,9 @@ function utf8Bytes(str) {
    one file attached after loading a scenario (KEEP_COLUMN), which is that
    scenario's file again. */
 var COLUMN = null, COLUMN_LABEL = null, COLUMNS = null, KEEP_COLUMN = false, FILE_SEEN = null, FILE_INFO = '';
+/* bumped when the file or the scenario changes: an estimate that comes back
+   after that answers a question nobody is asking any more */
+var RUN_SEQ = 0;
 var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] }, LEAVING = false;
 /* The stored list in this session: 'idle' · 'loading' · 'loaded' (a missing
    document counts) · 'failed'. Save writes the WHOLE list, so it writes only
@@ -437,7 +440,7 @@ function readFile(f, done) {
   INTERVAL = null; FILE_INFO = ''; $('fileinfo').textContent = '';
   /* a new file clears the column chosen for the last one; the same file read
      again (Simulate before its read finished) keeps it */
-  if (f !== FILE_SEEN) { FILE_SEEN = f || null; if (KEEP_COLUMN) KEEP_COLUMN = false; else clearColumn(); }
+  if (f !== FILE_SEEN) { FILE_SEEN = f || null; RUN_SEQ++; if (KEEP_COLUMN) KEEP_COLUMN = false; else clearColumn(); }
   function settle() { if (done) done(); }
   if (!f) return settle();
   /* judged on the text, as the server judges it; a UTF-8 file has at least a
@@ -629,12 +632,20 @@ function run() {
   if (bytes > MAX_BODY) { formMsg(tooBigBody(bytes)); return; }
   formMsg('');
   var btn = $('run'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Simulating 8,760 hours…';
+  var seq = RUN_SEQ, name = $('nm').value.trim();
+  function stale() {
+    if (seq === RUN_SEQ) return false;
+    formMsg('The file or the scenario changed while that estimate ran; simulate again for this one.', 'warn');
+    return true;
+  }
   api(payload).then(function (j) {
-    LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
+    if (stale()) return;
+    LAST = { name: name, site: c.site, result: j.result };
     /* the column question is answered: one line says which, with the way back */
     formMsg('');                                  /* a "still simulating" word is answered now */
     var box = $('colpick'), hadFocus = box.contains(document.activeElement);
-    if (COLUMNS && COLUMNS.length && COLUMN) {
+    if (c.site.load.type !== 'interval') { /* a bills or profile run leaves an open file question as it was */ }
+    else if (COLUMNS && COLUMNS.length && COLUMN) {
       box.innerHTML = '<p style="margin:0">Load column: <b>' + esc(COLUMN_LABEL || COLUMN) + '</b> <button type="button" class="btn btn-t" data-act="change-column">Change</button></p>';
       box.hidden = false;
       if (hadFocus) box.querySelector('[data-act=change-column]').focus();
@@ -642,6 +653,7 @@ function run() {
     render(j.result);
     canSave();
   }, function (e) {
+    if (stale()) return;
     var e0 = e.errors && e.errors[0];
     if (e.status === 400 && e0 && e0.field === 'load.column' && Array.isArray(e0.columns) && askColumn(e)) return;
     formMsg(e.message);
@@ -814,6 +826,7 @@ function save() {
 }
 function loadScenario(i) {
   var s = STORE.scenarios[i]; if (!s) return;
+  RUN_SEQ++;
   var site = s.site || {};
   $('nm').value = s.name || ''; $('zip').value = site.zip || ''; $('mkt').value = site.market || '';
   setSeg(site.segment || 'commercial');

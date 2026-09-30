@@ -189,7 +189,13 @@ Clean Cell's two tools) still wins: absent is not empty.
     column); in such a column a period that occurs ONCE, more than a day
     long and twice the column's distinct periods' median (the file's span, a
     monthly subtotal) is still a summary — a billing cycle, on many
-    readings, never is, however long it runs. A stamped row with a blank or "N/A" reading is a gap (zero
+    readings, never is, however long it runs (a period column filled only
+    on each cycle's first row is judged on its filled cells). A row blank
+    in a date or time column that every other reading fills (a monthly
+    subtotal under a Bill Period) is a summary; among timed readings a
+    dated row with no time is a summary, said; a row of words that is not
+    the header again (a billing table below the readings) ends them, while
+    a per-day repeat of the header does not. A stamped row with a blank or "N/A" reading is a gap (zero
     within 2%, said so). A date written only on a day's first row carries
     down. **One row per day** (a date and 24, 48 or 96 consecutive hour or
     interval columns, "Hour 1 … Hour 24", "HE1 kWh", "H1", "Stunde 1",
@@ -222,7 +228,11 @@ Clean Cell's two tools) still wins: absent is not empty.
     four repeats elsewhere are re-read intervals, as before; more is
     refused as two meters or delivered and received rows, naming the first
     repeat. A local-clock year that crosses two fall-backs holds an hour of
-    readings too many; the later repeat is left out, said. (Readings are still laid by position after sorting, so a
+    readings too many; only when the repeats fall on exactly two autumn
+    clock-change Sundays, and no more than the later day's repeats are
+    over the year (365 or 366 days by the span), is the later repeat left
+    out, said — any other reading too many is refused, never trimmed.
+    The meter/channel test reads the rows in date and time order. (Readings are still laid by position after sorting, so a
     local-clock file's summer hours sit one hour early against the tariff;
     placing each by its own clock slot is not built.) dates that run forward and
     then back are refused the same way. The interval is the readings per

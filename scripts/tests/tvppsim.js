@@ -741,6 +741,47 @@ section('Interval files: the recheck of the recheck (summary periods, day rows, 
   ok('a second channel for four daytime hours on two days is refused (repeats outside the clock change)', !q.ok && /repeat a date and time/.test(q.error), q.ok ? q.readings : q.error);
 })();
 
+section('Interval files: summaries, second tables and clock changes, read honestly (verification pass 4)');
+(function () {
+  var fmtC = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  function localYear() { var o = []; for (var ms = Date.UTC(2025, 0, 1, 6); ; ms += 36e5) { var p = {}; fmtC.formatToParts(new Date(ms)).forEach(function (x) { p[x.type] = x.value; }); if (p.year === '2026') break; o.push(p.month + '/' + p.day + '/' + p.year + ',' + p.hour + ':00,1'); } return o; }
+  function sum(q) { return q.kw.reduce(function (a, b) { return a + b; }, 0); }
+  var cal = localYear();
+  var q = S.parseInterval(['Date,Time,kWh'].concat(cal, ['12/31/2025,,8760']).join('\n'), 'kwh');
+  ok('a calendar year with one fall-back and a dated annual total: the total is a summary, the repeat stays (8,760 kWh, never 17,520)', q.ok && q.readings === 8760 && Math.round(sum(q)) === 8760 && Math.max.apply(null, q.kw) === 1 && !/two autumn/.test(q.notes.join(' ')), q.ok ? [q.readings, sum(q), q.notes] : q.error);
+  q = S.parseInterval(['Date,Time,kWh'].concat(cal, ['1/1/2026,00:00,55']).join('\n'), 'kwh');
+  ok('one fall-back and a reading too many is refused, not trimmed by dropping the fall-back', !q.ok && /8,761/.test(q.error), q.ok ? [q.readings, q.notes] : q.error);
+  var ghost = cal.slice(), at9 = ghost.indexOf('03/09/2025,03:00,1');
+  ghost.splice(at9, 0, '03/09/2025,02:00,55');
+  q = S.parseInterval(['Date,Time,kWh'].concat(ghost).join('\n'), 'kwh');
+  ok('one fall-back and a reading for the hour that never happened: refused, the fall-back is not dropped to make room', !q.ok && /8,761/.test(q.error), q.ok ? [q.readings, Math.max.apply(null, q.kw), q.notes] : q.error);
+  var ts = ['Timestamp,kWh'];
+  for (var k = 0; k < 8760; k++) { var tk = dayAt(2025, 1, 1, Math.floor(k / 24)); ts.push(tk[1] + '/' + tk[2] + '/' + tk[0] + ' ' + p2d(k % 24) + ':00,1'); }
+  q = S.parseInterval(ts.concat(['12/31/2025,8760']).join('\n'), 'kwh');
+  ok('a combined timestamp file with a dated, time-less annual total: the total is a summary, said', q.ok && q.readings === 8760 && Math.max.apply(null, q.kw) === 1 && /read as a summary and left out/.test(q.notes.join(' ')), q.ok ? [q.readings, q.notes] : q.error);
+  /* newest-first, with the meter swapped mid-day */
+  var rs = [];
+  for (var d = 0; d < 365; d++) { var t = dayAt(2025, 1, 1, d); for (var h = 0; h < 24; h++) { var late = t[1] > 6 || (t[1] === 6 && (t[2] > 15 || (t[2] === 15 && h >= 11))); rs.push({ d: d, l: (late ? '22222222' : '11111111') + ',' + t[1] + '/' + t[2] + '/' + t[0] + ',' + (h + 1) + ',2' }); } }
+  rs.sort(function (a, b) { return b.d - a.d; });
+  q = S.parseInterval(['Meter Number,Date,Hour,kWh'].concat(rs.map(function (x) { return x.l; })).join('\n'), 'kwh');
+  ok('a newest-first file with the meter swapped mid-day is one swap, judged in date order', q.ok && q.readings === 8760 && /changes from "11111111" to "22222222"/.test(q.notes.join(' ')), q.ok ? q.notes : q.error);
+  /* billing period on the cycle's first row; monthly subtotals; a second table below */
+  var bp = ['Billing Period,Date,Time,kWh'], bs = ['Bill Period,Date,Time,kWh'], tb = ['Date,Time,kWh'];
+  for (var i = 0; i < 8760; i++) {
+    var u = dayAt(2025, 1, 1, Math.floor(i / 24)), per = p2d(u[1]) + '/01/2025 - ' + p2d(u[1]) + '/28/2025', ds = u[1] + '/' + u[2] + '/2025,' + p2d(i % 24) + ':00,1';
+    bp.push((u[2] === 1 && i % 24 === 0 ? per : '') + ',' + ds);
+    bs.push(per + ',' + ds);
+    var nx = dayAt(2025, 1, 1, Math.floor(i / 24) + 1);
+    if (i % 24 === 23 && nx[1] !== u[1]) bs.push(per + ',,,744');
+    tb.push(ds);
+  }
+  tb.push('', 'Billing Period,Start,End,kWh', 'Jan 2025,1/1/2025,1/31/2025,744', 'Feb 2025,2/1/2025,2/28/2025,672');
+  [['a Billing Period on each cycle\'s first row only', bp], ['monthly subtotal rows (a bill period, no date or time)', bs], ['a billing summary table below the readings', tb]].forEach(function (c) {
+    var r = S.parseInterval(c[1].join('\n'), 'kwh');
+    ok(c[0] + ': one year, 8,760 kWh', r.ok && r.readings === 8760 && Math.round(sum(r)) === 8760, r.ok ? [r.readings, sum(r)] : r.error);
+  });
+})();
+
 section('Interval files: timestamps set the interval and the order (round 3: U1, T3, R4, R6, R7)');
 function meter(head, f, y) { var out = []; for (var i = 0; i < 8760; i++) { var t = tsAt(i, 1), dd = t[0].split('-'); out.push(f(dd[1] + '/' + dd[2] + '/' + (y || dd[0]), i)); } return out; }
 (function () {

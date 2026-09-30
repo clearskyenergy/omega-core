@@ -682,6 +682,19 @@ function installDouble(cfg) {
     ok('col: and the file line no longer names the refused column', !/Gone kW/.test(await text(p, '#fileinfo')) && /rows with numbers/.test(await text(p, '#fileinfo')), await text(p, '#fileinfo'));
     await runAndWait();
     ok('col: and the unknown column is not posted again', !('column' in (lastLoad() || {})), lastLoad());
+    /* the question is open: a profile estimate leaves it open */
+    await p.click('[data-mode=profile]');
+    await runAndWait();
+    var cProf = await chooser();
+    ok('col: a profile estimate leaves the file\'s open question as it was', cProf.shown && cProf.radios.length === 2, cProf);
+    await p.click('[data-mode=interval]');
+    /* a scenario loaded while an estimate runs: its answer is not drawn under the scenario's name */
+    var scenIdx = await p.$$eval('#scen option', function (os) { for (var k = 0; k < os.length; k++) if (os[k].textContent.indexOf('Two meters ·') === 0) return os[k].value; return null; });
+    var beforeStale = estimates();
+    await p.evaluate(function (v) { document.getElementById('run').click(); var sel = document.getElementById('scen'); sel.value = v; sel.dispatchEvent(new Event('change')); }, scenIdx);
+    await until(function () { return estimates() > beforeStale && p.$eval('#run', function (b) { return !b.disabled; }); }, 20000);
+    await p.waitForTimeout(200);
+    ok('col: an estimate that returns after a scenario was loaded is not drawn, and says why', /changed while that estimate ran/.test(await text(p, '#formmsg')) && !(await chooser()).radios.length, { msg: await text(p, '#formmsg'), chooser: (await chooser()).shown });
     ok('no stray NaN / undefined (chooser)', !(await stray(p)), await stray(p));
     await shot(p, 'desktop-chooser');
   });
