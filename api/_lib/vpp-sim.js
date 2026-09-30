@@ -45,6 +45,7 @@ var VERSION = 'vpp-sim-1';
 var HOURS_YEAR = 8760;
 var YEAR_START_DOW = 3;        /* the simulated calendar is 2025: 1 Jan = Wednesday */
 var DAYS = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 var SEGMENTS = ['residential', 'commercial', 'industrial'];
 var SUMMER = [5, 6, 7, 8];     /* Jun–Sep, month index 0–11 */
 
@@ -338,15 +339,26 @@ function buildLoad(input, loc, segment) {
       for (m = 0; m < 12; m++) if (b.months[m].kwh == null) b.months[m].kwh = sum / wsum * clim[m];
       notes.push((12 - b.covered) + ' calendar month(s) had no bill and were filled from the climate curve.');
     }
-    var kw = [], anyPeak = false, fromCost = false;
+    var kw = [], anyPeak = false, fromCost = false, overfull = [];
     for (m = 0; m < 12; m++) {
       var mo = b.months[m];
       if (mo.kwh == null) { fromCost = true; mo.kwh = 0; }
       if (mo.peakKw) anyPeak = true;
+      /* A bill whose kWh the billed peak could not draw even running flat
+         out all month (a load factor above 1.0) cannot be matched: the
+         month is shaped to its kWh and its peak lands above the bill's. */
+      if (mo.peakKw > 0 && mo.kwh > mo.peakKw * DAYS[m] * 24 * 1.0001) overfull.push(MONTH_NAMES[m]);
       var fit = fitMonth(shapeMonth(segment, m), mo.kwh, mo.peakKw);
       for (i = 0; i < fit.length; i++) kw.push(fit[i]);
     }
     if (fromCost) notes.push('A month with dollars but no kWh was left at zero load; add the kWh for a fair answer.');
+    if (overfull.length) {
+      var which = overfull.length === 12 ? 'every month' : overfull.length === 1 ? overfull[0]
+        : overfull.slice(0, -1).join(', ') + ' and ' + overfull[overfull.length - 1];
+      notes.push('In ' + which + ', the bill\'s kWh is more than its billed peak could draw running flat out over the month (a load factor above 1.0): ' +
+        'the kWh may be double-billed, the demand line may understate the peak, or the billing period may run longer than the month. ' +
+        (overfull.length === 1 ? 'That month is' : 'Those months are') + ' shaped to the kWh, so the modelled peak is above the bill\'s; check the bills.');
+    }
     if (!anyPeak && segment !== 'residential') notes.push('No bill carried a peak kW, so each month\'s peak comes from the ' + segment + ' load shape — add the billed demand for a real demand-charge figure.');
     return { ok: true, kw: kw, source: 'bills', quality: (anyPeak || segment === 'residential') && b.covered >= 12 ? 'medium' : 'low',
              notes: notes, months: b.months, label: b.rows + ' month(s) of bills, shaped hour by hour for a ' + segment + ' site' };

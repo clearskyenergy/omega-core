@@ -11,8 +11,9 @@
  * empty results (and put back what was typed), read the load balance, run
  * the sizing sweep and use its best size, compare the three deals, read the
  * results and the deck, save and reload a scenario — on a desktop and a
- * 390 px phone, and checks that a packaged workspace without Omega Compute
- * is refused with the way to it. Fails on a page error, a figure that reads
+ * 390 px phone, runs a portfolio of saved scenarios (pick, run, read, open
+ * one, download the workbook and open it), and checks that a packaged
+ * workspace without Omega Compute is refused with the way to it. Fails on a page error, a figure that reads
  * NaN/undefined or -0.0%, sideways scroll on the phone, a step that does not
  * render, a switch drawn without its track (the knob over its words), a
  * month field that is not a month and a year, a chart drawn at another
@@ -92,6 +93,46 @@ async function init(context, base) {
     firestore.FieldValue = { serverTimestamp: function () { return 'ts'; } };
     window.firebase = { apps: [1], initializeApp: function () {}, auth: authentication, firestore: firestore };
   });
+}
+
+/* ── saved scenarios for the portfolio, as the page saves them ── */
+var CS = require(path.join(root, 'api/_lib/compute-site'));
+var ZIP = require(path.join(root, 'api/_lib/portfolio/zip'));
+function seedBills(kwhYear, peak) {
+  var shape = [0.95, 0.9, 0.95, 0.97, 1.02, 1.08, 1.15, 1.16, 1.08, 1.0, 0.93, 0.91], sum = 0, out = [];
+  shape.forEach(function (x) { sum += x; });
+  for (var i = 0; i < 12; i++) {
+    var mo = (i + 3) % 12 + 1, yr = i + 3 >= 12 ? 2025 : 2024;
+    out.push({ month: yr + '-' + (mo < 10 ? '0' : '') + mo, kwh: Math.round(kwhYear * shape[i] / sum), peakKw: Math.round(peak * (0.85 + 0.15 * shape[i])) });
+  }
+  return out;
+}
+function seedSite(name, zip, amps, pods, bkw, bkwh, kwhYear, peak) {
+  return { site: { name: name, zip: zip, city: name, hostType: 'retail' }, service: { amps: amps, volts: 480 }, ev: { ports: 0 }, compute: { pods: pods },
+    battery: bkwh ? { kw: bkw, kwh: bkwh } : {}, deal: { structure: 'infra' }, load: { type: 'bills', bills: seedBills(kwhYear, peak) } };
+}
+function seedHeadline(input) {
+  var m = CS.model(input); if (!m.ok) return {};
+  var pf = m.proforma;
+  return { structure: m.structure.label, pods: m.compute.pods, battery: m.battery.kwh ? m.battery.kw + ' kW / ' + m.battery.kwh + ' kWh' : '', act: m.verdict.act,
+    irr: pf ? pf.metrics.afterTaxIrr : null, npv: pf ? pf.metrics.npv : m.lease && m.lease.npv, capital: pf ? pf.capex.total : 0 };
+}
+var SEEDED = (function () {
+  var list = [
+    { id: 'sv', name: 'Seed Valley', input: seedSite('Seed Valley', '91405', 800, 5, 200, 800, 1052640, 441.6) },
+    { id: 'mr', name: 'Mill Road', input: seedSite('Mill Road', '92562', 400, 1, 200, 800, 1588052, 228) },
+    { id: 'ht', name: 'High Tide', input: seedSite('High Tide', '92121', 400, 4, 75, 150, 689259, 146.9) },
+    { id: 'ls', name: 'Lease Street', input: { site: { name: 'Lease Street', zip: '78701', hostType: 'multifamily' }, service: { amps: 800, volts: 480 }, ev: { ports: 0 }, compute: { pods: 2 }, deal: { structure: 'lease' } } },
+    { id: 'bz', name: 'Bad ZIP', input: { site: { name: 'Bad ZIP', zip: 'x' }, service: { amps: 400 } } },
+    { id: 'iv', name: 'Interval Yard', input: { site: { name: 'Interval Yard', zip: '97005' }, service: { amps: 400, volts: 480 }, load: { type: 'interval', unit: 'kw' } } }
+  ];
+  return { v: 1, scenarios: list.map(function (x, i) {
+    return { id: x.id, name: x.name, input: x.input, ui: { loadMode: (x.input.load || {}).type || 'profile', debt: false },
+      at: '2026-09-' + (10 + i) + 'T12:00:00Z', headline: /^(bz|iv)$/.test(x.id) ? {} : seedHeadline(x.input) };
+  }) };
+})();
+async function seedSaved(context) {
+  await context.addInitScript(function (saved) { try { localStorage.setItem('omega_computepf_v1:northstar.example', JSON.stringify(saved)); } catch (e) {} }, SEEDED);
 }
 
 var checks = 0;
@@ -280,6 +321,77 @@ async function run() {
     ok(/Example/.test(await p2.inputValue('#i-name')), 'a link with ?example=1 opens on the example, run');
     ok(e2.length === 0, 'no page errors on the phone: ' + e2.join(' | '));
     await ctx2.close();
+
+    /* ── the portfolio: saved scenarios picked and run together ── */
+    CALLER = LEGACY; legacyRecords();
+    var ctx4 = await browser.newContext({ viewport: { width: 1320, height: 900 }, acceptDownloads: true }); await init(ctx4, base); await seedSaved(ctx4);
+    var p4 = await ctx4.newPage(), e4 = [];
+    p4.on('pageerror', function (e) { e4.push(e.message); });
+    await p4.goto(base + '/compute-proforma.html');
+    await p4.waitForFunction(function () { return document.querySelectorAll('#i-mkt option').length > 5; });
+    await p4.click('#btn-port');
+    await p4.waitForSelector('#pf:not([hidden]) #pf-list');
+    ok(await p4.evaluate(function () { return document.activeElement === document.getElementById('pf-title') && document.documentElement.classList.contains('pf-lock'); }),
+      'the portfolio opens over the page, its title in focus and the page held still');
+    var offered = await p4.evaluate(function () {
+      var b = document.querySelectorAll('#pf-list input[data-pf-id]'), off = [].filter.call(b, function (x) { return x.disabled; });
+      return { all: b.length, off: off.length, why: off.length ? off[0].closest('.pf-item').textContent : '' };
+    });
+    ok(offered.all === 6 && offered.off === 1 && /interval file/.test(offered.why), 'every saved scenario is offered; the one saved with an interval file says why it cannot run');
+    ok(/5 of 5 picked/.test(await p4.locator('#pf-count').textContent()), 'the ones that can run start picked');
+    await p4.click('[data-act="pf-advance"]');
+    var adv = SEEDED.scenarios.filter(function (x) { return x.headline && x.headline.act === 'ADVANCE'; }).length;
+    ok(new RegExp('^' + adv + ' of 5 picked').test(await p4.locator('#pf-count').textContent()), 'Only ADVANCE keeps the ' + adv + ' whose screen said ADVANCE');
+    await p4.click('[data-act="pf-all"]');
+    await p4.click('#pf-run');
+    await p4.waitForSelector('#pf-cash svg', { timeout: 60000 });
+    var pft = await p4.locator('#pf-body').textContent();
+    ok(/After-tax IRR of the summed cash flow/.test(pft) && /Site by site/.test(pft) && !STRAY.test(pft) && !/-0\.0%/.test(pft), 'the results name the portfolio\'s IRR and every site, with no NaN or undefined');
+    ok(await p4.locator('#pf-body table tbody tr:not(.tot)').count() === 4 && /Lease the power, no capital/.test(pft), 'each site that ran is a row, the lease with no capital listed but not summed');
+    ok(/Not run/.test(pft) && /Bad ZIP/.test(pft) && /ZIP/.test(await p4.locator('#pf-body .wl.warn').first().textContent()), 'a scenario the model refuses is listed as not run, with the model\'s reason');
+    ok(/What needs a look/.test(pft) && /NO_FIT|SERVICE_OVERLOAD|PLANNING_RATE/.test(pft), 'what needs a look is listed by site');
+    var clipped = await p4.evaluate(function () {
+      return [].filter.call(document.querySelectorAll('#pf-body .pf-who'), function (el) { return el.scrollWidth > el.clientWidth + 1 || getComputedStyle(el).textOverflow === 'ellipsis'; }).length;
+    });
+    ok(clipped === 0 && await p4.locator('#pf-body .pf-who').count() > 0, 'each flag names every scenario it covers, none cut short');
+    var pcw = await p4.evaluate(function () { var b = document.getElementById('pf-cash'), v = b.querySelector('svg').viewBox.baseVal.width; return { v: v, w: b.clientWidth }; });
+    ok(Math.abs(pcw.v - Math.max(300, pcw.w)) <= 1, 'the portfolio chart draws at its card\'s width (' + pcw.v + ' for ' + pcw.w + ')');
+    ok((await p4.evaluate(axisClash)).length === 0, 'its axis labels stand apart');
+    var dlw = p4.waitForEvent('download');
+    await p4.click('#pf-foot [data-act="pf-download"]');
+    var dlf = await dlw, xbuf = fs.readFileSync(await dlf.path());
+    var xfiles = {}; ZIP.extract(xbuf).forEach(function (f) { xfiles[f.name] = f.bytes.toString('utf8'); });
+    ok(/^Compute-portfolio-4-sites-\d{4}-\d{2}-\d{2}\.xlsx$/.test(dlf.suggestedFilename()) && /<sheet name="Portfolio"[\s\S]*<sheet name="After-tax cash flow"[\s\S]*<sheet name="Metric verification"[\s\S]*<sheet name="Site inputs"[\s\S]*<sheet name="Method &amp; flags"/.test(xfiles['xl/workbook.xml'] || ''),
+      'the workbook downloads as an .xlsx with its five sheets: ' + dlf.suggestedFilename());
+    ok(/Seed Valley/.test(xfiles['xl/worksheets/sheet1.xml']) && /<f>IFERROR\(IRR\(/.test(xfiles['xl/worksheets/sheet1.xml']), 'it holds the sites and the live IRR formula');
+    await p4.locator('#pf-body [data-act="pf-open"]', { hasText: 'Mill Road' }).click();
+    await p4.waitForFunction(function () { return document.getElementById('pf').hidden && document.getElementById('i-name').value === 'Mill Road'; });
+    ok(true, 'a site\'s name in the results opens that scenario');
+    await p4.click('#btn-port');
+    await p4.waitForSelector('#pf:not([hidden])');
+    for (var tb = 0; tb < 14; tb++) await p4.keyboard.press('Tab');
+    ok(await p4.evaluate(function () { return document.querySelector('#pf .pf-dlg').contains(document.activeElement); }), 'Tab stays inside the open panel');
+    await p4.keyboard.press('Escape');
+    ok(await p4.evaluate(function () { return document.getElementById('pf').hidden && document.activeElement === document.getElementById('btn-port') && /^#step-\d$/.test(location.hash); }),
+      'Escape closes it, back to the button that opened it');
+    ok(e4.length === 0, 'no page errors in the portfolio: ' + e4.join(' | '));
+    await ctx4.close();
+
+    var ctx5 = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true }); await init(ctx5, base); await seedSaved(ctx5);
+    var p5 = await ctx5.newPage(), e5 = [];
+    p5.on('pageerror', function (e) { e5.push(e.message); });
+    await p5.goto(base + '/compute-proforma.html#portfolio');
+    await p5.waitForSelector('#pf:not([hidden]) #pf-list', { timeout: 20000 });
+    ok(true, 'a link to #portfolio opens the portfolio');
+    var hdr = await p5.evaluate(function () { var h = document.querySelector('.hdr'); return { over: h.scrollWidth - h.clientWidth, sel: document.getElementById('scen').getBoundingClientRect().width }; });
+    ok(hdr.over <= 1 && hdr.sel >= 150, 'on a phone the header keeps the scenario picker readable beside the portfolio and save buttons (' + Math.round(hdr.sel) + ' px)');
+    await p5.click('#pf-run');
+    await p5.waitForSelector('#pf-cash svg', { timeout: 60000 });
+    var pw = await p5.evaluate(function () { var b = document.getElementById('pf-body'); return Math.max(document.scrollingElement.scrollWidth - innerWidth, b.scrollWidth - b.clientWidth); });
+    ok(pw <= 1, 'the portfolio fits a 390 px phone (' + pw + ' px over)');
+    await shot(p5, 'cpf-phone-portfolio');
+    ok(e5.length === 0, 'no page errors in the portfolio on a phone: ' + e5.join(' | '));
+    await ctx5.close();
 
     /* ── a packaged workspace without Omega Compute ── */
     liteOnlyRecords();

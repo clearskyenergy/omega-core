@@ -2023,6 +2023,7 @@ module.exports = {
   defaults: defaults,
   validate: validate,
   irr: irr,
+  npv: npvAt,
   payback: payback,
   MACRS: deepFreeze(MACRS),
   STATE_TAX: deepFreeze(STATE_TAX),

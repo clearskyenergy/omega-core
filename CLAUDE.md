@@ -1178,8 +1178,18 @@ Compute › Size › Site Screen (`rb-site-screen`, `OmegaSiteScreen`) posts
 the balance. The user guide is `guides/compute/Compute-Site-Pro-Forma.pdf`
 (the page's *Guide* link), built from the real page by `npm run
 guide:compute`: retake it after a change to the page, never edit it.
-`docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
-`npm run check:compute`.
+**Portfolio analysis** (2026-09-30, the owner: "select the projects and run a
+portfolio analysis and it outputs these details and this workbook"):
+*Portfolio* in the header runs picked saved scenarios together through
+`api/_lib/compute-portfolio.js` (`action: 'portfolio'`): each EXACTLY AS SAVED
+(nothing re-sized), the portfolio the SUM of their after-tax cash flows (its
+IRR the finance engine's on that sum, never an average), for every site with
+capital and for the ones that fit (`compute-site.fitsService`, the ONE fit
+rule the sizing sweep reads too); what cannot run is listed with why, never
+dropped. The workbook is written on the server by `api/_lib/portfolio/xlsx.js`,
+the ONE .xlsx writer (five sheets; totals are live formulas carrying their
+values). `docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
+`scripts/tests/tcomputeportfolio.js`, `npm run check:compute`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

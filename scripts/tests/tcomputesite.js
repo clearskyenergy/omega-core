@@ -246,6 +246,7 @@ function load(docs, caller) {
       if (/\/verify-token$/.test(n)) return stub;
       if (/\/package-access$/.test(n)) return require(path.join(ROOT, 'api/_lib/package-access'));
       if (/\/compute-site$/.test(n)) return CS;
+      if (/\/compute-portfolio$/.test(n)) return require(path.join(ROOT, 'api/_lib/compute-portfolio'));
       if (/\/proforma-engine$/.test(n)) return PF;
       if (/\/deck-brand$/.test(n)) return require(path.join(ROOT, 'api/_lib/deck-brand'));
       throw new Error('api/compute-proforma.js required an unstubbed module: ' + n);
@@ -265,6 +266,7 @@ function docs(org, bill, member) {
   if (member !== undefined) d[BASEP + '/members/' + UID] = member; return d;
 }
 var SCR = { action: 'screen', site: BASE };
+var PORT = { action: 'portfolio', today: new Date().toISOString().slice(0, 10), sites: [{ id: 'p1', name: 'Oak Street', input: BASE }, { id: 'p2', name: 'Tight', input: TIGHT }] };
 var PKG = function (mods) { return { packaged: true, packagingState: 'paid', accessUntil: 4102444800000, modules: mods }; };
 later(function () { section('Gate'); });
 [
@@ -289,7 +291,13 @@ later(function () { section('Gate'); });
   ['an unknown action is 400', docs(undefined, { tier: 'standard' }), { action: 'dump' }, null, function (r) { return r.status === 400; }],
   ['options name the GPU classes and patterns, and the finance defaults', docs(undefined, { tier: 'standard' }), { action: 'options' }, null, function (r) { return r.status === 200 && r.body.options.gpus.h200 && r.body.options.patterns.overnight && r.body.options.finance.years === 25; }],
   ['context returns the caller\'s brand for the deck', docs({ status: 'active', name: 'Example Energy' }, { tier: 'standard' }), { action: 'context' }, null, function (r) { return r.status === 200 && r.body.brand && r.body.orgId === ORG; }],
-  ['model returns the pro forma', docs(undefined, { tier: 'standard' }), { action: 'model', site: BASE }, null, function (r) { return r.status === 200 && r.body.result.proforma && r.body.result.deals; }]
+  ['model returns the pro forma', docs(undefined, { tier: 'standard' }), { action: 'model', site: BASE }, null, function (r) { return r.status === 200 && r.body.result.proforma && r.body.result.deals; }],
+  ['portfolio runs the picked scenarios and returns the workbook', docs(undefined, { tier: 'standard' }), PORT, null, function (r) {
+    var x = r.status === 200 && r.body.result; return x && x.ran === 2 && x.portfolio.all.sites === 2 && x.workbook && /^UEsDB/.test(x.workbook.base64) && !x.sites[0].flows; }],
+  ['portfolio is behind the same gate', docs({ status: 'pending' }, { tier: 'standard' }), PORT, null, function (r) { return r.status === 403; }],
+  ['portfolio with nothing picked is 400', docs(undefined, { tier: 'standard' }), { action: 'portfolio', sites: [] }, null, function (r) { return r.status === 400 && r.body.errors[0].field === 'sites'; }],
+  ['portfolio too large to run is 413', docs(undefined, { tier: 'standard' }), { action: 'portfolio', sites: [{ id: 'big', name: 'Big', input: { site: { zip: '78701', name: new Array(4100001).join('x') } } }] }, null,
+    function (r) { return r.status === 413; }]
 ].forEach(function (cse) {
   later(function () {
     return call(cse[1], cse[2], cse[3] || {}).then(function (r) { ok(cse[0], cse[4](r), { status: r.status, body: r.body && (r.body.error || r.body.errors) }); });

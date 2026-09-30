@@ -10,9 +10,10 @@
    with verify-token answered from one in-memory workspace and the browser's
    Firebase replaced by a stand-in, as render-compute-proforma.js does. It
    presses Run the example on the empty results, walks the seven steps and
-   photographs each card. Every figure the guide quotes is read off the page
-   it photographed, and each step's state is asserted, so the guide cannot
-   show or say what the page does not.
+   photographs each card, then saves four more sites beside the example and
+   runs them as a portfolio. Every figure the guide quotes is read off the
+   page it photographed, and each step's state is asserted, so the guide
+   cannot show or say what the page does not.
 
      node scripts/guides/compute-proforma.js               writes guides/compute/Compute-Site-Pro-Forma.pdf
    (served: https://silmarillion.clearskyomega.com/guides/compute/Compute-Site-Pro-Forma.pdf;
@@ -48,6 +49,33 @@ require.cache[vtPath] = { id: vtPath, filename: vtPath, loaded: true, exports: {
   readAsCaller: function (token, p) { return Promise.resolve(Object.prototype.hasOwnProperty.call(RECORDS, p) ? JSON.parse(JSON.stringify(RECORDS[p])) : null); }
 } };
 var handler = require(path.join(ROOT, 'api/compute-proforma'));
+var CS = require(path.join(ROOT, 'api/_lib/compute-site'));
+
+/* ── four more saved sites for the portfolio, with neutral names ──────── */
+function bills(kwhYear, peak) {
+  var shape = [0.95, 0.9, 0.95, 0.97, 1.02, 1.08, 1.15, 1.16, 1.08, 1.0, 0.93, 0.91], sum = 0, out = [];
+  shape.forEach(function (x) { sum += x; });
+  for (var i = 0; i < 12; i++) {
+    var mo = (i + 3) % 12 + 1, yr = i + 3 >= 12 ? 2025 : 2024;
+    out.push({ month: yr + '-' + (mo < 10 ? '0' : '') + mo, kwh: Math.round(kwhYear * shape[i] / sum), peakKw: Math.round(peak * (0.85 + 0.15 * shape[i])) });
+  }
+  return out;
+}
+function saved(id, name, city, zip, amps, pods, bkw, bkwh, kwhYear, peak) {
+  var input = { site: { name: name, city: city, zip: zip, hostType: 'retail' }, service: { amps: amps, volts: 480 }, ev: { ports: 0 }, compute: { pods: pods },
+    battery: bkwh ? { kw: bkw, kwh: bkwh } : {}, deal: { structure: 'infra' }, load: { type: 'bills', bills: bills(kwhYear, peak) } };
+  var m = CS.model(input), pf = m.proforma;
+  if (!m.ok) throw new Error('a portfolio site for the guide does not run: ' + name);
+  return { id: id, name: name, input: input, ui: { loadMode: 'bills', debt: false }, at: '2026-09-20T12:00:00Z',
+    headline: { structure: m.structure.label, pods: m.compute.pods, battery: m.battery.kwh ? m.battery.kw + ' kW / ' + m.battery.kwh + ' kWh' : '',
+      act: m.verdict.act, irr: pf ? pf.metrics.afterTaxIrr : null, npv: pf ? pf.metrics.npv : null, capital: pf ? pf.capex.total : 0 } };
+}
+var PF_SEED = [
+  saved('g-harbor', 'Harbor Point', 'Van Nuys', '91405', 800, 5, 200, 800, 1052640, 441.6),
+  saved('g-mill', 'Mill Road', 'Murrieta', '92562', 400, 1, 200, 800, 1588052, 228),
+  saved('g-north', 'North Yard', 'Hillsboro', '97124', 400, 2, 100, 400, 733719, 208),
+  saved('g-seed', 'Seed Valley', 'San Diego', '92121', 400, 4, 75, 150, 689259, 146.9)
+];
 
 var STATIC = { '/compute-proforma.html': 'text/html', '/proforma-logic.js': 'text/javascript', '/omega-tools.js': 'text/javascript', '/omega-splash.js': 'text/javascript' };
 var server = http.createServer(function (req, res) {
@@ -178,7 +206,7 @@ function guideHtml(img, F, marks) {
   + '<div class="side"><div>'
   + '<p>Seven steps down the left, the Live summary on the right. Every change runs the model again on the server after a short pause. On a phone the steps are Back and Next at the bottom, and the summary is the strip under the header.</p>'
   + '<ol style="margin:0 0 8px 18px;padding:0"><li><b>Site & service:</b> where, and what the panel can carry.</li><li><b>Building load:</b> an 8760, bills or a typical shape, and the tariff.</li><li><b>EV charging:</b> ports, sessions and when cars come.</li><li><b>Compute:</b> GPUs, who buys the hours, prices over time.</li><li><b>Load balance:</b> the battery, the hourly fit and the sizing sweep.</li><li><b>Deal & financing:</b> three ways to own it, tax and debt.</li><li><b>Results & report:</b> the IRR, the investor deck and saved scenarios.</li></ol>'
-  + '<p>Once the model has run, a line under each step’s name recaps it. A step with a problem is ringed in red. <b>Save scenario</b> at the top keeps the whole set; <b>Saved scenarios</b> reopens one.</p>'
+  + '<p>Once the model has run, a line under each step’s name recaps it. A step with a problem is ringed in red. <b>Save scenario</b> at the top keeps the whole set; <b>Saved scenarios</b> reopens one; <b>Portfolio</b> runs saved scenarios together.</p>'
   + '<p>A grey figure in a field is what a blank field runs on. Type over it to change it.</p>'
   + '</div>' + fig('rail', 'The Live summary.') + '</div>'
 
@@ -262,6 +290,24 @@ function guideHtml(img, F, marks) {
   + '<p>The deck is drawn from the result in your company’s brand: a cover, the one-page investor summary, the returns and tax basis, the annual cash flow, the assumptions and a closing page. <b>Print / save as PDF</b> prints it; <b>Download the annual CSV</b> exports the year-by-year figures.</p>'
   + fig('deck', 'The investor one-pager, as printed.')
   + '<p><b>Save scenario</b> at the top keeps every input. Saved scenarios are listed under <b>Compare scenarios</b>, at the foot of the results, with their size, schedule, deal and returns side by side.</p>'
+
+  /* ── the portfolio ── */
+  + '<h1>Portfolio analysis: many sites at once</h1>'
+  + '<p class="lead">Once you have saved scenarios, <b>Portfolio</b> at the top of the page, beside Saved scenarios, runs the ones you pick together. It gives the portfolio’s returns and every site’s side by side, and writes the workbook. <b>Run a portfolio analysis</b> under Compare scenarios opens it too.</p>'
+  + fig('pfpick', 'Pick the saved scenarios. <b>Select all</b>, <b>Clear</b> and <b>Only ADVANCE</b> (the ones whose load screen said ADVANCE when they were saved) change the picks; with more than eight, a filter finds one by name. A scenario saved with an interval file cannot run until it is opened, the file attached and saved again.')
+  + '<p>Each scenario runs through the model exactly as it was saved: its own load, service, chargers, pods, battery, deal and term. Nothing is re-sized. The portfolio is the sum of their after-tax cash flows, year by year, as if every site closed together. Its IRR is the IRR of that sum, not an average of the sites’ IRRs, so a large site weighs more than a small one.</p>'
+  + fig('pfres', 'The portfolio. Here ' + esc(F.pf.sites) + ' return ' + esc(F.pf.irr) + ' after tax together, and ' + esc(F.pf.fit) + '.')
+  + fig('pftable', 'Site by site, ranked by after-tax IRR, with two portfolios at the foot: every site with capital, and the ones that fit their existing service. A site’s name opens that scenario.')
+  + '<p><b>Fits the existing service</b> is the sizing sweep’s rule: no firm compute lost to the service limit, and under 5% of the charging energy unserved. A build that does not fit is shown as it was saved: open it, use Step 5’s <b>Find the best size</b>, save it and run the portfolio again. <b>What needs a look</b> lists each warning once, with every scenario it covers. <b>Not run</b> lists any scenario the model could not run, and why.</p>'
+  + '<h2>The workbook</h2>'
+  + '<p><b>Download the workbook</b> saves an Excel file of the run, named for the day. Every total is a live formula, and each formula also carries its value, so a preview that does not recalculate still reads right.</p>'
+  + '<table class="t k">'
+  + row('Portfolio', 'One row per site: the building load, the service and whether the build fits, the pods, GPUs and battery, the capital and the returns. The two portfolios are the totals.')
+  + row('After-tax cash flow', 'Each site’s Year 0 to the end of its term, the two sums and their cumulative.')
+  + row('Metric verification', 'The spreadsheet’s own IRR, NPV and MOIC from each cash flow, beside the model’s, and the differences.')
+  + row('Site inputs', 'What each site ran on: the scenario’s inputs after the model’s defaults.')
+  + row('Method & flags', 'How it was worked, what needs a look and what did not run.')
+  + '</table>'
 
   /* ── the site screen in site map ── */
   + '<h1>From Site Map: the Site Screen</h1>'
@@ -411,6 +457,33 @@ async function run() {
     assert(await page.locator('#compare tbody tr').count() === 1, 'the saved scenario is compared');
     await page.evaluate(function () { document.documentElement.classList.add('guide-shots'); });
     await snap('rail', page.locator('#rail .card').first());
+
+    /* the portfolio: the example and four more saved sites, run together */
+    await page.evaluate(function (a) {
+      var k = 'omega_computepf_v1:' + a.org, cur = JSON.parse(localStorage.getItem(k) || '{"v":1,"scenarios":[]}');
+      cur.scenarios = cur.scenarios.concat(a.seed); localStorage.setItem(k, JSON.stringify(cur));
+    }, { org: ORG, seed: PF_SEED });
+    await page.goto('about:blank');
+    await page.goto(base + '/compute-proforma.html#portfolio');
+    await page.waitForSelector('#pf:not([hidden]) #pf-list');
+    await page.waitForTimeout(900);
+    assert(/^5 of 5 picked/.test(await page.locator('#pf-count').textContent()), 'the example and the four sites are picked');
+    files.pfpick = path.join(SHOTS, 'pfpick.png');
+    await page.locator('#pf .pf-dlg').screenshot({ path: files.pfpick });
+    await page.click('#pf-run');
+    await page.waitForSelector('#pf-cash svg', { timeout: 60000 });
+    await page.mouse.move(2, 2);
+    F.pf = await page.evaluate(function () {
+      var card = document.querySelector('#pf-body .card'), aside = card.querySelector('.aside').textContent, n = /(\d+) sites? with capital · (\d+) fit/.exec(aside) || [];
+      var sites = +n[1], fit = +n[2];
+      return { sites: sites + ' site' + (sites === 1 ? '' : 's') + ' with capital', irr: card.querySelector('.kpi .v').textContent.trim(),
+        fit: fit === sites ? 'every one fits its existing service' : fit ? fit + ' of them fit their existing service' : 'none fits its existing service' };
+    });
+    assert(/%$/.test(F.pf.irr) && /with capital/.test(F.pf.sites), 'the portfolio ran and reads: ' + JSON.stringify(F.pf));
+    files.pfres = path.join(SHOTS, 'pfres.png');
+    await page.locator('#pf-body .card').first().screenshot({ path: files.pfres });
+    files.pftable = path.join(SHOTS, 'pftable.png');
+    await page.locator('#pf-body .card', { has: page.locator('h3', { hasText: 'Site by site' }) }).screenshot({ path: files.pftable });
     assert(errors.length === 0, 'no page errors: ' + errors.join(' | '));
 
     /* the PDF */
