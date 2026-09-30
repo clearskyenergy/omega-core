@@ -405,8 +405,6 @@ var SLOT_HEAD = /^(?:hour|hr|h|he|hour ending|hour beginning|interval|int|period
 /* a WHOLE header that names the meter or the channel (never "Meter Status",
    "Read Type", "Meter Reading" or a cumulative "Register": those describe a
    reading) */
-/* a date that is not the reading's: when it was read, billed, stated or revised */
-var READ_DATE_HEAD = /\b(?:read|reading|bill|billing|statement|revision|revised|posted|export|run|report)\b/i;
 var CHANNEL_HEAD = /^(?:channel|channel (?:name|id|number|no)|chan|direction|flow|flow direction|meter|meter (?:id|number|no|#|serial|serial number)|register type|uom|unit of measure|service point|service point id|sdp|esiid|esi id)$/i;
 var EXPORT_HEAD = /(export|generat|solar|\bpv\b|received)/i;   /* what left the site is not its load */
 var NOT_LOAD_HEAD = /(factor|\bpf\b|kva|\bva\b|\bmva\b|reactive|apparent|volt|\bamps?\b|ampere|\bcurrent\b|\(\s*a\s*\)|frequency|\bhz\b|temperature|\btemp\b|multiplier|\bmult\b|percent|%|\bpct\b|register|cumulative|odometer|meter\s+read|carbon|\bco2\b|emission|intensity|contract|threshold|\bevents?\b|\bflags?\b|\bstatus\b|\bresponse\b|\bestimated?\b)/i;
@@ -642,6 +640,16 @@ function channels(rows, head, dataRows, skip, lineNo) {
   for (var j = 0; j < rows[head].length; j++) {
     var hj = rows[head][j].s.trim();
     if (skip.indexOf(j) >= 0 || hj.length > 60 || !CHANNEL_HEAD.test(headNorm(hj).replace(/[()]/g, '').trim())) continue;
+    /* a meter or channel id takes a handful of values; a column of numbers
+       with dozens (a running register headed "Meter") is a reading */
+    var distinct = {}, nd = 0, allNum = true;
+    for (var i0 = 0; i0 < dataRows.length && nd <= 24; i0++) {
+      var c0 = rows[dataRows[i0]][j], r0 = c0 ? c0.s.trim() : '';
+      if (!r0) continue;
+      if (!/^-?[\d.,]+$/.test(r0)) allNum = false;
+      if (!has(distinct, r0)) { distinct[r0] = 1; nd++; }
+    }
+    if (allNum && nd > 24) continue;
     var cur = null, curRaw = '', seen = {}, swaps = [];
     for (var i = 0; i < dataRows.length; i++) {
       var c = rows[dataRows[i]][j], raw = c ? c.s.trim() : '';
@@ -765,10 +773,9 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
     var H = slots.length, dCol = -1;
     if ((H === 24 || H === 48 || H === 96) && slots[H - 1] - slots[0] === H - 1) {
       /* the day: a column of dates, never a "Bill Period" beside it */
-      for (var mp = 0; mp < 3 && dCol < 0; mp++)
+      for (var mp = 0; mp < 2 && dCol < 0; mp++)
         for (i = from; i < rows.length && i < from + 20 && dCol < 0; i++) if (rows[i].length === W)
-          for (j = 0; j < W && dCol < 0; j++) if (numeric.indexOf(j) < 0 && j < slots[0] && dateOf(rows[i][j].s) && (mp === 2 || !rangeStart(rows[i][j].s)) &&
-                                                  (mp > 0 || !READ_DATE_HEAD.test(headNorm(rows[head][j].s)))) dCol = j;
+          for (j = 0; j < W && dCol < 0; j++) if (numeric.indexOf(j) < 0 && j < slots[0] && dateOf(rows[i][j].s) && (mp || !rangeStart(rows[i][j].s))) dCol = j;
     }
     if (dCol >= 0) {
       /* a clock-change day has one slot fewer (spring) or one more (autumn):
@@ -939,12 +946,10 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
   /* a column of dates beats a column of periods: a "Billing Period" beside
      the reading's own date spans a month; a period is the time only where
      it is all the file has (SCE's "… to …") */
-  /* ...and the usage date beats a Read, Bill, Statement or Revision date beside it */
-  function sideDate(q) { return head >= 0 && READ_DATE_HEAD.test(headNorm(rows[head][q].s)); }
-  for (var pass = 0; pass < 3 && dateCol < 0; pass++)
+  for (var pass = 0; pass < 2 && dateCol < 0; pass++)
     for (i = 0; i < dataRows.length && i < 50 && dateCol < 0; i++) {
       var rr = rows[dataRows[i]];
-      for (j = 0; j < rr.length && dateCol < 0; j++) if (j !== col && dateOf(rr[j].s) && (pass === 2 || !rangeStart(rr[j].s)) && (pass > 0 || !sideDate(j))) dateCol = j;
+      for (j = 0; j < rr.length && dateCol < 0; j++) if (j !== col && dateOf(rr[j].s) && (pass || !rangeStart(rr[j].s))) dateCol = j;
     }
   if (dateCol >= 0) {
     var dcells = [];

@@ -820,11 +820,16 @@ section('Interval files: the final pass (sparse cycles, hour-ending clock change
   var tot = ['01/01/2025 - 12/31/2025']; for (k = 0; k < 24; k++) tot.push(365); mx.push(tot.join(','));
   q = S.parseInterval(mx.join('\n'), 'kwh');
   ok('a day matrix with a whole-year total row: the total is not a day', q.ok && q.readings === 8760 && Math.max.apply(null, q.kw) === 100, q.ok ? q.readings : q.error);
-  /* a Read Date two days after the usage date, and first */
-  var rd = ['Read Date,Usage Date,Hour,kWh'];
-  for (i = 0; i < 8760; i++) { var ud = dayAt(2025, 1, 1, Math.floor(i / 24)), rdd = dayAt(2025, 1, 3, Math.floor(i / 24)); rd.push(rdd[1] + '/' + rdd[2] + '/' + rdd[0] + ',' + ud[1] + '/' + ud[2] + '/2025,' + (i % 24 + 1) + ',' + (i % 24 === 16 ? 100 : 1)); }
-  q = S.parseInterval(rd.join('\n'), 'kwh');
-  ok('a Read Date before the Usage Date: the readings sit on the usage date', q.ok && q.readings === 8760 && q.kw.indexOf(100) === 16, q.ok ? [q.kw.indexOf(100), q.notes] : q.error);
+  /* verification pass 7: a date column is never skipped for its name; one spike, 15 Jul 16:00, must land at hour 4,696 */
+  var SPIKE = 195 * 24 + 16;
+  function yr(head, f) { var o = [head]; for (var h = 0; h < 8760; h++) { var t = dayAt(2025, 1, 1, Math.floor(h / 24)), n = dayAt(2025, 1, 1, Math.floor(h / 24) + 1); o.push(f(t[1] + '/' + t[2] + '/2025', n[1] + '/' + n[2] + '/' + n[0], h % 24, h === SPIKE ? 300 : 10, h)); } return o.join('\n'); }
+  [['Reading Date,Reading Time,End Date,End Time,kWh', function (d, nd, h, v) { return d + ',' + p2d(h) + ':00,' + (h === 23 ? nd : d) + ',' + p2d((h + 1) % 24) + ':00,' + v; }],
+   ['Read Date,Read Time,kWh,Received Date', function (d, nd, h, v) { return d + ',' + p2d(h) + ':00,' + v + ',' + nd; }],
+   ['Read Time,kWh,Last Updated', function (d, nd, h, v) { return d + ' ' + p2d(h) + ':00,' + v + ',1/5/2026 08:00'; }],
+   ['Date,Time,Meter,kWh', function (d, nd, h, v, k) { return d + ',' + p2d(h) + ':00,' + (50000 + k * 7 + k % 3) + ',' + v; }]].forEach(function (c) {
+    var r = S.parseInterval(yr(c[0], c[1]), 'kwh');
+    ok('"' + c[0] + '": read, the spike at 15 Jul 16:00', r.ok && r.readings === 8760 && r.kw.indexOf(300) === SPIKE, r.ok ? [r.kw.indexOf(300), r.notes] : r.error);
+  });
 })();
 
 section('Interval files: timestamps set the interval and the order (round 3: U1, T3, R4, R6, R7)');

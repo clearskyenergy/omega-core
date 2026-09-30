@@ -663,7 +663,7 @@ function run() {
     var e0 = e.errors && e.errors[0];
     if (e.status === 400 && e0 && e0.field === 'load.column' && Array.isArray(e0.columns) && askColumn(e)) return;
     formMsg(e.message);
-  }).then(function () { btn.disabled = false; btn.textContent = 'Simulate earnings'; });
+  }).then(function () { PICK_WAITING = false; btn.disabled = false; btn.textContent = 'Simulate earnings'; });
 }
 
 /* ── drawing ─────────────────────────────────────────────────────────── */

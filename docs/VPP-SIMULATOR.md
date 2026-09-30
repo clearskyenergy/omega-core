@@ -186,8 +186,12 @@ Clean Cell's two tools) still wins: absent is not empty.
     Billing Period or "Max Demand TOU" rate column): that describes each
     reading, and a period's START is the reading's time where it is the
     only time the file has (a plain date column wins over a period
-    column, and a usage date beats a Read / Bill / Statement / Revision
-    date beside it); in such a column a period that occurs ONCE, more than a day
+    column; otherwise the FIRST date column is the readings' date,
+    whatever it is called: a preference by name (a usage date over a Read /
+    Bill / Revision date, pass 6) misplaced "Reading Date, Reading Time, End
+    Date" and refused "Read Time … Last Updated" (pass 7) and was removed, so
+    a file whose first date column is not the usage date is read on that
+    column — not built: asking which column is the date); in such a column a period that occurs ONCE, more than a day
     long and twice the column's distinct periods' median (the file's span, a
     monthly subtotal) is still a summary — a billing cycle, on many
     readings, never is, however long it runs (a period column filled only
@@ -216,7 +220,10 @@ Clean Cell's two tools) still wins: absent is not empty.
     "Meter Reading" or a cumulative "Register"), numbered or not, compared as a person reads it ("KWH" is
     "kWh", "00A123" is "A123"): values that take turns are refused as more
     than one meter or channel (a date-only file of Delivered and Received
-    rows repeats no timestamp, so only that column shows it); one hand-over
+    rows repeats no timestamp, so only that column shows it — under a
+    header not in that list, such as "Energy Direction", it is not caught,
+    not built; a column of numbers with dozens of values, a running
+    register headed "Meter", is a reading, not an id); one hand-over
     (a meter replaced mid-year, at most twice) is read on and said.
     **Dates set the order and the interval.** The date column is read on
     every row, its day/month order settled across the file (month names,
