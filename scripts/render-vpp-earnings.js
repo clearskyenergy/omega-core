@@ -630,7 +630,7 @@ function installDouble(cfg) {
     await p.setInputFiles('#file', { name: 'one-column.csv', mimeType: 'text/csv', buffer: Buffer.from(INTERVAL_CSV) }); await rowsRead();
     var c2 = await chooser();
     await runAndWait();
-    ok('col: a new file clears the choice: the chooser goes and no column is posted', !c2.shown && !('column' in (lastLoad() || {})) && !/Column read/.test(await text(p, '#out')), { chooser: c2.shown, load: lastLoad() });
+    ok('col: a new file clears the choice: the chooser goes and no column is posted', !c2.shown && !('column' in (lastLoad() || {})) && !/your pick/.test(await text(p, '#out')) && /Column read: .*\(picked by its header\)/.test(await text(p, '#out')), { chooser: c2.shown, load: lastLoad(), out: (await text(p, '#out')).slice(0, 200) });
     /* the saved scenario puts the column back, for its file attached again */
     await pick(p, 'Two meters');
     ok('col: loading the scenario names its load column', /load column: Sub Meter kW/.test(await text(p, '#fileinfo')), await text(p, '#fileinfo'));

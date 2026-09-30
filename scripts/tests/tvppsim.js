@@ -381,8 +381,8 @@ t0 = Date.now(); var dos = S.simulate({ zip: '60601', load: { type: 'interval', 
 ok('ten 20,000-digit cells cost milliseconds, not seconds', dos.ok === false && ms < 1000, ms + ' ms');
 /* R5: the cap admits a real year of 15-minute readings (a Smart Meter
    Texas export: a 22-digit ESIID and a revision stamp on every row, CRLF,
-   ~3.1 MB) and is one number with the page's (4,300,000 characters, under
-   Vercel's 4.5 MB body); past it the refusal names a size, not a count. */
+   ~3.1 MB) and is one number with the page's (4,300,000 characters; the page separately
+   checks the posted JSON body in bytes against Vercel's 4.5 MB limit); past it the refusal names a size, not a count. */
 function smt() {
   var rows = ['ESIID,USAGE_DATE,REVISION_DATE,USAGE_START_TIME,USAGE_END_TIME,USAGE_KWH,ESTIMATED_ACTUAL,CONSUMPTION_SURPLUSGENERATION'];
   function p2(x) { return (x < 10 ? '0' : '') + x; }

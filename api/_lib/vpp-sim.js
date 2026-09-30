@@ -412,7 +412,7 @@ var CURRENCY = /[$€£¥]/;
 var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 var MONTH_FULL = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 var SHIFTS = [0, 1, -1, 2, -2, 3, -3];                     /* ties go to the smaller move */
-var MAX_TEXT = 4300000;   /* characters: a year of 15-minute rows with an account id and a revision stamp on each is ~3.2 MB; under Vercel's 4.5 MB body */
+var MAX_TEXT = 4300000;   /* characters: a year of 15-minute rows with an account id and a revision stamp on each is ~3.2 MB. The JSON body can be larger than the text (escaped quotes, tabs, line breaks), so the page also checks the posted body in bytes against Vercel's 4.5 MB limit (vpp-earnings.html) */
 var DUP_TOLERANCE = 4;    /* repeated timestamps allowed: the autumn clock change repeats one hour (four 15-minute readings) */
 
 function headNorm(s) { return String(s == null ? '' : s).trim().replace(/[_\-.\/]+/g, ' ').replace(/\s+/g, ' '); }

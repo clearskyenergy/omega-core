@@ -206,8 +206,8 @@ Clean Cell's two tools) still wins: absent is not empty.
     longer than 32 characters are never tested and the number test is
     linear; the text cap is 4,300,000 characters (`MAX_TEXT`, also
     `options().maxTextChars`, the page's number: a year of 15-minute Smart
-    Meter Texas rows is ~3.1 MB, and Vercel takes 4.5 MB), refused as a
-    size.
+    Meter Texas rows is ~3.1 MB), refused as a size. The JSON body can be
+    larger than the text, so the page also checks the body in bytes (below).
   - **Bills.** A month with no kWh (no bill, or dollars only) is filled
     from the climate curve and never calibrates the rate; the calibration
     takes the customer charge out of both sides, so the calibrated bill is
