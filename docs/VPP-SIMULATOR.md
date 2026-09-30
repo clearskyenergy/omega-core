@@ -190,12 +190,12 @@ Clean Cell's two tools) still wins: absent is not empty.
     long and twice the column's distinct periods' median (the file's span, a
     monthly subtotal) is still a summary — a billing cycle, on many
     readings, never is, however long it runs (a period column filled only
-    on each cycle's first row is judged on its filled cells). A row blank
-    in a date or time column that every other reading fills (a monthly
-    subtotal under a Bill Period) is a summary; among timed readings a
-    dated row with no time is a summary, said; a row of words that is not
-    the header again (a billing table below the readings) ends them, while
-    a per-day repeat of the header does not. A stamped row with a blank or "N/A" reading is a gap (zero
+    on each cycle's first row is judged on its filled cells). Subtotal rows
+    with no date or time, a dated total with no time among timed readings,
+    and a second table pasted below the readings are REFUSED (on the count,
+    or naming the row), never guessed at: each guess tried (verification
+    pass 4) broke a real export (a midnight written as the date alone, a
+    report title repeated per page, a Revision Date blank on some days). A stamped row with a blank or "N/A" reading is a gap (zero
     within 2%, said so). A date written only on a day's first row carries
     down. **One row per day** (a date and 24, 48 or 96 consecutive hour or
     interval columns, "Hour 1 … Hour 24", "HE1 kWh", "H1", "Stunde 1",

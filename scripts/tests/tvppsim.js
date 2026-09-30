@@ -748,7 +748,7 @@ section('Interval files: summaries, second tables and clock changes, read honest
   function sum(q) { return q.kw.reduce(function (a, b) { return a + b; }, 0); }
   var cal = localYear();
   var q = S.parseInterval(['Date,Time,kWh'].concat(cal, ['12/31/2025,,8760']).join('\n'), 'kwh');
-  ok('a calendar year with one fall-back and a dated annual total: the total is a summary, the repeat stays (8,760 kWh, never 17,520)', q.ok && q.readings === 8760 && Math.round(sum(q)) === 8760 && Math.max.apply(null, q.kw) === 1 && !/two autumn/.test(q.notes.join(' ')), q.ok ? [q.readings, sum(q), q.notes] : q.error);
+  ok('a calendar year with one fall-back and a dated annual total: refused on the count, never read by dropping the fall-back (17,520 kWh)', !q.ok && /8,761/.test(q.error), q.ok ? [q.readings, sum(q), q.notes] : q.error);
   q = S.parseInterval(['Date,Time,kWh'].concat(cal, ['1/1/2026,00:00,55']).join('\n'), 'kwh');
   ok('one fall-back and a reading too many is refused, not trimmed by dropping the fall-back', !q.ok && /8,761/.test(q.error), q.ok ? [q.readings, q.notes] : q.error);
   var ghost = cal.slice(), at9 = ghost.indexOf('03/09/2025,03:00,1');
@@ -758,7 +758,7 @@ section('Interval files: summaries, second tables and clock changes, read honest
   var ts = ['Timestamp,kWh'];
   for (var k = 0; k < 8760; k++) { var tk = dayAt(2025, 1, 1, Math.floor(k / 24)); ts.push(tk[1] + '/' + tk[2] + '/' + tk[0] + ' ' + p2d(k % 24) + ':00,1'); }
   q = S.parseInterval(ts.concat(['12/31/2025,8760']).join('\n'), 'kwh');
-  ok('a combined timestamp file with a dated, time-less annual total: the total is a summary, said', q.ok && q.readings === 8760 && Math.max.apply(null, q.kw) === 1 && /read as a summary and left out/.test(q.notes.join(' ')), q.ok ? [q.readings, q.notes] : q.error);
+  ok('a combined timestamp file with a dated, time-less annual total: refused on the count, not misread', !q.ok && /8,761/.test(q.error), q.ok ? [q.readings, q.notes] : q.error);
   /* newest-first, with the meter swapped mid-day */
   var rs = [];
   for (var d = 0; d < 365; d++) { var t = dayAt(2025, 1, 1, d); for (var h = 0; h < 24; h++) { var late = t[1] > 6 || (t[1] === 6 && (t[2] > 15 || (t[2] === 15 && h >= 11))); rs.push({ d: d, l: (late ? '22222222' : '11111111') + ',' + t[1] + '/' + t[2] + '/' + t[0] + ',' + (h + 1) + ',2' }); } }
@@ -776,10 +776,26 @@ section('Interval files: summaries, second tables and clock changes, read honest
     tb.push(ds);
   }
   tb.push('', 'Billing Period,Start,End,kWh', 'Jan 2025,1/1/2025,1/31/2025,744', 'Feb 2025,2/1/2025,2/28/2025,672');
-  [['a Billing Period on each cycle\'s first row only', bp], ['monthly subtotal rows (a bill period, no date or time)', bs], ['a billing summary table below the readings', tb]].forEach(function (c) {
-    var r = S.parseInterval(c[1].join('\n'), 'kwh');
-    ok(c[0] + ': one year, 8,760 kWh', r.ok && r.readings === 8760 && Math.round(sum(r)) === 8760, r.ok ? [r.readings, sum(r)] : r.error);
-  });
+  var r = S.parseInterval(bp.join('\n'), 'kwh');
+  ok('a Billing Period on each cycle\'s first row only: one year, 8,760 kWh', r.ok && r.readings === 8760 && Math.round(sum(r)) === 8760, r.ok ? [r.readings, sum(r)] : r.error);
+  /* guessed at once (pass 4) and each guess broke a real export (pass 5): these are refused plainly, never misread */
+  r = S.parseInterval(bs.join('\n'), 'kwh');
+  ok('monthly subtotal rows with no date or time: refused on the count (8,772), not misread', !r.ok && /8,772/.test(r.error), r.ok ? r.readings : r.error);
+  r = S.parseInterval(tb.join('\n'), 'kwh');
+  ok('a billing table below the readings: refused naming its row', !r.ok && /^Row 8,764/.test(r.error), r.ok ? r.readings : r.error);
+  /* pass 5: what those guesses broke reads again */
+  var ie = ['Interval End,kWh'];
+  for (i = 1; i <= 35040; i++) { var mins = i * 15, dd0 = dayAt(2025, 1, 1, Math.floor(mins / 1440)), mm = mins % 1440; ie.push(dd0[1] + '/' + dd0[2] + '/' + dd0[0] + (mm ? ' ' + Math.floor(mm / 60) + ':' + p2d(mm % 60) : '') + ',1'); }
+  r = S.parseInterval(ie.join('\n'), 'kwh');
+  ok('interval-ending 15-minute stamps with midnight written as the date alone are read', r.ok && r.readings === 35040, r.ok ? r.readings : r.error);
+  var pg = ['Date,Time,kWh'];
+  for (i = 0; i < 8760; i++) { var ud = dayAt(2025, 1, 1, Math.floor(i / 24)); if (i % 24 === 0 && ud[2] === 1 && i) pg.push('ACME Corp,Hourly Usage', 'Date,Time,kWh'); pg.push(ud[1] + '/' + ud[2] + '/2025,' + p2d(i % 24) + ':00,1'); }
+  r = S.parseInterval(pg.join('\n'), 'kwh');
+  ok('a report title and header repeated on every page do not end the readings', r.ok && r.readings === 8760, r.ok ? r.readings : r.error);
+  var rv = ['Date,Revision Date,Time,kWh'];
+  for (i = 0; i < 8760; i++) { var uv = dayAt(2025, 1, 1, Math.floor(i / 24)); rv.push(uv[1] + '/' + uv[2] + '/2025,' + (uv[2] === 5 ? '' : uv[1] + '/' + uv[2] + '/2025') + ',' + p2d(i % 24) + ':00,1'); }
+  r = S.parseInterval(rv.join('\n'), 'kwh');
+  ok('a Revision Date blank on some days does not drop those readings', r.ok && r.readings === 8760, r.ok ? r.readings : r.error);
 })();
 
 section('Interval files: timestamps set the interval and the order (round 3: U1, T3, R4, R6, R7)');

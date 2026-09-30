@@ -864,7 +864,6 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
   function footerCell(t) { t = t.trim(); return !!t && t.length <= 60 && (FOOTER.test(t) || dateRange(t)); }
   var perRow = {}, perSpan = {}, perCount = {};
   function footerRow(r) {
-    for (var a = 0; a < always.length; a++) if (!r[always[a]] || !r[always[a]].s.trim()) return true;
     for (var q = 0; q < r.length; q++) {
       if (!footerCell(r[q].s)) continue;
       if (!perRow[q]) return true;
@@ -873,7 +872,7 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
          hourly periods) is a summary; a billing cycle is on many readings,
          however long it runs */
       var t0 = r[q].s.trim(), sp = spanMin(t0);
-      if (sp != null && perSpan[q] != null && perCount[q][t0] === 1 && sp > Math.max(1440, 2 * perSpan[q])) return true;
+      if (sp != null && perSpan[q] != null && perCount[q][t0] === 1 && sp >= Math.max(1440, 2 * perSpan[q])) return true;
     }
     return false;
   }
@@ -887,18 +886,10 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
            '. Export the readings as plain numbers, or fix that cell.';
   }
 
-  var vals = [], dataRows = [], stamps = null, v, why2, cands = [], hits = {}, rHits = {}, filled = {}, stampy = {};
-  var headText = head >= 0 ? rows[head].map(function (c) { return c.s.trim().toLowerCase(); }).join('|') : null;
+  var vals = [], dataRows = [], stamps = null, v, why2, cands = [], hits = {}, rHits = {}, filled = {};
   if (col >= 0) for (i = from; i < rows.length; i++) {
     var row = rows[i], st = stampedRow(row);
     v = numOf(row[col]);
-    if (stamps !== null && v == null && looksCount(row) === 0) {
-      /* a row of words that is not the header again (a per-day header is):
-         a second table below the readings (a billing summary) ends them */
-      var words = 0, digits = false;
-      for (j = 0; j < row.length; j++) { var wt = row[j].s.trim(); if (wt) words++; if (/\d/.test(wt)) digits = true; }
-      if (words >= 2 && !digits && row.map(function (c) { return c.s.trim().toLowerCase(); }).join('|') !== headText) break;
-    }
     if (stamps === null) {
       if (v == null && !st) continue;                               /* a units line or a note before the readings */
       stamps = st;
@@ -910,15 +901,11 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
       if (!cs) continue;
       filled[j] = (filled[j] || 0) + 1;
       if (footerCell(cs)) { hits[j] = (hits[j] || 0) + 1; if (dateRange(cs)) rHits[j] = (rHits[j] || 0) + 1; }
-      if (CLOCK.test(cs) || dateOf(cs)) stampy[j] = (stampy[j] || 0) + 1;
     }
   }
   /* a period column may be filled on a cycle's first row only: judged on its filled cells */
   for (j in rHits) if (has(rHits, j) && !(hits[j] > cands.length / 2) && rHits[j] >= 6 && rHits[j] > filled[j] / 2) hits[j] = cands.length;
-  /* a date or time column filled on (nearly) every reading: a row with it blank is a subtotal */
-  var always = [];
-  for (j in stampy) if (has(stampy, j) && stampy[j] >= cands.length * 0.95 && !perRowCandidate(j)) always.push(+j);
-  function perRowCandidate(q) { return hits[q] > cands.length / 2; }
+
   for (j in hits) if (has(hits, j) && hits[j] > cands.length / 2) {
     perRow[j] = true;
     /* the median over DISTINCT periods: an hourly file's first 200 rows are one billing cycle */
@@ -986,14 +973,7 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
           times.push(tv);
         }
         var hasT = !!tSrc && tNull <= n * 0.02;
-        /* among timed readings, a dated row with no time is a summary (a day's
-           or the year's total), never a reading at midnight */
-        if (hasT && tNull) {
-          var kv = [], kd = [], kt = [], kr = [];
-          for (i = 0; i < n; i++) if (times[i] != null) { kv.push(vals[i]); kd.push(days[i]); kt.push(times[i]); kr.push(dataRows[i]); }
-          notes.push(fmt(n - kv.length) + ' dated row' + (n - kv.length === 1 ? '' : 's') + ' with no time among timed readings ' + (n - kv.length === 1 ? 'was' : 'were') + ' read as a summary and left out.');
-          vals = kv; days = kd; times = kt; dataRows = kr; n = vals.length;
-        }
+
 
         /* forward or backward — never both: a file whose dates run on and
            then start again is two meters or two channels one after another */
