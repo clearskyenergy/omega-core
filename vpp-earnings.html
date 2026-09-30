@@ -102,6 +102,7 @@ button{cursor:pointer}
 .f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;min-width:0}
 .f label{font-size:12.5px;font-weight:600;color:var(--ink)}
 .f .hint{font-size:12px;color:var(--muted)}
+#fileinfo{overflow-wrap:anywhere}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 input[type=text],input[type=number],select,textarea{width:100%;min-height:38px;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff}
@@ -173,9 +174,9 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
 .upsell{background:linear-gradient(135deg,#EEF4FF,#FFFFFF);border-color:#C7D7FE}
 .upsell-acts{display:flex;gap:8px;flex-wrap:wrap}
 .saved select{flex:1 1 180px;min-width:0}
-.colpick{margin-top:10px;border:1px solid #FEDF89;background:var(--warn-bg);border-radius:10px;padding:10px 12px}
+.colpick{min-width:0;overflow-wrap:anywhere;margin-top:10px;border:1px solid #FEDF89;background:var(--warn-bg);border-radius:10px;padding:10px 12px}
 .colpick h4{margin:0 0 4px;font-size:13px;color:var(--ink)}
-.colpick p{margin:0 0 8px;font-size:12px;color:var(--sub)}
+.colpick p{margin:0 0 8px;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
 .colpick label{display:flex;gap:8px;align-items:flex-start;padding:6px 4px;border-radius:7px;cursor:pointer;min-width:0}
 .colpick label:hover{background:#fff}
 .colpick input{margin-top:3px;flex:0 0 auto}
@@ -598,6 +599,14 @@ function run() {
   /* one estimate at a time: the chooser's button and a double-tap would
      otherwise post the whole file again (round 3 recheck) */
   if ($('run').disabled) return;
+  /* the question open with a column ticked: that is the column (Change, a
+     new tick, then Simulate) */
+  var ticked = $('colpick').querySelector('input[name=loadcol]:checked');
+  if (ticked && ticked.value !== COLUMN) {
+    COLUMN = ticked.value; COLUMN_LABEL = null;
+    for (var ci = 0; COLUMNS && ci < COLUMNS.length; ci++) if (COLUMNS[ci].key === COLUMN) COLUMN_LABEL = COLUMNS[ci].label;
+    paintInfo();
+  }
   var c = collect();
   if (c.error) { formMsg(c.error); return; }
   if (!/^\d{5}(-\d{4})?$/.test(c.site.zip)) { $('zip').className = 'bad'; formMsg('A five-digit US ZIP code is needed.'); $('zip').focus(); return; }
@@ -623,10 +632,13 @@ function run() {
   api(payload).then(function (j) {
     LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
     /* the column question is answered: one line says which, with the way back */
+    formMsg('');                                  /* a "still simulating" word is answered now */
+    var box = $('colpick'), hadFocus = box.contains(document.activeElement);
     if (COLUMNS && COLUMNS.length && COLUMN) {
-      $('colpick').innerHTML = '<p style="margin:0">Load column: <b>' + esc(COLUMN_LABEL || COLUMN) + '</b> <button type="button" class="btn btn-t" data-act="change-column">Change</button></p>';
-      $('colpick').hidden = false;
-    } else $('colpick').hidden = true;
+      box.innerHTML = '<p style="margin:0">Load column: <b>' + esc(COLUMN_LABEL || COLUMN) + '</b> <button type="button" class="btn btn-t" data-act="change-column">Change</button></p>';
+      box.hidden = false;
+      if (hadFocus) box.querySelector('[data-act=change-column]').focus();
+    } else box.hidden = true;
     render(j.result);
     canSave();
   }, function (e) {
@@ -877,7 +889,11 @@ document.addEventListener('click', function (e) {
   else if (act === 'fill-24') fillMonths(24);
   else if (act === 'paste') pasteBills();
   else if (act === 'use-column') useColumn();
-  else if (act === 'change-column') paintColumns();
+  else if (act === 'change-column') {
+    paintColumns();
+    var r0 = $('colpick').querySelector('input[name=loadcol]:checked') || $('colpick').querySelector('input[name=loadcol]');
+    if (r0) r0.focus();
+  }
 });
 $('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
 $('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });

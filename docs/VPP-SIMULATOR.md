@@ -186,22 +186,26 @@ Clean Cell's two tools) still wins: absent is not empty.
     Billing Period or "Max Demand TOU" rate column): that describes each
     reading, and a period's START is the reading's time where it is the
     only time the file has (a plain date column wins over a period
-    column); in such a column a period more than a day long and twice the
-    readings' own (the file's span, a monthly subtotal) is still a summary. A stamped row with a blank or "N/A" reading is a gap (zero
+    column); in such a column a period that occurs ONCE, more than a day
+    long and twice the column's distinct periods' median (the file's span, a
+    monthly subtotal) is still a summary — a billing cycle, on many
+    readings, never is, however long it runs. A stamped row with a blank or "N/A" reading is a gap (zero
     within 2%, said so). A date written only on a day's first row carries
     down. **One row per day** (a date and 24, 48 or 96 consecutive hour or
     interval columns, "Hour 1 … Hour 24", "HE1 kWh", "H1", "Stunde 1",
     "00:00"…) is read across each day as the long file it stands
     for, said in a note; no column is asked for. The day is the date alone
     (a midnight time in the cell is not each reading's), never a Bill
-    Period beside it; an hourly clock-change row of 23 values has its
-    02:00 hour as a gap and one of 25 leaves the repeated hour out, said;
+    Period beside it; a row one hour of slots short or long (23/25 hourly,
+    46/50 half-hourly, 92/100 at 15 minutes) on a US or EU clock-change
+    Sunday has its lost 02:00 hour as a gap or its repeated 01:00 hour left
+    out, and on any other day is short or long at its end, said;
     a refusal names the row of the file. A header row of bare numbers
     ("1 … 24", "0100 … 2400") is not recognised (it reads as data) and gets
     the column question. **A column that IS the meter or the channel**
     (the whole header: Meter, Meter Number, Channel, Direction, Flow, UOM,
-    Register, Service Point, ESIID — not "Meter Status" or "Meter
-    Reading"), numbered or not, compared as a person reads it ("KWH" is
+    Register Type, Service Point, ESIID — not "Meter Status", "Read Type",
+    "Meter Reading" or a cumulative "Register"), numbered or not, compared as a person reads it ("KWH" is
     "kWh", "00A123" is "A123"): values that take turns are refused as more
     than one meter or channel (a date-only file of Delivered and Received
     rows repeats no timestamp, so only that column shows it); one hand-over
@@ -217,7 +221,8 @@ Clean Cell's two tools) still wins: absent is not empty.
     from early November holds two fall-backs), four at most a day; up to
     four repeats elsewhere are re-read intervals, as before; more is
     refused as two meters or delivered and received rows, naming the first
-    repeat. (Readings are still laid by position after sorting, so a
+    repeat. A local-clock year that crosses two fall-backs holds an hour of
+    readings too many; the later repeat is left out, said. (Readings are still laid by position after sorting, so a
     local-clock file's summer hours sit one hour early against the tariff;
     placing each by its own clock slot is not built.) dates that run forward and
     then back are refused the same way. The interval is the readings per

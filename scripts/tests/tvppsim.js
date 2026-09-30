@@ -684,7 +684,22 @@ section('Interval files: the recheck of the recheck (summary periods, day rows, 
   q = S.parseInterval(mx(h24, function (t) { return iso(t[0], t[1], t[2]) + ' 00:00:00'; }), 'kwh');
   ok('a day matrix whose date cells carry midnight (Excel, MV-90) is read, not refused as repeats', good(q), why(q));
   q = S.parseInterval(mx(h24, us, true), 'kwh');
-  ok('a day matrix with 23- and 25-value clock-change rows is read, with the gap and the dropped hour said', good(q) && q.kw[67 * 24 + 2] === 0 && q.kw[67 * 24 + 3] === 10 && /clock-change days/.test(q.notes.join(' ')), why(q));
+  ok('a day matrix with 23- and 25-value clock-change rows is read, with the gap and the dropped hour said', good(q) && q.kw[67 * 24 + 2] === 0 && q.kw[67 * 24 + 3] === 10 && /on a clock-change day/.test(q.notes.join(' ')), why(q));
+  /* a short or long row on an ordinary day is short or long at its end, never shifted */
+  var odd = mx(h24, us).split('\n');
+  odd[166] = odd[166].replace(/,10$/, '');            /* 15 Jun: 23 values */
+  q = S.parseInterval(odd.join('\n'), 'kwh');
+  ok('a 23-value row on an ordinary day keeps its hours in place (the end is the gap)', good(q) && q.kw[165 * 24 + 18] === 20 && q.kw[165 * 24 + 23] === 0, why(q));
+  /* a half-hourly day matrix with its clock-change rows (46 and 50 values) */
+  var hh48 = 'Date';
+  for (k = 1; k <= 48; k++) hh48 += ',Interval ' + k;
+  var hm = [hh48];
+  for (d = 0; d < 365; d++) { var th = D(d), vh = []; for (k = 0; k < 48; k++) vh.push(hr(Math.floor(k / 2)));
+    if (th[1] === 3 && th[2] === 9) vh.splice(4, 2);
+    if (th[1] === 11 && th[2] === 2) vh.splice(4, 0, 9, 9);
+    hm.push(us(th) + ',' + vh.join(',')); }
+  q = S.parseInterval(hm.join('\n'), 'kwh');
+  ok('a half-hourly day matrix with 46- and 50-value clock-change rows is read', q.ok && q.readings === 17520 && q.kw.indexOf(40) === 18 && q.kw[67 * 24 + 2] === 0 && q.kw[67 * 24 + 3] === 20 && q.kw[305 * 24 + 2] === 20, why(q));   /* 10 kWh a half-hour is 20 kW */
   q = S.parseInterval(mx(he, function (t) { return p2d(t[1]) + '/01/2025 - ' + p2d(t[1]) + '/28/2025,' + us(t); }), 'kwh');
   ok('"Bill Period, Date, HE1 kWh … HE24 kWh": the Date is the day, not the bill period', good(q), why(q));
   var mxCh = ['Date,Channel'];
@@ -703,6 +718,18 @@ section('Interval files: the recheck of the recheck (summary periods, day rows, 
   for (var i = 0; i < 8760; i++) { var t0 = us(D(Math.floor(i / 24))); nc.push(t0 + ',1,2'); nc.push(t0 + ',2,2'); }
   q = S.parseInterval(nc.join('\n'), 'kwh');
   ok('channels numbered 1 and 2 are refused too', !q.ok && /"Channel" column takes turns/.test(q.error), q.ok ? q.readings : q.error);
+  q = S.parseInterval(yr('Meter Number,Read Date,Read Time,Read Type,Register,kWh', function (t, h, i) { return '123456,' + us(t) + ',' + p2d(h) + ':00,' + (i % 97 ? 'Actual' : 'Estimated') + ',' + (50000 + i * 10) + ',' + hr(h); }), 'kwh');
+  ok('"Read Type" (Actual / Estimated) and a cumulative "Register" describe readings, not meters', good(q), why(q));
+  var cyc = ['Bill Period,Read Date,Hour,kWh'], cuts = [0, 8, 38, 108, 130, 160, 191, 222, 252, 283, 313, 344, 365];
+  for (i = 0; i < 8760; i++) { var dday = Math.floor(i / 24), c = 0; while (cuts[c + 1] <= dday) c++; var a0 = D(cuts[c]), b0 = D(cuts[c + 1] - 1);
+    cyc.push(us(a0) + ' - ' + us(b0) + ',' + us(D(dday)) + ',' + (i % 24 + 1) + ',' + hr(i % 24)); }
+  q = S.parseInterval(cyc.join('\n'), 'kwh');
+  ok('billing cycles of 8 to 70 days on every reading are never summaries', good(q), why(q));
+  /* a local-clock half-hourly year of dates 3 Nov 2024 – 2 Nov 2025: two fall-backs, 17,522 readings */
+  var f2 = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }), fb = ['Date,Time,kWh'];
+  for (var ms = Date.UTC(2024, 10, 3, 5); ; ms += 18e5) { var pt = {}; f2.formatToParts(new Date(ms)).forEach(function (x) { pt[x.type] = x.value; }); if (pt.year === '2025' && pt.month === '11' && pt.day === '03') break; fb.push(pt.month + '/' + pt.day + '/' + pt.year + ',' + pt.hour + ':' + pt.minute + ',1'); }
+  q = S.parseInterval(fb.join('\n'), 'kwh');
+  ok('a half-hourly local year crossing two fall-backs (17,522 rows) is read, the later repeat left out and said', fb.length - 1 === 17522 && q.ok && q.readings === 17520 && /two autumn clock changes/.test(q.notes.join(' ')), q.ok ? [q.readings, q.notes] : q.error);
   /* repeats */
   var sd = ['Date,Time,kWh'];
   for (i = 0; i < 8760; i++) { if (i === 1000 || i === 3000 || i === 5000) continue; var row = us(D(Math.floor(i / 24))) + ',' + p2d(i % 24) + ':00,' + hr(i % 24); sd.push(row); if (i === 999 || i === 2999 || i === 4999) sd.push(row); }

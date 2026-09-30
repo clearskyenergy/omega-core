@@ -403,8 +403,9 @@ var PER_KWH_RAW = /\/\s*k?wh\b/i;                          /* "Cents/kWh", "$/kW
 /* an hour or interval column of a one-row-per-day file: "Hour 1", "HE 24", "1", "01:00", "00:00 - 00:15", "12:15 AM" */
 var SLOT_HEAD = /^(?:hour|hr|h|he|hour ending|hour beginning|interval|int|period|stunde|uur|heure|ora|kwh|kw)?\s*(?:\d{3,4}|\d{1,2}(?:\s*:\s*\d{2})?\s*(?:[ap]\.?m\.?)?)(?:\s*(?:to)?\s*(?:\d{3,4}|\d{1,2}(?:\s*:\s*\d{2})?\s*(?:[ap]\.?m\.?)?))?\s*(?:\(?\s*kwh?\s*\)?)?$/i;
 /* a WHOLE header that names the meter or the channel (never "Meter Status",
-   "Meter Reading" or "Meter Multiplier": those describe a reading) */
-var CHANNEL_HEAD = /^(?:channel|channel (?:name|id|number|no)|chan|direction|flow|flow direction|meter|meter (?:id|number|no|#|serial|serial number)|register|register type|read type|uom|unit of measure|service point|service point id|sdp|esiid|esi id)$/i;
+   "Read Type", "Meter Reading" or a cumulative "Register": those describe a
+   reading) */
+var CHANNEL_HEAD = /^(?:channel|channel (?:name|id|number|no)|chan|direction|flow|flow direction|meter|meter (?:id|number|no|#|serial|serial number)|register type|uom|unit of measure|service point|service point id|sdp|esiid|esi id)$/i;
 var EXPORT_HEAD = /(export|generat|solar|\bpv\b|received)/i;   /* what left the site is not its load */
 var NOT_LOAD_HEAD = /(factor|\bpf\b|kva|\bva\b|\bmva\b|reactive|apparent|volt|\bamps?\b|ampere|\bcurrent\b|\(\s*a\s*\)|frequency|\bhz\b|temperature|\btemp\b|multiplier|\bmult\b|percent|%|\bpct\b|register|cumulative|odometer|meter\s+read|carbon|\bco2\b|emission|intensity|contract|threshold|\bevents?\b|\bflags?\b|\bstatus\b|\bresponse\b|\bestimated?\b)/i;
 var TIME_TAIL = /\b(?:hour|hr|he|time|date|day|interval|period|start|end|ending|beginning|month|year)\s*(?:\([^)]*\))?\s*$/i;
@@ -613,6 +614,16 @@ function spanMin(t) {
   if (!a || !b) return null;
   return (dayNumber(b) - dayNumber(a)) * 1440 + ((clockOf(m[2]) || 0) - (clockOf(m[1]) || 0));
 }
+/* the day a clock change falls on: the US (second Sunday of March, first of
+   November) or the EU (last Sundays of March and October) */
+function clockChange(dt) {
+  if (!dt) return null;
+  var wd = new Date(Date.UTC(dt.y, dt.m - 1, dt.d)).getUTCDay();
+  if (wd !== 0) return null;
+  if (dt.m === 3 && (dt.d >= 8 && dt.d <= 14 || dt.d >= 25)) return 'spring';
+  if (dt.m === 11 && dt.d <= 7 || dt.m === 10 && dt.d >= 25) return 'autumn';
+  return null;
+}
 function p2(x) { return (x < 10 ? '0' : '') + x; }
 function describePer(per) { return per === 1 ? 'hourly' : (per === 2 ? 'half-hourly' : '15-minute'); }
 
@@ -763,7 +774,7 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
       var dayRows = [], mCells = [], ragged = [];
       for (i = from; i < rows.length; i++) {
         var mr = rows[i], d = mr.length - W;
-        if (Math.abs(d) > (H === 24 ? 1 : 0) || !mr[dCol] || !dateOf(mr[dCol].s)) continue;     /* a total or a note: not a day */
+        if ((d !== 0 && Math.abs(d) !== H / 24) || !mr[dCol] || !dateOf(mr[dCol].s)) continue;     /* a total or a note: not a day */
         if (d !== 0) ragged.push(mr[dCol].s.trim());
         dayRows.push(i); mCells.push(mr[dCol].s.trim());
       }
@@ -774,13 +785,20 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
       var longRows = ['Date\tTime\tLoad'], map = [0];
       for (var di = 0; di < dayRows.length; di++) {
         var rw = rows[dayRows[di]], dd = rw.length - W, dt = dateOf(mCells[di], mOrd.order);
+        var shift = dd !== 0 && clockChange(dt) === (dd < 0 ? 'spring' : 'autumn');
         /* the date alone: a midnight time in the cell is not each reading's time */
         var dayText = dt.y + '-' + p2(dt.m) + '-' + p2(dt.d);
         for (var k = 0; k < H; k++) {
-          /* spring: the 02:00 hour never happened (a gap), the rest move up
-             one cell; autumn: the repeated 01:00 hour (the third cell) is left out */
-          var at = slots[0] + (dd < 0 ? (k > 2 ? k - 1 : k) : (dd > 0 && k >= 2 ? k + 1 : k));
-          var cell = dd < 0 && k === 2 ? null : rw[at], nv = cell ? numOf(cell) : null;
+          /* on the spring clock change the 02:00 hour never happened (a gap)
+             and the rest move up; on the autumn one the repeated 01:00 hour
+             is left out. A row short or long on any other day is short or
+             long at its end: a gap, or a reading left out. */
+          var at, cell, g = H / 24;
+          if (dd < 0 && shift) at = k < 2 * g ? k : (k < 3 * g ? -1 : k - g);
+          else if (dd > 0 && shift) at = k < 2 * g ? k : k + g;
+          else at = dd < 0 && k >= H + dd ? -1 : k;
+          cell = at < 0 ? null : rw[slots[0] + at];
+          var nv = cell ? numOf(cell) : null;
           var mins = k * 1440 / H;
           longRows.push(dayText + '\t' + p2(Math.floor(mins / 60)) + ':' + p2(mins % 60) + '\t' + (nv != null ? nv : (cell ? cell.s.trim() : '')));
           map.push(lineNo[dayRows[di]]);
@@ -790,7 +808,8 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
       if (mOut.ok) {
         var mNotes = ['The file has one row per day with ' + H + ' columns ("' + labels[slots[0]] + '" … "' + labels[slots[H - 1]] + '"); they were read across each day as ' +
                       describePer(H / 24) + ' readings.'];
-        if (ragged.length) mNotes.push('The clock-change day' + (ragged.length > 1 ? 's' : '') + ' (' + ragged.slice(0, 2).join(', ') + ') had a slot more or fewer: a missing slot is a gap, an extra reading was left out.');
+        if (ragged.length) mNotes.push(fmt(ragged.length) + ' day' + (ragged.length > 1 ? 's' : '') + ' had an hour of slots more or fewer (' + ragged.slice(0, 3).join(', ') + (ragged.length > 3 ? ', …' : '') +
+                                       '): on a clock-change day the lost hour is a gap and the repeated hour is left out; on any other day the end of the row is a gap, or its extra readings are left out.');
         if (mch.note) mNotes.push(mch.note);
         mOut.notes = mNotes.concat(mOut.notes || []);
         mOut.column = { key: keys[slots[0]], label: '"' + labels[slots[0]] + '" … "' + labels[slots[H - 1]] + '", one row per day', chosen: 'auto' };
@@ -843,15 +862,17 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
      Period" or a "Rate: Max Demand TOU" column) describes each reading
      and never makes one a footer (round 3 recheck: every row was dropped). */
   function footerCell(t) { t = t.trim(); return !!t && t.length <= 60 && (FOOTER.test(t) || dateRange(t)); }
-  var perRow = {}, perSpan = {};
+  var perRow = {}, perSpan = {}, perCount = {};
   function footerRow(r) {
     for (var q = 0; q < r.length; q++) {
       if (!footerCell(r[q].s)) continue;
       if (!perRow[q]) return true;
-      /* in a column of periods, a period far longer than the readings' own
-         (the file's span, a month's subtotal under hourly periods) is a summary */
-      var sp = spanMin(r[q].s);
-      if (sp != null && perSpan[q] != null && sp > Math.max(1440, 2 * perSpan[q])) return true;
+      /* in a column of periods, a period that occurs once and is far longer
+         than the column's periods (the file's span, a month's subtotal under
+         hourly periods) is a summary; a billing cycle is on many readings,
+         however long it runs */
+      var t0 = r[q].s.trim(), sp = spanMin(t0);
+      if (sp != null && perSpan[q] != null && perCount[q][t0] === 1 && sp > Math.max(1440, 2 * perSpan[q])) return true;
     }
     return false;
   }
@@ -878,8 +899,16 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
   }
   for (j in hits) if (has(hits, j) && hits[j] > cands.length / 2) {
     perRow[j] = true;
-    var spans = [];
-    for (var si = 0; si < cands.length && spans.length < 201; si++) { var sc = rows[cands[si]][j], sv = sc ? spanMin(sc.s) : null; if (sv != null) spans.push(sv); }
+    /* the median over DISTINCT periods: an hourly file's first 200 rows are one billing cycle */
+    var spans = [], cnt = perCount[j] = {};
+    for (var si = 0; si < cands.length; si++) {
+      var sc = rows[cands[si]][j], st0 = sc ? sc.s.trim() : '';
+      if (!st0) continue;
+      if (has(cnt, st0)) { cnt[st0]++; continue; }
+      cnt[st0] = 1;
+      var sv = spans.length < 2000 ? spanMin(st0) : null;
+      if (sv != null) spans.push(sv);
+    }
     spans.sort(function (x, y) { return x - y; });
     perSpan[j] = spans.length ? spans[Math.floor(spans.length / 2)] : null;
   }
@@ -957,11 +986,12 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
           /* the autumn clock change repeats an hour between 01:00 and 03:00
              (the hour-number column's 2 or 3); a repeat anywhere else is a
              re-read, allowed as before up to four */
-          var dups = 0, dupAt = -1, dupDays = {}, nDupDays = 0, worst = 0, other = 0;
+          var dups = 0, dupAt = -1, dupDays = {}, nDupDays = 0, worst = 0, other = 0, fbAt = [];
           for (i = 1; i < n; i++) if (days[idx[i]] === days[idx[i - 1]] && times[idx[i]] === times[idx[i - 1]]) {
             dups++; if (dupAt < 0) dupAt = idx[i];
             var tm = times[idx[i]], fallBack = tSrc.clock ? (tm >= 60 && tm < 180) : (tm >= 1 && tm <= 3);
             if (!fallBack) { other++; continue; }
+            fbAt.push(i);
             var dk = days[idx[i]];
             if (!has(dupDays, dk)) { dupDays[dk] = 0; nDupDays++; }
             worst = Math.max(worst, ++dupDays[dk]);
@@ -980,7 +1010,16 @@ function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
         closeRun();
         per = bestC === 24 ? 1 : (bestC === 48 ? 2 : (bestC === 96 ? 4 : 0));
         if (!per) return { ok: false, error: 'The file has ' + fmt(bestC) + ' reading' + (bestC === 1 ? '' : 's') + ' on most days; this simulator reads hourly (24 a day), half-hourly (48) or 15-minute (96) readings for one year.' };
-        var d0 = days[idx[0]], d1 = days[idx[n - 1]];
+        /* a twelve-month span with two fall-backs holds one hour of readings
+           too many: the later day's repeated readings are left out */
+        var want = [365 * 24 * per, 366 * 24 * per], extra = n - want[0];
+        if (hasT && extra > 0 && want.indexOf(n) < 0 && extra <= fbAt.length) {
+          var drop = {}; for (i = fbAt.length - extra; i < fbAt.length; i++) drop[fbAt[i]] = 1;
+          var kept = []; for (i = 0; i < n; i++) if (!drop[i]) kept.push(vals[i]);
+          vals = kept; n = vals.length;
+          notes.push('The file crosses two autumn clock changes; the later one\'s repeated hour was left out.');
+        }
+        var d0 = days[idx[0]], d1 = days[idx[idx.length - 1]];
         start = addDays({ y: 1970, m: 1, d: 1 }, d0);
         spanDays = d1 - d0 + 1;
         if (downs) notes.push('The file lists its newest reading first; its readings were read in date and time order, from ' + showDate(start) + '.');

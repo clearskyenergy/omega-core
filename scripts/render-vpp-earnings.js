@@ -138,7 +138,7 @@ var srv = http.createServer(function (req, res) {
         /* the chooser fixture (and only it): the refusal the engine gives an
            ambiguous file under the interval contract, then the pick answered
            by the real engine on that one column */
-        if (L && L.type === 'interval' && typeof L.text === 'string' && L.text.split(/\r?\n/, 1)[0] === CHOOSER_HEAD) {
+        if (L && L.type === 'interval' && typeof L.text === 'string' && L.text.split(/\r?\n/, 1)[0].indexOf('Date,Main Meter kW,') === 0) {   /* the fixture, or its long-name variant */
           var cols = chooserColumns(L.text);
           picked = null;
           for (var ci = 0; ci < cols.length; ci++) if (cols[ci].key === L.column) picked = cols[ci];
@@ -636,7 +636,27 @@ function installDouble(cfg) {
     await p.click('[data-act=use-column]');
     ok('col: a pick while simulating is refused with a message, and the page still names the column posted', estimates() === beforeBusy && /Still simulating/.test(await text(p, '#formmsg')) && /load column: Sub Meter kW/.test(await text(p, '#fileinfo')), { posts: estimates() - beforeBusy, msg: await text(p, '#formmsg'), info: await text(p, '#fileinfo') });
     await p.evaluate(function () { document.getElementById('run').disabled = false; });
+    /* Change, tick another column, then the main Simulate button: the tick is the column */
+    await p.click('input[name=loadcol][value="Main Meter kW"]');
+    /* Simulate, then "Use this column" while that estimate is on its way (the warning), then the answer */
+    var beforeMain = estimates();
+    var midMsg = await p.evaluate(function () { document.getElementById('run').click(); document.querySelector('[data-act=use-column]').click(); return document.getElementById('formmsg').textContent; });
+    await until(function () { return estimates() > beforeMain && p.$eval('#run', function (b) { return !b.disabled; }); }, 20000);
+    await p.waitForTimeout(150);
+    ok('col: "Use this column" during an estimate says it is still simulating', /Still simulating/.test(midMsg) && estimates() === beforeMain + 1, { midMsg: midMsg, posts: estimates() - beforeMain });
+    var cMain = await chooser();
+    ok('col: after Change, a new tick and Simulate post the ticked column, and the line names it', (lastLoad() || {}).column === 'Main Meter kW' && /Load column: Main Meter kW/.test(cMain.text) &&
+       /load column: Main Meter kW/.test(await text(p, '#fileinfo')) && /Column read: Main Meter kW/.test(await text(p, '#out')), { load: lastLoad(), line: cMain.text, info: await text(p, '#fileinfo') });
+    ok('col: and the "still simulating" word is gone once the estimate is back', await p.$eval('#formmsg', function (e) { return e.hidden; }), await text(p, '#formmsg'));
+    /* back to the scenario's column, by keyboard: focus follows the controls it replaces */
+    await p.focus('[data-act=change-column]'); await p.keyboard.press('Enter');
+    var focused = await p.evaluate(function () { var a = document.activeElement; return a && a.name === 'loadcol' ? a.value : (a && a.tagName); });
+    ok('col: Change by keyboard puts focus on the ticked column', focused === 'Main Meter kW', focused);
     await p.click('input[name=loadcol][value="Sub Meter kW"]');
+    await p.focus('[data-act=use-column]'); await p.keyboard.press('Enter');
+    await until(function () { return p.$eval('#colpick', function (b) { return /Load column: Sub Meter kW/.test(b.textContent); }); }, 20000);
+    var focused2 = await p.evaluate(function () { var a = document.activeElement; return a && a.getAttribute('data-act'); });
+    ok('col: "Use this column" by keyboard leaves focus on Change, not the page', focused2 === 'change-column', focused2);
     ok('col: the result says which column was read', /Column read: Sub Meter kW \(your pick\)/.test(await text(p, '#out')), (await text(p, '#out')).slice(0, 300));
     ok('col: and is the engine\'s figure for that column', (await grossOnPage(p)) === money(want.totals.gross), { want: money(want.totals.gross), got: await grossOnPage(p) });
     var msg = await saveAs(p);
@@ -677,6 +697,17 @@ function installDouble(cfg) {
     var shown = await until(function () { return p.$eval('#colpick', function (b) { return !b.hidden; }); }, 20000);
     ok('col: the chooser shows on a phone', !!shown);
     ok('no sideways scroll on a 390px phone (chooser open)', !(await sideways(p)), await widths(p));
+    /* a long column name, read and collapsed to one line, still fits */
+    var LONG = 'SubMeterChillerPlantNorthWingConsumptionKilowattHoursRecorded';
+    await p.setInputFiles('#file', { name: 'long-names.csv', mimeType: 'text/csv', buffer: Buffer.from(CHOOSER_CSV.replace('Sub Meter kW', LONG)) });
+    await until(function () { return text(p, '#fileinfo').then(function (x) { return /rows with numbers/.test(x); }); });
+    await p.click('#run');
+    await until(function () { return p.$('input[name=loadcol][value="' + LONG + '"]'); }, 20000);
+    await p.click('input[name=loadcol][value="' + LONG + '"]');
+    await p.click('[data-act=use-column]');
+    await until(function () { return p.$('.kpis'); }, 20000);
+    var wide = await p.evaluate(function () { return document.documentElement.scrollWidth; });
+    ok('no sideways scroll on a 390px phone (a long column name, collapsed)', wide <= 390 && /Load column: SubMeter/.test(await text(p, '#colpick')), { scrollWidth: wide });
   });
   /* The REAL engine on a genuinely ambiguous file. It passes once
      api/_lib/vpp-sim.js implements the interval contract (field load.column
