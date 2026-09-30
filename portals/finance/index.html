@@ -888,6 +888,27 @@ input.szr-in[type=number]{font-family:var(--mono)}
 .dcard.locked .dc-top{filter:saturate(.2)}
 .dcard.locked .dc-body h4{color:var(--cs-muted)}
 
+/* deal file completion: one bar wherever a deal is drawn */
+.fill{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--cs-muted);white-space:nowrap}
+.fill-bar{flex:1 1 auto;min-width:44px;height:6px;border-radius:4px;background:rgba(14,26,36,.08);overflow:hidden}
+.fill-bar i{display:block;height:100%;border-radius:4px;background:var(--cs-red)}
+.fill.fair .fill-bar i{background:var(--cs-amber)}
+.fill.good .fill-bar i{background:var(--cs-green)}
+.fill b{font-weight:700;color:var(--cs-ink);font-variant-numeric:tabular-nums}
+.dc-fill{margin-top:12px}
+.sheet .fill{min-width:104px}
+.fill-next{margin:2px 0 12px}
+.fill-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:7px;align-items:center}
+.fill-chip{font-size:11.5px;padding:3px 9px;border-radius:12px;background:rgba(14,26,36,.06);color:var(--cs-ink)}
+.fill-more{font-size:11.5px;color:var(--cs-muted-2)}
+.fill-row{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:12px;align-items:center;padding:8px 0;
+  border-bottom:1px solid var(--cs-border);cursor:pointer;font-size:12.5px}
+.fill-row:hover{background:var(--cs-card-2)}
+.fill-row .fr-name{min-width:0}
+.fill-row .fr-name b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fill-row .fr-name span{display:block;font-size:11px;color:var(--cs-muted-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+@media (max-width:560px){.fill-row{grid-template-columns:minmax(0,1fr) 104px}.sheet .fill{min-width:92px}}
+
 /* ---------- COMMAND PALETTE ---------- */
 .cmdk-back{position:fixed;inset:0;background:rgba(14,26,36,.52);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
   z-index:90;display:none;align-items:flex-start;justify-content:center;padding:11vh 20px 20px}
@@ -1828,6 +1849,117 @@ ASSET_FIELDS.datacenter = ASSET_FIELDS.datacenter
   .map(f => f.g ? f : Object.assign({g:'Compute & tenancy'}, f))
   .concat(SITE_BASICS, DC_SITE_POWER, QUALIFY_BLOCKS);
 
+/* ── Deal file completion ───────────────────────────────────────────────────
+   How much of the deal file has been filled in (Tommy, 2026-09-30: "we need a
+   completion score of the deal input"). It measures information, not quality:
+   the buy box and the site conditions below judge whether a site is any good;
+   this only asks how many of the form's questions have an answer.
+
+   It counts what the SPONSOR STATED. buildDeal() fills in a 540-day COD, an
+   11.5% IRR, a 1.35x DSCR and the first offtake so the arithmetic never
+   throws, and saveDeal() writes a rate and a city off the state's market when
+   none was typed; none of those is information, so none is scored. The
+   technology, the state and the development stage always hold an answer and
+   are left out for the same reason. A blank, "—", "Not determined" and "Not
+   disclosed" are unanswered, as the form's own writer treats them, and a
+   follow-up question counts only once its parent opens it (syncDeps' rule).
+
+   Four parts, each worth a fixed share, so the sixty questions of a site
+   binder do not drown the size and the ask: a land deal with the binder half
+   done and no number is a deal file without its number. A part the technology
+   does not have (a solar deal has no asset block) drops out and the others
+   share its weight. The questions are the form's own lists — ASSET_FIELDS and
+   DOC_PRESETS — so a field added to the form is counted without an edit here. */
+const COMPLETION_PARTS = [
+  {key:'project',  label:'Project',       weight:.30},
+  {key:'status',   label:'Site & status', weight:.15},
+  {key:'asset',    label:'Asset detail',  weight:.30},
+  {key:'docs',     label:'Documents',     weight:.25}
+];
+const STORAGE_TECHS = ['bess', 'hybrid', 'micro'];
+
+/* A real nameplate. unsized() decides the Not sized label; 0.1 MW is also
+   buildDeal()'s stand-in for a draft saved with no size, which is why a draft
+   at 0.1 has never been publishable as sized. */
+const sizeStated = d => !unsized(d) && Number(d.mw) > 0.1;
+
+/* The documents a deal of this kind should carry, in DOC_PRESETS' words. The
+   Documents tab lists the missing ones from here too, so a solar deal is no
+   longer asked for a tenant lease or a data centre for a program award. */
+function docsFor(d) {
+  const t = d && d.tech;
+  const skip = t === 'datacenter' ? ['Utility bills', 'Offtake / PPA', 'Program award letter', 'Equipment quotes']
+             : t === 'land'       ? ['Utility bills', 'Offtake / PPA', 'Tenant lease or LOI', 'Program award letter', 'Equipment quotes']
+             : t === 'ev'         ? ['Offtake / PPA', 'Tenant lease or LOI']
+             :                      ['Tenant lease or LOI', 'Program award letter'];
+  return DOC_PRESETS.filter(x => skip.indexOf(x) === -1);
+}
+/* A link shared under that name, matched as the Documents tab always has. Twelve
+   extracted statements are the utility bills, link or not. */
+function hasDoc(d, label) {
+  if (label === 'Utility bills' && d.bill) return true;
+  const want = label.toLowerCase();
+  return (d.links || []).some(l => l && String(l.label || '').trim().toLowerCase() === want);
+}
+
+function dealCompletion(d) {
+  d = d || {};
+  const a = d.assetSpec || {};
+  const said = v => {
+    if (v == null) return false;
+    const s = String(v).trim();
+    return s !== '' && s !== '—' && UNSTATED.indexOf(s) === -1;
+  };
+  const items = [];
+  const add = (part, label, ok, weight) => items.push({part, label, ok: !!ok, weight: weight || 1});
+  const L = techLabels(d.tech);
+  const bare = s => s.replace(/\s*\(.*\)$/, '');
+
+  add('project', bare(L.mw), sizeStated(d), 2);
+  add('project', 'Capital ask', Number(d.ask) > 0, 2);
+  if (STORAGE_TECHS.indexOf(d.tech) !== -1) add('project', bare(L.mwh), Number(d.mwh) > 0);
+  add('project', 'Project notes', said(d.notes));
+
+  add('status', 'Site control', said(d.siteControl));
+  add('status', 'Interconnection', said(d.interconnect));
+  add('status', 'Permits', said(d.permits));
+
+  const seen = {};
+  (assetFields(d.tech) || []).forEach(f => {
+    if (seen[f.k]) return;
+    seen[f.k] = true;
+    if (f.dep) {
+      const pv = a[f.dep] == null ? '' : String(a[f.dep]).trim();
+      if (DEP_UNSTATED.concat(f.depNot || []).indexOf(pv) !== -1) return;
+    }
+    add('asset', f.l, said(a[f.k]), f.req ? 2 : 1);
+  });
+
+  /* Named as documents: "Interconnection" and "Permits" are also questions above. */
+  docsFor(d).forEach(x => add('docs', 'Document: ' + x, hasDoc(d, x)));
+
+  const total = xs => xs.reduce((s, i) => s + i.weight, 0);
+  const parts = COMPLETION_PARTS.map(p => {
+    const its = items.filter(i => i.part === p.key), got = its.filter(i => i.ok);
+    return {key: p.key, label: p.label, weight: p.weight, done: got.length, total: its.length,
+            share: its.length ? total(got) / total(its) : 0,
+            missing: its.filter(i => !i.ok).map(i => i.label)};
+  }).filter(p => p.total);
+  const wAll = parts.reduce((s, p) => s + p.weight, 0);
+  const raw = wAll ? parts.reduce((s, p) => s + p.weight * p.share, 0) / wAll * 100 : 0;
+  const all = items.every(i => i.ok);
+  /* 100 means nothing is missing; rounding never gets there on its own. */
+  const pctDone = all ? 100 : Math.min(99, Math.round(raw));
+  /* What to fill in next: the weighted questions first (the size, the ask, a
+     required field), then in the form's own order. */
+  const missing = items.filter(i => !i.ok)
+    .map((i, n) => ({label: i.label, part: i.part, weight: i.weight, n}))
+    .sort((x, y) => (y.weight - x.weight) || (x.n - y.n))
+    .map(i => ({label: i.label, part: i.part}));
+  return {pct: pctDone, band: pctDone >= 80 ? 'good' : pctDone >= 50 ? 'fair' : 'low',
+          done: items.length - missing.length, total: items.length, parts, missing};
+}
+
 /* ── The buy box ────────────────────────────────────────────────────────────
    Ten tests on whether a site is *developable*. Each returns pass, fail, or
    unknown, and unknown is never counted as either — a site with six passes and
@@ -2282,6 +2414,11 @@ function buildDeal(spec) {
   d.savings = d.bill  ? (d.bill.blended - d.ppaRate) / d.bill.blended
             : (d.utilityRate && d.ppaRate > 0) ? (d.utilityRate - d.ppaRate) / d.utilityRate
             : null;
+  /* How much of the file is filled in. dealCompletion() is the one rule; the
+     figure rides on the deal so the table sorts on it. Never written back:
+     dealToDoc() names every field it stores. */
+  d.completion = dealCompletion(d);
+  d.complete = d.completion.pct;
   return d;
 }
 
@@ -2953,6 +3090,7 @@ function devOverview() {
   const hidden = all.filter(d => !isPublished(d));
   const queued = all.filter(inReview);
   const onFirst = all.filter(onHold);
+  const toPublish = publishableDrafts();
 
   return `
   ${queued.length ? `<div class="sample-banner" style="background:var(--cs-amber-dim);border-color:rgba(199,122,0,.3)">
@@ -2964,6 +3102,13 @@ function devOverview() {
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cs-violet)"><path d="M12 3l2.7 5.5 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.8 1-6.1-4.4-4.3 6.1-.9z"/></svg>
     <div><b>${plural(onFirst.length, 'deal')} on first look.</b>
       ${onFirst.map(d => esc(d.name) + ' — ' + esc(holdOrgName(d)) + ', ' + esc(holdCountdown(d))).join('; ')}. ${onFirst.length === 1 ? 'It opens' : 'They open'} to every capital partner after that.</div>
+  </div>` : ''}
+  ${toPublish.length ? `<div class="sample-banner" style="background:var(--cs-blue-dim);border-color:rgba(0,137,189,.3)">
+    <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cs-blue)"><path d="M12 19V5M5 12l7-7 7 7"/></svg>
+    <div><b>${plural(toPublish.length, 'draft')} not in front of capital partners yet.</b>
+      ${isPlatformAdmin() ? 'Only their sponsors and ClearSky can see' : 'Only your organisation can see'} ${toPublish.length === 1 ? 'it' : 'them'}. Publish ${toPublish.length === 1 ? 'it' : 'them'} as ${toPublish.length === 1 ? 'it stands' : 'they stand'} —
+      a draft without a size or an ask goes as <i>Not sized</i> — and the deal file score shows how much of each is filled in.</div>
+    <button class="btn btn-ghost btn-xs" data-act="publish-drafts">Publish drafts</button>
   </div>` : ''}
   ${hidden.length ? `<div class="sample-banner" style="background:var(--cs-red-dim);border-color:rgba(180,50,42,.3)">
     <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" style="color:var(--cs-red)"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
@@ -2994,6 +3139,8 @@ function devOverview() {
             : stAll.avgCycle ? 'submission to funding' : 'no closes on record yet', '',
           cycleSpark.length > 2 ? sparkline(cycleSpark, 118, 34, 'var(--cs-blue)') : '')}
   </div>
+
+  ${completionOverview(list)}
 
   ${interestPanel(filtered())}
 
@@ -3154,6 +3301,7 @@ const COLS = [
   {key:'ppw',       lab:'$/W',         cls:'num', fmt:d => unsized(d) ? '—' : '$' + d.ppw.toFixed(2)},
   {key:'stage',     lab:'Stage'},
   {key:'status',    lab:'Outcome'},
+  {key:'complete',  lab:'File',        fmt:d => fillBar(d)},
   {key:'savings',   lab:'Bill savings', cls:'num', fmt:d => d.savings == null ? '—' : pct(d.savings * 100)},
   {key:'irr',       lab:'IRR',         cls:'num', fmt:d => unsized(d) ? '—' : d.irr.toFixed(1) + '%'},
   {key:'submittedBy',lab:'Submitted by'},
@@ -3196,6 +3344,7 @@ function lockedCell(d, c) {
     case 'stage':      return `<span class="pill ${STAGE_PILL[d.stage]}">${d.stage}</span>`;
     case 'status':   { const [cls, lab] = STATUS_PILL[d.status]; return `<span class="pill ${cls}">${lab}</span>`; }
     case 'submitted':  return dt(d.submitted);
+    case 'complete':   return fillBar(d);
     default:           return '<span class="lk-dot" title="Unlock this deal to see">•••</span>';
   }
 }
@@ -4203,7 +4352,8 @@ function drawerBody(d) {
     </div>
     ${isDraft(d) ? `<div class="verdict fair" style="margin-bottom:20px">
       <div class="vd-top"><span class="vd-badge">Draft</span><h5>Not yet sent to capital partners</h5></div>
-      <p>Only your organisation can see this. Fill in the nameplate and capital ask, then publish it when you're ready.</p>
+      <p>Only your organisation can see this. Publish it as it stands — ${draftPublishPatch(d).sizePending
+        ? 'without a size and an ask it goes as <b>Not sized</b>' : 'it goes with its size and ask'} — and the deal file below shows capital partners how much is filled in.</p>
       ${canEdit(d) ? `<button class="btn btn-primary btn-sm" style="margin-top:12px" data-act="republish" data-val="${d.id}">Publish to marketplace</button>
         <button class="btn btn-ghost btn-sm" style="margin-top:12px;margin-left:8px" data-act="edit-deal" data-val="${d.id}">Edit</button>` : ''}
     </div>` : ''}
@@ -4238,6 +4388,7 @@ function drawerBody(d) {
     ${d.status === 'declined' ? `<div class="verdict poor" style="margin-bottom:20px">
       <div class="vd-top"><span class="vd-badge">Declined</span><h5>${esc(d.declineReason)}</h5></div>
       <p>Returned after ${d.cycleDays} days in ${d.stage.toLowerCase()}. Resubmission is allowed once the underlying issue is documented.</p></div>` : ''}
+    ${completionPanel(d)}
     ${buyBoxPanel(d)}
     ${conditionsPanel(d)}
     <div class="sec">
@@ -4400,7 +4551,7 @@ function drawerBody(d) {
 
   if (S.drawerTab === 'docs') {
     const links = d.links || [];
-    const missing = DOC_PRESETS.filter(x => !links.some(l => l.label.toLowerCase() === x.toLowerCase()));
+    const missing = docsFor(d).filter(x => !hasDoc(d, x));
     return `
     <p class="note" style="margin-bottom:16px">Documents stay in the sponsor's own Drive, Dropbox or Box. Opening one records an entry on the audit trail — nothing is copied onto the platform.</p>
     ${links.length ? links.map(l => `<a class="doc-link" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" data-act="doc-open">
@@ -4905,7 +5056,7 @@ function exportDeals(list) {
   const withInterest = !!SESSION && (S.role !== 'partner' || isPlatformAdmin());
   const named = withInterest && namesShown();
 
-  const rows = [['Deal ID','Name','City','State','Technology','MW','MWh','Capital ask (USD)','$/W','Stage','Outcome','Decline reason','Developer','Originator','Bidders','Offers','Sponsor IRR %','DSCR','Offtake','Development stage','Sizing','Site control','Permits','Interconnection','Submitted','Decided','Days in process','Target COD','Shared links']
+  const rows = [['Deal ID','Name','City','State','Technology','MW','MWh','Capital ask (USD)','$/W','Stage','Outcome','Decline reason','Developer','Originator','Bidders','Offers','Sponsor IRR %','DSCR','Offtake','Development stage','Sizing','Site control','Permits','Interconnection','Submitted','Decided','Days in process','Target COD','Shared links','File complete (%)']
     .concat(withInterest ? ['Firms that viewed','Total opens','Firms that unlocked','Firms watching','Days to first view','Last viewed'] : [])
     .concat(named ? ['Viewing firms'] : [])];
 
@@ -4914,7 +5065,7 @@ function exportDeals(list) {
       STATUS_PILL[d.status][1], d.declineReason || '', d.developer, d.originator, d.bidders, d.offers, d.irr, d.dscr,
       d.offtake, d.devStage || '', unsized(d) ? 'not sized' : 'sized',
       d.siteControl, d.permits, d.interconnect, d.submitted, d.decided || '', d.cycleDays || d.ageDays, d.cod,
-      (d.links || []).map(l => l.label + ': ' + l.url).join(' | ')];
+      (d.links || []).map(l => l.label + ': ' + l.url).join(' | '), d.complete];
 
     if (withInterest) {
       const s = viewSummary(d.id);
@@ -7275,6 +7426,7 @@ function lockedPanel(d) {
       <div class="r"><div class="k">Capital ask</div><div class="v">${askBand(d)}</div></div>
       <div class="r"><div class="k">Stage</div><div class="v">${esc(d.stage)}</div></div>
       <div class="r"><div class="k">Filed</div><div class="v">${dt(d.submitted)}</div></div>
+      <div class="r"><div class="k">Deal file</div><div class="v">${d.complete}% filled in</div></div>
       ${d.assetSpec && d.assetSpec.corridor ? `<div class="r"><div class="k">Corridor</div><div class="v">${esc(d.assetSpec.corridor)}</div></div>` : ''}
       ${d.assetSpec && d.assetSpec.powerTiming ? `<div class="r"><div class="k">Time to power</div><div class="v">${esc(d.assetSpec.powerTiming)}</div></div>` : ''}
       ${d.bill ? '<div class="r done"><div class="k">Utility bills</div><div class="v">12 months on file</div></div>' : ''}
@@ -8708,7 +8860,7 @@ const NAV_ICON = {
 const VIEW_MODES = [['cards','Cards','card'], ['table','Table','table'], ['map','Map','map']];
 const SORT_OPTS = [
   ['ask','Largest ask'], ['mw','Largest size'], ['submitted','Most recent'],
-  ['name','Project A–Z'], ['state','State A–Z'], ['stage','Stage']
+  ['name','Project A–Z'], ['state','State A–Z'], ['stage','Stage'], ['complete','Most complete']
 ];
 
 /* ---------- the toolbar ---------------------------------------------------
@@ -8787,6 +8939,85 @@ function filterBar(showGroup) {
   </div>`;
 }
 
+/* ---------- deal file completion ------------------------------------------
+   dealCompletion() decides; these only draw it. The bar is the same on a card,
+   a table row and a sealed teaser: a share of the form answered, never a
+   judgement of the deal, which is the buy box's job. */
+function fillBar(d, label) {
+  const c = d.completion || dealCompletion(d);
+  const next = c.missing.slice(0, 3).map(m => m.label).join(', ');
+  return `<span class="fill ${c.band}" title="${esc(c.done + ' of ' + c.total + ' questions answered' + (next ? ' \u2014 next: ' + next : ''))}">`
+    + `<span class="fill-bar"><i style="width:${c.pct}%"></i></span><b>${c.pct}%</b>${label ? ' ' + esc(label) : ''}</span>`;
+}
+
+function completionPanel(d) {
+  const c = d.completion || dealCompletion(d);
+  const next = c.missing.slice(0, 10);
+  return `<div class="sec bb">
+    <h4>Deal file</h4>
+    <div class="bb-head ${c.band === 'low' ? 'poor' : c.band}">
+      <div class="bb-score"><b>${c.pct}%</b><span>filled in</span></div>
+      <div class="bb-verdict">
+        <strong>${c.missing.length ? plural(c.missing.length, 'question') + ' not answered yet' : 'Every question answered'}</strong>
+        <span>${c.parts.map(p => esc(p.label) + ' ' + p.done + '/' + p.total).join(' \u00b7 ')}</span>
+      </div>
+    </div>
+    ${next.length ? `<div class="fill-next"><div class="bb-w">Fill in next</div>
+      <div class="fill-chips">${next.map(m => `<span class="fill-chip">${esc(m.label)}</span>`).join('')}${
+        c.missing.length > next.length ? `<span class="fill-more">and ${c.missing.length - next.length} more</span>` : ''}</div></div>` : ''}
+    ${next.length && canEdit(d) ? `<button class="btn btn-ghost btn-sm" data-act="edit-deal" data-val="${esc(d.id)}">Fill these in</button>` : ''}
+  </div>`;
+}
+
+/* The book's deal files on the Overview: the average, how many sit in each
+   band, and the deals with the most still to answer, each with what to fill
+   in next. */
+function completionOverview(list) {
+  if (!list.length) return '';
+  const avgPct = Math.round(avg(list.map(d => d.complete)));
+  const inBand = b => list.filter(d => d.completion.band === b).length;
+  const open = list.filter(d => d.complete < 100)
+    .sort((a, b) => (a.complete - b.complete) || String(a.name).localeCompare(String(b.name)));
+  const band = (lab, n, colour) => `
+    <div style="margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;font-size:12.5px;margin-bottom:5px">
+        <span style="color:var(--cs-muted)">${lab}</span>
+        <span style="font-weight:700">${n} <span style="font-weight:500;color:var(--cs-muted-2)">· ${Math.round(n / list.length * 100)}%</span></span>
+      </div>
+      <div style="height:8px;border-radius:5px;background:var(--cs-card-2);overflow:hidden">
+        <div style="height:100%;width:${n / list.length * 100}%;background:${colour};border-radius:5px"></div>
+      </div>
+    </div>`;
+  return `
+  <div class="card" style="margin-top:14px">
+    <div class="card-head">
+      <div><h3>Deal file completion</h3>
+        <div class="ch-sub">How much of each deal's form is filled in: size and ask, site and status, the asset detail and the documents.
+          A count of answers across ${plural(list.length, 'deal')}, not a judgement of the deals.</div></div>
+    </div>
+    <div class="grid" style="grid-template-columns:minmax(0,.85fr) minmax(0,1.15fr);gap:22px;margin-top:4px">
+      <div>
+        <div style="display:flex;align-items:baseline;gap:10px;margin-bottom:14px">
+          <span style="font-family:'Syne',sans-serif;font-size:34px;font-weight:700;letter-spacing:-1px">${avgPct}%</span>
+          <span style="font-size:12.5px;color:var(--cs-muted)">filled in on average</span>
+        </div>
+        ${band('80% or more', inBand('good'), 'var(--cs-green)')}
+        ${band('50 to 79%', inBand('fair'), 'var(--cs-amber)')}
+        ${band('Under 50%', inBand('low'), 'var(--cs-red)')}
+      </div>
+      <div>
+        <h4 style="font-size:10.5px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--cs-muted-2);margin-bottom:6px">Most to fill in</h4>
+        ${open.length ? open.slice(0, 6).map(d => `<div class="fill-row" data-act="open" data-val="${esc(d.id)}">
+            <span class="fr-name"><b>${esc(d.name)}</b><span>Next: ${esc(d.completion.missing.slice(0, 3).map(m => m.label).join(', '))}</span></span>
+            ${fillBar(d)}
+          </div>`).join('')
+          + (open.length > 6 ? `<div class="note" style="margin-top:8px">and ${open.length - 6} more in My deals, where the File column sorts on it.</div>` : '')
+          : '<p class="note">Every deal here has every question answered.</p>'}
+      </div>
+    </div>
+  </div>`;
+}
+
 /* ---------- card grid -----------------------------------------------------
    A table is right for comparing forty deals on one figure. It is wrong for
    browsing, which is what a capital partner does first — so browsing gets
@@ -8822,6 +9053,7 @@ function dealCard(d) {
         <span class="pill ${sp[0]}">${sp[1]}</span>
         ${bb ? `<span class="pill ${BUYBOX_BADGE[bb.band]}" title="${esc(bb.verdict)}">${bb.met}/${bb.total} fit</span>` : ''}
       </div>
+      <div class="dc-fill">${fillBar(d, 'of the file filled in')}</div>
       <div class="dc-stats">
         <div class="dc-stat"><div class="k">Capital ask</div><div class="v">${esc(askv)}</div></div>
         <div class="dc-stat"><div class="k">Offtake</div><div class="v" style="font-size:12.5px">${esc(lk ? 'Sealed' : (d.offtake || '—'))}</div></div>
@@ -9863,6 +10095,11 @@ document.addEventListener('click', e => {
     case 'cmdk':       cmdkOpen(); break;
     case 'import':     importModal(); break;
     case 'imp-push':   impPush(); break;
+    case 'publish-drafts': publishDraftsModal(); break;
+    case 'pub-go':     publishDrafts(); break;
+    case 'pub-tick':   pubSel[val] = !pubSel[val]; pubPaint(); break;
+    case 'pub-all':
+    case 'pub-none':   pubRows.forEach(d => { pubSel[d.id] = act === 'pub-all'; }); pubPaint(); break;
     case 'imp-tick':   impSel[val] = !impSel[val]; impPaint(); break;
     case 'imp-owner':  break;   // handled on change, below
     case 'imp-all':
@@ -10948,19 +11185,161 @@ function isPublished(d) {
 }
 const isDraft = d => !!d && (d.draft || d.fsStatus === FS_DRAFT);
 
+/* ── Publishing a draft ─────────────────────────────────────────────────────
+   One rule for the drawer's Publish button and for Publish drafts (Tommy,
+   2026-09-30: "i want max deals in the room"). A draft goes out as it stands.
+   Without a real size or an ask it goes as an early opportunity, Not sized,
+   as the submit form files one with the box ticked; buildDeal()'s 0.1 MW
+   stand-in is cleared rather than published, and a size that was stated is
+   kept. Where it lands is intakeStatusFor()'s answer for a new filing, so a
+   technology an administrator reviews first goes to review from here too.
+   The deal file score travels with it, which is what tells a capital partner
+   how much of the file is there. */
+function draftPublishPatch(d) {
+  const patch = {status: intakeStatusFor(Object.assign({}, d, {draft: false}))};
+  if (!sizeStated(d) || !(Number(d.ask) > 0)) {
+    patch.sizePending = true;
+    if (!sizeStated(d)) patch.mw = 0;
+  }
+  return patch;
+}
+
+function publishedLine(d, patch) {
+  return patch.status === FS_REVIEW
+    ? `${d.name} goes to a ClearSky administrator for review before capital partners see it.`
+    : `${d.name} is on the marketplace${patch.sizePending ? ', marked Not sized' : ''}.`;
+}
+
+/* Writes a publish. Without a backend (sample data) the deal in memory takes it. */
+async function writePublish(d, patch) {
+  if (d.docId && FB.ready) return FB.db.collection('fin_projects').doc(d.docId).update(patch);
+  if (d.docId) throw new Error('No database connection — nothing was published.');
+  const local = Object.assign({}, d, {draft: false, fsStatus: patch.status});
+  if ('sizePending' in patch) local.sizePending = patch.sizePending;
+  if ('mw' in patch) local.mw = patch.mw;
+  Object.assign(d, buildDeal(local));
+}
+
 async function republish(id) {
   const d = allDeals().find(x => x.id === id);
-  if (!d || !d.docId || !FB.ready) return;
-  if (isDraft(d) && (!d.mw || d.mw <= 0.1 || !d.ask)) {
-    return toast('Add the nameplate and capital ask before publishing.', true);
-  }
+  if (!d) return;
+  const draft = isDraft(d);
+  if (!draft && (!d.docId || !FB.ready)) return;
+  const patch = draft ? draftPublishPatch(d) : {status: FS_OPEN};
   try {
-    await FB.db.collection('fin_projects').doc(d.docId).update({status: 'open'});
-    toast(`${d.name} is ${isDraft(d) ? 'now on the marketplace' : 'back on the marketplace'}.`);
+    await writePublish(d, patch);
+    toast(draft ? publishedLine(d, patch) : `${d.name} is back on the marketplace.`);
+    if (!d.docId) render();
   } catch (err) {
     console.error('[OMEGA] republish failed:', err);
     const [h, t] = explain(err);
     toast(h + (t ? ' ' + t : ''), true);
+  }
+}
+
+/* A draft an administrator sent back (returnDeal) was held for a reason, so
+   Publish drafts starts with it unticked and says why. */
+const sentBack = d => isDraft(d) && !!d.reviewedAt;
+
+/* Every draft this account may publish, the most complete first. */
+const publishableDrafts = () => myBook().filter(d => isDraft(d) && canEdit(d))
+  .sort((a, b) => (b.complete - a.complete) || String(a.name).localeCompare(String(b.name)));
+
+let pubSel = {}, pubRows = [];
+function publishDraftsModal() {
+  pubRows = publishableDrafts();
+  if (!pubRows.length) return toast('There are no drafts to publish.');
+  pubSel = {};
+  pubRows.forEach(d => { pubSel[d.id] = !sentBack(d); });
+  openModal(`
+  <div class="modal-head">
+    <div><h2>Publish drafts</h2>
+      <div class="mh-sub">Each draft ticked below goes to capital partners as it stands. One without a size
+        or a capital ask goes as <b>Not sized</b>, and every deal carries its file score, so a partner can
+        see how much is filled in. Untick any you want to keep back.${isPlatformAdmin()
+          ? ' As an administrator you see every sponsor\'s drafts; each row names whose it is.' : ''}</div></div>
+    <button class="dr-x" data-act="close-modal" aria-label="Close">&times;</button>
+  </div>
+  <div class="modal-body">
+    <div class="imp-batch">
+      <div class="imp-bhead">
+        <div class="imp-bt">${svgIc('layers', 16)}<h4>Drafts</h4><span class="imp-n" id="pubN"></span></div>
+        <div class="imp-ball">
+          <button class="link-btn" data-act="pub-all">Select all</button>
+          <button class="link-btn" data-act="pub-none">None</button>
+        </div>
+      </div>
+      <p class="imp-blurb">Most complete first.</p>
+      <div class="imp-rows">
+        ${pubRows.map(d => { const p = draftPublishPatch(d); return `
+          <label class="imp-row" for="pub_${esc(d.id)}">
+            <input type="checkbox" id="pub_${esc(d.id)}" data-act="pub-tick" data-val="${esc(d.id)}"${pubSel[d.id] ? ' checked' : ''}>
+            <span class="imp-main">
+              <b>${esc(d.name)}</b>
+              <span class="imp-meta">${esc(d.techName)} · ${esc(d.city)}, ${esc(d.state)}${isPlatformAdmin() ? ' · ' + esc(d.developer) + (d.submittedBy && d.submittedBy !== d.developer ? ' · ' + esc(d.submittedBy) : '') : ''}</span>
+              <span style="display:block;margin-top:6px;max-width:320px">${fillBar(d, 'filled in')}</span>
+              ${p.sizePending ? '<span class="imp-flag warn">Goes as Not sized</span>' : ''}
+              ${p.status === FS_REVIEW ? '<span class="imp-flag dup">Goes to review first</span>' : ''}
+              ${sentBack(d) ? `<span class="imp-flag warn">Sent back by ${esc(d.reviewedBy || 'an administrator')}${
+                d.reviewNote ? ': ' + esc(d.reviewNote) : ''}</span>` : ''}
+            </span>
+            <span class="imp-state" id="pubS-${esc(d.id)}"></span>
+          </label>`; }).join('')}
+      </div>
+    </div>
+  </div>
+  <div class="modal-foot">
+    <div class="auth-err" id="modalErr" style="margin:0;flex:1 1 240px;min-width:0"></div>
+    <span class="wiz-count" id="pubCount"></span>
+    <button class="btn btn-ghost btn-sm" data-act="close-modal">Cancel</button>
+    <button class="btn btn-primary btn-sm" id="pubGo" data-act="pub-go">Publish</button>
+  </div>`, true);
+  pubPaint();
+}
+
+function pubPaint() {
+  pubRows.forEach(d => { const box = $('#pub_' + CSS.escape(d.id)); if (box) box.checked = !!pubSel[d.id]; });
+  const n = pubRows.filter(d => pubSel[d.id]).length;
+  const el = $('#pubN'); if (el) el.textContent = n + ' of ' + pubRows.length;
+  const cnt = $('#pubCount'); if (cnt) cnt.textContent = n ? plural(n, 'draft') + ' selected' : 'Nothing selected';
+  const go = $('#pubGo'); if (go) { go.disabled = !n; go.textContent = n ? 'Publish ' + n : 'Publish'; }
+}
+
+/* One at a time, each through the same writer as the drawer's button, so a
+   refusal names the deal it stopped on and the rest still go. */
+async function publishDrafts() {
+  const chosen = pubRows.filter(d => pubSel[d.id]);
+  if (!chosen.length) return;
+  const go = $('#pubGo');
+  if (go) go.disabled = true;
+  modalErr('');
+  let done = 0, review = 0, failed = 0;
+  for (const d of chosen) {
+    const cell = $('#pubS-' + CSS.escape(d.id));
+    if (cell) cell.innerHTML = '<span class="imp-dot work"></span>';
+    const patch = draftPublishPatch(d);
+    try {
+      await writePublish(d, patch);
+      done++;
+      if (patch.status === FS_REVIEW) review++;
+      pubSel[d.id] = false;
+      if (cell) cell.innerHTML = '<span class="imp-dot ok">✓</span>';
+    } catch (err) {
+      failed++;
+      console.error('[OMEGA] publish failed for', d.name, err);
+      if (cell) cell.innerHTML = '<span class="imp-dot bad" title="' + esc(explain(err)[0]) + '">!</span>';
+    }
+    if (go) go.textContent = 'Publishing… ' + (done + failed) + ' of ' + chosen.length;
+  }
+  pubPaint();
+  const sent = plural(done, 'draft') + ' published' + (review ? ' (' + review + ' to review first)' : '');
+  if (failed) {
+    modalErr(plural(failed, 'draft') + ' refused' + (done ? ', ' + sent : '') + '. '
+      + 'Hover the red mark for the reason; the database decides who may publish a deal.');
+  } else {
+    closeModal();
+    render();
+    toast(sent + '.');
   }
 }
 

@@ -261,6 +261,44 @@ empty box.
 
 ---
 
+## Deal file completion and publishing drafts
+
+**Deal file score.** Every deal carries a percentage for how much of its form
+is filled in: `dealCompletion(d)` in `index.html`, the one rule. It counts
+what the sponsor *stated*, never what `buildDeal()` fills in to keep the
+arithmetic safe (the 540-day COD, the 11.5% IRR, the default offtake, a rate or
+city off the state's market, the 0.1 MW stand-in). There are four parts, each
+with a fixed weight, so a site binder's sixty questions do not drown out the
+size and the ask:
+
+| Part          | Weight | Questions                                                        |
+|---------------|--------|------------------------------------------------------------------|
+| Project       | 30%    | size and capital ask (double weight), MWh on storage, notes      |
+| Site & status | 15%    | site control, interconnection, permits                           |
+| Asset detail  | 30%    | the technology's own `ASSET_FIELDS` (required fields double)     |
+| Documents     | 25%    | `docsFor(d)`: the `DOC_PRESETS` a deal of this kind should carry |
+
+A part the technology does not have drops out, and the other parts share its
+weight. A blank, `—`, "Not determined" or "Not disclosed" counts as
+unanswered, and a follow-up question counts only once its parent question
+opens it. 100% means nothing is missing (rounding up to 100 is capped at 99).
+The score is shown on cards, in the table's File column (which sorts), in the
+drawer with what to fill in next, in the Overview's *Deal file completion*
+card, on a sealed deal's teaser, and in the CSV export. Everyone who can open a
+deal sees it. It is never written to Firestore. The Documents tab lists
+missing documents from the same `docsFor(d)`.
+
+**Publishing a draft** (drawer button, or *Publish drafts* on the Overview for
+every draft the account may edit) goes through `draftPublishPatch(d)`. A draft
+without a real size or an ask goes as an early opportunity (`sizePending:
+true`, shown as *Not sized*), and the 0.1 MW stand-in is cleared. Where it
+lands is `intakeStatusFor()`'s answer for a new filing: a gated technology
+goes to `review` from a sponsor and to `open` from an administrator. No rules
+change: an owner and an administrator could already set `status`.
+`scripts/tests/tdealcompletion.js` holds both rules.
+
+---
+
 ## View tracking — what the capital side has actually looked at
 
 A sponsor filing into a marketplace is otherwise working blind: they cannot
