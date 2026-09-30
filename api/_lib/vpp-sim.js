@@ -178,9 +178,25 @@ var SHAPES = {
          1.20, 1.24, 1.25, 1.24, 1.20, 1.10, 1.00, 0.95, 0.90, 0.86, 0.82, 0.80],
     we: [0.70, 0.68, 0.68, 0.68, 0.68, 0.70, 0.74, 0.78, 0.80, 0.82, 0.82, 0.82,
          0.82, 0.82, 0.82, 0.80, 0.78, 0.76, 0.74, 0.72, 0.72, 0.71, 0.70, 0.70]
+  },
+  /* Two host shapes the compute site pro forma (compute-site.js) builds on;
+     the VPP intake still offers its three segments only. A multifamily
+     HOUSE meter (corridors, garage, lifts, amenity HVAC) is flat with an
+     evening shoulder; a retail meter follows opening hours. */
+  multifamily: {
+    wd: [0.80, 0.76, 0.74, 0.73, 0.75, 0.85, 1.00, 1.08, 1.02, 0.96, 0.94, 0.95,
+         0.97, 0.98, 1.00, 1.04, 1.12, 1.22, 1.30, 1.30, 1.24, 1.14, 1.00, 0.88],
+    we: [0.82, 0.78, 0.76, 0.75, 0.75, 0.80, 0.90, 1.00, 1.06, 1.08, 1.08, 1.08,
+         1.08, 1.06, 1.06, 1.08, 1.14, 1.22, 1.28, 1.28, 1.22, 1.12, 1.00, 0.88]
+  },
+  retail: {
+    wd: [0.45, 0.43, 0.42, 0.42, 0.43, 0.48, 0.60, 0.85, 1.20, 1.45, 1.55, 1.60,
+         1.62, 1.62, 1.60, 1.58, 1.55, 1.50, 1.40, 1.20, 0.95, 0.70, 0.55, 0.48],
+    we: [0.45, 0.43, 0.42, 0.42, 0.43, 0.46, 0.55, 0.78, 1.10, 1.38, 1.50, 1.56,
+         1.58, 1.58, 1.56, 1.52, 1.46, 1.36, 1.20, 1.00, 0.80, 0.62, 0.52, 0.47]
   }
 };
-var DEFAULT_ANNUAL_KWH = { residential: 10800, commercial: 300000, industrial: 2400000 };
+var DEFAULT_ANNUAL_KWH = { residential: 10800, commercial: 300000, industrial: 2400000, multifamily: 450000, retail: 350000 };
 
 function dayOfWeek(dayIndex) { return (YEAR_START_DOW + dayIndex) % 7; }
 function isWeekend(dayIndex) { var d = dayOfWeek(dayIndex); return d === 0 || d === 6; }
@@ -434,6 +450,31 @@ function buildTariff(input, loc, segment, calibScale) {
            rates: { onPeak: r2(on * k), offPeak: r2(off * k), demand: r2(demand * k) },
            label: raw.name + ' — on-peak ' + win[0] + ':00–' + win[1] + ':00 weekdays' +
                   (own ? '' : '. A screening rate, not this customer\'s tariff; their bill or a URDB record replaces it.') };
+}
+
+/* The tariff a load is billed on: the caller's own rates or URDB record,
+   else the market's planning rate, scaled so the modelled bill matches the
+   dollars on the bills when three or more months carry them. The one
+   calibration rule, shared with the compute site pro forma. */
+function calibratedTariff(input, loc, segment, L) {
+  var tf = buildTariff(input, loc, segment, 1);
+  if (!tf.ok) return tf;
+  var calib = null;
+  if (L.source === 'bills' && tf.source === 'planning') {
+    var paid = 0, paidMonths = [], mi;
+    for (mi = 0; mi < 12; mi++) if (L.months[mi].cost != null) { paid += L.months[mi].cost; paidMonths.push(mi); }
+    if (paidMonths.length >= 3) {
+      var loadOnly = bill(L.kw, tf.tariff), modelled = 0;
+      for (mi = 0; mi < paidMonths.length; mi++) modelled += loadOnly.months[paidMonths[mi]].subtotal;
+      if (modelled > 0) {
+        var k = clamp(paid / modelled, 0.4, 2.5);
+        tf = buildTariff(input, loc, segment, k);
+        calib = { factor: r2(k), note: 'The planning rate was scaled by ' + r2(k) + '× so the modelled bill matches the ' +
+                  paidMonths.length + ' month(s) of dollars on the bills' + (k !== paid / modelled ? ' (capped)' : '') + '.' };
+      }
+    }
+  }
+  return { ok: true, tf: tf, calib: calib };
 }
 
 /* Hourly energy price and a demand-billed flag, read back off the
@@ -757,25 +798,11 @@ function simulate(input) {
   var perf = clamp(num(input.performance, 0.9), 0.5, 1);
 
   /* Tariff, calibrated to the bills' dollars when they carry any. */
-  var tf = buildTariff(input, loc, segment, 1);
-  if (!tf.ok) return { ok: false, errors: [{ field: 'tariff', message: tf.error }] };
+  var ct = calibratedTariff(input, loc, segment, L);
+  if (!ct.ok) return { ok: false, errors: [{ field: 'tariff', message: ct.error }] };
+  var tf = ct.tf, calib = ct.calib;
   var netNoBat = new Array(HOURS_YEAR);
   for (h = 0; h < HOURS_YEAR; h++) netNoBat[h] = load[h] - (solar ? solar[h] : 0);
-  var calib = null;
-  if (L.source === 'bills' && tf.source === 'planning') {
-    var paid = 0, paidMonths = [], mi;
-    for (mi = 0; mi < 12; mi++) if (L.months[mi].cost != null) { paid += L.months[mi].cost; paidMonths.push(mi); }
-    if (paidMonths.length >= 3) {
-      var loadOnly = bill(load, tf.tariff), modelled = 0;
-      for (mi = 0; mi < paidMonths.length; mi++) modelled += loadOnly.months[paidMonths[mi]].subtotal;
-      if (modelled > 0) {
-        var k = clamp(paid / modelled, 0.4, 2.5);
-        tf = buildTariff(input, loc, segment, k);
-        calib = { factor: r2(k), note: 'The planning rate was scaled by ' + r2(k) + '× so the modelled bill matches the ' +
-                  paidMonths.length + ' month(s) of dollars on the bills' + (k !== paid / modelled ? ' (capped)' : '') + '.' };
-      }
-    }
-  }
   var t = tf.tariff;
 
   var evWin = tf.win || RATE_BOOK[loc.market].win;
@@ -871,6 +898,14 @@ module.exports = {
   VERSION: VERSION, SPLIT: SPLIT, MARKETS: MARKETS, PROGRAMS: PROGRAMS, RATE_BOOK: RATE_BOOK,
   locate: locate, parseInterval: parseInterval, billsToMonths: billsToMonths, fitMonth: fitMonth,
   validate: validate, simulate: simulate,
+  /* The site builders the compute site pro forma (compute-site.js) reuses,
+     so a load, a tariff and a bill are made one way on this platform. */
+  site: {
+    HOURS_YEAR: HOURS_YEAR, DAYS: DAYS, MONTH_START: MONTH_START, YEAR_START_DOW: YEAR_START_DOW,
+    SHAPES: SHAPES, CLIMATE: CLIMATE,
+    isWeekend: isWeekend, monthOfHour: monthOfHour, buildLoad: buildLoad, buildTariff: buildTariff,
+    calibratedTariff: calibratedTariff, bill: bill, priceSeries: priceSeries, solarProfile: solarProfile
+  },
   /* for the page: what may be chosen, no rates */
   options: function () {
     var m = []; for (var k in MARKETS) if (has(MARKETS, k)) m.push({ key: k, name: MARKETS[k] });

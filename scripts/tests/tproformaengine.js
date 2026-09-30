@@ -700,7 +700,7 @@ eq('a fixed-fee battery flexes its fee', feeSens.sensitivity.map(function (s) { 
 section('inputs: defaults, reading, refusal');
 var D = E.defaults();
 eq('defaults carry the contract\'s top-level fields', Object.keys(D).join(),
-  'years,project,solar,bess,ev,controller,capex,allocation,revenue,opex,reserves,bessReplacement,tax,debt,discountPct,inflationPct');
+  'years,project,solar,bess,ev,controller,capex,allocation,revenue,opex,reserves,bessReplacement,refresh,tax,debt,discountPct,inflationPct');
 eq('SAM\'s split adds to 100', D.allocation.macrs5 + D.allocation.macrs15 + D.allocation.sl15 + D.allocation.sl20 + D.allocation.none, 100);
 ok('optional blocks default absent and derived values unset', D.solar === null && D.debt === null && D.tax.statePct === null &&
   D.reserves.equipment.watts === null);
@@ -906,6 +906,61 @@ ok('Taft: year 1 pays the credit sale and the rest of the debt term pays far les
 ok('the decks\' own errors are flagged, not fixed: Sunnyside\'s 7% and 36%, Taft\'s 8.84% in Florida',
   codes(S).indexOf('STATE_RATE_MISMATCH') >= 0 && codes(S).indexOf('NON_STATUTORY_RATE') >= 0 &&
   codes(F).indexOf('STATE_RATE_MISMATCH') >= 0 && codes(T).indexOf('STATE_RATE_MISMATCH') < 0);
+
+section('year-by-year schedules and equipment refresh (the compute site pro forma)');
+/* A business modelled year by year upstream (GPU-hour prices that fall and
+   reset at a refresh) hands the engine nominal dollars; the engine uses
+   them as they stand. Absent, every existing input behaves as before. */
+function computeSite(over) {
+  return merge({
+    years: 5,
+    project: { name: 'Compute site', state: 'TX' },
+    capex: { lines: [{ id: 'gpu', label: 'GPU servers', amount: 1000000, asset: 'other', depClass: 'macrs5' }] },
+    revenue: { other: [{ label: 'Compute', schedule: [500000, 450000, 405000, 364500, 328050] }] },
+    opex: { lines: [{ id: 'kwh', label: 'Electricity', schedule: [60000, 61800, 63654, 65564, 67531] }] },
+    reserves: { wcMonths: 0 }
+  }, over || {});
+}
+var CS = E.run(computeSite());
+ok('a scheduled revenue line runs', CS.ok, CS.errors);
+near('year 1 revenue is the schedule\'s first year', CS.rows[0].otherRevenue, 500000, 1e-6);
+near('year 3 revenue is used as given, never escalated', CS.rows[2].otherRevenue, 405000, 1e-6);
+near('a scheduled opex line is used as given', CS.rows[4].opex, 67531, 1e-6);
+eq('perYear defaults to the schedule\'s first year', CS.inputs.revenue.other[0].perYear, 500000);
+var CSE = E.run(computeSite({ revenue: { other: [{ label: 'Compute', perYear: 500000, escalatorPct: -10 }] },
+  opex: { lines: [{ id: 'kwh', label: 'Electricity', perYear: 60000, escalatorPct: 3 }] } }));
+near('the same figures by escalator give the same IRR (schedule = escalator, exactly)',
+  CSE.metrics.afterTaxIrr, CS.metrics.afterTaxIrr, 1e-4);
+var short = E.run(computeSite({ years: 6 }));
+ok('a schedule shorter than the term is refused, naming the line',
+  short.ok === false && short.errors.some(function (x) { return /schedule/.test(x.field) && /Compute/.test(x.message); }), short.errors);
+var neg = E.run(computeSite({ revenue: { other: [{ label: 'Compute', schedule: [1, -2, 3, 4, 5] }] } }));
+ok('a negative scheduled amount is refused', neg.ok === false && neg.errors.some(function (x) { return x.field === 'revenue.other[0].schedule[1]'; }), neg.errors);
+var bad = E.run(computeSite({ opex: { lines: [{ id: 'x', label: 'X', schedule: 'lots' }] } }));
+ok('a schedule that is not a list is refused', bad.ok === false, bad.errors);
+
+var RFX = E.run(computeSite({ refresh: { mode: 'expense', events: [{ label: 'GPU refresh', year: 3, cost: 400000 }] } }));
+var RFR = E.run(computeSite({ refresh: { mode: 'reserve', events: [{ label: 'GPU refresh', year: 3, cost: 400000 }] } }));
+ok('a refresh runs both ways', RFX.ok && RFR.ok, [RFX.errors, RFR.errors]);
+near('paid from cash: the whole cost lands in its year', CS.rows[2].preTaxCash - RFX.rows[2].preTaxCash, 400000, 1e-6);
+near('from a reserve: level deposits up to the event', CS.rows[0].preTaxCash - RFR.rows[0].preTaxCash, 400000 / 3, 1e-6);
+near('the refresh is capex in its year', RFX.rows[2].refreshCapex, 400000, 1e-6);
+near('and is depreciated as 5-year MACRS from that year', RFX.rows[2].depreciationFed - CS.rows[2].depreciationFed, 400000 * 0.20, 1e-6);
+ok('the refresh earns no credit', RFX.tax.itc.face === CS.tax.itc.face);
+ok('an event after the term is dropped', E.run(computeSite({ refresh: { events: [{ year: 9, cost: 5 }] } })).metrics.afterTaxIrr === CS.metrics.afterTaxIrr);
+ok('the conventions name the schedule and the refresh',
+  RFX.assumptions.some(function (a) { return /given year by year/.test(a); }) &&
+  RFX.assumptions.some(function (a) { return /refreshed in year 3/.test(a); }), RFX.assumptions);
+ok('an existing deck is unchanged by the new fields (no refresh, no schedule)', E.defaults().refresh.events.length === 0);
+var SITE = E.run(computeSite({ bess: { kw: 100, kwh: 200 }, revenue: { bess: { mode: 'site' } },
+  capex: { lines: [{ id: 'gpu', label: 'GPU servers', amount: 1000000, asset: 'other', depClass: 'macrs5' },
+                   { id: 'bat', label: 'Battery', amount: 110000, asset: 'storage' }] } }));
+ok('a battery whose value is inside the site\'s lines earns no separate revenue, and says so',
+  SITE.ok && SITE.rows.every(function (r) { return r.bessRevenue === 0; }) &&
+  SITE.assumptions.some(function (a) { return /not counted a second time/.test(a); }), SITE.errors || SITE.assumptions);
+ok('and still earns its storage credit', SITE.tax.itc.face > 0, SITE.tax && SITE.tax.itc);
+ok('and quotes no cost of storage: the site\'s costs are not the battery\'s', SITE.metrics.lcosCents === null &&
+  !SITE.assumptions.some(function (a) { return /LCOS/.test(a); }), SITE.metrics.lcosCents);
 
 console.log('\n  published vs model' + '\n  ' + pad('deck', 14, true) + pad('figure', 26, true) + pad('published', 22) + pad('model', 22) +
   pad('diff', 12) + '  tolerance');

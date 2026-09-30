@@ -1,0 +1,1632 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · Compute Site Pro Forma
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  WHAT THIS IS.
+  "Can this building's existing service carry GPU compute pods beside its EV
+  chargers, a battery and its own load — and what does it return?" The
+  metro-edge model (inference pods on power already built for EV charging,
+  Laitent's "one panel, two revenue streams"), screened hour by hour and
+  carried through to the investor case. Seven steps: site and service, the
+  building's load, charging, compute, battery and the load balance (with a
+  sizing sweep), the deal, and the results — the BESS Pro Forma's own
+  returns, IRR build, sensitivities and investor deck.
+
+  OMEGA COMPUTE ("Data center campus design, power and load screening").
+  It sits in the workspace's Finance cell beside the VPP Earnings Simulator.
+
+  WHERE THE LOGIC LIVES.  Not here.  Every figure comes back from
+  POST /api/compute-proforma (api/_lib/compute-site.js on the one tariff
+  engine and the one finance engine, api/_lib/proforma-engine.js). The deck
+  is drawn by /proforma-logic.js from that same answer, with the words the
+  server wrote for it. This page collects inputs, reads a file as text,
+  posts and draws.
+
+  OPENED FROM ELSEWHERE.  /compute-proforma.html?zip=&name=&host=&city=&hostType=
+  &kw=&amps=&volts=&ports=&portkw=&pods=&gpu=&bkw=&bkwh=&solar=&annualKwh=
+  pre-fills the form and runs, so the editor's Compute › Site Screen can hand
+  a site over.
+
+  SAVED DATA.  toolData/{orgId}/tools/computeproforma as { v:1, scenarios:[…] }
+  — the inputs and the headline of each scenario, at most 30, newest first,
+  mirrored to this browser ('omega_computepf_v1:<org>') so a save the rules
+  refuse is never lost. An interval file is not stored.
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="author" content="ClearSky Energy Solutions LLC">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
+<meta name="robots" content="noindex">
+<title>Compute Site Pro Forma</title>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-tools.js"></script>
+<script src="/proforma-logic.js"></script>
+<style>
+:root{
+  --acc:#2563EB;--acc-ink:#1D4ED8;--acc-tint:#EEF4FF;--acc-soft:rgba(37,99,235,.16);
+  --bg:#F3F5F8;--surface:#FFFFFF;--panel:#F8FAFC;--line:#E3E8EF;--line-2:#CBD3DE;
+  --ink:#0F172A;--text:#1E293B;--sub:#526071;--muted:#8A95A5;
+  --crit:#B42318;--crit-bg:#FEF3F2;--crit-line:#FECDCA;
+  --warn:#B54708;--warn-bg:#FFFAEB;--warn-line:#FEDF89;
+  --info:#175CD3;--info-bg:#EFF8FF;--info-line:#B2DDFF;
+  --ok:#067647;--ok-bg:#ECFDF3;--ok-line:#ABEFC6;
+  /* chart roles: the building is grey context; four validated categorical slots */
+  --c-bldg:#A3ADBB;--c-firm:#2a78d6;--c-ev:#eb6834;--c-spot:#1baf7a;--c-chg:#eda100;--c-net:#0F172A;--c-lim:#334155;
+  --hdr:60px;--r:12px;
+  color-scheme:light;
+}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--text);font:400 14px/1.5 Inter,system-ui,-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--acc-ink)}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc-ink);outline-offset:2px}
+.hdr{position:sticky;top:0;z-index:40;height:var(--hdr);display:flex;align-items:center;gap:12px;padding:0 20px;background:#fff;border-bottom:1px solid var(--line)}
+.hdr-back{display:inline-flex;align-items:center;gap:4px;color:var(--sub);text-decoration:none;font-weight:600;font-size:13px;padding:8px 8px 8px 4px;border-radius:8px;white-space:nowrap}
+.hdr-back:hover{color:var(--ink);background:var(--panel)}
+.hdr-sep{width:1px;height:24px;background:var(--line);flex:0 0 1px}
+.hdr-title{font-weight:700;color:var(--ink);font-size:15px;white-space:nowrap}
+.hdr-scen{min-width:0;flex:0 1 300px}
+.hdr-scen select{min-height:36px;font-size:13px;font-weight:600}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px;min-width:0;flex:0 0 auto}
+.save-state{font-size:12.5px;color:var(--sub);white-space:nowrap}
+.who{font-size:12.5px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:9px;border:1px solid transparent;font-weight:600;font-size:14px;line-height:1.1;white-space:nowrap;text-decoration:none}
+.btn-p{background:var(--acc-ink);color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.12)}
+.btn-p:hover{filter:brightness(1.07)}
+.btn-s{background:#fff;color:var(--ink);border-color:var(--line-2);box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.btn-s:hover{background:var(--panel)}
+.btn-t{background:transparent;color:var(--acc-ink);min-height:32px;padding:0 6px;border:0;font-weight:600}
+.btn-t:hover{text-decoration:underline}
+.btn-sm{min-height:32px;padding:0 12px;font-size:13px}
+.btn:disabled{opacity:.55;cursor:not-allowed;filter:none}
+.seg{display:inline-flex;flex-wrap:wrap;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:3px;gap:3px;max-width:100%}
+.seg button{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-weight:600;font-size:13px;line-height:1.3;color:var(--sub);min-height:34px}
+.seg button:hover{color:var(--ink)}
+.seg button[aria-pressed=true]{background:#fff;color:var(--ink);box-shadow:0 1px 2px rgba(15,23,42,.08),0 0 0 1px var(--line)}
+.sw{position:relative;display:inline-flex;align-items:center;gap:10px;cursor:pointer;font-weight:600;font-size:13.5px;color:var(--ink);min-height:32px;user-select:none}
+.sw input{position:absolute;opacity:0;width:1px;height:1px;margin:0}
+.sw .tr{position:relative;flex:0 0 40px;width:40px;height:24px;border-radius:12px;background:#CFD6E0;transition:background .15s}
+.sw .tr:after{content:'';position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.25);transition:transform .15s}
+.sw input:checked+.tr{background:var(--acc-ink)}
+.sw input:checked+.tr:after{transform:translateX(16px)}
+.sw input:focus-visible+.tr{box-shadow:0 0 0 3px var(--acc-soft)}
+.app{display:grid;grid-template-columns:232px minmax(0,1fr) 300px;gap:24px;max-width:1480px;margin:0 auto;padding:24px 24px 40px;align-items:start}
+.main{min-width:0;outline:none}
+.stepper{position:sticky;top:calc(var(--hdr) + 20px)}
+.stepper ol{list-style:none;margin:0;padding:0}
+.stepper li{position:relative}
+.stepper li:not(:last-child):after{content:'';position:absolute;left:23px;top:42px;bottom:-4px;width:2px;background:var(--line)}
+.stepper button{position:relative;z-index:1;display:flex;align-items:flex-start;gap:12px;width:100%;text-align:left;background:none;border:0;padding:9px 10px;margin:2px 0;border-radius:10px;color:var(--text)}
+.stepper button:hover{background:rgba(255,255,255,.75)}
+.stepper button[aria-current=step]{background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.06),0 0 0 1px var(--line)}
+.sn{flex:0 0 28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12.5px;color:var(--sub);background:#fff;border:1.5px solid var(--line-2)}
+.st-err .sn{border-color:var(--crit);color:var(--crit)}
+.stepper [aria-current=step] .sn{background:var(--acc-ink);border-color:var(--acc-ink);color:#fff}
+.stx{display:flex;flex-direction:column;min-width:0;padding-top:3px}
+.stt{font-weight:600;font-size:13.5px;color:var(--ink);line-height:1.3}
+.sts{font-size:12px;color:var(--sub);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:168px}
+.rail{position:sticky;top:calc(var(--hdr) + 20px)}
+.step-h{margin:2px 0 18px}
+.kick{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--acc-ink)}
+.step-h h2{font-size:24px;line-height:1.25;margin:6px 0;color:var(--ink);font-weight:700;letter-spacing:-.015em;outline:none}
+.lede{color:var(--sub);margin:0;max-width:74ch}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--r);padding:20px;margin:0 0 16px;box-shadow:0 1px 2px rgba(15,23,42,.04)}
+.card-h{display:flex;align-items:center;justify-content:space-between;gap:10px 16px;flex-wrap:wrap;margin:0 0 16px}
+.card-h h3{margin:0;font-size:15.5px;font-weight:650;color:var(--ink)}
+.card-h .aside{font-size:12.5px;color:var(--sub)}
+.card-note{font-size:13px;color:var(--sub);margin:-6px 0 16px;max-width:76ch}
+.card-note:last-child{margin-bottom:0}
+.sub-h{font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin:20px 0 10px}
+.step-nav{display:flex;justify-content:space-between;gap:12px;margin:8px 0 0}
+details.more{border-top:1px solid var(--line);margin-top:16px;padding-top:12px}
+details.more>summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--acc-ink);list-style:none;display:inline-flex;align-items:center;gap:6px;min-height:28px}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary:before{content:'';width:7px;height:7px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:rotate(-45deg);transition:transform .15s;margin-right:2px}
+details.more[open]>summary:before{transform:rotate(45deg)}
+details.more>.fg,details.more>.in{margin-top:14px}
+.fg{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:16px}
+.s1{grid-column:span 1}.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s6{grid-column:1/-1}
+.f{min-width:0}
+.f>label,.f .lbl{display:block;font-size:12.5px;font-weight:600;color:#344054;margin:0 0 6px}
+.req{color:var(--crit);font-weight:700}
+input[type=text],input[type=month],select,textarea{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font-size:14px;color:var(--ink);box-shadow:0 1px 2px rgba(15,23,42,.04)}
+textarea{min-height:80px;resize:vertical;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
+select{appearance:none;-webkit-appearance:none;padding-right:32px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23526071' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 11px center}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+input::placeholder,textarea::placeholder{color:#98A2B3}
+.ig{display:flex;align-items:stretch;border:1px solid var(--line-2);border-radius:8px;background:#fff;box-shadow:0 1px 2px rgba(15,23,42,.04);overflow:hidden}
+.ig:focus-within{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
+.ig input{border:0!important;box-shadow:none!important;border-radius:0;min-width:0;flex:1 1 auto;text-align:right;font-variant-numeric:tabular-nums}
+.ig .pre,.ig .suf{display:flex;align-items:center;padding:0 10px;color:var(--sub);background:var(--panel);font-size:13px;white-space:nowrap}
+.ig .pre{border-right:1px solid var(--line)}
+.ig .suf{border-left:1px solid var(--line)}
+.help{font-size:12px;color:var(--sub);margin:6px 0 0;line-height:1.45}
+.err{display:none;font-size:12px;color:var(--crit);margin:6px 0 0;font-weight:500}
+.f.bad .err{display:block}
+.f.bad .ig,.f.bad>input,.f.bad>select{border-color:var(--crit)}
+.choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.choice{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line-2);border-radius:10px;padding:12px 14px;cursor:pointer;background:#fff;text-align:left}
+.choice:hover{border-color:var(--acc)}
+.choice b{color:var(--ink);font-size:13.5px;font-weight:650}
+.choice span{color:var(--sub);font-size:12.5px;line-height:1.45}
+.choice .fig{font-size:12.5px;color:var(--ink);font-variant-numeric:tabular-nums}
+.choice[aria-pressed=true]{border-color:var(--acc);background:var(--acc-tint);box-shadow:0 0 0 1px var(--acc)}
+.banner{display:flex;gap:10px 14px;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.5;margin:0 0 14px;border:1px solid}
+.banner>div{flex:1 1 260px;min-width:0}
+.banner.warn{background:var(--warn-bg);border-color:var(--warn-line);color:#7A2E0E}
+.banner.info{background:var(--info-bg);border-color:var(--info-line);color:#194185}
+.banner.bad{background:var(--crit-bg);border-color:var(--crit-line);color:#7A271A}
+.banner.ok{background:var(--ok-bg);border-color:var(--ok-line);color:#05603A}
+.verdict{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+.verdict .act{font:800 12px/1 ui-monospace,Menlo,monospace;letter-spacing:1.2px;padding:6px 10px;border-radius:6px;border:1px solid currentColor}
+.verdict b{font-size:16px}
+.wl{display:flex;gap:10px;align-items:flex-start;padding:11px 12px;border-radius:10px;border:1px solid var(--line);margin:0 0 8px;font-size:13px;line-height:1.5;color:var(--text)}
+.wl.critical{background:var(--crit-bg);border-color:var(--crit-line)}
+.wl.warn{background:var(--warn-bg);border-color:var(--warn-line)}
+.wl.info{background:var(--info-bg);border-color:var(--info-line)}
+.wl .lv{display:block;font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}
+.wl.critical .lv{color:var(--crit)}.wl.warn .lv{color:var(--warn)}.wl.info .lv{color:var(--info)}
+.wl .code{font-size:11px;color:var(--muted);margin-left:6px;font-weight:600;text-transform:none;letter-spacing:.02em}
+.pill{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-weight:600;padding:3px 10px;border-radius:999px;border:1px solid var(--line);background:var(--panel);color:var(--sub);white-space:nowrap}
+.pill.ok{background:var(--ok-bg);color:var(--ok);border-color:var(--ok-line)}
+.pill.warn{background:var(--warn-bg);color:var(--warn);border-color:var(--warn-line)}
+.pill.bad{background:var(--crit-bg);color:var(--crit);border-color:var(--crit-line)}
+.pill.tier{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px}
+.empty{padding:28px 16px;text-align:center;color:var(--sub);font-size:13.5px;line-height:1.6}
+.spin{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--acc-ink);animation:spin .8s linear infinite;flex:0 0 16px;vertical-align:-3px}
+.btn-p .spin{border-color:rgba(255,255,255,.45);border-top-color:#fff}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:2.4s}*{transition:none!important}}
+table.bills{width:100%;border-collapse:collapse;font-size:12.5px}
+table.bills th{text-align:left;font-weight:600;color:var(--sub);padding:4px 3px}
+table.bills td{padding:2px 3px}
+table.bills input{min-height:32px;padding:4px 6px;font-size:12.5px;text-align:right}
+.bills-wrap{max-height:340px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:4px}
+table.mix{width:100%;border-collapse:collapse;font-size:13px}
+table.mix th{font-size:12px;color:var(--sub);font-weight:600;text-align:left;padding:6px}
+table.mix td{padding:4px 6px;vertical-align:middle}
+table.mix td:first-child{font-weight:600;color:var(--ink);white-space:nowrap}
+table.mix .ig{min-width:92px}
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.kpi{background:var(--acc-tint);border-radius:10px;padding:16px;min-width:0}
+.kpi .v{font-size:27px;font-weight:700;color:var(--ink);letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums}
+.kpi .l{font-size:12.5px;color:var(--sub);margin-top:6px;line-height:1.4}
+.kpi.plain{background:var(--panel);border:1px solid var(--line)}
+.kpi.plain .v{font-size:21px}
+.two{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+.two>.card{margin:0}
+.mrow{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13px;color:var(--sub)}
+.mrow:last-child{border-bottom:0}
+.mrow b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.mrow.tot{border-top:2px solid var(--line-2);border-bottom:0;margin-top:2px}
+.mrow.tot span,.mrow.tot b{color:var(--ink);font-weight:700}
+.gauge{position:relative;height:30px;border-radius:6px;background:var(--panel);border:1px solid var(--line);overflow:hidden;margin:6px 0 8px}
+.gauge i{position:absolute;top:0;bottom:0;left:0;background:var(--c-firm);opacity:.9}
+.gauge em{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--c-lim)}
+.gauge-l{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);gap:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 12px}
+.chart{position:relative}
+.chart svg{display:block;width:100%;height:auto;overflow:visible}
+.chart .ax{font-size:11px;fill:#6B7686;font-variant-numeric:tabular-nums}
+.chart .grid{stroke:#E8ECF1;stroke-width:1}
+.chart .base{stroke:#B8C1CD;stroke-width:1}
+.chart .b-a{fill:var(--acc)}
+.chart .hit{fill:transparent}
+.chart .hit:hover{fill:rgba(15,23,42,.05)}
+.chart .cum{fill:none;stroke:#334155;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.chart .dot{fill:#334155;stroke:#fff;stroke-width:2}
+.chart .lab{font-size:11.5px;fill:#334155;font-weight:600}
+.tip{position:absolute;pointer-events:none;background:#fff;border:1px solid var(--line);border-radius:8px;box-shadow:0 6px 18px rgba(15,23,42,.14);padding:8px 10px;font-size:12px;min-width:190px;z-index:5}
+.tip .t{font-weight:600;color:var(--ink);margin-bottom:4px}
+.tip .r{display:flex;align-items:center;justify-content:space-between;gap:12px;color:var(--sub);margin-top:2px}
+.tip .k{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.tip .v{font-weight:650;color:var(--ink);font-variant-numeric:tabular-nums}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--sub);margin:0 0 10px}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px}
+.legend i.lk{width:14px;height:2px;border-radius:1px;vertical-align:3px}
+.legend i.dash{width:14px;height:0;border-top:2px dashed var(--c-lim);background:none;vertical-align:3px}
+.tw{overflow:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--line);border-radius:10px;max-height:520px}
+.dt{border-collapse:separate;border-spacing:0;width:100%;font-size:12.5px}
+.dt th,.dt td{padding:7px 10px;text-align:right;white-space:nowrap;border-bottom:1px solid #EDF0F4;font-variant-numeric:tabular-nums}
+.dt thead th{position:sticky;top:0;background:var(--panel);color:var(--sub);font-weight:600;font-size:11.5px;z-index:2}
+.dt th:first-child,.dt td:first-child{position:sticky;left:0;background:#fff;text-align:left;z-index:1}
+.dt thead th:first-child{z-index:3;background:var(--panel)}
+.dt tbody tr:hover td{background:#FAFBFC}
+.dt .base td{font-weight:650;color:var(--ink)}
+.dt.wrap td:first-child{white-space:normal;min-width:150px}
+.sweep td.cell{text-align:center;cursor:pointer;min-width:110px;line-height:1.35}
+.sweep td.cell b{display:block;font-size:13px;color:var(--ink)}
+.sweep td.cell span{display:block;font-size:11.5px;color:var(--sub)}
+.sweep td.cell.no{background:repeating-linear-gradient(45deg,#F8FAFC,#F8FAFC 6px,#EEF1F5 6px,#EEF1F5 12px)!important;cursor:not-allowed}
+.sweep td.cell.no b{color:var(--muted)}
+.sweep td.cell.best{outline:2px solid var(--acc-ink);outline-offset:-2px}
+.sweep td.cell.cur{box-shadow:inset 0 0 0 2px #334155}
+.facts{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+.facts .mrow b{white-space:normal;max-width:60%}
+.deck-box{overflow:hidden;border-radius:10px;background:#E8ECF1;border:1px solid var(--line);padding:16px 16px 0;margin-top:18px;--pf-scale:.5}
+.deck-box>.empty{padding-bottom:28px}
+.deck-acts{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 14px}
+.rail-card{padding:18px}
+.rail-h{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:var(--sub);margin-bottom:10px}
+.hero{font-size:42px;font-weight:700;letter-spacing:-.025em;color:var(--ink);line-height:1}
+.hero.none{color:var(--line-2);font-weight:600}
+.hero-l{font-size:12.5px;color:var(--sub);margin:6px 0 12px}
+.kv{display:flex;justify-content:space-between;gap:12px;padding:8px 0;border-top:1px solid var(--line);font-size:13px;color:var(--sub)}
+.kv b{color:var(--ink);font-weight:650;font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.rail-foot{font-size:12px;color:var(--muted);margin-top:12px;line-height:1.45}
+.is-stale .hero,.is-stale .kv b{opacity:.45}
+.mstrip{display:none;position:sticky;top:var(--hdr);z-index:30;background:#fff;border-bottom:1px solid var(--line);padding:10px 16px;font-size:13px;color:var(--sub)}
+.mstrip b{color:var(--ink)}
+.mobnav{display:none;position:fixed;left:0;right:0;bottom:0;z-index:45;background:#fff;border-top:1px solid var(--line);padding:8px 12px;padding-bottom:calc(8px + env(safe-area-inset-bottom));align-items:center;gap:8px;box-shadow:0 -4px 16px rgba(15,23,42,.06)}
+.mobnav .mid{flex:1 1 auto;min-width:0;text-align:center;font-size:12px;color:var(--sub);line-height:1.3}
+.mobnav .mid b{display:block;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mobnav .btn{flex:0 0 auto;min-width:88px;min-height:44px}
+.foot{max-width:1480px;margin:0 auto;padding:0 24px 32px;font-size:12px;color:var(--muted);display:flex;gap:6px 10px;flex-wrap:wrap}
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;background:#0F172A;color:#fff;border-radius:10px;padding:10px 16px;font-size:13px;box-shadow:0 8px 24px rgba(15,23,42,.24);max-width:calc(100vw - 32px);text-align:center}
+.upsell{background:linear-gradient(135deg,#EEF4FF,#FFFFFF);border-color:#C7D7FE}
+@media (max-width:1199px){.app{grid-template-columns:212px minmax(0,1fr)}.rail{display:none}.mstrip{display:block}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:900px){
+  .fg{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
+  .s1,.s2{grid-column:span 1}.s3,.s4,.s6{grid-column:1/-1}
+  .two,.facts,.choices{grid-template-columns:minmax(0,1fr)}
+}
+@media (max-width:768px){
+  :root{--hdr:56px}
+  .hdr{padding:0 10px;gap:6px}
+  .hdr-back span,.hdr-sep,.hdr-title,.who,.save-state{display:none}
+  .hdr-scen{flex:1 1 auto}
+  .app{display:block;padding:14px 16px 104px}
+  .stepper{display:none}
+  .mobnav{display:flex}
+  .card{padding:16px}
+  input[type=text],input[type=month],select,textarea{font-size:16px}
+  .step-h h2{font-size:21px}
+  .kpi .v{font-size:22px}
+  .step-nav{display:none}
+  .foot{padding:0 16px 104px}
+  .seg{display:flex;width:100%}
+  .seg button{flex:1 1 0;padding:8px 10px}
+  .toast{bottom:88px}
+}
+@media (max-width:480px){.fg{grid-template-columns:minmax(0,1fr)}.fg>.f{grid-column:1/-1}}
+@media print{.hdr,.stepper,.rail,.mstrip,.mobnav,.foot{display:none!important}.app{display:block;padding:0}}
+</style>
+</head>
+<body>
+<header class="hdr">
+  <a class="hdr-back" href="/" title="Back to your workspace">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg><span>Workspace</span>
+  </a>
+  <span class="hdr-sep" aria-hidden="true"></span>
+  <span class="hdr-title">Compute Site Pro Forma</span>
+  <div class="hdr-scen"><select id="scen" aria-label="Saved scenarios"><option value="">Saved scenarios…</option></select></div>
+  <div class="hdr-right">
+    <span class="save-state" id="savemsg" aria-live="polite"></span>
+    <button type="button" class="btn btn-s btn-sm" data-act="save" id="btn-save">Save scenario</button>
+    <span class="who" id="who"></span>
+  </div>
+</header>
+<div class="mstrip" id="mstrip">Enter the ZIP and the service size to run the model.</div>
+
+<div class="app">
+  <nav class="stepper" aria-label="Steps">
+    <ol id="stepper">
+      <li><button type="button" data-step="1"><span class="sn">1</span><span class="stx"><span class="stt">Site &amp; service</span><span class="sts" id="sts1">Where, and what the panel carries</span></span></button></li>
+      <li><button type="button" data-step="2"><span class="sn">2</span><span class="stx"><span class="stt">Building load</span><span class="sts" id="sts2">Interval, bills or typical</span></span></button></li>
+      <li><button type="button" data-step="3"><span class="sn">3</span><span class="stx"><span class="stt">EV charging</span><span class="sts" id="sts3">Ports, sessions, schedule</span></span></button></li>
+      <li><button type="button" data-step="4"><span class="sn">4</span><span class="stx"><span class="stt">Compute</span><span class="sts" id="sts4">GPUs, contracts, schedule</span></span></button></li>
+      <li><button type="button" data-step="5"><span class="sn">5</span><span class="stx"><span class="stt">Load balance</span><span class="sts" id="sts5">Battery, fit and sizing</span></span></button></li>
+      <li><button type="button" data-step="6"><span class="sn">6</span><span class="stx"><span class="stt">Deal &amp; financing</span><span class="sts" id="sts6">Who owns what</span></span></button></li>
+      <li><button type="button" data-step="7"><span class="sn">7</span><span class="stx"><span class="stt">Results &amp; report</span><span class="sts" id="sts7">IRR and the investor deck</span></span></button></li>
+    </ol>
+  </nav>
+
+  <main class="main" id="main" tabindex="-1">
+    <div id="notice"></div>
+
+    <!-- ═══ 1 · SITE & SERVICE ═══ -->
+    <section class="step" data-step="1">
+      <div class="step-h"><div class="kick">Step 1 of 7</div><h2 tabindex="-1">Site &amp; service</h2>
+        <p class="lede">Compute pods, chargers and a battery share the building's existing service. Everything that follows is held under what that service may carry continuously.</p></div>
+      <div class="card">
+        <div class="card-h"><h3>The site</h3><button type="button" class="btn-t" data-act="example">Load an example site</button></div>
+        <div class="fg">
+          <div class="f s3"><label for="i-name">Scenario / project name</label><input type="text" id="i-name" data-path="site.name" maxlength="120" placeholder="e.g. Oak Street Apartments — 2 pods"></div>
+          <div class="f s3"><label for="i-sponsor">Sponsor</label><input type="text" id="i-sponsor" data-path="site.sponsor" maxlength="120" placeholder="Who is raising the capital"></div>
+          <div class="f s3"><label for="i-host">Host</label><input type="text" id="i-host" data-path="site.host" maxlength="160" placeholder="Property or owner name"></div>
+          <div class="f s3"><label>Host type</label>
+            <div class="seg" data-seg="site.hostType" data-def="multifamily" role="group" aria-label="Host type">
+              <button type="button" data-val="multifamily">Multifamily</button><button type="button" data-val="commercial">Office</button><button type="button" data-val="retail">Retail</button><button type="button" data-val="industrial">Industrial</button>
+            </div><p class="help">Sets the building's load shape and rate class.</p></div>
+          <div class="f s3"><label for="i-street">Street</label><input type="text" id="i-street" data-path="site.street" maxlength="160"></div>
+          <div class="f s1"><label for="i-city">City</label><input type="text" id="i-city" data-path="site.city" maxlength="80"></div>
+          <div class="f s1"><label for="i-zip">ZIP <span class="req">*</span></label><input type="text" id="i-zip" data-path="site.zip" inputmode="numeric" maxlength="10" placeholder="78701" autocomplete="postal-code"><p class="err" data-err="site.zip"></p></div>
+          <div class="f s1"><label for="i-mkt">Market</label><select id="i-mkt" data-path="site.market"><option value="">From the ZIP</option></select></div>
+          <div class="f s3"><label for="i-util">Utility</label><input type="text" id="i-util" data-path="site.utility" maxlength="120" placeholder="e.g. Austin Energy"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>The electrical service</h3><span class="aside">From the panel schedule or the utility</span></div>
+        <div class="fg">
+          <div class="f s2"><label for="i-amps">Service rating</label><div class="ig"><input type="text" id="i-amps" data-path="service.amps" data-kind="num" inputmode="decimal" placeholder="800"><span class="suf">A</span></div><p class="err" data-err="service.amps"></p></div>
+          <div class="f s2"><label for="i-volts">Voltage</label><select id="i-volts" data-path="service.volts" data-kind="num"><option value="">480 V</option><option value="208">208 V</option><option value="240">240 V</option><option value="480">480 V</option><option value="600">600 V</option><option value="4160">4,160 V</option><option value="12470">12,470 V</option></select></div>
+          <div class="f s2"><label for="i-ph">Phases</label><select id="i-ph" data-path="service.phases" data-kind="num"><option value="">Three-phase</option><option value="3">Three-phase</option><option value="1">Single-phase</option></select></div>
+          <div class="f s2"><label for="i-skw">…or its capacity in kW</label><div class="ig"><input type="text" id="i-skw" data-path="service.kw" data-kind="num" inputmode="decimal" placeholder="from the amps"><span class="suf">kW</span></div><p class="err" data-err="service.kw"></p><p class="help" id="svc-derived"></p></div>
+          <div class="f s2"><label for="i-load">Continuous loading limit</label><div class="ig"><input type="text" id="i-load" data-path="service.loadingPct" data-kind="num" inputmode="decimal" placeholder="80"><span class="suf">%</span></div><p class="help">NEC sizes continuous load at 80% of the rating.</p></div>
+          <div class="f s2"><label for="i-pf">Power factor</label><div class="ig"><input type="text" id="i-pf" data-path="service.pf" data-kind="num" inputmode="decimal" placeholder="0.95"></div></div>
+        </div>
+        <details class="more"><summary>A service upgrade</summary>
+          <div class="fg">
+            <div class="f s3"><label for="i-upk">Added capacity</label><div class="ig"><input type="text" id="i-upk" data-path="service.upgradeKw" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">kW</span></div></div>
+            <div class="f s3"><label for="i-upc">Upgrade cost</label><div class="ig"><span class="pre">$</span><input type="text" id="i-upc" data-path="service.upgradeCost" data-kind="num" inputmode="decimal" placeholder="0"></div><p class="help">Capitalised as 15-year property.</p></div>
+          </div>
+        </details>
+      </div>
+      <div class="step-nav"><span></span><button type="button" class="btn btn-p" data-go="2">Next: building load</button></div>
+    </section>
+
+    <!-- ═══ 2 · BUILDING LOAD ═══ -->
+    <section class="step" data-step="2" hidden>
+      <div class="step-h"><div class="kick">Step 2 of 7</div><h2 tabindex="-1">Building load &amp; tariff</h2>
+        <p class="lede">The building's own load is firm: it always comes first on the service. An 8760 is best, bills are good, and nothing gives a typical load for the host type, labelled as such.</p></div>
+      <div class="card">
+        <div class="seg" id="lmode" role="group" aria-label="Load data" style="margin-bottom:14px">
+          <button type="button" data-mode="profile" aria-pressed="true">Typical</button>
+          <button type="button" data-mode="bills" aria-pressed="false">Bills (12–24 mo)</button>
+          <button type="button" data-mode="interval" aria-pressed="false">8760 / interval</button>
+        </div>
+        <div id="m-profile"><div class="fg"><div class="f s3"><label for="i-akwh">Annual kWh</label><div class="ig"><input type="text" id="i-akwh" data-path="_annualKwh" data-kind="num" inputmode="decimal" placeholder="typical for the host type"><span class="suf">kWh</span></div></div></div></div>
+        <div id="m-bills" hidden>
+          <div class="bills-wrap"><table class="bills"><thead><tr><th>Month</th><th>kWh</th><th>Peak kW</th><th>$</th><th></th></tr></thead><tbody id="bills"></tbody></table></div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 4px">
+            <button type="button" class="btn-t" data-act="add-bill">+ Month</button>
+            <button type="button" class="btn-t" data-act="fill-12">Last 12 months</button>
+            <button type="button" class="btn-t" data-act="fill-24">Last 24 months</button>
+          </div>
+          <details class="more"><summary>Paste from a spreadsheet</summary><div class="in">
+            <p class="help">Rows of <i>month, kWh, peak kW, $</i> (month as 2025-07). Tabs or commas.</p>
+            <textarea id="paste" placeholder="2025-07	41200	180	6230"></textarea>
+            <button type="button" class="btn btn-s btn-sm" data-act="paste" style="margin-top:6px">Use these rows</button></div>
+          </details>
+        </div>
+        <div id="m-interval" hidden>
+          <div class="fg">
+            <div class="f s4"><label for="file">Interval file (CSV)</label><input type="file" id="file" accept=".csv,.txt,text/csv,text/plain"><p class="help">One year: 8,760 hourly or 35,040 fifteen-minute readings. The last number on each row is read as the load.</p><p class="help" id="fileinfo"></p></div>
+            <div class="f s2"><label for="iunit">Readings are</label><select id="iunit"><option value="kw">kW (demand)</option><option value="kwh">kWh per interval</option></select></div>
+          </div>
+        </div>
+        <p class="err" data-err="load" style="display:block"></p>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Tariff</h3><span class="aside">Optional</span></div>
+        <p class="card-note">Without it the market's planning rate is used, calibrated to the bills' dollars when three or more months carry them.</p>
+        <div class="fg">
+          <div class="f s2"><label for="t-on">On-peak energy</label><div class="ig"><span class="pre">$</span><input type="text" id="t-on" data-path="tariff.onPeakRate" data-kind="num" inputmode="decimal"><span class="suf">/kWh</span></div></div>
+          <div class="f s2"><label for="t-off">Off-peak energy</label><div class="ig"><span class="pre">$</span><input type="text" id="t-off" data-path="tariff.offPeakRate" data-kind="num" inputmode="decimal"><span class="suf">/kWh</span></div></div>
+          <div class="f s2"><label for="t-dem">Demand charge</label><div class="ig"><span class="pre">$</span><input type="text" id="t-dem" data-path="tariff.demandCharge" data-kind="num" inputmode="decimal"><span class="suf">/kW-mo</span></div></div>
+          <div class="f s2"><label for="t-ps">On-peak starts</label><div class="ig"><input type="text" id="t-ps" data-path="tariff.peakStart" data-kind="num" inputmode="numeric"><span class="suf">:00</span></div></div>
+          <div class="f s2"><label for="t-pe">On-peak ends</label><div class="ig"><input type="text" id="t-pe" data-path="tariff.peakEnd" data-kind="num" inputmode="numeric"><span class="suf">:00</span></div></div>
+        </div>
+        <details class="more"><summary>An OpenEI URDB tariff record</summary><div class="in">
+          <textarea id="urdb" placeholder='Paste the JSON of one URDB rate (openei.org/services/doc/rest/util_rates)'></textarea></div></details>
+        <p class="err" data-err="tariff" style="display:block"></p>
+      </div>
+      <div class="step-nav"><button type="button" class="btn btn-s" data-go="1">Back</button><button type="button" class="btn btn-p" data-go="3">Next: EV charging</button></div>
+    </section>
+
+    <!-- ═══ 3 · EV CHARGING ═══ -->
+    <section class="step" data-step="3" hidden>
+      <div class="step-h"><div class="kick">Step 3 of 7</div><h2 tabindex="-1">EV charging</h2>
+        <p class="lede">Charging is scheduled after the building and the firm compute, inside what the service has left. Managed charging moves each session into its cheapest hours without setting a new peak; energy that cannot be delivered before a car leaves is reported, not assumed away.</p></div>
+      <div class="card">
+        <div class="fg">
+          <div class="f s2"><label for="e-ports">Charging ports</label><div class="ig"><input type="text" id="e-ports" data-path="ev.ports" data-kind="num" inputmode="numeric" placeholder="8"><span class="suf">ports</span></div><p class="err" data-err="ev.ports"></p></div>
+          <div class="f s2"><label for="e-kw">Power per port</label><div class="ig"><input type="text" id="e-kw" data-path="ev.kwPerPort" data-kind="num" inputmode="decimal" placeholder="11.5"><span class="suf">kW</span></div>
+            <p class="help">L2 7.2 · 11.5 · 19.2 kW; DC fast 62.5 · 150 kW.</p></div>
+          <div class="f s2"><label class="sw"><input type="checkbox" data-path="ev.managed" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>Managed charging</span></label><p class="help">Off: cars charge on arrival, held under the service by the panel's load management (NEC 625.42).</p></div>
+          <div class="f s6"><label>Who charges, and when</label>
+            <div class="seg" data-seg="ev.pattern" data-def="overnight" role="group" aria-label="Charging pattern">
+              <button type="button" data-val="overnight">Residents overnight</button><button type="button" data-val="workplace">Workplace</button><button type="button" data-val="retail">Retail / public</button><button type="button" data-val="fleet">Fleet depot</button><button type="button" data-val="custom">Custom window</button>
+            </div></div>
+          <div class="f s2"><label for="e-sess">Sessions per port</label><div class="ig"><input type="text" id="e-sess" data-path="ev.sessionsPerPortDay" data-kind="num" inputmode="decimal" placeholder="1"><span class="suf">a weekday</span></div><p class="err" data-err="ev.sessionsPerPortDay"></p></div>
+          <div class="f s2"><label for="e-wk">Weekend sessions</label><div class="ig"><input type="text" id="e-wk" data-path="ev.weekendFactor" data-kind="num" inputmode="decimal" placeholder="0.9"><span class="suf">× weekday</span></div></div>
+          <div class="f s2"><label for="e-kwh">Energy per session</label><div class="ig"><input type="text" id="e-kwh" data-path="ev.kwhPerSession" data-kind="num" inputmode="decimal" placeholder="20"><span class="suf">kWh</span></div></div>
+          <div class="f s2" data-show="custom"><label for="e-as">Arrivals from</label><div class="ig"><input type="text" id="e-as" data-path="ev.arrivalStart" data-kind="num" inputmode="numeric" placeholder="17"><span class="suf">:00</span></div></div>
+          <div class="f s2" data-show="custom"><label for="e-ae">Arrivals until</label><div class="ig"><input type="text" id="e-ae" data-path="ev.arrivalEnd" data-kind="num" inputmode="numeric" placeholder="21"><span class="suf">:00</span></div><p class="err" data-err="ev.arrivalEnd"></p></div>
+          <div class="f s2"><label for="e-dw">Stay</label><div class="ig"><input type="text" id="e-dw" data-path="ev.dwellHours" data-kind="num" inputmode="numeric" placeholder="11"><span class="suf">hours</span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Charging money</h3></div>
+        <div class="fg">
+          <div class="f s2"><label for="e-pr">Driver price</label><div class="ig"><span class="pre">$</span><input type="text" id="e-pr" data-path="ev.pricePerKwh" data-kind="num" inputmode="decimal" placeholder="0.35"><span class="suf">/kWh</span></div></div>
+          <div class="f s2"><label for="e-pe">Price escalator</label><div class="ig"><input type="text" id="e-pe" data-path="ev.priceEscPct" data-kind="num" inputmode="decimal" placeholder="2"><span class="suf">%/yr</span></div></div>
+          <div class="f s2"><label class="sw"><input type="checkbox" data-path="ev.existing" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Chargers already installed</span></label><p class="help">No charger capital in the model.</p></div>
+          <div class="f s2"><label for="e-cx">Charger installed cost</label><div class="ig"><span class="pre">$</span><input type="text" id="e-cx" data-path="ev.capexPerPort" data-kind="num" inputmode="decimal" placeholder="9,000"><span class="suf">/port</span></div></div>
+          <div class="f s2"><label for="e-nf">Network fee</label><div class="ig"><span class="pre">$</span><input type="text" id="e-nf" data-path="ev.networkPerPortYear" data-kind="num" inputmode="decimal" placeholder="300"><span class="suf">/port-yr</span></div></div>
+          <div class="f s2"><label for="e-om">Charger O&amp;M</label><div class="ig"><span class="pre">$</span><input type="text" id="e-om" data-path="ev.omPerPortYear" data-kind="num" inputmode="decimal" placeholder="200"><span class="suf">/port-yr</span></div></div>
+          <div class="f s2"><label for="e-ef">Charger efficiency</label><div class="ig"><input type="text" id="e-ef" data-path="ev.efficiencyPct" data-kind="num" inputmode="decimal" placeholder="92"><span class="suf">%</span></div></div>
+          <div class="f s2"><label for="e-pp">Payment processing</label><div class="ig"><input type="text" id="e-pp" data-path="ev.processingPct" data-kind="num" inputmode="decimal" placeholder="3"><span class="suf">%</span></div></div>
+        </div>
+      </div>
+      <div class="step-nav"><button type="button" class="btn btn-s" data-go="2">Back</button><button type="button" class="btn btn-p" data-go="4">Next: compute</button></div>
+    </section>
+
+    <!-- ═══ 4 · COMPUTE ═══ -->
+    <section class="step" data-step="4" hidden>
+      <div class="step-h"><div class="kick">Step 4 of 7</div><h2 tabindex="-1">Compute</h2>
+        <p class="lede">Inference pods on the building's power. Offtake and edge-contract GPUs are firm; on-demand GPUs are the one load the model curtails to hold the peak, and only where that earns more.</p></div>
+      <div class="card">
+        <div class="card-h"><h3>The hardware</h3><span class="aside" id="gpu-ref"></span></div>
+        <div class="fg">
+          <div class="f s6"><label>GPU class</label>
+            <div class="seg" data-seg="compute.gpuClass" data-def="h200" role="group" aria-label="GPU class">
+              <button type="button" data-val="rtxpro6000">RTX PRO 6000</button><button type="button" data-val="h200">H200</button><button type="button" data-val="b300">B300</button><button type="button" data-val="custom">Custom</button>
+            </div></div>
+          <div class="f s2"><label for="c-pods">Pods</label><div class="ig"><input type="text" id="c-pods" data-path="compute.pods" data-kind="num" inputmode="numeric" placeholder="1"><span class="suf">pods</span></div><p class="err" data-err="compute.pods"></p></div>
+          <div class="f s2"><label for="c-gpp">GPUs per pod</label><div class="ig"><input type="text" id="c-gpp" data-path="compute.gpusPerPod" data-kind="num" inputmode="numeric" placeholder="48"><span class="suf">GPUs</span></div><p class="err" data-err="compute.gpusPerPod"></p></div>
+          <div class="f s2"><label for="c-kw">Power per GPU</label><div class="ig"><input type="text" id="c-kw" data-path="compute.kwPerGpu" data-kind="num" inputmode="decimal" placeholder="0.70"><span class="suf">kW</span></div><p class="err" data-err="compute.kwPerGpu"></p></div>
+          <div class="f s2"><label for="c-oh">Server overhead</label><div class="ig"><input type="text" id="c-oh" data-path="compute.overheadPct" data-kind="num" inputmode="decimal" placeholder="20"><span class="suf">%</span></div></div>
+          <div class="f s2"><label for="c-pue">Cooling (PUE)</label><div class="ig"><input type="text" id="c-pue" data-path="compute.pue" data-kind="num" inputmode="decimal" placeholder="1.15"></div></div>
+          <div class="f s2"><label for="c-av">Availability</label><div class="ig"><input type="text" id="c-av" data-path="compute.availabilityPct" data-kind="num" inputmode="decimal" placeholder="98"><span class="suf">%</span></div></div>
+          <div class="f s2"><label for="c-sv">Draw serving</label><div class="ig"><input type="text" id="c-sv" data-path="compute.servePct" data-kind="num" inputmode="decimal" placeholder="85"><span class="suf">% of rating</span></div></div>
+          <div class="f s2"><label for="c-id">Draw idle</label><div class="ig"><input type="text" id="c-id" data-path="compute.idlePct" data-kind="num" inputmode="decimal" placeholder="30"><span class="suf">% of rating</span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Who buys the compute</h3><button type="button" class="btn-t" data-act="mix">Use Laitent's published mix (40 / 30 / 30)</button></div>
+        <div class="tw" style="max-height:none;border:0"><table class="mix">
+          <thead><tr><th>Contract</th><th>Share of GPUs</th><th>Price</th><th>Used on average</th></tr></thead>
+          <tbody>
+            <tr><td>Long-term offtake</td><td><div class="ig"><input type="text" data-path="compute.tiers.offtake.sharePct" data-kind="num" inputmode="decimal" placeholder="40"><span class="suf">%</span></div></td><td><div class="ig"><span class="pre">$</span><input type="text" data-path="compute.tiers.offtake.price" data-kind="num" inputmode="decimal" data-pricekey="offtake"><span class="suf">/GPU-hr</span></div></td><td class="help">Take-or-pay</td></tr>
+            <tr><td>Local edge contracts</td><td><div class="ig"><input type="text" data-path="compute.tiers.edge.sharePct" data-kind="num" inputmode="decimal" placeholder="30"><span class="suf">%</span></div></td><td><div class="ig"><span class="pre">$</span><input type="text" data-path="compute.tiers.edge.price" data-kind="num" inputmode="decimal" data-pricekey="edge"><span class="suf">/GPU-hr</span></div></td><td><div class="ig"><input type="text" data-path="compute.tiers.edge.utilPct" data-kind="num" inputmode="decimal" placeholder="70"><span class="suf">%</span></div></td></tr>
+            <tr><td>On-demand overflow</td><td><div class="ig"><input type="text" data-path="compute.tiers.spot.sharePct" data-kind="num" inputmode="decimal" placeholder="30"><span class="suf">%</span></div></td><td><div class="ig"><span class="pre">$</span><input type="text" data-path="compute.tiers.spot.price" data-kind="num" inputmode="decimal" data-pricekey="spot"><span class="suf">/GPU-hr</span></div></td><td><div class="ig"><input type="text" data-path="compute.tiers.spot.utilPct" data-kind="num" inputmode="decimal" placeholder="40"><span class="suf">%</span></div></td></tr>
+          </tbody></table></div>
+        <p class="err" data-err="compute.tiers" style="display:block"></p>
+        <p class="help" id="price-ref"></p>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>The compute schedule</h3></div>
+        <div class="fg">
+          <div class="f s6"><label>On-demand GPUs</label>
+            <div class="seg" data-seg="compute.spotMode" data-def="follow" role="group" aria-label="On-demand schedule">
+              <button type="button" data-val="follow">Follow the site's peak</button><button type="button" data-val="always">Always on</button><button type="button" data-val="offpeak">Off-peak hours only</button>
+            </div><p class="help">Follow: the model curtails on-demand GPUs in the hours where holding the monthly peak earns more than the GPU-hours.</p></div>
+          <div class="f s2"><label for="c-es">Edge contract hours from</label><div class="ig"><input type="text" data-path="compute.edgeStart" id="c-es" data-kind="num" inputmode="numeric" placeholder="0"><span class="suf">:00</span></div></div>
+          <div class="f s2"><label for="c-ee">…until</label><div class="ig"><input type="text" data-path="compute.edgeEnd" id="c-ee" data-kind="num" inputmode="numeric" placeholder="24"><span class="suf">:00</span></div><p class="err" data-err="compute.edgeEnd"></p></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Prices over time and the cost of compute</h3></div>
+        <div class="fg">
+          <div class="f s2"><label for="c-dc">GPU-hour price decline</label><div class="ig"><input type="text" id="c-dc" data-path="compute.priceDeclinePct" data-kind="num" inputmode="decimal" placeholder="12"><span class="suf">%/yr of age</span></div></div>
+          <div class="f s2"><label for="c-ot">Offtake contract term</label><div class="ig"><input type="text" id="c-ot" data-path="compute.offtakeTermYears" data-kind="num" inputmode="numeric" placeholder="3"><span class="suf">years</span></div></div>
+          <div class="f s2"><label for="c-rp">First-year ramp</label><div class="ig"><input type="text" id="c-rp" data-path="compute.rampPct" data-kind="num" inputmode="decimal" placeholder="80"><span class="suf">%</span></div></div>
+          <div class="f s2"><label for="c-rf">GPU refresh every</label><div class="ig"><input type="text" id="c-rf" data-path="compute.refreshYears" data-kind="num" inputmode="numeric" placeholder="5"><span class="suf">years</span></div><p class="help">0 keeps the first GPUs to the end.</p></div>
+          <div class="f s2"><label for="c-rc">Refresh cost</label><div class="ig"><input type="text" id="c-rc" data-path="compute.refreshCostPct" data-kind="num" inputmode="decimal" placeholder="90"><span class="suf">% of today's</span></div></div>
+          <div class="f s2"><label for="c-cx">GPU installed cost</label><div class="ig"><span class="pre">$</span><input type="text" id="c-cx" data-path="compute.capexPerGpu" data-kind="num" inputmode="decimal" data-capexkey="1"><span class="suf">/GPU</span></div><p class="err" data-err="compute.capexPerGpu"></p></div>
+          <div class="f s2"><label for="c-pi">Pod infrastructure</label><div class="ig"><span class="pre">$</span><input type="text" id="c-pi" data-path="compute.podInfraPerPod" data-kind="num" inputmode="decimal" placeholder="250,000"><span class="suf">/pod</span></div></div>
+          <div class="f s2"><label for="c-mr">Site make-ready</label><div class="ig"><span class="pre">$</span><input type="text" id="c-mr" data-path="compute.makeReady" data-kind="num" inputmode="decimal" placeholder="60,000"></div></div>
+          <div class="f s2"><label for="c-fi">Fiber install</label><div class="ig"><span class="pre">$</span><input type="text" id="c-fi" data-path="compute.fiberInstall" data-kind="num" inputmode="decimal" placeholder="25,000"></div></div>
+          <div class="f s2"><label for="c-fm">Fiber backhaul</label><div class="ig"><span class="pre">$</span><input type="text" id="c-fm" data-path="compute.fiberPerMonth" data-kind="num" inputmode="decimal" placeholder="1,500"><span class="suf">/month</span></div></div>
+          <div class="f s2"><label for="c-ho">Hardware O&amp;M</label><div class="ig"><input type="text" id="c-ho" data-path="compute.hwOmPct" data-kind="num" inputmode="decimal" placeholder="3"><span class="suf">% of GPU cost</span></div></div>
+          <div class="f s2"><label for="c-po">Pod O&amp;M</label><div class="ig"><span class="pre">$</span><input type="text" id="c-po" data-path="compute.podOmPerYear" data-kind="num" inputmode="decimal" placeholder="8,000"><span class="suf">/pod-yr</span></div></div>
+          <div class="f s2"><label for="c-pf">Operator platform fee</label><div class="ig"><input type="text" id="c-pf" data-path="compute.platformFeePct" data-kind="num" inputmode="decimal" placeholder="15"><span class="suf">% of gross</span></div></div>
+        </div>
+      </div>
+      <div class="step-nav"><button type="button" class="btn btn-s" data-go="3">Back</button><button type="button" class="btn btn-p" data-go="5">Next: load balance</button></div>
+    </section>
+
+    <!-- ═══ 5 · LOAD BALANCE ═══ -->
+    <section class="step" data-step="5" hidden>
+      <div class="step-h"><div class="kick">Step 5 of 7</div><h2 tabindex="-1">Battery &amp; load balance</h2>
+        <p class="lede">Every hour of the year on one service: the building, the firm compute, the charging, the on-demand GPUs and the battery. The battery holds the monthly peak the model finds most valuable and protects firm compute when the service is tight.</p></div>
+      <div class="card">
+        <div class="card-h"><h3>Battery and solar</h3><span class="aside">Leave blank for none</span></div>
+        <div class="fg">
+          <div class="f s2"><label for="b-kw">Battery power</label><div class="ig"><input type="text" id="b-kw" data-path="battery.kw" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">kW</span></div></div>
+          <div class="f s2"><label for="b-kwh">Battery energy</label><div class="ig"><input type="text" id="b-kwh" data-path="battery.kwh" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">kWh</span></div><p class="err" data-err="battery.kwh"></p></div>
+          <div class="f s2"><label for="b-cx">Battery installed cost</label><div class="ig"><span class="pre">$</span><input type="text" id="b-cx" data-path="battery.capexPerKwh" data-kind="num" inputmode="decimal" placeholder="550"><span class="suf">/kWh</span></div></div>
+          <div class="f s2"><label for="s-kw">Solar</label><div class="ig"><input type="text" id="s-kw" data-path="solar.kwdc" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">kW-dc</span></div></div>
+          <div class="f s2"><label for="s-cx">Solar installed cost</label><div class="ig"><span class="pre">$</span><input type="text" id="s-cx" data-path="solar.capexPerW" data-kind="num" inputmode="decimal" placeholder="2.40"><span class="suf">/W</span></div></div>
+        </div>
+        <details class="more"><summary>Battery details</summary>
+          <div class="fg">
+            <div class="f s2"><label>Round trip</label><div class="ig"><input type="text" data-path="battery.rtePct" data-kind="num" inputmode="decimal" placeholder="88"><span class="suf">%</span></div></div>
+            <div class="f s2"><label>Usable depth</label><div class="ig"><input type="text" data-path="battery.dodPct" data-kind="num" inputmode="decimal" placeholder="90"><span class="suf">%</span></div></div>
+            <div class="f s2"><label>Capacity fade</label><div class="ig"><input type="text" data-path="battery.fadePct" data-kind="num" inputmode="decimal" placeholder="2.5"><span class="suf">%/yr</span></div></div>
+            <div class="f s2"><label>Wear cost</label><div class="ig"><span class="pre">$</span><input type="text" data-path="battery.wearPerKwh" data-kind="num" inputmode="decimal" placeholder="0.03"><span class="suf">/kWh</span></div></div>
+            <div class="f s2"><label>O&amp;M</label><div class="ig"><span class="pre">$</span><input type="text" data-path="battery.omPerKwhYear" data-kind="num" inputmode="decimal" placeholder="6"><span class="suf">/kWh-yr</span></div></div>
+            <div class="f s2"><label>Life / replacement</label><div class="ig"><input type="text" data-path="battery.lifeYears" data-kind="num" inputmode="numeric" placeholder="15"><span class="suf">yrs</span><input type="text" data-path="battery.replaceCostPct" data-kind="num" inputmode="decimal" placeholder="60"><span class="suf">%</span></div></div>
+          </div>
+        </details>
+      </div>
+      <div id="screen-out"><div class="card"><div class="empty">The load balance appears once the site's ZIP and service size are in.</div></div></div>
+      <div class="card">
+        <div class="card-h"><h3>Size it</h3><button type="button" class="btn btn-p btn-sm" data-act="optimize" id="btn-opt">Find the best size</button></div>
+        <p class="card-note">Pods against battery sizes, each a full year of hourly dispatch and the finance engine's after-tax return. The best is the highest NPV that fits: no lost firm compute and under 5% unserved charging.</p>
+        <div id="sweep-out"></div>
+      </div>
+      <div class="step-nav"><button type="button" class="btn btn-s" data-go="4">Back</button><button type="button" class="btn btn-p" data-go="6">Next: the deal</button></div>
+    </section>
+
+    <!-- ═══ 6 · DEAL & FINANCING ═══ -->
+    <section class="step" data-step="6" hidden>
+      <div class="step-h"><div class="kick">Step 6 of 7</div><h2 tabindex="-1">Deal &amp; financing</h2>
+        <p class="lede">Three ways to own the same site, priced side by side from the same hourly model. The one you choose gets the full pro forma.</p></div>
+      <div class="card">
+        <div class="card-h"><h3>Ownership structure</h3><span class="aside">Laitent's published host models, generalised</span></div>
+        <div class="choices" id="deals" data-seg="deal.structure" data-def="own">
+          <button type="button" class="choice" data-val="own"><b>Own and operate</b><span>The project owns the GPUs, pods, chargers and battery; sells compute through an operator's platform and charging to drivers.</span><span class="fig" data-deal="own"></span></button>
+          <button type="button" class="choice" data-val="infra"><b>Own the power layer</b><span>The investor owns the pods, power and chargers, not the GPUs, for a share of gross compute revenue.</span><span class="fig" data-deal="infra"></span></button>
+          <button type="button" class="choice" data-val="lease"><b>Lease the power</b><span>The host leases the power to a compute operator for fixed rent, electricity paid.</span><span class="fig" data-deal="lease"></span></button>
+        </div>
+        <div class="fg" style="margin-top:16px">
+          <div class="f s2" data-deal-show="own"><label>Host rent</label><div class="ig"><span class="pre">$</span><input type="text" data-path="deal.rentPerYear" data-kind="num" inputmode="decimal" placeholder="25,000"><span class="suf">/yr</span></div><p class="help">0 when the owner is the host.</p></div>
+          <div class="f s2" data-deal-show="own"><label>Host share of gross compute</label><div class="ig"><input type="text" data-path="deal.rentSharePct" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">%</span></div></div>
+          <div class="f s2" data-deal-show="own"><label>Rent escalator</label><div class="ig"><input type="text" data-path="deal.rentEscPct" data-kind="num" inputmode="decimal" placeholder="2"><span class="suf">%/yr</span></div></div>
+          <div class="f s2" data-deal-show="infra"><label>Share of gross compute</label><div class="ig"><input type="text" data-path="deal.infraSharePct" data-kind="num" inputmode="decimal" placeholder="20"><span class="suf">%</span></div></div>
+          <div class="f s4" data-deal-show="infra"><label class="sw"><input type="checkbox" data-path="deal.operatorPaysComputePower" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>The operator pays for the compute's electricity</span></label></div>
+          <div class="f s2" data-deal-show="lease"><label>Lease rent</label><div class="ig"><span class="pre">$</span><input type="text" data-path="deal.lease.rentPerYear" data-kind="num" inputmode="decimal" placeholder="25,000"><span class="suf">/yr</span></div></div>
+          <div class="f s2" data-deal-show="lease"><label>Lease escalator</label><div class="ig"><input type="text" data-path="deal.lease.escPct" data-kind="num" inputmode="decimal" placeholder="2"><span class="suf">%/yr</span></div></div>
+          <div class="f s2" data-deal-show="lease"><label>The host's capital</label><div class="ig"><span class="pre">$</span><input type="text" data-path="deal.lease.hostCapex" data-kind="num" inputmode="decimal" placeholder="0"></div><p class="help">e.g. chargers the host buys.</p></div>
+          <div class="f s2" data-deal-show="lease"><label>Cap rate</label><div class="ig"><input type="text" data-path="deal.lease.capRatePct" data-kind="num" inputmode="decimal" placeholder="6"><span class="suf">%</span></div></div>
+          <div class="f s4" data-deal-show="lease"><label class="sw"><input type="checkbox" data-path="deal.lease.hostKeepsCharging" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>The host keeps the charging revenue</span></label></div>
+          <div class="f s2"><label>Development and soft costs</label><div class="ig"><input type="text" data-path="deal.softCostPct" data-kind="num" inputmode="decimal" placeholder="8"><span class="suf">% of hard cost</span></div></div>
+          <div class="f s2"><label>Insurance</label><div class="ig"><input type="text" data-path="deal.insurancePct" data-kind="num" inputmode="decimal" placeholder="0.5"><span class="suf">% of capital</span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Term and rates</h3></div>
+        <div class="fg">
+          <div class="f s2"><label>Analysis term</label><div class="ig"><input type="text" data-path="finance.years" data-kind="num" inputmode="numeric" placeholder="10"><span class="suf">years</span></div><p class="err" data-err="finance.years"></p></div>
+          <div class="f s2"><label>Discount rate</label><div class="ig"><input type="text" data-path="finance.discountPct" data-kind="num" inputmode="decimal" placeholder="10"><span class="suf">%</span></div></div>
+          <div class="f s2"><label>Utility escalator</label><div class="ig"><input type="text" data-path="finance.utilityEscPct" data-kind="num" inputmode="decimal" placeholder="3"><span class="suf">%/yr</span></div></div>
+          <div class="f s2"><label>Inflation</label><div class="ig"><input type="text" data-path="finance.inflationPct" data-kind="num" inputmode="decimal" placeholder="2.5"><span class="suf">%</span></div></div>
+          <div class="f s2"><label>GPU refresh paid</label><select data-path="finance.refreshFunding"><option value="">From that year's cash</option><option value="expense">From that year's cash</option><option value="reserve">From a reserve</option></select></div>
+          <div class="f s2"><label for="f-boc">Construction begins</label><input type="month" id="f-boc" data-path="site.bocMonth"></div>
+          <div class="f s2"><label for="f-pis">In service</label><input type="month" id="f-pis" data-path="site.pisMonth"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Tax &amp; incentives</h3><span class="aside">The BESS Pro Forma's tax engine</span></div>
+        <div class="fg">
+          <div class="f s2"><label>Federal rate</label><div class="ig"><input type="text" data-path="finance.tax.federalPct" data-kind="num" inputmode="decimal" placeholder="21"><span class="suf">%</span></div><p class="err" data-err="finance.tax.federalPct"></p></div>
+          <div class="f s2"><label>State rate</label><div class="ig"><input type="text" data-path="finance.tax.statePct" data-kind="num" inputmode="decimal" placeholder="the state's"><span class="suf">%</span></div></div>
+          <div class="f s2"><label>Bonus depreciation</label><div class="ig"><input type="text" data-path="finance.tax.bonusPct" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">%</span></div><p class="help">100% is available for property acquired after 19 January 2025; use it only with the appetite to absorb it.</p></div>
+          <div class="f s3"><label>Tax appetite</label>
+            <div class="seg" data-seg="finance.tax.appetite" data-def="full" role="group" aria-label="Tax appetite"><button type="button" data-val="full">Full: losses used as they arise</button><button type="button" data-val="nol">Stand-alone: carried forward</button></div></div>
+          <div class="f s3"><label>Storage credit</label>
+            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.pwa" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>Prevailing wage met</span></label>
+            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.energyCommunity" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Energy community</span></label>
+            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.domesticContent" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Domestic content</span></label>
+            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.feocAttested" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Meets the FEOC thresholds</span></label></div>
+          <div class="f s3"><label>The credit is</label>
+            <div class="seg" data-seg="finance.tax.itc.monetization" data-def="direct" role="group" aria-label="ITC monetization"><button type="button" data-val="direct">Claimed</button><button type="button" data-val="transfer">Sold (§6418)</button></div></div>
+          <div class="f s3"><label>Transfer price</label><div class="ig"><span class="pre">$</span><input type="text" data-path="finance.tax.itc.transferPrice" data-kind="num" inputmode="decimal" placeholder="0.90"><span class="suf">per $1</span></div></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-h"><h3>Financing</h3></div>
+        <div class="seg" id="debt-seg" role="group" aria-label="Capital structure" style="margin-bottom:14px"><button type="button" data-debt="0" aria-pressed="true">100% equity</button><button type="button" data-debt="1" aria-pressed="false">With project debt</button></div>
+        <div class="fg" id="debt-fields" hidden>
+          <div class="f s2"><label>Sized on</label><select data-path="finance.debt.sizing"><option value="">The lesser of LTC and DSCR</option><option value="min">The lesser of LTC and DSCR</option><option value="ltc">Loan-to-cost</option><option value="dscr">Coverage (DSCR)</option></select></div>
+          <div class="f s2"><label>Loan-to-cost</label><div class="ig"><input type="text" data-path="finance.debt.ltcPct" data-kind="num" inputmode="decimal" placeholder="45"><span class="suf">%</span></div></div>
+          <div class="f s2"><label>Minimum DSCR</label><div class="ig"><input type="text" data-path="finance.debt.dscrMin" data-kind="num" inputmode="decimal" placeholder="1.35"><span class="suf">×</span></div></div>
+          <div class="f s2"><label>Interest rate</label><div class="ig"><input type="text" data-path="finance.debt.ratePct" data-kind="num" inputmode="decimal" placeholder="7.5"><span class="suf">%</span></div></div>
+          <div class="f s2"><label>Tenor</label><div class="ig"><input type="text" data-path="finance.debt.tenorYears" data-kind="num" inputmode="numeric" placeholder="7"><span class="suf">years</span></div><p class="err" data-err="finance.debt.tenorYears"></p></div>
+          <div class="f s2"><label>Fee</label><div class="ig"><input type="text" data-path="finance.debt.feePct" data-kind="num" inputmode="decimal" placeholder="1.5"><span class="suf">% of debt</span></div></div>
+        </div>
+      </div>
+      <div class="step-nav"><button type="button" class="btn btn-s" data-go="5">Back</button><button type="button" class="btn btn-p" data-go="7">See the results</button></div>
+    </section>
+
+    <!-- ═══ 7 · RESULTS ═══ -->
+    <section class="step" data-step="7" hidden>
+      <div class="step-h"><div class="kick">Step 7 of 7</div><h2 tabindex="-1">Results &amp; report</h2>
+        <p class="lede">The same returns, IRR build and investor deck as the BESS Pro Forma, from the same finance engine.</p></div>
+      <div id="res-body"><div class="card"><div class="empty">The results appear once the model has run.</div></div></div>
+      <div class="card" id="deck-card">
+        <div class="card-h"><h3>Investor deck</h3><span class="aside">In your company's brand</span></div>
+        <div class="deck-acts">
+          <button type="button" class="btn btn-p btn-sm" data-act="print" id="btn-print" disabled>Print / save as PDF</button>
+          <button type="button" class="btn btn-s btn-sm" data-act="csv" id="btn-csv" disabled>Download the annual CSV</button>
+        </div>
+        <div class="deck-box" id="deck-box"><div class="empty">The deck appears once the model has run.</div></div>
+      </div>
+      <div class="card" id="compare-card">
+        <div class="card-h"><h3>Compare scenarios</h3><span class="aside">Saved scenarios, as saved</span></div>
+        <div id="compare"></div>
+      </div>
+      <div class="step-nav"><button type="button" class="btn btn-s" data-go="6">Back</button><span></span></div>
+    </section>
+  </main>
+
+  <aside class="rail" id="rail" aria-label="Live summary"></aside>
+</div>
+
+<nav class="mobnav" aria-label="Step navigation">
+  <button type="button" class="btn btn-s" data-act="prev">Back</button>
+  <div class="mid" id="mob-mid"><b>Site &amp; service</b>Step 1 of 7</div>
+  <button type="button" class="btn btn-p" data-act="next">Next</button>
+</nav>
+
+<footer class="foot">
+  <span>© 2025–2026 ClearSky Energy Solutions LLC</span><span aria-hidden="true">·</span>
+  <span>A screening model, not a compute operator's offer, a utility load study or a tax opinion. Planning figures are marked.</span>
+</footer>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════════
+   ClearSky-OMEGA · Compute Site Pro Forma — page script
+   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   ES5 only. Every money figure on this page came back from /api/compute-proforma.
+   ═══════════════════════════════════════════════════════════════════════════ */
+(function (root) {
+'use strict';
+var ENDPOINT = '/api/compute-proforma', TOOL_KEY = 'computeproforma', MAX_SAVED = 30, MIRROR = 'omega_computepf_v1:';
+var STEPS = ['Site & service', 'Building load', 'EV charging', 'Compute', 'Load balance', 'Deal & financing', 'Results & report'];
+var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+var ME = null, DB = null, ORG = null, OPTS = null, CTX = { brand: null };
+var IN = {}, UI = { loadMode: 'profile', debt: false, day: 'summer' }, INTERVAL = null;
+var RES = null, SWEEP = null, STATE = 'idle', ERRS = [], SEQ = 0, TIMER = null, STEP = 1, STORE = { v: 1, scenarios: [] }, CUR_ID = null;
+var CHARTS = {};
+
+function $(id) { return document.getElementById(id); }
+function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+function fin(v) { return typeof v === 'number' && isFinite(v); }
+function num(v) { return fin(v) ? v : 0; }
+function money(n) { if (!fin(n)) return '—'; var v = Math.round(n); return (v < 0 ? '−$' : '$') + Math.abs(v).toLocaleString('en-US'); }
+function moneyShort(n) {
+  if (!fin(n)) return '—';
+  var a = Math.abs(n), s = n < 0 ? '−$' : '$';
+  if (a >= 1e6) return s + (a / 1e6).toFixed(a >= 1e7 ? 1 : 2) + 'M';
+  if (a >= 1e4) return s + Math.round(a / 1e3) + 'K';
+  return s + Math.round(a).toLocaleString('en-US');
+}
+function acct(n) { if (!fin(n)) return ''; var v = Math.round(n); return v < 0 ? '(' + Math.abs(v).toLocaleString('en-US') + ')' : v.toLocaleString('en-US'); }
+function pct(f, dp) { return fin(f) ? (f * 100).toFixed(dp == null ? 1 : dp) + '%' : 'n/a'; }
+function kw(n) { return fin(n) ? Math.round(n).toLocaleString('en-US') + ' kW' : '—'; }
+function n0(n) { return fin(n) ? Math.round(n).toLocaleString('en-US') : '—'; }
+function yrs(v) { return fin(v) ? v.toFixed(1) + ' years' : 'not within the term'; }
+function clone(o) { return JSON.parse(JSON.stringify(o)); }
+function closest(el, sel) { while (el && el.nodeType === 1) { if (el.matches ? el.matches(sel) : el.msMatchesSelector(sel)) return el; el = el.parentNode; } return null; }
+function getPath(o, p) { var parts = p.split('.'), c = o; for (var i = 0; i < parts.length; i++) { if (c == null || typeof c !== 'object') return undefined; c = c[parts[i]]; } return c; }
+function setPath(o, p, v) {
+  var parts = p.split('.'), c = o;
+  for (var i = 0; i < parts.length - 1; i++) { if (c[parts[i]] == null || typeof c[parts[i]] !== 'object') c[parts[i]] = {}; c = c[parts[i]]; }
+  if (v === undefined) delete c[parts[parts.length - 1]]; else c[parts[parts.length - 1]] = v;
+}
+function toast(t, ms) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, ms || 3200); }
+function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
+
+/* ── the form ─────────────────────────────────────────────────────────── */
+function readField(el) {
+  var kind = el.getAttribute('data-kind');
+  if (kind === 'bool') return !!el.checked;
+  var v = String(el.value == null ? '' : el.value).trim();
+  if (v === '') return undefined;
+  if (kind === 'num') { var n = Number(v.replace(/[$,\s]/g, '')); return isFinite(n) ? n : v; }
+  return v;
+}
+function onField(el) {
+  var p = el.getAttribute('data-path');
+  if (!p) return;
+  setPath(IN, p, readField(el));
+  var f = closest(el, '.f'); if (f) f.className = f.className.replace(/\s*\bbad\b/g, '');
+  changed(p);
+}
+function setSeg(path, val, quiet) {
+  var groups = document.querySelectorAll('[data-seg="' + path + '"]');
+  for (var g = 0; g < groups.length; g++) {
+    var b = groups[g].querySelectorAll('[data-val]');
+    for (var i = 0; i < b.length; i++) b[i].setAttribute('aria-pressed', b[i].getAttribute('data-val') === val ? 'true' : 'false');
+  }
+  if (!quiet) { setPath(IN, path, val); changed(path); }
+}
+function segValue(path) {
+  var v = getPath(IN, path);
+  if (v != null) return v;
+  var g = document.querySelector('[data-seg="' + path + '"]');
+  return g ? g.getAttribute('data-def') : null;
+}
+function paintForm() {
+  var els = document.querySelectorAll('[data-path]');
+  for (var i = 0; i < els.length; i++) {
+    var el = els[i], p = el.getAttribute('data-path'), v = getPath(IN, p);
+    if (el.getAttribute('data-kind') === 'bool') el.checked = v == null ? el.getAttribute('data-def') === '1' : !!v;
+    else if (el.tagName === 'SELECT') el.value = v == null ? '' : String(v);
+    else el.value = v == null ? '' : String(v);
+  }
+  var segs = document.querySelectorAll('[data-seg]');
+  for (var s = 0; s < segs.length; s++) setSeg(segs[s].getAttribute('data-seg'), segValue(segs[s].getAttribute('data-seg')), true);
+  setLoadMode(UI.loadMode, true);
+  setDebt(UI.debt, true);
+  paintHints();
+}
+/* Placeholders show what a blank field runs on: the class's planning
+   prices and power, the pattern's stay. They are the server's defaults,
+   read from the options it sent. */
+function paintHints() {
+  var cls = segValue('compute.gpuClass') || 'h200', g = OPTS && OPTS.gpus && OPTS.gpus[cls];
+  var els = document.querySelectorAll('[data-pricekey]');
+  for (var i = 0; i < els.length; i++) els[i].placeholder = g && g.price[els[i].getAttribute('data-pricekey')] != null ? String(g.price[els[i].getAttribute('data-pricekey')]) : 'required';
+  if (g) {
+    $('c-kw').placeholder = g.kw != null ? String(g.kw) : 'required';
+    $('c-gpp').placeholder = String(g.podMax);
+    $('c-cx').placeholder = g.capexPerGpu != null ? g.capexPerGpu.toLocaleString('en-US') : 'required';
+    $('gpu-ref').textContent = g.kw != null ? g.name + ': ' + g.kw + ' kW a GPU, up to ' + g.podMax + ' a pod' : 'Enter the accelerator\'s power and cost';
+  }
+  if (OPTS && OPTS.refs) $('price-ref').textContent = OPTS.refs.gpuPrices;
+  var pat = segValue('ev.pattern') || 'overnight', P = OPTS && OPTS.patterns && OPTS.patterns[pat];
+  if (P) { $('e-dw').placeholder = P.dwell != null ? String(P.dwell) : '8'; $('e-wk').placeholder = String(P.weekend); }
+  var custom = pat === 'custom', sh = document.querySelectorAll('[data-show="custom"]');
+  for (var k = 0; k < sh.length; k++) sh[k].hidden = !custom;
+  var who = segValue('deal.structure') || 'own', ds = document.querySelectorAll('[data-deal-show]');
+  for (var d = 0; d < ds.length; d++) ds[d].hidden = ds[d].getAttribute('data-deal-show') !== who;
+  var s = IN.service || {}, amps = s.amps, v = s.volts || 480, ph = s.phases || 3, pf = s.pf || 0.95;
+  $('svc-derived').textContent = !s.kw && amps ? '= ' + Math.round(amps * v * (ph === 3 ? Math.sqrt(3) : 1) * pf / 1000).toLocaleString('en-US') + ' kW from ' + amps + ' A at ' + v + ' V' : '';
+}
+function setLoadMode(m, quiet) {
+  UI.loadMode = m;
+  var b = $('lmode').querySelectorAll('button');
+  for (var i = 0; i < b.length; i++) b[i].setAttribute('aria-pressed', b[i].getAttribute('data-mode') === m ? 'true' : 'false');
+  $('m-profile').hidden = m !== 'profile'; $('m-bills').hidden = m !== 'bills'; $('m-interval').hidden = m !== 'interval';
+  if (m === 'bills' && !$('bills').children.length) fillMonths(12);
+  if (!quiet) changed('load');
+}
+function setDebt(on, quiet) {
+  UI.debt = !!on;
+  var b = $('debt-seg').querySelectorAll('button');
+  for (var i = 0; i < b.length; i++) b[i].setAttribute('aria-pressed', (b[i].getAttribute('data-debt') === '1') === UI.debt ? 'true' : 'false');
+  $('debt-fields').hidden = !UI.debt;
+  if (!quiet) changed('finance.debt');
+}
+function ym(d) { var m = d.getMonth() + 1; return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m; }
+function billRow(b) {
+  b = b || {};
+  var tr = document.createElement('tr');
+  tr.innerHTML = '<td><input type="text" data-k="month" maxlength="7" value="' + esc(b.month || '') + '" placeholder="2025-07" aria-label="Month" style="text-align:left"></td>' +
+    '<td><input type="text" inputmode="decimal" data-k="kwh" value="' + esc(b.kwh == null ? '' : b.kwh) + '" aria-label="kWh"></td>' +
+    '<td><input type="text" inputmode="decimal" data-k="peakKw" value="' + esc(b.peakKw == null ? '' : b.peakKw) + '" aria-label="Peak kW"></td>' +
+    '<td><input type="text" inputmode="decimal" data-k="cost" value="' + esc(b.cost == null ? '' : b.cost) + '" aria-label="Dollars"></td>' +
+    '<td><button type="button" class="btn-t" data-act="del-bill" aria-label="Remove month">×</button></td>';
+  $('bills').appendChild(tr);
+}
+function fillMonths(n) {
+  var keep = readBills(), have = {}, i;
+  for (i = 0; i < keep.length; i++) have[keep[i].month] = keep[i];
+  $('bills').innerHTML = '';
+  var d = new Date(); d.setDate(1); d.setMonth(d.getMonth() - n);
+  for (i = 0; i < n; i++) { var k = ym(d); billRow(have[k] || { month: k }); d.setMonth(d.getMonth() + 1); }
+}
+function readBills() {
+  var rows = $('bills').querySelectorAll('tr'), out = [];
+  for (var i = 0; i < rows.length; i++) {
+    var b = {}, inp = rows[i].querySelectorAll('input'), any = false;
+    for (var j = 0; j < inp.length; j++) {
+      var k = inp[j].getAttribute('data-k'), v = inp[j].value.replace(/[$,\s]/g, '');
+      if (k === 'month') b.month = inp[j].value.trim();
+      else if (v !== '' && isFinite(Number(v))) { b[k] = Number(v); any = true; }
+    }
+    if (b.month && any) out.push(b);
+  }
+  return out;
+}
+function pasteBills() {
+  var lines = $('paste').value.split(/\r?\n/), rows = [];
+  for (var i = 0; i < lines.length; i++) {
+    var c = lines[i].split(/[\t,;]/);
+    if (c.length < 2) continue;
+    var m = /(\d{4})[-\/](\d{1,2})/.exec(c[0]) || /(\d{1,2})[-\/](\d{4})/.exec(c[0]);
+    if (!m) continue;
+    var yr = m[1].length === 4 ? m[1] : m[2], mo = m[1].length === 4 ? m[2] : m[1];
+    function cell(x) { var v = String(x == null ? '' : x).replace(/[$,\s]/g, ''); return v === '' || !isFinite(Number(v)) ? null : Number(v); }
+    rows.push({ month: yr + '-' + (mo.length < 2 ? '0' : '') + mo, kwh: cell(c[1]), peakKw: cell(c[2]), cost: cell(c[3]) });
+  }
+  if (!rows.length) { toast('No rows with a month were found in the pasted text.'); return; }
+  if (rows.length > 24) rows = rows.slice(rows.length - 24);
+  $('bills').innerHTML = '';
+  for (var r = 0; r < rows.length; r++) billRow(rows[r]);
+  toast(rows.length + ' month(s) read from the paste.');
+  changed('load');
+}
+function readFile(f) {
+  INTERVAL = null; $('fileinfo').textContent = '';
+  if (!f) return;
+  if (f.size > 4000000) { $('fileinfo').textContent = 'That file is larger than one year of readings (4 MB).'; return; }
+  var r = new FileReader();
+  r.onload = function () {
+    INTERVAL = String(r.result || '');
+    var n = INTERVAL.split(/\r?\n/).filter(function (l) { return /\d/.test(l); }).length;
+    $('fileinfo').textContent = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
+    changed('load');
+  };
+  r.onerror = function () { $('fileinfo').textContent = 'The file could not be read.'; };
+  r.readAsText(f);
+}
+
+/* What the server is sent: the form, the load as the chosen intake, the
+   tariff, and debt only when the page says there is some. */
+function collect() {
+  var s = clone(IN);
+  var ak = s._annualKwh; delete s._annualKwh;
+  if (UI.loadMode === 'bills') s.load = { type: 'bills', bills: readBills() };
+  else if (UI.loadMode === 'interval') s.load = INTERVAL ? { type: 'interval', text: INTERVAL, unit: $('iunit').value } : { type: 'interval' };
+  else s.load = { type: 'profile', annualKwh: ak != null ? ak : (IN.load && IN.load.annualKwh) };
+  var u = $('urdb').value.trim();
+  if (u) {
+    try { var j = JSON.parse(u); s.tariff = s.tariff || {}; s.tariff.urdb = j && j.items && j.items[0] ? j.items[0] : j; }
+    catch (e) { return { error: 'The URDB tariff is not valid JSON.' }; }
+  }
+  if (s.finance) { if (!UI.debt) delete s.finance.debt; else if (!s.finance.debt) s.finance.debt = {}; }
+  else if (UI.debt) s.finance = { debt: {} };
+  return { site: s };
+}
+function ready() {
+  var s = IN.site || {}, v = IN.service || {};
+  return /^\d{5}(-\d{4})?$/.test(String(s.zip || '')) && (v.kw > 0 || v.amps > 0) &&
+    !(UI.loadMode === 'interval' && !INTERVAL) && !(UI.loadMode === 'bills' && !readBills().length);
+}
+
+/* ── the one place that talks to /api/compute-proforma ─────────────────── */
+function idToken() {
+  var u = ME;
+  try { u = u || (root.firebase && firebase.auth && firebase.auth().currentUser); } catch (e) {}
+  if (!u || typeof u.getIdToken !== 'function') return Promise.resolve(null);
+  return u.getIdToken().then(null, function () { return null; });
+}
+function readable(status, j) {
+  var said = j && typeof j.error === 'string' ? j.error : '';
+  if (status === 401) return 'Your sign-in has expired. Reload the page to sign in again.';
+  if (status === 403) return said || 'Your plan does not include the Compute Site Pro Forma (Omega Compute).';
+  if (status === 404) return 'The compute site service is not available at this address yet.';
+  if (status === 413) return 'That is more data than the server accepts in one request.';
+  if (status === 400 && j && j.errors && j.errors.length) return j.errors.map(function (e) { return e.message; }).join(' ');
+  if (status === 503) return said || 'Could not check your access right now. Try again in a minute.';
+  return said || ('The server answered ' + status + '.');
+}
+function api(body) {
+  return idToken().then(function (tok) {
+    if (!tok) { var e0 = new Error('Sign in to run the model — it runs on the server, behind your account.'); e0.status = 401; throw e0; }
+    return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify(body) })
+      .then(null, function () { throw new Error('Could not reach the model. Check your connection and try again.'); });
+  }).then(function (r) {
+    return r.text().then(function (t) {
+      var j = null; try { j = t ? JSON.parse(t) : null; } catch (e) {}
+      if (r.ok && j && j.ok !== false) return j;
+      var err = new Error(readable(r.status, j)); err.status = r.status; err.errors = j && j.errors; throw err;
+    });
+  });
+}
+
+/* Every change re-runs the model after a pause, as the BESS Pro Forma does. */
+function changed(path) {
+  if (path === 'compute.gpuClass' || path === 'ev.pattern' || path === 'deal.structure' || /^service\./.test(path)) paintHints();
+  if (SWEEP && /^(compute|battery|service|ev|load|site\.zip|deal\.structure|tariff)/.test(path || '')) SWEEP.stale = true;
+  if (TIMER) clearTimeout(TIMER);
+  if (!ready()) { STATE = 'idle'; renderRail(); return; }
+  STATE = 'pending'; renderRail();
+  TIMER = setTimeout(runModel, 900);
+}
+function runModel() {
+  TIMER = null;
+  if (!ready()) return;
+  var c = collect();
+  if (c.error) { STATE = 'error'; ERRS = [{ field: 'tariff', message: c.error }]; showErrors(); renderRail(); return; }
+  var seq = ++SEQ;
+  STATE = 'running'; renderRail();
+  api({ action: 'model', site: c.site }).then(function (j) {
+    if (seq !== SEQ) return;
+    RES = j.result; STATE = 'ok'; ERRS = [];
+    showErrors(); renderAll();
+  }, function (e) {
+    if (seq !== SEQ) return;
+    STATE = 'error'; ERRS = e.errors && e.errors.length ? e.errors : [{ field: '', message: e.message }];
+    showErrors(); renderRail();
+  });
+}
+var STEP_OF = [[/^site\.(bocMonth|pisMonth)/, 6], [/^site|^service/, 1], [/^load|^tariff/, 2], [/^ev/, 3], [/^compute/, 4],
+               [/^battery|^solar/, 5], [/^deal|^finance/, 6]];
+function stepOf(field) { for (var i = 0; i < STEP_OF.length; i++) if (STEP_OF[i][0].test(field || '')) return STEP_OF[i][1]; return 0; }
+function showErrors() {
+  var bad = document.querySelectorAll('.f.bad'), i;
+  for (i = 0; i < bad.length; i++) bad[i].className = bad[i].className.replace(/\s*\bbad\b/g, '');
+  var slots = document.querySelectorAll('[data-err]');
+  for (i = 0; i < slots.length; i++) slots[i].textContent = '';
+  var loose = [], steps = {};
+  ERRS.forEach(function (e) {
+    var f = String(e.field || ''), el = null;
+    /* the nearest field that can show it: finance.tax.itc.x, then finance.tax.itc, … */
+    while (f) {
+      el = document.querySelector('[data-err="' + f.replace(/"/g, '') + '"]');
+      if (el) break;
+      var up = f.replace(/(\.[^.]*|\[\d+\])$/, '');
+      f = up === f ? '' : up;
+    }
+    if (el) { el.textContent = (el.textContent ? el.textContent + ' ' : '') + e.message; var box = closest(el, '.f'); if (box) box.className += ' bad'; }
+    else loose.push(e.message);
+    var s = stepOf(e.field); if (s) steps[s] = true;
+  });
+  var st = document.querySelectorAll('#stepper button');
+  for (i = 0; i < st.length; i++) st[i].className = steps[st[i].getAttribute('data-step')] ? 'st-err' : '';
+  $('notice').innerHTML = loose.length ? '<div class="banner bad"><div>' + loose.map(esc).join(' ') + '</div></div>' : '';
+}
+
+/* ── steps ───────────────────────────────────────────────────────────── */
+function showStep(n) {
+  STEP = Math.max(1, Math.min(7, n));
+  var secs = document.querySelectorAll('section.step');
+  for (var i = 0; i < secs.length; i++) secs[i].hidden = Number(secs[i].getAttribute('data-step')) !== STEP;
+  var b = document.querySelectorAll('#stepper button');
+  for (var k = 0; k < b.length; k++) { if (Number(b[k].getAttribute('data-step')) === STEP) b[k].setAttribute('aria-current', 'step'); else b[k].removeAttribute('aria-current'); }
+  $('mob-mid').innerHTML = '<b>' + esc(STEPS[STEP - 1]) + '</b>Step ' + STEP + ' of 7';
+  try { history.replaceState(null, '', '#step-' + STEP); } catch (e) {}
+  window.scrollTo(0, 0);
+  if (STEP === 7) renderDeck();
+}
+
+/* ── the rail ────────────────────────────────────────────────────────── */
+function renderRail() {
+  var pf = RES && RES.proforma, m = pf && pf.metrics, su = pf && pf.sourcesUses, stale = STATE === 'pending' || STATE === 'running';
+  var lev = !!(m && m.levered), term = pf && pf.inputs ? pf.inputs.years : null;
+  function kv(k, v) { return '<div class="kv"><span>' + esc(k) + '</span><b>' + v + '</b></div>'; }
+  var status = STATE === 'idle' ? 'Enter the ZIP and the service size to run the model.'
+    : STATE === 'pending' || STATE === 'running' ? '<span class="spin" aria-hidden="true"></span> Updating…'
+    : STATE === 'error' ? esc((ERRS[0] && ERRS[0].message) || 'The model did not run.') : 'Up to date · ' + esc(RES && RES.version || '');
+  var h = '<div class="card rail-card' + (stale && RES ? ' is-stale' : '') + '"><div class="rail-h"><span>Live summary</span></div>';
+  if (pf) {
+    h += '<div class="hero">' + esc(m.afterTaxIrr == null ? 'n/a' : pct(m.afterTaxIrr, 2)) + '</div>' +
+      '<div class="hero-l">' + (lev ? 'after-tax equity IRR' : 'after-tax unlevered IRR') + (term ? ' · ' + term + '-year term' : '') + '</div>' +
+      kv(lev ? 'Equity sought' : 'Investment sought', esc(moneyShort(su.equity))) +
+      kv('After-tax payback', esc(m.paybackYears == null ? 'not within term' : '~' + yrs(m.paybackYears))) +
+      kv('NPV @ ' + pf.inputs.discountPct + '%', esc(moneyShort(m.npv))) +
+      kv('Year-one distribution', esc(moneyShort(m.year1Distribution)));
+  } else if (RES && RES.lease) {
+    h += '<div class="hero">' + esc(moneyShort(RES.lease.npv)) + '</div><div class="hero-l">NPV of the lease, no capital</div>' +
+      kv('Year-one rent', esc(moneyShort(RES.lease.year1))) + kv('Property value', '+' + esc(moneyShort(RES.lease.valueUplift)));
+  } else {
+    h += '<div class="hero none">—</div><div class="hero-l">after-tax IRR</div>';
+  }
+  if (RES) {
+    var v = RES.verdict, tone = v.tone === 'ok' ? 'ok' : v.tone === 'bad' ? 'bad' : 'warn';
+    h += kv('Peak at the meter', esc(kw(RES.balance.peakKw) + ' of ' + kw(RES.balance.limitKw))) +
+      '<div class="kv"><span>Site screen</span><b><span class="pill ' + tone + '">' + esc(v.act) + '</span></b></div>';
+  }
+  h += '<div class="rail-foot">' + status + (STATE === 'error' ? ' <button type="button" class="btn-t" data-act="retry" style="font-size:12px;min-height:0;padding:0">Try again</button>' : '') + '</div></div>';
+  $('rail').innerHTML = h;
+  $('mstrip').innerHTML = pf ? '<b>' + esc(m.afterTaxIrr == null ? 'n/a' : pct(m.afterTaxIrr, 2)) + '</b> IRR · <b>' + esc(moneyShort(su.equity)) + '</b> · ' +
+    '<b>' + esc(RES.verdict.act) + '</b> · peak ' + esc(kw(RES.balance.peakKw)) + ' of ' + esc(kw(RES.balance.limitKw)) + (stale ? ' · updating' : '')
+    : STATE === 'idle' ? 'Enter the ZIP and the service size to run the model.' : status.replace(/<[^>]+>/g, '');
+  var hint = RES ? [
+    RES.site.state + ' · ' + kw(RES.service.limitKw) + ' limit', RES.load.label, RES.ev.ports + ' ports · ' + (RES.ev.managed ? 'managed' : 'unmanaged'),
+    RES.compute.gpus + ' ' + RES.compute.gpuClass.toUpperCase().replace('RTXPRO6000', 'RTX PRO') + ' GPUs', RES.verdict.act + ' · peak ' + kw(RES.balance.peakKw),
+    RES.structure.label, pf ? pct(pf.metrics.afterTaxIrr, 1) + ' IRR' : 'Lease economics'] : null;
+  for (var i = 1; i <= 7 && hint; i++) $('sts' + i).textContent = hint[i - 1];
+}
+
+/* ── the load balance (step 5) ───────────────────────────────────────── */
+function renderAll() { renderRail(); renderScreen(); renderDeals(); renderResults(); renderSweep(); renderDeck(); }
+
+function renderScreen() {
+  if (!RES) return;
+  var R = RES, B = R.balance, v = R.verdict, h = '';
+  var tone = v.tone === 'ok' ? 'ok' : v.tone === 'bad' ? 'bad' : 'warn';
+  h += '<div class="banner ' + tone + '"><div class="verdict"><span class="act">' + esc(v.act) + '</span><b>' + esc(v.label) + '</b></div>' +
+    '<div style="flex-basis:100%">Next: ' + esc(v.gate) + '</div></div>';
+  h += '<div class="card"><div class="card-h"><h3>What the service carries</h3><span class="aside">' + esc(kw(R.service.kw)) + ' service at ' + R.service.loadingPct + '% continuous = ' + esc(kw(B.limitKw)) + ' limit</span></div>';
+  var fr = function (x) { return Math.max(0, Math.min(100, x / Math.max(B.limitKw, B.necNameplateKw, B.peakKw) * 100)); };
+  h += '<div class="gauge" role="img" aria-label="Peak at the meter ' + esc(kw(B.peakKw)) + ' against a ' + esc(kw(B.limitKw)) + ' limit"><i style="width:' + fr(B.peakKw).toFixed(1) + '%"></i><em style="left:' + fr(B.limitKw).toFixed(1) + '%"></em>' +
+    '<em style="left:' + fr(B.necNameplateKw).toFixed(1) + '%;background:var(--c-ev);width:2px;opacity:.8"></em></div>' +
+    '<div class="gauge-l"><span><i style="display:inline-block;width:10px;height:10px;background:var(--c-firm);border-radius:2px;margin-right:6px"></i>Peak at the meter ' + esc(kw(B.peakKw)) + '</span>' +
+    '<span>│ Service limit ' + esc(kw(B.limitKw)) + '</span><span style="color:var(--c-ev)">│ Every charger at full power + firm load ' + esc(kw(B.necNameplateKw)) + '</span></div>';
+  h += '<div class="kpis" style="margin-top:14px">' +
+    kpiP(kw(B.headroomKw), 'headroom at the peak hour<br>' + esc(B.utilisationPct) + '% of the limit used') +
+    kpiP(kw(B.firmPeakKw), 'firm peak: building and firm compute' + (B.overloadHours ? '<br><b style="color:var(--crit)">' + n0(B.overloadHours) + ' h over the limit</b>' : '')) +
+    kpiP(esc(R.ev.unservedPct) + '%', 'charging energy not delivered<br>' + n0(R.ev.deliveredKwh) + ' kWh delivered a year') +
+    kpiP(n0(R.compute.gpuHours.spotCurtailed), 'on-demand GPU-hours curtailed<br>of ' + n0(R.compute.gpuHours.spotOffered) + ' offered') + '</div></div>';
+
+  /* the day */
+  var day = null, d;
+  for (d = 0; d < R.days.length; d++) if (R.days[d].key === UI.day) day = R.days[d];
+  day = day || R.days[0];
+  h += '<div class="card"><div class="card-h"><h3>Hour by hour: ' + esc(day.label) + ' (' + esc(day.date) + ')</h3></div><div class="tabs seg" role="group" aria-label="Which day">';
+  for (d = 0; d < R.days.length; d++) h += '<button type="button" data-day="' + R.days[d].key + '" aria-pressed="' + (R.days[d].key === day.key) + '">' + esc(R.days[d].label) + '</button>';
+  h += '</div><div class="legend"><span><i style="background:var(--c-bldg)"></i>Building' + (R.solar ? ' (net of solar)' : '') + '</span><span><i style="background:var(--c-firm)"></i>Firm compute</span>' +
+    '<span><i style="background:var(--c-spot)"></i>On-demand compute</span><span><i style="background:var(--c-ev)"></i>EV charging</span><span><i style="background:var(--c-chg)"></i>Battery charging</span>' +
+    '<span><i class="lk" style="background:var(--c-net)"></i>At the meter</span><span><i class="dash"></i>Service limit</span></div>' +
+    '<div class="chart" id="ch-day"></div>' +
+    '<details class="more"><summary>The hours as a table</summary><div class="in">' + dayTable(day) + '</div></details></div>';
+
+  h += '<div class="two" style="margin-bottom:16px"><div class="card"><div class="card-h"><h3>Monthly peak</h3></div>' +
+    '<div class="legend"><span><i style="background:var(--c-bldg)"></i>Without battery or curtailment</span><span><i style="background:var(--c-firm)"></i>At the meter</span><span><i class="dash"></i>Limit</span></div><div class="chart" id="ch-month"></div></div>' +
+    '<div class="card"><div class="card-h"><h3>Load duration</h3><span class="aside">Every hour, sorted</span></div>' +
+    '<div class="legend"><span><i class="lk" style="background:var(--c-bldg)"></i>Without battery or curtailment</span><span><i class="lk" style="background:var(--c-firm)"></i>At the meter</span><span><i class="dash"></i>Limit</span></div><div class="chart" id="ch-dur"></div></div></div>';
+
+  /* the facts */
+  var C = R.compute, E = R.ev, Bt = R.battery;
+  h += '<div class="card"><div class="card-h"><h3>Year one on this service</h3><span class="aside">Confidence: ' + esc(R.confidence) + '</span></div><div class="facts"><div>' +
+    '<div class="sub-h" style="margin-top:0">Compute</div>' +
+    mr(n0(C.gpus) + ' ' + esc(C.gpuName) + ' GPUs', C.pods + ' pod' + (C.pods === 1 ? '' : 's')) +
+    mr('At the meter, a pod serving', kw(C.podKwServing)) +
+    mr('Offtake GPU-hours', n0(C.gpuHours.offtake)) + mr('Edge GPU-hours', n0(C.gpuHours.edge)) + mr('On-demand GPU-hours', n0(C.gpuHours.spot)) +
+    (C.gpuHours.firmLost ? mr('Firm GPU-hours lost', '<span style="color:var(--crit)">' + n0(C.gpuHours.firmLost) + '</span>') : '') +
+    mr('Gross compute revenue', money(C.revenue.gross), 'tot') + '</div><div>' +
+    '<div class="sub-h" style="margin-top:0">Charging</div>' +
+    mr(E.ports + ' ports at ' + E.kwPerPort + ' kW', esc(E.patternLabel)) + mr('Wanted, at the meter', n0(E.wantKwh) + ' kWh') +
+    mr('Delivered to cars', n0(E.deliveredKwh) + ' kWh') + mr('Not delivered, at the meter', n0(E.unservedKwh) + ' kWh (' + esc(E.unservedPct) + '%)') +
+    mr('Expected peak unmanaged (no load management)', kw(E.unmanagedPeakKw)) + mr('Every charger at full power', kw(E.nameplateKw)) + mr('Charging revenue', money(E.revenue), 'tot') + '</div><div>' +
+    '<div class="sub-h" style="margin-top:0">Battery and the bill</div>' +
+    (Bt.kwh > 0 ? mr(n0(Bt.kw) + ' kW / ' + n0(Bt.kwh) + ' kWh', n0(Bt.cyclesPerYear) + ' cycles a year') + mr('Its effect on the bill', money(Bt.billEffect)) +
+      mr('On-demand revenue it keeps running', money(Bt.spotEnabled)) : mr('Battery', 'none')) +
+    mr('Building billed alone', money(R.bill.baseline)) + mr('Billed with the project', money(R.bill.withProject)) +
+    mr('The project\'s electricity', money(R.bill.incremental), 'tot') + '</div></div>' +
+    '<p class="help" style="margin-top:12px"><b>Load:</b> ' + esc(R.load.label) + '. ' + esc((R.load.notes || []).join(' ')) + ' <b>Tariff:</b> ' + esc(R.tariff.label) +
+    (R.tariff.calibration ? ' ' + esc(R.tariff.calibration.note) : '') + '</p></div>';
+  $('screen-out').innerHTML = h;
+  drawDay(day, B.limitKw); drawMonths(R.months, B.limitKw); drawDuration(R.duration, B.limitKw);
+}
+function kpiP(v, l) { return '<div class="kpi plain"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>'; }
+function mr(k, v, cls) { return '<div class="mrow' + (cls ? ' ' + cls : '') + '"><span>' + k + '</span><b>' + v + '</b></div>'; }
+function dayTable(day) {
+  var h = '<div class="tw"><table class="dt"><thead><tr><th>Hour</th><th>Building</th><th>Firm compute</th><th>On-demand</th><th>EV</th><th>Battery in</th><th>Battery out</th><th>At the meter</th><th>GPUs curtailed</th></tr></thead><tbody>';
+  day.hours.forEach(function (x) {
+    h += '<tr><td>' + x.hour + ':00</td><td>' + x.building + '</td><td>' + x.computeFirm + '</td><td>' + x.computeSpot + '</td><td>' + x.ev + '</td><td>' + x.charge +
+      '</td><td>' + x.discharge + '</td><td>' + x.net + '</td><td>' + x.curtailedGpus + '</td></tr>';
+  });
+  return h + '</tbody></table></div><p class="help">kW, the hour\'s average.</p>';
+}
+
+/* ── charts: thin marks, recessive grid, a hover on every mark ───────── */
+function ticks(lo, hi, n) {
+  if (hi <= lo) hi = lo + 1;
+  var raw = (hi - lo) / n, p = Math.pow(10, Math.floor(Math.log(raw) / Math.LN10)), f = raw / p;
+  var step = (f <= 1 ? 1 : f <= 2 ? 2 : f <= 2.5 ? 2.5 : f <= 5 ? 5 : 10) * p, out = [];
+  for (var t = Math.floor(lo / step) * step; t <= hi + step * 0.001; t += step) out.push(Math.round(t * 1e6) / 1e6);
+  if (out[out.length - 1] < hi) out.push(out[out.length - 1] + step);
+  return out;
+}
+function f1(v) { return (Math.round(v * 10) / 10).toFixed(1); }
+function axKw(v) { return Math.abs(v) >= 1000 ? (v / 1000).toFixed(1) + ' MW' : Math.round(v) + ''; }
+function axMoney(v) { var a = Math.abs(v); return (v < 0 ? '−' : '') + (a >= 1e6 ? '$' + (a / 1e6).toFixed(1) + 'M' : a >= 1e3 ? '$' + Math.round(a / 1e3) + 'K' : '$' + Math.round(a)); }
+function frame(box) { var W = Math.max(300, box.clientWidth || 640); return { W: W, H: W < 520 ? 230 : 270, L: 52, R: 12, T: 14, B: 26 }; }
+function barTop(x, y0, y1, w) {
+  /* a bar with 2px rounded data-end, anchored square on its base */
+  var top = Math.min(y0, y1), bot = Math.max(y0, y1), r = Math.min(2, w / 2, (bot - top) / 2);
+  if (bot - top < 0.5) return '';
+  return 'M' + f1(x) + ' ' + f1(bot) + 'V' + f1(top + r) + 'Q' + f1(x) + ' ' + f1(top) + ' ' + f1(x + r) + ' ' + f1(top) + 'H' + f1(x + w - r) +
+    'Q' + f1(x + w) + ' ' + f1(top) + ' ' + f1(x + w) + ' ' + f1(top + r) + 'V' + f1(bot) + 'Z';
+}
+function drawDay(day, limit) {
+  var box = $('ch-day'); if (!box) return;
+  var hs = day.hours, g = frame(box), keys = [['building', 'var(--c-bldg)', 'Building'], ['computeFirm', 'var(--c-firm)', 'Firm compute'],
+    ['computeSpot', 'var(--c-spot)', 'On-demand compute'], ['ev', 'var(--c-ev)', 'EV charging'], ['charge', 'var(--c-chg)', 'Battery charging']];
+  var hi = limit;
+  hs.forEach(function (x) { var s = Math.max(0, x.building - x.solar) + x.computeFirm + x.computeSpot + x.ev + x.charge; if (s > hi) hi = s; if (x.net > hi) hi = x.net; });
+  var tk = ticks(0, hi * 1.05, 5), top = tk[tk.length - 1], pw = g.W - g.L - g.R, ph = g.H - g.T - g.B, band = pw / 24, bw = Math.max(4, band - 3);
+  function y(v) { return g.T + ph - v / top * ph; }
+  var s = ['<svg viewBox="0 0 ' + g.W + ' ' + g.H + '" role="img" aria-label="Load by hour on ' + esc(day.label) + '; the table below has every figure.">'];
+  tk.forEach(function (t) { s.push('<line class="grid" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(t)) + '" y2="' + f1(y(t)) + '"/><text class="ax" x="' + (g.L - 8) + '" y="' + f1(y(t) + 4) + '" text-anchor="end">' + axKw(t) + '</text>'); });
+  var pts = [];
+  hs.forEach(function (x, i) {
+    var x0 = g.L + band * i + (band - bw) / 2, acc = 0;
+    keys.forEach(function (k, ki) {
+      var v = k[0] === 'building' ? Math.max(0, x.building - x.solar) : x[k[0]];
+      if (!(v > 0)) return;
+      var yb = y(acc), yt = y(acc + v);
+      /* 2px surface gap between stacked segments */
+      s.push('<rect x="' + f1(x0) + '" y="' + f1(yt) + '" width="' + f1(bw) + '" height="' + f1(Math.max(0, yb - yt)) + '" fill="' + k[1] + '" stroke="#fff" stroke-width="1"/>');
+      acc += v;
+    });
+    s.push('<rect class="hit" data-i="' + i + '" x="' + f1(g.L + band * i) + '" y="' + g.T + '" width="' + f1(band) + '" height="' + ph + '"/>');
+    if (i % 3 === 0) s.push('<text class="ax" x="' + f1(g.L + band * i + band / 2) + '" y="' + (g.H - 8) + '" text-anchor="middle">' + x.hour + ':00</text>');
+    pts.push(f1(g.L + band * i + band / 2) + ',' + f1(y(x.net)));
+  });
+  s.push('<line x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(limit)) + '" y2="' + f1(y(limit)) + '" stroke="var(--c-lim)" stroke-width="2" stroke-dasharray="6 4"/>');
+  s.push('<text class="lab" x="' + (g.W - g.R) + '" y="' + f1(y(limit) - 6) + '" text-anchor="end">Service limit ' + axKw(limit) + ' kW</text>');
+  s.push('<polyline points="' + pts.join(' ') + '" fill="none" stroke="var(--c-net)" stroke-width="2" stroke-linejoin="round"/>');
+  s.push('<line class="base" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(0)) + '" y2="' + f1(y(0)) + '"/></svg>');
+  box.innerHTML = s.join('') + '<div class="tip" hidden></div>';
+  CHARTS['ch-day'] = function (i) {
+    var x = hs[i]; if (!x) return null;
+    var rows = [['var(--c-bldg)', 'Building', kw(x.building)]];
+    if (x.solar > 0) rows.push(['#F79009', 'Solar', kw(x.solar)]);
+    rows.push(['var(--c-firm)', 'Firm compute', kw(x.computeFirm)], ['var(--c-spot)', 'On-demand compute', kw(x.computeSpot)], ['var(--c-ev)', 'EV charging', kw(x.ev)]);
+    if (x.charge > 0) rows.push(['var(--c-chg)', 'Battery charging', kw(x.charge)]);
+    if (x.discharge > 0) rows.push(['var(--c-chg)', 'Battery discharging', '−' + kw(x.discharge)]);
+    if (x.curtailedGpus > 0) rows.push(['var(--c-spot)', 'GPUs curtailed', n0(x.curtailedGpus)]);
+    rows.push(['var(--c-net)', 'At the meter', kw(x.net)]);
+    return { title: x.hour + ':00–' + (x.hour + 1) + ':00', rows: rows };
+  };
+}
+function drawMonths(ms, limit) {
+  var box = $('ch-month'); if (!box) return;
+  var g = frame(box), hi = limit;
+  ms.forEach(function (m) { if (m.peakWithoutBatteryKw > hi) hi = m.peakWithoutBatteryKw; if (m.peakKw > hi) hi = m.peakKw; });
+  var tk = ticks(0, hi * 1.05, 5), top = tk[tk.length - 1], pw = g.W - g.L - g.R, ph = g.H - g.T - g.B, band = pw / 12, bw = Math.max(3, (band - 6) / 2);
+  function y(v) { return g.T + ph - v / top * ph; }
+  var s = ['<svg viewBox="0 0 ' + g.W + ' ' + g.H + '" role="img" aria-label="Monthly peak with and without the battery and curtailment">'];
+  tk.forEach(function (t) { s.push('<line class="grid" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(t)) + '" y2="' + f1(y(t)) + '"/><text class="ax" x="' + (g.L - 8) + '" y="' + f1(y(t) + 4) + '" text-anchor="end">' + axKw(t) + '</text>'); });
+  ms.forEach(function (m, i) {
+    var x0 = g.L + band * i + 2;
+    s.push('<path d="' + barTop(x0, y(0), y(m.peakWithoutBatteryKw), bw) + '" fill="var(--c-bldg)"/>');
+    s.push('<path d="' + barTop(x0 + bw + 2, y(0), y(m.peakKw), bw) + '" fill="var(--c-firm)"/>');
+    s.push('<rect class="hit" data-i="' + i + '" x="' + f1(g.L + band * i) + '" y="' + g.T + '" width="' + f1(band) + '" height="' + ph + '"/>');
+    /* a month name needs ~26px; narrower, every other month is named */
+    if (band >= 26 || i % 2 === 0) s.push('<text class="ax" x="' + f1(g.L + band * i + band / 2) + '" y="' + (g.H - 8) + '" text-anchor="middle">' + m.name + '</text>');
+  });
+  s.push('<line x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(limit)) + '" y2="' + f1(y(limit)) + '" stroke="var(--c-lim)" stroke-width="2" stroke-dasharray="6 4"/>');
+  s.push('<line class="base" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(0)) + '" y2="' + f1(y(0)) + '"/></svg>');
+  box.innerHTML = s.join('') + '<div class="tip" hidden></div>';
+  CHARTS['ch-month'] = function (i) {
+    var m = ms[i]; if (!m) return null;
+    return { title: m.name, rows: [['var(--c-bldg)', 'Building alone', kw(m.buildingPeakKw)], ['var(--c-bldg)', 'Without battery or curtailment', kw(m.peakWithoutBatteryKw)],
+      ['var(--c-firm)', 'At the meter', kw(m.peakKw)], ['var(--c-spot)', 'GPU-hours curtailed', n0(m.curtailedGpuHours)], ['var(--c-net)', 'Bill with the project', money(m.bill)]] };
+  };
+}
+function drawDuration(pts, limit) {
+  var box = $('ch-dur'); if (!box) return;
+  var g = frame(box), hi = limit;
+  pts.forEach(function (p) { if (p.unmanagedKw > hi) hi = p.unmanagedKw; if (p.kw > hi) hi = p.kw; });
+  var tk = ticks(0, hi * 1.05, 5), top = tk[tk.length - 1], pw = g.W - g.L - g.R, ph = g.H - g.T - g.B;
+  function y(v) { return g.T + ph - v / top * ph; }
+  function x(hr) { return g.L + (hr - 1) / 8759 * pw; }
+  var s = ['<svg viewBox="0 0 ' + g.W + ' ' + g.H + '" role="img" aria-label="Load duration curve: every hour of the year sorted from the highest load">'];
+  tk.forEach(function (t) { s.push('<line class="grid" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(t)) + '" y2="' + f1(y(t)) + '"/><text class="ax" x="' + (g.L - 8) + '" y="' + f1(y(t) + 4) + '" text-anchor="end">' + axKw(t) + '</text>'); });
+  [0, 2190, 4380, 6570, 8760].forEach(function (hr) { s.push('<text class="ax" x="' + f1(x(Math.max(1, hr))) + '" y="' + (g.H - 8) + '" text-anchor="middle">' + hr.toLocaleString('en-US') + ' h</text>'); });
+  var a = [], b = [];
+  pts.forEach(function (p) { a.push(f1(x(p.hours)) + ',' + f1(y(p.unmanagedKw))); b.push(f1(x(p.hours)) + ',' + f1(y(p.kw))); });
+  s.push('<polyline points="' + a.join(' ') + '" fill="none" stroke="var(--c-bldg)" stroke-width="2"/>');
+  s.push('<polyline points="' + b.join(' ') + '" fill="none" stroke="var(--c-firm)" stroke-width="2"/>');
+  s.push('<line x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(limit)) + '" y2="' + f1(y(limit)) + '" stroke="var(--c-lim)" stroke-width="2" stroke-dasharray="6 4"/>');
+  var band = pw / pts.length;
+  pts.forEach(function (p, i) { s.push('<rect class="hit" data-i="' + i + '" x="' + f1(g.L + band * i) + '" y="' + g.T + '" width="' + f1(band) + '" height="' + ph + '"/>'); });
+  s.push('</svg>');
+  box.innerHTML = s.join('') + '<div class="tip" hidden></div>';
+  CHARTS['ch-dur'] = function (i) {
+    var p = pts[i]; if (!p) return null;
+    return { title: 'The ' + p.hours.toLocaleString('en-US') + 'th busiest hour', rows: [['var(--c-bldg)', 'Without battery or curtailment', kw(p.unmanagedKw)], ['var(--c-firm)', 'At the meter', kw(p.kw)]] };
+  };
+}
+function drawCash(res) {
+  var box = $('ch-cash'); if (!box) return;
+  var y0 = res.year0 || {}, rows = res.rows || [], bars = [num(y0.afterTaxCash)], cum = [num(y0.afterTaxCash)];
+  rows.forEach(function (r) { bars.push(num(r.afterTaxCash)); cum.push(num(r.cumulativeAfterTax)); });
+  var lo = 0, hi = 0;
+  bars.concat(cum).forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; });
+  var g = frame(box); g.L = 58;
+  var pw = g.W - g.L - g.R, ph = g.H - g.T - g.B, tk = ticks(lo, hi, 5), a = tk[0], z = tk[tk.length - 1];
+  function y(v) { return g.T + ph - (v - a) / (z - a) * ph; }
+  var n = bars.length, band = pw / n, bw = Math.max(2, Math.min(22, band - 3)), pts = [];
+  var s = ['<svg viewBox="0 0 ' + g.W + ' ' + g.H + '" role="img" aria-label="After-tax cash flow by year with the cumulative total; the annual table below has every figure.">'];
+  tk.forEach(function (t) { s.push('<line class="grid" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(t)) + '" y2="' + f1(y(t)) + '"/><text class="ax" x="' + (g.L - 8) + '" y="' + f1(y(t) + 4) + '" text-anchor="end">' + axMoney(t) + '</text>'); });
+  bars.forEach(function (v, i) {
+    var cx = g.L + band * i + band / 2;
+    s.push('<rect class="hit" data-i="' + i + '" x="' + f1(g.L + band * i) + '" y="' + g.T + '" width="' + f1(band) + '" height="' + ph + '"/>');
+    s.push('<path class="b-a" d="' + barTop(cx - bw / 2, y(0), y(v), bw) + '"/>');
+    if (i % (n > 30 ? 10 : 5) === 0 || i === n - 1) s.push('<text class="ax" x="' + f1(cx) + '" y="' + (g.H - 8) + '" text-anchor="middle">' + i + '</text>');
+    pts.push(f1(cx) + ',' + f1(y(cum[i])));
+  });
+  s.push('<line class="base" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(0)) + '" y2="' + f1(y(0)) + '"/>');
+  s.push('<polyline class="cum" points="' + pts.join(' ') + '"/>');
+  var ex = g.L + band * (n - 1) + band / 2, ey = y(cum[n - 1]);
+  s.push('<circle class="dot" cx="' + f1(ex) + '" cy="' + f1(ey) + '" r="4"/><text class="lab" x="' + f1(ex - 8) + '" y="' + f1(ey - 10) + '" text-anchor="end">' + esc(moneyShort(cum[n - 1])) + ' cumulative</text></svg>');
+  box.innerHTML = s.join('') + '<div class="tip" hidden></div>';
+  CHARTS['ch-cash'] = function (i) {
+    if (i < 0 || i >= n) return null;
+    return { title: i === 0 ? 'Year 0 · equity at close' : 'Year ' + i, rows: [['var(--acc)', 'After-tax cash flow', money(bars[i])], ['#334155', 'Cumulative', money(cum[i])]] };
+  };
+}
+document.addEventListener('mousemove', function (e) {
+  var hit = closest(e.target, '.hit'), box = hit && closest(hit, '.chart');
+  var tips = document.querySelectorAll('.chart .tip');
+  for (var i = 0; i < tips.length; i++) if (!box || tips[i].parentNode !== box) tips[i].hidden = true;
+  if (!box || !CHARTS[box.id]) return;
+  var d = CHARTS[box.id](Number(hit.getAttribute('data-i'))), tip = box.querySelector('.tip');
+  if (!d || !tip) return;
+  tip.innerHTML = '<div class="t">' + esc(d.title) + '</div>' + d.rows.map(function (r) {
+    return '<div class="r"><span><span class="k" style="background:' + r[0] + '"></span>' + esc(r[1]) + '</span><span class="v">' + esc(r[2]) + '</span></div>';
+  }).join('');
+  tip.hidden = false;
+  var rb = box.getBoundingClientRect(), x = e.clientX - rb.left + 14, yv = e.clientY - rb.top + 14;
+  if (x + tip.offsetWidth > rb.width) x = e.clientX - rb.left - tip.offsetWidth - 14;
+  tip.style.left = Math.max(0, x) + 'px'; tip.style.top = Math.max(0, yv) + 'px';
+});
+
+/* ── the sizing sweep ────────────────────────────────────────────────── */
+function optimize() {
+  var c = collect();
+  if (c.error || !ready()) { toast('Enter the ZIP and the service size first.'); return; }
+  var b = $('btn-opt'); b.disabled = true; b.innerHTML = '<span class="spin"></span> Running every size…';
+  api({ action: 'optimize', site: c.site }).then(function (j) {
+    SWEEP = j.result; SWEEP.stale = false; renderSweep();
+  }, function (e) { $('sweep-out').innerHTML = '<div class="banner bad"><div>' + esc(e.message) + '</div></div>'; })
+    .then(function () { b.disabled = false; b.textContent = 'Find the best size'; });
+}
+function renderSweep() {
+  var box = $('sweep-out'); if (!box) return;
+  if (!SWEEP) { box.innerHTML = ''; return; }
+  var S = SWEEP, cols = S.batteries, best = S.best, maxN = 0, minN = 0;
+  S.grid.forEach(function (c) { if (c.fits && fin(c.npv)) { maxN = Math.max(maxN, c.npv); minN = Math.min(minN, c.npv); } });
+  var curPods = Number(getPath(IN, 'compute.pods') == null ? 1 : getPath(IN, 'compute.pods')), curKwh = Number(getPath(IN, 'battery.kwh') || 0), curKw = Number(getPath(IN, 'battery.kw') || 0);
+  var h = (S.stale ? '<p class="help" style="color:var(--warn)">The inputs changed since this sweep ran; run it again for current figures.</p>' : '') +
+    (best ? '<div class="banner ok"><div><b>Best: ' + best.pods + ' pod' + (best.pods === 1 ? '' : 's') + ' (' + n0(best.gpus) + ' GPUs)' + (best.batteryKwh ? ' with a ' + n0(best.batteryKw) + ' kW / ' + n0(best.batteryKwh) + ' kWh battery' : ', no battery') +
+      '</b> — ' + pct(best.irr, 1) + ' after-tax IRR, NPV ' + money(best.npv) + ' on ' + money(best.capital) + ' (' + esc(S.structure === 'own' ? 'owning the stack' : 'owning the power layer') + ').</div>' +
+      '<button type="button" class="btn btn-p btn-sm" data-act="use-size" data-pods="' + best.pods + '" data-kw="' + best.batteryKw + '" data-kwh="' + best.batteryKwh + '">Use this size</button></div>'
+      : '<div class="banner warn"><div>No size fits this service without losing firm compute or more than 5% of the charging. Try a battery, managed charging or a service upgrade.</div></div>');
+  h += '<div class="tw sweep"><table class="dt"><thead><tr><th>Pods</th>' + cols.map(function (b) { return '<th style="text-align:center">' + (b.kwh ? n0(b.kw) + ' kW / ' + n0(b.kwh) + ' kWh' : 'No battery') + '</th>'; }).join('') + '</tr></thead><tbody>';
+  S.pods.forEach(function (p) {
+    h += '<tr><td>' + p + '</td>';
+    cols.forEach(function (b) {
+      var c = null;
+      S.grid.forEach(function (x) { if (x.pods === p && x.batteryKwh === b.kwh && x.batteryKw === b.kw) c = x; });
+      if (!c) { h += '<td></td>'; return; }
+      var isBest = !!best && best.pods === c.pods && best.batteryKw === c.batteryKw && best.batteryKwh === c.batteryKwh;
+      var cls = 'cell' + (c.fits ? '' : ' no') + (isBest ? ' best' : '') + (p === curPods && b.kwh === curKwh && b.kw === curKw ? ' cur' : '');
+      var shade = c.fits && fin(c.npv) && maxN > minN ? (c.npv - minN) / (maxN - minN) : 0;
+      var bg = c.fits ? 'rgba(42,120,214,' + (0.06 + shade * 0.34).toFixed(2) + ')' : '';
+      h += '<td class="' + cls + '" style="' + (bg ? 'background:' + bg : '') + '" data-act="' + (c.fits ? 'use-size' : '') + '" data-pods="' + p + '" data-kw="' + b.kw + '" data-kwh="' + b.kwh + '" title="' + esc(c.fits ? 'Use this size' : 'Does not fit') + '">' +
+        '<b>' + (c.irr == null ? 'n/a' : pct(c.irr, 1)) + '</b><span>' + (c.fits ? 'NPV ' + moneyShort(c.npv) : (c.overloadHours ? n0(c.overloadHours) + ' h over' : c.unservedPct + '% unserved')) + '</span>' +
+        '<span>peak ' + n0(c.peakKw) + ' kW</span></td>';
+    });
+    h += '</tr>';
+  });
+  h += '</tbody></table></div><p class="help">' + esc(S.note) + ' A striped cell does not fit; the outlined one is the best; the dark-edged one is the size above. Shading follows NPV. ' +
+    'Each pod serves ' + n0(S.podKwServing) + ' kW at the meter; the limit is ' + n0(S.limitKw) + ' kW.</p>';
+  box.innerHTML = h;
+}
+
+/* ── the deal (step 6) ───────────────────────────────────────────────── */
+function renderDeals() {
+  if (!RES || !RES.deals) return;
+  ['own', 'infra', 'lease'].forEach(function (k) {
+    var d = RES.deals[k], el = document.querySelector('[data-deal="' + k + '"]');
+    if (!el || !d) return;
+    el.innerHTML = d.error ? 'Could not be priced with these inputs.'
+      : d.capital > 0 ? '<b>' + esc(d.irr == null ? 'n/a' : pct(d.irr, 1)) + '</b> IRR · NPV ' + esc(moneyShort(d.npv)) + '<br>' + esc(moneyShort(d.capital)) + ' capital · ' + esc(moneyShort(d.year1)) + ' year-one EBITDA'
+      : 'No capital · NPV ' + esc(moneyShort(d.npv)) + '<br>' + esc(moneyShort(d.year1)) + ' year one · +' + esc(moneyShort(d.valueUplift)) + ' property value';
+  });
+}
+
+/* ── the results (step 7): the BESS Pro Forma's own presentation ─────── */
+function kpi(v, l) { return '<div class="kpi"><div class="v">' + esc(v) + '</div><div class="l">' + l + '</div></div>'; }
+function warnHtml(w) {
+  var lv = w.level === 'critical' ? 'critical' : w.level === 'warn' ? 'warn' : 'info';
+  return '<div class="wl ' + lv + '"><div><span class="lv">' + (lv === 'critical' ? 'Critical' : lv === 'warn' ? 'Warning' : 'Note') + '<span class="code">' + esc(w.code || '') + '</span></span>' + esc(w.text) + '</div></div>';
+}
+function renderResults() {
+  var box = $('res-body'); if (!box || !RES) return;
+  var res = RES.proforma, h = '';
+  if (!res) {
+    var L = RES.lease || {};
+    box.innerHTML = '<div class="card"><div class="card-h"><h3>The lease, with no capital</h3></div><div class="kpis">' +
+      kpi(moneyShort(L.npv), 'NPV of the rent<br>at ' + esc(getPath(IN, 'finance.discountPct') || 10) + '%') + kpi(moneyShort(L.year1), 'year-one net income') +
+      kpi('+' + moneyShort(L.valueUplift), 'property value<br>at the cap rate') + kpi('n/a', 'IRR: no capital is invested') + '</div>' +
+      '<p class="card-note" style="margin-top:12px">An IRR needs an investment. Add the host\'s own capital (chargers, make-ready) in step 6 for the full pro forma, or compare the structures there.</p></div>';
+    return;
+  }
+  var m = res.metrics || {}, su = res.sourcesUses || {}, lev = !!m.levered, term = res.inputs && res.inputs.years;
+  h += '<div class="card"><div class="card-h"><h3>Headline returns</h3><span class="aside">' + esc(RES.structure.label) + ' · ' +
+    esc(lev ? 'levered, ' + moneyShort(res.debt && res.debt.amount) + ' debt' : '100% equity, unlevered') + '</span></div><div class="kpis">' +
+    kpi(moneyShort(su.equity), lev ? 'equity sought<br>alongside ' + esc(moneyShort(res.debt && res.debt.amount)) + ' of debt' : 'total investment sought<br>100% equity') +
+    kpi(m.afterTaxIrr == null ? 'n/a' : pct(m.afterTaxIrr, 2), (lev ? 'after-tax equity IRR' : 'after-tax unlevered IRR') + '<br>over the ' + esc(term) + '-year term') +
+    kpi(money(m.totalReturns), 'total investor returns<br>over the life of the project') +
+    kpi(m.paybackYears == null ? 'n/a' : '~' + yrs(m.paybackYears), 'after-tax payback<br>cash + depreciation + ITC') + '</div></div>';
+  var b = m.irrBuild || {};
+  function pts(v, plus) { return !fin(v) ? '—' : v < 0 ? '(' + Math.abs(v).toFixed(1) + ') pts' : (plus ? '+' : '') + v.toFixed(1) + ' pts'; }
+  h += '<div class="two" style="margin-bottom:16px"><div class="card"><div class="card-h"><h3>IRR build, after tax</h3></div>' +
+    mr('Cash only (pre-tax operating cash flow)', fin(b.cashOnly) ? b.cashOnly.toFixed(1) + '%' : '—') + mr('Depreciation effect', pts(b.depreciation, true)) +
+    mr('ITC effect', pts(b.itc, true)) + mr('Total after-tax IRR', fin(b.total) ? b.total.toFixed(1) + '%' : '—', 'tot') +
+    '<p class="help">Each step is rounded to a tenth of a point, as the deck prints it.</p></div>' +
+    '<div class="card"><div class="card-h"><h3>More metrics</h3></div>' +
+    mr('NPV at ' + esc(res.inputs.discountPct) + '%', money(m.npv)) + mr('Year-one distribution', money(m.year1Distribution)) +
+    mr('Multiple on invested capital', fin(m.moic) ? m.moic.toFixed(2) + '×' : '—') + mr('Pre-tax IRR', m.preTaxIrr == null ? 'n/a' : pct(m.preTaxIrr, 2)) +
+    (fin(m.lcosCents) ? mr('Levelized cost of storage', m.lcosCents.toFixed(2) + '¢/kWh') : '') +
+    (lev && fin(m.dscrMin) ? mr('DSCR, minimum / average', m.dscrMin.toFixed(2) + '× / ' + m.dscrAvg.toFixed(2) + '×') : '') +
+    mr('Installed cost', money(res.capex && res.capex.total)) + '</div></div>';
+  var ws = (res.warnings || []).slice().sort(function (x, y) { var o = { critical: 0, warn: 1, info: 2 }; return (o[x.level] || 2) - (o[y.level] || 2); });
+  h += '<div class="card"><div class="card-h"><h3>Warnings &amp; notes</h3><span class="aside">' + (ws.length ? ws.length + ' from the model' : 'None') + '</span></div>' +
+    (ws.length ? ws.map(warnHtml).join('') : '<p class="card-note">The model raised nothing for these inputs.</p>') + '</div>';
+  h += '<div class="card"><div class="card-h"><h3>After-tax cash flow</h3><span class="aside">Year 0 is the equity at close</span></div>' +
+    '<div class="legend"><span><i style="background:var(--acc)"></i>After-tax cash flow</span><span><i class="lk" style="background:#334155"></i>Cumulative</span></div>' +
+    '<div class="chart" id="ch-cash"></div><details class="more"><summary>Annual table</summary><div class="in">' + annualTable(res) + '</div></details></div>';
+  var sens = res.sensitivity || [];
+  if (sens.length) {
+    h += '<div class="card"><div class="card-h"><h3>Sensitivity</h3><span class="aside">After-tax IRR</span></div><div class="tw" style="max-height:none"><table class="dt wrap"><thead><tr><th>Case</th><th>After-tax IRR</th><th>Change</th></tr></thead><tbody>' +
+      '<tr class="base"><td>Base case</td><td>' + esc(m.afterTaxIrr == null ? 'n/a' : pct(m.afterTaxIrr, 2)) + '</td><td>—</td></tr>' +
+      sens.map(function (x) {
+        var d = fin(x.delta) ? x.delta * 100 : null;
+        return '<tr><td>' + esc(x.label || x.key) + '</td><td>' + esc(x.afterTaxIrr == null ? 'n/a' : pct(x.afterTaxIrr, 2)) + '</td><td>' +
+          esc(d == null ? '—' : (d > 0 ? '+' : d < 0 ? '−' : '') + Math.abs(d).toFixed(2) + ' pts') + '</td></tr>';
+      }).join('') + '</tbody></table></div></div>';
+  }
+  h += '<div class="card"><details class="more" style="border:0;margin:0;padding:0"><summary>The operating schedule, year by year</summary><div class="in">' + scheduleTable(RES.schedule, res) + '</div></details></div>';
+  h += '<div class="card"><details class="more" style="border:0;margin:0;padding:0"><summary>Deal comparison</summary><div class="in">' + dealsTable() + '</div></details></div>';
+  if ((res.assumptions || []).length) {
+    h += '<div class="card"><details class="more" style="border:0;margin:0;padding:0"><summary>Modelling conventions (' + res.assumptions.length + ')</summary><div class="in"><ul style="margin:0;padding-left:18px;color:var(--sub);font-size:13px;line-height:1.65">' +
+      res.assumptions.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul><p class="help">' + esc(RES.disclaimer) + '</p></div></details></div>';
+  }
+  var open = { a: !!(document.querySelector('#res-body details') && document.querySelector('#res-body details').open) };
+  box.innerHTML = h;
+  if (open.a) { var d0 = box.querySelector('details'); if (d0) d0.open = true; }
+  drawCash(res);
+}
+var TABLE_COLS = [['revenue', 'Revenue'], ['opex', 'Opex'], ['ebitda', 'EBITDA'], ['refreshCapex', 'GPU refresh'], ['debtService', 'Debt service'],
+  ['stateTax', 'State tax'], ['fedTax', 'Federal tax'], ['itc', 'ITC'], ['afterTaxCash', 'After-tax cash'], ['cumulativeAfterTax', 'Cumulative']];
+function annualTable(res) {
+  var lev = !!(res.metrics && res.metrics.levered), any = (res.rows || []).some(function (r) { return r.refreshCapex > 0; });
+  var cols = TABLE_COLS.filter(function (c) { return (lev || c[0] !== 'debtService') && (any || c[0] !== 'refreshCapex'); });
+  var h = '<div class="tw"><table class="dt"><thead><tr><th>Year</th>' + cols.map(function (c) { return '<th>' + esc(c[1]) + '</th>'; }).join('') + '</tr></thead><tbody>';
+  var y0 = res.year0 || {};
+  h += '<tr><td>0</td>' + cols.map(function (c) { return '<td>' + (c[0] === 'afterTaxCash' || c[0] === 'cumulativeAfterTax' ? esc(acct(y0.afterTaxCash)) : '') + '</td>'; }).join('') + '</tr>';
+  (res.rows || []).forEach(function (r) { h += '<tr><td>' + esc(r.year) + '</td>' + cols.map(function (c) { return '<td>' + esc(acct(r[c[0]])) + '</td>'; }).join('') + '</tr>'; });
+  return h + '</tbody></table></div><p class="help">Dollars, nominal. Negative figures in parentheses. The CSV carries every line the engine computes.</p>';
+}
+function scheduleTable(S, res) {
+  if (!S) return '';
+  var N = res.inputs.years, h = '<div class="tw"><table class="dt"><thead><tr><th>Line</th>';
+  for (var t = 1; t <= N; t++) h += '<th>Yr ' + t + '</th>';
+  h += '</tr></thead><tbody>';
+  function row(l, neg) { h += '<tr><td>' + esc(l.label) + '</td>' + l.schedule.slice(0, N).map(function (v) { return '<td>' + esc(acct(neg ? -v : v)) + '</td>'; }).join('') + '</tr>'; }
+  S.revenue.forEach(function (l) { row(l, false); });
+  S.opex.forEach(function (l) { row(l, true); });
+  h += '</tbody></table></div><p class="help">Revenue, then operating costs in parentheses, as the hourly model handed them to the finance engine' +
+    (S.refreshYears && S.refreshYears.length ? '; the GPUs are refreshed in year ' + S.refreshYears.join(' and ') : '') + '. Capital: ' +
+    S.capex.map(function (c) { return esc(c.label) + ' ' + money(c.amount); }).join(' · ') + '.</p>';
+  return h;
+}
+function dealsTable() {
+  var D = RES.deals, h = '<div class="tw"><table class="dt"><thead><tr><th>Structure</th><th>Capital</th><th>After-tax IRR</th><th>NPV</th><th>Payback</th><th>Year one</th></tr></thead><tbody>';
+  ['own', 'infra', 'lease'].forEach(function (k) {
+    var d = D[k];
+    h += '<tr' + (k === RES.structure.key ? ' class="base"' : '') + '><td>' + esc(d.label) + '</td><td>' + esc(money(d.capital)) + '</td><td>' + esc(d.irr == null ? 'n/a' : pct(d.irr, 1)) + '</td><td>' +
+      esc(money(d.npv)) + '</td><td>' + esc(d.payback == null ? '—' : d.payback.toFixed(1) + ' yrs') + '</td><td>' + esc(money(d.year1)) + '</td></tr>';
+  });
+  return h + '</tbody></table></div><p class="help">' + esc(OPTS && OPTS.refs ? OPTS.refs.laitentModels : '') + '</p>';
+}
+
+/* ── the deck: proforma-logic.js from the same answer ─────────────────── */
+function brandNow() {
+  var P = root.OmegaProformaReport;
+  if (P && typeof P.brandFrom === 'function') { try { return P.brandFrom(CTX.brand || {}, {}); } catch (e) {} }
+  return { name: (CTX.brand && CTX.brand.name) || '', accent: '#2563EB' };
+}
+function deckOpts() {
+  var s = RES.story || {};
+  return { include: { cashflow: true, disclosures: true }, title: s.title, flow: s.flow, terms: s.terms, narrative: s.narrative };
+}
+function renderDeck() {
+  var box = $('deck-box'), P = root.OmegaProformaReport, res = RES && RES.proforma;
+  $('btn-print').disabled = !res || !P; $('btn-csv').disabled = !res;
+  if (!box || STEP !== 7) return;
+  if (!P || typeof P.render !== 'function') { box.innerHTML = '<div class="empty">The report module did not load, so the deck cannot be drawn. Reload the page.</div>'; return; }
+  if (!res) { box.innerHTML = '<div class="empty">The deck appears once the model has run with capital invested.</div>'; return; }
+  if (!$('pf-deck-css') && typeof P.css === 'function') { var st = document.createElement('style'); st.id = 'pf-deck-css'; st.textContent = P.css(); document.head.appendChild(st); }
+  box.style.setProperty('--pf-scale', String(Math.max(0.2, Math.min(1, ((box.clientWidth || 700) - 32) / 960))));
+  try { box.innerHTML = P.render(res, brandNow(), deckOpts()) || '<div class="empty">The deck could not be drawn from this result.</div>'; }
+  catch (e) { box.innerHTML = '<div class="empty">The deck could not be drawn: ' + esc(e && e.message) + '</div>'; }
+}
+function printDeck() {
+  var P = root.OmegaProformaReport, res = RES && RES.proforma;
+  if (!res || !P) { toast('The deck is drawn from the model; run it first.'); return; }
+  var ok = false;
+  try { ok = P.print(res, brandNow(), deckOpts()) !== false; } catch (e) { ok = false; }
+  if (!ok) toast('The browser blocked the print window. Allow pop-ups for this site and try again.', 5000);
+}
+function csv() {
+  var res = RES && RES.proforma; if (!res) return;
+  var cols = [['year', 'Year'], ['revenue', 'Total revenue'], ['otherRevenue', 'Site revenue'], ['opex', 'Operating expenses'], ['ebitda', 'EBITDA'],
+    ['refreshCapex', 'GPU refresh capex'], ['replacementCapex', 'Replacement capex'], ['interest', 'Interest'], ['principal', 'Principal'], ['debtService', 'Debt service'],
+    ['depreciationFed', 'Depreciation, federal'], ['stateTax', 'State income tax'], ['fedTax', 'Federal income tax'], ['itc', 'ITC'],
+    ['preTaxCash', 'Pre-tax cash flow'], ['afterTaxCash', 'After-tax cash flow'], ['cumulativeAfterTax', 'Cumulative after-tax cash flow']];
+  function cell(v) { var s = v == null ? '' : typeof v === 'number' ? String(Math.round(v * 100) / 100) : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  var lines = [cols.map(function (c) { return cell(c[1]); }).join(',')];
+  lines.push(['0'].concat(cols.slice(1).map(function (c) { return c[0] === 'afterTaxCash' || c[0] === 'cumulativeAfterTax' ? cell(res.year0.afterTaxCash) : ''; })).join(','));
+  res.rows.forEach(function (r) { lines.push(cols.map(function (c) { return cell(r[c[0]]); }).join(',')); });
+  lines.push('');
+  RES.schedule.revenue.concat(RES.schedule.opex).forEach(function (l) { lines.push([cell(l.label)].concat(l.schedule.map(cell)).join(',')); });
+  var blob = new Blob([lines.join('\n')], { type: 'text/csv' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = (String(getPath(IN, 'site.name') || 'compute-site').replace(/[^\w-]+/g, '-') + '-pro-forma.csv'); a.click();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 2000);
+}
+
+/* ── saved scenarios ─────────────────────────────────────────────────── */
+function paintSaved() {
+  var sel = $('scen'), h = '<option value="">Saved scenarios…</option>';
+  STORE.scenarios.forEach(function (s, i) {
+    h += '<option value="' + i + '"' + (s.id === CUR_ID ? ' selected' : '') + '>' + esc(s.name) + (s.headline && fin(s.headline.irr) ? ' · ' + pct(s.headline.irr, 1) : '') + '</option>';
+  });
+  sel.innerHTML = h;
+  var c = $('compare');
+  if (!STORE.scenarios.length) { c.innerHTML = '<p class="card-note">Save a scenario (the button at the top) to compare sizes, schedules and deals side by side.</p>'; return; }
+  var t = '<div class="tw"><table class="dt"><thead><tr><th>Scenario</th><th>Structure</th><th>Pods</th><th>Battery</th><th>Charging</th><th>Peak / limit</th><th>Screen</th><th>IRR</th><th>NPV</th><th>Capital</th></tr></thead><tbody>';
+  STORE.scenarios.forEach(function (s, i) {
+    var x = s.headline || {};
+    t += '<tr' + (s.id === CUR_ID ? ' class="base"' : '') + '><td><button type="button" class="btn-t" data-act="load-scen" data-i="' + i + '">' + esc(s.name) + '</button></td><td>' + esc(x.structure || '') +
+      '</td><td>' + esc(x.pods == null ? '' : x.pods) + '</td><td>' + esc(x.battery || 'none') + '</td><td>' + esc(x.charging || '') + '</td><td>' + esc(x.peak || '') + '</td><td>' + esc(x.act || '') +
+      '</td><td>' + esc(fin(x.irr) ? pct(x.irr, 1) : 'n/a') + '</td><td>' + esc(fin(x.npv) ? moneyShort(x.npv) : '—') + '</td><td>' + esc(fin(x.capital) ? moneyShort(x.capital) : '—') + '</td></tr>';
+  });
+  c.innerHTML = t + '</tbody></table></div>';
+}
+function save() {
+  if (!RES) { toast('Run the model first — a scenario keeps its headline.'); return; }
+  var c = collect(); if (c.error) { toast(c.error); return; }
+  var input = c.site; if (input.load && input.load.type === 'interval') input.load = { type: 'interval', unit: input.load.unit };
+  var pf = RES.proforma, name = String(getPath(IN, 'site.name') || ('ZIP ' + RES.site.zip)).slice(0, 120);
+  var rec = { id: CUR_ID || ('s' + Date.now().toString(36)), name: name, input: input, ui: { loadMode: UI.loadMode, debt: UI.debt }, at: new Date().toISOString(),
+    headline: { structure: RES.structure.label, pods: RES.compute.pods, battery: RES.battery.kwh ? RES.battery.kw + ' kW / ' + RES.battery.kwh + ' kWh' : '',
+      charging: RES.ev.ports + ' × ' + RES.ev.kwPerPort + ' kW, ' + (RES.ev.managed ? 'managed' : 'unmanaged'), peak: Math.round(RES.balance.peakKw) + ' / ' + Math.round(RES.balance.limitKw) + ' kW',
+      act: RES.verdict.act, irr: pf ? pf.metrics.afterTaxIrr : null, npv: pf ? pf.metrics.npv : (RES.lease && RES.lease.npv), capital: pf ? pf.capex.total : 0 } };
+  CUR_ID = rec.id;
+  STORE.scenarios = [rec].concat(STORE.scenarios.filter(function (s) { return s.id !== rec.id; })).slice(0, MAX_SAVED);
+  if (ORG) store(MIRROR + ORG, STORE);
+  paintSaved();
+  $('savemsg').textContent = 'Saving…';
+  if (!(DB && ORG && root.OMEGATools && OMEGATools.saveToolData)) { $('savemsg').textContent = 'Saved on this device'; return; }
+  OMEGATools.saveToolData(DB, firebase, ORG, TOOL_KEY, STORE).then(function () {
+    $('savemsg').textContent = 'Saved to your workspace' + (UI.loadMode === 'interval' ? ' (attach the interval file again to re-run)' : '');
+  }, function () { $('savemsg').textContent = 'Saved on this device; the workspace refused it'; });
+}
+function loadScenario(i) {
+  var s = STORE.scenarios[i]; if (!s) return;
+  CUR_ID = s.id; IN = clone(s.input || {}); UI.loadMode = (s.ui && s.ui.loadMode) || (IN.load && IN.load.type) || 'profile'; UI.debt = !!(s.ui && s.ui.debt);
+  var L = IN.load || {};
+  if (L.type === 'bills') { $('bills').innerHTML = ''; (L.bills || []).forEach(billRow); }
+  if (L.type === 'profile' && L.annualKwh != null) IN._annualKwh = L.annualKwh;
+  if (L.type === 'interval') { INTERVAL = null; $('fileinfo').textContent = 'Attach the interval file again to re-run this scenario.'; }
+  $('urdb').value = IN.tariff && IN.tariff.urdb ? JSON.stringify(IN.tariff.urdb) : '';
+  if (IN.tariff) delete IN.tariff.urdb;
+  delete IN.load;
+  SWEEP = null; renderSweep();
+  paintForm(); paintSaved(); changed('load');
+}
+
+/* ── URL hand-off (Site Map's Compute › Site Screen) ─────────────────── */
+function prefill() {
+  var q = {}; (location.search || '').replace(/^\?/, '').split('&').forEach(function (p) {
+    if (!p) return; var a = p.split('='); try { q[decodeURIComponent(a[0])] = decodeURIComponent((a[1] || '').replace(/\+/g, ' ')); } catch (e) {}
+  });
+  var map = { name: 'site.name', zip: 'site.zip', city: 'site.city', host: 'site.host', street: 'site.street', utility: 'site.utility',
+    kw: 'service.kw', amps: 'service.amps', volts: 'service.volts', ports: 'ev.ports', portkw: 'ev.kwPerPort', pods: 'compute.pods',
+    bkw: 'battery.kw', bkwh: 'battery.kwh', solar: 'solar.kwdc', annualKwh: '_annualKwh' };
+  var any = false;
+  Object.keys(map).forEach(function (k) {
+    if (q[k] == null || q[k] === '') return;
+    var numeric = !/^(name|zip|city|host|street|utility)$/.test(k), v = numeric ? Number(q[k]) : String(q[k]).slice(0, 120);
+    if (numeric && !isFinite(v)) return;
+    setPath(IN, map[k], v); any = true;
+  });
+  if (q.hostType && /^(multifamily|commercial|retail|industrial)$/.test(q.hostType)) setPath(IN, 'site.hostType', q.hostType);
+  if (q.gpu && /^(rtxpro6000|h200|b300|custom)$/.test(q.gpu)) setPath(IN, 'compute.gpuClass', q.gpu);
+  if (q.pattern && /^(overnight|workplace|retail|fleet|custom)$/.test(q.pattern)) setPath(IN, 'ev.pattern', q.pattern);
+  return any;
+}
+function example() {
+  IN = { site: { name: 'Example multifamily site (illustrative)', host: 'Example apartments', city: 'Austin', zip: '78701', hostType: 'multifamily' },
+         service: { amps: 800, volts: 480 }, ev: { ports: 8 }, compute: { pods: 1 }, deal: { structure: 'infra' } };
+  UI.loadMode = 'profile'; CUR_ID = null; paintForm(); changed('site.zip');
+  toast('An illustrative site: a typical multifamily load on an 800 A service. Replace it with your own.');
+}
+
+/* ── wiring ──────────────────────────────────────────────────────────── */
+document.addEventListener('input', function (e) { if (e.target.getAttribute && e.target.getAttribute('data-path') && e.target.tagName !== 'SELECT' && e.target.type !== 'checkbox') onField(e.target); else if (closest(e.target, '#bills')) changed('load'); });
+document.addEventListener('change', function (e) {
+  var t = e.target;
+  if (t.getAttribute && t.getAttribute('data-path') && (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'month')) onField(t);
+  if (t.id === 'iunit') changed('load');
+  if (t.id === 'urdb') changed('tariff');
+});
+document.addEventListener('click', function (e) {
+  var sg = closest(e.target, '[data-seg] [data-val]');
+  if (sg) { setSeg(closest(sg, '[data-seg]').getAttribute('data-seg'), sg.getAttribute('data-val')); return; }
+  var lm = closest(e.target, '[data-mode]'); if (lm) { setLoadMode(lm.getAttribute('data-mode')); return; }
+  var db = closest(e.target, '[data-debt]'); if (db) { setDebt(db.getAttribute('data-debt') === '1'); return; }
+  var st = closest(e.target, '#stepper [data-step]'); if (st) { showStep(Number(st.getAttribute('data-step'))); return; }
+  var go = closest(e.target, '[data-go]'); if (go) { showStep(Number(go.getAttribute('data-go'))); return; }
+  var dy = closest(e.target, '[data-day]'); if (dy) { UI.day = dy.getAttribute('data-day'); renderScreen(); return; }
+  var b = closest(e.target, '[data-act]'); if (!b) return;
+  var act = b.getAttribute('data-act');
+  if (act === 'save') save();
+  else if (act === 'example') example();
+  else if (act === 'optimize') optimize();
+  else if (act === 'retry') runModel();
+  else if (act === 'print') printDeck();
+  else if (act === 'csv') csv();
+  else if (act === 'prev') showStep(STEP - 1);
+  else if (act === 'next') showStep(STEP + 1);
+  else if (act === 'add-bill') { if ($('bills').children.length < 24) billRow({}); }
+  else if (act === 'del-bill') { var tr = closest(b, 'tr'); if (tr) tr.parentNode.removeChild(tr); changed('load'); }
+  else if (act === 'fill-12') fillMonths(12);
+  else if (act === 'fill-24') fillMonths(24);
+  else if (act === 'paste') pasteBills();
+  else if (act === 'load-scen') loadScenario(Number(b.getAttribute('data-i')));
+  else if (act === 'mix') {
+    setPath(IN, 'compute.tiers.offtake.sharePct', 40); setPath(IN, 'compute.tiers.edge.sharePct', 30); setPath(IN, 'compute.tiers.spot.sharePct', 30);
+    paintForm(); changed('compute.tiers');
+  } else if (act === 'use-size') {
+    setPath(IN, 'compute.pods', Number(b.getAttribute('data-pods')));
+    var bk = Number(b.getAttribute('data-kw')), bh = Number(b.getAttribute('data-kwh'));
+    setPath(IN, 'battery.kw', bk > 0 ? bk : undefined); setPath(IN, 'battery.kwh', bh > 0 ? bh : undefined);
+    paintForm(); changed('compute.pods'); if (SWEEP) { SWEEP.stale = false; renderSweep(); }
+    toast('Size applied: ' + b.getAttribute('data-pods') + ' pod(s)' + (bh > 0 ? ' and a ' + bk + ' kW / ' + bh + ' kWh battery' : ', no battery') + '.');
+  }
+});
+$('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
+$('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });
+window.addEventListener('resize', function () { if (RES) { clearTimeout(window._rz); window._rz = setTimeout(function () { renderScreen(); if (RES.proforma) drawCash(RES.proforma); renderDeck(); }, 200); } });
+
+function onSignedIn(u) {
+  $('who').textContent = u.email || '';
+  ORG = (root.OMEGATools && OMEGATools.orgFromUrl) ? OMEGATools.orgFromUrl(u.email) : String(u.email || '').toLowerCase().split('@')[1];
+  var local = ORG ? store(MIRROR + ORG) : null;
+  if (local && local.v === 1 && Array.isArray(local.scenarios)) STORE = { v: 1, scenarios: local.scenarios.slice(0, MAX_SAVED) };
+  paintSaved();
+  api({ action: 'options' }).then(function (j) {
+    OPTS = j.options;
+    var sel = $('i-mkt'); (OPTS.markets || []).forEach(function (m) { var o = document.createElement('option'); o.value = m.key; o.textContent = m.name; sel.appendChild(o); });
+    paintForm();
+    if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
+    if (prefill()) { paintForm(); changed('site.zip'); }
+  }, function (e) {
+    if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
+    $('notice').innerHTML = '<div class="banner ' + (e.status === 403 ? 'bad' : 'warn') + '"><div>' + esc(e.message) + '</div>' +
+      (e.status === 403 ? '<a class="btn btn-p btn-sm" href="/workspace#module-compute">See Omega Compute</a>' : '') + '</div>';
+  });
+  api({ action: 'context' }).then(function (j) { CTX.brand = j.brand || null; if (STEP === 7) renderDeck(); }, function () {});
+  if (DB && ORG && root.OMEGATools && OMEGATools.loadToolData) {
+    OMEGATools.loadToolData(DB, ORG, TOOL_KEY).then(function (doc) {
+      var d = doc && doc.data;
+      if (d && d.v === 1 && Array.isArray(d.scenarios)) {
+        var seen = {}, merged = [];
+        d.scenarios.concat(STORE.scenarios).forEach(function (s) { if (s && s.id && !seen[s.id]) { seen[s.id] = true; merged.push(s); } });
+        merged.sort(function (a, b) { return String(b.at).localeCompare(String(a.at)); });
+        STORE = { v: 1, scenarios: merged.slice(0, MAX_SAVED) }; paintSaved();
+      }
+    }, function () {});
+  }
+}
+function startAuth() {
+  var cfg = root.CLEARSKY_CONFIG || {};
+  if (!root.firebase || !firebase.initializeApp) { $('notice').innerHTML = '<div class="banner bad"><div>The sign-in service did not load. Check your connection and reload the page.</div></div>'; return; }
+  try { if (!firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg); } catch (e) {}
+  var AUTH;
+  try { AUTH = firebase.auth(); } catch (e) { return; }
+  try { DB = firebase.firestore(); } catch (e) { DB = null; }
+  var wait = null;
+  AUTH.onAuthStateChanged(function (u) {
+    if (u) { if (wait) { clearInterval(wait); wait = null; } if (ME && ME.uid === u.uid) return; ME = u; onSignedIn(u); return; }
+    if (ME || wait) return;
+    var tries = (root.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession()) ? 20 : 4;
+    wait = setInterval(function () {
+      if (AUTH.currentUser) { clearInterval(wait); wait = null; return; }
+      if (--tries <= 0) {
+        clearInterval(wait); wait = null;
+        if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
+        $('notice').innerHTML = '<div class="banner info"><div><b>You are signed out.</b> The model runs behind your account.</div><a class="btn btn-p btn-sm" href="/">Sign in</a></div>';
+      }
+    }, 400);
+  });
+}
+var hs = /^#step-([1-7])$/.exec(location.hash || '');
+paintForm(); renderRail(); paintSaved(); showStep(hs ? +hs[1] : 1);
+startAuth();
+})(window);
+</script>
+</body>
+</html>

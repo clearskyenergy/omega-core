@@ -118,6 +118,11 @@
       file:'/vpp-earnings.html', badge:'new', tier:TIER.ALL, savesData:true,
       icon:'M13 2L4 14h7l-1 8 9-12h-7z' },
 
+    { key:'computeproforma', name:'Compute Site Pro Forma', category:'finance',
+      desc:'GPU pods beside EV charging, a battery and the building on one existing service: hourly load balance, sizing and the investor IRR.',
+      file:'/compute-proforma.html', badge:'new', tier:TIER.STANDARD, savesData:true,
+      icon:'M4 4h16v6H4zM4 14h16v6H4zM8 7h.01M8 17h.01M13 3l-2 8h4l-2 10' },
+
     { key:'isocalc', name:'BESS ISO Calculator', category:'finance',
       desc:'Annual FTM/BTM revenue across PJM, ERCOT, CAISO & every ISO — size by MW, auto-MWh.',
       file:'/bess-iso-calculator.html', badge:'new', tier:TIER.STANDARD,

@@ -173749,7 +173749,7 @@ if (root.console && console.info) {
   var PLAN = {
     site:   ['@site-setup', '@trace-boundary', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
     design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', '@fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
-    size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
+    size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-site-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
   /* ── OMEGA DESIGN'S DRAWING TOOLS LIVE ON DRAW, ON EVERY PLAN ────────
      Trace Boundary, Fence & Tie and Move System are Omega Design (lite)
@@ -177886,6 +177886,244 @@ root.OmegaEvRelay={ relayAll:relayAll, relayOne:relayOne };
   }
 
   root.OmegaLeasePanel = { open: open, state: function () { return S; }, site: siteOf, inject: inject };
+  if (typeof document === 'undefined') { /* node */ }
+  else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})(typeof window !== 'undefined' ? window : globalThis);
+</script>
+<script>
+/* ══════════════════════════════════════════════════════════════════════
+ *  OMEGA PATCH — EDGE SITE SCREEN (Compute › Size, 2026-09-30)
+ *  ---------------------------------------------------------------------
+ *  Omega Compute is "data center campus design, power and load
+ *  screening" (the October 2026 price book). The Load Screen beside this
+ *  button screens a CAMPUS: megawatts of IT load against a substation
+ *  ceiling, generation, gas and fibre. It cannot answer the edge
+ *  question — can this BUILDING's existing service carry GPU compute
+ *  pods beside its EV chargers, a battery and its own load? — which is
+ *  the metro-edge model (inference pods on power already built for EV
+ *  charging; Laitent's "one panel, two revenue streams").
+ *
+ *  This screens it hour by hour, on the server: POST /api/compute-proforma
+ *  { action:'screen' } (api/_lib/compute-site.js, the same engine as the
+ *  Compute Site Pro Forma). Nothing here computes a load, a bill or a
+ *  price; it gathers what the drawing already knows, lets the user
+ *  correct it, posts, and prints the verdict with the next gate, then
+ *  hands the site to /compute-proforma.html for sizing and the IRR.
+ *
+ *  WHAT IT READS, AND WHY IT ASKS
+ *  The project has no structured service rating or ZIP: the address is
+ *  one free-text line and the service lives in the BTM panel's inputs or
+ *  the intake wizard. So every field is pre-filled from the best source
+ *  the session has (named under the form) and stays editable:
+ *    ZIP       OmegaSiteContext.get().zip, the address text, the bill
+ *    service   #bm-service-amps / #bm-service-volts, else the intake's
+ *              p0_service_amps / p0_service_v
+ *    chargers  evChargerTotals() — placed EV catalog shapes and guided
+ *              chargers (future stalls are not connected load)
+ *    battery   omegaBessFleet();  solar  omegaSolarKwDc()
+ *    load      the Battery Sizer's 12 months of bills, else the 8760's
+ *              or the bill's annual kWh, else a typical load (labelled)
+ *  Registered to Omega Compute by id (api/_lib/modules.js IDS.compute);
+ *  the endpoint refuses a workspace without it, whatever the ribbon shows.
+ * ══════════════════════════════════════════════════════════════════════ */
+(function (root) {
+  'use strict';
+  var TAG = '[SiteScreen]', ID = 'omega-sitescreen', ENDPOINT = '/api/compute-proforma';
+  var IN = 'width:100%;background:var(--navy);border:1px solid var(--border);color:var(--text);'
+    + 'border-radius:6px;padding:7px 8px;font-size:12.5px;font-family:inherit;box-sizing:border-box';
+  var LB = 'font-size:10px;color:#9A9A9A;text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:4px';
+  var LAST = null;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function num(v) { var n = Number(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')); return String(v == null ? '' : v).trim() !== '' && isFinite(n) ? n : null; }
+  function kw(v) { return v == null || !isFinite(v) ? '—' : Math.round(v).toLocaleString() + ' kW'; }
+  function money(v) { return v == null || !isFinite(v) ? '—' : (v < 0 ? '−$' : '$') + Math.abs(Math.round(v)).toLocaleString(); }
+  function val(id) { var el = document.getElementById(id); return el ? el.value : ''; }
+  function tryCall(fn) { try { return fn(); } catch (e) { return null; } }
+
+  /* the intake wizard's saved scenario, read the way it stores it */
+  function intake() {
+    return tryCall(function () {
+      var st = JSON.parse(localStorage.getItem('omega.vw.' + (root._projectId || '__unsaved__')) || 'null');
+      return st && st.scenarios && st.scenarios[st.activeId] && st.scenarios[st.activeId].data;
+    }) || {};
+  }
+
+  /* What the drawing and the session already know, and where each came from. */
+  function gather() {
+    var f = {}, from = [], vw = intake(), sc = tryCall(function () { return root.OmegaSiteContext && root.OmegaSiteContext.get(); }) || {};
+    f.name = val('pname') || 'Site screen';
+    var addr = val('addr-in');
+    f.zip = sc.zip || (tryCall(function () { return typeof _ixSiteLocation === 'function' ? _ixSiteLocation(addr).zip : ''; }) || '') ||
+            (root._fomParsedBill && root._fomParsedBill.zip) || '';
+    if (f.zip) from.push('ZIP from ' + (sc.zip ? 'the geocoded address' : 'the address or the bill'));
+    var amps = num(val('bm-service-amps')), volts = num(val('bm-service-volts'));
+    if (amps) from.push('service from the BTM panel');
+    else if (num(vw.p0_service_amps)) {
+      amps = num(vw.p0_service_amps);
+      var sv = String(vw.p0_service_v || '');
+      volts = /480/.test(sv) ? 480 : /208/.test(sv) ? 208 : /4160/.test(sv) ? 4160 : volts;
+      from.push('service from the intake');
+    }
+    f.amps = amps; f.volts = volts || 480;
+    var ev = tryCall(function () { return typeof evChargerTotals === 'function' ? evChargerTotals() : null; });
+    f.ports = ev && ev.ports ? ev.ports : 0;
+    f.portKw = ev && ev.ports ? Math.round((num(ev.dcfcKw) + num(ev.l2Kw)) / ev.ports * 10) / 10 : 11.5;
+    if (f.ports) from.push(f.ports + ' charger port(s) on the drawing');
+    var b = tryCall(function () { return typeof omegaBessFleet === 'function' ? omegaBessFleet() : null; });
+    f.bkw = b && b.kw > 0 ? Math.round(b.kw) : null; f.bkwh = b && b.kwh > 0 ? Math.round(b.kwh) : null;
+    if (f.bkw) from.push('battery ' + (b.source === 'configured' ? 'as configured' : 'on the drawing'));
+    var pv = tryCall(function () { return typeof omegaSolarKwDc === 'function' ? omegaSolarKwDc() : 0; });
+    f.solar = pv > 0 ? Math.round(pv) : null;
+    var pods = tryCall(function () { return root.OmegaComputeCost && root.OmegaComputeCost.pods(); });
+    f.pods = pods && pods.n > 0 ? pods.n : 1;
+    f.bills = null; f.annualKwh = null;
+    var rows = tryCall(function () { return root.OmegaBessSizer && root.OmegaBessSizer.state && root.OmegaBessSizer.state.rows; });
+    if (Array.isArray(rows)) {
+      var bills = [];
+      rows.forEach(function (r, i) {
+        var k = num(r && r.kwh), d = num(r && r.demandKw), m = r && typeof r.month === 'number' && r.month >= 0 && r.month <= 11 ? r.month : i;
+        if (k != null || d != null) bills.push({ month: m, kwh: k, peakKw: d });
+      });
+      if (bills.length >= 3 && bills.every(function (x) { return x.kwh != null; })) { f.bills = bills; from.push(bills.length + ' months of bills from the Battery Sizer'); }
+    }
+    if (!f.bills) {
+      f.annualKwh = (root._bill8760 && root._bill8760.annualKwh) || (root.S && root.S.loadProfile && root.S.loadProfile.annualKwh) ||
+        (root._fomLastResult && root._fomLastResult.totalAnnualKwh) || num(vw.p0_annual_kwh) || null;
+      if (f.annualKwh) from.push('annual kWh from the imported load');
+    }
+    f.from = from;
+    return f;
+  }
+
+  function field(id, label, value, hint, type) {
+    return '<div style="flex:1;min-width:120px"><label style="' + LB + '" for="' + id + '">' + esc(label) + '</label>'
+      + '<input id="' + id + '" type="' + (type || 'text') + '" inputmode="decimal" style="' + IN + '" value="' + esc(value == null ? '' : value) + '"'
+      + (hint ? ' placeholder="' + esc(hint) + '"' : '') + '></div>';
+  }
+  function select(id, label, opts, cur) {
+    return '<div style="flex:1;min-width:120px"><label style="' + LB + '" for="' + id + '">' + esc(label) + '</label><select id="' + id + '" style="' + IN + '">'
+      + opts.map(function (o) { return '<option value="' + esc(o[0]) + '"' + (String(o[0]) === String(cur) ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div>';
+  }
+  function row() { return '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">' + Array.prototype.slice.call(arguments).join('') + '</div>'; }
+
+  function open() {
+    var f = gather(), old = document.getElementById(ID);
+    if (old && old.parentNode) old.parentNode.removeChild(old);
+    var w = document.createElement('div');
+    w.id = ID;
+    w.style.cssText = 'position:fixed;inset:0;z-index:9200;background:var(--scrim);display:flex;align-items:center;justify-content:center;padding:20px';
+    w.innerHTML = '<div role="dialog" aria-modal="true" aria-labelledby="ss-h" style="background:var(--bg);border:1px solid var(--border);border-radius:12px;padding:22px;max-width:640px;width:100%;max-height:90vh;overflow:auto;font-family:inherit">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center"><div id="ss-h" style="font-size:17px;font-weight:700;color:var(--text)">Edge site screen</div>'
+      + '<button data-a="x" aria-label="Close" style="background:none;border:none;color:var(--sub);font-size:20px;cursor:pointer;line-height:1">×</button></div>'
+      + '<div style="font-size:11.5px;color:var(--sub);margin:4px 0 6px;line-height:1.5">Can this building\'s existing service carry GPU compute pods beside its EV chargers, a battery and its own load? '
+      + 'Every hour of a year, on the server. Correct anything the drawing does not know.</div>'
+      + row(field('ss-zip', 'ZIP', f.zip, '78701'), select('ss-host', 'Host', [['multifamily', 'Multifamily'], ['commercial', 'Office'], ['retail', 'Retail'], ['industrial', 'Industrial']], 'multifamily'),
+            field('ss-amps', 'Service (A)', f.amps, '800'), select('ss-volts', 'Voltage', [[208, '208 V'], [240, '240 V'], [480, '480 V'], [600, '600 V'], [4160, '4,160 V']], f.volts))
+      + row(field('ss-ports', 'EV ports', f.ports, '8'), field('ss-portkw', 'kW per port', f.portKw, '11.5'),
+            select('ss-managed', 'Charging', [['1', 'Managed'], ['0', 'Unmanaged']], '1'), select('ss-pattern', 'Who charges', [['overnight', 'Residents overnight'], ['workplace', 'Workplace'], ['retail', 'Retail / public'], ['fleet', 'Fleet depot']], 'overnight'))
+      + row(select('ss-gpu', 'GPU class', [['h200', 'H200 (48 / pod)'], ['rtxpro6000', 'RTX PRO 6000 (48 / pod)'], ['b300', 'B300 (32 / pod)']], 'h200'), field('ss-pods', 'Pods', f.pods, '1'),
+            field('ss-bkw', 'Battery kW', f.bkw, 'none'), field('ss-bkwh', 'Battery kWh', f.bkwh, 'none'))
+      + row(field('ss-kwh', f.bills ? 'Load: ' + f.bills.length + ' months of bills' : 'Building kWh a year', f.bills ? '' : f.annualKwh, f.bills ? 'from the Battery Sizer' : 'typical if blank'), field('ss-solar', 'Solar kW-dc', f.solar, 'none'))
+      + '<div style="font-size:10.5px;color:var(--sub);margin-top:8px;line-height:1.5">' + (f.from.length ? 'Filled from: ' + esc(f.from.join('; ')) + '.' : 'Nothing on the drawing yet: enter the site.') + '</div>'
+      + '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap"><button data-a="run" style="background:var(--purple,#7C3AED);color:#fff;border:0;border-radius:7px;padding:9px 14px;font-weight:700;cursor:pointer">Screen this site</button>'
+      + '<a data-a="pf" href="#" target="_blank" rel="noopener" style="border:1px solid var(--border);color:var(--text);border-radius:7px;padding:9px 14px;font-weight:600;text-decoration:none">Open the Compute Site Pro Forma ↗</a></div>'
+      + '<div id="ss-out" style="margin-top:14px"></div></div>';
+    document.body.appendChild(w);
+    LAST = f;
+    w.addEventListener('click', function (e) {
+      var a = e.target && e.target.getAttribute && e.target.getAttribute('data-a');
+      if (e.target === w || a === 'x') { w.parentNode.removeChild(w); return; }
+      if (a === 'run') run();
+      if (a === 'pf') e.target.href = proformaLink();
+    });
+    w.addEventListener('keydown', function (e) { if (e.key === 'Escape' && w.parentNode) w.parentNode.removeChild(w); });
+    return true;
+  }
+
+  function site() {
+    var s = { site: { name: LAST ? LAST.name : 'Site screen', zip: val('ss-zip').trim(), hostType: val('ss-host') },
+      service: { amps: num(val('ss-amps')), volts: num(val('ss-volts')) },
+      ev: { ports: num(val('ss-ports')) || 0, kwPerPort: num(val('ss-portkw')), managed: val('ss-managed') === '1', pattern: val('ss-pattern') },
+      compute: { gpuClass: val('ss-gpu'), pods: num(val('ss-pods')) == null ? 1 : num(val('ss-pods')) },
+      battery: { kw: num(val('ss-bkw')), kwh: num(val('ss-bkwh')) }, solar: { kwdc: num(val('ss-solar')) } };
+    if (LAST && LAST.bills) s.load = { type: 'bills', bills: LAST.bills };
+    else s.load = { type: 'profile', annualKwh: num(val('ss-kwh')) };
+    return s;
+  }
+  function proformaLink() {
+    var s = site(), q = [];
+    function p(k, v) { if (v != null && v !== '') q.push(k + '=' + encodeURIComponent(v)); }
+    p('name', s.site.name); p('zip', s.site.zip); p('hostType', s.site.hostType); p('amps', s.service.amps); p('volts', s.service.volts);
+    p('ports', s.ev.ports); p('portkw', s.ev.kwPerPort); p('pattern', s.ev.pattern); p('gpu', s.compute.gpuClass); p('pods', s.compute.pods);
+    p('bkw', s.battery.kw); p('bkwh', s.battery.kwh); p('solar', s.solar.kwdc); p('annualKwh', s.load.annualKwh);
+    return '/compute-proforma.html?' + q.join('&');
+  }
+  function token() {
+    var u = null;
+    try { u = root._currentUser || (root.firebase && firebase.auth().currentUser); } catch (e) {}
+    return u ? u.getIdToken() : Promise.reject(new Error('Sign in to screen the site — it runs on the server, behind your account.'));
+  }
+  function run() {
+    var out = document.getElementById('ss-out');
+    if (!/^\d{5}$/.test(val('ss-zip').trim())) { out.innerHTML = '<div style="color:#F87171;font-size:12px">A five-digit ZIP is needed.</div>'; return; }
+    if (!num(val('ss-amps'))) { out.innerHTML = '<div style="color:#F87171;font-size:12px">The service rating (amps) is needed: it is on the main switchboard or the utility\'s service record.</div>'; return; }
+    out.innerHTML = '<div style="font-size:12px;color:var(--sub)">Screening 8,760 hours…</div>';
+    token().then(function (tok) {
+      return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify({ action: 'screen', site: site() }) });
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t); } catch (e) {}
+        if (r.status === 403) throw new Error((j && j.error) || 'Your plan does not include Omega Compute.');
+        if (!r.ok || !j || !j.ok) throw new Error(j && j.errors && j.errors.length ? j.errors.map(function (x) { return x.message; }).join(' ') : (j && j.error) || 'The screen did not run (' + r.status + ').');
+        return j.result;
+      });
+    }).then(function (R) { out.innerHTML = html(R); }, function (e) {
+      out.innerHTML = '<div style="color:#F87171;font-size:12px;line-height:1.5">' + esc(e.message) + '</div>';
+    });
+  }
+  function line(k, v, note) {
+    return '<div style="display:flex;justify-content:space-between;gap:14px;padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;color:var(--text)"><span>' + esc(k)
+      + (note ? '<span style="display:block;font-size:10px;color:var(--sub)">' + esc(note) + '</span>' : '') + '</span><b style="font-family:\'IBM Plex Mono\',monospace;white-space:nowrap">' + v + '</b></div>';
+  }
+  function html(R) {
+    var v = R.verdict, col = { ok: '#4ADE80', warn: '#F59E0B', bad: '#F87171' }[v.tone] || 'var(--text)', B = R.balance;
+    return '<div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:10px 0;border-bottom:1px solid var(--border)">'
+      + '<span style="font-size:15px;font-weight:700;color:var(--text)">' + esc(v.label) + '</span><span style="font:800 12px \'IBM Plex Mono\',monospace;letter-spacing:1.2px;color:' + col + '">' + esc(v.act) + '</span></div>'
+      + line('Next gate', '<span style="font-weight:500;white-space:normal">' + esc(v.gate) + '</span>')
+      + line('Service limit', kw(B.limitKw), R.service.kw.toLocaleString() + ' kW at ' + R.service.loadingPct + '% continuous')
+      + line('Peak at the meter', kw(B.peakKw), 'building, compute, charging and battery, hour by hour')
+      + line('Firm peak', kw(B.firmPeakKw), 'the building and the firm compute')
+      + line('Every charger at full power + firm load', kw(B.necNameplateKw), 'NEC 625.42 without load management')
+      + (B.overloadHours ? line('Hours over the service', B.overloadHours.toLocaleString()) : '')
+      + line('Charging not delivered', R.ev.unservedPct + '%')
+      + line(R.compute.gpus + ' ' + R.compute.gpuName + ' GPUs, gross', money(R.compute.revenue.gross) + '/yr', 'planning GPU-hour prices; the operator\'s contract replaces them')
+      + line('On-demand GPU-hours curtailed', R.compute.gpuHours.spotCurtailed.toLocaleString())
+      + line('The project\'s electricity', money(R.bill.incremental) + '/yr', R.tariff.label)
+      + '<div style="font-size:10px;color:var(--sub);margin-top:10px;line-height:1.6">Load: ' + esc(R.load.label) + '. Confidence ' + esc(R.confidence)
+      + '. A screen, not a utility load study. Size it and build the investor case in the Compute Site Pro Forma.</div>';
+  }
+
+  function injectButton() {
+    if (document.getElementById('rb-site-screen')) return true;
+    var body = document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="size"] .rpanel-body');
+    if (!body) return false;
+    var b = document.createElement('button');
+    b.className = 'rbtn'; b.id = 'rb-site-screen';
+    b.title = 'Edge Site Screen — GPU pods beside EV charging, a battery and the building on the existing service, hour by hour, with the next gate';
+    b.onclick = open;
+    b.innerHTML = '<span class="rb-ico" style="color:var(--purple)">▥</span><span class="rb-lbl">Site<br>Screen</span>';
+    var after = document.getElementById('rb-load-screen');
+    if (after && after.parentNode === body) body.insertBefore(b, after.nextSibling); else body.appendChild(b);
+    try { if (root.OmegaMode && root.OmegaMode.keep) root.OmegaMode.keep(/rb-site-screen/); } catch (e) {}
+    return true;
+  }
+  function boot() {
+    var c = 0, iv = setInterval(function () { if (injectButton() || ++c > 40) clearInterval(iv); }, 500);
+    if (root.console) console.info(TAG + ' ready — OmegaSiteScreen.open()');
+  }
+  root.OmegaSiteScreen = { open: open, gather: gather, site: site, link: proformaLink };
   if (typeof document === 'undefined') { /* node */ }
   else if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot);
   else boot();
