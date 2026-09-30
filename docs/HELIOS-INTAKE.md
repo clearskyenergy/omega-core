@@ -36,7 +36,8 @@ for helios").
    only where OMEGA can supply the item), the status block and a message to
    Helios. Everything is editable.
 4. **Previews** Helios's own PDF. `{action:'preview'}` fills the form's
-   AcroForm fields by name (pdf-lib, server side; the same mechanism the EV
+   AcroForm fields by name (pdf-lib, server side, self-hosted under
+   `vendor/pdf-lib/`; the same mechanism the EV
    cost workbook uses for United Illuminating's application), wraps a long
    answer across the printed lines, shrinks the type a step when it must and
    reports an answer that still did not fit. The person sees the form before
@@ -82,6 +83,9 @@ and the server refuses to send. ClearSky's copy goes to `MAIL_NOTIFY`
   does; `omega-ribbon-icons.js` has its icon.
 - `api/_lib/mail.js` `send()` now passes `cc`, `bcc` and `attachments`
   through to nodemailer.
+- `vendor/pdf-lib/1.17.1/` — pdf-lib's single-file build and its MIT licence.
+  One copy, required by a literal path, so the function bundle carries it and
+  the CI unit job, which installs nothing, runs the test.
 
 ## What is not built (honest list)
 

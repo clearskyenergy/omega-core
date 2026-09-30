@@ -1155,7 +1155,8 @@ is the ONE door: `draft` composes the answers with a source under each
 (`api/_lib/helios-intake.js compose()`: read, never invent; a question the
 platform cannot answer stays BLANK, never "Unknown"; a screening figure says
 so in the sentence), `preview` fills Helios's OWN PDF by field name
-(`forms/helios-first-pass.pdf`, pdf-lib server side, as the EV workbook
+(`forms/helios-first-pass.pdf`, pdf-lib server side from `vendor/pdf-lib/`,
+as the EV workbook
 fills United Illuminating's form) and hands it back, `send` stores it under
 `projects/{id}/` in Storage, mails it to Helios with the sender and ClearSky
 in copy (`mail.send` now carries `cc`/`attachments`), attaches a site-map

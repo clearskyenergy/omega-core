@@ -17,7 +17,7 @@
 var assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
 var ROOT = path.join(__dirname, '..', '..');
 var H = require(path.join(ROOT, 'api', '_lib', 'helios-intake.js'));
-var PDF = require('pdf-lib');
+var PDF = H.pdfLib();
 var checks = 0;
 function ok(c, m) { assert.ok(c, m); checks++; }
 function eq(a, b, m) { assert.equal(a, b, m); checks++; }
@@ -46,7 +46,7 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   var doc = await PDF.PDFDocument.load(TEMPLATE);
   var names = doc.getForm().getFields().map(function (f) { return f.getName(); });
   H.expectedFields().forEach(function (n) { ok(names.indexOf(n) >= 0, 'the form carries "' + n + '"'); });
-  eq(doc.getForm().getFields().filter(function (f) { return f.constructor.name === 'PDFCheckBox'; }).length, 12, 'twelve attachment boxes');
+  eq(doc.getForm().getFields().filter(function (f) { return f instanceof PDF.PDFCheckBox; }).length, 12, 'twelve attachment boxes');
   eq(doc.getPageCount(), 5, 'five pages');
 
   /* ── 2 · compose reads, never invents ── */
@@ -111,7 +111,7 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   ok(r10 && r10.truncated && r10.lines === 4, 'an answer past the printed lines is cut and reported');
   var r12 = filled.report.filter(function (x) { return x.question === 'q12'; })[0];
   ok(r12 && !r12.truncated && r12.lines <= 3, 'q12 fits its three lines');
-  var boxes = form.getFields().filter(function (f) { return f.constructor.name === 'PDFCheckBox'; });
+  var boxes = form.getFields().filter(function (f) { return f instanceof PDF.PDFCheckBox; });
   eq(boxes.filter(function (b) { return b.isChecked(); }).length, 5, 'five boxes ticked');
   var byPos = {}; boxes.forEach(function (b) { var rc = b.acroField.getWidgets()[0].getRectangle(); byPos[(rc.x < 200 ? 'L' : 'R') + Math.round(rc.y)] = b.isChecked(); });
   var rows = Object.keys(byPos).map(function (k) { return +k.slice(1); }).filter(function (v, i, a) { return a.indexOf(v) === i; }).sort(function (a, b) { return b - a; });
@@ -240,7 +240,9 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   var icons = require(path.join(ROOT, 'omega-ribbon-icons.js'));
   ok(icons.pathFor('Helios Intake', 'Helios Intake') !== icons.FALLBACK, 'the button has its own icon');
   var pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
-  ok(pkg.dependencies['pdf-lib'], 'pdf-lib is a dependency of the function');
+  ok(!pkg.dependencies['pdf-lib'], 'pdf-lib is vendored, not an npm dependency: the unit job installs nothing');
+  ok(fs.existsSync(path.join(ROOT, 'vendor', 'pdf-lib', '1.17.1', 'pdf-lib.min.js')) && fs.existsSync(path.join(ROOT, 'vendor', 'pdf-lib', '1.17.1', 'LICENSE-pdf-lib')), 'the vendored build and its licence are in the repo');
+  ok(typeof PDF.PDFDocument === 'object' || typeof PDF.PDFDocument === 'function', 'and it loads under Node');
   ok(fs.existsSync(path.join(ROOT, 'forms', 'helios-first-pass.pdf')), 'the blank form is in the repo');
 
   console.log('helios intake: ' + checks + ' checks passed.');

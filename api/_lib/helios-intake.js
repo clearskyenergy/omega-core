@@ -31,6 +31,11 @@
 var fs = require('fs'), path = require('path');
 
 var TEMPLATE_PATH = path.join(__dirname, '..', '..', 'forms', 'helios-first-pass.pdf');
+/* pdf-lib, self-hosted under vendor/ like the scan library (MIT; the
+   licence sits beside it). ONE copy, required by a literal path so the
+   function bundler carries it and the unit tests run with no install —
+   the CI job that runs scripts/tests/t*.js fetches nothing. */
+function pdfLib() { return require('../../vendor/pdf-lib/1.17.1/pdf-lib.min.js'); }
 var TEMPLATE_URL = '/forms/helios-first-pass.pdf';
 
 /* ── the form's fields, by what they answer ─────────────────────────── */
@@ -410,7 +415,7 @@ function templateBytes() {
 
 /* returns { bytes, report } — report says what was written where, and what did not fit */
 function fill(template, draft) {
-  var PDF = require('pdf-lib');
+  var PDF = pdfLib();
   draft = cleanDraft(draft);
   return PDF.PDFDocument.load(template).then(function (doc) {
     return doc.embedFont(PDF.StandardFonts.Helvetica).then(function (helv) {
@@ -453,7 +458,8 @@ function fill(template, draft) {
       Object.keys(STATUS).forEach(function (k) { setFit(STATUS[k], draft.status[k], 9.5, 7); });
 
       /* the attachment boxes, by position */
-      var boxes = form.getFields().filter(function (fl) { return fl.constructor.name === 'PDFCheckBox'; }).map(function (fl) {
+      /* by class, never by constructor name: the vendored build is minified */
+      var boxes = form.getFields().filter(function (fl) { return fl instanceof PDF.PDFCheckBox; }).map(function (fl) {
         var r = fl.acroField.getWidgets()[0].getRectangle(); return { f: fl, x: r.x, y: Math.round(r.y) };
       });
       var rows = []; boxes.forEach(function (b) { if (rows.indexOf(b.y) < 0) rows.push(b.y); }); rows.sort(function (a, b) { return b - a; });
@@ -522,7 +528,7 @@ function emailHtml(esc, o) {
   return html;
 }
 
-module.exports = { compose: compose, cleanFacts: cleanFacts, cleanDraft: cleanDraft, fill: fill, wrap: wrap, templateBytes: templateBytes,
+module.exports = { pdfLib: pdfLib, compose: compose, cleanFacts: cleanFacts, cleanDraft: cleanDraft, fill: fill, wrap: wrap, templateBytes: templateBytes,
   expectedFields: expectedFields, recipients: recipients, emailHtml: emailHtml, fileName: fileName, mdy: mdy,
   QUESTIONS: QUESTIONS, QUESTION_PREFIX: QUESTION_PREFIX, ATTACHMENT_LABEL: ATTACHMENT_LABEL, ATTACHMENTS: ATTACHMENTS, STATUS: STATUS, COVER: COVER,
   TEMPLATE_PATH: TEMPLATE_PATH, TEMPLATE_URL: TEMPLATE_URL };
