@@ -283,7 +283,8 @@ async function run() {
       ok(!/Subscribe|Keep module|\bAsk\b/.test(await page.locator('#omega-package-menu').textContent()), 'none of the retired words');
       await siteintel.getByRole('button', { name: 'Opt in', exact: true }).click();
       await siteintel.locator('.opm-quote').waitFor();
-      ok(/^\$[\d,]+\.\d{2} today \(\d+ of \d+ days left until your billing date, \d{4}-\d{2}-\d{2}\)$/.test(await siteintel.locator('.opm-quote').textContent()), 'the quote is server-priced and prorated to the billing date');
+      /* money() prints a whole-dollar amount without cents ($634), so the cents are optional: on 2026-09-30 the prorated figure was whole and this failed on every branch */
+      ok(/^\$[\d,]+(\.\d{2})? today \(\d+ of \d+ days left until your billing date, \d{4}-\d{2}-\d{2}\)$/.test(await siteintel.locator('.opm-quote').textContent()), 'the quote is server-priced and prorated to the billing date');
       await page.screenshot({ path: path.join(output5, 'editor-subscribe-quote-' + theme + '.png') });
       await siteintel.getByRole('button', { name: 'Opt in and pay' }).click();
       await siteintel.getByRole('button', { name: 'Cancel request' }).waitFor();
