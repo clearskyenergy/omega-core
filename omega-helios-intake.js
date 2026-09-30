@@ -24,6 +24,9 @@
   var API = '/api/helios-intake';
   var HOST_ID = 'helios-modal';
   var draftState = null;   /* the server's draft, kept for the questions and the labels */
+  var opened = null;       /* the draft as first shown, to tell whether anything was typed */
+  var sendId = null;       /* one per dialog: a retried send never mails twice */
+  var sent = false;
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function S_() { return root.S || {}; }
@@ -32,58 +35,121 @@
 
   /* ── the Viability Workflow's answers, read without creating a store ──
      (vwActive() writes a blank scenario when none exists; reading the
-     record directly has no side effect) */
+     record directly has no side effect). The address research travels
+     with the scenario (sc.research), because VW is not a window global. */
+  var SS = ['ss_zoning_prohibited', 'ss_moratorium', 'ss_hoa_restrict', 'ss_height_restrict', 'ss_historic_district', 'ss_overlay_zone',
+    'ss_no_fire_access', 'ss_occupied_setback', 'ss_gas_meter_close', 'ss_sprinkler_req', 'ss_uhf_fails', 'ss_floodplain', 'ss_wetlands',
+    'ss_underground_util', 'ss_soil_contamination', 'ss_noise_ordinance', 'ss_code_no_ess', 'ss_deed_restrict', 'ss_drainage_conflict',
+    'ss_feeder_overload', 'ss_ic_moratorium', 'ss_lease_prohibit', 'ss_other'];
+  var CHECKS = ['p5_zoning_ok', 'p5_flood_ok', 'p5_historic_ok', 'p5_noise_ok', 'ck_title', 'p5_elec', 'p5_bldg', 'p5_fire_perm', 'p5_civil',
+    'p5_stormwater', 'p5_erp', 'p5_haz'];
+  function tsp(key) {
+    var T = root.TX_TSP || {}, t = key && T[key];
+    return t ? { name: t.name, type: t.type } : null;
+  }
   function workflow(pid) {
     try {
       var raw = localStorage.getItem('omega.vw.' + (pid || '__unsaved__'));
       if (!raw) return null;
       var st = JSON.parse(raw) || {};
       var sc = st.scenarios && st.scenarios[st.activeId];
-      var d = (sc && sc.data) || {};
-      var research = (root.VW && root.VW.research) || {};
-      return { owner: d.p0_owner, siteControl: d.p0_site_control, utility: d.p0_utility, flood: d.p0_flood,
-               pathFinal: d.p2_path_final, appStatus: d.p4_app_status, queuePos: d.p4_queue_pos, timeline: d.p4_timeline,
-               ahj: d.p5_ahj, fireDept: d.p5_fire_dept, zoning: d.p5_zoning, notes: d.p5_notes, codDate: d.p8_cod_date,
-               updatedAt: sc ? sc.updatedAt : null, researchUtility: research.utility || null, researchFloodZone: research.floodZone || null };
+      if (!sc) return null;
+      var d = sc.data || {}, research = sc.research || {}, flags = {}, checks = {};
+      SS.forEach(function (k) { if (d[k] === '1' || d[k] === true) flags[k] = true; });
+      CHECKS.forEach(function (k) { if (d[k] === '1' || d[k] === true) checks[k] = true; });
+      var wires = tsp(d.p4_tsp) || tsp(d.p4_utility);
+      return { owner: d.p0_owner, siteControl: d.p0_site_control, utility: d.p0_utility || (tsp(d.p4_utility) ? '' : d.p4_utility), flood: d.p0_flood,
+               pathFinal: d.p2_path_final, appStatus: d.p4_app_status, queuePos: d.p4_queue_pos, timeline: d.p4_timeline, queueRisk: d.p4_queue_risk,
+               ahj: d.p5_ahj, fireDept: d.p5_fire_dept, zoning: d.p5_zoning, notes: d.p5_notes, icNotes: d.p4_notes, ssCustom: d.p5_ss_custom,
+               codDate: d.p8_cod_date, exportMode: d.p4_export, appType: d.p4_app_type, icEntity: d.p4_ic_entity, market: d.p4_market,
+               icStatusErcot: d.p4_ic_status_ercot, poiName: d.p4_poi, substation: d.p4_substation, poiKv: d.p4_poi_kv,
+               gentieMi: d.p4_gentie_mi, gentieKv: d.p4_gentie_kv, tsp: wires,
+               p3Kw: d.p3_kw, p3Kwh: d.p3_kwh, p3Duration: d.p3_duration, proposedKw: d.p4_proposed_kw, proposedKwh: d.p4_proposed_kwh,
+               flags: flags, checks: checks,
+               research: { utility: research.utility || null, floodZone: research.floodZone || null, jurisdiction: research.jurisdiction || null, zoning: research.zoning || null },
+               updatedAt: sc.updatedAt || null };
     } catch (e) { return null; }
+  }
+
+  function localDay() {
+    var t = new Date(), m = t.getMonth() + 1, d = t.getDate();
+    return t.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (d < 10 ? '0' : '') + d;
+  }
+  function inAddress(token, address) {
+    return !!(token && address && new RegExp('(^|[^A-Za-z])' + String(token).replace(/[^A-Za-z .'-]/g, '') + '([^A-Za-z]|$)', 'i').test(address));
   }
 
   /* ── what this session knows: read, never computed here ─────────── */
   function collect() {
-    var S = S_(), pid = root._projectId || null, f = { projectId: pid };
+    var S = S_(), pid = root._projectId || null, f = { projectId: pid, today: localDay() };
     f.name = val('pname'); f.address = val('addr-in');
-    try { var cs = (typeof root.mktSiteCityState === 'function') ? root.mktSiteCityState() : null; if (cs) { f.city = cs.city; f.state = cs.state; } } catch (e) {}
+    /* a city and state only where the ADDRESS says them: the helper also
+       reads a trailing two letters off the project name ("… Energy Co") */
+    try {
+      var cs = (typeof root.mktSiteCityState === 'function') ? root.mktSiteCityState() : null;
+      if (cs) { if (inAddress(cs.city, f.address)) f.city = cs.city; if (inAddress(cs.state, f.address)) f.state = cs.state; }
+    } catch (e) {}
     var D = root._SITE_DATA || {};
     f.site = { county: D.county, state: D.state, zip: D.zip, parcelApn: D.parcelApn, parcelAcres: D.parcelAcres, parcelOwner: D.parcelOwner,
                parcelZoning: D.parcelZoning, parcelSource: D.parcelSource, ahjName: D.ahjName, ahjPermitDays: D.ahjPermitDays };
     f.gridAtlas = D.gridAtlas || null;
     var g = S.grid || {};
     f.grid = { substations: (g.substations || []).slice(0, 3), lines: (g.lines || []).slice(0, 3), ranAt: g.ranAt || null };
+    /* the lookup is on the drawing too; the server reads it off the record
+       when the session has none */
     f.substationLookup = S.substationLookup || null;
     var dr = {}; try { dr = (typeof root.mktDrawingSummary === 'function') ? root.mktDrawingSummary() : {}; } catch (e) { dr = {}; }
     var fleet = null; try { fleet = (typeof root.omegaBessFleet === 'function') ? root.omegaBessFleet() : null; } catch (e) { fleet = null; }
-    var hasBoundary = false, shapes = S.shapes || [];
-    for (var i = 0; i < shapes.length; i++) { if (shapes[i] && shapes[i].omegaRole === 'boundary') { hasBoundary = true; break; } }
+    var shapes = S.shapes || [], hasBoundary = false, solar = 0;
+    try { hasBoundary = !!(typeof root._siteBoundaryShape === 'function' && root._siteBoundaryShape()); } catch (e) { hasBoundary = false; }
+    for (var i = 0; i < shapes.length; i++) {
+      var sh = shapes[i]; if (!sh) continue;
+      if (sh.omegaRole === 'boundary' || sh.isSiteBoundary) hasBoundary = true;
+      if (sh.kind === 'dersolar' || sh.kind === 'solar') solar++;
+    }
     f.drawing = { tech: dr.tech, solarKwDc: dr.solarKwDc, solarKwAc: dr.spec ? dr.spec.solarKwAc : null,
                   bessKw: dr.bessKw || (fleet && fleet.kw) || null, bessKwh: dr.bessKwh || (fleet && fleet.kwh) || null,
-                  evPorts: dr.evPorts, itKw: dr.itKw, capex: dr.capex, units: fleet ? fleet.units : null,
-                  elements: (S.elements || []).length, hasBoundary: hasBoundary };
+                  evPorts: dr.evPorts, itKw: dr.itKw, units: fleet ? fleet.units : null,
+                  elements: (S.elements || []).length + solar, hasBoundary: hasBoundary };
+    /* the drawn property line's own acreage, when it is a boundary and not
+       the largest shape standing in for one */
+    try {
+      var bi = (typeof root._siteBoundaryInfo === 'function') ? root._siteBoundaryInfo() : null;
+      if (bi && bi.present && !bi.derived && bi.acres > 0) f.boundary = { acres: bi.acres, source: bi.anchored ? 'ground coordinates' : 'drawing scale' };
+    } catch (e) {}
+    /* typed exclusions (wetland, floodplain, easement, right-of-way…) */
+    var ex = [];
+    for (var j = 0; j < shapes.length; j++) {
+      var x = shapes[j]; if (!x || x.omegaRole !== 'exclusion' || !x.exLabel) continue;
+      var ac = null;
+      try { var pts = (typeof root._shapeWorldPts === 'function' ? root._shapeWorldPts(x) : null) || x.pts; ac = (typeof root._alPolyAcres === 'function' && pts) ? root._alPolyAcres(pts) : null; } catch (e) { ac = null; }
+      ex.push({ reason: x.exLabel, acres: (isFinite(ac) && ac > 0) ? ac : null });
+    }
+    f.exclusions = ex.slice(0, 30);
     var b0 = first(S.bessList) || {};
     f.bess = { chem: b0.chem, mfr: b0.mfr, model: b0.model };
+    /* ONLY the captured Run, and only while the drawing has not moved since:
+       the live cost panel changes on every placement and is no Run */
     var r = S.costRollup || null;
-    f.run = { total: r ? r.capex : (+root._COST_TOTAL || null), at: r ? r.at : (S.lastRunAt || null), contracted: r ? !!r.contracted : !!root._COST_IS_CONTRACTED };
-    f.wizMode = root._wizMode || S.wizMode || null;
+    if (r && !S.resultsStale) f.run = { total: r.capex, at: r.at, contracted: !!r.contracted };
+    /* the market is a CHOICE: the editor defaults to BTM and says so with
+       _wizModeConfirmed; an unconfirmed default is not sent */
+    var wiz = root._wizMode || S.wizMode || null;
+    f.wizMode = (wiz && (wiz !== 'BTM' || root._wizModeConfirmed === true)) ? wiz : null;
+    f.wizModeConfirmed = root._wizModeConfirmed === true;
     f.interconMode = S.interconMode || null;
-    f.offtaker = S.offtaker || null;
+    f.poi = S.poi ? { kind: S.poi, ft: S.poiFt || null, source: 'setting' } : null;
+    var off = S.offtaker || null;
+    if (off) f.offtaker = (typeof off === 'string') ? { name: off } : { name: off.name, id: off.id || null };
     f.billImport = S.billImport || null;
     try {
       var J = root.OmegaPQJurisdiction;
       if (J && typeof J.jurisdiction === 'function' && f.address) {
         var jr = J.jurisdiction(null, f.address);
-        if (jr) f.jurisdiction = { state: jr.state, utility: jr.utility, known: jr.known, multiUtility: jr.multiUtility };
+        if (jr && jr.known === true) f.jurisdiction = { state: jr.state, utility: jr.utility, known: true, multiUtility: jr.multiUtility };
       }
     } catch (e) {}
-    var t = S.terrain || null; if (t) f.terrain = { reliefFt: t.reliefFt, areaFt2: t.areaFt2 };
+    var t = S.terrain || null; if (t) f.terrain = { reliefFt: t.reliefFt, areaFt2: t.areaFt2, slopePct: t.slopePct };
     f.workflow = workflow(pid);
     f.autopilot = S.autopilot || null;
     f.hasMap = !!(root._gmap || root._frozenMapImg);
@@ -134,12 +200,26 @@
     if (!h) {
       h = document.createElement('div'); h.id = HOST_ID;
       h.setAttribute('style', 'position:fixed;inset:0;background:rgba(6,12,22,.82);z-index:10000;display:flex;align-items:center;justify-content:center;padding:20px');
-      h.onclick = function (e) { if (e.target === h) close(); };
+      /* the backdrop closes only a click that STARTED on it: a text
+         selection dragged out of a textarea ends on the backdrop too */
+      var downOnBackdrop = false;
+      h.onmousedown = function (e) { downOnBackdrop = e.target === h; };
+      h.onclick = function (e) { if (e.target === h && downOnBackdrop) close(); downOnBackdrop = false; };
       document.body.appendChild(h);
     }
     return h;
   }
-  function close() { var h = document.getElementById(HOST_ID); if (h) h.remove(); }
+  function dirty() {
+    if (!draftState || !opened || sent) return false;
+    try { return JSON.stringify(readDraft()) !== opened || !!val('hi-message'); } catch (e) { return false; }
+  }
+  function close(force) {
+    if (force !== true && dirty() && !confirm('Close the Helios Intake? What you typed here is not saved.')) return;
+    var h = document.getElementById(HOST_ID); if (h) h.remove();
+    draftState = null; opened = null; sendId = null; sent = false;
+  }
+  function newSendId() { return 'hi' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
+  function sendable(d) { return !!(d && d.configured && d.mailConfigured !== false); }
   function panel(inner) {
     return '<div style="background:var(--panel);border:1px solid var(--border);border-radius:12px;max-width:820px;width:100%;max-height:92vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.6);color:var(--text)">' + inner + '</div>';
   }
@@ -164,9 +244,11 @@
     var h = header('Filled from this project where OMEGA knows the answer, with the source under each one. Finish the rest, preview the PDF, then send it to Helios. Blank means the platform does not know; it never writes "Unknown" for you.');
     var body = '<div style="padding:16px 20px">';
     /* where it goes */
-    if (d.configured) {
+    if (sendable(d)) {
       body += '<div style="margin-bottom:12px;padding:9px 11px;background:var(--navy);border:1px solid var(--border);border-radius:8px;font-size:11px;color:var(--sub)">Sends to <strong style="color:var(--text)">' + esc((d.to || []).join(', ')) + '</strong> with you and ClearSky in copy'
         + (d.lastSent && d.lastSent.sentAt ? ' · last sent ' + esc(String(d.lastSent.sentAt).slice(0, 10)) + ' by ' + esc(d.lastSent.sentBy || '') : '') + '</div>';
+    } else if (d.configured) {
+      body += '<div style="margin-bottom:12px;padding:9px 11px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.4);border-radius:8px;font-size:11px;color:#FDE68A;line-height:1.6">This deployment has no outgoing mailbox set up, so it cannot send yet. You can still finish and preview the form; ask ClearSky to set up mail before sending.</div>';
     } else {
       body += '<div style="margin-bottom:12px;padding:9px 11px;background:rgba(251,191,36,.08);border:1px solid rgba(251,191,36,.4);border-radius:8px;font-size:11px;color:#FDE68A;line-height:1.6">No Helios intake address is configured on this deployment yet. You can still finish and preview the form; ask ClearSky to set the Helios address before sending.</div>';
     }
@@ -209,7 +291,7 @@
       + '<div style="font-size:10px;color:#64748B;line-height:1.65;margin:8px 0 12px">Preview fills Helios’s own PDF with what is above and opens it. Send emails that PDF to Helios, keeps a copy on this project, and puts your address in copy so their reply reaches you.</div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap">'
       + '<button id="hi-preview" onclick="OmegaHeliosIntake.preview()" style="flex:1 1 180px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(56,189,248,.14);border:1px solid rgba(56,189,248,.5);color:#BAE6FD">Preview the filled PDF</button>'
-      + '<button id="hi-send" onclick="OmegaHeliosIntake.send()"' + (d.configured ? '' : ' disabled') + ' style="flex:1 1 180px;padding:10px;border-radius:8px;cursor:' + (d.configured ? 'pointer' : 'not-allowed') + ';font-family:inherit;font-weight:700;font-size:12px;background:' + (d.configured ? 'rgba(74,222,128,.16)' : 'rgba(100,116,139,.14)') + ';border:1px solid ' + (d.configured ? 'rgba(74,222,128,.5)' : 'rgba(100,116,139,.4)') + ';color:' + (d.configured ? '#86EFAC' : '#64748B') + '">✉ Send to Helios</button>'
+      + '<button id="hi-send" onclick="OmegaHeliosIntake.send()"' + (sendable(d) ? '' : ' disabled') + ' style="flex:1 1 180px;padding:10px;border-radius:8px;cursor:' + (sendable(d) ? 'pointer' : 'not-allowed') + ';font-family:inherit;font-weight:700;font-size:12px;background:' + (sendable(d) ? 'rgba(74,222,128,.16)' : 'rgba(100,116,139,.14)') + ';border:1px solid ' + (sendable(d) ? 'rgba(74,222,128,.5)' : 'rgba(100,116,139,.4)') + ';color:' + (sendable(d) ? '#86EFAC' : '#64748B') + '">✉ Send to Helios</button>'
       + '</div><div id="hi-log" style="margin-top:12px;font-size:11px;line-height:1.7;color:var(--sub)"></div></div>';
     return panel(h + body);
   }
@@ -223,7 +305,13 @@
     return d;
   }
   function log(html, color) { var l = document.getElementById('hi-log'); if (l) l.innerHTML = '<span style="color:' + (color || 'var(--sub)') + '">' + html + '</span>'; }
-  function busy(on) { ['hi-preview', 'hi-send'].forEach(function (id) { var b = document.getElementById(id); if (b && (id !== 'hi-send' || (draftState && draftState.configured))) b.disabled = !!on; }); }
+  /* Send stays shut on a deployment that cannot send and after a send:
+     one dialog mails once */
+  function busy(on) { ['hi-preview', 'hi-send'].forEach(function (id) { var b = document.getElementById(id); if (b && (id !== 'hi-send' || (sendable(draftState) && !sent))) b.disabled = !!on; }); }
+  function issuesHtml(list) {
+    if (!list || !list.length) return '';
+    return '<div style="margin-top:6px;color:#FDE68A">' + list.map(function (t) { return '⚠ ' + esc(t); }).join('<br>') + '</div>';
+  }
 
   function open() {
     var pid = root._projectId || null;
@@ -233,7 +321,8 @@
     var facts = null;
     try { facts = collect(); } catch (e) { facts = { projectId: pid }; }
     post({ projectId: pid, action: 'draft', facts: facts }).then(function (d) {
-      draftState = d; h.innerHTML = render(d);
+      draftState = d; sent = false; sendId = newSendId(); h.innerHTML = render(d);
+      try { opened = JSON.stringify(readDraft()); } catch (e) { opened = null; }
     }).catch(function (e) {
       h.innerHTML = panel(header('Could not prepare the intake') + '<div style="padding:22px;color:#FCA5A5;font-size:12px;line-height:1.7">' + esc(e.message || String(e)) + '</div>');
     });
@@ -247,26 +336,36 @@
       for (var i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
       var url = URL.createObjectURL(new Blob([arr], { type: 'application/pdf' }));
       var w = null; try { w = window.open(url, '_blank'); } catch (e) { w = null; }
-      var trunc = (r.report || []).filter(function (x) { return x.truncated; }).map(function (x) { return x.question.replace('q', ''); });
       log((w ? 'Preview opened in a new tab. ' : '') + '<a href="' + url + '" target="_blank" rel="noopener" style="color:#BAE6FD">Open the filled PDF</a> · <a href="' + url + '" download="' + esc(r.fileName || 'Helios-First-Pass.pdf') + '" style="color:#BAE6FD">Download</a>'
-        + (trunc.length ? '<br><span style="color:#FDE68A">Question' + (trunc.length > 1 ? 's ' : ' ') + trunc.join(', ') + ' did not fit the printed lines and ' + (trunc.length > 1 ? 'were' : 'was') + ' cut short — shorten the answer or put the detail in the message.</span>' : ''));
+        + (r.issues && r.issues.length ? issuesHtml(r.issues) : '<div style="margin-top:6px;color:#86EFAC">Every answer fits Helios\u2019s form as typed.</div>'));
       busy(false);
     }).catch(function (e) { busy(false); log(esc(e.message || String(e)), '#FCA5A5'); });
   }
 
+  /* Send asks the server what the form will hold first (the same fill as
+     Preview), so a cut answer or a changed character is said BEFORE the
+     mail goes, then confirms once. */
   function send() {
-    if (!draftState || !draftState.configured) return;
-    var to = (draftState.to || []).join(', ');
-    if (!confirm('Send the filled checklist to Helios?\n\nTo: ' + to + '\nYour address and ClearSky are in copy. A copy of the PDF is kept on this project.')) return;
-    busy(true); log('Preparing the attachment…');
-    var wantSnap = !!(document.getElementById('hi-snapshot') && document.getElementById('hi-snapshot').checked);
-    (wantSnap ? snapshot() : Promise.resolve(null)).then(function (jpeg) {
-      log('Sending to Helios…');
-      return post({ projectId: root._projectId, action: 'send', draft: readDraft(), message: val('hi-message'), siteMapJpeg: jpeg || undefined });
-    }).then(function (r) {
-      busy(false);
-      var b = document.getElementById('hi-send'); if (b) { b.disabled = true; b.textContent = '✓ Sent'; }
-      log('Sent to <strong style="color:var(--text)">' + esc((r.sentTo || []).join(', ')) + '</strong> with ' + esc((r.cc || []).join(', ')) + ' in copy. ' + esc(r.fileName || '') + ' is saved on this project.', '#86EFAC');
+    if (!sendable(draftState) || sent) return;
+    var to = (draftState.to || []).join(', '), draft = readDraft();
+    busy(true); log('Checking the form…');
+    post({ projectId: root._projectId, action: 'preview', draft: draft }).then(function (pv) {
+      var issues = pv.issues || [];
+      var last = draftState.lastSent && draftState.lastSent.sentAt ? '\n\nThis project was already sent on ' + String(draftState.lastSent.sentAt).slice(0, 10) + (draftState.lastSent.sentBy ? ' by ' + draftState.lastSent.sentBy : '') + '; this sends it again.' : '';
+      var ask = (last ? 'Send the filled checklist to Helios AGAIN?' : 'Send the filled checklist to Helios?') + '\n\nTo: ' + to + '\nYour address and ClearSky are in copy. A copy of the PDF is kept on this project.'
+        + (issues.length ? '\n\nBefore you send:\n- ' + issues.join('\n- ') : '') + last;
+      if (!confirm(ask)) { busy(false); log(issuesHtml(issues) || 'Not sent.'); return null; }
+      log('Preparing the attachment…');
+      var wantSnap = !!(document.getElementById('hi-snapshot') && document.getElementById('hi-snapshot').checked);
+      return (wantSnap ? snapshot() : Promise.resolve(null)).then(function (jpeg) {
+        log('Sending to Helios…');
+        return post({ projectId: root._projectId, action: 'send', sendId: sendId, draft: draft, message: val('hi-message'), siteMapJpeg: jpeg || undefined });
+      }).then(function (r) {
+        sent = true; busy(false);
+        var b = document.getElementById('hi-send'); if (b) { b.disabled = true; b.textContent = '✓ Sent'; }
+        log((r.repeat ? 'Already sent: ' : 'Sent to ') + '<strong style="color:var(--text)">' + esc((r.sentTo || []).join(', ')) + '</strong>' + (r.cc && r.cc.length ? ' with ' + esc(r.cc.join(', ')) + ' in copy' : '') + '. ' + esc(r.fileName || '') + ' is saved on this project.'
+          + (r.warning ? '<div style="margin-top:6px;color:#FDE68A">' + esc(r.warning) + '</div>' : '') + issuesHtml(r.issues), '#86EFAC');
+      });
     }).catch(function (e) { busy(false); log(esc(e.message || String(e)), '#FCA5A5'); });
   }
 

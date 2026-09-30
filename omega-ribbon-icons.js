@@ -37,6 +37,8 @@
   var TRANSFORMER = 'M3 12h3M18 12h3M7 7c2.5 0 2.5 2.5 0 2.5s-2.5 2.5 0 2.5-2.5 2.5 0 2.5-2.5 2.5 0 2.5M17 7c-2.5 0-2.5 2.5 0 2.5s2.5 2.5 0 2.5 2.5 2.5 0 2.5 2.5 2.5 0 2.5M11 6v12M13 6v12';
   var EXPORT = 'M12 3v12M8 7l4-4 4 4M4 15v5h16v-5';
   var TABLE = 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14';
+  /* an eraser on its baseline, not a blade: the old diagonal read as a cleaver */
+  var ERASER = 'M7 21l-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21M22 21H7M5 11l9 9';
   var FENCE = 'M4 21V9l2-2 2 2v12M10 21V9l2-2 2 2v12M16 21V9l2-2 2 2v12M3 13h18M3 18h18';
   var SERVICE = 'M12 3v5M8 8h8M9 8v5a3 3 0 0 0 6 0V8M12 16v5M9 21h6';
   var CHECKMAP = MAP + 'M9 12l2 2 4-4';
@@ -113,7 +115,7 @@
     selectmove: 'M5 3l7 16 2-6 6-2z', deselect: 'M5 4l7 14 2-5 5-2zM16 16l4 4M20 16l-4 4',
     duplicate: 'M8 8h12v12H8zM4 16V4h12', 'delete': 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6', deleteshape: 'M4 5h9v9H4zM15 14l5 5M20 14l-5 5',
     undo: 'M4 10a8 8 0 1 1 1 8M4 3v7h7', redo: 'M20 10a8 8 0 1 0-1 8M20 3v7h-7',
-    clearall: 'M4 19l7-7 6 6-4 4H7zM11 12l7-7 3 3-7 7', clearplot: 'M4 19l7-7 6 6-4 4H7zM11 12l7-7 3 3-7 7', clearschematic: 'M4 19l7-7 6 6-4 4H7zM11 12l7-7 3 3-7 7',
+    clearall: ERASER, clearplot: ERASER, clearschematic: 'M4 3h11l5 5v6M4 3v18h7M8 8h6M8 12h4M13 21l-2-2c-.6-.6-.6-1.4 0-2l4.5-4.5c.6-.6 1.4-.6 2 0l2.5 2.5c.6.6.6 1.4 0 2L16 21M22 21h-9',
     /* ── Analyze ── */
     circuitanalysis: 'M3 12h5l2-5 4 10 2-5h5',
     energybalance: 'M12 3v18M4 21h16M6 7h12M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0z',

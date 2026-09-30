@@ -693,4 +693,4 @@ function view(billing, rows, now) {
     ending: endingKeys(a).map(function (k) { return { key: k, name: label(k), endsOn: a.ending[k].endsOn || a.nextInvoiceOn || null, requestedAt: a.ending[k].requestedAt || null }; }), payWith: railName(billing) };
 }
 module.exports = { LOGIC: LOGIC, LEGACY: LEGACY, TIER_LEVEL: TIER_LEVEL, rail: rail, live: live, held: held, price: price, quote: quote, preview: preview, buy: buy, cancel: cancel, stop: stop, endingKeys: endingKeys,
-  issue: issue, settle: settle, grant: grant, exact: exact, boughtAfter: boughtAfter, pending: pending, view: view, context: context, records: records, isAddon: isAddon };
+  issue: issue, settle: settle, grant: grant, exact: exact, judge: judge, boughtAfter: boughtAfter, pending: pending, view: view, context: context, records: records, isAddon: isAddon };

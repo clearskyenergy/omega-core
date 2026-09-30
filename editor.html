@@ -52675,6 +52675,10 @@ function save(){
   sc.data   = VW.data;
   sc.scores = VW.scores;
   sc.fin    = VW.fin;
+  /* the address research's own answers (utility, FEMA zone, jurisdiction,
+     zoning) travel with the scenario, so a reload and the Helios Intake
+     read them back instead of losing them with the page */
+  if(VW.research) sc.research = VW.research;
   sc.updatedAt = Date.now();
   _vwWriteStore(st);
 }
@@ -52687,6 +52691,7 @@ function load(){
   VW.scores = sc.scores || {};
   VW.fin    = sc.fin    || {};
   VW.phase  = sc.phase  || 0;
+  VW.research = sc.research || null;
   _vwLockWarned = false;
 }
 

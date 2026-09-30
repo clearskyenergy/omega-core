@@ -31,10 +31,10 @@ var RICH = {
   drawing: { tech: 'storage', bessKw: 20000, bessKwh: 80000, capex: 31600000, units: 20, elements: 31, hasBoundary: true },
   bess: { chem: 'LFP', mfr: 'Sample', model: 'S-4' },
   run: { total: 31600000, at: 1790000000000, contracted: false },
-  wizMode: 'FOM', interconMode: 'service', offtaker: null,
+  wizMode: 'FOM', interconMode: 'service', offtaker: null, poi: { kind: 'utility-xfmr', ft: 400, source: 'setting' },
   billImport: { utility: 'Imperial Irrigation District' },
   terrain: { reliefFt: 6, areaFt2: 43560 * 40 },
-  workflow: { owner: 'Sample Owner LLC', siteControl: 'loi', appStatus: 'submitted', queuePos: '26INR0042', flood: '0', researchFloodZone: 'X', codDate: '12/15/27', timeline: '18-24 months' },
+  workflow: { owner: 'Sample Owner LLC', siteControl: 'loi', appStatus: 'submitted', queuePos: '26INR0042', flood: '1', research: { floodZone: 'X' }, codDate: '12/15/27', timeline: '18-24 months' },
   hasMap: true
 };
 var PROJECT = { orgId: 'nextnrg.example', name: '225 Cesar Chavez Blvd — Calexico', address: '225 Cesar Chavez Blvd, Calexico, CA', capex: 31600000, capexAt: 1790000000000, capexSource: 'site-map', bessKw: 20000, bessKwh: 80000, wizMode: 'FOM' };
@@ -67,11 +67,11 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   eq(d.answers.q10.text, '', 'q10 blank');
   ok(/18-24 months/.test(d.answers.q11.text), 'q11: the workflow timeline, named as the developer\'s');
   ok(/Grid Atlas/.test(d.answers.q12.text) && /92 kV/.test(d.answers.q12.text) && /1\.3 mi/.test(d.answers.q12.text) && /not a substitute for the utility interconnection study/.test(d.answers.q12.text), 'q12: substation, kV, distance and the caveat');
-  ok(/wholesale buyer/.test(d.answers.q13.text), 'q13: FOM means a wholesale buyer, never a company name');
+  ok(/wholesale market/.test(d.answers.q13.text) && /no offtaker is named/.test(d.answers.q13.text), 'q13: FOM means a wholesale buyer, never an invented company name');
   eq(d.answers.q14.text, '', 'q14 blank'); eq(d.answers.q15.text, '', 'q15 blank');
   ok(/Imperial County/.test(d.answers.q16.text) && /M-1/.test(d.answers.q16.text) && /not on the project record/.test(d.answers.q16.text), 'q16: county, zoning, and no claim about permitted use');
   eq(d.answers.q17.text, '', 'q17 blank without a permit pack');
-  ok(/not in a mapped floodplain/.test(d.answers.q18.text) && /zone X/.test(d.answers.q18.text) && /not screened by OMEGA/.test(d.answers.q18.text), 'q18: flood from the workflow, and what was not screened');
+  ok(/minimal flood risk/.test(d.answers.q18.text) && /zone X/.test(d.answers.q18.text) && /not screened by OMEGA/i.test(d.answers.q18.text), 'q18: the workflow\'s "1" is minimal flood risk (zone X), and what was not screened');
   ok(/\$31,600,000/.test(d.status.totalCost.text) && /Site Map Run/.test(d.status.totalCost.text), 'cost from the run');
   eq(d.status.cod.text, '12/15/27', 'COD from the workflow');
   eq(d.status.financing.text, '', 'the financing ask is never known');
@@ -86,9 +86,77 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   ok(/14 Quarry Rd/.test(bare.answers.q1.text) && !/APN/.test(bare.answers.q1.text), 'a bare project answers the address and nothing more');
   ['q2', 'q3', 'q6', 'q7', 'q9', 'q12', 'q13', 'q16', 'q18'].forEach(function (q) { eq(bare.answers[q].text, '', 'bare ' + q + ' stays blank'); });
   Object.keys(bare.attachments).forEach(function (k) { ok(!bare.attachments[k].on, 'bare: no box pre-ticked (' + k + ')'); });
-  var btm = H.compose({ project: PROJECT, org: ORG, caller: CALLER, facts: { wizMode: 'BTM', interconMode: 'none', offtaker: { name: 'Cold storage' } } });
-  ok(/Behind the meter/.test(btm.answers.q7.text) && /no new point of interconnection/.test(btm.answers.q7.text), 'BTM classification');
-  ok(/host facility/.test(btm.answers.q13.text) && /Cold storage/.test(btm.answers.q13.text), 'BTM buyer is the host, with the load class');
+  var btm = H.compose({ project: PROJECT, org: ORG, caller: CALLER, facts: { wizMode: 'BTM', poi: { kind: 'none' }, offtaker: { id: 'cold', name: 'Cold storage' } } });
+  ok(/Behind the meter/.test(btm.answers.q7.text) && /no new point of interconnection/.test(btm.answers.q7.text), 'BTM classification, corroborated by the POI and a guided-build offtaker');
+  ok(/host facility/.test(btm.answers.q13.text) && /load class: Cold storage/.test(btm.answers.q13.text), 'BTM buyer is the host, with the load class');
+
+  /* the editor's DEFAULT mode is not a choice: every new project is BTM on
+     the record until somebody picks, so a bare BTM reports nothing */
+  var dflt = H.compose({ project: { orgId: 'x.example', name: 'Solar land', wizMode: 'BTM' }, org: {}, caller: {}, facts: { wizMode: 'BTM' } });
+  eq(dflt.answers.q7.text, '', 'an unconfirmed BTM default: q7 blank');
+  eq(dflt.answers.q13.text, '', 'and q13 blank');
+  var chosen = H.compose({ project: { orgId: 'x.example', wizMode: 'BTM' }, org: {}, caller: {}, facts: { wizMode: 'BTM', wizModeConfirmed: true } });
+  ok(/Behind the meter/.test(chosen.answers.q7.text), 'a BTM chosen in the guided build is reported');
+  var typed = H.compose({ project: { orgId: 'x.example', wizMode: 'FOM' }, org: {}, caller: {}, facts: { offtaker: { name: 'Duke Energy Progress (PPA)' } } });
+  ok(/offtaker named on the project: Duke Energy Progress \(PPA\)/.test(typed.answers.q13.text) && !/no offtaker/.test(typed.answers.q13.text), 'a typed offtaker is the named buyer, never "none named": ' + typed.answers.q13.text);
+  var exporting = H.compose({ project: { orgId: 'x.example', wizMode: 'BTM' }, org: {}, caller: {}, facts: { wizMode: 'BTM', poi: { kind: 'substation', ft: 9000 } } });
+  ok(/Exporting to the grid/.test(exporting.answers.q7.text) && /transmission-level/.test(exporting.answers.q7.text) && /1\.7 mi/.test(exporting.answers.q12.text), 'a drawn substation POI exports, whatever the default says');
+  var wfPath = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: { workflow: { exportMode: 'full', appType: 'full_study', market: 'PJM', icNotes: 'Deposit $50k due at SIS', timeline: '18' } } });
+  ok(/Front of meter — full export/.test(wfPath.answers.q7.text) && /full interconnection study required/.test(wfPath.answers.q7.text) && /PJM/.test(wfPath.answers.q7.text), 'the workflow\'s export mode, application type and market: ' + wfPath.answers.q7.text);
+  ok(/full interconnection study is required/.test(wfPath.answers.q10.text) && /Deposit \$50k/.test(wfPath.answers.q10.text), 'q10 from the application type and the interconnection notes');
+  ok(/18 weeks/.test(wfPath.answers.q11.text), 'a bare timeline number is in the workflow\'s own unit: ' + wfPath.answers.q11.text);
+
+  /* flood, both ways: the workflow's "1" is minimal risk, "0" a floodplain */
+  var wet = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: { workflow: { flood: '0', research: { floodZone: 'AE' } } } });
+  ok(/in or near a mapped floodplain/.test(wet.answers.q18.text) && /zone AE/.test(wet.answers.q18.text), 'flood "0" is a mapped floodplain (zone AE)');
+
+  /* the wires company and what kind of utility it is, from the workflow */
+  var tva = H.compose({ project: { orgId: 'x.example', address: '1 Main St, Jackson, TN' }, org: {}, caller: {}, facts: { state: 'TN', jurisdiction: { state: 'TN', utility: 'Jackson Energy Authority', known: true } } });
+  ok(!/— investor-owned|sole investor-owned/.test(tva.answers.q6.text) && /confirm/.test(tva.answers.q6.text), 'the state table never asserts investor-owned (TVA\'s distributors are municipal and co-op): ' + tva.answers.q6.text);
+  var coop = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: { workflow: { tsp: { name: 'Pedernales Electric Cooperative', type: 'COOP' } } } });
+  ok(/Pedernales Electric Cooperative — electric cooperative/.test(coop.answers.q6.text), 'q6: the TSP and its ownership type');
+  ok(coop.answers.q15.text.length > 0, 'q15 speaks when a co-op serves the site');
+
+  /* the site screen and the checklist the developer ticked */
+  var flagged = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: {
+    workflow: { flags: { ss_wetlands: '1', ss_soil_contamination: true, ss_deed_restrict: '1', ss_bogus: '1' }, checks: { ck_title: '1', p5_zoning_ok: '1' } },
+    exclusions: [{ reason: 'Easement / access', acres: 1.2 }, { reason: 'Wetland / waters', acres: 3.4 }, { reason: 'unclassified' }],
+    boundary: { acres: 61.5 }, address: '9 Farm Rd, Ames, IA', terrain: { reliefFt: 12, areaFt2: 43560 * 60, slopePct: 2.4 } } });
+  ok(/Deed restriction/.test(flagged.answers.q5.text) && /Easement \/ access about 1\.2 ac/.test(flagged.answers.q5.text), 'q5: the deed flag and the traced easement');
+  ok(/title commitment ordered/i.test(flagged.answers.q4.text), 'q4: the title check the developer ticked');
+  ok(/wetland/i.test(flagged.answers.q18.text) && /contamination/i.test(flagged.answers.q18.text) && /Wetland \/ waters about 3\.4 ac/.test(flagged.answers.q18.text), 'q18: flagged hazards and the traced wetland: ' + flagged.answers.q18.text);
+  var notScreened = (/Not screened by OMEGA: ([^;.]*)/i.exec(flagged.answers.q18.text) || [])[1] || '';
+  ok(!/wetlands/.test(notScreened) && !/contamination/.test(notScreened), 'and never lists as "not screened" what the developer flagged: ' + notScreened);
+  ok(/2\.4%/.test(flagged.answers.q18.text), 'the terrain\'s average grade');
+  ok(/61\.5 acres \(measured from the property line/.test(flagged.answers.q1.text), 'q1: acreage from the drawn property line when no parcel service ran');
+
+  /* a state is two letters from the address or the geocoder, never a placeholder */
+  var unknownState = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: { address: '1200 County Road 5', jurisdiction: { state: '(unknown)', known: false } } });
+  ok(!/\(U/.test(unknownState.answers.q1.text), 'the jurisdiction table\'s "(unknown)" never prints as a state: ' + unknownState.answers.q1.text);
+  var ranked = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: { address: '4500 FM 1960, Spring', state: 'CO', site: { county: 'Harris County', state: 'TX' } } });
+  ok(/Harris County, TX/.test(ranked.answers.q1.text), 'the geocoder\'s state outranks one parsed elsewhere');
+
+  /* q2: the drawing, else the project type, else nothing (never "Other") */
+  var empty = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: { drawing: { tech: 'land' } } });
+  eq(empty.answers.q2.text, '', 'an empty drawing leaves q2 blank');
+  var typedProject = H.compose({ project: { orgId: 'x.example', siteScopes: ['der', 'bess'], bessSizing: { powerKw: 5000, nameplateKwh: 20000, durationH: 4, basis: 'interval' } }, org: {}, caller: {}, facts: {} });
+  ok(/Solar plus BESS/.test(typedProject.answers.q2.text) && /5 MW \/ 20 MWh \/ 4-hour/.test(typedProject.answers.q2.text), 'q2 from the project type and the Battery Sizer: ' + typedProject.answers.q2.text);
+  ok(typedProject.answers.q2.sources.some(function (x) { return /project type/.test(x); }) && typedProject.answers.q2.sources.some(function (x) { return /Battery Sizer/.test(x); }), 'each part credited to where it came from');
+
+  /* the Apply for Financing request fills the status block */
+  var fin = H.compose({ project: { orgId: 'x.example' }, org: {}, caller: {}, facts: {},
+    finApp: { status: 'submitted', form: { financedAmount: 22000000, product: 'Construction-to-term debt', termMonths: 84, ntpDate: '2027-03-01', codDate: '2027-12-15' } } });
+  ok(/\$22,000,000/.test(fin.status.financing.text) && /84-month term/.test(fin.status.financing.text), 'financing from the application: ' + fin.status.financing.text);
+  ok(/^3\/1\/27/.test(fin.status.constructionStart.text) && fin.status.cod.text === '12/15/27', 'NTP and COD from the application');
+
+  /* the record's drawing carries the substation lookup and the drawn POI */
+  var drawn = H.fromDrawing({ shapes: [{ kind: 'substation', omegaLookup: true, label: 'SANDY CREEK', voltage: '138 kV', srcMiles: 2.4, srcDir: 'NW', capMw: 60, srcName: 'HIFLD' },
+    { kind: 'utility', utype: 'mpoi', omegaPoi: true, label: 'SUBSTATION POI' }], conduits: [{ omegaPoi: true, omegaGenTie: true, ftOverride: 6100 }] });
+  ok(drawn.substation && drawn.substation.name === 'SANDY CREEK' && drawn.substation.kv === 138 && drawn.substation.miles === 2.4, 'the substation lookup off the saved drawing');
+  ok(drawn.poi && drawn.poi.kind === 'substation' && drawn.poi.ft === 6100, 'the drawn POI and its gen-tie length');
+
+  /* the cover date is the person's own day, not the server's UTC one */
+  eq(H.compose({ project: {}, org: {}, caller: {}, facts: { today: '2026-09-29' } }).cover.date, '9/29/26', 'the browser\'s local date');
   var hostile = H.compose({ project: PROJECT, org: ORG, caller: CALLER, facts: { site: { parcelApn: '<script>x</script>'.repeat(10) }, drawing: { bessKw: 'abc' } } });
   ok(hostile.answers.q1.text.indexOf('<script>') >= 0 && hostile.answers.q1.text.length < 400, 'facts are capped, not trusted');
   ok(!/NaN/.test(JSON.stringify(hostile.answers)), 'a non-number never prints');
@@ -128,68 +196,185 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   eq(H.recipients({}, {}).to.length, 0, 'else nobody');
   eq(H.recipients({ HELIOS_INTAKE_EMAIL: 'nope' }, {}).to.length, 0, 'a bad address is nobody');
 
+  /* ── 3b · what the form's font cannot print, and what does not fit ── */
+  eq(H.toWinAnsi('Kāneʻohe ≥ 5 MW → Łódź​ ✓'), "Kane'ohe >= 5 MW -> Lódz x", 'accents dropped where the font lacks them, symbols spelled out, invisible characters removed');
+  eq(H.toWinAnsi('naïve café — “quoted” €5'), 'naïve café — “quoted” €5', 'everything Windows-1252 has is kept');
+  eq(H.toWinAnsi('site 😀 ok'), 'site ? ok', 'an emoji is a question mark, never a crash');
+  var odd = JSON.parse(JSON.stringify(draft));
+  odd.cover.projectNameLocation = 'Kāneʻohe Bay Storage ≥ 20 MW\n45-123 Kamehameha Hwy, Kāneʻohe, HI​';
+  odd.cover.submittedBy = 'NextNRG — Development\nDana Ortiz-Łukasiewicz · dana@nextnrg.example\n+1 555 010 2000\nA fourth line';
+  odd.answers.q1 = 'APNs 1-2-3-004-005-000,1-2-3-004-006-000,1-2-3-004-007-000,1-2-3-004-008-000,1-2-3-004-009-000,1-2-3-004-010-000 https://www.example.com/a/very/long/path/to/the/parcel/record.pdf';
+  odd.status.financing = '$22,000,000 construction-to-term debt with a tax equity bridge and a letter of credit for the interconnection deposit';
+  odd.status.totalCost = 'x'.repeat(390);
+  odd.cover.date = 'September 30, 2026';
+  var oddFill = await H.fill(TEMPLATE, odd), oddForm = (await PDF.PDFDocument.load(oddFill.bytes)).getForm();
+  ok(/^Kane'ohe Bay Storage >= 20 MW\n45-123 Kamehameha Hwy, Kane'ohe, HI$/.test(oddForm.getTextField(H.COVER.projectNameLocation).getText()), 'a name the font cannot print is transliterated, not a 500');
+  eq(oddForm.getTextField(H.COVER.submittedBy).getText().split('\n').length, 4, 'the cover keeps every line the person wrote');
+  var coverRow = oddFill.report.filter(function (x) { return x.field === 'submittedBy'; })[0];
+  ok(coverRow && !coverRow.truncated && coverRow.size < 9.5, 'shrinking to fit the box instead of dropping lines');
+  eq(oddForm.getTextField(H.COVER.date).getText(), '9/30/26', 'a long-form date becomes m/d/yy, year and all');
+  var q1Row = oddFill.report.filter(function (x) { return x.question === 'q1'; })[0];
+  ok(q1Row && !q1Row.truncated, 'a long run of APNs and a URL are broken at their commas and slashes, and fit');
+  var wr = H.wrap('1-2-3-004-005-000,1-2-3-004-006-000,1-2-3-004-007-000,1-2-3-004-008-000', H.measurer(await (await PDF.PDFDocument.create()).embedFont(PDF.StandardFonts.Helvetica)), 9, 120);
+  ok(wr.length > 1 && wr.slice(0, -1).every(function (l) { return /,$/.test(l); }), 'a token longer than a line breaks after its commas: ' + JSON.stringify(wr));
+  var finRow = oddFill.report.filter(function (x) { return x.field === 'financing'; })[0];
+  ok(finRow && finRow.lines === 2 && !finRow.truncated, 'a long financing line wraps onto two lines of its box');
+  eq(oddForm.getTextField(H.STATUS.financing).getText().split('\n').length, 2, 'as two lines');
+  var costRow = oddFill.report.filter(function (x) { return x.field === 'totalCost'; })[0];
+  ok(costRow && costRow.truncated && /…$/.test(oddForm.getTextField(H.STATUS.totalCost).getText()), 'past two lines it is cut with an ellipsis and reported');
+  ok(oddFill.issues.some(function (t) { return /Estimated total project cost is longer than its box/.test(t); }), 'and said in words');
+  ok(oddFill.issues.some(function (t) { return /replaced/.test(t) && /Project name and location/.test(t) && /Submitted by/.test(t); }), 'the boxes whose characters changed are named');
+  ok(oddFill.issues.some(function (t) { return /Q10 is longer/.test(t); }), 'a cut answer is named');
+  /* the width the viewer DRAWS: every written line fits its box unkerned */
+  var helv = await (await PDF.PDFDocument.create()).embedFont(PDF.StandardFonts.Helvetica), W = H.measurer(helv);
+  Object.keys(H.QUESTION_PREFIX).forEach(function (q) {
+    for (var n = 1; n <= 6; n++) {
+      var fld; try { fld = oddForm.getTextField(H.QUESTION_PREFIX[q] + ' ' + n); } catch (e) { break; }
+      var r = fld.acroField.getWidgets()[0].getRectangle(), rowq = oddFill.report.filter(function (x) { return x.question === q; })[0];
+      if (rowq && rowq.size) ok(W(fld.getText() || '', rowq.size) <= r.width - 8 + 0.01, q + ' line ' + n + ' fits its box as drawn');
+    }
+  });
+  var badDate = JSON.parse(JSON.stringify(draft)); badDate.cover.date = 'next spring';
+  var bd = await H.fill(TEMPLATE, badDate);
+  eq((await PDF.PDFDocument.load(bd.bytes)).getForm().getTextField(H.COVER.date).getText() || '', '', 'a date the form cannot read is left blank');
+  ok(bd.issues.some(function (t) { return /next spring/.test(t); }), 'and said');
+
+  /* the draft is cleaned to strings, and a box is ticked only by true */
+  var cd = H.cleanDraft({ cover: { date: '2026-09-30' }, answers: { q1: { text: 'from an object' }, q2: { nested: 1 }, q3: ['x'], q4: 42 },
+    status: { cod: { text: '12/15/27' } }, attachments: { addressParcel: 'false', deedTitle: true, boundaryKml: { on: true }, utilityContact: { on: 'true' }, queueRecord: 1 } });
+  eq(cd.answers.q1, 'from an object', '{text} is read'); eq(cd.answers.q2, '', 'an object is not an answer'); eq(cd.answers.q3, '', 'nor an array'); eq(cd.answers.q4, '42', 'a number is');
+  ok(!/object Object/.test(JSON.stringify(cd)), 'never "[object Object]"');
+  ok(!cd.attachments.addressParcel && cd.attachments.deedTitle && cd.attachments.boundaryKml && !cd.attachments.utilityContact && !cd.attachments.queueRecord, 'the string "false", {on:"true"} and 1 tick nothing; true and {on:true} do');
+  eq(cd.cover.date, '9/30/26', 'an ISO date becomes the form\'s m/d/yy');
+  eq(H.normalizeDate('12/15/2027').text, '12/15/27', 'm/d/yyyy');
+  eq(H.normalizeDate('15 Dec 2027').text, '12/15/27', 'd Month yyyy');
+  ok(!H.normalizeDate('2/30/27').ok, 'February 30th is not a date');
+  eq(H.fileName({ cover: { projectNameLocation: 'Kane\'ohe Bay\nx', date: '9/29/26' } }, new Date(Date.UTC(2026, 8, 30))), 'Helios-First-Pass-Kane-ohe-Bay-2026-09-29.pdf', 'the file is named for the form\'s own date');
+
   /* ── 5 · the door ── */
-  var AUTH, DOCS, SETS, ADDS, SAVED, MAILS, MAIL_ON, MAIL_RESULT, CLIENT_ADMIN;
+  var FD = require(path.join(ROOT, 'scripts', '_lib', 'firestore-double.js'));
+  var DB, AUTH, SAVED, MAILS, MAIL_ON, MAIL_RESULT, CLIENT_ADMIN, SAVE_FAIL;
+  var ME = { uid: 'u1', email: 'dana@nextnrg.example', orgId: 'nextnrg.example', staff: false, claims: { email_verified: true, name: 'Token Name' } };
+  function as(c) { AUTH = function () { return Promise.resolve(Object.assign({}, c)); }; }
   function reset() {
-    AUTH = function () { return Promise.resolve({ uid: 'u1', email: 'dana@nextnrg.example', orgId: 'nextnrg.example', staff: false, claims: { email_verified: true, name: 'Dana Ortiz' } }); };
-    DOCS = { 'projects/p1': Object.assign({}, PROJECT), 'omega_orgs/nextnrg.example': Object.assign({}, ORG), 'fin_settings/dealroom': { orgs: { helios: ['intake@helios.example'] } } };
-    SETS = []; ADDS = []; SAVED = []; MAILS = []; MAIL_ON = true; MAIL_RESULT = { ok: true, id: 'msg-1' }; CLIENT_ADMIN = false;
+    DB = new FD.DB(); as(ME);
+    DB.seed('projects/p1', PROJECT);
+    DB.seed('omega_orgs/nextnrg.example', ORG);
+    DB.seed('omega_orgs/nextnrg.example/billing/current', { tier: 'deluxe' });
+    DB.seed('omega_orgs/nextnrg.example/members/u1', { role: 'admin', status: 'active', name: 'Dana Ortiz' });
+    DB.seed('fin_settings/dealroom', { orgs: { helios: ['intake@helios.example'] } });
+    SAVED = []; MAILS = []; MAIL_ON = true; MAIL_RESULT = { ok: true, id: 'msg-1' }; CLIENT_ADMIN = false; SAVE_FAIL = false;
     delete process.env.HELIOS_INTAKE_EMAIL; delete process.env.MAIL_NOTIFY;
   }
-  function httpError(s, m) { var e = new Error(m); e.status = s; return e; }
-  function fakeDb() {
-    function doc(col, id) {
-      return { id: id,
-        get: function () { return Promise.resolve({ exists: !!DOCS[col + '/' + id], data: function () { return DOCS[col + '/' + id]; } }); },
-        set: function (data, o) { SETS.push({ path: col + '/' + id, data: data, opts: o }); DOCS[col + '/' + id] = Object.assign({}, DOCS[col + '/' + id], data); return Promise.resolve(); },
-        collection: function (sub) { return { add: function (data) { ADDS.push({ path: col + '/' + id + '/' + sub, data: data }); return Promise.resolve({ id: 'h1' }); } }; } };
-    }
-    return { collection: function (col) { return { doc: function (id) { return doc(col, id); } }; } };
-  }
-  var fakeAdmin = { handler: function (fn) { return fn; }, httpError: httpError, authenticate: function (req) { return AUTH(req); }, db: fakeDb,
-    canActInOrg: function (caller, org) { return Promise.resolve(!!caller.staff || caller.orgId === org); },
+  function snap() { return JSON.stringify(Array.from(DB.data.entries()).sort()); }
+  function httpError(st, m) { var e = new Error(m); e.status = st; return e; }
+  var fakeAdmin = { handler: function (fn) { return fn; }, httpError: httpError, authenticate: function (req) { return AUTH(req); }, db: function () { return DB; },
     clientAdmin: function () { return Promise.resolve(!!CLIENT_ADMIN); },
-    init: function () { return { storage: function () { return { bucket: function () { return { file: function (p) { return { save: function (bytes, o) { SAVED.push({ path: p, bytes: bytes, opts: o }); return Promise.resolve(); } }; } }; } }; } }; },
-    FieldValue: function () { return { increment: function (n) { return { __inc: n }; } }; } };
+    init: function () { return { storage: function () { return { bucket: function () { return { file: function (p) { return { save: function (bytes, o) { if (SAVE_FAIL) return Promise.reject(new Error('bucket down')); SAVED.push({ path: p, bytes: bytes, opts: o }); return Promise.resolve(); } }; } }; } }; } }; },
+    FieldValue: function () { return {}; } };
   var fakeMail = { configured: function () { return MAIL_ON; }, send: function (to, subject, html, text, opts) { MAILS.push({ to: to, subject: subject, html: html, opts: opts }); return Promise.resolve(MAIL_RESULT); },
     layout: function (t, b) { return '<html>' + b + '</html>'; }, esc: function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); } };
-  function inject(rel, exp) { var p = require.resolve(path.join(ROOT, 'api', '_lib', rel)); require.cache[p] = { id: p, filename: p, loaded: true, exports: exp }; }
-  inject('admin.js', fakeAdmin); inject('mail.js', fakeMail);
+  FD.mock('../api/_lib/admin.js', fakeAdmin); FD.mock('../api/_lib/mail.js', fakeMail);
   var api = require(path.join(ROOT, 'api', 'helios-intake.js'));
   function call(body, method) { return api({ method: method || 'POST', headers: {}, body: body }); }
   async function refused(body, status, why, method) { try { await call(body, method); assert.fail('expected ' + status + ': ' + why); } catch (e) { eq(e.status, status, why + ' → ' + e.message); } }
+  var n = 0; function sid() { return 'send-test-' + (++n); }
 
   reset();
+  var before = snap();
   var dr = await call({ projectId: 'p1', action: 'draft', facts: RICH });
-  ok(dr.ok && dr.configured && dr.to[0] === 'intake@helios.example' && dr.draft.answers.q12.text.length > 0, 'draft: composed, and says where it will go');
+  ok(dr.ok && dr.configured && dr.mailConfigured && dr.to[0] === 'intake@helios.example' && dr.draft.answers.q12.text.length > 0, 'draft: composed, and says where it will go');
   ok(dr.draft.questions && dr.draft.attachmentLabels, 'draft carries the labels the dialog prints');
-  eq(SETS.length + ADDS.length + SAVED.length + MAILS.length, 0, 'draft writes nothing');
-
+  ok(/Dana Ortiz/.test(dr.draft.cover.submittedBy) && !/Token Name/.test(dr.draft.cover.submittedBy), 'the sender is named from the workspace\'s member record, not the token');
+  eq(snap(), before, 'draft writes nothing');
   var pv = await call({ projectId: 'p1', action: 'preview', draft: draft });
-  ok(pv.ok && pv.pdfBase64 && pv.fileName, 'preview hands back the PDF');
+  ok(pv.ok && pv.pdfBase64 && pv.fileName && Array.isArray(pv.issues), 'preview hands back the PDF and what did not fit');
   var pvDoc = await PDF.PDFDocument.load(Buffer.from(pv.pdfBase64, 'base64'));
   ok(pvDoc.getForm().getTextField(H.QUESTION_PREFIX.q2 + ' 1').getText().indexOf('Stand Alone BESS') === 0, 'the preview is filled');
-  eq(SETS.length + ADDS.length + SAVED.length + MAILS.length, 0, 'preview writes and sends nothing');
+  eq(snap() + SAVED.length + MAILS.length, before + 0 + 0, 'preview writes and sends nothing');
+  var weird = await call({ projectId: 'p1', action: 'preview', draft: odd });
+  ok(weird.ok && weird.issues.length >= 2, 'a draft full of characters the font lacks previews, with the changes said');
 
-  reset(); AUTH = function () { return Promise.resolve({ uid: 'u2', email: 'new@nextnrg.example', orgId: 'nextnrg.example', staff: false, claims: { email_verified: false } }); };
-  await refused({ projectId: 'p1', action: 'send', draft: draft }, 403, 'an unverified member cannot send');
+  /* the financing request: the workspace's own, never a partner's */
+  reset();
+  DB.seed('fin_applications/a1', { orgId: 'nextnrg.example', projectId: 'p1', status: 'submitted', form: { financedAmount: 22000000, product: 'Construction-to-term debt', termMonths: 84 }, updatedAt: 5 });
+  DB.seed('fin_applications/a2', { orgId: 'other.example', projectId: 'p1', status: 'submitted', form: { financedAmount: 999 }, updatedAt: 9 });
+  var withFin = await call({ projectId: 'p1', action: 'draft', facts: {} });
+  ok(/\$22,000,000/.test(withFin.draft.status.financing.text), 'the workspace\'s own Apply for Financing request fills the ask');
+  DB.seed('projects/p1', Object.assign({}, PROJECT, { orgsInvolved: ['partner.example'] }));
+  DB.seed('omega_orgs/partner.example/billing/current', { tier: 'enterprise' });
+  as({ uid: 'u7', email: 'pat@partner.example', orgId: 'partner.example', staff: false, claims: { email_verified: true } });
+  var partner = await call({ projectId: 'p1', action: 'draft', facts: {} });
+  ok(partner.ok && partner.draft.status.financing.text === '', 'a JDA partner may draft, and never sees the owner\'s financing request');
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 403, 'but only the project\'s own workspace sends it');
+
+  /* who may read, as the projects read rule says */
+  reset(); as({ uid: 'u9', email: 'x@other.example', orgId: 'other.example', staff: false, claims: { email_verified: true } });
+  DB.seed('omega_orgs/other.example/billing/current', { tier: 'enterprise' });
+  await refused({ projectId: 'p1', action: 'draft', facts: {} }, 403, 'another workspace cannot even draft');
+  reset(); DB.seed('projects/p2', { name: 'Legacy, no org' });
+  as({ uid: 'anon', email: '', orgId: '', staff: false, claims: {} });
+  await refused({ projectId: 'p2', action: 'draft', facts: {} }, 403, 'an email-less token never matches a project with no org');
+  DB.seed('projects/p3', { name: 'Mine', uid: 'u1', orgId: 'old.example' });
+  as(ME);
+  ok((await call({ projectId: 'p3', action: 'draft', facts: {} })).ok, 'the project\'s own creator may draft it');
+
+  /* the plan behind the button */
+  reset(); DB.seed('omega_orgs/nextnrg.example/billing/current', { tier: 'standard' });
+  await refused({ projectId: 'p1', action: 'draft', facts: {} }, 403, 'a plan without the Output tab\'s exports cannot use it');
+  DB.seed('omega_orgs/nextnrg.example/billing/current', { tier: 'standard', addOns: { live: ['finance'], accessUntil: Date.now() + 86400000 } });
+  ok((await call({ projectId: 'p1', action: 'draft', facts: {} })).ok, 'Omega Capital bought as an add-on opens it');
+  DB.seed('omega_orgs/nextnrg.example/billing/current', { tier: 'deluxe', toolAccess: ['gridatlas'] });
+  await refused({ projectId: 'p1', action: 'draft', facts: {} }, 403, 'a product without Site Map cannot');
+  DB.seed('omega_orgs/nextnrg.example/billing/current', { tier: 'deluxe' });
+  DB.seed('omega_orgs/nextnrg.example/members/u1', { role: 'member', status: 'disabled' });
+  await refused({ projectId: 'p1', action: 'draft', facts: {} }, 403, 'a member the workspace disabled cannot');
+  reset();
+  var soon = new Date(Date.now() + 30 * 86400000).toISOString();
+  DB.seed('omega_orgs/nextnrg.example/billing/current', { packaged: true, modules: ['lite'], packagingState: 'paid', accessUntil: soon });
+  await refused({ projectId: 'p1', action: 'draft', facts: {} }, 403, 'a package without Omega Capital cannot');
+  DB.seed('omega_orgs/nextnrg.example/billing/current', { packaged: true, modules: ['lite', 'finance'], packagingState: 'paid', accessUntil: soon });
+  ok((await call({ projectId: 'p1', action: 'draft', facts: {} })).ok, 'a package with it can');
+  DB.seed('omega_orgs/nextnrg.example/billing/current', { packaged: true, modules: ['lite', 'finance'], packagingState: 'paid', accessUntil: new Date(Date.now() - 86400000).toISOString() });
+  ok((await call({ projectId: 'p1', action: 'draft', facts: {} })).ok, 'a read-only package may still draft');
+  await refused({ projectId: 'p1', action: 'preview', draft: draft }, 403, 'but produces nothing');
+
+  /* sending asks more */
+  reset(); as({ uid: 'u2', email: 'new@nextnrg.example', orgId: 'nextnrg.example', staff: false, claims: { email_verified: false } });
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 403, 'an unverified member cannot send');
   ok(await call({ projectId: 'p1', action: 'draft', facts: {} }).then(function (r) { return r.ok; }), 'but may draft');
   CLIENT_ADMIN = true;
-  ok((await call({ projectId: 'p1', action: 'send', draft: draft })).ok, 'an owner or administrator of an active client sends without the link');
+  ok((await call({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() })).ok, 'an owner or administrator of an active client sends without the link');
+  reset(); DB.seed('omega_orgs/nextnrg.example/members/u1', { role: 'viewer', status: 'active' });
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 403, 'a viewer cannot send');
+  reset(); DB.seed('omega_orgs/nextnrg.example', Object.assign({}, ORG, { status: 'suspended' }));
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 403, 'a suspended workspace cannot send');
+  ok((await call({ projectId: 'p1', action: 'draft', facts: {} })).ok, 'but may still draft (the refusal is the send\'s)');
+  reset(); DB.data.delete('omega_orgs/nextnrg.example');
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 403, 'no workspace record: mailing a third party does not fail open');
+  ok((await call({ projectId: 'p1', action: 'draft', facts: {} })).ok, 'drafting does');
+  reset(); DB.seed('projects/g1', { orgId: 'gmail.com', name: 'x' }); DB.seed('omega_orgs/gmail.com', { name: 'Gmail', status: 'active' });
+  DB.seed('omega_orgs/gmail.com/billing/current', { tier: 'enterprise' }); DB.seed('omega_orgs/gmail.com/members/g', { role: 'owner', status: 'active' });
+  as({ uid: 'g', email: 'someone@gmail.com', orgId: 'gmail.com', staff: false, claims: { email_verified: true } });
+  await refused({ projectId: 'g1', action: 'send', draft: draft, sendId: sid() }, 403, 'a personal email domain never sends in a company\'s name');
 
-  reset(); DOCS['fin_settings/dealroom'] = {};
-  await refused({ projectId: 'p1', action: 'send', draft: draft }, 400, 'no address configured: refused, not guessed');
+  reset(); DB.seed('fin_settings/dealroom', {});
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 400, 'no address configured: refused, not guessed');
   eq(MAILS.length, 0, 'nothing mailed');
   process.env.HELIOS_INTAKE_EMAIL = 'env@helios.example';
-  ok((await call({ projectId: 'p1', action: 'send', draft: draft })).sentTo[0] === 'env@helios.example', 'the environment address is used');
-
+  ok((await call({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() })).sentTo[0] === 'env@helios.example', 'the environment address is used');
   reset(); MAIL_ON = false;
-  await refused({ projectId: 'p1', action: 'send', draft: draft }, 500, 'mail not configured is a deployment problem');
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 500, 'mail not configured is a deployment problem');
+  reset();
+  await refused({ projectId: 'p1', action: 'send', draft: draft }, 400, 'a send carries its id');
 
+  /* the send itself */
   reset();
   var jpeg = Buffer.concat([Buffer.from([0xFF, 0xD8, 0xFF, 0xE0]), Buffer.alloc(300, 1)]);
-  var s = await call({ projectId: 'p1', action: 'send', draft: draft, message: 'Calexico first pass, per our call.', siteMapJpeg: 'data:image/jpeg;base64,' + jpeg.toString('base64') });
-  ok(s.ok && s.sentTo[0] === 'intake@helios.example' && /^projects\/p1\/helios-first-pass-\d{8}T\d{4}\.pdf$/.test(s.path), 'sent, and the file sits in the project\'s own folder: ' + s.path);
+  var id1 = sid();
+  var s = await call({ projectId: 'p1', action: 'send', sendId: id1, draft: draft, message: 'Calexico first pass, per our call.', siteMapJpeg: 'data:image/jpeg;base64,' + jpeg.toString('base64') });
+  ok(s.ok && s.sentTo[0] === 'intake@helios.example' && new RegExp('^projects/p1/helios-first-pass-\\d{8}T\\d{6}-' + id1 + '\\.pdf$').test(s.path), 'sent, and the file sits in the project\'s own folder under its own name: ' + s.path);
+  ok(Array.isArray(s.issues) && Array.isArray(s.report), 'the send says what the form holds');
   eq(SAVED.length, 1, 'one file stored'); eq(SAVED[0].opts.contentType, 'application/pdf', 'as a PDF');
   eq(MAILS.length, 1, 'one email');
   eq(MAILS[0].to, 'intake@helios.example', 'to Helios');
@@ -198,31 +383,52 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   eq(MAILS[0].opts.attachments.length, 2, 'the form and the snapshot');
   eq(MAILS[0].opts.attachments[0].contentType, 'application/pdf', 'the PDF first');
   eq(MAILS[0].opts.attachments[1].filename, 'site-map.jpg', 'then the site map');
-  ok(/Calexico first pass, per our call\./.test(MAILS[0].html) && /NextNRG/.test(MAILS[0].html) && /Dana Ortiz/.test(MAILS[0].html), 'the mail names the sender and carries the message');
+  ok(/Calexico first pass, per our call\./.test(MAILS[0].html) && /NextNRG/.test(MAILS[0].html) && /Dana Ortiz/.test(MAILS[0].html) && /dana@nextnrg\.example/.test(MAILS[0].html), 'the mail names the workspace, the person and their verified address, and carries the message');
   ok(/First pass checklist — 225 Cesar Chavez Blvd — Calexico/.test(MAILS[0].subject), 'subject names the project');
-  var rec = SETS.filter(function (x) { return x.path === 'projects/p1'; })[0];
-  ok(rec && rec.opts && rec.opts.merge === true && rec.data.heliosIntake.sentTo[0] === 'intake@helios.example' && rec.data.heliosIntake.count.__inc === 1 && rec.data.heliosIntake.snapshot === true, 'the send is recorded on the project, merged, counted');
-  ok(ADDS.length === 1 && ADDS[0].path === 'projects/p1/intakes' && ADDS[0].data.kind === 'helios-first-pass', 'and in the project\'s history');
+  var proj = DB.data.get('projects/p1');
+  ok(proj.heliosIntake && proj.heliosIntake.sentTo[0] === 'intake@helios.example' && proj.heliosIntake.snapshot === true && proj.heliosIntake.sendId === id1, 'the send is recorded on the project');
+  var hist = DB.data.get('projects/p1/intakes/' + id1);
+  ok(hist && hist.state === 'sent' && hist.kind === 'helios-first-pass' && hist.orgId === 'nextnrg.example', 'and in the project\'s history, keyed by the send');
+  var day = new Date().toISOString().slice(0, 10);
+  eq(DB.data.get('projects/p1/intake_counters/helios-' + day).count, 1, 'counted for the project');
+  eq(DB.data.get('omega_orgs/nextnrg.example/intake_counters/helios-' + day).count, 1, 'and for the workspace');
+  var again = await call({ projectId: 'p1', action: 'send', sendId: id1, draft: draft });
+  ok(again.ok && again.repeat === true && again.path === s.path, 'the same send again answers with the first');
+  eq(MAILS.length, 1, 'and mails nothing more');
   var dr2 = await call({ projectId: 'p1', action: 'draft', facts: {} });
   ok(dr2.lastSent && dr2.lastSent.sentBy === 'dana@nextnrg.example', 'the next draft says it was sent before');
+  var s2 = await call({ projectId: 'p1', action: 'send', sendId: sid(), draft: draft, siteMapJpeg: 'data:image/png;base64,' + Buffer.alloc(400, 2).toString('base64') });
+  eq(MAILS[1].opts.attachments.length, 1, 'a non-JPEG snapshot is dropped, the form still goes'); ok(s2.ok, 'sent');
+  ok(SAVED[0].path !== SAVED[1].path, 'two sends never share a stored file');
 
-  reset();
-  var s2 = await call({ projectId: 'p1', action: 'send', draft: draft, siteMapJpeg: 'data:image/png;base64,' + Buffer.alloc(400, 2).toString('base64') });
-  eq(MAILS[0].opts.attachments.length, 1, 'a non-JPEG snapshot is dropped, the form still goes'); ok(s2.ok, 'sent');
+  /* limits, on documents no browser can reach */
+  reset(); DB.seed('projects/p1/intake_counters/helios-' + day, { count: 5 });
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 429, 'five sends a project a day');
+  eq(MAILS.length, 0, 'nothing mailed past the limit');
+  reset(); DB.seed('omega_orgs/nextnrg.example/intake_counters/helios-' + day, { count: 25 });
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 429, 'twenty-five a workspace a day');
+  reset(); as({ uid: 's1', email: 'ops@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true, claims: { email_verified: true } });
+  DB.seed('projects/p1/intake_counters/helios-' + day, { count: 5 });
+  ok((await call({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() })).ok, 'staff are not held to the daily limit');
+  ok((await call({ projectId: 'p1', action: 'draft', facts: {} })).ok, 'and may draft any project');
 
-  reset(); MAIL_RESULT = { ok: false, error: 'bounced' };
-  await refused({ projectId: 'p1', action: 'send', draft: draft }, 502, 'a refused message is reported, the file is still stored');
+  /* a send in flight, a failed one, a stale one */
+  reset(); var id2 = sid();
+  DB.seed('projects/p1/intakes/' + id2, { state: 'sending', startedAt: new Date().toISOString() });
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: id2 }, 409, 'a send in flight is not sent twice');
+  DB.seed('projects/p1/intakes/' + id2, { state: 'sending', startedAt: new Date(Date.now() - 3600000).toISOString() });
+  ok((await call({ projectId: 'p1', action: 'send', draft: draft, sendId: id2 })).ok, 'one that died an hour ago may be retried');
+  reset(); MAIL_RESULT = { ok: false, error: 'bounced' }; var id3 = sid();
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: id3 }, 502, 'a refused message is reported, the file is still stored');
   eq(SAVED.length, 1, 'stored before the send');
-  eq(SETS.length, 0, 'not recorded as sent');
+  ok(!DB.data.get('projects/p1').heliosIntake, 'not recorded as sent');
+  eq(DB.data.get('projects/p1/intakes/' + id3).state, 'failed', 'the history says it failed');
+  MAIL_RESULT = { ok: true, id: 'msg-2' };
+  ok((await call({ projectId: 'p1', action: 'send', draft: draft, sendId: id3 })).ok, 'and the retry with the same id goes');
+  reset(); SAVE_FAIL = true;
+  await refused({ projectId: 'p1', action: 'send', draft: draft, sendId: sid() }, 502, 'a file that cannot be stored is never mailed');
+  eq(MAILS.length, 0, 'nothing mailed');
 
-  reset(); AUTH = function () { return Promise.resolve({ uid: 'u9', email: 'x@other.example', orgId: 'other.example', staff: false, claims: { email_verified: true } }); };
-  await refused({ projectId: 'p1', action: 'draft', facts: {} }, 403, 'another workspace cannot even draft');
-  reset(); AUTH = function () { return Promise.resolve({ uid: 's1', email: 'ops@clearsky-usa.com', orgId: 'clearsky-usa.com', staff: true, claims: { email_verified: true } }); };
-  ok((await call({ projectId: 'p1', action: 'draft', facts: {} })).ok, 'staff may');
-  reset(); DOCS['omega_orgs/nextnrg.example'].status = 'suspended';
-  await refused({ projectId: 'p1', action: 'send', draft: draft }, 403, 'a suspended workspace cannot send');
-  reset(); delete DOCS['omega_orgs/nextnrg.example'];
-  ok((await call({ projectId: 'p1', action: 'send', draft: draft })).ok, 'no workspace record: fails open, like the editor gate');
   reset();
   await refused({ projectId: 'nope', action: 'draft' }, 404, 'unknown project');
   await refused({ projectId: 'p1', action: 'delete' }, 400, 'unknown action');

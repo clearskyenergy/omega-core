@@ -1161,9 +1161,18 @@ fills United Illuminating's form) and hands it back, `send` stores it under
 `projects/{id}/` in Storage, mails it to Helios with the sender and ClearSky
 in copy (`mail.send` now carries `cc`/`attachments`), attaches a site-map
 JPEG when asked, and records `projects/{id}.heliosIntake` plus
-`intakes/`. Drafting needs `canActInOrg`; sending needs a verified email,
-`admin.clientAdmin`, or staff, and refuses a pending/suspended/cancelled
-workspace. Helios's address is `HELIOS_INTAKE_EMAIL`, else
+`intakes/{sendId}`. Text is transliterated to what the form's Helvetica
+prints (`toWinAnsi`), measured as drawn, wrapped, shrunk and, only then,
+cut, and `issues` says what was cut or changed before anything is sent.
+Drafting follows the projects READ rule (never an `org_members` grant) and
+the caller's plan (Omega Capital in a package; the editor's `export` or
+the finance add-on on a legacy plan, `addons.judge`); sending is the
+project's own workspace only, a record not pending/suspended/cancelled, no
+personal domain, not a viewer, a verified email or `admin.clientAdmin` or
+staff, five a project and twenty-five a workspace a day on counters no rule
+opens, and a `sendId` claimed in a transaction so a retry never mails twice.
+The editor's default BTM is not a choice and is never reported. Helios's
+address is `HELIOS_INTAKE_EMAIL`, else
 `fin_settings/dealroom.orgs.helios`, never a constant; unset means the
 dialog says so and nothing is mailed. `scripts/tests/thelios.js` pins the
 form's field names and the door. Design and the not-built list:
