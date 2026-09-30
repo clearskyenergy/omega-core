@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
    scripts/guides/compute-proforma.js — the Compute Site Pro Forma guide: a
-   Letter PDF with the ClearSky-OMEGA mark on every page and screenshots of
+   Letter PDF with the OMEGA mark (omega-logo.png, the product's own icon:
+   the favicon and the dashboard's top bar) on every page and screenshots of
    the real page.
 
    It serves compute-proforma.html against the REAL endpoint
@@ -135,7 +136,7 @@ function guideHtml(img, F, marks) {
     + '.cover .sub{font-size:12.5pt;line-height:1.45;color:#c9dde5;max-width:6.3in;margin:0 0 22px}'
     + '.cover .shot{background:#fff;border-radius:10px;padding:6px;box-shadow:0 10px 30px rgba(0,0,0,.35)}.cover .shot img{width:100%;display:block;border-radius:6px}'
     + '.cover .foot{position:absolute;left:0.75in;right:0.75in;bottom:0.85in;display:flex;align-items:center;gap:18px;border-top:1px solid rgba(255,255,255,.18);padding-top:16px}'
-    + '.cover .foot img{height:46px;display:block}.cover .foot .who{font-size:10pt;color:#c9dde5;line-height:1.45}.cover .foot .who b{color:#fff;font-size:11pt}';
+    + '.cover .foot img{height:0.95in;display:block}.cover .foot .who{font-size:10pt;color:#c9dde5;line-height:1.45}.cover .foot .who b{color:#fff;font-size:11pt}';
 
   var ex = F.example;
   return '<!doctype html><html><head><meta charset="utf-8"><title>' + TITLE + ' · User guide</title><style>' + css + '</style></head><body>'
@@ -146,7 +147,7 @@ function guideHtml(img, F, marks) {
   + '<h1>Compute Site Pro Forma</h1>'
   + '<p class="sub">Screen a building’s existing electrical service for GPU compute pods beside its EV chargers, a battery and its own load. Size it, choose the deal and present the after-tax IRR in your company’s brand.</p>'
   + '<div class="shot"><img src="' + img.cover.uri + '"></div>'
-  + '<div class="foot"><img src="' + marks.clearsky + '" alt="ClearSky"><div class="who"><b>ClearSky Energy Solutions</b><br>silmarillion.clearskyomega.com · ' + esc(F.month) + '</div></div>'
+  + '<div class="foot"><img src="' + marks.foot + '" alt="ClearSky-OMEGA"><div class="who"><b>ClearSky-OMEGA</b> · ClearSky Energy Solutions<br>silmarillion.clearskyomega.com · ' + esc(F.month) + '</div></div>'
   + '</section>'
 
   /* ── what it answers ── */
@@ -414,9 +415,11 @@ async function run() {
 
     /* the PDF */
     var img = {}; Object.keys(files).forEach(function (k) { img[k] = { uri: 'data:image/png;base64,' + fs.readFileSync(files[k]).toString('base64'), w: widthOf(files[k]) }; });
-    var marks = { band: await mark(context, 'site-assets/clearsky-omega-white.png', 88), clearsky: await mark(context, 'site-assets/clearsky-logo-light.png', 96) };
-    var HEADER = '<div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;width:100%;height:0.8in;margin:0;background:#0f2e3f;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 0.55in;box-sizing:border-box;font-family:Liberation Sans,Arial,sans-serif">'
-      + '<img src="' + marks.band + '" alt="ClearSky-OMEGA" style="height:0.46in;display:block">'
+    var marks = { band: await mark(context, 'omega-logo.png', 96), foot: await mark(context, 'omega-logo.png', 184) };
+    /* Chromium pads a header template from the page's top edge; the band runs to the edge */
+    var HEADER = '<style>#header{padding:0!important;margin:0!important}html,body{margin:0!important;padding:0!important}</style>'
+      + '<div style="-webkit-print-color-adjust:exact;print-color-adjust:exact;width:100%;height:0.8in;margin:0;background:#0f2e3f;color:#fff;display:flex;align-items:center;justify-content:space-between;padding:0 0.55in;box-sizing:border-box;font-family:Liberation Sans,Arial,sans-serif">'
+      + '<div style="display:flex;align-items:center;gap:10px"><img src="' + marks.band + '" alt="ClearSky-OMEGA" style="height:0.52in;display:block"><div style="font-size:14pt;font-weight:700;letter-spacing:-.2px">ClearSky-OMEGA</div></div>'
       + '<div style="text-align:right"><div style="font-size:13pt;font-weight:700;letter-spacing:-.1px">' + TITLE + '</div><div style="font-size:8.6pt;color:#b9d3dc;margin-top:2px">' + SUB + '</div></div></div>';
     var FOOTER = '<div style="width:100%;text-align:center;font:8pt Liberation Sans,Arial,sans-serif;color:#7d93a0;padding-bottom:6px">ClearSky Energy Solutions &nbsp;·&nbsp; silmarillion.clearskyomega.com &nbsp;·&nbsp; page <span class="pageNumber"></span> of <span class="totalPages"></span></div>';
     var doc = await context.newPage();

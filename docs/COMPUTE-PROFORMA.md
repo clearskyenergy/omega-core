@@ -42,7 +42,7 @@ comes back from the toast (*Put mine back*).
 
 **The guide.** `guides/compute/Compute-Site-Pro-Forma.pdf` (served at
 `/guides/compute/…`, linked as *Guide* in the page's header) is the user guide
-with the ClearSky-OMEGA mark: a cover, where to find the tool, the example,
+with the OMEGA mark (`omega-logo.png`, the product's icon) on every page: a cover, where to find the tool, the example,
 each of the seven steps, reading the results, the Site Screen and the
 planning figures. `npm run guide:compute` (`scripts/guides/compute-proforma.js`)
 builds it from the REAL page against the real endpoint: it runs the example,
