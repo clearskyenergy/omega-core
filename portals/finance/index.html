@@ -2947,6 +2947,9 @@ function devOverview() {
   const cycleSpark = all.filter(d => d.cycleDays).sort((a, b) => a.submitted.localeCompare(b.submitted)).slice(-14).map(d => d.cycleDays);
 
   const samples = all.filter(d => d.sample).length;
+  /* stats() leaves drafts out (nothing was submitted), while the page title
+     and the My deals count include them. Name the gap on the card. */
+  const drafts = list.filter(isDraft).length;
   const hidden = all.filter(d => !isPublished(d));
   const queued = all.filter(inReview);
   const onFirst = all.filter(onHold);
@@ -2976,7 +2979,8 @@ function devOverview() {
   </div>` : ''}
   ${filterChips()}
   <div class="kpi-strip">
-    ${kpi('Deals submitted', st.n, '', st.active ? `${st.active} still in market` : 'none open right now', '')}
+    ${kpi('Deals submitted', st.n, '', (st.active ? `${st.active} still in market` : 'none open right now')
+          + (drafts ? ` · ${plural(drafts, 'draft')} not submitted yet` : ''), '')}
     ${kpi('Capital requested', usdC(st.ask), '', `${num(st.mw, 0)} MW across ${plural(Object.keys(stateAgg(list)).length, 'state')}`, '')}
     ${kpi('Approval rate', nDecided ? pct(st.approvalRate) : '—', '',
           nDecided ? `${st.won} funded / ${plural(nDecided, 'decision')}` : 'no decisions back yet',
