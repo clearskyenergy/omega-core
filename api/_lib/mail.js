@@ -142,6 +142,12 @@ function send(to, subject, html, text, opts) {
   var msg = { from: from, to: to, subject: subject, html: html,
     text: text || html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() };
   if (opts.replyTo) msg.replyTo = opts.replyTo;
+  /* a copy to the sender and to ClearSky, and a file the mail carries
+     (the Helios intake sends the filled form itself, which is the point of
+     that mail); nodemailer's own shapes, passed through untouched */
+  if (opts.cc) msg.cc = opts.cc;
+  if (opts.bcc) msg.bcc = opts.bcc;
+  if (Array.isArray(opts.attachments) && opts.attachments.length) msg.attachments = opts.attachments;
   return got.t.sendMail(msg)
     .then(function (r) { return { ok: true, id: r.messageId, from: from }; })
     .catch(function (e) { console.error('[mail] send failed:', subject, '->', to, e.message); return { ok: false, error: e.message }; });
