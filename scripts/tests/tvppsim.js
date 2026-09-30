@@ -672,6 +672,31 @@ later(function () {
     return failWith('livekey-abcdef', 'https://livekey-abcdef.example.invalid/estimate', function () { return Promise.reject(new TypeError('fetch failed')); });
   }).then(function (o) {
     ok('a host that carries the key is withheld', o.n === 1 && /Endpoint: \[endpoint withheld\]$/.test(o.log) && o.log.indexOf('livekey') < 0, o.log);
+    /* U3: the URL parser lowercases a host, so a key in the host with any capital came back folded */
+    return failWith('Tok3nABCDEF', 'https://Tok3nABCDEF.example.invalid/estimate', function () { return Promise.reject(new TypeError('fetch failed')); });
+  }).then(function (o) {
+    ok('a host that carries the key in another case is withheld (U3)', o.n === 1 && /Endpoint: \[endpoint withheld\]$/.test(o.log) && o.log.toLowerCase().indexOf('tok3n') < 0, o.log);
+    return failWith('Kéy-ÄBCD', 'https://Kéy-ÄBCD.example.invalid/estimate', function () { return Promise.reject(new TypeError('fetch failed')); });
+  }).then(function (o) {
+    ok('a host that carries a non-ASCII key (printed as punycode) is withheld', o.n === 1 && /Endpoint: \[endpoint withheld\]$/.test(o.log) && none(o.log.toLowerCase(), ['xn--', 'bcd']), o.log);
+    return failWith('Tok3nABCDEF', 'https://example.invalid/TOK3NABCDEF/x?k=tok3nabcdef&j=Tok3nABCDEF', function () { return Promise.reject(new TypeError('fetch failed')); });
+  }).then(function (o) {
+    ok('a key in the path and query, in any case: the origin alone is logged', o.n === 1 && / Endpoint: https:\/\/example\.invalid$/.test(o.log) && o.log.toLowerCase().indexOf('tok3n') < 0, o.log);
+    return failWith('sk_live_abcdef', 'https://example.invalid/estimate', function () {
+      var e = new Error('x'); e.name = 'SK_LIVE_ABCDEF'; e.cause = { code: 'SK_LIVE_ABCDEF' }; return Promise.reject(e);
+    });
+  }).then(function (o) {
+    ok('an error name or code that is the key in another case is withheld', o.n === 1 && /quote failed \(Error\): /.test(o.log) && o.log.toLowerCase().indexOf('sk_live') < 0, o.log);
+    /* R18: a URL error whose quoted URL holds the word "header" is a URL fault, and a header error whose key holds "URL" is a header fault */
+    return failWith('k', 'api.headerless.example/estimate', function () { return Promise.reject(new TypeError('Failed to parse URL from api.headerless.example/estimate')); });
+  }).then(function (o) {
+    ok('a scheme-less URL that holds "header" reads "invalid URL", not the key (R18)', o.n === 1 && /: invalid URL; check DIVIDENDVPP_API_URL\./.test(o.log), o.log);
+    return failWith('k', 'https://user:pw12@headers.example.invalid/x', function (u) { return Promise.reject(new TypeError('Request cannot be constructed from a URL that includes credentials: ' + u)); });
+  }).then(function (o) {
+    ok('a credentialed URL whose host holds "headers" reads the credentials phrase (R18)', o.n === 1 && /: the URL carries credentials/.test(o.log) && none(o.log, ['pw12', 'user']), o.log);
+    return failWith('my URL-key\nx', 'https://example.invalid/x', function (u, o2) { return Promise.reject(new TypeError('Headers.append: "' + o2.headers.Authorization + '" is an invalid header value.')); });
+  }).then(function (o) {
+    ok('a header error whose key holds "URL" reads the header phrase', o.n === 1 && /: invalid header value; check DIVIDENDVPP_API_KEY\./.test(o.log) && o.log.indexOf('URL-key') < 0, o.log);
     return failWith('k', 'https://example.invalid/estimate', function () { var e = new Error('x'); e.name = 'Bad "name" k=QSECRETQ'; return Promise.reject(e); });
   }).then(function (o) {
     ok('an error name that is not an identifier reads "Error"', o.n === 1 && /quote failed \(Error\): /.test(o.log) && none(o.log, ['QSECRETQ', 'Bad']), o.log);
@@ -693,6 +718,18 @@ later(function () {
     }).then(function (o2) {
       ok('real fetch, a URL without a scheme: "could not be reached", the log says why and never prints it', /could not be reached/.test(o2.r.providerQuote.error)
         && /invalid URL/.test(o2.log) && none(o2.log, ['QSECRETQ', 'dividendvpp.com', 'estimate']), [o2.r.providerQuote.error, o2.log]);
+      return failWith('Tok3nABCDEF', 'https://Tok3nABCDEF.localhost:9/estimate', saved);
+    }).then(function (o2) {
+      ok('real fetch, the key as a mixed-case host label: withheld, in any case (U3)', o2.n === 1 && /Endpoint: \[endpoint withheld\]$/.test(o2.log) && o2.log.toLowerCase().indexOf('tok3n') < 0, o2.log);
+      return failWith('k', 'api.headerless.example/estimate', saved);
+    }).then(function (o2) {
+      ok('real fetch, a scheme-less URL holding "header": "invalid URL" (R18)', o2.n === 1 && /\(TypeError, ERR_INVALID_URL\): invalid URL; check DIVIDENDVPP_API_URL\./.test(o2.log), o2.log);
+      return failWith('k', 'https://user:pw12@headers.example.invalid/x', saved);
+    }).then(function (o2) {
+      ok('real fetch, a credentialed URL on a "headers" host: the credentials phrase (R18)', o2.n === 1 && /: the URL carries credentials/.test(o2.log) && none(o2.log, ['pw12', 'user@']), o2.log);
+      return failWith('my URL-key\nx', 'https://example.invalid/x', saved);
+    }).then(function (o2) {
+      ok('real fetch, a key holding "URL" and a newline: the header phrase', o2.n === 1 && /: invalid header value; check DIVIDENDVPP_API_KEY\./.test(o2.log) && o2.log.indexOf('URL-key') < 0, o2.log);
     });
   }).then(function () {
     ok('every line the provider logged is the fixed shape: name, code, one phrase, origin', every.length >= 10 && every.every(function (l) { return LINE.test(l); }),

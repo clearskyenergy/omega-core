@@ -19,12 +19,17 @@
         parsed and evaluated (a small evaluator of the rules language, in
         the section; no emulator here), so the real `allow write` and
         packageWrite() refuse vppsim on a record saved under the previous
-        catalog and allow it after the backfill, while the rule's other
-        conjuncts still hold (period, member list, verified email, org);
-        and each of a list of edits to the rule (the tool clause negated,
-        deleted, joined by ||, reading another field or default; the
-        member clause negated; the period check dropped; packageWrite no
-        longer consulted) fails the section;
+        catalog and allow it after the backfill, while each of the rule's
+        other clauses decides a case of its own (the org check on a legacy
+        workspace, the demo bucket and staff, tenant status, the role list,
+        a member record, the member list, verified email, the trial window
+        and accessUntil); EVERY clause of the toolData write and of
+        packageWrite(), found in the text at every depth, deleted and
+        negated in turn, fails the section, except two named equivalents
+        whose reason is written down (and which are held to still survive);
+        and a list of further edits (the tool clause joined by || or
+        reading another field or default, accessUntil dropped, a viewer
+        admitted, packageWrite no longer consulted) fails it too;
      4. the catalog this backfill last covered: a module gaining a tool
         fails here until the backfill is run with that deploy.
 
@@ -592,6 +597,7 @@ function reader(db) {
   };
 }
 function ownerOf(org, token) { return { uid: 'u-' + org, token: Object.assign({ email: 'owner@' + org, email_verified: true }, token || {}) }; }
+function person(name, domain) { return { uid: 'u-' + name, token: { email: name + '@' + domain, email_verified: true } }; }
 /* a browser's Save of toolData/{org}/tools/{tool} by `auth` (undefined: the
    workspace's owner; null: signed out); create and update must agree */
 function saveAllowed(rules, db, org, tool, auth, time) {
@@ -610,6 +616,17 @@ function judgeRules(text) {
     db.seed('omega_orgs/' + id + '/members/u-' + id, { role: 'owner', status: 'active', email: 'owner@' + id });
   });
   db.seed('omega_orgs/trial-old.com/members/u-narrow', { role: 'member', status: 'active', email: 'narrow@trial-old.com', toolAccess: ['editor'] });
+  db.seed('omega_orgs/paid-old.com/members/u-viewer', { role: 'viewer', status: 'active', email: 'viewer@paid-old.com' });
+  db.seed('omega_orgs/paid-old.com/members/u-member', { role: 'member', status: 'active', email: 'member@paid-old.com' });
+  db.seed('omega_orgs/suspended.com', { name: 'suspended.com', status: 'suspended' });
+  db.seed('omega_orgs/suspended.com/billing/current', { packaged: true, packagingState: 'paid', modules: ['lite'], toolAccess: M.resolve(['lite']).toolAccess, accessUntil: NOW + 30 * DAY });
+  db.seed('omega_orgs/suspended.com/members/u-suspended.com', { role: 'owner', status: 'active', email: 'owner@suspended.com' });
+  ['demo-clearsky', 'demo-sunesol'].forEach(function (id) {
+    db.seed('omega_orgs/' + id, { name: id, status: 'active' });
+    db.seed('omega_orgs/' + id + '/billing/current', { packaged: true, packagingState: 'awaiting_payment', modules: ['lite'], toolAccess: M.resolve(['lite']).toolAccess, accessUntil: NOW });
+  });
+  db.seed('omega_orgs/demo-clearsky/members/u-ana', { role: 'owner', status: 'active', email: 'ana@clearsky-usa.com' });
+  db.seed('omega_orgs/demo-sunesol/members/u-sam', { role: 'owner', status: 'active', email: 'sam@sunesol.com' });
   var matched = rules.judge('toolData/trial-old.com/tools/vppsim', 'update', { auth: ownerOf('trial-old.com'), time: NOW }, reader(db)).matched;
   expect('the one match block that governs toolData/{org}/tools/{tool}', matched.join(), '/toolData/{orgId}/tools/{toolKey}');
   expect('a record saved under the previous catalog: Save of vppsim is REFUSED', saveAllowed(rules, db, 'trial-old.com', 'vppsim'), false);
@@ -631,6 +648,18 @@ function judgeRules(text) {
     expect('  an unverified email is refused', saveAllowed(rules, db, 'trial-old.com', 'vppsim', ownerOf('trial-old.com', { email_verified: false })), false);
     expect('  another company\'s person is refused', saveAllowed(rules, db, 'trial-old.com', 'vppsim', ownerOf('paid-old.com')), false);
     expect('  signed out is refused', saveAllowed(rules, db, 'trial-old.com', 'vppsim', null), false);
+    /* T10: each clause below is the ONLY thing that refuses (or allows) its case */
+    expect('  a person from another domain saving to a LEGACY workspace is refused (the match-level org check alone)',
+      saveAllowed(rules, db, 'cleancell.us', 'vppsim', ownerOf('attacker.example')), false);
+    expect('  the owner of a SUSPENDED packaged workspace saves nothing', saveAllowed(rules, db, 'suspended.com', 'vppsim'), false);
+    expect('  a member with the role "viewer" saves nothing', saveAllowed(rules, db, 'paid-old.com', 'vppsim', person('viewer', 'paid-old.com')), false);
+    expect('  a member with the role "member" saves', saveAllowed(rules, db, 'paid-old.com', 'vppsim', person('member', 'paid-old.com')), true);
+    expect('  a person of the workspace with no member record saves nothing on a package', saveAllowed(rules, db, 'paid-old.com', 'vppsim', person('nodoc', 'paid-old.com')), false);
+    expect('  a paid package past its accessUntil saves nothing', saveAllowed(rules, db, 'paid-old.com', 'vppsim', undefined, NOW + 31 * DAY), false);
+    expect('  ClearSky staff save to their demo bucket even while its package is closed (isAdmin, ownsDemoBucket)',
+      saveAllowed(rules, db, 'demo-clearsky', 'vppsim', person('ana', 'clearsky-usa.com')), true);
+    expect('  a demo bucket owner who is not staff meets the package (its period is closed)',
+      saveAllowed(rules, db, 'demo-sunesol', 'vppsim', person('sam', 'sunesol.com')), false);
     return out;
   });
 }
@@ -647,8 +676,90 @@ var MUTANTS = [
   ['the tool clause defaulting to a list that names a tool', TOOL_CLAUSE, TOOL_CLAUSE.replace("'toolAccess', []", "'toolAccess', ['editor']")],
   ['the member clause negated', MEMBER_CLAUSE, '!' + MEMBER_CLAUSE],
   ['the period check dropped', "&& packagePeriodOpen(get(/databases/$(database)/documents/omega_orgs/$(o)/billing/current).data)", ''],
-  ['packageWrite no longer consulted by the toolData write', '&& packageWrite(orgId, toolKey);', ';']
+  ['packageWrite no longer consulted by the toolData write', '&& packageWrite(orgId, toolKey);', ';'],
+  ['accessUntil no longer compared with now', "&& now < b.get('accessUntil', 0)", ''],
+  ['a viewer admitted by the role list', "tRole(o) in ['owner', 'admin', 'member']", "tRole(o) in ['owner', 'admin', 'member', 'viewer']"]
 ];
+
+/* T10: EVERY clause, not a hand-picked few. The toolData write's condition
+   and packageWrite()'s body are cut out of the live text and split into
+   their && / || clauses at every depth (a parenthesised group is a clause
+   and so is each clause inside it); each clause is then DELETED and,
+   separately, NEGATED, and every such rule must fail this section. A
+   mutant that survives must be named in EQUIVALENT with the reason it
+   cannot change any outcome; the list is held exact, so a clause that
+   becomes decidable (or one that stops being) fails here too. */
+function exprAt(text, start, head) {
+  var at = text.indexOf(start); if (at < 0 || text.indexOf(start, at + 1) >= 0) return null;
+  var h = text.indexOf(head, at); if (h < 0) return null;
+  var from = h + head.length, to = text.indexOf(';', from);
+  return { from: from, to: to, src: text.slice(from, to) };
+}
+/* split `src` on a top-level operator; parens, brackets and quotes nest */
+function splitTop(src, op) {
+  var parts = [], depth = 0, q = null, last = 0, i, c;
+  for (i = 0; i < src.length; i++) {
+    c = src[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; continue; }
+    if (c === "'" || c === '"') q = c;
+    else if (c === '(' || c === '[') depth++;
+    else if (c === ')' || c === ']') depth--;
+    else if (!depth && src.substr(i, 2) === op) { parts.push(src.slice(last, i)); last = i + 2; i++; }
+  }
+  parts.push(src.slice(last));
+  return parts.map(function (x) { return x.trim(); });
+}
+function wrapped(src) {
+  if (src[0] !== '(' || src[src.length - 1] !== ')') return false;
+  var depth = 0, q = null;
+  for (var i = 0; i < src.length; i++) {
+    var c = src[i];
+    if (q) { if (c === '\\') i++; else if (c === q) q = null; continue; }
+    if (c === "'" || c === '"') q = c; else if (c === '(') depth++; else if (c === ')') { depth--; if (!depth && i < src.length - 1) return false; }
+  }
+  return true;
+}
+function tree(src, paren) {
+  var s = src.trim();
+  if (wrapped(s)) return tree(s.slice(1, -1), true);
+  var ops = ['||', '&&'];
+  for (var k = 0; k < ops.length; k++) {
+    var parts = splitTop(s, ops[k]);
+    if (parts.length > 1) return { op: ops[k], paren: !!paren, items: parts.map(function (x) { return tree(x, false); }) };
+  }
+  return { leaf: s, paren: !!paren };
+}
+function ser(n) {
+  var t = n.leaf != null ? n.leaf : n.items.map(ser).join(' ' + n.op + ' ');
+  return n.paren ? '(' + t + ')' : t;
+}
+/* every clause below the root: { label, deleted, negated } as whole expressions */
+function clauseMutants(root) {
+  var out = [];
+  (function go(n, rebuild) {
+    if (n.leaf != null) return;
+    n.items.forEach(function (it, i) {
+      function withItem(x) {
+        var items = n.items.slice(); if (x === null) items.splice(i, 1); else items[i] = x;
+        return rebuild(items.length === 1 ? Object.assign({}, items[0], { paren: n.paren || items[0].paren }) : { op: n.op, paren: n.paren, items: items });
+      }
+      out.push({ label: ser(Object.assign({}, it, { paren: false })), deleted: withItem(null), negated: withItem({ leaf: '!(' + ser(Object.assign({}, it, { paren: false })) + ')', paren: false }) });
+      go(it, function (x) { return withItem(x); });
+    });
+  })(root, function (x) { return ser(x); });
+  return out;
+}
+var CLAUSE_SITES = [
+  ['the toolData write', 'match /toolData/{orgId}/tools/{toolKey} {', 'allow write: if '],
+  ['packageWrite()', 'function packageWrite(o, tool) {', 'return ']
+];
+/* a surviving mutant, and why nothing can observe it */
+var EQUIVALENT = {
+  'the toolData write: signedIn() deleted':
+    'signed out, userOrg() reads request.auth.token of null: an error, which || with ownsDemoBucket() (false) leaves standing, and an error refuses',
+  'packageWrite(): tHasMember(o) deleted':
+    'with no member record tRole() reads "member", but the member-list clause then get()s the absent record: an error, and an error refuses'
+};
 later(function () {
   section('firestore.rules: the toolData write, evaluated from the rules text');
   var page = fs.readFileSync(path.join(ROOT, 'vpp-earnings.html'), 'utf8');
@@ -666,7 +777,32 @@ later(function () {
         });
       });
     });
-    return chain;
+    return chain.then(function () {
+      var survivors = [], tried = 0, chain2 = Promise.resolve();
+      CLAUSE_SITES.forEach(function (site) {
+        var e = exprAt(RULES, site[1], site[2]);
+        if (!e) { ok(site[0] + ': found in firestore.rules exactly once', false, site[1]); return; }
+        var ms = clauseMutants(tree(e.src, false));
+        ok(site[0] + ': its clauses were read (' + ms.length + ')', ms.length >= (site[0] === 'packageWrite()' ? 10 : 4), ms.map(function (m) { return m.label; }));
+        ms.forEach(function (m) {
+          [['deleted', m.deleted], ['negated', m.negated]].forEach(function (v) {
+            chain2 = chain2.then(function () {
+              tried++;
+              return judgeRules(RULES.slice(0, e.from) + v[1] + RULES.slice(e.to)).then(function (res) {
+                if (!res.some(function (r) { return !r.pass; })) survivors.push(site[0] + ': ' + m.label + ' ' + v[0]);
+              }, function (err) { survivors.push(site[0] + ': ' + m.label + ' ' + v[0] + ' (threw ' + err.message + ')'); });
+            });
+          });
+        });
+      });
+      return chain2.then(function () {
+        var unexplained = survivors.filter(function (s) { return !EQUIVALENT[s]; });
+        var stale = Object.keys(EQUIVALENT).filter(function (k) { return survivors.indexOf(k) < 0; });
+        ok('every clause of the toolData write and of packageWrite(), deleted or negated, fails this section (' + tried + ' mutants; the survivors are the named equivalents)',
+          tried >= 28 && unexplained.length === 0, unexplained);
+        ok('each named equivalent still survives (else take it off EQUIVALENT)', stale.length === 0, stale);
+      });
+    });
   });
 });
 
