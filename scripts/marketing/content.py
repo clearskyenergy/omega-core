@@ -88,11 +88,9 @@ That's Build Tuesday. What should we build next week: an EV hub, solar + storage
 
  dict(day=3, pillar='quiz', fmt='Image', title='Spot the problem',
   visual="The card. Tomorrow's run posts the answer card as a comment on this post.",
-  text="""Spot the problem.
+  text="""One of these four battery units gets the whole layout sent back by the fire marshal. Which one?
 
-One of these four battery units gets the layout sent back by the fire marshal. Which one, and why?
-
-Answer in the comments. We'll post the answer tomorrow.
+Spot the problem, and tell us why. Answer in the comments; we'll post the answer tomorrow.
 
 #BESS #NFPA855 #FireSafety""",
   comment="",
