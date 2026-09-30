@@ -181,17 +181,30 @@ Clean Cell's two tools) still wins: absent is not empty.
     **Rows.** Once the readings carry a date, a clock time or an hour
     number, an unstamped row is a note or a footer; a row with a Total /
     Sum / Average / Max cell, or a date range, is a footer even when
-    stamped; a stamped row with a blank or "N/A" reading is a gap (zero
+    stamped — unless that column carries such a cell on most readings
+    (SCE's Green Button "2025-01-01 00:00:00 to 2025-01-01 01:00:00", a
+    Billing Period or "Max Demand TOU" rate column): that describes each
+    reading, and a period's START is the reading's time where it is the
+    only time the file has (a plain date column wins over a period
+    column). A stamped row with a blank or "N/A" reading is a gap (zero
     within 2%, said so). A date written only on a day's first row carries
-    down.
+    down. **One row per day** (a date and 24, 48 or 96 consecutive hour or
+    interval columns, "Hour 1 … Hour 24", "HE 1", "00:00"…) is read across
+    each day as the long file it stands for, said in a note; no column is
+    asked for. **A Meter / Channel / Direction / UOM column** that holds
+    more than one value is refused as more than one meter or channel (a
+    date-only file of Delivered and Received rows repeats no timestamp,
+    so only that column shows it).
     **Dates set the order and the interval.** The date column is read on
     every row, its day/month order settled across the file (month names,
     20250605 and two-digit years too). With a time (in the date cell, a
     clock column or an hour-number column) the readings are put in date and
     time order — a newest-first file, or one sorted newest day first with
     hours ascending, is read oldest first and no day is turned round — and
-    more than four repeated timestamps (two meters, delivered and received
-    rows) are refused, naming the first repeat; dates that run forward and
+    repeated timestamps beyond one clock-change hour on each of at most
+    two days (a twelve-month export from early November holds two
+    fall-backs) are refused as two meters or delivered and received rows,
+    naming the first repeat; dates that run forward and
     then back are refused the same way. The interval is the readings per
     day (24, 48 or 96), never the row count, so two years of hourly rows
     are refused as two years, not read as a year of half-hours; a dated

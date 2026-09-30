@@ -618,9 +618,13 @@ function installDouble(cfg) {
       c1.shown && /Which column is the load\?/.test(c1.text) && c1.radios.map(function (r) { return r.v; }).join() === 'Main Meter kW,Sub Meter kW' && /e\.g\. 30 · 30 · 30/.test(c1.text) && /e\.g\. 9 · 9 · 9/.test(c1.text) && !c1.radios.some(function (r) { return r.on; }), c1);
     ok('col: the first post named no column, and no result is drawn', !('column' in (lastLoad() || {})) && !(await p.$('.kpis')) && /Which column is the load/.test(await text(p, '#formmsg')), { load: lastLoad(), msg: await text(p, '#formmsg') });
     await p.click('input[name=loadcol][value="Sub Meter kW"]');
-    await p.click('[data-act=use-column]');
-    await until(function () { return p.$('.kpis'); }, 20000); await p.waitForTimeout(150);
+    var beforePick = estimates();
+    /* three taps before the answer: one estimate */
+    await p.evaluate(function () { var b = document.querySelector('[data-act=use-column]'); b.click(); b.click(); b.click(); });
+    await until(function () { return p.$('.kpis'); }, 20000); await p.waitForTimeout(300);
+    ok('col: tapping "Use this column" three times posts one estimate', estimates() === beforePick + 1, { posts: estimates() - beforePick });
     ok('col: the pick is posted as load.column', (lastLoad() || {}).column === 'Sub Meter kW', lastLoad());
+    ok('col: once the picked column is read, the question closes', !(await chooser()).shown, (await chooser()).text.slice(0, 120));
     ok('col: the result says which column was read', /Column read: Sub Meter kW \(your pick\)/.test(await text(p, '#out')), (await text(p, '#out')).slice(0, 300));
     ok('col: and is the engine\'s figure for that column', (await grossOnPage(p)) === money(want.totals.gross), { want: money(want.totals.gross), got: await grossOnPage(p) });
     var msg = await saveAs(p);

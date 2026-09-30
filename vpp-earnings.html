@@ -593,6 +593,9 @@ function api(body) {
 }
 
 function run() {
+  /* one estimate at a time: the chooser's button and a double-tap would
+     otherwise post the whole file again (round 3 recheck) */
+  if ($('run').disabled) return;
   var c = collect();
   if (c.error) { formMsg(c.error); return; }
   if (!/^\d{5}(-\d{4})?$/.test(c.site.zip)) { $('zip').className = 'bad'; formMsg('A five-digit US ZIP code is needed.'); $('zip').focus(); return; }
@@ -617,6 +620,8 @@ function run() {
   var btn = $('run'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Simulating 8,760 hours…';
   api(payload).then(function (j) {
     LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
+    /* the column question is answered: the result's chip says which column was read */
+    $('colpick').hidden = true;
     render(j.result);
     canSave();
   }, function (e) {

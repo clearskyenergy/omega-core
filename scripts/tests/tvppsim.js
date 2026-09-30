@@ -609,6 +609,51 @@ section('Interval files: delimiter, commas and footers (round 3: T2, T5, U2)');
   ok('"Max Demand,2025-07-15 14:00,250" (stamped) is a footer', md.ok && md.readings === 8760 && Math.max.apply(null, md.kw) === 40, md.ok ? md.readings : md.error);
 })();
 
+section('Interval files: periods, day rows, clock changes and channels (round 3 recheck)');
+(function () {
+  function hr(h) { return h === 18 ? 20 : 10; }
+  function stamp(k) { var t = dayAt(2025, 1, 1, Math.floor(k / 24)); return [t, k % 24]; }
+  /* SCE's Green Button: each reading's cell is its period, "A to B" */
+  var sce = ['Name,Someone', '', 'Energy consumption time period,Usage(Real energy in kilowatt-hours),Reading quality'];
+  var per = ['Period,kWh'], bp = ['Date,Hour Ending,Billing Period,Rate,kWh'];
+  for (var i = 0; i < 8760; i++) {
+    var a = stamp(i), b = stamp(i + 1), A = a[0], B = b[0];
+    sce.push('"' + iso(A[0], A[1], A[2]) + ' ' + p2d(a[1]) + ':00:00 to ' + iso(B[0], B[1], B[2]) + ' ' + p2d(b[1]) + ':00:00","' + hr(a[1]) + '",""');
+    per.push(A[1] + '/' + A[2] + '/' + A[0] + ' ' + a[1] + ':00 - ' + B[1] + '/' + B[2] + '/' + B[0] + ' ' + b[1] + ':00,' + hr(a[1]));
+    bp.push(A[1] + '/' + A[2] + '/' + A[0] + ',' + (a[1] + 1) + ',' + p2d(A[1]) + '/01/2025 - ' + p2d(A[1]) + '/28/2025,Max Demand TOU,' + hr(a[1]));
+  }
+  [['SCE "… to …" periods', sce], ['"… - …" periods', per], ['a Billing Period and a "Max Demand TOU" rate column on every row', bp]].forEach(function (c) {
+    var q = S.parseInterval(c[1].join('\n'), 'kwh');
+    ok(c[0] + ' are readings, not footers: a dated year with its 18:00 peak', q.ok && q.readings === 8760 && q.dated && q.kw.indexOf(20) === 18, q.ok ? [q.readings, q.dated, q.kw.indexOf(20)] : q.error);
+  });
+  var bp2 = ['Billing Period,Date,Hour Ending,kWh'];
+  for (i = 0; i < 8760; i++) { var a2 = stamp(i), A2 = a2[0]; bp2.push(p2d(A2[1]) + '/01/2025 - ' + p2d(A2[1]) + '/28/2025,' + A2[1] + '/' + A2[2] + '/' + A2[0] + ',' + (a2[1] + 1) + ',' + hr(a2[1])); }
+  var qb = S.parseInterval(bp2.join('\n'), 'kwh');
+  ok('a Billing Period column BEFORE the Date column is not taken as the date (a month is not a day)', qb.ok && qb.readings === 8760 && qb.dated && qb.kw.indexOf(20) === 18, qb.ok ? [qb.readings, qb.kw.indexOf(20)] : qb.error);
+  /* one row per day, 24 hour columns and a total */
+  var m = ['Account,Date'], k;
+  for (k = 1; k <= 24; k++) m[0] += ',Hour ' + k;
+  m[0] += ',Total';
+  for (var d = 0; d < 365; d++) { var t = dayAt(2025, 1, 1, d), r = '123,' + t[1] + '/' + t[2] + '/' + t[0]; for (k = 0; k < 24; k++) r += ',' + hr(k); m.push(r + ',250'); }
+  var mx = S.parseInterval(m.join('\n'), 'kwh');
+  ok('a "Date, Hour 1 … Hour 24" day matrix is read across each day as an hourly year, and says so', mx.ok && mx.readings === 8760 && mx.dated && mx.kw.indexOf(20) === 18 &&
+     /one row per day with 24 columns/.test(mx.notes.join(' ')) && mx.column && mx.column.chosen === 'auto', mx.ok ? [mx.readings, mx.notes] : mx);
+  var mxp = S.parseInterval(m.join('\n'), 'kwh', null, 'Hour 1');
+  ok('a stale column pick on a day matrix does not break it', mxp.ok && mxp.readings === 8760, mxp.ok ? mxp.readings : mxp.error);
+  /* a 15-minute local-clock year from 3 Nov 2024 crosses two fall-backs */
+  var dst = ['Date,Time,kWh'], f = new Intl.DateTimeFormat('en-US', { timeZone: 'America/Chicago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' });
+  for (i = 0; i < 35040; i++) { var pt = {}; f.formatToParts(new Date(Date.UTC(2024, 10, 3, 5) + i * 9e5)).forEach(function (x) { pt[x.type] = x.value; }); dst.push(pt.month + '/' + pt.day + '/' + pt.year + ',' + pt.hour + ':' + pt.minute + ',2.5'); }
+  var q2 = S.parseInterval(dst.join('\n'), 'kwh');
+  ok('a 15-minute local-time year that crosses two fall-backs is one meter, not two', q2.ok && q2.readings === 35040, q2.ok ? q2.readings : q2.error);
+  /* a date, a channel and no time: delivered and received never repeat a stamp */
+  var ch = ['Date,Channel,kWh'];
+  for (i = 0; i < 8760; i++) { var c0 = stamp(i)[0], ds = c0[1] + '/' + c0[2] + '/' + c0[0]; ch.push(ds + ',Delivered,' + hr(i % 24)); ch.push(ds + ',Received,40'); }
+  var q3 = S.parseInterval(ch.join('\n'), 'kwh');
+  ok('"Date,Channel,kWh" with Delivered and Received rows is refused (not read as a half-hourly year)', !q3.ok && /"Channel" column holds more than one value/.test(q3.error) && /more than one channel/.test(q3.error), q3.ok ? q3.readings : q3.error);
+  var one = S.parseInterval(yr1('Date,Time,Meter,kW', function (dd, hh) { return dd + ',' + hh + ',M-1001,40'; }), 'kw');
+  ok('a Meter column with one meter on every row is fine', one.ok && one.readings === 8760, one.ok ? one.readings : one.error);
+})();
+
 section('Interval files: timestamps set the interval and the order (round 3: U1, T3, R4, R6, R7)');
 function meter(head, f, y) { var out = []; for (var i = 0; i < 8760; i++) { var t = tsAt(i, 1), dd = t[0].split('-'); out.push(f(dd[1] + '/' + dd[2] + '/' + (y || dd[0]), i)); } return out; }
 (function () {
