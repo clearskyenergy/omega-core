@@ -28,9 +28,16 @@ function div(id) {
 var styles = (markup.match(/<style\b[^>]*>[\s\S]*?<\/style>/gi) || []).join('\n');
 /* the plan chip's own script, inline: it paints into the title bar's mount */
 var plan = fs.readFileSync(path.join(ROOT, 'omega-editor-plan.js'), 'utf8').replace(/<\/script/gi, '<\\/script');
+/* the export's own pre-capture step, cut out of the file so the check runs
+   what ships: every sheet export (blueprint, plot plan, proposal) calls it on
+   #sc right before html2canvas */
+var NORM_A = source.indexOf('async function _preCaptureNormalize(el) {'), NORM_B = source.indexOf('async function _captureCanvasWithSVG(', NORM_A);
+assert(NORM_A > 0 && NORM_B > NORM_A, '_preCaptureNormalize is in editor.html');
+var normalize = source.slice(NORM_A, NORM_B).replace(/<\/script/gi, '<\\/script');
 var fixture = '<!doctype html><html><head><meta charset="utf-8"><title>Editor chrome</title>' + styles + '</head><body>' +
   div('portal-nav') + div('tb') + div('ribbon') + div('lp') + div('rp') + div('bess-modal') + div('export-modal') +
-  '<script>window.OmegaUI={};</script><script>' + plan + '</script>' +
+  '<div id="sc" style="position:absolute;left:340px;top:140px;width:760px;height:520px">' + div('lgd') + '</div>' +
+  '<script>window.OmegaUI={};</script><script>' + plan + '</script><script>' + normalize + '</script>' +
   '</body></html>';
 /* a read-only package with every part of the panel: the notice and its pay
    link, the server's figures, In Site Map, Elsewhere and a change waiting
@@ -124,6 +131,50 @@ async function run() {
            this name is two lines in a full-width pill, not one word a line */
         ok(x.width >= 150 && x.lines <= 3, scheme + ': equipment label ' + x.sel + ' uses the pill width (' + x.width + 'px, ' + x.lines + ' lines)');
       });
+      /* The legend on an exported sheet (2026-09-30, Concord, 164 Summer St:
+         "the legend is spitting out blanks ... it gets removed once I export
+         it"). _preCaptureNormalize paints the key's ground dark for the
+         capture; under the light chrome its rows kept the theme's dark ink,
+         so the sheet showed the icons and nothing else. Rows are built the
+         way renderLegend() builds them. On screen the key follows the theme;
+         during the capture every line of it reads on the dark ground; after
+         the capture #lgd carries exactly the inline style it had before. */
+      var key = await page.evaluate(async function () {
+        document.getElementById('lgd-items').innerHTML =
+          '<div style="font-size:8px;font-weight:800;letter-spacing:.8px;opacity:.6;margin:2px 0 4px">EQUIPMENT</div>'
+          + '<div class="li"><div class="li-ico"><svg width="16" height="16"><rect width="16" height="16" fill="#2E7D4F"/></svg></div><span class="li-txt">EVSE 1 · Autel AC Elite ×2</span></div>'
+          + '<div class="li"><div class="li-ico" style="font-size:8px;font-weight:800">MB</div><span class="li-txt">New Meter Bank</span></div>'
+          + '<div style="font-size:8px;font-weight:800;letter-spacing:.8px;opacity:.6;margin:8px 0 4px">CONDUIT</div>'
+          + '<div class="li"><div class="li-line" style="background:#F59E0B"></div><span class="li-txt">Branch — panel→EVSE<br><span style="font-size:8px;opacity:.65">2 runs · 64 ft of conduit · in trench</span></span></div>'
+          + '<div class="li" style="border-top:1px solid var(--hairline);margin-top:4px;padding-top:4px"><span class="li-txt" style="font-size:8.5px"><strong>Trench 40 ft</strong> · dug once</span></div>';
+        var lgd = document.getElementById('lgd');
+        lgd.style.display = 'block';
+        function measure(fold) {
+          var g = C.ground(lgd), worst = 99, what = '', n = 0;
+          lgd.querySelectorAll('h4, .li-txt, .li-txt span, #lgd-items > div:not(.li)').forEach(function (t) {
+            var own = Array.prototype.some.call(t.childNodes, function (c) { return c.nodeType === 3 && c.textContent.trim().length > 1; });
+            if (!own) return;
+            var cs = getComputedStyle(t), fg = C.parse(cs.color), a = 1;
+            if (fold) for (var p = t; p && p !== lgd.parentNode; p = p.parentElement) a *= +getComputedStyle(p).opacity;
+            fg.a *= a; n++;
+            var c = C.contrast(C.over(fg, g), g);
+            if (c < worst) { worst = c; what = t.textContent.trim().slice(0, 28) + ' ' + cs.color; }
+          });
+          return { ground: 'rgb(' + Math.round(g.r) + ',' + Math.round(g.g) + ',' + Math.round(g.b) + ')', lum: C.lum(g), worst: worst, what: what, n: n };
+        }
+        var before = lgd.getAttribute('style'), screen = measure();
+        var cleanup = await _preCaptureNormalize(document.getElementById('sc'));
+        var capture = measure(true);   /* at export, as drawn: opacity folded in */
+        cleanup();
+        return { screen: screen, capture: capture, restored: lgd.getAttribute('style') === before, style: lgd.getAttribute('style'), after: measure() };
+      });
+      ok(key.screen.n >= 6 && key.capture.n === key.screen.n, scheme + ': legend text measured (' + key.screen.n + ' lines)');
+      ok(scheme === 'light' ? key.screen.lum > 0.8 : key.screen.lum < 0.2, scheme + ': legend on screen follows the theme, ground ' + key.screen.ground);
+      ok(key.screen.worst >= 4.5, scheme + ': legend on screen contrast ' + key.screen.worst.toFixed(2) + ':1 — ' + key.screen.what);
+      ok(key.capture.lum < 0.2, scheme + ': legend at export sits on the dark sheet ground ' + key.capture.ground);
+      ok(key.capture.worst >= 4.5, scheme + ': legend at export contrast ' + key.capture.worst.toFixed(2) + ':1 — ' + key.capture.what);
+      ok(key.restored, scheme + ': the capture hands #lgd back as it was (' + key.style + ')');
+      ok(Math.abs(key.after.worst - key.screen.worst) < 0.01, scheme + ': legend on screen after export reads as before (' + key.after.worst.toFixed(2) + ':1)');
       for (var p of PANELS) {
         await page.evaluate(function (fn) { (new Function('return (' + fn + ')'))()(); }, p.open.toString());
         var r = await page.evaluate(function (spec) {

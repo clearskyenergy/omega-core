@@ -20,7 +20,15 @@
             narrative: '',       replaces the generated overview paragraph
             contact: { lines },  the close page's lines ('Email: …'), six at most
             quarterLabel: '',    the cover's 'Q3 2026'; default from the prepared date
-            footerTitle: '' }    default 'Investor One-Pager'
+            footerTitle: '',     default 'Investor One-Pager'
+            title: '',           replaces the overview's generated title
+            flow: [[kind, label, caption], …]  replaces "How the system works"
+                                 (kind: solar, bess, controller, ev, compute,
+                                 host, grid; six at most)
+            terms: ['…', …] }    replaces the terms banner's parts
+   The last three let a site whose model lives elsewhere (the Compute Site
+   Pro Forma: GPU pods, chargers and a battery on one service) print the
+   same deck; its words come from the server, like every figure.
 
    render() wraps each slide in a .pf-frame sized to var(--pf-scale), so a
    page sets --pf-scale on any ancestor and the deck lays out at that size
@@ -512,6 +520,8 @@
   /* ── THE WORDS ──────────────────────────────────────────────────────────── */
   /* EV joins the title only while the title stays one line at full size. */
   function titleText(m) {
+    var given = clean(m.o.title);
+    if (given) return given;
     var parts = [], where = m.place ? ' in ' + m.place : '';
     if (m.solar) parts.push(fmt.kw(m.solar.kwDc) + ' DC solar');
     if (m.bess) parts.push(m.solar ? fmt.kwh(m.bess.kwh) + ' storage' : fmt.kw(m.bess.kw) + ' / ' + fmt.kwh(m.bess.kwh) + ' battery storage');
@@ -679,6 +689,10 @@
       ' 13.76 17.77 12.24 15.98Z"/>' +
       '<path class="a" d="M18.28 10.57L19.24 9.93 22.13 14.23 21.18 14.87Z"/><path class="a" d="M24.15 13.26L25.18 13.77 23.04 18.17 22 17.66Z"/>' +
       '<rect class="a" x="23.04" y="18.02" width="3.6" height="2.88" rx="0.81"/>',
+    compute: '<rect class="a" x="10.08" y="7.92" width="15.84" height="20.16" rx="1.44"/>' +
+      '<rect class="w" x="12.24" y="10.44" width="11.52" height="3.6" rx=".72"/><rect class="w" x="12.24" y="16.2" width="11.52" height="3.6" rx=".72"/>' +
+      '<rect class="w" x="12.24" y="21.96" width="11.52" height="3.6" rx=".72"/>' +
+      '<circle class="a" cx="21.6" cy="12.24" r=".9"/><circle class="a" cx="21.6" cy="18" r=".9"/><circle class="a" cx="21.6" cy="23.76" r=".9"/>',
     host: '<rect class="a" x="16.56" y="7.93" width="10.8" height="18.74"/><rect class="a" x="7.92" y="14.42" width="8.64" height="12.25"/>' +
       '<path class="w" d="M19.44 11.54h1.8v2.16h-1.8zM23.04 11.54h1.8v2.16h-1.8zM19.44 15.5h1.8v2.16h-1.8zM23.04 15.5h1.8v2.16h-1.8z' +
       'M19.44 19.46h1.8v2.16h-1.8zM23.04 19.46h1.8v2.16h-1.8zM19.44 23.07h1.8v2.16h-1.8zM23.04 23.07h1.8v2.16h-1.8z' +
@@ -688,7 +702,7 @@
       '<path class="a" d="M15.32 11.16L16.67 11.35 14.32 28.12 12.97 27.93Z"/><path class="a" d="M19.09 11.35L20.44 11.16 22.79 27.93 21.44 28.12Z"/>'
   };
   function icon(kind) {
-    return '<svg class="pf-ico" viewBox="0 0 36 36" aria-hidden="true"><circle class="t" cx="18" cy="18" r="18"/>' + GLYPH[kind] + '</svg>';
+    return '<svg class="pf-ico" viewBox="0 0 36 36" aria-hidden="true"><circle class="t" cx="18" cy="18" r="18"/>' + (GLYPH[kind] || GLYPH.host) + '</svg>';
   }
   var ARROW = '<svg class="pf-arw" viewBox="0 0 12.24 6.48" aria-hidden="true"><path class="a" d="M0 1.62H9V0L12.24 3.24 9 6.48V4.86H0Z"/></svg>';
 
@@ -741,7 +755,12 @@
   }
   /* What is on the site, left to right as power flows: [icon, label, caption]. */
   function flowItems(m) {
-    var items = [];
+    var items = [], given = arr(m.o.flow), g;
+    for (g = 0; g < given.length && items.length < 6; g++) {
+      var it = arr(given[g]);
+      if (clean(it[1])) items.push([own(GLYPH, clean(it[0])) ? clean(it[0]) : 'host', clean(it[1]), clean(it[2])]);
+    }
+    if (items.length) return items;
     if (m.solar) {
       items.push(['solar', fmt.kw(m.solar.kwDc) + ' DC Solar', (m.roof ? 'Rooftop photovoltaic array' : 'Photovoltaic array') + ' on the host site']);
     }
@@ -772,7 +791,8 @@
   }
   /* The deal in one line: the PPA, or how the battery is paid for. */
   function termsPill(m) {
-    var t = term(m), b = at(m.inp, 'revenue.bess') || {}, host = m.host;
+    var t = term(m), b = at(m.inp, 'revenue.bess') || {}, host = m.host, given = arr(m.o.terms).map(clean).filter(Boolean);
+    if (given.length) return pill(given.slice(0, 4), 'pf-pill-ov');
     if (m.ppa) {
       return pill([(t ? t + '-year ' : '') + 'PPA', fmt.rate(m.ppa.rate1) + ' in year one',
         pos(m.ppa.escalatorPct) ? fmt.percent(m.ppa.escalatorPct) + ' annual escalator' : '', host ? 'Off-taker: ' + host : ''], 'pf-pill-ov');

@@ -63,7 +63,9 @@
     feasibilitycsv: DOC + 'M9 12h6M9 15h6M9 18h6',
     /* ── 3 · Size & cost ── */
     electricalsizing: 'M12 2L5 13h6l-1 9 8-11h-6l1-9zM17 4h4M17 8h4M17 12h4',
-    loadscreen: GAUGE, loadbar: GAUGE, maxload: 'M4 20h16M6 20v-6M10 20v-10M14 20V4M18 20v-8',
+    loadscreen: GAUGE, loadbar: GAUGE,
+    /* a building on its service with a charge bolt: the edge site screen */
+    sitescreen: 'M4 21V9l6-4 6 4v12M3 21h18M17 13h3v8M9 10l-2 4h3l-2 4', maxload: 'M4 20h16M6 20v-6M10 20v-10M14 20V4M18 20v-8',
     computecost: SERVER + 'M14 6h4M14 16h4',
     landlease: 'M3 20l4-13 14 2-4 11zM10 12h5M9 15h5',
     /* ── Build tab: guided builds and equipment ── */
