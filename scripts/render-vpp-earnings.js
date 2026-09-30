@@ -42,6 +42,21 @@
           undated file run after it posts no date
      size the page's file check is the server's cap in the server's measure:
           4,300,000 characters read, one more refused with nothing posted
+     T11  what is measured is what is POSTED, the JSON body in UTF-8 bytes,
+          against 4,400,000 (under Vercel's 4.5 MB): a quoted CRLF file under
+          the character cap, a file of two-byte characters, and a file that
+          fits alone with a tariff that tips the body over are each refused
+          with the limit named and nothing posted; one under it is posted
+     col  "Which column is the load?" (the interval contract): the server's
+          refusal (field load.column, with columns) shows a chooser with each
+          column's samples; the pick is posted as load.column and named in
+          the result; it is saved with the scenario (never the file) and
+          put back; a new file clears it; an unknown column asks again.
+          The render server STUBS that refusal for one fixture only (its
+          header is CHOOSER_HEAD) and answers the pick with the real engine
+          on that column; a second case sends a genuinely ambiguous file
+          through the REAL engine ('needs the engine's column contract':
+          it fails until api/_lib/vpp-sim.js implements the contract)
      S3   Save writes the whole list, so it never writes over a stored list
           it has not read: a refused read is said and read again on Save, a
           slow one makes Save wait (the hand-off's auto-run included), and a
@@ -119,11 +134,24 @@ var srv = http.createServer(function (req, res) {
       if (L && typeof L === 'object') { load = {}; for (var lk in L) load[lk] = lk === 'text' ? (typeof L.text === 'string' ? L.text.length : L.text) : L[lk]; }
       apiCalls.push({ route: req.method + ' ' + u, action: body && body.action, load: load });
       if (u === '/api/vpp-estimate') {
-        var out = { status: 200 };
+        var out = { status: 200 }, picked = null;
+        /* the chooser fixture (and only it): the refusal the engine gives an
+           ambiguous file under the interval contract, then the pick answered
+           by the real engine on that one column */
+        if (L && L.type === 'interval' && typeof L.text === 'string' && L.text.split(/\r?\n/, 1)[0] === CHOOSER_HEAD) {
+          var cols = chooserColumns(L.text);
+          picked = null;
+          for (var ci = 0; ci < cols.length; ci++) if (cols[ci].key === L.column) picked = cols[ci];
+          if (!picked) return json({ ok: false, errors: [{ field: 'load.column', message: 'Which column is the load? This file has two that could be: Main Meter kW and Sub Meter kW.', columns: cols }] }, 400);
+          body.site.load.text = oneColumn(L.text, picked.index);
+        }
         var r = {
           setHeader: function (k, v) { res.setHeader(k, v); },
           status: function (n) { out.status = n; return r; },
-          json: function (o) { json(o, out.status); return r; }
+          json: function (o) {
+            if (picked && o && o.result && o.result.load && !o.result.load.column) o.result.load.column = { key: picked.key, label: picked.label, chosen: 'caller' };
+            json(o, out.status); return r;
+          }
         };
         return Promise.resolve(ENDPOINT({ method: req.method, headers: req.headers, body: body }, r))
           .catch(function (e) { missing.push('vpp-estimate threw: ' + (e && e.message)); json({ ok: false, error: 'threw' }, 500); });
@@ -159,6 +187,26 @@ var INTERVAL_CSV = (function () {
   for (var i = 0; i < 35040; i++) { var h = Math.floor(i / 4) % 24; out.push(i + ',' + (h >= 8 && h < 18 ? 14 : 6).toFixed(2)); }
   return out.join('\n');
 })();
+/* an hourly year, dated, with the given header and a row's cells after the date */
+function hourlyCsv(head, cells, eol) {
+  var out = [head];
+  for (var d = 0; d < 365; d++) for (var h = 0; h < 24; h++) {
+    var dt = new Date(Date.UTC(2025, 0, 1 + d, h));
+    out.push(dt.toISOString().slice(0, 10) + ' ' + (h < 10 ? '0' : '') + h + ':00,' + cells(h));
+  }
+  return out.join(eol || '\n');
+}
+/* the chooser fixture: the render server answers it with the contract's refusal */
+var CHOOSER_HEAD = 'Date,Main Meter kW,Sub Meter kW';
+var CHOOSER_CSV = hourlyCsv(CHOOSER_HEAD, function (h) { return (h >= 8 && h < 18 ? 80 : 30) + ',' + (h >= 13 && h < 18 ? 22 : 9); });
+function chooserColumns(text) {
+  var lines = text.split(/\r?\n/), head = lines[0].split(','), out = [];
+  for (var c = 1; c < head.length; c++) out.push({ key: head[c], label: head[c], index: c, sample: lines.slice(1, 4).map(function (l) { return l.split(',')[c]; }) });
+  return out.map(function (x) { return { key: x.key, label: x.label, sample: x.sample, index: x.index }; });
+}
+function oneColumn(text, c) { return text.split(/\r?\n/).map(function (l) { var a = l.split(','); return a[0] + ',' + a[c]; }).join('\n'); }
+/* genuinely ambiguous, through the REAL engine: two load-named columns */
+var AMBIGUOUS_CSV = hourlyCsv('Date,Site kW,Chiller kW', function (h) { return (h >= 8 && h < 18 ? 60 : 25) + ',' + (h >= 12 && h < 17 ? 30 : 5); });
 var US_BILLS = (function () {
   var rows = [];
   for (var m = 1; m <= 12; m++) rows.push(m + '/15/2025\t' + (38000 + m * 900) + '\t' + (150 + (m > 5 && m < 10 ? 40 : 0)) + '\t' + (5200 + m * 110));
@@ -250,7 +298,13 @@ function installDouble(cfg) {
     await ctx.addInitScript(installDouble, { user: opts.user, docs: opts.docs || ORG_DOCS, failures: opts.failures, holdRead: !!opts.holdRead });
     var page = await ctx.newPage(), errs = [];
     page.on('pageerror', function (e) { errs.push('pageerror: ' + e.message); });
-    page.on('console', function (m) { if (m.type() === 'error') errs.push('console: ' + m.text().slice(0, 300)); });
+    page.on('console', function (m) {
+      if (m.type() !== 'error') return;
+      /* a step that expects the estimate refused (400) says so; nothing else is let through */
+      var at = (m.location() && m.location().url) || '';
+      if (opts.estimate400 && /status of 400/.test(m.text()) && /\/api\/vpp-estimate$/.test(at)) return;
+      errs.push('console: ' + m.text().slice(0, 300));
+    });
     page.on('dialog', function (d) { errs.push('dialog: ' + d.message()); d.dismiss().catch(function () {}); });
     return { ctx: ctx, page: page, errs: errs };
   }
@@ -276,9 +330,13 @@ function installDouble(cfg) {
       .then(function (t) { return t || text(p, '#savemsg'); });
   }
   /* an interval file of exactly n characters (ASCII: as many bytes) */
-  function sizedCsv(n) {
-    var head = 'timestamp,kw\n', line = '1,5.00\n', s = head + line.repeat(Math.floor((n - head.length) / line.length));
-    return s + '\n'.repeat(n - s.length);
+  function sizedCsv(n, line) {
+    var head = 'timestamp,kw,note\n', s;
+    /* long rows by default: one escaped line break per 100 characters, so a
+       file at the character cap is also under the byte limit once posted */
+    line = line || ('1,5.00,' + new Array(93).join('x') + '\n');
+    s = head + line.repeat(Math.floor((n - head.length) / line.length));
+    return s + 'x'.repeat(n - s.length);
   }
   function grossOnPage(p) { return p.$eval('.kpi.hl .v', function (e) { return e.textContent; }).catch(function () { return null; }); }
   async function shot(p, name) { if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'vpp-' + name + '.png'), fullPage: true }); }
@@ -485,6 +543,154 @@ function installDouble(cfg) {
     before = estimates();
     await p.click('#run'); await p.waitForTimeout(600);
     ok('size: one character more is refused, the limit named, and nothing is posted', !!refused && /4,300,000 characters/.test(await text(p, '#formmsg')) && estimates() === before, { info: await text(p, '#fileinfo'), msg: await text(p, '#formmsg'), posted: estimates() - before });
+  });
+
+  /* ── T11: the size is what is POSTED (the JSON body, UTF-8 bytes) ──── */
+  await step('Request size is the posted body (desktop)', async function (use) {
+    var t = await use({ user: userOf('u-ana'), estimate400: true }), p = t.page;
+    await p.goto(base + '/vpp-earnings.html', { waitUntil: 'load' });
+    await signedIn(p);
+    await p.fill('#zip', '60601');
+    await p.click('[data-mode=interval]');
+    var pageSrc = fs.readFileSync(path.join(ROOT, 'vpp-earnings.html'), 'utf8');
+    ok('T11: the page measures against 4,400,000 bytes', /\nvar MAX_BODY = 4400000;/.test(pageSrc));
+    async function refusedUnposted(name, buf, want) {
+      await p.setInputFiles('#file', { name: name, mimeType: 'text/csv', buffer: buf });
+      await until(function () { return text(p, '#fileinfo').then(function (x) { return x ? x : null; }); });
+      var before = estimates();
+      await p.click('#run'); await p.waitForTimeout(700);
+      return { info: await text(p, '#fileinfo'), msg: await text(p, '#formmsg'), posted: estimates() - before, want: want };
+    }
+    /* a quoted, CRLF year under the character cap: every quote and line break is escaped in the body */
+    var rowQ = '"2025-01-01 00:00","5.00","A","B","C"\r\n', quoted = 'Date,kW,a,b,c\r\n' + rowQ.repeat(Math.floor(4150000 / rowQ.length));
+    var q = await refusedUnposted('quoted-crlf.csv', Buffer.from(quoted), quoted.length);
+    ok('T11: a quoted CRLF file under 4,300,000 characters (' + quoted.length.toLocaleString('en-US') + ') whose body is over 4.4 MB is refused, the limit named, nothing posted',
+      quoted.length <= 4300000 && q.posted === 0 && /4,400,000 bytes/.test(q.msg), q);
+    /* two-byte characters: the body has fewer than 4.4 million characters and more than 4.4 million bytes */
+    var rowU = '1,5.00,' + 'é'.repeat(10) + '\n', wide = 'timestamp,kw,note\n' + rowU.repeat(Math.floor(3000000 / rowU.length));
+    var w = await refusedUnposted('utf8-notes.csv', Buffer.from(wide, 'utf8'), JSON.stringify(wide).length);
+    ok('T11: the body is measured in UTF-8 bytes, not characters (' + JSON.stringify(wide).length.toLocaleString('en-US') + ' characters, ' + Buffer.byteLength(JSON.stringify(wide)).toLocaleString('en-US') + ' bytes): refused, nothing posted',
+      JSON.stringify(wide).length < 4400000 && w.posted === 0 && /4,400,000 bytes/.test(w.msg), w);
+    /* a file that fits alone (4.33 MB escaped), and a pasted tariff that tips the whole body over */
+    var fits = sizedCsv(3790000, '1,5.00\n');
+    await p.setInputFiles('#file', { name: 'fits-alone.csv', mimeType: 'text/csv', buffer: Buffer.from(fits) });
+    var readFits = await until(function () { return text(p, '#fileinfo').then(function (x) { return /rows with numbers/.test(x) ? x : null; }); });
+    ok('(the file alone is under the limit once escaped, and is read)', !!readFits && Buffer.byteLength(JSON.stringify(fits)) < 4400000, { info: await text(p, '#fileinfo'), bytes: Buffer.byteLength(JSON.stringify(fits)) });
+    await openDetails(p, 'Tariff');
+    var bigUrdb = JSON.parse(JSON.stringify(URDB)); bigUrdb.name = 'Padded ' + new Array(120001).join('p');
+    await p.fill('#urdb', JSON.stringify(bigUrdb));
+    var before = estimates();
+    await p.click('#run'); await p.waitForTimeout(700);
+    var fm = await text(p, '#formmsg');
+    ok('T11: the whole body is measured: the file with a large tariff is over, refused with the limit named, nothing posted', estimates() === before && /4,400,000 bytes/.test(fm), { msg: fm, posted: estimates() - before });
+    await p.fill('#urdb', '');
+    before = estimates();
+    await p.click('#run');
+    var posted = await until(function () { return estimates() > before && p.$eval('#run', function (b) { return !b.disabled; }); }, 30000);
+    ok('T11: without the tariff the same file is under the limit and is posted', !!posted && lastLoad() && lastLoad().text === fits.length, { posted: estimates() - before, msg: await text(p, '#formmsg') });
+  });
+
+  /* ── col: "Which column is the load?" (the interval contract) ─────────── */
+  await step('Which column is the load (stubbed refusal, desktop)', async function (use) {
+    var subSite = { zip: '60601', segment: 'commercial', battery: { kw: 100, kwh: 400 }, load: { type: 'interval', text: oneColumn(CHOOSER_CSV, 2), unit: 'kw', column: 'Sub Meter kW' } };
+    var want = await PROVIDER.estimate(subSite);
+    if (!want || want.ok === false) throw new Error('the engine refused the Sub Meter column: ' + JSON.stringify(want && want.errors));
+    var saved = {}; saved[ANA_DOC] = { data: { v: 1, scenarios: [
+      scenario('Gone column', { zip: '60601', segment: 'commercial', battery: { kw: 100, kwh: 400 }, load: { type: 'interval', unit: 'kw', column: 'Gone kW' } })
+    ] } };
+    var t = await use({ user: userOf('u-ana'), docs: withDocs(saved), estimate400: true }), p = t.page;
+    await p.goto(base + '/vpp-earnings.html', { waitUntil: 'load' });
+    await until(function () { return scenNames(p).then(function (n) { return n.length === 2; }); });
+    await p.fill('#zip', '60601'); await p.fill('#nm', 'Two meters'); await p.fill('#bkw', '100'); await p.fill('#bkwh', '400');
+    await p.click('[data-mode=interval]');
+    var fixture = { name: 'two-meters.csv', mimeType: 'text/csv', buffer: Buffer.from(CHOOSER_CSV) };
+    function rowsRead() { return until(function () { return text(p, '#fileinfo').then(function (x) { return /rows with numbers/.test(x) ? x : null; }); }); }
+    function chooser() { return p.evaluate(function () { var b = document.getElementById('colpick'); return { shown: !b.hidden, text: b.textContent, radios: [].map.call(b.querySelectorAll('input[name=loadcol]'), function (i) { return { v: i.value, on: i.checked }; }) }; }); }
+    async function runAndWait() {
+      var before = estimates(); await p.click('#run');
+      await until(function () { return estimates() > before && p.$eval('#run', function (b) { return !b.disabled; }); }, 20000);
+      await p.waitForTimeout(150);
+    }
+    await p.setInputFiles('#file', fixture); await rowsRead();
+    await runAndWait();
+    var c1 = await chooser();
+    ok('col: the refusal shows "Which column is the load?" in the interval panel, each column with its sample values',
+      c1.shown && /Which column is the load\?/.test(c1.text) && c1.radios.map(function (r) { return r.v; }).join() === 'Main Meter kW,Sub Meter kW' && /e\.g\. 30 · 30 · 30/.test(c1.text) && /e\.g\. 9 · 9 · 9/.test(c1.text) && !c1.radios.some(function (r) { return r.on; }), c1);
+    ok('col: the first post named no column, and no result is drawn', !('column' in (lastLoad() || {})) && !(await p.$('.kpis')) && /Which column is the load/.test(await text(p, '#formmsg')), { load: lastLoad(), msg: await text(p, '#formmsg') });
+    await p.click('input[name=loadcol][value="Sub Meter kW"]');
+    await p.click('[data-act=use-column]');
+    await until(function () { return p.$('.kpis'); }, 20000); await p.waitForTimeout(150);
+    ok('col: the pick is posted as load.column', (lastLoad() || {}).column === 'Sub Meter kW', lastLoad());
+    ok('col: the result says which column was read', /Column read: Sub Meter kW \(your pick\)/.test(await text(p, '#out')), (await text(p, '#out')).slice(0, 300));
+    ok('col: and is the engine\'s figure for that column', (await grossOnPage(p)) === money(want.totals.gross), { want: money(want.totals.gross), got: await grossOnPage(p) });
+    var msg = await saveAs(p);
+    var stored = await doc(p, ANA_DOC), s0 = stored && stored.data.scenarios[0];
+    ok('col: Save keeps the column with the scenario, never the file', /^Saved/.test(msg) && !!s0 && s0.name === 'Two meters' && s0.site.load.column === 'Sub Meter kW' && !('text' in s0.site.load), { msg: msg, load: s0 && s0.site.load });
+    /* a new file clears the choice */
+    await p.setInputFiles('#file', { name: 'one-column.csv', mimeType: 'text/csv', buffer: Buffer.from(INTERVAL_CSV) }); await rowsRead();
+    var c2 = await chooser();
+    await runAndWait();
+    ok('col: a new file clears the choice: the chooser goes and no column is posted', !c2.shown && !('column' in (lastLoad() || {})) && !/Column read/.test(await text(p, '#out')), { chooser: c2.shown, load: lastLoad() });
+    /* the saved scenario puts the column back, for its file attached again */
+    await pick(p, 'Two meters');
+    ok('col: loading the scenario names its load column', /load column: Sub Meter kW/.test(await text(p, '#fileinfo')), await text(p, '#fileinfo'));
+    await p.setInputFiles('#file', fixture); await rowsRead();
+    await runAndWait();
+    ok('col: its file attached again is read on that column, with no question asked', (lastLoad() || {}).column === 'Sub Meter kW' && !(await chooser()).shown && /Column read: Sub Meter kW/.test(await text(p, '#out')) && (await grossOnPage(p)) === money(want.totals.gross), { load: lastLoad(), gross: await grossOnPage(p) });
+    /* a column the file does not have asks again, with nothing picked */
+    await pick(p, 'Gone column');
+    await p.setInputFiles('#file', fixture); await rowsRead();
+    await runAndWait();
+    var c3 = await chooser();
+    ok('col: a saved column the file does not have is refused the same way, and the chooser asks with nothing picked', (lastLoad() || {}).column === 'Gone kW' && c3.shown && c3.radios.length === 2 && !c3.radios.some(function (r) { return r.on; }), { load: lastLoad(), chooser: c3 });
+    ok('col: and the file line no longer names the refused column', !/Gone kW/.test(await text(p, '#fileinfo')) && /rows with numbers/.test(await text(p, '#fileinfo')), await text(p, '#fileinfo'));
+    await runAndWait();
+    ok('col: and the unknown column is not posted again', !('column' in (lastLoad() || {})), lastLoad());
+    ok('no stray NaN / undefined (chooser)', !(await stray(p)), await stray(p));
+    await shot(p, 'desktop-chooser');
+  });
+  await step('Which column is the load (phone, 390px)', async function (use) {
+    var t = await use({ user: userOf('u-ana'), phone: true, estimate400: true }), p = t.page;
+    await p.goto(base + '/vpp-earnings.html', { waitUntil: 'load' });
+    await signedIn(p);
+    await p.fill('#zip', '60601');
+    await p.click('[data-mode=interval]');
+    await p.setInputFiles('#file', { name: 'two-meters.csv', mimeType: 'text/csv', buffer: Buffer.from(CHOOSER_CSV) });
+    await until(function () { return text(p, '#fileinfo').then(function (x) { return /rows with numbers/.test(x); }); });
+    await p.click('#run');
+    var shown = await until(function () { return p.$eval('#colpick', function (b) { return !b.hidden; }); }, 20000);
+    ok('col: the chooser shows on a phone', !!shown);
+    ok('no sideways scroll on a 390px phone (chooser open)', !(await sideways(p)), await widths(p));
+  });
+  /* The REAL engine on a genuinely ambiguous file. It passes once
+     api/_lib/vpp-sim.js implements the interval contract (field load.column
+     with columns; result.load.column); until then it fails, by design. */
+  await step('Which column is the load (real engine: needs the engine\'s column contract)', async function (use) {
+    var site = { zip: '60601', segment: 'commercial', battery: { kw: 50, kwh: 200 }, load: { type: 'interval', text: AMBIGUOUS_CSV, unit: 'kw' } };
+    var refusal = await PROVIDER.estimate(site);
+    var t = await use({ user: userOf('u-ana'), estimate400: true }), p = t.page;
+    await p.goto(base + '/vpp-earnings.html', { waitUntil: 'load' });
+    await signedIn(p);
+    await p.fill('#zip', '60601'); await p.fill('#bkw', '50'); await p.fill('#bkwh', '200');
+    await p.click('[data-mode=interval]');
+    await p.setInputFiles('#file', { name: 'site-and-chiller.csv', mimeType: 'text/csv', buffer: Buffer.from(AMBIGUOUS_CSV) });
+    await until(function () { return text(p, '#fileinfo').then(function (x) { return /rows with numbers/.test(x); }); });
+    var before = estimates();
+    await p.click('#run');
+    await until(function () { return estimates() > before && p.$eval('#run', function (b) { return !b.disabled; }); }, 20000);
+    var shown = await until(function () { return p.$eval('#colpick', function (b) { return !b.hidden; }); }, 3000);
+    ok('col [needs the engine\'s column contract]: the real engine refuses an ambiguous file with field load.column and its columns, and the page asks',
+      !!shown && refusal && refusal.ok === false && refusal.errors[0].field === 'load.column' && Array.isArray(refusal.errors[0].columns),
+      { engine: refusal && refusal.errors, msg: await text(p, '#formmsg') });
+    if (!shown) return;
+    site.load.column = 'Chiller kW';
+    var want = await PROVIDER.estimate(site);
+    await p.click('input[name=loadcol][value="Chiller kW"]');
+    await p.click('[data-act=use-column]');
+    await until(function () { return p.$('.kpis'); }, 20000); await p.waitForTimeout(150);
+    ok('col [needs the engine\'s column contract]: the pick is read by the real engine, named in the result, and is its figure',
+      (lastLoad() || {}).column === 'Chiller kW' && /Column read: Chiller kW/.test(await text(p, '#out')) && want && want.ok !== false && (await grossOnPage(p)) === money(want.totals.gross),
+      { load: lastLoad(), gross: await grossOnPage(p), want: want && want.totals && money(want.totals.gross) });
   });
 
   /* ── S3: Save writes the WHOLE list, so never before the stored list is read ── */

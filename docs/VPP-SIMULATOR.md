@@ -180,13 +180,28 @@ Clean Cell's two tools) still wins: absent is not empty.
 - `vpp-earnings.html` — collects, reads the CSV as text, posts, draws. An
   interval file over the server's cap (4,300,000 characters, measured as the
   server measures it: characters of text) is refused on the page, with the
-  limit named, before anything is posted.
+  limit named, before anything is posted. So is a request whose POSTED body
+  is over 4,400,000 bytes: the page measures the JSON it is about to send in
+  UTF-8 bytes (a quote, tab or line break of the file is two bytes there, a
+  non-ASCII character two to four), because Vercel refuses a body over
+  4.5 MB with a 413 before the function runs, and a quoted CRLF file under
+  the character cap can be one. The file alone is measured when it is read,
+  the whole body (tariff included) on Simulate.
+  **Which column is the load?** When the engine will not guess the load
+  column it answers 400 with `errors[0].field === 'load.column'` and
+  `columns: [{ key, label, sample }]`; the page shows those columns, with up
+  to three sample values each, in the interval panel, posts the pick as
+  `load.column` and names the column read in the result
+  (`result.load.column`, "your pick" or "picked by its header"). The column
+  (its key, the header text) is saved with the scenario, never the file, and
+  put back on load for the file attached next; any other new file clears the
+  choice, and a saved column the file does not have asks again.
   Scenarios save to `toolData/{org}/tools/vppsim` as `{ v:1, scenarios:[…] }`,
   at most 30, newest first. Each is `{ name, site, gross, owner, market, at }`:
   the inputs (`site`) and the run's headline — `gross` labels the saved list;
   `owner`, the resolved `market` and the save time are kept beside it —
   never the streams, rates or anything else of the result. An interval file
-  is not stored (its unit and first-reading date are), and a URDB tariff is
+  is not stored (its unit, first-reading date and load column are), and a URDB tariff is
   stored as text (`tariff.urdbJson`) because Firestore refuses nested arrays.
   Loading a scenario sets the unit, first-reading date and file for every
   scenario (a profile or bills one blanks them), so a date left by an

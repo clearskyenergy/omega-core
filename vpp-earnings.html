@@ -33,12 +33,23 @@
   folded, as the rules fold them). A URDB tariff is kept as its JSON text
   (tariff.urdbJson): Firestore refuses the arrays inside arrays it is made
   of. The interval file is never stored; its unit, first-reading date and
-  the split are. A save writes the whole list, so Save refuses (and says
+  the split are, and so is the load column the person chose (the file's
+  header text, load.column), put back when the scenario is loaded and
+  kept for the next file attached. A save writes the whole list, so Save refuses (and says
   why) until the stored list has been read in this session, a missing
   document counting as read, and while another save is on its way.
   Another person signing in, or signing out, reloads the page.
-  An interval file over the server's cap (4,300,000 characters) is refused
-  here, with the limit named, before anything is posted.
+  WHICH COLUMN.  When the server cannot tell which column of a file is the
+  load (two load columns, or none named as one), it answers 400 with
+  errors[0].field 'load.column' and the columns it found ({ key, label,
+  sample }). The page shows "Which column is the load?" in the interval
+  panel, and the choice is posted as load.column and shown in the result
+  (result.load.column). A new file clears the choice.
+  SIZE.  What is measured is what is POSTED: the UTF-8 bytes of the JSON
+  body, where every quote, tab and line break of the file is escaped. Over
+  4,400,000 bytes (under Vercel's 4.5 MB request limit) the estimate is
+  refused here, the limit named, before anything is posted; so is a file
+  over the engine's own cap (4,300,000 characters).
   Rendered and checked by scripts/render-vpp-earnings.js (check:pages).
   ═══════════════════════════════════════════════════════════════════════════════
 -->
@@ -162,6 +173,15 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
 .upsell{background:linear-gradient(135deg,#EEF4FF,#FFFFFF);border-color:#C7D7FE}
 .upsell-acts{display:flex;gap:8px;flex-wrap:wrap}
 .saved select{flex:1 1 180px;min-width:0}
+.colpick{margin-top:10px;border:1px solid #FEDF89;background:var(--warn-bg);border-radius:10px;padding:10px 12px}
+.colpick h4{margin:0 0 4px;font-size:13px;color:var(--ink)}
+.colpick p{margin:0 0 8px;font-size:12px;color:var(--sub)}
+.colpick label{display:flex;gap:8px;align-items:flex-start;padding:6px 4px;border-radius:7px;cursor:pointer;min-width:0}
+.colpick label:hover{background:#fff}
+.colpick input{margin-top:3px;flex:0 0 auto}
+.colpick .cl{font-weight:600;color:var(--ink);font-size:13px;overflow-wrap:anywhere}
+.colpick .cs{display:block;font-size:11.5px;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+.colpick .btn{margin-top:6px}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
@@ -231,6 +251,7 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
         </div>
         <span class="hint" style="display:block;margin:-6px 0 8px;font-size:12px;color:var(--muted)">A file with no dates is read as starting 1 January unless you give its first day.</span>
         <div id="fileinfo" class="hint" style="font-size:12px;color:var(--sub)"></div>
+        <div id="colpick" class="colpick" hidden></div>
       </div>
       <details class="more"><summary>Tariff (optional)</summary>
         <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0 8px">Without it a regional planning rate is used — calibrated to the bills' dollars when they carry any.</p>
@@ -293,6 +314,33 @@ var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oc
    text): api/_lib/vpp-sim.js MAX_TEXT. The page refuses past it, before posting. */
 var MAX_TEXT = 4300000;
 var TOO_BIG = 'The interval file is larger than 4.3 MB (4,300,000 characters), the most one estimate accepts. Export one year of hourly or 15-minute readings without extra columns.';
+/* What is POSTED is the JSON body, where every quote, tab and line break of
+   the file becomes two characters: a file under MAX_TEXT can still make a
+   request Vercel refuses (4.5 MB) before the function runs. So the body is
+   measured in UTF-8 bytes, as sent, against this, with a margin. */
+var MAX_BODY = 4400000;
+function tooBigBody(bytes) {
+  return 'With its quotes, tabs and line breaks this estimate is ' + (bytes / 1e6).toFixed(1) + ' MB to send; one estimate takes at most 4.4 MB (4,400,000 bytes). ' +
+    'Export one year of hourly or 15-minute readings without extra columns or quoted fields.';
+}
+/* The UTF-8 length of a string, counted: a pair of surrogates is 4 bytes */
+function utf8Bytes(str) {
+  var n = 0, i, c, len = str.length;
+  for (i = 0; i < len; i++) {
+    c = str.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xD800 && c <= 0xDBFF && i + 1 < len && (str.charCodeAt(i + 1) & 0xFC00) === 0xDC00) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+/* The load column: COLUMN is what is posted as load.column (the key the
+   server gave, the header text), COLUMN_LABEL what a person reads, COLUMNS
+   the list the server last offered. A new file clears the choice, except the
+   one file attached after loading a scenario (KEEP_COLUMN), which is that
+   scenario's file again. */
+var COLUMN = null, COLUMN_LABEL = null, COLUMNS = null, KEEP_COLUMN = false, FILE_SEEN = null, FILE_INFO = '';
 var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] }, LEAVING = false;
 /* The stored list in this session: 'idle' · 'loading' · 'loaded' (a missing
    document counts) · 'failed'. Save writes the WHOLE list, so it writes only
@@ -385,7 +433,10 @@ function pasteBills() {
 }
 /* done(), when given, is called once the read has settled either way */
 function readFile(f, done) {
-  INTERVAL = null; $('fileinfo').textContent = '';
+  INTERVAL = null; FILE_INFO = ''; $('fileinfo').textContent = '';
+  /* a new file clears the column chosen for the last one; the same file read
+     again (Simulate before its read finished) keeps it */
+  if (f !== FILE_SEEN) { FILE_SEEN = f || null; if (KEEP_COLUMN) KEEP_COLUMN = false; else clearColumn(); }
   function settle() { if (done) done(); }
   if (!f) return settle();
   /* judged on the text, as the server judges it; a UTF-8 file has at least a
@@ -396,13 +447,71 @@ function readFile(f, done) {
   r.onload = function () {
     var text = String(r.result || '');
     if (text.length > MAX_TEXT) { $('fileinfo').textContent = TOO_BIG; return settle(); }
+    /* the file alone, escaped as the body will carry it (run() measures the whole body again) */
+    var sent = utf8Bytes(JSON.stringify(text));
+    if (sent > MAX_BODY) { $('fileinfo').textContent = tooBigBody(sent); return settle(); }
     INTERVAL = text;
     var n = INTERVAL.split(/\r\n|\r|\n/).filter(function (l) { return /\d/.test(l); }).length;
-    $('fileinfo').textContent = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
+    FILE_INFO = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
+    paintInfo();
     settle();
   };
   r.onerror = function () { $('fileinfo').textContent = 'The file could not be read.'; settle(); };
   r.readAsText(f);
+}
+
+/* ── which column is the load ───────────────────────────────────────── */
+function columnNote() { return COLUMN ? ' · load column: ' + (COLUMN_LABEL || COLUMN) : ''; }
+/* the line under the picker: the file read, and the column that will be posted */
+function paintInfo() { if (FILE_INFO && INTERVAL) $('fileinfo').textContent = FILE_INFO + columnNote(); }
+function clearColumn() { COLUMN = null; COLUMN_LABEL = null; COLUMNS = null; paintColumns(); }
+/* The server's list, as it sent it: [{ key, label, sample[] }]. Only plain
+   strings are kept; every one is drawn through esc(). */
+function takeColumns(list) {
+  var out = [];
+  for (var i = 0; i < list.length && out.length < 60; i++) {
+    var c = list[i];
+    if (!c || typeof c.key !== 'string' || !c.key) continue;
+    var sm = Array.isArray(c.sample) ? c.sample.slice(0, 3).map(function (x) { return String(x == null ? '' : x).slice(0, 40); }) : [];
+    out.push({ key: c.key, label: typeof c.label === 'string' && c.label ? c.label : c.key, sample: sm });
+  }
+  return out;
+}
+function paintColumns(message) {
+  var box = $('colpick');
+  if (!COLUMNS || !COLUMNS.length) { box.innerHTML = ''; box.hidden = true; return; }
+  var h = '<h4 id="colpick-h">Which column is the load?</h4><p>' + esc(message || 'The file has more than one column that could be the load. Pick the one with the meter readings.') + '</p>' +
+    '<div role="radiogroup" aria-labelledby="colpick-h">';
+  for (var i = 0; i < COLUMNS.length; i++) {
+    var c = COLUMNS[i];
+    h += '<label><input type="radio" name="loadcol" value="' + esc(c.key) + '"' + (c.key === COLUMN ? ' checked' : '') + '>' +
+      '<span><span class="cl">' + esc(c.label) + '</span>' +
+      (c.sample.length ? '<span class="cs">e.g. ' + esc(c.sample.join(' · ')) + '</span>' : '') + '</span></label>';
+  }
+  h += '</div><button type="button" class="btn btn-p" data-act="use-column">Use this column and simulate</button>';
+  box.innerHTML = h; box.hidden = false;
+}
+/* the estimate asked which column: say so in the panel, and in the form's message */
+function askColumn(err) {
+  var e0 = err.errors[0];
+  COLUMNS = takeColumns(e0.columns);
+  if (!COLUMNS.length) return false;
+  /* a column the file does not have (a scenario's, on another file) is not kept */
+  var known = false;
+  for (var i = 0; i < COLUMNS.length; i++) if (COLUMNS[i].key === COLUMN) known = true;
+  if (!known) { COLUMN = null; COLUMN_LABEL = null; }
+  paintColumns(e0.message); paintInfo();
+  formMsg('Which column is the load? Pick it under the interval file, then simulate.', 'warn');
+  try { $('colpick').scrollIntoView({ block: 'nearest' }); } catch (x) {}
+  return true;
+}
+function useColumn() {
+  var picked = $('colpick').querySelector('input[name=loadcol]:checked');
+  if (!picked) { formMsg('Pick the column that holds the load first.', 'warn'); return; }
+  COLUMN = picked.value; COLUMN_LABEL = null;
+  for (var i = 0; COLUMNS && i < COLUMNS.length; i++) if (COLUMNS[i].key === COLUMN) COLUMN_LABEL = COLUMNS[i].label;
+  paintInfo();
+  run();
 }
 
 function collect() {
@@ -414,6 +523,7 @@ function collect() {
   if (MODE === 'bills') site.load = { type: 'bills', bills: readBills() };
   else if (MODE === 'interval') {
     site.load = { type: 'interval', text: INTERVAL, unit: $('iunit').value };
+    if (COLUMN) site.load.column = COLUMN;
     var isd = $('istart').value.trim();
     if (isd) { if (!/^\d{4}-\d{2}-\d{2}$/.test(isd)) return { error: 'The first reading date is YYYY-MM-DD.' }; site.load.startDate = isd; }
   }
@@ -461,15 +571,17 @@ function readable(status, j) {
   if (status === 401) return 'Your sign-in has expired. Reload the page to sign in again.';
   if (status === 403) return said || 'Your plan does not include the VPP Earnings Simulator.';
   if (status === 404) return 'The simulator service is not available at this address yet.';
-  if (status === 413) return 'That is more data than the server accepts in one request.';
+  if (status === 413) return 'That is more data than the server accepts in one request (4.5 MB). Export one year of hourly or 15-minute readings without extra columns or quoted fields.';
   if (status === 400 && j && j.errors && j.errors.length) return j.errors.map(function (e) { return e.message; }).join(' ');
   if (status === 503) return said || 'Could not check your access right now. Try again in a minute.';
   return said || ('The server answered ' + status + '.');
 }
+/* body is an object, or the JSON text run() already measured (posted as is) */
 function api(body) {
+  var payload = typeof body === 'string' ? body : JSON.stringify(body);
   return idToken().then(function (tok) {
     if (!tok) { var e0 = new Error('Sign in to run the simulator — it runs on the server, behind your account.'); e0.status = 401; throw e0; }
-    return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify(body) })
+    return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: payload })
       .then(null, function () { throw new Error('Could not reach the simulator. Check your connection and try again.'); });
   }).then(function (r) {
     return r.text().then(function (t) {
@@ -496,13 +608,20 @@ function run() {
     formMsg('Attach the interval file, or pick another load option.'); return;
   }
   if (MODE === 'bills' && !c.site.load.bills.length) { formMsg('Enter at least one month of bills (kWh or $).'); return; }
+  /* what is measured is what is posted: the whole body, in UTF-8 bytes */
+  if (MODE === 'interval' && c.site.load.text.length > MAX_TEXT) { formMsg(TOO_BIG); return; }
+  var payload = JSON.stringify({ action: 'estimate', site: c.site });
+  var bytes = utf8Bytes(payload);
+  if (bytes > MAX_BODY) { formMsg(tooBigBody(bytes)); return; }
   formMsg('');
   var btn = $('run'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Simulating 8,760 hours…';
-  api({ action: 'estimate', site: c.site }).then(function (j) {
+  api(payload).then(function (j) {
     LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
     render(j.result);
     canSave();
   }, function (e) {
+    var e0 = e.errors && e.errors[0];
+    if (e.status === 400 && e0 && e0.field === 'load.column' && Array.isArray(e0.columns) && askColumn(e)) return;
     formMsg(e.message);
   }).then(function () { btn.disabled = false; btn.textContent = 'Simulate earnings'; });
 }
@@ -522,7 +641,7 @@ function render(R) {
     kpi('Bill savings / yr', money(T.billSavings), money(R.bill.before) + ' → ' + money(R.bill.after) + (T.tagSavings ? ' · plus ' + money(T.tagSavings) + ' capacity/transmission tag' : '')) +
     kpi('Grid programmes / yr', money(T.gridEarnings), T.stackUplift ? T.stackUplift + '× the best single stream' : '') + '</div>';
   h += '<div class="chips"><span class="chip ' + esc(R.confidence) + '">Confidence: ' + esc(R.confidence) + '</span>' +
-       '<span class="chip">Load: ' + esc(R.load.label) + '</span>' +
+       '<span class="chip">Load: ' + esc(R.load.label) + '</span>' + columnChip(R.load.column) +
        '<span class="chip">' + R.battery.cyclesPerYear + ' cycles / yr</span>' +
        (R.site.marketInferred ? '<span class="chip">Market from ZIP</span>' : '') + '</div></div>';
 
@@ -576,6 +695,12 @@ function render(R) {
     '<ul class="miss">' + R.missing.map(function (m) { return '<li>' + esc(m) + '</li>'; }).join('') + '</ul>' +
     '<p class="lede" style="margin:10px 0 0">' + esc(R.disclaimer) + '</p></div>';
   $('out').innerHTML = h;
+}
+/* which column of the file was read: result.load.column { key, label, chosen } */
+function columnChip(c) {
+  if (!c || typeof c !== 'object' || (typeof c.label !== 'string' && typeof c.key !== 'string')) return '';
+  var how = c.chosen === 'caller' ? 'your pick' : c.chosen === 'auto' ? 'picked by its header' : '';
+  return '<span class="chip" data-load-column>Column read: ' + esc(c.label || c.key) + (how ? ' (' + esc(how) + ')' : '') + '</span>';
 }
 /* which battery figures the server suggested (assumedFields; older answers: assumed = both) */
 function suggested(b, k) { return Array.isArray(b.assumedFields) ? b.assumedFields.indexOf(k) >= 0 : !!b.assumed; }
@@ -647,7 +772,7 @@ function save() {
     return;
   }
   var site = JSON.parse(JSON.stringify(LAST.site));
-  if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit, startDate: site.load.startDate || null }; }
+  if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit, startDate: site.load.startDate || null, column: site.load.column || null }; }
   if (site.tariff && site.tariff.urdb) { site.tariff.urdbJson = JSON.stringify(site.tariff.urdb); delete site.tariff.urdb; }
   var rec = { name: LAST.name || ('ZIP ' + site.zip), site: site, gross: LAST.result.totals.gross, owner: LAST.result.totals.owner,
               market: LAST.result.site.market, at: new Date().toISOString() };
@@ -684,10 +809,13 @@ function loadScenario(i) {
      A date or unit left by an earlier scenario is never posted with a file
      it was not given for. */
   var iv = L.type === 'interval';
-  INTERVAL = null; $('file').value = '';
+  INTERVAL = null; $('file').value = ''; FILE_SEEN = null;
   $('iunit').value = iv && L.unit === 'kwh' ? 'kwh' : 'kw';
   $('istart').value = iv && typeof L.startDate === 'string' ? L.startDate : '';
-  $('fileinfo').textContent = iv ? 'Attach the interval file again to re-run this scenario.' : '';
+  /* the load column this scenario was read with, kept for the file attached next */
+  clearColumn();
+  if (iv && typeof L.column === 'string' && L.column) { COLUMN = L.column; COLUMN_LABEL = L.column; KEEP_COLUMN = true; } else KEEP_COLUMN = false;
+  $('fileinfo').textContent = iv ? 'Attach the interval file again to re-run this scenario' + (COLUMN ? ' (load column: ' + COLUMN + ').' : '.') : '';
   var t = site.tariff || {};
   $('ron').value = t.onPeakRate != null ? t.onPeakRate : ''; $('roff').value = t.offPeakRate != null ? t.offPeakRate : '';
   $('rdem').value = t.demandCharge != null ? t.demandCharge : ''; $('rps').value = t.peakStart != null ? t.peakStart : '';
@@ -738,6 +866,7 @@ document.addEventListener('click', function (e) {
   else if (act === 'fill-12') fillMonths(12);
   else if (act === 'fill-24') fillMonths(24);
   else if (act === 'paste') pasteBills();
+  else if (act === 'use-column') useColumn();
 });
 $('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
 $('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });
