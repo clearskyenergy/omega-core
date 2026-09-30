@@ -152,10 +152,17 @@ var ZIP3_MARKET = [
    reopens both rows. */
 var PJM_BUNDLED = {
   NC: { name: 'North Carolina',
+        /* T7: the utility's own route has a size floor; below it the row is listed, never priced */
+        floor: { kw: 500, basis: 'peak',
+                 why: 'Dominion Energy North Carolina\'s non-residential curtailment offer, Schedule 6C, applies to a customer "who contracts for the supply of 500 kW or greater" (dominionenergy.com, North Carolina non-residential rate schedules; read 2026-09-30), and no smaller programme is on file' },
         dr: 'Closed here: the North Carolina Utilities Commission opted Dominion Energy North Carolina\'s retail customers out of PJM wholesale demand response when Dominion moved its North Carolina transmission into PJM ("Order Opting Out of Retail Customer Participation in Wholesale Demand Response Programs", Docket E-22, Sub 418, 2010-03-11; PJM\'s list of RERRA orders, read 2026-09-29). Not counted.' },
   IN: { name: 'Indiana',
+        floor: { kw: 100, basis: 'committed',
+                 why: 'I&M\'s Rider D.R.S.1 (Demand Response Service – Emergency) contracts at least 100 kW of curtailable capacity (the minimum lowered from 250 kW, IURC 30-day filing 3094, 2013; read 2026-09-30)' },
         dr: 'Closed here: Indiana end-use customers "shall not be enrolled or otherwise participate in RTO demand response programs directly or through curtailment service providers or other aggregators" — only through their utility\'s IURC-approved tariff (IURC Cause 43566, order of 2010-07-28; read 2026-09-29). Not counted.' },
   KY: { name: 'Kentucky',
+        floor: { kw: 500, basis: 'committed',
+                 why: 'Kentucky Power\'s Rider D.R.S. sets "the minimum interruptible capacity contracted for under this Schedule" at 500 kW, at least 100 kW for each account aggregated at one location, and no more than the average on-peak demand; its events are 3 h, capped at 60 h a year (P.S.C. KY No. 12, Sheet 36-2, carried to the current book\'s Sheet 23; read 2026-09-30). Duke Energy Kentucky\'s own tariff replaces it where Duke serves' },
         dr: 'Closed here: "No retail electric customer is authorized to participate directly or indirectly in any PJM wholesale market, including but not limited to DR programs … except under a tariff or special contract on file with the Commission" (Kentucky PSC Case 2017-00129, order of 2017-06-06, restating the conditions of the Kentucky Power, Duke Energy Kentucky and EKPC moves into PJM; read 2026-09-29). Not counted.' }
 };
 function bundledPlcWhy(st) {
@@ -179,6 +186,12 @@ function nyArea(z3, zip5) {
     return { conEd: false, zoneJ: false, li: true, area: 'PSEG Long Island (LIPA, NYISO Zone K)' };
   return { conEd: false, zoneJ: false, li: false, area: null };
 }
+/* Kauai is not Hawaiian Electric: the whole island is served by Kauai Island
+   Utility Cooperative (KIUC), the state's one electric co-operative, so
+   Hawaiian Electric's programmes (BYOD Plus, Rule 33: Oahu, Maui County and
+   Hawaii Island) are not open there. The 17 ZIPs of Kauai County (T9). */
+var KIUC_ZIP5 = { '96703': 1, '96705': 1, '96714': 1, '96715': 1, '96716': 1, '96722': 1, '96741': 1, '96746': 1, '96747': 1,
+                  '96751': 1, '96752': 1, '96754': 1, '96756': 1, '96765': 1, '96766': 1, '96769': 1, '96796': 1 };
 var CLIMATE = {  /* monthly load multipliers by climate, Jan..Dec */
   hot:   [0.85, 0.82, 0.86, 0.92, 1.05, 1.20, 1.30, 1.30, 1.17, 0.98, 0.86, 0.87],
   mixed: [1.05, 0.98, 0.92, 0.88, 0.95, 1.10, 1.22, 1.20, 1.02, 0.90, 0.92, 1.04],
@@ -213,6 +226,8 @@ function locate(zip, marketOverride) {
   }
   var ny = state === 'NY' ? nyArea(z.z3, z.zip) : { conEd: false, zoneJ: false, li: false, area: null };
   if (!area) area = ny.area;
+  var kiuc = state === 'HI' && has(KIUC_ZIP5, z.zip);
+  if (kiuc && !area) area = 'Kauai Island Utility Cooperative (KIUC), not Hawaiian Electric';
   var inferred = true;
   /* An override that moves the site to another market also drops the area:
      the label named the utility of the market it came with, and a label
@@ -226,6 +241,7 @@ function locate(zip, marketOverride) {
     area: area, conEd: ny.conEd, zoneJ: ny.zoneJ, li: ny.li,
     nyc: ny.zoneJ,          /* New York City proper (kept for callers of the old flag) */
     comed: state === 'IL' && z.z3 >= 600 && z.z3 <= 611,
+    kiuc: kiuc,
     pjmBundled: market === 'PJM' && has(PJM_BUNDLED, state) ? state : null,
     climate: STATE_CLIMATE[state] || 'mixed',
     solarYield: SOLAR_YIELD[state] || 1250,
@@ -309,62 +325,86 @@ function fitMonth(raw, kwh, peakKw) {
 /* One interval file → hourly kW on the simulated calendar.
 
    Reading a CSV. Lines end in CRLF, LF or a lone CR (Excel for Mac). The
-   delimiter is the one the most sampled lines carry (from the top and the
-   middle of the file), so a stray tab in a title line never decides it.
-   Cells are split with double quotes honoured (a quoted "1,234.5" is one
-   reading, not two), and a cell carrying a currency sign is never a
+   delimiter is chosen by the DATA rows (lines that carry a digit, from the
+   top and the middle of the file): the one that splits most of them into
+   the same number of cells, and among those that nearly tie, the one that
+   gives more cells — so a comma in a name or an address above the
+   readings never turns a semicolon file with decimal commas into a comma
+   file. Cells are split with double quotes honoured (a quoted "1,234.5" is
+   one reading, not two), and a cell carrying a currency sign is never a
    reading. In a tab or semicolon file a comma inside a number is read the
    way the file itself shows it: decimal commas ("0,25", "1.234,5") where
    only a decimal comma fits, a thousands separator ("1,250.0") where only
    that fits — and a reading whose comma could be either ("1,250") is
-   refused with its row, never guessed. A reading that carries digits but
-   is not a number is refused the same way, never read as zero.
+   refused with its row, never guessed (such a cell still marks its column
+   as one of numbers, so the header is found and the row is named). A
+   reading that carries digits but is not a number is refused the same way,
+   never read as zero.
 
-   The load column. When a header row names the columns, the load is the
-   column headed usage / kWh / kW / demand / load (money words match as
-   whole words: cost, price, rate, charge — "Integrated Demand" is not a
-   rate). A column that measures something else — power factor, kVA,
-   kVAR, volts, amps — is never the load, and neither is one whose last
-   word is a time part ("Usage Hour", "Usage Date") unless it names kW or
-   kWh. Two load columns are narrowed by the unit the caller chose (an
-   explicit kWh or kW first, then the looser words: usage / energy, or
-   demand / load), and still two is refused rather than guessed. Without a
-   header, one numeric column is the load and more than one is refused. A
-   cell longer than any real reading is skipped before it is tested, and
-   the number test runs in linear time, so a hostile cell cannot pin the
-   function.
+   The load column. The simulator picks it by itself ONLY when exactly one
+   column of numbers survives the exclusions and its header names the load
+   (kW, kWh, usage, consumption, energy, demand, load, value — whole words,
+   with "_" and "-" read as spaces, so USAGE_KWH is "usage kwh" and
+   USAGE_HOUR is "usage hour"), or when the file has a single column of
+   numbers that is not excluded. Excluded: money (cost, price, rate, charge,
+   cents, credit, anything per kWh), what left the site (export, solar,
+   received), what measures something else (power factor, kVA / VA / MVA,
+   kVAR, volts, amps or "(A)", frequency, temperature, multipliers,
+   percentages, registers and meter readings, carbon, contract figures,
+   events and flags), and a column whose last word is a time part ("Usage
+   Hour", "Usage Date") unless it names kW / kWh or reads "per hour". In
+   every other case it does not guess: it answers "Which column is the
+   load?" with the columns of numbers (field `load.column`, each with the
+   key to send back, its header and sample values), and the caller names
+   one (`load.column`: the header text, or "#3" for the third column of a
+   file with no header). The result says which column was read and whether
+   it was picked or named.
 
-   Rows. Once the first reading carries a date or a clock time, a row
-   without one is a note or a footer (a "Total" line) and is skipped, and a
-   stamped row whose reading is blank or "N/A" is a gap: counted, read as
-   zero within 2%, and said so. In a file with no stamps, a row that starts
-   with Total / Sum / Average / Max is a footer.
+   Rows. Once the first reading carries a date, a clock time or an hour
+   number, a row without one is a note or a footer and is skipped; a row
+   with a Total / Sum / Average / Max cell, or a date range ("01/01/2025 -
+   12/31/2025"), is a footer whether it is stamped or not; a stamped row
+   whose reading is blank or "N/A" is a gap: counted, read as zero within
+   2%, and said so. A date written only on a day's first row carries down
+   to the rows under it.
 
    The calendar. The simulation runs on 2025 (1 Jan a Wednesday), and
    billing, TOU windows and summer events are laid on it by hour. The date
    column is read on every row: its day/month order is settled across the
    whole file (a first part over 12 anywhere is a day, a second part over
    12 anywhere is a day; a two-digit year is the part that holds still),
-   month names and 20250605 are read too, and a file that runs newest-first
-   is read oldest-first. Its first date places it — or `startDate` for a
-   bare list; a file's own date wins over a `startDate` and the note says
-   so: 29 Feb is removed, a year that runs past 365 days loses its last
-   day, a 364-day remainder repeats its last day, and the series is wrapped
-   so each reading lands on its own calendar date, then moved by the shift
-   of up to three days that lands the most of its weekends on the
-   calendar's weekends, counted over every day (a year that crosses New
-   Year or 29 Feb cannot line up everywhere; the note says how many days
-   differ). With no date anywhere the readings are READ AS STARTING 1
-   JANUARY, and the result says so. 8760/8784 hourly, 17520/17568
-   half-hourly or 35040/35136 quarter-hourly; kWh-per-interval is converted
-   when the caller says so. */
+   month names and 20250605 are read too. With a time (in the date cell, a
+   clock column or an hour-number column) the readings are put in date and
+   time order — so a newest-first file, or one sorted newest day first with
+   its hours ascending, is read oldest first without turning any day round
+   — and a file whose timestamps repeat (two meters, or delivered and
+   received rows, in one file) is refused and says what it found; so is one
+   whose dates run forward and then back. The interval length comes from
+   the readings per day (24, 48 or 96), never from the row count, and a
+   dated file must hold one year of them. Its first date places it — or
+   `startDate` for a bare list; a file's own date wins over a `startDate`
+   and the note says so: 29 Feb is removed, a year that runs past 365 days
+   loses its last day, a 364-day remainder repeats its last day, and the
+   series is wrapped so each reading lands on its own calendar date, then
+   moved by the shift of up to three days that lands the most of its
+   weekends on the calendar's weekends, counted over every day (a year that
+   crosses New Year or 29 Feb cannot line up everywhere; the note says how
+   many days differ). With no date anywhere the readings are READ AS
+   STARTING 1 JANUARY, the interval is read off the count (8760/8784
+   hourly, 17520/17568 half-hourly or 35040/35136 quarter-hourly), and the
+   result says so. kWh-per-interval is converted when the caller says so. */
 var NUM_RE = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:e-?\d+)?$/i;   /* linear: no two quantifiers compete for a digit */
 var MAX_CELL = 32;                                         /* no reading is longer; a longer cell is never tested */
-var LOAD_HEAD = /(usage|consumption|kwh|\bkw\b|demand|load|value|reading|import|delivered|energy|power)/i;
-var MONEY_HEAD = /(\bcost|\$|€|£|\bprice|\bamount|\bcharges?\b|\busd\b|dollar|\brates?\b)/i;
+/* Header tests run on a normalised name: "_", "-", "." and "/" read as spaces. */
+var LOAD_HEAD = /\b(?:usage|consumption|kwh|kw|demand|load|value|reading|import|imported|delivered|energy|power)\b/i;
+var EXPLICIT_LOAD = /\b(?:kwh|kw|usage|consumption|energy|demand|load|value)\b/i;
+var MONEY_HEAD = /(\bcosts?\b|\$|€|£|¢|\bprices?\b|\bamounts?\b|\bcharges?\b|\busd\b|dollar|\brates?\b|\bcents?\b|\bcredits?\b|\btariff\b|\bper\s+k?wh\b)/i;
+var PER_KWH_RAW = /\/\s*k?wh\b/i;                          /* "Cents/kWh", "$/kWh": tested on the raw name */
 var EXPORT_HEAD = /(export|generat|solar|\bpv\b|received)/i;   /* what left the site is not its load */
-var NOT_LOAD_HEAD = /(factor|\bpf\b|kvar|\bkvah?\b|reactive|apparent|volt|\bamps?\b|ampere|frequency|\bhz\b|temperature|\btemp\b)/i;
+var NOT_LOAD_HEAD = /(factor|\bpf\b|kva|\bva\b|\bmva\b|reactive|apparent|volt|\bamps?\b|ampere|\bcurrent\b|\(\s*a\s*\)|frequency|\bhz\b|temperature|\btemp\b|multiplier|\bmult\b|percent|%|\bpct\b|register|cumulative|odometer|meter\s+read|carbon|\bco2\b|emission|intensity|contract|threshold|\bevents?\b|\bflags?\b|\bstatus\b|\bresponse\b|\bestimated?\b)/i;
 var TIME_TAIL = /\b(?:hour|hr|he|time|date|day|interval|period|start|end|ending|beginning|month|year)\s*(?:\([^)]*\))?\s*$/i;
+var PER_TIME = /\bper\s+\w+\s*(?:\([^)]*\))?\s*$/i;       /* "Usage per Hour" is a load, not an hour */
+var HOUR_INDEX = /\b(?:hour|hr|he|interval|period)\b/i;
 var UNIT_TOKEN = /\bkwh?\b/i;
 var FOOTER = /^\s*(?:grand\s+)?(?:total|totals|sum|average|mean|avg|min|minimum|max|maximum)\b/i;
 var CLOCK = /^\s*\d{1,2}:\d{2}/;
@@ -373,6 +413,18 @@ var MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep'
 var MONTH_FULL = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 var SHIFTS = [0, 1, -1, 2, -2, 3, -3];                     /* ties go to the smaller move */
 var MAX_TEXT = 4300000;   /* characters: a year of 15-minute rows with an account id and a revision stamp on each is ~3.2 MB; under Vercel's 4.5 MB body */
+var DUP_TOLERANCE = 4;    /* repeated timestamps allowed: the autumn clock change repeats one hour (four 15-minute readings) */
+
+function headNorm(s) { return String(s == null ? '' : s).trim().replace(/[_\-.\/]+/g, ' ').replace(/\s+/g, ' '); }
+/* Why a header is not the load: 'money' | 'export' | 'other' | 'time' | null */
+function headExcluded(raw) {
+  var n = headNorm(raw);
+  if (MONEY_HEAD.test(n) || PER_KWH_RAW.test(raw)) return 'money';
+  if (EXPORT_HEAD.test(n)) return 'export';
+  if (NOT_LOAD_HEAD.test(n) || NOT_LOAD_HEAD.test(raw)) return 'other';
+  if (TIME_TAIL.test(n) && !UNIT_TOKEN.test(n) && !PER_TIME.test(n)) return 'time';
+  return null;
+}
 
 function splitCells(line, delim) {
   var out = [], i;
@@ -423,22 +475,33 @@ function cellNumber(c, dec) {
   else if (/^\d{8}$/.test(s) && parseDate(s)) return null;                                      /* 20250605 is a date */
   return NUM_RE.test(s) ? parseFloat(s) : null;
 }
-/* The delimiter the most sampled lines carry (then the most of it); ties
-   go tab, then semicolon, then comma. Quoted text is not counted. */
+/* The delimiter, judged on the data rows (lines with a digit, from the top
+   and the middle of the file): each delimiter's most common cell count
+   (over one) and how many lines have it; of the delimiters within 80% of
+   the most consistent, the one that gives the most cells wins (ties: tab,
+   then semicolon, then comma). A semicolon file with decimal commas splits
+   every data line in two on the comma and in three on the semicolon, so a
+   preamble's comma cannot decide it. Quoted text is not counted. */
 function pickDelimiter(lines) {
-  var ds = ['\t', ';', ','], lines1 = { '\t': 0, ';': 0, ',': 0 }, count = { '\t': 0, ';': 0, ',': 0 }, i, k, seen;
-  function look(l) {
-    l = l.replace(/"[^"]*"/g, '');
-    for (k = 0; k < 3; k++) { var n = l.split(ds[k]).length - 1; if (n) { lines1[ds[k]]++; count[ds[k]] += n; } }
+  var ds = ['\t', ';', ','], sample = [], i, k, seen;
+  for (i = 0, seen = 0; i < lines.length && seen < 25; i++) if (/\d/.test(lines[i])) { sample.push(lines[i].replace(/"[^"]*"/g, '""')); seen++; }
+  for (i = Math.max(Math.floor(lines.length / 2), i), seen = 0; i < lines.length && seen < 25; i++) if (/\d/.test(lines[i])) { sample.push(lines[i].replace(/"[^"]*"/g, '""')); seen++; }
+  var stat = [], top = 0;
+  for (k = 0; k < 3; k++) {
+    var counts = {}, m = 0, s = 0;
+    for (i = 0; i < sample.length; i++) {
+      var c = sample[i].split(ds[k]).length;
+      if (c < 2) continue;
+      counts[c] = (counts[c] || 0) + 1;
+      if (counts[c] > s || (counts[c] === s && c > m)) { s = counts[c]; m = c; }
+    }
+    stat.push({ d: ds[k], m: m, s: s });
+    if (s > top) top = s;
   }
-  for (i = 0, seen = 0; i < lines.length && seen < 25; i++) if (lines[i].trim()) { look(lines[i]); seen++; }
-  for (i = Math.floor(lines.length / 2), seen = 0; i < lines.length && seen < 25; i++) if (lines[i].trim()) { look(lines[i]); seen++; }
-  var best = ds[0];
-  for (k = 1; k < 3; k++) {
-    var d = ds[k];
-    if (lines1[d] > lines1[best] || (lines1[d] === lines1[best] && count[d] > count[best])) best = d;
-  }
-  return best;
+  if (!top) return '\t';                                    /* one column: nothing splits */
+  var best = null;
+  for (k = 0; k < 3; k++) if (stat[k].s && stat[k].s >= 0.8 * top && (!best || stat[k].m > best.m)) best = stat[k];
+  return best.d;
 }
 
 function daysIn(y, m) { return m === 2 ? ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0 ? 29 : 28) : DAYS[m - 1]; }
@@ -514,27 +577,153 @@ function calDay(dt) { return MONTH_START[dt.m - 1] / 24 + dt.d - 1; }   /* 0–3
 function showDate(dt) { return dt.d + ' ' + MONTH_NAMES[dt.m - 1] + ' ' + dt.y; }
 function perOf(n) { return n === 8760 || n === 8784 ? 1 : (n === 17520 || n === 17568 ? 2 : (n === 35040 || n === 35136 ? 4 : 0)); }
 
-function parseInterval(text, unit, startDate) {
+/* The time of day in a cell, in minutes: "13:00", "1:00 PM", "T13:00:00",
+   after a date or on its own; null when there is none. */
+function clockOf(s) {
+  var m = /(?:^|[T\s])(\d{1,2}):(\d{2})(?::\d{2}(?:\.\d+)?)?\s*([AaPp])?\.?[Mm]?\.?(?:\s|$|Z|[+-]\d)/.exec(' ' + String(s == null ? '' : s).trim() + ' ');
+  if (!m) return null;
+  var h = +m[1], mi = +m[2];
+  if (m[3]) { var pm = /p/i.test(m[3]); if (h === 12) h = pm ? 12 : 0; else if (pm) h += 12; }
+  return h > 24 || mi > 59 ? null : h * 60 + mi;
+}
+/* "01/01/2025 - 12/31/2025": a period, as a footer or a summary row carries */
+function dateRange(t) {
+  var m = /^(.{6,40}?)\s*(?:–|—|\s-\s|\bto\b)\s*(.{6,40})$/.exec(t);
+  return !!m && !!parseDate(m[1]) && !!parseDate(m[2]);
+}
+function describePer(per) { return per === 1 ? 'hourly' : (per === 2 ? 'half-hourly' : '15-minute'); }
+
+/* parseInterval(text, unit, startDate, column) — `column` is the caller's
+   choice of the load column: the header text, or "#3". The answer carries
+   `column: { key, label, chosen: 'auto' | 'caller' }`; a refusal about the
+   column carries `field: 'load.column'` and `columns: [{ key, label, sample }]`. */
+function parseInterval(text, unit, startDate, column) {
   var lines = String(text || '').replace(/^﻿/, '').split(/\r\n|\r|\n/), i, j;
   var delim = pickDelimiter(lines), rows = [], lineNo = [];
   for (i = 0; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
     rows.push(splitCells(lines[i], delim)); lineNo.push(i + 1);
   }
-  var dec = numberFormat(rows, delim);
+  var dec = numberFormat(rows, delim), dateCache = {};
   function numOf(c) { return cellNumber(c, dec); }
-  function numericCount(r) { var k = 0; for (var q = 0; q < r.length; q++) if (numOf(r[q]) != null) k++; return k; }
-  function colIsNumeric(from, col) {
+  /* a comma reading the file does not settle ("1,250" in a tab file) still
+     marks a column of numbers, so the header is found and the row named */
+  function looksNum(c) {
+    if (numOf(c) != null) return true;
+    if (!c || dec || delim === ',') return false;
+    var s = c.s.trim();
+    return s.length <= MAX_CELL && s.indexOf(',') >= 0 && /^-?[\d.,]+$/.test(s) && /\d/.test(s);
+  }
+  function looksCount(r) { var k = 0; for (var q = 0; q < r.length; q++) if (looksNum(r[q])) k++; return k; }
+  function dateOf(s, order) {
+    var key = (order || '') + '|' + s;
+    if (!has(dateCache, key)) dateCache[key] = parseDate(s, order);
+    return dateCache[key];
+  }
+
+  /* The width of a data row: the most common cell count among rows that
+     carry a number. */
+  var widths = {}, W = 0, wN = 0, firstData = -1;
+  for (i = 0; i < rows.length && i < 2000; i++) if (looksCount(rows[i]) > 0) {
+    var wl = rows[i].length; widths[wl] = (widths[wl] || 0) + 1;
+    if (widths[wl] > wN || (widths[wl] === wN && wl > W)) { wN = widths[wl]; W = wl; }
+  }
+  for (i = 0; i < rows.length; i++) if (rows[i].length === W && looksCount(rows[i]) > 0) { firstData = i; break; }
+  function colIsNumeric(from, c) {
     var seen = 0, good = 0;
-    for (var q = from; q < rows.length && seen < 20; q++) { seen++; if (numOf(rows[q][col]) != null) good++; }
+    for (var q = from; q < rows.length && seen < 20; q++) {
+      if (rows[q].length !== W || !looksCount(rows[q])) continue;
+      seen++; if (looksNum(rows[q][c])) good++;
+    }
     return seen > 0 && good >= Math.ceil(seen * 0.9);
   }
-  /* a row stamped with a date or a clock time in a cell other than the load */
-  function stampedRow(r, skip) {
-    for (var q = 0; q < r.length; q++) if (q !== skip && (CLOCK.test(r[q].s) || parseDate(r[q].s))) return true;
+
+  /* The header: a row with no number, as wide as the data, above the first
+     reading, naming a column of numbers (for a one-column file, the row
+     just above the readings). */
+  var head = -1;
+  if (firstData > 0) {
+    if (W === 1) { if (!looksCount(rows[firstData - 1]) && rows[firstData - 1][0].s.trim()) head = firstData - 1; }
+    else for (i = 0; i < firstData && i < 60 && head < 0; i++) {
+      if (rows[i].length !== W || looksCount(rows[i])) continue;
+      for (j = 0; j < W; j++) if (rows[i][j].s.trim() && colIsNumeric(i + 1, j)) { head = i; break; }
+    }
+  }
+  var from = head >= 0 ? head + 1 : 0;
+
+  /* The columns of numbers, as a caller sees them. */
+  var numeric = [], labels = [], keys = [];
+  for (j = 0; j < W; j++) {
+    var raw = head >= 0 ? rows[head][j].s.trim() : '';
+    labels.push(raw && raw.length <= 60 ? raw : 'Column ' + (j + 1));
+    if (colIsNumeric(from, j)) numeric.push(j);
+  }
+  for (j = 0; j < W; j++) {
+    var dup = false;
+    for (var q2 = 0; q2 < W; q2++) if (q2 !== j && head >= 0 && rows[head][q2].s.trim() === rows[head][j].s.trim()) dup = true;
+    keys.push(head >= 0 && rows[head][j].s.trim() && rows[head][j].s.trim().length <= 60 && !dup ? rows[head][j].s.trim() : '#' + (j + 1));
+  }
+  function columnList() {
+    var out = [];
+    for (var a = 0; a < numeric.length; a++) {
+      var c = numeric[a], sample = [];
+      if (head >= 0 && headExcluded(rows[head][c].s) === 'time') continue;   /* an hour number is never the load */
+      for (var q = from; q < rows.length && sample.length < 3; q++) {
+        if (rows[q].length !== W || !rows[q][c]) continue;
+        var s = rows[q][c].s.trim();
+        if (s && looksNum(rows[q][c])) sample.push(s.length > 24 ? s.slice(0, 24) + '…' : s);
+      }
+      out.push({ key: keys[c], label: labels[c], sample: sample });
+    }
+    return out;
+  }
+  function ask(message) { return { ok: false, field: 'load.column', error: message, columns: columnList() }; }
+  function quoteList(cs) { var n = []; for (var a = 0; a < cs.length; a++) n.push('"' + labels[cs[a]] + '"'); return n.join(', '); }
+
+  var col = -1, chosen = null;
+  if (column != null && String(column).trim() !== '') {
+    var want = String(column).trim(), hit = /^#(\d{1,3})$/.exec(want);
+    for (var a = 0; a < numeric.length && col < 0; a++) {
+      if (keys[numeric[a]] === want || (head >= 0 && rows[head][numeric[a]].s.trim() === want) || (hit && +hit[1] === numeric[a] + 1)) col = numeric[a];
+    }
+    if (col < 0) return ask('Which column is the load? "' + want.slice(0, 60) + '" is not a column of numbers in this file; choose one of the columns listed.');
+    chosen = 'caller';
+  } else if (numeric.length) {
+    if (head >= 0) {
+      var cand = [], open = [];
+      for (a = 0; a < numeric.length; a++) {
+        var nm = rows[head][numeric[a]].s.trim(), why = nm.length > 60 ? 'other' : headExcluded(nm);
+        if (!why) { open.push(numeric[a]); if (LOAD_HEAD.test(headNorm(nm))) cand.push(numeric[a]); }
+      }
+      if (cand.length === 1 && EXPLICIT_LOAD.test(headNorm(rows[head][cand[0]].s))) col = cand[0];
+      else if (numeric.length === 1 && open.length === 1) col = open[0];
+      else if (cand.length > 1) return ask('Which column is the load? The file has more than one load column (' + quoteList(cand) + '); choose the one that holds the site\'s kW or kWh readings.');
+      else return ask('Which column is the load? No column of numbers is headed as the site\'s kW or kWh (the columns of numbers are ' + quoteList(numeric) + '); choose the one that holds the readings.');
+    } else if (numeric.length === 1) col = numeric[0];
+    else return ask('Which column is the load? More than one column holds numbers and no header names the load; choose the column of readings, or add a header row (for example "Date,kW").');
+    chosen = 'auto';
+  }
+  var headName = head >= 0 && col >= 0 ? rows[head][col].s.trim() : null;
+
+  /* Header columns that hold a time part: an hour number there stamps a row. */
+  var timeCols = [];
+  if (head >= 0) for (j = 0; j < W; j++) if (j !== col && headExcluded(rows[head][j].s) === 'time') timeCols.push(j);
+  function stampedRow(r) {
+    for (var q = 0; q < r.length; q++) {
+      if (q === col) continue;
+      var s = r[q].s;
+      if (CLOCK.test(s) || dateOf(s)) return true;
+    }
+    for (q = 0; q < timeCols.length; q++) { var t = r[timeCols[q]]; if (t && /^\s*\d{1,4}\s*$/.test(t.s)) return true; }
     return false;
   }
-  function footerRow(r) { for (var q = 0; q < r.length; q++) { var t = r[q].s.trim(); if (t) return FOOTER.test(t); } return false; }
+  function footerRow(r) {
+    for (var q = 0; q < r.length; q++) {
+      var t = r[q].s.trim();
+      if (t && t.length <= 60 && (FOOTER.test(t) || dateRange(t))) return true;
+    }
+    return false;
+  }
   /* a reading that carries digits but is not a number is a format problem,
      refused with its row — never read as zero */
   function unreadable(i2, c) {
@@ -545,101 +734,104 @@ function parseInterval(text, unit, startDate) {
            '. Export the readings as plain numbers, or fix that cell.';
   }
 
-  /* The header: the first row with no number in it that names a load
-     column whose readings follow. */
-  var head = -1, col = -1, headName = null, err = null;
-  for (i = 0; i < rows.length && i < 60 && head < 0; i++) {
-    var r = rows[i];
-    if (numericCount(r) > 0) continue;
-    var cand = [];
-    for (j = 0; j < r.length; j++) {
-      var name = r[j].s.trim();
-      if (name.length > 60 || !LOAD_HEAD.test(name) || MONEY_HEAD.test(name) || EXPORT_HEAD.test(name) || NOT_LOAD_HEAD.test(name)) continue;
-      if (TIME_TAIL.test(name) && !UNIT_TOKEN.test(name)) continue;
-      if (colIsNumeric(i + 1, j)) cand.push(j);
-    }
-    if (!cand.length) continue;
-    if (cand.length > 1) {
-      var kwhUnit = unit === 'kwh', narrow = [];
-      for (j = 0; j < cand.length; j++) if (kwhUnit ? /\bkwh\b/i.test(r[cand[j]].s) : /\bkw\b/i.test(r[cand[j]].s)) narrow.push(cand[j]);
-      if (!narrow.length) {
-        var loose = kwhUnit ? /usage|consumption|energy/i : /demand|\bload\b/i;
-        for (j = 0; j < cand.length; j++) if (loose.test(r[cand[j]].s) && (kwhUnit || !/kwh/i.test(r[cand[j]].s))) narrow.push(cand[j]);
-      }
-      if (narrow.length !== 1) {
-        var names = []; for (j = 0; j < cand.length; j++) names.push('"' + r[cand[j]].s.trim() + '"');
-        err = 'The file has more than one load column (' + names.join(', ') + ') and the unit chosen (' + (kwhUnit ? 'kWh' : 'kW') +
-              ') does not tell them apart; keep one column of readings.';
-        break;
-      }
-      cand = narrow;
-    }
-    head = i; col = cand[0]; headName = r[col].s.trim();
+  var vals = [], dataRows = [], stamps = null, v, why2;
+  if (col >= 0) for (i = from; i < rows.length; i++) {
+    var row = rows[i], st = stampedRow(row);
+    v = numOf(row[col]);
+    if (stamps === null) {
+      if (v == null && !st) continue;                               /* a units line or a note before the readings */
+      stamps = st;
+    } else if (stamps ? !st : (v == null && looksCount(row) === 0)) continue;   /* a note, a blank or an unstamped footer */
+    if (footerRow(row)) continue;                                   /* "Total,…", "Max Demand,…", a date range: never a reading */
+    if (v == null && (why2 = unreadable(i, row[col]))) return { ok: false, error: why2 };
+    vals.push(v == null ? NaN : v);                                 /* a gap: counted unreadable below */
+    dataRows.push(i);
   }
-  if (err) return { ok: false, error: err };
+  var n = vals.length;
 
-  var vals = [], dataRows = [], stamps = null, v, why;
-  if (head >= 0) {
-    for (i = head + 1; i < rows.length; i++) {
-      var row = rows[i], st = stampedRow(row, col);
-      v = numOf(row[col]);
-      if (stamps === null) {
-        if (v == null && !st) continue;                               /* a units line or a note before the readings */
-        stamps = st;
-      } else if (stamps ? !st : (v == null && numericCount(row) === 0)) continue;   /* a note, a blank or a footer */
-      if (!st && footerRow(row)) continue;                            /* "Total,…" in a file with no stamps */
-      if (v == null && (why = unreadable(i, row[col]))) return { ok: false, error: why };
-      vals.push(v == null ? NaN : v);                                 /* a gap: counted unreadable below */
-      dataRows.push(i);
-    }
-  } else {
-    for (i = 0; i < rows.length; i++) {
-      var k = numericCount(rows[i]);
-      if (!k) {
-        /* a stamped row with no reading, once the readings are stamped: a gap */
-        if (stamps === true && stampedRow(rows[i], col)) {
-          if ((why = unreadable(i, rows[i][col]))) return { ok: false, error: why };
-          vals.push(NaN); dataRows.push(i);
-        }
-        continue;                                                     /* a title or a header without a load name */
-      }
-      if (stamps === true && !stampedRow(rows[i], col)) continue;      /* a footer in a stamped file */
-      if (stamps !== true && footerRow(rows[i])) continue;
-      if (k > 1) return { ok: false, error: 'More than one column holds numbers and no header names the load; add a header row (for example "Date,kW") or keep one column of readings.' };
-      for (j = 0; j < rows[i].length; j++) { var x = numOf(rows[i][j]); if (x != null) { vals.push(x); break; } }
-      if (stamps === null) { col = j; stamps = stampedRow(rows[i], col); }
-      dataRows.push(i);
-    }
-  }
-
-  /* The dates: the first data row's date cell names the column, its order
-     is settled across every row, and the first and last dates say which
-     way the file runs. */
-  var notes = [], start = null, dateCol = -1, dated = false, datesOff = false, undatedWhy = null, n = vals.length;
-  if (dataRows.length) {
-    var r0 = rows[dataRows[0]];
-    for (j = 0; j < r0.length && dateCol < 0; j++) if (j !== col && parseDate(r0[j].s)) dateCol = j;
+  /* The dates. */
+  var notes = [], start = null, dateCol = -1, dated = false, datesOff = false, undatedWhy = null, per = 0, spanDays = 0;
+  for (i = 0; i < dataRows.length && i < 50 && dateCol < 0; i++) {
+    var rr = rows[dataRows[i]];
+    for (j = 0; j < rr.length && dateCol < 0; j++) if (j !== col && dateOf(rr[j].s)) dateCol = j;
   }
   if (dateCol >= 0) {
-    var dcells = []; for (i = 0; i < dataRows.length; i++) dcells.push(rows[dataRows[i]][dateCol] ? rows[dataRows[i]][dateCol].s : '');
+    var dcells = [];
+    for (i = 0; i < dataRows.length; i++) { var dc = rows[dataRows[i]][dateCol]; dcells.push(dc ? dc.s.trim() : ''); }
     var ord = dateOrder(dcells);
     if (ord.conflict) {
       undatedWhy = 'The date column mixes day-first and month-first dates, so it could not be read; the readings were read as starting on 1 January. Give the first reading\'s date to place them.';
     } else {
-      var firstD = null, lastD = null;
-      for (i = 0; i < dcells.length && i < 50 && !firstD; i++) firstD = parseDate(dcells[i], ord.order);
-      for (i = dcells.length - 1; i >= 0 && i >= dcells.length - 50 && !lastD; i--) lastD = parseDate(dcells[i], ord.order);
-      if (firstD && lastD) {
-        var span = dayNumber(lastD) - dayNumber(firstD);
-        if (span < 0) {
-          vals.reverse(); start = lastD; span = -span;
-          notes.push('The file lists its newest reading first; it was read oldest first, from ' + showDate(lastD) + '.');
-        } else start = firstD;
-        var per0 = perOf(n), endD = start === firstD ? lastD : firstD;
-        if (per0 && Math.abs(span - (n / (24 * per0) - 1)) > 1) {
+      /* each row's day (a blank carries the date above it down) and time */
+      var days = [], bad = 0, last = null, dt0;
+      for (i = 0; i < n; i++) {
+        if (!dcells[i]) { days.push(last); if (last == null) bad++; continue; }
+        dt0 = dateOf(dcells[i], ord.order);
+        if (dt0) { last = dayNumber(dt0); days.push(last); } else { days.push(last); bad++; }
+      }
+      var firstKnown = null; for (i = 0; i < n && firstKnown == null; i++) firstKnown = days[i];
+      for (i = 0; i < n && days[i] == null; i++) days[i] = firstKnown;
+      if (firstKnown == null || bad > n * 0.02) {
+        undatedWhy = 'The file\'s date column ("' + (head >= 0 ? rows[head][dateCol].s.trim().slice(0, 40) : 'column ' + (dateCol + 1)) + '") could not be read on ' + fmt(bad) + ' of ' + fmt(n) +
+                     ' rows, so the readings were read as starting on 1 January. A file that starts on another date shifts every month, event and weekday — give the first reading\'s date.';
+      } else {
+        /* the time of day: in the date cell, else a clock column, else an hour-number column */
+        var times = [], tSrc = null, tNull = 0;
+        if (clockOf(dcells[0]) != null) tSrc = { col: dateCol, clock: true };
+        var r0 = rows[dataRows[0]];
+        for (j = 0; j < r0.length && !tSrc; j++) if (j !== col && j !== dateCol && CLOCK.test(r0[j].s)) tSrc = { col: j, clock: true };
+        for (j = 0; j < timeCols.length && !tSrc; j++) if (timeCols[j] !== dateCol && r0[timeCols[j]] && /^\s*\d{1,4}\s*$/.test(r0[timeCols[j]].s)) tSrc = { col: timeCols[j], clock: false };
+        for (i = 0; i < n && tSrc; i++) {
+          var tc = rows[dataRows[i]][tSrc.col], tv = null;
+          if (tc) tv = tSrc.clock ? clockOf(tc.s) : (/^\s*\d{1,4}\s*$/.test(tc.s) ? +tc.s : null);
+          if (tv == null) tNull++;
+          times.push(tv);
+        }
+        var hasT = !!tSrc && tNull <= n * 0.02;
+
+        /* forward or backward — never both: a file whose dates run on and
+           then start again is two meters or two channels one after another */
+        var ups = 0, downs = 0, turn = -1, dirUp = null;
+        for (i = 1; i < n; i++) {
+          if (days[i] === days[i - 1]) continue;
+          var up = days[i] > days[i - 1];
+          if (up) ups++; else downs++;
+          if (dirUp === null) dirUp = up; else if (up !== dirUp && turn < 0) turn = i;
+        }
+        if (ups && downs) {
+          var dA = rows[dataRows[turn - 1]][dateCol] ? rows[dataRows[turn - 1]][dateCol].s.trim() : '', dB = rows[dataRows[turn]][dateCol] ? rows[dataRows[turn]][dateCol].s.trim() : '';
+          return { ok: false, error: 'The dates in the file run ' + (dirUp ? 'forward' : 'backward') + ' and then turn back (row ' + fmt(lineNo[dataRows[turn]]) + ': "' + dB.slice(0, 24) + '" after "' + dA.slice(0, 24) +
+                   '"): it looks like more than one meter, or more than one channel (delivered and received), one after another. Export one meter\'s readings of one channel, one year.' };
+        }
+        /* date and time order; ties keep the file's order */
+        var idx = []; for (i = 0; i < n; i++) idx.push(i);
+        idx.sort(function (x, y) { return (days[x] - days[y]) || (hasT ? times[x] - times[y] : 0) || (x - y); });
+        if (hasT) {
+          var dups = 0, dupAt = -1;
+          for (i = 1; i < n; i++) if (days[idx[i]] === days[idx[i - 1]] && times[idx[i]] === times[idx[i - 1]]) { dups++; if (dupAt < 0) dupAt = idx[i]; }
+          if (dups > DUP_TOLERANCE) {
+            return { ok: false, error: fmt(dups) + ' readings repeat a date and time already in the file (first at row ' + fmt(lineNo[dataRows[dupAt]]) +
+                     '): it looks like more than one meter, or more than one channel (delivered and received), in one file. Export one meter\'s readings of one channel, one year.' };
+          }
+        }
+        var sorted = []; for (i = 0; i < n; i++) sorted.push(vals[idx[i]]);
+        vals = sorted;
+        /* the interval: readings per day, the most common count */
+        var perDay = {}, runDay = null, runN = 0, bestC = 0, bestN = 0;
+        var closeRun = function () { if (runDay != null) { perDay[runN] = (perDay[runN] || 0) + 1; if (perDay[runN] > bestN || (perDay[runN] === bestN && runN > bestC)) { bestN = perDay[runN]; bestC = runN; } } };
+        for (i = 0; i < n; i++) { var dd0 = days[idx[i]]; if (dd0 !== runDay) { closeRun(); runDay = dd0; runN = 0; } runN++; }
+        closeRun();
+        per = bestC === 24 ? 1 : (bestC === 48 ? 2 : (bestC === 96 ? 4 : 0));
+        if (!per) return { ok: false, error: 'The file has ' + fmt(bestC) + ' reading' + (bestC === 1 ? '' : 's') + ' on most days; this simulator reads hourly (24 a day), half-hourly (48) or 15-minute (96) readings for one year.' };
+        var d0 = days[idx[0]], d1 = days[idx[n - 1]];
+        start = addDays({ y: 1970, m: 1, d: 1 }, d0);
+        spanDays = d1 - d0 + 1;
+        if (downs) notes.push('The file lists its newest reading first; its readings were read in date and time order, from ' + showDate(start) + '.');
+        var cover = n / (24 * per);
+        if (Math.abs(spanDays - cover) > 1 && (n === 365 * 24 * per || n === 366 * 24 * per)) {
           datesOff = true;
-          notes.push('The dates run from ' + showDate(start) + ' to ' + showDate(endD) + ' (' + fmt(span + 1) + ' days) but the readings cover ' +
-                     fmt(n / (24 * per0)) + ' days; they were laid in file order from ' + showDate(start) + '.');
+          notes.push('The dates run from ' + showDate(start) + ' to ' + showDate(addDays(start, spanDays - 1)) + ' (' + fmt(spanDays) + ' days) but the ' + describePer(per) +
+                     ' readings cover ' + fmt(cover) + ' days; they were laid in date order from ' + showDate(start) + '.');
         }
         if (ord.assumed) notes.push('Every date in the file could be read day-first or month-first; they were read month-first (US), so the first reading is ' + showDate(start) + '.');
       }
@@ -658,12 +850,12 @@ function parseInterval(text, unit, startDate) {
   } else if (given) { start = given; dated = true; }
 
   if (headName) {
-    var hint = /kwh/i.test(headName) ? 'kwh' : (/\bkw\b|demand/i.test(headName) ? 'kw' : null);
+    var hn = headNorm(headName), hint = /\bkwh\b/i.test(hn) ? 'kwh' : (/\bkw\b|demand/i.test(hn) ? 'kw' : null);
     if (!hint && dataRows.length) for (j = 0; j < rows[head].length; j++) {
       var u0 = rows[dataRows[0]][j];
       if (/^\s*units?\s*$/i.test(rows[head][j].s) && u0 && /^\s*kwh\s*$/i.test(u0.s)) hint = 'kwh';
     }
-    for (j = 0; j < rows[head].length; j++) if (j !== col && EXPORT_HEAD.test(rows[head][j].s) && rows[head][j].s.trim().length <= 60 && colIsNumeric(head + 1, j)) {
+    for (j = 0; j < rows[head].length; j++) if (j !== col && EXPORT_HEAD.test(headNorm(rows[head][j].s)) && rows[head][j].s.trim().length <= 60 && colIsNumeric(head + 1, j)) {
       notes.push('The file also has an export column ("' + rows[head][j].s.trim() + '"); only "' + headName + '" was read as the load. If the site has solar, those readings are already net of it — leave Solar blank.');
       break;
     }
@@ -671,14 +863,29 @@ function parseInterval(text, unit, startDate) {
       notes.push('The load column ("' + headName + '") looks like ' + (hint === 'kwh' ? 'kWh per interval' : 'kW') +
                  ', but it was read as ' + (unit === 'kwh' ? 'kWh per interval' : 'kW') + ' as chosen; change the unit if that is wrong.');
   }
-  var out = intervalToHourly(vals, unit, dated ? start : null, { undatedWhy: undatedWhy });
-  if (out.ok) { out.notes = notes.concat(out.notes); if (datesOff) out.datesOff = true; }
+  var out = intervalToHourly(vals, unit, dated ? start : null, { undatedWhy: undatedWhy, per: per, spanDays: spanDays });
+  if (out.ok) {
+    out.notes = notes.concat(out.notes);
+    if (datesOff) out.datesOff = true;
+    if (col >= 0) out.column = { key: keys[col], label: labels[col], chosen: chosen };
+  }
   return out;
 }
 
 function intervalToHourly(vals, unit, start, opts) {
   if (!Array.isArray(vals)) return { ok: false, error: 'The interval data is not a list of readings.' };
   var n = vals.length, per = perOf(n);
+  /* A dated file's interval comes from its timestamps (readings per day),
+     never from the row count: two years of hourly rows are not one year of
+     half-hourly ones. */
+  if (opts && opts.per) {
+    if (n !== 365 * 24 * opts.per && n !== 366 * 24 * opts.per) {
+      return { ok: false, error: 'An interval file must be one year: the file\'s dates show ' + describePer(opts.per) + ' readings, and it holds ' + fmt(n) +
+               (opts.spanDays ? ' of them over ' + fmt(opts.spanDays) + ' days' : '') + ' — one year is ' + fmt(8760 * opts.per) + ' (' + fmt(8784 * opts.per) +
+               ' in a leap year). Export one year: the most recent twelve months.' };
+    }
+    per = opts.per;
+  }
   if (!per) return { ok: false, error: 'An interval file must be one year: 8,760 hourly or 35,040 fifteen-minute readings (' + fmt(n) + ' found).' };
   var nDays = n / (24 * per), keep = [], notes = [], d, dt, leapGone = null, lastDropped = false;
   if (start) {
@@ -787,12 +994,13 @@ function buildLoad(input, loc, segment) {
   var intake = input.load || {}, clim = CLIMATE[loc.climate], notes = [], m, i;
   if (intake.type === 'interval') {
     var p = Array.isArray(intake.values) ? intervalToHourly(intake.values, intake.unit, parseDate(intake.startDate))
-                                          : parseInterval(intake.text, intake.unit, intake.startDate);
+                                          : parseInterval(intake.text, intake.unit, intake.startDate, intake.column);
     if (!p.ok) return p;
     /* Undated readings are placed on the calendar by assumption, which moves
        every summer event and weekday if the assumption is wrong; so are
        dated ones whose dates do not span the readings. */
     return { ok: true, kw: p.kw, source: 'interval', quality: p.dated && !p.datesOff ? 'high' : 'medium', notes: p.notes,
+             column: p.column || null, peakAssumed: false,
              label: 'Your interval data (' + fmt(p.readings) + ' readings)' };
   }
   if (intake.type === 'bills') {
@@ -820,8 +1028,13 @@ function buildLoad(input, loc, segment) {
       for (i = 0; i < fit.length; i++) kw.push(fit[i]);
     }
     if (!anyPeak && segment !== 'residential') notes.push('No bill carried a peak kW, so each month\'s peak comes from the ' + segment + ' load shape — add the billed demand for a real demand-charge figure.');
+    /* The summer peak a load-reduction programme is capped at is billed only
+       when every summer month's bill carries its peak (S4: quality 'low'
+       for missing kWh is not an assumed peak). */
+    var summerBilled = true;
+    for (m = 0; m < SUMMER.length; m++) if (!(b.months[SUMMER[m]].peakKw > 0)) summerBilled = false;
     return { ok: true, kw: kw, source: 'bills', quality: (anyPeak || segment === 'residential') && b.withKwh >= 12 ? 'medium' : 'low',
-             notes: notes, months: b.months, label: b.rows + ' month(s) of bills, shaped hour by hour for a ' + segment + ' site' };
+             peakAssumed: !summerBilled, notes: notes, months: b.months, label: b.rows + ' month(s) of bills, shaped hour by hour for a ' + segment + ' site' };
   }
   var annual = num(intake.annualKwh, null), assumed = false;
   if (!(annual > 0)) { annual = DEFAULT_ANNUAL_KWH[segment]; assumed = true; }
@@ -832,7 +1045,7 @@ function buildLoad(input, loc, segment) {
     var f = fitMonth(shapeMonth(segment, m), target, null);
     for (i = 0; i < f.length; i++) out.push(f[i]);
   }
-  return { ok: true, kw: out, source: 'profile', quality: 'low',
+  return { ok: true, kw: out, source: 'profile', quality: 'low', peakAssumed: true,
            notes: [assumed ? 'No load was given: a typical ' + segment + ' site of ' + fmt(annual) + ' kWh a year was assumed.'
                            : 'A ' + segment + ' load shape scaled to ' + fmt(annual) + ' kWh a year.'],
            label: assumed ? 'Typical ' + segment + ' load (assumed)' : 'Typical ' + segment + ' shape at your annual kWh' };
@@ -1012,6 +1225,15 @@ function dispatch(load, solar, bat, t, events, evHours) {
     if (x < 0) return Math.min(P, -x);
     return gridCharge[hr] ? Math.min(P, Math.max(0, line - x)) : 0;
   }
+  /* What the reserve may count on buying back in hour h: an event hour buys
+     solar surplus only, because the dispatch never charges from the grid
+     inside a called event — whatever the hour's net load, zero included
+     (a gap read as zero, or a net-metered reading clamped to zero). ONE
+     rule for the target check, the reserves and the dispatch. */
+  function reserveCredit(hr, line) {
+    if (eventSet[hr]) return net0[hr] < 0 ? Math.min(P, -net0[hr]) : 0;
+    return canBuy(hr, line);
+  }
 
   var eventSet = {}; for (var e = 0; e < events.length; e++) eventSet[events[e]] = true;
   var evCap = Math.min(P, Eout / Math.max(1, evHours || 4));   /* the event spread over its hours */
@@ -1033,7 +1255,7 @@ function dispatch(load, solar, bat, t, events, evHours) {
         var need = 0, refill = 0;
         for (h = d0; h < d0 + 24; h++) {
           if (net0[h] > mid) need += net0[h] - mid;
-          else refill += canBuy(h, mid);
+          else refill += reserveCredit(h, mid);
         }
         if (need > Eout || need > refill * rte) ok = false;
       }
@@ -1058,7 +1280,7 @@ function dispatch(load, solar, bat, t, events, evHours) {
     for (var hh = upTo - 1; hh >= 0; hh--) {
       var Tt = tg[monthAt[hh]], xx = net0[hh], nP = xx > Tt ? Math.min(P, xx - Tt) : 0;
       if (nP > 0) r += nP / sr;
-      else if (!(eventSet[hh] && xx > 0)) r = Math.max(0, r - canBuy(hh, Tt) * sr);
+      else r = Math.max(0, r - reserveCredit(hh, Tt) * sr);
       if (r > E * (1 + 1e-9) + 1e-9) return false;
     }
     return true;
@@ -1083,7 +1305,7 @@ function dispatch(load, solar, bat, t, events, evHours) {
     var T = target[monthAt[h]], x0 = net0[h];
     var needP = x0 > T ? Math.min(P, x0 - T) : 0, needA = needP;
     if (eventSet[h]) needA = Math.max(needA, Math.min(evCap, Math.max(0, x0)));
-    var credit = needA > 0 ? 0 : canBuy(h, T) * sr;
+    var credit = needA > 0 ? 0 : reserveCredit(h, T) * sr;
     resPeak[h] = Math.min(E, needP > 0 ? resPeak[h + 1] + needP / sr : Math.max(0, resPeak[h + 1] - credit));
     resAll[h] = Math.min(E, needA > 0 ? resAll[h + 1] + needA / sr : Math.max(0, resAll[h + 1] - credit));
   }
@@ -1170,11 +1392,10 @@ function pickEvents(load, count, win) {
 var PROGRAMS = [
   { id: 'ca.elrp', name: 'Emergency Load Reduction Program (ELRP)', markets: ['CAISO'], group: 'ca-dr',
     segments: SEGMENTS, kind: 'event', perKwh: 2.00, win: [16, 21],
-    eventsBySegment: { residential: 7, commercial: 3, industrial: 3 },
-    hoursBySegment: { residential: 3, commercial: 4, industrial: 4 },
+    events: 7, hours: 3,
     pairWith: 'ca.ra',
     pairWhy: 'CBP / DRAM pays more for the same hours. Enrolled there, the site could add ELRP through Group B (B.2 for CBP, B.1 for DRAM), which pays only the reduction beyond the CBP/DRAM commitment — that top-up is not modelled, so only the better of the two is counted.',
-    ref: 'CPUC ELRP pays $2/kWh of verified incremental load reduction in events called 4–9 pm, May–October, up to 60 hours a season; the pilot is approved through 2027 (elrp.sdge.com, read 2026-09-29). A home battery enrols through a VPP aggregator in sub-group A.4 (behind-the-meter storage, at least 500 kW aggregated, events of 1–3 h: 3 h here); a non-residential site through an aggregator in A.2 (events of 1–5 h: 4 h here). It pays incremental reduction against a baseline of similar non-event days, so a battery is paid for what it gives BEYOND its everyday discharge — here, the dispatch with the events minus the dispatch without them. The planning year is the recent record, not the 60-hour cap: PG&E and SCE each called seven A.4 events in 2024 (about 20 event-hours), and two (PG&E) and three (SCE) A.2 events — so 7 events for a home battery and 3 for a business here (PG&E and SCE PY2024 ELRP load-impact evaluations, Demand Side Analytics, calmac.org, read 2026-09-29). The utility\'s event record for the season replaces it.' },
+    ref: 'CPUC ELRP pays $2/kWh of verified incremental load reduction in events called 4–9 pm, May–October, up to 60 hours a season; the pilot is approved through 2027 (elrp.sdge.com, read 2026-09-29). A battery in a VPP enrols through its aggregator in sub-group A.4, whatever the site: A.4 is "third-party aggregators managing a behind-the-meter (BTM) hybrid Virtual Power Plant (VPP) consisting of storage paired with NEM solar or stand-alone storage deployed with residential … or non-residential … customers", at least 500 kW aggregated, dispatched at least 20 hours a season (elrp.sce.com/aggregator-drp-faq, read 2026-09-30), with events of 1–3 h: 3 h here. A.2 is for non-residential aggregators outside a storage VPP, so a business battery in this VPP is A.4 too. It pays incremental reduction against a baseline of similar non-event days, so a battery is paid for what it gives BEYOND its everyday discharge — here, the dispatch with the events minus the dispatch without them. The planning year is the recent record, not the 60-hour cap: PG&E and SCE each called seven A.4 events in 2024 (about 20 event-hours) — so 7 events of 3 h for every site here (PG&E and SCE PY2024 ELRP load-impact evaluations, Demand Side Analytics, calmac.org, read 2026-09-29). The utility\'s event record for the season replaces it.' },
   { id: 'ca.dsgs', exportOk: true, name: 'Demand Side Grid Support (DSGS) Option 3', markets: ['CAISO'], group: 'ca-dr',
     segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 60, minHours: 2,
     closed: 'Closed to a new aggregation: the CEC\'s DSGS Guidelines, 5th edition (adopted 2026-04-27, CEC-300-2026-001-CMF), limit Option 3 in the 2026 season to storage VPP aggregators that took part in October 2025, and the 2026–27 state budget funds no 2027 season (status read 2026-09-29). Not counted.',
@@ -1245,7 +1466,8 @@ var PROGRAMS = [
   { id: 'west.dr', exportOk: true, name: 'Utility battery programme (BYOD)', markets: ['WEST'], group: 'west',
     segments: SEGMENTS, kind: 'capacity', perKwYear: 50, minHours: 2,
     ref: 'Western utility battery programmes (e.g. APS Storage Rewards, Xcel Colorado Renewable Battery Connect, NV Energy, Portland General). Planning figure.' },
-  { id: 'hi.bb', exportOk: true, name: 'Hawaiian Electric Bring Your Own Device Plus (BYOD Plus)', markets: ['HI'], group: 'hi',
+  { id: 'hi.bb', exportOk: true, name: 'Hawaiian Electric Bring Your Own Device Plus (BYOD Plus)', markets: ['HI'], group: 'hi', notKiuc: true,
+    kiucWhy: 'BYOD Plus is Hawaiian Electric\'s Rule 33 programme, for Oahu, Maui County and Hawaii Island; this ZIP is on Kauai, served only by Kauai Island Utility Cooperative (KIUC), and no KIUC battery-programme payment is on file here. Not counted.',
     segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 60, minHours: 2,
     needsSolar: true, solarWhy: 'BYOD Plus takes only batteries paired with renewable generation; no solar was entered.',
     ref: 'Battery Bonus closed to new participants on 2024-07-01; its successor, Bring Your Own Device Plus (Rule 33, effective 2025-05-15, a five-year programme to 2030-05-14), asks a two-hour discharge every day and pays two things (hawaiianelectric.com Rule 33, Sheets 49.41-K and -L, read 2026-09-29). The ONE-TIME upfront incentive of $400 per kW committed ($800 for a qualifying low-to-moderate-income customer) is not counted here: it is listed with the other one-time incentives. The RECURRING part is a monthly Grid Service Export Credit: on a tariff other than NEM it is fixed at (retail rate − the DER tariff\'s export rate) × committed kW × 70% × 2 h × 30 days; a NEM customer already exports at the retail rate and gets nothing beyond it. $60/kW-yr is a planning figure for that recurring credit, not derived from those terms; the customer\'s own rates in that formula replace it.' }
@@ -1261,6 +1483,7 @@ function gate(p, ctx) {
   if (p.comedOnly && !loc.comed) return false;
   if (p.bundledOnly && !loc.pjmBundled) return false;
   if (p.closed) return p.closed;
+  if (p.notKiuc && loc.kiuc) return p.kiucWhy;
   if (p.retailDr && loc.pjmBundled) return PJM_BUNDLED[loc.pjmBundled].dr;
   if (p.choiceOnly && loc.pjmBundled) return bundledPlcWhy(loc.pjmBundled);
   if (p.segments.indexOf(ctx.segment) < 0) return p.segWhy || ('Not open to ' + ctx.segment + ' sites.');
@@ -1275,7 +1498,7 @@ function eventProgram(ctx) {
   for (var i = 0; i < PROGRAMS.length; i++) if (PROGRAMS[i].kind === 'event' && gate(PROGRAMS[i], ctx) === null) return PROGRAMS[i];
   return null;
 }
-function eventHours(p, segment) { return (p.hoursBySegment && p.hoursBySegment[segment]) || 4; }
+function eventHours(p, segment) { return (p.hoursBySegment && p.hoursBySegment[segment]) || p.hours || 4; }
 function eventCount(p, segment) { return (p.eventsBySegment && p.eventsBySegment[segment]) || p.events || 0; }
 
 /* A behind-the-meter battery sells a reduction in the site's own load, so
@@ -1326,6 +1549,12 @@ function programValue(p, ctx) {
   if (loc.li && (p.perKwYearConEd || p.perKwYearZoneJ))
     rateNote = ' Long Island (PSEG Long Island, NYISO Zone K): the upstate planning rate is used, not Con Edison\'s or New York City\'s; PSEG Long Island\'s own terms replace it.';
   var kwCommitted = Math.min(shed, Eout / (p.minHours || 1));
+  /* a utility's own tariff below its size floor is not a route for this site */
+  var fl = p.bundledOnly && loc.pjmBundled ? PJM_BUNDLED[loc.pjmBundled].floor : null;
+  if (fl) {
+    var sized = fl.basis === 'peak' ? ctx.peakKw : kwCommitted;
+    if (sized < fl.kw) return { skip: fl.why + '. This site ' + (fl.basis === 'peak' ? 'peaks at ' + fmt(sized) + ' kW' : 'commits ' + r2(sized) + ' kW') + ', below it; not counted.' };
+  }
   return { usd: kwCommitted * rate * perf, tier: p.tier || 'planning', url: p.url, kw: kwCommitted,
            how: r2(kwCommitted) + ' kW committed (' + fmt(shed) + ' kW for ' + (p.minHours || 1) + ' h' +
                 (kwCommitted < shed ? ', limited by the ' + r2(Eout) + ' kWh it delivers' : '') + ') × $' + rate + '/' + (p.unit || 'kW-yr') + ' × ' +
@@ -1384,6 +1613,8 @@ function validate(input) {
   if (l.type === 'interval' && typeof l.text !== 'string' && !Array.isArray(l.values)) errs.push({ field: 'load.text', message: 'Attach the interval file.' });
   if (l.type === 'interval' && typeof l.text === 'string' && l.text.length > MAX_TEXT) errs.push({ field: 'load.text', message: 'The interval file is larger than this simulator takes (' + (MAX_TEXT / 1e6).toFixed(1) + ' million characters); export one year of hourly or 15-minute readings, without extra columns.' });
   if (l.type === 'interval' && l.startDate != null && !parseDate(l.startDate)) errs.push({ field: 'load.startDate', message: 'The start date is YYYY-MM-DD.' });
+  if (l.type === 'interval' && l.column != null && !(typeof l.column === 'string' && l.column.length <= 200))
+    errs.push({ field: 'load.column', message: 'Which column is the load? Name it by its header text, or "#3" for the third column.', columns: [] });
   if (l.type === 'bills' && !Array.isArray(l.bills)) errs.push({ field: 'load.bills', message: 'Enter at least one month of bills.' });
   var s = input.split;
   if (s && typeof s === 'object') {
@@ -1404,7 +1635,11 @@ function simulate(input) {
   if (!loc.ok) return { ok: false, errors: [{ field: 'zip', message: loc.error }] };
 
   var L = buildLoad(input, loc, segment);
-  if (!L.ok) return { ok: false, errors: [{ field: 'load', message: L.error }] };
+  if (!L.ok) {
+    /* "Which column is the load?" goes back with the columns to choose from */
+    if (L.field === 'load.column') return { ok: false, errors: [{ field: 'load.column', message: L.error, columns: L.columns }] };
+    return { ok: false, errors: [{ field: 'load', message: L.error }] };
+  }
   var load = L.kw, h, peakKw = 0, annualKwh = 0;
   for (h = 0; h < HOURS_YEAR; h++) { annualKwh += load[h]; if (load[h] > peakKw) peakKw = load[h]; }
   if (!(annualKwh > 0)) return { ok: false, errors: [{ field: 'load', message: 'The load adds up to zero kWh.' }] };
@@ -1462,7 +1697,7 @@ function simulate(input) {
   var shedKw = 0;
   for (h = MONTH_START[SUMMER[0]]; h < MONTH_START[SUMMER[SUMMER.length - 1]] + DAYS[SUMMER[SUMMER.length - 1]] * 24; h++) if (netNoBat[h] > shedKw) shedKw = netNoBat[h];
   var ctx = { loc: loc, segment: segment, battery: bat, performance: perf, solarKw: solarKw, peakKw: peakKw, shedKw: shedKw,
-              loadAssumed: L.quality === 'low', loadLabel: L.label };
+              loadAssumed: !!L.peakAssumed, loadLabel: L.label };
   var D0 = dispatch(load, solar, bat, t, [], 0);
   var before = bill(Array.prototype.slice.call(D0.net0), t);
   var after0 = bill(Array.prototype.slice.call(D0.net), t);
@@ -1545,7 +1780,8 @@ function simulate(input) {
     ok: true, version: VERSION, provider: 'simulated',
     site: { zip: loc.zip, state: loc.state, market: loc.market, marketName: loc.marketName, area: loc.area,
             marketInferred: loc.marketInferred, segment: segment, climate: loc.climate },
-    load: { source: L.source, label: L.label, quality: L.quality, notes: L.notes, annualKwh: r0(annualKwh), peakKw: r2(peakKw) },
+    load: { source: L.source, label: L.label, quality: L.quality, notes: L.notes, annualKwh: r0(annualKwh), peakKw: r2(peakKw),
+            column: L.column || null },
     solar: solarKw > 0 ? { kwdc: solarKw, annualKwh: r0(solarKw * loc.solarYield), yield: loc.solarYield } : null,
     battery: { kw: bat.kw, kwh: bat.kwh, usableKwh: r2(bat.kwh * bat.dod), rte: bat.rte, assumed: bat.assumed, assumedFields: bat.assumedFields,
                cyclesPerYear: r0(D.cycles), dischargedKwh: r0(D.dischargedKwh), chargedKwh: r0(D.chargedKwh),

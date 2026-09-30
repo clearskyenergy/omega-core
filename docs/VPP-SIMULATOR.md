@@ -38,6 +38,7 @@ Clean Cell's two tools) still wins: absent is not empty.
 | Battery kW / kWh | no | blank = 5 kW / 13.5 kWh home battery, or ¼ of peak for 2 h |
 | Solar kW-dc | no | modelled from a state yield; unlocks Clean Peak where it applies |
 | Load | no | **8760 / 15-minute interval CSV** (best), **12–24 months of bills** (kWh, peak kW, $), or nothing (a typical load, labelled) |
+| Load column | no | only when the simulator asks "Which column is the load?" (`load.column`: the header text, or `#3` for the third column of a file with no header) |
 | Start date | no | only for a bare list of readings with no dates (`load.startDate`, YYYY-MM-DD); a CSV's own date column wins, and the result says so when they differ |
 | Tariff | no | own on/off-peak and demand rates, or an OpenEI URDB record; else a regional planning rate calibrated to the bills' dollars |
 | Split | no | defaults to DividendVPP's 70/20/10 |
@@ -70,15 +71,20 @@ Clean Cell's two tools) still wins: absent is not empty.
     month that breaks it is raised to the lowest target that holds.
   - **Events are priced off the dispatch.** ELRP (the one programme paid per
     kWh delivered) runs its own event days through the dispatch: seven
-    3-hour events a year for a home battery (sub-group A.4), three 4-hour
-    events for a business (A.2), from 4 pm — the 2024 record (PG&E's and
-    SCE's PY2024 ELRP evaluations: seven A.4 events each, two and three
-    A.2), not the 60-hour cap. It is worth the kWh the battery gives in
+    3-hour events a year from 4 pm, for a home and a business alike — a
+    behind-the-meter battery in a VPP is sub-group A.4 whatever the site
+    (SCE's aggregator FAQ: storage "deployed with residential … or
+    non-residential … customers", 500 kW aggregated; A.2 is for
+    non-residential aggregators outside a storage VPP) — the 2024 record
+    (PG&E's and SCE's PY2024 ELRP evaluations: seven A.4 events each), not
+    the 60-hour cap. It is worth the kWh the battery gives in
     those hours *beyond its everyday dispatch* (ELRP pays incremental
     reduction against a baseline of similar days), × performance ×
     $2/kWh; an event takes only energy no later over-target hour needs,
     and the battery never charges from the grid inside an event (that
-    would come off the reduction paid for); holding charge for the events
+    would come off the reduction paid for) — and neither the target check
+    nor the reserves count on it there, whatever the hour's load, zero
+    included (one rule, `reserveCredit`); holding charge for the events
     is a cost the TOU stream carries when ELRP is counted, and the group picks
     ELRP only if it pays net of that cost. A home battery that already
     empties into 4–9 pm for TOU savings has nothing extra to give and ELRP
@@ -96,8 +102,10 @@ Clean Cell's two tools) still wins: absent is not empty.
     CSP's nomination replaces it) — `published` only when the battery's
     rating, or the site's summer peak read from its own interval data or
     billed peaks, sets the kW. When the four-hour assumption sets it, or a
-    summer peak read off a load shape (the typical load, or bills without
-    peaks — load quality `low`), the row is `planning` and says why.
+    summer peak read off a load shape (the typical load, or bills whose
+    summer months do not all carry a billed peak), the row is `planning`
+    and says why. Bills that carry their peaks keep the cap `published`
+    even when missing kWh make the load `low` quality.
   - **Programme status is dated, not live** (read 2026-09-29): DSGS Option 3
     is `closed` (CEC Guidelines 5th ed., CEC-300-2026-001-CMF, adopted
     2026-04-27: 2026 limited to aggregators from October 2025; no 2027
@@ -109,7 +117,10 @@ Clean Cell's two tools) still wins: absent is not empty.
     batteries paired with renewables: $60/kW-yr is a planning figure for
     its recurring export credit (Rule 33's formula, zero beyond NEM's own
     retail credit), and its $400/kW upfront incentive is one-time, listed
-    with the one-time incentives on the kW the estimate commits. CBP/DRAM
+    with the one-time incentives on the kW the estimate commits. Kauai is
+    not Hawaiian Electric: its 17 ZIPs are Kauai Island Utility Cooperative
+    (KIUC), where BYOD Plus is listed with that reason and no upfront is
+    named; no KIUC battery-programme payment is on file. CBP/DRAM
     and ELRP are not called exclusive: ELRP Group B would pay the reduction
     beyond a CBP/DRAM
     commitment, a top-up not modelled, so the better of the two is counted.
@@ -125,41 +136,78 @@ Clean Cell's two tools) still wins: absent is not empty.
     2017). There the CSP capacity row and the PLC row are listed with that
     dated reason, never priced, and a business gets the utility's own
     demand-response tariff as a planning row ($40/kW-yr; I&M Rider D.R.S.1,
-    Kentucky Power Rider D.R.S.); a home battery has no route on file. New
+    Kentucky Power Rider D.R.S., Dominion NC Schedule 6C) — only at or above
+    the tariff's size floor: Kentucky 500 kW committed (Rider D.R.S.), North
+    Carolina 500 kW contracted (Schedule 6C, read as the site's peak),
+    Indiana 100 kW committed (D.R.S.1); below it the row is listed with the
+    tariff's own minimum, never priced. A home battery has no route on file. New
     York is by utility: Con Edison (100–104, 105–108, 111–114,
     11004/11005) earns its DLM rate, New York
     City (Zone J) the NYC SCR price, and Long Island (the rest of 110,
     115–119: PSEG Long Island, Zone K) the upstate planning rates under its
     own label. A market override that changes the market drops the area.
   - **Interval files.** Lines end in CRLF, LF or a lone CR; the delimiter
-    is the one most sampled lines carry (a stray tab in a title never
-    decides). Quote-aware CSV; a currency cell is never a reading; in a tab
-    or semicolon file a comma in a number is read the way the file shows it
+    is chosen by the data rows (lines with a digit): the one that splits
+    most of them into the same number of cells, and among near ties the one
+    that gives more cells — so a comma in a name or address above the
+    readings never turns a semicolon file with decimal commas into a comma
+    file. Quote-aware CSV; a currency cell is never a reading; in a tab or
+    semicolon file a comma in a number is read the way the file shows it
     (decimal commas "0,25" / "1.234,5", or a thousands "1,250.0"), and a
     reading that could be either ("1,250"), or that carries digits but is
-    not a number, is refused with its row — never read as zero. The load
-    column is picked by its header (usage / kWh / kW / demand, money words
-    as whole words, never cost, export, power factor, kVA, kVAR, volts,
-    amps, or a column whose last word is a time part such as "Usage Hour");
-    two load columns are narrowed by the unit (an explicit kWh / kW first),
-    still two is refused, and a headerless file with more than one numeric
-    column is refused. Once the readings carry a date or time, an unstamped
-    row is a note or a footer ("Total") and a stamped row with a blank or
-    "N/A" reading is a gap (zero within 2%, said so). The date column is
-    read on every row: its day/month order is settled across the file
-    (month names, 20250605 and two-digit years too), a newest-first file is
-    read oldest-first, and dates that do not span the readings are said and
-    drop the load to `medium`. The first date lays the year on the calendar
-    (29 Feb removed, wrapped by date, then moved by the shift of up to
-    three days that lands the most weekends on weekends over the whole
-    year, with how many days still differ); a file's own date wins over a
-    given start date, and says so; with no date the readings are read as
-    starting 1 January, said so, and the load is `medium` quality, not
-    `high`. Cells longer than 32 characters are never tested and the
-    number test is linear; the text cap is 4,300,000 characters
-    (`MAX_TEXT`, also `options().maxTextChars`, the page's number: a year
-    of 15-minute Smart Meter Texas rows is ~3.1 MB, and Vercel takes
-    4.5 MB), refused as a size.
+    not a number, is refused with its row — never read as zero (an
+    ambiguous cell still marks its column as numbers, so the row is named,
+    not "0 found").
+    **The load column is picked, never guessed.** The engine reads it by
+    itself only when exactly one column of numbers survives the exclusions
+    and its header names the load (kW, kWh, usage, consumption, energy,
+    demand, load, value — whole words, with `_` and `-` read as spaces), or
+    when the file has a single column of numbers that is not excluded.
+    Excluded: money (cost, price, rate, charge, cents, credit, anything per
+    kWh), export / solar / received, power factor, kVA / VA / MVA, kVAR,
+    volts, amps or "(A)", frequency, temperature, multipliers, percentages,
+    registers and meter readings, carbon, contract figures, events and
+    flags, and a column whose last word is a time part ("Usage Hour",
+    USAGE_HOUR) unless it names kW/kWh or reads "per hour". Otherwise the
+    answer is `ok: false` with `errors[0] = { field: 'load.column', message:
+    'Which column is the load? …', columns: [{ key, label, sample }] }` (up
+    to three sample values per column; an hour-number column is not
+    offered), and the caller sends `load.column` = a `key` (the header
+    text, or `#n` without a header); an unknown one is refused the same
+    way. The result's `load.column` is `{ key, label, chosen: 'auto' |
+    'caller' }`. (Before round 3 two load columns were narrowed by the unit
+    token, which let a register, a price or a contract kW beside "Usage"
+    win silently.)
+    **Rows.** Once the readings carry a date, a clock time or an hour
+    number, an unstamped row is a note or a footer; a row with a Total /
+    Sum / Average / Max cell, or a date range, is a footer even when
+    stamped; a stamped row with a blank or "N/A" reading is a gap (zero
+    within 2%, said so). A date written only on a day's first row carries
+    down.
+    **Dates set the order and the interval.** The date column is read on
+    every row, its day/month order settled across the file (month names,
+    20250605 and two-digit years too). With a time (in the date cell, a
+    clock column or an hour-number column) the readings are put in date and
+    time order — a newest-first file, or one sorted newest day first with
+    hours ascending, is read oldest first and no day is turned round — and
+    more than four repeated timestamps (two meters, delivered and received
+    rows) are refused, naming the first repeat; dates that run forward and
+    then back are refused the same way. The interval is the readings per
+    day (24, 48 or 96), never the row count, so two years of hourly rows
+    are refused as two years, not read as a year of half-hours; a dated
+    file must hold 365 (or 366) days of them, and dates that do not span
+    the readings are said and drop the load to `medium`. The first date
+    lays the year on the calendar (29 Feb removed, wrapped by date, then
+    moved by the shift of up to three days that lands the most weekends on
+    weekends over the whole year, with how many days still differ); a
+    file's own date wins over a given start date, and says so; with no date
+    the interval is read off the count and the readings as starting 1
+    January, said so, and the load is `medium` quality, not `high`. Cells
+    longer than 32 characters are never tested and the number test is
+    linear; the text cap is 4,300,000 characters (`MAX_TEXT`, also
+    `options().maxTextChars`, the page's number: a year of 15-minute Smart
+    Meter Texas rows is ~3.1 MB, and Vercel takes 4.5 MB), refused as a
+    size.
   - **Bills.** A month with no kWh (no bill, or dollars only) is filled
     from the climate curve and never calibrates the rate; the calibration
     takes the customer charge out of both sides, so the calibrated bill is
@@ -245,7 +293,14 @@ a module and a `render-legacy-gates.js` pass).
   Order 719 opt-out states in PJM). Virginia and West Virginia are also
   largely bundled but not reviewed yet: their PLC row is still offered.
   The utility demand-response tariff in the bundled states is a planning
-  figure, not the rider's terms.
+  figure, not the rider's terms (its size floor is enforced; its events —
+  Kentucky Power's are 3 h, 60 h a year — are not). Duke Energy Kentucky
+  is held to Kentucky Power's 500 kW floor until its own tariff is read.
+- An interval file with a date and no time on each row cannot show two
+  channels interleaved within a day (two meters one after another are
+  refused where the dates turn back). A daylight-saving file one hour
+  short (8,759 hourly) is refused by its count, not filled.
+- Kauai (KIUC) has no battery-programme row of its own.
 - `api/price-site.js` still carries ComEd's VPP at $150/kW-yr (the
   withdrawn Rider VPP's planning rate); it is not this engine's figure.
 - Wholesale (front-of-meter) participation, one-time incentives (SGIP, ITC)

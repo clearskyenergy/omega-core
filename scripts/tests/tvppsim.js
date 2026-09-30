@@ -62,8 +62,9 @@ ok('El Paso 885 is offered no ERCOT ADER', !stream(S.simulate({ zip: '88510', se
    through the utility (NCUC E-22 Sub 418, IURC 43566, KY PSC 2017-00129).
    Both PJM customer rows are listed with the reason, never priced; a
    business gets the utility's own tariff as a planning row. */
-[['27954', /E-22, Sub 418/, /North Carolina has no retail choice/], ['27909', /E-22, Sub 418/, /North Carolina/], ['46802', /IURC Cause 43566/, /Indiana has no retail choice/],
- ['47303', /IURC Cause 43566/, /Indiana/], ['41101', /2017-00129/, /Kentucky has no retail choice/], ['41011', /2017-00129/, /Kentucky/]].forEach(function (c) {
+[['27954', /E-22, Sub 418/, /North Carolina has no retail choice/, /Schedule 6C.*500 kW or greater.*peaks at [\d,]+ kW/], ['27909', /E-22, Sub 418/, /North Carolina/, /Schedule 6C/],
+ ['46802', /IURC Cause 43566/, /Indiana has no retail choice/, /D\.R\.S\.1.*at least 100 kW.*commits [\d.]+ kW/], ['47303', /IURC Cause 43566/, /Indiana/, /D\.R\.S\.1/],
+ ['41101', /2017-00129/, /Kentucky has no retail choice/, /Rider D\.R\.S\. sets .*500 kW.*commits [\d.]+ kW/], ['41011', /2017-00129/, /Kentucky/, /500 kW/]].forEach(function (c) {
   ['commercial', 'industrial', 'residential'].forEach(function (seg) {
     var r = S.simulate({ zip: c[0], segment: seg }), u = stream(r, 'pjm.utility');
     var capWhy = r.missing.filter(function (m) { return /^PJM capacity via curtailment/.test(m); })[0] || '';
@@ -71,10 +72,15 @@ ok('El Paso 885 is offered no ERCOT ADER', !stream(S.simulate({ zip: '88510', se
     ok(c[0] + ' ' + seg + ': still PJM, but no CSP capacity or PLC saving is priced; both are listed with the dated reason',
        r.ok && r.site.market === 'PJM' && !stream(r, 'pjm.capacity') && !stream(r, 'pjm.plc') && r.totals.tagSavings === 0 &&
        c[1].test(capWhy) && c[2].test(plcWhy) && !stream(r, 'se.dr') && !stream(r, 'miso.dr'), [r.site, capWhy, plcWhy]);
-    ok(c[0] + ' ' + seg + ': ' + (seg === 'residential' ? 'no utility route for a home battery is priced, and it says so' : 'the utility\'s own tariff is the route, a planning row'),
+    /* T7: the named tariffs have size floors (Kentucky Power D.R.S. 500 kW
+       committed, Dominion NC Schedule 6C 500 kW contracted, I&M D.R.S.1
+       100 kW): a default site is far below them, listed with the reason */
+    ok(c[0] + ' ' + seg + ': ' + (seg === 'residential' ? 'no utility route for a home battery is priced, and it says so' : 'the utility\'s tariff is below its size floor for a typical site: listed with the tariff\'s own minimum, never priced'),
        seg === 'residential' ? !u && r.missing.some(function (m) { return /^Utility demand-response tariff/.test(m) && /business customers/.test(m); })
-                             : !!u && u.counted && u.tier === 'planning' && /Rider D\.R\.S/.test(u.ref), u || r.missing);
+                             : !u && r.missing.some(function (m) { return /^Utility demand-response tariff/.test(m) && c[3].test(m) && /below it; not counted/.test(m); }) && r.totals.gridEarnings === 0, u || r.missing);
   });
+  var big = S.simulate({ zip: c[0], segment: 'industrial', battery: { kw: 1500, kwh: 6000 }, load: { type: 'profile', annualKwh: 30000000 } }), ub = stream(big, 'pjm.utility');
+  ok(c[0] + ' a site above the floor: the utility\'s own tariff is the route, a planning row', !!ub && ub.counted && ub.tier === 'planning' && /Rider D\.R\.S/.test(ub.ref) && ub.committedKw >= 500, ub || big.missing);
 });
 ok('a PJM state with retail choice still prices CSP capacity and the PLC tag, and never offers the bundled-state utility row', (function () {
   var r = S.simulate({ zip: '19103', segment: 'commercial' }), il = S.simulate({ zip: '60601', segment: 'industrial' });
@@ -82,7 +88,7 @@ ok('a PJM state with retail choice still prices CSP capacity and the PLC tag, an
          !!stream(il, 'pjm.plc') && !stream(il, 'pjm.utility');
 })());
 ok('a bundled-state ZIP moved into PJM by the user is gated the same way (Raleigh, NC)', (function () {
-  var r = S.simulate({ zip: '27601', segment: 'commercial', market: 'PJM' });
+  var r = S.simulate({ zip: '27601', segment: 'industrial', market: 'PJM', battery: { kw: 1500, kwh: 6000 }, load: { type: 'profile', annualKwh: 30000000 } });
   return r.ok && r.site.market === 'PJM' && !stream(r, 'pjm.plc') && !stream(r, 'pjm.capacity') && !!stream(r, 'pjm.utility');
 })());
 ok('the US Virgin Islands (008) are refused, not priced as Puerto Rico', S.locate('00802').ok === false);
@@ -284,10 +290,14 @@ var evFlat = S.simulate({ zip: '94110', segment: 'residential', battery: { kw: 5
 var evFlatHours = evFlat.sampleDay.hours.filter(function (x) { return x.event; });
 ok('the battery never charges from the grid inside a called ELRP event (flat energy price)', stream(evFlat, 'ca.elrp').counted && evFlatHours.length > 0 &&
    evFlatHours.every(function (x) { return x.battery >= -1e-9 || x.load - x.solar < 0; }), evFlatHours);
-ok('a home battery\'s ELRP events are 3 h (sub-group A.4), a business\'s 4 h (A.2)', /× 3 h/.test(el2.how) && /× 4 h/.test(el1.how) && /A\.4/.test(el2.ref) && /A\.2/.test(el2.ref) && !/A\.6/.test(el2.ref));
+/* T8: a behind-the-meter battery in a VPP is ELRP A.4 whatever the segment
+   (SCE's aggregator FAQ: storage "deployed with residential … or
+   non-residential … customers"), so a business battery is 7 × 3 h too. */
+ok('ELRP: every battery in this VPP is sub-group A.4, 3 h events — a home and a business alike', /× 3 h/.test(el2.how) && /× 3 h/.test(el1.how) && /A\.4/.test(el2.ref) &&
+   /non-residential/.test(el2.ref) && !/A\.6/.test(el2.ref) && !/a non-residential site through an aggregator in A\.2/.test(el2.ref), [el1.how, el2.ref]);
 /* R12: the planning year is the recent dispatch record (PG&E and SCE PY2024
    evaluations: seven A.4 events, two and three A.2), not twelve. */
-ok('ELRP\'s planning year is the 2024 record: 7 events for a home battery, 3 for a business', /^7 events × 3 h/.test(el2.how) && /^3 events × 4 h/.test(el1.how) &&
+ok('ELRP\'s planning year is the 2024 A.4 record: 7 events of 3 h for a home battery and a business', /^7 events × 3 h/.test(el2.how) && /^7 events × 3 h/.test(el1.how) &&
    /2024/.test(el2.ref) && /calmac/.test(el2.ref) && /through 2027/.test(el2.ref) && !/12 events/.test(el2.ref), [el2.how, el1.how]);
 /* d3: CBP/DRAM and ELRP are not mutually exclusive (ELRP Group B), only
    the top-up is not modelled. */
@@ -330,30 +340,40 @@ var leapCsv = [];
 for (vi = 0; vi < 366; vi++) { var lt = dayAt(2024, 1, 1, vi); for (var lh = 0; lh < 24; lh++) leapCsv.push(iso(lt[0], lt[1], lt[2]) + 'T' + (lh < 10 ? '0' : '') + lh + ':00,' + (lt[1] === 2 && lt[2] === 29 ? 999 : 5)); }
 var leap2 = S.parseInterval(leapCsv.join('\n'), 'kw');
 ok('a dated 2024 file drops its 29 Feb readings and says so', leap2.ok && leap2.kw.indexOf(999) < 0 && leap2.notes.some(function (n) { return /29 Feb 2024 was removed/.test(n); }), leap2.ok ? leap2.notes : leap2);
-var q = [], qi; for (qi = 0; qi < 8760; qi++) q.push('"' + iso(2025, 1, 1) + '","1,234.5"');
+/* Fixtures carry a real year of timestamps: a file whose timestamps repeat is
+   refused (U1), so a constant date is no longer a year of readings. */
+function tsAt(i, per) { var t = dayAt(2025, 1, 1, Math.floor(i / (24 * per))), mins = (i % (24 * per)) * (60 / per); return [iso(t[0], t[1], t[2]), (mins < 600 ? '0' : '') + Math.floor(mins / 60) + ':' + (mins % 60 < 10 ? '0' : '') + (mins % 60)]; }
+var q = [], qi; for (qi = 0; qi < 8760; qi++) q.push('"' + tsAt(qi, 1).join(' ') + '","1,234.5"');
 var quoted = S.parseInterval(q.join('\n'), 'kw');
 ok('a quoted "1,234.5" is one reading of 1,234.5', quoted.ok && quoted.kw[0] === 1234.5, quoted.ok ? quoted.kw[0] : quoted);
 var gb = ['Name,ACCOUNT NAME', 'Address,1 MAIN ST', 'Account Number,12345', 'Service,Service 1', '', 'TYPE,DATE,START TIME,END TIME,USAGE,UNITS,COST,NOTES'];
-for (qi = 0; qi < 35040; qi++) { var gt = dayAt(2025, 1, 1, Math.floor(qi / 96)); gb.push('Electric usage,' + iso(gt[0], gt[1], gt[2]) + ',00:00,00:14,0.25,kWh,$0.03,'); }
+for (qi = 0; qi < 35040; qi++) { var gt = dayAt(2025, 1, 1, Math.floor(qi / 96)); gb.push('Electric usage,' + iso(gt[0], gt[1], gt[2]) + ',' + tsAt(qi, 4)[1] + ',00:14,0.25,kWh,$0.03,'); }
 var green = S.parseInterval(gb.join('\n'), 'kwh');
 ok('a utility (Green Button) download reads USAGE, not the $ COST column', green.ok && Math.abs(green.kw[0] - 1) < 1e-9, green.ok ? green.kw[0] : green);
 var greenKw = S.parseInterval(gb.join('\n'), 'kw');
 ok('…and says so when its kWh column was read as kW', greenKw.ok && greenKw.notes.some(function (n) { return /looks like kWh per interval/.test(n); }), greenKw.notes);
-var costRows = ['Start,Usage,Units,Cost']; for (qi = 0; qi < 8760; qi++) costRows.push(iso(2025, 1, 1) + ' 00:00,40.0,kWh,$6.00');
+var costRows = ['Start,Usage,Units,Cost']; for (qi = 0; qi < 8760; qi++) costRows.push(tsAt(qi, 1).join(' ') + ',40.0,kWh,$6.00');
 var cost = S.parseInterval(costRows.join('\n'), 'kwh');
 ok('a trailing $ cost column is never the load', cost.ok && cost.kw[0] === 40, cost.ok ? cost.kw[0] : cost);
-var dollarRows = []; for (qi = 0; qi < 8760; qi++) dollarRows.push(iso(2025, 1, 1) + ' 00:00,40.0,$6.00');
+var dollarRows = []; for (qi = 0; qi < 8760; qi++) dollarRows.push(tsAt(qi, 1).join(' ') + ',40.0,$6.00');
 var dollars = S.parseInterval(dollarRows.join('\n'), 'kw');
 ok('a cell with a currency sign is never a reading, header or not', dollars.ok && dollars.kw[0] === 40, dollars.ok ? dollars.kw[0] : dollars);
 var twoCol = []; for (qi = 0; qi < 8760; qi++) twoCol.push((qi % 24) + ',5.2');
 ok('two numeric columns and no header are refused, not guessed', /more than one column/i.test(S.parseInterval(twoCol.join('\n'), 'kw').error || ''));
-var amb = ['Date,Import kWh,Delivered kWh']; for (qi = 0; qi < 8760; qi++) amb.push(iso(2025, 1, 1) + ',1,2');
+var amb = ['Date,Import kWh,Delivered kWh']; for (qi = 0; qi < 8760; qi++) amb.push(tsAt(qi, 1).join(' ') + ',1,2');
 ok('two load-named columns the unit cannot tell apart are refused', /more than one load column/i.test(S.parseInterval(amb.join('\n'), 'kwh').error || ''));
-var nem = ['TYPE,DATE,START TIME,END TIME,IMPORT (kWh),EXPORT (kWh),COST']; for (qi = 0; qi < 8760; qi++) nem.push('Electric usage,' + iso(2025, 1, 1) + ',00:00,00:59,2.5,0.4,$0.50');
+var nem = ['TYPE,DATE,START TIME,END TIME,IMPORT (kWh),EXPORT (kWh),COST']; for (qi = 0; qi < 8760; qi++) nem.push('Electric usage,' + tsAt(qi, 1).join(',') + ',00:59,2.5,0.4,$0.50');
 var nemR = S.parseInterval(nem.join('\n'), 'kwh');
 ok('an IMPORT / EXPORT download reads the imports as the load, and says the export was set aside', nemR.ok && nemR.kw[0] === 2.5 && nemR.notes.some(function (n) { return /export column/.test(n); }), nemR.ok ? nemR.notes : nemR);
-var both = ['Date,kWh,kW']; for (qi = 0; qi < 8760; qi++) both.push(iso(2025, 1, 1) + ',3,7');
-ok('a kWh and a kW column are told apart by the chosen unit', S.parseInterval(both.join('\n'), 'kw').kw[0] === 7 && S.parseInterval(both.join('\n'), 'kwh').kw[0] === 3);
+var both = ['Date,kWh,kW']; for (qi = 0; qi < 8760; qi++) both.push(tsAt(qi, 1).join(' ') + ',3,7');
+/* The load-column contract (round 3): two load columns are never told apart
+   by the unit chosen (T1 — a register or a price beside "Usage" won that
+   narrowing); the caller names the column, by its header or "#n". */
+var bothAsk = S.parseInterval(both.join('\n'), 'kw');
+ok('a kWh and a kW column: "Which column is the load?", with both columns, keys and samples', !bothAsk.ok && bothAsk.field === 'load.column' && /^Which column is the load\?/.test(bothAsk.error) &&
+   JSON.stringify(bothAsk.columns) === JSON.stringify([{ key: 'kWh', label: 'kWh', sample: ['3', '3', '3'] }, { key: 'kW', label: 'kW', sample: ['7', '7', '7'] }]), bothAsk);
+ok('…and read as the caller names it (header text or "#3")', S.parseInterval(both.join('\n'), 'kw', null, 'kW').kw[0] === 7 && S.parseInterval(both.join('\n'), 'kwh', null, 'kWh').kw[0] === 3 &&
+   S.parseInterval(both.join('\n'), 'kw', null, '#3').kw[0] === 7 && S.parseInterval(both.join('\n'), 'kw', null, ' kW ').column.chosen === 'caller');
 var t0 = Date.now(), big = S.parseInterval(new Array(1000001).join('9') + 'x', 'kw'), ms = Date.now() - t0;
 ok('a 1 MB digit run is refused in well under a second (no quadratic regex)', big.ok === false && ms < 1000, ms + ' ms');
 var cells = []; for (qi = 0; qi < 10; qi++) cells.push(new Array(20001).join('9') + 'x');
@@ -399,8 +419,9 @@ ok('"Usage Hour" (a time part) is never a second load column: "Usage (kWh)" is r
   var p = S.parseInterval(rowsOf(c[0], function (ts, i) { return ts.slice(0, 10) + ',' + (i % 24 + 1) + ',6.5'; }), c[1]);
   ok('"' + c[0] + '" read as ' + c[1] + ': the hour column is never the load, in either unit', p.ok && p.kw[0] === 6.5 && p.kw[23] === 6.5, p.ok ? p.kw.slice(0, 3) : p.error);
 });
-var twoKwh = S.parseInterval(rowsOf('Date,Usage,Demand (kW),Power Factor', function (ts) { return ts + ',5,20,0.9'; }), 'kw');
-ok('with kW chosen, an explicit "kW" column wins over a bare "Usage"', twoKwh.ok && twoKwh.kw[0] === 20, twoKwh);
+var twoKwhText = rowsOf('Date,Usage,Demand (kW),Power Factor', function (ts) { return ts + ',5,20,0.9'; }), twoKwh = S.parseInterval(twoKwhText, 'kw');
+ok('"Usage" beside "Demand (kW)" is asked, not narrowed by the unit; the named column is read', !twoKwh.ok && twoKwh.field === 'load.column' &&
+   /"Usage", "Demand \(kW\)"/.test(twoKwh.error) && S.parseInterval(twoKwhText, 'kw', null, 'Demand (kW)').kw[0] === 20, twoKwh);
 
 section('Interval files: rows, footers and gaps (R6, S2)');
 function dated(head, f, extra) { var out = [head]; for (var i = 0; i < 8760; i++) { var t = dayAt(2025, 1, 1, Math.floor(i / 24)); out.push(f(iso(t[0], t[1], t[2]), (i % 24 < 10 ? '0' : '') + (i % 24), i)); } return out.concat(extra || []).join('\n'); }
@@ -494,6 +515,204 @@ ok('a date column the parser cannot read says so, instead of asking for a date c
 var overrode = S.parseInterval(office(2025, 6, 5, 365).join('\n'), 'kw', '2025-01-01');
 ok('a file\'s own date wins over a start date given with it, and the note says so', overrode.ok && overrode.notes.some(function (n) { return /own dates were used/.test(n) && /1 Jan 2025/.test(n) && /5 Jun 2025/.test(n); }), overrode.ok ? overrode.notes : overrode.error);
 
+section('Interval files: the load column contract (round 3: T1, T4, R2, R8)');
+/* hourly 2025 rows: head, then f(date, 'HH:00', i) per row */
+function yr1(head, f) { var out = [head]; for (var i = 0; i < 8760; i++) { var t = tsAt(i, 1); out.push(f(t[0], t[1], i)); } return out.join('\n'); }
+function realLoad(i) { return 100 + (i % 24 >= 12 && i % 24 < 18 ? 50 : 0); }   /* 100 kW, 150 kW in the afternoon */
+/* T1: a register, a price, a carbon intensity, a contract kW or a credit
+   beside the load was preferred for carrying the unit token */
+[['Date,Time,Usage,Meter Reading (kWh)', 'kwh', function (i) { return realLoad(i) + ',' + (45000 + i); }],
+ ['Read Date,Hour,Consumption,Register (kWh)', 'kwh', function (i) { return realLoad(i) + ',' + (45000 + i); }],
+ ['Date,Time,Usage,Cents/kWh', 'kwh', function (i) { return realLoad(i) + ',42.5'; }],
+ ['Date,Time,Usage,Carbon Intensity (g/kWh)', 'kwh', function (i) { return realLoad(i) + ',385'; }],
+ ['Date,Time,Demand,Contract kW', 'kw', function (i) { return realLoad(i) + ',500'; }],
+ ['Date,Time,Usage,kWh Credit', 'kwh', function (i) { return realLoad(i) + ',3.1'; }]].forEach(function (c) {
+  var text = c[0].indexOf('Hour') > 0
+    ? yr1(c[0], function (d, hh, i) { return d + ',' + (i % 24 + 1) + ',' + c[2](i); })
+    : yr1(c[0], function (d, hh, i) { return d + ',' + hh + ',' + c[2](i); });
+  var p = S.parseInterval(text, c[1]);
+  ok('"' + c[0] + '": the load is the usage / demand column, never the register, price, carbon, contract or credit beside it',
+     p.ok && p.kw[10] === 100 && p.kw[14] === 150 && p.column.label === c[0].split(',')[2] && p.column.chosen === 'auto', p.ok ? [p.kw[10], p.column] : p);
+});
+/* T4: "_" is a separator, so USAGE_HOUR is a time part and KWH_DELIVERED a load */
+[['Date,Time,USAGE_HOUR,KWH_DELIVERED', 'KWH_DELIVERED'], ['Date,Time,USAGE_HOUR,INTERVAL_KWH', 'INTERVAL_KWH'], ['USAGE_DATE,USAGE_TIME,USAGE_HOUR,USAGE_KWH', 'USAGE_KWH']].forEach(function (c) {
+  var p = S.parseInterval(yr1(c[0], function (d, hh, i) { return d + ',' + hh + ',' + (i % 24 + 1) + ',' + realLoad(i); }), 'kwh');
+  ok('"' + c[0] + '": the hour number is never the load; ' + c[1] + ' is read', p.ok && p.kw[10] === 100 && p.column.key === c[1], p.ok ? [p.kw[10], p.column] : p);
+});
+/* R2 residual: non-load columns spelled another way */
+['KVA_DEMAND', 'Demand_kVA', 'DemandKVA', 'Demand (VA)', 'Demand (MVA)', 'Demand Current (A)', 'Demand Multiplier', 'Load (%)', 'Demand Response Event'].forEach(function (h) {
+  var p = S.parseInterval(yr1('Date,Usage (kWh),' + h, function (d, hh, i) { return d + ' ' + hh + ',' + realLoad(i) + ',' + (h === 'Demand Multiplier' ? '1.2' : h === 'Demand Response Event' ? '0' : String(realLoad(i) * 1.1)); }), 'kw');
+  ok('"' + h + '" beside "Usage (kWh)" under kW is never the load', p.ok && p.kw[10] === 100 && p.column.label === 'Usage (kWh)', p.ok ? [p.kw[10], p.column] : p);
+});
+/* R8: a load column headed "per <time>" is a load, not a time part */
+[['Date,Hour Ending,Usage per Hour', 'kwh'], ['Date,HE,Usage per Interval', 'kwh'], ['Date,Hour,Energy per Period', 'kwh'], ['Date,Hour,Demand per Hour', 'kw']].forEach(function (c) {
+  var p = S.parseInterval(yr1(c[0], function (d, hh, i) { return d + ',' + (i % 24 + 1) + ',' + realLoad(i); }), c[1]);
+  ok('"' + c[0] + '" reads "' + c[0].split(',')[2] + '" as the load', p.ok && p.kw[10] === 100 && p.readings === 8760, p.ok ? p.kw[10] : p.error);
+});
+(function () {
+  var rows = ['Date,Interval,Usage per Interval'];
+  for (var i = 0; i < 35040; i++) rows.push(tsAt(i, 4)[0] + ',' + (i % 96 + 1) + ',25');
+  var p = S.parseInterval(rows.join('\n'), 'kwh');
+  ok('a 15-minute "Date,Interval,Usage per Interval" file is read (Interval numbered 1–96)', p.ok && p.kw[0] === 100 && p.dated, p.ok ? p.kw[0] : p.error);
+})();
+/* the contract: "Which column is the load?" with the columns; a named column is read */
+var askText = yr1('Date,Time,Reading,Delivered', function (d, hh, i) { return d + ',' + hh + ',' + realLoad(i) + ',' + (realLoad(i) + 1); });
+var ask1 = S.parseInterval(askText, 'kw');
+ok('two load-ish columns and no explicit one: the parser asks, with each column\'s key, label and sample', !ask1.ok && ask1.field === 'load.column' && /^Which column is the load\?/.test(ask1.error) &&
+   ask1.columns.length === 2 && ask1.columns[0].key === 'Reading' && ask1.columns[1].label === 'Delivered' && ask1.columns[0].sample.join() === '100,100,100', ask1);
+var one = S.parseInterval(yr1('Timestamp,Reading', function (d, hh, i) { return d + ' ' + hh + ',' + realLoad(i); }), 'kw');
+ok('a single column of numbers is read by itself, whatever its header', one.ok && one.kw[10] === 100 && one.column.chosen === 'auto', one.ok ? one.column : one);
+var pfOnly = S.parseInterval(yr1('Timestamp,Power Factor', function (d, hh) { return d + ' ' + hh + ',0.95'; }), 'kw');
+ok('…unless that one column is excluded (power factor): asked, never read as kW', !pfOnly.ok && pfOnly.field === 'load.column' && pfOnly.columns.length === 1, pfOnly);
+var unknown = S.parseInterval(askText, 'kw', null, 'Usage');
+ok('an unknown load.column is refused the same way, with the columns', !unknown.ok && unknown.field === 'load.column' && /"Usage" is not a column of numbers/.test(unknown.error) && unknown.columns.length === 2, unknown);
+var named = S.parseInterval(askText, 'kw', null, 'Delivered');
+ok('the named column is read, and the result says the caller chose it', named.ok && named.kw[10] === 101 && named.column.key === 'Delivered' && named.column.chosen === 'caller', named.ok ? named.column : named);
+var headless = []; for (qi = 0; qi < 8760; qi++) headless.push(tsAt(qi, 1).join(' ') + ',' + (qi % 24) + ',' + realLoad(qi));
+var hAsk = S.parseInterval(headless.join('\n'), 'kw'), hNamed = S.parseInterval(headless.join('\n'), 'kw', null, '#3');
+ok('no header, two columns of numbers: asked with "#2" / "#3" keys; "#3" is read', !hAsk.ok && hAsk.field === 'load.column' && hAsk.columns.map(function (c) { return c.key; }).join() === '#2,#3' &&
+   hAsk.columns[1].label === 'Column 3' && hNamed.ok && hNamed.kw[10] === 100 && hNamed.column.key === '#3', [hAsk.columns, hNamed.ok ? hNamed.column : hNamed]);
+var simAsk = S.simulate({ zip: '60601', segment: 'commercial', load: { type: 'interval', text: askText, unit: 'kw' } });
+ok('simulate answers errors[0] = { field: "load.column", message, columns } — plain JSON', !simAsk.ok && simAsk.errors[0].field === 'load.column' && /^Which column is the load\?/.test(simAsk.errors[0].message) &&
+   JSON.stringify(JSON.parse(JSON.stringify(simAsk.errors[0]))) === JSON.stringify(simAsk.errors[0]) && simAsk.errors[0].columns.length === 2, simAsk.errors);
+var simNamed = S.simulate({ zip: '60601', segment: 'commercial', load: { type: 'interval', text: askText, unit: 'kw', column: 'Reading' } });
+ok('…and with load.column the result\'s load block says which column was read', simNamed.ok && JSON.stringify(simNamed.load.column) === JSON.stringify({ key: 'Reading', label: 'Reading', chosen: 'caller' }), simNamed.load);
+ok('a load.column that is not a short string is a field error', S.simulate({ zip: '60601', load: { type: 'interval', text: askText, column: { x: 1 } } }).errors[0].field === 'load.column');
+
+section('Interval files: delimiter, commas and footers (round 3: T2, T5, U2)');
+(function () {
+  /* T2: two comma preamble lines above a semicolon file with decimal commas */
+  var rows = ['Kunde: Muster, Hans', 'Anschrift: Hauptstr. 1, 10115 Berlin', 'Datum;Uhrzeit;Verbrauch (kWh)'];
+  for (var i = 0; i < 35040; i++) { var t = tsAt(i, 4), d = t[0].split('-'); rows.push(d[2] + '.' + d[1] + '.' + d[0] + ';' + t[1] + ';0,375'); }
+  var p = S.parseInterval(rows.join('\n'), 'kwh');
+  ok('a semicolon file with decimal commas under two comma-bearing preamble lines reads 0,375 kWh (1.5 kW), dated', p.ok && Math.abs(p.kw[0] - 1.5) < 1e-9 && p.dated &&
+     !p.notes.some(function (n) { return /No dates were found/.test(n); }), p.ok ? [p.kw[0], p.notes] : p.error);
+  /* T5: every reading's comma is ambiguous: refused with its row, not "0 found" */
+  var amb3 = ['Datum;Uhrzeit;Verbrauch (kWh)'];
+  for (i = 0; i < 35040; i++) { t = tsAt(i, 4); amb3.push(t[0] + ';' + t[1] + ';' + (i % 2 ? '15,000' : '37,500')); }
+  var a3 = S.parseInterval(amb3.join('\n'), 'kwh');
+  ok('a semicolon file whose every reading is "15,000"-shaped is refused with its row, never "0 found"', !a3.ok && /^Row 2: the reading "37,500"/.test(a3.error) && /thousands separator or a decimal point/.test(a3.error), a3.error);
+  var tsvAmb = ['Date\tHour Ending\tkW'];
+  for (i = 0; i < 8760; i++) { t = tsAt(i, 1); tsvAmb.push(t[0] + '\t' + (i % 24 + 1) + '\t' + (i % 2 ? '600' : '1,500')); }
+  var a4 = S.parseInterval(tsvAmb.join('\n'), 'kw');
+  ok('a tab file with "1,500" and "600" names the row, not "no header names the load"', !a4.ok && /^Row 2: the reading "1,500"/.test(a4.error) && !/no header names/.test(a4.error), a4.error);
+})();
+(function () {
+  /* U2: a stamped footer (a date range and "Total") is not a reading, even
+     where the file is one hour short (daylight saving) */
+  var rows = ['Account,Date,Hour Ending,kWh'];
+  for (var i = 0; i < 8760; i++) { var t = tsAt(i, 1), dd = t[0].split('-'); if (i === 1633) continue; rows.push('9100123456,' + dd[1] + '/' + dd[2] + '/' + dd[0] + ',' + (i % 24 + 1) + ',50'); }
+  rows.push('9100123456,01/01/2025 - 12/31/2025,Total,822490');
+  var p = S.parseInterval(rows.join('\n'), 'kwh');
+  ok('a stamped "Total" footer with a date range never becomes the 8,760th reading', !p.ok && /8,759/.test(p.error) && p.error.indexOf('822') < 0, p.ok ? Math.max.apply(null, p.kw) : p.error);
+  var md = S.parseInterval(yr1('Date,Time,kW', function (d, hh) { return d + ',' + hh + ',40'; }) + '\nMax Demand,2025-07-15 14:00,250', 'kw');
+  ok('"Max Demand,2025-07-15 14:00,250" (stamped) is a footer', md.ok && md.readings === 8760 && Math.max.apply(null, md.kw) === 40, md.ok ? md.readings : md.error);
+})();
+
+section('Interval files: timestamps set the interval and the order (round 3: U1, T3, R4, R6, R7)');
+function meter(head, f, y) { var out = []; for (var i = 0; i < 8760; i++) { var t = tsAt(i, 1), dd = t[0].split('-'); out.push(f(dd[1] + '/' + dd[2] + '/' + (y || dd[0]), i)); } return out; }
+(function () {
+  /* U1: two meters stacked, the same year: 17,520 rows spanning one year */
+  var a = meter('', function (d, i) { return 'A1,M-1001,' + d + ',' + (i % 24 + 1) + ',' + realLoad(i); });
+  var b = meter('', function (d, i) { return 'A1,M-1002,' + d + ',' + (i % 24 + 1) + ',' + realLoad(i); });
+  var p = S.parseInterval(['Account,Meter,Date,Hour Ending,kWh'].concat(a, b).join('\n'), 'kwh');
+  ok('two meters stacked in one file are refused, saying what was found (not read as a year of half-hours)', !p.ok && /turn back|repeat/.test(p.error) && /more than one meter/.test(p.error), p.ok ? p.readings : p.error);
+  /* the same with a date and no time on each row: the dates run on, then start again */
+  var a2 = meter('', function (d, i) { return d + ',' + realLoad(i); }), b2 = meter('', function (d, i) { return d + ',' + realLoad(i); });
+  var p2 = S.parseInterval(['Date,kWh'].concat(a2, b2).join('\n'), 'kwh');
+  ok('two date-only meters stacked are refused where the dates turn back (not read as 48 half-hours a day)', !p2.ok && /run forward and then turn back/.test(p2.error) && /row 8,762/.test(p2.error), p2.ok ? p2.readings : p2.error);
+  /* delivered and received rows interleaved each hour */
+  var il = ['Date,Hour Ending,Channel,kWh'];
+  for (var i = 0; i < 8760; i++) { var t = tsAt(i, 1); il.push(t[0] + ',' + (i % 24 + 1) + ',Delivered,' + realLoad(i)); il.push(t[0] + ',' + (i % 24 + 1) + ',Received,40'); }
+  var q = S.parseInterval(il.join('\n'), 'kwh');
+  ok('delivered and received rows interleaved each hour are refused as repeated timestamps', !q.ok && /repeat a date and time/.test(q.error) && /8,760 readings/.test(q.error), q.ok ? q.readings : q.error);
+  /* two years of hourly readings: 17,520 rows over 730 days */
+  var two = ['Date,Time,kWh'];
+  for (i = 0; i < 17520; i++) { var d = dayAt(2024, 9, 29, Math.floor(i / 24)); two.push(iso(d[0], d[1], d[2]) + ',' + p2d(i % 24) + ':00,' + realLoad(i)); }
+  var r = S.parseInterval(two.join('\n'), 'kwh');
+  ok('two years of hourly readings are refused as two years of hourly, not read as one year of half-hours', !r.ok && /hourly readings/.test(r.error) && /17,520 of them over 730 days/.test(r.error), r.ok ? r.readings : r.error);
+})();
+(function () {
+  /* T3 / R4: sorted by the Date column descending, hours ascending within
+     each day: an evening-peak home keeps its evening peak */
+  function home(h) { return h >= 17 && h < 21 ? 3 : 0.5; }
+  var ascRows = ['Date,Time,kWh'], dayDesc = ['Date,Time,kWh'], i, d, h;
+  for (d = 0; d < 365; d++) for (h = 0; h < 24; h++) { var t = dayAt(2025, 1, 1, d); ascRows.push(p2d(t[1]) + '/' + p2d(t[2]) + '/' + t[0] + ',' + p2d(h) + ':00,' + home(h)); }
+  for (d = 364; d >= 0; d--) for (h = 0; h < 24; h++) { t = dayAt(2025, 1, 1, d); dayDesc.push(p2d(t[1]) + '/' + p2d(t[2]) + '/' + t[0] + ',' + p2d(h) + ':00,' + home(h)); }
+  var A = S.parseInterval(ascRows.join('\n'), 'kwh'), D = S.parseInterval(dayDesc.join('\n'), 'kwh');
+  ok('a file sorted newest day first with its hours ascending is read in date and time order, no day turned round', A.ok && D.ok && A.kw.join() === D.kw.join() && D.kw[18] === 3 && D.kw[5] === 0.5 &&
+     D.notes.some(function (n) { return /newest reading first/.test(n) && /1 Jan 2025/.test(n); }), D.ok ? [D.kw.slice(0, 24), D.notes] : D.error);
+  var hd = ['Date,Hour Ending,kW'];
+  for (d = 364; d >= 0; d--) for (h = 1; h <= 24; h++) { t = dayAt(2025, 1, 1, d); hd.push(iso(t[0], t[1], t[2]) + ',' + h + ',' + home(h - 1)); }
+  var HD = S.parseInterval(hd.join('\n'), 'kw');
+  ok('…and so is one with an "Hour Ending" number column (R4)', HD.ok && HD.kw.join() === A.kw.join(), HD.ok ? HD.kw.slice(0, 24) : HD.error);
+})();
+(function () {
+  /* R6: the date only on each day's first row (a merged-cell export) */
+  [['Date,Hour Ending,kWh', function (t) { return p2d(t[1]) + '/' + p2d(t[2]) + '/' + t[0]; }], ['Date,Hour Ending,kWh', function (t) { return iso(t[0], t[1], t[2]); }]].forEach(function (c, k) {
+    var rows = [c[0]];
+    for (var d = 0; d < 365; d++) for (var h = 1; h <= 24; h++) { var t = dayAt(2025, 3, 1, d); rows.push((h === 1 ? c[1](t) : '') + ',' + h + ',' + (40 + h)); }
+    var p = S.parseInterval(rows.join('\n'), 'kwh');
+    ok('a date on each day\'s first row only (' + (k ? 'ISO' : 'M/D/Y') + ') is a year of dated readings from 1 Mar 2025', p.ok && p.readings === 8760 && p.dated && p.notes.some(function (n) { return /1 Mar 2025/.test(n); }), p.ok ? p.notes : p.error);
+  });
+  /* R7 / R4(2): a 15-minute file with the date on the day's first row, a time on every row */
+  var q = ['Date,Time,kW'];
+  for (var i = 0; i < 35040; i++) { var t = dayAt(2025, 6, 5, Math.floor(i / 96)), mm = (i % 96) * 15; q.push((i % 96 ? '' : iso(t[0], t[1], t[2])) + ',' + p2d(Math.floor(mm / 60)) + ':' + p2d(mm % 60) + ',' + (t[1] === 7 ? 100 : 300)); }
+  var p = S.parseInterval(q.join('\n'), 'kw');
+  ok('a 15-minute file dated on each day\'s first row is placed from 5 Jun 2025, not read as undated', p.ok && p.dated && p.notes.some(function (n) { return /5 Jun 2025/.test(n); }) &&
+     !p.notes.some(function (n) { return /No dates were found/.test(n); }) && p.kw[4800] === 100, p.ok ? p.notes : p.error);
+})();
+
+section('Dispatch: an event hour at zero load (round 3: T6 / R1)');
+(function () {
+  /* summer weekdays 6 kW at 12–15 and 17–20 over a 1 kW base; the 16:00
+     reading on June weekdays is exactly 0 (a gap read as zero, or a
+     net-metered hour clamped to zero). The dispatch never grid-charges in a
+     called event, so the reserve must not count on it either. */
+  function build(zeroAt16) {
+    var rows = ['Timestamp,kW'];
+    for (var i = 0; i < 8760; i++) {
+      var d = Math.floor(i / 24), h = i % 24, dw = (3 + d) % 7, t = dayAt(2025, 1, 1, d), v = 1;
+      if (t[1] >= 6 && t[1] <= 9 && dw !== 0 && dw !== 6) {
+        if ((h >= 12 && h < 16) || (h >= 17 && h < 21)) v = 6;
+        if (h === 16 && t[1] === 6) v = zeroAt16;
+      }
+      rows.push(iso(t[0], t[1], t[2]) + ' ' + p2d(h) + ':00,' + v);
+    }
+    return rows.join('\n');
+  }
+  [['a 0 reading', 0], ['a blank reading', '']].forEach(function (c) {
+    var r = S.simulate({ zip: '94110', segment: 'residential', battery: { kw: 5, kwh: 10 },
+      tariff: { demandCharge: 15, onPeakRate: 0.30, offPeakRate: 0.15, peakStart: 11, peakEnd: 16 }, load: { type: 'interval', text: build(c[1]), unit: 'kw' } });
+    ok('with ' + c[0] + ' inside an ELRP event on a charging hour, every month still holds its demand target', r.ok && r.monthly.every(function (m) { return m.targetKw == null || m.peakAfterKw <= m.targetKw + 0.01; }),
+       r.ok ? r.monthly.map(function (m) { return [m.month, m.peakAfterKw, m.targetKw]; }) : r.errors);
+  });
+  /* the recheck's flat-rate shape: hours 16–19 at 0 kW every day */
+  var vals2 = [];
+  for (var i = 0; i < 8760; i++) {
+    var d = Math.floor(i / 24), h = i % 24, v = 1;
+    if (h >= 16 && h < 20) v = 0;
+    else if (d % 2 === 0) v = (h >= 12 && h < 16) || h >= 20 ? 3 : 1;
+    else v = h < 4 ? 3 : 1;
+    vals2.push(v);
+  }
+  var r2 = S.simulate({ zip: '94110', segment: 'residential', battery: { kw: 5, kwh: 10 }, tariff: { demandCharge: 15, onPeakRate: 0.3, offPeakRate: 0.3 },
+    load: { type: 'interval', startDate: '2025-01-01', values: vals2 } });
+  ok('flat rates, zero load in every event hour: June holds its target and its bill does not rise', r2.ok && r2.monthly.every(function (m) { return m.targetKw == null || m.peakAfterKw <= m.targetKw + 0.01; }) &&
+     r2.monthly[5].billAfter <= r2.monthly[5].billBefore, r2.ok ? r2.monthly[5] : r2.errors);
+})();
+
+section('Bills: an assumed peak is only one no bill carries (S4)');
+(function () {
+  var b11 = []; for (var m = 1; m <= 11; m++) b11.push({ month: '2025-' + p2d(m), kwh: 25000, peakKw: 90 });
+  var r = S.simulate({ zip: '19103', segment: 'commercial', battery: { kw: 500, kwh: 4000 }, load: { type: 'bills', bills: b11 } }), pc = stream(r, 'pjm.capacity');
+  ok('11 months of bills WITH their billed peaks: the PJM kW capped at the billed summer peak is published, not "read off a load shape"', r.ok && r.load.quality === 'low' && pc && pc.tier === 'published' &&
+     /Capped at the site's 90 kW/.test(pc.how) && !/load shape/.test(pc.how), pc);
+  var noPk = []; for (m = 1; m <= 12; m++) noPk.push({ month: '2025-' + p2d(m), kwh: 25000 });
+  var pn = stream(S.simulate({ zip: '19103', segment: 'commercial', battery: { kw: 500, kwh: 4000 }, load: { type: 'bills', bills: noPk } }), 'pjm.capacity');
+  ok('…bills without peaks still say the peak is read off a load shape (planning)', pn && pn.tier === 'planning' && /load shape/.test(pn.how), pn);
+})();
+
 section('Bills and the calibration (c4, c10)');
 function billRows(f) { var b = []; for (var m = 1; m <= 12; m++) b.push(f(m, '2025-' + (m < 10 ? '0' : '') + m)); return b; }
 var allKwh = S.simulate({ zip: '30301', segment: 'commercial', load: { type: 'bills', bills: billRows(function (m, mo) { return { month: mo, kwh: 40000, peakKw: 160, cost: 7000 }; }) } });
@@ -539,6 +758,14 @@ ok('BYOD Plus: the $60 is a planning figure for the recurring export credit, nev
    /one-time/i.test(hb.ref) && /70% × 2 h × 30 days/.test(hb.ref) && /NEM/.test(hb.ref), hb && hb.ref);
 ok('…and its $400/kW upfront is listed with the one-time incentives, on the kW it commits', hiPv.missing.some(function (m) { return /^One-time incentives/.test(m) && /BYOD Plus/.test(m) && /\$2,000 on the 5 kW this estimate commits/.test(m); }) &&
    !caRes.missing.some(function (m) { return /^One-time incentives/.test(m) && /BYOD/.test(m); }), hiPv.missing);
+
+/* T9: Kauai is KIUC's, not Hawaiian Electric's */
+var kauai = S.simulate({ zip: '96766', segment: 'residential', solarKw: 6 });
+ok('Lihue (Kauai) is Kauai Island Utility Cooperative, and is priced no BYOD Plus and no BYOD upfront', kauai.ok && /KIUC/.test(kauai.site.area) && !stream(kauai, 'hi.bb') &&
+   kauai.missing.some(function (m) { return /^Hawaiian Electric Bring Your Own Device Plus/.test(m) && /Kauai Island Utility Cooperative/.test(m) && /Not counted/.test(m); }) &&
+   !kauai.missing.some(function (m) { return /^One-time incentives/.test(m) && /BYOD/.test(m); }), [kauai.site, kauai.missing]);
+ok('every Kauai County ZIP is KIUC; Honolulu and Maui are not', ['96703', '96705', '96714', '96715', '96716', '96722', '96741', '96746', '96747', '96751', '96752', '96754', '96756', '96765', '96766', '96769', '96796']
+   .every(function (z) { return S.locate(z).kiuc === true; }) && S.locate('96813').kiuc === false && S.locate('96793').kiuc === false && !!stream(hiPv, 'hi.bb'));
 
 /* ── included with every account ─────────────────────────────────────── */
 section('Base: included with every account');
@@ -772,6 +999,10 @@ later(function () { section('Gate'); });
   ['a billing read that throws is 503, never a pass', docs({ status: 'active' }, { __throws: 502 }), EST, null, function (r) { return r.status === 503; }],
   ['staff skip the entitlement', docs({ status: 'suspended' }), EST, { caller: { uid: 's', email: 'x@clearsky-usa.com', emailVerified: true, orgId: 'clearsky-usa.com', staff: true } }, function (r) { return r.status === 200; }],
   ['bad input is 400 with field errors', docs(undefined, { tier: 'standard' }), { action: 'estimate', site: { zip: 'x' } }, null, function (r) { return r.status === 400 && r.body.errors[0].field === 'zip'; }],
+  ['"Which column is the load?" reaches the page as 400 with the columns intact', docs(undefined, { tier: 'standard' }), { action: 'estimate', site: { zip: '60601', segment: 'commercial', load: { type: 'interval', text: askText, unit: 'kw' } } }, null,
+    function (r) { var e = r.body.errors && r.body.errors[0]; return r.status === 400 && e.field === 'load.column' && e.columns.length === 2 && e.columns[1].key === 'Delivered' && e.columns[0].sample.length === 3; }],
+  ['an estimate with load.column runs and reports the column', docs(undefined, { tier: 'standard' }), { action: 'estimate', site: { zip: '60601', segment: 'commercial', load: { type: 'interval', text: askText, unit: 'kw', column: 'Delivered' } } }, null,
+    function (r) { return r.status === 200 && r.body.result.load.column.key === 'Delivered' && r.body.result.load.column.chosen === 'caller'; }],
   ['an unknown action is 400', docs(undefined, { tier: 'standard' }), { action: 'dump' }, null, function (r) { return r.status === 400; }],
   ['options lists markets', docs(undefined, { tier: 'standard' }), { action: 'options' }, null, function (r) { return r.status === 200 && r.body.options.markets.length >= 10; }]
 ].forEach(function (c) {
