@@ -1155,6 +1155,27 @@ and PJM capacity through `value-stack.js` — never a second copy. Every stream
 is computed, published or planning. `docs/VPP-SIMULATOR.md`,
 `scripts/tests/tvppsim.js`.
 
+## Compute Site Pro Forma and the Edge Site Screen (2026-09-30)
+
+`compute-proforma.html` (`computeproforma`, Omega Compute; Finance hexagon
+right after the VPP simulator, and the Compute hexagon) answers "can this
+building's existing service carry GPU pods beside its EV chargers, a battery
+and its own load, and what does it return?" — the metro-edge model Laitent
+publishes (pods on power built for EV charging). The math is
+`api/_lib/compute-site.js` behind `POST /api/compute-proforma` (options,
+context, screen, model, optimize): 8,760 hours on one service limit, placed
+in contract priority (building, firm compute, charging, then the battery and
+on-demand GPUs by a monthly demand-target search, the battery reserving for
+firm overloads); loads, tariffs and bills through `vpp-sim.js` `site.*` and
+`bess-tariff.js`, and the returns, IRR build, sensitivities and deck through
+the ONE finance engine (`proforma-engine.js`: yearly `schedule` lines, the
+`refresh` block, `bess.mode: 'site'`) and `proforma-logic.js` (`opts.title`,
+`flow`, `terms`) — never a second copy. Own / infra / lease are priced side
+by side; Laitent's published figures are cited, never its data. The editor's
+Compute › Size › Site Screen (`rb-site-screen`, `OmegaSiteScreen`) posts
+`screen` from the drawing and links to the page. `docs/COMPUTE-PROFORMA.md`,
+`scripts/tests/tcomputesite.js`, `npm run check:compute`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by

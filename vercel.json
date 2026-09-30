@@ -297,6 +297,7 @@
     "api/logic-accounting.js": { "maxDuration": 60 },
     "api/ledger-webhook.js": { "maxDuration": 60 },
     "api/lite-atlas.js": { "maxDuration": 60 },
+    "api/compute-proforma.js": { "maxDuration": 60 },
     "api/grid-atlas.js": {
       "maxDuration": 60
     },

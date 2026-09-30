@@ -36,6 +36,13 @@
  *    - battery revenue from the OMEGA sizing engine's year-by-year savings
  *      schedule, and its pack replacements funded from a reserve;
  *    - demand response, EV charging and other revenue;
+ *    - a year-by-year SCHEDULE on an other-revenue or opex line, for a
+ *      business whose operating figures are modelled year by year rather
+ *      than escalated from year one (the compute site pro forma: GPU-hour
+ *      prices that fall with the hardware's age and reset at a refresh);
+ *    - equipment REFRESH events (servers, GPUs) funded from a reserve or
+ *      from cash and depreciated as 5-year MACRS, as the battery's pack
+ *      replacements are;
  *    - sensitivities, and warnings drawn from the tax research.
  *
  *  Pure: no I/O, no clock, no randomness. Rates arrive as PERCENT (2.5 is
@@ -259,7 +266,10 @@ function sumPts(build) {
  * ---------------------------------------------------------------------- */
 
 var ASSETS = ['solar', 'storage', 'blended', 'ev', 'roof', 'controller', 'interconnection', 'other'];
-var BESS_MODES = ['bundled', 'shared-savings', 'fixed', 'host-owned'];
+/* 'site': the battery serves a site whose economics are modelled whole
+   upstream (the compute site pro forma), so its value is already inside
+   that site's revenue and cost lines and is not counted a second time. */
+var BESS_MODES = ['bundled', 'shared-savings', 'fixed', 'host-owned', 'site'];
 
 /* What a capex line is assumed to be when it does not say (tax research
    §8): solar, storage and their integral parts are energy property on
@@ -305,6 +315,7 @@ var DEFAULTS = {
   opex: { lines: [] },
   reserves: { wcMonths: 3, equipment: { costPerW: 0.10, freqYears: 15, watts: null }, interestPct: 1.75 },
   bessReplacement: { mode: 'reserve' },
+  refresh: { mode: 'reserve', events: [] },
   tax: {
     federalPct: 21, statePct: null, stateDeductible: true,
     appetite: 'full', nolLimitPct: 80, stateNol: true,
@@ -633,10 +644,13 @@ function readRevenue(e, v) {
     other: readList(e, 'revenue.other', r.other, 20, 'Other revenue lines').map(function (x, i) {
       var f = 'revenue.other[' + i + ']';
       if (!isObj(x)) { e.push(err(f, 'Each other-revenue line must be an object.')); x = {}; }
+      var sched = readSchedule(e, f + '.schedule', x.schedule, 'Other revenue');
       return {
         label: readStr(x.label, 160) || 'Other revenue',
-        perYear: readNum(e, f + '.perYear', x.perYear, { req: true, min: 0, max: 1e9, label: 'Other revenue ($/yr)' }),
-        escalatorPct: readNum(e, f + '.escalatorPct', x.escalatorPct, { def: 0, min: -10, max: 20, label: 'Its escalator (%/yr)' })
+        perYear: readNum(e, f + '.perYear', blank(x.perYear) && sched ? sched[0] : x.perYear,
+          { req: true, min: 0, max: 1e9, label: 'Other revenue ($/yr)' }),
+        escalatorPct: readNum(e, f + '.escalatorPct', x.escalatorPct, { def: 0, min: -10, max: 20, label: 'Its escalator (%/yr)' }),
+        schedule: sched
       };
     })
   };
@@ -647,13 +661,48 @@ function readOpex(e, v) {
   return readList(e, 'opex.lines', o.lines, 50, 'Opex lines').map(function (x, i) {
     var f = 'opex.lines[' + i + ']';
     if (!isObj(x)) { e.push(err(f, 'Each opex line must be an object.')); x = {}; }
+    var sched = readSchedule(e, f + '.schedule', x.schedule, 'Operating cost');
     return {
       id: readStr(x.id, 64),
       label: readStr(x.label, 160) || 'Operating cost',
-      perYear: readNum(e, f + '.perYear', x.perYear, { req: true, min: 0, max: 1e9, label: 'Year-1 operating cost ($)' }),
-      escalatorPct: readNum(e, f + '.escalatorPct', x.escalatorPct, { def: 2.5, min: -10, max: 20, label: 'The opex escalator (%/yr)' })
+      perYear: readNum(e, f + '.perYear', blank(x.perYear) && sched ? sched[0] : x.perYear,
+        { req: true, min: 0, max: 1e9, label: 'Year-1 operating cost ($)' }),
+      escalatorPct: readNum(e, f + '.escalatorPct', x.escalatorPct, { def: 2.5, min: -10, max: 20, label: 'The opex escalator (%/yr)' }),
+      schedule: sched
     };
   });
+}
+
+/* A line's year-by-year amounts in NOMINAL dollars, year 1 first. Used as
+   it stands, never escalated again (the battery's savings schedule is read
+   the same way). Absent is null: the line escalates from perYear. It must
+   cover the whole term, which crossCheck confirms once the term is known. */
+function readSchedule(e, field, v, label) {
+  if (blank(v)) return null;
+  if (!Array.isArray(v)) { e.push(err(field, label + ' schedule must be a list of yearly amounts.')); return null; }
+  if (!v.length || v.length > 60) { e.push(err(field, label + ' schedule must list 1 to 60 years.')); return null; }
+  return v.map(function (x, i) {
+    return readNum(e, field + '[' + i + ']', x, { req: true, min: 0, max: 1e10, label: label + ' in year ' + (i + 1) });
+  });
+}
+
+/* Equipment refresh: servers and GPUs bought again partway through the
+   term. Like the battery's pack replacements it is new 5-year property with
+   no credit, funded either from level reserve deposits since the previous
+   event or from that year's cash. */
+function readRefresh(e, v) {
+  var r = readObj(e, 'refresh', v, 'The equipment refresh') || {};
+  var mode = readEnum(e, 'refresh.mode', r.mode, DEFAULTS.refresh.mode, ['reserve', 'expense'], 'The refresh funding');
+  var events = readList(e, 'refresh.events', r.events, 20, 'Refresh events').map(function (x, i) {
+    var f = 'refresh.events[' + i + ']';
+    if (!isObj(x)) { e.push(err(f, 'Each refresh event must be an object.')); return { label: 'Equipment refresh', year: 1, cost: 0 }; }
+    return {
+      label: readStr(x.label, 160) || 'Equipment refresh',
+      year: readNum(e, f + '.year', x.year, { req: true, int: true, min: 1, max: 60, label: 'The refresh year' }),
+      cost: readNum(e, f + '.cost', x.cost, { req: true, min: 0, max: 1e10, label: 'The refresh cost' })
+    };
+  });
+  return { mode: mode, events: events };
 }
 
 function readTaxAsset(e, field, v, label) {
@@ -755,6 +804,18 @@ function crossCheck(e, o) {
   if (o.tax.convention === 'mid-quarter' && !o.project.pisMonth) {
     e.push(err('project.pisMonth', 'The mid-quarter convention needs the placed-in-service month.'));
   }
+  o.revenue.other.forEach(function (x, i) {
+    if (x.schedule && x.schedule.length < o.years) {
+      e.push(err('revenue.other[' + i + '].schedule', 'The schedule for "' + x.label + '" covers ' + x.schedule.length +
+        ' years but the analysis runs ' + o.years + '.'));
+    }
+  });
+  o.opex.lines.forEach(function (x, i) {
+    if (x.schedule && x.schedule.length < o.years) {
+      e.push(err('opex.lines[' + i + '].schedule', 'The schedule for "' + x.label + '" covers ' + x.schedule.length +
+        ' years but the analysis runs ' + o.years + '.'));
+    }
+  });
   if (o.debt && o.debt.tenorYears > o.years) {
     e.push(err('debt.tenorYears', 'The loan tenor cannot run past the ' + o.years + '-year analysis term.'));
   }
@@ -793,6 +854,7 @@ function normalize(raw) {
   if (o.reserves.equipment.watts == null) o.reserves.equipment.watts = o.solar && o.solar.kwDc ? o.solar.kwDc * 1000 : 0;
   var br = readObj(e, 'bessReplacement', raw.bessReplacement, 'The battery replacement settings') || {};
   o.bessReplacement = { mode: readEnum(e, 'bessReplacement.mode', br.mode, 'reserve', ['reserve', 'expense', 'none'], 'The replacement funding') };
+  o.refresh = readRefresh(e, raw.refresh);
   o.tax = readTax(e, raw.tax, o.project, meta);
   o.debt = readDebt(e, raw.debt);
   o.discountPct = readNum(e, 'discountPct', raw.discountPct, { def: DEFAULTS.discountPct, min: 0, max: 50, label: 'The discount rate (%)' });
@@ -1124,9 +1186,13 @@ function model(inp, adj) {
     }
     drRev[t] = (rv.dr.perYear + rv.dr.perKwYear * (b ? b.kw : 0)) * Math.pow(1 + rv.dr.escalatorPct / 100, t - 1);
     if (ev) evRev[t] = rv.ev.perKwYear * ev.kw * Math.pow(1 + rv.ev.escalatorPct / 100, t - 1);
-    for (k = 0; k < rv.other.length; k++) otherRev[t] += rv.other[k].perYear * Math.pow(1 + rv.other[k].escalatorPct / 100, t - 1);
+    for (k = 0; k < rv.other.length; k++) {
+      otherRev[t] += rv.other[k].schedule ? rv.other[k].schedule[t - 1]
+                                          : rv.other[k].perYear * Math.pow(1 + rv.other[k].escalatorPct / 100, t - 1);
+    }
     for (k = 0; k < inp.opex.lines.length; k++) {
-      opex[t] += inp.opex.lines[k].perYear * Math.pow(1 + inp.opex.lines[k].escalatorPct / 100, t - 1);
+      var ol = inp.opex.lines[k];
+      opex[t] += ol.schedule ? ol.schedule[t - 1] : ol.perYear * Math.pow(1 + ol.escalatorPct / 100, t - 1);
     }
     revenue[t] = ppaRev[t] + bessRev[t] + (rv.dr.inBase ? drRev[t] : 0) + evRev[t] + otherRev[t];
     ebitda[t] = revenue[t] - opex[t];
@@ -1181,6 +1247,26 @@ function model(inp, adj) {
   }
   for (t = 1; t <= N; t++) bessBal[t] = bessBal[t - 1] + bessFund[t] - (repMode === 'reserve' ? bessRepl[t] : 0);
 
+  /* Equipment refresh (servers, GPUs), the same two ways. Events after the
+     term are dropped; two in one year add up. */
+  var rfFund = zeros(N), rfRepl = zeros(N), rfCash = zeros(N), rfBal = zeros(N), rfs = [], rfBy = {};
+  inp.refresh.events.forEach(function (r) {
+    if (r.year >= 1 && r.year <= N && r.cost > 0) rfBy[r.year] = (rfBy[r.year] || 0) + r.cost;
+  });
+  Object.keys(rfBy).map(Number).sort(function (x, y) { return x - y; })
+    .forEach(function (y) { rfs.push({ year: y, cost: rfBy[y] }); });
+  if (inp.refresh.mode === 'reserve') {
+    var rprev = 0;
+    rfs.forEach(function (r) {
+      for (t = rprev + 1; t <= r.year; t++) rfFund[t] += r.cost / (r.year - rprev);
+      rfRepl[r.year] += r.cost;
+      rprev = r.year;
+    });
+  } else {
+    rfs.forEach(function (r) { rfRepl[r.year] += r.cost; rfCash[r.year] += r.cost; });
+  }
+  for (t = 1; t <= N; t++) rfBal[t] = rfBal[t - 1] + rfFund[t] - (inp.refresh.mode === 'reserve' ? rfRepl[t] : 0);
+
   /* ---- credit and basis ---- */
   var rates = assetRates(inp);
   var B = basisOf(inp, adj, rates);
@@ -1203,7 +1289,7 @@ function model(inp, adj) {
   });
   var replCapex = zeros(N), m5 = schedule('macrs5', 'half-year');
   for (t = 1; t <= N; t++) {
-    replCapex[t] = eqRepl[t] + bessRepl[t];
+    replCapex[t] = eqRepl[t] + bessRepl[t] + rfRepl[t];
     if (replCapex[t] > 0) {
       for (k = 0; k < m5.length && t + k <= N; k++) {
         depFed[t + k] += replCapex[t] * m5[k];
@@ -1219,11 +1305,11 @@ function model(inp, adj) {
      point, which a 1-2% reserve rate reaches in a handful of passes. */
   var ri = inp.reserves.interestPct / 100, D = inp.debt;
   var baseInt = zeros(N), resInt = zeros(N), cfads = zeros(N), dsra = zeros(N), ds = zeros(N), sized = null;
-  for (t = 1; t <= N; t++) baseInt[t] = ri * (wc[t - 1] + eqBal[t - 1] + bessBal[t - 1]);
+  for (t = 1; t <= N; t++) baseInt[t] = ri * (wc[t - 1] + eqBal[t - 1] + bessBal[t - 1] + rfBal[t - 1]);
   function fillCfads() {
     for (var y = 1; y <= N; y++) {
       resInt[y] = baseInt[y] + ri * dsra[y - 1];
-      cfads[y] = ebitda[y] + resInt[y] - eqFund[y] - bessFund[y] - bessCash[y];
+      cfads[y] = ebitda[y] + resInt[y] - eqFund[y] - bessFund[y] - bessCash[y] - rfFund[y] - rfCash[y];
     }
   }
   fillCfads();
@@ -1297,7 +1383,8 @@ function model(inp, adj) {
   var uses = capexTotal + wc[0] + dsra[0] + fee, equity = uses - amount;
   var pre = [-equity], at = [-equity], atEx = [-equity], dist = [0];
   for (t = 1; t <= N; t++) {
-    pre[t] = ebitda[t] + resInt[t] - intr[t] - prin[t] - wcFund[t] - eqFund[t] - bessFund[t] - bessCash[t] - dsraFund[t];
+    pre[t] = ebitda[t] + resInt[t] - intr[t] - prin[t] - wcFund[t] - eqFund[t] - bessFund[t] - bessCash[t] -
+             rfFund[t] - rfCash[t] - dsraFund[t];
     atEx[t] = pre[t] - stTax[t] - fedTax[t];
     at[t] = atEx[t] + itcFlow[t];
     /* What the investor is paid. With a full tax appetite the tax effects
@@ -1346,7 +1433,8 @@ function model(inp, adj) {
     solarKwh: solarKwh, solarNet: solarNet, soldKwh: soldKwh, ppaRev: ppaRev, bessRev: bessRev, hostSav: hostSav,
     drRev: drRev, evRev: evRev, otherRev: otherRev, revenue: revenue, opex: opex, ebitda: ebitda,
     wc: wc, wcFund: wcFund, eqFund: eqFund, eqRepl: eqRepl, bessFund: bessFund, bessRepl: bessRepl,
-    bessCash: bessCash, replCapex: replCapex, reps: reps, resInt: resInt, cfads: cfads,
+    bessCash: bessCash, replCapex: replCapex, reps: reps, rfFund: rfFund, rfRepl: rfRepl, rfCash: rfCash, rfs: rfs,
+    resInt: resInt, cfads: cfads,
     debt: D ? { amount: amount, sized: sized, fee: fee, dsra0: dsra[0], dscrMin: dscrMin, dscrAvg: dscrAvg } : null,
     ds: ds, intr: intr, prin: prin, feeAm: feeAm, dsraFund: dsraFund, dscr: dscr,
     depFed: depFed, depSt: depSt, stTI: stTI, fedTI: fedTI, stTax: stTax, fedTax: fedTax, itcFlow: itcFlow,
@@ -1361,7 +1449,9 @@ function model(inp, adj) {
       distributionsDuringDebt: during, distributionsAfterDebt: after,
       lppaCents: rv.ppa && pvKwh > 0 ? pvRev / pvKwh * 100 : null,
       lcoeCents: s && pvKwh > 0 ? pvCost / pvKwh * 100 : null,
-      lcosCents: !s && b && pvDis > 0 ? pvCost / pvDis * 100 : null,
+      /* a 'site' battery's costs are the whole site's, not the battery's:
+         dividing them by its discharge is not a cost of storage */
+      lcosCents: !s && b && rv.bess.mode !== 'site' && pvDis > 0 ? pvCost / pvDis * 100 : null,
       levered: levered, dscrMin: dscrMin, dscrAvg: dscrAvg
     }
   };
@@ -1419,7 +1509,8 @@ function assemble(inp, c) {
       ppaRevenue: c.ppaRev[t], bessRevenue: c.bessRev[t], hostSavings: c.hostSav[t], drRevenue: c.drRev[t],
       evRevenue: c.evRev[t], otherRevenue: c.otherRev[t], revenue: c.revenue[t], opex: c.opex[t], ebitda: c.ebitda[t],
       reserveInterest: c.resInt[t], wcFunding: c.wcFund[t], equipReserve: c.eqFund[t], bessReserve: c.bessFund[t],
-      replacementCapex: c.replCapex[t], replacementFromCash: c.bessCash[t], dsraFunding: c.dsraFund[t],
+      replacementCapex: c.replCapex[t], replacementFromCash: c.bessCash[t] + c.rfCash[t],
+      refreshCapex: c.rfRepl[t], refreshReserve: c.rfFund[t], dsraFunding: c.dsraFund[t],
       cfads: c.cfads[t], interest: c.intr[t], principal: c.prin[t], debtService: c.ds[t], dscr: c.dscr[t],
       feeAmortization: c.feeAm[t], depreciationFed: c.depFed[t], depreciationState: c.depSt[t],
       stateTaxableIncome: c.stTI[t], fedTaxableIncome: c.fedTI[t], stateTax: c.stTax[t], fedTax: c.fedTax[t],
@@ -1685,7 +1776,7 @@ function notes(inp, c, meta, sens) {
   }
 
   /* -- the battery -- */
-  if (b && !b.sizing) {
+  if (b && !b.sizing && rv.bess.mode !== 'site') {
     warn('warn', 'NO_SIZING', 'The battery size was entered by hand rather than sized by the sizing engine against the site\'s load, ' +
       'so no bill-savings schedule stands behind the storage economics.');
   }
@@ -1751,6 +1842,9 @@ function notes(inp, c, meta, sens) {
     var mode = rv.bess.mode;
     if (mode === 'bundled') {
       a.push('The battery\'s bill savings stay with the host as part of the bundled service; they are reported as host value, not owner revenue.');
+    } else if (mode === 'site') {
+      a.push('The battery\'s value — the peak it shaves, the energy it shifts and the load it lets the site carry — is inside the ' +
+        'site\'s own revenue and electricity lines, modelled hour by hour upstream; it is not counted a second time.');
     } else if (mode === 'fixed') {
       a.push('The owner charges $' + fmtNum(rv.bess.fixedPerKwMonth) + '/kW-month on ' + fmtNum(b.kw) + ' kW, ' +
         escText(rv.bess.escalatorPct) + '.');
@@ -1771,8 +1865,23 @@ function notes(inp, c, meta, sens) {
   }
   if (c.evRev[1] > 0) a.push('EV charging earns ' + money(c.evRev[1]) + ' in year one ($' + fmtNum(rv.ev.perKwYear) + '/kW-yr on ' +
     fmtNum(inp.ev.kw) + ' kW), ' + escText(rv.ev.escalatorPct) + '.');
+  var scheduled = rv.other.filter(function (x) { return x.schedule; }).length +
+                  inp.opex.lines.filter(function (x) { return x.schedule; }).length;
   if (c.otherRev[1] > 0) a.push('Other revenue of ' + money(c.otherRev[1]) + ' in year one is counted in the base case.');
-  if (c.opex[1] > 0) a.push('Operating costs start at ' + money(c.opex[1]) + ' and each line escalates at its own rate.');
+  if (c.opex[1] > 0) {
+    a.push('Operating costs start at ' + money(c.opex[1]) + ' and each line escalates at its own rate' +
+      (scheduled ? ', except a line given year by year, which is used as given' : '') + '.');
+  }
+  if (scheduled) {
+    a.push(scheduled + ' revenue or cost line' + (scheduled === 1 ? ' is' : 's are') + ' given year by year in nominal dollars ' +
+      'by the model that produced them and used as they stand, never escalated again.');
+  }
+  if (c.rfs.length) {
+    a.push('Equipment is refreshed in year ' + c.rfs.map(function (r) { return r.year; }).join(' and ') + ' (' +
+      c.rfs.map(function (r) { return money(r.cost); }).join(', ') + '), ' +
+      (inp.refresh.mode === 'reserve' ? 'saved for in level deposits to a reserve' : 'paid from that year\'s cash') +
+      ', and depreciated as 5-year MACRS with no credit.');
+  }
   if (inp.reserves.wcMonths > 0) {
     a.push('A working-capital reserve of ' + fmtNum(inp.reserves.wcMonths) + ' months of the next year\'s operating cost is funded at ' +
       'close, topped up each year and released in year ' + N + '.');
@@ -1828,10 +1937,11 @@ function notes(inp, c, meta, sens) {
       (D.dsraMonths > 0 ? '; a DSRA of ' + fmtNum(D.dsraMonths) + ' months of the next year\'s debt service is funded at close ' +
         'and released at maturity' : '') + '.');
   }
-  a.push('NPV' + (rv.ppa ? ', the levelized PPA price' : '') + (s ? ' and LCOE' : (b ? ' and LCOS' : '')) + ' discount at ' +
+  var lcos = !s && b && rv.bess.mode !== 'site';
+  a.push('NPV' + (rv.ppa ? ', the levelized PPA price' : '') + (s ? ' and LCOE' : (lcos ? ' and LCOS' : '')) + ' discount at ' +
     fmtNum(inp.discountPct) + '% nominal' + (s ? '; LCOE follows SAM: the present value of the owner\'s annual costs, with the ' +
     'equity at year 0, over the present value of the kWh delivered' : '') +
-    (!s && b ? '; LCOS is the same cost over the present value of battery discharge, which falls with state of health' : '') + '.');
+    (lcos ? '; LCOS is the same cost over the present value of battery discharge, which falls with state of health' : '') + '.');
   a.push('Total investor returns are the after-tax cash flows of years 0 to ' + N + ' added up; payback is when the ' +
     'cumulative after-tax cash turns non-negative for good, interpolated within that year; the IRR build steps are differences ' +
     'of IRRs rounded to a tenth of a point, so they add up to the total.');
