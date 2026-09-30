@@ -184,7 +184,7 @@ async function boot(browser, base, tier, addons, live) {
     return { leaked: leaked, listed: listed.length, blockedTabs: blockedTabs, jarvisTabs: jarvisTabs, named: hidden.length };
   });
   rows.ran = {};
-  for (var id of ['rb-valuestack', 'rb-compute-cost', 'rb-trace-boundary']) {
+  for (var id of ['rb-valuestack', 'rb-compute-cost', 'rb-trace-boundary', 'rb-site-screen']) {
     var before = await page.evaluate(function (id) {
       var el = document.getElementById(id); if (!el) return null;
       window.__ran = false; el.addEventListener('click', function () { window.__ran = true; }, { capture: true, once: true });
@@ -196,6 +196,15 @@ async function boot(browser, base, tier, addons, live) {
     await page.waitForTimeout(250);
     rows.ran[id] = before == null ? null : await page.evaluate(function () { return window.__ran; });
   }
+  /* the Edge Site Screen (Omega Compute) sits in the Compute tab's size group and opens on the drawing's data */
+  rows.siteScreen = await page.evaluate(function () {
+    var b = document.getElementById('rb-site-screen'), m = document.getElementById('omega-sitescreen');
+    var out = { inSize: !!(b && b.closest('.rpanel[data-ct="size"]') && b.closest('.ribbon-page[data-page="compute"]')),
+                opened: !!m, form: !!(m && m.querySelector('#ss-zip') && m.querySelector('#ss-amps') && m.querySelector('[data-a="run"]')),
+                link: window.OmegaSiteScreen ? OmegaSiteScreen.link() : '' };
+    if (m && m.parentNode) m.parentNode.removeChild(m);
+    return out;
+  });
   rows.jarvisTab = {};
   for (var tab of ['analyze', 'compute']) {
     rows.jarvisTab[tab] = await page.evaluate(function (tab) {
@@ -378,7 +387,7 @@ async function run() {
       /* run by name: Search tools (Ctrl+K) and Ask Jarvis */
       var b = seen[tier].rows.byName, ran = seen[tier].rows.ran, jt = seen[tier].rows.jarvisTab;
       ok(b.listed > 0 && !b.leaked.length, tier + ': Search tools lists nothing from a tab the plan hides (' + b.named + ' hidden)' + (b.leaked.length ? ': ' + b.leaked.slice(0, 8).join('; ') : ''));
-      [['rb-valuestack', 'engineering'], ['rb-compute-cost', 'compute'], ['rb-trace-boundary', '']].forEach(function (c) {
+      [['rb-valuestack', 'engineering'], ['rb-compute-cost', 'compute'], ['rb-trace-boundary', ''], ['rb-site-screen', 'compute']].forEach(function (c) {
         var open = !c[1] || C.canWith(plan.tier, c[1], { addons: plan.addons });
         ok(ran[c[0]] === open, tier + ': ' + c[0] + ' (behind ' + c[1] + ') ' + (open ? 'runs' : 'does not run') + ' by name (Search tools, Jarvis): ran=' + ran[c[0]]);
       });
@@ -407,6 +416,9 @@ async function run() {
     ok(!drift.length, BOUGHT + ': every module command is open exactly when it is Compute\'s or the tier opens it' + (drift.length ? ': ' + drift.slice(0, 8).map(function (r) { return r.id || r.onclick.slice(0, 40); }).join('; ') : ''));
     ok(!C.canWith('standard', 'compute', {}) && bought.rows.byName.jarvisTabs.indexOf('compute') >= 0 && bought.rows.jarvisTab.compute.opened === true, BOUGHT + ': Jarvis may open the Compute tab now; the tier is still Core');
     ok(bought.rows.ran['rb-compute-cost'] === true && bought.rows.ran['rb-valuestack'] === false, BOUGHT + ': by name, Compute Cost runs and Value Stack (Storage, on Analyze) does not');
+    var ss = bought.rows.siteScreen;
+    ok(bought.rows.ran['rb-site-screen'] === true && ss.inSize && ss.opened && ss.form && /^\/compute-proforma\.html\?/.test(ss.link),
+       BOUGHT + ': the Edge Site Screen sits in Compute \u203a Size, runs by name, opens its form and links to the pro forma: ' + JSON.stringify(ss));
     ok(!bought.rows.byName.leaked.length, BOUGHT + ': Search tools lists nothing that stays shut: ' + bought.rows.byName.leaked.join('; '));
     ok(bought.rows.optin.tabs.map(function (t) { return t.page; }).sort().join() === 'analyze,estimate', BOUGHT + ': Analyze and Estimate are still Opt in, Compute is not: ' + JSON.stringify(bought.rows.optin.tabs.map(function (t) { return t.page; })));
     /* the phone: Compute from the tab menu says Opt in, and Opt in is the purchase */

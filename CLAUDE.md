@@ -1141,6 +1141,43 @@ forward to the Modules page. Enterprise is "Contact for pricing":
 no Enterprise figure (the book keeps it for the contract). Design, launch
 order and the honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
 
+## Helios Intake (2026-09-30)
+
+**Helios Energy Advisors' first-pass checklist, filled from the project and
+sent from the editor** (Tommy: "help the client fill this out and autofill
+as much as possible and then send to the email address for helios"). The
+Output tab's *Helios Intake* (`omega-helios-intake.js`, ES5, on the `export`
+cap beside Apply for Financing) gathers what the session knows — the
+drawing, the parcel lookup, Grid Atlas, the substation lookup, the terrain
+sample, the project mode and drawn POI, the imported bill, the Viability
+Workflow's answers read off `localStorage` — and `POST /api/helios-intake`
+is the ONE door: `draft` composes the answers with a source under each
+(`api/_lib/helios-intake.js compose()`: read, never invent; a question the
+platform cannot answer stays BLANK, never "Unknown"; a screening figure says
+so in the sentence), `preview` fills Helios's OWN PDF by field name
+(`forms/helios-first-pass.pdf`, pdf-lib server side from `vendor/pdf-lib/`,
+as the EV workbook
+fills United Illuminating's form) and hands it back, `send` stores it under
+`projects/{id}/` in Storage, mails it to Helios with the sender and ClearSky
+in copy (`mail.send` now carries `cc`/`attachments`), attaches a site-map
+JPEG when asked, and records `projects/{id}.heliosIntake` plus
+`intakes/{sendId}`. Text is transliterated to what the form's Helvetica
+prints (`toWinAnsi`), measured as drawn, wrapped, shrunk and, only then,
+cut, and `issues` says what was cut or changed before anything is sent.
+Drafting follows the projects READ rule (never an `org_members` grant) and
+the caller's plan (Omega Capital in a package; the editor's `export` or
+the finance add-on on a legacy plan, `addons.judge`); sending is the
+project's own workspace only, a record not pending/suspended/cancelled, no
+personal domain, not a viewer, a verified email or `admin.clientAdmin` or
+staff, five a project and twenty-five a workspace a day on counters no rule
+opens, and a `sendId` claimed in a transaction so a retry never mails twice.
+The editor's default BTM is not a choice and is never reported. Helios's
+address is `HELIOS_INTAKE_EMAIL`, else
+`fin_settings/dealroom.orgs.helios`, never a constant; unset means the
+dialog says so and nothing is mailed. `scripts/tests/thelios.js` pins the
+form's field names and the door. Design and the not-built list:
+`docs/HELIOS-INTAKE.md`.
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
@@ -1154,6 +1191,29 @@ rides BESIDE the simulation, never blended. Bills go through `bess-tariff.js`
 and PJM capacity through `value-stack.js` — never a second copy. Every stream
 is computed, published or planning. `docs/VPP-SIMULATOR.md`,
 `scripts/tests/tvppsim.js`.
+
+## Compute Site Pro Forma and the Edge Site Screen (2026-09-30)
+
+`compute-proforma.html` (`computeproforma`, Omega Compute; Finance hexagon
+right after the VPP simulator, and the Compute hexagon) answers "can this
+building's existing service carry GPU pods beside its EV chargers, a battery
+and its own load, and what does it return?" — the metro-edge model Laitent
+publishes (pods on power built for EV charging). The math is
+`api/_lib/compute-site.js` behind `POST /api/compute-proforma` (options,
+context, screen, model, optimize): 8,760 hours on one service limit, placed
+in contract priority (building, firm compute, charging, then the battery and
+on-demand GPUs by a monthly demand-target search, the battery reserving for
+firm overloads); loads, tariffs and bills through `vpp-sim.js` `site.*` and
+`bess-tariff.js`, and the returns, IRR build, sensitivities and deck through
+the ONE finance engine (`proforma-engine.js`: yearly `schedule` lines, the
+`refresh` block, `bess.mode: 'site'`) and `proforma-logic.js` (`opts.title`,
+`flow`, `terms`) — never a second copy. Own / infra / lease are priced side
+by side; Laitent's published figures are cited, never its data. The editor's
+Compute › Size › Site Screen (`rb-site-screen`, `OmegaSiteScreen`) posts
+`screen` from the drawing and links to the page. *Run the example* (and
+`?example=1`) loads an illustrative tight 400 A site that shows every part of
+the balance. `docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
+`npm run check:compute`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

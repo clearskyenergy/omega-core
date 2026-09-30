@@ -44,10 +44,10 @@
     { key: 'deliver',  label: 'Deliver',  icon: '➜', hint: 'ship, custody', logic: 'logic-logistics', pages: [['Shipping & receiving', 'Loads and lanes', '/logic-logistics.html'], ['Sites & custody', 'Where every unit is', '/logic-custody.html']] },
     { key: 'design',   label: 'Design',   icon: '▧', hint: 'Site Map, sandbox', tools: ['editor', 'sandbox', 'siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'] },
     { key: 'grid',     label: 'Grid',     icon: '⌗', hint: 'capacity, screen', tools: ['gridatlas', 'interconnect', 'comedcap', 'sitefinder', 'interconnectstudy'] },
-    { key: 'money',    label: 'Finance',  icon: '$',      hint: 'capital, size, model', also: ['financing'], tools: ['batterysizer', 'valuestack', 'vppsim', 'isocalc', 'proforma', 'dcfc', 'apartment', 'fleet', 'investment', 'costestimator'] },
+    { key: 'money',    label: 'Finance',  icon: '$',      hint: 'capital, size, model', also: ['financing'], tools: ['batterysizer', 'valuestack', 'vppsim', 'computeproforma', 'isocalc', 'proforma', 'dcfc', 'apartment', 'fleet', 'investment', 'costestimator'] },
     { key: 'sales',    label: 'Sales',    icon: '▤', hint: 'proposals, estimates', tools: ['sales', 'spatco_ev', 'evcostwb', 'computelease'] },
     { key: 'market',   label: 'Market',   icon: '◈', hint: 'partners, quotes', market: true, tools: ['financing', 'opportunity', 'osaportal'], pages: [['Marketplace', 'The tools catalogue: BESS, EV and finance tools', '/marketplace.html'], ['Quote Desk', 'Both ends of a request for quote', '/rfq.html']] },
-    { key: 'compute',  label: 'Compute',  icon: '▦', hint: 'data centers', tools: ['datacenter', 'computepower'] },
+    { key: 'compute',  label: 'Compute',  icon: '▦', hint: 'data centers, edge sites', tools: ['datacenter', 'computepower', 'computeproforma'] },
     { key: 'permits',  label: 'Permits',  icon: '✓', hint: 'AHJ, intake', tools: ['permit', 'intake', 'sitelifecycle'] },
     { key: 'ops',      label: 'Operate',  icon: '◉', hint: 'O&M, fleet', tools: ['signal', 'omconsole', 'fieldservice', 'slaintel', 'ownerreport', 'fleetcommand', 'degradation', 'evcloseout'] },
     { key: 'team',     label: 'Team',     icon: '◌', hint: 'people, feed', always: true, pages: [['Team', 'Who is in the workspace', '#team'], ['Feed', 'What changed', '#feed']] }
