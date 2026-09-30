@@ -117,6 +117,14 @@ function openFinancingApply(){
            || new URLSearchParams(location.search).get('project'); } catch (e) {}
   location.href = '/financing.html' + (id ? ('?project=' + encodeURIComponent(id)) : '');
 }
+/* Helios Intake: Helios Energy Advisors' first-pass checklist, filled from
+   this project, finished by the person, previewed and sent to Helios from
+   the editor (2026-09-30, Tommy). The dialog is omega-helios-intake.js; the
+   one door that composes, fills their PDF and mails it is api/helios-intake. */
+function openHeliosIntake(){
+  if (window.OmegaHeliosIntake && typeof OmegaHeliosIntake.open === 'function') OmegaHeliosIntake.open();
+  else alert('The Helios intake module did not load. Reload the page and try again.');
+}
 </script>
 <script src="/omega-brand.js"></script>
 <script src="/omega-editor-gate.js"></script>
@@ -157,6 +165,10 @@ function openFinancingApply(){
 <script src="/omega-compute-lease.js"></script>
 <script src="/omega-bess-result.js"></script>
 <script src="/omega-parcel-report.js"></script>
+<!-- Helios Energy Advisors' first-pass checklist from the Output tab: gathers
+     what this session knows and talks to api/helios-intake, which fills
+     their own PDF and sends it. -->
+<script src="/omega-helios-intake.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
      This is the button that gives it a way in, plus the honest labelling: the
@@ -2349,6 +2361,12 @@ window.onerror = function(msg, src, line, col, err) {
              finished design outward. The marketplace lists a deal for capital
              to find; this one asks a named lender for a price. -->
         <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for<br>Financing</span></button>
+        <!-- The checklist Helios Energy Advisors asks for before it looks at
+             a large land deal. Filled from this project where OMEGA knows
+             the answer, finished by the person, previewed as Helios's own
+             PDF and sent to them from here, with the sender in copy. Same
+             cap as Apply for Financing: it is the same kind of outward step. -->
+        <button class="rbtn" onclick="rbRun(openHeliosIntake)" data-cap="export" title="Helios Intake — fill Helios Energy Advisors' first-pass checklist from this project, finish the rest, preview the PDF and send it to Helios."><span class="rb-ico" style="color:#F4C542">&#9728;</span><span class="rb-lbl">Helios<br>Intake</span></button>
       </div>
       <div class="rpanel-cap">Marketplace</div>
     </div>
