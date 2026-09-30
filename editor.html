@@ -27986,18 +27986,43 @@ async function _preCaptureNormalize(el) {
   });
 
   // ── 3. Flatten legend backdrop-filter (html2canvas can't render it) ───
+  /* THE LEGEND EXPORTED BLANK IN THE LIGHT THEME (Concord, 164 Summer St,
+     2026-09-30: "the legend is spitting out blanks ... it gets removed once
+     I export it. While I'm currently editing it, it's there").
+
+     This step paints the key's ground dark for the sheet, but its ink came
+     from the chrome theme: every row is .li-txt (var(--text)), the heading
+     var(--sub), the section captions and the ENG swatches inherit `color`.
+     Under the light chrome those are #16202B / #4A5B6C, so the capture drew
+     dark navy text on a dark navy box — the icons and line swatches carry
+     their own colours and were all that survived. Pin the ink to the dark
+     token values with the ground, on #lgd itself so every row inherits it,
+     and hand back exactly what was there. The screen is untouched outside
+     the capture. scripts/render-editor-theme.js holds this in both themes. */
   var lgd = document.getElementById('lgd');
   if (lgd) {
     var oBF = lgd.style.backdropFilter;
     var oWBF = lgd.style.webkitBackdropFilter;
     var oBG = lgd.style.background;
+    var oColor = lgd.style.color;
+    var LGD_INK = { '--text':'#E6E8EA', '--sub':'#9AA1A9', '--hairline':'rgba(255,255,255,.12)', '--border':'#43474D' };
+    var oInk = {};
     lgd.style.backdropFilter = 'none';
     lgd.style.webkitBackdropFilter = 'none';
     lgd.style.background = 'rgba(13,27,42,0.97)';
+    Object.keys(LGD_INK).forEach(function(k) {
+      oInk[k] = lgd.style.getPropertyValue(k);
+      lgd.style.setProperty(k, LGD_INK[k]);
+    });
+    lgd.style.color = LGD_INK['--text'];
     restores.push(function() {
       lgd.style.backdropFilter = oBF;
       lgd.style.webkitBackdropFilter = oWBF;
       lgd.style.background = oBG;
+      lgd.style.color = oColor;
+      Object.keys(oInk).forEach(function(k) {
+        if (oInk[k]) lgd.style.setProperty(k, oInk[k]); else lgd.style.removeProperty(k);
+      });
     });
   }
 
