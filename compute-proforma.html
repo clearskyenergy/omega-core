@@ -84,6 +84,8 @@ button{cursor:pointer}
 .hdr-scen select{min-height:36px;font-size:13px;font-weight:600}
 .hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px;min-width:0;flex:0 0 auto}
 .save-state{font-size:12.5px;color:var(--sub);white-space:nowrap}
+.hdr-guide{color:var(--sub);text-decoration:none;font-weight:600;font-size:13px;padding:6px 8px;border-radius:8px;white-space:nowrap}
+.hdr-guide:hover{color:var(--ink);background:var(--panel)}
 .who{font-size:12.5px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:9px;border:1px solid transparent;font-weight:600;font-size:14px;line-height:1.1;white-space:nowrap;text-decoration:none}
 .btn-p{background:var(--acc-ink);color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.12)}
@@ -298,7 +300,7 @@ table.mix .ig{min-width:92px}
 @media (max-width:768px){
   :root{--hdr:56px}
   .hdr{padding:0 10px;gap:6px}
-  .hdr-back span,.hdr-sep,.hdr-title,.who,.save-state{display:none}
+  .hdr-back span,.hdr-sep,.hdr-title,.who,.save-state,.hdr-guide{display:none}
   .hdr-scen{flex:1 1 auto}
   .app{display:block;padding:14px 16px 104px}
   .stepper{display:none}
@@ -327,6 +329,7 @@ table.mix .ig{min-width:92px}
   <div class="hdr-scen"><select id="scen" aria-label="Saved scenarios"><option value="">Saved scenarios…</option></select></div>
   <div class="hdr-right">
     <span class="save-state" id="savemsg" aria-live="polite"></span>
+    <a class="hdr-guide" id="hdr-guide" href="/guides/compute/Compute-Site-Pro-Forma.pdf" target="_blank" rel="noopener">Guide</a>
     <button type="button" class="btn btn-s btn-sm" data-act="save" id="btn-save">Save scenario</button>
     <span class="who" id="who"></span>
   </div>

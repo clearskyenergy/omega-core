@@ -40,6 +40,16 @@ work to do, and the model runs at once. The construction and service months
 follow today's date (two and nine months out). Whatever the person had typed
 comes back from the toast (*Put mine back*).
 
+**The guide.** `guides/compute/Compute-Site-Pro-Forma.pdf` (served at
+`/guides/compute/…`, linked as *Guide* in the page's header) is the user guide
+with the ClearSky-OMEGA mark: a cover, where to find the tool, the example,
+each of the seven steps, reading the results, the Site Screen and the
+planning figures. `npm run guide:compute` (`scripts/guides/compute-proforma.js`)
+builds it from the REAL page against the real endpoint: it runs the example,
+photographs every card and quotes only figures it read off the page, so a
+change to the page is a rebuild of the guide, never an edit to it. Like
+`guides/editor/`, the folder is outside `build.js` and `tguides.js`.
+
 **Who owns it.** Omega Compute owns the tool (`api/_lib/modules.js`). A
 packaged workspace needs that module. A legacy workspace needs Standard or
 above, or a trial, which is the BESS Pro Forma's rule. The endpoint refuses
@@ -227,6 +237,7 @@ the planning ones.
 | `scripts/tests/tproformaengine.js` | The engine extensions. |
 | `scripts/render-compute-proforma.js` (in `check:pages`; `npm run check:compute`) | The page in Chromium against the real endpoint, on a desktop and a 390 px phone, including a workspace refused for lacking Omega Compute. It runs the example from the empty results and puts typed input back, and fails on a switch drawn without its track, a month field that is not a month and a year, a chart drawn at another width than its card, axis labels closer than 4 px, a wrapping tax control or a rate that reads -0.0%. |
 | `scripts/render-legacy-gates.js` | The Site Screen in the real editor on every legacy tier and with Omega Compute bought. |
+| `scripts/guides/compute-proforma.js` (`npm run guide:compute`) | Builds the guide from the real page; asserts the example runs, each step renders, the sweep names its best size and the scenario saves. |
 | `scripts/render-workspace.js` | The Finance panel order. |
 
 ## Not built

@@ -136,6 +136,8 @@ async function run() {
     await page.goto(base + '/compute-proforma.html');
     await page.waitForFunction(function () { return document.querySelectorAll('#i-mkt option').length > 5; });
     ok(await page.locator('#stepper button').count() === 7, 'seven steps');
+    var guide = await page.locator('#hdr-guide').getAttribute('href');
+    ok(/^\/guides\//.test(guide) && fs.existsSync(path.join(root, guide)), 'the header links the guide, and the site serves it: ' + guide);
     ok(await page.locator('#i-mkt').evaluate(function (el) { return el.clientWidth; }) >= 160, 'the market list is wide enough to read "From the ZIP"');
     await page.locator('#stepper [data-step="3"]').click();
     var sw3 = await page.evaluate(switchesDrawn, 3);

@@ -1175,7 +1175,10 @@ by side; Laitent's published figures are cited, never its data. The editor's
 Compute › Size › Site Screen (`rb-site-screen`, `OmegaSiteScreen`) posts
 `screen` from the drawing and links to the page. *Run the example* (and
 `?example=1`) loads an illustrative tight 400 A site that shows every part of
-the balance. `docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
+the balance. The user guide is `guides/compute/Compute-Site-Pro-Forma.pdf`
+(the page's *Guide* link), built from the real page by `npm run
+guide:compute`: retake it after a change to the page, never edit it.
+`docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
 `npm run check:compute`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
