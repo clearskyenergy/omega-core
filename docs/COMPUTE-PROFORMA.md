@@ -30,6 +30,16 @@ Two surfaces answer it on one engine:
   the site on the server, and prints a verdict (ADVANCE, VERIFY or HOLD) with
   the next gate. It then hands the site to the pro forma through its URL.
 
+**The example.** *Run the example* sits on step 1, in the live summary and on
+the empty load balance and results, and `?example=1` opens the page on it. It
+is an illustrative tight site: a 400 A, 480 V apartment service in Austin with
+4 H200 pods, 12 managed 11.5 kW chargers and a 100 kW / 200 kWh battery,
+under the power-layer deal. The chargers at full power would overrun the
+service, so managed charging, the battery and the on-demand GPUs all have
+work to do, and the model runs at once. The construction and service months
+follow today's date (two and nine months out). Whatever the person had typed
+comes back from the toast (*Put mine back*).
+
 **Who owns it.** Omega Compute owns the tool (`api/_lib/modules.js`). A
 packaged workspace needs that module. A legacy workspace needs Standard or
 above, or a trial, which is the BESS Pro Forma's rule. The endpoint refuses
@@ -215,7 +225,7 @@ the planning ones.
 |---|---|
 | `scripts/tests/tcomputesite.js` (in `npm test`) | Input, physics invariants, schedule, structures, sweep, gate, deck and registrations. The invariants: the meter never exceeds the limit, energy balances every hour, the battery stays inside its limits, firm load is lost only when firm load itself exceeds the service, and managed charging never costs more than unmanaged. |
 | `scripts/tests/tproformaengine.js` | The engine extensions. |
-| `scripts/render-compute-proforma.js` (in `check:pages`; `npm run check:compute`) | The page in Chromium against the real endpoint, on a desktop and a 390 px phone, including a workspace refused for lacking Omega Compute. |
+| `scripts/render-compute-proforma.js` (in `check:pages`; `npm run check:compute`) | The page in Chromium against the real endpoint, on a desktop and a 390 px phone, including a workspace refused for lacking Omega Compute. It runs the example from the empty results and puts typed input back, and fails on a switch drawn without its track, a month field that is not a month and a year, a chart drawn at another width than its card, axis labels closer than 4 px, a wrapping tax control or a rate that reads -0.0%. |
 | `scripts/render-legacy-gates.js` | The Site Screen in the real editor on every legacy tier and with Omega Compute bought. |
 | `scripts/render-workspace.js` | The Finance panel order. |
 
