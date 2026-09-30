@@ -37,6 +37,8 @@
   var TRANSFORMER = 'M3 12h3M18 12h3M7 7c2.5 0 2.5 2.5 0 2.5s-2.5 2.5 0 2.5-2.5 2.5 0 2.5-2.5 2.5 0 2.5M17 7c-2.5 0-2.5 2.5 0 2.5s2.5 2.5 0 2.5 2.5 2.5 0 2.5 2.5 2.5 0 2.5M11 6v12M13 6v12';
   var EXPORT = 'M12 3v12M8 7l4-4 4 4M4 15v5h16v-5';
   var TABLE = 'M4 5h16v14H4zM4 10h16M4 15h16M10 5v14';
+  /* an eraser on its baseline, not a blade: the old diagonal read as a cleaver */
+  var ERASER = 'M7 21l-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21M22 21H7M5 11l9 9';
   var FENCE = 'M4 21V9l2-2 2 2v12M10 21V9l2-2 2 2v12M16 21V9l2-2 2 2v12M3 13h18M3 18h18';
   var SERVICE = 'M12 3v5M8 8h8M9 8v5a3 3 0 0 0 6 0V8M12 16v5M9 21h6';
   var CHECKMAP = MAP + 'M9 12l2 2 4-4';
@@ -113,7 +115,7 @@
     selectmove: 'M5 3l7 16 2-6 6-2z', deselect: 'M5 4l7 14 2-5 5-2zM16 16l4 4M20 16l-4 4',
     duplicate: 'M8 8h12v12H8zM4 16V4h12', 'delete': 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6', deleteshape: 'M4 5h9v9H4zM15 14l5 5M20 14l-5 5',
     undo: 'M4 10a8 8 0 1 1 1 8M4 3v7h7', redo: 'M20 10a8 8 0 1 0-1 8M20 3v7h-7',
-    clearall: 'M4 19l7-7 6 6-4 4H7zM11 12l7-7 3 3-7 7', clearplot: 'M4 19l7-7 6 6-4 4H7zM11 12l7-7 3 3-7 7', clearschematic: 'M4 19l7-7 6 6-4 4H7zM11 12l7-7 3 3-7 7',
+    clearall: ERASER, clearplot: ERASER, clearschematic: 'M4 3h11l5 5v6M4 3v18h7M8 8h6M8 12h4M13 21l-2-2c-.6-.6-.6-1.4 0-2l4.5-4.5c.6-.6 1.4-.6 2 0l2.5 2.5c.6.6.6 1.4 0 2L16 21M22 21h-9',
     /* ── Analyze ── */
     circuitanalysis: 'M3 12h5l2-5 4 10 2-5h5',
     energybalance: 'M12 3v18M4 21h16M6 7h12M6 7l-3 6a3 3 0 0 0 6 0zM18 7l-3 6a3 3 0 0 0 6 0z',
@@ -152,6 +154,8 @@
     interactivereport: DOC + 'M9 17v-3M12 17v-6M15 17v-4',
     exportforcad: EXPORT, exportforvalidation: EXPORT + 'M17 9l2 2 3-3', geoexport: EXPORT, exporttomonday: EXPORT,
     pushtomarketplace: 'M3 10l2-5h14l2 5H3zM5 10v10h14V10M12 13v5M10 16l2 2 2-2',
+    /* Helios: a sun over a document line — the checklist their name is on */
+    heliosintake: 'M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7',
     synctocrm: 'M8 7a3 3 0 1 0 0 .01M3 19a5 5 0 0 1 10 0M20 8a4 4 0 0 0-7 2M13 16a4 4 0 0 0 7-2M20 5v3h-3M13 19v-3h3',
     crmintegration: 'M8 7a3 3 0 1 0 0 .01M3 19a5 5 0 0 1 10 0M15 9h6M18 6v6M15 15h6',
     siteplanstyles: 'M4 4h16v16H4zM8 8h4v4H8zM14 8h2M14 12h2M8 16h8',

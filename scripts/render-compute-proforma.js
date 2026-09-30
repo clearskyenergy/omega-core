@@ -7,13 +7,16 @@
  * answers from an in-memory set of records. The browser's Firebase is a
  * stand-in that reports one signed-in person and a toolData store.
  *
- * It walks the whole tool as a person would — load the example, read the
- * load balance, run the sizing sweep and use its best size, compare the
- * three deals, read the results and the deck, save and reload a scenario —
- * on a desktop and a 390 px phone, and checks that a packaged workspace
- * without Omega Compute is refused with the way to it. Fails on a page
- * error, a figure that reads NaN/undefined, sideways scroll on the phone or
- * a step that does not render.
+ * It walks the whole tool as a person would — run the example from the
+ * empty results (and put back what was typed), read the load balance, run
+ * the sizing sweep and use its best size, compare the three deals, read the
+ * results and the deck, save and reload a scenario — on a desktop and a
+ * 390 px phone, and checks that a packaged workspace without Omega Compute
+ * is refused with the way to it. Fails on a page error, a figure that reads
+ * NaN/undefined or -0.0%, sideways scroll on the phone, a step that does not
+ * render, a switch drawn without its track (the knob over its words), a
+ * month field that is not a month and a year, a chart drawn at another
+ * width than its card (its text scaled down) or a control that wraps.
  *
  * A plain run writes nothing into the repo; --shots DIR keeps screenshots.
  * Run: node scripts/render-compute-proforma.js   (needs Playwright + Chromium)
@@ -94,6 +97,29 @@ async function init(context, base) {
 var checks = 0;
 function ok(cond, label) { assert(cond, label); checks++; console.log('  ok   ' + label); }
 var STRAY = /\b(NaN|undefined|Infinity|\[object Object\])\b/;
+/* every visible switch in the step: its track drawn, its words beside it (not under the knob) */
+function switchesDrawn(step) {
+  return [].map.call(document.querySelectorAll('section.step[data-step="' + step + '"] label.sw'), function (l) {
+    if (!l.offsetParent) return null;
+    var t = l.querySelector('.tr').getBoundingClientRect(), x = l.lastElementChild.getBoundingClientRect();
+    return { w: Math.round(t.width), h: Math.round(t.height), gap: Math.round(x.left - t.right) };
+  }).filter(function (v) { return v; });
+}
+/* charts whose axis labels run into each other: labels on one line with under 4 px between them */
+function axisClash() {
+  var bad = [];
+  [].forEach.call(document.querySelectorAll('.chart svg'), function (sv) {
+    if (!sv.getBoundingClientRect().width) return;
+    var rows = {};
+    [].forEach.call(sv.querySelectorAll('text.ax'), function (t) { var r = t.getBoundingClientRect(); if (r.width) (rows[Math.round(r.top)] = rows[Math.round(r.top)] || []).push(r); });
+    Object.keys(rows).forEach(function (k) {
+      var a = rows[k].sort(function (p, q) { return p.left - q.left; });
+      for (var i = 1; i < a.length; i++) if (a[i].left - a[i - 1].right < 4) { bad.push(sv.parentNode.id + ' (' + Math.round(a[i].left - a[i - 1].right) + ' px apart)'); return; }
+    });
+  });
+  return bad;
+}
+function drawnOk(list) { return list.length > 0 && list.every(function (r) { return r.w >= 36 && r.h >= 20 && r.gap >= 6; }); }
 
 async function run() {
   await new Promise(function (r) { server.listen(0, '127.0.0.1', r); });
@@ -110,7 +136,34 @@ async function run() {
     await page.goto(base + '/compute-proforma.html');
     await page.waitForFunction(function () { return document.querySelectorAll('#i-mkt option').length > 5; });
     ok(await page.locator('#stepper button').count() === 7, 'seven steps');
-    await page.locator('[data-act="example"]').click();
+    ok(await page.locator('#i-mkt').evaluate(function (el) { return el.clientWidth; }) >= 160, 'the market list is wide enough to read "From the ZIP"');
+    await page.locator('#stepper [data-step="3"]').click();
+    var sw3 = await page.evaluate(switchesDrawn, 3);
+    ok(sw3.length === 2 && drawnOk(sw3), 'the charging step\'s switches draw their tracks beside their words: ' + JSON.stringify(sw3));
+
+    /* nothing has run: the results offer the example and step 1 */
+    await page.locator('#stepper [data-step="7"]').click();
+    ok(await page.locator('#res-body [data-act="example"]').count() === 1 && await page.locator('#res-body [data-go="1"]').count() === 1 &&
+       await page.locator('#rail .rail-ex').count() === 1, 'the empty results and the live summary offer the example and step 1');
+    /* what was typed can be put back */
+    await page.locator('#stepper [data-step="1"]').click();
+    await page.fill('#i-zip', '60601');
+    var sts1 = await page.locator('#sts1').textContent();
+    await page.locator('#rail .rail-ex').click();
+    await page.locator('#toast [data-act="undo-example"]').waitFor();
+    ok(/Example/.test(await page.inputValue('#i-name')), 'the example fills the form');
+    await page.waitForFunction(function () { var h = document.querySelector('#rail .hero'); return h && /%/.test(h.textContent); }, null, { timeout: 30000 });
+    await page.locator('#toast [data-act="undo-example"]').click();
+    ok(await page.inputValue('#i-zip') === '60601' && await page.inputValue('#i-name') === '', 'Put mine back restores what was typed');
+    ok(await page.locator('#sts1').textContent() === sts1 && await page.locator('[data-deal="infra"]').textContent() === '' &&
+       !/%/.test(await page.locator('#rail .hero').textContent()), 'and nothing from the example\'s result stays up: the step list, the deal cards, the summary');
+    await page.locator('#stepper [data-step="7"]').click();
+    await page.locator('#res-body [data-act="example"]').waitFor();
+    ok(true, 'and the results go back to the way in');
+    /* run the example from the results: they fill in place */
+    await page.locator('#res-body [data-act="example"]').click();
+    await page.waitForFunction(function () { return /Headline returns/.test(document.getElementById('res-body').textContent); }, null, { timeout: 30000 });
+    ok(await page.locator('#stepper [aria-current="step"]').getAttribute('data-step') === '7', 'Run the example fills the results where the person is');
     await page.waitForFunction(function () { var h = document.querySelector('#rail .hero'); return h && /%/.test(h.textContent); }, null, { timeout: 30000 });
     var rail = await page.locator('#rail').textContent();
     ok(/after-tax unlevered IRR/.test(rail) && /Peak at the meter/.test(rail) && !STRAY.test(rail), 'the live summary shows the IRR, the peak and the screen: ' + rail.replace(/\s+/g, ' ').slice(0, 120));
@@ -122,6 +175,15 @@ async function run() {
     ok(/ADVANCE|VERIFY|HOLD/.test(scr) && /Next:/.test(scr), 'the load balance says advance, verify or hold, and the next gate');
     ok(!STRAY.test(scr), 'the load balance prints no NaN or undefined');
     for (var id of ['ch-day', 'ch-month', 'ch-dur']) ok(await page.locator('#' + id + ' svg').count() === 1, id + ' is drawn');
+    var off = await page.evaluate(function () {
+      return ['ch-day', 'ch-month', 'ch-dur'].map(function (k) {
+        var b = document.getElementById(k), v = b.querySelector('svg').getAttribute('viewBox').split(' ');
+        return Math.abs(Number(v[2]) - Math.max(300, b.clientWidth));
+      });
+    });
+    ok(off.every(function (d) { return d <= 1; }), 'each chart is drawn at its card\'s width, so its text is full size (' + off.join(', ') + ' px off), though the model ran on another step');
+    var clash5 = await page.evaluate(axisClash);
+    ok(clash5.length === 0, 'no chart\'s axis labels run into each other: ' + clash5.join(', '));
     ok(await page.locator('#ch-day .hit').count() === 24, 'the day chart has a hover target for every hour');
     await page.locator('#ch-day .hit').nth(18).hover();
     ok(/At the meter/.test(await page.locator('#ch-day .tip').textContent()), 'hovering an hour names each load and the meter');
@@ -143,6 +205,22 @@ async function run() {
     await shot(page, 'cpf-5-sweep');
 
     await page.locator('#stepper [data-step="6"]').click();
+    var sw6 = await page.evaluate(switchesDrawn, 6);
+    ok(sw6.length === 5 && drawnOk(sw6), 'the deal step\'s switches draw their tracks beside their words: ' + JSON.stringify(sw6));
+    var s6 = await page.evaluate(function () {
+      var mp = [].map.call(document.querySelectorAll('.mp[data-mp]'), function (m) { var q = m.querySelectorAll('select'); return q.length === 2 && !!q[0].value && !!q[1].value; });
+      var seg = document.querySelectorAll('[data-seg="finance.tax.appetite"] button');
+      return { mp: mp, oneLine: seg.length === 2 && seg[0].offsetTop === seg[1].offsetTop, negZero: /[-\u2212]0\.0+%/.test(document.querySelector('section.step[data-step="6"]').textContent) };
+    });
+    ok(s6.mp.length === 2 && s6.mp.every(Boolean), 'construction and service are a month and a year each, filled by the example');
+    ok(s6.oneLine, 'the tax appetite reads on one line');
+    ok(!s6.negZero, 'no rate reads -0.0%');
+    var yNow = await page.inputValue('.mp[data-mp="site.pisMonth"] [data-part=y]');
+    await page.selectOption('.mp[data-mp="site.pisMonth"] [data-part=y]', '2020');
+    await page.waitForFunction(function () { var e = document.querySelector('[data-err="finance.project.pisMonth"]'); return e && e.textContent.length > 5; }, null, { timeout: 30000 });
+    ok(true, 'service before construction is refused under the In service field');
+    await page.selectOption('.mp[data-mp="site.pisMonth"] [data-part=y]', yNow);
+    await page.waitForFunction(function () { var f = document.querySelector('#rail .rail-foot'); return f && /Up to date/.test(f.textContent); }, null, { timeout: 30000 });
     var deals = await page.locator('#deals').textContent();
     ok(/IRR/.test(deals) && /No capital/.test(deals) && !STRAY.test(deals), 'the three structures are priced side by side');
     await page.locator('#deals [data-val="own"]').click();
@@ -154,6 +232,7 @@ async function run() {
 
     await page.locator('#stepper [data-step="7"]').click();
     await page.locator('#ch-cash svg').waitFor();
+    ok((await page.evaluate(axisClash)).length === 0, 'the cash-flow chart\'s labels stand apart');
     var resTxt = await page.locator('#res-body').textContent();
     ok(/Headline returns/.test(resTxt) && /IRR build, after tax/.test(resTxt) && /More metrics/.test(resTxt) && /Sensitivity/.test(resTxt), 'the results are the BESS Pro Forma\'s blocks');
     ok(/GPU-hour prices −20%/.test(resTxt) && /Electricity rates \+25%/.test(resTxt), 'the sensitivities include the compute cases');
@@ -185,6 +264,18 @@ async function run() {
       ok(wide <= 1, 'step ' + n + ' fits a 390 px phone (' + wide + ' px over)');
     }
     await shot(p2, 'cpf-phone-results');
+    for (var cs of [5, 7]) {
+      await p2.evaluate(function (k) { document.querySelector('#stepper [data-step="' + k + '"]').click(); }, cs);
+      await p2.waitForTimeout(200);
+      var cl = await p2.evaluate(axisClash);
+      ok(cl.length === 0, 'on a phone, step ' + cs + '\'s chart labels stand apart: ' + cl.join(', '));
+    }
+    await p2.evaluate(function () { document.querySelector('#stepper [data-step="3"]').click(); });
+    var swp = await p2.evaluate(switchesDrawn, 3);
+    ok(swp.length === 2 && drawnOk(swp), 'the switches draw their tracks on a phone too: ' + JSON.stringify(swp));
+    await p2.goto(base + '/compute-proforma.html?example=1');
+    await p2.waitForFunction(function () { return /IRR/.test(document.getElementById('mstrip').textContent); }, null, { timeout: 30000 });
+    ok(/Example/.test(await p2.inputValue('#i-name')), 'a link with ?example=1 opens on the example, run');
     ok(e2.length === 0, 'no page errors on the phone: ' + e2.join(' | '));
     await ctx2.close();
 

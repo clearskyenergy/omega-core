@@ -143,8 +143,14 @@ details.more>.fg,details.more>.in{margin-top:14px}
 .s1{grid-column:span 1}.s2{grid-column:span 2}.s3{grid-column:span 3}.s4{grid-column:span 4}.s6{grid-column:1/-1}
 .f{min-width:0}
 .f>label,.f .lbl{display:block;font-size:12.5px;font-weight:600;color:#344054;margin:0 0 6px}
+/* A switch is a label too: it keeps its own face inside a field (the rule above would make it a
+   block and leave the track with no size, the knob drawn over the words). */
+.f>label.sw{display:flex;width:max-content;max-width:100%;margin:0;font-size:13.5px;font-weight:600;color:var(--ink)}
+.sws{display:grid;grid-template-columns:repeat(2,max-content);gap:10px 40px}
+.mp{display:flex;gap:8px}
+.mp select{flex:1 1 0;min-width:0}
 .req{color:var(--crit);font-weight:700}
-input[type=text],input[type=month],select,textarea{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font-size:14px;color:var(--ink);box-shadow:0 1px 2px rgba(15,23,42,.04)}
+input[type=text],select,textarea{width:100%;min-height:40px;padding:8px 12px;border:1px solid var(--line-2);border-radius:8px;background:#fff;font-size:14px;color:var(--ink);box-shadow:0 1px 2px rgba(15,23,42,.04)}
 textarea{min-height:80px;resize:vertical;font:12px/1.4 ui-monospace,Menlo,Consolas,monospace}
 select{appearance:none;-webkit-appearance:none;padding-right:32px;background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23526071' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") no-repeat right 11px center}
 input:focus,select:focus,textarea:focus{outline:none;border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-soft)}
@@ -158,7 +164,7 @@ input::placeholder,textarea::placeholder{color:#98A2B3}
 .help{font-size:12px;color:var(--sub);margin:6px 0 0;line-height:1.45}
 .err{display:none;font-size:12px;color:var(--crit);margin:6px 0 0;font-weight:500}
 .f.bad .err{display:block}
-.f.bad .ig,.f.bad>input,.f.bad>select{border-color:var(--crit)}
+.f.bad .ig,.f.bad>input,.f.bad>select,.f.bad .mp select{border-color:var(--crit)}
 .choices{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
 .choice{display:flex;flex-direction:column;gap:4px;border:1px solid var(--line-2);border-radius:10px;padding:12px 14px;cursor:pointer;background:#fff;text-align:left}
 .choice:hover{border-color:var(--acc)}
@@ -188,6 +194,10 @@ input::placeholder,textarea::placeholder{color:#98A2B3}
 .pill.bad{background:var(--crit-bg);color:var(--crit);border-color:var(--crit-line)}
 .pill.tier{font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;padding:1px 6px}
 .empty{padding:28px 16px;text-align:center;color:var(--sub);font-size:13.5px;line-height:1.6}
+.empty-acts{display:flex;flex-wrap:wrap;justify-content:center;gap:10px;margin-top:14px}
+.empty .spin{margin-right:8px}
+.rail-ex{width:100%;margin-top:12px}
+.toast-act{background:none;border:0;color:#93C5FD;font-weight:700;margin-left:10px;padding:0 4px;min-height:28px;cursor:pointer}
 .spin{display:inline-block;width:16px;height:16px;border-radius:50%;border:2px solid var(--line-2);border-top-color:var(--acc-ink);animation:spin .8s linear infinite;flex:0 0 16px;vertical-align:-3px}
 .btn-p .spin{border-color:rgba(255,255,255,.45);border-top-color:#fff}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -294,7 +304,7 @@ table.mix .ig{min-width:92px}
   .stepper{display:none}
   .mobnav{display:flex}
   .card{padding:16px}
-  input[type=text],input[type=month],select,textarea{font-size:16px}
+  input[type=text],select,textarea{font-size:16px}
   .step-h h2{font-size:21px}
   .kpi .v{font-size:22px}
   .step-nav{display:none}
@@ -303,7 +313,7 @@ table.mix .ig{min-width:92px}
   .seg button{flex:1 1 0;padding:8px 10px}
   .toast{bottom:88px}
 }
-@media (max-width:480px){.fg{grid-template-columns:minmax(0,1fr)}.fg>.f{grid-column:1/-1}}
+@media (max-width:480px){.fg{grid-template-columns:minmax(0,1fr)}.fg>.f{grid-column:1/-1}.sws{grid-template-columns:minmax(0,1fr)}}
 @media print{.hdr,.stepper,.rail,.mstrip,.mobnav,.foot{display:none!important}.app{display:block;padding:0}}
 </style>
 </head>
@@ -344,7 +354,7 @@ table.mix .ig{min-width:92px}
       <div class="step-h"><div class="kick">Step 1 of 7</div><h2 tabindex="-1">Site &amp; service</h2>
         <p class="lede">Compute pods, chargers and a battery share the building's existing service. Everything that follows is held under what that service may carry continuously.</p></div>
       <div class="card">
-        <div class="card-h"><h3>The site</h3><button type="button" class="btn-t" data-act="example">Load an example site</button></div>
+        <div class="card-h"><h3>The site</h3><button type="button" class="btn-t" data-act="example">Run the example</button></div>
         <div class="fg">
           <div class="f s3"><label for="i-name">Scenario / project name</label><input type="text" id="i-name" data-path="site.name" maxlength="120" placeholder="e.g. Oak Street Apartments — 2 pods"></div>
           <div class="f s3"><label for="i-sponsor">Sponsor</label><input type="text" id="i-sponsor" data-path="site.sponsor" maxlength="120" placeholder="Who is raising the capital"></div>
@@ -354,10 +364,10 @@ table.mix .ig{min-width:92px}
               <button type="button" data-val="multifamily">Multifamily</button><button type="button" data-val="commercial">Office</button><button type="button" data-val="retail">Retail</button><button type="button" data-val="industrial">Industrial</button>
             </div><p class="help">Sets the building's load shape and rate class.</p></div>
           <div class="f s3"><label for="i-street">Street</label><input type="text" id="i-street" data-path="site.street" maxlength="160"></div>
-          <div class="f s1"><label for="i-city">City</label><input type="text" id="i-city" data-path="site.city" maxlength="80"></div>
+          <div class="f s2"><label for="i-city">City</label><input type="text" id="i-city" data-path="site.city" maxlength="80"></div>
           <div class="f s1"><label for="i-zip">ZIP <span class="req">*</span></label><input type="text" id="i-zip" data-path="site.zip" inputmode="numeric" maxlength="10" placeholder="78701" autocomplete="postal-code"><p class="err" data-err="site.zip"></p></div>
-          <div class="f s1"><label for="i-mkt">Market</label><select id="i-mkt" data-path="site.market"><option value="">From the ZIP</option></select></div>
-          <div class="f s3"><label for="i-util">Utility</label><input type="text" id="i-util" data-path="site.utility" maxlength="120" placeholder="e.g. Austin Energy"></div>
+          <div class="f s4"><label for="i-util">Utility</label><input type="text" id="i-util" data-path="site.utility" maxlength="120" placeholder="e.g. Austin Energy"></div>
+          <div class="f s2"><label for="i-mkt">Market</label><select id="i-mkt" data-path="site.market"><option value="">From the ZIP</option></select></div>
         </div>
       </div>
       <div class="card">
@@ -438,7 +448,7 @@ table.mix .ig{min-width:92px}
           <div class="f s2"><label for="e-ports">Charging ports</label><div class="ig"><input type="text" id="e-ports" data-path="ev.ports" data-kind="num" inputmode="numeric" placeholder="8"><span class="suf">ports</span></div><p class="err" data-err="ev.ports"></p></div>
           <div class="f s2"><label for="e-kw">Power per port</label><div class="ig"><input type="text" id="e-kw" data-path="ev.kwPerPort" data-kind="num" inputmode="decimal" placeholder="11.5"><span class="suf">kW</span></div>
             <p class="help">L2 7.2 · 11.5 · 19.2 kW; DC fast 62.5 · 150 kW.</p></div>
-          <div class="f s2"><label class="sw"><input type="checkbox" data-path="ev.managed" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>Managed charging</span></label><p class="help">Off: cars charge on arrival, held under the service by the panel's load management (NEC 625.42).</p></div>
+          <div class="f s2"><span class="lbl">Scheduling</span><label class="sw"><input type="checkbox" data-path="ev.managed" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>Managed charging</span></label><p class="help">Off: cars charge on arrival, held under the service by the panel's load management (NEC 625.42).</p></div>
           <div class="f s6"><label>Who charges, and when</label>
             <div class="seg" data-seg="ev.pattern" data-def="overnight" role="group" aria-label="Charging pattern">
               <button type="button" data-val="overnight">Residents overnight</button><button type="button" data-val="workplace">Workplace</button><button type="button" data-val="retail">Retail / public</button><button type="button" data-val="fleet">Fleet depot</button><button type="button" data-val="custom">Custom window</button>
@@ -456,7 +466,7 @@ table.mix .ig{min-width:92px}
         <div class="fg">
           <div class="f s2"><label for="e-pr">Driver price</label><div class="ig"><span class="pre">$</span><input type="text" id="e-pr" data-path="ev.pricePerKwh" data-kind="num" inputmode="decimal" placeholder="0.35"><span class="suf">/kWh</span></div></div>
           <div class="f s2"><label for="e-pe">Price escalator</label><div class="ig"><input type="text" id="e-pe" data-path="ev.priceEscPct" data-kind="num" inputmode="decimal" placeholder="2"><span class="suf">%/yr</span></div></div>
-          <div class="f s2"><label class="sw"><input type="checkbox" data-path="ev.existing" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Chargers already installed</span></label><p class="help">No charger capital in the model.</p></div>
+          <div class="f s2"><span class="lbl">Charger capital</span><label class="sw"><input type="checkbox" data-path="ev.existing" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Chargers already installed</span></label><p class="help">No charger capital in the model.</p></div>
           <div class="f s2"><label for="e-cx">Charger installed cost</label><div class="ig"><span class="pre">$</span><input type="text" id="e-cx" data-path="ev.capexPerPort" data-kind="num" inputmode="decimal" placeholder="9,000"><span class="suf">/port</span></div></div>
           <div class="f s2"><label for="e-nf">Network fee</label><div class="ig"><span class="pre">$</span><input type="text" id="e-nf" data-path="ev.networkPerPortYear" data-kind="num" inputmode="decimal" placeholder="300"><span class="suf">/port-yr</span></div></div>
           <div class="f s2"><label for="e-om">Charger O&amp;M</label><div class="ig"><span class="pre">$</span><input type="text" id="e-om" data-path="ev.omPerPortYear" data-kind="num" inputmode="decimal" placeholder="200"><span class="suf">/port-yr</span></div></div>
@@ -581,12 +591,12 @@ table.mix .ig{min-width:92px}
           <div class="f s2" data-deal-show="own"><label>Host share of gross compute</label><div class="ig"><input type="text" data-path="deal.rentSharePct" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">%</span></div></div>
           <div class="f s2" data-deal-show="own"><label>Rent escalator</label><div class="ig"><input type="text" data-path="deal.rentEscPct" data-kind="num" inputmode="decimal" placeholder="2"><span class="suf">%/yr</span></div></div>
           <div class="f s2" data-deal-show="infra"><label>Share of gross compute</label><div class="ig"><input type="text" data-path="deal.infraSharePct" data-kind="num" inputmode="decimal" placeholder="20"><span class="suf">%</span></div></div>
-          <div class="f s4" data-deal-show="infra"><label class="sw"><input type="checkbox" data-path="deal.operatorPaysComputePower" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>The operator pays for the compute's electricity</span></label></div>
+          <div class="f s4" data-deal-show="infra"><span class="lbl">Compute electricity</span><label class="sw"><input type="checkbox" data-path="deal.operatorPaysComputePower" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>The operator pays for the compute's electricity</span></label></div>
           <div class="f s2" data-deal-show="lease"><label>Lease rent</label><div class="ig"><span class="pre">$</span><input type="text" data-path="deal.lease.rentPerYear" data-kind="num" inputmode="decimal" placeholder="25,000"><span class="suf">/yr</span></div></div>
           <div class="f s2" data-deal-show="lease"><label>Lease escalator</label><div class="ig"><input type="text" data-path="deal.lease.escPct" data-kind="num" inputmode="decimal" placeholder="2"><span class="suf">%/yr</span></div></div>
           <div class="f s2" data-deal-show="lease"><label>The host's capital</label><div class="ig"><span class="pre">$</span><input type="text" data-path="deal.lease.hostCapex" data-kind="num" inputmode="decimal" placeholder="0"></div><p class="help">e.g. chargers the host buys.</p></div>
           <div class="f s2" data-deal-show="lease"><label>Cap rate</label><div class="ig"><input type="text" data-path="deal.lease.capRatePct" data-kind="num" inputmode="decimal" placeholder="6"><span class="suf">%</span></div></div>
-          <div class="f s4" data-deal-show="lease"><label class="sw"><input type="checkbox" data-path="deal.lease.hostKeepsCharging" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>The host keeps the charging revenue</span></label></div>
+          <div class="f s4" data-deal-show="lease"><span class="lbl">Charging revenue</span><label class="sw"><input type="checkbox" data-path="deal.lease.hostKeepsCharging" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>The host keeps the charging revenue</span></label></div>
           <div class="f s2"><label>Development and soft costs</label><div class="ig"><input type="text" data-path="deal.softCostPct" data-kind="num" inputmode="decimal" placeholder="8"><span class="suf">% of hard cost</span></div></div>
           <div class="f s2"><label>Insurance</label><div class="ig"><input type="text" data-path="deal.insurancePct" data-kind="num" inputmode="decimal" placeholder="0.5"><span class="suf">% of capital</span></div></div>
         </div>
@@ -599,26 +609,28 @@ table.mix .ig{min-width:92px}
           <div class="f s2"><label>Utility escalator</label><div class="ig"><input type="text" data-path="finance.utilityEscPct" data-kind="num" inputmode="decimal" placeholder="3"><span class="suf">%/yr</span></div></div>
           <div class="f s2"><label>Inflation</label><div class="ig"><input type="text" data-path="finance.inflationPct" data-kind="num" inputmode="decimal" placeholder="2.5"><span class="suf">%</span></div></div>
           <div class="f s2"><label>GPU refresh paid</label><select data-path="finance.refreshFunding"><option value="">From that year's cash</option><option value="expense">From that year's cash</option><option value="reserve">From a reserve</option></select></div>
-          <div class="f s2"><label for="f-boc">Construction begins</label><input type="month" id="f-boc" data-path="site.bocMonth"></div>
-          <div class="f s2"><label for="f-pis">In service</label><input type="month" id="f-pis" data-path="site.pisMonth"></div>
+          <div class="f s2"><span class="lbl" id="l-boc">Construction begins</span><div class="mp" data-mp="site.bocMonth" role="group" aria-labelledby="l-boc"></div><p class="help">Sets which credits apply; blank assumes they all do.</p><p class="err" data-err="finance.project.bocMonth"></p></div>
+          <div class="f s2"><span class="lbl" id="l-pis">In service</span><div class="mp" data-mp="site.pisMonth" role="group" aria-labelledby="l-pis"></div><p class="help">The first operating month; the credit is claimed that year.</p><p class="err" data-err="finance.project.pisMonth"></p></div>
         </div>
       </div>
       <div class="card">
         <div class="card-h"><h3>Tax &amp; incentives</h3><span class="aside">The BESS Pro Forma's tax engine</span></div>
         <div class="fg">
           <div class="f s2"><label>Federal rate</label><div class="ig"><input type="text" data-path="finance.tax.federalPct" data-kind="num" inputmode="decimal" placeholder="21"><span class="suf">%</span></div><p class="err" data-err="finance.tax.federalPct"></p></div>
-          <div class="f s2"><label>State rate</label><div class="ig"><input type="text" data-path="finance.tax.statePct" data-kind="num" inputmode="decimal" placeholder="the state's"><span class="suf">%</span></div></div>
+          <div class="f s2"><label>State rate</label><div class="ig"><input type="text" data-path="finance.tax.statePct" data-kind="num" inputmode="decimal" placeholder="by state" id="t-state"><span class="suf">%</span></div></div>
           <div class="f s2"><label>Bonus depreciation</label><div class="ig"><input type="text" data-path="finance.tax.bonusPct" data-kind="num" inputmode="decimal" placeholder="0"><span class="suf">%</span></div><p class="help">100% is available for property acquired after 19 January 2025; use it only with the appetite to absorb it.</p></div>
-          <div class="f s3"><label>Tax appetite</label>
-            <div class="seg" data-seg="finance.tax.appetite" data-def="full" role="group" aria-label="Tax appetite"><button type="button" data-val="full">Full: losses used as they arise</button><button type="button" data-val="nol">Stand-alone: carried forward</button></div></div>
-          <div class="f s3"><label>Storage credit</label>
-            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.pwa" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>Prevailing wage met</span></label>
-            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.energyCommunity" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Energy community</span></label>
-            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.domesticContent" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Domestic content</span></label>
-            <label class="sw"><input type="checkbox" data-path="finance.tax.itc.feocAttested" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Meets the FEOC thresholds</span></label></div>
+          <div class="f s6"><label>Tax appetite</label>
+            <div class="seg" data-seg="finance.tax.appetite" data-def="full" role="group" aria-label="Tax appetite"><button type="button" data-val="full">Used as they arise</button><button type="button" data-val="nol">Carried forward (NOL)</button></div><p class="help">An investor with other income uses the losses the year they arise; a stand-alone owner carries them forward.</p></div>
           <div class="f s3"><label>The credit is</label>
             <div class="seg" data-seg="finance.tax.itc.monetization" data-def="direct" role="group" aria-label="ITC monetization"><button type="button" data-val="direct">Claimed</button><button type="button" data-val="transfer">Sold (§6418)</button></div></div>
-          <div class="f s3"><label>Transfer price</label><div class="ig"><span class="pre">$</span><input type="text" data-path="finance.tax.itc.transferPrice" data-kind="num" inputmode="decimal" placeholder="0.90"><span class="suf">per $1</span></div></div>
+          <div class="f s3"><label>Transfer price</label><div class="ig"><span class="pre">$</span><input type="text" data-path="finance.tax.itc.transferPrice" data-kind="num" inputmode="decimal" placeholder="0.90"><span class="suf">per $1</span></div><p class="help">When the credit is sold.</p></div>
+          <div class="f s6"><span class="lbl">Storage credit</span>
+            <div class="sws">
+              <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.pwa" data-kind="bool" data-def="1" checked><span class="tr" aria-hidden="true"></span><span>Prevailing wage met</span></label>
+              <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.energyCommunity" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Energy community</span></label>
+              <label class="sw"><input type="checkbox" data-path="finance.tax.itc.storage.domesticContent" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Domestic content</span></label>
+              <label class="sw"><input type="checkbox" data-path="finance.tax.itc.feocAttested" data-kind="bool"><span class="tr" aria-hidden="true"></span><span>Meets the FEOC thresholds</span></label>
+            </div><p class="help">The battery's investment tax credit and its adders.</p></div>
         </div>
       </div>
       <div class="card">
@@ -686,7 +698,8 @@ var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oc
 var ME = null, DB = null, ORG = null, OPTS = null, CTX = { brand: null };
 var IN = {}, UI = { loadMode: 'profile', debt: false, day: 'summer' }, INTERVAL = null;
 var RES = null, SWEEP = null, STATE = 'idle', ERRS = [], SEQ = 0, TIMER = null, STEP = 1, STORE = { v: 1, scenarios: [] }, CUR_ID = null;
-var CHARTS = {};
+var CHARTS = {}, PREV = null, DENIED = false;
+var FIRST_YEAR = 2020, LAST_YEAR = 2045;
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -701,7 +714,13 @@ function moneyShort(n) {
   return s + Math.round(a).toLocaleString('en-US');
 }
 function acct(n) { if (!fin(n)) return ''; var v = Math.round(n); return v < 0 ? '(' + Math.abs(v).toLocaleString('en-US') + ')' : v.toLocaleString('en-US'); }
-function pct(f, dp) { return fin(f) ? (f * 100).toFixed(dp == null ? 1 : dp) + '%' : 'n/a'; }
+/* A rate rounded to zero reads 0.0%, never -0.0%; a negative one takes the minus sign money() uses. */
+function pct(f, dp) {
+  if (!fin(f)) return 'n/a';
+  var d = dp == null ? 1 : dp, t = (f * 100).toFixed(d);
+  if (Number(t) === 0) t = (0).toFixed(d);
+  return (t.charAt(0) === '-' ? '\u2212' + t.slice(1) : t) + '%';
+}
 function kw(n) { return fin(n) ? Math.round(n).toLocaleString('en-US') + ' kW' : '—'; }
 function n0(n) { return fin(n) ? Math.round(n).toLocaleString('en-US') : '—'; }
 function yrs(v) { return fin(v) ? v.toFixed(1) + ' years' : 'not within the term'; }
@@ -713,7 +732,11 @@ function setPath(o, p, v) {
   for (var i = 0; i < parts.length - 1; i++) { if (c[parts[i]] == null || typeof c[parts[i]] !== 'object') c[parts[i]] = {}; c = c[parts[i]]; }
   if (v === undefined) delete c[parts[parts.length - 1]]; else c[parts[parts.length - 1]] = v;
 }
-function toast(t, ms) { var el = $('toast'); el.textContent = t; el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, ms || 3200); }
+function toast(t, ms, act, actLabel) {
+  var el = $('toast');
+  el.innerHTML = esc(t) + (act ? '<button type="button" class="toast-act" data-act="' + esc(act) + '">' + esc(actLabel || 'Undo') + '</button>' : '');
+  el.hidden = false; clearTimeout(toast.t); toast.t = setTimeout(function () { el.hidden = true; }, ms || 3200);
+}
 function store(k, v) { try { if (v === undefined) return JSON.parse(localStorage.getItem(k) || 'null'); localStorage.setItem(k, JSON.stringify(v)); } catch (e) { return null; } }
 
 /* ── the form ─────────────────────────────────────────────────────────── */
@@ -756,9 +779,37 @@ function paintForm() {
   }
   var segs = document.querySelectorAll('[data-seg]');
   for (var s = 0; s < segs.length; s++) setSeg(segs[s].getAttribute('data-seg'), segValue(segs[s].getAttribute('data-seg')), true);
+  var mps = document.querySelectorAll('.mp[data-mp]');
+  for (var q = 0; q < mps.length; q++) paintMonth(mps[q]);
   setLoadMode(UI.loadMode, true);
   setDebt(UI.debt, true);
   paintHints();
+}
+/* Month and year as two lists, as the BESS Pro Forma asks for them: a browser's own month
+   field draws dashes when blank and differs on every platform. */
+function monthSelects(host) {
+  if (host.querySelector('select')) return;
+  var m = '<select data-part="m" aria-label="Month"><option value="">Month</option>';
+  for (var i = 0; i < 12; i++) m += '<option value="' + (i < 9 ? '0' : '') + (i + 1) + '">' + MONTHS[i] + '</option>';
+  var y = '<select data-part="y" aria-label="Year"><option value="">Year</option>';
+  for (var yy = FIRST_YEAR; yy <= LAST_YEAR; yy++) y += '<option value="' + yy + '">' + yy + '</option>';
+  host.innerHTML = m + '</select>' + y + '</select>';
+}
+function paintMonth(host) {
+  monthSelects(host);
+  var v = getPath(IN, host.getAttribute('data-mp')), mm = /^(\d{4})-(\d{2})$/.exec(String(v || ''));
+  var ms = host.querySelector('[data-part=m]'), ys = host.querySelector('[data-part=y]');
+  /* a month picked before its year is not a value yet; a repaint keeps the half-made choice */
+  if (!mm && !(ms.value && ys.value)) return;
+  ms.value = mm ? mm[2] : ''; ys.value = mm ? mm[1] : '';
+}
+function onMonth(host) {
+  var p = host.getAttribute('data-mp'), m = host.querySelector('[data-part=m]').value, y = host.querySelector('[data-part=y]').value;
+  if (m && y) setPath(IN, p, y + '-' + m);
+  else if (!m && !y) setPath(IN, p, undefined);
+  else return;
+  var f = closest(host, '.f'); if (f) f.className = f.className.replace(/\s*\bbad\b/g, '');
+  changed(p);
 }
 /* Placeholders show what a blank field runs on: the class's planning
    prices and power, the pattern's stay. They are the server's defaults,
@@ -979,6 +1030,9 @@ function showStep(n) {
   $('mob-mid').innerHTML = '<b>' + esc(STEPS[STEP - 1]) + '</b>Step ' + STEP + ' of 7';
   try { history.replaceState(null, '', '#step-' + STEP); } catch (e) {}
   window.scrollTo(0, 0);
+  var mb = document.querySelector('.mobnav [data-act="prev"]'), mn = document.querySelector('.mobnav [data-act="next"]');
+  if (mb) mb.disabled = STEP === 1; if (mn) mn.disabled = STEP === 7;
+  if (STEP === 5 || STEP === 7) redrawCharts();
   if (STEP === 7) renderDeck();
 }
 
@@ -1009,20 +1063,57 @@ function renderRail() {
     h += kv('Peak at the meter', esc(kw(RES.balance.peakKw) + ' of ' + kw(RES.balance.limitKw))) +
       '<div class="kv"><span>Site screen</span><b><span class="pill ' + tone + '">' + esc(v.act) + '</span></b></div>';
   }
-  h += '<div class="rail-foot">' + status + (STATE === 'error' ? ' <button type="button" class="btn-t" data-act="retry" style="font-size:12px;min-height:0;padding:0">Try again</button>' : '') + '</div></div>';
+  var offer = !RES && !DENIED && STATE === 'idle';
+  h += '<div class="rail-foot">' + status + (STATE === 'error' ? ' <button type="button" class="btn-t" data-act="retry" style="font-size:12px;min-height:0;padding:0">Try again</button>' : '') + '</div>' +
+    (offer ? '<button type="button" class="btn btn-s btn-sm rail-ex" data-act="example">Run the example</button>' : '') + '</div>';
   $('rail').innerHTML = h;
   $('mstrip').innerHTML = pf ? '<b>' + esc(m.afterTaxIrr == null ? 'n/a' : pct(m.afterTaxIrr, 2)) + '</b> IRR · <b>' + esc(moneyShort(su.equity)) + '</b> · ' +
     '<b>' + esc(RES.verdict.act) + '</b> · peak ' + esc(kw(RES.balance.peakKw)) + ' of ' + esc(kw(RES.balance.limitKw)) + (stale ? ' · updating' : '')
-    : STATE === 'idle' ? 'Enter the ZIP and the service size to run the model.' : status.replace(/<[^>]+>/g, '');
+    : STATE === 'idle' ? 'Enter the ZIP and the service size to run the model.' + (offer ? ' <button type="button" class="btn-t" data-act="example" style="min-height:0;padding:0 2px;font-size:13px">Run the example</button>' : '')
+    : status.replace(/<[^>]+>/g, '');
   var hint = RES ? [
     RES.site.state + ' · ' + kw(RES.service.limitKw) + ' limit', RES.load.label, RES.ev.ports + ' ports · ' + (RES.ev.managed ? 'managed' : 'unmanaged'),
     RES.compute.gpus + ' ' + RES.compute.gpuClass.toUpperCase().replace('RTXPRO6000', 'RTX PRO') + ' GPUs', RES.verdict.act + ' · peak ' + kw(RES.balance.peakKw),
     RES.structure.label, pf ? pct(pf.metrics.afterTaxIrr, 1) + ' IRR' : 'Lease economics'] : null;
   for (var i = 1; i <= 7 && hint; i++) $('sts' + i).textContent = hint[i - 1];
+  paintEmpty();
+}
+/* What the load balance and the results say before anything has run: running, or the way to
+   a first result (the example, or step 1). */
+var STS0 = null;
+function paintEmpty() {
+  if (RES) return;
+  /* the step list's own words and blank deal cards: nothing from an earlier result stays up */
+  var i;
+  if (!STS0) { STS0 = []; for (i = 1; i <= 7; i++) STS0[i] = $('sts' + i) ? $('sts' + i).textContent : ''; }
+  else for (i = 1; i <= 7; i++) if ($('sts' + i)) $('sts' + i).textContent = STS0[i];
+  [].forEach.call(document.querySelectorAll('[data-deal]'), function (el) { el.innerHTML = ''; });
+  var busy = STATE === 'pending' || STATE === 'running', spin = '<span class="spin" aria-hidden="true"></span>';
+  var ex = DENIED ? '' : '<button type="button" class="btn btn-p btn-sm" data-act="example">Run the example</button>';
+  $('screen-out').innerHTML = '<div class="card"><div class="empty">' + (busy ? spin + 'Running a year of hourly dispatch…'
+    : 'The load balance appears once the site\'s ZIP and service size are in.' + (ex ? '<div class="empty-acts">' + ex + '</div>' : '')) + '</div></div>';
+  $('res-body').innerHTML = '<div class="card"><div class="empty">' + (busy ? spin + 'Running the model…'
+    : 'Nothing has run yet. Run the example for a finished pro forma, or enter your site from step 1.' +
+      '<div class="empty-acts">' + ex + '<button type="button" class="btn btn-s btn-sm" data-go="1">Start at step 1</button></div>') + '</div></div>';
+}
+/* Charts take their width from their card, so one drawn while its step was hidden is drawn
+   again when the step shows (and on a resize); otherwise its text is scaled down with it. */
+function redrawCharts() {
+  if (!RES) return;
+  var R = RES, B = R.balance, day = null;
+  for (var d = 0; d < R.days.length; d++) if (R.days[d].key === UI.day) day = R.days[d];
+  if ($('ch-day')) drawDay(day || R.days[0], B.limitKw);
+  if ($('ch-month')) drawMonths(R.months, B.limitKw);
+  if ($('ch-dur')) drawDuration(R.duration, B.limitKw);
+  if ($('ch-cash') && R.proforma) drawCash(R.proforma);
 }
 
 /* ── the load balance (step 5) ───────────────────────────────────────── */
-function renderAll() { renderRail(); renderScreen(); renderDeals(); renderResults(); renderSweep(); renderDeck(); }
+function renderAll() {
+  renderRail(); renderScreen(); renderDeals(); renderResults(); renderSweep(); renderDeck();
+  var t = RES && RES.proforma && RES.proforma.inputs && RES.proforma.inputs.tax, st = $('t-state');
+  if (st) st.placeholder = t && fin(t.statePct) ? String(t.statePct) : 'by state';
+}
 
 function renderScreen() {
   if (!RES) return;
@@ -1120,6 +1211,8 @@ function drawDay(day, limit) {
   var hi = limit;
   hs.forEach(function (x) { var s = Math.max(0, x.building - x.solar) + x.computeFirm + x.computeSpot + x.ev + x.charge; if (s > hi) hi = s; if (x.net > hi) hi = x.net; });
   var tk = ticks(0, hi * 1.05, 5), top = tk[tk.length - 1], pw = g.W - g.L - g.R, ph = g.H - g.T - g.B, band = pw / 24, bw = Math.max(4, band - 3);
+  /* an hour label every 3 hours where '12:00' fits between them, else every 6 (a phone) */
+  var every = band * 3 >= 40 ? 3 : 6;
   function y(v) { return g.T + ph - v / top * ph; }
   var s = ['<svg viewBox="0 0 ' + g.W + ' ' + g.H + '" role="img" aria-label="Load by hour on ' + esc(day.label) + '; the table below has every figure.">'];
   tk.forEach(function (t) { s.push('<line class="grid" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(t)) + '" y2="' + f1(y(t)) + '"/><text class="ax" x="' + (g.L - 8) + '" y="' + f1(y(t) + 4) + '" text-anchor="end">' + axKw(t) + '</text>'); });
@@ -1135,7 +1228,7 @@ function drawDay(day, limit) {
       acc += v;
     });
     s.push('<rect class="hit" data-i="' + i + '" x="' + f1(g.L + band * i) + '" y="' + g.T + '" width="' + f1(band) + '" height="' + ph + '"/>');
-    if (i % 3 === 0) s.push('<text class="ax" x="' + f1(g.L + band * i + band / 2) + '" y="' + (g.H - 8) + '" text-anchor="middle">' + x.hour + ':00</text>');
+    if (i % every === 0) s.push('<text class="ax" x="' + f1(g.L + band * i + band / 2) + '" y="' + (g.H - 8) + '" text-anchor="middle">' + x.hour + ':00</text>');
     pts.push(f1(g.L + band * i + band / 2) + ',' + f1(y(x.net)));
   });
   s.push('<line x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(limit)) + '" y2="' + f1(y(limit)) + '" stroke="var(--c-lim)" stroke-width="2" stroke-dasharray="6 4"/>');
@@ -1331,8 +1424,8 @@ function renderResults() {
   var b = m.irrBuild || {};
   function pts(v, plus) { return !fin(v) ? '—' : v < 0 ? '(' + Math.abs(v).toFixed(1) + ') pts' : (plus ? '+' : '') + v.toFixed(1) + ' pts'; }
   h += '<div class="two" style="margin-bottom:16px"><div class="card"><div class="card-h"><h3>IRR build, after tax</h3></div>' +
-    mr('Cash only (pre-tax operating cash flow)', fin(b.cashOnly) ? b.cashOnly.toFixed(1) + '%' : '—') + mr('Depreciation effect', pts(b.depreciation, true)) +
-    mr('ITC effect', pts(b.itc, true)) + mr('Total after-tax IRR', fin(b.total) ? b.total.toFixed(1) + '%' : '—', 'tot') +
+    mr('Cash only (pre-tax operating cash flow)', fin(b.cashOnly) ? pct(b.cashOnly / 100, 1) : '—') + mr('Depreciation effect', pts(b.depreciation, true)) +
+    mr('ITC effect', pts(b.itc, true)) + mr('Total after-tax IRR', fin(b.total) ? pct(b.total / 100, 1) : '—', 'tot') +
     '<p class="help">Each step is rounded to a tenth of a point, as the deck prints it.</p></div>' +
     '<div class="card"><div class="card-h"><h3>More metrics</h3></div>' +
     mr('NPV at ' + esc(res.inputs.discountPct) + '%', money(m.npv)) + mr('Year-one distribution', money(m.year1Distribution)) +
@@ -1517,18 +1610,46 @@ function prefill() {
   if (q.pattern && /^(overnight|workplace|retail|fleet|custom)$/.test(q.pattern)) setPath(IN, 'ev.pattern', q.pattern);
   return any;
 }
+/* The example is a TIGHT service, so every part of the balance shows: twelve chargers whose
+   nameplate alone would overrun a 400 A panel (so charging is managed), a battery that takes the
+   meter below the building-plus-firm-compute peak, and on-demand GPUs held back when it pays.
+   Illustrative and named so; construction and service dates follow today's date. Anything the
+   person had entered can be put back from the toast. */
+function hasInput(o) {
+  if (o == null || o === '') return false;
+  if (typeof o !== 'object') return true;
+  for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k) && hasInput(o[k])) return true;
+  return false;
+}
 function example() {
-  IN = { site: { name: 'Example multifamily site (illustrative)', host: 'Example apartments', city: 'Austin', zip: '78701', hostType: 'multifamily' },
-         service: { amps: 800, volts: 480 }, ev: { ports: 8 }, compute: { pods: 1 }, deal: { structure: 'infra' } };
-  UI.loadMode = 'profile'; CUR_ID = null; paintForm(); changed('site.zip');
-  toast('An illustrative site: a typical multifamily load on an 800 A service. Replace it with your own.');
+  var urdb = $('urdb').value;
+  PREV = hasInput(IN) || urdb.trim() ? { IN: clone(IN), mode: UI.loadMode, debt: UI.debt, id: CUR_ID, urdb: urdb } : null;
+  var now = new Date(), boc = new Date(now.getFullYear(), now.getMonth() + 2, 1), pis = new Date(now.getFullYear(), now.getMonth() + 9, 1);
+  IN = { site: { name: 'Example: 4 GPU pods on a 400 A apartment service (illustrative)', host: 'Example apartments', city: 'Austin', zip: '78701',
+                 hostType: 'multifamily', bocMonth: ym(boc), pisMonth: ym(pis) },
+         service: { amps: 400, volts: 480 }, ev: { ports: 12 }, compute: { pods: 4 }, battery: { kw: 100, kwh: 200 }, deal: { structure: 'infra' } };
+  UI.loadMode = 'profile'; UI.debt = false; CUR_ID = null; $('urdb').value = ''; SWEEP = null;
+  paintForm(); renderSweep(); paintSaved();
+  if (TIMER) { clearTimeout(TIMER); TIMER = null; }
+  runModel();
+  toast('Example loaded: 4 GPU pods, 12 chargers and a battery on a 400 A apartment service. Illustrative.',
+    PREV ? 9000 : 6000, PREV ? 'undo-example' : null, 'Put mine back');
+}
+function undoExample() {
+  if (!PREV) return;
+  IN = PREV.IN; UI.loadMode = PREV.mode; UI.debt = PREV.debt; CUR_ID = PREV.id; $('urdb').value = PREV.urdb || ''; PREV = null;
+  SWEEP = null; paintForm(); renderSweep(); paintSaved(); $('toast').hidden = true;
+  if (TIMER) { clearTimeout(TIMER); TIMER = null; }
+  if (ready()) { runModel(); return; }
+  SEQ++; RES = null; STATE = 'idle'; ERRS = []; showErrors(); renderAll();
 }
 
 /* ── wiring ──────────────────────────────────────────────────────────── */
 document.addEventListener('input', function (e) { if (e.target.getAttribute && e.target.getAttribute('data-path') && e.target.tagName !== 'SELECT' && e.target.type !== 'checkbox') onField(e.target); else if (closest(e.target, '#bills')) changed('load'); });
 document.addEventListener('change', function (e) {
   var t = e.target;
-  if (t.getAttribute && t.getAttribute('data-path') && (t.tagName === 'SELECT' || t.type === 'checkbox' || t.type === 'month')) onField(t);
+  if (t.getAttribute && t.getAttribute('data-path') && (t.tagName === 'SELECT' || t.type === 'checkbox')) onField(t);
+  var mp = closest(t, '.mp[data-mp]'); if (mp) onMonth(mp);
   if (t.id === 'iunit') changed('load');
   if (t.id === 'urdb') changed('tariff');
 });
@@ -1544,6 +1665,7 @@ document.addEventListener('click', function (e) {
   var act = b.getAttribute('data-act');
   if (act === 'save') save();
   else if (act === 'example') example();
+  else if (act === 'undo-example') undoExample();
   else if (act === 'optimize') optimize();
   else if (act === 'retry') runModel();
   else if (act === 'print') printDeck();
@@ -1569,7 +1691,7 @@ document.addEventListener('click', function (e) {
 });
 $('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
 $('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });
-window.addEventListener('resize', function () { if (RES) { clearTimeout(window._rz); window._rz = setTimeout(function () { renderScreen(); if (RES.proforma) drawCash(RES.proforma); renderDeck(); }, 200); } });
+window.addEventListener('resize', function () { if (RES) { clearTimeout(window._rz); window._rz = setTimeout(function () { redrawCharts(); renderDeck(); }, 200); } });
 
 function onSignedIn(u) {
   $('who').textContent = u.email || '';
@@ -1582,9 +1704,11 @@ function onSignedIn(u) {
     var sel = $('i-mkt'); (OPTS.markets || []).forEach(function (m) { var o = document.createElement('option'); o.value = m.key; o.textContent = m.name; sel.appendChild(o); });
     paintForm();
     if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
-    if (prefill()) { paintForm(); changed('site.zip'); }
+    if (/[?&]example=1(&|$)/.test(location.search)) example();
+    else if (prefill()) { paintForm(); changed('site.zip'); }
   }, function (e) {
     if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
+    if (e.status === 403 || e.status === 401) { DENIED = true; renderRail(); }
     $('notice').innerHTML = '<div class="banner ' + (e.status === 403 ? 'bad' : 'warn') + '"><div>' + esc(e.message) + '</div>' +
       (e.status === 403 ? '<a class="btn btn-p btn-sm" href="/workspace#module-compute">See Omega Compute</a>' : '') + '</div>';
   });
