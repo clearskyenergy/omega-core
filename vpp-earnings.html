@@ -506,6 +506,8 @@ function askColumn(err) {
   return true;
 }
 function useColumn() {
+  /* an estimate on its way: the pick waits, so the page and the result never name different columns */
+  if ($('run').disabled) { formMsg('Still simulating; pick the column again once this estimate is back.', 'warn'); return; }
   var picked = $('colpick').querySelector('input[name=loadcol]:checked');
   if (!picked) { formMsg('Pick the column that holds the load first.', 'warn'); return; }
   COLUMN = picked.value; COLUMN_LABEL = null;
@@ -620,8 +622,11 @@ function run() {
   var btn = $('run'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Simulating 8,760 hours…';
   api(payload).then(function (j) {
     LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
-    /* the column question is answered: the result's chip says which column was read */
-    $('colpick').hidden = true;
+    /* the column question is answered: one line says which, with the way back */
+    if (COLUMNS && COLUMNS.length && COLUMN) {
+      $('colpick').innerHTML = '<p style="margin:0">Load column: <b>' + esc(COLUMN_LABEL || COLUMN) + '</b> <button type="button" class="btn btn-t" data-act="change-column">Change</button></p>';
+      $('colpick').hidden = false;
+    } else $('colpick').hidden = true;
     render(j.result);
     canSave();
   }, function (e) {
@@ -872,6 +877,7 @@ document.addEventListener('click', function (e) {
   else if (act === 'fill-24') fillMonths(24);
   else if (act === 'paste') pasteBills();
   else if (act === 'use-column') useColumn();
+  else if (act === 'change-column') paintColumns();
 });
 $('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
 $('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });

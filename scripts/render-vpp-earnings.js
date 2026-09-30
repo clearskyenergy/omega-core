@@ -624,7 +624,19 @@ function installDouble(cfg) {
     await until(function () { return p.$('.kpis'); }, 20000); await p.waitForTimeout(300);
     ok('col: tapping "Use this column" three times posts one estimate', estimates() === beforePick + 1, { posts: estimates() - beforePick });
     ok('col: the pick is posted as load.column', (lastLoad() || {}).column === 'Sub Meter kW', lastLoad());
-    ok('col: once the picked column is read, the question closes', !(await chooser()).shown, (await chooser()).text.slice(0, 120));
+    var cDone = await chooser();
+    ok('col: once the picked column is read, the question closes to one line naming it', cDone.radios.length === 0 && /Load column: Sub Meter kW\s*Change/.test(cDone.text), cDone.text.slice(0, 120));
+    await p.click('[data-act=change-column]');
+    var cBack = await chooser();
+    ok('col: Change brings the question back with the pick selected', cBack.radios.length === 2 && cBack.radios.some(function (r) { return r.v === 'Sub Meter kW' && r.on; }), cBack);
+    /* a pick made while an estimate is on its way is refused, never swapped in silently */
+    await p.evaluate(function () { document.getElementById('run').disabled = true; });
+    await p.click('input[name=loadcol][value="Main Meter kW"]');
+    var beforeBusy = estimates();
+    await p.click('[data-act=use-column]');
+    ok('col: a pick while simulating is refused with a message, and the page still names the column posted', estimates() === beforeBusy && /Still simulating/.test(await text(p, '#formmsg')) && /load column: Sub Meter kW/.test(await text(p, '#fileinfo')), { posts: estimates() - beforeBusy, msg: await text(p, '#formmsg'), info: await text(p, '#fileinfo') });
+    await p.evaluate(function () { document.getElementById('run').disabled = false; });
+    await p.click('input[name=loadcol][value="Sub Meter kW"]');
     ok('col: the result says which column was read', /Column read: Sub Meter kW \(your pick\)/.test(await text(p, '#out')), (await text(p, '#out')).slice(0, 300));
     ok('col: and is the engine\'s figure for that column', (await grossOnPage(p)) === money(want.totals.gross), { want: money(want.totals.gross), got: await grossOnPage(p) });
     var msg = await saveAs(p);
@@ -640,7 +652,7 @@ function installDouble(cfg) {
     ok('col: loading the scenario names its load column', /load column: Sub Meter kW/.test(await text(p, '#fileinfo')), await text(p, '#fileinfo'));
     await p.setInputFiles('#file', fixture); await rowsRead();
     await runAndWait();
-    ok('col: its file attached again is read on that column, with no question asked', (lastLoad() || {}).column === 'Sub Meter kW' && !(await chooser()).shown && /Column read: Sub Meter kW/.test(await text(p, '#out')) && (await grossOnPage(p)) === money(want.totals.gross), { load: lastLoad(), gross: await grossOnPage(p) });
+    ok('col: its file attached again is read on that column, with no question asked', (lastLoad() || {}).column === 'Sub Meter kW' && !(await chooser()).radios.length && /Column read: Sub Meter kW/.test(await text(p, '#out')) && (await grossOnPage(p)) === money(want.totals.gross), { load: lastLoad(), gross: await grossOnPage(p) });
     /* a column the file does not have asks again, with nothing picked */
     await pick(p, 'Gone column');
     await p.setInputFiles('#file', fixture); await rowsRead();

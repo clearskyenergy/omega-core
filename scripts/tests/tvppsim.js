@@ -649,9 +649,69 @@ section('Interval files: periods, day rows, clock changes and channels (round 3 
   var ch = ['Date,Channel,kWh'];
   for (i = 0; i < 8760; i++) { var c0 = stamp(i)[0], ds = c0[1] + '/' + c0[2] + '/' + c0[0]; ch.push(ds + ',Delivered,' + hr(i % 24)); ch.push(ds + ',Received,40'); }
   var q3 = S.parseInterval(ch.join('\n'), 'kwh');
-  ok('"Date,Channel,kWh" with Delivered and Received rows is refused (not read as a half-hourly year)', !q3.ok && /"Channel" column holds more than one value/.test(q3.error) && /more than one channel/.test(q3.error), q3.ok ? q3.readings : q3.error);
+  ok('"Date,Channel,kWh" with Delivered and Received rows is refused (not read as a half-hourly year)', !q3.ok && /"Channel" column takes turns between/.test(q3.error) && /more than one channel/.test(q3.error), q3.ok ? q3.readings : q3.error);
   var one = S.parseInterval(yr1('Date,Time,Meter,kW', function (dd, hh) { return dd + ',' + hh + ',M-1001,40'; }), 'kw');
   ok('a Meter column with one meter on every row is fine', one.ok && one.readings === 8760, one.ok ? one.readings : one.error);
+})();
+
+section('Interval files: the recheck of the recheck (summary periods, day rows, meter columns, re-reads)');
+(function () {
+  function hr(h) { return h === 18 ? 20 : 10; }
+  function D(k) { return dayAt(2025, 1, 1, k); }
+  function us(t) { return t[1] + '/' + t[2] + '/' + t[0]; }
+  function yr(head, f) { var o = [head]; for (var i = 0; i < 8760; i++) o.push(f(D(Math.floor(i / 24)), i % 24, i)); return o.join('\n'); }
+  function good(q) { return q.ok && q.readings === 8760 && q.dated && q.kw.indexOf(20) === 18; }
+  function why(q) { return q.ok ? [q.readings, q.kw.indexOf(20), q.notes] : q.error; }
+  /* a summary period under per-reading periods: the file's span, far longer than a reading's */
+  var sce = yr('Energy Delivered time period,Usage(Real energy in kilowatt-hours),Reading quality', function (t, h, i) { var e = D(Math.floor((i + 1) / 24)); return iso(t[0], t[1], t[2]) + ' ' + p2d(h) + ':00:00 to ' + iso(e[0], e[1], e[2]) + ' ' + p2d((i + 1) % 24) + ':00:00,' + hr(h) + ','; }) +
+            '\n2025-01-01 00:00:00 to 2026-01-01 00:00:00,8760.0,';
+  var q = S.parseInterval(sce, 'kwh');
+  ok('SCE periods with a whole-year summary period: the summary is not a reading', good(q), why(q));
+  var bp = yr('Billing Period,Date,Start Time,kWh', function (t, h) { return p2d(t[1]) + '/01/2025 - ' + p2d(t[1]) + '/28/2025,' + us(t) + ',' + p2d(h) + ':00,' + hr(h); }) + '\n01/01/2025 - 12/31/2025,,,8760';
+  q = S.parseInterval(bp, 'kwh');
+  ok('a Billing Period column with a whole-year summary row: the summary is not a reading', good(q), why(q));
+  /* day rows */
+  function mx(head, first, ragged) {
+    var o = [head];
+    for (var d = 0; d < 365; d++) { var t = D(d), v = []; for (var k = 0; k < 24; k++) v.push(hr(k));
+      if (ragged && t[1] === 3 && t[2] === 9) v.splice(2, 1);
+      if (ragged && t[1] === 11 && t[2] === 2) v.splice(2, 0, 9);
+      o.push(first(t) + ',' + v.join(',')); }
+    return o.join('\n');
+  }
+  var h24 = 'Date', he = 'Bill Period,Date', k;
+  for (k = 1; k <= 24; k++) { h24 += ',Hour ' + k; he += ',HE' + k + ' kWh'; }
+  q = S.parseInterval(mx(h24, function (t) { return iso(t[0], t[1], t[2]) + ' 00:00:00'; }), 'kwh');
+  ok('a day matrix whose date cells carry midnight (Excel, MV-90) is read, not refused as repeats', good(q), why(q));
+  q = S.parseInterval(mx(h24, us, true), 'kwh');
+  ok('a day matrix with 23- and 25-value clock-change rows is read, with the gap and the dropped hour said', good(q) && q.kw[67 * 24 + 2] === 0 && q.kw[67 * 24 + 3] === 10 && /clock-change days/.test(q.notes.join(' ')), why(q));
+  q = S.parseInterval(mx(he, function (t) { return p2d(t[1]) + '/01/2025 - ' + p2d(t[1]) + '/28/2025,' + us(t); }), 'kwh');
+  ok('"Bill Period, Date, HE1 kWh … HE24 kWh": the Date is the day, not the bill period', good(q), why(q));
+  var mxCh = ['Date,Channel'];
+  for (k = 1; k <= 24; k++) mxCh[0] += ',Hour ' + k;
+  for (var d = 0; d < 365; d++) { var tt = D(d), vv = []; for (k = 0; k < 24; k++) vv.push(hr(k)); mxCh.push(us(tt) + ',Delivered,' + vv.join(',')); mxCh.push(us(tt) + ',Received,' + vv.join(',')); }
+  q = S.parseInterval(mxCh.join('\n'), 'kwh');
+  ok('a day matrix of Delivered and Received rows is refused on its Channel column, naming a row of the file', !q.ok && /"Channel" column takes turns/.test(q.error) && /row 4\)/.test(q.error), q.ok ? q.readings : q.error);
+  /* meter and channel columns */
+  q = S.parseInterval(yr('Date,Time,Meter Status,kWh', function (t, h, i) { return us(t) + ',' + p2d(h) + ':00,' + (i % 7 ? 'Actual' : 'Estimated') + ',' + hr(h); }), 'kwh');
+  ok('"Meter Status" (Actual / Estimated) describes a reading and is not a second meter', good(q), why(q));
+  q = S.parseInterval(yr('Date,Time,UOM,Meter Number,kWh', function (t, h, i) { return us(t) + ',' + p2d(h) + ':00,' + (i < 4000 ? 'KWH' : 'kWh') + ',' + (i % 2 ? 'A123' : '00A123') + ',' + hr(h); }), 'kwh');
+  ok('"KWH" and "kWh", "A123" and "00A123" are one value each', good(q), why(q));
+  q = S.parseInterval(yr('Date,Time,Meter Number,kWh', function (t, h, i) { return us(t) + ',' + p2d(h) + ':00,' + (i < 5000 ? 'X100' : 'X200') + ',' + hr(h); }), 'kwh');
+  ok('a meter replaced mid-year is read on, and said', good(q) && /changes from "X100" to "X200" at row 5,002/.test(q.notes.join(' ')), why(q));
+  var nc = ['Date,Channel,kWh'];
+  for (var i = 0; i < 8760; i++) { var t0 = us(D(Math.floor(i / 24))); nc.push(t0 + ',1,2'); nc.push(t0 + ',2,2'); }
+  q = S.parseInterval(nc.join('\n'), 'kwh');
+  ok('channels numbered 1 and 2 are refused too', !q.ok && /"Channel" column takes turns/.test(q.error), q.ok ? q.readings : q.error);
+  /* repeats */
+  var sd = ['Date,Time,kWh'];
+  for (i = 0; i < 8760; i++) { if (i === 1000 || i === 3000 || i === 5000) continue; var row = us(D(Math.floor(i / 24))) + ',' + p2d(i % 24) + ':00,' + hr(i % 24); sd.push(row); if (i === 999 || i === 2999 || i === 4999) sd.push(row); }
+  q = S.parseInterval(sd.join('\n'), 'kwh');
+  ok('three scattered re-read intervals are not a second meter (as before)', q.ok && q.readings === 8760, why(q));
+  var ov = ['Date,Time,kWh'];
+  for (i = 0; i < 8760; i++) { var tr = D(Math.floor(i / 24)), hh = i % 24; ov.push(us(tr) + ',' + p2d(hh) + ':00,' + hr(hh)); if ((tr[1] === 4 && tr[2] === 1 || tr[1] === 8 && tr[2] === 1) && hh >= 10 && hh < 14) ov.push(us(tr) + ',' + p2d(hh) + ':00,0.3'); }
+  q = S.parseInterval(ov.join('\n'), 'kwh');
+  ok('a second channel for four daytime hours on two days is refused (repeats outside the clock change)', !q.ok && /repeat a date and time/.test(q.error), q.ok ? q.readings : q.error);
 })();
 
 section('Interval files: timestamps set the interval and the order (round 3: U1, T3, R4, R6, R7)');

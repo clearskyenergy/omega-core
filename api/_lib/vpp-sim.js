@@ -401,8 +401,10 @@ var EXPLICIT_LOAD = /\b(?:kwh|kw|usage|consumption|energy|demand|load|value)\b/i
 var MONEY_HEAD = /(\bcosts?\b|\$|€|£|¢|\bprices?\b|\bamounts?\b|\bcharges?\b|\busd\b|dollar|\brates?\b|\bcents?\b|\bcredits?\b|\btariff\b|\bper\s+k?wh\b)/i;
 var PER_KWH_RAW = /\/\s*k?wh\b/i;                          /* "Cents/kWh", "$/kWh": tested on the raw name */
 /* an hour or interval column of a one-row-per-day file: "Hour 1", "HE 24", "1", "01:00", "00:00 - 00:15", "12:15 AM" */
-var SLOT_HEAD = /^(?:hour|hr|he|hour ending|hour beginning|interval|int|period|kwh|kw)?\s*(?:\d{1,2}(?:\s*:\s*\d{2})?\s*(?:[ap]\.?m\.?)?)(?:\s*(?:to)?\s*\d{1,2}(?:\s*:\s*\d{2})?\s*(?:[ap]\.?m\.?)?)?$/i;
-var CHANNEL_HEAD = /\b(?:channel|chan|direction|flow|meter|meter\s*(?:id|number|no)|register\s*type|uom|unit\s*of\s*measure|service\s*point|sdp|esiid)\b/i;   /* one value in a file of one meter's one channel */
+var SLOT_HEAD = /^(?:hour|hr|h|he|hour ending|hour beginning|interval|int|period|stunde|uur|heure|ora|kwh|kw)?\s*(?:\d{3,4}|\d{1,2}(?:\s*:\s*\d{2})?\s*(?:[ap]\.?m\.?)?)(?:\s*(?:to)?\s*(?:\d{3,4}|\d{1,2}(?:\s*:\s*\d{2})?\s*(?:[ap]\.?m\.?)?))?\s*(?:\(?\s*kwh?\s*\)?)?$/i;
+/* a WHOLE header that names the meter or the channel (never "Meter Status",
+   "Meter Reading" or "Meter Multiplier": those describe a reading) */
+var CHANNEL_HEAD = /^(?:channel|channel (?:name|id|number|no)|chan|direction|flow|flow direction|meter|meter (?:id|number|no|#|serial|serial number)|register|register type|read type|uom|unit of measure|service point|service point id|sdp|esiid|esi id)$/i;
 var EXPORT_HEAD = /(export|generat|solar|\bpv\b|received)/i;   /* what left the site is not its load */
 var NOT_LOAD_HEAD = /(factor|\bpf\b|kva|\bva\b|\bmva\b|reactive|apparent|volt|\bamps?\b|ampere|\bcurrent\b|\(\s*a\s*\)|frequency|\bhz\b|temperature|\btemp\b|multiplier|\bmult\b|percent|%|\bpct\b|register|cumulative|odometer|meter\s+read|carbon|\bco2\b|emission|intensity|contract|threshold|\bevents?\b|\bflags?\b|\bstatus\b|\bresponse\b|\bestimated?\b)/i;
 var TIME_TAIL = /\b(?:hour|hr|he|time|date|day|interval|period|start|end|ending|beginning|month|year)\s*(?:\([^)]*\))?\s*$/i;
@@ -603,19 +605,66 @@ function rangeStart(t) {
   var m = RANGE.exec(String(t == null ? '' : t).trim());
   return m && parseDate(m[1]) && parseDate(m[2]) ? m[1].trim() : null;
 }
+/* how long a period is, in minutes (null when it is not a period) */
+function spanMin(t) {
+  var m = RANGE.exec(String(t == null ? '' : t).trim());
+  if (!m) return null;
+  var a = parseDate(m[1]), b = parseDate(m[2]);
+  if (!a || !b) return null;
+  return (dayNumber(b) - dayNumber(a)) * 1440 + ((clockOf(m[2]) || 0) - (clockOf(m[1]) || 0));
+}
 function p2(x) { return (x < 10 ? '0' : '') + x; }
 function describePer(per) { return per === 1 ? 'hourly' : (per === 2 ? 'half-hourly' : '15-minute'); }
+
+/* A column naming the meter or the channel holds ONE value in a file of
+   one meter's one channel. Delivered and received rows under one date and
+   no time never repeat a timestamp, so this is the only thing that shows
+   them (round 3 recheck, U1). Values are compared as a person reads them
+   ("KWH" is "kWh", "00A123" is "A123"); two that take turns are two
+   channels or meters and are refused; one that hands over to another once
+   is a meter swapped mid-year, read on and said. */
+function channels(rows, head, dataRows, skip, lineNo) {
+  if (head < 0) return {};
+  function norm(v) { return v.toLowerCase().replace(/\s+/g, ' ').replace(/^0+(?=[0-9a-z])/, ''); }
+  for (var j = 0; j < rows[head].length; j++) {
+    var hj = rows[head][j].s.trim();
+    if (skip.indexOf(j) >= 0 || hj.length > 60 || !CHANNEL_HEAD.test(headNorm(hj).replace(/[()]/g, '').trim())) continue;
+    var cur = null, curRaw = '', seen = {}, swaps = [];
+    for (var i = 0; i < dataRows.length; i++) {
+      var c = rows[dataRows[i]][j], raw = c ? c.s.trim() : '';
+      if (!raw) continue;
+      var v = norm(raw);
+      if (v === cur) continue;
+      if (cur !== null) {
+        if (has(seen, v)) {
+          return { error: 'The "' + hj + '" column takes turns between "' + curRaw.slice(0, 24) + '" and "' + raw.slice(0, 24) + '" (row ' + fmt(lineNo[dataRows[i]]) +
+                   '): it looks like more than one meter, or more than one channel (delivered and received), in one file. Export one meter\'s readings of one channel, one year.' };
+        }
+        swaps.push({ from: curRaw, to: raw, at: lineNo[dataRows[i]] });
+      }
+      seen[v] = 1; cur = v; curRaw = raw;
+    }
+    if (swaps.length > 2) {
+      return { error: 'The "' + hj + '" column changes value ' + fmt(swaps.length) + ' times: it looks like more than one meter, or more than one channel, in one file. Export one meter\'s readings of one channel, one year.' };
+    }
+    if (swaps.length) {
+      return { note: 'The "' + hj + '" column changes from "' + swaps[0].from.slice(0, 24) + '" to "' + swaps[0].to.slice(0, 24) + '" at row ' + fmt(swaps[0].at) +
+               (swaps.length > 1 ? ' (and once more)' : '') + ' — read as the meter replaced during the year, one site\'s readings throughout.' };
+    }
+  }
+  return {};
+}
 
 /* parseInterval(text, unit, startDate, column) — `column` is the caller's
    choice of the load column: the header text, or "#3". The answer carries
    `column: { key, label, chosen: 'auto' | 'caller' }`; a refusal about the
    column carries `field: 'load.column'` and `columns: [{ key, label, sample }]`. */
-function parseInterval(text, unit, startDate, column, matrixDone) {
+function parseInterval(text, unit, startDate, column, matrixDone, lineMap) {
   var lines = String(text || '').replace(/^﻿/, '').split(/\r\n|\r|\n/), i, j;
   var delim = pickDelimiter(lines), rows = [], lineNo = [];
   for (i = 0; i < lines.length; i++) {
     if (!lines[i].trim()) continue;
-    rows.push(splitCells(lines[i], delim)); lineNo.push(i + 1);
+    rows.push(splitCells(lines[i], delim)); lineNo.push(lineMap ? (lineMap[i] || i + 1) : i + 1);
   }
   var dec = numberFormat(rows, delim), dateCache = {};
   function numOf(c) { return cellNumber(c, dec); }
@@ -702,23 +751,48 @@ function parseInterval(text, unit, startDate, column, matrixDone) {
     for (j = 0; j < W; j++) if (numeric.indexOf(j) >= 0 && SLOT_HEAD.test(headNorm(rows[head][j].s))) slots.push(j);
     var H = slots.length, dCol = -1;
     if ((H === 24 || H === 48 || H === 96) && slots[H - 1] - slots[0] === H - 1) {
-      for (i = from; i < rows.length && i < from + 20 && dCol < 0; i++) if (rows[i].length === W)
-        for (j = 0; j < W && dCol < 0; j++) if (numeric.indexOf(j) < 0 && dateOf(rows[i][j].s)) dCol = j;
+      /* the day: a column of dates, never a "Bill Period" beside it */
+      for (var mp = 0; mp < 2 && dCol < 0; mp++)
+        for (i = from; i < rows.length && i < from + 20 && dCol < 0; i++) if (rows[i].length === W)
+          for (j = 0; j < W && dCol < 0; j++) if (numeric.indexOf(j) < 0 && j < slots[0] && dateOf(rows[i][j].s) && (mp || !rangeStart(rows[i][j].s))) dCol = j;
     }
     if (dCol >= 0) {
-      var longRows = ['Date\tTime\tLoad'];
+      /* a clock-change day has one slot fewer (spring) or one more (autumn):
+         the short day's missing slot is a gap, the long day's extra reading
+         is left out, and both are said */
+      var dayRows = [], mCells = [], ragged = [];
       for (i = from; i < rows.length; i++) {
-        var mr = rows[i];
-        if (mr.length !== W || !mr[dCol] || !dateOf(mr[dCol].s)) continue;     /* a total or a note: not a day */
+        var mr = rows[i], d = mr.length - W;
+        if (Math.abs(d) > (H === 24 ? 1 : 0) || !mr[dCol] || !dateOf(mr[dCol].s)) continue;     /* a total or a note: not a day */
+        if (d !== 0) ragged.push(mr[dCol].s.trim());
+        dayRows.push(i); mCells.push(mr[dCol].s.trim());
+      }
+      var mch = channels(rows, head, dayRows, slots, lineNo);
+      if (mch.error) return { ok: false, error: mch.error };
+      var mOrd = dateOrder(mCells);
+      if (mOrd.conflict) return { ok: false, error: 'The date column mixes day-first and month-first dates, so the days could not be placed.' };
+      var longRows = ['Date\tTime\tLoad'], map = [0];
+      for (var di = 0; di < dayRows.length; di++) {
+        var rw = rows[dayRows[di]], dd = rw.length - W, dt = dateOf(mCells[di], mOrd.order);
+        /* the date alone: a midnight time in the cell is not each reading's time */
+        var dayText = dt.y + '-' + p2(dt.m) + '-' + p2(dt.d);
         for (var k = 0; k < H; k++) {
-          var mins = k * 1440 / H, cell = mr[slots[k]], nv = numOf(cell);
-          longRows.push(mr[dCol].s.trim() + '\t' + p2(Math.floor(mins / 60)) + ':' + p2(mins % 60) + '\t' + (nv != null ? nv : (cell ? cell.s.trim() : '')));
+          /* spring: the 02:00 hour never happened (a gap), the rest move up
+             one cell; autumn: the repeated 01:00 hour (the third cell) is left out */
+          var at = slots[0] + (dd < 0 ? (k > 2 ? k - 1 : k) : (dd > 0 && k >= 2 ? k + 1 : k));
+          var cell = dd < 0 && k === 2 ? null : rw[at], nv = cell ? numOf(cell) : null;
+          var mins = k * 1440 / H;
+          longRows.push(dayText + '\t' + p2(Math.floor(mins / 60)) + ':' + p2(mins % 60) + '\t' + (nv != null ? nv : (cell ? cell.s.trim() : '')));
+          map.push(lineNo[dayRows[di]]);
         }
       }
-      var mOut = parseInterval(longRows.join('\n'), unit, startDate, null, true);
+      var mOut = parseInterval(longRows.join('\n'), unit, startDate, null, true, map);
       if (mOut.ok) {
-        mOut.notes = ['The file has one row per day with ' + H + ' columns ("' + labels[slots[0]] + '" … "' + labels[slots[H - 1]] + '"); they were read across each day as ' +
-                      describePer(H / 24) + ' readings.'].concat(mOut.notes || []);
+        var mNotes = ['The file has one row per day with ' + H + ' columns ("' + labels[slots[0]] + '" … "' + labels[slots[H - 1]] + '"); they were read across each day as ' +
+                      describePer(H / 24) + ' readings.'];
+        if (ragged.length) mNotes.push('The clock-change day' + (ragged.length > 1 ? 's' : '') + ' (' + ragged.slice(0, 2).join(', ') + ') had a slot more or fewer: a missing slot is a gap, an extra reading was left out.');
+        if (mch.note) mNotes.push(mch.note);
+        mOut.notes = mNotes.concat(mOut.notes || []);
         mOut.column = { key: keys[slots[0]], label: '"' + labels[slots[0]] + '" … "' + labels[slots[H - 1]] + '", one row per day', chosen: 'auto' };
       }
       return mOut;
@@ -769,9 +843,16 @@ function parseInterval(text, unit, startDate, column, matrixDone) {
      Period" or a "Rate: Max Demand TOU" column) describes each reading
      and never makes one a footer (round 3 recheck: every row was dropped). */
   function footerCell(t) { t = t.trim(); return !!t && t.length <= 60 && (FOOTER.test(t) || dateRange(t)); }
-  var perRow = {};
+  var perRow = {}, perSpan = {};
   function footerRow(r) {
-    for (var q = 0; q < r.length; q++) if (!perRow[q] && footerCell(r[q].s)) return true;
+    for (var q = 0; q < r.length; q++) {
+      if (!footerCell(r[q].s)) continue;
+      if (!perRow[q]) return true;
+      /* in a column of periods, a period far longer than the readings' own
+         (the file's span, a month's subtotal under hourly periods) is a summary */
+      var sp = spanMin(r[q].s);
+      if (sp != null && perSpan[q] != null && sp > Math.max(1440, 2 * perSpan[q])) return true;
+    }
     return false;
   }
   /* a reading that carries digits but is not a number is a format problem,
@@ -795,7 +876,13 @@ function parseInterval(text, unit, startDate, column, matrixDone) {
     cands.push(i);
     for (j = 0; j < row.length; j++) if (j !== col && footerCell(row[j].s)) hits[j] = (hits[j] || 0) + 1;
   }
-  for (j in hits) if (has(hits, j) && hits[j] > cands.length / 2) perRow[j] = true;
+  for (j in hits) if (has(hits, j) && hits[j] > cands.length / 2) {
+    perRow[j] = true;
+    var spans = [];
+    for (var si = 0; si < cands.length && spans.length < 201; si++) { var sc = rows[cands[si]][j], sv = sc ? spanMin(sc.s) : null; if (sv != null) spans.push(sv); }
+    spans.sort(function (x, y) { return x - y; });
+    perSpan[j] = spans.length ? spans[Math.floor(spans.length / 2)] : null;
+  }
   for (var ci = 0; ci < cands.length; ci++) {
     i = cands[ci]; row = rows[i]; v = numOf(row[col]);
     if (footerRow(row)) continue;                                   /* "Total,…", "Max Demand,…", the file's span: never a reading */
@@ -867,14 +954,19 @@ function parseInterval(text, unit, startDate, column, matrixDone) {
         var idx = []; for (i = 0; i < n; i++) idx.push(i);
         idx.sort(function (x, y) { return (days[x] - days[y]) || (hasT ? times[x] - times[y] : 0) || (x - y); });
         if (hasT) {
-          var dups = 0, dupAt = -1, dupDays = {}, nDupDays = 0, worst = 0;
+          /* the autumn clock change repeats an hour between 01:00 and 03:00
+             (the hour-number column's 2 or 3); a repeat anywhere else is a
+             re-read, allowed as before up to four */
+          var dups = 0, dupAt = -1, dupDays = {}, nDupDays = 0, worst = 0, other = 0;
           for (i = 1; i < n; i++) if (days[idx[i]] === days[idx[i - 1]] && times[idx[i]] === times[idx[i - 1]]) {
             dups++; if (dupAt < 0) dupAt = idx[i];
+            var tm = times[idx[i]], fallBack = tSrc.clock ? (tm >= 60 && tm < 180) : (tm >= 1 && tm <= 3);
+            if (!fallBack) { other++; continue; }
             var dk = days[idx[i]];
             if (!has(dupDays, dk)) { dupDays[dk] = 0; nDupDays++; }
             worst = Math.max(worst, ++dupDays[dk]);
           }
-          if (nDupDays > DUP_DAYS || worst > DUP_TOLERANCE) {
+          if (other > DUP_TOLERANCE || nDupDays > DUP_DAYS || worst > DUP_TOLERANCE) {
             return { ok: false, error: fmt(dups) + ' readings repeat a date and time already in the file (first at row ' + fmt(lineNo[dataRows[dupAt]]) +
                      '): it looks like more than one meter, or more than one channel (delivered and received), in one file. Export one meter\'s readings of one channel, one year.' };
           }
@@ -928,23 +1020,9 @@ function parseInterval(text, unit, startDate, column, matrixDone) {
       notes.push('The load column ("' + headName + '") looks like ' + (hint === 'kwh' ? 'kWh per interval' : 'kW') +
                  ', but it was read as ' + (unit === 'kwh' ? 'kWh per interval' : 'kW') + ' as chosen; change the unit if that is wrong.');
   }
-  /* A column naming the meter or the channel holds ONE value in a file of
-     one meter's one channel. Delivered and received rows under one date and
-     no time never repeat a timestamp, so this is the only thing that shows
-     them (round 3 recheck, U1). */
-  if (head >= 0) for (j = 0; j < rows[head].length; j++) {
-    var hj = rows[head][j].s.trim();
-    if (j === col || numeric.indexOf(j) >= 0 || hj.length > 60 || !CHANNEL_HEAD.test(headNorm(hj)) || /read/i.test(hj)) continue;
-    var seenV = [], seenAt = -1;
-    for (i = 0; i < dataRows.length && seenV.length < 2; i++) {
-      var cv = rows[dataRows[i]][j] ? rows[dataRows[i]][j].s.trim() : '';
-      if (cv && seenV.indexOf(cv) < 0) { seenV.push(cv); seenAt = dataRows[i]; }
-    }
-    if (seenV.length > 1) {
-      return { ok: false, error: 'The "' + hj + '" column holds more than one value ("' + seenV[0].slice(0, 24) + '", then "' + seenV[1].slice(0, 24) + '" at row ' + fmt(lineNo[seenAt]) +
-               '): it looks like more than one meter, or more than one channel (delivered and received), in one file. Export one meter\'s readings of one channel, one year.' };
-    }
-  }
+  var ch = channels(rows, head, dataRows, [col], lineNo);
+  if (ch.error) return { ok: false, error: ch.error };
+  if (ch.note) notes.push(ch.note);
   var out = intervalToHourly(vals, unit, dated ? start : null, { undatedWhy: undatedWhy, per: per, spanDays: spanDays });
   if (out.ok) {
     out.notes = notes.concat(out.notes);
