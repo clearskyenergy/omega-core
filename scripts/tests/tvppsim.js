@@ -798,6 +798,35 @@ section('Interval files: summaries, second tables and clock changes, read honest
   ok('a Revision Date blank on some days does not drop those readings', r.ok && r.readings === 8760, r.ok ? r.readings : r.error);
 })();
 
+section('Interval files: the final pass (sparse cycles, hour-ending clock changes, read dates)');
+(function () {
+  function sum(q) { return q.kw.reduce(function (a, b) { return a + b; }, 0); }
+  /* a Billing Period on each cycle's first row, one cycle 61 days: no reading is dropped */
+  var cuts = [0, 31, 59, 90, 120, 151, 212, 243, 273, 304, 334, 365], bp = ['Billing Period,Date,Time,kWh'];
+  for (var i = 0; i < 8760; i++) { var dd = Math.floor(i / 24), c = 0; while (cuts[c + 1] <= dd) c++; var a = dayAt(2025, 1, 1, cuts[c]), b = dayAt(2025, 1, 1, cuts[c + 1] - 1), t = dayAt(2025, 1, 1, dd);
+    bp.push((dd === cuts[c] && i % 24 === 0 ? a[1] + '/' + a[2] + '/2025 - ' + b[1] + '/' + b[2] + '/2025' : '') + ',' + t[1] + '/' + t[2] + '/2025,' + p2d(i % 24) + ':00,' + (i % 24 === 17 ? 100 : 1)); }
+  var q = S.parseInterval(bp.join('\n'), 'kwh');
+  ok('a first-row-only Billing Period with a 61-day cycle drops no reading', q.ok && q.readings === 8760 && Math.round(sum(q)) === 365 * 123 && q.kw[151 * 24 + 17] === 100, q.ok ? [q.readings, sum(q)] : q.error);
+  /* an EU hour-ending file crossing two fall-backs: the repeated hour ends at 03:00 */
+  var fe = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }), eu = ['Date,Time,kWh'];
+  /* each row stamped at its hour's END, midnight as 24:00 of the same day (27.10.2024 – 26.10.2025) */
+  for (var ms = Date.UTC(2024, 9, 26, 22); ; ms += 36e5) { var pt = {}; fe.formatToParts(new Date(ms)).forEach(function (x) { pt[x.type] = x.value; }); if (pt.year === '2025' && pt.month === '10' && pt.day === '27') break; eu.push(pt.day + '.' + pt.month + '.' + pt.year + ',' + p2d(+pt.hour + 1) + ':00,1'); }
+  q = S.parseInterval(eu.join('\n'), 'kwh');
+  ok('an EU hour-ending year crossing two fall-backs (the repeat stamped 03:00) is read', q.ok && q.readings === 8760 && /two autumn clock changes/.test(q.notes.join(' ')), q.ok ? [q.readings, q.notes] : [eu.length - 1, q.error]);
+  /* a day matrix with a whole-year total row */
+  var mx = ['Date'], k;
+  for (k = 1; k <= 24; k++) mx[0] += ',Hour ' + k;
+  for (var d = 0; d < 365; d++) { var u = dayAt(2025, 1, 1, d), v = []; for (k = 0; k < 24; k++) v.push(k === 17 ? 100 : 1); mx.push(u[1] + '/' + u[2] + '/2025,' + v.join(',')); }
+  var tot = ['01/01/2025 - 12/31/2025']; for (k = 0; k < 24; k++) tot.push(365); mx.push(tot.join(','));
+  q = S.parseInterval(mx.join('\n'), 'kwh');
+  ok('a day matrix with a whole-year total row: the total is not a day', q.ok && q.readings === 8760 && Math.max.apply(null, q.kw) === 100, q.ok ? q.readings : q.error);
+  /* a Read Date two days after the usage date, and first */
+  var rd = ['Read Date,Usage Date,Hour,kWh'];
+  for (i = 0; i < 8760; i++) { var ud = dayAt(2025, 1, 1, Math.floor(i / 24)), rdd = dayAt(2025, 1, 3, Math.floor(i / 24)); rd.push(rdd[1] + '/' + rdd[2] + '/' + rdd[0] + ',' + ud[1] + '/' + ud[2] + '/2025,' + (i % 24 + 1) + ',' + (i % 24 === 16 ? 100 : 1)); }
+  q = S.parseInterval(rd.join('\n'), 'kwh');
+  ok('a Read Date before the Usage Date: the readings sit on the usage date', q.ok && q.readings === 8760 && q.kw.indexOf(100) === 16, q.ok ? [q.kw.indexOf(100), q.notes] : q.error);
+})();
+
 section('Interval files: timestamps set the interval and the order (round 3: U1, T3, R4, R6, R7)');
 function meter(head, f, y) { var out = []; for (var i = 0; i < 8760; i++) { var t = tsAt(i, 1), dd = t[0].split('-'); out.push(f(dd[1] + '/' + dd[2] + '/' + (y || dd[0]), i)); } return out; }
 (function () {

@@ -183,6 +183,7 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
 .colpick .cl{font-weight:600;color:var(--ink);font-size:13px;overflow-wrap:anywhere}
 .colpick .cs{display:block;font-size:11.5px;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
 .colpick .btn{margin-top:6px}
+.colpick [data-act=change-column]{min-height:40px}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
@@ -344,7 +345,7 @@ function utf8Bytes(str) {
 var COLUMN = null, COLUMN_LABEL = null, COLUMNS = null, KEEP_COLUMN = false, FILE_SEEN = null, FILE_INFO = '';
 /* bumped when the file or the scenario changes: an estimate that comes back
    after that answers a question nobody is asking any more */
-var RUN_SEQ = 0;
+var RUN_SEQ = 0, PICK_WAITING = false;   /* a pick refused while an estimate ran: it is still the person's choice */
 var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] }, LEAVING = false;
 /* The stored list in this session: 'idle' · 'loading' · 'loaded' (a missing
    document counts) · 'failed'. Save writes the WHOLE list, so it writes only
@@ -511,7 +512,7 @@ function askColumn(err) {
 }
 function useColumn() {
   /* an estimate on its way: the pick waits, so the page and the result never name different columns */
-  if ($('run').disabled) { formMsg('Still simulating; pick the column again once this estimate is back.', 'warn'); return; }
+  if ($('run').disabled) { PICK_WAITING = true; formMsg('Still simulating; pick the column again once this estimate is back.', 'warn'); return; }
   var picked = $('colpick').querySelector('input[name=loadcol]:checked');
   if (!picked) { formMsg('Pick the column that holds the load first.', 'warn'); return; }
   COLUMN = picked.value; COLUMN_LABEL = null;
@@ -642,9 +643,14 @@ function run() {
     if (stale()) return;
     LAST = { name: name, site: c.site, result: j.result };
     /* the column question is answered: one line says which, with the way back */
-    formMsg('');                                  /* a "still simulating" word is answered now */
-    var box = $('colpick'), hadFocus = box.contains(document.activeElement);
-    if (c.site.load.type !== 'interval') { /* a bills or profile run leaves an open file question as it was */ }
+    var box = $('colpick'), hadFocus = box.contains(document.activeElement), waiting = PICK_WAITING;
+    PICK_WAITING = false;
+    var tick = box.querySelector('input[name=loadcol]:checked');
+    if (waiting && tick && tick.value !== COLUMN) {
+      /* the pick made while this ran is not what it used: keep the question open, the tick kept */
+      formMsg('This estimate used "' + (COLUMN_LABEL || COLUMN) + '". Press "Use this column" to run the one you ticked.', 'warn');
+    } else formMsg('');                           /* a "still simulating" word is answered now */
+    if (c.site.load.type !== 'interval' || (waiting && tick && tick.value !== COLUMN)) { /* a bills or profile run, or a pick still to run, leaves the question as it was */ }
     else if (COLUMNS && COLUMNS.length && COLUMN) {
       box.innerHTML = '<p style="margin:0">Load column: <b>' + esc(COLUMN_LABEL || COLUMN) + '</b> <button type="button" class="btn btn-t" data-act="change-column">Change</button></p>';
       box.hidden = false;

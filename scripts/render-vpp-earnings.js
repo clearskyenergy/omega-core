@@ -657,6 +657,21 @@ function installDouble(cfg) {
     await until(function () { return p.$eval('#colpick', function (b) { return /Load column: Sub Meter kW/.test(b.textContent); }); }, 20000);
     var focused2 = await p.evaluate(function () { var a = document.activeElement; return a && a.getAttribute('data-act'); });
     ok('col: "Use this column" by keyboard leaves focus on Change, not the page', focused2 === 'change-column', focused2);
+    /* a different column ticked and refused while an estimate runs stays the person's choice */
+    await p.click('[data-act=change-column]');
+    var beforeKeep = estimates();
+    await p.evaluate(function () { document.getElementById('run').click(); document.querySelector('input[name=loadcol][value="Main Meter kW"]').click(); document.querySelector('[data-act=use-column]').click(); });
+    await until(function () { return estimates() > beforeKeep && p.$eval('#run', function (b) { return !b.disabled; }); }, 20000);
+    await p.waitForTimeout(200);
+    var cKeep = await chooser();
+    ok('col: a pick refused mid-estimate is kept open with its tick, and the page says which column that estimate used', cKeep.radios.some(function (r) { return r.v === 'Main Meter kW' && r.on; }) &&
+       /This estimate used "Sub Meter kW"/.test(await text(p, '#formmsg')), { chooser: cKeep, msg: await text(p, '#formmsg') });
+    var chH = await p.evaluate(function () { var b = document.querySelector('.colpick .btn'); return b ? b.getBoundingClientRect().height : 0; });
+    await p.click('input[name=loadcol][value="Sub Meter kW"]');
+    await p.click('[data-act=use-column]');
+    await until(function () { return p.$eval('#colpick', function (b) { return /Load column: Sub Meter kW/.test(b.textContent); }); }, 20000);
+    var chg = await p.evaluate(function () { return document.querySelector('[data-act=change-column]').getBoundingClientRect().height; });
+    ok('col: the Change button is a finger\'s height (40px)', chg >= 40, { change: chg, use: chH });
     ok('col: the result says which column was read', /Column read: Sub Meter kW \(your pick\)/.test(await text(p, '#out')), (await text(p, '#out')).slice(0, 300));
     ok('col: and is the engine\'s figure for that column', (await grossOnPage(p)) === money(want.totals.gross), { want: money(want.totals.gross), got: await grossOnPage(p) });
     var msg = await saveAs(p);

@@ -186,11 +186,13 @@ Clean Cell's two tools) still wins: absent is not empty.
     Billing Period or "Max Demand TOU" rate column): that describes each
     reading, and a period's START is the reading's time where it is the
     only time the file has (a plain date column wins over a period
-    column); in such a column a period that occurs ONCE, more than a day
+    column, and a usage date beats a Read / Bill / Statement / Revision
+    date beside it); in such a column a period that occurs ONCE, more than a day
     long and twice the column's distinct periods' median (the file's span, a
     monthly subtotal) is still a summary — a billing cycle, on many
     readings, never is, however long it runs (a period column filled only
-    on each cycle's first row is judged on its filled cells). Subtotal rows
+    on each cycle's first row is a per-reading column and never judged by
+    span, so no reading of a long cycle is dropped). Subtotal rows
     with no date or time, a dated total with no time among timed readings,
     and a second table pasted below the readings are REFUSED (on the count,
     or naming the row), never guessed at: each guess tried (verification
@@ -222,7 +224,8 @@ Clean Cell's two tools) still wins: absent is not empty.
     clock column or an hour-number column) the readings are put in date and
     time order — a newest-first file, or one sorted newest day first with
     hours ascending, is read oldest first and no day is turned round — and
-    a repeated timestamp between 01:00 and 03:00 (hour number 1–3) is the
+    a repeated timestamp from 01:00 to 03:00 inclusive (hour number 1–3;
+    an EU hour-ending file stamps the repeat 03:00) is the
     autumn clock change, allowed on at most two days (a twelve-month export
     from early November holds two fall-backs), four at most a day; up to
     four repeats elsewhere are re-read intervals, as before; more is
