@@ -102,9 +102,7 @@ Spot the problem, and tell us why. Answer in the comments; we'll post the answer
 
  dict(day=4, pillar='stack', fmt='Image', title='Count your stack',
   visual="The card.",
-  text="""Count your stack.
-
-Tick every tool that touches one of your projects before NTP:
+  text="""How many tools does one of your projects pass through before NTP? Count them:
 
 ☐ Grid or hosting-capacity data
 ☐ GIS seat or analyst

@@ -164,9 +164,7 @@ Next day, as a comment on this post with `day03-answer.png`: Answer: unit 1. It 
 *Count Your Stack · Image.* Visual: The card. Graphic: `day04.png` (checklist).
 
 ```text
-Count your stack.
-
-Tick every tool that touches one of your projects before NTP:
+How many tools does one of your projects pass through before NTP? Count them:
 
 ☐ Grid or hosting-capacity data
 ☐ GIS seat or analyst
