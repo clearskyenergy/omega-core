@@ -159,7 +159,11 @@ function quote(c, rows, input, now) {
     steer = { plan: after.recommendation.plan, savingsCents: after.recommendation.savingsCents,
       display: 'Switch to ' + (after.recommendation.plan === 'alacarte' ? 'Lite + modules' : book.plans[after.recommendation.plan].name) + ' and save ' + P.money(after.recommendation.savingsCents) + '/month.' };
   }
-  var feeNote = after.serviceFee.amountCents !== before.serviceFee.amountCents ? 'Your annual service fee at renewal becomes ' + after.serviceFee.display + ' (now ' + before.serviceFee.display + ').' : null;
+  /* a plan fee starting, ending or changing at renewal is said in words; Omega Design alone has none */
+  var feeNote = after.serviceFee.amountCents === before.serviceFee.amountCents ? null
+    : !before.serviceFee.amountCents ? 'Your plan adds an annual service fee at renewal: ' + after.serviceFee.display + '.'
+    : !after.serviceFee.amountCents ? 'Your annual service fee ends at renewal (now ' + before.serviceFee.display + ').'
+    : 'Your annual service fee at renewal becomes ' + after.serviceFee.display + ' (now ' + before.serviceFee.display + ').';
   var blocked = gate.canApply && open.length ? { canApply: false, reason: 'A change is waiting for payment: ' + open[0].add.map(function (k) { return M.get(k).name; }).join(', ') + '. Pay it on the invoice page or cancel it first.' } : gate;
   /* the renewal is due and not issued yet: a paid change now would bill the
      whole new cycle, and the renewal would bill it again once the change is
