@@ -118789,11 +118789,11 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
        marketplace, so a wrong click does not put a bad file in front of a
        utility or another engineer. That is the line BETA marks. */
     [/openMarketplacePush/,     'NEW'],    /* Push to Marketplace        */
-    [/exportSpecsForCADTool/,   'BETA'],   /* Export for CAD             */
-    [/exportToMonday/,          'BETA'],   /* Export to Monday           */
-    [/openValidationExport/,    'BETA'],   /* Export for Validation      */
-    [/openValidationStatus/,    'BETA'],   /* Validation Status          */
-    [/OmegaGeo/,                'BETA']    /* Geo Export                 */
+    [/exportSpecsForCADTool/,   'NEW'],    /* Export for CAD             */
+    [/exportToMonday/,          'NEW'],    /* Export to Monday           */
+    [/openValidationExport/,    'NEW'],    /* Export for Validation      */
+    [/openValidationStatus/,    'NEW'],    /* Validation Status          */
+    [/OmegaGeo/,                'NEW']     /* Geo Export                 */
   ];
 
   /* NEW: finished tools this patch set added. Named by id because they
@@ -118808,7 +118808,7 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     ['rb-takeoff-budget', 'NEW'],
     ['rb-gis-layers',     'NEW'],
     ['rb-siteplan',       'NEW'],
-    ['rb-geo-export',     'BETA'],
+    ['rb-geo-export',     'NEW'],
 
     /* Tools this patch set added. NEW where the tool does what it claims;
        BETA where it works but is knowingly incomplete, and the reason is
@@ -118830,10 +118830,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     ['omega-btn-sldcheck',      'NEW'],
     ['omega-btn-drc',           'NEW'],
     ['omega-btn-bill-analysis', 'NEW'],
-    ['omega-btn-permit-matrix', 'BETA'],
-    ['rb-noise-model',          'BETA'],
-    ['rb-optimizer',            'BETA'],
-    ['rb-network',              'BETA']
+    ['omega-btn-permit-matrix', 'NEW'],
+    ['rb-noise-model',          'NEW'],
+    ['rb-optimizer',            'NEW'],
+    ['rb-network',              'NEW']
   ];
 
   function tagButton(btn, label) {
@@ -147294,7 +147294,7 @@ function injectButton(){
     b.className = 'rbtn omega-beta';
     b.innerHTML = '<span class="rb-ico" style="color:var(--accent)">\u25E9</span>'
                 + '<span class="rb-lbl">3D Site<br>Visualizer</span>'
-                + '<span class="omega-beta-tag">BETA</span>';
+                + '<span class="omega-new-tag">NEW</span>';
     b.onclick = function(){
       if(typeof rbRun === 'function') rbRun(open); else open();
     };
@@ -152751,11 +152751,10 @@ var SOON = [
     note: 'The ZIP-level utility and rate screen is being finished. Grid Pre-Qualify covers interconnection screening in the meantime.' }
 ];
 
-/* Bill Analysis is currently badged NEW. It is an analysis whose numbers
-   feed a proposal, so BETA is the accurate label: the tool runs, the
-   output is what needs a second look. */
+/* Bill Analysis reads NEW, like every other tagged ribbon tool
+   (2026-10-02: the owner retired BETA on the ribbon). */
 var REBADGE = [
-  { id: 'omega-btn-bill-analysis', label: 'BETA' }
+  { id: 'omega-btn-bill-analysis', label: 'NEW' }
 ];
 
 /* ── styles: one badge colour that is neither a warning nor a signpost ── */
