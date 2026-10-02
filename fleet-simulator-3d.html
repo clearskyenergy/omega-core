@@ -437,12 +437,16 @@ var BIGBATT=[
   {id:"grid4608",name:"GRID 4608 container",kwh:4608,model:"ESD1280-05P4608",kind:"container"},
   {id:"grid5068",name:"GRID 5068 container",kwh:5068,model:"ESD1280-05P5068",kind:"container"}
 ];
-/* node kind: rack / galleon / leviathan */
+/* node kind: rack / galleon / leviathan
+   Armada's own names, as the editor carries them. The Leviathan is its
+   published 1.77 MW IT (armada.ai/product/leviathan); it was listed here
+   as 1 MW. Cruiser and Triton kW are planning estimates: Armada publishes
+   their containers and rack counts (3 and 5), not a rating. */
 var BIGNODE=[
   {id:"none",name:"None",kw:0,model:"\u2014",kind:""},
-  {id:"cruiser",name:"Galleon Cruiser (20ft)",kw:35,model:"Armada Galleon",kind:"rack"},
-  {id:"triton",name:"Galleon Triton",kw:120,model:"Armada Galleon",kind:"galleon"},
-  {id:"leviathan",name:"Leviathan (1MW MDC)",kw:1000,model:"Armada Leviathan",kind:"leviathan"}
+  {id:"cruiser",name:"Armada Cruiser (20 ft Galleon, 3 racks)",kw:35,model:"Armada Cruiser",kind:"rack"},
+  {id:"triton",name:"Armada Triton (40 ft Galleon, 5 racks)",kw:120,model:"Armada Triton",kind:"galleon"},
+  {id:"leviathan",name:"Armada Leviathan (1.77 MW)",kw:1770,model:"Armada Leviathan",kind:"leviathan"}
 ];
 /* DER generation systems (on-site solar / wind / generator). kw = nameplate,
    cf = capacity factor, cost = levelized $/kWh to generate. */
