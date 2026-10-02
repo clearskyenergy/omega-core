@@ -187,11 +187,9 @@ Comment your score. 6 or more and you're carrying the stack OMEGA was built to r
 *Speedrun Friday · Image.* Visual: Record the run first (sandbox, clock on screen, one take). Post this card at 8 AM; post the video at noon with the real time. Never state a time you did not record. Graphic: `day05.png` (stopwatch).
 
 ```text
-Speedrun Friday.
+How long does it take to go from an address to a battery layout, sized, with a proposal? Guess.
 
-An address to a battery layout, sized, with a proposal. One take, clock on screen, no cuts.
-
-Before you watch: how long does it take? Guess in the comments.
+Speedrun Friday: one take, clock on screen, no cuts. Put your guess in the comments before you watch.
 
 Closest guess gets a live build of their own site with us.
 
