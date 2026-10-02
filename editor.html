@@ -37965,9 +37965,10 @@ function buildBOM() {
   /* Omega-Core is ClearSky's skid on its own meter: listed so the drawing and
      the BOM agree, never priced into the host's materials. */
   if(_cs.oc){
-    addItem('Compute', 'Omega-Core skid (Solela Edge Compute + CleanCell R60)',
+    var _ocItem = addItem('Compute', 'Omega-Core skid (Solela Edge Compute + CleanCell R60)',
             Math.round(_cs.ocKw/_cs.oc)+' kW compute + '+(Math.round(_cs.ocKwh/_cs.oc*100)/100)+' kWh battery each',
             _cs.oc, 'ea', 'ClearSky-owned on its own utility meter under the Omega-Core land lease \u2014 not host capex. Output \u203a Omega-Core for terms');
+    if(_ocItem) _ocItem.notHostScope = true;   /* the electrical bid and the RFQ skip it */
   }
   if(_cs.gen){
     var _genBasis = '';
@@ -38551,7 +38552,7 @@ function submitRfqFile() {
     toOrgIds: toOrgIds,
     accounts: accounts,
     note: String((document.getElementById('rfq-note') || {}).value || '').trim(),
-    bom: (st.bom.items || []).map(function (it) {
+    bom: (st.bom.items || []).filter(function (it) { return !it.notHostScope; }).map(function (it) {
       /* manufacturer travels with the line so the server can route a
          catalogue item to its factory even when no /equipment row exists
          for the key yet — see the brand fallback in api/rfq.js. */
@@ -43348,7 +43349,7 @@ function _ppRenderFencing(sizeKey, street){
    This makes the cover sheet reflect the real design instead of boilerplate. */
 function _ppDynamicNotes(){
   var gen=[], elec=[];
-  var eqCount={}, evList={}, derList={}, hasFence=false, hasBollard=false, hasGround=false;
+  var eqCount={}, evList={}, derList={}, hasFence=false, hasBollard=false, hasGround=false, ocSkids=0;
   var i, el, sh;
   /* -- placed equipment icons (EMS, POI, XFMR, meter, panel, disconnect...) -- */
   var eqName={ ems:'Energy Management System (EMS)', util_poi:'Utility Point of Interconnection',
@@ -43366,6 +43367,7 @@ function _ppDynamicNotes(){
       evList[evk]=(evList[evk]||0)+1; }
     if(sh.kind==='dersolar') derList['Solar PV array'+(sh.kw?(' '+sh.kw+' kW-DC'):'')]=(derList['Solar PV array'+(sh.kw?(' '+sh.kw+' kW-DC'):'')]||0)+1;
     if(sh.kind==='derwind') derList['Wind turbine'+(sh.kw?(' '+sh.kw+' kW'):'')]=1;
+    if(sh.kind==='derdc' && sh.omegaCore){ ocSkids++; continue; }   /* own service: not host DER */
     if(sh.kind==='deralt'||sh.kind==='derdc') derList[(sh.model||'Generator')+(sh.kw?(' '+sh.kw+' kW'):'')]=1;
     if(sh.kind==='assembly'){ if(sh.hasFence) hasFence=true; if(sh.hasBollards) hasBollard=true; }
   } }
@@ -43398,6 +43400,7 @@ function _ppDynamicNotes(){
   if(fleet.units>0) elec.push('BESS DC and AC circuits shall be labeled and identified per NEC 690.17, 705 and 706; disconnects may be energized in the open position.');
   if(Object.keys(evList).length) elec.push('EVSE branch circuits shall comply with NEC Article 625; provide GFCI/ground-fault protection and required disconnecting means.');
   if(Object.keys(derList).length) elec.push('DER interconnection shall meet NEC 705 and the serving utility interconnection standard; provide a lockable, visible-blade AC disconnect.');
+  if(ocSkids) elec.push('Omega-Core skid'+(ocSkids>1?'s ('+ocSkids+')':'')+' served by a separate 480 V utility service and meter, not interconnected with this site\'s service; owned and permitted by its operator.');
   if(eqCount['step-up transformer']) elec.push('Transformer secondary and grounding shall comply with NEC 450 and 250; provide required working clearances per NEC 110.26.');
 
   /* ---- Guided Build provenance ---- */
@@ -43435,6 +43438,7 @@ function _ppBuildInventory(){
       inv.ev_chargers.push({ model: sh.model||sh.label||'EV charger', kw: sh.kw||null }); }
     if(sh.kind==='dersolar') inv.der.push({ type:'Solar PV', kw: sh.kw||null });
     if(sh.kind==='derwind') inv.der.push({ type:'Wind', kw: sh.kw||null });
+    if(sh.kind==='derdc' && sh.omegaCore){ inv.separateService=(inv.separateService||[]); inv.separateService.push({ type:'Omega-Core skid (own utility meter)', kw: sh.kw||null, kwh: sh.bessKwh||null }); continue; }
     if(sh.kind==='deralt'||sh.kind==='derdc') inv.der.push({ type: sh.model||'Generator', kw: sh.kw||null });
     if(sh.kind==='assembly'){ if(sh.hasFence) inv.fencing=true; if(sh.hasBollards) inv.bollards=true; }
   } }
@@ -57828,7 +57832,8 @@ function placeDcClusterAt(p){
     centers.push({x:cx,y:cy}); n++;
   } }
   var ems=(typeof _findEmsNode==='function')?_findEmsNode():null;
-  if(cfg.trench && ems){
+  /* Omega-Core skids are on their own utility meter: no feed from the host's EMS */
+  if(cfg.trench && ems && !spec.omegaCore){
     var ex=ems.x+(ems.w||32)/2, ey=ems.y+(ems.w||32)/2;
     for(var i=0;i<centers.length;i++){
       /* straight run from the EMS directly to the DC unit point */
@@ -72809,6 +72814,7 @@ function buildEstimate(){
   var seen = {};   /* base key -> count, to number duplicate lines */
 
   bom.items.forEach(function(it){
+    if(it.notHostScope) return;   /* Omega-Core: ClearSky's skid, not the host's bid */
     var sig = _sig(it);
     var qty = +it.qty || 0;
     var lu  = _laborFor(sig);          /* hrs per unit */
@@ -171257,7 +171263,9 @@ if (root.console && console.info) {
       is: function (sh) { return sh.kind === 'bespad' || sh.kind === 'assembly'
         || (sh.kind === 'eq' && sh.eqId === 'bess'); } },
     { key: 'compute',    label: 'COMPUTE CAMPUS',
-      is: function (sh) { return sh.kind === 'derdc'; } },
+      /* an Omega-Core skid is ClearSky's, on its own meter: never fenced
+         into the host's compound or tied to the host's controller */
+      is: function (sh) { return sh.kind === 'derdc' && !sh.omegaCore; } },
     { key: 'generation', label: 'ON-SITE GENERATION',
       is: function (sh) { return sh.kind === 'deralt' || sh.kind === 'derwind'; } },
     { key: 'solar',      label: 'SOLAR FIELD',

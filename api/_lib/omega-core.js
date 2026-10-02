@@ -149,7 +149,14 @@ var RATE_CARD = {
 };
 
 /* ── small helpers (compute-lease's, by value) ───────────────────────────── */
-function num(v) { var n = Number(v); return (v === '' || v == null || !isFinite(n)) ? null : n; }
+/* A number, or a numeric string. Anything else — blank, an array, a boolean
+   — is UNANSWERED, never 0: Number([]) is 0 and Number(true) is 1, and a
+   zero kW is a disqualification nobody typed. */
+function num(v) {
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  if (typeof v === 'string' && v.trim() !== '') { var n = Number(v); return isFinite(n) ? n : null; }
+  return null;
+}
 function str(v) { return v == null ? '' : String(v).trim(); }
 function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 function round(v, d) { var m = Math.pow(10, d || 0); return Math.round(v * m) / m; }
@@ -195,10 +202,10 @@ function hostPeakKw(d) {
   return any ? t : null;
 }
 
-function unitsWanted(rep, d) {
+var MAX_UNITS = 20;
+function unitsAsked(rep, d) {
   var r = num(rep.units), placed = num(d.units);
-  var n = r != null && r >= 1 ? r : (placed != null && placed >= 1 ? placed : 1);
-  return clamp(Math.round(n), 1, 20);
+  return Math.round(r != null && r >= 1 ? r : (placed != null && placed >= 1 ? placed : 1));
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -286,17 +293,29 @@ function gatePower(rep, d, ev, n) {
       asks.push('Size the offer to ' + supported + ' skid' + (supported === 1 ? '' : 's') + ', or ask the utility what '
         + fmt(needFirm) + ' kW takes.');
     }
-    if (source === 'drawing' && status !== 'fail') {
-      asks.push('Confirm with the utility: a new 480 V three-phase service and meter for ' + fmt(needPeak) + ' kW. '
-        + 'The drawing shows room; only the utility can say it will serve.');
-    } else if (source === 'utility' && willServe !== 'confirmed' && status !== 'fail') {
-      asks.push('Get the will-serve for the new meter in writing — it is free and it is the long pole.');
+    if (status !== 'fail' && source === 'drawing' && headroom >= M.firmKw) {
+      asks.push(willServe === 'confirmed'
+        ? 'Get the kW the will-serve covers in writing (' + fmt(needPeak) + ' kW at peak); the drawing shows room, the letter is the answer.'
+        : 'Confirm with the utility: a new 480 V three-phase service and meter for ' + fmt(needPeak) + ' kW. '
+          + 'The drawing shows room; only the utility can say it will serve.');
+    } else if (status !== 'fail' && source === 'utility' && willServe !== 'confirmed') {
+      asks.push(willServe === 'requested'
+        ? 'Chase the pending will-serve for the new meter — it is the long pole.'
+        : 'Get the will-serve for the new meter in writing — it is free and it is the long pole.');
     }
   } else {
     basis.push('Neither the utility\'s figure nor a transformer rating is on the project.');
-    asks.push('Get the available kW for a new 480 V three-phase service at this location ('
-      + fmt(needPeak) + ' kW at peak), and open a will-serve request for the new meter.');
     if (willServe === 'none') { status = 'fail'; basis.push('The utility has declined a new service here.'); }
+    else if (willServe === 'confirmed') {
+      /* a will-serve is written for a load, so a confirmed one is room —
+         for the load it names, which is the one thing still to read off it */
+      status = 'conditional';
+      basis.push('Will-serve confirmed for the new meter; the kW it covers is not captured.');
+      asks.push('Read the kW off the will-serve letter (' + fmt(needPeak) + ' kW at peak for ' + n + ' skid' + (n > 1 ? 's' : '') + ').');
+    } else {
+      asks.push('Get the available kW for a new 480 V three-phase service at this location (' + fmt(needPeak) + ' kW at peak), '
+        + (willServe === 'requested' ? 'and chase the pending will-serve request.' : 'and open a will-serve request for the new meter.'));
+    }
   }
 
   /* Grid Atlas: proximity, never capacity — reported and lightly weighted. */
@@ -317,6 +336,7 @@ function gatePower(rep, d, ev, n) {
     headline: status === 'pass' ? 'Will-serve confirmed for ' + n + ' skid' + (n > 1 ? 's' : '')
             : status === 'fail' ? (willServe === 'none' ? 'Utility declined a new service' : 'Under one skid\'s draw')
             : status === 'conditional' ? (supported != null && supported < n ? 'Room for ' + supported + ' of ' + n
+                                          : headroom == null ? 'Will-serve confirmed — kW to read off it'
                                           : 'Room shown — utility to confirm')
             : 'Available power not confirmed',
     needKw: { firm: needFirm, peak: needPeak }, headroomKw: headroom == null ? null : Math.round(headroom),
@@ -357,7 +377,7 @@ function gateLocation(rep, d, ev, site) {
   } else {
     charging = 'conditional';
     basis.push('No chargers on the drawing. Omega-Core is offered on charging sites, where the lease raises the site\'s return.');
-    asks.push('Place the site\'s EV chargers (Draw › EV Catalog) and run the site, or confirm it is a charging site.');
+    asks.push('Place the site\'s EV chargers (Draw › EV Catalog) and run the site — the lease is offered on charging sites.');
   }
   parts.push(charging);
 
@@ -401,7 +421,10 @@ function gateLocation(rep, d, ev, site) {
   return { key: 'location', label: 'Location', status: status, score: score,
     headline: status === 'pass' ? 'Charging site, ' + cls + ' zoning'
             : status === 'fail' ? 'Residential zoning'
-            : charging !== 'pass' ? 'No chargers on the drawing' : 'Zoning not confirmed',
+            : !located ? 'No map point'
+            : zoning === 'unconfirmed' ? 'Zoning not confirmed'
+            : charging !== 'pass' ? 'No chargers on the drawing'
+            : 'Zoning to confirm with the jurisdiction',
     zoningClass: cls || null, zoningCode: code || null,
     chargers: { dcfcUnits: dcfc, l2Units: l2, ports: ports },
     basis: basis, asks: asks,
@@ -500,6 +523,21 @@ function buildOffer(n, term) {
 /* What the lease does to the charging site the Run priced. Reads the Run;
    never re-prices the site. A Run that is stale or missing is said so, and
    the before/after is left out rather than computed off old numbers. */
+/* Years to repay the site's net cost: the Run's year-1 revenue every year,
+   plus the lease ONLY for the term it runs (escalating) — rent that is not
+   contracted is not counted. Null when it does not repay inside 40 years. */
+function paybackYears(net, rev, leaseYr1, esc, term) {
+  if (!(net > 0)) return null;
+  var cum = 0;
+  for (var y = 1; y <= 40; y++) {
+    var inflow = (rev > 0 ? rev : 0) + (y <= term ? leaseYr1 * Math.pow(1 + esc, y - 1) : 0);
+    if (!(inflow > 0)) return null;
+    if (cum + inflow >= net) return round(y - 1 + (net - cum) / inflow, 1);
+    cum += inflow;
+  }
+  return null;
+}
+
 function hostEconomics(run, offer) {
   run = obj(run);
   var capex = num(run.capex), inc = num(run.incentive), rev = num(run.annualRevenue);
@@ -520,15 +558,20 @@ function hostEconomics(run, offer) {
   }
   if (run.stale === true) out.notes.push('The drawing changed after the last Run — re-run for current figures.');
   if (net != null && net > 0 && out.leaseTermTotal) out.leaseCoversPctOfNet = round(out.leaseTermTotal / net * 100, 1);
+  var esc = offer.escalatorPct.base / 100;
   if (rev != null && rev > 0) {
     out.revenueUpliftPct = round(offer.annual.base / rev * 100, 1);
     if (net != null && net > 0) {
-      out.paybackYearsBefore = round(net / rev, 1);
-      out.paybackYearsAfter = round(net / (rev + offer.annual.base), 1);
+      out.paybackYearsBefore = paybackYears(net, rev, 0, 0, 0);
+      out.paybackYearsAfter = paybackYears(net, rev, offer.annual.base, esc, offer.termYears);
     }
   } else {
-    out.notes.push('The Run priced no revenue for this site, so payback is not shown; the lease is the income.');
-    if (net != null && net > 0) out.paybackYearsAfter = round(net / offer.annual.base, 1);
+    out.notes.push('The Run priced no revenue for this site, so the lease is its only income here.');
+    if (net != null && net > 0) {
+      out.paybackYearsAfter = paybackYears(net, 0, offer.annual.base, esc, offer.termYears);
+      if (out.paybackYearsAfter == null) out.notes.push('The lease alone does not repay the site\'s net cost inside the '
+        + offer.termYears + '-year term.');
+    }
   }
   out.notes.push('Omega-Core is on its own meter: the host\'s utility bill and demand charges do not change.');
   return out;
@@ -581,19 +624,25 @@ function evaluate(body, opts) {
   if (site.lat == null) site.lat = null;
   if (site.lng == null) site.lng = null;
 
-  var n = unitsWanted(rep, d);
+  var asked = unitsAsked(rep, d);
+  var n = clamp(asked, 1, MAX_UNITS);
   var term = termOf(rep);
   var gates = {
     power: gatePower(rep, d, ev, n),
     location: gateLocation(rep, d, ev, site),
     fiber: gateFiber(rep, ev)
   };
-  var v = verdictOf(gates);
 
-  /* Offer the skids the power can carry: fewer, never more. */
+  /* Offer the skids the power can carry: fewer, never more — and judge the
+     power gate on the count actually priced, not the one asked for. */
   var proposed = n;
-  if (gates.power.unitsSupported != null && gates.power.unitsSupported >= 1 && gates.power.unitsSupported < n)
-    proposed = gates.power.unitsSupported;
+  var sup = gates.power.unitsSupported;
+  if (sup != null && sup >= 1 && sup < n) {
+    proposed = sup;
+    gates.power = gatePower(rep, d, ev, proposed);
+    gates.power.basis.unshift('Asked for ' + n + ' skids; the power carries ' + proposed + ', so the offer is ' + proposed + '.');
+  }
+  var v = verdictOf(gates);
   var offer = v.offerable ? buildOffer(proposed, term) : null;
   var host = hostEconomics(run, offer);
   var program = programOf(proposed, term, offer, gates);
@@ -619,6 +668,13 @@ function evaluate(body, opts) {
   if (!parcel) findings.push({ severity: 'note', text: 'No parcel record for this point — zoning and owner are unverified.' });
   if (proposed < n) findings.push({ severity: 'risk', text: 'Power supports ' + proposed + ' of the ' + n
     + ' skids asked for; the lease is priced on ' + proposed + '.' });
+  if (offer && sup === 0) findings.push({ severity: 'risk', text: 'On what the project shows there is no room for even one skid; '
+    + 'the lease on ' + proposed + ' is indicative until the utility says it will serve.' });
+  if (asked > MAX_UNITS) findings.push({ severity: 'note', text: 'Asked for ' + asked + ' skids; one screen prices up to '
+    + MAX_UNITS + '. Split the site or screen the rest separately.' });
+  var termAsked = num(rep.termYears);
+  if (termAsked != null && termAsked > TERMS.maxTermYears) findings.push({ severity: 'note', text: 'A ' + termAsked
+    + '-year term was asked for; the card prices up to ' + TERMS.maxTermYears + ' years.' });
   if (v.verdict === 'incomplete') findings.push({ severity: 'risk', text: v.reason });
   if (gates.fiber.status === 'conditional') findings.push({ severity: 'risk',
     text: 'Fiber is reachable but not on site. The lateral is ClearSky\'s cost in the program outlay — do not promise the host a separate fiber payment.' });
@@ -646,7 +702,7 @@ function evaluate(body, opts) {
     rateCardVersion: RATE_CARD.version,
     product: PRODUCT,
     site: site,
-    units: { requested: n, placed: num(d.units) || 0, supported: gates.power.unitsSupported, proposed: proposed,
+    units: { requested: asked, placed: num(d.units) || 0, supported: gates.power.unitsSupported, proposed: proposed,
              perSkid: { computeKw: PRODUCT.compute.kw, bessKw: PRODUCT.battery.kw, bessKwh: PRODUCT.battery.kwh,
                         meterFirmKw: PRODUCT.meter.firmKw, meterPeakKw: PRODUCT.meter.peakKw,
                         serviceAmps: serviceAmps(PRODUCT.meter.peakKw, PRODUCT.meter.volts, PRODUCT.meter.powerFactor),

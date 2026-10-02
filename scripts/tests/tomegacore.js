@@ -132,6 +132,33 @@ eq(nothing.verdict, 'incomplete', 'nothing known: incomplete, indicative — nev
 ok(nothing.asks.length >= 4, 'and a call list');
 eq(nothing.offer.units, 1, 'one skid by default');
 
+/* the review's findings, each pinned */
+var conf = OC.evaluate({ rep: { willServe: 'confirmed' } }, {});
+eq(conf.gates.power.status, 'conditional', 'a confirmed will-serve with no kW figure is room to read, not unconfirmed');
+ok(!conf.asks.some(function (a) { return /open a will-serve request/.test(a.ask); }), 'and it never asks to open the will-serve it already has');
+var pend = OC.evaluate({ rep: { willServe: 'requested' } }, {});
+ok(pend.asks.some(function (a) { return /chase the pending will-serve/.test(a.ask); }), 'a pending will-serve is chased, not re-opened');
+var fullA = OC.evaluate(full, {});
+ok(!fullA.asks.some(function (a) { return /drawing shows room/.test(a.ask); }), 'a full drawn transformer never also says the drawing shows room');
+ok(fullA.findings.some(function (f) { return /no room for even one skid/.test(f.text); }), 'and an offer on no room says it is indicative');
+var down = clone(GOOD); down.rep.units = 3; down.rep.availableKw = 140;
+var dr = OC.evaluate(down, {});
+eq(dr.units.proposed, 1, '140 kW carries one skid');
+eq(dr.gates.power.status, 'pass', 'and the power gate is judged on the one priced, not the three asked');
+ok(/Asked for 3 skids; the power carries 1/.test(dr.gates.power.basis[0]), 'and says so first');
+eq(dr.verdict, 'qualified', 'so a site that carries what is priced qualifies');
+var junk = clone(GOOD); junk.rep.availableKw = []; junk.rep.willServe = 'unknown'; delete junk.drawing.xfmrKva;
+eq(OC.evaluate(junk, {}).gates.power.status, 'unconfirmed', 'an array is unanswered, never 0 kW and a fail');
+junk.rep.availableKw = true;
+eq(OC.evaluate(junk, {}).gates.power.status, 'unconfirmed', 'a boolean too');
+eq(OC.evaluate(noPt, {}).gates.location.headline, 'No map point', 'the location headline names what is open');
+var big = clone(GOOD); big.rep.units = 25; big.rep.availableKw = 5000; big.rep.termYears = 20;
+var br = OC.evaluate(big, {});
+eq(br.units.requested, 25, 'what was asked is reported as asked');
+eq(br.units.proposed, 20, 'and one screen prices up to 20');
+ok(br.findings.some(function (f) { return /Asked for 25 skids/.test(f.text); }) && br.findings.some(function (f) { return /20-year term/.test(f.text); }), 'both clamps are said, not silent');
+ok(!OC.evaluate(noEv, {}).asks.some(function (a) { return /confirm it is a charging site/.test(a.ask); }), 'no ask points at a field the dialog does not have');
+
 /* terms and the Run */
 var shortT = clone(GOOD); shortT.rep.termYears = 3;
 eq(OC.evaluate(shortT, {}).offer.termYears, 5, 'a term under 5 years is priced at the 5-year minimum');
@@ -146,12 +173,18 @@ var stale = clone(GOOD); stale.run.stale = true;
 ok(OC.evaluate(stale, {}).host.notes.some(function (n) { return /changed after the last Run/.test(n); }), 'a stale Run is said');
 var noRev = clone(GOOD); noRev.run.annualRevenue = 0;
 eq(OC.evaluate(noRev, {}).host.revenueUpliftPct, null, 'a Run with no revenue: no uplift percentage');
+var nrv = OC.evaluate(noRev, {}).host;
+eq(nrv.paybackYearsAfter, null, 'the lease alone does not repay $1.1M inside 5 years, and no number pretends it does');
+ok(nrv.notes.some(function (n) { return /inside the 5-year term/.test(n); }), 'and it says so');
+var slow = clone(GOOD); slow.run.annualRevenue = 100000;
+eq(OC.evaluate(slow, {}).host.paybackYearsAfter, Math.round((10 + (1100000 - 100000 * 10 - OC.evaluate(slow, {}).offer.termTotal.base) / 100000) * 10) / 10,
+   'past the term the lease stops: payback counts only the rent contracted');
 
 /* ═══ 2 · the door ═════════════════════════════════════════════════════ */
-var ctx, member, org;
+var ctx, member, org, readsFail = false;
 D.mock('../api/_lib/verify-token', {
   authenticateWithTier: function () { return Promise.resolve(ctx); },
-  readAsCaller: function (token, p) { return Promise.resolve(/\/members\//.test(p) ? member : org); },
+  readAsCaller: function (token, p) { if (readsFail) return Promise.reject(Object.assign(new Error('PERMISSION_DENIED raw'), { status: 403 })); return Promise.resolve(/\/members\//.test(p) ? member : org); },
   httpError: function (status, message) { return Object.assign(new Error(message), { status: status }); }
 });
 delete require.cache[require.resolve('../../api/compute-lease')];
@@ -194,6 +227,11 @@ var doorChecks = [
   function () { setup(['lite']); ctx.billing.toolOverrides = { omegacore: true, computelease: true }; ctx.billing.addons = ['compute'];
     return expect(403, 'and no override or addon forges it'); },
   function () { setup(['lite', 'compute']); return expect(200, 'Omega Compute in the package: answered'); },
+  function () { setup(null); ctx.billing.toolOverrides = { editor: false }; return expect(403, 'Site Map switched off refuses it'); },
+  function () { setup(['lite', 'compute']); member.toolAccess = ['computeproforma']; return expect(403, 'a packaged member without Site Map in their tools is refused'); },
+  function () { setup(['lite', 'compute']); member.toolAccess = ['editor']; return expect(200, 'and with it, answered'); },
+  function () { setup(null); readsFail = true; return expect(503, 'a failed read is try-again, never a pass').then(function (o) {
+    readsFail = false; ok(!/PERMISSION_DENIED/.test(JSON.stringify(o.body)), 'and never the raw error'); }); },
   function () { setup(null, 'trial'); ctx.caller.staff = true; return expect(200, 'staff are answered').then(function (o) { ok(!!o.body.rateCard.buildUp, 'and see the card'); }); }
 ];
 
@@ -252,6 +290,12 @@ function editorChecks() {
   ok(/add\('omegacore', '\\u25a6', 'Omega-Core skid \(own meter\)', sh\.kw, sh\.bessKwh\)/.test(ED), 'the legend gives it its own row with its kWh');
   ok(/case 'derdc':\s*\n\s*\/\* Omega-Core is its own row/.test(ED), 'and so does the campus census');
   ok(/if\(_r && DERC_DC\[_r\] && !DERC_DC\[_r\]\.omegaCore\)/.test(ED), 'a palette element of it is not host load either');
+  ok(/is: function \(sh\) \{ return sh\.kind === 'derdc' && !sh\.omegaCore; \}/.test(ED), 'Fence & Tie never fences it into the host compound or ties it to the host controller');
+  ok(/if\(cfg\.trench && ems && !spec\.omegaCore\)/.test(bodyFrom(ED, 'function placeDcClusterAt(p){')), 'the cluster dialog never trenches a host EMS feed to a skid');
+  ok(/if\(it\.notHostScope\) return;/.test(ED) && /_ocItem\.notHostScope = true/.test(ED), 'its BOM line is never priced into the host\'s electrical bid');
+  ok(/filter\(function \(it\) \{ return !it\.notHostScope; \}\)/.test(ED), 'nor sent out for quote');
+  ok(/if\(sh\.kind==='derdc' && sh\.omegaCore\)\{ ocSkids\+\+; continue; \}/.test(ED) && /separate 480 V utility service and meter, not interconnected/.test(ED), 'the permit notes call it a separate service, never host DER under NEC 705');
+  ok(/inv\.separateService/.test(ED), 'and the permit inventory lists it apart from the DER');
 
   /* the Output button, its owner, its icon, its module */
   ok(/<button class="rbtn" id="rb-omega-core" onclick="rbRun\(openOmegaCore\)" data-cap="compute"/.test(ED), 'Output › Omega-Core, on the compute cap');
@@ -269,6 +313,7 @@ function editorChecks() {
   ok(/© 2025–2026 ClearSky Energy Solutions LLC/.test(mod), 'and carries the header');
   ok(!/450000|450,000|monthlyPerSkid\s*:\s*\{|fmvAtYear5/.test(mod), 'no price, lease card or buyout band in the browser');
   ok(/OmegaComputeLease/.test(mod) && /\.evidence\(/.test(mod), 'it fans out through OmegaComputeLease.evidence, not a second copy');
+  ok(/rescore\(\)\.then\(function \(r\) \{ if \(r && !st\.evidence\) screen\(\); \}\)/.test(mod) && /if \(st\.refused\)/.test(mod), 'a caller the door refused never sets off the metered lookups');
 
   /* the project field, saved and restored */
   var save = bodyFrom(ED, 'async function saveProject(');

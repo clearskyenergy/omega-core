@@ -34,7 +34,7 @@
 
   var API = '/api/omega-core';
   var HOST_ID = 'omega-core-modal';
-  var st = { facts: null, evidence: null, evidenceKey: null, result: null, sources: {}, busy: false };
+  var st = { facts: null, evidence: null, evidenceKey: null, result: null, sources: {}, busy: false, refused: false };
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function S_() { return root.S || {}; }
@@ -127,7 +127,7 @@
     }).then(function (r) {
       return r.text().then(function (t) {
         var j = null; try { j = JSON.parse(t); } catch (e) {}
-        if (!r.ok) throw new Error((j && j.error) || ('HTTP ' + r.status));
+        if (!r.ok) { var err = new Error((j && j.error) || ('HTTP ' + r.status)); err.status = r.status; throw err; }
         return j || {};
       });
     });
@@ -374,6 +374,9 @@
       busy(false); paint();
       return r;
     }, function (e) {
+      /* refused (signed out, not on the plan): the lookups are not run for a
+         caller the door turned away — they cost time and metered calls */
+      if (e && (e.status === 401 || e.status === 403 || /Sign in/.test(e.message || ''))) st.refused = true;
       busy(false); onSource('score', 'bad', (e && e.message) || 'failed');
       log(esc((e && e.message) || 'The Omega-Core service did not answer.'), '#FCA5A5');
       return null;
@@ -383,6 +386,7 @@
   /* Gather the evidence (Grid Atlas, fiber, parcel — up to a minute), then score. */
   function screen() {
     if (st.busy) return Promise.resolve(null);
+    if (st.refused) { log('Omega-Core is not open to this account, so the lookups were not run.', '#FDE68A'); return Promise.resolve(null); }
     var f = st.facts; if (!f) return Promise.resolve(null);
     var CL = root.OmegaComputeLease;
     if (!CL || typeof CL.evidence !== 'function') { log('The lookup client did not load — qualifying on the drawing and your answers alone.', '#FDE68A'); return rescore(); }
@@ -451,11 +455,11 @@
       return;
     }
     if (st.evidenceKey && st.evidenceKey !== siteKey(st.facts)) { st.evidence = null; st.evidenceKey = null; st.sources = {}; }
-    st.result = null;
+    st.result = null; st.refused = false;
     paint();
     /* Score at once on what the project holds, then gather the evidence
        for this site the first time the dialog opens on it. */
-    rescore().then(function () { if (!st.evidence) screen(); });
+    rescore().then(function (r) { if (r && !st.evidence) screen(); });
   }
 
   root.OmegaCoreQualify = { open: open, close: close, screen: screen, rescore: rescore, runSite: runSite,

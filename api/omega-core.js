@@ -51,6 +51,7 @@ function legacyRefusal(orgId, bill, member) {
   var ov = bill.toolOverrides || {};
   for (var i = 0; i < SWITCHES.length; i++)
     if (ov[SWITCHES[i]] === false) return 'Omega-Core is switched off for this organisation.';
+  if (ov.editor === false) return 'Site Map is switched off for this organisation.';
   if (member && member.status && member.status !== 'active') return 'Your membership of this workspace is not active.';
   if (Array.isArray(bill.toolAccess) && bill.toolAccess.indexOf('editor') < 0)
     return 'Site Map is not in this organisation\'s product.';
@@ -59,6 +60,9 @@ function legacyRefusal(orgId, bill, member) {
   var AD = require('./_lib/addons'), on = AD.live(bill, Date.now());
   if (on.indexOf('compute') >= 0) return null;
   var ctx = AD.judge(orgId, bill, on).ctx;
+  /* Site Map itself must open on the plan: the button is in it (Helios asks the same) */
+  var editor = !ctx.tool || !ctx.tool('editor') || !ctx.canOpen || ctx.canOpen('editor');
+  if (!editor) return 'Site Map is not in this workspace\'s product.';
   if (typeof ctx.canCap === 'function' && ctx.canCap('compute') === true) return null;
   return 'Omega-Core is part of Omega Compute, which this plan does not include (Modules › Opt in).';
 }
@@ -78,7 +82,14 @@ module.exports = function (req, res) {
   }
   if (req.method !== 'POST') return res.status(405).json({ build: OC.BUILD, error: 'GET or POST.' });
   return auth.authenticateWithTier(req).then(function (ctx) {
-    return require('./_lib/package-access').withToken(req, ctx, 'compute');
+    /* the button is in Site Map: a packaged member must hold the editor itself */
+    return require('./_lib/package-access').withToken(req, ctx, 'compute', { tools: ['editor'] })
+      .then(null, function (e) {
+        /* a Firestore read that failed (502) is try-again; a package that
+           refuses (403) says why */
+        if (e && e.status === 502) throw auth.httpError(503, 'Could not check access to Omega-Core right now; try again in a minute.');
+        throw e;
+      });
   }).then(function (a) {
     var token = String(req.headers.authorization || '').replace(/^Bearer /, '');
     var base = 'omega_orgs/' + encodeURIComponent(a.caller.orgId);
@@ -103,8 +114,8 @@ module.exports = function (req, res) {
       }
       a.org = org;
       return a;
-    }, function (e) {
-      if (e && e.status) throw e;
+    }, function () {
+      /* any failed read is "try again", never a pass and never its raw text */
       throw auth.httpError(503, 'Could not check access to Omega-Core right now; try again in a minute.');
     });
   }).then(function (a) {
