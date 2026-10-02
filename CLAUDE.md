@@ -1240,7 +1240,13 @@ gate), skids priced on what the power carries, the seed lease card
 (`omega-core-lease-v1`, build-up staff-only), the host's payback before/after
 off the Run, and the FMV band — never in the browser. A legacy plan must open
 the compute cap (`addons.judge`), as the button does. `S.omegaCore` rides on
-the project. `docs/OMEGA-CORE.md`, `scripts/tests/tomegacore.js`.
+the project. **No false results** (Tommy, 2026-10-02): a firm answer either way
+only on a confirmed fact — Qualified / Qualified with conditions / **Needs
+further qualification** (anything resting on the drawing, the public record or
+a missing answer; its lease is marked indicative, not an offer, or withheld
+while fiber or zoning only looks unlikely) / Does not qualify (a declined
+will-serve, the utility's own kW under one skid, zoning the rep entered).
+`docs/OMEGA-CORE.md`, `scripts/tests/tomegacore.js`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

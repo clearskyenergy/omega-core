@@ -89,11 +89,29 @@ eq(r.rateCard.disclosed, false, 'a tenant does not see the card build-up');
 ok(!r.rateCard.buildUp, 'no build-up off staff');
 ok(OC.evaluate(GOOD, { disclose: true }).rateCard.buildUp, 'staff see the build-up');
 
+/* NO FALSE RESULTS: a firm answer only on a confirmed fact */
+eq(r.offer.indicative, false, 'a qualified site\'s lease is not marked indicative');
+eq(OC.evaluate(GOOD, {}).verdictLabel, 'Qualified', 'Qualified, in those words');
+var drawnOnly = clone(GOOD); delete drawnOnly.rep.availableKw; drawnOnly.rep.willServe = 'unknown';
+eq(OC.evaluate(drawnOnly, {}).gates.power.qualification, 'needs-qualification', 'room on the drawing alone needs qualification, never "clears"');
+eq(OC.evaluate(drawnOnly, {}).verdict, 'needs-qualification', 'so the site does too');
+var capped = clone(GOOD); capped.rep.availableKw = 100;
+eq(OC.evaluate(capped, {}).gates.power.qualification, 'clears-with-conditions', 'the utility\'s 100 kW confirmed: one skid with its recharge capped clears with conditions');
+eq(OC.evaluate(capped, {}).verdict, 'conditional', 'and the site qualifies with conditions');
+var pendingWs = clone(GOOD); pendingWs.rep.willServe = 'requested';
+eq(OC.evaluate(pendingWs, {}).verdict, 'needs-qualification', 'a will-serve still pending needs qualification');
+var declinedV = clone(GOOD); declinedV.rep.willServe = 'none';
+eq(OC.evaluate(declinedV, {}).verdict, 'not-qualified', 'a declined will-serve is a confirmed "does not qualify"');
+var reachable = clone(GOOD); reachable.rep.fiberOnSite = 'no';
+eq(OC.evaluate(reachable, {}).gates.fiber.qualification, 'needs-qualification', 'fiber reachable but not on site needs a carrier');
+
 /* fiber is the hard gate and it is compute-lease's own */
 var noFiber = clone(GOOD); noFiber.rep.fiberOnSite = 'no'; noFiber.evidence.network = { verdict: 'unlikely', reasons: [] };
 var nf = OC.evaluate(noFiber, {});
-eq(nf.verdict, 'disqualified', 'no fiber and fiber unlikely: disqualified however good the power is');
-eq(nf.offer, null, 'and no lease is priced');
+eq(nf.verdict, 'needs-qualification', 'no fiber and the public record says unlikely: needs further qualification, never a false "no"');
+eq(nf.gates.fiber.qualification, 'likely-fails', 'the fiber gate reads "unlikely — confirm", not a confirmed fail');
+eq(nf.offer, null, 'and no lease is priced on it: fiber is still the hard gate');
+eq(nf.verdictLabel, 'Needs further qualification', 'in those words');
 eq(JSON.stringify(OC.gateFiber(GOOD.rep, GOOD.evidence).status), JSON.stringify(CL.gateFiber(GOOD.rep, GOOD.evidence).status), 'the fiber gate is compute-lease\'s gateFiber');
 var withFile = OC.gateFiber({}, { fiberOnFile: { nearestRoute: { distanceM: 1609.344, operator: 'Zayo' } } });
 ok(withFile.basis.some(function (b) { return /1 mi \(Zayo\)/.test(b); }), 'fiber already on the project is reported');
@@ -102,7 +120,13 @@ eq(withFile.status, CL.gateFiber({}, {}).status, 'and never moves the gate');
 /* location */
 var resi = clone(GOOD); resi.rep.zoningCode = 'R-1';
 eq(OC.evaluate(resi, {}).gates.location.status, 'fail', 'residential zoning fails location');
-eq(OC.evaluate(resi, {}).verdict, 'disqualified', 'and disqualifies');
+eq(OC.evaluate(resi, {}).verdict, 'not-qualified', 'entered by the rep, it is a confirmed "does not qualify"');
+eq(OC.evaluate(resi, {}).verdictLabel, 'Does not qualify', 'in those words');
+var resiRec = clone(GOOD); resiRec.evidence.parcel.zoning = 'R-1';
+var rr = OC.evaluate(resiRec, {});
+eq(rr.verdict, 'needs-qualification', 'a county record alone saying residential needs qualification, never a false "no"');
+eq(rr.offer, null, 'and no lease is quoted on it');
+ok(/confirm/.test(rr.gates.location.headline), 'the headline asks for the check');
 var noEv = clone(GOOD); noEv.drawing.chargers = {};
 eq(OC.evaluate(noEv, {}).gates.location.status, 'conditional', 'no chargers drawn: conditional — Omega-Core is for charging sites');
 var noPt = clone(GOOD); noPt.site = {};
@@ -128,7 +152,9 @@ eq(mr.offer.monthly.base, 4000, '4 skids at base');
 ok(mr.findings.some(function (f) { return /supports 4 of the 6/.test(f.text); }), 'and says so');
 var nothing = OC.evaluate({ rep: {} }, {});
 eq(nothing.gates.power.status, 'unconfirmed', 'nothing known: power unconfirmed');
-eq(nothing.verdict, 'incomplete', 'nothing known: incomplete, indicative — never disqualified for not asking');
+eq(nothing.verdict, 'needs-qualification', 'nothing known: needs further qualification — never disqualified for not asking');
+eq(nothing.offer.indicative, true, 'and its lease range is marked indicative, not an offer');
+ok(/not an offer/.test(nothing.verdictReason), 'and says so');
 ok(nothing.asks.length >= 4, 'and a call list');
 eq(nothing.offer.units, 1, 'one skid by default');
 
@@ -261,6 +287,8 @@ function editorChecks() {
   var sh = P.S.shapes[0];
   ok(sh && sh.kind === 'derdc' && sh.omegaCore === true && sh.ownMeter === true, 'a placed skid carries omegaCore and ownMeter');
   eq(sh && sh.bessKwh, 61.44, 'and its battery');
+  ok(sh && !sh.bessKey && sh.ocBessKey === 'CC-R60', 'under its own key, so no host reader takes the skid\'s battery for the site\'s');
+  ok(/if \(x && x\.bessKey && !x\.omegaCore\) seed = x\.bessKey;/.test(ED), 'the engineering build never seeds its BESS step from the skid');
   P._derDcId = 'dc_triton'; vm.runInContext('_derPlaceDcPad({x:0,y:0})', P);
   ok(!P.S.shapes[1].omegaCore, 'an ordinary pod does not');
 
@@ -314,6 +342,12 @@ function editorChecks() {
   ok(!/450000|450,000|monthlyPerSkid\s*:\s*\{|fmvAtYear5/.test(mod), 'no price, lease card or buyout band in the browser');
   ok(/OmegaComputeLease/.test(mod) && /\.evidence\(/.test(mod), 'it fans out through OmegaComputeLease.evidence, not a second copy');
   ok(/rescore\(\)\.then\(function \(r\) \{ if \(r && !st\.evidence\) screen\(\); \}\)/.test(mod) && /if \(st\.refused\)/.test(mod), 'a caller the door refused never sets off the metered lookups');
+  ok(/function close\(\) \{[^}]*st\.gen\+\+/.test(mod) && (mod.match(/if \(!live\(gen, pid\)\) return/g) || []).length >= 4, 'a request that lands after the dialog closed (or moved project) answers nothing and writes nothing');
+  ok(/answered\('oc-units', 'units'\)/.test(mod) && /answered\('oc-zoningCode', 'zoningCode'\)/.test(mod) && /function touched\(id\) \{ if \(id\) st\.dirty\[id\] = true; \}/.test(mod), 'a prefill the rep never touched is not saved as an answer');
+  ok(/root\.omegaSetStale\(true\)/.test(mod) && /The Run priced nothing on this drawing/.test(mod), 'Run the site really runs, and never claims a Run that did not happen');
+  ok(/try \{ u = root\._currentUser/.test(mod) && /catch \(e0\) \{ call = Promise\.reject\(e0\); \}/.test(mod), 'a Firebase that never started is "sign in", never a dialog stuck busy');
+  ok(/f\.saved = readRep\(\) \|\| rep;/.test(mod), 'what was typed while a request ran survives the repaint');
+  ok(/'Needs further qualification'/.test(mod) && /not an offer until the site qualifies/.test(mod), 'the dialog says "Needs further qualification" and marks an indicative lease as not an offer');
 
   /* the project field, saved and restored */
   var save = bodyFrom(ED, 'async function saveProject(');
@@ -329,7 +363,13 @@ function editorChecks() {
   ok(R && /Rev A/.test(R.verified), 'it cites the datasheet');
   ok(/'CC-R60':\s*\{ l:'28\\'-0"',\s*w:'7\\'-3"'.*lf:28\.0, wf:7\.25/.test(ED), 'its 336 x 87 in skid is on the BESS Pad list');
   ok(/<option value="CC-R60">/.test(ED), 'and in BESS Config');
-  ok(/_setChk\('inc-pcs',  m\._incPCS  != null \? m\._incPCS  : _big\);/.test(ED), 'the catalog\'s own word on its PCS wins over the size rule');
+  ok(/_setChk\('inc-pcs',  m\._incPCS===true   \|\| _big\);/.test(ED), 'the catalog\'s own YES on its PCS wins over the size rule; a blank tenant flag does not');
+  ok(R && R._incXfmr === true && R._incDisco === false, 'the R60 adds no transformer (native 277/480 V) and keeps the site AC disconnect');
+  ok(/\['usable','eqcost'\]\.forEach\(function\(k\)\{ var el=document\.getElementById\('bm-'\+k\); if\(el && m\[k\]==null\) el\.value=''; \}\);/.test(ED), 'an unpublished usable kWh or price clears the field, never saves 700 kWh on a 61 kWh battery');
+  var place = bodyFrom(ED, 'function _doPlaceBesPad(p,spec,opts){');
+  ok(/a\.key==='pcs'   && _ce\._incPCS===true/.test(place) && /a\.key==='xfmr'  && _ce\._incXfmr===true/.test(place) && /a\.key==='disco' && _ce\._incDisco===true/.test(place), 'every BESS Pad path places the R60 with its disconnect and without a second PCS or a transformer');
+  ok(!/data-auto-off/.test(ED), 'and the modal no longer second-guesses the box');
+  ok(R && !/derived/.test(JSON.stringify(R)) && /'CC-R60':[^\n]*h:'SEE MFR SUBMITTAL'/.test(ED), 'its height is not derived while the drawing and the datasheet disagree');
   ok((ED.match(/&& !p\.evSkid\)/g) || []).length === 2, 'the auto-sizer never recommends an EV skid');
 }
 
@@ -344,7 +384,7 @@ function clientChecks() {
     evChargerTotals: function () { return { dcfcKw: 480, dcfcUnits: 2, l2Kw: 0, l2Units: 0, ports: 4 }; },
     omegaDcLoadKw: function () { return 120; },
     _SITE_DATA: { parcelZoning: 'C-2' },
-    localStorage: { getItem: function () { return JSON.stringify({ activeId: 'a', scenarios: { a: { data: { p0_service_amps: '800', p0_service_v: '480', p0_xfmr_kva: '1000' } } } }); } }
+    localStorage: { getItem: function () { return JSON.stringify({ activeId: 'a', scenarios: { a: { data: { p0_service_amps: '800A', p0_service_v: '277/480', p0_xfmr_kva: '1,000 kVA' } } } }); } }
   };
   W.window = W;
   var docEls = { 'addr-in': { value: '9 Oak Ave' }, pname: { value: 'Oak Charging' } };
@@ -355,8 +395,9 @@ function clientChecks() {
   eq(f.drawing.units, 1, 'collect: one skid on the drawing (the pod is not one)');
   eq(f.drawing.chargers.dcfcUnits, 2, 'collect: the chargers');
   eq(f.drawing.dcLoadKw, 120, 'collect: the host\'s own compute');
-  eq(f.drawing.xfmrKva, 1000, 'collect: the transformer from the site intake');
-  eq(f.drawing.service.amps, 800, 'collect: the host service from the intake');
+  eq(f.drawing.xfmrKva, 1000, 'collect: the transformer from the site intake, read as the form saves it ("1,000 kVA")');
+  eq(f.drawing.service.amps, 800, 'collect: the host service amps from the intake ("800A")');
+  eq(f.drawing.service.volts, 480, 'collect: and its voltage from the select ("277/480")');
   eq(f.run.capex, 900000, 'collect: the Run\'s capex');
   eq(f.run.lines.ev, 500000, 'collect: the cost sheet\'s own lines');
   eq(f.site.lat, 40.5, 'collect: the site point');

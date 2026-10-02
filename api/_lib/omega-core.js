@@ -332,7 +332,13 @@ function gatePower(rep, d, ev, n) {
   var score = prox == null ? Math.round(served * 0.5 + sized * 0.5)
                            : Math.round(served * 0.45 + sized * 0.4 + prox * 0.15);
 
-  return { key: 'power', label: 'Power', status: status, score: score,
+  /* CONFIRMED means the status rests on what the utility said (through the
+     rep), not on the drawing or on nothing. Only a confirmed fail is a "does
+     not qualify"; everything unconfirmed is "needs further qualification". */
+  var confirmed = status === 'pass'
+    || (status === 'fail' && (willServe === 'none' || source === 'utility'))
+    || (status === 'conditional' && source === 'utility' && willServe === 'confirmed');
+  return { key: 'power', label: 'Power', status: status, score: score, confirmed: confirmed,
     headline: status === 'pass' ? 'Will-serve confirmed for ' + n + ' skid' + (n > 1 ? 's' : '')
             : status === 'fail' ? (willServe === 'none' ? 'Utility declined a new service' : 'Under one skid\'s draw')
             : status === 'conditional' ? (supported != null && supported < n ? 'Room for ' + supported + ' of ' + n
@@ -418,9 +424,12 @@ function gateLocation(rep, d, ev, site) {
   var ls = located ? 100 : 20;
   var score = Math.round(cs * 0.4 + zs * 0.4 + ls * 0.2);
 
-  return { key: 'location', label: 'Location', status: status, score: score,
+  /* residential zoning is a "does not qualify" only when the rep entered it;
+     a county record alone is a reason to check, not a verdict */
+  var confirmed = status === 'pass' || (status === 'fail' && !!(str(rep.zoningCode) || str(rep.zoningClass)));
+  return { key: 'location', label: 'Location', status: status, score: score, confirmed: confirmed,
     headline: status === 'pass' ? 'Charging site, ' + cls + ' zoning'
-            : status === 'fail' ? 'Residential zoning'
+            : status === 'fail' ? (str(rep.zoningCode) || str(rep.zoningClass) ? 'Residential zoning' : 'County record shows residential — confirm')
             : !located ? 'No map point'
             : zoning === 'unconfirmed' ? 'Zoning not confirmed'
             : charging !== 'pass' ? 'No chargers on the drawing'
@@ -440,6 +449,12 @@ function gateLocation(rep, d, ev, site) {
    gate — the verdict is the one rule. */
 function gateFiber(rep, ev) {
   var g = CL.gateFiber(rep, ev);
+  /* Only a carrier (through the rep's gig-on-site answer) confirms fiber. A
+     fail is the public record saying "unlikely" with no service on site:
+     no lease is priced on it (the hard gate), and it is never called a
+     confirmed "no" — a carrier may still serve the address. */
+  g.confirmed = g.status === 'pass';
+  if (g.status === 'fail') g.headline = 'Fiber unlikely on the public record — a carrier must confirm';
   var f = ev.fiberOnFile || null;
   if (f) {
     var nr = f.nearestRoute || {};
@@ -464,27 +479,40 @@ function gateFiber(rep, ev) {
    THE VERDICT — fiber does not average
    ═══════════════════════════════════════════════════════════════════════════ */
 var ORDER = ['power', 'location', 'fiber'];
+
+/* What a gate says, in the words a rep can repeat without overstating it.
+   NO FALSE RESULTS (Tommy, 2026-10-02: "we dont want false results it should
+   say needs further qualification"): a firm answer, either way, only on a
+   confirmed fact; everything resting on a drawing, a public map or a
+   missing answer NEEDS FURTHER QUALIFICATION. */
+function qualificationOf(g) {
+  if (g.status === 'pass') return 'clears';
+  if (g.status === 'fail') return g.confirmed ? 'fails' : 'likely-fails';
+  if (g.status === 'conditional' && g.confirmed) return 'clears-with-conditions';
+  return 'needs-qualification';
+}
+
 function verdictOf(gates) {
-  var fails = ORDER.filter(function (k) { return gates[k].status === 'fail'; });
-  var open = ORDER.filter(function (k) { return gates[k].status === 'unconfirmed'; });
-  var cond = ORDER.filter(function (k) { return gates[k].status === 'conditional'; });
+  ORDER.forEach(function (k) { gates[k].qualification = qualificationOf(gates[k]); });
+  function where(q) { return ORDER.filter(function (k) { return gates[k].qualification === q; }); }
   function names(ks) { return ks.map(function (k) { return gates[k].label.toLowerCase(); }); }
-  if (gates.fiber.status === 'fail')
-    return { verdict: 'disqualified', offerable: false,
-      reason: 'Fiber is the hard gate and this site fails it. No lease is priced: a site that cannot show '
-            + '1 Gbps bidirectional is not an Omega-Core site, however good the power is.' };
+  var fails = where('fails'), likely = where('likely-fails'), open = where('needs-qualification'), cond = where('clears-with-conditions');
   if (fails.length)
-    return { verdict: 'disqualified', offerable: false,
-      reason: 'Fails on ' + names(fails).join(' and ') + '. No lease is priced.' };
+    return { verdict: 'not-qualified', offerable: false,
+      reason: 'Does not qualify on a confirmed fact: ' + fails.map(function (k) { return gates[k].label.toLowerCase() + ' — ' + gates[k].headline; }).join('; ')
+            + '. No lease is priced.' };
+  if (likely.length)
+    return { verdict: 'needs-qualification', offerable: false,
+      reason: 'Needs further qualification before any lease is quoted: ' + likely.map(function (k) { return gates[k].label.toLowerCase() + ' — ' + gates[k].headline; }).join('; ')
+            + '. Nothing here confirms it either way.' };
   if (open.length)
-    return { verdict: 'incomplete', offerable: true,
-      reason: 'Indicative only — ' + names(open).join(', ') + ' ' + (open.length > 1 ? 'are' : 'is')
-            + ' not confirmed. Do not present this as a firm offer until the open gates are closed.' };
+    return { verdict: 'needs-qualification', offerable: true, indicative: true,
+      reason: 'Needs further qualification — ' + names(open).join(', ') + ' ' + (open.length > 1 ? 'are' : 'is')
+            + ' not confirmed yet. The lease below is an indicative range, not an offer, until the list below is closed.' };
   if (cond.length)
     return { verdict: 'conditional', offerable: true,
-      reason: 'Every gate is answered, with conditions on ' + names(cond).join(' and ')
-            + '. Offerable, with the conditions written into the LOI.' };
-  return { verdict: 'qualified', offerable: true, reason: 'Power, location and fiber clear on evidence. Offerable.' };
+      reason: 'Qualified on confirmed facts, with conditions on ' + names(cond).join(' and ') + ' to write into the LOI.' };
+  return { verdict: 'qualified', offerable: true, reason: 'Power, location and fiber clear on confirmed facts.' };
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -644,6 +672,7 @@ function evaluate(body, opts) {
   }
   var v = verdictOf(gates);
   var offer = v.offerable ? buildOffer(proposed, term) : null;
+  if (offer) offer.indicative = !!v.indicative;
   var host = hostEconomics(run, offer);
   var program = programOf(proposed, term, offer, gates);
 
@@ -675,7 +704,7 @@ function evaluate(body, opts) {
   var termAsked = num(rep.termYears);
   if (termAsked != null && termAsked > TERMS.maxTermYears) findings.push({ severity: 'note', text: 'A ' + termAsked
     + '-year term was asked for; the card prices up to ' + TERMS.maxTermYears + ' years.' });
-  if (v.verdict === 'incomplete') findings.push({ severity: 'risk', text: v.reason });
+  if (v.indicative) findings.push({ severity: 'risk', text: 'Indicative only: do not present the lease as an offer until the site is qualified.' });
   if (gates.fiber.status === 'conditional') findings.push({ severity: 'risk',
     text: 'Fiber is reachable but not on site. The lateral is ClearSky\'s cost in the program outlay — do not promise the host a separate fiber payment.' });
   if (host.run.stale) findings.push({ severity: 'note', text: 'The Run is older than the drawing — the host figures are from the last Run.' });
@@ -709,6 +738,8 @@ function evaluate(body, opts) {
                         footprintFt: PRODUCT.skid.lengthFt + ' × ' + PRODUCT.skid.depthFt } },
     gates: gates, gateOrder: ORDER.slice(),
     verdict: v.verdict, offerable: v.offerable, verdictReason: v.reason,
+    verdictLabel: { qualified: 'Qualified', conditional: 'Qualified with conditions',
+                    'needs-qualification': 'Needs further qualification', 'not-qualified': 'Does not qualify' }[v.verdict],
     offer: offer,
     host: host,
     program: program,

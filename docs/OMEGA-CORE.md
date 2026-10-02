@@ -59,10 +59,15 @@ limit), about an hour at 60 kW. Nobody should sell it as a full UPS.
 
 `BESS_CATALOG['CC-R60']` is the R60 as a battery product (BESS Config's Clean
 Cell group, Draw › BESS Pad on its 336 × 87 in skid via `GOTION_CATALOG_DIMS`).
-Its PCS is integrated (`_incPCS: true`, `xfmr: 'N/A'`), and the catalog's own
-word now wins over the size rule in `applyBMCatalog`, so the Guided Build does
-not draw an external PCS beside it; the BESS Pad modal turns "Full assembly"
-off for it. `evSkid: true` keeps the auto-sizer from recommending an EV
+Its PCS is integrated and its output native 277/480 V (`_incPCS: true`,
+`_incXfmr: true`); the external AC disconnect stays (`_incDisco: false`). The
+catalog's own YES wins over the size rule in `applyBMCatalog` (a tenant row
+with blank integration columns is "not said" and keeps the size rule), and
+every BESS Pad path — the modal, quick place, the cluster — places it with its
+disconnect and without a second PCS or a transformer. An unpublished usable
+kWh or price clears the BESS Config field rather than saving a stale one. Its
+**height is not stated**: the drawing's 82.75 in overall and the datasheet's
+2,200 mm (86.6 in) cabinet disagree — to confirm with Clean Cell. `evSkid: true` keeps the auto-sizer from recommending an EV
 charging skid for a peak-shaving target. Usable kWh, weight, price and the
 Autel charger rating are **not published** and stay null or say so; place the
 two Autel dispensers from the EV Catalog at the rating the project engineering
@@ -103,10 +108,24 @@ Pure, no I/O. Three gates, in the order Tommy named them:
   compute-lease's `classifyZoning` (residential fails), a map point, the skid
   placed.
 - **Fiber** — **compute-lease's `gateFiber`, unchanged: the hard gate**, 1 Gbps
-  bidirectional. A site that fails it is disqualified and no lease is priced.
+  bidirectional. While the public record says "unlikely" no lease is priced —
+  but that is *needs further qualification* (a carrier may still serve the
+  address), never a confirmed "no".
 
-Unanswered is **unconfirmed**, never a failure: the site comes back
-*incomplete* with a call list, an indicative offer and nothing invented.
+**No false results** (Tommy, 2 October 2026: "we dont want false results it
+should say needs further qualification"). A firm answer, either way, rests
+only on a confirmed fact; everything resting on a drawing, a public map or a
+missing answer **needs further qualification**:
+
+| Verdict | When | Lease |
+|---|---|---|
+| **Qualified** | every gate clears on confirmed facts (the utility's figure with a confirmed will-serve, gig fiber on site, the zoning, the chargers drawn) | priced |
+| **Qualified with conditions** | confirmed, with an engineering or contract condition (e.g. the utility's kW carries the compute but the battery recharge is capped) | priced |
+| **Needs further qualification** | anything open, or resting on the drawing or the public record; the result lists exactly what closes it | an **indicative range, marked "not an offer"** — or none at all while fiber or zoning only looks *unlikely* on the public record |
+| **Does not qualify** | only a confirmed fact: the utility declined a new service, the utility's own kW is under one skid, zoning the rep entered is residential | none |
+
+Each gate says the same in its own chip: *Clears*, *Clears with conditions*,
+*Needs qualification*, *Unlikely — confirm*, *Does not qualify*.
 
 **The lease card** (`omega-core-lease-v1`, ⚠ a seed, not comps): **$750 /
 $1,000 / $1,500 per skid per month**, escalating 2.0 / 2.5 / 3.0% a year, priced
@@ -151,6 +170,10 @@ client's `collect()` against a fake session, the project field, and the R60.
 `scripts/test-package-producers.js` holds the packaged door.
 
 ## Not built
+
+- **The skid's height.** The drawing says 82.75 in overall; the R60 cabinet
+  alone is 2,200 mm (86.6 in) on the datasheet. Omega-Core carries the
+  drawing's figure; the R60 row states none until Clean Cell confirms.
 
 - **Compute revenue.** The skid's own GPU revenue and ClearSky's return on the
   $450,000 are not modelled here; `api/_lib/compute-site.js` is where that

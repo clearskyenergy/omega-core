@@ -34,7 +34,14 @@
 
   var API = '/api/omega-core';
   var HOST_ID = 'omega-core-modal';
-  var st = { facts: null, evidence: null, evidenceKey: null, result: null, sources: {}, busy: false, refused: false };
+  var st = { facts: null, evidence: null, evidenceKey: null, result: null, sources: {}, busy: false, refused: false,
+             gen: 0, dirty: {} };
+  /* A request answers the dialog that asked, or nothing: closed, reopened or
+     on another project, its answer is dropped before it reads a field or
+     writes S.omegaCore. */
+  function live(gen, pid) {
+    return gen === st.gen && pid === (root._projectId || null) && !!document.getElementById(HOST_ID);
+  }
 
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function S_() { return root.S || {}; }
@@ -45,6 +52,23 @@
   function kw(n) { return n == null ? '—' : Math.round(n).toLocaleString('en-US') + ' kW'; }
 
   /* ── what the session knows ───────────────────────────────────────── */
+  /* The number in a typed field: '500 kVA' is 500, '1,200A' is 1200. */
+  function figure(v) {
+    if (v == null || v === '') return null;
+    var n = Number(String(v).replace(/[^0-9.\-]/g, ''));
+    return isFinite(n) && n > 0 ? n : null;
+  }
+  /* The intake's voltage select saves '120/208', '277/480' or '4160'. */
+  function intakeVolts(v) {
+    var t = String(v == null ? '' : v);
+    if (/4160/.test(t)) return 4160;
+    if (/480/.test(t)) return 480;
+    if (/208/.test(t)) return 208;
+    if (/240/.test(t)) return 240;
+    if (/600/.test(t)) return 600;
+    return figure(t);
+  }
+
   function intake(pid) {
     /* The Viability Workflow's answers, read without creating a store. */
     try {
@@ -83,11 +107,14 @@
                      l2Units: num(ev.l2Units) || 0, ports: num(ev.ports) || 0 };
     } } catch (e) {}
     try { if (typeof root.omegaDcLoadKw === 'function') d.dcLoadKw = num(root.omegaDcLoadKw()) || 0; } catch (e) {}
-    var amps = num(val('bm-service-amps')) || num(vw.p0_service_amps);
-    var volts = num(val('bm-service-volts')) || num(vw.p0_service_v);
-    if (amps && volts) d.service = { amps: amps, volts: volts, phases: volts <= 240 && /single|1/i.test(String(vw.p0_phase || '')) ? 1 : 3,
-                                     source: num(val('bm-service-amps')) ? 'BESS Config service' : 'site intake' };
-    d.xfmrKva = num(vw.p0_xfmr_kva);
+    /* amps and volts as a PAIR from one source: BESS Config's when its amps
+       are set, else the intake's — never intake amps on a default voltage */
+    var cfgAmps = figure(val('bm-service-amps'));
+    var amps = cfgAmps ? cfgAmps : figure(vw.p0_service_amps);
+    var volts = cfgAmps ? figure(val('bm-service-volts')) : intakeVolts(vw.p0_service_v);
+    if (amps && volts) d.service = { amps: amps, volts: volts, phases: 3,
+                                     source: cfgAmps ? 'BESS Config service' : 'site intake' };
+    d.xfmrKva = figure(vw.p0_xfmr_kva);
     try { var acc = typeof root._btmServiceAcceptance === 'function' ? root._btmServiceAcceptance() : null;
       if (acc && acc.hasLoad && num(acc.peakKW)) d.buildingKw = num(acc.peakKW); } catch (e) {}
     if (d.buildingKw == null && num(vw.p0_peak_kw)) d.buildingKw = num(vw.p0_peak_kw);
@@ -118,8 +145,10 @@
 
   /* ── talking to the server ────────────────────────────────────────── */
   function token() {
-    var u = root._currentUser || (root.firebase && root.firebase.auth && root.firebase.auth().currentUser);
-    return u ? u.getIdToken() : Promise.reject(new Error('Sign in to qualify a site for Omega-Core.'));
+    var u = null;
+    try { u = root._currentUser || (root.firebase && root.firebase.auth && root.firebase.auth().currentUser); } catch (e) { u = null; }
+    if (!u || typeof u.getIdToken !== 'function') return Promise.reject(new Error('Sign in to qualify a site for Omega-Core.'));
+    try { return Promise.resolve(u.getIdToken()); } catch (e) { return Promise.reject(new Error('Sign in to qualify a site for Omega-Core.')); }
   }
   function post(body) {
     return token().then(function (tok) {
@@ -148,20 +177,25 @@
   }
   function close() {
     var h = document.getElementById(HOST_ID); if (h) h.remove();
-    st.busy = false;
+    st.gen++; st.busy = false;
   }
   var INP = 'width:100%;box-sizing:border-box;background:var(--navy);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:6px 8px;font-size:11.5px;font-family:inherit';
   function lbl(t) { return '<div style="font-size:9.5px;color:#64748B;text-transform:uppercase;letter-spacing:.4px;margin:0 0 3px">' + t + '</div>'; }
-  function inp(id, value, ph, type) { return '<input id="' + id + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + esc(value == null ? '' : value) + '" placeholder="' + esc(ph || '') + '" style="' + INP + '" oninput="OmegaCoreQualify.touched()">'; }
+  function inp(id, value, ph, type) { return '<input id="' + id + '"' + (type ? ' type="' + type + '"' : '') + ' value="' + esc(value == null ? '' : value) + '" placeholder="' + esc(ph || '') + '" style="' + INP + '" oninput="OmegaCoreQualify.touched(this.id)">'; }
   function sel(id, value, opts) {
-    return '<select id="' + id + '" style="' + INP + '" onchange="OmegaCoreQualify.touched()">' + opts.map(function (o) {
+    return '<select id="' + id + '" style="' + INP + '" onchange="OmegaCoreQualify.touched(this.id)">' + opts.map(function (o) {
       return '<option value="' + esc(o[0]) + '"' + (String(value) === String(o[0]) ? ' selected' : '') + '>' + esc(o[1]) + '</option>';
     }).join('') + '</select>';
   }
   function field(label, html, w) { return '<div style="flex:' + (w || '1 1 150px') + ';min-width:0">' + lbl(label) + html + '</div>'; }
   function section(t) { return '<div style="font-size:10px;font-weight:800;color:#64748B;letter-spacing:.5px;margin:16px 0 8px">' + esc(t).toUpperCase() + '</div>'; }
-  var STATUS = { pass: ['#22C55E', 'Clears'], conditional: ['#38BDF8', 'Conditional'], unconfirmed: ['#F59E0B', 'Unconfirmed'], fail: ['#EF4444', 'Fails'] };
-  var VERDICT = { qualified: ['#22C55E', 'Qualified'], conditional: ['#38BDF8', 'Qualified with conditions'], incomplete: ['#F59E0B', 'Indicative — gates open'], disqualified: ['#EF4444', 'Not an Omega-Core site'] };
+  /* The words are the server's: a firm answer only on a confirmed fact,
+     everything else "needs further qualification" (Tommy, 2026-10-02). */
+  var QUAL = { clears: ['#22C55E', 'Clears'], 'clears-with-conditions': ['#38BDF8', 'Clears with conditions'],
+               'needs-qualification': ['#F59E0B', 'Needs qualification'], 'likely-fails': ['#FB923C', 'Unlikely — confirm'],
+               fails: ['#EF4444', 'Does not qualify'] };
+  var VERDICT = { qualified: ['#22C55E', 'Qualified'], conditional: ['#38BDF8', 'Qualified with conditions'],
+                  'needs-qualification': ['#F59E0B', 'Needs further qualification'], 'not-qualified': ['#EF4444', 'Does not qualify'] };
   function chip(c, t) { return '<span style="display:inline-block;padding:2px 8px;border-radius:999px;font-size:10px;font-weight:800;color:' + c + ';border:1px solid ' + c + ';background:rgba(255,255,255,.03)">' + esc(t) + '</span>'; }
 
   function header() {
@@ -218,15 +252,21 @@
       + '</div>';
   }
 
+  /* An answer is what the rep typed or chose, now or on an earlier visit.
+     A prefill (the skids on the drawing, the parcel's zoning) is not: left
+     untouched it is not sent, so the drawing and the county record keep
+     deciding when they change. Null when the dialog is gone. */
   function readRep() {
-    var r = {};
-    var u = num(val('oc-units')); if (u != null) r.units = u;
+    if (!document.getElementById(HOST_ID)) return null;
+    var saved = (st.facts && st.facts.saved) || {}, r = {};
+    function answered(id, key) { return !!st.dirty[id] || saved[key] != null; }
+    var u = num(val('oc-units')); if (u != null && answered('oc-units', 'units')) r.units = u;
     var a = num(val('oc-availableKw')); if (a != null) r.availableKw = a;
     r.willServe = val('oc-willServe') || 'unknown';
     r.fiberOnSite = val('oc-fiberOnSite') || 'unknown';
     var dn = num(val('oc-fiberDownMbps')); if (dn != null) r.fiberDownMbps = dn;
     var up = num(val('oc-fiberUpMbps')); if (up != null) r.fiberUpMbps = up;
-    if (val('oc-zoningCode')) r.zoningCode = val('oc-zoningCode');
+    if (val('oc-zoningCode') && answered('oc-zoningCode', 'zoningCode')) r.zoningCode = val('oc-zoningCode');
     r.hostWilling = val('oc-hostWilling') || 'unknown';
     var t = num(val('oc-termYears')); if (t != null) r.termYears = t;
     r.endOfTerm = val('oc-endOfTerm') || 'undecided';
@@ -245,7 +285,7 @@
   }
 
   function gateHtml(g) {
-    var s = STATUS[g.status] || ['#94A3B8', g.status];
+    var s = QUAL[g.qualification] || ['#94A3B8', g.qualification || g.status];
     return '<div style="border:1px solid var(--border);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--navy)">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div style="font-weight:800;color:var(--text);font-size:12.5px">' + esc(g.label)
       + (g.hardGate ? ' <span style="font-size:9.5px;color:#64748B;font-weight:600">· hard gate</span>' : '') + '</div>' + chip(s[0], s[1]) + '</div>'
@@ -255,9 +295,16 @@
       + '</div>';
   }
 
+  function paybackText(hs) {
+    var hasRev = hs.run && hs.run.annualRevenue > 0;
+    var after = hs.paybackYearsAfter != null ? hs.paybackYearsAfter + ' yr' : 'not inside the term';
+    if (!hasRev) return hs.paybackYearsAfter != null ? hs.paybackYearsAfter + ' yr on the lease alone' : '—';
+    return (hs.paybackYearsBefore != null ? hs.paybackYearsBefore + ' yr' : '40+ yr') + ' → ' + (hs.paybackYearsAfter != null ? after : '40+ yr');
+  }
+
   function resultHtml(r) {
     if (!r) return '';
-    var v = VERDICT[r.verdict] || ['#94A3B8', r.verdict];
+    var v = VERDICT[r.verdict] || ['#94A3B8', r.verdictLabel || r.verdict];
     var h = '<div style="margin-top:14px;padding:12px 14px;border-radius:10px;border:1px solid ' + v[0] + ';background:rgba(255,255,255,.02)">'
       + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-size:15px;font-weight:800;color:' + v[0] + '">' + esc(v[1]) + '</div>'
       + '<div style="font-size:11px;color:var(--sub)">' + esc(r.units.proposed) + ' skid' + (r.units.proposed > 1 ? 's' : '') + ' proposed'
@@ -269,7 +316,8 @@
 
     var o = r.offer;
     if (o) {
-      h += section('The host\'s land lease — ' + o.units + ' skid' + (o.units > 1 ? 's' : '') + ', ' + o.termYears + ' years');
+      h += section((o.indicative ? 'Indicative land lease — not an offer until the site qualifies — ' : 'The host\'s land lease — ')
+        + o.units + ' skid' + (o.units > 1 ? 's' : '') + ', ' + o.termYears + ' years');
       h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px"><tr style="color:#64748B;font-size:10px;text-transform:uppercase"><td></td><td style="text-align:right;padding:3px 6px">Low</td><td style="text-align:right;padding:3px 6px;color:var(--text)">Base</td><td style="text-align:right;padding:3px 6px">High</td></tr>';
       [['Per skid, per month', o.monthlyPerSkid], ['Per month', o.monthly], ['Per year (year 1)', o.annual], ['Over the term, escalating', o.termTotal]].forEach(function (row) {
         h += '<tr style="border-top:1px solid var(--border)"><td style="padding:5px 6px 5px 0;color:var(--sub)">' + row[0] + '</td>'
@@ -277,7 +325,8 @@
       });
       h += '</table><div style="font-size:10px;color:#64748B;margin-top:5px">' + esc(o.basis) + ' ' + esc(o.howToUse) + '</div>';
     } else {
-      h += section('The host\'s land lease') + '<div style="font-size:11px;color:#FCA5A5">No lease is priced on a site that fails a gate.</div>';
+      h += section('The host\'s land lease') + '<div style="font-size:11px;color:#FDE68A">No lease is quoted until '
+        + (r.verdict === 'not-qualified' ? 'this is resolved — the site does not qualify on a confirmed fact.' : 'the open items below are confirmed.') + '</div>';
     }
 
     var hs = r.host || {}, run = hs.run || {};
@@ -286,7 +335,7 @@
       var cells = [
         ['Site capex', money(run.capex)], ['Net of incentives', money(run.netCost)], ['Year-1 revenue', money(run.annualRevenue)],
         ['Lease, year 1', money(hs.leaseAnnual)], ['Revenue uplift', hs.revenueUpliftPct != null ? hs.revenueUpliftPct + '%' : '—'],
-        ['Payback', hs.paybackYearsBefore != null ? hs.paybackYearsBefore + ' → ' + hs.paybackYearsAfter + ' yr' : (hs.paybackYearsAfter != null ? hs.paybackYearsAfter + ' yr on the lease alone' : '—')],
+        ['Payback', paybackText(hs)],
         ['Lease over term', money(hs.leaseTermTotal)], ['Covers of net cost', hs.leaseCoversPctOfNet != null ? hs.leaseCoversPctOfNet + '%' : '—']
       ];
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px">' + cells.map(function (c) {
@@ -312,7 +361,7 @@
     }
 
     if (r.asks && r.asks.length) {
-      h += section('What closes it — the call list');
+      h += section(r.verdict === 'qualified' || r.verdict === 'conditional' ? 'Still to do' : 'What it needs to qualify');
       h += '<ol style="margin:0;padding-left:18px;font-size:11px;color:var(--text);line-height:1.65">' + r.asks.map(function (a) {
         return '<li><span style="color:#64748B">' + esc(a.gate) + ' ·</span> ' + esc(a.ask) + '</li>';
       }).join('') + '</ol>';
@@ -354,26 +403,33 @@
   function rescore() {
     if (st.busy) return Promise.resolve(null);
     var f = st.facts; if (!f) return Promise.resolve(null);
-    var rep = readRep();
+    var rep = readRep(); if (!rep) return Promise.resolve(null);
+    var gen = st.gen, pid = root._projectId || null;
     var ev = st.evidence && st.evidenceKey === siteKey(f) ? st.evidence : {};
     var evidence = { gridAtlas: ev.gridAtlas || null, network: ev.network || null, parcel: ev.parcel || null,
                      site: ev.site ? { lat: ev.site.lat, lng: ev.site.lng } : null, fiberOnFile: f.fiberOnFile };
     var site = { name: f.site.name, address: f.site.address || (ev.site && (ev.site.resolved || ev.site.address)) || '',
                  lat: f.site.lat != null ? f.site.lat : (ev.site && ev.site.lat), lng: f.site.lng != null ? f.site.lng : (ev.site && ev.site.lng) };
     busy(true); onSource('score', 'busy', 'running the gates…');
-    return post({ site: site, drawing: f.drawing, run: f.run, evidence: evidence, rep: rep }).then(function (r) {
+    var call;
+    try { call = post({ site: site, drawing: f.drawing, run: f.run, evidence: evidence, rep: rep }); }
+    catch (e0) { call = Promise.reject(e0); }
+    return call.then(function (r) {
+      if (!live(gen, pid)) return null;
       st.result = r;
       var S = S_();
       /* ride on the project: the answers and the headline, never the card */
       S.omegaCore = { rep: rep, at: new Date().toISOString(), verdict: r.verdict, units: r.units && r.units.proposed,
                       monthlyPerSkidBase: r.offer ? r.offer.monthlyPerSkid.base : null, termYears: r.terms && r.terms.termYears,
                       rateCardVersion: r.rateCardVersion || null };
-      f.saved = rep;
-      onSource('score', r.verdict === 'disqualified' ? 'bad' : r.verdict === 'qualified' ? 'ok' : 'warn',
-        r.verdict + (r.offer ? ' · ' + money(r.offer.monthlyPerSkid.base) + '/skid/mo at base' : ' · no lease priced'));
+      /* what is in the fields NOW (typed while the request ran) survives the repaint */
+      f.saved = readRep() || rep;
+      onSource('score', r.verdict === 'not-qualified' ? 'bad' : (r.verdict === 'qualified' || r.verdict === 'conditional') ? 'ok' : 'warn',
+        (r.verdictLabel || r.verdict) + (r.offer ? ' · ' + money(r.offer.monthlyPerSkid.base) + '/skid/mo at base' + (r.offer.indicative ? ' (indicative)' : '') : ' · no lease quoted'));
       busy(false); paint();
       return r;
     }, function (e) {
+      if (!live(gen, pid)) return null;
       /* refused (signed out, not on the plan): the lookups are not run for a
          caller the door turned away — they cost time and metered calls */
       if (e && (e.status === 401 || e.status === 403 || /Sign in/.test(e.message || ''))) st.refused = true;
@@ -392,27 +448,42 @@
     if (!CL || typeof CL.evidence !== 'function') { log('The lookup client did not load — qualifying on the drawing and your answers alone.', '#FDE68A'); return rescore(); }
     if (f.site.lat == null && !f.site.address) { log('Set the site\'s address or map pin first — there is nothing to look up.', '#FDE68A'); return rescore(); }
     busy(true); st.sources = {};
+    var gen = st.gen, pid = root._projectId || null, key = siteKey(f);
     var units = Math.max(1, num(val('oc-units')) || f.drawing.units || 1);
     return CL.evidence({ lat: f.site.lat, lng: f.site.lng, address: f.site.address, sizeMw: units * 0.135 }, { onSource: onSource })
       .then(function (ev) {
-        st.evidence = ev; st.evidenceKey = siteKey(f);
+        /* the evidence is the site's, worth keeping whoever asked; the
+           follow-up score belongs to the dialog that asked */
+        if (pid === (root._projectId || null)) { st.evidence = ev; st.evidenceKey = key; }
+        if (!live(gen, pid)) return null;
         busy(false); return rescore();
       }, function (e) {
+        if (!live(gen, pid)) return null;
         busy(false); log(esc((e && e.message) || 'The lookups did not run.'), '#FDE68A'); return rescore();
       });
   }
 
   function runSite() {
+    if (st.busy) return;
     if (typeof root.omegaRunAndWait !== 'function') { log('This build has no Run to call.', '#FDE68A'); return; }
-    log('Running the site…', '#BAE6FD');
-    root.omegaRunAndWait().then(function () {
-      var rep = st.facts ? readRep() : null;
+    var gen = st.gen, pid = root._projectId || null;
+    /* a project just opened has no Run in this session but is not stale, so
+       omegaRunAndWait would return at once: mark it stale so it really runs */
+    try { if (!S_().costRollup && !S_().running && typeof root.omegaSetStale === 'function') root.omegaSetStale(true); } catch (e) {}
+    busy(true); log('Running the site…', '#BAE6FD');
+    root.omegaRunAndWait().then(function (finished) {
+      if (!live(gen, pid)) return;
+      busy(false);
+      var rep = readRep();
       st.facts = collect(); if (rep) st.facts.saved = rep;
-      paint(); log('The Run is in. Qualify again to use it.', '#86EFAC');
+      paint();
+      if (finished === false) log('The Run did not finish in time — try Run on the results rail, then qualify again.', '#FDE68A');
+      else if (!S_().costRollup) log('The Run priced nothing on this drawing — place the chargers and equipment, then run it.', '#FDE68A');
+      else log('The Run is in. Qualify again to use it.', '#86EFAC');
     });
   }
 
-  function touched() { /* answers changed: nothing to do until the rep asks to re-score */ }
+  function touched(id) { if (id) st.dirty[id] = true; }
 
   /* A printable summary, printed through a hidden frame so no pop-up
      blocker eats it. Everything on it came back from the server. */
@@ -424,21 +495,21 @@
       + 'table{border-collapse:collapse;width:100%}td{padding:4px 6px;border-top:1px solid #e2e8f0}ul,ol{margin:0;padding-left:18px}.k{color:#64748b}.v{font-weight:700}.small{font-size:10px;color:#64748b}</style></head><body>';
     doc += '<div class="small">' + esc(b.name || 'ClearSky') + ' · Omega-Core site qualification · ' + esc(new Date().toISOString().slice(0, 10)) + '</div>'
       + '<h1>' + esc(f.site.name || 'Omega-Core site') + '</h1><div>' + esc(f.site.address || '') + '</div>'
-      + '<h2>Verdict</h2><div class="v">' + esc((VERDICT[r.verdict] || ['', r.verdict])[1]) + ' — ' + esc(r.units.proposed) + ' skid' + (r.units.proposed > 1 ? 's' : '') + '</div><div>' + esc(r.verdictReason) + '</div>'
+      + '<h2>Verdict</h2><div class="v">' + esc((VERDICT[r.verdict] || ['', r.verdictLabel || r.verdict])[1]) + ' — ' + esc(r.units.proposed) + ' skid' + (r.units.proposed > 1 ? 's' : '') + '</div><div>' + esc(r.verdictReason) + '</div>'
       + '<h2>The skid</h2><div>' + esc(r.product.compute.model) + ' ' + esc(r.product.compute.kw) + ' kW + ' + esc(r.product.battery.model) + ' ' + esc(r.product.battery.kwh) + ' kWh / ' + esc(r.product.battery.kw) + ' kW (' + esc(r.product.battery.pcs) + ', ' + esc(r.product.battery.acV) + ') on one '
       + esc(r.product.skid.lengthIn) + ' × ' + esc(r.product.skid.depthIn) + ' in skid · its own utility meter</div>'
-      + '<h2>Gates</h2><table>' + (r.gateOrder || []).map(function (k) { var g = r.gates[k]; return '<tr><td class="k">' + esc(g.label) + '</td><td class="v">' + esc((STATUS[g.status] || ['', g.status])[1]) + '</td><td>' + esc(g.headline) + '</td></tr>'; }).join('') + '</table>';
-    if (r.offer) doc += '<h2>Land lease to the host</h2><table><tr><td class="k">Per skid, per month</td><td class="v">' + money(r.offer.monthlyPerSkid.base) + '</td><td class="small">range ' + money(r.offer.monthlyPerSkid.low) + '–' + money(r.offer.monthlyPerSkid.high) + '</td></tr>'
+      + '<h2>Gates</h2><table>' + (r.gateOrder || []).map(function (k) { var g = r.gates[k]; return '<tr><td class="k">' + esc(g.label) + '</td><td class="v">' + esc((QUAL[g.qualification] || ['', g.status])[1]) + '</td><td>' + esc(g.headline) + '</td></tr>'; }).join('') + '</table>';
+    if (r.offer) doc += '<h2>' + (r.offer.indicative ? 'Indicative land lease — not an offer until the site qualifies' : 'Land lease to the host') + '</h2><table><tr><td class="k">Per skid, per month</td><td class="v">' + money(r.offer.monthlyPerSkid.base) + '</td><td class="small">range ' + money(r.offer.monthlyPerSkid.low) + '–' + money(r.offer.monthlyPerSkid.high) + '</td></tr>'
       + '<tr><td class="k">Per year, ' + esc(r.offer.units) + ' skid' + (r.offer.units > 1 ? 's' : '') + '</td><td class="v">' + money(r.offer.annual.base) + '</td><td></td></tr>'
       + '<tr><td class="k">Over ' + esc(r.offer.termYears) + ' years, escalating ' + esc(r.offer.escalatorPct.base) + '%</td><td class="v">' + money(r.offer.termTotal.base) + '</td><td></td></tr></table>';
     var hs = r.host || {};
     if (r.offer && hs.run && hs.run.capex != null) doc += '<h2>The charging site, from the Run</h2><table><tr><td class="k">Capex</td><td class="v">' + money(hs.run.capex) + '</td></tr><tr><td class="k">Year-1 revenue</td><td class="v">' + money(hs.run.annualRevenue) + '</td></tr>'
-      + (hs.paybackYearsBefore != null ? '<tr><td class="k">Payback</td><td class="v">' + hs.paybackYearsBefore + ' → ' + hs.paybackYearsAfter + ' years with the lease</td></tr>' : '')
+      + (hs.paybackYearsBefore != null || hs.paybackYearsAfter != null ? '<tr><td class="k">Payback (before → with the lease)</td><td class="v">' + esc(paybackText(hs)) + '</td></tr>' : '')
       + (hs.revenueUpliftPct != null ? '<tr><td class="k">Revenue uplift</td><td class="v">' + hs.revenueUpliftPct + '%</td></tr>' : '') + '</table>';
     var t = r.terms || {}, p = r.program || {}, fmv = p.fmvAtEndPerSkid || {};
     doc += '<h2>Terms</h2><ul><li>' + esc(t.minTermYears) + '-year minimum term. ' + esc(t.renewal) + '</li><li>' + esc(t.meter) + '</li><li>' + esc(t.ownership) + '</li><li>' + esc((t.endOfTerm || {}).remove) + '</li><li>' + esc((t.endOfTerm || {}).buyout)
       + ' Indicative: ' + money(fmv.low) + '–' + money(fmv.high) + ' per skid at year ' + esc((t.endOfTerm || {}).year) + ' on a ' + money(p.systemCostPerSkid) + ' system.</li></ul>';
-    if (r.asks && r.asks.length) doc += '<h2>Open items</h2><ol>' + r.asks.map(function (a) { return '<li>' + esc(a.gate) + ': ' + esc(a.ask) + '</li>'; }).join('') + '</ol>';
+    if (r.asks && r.asks.length) doc += '<h2>' + (r.verdict === 'qualified' || r.verdict === 'conditional' ? 'Still to do' : 'What it needs to qualify') + '</h2><ol>' + r.asks.map(function (a) { return '<li>' + esc(a.gate) + ': ' + esc(a.ask) + '</li>'; }).join('') + '</ol>';
     doc += '<p class="small">' + esc(r.disclaimer) + ' Lease card ' + esc(r.rateCardVersion) + '.</p></body></html>';
     var fr = document.createElement('iframe');
     fr.setAttribute('style', 'position:fixed;right:0;bottom:0;width:0;height:0;border:0');
@@ -455,7 +526,7 @@
       return;
     }
     if (st.evidenceKey && st.evidenceKey !== siteKey(st.facts)) { st.evidence = null; st.evidenceKey = null; st.sources = {}; }
-    st.result = null; st.refused = false;
+    st.result = null; st.refused = false; st.dirty = {}; st.gen++; st.busy = false;
     paint();
     /* Score at once on what the project holds, then gather the evidence
        for this site the first time the dialog opens on it. */

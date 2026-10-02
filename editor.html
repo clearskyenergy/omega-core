@@ -6667,12 +6667,14 @@ const GOTION_CATALOG_DIMS = {
   'CSI-SOLBANK3-5016':{ l:'19\'-10.5"',w:'7\'-12.0"', h:'9\'-6.0"',  wt:'~83,000 lbs', lf:19.875, wf:8.0,   hf:9.5   },
   'CSI-CSES351A6':    { l:'129\'-3"',  w:'11\'-2"',   h:'8\'-10"',   wt:'~392,000 lbs',lf:129.3,  wf:11.15, hf:8.86  },
   'CSI-POWERBLOCK-ESPB4H':{ l:'19\'-10.5"',w:'7\'-12.0"',h:'9\'-6.0"',wt:'~85,000 lbs ea',lf:19.875,wf:8.0, hf:9.5 },
-  /* The R60 is a SKID, and the footprint is the skid: 336 x 87 in from Clean
-     Cell's skid drawing (two Autel dispensers at the ends, the cabinet in the
-     middle), not from the datasheet, which prints only the cabinet
-     (1100 x 750 x 2200 mm). Height is the cabinet's 2,200 mm on the 8 in
-     base, derived; weight is unpublished and says so. */
-  'CC-R60':           { l:'28\'-0"',    w:'7\'-3"',    h:'~7\'-11" (derived)', wt:'SEE MFR SUBMITTAL', lf:28.0, wf:7.25, hf:7.88 },
+  /* The R60 is a SKID, and the footprint is the skid: 336 x 87 in from the
+     skid drawing ClearSky supplied (2026-10-02; two Autel dispensers at the
+     ends, the cabinet in the middle), not from the datasheet, which prints
+     only the cabinet (1100 x 750 x 2200 mm). Height is NOT stated: that
+     drawing's 82.75 in overall and the datasheet's 2,200 mm (86.6 in)
+     cabinet disagree, so it reads "see submittal" until Clean Cell confirms
+     it. Weight is unpublished and says so. */
+  'CC-R60':           { l:'28\'-0"',    w:'7\'-3"',    h:'SEE MFR SUBMITTAL', wt:'SEE MFR SUBMITTAL', lf:28.0, wf:7.25 },
 };
 
 const CTYPES=[
@@ -11048,18 +11050,6 @@ function _padModelChange(){
       var sm=models[parseInt(sel.value,10)];
       var qtyEl=document.getElementById('pad-qty');
       if(sm && sm.sysQty && qtyEl){ qtyEl.value=sm.sysQty; }
-      /* A skid that carries its own PCS (the CleanCell R60) is the whole
-         assembly already: "Full assembly" would add a PCS, transformer and
-         disconnect beside it that the product does not need. Only the
-         catalog's explicit word turns it off; anything else is untouched. */
-      var asmEl=document.getElementById('pad-assembly');
-      var ce=(sm && typeof BESS_CATALOG!=='undefined') ? BESS_CATALOG[sm.id] : null;
-      if(asmEl && ce && ce._incPCS===true){
-        if(asmEl.checked){ asmEl.checked=false; asmEl.setAttribute('data-auto-off','1'); }
-      } else if(asmEl && asmEl.getAttribute('data-auto-off')==='1'){
-        /* we turned it off for the skid; picking another model puts it back */
-        asmEl.checked=true; asmEl.removeAttribute('data-auto-off');
-      }
     }
   }catch(e){}
 }
@@ -11162,6 +11152,22 @@ function _doPlaceBesPad(p,spec,opts){
        - Bollards + fence wrap the combined footprint.
      Parts store FEET-space offsets (dx,dy) from the assembly center (0,0). */
   var auxDefs=_asmAuxSpecs();
+  /* A unit that SAYS what rides on it (the CleanCell R60's side-mounted
+     Sol-Ark, a tenant product's integrates{}) gets no second PCS or
+     transformer beside it — on every path that places it (the modal, quick
+     place, the cluster). The external AC disconnect stays unless the unit
+     says it carries one. */
+  try{
+    var _ce=(typeof BESS_CATALOG!=='undefined') ? BESS_CATALOG[_asmElecFromSpec(spec).key] : null;
+    if(_ce){
+      auxDefs=auxDefs.filter(function(a){
+        if(a.key==='pcs'   && _ce._incPCS===true)   return false;
+        if(a.key==='xfmr'  && _ce._incXfmr===true)  return false;
+        if(a.key==='disco' && _ce._incDisco===true) return false;
+        return true;
+      });
+    }
+  }catch(e){}
   var parts=[];
   var padMargin=2.0;    /* ft of concrete around the whole group */
   var gearVGap=2.5;     /* ft between stacked gear units (vertical) */
@@ -21736,9 +21742,11 @@ const BESS_CATALOG = {
      one 61.44 kWh high-voltage LFP cabinet (614.4 VDC, 100 Ah), one
      side-mounted Sol-Ark 60K three-phase hybrid PCS (60 kW continuous,
      277/480 V), and two Autel DC fast-charging dispensers on one
-     transportable skid. The PCS is integrated (it rides on the cabinet), so
-     the explicit _inc* flags below tell the BESS Config and the Guided Build
-     not to add an external PCS, transformer or disconnect.
+     transportable skid. The PCS is integrated (it rides on the cabinet) and
+     the output is native 277/480 V, so _incPCS and _incXfmr tell the BESS
+     Config, the Guided Build and BESS Pad to add no external PCS and no
+     step-up transformer; _incDisco is false because a site AC disconnect is
+     still required (72.3 A max AC output).
      The datasheet does NOT publish usable kWh, weight, price or the Autel
      charger rating ("established in the project engineering package"), so
      those stay null or say so — never a guess. The 336 x 87 in skid is Clean
@@ -21749,7 +21757,7 @@ const BESS_CATALOG = {
     kwh:61.44,usable:null,kw:60,dur:1.02,dcv:'614.4V (100Ah)',eqcost:null,
     inv:'Sol-Ark 60K-3P hybrid PCS (integrated, side-mounted on the cabinet)',ikva:60,
     xfmr:'N/A',disco:'Project-engineered (72.3 A max AC output)',
-    _incPCS:true,_incXfmr:false,_incDisco:false,evSkid:true,
+    _incPCS:true,_incXfmr:true,_incDisco:false,evSkid:true,
     ci:true,gridConnectV:'277/480 VAC 4-wire Wye or 480 VAC 3-wire Delta',acCurrent:72.3,peakKva:'90 kVA for 10 s (off grid)',maxDcA:100,
     pcsEff:'97.5% max / 96.5% CEC / 96.0% grid-to-battery',cooling:'Forced-air cooling (battery)',
     tempRange:'Battery charge 0..55C, discharge -20..55C; PCS -40..60C (derating above 45C)',
@@ -21759,7 +21767,7 @@ const BESS_CATALOG = {
     cabinet:'1100 W x 750 D x 2200 H mm (battery cabinet)',dims:'8534x2210mm skid (336 x 87 in)',
     installType:'Floor-mounted transportable commercial skid',
     evChargers:{count:2,mfr:'Autel',kind:'DC fast-charging dispenser',kw:null},
-    verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 in per Clean Cell skid drawing',
+    verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 in per the skid drawing ClearSky supplied (2026-10-02)',
     notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: quote required. Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
 };
 
@@ -21885,6 +21893,9 @@ function applyBMCatalog() {
   set('name', 'BESS-' + String(idx).padStart(2,'0'));
   set('mfr', m.mfr); set('model', m.model); set('kwh', m.kwh); set('usable', m.usable);
   set('kw', m.kw); set('dur', m.dur); set('dcv', m.dcv); set('eqcost', m.eqcost);
+  /* unpublished is blank: the input's 700 kWh default, or the last model's
+     figure, must never save as this unit's usable energy or price */
+  ['usable','eqcost'].forEach(function(k){ var el=document.getElementById('bm-'+k); if(el && m[k]==null) el.value=''; });
   set('inv', m.inv); set('ikva', m.ikva); set('xfmr', m.xfmr); set('disco', m.disco);
   set('notes', m.notes);
   document.getElementById('bm-chem').value = m.chem || 'LFP';
@@ -21892,13 +21903,15 @@ function applyBMCatalog() {
   // step-up transformer on the pad; smaller Edge units typically do not.
   var _big = (+m.kw||0) > 760;
   var _setChk=function(cid,on){var el=document.getElementById('bm-'+cid);if(el)el.checked=!!on;};
-  /* An entry that SAYS what rides on its pad (the CleanCell R60's
+  /* An entry that SAYS something rides on its pad (the CleanCell R60's
      side-mounted Sol-Ark, a tenant product's integrates{}) is believed over
      the size rule, or a 60 kW skid with its PCS on the cabinet saves as
-     needing an external one and the Guided Build draws it. */
-  _setChk('inc-pcs',  m._incPCS  != null ? m._incPCS  : _big);
-  _setChk('inc-disco',m._incDisco!= null ? m._incDisco: (_big && !!m.disco));
-  _setChk('inc-xfmr', m._incXfmr != null ? m._incXfmr : (_big && !!m.xfmr));
+     needing an external one and the Guided Build draws it. Only a YES: a
+     tenant row with blank integration columns imports as false, and that is
+     "not said", not "external", so the size rule still decides it. */
+  _setChk('inc-pcs',  m._incPCS===true   || _big);
+  _setChk('inc-disco',m._incDisco===true || (_big && !!m.disco));
+  _setChk('inc-xfmr', m._incXfmr===true  || (_big && !!m.xfmr));
   if(typeof _bmUpdateIntegrationHint==='function') _bmUpdateIntegrationHint();
   // Show preview
   const hasCost = m.eqcost != null;
@@ -54756,7 +54769,7 @@ var DERC_DC = (function () {
         if (c.omegaCore) {
           out[k].omegaCore = true; out[k].ownMeter = !!c.ownMeter;
           out[k].bessKw = c.bessKw; out[k].bessKwh = c.bessKwh;
-          out[k].bessKey = c.bessKey; out[k].bessModel = c.bessModel; out[k].hf = c.hf;
+          out[k].ocBessKey = c.bessKey; out[k].bessModel = c.bessModel; out[k].hf = c.hf;
         }
       }
     }
@@ -55007,7 +55020,9 @@ function _derPlaceDcPad(p){
   var _oc=DERC_DC[_derDcId];
   if(_oc && _oc.omegaCore){
     sh.omegaCore=true; sh.ownMeter=true; sh.bessKw=_oc.bessKw; sh.bessKwh=_oc.bessKwh;
-    sh.bessKey=_oc.bessKey; sh.bessModel=_oc.bessModel; sh.hf=_oc.hf;
+    /* under its own name: a host reader that seeds from `bessKey` (the
+       engineering build's BESS step) must never pick the skid's battery */
+    sh.ocBessKey=_oc.ocBessKey; sh.bessModel=_oc.bessModel; sh.hf=_oc.hf;
   }
   S.shapes.push(sh); renderShape(sh); updShapeCount(); pushHist();
   if(typeof updateSummaryPanel==='function') updateSummaryPanel();
@@ -92713,7 +92728,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       /* default to the unit already on the drawing if there is one */
       try {
         var seed = null;
-        (S_() && S_().shapes || []).forEach(function (x) { if (x && x.bessKey) seed = x.bessKey; });
+        (S_() && S_().shapes || []).forEach(function (x) { if (x && x.bessKey && !x.omegaCore) seed = x.bessKey; });
         if (seed) sel.value = seed;
       } catch (e) {}
       if (!sel.value && units.length) sel.value = units[0].key;
