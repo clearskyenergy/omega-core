@@ -118769,6 +118769,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
  *  either. So the drawing and analysis tools say NEW, and only the things *
  *  that emit a file to a third party say BETA.                            *
  *                                                                        *
+ *  2026-10-02: the owner retired BETA on the ribbon; every tag below      *
+ *  reads NEW. The notes on what each tool still lacks stay, so they can   *
+ *  be finished rather than forgotten.                                     *
+ *                                                                        *
  *  Both reuse the app's own .omega-beta anchor class so the corner        *
  *  position matches the badge already on Compute Build.                   *
  *                                                                        *
@@ -118797,8 +118801,7 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
   ];
 
   /* NEW: finished tools this patch set added. Named by id because they
-     carry no onclick attribute. Geo Export is deliberately absent — it is
-     an export, so it is in the BETA table above. */
+     carry no onclick attribute. */
   var OWN = [
     ['rb-bldg-designer',  'NEW'],
     ['rb-cad-schem',      'NEW'],
@@ -118813,6 +118816,8 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     /* Tools this patch set added. NEW where the tool does what it claims;
        BETA where it works but is knowingly incomplete, and the reason is
        written down so it can be retired rather than lingering forever.
+       Since 2026-10-02 these read NEW too (the owner's call); the notes
+       still say what each one lacks.
 
          Permitting Matrix  one verified jurisdiction pack (Vista / SDG&E).
                             Everywhere else the permits and code references
@@ -142698,7 +142703,7 @@ challengeRow(s) +
 </script>
 
 
-<!-- ═══ 3D SITE VISUALIZER (BETA) ═════════════════════════════════════
+<!-- ═══ 3D SITE VISUALIZER ═════════════════════════════════════════
      Renders the drawn site map as a lit 3D model. Adds a button to
      Output › Reports. Self-contained; three.js is lazy-loaded only
      when the view is actually opened.                              -->
@@ -146407,7 +146412,7 @@ var CSS = ''
 + '#ovis .ov-ttl{font-size:13px;font-weight:700;letter-spacing:.3px}'
 + '#ovis .ov-ttl span{color:#4A8FD8}'
 + '#ovis .ov-sub{font-size:10.5px;color:#9A9A9A;font-family:"IBM Plex Mono",monospace}'
-+ '#ovis .ov-beta{display:inline-block;margin-left:7px;padding:1px 5px;border-radius:2px;'
++ '#ovis .ov-ttl .ov-beta{display:inline-block;margin-left:7px;padding:1px 5px;border-radius:2px;'
 +   'background:var(--accent,#4A8FD8);color:var(--on-accent,#fff);font-size:8.5px;font-weight:800;letter-spacing:.8px;'
 +   'vertical-align:2px;font-family:"IBM Plex Mono",monospace}'
 + '#ov-ribbon-btn{position:relative}'
@@ -147287,7 +147292,7 @@ function injectButton(){
     b.id = 'ov-ribbon-btn';
     b.title = '3D Site Visualizer \u2014 render the drawn site map as a lit 3D model: '
             + 'carports, rooftop and ground arrays, BESS, transformers and parking';
-    /* BETA, using the app's OWN badge class and markup order rather than
+    /* NEW, using the app's OWN badge class and markup order rather than
        a bespoke one. The custom badge sat in front of the icon and used a
        different colour and size, so it read as a broken button next to
        the Permitting Matrix and Bill Analysis tags beside it. */
