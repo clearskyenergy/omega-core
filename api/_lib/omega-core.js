@@ -274,7 +274,11 @@ function gatePower(rep, d, ev, n) {
       status = 'fail';
       basis.push('The utility has declined a new service here.');
     } else if (headroom < M.firmKw) {
-      status = source === 'utility' ? 'fail' : 'unconfirmed';
+      /* Under one skid. From the utility it is a confirmed fail; from the
+         drawing it is a fail NOT confirmed — "unlikely, utility to confirm":
+         no lease is quoted on room the only evidence says is not there, and
+         nothing calls the site a "no" on a drawing alone. */
+      status = 'fail';
       basis.push(fmt(Math.max(0, headroom)) + ' kW is under one skid\'s ' + M.firmKw + ' kW firm draw.');
       if (source === 'drawing') asks.push('The drawn transformer looks full. Ask the utility whether a new 480 V '
         + 'service for ' + fmt(needPeak) + ' kW can be set here — a transformer upgrade is their call and their cost to quote.');
@@ -340,9 +344,12 @@ function gatePower(rep, d, ev, n) {
     || (status === 'conditional' && source === 'utility' && willServe === 'confirmed');
   return { key: 'power', label: 'Power', status: status, score: score, confirmed: confirmed,
     headline: status === 'pass' ? 'Will-serve confirmed for ' + n + ' skid' + (n > 1 ? 's' : '')
-            : status === 'fail' ? (willServe === 'none' ? 'Utility declined a new service' : 'Under one skid\'s draw')
+            : status === 'fail' ? (willServe === 'none' ? 'Utility declined a new service'
+                                   : source === 'utility' ? 'Under one skid\'s draw'
+                                   : 'Drawn transformer looks full — utility to confirm')
             : status === 'conditional' ? (supported != null && supported < n ? 'Room for ' + supported + ' of ' + n
                                           : headroom == null ? 'Will-serve confirmed — kW to read off it'
+                                          : (source === 'utility' && willServe === 'confirmed') ? 'Room at the compute load — recharge capped'
                                           : 'Room shown — utility to confirm')
             : 'Available power not confirmed',
     needKw: { firm: needFirm, peak: needPeak }, headroomKw: headroom == null ? null : Math.round(headroom),
@@ -697,8 +704,6 @@ function evaluate(body, opts) {
   if (!parcel) findings.push({ severity: 'note', text: 'No parcel record for this point — zoning and owner are unverified.' });
   if (proposed < n) findings.push({ severity: 'risk', text: 'Power supports ' + proposed + ' of the ' + n
     + ' skids asked for; the lease is priced on ' + proposed + '.' });
-  if (offer && sup === 0) findings.push({ severity: 'risk', text: 'On what the project shows there is no room for even one skid; '
-    + 'the lease on ' + proposed + ' is indicative until the utility says it will serve.' });
   if (asked > MAX_UNITS) findings.push({ severity: 'note', text: 'Asked for ' + asked + ' skids; one screen prices up to '
     + MAX_UNITS + '. Split the site or screen the rest separately.' });
   var termAsked = num(rep.termYears);

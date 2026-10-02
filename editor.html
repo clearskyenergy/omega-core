@@ -12498,7 +12498,7 @@ function _snapshotCampus(info){
   var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
   function belongs(o){
     if (!o) return false;
-    if (o.omegaCampus === info.tag || MAP[o.kind] === info.tag) return true;
+    if (o.omegaCampus === info.tag || (o.omegaCore ? null : MAP[o.kind]) === info.tag) return true;
     if (!info.foot) return false;
     var c = _shapeCentroid(o);
     return !!(c && _ptInPoly(c.x, c.y, info.foot));
@@ -12797,7 +12797,7 @@ function _campusPredicate(tag, footprint){
   var fences = [], seeds = [];
   (S.shapes||[]).forEach(function(o){
     if (!o || o.isSiteBoundary) return;
-    if (o.omegaCampus === tag || MAP[o.kind] === tag){
+    if (o.omegaCampus === tag || (o.omegaCore ? null : MAP[o.kind]) === tag){
       var c=_shapeWorldCentroid(o); if(c) seeds.push(c);
     }
   });
@@ -12825,7 +12825,7 @@ function _campusPredicate(tag, footprint){
   }
   return function(o){
     if (!o) return false;
-    if (o.omegaCampus === tag || MAP[o.kind] === tag) return true;
+    if (o.omegaCampus === tag || (o.omegaCore ? null : MAP[o.kind]) === tag) return true;
     if (footprint){
       var c = (o.pts ? _shapeWorldCentroid(o) : _shapeCentroid(o));
       if (c && _ptInPoly(c.x, c.y, footprint)) return true;
@@ -34743,6 +34743,10 @@ function o2Targets(){
    with the campus the selection belongs to. The compound builder writes
    omegaCampus using the same words, so this is a lookup and not a guess.
    Class membership is untouched — the chips still count what they counted. */
+/* An Omega-Core skid is kind derdc but never a member of the host's compute
+   campus (it is ClearSky's, on its own meter): every reader below asks
+   `o.omegaCore ? null : MAP[o.kind]`, so moving, turning or fitting the
+   host's compound never drags the skid, and moving the skid never drags it. */
 var _O2_CAMPUS_OF_KIND = { derdc:'compute', deralt:'generation', derwind:'generation',
                            bespad:'storage', assembly:'storage',
                            dersolar:'solar', solar:'solar' };
@@ -34753,7 +34757,7 @@ function _o2WithFences(targets){
     seen[t.kind + ':' + t.id] = 1;
     if (t.kind !== 'shape') return;
     var sh = (S.shapes||[]).filter(function(x){ return x.id===t.id; })[0];
-    var tag = sh && _O2_CAMPUS_OF_KIND[sh.kind];
+    var tag = sh && !sh.omegaCore && _O2_CAMPUS_OF_KIND[sh.kind];
     if (tag) tags[tag] = 1;
   });
   if (!Object.keys(tags).length) return targets;
@@ -34927,7 +34931,7 @@ function omegaBlockOut(){
       if (!o || o===fence || o.locked || o.isSiteBoundary || !o.pts || o.pts.length<2) return false;
       if (o.omegaCampus) return false;
       var c = _shapeCentroid(o);
-      return (MAP[o.kind] === tag) || !!(c && _ptInPoly(c.x, c.y, fence.pts));
+      return ((o.omegaCore ? null : MAP[o.kind]) === tag) || !!(c && _ptInPoly(c.x, c.y, fence.pts));
     });
     if (!members.length) return;
 
@@ -35002,7 +35006,7 @@ function omegaRecalibrate(){
     var members = (S.shapes||[]).filter(function(o){
       if (!o || o===fence || o.locked || o.isSiteBoundary || !o.pts || o.pts.length<2) return false;
       if (o.omegaCampus === tag) return false;             /* another fence */
-      return (MAP[o.kind] === tag) || _ptInPoly((_shapeCentroid(o)||{}).x,
+      return ((o.omegaCore ? null : MAP[o.kind]) === tag) || _ptInPoly((_shapeCentroid(o)||{}).x,
                                                 (_shapeCentroid(o)||{}).y, fence.pts);
     });
     if (!members.length) return;
@@ -35130,7 +35134,7 @@ function omegaSetLayoutFacing(dir){
   var tags = {};
   (S.shapes||[]).forEach(function(o){
     if (!o || o.isSiteBoundary) return;
-    var t = o.omegaCampus || MAP[o.kind];
+    var t = o.omegaCampus || (o.omegaCore ? null : MAP[o.kind]);
     if (t) tags[t] = 1;
   });
   var names = Object.keys(tags);
@@ -35210,7 +35214,7 @@ function _omegaAxisLabel(deg){
       var tags = {};
       (S.shapes||[]).forEach(function(o){
         if (!o || o.isSiteBoundary) return;
-        var t = o.omegaCampus || MAP[o.kind];
+        var t = o.omegaCampus || (o.omegaCore ? null : MAP[o.kind]);
         if (t) tags[t] = 1;
       });
       var moved = 0, over = [];
@@ -35534,7 +35538,7 @@ function omegaAlignCampus(tag, deg){
     var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
     var x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity,got=false;
     (S.shapes||[]).forEach(function(o){
-      if (!o || (o.omegaCampus!==tag && MAP[o.kind]!==tag) || !o.pts) return;
+      if (!o || (o.omegaCampus!==tag && (o.omegaCore ? null : MAP[o.kind])!==tag) || !o.pts) return;
       o.pts.forEach(function(p){
         if(p.x<x1)x1=p.x; if(p.y<y1)y1=p.y; if(p.x>x2)x2=p.x; if(p.y>y2)y2=p.y; got=true; });
     });
@@ -35585,7 +35589,7 @@ function omegaAlignToLand(){
   var tags = {}, MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
   (S.shapes||[]).forEach(function(o){
     if (!o || o.isSiteBoundary) return;
-    var t = o.omegaCampus || MAP[o.kind];
+    var t = o.omegaCampus || (o.omegaCore ? null : MAP[o.kind]);
     if (t) tags[t] = 1;
   });
   var names = Object.keys(tags);
@@ -164887,7 +164891,7 @@ if (root.console && console.info) {
           var tagsF = {};
           (S.shapes || []).forEach(function (o) {
             if (!o || o.isSiteBoundary) return;
-            var t = o.omegaCampus || MAPK[o.kind]; if (t) tagsF[t] = 1;
+            var t = o.omegaCampus || (o.omegaCore ? null : MAPK[o.kind]); if (t) tagsF[t] = 1;
           });
           var tooBig = [];
           Object.keys(tagsF).forEach(function (t) {

@@ -45,7 +45,7 @@ limit), about an hour at 60 kW. Nobody should sell it as a full UPS.
   POI, the data-centre electrical ROM, `OmegaComputeCost.pods` (no $30k/kW pod
   price), the one-line and the auto single-line, the supply links, the
   proposal type, the overview archetype, the Compute HUD's reconstruction, the
-  project kinds and the guided build's taps. Without that, one 75 kW skid read
+  project kinds, the guided build's taps, Fence & Tie, the cluster dialog's EMS feed, the electrical bid and RFQ, the permit notes, and the campus grouping that moves and turns the host's compute compound. Without that, one 75 kW skid read
   as about $8M of data centre on the host's Run and turned a charging site into
   a "compute campus".
 - **It is counted as itself:** its own legend row ("Omega-Core skid (own

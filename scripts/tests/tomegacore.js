@@ -143,7 +143,10 @@ eq(dp.status, 'conditional', 'the drawn transformer shows room: conditional, nev
 eq(dp.headroomSource, 'drawing', 'and says the headroom is the drawing\'s');
 eq(dp.headroomKw, Math.round(1500 * 0.95 - 638), 'headroom = kVA x pf - the host\'s drawn chargers');
 var full = clone(drawn); full.drawing.xfmrKva = 500;
-eq(OC.evaluate(full, {}).gates.power.status, 'unconfirmed', 'a full drawn transformer is unconfirmed, never a fail on a drawing alone');
+var fullR = OC.evaluate(full, {});
+eq(fullR.gates.power.qualification, 'likely-fails', 'a full drawn transformer is "unlikely — confirm", never a confirmed fail on a drawing alone');
+eq(fullR.verdict, 'needs-qualification', 'so the site needs further qualification');
+eq(fullR.offer, null, 'and no lease is quoted on room the only evidence says is not there — never more skids as the room shrinks');
 var many = clone(GOOD); many.rep.units = 6; many.rep.availableKw = 300;
 var mr = OC.evaluate(many, {});
 eq(mr.units.supported, 4, '300 kW carries 4 skids at the compute load');
@@ -166,7 +169,10 @@ var pend = OC.evaluate({ rep: { willServe: 'requested' } }, {});
 ok(pend.asks.some(function (a) { return /chase the pending will-serve/.test(a.ask); }), 'a pending will-serve is chased, not re-opened');
 var fullA = OC.evaluate(full, {});
 ok(!fullA.asks.some(function (a) { return /drawing shows room/.test(a.ask); }), 'a full drawn transformer never also says the drawing shows room');
-ok(fullA.findings.some(function (f) { return /no room for even one skid/.test(f.text); }), 'and an offer on no room says it is indicative');
+var six = clone(full); six.rep.units = 6;
+eq(OC.evaluate(six, {}).offer, null, 'six asked on a full drawn transformer: still no lease, not six skids priced');
+var cappedH = clone(GOOD); cappedH.rep.availableKw = 100;
+eq(OC.evaluate(cappedH, {}).gates.power.headline, 'Room at the compute load — recharge capped', 'a utility-confirmed figure never reads "utility to confirm"');
 var down = clone(GOOD); down.rep.units = 3; down.rep.availableKw = 140;
 var dr = OC.evaluate(down, {});
 eq(dr.units.proposed, 1, '140 kW carries one skid');
@@ -324,6 +330,15 @@ function editorChecks() {
   ok(/filter\(function \(it\) \{ return !it\.notHostScope; \}\)/.test(ED), 'nor sent out for quote');
   ok(/if\(sh\.kind==='derdc' && sh\.omegaCore\)\{ ocSkids\+\+; continue; \}/.test(ED) && /separate 480 V utility service and meter, not interconnected/.test(ED), 'the permit notes call it a separate service, never host DER under NEC 705');
   ok(/inv\.separateService/.test(ED), 'and the permit inventory lists it apart from the DER');
+  ok((ED.match(/\(o\.omegaCore \? null : MAP\[o\.kind\]\)/g) || []).length >= 9 && /!sh\.omegaCore && _O2_CAMPUS_OF_KIND\[sh\.kind\]/.test(ED)
+     && /\(o\.omegaCore \? null : MAPK\[o\.kind\]\)/.test(ED), 'moving, turning or fitting the host\'s compute campus never drags the skid, nor the skid the campus');
+  var o2 = { S: { shapes: [{ id: 'f1', kind: 'rect', omegaCampus: 'compute', campusLabel: 'COMPUTE', pts: [{ x: 0, y: 0 }, { x: 100, y: 100 }] },
+                           { id: 'pod', kind: 'derdc', pts: [{ x: 50, y: 50 }] }, { id: 'skid', kind: 'derdc', omegaCore: true, pts: [{ x: 900, y: 900 }] }] } };
+  vm.createContext(o2);
+  vm.runInContext(ED.slice(ED.indexOf('var _O2_CAMPUS_OF_KIND = {'), ED.indexOf('function _o2WithFences(targets){')), o2);
+  vm.runInContext(bodyFrom(ED, 'function _o2WithFences(targets){'), o2);
+  var picked = vm.runInContext("_o2WithFences([{kind:'shape',id:'skid'}])", o2);
+  eq(picked.map(function (x) { return x.id; }).join(','), 'skid', 'selecting the skid brings no host compute fence with it');
 
   /* the Output button, its owner, its icon, its module */
   ok(/<button class="rbtn" id="rb-omega-core" onclick="rbRun\(openOmegaCore\)" data-cap="compute"/.test(ED), 'Output › Omega-Core, on the compute cap');

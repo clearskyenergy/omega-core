@@ -379,8 +379,8 @@
     var f = st.facts; if (!f) return;
     var body = '<div style="padding:14px 20px">' + factsHtml(f) + repHtml(f)
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'
-      + '<button id="oc-screen" onclick="OmegaCoreQualify.screen()" style="flex:1 1 200px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(34,211,238,.14);border:1px solid rgba(34,211,238,.5);color:#A5F3FC">' + (st.evidence ? 'Re-run the lookups' : 'Screen the site') + ' — power, location, fiber</button>'
-      + '<button id="oc-rescore" onclick="OmegaCoreQualify.rescore()" style="flex:1 1 160px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.45);color:#86EFAC">Qualify with these answers</button>'
+      + '<button id="oc-screen" onclick="OmegaCoreQualify.screen()"' + (st.busy ? ' disabled' : '') + ' style="flex:1 1 200px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(34,211,238,.14);border:1px solid rgba(34,211,238,.5);color:#A5F3FC">' + (st.evidence ? 'Re-run the lookups' : 'Screen the site') + ' — power, location, fiber</button>'
+      + '<button id="oc-rescore" onclick="OmegaCoreQualify.rescore()"' + (st.busy ? ' disabled' : '') + ' style="flex:1 1 160px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.45);color:#86EFAC">Qualify with these answers</button>'
       + (st.result ? '<button onclick="OmegaCoreQualify.print()" style="flex:0 1 120px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.4);color:var(--text)">Print</button>' : '')
       + '</div>' + '<div id="oc-sources">' + sourcesHtml() + '</div>'
       + '<div id="oc-log" style="margin-top:8px;font-size:11px;color:var(--sub)"></div>'
