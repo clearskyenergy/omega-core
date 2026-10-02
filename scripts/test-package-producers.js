@@ -21,6 +21,7 @@ async function main() {
     ['bess-size', 'POST', { mode: 'invalid' }, 'storage', 400],
     ['bess-design', 'POST', { loadMw: -1 }, 'storage', 400],
     ['compute-lease', 'POST', {}, 'compute', 400],
+    ['omega-core', 'POST', {}, 'compute', 400],
     ['network-proximity', 'POST', {}, 'siteintel', 400],
     ['fiber-screen', 'GET', {}, 'gridatlas', 400],
     ['fiber-proxy', 'GET', {}, 'gridatlas', 503],

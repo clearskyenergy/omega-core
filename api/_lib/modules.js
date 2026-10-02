@@ -35,7 +35,7 @@ var CATALOG = [
   record('finance', 'Omega Capital', 'premium', 'investment dcfc fleet apartment degradation', 'finance',
     'openMarketplacePush openFinancingApply openHeliosIntake openBuildingPanel'),
   record('compute', 'Omega Compute', 'premium', 'datacenter computepower computelease computeproforma', 'compute',
-    'openDcClusterDialog derSetDc'),
+    'openDcClusterDialog derSetDc openOmegaCore'),
   record('ops', 'Omega Operate', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', 'OmegaOM.open OmegaFleetOM.open'),
   record('whitelabel', 'Omega Storefront', 'premium', '', 'whitelabel', ''),
   record('permitting', 'Omega Permits', 'deliverable', '', 'permitting', 'OmegaPermitMatrix.open', 'matrices'),

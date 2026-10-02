@@ -156,6 +156,9 @@
     pushtomarketplace: 'M3 10l2-5h14l2 5H3zM5 10v10h14V10M12 13v5M10 16l2 2 2-2',
     /* Helios: a sun over a document line — the checklist their name is on */
     heliosintake: 'M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7',
+    /* Omega-Core: two cabinets on a skid — compute rack lights beside a
+       battery with its bolt — the skid's own picture */
+    omegacore: 'M2 18h20M4 18v2M20 18v2M4 6h7v12H4zM6 9h3M6 12h3M6 15h3M13 8h7v10h-7zM17 10l-2 3h2.5l-2 3',
     synctocrm: 'M8 7a3 3 0 1 0 0 .01M3 19a5 5 0 0 1 10 0M20 8a4 4 0 0 0-7 2M13 16a4 4 0 0 0 7-2M20 5v3h-3M13 19v-3h3',
     crmintegration: 'M8 7a3 3 0 1 0 0 .01M3 19a5 5 0 0 1 10 0M15 9h6M18 6v6M15 15h6',
     siteplanstyles: 'M4 4h16v16H4zM8 8h4v4H8zM14 8h2M14 12h2M8 16h8',

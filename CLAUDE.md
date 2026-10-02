@@ -1215,6 +1215,33 @@ Compute › Size › Site Screen (`rb-site-screen`, `OmegaSiteScreen`) posts
 the balance. `docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
 `npm run check:compute`.
 
+## Omega-Core (2026-10-02)
+
+**ClearSky's edge-compute skid on a charging site, on its own meter, paying
+the host** (Tommy: "use the land lease offering from this unit to provide
+payment on charging sites to help increase the profitability of the site").
+One 336 × 87 in skid: Solela Edge Compute (75 kW) + CleanCell R60 (61.44 kWh,
+60 kW Sol-Ark 60K, Clean Cell's datasheet Rev A), $450,000, 5-year minimum,
+then removed with the meter turned off or bought by the host at fair market
+value. Draw › Data Ctr › Omega-Core Skid is `DC_CATALOG.dc_omegacore`; the
+placed `derdc` carries `omegaCore: true`, and EVERY reader of host load, host
+cost, host battery and site type skips it (one 75 kW skid otherwise read as
+~$8M of data centre and a "compute campus") while the legend, the Results
+rail, the BOM and the spec sheet count it as itself. `BESS_CATALOG['CC-R60']`
+is the R60 as a battery (integrated PCS: the catalog's own `_inc*` word wins
+over the size rule; `evSkid` keeps it out of the auto-sizer). Output ›
+Omega-Core (`openOmegaCore`, `data-cap="compute"`, owned by Omega Compute as
+`derSetDc` is) is `omega-core-qualify.js`: it reads the Run, the drawing, the
+service/transformer and the site point, fans out through
+`OmegaComputeLease.evidence`, and posts to `POST /api/omega-core` on
+`api/_lib/omega-core.js` — three gates (power for a new 480 V service; a
+charging site, zoned, located; fiber = compute-lease's `gateFiber`, the hard
+gate), skids priced on what the power carries, the seed lease card
+(`omega-core-lease-v1`, build-up staff-only), the host's payback before/after
+off the Run, and the FMV band — never in the browser. A legacy plan must open
+the compute cap (`addons.judge`), as the button does. `S.omegaCore` rides on
+the project. `docs/OMEGA-CORE.md`, `scripts/tests/tomegacore.js`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
