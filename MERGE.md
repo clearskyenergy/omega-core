@@ -2688,3 +2688,41 @@ candidate without a size for a battery, whatever kind of job it was.
   table, the percent, the phrases, the row, the card order);
   `tcostrollup.js` now hands the workspace a Level 2 site the run priced
   and reads "Designed and run" at 100%.
+
+## Parcel lines — October 2, 2026
+
+A customer asked for the map to "show the parcels so they know property
+lines". Google's Maps JavaScript API has no parcel layer (the lines in the
+consumer Maps app are not offered to developers), so View › Canvas gains
+**Parcel Lines** (`rb-parcels`, `pcToggle`), a view setting like Solar
+Panels: remembered per browser (`omegaParcelLines`), never saved with the
+drawing, never a shape on the plan.
+
+- `omega-parcel-sources.js` (new, ES5, UMD) is the ONE list of public
+  county and state parcel layers, each verified by hand on 2026-10-02 (the
+  service answered and drew lines on an export tile): Cook, DuPage, Lake
+  and Will counties (IL), North Carolina, New Jersey and Delaware
+  statewide, and New York's participating counties. Each is drawn on the
+  live Google map as an ImageMapType from the county's own `/export`, in
+  one yellow line style with labels off where the service takes
+  `dynamicLayers` (Lake's own cyan line layer where it does not). Free, no
+  key; every service sends CORS headers, so the lines also land in map
+  captures.
+- `api/parcel.js` builds its county lookup table from the same list
+  (`lookupLayers()`, byte for byte what it carried before), so a county
+  that moves its layer is fixed once. The Cloudflare worker keeps its own
+  attribute copy, as before.
+- The parcel at the map centre is outlined from `/api/parcel` through
+  `OmegaAutopilot.parcel` (Regrid where the plan carries it, the counties
+  otherwise) and named by APN and acres; this is the line a site outside
+  the public layers still gets. It is asked when the lines come on, then
+  only where no public layer draws as the map settles somewhere new, never
+  twice for a parcel found, and at most twelve times a page (Regrid is
+  metered per lookup).
+- The inline `OmegaParcels` block it replaces was console-only, and its
+  South Carolina and Florida URLs answered "Invalid URL" (hosted
+  FeatureServers, which have no `/export`); its Lake and North Carolina
+  layer ids drew nothing. `OmegaParcels.status()` / `.sources()` remain.
+- Tests: `scripts/tests/tparcellines.js` (the list, the tile maths, and the
+  editor's block cut out of `editor.html` and run on a stand-in Google
+  map); `scripts/tests/tparcel.js` (unchanged, now in `npm test`).
