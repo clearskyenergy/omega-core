@@ -37,7 +37,7 @@ PS.SOURCES.forEach(function (s) {
   ok(b.length === 4 && b[0] < b[2] && b[1] < b[3] && b[0] > 18 && b[2] < 50 && b[1] > -125 && b[3] < -66,
      s.id + ': a [south, west, north, east] box inside the lower 48');
 });
-ok(PS.SOURCES.length >= 8, 'eight verified layers');
+ok(PS.SOURCES.length >= 25, PS.SOURCES.length + ' verified layers');
 ok(PS.LOOKUP_ORDER[PS.LOOKUP_ORDER.length - 1] === 'cook', 'the server asks Cook last (its box holds DuPage)');
 PS.LOOKUP_ORDER.forEach(function (id) {
   var s = PS.byId(id);
@@ -46,7 +46,13 @@ PS.LOOKUP_ORDER.forEach(function (id) {
 /* what api/parcel.js asked before the list was shared, byte for byte, plus
    Peoria (2026-10-03, a customer's site at 107 Cass St) */
 var LOOK = PS.lookupLayers();
-eq(Object.keys(LOOK), ['dupage', 'lake', 'peoria', 'cook'], 'the server asks DuPage, Lake, Peoria, then Cook');
+var lookKeys = Object.keys(LOOK);
+eq(lookKeys.slice(0, 3), ['dupage', 'lake', 'peoria'], 'the server asks DuPage, Lake and Peoria first');
+ok(lookKeys[lookKeys.length - 1] === 'cook' && lookKeys.length >= 18, 'then the rest of the counties, Cook last (' + lookKeys.length + ')');
+lookKeys.forEach(function (k) {
+  ok(/\/MapServer\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && / County$/.test(LOOK[k].label), k + ': a polygon layer, an id field and a county name for the lookup');
+});
+lookKeys.filter(function (k) { return ['dupage', 'lake', 'peoria', 'cook'].indexOf(k) < 0; }).forEach(function (k) { delete LOOK[k]; });
 eq(LOOK.peoria, { url: 'https://gis.peoriacounty.gov/arcgis/rest/services/DP/Cadastral/MapServer/1',
                   idField: 'PIN', owner: 'owner_name', label: 'Peoria County', bbox: [40.54, -90.00, 41.02, -89.44] }, 'Peoria: its Parcels layer, PIN and owner');
 delete LOOK.peoria;
@@ -100,8 +106,12 @@ eq(PS.at(WHEATON[0], WHEATON[1]).map(function (s) { return s.id; }), ['dupage', 
 eq(PS.at(RAL[0], RAL[1]).map(function (s) { return s.id; }), ['nc'], 'Raleigh: North Carolina');
 eq(PS.at(SARATOGA[0], SARATOGA[1]).map(function (s) { return s.id; }), ['ny'], 'Saratoga: New York\'s box');
 eq(PS.at(KANSAS[0], KANSAS[1]), [], 'Kansas: no public layer');
-eq(PS.at(40.675254, -89.610850).map(function (s) { return s.id; }), ['peoria'], '107 Cass St, Peoria: Peoria County');
-eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['cook', 'will'], 'a view touching Cook\'s and Will\'s boxes');
+ok(PS.at(40.675254, -89.610850).map(function (s) { return s.id; }).indexOf('peoria') >= 0, '107 Cass St, Peoria: inside Peoria County\'s box (and Tazewell\'s, across the river)');
+eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['cook', 'will', 'grundy'], 'a view touching Cook\'s, Will\'s and Grundy\'s boxes');
+PS.SOURCES.forEach(function (s) {
+  ok(Array.isArray(s.test) && s.test[0] >= s.bbox[0] && s.test[0] <= s.bbox[2] && s.test[1] >= s.bbox[1] && s.test[1] <= s.bbox[3]
+     && PS.at(s.test[0], s.test[1]).indexOf(s) >= 0, s.id + ': its test point (scripts/check-parcel-sources.js) is inside its box');
+});
 var sq = [[0, 0], [0, 1], [1, 1], [1, 0]];
 ok(PS.inRing(sq, 0.5, 0.5) && !PS.inRing(sq, 1.5, 0.5) && !PS.inRing(sq, 0.5, -0.1) && !PS.inRing([[0, 0], [1, 1]], 0.5, 0.5),
    'a point in a ring, and not out of it');

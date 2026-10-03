@@ -2741,7 +2741,13 @@ and "these should have their own tab in the panel finance".
 
 - **Peoria County** joins `omega-parcel-sources.js` (DP/Cadastral layer 1,
   from z16), for drawing and for the server's point lookup (PIN,
-  owner_name). The lookup order is DuPage, Lake, Peoria, Cook.
+  owner_name), and so do sixteen more Illinois counties found and verified
+  the same day: Kane, Sangamon, McLean, St. Clair, Macon, Tazewell, Grundy,
+  LaSalle, Madison, Logan, Adams, Coles, Knox, Lee, Boone and Winnebago
+  (fifteen with a point lookup; Logan is a line layer). The ones not public
+  or not reachable are named in the file. Every source carries a `test`
+  point, and `scripts/check-parcel-sources.js` re-checks them all over the
+  network (25 of 25 drew on 2026-10-03). Cook stays last in the lookup.
 - **`api/parcel-tiles.js`** relays Regrid's nationwide parcel tiles. POST
   (a signed-in member of an active workspace) answers a ticket or why not
   (`not-configured`, `no-tile-access` after one remembered probe tile,

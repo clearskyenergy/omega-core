@@ -23,9 +23,12 @@
  *
  * Before adding a layer: ask `<service>?f=json` for the layer id and its
  * minScale, then `<service>/export?...` for one tile where parcels are known
- * to be (scripts/tests/tparcellines.js checks the shape; it cannot check the
- * network). A layer drawn below its minScale comes back as an empty picture,
- * which is why each one carries the zoom it starts drawing at.
+ * to be, and record that place as the source's `test` point. A layer drawn
+ * below its minScale comes back as an empty picture, which is why each one
+ * carries the zoom it starts drawing at. scripts/tests/tparcellines.js
+ * checks the shape (offline); `node scripts/check-parcel-sources.js` asks
+ * every county for the tile at its `test` point and says which still draw
+ * (network, so not in npm test) — run it when a county may have moved.
  *
  * bbox is [south, west, north, east] in degrees, rounded OUTWARD. It is a
  * cheap pre-test, "could this tile or point be in that county", not the
@@ -56,17 +59,17 @@
     { id: 'dupage', label: 'DuPage County, IL',
       service: 'https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
-      bbox: [41.63, -88.27, 42.02, -87.90],
+      bbox: [41.63, -88.27, 42.02, -87.90], test: [41.8661, -88.1070],
       lookup: { layer: 0, idField: 'PIN', owner: 'BILLNAME', county: 'DuPage County' } },
     { id: 'lake', label: 'Lake County, IL',
       service: 'https://maps.lakecountyil.gov/arcgis/rest/services/GISMapping/WABParcels/MapServer',
       lineLayer: 11, restyle: false, minZoom: 15,
-      bbox: [42.15, -88.20, 42.50, -87.75],
+      bbox: [42.15, -88.20, 42.50, -87.75], test: [42.3636, -87.8448],
       lookup: { layer: 12, idField: 'pin', owner: 'taxpayer_name', county: 'Lake County' } },
     { id: 'cook', label: 'Cook County, IL',
       service: 'https://gis12.cookcountyil.gov/traditional/rest/services/CookViewer3Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 16,
-      bbox: [41.46, -88.27, 42.16, -87.52],
+      bbox: [41.46, -88.27, 42.16, -87.52], test: [41.8781, -87.6298],
       lookup: { layer: 0, idField: 'PIN14_dash', owner: null, county: 'Cook County' } },
     /* Ameren territory. Added 2026-10-03 for a customer's site at 107 Cass
        St, Peoria: "Parcels" in the county's Cadastral service (minScale
@@ -74,36 +77,135 @@
     { id: 'peoria', label: 'Peoria County, IL',
       service: 'https://gis.peoriacounty.gov/arcgis/rest/services/DP/Cadastral/MapServer',
       lineLayer: 1, restyle: true, minZoom: 16,
-      bbox: [40.54, -90.00, 41.02, -89.44],
+      bbox: [40.54, -90.00, 41.02, -89.44], test: [40.6753, -89.6108],
       lookup: { layer: 1, idField: 'PIN', owner: 'owner_name', county: 'Peoria County' } },
     /* "Parcels_LY": the county's published basemap parcels. */
     { id: 'will', label: 'Will County, IL',
       service: 'https://gis.willcountyillinois.com/hosting/rest/services/Basemap/Parcels_LY_DV/MapServer',
       lineLayer: 1, restyle: true, minZoom: 15,
-      bbox: [41.19, -88.27, 41.73, -87.52] },
+      bbox: [41.19, -88.27, 41.73, -87.52], test: [41.5250, -88.0817] },
+    /* ── Illinois, beyond Chicagoland and Peoria (verified 2026-10-03: the
+       service listed the layer, its extent came back in WGS84, and a z17
+       tile at `test` drew lines, restyled in yellow where `restyle`).
+       Not public or not reachable that day: McHenry (403), Kendall,
+       DeKalb and Whiteside (hosted FeatureServer only), Champaign,
+       Livingston, Ford, Jackson, Christian (no public REST), Rock Island
+       (annotation only), Ogle, Clinton, Jersey (viewer only), Woodford
+       (private), Vermilion, Iroquois, Macoupin (broken certificates),
+       Monroe (no single parcel layer), Kankakee (503 on 2026-10-03; it
+       had answered an hour earlier). ── */
+    { id: 'kane', label: 'Kane County, IL',
+      service: 'https://gistech.countyofkane.org/arcgis/rest/services/KanePINList/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [41.71, -88.61, 42.16, -88.23], test: [41.8869, -88.3086],
+      lookup: { layer: 0, idField: 'PIN', owner: 'TaxName', county: 'Kane County' } },
+    { id: 'sangamon', label: 'Sangamon County, IL',
+      service: 'https://sangis.co.sangamon.il.us/server/rest/services/TyleratENTParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [39.51, -90.00, 39.98, -89.21], test: [39.8013, -89.6487],
+      lookup: { layer: 0, idField: 'PIN', owner: null, county: 'Sangamon County' } },
+    { id: 'mclean', label: 'McLean County, IL',
+      service: 'https://gis.mcleancountyil.gov/arcgis/rest/services/BnZ/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [40.27, -89.28, 40.76, -88.45], test: [40.4793, -88.994],
+      lookup: { layer: 0, idField: 'PIN', owner: null, county: 'McLean County' } },
+    { id: 'stclair', label: 'St. Clair County, IL',
+      service: 'https://arcgispublicmap.co.st-clair.il.us/server/rest/services/SCC_parcel_map_data/MapServer',
+      lineLayer: 29, restyle: true, minZoom: 15,
+      bbox: [38.21, -90.27, 38.67, -89.70], test: [38.5134, -89.984],
+      lookup: { layer: 29, idField: 'parcel_number', owner: 'owner', county: 'St. Clair County' } },
+    /* The City of Decatur's server; its layer covers all of Macon County. */
+    { id: 'macon', label: 'Macon County, IL',
+      service: 'https://maps.decaturil.gov/arcgis/rest/services/Public/parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [39.65, -89.23, 40.06, -88.74], test: [39.8406, -88.9516],
+      lookup: { layer: 0, idField: 'DBO.Tax_Parcels.PARCELNUMBER', owner: 'DBO.Tax_Parcels.PRIMARYNAME', county: 'Macon County' } },
+    /* No CORS header: lines draw, but a map capture leaves them out. */
+    { id: 'tazewell', label: 'Tazewell County, IL',
+      service: 'https://gis.tazewell-il.gov/arcgis/rest/services/WAB/TazCo_Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [40.31, -89.93, 40.76, -89.25], test: [40.5676, -89.6407],
+      lookup: { layer: 0, idField: 'PIN', owner: null, county: 'Tazewell County' } },
+    /* No dynamicLayers here: its own style. */
+    { id: 'grundy', label: 'Grundy County, IL',
+      service: 'https://maps.grundyco.org/arcgis/rest/services/CountyWebsiteMaps/CountyParcelsBaseLayer_SPIE/MapServer',
+      lineLayer: 0, restyle: false, minZoom: 16,
+      bbox: [41.10, -88.60, 41.47, -88.24], test: [41.3573, -88.4212],
+      lookup: { layer: 0, idField: 'Grundy_Master.SDEDATA.Parcel_Poly.PIN', owner: 'GrundyParcels.dbo.GISParcelsLegalDescriptionIncluded.taxname', county: 'Grundy County' } },
+    /* No CORS header: lines draw, but a map capture leaves them out. */
+    { id: 'lasalle', label: 'LaSalle County, IL',
+      service: 'https://gis.lasallecounty.org/arcgis/rest/services/TaxParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [40.92, -89.17, 41.64, -88.58], test: [41.3465, -88.8424],
+      lookup: { layer: 0, idField: 'PIN', owner: 'TAXNAME', county: 'LaSalle County' } },
+    { id: 'madison', label: 'Madison County, IL',
+      service: 'https://gisportal.co.madison.il.us/servera/rest/services/CCAO/Parcel_Owners/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [38.65, -90.28, 39.01, -89.59], test: [38.8129, -89.9535],
+      lookup: { layer: 0, idField: 'PIN', owner: 'OWN_FULL', county: 'Madison County' } },
+    /* A parcel-fabric LINE layer: it keeps its own style and has no lot to
+       look up. */
+    { id: 'logan', label: 'Logan County, IL',
+      service: 'https://www.centralilmaps.com/arcgis/rest/services/Logan/Logan_PropertyAnno/MapServer',
+      lineLayer: 2, restyle: false, minZoom: 14,
+      bbox: [39.91, -89.61, 40.33, -89.13], test: [40.1484, -89.3647] },
+    { id: 'adams', label: 'Adams County, IL',
+      service: 'https://www.adamscountyarcserver.com/adamscountyarcserver/rest/services/Adams_County_Basemap_Complete/MapServer',
+      lineLayer: 13, restyle: true, minZoom: 15,
+      bbox: [39.75, -91.52, 40.20, -90.91], test: [39.9343, -91.4072],
+      lookup: { layer: 13, idField: 'PIN', owner: 'OwnerName', county: 'Adams County' } },
+    /* The service name carries a date; expect it to move at the next refresh. */
+    { id: 'coles', label: 'Coles County, IL',
+      service: 'https://www.colesco.illinois.gov/arcgis/rest/services/ColesCounty/ColesParcels_2026_02_20/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [39.37, -88.48, 39.69, -87.95], test: [39.4961, -88.1762],
+      lookup: { layer: 0, idField: 'PIN', owner: 'DEEDNAME', county: 'Coles County' } },
+    /* The City of Galesburg's server; its layer covers all of Knox County. */
+    { id: 'knox', label: 'Knox County, IL',
+      service: 'https://gis.ci.galesburg.il.us/server/rest/services/ParcelSearch/MapServer',
+      lineLayer: 33, restyle: true, minZoom: 17,
+      bbox: [40.71, -90.45, 41.16, -89.98], test: [40.9447, -90.37],
+      lookup: { layer: 33, idField: 'CoGData.DBO.CADASTRAL_PARCEL_POLYGONS.PIN', owner: null, county: 'Knox County' } },
+    { id: 'lee', label: 'Lee County, IL',
+      service: 'https://gis.leecountyil.gov/leecogis/rest/services/Parcel_Polygons/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [41.57, -89.64, 41.92, -88.93], test: [41.8445, -89.4843],
+      lookup: { layer: 0, idField: 'leecogis_LEE_Parcel_Poly_PIN', owner: 'dbo_gis_data_owner1_name', county: 'Lee County' } },
+    { id: 'boone', label: 'Boone County, IL',
+      service: 'https://maps.boonecountyil.org/arcgis/rest/services/Assessment_Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.15, -88.95, 42.50, -88.70], test: [42.2585, -88.8445],
+      lookup: { layer: 0, idField: 'pin', owner: null, county: 'Boone County' } },
+    /* The City of Rockford's server: lines are ALL_PARCELS (15), owners
+       ParcelOwnership (13), both county-wide. */
+    { id: 'winnebago', label: 'Winnebago County, IL',
+      service: 'https://rockgis.rockfordil.gov/arcgissvr/rest/services/Rockford_IL_MapService/MapServer',
+      lineLayer: 15, restyle: true, minZoom: 15,
+      bbox: [42.14, -89.41, 42.51, -88.93], test: [42.2711, -89.0957],
+      lookup: { layer: 13, idField: 'PIN', owner: 'OwnerLastName', county: 'Winnebago County' } },
     { id: 'nc', label: 'North Carolina (statewide)',
       service: 'https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
-      bbox: [33.84, -84.33, 36.59, -75.45] },
+      bbox: [33.84, -84.33, 36.59, -75.45], test: [35.7796, -78.6382] },
     { id: 'nj', label: 'New Jersey (statewide)',
       service: 'https://maps.nj.gov/arcgis/rest/services/Framework/Cadastral/MapServer',
       lineLayer: 0, restyle: true, minZoom: 14,
-      bbox: [38.92, -75.57, 41.36, -73.88] },
+      bbox: [38.92, -75.57, 41.36, -73.88], test: [40.7357, -74.1724] },
     /* The state publishes only the counties that agreed to share: Erie,
        Onondaga, Albany and Tompkins draw; Monroe and Saratoga do not. */
     { id: 'ny', label: 'New York (participating counties)',
       service: 'https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
-      bbox: [40.49, -79.77, 45.02, -71.79] },
+      bbox: [40.49, -79.77, 45.02, -71.79], test: [42.6526, -73.7562] },
     { id: 'de', label: 'Delaware (statewide)',
       service: 'https://enterprise.firstmap.delaware.gov/arcgis/rest/services/PlanningCadastre/DE_StateParcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
-      bbox: [38.45, -75.79, 39.84, -75.04] }
+      bbox: [38.45, -75.79, 39.84, -75.04], test: [39.1582, -75.5244] }
   ];
 
   /* The server asks these for the parcel under a point, in this order:
      tightest box first, Cook last (its box holds DuPage's). */
-  var LOOKUP_ORDER = ['dupage', 'lake', 'peoria', 'cook'];
+  var LOOKUP_ORDER = ['dupage', 'lake', 'peoria', 'kane', 'sangamon', 'mclean', 'stclair', 'macon', 'tazewell', 'grundy', 'lasalle', 'madison', 'adams', 'coles', 'knox', 'lee', 'boone', 'winnebago', 'cook'];
 
   /* One line style for every layer that takes one: a warm yellow that reads
      on satellite and on the light basemap, never an editor colour. */
