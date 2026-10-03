@@ -2802,6 +2802,10 @@ and "these should have their own tab in the panel finance".
   Designer mode keeps it hidden, as those three were.
 - **Summary** also sits in Estimate › Cost & ROI (`rb-est-summary`); the View
   copy stays, because Estimate is plan-gated and Summary is Omega Design's.
+  The Estimate copy calls `openRpPanel('summary','estimate')`, which the
+  catalog gives to Omega Estimate: an Omega Design command on a tab gated
+  behind engineering made Omega Design itself read partly locked on lower
+  legacy tiers (render-legacy-gates caught it).
 - `render-admin-account.js`: the legacy fixture's dates follow the run (a
   fixed 2026-10-17 due date fell inside "due soon" on 2026-10-03).
 

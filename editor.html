@@ -2260,7 +2260,7 @@ window.onerror = function(msg, src, line, col, err) {
   <div class="ribbon-page" data-page="estimate" data-module="estimate" data-cap="engineering">
     <div class="rpanel">
       <div class="rpanel-body">
-        <button class="rbtn" id="rb-est-summary" onclick="openRpPanel('summary')" title="Site map summary — BESS, conduit, equipment, DER (also in View › Panels, which every plan opens)"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
+        <button class="rbtn" id="rb-est-summary" onclick="openRpPanel('summary','estimate')" title="Site map summary — BESS, conduit, equipment, DER (also in View › Panels, which every plan opens)"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
         <button class="rbtn" onclick="openRpPanel('cost')" title="Construction cost estimator — equipment, install, incentives, revenue, ROI"><span class="rb-ico">$</span><span class="rb-lbl">Construction<br>Cost</span></button>
         <button class="rbtn" onclick="rbRun(openSolarBessSizer)" title="Estimate the BESS needed for the solar drawn on the sitemap — input / throughput / output"><span class="rb-ico" style="color:var(--amber)">☀</span><span class="rb-lbl">Solar →<br>BESS</span></button>
       </div>
