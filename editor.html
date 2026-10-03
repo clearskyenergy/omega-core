@@ -174,6 +174,9 @@ function openOmegaCore(){
 <script src="/omega-compute-lease.js"></script>
 <script src="/omega-bess-result.js"></script>
 <script src="/omega-parcel-report.js"></script>
+<!-- The ONE list of public county and state parcel layers: View › Parcel
+     Lines draws them on the map, and api/parcel.js asks the same counties. -->
+<script src="/omega-parcel-sources.js"></script>
 <!-- Helios Energy Advisors' first-pass checklist from the Output tab: gathers
      what this session knows and talks to api/helios-intake, which fills
      their own PDF and sends it. -->
@@ -1877,7 +1880,7 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" onclick="_guidedPick('deluxe')" title="Full Topology &mdash; source &rarr; BESS &rarr; EMS &rarr; XFMR &rarr; utility. Auto-trenched."><span class="rb-ico" style="color:#4ADE80;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="3.6" r="2.1" fill="currentColor" stroke="none"/><line x1="12" y1="5.7" x2="12" y2="9"/><line x1="4.5" y1="9" x2="19.5" y2="9"/><line x1="4.5" y1="9" x2="4.5" y2="12"/><line x1="12" y1="9" x2="12" y2="12"/><line x1="19.5" y1="9" x2="19.5" y2="12"/><rect x="2.4" y="12" width="4.2" height="4.2" rx="1"/><rect x="9.9" y="12" width="4.2" height="4.2" rx="1"/><rect x="17.4" y="12" width="4.2" height="4.2" rx="1"/><line x1="12" y1="16.2" x2="12" y2="20.4"/><line x1="8.5" y1="20.4" x2="15.5" y2="20.4"/></svg></span><span class="rb-lbl">Full<br>Topology</span></button>
         <button class="rbtn" onclick="_guidedPick('l2')" title="Level 2 &mdash; 240V 1&Oslash; off an existing service. Meter bank &rarr; outdoor panel &rarr; trench &rarr; EVSE."><span class="rb-ico" style="color:#22D3EE;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4.5" y="3" width="10" height="17" rx="2"/><rect x="6.8" y="6" width="5.4" height="4" rx="1" fill="currentColor" stroke="none" opacity=".45"/><line x1="7" y1="13" x2="12" y2="13"/><line x1="7" y1="15.5" x2="10" y2="15.5"/><path d="M14.5 11.5c3 0 4.5 1.5 4.5 4v1.5"/><circle cx="19" cy="19" r="2" fill="currentColor" stroke="none"/></svg></span><span class="rb-lbl">Level<br>2</span></button>
         <button class="rbtn" onclick="_guidedPick('ev')" title="DCFC &mdash; DC fast charging bank + AC distribution + BESS demand management"><span class="rb-ico" style="color:#F5A623;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="7.4" y="2.6" width="9.2" height="15.6" rx="2"/><rect x="9.3" y="5" width="5.4" height="4.6" rx="1" fill="currentColor" stroke="none" opacity=".45"/><line x1="9.6" y1="12" x2="14.4" y2="12"/><line x1="9.6" y1="14.4" x2="12.6" y2="14.4"/><path d="M7.4 11.2c-3 0-4.4 1.6-4.4 4v1.4"/><circle cx="3" cy="18.6" r="1.8" fill="currentColor" stroke="none"/><path d="M16.6 11.2c3 0 4.4 1.6 4.4 4v1.4"/><circle cx="21" cy="18.6" r="1.8" fill="currentColor" stroke="none"/><line x1="6" y1="20.8" x2="18" y2="20.8"/></svg></span><span class="rb-lbl">DCFC<br>Build</span></button>
-        <button class="rbtn" style="position:relative" onclick="_guidedPick('compute')" title="Compute Build &mdash; data center / microgrid. Load-first: IT load &rarr; grid ceiling &rarr; fuel cells &rarr; ride-through storage. Uses the substation lookup as the capacity ceiling."><span class="rb-ico" style="color:#A78BFA;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3" width="11" height="5" rx="1.2"/><rect x="2.6" y="9.6" width="11" height="5" rx="1.2"/><circle cx="5.2" cy="5.5" r=".9" fill="currentColor" stroke="none"/><circle cx="5.2" cy="12.1" r=".9" fill="currentColor" stroke="none"/><line x1="7.6" y1="5.5" x2="11.4" y2="5.5"/><line x1="7.6" y1="12.1" x2="11.4" y2="12.1"/><rect x="16.4" y="6.4" width="5.2" height="8.2" rx="1.2"/><line x1="19" y1="8.6" x2="19" y2="12.4"/><line x1="17.6" y1="10.5" x2="20.4" y2="10.5"/><line x1="13.6" y1="10.5" x2="16.4" y2="10.5"/><line x1="8.1" y1="14.6" x2="8.1" y2="19.4"/><line x1="19" y1="14.6" x2="19" y2="19.4"/><line x1="2" y1="19.4" x2="22" y2="19.4"/></svg></span><span class="rb-lbl">Compute<br>Build</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(167,139,250,.92);color:#131033;padding:1px 3px;border-radius:3px;line-height:1.2">BETA</span></button>
+        <button class="rbtn" style="position:relative" onclick="_guidedPick('compute')" title="Compute Build &mdash; data center / microgrid. Load-first: IT load &rarr; grid ceiling &rarr; fuel cells &rarr; ride-through storage. Uses the substation lookup as the capacity ceiling."><span class="rb-ico" style="color:#A78BFA;display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2.6" y="3" width="11" height="5" rx="1.2"/><rect x="2.6" y="9.6" width="11" height="5" rx="1.2"/><circle cx="5.2" cy="5.5" r=".9" fill="currentColor" stroke="none"/><circle cx="5.2" cy="12.1" r=".9" fill="currentColor" stroke="none"/><line x1="7.6" y1="5.5" x2="11.4" y2="5.5"/><line x1="7.6" y1="12.1" x2="11.4" y2="12.1"/><rect x="16.4" y="6.4" width="5.2" height="8.2" rx="1.2"/><line x1="19" y1="8.6" x2="19" y2="12.4"/><line x1="17.6" y1="10.5" x2="20.4" y2="10.5"/><line x1="13.6" y1="10.5" x2="16.4" y2="10.5"/><line x1="8.1" y1="14.6" x2="8.1" y2="19.4"/><line x1="19" y1="14.6" x2="19" y2="19.4"/><line x1="2" y1="19.4" x2="22" y2="19.4"/></svg></span><span class="rb-lbl">Compute<br>Build</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(167,139,250,.92);color:#131033;padding:1px 3px;border-radius:3px;line-height:1.2">NEW</span></button>
       </div>
       <div class="rpanel-cap">2 &middot; Build</div>
     </div>
@@ -2329,6 +2332,7 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" id="rb-op-tl-key" aria-pressed="true" onclick="rbRun(opToggleTerrainKey)" title="Terrain key &mdash; contour interval or colour ramp for the terrain layer"><span class="rb-ico">&#9968;</span><span class="rb-lbl">Terrain Key</span></button>
         <button class="rbtn" onclick="rbRun(tlCycle)" title="Sampled terrain layer &mdash; cycle off / contours / elevation / slope / cut-fill"><span class="rb-ico">&#9776;</span><span class="rb-lbl">Terrain Layer</span></button>
         <button class="rbtn" onclick="rbRun(ttCycle)" title="USGS 3DEP terrain tiles &mdash; real LiDAR relief, slope, aspect and contours drawn straight onto the map. US only."><span class="rb-ico">&#9968;</span><span class="rb-lbl">3DEP Tiles</span></button>
+        <button class="rbtn" id="rb-parcels" aria-pressed="false" onclick="rbRun(pcToggle)" title="Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey."><span class="rb-ico" style="color:#FFD60A">▱</span><span class="rb-lbl">Parcel<br>Lines</span></button>
         <button class="rbtn" onclick="rbRun(engSchedToggleVisible)" title="Conduit schedule — show or hide the run schedule panel"><span class="rb-ico">≔</span><span class="rb-lbl">Conduit<br>Schedule</span></button>
         <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
       </div>
@@ -31330,142 +31334,242 @@ window.OmegaUI={
 })();
 
 /* ====================================================================
- *  PARCEL BOUNDARIES  (zoning / property lines)
+ *  PARCEL LINES  (View › Parcel Lines — property lines on the map)
  *  --------------------------------------------------------------------
- *  Google's JavaScript API publishes no parcel layer. The property lines
- *  visible in the consumer Maps app are not exposed to developers, so an
- *  overlay has to come from a cadastral source.
+ *  A customer asked (2026-10-02) to "have the map show the parcels so
+ *  they know property lines". Google's JavaScript API publishes no parcel
+ *  layer — the property lines in the consumer Maps app are not offered to
+ *  developers — so the lines come from two places, both drawn on the same
+ *  live Google map:
  *
- *  Parcels are maintained by county assessors, and most publish an ArcGIS
- *  service. Point this at the county covering the site and it draws real
- *  boundaries; there is no national free source that covers everywhere.
- *  Statewide services exist in some states and are used where they do.
+ *   1. PUBLIC LINES. Every county and state layer in
+ *      omega-parcel-sources.js (the ONE list; api/parcel.js reads the same
+ *      counties) as an ImageMapType: the county draws a picture of each
+ *      tile and Google owns tiling and panning, so there is nothing to
+ *      anchor or reproject. Free, no key, and only where a layer exists.
+ *   2. THE PARCEL AT THE MAP CENTRE. /api/parcel through
+ *      OmegaAutopilot.parcel (the call Site Data Layers › Parcels makes),
+ *      drawn as a native outline and named by APN and acres: Regrid where
+ *      the tenant's plan carries it, the county layers otherwise. It is
+ *      asked when the lines come on, then as the map settles somewhere new
+ *      only where no public layer draws, at most PC_LOOKUPS times a page,
+ *      because Regrid is metered per lookup. An answer is kept for the
+ *      page, so off and on again never spends a second lookup.
  *
- *  Two ways to add a county:
- *    1. Find its parcel FeatureServer/MapServer (search
- *       "<county> parcels arcgis rest services").
- *    2. OmegaParcels.addSource({name, url, type:'tile'|'query'}).
+ *  A VIEW setting, like Solar Panels: remembered per browser, never saved
+ *  with the drawing, never a shape on the plan and never a number. Making
+ *  the parcel part of the DRAWING (setbacks, the sheets, Design Site) is
+ *  Site › Set as boundary or the autopilot's parcel step. Reference only:
+ *  an assessor's line is a tax map, not a survey, and every message says so.
  *
- *  Commercial wall-to-wall coverage (Regrid, ReportAll, LightBox) is a
- *  paid API; register one with OmegaParcels.setKey() if you licence it.
- *
- *  Drawn as an ImageMapType where the service exports images, so Google
- *  owns tiling and panning and there is nothing to anchor or reproject.
+ *  OmegaParcels.status() / .sources() in the console say what is drawing.
  * ==================================================================== */
-var PARCEL_SOURCES = [
-  /* Statewide services — verified public ArcGIS endpoints. */
-  { id:'nc',   name:'North Carolina — statewide parcels',
-    url:'https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer',
-    type:'tile', layers:'show:0' },
-  { id:'sc',   name:'South Carolina — statewide parcels',
-    url:'https://services1.arcgis.com/VaY7cY9pvUYUP1Lf/ArcGIS/rest/services/Parcels/MapServer',
-    type:'tile', layers:'show:0' },
-  { id:'fl',   name:'Florida — statewide parcels (FDOR)',
-    url:'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/MapServer',
-    type:'tile', layers:'show:0' }
-];
+var PC_PREF='omegaParcelLines';
+var PC_LOOKUPS=12;
+var PC_INK='#FFD60A';
+var _pc={ on:false, map:null, layers:[], polys:[], idle:null, timer:null, watch:null,
+          found:[], asked:{}, lookups:0, opacity:0.9, last:'', loudNext:false };
 
-var _pc = { layer:null, srcId:null, opacity:0.85 };
+function _pcSources(){ return window.OmegaParcelSources||null; }
 
 /* Which map are we drawing on? Same resolution the rest of the file uses. */
 function _pcMap(){
   try{
     var m=(typeof _gmap!=='undefined'&&_gmap)?_gmap:window._gmap;
-    return (m && m.overlayMapTypes) ? m : null;
+    return (m && m.overlayMapTypes && window.google && google.maps) ? m : null;
   }catch(e){ return null; }
 }
 
-function _pcSource(id){
-  for(var i=0;i<PARCEL_SOURCES.length;i++){
-    if(PARCEL_SOURCES[i].id===id) return PARCEL_SOURCES[i];
-  }
+function _pcPrefRead(){ try{ return localStorage.getItem(PC_PREF)==='1'; }catch(e){ return false; } }
+function _pcPrefWrite(on){ try{ localStorage.setItem(PC_PREF, on?'1':'0'); }catch(e){} }
+
+/* The ribbon button tells the truth: pressed while on, and its tooltip
+   carries the last thing said about what is drawing. */
+function _pcPaint(){
+  var b=document.getElementById('rb-parcels'); if(!b) return;
+  b.setAttribute('aria-pressed', _pc.on?'true':'false');
+  b.title = _pc.on
+    ? 'Parcel lines on — '+(_pc.last||'waiting for the site map')+' Click to hide.'
+    : 'Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey.';
+}
+
+/* loud: a banner as well, for what the person just did. A settle of the
+   map only updates the tooltip, or every pan would flash a message. */
+function _pcSay(msg, loud){
+  _pc.last=msg; _pcPaint();
+  if(loud && typeof showBanner==='function'){ try{ showBanner('shape', msg); }catch(e){} }
+}
+
+function _pcDescribe(p){
+  var bits=[];
+  if(p.apn) bits.push('APN '+p.apn);
+  if(p.acres!=null) bits.push(p.acres+' ac');
+  if(p.county) bits.push(p.county);
+  return (bits.join(' · ')||'a parcel record')+(p.source?' ('+p.source+')':'');
+}
+
+function _pcOutline(p){
+  if(!_pc.map || !p || !p.ring || p.ring.length<3) return;
+  try{
+    var path=p.ring.map(function(q){ return { lat:+q[0], lng:+q[1] }; });
+    _pc.polys.push(new google.maps.Polygon({ paths:path, map:_pc.map, clickable:false,
+      strokeColor:PC_INK, strokeOpacity:1, strokeWeight:3, fillColor:PC_INK, fillOpacity:0.06, zIndex:5 }));
+  }catch(e){ if(window.console) console.warn('[parcels] outline:', e&&e.message); }
+}
+
+/* The record already found that holds this point, or null. */
+function _pcFoundAt(lat, lng){
+  var S=_pcSources(); if(!S) return null;
+  for(var i=0;i<_pc.found.length;i++){ if(S.inRing(_pc.found[i].ring, lat, lng)) return _pc.found[i]; }
   return null;
 }
 
-/* Web-mercator bbox for an XYZ tile — same maths the 3DEP layer uses. */
-function _pcTileBbox(x,y,z){
-  var W=20037508.342789244, n=Math.pow(2,z), sz=(W*2)/n;
-  return [ -W + x*sz, W - (y+1)*sz, -W + (x+1)*sz, W - y*sz ];
+function _pcAttach(m){
+  var S=_pcSources();
+  _pc.map=m;
+  if(S){
+    S.SOURCES.forEach(function(src){
+      try{
+        var layer=new google.maps.ImageMapType({
+          name:'Parcel lines — '+src.label,
+          tileSize:new google.maps.Size(256,256),
+          minZoom:src.minZoom||14, maxZoom:22, opacity:_pc.opacity,
+          getTileUrl:function(c, z){ return S.tileUrl(src, c.x, c.y, z); }
+        });
+        m.overlayMapTypes.push(layer);
+        _pc.layers.push(layer);
+      }catch(e){ if(window.console) console.warn('[parcels] '+src.id+':', e&&e.message); }
+    });
+  }
+  _pc.found.forEach(_pcOutline);
+  try{ _pc.idle=google.maps.event.addListener(m, 'idle', function(){
+    clearTimeout(_pc.timer); _pc.timer=setTimeout(function(){ _pcLook(false); }, 900);
+  }); }catch(e){}
+  var loud=_pc.loudNext; _pc.loudNext=false;
+  _pcLook(loud);
 }
 
-function _pcOff(){
-  var m=_pcMap();
-  if(m && _pc.layer){
+function _pcDetach(){
+  var m=_pc.map;
+  if(m){
     try{
       var arr=m.overlayMapTypes;
-      for(var i=arr.getLength()-1;i>=0;i--){ if(arr.getAt(i)===_pc.layer) arr.removeAt(i); }
+      for(var i=arr.getLength()-1;i>=0;i--){ if(_pc.layers.indexOf(arr.getAt(i))>=0) arr.removeAt(i); }
     }catch(e){}
   }
-  _pc.layer=null; _pc.srcId=null;
+  _pc.polys.forEach(function(p){ try{ p.setMap(null); }catch(e){} });
+  if(_pc.idle){ try{ google.maps.event.removeListener(_pc.idle); }catch(e){} }
+  clearTimeout(_pc.timer);
+  _pc.map=null; _pc.layers=[]; _pc.polys=[]; _pc.idle=null;
 }
 
-function _pcOn(id){
-  var src=_pcSource(id);
-  if(!src){ if(window.console) console.warn('[parcels] unknown source: '+id); return false; }
+/* What is drawing at the map centre, and the parcel there. */
+function _pcLook(loud){
+  if(!_pc.on || !_pc.map) return;
+  var c=null, z=0;
+  try{ c=_pc.map.getCenter(); z=_pc.map.getZoom()||0; }catch(e){}
+  if(!c) return;
+  var lat=c.lat(), lng=c.lng(), S=_pcSources();
+  var covered=S ? S.at(lat, lng) : [];
+  var minZ=99;
+  covered.forEach(function(s){ minZ=Math.min(minZ, s.minZoom||14); });
+  var cov=!S ? 'The public parcel list did not load (omega-parcel-sources.js)'
+    : covered.length ? 'Lines from '+covered.map(function(s){ return s.label; }).join(', ')
+                       +(z<minZ ? ' — zoom in to see them' : '')
+    : 'No public parcel layer covers this area';
+  var tail=' Reference only — not a survey.';
+
+  if(z<14){ _pcSay(cov+'. Zoom in to the site to look up its parcel.', loud); return; }
+  var have=_pcFoundAt(lat, lng);
+  if(have){ _pcSay(cov+'. Parcel at the centre: '+_pcDescribe(have)+'.'+tail, loud); return; }
+  /* Following the map: where public lines already draw, they show the
+     neighbours; a lookup is spent only where nothing else would. */
+  if(!loud && covered.length && _pc.found.length){ _pcSay(cov+'.'+tail, loud); return; }
+  var AP=window.OmegaAutopilot;
+  if(!AP || typeof AP.parcel!=='function'){ _pcSay(cov+'.'+tail, loud); return; }
+  var k=lat.toFixed(4)+','+lng.toFixed(4);
+  if(_pc.asked[k]){ _pcSay(cov+'.'+tail, loud); return; }
+  if(_pc.lookups>=PC_LOOKUPS){
+    _pcSay(cov+'. This page has used its '+PC_LOOKUPS+' parcel lookups; reload to look up more.'+tail, loud);
+    return;
+  }
+  _pc.asked[k]=1; _pc.lookups++;
+  _pcSay(cov+'. Looking up the parcel at the map centre…', loud);
+  AP.parcel(lat, lng).then(function(p){
+    if(p && p.ring && p.ring.length>=3 && !_pcFoundAt(lat, lng)){ _pc.found.push(p); _pcOutline(p); }
+    if(!_pc.on) return;
+    _pcSay(p ? cov+'. Parcel at the centre: '+_pcDescribe(p)+'.'+tail
+             : cov+'. No parcel record at the map centre.', loud);
+  }, function(e){
+    delete _pc.asked[k];
+    if(!_pc.on) return;
+    var why=(e && e.message) || '';
+    _pcSay(/signed out/.test(why) ? cov+'. Sign in to look up the parcel at the map centre.'
+                                  : cov+'. The parcel lookup did not answer'+(why?' ('+why+')':'')+'.', loud);
+  });
+}
+
+/* The map can be built again (a new address, the GPS dialog, a restore);
+   follow whichever one is live while the lines are on. */
+function _pcWatch(){
+  if(_pc.watch) return;
+  _pc.watch=setInterval(function(){
+    if(!_pc.on){ clearInterval(_pc.watch); _pc.watch=null; return; }
+    var m=_pcMap();
+    if(m && m!==_pc.map){ _pcDetach(); _pcAttach(m); }
+  }, 1500);
+}
+
+function _pcOn(loud){
+  _pc.on=true; _pcPrefWrite(true); _pcWatch();
   var m=_pcMap();
   if(!m){
-    if(typeof showBanner==='function'){
-      try{ showBanner('shape','No live map yet \u2014 load the satellite view first.'); }catch(e){}
-    }
-    return false;
+    _pc.loudNext=!!loud;
+    _pcSay('Parcel lines are on; they appear once the site map loads.', loud);
+    return true;
   }
-  _pcOff();
-
-  var layer=new google.maps.ImageMapType({
-    name:'Parcels \u2014 '+src.name,
-    tileSize:new google.maps.Size(256,256),
-    minZoom:12,                /* boundaries are noise when zoomed out */
-    maxZoom:22,
-    opacity:_pc.opacity,
-    getTileUrl:function(coord,zoom){
-      var n=Math.pow(2,zoom);
-      var x=((coord.x%n)+n)%n;
-      if(coord.y<0||coord.y>=n) return null;
-      var bb=_pcTileBbox(x,coord.y,zoom);
-      return src.url+'/export'
-        + '?bbox='+bb.join('%2C')
-        + '&bboxSR=3857&imageSR=3857&size=256%2C256'
-        + '&layers='+encodeURIComponent(src.layers||'show:0')
-        + '&format=png32&transparent=true&f=image';
-    }
-  });
-  m.overlayMapTypes.push(layer);
-  _pc.layer=layer; _pc.srcId=id;
-
-  if(typeof showBanner==='function'){
-    try{ showBanner('shape','Parcel boundaries: '+src.name
-      + ' \u2014 reference only, confirm against the recorded plat before relying on a setback.'); }catch(e){}
-  }
+  if(m!==_pc.map){ _pcDetach(); _pc.loudNext=!!loud; _pcAttach(m); }
+  else _pcLook(!!loud);
   return true;
 }
 
+function _pcOff(loud){
+  _pc.on=false; _pcPrefWrite(false); _pcDetach();
+  if(_pc.watch){ clearInterval(_pc.watch); _pc.watch=null; }
+  _pc.last=''; _pcPaint();
+  if(loud && typeof showBanner==='function'){ try{ showBanner('shape','Parcel lines off.'); }catch(e){} }
+  return false;
+}
+
+/* View › Parcel Lines */
+function pcToggle(){ return _pc.on ? _pcOff(true) : _pcOn(true); }
+
+/* A choice made in this browser comes back with the page. */
+(function(){
+  function boot(){ _pcPaint(); if(_pcPrefRead()) _pcOn(false); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+
 window.OmegaParcels={
   sources:function(){
-    var rows=PARCEL_SOURCES.map(function(s){ return {id:s.id, name:s.name, type:s.type}; });
+    var S=_pcSources();
+    var rows=S ? S.SOURCES.map(function(s){ return { id:s.id, name:s.label, fromZoom:s.minZoom, box:s.bbox.join(', ') }; }) : [];
     console.table?console.table(rows):console.log(rows);
-    console.info('[parcels] OmegaParcels.on(\'<id>\') to show. '
-      + 'OmegaParcels.addSource({id,name,url}) to add a county.');
     return rows;
   },
-  on:function(id){ return _pcOn(id||(PARCEL_SOURCES[0]&&PARCEL_SOURCES[0].id)); },
-  off:function(){ _pcOff(); console.info('[parcels] off'); return true; },
-  toggle:function(id){ return _pc.layer ? (this.off(), false) : this.on(id); },
+  on:function(){ return _pcOn(true); },
+  off:function(){ return _pcOff(true); },
+  toggle:pcToggle,
   opacity:function(v){
     var o=parseFloat(v); if(!isFinite(o)) return _pc.opacity;
     _pc.opacity=Math.max(0,Math.min(1,o));
-    if(_pc.layer) try{ _pc.layer.setOpacity(_pc.opacity); }catch(e){}
+    _pc.layers.forEach(function(l){ try{ l.setOpacity(_pc.opacity); }catch(e){} });
     return _pc.opacity;
   },
-  addSource:function(cfg){
-    if(!cfg||!cfg.url||!cfg.id){ console.warn('[parcels] need {id, name, url}'); return false; }
-    PARCEL_SOURCES.push({ id:cfg.id, name:cfg.name||cfg.id, url:cfg.url,
-                          type:cfg.type||'tile', layers:cfg.layers||'show:0' });
-    console.info('[parcels] added '+cfg.id+' \u2014 OmegaParcels.on(\''+cfg.id+'\')');
-    return true;
-  },
   status:function(){
-    var o={ on:!!_pc.layer, source:_pc.srcId||'(none)',
-            opacity:_pc.opacity, liveMap:!!_pcMap(), sources:PARCEL_SOURCES.length };
+    var o={ on:_pc.on, liveMap:!!_pcMap(), drawing:_pc.layers.length, parcelsFound:_pc.found.length,
+            lookupsUsed:_pc.lookups+' of '+PC_LOOKUPS, said:_pc.last||'(nothing yet)' };
     console.table?console.table(o):console.log(o);
     return o;
   }
@@ -77339,6 +77443,7 @@ window._crmToastModal=_crmToastModal;
      ==================================================== -->
 <style>
   #rb-native[aria-pressed="true"]{ background:var(--hl-dim); border-color:var(--accent); color:var(--accent); }
+  #rb-parcels[aria-pressed="true"]{ background:var(--hl-dim); border-color:var(--accent); color:var(--accent); }
 </style>
 <script>
 (function(){
@@ -108563,6 +108668,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     /recenterOnEquipment/,
     /undoLast/,
     /toggleLayersPanel/,
+    /pcToggle/,                        /* Parcel Lines: where the property ends */
 
     /* --- the mode switch must never hide itself ---------------------- */
     /OmegaMode/
@@ -119000,6 +119106,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
  *  either. So the drawing and analysis tools say NEW, and only the things *
  *  that emit a file to a third party say BETA.                            *
  *                                                                        *
+ *  2026-10-02: the owner retired BETA on the ribbon; every tag below      *
+ *  reads NEW. The notes on what each tool still lacks stay, so they can   *
+ *  be finished rather than forgotten.                                     *
+ *                                                                        *
  *  Both reuse the app's own .omega-beta anchor class so the corner        *
  *  position matches the badge already on Compute Build.                   *
  *                                                                        *
@@ -119020,16 +119130,15 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
        marketplace, so a wrong click does not put a bad file in front of a
        utility or another engineer. That is the line BETA marks. */
     [/openMarketplacePush/,     'NEW'],    /* Push to Marketplace        */
-    [/exportSpecsForCADTool/,   'BETA'],   /* Export for CAD             */
-    [/exportToMonday/,          'BETA'],   /* Export to Monday           */
-    [/openValidationExport/,    'BETA'],   /* Export for Validation      */
-    [/openValidationStatus/,    'BETA'],   /* Validation Status          */
-    [/OmegaGeo/,                'BETA']    /* Geo Export                 */
+    [/exportSpecsForCADTool/,   'NEW'],    /* Export for CAD             */
+    [/exportToMonday/,          'NEW'],    /* Export to Monday           */
+    [/openValidationExport/,    'NEW'],    /* Export for Validation      */
+    [/openValidationStatus/,    'NEW'],    /* Validation Status          */
+    [/OmegaGeo/,                'NEW']     /* Geo Export                 */
   ];
 
   /* NEW: finished tools this patch set added. Named by id because they
-     carry no onclick attribute. Geo Export is deliberately absent — it is
-     an export, so it is in the BETA table above. */
+     carry no onclick attribute. */
   var OWN = [
     ['rb-bldg-designer',  'NEW'],
     ['rb-cad-schem',      'NEW'],
@@ -119039,11 +119148,13 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     ['rb-takeoff-budget', 'NEW'],
     ['rb-gis-layers',     'NEW'],
     ['rb-siteplan',       'NEW'],
-    ['rb-geo-export',     'BETA'],
+    ['rb-geo-export',     'NEW'],
 
     /* Tools this patch set added. NEW where the tool does what it claims;
        BETA where it works but is knowingly incomplete, and the reason is
        written down so it can be retired rather than lingering forever.
+       Since 2026-10-02 these read NEW too (the owner's call); the notes
+       still say what each one lacks.
 
          Permitting Matrix  one verified jurisdiction pack (Vista / SDG&E).
                             Everywhere else the permits and code references
@@ -119061,10 +119172,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     ['omega-btn-sldcheck',      'NEW'],
     ['omega-btn-drc',           'NEW'],
     ['omega-btn-bill-analysis', 'NEW'],
-    ['omega-btn-permit-matrix', 'BETA'],
-    ['rb-noise-model',          'BETA'],
-    ['rb-optimizer',            'BETA'],
-    ['rb-network',              'BETA']
+    ['omega-btn-permit-matrix', 'NEW'],
+    ['rb-noise-model',          'NEW'],
+    ['rb-optimizer',            'NEW'],
+    ['rb-network',              'NEW']
   ];
 
   function tagButton(btn, label) {
@@ -142929,7 +143040,7 @@ challengeRow(s) +
 </script>
 
 
-<!-- ═══ 3D SITE VISUALIZER (BETA) ═════════════════════════════════════
+<!-- ═══ 3D SITE VISUALIZER ═════════════════════════════════════════
      Renders the drawn site map as a lit 3D model. Adds a button to
      Output › Reports. Self-contained; three.js is lazy-loaded only
      when the view is actually opened.                              -->
@@ -146638,8 +146749,8 @@ var CSS = ''
 + '#ovis .ov-ttl{font-size:13px;font-weight:700;letter-spacing:.3px}'
 + '#ovis .ov-ttl span{color:#4A8FD8}'
 + '#ovis .ov-sub{font-size:10.5px;color:#9A9A9A;font-family:"IBM Plex Mono",monospace}'
-+ '#ovis .ov-beta{display:inline-block;margin-left:7px;padding:1px 5px;border-radius:2px;'
-+   'background:#E0A83C;color:#141416;font-size:8.5px;font-weight:800;letter-spacing:.8px;'
++ '#ovis .ov-ttl .ov-beta{display:inline-block;margin-left:7px;padding:1px 5px;border-radius:2px;'
++   'background:var(--accent,#4A8FD8);color:var(--on-accent,#fff);font-size:8.5px;font-weight:800;letter-spacing:.8px;'
 +   'vertical-align:2px;font-family:"IBM Plex Mono",monospace}'
 + '#ov-ribbon-btn{position:relative}'
 + '#ovis .ov-sp{flex:1}'
@@ -146735,7 +146846,7 @@ function shell(){
   d.innerHTML = ''
   + '<div class="ov-bar">'
   +   '<div class="ov-ttl">Site <span>Visualizer</span>'
-  +     '<span class="ov-beta">BETA</span></div>'
+  +     '<span class="ov-beta">NEW</span></div>'
   +   '<div class="ov-sub" id="ov-scale"></div>'
   +   '<div class="ov-sp"></div>'
   +   '<button class="ov-b" id="ov-present" title="Hide the panel for a clean image">&#9635; Presentation</button>'
@@ -147518,14 +147629,14 @@ function injectButton(){
     b.id = 'ov-ribbon-btn';
     b.title = '3D Site Visualizer \u2014 render the drawn site map as a lit 3D model: '
             + 'carports, rooftop and ground arrays, BESS, transformers and parking';
-    /* BETA, using the app's OWN badge class and markup order rather than
+    /* NEW, using the app's OWN badge class and markup order rather than
        a bespoke one. The custom badge sat in front of the icon and used a
        different colour and size, so it read as a broken button next to
        the Permitting Matrix and Bill Analysis tags beside it. */
     b.className = 'rbtn omega-beta';
     b.innerHTML = '<span class="rb-ico" style="color:var(--accent)">\u25E9</span>'
                 + '<span class="rb-lbl">3D Site<br>Visualizer</span>'
-                + '<span class="omega-beta-tag">BETA</span>';
+                + '<span class="omega-new-tag">NEW</span>';
     b.onclick = function(){
       if(typeof rbRun === 'function') rbRun(open); else open();
     };
@@ -152982,11 +153093,10 @@ var SOON = [
     note: 'The ZIP-level utility and rate screen is being finished. Grid Pre-Qualify covers interconnection screening in the meantime.' }
 ];
 
-/* Bill Analysis is currently badged NEW. It is an analysis whose numbers
-   feed a proposal, so BETA is the accurate label: the tool runs, the
-   output is what needs a second look. */
+/* Bill Analysis reads NEW, like every other tagged ribbon tool
+   (2026-10-02: the owner retired BETA on the ribbon). */
 var REBADGE = [
-  { id: 'omega-btn-bill-analysis', label: 'BETA' }
+  { id: 'omega-btn-bill-analysis', label: 'NEW' }
 ];
 
 /* ── styles: one badge colour that is neither a warning nor a signpost ── */

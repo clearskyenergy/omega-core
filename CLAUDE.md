@@ -1405,6 +1405,11 @@ tenant. Treat it that way.
   and calls `done()`; the dashboard keeps its boot splash (`data-boot="no"`).
   Never a flash of another page or the sign-in card. `docs/LOADING-SCREEN.md`.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
+- Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
+  and state parcel services. The editor's View › Parcel Lines draws them on
+  the map and `api/parcel.js` asks the same counties for a point; a county
+  that moves its layer is fixed there, never pasted into a page
+  (`scripts/tests/tparcellines.js`).
 - `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
   Chromium, signed in, with the Firebase compat SDK replaced by
   `scripts/_lib/firebase-double.js` and four tenants from
