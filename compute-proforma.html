@@ -33,6 +33,13 @@
   — the inputs and the headline of each scenario, at most 30, newest first,
   mirrored to this browser ('omega_computepf_v1:<org>') so a save the rules
   refuse is never lost. An interval file is not stored.
+
+  PORTFOLIO.  The header's Portfolio (and #portfolio) picks saved scenarios
+  and posts them as { action:'portfolio' }: the server runs each as saved,
+  sums their after-tax cash flows and writes the workbook
+  (api/_lib/compute-portfolio.js); this page draws the answer and saves the
+  file it was handed. The picks stay in this browser
+  ('omega_computepf_picks_v1:<org>').
   ═══════════════════════════════════════════════════════════════════════════════
 -->
 <html lang="en">
@@ -84,6 +91,8 @@ button{cursor:pointer}
 .hdr-scen select{min-height:36px;font-size:13px;font-weight:600}
 .hdr-right{margin-left:auto;display:flex;align-items:center;gap:12px;min-width:0;flex:0 0 auto}
 .save-state{font-size:12.5px;color:var(--sub);white-space:nowrap}
+.hdr-guide{color:var(--sub);text-decoration:none;font-weight:600;font-size:13px;padding:6px 8px;border-radius:8px;white-space:nowrap}
+.hdr-guide:hover{color:var(--ink);background:var(--panel)}
 .who{font-size:12.5px;color:var(--muted);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 16px;border-radius:9px;border:1px solid transparent;font-weight:600;font-size:14px;line-height:1.1;white-space:nowrap;text-decoration:none}
 .btn-p{background:var(--acc-ink);color:#fff;box-shadow:0 1px 2px rgba(15,23,42,.12)}
@@ -289,6 +298,54 @@ table.mix .ig{min-width:92px}
 .foot{max-width:1480px;margin:0 auto;padding:0 24px 32px;font-size:12px;color:var(--muted);display:flex;gap:6px 10px;flex-wrap:wrap}
 .toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:80;background:#0F172A;color:#fff;border-radius:10px;padding:10px 16px;font-size:13px;box-shadow:0 8px 24px rgba(15,23,42,.24);max-width:calc(100vw - 32px);text-align:center}
 .upsell{background:linear-gradient(135deg,#EEF4FF,#FFFFFF);border-color:#C7D7FE}
+/* The portfolio: saved scenarios picked and run together, over the page. */
+.hdr-port{flex:0 0 auto}
+.hdr-port svg{flex:0 0 16px}
+html.pf-lock,html.pf-lock body{overflow:hidden}
+.pf-back{position:fixed;top:0;right:0;bottom:0;left:0;z-index:70;background:rgba(15,23,42,.45);display:flex;align-items:flex-start;justify-content:center;padding:32px 24px}
+.pf-dlg{position:relative;display:flex;flex-direction:column;width:100%;max-width:1180px;max-height:calc(100vh - 64px);background:var(--bg);border-radius:14px;box-shadow:0 24px 64px rgba(15,23,42,.28);outline:none}
+.pf-h{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px 14px 22px;background:#fff;border-bottom:1px solid var(--line);border-radius:14px 14px 0 0}
+.pf-h h2{margin:4px 0 0;font-size:21px;line-height:1.25;color:var(--ink);font-weight:700;letter-spacing:-.01em;outline:none}
+.pf-x{flex:0 0 40px;width:40px;height:40px;border:0;border-radius:10px;background:transparent;color:var(--sub);display:inline-flex;align-items:center;justify-content:center}
+.pf-x:hover{background:var(--panel);color:var(--ink)}
+.pf-b{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:18px 22px 22px}
+.pf-foot{display:flex;align-items:center;justify-content:space-between;gap:10px 14px;flex-wrap:wrap;padding:12px 22px;background:#fff;border-top:1px solid var(--line);border-radius:0 0 14px 14px}
+.pf-foot .pf-count{font-size:13px;color:var(--sub)}
+.pf-foot .pf-count b{color:var(--ink)}
+.pf-acts{display:flex;gap:8px;flex-wrap:wrap;margin-left:auto}
+.pf-tools{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin:0 0 12px}
+.pf-tools input[type=text]{flex:1 1 220px;max-width:320px;min-height:36px}
+.pf-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.pf-item{display:flex;gap:10px;align-items:flex-start;padding:10px 12px;border:1px solid var(--line-2);border-radius:10px;background:#fff;cursor:pointer;min-width:0}
+.pf-item:hover{border-color:var(--acc)}
+.pf-item input{flex:0 0 18px;width:18px;height:18px;margin:2px 0 0;accent-color:var(--acc-ink);cursor:pointer}
+.pf-item .t{display:block;min-width:0}
+.pf-item b{display:block;font-size:13.5px;font-weight:650;color:var(--ink);overflow-wrap:anywhere}
+.pf-item .m{display:block;font-size:12px;color:var(--sub);margin-top:2px}
+.pf-item.on{border-color:var(--acc);background:var(--acc-tint);box-shadow:0 0 0 1px var(--acc)}
+.pf-item.off{cursor:not-allowed;background:var(--panel)}
+.pf-item.off b{color:var(--sub)}
+.pf-sum{font-size:13px;color:var(--sub);margin:12px 0 0}
+.pf-sum b{color:var(--ink)}
+.pf-foot>.pf-get{margin-left:auto}
+.dt tr.tot td{font-weight:700;color:var(--ink);background:var(--panel);border-top:2px solid var(--line-2)}
+.dt td .btn-t{min-height:28px;padding:0;text-align:left;white-space:normal}
+.wl .pf-who{display:block;font-size:12px;color:var(--sub);margin-top:4px}
+@media (max-width:768px){
+  .hdr-port span{display:none}
+  .hdr-port{min-width:36px;padding:0 9px}
+  .pf-back{padding:0}
+  .pf-dlg{max-width:none;height:100%;max-height:none;border-radius:0}
+  .pf-h,.pf-foot{border-radius:0}
+  .pf-h{padding:12px 12px 12px 16px}
+  .pf-b{padding:14px 16px 18px}
+  .pf-foot{padding:10px 16px calc(10px + env(safe-area-inset-bottom))}
+  .pf-list{grid-template-columns:minmax(0,1fr)}
+  .pf-acts{width:100%}
+  .pf-acts .btn{flex:1 1 0}
+  .pf-foot>.btn{width:100%}
+  .hdr-save-long{display:none}
+}
 @media (max-width:1199px){.app{grid-template-columns:212px minmax(0,1fr)}.rail{display:none}.mstrip{display:block}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:900px){
   .fg{grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 12px}
@@ -298,7 +355,7 @@ table.mix .ig{min-width:92px}
 @media (max-width:768px){
   :root{--hdr:56px}
   .hdr{padding:0 10px;gap:6px}
-  .hdr-back span,.hdr-sep,.hdr-title,.who,.save-state{display:none}
+  .hdr-back span,.hdr-sep,.hdr-title,.who,.save-state,.hdr-guide{display:none}
   .hdr-scen{flex:1 1 auto}
   .app{display:block;padding:14px 16px 104px}
   .stepper{display:none}
@@ -325,9 +382,12 @@ table.mix .ig{min-width:92px}
   <span class="hdr-sep" aria-hidden="true"></span>
   <span class="hdr-title">Compute Site Pro Forma</span>
   <div class="hdr-scen"><select id="scen" aria-label="Saved scenarios"><option value="">Saved scenarios…</option></select></div>
+  <button type="button" class="btn btn-s btn-sm hdr-port" data-act="portfolio" id="btn-port" aria-label="Portfolio analysis of saved scenarios" title="Run saved scenarios together as a portfolio">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 9 5-9 5-9-5 9-5z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 5 9-5"/></svg><span>Portfolio</span></button>
   <div class="hdr-right">
     <span class="save-state" id="savemsg" aria-live="polite"></span>
-    <button type="button" class="btn btn-s btn-sm" data-act="save" id="btn-save">Save scenario</button>
+    <a class="hdr-guide" id="hdr-guide" href="/guides/compute/Compute-Site-Pro-Forma.pdf" target="_blank" rel="noopener">Guide</a>
+    <button type="button" class="btn btn-s btn-sm" data-act="save" id="btn-save">Save<span class="hdr-save-long"> scenario</span></button>
     <span class="who" id="who"></span>
   </div>
 </header>
@@ -662,7 +722,8 @@ table.mix .ig{min-width:92px}
         <div class="deck-box" id="deck-box"><div class="empty">The deck appears once the model has run.</div></div>
       </div>
       <div class="card" id="compare-card">
-        <div class="card-h"><h3>Compare scenarios</h3><span class="aside">Saved scenarios, as saved</span></div>
+        <div class="card-h"><h3>Compare scenarios</h3><button type="button" class="btn btn-s btn-sm" data-act="portfolio">Run a portfolio analysis</button></div>
+        <p class="card-note">Saved scenarios, as saved. A portfolio analysis runs the ones you pick together and writes the workbook.</p>
         <div id="compare"></div>
       </div>
       <div class="step-nav"><button type="button" class="btn btn-s" data-go="6">Back</button><span></span></div>
@@ -682,6 +743,16 @@ table.mix .ig{min-width:92px}
   <span>© 2025–2026 ClearSky Energy Solutions LLC</span><span aria-hidden="true">·</span>
   <span>A screening model, not a compute operator's offer, a utility load study or a tax opinion. Planning figures are marked.</span>
 </footer>
+<div class="pf-back" id="pf" hidden>
+  <div class="pf-dlg" role="dialog" aria-modal="true" aria-labelledby="pf-title" tabindex="-1">
+    <div class="pf-h">
+      <div><div class="kick">Portfolio analysis</div><h2 id="pf-title" tabindex="-1">Run saved sites together</h2></div>
+      <button type="button" class="pf-x" data-act="pf-close" aria-label="Close the portfolio analysis"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+    <div class="pf-b" id="pf-body"></div>
+    <div class="pf-foot" id="pf-foot"></div>
+  </div>
+</div>
 <div class="toast" id="toast" hidden></div>
 
 <script>
@@ -1298,16 +1369,21 @@ function drawDuration(pts, limit) {
   };
 }
 function drawCash(res) {
-  var box = $('ch-cash'); if (!box) return;
   var y0 = res.year0 || {}, rows = res.rows || [], bars = [num(y0.afterTaxCash)], cum = [num(y0.afterTaxCash)];
   rows.forEach(function (r) { bars.push(num(r.afterTaxCash)); cum.push(num(r.cumulativeAfterTax)); });
+  drawCashBars('ch-cash', bars, cum, 'After-tax cash flow by year with the cumulative total; the annual table below has every figure.');
+}
+/* Bars for each year's after-tax cash and a line for the running total: the
+   scenario's (step 7) and the portfolio's draw the same way. */
+function drawCashBars(id, bars, cum, label) {
+  var box = $(id); if (!box || !bars.length) return;
   var lo = 0, hi = 0;
   bars.concat(cum).forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; });
   var g = frame(box); g.L = 58;
   var pw = g.W - g.L - g.R, ph = g.H - g.T - g.B, tk = ticks(lo, hi, 5), a = tk[0], z = tk[tk.length - 1];
   function y(v) { return g.T + ph - (v - a) / (z - a) * ph; }
   var n = bars.length, band = pw / n, bw = Math.max(2, Math.min(22, band - 3)), pts = [];
-  var s = ['<svg viewBox="0 0 ' + g.W + ' ' + g.H + '" role="img" aria-label="After-tax cash flow by year with the cumulative total; the annual table below has every figure.">'];
+  var s = ['<svg viewBox="0 0 ' + g.W + ' ' + g.H + '" role="img" aria-label="' + esc(label) + '">'];
   tk.forEach(function (t) { s.push('<line class="grid" x1="' + g.L + '" x2="' + (g.W - g.R) + '" y1="' + f1(y(t)) + '" y2="' + f1(y(t)) + '"/><text class="ax" x="' + (g.L - 8) + '" y="' + f1(y(t) + 4) + '" text-anchor="end">' + axMoney(t) + '</text>'); });
   bars.forEach(function (v, i) {
     var cx = g.L + band * i + band / 2;
@@ -1321,7 +1397,7 @@ function drawCash(res) {
   var ex = g.L + band * (n - 1) + band / 2, ey = y(cum[n - 1]);
   s.push('<circle class="dot" cx="' + f1(ex) + '" cy="' + f1(ey) + '" r="4"/><text class="lab" x="' + f1(ex - 8) + '" y="' + f1(ey - 10) + '" text-anchor="end">' + esc(moneyShort(cum[n - 1])) + ' cumulative</text></svg>');
   box.innerHTML = s.join('') + '<div class="tip" hidden></div>';
-  CHARTS['ch-cash'] = function (i) {
+  CHARTS[id] = function (i) {
     if (i < 0 || i >= n) return null;
     return { title: i === 0 ? 'Year 0 · equity at close' : 'Year ' + i, rows: [['var(--acc)', 'After-tax cash flow', money(bars[i])], ['#334155', 'Cumulative', money(cum[i])]] };
   };
@@ -1556,6 +1632,7 @@ function paintSaved() {
       '</td><td>' + esc(fin(x.irr) ? pct(x.irr, 1) : 'n/a') + '</td><td>' + esc(fin(x.npv) ? moneyShort(x.npv) : '—') + '</td><td>' + esc(fin(x.capital) ? moneyShort(x.capital) : '—') + '</td></tr>';
   });
   c.innerHTML = t + '</tbody></table></div>';
+  if (PF.open && PF.stage === 'pick' && !PF.busy) { if (PF.dflt) pfDefault(); renderPortfolio(); }
 }
 function save() {
   if (!RES) { toast('Run the model first — a scenario keeps its headline.'); return; }
@@ -1588,6 +1665,212 @@ function loadScenario(i) {
   delete IN.load;
   SWEEP = null; renderSweep();
   paintForm(); paintSaved(); changed('load');
+}
+
+/* ── the portfolio: saved scenarios picked and run together ──────────── */
+/* The server runs each picked scenario as saved and sums their after-tax
+   cash flows (api/_lib/compute-portfolio.js); the page picks, posts and
+   draws, and hands over the workbook the server wrote. The picks are
+   remembered in this browser only. */
+var PF = { open: false, stage: 'pick', sel: {}, inited: false, dflt: false, q: '', busy: false, res: null, err: '', opener: null, seq: 0 };
+var PF_KEY = 'omega_computepf_picks_v1:';
+function ymd(d) { var m = d.getMonth() + 1, x = d.getDate(); return d.getFullYear() + '-' + (m < 10 ? '0' : '') + m + '-' + (x < 10 ? '0' : '') + x; }
+function shortDate(iso) { var d = new Date(iso); return isNaN(d.getTime()) ? '' : MONTHS[d.getMonth()] + ' ' + d.getDate(); }
+function pfSaved() { return STORE.scenarios.filter(function (x) { return x && x.id; }); }
+function pfRunnable(x) { var L = x.input && x.input.load; return !(L && L.type === 'interval' && typeof L.text !== 'string'); }
+function pfPicked() { return pfSaved().filter(function (x) { return PF.sel[x.id] && pfRunnable(x); }); }
+function pfShown(x) { return !PF.q || String(x.name || '').toLowerCase().indexOf(PF.q.toLowerCase()) >= 0; }
+function pfDefault() { PF.sel = {}; pfSaved().forEach(function (x) { if (pfRunnable(x)) PF.sel[x.id] = true; }); PF.dflt = true; }
+function pfRemember() { PF.dflt = false; if (ORG) store(PF_KEY + ORG, Object.keys(PF.sel).filter(function (k) { return PF.sel[k]; })); }
+function openPortfolio(opener) {
+  PF.opener = opener || document.activeElement;
+  if (!PF.inited) {
+    PF.inited = true;
+    var kept = ORG ? store(PF_KEY + ORG) : null;
+    if (Array.isArray(kept) && kept.length) kept.forEach(function (id) { PF.sel[id] = true; }); else pfDefault();
+  }
+  PF.open = true; $('pf').hidden = false; document.documentElement.classList.add('pf-lock');
+  try { history.replaceState(null, '', '#portfolio'); } catch (e) {}
+  renderPortfolio();
+  setTimeout(function () { var h = $('pf-title'); if (h && PF.open) h.focus(); }, 0);
+}
+function closePortfolio() {
+  if (!PF.open) return;
+  PF.open = false; $('pf').hidden = true; document.documentElement.classList.remove('pf-lock');
+  try { history.replaceState(null, '', '#step-' + STEP); } catch (e) {}
+  var o = PF.opener; PF.opener = null;
+  if (o && o.focus && document.body.contains(o)) { try { o.focus(); } catch (e) {} }
+}
+function renderPortfolio() {
+  if (!PF.open) return;
+  var results = PF.stage === 'results' && PF.res;
+  $('pf-title').textContent = results ? 'Portfolio of ' + PF.res.ran + ' site' + (PF.res.ran === 1 ? '' : 's') : 'Run saved sites together';
+  $('pf-body').innerHTML = results ? pfResultsHtml() : pfPickHtml();
+  $('pf-body').scrollTop = 0;
+  pfFoot();
+  if (results) drawPortfolioChart();
+}
+function pfFoot() {
+  var f = $('pf-foot'); if (!f) return;
+  if (PF.stage === 'results' && PF.res) {
+    f.innerHTML = '<button type="button" class="btn btn-s pf-chg" data-act="pf-change">Change the picks</button>' +
+      (PF.res.workbook ? '<button type="button" class="btn btn-p pf-get" data-act="pf-download">Download the workbook</button>' : '');
+    return;
+  }
+  var n = pfPicked().length, all = pfSaved().filter(pfRunnable).length;
+  f.innerHTML = '<span class="pf-count" id="pf-count" aria-live="polite"><b>' + n + '</b> of ' + all + ' picked</span><div class="pf-acts">' +
+    (PF.res && !PF.busy ? '<button type="button" class="btn btn-s" data-act="pf-last">The last results</button>' : '') +
+    '<button type="button" class="btn btn-p" data-act="pf-run" id="pf-run"' + (n && !PF.busy ? '' : ' disabled') + '>' +
+    (PF.busy ? '<span class="spin"></span>Running ' + n + ' site' + (n === 1 ? '' : 's') + '…' : 'Run the portfolio' + (n ? ' (' + n + ')' : '')) + '</button></div>';
+}
+function pfPickHtml() {
+  var list = pfSaved();
+  if (!list.length) {
+    return '<div class="card"><div class="empty">No saved scenarios yet. Set up a site, let the model run and press <b>Save scenario</b> at the top: ' +
+      'a portfolio analysis runs your saved scenarios together.<div class="empty-acts"><button type="button" class="btn btn-p btn-sm" data-act="pf-close">Back to the model</button>' +
+      '<button type="button" class="btn btn-s btn-sm" data-act="pf-example">Run the example</button></div></div></div>';
+  }
+  var h = '<p class="lede" style="margin:0 0 14px">Pick saved scenarios. Each one runs through the model exactly as it was saved (its own load, service, ' +
+    'equipment, deal and term), and the portfolio is the sum of their after-tax cash flows, as if every site closed together. The details show here, ' +
+    'and the workbook downloads with every figure.</p>';
+  if (PF.err) h += '<div class="banner bad"><div>' + esc(PF.err) + '</div></div>';
+  h += '<div class="pf-tools">' + (list.length > 8 ? '<input type="text" id="pf-q" placeholder="Filter by name" aria-label="Filter the saved scenarios by name" value="' + esc(PF.q) + '">' : '') +
+    '<button type="button" class="btn btn-s btn-sm" data-act="pf-all">Select all</button><button type="button" class="btn btn-s btn-sm" data-act="pf-none">Clear</button>' +
+    '<button type="button" class="btn btn-s btn-sm" data-act="pf-advance" title="The scenarios whose load screen said ADVANCE when they were saved">Only ADVANCE</button></div>';
+  h += '<div class="pf-list" id="pf-list">' + list.map(function (x) {
+    var hl = x.headline || {}, can = pfRunnable(x), on = can && !!PF.sel[x.id];
+    var meta = can ? [hl.pods != null ? hl.pods + ' pod' + (hl.pods === 1 ? '' : 's') : '', hl.battery || 'no battery', fin(hl.irr) ? 'IRR ' + pct(hl.irr, 1) : '',
+      hl.act || '', x.at ? 'saved ' + shortDate(x.at) : ''].filter(Boolean).join(' · ')
+      : 'Saved with an interval file, which is never kept with a scenario: open it and attach the file to include it.';
+    return '<label class="pf-item' + (on ? ' on' : '') + (can ? '' : ' off') + '"' + (pfShown(x) ? '' : ' hidden') + '>' +
+      '<input type="checkbox" data-pf-id="' + esc(x.id) + '"' + (on ? ' checked' : '') + (can ? '' : ' disabled') + '>' +
+      '<span class="t"><b>' + esc(x.name) + '</b><span class="m">' + esc(meta) + '</span></span></label>';
+  }).join('') + '</div>';
+  return h;
+}
+/* The picks change in place, so a checkbox or the filter keeps its focus. */
+function pfPaintChecks() {
+  var boxes = document.querySelectorAll('#pf-list input[data-pf-id]');
+  for (var i = 0; i < boxes.length; i++) {
+    var id = boxes[i].getAttribute('data-pf-id'), on = !boxes[i].disabled && !!PF.sel[id];
+    boxes[i].checked = on;
+    var it = closest(boxes[i], '.pf-item'); if (it) it.className = 'pf-item' + (on ? ' on' : '') + (boxes[i].disabled ? ' off' : '');
+  }
+  pfFoot();
+}
+function pfFilter(q) {
+  PF.q = q;
+  pfSaved().forEach(function (x) {
+    var box = document.querySelector('#pf-list input[data-pf-id="' + String(x.id).replace(/["\\]/g, '') + '"]'), it = box && closest(box, '.pf-item');
+    if (it) it.hidden = !pfShown(x);
+  });
+}
+function pfQuick(mode) {
+  pfSaved().forEach(function (x) {
+    if (!pfShown(x) || !pfRunnable(x)) return;
+    PF.sel[x.id] = mode === 'all' ? true : mode === 'none' ? false : (x.headline && x.headline.act) === 'ADVANCE';
+  });
+  pfRemember(); pfPaintChecks();
+}
+function runPortfolio() {
+  var picked = pfPicked();
+  if (!picked.length || PF.busy) return;
+  PF.busy = true; PF.err = ''; var seq = ++PF.seq;
+  pfFoot();
+  api({ action: 'portfolio', today: ymd(new Date()), sites: picked.map(function (x) { return { id: x.id, name: x.name, at: x.at, input: x.input }; }) }).then(function (j) {
+    if (seq !== PF.seq) return;
+    PF.busy = false; PF.res = j.result; PF.stage = 'results'; renderPortfolio();
+    var h = $('pf-title'); if (h && PF.open) h.focus();
+  }, function (e) {
+    if (seq !== PF.seq) return;
+    PF.busy = false; PF.err = e.message || 'The portfolio could not run.'; if (PF.stage !== 'pick') PF.stage = 'pick'; renderPortfolio();
+  });
+}
+function pfMoic(v) { return fin(v) ? v.toFixed(2) + '×' : 'n/a'; }
+function pfBattery(kwh, kw) { return kwh ? n0(kw) + ' kW / ' + n0(kwh) + ' kWh' : 'none'; }
+function pfBatt(kwh, kw) { return kwh ? n0(kw) + '/' + n0(kwh) : '—'; }
+function pfResultsHtml() {
+  var r = PF.res, A = r.portfolio.all, F = r.portfolio.fits, h = '', rate = r.discountPct + '%';
+  if (!r.ran) {
+    h += '<div class="banner warn"><div><b>None of the picked scenarios could run.</b> What each needs is below.</div></div>';
+  } else if (!A.sites) {
+    h += '<div class="banner info"><div>None of these scenarios puts capital in (a lease with no capital), so there is no investor cash flow to sum. Each is listed below with its value.</div></div>';
+  } else {
+    h += '<div class="card"><div class="card-h"><h3>The portfolio</h3><span class="aside">' + esc(A.sites + ' site' + (A.sites === 1 ? '' : 's') + ' with capital · ' + A.fit + ' fit the existing service') + '</span></div>' +
+      '<div class="kpis">' + kpi(pct(A.irr, 1), 'After-tax IRR of the summed cash flow') + kpi(moneyShort(A.npv), 'NPV at ' + esc(rate) + (r.mixedRates ? ', the rate most sites use' : '')) +
+      kpi(moneyShort(A.equity), 'Equity at close') + kpi(pfMoic(A.moic), 'MOIC, years 1–' + A.years + ' over the equity') + '</div>' +
+      '<div class="kpis" style="margin-top:12px">' + kpiP(esc(fin(A.payback) ? A.payback.toFixed(1) + ' years' : 'never'), 'Payback of the sum') +
+      kpiP(esc(moneyShort(A.netReturn)), 'Net investor return, years 0–' + A.years) + kpiP(esc(moneyShort(A.year1Revenue)), 'Year-one revenue') +
+      kpiP(esc(n0(A.pods) + ' pods · ' + n0(A.gpus) + ' GPUs'), esc(A.batteryKwh ? 'Battery ' + pfBattery(A.batteryKwh, A.batteryKw) : 'No battery')) + '</div>';
+    if (F.sites && F.sites < A.sites) {
+      h += '<p class="pf-sum"><b>The ' + F.sites + ' that fit the existing service:</b> after-tax IRR ' + esc(pct(F.irr, 1)) + ', NPV ' + esc(moneyShort(F.npv)) +
+        ', equity ' + esc(moneyShort(F.equity)) + ', MOIC ' + esc(pfMoic(F.moic)) + '.</p>';
+    } else if (!F.sites) {
+      h += '<p class="pf-sum"><b>None of these builds fits its existing service.</b> Open a site and use Step 5\'s Find the best size, then save it and run the portfolio again.</p>';
+    }
+    h += '<div class="chart" id="pf-cash" style="margin-top:16px"></div>' +
+      '<p class="help">The IRR is of the sites\' after-tax cash flows added year by year, not an average of their IRRs, so a large site weighs more than a small one.</p></div>';
+  }
+  if (r.workbook) {
+    h += '<div class="banner info"><div><b>The workbook</b> (' + esc(r.workbook.name) + ') has five sheets: Portfolio, After-tax cash flow, Metric verification ' +
+      '(the spreadsheet recomputes each site\'s IRR, NPV and MOIC from its cash flow), Site inputs, and Method &amp; flags. Every total is a live formula.</div></div>';
+  }
+  if (r.sites.length) {
+    h += '<div class="card"><div class="card-h"><h3>Site by site</h3><span class="aside">Ranked by after-tax IRR · a name opens the scenario</span></div>' +
+      '<div class="tw"><table class="dt wrap"><thead><tr><th>Site</th><th>Fits</th><th>Screen</th><th>Pods</th><th>Battery kW/kWh</th><th>Deal</th><th>Equity</th><th>After-tax IRR</th>' +
+      '<th>NPV at ' + esc(rate) + '</th><th>MOIC</th><th>Payback</th></tr></thead><tbody>';
+    r.sites.forEach(function (x) {
+      var inv = x.invested;
+      h += '<tr><td><button type="button" class="btn-t" data-act="pf-open" data-id="' + esc(x.id) + '">' + esc(x.label || x.name) + '</button></td>' +
+        '<td>' + (x.fits ? '<span class="pill ok">Yes</span>' : '<span class="pill bad">No</span>') + '</td><td>' + esc(x.act) + '</td><td>' + esc(n0(x.pods)) + '</td>' +
+        '<td>' + esc(pfBatt(x.batteryKwh, x.batteryKw)) + '</td><td>' + esc(x.structureShort + (inv ? '' : ', no capital')) + '</td>' +
+        '<td>' + (inv ? esc(moneyShort(x.equity)) : '—') + '</td><td>' + (inv ? esc(pct(x.irr, 1)) : '—') + '</td>' +
+        '<td>' + esc(moneyShort(inv ? x.npv : x.leaseNpv)) + (inv ? '' : ' rent') + '</td><td>' + (inv ? esc(pfMoic(x.moic)) : '—') + '</td>' +
+        '<td>' + (inv ? esc(fin(x.payback) ? x.payback.toFixed(1) + ' yrs' : 'never') : '—') + '</td></tr>';
+    });
+    [[A, 'All ' + A.sites + ' with capital', A.fit + ' of ' + A.sites], [F, 'The ' + F.sites + ' that fit', '']].forEach(function (d) {
+      var P = d[0]; if (!P.sites) return;
+      h += '<tr class="tot"><td>' + esc(d[1]) + '</td><td>' + esc(d[2]) + '</td><td></td><td>' + esc(n0(P.pods)) + '</td><td>' + esc(pfBatt(P.batteryKwh, P.batteryKw)) + '</td><td></td>' +
+        '<td>' + esc(moneyShort(P.equity)) + '</td><td>' + esc(pct(P.irr, 1)) + '</td><td>' + esc(moneyShort(P.npv)) + '</td><td>' + esc(pfMoic(P.moic)) + '</td>' +
+        '<td>' + esc(fin(P.payback) ? P.payback.toFixed(1) + ' yrs' : 'never') + '</td></tr>';
+    });
+    h += '</tbody></table></div></div>';
+  }
+  if (r.skipped.length) {
+    h += '<div class="card"><div class="card-h"><h3>Not run</h3><span class="aside">' + r.skipped.length + ' of ' + r.picked + ' picked</span></div>' +
+      r.skipped.map(function (k) { return '<div class="wl warn"><div><b>' + esc(k.name) + '.</b> ' + esc(k.reason) + '</div></div>'; }).join('') + '</div>';
+  }
+  if (r.flags.length) {
+    h += '<div class="card"><div class="card-h"><h3>What needs a look</h3><span class="aside">From the model and the bills, by site</span></div>' +
+      r.flags.map(function (f) {
+        var lv = f.level === 'critical' ? 'critical' : f.level === 'warn' ? 'warn' : 'info';
+        return '<div class="wl ' + lv + '"><div><span class="lv">' + (lv === 'critical' ? 'Critical' : lv === 'warn' ? 'Warning' : 'Note') + '<span class="code">' + esc(f.code) + '</span></span>' +
+          esc(f.text) + '<span class="pf-who">' + esc(f.count + ' scenario' + (f.count === 1 ? '' : 's') + ': ' + f.sites.join(', ')) + '</span></div></div>';
+      }).join('') + '</div>';
+  }
+  return h;
+}
+function drawPortfolioChart() {
+  var A = PF.res && PF.res.portfolio && PF.res.portfolio.all;
+  if (!A || !A.flows || !A.flows.length) return;
+  var cum = [], c = 0; A.flows.forEach(function (v) { c += v; cum.push(c); });
+  drawCashBars('pf-cash', A.flows, cum, 'The portfolio\'s after-tax cash flow by year with the cumulative total; the workbook has every figure.');
+}
+function pfDownload() {
+  var w = PF.res && PF.res.workbook; if (!w) return;
+  var bin = atob(w.base64), u8 = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  var blob = new Blob([u8], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = w.name; a.style.display = 'none';
+  document.body.appendChild(a); a.click(); a.parentNode.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 4000);
+  toast('Workbook saved: ' + w.name);
+}
+function pfOpen(id) {
+  for (var i = 0; i < STORE.scenarios.length; i++) {
+    if (STORE.scenarios[i].id === id) { var nm = STORE.scenarios[i].name; closePortfolio(); loadScenario(i); toast('Opened ' + nm + '.'); return; }
+  }
+  toast('That scenario is no longer saved.');
 }
 
 /* ── URL hand-off (Site Map's Compute › Site Screen) ─────────────────── */
@@ -1645,15 +1928,17 @@ function undoExample() {
 }
 
 /* ── wiring ──────────────────────────────────────────────────────────── */
-document.addEventListener('input', function (e) { if (e.target.getAttribute && e.target.getAttribute('data-path') && e.target.tagName !== 'SELECT' && e.target.type !== 'checkbox') onField(e.target); else if (closest(e.target, '#bills')) changed('load'); });
+document.addEventListener('input', function (e) { if (e.target.id === 'pf-q') { pfFilter(e.target.value); return; } if (e.target.getAttribute && e.target.getAttribute('data-path') && e.target.tagName !== 'SELECT' && e.target.type !== 'checkbox') onField(e.target); else if (closest(e.target, '#bills')) changed('load'); });
 document.addEventListener('change', function (e) {
   var t = e.target;
   if (t.getAttribute && t.getAttribute('data-path') && (t.tagName === 'SELECT' || t.type === 'checkbox')) onField(t);
   var mp = closest(t, '.mp[data-mp]'); if (mp) onMonth(mp);
   if (t.id === 'iunit') changed('load');
   if (t.id === 'urdb') changed('tariff');
+  if (t.getAttribute && t.getAttribute('data-pf-id') != null) { PF.sel[t.getAttribute('data-pf-id')] = t.checked; pfRemember(); pfPaintChecks(); }
 });
 document.addEventListener('click', function (e) {
+  if (e.target === $('pf')) { closePortfolio(); return; }
   var sg = closest(e.target, '[data-seg] [data-val]');
   if (sg) { setSeg(closest(sg, '[data-seg]').getAttribute('data-seg'), sg.getAttribute('data-val')); return; }
   var lm = closest(e.target, '[data-mode]'); if (lm) { setLoadMode(lm.getAttribute('data-mode')); return; }
@@ -1664,6 +1949,15 @@ document.addEventListener('click', function (e) {
   var b = closest(e.target, '[data-act]'); if (!b) return;
   var act = b.getAttribute('data-act');
   if (act === 'save') save();
+  else if (act === 'portfolio') openPortfolio(b);
+  else if (act === 'pf-close') closePortfolio();
+  else if (act === 'pf-run') runPortfolio();
+  else if (act === 'pf-all' || act === 'pf-none' || act === 'pf-advance') pfQuick(act.slice(3));
+  else if (act === 'pf-change') { PF.stage = 'pick'; renderPortfolio(); }
+  else if (act === 'pf-last') { PF.stage = 'results'; renderPortfolio(); }
+  else if (act === 'pf-download') pfDownload();
+  else if (act === 'pf-open') pfOpen(b.getAttribute('data-id'));
+  else if (act === 'pf-example') { closePortfolio(); example(); }
   else if (act === 'example') example();
   else if (act === 'undo-example') undoExample();
   else if (act === 'optimize') optimize();
@@ -1692,6 +1986,21 @@ document.addEventListener('click', function (e) {
 $('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
 $('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });
 window.addEventListener('resize', function () { if (RES) { clearTimeout(window._rz); window._rz = setTimeout(function () { redrawCharts(); renderDeck(); }, 200); } });
+window.addEventListener('resize', function () { if (PF.open && PF.stage === 'results') { clearTimeout(window._pz); window._pz = setTimeout(drawPortfolioChart, 200); } });
+/* A link to #portfolio from the page itself opens it too. */
+window.addEventListener('hashchange', function () { if (location.hash === '#portfolio' && !PF.open && ME) openPortfolio(null); });
+/* The panel is modal: Escape closes it and Tab stays inside it. */
+document.addEventListener('keydown', function (e) {
+  if (!PF.open) return;
+  if (e.key === 'Escape' || e.keyCode === 27) { e.preventDefault(); closePortfolio(); return; }
+  if (e.key !== 'Tab') return;
+  var dlg = document.querySelector('#pf .pf-dlg'), all = dlg.querySelectorAll('button:not([disabled]), input:not([disabled]), a[href]'), vis = [];
+  for (var i = 0; i < all.length; i++) if (all[i].offsetParent !== null) vis.push(all[i]);
+  if (!vis.length) return;
+  var first = vis[0], last = vis[vis.length - 1], inside = dlg.contains(document.activeElement);
+  if (e.shiftKey && (!inside || document.activeElement === first || document.activeElement === dlg || document.activeElement === $('pf-title'))) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && (!inside || document.activeElement === last)) { e.preventDefault(); first.focus(); }
+});
 
 function onSignedIn(u) {
   $('who').textContent = u.email || '';
@@ -1706,6 +2015,7 @@ function onSignedIn(u) {
     if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
     if (/[?&]example=1(&|$)/.test(location.search)) example();
     else if (prefill()) { paintForm(); changed('site.zip'); }
+    if (WANT_PF) { WANT_PF = false; openPortfolio(null); }
   }, function (e) {
     if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
     if (e.status === 403 || e.status === 401) { DENIED = true; renderRail(); }
@@ -1747,7 +2057,7 @@ function startAuth() {
     }, 400);
   });
 }
-var hs = /^#step-([1-7])$/.exec(location.hash || '');
+var hs = /^#step-([1-7])$/.exec(location.hash || ''), WANT_PF = location.hash === '#portfolio';
 paintForm(); renderRail(); paintSaved(); showStep(hs ? +hs[1] : 1);
 startAuth();
 })(window);

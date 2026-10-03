@@ -16,6 +16,12 @@
                                           two side by side, sensitivities
    POST { action:'optimize', site:{…} } → pods × battery sizes, each a year
                                           of dispatch and a finance run
+   POST { action:'portfolio', sites:[{id,name,at,input}], today } → the
+                                          saved scenarios picked, each run as
+                                          saved, the sum of their after-tax
+                                          cash flows, what could not run and
+                                          why, and the workbook (base64)
+                                          (api/_lib/compute-portfolio.js)
 
    The load balance, the dispatch and the returns are the IP (CLAUDE.md,
    "where logic lives"): api/_lib/compute-site.js on the ONE tariff engine
@@ -34,12 +40,14 @@
 'use strict';
 var auth = require('./_lib/verify-token');
 var CS = require('./_lib/compute-site');
+var CP = require('./_lib/compute-portfolio');
 var PF = require('./_lib/proforma-engine');
 var deckBrand = require('./_lib/deck-brand');
 
 var TOOL_KEY = 'computeproforma';
 var MODULE = 'compute';
-var ACTIONS = ['options', 'context', 'screen', 'model', 'optimize'];
+var ACTIONS = ['options', 'context', 'screen', 'model', 'optimize', 'portfolio'];
+var PORTFOLIO_BYTES = 4000000;
 var TIERS = ['trial', 'standard', 'pro', 'deluxe', 'enterprise', 'partner', 'internal'];
 var CLOSED = ['pending', 'suspended', 'cancelled'];
 var PLATFORM = 'ClearSky-OMEGA';
@@ -124,6 +132,7 @@ module.exports = function (req, res) {
     if (action === 'context') {
       return res.status(200).json({ ok: true, orgId: g.caller.orgId, brand: deckBrand.brandOf(g.org, g.caller.orgId, PLATFORM) });
     }
+    if (action === 'portfolio') return portfolio(res, g, body);
     var run = action === 'screen' ? CS.screen : action === 'optimize' ? CS.optimize : CS.model;
     var out = run(body.site);
     if (!out || out.ok === false) return res.status(400).json({ ok: false, errors: (out && out.errors) || [] });
@@ -138,4 +147,26 @@ module.exports = function (req, res) {
   });
 };
 
+/* The date the workbook says it was prepared: the caller's own day when it
+   sends one within a day of ours (a desk in California is a day behind UTC
+   every evening), else today in UTC. */
+function preparedDay(sent, now) {
+  var today = new Date(now).toISOString().slice(0, 10);
+  if (typeof sent !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(sent)) return today;
+  var t = Date.parse(sent + 'T12:00:00Z');
+  return isFinite(t) && Math.abs(t - now) <= 36 * 3600 * 1000 ? sent : today;
+}
+
+function portfolio(res, g, body) {
+  var list = body.sites;
+  if (!Array.isArray(list) || !list.length) return res.status(400).json({ ok: false, errors: [{ field: 'sites', message: 'Pick at least one saved scenario.' }] });
+  if (JSON.stringify(list).length > PORTFOLIO_BYTES) {
+    return res.status(413).json({ ok: false, error: 'Those scenarios are too large to run together; pick fewer.' });
+  }
+  var out = CP.run(list, { prepared: preparedDay(body.today, Date.now()), brand: deckBrand.brandOf(g.org, g.caller.orgId, PLATFORM) });
+  if (!out || out.ok === false) return res.status(400).json({ ok: false, errors: (out && out.errors) || [] });
+  return res.status(200).json({ ok: true, result: CP.forPage(out) });
+}
+
 module.exports._gate = { refusal: refusal, TOOL_KEY: TOOL_KEY, MODULE: MODULE };
+module.exports._preparedDay = preparedDay;

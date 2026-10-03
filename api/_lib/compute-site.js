@@ -135,6 +135,8 @@ var STRUCTURES = {
   infra: 'Own the power and pod layer for a revenue share',
   lease: 'Lease the power to a compute operator'
 };
+/* The same three as the page's Deal choices name them, for tables. */
+var STRUCTURE_SHORT = { own: 'Own and operate', infra: 'Own the power layer', lease: 'Lease the power' };
 var SPOT_MODES = ['follow', 'always', 'offpeak'];
 
 /* ── small helpers ───────────────────────────────────────────────────────── */
@@ -865,6 +867,13 @@ function finance(c, ctx, y1, y0, who, full) {
            payback: res.metrics.paybackYears, noi1: res.rows[0].ebitda, schedule: sch, inputs: inp, result: full ? res : null };
 }
 
+/* THE FIT RULE, the sizing sweep's and the portfolio's: no firm compute lost
+   to the service limit, and under 5% of the charging energy unserved. */
+function fitsService(y1) {
+  var unservedPct = y1.ev.wantKwh > 0 ? y1.ev.unservedKwh / y1.ev.wantKwh * 100 : 0;
+  return y1.overKwh < 1e-3 && unservedPct <= 5;
+}
+
 /* ── THE SCREEN ──────────────────────────────────────────────────────────── */
 /* The Load Screen's gate ladder (editor.html patch 56), for a shared
    service instead of a substation: does the site advance, and what is the
@@ -1080,7 +1089,7 @@ function assembleScreen(c, ctx, y1, y0, run) {
     solar: c.solar.kwdc > 0 ? { kwdc: c.solar.kwdc, annualKwh: r0(c.solar.kwdc * ctx.loc.solarYield) } : null,
     balance: { limitKw: r1(ctx.limit), peakKw: r1(y1.peak), firmPeakKw: r1(y1.firmPeak), headroomKw: r1(ctx.limit - y1.peak),
                necNameplateKw: r1(necKw), overloadHours: y1.overHours, overloadKwh: r0(y1.overKwh),
-               utilisationPct: r1(y1.peak / ctx.limit * 100) },
+               utilisationPct: r1(y1.peak / ctx.limit * 100), fits: fitsService(y1) },
     bill: { baseline: r0(y1.baseBill), withProject: r0(y1.bill.total), incremental: r0(y1.bill.total - y1.baseBill),
             withoutBattery: y0 ? r0(y0.bill.total) : null },
     verdict: v1,
@@ -1252,7 +1261,7 @@ function optimize(input) {
       var f = full(run, podsList[i], sizes[j][0], sizes[j][1]);
       var y1 = f.y1, fin = finance(c, ctx, y1, f.y0, who, false);
       var unservedPct = y1.ev.wantKwh > 0 ? y1.ev.unservedKwh / y1.ev.wantKwh * 100 : 0;
-      var fits = y1.overKwh < 1e-3 && unservedPct <= 5;
+      var fits = fitsService(y1);
       var cell = { pods: podsList[i], gpus: y1.gpus, batteryKw: sizes[j][0], batteryKwh: sizes[j][1], peakKw: r1(y1.peak),
                    overloadHours: y1.overHours, unservedPct: r1(unservedPct), spotCurtailedPct: r1(y1.spotCurtailedGpuH / Math.max(1, y1.gpuHours.spotOffered) * 100),
                    capital: r0(fin.capital || 0), irr: fin.irr != null ? fin.irr : null, npv: fin.npv != null ? r0(fin.npv) : null, fits: fits };
@@ -1280,8 +1289,8 @@ function options() {
 }
 
 module.exports = {
-  VERSION: VERSION, GPU: GPU, EV_PATTERNS: EV_PATTERNS, STRUCTURES: STRUCTURES, REFS: REFS,
-  read: read, screen: screen, model: model, optimize: optimize, options: options,
+  VERSION: VERSION, GPU: GPU, EV_PATTERNS: EV_PATTERNS, STRUCTURES: STRUCTURES, STRUCTURE_SHORT: STRUCTURE_SHORT, REFS: REFS,
+  read: read, screen: screen, model: model, optimize: optimize, options: options, fitsService: fitsService,
   _internal: { prepare: prepare, computeLoad: computeLoad, evCohorts: evCohorts, planEv: planEv, dispatch: dispatch,
                runMonth: runMonth, refreshPlan: refreshPlan, ageOf: ageOf, schedule: schedule, capexLines: capexLines,
                batteryOf: batteryOf, start: start, full: full }

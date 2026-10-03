@@ -40,6 +40,59 @@ work to do, and the model runs at once. The construction and service months
 follow today's date (two and nine months out). Whatever the person had typed
 comes back from the toast (*Put mine back*).
 
+**The guide.** `guides/compute/Compute-Site-Pro-Forma.pdf` (served at
+`/guides/compute/…`, linked as *Guide* in the page's header) is the user guide
+with the OMEGA mark (`omega-logo.png`, the product's icon) on every page: a cover, where to find the tool, the example,
+each of the seven steps, reading the results, the Site Screen and the
+planning figures. `npm run guide:compute` (`scripts/guides/compute-proforma.js`)
+builds it from the REAL page against the real endpoint: it runs the example,
+photographs every card and quotes only figures it read off the page, so a
+change to the page is a rebuild of the guide, never an edit to it. Like
+`guides/editor/`, the folder is outside `build.js` and `tguides.js`.
+
+**Portfolio analysis.** *Portfolio* in the page's header (beside the saved
+scenarios; also *Run a portfolio analysis* under Compare scenarios, and
+`#portfolio`) opens a panel over the page. The person picks saved scenarios
+(Select all, Clear, Only ADVANCE, a filter past eight; the picks are
+remembered in this browser, `omega_computepf_picks_v1:<org>`) and runs them
+together: `POST /api/compute-proforma {action:'portfolio', sites:[{id, name,
+at, input}], today}` → `api/_lib/compute-portfolio.js`.
+
+- Each scenario runs through `compute-site.model` **exactly as saved**. Nothing
+  is re-sized: sizing is Step 5's Find the best size, saved.
+- The portfolio is the **sum of the after-tax cash flows** year by year, every
+  site on its own Year 0 as if all closed together, each keeping its own
+  term. Its IRR is the finance engine's IRR of that sum (never an average of
+  the sites' IRRs), its NPV the sum's at the rate most sites use (said when
+  they differ), its MOIC years 1–N over the equity at close, its payback the
+  engine's.
+- Two portfolios: every site with capital, and the ones that **fit the
+  existing service**, `compute-site.fitsService`, the ONE rule the sizing
+  sweep also reads (no firm compute lost to the limit, under 5% of charging
+  unserved).
+- A scenario that cannot run is listed under *Not run* with the reason: an
+  interval file is never stored with a scenario (the picker holds those back
+  and says so), or the model refuses its inputs. A lease with no capital is
+  listed with its rent's value and never summed. A name picked twice gains
+  the day it was saved.
+- *What needs a look* groups the model's warnings, the no-fit rows and the
+  bills whose kWh the billed peak cannot draw (the load builder's own note),
+  each once with every scenario it covers; a flag shared by several sites
+  says it in general, never one site's figures.
+
+**The workbook** (`Compute-portfolio-<n>-sites-<date>.xlsx`) is written on the
+server by `api/_lib/portfolio/xlsx.js`, the repo's one .xlsx writer
+(deflated through `portfolio/zip.js`): **Portfolio** (a row per site: load,
+service, fit, equipment, capital, returns; the two portfolios as live
+totals), **After-tax cash flow** (Year 0 to N per site, the two sums as `SUM`
+and `SUMIF`, their cumulative), **Metric verification** (the spreadsheet's own
+`IRR`, `NPV` and `SUM` of each cash flow beside the model's, and the
+differences), **Site inputs** and **Method & flags**. Every formula carries
+the value the spreadsheet will compute, so a preview that never recalculates
+reads right, and the workbook asks Excel to recalculate on open. While it was
+built, LibreOffice Calc recalculated every formula and matched each cached
+value to 1e-9.
+
 **Who owns it.** Omega Compute owns the tool (`api/_lib/modules.js`). A
 packaged workspace needs that module. A legacy workspace needs Standard or
 above, or a trial, which is the BESS Pro Forma's rule. The endpoint refuses
@@ -53,8 +106,10 @@ anyone else, whatever a page shows.
 | `api/_lib/vpp-sim.js` (`site.*`) | The one load builder (interval, bills or a typical shape), tariff calibration, the billing wrapper and the solar profile. Its builders are exported, never copied. It adds two host shapes: a multifamily house meter and retail. |
 | `api/_lib/bess-tariff.js` | The one tariff engine. The final bills come from here. |
 | `api/_lib/proforma-engine.js` | The one finance engine (NREL SAM single owner). The returns, IRR build, tax, ITC, debt and sensitivities are all its own. |
-| `api/compute-proforma.js` | The gate, using the pro forma's rules. Actions are `options`, `context`, `screen`, `model` and `optimize`. It has a 60 s function limit in `vercel.json`. |
-| `compute-proforma.html` | Collects inputs, posts them, and draws the results. The deck comes from `proforma-logic.js`. |
+| `api/_lib/compute-portfolio.js` | Pure, server-only. Runs picked saved scenarios as saved, sums their after-tax cash flows, reports what could not run and what needs a look, and writes the workbook. |
+| `api/_lib/portfolio/xlsx.js` | The one .xlsx reader and writer: `workbook()` writes sheets with the house style, widths, frozen panes, filters, merges and formulas with cached values; `build()` is the BESS portfolio's upload template. |
+| `api/compute-proforma.js` | The gate, using the pro forma's rules. Actions are `options`, `context`, `screen`, `model`, `optimize` and `portfolio` (at most 30 scenarios, 4 MB). It has a 60 s function limit in `vercel.json`. |
+| `compute-proforma.html` | Collects inputs, posts them, and draws the results. The deck comes from `proforma-logic.js`. The Portfolio panel picks saved scenarios, posts them and hands over the server's workbook. |
 | `editor.html`, patch "EDGE SITE SCREEN" | Gathers what the drawing knows, posts `screen`, and links to the page. |
 
 No figure is computed in a browser. The deck prints words the server wrote
@@ -218,6 +273,17 @@ the planning ones.
   - Factors out `calibratedTariff()`.
   - Adds the multifamily and retail shapes.
   - The VPP intake still offers three segments.
+  - A bill whose kWh its billed peak could not draw running flat out (a load
+    factor above 1.0) is now said in the load's notes, by month. The month is
+    still shaped to its kWh, as before; no figure moves.
+- **`compute-site.js`** exports `fitsService` (the sweep's fit rule, now also
+  `balance.fits` on every screen) and `STRUCTURE_SHORT`; no figure moves (the
+  guide's example reads the same to the dollar).
+- **`proforma-engine.js`** exports `npv` (its own `npvAt`).
+- **`portfolio/zip.js`** `build(files, { deflate: true })` deflates; stored
+  entries stay the default. **`portfolio/xlsx.js`** `build(rows)` is now one
+  sheet of `workbook()`; the upload template round-trips as before
+  (`scripts/test-portfolio.js`).
 
 ## Tests and checks
 
@@ -225,8 +291,10 @@ the planning ones.
 |---|---|
 | `scripts/tests/tcomputesite.js` (in `npm test`) | Input, physics invariants, schedule, structures, sweep, gate, deck and registrations. The invariants: the meter never exceeds the limit, energy balances every hour, the battery stays inside its limits, firm load is lost only when firm load itself exceeds the service, and managed charging never costs more than unmanaged. |
 | `scripts/tests/tproformaengine.js` | The engine extensions. |
-| `scripts/render-compute-proforma.js` (in `check:pages`; `npm run check:compute`) | The page in Chromium against the real endpoint, on a desktop and a 390 px phone, including a workspace refused for lacking Omega Compute. It runs the example from the empty results and puts typed input back, and fails on a switch drawn without its track, a month field that is not a month and a year, a chart drawn at another width than its card, axis labels closer than 4 px, a wrapping tax control or a rate that reads -0.0%. |
+| `scripts/tests/tcomputeportfolio.js` (in `npm test`) | The portfolio: each site is the model's own figures as saved, fit is the one rule the sweep reads, the sums, IRR, NPV, MOIC and payback are the engine's on the summed flow (not an average), what cannot run is listed with why, flags never quote one site's figures for many, and the workbook is well-formed with formulas whose cached values agree with the model to a cent; the writer escapes and names sheets safely; the upload template still round-trips. |
+| `scripts/render-compute-proforma.js` (in `check:pages`; `npm run check:compute`) | The page in Chromium against the real endpoint, on a desktop and a 390 px phone, including a workspace refused for lacking Omega Compute. It runs the example from the empty results and puts typed input back, and fails on a switch drawn without its track, a month field that is not a month and a year, a chart drawn at another width than its card, axis labels closer than 4 px, a wrapping tax control or a rate that reads -0.0%. The portfolio: picks, the interval scenario held back with its reason, a refused one under Not run, the chart at its card's width, flags not cut short, the downloaded .xlsx and its five sheets, a row opening its scenario, Tab held inside and Escape closing, `#portfolio`, and no sideways scroll on a phone. |
 | `scripts/render-legacy-gates.js` | The Site Screen in the real editor on every legacy tier and with Omega Compute bought. |
+| `scripts/guides/compute-proforma.js` (`npm run guide:compute`) | Builds the guide from the real page; asserts the example runs, each step renders, the sweep names its best size and the scenario saves, then runs four more saved sites and the example as a portfolio and photographs the picker, the results and the table. |
 | `scripts/render-workspace.js` | The Finance panel order. |
 
 ## Not built
@@ -252,3 +320,8 @@ the planning ones.
 - **The Site Screen reads what the session knows.** The project has no
   structured service rating or ZIP, so the form asks for what the drawing
   lacks.
+- **The portfolio runs scenarios as saved, at most 30 at once.** It does not
+  re-size a site (a site that does not fit is shown as saved), it aligns every
+  site on its own Year 0 rather than on its calendar dates, and a scenario
+  saved with an interval file runs only after the file is attached and the
+  scenario saved again, because the file is never stored.
