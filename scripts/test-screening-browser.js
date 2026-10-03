@@ -37,7 +37,7 @@ async function main(){
  await page.getByRole('link',{name:/Open BESS Portfolio Screening/}).click();await page.locator('#file').waitFor();
  const csk=process.env.CSK_XLSX;
  if(csk){
-  await page.locator('#file').setInputFiles(csk);await page.getByText(/Imported 11 CSK sites from their detail tabs/).waitFor();assert.equal(await page.locator('#intakeCount').innerText(),'11 sites ready for review');
+  await page.locator('#file').setInputFiles(csk);await page.getByText(/Imported 11 sites/).waitFor();assert.equal(await page.locator('#intakeCount').innerText(),'11 sites ready for review');
   await page.locator('#enrich').uncheck();await page.locator('#run').click();await waitReport();assert.equal(await page.locator('.result').count(),11);
   const sizeText=await page.locator('.result .metric:nth-child(5) b').allTextContents();assert(sizeText.every(t=>t==='Verify'));
   pass('actual CSK workbook imports all 11 sites, flags conflicts and avoids unverified recommended sizes');
@@ -63,6 +63,16 @@ async function main(){
  await page.goto(url+'/screening.html?tool=parcel');
  const kml='<?xml version="1.0"?><kml><Document><Placemark><name>Parcel boundary</name><Polygon><outerBoundaryIs><LinearRing><coordinates>-88,42 -87.99,42 -87.99,42.01 -88,42.01 -88,42</coordinates></LinearRing></outerBoundaryIs></Polygon></Placemark><Placemark><name>138 kV transmission</name><LineString><coordinates>-88,42 -88,42.01</coordinates></LineString></Placemark></Document></kml>';
  await page.locator('#file').setInputFiles([{name:'parcel-a.kml',mimeType:'application/xml',buffer:Buffer.from(kml)},{name:'parcel-b.kml',mimeType:'application/xml',buffer:Buffer.from(kml)}]);await page.getByText('2 sites ready for review').waitFor();await page.locator('#enrich').uncheck();await page.locator('#run').click();await waitReport();assert.equal(await page.locator('.result').count(),2);assert((await page.locator('.result').first().innerText()).includes('138 kV'));pass('parcel tool screens multiple KML files through the editor engine');
+ await page.goto(url+'/screening.html?tool=parcel');
+ let networkCalls=0,networkFailed=false;
+ await page.route('**/api/portfolio-enrich',route=>route.fulfill({contentType:'application/json',body:JSON.stringify({fields:{latitude:40.67519,longitude:-89.61120,propertyAreaSf:43560*400},features:[],notes:[],gridEvidence:{lines:[{voltageKv:345,distanceKm:.1,circuits:2}],substations:[{voltageKv:345,distanceKm:.1}]}})}));
+ await page.route('**/api/network-proximity',route=>{networkCalls++;const b=route.request().postDataJSON();assert.equal(b.lat,40.67519);return route.fulfill({status:networkFailed?502:200,contentType:'application/json',body:JSON.stringify(networkFailed?{error:'Fixture outage'}:{fiber:{verdict:'likely',reasons:['Fiber provider fixture']},capacity:{class:'regional',routeDiversity:'diverse'},datacenter:{verdict:'strong',score:80},build:'test-network-engine'})});});
+ await page.locator('#addresses').fill('107 Cass Street, Peoria, IL 61602');await page.locator('#addAddresses').click();await page.locator('#run').click();await waitReport();
+ assert.equal(networkCalls,1);assert((await page.locator('.compute-context').innerText()).includes('strong'));assert((await page.locator('.compute-context').innerText()).includes('diverse'));await noOverflow();
+ const dl=page.waitForEvent('download');await page.locator('#export').click();const download=await dl,file=path.join(output,'compute-results.csv');await download.saveAs(file);const csv=fs.readFileSync(file,'utf8');assert(csv.includes('DC connectivity score'));assert(csv.includes('strong'));assert(csv.includes('Planning MW (not approved)'));
+ await page.screenshot({path:path.join(output,'compute-mobile.png'),fullPage:true});
+ networkFailed=true;await page.locator('#run').click();await waitReport();assert.equal(networkCalls,2);assert(!(await page.locator('.compute-context').innerText()).includes('strong'));assert((await page.locator('.badge').innerText()).includes('Verify'));
+ pass('compute calls the existing network engine, renders/exports separate connectivity and clears stale results on provider failure');
  assert.deepEqual(errors,[]);pass('no uncaught browser errors');console.log('\n'+checks+' browser checks passed.');
 }
 main().catch(async e=>{console.error(e);if(page){console.log(await page.evaluate(()=>({workspace:document.querySelector('#workspace').textContent,authNotice:document.querySelector('#authNotice').hidden,firebase:typeof firebase,apps:window.firebase&&firebase.apps.length,status:document.querySelector('#status').textContent})));await page.screenshot({path:path.join(output,'failure.png'),fullPage:true});}console.log(errors);process.exitCode=1;}).finally(async()=>{if(browser)await browser.close();server.close();});

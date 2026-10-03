@@ -73,6 +73,20 @@ test('Parcel screening reuses the editor engine with real geometry',()=>{
  const base=SI.gridScore(SI.intake(features,'Site')),r=engine.parcel({name:'Site',features},0);assert.equal(r.score,base.score);assert.equal(r.grid.kv,base.kv);
  assert.equal(engine.parcel({address:'No geometry yet'},0).score,null);
 });
+test('Compute uses the Site Map network verdict separately from the power score',()=>{
+ const common={name:'Compute candidate',propertyAreaSf:43560*400,gridEvidence:{lines:[{voltageKv:345,distanceKm:.1,circuits:2}],substations:[{voltageKv:345,distanceKm:.1}],pipelines:[{gas:true,diameterIn:30,distanceKm:.1}]}};
+ const network={fiber:{verdict:'likely',reasons:['Provider test evidence']},capacity:{class:'regional',routeDiversity:'diverse',independentPaths:2},datacenter:{verdict:'strong',score:80}};
+ const good=engine.parcel({...common,networkEvidence:network},0),unknown=engine.parcel(common,0);
+ assert.equal(good.decision,'Priority Go');assert.equal(unknown.decision,'Verify');assert.equal(good.score,unknown.score);
+ assert.equal(good.connectivity.datacenterScore,80);assert.equal(good.approvedMw,null);assert(good.planningMw>0);
+ assert.equal(engine.parcel({...common,networkEvidence:{...network,fiber:{verdict:'unlikely'}}},0).decision,'Hold / Needs Review');
+ assert.equal(engine.parcel({...common,networkEvidence:{...network,capacity:{routeDiversity:'single-threaded'}}},0).decision,'Conditional Go');
+ const invalid=engine.parcel({...common,networkEvidence:{datacenter:{verdict:'invented',score:999}}},0);assert.equal(invalid.connectivity.datacenterScore,null);assert.equal(invalid.decision,'Verify');
+ assert.equal(good.grid.components.find(c=>c.key==='redundancy').points,15);
+ assert(good.grid.components.find(c=>c.key==='gas').points>0);
+ const noDistance=engine.parcel({...common,gridEvidence:{lines:[{voltageKv:345}],pipelines:[{hazardousLiquid:true,distanceKm:null}]}},0);assert.equal(noDistance.grid.hazardOnParcel,0);
+ const hazardous=engine.parcel({...common,gridEvidence:{...common.gridEvidence,pipelines:[{hazardousLiquid:true,distanceKm:.02}]}},0);assert(hazardous.grid.hazardOnParcel>0);assert(hazardous.risks.some(x=>x.includes('easement')));
+});
 async function authTests(){
  const auth=require('../api/_lib/verify-token'),oldVerify=auth.verifyIdToken,oldRead=auth.readAsCaller;
  const gate=require('../api/_lib/screening-auth');
