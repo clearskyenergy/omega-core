@@ -124,6 +124,22 @@ var sq = [[0, 0], [0, 1], [1, 1], [1, 0]];
 ok(PS.inRing(sq, 0.5, 0.5) && !PS.inRing(sq, 1.5, 0.5) && !PS.inRing(sq, 0.5, -0.1) && !PS.inRing([[0, 0], [1, 1]], 0.5, 0.5),
    'a point in a ring, and not out of it');
 
+/* ── 2b · the build order (scripts/_lib/parcel-priority.js) ───────────── */
+var RANK = require(path.join(ROOT, 'scripts', '_lib', 'parcel-priority.js')).RANKED;
+var STS = RANK.map(function (r) { return r.st; });
+eq(STS.length, 52, 'fifty states, DC and Puerto Rico');
+ok(STS.every(function (s, i) { return /^[A-Z]{2}$/.test(s) && STS.indexOf(s) === i; }), 'each once, by its postal code');
+var scored = RANK.filter(function (r) { return !r.storage; });
+ok(scored.every(function (r, i) { return i === 0 || r.aceee >= scored[i - 1].aceee; }), 'everything but the pulled-up battery markets in ACEEE order');
+eq(RANK.filter(function (r) { return r.storage; }).map(function (r) { return r.st; }), ['TX', 'AZ', 'PR'], 'Texas, Arizona and Puerto Rico pulled up as battery markets');
+ok(RANK.slice(0, 25).map(function (r) { return r.aceee; }).join() === scored.slice(0, 25).map(function (r) { return r.aceee; }).join(), 'ACEEE\'s top 25 first');
+RANK.forEach(function (r) {
+  ok(r.cities.length >= 1 && r.cities.every(function (c) { return typeof c[0] === 'string' && c[1] > 17 && c[1] < 72 && c[2] > -180 && c[2] < -64; }),
+     r.st + ': sample cities with a name and a point in the United States');
+});
+ok(RANK.filter(function (r) { return r.st === 'ID'; })[0].cities.length && !PS.SOURCES.some(function (s) { return /idwr/i.test(s.service); }),
+   'Idaho is on the list to be mapped, never from IDWR\'s layer');
+
 /* ── 3 · the editor's block, run ───────────────────────────────────────── */
 var a = edSrc.indexOf(' *  PARCEL LINES  (View'), b = edSrc.indexOf("var TT_BASE = 'https://elevation.nationalmap.gov");
 ok(a > 0 && b > a, 'the block is in editor.html');
@@ -237,7 +253,7 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   eq(asks.length, 1, 'the parcel at the centre is looked up once');
   ok(polys.length === 1 && polys[0].map === m1 && polys[0].opts.clickable === false, 'and outlined, never in the way of a click');
   var said = banners[banners.length - 1];
-  ok(/Lines from Cook County, IL/.test(said) && /APN 17-16-222-009 · 0\.42 ac · Cook County \(cook\)/.test(said) && /not a survey/.test(said),
+  ok(/Lines from Cook County, IL/.test(said) && /APN 17-16-222-009 · 0\.42 ac · Cook County\./.test(said) && /not a survey/.test(said) && !/\(cook\)/.test(said),
      'the banner names the source, the parcel and that it is not a survey: ' + said);
   eq(button.attrs['aria-pressed'], 'true', 'the button is pressed');
   ok(/APN 17-16-222-009/.test(button.title), 'and its tooltip says what is drawing');
@@ -256,6 +272,7 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   idle(m1); await settle();
   eq(asks.length, 2, 'Kansas: no public layer, the parcel at the centre is looked up');
   ok(polys.length === 2 && /No public parcel layer covers this area/.test(button.title), 'outlined, and the tooltip is honest about coverage');
+  ok(/APN K-1 · 160 ac · Rice \(Regrid\)/.test(button.title), 'a Regrid record is named as Regrid\'s: ' + button.title);
   m1.lat = 38.505; idle(m1); await settle();
   eq(asks.length, 2, 'inside that parcel: not again');
   m1.z = 12; m1.lat = 38.0; idle(m1); await settle();
@@ -269,6 +286,21 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   ANSWER.next = null;
   idle(m1); await settle();
   ok(asks.length === 4 && /No parcel record at the map centre/.test(button.title), 'a refused point is asked again, and a miss is said');
+
+  /* overlapping boxes: 107 Cass St is in Peoria's box and Tazewell's; the
+     county that answered for the centre is the one named */
+  m1.lat = 40.675254; m1.lng = -89.610850;
+  ok(PS.at(m1.lat, m1.lng).map(function (s) { return s.id; }).join() === 'peoria,tazewell', 'Peoria\'s and Tazewell\'s boxes both hold 107 Cass St');
+  ANSWER.next = { ring: [[40.6750, -89.6112], [40.6750, -89.6105], [40.6755, -89.6105], [40.6755, -89.6112]], apn: '1817258018', acres: 0.57, county: 'Peoria County', source: 'peoria' };
+  vm.runInContext('OmegaParcels.on()', ctx); await settle();
+  said = banners[banners.length - 1];
+  ok(asks.length === 5 && /^Lines from Peoria County, IL\. Parcel at the centre: APN 1817258018 · 0\.57 ac · Peoria County\./.test(said) && !/Tazewell/.test(said),
+     'the county that answered is named alone, without the key: ' + said);
+  idle(m1); await settle();
+  ok(asks.length === 5 && /— Lines from Peoria County, IL\. Parcel at the centre/.test(button.title), 'and again from the parcel already found, without a lookup');
+  m1.lat = 40.6800; idle(m1); await settle();
+  ok(/Lines from Peoria County, IL, Tazewell County, IL/.test(button.title), 'off that parcel, both boxes are named again (no lookup says which)');
+  ANSWER.next = null;
 
   /* the cap: Regrid is metered */
   for (var i = 0; i < 20; i++) { m1.lat = 37 + i * 0.01; idle(m1); await settle(); }
@@ -287,7 +319,7 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   ctx._gmap = m2;
   vm.runInContext('pcToggle()', ctx); await settle();
   ok(parcelLayers(m2).length === 1 && asks.length === before, 'back on: the lines, no lookup for a parcel already found');
-  ok(polys.filter(function (p) { return p.map === m2; }).length === 2, 'both parcels found this page outlined again');
+  ok(polys.filter(function (p) { return p.map === m2; }).length === 3, 'every parcel found this page (Chicago, Kansas, Peoria) outlined again');
   ok(/APN 17-16-222-009/.test(banners[banners.length - 1]), 'and the centre parcel named from what was found');
 
   /* the map is rebuilt (a new address): followed */

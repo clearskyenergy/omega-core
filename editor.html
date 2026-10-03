@@ -31297,7 +31297,9 @@ function _pcDescribe(p){
   if(p.apn) bits.push('APN '+p.apn);
   if(p.acres!=null) bits.push(p.acres+' ac');
   if(p.county) bits.push(p.county);
-  return (bits.join(' · ')||'a parcel record')+(p.source?' ('+p.source+')':'');
+  /* A county's own record is named by its county; only Regrid is named as
+     the source (the key, 'peoria' or 'cook', meant nothing to anybody). */
+  return (bits.join(' · ')||'a parcel record')+(p.source==='regrid'?' (Regrid)':'');
 }
 
 function _pcOutline(p){
@@ -31470,17 +31472,26 @@ function _pcLook(loud){
   var lat=c.lat(), lng=c.lng(), S=_pcSources();
   var covered=_pc.regridOn ? [{ label:'Regrid (every county)', minZoom:_pcRg.minZoom }]
              : S ? S.at(lat, lng) : [];
-  var minZ=99;
-  covered.forEach(function(s){ minZ=Math.min(minZ, s.minZoom||14); });
-  var cov=(!S && !_pc.regridOn) ? 'The public parcel list did not load (omega-parcel-sources.js)'
-    : covered.length ? 'Lines from '+covered.map(function(s){ return s.label; }).join(', ')
-                       +(z<minZ ? ' — zoom in to see them' : '')
-    : 'No public parcel layer covers this area';
+  function covOf(list){
+    if(!S && !_pc.regridOn) return 'The public parcel list did not load (omega-parcel-sources.js)';
+    if(!list.length) return 'No public parcel layer covers this area';
+    var minZ=99;
+    list.forEach(function(s){ minZ=Math.min(minZ, s.minZoom||14); });
+    return 'Lines from '+list.map(function(s){ return s.label; }).join(', ')+(z<minZ ? ' — zoom in to see them' : '');
+  }
+  var cov=covOf(covered);
+  /* The boxes overlap (Peoria's and Tazewell's meet across the river, Cook's
+     holds DuPage's), so a centre that a county's own record answered is
+     said to be drawn by that county alone. */
+  function covFor(p){
+    if(p && !_pc.regridOn) for(var i=0;i<covered.length;i++){ if(covered[i].id===p.source) return covOf([covered[i]]); }
+    return cov;
+  }
   var tail=' Reference only — not a survey.';
 
   if(z<14){ _pcSay(cov+'. Zoom in to the site to look up its parcel.', loud); return; }
   var have=_pcFoundAt(lat, lng);
-  if(have){ _pcSay(cov+'. Parcel at the centre: '+_pcDescribe(have)+'.'+tail, loud); return; }
+  if(have){ _pcSay(covFor(have)+'. Parcel at the centre: '+_pcDescribe(have)+'.'+tail, loud); return; }
   /* Following the map: where public lines already draw, they show the
      neighbours; a lookup is spent only where nothing else would. */
   if(!loud && covered.length && _pc.found.length){ _pcSay(cov+'.'+tail, loud); return; }
@@ -31497,7 +31508,7 @@ function _pcLook(loud){
   AP.parcel(lat, lng).then(function(p){
     if(p && p.ring && p.ring.length>=3 && !_pcFoundAt(lat, lng)){ _pc.found.push(p); _pcOutline(p); }
     if(!_pc.on) return;
-    _pcSay(p ? cov+'. Parcel at the centre: '+_pcDescribe(p)+'.'+tail
+    _pcSay(p ? covFor(p)+'. Parcel at the centre: '+_pcDescribe(p)+'.'+tail
              : cov+'. No parcel record at the map centre.', loud);
   }, function(e){
     delete _pc.asked[k];
