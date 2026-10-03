@@ -2297,7 +2297,6 @@ window.onerror = function(msg, src, line, col, err) {
      <button class="rbtn" id="rb-clearplot" onclick="clearPlot()" title="Clear the committed plot and return to the live interactive map"><span class="rb-ico">✕</span><span class="rb-lbl">Clear<br>Plot</span></button> -->
         <button class="rbtn" id="rb-recenter" onclick="recenterOnEquipment()" title="Recenter the view on your placed equipment — brings any off-screen equipment back into the window"><span class="rb-ico" style="color:#34A853">⊕</span><span class="rb-lbl">Recenter</span></button>
         <button class="rbtn" id="btn-pv-view" onclick="omegaPvViewCycle()" title="Solar view — cycle individual modules → row bands → outline only. A view setting: it is not saved with the drawing and never changes a number."><span class="rb-ico" style="color:var(--accent-2)">☷</span><span class="rb-lbl">Solar<br>Panels</span></button>
-        <button class="rbtn" id="rb-parcels" aria-pressed="false" onclick="rbRun(pcToggle)" title="Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey."><span class="rb-ico" style="color:#FFD60A">▱</span><span class="rb-lbl">Parcel<br>Lines</span></button>
         <button class="rbtn" id="btn-3d" onclick="toggle3D()" title="3D site review &mdash; inspect equipment massing, roof context and sightlines. Editing pauses while tilted; press 2D or Esc to return." style="position:relative"><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>Review</span></button>
         <button class="rbtn" id="rb-crosshair" onclick="nnToggleCrosshair()" title="Toggle the AutoCAD-style crosshair cursor in draw/placement modes"><span class="rb-ico">✛</span><span class="rb-lbl">Crosshair</span></button>
       </div>
@@ -2319,6 +2318,7 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" id="rb-op-tl-key" aria-pressed="true" onclick="rbRun(opToggleTerrainKey)" title="Terrain key &mdash; contour interval or colour ramp for the terrain layer"><span class="rb-ico">&#9968;</span><span class="rb-lbl">Terrain Key</span></button>
         <button class="rbtn" onclick="rbRun(tlCycle)" title="Sampled terrain layer &mdash; cycle off / contours / elevation / slope / cut-fill"><span class="rb-ico">&#9776;</span><span class="rb-lbl">Terrain Layer</span></button>
         <button class="rbtn" onclick="rbRun(ttCycle)" title="USGS 3DEP terrain tiles &mdash; real LiDAR relief, slope, aspect and contours drawn straight onto the map. US only."><span class="rb-ico">&#9968;</span><span class="rb-lbl">3DEP Tiles</span></button>
+        <button class="rbtn" id="rb-parcels" aria-pressed="false" onclick="rbRun(pcToggle)" title="Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey."><span class="rb-ico" style="color:#FFD60A">▱</span><span class="rb-lbl">Parcel<br>Lines</span></button>
         <button class="rbtn" onclick="rbRun(engSchedToggleVisible)" title="Conduit schedule — show or hide the run schedule panel"><span class="rb-ico">≔</span><span class="rb-lbl">Conduit<br>Schedule</span></button>
         <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
       </div>
@@ -108437,6 +108437,7 @@ button[style*="linear-gradient"][aria-disabled="true"]{
     /recenterOnEquipment/,
     /undoLast/,
     /toggleLayersPanel/,
+    /pcToggle/,                        /* Parcel Lines: where the property ends */
 
     /* --- the mode switch must never hide itself ---------------------- */
     /OmegaMode/
