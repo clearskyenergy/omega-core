@@ -44,7 +44,7 @@
     { key: 'deliver',  label: 'Deliver',  icon: '➜', hint: 'ship, custody', logic: 'logic-logistics', pages: [['Shipping & receiving', 'Loads and lanes', '/logic-logistics.html'], ['Sites & custody', 'Where every unit is', '/logic-custody.html']] },
     { key: 'design',   label: 'Design',   icon: '▧', hint: 'Site Map, sandbox', tools: ['editor', 'sandbox', 'siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'] },
     { key: 'grid',     label: 'Grid',     icon: '⌗', hint: 'capacity, screen', tools: ['gridatlas', 'interconnect', 'comedcap', 'sitefinder', 'interconnectstudy'] },
-    { key: 'money',    label: 'Finance',  icon: '$',      hint: 'size, revenue, model', tools: ['batterysizer', 'valuestack', 'vppsim', 'computeproforma', 'isocalc', 'proforma', 'dcfc', 'apartment', 'fleet', 'investment', 'costestimator'] },
+    { key: 'money',    label: 'Finance',  icon: '$',      hint: 'capital, size, model', also: ['financing'], tools: ['batterysizer', 'valuestack', 'vppsim', 'computeproforma', 'isocalc', 'proforma', 'dcfc', 'apartment', 'fleet', 'investment', 'costestimator'] },
     { key: 'sales',    label: 'Sales',    icon: '▤', hint: 'screen, propose, estimate', tools: ['sales', 'spatco_ev', 'evcostwb', 'computelease', 'parcelscreening', 'bessscreening'], subjects: [{ key: 'screening', name: 'Screening', sub: 'Parcel and BESS portfolio screening', href: '/screening.html', tools: ['parcelscreening', 'bessscreening'] }] },
     { key: 'market',   label: 'Market',   icon: '◈', hint: 'partners, quotes', market: true, tools: ['financing', 'opportunity', 'osaportal'], pages: [['Marketplace', 'The tools catalogue: BESS, EV and finance tools', '/marketplace.html'], ['Quote Desk', 'Both ends of a request for quote', '/rfq.html']] },
     { key: 'compute',  label: 'Compute',  icon: '▦', hint: 'data centers, edge sites', tools: ['datacenter', 'computepower', 'computeproforma'] },
@@ -82,7 +82,10 @@
     return { centre: byKey('today'), ring: first.concat(fill.slice(0, Math.max(0, room)), last).slice(0, RING_MAX) };
   }
   /* the side panel's rows for an area: pages first, then its tools with
-     the catalog's own name and link, locked ones last and marked */
+     the catalog's own name and link, locked ones last and marked. `also`
+     are tools the panel lists first that never earn the area its cell (the
+     financing portal is open on every plan, so it would put Finance on
+     every hub): Finance leads with the portal where it has a cell */
   function items(key, ctx) {
     var a = byKey(key); if (!a) return [];
     ctx = ctx || {};
@@ -93,7 +96,7 @@
       out.push({ key: s.key, name: s.name, sub: s.sub, href: s.href, page: true, subject: true });
     });
     var open = [], locked = [];
-    (a.tools || []).forEach(function (k) {
+    (a.also || []).concat(a.tools || []).forEach(function (k) {
       if (grouped.indexOf(k) >= 0) return;
       var t = ctx.tool ? ctx.tool(k) : null; if (!t || t.soon) return;
       var row = { key: k, name: t.name, sub: t.blurb || t.desc || '', locked: !(ctx.canOpen && ctx.canOpen(k)) };
