@@ -2693,10 +2693,14 @@ candidate without a size for a battery, whatever kind of job it was.
 
 A customer asked for the map to "show the parcels so they know property
 lines". Google's Maps JavaScript API has no parcel layer (the lines in the
-consumer Maps app are not offered to developers), so View › Canvas gains
-**Parcel Lines** (`rb-parcels`, `pcToggle`), a view setting like Solar
-Panels: remembered per browser (`omegaParcelLines`), never saved with the
-drawing, never a shape on the plan.
+consumer Maps app are not offered to developers), so View › Panels gains
+**Parcel Lines** (`rb-parcels`, `pcToggle`, beside 3DEP Tiles), a view
+setting like Solar Panels: remembered per browser (`omegaParcelLines`),
+never saved with the drawing, never a shape on the plan. Designer mode, the
+default ribbon on every legacy plan, keeps it (`/pcToggle/` in OmegaMode's
+`KEEP`); it first landed in View › Canvas without that and was hidden on
+legacy plans (Tommy, 2026-10-03: "it should show on the tools in the panels
+in the editor under view").
 
 - `omega-parcel-sources.js` (new, ES5, UMD) is the ONE list of public
   county and state parcel layers, each verified by hand on 2026-10-02 (the

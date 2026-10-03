@@ -109,6 +109,11 @@ var btn = edSrc.match(/<button class="rbtn" id="rb-parcels"[^>]*>[\s\S]*?<\/butt
 ok(btn && /onclick="rbRun\(pcToggle\)"/.test(btn[0]) && /Parcel<br>Lines/.test(btn[0]), 'View has a Parcel Lines button');
 var viewPage = edSrc.slice(edSrc.indexOf('<div class="ribbon-page" data-page="view">'), edSrc.indexOf('<div class="ribbon-page" data-page="output">'));
 ok(viewPage.indexOf('id="rb-parcels"') > 0 && !/id="rb-parcels"[^>]*data-cap=/.test(viewPage), 'on the View page, on every plan');
+var panelsGroup = viewPage.slice(viewPage.lastIndexOf('<div class="rpanel">', viewPage.indexOf('id="rb-parcels"')));
+panelsGroup = panelsGroup.slice(0, panelsGroup.indexOf('rpanel-cap') + 40);
+ok(/rpanel-cap">Panels</.test(panelsGroup), 'in View › Panels, where it was asked for');
+var keep = edSrc.slice(edSrc.indexOf('var KEEP = ['), edSrc.indexOf('];', edSrc.indexOf('var KEEP = [')));
+ok(/\/pcToggle\//.test(keep), 'Designer mode (every legacy plan\'s default ribbon) keeps it');
 
 function MVC(init) {
   var arr = (init || []).slice();
