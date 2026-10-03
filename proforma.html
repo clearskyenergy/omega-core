@@ -428,6 +428,23 @@ body.refused .app{grid-template-columns:minmax(0,860px);justify-content:center}
 }
 @media print{.hdr,.stepper,.rail,.mstrip,.mobnav,.foot{display:none!important}.app{display:block;padding:0}}
 </style>
+<style id="omega-finance-responsive">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Touch layouts only; calculation and account behavior stay in the existing code. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.app,.wrap,.main,.card{min-width:0}
+input,select,textarea{min-width:0;max-width:100%}
+button,a,input,select,textarea{touch-action:manipulation}
+@media screen and (max-width:900px),screen and (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]):not([type=color]),select,textarea{font-size:16px!important;min-height:44px}
+  button,.btn,.rep-btn,.hdr-back,details.more>summary{min-height:44px}
+  .hdr-back{display:inline-flex;align-items:center}
+  .bills-wrap{min-width:0;max-width:100%;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+  table.bills{min-width:540px}
+  .btn{white-space:normal;line-height:1.35}
+}
+
+</style>
 </head>
 <body class="booting">
 <a class="skip" href="#main">Skip to the form</a>

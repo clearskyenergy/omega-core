@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -123,6 +124,51 @@
   .print-only{display:none}
   .print-meta{font-size:12px;color:var(--sub);margin:6px 0 0}
   .print-meta b{color:var(--ink)}
+</style>
+<style id="omega-finance-responsive">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Finance layout: shrink grid/flex children, not the user's viewport. */
+html{-webkit-text-size-adjust:100%}
+:where(main,section,article,aside,header,nav,div,form,fieldset,label){min-width:0}
+input:not([type=checkbox]):not([type=radio]),select,textarea{min-width:0;max-width:100%}
+button,a,input,select,textarea{touch-action:manipulation}
+:where(h1,h2,h3,h4,p,label,.hint,.note,.page-sub){overflow-wrap:anywhere}
+.finance-table-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.finance-table-scroll:focus-visible{outline:2px solid var(--cs-sky,#2B5FA8);outline-offset:2px}
+.finance-table-scroll>.finance-wide-table{min-width:600px}
+.finance-table-scroll table{margin-left:0;margin-right:0}
+@media screen and (max-width:900px),screen and (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]),select,textarea{font-size:16px!important;min-height:44px}
+  button:not(.hb),.btn,.tb-back,.backBtn,[role=tab]{min-height:44px;line-height:1.35;white-space:normal}
+  button:not(.hb),.btn{font-size:14px}
+  :where(.fg label,.field label,.hint,.note,.kpi-label,.kpi-foot){font-size:13px}
+  .panel-actions,.panel-actions .right,.export-row,.intake-actions{flex-wrap:wrap;gap:10px}
+  .export-row>.btn,.panel-actions>.btn{flex:1 1 160px;justify-content:center}
+  :where(.ytable-wrap,.scroll-x,.heat-wrap,.table-wrap,.gWrap){min-width:0;max-width:100%}
+  .finance-has-wide-table::before{content:'Swipe to see all columns';display:block;position:sticky;left:0;padding:8px 0;font:12px/1.5 system-ui,sans-serif;color:var(--cs-sub,var(--sub,#5E6C7D))}
+}
+@media print{
+  .finance-table-scroll{overflow:visible;width:100%;max-width:none}
+  .finance-table-scroll>.finance-wide-table{min-width:0!important;width:100%}
+  .finance-has-wide-table::before{display:none}
+}
+
+.grid{grid-template-columns:minmax(0,340px) minmax(0,1fr)}
+.cards{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media screen and (max-width:880px){.grid{grid-template-columns:minmax(0,1fr)}.panel.sticky{position:static}}
+@media screen and (max-width:760px){
+  #topbar,.topbar,.tb{height:auto;min-height:60px;flex-wrap:wrap;gap:8px;padding:8px 14px}
+  .tb-tag{white-space:normal}.tb-actions{flex-wrap:wrap}
+  .wrap{padding-left:14px;padding-right:14px;padding-bottom:calc(40px + env(safe-area-inset-bottom))}
+  .panel{padding:16px}.lede{font-size:16px}
+  .fld .lbl{font-size:14px;gap:8px;flex-wrap:wrap}.note{font-size:13px}
+  .inrow input{flex:1;min-width:0}.unit-toggle{min-height:44px}
+  .unit-toggle button{min-width:44px;padding:0 10px}
+  .seg button{flex:1 1 100px}
+}
+@media screen and (max-width:560px){.cards{grid-template-columns:minmax(0,1fr)}}
+@media print{.grid{grid-template-columns:1fr}}
+
 </style>
 </head>
 <body>
@@ -424,6 +470,66 @@ bindRange('pue',function(v){S.pue=v;document.getElementById('pueEcho').textConte
 bindRange('capx',function(v){S.capxPerMW=v;document.getElementById('capxEcho').textContent='$'+v.toFixed(1)+'M / MW';});
 
 render();
+</script>
+<script id="omega-finance-accessibility">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Presentation only. No calculation, authentication or saved-data changes. */
+(function () {
+  'use strict';
+  var nextId = 0;
+  function enhance(root) {
+    var tables = root.querySelectorAll('table');
+    for (var i = 0; i < tables.length; i++) {
+      var table = tables[i];
+      if (table.closest('.finance-table-scroll')) continue;
+      var wrapper = document.createElement('div');
+      wrapper.className = 'finance-table-scroll';
+      wrapper.setAttribute('role', 'region');
+      var card = table.closest('.card,.rcard,.panel,.sec,section');
+      var heading = card && card.querySelector('h2,h3,h4,.section-title,.sec-h,.card-title');
+      wrapper.setAttribute('aria-label', (table.getAttribute('aria-label') || (heading && heading.textContent.trim()) || 'Financial data') + ' — scroll horizontally for more columns');
+      wrapper.tabIndex = 0;
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+      if (table.rows.length && table.rows[0].cells.length > 4) {
+        table.classList.add('finance-wide-table');
+        wrapper.classList.add('finance-has-wide-table');
+      }
+    }
+    var fields = root.querySelectorAll('.field,.fg,.iv-fg');
+    for (var j = 0; j < fields.length; j++) {
+      var label = fields[j].querySelector('label');
+      var input = fields[j].querySelector('input:not([type=hidden]),select,textarea');
+      if (!label || !input || label.htmlFor || label.contains(input)) continue;
+      if (!input.id) input.id = 'finance-field-' + (++nextId);
+      label.htmlFor = input.id;
+    }
+  }
+  function start() {
+    enhance(document);
+    // Result tables are inserted after a calculation in several tools.
+    // Observe additions only and ignore our own wrappers to avoid feedback.
+    if (!window.MutationObserver) return;
+    var queued = false;
+    new MutationObserver(function (records) {
+      var changed = false;
+      for (var i = 0; i < records.length; i++) {
+        var nodes = records[i].addedNodes;
+        for (var j = 0; j < nodes.length; j++) {
+          var n = nodes[j];
+          if (n.nodeType === 1 && !n.classList.contains('finance-table-scroll') &&
+              (n.tagName === 'TABLE' || n.querySelector('table,input,select,textarea'))) changed = true;
+        }
+      }
+      if (!changed || queued) return;
+      queued = true;
+      window.requestAnimationFrame(function () { queued = false; enhance(document); });
+    }).observe(document.body, {childList:true,subtree:true});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+}());
+
 </script>
 </body>
 </html>

@@ -174,7 +174,7 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
   ok(H.fromEsri(EMPTY, 'cook') === null, 'no feature under the point: null');
   ok(H.fromEsri(ESRI_ERR, 'cook') === null, 'an ArcGIS 200 {error} is a miss, not a parcel');
   ok(H.fromEsri({ features: [{ attributes: { PIN14_dash: 'x' } }] }, 'cook') === null, 'a feature with no geometry is not a parcel');
-  ok(H.fromEsri(COOK_HIT, 'kane') === null, 'an unknown county key answers null rather than guessing a schema');
+  ok(H.fromEsri(COOK_HIT, 'nowhere') === null, 'an unknown county key answers null rather than guessing a schema');
 
   /* ── 7 · a Regrid answer → the contract (fixture only; no live key) ─── */
   console.log('a Regrid answer becomes the contract');

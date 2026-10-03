@@ -355,10 +355,16 @@ function exportCSV(){
   rows.push(['Year','Charging','BESS stack','O&M','Net CF','Cumulative']);
   for(var i=0;i<m.years.length;i++){ var Y=m.years[i];
     rows.push([Y.y, Math.round(Y.charging), Math.round(Y.demand+Y.arb+Y.vpp), Math.round(Y.om), Math.round(Y.net), Math.round(Y.cum)]); }
-  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
+  var csv = rows.map(function(r){ return r.map(function(value){
+    var cell = value === null || value === undefined ? '' : String(value);
+    return /[",\r\n]/.test(cell) ? '"' + cell.replace(/"/g, '""') + '"' : cell;
+  }).join(','); }).join('\r\n');
   var blob = new Blob([csv], {type:'text/csv'});
-  var a=document.createElement('a'); a.href=URL.createObjectURL(blob);
-  a.download='dcfc-bess-proforma.csv'; a.click();
+  var url=URL.createObjectURL(blob);
+  var a=document.createElement('a'); a.href=url;
+  a.download='dcfc-bess-proforma.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 5000);
 }
 
 /* ══════════ INIT ══════════ */
@@ -369,7 +375,23 @@ function initRateSelect(){
 }
 function wire(){
   var ids=['i_rate','i_kwh','i_peak','i_retail','i_bkw','i_bkwh','i_rte','i_deg','i_capex','i_itc','i_rebate','i_om','i_disc','i_life','i_vpp','i_growth','i_site'];
-  for(var i=0;i<ids.length;i++){ var el=$(ids[i]); if(el){ el.addEventListener('input',render); el.addEventListener('change',render); } }
+  for(var i=0;i<ids.length;i++){
+    var el=$(ids[i]);
+    if(el){
+      (function(field){
+        var previous=field.value;
+        function onEdit(){
+          // A blur after typing fires change again. Replacing the result
+          // buttons at that instant swallowed the first tap on Export.
+          if(field.value===previous) return;
+          previous=field.value;
+          render();
+        }
+        field.addEventListener('input',onEdit);
+        field.addEventListener('change',onEdit);
+      }(el));
+    }
+  }
 }
 function boot(){
   // pick up workspace branding if present

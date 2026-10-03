@@ -187,6 +187,41 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
+<style id="omega-finance-responsive">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Touch layouts only; calculation and account behavior stay in the existing code. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.app,.wrap,.main,.card{min-width:0}
+input,select,textarea{min-width:0;max-width:100%}
+button,a,input,select,textarea{touch-action:manipulation}
+@media screen and (max-width:900px),screen and (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=hidden]):not([type=range]):not([type=color]),select,textarea{font-size:16px!important;min-height:44px}
+  button,.btn,.rep-btn,.hdr-back,details.more>summary{min-height:44px}
+  .hdr-back{display:inline-flex;align-items:center}
+  .bills-wrap{min-width:0;max-width:100%;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch}
+  table.bills{min-width:540px}
+  .btn{white-space:normal;line-height:1.35}
+}
+
+.wrap{grid-template-columns:400px minmax(0,1fr)}
+.wrap>section,.charts>div,.kpi{min-width:0}
+.row{grid-template-columns:repeat(2,minmax(0,1fr))}
+.row3{grid-template-columns:repeat(3,minmax(0,1fr))}
+.charts{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media screen and (max-width:1100px){.charts{grid-template-columns:minmax(0,1fr)}}
+@media screen and (max-width:980px){.wrap{grid-template-columns:minmax(0,1fr)}}
+@media screen and (max-width:560px){
+  .hdr{height:auto;min-height:60px;flex-wrap:wrap;gap:4px 8px;padding:8px 12px}
+  .hdr-title{white-space:normal;flex:1 1 140px;line-height:1.35}
+  .hdr-right{display:none}
+  .row,.row3{grid-template-columns:minmax(0,1fr)}
+  .wrap{padding:12px max(12px,env(safe-area-inset-right)) 20px max(12px,env(safe-area-inset-left))}
+  .saved{flex-wrap:wrap}.saved .btn{flex:1 1 90px}
+  .kpi .v{overflow-wrap:anywhere;font-size:20px}
+  .foot{padding-bottom:calc(20px + env(safe-area-inset-bottom))}
+}
+
+</style>
 </head>
 <body>
 <header class="hdr">

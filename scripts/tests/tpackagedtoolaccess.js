@@ -816,11 +816,11 @@ later(function () {
 var BACKFILLED = {
   'lite': 'editor sandbox sales intake opportunity financing signal vppsim',
   'gridatlas': 'gridatlas interconnect comedcap',
-  'storage': 'batterysizer proforma valuestack isocalc',
+  'storage': 'batterysizer proforma valuestack isocalc bessscreening',
   'estimate': 'costestimator',
   'evrebates': 'evcostwb evcloseout',
   'plansets': '',
-  'siteintel': '',
+  'siteintel': 'parcelscreening',
   'engineering': 'conductorsizing powerflow siteoptimizer',
   'finance': 'investment dcfc fleet apartment degradation',
   'compute': 'datacenter computepower computelease computeproforma',
