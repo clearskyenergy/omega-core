@@ -163,6 +163,8 @@
     sitemap: MAP, layoutsite: 'M4 4h16v16H4zM4 12h16M12 4v16', lockmap: 'M5 11h14v10H5zM8 11V7a4 4 0 0 1 8 0v4',
     layers: LAYERS, gislayers: LAYERS, nativelayer: LAYERS, terrainlayer: 'M3 18l5-8 4 5 3-4 6 7zM3 18h18M16 6h.01', terrainkey: 'M3 18l5-8 4 5 3-4 6 7zM3 18h18M16 6h.01',
     '3deptiles': 'M3 5h18v14H3zM9 5v14M15 5v14M3 12h18',
+    /* a plat: a block cut into lots, the lot lines running to the property line */
+    parcellines: 'M3 4h18v16H3zM11 4v16M3 11h8M11 13h10M16 13v7',
     compass: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM15 9l-2 5-5 2 2-5z',
     coordinates: 'M12 3v18M3 12h18M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', crosshair: 'M12 4v4M12 16v4M4 12h4M16 12h4M12 9a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
     recenter: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM12 3v3M12 18v3M3 12h3M18 12h3',

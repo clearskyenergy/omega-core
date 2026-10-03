@@ -17,10 +17,10 @@ function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
 var CATALOG = [
   record('lite', 'Omega Design', 'floor', 'editor sandbox sales intake opportunity financing signal vppsim',
     'design view export.blueprint',
-    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
+    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle pcToggle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
-  record('storage', 'Omega Storage', 'standard', 'batterysizer proforma valuestack isocalc', 'storage',
+  record('storage', 'Omega Storage', 'standard', 'batterysizer proforma valuestack isocalc bessscreening', 'storage',
     'openBessSizer openSolarBessSizer openBillImport openNonExportCalc openEnergyBalance openValueStack openBillAnalysis', 'models'),
   record('estimate', 'Omega Estimate', 'standard', 'costestimator', 'estimate',
     'openBomSourcing openElectricalEstimate openTakeoffBudget exportBudgetCSV exportTrenchCSV exportEstimateCSV', 'boms'),
@@ -28,7 +28,7 @@ var CATALOG = [
     'markFutureEV', 'evApplications'),
   record('plansets', 'Omega Plans', 'premium', '', 'plansets schematic riser export.plotplan export.oneline',
     'openPlotPlanExport openOneLineExport exportSpecsForCADTool d4Open OmegaArch.open OmegaArch.review OmegaSchematicTool.open openRiser openSchematic openPermitSheet openSheetSet openSiteStyles openBuildingDesigner openDesignReview OmegaAIRender.open'),
-  record('siteintel', 'Omega Intel', 'premium', '', 'siteintel parcelscreen',
+  record('siteintel', 'Omega Intel', 'premium', 'parcelscreening', 'siteintel parcelscreen',
     'openScorePanel openNetworkProximity openProjectIntelligence opToggleTerrainKey tlCycle ttCycle e5Open', 'screens'),
   record('engineering', 'Omega Engineer', 'premium', 'conductorsizing powerflow siteoptimizer', 'engineering',
     'openDerAnalysis openValidationExport openValidationStatus _valSubmit e3MeteoOpen'),
@@ -60,7 +60,12 @@ CATALOG.forEach(function (m) { BY_KEY[m.key] = m; });
 /* Argument-sensitive launchers must never grant Compute from the Lite build family. */
 BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(["_guidedPick('der')", "_guidedPick('standard')", "_guidedPick('deluxe')", "_guidedPick('l2')", "_guidedPick('ev')", "homeStartWizard('FOM')", "openRpPanel('summary')", "rpTab('summary')"]);
 BY_KEY.compute.ribbon.push("_guidedPick('compute')");
-BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost');
+BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost',
+  /* Summary in Estimate › Cost & ROI (2026-10-03) is the same panel as View's,
+     but Estimate's command: a copy owned by Omega Design on a tab gated
+     behind engineering would make Omega Design itself read partly locked on
+     a lower legacy tier. View's openRpPanel('summary') stays Omega Design's. */
+  "openRpPanel('summary','estimate')");
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
   lite: 'rb-color rb-fence-tie rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-trace-boundary rb-design-ai rb-nrel-key',
@@ -83,7 +88,7 @@ BY_KEY.engineering.editorPage = 'analyze';
 BY_KEY.storage.editorPage = 'analyze';
 BY_KEY.ops.editorPage = 'analyze';
 BY_KEY.plansets.editorPage = 'output';
-BY_KEY.finance.editorPage = 'output';
+BY_KEY.finance.editorPage = 'finance';
 BY_KEY.evrebates.editorPage = 'output';
 /* Honest beta disclosures travel with the one catalog projection. Hidden
  * stubs remain NOT_SOLD and are never turned into included features. */
@@ -109,7 +114,7 @@ var FEATURES = {
   compute: ['Compute campus design', 'Power and load screening', 'Compute site pro forma and land lease proposals'],
   ops: ['Site lifecycle', 'Field service', 'Owner reporting'],
   whitelabel: ['Your branded storefront', 'Embedded customer experience', 'Reseller delivery'],
-  permitting: ['Permitting matrices (BETA)', 'Jurisdiction checklist', 'Verified coverage shown below'],
+  permitting: ['Permitting matrices', 'Jurisdiction checklist', 'Verified coverage shown below'],
   sitefinder: ['Site discovery', 'Parcel studies', 'Northern Illinois coverage'],
   'logic-office': ['Orders and customers', 'Office workflow', 'Fulfilment tracking'],
   'logic-plant': ['Production board', 'Work instructions', 'Plant release'],

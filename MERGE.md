@@ -1,5 +1,45 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Sales compute screening parity (2026-10-03)
+
+Sales Parcel Screening calls the same OmegaSiteIntel intake/gridScore engine
+as the Site Map Parcel Screening Register. It now also calls the existing
+Firebase-authenticated `/api/network-proximity` service for precise addresses,
+with its existing billing/module checks. Fiber reach, route diversity and
+connectivity-only data-center suitability remain separate from the power
+score. Missing connectivity produces Verify; unfavorable connectivity holds
+a compute candidate. A favorable power score cannot hide that gate.
+
+The server adapter carries mapped circuit and pipeline evidence into the
+existing grid engine. No new grid/fiber score formulas are introduced.
+Pursuit gating and evidence normalization run in `api/_lib/compute-screening.js`;
+the browser only requests provider results and renders/export them. Planning
+MW from the existing voltage/acreage heuristic is explicitly not approved
+utility capacity. Carrier bandwidth also remains unconfirmed.
+
+Network failures retain the row, erase older connectivity evidence and mark
+Verify. Address changes invalidate network evidence. CSV, print and site
+review include the separate connectivity result. No new data collections,
+credentials, tile subscriptions or tenant-specific core behavior.
+
+## Sales Screening (2026-10-02)
+
+The Sales hex now includes the Screening subject, with Parcel Screening and
+BESS Portfolio Screening at `/screening.html`. The parcel tool reuses the
+editor engine for single addresses and portfolios. BESS imports XLSX/CSV
+portfolios, reproduces the supplied CSK full/half rubric, ranks every row,
+and keeps missing evidence and unsupported sizes marked Verify.
+
+Scoring and sizing run only in `api/_lib/portfolio-screening.js`, through
+token, billing, organization, member and module checks. Parcel Screening is
+owned by Omega Intel; BESS Screening by Omega Storage. Existing tool
+allowlists and packaged read-only states remain authoritative. No new
+collections or migrations are needed. Portfolios export as JSON or CSV.
+
+Grid Atlas mutable request state is now isolated per invocation so
+concurrent portfolio lookups cannot share another site's evidence.
+
+
 Measured on 2026-09-06 against the sixteen repository snapshots. Every
 "canonical" pick below is the SUPERSET build unless stated; nothing was
 hand-merged inside a multi-megabyte file. Items under **TODO** are the
@@ -2688,3 +2728,128 @@ candidate without a size for a battery, whatever kind of job it was.
   table, the percent, the phrases, the row, the card order);
   `tcostrollup.js` now hands the workspace a Level 2 site the run priced
   and reads "Designed and run" at 100%.
+
+## Parcel lines — October 2, 2026
+
+A customer asked for the map to "show the parcels so they know property
+lines". Google's Maps JavaScript API has no parcel layer (the lines in the
+consumer Maps app are not offered to developers), so View › Panels gains
+**Parcel Lines** (`rb-parcels`, `pcToggle`, beside 3DEP Tiles), a view
+setting like Solar Panels: remembered per browser (`omegaParcelLines`),
+never saved with the drawing, never a shape on the plan. Designer mode, the
+default ribbon on every legacy plan, keeps it (`/pcToggle/` in OmegaMode's
+`KEEP`); it first landed in View › Canvas without that and was hidden on
+legacy plans (Tommy, 2026-10-03: "it should show on the tools in the panels
+in the editor under view").
+
+- `omega-parcel-sources.js` (new, ES5, UMD) is the ONE list of public
+  county and state parcel layers, each verified by hand on 2026-10-02 (the
+  service answered and drew lines on an export tile): Cook, DuPage, Lake
+  and Will counties (IL), North Carolina, New Jersey and Delaware
+  statewide, and New York's participating counties. Each is drawn on the
+  live Google map as an ImageMapType from the county's own `/export`, in
+  one yellow line style with labels off where the service takes
+  `dynamicLayers` (Lake's own cyan line layer where it does not). Free, no
+  key; every service sends CORS headers, so the lines also land in map
+  captures.
+- `api/parcel.js` builds its county lookup table from the same list
+  (`lookupLayers()`, byte for byte what it carried before), so a county
+  that moves its layer is fixed once. The Cloudflare worker keeps its own
+  attribute copy, as before.
+- The parcel at the map centre is outlined from `/api/parcel` through
+  `OmegaAutopilot.parcel` (Regrid where the plan carries it, the counties
+  otherwise) and named by APN and acres; this is the line a site outside
+  the public layers still gets. It is asked when the lines come on, then
+  only where no public layer draws as the map settles somewhere new, never
+  twice for a parcel found, and at most twelve times a page (Regrid is
+  metered per lookup).
+- The inline `OmegaParcels` block it replaces was console-only, and its
+  South Carolina and Florida URLs answered "Invalid URL" (hosted
+  FeatureServers, which have no `/export`); its Lake and North Carolina
+  layer ids drew nothing. `OmegaParcels.status()` / `.sources()` remain.
+- Tests: `scripts/tests/tparcellines.js` (the list, the tile maths, and the
+  editor's block cut out of `editor.html` and run on a stand-in Google
+  map); `scripts/tests/tparcel.js` (unchanged, now in `npm test`).
+
+## 2026-10-03 — Site Discovery evidence handling
+
+Site Discovery weighted ranking now runs in `/api/site-discovery`, guarded by the existing tenant/billing/member checks and the Omega Sites module. Missing or invalid active factors remain Verify with a weighted score range; zero is a real value, and all-zero weights are rejected. Grid proximity and load preference are explicitly not capacity approval or BESS sizing. CSV uses the shared quoted-field parser and safe export, imported names render as text, edits invalidate old results, and only returned tenant scope is saved. Removed seeded example candidates. Added 50-site/edge-case/access tests and a browser regression for quoted CSV, unknowns, stale results and mobile layout. No data migration.
+
+## Parcel lines everywhere; a Finance tab; no label on its caption — October 3, 2026
+
+Tommy, from the live editor at a customer's site in Peoria: "the whole point
+is that we need the map to show the parcels like what the gis would show and
+the property boundaries", then "build an api and get all the GIS data we can
+get", "make sure text layers dont overlap", "put summary in estimate panel"
+and "these should have their own tab in the panel finance".
+
+- **Peoria County** joins `omega-parcel-sources.js` (DP/Cadastral layer 1,
+  from z16), for drawing and for the server's point lookup (PIN,
+  owner_name), and so do sixteen more Illinois counties found and verified
+  the same day: Kane, Sangamon, McLean, St. Clair, Macon, Tazewell, Grundy,
+  LaSalle, Madison, Logan, Adams, Coles, Knox, Lee, Boone and Winnebago
+  (fifteen with a point lookup; Logan is a line layer). The ones not public
+  or not reachable are named in the file. Every source carries a `test`
+  point, and `scripts/check-parcel-sources.js` re-checks them all over the
+  network (25 of 25 drew on 2026-10-03). Cook stays last in the lookup.
+- **`api/parcel-tiles.js`** relays Regrid's nationwide parcel tiles. POST
+  (a signed-in member of an active workspace) answers a ticket or why not
+  (`not-configured`, `no-tile-access` after one remembered probe tile,
+  `switched-off` by `toolOverrides.parcelTiles === false`); GET serves one
+  PNG for a valid ticket, edge-cached for the month. The ticket is an HMAC
+  of the month under a key derived from REGRID_TOKEN, the same for everyone
+  so the edge cache is shared; last month's is honoured across the turn.
+  Regrid's terms license the tiles for exactly this (a Tileserver
+  subscription; regrid.com/terms/api). Their unkeyed endpoint answering is
+  not a licence and is never used.
+- The editor asks for a ticket when Parcel Lines comes on; where it gets
+  one, a single Regrid layer replaces the county layers on that map, its
+  dark-green lines repainted in the Parcel Lines yellow on a canvas (the
+  tile is same-origin, so nothing is tainted). Without one, the county
+  layers draw as before.
+- **No label on its caption.** Two label lines, the icon and the button's
+  padding came to ~57px where a 78px ribbon leaves ~50px, so every second
+  line spilled onto the caption rule (onto the caption itself in macOS
+  fonts). The ribbon's last style block now fixes the line heights in
+  pixels and trims the button's padding: 50px over an 18px caption. The
+  title bar gives way in order (key hints, then the search words, then the
+  project name) instead of cutting "Pro" or wrapping "Ask Jarvis".
+  `scripts/render-editor-plan.js` measures every label against its caption
+  on every tab, packaged and legacy (Pro and Designer), and fails on the
+  old CSS.
+- **Finance tab** (`data-page="finance" data-module="finance"`): Push to
+  Marketplace, Apply for Financing and Helios Intake move out of Output's
+  Marketplace group with their caps unchanged; `finance.editorPage` is
+  `finance`, so a package without Omega Capital sees the tab marked Opt in.
+  Designer mode keeps it hidden, as those three were.
+- **Summary** also sits in Estimate › Cost & ROI (`rb-est-summary`); the View
+  copy stays, because Estimate is plan-gated and Summary is Omega Design's.
+  The Estimate copy calls `openRpPanel('summary','estimate')`, which the
+  catalog gives to Omega Estimate: an Omega Design command on a tab gated
+  behind engineering made Omega Design itself read partly locked on lower
+  legacy tiers (render-legacy-gates caught it).
+- `render-admin-account.js`: the legacy fixture's dates follow the run (a
+  fixed 2026-10-17 due date fell inside "due soon" on 2026-10-03).
+- **Seventy-four public layers.** Twenty-two statewide services (WV, TX, AR,
+  HI, VA, MA, MD, RI, VT, NH, ME, OH, WI, MN, NE, FL, CO, MT, WA, NV,
+  Mississippi in two halves, Oregon's county taxlots) and twenty-six county
+  and metro ones (California statewide; Los Angeles, San Diego, Orange,
+  Riverside, Sacramento, Harris, Tarrant, Travis, Maricopa, Pima, Clark,
+  Franklin OH, Oakland, Pennsylvania statewide, Allegheny, Hennepin, Jackson
+  MO, St. Louis County, Marion IN, Davidson, Jefferson KY, Salt Lake,
+  Multnomah, Hillsborough, Miami-Dade) join the list, each re-checked by a
+  tile at its own `test` point (74 of 74 drew on 2026-10-03; Mississippi's
+  server takes 15-30 s a tile, so the check now waits 45 s and prints the
+  time). Twenty-three of them add a point lookup to `api/parcel.js`
+  (43 in all); Pennsylvania's statewide lookup comes after every county
+  inside it, Cook still last. Left out: Idaho's statewide layer (its
+  licence keeps the data inside IDWR), and Dallas, Hamilton OH, King WA
+  and Kankakee, which did not answer from here on the day; states that
+  publish parcels only as a FeatureServer (no picture to draw) are not
+  in it either. Regrid's relay is still what draws the rest.
+- **One overlay, not seventy-four.** The editor draws every public layer
+  through ONE custom map type: a tile holds an `<img>` for each layer whose
+  box it touches (usually one), and a layer that refuses a tile hides its
+  image. Seventy-four ImageMapTypes would have put a tile slot per layer
+  per tile on the map. `OmegaParcels.opacity()` reaches the live tiles.
+

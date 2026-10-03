@@ -438,7 +438,10 @@ var CALLER = { email: 'dana@nextnrg.example', name: 'Dana Ortiz' };
   /* ── 6 · the editor is wired ── */
   var editor = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
   ok(/<script src="\/omega-helios-intake\.js"><\/script>/.test(editor), 'the module loads in the editor');
-  ok(/onclick="rbRun\(openHeliosIntake\)" data-cap="export"/.test(editor), 'the Output tab has the button, on the export cap');
+  ok(/onclick="rbRun\(openHeliosIntake\)" data-cap="export"/.test(editor), 'the button is on the export cap');
+  var financePage = editor.slice(editor.indexOf('<div class="ribbon-page" data-page="finance"'), editor.indexOf('<div class="ribbon-page" data-page="view"'));
+  ok(financePage.indexOf('rbRun(openHeliosIntake)') > 0 && financePage.indexOf('rbRun(openFinancingApply)') > 0 && financePage.indexOf('rbRun(openMarketplacePush)') > 0,
+     'Helios Intake sits in the Finance tab with Apply for Financing and Push to Marketplace (2026-10-03)');
   ok(/function openHeliosIntake\(\)/.test(editor), 'and its opener');
   var mod = fs.readFileSync(path.join(ROOT, 'omega-helios-intake.js'), 'utf8');
   ok(!/=>|\bconst\b|\blet\b|`/.test(mod), 'the module is ES5');

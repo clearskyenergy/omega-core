@@ -62,40 +62,29 @@ var REGRID_ADDON = 'parcels';
 var CACHE = 'parcel_cache';
 var CACHE_TTL_MS = 30 * 24 * 3600 * 1000;
 
-/* County layers, copied from workers/comed-proxy-worker-v10.js PARCELS. The
-   worker is not changed: it is a browser proxy for attributes, this is the
-   server asking the same layers for geometry. Keep the two in step when a
-   county moves its layer (Cook did in 2026). `owner: null` means the public
-   layer carries no owner name at all — Cook's lives on the Assessor feed and
-   is not fetched here. No layer is known to carry an acreage field, so acres
-   are measured from the ring unless a field turns up (see acresFromAttrs).
+/* County layers: omega-parcel-sources.js is the ONE list, shared with the
+   editor's View › Parcel Lines, which draws the same counties' lines on the
+   map. A county that moves its layer (Cook did in 2026) is fixed there once.
+   workers/comed-proxy-worker-v10.js keeps its own copy for attributes: it is
+   a browser proxy that cannot require this file, so keep it in step. `owner:
+   null` means the public layer carries no owner name at all — Cook's lives on
+   the Assessor feed and is not fetched here. No layer is known to carry an
+   acreage field, so acres are measured from the ring unless a field turns up
+   (see acresFromAttrs).
 
-   bbox is [south, west, north, east] in degrees, rounded OUTWARD to 0.01 from
-   the county extents in the Census TIGER county boundary file. They are a
-   cheap pre-test — "could this point be in that county" — not the county line:
-   Cook's box contains all of DuPage's and overlaps Lake's southern edge, so a
-   point is asked of the tighter boxes first and Cook last, and an empty answer
-   from one moves on to the next. Verify a box against the layer's own
-   fullExtent (<url>?f=json) before trusting it after a layer move. */
-var PARCELS = {
-  dupage: {
-    url: 'https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/MapServer/0',
-    idField: 'PIN', owner: 'BILLNAME', label: 'DuPage County',
-    bbox: [41.63, -88.27, 42.02, -87.90]
-  },
-  lake: {
-    url: 'https://maps.lakecountyil.gov/arcgis/rest/services/GISMapping/WABParcels/MapServer/12',
-    idField: 'pin', owner: 'taxpayer_name', label: 'Lake County',
-    bbox: [42.15, -88.20, 42.50, -87.75]
-  },
-  cook: {
-    url: 'https://gis12.cookcountyil.gov/traditional/rest/services/CookViewer3Parcels/MapServer/0',
-    idField: 'PIN14_dash', owner: null, label: 'Cook County',
-    bbox: [41.46, -88.27, 42.16, -87.52]
-  }
-};
+   PARCELS is key → { url, idField, owner, label, bbox }, url being the
+   polygon layer queried. bbox is [south, west, north, east] in degrees,
+   rounded OUTWARD to 0.01 from the county extents in the Census TIGER county
+   boundary file. They are a cheap pre-test — "could this point be in that
+   county" — not the county line: Cook's box contains all of DuPage's and
+   overlaps Lake's southern edge, so a point is asked of the tighter boxes
+   first and Cook last (COUNTY_ORDER), and an empty answer from one moves on
+   to the next. Verify a box against the layer's own fullExtent
+   (<url>?f=json) before trusting it after a layer move. */
+var PS = require('../omega-parcel-sources.js');
+var PARCELS = PS.lookupLayers();
 /* Asked in this order: tightest box first, Cook last (its box holds DuPage). */
-var COUNTY_ORDER = ['dupage', 'lake', 'cook'];
+var COUNTY_ORDER = PS.LOOKUP_ORDER.slice();
 
 var REGRID_POINT = 'https://app.regrid.com/api/v2/parcels/point';
 var ACRE_M2 = 4046.8564224;

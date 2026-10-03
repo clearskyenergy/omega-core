@@ -91,6 +91,49 @@ function fixture() {
   window.alert = function () {};
 }
 
+/* NO LABEL ON ITS CAPTION (2026-10-03, "make sure text layers dont
+   overlap"): on every ribbon tab the page shows, every button label's text
+   ends above its panel caption's box, and no title-bar text is cut by a box
+   too narrow for it. A label used to spill ~5px onto the caption rule, and
+   onto the caption itself in macOS's taller fonts. Run in the page. */
+function ribbonOverlaps() {
+  var out = [];
+  Array.prototype.forEach.call(document.querySelectorAll('#ribbon-tabs .rtab[data-page]'), function (tab) {
+    if (getComputedStyle(tab).display === 'none') return;
+    var pg = tab.getAttribute('data-page');
+    try { rbTab(pg); } catch (e) { return; }
+    var page = document.querySelector('#ribbon .ribbon-page[data-page="' + pg + '"]');
+    if (!page || getComputedStyle(page).display === 'none') return;
+    Array.prototype.forEach.call(page.querySelectorAll('.rpanel'), function (p) {
+      var cap = p.querySelector('.rpanel-cap');
+      if (getComputedStyle(p).display === 'none' || !cap || getComputedStyle(cap).display === 'none') return;
+      var capTop = cap.getBoundingClientRect().top;
+      Array.prototype.forEach.call(p.querySelectorAll('.rb-lbl'), function (l) {
+        var b = l.closest('.rbtn,.rsbtn');
+        if (b && getComputedStyle(b).display === 'none') return;
+        var r = document.createRange(); r.selectNodeContents(l);
+        Array.prototype.forEach.call(r.getClientRects(), function (lr) {
+          if (lr.width && lr.bottom > capTop + 0.5) out.push(pg + ' "' + l.textContent.trim() + '" ends ' + (lr.bottom - capTop).toFixed(1) + 'px into "' + cap.textContent.trim() + '"');
+        });
+      });
+    });
+  });
+  Array.prototype.forEach.call(document.querySelectorAll('#tb .tb-right *'), function (e) {
+    if (e.children.length || !(e.textContent || '').trim() || getComputedStyle(e).display === 'none') return;
+    var r = e.getBoundingClientRect(); if (!r.width) return;
+    if (r.right > innerWidth + 0.5) out.push('title bar "' + e.textContent.trim() + '" runs off the screen');
+    for (var a = e.parentElement; a && a.id !== 'tb'; a = a.parentElement) {
+      var cs = getComputedStyle(a);
+      if (cs.overflow === 'visible' && cs.overflowX === 'visible') continue;
+      var ar = a.getBoundingClientRect();
+      if (r.right > ar.right + 0.5 || r.left < ar.left - 0.5) out.push('title bar "' + e.textContent.trim() + '" is cut by ' + (a.id || a.className));
+      break;
+    }
+  });
+  var tabs = document.querySelector('#ribbon-tabs .rtab.active'); if (tabs) try { rbTab('home'); } catch (e) {}
+  return out;
+}
+
 /* WCAG contrast of the chip's own text on its own face */
 function chipContrast() {
   function parse(c) { var m = /rgba?\(([\d.]+),\s*([\d.]+),\s*([\d.]+)(?:,\s*([\d.]+))?\)/.exec(c || ''); return m ? { r: +m[1], g: +m[2], b: +m[3], a: m[4] === undefined ? 1 : +m[4] } : null; }
@@ -163,6 +206,8 @@ async function run() {
       ok(calls.summary >= 1 && !/\$/.test(await pop.textContent()), theme + ': a 503 summary leaves no figure');
       ok(/more modules available/.test(await pop.textContent()), theme + ': what is not held is counted');
       await page.screenshot({ path: path.join(output, theme + '-desktop-lite.png') });
+      var laps = await page.evaluate(ribbonOverlaps);
+      ok(laps.length === 0, theme + ': no ribbon label runs into its caption and no title-bar text is cut: ' + laps.slice(0, 6).join('; '));
       await closePanel();
 
       /* a mixed package, the summary answering */
@@ -282,6 +327,14 @@ async function run() {
       ok(!changing.some(function (t) { return t.indexOf(M.get('storage').name) === 0; }) && legacyIn.indexOf(M.get('storage').name) >= 0, theme + ': one the tier already met is Live, as on the Modules page, never also "Opt-in requested"');
       ok(await page.locator('#omega-package-tab').count() === 0 && calls.catalog === catalogBefore, theme + ': no Ladder and no package pricing for a legacy plan');
       await page.screenshot({ path: path.join(output, theme + '-desktop-legacy.png') });
+      /* the legacy ribbon (Designer/Pro switch in the title bar) is the one
+         that overlapped; both of its modes */
+      for (var mode of ['pro', 'designer']) {
+        await page.evaluate(function (m) { if (window.OmegaMode && OmegaMode.set) OmegaMode.set(m); }, mode);
+        await page.waitForTimeout(250);
+        var lapsLegacy = await page.evaluate(ribbonOverlaps);
+        ok(lapsLegacy.length === 0, theme + ' legacy ' + mode + ': no ribbon label runs into its caption and no title-bar text is cut: ' + lapsLegacy.slice(0, 6).join('; '));
+      }
       /* the retried plan survives an injected gated button (the gating block re-applies its stale fail-safe tier) */
       await page.evaluate(function () { var b = document.createElement('div'); b.setAttribute('data-cap', 'schematic'); b.id = 'plan-probe'; b.textContent = 'probe'; document.body.appendChild(b); });
       await page.waitForTimeout(300);

@@ -736,7 +736,7 @@
     if (spot) { var on = node('p', '', 'opm-on'); on.appendChild(node('span', 'On the ' + spot.tab + ' tab')); on.appendChild(button('Show me', function () { showMe(m.key); }, 'opm-link')); el.appendChild(on); }
     var list = node('ul'); (m.features || []).forEach(function (f) { list.appendChild(node('li', f)); }); el.appendChild(list);
     el.appendChild(node('p', price || '', 'opm-price'));
-    if (m.beta && m.beta.length) el.appendChild(node('p', 'BETA: ' + m.beta.join(', '), 'opm-note'));
+    if (m.beta && m.beta.length) el.appendChild(node('p', 'NEW: ' + m.beta.join(', '), 'opm-note'));
     if (m.coverage) el.appendChild(node('p', m.coverage, 'opm-note'));
     if (m.agreement) el.appendChild(node('p', m.agreement, 'opm-note'));
     /* one module on its own: say what else it brings before the button —
@@ -1160,7 +1160,7 @@
         if (notes[m.key]) { var flag = node('span', notes[m.key], 'pkm-tag flag'); flag.setAttribute('data-request', m.key); flag.style.fontWeight = '700'; tags.appendChild(flag); }
         if (m.usageDisplay) tags.appendChild(node('span', m.usageDisplay, 'pkm-tag'));
         if (m.key === 'lite') tags.appendChild(node('span', 'Always included', 'pkm-tag'));
-        if (m.beta && m.beta.length) tags.appendChild(node('span', 'BETA', 'pkm-tag beta'));
+        if (m.beta && m.beta.length) tags.appendChild(node('span', 'NEW', 'pkm-tag beta'));
         if ((m.requires || []).indexOf('logic-office') >= 0) tags.appendChild(node('span', 'Needs ' + (office ? office.name : 'Logic Office'), 'pkm-tag'));
         if (options.readOnly && owned && m.key !== 'lite') tags.appendChild(node('span', 'On · opt out at review', 'pkm-tag'));
         item.appendChild(tags); shelves[m.shelf].appendChild(item);
