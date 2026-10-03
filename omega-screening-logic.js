@@ -12,7 +12,7 @@
   function drawMode(){
     el('hub').hidden=!!mode;el('work').hidden=!mode;if(!mode)return;
     document.title=active()+' · OMEGA';el('pageTitle').textContent=active();el('crumbTool').textContent='› '+active();
-    el('pageIntro').textContent=mode==='bess'?'Turn a workbook of candidate sites into a prioritized BESS pipeline. See physical-fit options, recommended sizing where supported, and exactly what needs verification.':'Use the editor’s parcel screening engine to compare one address or a portfolio. Import site lists or KML / KMZ files and carry promising sites into design.';
+    el('pageIntro').textContent=mode==='bess'?'Turn your site list into a prioritized battery storage pipeline. Compare site suitability and preliminary system sizes, with clear next steps for each location.':'Evaluate one property or an entire portfolio. Review site details and project constraints, compare locations, and move promising sites into design.';
     el('parcelTab').className='button'+(mode==='parcel'?' active':'');el('bessTab').className='button'+(mode==='bess'?' active':'');
     el('file').accept=mode==='parcel'?'.xlsx,.csv,.json,.kml,.kmz':'.xlsx,.csv,.json';
     el('fileHelp').textContent='XLSX, CSV or a saved portfolio'+(mode==='parcel'?', plus multiple KML / KMZ files':'')+'. Up to 500 sites.';
@@ -88,7 +88,7 @@
       var s=r.sizing||{},p=s.physicalOption,score=r.score==null?(r.scoreRange?r.scoreRange[0]+'–'+r.scoreRange[1]:'Verify'):r.score+'/100';
       var badge=r.decision==='Priority Go'?'go':r.decision==='Hold / Needs Review'?'hold':'';
       return '<article class="result"><div class="result-top"><div class="rank">'+r.rank+'</div><div class="site"><div class="site-title">'+esc(r.address||r.name)+'</div><span class="badge '+badge+'">'+esc(r.decision)+'</span>'+(r.address&&r.name?'<div class="help">'+esc(r.name)+'</div>':'')+'</div><div class="metric"><small>Score</small><b>'+esc(score)+'</b><span>'+(r.score==null?'Verify missing inputs':mode==='bess'?'Physical screen':esc(r.confidence)+' confidence')+'</span></div>'+
-        (mode==='bess'?'<div class="metric"><small>Physical-fit option</small><b>'+size(p&&p.kw,p&&p.kwh)+'</b><span>Preliminary CSK proxy</span></div><div class="metric"><small>Recommended size</small><b>'+size(s.recommendedKw,s.recommendedKwh)+'</b><span>'+esc(s.status||'Verify')+'</span></div>':'<div class="metric"><small>Parcel size</small><b>'+n(r.acres)+'</b><span>acres</span></div><div class="metric"><small>Grid context</small><b>'+n(r.grid&&r.grid.kv)+' kV</b><span>Capacity: Verify</span></div>')+
+        (mode==='bess'?'<div class="metric"><small>Physical-fit option</small><b>'+size(p&&p.kw,p&&p.kwh)+'</b><span>Preliminary size estimate</span></div><div class="metric"><small>Recommended size</small><b>'+size(s.recommendedKw,s.recommendedKwh)+'</b><span>'+esc(s.status||'Verify')+'</span></div>':'<div class="metric"><small>Parcel size</small><b>'+n(r.acres)+'</b><span>acres</span></div><div class="metric"><small>Grid context</small><b>'+n(r.grid&&r.grid.kv)+' kV</b><span>Capacity: Verify</span></div>')+
         '</div><div class="result-bottom"><div class="next"><b>Next:</b> '+esc(r.nextAction)+'</div><button data-edit="'+esc(r.id)+'">Review site</button></div><div class="print-only">'+esc((r.reasons||[]).join(' '))+'<br><b>Verify:</b> '+esc((r.verify||[]).join(' '))+'</div></article>';
     }).join('')||'<div class="empty">No sites match this filter.</div>';
     el('methodology').textContent=report.methodology+' '+report.ranking+' Physical-fit options are reference systems, not engineered layouts. Unknown values do not earn points or become zero-capacity approvals. Recommended sizing requires a documented objective, layout, utility limits, recharge feasibility and business case.';
@@ -102,7 +102,7 @@
     if(ext==='csv')return read(file).then(function(t){pending={name:file.name,sheets:[{name:'CSV',rows:I.csv(t)}]};showMapping();});
     if(ext==='xlsx')return read(file,'buffer').then(I.readXlsx).then(function(sheets){
       var csk=I.csk(sheets,file.name);
-      if(csk){add(csk);say('Imported '+csk.length+' CSK sites from their detail tabs. Conflicting summary references are flagged for verification.');}
+      if(csk){add(csk);say('Imported '+csk.length+' sites. Review any conflicting information flagged for verification.');}
       else{pending={name:file.name,sheets:sheets};showMapping();}
     });
     if(mode!=='parcel'||['kml','kmz'].indexOf(ext)<0)return Promise.reject(new Error('Unsupported file. Choose XLSX, CSV'+(mode==='parcel'?', KML, KMZ':'')+' or a saved portfolio.'));
@@ -129,7 +129,7 @@
     var r=report&&report.rows.filter(function(r){return r.id===id;})[0],html='';
     if(r){
       html='<p><span class="badge">'+esc(r.decision)+'</span> '+(r.score==null?'Score: Verify':r.score+'/100')+'</p>';
-      if(r.full&&r.half)html+='<table class="score-table"><thead><tr><th>CSK component</th><th>Full</th><th>Half</th><th>Max</th></tr></thead><tbody>'+r.full.components.map(function(c,i){return '<tr><td>'+esc(c.label)+'</td><td>'+n(c.points)+'</td><td>'+n(r.half.components[i].points)+'</td><td>'+c.max+'</td></tr>';}).join('')+'</tbody></table>';
+      if(r.full&&r.half)html+='<table class="score-table"><thead><tr><th>Screening criterion</th><th>Full</th><th>Half</th><th>Max</th></tr></thead><tbody>'+r.full.components.map(function(c,i){return '<tr><td>'+esc(c.label)+'</td><td>'+n(c.points)+'</td><td>'+n(r.half.components[i].points)+'</td><td>'+c.max+'</td></tr>';}).join('')+'</tbody></table>';
       if(r.sizing){var z=r.sizing;html+='<div class="notice"><b>Recommended size: '+size(z.recommendedKw,z.recommendedKwh)+'</b><br>'+esc(z.reason)+'<br>Supplied-limit maximum: '+size(z.maxKw,z.maxKwh)+'</div>';}
       html+='<h3>Why this site ranks here</h3><ul>'+(r.reasons||[]).concat(r.risks||[]).map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul><h3>Verify before advancing</h3><ul>'+(r.verify||[]).map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul>';
     }
