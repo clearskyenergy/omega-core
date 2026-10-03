@@ -17,31 +17,13 @@ var PS = require('../omega-parcel-sources.js');
 var R = require('./_lib/parcel-priority.js');
 var live = process.argv.indexOf('--live') > 0, asJson = process.argv.indexOf('--json') > 0;
 
-function tileOf(lat, lng, z) {
-  var n = Math.pow(2, z), r = lat * Math.PI / 180;
-  return [Math.floor((lng + 180) / 360 * n), Math.floor((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2 * n)];
-}
-/* Does this layer draw lines at this point? A blank tile is ~885 bytes. */
-function draws(src, lat, lng) {
-  var z = Math.max(17, src.minZoom || 0), t = tileOf(lat, lng, z), url = PS.tileUrl(src, t[0], t[1], z);
-  if (!url) return Promise.resolve(false);
-  var go = function (left) {
-    var ctl = new AbortController(), timer = setTimeout(function () { ctl.abort(); }, 45000);
-    return fetch(url, { signal: ctl.signal }).then(function (r) {
-      return r.arrayBuffer().then(function (b) {
-        clearTimeout(timer);
-        return r.ok && (r.headers.get('content-type') || '').indexOf('image/png') === 0 && b.byteLength > 1000;
-      });
-    }).catch(function () { clearTimeout(timer); return left ? go(left - 1) : false; });
-  };
-  return go(1);
-}
+var D = require('./_lib/parcel-draw.js');
 
 function city(c) {
   var boxed = PS.at(c[1], c[2]);
   var out = { name: c[0], at: [c[1], c[2]], boxed: boxed.map(function (s) { return s.id; }), drawn: null };
   if (!live) return Promise.resolve(out);
-  return Promise.all(boxed.map(function (s) { return draws(s, c[1], c[2]).then(function (d) { return d ? s.id : null; }); }))
+  return Promise.all(boxed.map(function (s) { return D.draws(s, c[1], c[2]).then(function (d) { return d.drew ? s.id : null; }); }))
     .then(function (ids) { out.drawn = ids.filter(Boolean); return out; });
 }
 

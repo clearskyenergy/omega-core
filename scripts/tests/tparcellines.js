@@ -37,8 +37,8 @@ PS.SOURCES.forEach(function (s) {
      || (s.restyle === false && /^\d+(,\d+)+$/.test(s.lineLayer)), s.id + ': a layer id');
   ok(s.minZoom >= 12 && s.minZoom <= 18, s.id + ': draws from a street zoom');
   var b = s.bbox;
-  ok(b.length === 4 && b[0] < b[2] && b[1] < b[3] && b[0] > 18 && b[2] < 72 && b[1] > -180 && b[3] < -66,
-     s.id + ': a [south, west, north, east] box inside the United States');
+  ok(b.length === 4 && b[0] < b[2] && b[1] < b[3] && b[0] > 17 && b[2] < 72 && b[1] > -180 && b[3] < -64,
+     s.id + ': a [south, west, north, east] box inside the United States and Puerto Rico');
 });
 ok(PS.SOURCES.length >= 74, PS.SOURCES.length + ' verified layers');
 ok(!PS.byId('id') && !PS.SOURCES.some(function (s) { return /idaho|idwr/i.test(s.label + s.service); }),
@@ -57,8 +57,9 @@ eq(lookKeys.slice(0, 3), ['dupage', 'lake', 'peoria'], 'the server asks DuPage, 
 ok(lookKeys[lookKeys.length - 1] === 'cook' && lookKeys.length >= 43, 'then the rest of the counties, Cook last (' + lookKeys.length + ')');
 ok(lookKeys.indexOf('pa') === lookKeys.length - 2, 'Pennsylvania\'s statewide layer after every county inside it (Allegheny names its own)');
 lookKeys.forEach(function (k) {
-  ok(/\/MapServer\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && (/ County$/.test(LOOK[k].label) || (k === 'pa' && LOOK[k].label === 'Pennsylvania')),
-     k + ': a polygon layer, an id field and a county (or state) name for the lookup');
+  var stem = PS.byId(k).label.replace(/ \(.*\)$/, '');
+  ok(/\/MapServer\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && (/ (County|Parish)$|^City of /.test(LOOK[k].label) || LOOK[k].label === stem),
+     k + ': a polygon layer, an id field and a county name (statewide, the state\'s; a city\'s own layer, the city) for the lookup');
 });
 lookKeys.filter(function (k) { return ['dupage', 'lake', 'peoria', 'cook'].indexOf(k) < 0; }).forEach(function (k) { delete LOOK[k]; });
 eq(LOOK.peoria, { url: 'https://gis.peoriacounty.gov/arcgis/rest/services/DP/Cadastral/MapServer/1',
@@ -112,7 +113,7 @@ ok(/&layers=show%3A11&/.test(lu) && lu.indexOf('dynamicLayers') < 0, 'Lake: its 
 eq(PS.at(CHI[0], CHI[1]).map(function (s) { return s.id; }), ['cook'], 'Chicago: Cook');
 eq(PS.at(WHEATON[0], WHEATON[1]).map(function (s) { return s.id; }), ['dupage', 'cook'], 'Wheaton: DuPage, and Cook\'s box');
 eq(PS.at(RAL[0], RAL[1]).map(function (s) { return s.id; }), ['nc'], 'Raleigh: North Carolina');
-eq(PS.at(SARATOGA[0], SARATOGA[1]).map(function (s) { return s.id; }), ['ny'], 'Saratoga: New York\'s box');
+eq(PS.at(SARATOGA[0], SARATOGA[1]).map(function (s) { return s.id; }), ['ny', 'saratoga'], 'Saratoga: New York\'s box, and Saratoga County\'s own (the state layer leaves it out)');
 eq(PS.at(KANSAS[0], KANSAS[1]), [], 'Kansas: no public layer');
 ok(PS.at(40.675254, -89.610850).map(function (s) { return s.id; }).indexOf('peoria') >= 0, '107 Cass St, Peoria: inside Peoria County\'s box (and Tazewell\'s, across the river)');
 var kk = PS.byId('kankakee'), tk = tileOf(41.12, -87.8612, 17), kurl = PS.tileUrl(kk, tk[0], tk[1], 17);
@@ -121,6 +122,10 @@ ok(kk.lines === true && kdyn[0].drawingInfo.renderer.symbol.type === 'esriSLS' &
    'a line layer (Kankakee\'s parcel fabric) is drawn as the line itself, in the one colour (a fill symbol would be ignored)');
 ok(dyn[0].drawingInfo.renderer.symbol.type === 'esriSFS', 'a polygon layer keeps the outline-only fill');
 PS.SOURCES.forEach(function (s) { if (s.lines !== undefined) ok(s.lines === true && s.restyle === true, s.id + ': lines only with restyle'); });
+PS.SOURCES.forEach(function (s) {
+  if (s.browserOnly !== undefined) ok(s.browserOnly === true && !s.lookup && PS.LOOKUP_ORDER.indexOf(s.id) < 0,
+    s.id + ': a layer that answers browsers only has no server lookup (the server would get its 403)');
+});
 eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['cook', 'will', 'grundy', 'kankakee'], 'a view touching Cook\'s, Will\'s, Grundy\'s and Kankakee\'s boxes');
 PS.SOURCES.forEach(function (s) {
   ok(Array.isArray(s.test) && s.test[0] >= s.bbox[0] && s.test[0] <= s.bbox[2] && s.test[1] >= s.bbox[1] && s.test[1] <= s.bbox[3]
@@ -221,8 +226,15 @@ page(null);
 function settle() { return new Promise(function (r) { setImmediate(r); }); }
 function idle(m) { m.listeners.forEach(function (h) { if (h.ev === 'idle') h.f(); }); var t2 = timers.splice(0); t2.forEach(function (f) { f(); }); }
 function parcelLayers(m) { return m.overlayMapTypes.all().filter(function (l) { return /^Parcel lines/.test(l.name || ''); }); }
-var DOC = { createElement: function () {
-  return { style: {}, kids: [], setAttribute: function (k, v) { this[k] = v; }, appendChild: function (c) { this.kids.push(c); } };
+var PIX = null;   /* what a canvas holds after drawImage: two pixels, one drawn, one clear */
+var DOC = { createElement: function (tag) {
+  var el = { tag: tag, style: {}, kids: [], setAttribute: function (k, v) { this[k] = v; }, appendChild: function (c) { this.kids.push(c); },
+             removeAttribute: function (k) { if (k === 'crossorigin') this.crossOrigin = undefined; },
+             replaceChild: function (n, o) { var i = this.kids.indexOf(o); if (i >= 0) this.kids[i] = n; } };
+  if (tag === 'canvas') el.getContext = function () {
+    return { drawImage: function () { PIX = { data: [10, 10, 10, 100, 0, 0, 0, 0] }; }, getImageData: function () { return PIX; }, putImageData: function (d) { el.painted = d.data.slice(); } };
+  };
+  return el;
 } };
 var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8783, -87.6300]];
 
@@ -252,6 +264,24 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   var ks = tileOf(KANSAS[0], KANSAS[1], 18), kt = pub.getTile({ x: ks[0], y: ks[1] }, 18, DOC);
   ok(kt.kids.length === 0, 'Kansas: an empty tile, nothing asked');
   ok(pub.getTile({ x: tt[0], y: tt[1] }, 11, DOC).kids.length === 0 && pub.minZoom <= 14, 'zoomed out past every layer: nothing asked');
+  /* a layer that will not take our style is repainted in the one yellow;
+     a server that will not let us read it is shown as the county drew it */
+  var lk = tileOf(42.3636, -87.8448, 16), lp = pub.parts({ x: lk[0], y: lk[1] }, 16);
+  ok(lp.length === 1 && lp[0].own === true && lp[0].u.indexOf(lake.service) === 0, 'Lake County draws in its own style (no dynamicLayers there)');
+  var lt = pub.getTile({ x: lk[0], y: lk[1] }, 16, DOC), limg = lt.kids[0];
+  ok(limg.crossOrigin === 'anonymous' && limg.src === lp[0].u, 'so its picture is asked for in a way the page may read');
+  limg.onload();
+  ok(lt.kids[0].tag === 'canvas' && lt.kids[0].painted.slice(0, 4).join() === '255,214,10,200' && lt.kids[0].painted.slice(4).join() === '0,0,0,0',
+     'and repainted: every drawn pixel the one yellow, alpha doubled, clear pixels left clear');
+  var lt2 = pub.getTile({ x: lk[0], y: lk[1] }, 16, DOC), limg2 = lt2.kids[0];
+  limg2.onerror();
+  ok(limg2.crossOrigin === undefined && limg2.src === lp[0].u + '&plain=1' && limg2.style.display !== 'none', 'a server that refuses: asked again plainly, drawn as the county drew it');
+  limg2.onerror();
+  ok(limg2.style.display === 'none', 'and if that fails too, hidden, never a broken image');
+  ok(tile.kids[0].crossOrigin === undefined, 'a layer drawn in our style is asked for plainly (no repaint needed)');
+  var dn = tileOf(44.70, -73.95, 15), dparts = pub.parts({ x: dn[0], y: dn[1] }, 15);
+  ok(PS.at(44.70, -73.95).filter(function (s) { return /dancgis/.test(s.service); }).length === 2
+     && dparts.filter(function (p) { return /dancgis/.test(p.u); }).length === 1, 'two counties on one regional layer (Franklin, Clinton): one picture, asked once');
   vm.runInContext('OmegaParcels.opacity(0.5)', ctx);
   ok(tile.style.opacity === '0.5', 'OmegaParcels.opacity() reaches the tiles on the map');
   pub.releaseTile(tile); vm.runInContext('OmegaParcels.opacity(0.9)', ctx);
