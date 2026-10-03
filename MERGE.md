@@ -1,5 +1,59 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Design with AI keeps the build on the parcel (2026-10-03)
+
+Thomas, on 780 W Martin Luther King Jr Blvd, Los Angeles: "it put the solar
+on the parcel, which is the right thing and the bess should also be in
+there." The parcel lookup was right (LA County APN 5019-025-063, the whole
+block, 0.96 ac) and the array stayed on it. The equipment never looked at
+the parcel: the autopilot's `layout()` put the first piece at the centre
+and walked each next one 30 ft further along one heading, so on a 134 ft
+deep lot the battery block landed on the sidewalk, the inverter in the
+street and the building-loads panel on the lot across it.
+
+- **The build is planned whole before anything is drawn** (`_plan` in the
+  autopilot, pure; `OmegaAutopilot.plan()` reads it for the armed build).
+  With a parcel, every piece's drawn box (`_evPx`, floors included) sits
+  inside the lot with a 5 ft drawing setback, the run that feeds it (its
+  parent in a tree build, the last piece in a chain — what `placeBgbAt`
+  lays) stays on the lot, and no two boxes come within 4 ft. Where the
+  straight walk would cross the line it turns along it (eight headings,
+  cost = distance from the 30 ft spacing + the turn). On open ground and
+  with no parcel every piece lands where the straight walk always put it.
+  Nothing fits: the build stops and names the piece. The first piece keeps
+  its old rules (behind the building, clear of one, the centre) and must
+  fit on the lot there too; `_findClear` / `_behind` take an optional fit
+  test for that. Drawing clearances, not code setbacks.
+- **The array keeps off the equipment.** `stepBuild` arms and plans the
+  chain first, lays the array with the plan's keep-outs, then places the
+  chain. A chain that cannot fit still gets its array, then the refusal.
+- **`computeGroundLayoutV2` tests exclusions whole.** A table was refused
+  only when one of its own corners was inside an exclusion, so a 20 x 40 ft
+  carport table covered a battery pad (or a small building) untouched.
+  `fitAtAngle` now rotates each exclusion into the rows' frame once per
+  angle and refuses any overlap (`boxHitsRing`, bbox first). Every ground
+  layout with exclusions benefits.
+- **An empty Overpass answer from a fallback is not believed.** osm.ch
+  serves Switzerland only; it was the autopilot's last mirror and turned two
+  failed mirrors into "0 roads · 0 buildings - no public road nearby" in
+  central LA, so the build faced south and no building was checked. An
+  empty answer moves on; only the first mirror's empty is taken as true;
+  otherwise the HUD says the roads were unavailable, naming each mirror.
+  The building layer (`OVERPASS` ~153283) and `grid-atlas.js` still list
+  osm.ch with the old belief; not changed here.
+- `window._bgbNode(k)` / `window._bgbParents()` are read-only accessors next
+  to `_bgbState`, so the plan measures what `BGB_NODES` draws and follows
+  the preset's own legs rather than a copy.
+
+Tests: `scripts/tests/tautopilot-parcel.js` (the planner on the real LA
+ring, every heading, an L-shaped lot, a lot too small, buildings, open
+ground unchanged, a seeded fuzz), `scripts/tests/tsolarexcl.js` (the
+array's keep-outs and the mirror rule), `scripts/tests/tautopilot.js` (the
+wiring), and `npm run check:autopilot` (`scripts/render-autopilot-parcel.js`:
+the full editor in Chromium runs stepBuild's sequence on that ring through
+the real `placeBgbAt` and reads the drawing back). The autopilot tests
+joined `npm test`.
+
 ## Sales compute screening parity (2026-10-03)
 
 Sales Parcel Screening calls the same OmegaSiteIntel intake/gridScore engine

@@ -3,7 +3,7 @@
 const fs = require('fs');
 const src = fs.readFileSync('editor.html', 'utf8');
 const i = src.indexOf('/* ── KEEPING EQUIPMENT OUT OF BUILDINGS');
-const j = src.indexOf('function layout() {', i);
+const j = src.indexOf('function layout(', i);
 const body = src.slice(i, j);
 const mod = new Function('ST', 'toPx', `${body}
   return {_inPoly,_rectHitsPoly,_padRect,_clear,_findClear,_bldPx,_hostBuilding,_behind,
