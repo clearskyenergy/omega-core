@@ -1,9 +1,12 @@
 <!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Residential BESS Portfolio Analyzer — ClearSky</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'IBM Plex Mono',monospace,'Courier New',monospace;background:#060D14;color:#C8D8E8;min-height:100vh;font-size:12px}
@@ -171,39 +174,183 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   .caveat{color:#000;background:#f5f5f5}
 }
 </style>
+<style id="omega-finance-responsive">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Finance layout: shrink grid/flex children, not the user's viewport. */
+html{-webkit-text-size-adjust:100%}
+:where(main,section,article,aside,header,nav,div,form,fieldset,label){min-width:0}
+input:not([type=checkbox]):not([type=radio]),select,textarea{min-width:0;max-width:100%}
+button,a,input,select,textarea{touch-action:manipulation}
+:where(h1,h2,h3,h4,p,label,.hint,.note,.page-sub){overflow-wrap:anywhere}
+.finance-table-scroll{width:100%;max-width:100%;min-width:0;overflow-x:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.finance-table-scroll:focus-visible{outline:2px solid var(--cs-sky,#2B5FA8);outline-offset:2px}
+.finance-table-scroll>.finance-wide-table{min-width:600px}
+.finance-table-scroll table{margin-left:0;margin-right:0}
+@media screen and (max-width:900px),screen and (pointer:coarse){
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]),select,textarea{font-size:16px!important;min-height:44px}
+  button:not(.hb),.btn,.tb-back,.backBtn,[role=tab]{min-height:44px;line-height:1.35;white-space:normal}
+  button:not(.hb),.btn{font-size:14px}
+  :where(.fg label,.field label,.hint,.note,.kpi-label,.kpi-foot){font-size:13px}
+  .panel-actions,.panel-actions .right,.export-row,.intake-actions{flex-wrap:wrap;gap:10px}
+  .export-row>.btn,.panel-actions>.btn{flex:1 1 160px;justify-content:center}
+  :where(.ytable-wrap,.scroll-x,.heat-wrap,.table-wrap,.gWrap){min-width:0;max-width:100%}
+  .finance-has-wide-table::before{content:'Swipe to see all columns';display:block;position:sticky;left:0;padding:8px 0;font:12px/1.5 system-ui,sans-serif;color:var(--cs-sub,var(--sub,#5E6C7D))}
+}
+@media print{
+  .finance-table-scroll{overflow:visible;width:100%;max-width:none}
+  .finance-table-scroll>.finance-wide-table{min-width:0!important;width:100%}
+  .finance-has-wide-table::before{display:none}
+}
+
+/* Match the Finance tools: navy chrome, white cards, blue controls, gold labels. */
+:root{
+  --bg:#F4F1EC;--surface:#FFFFFF;--panel:#FAFAF8;--card:#FFFFFF;
+  --border:#DDD8D0;--border2:#BBC7D3;--gold:#947327;--gold-dim:#FAF6E9;
+  --cyan:#1B4F8A;--cyan-dim:#EFF5FB;--green:#137A38;--green-dim:#EDF7F0;
+  --red:#B3261E;--amber:#955800;--purple:#6941A5;
+  --text:#1A2332;--sub:#5E6C7D;--muted:#728094;
+  --cs-navy:#0B1E35;--cs-blue:#1B4F8A;--cs-gold:#E8C56A;
+}
+body{font-family:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--text);font-size:16px;line-height:1.5}
+button,input,select{font-family:inherit}
+.hdr{background:var(--cs-navy);color:#fff;min-height:60px;padding:8px 24px;gap:16px;position:sticky;top:0;z-index:100;border-bottom:1px solid rgba(255,255,255,.1)}
+.hdr-brand{font-size:16px;font-weight:700;color:#fff;text-decoration:none}
+.hdr-brand span{color:var(--cs-gold)}
+.hdr-context{font-size:12px;letter-spacing:.06em;color:#B8C8D8;text-transform:uppercase;border-left:1px solid #3B4B5C;padding-left:16px}
+.hdr-back{display:inline-flex;align-items:center;justify-content:center;margin-left:auto;color:#fff;font-size:14px;letter-spacing:0;text-decoration:none;border:1px solid #4A5A6A;border-radius:8px;padding:10px 14px;min-height:44px;background:rgba(255,255,255,.07)}
+.hdr-back:hover{color:#fff;background:rgba(255,255,255,.15)}
+.portfolio-main{max-width:1320px;margin:0 auto;padding:28px 24px calc(56px + env(safe-area-inset-bottom))}
+.portfolio-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px}
+.portfolio-label{color:var(--gold);font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+.portfolio-title{font-size:30px;line-height:1.2;letter-spacing:-.025em;color:var(--cs-navy);margin:6px 0}
+.portfolio-sub{font-size:16px;line-height:1.5;color:var(--sub);max-width:650px}
+.portfolio-actions{display:flex;gap:8px;flex-wrap:wrap}
+.tabs{display:flex;gap:0;overflow-x:auto;max-width:100%;background:#fff;border:1px solid var(--border);border-radius:12px;margin-bottom:22px;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.tab{font:600 14px/1.4 'DM Sans',system-ui,sans-serif;flex:1 0 auto;border:0;border-right:1px solid var(--border);border-bottom:3px solid transparent;background:#fff;padding:14px 16px;min-height:52px;white-space:nowrap;letter-spacing:0;text-transform:none;color:var(--sub);text-align:center}
+.tab:last-child{border-right:0}
+.tab:hover{color:var(--cs-blue);background:var(--cyan-dim)}
+.tab.active{background:linear-gradient(120deg,var(--cs-navy),var(--cs-blue));color:#fff;border-bottom-color:var(--cs-gold)}
+.tab:focus-visible,.btn:focus-visible,.sel-card:focus-visible,.agg-card:focus-visible{outline:3px solid var(--cs-blue);outline-offset:-3px}
+.panel{padding:0;min-width:0}
+.grid-config{grid-template-columns:minmax(0,380px) minmax(0,1fr);gap:22px}
+.grid2,.grid3,.grid4,.row2,.row3,.sel-grid,.agg-grid,.mol-compare{gap:14px}
+.grid2,.row2,.agg-grid,.mol-compare{grid-template-columns:repeat(2,minmax(0,1fr))}
+.grid3,.row3,.sel-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.grid4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.sec,.card,.mol-side{border-radius:14px;background:#fff;padding:20px;border:1px solid var(--border);box-shadow:0 2px 12px rgba(11,30,53,.04)}
+.sec{margin-bottom:18px}
+.sec-h{margin:-20px -20px 20px;padding:16px 20px;background:linear-gradient(120deg,var(--cs-navy),var(--cs-blue));color:#fff;border-radius:13px 13px 0 0;font-size:16px;line-height:1.4;letter-spacing:0;text-transform:none}
+.field{margin-bottom:14px}
+.field label{font-size:13px;line-height:1.45;font-weight:600;letter-spacing:.02em;margin-bottom:6px}
+.field input,.field select,#state-picker{font-size:16px;min-height:44px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff;color:var(--text);width:100%}
+.field input:focus,.field select:focus,#state-picker:focus{outline:2px solid var(--cs-blue);outline-offset:1px;border-color:var(--cs-blue)}
+.field input[readonly]{background:var(--panel)!important;color:var(--cs-navy)!important}
+.card-title{font-size:12px;line-height:1.45;letter-spacing:.05em;color:var(--sub)}
+.card-val{font-size:28px;line-height:1.2;overflow-wrap:anywhere;font-variant-numeric:tabular-nums}
+.card-note{font-size:13px;line-height:1.45;margin-top:7px}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;border-radius:8px;padding:10px 14px;font-size:14px;line-height:1.35;letter-spacing:0}
+.btn-gold{background:var(--cs-blue);color:#fff}
+.btn-outline{background:#fff;border:1px solid var(--border);color:var(--cs-navy)}
+.btn-outline:hover{border-color:var(--cs-blue);color:var(--cs-blue)}
+.section-title{font-size:18px;line-height:1.4;letter-spacing:0;flex-wrap:wrap;color:var(--cs-navy);margin-bottom:16px;padding-bottom:12px}
+.section-title span{font-size:13px}
+.badge,.state-tag{font-size:12px;line-height:1.5;border-radius:5px;white-space:normal}
+.caveat{font-size:14px;line-height:1.55;border-radius:8px;padding:12px}
+.sel-card,.agg-card{padding:14px;border-radius:10px;min-width:0;min-height:64px}
+.sel-card-name,.agg-card-name{font-size:14px;line-height:1.4}
+.sel-card-sub,.agg-card-sub{font-size:13px;line-height:1.45}
+.sel-card.active{border-color:var(--cs-blue);background:var(--cyan-dim)}
+.sel-card.active .sel-card-name{color:var(--cs-blue)}
+.unit-row,.bar-label{gap:12px;align-items:baseline}
+.unit-key,.bar-label{font-size:14px;line-height:1.5}
+.unit-val{font-size:14px;font-variant-numeric:tabular-nums;text-align:right}
+.mol-title{font-size:16px}
+table.data{font-size:14px}
+table.data th{font-size:12px;line-height:1.4;padding:12px;color:var(--sub)}
+table.data td{padding:12px;vertical-align:top}
+table.data th{white-space:nowrap}
+table.data td:first-child{min-width:150px}
+table.data td.r{font-variant-numeric:tabular-nums;white-space:nowrap}
+table.data tr.total td{font-size:14px;background:var(--cyan-dim)}
+.scroll-x{min-width:0;max-width:100%;border-radius:8px}
+.panel [style*="font-size:8px"],.panel [style*="font-size:9px"],.panel [style*="font-size:10px"]{font-size:13px!important;line-height:1.5}
+#state-rows>div{grid-template-columns:minmax(0,1fr) 88px 44px!important;gap:8px!important;padding:10px 0;border-bottom:1px solid var(--border)}
+#state-rows input{font-size:16px!important;min-height:44px;border-radius:8px!important;width:100%;min-width:0}
+#state-rows button{font-size:18px!important;min-width:44px;min-height:44px;border-radius:8px}
+#state-rows button:hover{background:#FCEDEA}
+#state-picker{font-size:16px!important;min-width:0}
+@media screen and (max-width:1100px){.grid-config{grid-template-columns:minmax(0,1fr)}.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media screen and (max-width:760px){
+  .hdr{padding:8px 14px;gap:12px}.hdr-context{display:none}
+  .portfolio-main{padding:22px 14px calc(40px + env(safe-area-inset-bottom))}
+  .portfolio-intro{gap:14px;margin-bottom:18px}.portfolio-title{font-size:26px}
+  .portfolio-actions{width:100%;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .portfolio-actions .btn{padding:10px 8px;font-size:14px}
+  .tabs{margin-bottom:18px}.tab{padding:12px 16px;min-width:130px}
+  .sec,.card,.mol-side{padding:16px}.sec-h{margin:-16px -16px 16px;padding:16px}
+  .grid2,.grid3,.row2,.row3,.mol-compare{grid-template-columns:minmax(0,1fr)}
+  .sel-grid,.agg-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media screen and (max-width:380px){
+  .grid4,.sel-grid,.agg-grid{grid-template-columns:minmax(0,1fr)}
+  .portfolio-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .portfolio-actions .btn:last-child{grid-column:1/-1}
+}
+@media print{
+  .hdr,.portfolio-actions,.tabs{display:none!important}
+  .portfolio-main{padding:0;max-width:none}
+  .portfolio-title{font-size:22px}.portfolio-sub{font-size:12px}
+  .panel{display:block!important;break-before:page;padding:0}
+  #tab-config{break-before:auto}
+  .sec-h{background:#EDF2F7!important;color:#0B1E35!important}
+  .grid-config{grid-template-columns:1fr}
+  .sec,.card{box-shadow:none;break-inside:avoid}
+  table.data{font-size:10px}table.data th{font-size:9px}table.data th,table.data td{padding:5px;white-space:normal!important}
+  .scroll-x{overflow:visible}
+}
+
+</style>
 </head>
 <body>
 
-<div class="hdr">
-  <a href="/" class="hdr-back">← Portal</a>
-  <div class="hdr-title">🏢 RESIDENTIAL BESS PORTFOLIO ANALYZER</div>
-  <div style="margin-left:auto;display:flex;gap:8px">
-    <button class="btn btn-outline" onclick="exportCSV()" style="padding:6px 12px;font-size:10px">⬇ Export CSV</button>
-    <button class="btn btn-outline" onclick="exportJSON()" style="padding:6px 12px;font-size:10px">⬇ JSON</button>
-    <button class="btn btn-gold" onclick="window.print()" style="padding:6px 12px;font-size:10px">🖨 Print / PDF</button>
+<header class="hdr">
+  <a class="hdr-brand" href="/">ClearSky<span>–OMEGA</span></a>
+  <span class="hdr-context">Finance &amp; modeling</span>
+  <a href="/" class="hdr-back">Platform</a>
+</header>
+<main class="portfolio-main">
+  <div class="portfolio-intro">
+    <div>
+      <div class="portfolio-label">Portfolio modeling</div>
+      <h1 class="portfolio-title">Residential BESS Portfolio Analyzer</h1>
+      <p class="portfolio-sub">Configure your sites, compare battery revenue and review the portfolio pro forma.</p>
+    </div>
+    <div class="portfolio-actions" aria-label="Export portfolio">
+      <button type="button" class="btn btn-outline" onclick="exportCSV()">Export CSV</button>
+      <button type="button" class="btn btn-outline" onclick="exportJSON()">Export JSON</button>
+      <button type="button" class="btn btn-gold" onclick="window.print()">Print / PDF</button>
+    </div>
   </div>
-</div>
-
-<div class="tabs">
-  <div class="tab active" onclick="showTab('config')">⚙️ Configuration</div>
-  <div class="tab" onclick="showTab('portfolio')">📊 Portfolio Analysis</div>
-  <div class="tab" onclick="showTab('unit')">🏠 Per-Unit / Per-Site</div>
-  <div class="tab" onclick="showTab('owner')">⚡ Owner Meter (BTM)</div>
-  <div class="tab" onclick="showTab('molecule')">🔬 Molecule Optimization</div>
-  <div class="tab" onclick="showTab('proforma')">📈 Pro Forma</div>
-</div>
+  <div class="tabs" role="tablist" aria-label="Portfolio sections">
+    <button type="button" class="tab active" id="portfolio-tab-config" role="tab" aria-controls="tab-config" aria-selected="true" tabindex="0" onclick="showTab('config')">Configuration</button>
+    <button type="button" class="tab" id="portfolio-tab-portfolio" role="tab" aria-controls="tab-portfolio" aria-selected="false" tabindex="-1" onclick="showTab('portfolio')">Portfolio analysis</button>
+    <button type="button" class="tab" id="portfolio-tab-unit" role="tab" aria-controls="tab-unit" aria-selected="false" tabindex="-1" onclick="showTab('unit')">Per unit / per site</button>
+    <button type="button" class="tab" id="portfolio-tab-owner" role="tab" aria-controls="tab-owner" aria-selected="false" tabindex="-1" onclick="showTab('owner')">Owner meter</button>
+    <button type="button" class="tab" id="portfolio-tab-molecule" role="tab" aria-controls="tab-molecule" aria-selected="false" tabindex="-1" onclick="showTab('molecule')">Molecule optimization</button>
+    <button type="button" class="tab" id="portfolio-tab-proforma" role="tab" aria-controls="tab-proforma" aria-selected="false" tabindex="-1" onclick="showTab('proforma')">Pro forma</button>
+  </div>
 
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- TAB 1: CONFIGURATION -->
 <!-- ══════════════════════════════════════════════════════════════ -->
-<div class="panel active" id="tab-config">
+<div class="panel active" id="tab-config" role="tabpanel" aria-labelledby="portfolio-tab-config" tabindex="0">
 <div class="grid-config">
 
 <!-- LEFT: Inputs -->
 <div>
 
   <div class="sec">
-    <div class="sec-h">🏢 Portfolio Configuration</div>
+    <div class="sec-h">Portfolio Configuration</div>
     <div class="field"><label>Total Residential Units (auto — sum of states below)</label>
       <input type="number" id="total-units" value="6000" readonly style="background:var(--panel);color:var(--gold);font-weight:700;cursor:not-allowed"></div>
     <div class="row2">
@@ -215,7 +362,7 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   </div>
 
   <div class="sec">
-    <div class="sec-h">⚡ Per-Unit Battery (Molecule Optimized)</div>
+    <div class="sec-h">Per-Unit Battery (Molecule Optimized)</div>
     <div class="row2">
       <div class="field"><label>Per-Unit Battery (kWh) ≤ 13</label>
         <input type="number" id="unit-kwh" value="13" min="1" max="13" step="0.5" oninput="recalc()"></div>
@@ -226,7 +373,7 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   </div>
 
   <div class="sec">
-    <div class="sec-h">🏗 Owner Meter — Behind-the-Meter System</div>
+    <div class="sec-h">Owner Meter — Behind-the-Meter System</div>
     <div class="row2">
       <div class="field"><label>Owner BESS (MWh) ≤ 5</label>
         <input type="number" id="owner-mwh" value="1" min="0" max="5" step="0.25" oninput="recalc()"></div>
@@ -245,10 +392,10 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   </div>
 
   <div class="sec">
-    <div class="sec-h">🗺 Units by State</div>
+    <div class="sec-h">Units by State</div>
     <div style="font-size:9px;color:var(--sub);margin-bottom:8px">Add any of the 50 states, then enter exact unit counts. Sites are derived from Avg Units per Site above.</div>
     <div style="display:flex;gap:6px;margin-bottom:10px">
-      <select id="state-picker" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 9px;font-size:10px;font-family:inherit"></select>
+      <select aria-label="Add a state to the portfolio" id="state-picker" style="flex:1;background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:4px;padding:6px 9px;font-size:10px;font-family:inherit"></select>
       <button class="btn btn-gold" onclick="addState()" style="padding:6px 12px;font-size:10px">+ Add</button>
     </div>
     <div id="state-rows"></div>
@@ -260,29 +407,29 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   </div>
 
   <div class="sec">
-    <div class="sec-h">💻 Compute Tier (per unit)</div>
+    <div class="sec-h">Compute Tier (per unit)</div>
     <div class="sel-grid" id="compute-sel">
-      <div class="sel-card active" onclick="setCompute('t1')" id="ct-t1">
+      <div class="sel-card active" onclick="setCompute('t1')" id="ct-t1" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="sel-card-icon">📡</div>
         <div class="sel-card-name">Bandwidth Node</div>
         <div class="sel-card-sub">$60/unit · $10/mo · Silent</div>
       </div>
-      <div class="sel-card" onclick="setCompute('t2')" id="ct-t2">
+      <div class="sel-card" onclick="setCompute('t2')" id="ct-t2" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="sel-card-icon">🖥</div>
         <div class="sel-card-name">Edge AI Box</div>
         <div class="sel-card-sub">$450/unit · $80/mo · Low heat</div>
       </div>
-      <div class="sel-card" onclick="setCompute('t3')" id="ct-t3">
+      <div class="sel-card" onclick="setCompute('t3')" id="ct-t3" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="sel-card-icon">🎮</div>
         <div class="sel-card-name">Consumer GPU</div>
         <div class="sel-card-sub">$2,000/unit · $225/mo · High heat</div>
       </div>
-      <div class="sel-card" onclick="setCompute('t4')" id="ct-t4">
+      <div class="sel-card" onclick="setCompute('t4')" id="ct-t4" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="sel-card-icon">💾</div>
         <div class="sel-card-name">Storage Node</div>
         <div class="sel-card-sub">$120/unit · $6.50/mo · Silent</div>
       </div>
-      <div class="sel-card" onclick="setCompute('t5')" id="ct-t5">
+      <div class="sel-card" onclick="setCompute('t5')" id="ct-t5" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="sel-card-icon">⚡</div>
         <div class="sel-card-name">Energy Only</div>
         <div class="sel-card-sub">$0/unit · $0/mo</div>
@@ -292,29 +439,29 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   </div>
 
   <div class="sec">
-    <div class="sec-h">🔌 Aggregation Partner (Owner Meter Only)</div>
+    <div class="sec-h">Aggregation Partner (Owner Meter Only)</div>
     <div class="agg-grid" id="agg-grid">
-      <div class="agg-card active" onclick="setAgg('molecule')" id="agg-molecule">
+      <div class="agg-card active" onclick="setAgg('molecule')" id="agg-molecule" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="agg-card-name">🔬 Molecule Systems</div>
         <div class="agg-card-sub">AERA + DividendVPP · 70/20/10 split · USD payouts · Individual unit + owner meter optimization</div>
       </div>
-      <div class="agg-card" onclick="setAgg('voltus')" id="agg-voltus">
+      <div class="agg-card" onclick="setAgg('voltus')" id="agg-voltus" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="agg-card-name">⚡ Voltus</div>
         <div class="agg-card-sub">Owner meter BTM only · Demand response aggregation · ~80% net to asset owner</div>
       </div>
-      <div class="agg-card" onclick="setAgg('cpower')" id="agg-cpower">
+      <div class="agg-card" onclick="setAgg('cpower')" id="agg-cpower" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="agg-card-name">🔋 CPower</div>
         <div class="agg-card-sub">Owner meter BTM only · PJM/MISO/CAISO programs · ~80% net to asset owner</div>
       </div>
-      <div class="agg-card" onclick="setAgg('syso')" id="agg-syso">
+      <div class="agg-card" onclick="setAgg('syso')" id="agg-syso" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="agg-card-name">🌐 Syso Systems</div>
         <div class="agg-card-sub">Owner meter BTM only · Grid services optimization · ~82% net</div>
       </div>
-      <div class="agg-card" onclick="setAgg('diy')" id="agg-diy">
+      <div class="agg-card" onclick="setAgg('diy')" id="agg-diy" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="agg-card-name">🛠 DIY / Self-Dispatch</div>
         <div class="agg-card-sub">No aggregator · 55% realized capture rate · No rev-share fee</div>
       </div>
-      <div class="agg-card" onclick="setAgg('other')" id="agg-other">
+      <div class="agg-card" onclick="setAgg('other')" id="agg-other" role="button" tabindex="0" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}">
         <div class="agg-card-name">➕ Other / Custom</div>
         <div class="agg-card-sub">Set custom capture rate and revenue share below</div>
       </div>
@@ -332,7 +479,7 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   </div>
 
   <div class="sec">
-    <div class="sec-h">💰 CapEx Assumptions</div>
+    <div class="sec-h">CapEx Assumptions</div>
     <div class="row2">
       <div class="field"><label>Battery + Meter Installed ($/unit)</label>
         <input type="number" id="capex-unit" value="9500" oninput="recalc()"></div>
@@ -348,7 +495,7 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
   </div>
 
   <div class="sec">
-    <div class="sec-h">📈 Annual Escalators</div>
+    <div class="sec-h">Annual Escalators</div>
     <div class="row3">
       <div class="field"><label>VPP/DR (%/yr)</label>
         <input type="number" id="esc-vpp" value="2" step="0.5" oninput="recalc()"></div>
@@ -363,7 +510,7 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
 
 <!-- RIGHT: Live Summary -->
 <div>
-  <div class="section-title">📊 Live Portfolio Summary</div>
+  <div class="section-title">Live Portfolio Summary</div>
 
   <div class="grid4" style="margin-bottom:14px">
     <div class="card gold"><div class="card-title">Total Units</div><div class="card-val gold" id="s-units">6,000</div><div class="card-note">Residential meters</div></div>
@@ -412,8 +559,8 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- TAB 2: PORTFOLIO ANALYSIS -->
 <!-- ══════════════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-portfolio">
-  <div class="section-title">📊 Per-State Revenue Analysis <span>All figures Year 1 gross unless noted</span></div>
+<div class="panel" id="tab-portfolio" role="tabpanel" aria-labelledby="portfolio-tab-portfolio" tabindex="0">
+  <div class="section-title">Per-State Revenue Analysis <span>All figures Year 1 gross unless noted</span></div>
 
   <div class="scroll-x" style="margin-bottom:18px">
     <table class="data" id="state-table">
@@ -462,10 +609,10 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- TAB 3: PER-UNIT / PER-SITE -->
 <!-- ══════════════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-unit">
+<div class="panel" id="tab-unit" role="tabpanel" aria-labelledby="portfolio-tab-unit" tabindex="0">
   <div class="grid2">
     <div>
-      <div class="section-title">🏠 Per-Unit Economics</div>
+      <div class="section-title">Per-Unit Economics</div>
       <div class="card" style="margin-bottom:14px">
         <div class="card-title">Per Residential Unit (Annual)</div>
         <div id="per-unit-rows"></div>
@@ -480,7 +627,7 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
       </div>
     </div>
     <div>
-      <div class="section-title">🏗 Per-Site / Building Economics</div>
+      <div class="section-title">Per-Site / Building Economics</div>
       <div class="card" style="margin-bottom:14px">
         <div class="card-title">Per Building / Site (Annual)</div>
         <div id="per-site-rows"></div>
@@ -502,8 +649,8 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- TAB 4: OWNER METER -->
 <!-- ══════════════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-owner">
-  <div class="section-title">⚡ Owner Meter — Behind-the-Meter Battery (up to 5 MWh per site)</div>
+<div class="panel" id="tab-owner" role="tabpanel" aria-labelledby="portfolio-tab-owner" tabindex="0">
+  <div class="section-title">Owner Meter — Behind-the-Meter Battery (up to 5 MWh per site)</div>
 
   <div class="grid2" style="margin-bottom:14px">
     <div class="card gold"><div class="card-title">Owner Fleet Capacity</div><div class="card-val gold" id="ow-capacity">—</div><div class="card-note">MWh across all sites</div></div>
@@ -547,8 +694,8 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- TAB 5: MOLECULE OPTIMIZATION -->
 <!-- ══════════════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-molecule">
-  <div class="section-title">🔬 Molecule Systems — DividendVPP Analysis</div>
+<div class="panel" id="tab-molecule" role="tabpanel" aria-labelledby="portfolio-tab-molecule" tabindex="0">
+  <div class="section-title">Molecule Systems — DividendVPP Analysis</div>
 
   <div class="caveat" style="margin-bottom:14px">
     Molecule doesn't create a new revenue stream — it sits between the utility VPP dispatch signal and your battery portfolio, guaranteeing each dispatch event is executed and telemetry-verified, then runs cross-program optimization (Lightsmith) so each site is always in the best-paying program available that hour. Most VPP portfolios without execution software realize ~55% of modeled value due to missed events and static enrollment. Molecule targets 95% realized capture. Revenue share: 70% asset owner / 20% Molecule / 10% installer (ClearSky captures installer 10% as installer of record).
@@ -590,8 +737,8 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
 <!-- ══════════════════════════════════════════════════════════════ -->
 <!-- TAB 6: PRO FORMA -->
 <!-- ══════════════════════════════════════════════════════════════ -->
-<div class="panel" id="tab-proforma">
-  <div class="section-title">📈 5-Year Pro Forma</div>
+<div class="panel" id="tab-proforma" role="tabpanel" aria-labelledby="portfolio-tab-proforma" tabindex="0">
+  <div class="section-title">Year Pro Forma</div>
 
   <div class="grid4" style="margin-bottom:14px">
     <div class="card gold"><div class="card-title">Gross CapEx</div><div class="card-val gold" id="pf-capex">—</div></div>
@@ -618,6 +765,8 @@ table.data tr.total td{background:var(--panel);font-weight:700;font-size:11px;bo
     </div>
   </div>
 </div>
+
+</main>
 
 <script>
 // ══════════════════════════════════════════════════════════════════
@@ -1277,13 +1426,34 @@ function recalc(){
 // TAB SWITCHING
 // ══════════════════════════════════════════════════════════════════
 function showTab(id){
+  var panel = document.getElementById('tab-'+id);
+  var tab = document.getElementById('portfolio-tab-'+id);
+  if (!panel || !tab) return;
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.remove('active'); });
-  document.querySelectorAll('.tab').forEach(function(t){ t.classList.remove('active'); });
-  document.getElementById('tab-'+id).classList.add('active');
-  var tabs=document.querySelectorAll('.tab');
-  var map={'config':0,'portfolio':1,'unit':2,'owner':3,'molecule':4,'proforma':5};
-  if(map[id]!==undefined) tabs[map[id]].classList.add('active');
+  document.querySelectorAll('.tab').forEach(function(t){
+    t.classList.remove('active');
+    t.setAttribute('aria-selected','false');
+    t.tabIndex = -1;
+  });
+  panel.classList.add('active');
+  tab.classList.add('active');
+  tab.setAttribute('aria-selected','true');
+  tab.tabIndex = 0;
+  tab.scrollIntoView({block:'nearest',inline:'nearest'});
 }
+document.querySelector('.tabs').addEventListener('keydown', function(event){
+  var tabs = Array.prototype.slice.call(document.querySelectorAll('.tab'));
+  var index = tabs.indexOf(event.target);
+  if (index < 0) return;
+  if (event.key === 'ArrowRight') index = (index + 1) % tabs.length;
+  else if (event.key === 'ArrowLeft') index = (index + tabs.length - 1) % tabs.length;
+  else if (event.key === 'Home') index = 0;
+  else if (event.key === 'End') index = tabs.length - 1;
+  else return;
+  event.preventDefault();
+  tabs[index].click();
+  tabs[index].focus();
+});
 
 // ══════════════════════════════════════════════════════════════════
 // STATE MANAGEMENT (add/remove/edit states)
@@ -1332,8 +1502,8 @@ function renderStateRows(){
     var flag = S.known ? '' : ' <span style="color:var(--amber);font-size:8px">⚠ investigate</span>';
     row.innerHTML =
       '<div style="font-size:10px;color:var(--text)">'+S.name+flag+'<br><span style="font-size:8px;color:var(--sub)">'+S.util+'</span></div>'
-      + '<input type="number" min="0" value="'+(_activeStates[k]||0)+'" oninput="updateStateUnits(\''+k+'\',this.value)" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:5px 7px;font-size:10px;font-family:inherit">'
-      + '<button onclick="removeState(\''+k+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 5px">✕</button>';
+      + '<input aria-label="Residential units in '+S.name+'" type="number" min="0" value="'+(_activeStates[k]||0)+'" oninput="updateStateUnits(\''+k+'\',this.value)" style="background:var(--card);border:1px solid var(--border);color:var(--text);border-radius:3px;padding:5px 7px;font-size:10px;font-family:inherit">'
+      + '<button aria-label="Remove '+S.name+' from portfolio" onclick="removeState(\''+k+'\')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:13px;padding:2px 5px">✕</button>';
     div.appendChild(row);
   });
   if (!Object.keys(_activeStates).length) {
@@ -1474,6 +1644,66 @@ function exportJSON(){
 renderStateRows();
 populateStatePicker();
 recalc();
+</script>
+<script id="omega-finance-accessibility">
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Presentation only. No calculation, authentication or saved-data changes. */
+(function () {
+  'use strict';
+  var nextId = 0;
+  function enhance(root) {
+    var tables = root.querySelectorAll('table');
+    for (var i = 0; i < tables.length; i++) {
+      var table = tables[i];
+      if (table.closest('.finance-table-scroll')) continue;
+      var wrapper = document.createElement('div');
+      wrapper.className = 'finance-table-scroll';
+      wrapper.setAttribute('role', 'region');
+      var card = table.closest('.card,.rcard,.panel,.sec,section');
+      var heading = card && card.querySelector('h2,h3,h4,.section-title,.sec-h,.card-title');
+      wrapper.setAttribute('aria-label', (table.getAttribute('aria-label') || (heading && heading.textContent.trim()) || 'Financial data') + ' — scroll horizontally for more columns');
+      wrapper.tabIndex = 0;
+      table.parentNode.insertBefore(wrapper, table);
+      wrapper.appendChild(table);
+      if (table.rows.length && table.rows[0].cells.length > 4) {
+        table.classList.add('finance-wide-table');
+        wrapper.classList.add('finance-has-wide-table');
+      }
+    }
+    var fields = root.querySelectorAll('.field,.fg,.iv-fg');
+    for (var j = 0; j < fields.length; j++) {
+      var label = fields[j].querySelector('label');
+      var input = fields[j].querySelector('input:not([type=hidden]),select,textarea');
+      if (!label || !input || label.htmlFor || label.contains(input)) continue;
+      if (!input.id) input.id = 'finance-field-' + (++nextId);
+      label.htmlFor = input.id;
+    }
+  }
+  function start() {
+    enhance(document);
+    // Result tables are inserted after a calculation in several tools.
+    // Observe additions only and ignore our own wrappers to avoid feedback.
+    if (!window.MutationObserver) return;
+    var queued = false;
+    new MutationObserver(function (records) {
+      var changed = false;
+      for (var i = 0; i < records.length; i++) {
+        var nodes = records[i].addedNodes;
+        for (var j = 0; j < nodes.length; j++) {
+          var n = nodes[j];
+          if (n.nodeType === 1 && !n.classList.contains('finance-table-scroll') &&
+              (n.tagName === 'TABLE' || n.querySelector('table,input,select,textarea'))) changed = true;
+        }
+      }
+      if (!changed || queued) return;
+      queued = true;
+      window.requestAnimationFrame(function () { queued = false; enhance(document); });
+    }).observe(document.body, {childList:true,subtree:true});
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start);
+  else start();
+}());
+
 </script>
 </body>
 </html>
