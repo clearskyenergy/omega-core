@@ -1,5 +1,23 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Sales Screening (2026-10-02)
+
+The Sales hex now includes the Screening subject, with Parcel Screening and
+BESS Portfolio Screening at `/screening.html`. The parcel tool reuses the
+editor engine for single addresses and portfolios. BESS imports XLSX/CSV
+portfolios, reproduces the supplied CSK full/half rubric, ranks every row,
+and keeps missing evidence and unsupported sizes marked Verify.
+
+Scoring and sizing run only in `api/_lib/portfolio-screening.js`, through
+token, billing, organization, member and module checks. Parcel Screening is
+owned by Omega Intel; BESS Screening by Omega Storage. Existing tool
+allowlists and packaged read-only states remain authoritative. No new
+collections or migrations are needed. Portfolios export as JSON or CSV.
+
+Grid Atlas mutable request state is now isolated per invocation so
+concurrent portfolio lookups cannot share another site's evidence.
+
+
 Measured on 2026-09-06 against the sixteen repository snapshots. Every
 "canonical" pick below is the SUPERSET build unless stated; nothing was
 hand-merged inside a multi-megabyte file. Items under **TODO** are the
@@ -2730,6 +2748,10 @@ in the editor under view").
 - Tests: `scripts/tests/tparcellines.js` (the list, the tile maths, and the
   editor's block cut out of `editor.html` and run on a stand-in Google
   map); `scripts/tests/tparcel.js` (unchanged, now in `npm test`).
+
+## 2026-10-03 — Site Discovery evidence handling
+
+Site Discovery weighted ranking now runs in `/api/site-discovery`, guarded by the existing tenant/billing/member checks and the Omega Sites module. Missing or invalid active factors remain Verify with a weighted score range; zero is a real value, and all-zero weights are rejected. Grid proximity and load preference are explicitly not capacity approval or BESS sizing. CSV uses the shared quoted-field parser and safe export, imported names render as text, edits invalidate old results, and only returned tenant scope is saved. Removed seeded example candidates. Added 50-site/edge-case/access tests and a browser regression for quoted CSV, unknowns, stale results and mobile layout. No data migration.
 
 ## Parcel lines everywhere; a Finance tab; no label on its caption — October 3, 2026
 
