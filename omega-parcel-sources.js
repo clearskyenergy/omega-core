@@ -29,6 +29,9 @@
  * checks the shape (offline); `node scripts/check-parcel-sources.js` asks
  * every county for the tile at its `test` point and says which still draw
  * (network, so not in npm test) — run it when a county may have moved.
+ * Where coverage goes next is scripts/_lib/parcel-priority.js (ACEEE's
+ * scorecard, battery markets pulled up); `node scripts/parcel-coverage.js
+ * --live` reports it state by state and names the next state.
  *
  * bbox is [south, west, north, east] in degrees, rounded OUTWARD. It is a
  * cheap pre-test, "could this tile or point be in that county", not the
@@ -54,7 +57,18 @@
      bright cyan that reads on imagery as it is.
      `lookup` is what api/parcel.js asks for the parcel under a point: the
      polygon layer, its id and owner fields (owner null: the public layer
-     carries none), and the county name the answer reports. */
+     carries none), and the county name the answer reports.
+     `lines: true` (with restyle) marks a layer of boundary LINES rather than
+     parcel polygons (Kankakee's parcel fabric): it is drawn with a line
+     symbol, because a fill symbol on a line layer is ignored.
+     A layer that will not take dynamicLayers (restyle: false) is drawn in
+     its county's own colours, and the editor repaints that picture in the
+     one yellow on a canvas (every such server let this origin read it on
+     2026-10-03; one that stops is shown as the county drew it).
+     `browserOnly: true` marks a server that answers browsers and refuses
+     every scripted client (Tennessee's): the map draws it, the checks ask
+     it as a browser (scripts/_lib/parcel-draw.js), and it has no `lookup`,
+     because the lookup runs on our server. */
   var SOURCES = [
     { id: 'dupage', label: 'DuPage County, IL',
       service: 'https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/MapServer',
@@ -183,6 +197,35 @@
       lineLayer: 15, restyle: true, minZoom: 15,
       bbox: [42.14, -89.41, 42.51, -88.93], test: [42.2711, -89.0957],
       lookup: { layer: 13, idField: 'PIN', owner: 'OwnerLastName', county: 'Winnebago County' } },
+    /* Added 2026-10-03, verified the same day. Champaign, Vermilion and Moline are
+       county layers published by their largest city (Champaign's and Danville's
+       layers are county-wide; Moline's is the city alone, the only public Rock
+       Island parcels). Kankakee publishes a parcel fabric's boundary LINES, drawn
+       with the line style (lines: true). Kendall's public layer is two townships. */
+    { id: 'champaign', label: 'Champaign County, IL',
+      service: 'https://gisportal.champaignil.gov/ms/rest/services/OpenGov/Open_Gov_Map_Service/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [39.87, -88.47, 40.41, -87.92], test: [40.1167, -88.2441],
+      lookup: { layer: 0, idField: 'PIN', owner: 'TaxPayer_Name', county: 'Champaign County' } },
+    { id: 'kankakee', label: 'Kankakee County, IL',
+      service: 'https://k3gis.com/arcgis/rest/services/Cadastral/Cadastral/MapServer',
+      lineLayer: 20, restyle: true, lines: true, minZoom: 15,
+      bbox: [40.99, -88.26, 41.31, -87.52], test: [41.1200, -87.8612] },
+    { id: 'kendall', label: 'Kendall County, IL (Oswego and Bristol townships)',
+      service: 'https://maps.co.kendall.il.us/server/rest/services/Hosted/OswegoERPMap/MapServer',
+      lineLayer: 10, restyle: true, minZoom: 16,
+      bbox: [41.63, -88.49, 41.73, -88.25], test: [41.6455, -88.4466],
+      lookup: { layer: 10, idField: 'pin', owner: 'owner_name', county: 'Kendall County' } },
+    { id: 'vermilion', label: 'Vermilion County, IL',
+      service: 'https://gis.cityofdanville.org/arcgis/rest/services/Property/Property/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [39.86, -87.95, 40.50, -87.52], test: [40.1250, -87.6296],
+      lookup: { layer: 0, idField: 'PIN', owner: 'FullName', county: 'Vermilion County' } },
+    { id: 'moline', label: 'City of Moline, IL',
+      service: 'https://gis2.moline.il.us/arcgis/rest/services/Mobile_Map2/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 17,
+      bbox: [41.42, -90.54, 41.52, -90.43], test: [41.5065, -90.5160],
+      lookup: { layer: 0, idField: 'NEW_PIN', owner: 'NAME', county: 'Rock Island County' } },
     { id: 'nc', label: 'North Carolina (statewide)',
       service: 'https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
@@ -197,10 +240,122 @@
       service: 'https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
       bbox: [40.49, -79.77, 45.02, -71.79], test: [42.6526, -73.7562] },
+    /* The 24 counties New York's statewide layer leaves out (its own list of
+       participating counties), 16 of them covered here, verified 2026-10-03.
+       Jefferson, Franklin and Clinton are one regional layer kept by the North
+       Country's development authority (DANC), each county loaded at a different
+       date; a tile touching two of their boxes asks for the picture once.
+       Saratoga, Schenectady, Schoharie and Delaware are hosted by a consultant
+       (VHB); Schenectady's service name carries a date, Saratoga's layer 57 is
+       its "2026" layer, and both may move. Dutchess sends no CORS header (the
+       lines draw; a map capture leaves them out). Monroe's drawn layer is the
+       2021 roll. Still without a public layer: Columbia, Orleans, Herkimer,
+       Allegany, Madison, Fulton, Seneca, Chenango. */
+    { id: 'nassau', label: 'Nassau County, NY',
+      service: 'https://gis.nassaucountyny.gov/server/rest/services/Layers/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 17,
+      bbox: [40.58, -73.77, 40.92, -73.42], test: [40.7490, -73.6407],
+      lookup: { layer: 1, idField: 'PARID', owner: null, county: 'Nassau County' } },
+    { id: 'monroeny', label: 'Monroe County, NY',
+      service: 'https://maps.monroecounty.gov/server/rest/services/Census_Data/Census_2020/MapServer',
+      lineLayer: 5, restyle: true, minZoom: 15,
+      bbox: [42.93, -78.01, 43.39, -77.36], test: [43.1580, -77.6100],
+      lookup: { layer: 5, idField: 'PRINTKEY', owner: 'OWNERNAME1', county: 'Monroe County' } },
+    { id: 'dutchess', label: 'Dutchess County, NY',
+      service: 'https://gis.dutchessny.gov/server/rest/services/ParcelAccess_Public/MapServer',
+      lineLayer: 3, restyle: true, minZoom: 15,
+      bbox: [41.43, -74.00, 42.09, -73.48], test: [41.7036, -73.9287],
+      lookup: { layer: 3, idField: 'PrintKey', owner: null, county: 'Dutchess County' } },
+    { id: 'saratoga', label: 'Saratoga County, NY',
+      service: 'https://spatialags.vhb.com/arcgis/rest/services/29820_Saratoga/NY_County_Saratoga/MapServer',
+      lineLayer: 57, restyle: true, minZoom: 15,
+      bbox: [42.77, -74.16, 43.40, -73.57], test: [43.0831, -73.7846],
+      lookup: { layer: 57, idField: 'PRINT_KEY', owner: 'OWNER', county: 'Saratoga County' } },
+    { id: 'schenectady', label: 'Schenectady County, NY',
+      service: 'https://spatialags.vhb.com/arcgis/rest/services/29816_SIMS/SIMS_03262026/MapServer',
+      lineLayer: 6, restyle: true, minZoom: 15,
+      bbox: [42.71, -74.31, 42.96, -73.80], test: [42.8142, -73.9396],
+      lookup: { layer: 6, idField: 'PRINT_KEY', owner: 'OWNER', county: 'Schenectady County' } },
+    { id: 'niagara', label: 'Niagara County, NY',
+      service: 'https://gis.niagaracounty.gov/server/rest/services/PublicViewer/Public_Viewer/MapServer',
+      lineLayer: 4, restyle: true, minZoom: 15,
+      bbox: [43.01, -79.08, 43.38, -78.46], test: [43.0964, -79.0375],
+      lookup: { layer: 4, idField: 'PrintKey', owner: 'OwnrName', county: 'Niagara County' } },
+    { id: 'jeffersonny', label: 'Jefferson County, NY',
+      service: 'https://maps.dancgis.org/server/rest/services/Parcel_Model/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [43.66, -76.45, 44.41, -75.44], test: [43.9752, -75.9108],
+      lookup: { layer: 0, idField: 'PRINT_KEY', owner: 'PRIMARY_OW', county: 'Jefferson County' } },
+    { id: 'chemung', label: 'Chemung County, NY',
+      service: 'https://ccgcportal.chemungcountyny.gov/production/rest/services/viewers/Parcels/MapServer',
+      lineLayer: 1, restyle: false, minZoom: 15,
+      bbox: [42.00, -76.97, 42.30, -76.53], test: [42.0898, -76.8077],
+      lookup: { layer: 1, idField: 'PrintKey', owner: 'Current_Owner', county: 'Chemung County' } },
+    { id: 'clintonny', label: 'Clinton County, NY',
+      service: 'https://maps.dancgis.org/server/rest/services/Parcel_Model/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [44.41, -74.06, 45.03, -73.34], test: [44.6994, -73.4529],
+      lookup: { layer: 0, idField: 'PRINT_KEY', owner: 'PRIMARY_OW', county: 'Clinton County' } },
+    { id: 'cattaraugus', label: 'Cattaraugus County, NY',
+      service: 'https://maps2.cattco.org/arcgiswebadaptor/rest/services/ParcelandSales_Viewer/MapServer',
+      lineLayer: 3, restyle: true, minZoom: 15,
+      bbox: [41.99, -79.07, 42.55, -78.30], test: [42.0778, -78.4303],
+      lookup: { layer: 3, idField: 'TAX_MAP_NO', owner: 'OWNER1', county: 'Cattaraugus County' } },
+    { id: 'washingtonny', label: 'Washington County, NY',
+      service: 'https://gis.washingtoncountyny.gov/arcgis/rest/services/Layers/MapServer',
+      lineLayer: 4, restyle: true, minZoom: 15,
+      bbox: [42.94, -73.64, 43.81, -73.24], test: [43.3008, -73.5857],
+      lookup: { layer: 4, idField: 'PRINT_KEY', owner: 'OWNER', county: 'Washington County' } },
+    { id: 'delawareny', label: 'Delaware County, NY',
+      service: 'https://spatialags.vhb.com/arcgis/rest/services/29822_Delaware/NY_County_Delaware/MapServer',
+      lineLayer: 25, restyle: true, minZoom: 15,
+      bbox: [41.84, -75.43, 42.52, -74.42], test: [42.2782, -74.9162],
+      lookup: { layer: 25, idField: 'PRINT_KEY', owner: 'OWNER', county: 'Delaware County' } },
+    { id: 'franklinny', label: 'Franklin County, NY',
+      service: 'https://maps.dancgis.org/server/rest/services/Parcel_Model/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [44.08, -74.76, 45.01, -73.88], test: [44.8486, -74.2949],
+      lookup: { layer: 0, idField: 'PRINT_KEY', owner: 'PRIMARY_OW', county: 'Franklin County' } },
+    { id: 'essexny', label: 'Essex County, NY',
+      service: 'https://essex-gis.co.essex.ny.us/arcgis/rest/services/NY_County_Essex/MapServer',
+      lineLayer: 7, restyle: true, minZoom: 15,
+      bbox: [43.72, -74.35, 44.57, -73.30], test: [44.2795, -73.9799],
+      lookup: { layer: 7, idField: 'PRINTKEY', owner: 'OWNER', county: 'Essex County' } },
+    { id: 'schoharie', label: 'Schoharie County, NY',
+      service: 'https://spatialags.vhb.com/arcgis/rest/services/20327_Schoharie/NY_County_Schoharie/MapServer',
+      lineLayer: 5, restyle: true, minZoom: 15,
+      bbox: [42.35, -74.72, 42.83, -74.16], test: [42.6776, -74.4854],
+      lookup: { layer: 5, idField: 'PRINT_KEY', owner: 'OWNER', county: 'Schoharie County' } },
+    { id: 'yates', label: 'Yates County, NY',
+      service: 'https://gisportal.yatescounty.org/server/rest/services/PY_Village_Bound_Nov2025/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.45, -77.37, 42.77, -76.90], test: [42.6609, -77.0533],
+      lookup: { layer: 0, idField: 'PRINT_KEY', owner: 'OWNER', county: 'Yates County' } },
     { id: 'de', label: 'Delaware (statewide)',
       service: 'https://enterprise.firstmap.delaware.gov/arcgis/rest/services/PlanningCadastre/DE_StateParcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
       bbox: [38.45, -75.79, 39.84, -75.04], test: [39.1582, -75.5244] },
+    /* District of Columbia (DC GIS, CC BY 4.0), Connecticut and Puerto Rico,
+       verified 2026-10-03. Connecticut's service is 169 town layers in 9
+       regional groups, too many for one restyle, so it is drawn in its own
+       thin grey and repainted yellow in the editor; its one statewide layer is
+       a FeatureServer, so there is no point lookup. Puerto Rico is CRIM's
+       parcels on the Planning Board's server (the service name carries a date);
+       roads and water are polygons in it too. */
+    { id: 'dc', label: 'District of Columbia',
+      service: 'https://maps2.dcgis.dc.gov/dcgis/rest/services/DCGIS_DATA/Property_and_Land_WebMercator/MapServer',
+      lineLayer: 40, restyle: true, minZoom: 16,
+      bbox: [38.79, -77.12, 39.00, -76.90], test: [38.9035, -77.0328],
+      lookup: { layer: 40, idField: 'SSL', owner: 'OWNERNAME', county: 'District of Columbia' } },
+    { id: 'ct', label: 'Connecticut (statewide)',
+      service: 'https://cteco.uconn.edu/ctmaps/rest/services/Parcels/Parcels_tiled/MapServer',
+      lineLayer: '0,39,46,63,85,105,123,143,159', restyle: false, minZoom: 14,
+      bbox: [40.97, -73.73, 42.06, -71.78], test: [41.7658, -72.6734] },
+    { id: 'pr', label: 'Puerto Rico (statewide)',
+      service: 'https://sigejp.pr.gov/server/rest/services/crim/crim_feb_2025/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [17.87, -67.96, 18.53, -65.21], test: [18.4655, -66.1057],
+      lookup: { layer: 0, idField: 'NUM_CATASTRO', owner: null, county: 'Puerto Rico' } },
     /* ── Statewide, found and verified 2026-10-03 (two z17 tiles each, in
        different parts of the state). Idaho's IDWR layer is left out: its
        description says the data "cannot be shared outside IDWR". Hosted
@@ -289,6 +444,15 @@
       service: 'https://gis.colorado.gov/public/rest/services/Address_and_Parcel/Colorado_Public_Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
       bbox: [36.99, -109.07, 41.01, -102.04], test: [39.7392, -104.9903] },
+    /* Colorado's statewide layer holds 44 of 64 counties (checked 2026-10-03).
+       Fremont fills one gap; Montrose's terms ask for permission first; Delta and
+       Chaffee are FeatureServers only. Fremont's layer id is what its server
+       calls it. */
+    { id: 'fremontco', label: 'Fremont County, CO',
+      service: 'https://fremontgis.com/server/rest/services/AUT_LAND_RECORDS/MapServer',
+      lineLayer: 1082516613, restyle: true, minZoom: 15,
+      bbox: [38.25, -106.02, 38.70, -104.93], test: [38.4411, -105.2425],
+      lookup: { layer: 1082516613, idField: 'ASSR_MAPNO', owner: 'OWNER_NAME', county: 'Fremont County' } },
     { id: 'mt', label: 'Montana (statewide)',
       service: 'https://gisservice.mt.gov/arcgis/rest/services/msdi_cadastral_map_v1/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
@@ -386,6 +550,59 @@
       lineLayer: 2, restyle: false, minZoom: 15,
       bbox: [31.41, -113.35, 32.53, -110.43], test: [32.235, -110.96],
       lookup: { layer: 12, idField: 'PARCEL', owner: null, county: 'Pima County' } },
+    /* Arizona, verified 2026-10-03. Yavapai and Coconino come from the Arizona
+       Department of Water Resources' statewide service (one layer per county,
+       alphabetical: 0 Apache … 13 Yavapai, 14 Yuma) because both counties' own
+       servers refuse scripted and image requests; any other Arizona county is
+       the same service at its own layer id. */
+    { id: 'pinal', label: 'Pinal County, AZ',
+      service: 'https://gis.pinal.gov/mapping/rest/services/TaxParcels/MapServer',
+      lineLayer: 3, restyle: true, minZoom: 15,
+      bbox: [32.49, -112.21, 33.47, -110.43], test: [32.8773, -111.7568],
+      lookup: { layer: 3, idField: 'PARCELID', owner: 'OWNERNME1', county: 'Pinal County' } },
+    { id: 'yavapai', label: 'Yavapai County, AZ',
+      service: 'https://azwatermaps.azwater.gov/arcgis/rest/services/General/Parcels/MapServer',
+      lineLayer: 13, restyle: true, minZoom: 15,
+      bbox: [33.86, -113.38, 35.56, -111.45], test: [34.5391, -112.4677],
+      lookup: { layer: 13, idField: 'APN', owner: 'OWNER_NAME', county: 'Yavapai County' } },
+    { id: 'coconino', label: 'Coconino County, AZ',
+      service: 'https://azwatermaps.azwater.gov/arcgis/rest/services/General/Parcels/MapServer',
+      lineLayer: 2, restyle: true, minZoom: 15,
+      bbox: [34.29, -113.35, 37.02, -110.74], test: [35.1988, -111.6503],
+      lookup: { layer: 2, idField: 'APN', owner: 'OWNER_NAME', county: 'Coconino County' } },
+    { id: 'mohave', label: 'Mohave County, AZ',
+      service: 'https://mcgis.mohave.gov/arcgis/rest/services/PARCELS/MapServer',
+      lineLayer: 3, restyle: true, minZoom: 15,
+      bbox: [34.20, -114.75, 37.01, -112.52], test: [35.1891, -114.0544],
+      lookup: { layer: 3, idField: 'TAXPIN', owner: 'OWNER', county: 'Mohave County' } },
+    { id: 'yuma', label: 'Yuma County, AZ',
+      service: 'https://arcgis.yumacountyaz.gov/webgis/rest/services/YC_Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [32.03, -114.83, 33.47, -113.32], test: [32.7244, -114.6250],
+      lookup: { layer: 0, idField: 'PIDNUM', owner: 'OWNER_NAME', county: 'Yuma County' } },
+    /* New Mexico, verified 2026-10-03: the county assessors' own services, and
+       for Sandoval the State Engineer's 2023 county-parcels service (one layer
+       per county, alphabetical; its 2025 service draws blank tiles). */
+    { id: 'bernalillo', label: 'Bernalillo County, NM',
+      service: 'https://assessormap.bernco.gov/server/rest/services/GIS/Assessor_Parcels_Public/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [34.86, -107.20, 35.23, -106.14], test: [35.0842, -106.6514],
+      lookup: { layer: 0, idField: 'UPC', owner: 'OWNER', county: 'Bernalillo County' } },
+    { id: 'santafe', label: 'Santa Fe County, NM',
+      service: 'https://sfcomaps.santafecountynm.gov/restsvc/rest/services/LAND/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [35.03, -106.26, 36.01, -105.70], test: [35.6870, -105.9378],
+      lookup: { layer: 0, idField: 'UPC', owner: 'OwnerName', county: 'Santa Fe County' } },
+    { id: 'donaana', label: 'Doña Ana County, NM',
+      service: 'https://gis.donaana.gov/server/rest/services/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [31.77, -107.32, 33.06, -106.33], test: [32.3159, -106.7744],
+      lookup: { layer: 0, idField: 'PARCELNUMBER', owner: 'OWNERNAME', county: 'Doña Ana County' } },
+    { id: 'sandoval', label: 'Sandoval County, NM',
+      service: 'https://gis.ose.nm.gov/server_s/rest/services/Support_Features/County_Parcels_2023/MapServer',
+      lineLayer: 23, restyle: true, minZoom: 15,
+      bbox: [35.18, -107.64, 36.25, -106.23], test: [35.2344, -106.6784],
+      lookup: { layer: 23, idField: 'UPC', owner: null, county: 'Sandoval County' } },
     { id: 'clark', label: 'Clark County, NV',
       service: 'https://maps.clarkcountynv.gov/arcgis/rest/services/Assessor/LandApp/MapServer',
       lineLayer: 9, restyle: false, minZoom: 15,
@@ -401,6 +618,39 @@
       lineLayer: 1, restyle: true, minZoom: 14,
       bbox: [42.42, -83.70, 42.90, -83.07], test: [42.4895, -83.1446],
       lookup: { layer: 1, idField: 'PIN', owner: null, county: 'Oakland County' } },
+    /* Michigan (no statewide parcel layer). Wayne's layer holds Detroit.
+       Washtenaw, Ingham, Genesee and Kalamazoo publish parcels only behind a
+       token or as hosted FeatureServers (no picture to draw). Added 2026-10-03. */
+    { id: 'wayne', label: 'Wayne County, MI',
+      service: 'https://www.waynecounty.com/gisserver/rest/services/ParcelViewer/prcls_fullAdd_parsed_FINAL/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.03, -83.56, 42.46, -82.86], test: [42.3360, -83.0490],
+      lookup: { layer: 0, idField: 'packedParc', owner: 'ownername1', county: 'Wayne County' } },
+    { id: 'kent', label: 'Kent County, MI',
+      service: 'https://gis.kentcountymi.gov/agisprod/rest/services/OpenData/Parcel_Related_Layers/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.76, -85.80, 43.30, -85.30], test: [42.9634, -85.6681],
+      lookup: { layer: 0, idField: 'PNUM', owner: null, county: 'Kent County' } },
+    { id: 'macomb', label: 'Macomb County, MI',
+      service: 'https://gis.macombgov.org/arcgis1/rest/services/PARCEL_FABRIC/Parcels_Web/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.44, -83.12, 42.91, -82.70], test: [42.5803, -82.9196],
+      lookup: { layer: 0, idField: 'TAX_ID', owner: 'ownername1', county: 'Macomb County' } },
+    { id: 'ottawa', label: 'Ottawa County, MI',
+      service: 'https://gis.miottawa.org/arcgis/rest/services/HostedServices/ParcelsPublic/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [42.72, -86.28, 43.21, -85.77], test: [42.7905, -86.1050],
+      lookup: { layer: 0, idField: 'FinalPIN', owner: 'OwnerName', county: 'Ottawa County' } },
+    { id: 'muskegon', label: 'Muskegon County, MI',
+      service: 'https://maps.muskegoncountygis.com/arcgis/rest/services/Layers/Parcels_Base/MapServer',
+      lineLayer: 30, restyle: true, minZoom: 17,
+      bbox: [43.11, -86.47, 43.48, -85.79], test: [43.2330, -86.2500],
+      lookup: { layer: 30, idField: 'PIN', owner: 'Owner_Name1', county: 'Muskegon County' } },
+    { id: 'jacksonmi', label: 'Jackson County, MI',
+      service: 'https://gis.mijackson.org/countygis/rest/services/RealEstate/RealEstateParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [42.07, -84.72, 42.43, -84.13], test: [42.2459, -84.4013],
+      lookup: { layer: 0, idField: 'PIN', owner: 'OWNER', county: 'Jackson County' } },
     /* PA DEP's statewide layer: Philadelphia and Allegheny included. */
     { id: 'pa', label: 'Pennsylvania (statewide)',
       service: 'https://gis.dep.pa.gov/depgisprd/rest/services/Parcels/PA_Parcels/MapServer',
@@ -417,26 +667,109 @@
       lineLayer: 1, restyle: true, minZoom: 15,
       bbox: [44.78, -93.78, 45.25, -93.17], test: [44.976, -93.27],
       lookup: { layer: 1, idField: 'PID', owner: 'OWNER_NM', county: 'Hennepin County' } },
+    /* Minnesota's statewide layer holds 59 of 87 counties (checked 2026-10-03);
+       three of the missing ones, verified the same day. Freeborn and Nicollet
+       are FeatureServers only. */
+    { id: 'blueearth', label: 'Blue Earth County, MN',
+      service: 'https://gis.blueearthcountymn.gov/server/rest/services/LandRecords/TaxParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [43.84, -94.38, 44.27, -93.76], test: [44.1638, -93.9993],
+      lookup: { layer: 0, idField: 'ParcelNo', owner: null, county: 'Blue Earth County' } },
+    { id: 'kandiyohi', label: 'Kandiyohi County, MN',
+      service: 'https://gis.kcmn.us/arcgis/rest/services/Kandiyohi/Boundaries/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 15,
+      bbox: [44.89, -95.26, 45.42, -94.75], test: [45.1219, -95.0433],
+      lookup: { layer: 1, idField: 'PIN', owner: 'TAXNAME', county: 'Kandiyohi County' } },
+    { id: 'beltrami', label: 'Beltrami County, MN',
+      service: 'https://arcgis.co.beltrami.mn.us/arcgis/rest/services/BeltramiData/BeltramiOpenData/MapServer',
+      lineLayer: 2, restyle: true, minZoom: 15,
+      bbox: [47.40, -95.61, 48.55, -94.40], test: [47.4739, -94.8801],
+      lookup: { layer: 2, idField: 'PIN', owner: 'OWNERNAME1', county: 'Beltrami County' } },
     { id: 'jackson', label: 'Jackson County, MO',
       service: 'https://jcgis.jacksongov.org/arcgis/rest/services/ParcelViewer/ParcelsAscendRelate/MapServer',
       lineLayer: 1, restyle: true, minZoom: 15,
       bbox: [38.83, -94.61, 39.24, -94.10], test: [39.0997, -94.5786],
       lookup: { layer: 1, idField: 'Name', owner: null, county: 'Jackson County' } },
+    /* Kansas, verified 2026-10-03. Johnson County (AIMS) sells its parcel
+       services to data partners, so it is not here; Overland Park's own layer is
+       AIMS's data and awaits that decision too. */
+    { id: 'wyandotte', label: 'Wyandotte County, KS',
+      service: 'https://gisweb.wycokck.org/arcgis/rest/services/GISPUB/Parcel_Polygons/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [38.98, -94.92, 39.21, -94.59], test: [39.1140, -94.6277],
+      lookup: { layer: 0, idField: 'PARCEL', owner: null, county: 'Wyandotte County' } },
+    { id: 'sedgwickks', label: 'Sedgwick County, KS',
+      service: 'https://gismaps.sedgwickcounty.org/arcgis/rest/services/Map/Op_Parcel_Dynamic_SP/MapServer',
+      lineLayer: 0, restyle: false, minZoom: 15,
+      bbox: [37.46, -97.82, 37.92, -97.14], test: [37.6870, -97.3307],
+      lookup: { layer: 0, idField: 'PIN', owner: null, county: 'Sedgwick County' } },
+    { id: 'shawneeks', label: 'Shawnee County, KS',
+      service: 'https://gis.sncoapps.us/arcgis2/rest/services/Current_Parcels/MapServer',
+      lineLayer: 4, restyle: true, minZoom: 15,
+      bbox: [38.86, -96.05, 39.23, -95.48], test: [39.0473, -95.6756],
+      lookup: { layer: 4, idField: 'PID', owner: 'ONAME', county: 'Shawnee County' } },
     { id: 'stlouisco', label: 'St. Louis County, MO',
       service: 'https://maps.stlouisco.com/hosting/rest/services/Maps/AGS_Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
       bbox: [38.39, -90.75, 38.90, -90.12], test: [38.6426, -90.3237],
       lookup: { layer: 0, idField: 'LOCATOR', owner: 'OWNER_NAME', county: 'St. Louis County' } },
+    /* Missouri, verified 2026-10-03. Greene's layer is county-wide on the City of
+       Springfield's server. St. Charles sits behind a bot challenge; Clay and
+       Platte publish no public MapServer. */
+    { id: 'stlcity', label: 'City of St. Louis, MO',
+      service: 'https://maps8.stlouis-mo.gov/arcgis/rest/services/ASSESSOR/Assessor_Public_Parcels/MapServer',
+      lineLayer: 11, restyle: true, minZoom: 15,
+      bbox: [38.53, -90.33, 38.78, -90.17], test: [38.6267, -90.1997],
+      lookup: { layer: 11, idField: 'ParcelId', owner: 'OwnerName', county: 'City of St. Louis' } },
+    { id: 'greenemo', label: 'Greene County, MO',
+      service: 'https://maps.springfieldmo.gov/arcgis/rest/services/Maps/GisViewer/MapServer',
+      lineLayer: 66, restyle: true, minZoom: 16,
+      bbox: [37.08, -93.63, 37.43, -93.06], test: [37.2081, -93.2925],
+      lookup: { layer: 66, idField: 'PIN', owner: 'OWN1', county: 'Greene County' } },
+    { id: 'boonemo', label: 'Boone County, MO',
+      service: 'https://gis.boonemo.gov/arcgis/rest/services/BC_Basemap_MSD_V2/MapServer',
+      lineLayer: 7, restyle: true, minZoom: 15,
+      bbox: [38.64, -92.58, 39.25, -92.10], test: [38.9519, -92.3343],
+      lookup: { layer: 7, idField: 'ASSESSOR', owner: null, county: 'Boone County' } },
     { id: 'marion', label: 'Marion County, IN',
       service: 'https://gis.indy.gov/server/rest/services/MapIndy/MapIndyProperty/MapServer',
       lineLayer: 10, restyle: true, minZoom: 16,
       bbox: [39.63, -86.33, 39.93, -85.93], test: [39.7684, -86.1581],
       lookup: { layer: 10, idField: 'STATEPARCELNUMBER', owner: null, county: 'Marion County' } },
+    /* Indiana, verified 2026-10-03. Indiana's statewide parcels are hosted
+       FeatureServers only, so the counties: Allen (Fort Wayne; its lookup fields
+       are the service's joined names, as it returns them) and Vanderburgh
+       (Evansville). */
+    { id: 'allen', label: 'Allen County, IN',
+      service: 'https://gis.acimap.us/services/rest/services/CFW/Parcels_With_Ownership_Information/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [40.91, -85.34, 41.28, -84.79], test: [41.0796, -85.1401],
+      lookup: { layer: 0, idField: 'GISPublished.SDE.Parcel_Poly.PIN', owner: 'sde.CurrentOwner.OwnerofRecord', county: 'Allen County' } },
+    { id: 'vanderburgh', label: 'Vanderburgh County, IN',
+      service: 'https://maps.evansvillegis.com/arcgis_server/rest/services/ASSESSOR/PARCEL_DATA/MapServer',
+      lineLayer: 0, restyle: false, minZoom: 16,
+      bbox: [37.82, -87.71, 38.17, -87.44], test: [37.9705, -87.5714],
+      lookup: { layer: 0, idField: 'NAME', owner: 'OWNER1', county: 'Vanderburgh County' } },
     { id: 'davidson', label: 'Davidson County, TN',
       service: 'https://maps.nashville.gov/arcgis/rest/services/Cadastral/Parcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 16,
       bbox: [35.96, -87.06, 36.41, -86.51], test: [36.16, -86.78],
       lookup: { layer: 0, idField: 'APN', owner: 'Owner', county: 'Davidson County' } },
+    /* Tennessee, verified 2026-10-03. The state's layer (TDEC, 94 of 95 counties;
+       not Knox) answers browsers only: every scripted client gets a 403, so it is
+       browserOnly (scripts/_lib/parcel-draw.js asks it as a browser) and carries
+       no point lookup, which runs on the server. It overlaps Davidson's and
+       Hamilton's own layers. Knox (KGIS) refuses everything; Shelby is covered by
+       the state layer alone. */
+    { id: 'tn', label: 'Tennessee (statewide except Knox)',
+      service: 'https://tdeconline.tn.gov/arcgis/rest/services/Parcels_OG/MapServer',
+      lineLayer: 0, restyle: true, browserOnly: true, minZoom: 14,
+      bbox: [34.90, -90.40, 36.70, -81.64], test: [35.1486, -90.0475] },
+    { id: 'hamiltontn', label: 'Hamilton County, TN',
+      service: 'https://gis.hamiltontn.gov/server/rest/services/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [34.97, -85.48, 35.47, -84.94], test: [35.0453, -85.3100],
+      lookup: { layer: 0, idField: 'GISLINK', owner: 'OWNERNAME1', county: 'Hamilton County' } },
     { id: 'jefferson', label: 'Jefferson County, KY',
       service: 'https://gis.lojic.org/maps/rest/services/LojicSolutions/OpenDataPVA/MapServer',
       lineLayer: 1, restyle: true, minZoom: 15,
@@ -447,6 +780,29 @@
       lineLayer: 1, restyle: true, minZoom: 16,
       bbox: [40.41, -112.24, 40.93, -111.55], test: [40.7608, -111.891],
       lookup: { layer: 1, idField: 'parcel_id', owner: 'own_name', county: 'Salt Lake County' } },
+    /* Utah, verified 2026-10-03. Utah's statewide parcels (UGRC) are published
+       only as FeatureServers, so the counties' own services. Davis's and Utah
+       County's public layers carry no owner names. */
+    { id: 'utahco', label: 'Utah County, UT',
+      service: 'https://maps.utahcounty.gov/arcgis/rest/services/Assessor/Assr_Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [39.77, -112.22, 40.58, -110.85], test: [40.2340, -111.6578],
+      lookup: { layer: 0, idField: 'PARCELID', owner: null, county: 'Utah County' } },
+    { id: 'davis', label: 'Davis County, UT',
+      service: 'https://gisportal-pro.daviscountyutah.gov/server/rest/services/Public/Davis_County_Public_Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [40.81, -112.18, 41.16, -111.77], test: [41.0607, -111.9701],
+      lookup: { layer: 0, idField: 'ParcelTaxID', owner: null, county: 'Davis County' } },
+    { id: 'weber', label: 'Weber County, UT',
+      service: 'https://maps.webercountyutah.gov/arcgis/rest/services/gis/parcels_geogizmo2/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [41.07, -112.50, 41.44, -111.42], test: [41.2239, -111.9727],
+      lookup: { layer: 0, idField: 'PARCEL_ID', owner: 'NAME_ONE', county: 'Weber County' } },
+    { id: 'washingtonut', label: 'Washington County, UT',
+      service: 'https://agisprodvm.washco.utah.gov/arcgis/rest/services/Parcels/MapServer',
+      lineLayer: 0, restyle: false, minZoom: 16,
+      bbox: [36.98, -114.08, 37.63, -112.89], test: [37.1041, -113.5858],
+      lookup: { layer: 0, idField: 'TAX_ID', owner: null, county: 'Washington County' } },
     /* Portland Metro's taxlots: Multnomah, Washington and Clackamas. */
     { id: 'multnomah', label: 'Portland Metro (Multnomah, Washington, Clackamas), OR',
       service: 'https://www.portlandmaps.com/arcgis/rest/services/Public/Taxlots/MapServer',
@@ -462,13 +818,260 @@
       service: 'https://gisweb.miamidade.gov/arcgis/rest/services/MD_LandInformation/MapServer',
       lineLayer: 26, restyle: true, minZoom: 17,
       bbox: [25.13, -80.88, 25.98, -80.11], test: [25.77, -80.195],
-      lookup: { layer: 26, idField: 'FOLIO', owner: 'TRUE_OWNER1', county: 'Miami-Dade County' } }
+      lookup: { layer: 26, idField: 'FOLIO', owner: 'TRUE_OWNER1', county: 'Miami-Dade County' } },
+    /* Georgia, verified 2026-10-03: metro Atlanta and Savannah. Not here:
+       Gwinnett (its only public parcel layer prints a PIN and a house number on
+       every lot, in its own style), Forsyth (its terms forbid any sale of the map
+       or its information without written permission; awaiting that decision). */
+    { id: 'fulton', label: 'Fulton County, GA',
+      service: 'https://gismaps.fultoncountyga.gov/arcgispub/rest/services/OpenData/Tax_Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [33.50, -84.86, 34.19, -84.09], test: [33.7490, -84.3880],
+      lookup: { layer: 0, idField: 'ParcelID', owner: 'Owner', county: 'Fulton County' } },
+    { id: 'dekalbga', label: 'DeKalb County, GA',
+      service: 'https://dcgis.dekalbcountyga.gov/mapping/rest/services/TaxParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [33.61, -84.36, 33.98, -84.02], test: [33.7751, -84.2965],
+      lookup: { layer: 0, idField: 'PARCELID', owner: 'OWNERNME1', county: 'DeKalb County' } },
+    { id: 'cobb', label: 'Cobb County, GA',
+      service: 'https://gis.cobbcounty.gov/gisserver/rest/services/cobbpublic/Parcels/MapServer',
+      lineLayer: 3, restyle: true, minZoom: 16,
+      bbox: [33.74, -84.75, 34.09, -84.37], test: [33.9525, -84.5504],
+      lookup: { layer: 3, idField: 'PIN', owner: 'OWNER_NAM1', county: 'Cobb County' } },
+    { id: 'chathamga', label: 'Chatham County, GA',
+      service: 'https://pub.sagis.org/arcgis/rest/services/ChathamCounty/Parcels_Cyclomedia/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [31.72, -81.40, 32.24, -80.83], test: [32.0812, -81.0911],
+      lookup: { layer: 0, idField: 'PIN', owner: 'Owner', county: 'Chatham County' } },
+    /* South Carolina, verified 2026-10-03. Greenville is the CITY's layer (the
+       county publishes no public service); Richland publishes a GeoServer WMS,
+       not an ArcGIS MapServer. */
+    { id: 'charleston', label: 'Charleston County, SC',
+      service: 'https://gisccapps.charlestoncounty.org/arcgis/rest/services/GIS_VIEWER/External_GIS_Website/MapServer',
+      lineLayer: 7, restyle: true, minZoom: 15,
+      bbox: [32.48, -80.46, 33.23, -79.26], test: [32.7767, -79.9305],
+      lookup: { layer: 7, idField: 'PID', owner: 'OWNER1', county: 'Charleston County' } },
+    { id: 'berkeleysc', label: 'Berkeley County, SC',
+      service: 'https://gis.berkeleycountysc.gov/arcgis/rest/services/internet/MapServer',
+      lineLayer: 4, restyle: true, minZoom: 15,
+      bbox: [32.81, -80.37, 33.51, -79.44], test: [33.1958, -80.0136],
+      lookup: { layer: 4, idField: 'O_TMS', owner: 'OwnerName', county: 'Berkeley County' } },
+    { id: 'horry', label: 'Horry County, SC',
+      service: 'https://gisportal.horrycounty.org/server/rest/services/OpenData/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [33.56, -79.35, 34.31, -78.52], test: [33.6893, -78.8866],
+      lookup: { layer: 0, idField: 'PIN', owner: null, county: 'Horry County' } },
+    { id: 'lexingtonsc', label: 'Lexington County, SC',
+      service: 'https://maps.lex-co.com/agstserver/rest/services/Property/MapServer',
+      lineLayer: 4, restyle: true, minZoom: 14,
+      bbox: [33.65, -81.58, 34.20, -80.92], test: [33.9816, -81.2360],
+      lookup: { layer: 4, idField: 'TMS', owner: 'Owner', county: 'Lexington County' } },
+    { id: 'spartanburg', label: 'Spartanburg County, SC',
+      service: 'https://maps.spartanburgcounty.org/server/rest/services/OneMap/Tax_Parcels/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 15,
+      bbox: [34.57, -82.24, 35.21, -81.71], test: [34.9492, -81.9319],
+      lookup: { layer: 1, idField: 'MAPNUMBER', owner: 'OwnerName', county: 'Spartanburg County' } },
+    { id: 'greenvillesc', label: 'City of Greenville, SC',
+      service: 'https://citygis.greenvillesc.gov/arcgis/rest/services/GeneralData/GeneralData_6570/MapServer',
+      lineLayer: 2, restyle: true, minZoom: 15,
+      bbox: [34.73, -82.48, 34.93, -82.24], test: [34.8530, -82.3937],
+      lookup: { layer: 2, idField: 'PIN', owner: 'OWNAM1', county: 'Greenville County' } },
+    /* Oklahoma, verified 2026-10-03. The state's parcels are a view-only WMS
+       and Oklahoma County's own host is gone, so Tulsa County (INCOG's server)
+       and the cities of Edmond and Norman, each its city alone. */
+    { id: 'tulsa', label: 'Tulsa County, OK',
+      service: 'https://map11.incog.org/arcgis11wa/rest/services/Parcels_TulsaCo/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [35.85, -96.31, 36.44, -95.74], test: [36.1534, -95.9928],
+      lookup: { layer: 0, idField: 'ParcelNo', owner: 'Owner', county: 'Tulsa County' } },
+    { id: 'edmond', label: 'City of Edmond (Oklahoma County), OK',
+      service: 'https://gis.edmondok.gov/arcgis/rest/services/EdmondOKPLL/EdmondOKPLL/MapServer',
+      lineLayer: 22, restyle: true, minZoom: 16,
+      bbox: [35.60, -97.56, 35.73, -97.26], test: [35.6525, -97.4776],
+      lookup: { layer: 22, idField: 'PARCEL_NO', owner: null, county: 'Oklahoma County' } },
+    { id: 'norman', label: 'City of Norman (Cleveland County), OK',
+      service: 'https://maps.normanok.gov/arcgis/rest/services/GeneralBaseMap2025/MapServer',
+      lineLayer: 28, restyle: true, minZoom: 16,
+      bbox: [35.14, -97.55, 35.35, -97.17], test: [35.2235, -97.4393],
+      lookup: { layer: 28, idField: 'GEONUMBER', owner: null, county: 'Cleveland County' } },
+    /* Louisiana, verified 2026-10-03. East Baton Rouge carries no lookup: its
+       layer answers nothing to outFields=*, which the server's lookup asks.
+       Jefferson Parish's SITE_ID is the parish's site id, not the assessor's
+       number. Caddo is not here: its only public layer is a 2013 copy behind a
+       third party's ArcGIS Online proxy. */
+    { id: 'orleans', label: 'Orleans Parish, LA',
+      service: 'https://maps.nola.gov/server/rest/services/Assessor/Landbase_Layers/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [29.86, -90.14, 30.18, -89.64], test: [29.9510, -90.0713],
+      lookup: { layer: 0, idField: 'GEOPIN', owner: null, county: 'Orleans Parish' } },
+    { id: 'jeffparish', label: 'Jefferson Parish, LA',
+      service: 'https://eweb.jeffparish.net/arcgis/rest/services/JPFeatures2025/MapServer',
+      lineLayer: 8, restyle: true, minZoom: 15,
+      bbox: [29.65, -90.29, 30.05, -90.00], test: [29.9836, -90.1525],
+      lookup: { layer: 8, idField: 'SITE_ID', owner: null, county: 'Jefferson Parish' } },
+    { id: 'ebr', label: 'East Baton Rouge Parish, LA',
+      service: 'https://maps.brla.gov/gis/rest/services/Cadastral/Tax_Parcel/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [30.31, -91.32, 30.73, -90.84], test: [30.4509, -91.1874] },
+    { id: 'lafayette', label: 'Lafayette Parish, LA',
+      service: 'https://maps.lafayettela.gov/arcgis/rest/services/BaseLayers/LCG_Parcels_withCAMA_Data/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [30.03, -92.29, 30.39, -91.90], test: [30.2249, -92.0195],
+      lookup: { layer: 0, idField: 'ASMNTNUM', owner: 'OWNERS', county: 'Lafayette Parish' } },
+    /* Iowa, verified 2026-10-03. Polk carries no lookup: its firewall refuses a
+       user agent with a URL in it, which api/parcel.js sends. Black Hawk's
+       layer is county-wide on the City of Waterloo's server. */
+    { id: 'polk', label: 'Polk County, IA',
+      service: 'https://gis4.polkcountyiowa.gov/server/rest/services/Public/Polk_County_Parcels/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 14,
+      bbox: [41.48, -93.82, 41.87, -93.32], test: [41.5865, -93.6252] },
+    { id: 'linn', label: 'Linn County, IA',
+      service: 'https://gis.linncountyiowa.gov/ags/rest/services/Planning/mapBSAPermitting/MapServer',
+      lineLayer: 6, restyle: true, minZoom: 16,
+      bbox: [41.85, -91.84, 42.30, -91.36], test: [41.9769, -91.6664],
+      lookup: { layer: 6, idField: 'GPN', owner: 'OwnerDeed', county: 'Linn County' } },
+    { id: 'johnsonia', label: 'Johnson County, IA',
+      service: 'https://gis.johnsoncountyiowa.gov/arcgis/rest/services/LandRecords/Land_Records/MapServer',
+      lineLayer: 9, restyle: true, minZoom: 15,
+      bbox: [41.42, -91.85, 41.87, -91.35], test: [41.6616, -91.5299],
+      lookup: { layer: 9, idField: 'PPN', owner: 'MailingName', county: 'Johnson County' } },
+    { id: 'blackhawk', label: 'Black Hawk County, IA',
+      service: 'https://maps.cityofwaterlooiowa.com/arcgisserver/rest/services/LandRecords/TaxParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [42.29, -92.56, 42.65, -92.05], test: [42.4912, -92.3428],
+      lookup: { layer: 0, idField: 'PIN', owner: 'deedholder', county: 'Black Hawk County' } },
+    /* Kentucky, verified 2026-10-03: Lexington-Fayette (its own orange style,
+       repainted), northern Kentucky (Kenton, Boone) and Bowling Green (Warren).
+       No statewide layer exists. */
+    { id: 'fayette', label: 'Fayette County (Lexington), KY',
+      service: 'https://maps.lexingtonky.gov/lfucggis/rest/services/property/MapServer',
+      lineLayer: 1, restyle: false, minZoom: 15,
+      bbox: [37.84, -84.67, 38.22, -84.28], test: [38.0406, -84.5037],
+      lookup: { layer: 1, idField: 'PVANUM', owner: null, county: 'Fayette County' } },
+    { id: 'kenton', label: 'Kenton County, KY',
+      service: 'https://maps.linkgis.org/server/rest/services/Parcel_QueryOnly/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 15,
+      bbox: [38.78, -84.63, 39.10, -84.41], test: [39.0837, -84.5104],
+      lookup: { layer: 1, idField: 'PIDN', owner: 'OWNER', county: 'Kenton County' } },
+    { id: 'booneky', label: 'Boone County, KY',
+      service: 'https://secure.boonecountygis.com/server/rest/services/ParcelLayers/MapServer',
+      lineLayer: 32, restyle: true, minZoom: 15,
+      bbox: [38.77, -84.90, 39.15, -84.59], test: [38.9981, -84.6270],
+      lookup: { layer: 32, idField: 'PIDN', owner: 'PRCLOWNR1', county: 'Boone County' } },
+    { id: 'warren', label: 'Warren County (Bowling Green), KY',
+      service: 'https://webgis.bgky.org/server/rest/services/WARCO/Parcel_Reference/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [36.77, -86.69, 37.20, -86.11], test: [36.9693, -86.4812],
+      lookup: { layer: 0, idField: 'PVA_PARCEL', owner: null, county: 'Warren County' } },
+    /* Alabama, verified 2026-10-03. Madison's layer is on Huntsville's server and
+       Mobile's on the City of Mobile's, each county-wide. Shelby's ISV service
+       is skipped: its description limits it to one application. */
+    { id: 'jeffersonal', label: 'Jefferson County, AL',
+      service: 'https://jccgis.jccal.org/server/rest/services/Basemap/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [33.24, -87.35, 33.85, -86.51], test: [33.5202, -86.8097],
+      lookup: { layer: 0, idField: 'PARCELID', owner: 'OWNERNAME', county: 'Jefferson County' } },
+    { id: 'madisonal', label: 'Madison County, AL',
+      service: 'https://maps.huntsvilleal.gov/server/rest/services/Boundaries/MadisonCountyParcels/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 15,
+      bbox: [34.47, -86.80, 35.00, -86.25], test: [34.7297, -86.5861],
+      lookup: { layer: 1, idField: 'PIN', owner: null, county: 'Madison County' } },
+    { id: 'montgomeryal', label: 'Montgomery County, AL',
+      service: 'https://gis.montgomeryal.gov/server/rest/services/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [31.96, -86.50, 32.51, -85.91], test: [32.3778, -86.3077],
+      lookup: { layer: 0, idField: 'ParcelNo', owner: 'OwnerName', county: 'Montgomery County' } },
+    { id: 'shelbyal', label: 'Shelby County, AL',
+      service: 'https://maps.shelbyal.com/gisserver/rest/services/LegacyServices/Cadastral_Current/MapServer',
+      lineLayer: 91, restyle: true, minZoom: 15,
+      bbox: [33.01, -87.03, 33.55, -86.33], test: [33.2443, -86.8165],
+      lookup: { layer: 91, idField: 'Assess_Num', owner: null, county: 'Shelby County' } },
+    { id: 'mobile', label: 'Mobile County, AL',
+      service: 'https://maps.cityofmobile.org/arcgis/rest/services/EG_Data_MS/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 15,
+      bbox: [30.20, -88.44, 31.18, -87.92], test: [30.6949, -88.0400],
+      lookup: { layer: 1, idField: 'parcel', owner: 'name', county: 'Mobile County' } },
+    /* Idaho, county layers only (the IDWR statewide layer's licence keeps its
+       data inside IDWR), verified 2026-10-03. Kootenai's is the county
+       assessor's parcels on Post Falls's server. Ada publishes only a
+       development host whose terms say not to redistribute, so it is not here. */
+    { id: 'canyon', label: 'Canyon County, ID',
+      service: 'https://maps.canyoncounty.id.gov/arcgisserver/rest/services/Assessor/CCPublicTaxparcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [43.28, -117.04, 43.89, -116.46], test: [43.5805, -116.5628],
+      lookup: { layer: 0, idField: 'ACCOUNT', owner: null, county: 'Canyon County' } },
+    { id: 'bonneville', label: 'Bonneville County, ID',
+      service: 'https://gis.bonnevillecountyidaho.gov/hosted/rest/services/Parcel_Viewer/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [43.01, -112.53, 43.63, -111.03], test: [43.4914, -112.0345],
+      lookup: { layer: 0, idField: 'bonnevilleprddb.dataowner.Parcel.pin', owner: 'bonnevilleprddb.sde.PINS_1.owner', county: 'Bonneville County' } },
+    { id: 'kootenai', label: 'Kootenai County, ID',
+      service: 'https://gis.postfalls.gov/server/rest/services/AssessorParcels/MapServer',
+      lineLayer: 25, restyle: true, minZoom: 15,
+      bbox: [47.36, -117.06, 48.00, -116.31], test: [47.6787, -116.7807],
+      lookup: { layer: 25, idField: 'PIN', owner: 'NAME', county: 'Kootenai County' } },
+    /* The Dakotas, verified 2026-10-03. Cass is county-wide on Fargo's server;
+       Burleigh's layer is the Bismarck-Mandan dispatch area (Burleigh and
+       Morton). Sioux Falls is asked before Minnehaha, whose layer holds only the
+       county outside the city. */
+    { id: 'cass', label: 'Cass County, ND',
+      service: 'https://gis.cityoffargo.com/arcgis/rest/services/Basemap/CassCountyParcelsWGS84/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [46.60, -97.74, 47.27, -96.73], test: [46.8772, -96.7895],
+      lookup: { layer: 0, idField: 'PIN', owner: 'Name', county: 'Cass County' } },
+    { id: 'burleigh', label: 'Burleigh & Morton Counties (Bismarck-Mandan), ND',
+      service: 'https://bisgis.bismarcknd.gov/server/rest/services/CenCom_Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [46.27, -102.12, 47.33, -100.07], test: [46.8080, -100.7838],
+      lookup: { layer: 0, idField: 'PARCEL_ID', owner: 'OWNER', county: 'Burleigh County' } },
+    { id: 'siouxfalls', label: 'City of Sioux Falls, SD',
+      service: 'https://gis.siouxfalls.gov/arcgis/rest/services/Data/Property/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 17,
+      bbox: [43.46, -96.88, 43.65, -96.59], test: [43.5463, -96.7307],
+      lookup: { layer: 1, idField: 'TAG', owner: 'OWNNAME1', county: 'Minnehaha County' } },
+    { id: 'minnehaha', label: 'Minnehaha County (outside Sioux Falls), SD',
+      service: 'https://gis.minnehahacounty.gov/minnemap/rest/services/Parcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [43.48, -97.14, 43.87, -96.43], test: [43.8265, -96.7116],
+      lookup: { layer: 0, idField: 'TAG', owner: 'MRTNM1', county: 'Minnehaha County' } },
+    { id: 'pennington', label: 'Pennington County, SD',
+      service: 'https://gis.rcgov.org/server/rest/services/AGOL/AGOL/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [43.63, -104.10, 44.52, -101.97], test: [44.0808, -103.2302],
+      lookup: { layer: 0, idField: 'PIN', owner: 'GranteeLastName', county: 'Pennington County' } },
+    /* Wyoming, verified 2026-10-03. Laramie's licence reads 'for display purposes
+       only'; its layer returns no geometry, so it carries no lookup. Natrona's
+       is the regional GIS's ownership boundaries (approximate). */
+    { id: 'laramie', label: 'Laramie County, WY',
+      service: 'https://maps.laramiecounty.com/arcgis/rest/services/Planning/Laramie_County_GIS_Overlay/MapServer',
+      lineLayer: 19, restyle: true, minZoom: 15,
+      bbox: [40.99, -105.29, 41.66, -104.04], test: [41.1400, -104.8202] },
+    { id: 'natrona', label: 'Natrona County, WY',
+      service: 'https://maps.casperwy.gov/nrgisc/rest/services/Matix/CAMA_Property_Ownership/MapServer',
+      lineLayer: 2, restyle: true, minZoom: 15,
+      bbox: [42.42, -107.55, 43.51, -106.05], test: [42.8507, -106.3244],
+      lookup: { layer: 2, idField: 'GEOCODE', owner: 'OWN1', county: 'Natrona County' } },
+    { id: 'claytonga', label: 'Clayton County, GA',
+      service: 'https://gis.claytoncountyga.gov/server/rest/services/TaxAssessor/TylerTaxParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [33.35, -84.46, 33.65, -84.24], test: [33.5217, -84.3538],
+      lookup: { layer: 0, idField: 'PARCELID', owner: 'OWNERNME', county: 'Clayton County' } },
+    { id: 'cherokeega', label: 'Cherokee County, GA',
+      service: 'https://gis.cherokeecountyga.gov/arcgis/rest/services/MainLayersOnline/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 15,
+      bbox: [34.07, -84.67, 34.42, -84.25], test: [34.2366, -84.4907],
+      lookup: { layer: 1, idField: 'PIN', owner: 'OWNER', county: 'Cherokee County' } },
+    { id: 'henryga', label: 'Henry County, GA',
+      service: 'https://arcgis.co.henry.ga.us/server/rest/services/Parcels/MapServer',
+      lineLayer: 12, restyle: true, minZoom: 16,
+      bbox: [33.29, -84.36, 33.65, -83.92], test: [33.4473, -84.1468],
+      lookup: { layer: 12, idField: 'PARCEL_NO', owner: null, county: 'Henry County' } }
   ];
 
   /* The server asks these for the parcel under a point, in this order:
      tightest box first, Cook last (its box holds DuPage's). */
   var LOOKUP_ORDER = ['dupage', 'lake', 'peoria', 'kane', 'sangamon', 'mclean', 'stclair', 'macon', 'tazewell', 'grundy', 'lasalle', 'madison', 'adams', 'coles', 'knox', 'lee', 'boone', 'winnebago',
-    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'pa', 'cook'];
+    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'champaign', 'kendall', 'vermilion', 'moline', 'wayne', 'kent', 'macomb', 'ottawa', 'muskegon', 'jacksonmi', 'nassau', 'monroeny', 'dutchess', 'saratoga', 'schenectady', 'niagara', 'jeffersonny', 'chemung', 'clintonny', 'cattaraugus', 'washingtonny', 'delawareny', 'franklinny', 'essexny', 'schoharie', 'yates', 'dc', 'pr', 'pinal', 'yavapai', 'coconino', 'mohave', 'yuma', 'bernalillo', 'santafe', 'donaana', 'sandoval', 'utahco', 'davis', 'weber', 'washingtonut', 'hamiltontn', 'allen', 'vanderburgh', 'fulton', 'dekalbga', 'cobb', 'chathamga', 'claytonga', 'cherokeega', 'henryga', 'stlcity', 'greenemo', 'boonemo', 'wyandotte', 'sedgwickks', 'shawneeks', 'charleston', 'berkeleysc', 'horry', 'lexingtonsc', 'spartanburg', 'greenvillesc', 'fremontco', 'blueearth', 'kandiyohi', 'beltrami', 'tulsa', 'edmond', 'norman', 'orleans', 'jeffparish', 'lafayette', 'linn', 'johnsonia', 'blackhawk', 'fayette', 'kenton', 'booneky', 'warren', 'jeffersonal', 'madisonal', 'montgomeryal', 'shelbyal', 'mobile', 'canyon', 'bonneville', 'kootenai', 'cass', 'burleigh', 'siouxfalls', 'minnehaha', 'pennington', 'natrona', 'pa', 'cook'];
 
   /* One line style for every layer that takes one: a warm yellow that reads
      on satellite and on the light basemap, never an editor colour. */
@@ -521,16 +1124,19 @@
     return out;
   }
 
-  /* dynamicLayers: the source's own line layer, outline only, labels off. */
-  function lineStyle(layerId) {
+  /* dynamicLayers: the source's own layer, labels off, in the one line
+     style: a polygon layer as an outline with no fill, a line layer
+     (`lines: true`, a parcel fabric's boundaries such as Kankakee's) as the
+     line itself, because a fill symbol on a line layer is ignored and the
+     county's own colour comes back. */
+  function lineStyle(layerId, lines) {
+    var line = { type: 'esriSLS', style: 'esriSLSSolid', color: LINE_RGBA, width: LINE_WIDTH };
     return JSON.stringify([{
       id: layerId,
       source: { type: 'mapLayer', mapLayerId: layerId },
       drawingInfo: {
         showLabels: false,
-        renderer: { type: 'simple', symbol: {
-          type: 'esriSFS', style: 'esriSFSNull',
-          outline: { type: 'esriSLS', style: 'esriSLSSolid', color: LINE_RGBA, width: LINE_WIDTH } } }
+        renderer: { type: 'simple', symbol: lines ? line : { type: 'esriSFS', style: 'esriSFSNull', outline: line } }
       }
     }]);
   }
@@ -548,7 +1154,7 @@
     if (!overlaps(src.bbox, tileBox(x, y, z))) return null;
     var bb = tileBbox(x, y, z);
     var which = src.restyle
-      ? 'dynamicLayers=' + encodeURIComponent(lineStyle(src.lineLayer))
+      ? 'dynamicLayers=' + encodeURIComponent(lineStyle(src.lineLayer, src.lines))
       : 'layers=' + encodeURIComponent('show:' + src.lineLayer);
     return src.service + '/export'
       + '?bbox=' + bb.join('%2C')

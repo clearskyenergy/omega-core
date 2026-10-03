@@ -1381,6 +1381,12 @@ tenant. Treat it that way.
   subscription; the token never reaches a browser, a monthly HMAC ticket
   does, so Vercel's edge caches one copy of a tile for everyone;
   `scripts/tests/tparceltiles.js`). Google's Maps API has no parcel layer.
+  Coverage is built state by state in ONE order,
+  `scripts/_lib/parcel-priority.js` (ACEEE's 2025 scorecard; Texas, Arizona
+  and Puerto Rico pulled up as battery markets); `node
+  scripts/parcel-coverage.js --live` says what draws and names the next
+  state. A layer in its county's own style is repainted yellow in the
+  editor; a layer whose terms ask for permission is never added without it.
 - `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
   Chromium, signed in, with the Firebase compat SDK replaced by
   `scripts/_lib/firebase-double.js` and four tenants from

@@ -2853,3 +2853,72 @@ and "these should have their own tab in the panel finance".
   image. Seventy-four ImageMapTypes would have put a tile slot per layer
   per tile on the map. `OmegaParcels.opacity()` reaches the live tiles.
 
+
+## Parcel lines state by state — October 3, 2026
+
+Tommy: "go state by state in the rank of states with good programs for
+battery energy storage and higher ranked on energy efficiency … we need to
+map out the country eventually but should be constantly improving our
+tools functionality".
+
+- **The order** is `scripts/_lib/parcel-priority.js`: ACEEE's 2025 State
+  Energy Efficiency Scorecard, ties kept, with Texas, Arizona and Puerto
+  Rico pulled up behind its top 25 as battery markets. Each state carries
+  two to four sample cities. `node scripts/parcel-coverage.js --live` asks
+  every layer whose box holds each city for its tile and names the next
+  state; `scripts/_lib/parcel-draw.js` is the one tile test it shares with
+  `check-parcel-sources.js`. Baseline 2026-10-03: 27 of 52 mapped, 8
+  partial, 17 with nothing; after this round 37, 6 and 9.
+- **70 new layers** (144 in all, 110 with a point lookup), each drawn at
+  its test point and answering its lookup on 2026-10-03: sixteen New York
+  counties the state layer leaves out (Nassau, Monroe, Dutchess, Saratoga,
+  …), the District of Columbia, Connecticut and Puerto Rico statewide;
+  Michigan (Wayne with Detroit, Kent, Macomb, Ottawa, Muskegon, Jackson);
+  five more Illinois layers (Champaign, Kankakee, Kendall's two townships,
+  Vermilion, Moline); New Mexico (Bernalillo, Santa Fe, Doña Ana,
+  Sandoval); Utah (Utah County, Davis, Weber, Washington); Tennessee
+  statewide (94 of 95 counties) and Hamilton; five Arizona counties; Allen
+  and Vanderburgh, Indiana; metro Atlanta and Savannah; St. Louis City,
+  Greene and Boone, Missouri; Wyandotte, Sedgwick and Shawnee, Kansas; six
+  South Carolina layers; and gap-fillers inside Colorado's and Minnesota's
+  partial state layers (Fremont; Blue Earth, Kandiyohi, Beltrami).
+- **Held back, for a decision that is not ours:** Forsyth County, GA (its
+  terms forbid "any sale of this map or information" without written
+  permission), Montrose County, CO ("use only with permission"), and
+  Overland Park, KS (Johnson County AIMS's data, which AIMS sells to
+  partners). Gwinnett, GA is left out on looks: its only public layer
+  prints a PIN and a house number on every lot.
+- **Line layers** (`lines: true`): Kankakee publishes its parcel fabric's
+  boundary lines; a fill symbol on a line layer is ignored, so it is drawn
+  with a line symbol in the one yellow.
+- **Own-style layers repainted.** A layer that refuses dynamicLayers was
+  drawn in its county's own colours: black, grey or cyan lines that vanish
+  on satellite (Connecticut's 1 px grey). The editor now asks for those
+  pictures in CORS mode, repaints every drawn pixel the Parcel Lines yellow
+  on a canvas, alpha doubled, and draws it again a pixel right and down to
+  match the 1.5 px of the restyled layers. Every such server allowed it on
+  2026-10-03; one that stops is asked again plainly and shown as drawn.
+  Checked in Chromium on the live Connecticut server at Hartford.
+- **One picture per tile per URL.** Three New York counties share one
+  regional layer (DANC); a tile touching two of their boxes now asks once.
+- **`browserOnly`** (Tennessee's state layer, TDEC): its server refuses
+  every scripted client and answers browsers. The map draws it, the checks
+  ask it through curl as a browser, and it carries no point lookup.
+- **The banner names the county that answered** ("Peoria County", not
+  "Peoria County (peoria)"; not Tazewell's box at 107 Cass St). Only a
+  Regrid record is named as Regrid's.
+- **The rest of the list, the same day** (30 more; 174 layers, 137 with a
+  point lookup): Oklahoma (Tulsa County; Edmond and Norman, each its city
+  alone), Louisiana (Orleans, Jefferson, East Baton Rouge, Lafayette),
+  Iowa (Polk, Linn, Johnson, Black Hawk), Kentucky (Lexington-Fayette,
+  Kenton, Boone, Warren), Alabama (Jefferson, Madison, Montgomery, Shelby,
+  Mobile), Idaho by county (Canyon, Bonneville, Kootenai), the Dakotas
+  (Cass, Bismarck-Mandan, Sioux Falls, Minnehaha, Pennington) and Wyoming
+  (Laramie, Natrona). Left out: Caddo Parish (a 2013 copy behind a third
+  party's ArcGIS Online proxy), Ada County (a development host whose terms
+  say not to redistribute), Anchorage and statewide Oklahoma, North Dakota
+  and Wyoming (FeatureServers or a WMS only). Live coverage: 43 of 52
+  mapped, 8 partial (McHenry, Ann Arbor and Lansing, Knoxville, Boise,
+  Oklahoma City, Columbia SC, Overland Park), Alaska with nothing. What is
+  left sits behind tokens, bot challenges or FeatureServers: Regrid's relay
+  is the way to it.

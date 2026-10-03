@@ -31297,7 +31297,9 @@ function _pcDescribe(p){
   if(p.apn) bits.push('APN '+p.apn);
   if(p.acres!=null) bits.push(p.acres+' ac');
   if(p.county) bits.push(p.county);
-  return (bits.join(' · ')||'a parcel record')+(p.source?' ('+p.source+')':'');
+  /* A county's own record is named by its county; only Regrid is named as
+     the source (the key, 'peoria' or 'cook', meant nothing to anybody). */
+  return (bits.join(' · ')||'a parcel record')+(p.source==='regrid'?' (Regrid)':'');
 }
 
 function _pcOutline(p){
@@ -31347,8 +31349,12 @@ function _pcRegrid(){
    satellite. The tile comes from this origin, so the canvas is not tainted
    and every line pixel is repainted in PC_INK; if anything refuses, the
    tile stays as Regrid drew it. */
+/* Every drawn pixel in the one Parcel Lines yellow, its alpha doubled so a
+   1 px anti-aliased line reads on satellite. */
+function _pcInk(px){
+  for(var i=0;i<px.length;i+=4){ if(px[i+3]){ px[i]=255; px[i+1]=214; px[i+2]=10; px[i+3]=Math.min(255, px[i+3]*2); } }
+}
 function _pcRegridLayer(){
-  var ink=[255,214,10];
   return {
     name:'Parcel lines \u2014 Regrid (every county)',
     tileSize:new google.maps.Size(256,256), minZoom:_pcRg.minZoom, maxZoom:22,
@@ -31362,7 +31368,7 @@ function _pcRegridLayer(){
         try{
           var g=cv.getContext('2d'); g.drawImage(img, 0, 0, 256, 256);
           var d=g.getImageData(0, 0, 256, 256), px=d.data;
-          for(var i=0;i<px.length;i+=4){ if(px[i+3]){ px[i]=ink[0]; px[i+1]=ink[1]; px[i+2]=ink[2]; px[i+3]=Math.min(255, px[i+3]*2); } }
+          _pcInk(px);
           g.putImageData(d, 0, 0);
         }catch(e){}
       };
@@ -31387,27 +31393,60 @@ function _pcClearLayers(m){
    one; a layer that refuses a tile hides its <img> rather than showing a
    broken one. */
 function _pcCountyLayer(S){
-  var tiles=[], minZ=22;
+  var tiles=[], minZ=22, POS='position:absolute;left:0;top:0;width:256px;height:256px;border:0';
   S.SOURCES.forEach(function(src){ minZ=Math.min(minZ, src.minZoom||14); });
-  function urls(c, z){
-    var out=[];
-    S.SOURCES.forEach(function(src){ var u=S.tileUrl(src, c.x, c.y, z); if(u) out.push(u); });
+  /* The pictures one tile asks for: each layer whose box it touches, once
+     (three New York counties share one regional layer); `own` when the
+     layer is drawn in its county's own style. */
+  function parts(c, z){
+    var out=[], seen={};
+    S.SOURCES.forEach(function(src){
+      var u=S.tileUrl(src, c.x, c.y, z);
+      if(u && !seen[u]){ seen[u]=1; out.push({ u:u, own:!src.restyle }); }
+    });
     return out;
+  }
+  /* A layer that will not take our style (black, grey or cyan lines, which
+     vanish on satellite) is repainted in the one yellow on a canvas; its
+     server lets this origin read the picture (every one did on 2026-10-03).
+     A server that stops letting it is shown as the county drew it, and a
+     picture that fails both ways hides rather than showing a broken image. */
+  function picture(doc, d, p){
+    var img=doc.createElement('img');
+    img.alt=''; img.style.cssText=POS;
+    img.onerror=function(){ img.style.display='none'; };
+    if(p.own){
+      img.crossOrigin='anonymous';
+      img.onload=function(){
+        try{
+          var cv=doc.createElement('canvas');
+          cv.width=256; cv.height=256; cv.style.cssText=POS;
+          var g=cv.getContext('2d'); g.drawImage(img, 0, 0, 256, 256);
+          var data=g.getImageData(0, 0, 256, 256); _pcInk(data.data); g.putImageData(data, 0, 0);
+          /* a county's own line is often 1 px; drawn again a pixel right
+             and down it matches the 1.5 px of the layers drawn in our style */
+          g.drawImage(cv, 1, 0); g.drawImage(cv, 0, 1);
+          d.replaceChild(cv, img);
+        }catch(e){}
+      };
+      img.onerror=function(){
+        img.onload=null; img.removeAttribute('crossorigin');
+        img.onerror=function(){ img.style.display='none'; };
+        img.src=p.u+'&plain=1';
+      };
+    }
+    img.src=p.u;
+    d.appendChild(img);
   }
   return {
     name:'Parcel lines \u2014 public county and state layers',
     tileSize:new google.maps.Size(256,256), minZoom:minZ, maxZoom:22,
-    urls:urls,
+    parts:parts,
+    urls:function(c, z){ return parts(c, z).map(function(p){ return p.u; }); },
     getTile:function(c, z, doc){
       var d=doc.createElement('div');
       d.style.width='256px'; d.style.height='256px'; d.style.position='relative'; d.style.opacity=String(_pc.opacity);
-      urls(c, z).forEach(function(u){
-        var img=doc.createElement('img');
-        img.alt=''; img.style.cssText='position:absolute;left:0;top:0;width:256px;height:256px;border:0';
-        img.onerror=function(){ img.style.display='none'; };
-        img.src=u;
-        d.appendChild(img);
-      });
+      parts(c, z).forEach(function(p){ picture(doc, d, p); });
       tiles.push(d);
       return d;
     },
@@ -31470,17 +31509,26 @@ function _pcLook(loud){
   var lat=c.lat(), lng=c.lng(), S=_pcSources();
   var covered=_pc.regridOn ? [{ label:'Regrid (every county)', minZoom:_pcRg.minZoom }]
              : S ? S.at(lat, lng) : [];
-  var minZ=99;
-  covered.forEach(function(s){ minZ=Math.min(minZ, s.minZoom||14); });
-  var cov=(!S && !_pc.regridOn) ? 'The public parcel list did not load (omega-parcel-sources.js)'
-    : covered.length ? 'Lines from '+covered.map(function(s){ return s.label; }).join(', ')
-                       +(z<minZ ? ' — zoom in to see them' : '')
-    : 'No public parcel layer covers this area';
+  function covOf(list){
+    if(!S && !_pc.regridOn) return 'The public parcel list did not load (omega-parcel-sources.js)';
+    if(!list.length) return 'No public parcel layer covers this area';
+    var minZ=99;
+    list.forEach(function(s){ minZ=Math.min(minZ, s.minZoom||14); });
+    return 'Lines from '+list.map(function(s){ return s.label; }).join(', ')+(z<minZ ? ' — zoom in to see them' : '');
+  }
+  var cov=covOf(covered);
+  /* The boxes overlap (Peoria's and Tazewell's meet across the river, Cook's
+     holds DuPage's), so a centre that a county's own record answered is
+     said to be drawn by that county alone. */
+  function covFor(p){
+    if(p && !_pc.regridOn) for(var i=0;i<covered.length;i++){ if(covered[i].id===p.source) return covOf([covered[i]]); }
+    return cov;
+  }
   var tail=' Reference only — not a survey.';
 
   if(z<14){ _pcSay(cov+'. Zoom in to the site to look up its parcel.', loud); return; }
   var have=_pcFoundAt(lat, lng);
-  if(have){ _pcSay(cov+'. Parcel at the centre: '+_pcDescribe(have)+'.'+tail, loud); return; }
+  if(have){ _pcSay(covFor(have)+'. Parcel at the centre: '+_pcDescribe(have)+'.'+tail, loud); return; }
   /* Following the map: where public lines already draw, they show the
      neighbours; a lookup is spent only where nothing else would. */
   if(!loud && covered.length && _pc.found.length){ _pcSay(cov+'.'+tail, loud); return; }
@@ -31497,7 +31545,7 @@ function _pcLook(loud){
   AP.parcel(lat, lng).then(function(p){
     if(p && p.ring && p.ring.length>=3 && !_pcFoundAt(lat, lng)){ _pc.found.push(p); _pcOutline(p); }
     if(!_pc.on) return;
-    _pcSay(p ? cov+'. Parcel at the centre: '+_pcDescribe(p)+'.'+tail
+    _pcSay(p ? covFor(p)+'. Parcel at the centre: '+_pcDescribe(p)+'.'+tail
              : cov+'. No parcel record at the map centre.', loud);
   }, function(e){
     delete _pc.asked[k];
