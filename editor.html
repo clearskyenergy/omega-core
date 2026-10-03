@@ -31234,9 +31234,11 @@ window.OmegaUI={
  *
  *   1. PUBLIC LINES. Every county and state layer in
  *      omega-parcel-sources.js (the ONE list; api/parcel.js reads the same
- *      counties) as an ImageMapType: the county draws a picture of each
- *      tile and Google owns tiling and panning, so there is nothing to
- *      anchor or reproject. Free, no key, and only where a layer exists.
+ *      counties), as ONE overlay whose tiles ask only the layers whose box
+ *      they touch: the county or state draws a picture of each tile and
+ *      Google owns tiling and panning, so there is nothing to anchor or
+ *      reproject, and seventy-odd layers cost one overlay, not seventy.
+ *      Free, no key, and only where a layer exists.
  *   2. THE PARCEL AT THE MAP CENTRE. /api/parcel through
  *      OmegaAutopilot.parcel (the call Site Data Layers › Parcels makes),
  *      drawn as a native outline and named by APN and acres: Regrid where
@@ -31380,21 +31382,48 @@ function _pcClearLayers(m){
   _pc.layers=[]; _pc.regridOn=false;
 }
 
+/* One overlay for every public layer. A tile holds an <img> for each
+   layer whose box it touches (S.tileUrl is null everywhere else), usually
+   one; a layer that refuses a tile hides its <img> rather than showing a
+   broken one. */
+function _pcCountyLayer(S){
+  var tiles=[], minZ=22;
+  S.SOURCES.forEach(function(src){ minZ=Math.min(minZ, src.minZoom||14); });
+  function urls(c, z){
+    var out=[];
+    S.SOURCES.forEach(function(src){ var u=S.tileUrl(src, c.x, c.y, z); if(u) out.push(u); });
+    return out;
+  }
+  return {
+    name:'Parcel lines \u2014 public county and state layers',
+    tileSize:new google.maps.Size(256,256), minZoom:minZ, maxZoom:22,
+    urls:urls,
+    getTile:function(c, z, doc){
+      var d=doc.createElement('div');
+      d.style.width='256px'; d.style.height='256px'; d.style.position='relative'; d.style.opacity=String(_pc.opacity);
+      urls(c, z).forEach(function(u){
+        var img=doc.createElement('img');
+        img.alt=''; img.style.cssText='position:absolute;left:0;top:0;width:256px;height:256px;border:0';
+        img.onerror=function(){ img.style.display='none'; };
+        img.src=u;
+        d.appendChild(img);
+      });
+      tiles.push(d);
+      return d;
+    },
+    releaseTile:function(d){ var i=tiles.indexOf(d); if(i>=0) tiles.splice(i, 1); },
+    setOpacity:function(v){ tiles.forEach(function(d){ d.style.opacity=String(v); }); }
+  };
+}
+
 function _pcAddCounty(m){
   var S=_pcSources();
   if(!S) return;
-  S.SOURCES.forEach(function(src){
-    try{
-      var layer=new google.maps.ImageMapType({
-        name:'Parcel lines \u2014 '+src.label,
-        tileSize:new google.maps.Size(256,256),
-        minZoom:src.minZoom||14, maxZoom:22, opacity:_pc.opacity,
-        getTileUrl:function(c, z){ return S.tileUrl(src, c.x, c.y, z); }
-      });
-      m.overlayMapTypes.push(layer);
-      _pc.layers.push(layer);
-    }catch(e){ if(window.console) console.warn('[parcels] '+src.id+':', e&&e.message); }
-  });
+  try{
+    var layer=_pcCountyLayer(S);
+    m.overlayMapTypes.push(layer);
+    _pc.layers.push(layer);
+  }catch(e){ if(window.console) console.warn('[parcels] public layers:', e&&e.message); }
 }
 
 function _pcAddRegrid(m){
@@ -31538,7 +31567,7 @@ window.OmegaParcels={
     return _pc.opacity;
   },
   status:function(){
-    var o={ on:_pc.on, liveMap:!!_pcMap(), drawing:_pc.regridOn ? 'Regrid (every county)' : _pc.layers.length+' county/state layers',
+    var o={ on:_pc.on, liveMap:!!_pcMap(), drawing:_pc.regridOn ? 'Regrid (every county)' : _pc.layers.length ? (_pcSources()||{SOURCES:[]}).SOURCES.length+' county/state layers' : 'nothing',
             regrid:_pcRg.ticket ? 'on' : (_pcRg.reason || 'not asked'), parcelsFound:_pc.found.length,
             lookupsUsed:_pc.lookups+' of '+PC_LOOKUPS, said:_pc.last||'(nothing yet)' };
     console.table?console.table(o):console.log(o);

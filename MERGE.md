@@ -2808,4 +2808,26 @@ and "these should have their own tab in the panel finance".
   legacy tiers (render-legacy-gates caught it).
 - `render-admin-account.js`: the legacy fixture's dates follow the run (a
   fixed 2026-10-17 due date fell inside "due soon" on 2026-10-03).
+- **Seventy-four public layers.** Twenty-two statewide services (WV, TX, AR,
+  HI, VA, MA, MD, RI, VT, NH, ME, OH, WI, MN, NE, FL, CO, MT, WA, NV,
+  Mississippi in two halves, Oregon's county taxlots) and twenty-six county
+  and metro ones (California statewide; Los Angeles, San Diego, Orange,
+  Riverside, Sacramento, Harris, Tarrant, Travis, Maricopa, Pima, Clark,
+  Franklin OH, Oakland, Pennsylvania statewide, Allegheny, Hennepin, Jackson
+  MO, St. Louis County, Marion IN, Davidson, Jefferson KY, Salt Lake,
+  Multnomah, Hillsborough, Miami-Dade) join the list, each re-checked by a
+  tile at its own `test` point (74 of 74 drew on 2026-10-03; Mississippi's
+  server takes 15-30 s a tile, so the check now waits 45 s and prints the
+  time). Twenty-three of them add a point lookup to `api/parcel.js`
+  (43 in all); Pennsylvania's statewide lookup comes after every county
+  inside it, Cook still last. Left out: Idaho's statewide layer (its
+  licence keeps the data inside IDWR), and Dallas, Hamilton OH, King WA
+  and Kankakee, which did not answer from here on the day; states that
+  publish parcels only as a FeatureServer (no picture to draw) are not
+  in it either. Regrid's relay is still what draws the rest.
+- **One overlay, not seventy-four.** The editor draws every public layer
+  through ONE custom map type: a tile holds an `<img>` for each layer whose
+  box it touches (usually one), and a layer that refuses a tile hides its
+  image. Seventy-four ImageMapTypes would have put a tile slot per layer
+  per tile on the map. `OmegaParcels.opacity()` reaches the live tiles.
 
