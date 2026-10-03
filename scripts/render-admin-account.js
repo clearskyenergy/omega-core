@@ -35,11 +35,11 @@
      npm run check:pages
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-/* sixty days out, so 'current' never turns 'due soon' as the calendar moves (it did on 2026-10-03) */
-var LEGACY_DUE = new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10);
 process.env.PACKAGING_PROVIDER = 'quickbooks';
 var http = require('http'), fs = require('fs'), path = require('path');
 var ROOT = path.join(__dirname, '..');
+function isoDay(days) { return new Date(Date.now() + days * 86400000).toISOString().slice(0, 10); }
+var LEGACY_DUE = isoDay(30), LEGACY_PAID = isoDay(-14);
 var PW = process.env.PLAYWRIGHT || (function () { try { return require.resolve('playwright'); } catch (e) { return '/opt/node22/lib/node_modules/playwright'; } })();
 var chromium; try { chromium = require(PW).chromium; } catch (e) { console.log('render-admin-account: Playwright not found (' + PW + '); skipped'); process.exit(0); }
 var SANDBOX_CHROME = '/opt/pw-browsers/chromium-1194/chrome-linux/chrome';
@@ -96,7 +96,9 @@ async function seed() {
   sdb.seed('projects/p1', { orgId: 'pkg.example', name: 'Site A', createdAt: Date.now() });
   /* the legacy tenant: a Standard tier billed outside the engine */
   sdb.seed('omega_orgs/legacy.example', { name: 'Legacy Co', status: 'active', vertical: 'developer', domains: ['legacy.clearskyomega.com'], createdAt: Date.now() - 86400000 * 200 });
-  sdb.seed('omega_orgs/legacy.example/billing/current', { tier: 'standard', addons: ['compute'], amountDue: 0, subscriptionDue: LEGACY_DUE, lastPaidAt: '2026-09-17', paymentProvider: 'stripe', stripeCustomerId: 'cus_fixture' });
+  /* Dates relative to the run: a fixed due date read "current" until it came
+     within _standing's fourteen days and then failed every run (2026-10-03). */
+  sdb.seed('omega_orgs/legacy.example/billing/current', { tier: 'standard', addons: ['compute'], amountDue: 0, subscriptionDue: LEGACY_DUE, lastPaidAt: LEGACY_PAID, paymentProvider: 'stripe', stripeCustomerId: 'cus_fixture' });
   sdb.seed('omega_orgs/legacy.example/members/u-lee', { email: 'lee@legacy.example', role: 'owner', status: 'active', name: 'Lee Legacy' });
   sdb.seed('team_members/legacy.example__lee@legacy.example', { orgId: 'legacy.example', email: 'lee@legacy.example', lastSeen: Date.now() - 7200000 });
   /* the signup in progress: an account made on /start.html an hour ago, building its system, no record yet */
