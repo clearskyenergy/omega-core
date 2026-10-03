@@ -2112,10 +2112,10 @@ window.onerror = function(msg, src, line, col, err) {
             <div class="rb-fly-head">Compute</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',openDcClusterDialog)"><span class="fi-ico">▦</span> Data-Ctr Cluster</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_ztmm1')})" title="ZTMM Container Data Center — IT POD + ELE POD, 6 × 150 kW liquid-cooled racks, external 2 × 1200 kW air-cooled chillers. From the vendor's Layout-01 drawing."><span class="fi-ico">▦</span> ZTMM 1 MW Block <span class="fi-sub">40 × 25 ft</span></button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_mdc1')})"><span class="fi-ico">▦</span> 1 MW MDC Pad <span class="fi-sub">40 × 10 ft · nominal</span></button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1.77 MW MDC Pad <span class="fi-sub">119 × 45 ft</span></button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})"><span class="fi-ico">▦</span> Triton Pad <span class="fi-sub">120 kW</span></button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})"><span class="fi-ico">▦</span> Cruiser Pad <span class="fi-sub">35 kW</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_mdc1')})" title="A generic 1 MW planning block on a 40 × 10 ft pad. Not an Armada product and no vendor datasheet behind it."><span class="fi-ico">▦</span> Generic 1 MW MDC <span class="fi-sub">40 × 10 ft</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})" title="Armada Leviathan — 1.77 MW IT, 8 × 200 kW compute racks + 4 × 42.5 kW network racks, 576 GB300 NVL72 GPUs, 2.2 MW closed-loop direct-to-chip cooling, no site water, 480 V. Two 45 ft containers + one 20 ft, 119 × 45 ft. Per armada.ai/product/leviathan."><span class="fi-ico">▦</span> Armada Leviathan <span class="fi-sub">1.77 MW</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})" title="Armada Triton — the 40 ft Galleon, up to 5 racks of compute. Armada does not publish its kW; 120 kW is a planning estimate."><span class="fi-ico">▦</span> Armada Triton <span class="fi-sub">40 ft · 5 racks</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})" title="Armada Cruiser — the 20 ft Galleon, up to 3 racks of compute, fits a C-17 or C-130. Armada does not publish its kW; 35 kW is a planning estimate."><span class="fi-ico">▦</span> Armada Cruiser <span class="fi-sub">20 ft · 3 racks</span></button>
           </div>
         </div>
       </div>
@@ -6285,10 +6285,10 @@ const EQ=[
   {id:'camera',  label:'Camera'},
   {id:'ups',     label:'UPS'},
   {id:'pole',    label:'Utility Pole'},
-  {id:'dc_cruiser',   label:'Compute Container 20ft'},
-  {id:'dc_triton',    label:'Compute Container 40ft'},
-  {id:'dc_mdc1',      label:'1 MW MDC'},
-  {id:'dc_leviathan', label:'1.77 MW MDC'},
+  {id:'dc_cruiser',   label:'Armada Cruiser 20ft'},
+  {id:'dc_triton',    label:'Armada Triton 40ft'},
+  {id:'dc_mdc1',      label:'Generic 1 MW MDC'},
+  {id:'dc_leviathan', label:'Armada Leviathan 1.77 MW'},
   {id:'dc_ztmm1',     label:'ZTMM 1 MW DC'},
 ];
 
@@ -6311,14 +6311,39 @@ const EQ=[
    that the vendor has not published — say so rather than letting an estimate
    read as a datasheet.
    ══════════════════════════════════════════════════════════════════════ */
+/* ── THE NAMES STAY ON ─────────────────────────────────────────────────
+   Armada is a partner, and its units are Cruiser, Triton and Leviathan
+   (the Galleon line). They were carried here as "Compute Container" and
+   "1.77 MW MDC", so a Leviathan could not be found by its name and the
+   generic 1 MW block read like it (2026-10-02, Tommy: "just keep the names
+   so we know"). `make` and `model` are the vendor's own words; `label` is
+   what the menu, the legend and a placed pad print. The generic block
+   says it is generic.
+
+   What Armada publishes is on the row and `verified` names the page. The
+   Galleon page gives Cruiser and Triton their container and rack count
+   only (Armada's launch coverage adds that a Cruiser fits a C-17 or
+   C-130), so their kW stays a planning estimate (`verified:null`, the
+   spec says so). Orion (10 MW, 40 racks, six prefabricated modules, announced
+   2026-08-28) has no published footprint and is not drawn until it does. */
 var DC_CATALOG = {
-  dc_cruiser:   { label:'Compute Container (20ft)', kw:35,  lf:20, wf:8,
+  dc_cruiser:   { label:'Armada Cruiser (20 ft Galleon)', kw:35,  lf:20, wf:8,
+                  make:'Armada', model:'Cruiser', family:'armada-galleon',
+                  racks:3, containers:1,
                   cooling:'integrated', water:0, ups:'integrated',
-                  spec:'20 ft compute container · 3 racks',
+                  spec:'Armada Cruiser · 20 ft Galleon · up to 3 racks of compute '
+                     + '· air-transportable (C-17 / C-130) · 35 kW is a planning '
+                     + 'estimate, Armada does not publish the rating',
+                  source:'armada.ai/product/galleon',
                   verified:null },
-  dc_triton:    { label:'Compute Container (40ft)', kw:120, lf:40, wf:8,
+  dc_triton:    { label:'Armada Triton (40 ft Galleon)', kw:120, lf:40, wf:8,
+                  make:'Armada', model:'Triton', family:'armada-galleon',
+                  racks:5, containers:1,
                   cooling:'integrated', water:0, ups:'integrated',
-                  spec:'40 ft compute container · 5 racks',
+                  spec:'Armada Triton · 40 ft Galleon · up to 5 racks of compute '
+                     + '· 120 kW is a planning estimate, Armada does not publish '
+                     + 'the rating',
+                  source:'armada.ai/product/galleon',
                   verified:null },
   /* The 1.77 MW unit is three containers — two 45 ft (compute, power distribution)
      and one 20 ft (cooling) — occupying 119 x 45 ft, 0.12 acres, as one
@@ -6343,15 +6368,40 @@ var DC_CATALOG = {
      dc_leviathan keeps its id. Every drawing already saved references it,
      and those shapes carry their own lf/wf/kw, so they keep rendering at
      whatever they were placed as. */
-  dc_mdc1:      { label:'1 MW Modular Data Center', kw:1000, lf:40, wf:10,
+  dc_mdc1:      { label:'Generic 1 MW MDC (nominal)', kw:1000, lf:40, wf:10,
+                  make:'Generic', model:'1 MW Modular Data Center',
                   cooling:'integrated', water:0, ups:'integrated', volts:480,
-                  spec:'1 MW IT \u00b7 40 ft container class \u00b7 480 V / 60 Hz',
+                  spec:'Generic 1 MW IT planning block \u00b7 40 ft container class '
+                     + '\u00b7 480 V / 60 Hz \u00b7 not an Armada unit',
                   verified:null },
-  dc_leviathan: { label:'1.77 MW Modular Data Center', kw:1770, lf:119, wf:45,
-                  coolKw:2200, cooling:'integrated-closed-loop', water:0,
+  /* Every figure below is Armada's (armada.ai/product/leviathan). `kw` is
+     the IT envelope and it adds up: 8 x 200 kW compute + 4 x 42.5 kW
+     network = 1,770 kW. 36,300 x 13,600 mm is the 119 x 45 ft drawn. */
+  dc_leviathan: { label:'Armada Leviathan (1.77 MW)', kw:1770, lf:119, wf:45,
+                  make:'Armada', model:'Leviathan', family:'armada-galleon',
+                  racks:8, rackKw:200, networkRacks:4, networkKw:42.5,
+                  containers:3, lengthMm:36300, widthMm:13600,
+                  coolKw:2200, liquidPct:80, cooling:'integrated-closed-loop', water:0,
                   ups:'integrated', volts:480, acres:0.12,
-                  spec:'1.77 MW IT · closed-circuit direct-to-chip, '
-                     + 'air-cooled N+1, no site water · 480 V / 60 Hz',
+                  gpus:576, gpuModel:'NVIDIA GB300 NVL72', gpusAlt:512, gpuAltModel:'NVIDIA HGX B300 / B200',
+                  network:'NVIDIA Quantum InfiniBand NDR 800 Gb/s or Spectrum-X',
+                  deployWeeks:12,
+                  /* `spec` is the nameplate a placed unit prints; `detail`
+                     is the rest of the page, for the equipment library. */
+                  spec:'Armada Leviathan · 1.77 MW IT · 8 × 200 kW racks · '
+                     + '2.2 MW closed-loop direct-to-chip cooling, no site water '
+                     + '· 480 V / 60 Hz',
+                  detail:'1.77 MW IT envelope: 8 × 200 kW compute racks + 4 × 42.5 kW '
+                     + 'network racks · 576 NVIDIA GB300 NVL72 GPUs, or 512 HGX B300/B200 '
+                     + '· NVIDIA Quantum InfiniBand NDR 800 Gb/s or Spectrum-X '
+                     + '· 2.2 MW cooling, closed-circuit direct-to-chip liquid loop, '
+                     + '80/20 liquid/air, N+1 air-cooled chillers, no onsite water '
+                     + '· UPS-backed modular power distribution · 480 V / 60 Hz '
+                     + '· two 45 ft containers (compute, power distribution) + one 20 ft '
+                     + '(cooling), 36,300 × 13,600 mm (119 × 45 ft), 0.12 ac '
+                     + '· 12 weeks from site-ready to operational '
+                     + '· 8 units = 4,608-GPU super cluster, path to 50 MW+',
+                  source:'armada.ai/product/leviathan',
                   verified:'armada.ai/product/leviathan' },
   /* ── ZTMM CONTAINER DATA CENTER — THE FIRST 1 MW UNIT WITH A DRAWING ──
      Zhejiang Zhiting (ZTMM) "Container Data Center", Layout-01 dated
@@ -6389,6 +6439,7 @@ var DC_CATALOG = {
      CDU, chiller and electrical resized with it — the drawing shown is
      Option A, so B carries the envelope numbers and says so. */
   dc_ztmm1:     { label:'ZTMM 1 MW Container DC (6 racks)', kw:920, lf:40, wf:25,
+                  make:'ZTMM', model:'Container Data Center (6 racks)',
                   family:'ztmm', racks:6, rackKw:150, networkKw:20,
                   itPods:1, elePods:1, containers:2,
                   cooling:'external-chiller', coolKw:1200, water:0,
@@ -6402,6 +6453,7 @@ var DC_CATALOG = {
                   verified:'ZTMM Container Data Center Layout-01 (2026-09-18) '
                          + '+ Modular AI Data Center Design Concept EN §2' },
   dc_ztmm1b:    { label:'ZTMM 1 MW Container DC (7 racks, Option B)', kw:1070, lf:40, wf:25,
+                  make:'ZTMM', model:'Container Data Center (7 racks, Option B)',
                   family:'ztmm', racks:7, rackKw:150, networkKw:20,
                   itPods:1, elePods:1, containers:2,
                   cooling:'external-chiller', coolKw:1200, water:0,
@@ -33515,15 +33567,17 @@ var OmegaEq = (function(){
         if(c.org) continue;
         out['DC-'+d.toUpperCase()]={
           key:'DC-'+d.toUpperCase(), cat:'datacenter', sub:'module',
-          manufacturer:(String(c.spec||'').split(' ')[0]||'Generic'),
-          model:c.label||d,
+          /* The vendor's own name. This took the spec's first word, which
+             made the ZTMM block's maker "2" and the Leviathan's "1.77". */
+          manufacturer:c.make||(String(c.spec||'').split(' ')[0]||'Generic'),
+          model:c.model||c.label||d,
           energyKwh:0, powerKw:+c.kw||0,
-          lengthMm:c.lf?Math.round(c.lf*F2):null,
-          widthMm: c.wf?Math.round(c.wf*F2):null,
+          lengthMm:c.lengthMm||(c.lf?Math.round(c.lf*F2):null),
+          widthMm: c.widthMm||(c.wf?Math.round(c.wf*F2):null),
           heightMm:null,
           type:'Compute module',
           efficiency:null, pnomKva:0, pmaxKw:+c.kw||0, cRate:null,
-          notes:c.spec||'',
+          notes:c.detail||c.spec||'',
           createdBy:'ClearSky', publishedAt:null, archived:false, _seed:true
         };
       }
@@ -54828,9 +54882,9 @@ function p0OrdScreenCA(){
    DC_CATALOG is somehow absent, which would mean the file was cut in half. */
 var DERC_DC = (function () {
   var out = {
-    dc_cruiser:   { label:'Compute Container (20ft)', kw:35,   lf:20,  wf:8  },
-    dc_triton:    { label:'Compute Container (40ft)', kw:120,  lf:40,  wf:8  },
-    dc_leviathan: { label:'1.77 MW Modular Data Center', kw:1770, lf:119, wf:45 }
+    dc_cruiser:   { label:'Armada Cruiser (20 ft Galleon)', kw:35,   lf:20,  wf:8  },
+    dc_triton:    { label:'Armada Triton (40 ft Galleon)',  kw:120,  lf:40,  wf:8  },
+    dc_leviathan: { label:'Armada Leviathan (1.77 MW)',     kw:1770, lf:119, wf:45 }
   };
   try {
     if (typeof DC_CATALOG !== 'undefined') {
@@ -103637,7 +103691,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
     /* Compute pods first - this is a load-led build, so the load lands
        first and everything else is arranged to serve it. */
-    var pSpec=r.podSpec||{id:'dc_leviathan',label:'MDC',kw:1000,lf:40,wf:10};
+    var pSpec=r.podSpec||{id:'dc_mdc1',label:'Generic 1 MW MDC (nominal)',kw:1000,lf:40,wf:10};
     var pCols=Math.min(4,Math.max(1,Math.ceil(Math.sqrt(r.pods))));
     /* ZTMM blocks each carry their own footprint and IT kW (a 3 MW block
        is four containers on one 40 x 50 pad, not three 1 MW pads), so the
@@ -157516,7 +157570,7 @@ if (root.console && console.info) {
     /* The 1.77 MW unit, to its published spec: 1.77 MW IT on 119 x 45 ft with its
        cooling inside that footprint. `kw` is IT — PUE above turns it into
        facility load, so cooling must not be added here as well. */
-    pod:  { kw: 1770, lf: 119, wf: 45, label: 'MDC pod', clearFt: 15,
+    pod:  { kw: 1770, lf: 119, wf: 45, label: 'Armada Leviathan', clearFt: 15,
             cooling: 'integrated-closed-loop', water: 0 },
     bess: { kwhPerUnit: 4000, lf: 40, wf: 8, clearFt: 10, label: 'BESS container' },
     /* interconnection yard: the point where everything ties together.
@@ -161493,7 +161547,7 @@ if (root.console && console.info) {
 
     clearPrevious();
 
-    var pSpec = r.podSpec || { id: 'dc_leviathan', label: 'MDC', kw: 1000, lf: 40, wf: 10 };
+    var pSpec = r.podSpec || { id: 'dc_mdc1', label: 'Generic 1 MW MDC (nominal)', kw: 1000, lf: 40, wf: 10 };
     /* ZTMM blocks are not all the same size (1 MW is two containers, the
        5 MW block is seven). Slots are packed at the largest block so each
        one fits, and every shape is then written at its own block's size. */
