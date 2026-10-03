@@ -41,8 +41,8 @@ PS.SOURCES.forEach(function (s) {
      s.id + ': a [south, west, north, east] box inside the United States and Puerto Rico');
 });
 ok(PS.SOURCES.length >= 74, PS.SOURCES.length + ' verified layers');
-ok(!PS.byId('id') && !PS.SOURCES.some(function (s) { return /idaho|idwr/i.test(s.label + s.service); }),
-   'never Idaho\'s statewide layer: its licence keeps the data inside IDWR');
+ok(!PS.byId('id') && !PS.SOURCES.some(function (s) { return /idwr/i.test(s.service) || /^Idaho \(statewide/.test(s.label); }),
+   'never Idaho\'s statewide layer: its licence keeps the data inside IDWR (county layers are fine)');
 ok(!PS.SOURCES.some(function (s) { return /regrid/i.test(s.service); }), 'never Regrid\'s tiles without a key (api/parcel-tiles is that door)');
 ok(PS.LOOKUP_ORDER[PS.LOOKUP_ORDER.length - 1] === 'cook', 'the server asks Cook last (its box holds DuPage)');
 PS.LOOKUP_ORDER.forEach(function (id) {

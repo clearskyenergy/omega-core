@@ -2885,3 +2885,18 @@ tools functionality".
 - **The banner names the county that answered** ("Peoria County", not
   "Peoria County (peoria)"; not Tazewell's box at 107 Cass St). Only a
   Regrid record is named as Regrid's.
+- **The rest of the list, the same day** (30 more; 174 layers, 137 with a
+  point lookup): Oklahoma (Tulsa County; Edmond and Norman, each its city
+  alone), Louisiana (Orleans, Jefferson, East Baton Rouge, Lafayette),
+  Iowa (Polk, Linn, Johnson, Black Hawk), Kentucky (Lexington-Fayette,
+  Kenton, Boone, Warren), Alabama (Jefferson, Madison, Montgomery, Shelby,
+  Mobile), Idaho by county (Canyon, Bonneville, Kootenai), the Dakotas
+  (Cass, Bismarck-Mandan, Sioux Falls, Minnehaha, Pennington) and Wyoming
+  (Laramie, Natrona). Left out: Caddo Parish (a 2013 copy behind a third
+  party's ArcGIS Online proxy), Ada County (a development host whose terms
+  say not to redistribute), Anchorage and statewide Oklahoma, North Dakota
+  and Wyoming (FeatureServers or a WMS only). Live coverage: 43 of 52
+  mapped, 8 partial (McHenry, Ann Arbor and Lansing, Knoxville, Boise,
+  Oklahoma City, Columbia SC, Overland Park), Alaska with nothing. What is
+  left sits behind tokens, bot challenges or FeatureServers: Regrid's relay
+  is the way to it.

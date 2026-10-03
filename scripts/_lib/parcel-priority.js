@@ -76,7 +76,7 @@ var RANKED = [
   { st: 'KS', name: 'Kansas', aceee: 48, cities: [['Wichita', 37.6872, -97.3301], ['Overland Park', 38.9822, -94.6708], ['Kansas City KS', 39.1142, -94.6275]] },
   { st: 'MS', name: 'Mississippi', aceee: 49, cities: [['Jackson', 32.2988, -90.1848], ['Gulfport', 30.3674, -89.0928]] },
   { st: 'AL', name: 'Alabama', aceee: 50, cities: [['Birmingham', 33.5186, -86.8104], ['Huntsville', 34.7304, -86.5861], ['Mobile', 30.6954, -88.0399]] },
-  { st: 'WY', name: 'Wyoming', aceee: 51, cities: [['Cheyenne', 41.1400, -104.8202], ['Casper', 42.8666, -106.3131]] }
+  { st: 'WY', name: 'Wyoming', aceee: 51, cities: [['Cheyenne', 41.1400, -104.8202], ['Casper', 42.8501, -106.3252]] }
 ];
 
 module.exports = { RANKED: RANKED, SOURCE: 'ACEEE 2025 State Energy Efficiency Scorecard' };
