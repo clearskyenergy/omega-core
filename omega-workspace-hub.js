@@ -45,7 +45,7 @@
     { key: 'design',   label: 'Design',   icon: '▧', hint: 'Site Map, sandbox', tools: ['editor', 'sandbox', 'siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'] },
     { key: 'grid',     label: 'Grid',     icon: '⌗', hint: 'capacity, screen', tools: ['gridatlas', 'interconnect', 'comedcap', 'sitefinder', 'interconnectstudy'] },
     { key: 'money',    label: 'Finance',  icon: '$',      hint: 'size, revenue, model', tools: ['batterysizer', 'valuestack', 'vppsim', 'computeproforma', 'isocalc', 'proforma', 'dcfc', 'apartment', 'fleet', 'investment', 'costestimator'] },
-    { key: 'sales',    label: 'Sales',    icon: '▤', hint: 'proposals, estimates', tools: ['sales', 'spatco_ev', 'evcostwb', 'computelease'] },
+    { key: 'sales',    label: 'Sales',    icon: '▤', hint: 'screen, propose, estimate', tools: ['sales', 'spatco_ev', 'evcostwb', 'computelease', 'parcelscreening', 'bessscreening'], subjects: [{ key: 'screening', name: 'Screening', sub: 'Parcel and BESS portfolio screening', href: '/screening.html', tools: ['parcelscreening', 'bessscreening'] }] },
     { key: 'market',   label: 'Market',   icon: '◈', hint: 'partners, quotes', market: true, tools: ['financing', 'opportunity', 'osaportal'], pages: [['Marketplace', 'The tools catalogue: BESS, EV and finance tools', '/marketplace.html'], ['Quote Desk', 'Both ends of a request for quote', '/rfq.html']] },
     { key: 'compute',  label: 'Compute',  icon: '▦', hint: 'data centers, edge sites', tools: ['datacenter', 'computepower', 'computeproforma'] },
     { key: 'permits',  label: 'Permits',  icon: '✓', hint: 'AHJ, intake', tools: ['permit', 'intake', 'sitelifecycle'] },
@@ -87,8 +87,14 @@
     var a = byKey(key); if (!a) return [];
     ctx = ctx || {};
     var out = (a.pages || []).map(function (p) { return { name: p[0], sub: p[1], href: p[2], page: true }; });
+    var grouped = [];
+    (a.subjects || []).forEach(function (s) {
+      grouped = grouped.concat(s.tools || []);
+      out.push({ key: s.key, name: s.name, sub: s.sub, href: s.href, page: true, subject: true });
+    });
     var open = [], locked = [];
     (a.tools || []).forEach(function (k) {
+      if (grouped.indexOf(k) >= 0) return;
       var t = ctx.tool ? ctx.tool(k) : null; if (!t || t.soon) return;
       var row = { key: k, name: t.name, sub: t.blurb || t.desc || '', locked: !(ctx.canOpen && ctx.canOpen(k)) };
       (row.locked ? locked : open).push(row);

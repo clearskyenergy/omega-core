@@ -469,6 +469,24 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     return ['today'].concat(HUB.compose(c).ring.map(function (a) { return a.key; }));
   }
 
+  /* Sales -> Screening is a subject containing the two portfolio tools. */
+  var screeningFixture = FX.legacyEnterprise(HOST);
+  screeningFixture.docs['omega_orgs/' + screeningFixture.org + '/billing/current'].addons = [];
+  await scenario('sales-screening', screeningFixture, { steps: async function (p) {
+    await p.locator('[data-hub="sales"]').click();
+    var subject = p.locator('#ows-overlay a.ows-row').filter({ hasText: 'Parcel and BESS portfolio screening' });
+    ok('Sales hex exposes Screening as a subject', await subject.count() === 1);
+    await subject.click();
+    await p.locator('#hub .tool-card').first().waitFor();
+    ok('Screening subject contains exactly two tools', await p.locator('#hub .tool-card').count() === 2);
+    await p.setViewportSize({ width: 390, height: 844 });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'sales-screening-hub-390.png'), fullPage: true });
+    await p.getByRole('link', { name: /Open BESS Portfolio Screening/ }).click();
+    await p.locator('#file').waitFor();
+    ok('BESS tool accepts workbooks from the live Sales path', await p.locator('#file').getAttribute('accept') === '.xlsx,.csv,.json');
+    return { path: new URL(p.url()).pathname, tool: 'bess' };
+  } });
+
   /* ══ 1. NEWCO — first visit, terms first ══ */
   var newco = FX.newco(HOST);
   await scenario('newco', newco, { steps: async function (p) {

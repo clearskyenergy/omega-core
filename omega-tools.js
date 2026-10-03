@@ -168,6 +168,15 @@
       file:'/investment-analysis.html', badge:'invest', tier:TIER.ENTERPRISE, savesData:true,
       icon:'M3 3v18h18M18 9l-5 5-3-3-4 4' },
 
+    { key:'parcelscreening', name:'Parcel Screening', category:'sales', subject:'screening',
+      desc:'Screen one address, a workbook or a portfolio of parcel KML/KMZ files with the editor screening engine.',
+      file:'/screening.html?tool=parcel', tier:TIER.DELUXE, savesData:false,
+      icon:'M3 3h18v18H3zM8 3v18M3 8h18M15 12l3 3-3 3' },
+    { key:'bessscreening', name:'BESS Portfolio Screening', category:'sales', subject:'screening',
+      desc:'Rank candidate sites with the CSK criteria, compare sizing options and identify what to verify.',
+      file:'/screening.html?tool=bess', tier:TIER.STANDARD, savesData:false,
+      icon:'M7 3h10v18H7zM10 1h4M10 8h4M12 6v4M10 16h4' },
+
     { key:'sales', name:'Sales Proposal Builder', category:'sales',
       desc:'3-page customer proposals with AI site placement.',
       file:'/sales-proposal.html', tier:TIER.STANDARD, savesData:true,
@@ -744,6 +753,11 @@
         if (!snap.empty) {
           var list = [];
           snap.forEach(function (doc) { list.push(doc.data()); });
+          /* Screening ships with the code; an older published catalog must
+             not hide its routes. Existing documents and access rules win. */
+          SEED_TOOLS.forEach(function (seed) {
+            if (seed.subject === 'screening' && !list.some(function (t) { return t.key === seed.key; })) list.push(seed);
+          });
           self._tools = list;
         }
         if (cb) cb(self._tools);
