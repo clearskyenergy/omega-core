@@ -35,6 +35,8 @@
      npm run check:pages
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
+/* sixty days out, so 'current' never turns 'due soon' as the calendar moves (it did on 2026-10-03) */
+var LEGACY_DUE = new Date(Date.now() + 60 * 864e5).toISOString().slice(0, 10);
 process.env.PACKAGING_PROVIDER = 'quickbooks';
 var http = require('http'), fs = require('fs'), path = require('path');
 var ROOT = path.join(__dirname, '..');
@@ -94,7 +96,7 @@ async function seed() {
   sdb.seed('projects/p1', { orgId: 'pkg.example', name: 'Site A', createdAt: Date.now() });
   /* the legacy tenant: a Standard tier billed outside the engine */
   sdb.seed('omega_orgs/legacy.example', { name: 'Legacy Co', status: 'active', vertical: 'developer', domains: ['legacy.clearskyomega.com'], createdAt: Date.now() - 86400000 * 200 });
-  sdb.seed('omega_orgs/legacy.example/billing/current', { tier: 'standard', addons: ['compute'], amountDue: 0, subscriptionDue: '2026-10-17', lastPaidAt: '2026-09-17', paymentProvider: 'stripe', stripeCustomerId: 'cus_fixture' });
+  sdb.seed('omega_orgs/legacy.example/billing/current', { tier: 'standard', addons: ['compute'], amountDue: 0, subscriptionDue: LEGACY_DUE, lastPaidAt: '2026-09-17', paymentProvider: 'stripe', stripeCustomerId: 'cus_fixture' });
   sdb.seed('omega_orgs/legacy.example/members/u-lee', { email: 'lee@legacy.example', role: 'owner', status: 'active', name: 'Lee Legacy' });
   sdb.seed('team_members/legacy.example__lee@legacy.example', { orgId: 'legacy.example', email: 'lee@legacy.example', lastSeen: Date.now() - 7200000 });
   /* the signup in progress: an account made on /start.html an hour ago, building its system, no record yet */
@@ -163,7 +165,7 @@ function fixture() { var docs = {}; sdb.data.forEach(function (v, k) { docs[k] =
   await p.goto(base + '/admin/account.html?org=legacy.example', { waitUntil: 'domcontentloaded' });
   await p.waitForSelector('#tb-amt-legacy\\.example', { timeout: 10000 }).catch(function () {});
   var lhead = await text(p, '#acct-chips'), lpay = await text(p, '#acct-pay');
-  ok('a legacy tenant reads current, with its tier, add-ons, next payment and provider, and Edit the terms', /active/i.test(lhead) && /current/i.test(lhead) && /standard/.test(lpay) && /compute/.test(lpay) && /Next payment\s*2026-10-17/.test(lpay) && /stripe/.test(lpay) && /Edit the terms/.test(lpay), { chips: lhead, pay: lpay });
+  ok('a legacy tenant reads current, with its tier, add-ons, next payment and provider, and Edit the terms', /active/i.test(lhead) && /current/i.test(lhead) && /standard/.test(lpay) && /compute/.test(lpay) && new RegExp('Next payment\\s*' + LEGACY_DUE).test(lpay) && /stripe/.test(lpay) && /Edit the terms/.test(lpay), { chips: lhead, pay: lpay });
   await p.fill('#tb-amt-legacy\\.example', '1200'); await p.fill('#tb-due-legacy\\.example', '2026-11-01');
   await p.click('#acct-detail button:has-text("Save terms")');
   await until(function () { return p.$eval('#tb-msg-legacy\\.example', function (e) { return /Saved|Failed/.test(e.textContent); }).catch(function () { return false; }); });
