@@ -2752,3 +2752,82 @@ in the editor under view").
 ## 2026-10-03 — Site Discovery evidence handling
 
 Site Discovery weighted ranking now runs in `/api/site-discovery`, guarded by the existing tenant/billing/member checks and the Omega Sites module. Missing or invalid active factors remain Verify with a weighted score range; zero is a real value, and all-zero weights are rejected. Grid proximity and load preference are explicitly not capacity approval or BESS sizing. CSV uses the shared quoted-field parser and safe export, imported names render as text, edits invalidate old results, and only returned tenant scope is saved. Removed seeded example candidates. Added 50-site/edge-case/access tests and a browser regression for quoted CSV, unknowns, stale results and mobile layout. No data migration.
+
+## Parcel lines everywhere; a Finance tab; no label on its caption — October 3, 2026
+
+Tommy, from the live editor at a customer's site in Peoria: "the whole point
+is that we need the map to show the parcels like what the gis would show and
+the property boundaries", then "build an api and get all the GIS data we can
+get", "make sure text layers dont overlap", "put summary in estimate panel"
+and "these should have their own tab in the panel finance".
+
+- **Peoria County** joins `omega-parcel-sources.js` (DP/Cadastral layer 1,
+  from z16), for drawing and for the server's point lookup (PIN,
+  owner_name), and so do sixteen more Illinois counties found and verified
+  the same day: Kane, Sangamon, McLean, St. Clair, Macon, Tazewell, Grundy,
+  LaSalle, Madison, Logan, Adams, Coles, Knox, Lee, Boone and Winnebago
+  (fifteen with a point lookup; Logan is a line layer). The ones not public
+  or not reachable are named in the file. Every source carries a `test`
+  point, and `scripts/check-parcel-sources.js` re-checks them all over the
+  network (25 of 25 drew on 2026-10-03). Cook stays last in the lookup.
+- **`api/parcel-tiles.js`** relays Regrid's nationwide parcel tiles. POST
+  (a signed-in member of an active workspace) answers a ticket or why not
+  (`not-configured`, `no-tile-access` after one remembered probe tile,
+  `switched-off` by `toolOverrides.parcelTiles === false`); GET serves one
+  PNG for a valid ticket, edge-cached for the month. The ticket is an HMAC
+  of the month under a key derived from REGRID_TOKEN, the same for everyone
+  so the edge cache is shared; last month's is honoured across the turn.
+  Regrid's terms license the tiles for exactly this (a Tileserver
+  subscription; regrid.com/terms/api). Their unkeyed endpoint answering is
+  not a licence and is never used.
+- The editor asks for a ticket when Parcel Lines comes on; where it gets
+  one, a single Regrid layer replaces the county layers on that map, its
+  dark-green lines repainted in the Parcel Lines yellow on a canvas (the
+  tile is same-origin, so nothing is tainted). Without one, the county
+  layers draw as before.
+- **No label on its caption.** Two label lines, the icon and the button's
+  padding came to ~57px where a 78px ribbon leaves ~50px, so every second
+  line spilled onto the caption rule (onto the caption itself in macOS
+  fonts). The ribbon's last style block now fixes the line heights in
+  pixels and trims the button's padding: 50px over an 18px caption. The
+  title bar gives way in order (key hints, then the search words, then the
+  project name) instead of cutting "Pro" or wrapping "Ask Jarvis".
+  `scripts/render-editor-plan.js` measures every label against its caption
+  on every tab, packaged and legacy (Pro and Designer), and fails on the
+  old CSS.
+- **Finance tab** (`data-page="finance" data-module="finance"`): Push to
+  Marketplace, Apply for Financing and Helios Intake move out of Output's
+  Marketplace group with their caps unchanged; `finance.editorPage` is
+  `finance`, so a package without Omega Capital sees the tab marked Opt in.
+  Designer mode keeps it hidden, as those three were.
+- **Summary** also sits in Estimate › Cost & ROI (`rb-est-summary`); the View
+  copy stays, because Estimate is plan-gated and Summary is Omega Design's.
+  The Estimate copy calls `openRpPanel('summary','estimate')`, which the
+  catalog gives to Omega Estimate: an Omega Design command on a tab gated
+  behind engineering made Omega Design itself read partly locked on lower
+  legacy tiers (render-legacy-gates caught it).
+- `render-admin-account.js`: the legacy fixture's dates follow the run (a
+  fixed 2026-10-17 due date fell inside "due soon" on 2026-10-03).
+- **Seventy-four public layers.** Twenty-two statewide services (WV, TX, AR,
+  HI, VA, MA, MD, RI, VT, NH, ME, OH, WI, MN, NE, FL, CO, MT, WA, NV,
+  Mississippi in two halves, Oregon's county taxlots) and twenty-six county
+  and metro ones (California statewide; Los Angeles, San Diego, Orange,
+  Riverside, Sacramento, Harris, Tarrant, Travis, Maricopa, Pima, Clark,
+  Franklin OH, Oakland, Pennsylvania statewide, Allegheny, Hennepin, Jackson
+  MO, St. Louis County, Marion IN, Davidson, Jefferson KY, Salt Lake,
+  Multnomah, Hillsborough, Miami-Dade) join the list, each re-checked by a
+  tile at its own `test` point (74 of 74 drew on 2026-10-03; Mississippi's
+  server takes 15-30 s a tile, so the check now waits 45 s and prints the
+  time). Twenty-three of them add a point lookup to `api/parcel.js`
+  (43 in all); Pennsylvania's statewide lookup comes after every county
+  inside it, Cook still last. Left out: Idaho's statewide layer (its
+  licence keeps the data inside IDWR), and Dallas, Hamilton OH, King WA
+  and Kankakee, which did not answer from here on the day; states that
+  publish parcels only as a FeatureServer (no picture to draw) are not
+  in it either. Regrid's relay is still what draws the rest.
+- **One overlay, not seventy-four.** The editor draws every public layer
+  through ONE custom map type: a tile holds an `<img>` for each layer whose
+  box it touches (usually one), and a layer that refuses a tile hides its
+  image. Seventy-four ImageMapTypes would have put a tile slot per layer
+  per tile on the map. `OmegaParcels.opacity()` reaches the live tiles.
+

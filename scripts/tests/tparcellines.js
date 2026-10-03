@@ -31,27 +31,47 @@ PS.SOURCES.forEach(function (s) {
   ok(/^[a-z]+$/.test(s.id) && !ids[s.id], s.id + ': a unique id'); ids[s.id] = true;
   ok(typeof s.label === 'string' && s.label.length > 3, s.id + ': a label people read');
   ok(/^https:\/\/[^/]+\/.+\/MapServer$/.test(s.service), s.id + ': an https MapServer root');
-  ok(s.lineLayer === (s.lineLayer | 0) && s.lineLayer >= 0, s.id + ': a layer id');
+  /* a layer id; a service drawn in its own style (restyle false) may show
+     several, as a comma list (Oregon publishes a layer per county) */
+  ok((s.lineLayer === (s.lineLayer | 0) && s.lineLayer >= 0)
+     || (s.restyle === false && /^\d+(,\d+)+$/.test(s.lineLayer)), s.id + ': a layer id');
   ok(s.minZoom >= 12 && s.minZoom <= 18, s.id + ': draws from a street zoom');
   var b = s.bbox;
-  ok(b.length === 4 && b[0] < b[2] && b[1] < b[3] && b[0] > 18 && b[2] < 50 && b[1] > -125 && b[3] < -66,
-     s.id + ': a [south, west, north, east] box inside the lower 48');
+  ok(b.length === 4 && b[0] < b[2] && b[1] < b[3] && b[0] > 18 && b[2] < 72 && b[1] > -180 && b[3] < -66,
+     s.id + ': a [south, west, north, east] box inside the United States');
 });
-ok(PS.SOURCES.length >= 8, 'eight verified layers');
+ok(PS.SOURCES.length >= 74, PS.SOURCES.length + ' verified layers');
+ok(!PS.byId('id') && !PS.SOURCES.some(function (s) { return /idaho|idwr/i.test(s.label + s.service); }),
+   'never Idaho\'s statewide layer: its licence keeps the data inside IDWR');
+ok(!PS.SOURCES.some(function (s) { return /regrid/i.test(s.service); }), 'never Regrid\'s tiles without a key (api/parcel-tiles is that door)');
 ok(PS.LOOKUP_ORDER[PS.LOOKUP_ORDER.length - 1] === 'cook', 'the server asks Cook last (its box holds DuPage)');
 PS.LOOKUP_ORDER.forEach(function (id) {
   var s = PS.byId(id);
   ok(s && s.lookup && typeof s.lookup.idField === 'string' && s.lookup.county, id + ': a lookup layer for the server');
 });
-/* what api/parcel.js asked before the list was shared, byte for byte */
-eq(PS.lookupLayers(), {
+/* what api/parcel.js asked before the list was shared, byte for byte, plus
+   Peoria (2026-10-03, a customer's site at 107 Cass St) */
+var LOOK = PS.lookupLayers();
+var lookKeys = Object.keys(LOOK);
+eq(lookKeys.slice(0, 3), ['dupage', 'lake', 'peoria'], 'the server asks DuPage, Lake and Peoria first');
+ok(lookKeys[lookKeys.length - 1] === 'cook' && lookKeys.length >= 43, 'then the rest of the counties, Cook last (' + lookKeys.length + ')');
+ok(lookKeys.indexOf('pa') === lookKeys.length - 2, 'Pennsylvania\'s statewide layer after every county inside it (Allegheny names its own)');
+lookKeys.forEach(function (k) {
+  ok(/\/MapServer\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && (/ County$/.test(LOOK[k].label) || (k === 'pa' && LOOK[k].label === 'Pennsylvania')),
+     k + ': a polygon layer, an id field and a county (or state) name for the lookup');
+});
+lookKeys.filter(function (k) { return ['dupage', 'lake', 'peoria', 'cook'].indexOf(k) < 0; }).forEach(function (k) { delete LOOK[k]; });
+eq(LOOK.peoria, { url: 'https://gis.peoriacounty.gov/arcgis/rest/services/DP/Cadastral/MapServer/1',
+                  idField: 'PIN', owner: 'owner_name', label: 'Peoria County', bbox: [40.54, -90.00, 41.02, -89.44] }, 'Peoria: its Parcels layer, PIN and owner');
+delete LOOK.peoria;
+eq(LOOK, {
   dupage: { url: 'https://gis.dupageco.org/arcgis/rest/services/DuPage_County_IL/ParcelsWithRealEstateCC/MapServer/0',
             idField: 'PIN', owner: 'BILLNAME', label: 'DuPage County', bbox: [41.63, -88.27, 42.02, -87.90] },
   lake:   { url: 'https://maps.lakecountyil.gov/arcgis/rest/services/GISMapping/WABParcels/MapServer/12',
             idField: 'pin', owner: 'taxpayer_name', label: 'Lake County', bbox: [42.15, -88.20, 42.50, -87.75] },
   cook:   { url: 'https://gis12.cookcountyil.gov/traditional/rest/services/CookViewer3Parcels/MapServer/0',
             idField: 'PIN14_dash', owner: null, label: 'Cook County', bbox: [41.46, -88.27, 42.16, -87.52] }
-}, 'the server lookup table is unchanged');
+}, 'the three original counties are unchanged');
 var apiSrc = fs.readFileSync(path.join(ROOT, 'api/parcel.js'), 'utf8');
 var edSrc = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
 ok(/require\('\.\.\/omega-parcel-sources\.js'\)/.test(apiSrc), 'api/parcel.js reads the one list');
@@ -94,7 +114,12 @@ eq(PS.at(WHEATON[0], WHEATON[1]).map(function (s) { return s.id; }), ['dupage', 
 eq(PS.at(RAL[0], RAL[1]).map(function (s) { return s.id; }), ['nc'], 'Raleigh: North Carolina');
 eq(PS.at(SARATOGA[0], SARATOGA[1]).map(function (s) { return s.id; }), ['ny'], 'Saratoga: New York\'s box');
 eq(PS.at(KANSAS[0], KANSAS[1]), [], 'Kansas: no public layer');
-eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['cook', 'will'], 'a view touching Cook\'s and Will\'s boxes');
+ok(PS.at(40.675254, -89.610850).map(function (s) { return s.id; }).indexOf('peoria') >= 0, '107 Cass St, Peoria: inside Peoria County\'s box (and Tazewell\'s, across the river)');
+eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['cook', 'will', 'grundy'], 'a view touching Cook\'s, Will\'s and Grundy\'s boxes');
+PS.SOURCES.forEach(function (s) {
+  ok(Array.isArray(s.test) && s.test[0] >= s.bbox[0] && s.test[0] <= s.bbox[2] && s.test[1] >= s.bbox[1] && s.test[1] <= s.bbox[3]
+     && PS.at(s.test[0], s.test[1]).indexOf(s) >= 0, s.id + ': its test point (scripts/check-parcel-sources.js) is inside its box');
+});
 var sq = [[0, 0], [0, 1], [1, 1], [1, 0]];
 ok(PS.inRing(sq, 0.5, 0.5) && !PS.inRing(sq, 1.5, 0.5) && !PS.inRing(sq, 0.5, -0.1) && !PS.inRing([[0, 0], [1, 1]], 0.5, 0.5),
    'a point in a ring, and not out of it');
@@ -129,7 +154,9 @@ function makeMap(lat, lng, z) {
 }
 var timers, intervals, banners, asks, store, polys, ANSWER, button, ctx;
 /* one page: a fresh context with the list and the editor's block loaded */
-function page(remembered) {
+var POSTS, RG;
+function page(remembered, rg) {
+  POSTS = []; RG = rg || null;
   timers = []; intervals = []; banners = []; asks = []; store = {}; polys = []; ANSWER = {};
   if (remembered) store.omegaParcelLines = remembered;
   button = { attrs: {}, title: '', setAttribute: function (k, v) { this.attrs[k] = v; } };
@@ -154,6 +181,15 @@ function page(remembered) {
                removeListener: function (h) { var i = h.m.listeners.indexOf(h); if (i >= 0) h.m.listeners.splice(i, 1); } }
     } }
   };
+  if (rg) {
+    ctx._currentUser = { getIdToken: function () { return Promise.resolve('id-token'); } };
+    ctx.Image = function () {};
+    ctx.fetch = function (url, o) {
+      POSTS.push({ url: url, method: o && o.method, auth: o && o.headers && o.headers.Authorization });
+      if (RG.fail) return Promise.reject(new Error('offline'));
+      return Promise.resolve({ status: 200, json: function () { return Promise.resolve(RG.answer); } });
+    };
+  }
   ctx.window = ctx;
   vm.createContext(ctx);
   vm.runInContext(fs.readFileSync(path.join(ROOT, 'omega-parcel-sources.js'), 'utf8'), ctx);
@@ -163,6 +199,9 @@ page(null);
 function settle() { return new Promise(function (r) { setImmediate(r); }); }
 function idle(m) { m.listeners.forEach(function (h) { if (h.ev === 'idle') h.f(); }); var t2 = timers.splice(0); t2.forEach(function (f) { f(); }); }
 function parcelLayers(m) { return m.overlayMapTypes.all().filter(function (l) { return /^Parcel lines/.test(l.name || ''); }); }
+var DOC = { createElement: function () {
+  return { style: {}, kids: [], setAttribute: function (k, v) { this[k] = v; }, appendChild: function (c) { this.kids.push(c); } };
+} };
 var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8783, -87.6300]];
 
 (async function () {
@@ -177,11 +216,24 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   ANSWER.next = { ring: RING, apn: '17-16-222-009', acres: 0.42, county: 'Cook County', source: 'cook' };
   ctx._gmap = m1; intervals[0]();
   await settle();
-  eq(parcelLayers(m1).length, PS.SOURCES.length, 'one tile layer per public source');
+  eq(parcelLayers(m1).length, 1, 'every public source through ONE overlay, not ' + PS.SOURCES.length);
   ok(m1.overlayMapTypes.getAt(0).name === 'USGS 3DEP', 'the overlay that was there stays first');
-  var tt = tileOf(CHI[0], CHI[1], 19);
-  var urls = parcelLayers(m1).map(function (l) { return l.getTileUrl({ x: tt[0], y: tt[1] }, 19); }).filter(Boolean);
+  var pub = parcelLayers(m1)[0], tt = tileOf(CHI[0], CHI[1], 19);
+  var urls = pub.urls({ x: tt[0], y: tt[1] }, 19);
   ok(urls.length === 1 && urls[0].indexOf(cook.service) === 0, 'a Chicago tile is asked of Cook alone');
+  var tile = pub.getTile({ x: tt[0], y: tt[1] }, 19, DOC);
+  ok(tile.kids.length === 1 && tile.kids[0].src === urls[0] && tile.style.opacity === '0.9', 'and holds one picture, Cook\'s, at the lines\' opacity');
+  tile.kids[0].onerror();
+  ok(tile.kids[0].style.display === 'none', 'a tile the county refuses hides, never a broken image');
+  var wt = tileOf(41.40, -88.255, 16);
+  ok(pub.urls({ x: wt[0], y: wt[1] }, 16).length >= 2, 'where boxes overlap (Will and Grundy) one tile asks each');
+  var ks = tileOf(KANSAS[0], KANSAS[1], 18), kt = pub.getTile({ x: ks[0], y: ks[1] }, 18, DOC);
+  ok(kt.kids.length === 0, 'Kansas: an empty tile, nothing asked');
+  ok(pub.getTile({ x: tt[0], y: tt[1] }, 11, DOC).kids.length === 0 && pub.minZoom <= 14, 'zoomed out past every layer: nothing asked');
+  vm.runInContext('OmegaParcels.opacity(0.5)', ctx);
+  ok(tile.style.opacity === '0.5', 'OmegaParcels.opacity() reaches the tiles on the map');
+  pub.releaseTile(tile); vm.runInContext('OmegaParcels.opacity(0.9)', ctx);
+  ok(tile.style.opacity === '0.5' && kt.style.opacity === '0.9', 'a released tile is let go');
   eq(asks.length, 1, 'the parcel at the centre is looked up once');
   ok(polys.length === 1 && polys[0].map === m1 && polys[0].opts.clickable === false, 'and outlined, never in the way of a click');
   var said = banners[banners.length - 1];
@@ -234,7 +286,7 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   var m2 = makeMap(CHI[0], CHI[1], 19), before = asks.length;
   ctx._gmap = m2;
   vm.runInContext('pcToggle()', ctx); await settle();
-  ok(parcelLayers(m2).length === PS.SOURCES.length && asks.length === before, 'back on: the lines, no lookup for a parcel already found');
+  ok(parcelLayers(m2).length === 1 && asks.length === before, 'back on: the lines, no lookup for a parcel already found');
   ok(polys.filter(function (p) { return p.map === m2; }).length === 2, 'both parcels found this page outlined again');
   ok(/APN 17-16-222-009/.test(banners[banners.length - 1]), 'and the centre parcel named from what was found');
 
@@ -242,7 +294,7 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   var m3 = makeMap(RAL[0], RAL[1], 18);
   ctx._gmap = m3; intervals[intervals.length - 1]();
   await settle();
-  ok(parcelLayers(m2).length === 0 && parcelLayers(m3).length === PS.SOURCES.length, 'a rebuilt map gets the lines; the old one lets go');
+  ok(parcelLayers(m2).length === 0 && parcelLayers(m3).length === 1, 'a rebuilt map gets the lines; the old one lets go');
   ok(/Lines from North Carolina/.test(button.title), 'and the tooltip names the new source');
 
   /* a page opened with the choice remembered comes back on, quietly */
@@ -253,7 +305,7 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   ANSWER.next = { ring: RING, apn: '17-16-222-009', acres: 0.42, county: 'Cook County', source: 'cook' };
   ctx._gmap = m4; intervals[0]();
   await settle();
-  ok(parcelLayers(m4).length === PS.SOURCES.length && asks.length === 1 && polys.length === 1, 'the map arrives: lines and the centre parcel');
+  ok(parcelLayers(m4).length === 1 && asks.length === 1 && polys.length === 1, 'the map arrives: lines and the centre parcel');
   ok(banners.length === 0 && /APN 17-16-222-009/.test(button.title), 'quietly: the tooltip says it, no banner on a page load');
 
   /* the list failed to load: the toggle still answers and says why */
@@ -262,6 +314,42 @@ var RING = [[41.8780, -87.6300], [41.8780, -87.6296], [41.8783, -87.6296], [41.8
   ctx._gmap = makeMap(CHI[0], CHI[1], 19);
   vm.runInContext('pcToggle()', ctx); await settle();
   ok(parcelLayers(ctx._gmap).length === 0 && /did not load/.test(banners[banners.length - 1]), 'no list: no layers, and it says the list did not load');
+
+  /* ── Regrid: every county, when the server has the key ─────────────── */
+  page(null, { answer: { ok: true, ticket: '2026-10.TICKET', minZoom: 15, source: 'Regrid' } });
+  var g1 = makeMap(KANSAS[0], KANSAS[1], 18);
+  ctx._gmap = g1;
+  vm.runInContext('pcToggle()', ctx); await settle(); await settle();
+  var rl = parcelLayers(g1);
+  ok(POSTS.length === 1 && POSTS[0].url === '/api/parcel-tiles' && POSTS[0].method === 'POST' && POSTS[0].auth === 'Bearer id-token', 'Regrid: one POST for a ticket, signed in');
+  ok(rl.length === 1 && /Regrid/.test(rl[0].name), 'Regrid answers: its one layer replaces the county layers (no double lines)');
+  ok(g1.overlayMapTypes.getAt(0).name === 'USGS 3DEP', 'and the overlay that was there stays');
+  var tk = tileOf(KANSAS[0], KANSAS[1], 18), cv = rl[0].getTile({ x: tk[0], y: tk[1] }, 18, DOC);
+  eq(cv['data-src'], '/api/parcel-tiles?z=18&x=' + tk[0] + '&y=' + tk[1] + '&t=2026-10.TICKET', 'a tile is asked of our relay with the ticket, never of Regrid with a key');
+  ok(!rl[0].getTile({ x: 0, y: 0 }, 14, DOC)['data-src'], 'nothing is asked below z15');
+  ok(/Lines from Regrid \(every county\)/.test(button.title), 'the tooltip says Regrid draws every county: ' + button.title);
+  vm.runInContext('pcToggle()', ctx); vm.runInContext('pcToggle()', ctx); await settle();
+  ok(POSTS.length === 1 && /Regrid/.test(parcelLayers(g1)[0].name), 'off and on: the ticket is kept, no second POST');
+  var g2 = makeMap(RAL[0], RAL[1], 18);
+  ctx._gmap = g2; intervals[intervals.length - 1](); await settle();
+  ok(parcelLayers(g2).length === 1 && /Regrid/.test(parcelLayers(g2)[0].name) && POSTS.length === 1, 'a rebuilt map gets Regrid straight away');
+
+  page(null, { answer: { ok: false, reason: 'not-configured' } });
+  var g3 = makeMap(CHI[0], CHI[1], 19);
+  ctx._gmap = g3;
+  vm.runInContext('pcToggle()', ctx); await settle(); await settle();
+  ok(POSTS.length === 1 && parcelLayers(g3).length === 1 && !/Regrid/.test(parcelLayers(g3)[0].name), 'no key on the server: the county layers stay');
+  vm.runInContext('pcToggle()', ctx); vm.runInContext('pcToggle()', ctx); await settle();
+  ok(POSTS.length === 1, 'and a definite no is not asked again this page');
+  ok(/not-configured/.test(JSON.stringify(vm.runInContext('OmegaParcels.status()', ctx))), 'status() says why');
+
+  page(null, { fail: true });
+  var g4 = makeMap(CHI[0], CHI[1], 19);
+  ctx._gmap = g4;
+  vm.runInContext('pcToggle()', ctx); await settle(); await settle();
+  ok(parcelLayers(g4).length === 1 && !/Regrid/.test(parcelLayers(g4)[0].name), 'the relay did not answer: the county layers stay');
+  vm.runInContext('pcToggle()', ctx); vm.runInContext('pcToggle()', ctx); await settle();
+  ok(POSTS.length === 2, 'and it is asked again next time');
 
   console.log('parcel lines: ' + n + ' checks passed.');
 })().catch(function (e) { console.error(e); process.exit(1); });

@@ -60,7 +60,12 @@ CATALOG.forEach(function (m) { BY_KEY[m.key] = m; });
 /* Argument-sensitive launchers must never grant Compute from the Lite build family. */
 BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(["_guidedPick('der')", "_guidedPick('standard')", "_guidedPick('deluxe')", "_guidedPick('l2')", "_guidedPick('ev')", "homeStartWizard('FOM')", "openRpPanel('summary')", "rpTab('summary')"]);
 BY_KEY.compute.ribbon.push("_guidedPick('compute')");
-BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost');
+BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost',
+  /* Summary in Estimate › Cost & ROI (2026-10-03) is the same panel as View's,
+     but Estimate's command: a copy owned by Omega Design on a tab gated
+     behind engineering would make Omega Design itself read partly locked on
+     a lower legacy tier. View's openRpPanel('summary') stays Omega Design's. */
+  "openRpPanel('summary','estimate')");
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
   lite: 'rb-color rb-fence-tie rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-trace-boundary rb-design-ai rb-nrel-key',
@@ -83,7 +88,7 @@ BY_KEY.engineering.editorPage = 'analyze';
 BY_KEY.storage.editorPage = 'analyze';
 BY_KEY.ops.editorPage = 'analyze';
 BY_KEY.plansets.editorPage = 'output';
-BY_KEY.finance.editorPage = 'output';
+BY_KEY.finance.editorPage = 'finance';
 BY_KEY.evrebates.editorPage = 'output';
 /* Honest beta disclosures travel with the one catalog projection. Hidden
  * stubs remain NOT_SOLD and are never turned into included features. */
