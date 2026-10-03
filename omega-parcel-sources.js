@@ -68,6 +68,14 @@
       lineLayer: 0, restyle: true, minZoom: 16,
       bbox: [41.46, -88.27, 42.16, -87.52],
       lookup: { layer: 0, idField: 'PIN14_dash', owner: null, county: 'Cook County' } },
+    /* Ameren territory. Added 2026-10-03 for a customer's site at 107 Cass
+       St, Peoria: "Parcels" in the county's Cadastral service (minScale
+       10000, so from z16), PIN and owner_name on each lot. */
+    { id: 'peoria', label: 'Peoria County, IL',
+      service: 'https://gis.peoriacounty.gov/arcgis/rest/services/DP/Cadastral/MapServer',
+      lineLayer: 1, restyle: true, minZoom: 16,
+      bbox: [40.54, -90.00, 41.02, -89.44],
+      lookup: { layer: 1, idField: 'PIN', owner: 'owner_name', county: 'Peoria County' } },
     /* "Parcels_LY": the county's published basemap parcels. */
     { id: 'will', label: 'Will County, IL',
       service: 'https://gis.willcountyillinois.com/hosting/rest/services/Basemap/Parcels_LY_DV/MapServer',
@@ -95,7 +103,7 @@
 
   /* The server asks these for the parcel under a point, in this order:
      tightest box first, Cook last (its box holds DuPage's). */
-  var LOOKUP_ORDER = ['dupage', 'lake', 'cook'];
+  var LOOKUP_ORDER = ['dupage', 'lake', 'peoria', 'cook'];
 
   /* One line style for every layer that takes one: a warm yellow that reads
      on satellite and on the light basemap, never an editor colour. */

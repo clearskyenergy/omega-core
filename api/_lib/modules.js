@@ -83,7 +83,7 @@ BY_KEY.engineering.editorPage = 'analyze';
 BY_KEY.storage.editorPage = 'analyze';
 BY_KEY.ops.editorPage = 'analyze';
 BY_KEY.plansets.editorPage = 'output';
-BY_KEY.finance.editorPage = 'output';
+BY_KEY.finance.editorPage = 'finance';
 BY_KEY.evrebates.editorPage = 'output';
 /* Honest beta disclosures travel with the one catalog projection. Hidden
  * stubs remain NOT_SOLD and are never turned into included features. */

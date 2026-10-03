@@ -1376,7 +1376,11 @@ tenant. Treat it that way.
   and state parcel services. The editor's View › Parcel Lines draws them on
   the map and `api/parcel.js` asks the same counties for a point; a county
   that moves its layer is fixed there, never pasted into a page
-  (`scripts/tests/tparcellines.js`).
+  (`scripts/tests/tparcellines.js`). Every other county comes from Regrid's
+  tiles through `api/parcel-tiles.js` (REGRID_TOKEN with a Tileserver
+  subscription; the token never reaches a browser, a monthly HMAC ticket
+  does, so Vercel's edge caches one copy of a tile for everyone;
+  `scripts/tests/tparceltiles.js`). Google's Maps API has no parcel layer.
 - `npm run check:dashboard` renders the tenant dashboard (`index.html`) in
   Chromium, signed in, with the Firebase compat SDK replaced by
   `scripts/_lib/firebase-double.js` and four tenants from

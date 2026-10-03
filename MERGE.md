@@ -2730,3 +2730,50 @@ in the editor under view").
 - Tests: `scripts/tests/tparcellines.js` (the list, the tile maths, and the
   editor's block cut out of `editor.html` and run on a stand-in Google
   map); `scripts/tests/tparcel.js` (unchanged, now in `npm test`).
+
+## Parcel lines everywhere; a Finance tab; no label on its caption — October 3, 2026
+
+Tommy, from the live editor at a customer's site in Peoria: "the whole point
+is that we need the map to show the parcels like what the gis would show and
+the property boundaries", then "build an api and get all the GIS data we can
+get", "make sure text layers dont overlap", "put summary in estimate panel"
+and "these should have their own tab in the panel finance".
+
+- **Peoria County** joins `omega-parcel-sources.js` (DP/Cadastral layer 1,
+  from z16), for drawing and for the server's point lookup (PIN,
+  owner_name). The lookup order is DuPage, Lake, Peoria, Cook.
+- **`api/parcel-tiles.js`** relays Regrid's nationwide parcel tiles. POST
+  (a signed-in member of an active workspace) answers a ticket or why not
+  (`not-configured`, `no-tile-access` after one remembered probe tile,
+  `switched-off` by `toolOverrides.parcelTiles === false`); GET serves one
+  PNG for a valid ticket, edge-cached for the month. The ticket is an HMAC
+  of the month under a key derived from REGRID_TOKEN, the same for everyone
+  so the edge cache is shared; last month's is honoured across the turn.
+  Regrid's terms license the tiles for exactly this (a Tileserver
+  subscription; regrid.com/terms/api). Their unkeyed endpoint answering is
+  not a licence and is never used.
+- The editor asks for a ticket when Parcel Lines comes on; where it gets
+  one, a single Regrid layer replaces the county layers on that map, its
+  dark-green lines repainted in the Parcel Lines yellow on a canvas (the
+  tile is same-origin, so nothing is tainted). Without one, the county
+  layers draw as before.
+- **No label on its caption.** Two label lines, the icon and the button's
+  padding came to ~57px where a 78px ribbon leaves ~50px, so every second
+  line spilled onto the caption rule (onto the caption itself in macOS
+  fonts). The ribbon's last style block now fixes the line heights in
+  pixels and trims the button's padding: 50px over an 18px caption. The
+  title bar gives way in order (key hints, then the search words, then the
+  project name) instead of cutting "Pro" or wrapping "Ask Jarvis".
+  `scripts/render-editor-plan.js` measures every label against its caption
+  on every tab, packaged and legacy (Pro and Designer), and fails on the
+  old CSS.
+- **Finance tab** (`data-page="finance" data-module="finance"`): Push to
+  Marketplace, Apply for Financing and Helios Intake move out of Output's
+  Marketplace group with their caps unchanged; `finance.editorPage` is
+  `finance`, so a package without Omega Capital sees the tab marked Opt in.
+  Designer mode keeps it hidden, as those three were.
+- **Summary** also sits in Estimate › Cost & ROI (`rb-est-summary`); the View
+  copy stays, because Estimate is plan-gated and Summary is Omega Design's.
+- `render-admin-account.js`: the legacy fixture's dates follow the run (a
+  fixed 2026-10-17 due date fell inside "due soon" on 2026-10-03).
+

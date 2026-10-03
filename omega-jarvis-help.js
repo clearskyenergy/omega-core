@@ -461,7 +461,7 @@
   function addChip() {
     var right = doc.querySelector('#tb .tb-right');
     if (!right || doc.getElementById('omega-jarvis-chip')) return !!right;
-    var d = el('div', 'display:inline-flex;align-items:center;gap:6px;margin-right:8px;padding:3px 9px;border:1px solid #26364d;border-radius:7px;cursor:pointer;color:#C7D4E2;font:600 11.5px ' + FONT);
+    var d = el('div', 'display:inline-flex;align-items:center;gap:6px;margin-right:8px;padding:3px 9px;white-space:nowrap;flex-shrink:0;border:1px solid #26364d;border-radius:7px;cursor:pointer;color:#C7D4E2;font:600 11.5px ' + FONT);
     d.id = 'omega-jarvis-chip';
     d.title = 'Ask Jarvis about this site or the tool (F1)';
     d.appendChild(el('span', 'width:16px;height:16px;border-radius:4px;background:#2B5FA8;color:#fff;display:grid;place-items:center;font-size:10px;font-weight:700', 'J'));
