@@ -59,6 +59,10 @@ function overlaps(P, Q) {
   for (i = 0; i < P.length; i++) for (j = 0; j < Q.length; j++) if (cross(P[i], P[(i + 1) % P.length], Q[j], Q[(j + 1) % Q.length])) return true;
   return false;
 }
+function shrink(z) {
+  var c = z.reduce(function (m, p) { return { x: m.x + p.x / z.length, y: m.y + p.y / z.length }; }, { x: 0, y: 0 });
+  return z.map(function (p) { var dx = p.x - c.x, dy = p.y - c.y, L = Math.sqrt(dx * dx + dy * dy) || 1; return { x: p.x - dx / L * 0.01, y: p.y - dy / L * 0.01 }; });
+}
 /* the corners-only rule this replaced, for the before/after */
 function cornersOnly(t, excl) { return tablePoly(t).some(function (c) { return excl.some(function (z) { return inside(c, z); }); }); }
 
@@ -67,16 +71,26 @@ var lot = [{ x: 0, y: 0 }, { x: 320 * ppf, y: 0 }, { x: 320 * ppf, y: 140 * ppf 
 function pad(cx, cy, wft, hft) { var w = wft * ppf / 2, h = hft * ppf / 2; return [{ x: cx - w, y: cy - h }, { x: cx + w, y: cy - h }, { x: cx + w, y: cy + h }, { x: cx - w, y: cy + h }]; }
 /* a battery pad, a transformer pad and a tiny pedestal, as the autopilot reserves them */
 var pads = [pad(160 * ppf, 70 * ppf, 26, 20), pad(100 * ppf, 40 * ppf, 16, 14), pad(230 * ppf, 100 * ppf, 8, 8)];
-[['fixed-ground', 20, 12], ['carport', 20, 40], ['tracker', 180, 6]].forEach(function (tb) {
-  var tw = tb[1] * ppf, th = tb[2] * ppf, pitch = th / 0.4, gap = Math.max(2 * ppf, tw * 0.08);
+/* GM_TABLE's own sizes: fixed-ground 20 x 12, carport 20 x 40, tracker-1ax
+   6 x 180 (the tracker on a lot deep enough to take its 180 ft rows at
+   every azimuth tried; a fill with no tables proves nothing, so each one
+   must lay some and lose some to the pads) */
+var bigLot = [{ x: 0, y: 0 }, { x: 460 * ppf, y: 0 }, { x: 460 * ppf, y: 460 * ppf }, { x: 0, y: 460 * ppf }];
+var bigPads = [pad(230 * ppf, 230 * ppf, 26, 20), pad(150 * ppf, 120 * ppf, 16, 14), pad(330 * ppf, 340 * ppf, 8, 8)];
+[['fixed-ground', 20, 12, lot, pads], ['carport', 20, 40, lot, pads], ['tracker-1ax', 6, 180, bigLot, bigPads]].forEach(function (tb) {
+  var tw = tb[1] * ppf, th = tb[2] * ppf, pitch = th / 0.4, gap = Math.max(2 * ppf, tw * 0.08), field = tb[3], keep = tb[4];
+  if (tb[0] === 'tracker-1ax') pitch = tw / 0.33;   /* the tracker fix: chord is the pitch axis */
   [0, 15, 30, 90, 137].forEach(function (deg) {
     var ang = deg * Math.PI / 180;
-    var clear = E.fitAtAngle(lot, ang, tw, th, pitch, gap, 0, [], 100000, 0, 0).tables;
-    var withPads = E.fitAtAngle(lot, ang, tw, th, pitch, gap, 0, pads, 100000, 0, 0).tables;
-    var under = withPads.filter(function (t) { var P = tablePoly(t); return pads.some(function (z) { return overlaps(P, z); }); });
-    ok(under.length === 0, tb[0] + ' at ' + deg + '°: no table over a reserved pad (' + withPads.length + ' of ' + clear.length + ' tables kept)');
+    var clear = E.fitAtAngle(field, ang, tw, th, pitch, gap, 0, [], 100000, 0, 0).tables;
+    var withPads = E.fitAtAngle(field, ang, tw, th, pitch, gap, 0, keep, 100000, 0, 0).tables;
+    /* overlap of the INSIDES: a table that only touches a pad's edge (the
+       grid lands on one exactly at 0° and 90°) is not over it */
+    var under = withPads.filter(function (t) { var P = tablePoly(t); return keep.some(function (z) { return overlaps(P, shrink(z)); }); });
+    ok(clear.length > 0 && withPads.length < clear.length && under.length === 0,
+       tb[0] + ' at ' + deg + '°: no table over a reserved pad (' + withPads.length + ' of ' + clear.length + ' tables kept)');
     if (tb[0] === 'carport' && deg === 0) {
-      var missed = clear.filter(function (t) { var P = tablePoly(t); return pads.some(function (z) { return overlaps(P, z); }) && !cornersOnly(t, pads); });
+      var missed = clear.filter(function (t) { var P = tablePoly(t); return pads.some(function (z) { return overlaps(P, shrink(z)); }) && !cornersOnly(t, pads); });
       ok(missed.length > 0, 'carport at 0°: the corners-only rule would have kept ' + missed.length + ' table(s) over a pad - the miss, reproduced');
     }
   });

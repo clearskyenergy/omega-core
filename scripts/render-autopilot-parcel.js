@@ -19,6 +19,10 @@
  *                    every committed run stays on the lot; the PV step
  *                    snapped to the array; no table of the array sits over
  *                    an equipment box
+ *                    at 2, 5 and 8 MWh: the battery block is drawn centred
+ *                    where the plan put it, at its rated footprint (it used
+ *                    to grow right and down from the default cabinet's
+ *                    corner, onto the next piece or over the lot line)
  *   battery chain    the BTM sequence on the same lot stops before the POI
  *                    (still a click) with every piece and run on the lot
  * Fails on a page error. A screenshot of each goes to the shots folder
@@ -106,7 +110,7 @@ function build(args) {
 
   /* stepSize with mw=1 / mwh=2 */
   var BGB = _bgbState();
-  BGB.kw = 1000; BGB.kwh = 2000; BGB.mode = 'BTM'; BGB.sizeLocked = true;
+  BGB.kw = args.kw; BGB.kwh = args.kwh; BGB.mode = 'BTM'; BGB.sizeLocked = true;
   BGB.cfg = _bgbGenericCfg(BGB.kw, BGB.kwh);
   window.__omegaForceMode = 'BTM'; window.__omegaTieFrom = null;
   _bgbSync();
@@ -114,7 +118,7 @@ function build(args) {
   /* stepBuild */
   if (args.solar) { window.__omegaForceMode = 'SOLAR_BESS'; window.__omegaSolarEntry = true; }
   _bgbStartPlacing();
-  var pl = OmegaAutopilot.plan(), lay = null;
+  var pl = OmegaAutopilot.plan({ pvPoint: args.solar }), lay = null;
   if (args.solar) {
     lay = computeGroundLayout({ boundary: px, exclusions: pl.keepOut });
     applyGroundLayout(px, lay, pl.keepOut);
@@ -140,7 +144,10 @@ function build(args) {
     return true;
   }
   var setback = 5 * ppf, out = { placed: placed, pieces: [], runs: 0, runsOff: [], under: 0, moved: pl.moved, tables: 0,
-                                 pvSnapped: false, active: BGB.active, next: _bgbCurKind(), errors: [] };
+                                 pvSnapped: false, active: BGB.active, next: _bgbCurKind(), errors: [], offPlan: [],
+                                 fp: _bessFootprint(args.kwh, args.kw), bessFt: null };
+  var spot = {};
+  pl.placed.forEach(function (q) { spot[q.kind] = q.pt; });
   (S.elements || []).forEach(function (el) {
     if (!el || !el.bgbRole) return;
     var x0 = el.x - setback, y0 = el.y - setback, x1 = el.x + el.w + setback, y1 = el.y + el.h + setback;
@@ -148,6 +155,12 @@ function build(args) {
     var on = corners.every(function (c) { return inPoly(c, px); });
     for (var e = 0; on && e < 4; e++) for (var j = 0; j < px.length; j++) if (cross(corners[e], corners[(e + 1) % 4], px[j], px[(j + 1) % px.length])) on = false;
     out.pieces.push({ role: el.bgbRole, label: el.label, on: on, box: [Math.round(el.x), Math.round(el.y), Math.round(el.w), Math.round(el.h)] });
+    /* drawn where the plan put it: the box centred on the planned spot */
+    var want = spot[el.evRole];
+    if (want && (Math.abs(el.x + el.w / 2 - want.x) > 1 || Math.abs(el.y + el.h / 2 - want.y) > 1))
+      out.offPlan.push(el.evRole + ' centred at ' + Math.round(el.x + el.w / 2) + ',' + Math.round(el.y + el.h / 2)
+        + ', planned ' + Math.round(want.x) + ',' + Math.round(want.y));
+    if (el.bgbRole === 'bess') out.bessFt = { lf: el.lf, wf: el.wf };
   });
   (S._trenches || []).forEach(function (t) {
     out.runs++;
@@ -179,8 +192,11 @@ async function run() {
   var base = 'http://127.0.0.1:' + server.address().port;
   var browser = await chromium.launch({ executablePath: process.env.CHROME || chromium.executablePath() });
   try {
-    for (var mode of [{ name: 'solar + storage', solar: true, ppf: 1.45 }, { name: 'solar + storage', solar: true, ppf: 3 },
-                      { name: 'battery chain', solar: false, ppf: 2 }]) {
+    for (var mode of [{ name: 'solar + storage', solar: true, ppf: 1.45, kw: 1000, kwh: 2000 },
+                      { name: 'solar + storage', solar: true, ppf: 3, kw: 1000, kwh: 2000 },
+                      { name: 'solar + storage', solar: true, ppf: 1.45, kw: 2500, kwh: 5000 },
+                      { name: 'solar + storage', solar: true, ppf: 3, kw: 4000, kwh: 8000 },
+                      { name: 'battery chain', solar: false, ppf: 2, kw: 1000, kwh: 2000 }]) {
       var context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
       await context.addInitScript(fixture);
       await context.route('**/*', function (route) {
@@ -199,8 +215,8 @@ async function run() {
           && window.computeGroundLayout.__omegaAxisFix;
       }, null, { timeout: 30000 });
       await page.waitForTimeout(2500);
-      var tag = mode.name + ' at ' + mode.ppf + ' px/ft';
-      var r = await page.evaluate(build, { ppf: mode.ppf, ring: RING, solar: mode.solar });
+      var tag = mode.name + ' ' + (mode.kwh / 1000) + ' MWh at ' + mode.ppf + ' px/ft';
+      var r = await page.evaluate(build, { ppf: mode.ppf, ring: RING, solar: mode.solar, kw: mode.kw, kwh: mode.kwh });
       console.log('  ' + tag + ': ' + r.placed.join(' > ') + (r.moved.length ? '   (turned: ' + r.moved.join(', ') + ')' : ''));
       r.pieces.forEach(function (p) { console.log('     ' + (p.on ? 'on lot ' : 'OFF    ') + p.role.padEnd(9) + ' ' + p.label + ' ' + JSON.stringify(p.box)); });
       var want = mode.solar ? ['service', 'utilxfmr', 'mainswgr', 'bess', 'pvinv', 'loads'] : ['bess', 'xfmr', 'disco', 'panel', 'meter'];
@@ -208,6 +224,9 @@ async function run() {
       ok(want.every(function (w) { return roles.indexOf(w) >= 0; }), tag + ': the build placed ' + want.join(', '));
       ok(r.pieces.length && r.pieces.every(function (p) { return p.on; }), tag + ': every piece\'s drawn box is inside the parcel with 5 ft to spare');
       ok(r.runs >= want.length - 1 && r.runsOff.length === 0, tag + ': all ' + r.runs + ' runs stay on the lot');
+      ok(r.offPlan.length === 0, tag + ': every piece is drawn centred where the plan put it' + (r.offPlan.length ? ' - ' + r.offPlan.join('; ') : ''));
+      if (mode.solar) ok(r.bessFt && r.bessFt.lf === r.fp.lf && r.bessFt.wf === r.fp.wf,
+        tag + ': the battery block keeps its rated ' + r.fp.lf + ' x ' + r.fp.wf + ' ft through a zoom (lf/wf recorded)');
       if (mode.solar) {
         ok(r.tables > 20, tag + ': the array was laid (' + r.tables + ' tables)');
         ok(r.under === 0, tag + ': no table of the array is over an equipment box');
@@ -217,7 +236,7 @@ async function run() {
         ok(r.active === true && r.next === 'service', tag + ': stopped before the POI, which stays a click');
       }
       ok(errors.length === 0, tag + ': no page error' + (errors.length ? ' - ' + errors.slice(0, 3).join(' | ') : ''));
-      await page.screenshot({ path: path.join(output, (mode.solar ? 'solar-storage' : 'battery-chain') + '-' + mode.ppf + '.png') });
+      await page.screenshot({ path: path.join(output, (mode.solar ? 'solar-storage' : 'battery-chain') + '-' + (mode.kwh / 1000) + 'mwh-' + mode.ppf + '.png') });
       await context.close();
     }
   } finally {

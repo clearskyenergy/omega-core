@@ -83,30 +83,62 @@ function planOn(ring, o) {
   var ppf = o.ppf, Gx = load(rootFor(ppf));
   var fp = o.fp || FP_2MWH;
   return Gx._plan({ Pc: o.Pc || meanOf(ring), v: o.v, ppf: ppf, ring: ring, blds: o.blds || [],
-                    seq: o.build.seq, parents: o.build.parents, fp: fp, box: Gx._boxer(fp, ppf) });
+                    seq: o.build.seq, parents: o.build.parents, fp: fp, box: Gx._boxer(fp, ppf),
+                    pvPoint: o.pvPoint === undefined ? o.build === SOLAR : o.pvPoint });
 }
 
-/* Everything the plan promises, checked from the outside. */
+/* ── THE ORACLE. Nothing in it is cut from editor.html: a planner that
+   judged itself with its own _polyInPoly and _segOnLot passed with either
+   one broken (the review's mutation runs, 2026-10-03). Winding-number
+   point-in-polygon, and every box edge and every run sampled every half
+   pixel, plus no lot or building vertex inside a box. ───────────────── */
+function pip(p, poly) {
+  var wn = 0;
+  for (var i = 0; i < poly.length; i++) {
+    var a = poly[i], b = poly[(i + 1) % poly.length];
+    var left = (b.x - a.x) * (p.y - a.y) - (p.x - a.x) * (b.y - a.y);
+    if (a.y <= p.y) { if (b.y > p.y && left > 0) wn++; } else if (b.y <= p.y && left < 0) wn--;
+  }
+  return wn !== 0;
+}
+function samples(a, b, step) {
+  var n = Math.max(1, Math.ceil(Math.sqrt((b.x - a.x) * (b.x - a.x) + (b.y - a.y) * (b.y - a.y)) / step)), out = [];
+  for (var i = 0; i <= n; i++) out.push({ x: a.x + (b.x - a.x) * i / n, y: a.y + (b.y - a.y) * i / n });
+  return out;
+}
+function corners(pt, w, h, grow) {
+  var hw = w / 2 + grow, hh = h / 2 + grow;
+  return [{ x: pt.x - hw, y: pt.y - hh }, { x: pt.x + hw, y: pt.y - hh }, { x: pt.x + hw, y: pt.y + hh }, { x: pt.x - hw, y: pt.y + hh }];
+}
+function strictlyIn(v, c) { return v.x > c[0].x && v.x < c[2].x && v.y > c[0].y && v.y < c[2].y; }
+function boxOnLot(pt, w, h, grow, ring) {
+  var c = corners(pt, w, h, grow);
+  for (var e = 0; e < 4; e++) if (!samples(c[e], c[(e + 1) % 4], 0.5).every(function (p) { return pip(p, ring); })) return false;
+  return ring.every(function (v) { return !strictlyIn(v, c); });
+}
+function boxOffBuilding(pt, w, h, bld) {
+  var c = corners(pt, w, h, 0);
+  if (bld.some(function (v) { return strictlyIn(v, c); })) return false;
+  for (var e = 0; e < 4; e++) if (samples(c[e], c[(e + 1) % 4], 0.5).some(function (p) { return pip(p, bld); })) return false;
+  return !pip(pt, bld);
+}
+function runOnLot(a, b, ring) { return samples(a, b, 0.5).every(function (p) { return pip(p, ring); }); }
+
+/* Everything the plan promises, checked by the oracle. */
+var SETBACK_FT = 5, GAP_FT = 4;
 function violations(p, ring, ppf, blds) {
-  var out = [], lot = G.LOT_SETBACK_FT * ppf, gap = G.PAD_GAP_FT * ppf;
+  var out = [], lot = SETBACK_FT * ppf - 0.01, gap = GAP_FT * ppf;
   p.placed.forEach(function (q) {
-    if (ring && !G._polyInPoly(G._box(q.pt, q.w, q.h, lot), ring)) out.push(q.kind + ' box crosses the lot line');
+    if (ring && !boxOnLot(q.pt, q.w, q.h, lot, ring)) out.push(q.kind + ' box crosses the lot line');
+    if (blds && G.OUTDOOR_ONLY[q.kind] && !blds.every(function (bl) { return boxOffBuilding(q.pt, q.w, q.h, bl); }))
+      out.push(q.kind + ' is on a building');
   });
-  p.nodes.forEach(function (n) {
-    if (ring && !G._segOnLot(n.from, n.pt, ring)) out.push(n.kind + ' run leaves the lot');
-    if (blds && blds.length && G.OUTDOOR_ONLY[n.kind]) {
-      var q = p.placed.filter(function (z) { return z.pt === n.pt; })[0];
-      if (!G._clear(n.pt, q.kind === 'acblock' || q.kind === 'bess' ? 20 : 8, q.kind === 'acblock' || q.kind === 'bess' ? 8 : 6,
-                    { x: 0, y: 1 }, ppf, blds) &&
-          !G._clear(n.pt, q.kind === 'acblock' || q.kind === 'bess' ? 20 : 8, q.kind === 'acblock' || q.kind === 'bess' ? 8 : 6,
-                    { x: 1, y: 0 }, ppf, blds)) out.push(n.kind + ' is on a building');
-    }
-  });
+  p.nodes.forEach(function (n) { if (ring && !runOnLot(n.from, n.pt, ring)) out.push(n.kind + ' run leaves the lot'); });
   for (var a = 0; a < p.placed.length; a++) {
     for (var b = a + 1; b < p.placed.length; b++) {
       var A = p.placed[a], B = p.placed[b];
-      if (Math.abs(A.pt.x - B.pt.x) < (A.w + B.w) / 2 + gap - 1e-6 && Math.abs(A.pt.y - B.pt.y) < (A.h + B.h) / 2 + gap - 1e-6)
-        out.push(A.kind + ' and ' + B.kind + ' overlap');
+      if (Math.abs(A.pt.x - B.pt.x) < (A.lf + B.lf) * ppf / 2 + gap - 1e-6 && Math.abs(A.pt.y - B.pt.y) < (A.wf + B.wf) * ppf / 2 + gap - 1e-6)
+        out.push(A.kind + ' and ' + B.kind + ' within ' + GAP_FT + ' ft');
     }
   }
   return out;
@@ -168,23 +200,45 @@ console.log('\nwhere each run starts');
      'solar + storage: each run starts at its parent (placeBgbAt\'s _pk)');
 })();
 
+/* ── 3b. a walk that turns at the line carries on along it ─────────────── */
+console.log('\na walk that turns at the lot line');
+(function () {
+  /* 600 x 60 ft, the walk facing into the short side: the first piece has
+     to turn, and the rest follow it along the lot in one line rather than
+     trying the street again and doubling back past the battery */
+  var ppf = 2, lot = [{ x: 0, y: 0 }, { x: 600 * ppf, y: 0 }, { x: 600 * ppf, y: 60 * ppf }, { x: 0, y: 60 * ppf }];
+  var p = planOn(lot, { ppf: ppf, v: { x: 0, y: 1 }, Pc: { x: 300 * ppf, y: 30 * ppf }, build: BTM });
+  var xs = p.placed.map(function (q) { return q.pt.x; }), ys = p.placed.map(function (q) { return Math.round(q.pt.y); });
+  var oneWay = xs.every(function (x, i) { return i < 2 || Math.sign(x - xs[i - 1]) === Math.sign(xs[1] - xs[0]); });
+  ok(violations(p, lot, ppf).length === 0 && oneWay && ys.every(function (y) { return y === ys[0]; }),
+     'every piece in one line along the lot, one way (' + p.placed.map(function (q) { return q.kind + '@' + Math.round(q.pt.x / ppf); }).join(' ') + ')');
+})();
+
 /* ── 4. open ground and no parcel: the straight walk, untouched ──────── */
 console.log('\nnothing moves that did not have to');
-[BTM, SOLAR].forEach(function (build) {
-  var ppf = 2, Pc = { x: 5000, y: 5000 }, v = { x: 0.6, y: 0.8 };
-  var huge = [{ x: 0, y: 0 }, { x: 10000, y: 0 }, { x: 10000, y: 10000 }, { x: 0, y: 10000 }];
-  [huge, null].forEach(function (ring) {
-    var Gx = load(rootFor(ppf));
-    var p = Gx._plan({ Pc: Pc, v: v, ppf: ppf, ring: ring, blds: [], seq: build.seq, parents: build.parents,
-                       fp: FP_2MWH, box: Gx._boxer(FP_2MWH, ppf) });
-    var same = p.nodes.every(function (n, ix) {
-      var want = FP_2MWH.lf / 2 + 30 * (ix + 1);
-      return Math.abs(n.pt.x - (Pc.x + v.x * want * ppf)) < 1e-6 && Math.abs(n.pt.y - (Pc.y + v.y * want * ppf)) < 1e-6;
+/* At every scale the autopilot draws at: a big parcel is fitted at
+   ~0.6 px/ft (Google zoom 18), where a symbol's pixel floor stands for
+   45 ft of kit. Spacing by that floor moved pieces and lengthened the runs
+   with the zoom (the review, 2026-10-03); spacing is on the real kit. */
+[0.31, 0.616, 1, 2, 4].forEach(function (ppf) {
+  [BTM, SOLAR].forEach(function (build) {
+    [{ x: 0, y: 1 }, { x: 1, y: 0 }, { x: 0.6, y: 0.8 }, { x: -0.8, y: 0.6 }].forEach(function (v) {
+      var Pc = { x: 50000, y: 50000 };
+      var huge = [{ x: 0, y: 0 }, { x: 100000, y: 0 }, { x: 100000, y: 100000 }, { x: 0, y: 100000 }];
+      [huge, null].forEach(function (ring) {
+        var Gx = load(rootFor(ppf));
+        var p = Gx._plan({ Pc: Pc, v: v, ppf: ppf, ring: ring, blds: [], seq: build.seq, parents: build.parents,
+                           fp: FP_2MWH, box: Gx._boxer(FP_2MWH, ppf), pvPoint: build === SOLAR });
+        var same = p.nodes.every(function (n, ix) {
+          var want = FP_2MWH.lf / 2 + 30 * (ix + 1);
+          return Math.abs(n.pt.x - (Pc.x + v.x * want * ppf)) < 1e-6 && Math.abs(n.pt.y - (Pc.y + v.y * want * ppf)) < 1e-6;
+        });
+        var label = ppf + ' px/ft ' + (build === BTM ? 'battery chain' : 'solar + storage') + ' heading ('
+          + v.x + ',' + v.y + ')' + (ring ? ' on open ground' : ' with no parcel');
+        ok(same && p.anchor === Pc && p.where === '' && p.moved.length === 0 && p.onLot === !!ring,
+           label + ': the straight walk\'s spots, nothing reported moved');
+      });
     });
-    var label = (build === BTM ? 'battery chain' : 'solar + storage') + (ring ? ' on open ground' : ' with no parcel');
-    ok(same && p.anchor === Pc && p.where === '', label + ': the same spots the straight walk gave');
-    ok(p.moved.length === 0, label + ': nothing reported as moved');
-    ok(p.onLot === !!ring, label + ': onLot says whether a parcel held it');
   });
 });
 
@@ -249,6 +303,81 @@ console.log('\nbuildings on the lot');
      'a lot tight behind the building: on the lot or refused, never over the line' + (e2 ? ' ("' + e2 + '")' : ''));
 })();
 
+/* ── 7b. the first piece on a built lot, tight behind the building ───── */
+console.log('\nthe first piece fits on a built lot too');
+(function () {
+  /* The first spot behind the building has its CENTRE on the lot and its
+     box over the rear line: only the fit test passed to _behind catches it. */
+  var ppf = 2, s = ppf;
+  var lot = [{ x: 0, y: 35 * s }, { x: 300 * s, y: 35 * s }, { x: 300 * s, y: 260 * s }, { x: 0, y: 260 * s }];
+  var shop = [{ x: 80 * s, y: 60 * s }, { x: 220 * s, y: 60 * s }, { x: 220 * s, y: 180 * s }, { x: 80 * s, y: 180 * s }];
+  var p = planOn(lot, { ppf: ppf, v: { x: 0, y: 1 }, Pc: { x: 150 * s, y: 130 * s }, blds: [shop], build: BTM });
+  var bad = violations(p, lot, ppf, [shop]);
+  ok(bad.length === 0, 'the battery and the rest stay on the lot with the rear line 25 ft behind the building'
+    + (bad.length ? ' - ' + bad.join('; ') : ''));
+})();
+
+/* ── 7c. a slot cut into the lot: no box straddles it, no run crosses it ── */
+console.log('\na lot with a slot cut into it');
+(function () {
+  /* A 9 ft slot 200 ft deep (the review's lot, 1.45 px/ft). Corners-only
+     box tests and endpoint-only run tests both put kit across it. */
+  var ppf = 1.45;
+  var slot = [{ x: 300, y: 300 }, { x: 407.5, y: 300 }, { x: 407.5, y: 498.5 }, { x: 421, y: 498.5 }, { x: 421, y: 300 },
+              { x: 488, y: 300 }, { x: 488, y: 706.7 }, { x: 300, y: 706.7 }];
+  var bad = [], plans = 0;
+  for (var deg = 0; deg < 360; deg += 10) {
+    var t = deg * Math.PI / 180, v = { x: Math.cos(t), y: Math.sin(t) };
+    [BTM, SOLAR].forEach(function (build) {
+      [true, false].forEach(function (pvPoint) {
+        try {
+          var p = planOn(slot, { ppf: ppf, v: v, build: build, pvPoint: pvPoint }); plans++;
+          violations(p, slot, ppf).forEach(function (m) { bad.push(deg + '°: ' + m); });
+        } catch (e) { if (!/place (it|the rest) by hand/.test(e.message)) bad.push(deg + '°: ' + e.message); }
+      });
+    });
+  }
+  ok(plans > 100 && bad.length === 0, plans + ' plans round the slot: no box across it, no run through it'
+    + (bad.length ? ' - ' + bad.slice(0, 3).join('; ') : ''));
+})();
+
+/* ── 7d. a big L: its vertex mean is far out in the notch ─────────────── */
+console.log('\na big L-shaped parcel');
+(function () {
+  var ppf = 0.3, s = ppf;                      /* 3000 ft arms, 200 ft wide: a farm parcel */
+  var L = [{ x: 0, y: 0 }, { x: 200 * s, y: 0 }, { x: 200 * s, y: 2800 * s }, { x: 3000 * s, y: 2800 * s },
+           { x: 3000 * s, y: 3000 * s }, { x: 0, y: 3000 * s }];
+  var mean = meanOf(L), far = Infinity;
+  L.forEach(function (q, i) {
+    var a = L[i], b = L[(i + 1) % L.length], ex = b.x - a.x, ey = b.y - a.y, L2 = ex * ex + ey * ey;
+    var tt = Math.max(0, Math.min(1, ((mean.x - a.x) * ex + (mean.y - a.y) * ey) / L2));
+    far = Math.min(far, Math.sqrt(Math.pow(a.x + ex * tt - mean.x, 2) + Math.pow(a.y + ey * tt - mean.y, 2)) / ppf);
+  });
+  ok(!pip(mean, L) && far > 320, 'the vertex mean is ' + Math.round(far) + ' ft off the lot, past the 320 ft search');
+  var p = null, err = null;
+  try { p = planOn(L, { ppf: ppf, v: { x: 0, y: 1 }, Pc: mean, build: BTM }); } catch (e) { err = e.message; }
+  ok(p && pip(p.anchor, L) && /inside the parcel/.test(p.where), 'the battery is still found a place on it'
+    + (err ? ' - threw "' + err + '"' : ' ("' + (p ? p.where.trim() : '') + '")'));
+  ok(p && violations(p, L, ppf).length === 0, 'and the chain follows it on');
+})();
+
+/* ── 7e. the PV hand-off is a point when the build lays an array ──────── */
+console.log('\nthe PV hand-off');
+(function () {
+  var ppf = 1.5, lot = [{ x: 0, y: 0 }, { x: 84 * ppf, y: 0 }, { x: 84 * ppf, y: 81 * ppf }, { x: 0, y: 81 * ppf }];
+  var v = { x: 0.46, y: -0.89 }, n = Math.sqrt(v.x * v.x + v.y * v.y); v = { x: v.x / n, y: v.y / n };
+  var asPoint = null, asBox = null;
+  try { asPoint = planOn(lot, { ppf: ppf, v: v, build: SOLAR, pvPoint: true }); } catch (e) { asPoint = e.message; }
+  try { asBox = planOn(lot, { ppf: ppf, v: v, build: SOLAR, pvPoint: false }); } catch (e) { asBox = e.message; }
+  ok(typeof asPoint === 'object' && violations(asPoint, lot, ppf).length === 0,
+     'an 84 x 81 ft lot takes the whole solar + storage chain when nothing is drawn at the PV hand-off');
+  var pv = typeof asPoint === 'object' ? asPoint.placed.filter(function (q) { return q.kind === 'pv'; })[0] : null;
+  ok(pv && pv.w === 0 && pv.lf === 0, 'the hand-off reserves no box, only its setback and gap');
+  var pvb = typeof asBox === 'object' ? asBox.placed.filter(function (q) { return q.kind === 'pv'; })[0] : null;
+  ok(typeof asBox === 'string' || (pvb && pvb.w > 0 && violations(asBox, lot, ppf).length === 0),
+     'with no array the PV step draws its own box, and the plan measures and fits it');
+})();
+
 /* ── 8. the boxes are the ones the editor draws ──────────────────────── */
 console.log('\nthe box each step is measured by');
 (function () {
@@ -270,7 +399,7 @@ console.log('\nfuzz');
   var seed = 20261003;
   function rnd() { seed = (seed * 1103515245 + 12345) & 0x7fffffff; return seed / 0x7fffffff; }
   var runs = 0, placedRuns = 0, refusals = 0, bad = [];
-  for (var n = 0; n < 400; n++) {
+  for (var n = 0; n < 600; n++) {
     var ppf = [1, 1.45, 2.5, 6][n % 4], cx = 2000, cy = 2000;
     /* a star-shaped lot (every vertex visible from the centre): 4 to 11
        vertices, 60 to 420 ft out, sometimes a rectangle */
@@ -285,11 +414,18 @@ console.log('\nfuzz');
       }
     }
     var t = rnd() * 2 * Math.PI, v = { x: Math.cos(t), y: Math.sin(t) };
+    if (n % 7 === 3) {
+      /* a rectangle with a slot cut in from one side */
+      var W = (160 + rnd() * 300) * ppf, H = (140 + rnd() * 260) * ppf, sx = cx - W / 2 + W * (0.25 + rnd() * 0.5);
+      var sw = (6 + rnd() * 20) * ppf, sd = H * (0.3 + rnd() * 0.5);
+      ring = [{ x: cx - W / 2, y: cy - H / 2 }, { x: sx, y: cy - H / 2 }, { x: sx, y: cy - H / 2 + sd }, { x: sx + sw, y: cy - H / 2 + sd },
+              { x: sx + sw, y: cy - H / 2 }, { x: cx + W / 2, y: cy - H / 2 }, { x: cx + W / 2, y: cy + H / 2 }, { x: cx - W / 2, y: cy + H / 2 }];
+    }
     var build = (n % 2) ? SOLAR : BTM;
     var fp = [{ lf: 5, wf: 3 }, { lf: 10, wf: 5 }, FP_2MWH, { lf: 40, wf: 9.5 }][n % 4];
     runs++;
     try {
-      var p = planOn(ring, { ppf: ppf, v: v, Pc: meanOf(ring), build: build, fp: fp });
+      var p = planOn(ring, { ppf: ppf, v: v, Pc: meanOf(ring), build: build, fp: fp, pvPoint: build === SOLAR && (n % 3 !== 0) });
       placedRuns++;
       violations(p, ring, ppf).forEach(function (m) { bad.push('#' + n + ' ' + m); });
     } catch (e) {

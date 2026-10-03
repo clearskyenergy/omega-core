@@ -92,11 +92,14 @@ ok(/window\._bgbNode=function\(k\)\{ return \(k && BGB_NODES\[k\]\) \|\| null; \
 console.log('the parcel plan');
 {
   const sb = block.slice(block.indexOf('function stepBuild()'), block.indexOf('function score()'));
-  const iPlan = sb.indexOf('pl = planChain(geo)'), iArr = sb.indexOf('solarArray(geo.ring'), iLay = sb.indexOf('layout(pl)');
+  const iPlan = sb.indexOf('pl = planChain(geo, { pvPoint: array })'), iArr = sb.indexOf('solarArray(geo.ring'), iLay = sb.indexOf('layout(pl)');
   ok(iPlan > 0 && iArr > iPlan && iLay > iArr, 'stepBuild plans the chain, then lays the array, then places the chain');
-  ok(/solarArray\(geo\.ring, geo\.blds\.concat\(pl \? pl\.keepOut : \[\]\)\)/.test(sb), 'the array keeps its panels off the planned pads');
-  ok(/if \(planErr\) throw planErr;/.test(sb) && sb.indexOf('if (planErr) throw planErr;') > iArr,
-     'a chain that cannot fit still gets its array, then says why');
+  ok(/solarArray\(geo\.ring, geo\.blds, pl \? pl\.keepOut : \[\]\)/.test(sb), 'the array keeps its panels off the planned pads');
+  const iPErr = sb.indexOf('if (planErr) throw'), iAErr = sb.indexOf('if (arrErr) throw');
+  ok(iPErr > iArr, 'a chain that cannot fit still gets its array, then says why');
+  ok(/catch \(e\) \{\s*arrErr = e;/.test(sb) && iAErr > iLay,
+     'an array that cannot fit beside the equipment still gets the chain, then says why');
+  ok(/pl = planChain\(geo, \{ pvPoint: false \}\)/.test(sb), 'and without an array the chain is planned again with a PV box');
   ok(/function layout\(plan\)/.test(block) && /plan = plan \|\| planChain\(\);/.test(block), 'layout() takes a plan, or makes one');
   ok(!/function at\(ft\)/.test(block), 'the straight walk that ignored the parcel is gone');
   ok(/_polyInPoly\(_box\(c, b\.w, b\.h, lot\), ring\)/.test(block) && /_segOnLot\(from, c, ring\)/.test(block),

@@ -16,17 +16,33 @@ street and the building-loads panel on the lot across it.
   With a parcel, every piece's drawn box (`_evPx`, floors included) sits
   inside the lot with a 5 ft drawing setback, the run that feeds it (its
   parent in a tree build, the last piece in a chain — what `placeBgbAt`
-  lays) stays on the lot, and no two boxes come within 4 ft. Where the
-  straight walk would cross the line it turns along it (eight headings,
-  cost = distance from the 30 ft spacing + the turn). On open ground and
-  with no parcel every piece lands where the straight walk always put it.
-  Nothing fits: the build stops and names the piece. The first piece keeps
-  its old rules (behind the building, clear of one, the centre) and must
-  fit on the lot there too; `_findClear` / `_behind` take an optional fit
-  test for that. Drawing clearances, not code setbacks.
+  lays) stays on the lot, and no two pieces come within 4 ft, measured on
+  the kit's real footprint (a symbol's pixel floor stands for 45 ft of kit
+  at the scale a big parcel is fitted at, and spacing by it moved pieces
+  with the zoom; two drawn symbols touching is only a small tie-break
+  cost). Where the straight walk would cross the line it turns along it
+  (eight headings, cost = distance from the 30 ft spacing + the turn) and
+  carries on that way. On open ground and with no parcel every piece lands
+  where the straight walk always put it, at every scale. Nothing fits: the
+  build stops and names the piece. The first piece keeps its old rules
+  (behind the building, clear of one, the centre) and must fit on the lot
+  there too; `_findClear` / `_behind` take an optional fit test for that,
+  and a centre far off the lot (the notch of a big L) starts the search
+  from the nearest point on it. With an array, the PV step is planned as
+  a point (it hands the run to the array and draws nothing). Drawing
+  clearances, not code setbacks.
 - **The array keeps off the equipment.** `stepBuild` arms and plans the
   chain first, lays the array with the plan's keep-outs, then places the
-  chain. A chain that cannot fit still gets its array, then the refusal.
+  chain. A chain that cannot fit still gets its array, then the refusal;
+  an array squeezed out by the pads still gets the chain (planned again
+  with a PV box of its own), then the refusal, which names the pads.
+- **A rated battery block grows about its centre.** `placeBgbAt`'s placeon
+  path drew the default cabinet centred on the snap point, then set the
+  rated w/h without moving x/y, so a 5–8 MWh block reached 5–15 ft right
+  and down of where it was placed (onto the next piece, or over a lot line
+  the plan had kept it inside), and left the default lf/wf behind, so the
+  next zoom (`omegaRescaleElements`) shrank it back. It is re-centred and
+  records the rated footprint.
 - **`computeGroundLayoutV2` tests exclusions whole.** A table was refused
   only when one of its own corners was inside an exclusion, so a 20 x 40 ft
   carport table covered a battery pad (or a small building) untouched.
@@ -46,12 +62,16 @@ street and the building-loads panel on the lot across it.
   the preset's own legs rather than a copy.
 
 Tests: `scripts/tests/tautopilot-parcel.js` (the planner on the real LA
-ring, every heading, an L-shaped lot, a lot too small, buildings, open
-ground unchanged, a seeded fuzz), `scripts/tests/tsolarexcl.js` (the
-array's keep-outs and the mirror rule), `scripts/tests/tautopilot.js` (the
-wiring), and `npm run check:autopilot` (`scripts/render-autopilot-parcel.js`:
-the full editor in Chromium runs stepBuild's sequence on that ring through
-the real `placeBgbAt` and reads the drawing back). The autopilot tests
+ring, judged by an oracle of its own — no helper cut from the planner:
+every heading, an L-shaped lot, a slot cut into a lot, a big L, a lot too
+small, a lot tight behind a building, open ground unchanged at 0.31–4
+px/ft, a seeded fuzz; each guard removed in turn fails it),
+`scripts/tests/tsolarexcl.js` (the array's keep-outs, every preset laying
+tables, and the mirror rule), `scripts/tests/tautopilot.js` (the wiring),
+and `npm run check:autopilot` (`scripts/render-autopilot-parcel.js`: the
+full editor in Chromium runs stepBuild's sequence on that ring at 2, 5 and
+8 MWh through the real `placeBgbAt` and reads the drawing back: on the
+lot, centred where planned, the rated footprint kept). The autopilot tests
 joined `npm test`.
 
 ## Sales compute screening parity (2026-10-03)

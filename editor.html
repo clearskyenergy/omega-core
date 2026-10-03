@@ -69094,7 +69094,19 @@ function placeBgbAt(p){
       /* Resize to the rating now that we know it. */
       try{
         var _fp=_bessFootprint(BGB.kwh, BGB.kw), _d=_evPx('bess', _fp);
-        if(_d && _d.w){ el.w=_d.w; el.h=_d.h; }
+        if(_d && _d.w){
+          /* About the centre it was placed at, and with the rated footprint
+             recorded. _evAdd centred the DEFAULT cabinet on the snap point;
+             growing it from that corner pushed a big battery right and down
+             by half the difference - onto the next piece, or over a lot
+             line the autopilot had planned it inside (2026-10-03) - and
+             the default lf/wf left behind put it back to the default
+             cabinet's size on the next zoom (omegaRescaleElements). */
+          var _cx=el.x+el.w/2, _cy=el.y+el.h/2;
+          el.w=_d.w; el.h=_d.h; el.aspect=_d.h/_d.w;
+          el.x=Math.round(_cx-_d.w/2); el.y=Math.round(_cy-_d.h/2);
+          el.lf=+_fp.lf; el.wf=+_fp.wf;
+        }
       }catch(e){}
     }
     if(_isBessNode){
@@ -159358,8 +159370,11 @@ if (root.console && console.info) {
        - the run that feeds it - from its parent in a tree build, from the
          last piece in a chain, exactly what placeBgbAt will lay - stays on
          the lot, so an L-shaped lot's notch is not trenched through;
-       - no two boxes come within PAD_GAP_FT of each other, which the
-         straight walk never had to think about.
+       - no two pieces come within PAD_GAP_FT of each other, measured on
+         the kit's real footprint (not the drawn box: its floor is a fixed
+         number of pixels, so at the scale a big parcel is fitted at it
+         stands for 45 ft of kit, and spacing by it moved pieces on open
+         ground and lengthened the runs with the zoom).
      Where the straight walk would cross the line, the walk TURNS along it:
      each piece looks around the last piece placed in eight headings, every
      five feet, and takes the cheapest spot that fits - cost is how far it
@@ -159383,6 +159398,9 @@ if (root.console && console.info) {
   var KEEP_OUT_FT = 3;          /* panels stay this far off an equipment box */
   var STEP_FT = 30;             /* the walk's spacing, as it has always been */
   var REACH_FT = 120;           /* how far past that spacing before the spiral */
+  var DRAWN_FT = 4;             /* what two drawn symbols touching costs: a
+                                   tie-break under one 5 ft step, so it never
+                                   moves a piece off the straight walk */
   /* [degrees off the walk, what turning that far costs in feet] */
   var TURNS = [[0, 0], [45, 8], [-45, 8], [90, 12], [-90, 12], [135, 30], [-135, 30], [180, 40]];
 
@@ -159436,7 +159454,10 @@ if (root.console && console.info) {
     }
     return best;
   }
-  /* What a candidate spot for one piece must satisfy (see above). */
+  /* What a candidate spot for one piece must satisfy (see above): false
+     when it does not fit, else the extra it costs - DRAWN_FT when its
+     drawn symbol would touch another's, which is allowed (at a small
+     scale every floored symbol touches) but the worse spot. */
   function _fitter(b, from, outdoor, ring, blds, placed, lot, gap, ppf) {
     return function (c, dir) {
       if (ring) {
@@ -159444,13 +159465,33 @@ if (root.console && console.info) {
         if (!_segOnLot(from, c, ring)) return false;
       }
       if (outdoor && !_clear(c, b.lf, b.wf, dir, ppf, blds)) return false;
+      var extra = 0;
       for (var i = 0; i < placed.length; i++) {
-        var q = placed[i];
-        if (Math.abs(c.x - q.pt.x) < (b.w + q.w) / 2 + gap &&
-            Math.abs(c.y - q.pt.y) < (b.h + q.h) / 2 + gap) return false;
+        var q = placed[i], dx = Math.abs(c.x - q.pt.x), dy = Math.abs(c.y - q.pt.y);
+        if (dx < (b.lf + q.lf) * ppf / 2 + gap && dy < (b.wf + q.wf) * ppf / 2 + gap) return false;
+        if (dx < (b.w + q.w) / 2 && dy < (b.h + q.h) / 2) extra = DRAWN_FT;
       }
-      return true;
+      return extra;
     };
+  }
+  /* The point on the lot nearest p, a foot in from the line: where to
+     start looking when p itself is off the lot (the vertex mean of an L
+     can be hundreds of feet out in the notch). Null with no lot. */
+  function _nearestOnLot(p, ring, ppf) {
+    var best = null, bd = Infinity;
+    for (var j = 0; j < ring.length; j++) {
+      var a = ring[j], b = ring[(j + 1) % ring.length], ex = b.x - a.x, ey = b.y - a.y, L2 = ex * ex + ey * ey;
+      if (!(L2 > 0)) continue;
+      var t = Math.max(0, Math.min(1, ((p.x - a.x) * ex + (p.y - a.y) * ey) / L2));
+      var q = { x: a.x + ex * t, y: a.y + ey * t }, L = Math.sqrt(L2);
+      for (var sgn = -1; sgn <= 1; sgn += 2) {
+        var c = { x: q.x - sgn * ey / L * ppf, y: q.y + sgn * ex / L * ppf };
+        if (!_inPoly(c, ring)) continue;
+        var d = _dist(c, p);
+        if (d < bd) { bd = d; best = c; }
+      }
+    }
+    return best;
   }
   /* The cheapest spot that fits, walking on from `at` (the last piece
      placed) on the heading `d` at the spacing `s` (px). Ties go to the
@@ -159470,8 +159511,10 @@ if (root.console && console.info) {
         var cost = Math.abs(dists[k] - s) / ppf + heads[i].pen;
         if (best && cost >= best.cost) continue;
         var c = { x: at.x + heads[i].dir.x * dists[k], y: at.y + heads[i].dir.y * dists[k] };
-        if (!ok(c, heads[i].dir)) continue;
-        best = { pt: c, dir: heads[i].dir, deg: heads[i].deg, cost: cost };
+        var extra = ok(c, heads[i].dir);
+        if (extra === false) continue;
+        cost += extra;
+        if (!best || cost < best.cost) best = { pt: c, dir: heads[i].dir, deg: heads[i].deg, cost: cost };
       }
     }
     if (best) return best;
@@ -159482,7 +159525,7 @@ if (root.console && console.info) {
       for (i = 0; i < angles.length; i++) {
         var h = _rot(d, angles[i]);
         var c2 = { x: at.x + h.x * r * ppf, y: at.y + h.y * r * ppf };
-        if (ok(c2, d)) return { pt: c2, dir: d, deg: null, cost: Infinity, spiral: true };
+        if (ok(c2, d) !== false) return { pt: c2, dir: d, deg: null, cost: Infinity, spiral: true };
       }
     }
     return null;
@@ -159498,6 +159541,9 @@ if (root.console && console.info) {
        o.parents  a tree build's legs {kind: parent kind}, or null
        o.fp       the battery's footprint, ft {lf, wf}
        o.box(k)   {w, h} px the editor draws for step k, {lf, wf} ft the kit
+       o.pvPoint  the build lays an array, so the PV step is a hand-off to
+                  it (placeBgbAt runs the DC run there and draws nothing):
+                  a point that keeps the setback and the gap, not a box
      Throws, naming the piece, when one has nowhere to go. */
   function _plan(o) {
     var ppf = o.ppf, ring = o.ring || null, blds = o.blds || [], v = o.v, fp = o.fp;
@@ -159516,6 +159562,10 @@ if (root.console && console.info) {
       var host = _hostBuilding(o.Pc, blds, ppf);
       var found = host ? _behind(host, v, fp.lf, fp.wf, ppf, blds, ring, fits0)
                        : _findClear(o.Pc, fp.lf, fp.wf, v, ppf, blds, ring, fits0);
+      if (!found && !host && ring && !_inPoly(o.Pc, ring)) {
+        var near0 = _nearestOnLot(o.Pc, ring, ppf);
+        if (near0) found = _findClear(near0, fp.lf, fp.wf, v, ppf, blds, ring, fits0);
+      }
       /* Stopping is the right answer: a battery drawn inside a building is
          a mistake somebody has to notice, and a silent one is worse than a
          refusal that says why. The build stays armed for a human. */
@@ -159529,8 +159579,12 @@ if (root.console && console.info) {
                    : (movedFt ? ' (moved ' + movedFt + ' ft clear of a building)' : '');
     } else if (!fits0(o.Pc)) {
       /* A bare lot whose centre will not take the box: a narrow strip, or
-         an L whose centroid is not on it at all. */
+         an L whose centroid is not on it at all - then the search starts
+         from the nearest point that is on it, or a big L's arms would be
+         out of reach of a search round its empty notch. */
       var inside = _findClear(o.Pc, fp.lf, fp.wf, v, ppf, [], ring, fits0);
+      var near = (!inside && !_inPoly(o.Pc, ring)) ? _nearestOnLot(o.Pc, ring, ppf) : null;
+      if (near) inside = _findClear(near, fp.lf, fp.wf, v, ppf, [], ring, fits0);
       if (!inside) throw new Error('no room inside the parcel for the ' + name(first) + ' within '
         + SEARCH_MAX_FT + ' ft of its centre - place it by hand');
       anchor = inside;
@@ -159543,13 +159597,14 @@ if (root.console && console.info) {
        with the walk when a piece goes round a corner of the lot (a right
        angle or more), so the next one carries on along the line rather
        than trying the street again; a small dodge keeps the heading. */
-    var placed = [{ kind: first, pt: anchor, w: b0.w, h: b0.h }], nodes = [], moved = [], pos = {};
+    var placed = [{ kind: first, pt: anchor, w: b0.w, h: b0.h, lf: b0.lf, wf: b0.wf }], nodes = [], moved = [], pos = {};
     pos[first] = anchor;
     var prev = anchor, d = v;
     for (var k = 1; k < seq.length && k < 12; k++) {
       var kind = seq[k];
       if (!kind || kind === 'service') break;          /* the POI stays a click */
-      var b = o.box(kind), par = o.parents ? o.parents[kind] : null;
+      var b = (kind === 'pv' && o.pvPoint) ? { w: 0, h: 0, lf: 0, wf: 0 } : o.box(kind);
+      var par = o.parents ? o.parents[kind] : null;
       var from = (par && pos[par]) || prev;
       var s = (STEP_FT + (k === 1 ? fp.lf / 2 : 0)) * ppf;
       /* The building check is PER KIND. A transformer or a disconnect in a
@@ -159561,9 +159616,9 @@ if (root.console && console.info) {
       if (!spot) throw new Error('no room ' + (ring ? 'inside the parcel ' : '') + 'for the ' + name(kind)
         + (outdoor ? ' clear of the buildings' : '') + ' within ' + SEARCH_MAX_FT + ' ft of the '
         + name(placed[placed.length - 1].kind) + ' - place the rest by hand');
-      if (spot.cost > 1e-6) moved.push(kind);
+      if (spot.spiral || spot.deg !== 0 || Math.abs(_dist(spot.pt, prev) - s) > 1e-6) moved.push(kind);
       if (!spot.spiral && Math.abs(spot.deg) >= 90) d = spot.dir;
-      placed.push({ kind: kind, pt: spot.pt, w: b.w, h: b.h });
+      placed.push({ kind: kind, pt: spot.pt, w: b.w, h: b.h, lf: b.lf, wf: b.wf });
       nodes.push({ kind: kind, pt: spot.pt, from: from });
       pos[kind] = spot.pt; prev = spot.pt;
     }
@@ -159649,15 +159704,18 @@ if (root.console && console.info) {
      exclusions; it has simply never been handed the buildings. Parcel in as
      the boundary, building footprints in as exclusions, and the array comes
      back fitted around them rather than drawn over them. ──────────────── */
-  function solarArray(ringPx, blds) {
+  function solarArray(ringPx, blds, pads) {
     if (typeof root.computeGroundLayout !== 'function' || typeof root.applyGroundLayout !== 'function')
       throw new Error('the array engine is not on this page');
     if (!ringPx || ringPx.length < 3)
       throw new Error('no parcel boundary to fill - draw one, or the array has no edge to respect');
-    var lay = root.computeGroundLayout({ boundary: ringPx, exclusions: blds || [] });
+    /* pads: the equipment the chain will place, kept clear of panels */
+    var excl = (blds || []).concat(pads || []);
+    var lay = root.computeGroundLayout({ boundary: ringPx, exclusions: excl });
     if (!lay || !(lay.tableCount > 0))
-      throw new Error('the parcel is too small for an array once setbacks and buildings are taken out');
-    root.applyGroundLayout(ringPx, lay, blds || []);
+      throw new Error('the parcel is too small for an array once setbacks' + (pads && pads.length
+        ? ', buildings and the equipment pads are taken out' : ' and buildings are taken out'));
+    root.applyGroundLayout(ringPx, lay, excl);
     return lay;
   }
 
@@ -159678,8 +159736,9 @@ if (root.console && console.info) {
     return { blds: blds, ring: ring };
   }
 
-  /* The plan for the build that is armed, on the site as it is on screen. */
-  function planChain(geo) {
+  /* The plan for the build that is armed, on the site as it is on screen.
+     opts.pvPoint: the build lays an array, so the PV step is a point. */
+  function planChain(geo, opts) {
     if (!bgb()) throw new Error('guided build is not on this page');
     var c = ST.centre || centreOf(); if (!c) throw new Error('no site centre');
     var Pc = toPx(c.lat, c.lng); if (!Pc) throw new Error('site centre is off the canvas');
@@ -159693,7 +159752,7 @@ if (root.console && console.info) {
     var fp = root._bessFootprint(BGB.kwh, BGB.kw), parents = null;
     try { parents = (typeof root._bgbParents === 'function') ? root._bgbParents() : null; } catch (e) {}
     return _plan({ Pc: Pc, v: v, ppf: ppf, ring: geo.ring, blds: geo.blds, seq: (BGB.seq || []).slice(),
-                   parents: parents, fp: fp, box: _boxer(fp, ppf) });
+                   parents: parents, fp: fp, box: _boxer(fp, ppf), pvPoint: !!(opts && opts.pvPoint) });
   }
 
   /* Place what the plan says, through the same placeBgbAt / _bgbFinishRun
@@ -159744,24 +159803,35 @@ if (root.console && console.info) {
          told where the equipment pads go and keep its panels off them. The
          old order filled the lot with panels and then drew the battery on
          top of them. One _siteGeom() for both, as before. */
-      var geo = _siteGeom(), chain = plan.steps.indexOf('chain') !== -1, pl = null, planErr = null, note = '';
+      var geo = _siteGeom(), chain = plan.steps.indexOf('chain') !== -1, array = plan.steps.indexOf('array') !== -1;
+      var pl = null, planErr = null, arrErr = null, note = '';
       if (chain) {
         if (plan.mode) { try { root.__omegaForceMode = plan.mode; root.__omegaSolarEntry = true; } catch (e) {} }
         if (!ST.armed) { root._bgbStartPlacing(); ST.armed = true; }
         /* A chain that cannot fit still gets its array: the panels are
            right on their own, and the refusal is reported after them. */
-        try { pl = planChain(geo); } catch (e) { planErr = e; }
+        try { pl = planChain(geo, { pvPoint: array }); } catch (e) { planErr = e; }
       }
-      if (plan.steps.indexOf('array') !== -1) {
-        var lay = solarArray(geo.ring, geo.blds.concat(pl ? pl.keepOut : []));
-        done.push('array (' + lay.tableCount + ' tables · ' + Math.round(lay.kw) + ' kW)');
+      if (array) {
+        /* And an array that cannot fit beside the equipment does not cost
+           the equipment that does: the chain is still placed, then the
+           array's refusal is reported. Without an array the PV step draws
+           a box of its own, so the chain is planned again with one. */
+        try {
+          var lay = solarArray(geo.ring, geo.blds, pl ? pl.keepOut : []);
+          done.push('array (' + lay.tableCount + ' tables · ' + Math.round(lay.kw) + ' kW)');
+        } catch (e) {
+          arrErr = e;
+          if (pl) { try { pl = planChain(geo, { pvPoint: false }); } catch (e2) { planErr = e2; pl = null; } }
+        }
       }
-      if (planErr) throw planErr;
+      if (planErr) throw new Error(planErr.message + (arrErr ? '; and ' + arrErr.message : ''));
       if (chain) {
         done = done.concat(layout(pl));
         if (pl.onLot) note = ' · all inside parcel' + (ST.parcel && ST.parcel.apn ? ' ' + ST.parcel.apn : '')
           + (pl.moved.length ? ' (' + pl.moved.join(', ') + ' turned to fit)' : '');
       }
+      if (arrErr) throw new Error((done.length ? done.join(' > ') + note + ' - but no array: ' : '') + arrErr.message);
       mark('build', 'ok', done.join(' > ') + note);
     } catch (e) {
       /* The build stays armed so a person can carry on by clicking. */
@@ -159935,9 +160005,11 @@ if (root.console && console.info) {
     mark(ST.step, 'blocked', 'stopped');
   }
 
-  /* plan(): what layout() would place, and the keep-outs it would hand the
-     array, for the build that is armed - computed, never drawn. */
-  root.OmegaAutopilot = { start: start, parcel: parcel, roads: roads, plan: planChain, layout: layout, score: score, stop: stop,
+  /* plan(opts): what layout() would place, and the keep-outs it would hand
+     the array, for the build that is armed - computed, never drawn.
+     opts.pvPoint as planChain takes it. */
+  root.OmegaAutopilot = { start: start, parcel: parcel, roads: roads,
+                          plan: function (opts) { return planChain(null, opts); }, layout: layout, score: score, stop: stop,
                           state: function () { return ST; } };
 
   if (!P) return;                                   /* no ?address= and ?auto=: nothing on this page changes */
