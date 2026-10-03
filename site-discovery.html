@@ -1,13 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<script src="/omega-splash.js"></script>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Site Discovery &amp; Screening · ClearSky-OMEGA</title>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
 <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-sso.js"></script>
 <script src="/omega-settings.js"></script>
+<script src="/omega-screening-import.js"></script>
 <style>
   :root{
     --ink:#f5f7fb; --panel:#ffffff; --panel2:#f0f3f9; --line:#d9e0ec;
@@ -72,6 +79,7 @@
   .nav{display:flex;background:#12233f;padding:0 8px;flex-wrap:wrap}
   .nav a{color:#9fb2cf;padding:11px 15px;font-size:13px;font-weight:600;cursor:pointer;border-bottom:2px solid transparent;text-decoration:none}
   .nav a.on{color:#fff;border-bottom-color:#4da3ff;background:#0e1b33}
+@media(max-width:600px){.wt label{flex-basis:115px}.wt input{min-width:0}.tb{height:auto;min-height:52px;flex-wrap:wrap;padding:10px;gap:6px}.tb-sep,.tb-badge,.tb-user{display:none}.tb-ws{flex-basis:100%;overflow-wrap:anywhere}.siteRow .nm{flex-basis:100%}.siteRow .sm{flex-basis:40%;min-width:0}}
 </style>
 </head>
 <body>
@@ -112,19 +120,19 @@
     <div class="note">Enter each candidate's raw metrics. Grid distance is in miles (closer = better, auto-scored). The four score columns are your 0–100 assessments of incentive strength, land/siting, offtake demand, and interconnection ease.</div>
   </div>
 
-  <button class="btn wide" id="runBtn">Rank sites</button>
+  <button class="btn wide" id="runBtn">Rank sites</button><div id="runMsg" class="note" role="status"></div>
 
   <div id="results" class="hidden">
     <div class="card">
       <h2>Ranked pipeline</h2>
-      <table id="rankTable">
+      <div style="overflow-x:auto"><table id="rankTable">
         <thead><tr>
           <th>#</th><th>Site</th><th class="r">Load kW</th><th class="r">Grid mi</th>
           <th class="r">Incentive</th><th class="r">Land</th><th class="r">Offtake</th>
           <th class="r">Interconnect</th><th class="r">Score</th>
         </tr></thead>
         <tbody></tbody>
-      </table>
+      </table></div>
       <div class="note" id="rankNote"></div>
       <div class="row" style="margin-top:14px">
         <button class="btn" id="saveBtn">Save ranking</button>
@@ -165,7 +173,7 @@
   })();
 
   var _db=null;
-  try{if(!firebase.apps.length){firebase.initializeApp({apiKey:'AIzaSyB-PLACEHOLDER',authDomain:'clearsky-portal.firebaseapp.com',projectId:'clearsky-portal'});}
+  try{if(!firebase.apps.length){firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);}
     _db=firebase.firestore();}catch(e){_db=null;}
 
   if (typeof OMEGASettings!=='undefined'){
@@ -184,6 +192,12 @@
   })();
 
   function $(id){return document.getElementById(id);}
+  function esc(v){return String(v==null?'':v).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+  var LAST=[],lastWeights=null,revision=0,busy=false;
+  function invalidate(){revision++;LAST=[];lastWeights=null;$('results').className='hidden';$('saveMsg').textContent='';}
+  function shown(v){return v==null?'Verify':Math.round(v*10)/10;}
+  function message(v){$('runMsg').textContent=v;}
+
 
   /* ── Factors & default weights ── */
   var FACTORS=[
@@ -212,7 +226,7 @@
     var k=e.target.getAttribute('data-wk');
     $('wv_'+k).textContent=e.target.value;
     for(var i=0;i<FACTORS.length;i++){ if(FACTORS[i].key===k) FACTORS[i].w=parseFloat(e.target.value); }
-    updateSum();
+    updateSum();invalidate();
   }
   function updateSum(){
     var t=0;for(var i=0;i<FACTORS.length;i++)t+=FACTORS[i].w;
@@ -225,68 +239,34 @@
     cfg=cfg||{};seq++;
     var div=document.createElement('div');
     div.className='siteRow';
-    div.innerHTML=
-      '<input class="nm" placeholder="Site name" value="'+(cfg.name||('Site '+seq))+'">'+
-      '<input class="sm" type="number" placeholder="Load kW" value="'+(cfg.load_kw!=null?cfg.load_kw:'')+'">'+
-      '<input class="sm" type="number" placeholder="Grid mi" value="'+(cfg.grid_dist_mi!=null?cfg.grid_dist_mi:'')+'">'+
-      '<input class="sm" type="number" placeholder="Incent 0-100" value="'+(cfg.incentive_score!=null?cfg.incentive_score:'')+'">'+
-      '<input class="sm" type="number" placeholder="Land 0-100" value="'+(cfg.land_score!=null?cfg.land_score:'')+'">'+
-      '<input class="sm" type="number" placeholder="Offtake 0-100" value="'+(cfg.offtake_score!=null?cfg.offtake_score:'')+'">'+
-      '<input class="sm" type="number" placeholder="Interc 0-100" value="'+(cfg.interconnect_score!=null?cfg.interconnect_score:'')+'">'+
-      '<button class="del">×</button>';
-    div.querySelector('.del').addEventListener('click',function(){div.parentNode.removeChild(div);});
+    var fields=['name','load_kw','grid_dist_mi','incentive_score','land_score','offtake_score','interconnect_score'];
+    var labels=['Site name','Load kW','Grid mi','Incentive 0–100','Land 0–100','Offtake 0–100','Interconnect 0–100'];
+    fields.forEach(function(k,i){var input=document.createElement('input');input.className=i?'sm':'nm';input.type='text';if(i)input.inputMode='decimal';input.placeholder=labels[i];input.setAttribute('aria-label',labels[i]);input.value=cfg[k]==null?'':cfg[k];input.addEventListener('input',invalidate);div.appendChild(input);});
+    var del=document.createElement('button');del.className='del';del.textContent='×';del.setAttribute('aria-label','Remove site');div.appendChild(del);
+    del.addEventListener('click',function(){div.parentNode.removeChild(div);invalidate();});
+    invalidate();
     $('sites').appendChild(div);
   }
   $('addSite').addEventListener('click',function(){addSite();});
 
-  /* CSV import */
+  /* The same quoted-cell/BOM parser and safe export used by portfolio screening. */
   $('csv').addEventListener('change',function(e){
     var f=e.target.files[0];if(!f)return;
-    var r=new FileReader();
-    r.onload=function(){
-      var lines=String(r.result).split(/\r?\n/).filter(function(x){return x.trim();});
-      if(!lines.length)return;
-      var head=lines[0].split(',').map(function(x){return x.trim().toLowerCase();});
-      function col(row,name){var i=head.indexOf(name);return i>=0?row[i]:'';}
-      $('sites').innerHTML='';seq=0;
-      for(var i=1;i<lines.length;i++){
-        var row=lines[i].split(',');
-        addSite({
-          name:col(row,'name')||('Site '+i),
-          load_kw:col(row,'load_kw'), grid_dist_mi:col(row,'grid_dist_mi'),
-          incentive_score:col(row,'incentive_score'), land_score:col(row,'land_score'),
-          offtake_score:col(row,'offtake_score'), interconnect_score:col(row,'interconnect_score')
-        });
-      }
-    };
-    r.readAsText(f);
+    if(f.size>500000){message('CSV is too large. Use up to 500 sites and 500 KB.');return;}
+    var reader=new FileReader();reader.onload=function(){try{
+      var rows=OmegaScreeningImport.csv(reader.result).filter(function(r){return r.some(function(v){return v.trim();});});
+      if(rows.length<2||rows.length>501)throw new Error('Supply a header and 1–500 candidate rows.');
+      var head=rows.shift().map(function(v){return v.trim().toLowerCase();});
+      if(head.indexOf('name')<0||head.some(function(v,i){return v&&head.indexOf(v)!==i;}))throw new Error('Use a name column and unique column headings.');
+      if(rows.some(function(r){return r.length!==head.length;}))throw new Error('CSV rows must match the header column count. Quote names that contain commas.');
+      var fields=['name','load_kw','grid_dist_mi','incentive_score','land_score','offtake_score','interconnect_score'];
+      var incoming=rows.map(function(row){var obj={};fields.forEach(function(k){var i=head.indexOf(k);obj[k]=i<0?'':row[i];});return obj;});
+      $('sites').innerHTML='';seq=0;incoming.forEach(addSite);message('Imported '+incoming.length+' sites. Blank and invalid values require Verify.');
+    }catch(err){message(err.message);}};reader.onerror=function(){message('Could not read CSV. Existing sites were kept.');};reader.readAsText(f);
   });
 
-  /* seed examples */
-  addSite({name:'Clinton IA depot',load_kw:750,grid_dist_mi:0.4,incentive_score:60,land_score:80,offtake_score:70,interconnect_score:75});
-  addSite({name:'Berkeley CA (PG&E)',load_kw:802,grid_dist_mi:1.2,incentive_score:95,land_score:55,offtake_score:85,interconnect_score:45});
-  addSite({name:'ComEd IL C&I',load_kw:1200,grid_dist_mi:0.8,incentive_score:90,land_score:65,offtake_score:60,interconnect_score:70});
-
-  /* ── Scoring ──
-     grid: closer is better -> score = clamp(100 - dist*20, 0..100) (5mi -> 0)
-     size: larger load better up to a cap -> score = clamp(load/2000*100,0..100)
-     others: user-entered 0..100 directly.
-     Final = weighted average normalized by total weight. */
-  function clamp(v){return v<0?0:(v>100?100:v);}
-  function scoreSite(s){
-    var grid=clamp(100 - (parseFloat(s.grid_dist_mi)||0)*20);
-    var size=clamp((parseFloat(s.load_kw)||0)/2000*100);
-    var parts={
-      grid:grid, size:size,
-      incentive:clamp(parseFloat(s.incentive_score)||0),
-      land:clamp(parseFloat(s.land_score)||0),
-      offtake:clamp(parseFloat(s.offtake_score)||0),
-      interconnect:clamp(parseFloat(s.interconnect_score)||0)
-    };
-    var tw=0,acc=0;
-    for(var i=0;i<FACTORS.length;i++){var f=FACTORS[i];tw+=f.w;acc+=f.w*parts[f.key];}
-    return {parts:parts, total: tw? acc/tw : 0};
-  }
+  /* Start with real inputs; examples must never look like customer evidence. */
+  addSite();
 
   function scoreColor(v){
     // red(0)->amber(50)->green(100)
@@ -296,63 +276,37 @@
     return 'rgb('+r+','+g+',80)';
   }
 
-  var LAST=[];
   function run(){
-    var rows=$('sites').getElementsByClassName('siteRow');
-    var sites=[];
-    for(var i=0;i<rows.length;i++){
-      var inp=rows[i].getElementsByTagName('input');
-      var name=inp[0].value||('Site '+(i+1));
-      var s={name:name,load_kw:inp[1].value,grid_dist_mi:inp[2].value,
-        incentive_score:inp[3].value,land_score:inp[4].value,
-        offtake_score:inp[5].value,interconnect_score:inp[6].value};
-      var sc=scoreSite(s);
-      s.score=sc.total;s.parts=sc.parts;
-      sites.push(s);
-    }
-    sites.sort(function(a,b){return b.score-a.score;});
-    LAST=sites;
-
-    var tb='';
-    for(var r=0;r<sites.length;r++){
-      var s2=sites[r];
-      tb+='<tr><td class="rank">'+(r+1)+'</td><td>'+s2.name+'</td>'+
-        '<td class="r">'+(s2.load_kw||'—')+'</td>'+
-        '<td class="r">'+(s2.grid_dist_mi||'—')+'</td>'+
-        '<td class="r">'+Math.round(s2.parts.incentive)+'</td>'+
-        '<td class="r">'+Math.round(s2.parts.land)+'</td>'+
-        '<td class="r">'+Math.round(s2.parts.offtake)+'</td>'+
-        '<td class="r">'+Math.round(s2.parts.interconnect)+'</td>'+
-        '<td class="r"><span class="score" style="background:'+scoreColor(s2.score)+'">'+
-          Math.round(s2.score)+'</span></td></tr>';
-    }
-    $('rankTable').getElementsByTagName('tbody')[0].innerHTML=tb||
-      '<tr><td colspan="9" class="muted">No sites entered.</td></tr>';
-    $('rankNote').innerHTML='Ranked '+sites.length+' site(s) by weighted score. Grid proximity auto-scored (closer = higher, 5+ mi = 0). '+
-      'Project size auto-scored against a 2 MW reference. Adjust weights above and re-rank to test sensitivity.';
-    $('results').className='';
-    $('results').scrollIntoView({behavior:'smooth'});
+    if(busy)return;
+    invalidate();
+    var user=firebase.auth().currentUser;
+    if(!user){message('Sign in through your OMEGA workspace to rank sites.');return;}
+    if(window.OmegaTenant&&OmegaTenant.refused){message('This workspace is unavailable.');return;}
+    var sites=Array.prototype.map.call($('sites').getElementsByClassName('siteRow'),function(row){
+      var inp=row.getElementsByTagName('input');return {name:inp[0].value,load_kw:inp[1].value,grid_dist_mi:inp[2].value,incentive_score:inp[3].value,land_score:inp[4].value,offtake_score:inp[5].value,interconnect_score:inp[6].value};
+    });
+    var weights={};FACTORS.forEach(function(f){weights[f.key]=f.w;});
+    var version=revision;busy=true;$('runBtn').disabled=true;message('Ranking sites…');
+    user.getIdToken().then(function(token){return fetch('/api/site-discovery',{method:'POST',headers:{'Content-Type':'application/json',Authorization:'Bearer '+token},body:JSON.stringify({sites:sites,weights:weights})});}).then(function(r){return r.json().then(function(j){if(!r.ok)throw new Error(j.error||'Ranking failed.');return j;});}).then(function(report){
+      if(version!==revision){message('Inputs changed during ranking. Rank again.');return;}
+      LAST=report.rows;lastWeights=report.weights;ORG=report.orgId;$('orgLabel').textContent='org: '+ORG;
+      $('rankTable').getElementsByTagName('tbody')[0].innerHTML=LAST.map(function(s){
+        return '<tr><td>'+s.rank+'</td><td>'+esc(s.name)+(s.verify.length?'<div class="note">Verify: '+esc(s.verify.join(', '))+'</div>':'')+'</td>'+
+          '<td>'+shown(s.load_kw)+'</td><td>'+shown(s.grid_dist_mi)+'</td>'+['incentive','land','offtake','interconnect'].map(function(k){return '<td>'+shown(s.parts[k])+'</td>';}).join('')+
+          '<td><span class="score" style="background:'+(s.score==null?'#80520f':scoreColor(s.score))+'">'+(s.score==null?'Verify':shown(s.score))+'</span>'+(s.score==null?'<div class="note">'+shown(s.scoreRange[0])+'–'+shown(s.scoreRange[1])+'</div>':'')+'</td></tr>';
+      }).join('');
+      $('rankNote').textContent=report.methodology;$('results').className='';message('Ranked '+LAST.length+' sites.');
+    }).catch(function(e){message(e.message);}).then(function(){busy=false;$('runBtn').disabled=false;});
   }
-
   function exportCsv(){
     if(!LAST.length)return;
-    var h='rank,name,load_kw,grid_dist_mi,incentive,land,offtake,interconnect,score\n';
-    for(var i=0;i<LAST.length;i++){var s=LAST[i];
-      h+=(i+1)+','+'"'+s.name+'",'+(s.load_kw||'')+','+(s.grid_dist_mi||'')+','+
-        Math.round(s.parts.incentive)+','+Math.round(s.parts.land)+','+
-        Math.round(s.parts.offtake)+','+Math.round(s.parts.interconnect)+','+
-        Math.round(s.score)+'\n';
-    }
-    var blob=new Blob([h],{type:'text/csv'});
-    var a=document.createElement('a');a.href=URL.createObjectURL(blob);
-    a.download='site-ranking.csv';a.click();
+    var rows=[['rank','name','load_kw','grid_dist_mi','incentive','land','offtake','interconnect','score','status','score_min','score_max','verify']];
+    LAST.forEach(function(s){rows.push([s.rank,s.name,s.load_kw,s.grid_dist_mi,s.parts.incentive,s.parts.land,s.parts.offtake,s.parts.interconnect,s.score,s.status,s.scoreRange[0],s.scoreRange[1],s.verify.join('; ')]);});
+    var url=URL.createObjectURL(new Blob([OmegaScreeningImport.toCsv(rows)],{type:'text/csv;charset=utf-8'})),a=document.createElement('a');a.href=url;a.download='site-ranking.csv';a.click();setTimeout(function(){URL.revokeObjectURL(url);},1000);
   }
-
   function saveData(){
-    if(!_db||!ORG){$('saveMsg').textContent='No org/DB scope — preview mode; not persisted.';return;}
-    var slim=[];for(var i=0;i<LAST.length;i++){var s=LAST[i];slim.push({rank:i+1,name:s.name,score:Math.round(s.score),parts:s.parts,load_kw:s.load_kw,grid_dist_mi:s.grid_dist_mi});}
-    var weights={};for(var w=0;w<FACTORS.length;w++)weights[FACTORS[w].key]=FACTORS[w].w;
-    var payload={data:{ranking:slim,weights:weights,savedAt:Date.now(),project:PROJECT},updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
+    if(!_db||!ORG||!LAST.length||!lastWeights){$('saveMsg').textContent='Rank your current inputs before saving.';return;}
+    var payload={data:{ranking:LAST,weights:lastWeights,savedAt:Date.now(),project:PROJECT},updatedAt:firebase.firestore.FieldValue.serverTimestamp()};
     _db.collection('toolData').doc(ORG).collection('tools').doc('sitediscovery').set(payload,{merge:true})
       .then(function(){$('saveMsg').textContent='Saved to '+ORG+'.';})
       ['catch'](function(e){$('saveMsg').textContent='Save failed: '+e.message;});

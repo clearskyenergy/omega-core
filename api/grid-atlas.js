@@ -49,7 +49,11 @@
    console showed a new build stamp while the serverless function was still the
    previous one, and nothing in the reply said so. Bump this whenever the file
    changes and the answer is visible from any response. */
-const BUILD = '2026-09-17.substations-back-lines-light';
+const BUILD = '2026-10-02.screening-request-isolation';
+
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   Every site request owns its mutable source, trace and OSM bundle state. */
+function createRequestHandler() {
 
 const MODEL = {
   version: 'grid-atlas-svc-v1',
@@ -1047,7 +1051,7 @@ function applyCors(req, res) {
   res.setHeader('Access-Control-Max-Age', '86400');
 }
 
-module.exports = async function handler(req, res) {
+return async function handler(req, res) {
   applyCors(req, res);
   /* Preflight. Must answer before the method check below, which used to
      reject OPTIONS with a 405 and stop every cross-origin call dead. */
@@ -1230,3 +1234,6 @@ module.exports = async function handler(req, res) {
    own, and the only cost is that a number in the console may not exactly match
    the same site opened in the page. Worth closing, not urgent.
    ───────────────────────────────────────────────────────────────────────────── */
+
+}
+module.exports = function (req, res) { return createRequestHandler()(req, res); };

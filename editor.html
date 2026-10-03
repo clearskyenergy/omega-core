@@ -1805,6 +1805,7 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rtab"        data-page="annotate" onclick="rbTab('annotate')">Annotate</div>
     <div class="rtab"        data-page="analyze" data-cap="engineering" onclick="rbTab('analyze')">Analyze</div>
     <div class="rtab"        data-page="estimate" data-module="estimate" data-cap="engineering" onclick="rbTab('estimate')">Estimate</div>
+    <div class="rtab"        data-page="finance" data-module="finance" onclick="rbTab('finance')" title="Finance &mdash; list the project on the marketplace, ask a lender for a price, send Helios its intake">Finance</div>
     <div class="rtab"        data-page="view"    onclick="rbTab('view')">View</div>
     <div class="rtab"        data-page="output"  onclick="rbTab('output')">Output</div>
     <div class="rtab"        data-page="settings" onclick="rbTab('settings')">Settings</div>
@@ -1823,6 +1824,7 @@ window.onerror = function(msg, src, line, col, err) {
     <button class="rtm-item" onclick="rbHamburgerPick('annotate')">Annotate</button>
     <button class="rtm-item" onclick="rbHamburgerPick('analyze')">Analyze</button>
     <button class="rtm-item" onclick="rbHamburgerPick('estimate')">Estimate</button>
+    <button class="rtm-item" onclick="rbHamburgerPick('finance')">Finance</button>
     <button class="rtm-item" onclick="rbHamburgerPick('view')">View</button>
     <button class="rtm-item" onclick="rbHamburgerPick('output')">Output</button>
     <button class="rtm-item" onclick="rbHamburgerPick('settings')">Settings</button>
@@ -2272,6 +2274,7 @@ window.onerror = function(msg, src, line, col, err) {
   <div class="ribbon-page" data-page="estimate" data-module="estimate" data-cap="engineering">
     <div class="rpanel">
       <div class="rpanel-body">
+        <button class="rbtn" id="rb-est-summary" onclick="openRpPanel('summary','estimate')" title="Site map summary — BESS, conduit, equipment, DER (also in View › Panels, which every plan opens)"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
         <button class="rbtn" onclick="openRpPanel('cost')" title="Construction cost estimator — equipment, install, incentives, revenue, ROI"><span class="rb-ico">$</span><span class="rb-lbl">Construction<br>Cost</span></button>
         <button class="rbtn" onclick="rbRun(openSolarBessSizer)" title="Estimate the BESS needed for the solar drawn on the sitemap — input / throughput / output"><span class="rb-ico" style="color:var(--amber)">☀</span><span class="rb-lbl">Solar →<br>BESS</span></button>
       </div>
@@ -2283,6 +2286,36 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" onclick="rbRun(openElectricalEstimate)" title="Electrical estimate — NECA-style labor units + material, priced bid build-up"><span class="rb-ico" style="color:var(--amber)">⚡</span><span class="rb-lbl">Electrical<br>Estimate</span></button>
       </div>
       <div class="rpanel-cap">Takeoff &amp; Sourcing</div>
+    </div>
+  </div>
+
+  <!-- FINANCE (Tommy, 2026-10-03: "these should have their own tab in the
+       panel finance"). Omega Capital's editor commands, moved out of
+       Output's Marketplace group with their caps unchanged, so no plan gains
+       or loses one. data-module="finance": a package without Omega Capital
+       sees the tab marked Opt in, and api/_lib/modules.js names this page as
+       the module's own (finance.editorPage). -->
+  <div class="ribbon-page" data-page="finance" data-module="finance">
+    <div class="rpanel">
+      <div class="rpanel-body">
+        <button class="rbtn" onclick="rbRun(openMarketplacePush)" title="Push to Marketplace — file this project into the finance platform as an open deal, attributed to your account and scoped to your organisation."><span class="rb-ico" style="color:var(--green)">↗</span><span class="rb-lbl">Push to<br>Marketplace</span></button>
+      </div>
+      <div class="rpanel-cap">Marketplace</div>
+    </div>
+    <div class="rpanel">
+      <div class="rpanel-body">
+        <!-- Next to the marketplace on purpose: both take a finished design
+             outward. The marketplace lists a deal for capital to find; this
+             one asks a named lender for a price. -->
+        <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for<br>Financing</span></button>
+        <!-- The checklist Helios Energy Advisors asks for before it looks at
+             a large land deal. Filled from this project where OMEGA knows
+             the answer, finished by the person, previewed as Helios's own
+             PDF and sent to them from here, with the sender in copy. Same
+             cap as Apply for Financing: it is the same kind of outward step. -->
+        <button class="rbtn" onclick="rbRun(openHeliosIntake)" data-cap="export" title="Helios Intake — fill Helios Energy Advisors' first-pass checklist from this project, finish the rest, preview the PDF and send it to Helios."><span class="rb-ico" style="color:#F4C542">&#9728;</span><span class="rb-lbl">Helios<br>Intake</span></button>
+      </div>
+      <div class="rpanel-cap">Financing</div>
     </div>
   </div>
 
@@ -2351,7 +2384,7 @@ window.onerror = function(msg, src, line, col, err) {
              no export to sell. Gated at export.blueprint, granted at
              standard, inherited upward. -->
         <button class="rbtn" data-cap="export.blueprint" onclick="rbRun(openBlueprintExport)" title="Full blueprint / Print to PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Blueprint<br>/ PDF</span></button>
-        <button class="rbtn omega-beta" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — in beta, access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span><span class="omega-beta-tag">BETA</span></button>
+        <button class="rbtn omega-beta" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span><span class="omega-new-tag">NEW</span></button>
         <!-- Original call preserved; re-enable by restoring this onclick:
              <button class="rbtn" onclick="rbRun(sendToPermitCreator)" data-cap="permitting" title="Assemble the full permit set"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span></button> -->
       </div>
@@ -2371,22 +2404,6 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" onclick="exportToMonday()" title="Export project tasks as a Monday.com board CSV"><span class="rb-ico">▦</span><span class="rb-lbl">Export to<br>Monday</span></button>
       </div>
       <div class="rpanel-cap">Handoff</div>
-    </div>
-    <div class="rpanel">
-      <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openMarketplacePush)" title="Push to Marketplace — file this project into the finance platform as an open deal, attributed to your account and scoped to your organisation."><span class="rb-ico" style="color:var(--green)">↗</span><span class="rb-lbl">Push to<br>Marketplace</span></button>
-        <!-- Beside Push to Marketplace on purpose: both are ways of taking a
-             finished design outward. The marketplace lists a deal for capital
-             to find; this one asks a named lender for a price. -->
-        <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for<br>Financing</span></button>
-        <!-- The checklist Helios Energy Advisors asks for before it looks at
-             a large land deal. Filled from this project where OMEGA knows
-             the answer, finished by the person, previewed as Helios's own
-             PDF and sent to them from here, with the sender in copy. Same
-             cap as Apply for Financing: it is the same kind of outward step. -->
-        <button class="rbtn" onclick="rbRun(openHeliosIntake)" data-cap="export" title="Helios Intake — fill Helios Energy Advisors' first-pass checklist from this project, finish the rest, preview the PDF and send it to Helios."><span class="rb-ico" style="color:#F4C542">&#9728;</span><span class="rb-lbl">Helios<br>Intake</span></button>
-      </div>
-      <div class="rpanel-cap">Marketplace</div>
     </div>
     <!-- Omega-Core: ClearSky's skid (Solela Edge Compute + CleanCell R60) on
          its own meter at a charging site, paying the host a land lease. Takes
@@ -31344,9 +31361,11 @@ window.OmegaUI={
  *
  *   1. PUBLIC LINES. Every county and state layer in
  *      omega-parcel-sources.js (the ONE list; api/parcel.js reads the same
- *      counties) as an ImageMapType: the county draws a picture of each
- *      tile and Google owns tiling and panning, so there is nothing to
- *      anchor or reproject. Free, no key, and only where a layer exists.
+ *      counties), as ONE overlay whose tiles ask only the layers whose box
+ *      they touch: the county or state draws a picture of each tile and
+ *      Google owns tiling and panning, so there is nothing to anchor or
+ *      reproject, and seventy-odd layers cost one overlay, not seventy.
+ *      Free, no key, and only where a layer exists.
  *   2. THE PARCEL AT THE MAP CENTRE. /api/parcel through
  *      OmegaAutopilot.parcel (the call Site Data Layers › Parcels makes),
  *      drawn as a native outline and named by APN and acres: Regrid where
@@ -31367,7 +31386,7 @@ window.OmegaUI={
 var PC_PREF='omegaParcelLines';
 var PC_LOOKUPS=12;
 var PC_INK='#FFD60A';
-var _pc={ on:false, map:null, layers:[], polys:[], idle:null, timer:null, watch:null,
+var _pc={ on:false, map:null, layers:[], polys:[], idle:null, timer:null, watch:null, regridOn:false,
           found:[], asked:{}, lookups:0, opacity:0.9, last:'', loudNext:false };
 
 function _pcSources(){ return window.OmegaParcelSources||null; }
@@ -31424,21 +31443,132 @@ function _pcFoundAt(lat, lng){
   return null;
 }
 
-function _pcAttach(m){
+/* REGRID: EVERY COUNTY, WHEN THE SERVER HAS THE KEY (2026-10-03, "we need
+   the map to show the parcels like what the GIS would show"). The free
+   county layers stop at the county line; Regrid draws every county in the
+   country, through api/parcel-tiles, which keeps the token on the server
+   and hands this page a monthly ticket. Asked once a page; a definite "no"
+   ('not-configured', 'no-tile-access', 'switched-off') is kept, a network
+   failure is asked again next time. Where it answers, it replaces the
+   county layers on this map (one style, no double lines). */
+var _pcRg={ ticket:null, minZoom:15, reason:null, pending:null };
+function _pcRegrid(){
+  if(_pcRg.ticket) return Promise.resolve(_pcRg);
+  if(_pcRg.pending) return _pcRg.pending;
+  var u=null;
+  try{ u=window._currentUser||(window.firebase&&firebase.auth&&firebase.auth().currentUser)||null; }catch(e){}
+  if(!u || typeof fetch!=='function') return Promise.resolve(null);
+  _pcRg.pending=Promise.resolve(u.getIdToken()).then(function(tok){
+    return fetch('/api/parcel-tiles', { method:'POST',
+      headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+tok }, body:'{}' });
+  }).then(function(r){
+    return r.json().catch(function(){ return null; }).then(function(j){
+      if(j && j.ok && j.ticket){ _pcRg.ticket=j.ticket; _pcRg.minZoom=j.minZoom||15; return _pcRg; }
+      _pcRg.reason=(j && (j.reason || j.error)) || ('HTTP '+r.status);
+      return null;
+    });
+  }).then(null, function(){ _pcRg.pending=null; return null; });
+  return _pcRg.pending;
+}
+/* Regrid's PNGs are drawn in its own dark green, which disappears on
+   satellite. The tile comes from this origin, so the canvas is not tainted
+   and every line pixel is repainted in PC_INK; if anything refuses, the
+   tile stays as Regrid drew it. */
+function _pcRegridLayer(){
+  var ink=[255,214,10];
+  return {
+    name:'Parcel lines \u2014 Regrid (every county)',
+    tileSize:new google.maps.Size(256,256), minZoom:_pcRg.minZoom, maxZoom:22,
+    getTile:function(c, z, doc){
+      var cv=doc.createElement('canvas');
+      cv.width=256; cv.height=256; cv.style.width='256px'; cv.style.height='256px';
+      var n=Math.pow(2, z);
+      if(z<_pcRg.minZoom || c.y<0 || c.y>=n || !_pcRg.ticket) return cv;
+      var x=((c.x%n)+n)%n, img=new Image();
+      img.onload=function(){
+        try{
+          var g=cv.getContext('2d'); g.drawImage(img, 0, 0, 256, 256);
+          var d=g.getImageData(0, 0, 256, 256), px=d.data;
+          for(var i=0;i<px.length;i+=4){ if(px[i+3]){ px[i]=ink[0]; px[i+1]=ink[1]; px[i+2]=ink[2]; px[i+3]=Math.min(255, px[i+3]*2); } }
+          g.putImageData(d, 0, 0);
+        }catch(e){}
+      };
+      img.src='/api/parcel-tiles?z='+z+'&x='+x+'&y='+c.y+'&t='+encodeURIComponent(_pcRg.ticket);
+      cv.setAttribute('data-src', img.src);
+      return cv;
+    },
+    releaseTile:function(){}
+  };
+}
+
+function _pcClearLayers(m){
+  try{
+    var arr=m.overlayMapTypes;
+    for(var i=arr.getLength()-1;i>=0;i--){ if(_pc.layers.indexOf(arr.getAt(i))>=0) arr.removeAt(i); }
+  }catch(e){}
+  _pc.layers=[]; _pc.regridOn=false;
+}
+
+/* One overlay for every public layer. A tile holds an <img> for each
+   layer whose box it touches (S.tileUrl is null everywhere else), usually
+   one; a layer that refuses a tile hides its <img> rather than showing a
+   broken one. */
+function _pcCountyLayer(S){
+  var tiles=[], minZ=22;
+  S.SOURCES.forEach(function(src){ minZ=Math.min(minZ, src.minZoom||14); });
+  function urls(c, z){
+    var out=[];
+    S.SOURCES.forEach(function(src){ var u=S.tileUrl(src, c.x, c.y, z); if(u) out.push(u); });
+    return out;
+  }
+  return {
+    name:'Parcel lines \u2014 public county and state layers',
+    tileSize:new google.maps.Size(256,256), minZoom:minZ, maxZoom:22,
+    urls:urls,
+    getTile:function(c, z, doc){
+      var d=doc.createElement('div');
+      d.style.width='256px'; d.style.height='256px'; d.style.position='relative'; d.style.opacity=String(_pc.opacity);
+      urls(c, z).forEach(function(u){
+        var img=doc.createElement('img');
+        img.alt=''; img.style.cssText='position:absolute;left:0;top:0;width:256px;height:256px;border:0';
+        img.onerror=function(){ img.style.display='none'; };
+        img.src=u;
+        d.appendChild(img);
+      });
+      tiles.push(d);
+      return d;
+    },
+    releaseTile:function(d){ var i=tiles.indexOf(d); if(i>=0) tiles.splice(i, 1); },
+    setOpacity:function(v){ tiles.forEach(function(d){ d.style.opacity=String(v); }); }
+  };
+}
+
+function _pcAddCounty(m){
   var S=_pcSources();
+  if(!S) return;
+  try{
+    var layer=_pcCountyLayer(S);
+    m.overlayMapTypes.push(layer);
+    _pc.layers.push(layer);
+  }catch(e){ if(window.console) console.warn('[parcels] public layers:', e&&e.message); }
+}
+
+function _pcAddRegrid(m){
+  try{
+    var layer=_pcRegridLayer();
+    m.overlayMapTypes.push(layer);
+    _pc.layers.push(layer); _pc.regridOn=true;
+  }catch(e){ if(window.console) console.warn('[parcels] regrid:', e&&e.message); }
+}
+
+function _pcAttach(m){
   _pc.map=m;
-  if(S){
-    S.SOURCES.forEach(function(src){
-      try{
-        var layer=new google.maps.ImageMapType({
-          name:'Parcel lines — '+src.label,
-          tileSize:new google.maps.Size(256,256),
-          minZoom:src.minZoom||14, maxZoom:22, opacity:_pc.opacity,
-          getTileUrl:function(c, z){ return S.tileUrl(src, c.x, c.y, z); }
-        });
-        m.overlayMapTypes.push(layer);
-        _pc.layers.push(layer);
-      }catch(e){ if(window.console) console.warn('[parcels] '+src.id+':', e&&e.message); }
+  if(_pcRg.ticket) _pcAddRegrid(m);
+  else{
+    _pcAddCounty(m);
+    _pcRegrid().then(function(rg){
+      if(!rg || !_pc.on || _pc.map!==m || _pc.regridOn) return;
+      _pcClearLayers(m); _pcAddRegrid(m); _pcLook(false);
     });
   }
   _pc.found.forEach(_pcOutline);
@@ -31451,12 +31581,7 @@ function _pcAttach(m){
 
 function _pcDetach(){
   var m=_pc.map;
-  if(m){
-    try{
-      var arr=m.overlayMapTypes;
-      for(var i=arr.getLength()-1;i>=0;i--){ if(_pc.layers.indexOf(arr.getAt(i))>=0) arr.removeAt(i); }
-    }catch(e){}
-  }
+  if(m) _pcClearLayers(m);
   _pc.polys.forEach(function(p){ try{ p.setMap(null); }catch(e){} });
   if(_pc.idle){ try{ google.maps.event.removeListener(_pc.idle); }catch(e){} }
   clearTimeout(_pc.timer);
@@ -31470,10 +31595,11 @@ function _pcLook(loud){
   try{ c=_pc.map.getCenter(); z=_pc.map.getZoom()||0; }catch(e){}
   if(!c) return;
   var lat=c.lat(), lng=c.lng(), S=_pcSources();
-  var covered=S ? S.at(lat, lng) : [];
+  var covered=_pc.regridOn ? [{ label:'Regrid (every county)', minZoom:_pcRg.minZoom }]
+             : S ? S.at(lat, lng) : [];
   var minZ=99;
   covered.forEach(function(s){ minZ=Math.min(minZ, s.minZoom||14); });
-  var cov=!S ? 'The public parcel list did not load (omega-parcel-sources.js)'
+  var cov=(!S && !_pc.regridOn) ? 'The public parcel list did not load (omega-parcel-sources.js)'
     : covered.length ? 'Lines from '+covered.map(function(s){ return s.label; }).join(', ')
                        +(z<minZ ? ' — zoom in to see them' : '')
     : 'No public parcel layer covers this area';
@@ -31568,7 +31694,8 @@ window.OmegaParcels={
     return _pc.opacity;
   },
   status:function(){
-    var o={ on:_pc.on, liveMap:!!_pcMap(), drawing:_pc.layers.length, parcelsFound:_pc.found.length,
+    var o={ on:_pc.on, liveMap:!!_pcMap(), drawing:_pc.regridOn ? 'Regrid (every county)' : _pc.layers.length ? (_pcSources()||{SOURCES:[]}).SOURCES.length+' county/state layers' : 'nothing',
+            regrid:_pcRg.ticket ? 'on' : (_pcRg.reason || 'not asked'), parcelsFound:_pc.found.length,
             lookupsUsed:_pc.lookups+' of '+PC_LOOKUPS, said:_pc.last||'(nothing yet)' };
     console.table?console.table(o):console.log(o);
     return o;
@@ -77344,7 +77471,7 @@ window._crmToastModal=_crmToastModal;
   /* ---------------- PERMIT CREATOR (beta gate) ---------------- */
   window.omegaPermitBeta=function(){
     modal('&#128203; Permit Creator <span style="font:700 8px/1 monospace;letter-spacing:.08em;'
-        + 'color:#16202B;background:#F59E0B;border-radius:2px;padding:2px 4px;margin-left:6px">BETA</span>',
+        + 'color:#FFFFFF;background:#2B5FA8;border-radius:2px;padding:2px 4px;margin-left:6px">NEW</span>',
       /* Just the customer-facing line. The previous version appended an
          internal note explaining that the feature was "still installed,
          only gated" - accurate, but that is a message to a developer, not
@@ -106031,6 +106158,17 @@ table.e3-tbl tr.e3-cur td{ background:var(--hl-dim); }
   background:var(--hover);
 }
 @media (max-width:900px){ #omega-search{ display:none } }
+/* THE TITLE BAR GIVES WAY IN ORDER (2026-10-03). The tabs and Run take
+   ~880px, so on a 1280px screen the right-hand group has under 400px. It
+   used to give way by crushing whatever shrank first: "Pro" cut to "Prc",
+   "Ask Jarvis" wrapped onto two lines. Now the Designer/Pro switch and the
+   Jarvis chip never shrink (flex-shrink:0 on both); the key hints go first,
+   then the search field's words (to its icon), then the project name. */
+#tb .tb-right{ min-width:0; flex:0 1 auto; }
+#omega-search{ min-width:34px; flex:0 1 170px; overflow:hidden; }
+#omega-search .os-lbl{ overflow:hidden; text-overflow:ellipsis; }
+#pname{ min-width:90px; flex:0 1 190px; }
+@media (max-width:1366px){ #omega-jarvis-chip kbd, #omega-search kbd{ display:none } }
 
 /* ---------------------------------------------------------------------- *
  *  6. COMMAND PALETTE  (Ctrl / ⌘ + K)                                    *
@@ -106131,11 +106269,12 @@ body.omg-designer .rbtn .rb-lbl{ font-size:9.5px }
 body.omg-designer .rtab{ padding:0 20px; font-size:12px }
 
 /* mode switch in the title bar */
-#omg-switch{ display:flex; align-items:center; gap:0; height:23px;
+#omg-switch{ display:flex; align-items:center; gap:0; height:23px; flex-shrink:0;
   border:1px solid var(--border); border-radius:var(--radius-md); overflow:hidden }
 #omg-switch button{
   background:transparent; border:none; color:var(--sub); cursor:pointer;
   font-family:inherit; font-size:10.5px; font-weight:600; padding:0 10px; height:100%;
+  white-space:nowrap;
 }
 #omg-switch button:hover{ color:var(--text); background:var(--hover) }
 #omg-switch button.on{ background:var(--accent); color:var(--on-accent) }
@@ -106595,6 +106734,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
         if (!discovery || view.modules.indexOf(discovery.key) >= 0) return;
       }
       if ((!view && el.hasAttribute('data-cap-blocked')) || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-packaging-retired')) return;
+      /* hidden at the owner's request (the gating HIDE list): not runnable by name either */
+      if (el.classList && el.classList.contains('omega-gated-hidden')) return;
       var name = textOf(el);
       if (!name) return;
       if (seenEl.indexOf(el) >= 0) return;
@@ -119187,7 +119328,7 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     if (!btn.style.position) btn.style.position = 'relative';
     var s = document.createElement('span');
     s.className = (label === 'NEW') ? 'omega-new-tag' : 'omega-beta-tag';
-    s.textContent = label || 'BETA';
+    s.textContent = label || 'NEW';
     btn.appendChild(s);
     return true;
   }
@@ -119216,7 +119357,7 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
       if (typeof re === 'string') {
         return tagButton(document.getElementById(re), label) ? 1 : 0;
       }
-      MARKS.push([re, label || 'BETA']);
+      MARKS.push([re, label || 'NEW']);
       return apply();
     },
     list: function () {
@@ -142888,9 +143029,18 @@ challengeRow(s) +
 #ribbon .rb-ico,#ribbon .rs-ico,#ribbon .fi-ico,#ribbon .mi-ico{color:var(--accent,#6E9BE0)!important}
 #ribbon .rb-ico svg{width:22px!important;height:22px!important;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
 #ribbon .rs-ico svg,#ribbon .fi-ico svg,#ribbon .mi-ico svg{width:16px!important;height:16px!important}
-#ribbon .rbtn{max-width:88px;flex-shrink:0}
-#ribbon .rb-lbl{font-size:10px!important;line-height:1.2!important;max-width:82px;white-space:nowrap;word-break:normal;hyphens:none}
-#ribbon .rpanel-cap{font-size:9px!important;line-height:1.4;letter-spacing:.08em;text-transform:uppercase}
+#ribbon .rbtn{max-width:88px;flex-shrink:0;padding:3px 4px 1px!important;gap:2px!important}
+/* NO LABEL ON ITS CAPTION (Tommy, 2026-10-03: "make sure text layers dont
+   overlap"). Two label lines, the icon and the button's padding came to
+   ~57px, but a 78px ribbon leaves a button ~50px once the panel's top
+   padding and the caption are reserved, so every second line ("B&W",
+   "Review", "Tools") spilled onto the caption's rule and, in macOS's taller
+   fonts, onto the caption itself. Line heights are fixed pixels so no font's
+   metrics can grow them back: 3 + 22 icon + 2 + 2×11 label + 1 = 50px over
+   a 2 + 12 + 3 + 1px caption. scripts/render-editor-plan.js measures every
+   label against its caption on every tab. */
+#ribbon .rb-lbl{font-size:10px!important;line-height:11px!important;min-height:22px!important;max-width:82px;white-space:nowrap;word-break:normal;hyphens:none}
+#ribbon .rpanel-cap{font-size:9px!important;line-height:12px!important;padding:2px 6px 3px!important;margin-top:0!important;letter-spacing:.08em;text-transform:uppercase}
 /* Light values live in the shared token set (omega-ui-theme :root and its
    light blocks); the ribbon only names which token paints its ground. */
 #tb,#ribbon{background:var(--navy);color:var(--text)}
