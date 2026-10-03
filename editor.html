@@ -69094,7 +69094,19 @@ function placeBgbAt(p){
       /* Resize to the rating now that we know it. */
       try{
         var _fp=_bessFootprint(BGB.kwh, BGB.kw), _d=_evPx('bess', _fp);
-        if(_d && _d.w){ el.w=_d.w; el.h=_d.h; }
+        if(_d && _d.w){
+          /* About the centre it was placed at, and with the rated footprint
+             recorded. _evAdd centred the DEFAULT cabinet on the snap point;
+             growing it from that corner pushed a big battery right and down
+             by half the difference - onto the next piece, or over a lot
+             line the autopilot had planned it inside (2026-10-03) - and
+             the default lf/wf left behind put it back to the default
+             cabinet's size on the next zoom (omegaRescaleElements). */
+          var _cx=el.x+el.w/2, _cy=el.y+el.h/2;
+          el.w=_d.w; el.h=_d.h; el.aspect=_d.h/_d.w;
+          el.x=Math.round(_cx-_d.w/2); el.y=Math.round(_cy-_d.h/2);
+          el.lf=+_fp.lf; el.wf=+_fp.wf;
+        }
       }catch(e){}
     }
     if(_isBessNode){
@@ -69249,6 +69261,16 @@ window._bgbCancel=_bgbCancel;
    and a global by that name would switch every one of them on at once.
    That is a separate decision; this only lets a later block read the state. */
 try{ window._bgbState=function(){ return BGB; }; window._bgbCurKind=_bgbCurKind; }catch(e){}
+/* Two more READS for the autopilot, which plans every piece onto the parcel
+   before it places one: what a step draws (its evKind, so the plan measures
+   the box the editor will draw) and which piece a tree build runs each leg
+   from (the preset's parents, so the plan checks the run placeBgbAt will
+   actually lay). Read here rather than copied there, so a preset that
+   changes is changed once. */
+try{
+  window._bgbNode=function(k){ return (k && BGB_NODES[k]) || null; };
+  window._bgbParents=function(){ var p=BGB_PRESETS[BGB.mode]; return (p && p.parents) || null; };
+}catch(e){}
 
 /* Enter/Backspace for BESS draw phase + live rubber-band. */
 document.addEventListener('keydown', function(e){
@@ -84561,6 +84583,34 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     return m;
   }
 
+  /* Does the segment a-b pass through the INSIDE of the upright box
+     x0..x1, y0..y1? Liang-Barsky clipping; a segment that only runs along
+     an edge or touches a corner does not count. */
+  function segInBox(ax, ay, bx, by, x0, y0, x1, y1) {
+    var t0 = 0, t1 = 1, dx = bx - ax, dy = by - ay;
+    var P = [-dx, dx, -dy, dy], Q = [ax - x0, x1 - ax, ay - y0, y1 - ay];
+    for (var k = 0; k < 4; k++) {
+      if (P[k] === 0) { if (Q[k] <= 0) return false; continue; }
+      var r = Q[k] / P[k];
+      if (P[k] < 0) { if (r > t1) return false; if (r > t0) t0 = r; }
+      else { if (r < t0) return false; if (r < t1) t1 = r; }
+    }
+    return t0 < t1;
+  }
+  /* Does an upright box overlap a ring at all? `z` is {p: ring, b: its box},
+     both in the box's own frame. A vertex of the ring inside the box, a
+     corner of the box inside the ring, or an edge of the ring through the
+     box. The ring's box first, so a table nowhere near costs four
+     comparisons. */
+  function boxHitsRing(x0, y0, x1, y1, z) {
+    var b = z.b, p = z.p, n = p.length, i, j;
+    if (b.maxX <= x0 || b.minX >= x1 || b.maxY <= y0 || b.minY >= y1) return false;
+    for (i = 0; i < n; i++) if (p[i].x > x0 && p[i].x < x1 && p[i].y > y0 && p[i].y < y1) return true;
+    if (inPoly(x0, y0, p) || inPoly(x1, y0, p) || inPoly(x1, y1, p) || inPoly(x0, y1, p)) return true;
+    for (i = 0, j = n - 1; i < n; j = i++) if (segInBox(p[j].x, p[j].y, p[i].x, p[i].y, x0, y0, x1, y1)) return true;
+    return false;
+  }
+
   /* ── the rotated fill ──────────────────────────────────────────────── */
   function fitAtAngle(bnd, ang, tw, th, pitch, colGap, sb, excl, hardCap, oy, ox) {
     oy = oy || 0; ox = ox || 0;
@@ -84570,6 +84620,25 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     var bb = bbox(rb);
     var hw = tw / 2, hh = th / 2;
     var out = [], rows = 0, capped = false;
+
+    /* KEEP-OUTS ARE TESTED WHOLE. A table used to be refused only when one
+       of its own corners fell inside an exclusion, so anything smaller than
+       a table sat under it untouched: a 20 x 40 ft carport table covers a
+       14 x 20 ft battery pad, or a small building, without one corner
+       landing on it (the same trap the autopilot's building check documents
+       one level down). The autopilot now reserves its equipment pads as
+       exclusions, so that miss would draw panels over the battery. Each
+       exclusion is turned into the rows' own frame once per angle, where a
+       table is an upright box, and a table is refused when the two overlap
+       at all. */
+    var ex = [];
+    for (var ei = 0; excl && ei < excl.length; ei++) {
+      var z = excl[ei];
+      if (!z || z.length < 3) continue;
+      var rz = new Array(z.length);
+      for (var zi = 0; zi < z.length; zi++) rz[zi] = { x: z[zi].x * c + z[zi].y * s, y: -z[zi].x * s + z[zi].y * c };
+      ex.push({ p: rz, b: bbox(rz) });
+    }
 
     for (var y = bb.minY + hh + oy; y <= bb.maxY - hh + 1e-6; y += pitch) {
       rows++;
@@ -84581,10 +84650,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
           var wx = fx * c - fy * s, wy = fx * s + fy * c;
           if (!inPoly(wx, wy, bnd)) { ok = false; break; }
           if (sb > 0 && minEdgeDist(wx, wy, bnd) < sb) { ok = false; break; }
-          if (excl && excl.length) {
-            for (var e = 0; e < excl.length; e++) if (inPoly(wx, wy, excl[e])) { ok = false; break; }
-          }
         }
+        for (var e = 0; ok && e < ex.length; e++) if (boxHitsRing(x - hw, y - hh, x + hw, y + hh, ex[e])) ok = false;
         if (ok) {
           var cxw = x * c - y * s, cyw = x * s + y * c;
           out.push({ x: cxw - hw, y: cyw - hh, w: tw, h: th, a: ang });
@@ -158893,16 +158960,32 @@ if (root.console && console.info) {
   }
 
   /* ── STEP 3: roads and buildings from OpenStreetMap ───────────────────── */
-  /* The same three mirrors the building layer lists, same 9 s per mirror. */
+  /* The same three mirrors the building layer lists, same 9 s per mirror.
+
+     AN EMPTY ANSWER FROM A FALLBACK IS NOT BELIEVED. overpass.osm.ch carries
+     Switzerland and answers everywhere else with a well-formed, empty 200
+     (api/grid-atlas.js measured it; api/network-proximity.js refuses it the
+     same way). It is the last mirror here too, and on 780 W Martin Luther
+     King Jr Blvd (2026-10-03) the first two did not answer, osm.ch said
+     "nothing", and the HUD printed "0 roads · 0 buildings - no public road
+     nearby" for a block in central Los Angeles: the build faced south by
+     default and no building was checked. So an empty answer moves on to the
+     next mirror, and an empty is only taken as the truth from the FIRST
+     mirror; an empty from a fallback after the first failed is reported as
+     the failure it is, and the HUD says the roads were unavailable. */
   var OVERPASS = ['https://overpass.kumi.systems/api/interpreter', 'https://overpass-api.de/api/interpreter', 'https://overpass.osm.ch/api/interpreter'];
   function overpass(q) {
     return new Promise(function (res, rej) {
-      var idx = 0, last = null;
+      /* trace: what each mirror did, host and outcome, for the HUD line */
+      var idx = 0, trace = [], firstEmpty = false;
       function attempt() {
-        if (idx >= OVERPASS.length) return rej(new Error('no Overpass mirror answered' + (last ? ' (' + last + ')' : '')));
-        var url = OVERPASS[idx++], done = false, ctl = null;
+        if (idx >= OVERPASS.length) {
+          if (firstEmpty) return res([]);
+          return rej(new Error('no Overpass mirror answered' + (trace.length ? ' (' + trace.join('; ') + ')' : '')));
+        }
+        var primary = idx === 0, url = OVERPASS[idx++], host = String(url).split('/')[2], done = false, ctl = null;
         try { if (typeof AbortController === 'function') ctl = new AbortController(); } catch (e) {}
-        var t = setTimeout(function () { if (done) return; done = true; last = 'timeout'; try { if (ctl) ctl.abort(); } catch (e) {} attempt(); }, 9000);
+        var t = setTimeout(function () { if (done) return; done = true; trace.push(host + ' timeout'); try { if (ctl) ctl.abort(); } catch (e) {} attempt(); }, 9000);
         fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=UTF-8' }, body: q, signal: ctl ? ctl.signal : undefined })
           .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
           .then(function (j) {
@@ -158910,9 +158993,13 @@ if (root.console && console.info) {
             /* A busy mirror answers 200 with no elements and a remark about
                its own timeout. That is not an empty neighbourhood. */
             if (j && j.remark && !(j.elements && j.elements.length)) throw new Error(String(j.remark).slice(0, 80));
-            done = true; clearTimeout(t); res(j && j.elements ? j.elements : []);
+            done = true; clearTimeout(t);
+            if (j && j.elements && j.elements.length) { res(j.elements); return; }
+            if (primary) firstEmpty = true;
+            trace.push(host + ' empty');
+            attempt();
           })
-          .catch(function (e) { if (done) return; done = true; clearTimeout(t); last = (e && e.message) || 'unreachable'; attempt(); });
+          .catch(function (e) { if (done) return; done = true; clearTimeout(t); trace.push(host + ' ' + ((e && e.message) || 'unreachable')); attempt(); });
       }
       attempt();
     });
@@ -159148,9 +159235,12 @@ if (root.console && console.info) {
      near the axis the rest of the chain walks along as the site allows.
      `ring` (the parcel boundary, px) keeps the search on the property when we
      have one; without a parcel the search is unconstrained, which is the same
-     latitude the rest of the autopilot already takes. */
-  function _findClear(pt0, lf, wf, v, ppf, blds, ring) {
-    if (_clear(pt0, lf, wf, v, ppf, blds) && (!ring || _inPoly(pt0, ring))) return pt0;
+     latitude the rest of the autopilot already takes. `fits` is the caller's
+     own test on top, when it has one: the planner below passes "the whole box
+     the editor will draw is inside the parcel", because a centre on the lot
+     says nothing about the half of the pad on the neighbour's side. */
+  function _findClear(pt0, lf, wf, v, ppf, blds, ring, fits) {
+    if (_clear(pt0, lf, wf, v, ppf, blds) && (!ring || _inPoly(pt0, ring)) && (!fits || fits(pt0))) return pt0;
     var angles = [];
     for (var a = 0; a < 360; a += 15) angles.push(a);
     angles.sort(function (m, n) {                /* nearest the axis first */
@@ -159165,7 +159255,7 @@ if (root.console && console.info) {
         var dy = v.x * Math.sin(th) + v.y * Math.cos(th);
         var c = { x: pt0.x + dx * r * ppf, y: pt0.y + dy * r * ppf };
         if (ring && !_inPoly(c, ring)) continue;
-        if (_clear(c, lf, wf, v, ppf, blds)) return c;
+        if (_clear(c, lf, wf, v, ppf, blds) && (!fits || fits(c))) return c;
       }
     }
     return null;
@@ -159204,7 +159294,7 @@ if (root.console && console.info) {
      the road-facing front, so -v is the back: step out from the building's
      centroid until the pad is clear of it, then keep the first spot that is
      clear of every other building too and still on the property. */
-  function _behind(host, v, lf, wf, ppf, blds, ring) {
+  function _behind(host, v, lf, wf, ppf, blds, ring, fits) {
     var back = { x: -v.x, y: -v.y };
     /* START AT THE BACK WALL, NOT THE MIDDLE OF THE BUILDING.
 
@@ -159228,7 +159318,7 @@ if (root.console && console.info) {
     for (var ft = 0; ft <= reach; ft += SEARCH_STEP_FT) {
       var pt = { x: c.x + back.x * (start + ft * ppf), y: c.y + back.y * (start + ft * ppf) };
       if (ring && !_inPoly(pt, ring)) break;          /* off the property */
-      if (_clear(pt, lf, wf, v, ppf, blds)) return pt;
+      if (_clear(pt, lf, wf, v, ppf, blds) && (!fits || fits(pt))) return pt;
     }
     /* THE BACK IS BLOCKED OR OFF THE LOT. Hug the building rather than flee
        to the boundary: walk the footprint's own outline at a fixed standoff
@@ -159247,6 +159337,7 @@ if (root.console && console.info) {
         var cand = { x: m.x + away.x * off, y: m.y + away.y * off };
         if (ring && !_inPoly(cand, ring)) continue;
         if (!_clear(cand, lf, wf, v, ppf, blds)) continue;
+        if (fits && !fits(cand)) continue;
         /* how far toward the BACK this wall faces: +1 is dead rear */
         var score = away.x * back.x + away.y * back.y;
         if (score > sideScore) { sideScore = score; side = cand; }
@@ -159254,7 +159345,320 @@ if (root.console && console.info) {
     }
     if (side) return side;
     /* Only now, with nothing against the building available at all. */
-    return _findClear(c, lf, wf, back, ppf, blds, ring);
+    return _findClear(c, lf, wf, back, ppf, blds, ring, fits);
+  }
+
+  /* ── KEEPING EQUIPMENT ON THE PARCEL ───────────────────────────────────
+     The parcel ring was drawn, made the boundary and handed to the array
+     engine, which kept the panels on the lot. The equipment never looked
+     at it: layout() put the first piece at the site centre and walked each
+     next one thirty feet further along the same heading, however far that
+     took it. On 780 W Martin Luther King Jr Blvd (Thomas, 2026-10-03) the
+     parcel is the whole block but only 134 ft deep, the road lookup had
+     failed so the walk faced south, and the battery block landed on the
+     sidewalk, the inverter in the street and the building-loads panel on
+     the lot across it - somebody else's parcel. "It put the solar on the
+     parcel, which is the right thing, and the bess should also be in
+     there."
+
+     So the build is PLANNED whole before anything is drawn, and with a
+     parcel every piece must fit inside it:
+       - the box the editor actually draws (_evPx, which has a floor, so at
+         site scale a symbol is often bigger than the kit) sits inside the
+         lot line with LOT_SETBACK_FT to spare, all of it, not just its
+         centre;
+       - the run that feeds it - from its parent in a tree build, from the
+         last piece in a chain, exactly what placeBgbAt will lay - stays on
+         the lot, so an L-shaped lot's notch is not trenched through;
+       - no two pieces come within PAD_GAP_FT of each other, measured on
+         the kit's real footprint (not the drawn box: its floor is a fixed
+         number of pixels, so at the scale a big parcel is fitted at it
+         stands for 45 ft of kit, and spacing by it moved pieces on open
+         ground and lengthened the runs with the zoom).
+     Where the straight walk would cross the line, the walk TURNS along it:
+     each piece looks around the last piece placed in eight headings, every
+     five feet, and takes the cheapest spot that fits - cost is how far it
+     is from the walk's own spacing plus how sharply it turns. The
+     straight-on spot at the usual spacing costs nothing, so on open ground
+     every piece lands exactly where the straight walk always put it.
+     Nothing fits: the build stops and names the piece, like the building
+     check does. A refusal a person reads beats equipment on a neighbour's
+     land.
+
+     The plan also hands back keep-outs, one per piece: the array is told
+     to keep its panels off them, so a solar + storage build reserves its
+     equipment pads before the panels fill the lot instead of drawing the
+     battery on top of the array.
+
+     Like the building clearance, these are DRAWING clearances so the
+     sketch reads as being on the property and in one piece. A zoning or
+     fire-code setback is the AHJ's to set, not this file's. ─────────── */
+  var LOT_SETBACK_FT = 5;       /* a box's edge to the property line */
+  var PAD_GAP_FT = 4;           /* a box's edge to the next box */
+  var KEEP_OUT_FT = 3;          /* panels stay this far off an equipment box */
+  var STEP_FT = 30;             /* the walk's spacing, as it has always been */
+  var REACH_FT = 120;           /* how far past that spacing before the spiral */
+  var DRAWN_FT = 4;             /* what two drawn symbols touching costs: a
+                                   tie-break under one 5 ft step, so it never
+                                   moves a piece off the straight walk */
+  /* [degrees off the walk, what turning that far costs in feet] */
+  var TURNS = [[0, 0], [45, 8], [-45, 8], [90, 12], [-90, 12], [135, 30], [-135, 30], [180, 40]];
+
+  function _dist(a, b) { return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
+  function _rot(d, deg) {
+    var t = deg * Math.PI / 180, c = Math.cos(t), s = Math.sin(t);
+    return { x: d.x * c - d.y * s, y: d.x * s + d.y * c };
+  }
+  /* The box the editor draws for a piece: upright (rot 0) and centred where
+     it is placed, as _evAdd draws it, grown by `grow` px on every side. */
+  function _box(pt, w, h, grow) {
+    var hw = w / 2 + (grow || 0), hh = h / 2 + (grow || 0);
+    return [{ x: pt.x - hw, y: pt.y - hh }, { x: pt.x + hw, y: pt.y - hh },
+            { x: pt.x + hw, y: pt.y + hh }, { x: pt.x - hw, y: pt.y + hh }];
+  }
+  /* Is `inner` wholly inside `outer`? Every corner in, AND no edge of one
+     crossing an edge of the other: four corners on the lot still pass a
+     box that straddles a notch in the lot line. */
+  function _polyInPoly(inner, outer) {
+    var i, j;
+    for (i = 0; i < inner.length; i++) if (!_inPoly(inner[i], outer)) return false;
+    for (i = 0; i < inner.length; i++) {
+      var a = inner[i], b = inner[(i + 1) % inner.length];
+      for (j = 0; j < outer.length; j++) if (_segHit(a, b, outer[j], outer[(j + 1) % outer.length])) return false;
+    }
+    return true;
+  }
+  /* A run that stays on the lot: both ends and its middle inside and no
+     crossing of the line. Both ends on the lot is not enough - a straight
+     run across an L-shaped lot's inside corner is dug through the yard
+     next door. */
+  function _segOnLot(a, b, ring) {
+    if (!_inPoly(a, ring) || !_inPoly(b, ring)) return false;
+    if (!_inPoly({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, ring)) return false;
+    for (var j = 0; j < ring.length; j++) if (_segHit(a, b, ring[j], ring[(j + 1) % ring.length])) return false;
+    return true;
+  }
+  /* How far from p along the unit heading d before the lot line, px.
+     Infinity with no lot. Breaks a tie between turning left and turning
+     right toward the side with more room. */
+  function _room(p, d, ring) {
+    if (!ring) return Infinity;
+    var best = Infinity;
+    for (var j = 0; j < ring.length; j++) {
+      var a = ring[j], b = ring[(j + 1) % ring.length];
+      var ex = b.x - a.x, ey = b.y - a.y, den = d.x * ey - d.y * ex;
+      if (Math.abs(den) < 1e-12) continue;
+      var wx = a.x - p.x, wy = a.y - p.y;
+      var t = (wx * ey - wy * ex) / den, u = (wx * d.y - wy * d.x) / den;
+      if (t > 1e-9 && u >= 0 && u <= 1 && t < best) best = t;
+    }
+    return best;
+  }
+  /* What a candidate spot for one piece must satisfy (see above): false
+     when it does not fit, else the extra it costs - DRAWN_FT when its
+     drawn symbol would touch another's, which is allowed (at a small
+     scale every floored symbol touches) but the worse spot. */
+  function _fitter(b, from, outdoor, ring, blds, placed, lot, gap, ppf) {
+    return function (c, dir) {
+      if (ring) {
+        if (!_polyInPoly(_box(c, b.w, b.h, lot), ring)) return false;
+        if (!_segOnLot(from, c, ring)) return false;
+      }
+      if (outdoor && !_clear(c, b.lf, b.wf, dir, ppf, blds)) return false;
+      var extra = 0;
+      for (var i = 0; i < placed.length; i++) {
+        var q = placed[i], dx = Math.abs(c.x - q.pt.x), dy = Math.abs(c.y - q.pt.y);
+        if (dx < (b.lf + q.lf) * ppf / 2 + gap && dy < (b.wf + q.wf) * ppf / 2 + gap) return false;
+        if (dx < (b.w + q.w) / 2 && dy < (b.h + q.h) / 2) extra = DRAWN_FT;
+      }
+      return extra;
+    };
+  }
+  /* The point on the lot nearest p, a foot in from the line: where to
+     start looking when p itself is off the lot (the vertex mean of an L
+     can be hundreds of feet out in the notch). Null with no lot. */
+  function _nearestOnLot(p, ring, ppf) {
+    var best = null, bd = Infinity;
+    for (var j = 0; j < ring.length; j++) {
+      var a = ring[j], b = ring[(j + 1) % ring.length], ex = b.x - a.x, ey = b.y - a.y, L2 = ex * ex + ey * ey;
+      if (!(L2 > 0)) continue;
+      var t = Math.max(0, Math.min(1, ((p.x - a.x) * ex + (p.y - a.y) * ey) / L2));
+      var q = { x: a.x + ex * t, y: a.y + ey * t }, L = Math.sqrt(L2);
+      for (var sgn = -1; sgn <= 1; sgn += 2) {
+        var c = { x: q.x - sgn * ey / L * ppf, y: q.y + sgn * ex / L * ppf };
+        if (!_inPoly(c, ring)) continue;
+        var d = _dist(c, p);
+        if (d < bd) { bd = d; best = c; }
+      }
+    }
+    return best;
+  }
+  /* The cheapest spot that fits, walking on from `at` (the last piece
+     placed) on the heading `d` at the spacing `s` (px). Ties go to the
+     heading with more room. A spiral round `at` is the last resort; null
+     when nothing fits within SEARCH_MAX_FT. Where the piece's RUN starts
+     is the fitter's business, not the walk's. */
+  function _spot(at, d, s, ok, ring, ppf) {
+    var step = 5 * ppf, reach = s + REACH_FT * ppf, heads = [], dists = [s], best = null, i, k;
+    for (i = 0; i < TURNS.length; i++) {
+      var hd = _rot(d, TURNS[i][0]);
+      heads.push({ dir: hd, deg: TURNS[i][0], pen: TURNS[i][1], room: _room(at, hd, ring), ix: i });
+    }
+    heads.sort(function (a, b) { return (a.pen - b.pen) || (b.room - a.room) || (a.ix - b.ix); });
+    for (var dd = step; dd <= reach + 1e-9; dd += step) if (Math.abs(dd - s) > 1e-6) dists.push(dd);
+    for (i = 0; i < heads.length; i++) {
+      for (k = 0; k < dists.length; k++) {
+        var cost = Math.abs(dists[k] - s) / ppf + heads[i].pen;
+        if (best && cost >= best.cost) continue;
+        var c = { x: at.x + heads[i].dir.x * dists[k], y: at.y + heads[i].dir.y * dists[k] };
+        var extra = ok(c, heads[i].dir);
+        if (extra === false) continue;
+        cost += extra;
+        if (!best || cost < best.cost) best = { pt: c, dir: heads[i].dir, deg: heads[i].deg, cost: cost };
+      }
+    }
+    if (best) return best;
+    var angles = [];
+    for (var a = 0; a < 360; a += 15) angles.push(a > 180 ? a - 360 : a);
+    angles.sort(function (m, n) { return Math.abs(m) - Math.abs(n); });
+    for (var r = SEARCH_STEP_FT; r <= SEARCH_MAX_FT; r += SEARCH_STEP_FT) {
+      for (i = 0; i < angles.length; i++) {
+        var h = _rot(d, angles[i]);
+        var c2 = { x: at.x + h.x * r * ppf, y: at.y + h.y * r * ppf };
+        if (ok(c2, d) !== false) return { pt: c2, dir: d, deg: null, cost: Infinity, spiral: true };
+      }
+    }
+    return null;
+  }
+
+  /* THE PLAN. Pure: the site in canvas px in, every piece's spot out,
+     nothing drawn - so the whole build is checked before the first click,
+     the array can be told where the equipment goes, and it can be tested
+     off the page.
+       o.Pc       site centre                o.v     unit heading toward the road
+       o.ppf      px per ft                  o.ring  the parcel, or null
+       o.blds     building rings             o.seq   the guided build's steps
+       o.parents  a tree build's legs {kind: parent kind}, or null
+       o.fp       the battery's footprint, ft {lf, wf}
+       o.box(k)   {w, h} px the editor draws for step k, {lf, wf} ft the kit
+       o.pvPoint  the build lays an array, so the PV step is a hand-off to
+                  it (placeBgbAt runs the DC run there and draws nothing):
+                  a point that keeps the setback and the gap, not a box
+     Throws, naming the piece, when one has nowhere to go. */
+  function _plan(o) {
+    var ppf = o.ppf, ring = o.ring || null, blds = o.blds || [], v = o.v, fp = o.fp;
+    var seq = (o.seq && o.seq.length) ? o.seq : ['bess'];
+    var first = seq[0], lot = LOT_SETBACK_FT * ppf, gap = PAD_GAP_FT * ppf;
+    function name(k) { return k === 'bess' ? 'battery' : k; }
+    var b0 = o.box(first);
+    function fits0(pt) { return !ring || _polyInPoly(_box(pt, b0.w, b0.h, lot), ring); }
+
+    /* The first piece goes where it always went, and now has to fit on the
+       lot there. THE BATTERY GOES BEHIND THE BUILDING: not at the centroid,
+       which on a built lot IS the building, and not at the front, which is
+       where the meter and the utility connection belong. */
+    var anchor = o.Pc, where = '';
+    if (blds.length) {
+      var host = _hostBuilding(o.Pc, blds, ppf);
+      var found = host ? _behind(host, v, fp.lf, fp.wf, ppf, blds, ring, fits0)
+                       : _findClear(o.Pc, fp.lf, fp.wf, v, ppf, blds, ring, fits0);
+      if (!found && !host && ring && !_inPoly(o.Pc, ring)) {
+        var near0 = _nearestOnLot(o.Pc, ring, ppf);
+        if (near0) found = _findClear(near0, fp.lf, fp.wf, v, ppf, blds, ring, fits0);
+      }
+      /* Stopping is the right answer: a battery drawn inside a building is
+         a mistake somebody has to notice, and a silent one is worse than a
+         refusal that says why. The build stays armed for a human. */
+      if (!found) throw new Error('nowhere clear within ' + SEARCH_MAX_FT + ' ft for the ' + name(first) + ' ('
+        + blds.length + ' building' + (blds.length === 1 ? '' : 's') + ' on this site'
+        + (ring ? ', and it has to be inside the parcel' : '') + ') - '
+        + 'place it by hand, or draw a boundary that excludes them');
+      anchor = found;
+      var movedFt = Math.round(_dist(found, o.Pc) / ppf);
+      where = host ? ' (behind the building, ' + movedFt + ' ft off centre)'
+                   : (movedFt ? ' (moved ' + movedFt + ' ft clear of a building)' : '');
+    } else if (!fits0(o.Pc)) {
+      /* A bare lot whose centre will not take the box: a narrow strip, or
+         an L whose centroid is not on it at all - then the search starts
+         from the nearest point that is on it, or a big L's arms would be
+         out of reach of a search round its empty notch. */
+      var inside = _findClear(o.Pc, fp.lf, fp.wf, v, ppf, [], ring, fits0);
+      var near = (!inside && !_inPoly(o.Pc, ring)) ? _nearestOnLot(o.Pc, ring, ppf) : null;
+      if (near) inside = _findClear(near, fp.lf, fp.wf, v, ppf, [], ring, fits0);
+      if (!inside) throw new Error('no room inside the parcel for the ' + name(first) + ' within '
+        + SEARCH_MAX_FT + ' ft of its centre - place it by hand');
+      anchor = inside;
+      where = ' (moved ' + Math.round(_dist(inside, o.Pc) / ppf) + ' ft to sit inside the parcel)';
+    }
+
+    /* Then each piece, walking on from the last one. Its RUN starts where
+       placeBgbAt will start it (the parent in a tree build, the last piece
+       in a chain) and is what has to stay on the lot. The heading turns
+       with the walk when a piece goes round a corner of the lot (a right
+       angle or more), so the next one carries on along the line rather
+       than trying the street again; a small dodge keeps the heading. */
+    var placed = [{ kind: first, pt: anchor, w: b0.w, h: b0.h, lf: b0.lf, wf: b0.wf }], nodes = [], moved = [], pos = {};
+    pos[first] = anchor;
+    var prev = anchor, d = v;
+    for (var k = 1; k < seq.length && k < 12; k++) {
+      var kind = seq[k];
+      if (!kind || kind === 'service') break;          /* the POI stays a click */
+      var b = (kind === 'pv' && o.pvPoint) ? { w: 0, h: 0, lf: 0, wf: 0 } : o.box(kind);
+      var par = o.parents ? o.parents[kind] : null;
+      var from = (par && pos[par]) || prev;
+      var s = (STEP_FT + (k === 1 ? fp.lf / 2 : 0)) * ppf;
+      /* The building check is PER KIND. A transformer or a disconnect in a
+         warehouse wall is the same bug the battery was; the switchgear and
+         the revenue meter being in or on the building is the system working
+         as designed. The lot line is every kind's. */
+      var outdoor = !!OUTDOOR_ONLY[kind] && blds.length > 0;
+      var spot = _spot(prev, d, s, _fitter(b, from, outdoor, ring, blds, placed, lot, gap, ppf), ring, ppf);
+      if (!spot) throw new Error('no room ' + (ring ? 'inside the parcel ' : '') + 'for the ' + name(kind)
+        + (outdoor ? ' clear of the buildings' : '') + ' within ' + SEARCH_MAX_FT + ' ft of the '
+        + name(placed[placed.length - 1].kind) + ' - place the rest by hand');
+      if (spot.spiral || spot.deg !== 0 || Math.abs(_dist(spot.pt, prev) - s) > 1e-6) moved.push(kind);
+      if (!spot.spiral && Math.abs(spot.deg) >= 90) d = spot.dir;
+      placed.push({ kind: kind, pt: spot.pt, w: b.w, h: b.h, lf: b.lf, wf: b.wf });
+      nodes.push({ kind: kind, pt: spot.pt, from: from });
+      pos[kind] = spot.pt; prev = spot.pt;
+    }
+
+    /* What the array must keep its panels off. Not the PV step: in a solar
+       build that is where the DC run leaves for the array itself. */
+    var keepOut = [];
+    for (var q = 0; q < placed.length; q++) {
+      if (placed[q].kind !== 'pv') keepOut.push(_box(placed[q].pt, placed[q].w, placed[q].h, KEEP_OUT_FT * ppf));
+    }
+    return { anchor: anchor, where: where, first: first, nodes: nodes, placed: placed,
+             moved: moved, keepOut: keepOut, onLot: !!ring };
+  }
+
+  /* The box each step draws, measured the way the editor measures it, and
+     the kit's real footprint for the building clearance - the battery's
+     own rating, a pad-mount's rough 8 x 6 ft envelope for the rest, as the
+     building check has always used. A battery is measured both ways (with
+     its rating, and as the default cabinet the BTM path first draws) and
+     the larger kept, so neither can poke over the line. */
+  function _boxer(fp, ppf) {
+    return function (kind) {
+      var node = null;
+      try { node = (typeof root._bgbNode === 'function') ? root._bgbNode(kind) : null; } catch (e) {}
+      var ev = (node && node.evKind) || kind, isBess = ev === 'bess';
+      var ft = isBess ? { lf: fp.lf, wf: fp.wf } : { lf: 8, wf: 6 };
+      var w = ft.lf * ppf, h = ft.wf * ppf;
+      try {
+        if (typeof root._evPx === 'function') {
+          var dd = root._evPx(ev, isBess ? { lf: fp.lf, wf: fp.wf } : undefined);
+          if (dd && dd.w > 0 && dd.h > 0) { w = dd.w; h = dd.h; }
+          if (isBess) {
+            var d2 = root._evPx('bess');
+            if (d2 && d2.w > w) w = d2.w;
+            if (d2 && d2.h > h) h = d2.h;
+          }
+        }
+      } catch (e) {}
+      return { w: w, h: h, lf: ft.lf, wf: ft.wf };
+    };
   }
 
   /* ── WHAT EACH PROJECT TYPE RUNS ──────────────────────────────────────
@@ -159300,15 +159704,18 @@ if (root.console && console.info) {
      exclusions; it has simply never been handed the buildings. Parcel in as
      the boundary, building footprints in as exclusions, and the array comes
      back fitted around them rather than drawn over them. ──────────────── */
-  function solarArray(ringPx, blds) {
+  function solarArray(ringPx, blds, pads) {
     if (typeof root.computeGroundLayout !== 'function' || typeof root.applyGroundLayout !== 'function')
       throw new Error('the array engine is not on this page');
     if (!ringPx || ringPx.length < 3)
       throw new Error('no parcel boundary to fill - draw one, or the array has no edge to respect');
-    var lay = root.computeGroundLayout({ boundary: ringPx, exclusions: blds || [] });
+    /* pads: the equipment the chain will place, kept clear of panels */
+    var excl = (blds || []).concat(pads || []);
+    var lay = root.computeGroundLayout({ boundary: ringPx, exclusions: excl });
     if (!lay || !(lay.tableCount > 0))
-      throw new Error('the parcel is too small for an array once setbacks and buildings are taken out');
-    root.applyGroundLayout(ringPx, lay, blds || []);
+      throw new Error('the parcel is too small for an array once setbacks' + (pads && pads.length
+        ? ', buildings and the equipment pads are taken out' : ' and buildings are taken out'));
+    root.applyGroundLayout(ringPx, lay, excl);
     return lay;
   }
 
@@ -159329,9 +159736,10 @@ if (root.console && console.info) {
     return { blds: blds, ring: ring };
   }
 
-  function layout() {
-    if (!bgb() || !BGB.active) throw new Error('guided build is not armed');
-    if (BGB.phase !== 'poi' || BGB.stepIx !== 0) throw new Error('guided build already in progress');
+  /* The plan for the build that is armed, on the site as it is on screen.
+     opts.pvPoint: the build lays an array, so the PV step is a point. */
+  function planChain(geo, opts) {
+    if (!bgb()) throw new Error('guided build is not on this page');
     var c = ST.centre || centreOf(); if (!c) throw new Error('no site centre');
     var Pc = toPx(c.lat, c.lng); if (!Pc) throw new Error('site centre is off the canvas');
     var ppf = S.pxPerFt; if (!(ppf > 0)) throw new Error('no scale yet');
@@ -159340,63 +159748,36 @@ if (root.console && console.info) {
       var Pf = toPx(ST.front.lat, ST.front.lng);
       if (Pf) { var dx = Pf.x - Pc.x, dy = Pf.y - Pc.y, L = Math.sqrt(dx * dx + dy * dy); if (L > 1) v = { x: dx / L, y: dy / L }; }
     }
-    var fp = root._bessFootprint(BGB.kwh, BGB.kw);
-    function place(pt) { root.placeBgbAt(root._plotUnproject({ x: pt.x, y: pt.y })); }
+    geo = geo || _siteGeom();
+    var fp = root._bessFootprint(BGB.kwh, BGB.kw), parents = null;
+    try { parents = (typeof root._bgbParents === 'function') ? root._bgbParents() : null; } catch (e) {}
+    return _plan({ Pc: Pc, v: v, ppf: ppf, ring: geo.ring, blds: geo.blds, seq: (BGB.seq || []).slice(),
+                   parents: parents, fp: fp, box: _boxer(fp, ppf), pvPoint: !!(opts && opts.pvPoint) });
+  }
 
-    /* THE COLLISION CHECK, before anything is drawn. */
-    var _g = _siteGeom(), blds = _g.blds, ringPx = _g.ring;
-    var anchor = Pc, where = '';
-    if (blds.length) {
-      /* THE BATTERY GOES BEHIND THE BUILDING. Not at the centroid, which on
-         a built lot IS the building, and not at the front, which is where
-         the meter and the utility connection belong. */
-      var host = _hostBuilding(Pc, blds, ppf);
-      var found = host ? _behind(host, v, fp.lf, fp.wf, ppf, blds, ringPx)
-                       : _findClear(Pc, fp.lf, fp.wf, v, ppf, blds, ringPx);
-      if (!found) {
-        /* Stopping is the right answer: a battery drawn inside a building is
-           a mistake somebody has to notice, and a silent one is worse than a
-           refusal that says why. The build stays armed for a human. */
-        throw new Error('nowhere clear within ' + SEARCH_MAX_FT + ' ft for the battery ('
-          + blds.length + ' building' + (blds.length === 1 ? '' : 's') + ' on this site) - '
-          + 'place it by hand, or draw a boundary that excludes them');
-      }
-      anchor = found;
-      var movedFt = Math.round(Math.sqrt(Math.pow(found.x - Pc.x, 2) + Math.pow(found.y - Pc.y, 2)) / ppf);
-      where = host ? ' (behind the building, ' + movedFt + ' ft off centre)'
-                   : (movedFt ? ' (moved ' + movedFt + ' ft clear of a building)' : '');
-    }
-    /* Everything downstream walks from where the battery actually went, not
-       from the centroid — otherwise the trench starts inside the building the
-       battery was just moved out of. */
-    function at(ft) { return { x: anchor.x + v.x * ft * ppf, y: anchor.y + v.y * ft * ppf }; }
+  /* Place what the plan says, through the same placeBgbAt / _bgbFinishRun
+     pair a click would run: the first piece, then for each next one a run
+     ending at its spot and the piece snapped onto that run. Planned whole
+     first (above), so nothing is drawn for a build that cannot fit. */
+  function layout(plan) {
+    if (!bgb() || !BGB.active) throw new Error('guided build is not armed');
+    if (BGB.phase !== 'poi' || BGB.stepIx !== 0) throw new Error('guided build already in progress');
+    plan = plan || planChain();
+    function place(pt) { root.placeBgbAt(root._plotUnproject({ x: pt.x, y: pt.y })); }
     var placed = [];
-    place(anchor);
+    place(plan.anchor);
     if (BGB.phase !== 'drawtrench' || BGB.stepIx !== 1) throw new Error('build stalled at ' + (BGB.seq[0] || 'bess'));
-    placed.push(BGB.seq[0] + where);
-    for (var k = 1; k < 12; k++) {
+    placed.push(BGB.seq[0] + plan.where);
+    for (var k = 0; k < plan.nodes.length; k++) {
       var kind = root._bgbCurKind();
       if (!kind || kind === 'service') break;
-      /* The chain walks from the battery toward the road, and the check is
-         PER KIND. A transformer or a disconnect in a warehouse wall is the
-         same bug as the battery was; the switchgear and the revenue meter
-         being in or on the building is the system working as designed, so
-         they are placed where the walk puts them and not pushed out. */
-      var want = fp.lf / 2 + 30 * k, pt = at(want);
-      if (blds.length && OUTDOOR_ONLY[kind]) {
-        var kfp = { lf: 8, wf: 6 };          /* a pad-mount's rough envelope */
-        var tries = 0;
-        while (!_clear(pt, kfp.lf, kfp.wf, v, ppf, blds) && tries < 40) {
-          want += SEARCH_STEP_FT; pt = at(want); tries++;
-        }
-        if (tries >= 40) throw new Error('no clear outdoor run for the ' + kind
-          + ' between the battery and the road - place the rest by hand');
-      }
+      var n = plan.nodes[k];
+      if (n.kind !== kind) throw new Error('build stalled at ' + kind + ' (the plan has ' + n.kind + ' next)');
       var ix = BGB.stepIx;
-      place(pt);                          /* trench vertex */
+      place(n.pt);                        /* trench vertex */
       root._bgbFinishRun();               /* commit the run: phase placeon */
       if (BGB.phase !== 'placeon') throw new Error('build stalled at ' + kind + ' (run)');
-      place(pt);                          /* the node, snapped onto that run */
+      place(n.pt);                        /* the node, snapped onto that run */
       if (BGB.stepIx !== ix + 1) throw new Error('build stalled at ' + kind);
       placed.push(kind);
     }
@@ -159417,20 +159798,41 @@ if (root.console && console.info) {
     }
 
     try {
-      /* The array first when there is one: it wants the open ground, and
-         the electrical chain should walk around what it fills, not the
-         other way round. */
-      if (plan.steps.indexOf('array') !== -1) {
-        var geo = _siteGeom();
-        var lay = solarArray(geo.ring, geo.blds);
-        done.push('array (' + lay.tableCount + ' tables · ' + Math.round(lay.kw) + ' kW)');
-      }
-      if (plan.steps.indexOf('chain') !== -1) {
+      /* The array still goes down before the chain is drawn - it wants the
+         open ground - but the chain is PLANNED first, so the array can be
+         told where the equipment pads go and keep its panels off them. The
+         old order filled the lot with panels and then drew the battery on
+         top of them. One _siteGeom() for both, as before. */
+      var geo = _siteGeom(), chain = plan.steps.indexOf('chain') !== -1, array = plan.steps.indexOf('array') !== -1;
+      var pl = null, planErr = null, arrErr = null, note = '';
+      if (chain) {
         if (plan.mode) { try { root.__omegaForceMode = plan.mode; root.__omegaSolarEntry = true; } catch (e) {} }
         if (!ST.armed) { root._bgbStartPlacing(); ST.armed = true; }
-        done = done.concat(layout());
+        /* A chain that cannot fit still gets its array: the panels are
+           right on their own, and the refusal is reported after them. */
+        try { pl = planChain(geo, { pvPoint: array }); } catch (e) { planErr = e; }
       }
-      mark('build', 'ok', done.join(' > '));
+      if (array) {
+        /* And an array that cannot fit beside the equipment does not cost
+           the equipment that does: the chain is still placed, then the
+           array's refusal is reported. Without an array the PV step draws
+           a box of its own, so the chain is planned again with one. */
+        try {
+          var lay = solarArray(geo.ring, geo.blds, pl ? pl.keepOut : []);
+          done.push('array (' + lay.tableCount + ' tables · ' + Math.round(lay.kw) + ' kW)');
+        } catch (e) {
+          arrErr = e;
+          if (pl) { try { pl = planChain(geo, { pvPoint: false }); } catch (e2) { planErr = e2; pl = null; } }
+        }
+      }
+      if (planErr) throw new Error(planErr.message + (arrErr ? '; and ' + arrErr.message : ''));
+      if (chain) {
+        done = done.concat(layout(pl));
+        if (pl.onLot) note = ' · all inside parcel' + (ST.parcel && ST.parcel.apn ? ' ' + ST.parcel.apn : '')
+          + (pl.moved.length ? ' (' + pl.moved.join(', ') + ' turned to fit)' : '');
+      }
+      if (arrErr) throw new Error((done.length ? done.join(' > ') + note + ' - but no array: ' : '') + arrErr.message);
+      mark('build', 'ok', done.join(' > ') + note);
     } catch (e) {
       /* The build stays armed so a person can carry on by clicking. */
       ST.fatal = true; ST.error = e.message; mark('build', 'blocked', e.message);
@@ -159603,7 +160005,11 @@ if (root.console && console.info) {
     mark(ST.step, 'blocked', 'stopped');
   }
 
-  root.OmegaAutopilot = { start: start, parcel: parcel, roads: roads, layout: layout, score: score, stop: stop,
+  /* plan(opts): what layout() would place, and the keep-outs it would hand
+     the array, for the build that is armed - computed, never drawn.
+     opts.pvPoint as planChain takes it. */
+  root.OmegaAutopilot = { start: start, parcel: parcel, roads: roads,
+                          plan: function (opts) { return planChain(null, opts); }, layout: layout, score: score, stop: stop,
                           state: function () { return ST; } };
 
   if (!P) return;                                   /* no ?address= and ?auto=: nothing on this page changes */

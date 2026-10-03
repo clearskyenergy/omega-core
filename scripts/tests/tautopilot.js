@@ -53,7 +53,9 @@ const NAMES = ['fetchMap', '_latLngToPx', '_liveMapState', '_getCanvasSize', '_g
   'uid', 'updShapeCount', 'OmegaSite', 'OmegaGIS', 'openBessGuidedBuild', '_bgbStartPlacing', 'placeBgbAt',
   '_bgbFinishRun', '_bgbCurKind', '_bgbCancel', '_bgbSync', '_bgbGenericCfg', '_bessFootprint', '_plotUnproject',
   'showBanner', 'OmegaGridPrescreen', 'openScorePanel', 'computeInterconnectScore', 'saveProject',
-  '_renderLayerData', 'SHAPE_STROKE', '_bgbState', '_CFG', 'S'];
+  '_renderLayerData', 'SHAPE_STROKE', '_bgbState', '_CFG', 'S',
+  /* what the parcel planner measures and follows (2026-10-03) */
+  '_bgbNode', '_bgbParents', '_evPx', 'computeGroundLayout', 'applyGroundLayout'];
 ok(!/_saveProject/.test(block), 'it does not call the _saveProject that does not exist');
 function defined(name) {
   const re = new RegExp('(^|[\\s;{}])(async\\s+)?function\\s+' + name + '\\s*\\(|(window|root)\\.' + name + '\\s*=[^=]|'
@@ -79,6 +81,30 @@ ok(/window\._bgbState=function\(\)\{ return BGB; \};/.test(s) && /window\._bgbCu
    '_bgbState() and _bgbCurKind are exported on window');
 ok(!/window\.BGB\s*=/.test(s), 'and BGB itself is still not a global');
 ok(!/typeof BGB\b/.test(block), 'the module reads the state through the accessor, never a bare BGB');
+ok(/window\._bgbNode=function\(k\)\{ return \(k && BGB_NODES\[k\]\) \|\| null; \};/.test(s)
+   && /window\._bgbParents=function\(\)\{ var p=BGB_PRESETS\[BGB\.mode\]; return \(p && p\.parents\) \|\| null; \};/.test(s),
+   '_bgbNode and _bgbParents read the guided build\'s own tables (no copy in the autopilot)');
+
+/* The build keeps to the parcel (Design with AI, 2026-10-03): the chain is
+   planned before anything is drawn, the array is told the equipment pads,
+   and layout() places what the plan says. scripts/tests/tautopilot-parcel.js
+   holds the geometry; this holds the wiring. */
+console.log('the parcel plan');
+{
+  const sb = block.slice(block.indexOf('function stepBuild()'), block.indexOf('function score()'));
+  const iPlan = sb.indexOf('pl = planChain(geo, { pvPoint: array })'), iArr = sb.indexOf('solarArray(geo.ring'), iLay = sb.indexOf('layout(pl)');
+  ok(iPlan > 0 && iArr > iPlan && iLay > iArr, 'stepBuild plans the chain, then lays the array, then places the chain');
+  ok(/solarArray\(geo\.ring, geo\.blds, pl \? pl\.keepOut : \[\]\)/.test(sb), 'the array keeps its panels off the planned pads');
+  const iPErr = sb.indexOf('if (planErr) throw'), iAErr = sb.indexOf('if (arrErr) throw');
+  ok(iPErr > iArr, 'a chain that cannot fit still gets its array, then says why');
+  ok(/catch \(e\) \{\s*arrErr = e;/.test(sb) && iAErr > iLay,
+     'an array that cannot fit beside the equipment still gets the chain, then says why');
+  ok(/pl = planChain\(geo, \{ pvPoint: false \}\)/.test(sb), 'and without an array the chain is planned again with a PV box');
+  ok(/function layout\(plan\)/.test(block) && /plan = plan \|\| planChain\(\);/.test(block), 'layout() takes a plan, or makes one');
+  ok(!/function at\(ft\)/.test(block), 'the straight walk that ignored the parcel is gone');
+  ok(/_polyInPoly\(_box\(c, b\.w, b\.h, lot\), ring\)/.test(block) && /_segOnLot\(from, c, ring\)/.test(block),
+     'each spot is held to the lot: the whole drawn box, and the run that feeds it');
+}
 
 /* The three small edits. */
 console.log('the edits beside it');

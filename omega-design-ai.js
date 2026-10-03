@@ -17,8 +17,10 @@
 
    WHY THE TWO ANSWERS ARE LABELLED DIFFERENTLY
    The autopilot's own layout() walks the guided build placing each node
-   thirty feet along a vector from the site centre. It does not know where
-   the building is, what the setbacks are, or that there is a drainage
+   thirty feet along a vector from the site centre. When it has the parcel
+   it keeps every piece and run inside it (2026-10-03), and it keeps the
+   battery, transformer and disconnect off the buildings it imported. It
+   does not know what the setbacks are, or that there is a drainage
    easement in the way. It is a sketch, it has always been a sketch, and
    on a screen next to a satellite image it is very easy to mistake for a
    drawing. So this labels it: SKETCH, unverified placement.
@@ -291,8 +293,10 @@
                         + 'No electrical equipment is drawn.'
         :                 'Loads the site and stops: ' + (HAND[k] || 'the next step is yours.');
       note.textContent =
-          d === 'build' ? 'This produces a SKETCH: equipment walked out from the building toward the road. It checks the '
-                        + 'building footprints it imported, but not setbacks, easements, clearances or obstructions. '
+          d === 'build' ? 'This produces a SKETCH: equipment walked out from the building toward the road. When the parcel '
+                        + 'is found, every piece and run is kept inside it; the battery, transformer and disconnect are kept '
+                        + 'off the building footprints it imported (the switchgear and meter may sit in or on the building). '
+                        + 'It does not check zoning setbacks, easements, clearances or obstructions. '
                         + 'Use "Make it buildable" once you have the survey and the service location.'
         : d === 'array' ? 'This produces a SKETCH array: the packing engine fills the parcel at the configured GCR and '
                         + 'setback, with the buildings taken out. It knows nothing about shading, easements or soils.'
