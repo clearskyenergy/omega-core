@@ -2744,3 +2744,7 @@ drawing, never a shape on the plan.
 - Tests: `scripts/tests/tparcellines.js` (the list, the tile maths, and the
   editor's block cut out of `editor.html` and run on a stand-in Google
   map); `scripts/tests/tparcel.js` (unchanged, now in `npm test`).
+
+## 2026-10-03 — Site Discovery evidence handling
+
+Site Discovery weighted ranking now runs in `/api/site-discovery`, guarded by the existing tenant/billing/member checks and the Omega Sites module. Missing or invalid active factors remain Verify with a weighted score range; zero is a real value, and all-zero weights are rejected. Grid proximity and load preference are explicitly not capacity approval or BESS sizing. CSV uses the shared quoted-field parser and safe export, imported names render as text, edits invalidate old results, and only returned tenant scope is saved. Removed seeded example candidates. Added 50-site/edge-case/access tests and a browser regression for quoted CSV, unknowns, stale results and mobile layout. No data migration.

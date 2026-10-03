@@ -4,7 +4,8 @@ var auth=require('./verify-token');
 module.exports=async function(req,mode){
   var m=/^Bearer (.+)$/.exec((req.headers||{}).authorization||'');
   if(!m)throw auth.httpError(401,'Sign in to your OMEGA workspace.');
-  var token=m[1],caller=await auth.verifyIdToken(token),key=mode==='parcel'?'parcelscreening':'bessscreening';
+  if(['parcel','bess','discovery'].indexOf(mode)<0)throw auth.httpError(400,'Unknown screening mode.');
+  var token=m[1],caller=await auth.verifyIdToken(token),key=mode==='discovery'?'sitediscovery':mode==='parcel'?'parcelscreening':'bessscreening';
   if(!caller.orgId||caller.emailVerified!==true)throw auth.httpError(403,'A verified workspace account is required.');
   var base='omega_orgs/'+encodeURIComponent(caller.orgId);
   var records=await Promise.all([auth.readAsCaller(token,base),auth.readAsCaller(token,base+'/billing/current'),auth.readAsCaller(token,base+'/members/'+encodeURIComponent(caller.uid))]);
@@ -15,7 +16,7 @@ module.exports=async function(req,mode){
     if(billing.packaged===true){
       var packages=require('./package-access');
       var view=packages.project(caller,billing,org,member,Date.now());
-      packages.requireModule(view,mode==='parcel'?'siteintel':'storage',{tools:[key]});
+      packages.requireModule(view,mode==='discovery'?'sitefinder':mode==='parcel'?'siteintel':'storage',{tools:[key]});
       return {caller:caller,billing:billing,token:token,packageAccess:view};
     }
     var ov=billing.toolOverrides||{},addons=billing.addons||[];
