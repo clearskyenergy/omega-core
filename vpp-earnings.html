@@ -26,7 +26,31 @@
   pre-fills the form, so the editor or a project can hand a site over.
 
   SAVED DATA.  toolData/{orgId}/tools/vppsim as { v:1, scenarios:[…] } —
-  the inputs and the headline of each run, at most 30, newest first.
+  at most 30, newest first, each { name, site, gross, owner, market, at }:
+  the inputs (site) and the headline of the run (gross is the saved list's
+  label; owner and market are kept beside it), never the streams or rates.
+  The orgId is the one the server resolved (options answers it, aliases
+  folded, as the rules fold them). A URDB tariff is kept as its JSON text
+  (tariff.urdbJson): Firestore refuses the arrays inside arrays it is made
+  of. The interval file is never stored; its unit, first-reading date and
+  the split are, and so is the load column the person chose (the file's
+  header text, load.column), put back when the scenario is loaded and
+  kept for the next file attached. A save writes the whole list, so Save refuses (and says
+  why) until the stored list has been read in this session, a missing
+  document counting as read, and while another save is on its way.
+  Another person signing in, or signing out, reloads the page.
+  WHICH COLUMN.  When the server cannot tell which column of a file is the
+  load (two load columns, or none named as one), it answers 400 with
+  errors[0].field 'load.column' and the columns it found ({ key, label,
+  sample }). The page shows "Which column is the load?" in the interval
+  panel, and the choice is posted as load.column and shown in the result
+  (result.load.column). A new file clears the choice.
+  SIZE.  What is measured is what is POSTED: the UTF-8 bytes of the JSON
+  body, where every quote, tab and line break of the file is escaped. Over
+  4,400,000 bytes (under Vercel's 4.5 MB request limit) the estimate is
+  refused here, the limit named, before anything is posted; so is a file
+  over the engine's own cap (4,300,000 characters).
+  Rendered and checked by scripts/render-vpp-earnings.js (check:pages).
   ═══════════════════════════════════════════════════════════════════════════════
 -->
 <html lang="en">
@@ -78,6 +102,7 @@ button{cursor:pointer}
 .f{display:flex;flex-direction:column;gap:4px;margin-bottom:12px;min-width:0}
 .f label{font-size:12.5px;font-weight:600;color:var(--ink)}
 .f .hint{font-size:12px;color:var(--muted)}
+#fileinfo{overflow-wrap:anywhere}
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
 input[type=text],input[type=number],select,textarea{width:100%;min-height:38px;padding:7px 10px;border:1px solid var(--line-2);border-radius:8px;background:#fff}
@@ -149,6 +174,16 @@ svg text{font:11px Inter,system-ui,sans-serif;fill:#526071}
 .upsell{background:linear-gradient(135deg,#EEF4FF,#FFFFFF);border-color:#C7D7FE}
 .upsell-acts{display:flex;gap:8px;flex-wrap:wrap}
 .saved select{flex:1 1 180px;min-width:0}
+.colpick{min-width:0;overflow-wrap:anywhere;margin-top:10px;border:1px solid #FEDF89;background:var(--warn-bg);border-radius:10px;padding:10px 12px}
+.colpick h4{margin:0 0 4px;font-size:13px;color:var(--ink)}
+.colpick p{margin:0 0 8px;font-size:12px;color:var(--sub);overflow-wrap:anywhere}
+.colpick label{display:flex;gap:8px;align-items:flex-start;padding:6px 4px;border-radius:7px;cursor:pointer;min-width:0}
+.colpick label:hover{background:#fff}
+.colpick input{margin-top:3px;flex:0 0 auto}
+.colpick .cl{font-weight:600;color:var(--ink);font-size:13px;overflow-wrap:anywhere}
+.colpick .cs{display:block;font-size:11.5px;color:var(--muted);font-family:ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+.colpick .btn{margin-top:6px}
+.colpick [data-act=change-column]{min-height:40px}
 .spin{width:14px;height:14px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:sp .8s linear infinite}
 @keyframes sp{to{transform:rotate(360deg)}}
 </style>
@@ -239,16 +274,21 @@ button,a,input,select,textarea{touch-action:manipulation}
           <button type="button" class="btn btn-t" data-act="fill-24">Last 24 months</button>
         </div>
         <details class="more"><summary>Paste from a spreadsheet</summary>
-          <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0">Rows of <i>month, kWh, peak kW, $</i> (month as 2025-07). Tabs or commas.</p>
+          <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0">Rows of <i>month, kWh, peak kW, $</i> (month as 2025-07, 7/2025, or a bill date such as 7/15/2025). Tabs or commas.</p>
           <textarea id="paste" placeholder="2025-07	41200	180	6230"></textarea>
           <button type="button" class="btn btn-s" data-act="paste" style="margin-top:6px">Use these rows</button>
         </details>
       </div>
       <div id="m-interval" hidden>
         <div class="f"><label for="file">Interval file (CSV)</label><input type="file" id="file" accept=".csv,.txt,text/csv,text/plain">
-          <span class="hint">One year: 8,760 hourly or 35,040 fifteen-minute readings. The last number on each row is read as the load.</span></div>
-        <div class="f"><label for="iunit">Readings are</label><select id="iunit"><option value="kw">kW (demand)</option><option value="kwh">kWh per interval</option></select></div>
+          <span class="hint">One year: 8,760 hourly or 35,040 fifteen-minute readings. The load column is picked by its header (usage, kWh, kW), never a cost column; a date column places the year on the calendar.</span></div>
+        <div class="row">
+          <div class="f"><label for="iunit">Readings are</label><select id="iunit"><option value="kw">kW (demand)</option><option value="kwh">kWh per interval</option></select></div>
+          <div class="f"><label for="istart">First reading (if undated)</label><input type="text" id="istart" maxlength="10" placeholder="YYYY-MM-DD"></div>
+        </div>
+        <span class="hint" style="display:block;margin:-6px 0 8px;font-size:12px;color:var(--muted)">A file with no dates is read as starting 1 January unless you give its first day.</span>
         <div id="fileinfo" class="hint" style="font-size:12px;color:var(--sub)"></div>
+        <div id="colpick" class="colpick" hidden></div>
       </div>
       <details class="more"><summary>Tariff (optional)</summary>
         <p class="hint" style="font-size:12px;color:var(--muted);margin:4px 0 8px">Without it a regional planning rate is used — calibrated to the bills' dollars when they carry any.</p>
@@ -307,7 +347,46 @@ var ENDPOINT = '/api/vpp-estimate';
 var TOOL_KEY = 'vppsim';
 var MAX_SAVED = 30;
 var MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] };
+/* the server's cap on an interval file, in its own measure (characters of
+   text): api/_lib/vpp-sim.js MAX_TEXT. The page refuses past it, before posting. */
+var MAX_TEXT = 4300000;
+var TOO_BIG = 'The interval file is larger than 4.3 MB (4,300,000 characters), the most one estimate accepts. Export one year of hourly or 15-minute readings without extra columns.';
+/* What is POSTED is the JSON body, where every quote, tab and line break of
+   the file becomes two characters: a file under MAX_TEXT can still make a
+   request Vercel refuses (4.5 MB) before the function runs. So the body is
+   measured in UTF-8 bytes, as sent, against this, with a margin. */
+var MAX_BODY = 4400000;
+function tooBigBody(bytes) {
+  return 'With its quotes, tabs and line breaks this estimate is ' + (bytes / 1e6).toFixed(1) + ' MB to send; one estimate takes at most 4.4 MB (4,400,000 bytes). ' +
+    'Export one year of hourly or 15-minute readings without extra columns or quoted fields.';
+}
+/* The UTF-8 length of a string, counted: a pair of surrogates is 4 bytes */
+function utf8Bytes(str) {
+  var n = 0, i, c, len = str.length;
+  for (i = 0; i < len; i++) {
+    c = str.charCodeAt(i);
+    if (c < 0x80) n += 1;
+    else if (c < 0x800) n += 2;
+    else if (c >= 0xD800 && c <= 0xDBFF && i + 1 < len && (str.charCodeAt(i + 1) & 0xFC00) === 0xDC00) { n += 4; i++; }
+    else n += 3;
+  }
+  return n;
+}
+/* The load column: COLUMN is what is posted as load.column (the key the
+   server gave, the header text), COLUMN_LABEL what a person reads, COLUMNS
+   the list the server last offered. A new file clears the choice, except the
+   one file attached after loading a scenario (KEEP_COLUMN), which is that
+   scenario's file again. */
+var COLUMN = null, COLUMN_LABEL = null, COLUMNS = null, KEEP_COLUMN = false, FILE_SEEN = null, FILE_INFO = '';
+/* bumped when the file or the scenario changes: an estimate that comes back
+   after that answers a question nobody is asking any more */
+var RUN_SEQ = 0, PICK_WAITING = false;   /* a pick refused while an estimate ran: it is still the person's choice */
+var ME = null, DB = null, ORG = null, SEG = 'commercial', MODE = 'profile', INTERVAL = null, LAST = null, STORE = { v: 1, scenarios: [] }, LEAVING = false;
+/* The stored list in this session: 'idle' · 'loading' · 'loaded' (a missing
+   document counts) · 'failed'. Save writes the WHOLE list, so it writes only
+   once this is 'loaded' and no other save is on its way (SAVING); a Save
+   refused meanwhile is REFUSED_SAVE, and the page says when to press again. */
+var SAVED = 'idle', SAVING = false, REFUSED_SAVE = false;
 
 function $(id) { return document.getElementById(id); }
 function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -360,34 +439,121 @@ function readBills() {
   return out;
 }
 function cellNum(x) { var v = String(x == null ? '' : x).replace(/[$,\s]/g, ''); return v === '' || !isFinite(Number(v)) ? null : Number(v); }
+/* The month of a pasted bill's first cell, as { y, m } (m 1-based, not yet
+   checked), or null when the cell is not a date (a header row).
+   2025-07 · 2025/7 · 2025-07-15 · 7/2025 · and a full US date 7/15/2025
+   (or 7/15/25), whose FIRST number is the month: the M/YYYY form alone read
+   the day as the month, '15/2025'. */
+function billMonth(cell) {
+  var s = String(cell == null ? '' : cell), m;
+  if ((m = /^\s*(\d{4})[-\/](\d{1,2})(?:[-\/]\d{1,2})?(?:\D|$)/.exec(s))) return { y: m[1], m: +m[2] };
+  if ((m = /^\s*(\d{1,2})[-\/](\d{1,2})[-\/](\d{4}|\d{2})(?:\D|$)/.exec(s))) return { y: (m[3].length === 2 ? '20' : '') + m[3], m: +m[1] };
+  if ((m = /^\s*(\d{1,2})[-\/](\d{4})\s*$/.exec(s))) return { y: m[2], m: +m[1] };
+  return null;
+}
 function pasteBills() {
-  var lines = $('paste').value.split(/\r?\n/), rows = [];
+  var lines = $('paste').value.split(/\r?\n/), rows = [], bad = [];
   for (var i = 0; i < lines.length; i++) {
     var c = lines[i].split(/[\t,;]/);
     if (c.length < 2) continue;
-    var m = /(\d{4})[-\/](\d{1,2})/.exec(c[0]) || /(\d{1,2})[-\/](\d{4})/.exec(c[0]);
-    if (!m) continue;
-    var yr = m[1].length === 4 ? m[1] : m[2], mo = m[1].length === 4 ? m[2] : m[1];
-    rows.push({ month: yr + '-' + (mo.length < 2 ? '0' : '') + mo, kwh: cellNum(c[1]), peakKw: cellNum(c[2]), cost: cellNum(c[3]) });
+    var d = billMonth(c[0]);
+    if (!d) continue;
+    if (!(d.m >= 1 && d.m <= 12)) { bad.push('row ' + (i + 1) + ' ("' + String(c[0]).trim().slice(0, 20) + '")'); continue; }
+    rows.push({ month: d.y + '-' + (d.m < 10 ? '0' : '') + d.m, kwh: cellNum(c[1]), peakKw: cellNum(c[2]), cost: cellNum(c[3]) });
   }
-  if (!rows.length) { formMsg('No rows with a month were found in the pasted text.', 'warn'); return; }
+  var badText = bad.length ? ' Left out, no month 1–12 in the date: ' + bad.slice(0, 5).join(', ') + (bad.length > 5 ? ' and ' + (bad.length - 5) + ' more' : '') + '.' : '';
+  if (!rows.length) { formMsg((bad.length ? 'No row had a readable month.' : 'No rows with a month were found in the pasted text.') + badText, 'warn'); return; }
   if (rows.length > 24) rows = rows.slice(rows.length - 24);
   $('bills').innerHTML = '';
-  for (var r = 0; r < rows.length; r++) billRow(rows[r]);
-  formMsg(rows.length + ' month(s) read from the paste.', 'ok');
+  var seen = {}, months = 0;
+  for (var r = 0; r < rows.length; r++) { billRow(rows[r]); if (!seen[rows[r].month]) { seen[rows[r].month] = 1; months++; } }
+  /* twelve rows that all land on one month read as a valid year and are not one */
+  var dupText = months < rows.length ? ' ' + rows.length + ' rows cover only ' + months + ' month' + (months > 1 ? 's' : '') + '; check the date column.' : '';
+  formMsg(rows.length + ' month(s) read from the paste.' + dupText + badText, bad.length || dupText ? 'warn' : 'ok');
 }
-function readFile(f) {
-  INTERVAL = null; $('fileinfo').textContent = '';
-  if (!f) return;
-  if (f.size > 4000000) { $('fileinfo').textContent = 'That file is larger than one year of readings (4 MB).'; return; }
+/* done(), when given, is called once the read has settled either way */
+function readFile(f, done) {
+  INTERVAL = null; FILE_INFO = ''; $('fileinfo').textContent = '';
+  /* a new file clears the column chosen for the last one; the same file read
+     again (Simulate before its read finished) keeps it */
+  if (f !== FILE_SEEN) { FILE_SEEN = f || null; RUN_SEQ++; if (KEEP_COLUMN) KEEP_COLUMN = false; else clearColumn(); }
+  function settle() { if (done) done(); }
+  if (!f) return settle();
+  /* judged on the text, as the server judges it; a UTF-8 file has at least a
+     third as many characters as bytes, so one past three times the cap is
+     refused without reading it */
+  if (f.size > MAX_TEXT * 3) { $('fileinfo').textContent = TOO_BIG; return settle(); }
   var r = new FileReader();
   r.onload = function () {
-    INTERVAL = String(r.result || '');
-    var n = INTERVAL.split(/\r?\n/).filter(function (l) { return /\d/.test(l); }).length;
-    $('fileinfo').textContent = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
+    var text = String(r.result || '');
+    if (text.length > MAX_TEXT) { $('fileinfo').textContent = TOO_BIG; return settle(); }
+    /* the file alone, escaped as the body will carry it (run() measures the whole body again) */
+    var sent = utf8Bytes(JSON.stringify(text));
+    if (sent > MAX_BODY) { $('fileinfo').textContent = tooBigBody(sent); return settle(); }
+    INTERVAL = text;
+    var n = INTERVAL.split(/\r\n|\r|\n/).filter(function (l) { return /\d/.test(l); }).length;
+    FILE_INFO = f.name + ' · about ' + n.toLocaleString('en-US') + ' rows with numbers';
+    paintInfo();
+    settle();
   };
-  r.onerror = function () { $('fileinfo').textContent = 'The file could not be read.'; };
+  r.onerror = function () { $('fileinfo').textContent = 'The file could not be read.'; settle(); };
   r.readAsText(f);
+}
+
+/* ── which column is the load ───────────────────────────────────────── */
+function columnNote() { return COLUMN ? ' · load column: ' + (COLUMN_LABEL || COLUMN) : ''; }
+/* the line under the picker: the file read, and the column that will be posted */
+function paintInfo() { if (FILE_INFO && INTERVAL) $('fileinfo').textContent = FILE_INFO + columnNote(); }
+function clearColumn() { COLUMN = null; COLUMN_LABEL = null; COLUMNS = null; paintColumns(); }
+/* The server's list, as it sent it: [{ key, label, sample[] }]. Only plain
+   strings are kept; every one is drawn through esc(). */
+function takeColumns(list) {
+  var out = [];
+  for (var i = 0; i < list.length && out.length < 60; i++) {
+    var c = list[i];
+    if (!c || typeof c.key !== 'string' || !c.key) continue;
+    var sm = Array.isArray(c.sample) ? c.sample.slice(0, 3).map(function (x) { return String(x == null ? '' : x).slice(0, 40); }) : [];
+    out.push({ key: c.key, label: typeof c.label === 'string' && c.label ? c.label : c.key, sample: sm });
+  }
+  return out;
+}
+function paintColumns(message) {
+  var box = $('colpick');
+  if (!COLUMNS || !COLUMNS.length) { box.innerHTML = ''; box.hidden = true; return; }
+  var h = '<h4 id="colpick-h">Which column is the load?</h4><p>' + esc(message || 'The file has more than one column that could be the load. Pick the one with the meter readings.') + '</p>' +
+    '<div role="radiogroup" aria-labelledby="colpick-h">';
+  for (var i = 0; i < COLUMNS.length; i++) {
+    var c = COLUMNS[i];
+    h += '<label><input type="radio" name="loadcol" value="' + esc(c.key) + '"' + (c.key === COLUMN ? ' checked' : '') + '>' +
+      '<span><span class="cl">' + esc(c.label) + '</span>' +
+      (c.sample.length ? '<span class="cs">e.g. ' + esc(c.sample.join(' · ')) + '</span>' : '') + '</span></label>';
+  }
+  h += '</div><button type="button" class="btn btn-p" data-act="use-column">Use this column and simulate</button>';
+  box.innerHTML = h; box.hidden = false;
+}
+/* the estimate asked which column: say so in the panel, and in the form's message */
+function askColumn(err) {
+  var e0 = err.errors[0];
+  COLUMNS = takeColumns(e0.columns);
+  if (!COLUMNS.length) return false;
+  /* a column the file does not have (a scenario's, on another file) is not kept */
+  var known = false;
+  for (var i = 0; i < COLUMNS.length; i++) if (COLUMNS[i].key === COLUMN) known = true;
+  if (!known) { COLUMN = null; COLUMN_LABEL = null; }
+  paintColumns(e0.message); paintInfo();
+  formMsg('Which column is the load? Pick it under the interval file, then simulate.', 'warn');
+  try { $('colpick').scrollIntoView({ block: 'nearest' }); } catch (x) {}
+  return true;
+}
+function useColumn() {
+  /* an estimate on its way: the pick waits, so the page and the result never name different columns */
+  if ($('run').disabled) { PICK_WAITING = true; formMsg('Still simulating; pick the column again once this estimate is back.', 'warn'); return; }
+  var picked = $('colpick').querySelector('input[name=loadcol]:checked');
+  if (!picked) { formMsg('Pick the column that holds the load first.', 'warn'); return; }
+  COLUMN = picked.value; COLUMN_LABEL = null;
+  for (var i = 0; COLUMNS && i < COLUMNS.length; i++) if (COLUMNS[i].key === COLUMN) COLUMN_LABEL = COLUMNS[i].label;
+  paintInfo();
+  run();
 }
 
 function collect() {
@@ -397,7 +563,12 @@ function collect() {
   if (kw != null || kwh != null) { site.battery = {}; if (kw != null) site.battery.kw = kw; if (kwh != null) site.battery.kwh = kwh; }
   if (pv != null) site.solarKw = pv;
   if (MODE === 'bills') site.load = { type: 'bills', bills: readBills() };
-  else if (MODE === 'interval') site.load = { type: 'interval', text: INTERVAL, unit: $('iunit').value };
+  else if (MODE === 'interval') {
+    site.load = { type: 'interval', text: INTERVAL, unit: $('iunit').value };
+    if (COLUMN) site.load.column = COLUMN;
+    var isd = $('istart').value.trim();
+    if (isd) { if (!/^\d{4}-\d{2}-\d{2}$/.test(isd)) return { error: 'The first reading date is YYYY-MM-DD.' }; site.load.startDate = isd; }
+  }
   else site.load = { type: 'profile', annualKwh: numOrNull('akwh') };
   var t = {}, any = false;
   ['ron:onPeakRate', 'roff:offPeakRate', 'rdem:demandCharge', 'rps:peakStart', 'rpe:peakEnd'].forEach(function (p) {
@@ -406,9 +577,22 @@ function collect() {
   var u = $('urdb').value.trim();
   if (u) { try { t.urdb = JSON.parse(u); any = true; if (t.urdb && t.urdb.items && t.urdb.items[0]) t.urdb = t.urdb.items[0]; } catch (e) { return { error: 'The URDB tariff is not valid JSON.' }; } }
   if (any) site.tariff = t;
-  var so = numOrNull('sown'), sp = numOrNull('splat'), si = numOrNull('sins');
-  if (so != null && sp != null && si != null && !(so === 70 && sp === 20 && si === 10)) site.split = { owner: so / 100, platform: sp / 100, installer: si / 100 };
+  /* the split: all three shares, or none. A partly filled split is said,
+     never quietly swapped for the published 70 / 20 / 10. */
+  var so = numOrNull('sown'), sp = numOrNull('splat'), si = numOrNull('sins'), blank = [];
+  if (so == null) blank.push('sown');
+  if (sp == null) blank.push('splat');
+  if (si == null) blank.push('sins');
+  markSplit(blank.length < 3 ? blank : []);
+  if (blank.length && blank.length < 3) {
+    var box = closest($('sown'), 'details'); if (box) box.open = true;
+    return { error: 'Enter all three revenue shares (use 0 for none); together they must make 100%.' };
+  }
+  if (!blank.length && !(so === 70 && sp === 20 && si === 10)) site.split = { owner: so / 100, platform: sp / 100, installer: si / 100 };
   return { site: site };
+}
+function markSplit(bad) {
+  ['sown', 'splat', 'sins'].forEach(function (id) { $(id).className = bad.indexOf(id) >= 0 ? 'bad' : ''; });
 }
 
 function formMsg(text, kind) {
@@ -429,15 +613,17 @@ function readable(status, j) {
   if (status === 401) return 'Your sign-in has expired. Reload the page to sign in again.';
   if (status === 403) return said || 'Your plan does not include the VPP Earnings Simulator.';
   if (status === 404) return 'The simulator service is not available at this address yet.';
-  if (status === 413) return 'That is more data than the server accepts in one request.';
+  if (status === 413) return 'That is more data than the server accepts in one request (4.5 MB). Export one year of hourly or 15-minute readings without extra columns or quoted fields.';
   if (status === 400 && j && j.errors && j.errors.length) return j.errors.map(function (e) { return e.message; }).join(' ');
   if (status === 503) return said || 'Could not check your access right now. Try again in a minute.';
   return said || ('The server answered ' + status + '.');
 }
+/* body is an object, or the JSON text run() already measured (posted as is) */
 function api(body) {
+  var payload = typeof body === 'string' ? body : JSON.stringify(body);
   return idToken().then(function (tok) {
     if (!tok) { var e0 = new Error('Sign in to run the simulator — it runs on the server, behind your account.'); e0.status = 401; throw e0; }
-    return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: JSON.stringify(body) })
+    return fetch(ENDPOINT, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + tok }, body: payload })
       .then(null, function () { throw new Error('Could not reach the simulator. Check your connection and try again.'); });
   }).then(function (r) {
     return r.text().then(function (t) {
@@ -449,21 +635,70 @@ function api(body) {
 }
 
 function run() {
+  /* one estimate at a time: the chooser's button and a double-tap would
+     otherwise post the whole file again (round 3 recheck) */
+  if ($('run').disabled) return;
+  /* the question open with a column ticked: that is the column (Change, a
+     new tick, then Simulate) */
+  var ticked = $('colpick').querySelector('input[name=loadcol]:checked');
+  if (ticked && ticked.value !== COLUMN) {
+    COLUMN = ticked.value; COLUMN_LABEL = null;
+    for (var ci = 0; COLUMNS && ci < COLUMNS.length; ci++) if (COLUMNS[ci].key === COLUMN) COLUMN_LABEL = COLUMNS[ci].label;
+    paintInfo();
+  }
   var c = collect();
   if (c.error) { formMsg(c.error); return; }
   if (!/^\d{5}(-\d{4})?$/.test(c.site.zip)) { $('zip').className = 'bad'; formMsg('A five-digit US ZIP code is needed.'); $('zip').focus(); return; }
   $('zip').className = '';
-  if (MODE === 'interval' && !INTERVAL) { formMsg('Attach the interval file, or pick another load option.'); return; }
+  if (MODE === 'interval' && !INTERVAL) {
+    /* a file still in the picker (a read not finished yet) is read now,
+       and the run goes on only if that produced readings */
+    var picked = $('file').files && $('file').files[0];
+    if (picked) {
+      readFile(picked, function () { if (INTERVAL) run(); else formMsg($('fileinfo').textContent || 'The interval file could not be read; attach it again.'); });
+      return;
+    }
+    formMsg('Attach the interval file, or pick another load option.'); return;
+  }
   if (MODE === 'bills' && !c.site.load.bills.length) { formMsg('Enter at least one month of bills (kWh or $).'); return; }
+  /* what is measured is what is posted: the whole body, in UTF-8 bytes */
+  if (MODE === 'interval' && c.site.load.text.length > MAX_TEXT) { formMsg(TOO_BIG); return; }
+  var payload = JSON.stringify({ action: 'estimate', site: c.site });
+  var bytes = utf8Bytes(payload);
+  if (bytes > MAX_BODY) { formMsg(tooBigBody(bytes)); return; }
   formMsg('');
   var btn = $('run'); btn.disabled = true; btn.innerHTML = '<span class="spin"></span> Simulating 8,760 hours…';
-  api({ action: 'estimate', site: c.site }).then(function (j) {
-    LAST = { name: $('nm').value.trim(), site: c.site, result: j.result };
+  var seq = RUN_SEQ, name = $('nm').value.trim();
+  function stale() {
+    if (seq === RUN_SEQ) return false;
+    formMsg('The file or the scenario changed while that estimate ran; simulate again for this one.', 'warn');
+    return true;
+  }
+  api(payload).then(function (j) {
+    if (stale()) return;
+    LAST = { name: name, site: c.site, result: j.result };
+    /* the column question is answered: one line says which, with the way back */
+    var box = $('colpick'), hadFocus = box.contains(document.activeElement), waiting = PICK_WAITING;
+    PICK_WAITING = false;
+    var tick = box.querySelector('input[name=loadcol]:checked');
+    if (waiting && tick && tick.value !== COLUMN) {
+      /* the pick made while this ran is not what it used: keep the question open, the tick kept */
+      formMsg('This estimate used "' + (COLUMN_LABEL || COLUMN) + '". Press "Use this column" to run the one you ticked.', 'warn');
+    } else formMsg('');                           /* a "still simulating" word is answered now */
+    if (c.site.load.type !== 'interval' || (waiting && tick && tick.value !== COLUMN)) { /* a bills or profile run, or a pick still to run, leaves the question as it was */ }
+    else if (COLUMNS && COLUMNS.length && COLUMN) {
+      box.innerHTML = '<p style="margin:0">Load column: <b>' + esc(COLUMN_LABEL || COLUMN) + '</b> <button type="button" class="btn btn-t" data-act="change-column">Change</button></p>';
+      box.hidden = false;
+      if (hadFocus) box.querySelector('[data-act=change-column]').focus();
+    } else box.hidden = true;
     render(j.result);
-    $('save').disabled = !(DB && ORG);
+    canSave();
   }, function (e) {
+    if (stale()) return;
+    var e0 = e.errors && e.errors[0];
+    if (e.status === 400 && e0 && e0.field === 'load.column' && Array.isArray(e0.columns) && askColumn(e)) return;
     formMsg(e.message);
-  }).then(function () { btn.disabled = false; btn.textContent = 'Simulate earnings'; });
+  }).then(function () { PICK_WAITING = false; btn.disabled = false; btn.textContent = 'Simulate earnings'; });
 }
 
 /* ── drawing ─────────────────────────────────────────────────────────── */
@@ -473,15 +708,15 @@ function render(R) {
   var T = R.totals, h = '';
   h += '<div class="card"><h2>' + esc(LAST && LAST.name ? LAST.name : ('ZIP ' + R.site.zip)) + '</h2>';
   h += '<p class="lede">' + esc(R.site.marketName) + (R.site.area ? ' · ' + esc(R.site.area) : '') + ' · ' + esc(R.site.state) + ' · ' + esc(R.site.segment) +
-       ' · ' + R.battery.kw.toLocaleString('en-US') + ' kW / ' + R.battery.kwh.toLocaleString('en-US') + ' kWh' + (R.battery.assumed ? ' (suggested)' : '') +
+       ' · ' + R.battery.kw.toLocaleString('en-US') + ' kW' + (suggested(R.battery, 'kw') ? ' (suggested)' : '') + ' / ' + R.battery.kwh.toLocaleString('en-US') + ' kWh' + (suggested(R.battery, 'kwh') ? ' (suggested)' : '') +
        (R.solar ? ' · ' + R.solar.kwdc.toLocaleString('en-US') + ' kW-dc solar' : '') + '</p>';
   h += '<div class="kpis">' +
     kpi('Stacked earnings / yr', money(T.gross), money(T.perKw) + ' per kW', true) +
     kpi('Owner keeps / yr', money(T.owner), 'bill savings + ' + Math.round(R.split.owner * 100) + '% of programmes') +
-    kpi('Bill savings / yr', money(T.billSavings), money(R.bill.before) + ' → ' + money(R.bill.after)) +
+    kpi('Bill savings / yr', money(T.billSavings), money(R.bill.before) + ' → ' + money(R.bill.after) + (T.tagSavings ? ' · plus ' + money(T.tagSavings) + ' capacity/transmission tag' : '')) +
     kpi('Grid programmes / yr', money(T.gridEarnings), T.stackUplift ? T.stackUplift + '× the best single stream' : '') + '</div>';
   h += '<div class="chips"><span class="chip ' + esc(R.confidence) + '">Confidence: ' + esc(R.confidence) + '</span>' +
-       '<span class="chip">Load: ' + esc(R.load.label) + '</span>' +
+       '<span class="chip">Load: ' + esc(R.load.label) + '</span>' + columnChip(R.load.column) +
        '<span class="chip">' + R.battery.cyclesPerYear + ' cycles / yr</span>' +
        (R.site.marketInferred ? '<span class="chip">Market from ZIP</span>' : '') + '</div></div>';
 
@@ -536,6 +771,14 @@ function render(R) {
     '<p class="lede" style="margin:10px 0 0">' + esc(R.disclaimer) + '</p></div>';
   $('out').innerHTML = h;
 }
+/* which column of the file was read: result.load.column { key, label, chosen } */
+function columnChip(c) {
+  if (!c || typeof c !== 'object' || (typeof c.label !== 'string' && typeof c.key !== 'string')) return '';
+  var how = c.chosen === 'caller' ? 'your pick' : c.chosen === 'auto' ? 'picked by its header' : '';
+  return '<span class="chip" data-load-column>Column read: ' + esc(c.label || c.key) + (how ? ' (' + esc(how) + ')' : '') + '</span>';
+}
+/* which battery figures the server suggested (assumedFields; older answers: assumed = both) */
+function suggested(b, k) { return Array.isArray(b.assumedFields) ? b.assumedFields.indexOf(k) >= 0 : !!b.assumed; }
 function pct(a, b) { return b > 0 ? Math.max(0, Math.min(100, a / b * 100)).toFixed(2) : 0; }
 
 function dayChart(hours) {
@@ -573,6 +816,7 @@ function monthChart(months) {
 }
 
 /* ── saved scenarios: toolData/{org}/tools/vppsim ─────────────────────── */
+function canSave() { $('save').disabled = !(LAST && DB && ORG); }
 function paintSaved() {
   var sel = $('scen'), h = '<option value="">Saved scenarios…</option>';
   for (var i = 0; i < STORE.scenarios.length; i++) {
@@ -581,20 +825,49 @@ function paintSaved() {
   }
   sel.innerHTML = h;
 }
+/* Firestore refuses an array inside an array, and the compat SDK says so by
+   THROWING from set() before any promise exists. An OpenEI URDB record is
+   made of them (energyratestructure [[{rate}]], the 12×24 schedules), so the
+   tariff is stored as the JSON text the person pasted and parsed again on
+   load. The new list becomes STORE only once the write has landed: a record
+   that cannot be stored never sits in memory spoiling the next save.
+   The write REPLACES the stored list with STORE plus this record, so it is
+   refused while STORE is not the stored list: before the list has been read
+   in this session (still loading, or the read failed: it is read again), and
+   while another save is on its way (the next list would leave it out). */
+var MAX_DOC_CHARS = 900000; /* under Firestore's 1 MiB document limit */
 function save() {
   if (!LAST || !DB || !ORG) return;
+  if (SAVING) { $('savemsg').textContent = 'Still saving the last scenario. Press Save again once it is saved.'; return; }
+  if (SAVED !== 'loaded') {
+    REFUSED_SAVE = true;
+    if (SAVED === 'loading') { $('savemsg').textContent = 'Not saved yet: your saved scenarios are still loading, and saving now would write over them. Press Save again once they are loaded.'; return; }
+    $('savemsg').textContent = 'Not saved: your saved scenarios have not loaded, and saving now would write over them. Loading them again…';
+    loadSaved();
+    return;
+  }
   var site = JSON.parse(JSON.stringify(LAST.site));
-  if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit }; }
+  if (site.load && site.load.type === 'interval') { site.load = { type: 'interval', unit: site.load.unit, startDate: site.load.startDate || null, column: site.load.column || null }; }
+  if (site.tariff && site.tariff.urdb) { site.tariff.urdbJson = JSON.stringify(site.tariff.urdb); delete site.tariff.urdb; }
   var rec = { name: LAST.name || ('ZIP ' + site.zip), site: site, gross: LAST.result.totals.gross, owner: LAST.result.totals.owner,
               market: LAST.result.site.market, at: new Date().toISOString() };
-  STORE.scenarios = [rec].concat(STORE.scenarios.filter(function (s) { return s.name !== rec.name; })).slice(0, MAX_SAVED);
+  var next = { v: 1, scenarios: [rec].concat(STORE.scenarios.filter(function (s) { return s.name !== rec.name; })).slice(0, MAX_SAVED) };
+  var dropped = 0;
+  while (next.scenarios.length > 1 && JSON.stringify(next).length > MAX_DOC_CHARS) { next.scenarios.pop(); dropped++; }
+  var tail = (rec.site.load.type === 'interval' ? ' (the interval file is not stored; attach it again to re-run).' : '.') +
+    (dropped ? ' The ' + dropped + ' oldest scenario' + (dropped > 1 ? 's were' : ' was') + ' dropped to make room.' : '');
+  function failed() { SAVING = false; $('savemsg').textContent = 'Could not save right now.'; }
   $('savemsg').textContent = 'Saving…';
-  OMEGATools.saveToolData(DB, firebase, ORG, TOOL_KEY, STORE).then(function () {
-    paintSaved(); $('savemsg').textContent = 'Saved to your workspace' + (rec.site.load.type === 'interval' ? ' (the interval file is not stored; attach it again to re-run).' : '.');
-  }, function () { $('savemsg').textContent = 'Could not save right now.'; });
+  var write;
+  try { write = OMEGATools.saveToolData(DB, firebase, ORG, TOOL_KEY, next); } catch (e) { failed(); return; }
+  SAVING = true;
+  Promise.resolve(write).then(function () {
+    SAVING = false; STORE = next; paintSaved(); $('savemsg').textContent = 'Saved to your workspace' + tail;
+  }, failed);
 }
 function loadScenario(i) {
   var s = STORE.scenarios[i]; if (!s) return;
+  RUN_SEQ++;
   var site = s.site || {};
   $('nm').value = s.name || ''; $('zip').value = site.zip || ''; $('mkt').value = site.market || '';
   setSeg(site.segment || 'commercial');
@@ -605,17 +878,47 @@ function loadScenario(i) {
   setMode(L.type);
   if (L.type === 'bills') { $('bills').innerHTML = ''; (L.bills || []).forEach(billRow); }
   if (L.type === 'profile') $('akwh').value = L.annualKwh != null ? L.annualKwh : '';
-  if (L.type === 'interval') { INTERVAL = null; $('fileinfo').textContent = 'Attach the interval file again to re-run this scenario.'; }
+  /* The interval fields go together, for EVERY scenario: the file is never
+     stored, so the picker is cleared (choosing the same file again fires
+     'change'), and the unit (kWh per 15-minute interval is four times the kW
+     it reads as) and the first-reading date are this scenario's, or blank.
+     A date or unit left by an earlier scenario is never posted with a file
+     it was not given for. */
+  var iv = L.type === 'interval';
+  INTERVAL = null; $('file').value = ''; FILE_SEEN = null;
+  $('iunit').value = iv && L.unit === 'kwh' ? 'kwh' : 'kw';
+  $('istart').value = iv && typeof L.startDate === 'string' ? L.startDate : '';
+  /* the load column this scenario was read with, kept for the file attached next */
+  clearColumn();
+  if (iv && typeof L.column === 'string' && L.column) { COLUMN = L.column; COLUMN_LABEL = L.column; KEEP_COLUMN = true; } else KEEP_COLUMN = false;
+  $('fileinfo').textContent = iv ? 'Attach the interval file again to re-run this scenario' + (COLUMN ? ' (load column: ' + COLUMN + ').' : '.') : '';
   var t = site.tariff || {};
   $('ron').value = t.onPeakRate != null ? t.onPeakRate : ''; $('roff').value = t.offPeakRate != null ? t.offPeakRate : '';
   $('rdem').value = t.demandCharge != null ? t.demandCharge : ''; $('rps').value = t.peakStart != null ? t.peakStart : '';
-  $('rpe').value = t.peakEnd != null ? t.peakEnd : ''; $('urdb').value = t.urdb ? JSON.stringify(t.urdb) : '';
+  $('rpe').value = t.peakEnd != null ? t.peakEnd : '';
+  $('urdb').value = typeof t.urdbJson === 'string' ? t.urdbJson : (t.urdb ? JSON.stringify(t.urdb) : '');
+  /* the split the scenario ran with, or the published default when it had
+     none, so a re-run never carries over whatever the form last held */
+  var sp = site.split;
+  $('sown').value = sp && sp.owner != null ? share(sp.owner) : 70;
+  $('splat').value = sp && sp.platform != null ? share(sp.platform) : 20;
+  $('sins').value = sp && sp.installer != null ? share(sp.installer) : 10;
+  markSplit([]);
 }
+/* 0.7 → 70, not 70.00000000000001, so collect()'s default check still matches */
+function share(f) { return +(Number(f) * 100).toFixed(4); }
 
 /* ── URL hand-off: ?zip=&segment=&kw=&kwh=&solar=&name= ─────────────── */
+/* One malformed escape ('50% solar', sent as 50%%20solar) must not throw and
+   lose every parameter, the ZIP included: a '%' that starts no escape is
+   read as itself, and a value that still cannot be decoded is kept raw. */
+function dec(s) {
+  try { return decodeURIComponent(s); } catch (e) {}
+  try { return decodeURIComponent(s.replace(/%(?![0-9a-fA-F]{2})/g, '%25')); } catch (e2) { return s; }
+}
 function prefill() {
   var q = {}; (location.search || '').replace(/^\?/, '').split('&').forEach(function (p) {
-    if (!p) return; var a = p.split('='); q[decodeURIComponent(a[0])] = decodeURIComponent((a[1] || '').replace(/\+/g, ' '));
+    if (!p) return; var a = p.split('='); q[dec(a[0])] = dec((a[1] || '').replace(/\+/g, ' '));
   });
   if (q.zip) $('zip').value = q.zip.slice(0, 10);
   if (q.segment && /^(residential|commercial|industrial)$/.test(q.segment)) setSeg(q.segment);
@@ -639,24 +942,57 @@ document.addEventListener('click', function (e) {
   else if (act === 'fill-12') fillMonths(12);
   else if (act === 'fill-24') fillMonths(24);
   else if (act === 'paste') pasteBills();
+  else if (act === 'use-column') useColumn();
+  else if (act === 'change-column') {
+    paintColumns();
+    var r0 = $('colpick').querySelector('input[name=loadcol]:checked') || $('colpick').querySelector('input[name=loadcol]');
+    if (r0) r0.focus();
+  }
 });
 $('file').addEventListener('change', function () { readFile(this.files && this.files[0]); });
 $('scen').addEventListener('change', function () { if (this.value !== '') loadScenario(+this.value); });
 $('zip').addEventListener('keydown', function (e) { if (e.key === 'Enter') run(); });
 
+function orgFallback(u) {
+  return (root.OMEGATools && OMEGATools.orgFromUrl) ? OMEGATools.orgFromUrl(u.email) : (String(u.email || '').toLowerCase().split('@')[1] || null);
+}
+/* Reads the stored list, once per session: never a second read beside one on
+   its way, never again once read (a late read must not undo a save). A
+   missing document is an empty list, read; a refused read is said, never
+   drawn as an empty list, and the next Save reads it again. */
+function loadSaved() {
+  if (SAVED === 'loading' || SAVED === 'loaded') return;
+  function refused() {
+    SAVED = 'failed';
+    $('savemsg').textContent = REFUSED_SAVE
+      ? 'Not saved: your saved scenarios could not be loaded, and saving now would write over them. Press Save to try again.'
+      : 'Your saved scenarios could not be loaded. Save loads them first, so none is written over.';
+  }
+  if (!(DB && ORG && root.OMEGATools && OMEGATools.loadToolData)) { refused(); return; }
+  SAVED = 'loading';
+  var read;
+  try { read = OMEGATools.loadToolData(DB, ORG, TOOL_KEY); } catch (e) { refused(); return; }
+  Promise.resolve(read).then(function (doc) {
+    var d = doc && doc.data;
+    STORE = { v: 1, scenarios: d && d.v === 1 && Array.isArray(d.scenarios) ? d.scenarios.slice(0, MAX_SAVED) : [] };
+    SAVED = 'loaded'; paintSaved();
+    if (REFUSED_SAVE) { REFUSED_SAVE = false; $('savemsg').textContent = 'Your saved scenarios are loaded. Press Save again to add this one.'; }
+  }, refused);
+}
 function onSignedIn(u) {
   $('who').textContent = u.email || '';
-  ORG = (root.OMEGATools && OMEGATools.orgFromUrl) ? OMEGATools.orgFromUrl(u.email) : String(u.email || '').toLowerCase().split('@')[1];
+  /* The org the server resolved (aliases folded, as the rules fold them:
+     fenecon.de → fenecon.com) is the one whose toolData the rules let this
+     person read and write; the email domain only when the server did not
+     answer. The saved scenarios load once it is known. */
   api({ action: 'options' }).then(function (j) {
+    ORG = (j && typeof j.orgId === 'string' && j.orgId) || orgFallback(u);
     var sel = $('mkt'), ms = (j.options && j.options.markets) || [];
     for (var i = 0; i < ms.length; i++) { var o = document.createElement('option'); o.value = ms[i].key; o.textContent = ms[i].name; sel.appendChild(o); }
-  }, function (e) { formMsg(e.message, e.status === 403 ? 'bad' : 'warn'); });
-  if (DB && ORG && root.OMEGATools && OMEGATools.loadToolData) {
-    OMEGATools.loadToolData(DB, ORG, TOOL_KEY).then(function (doc) {
-      var d = doc && doc.data;
-      if (d && d.v === 1 && Array.isArray(d.scenarios)) { STORE = { v: 1, scenarios: d.scenarios.slice(0, MAX_SAVED) }; paintSaved(); }
-    }, function () {});
-  }
+  }, function (e) {
+    ORG = orgFallback(u);
+    formMsg(e.message, e.status === 403 ? 'bad' : 'warn');
+  }).then(function () { canSave(); loadSaved(); });
   if (root.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
   if (prefill()) run();
 }
@@ -669,6 +1005,13 @@ function startAuth() {
   try { DB = firebase.firestore(); } catch (e) { DB = null; }
   var wait = null;
   AUTH.onAuthStateChanged(function (u) {
+    /* Another person signing in, or this one signing out (in this tab or
+       another: Firebase shares the session), after a sign-in: start again
+       as a new page. What is on screen, the saved list, the last result and
+       the file all belonged to the last person, and must never be saved
+       under the next one's workspace. */
+    if (LEAVING) return;
+    if (ME && (!u || u.uid !== ME.uid)) { LEAVING = true; $('save').disabled = true; $('run').disabled = true; root.location.reload(); return; }
     if (u) {
       if (wait) { clearInterval(wait); wait = null; }
       if (ME && ME.uid === u.uid) return;

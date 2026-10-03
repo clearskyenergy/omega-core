@@ -38,6 +38,8 @@ Clean Cell's two tools) still wins: absent is not empty.
 | Battery kW / kWh | no | blank = 5 kW / 13.5 kWh home battery, or ¼ of peak for 2 h |
 | Solar kW-dc | no | modelled from a state yield; unlocks Clean Peak where it applies |
 | Load | no | **8760 / 15-minute interval CSV** (best), **12–24 months of bills** (kWh, peak kW, $), or nothing (a typical load, labelled) |
+| Load column | no | only when the simulator asks "Which column is the load?" (`load.column`: the header text, or `#3` for the third column of a file with no header) |
+| Start date | no | only for a bare list of readings with no dates (`load.startDate`, YYYY-MM-DD); a CSV's own date column wins, and the result says so when they differ |
 | Tariff | no | own on/off-peak and demand rates, or an OpenEI URDB record; else a regional planning rate calibrated to the bills' dollars |
 | Split | no | defaults to DividendVPP's 70/20/10 |
 
@@ -46,11 +48,224 @@ Clean Cell's two tools) still wins: absent is not empty.
 - `api/_lib/vpp-sim.js` — pure, server-only. Builds an 8760, runs an hourly
   dispatch (monthly demand target by bisection, event days, TOU arbitrage,
   solar charging, no export on the meter), bills before/after through the ONE
-  tariff engine (`bess-tariff.js`), and prices programmes. PJM capacity reuses
-  `value-stack.js` (published BRA price × ELCC class). One programme per
+  tariff engine (`bess-tariff.js`), and prices programmes. One programme per
   exclusivity group is counted; the rest are listed with the reason.
   Load-reduction programmes are capped at the site's summer peak load;
-  battery-metered BYOD programmes (`exportOk`) take the full rating.
+  battery-metered BYOD programmes (`exportOk`) take the full rating. What the
+  engine holds to (each pinned by `tvppsim.js`, each test failing without its
+  rule):
+  - **One loss model.** The round trip is split evenly: a kWh bought stores
+    √rte, a kWh delivered takes 1/√rte out of the store, so delivered over
+    bought across the year is the round trip. The demand-target bisection
+    uses the same model and counts refill only in the hours the dispatch
+    actually charges in; programme kW is limited by the energy the battery
+    *delivers*.
+  - **The reserve looks ahead.** The store each hour keeps what the
+    over-target hours (and events) still to come need, less what the
+    charging hours between can put back — so an evening's arbitrage never
+    spends what tomorrow morning's demand shave needs, and every month holds
+    the target the bisection set. The bisection tests each day alone, which
+    cannot see an over-target stretch that runs past midnight or a month's
+    end with no charging hour between, so each month's target is then
+    checked in order with that same reserve across the boundaries and a
+    month that breaks it is raised to the lowest target that holds.
+  - **Events are priced off the dispatch.** ELRP (the one programme paid per
+    kWh delivered) runs its own event days through the dispatch: seven
+    3-hour events a year from 4 pm, for a home and a business alike — a
+    behind-the-meter battery in a VPP is sub-group A.4 whatever the site
+    (SCE's aggregator FAQ: storage "deployed with residential … or
+    non-residential … customers", 500 kW aggregated; A.2 is for
+    non-residential aggregators outside a storage VPP) — the 2024 record
+    (PG&E's and SCE's PY2024 ELRP evaluations: seven A.4 events each), not
+    the 60-hour cap. It is worth the kWh the battery gives in
+    those hours *beyond its everyday dispatch* (ELRP pays incremental
+    reduction against a baseline of similar days), × performance ×
+    $2/kWh; an event takes only energy no later over-target hour needs,
+    and the battery never charges from the grid inside an event (that
+    would come off the reduction paid for) — and neither the target check
+    nor the reserves count on it there, whatever the hour's load, zero
+    included (one rule, `reserveCredit`); holding charge for the events
+    is a cost the TOU stream carries when ELRP is counted, and the group picks
+    ELRP only if it pays net of that cost. A home battery that already
+    empties into 4–9 pm for TOU savings has nothing extra to give and ELRP
+    is listed with that reason.
+  - **Bill savings stay with the customer.** The tariff's streams (demand,
+    TOU, tax included pro rata so they add up to before → after) and the tag
+    programmes on the customer's own bill (PJM PLC/5CP, ERCOT 4CP, category
+    `bill`) are kept whole; only grid-programme earnings are split 70/20/10.
+    `totals.billSavings` = `tariffSavings` (the before → after bill) +
+    `tagSavings`.
+  - **PJM through a CSP is a Demand Resource**, accredited at PJM's Demand
+    Resource class rating (91% for 2028/29, beside the storage classes in
+    `value-stack.js`), not in the 4/6/8/10-hour storage classes. It is
+    nominated at what the battery can hold for four hours (planning; the
+    CSP's nomination replaces it) — `published` only when the battery's
+    rating, or the site's summer peak read from its own interval data or
+    billed peaks, sets the kW. When the four-hour assumption sets it, or a
+    summer peak read off a load shape (the typical load, or bills whose
+    summer months do not all carry a billed peak), the row is `planning`
+    and says why. Bills that carry their peaks keep the cap `published`
+    even when missing kWh make the load `low` quality.
+  - **Programme status is dated, not live** (read 2026-09-29): DSGS Option 3
+    is `closed` (CEC Guidelines 5th ed., CEC-300-2026-001-CMF, adopted
+    2026-04-27: 2026 limited to aggregators from October 2025; no 2027
+    funding) and listed, never
+    counted; ComEd is **Rider SDVPP** ($10/kW-Season of average injection
+    4–6 pm weekdays Jun–Sep, ICC-approved, effective 2026-07-16, service by
+    2027-03-01; Rider VPP/BYODLR was withdrawn in Docket 25-0678); Hawaii is
+    **BYOD Plus** (Battery Bonus closed 2024-07-01), which takes only
+    batteries paired with renewables: $60/kW-yr is a planning figure for
+    its recurring export credit (Rule 33's formula, zero beyond NEM's own
+    retail credit), and its $400/kW upfront incentive is one-time, listed
+    with the one-time incentives on the kW the estimate commits. Kauai is
+    not Hawaiian Electric: its 17 ZIPs are Kauai Island Utility Cooperative
+    (KIUC), where BYOD Plus is listed with that reason and no upfront is
+    named; no KIUC battery-programme payment is on file. CBP/DRAM
+    and ELRP are not called exclusive: ELRP Group B would pay the reduction
+    beyond a CBP/DRAM
+    commitment, a top-up not modelled, so the better of the two is counted.
+  - **Where.** ZIP3 → state → market, refined by prefix where a state
+    straddles two markets (El Paso 885, Entergy Texas 776–777, SWEPCO,
+    OG&E, I&M, Kentucky Power, Dominion NC 279; 201 is Virginia; 008, the
+    US Virgin Islands, is refused; 289 is TVA-distributor territory, and
+    278 names Rocky Mount and Wilson as municipal). Those PJM refinements
+    in North Carolina, Indiana and Kentucky are bundled: no retail choice,
+    so no PLC-set capacity charge on the bill, and the state has closed PJM
+    demand response to retail customers except through the utility (NCUC
+    E-22 Sub 418, 2010; IURC Cause 43566, 2010; KY PSC Case 2017-00129,
+    2017). There the CSP capacity row and the PLC row are listed with that
+    dated reason, never priced, and a business gets the utility's own
+    demand-response tariff as a planning row ($40/kW-yr; I&M Rider D.R.S.1,
+    Kentucky Power Rider D.R.S., Dominion NC Schedule 6C) — only at or above
+    the tariff's size floor: Kentucky 500 kW committed (Rider D.R.S.), North
+    Carolina 500 kW contracted (Schedule 6C, read as the site's peak),
+    Indiana 100 kW committed (D.R.S.1); below it the row is listed with the
+    tariff's own minimum, never priced. A home battery has no route on file. New
+    York is by utility: Con Edison (100–104, 105–108, 111–114,
+    11004/11005) earns its DLM rate, New York
+    City (Zone J) the NYC SCR price, and Long Island (the rest of 110,
+    115–119: PSEG Long Island, Zone K) the upstate planning rates under its
+    own label. A market override that changes the market drops the area.
+  - **Interval files.** Lines end in CRLF, LF or a lone CR; the delimiter
+    is chosen by the data rows (lines with a digit): the one that splits
+    most of them into the same number of cells, and among near ties the one
+    that gives more cells — so a comma in a name or address above the
+    readings never turns a semicolon file with decimal commas into a comma
+    file. Quote-aware CSV; a currency cell is never a reading; in a tab or
+    semicolon file a comma in a number is read the way the file shows it
+    (decimal commas "0,25" / "1.234,5", or a thousands "1,250.0"), and a
+    reading that could be either ("1,250"), or that carries digits but is
+    not a number, is refused with its row — never read as zero (an
+    ambiguous cell still marks its column as numbers, so the row is named,
+    not "0 found").
+    **The load column is picked, never guessed.** The engine reads it by
+    itself only when exactly one column of numbers survives the exclusions
+    and its header names the load (kW, kWh, usage, consumption, energy,
+    demand, load, value — whole words, with `_` and `-` read as spaces), or
+    when the file has a single column of numbers that is not excluded.
+    Excluded: money (cost, price, rate, charge, cents, credit, anything per
+    kWh), export / solar / received, power factor, kVA / VA / MVA, kVAR,
+    volts, amps or "(A)", frequency, temperature, multipliers, percentages,
+    registers and meter readings, carbon, contract figures, events and
+    flags, and a column whose last word is a time part ("Usage Hour",
+    USAGE_HOUR) unless it names kW/kWh or reads "per hour". Otherwise the
+    answer is `ok: false` with `errors[0] = { field: 'load.column', message:
+    'Which column is the load? …', columns: [{ key, label, sample }] }` (up
+    to three sample values per column; an hour-number column is not
+    offered), and the caller sends `load.column` = a `key` (the header
+    text, or `#n` without a header); an unknown one is refused the same
+    way. The result's `load.column` is `{ key, label, chosen: 'auto' |
+    'caller' }`. (Before round 3 two load columns were narrowed by the unit
+    token, which let a register, a price or a contract kW beside "Usage"
+    win silently.)
+    **Rows.** Once the readings carry a date, a clock time or an hour
+    number, an unstamped row is a note or a footer; a row with a Total /
+    Sum / Average / Max cell, or a date range, is a footer even when
+    stamped — unless that column carries such a cell on most readings
+    (SCE's Green Button "2025-01-01 00:00:00 to 2025-01-01 01:00:00", a
+    Billing Period or "Max Demand TOU" rate column): that describes each
+    reading, and a period's START is the reading's time where it is the
+    only time the file has (a plain date column wins over a period
+    column; otherwise the FIRST date column is the readings' date,
+    whatever it is called: a preference by name (a usage date over a Read /
+    Bill / Revision date, pass 6) misplaced "Reading Date, Reading Time, End
+    Date" and refused "Read Time … Last Updated" (pass 7) and was removed, so
+    a file whose first date column is not the usage date is read on that
+    column — not built: asking which column is the date); in such a column a period that occurs ONCE, more than a day
+    long and twice the column's distinct periods' median (the file's span, a
+    monthly subtotal) is still a summary — a billing cycle, on many
+    readings, never is, however long it runs (a period column filled only
+    on each cycle's first row is a per-reading column and never judged by
+    span, so no reading of a long cycle is dropped). Subtotal rows
+    with no date or time, a dated total with no time among timed readings,
+    and a second table pasted below the readings are REFUSED (on the count,
+    or naming the row), never guessed at: each guess tried (verification
+    pass 4) broke a real export (a midnight written as the date alone, a
+    report title repeated per page, a Revision Date blank on some days). A stamped row with a blank or "N/A" reading is a gap (zero
+    within 2%, said so). A date written only on a day's first row carries
+    down. **One row per day** (a date and 24, 48 or 96 consecutive hour or
+    interval columns, "Hour 1 … Hour 24", "HE1 kWh", "H1", "Stunde 1",
+    "00:00"…) is read across each day as the long file it stands
+    for, said in a note; no column is asked for. The day is the date alone
+    (a midnight time in the cell is not each reading's), never a Bill
+    Period beside it; a row one hour of slots short or long (23/25 hourly,
+    46/50 half-hourly, 92/100 at 15 minutes) on a US or EU clock-change
+    Sunday has its lost 02:00 hour as a gap or its repeated 01:00 hour left
+    out, and on any other day is short or long at its end, said;
+    a refusal names the row of the file. A header row of bare numbers
+    ("1 … 24", "0100 … 2400") is not recognised (it reads as data) and gets
+    the column question. **A column that IS the meter or the channel**
+    (the whole header: Meter, Meter Number, Channel, Direction, Flow, UOM,
+    Register Type, Service Point, ESIID — not "Meter Status", "Read Type",
+    "Meter Reading" or a cumulative "Register"), numbered or not, compared as a person reads it ("KWH" is
+    "kWh", "00A123" is "A123"): values that take turns are refused as more
+    than one meter or channel (a date-only file of Delivered and Received
+    rows repeats no timestamp, so only that column shows it — under a
+    header not in that list, such as "Energy Direction", it is not caught,
+    not built; a column of numbers with dozens of values, a running
+    register headed "Meter", is a reading, not an id); one hand-over
+    (a meter replaced mid-year, at most twice) is read on and said.
+    **Dates set the order and the interval.** The date column is read on
+    every row, its day/month order settled across the file (month names,
+    20250605 and two-digit years too). With a time (in the date cell, a
+    clock column or an hour-number column) the readings are put in date and
+    time order — a newest-first file, or one sorted newest day first with
+    hours ascending, is read oldest first and no day is turned round — and
+    a repeated timestamp from 01:00 to 03:00 inclusive (hour number 1–3;
+    an EU hour-ending file stamps the repeat 03:00) is the
+    autumn clock change, allowed on at most two days (a twelve-month export
+    from early November holds two fall-backs), four at most a day; up to
+    four repeats elsewhere are re-read intervals, as before; more is
+    refused as two meters or delivered and received rows, naming the first
+    repeat. A local-clock year that crosses two fall-backs holds an hour of
+    readings too many; only when the repeats fall on exactly two autumn
+    clock-change Sundays, and no more than the later day's repeats are
+    over the year (365 or 366 days by the span), is the later repeat left
+    out, said — any other reading too many is refused, never trimmed.
+    The meter/channel test reads the rows in date and time order. (Readings are still laid by position after sorting, so a
+    local-clock file's summer hours sit one hour early against the tariff;
+    placing each by its own clock slot is not built.) dates that run forward and
+    then back are refused the same way. The interval is the readings per
+    day (24, 48 or 96), never the row count, so two years of hourly rows
+    are refused as two years, not read as a year of half-hours; a dated
+    file must hold 365 (or 366) days of them, and dates that do not span
+    the readings are said and drop the load to `medium`. The first date
+    lays the year on the calendar (29 Feb removed, wrapped by date, then
+    moved by the shift of up to three days that lands the most weekends on
+    weekends over the whole year, with how many days still differ); a
+    file's own date wins over a given start date, and says so; with no date
+    the interval is read off the count and the readings as starting 1
+    January, said so, and the load is `medium` quality, not `high`. Cells
+    longer than 32 characters are never tested and the number test is
+    linear; the text cap is 4,300,000 characters (`MAX_TEXT`, also
+    `options().maxTextChars`, the page's number: a year of 15-minute Smart
+    Meter Texas rows is ~3.1 MB), refused as a size. The JSON body can be
+    larger than the text, so the page also checks the body in bytes (below).
+  - **Bills.** A month with no kWh (no bill, or dollars only) is filled
+    from the climate curve and never calibrates the rate; the calibration
+    takes the customer charge out of both sides, so the calibrated bill is
+    the dollars paid. A kWh-only battery takes a kW at the suggested
+    battery's duration and is refused past twelve hours.
 - `api/_lib/vpp-provider.js` — the seam for the live integration. With
   `DIVIDENDVPP_API_URL` and `DIVIDENDVPP_API_KEY` set in Vercel, every
   estimate also carries `providerQuote` **beside** the simulation (never
@@ -61,9 +276,56 @@ Clean Cell's two tools) still wins: absent is not empty.
 - `api/vpp-estimate.js` — the gate (proforma's: verify-token, absent ≠ empty
   allowlists, `toolOverrides.vppsim`, Omega Design on a packaged workspace,
   every tier from trial, 503 on a failed read) and two actions, `options` and `estimate`.
-- `vpp-earnings.html` — collects, reads the CSV as text, posts, draws.
-  Scenarios save to `toolData/{org}/tools/vppsim` (inputs only; an interval
-  file is not stored).
+  `options` also returns the server-resolved `orgId` (alias-folded, e.g.
+  fenecon.de → fenecon.com), which is the org the page saves under.
+- `vpp-earnings.html` — collects, reads the CSV as text, posts, draws. An
+  interval file over the server's cap (4,300,000 characters, measured as the
+  server measures it: characters of text) is refused on the page, with the
+  limit named, before anything is posted. So is a request whose POSTED body
+  is over 4,400,000 bytes: the page measures the JSON it is about to send in
+  UTF-8 bytes (a quote, tab or line break of the file is two bytes there, a
+  non-ASCII character two to four), because Vercel refuses a body over
+  4.5 MB with a 413 before the function runs, and a quoted CRLF file under
+  the character cap can be one. The file alone is measured when it is read,
+  the whole body (tariff included) on Simulate.
+  **Which column is the load?** When the engine will not guess the load
+  column it answers 400 with `errors[0].field === 'load.column'` and
+  `columns: [{ key, label, sample }]`; the page shows those columns, with up
+  to three sample values each, in the interval panel, posts the pick as
+  `load.column` and names the column read in the result
+  (`result.load.column`, "your pick" or "picked by its header"). The column
+  (its key, the header text) is saved with the scenario, never the file, and
+  put back on load for the file attached next; any other new file clears the
+  choice, and a saved column the file does not have asks again.
+  Scenarios save to `toolData/{org}/tools/vppsim` as `{ v:1, scenarios:[…] }`,
+  at most 30, newest first. Each is `{ name, site, gross, owner, market, at }`:
+  the inputs (`site`) and the run's headline — `gross` labels the saved list;
+  `owner`, the resolved `market` and the save time are kept beside it —
+  never the streams, rates or anything else of the result. An interval file
+  is not stored (its unit, first-reading date and load column are), and a URDB tariff is
+  stored as text (`tariff.urdbJson`) because Firestore refuses nested arrays.
+  Loading a scenario sets the unit, first-reading date and file for every
+  scenario (a profile or bills one blanks them), so a date left by an
+  earlier scenario is never posted with a file it was not given for.
+  A save writes the whole list, so Save waits until the stored list has been
+  read in this session (a missing document counts as read): while it is
+  loading, or after a read that failed (Save reads it again), and while
+  another save is on its way, Save refuses and says why instead of writing
+  one record over the stored list. A refused read is said on the page, never
+  drawn as an empty list. The page reloads when the signed-in account
+  changes, so one person's scenarios never reach another's org.
+
+**A deploy that adds a tool to a module runs the backfill.** A packaged
+workspace's `billing/current.toolAccess` is a copy saved when its plan was
+activated, and `firestore.rules` (`packageWrite`) reads that copy for a
+tool's `toolData` write. So after this tool joined Omega Design, a package
+activated earlier runs the estimate (the API projects from `modules[]`) but
+cannot save a scenario until the copy is refreshed:
+`node scripts/backfill-packaged-toolaccess.js` (dry run, a per-org report),
+then `--apply` (adds only, never removes, one `admin_audit` row per change;
+needs Admin SDK credentials). `scripts/tests/tpackagedtoolaccess.js` holds
+it. The lasting fix, reconcile re-deriving a live trial's grants when it has
+no invoices yet, is a separate billing change.
 
 Every stream carries a tier: **computed** (from this site's load and
 tariff), **published** (a dated public figure), **planning** (a screening
@@ -80,10 +342,39 @@ a module and a `render-legacy-gates.js` pass).
 ## Not built
 
 - The live DividendVPP call is written but unverified — their API is not public.
-- Programme rates are planning figures; there is no rate feed or dated
-  programme book yet, and no utility-specific tariff lookup (URDB is pasted).
+- Programme rates are planning figures unless marked published; programme
+  status is dated in each row (read 2026-09-29), not a live feed. There is
+  no rate feed and no utility-specific tariff lookup (URDB is pasted).
+- Capacity programmes (SDVPP, ConnectedSolutions, BYOD, CBP/DRAM, DLM…) are
+  priced on committed kW; their own daily or event dispatch is not
+  simulated, so the bill streams are not reduced for it. Only ELRP runs
+  through the dispatch.
+- The dispatch never exports past the meter. ELRP counts exports in an
+  event (a NEM-paired home battery can earn there); that is not modelled.
+- ELRP Group B on top of CBP/DRAM (the incremental top-up) is not modelled.
+- The PJM Demand Resource nomination is a four-hour planning assumption;
+  Long Island (PSEG Long Island, Zone K) has no rates of its own here.
+- The utility is inferred from the ZIP3, not a utility boundary; mixed
+  prefixes (278, 105) say so in the area label and the market can be
+  overridden.
+- The bundled-PJM rule covers North Carolina, Indiana and Kentucky (FERC's
+  Order 719 opt-out states in PJM). Virginia and West Virginia are also
+  largely bundled but not reviewed yet: their PLC row is still offered.
+  The utility demand-response tariff in the bundled states is a planning
+  figure, not the rider's terms (its size floor is enforced; its events —
+  Kentucky Power's are 3 h, 60 h a year — are not). Duke Energy Kentucky
+  is held to Kentucky Power's 500 kW floor until its own tariff is read.
+- An interval file with a date and no time on each row cannot show two
+  channels interleaved within a day (two meters one after another are
+  refused where the dates turn back). A daylight-saving file one hour
+  short (8,759 hourly) is refused by its count, not filled.
+- Kauai (KIUC) has no battery-programme row of its own.
+- `api/price-site.js` still carries ComEd's VPP at $150/kW-yr (the
+  withdrawn Rider VPP's planning rate); it is not this engine's figure.
 - Wholesale (front-of-meter) participation, one-time incentives (SGIP, ITC)
   and resilience value are listed as not counted.
 - Weather is a climate curve by state, not a TMY year.
 
-Tests: `scripts/tests/tvppsim.js` (in `npm test`).
+Tests: `scripts/tests/tvppsim.js` and `scripts/tests/tpackagedtoolaccess.js`
+(in `npm test`); `scripts/render-vpp-earnings.js` renders the real page on
+the Firebase double against the real engine (in `check:pages`).

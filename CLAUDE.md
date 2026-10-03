@@ -1190,7 +1190,12 @@ for a live operator quote (`DIVIDENDVPP_API_URL`/`_KEY`, Vercel only), which
 rides BESIDE the simulation, never blended. Bills go through `bess-tariff.js`
 and PJM capacity through `value-stack.js` — never a second copy. Every stream
 is computed, published or planning. `docs/VPP-SIMULATOR.md`,
-`scripts/tests/tvppsim.js`.
+`scripts/tests/tvppsim.js`, `scripts/render-vpp-earnings.js` (check:pages).
+**Adding a tool to a module needs the backfill**: a packaged record's stored
+`billing/current.toolAccess` is what `packageWrite` in the rules reads for a
+tool's `toolData`, so run `scripts/backfill-packaged-toolaccess.js` (dry run,
+then `--apply`; add-only, audited) with that deploy
+(`scripts/tests/tpackagedtoolaccess.js`).
 
 ## Compute Site Pro Forma and the Edge Site Screen (2026-09-30)
 
