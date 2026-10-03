@@ -1,5 +1,27 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Sales compute screening parity (2026-10-03)
+
+Sales Parcel Screening calls the same OmegaSiteIntel intake/gridScore engine
+as the Site Map Parcel Screening Register. It now also calls the existing
+Firebase-authenticated `/api/network-proximity` service for precise addresses,
+with its existing billing/module checks. Fiber reach, route diversity and
+connectivity-only data-center suitability remain separate from the power
+score. Missing connectivity produces Verify; unfavorable connectivity holds
+a compute candidate. A favorable power score cannot hide that gate.
+
+The server adapter carries mapped circuit and pipeline evidence into the
+existing grid engine. No new grid/fiber score formulas are introduced.
+Pursuit gating and evidence normalization run in `api/_lib/compute-screening.js`;
+the browser only requests provider results and renders/export them. Planning
+MW from the existing voltage/acreage heuristic is explicitly not approved
+utility capacity. Carrier bandwidth also remains unconfirmed.
+
+Network failures retain the row, erase older connectivity evidence and mark
+Verify. Address changes invalidate network evidence. CSV, print and site
+review include the separate connectivity result. No new data collections,
+credentials, tile subscriptions or tenant-specific core behavior.
+
 ## Sales Screening (2026-10-02)
 
 The Sales hex now includes the Screening subject, with Parcel Screening and

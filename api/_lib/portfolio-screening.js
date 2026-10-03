@@ -1,7 +1,8 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var parcelEngine = require('../../omega-site-intel');
-var VERSION = 'screening/2026-10-02.1';
+var compute = require('./compute-screening');
+var VERSION = 'screening/2026-10-03.1';
 var NUMBERS = ['propertyAreaSf','buildingAreaSf','openAreaSf','parkingSpaces','parcelCount',
   'targetKw','targetKwh','demandReductionKw','peakDurationHours','usableFraction','dischargeEfficiency',
   'layoutKw','layoutKwh','utilityApprovedKw','utilityApprovedKwh','latitude','longitude'];
@@ -153,26 +154,24 @@ function parcel(raw,index) {
   if(points>10000)throw new Error('Too many geometry points. Simplify this site boundary.');
   var intake=parcelEngine.intake(features,s.name||s.address);
   if(s.propertyAreaSf>0&&!intake.grossAcres){intake.grossAcres=s.propertyAreaSf/43560;intake.buildableCeilingAcres=intake.grossAcres;intake.statedAcres=intake.grossAcres;}
-  if(grid&&typeof grid==='object'){
-    var lines=Array.isArray(grid.lines)?grid.lines:[],subs=Array.isArray(grid.substations)?grid.substations:[];
-    var volts=lines.concat(subs).map(function(v){return number(v.voltageKv);}).filter(function(v){return v>0&&v<=1500;});
-    if(volts.length)intake.maxKv=Math.max(intake.maxKv||0,Math.max.apply(null,volts));
-    var near=function(arr){var d=arr.map(function(v){return number(v.distanceKm);}).filter(function(v){return v!=null&&v>=0&&v<=500;});return d.length?Math.min.apply(null,d)*1000:null;};
-    var subM=near(subs),lineM=near(lines);
-    if(subM!=null){intake.nearestSubM=subM;intake.substations=subs.slice(0,50).map(function(v){return {name:text(v.name),attrs:{kv:number(v.voltageKv),kvUnknown:!number(v.voltageKv)}};});}
-    if(lineM!=null)intake.nearestLineM=lineM;
-    intake.evidence='uploaded_or_lookup_grid_context';
-  }
+  if(grid&&typeof grid==='object')compute.mergeGrid(intake,grid);
   var g=parcelEngine.gridScore(intake),hasEvidence=!!(intake.grossAcres||intake.maxKv||intake.nearestSubM!=null||intake.nearestLineM!=null);
   var score=hasEvidence?g.score:null,verify=s.warnings.concat(s.lookupNotes,errors.map(function(e){return 'Verify KML: '+text(e);}));
+  if(grid&&g.confidence==='good')g.confidence='medium';
+  var connectivity=compute.network(raw.networkEvidence);
+  var powerDecision=score==null?'Verify':score>=70?'Priority Go':score>=50?'Conditional Go':'Hold / Needs Review';
+  var decision=compute.gate(connectivity,powerDecision);
+  if(connectivity.verdict==='Verify'||connectivity.verdict==='uncertain')verify.unshift('Verify fiber service at the site; the compute connectivity gate is unanswered.');
+  if(connectivity.datacenterVerdict==='Verify')verify.push('Verify data-center connectivity suitability.');
+  verify.push('Verify carrier-quoted symmetric bandwidth, diverse entrances, latency and construction scope. Mapped fiber is not deliverable capacity.');
   (g.missing||[]).forEach(function(v){verify.push('Verify '+v+'.');});
   verify.push('Verify parcel boundaries, zoning, flood risk, access/easements and site control.');
   verify.push('Verify actual utility capacity, interconnection queue and upgrade scope. Mapped voltage is not capacity.');
   return {id:s.id,name:s.name,address:s.address,taxId:s.taxId,originalIndex:index,mode:'parcel',score:score,
-    decision:score==null?'Verify':score>=70?'Priority Go':score>=50?'Conditional Go':'Hold / Needs Review',
+    decision:decision,powerDecision:powerDecision,connectivity:connectivity,planningMw:g.mwHostable,approvedMw:null,
     confidence:g.confidence,evidenceCoverage:null,acres:intake.grossAcres||null,grid:g,
     reasons:score==null?['No usable parcel or grid evidence yet.']:['Same screening engine as the editor Parcel Screening Register.',g.kv?g.kv+' kV mapped nearby; capacity unconfirmed.':'Grid voltage: Verify.'],
-    risks:(intake.flags||[]).map(function(v){return v.msg;}).slice(0,30),verify:verify,
+    risks:connectivity.notes.concat((intake.flags||[]).map(function(v){return v.msg;})).slice(0,30),verify:verify,
     nextAction:verify[0],source:s.source,sourceDate:s.sourceDate,latitude:s.latitude,longitude:s.longitude};
 }
 function rank(rows) {
@@ -195,7 +194,7 @@ function screen(mode,sites) {
     }catch(e){return {id:text(raw&&raw.id||'site-'+(i+1)),name:text(raw&&raw.name),address:text(raw&&raw.address),originalIndex:i,mode:mode,score:null,decision:'Verify',reasons:[],risks:[],verify:[text(e.message)],nextAction:text(e.message)};}
   });
   return {version:VERSION,mode:mode,checkedAt:new Date().toISOString(),rows:rank(rows),
-    methodology:mode==='bess'?'CSK-ESS-001 physical screening: open area 60, parking 20, parcel complexity 10, zoning/flood 10. Full 1000 kW / 3500 kWh; half 500 kW / 1750 kWh. Scores 85+ Priority Go; 65–84 Conditional Go; below 65 Hold. Missing components produce a range, never a passing score.':'Editor Parcel Screening Register engine. Screening rank only; grid voltage is not approved capacity.',
+    methodology:mode==='bess'?'CSK-ESS-001 physical screening: open area 60, parking 20, parcel complexity 10, zoning/flood 10. Full 1000 kW / 3500 kWh; half 500 kW / 1750 kWh. Scores 85+ Priority Go; 65–84 Conditional Go; below 65 Hold. Missing components produce a range, never a passing score.':'Site Map OmegaSiteIntel parcel/grid engine plus the same network-proximity fiber and data-center engine. Connectivity is a separate pursuit gate, not averaged into power. MW is a planning heuristic, not utility-approved capacity.',
     ranking:'Decision first, then known score, conservative score floor, evidence coverage, open area and source order. Verify rows have unresolved evidence; Hold rows have known constraints.'};
 }
 module.exports={screen:screen,rank:rank,bess:bess,parcel:parcel,normalize:normalize,number:number,VERSION:VERSION};
