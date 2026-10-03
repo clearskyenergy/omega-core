@@ -49,11 +49,18 @@
    this file reads them, it never re-prices the host's site.
 
    ─────────────────────────────────────────────────────────────────────────────
-   ⚠ THE LEASE CARD AND THE BUYOUT BAND ARE SEEDS, NOT COMPS
+   ⚠ NO OMEGA-CORE RENT IS SET — THE CARD IS A MARKET REFERENCE
    ─────────────────────────────────────────────────────────────────────────────
-   Same warning compute-lease carries. Versioned, echoed on every answer, and
-   the build-up is staff-only. Replace with signed comparables and bump
-   RATE_CARD.version before quoting either as ClearSky's position.
+   ClearSky has not set the rent (Tommy, 2026-10-03: "idk the lease amounts
+   yet we will need to manually input that or go with a market standard if
+   there is such a thing"). There is no published standard for an
+   edge-compute skid on a charging site, so the card is read off the nearest
+   comparables (RATE_CARD.sources) and every lease priced on it is marked a
+   market reference, NOT AN OFFER, whatever the verdict. A rent typed for the
+   site (rep.leaseMonthly, rep.leaseEscalatorPct) replaces the reference and
+   the host's figures follow it. The buyout band is still a seed. Versioned,
+   echoed on every answer; the build-up is staff-only. When ClearSky sets the
+   rent, put it here and bump RATE_CARD.version.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
@@ -114,29 +121,55 @@ var TERMS = {
 };
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   THE LEASE CARD  ⚠ seed values — see the header
+   THE LEASE CARD  ⚠ a market reference, not ClearSky's rent — see the header
    ═══════════════════════════════════════════════════════════════════════════
    Rent per skid per month, because a charging-site host thinks in "what does
    this pay me a month", and a skid is a unit, not an acre.
 
-     LOW  $750   compute-lease's floorMonthly: below it a lease is not worth
-                 the host's signature, our legal cost or the title work.
-     BASE $1,000 75 kW at compute-lease's high capacity band ($90/kW-yr ≈
-                 $560/mo) plus about three parking stalls of ground the skid
-                 and its clearances take (~$150/stall-mo ≈ $450).
-     HIGH $1,500 for a site that clears every gate on evidence.
+   The nearest published comparable is a wireless carrier's ground lease: a
+   third party's equipment on someone else's land, on its own meter, paying
+   rent (Steel in the Air, 2026: new proposals $500–$1,250 a month,
+   suburban/commercial $800–$1,500, urban $1,200–$2,500+, an average of
+   $1,300; escalators 2–3%). The ground the host gives up is about three
+   parking stalls at $100–$300 a stall a month ($300–$900).
 
-   Open at base. Hold at low. Go to high only on evidence. */
+     LOW  $750   under the suburban/commercial band, over three stalls at
+                 the average; also compute-lease's floorMonthly, below which
+                 a lease is not worth the signature and the title work.
+     BASE $1,000 inside the suburban/commercial band and the new-proposal
+                 range — a charging site is a commercial lot.
+     HIGH $1,500 the top of the suburban/commercial band: a site that clears
+                 every gate on evidence.
+
+   Escalators 2.0 / 2.5 / 3.0%: 3% was the tower standard, carriers now push
+   2%. Open at base. Hold at low. Go to high only on evidence. */
 var RATE_CARD = {
-  version: 'omega-core-lease-v1',
-  asOf: '2026-10-02',
+  version: 'omega-core-lease-v2',
+  asOf: '2026-10-03',
+  basis: 'market-reference',
   monthlyPerSkid: { low: 750, base: 1000, high: 1500 },
   escalatorPct: { low: 2.0, base: 2.5, high: 3.0 },
   buildUp: {
-    low: 'compute-lease floorMonthly ($750/mo)',
-    base: '75 kW at $90/kW-yr capacity rent (~$560/mo) + ~3 parking stalls at ~$150/stall-mo (~$450/mo)',
-    high: 'a site that clears power, location and fiber on evidence'
+    low: 'under the suburban/commercial tower ground-lease band ($800–$1,500/mo); over ~3 parking stalls at the '
+       + 'average (~$465/mo); compute-lease floorMonthly ($750/mo)',
+    base: 'inside the suburban/commercial tower ground-lease band and the 2026 new-proposal range ($500–$1,250/mo)',
+    high: 'the top of the suburban/commercial band: a site that clears power, location and fiber on evidence'
   },
+  /* The comparables the reference is read off. Public figures, shown to every
+     entitled caller beside a market-reference lease so the range is never
+     presented without where it came from. */
+  sources: [
+    { what: 'Cell-tower ground leases, new in 2026 — a carrier\'s equipment on its own meter, paying rent',
+      figure: '$500–$1,250 a month for most new proposals; suburban/commercial $800–$1,500; urban $1,200–$2,500+; '
+            + 'average $1,300. Escalators 2–3% a year (3% was standard; carriers now push 2%).',
+      url: 'https://www.steelintheair.com/cell-tower-lease-rates/' },
+    { what: 'Surface parking — the ground the skid and its clearances take (about three stalls)',
+      figure: '$100–$300 a stall a month, about $155 on average; about $300–$900 a month for three stalls.',
+      url: 'https://www.mycurbspot.com/tools/parking-spot-value' }
+  ],
+  /* What the screen takes as a typed rent: anything else is set aside, said,
+     and the reference shown instead. */
+  entered: { minMonthly: 1, maxMonthly: 10000, maxEscalatorPct: 10 },
   /* FAIR MARKET VALUE — indicative only. The contract says FMV by
      independent appraisal; this band only lets a host see the order of
      magnitude. Share of the system cost left at year 5, declining
@@ -535,24 +568,74 @@ function fmvShare(band, years) {
   return Math.max(RATE_CARD.fmvFloor, Math.pow(r5, years / 5));
 }
 
-function buildOffer(n, term) {
-  var bands = ['low', 'base', 'high'], perSkid = {}, monthly = {}, annual = {}, termTotal = {};
+/* The rent typed for this site, if any. A rent outside what the screen takes
+   is set aside and said, never clamped into a number nobody typed; an
+   escalator alone means nothing until there is a rent to escalate. */
+function rentOf(rep) {
+  var E = RATE_CARD.entered, m = num(rep.leaseMonthly), e = num(rep.leaseEscalatorPct);
+  var out = { rent: null, escalatorPct: null, notes: [] };
+  if (m != null) {
+    if (m >= E.minMonthly && m <= E.maxMonthly) out.rent = Math.round(m);
+    else out.notes.push('A rent of $' + fmt(m) + ' per skid per month was entered; the screen takes $' + fmt(E.minMonthly)
+      + '–$' + fmt(E.maxMonthly) + ', so the market reference is shown instead.');
+  }
+  if (e != null) {
+    if (e < 0 || e > E.maxEscalatorPct) out.notes.push('An escalator of ' + e + '% was entered; the screen takes 0–'
+      + E.maxEscalatorPct + '%, so ' + (out.rent != null ? RATE_CARD.escalatorPct.base + '% is used.' : 'it is set aside.'));
+    else if (out.rent == null) out.notes.push('An escalator was entered without a rent; it applies once the rent per skid is entered.');
+    else out.escalatorPct = round(e, 2);
+  }
+  return out;
+}
+
+function plural(n) { return n + ' skid' + (n > 1 ? 's' : ''); }
+
+function buildOffer(n, term, lease) {
+  var entered = !!(lease && lease.rent != null);
+  var bands = ['low', 'base', 'high'], perSkid = {}, monthly = {}, annual = {}, termTotal = {}, escPct = {};
   bands.forEach(function (b) {
-    var m = RATE_CARD.monthlyPerSkid[b];
+    var m = entered ? lease.rent : RATE_CARD.monthlyPerSkid[b];
+    var e = entered ? (lease.escalatorPct != null ? lease.escalatorPct : RATE_CARD.escalatorPct.base) : RATE_CARD.escalatorPct[b];
     perSkid[b] = m;
     monthly[b] = m * n;
     annual[b] = m * 12 * n;
-    termTotal[b] = Math.round(escalatedTotal(m * 12 * n, RATE_CARD.escalatorPct[b] / 100, term));
+    escPct[b] = e;
+    termTotal[b] = Math.round(escalatedTotal(m * 12 * n, e / 100, term));
   });
-  return {
+  var o = {
     units: n, termYears: term,
+    source: entered ? 'entered' : 'market',
     monthlyPerSkid: perSkid, monthly: monthly, annual: annual, termTotal: termTotal,
-    escalatorPct: { low: RATE_CARD.escalatorPct.low, base: RATE_CARD.escalatorPct.base, high: RATE_CARD.escalatorPct.high },
-    basis: '$' + fmt(perSkid.base) + ' per skid per month at base, ' + n + ' skid' + (n > 1 ? 's' : '')
-         + ', escalating ' + RATE_CARD.escalatorPct.base + '%/yr over ' + term + ' years.',
-    howToUse: 'Open at base. Hold at low. Go to high only for a site that clears every gate on evidence. '
-            + 'The range is room to negotiate, not three opinions about the site.'
+    escalatorPct: escPct
   };
+  if (entered) {
+    o.basis = '$' + fmt(lease.rent) + ' per skid per month as entered for this site, ' + plural(n) + ', escalating '
+      + escPct.base + '%/yr' + (lease.escalatorPct == null ? ' (the market reference\'s base — enter an escalator to change it)' : '')
+      + ' over ' + term + ' years.';
+    o.howToUse = 'The rent entered for this site. The signed lease sets the rent.';
+  } else {
+    o.marketReference = true;
+    o.basis = 'Market reference: $' + fmt(perSkid.low) + '–$' + fmt(perSkid.high) + ' per skid per month, base $'
+      + fmt(perSkid.base) + ', ' + plural(n) + ', escalating ' + escPct.low + '–' + escPct.high + '%/yr over ' + term
+      + ' years. ClearSky has not set an Omega-Core rent and there is no published standard for an edge-compute '
+      + 'skid on a charging site; the range is read off the nearest comparables.';
+    o.howToUse = 'Not an offer. Enter the rent per skid per month for this site once it is agreed, and the lease '
+      + 'and the host\'s figures follow it.';
+    o.market = {
+      note: 'Read off the nearest published comparables — not an Omega-Core standard.',
+      sources: RATE_CARD.sources.map(function (x) { return { what: x.what, figure: x.figure, url: x.url }; })
+    };
+  }
+  return o;
+}
+
+/* The one heading a lease is shown under, in the dialog and on the print. */
+function offerLabel(o) {
+  if (!o) return null;
+  var tail = ' — ' + plural(o.units) + ', ' + o.termYears + ' years';
+  if (o.source === 'market') return 'Land lease — market reference, not an offer' + tail;
+  if (o.indicative) return 'Land lease at the entered rent — indicative until the site qualifies' + tail;
+  return 'The host\'s land lease at the entered rent' + tail;
 }
 
 /* What the lease does to the charging site the Run priced. Reads the Run;
@@ -581,6 +664,7 @@ function hostEconomics(run, offer) {
   var out = {
     run: { capex: capex, incentive: inc, netCost: net, annualRevenue: rev,
            low: num(run.low), high: num(run.high), at: str(run.at) || null, stale: run.stale === true },
+    leaseSource: offer ? offer.source : null,
     leaseAnnual: offer ? offer.annual.base : null,
     leaseTermTotal: offer ? offer.termTotal.base : null,
     paybackYearsBefore: null, paybackYearsAfter: null, revenueUpliftPct: null, leaseCoversPctOfNet: null,
@@ -592,6 +676,8 @@ function hostEconomics(run, offer) {
     return out;
   }
   if (run.stale === true) out.notes.push('The drawing changed after the last Run — re-run for current figures.');
+  if (offer.source === 'market') out.notes.push('The lease figures here are the market reference\'s base ($'
+    + fmt(offer.monthlyPerSkid.base) + ' a skid a month), not an agreed rent. Enter the rent for this site to see the real figures.');
   if (net != null && net > 0 && out.leaseTermTotal) out.leaseCoversPctOfNet = round(out.leaseTermTotal / net * 100, 1);
   var esc = offer.escalatorPct.base / 100;
   if (rev != null && rev > 0) {
@@ -678,8 +764,13 @@ function evaluate(body, opts) {
     gates.power.basis.unshift('Asked for ' + n + ' skids; the power carries ' + proposed + ', so the offer is ' + proposed + '.');
   }
   var v = verdictOf(gates);
-  var offer = v.offerable ? buildOffer(proposed, term) : null;
-  if (offer) offer.indicative = !!v.indicative;
+  var lease = rentOf(rep);
+  var offer = v.offerable ? buildOffer(proposed, term, lease) : null;
+  /* a market reference is never an offer, whatever the verdict */
+  if (offer) {
+    offer.indicative = !!v.indicative || offer.source === 'market';
+    offer.label = offerLabel(offer);
+  }
   var host = hostEconomics(run, offer);
   var program = programOf(proposed, term, offer, gates);
 
@@ -709,6 +800,9 @@ function evaluate(body, opts) {
   var termAsked = num(rep.termYears);
   if (termAsked != null && termAsked > TERMS.maxTermYears) findings.push({ severity: 'note', text: 'A ' + termAsked
     + '-year term was asked for; the card prices up to ' + TERMS.maxTermYears + ' years.' });
+  lease.notes.forEach(function (t) { findings.push({ severity: 'note', text: t }); });
+  if (offer && offer.source === 'market') findings.push({ severity: 'note', text: 'No Omega-Core rent is set. The lease shown is a '
+    + 'market reference (cell-tower ground leases and parking-stall rent), not an offer — enter the rent for this site when it is agreed.' });
   if (v.indicative) findings.push({ severity: 'risk', text: 'Indicative only: do not present the lease as an offer until the site is qualified.' });
   if (gates.fiber.status === 'conditional') findings.push({ severity: 'risk',
     text: 'Fiber is reachable but not on site. The lateral is ClearSky\'s cost in the program outlay — do not promise the host a separate fiber payment.' });
@@ -734,6 +828,7 @@ function evaluate(body, opts) {
     build: BUILD,
     model: 'omega-core-v1',
     rateCardVersion: RATE_CARD.version,
+    leaseSource: offer ? offer.source : (lease.rent != null ? 'entered' : 'market'),
     product: PRODUCT,
     site: site,
     units: { requested: asked, placed: num(d.units) || 0, supported: gates.power.unitsSupported, proposed: proposed,
@@ -752,8 +847,11 @@ function evaluate(body, opts) {
     asks: asks,
     findings: findings,
     brand: opts.brand || CL.brandOf(null),
-    disclaimer: 'Indicative only. The lease range comes from the Omega-Core lease card (' + RATE_CARD.version
-      + ') against the evidence supplied and is not a binding offer. Rent, term and conditions are subject to a '
+    disclaimer: 'Indicative only. ' + (lease.rent != null
+        ? 'The lease is priced on the rent entered for this site'
+        : 'ClearSky has not set an Omega-Core rent; the lease is a market reference read off comparable leases ('
+          + RATE_CARD.version + ')')
+      + ', against the evidence supplied, and is not a binding offer. Rent, term and conditions are subject to a '
       + 'signed LOI, a utility will-serve for the skid\'s own meter, a carrier commitment for 1 Gbps bidirectional '
       + 'service, and site diligence. Fair market value at the end of the term is set by independent appraisal.'
   };
@@ -762,13 +860,13 @@ function evaluate(body, opts) {
      is staff-only, as compute-lease does. */
   out.rateCard = opts.disclose
     ? RATE_CARD
-    : { version: RATE_CARD.version, asOf: RATE_CARD.asOf, disclosed: false };
+    : { version: RATE_CARD.version, asOf: RATE_CARD.asOf, basis: RATE_CARD.basis, disclosed: false };
   return out;
 }
 
 module.exports = {
   evaluate: evaluate, PRODUCT: PRODUCT, TERMS: TERMS, RATE_CARD: RATE_CARD, BUILD: BUILD,
   gatePower: gatePower, gateLocation: gateLocation, gateFiber: gateFiber, verdictOf: verdictOf,
-  buildOffer: buildOffer, hostEconomics: hostEconomics, programOf: programOf,
+  buildOffer: buildOffer, rentOf: rentOf, offerLabel: offerLabel, hostEconomics: hostEconomics, programOf: programOf,
   serviceAmps: serviceAmps, serviceKw: serviceKw, fmvShare: fmvShare, hostPeakKw: hostPeakKw
 };

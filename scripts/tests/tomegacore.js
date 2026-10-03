@@ -89,8 +89,55 @@ eq(r.rateCard.disclosed, false, 'a tenant does not see the card build-up');
 ok(!r.rateCard.buildUp, 'no build-up off staff');
 ok(OC.evaluate(GOOD, { disclose: true }).rateCard.buildUp, 'staff see the build-up');
 
+/* THE RENT (Tommy, 2026-10-03: "idk the lease amounts yet we will need to
+   manually input that or go with a market standard"): no rent is set, so the
+   card is a market reference — never an offer, whatever the verdict — until
+   a rent is typed for the site. */
+eq(r.offer.source, 'market', 'with no rent typed, the lease is the market reference');
+eq(r.offer.indicative, true, 'and a market reference is never an offer, even on a qualified site');
+ok(/market reference, not an offer/.test(r.offer.label), 'its heading says so');
+ok(r.offer.market && r.offer.market.sources.length >= 2 && r.offer.market.sources.every(function (x) { return /^https:\/\//.test(x.url) && x.figure; }),
+   'and names the comparables it is read off, each with a source');
+ok(r.findings.some(function (f) { return /No Omega-Core rent is set/.test(f.text); }), 'the findings say no rent is set');
+ok(r.host.notes.some(function (n) { return /market reference.s base/.test(n); }), 'the host figures say they are on the reference');
+ok(/has not set an Omega-Core rent/.test(r.disclaimer), 'and so does the disclaimer');
+eq(r.rateCard.basis, 'market-reference', 'a tenant sees what the card is');
+ok(!r.rateCard.monthlyPerSkid && !r.rateCard.sources, 'but not the card itself');
+eq(OC.RATE_CARD.version, 'omega-core-lease-v2', 'the card is versioned past the seed');
+var rent = clone(GOOD); rent.rep.leaseMonthly = 1200;
+var rr = OC.evaluate(rent, {});
+eq(rr.offer.source, 'entered', 'a rent typed for the site replaces the reference');
+eq(JSON.stringify(rr.offer.monthlyPerSkid), JSON.stringify({ low: 1200, base: 1200, high: 1200 }), 'one figure, not a range');
+eq(rr.offer.escalatorPct.base, 2.5, 'escalating at the reference base when none is typed');
+eq(rr.offer.termTotal.base, Math.round(CL.escalatedTotal(14400, 0.025, 5)), 'priced over the term');
+eq(rr.offer.indicative, false, 'a qualified site at a typed rent is not marked indicative');
+ok(/at the entered rent/.test(rr.offer.label) && !rr.offer.market, 'its heading says the rent was entered, with no reference beside it');
+eq(rr.host.leaseAnnual, 14400, 'the host\'s figures follow the typed rent');
+eq(rr.host.paybackYearsAfter, Math.round(1100000 / 234400 * 10) / 10, 'payback after, on the typed rent');
+eq(rr.program.leaseTermTotal, rr.offer.termTotal.base, 'and so does ClearSky\'s outlay');
+ok(!rr.findings.some(function (f) { return /No Omega-Core rent is set/.test(f.text); }), 'no "no rent" finding once one is typed');
+rent.rep.leaseEscalatorPct = 3;
+eq(OC.evaluate(rent, {}).offer.termTotal.base, Math.round(CL.escalatedTotal(14400, 0.03, 5)), 'a typed escalator is used');
+rent.rep.leaseMonthly = '1500';
+eq(OC.evaluate(rent, {}).offer.monthlyPerSkid.base, 1500, 'a numeric string is a rent');
+[0, -100, 25000, '', '1,200', true, [900]].forEach(function (bad) {
+  var b = clone(GOOD); b.rep.leaseMonthly = bad;
+  eq(OC.evaluate(b, {}).offer.source, 'market', 'a rent of ' + JSON.stringify(bad) + ' is not a rent');
+});
+var big = clone(GOOD); big.rep.leaseMonthly = 25000;
+ok(OC.evaluate(big, {}).findings.some(function (f) { return /\$25,000 per skid per month was entered/.test(f.text); }), 'a rent set aside is said, never clamped');
+var escOnly = clone(GOOD); escOnly.rep.leaseEscalatorPct = 3;
+ok(OC.evaluate(escOnly, {}).findings.some(function (f) { return /escalator was entered without a rent/.test(f.text); }), 'an escalator alone waits for a rent');
+var escBad = clone(GOOD); escBad.rep.leaseMonthly = 1000; escBad.rep.leaseEscalatorPct = 40;
+eq(OC.evaluate(escBad, {}).offer.escalatorPct.base, 2.5, 'an escalator over 10% is set aside for the base');
+var openRent = OC.evaluate({ rep: { leaseMonthly: 1100 } }, {});
+eq(openRent.verdict, 'needs-qualification', 'a typed rent never qualifies a site');
+eq(openRent.offer.indicative, true, 'and on an open site it stays indicative');
+ok(/indicative until the site qualifies/.test(openRent.offer.label), 'and is headed so');
+var noLease = clone(GOOD); noLease.rep.willServe = 'none'; noLease.rep.leaseMonthly = 1200;
+eq(OC.evaluate(noLease, {}).offer, null, 'a site that does not qualify gets no lease, typed rent or not');
+
 /* NO FALSE RESULTS: a firm answer only on a confirmed fact */
-eq(r.offer.indicative, false, 'a qualified site\'s lease is not marked indicative');
 eq(OC.evaluate(GOOD, {}).verdictLabel, 'Qualified', 'Qualified, in those words');
 var drawnOnly = clone(GOOD); delete drawnOnly.rep.availableKw; drawnOnly.rep.willServe = 'unknown';
 eq(OC.evaluate(drawnOnly, {}).gates.power.qualification, 'needs-qualification', 'room on the drawing alone needs qualification, never "clears"');
@@ -362,7 +409,10 @@ function editorChecks() {
   ok(/root\.omegaSetStale\(true\)/.test(mod) && /The Run priced nothing on this drawing/.test(mod), 'Run the site really runs, and never claims a Run that did not happen');
   ok(/try \{ u = root\._currentUser/.test(mod) && /catch \(e0\) \{ call = Promise\.reject\(e0\); \}/.test(mod), 'a Firebase that never started is "sign in", never a dialog stuck busy');
   ok(/f\.saved = readRep\(\) \|\| rep;/.test(mod), 'what was typed while a request ran survives the repaint');
-  ok(/'Needs further qualification'/.test(mod) && /not an offer until the site qualifies/.test(mod), 'the dialog says "Needs further qualification" and marks an indicative lease as not an offer');
+  ok(/'Needs further qualification'/.test(mod) && /section\(o\.label \|\| 'Land lease'\)/.test(mod) && /esc\(r\.offer\.label \|\| 'Land lease'\)/.test(mod),
+     'the dialog says "Needs further qualification" and heads the lease, on screen and printed, with the server\'s words');
+  ok(/inp\('oc-leaseMonthly'/.test(mod) && /r\.leaseMonthly = lm/.test(mod) && /r\.leaseEscalatorPct = le/.test(mod), 'the rent and its escalator are typed in the dialog and sent');
+  ok(/o\.market\.sources/.test(mod) && /rel="noopener"/.test(mod), 'a market reference is shown with its sources');
 
   /* the project field, saved and restored */
   var save = bodyFrom(ED, 'async function saveProject(');

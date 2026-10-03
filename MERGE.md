@@ -2763,8 +2763,15 @@ flag** (the R60 and every tenant product merged by `omega-bess-products.js`):
 the catalog's own word on its PCS, transformer and disconnect now wins over
 the >760 kW size rule. Entries without the flags behave as before.
 
+**The rent (2026-10-03).** No Omega-Core rent is set, so the card
+(`omega-core-lease-v2`) is a market reference read off cell-tower ground
+leases and parking-stall rent, never an offer whatever the verdict, and the
+dialog takes a rent (and escalator) typed per site, which the lease and the
+host's figures follow. Still server-side: the browser sends the number, the
+model prices it.
+
 Open: compute revenue and ClearSky's return on the skid (belongs in
-`api/_lib/compute-site.js` when Solela's figures arrive); a signed comp set
-for the lease card and the buyout band; the R60 in Clean Cell's own tenant
-product list.
+`api/_lib/compute-site.js` when Solela's figures arrive); ClearSky's own
+standard rent; a signed comp set for the buyout band; the R60 in Clean Cell's
+own tenant product list.
 

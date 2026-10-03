@@ -249,6 +249,11 @@
       + field('Host will sign a land lease', sel('oc-hostWilling', dflt('hostWilling', 'unknown'), [['unknown', 'Not asked'], ['exploring', 'Exploring'], ['yes', 'Yes'], ['no', 'No']]))
       + field('Term (years, 5 minimum)', inp('oc-termYears', dflt('termYears', 5), '5', 'number'), '0 1 140px')
       + field('At the end of the term', sel('oc-endOfTerm', dflt('endOfTerm', 'undecided'), [['undecided', 'Undecided'], ['remove', 'Remove the skid, meter off'], ['buyout', 'Host buys at fair market value']]))
+      + '</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">'
+      + field('Rent per skid per month ($)', inp('oc-leaseMonthly', dflt('leaseMonthly', ''), 'blank = reference', 'number'), '0 1 190px')
+      + field('Rent escalator (%/yr)', inp('oc-leaseEscalatorPct', dflt('leaseEscalatorPct', ''), 'blank = 2.5', 'number'), '0 1 140px')
+      + '<div style="flex:1 1 220px;min-width:0;align-self:flex-end;font-size:10px;color:#64748B;line-height:1.5">No Omega-Core rent is set yet. '
+      + 'Leave it blank for the market reference; type the rent agreed for this site and the lease and the host\'s figures follow it.</div>'
       + '</div>';
   }
 
@@ -270,6 +275,8 @@
     r.hostWilling = val('oc-hostWilling') || 'unknown';
     var t = num(val('oc-termYears')); if (t != null) r.termYears = t;
     r.endOfTerm = val('oc-endOfTerm') || 'undecided';
+    var lm = num(val('oc-leaseMonthly')); if (lm != null) r.leaseMonthly = lm;
+    var le = num(val('oc-leaseEscalatorPct')); if (le != null) r.leaseEscalatorPct = le;
     return r;
   }
 
@@ -316,14 +323,27 @@
 
     var o = r.offer;
     if (o) {
-      h += section((o.indicative ? 'Indicative land lease — not an offer until the site qualifies — ' : 'The host\'s land lease — ')
-        + o.units + ' skid' + (o.units > 1 ? 's' : '') + ', ' + o.termYears + ' years');
-      h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px"><tr style="color:#64748B;font-size:10px;text-transform:uppercase"><td></td><td style="text-align:right;padding:3px 6px">Low</td><td style="text-align:right;padding:3px 6px;color:var(--text)">Base</td><td style="text-align:right;padding:3px 6px">High</td></tr>';
-      [['Per skid, per month', o.monthlyPerSkid], ['Per month', o.monthly], ['Per year (year 1)', o.annual], ['Over the term, escalating', o.termTotal]].forEach(function (row) {
-        h += '<tr style="border-top:1px solid var(--border)"><td style="padding:5px 6px 5px 0;color:var(--sub)">' + row[0] + '</td>'
-          + '<td style="text-align:right;padding:5px 6px">' + money(row[1].low) + '</td><td style="text-align:right;padding:5px 6px;font-weight:800;color:var(--text)">' + money(row[1].base) + '</td><td style="text-align:right;padding:5px 6px">' + money(row[1].high) + '</td></tr>';
-      });
-      h += '</table><div style="font-size:10px;color:#64748B;margin-top:5px">' + esc(o.basis) + ' ' + esc(o.howToUse) + '</div>';
+      /* the heading is the server's: a market reference is never an offer */
+      h += section(o.label || 'Land lease');
+      var rows = [['Per skid, per month', o.monthlyPerSkid], ['Per month', o.monthly], ['Per year (year 1)', o.annual], ['Over the term, escalating ' + (o.source === 'entered' ? o.escalatorPct.base + '%' : ''), o.termTotal]];
+      if (o.source === 'entered') {
+        h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px">' + rows.map(function (row) {
+          return '<tr style="border-top:1px solid var(--border)"><td style="padding:5px 6px 5px 0;color:var(--sub)">' + row[0] + '</td><td style="text-align:right;padding:5px 6px;font-weight:800;color:var(--text)">' + money(row[1].base) + '</td></tr>';
+        }).join('') + '</table>';
+      } else {
+        h += '<table style="width:100%;border-collapse:collapse;font-size:11.5px"><tr style="color:#64748B;font-size:10px;text-transform:uppercase"><td></td><td style="text-align:right;padding:3px 6px">Low</td><td style="text-align:right;padding:3px 6px;color:var(--text)">Base</td><td style="text-align:right;padding:3px 6px">High</td></tr>';
+        rows.forEach(function (row) {
+          h += '<tr style="border-top:1px solid var(--border)"><td style="padding:5px 6px 5px 0;color:var(--sub)">' + row[0] + '</td>'
+            + '<td style="text-align:right;padding:5px 6px">' + money(row[1].low) + '</td><td style="text-align:right;padding:5px 6px;font-weight:800;color:var(--text)">' + money(row[1].base) + '</td><td style="text-align:right;padding:5px 6px">' + money(row[1].high) + '</td></tr>';
+        });
+        h += '</table>';
+      }
+      h += '<div style="font-size:10px;color:#64748B;margin-top:5px">' + esc(o.basis) + ' ' + esc(o.howToUse) + '</div>';
+      if (o.market && o.market.sources) h += '<div style="font-size:10px;color:var(--sub);margin-top:6px;line-height:1.55">' + esc(o.market.note) + '<ul style="margin:3px 0 0;padding-left:16px">'
+        + o.market.sources.map(function (x) {
+          return '<li><strong style="color:var(--text)">' + esc(x.what) + '</strong> — ' + esc(x.figure)
+            + (/^https:\/\//.test(x.url || '') ? ' <a href="' + esc(x.url) + '" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline">source</a>' : '') + '</li>';
+        }).join('') + '</ul></div>';
     } else {
       h += section('The host\'s land lease') + '<div style="font-size:11px;color:#FDE68A">No lease is quoted until '
         + (r.verdict === 'not-qualified' ? 'this is resolved — the site does not qualify on a confirmed fact.' : 'the open items below are confirmed.') + '</div>';
@@ -421,11 +441,12 @@
       /* ride on the project: the answers and the headline, never the card */
       S.omegaCore = { rep: rep, at: new Date().toISOString(), verdict: r.verdict, units: r.units && r.units.proposed,
                       monthlyPerSkidBase: r.offer ? r.offer.monthlyPerSkid.base : null, termYears: r.terms && r.terms.termYears,
-                      rateCardVersion: r.rateCardVersion || null };
+                      leaseSource: r.offer ? r.offer.source : null, rateCardVersion: r.rateCardVersion || null };
       /* what is in the fields NOW (typed while the request ran) survives the repaint */
       f.saved = readRep() || rep;
       onSource('score', r.verdict === 'not-qualified' ? 'bad' : (r.verdict === 'qualified' || r.verdict === 'conditional') ? 'ok' : 'warn',
-        (r.verdictLabel || r.verdict) + (r.offer ? ' · ' + money(r.offer.monthlyPerSkid.base) + '/skid/mo at base' + (r.offer.indicative ? ' (indicative)' : '') : ' · no lease quoted'));
+        (r.verdictLabel || r.verdict) + (r.offer ? ' · ' + money(r.offer.monthlyPerSkid.base) + '/skid/mo '
+          + (r.offer.source === 'entered' ? 'entered' + (r.offer.indicative ? ' (indicative)' : '') : 'market reference, not an offer') : ' · no lease quoted'));
       busy(false); paint();
       return r;
     }, function (e) {
@@ -499,9 +520,11 @@
       + '<h2>The skid</h2><div>' + esc(r.product.compute.model) + ' ' + esc(r.product.compute.kw) + ' kW + ' + esc(r.product.battery.model) + ' ' + esc(r.product.battery.kwh) + ' kWh / ' + esc(r.product.battery.kw) + ' kW (' + esc(r.product.battery.pcs) + ', ' + esc(r.product.battery.acV) + ') on one '
       + esc(r.product.skid.lengthIn) + ' × ' + esc(r.product.skid.depthIn) + ' in skid · its own utility meter</div>'
       + '<h2>Gates</h2><table>' + (r.gateOrder || []).map(function (k) { var g = r.gates[k]; return '<tr><td class="k">' + esc(g.label) + '</td><td class="v">' + esc((QUAL[g.qualification] || ['', g.status])[1]) + '</td><td>' + esc(g.headline) + '</td></tr>'; }).join('') + '</table>';
-    if (r.offer) doc += '<h2>' + (r.offer.indicative ? 'Indicative land lease — not an offer until the site qualifies' : 'Land lease to the host') + '</h2><table><tr><td class="k">Per skid, per month</td><td class="v">' + money(r.offer.monthlyPerSkid.base) + '</td><td class="small">range ' + money(r.offer.monthlyPerSkid.low) + '–' + money(r.offer.monthlyPerSkid.high) + '</td></tr>'
+    if (r.offer) doc += '<h2>' + esc(r.offer.label || 'Land lease') + '</h2><table><tr><td class="k">Per skid, per month</td><td class="v">' + money(r.offer.monthlyPerSkid.base) + '</td><td class="small">'
+      + (r.offer.source === 'entered' ? 'entered for this site' : 'market reference ' + money(r.offer.monthlyPerSkid.low) + '–' + money(r.offer.monthlyPerSkid.high) + ', base shown') + '</td></tr>'
       + '<tr><td class="k">Per year, ' + esc(r.offer.units) + ' skid' + (r.offer.units > 1 ? 's' : '') + '</td><td class="v">' + money(r.offer.annual.base) + '</td><td></td></tr>'
-      + '<tr><td class="k">Over ' + esc(r.offer.termYears) + ' years, escalating ' + esc(r.offer.escalatorPct.base) + '%</td><td class="v">' + money(r.offer.termTotal.base) + '</td><td></td></tr></table>';
+      + '<tr><td class="k">Over ' + esc(r.offer.termYears) + ' years, escalating ' + esc(r.offer.escalatorPct.base) + '%</td><td class="v">' + money(r.offer.termTotal.base) + '</td><td></td></tr></table>'
+      + (r.offer.market && r.offer.market.sources ? '<p class="small">' + esc(r.offer.market.note) + ' ' + r.offer.market.sources.map(function (x) { return esc(x.what) + ': ' + esc(x.figure) + ' (' + esc(x.url) + ')'; }).join(' · ') + '</p>' : '');
     var hs = r.host || {};
     if (r.offer && hs.run && hs.run.capex != null) doc += '<h2>The charging site, from the Run</h2><table><tr><td class="k">Capex</td><td class="v">' + money(hs.run.capex) + '</td></tr><tr><td class="k">Year-1 revenue</td><td class="v">' + money(hs.run.annualRevenue) + '</td></tr>'
       + (hs.paybackYearsBefore != null || hs.paybackYearsAfter != null ? '<tr><td class="k">Payback (before → with the lease)</td><td class="v">' + esc(paybackText(hs)) + '</td></tr>' : '')

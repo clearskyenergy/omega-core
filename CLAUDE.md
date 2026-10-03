@@ -1236,9 +1236,16 @@ service/transformer and the site point, fans out through
 `OmegaComputeLease.evidence`, and posts to `POST /api/omega-core` on
 `api/_lib/omega-core.js` — three gates (power for a new 480 V service; a
 charging site, zoned, located; fiber = compute-lease's `gateFiber`, the hard
-gate), skids priced on what the power carries, the seed lease card
-(`omega-core-lease-v1`, build-up staff-only), the host's payback before/after
-off the Run, and the FMV band — never in the browser. A legacy plan must open
+gate), skids priced on what the power carries, the lease, the host's payback
+before/after off the Run, and the FMV band — never in the browser. **No
+Omega-Core rent is set** (Tommy, 2026-10-03: "idk the lease amounts yet we
+will need to manually input that or go with a market standard"): the card
+(`omega-core-lease-v2`) is a MARKET REFERENCE read off cell-tower ground
+leases and parking-stall rent (`RATE_CARD.sources`, shown with it), never an
+offer whatever the verdict, until a rent is typed for the site (`rep.leaseMonthly`,
+`rep.leaseEscalatorPct`; out of range is set aside and said); the host's
+figures follow the typed rent. When ClearSky sets the rent, it goes on the
+card and the version moves. A legacy plan must open
 the compute cap (`addons.judge`), as the button does. `S.omegaCore` rides on
 the project. **No false results** (Tommy, 2026-10-02): a firm answer either way
 only on a confirmed fact — Qualified / Qualified with conditions / **Needs

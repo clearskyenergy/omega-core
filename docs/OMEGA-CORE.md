@@ -119,21 +119,45 @@ missing answer **needs further qualification**:
 
 | Verdict | When | Lease |
 |---|---|---|
-| **Qualified** | every gate clears on confirmed facts (the utility's figure with a confirmed will-serve, gig fiber on site, the zoning, the chargers drawn) | priced |
-| **Qualified with conditions** | confirmed, with an engineering or contract condition (e.g. the utility's kW carries the compute but the battery recharge is capped) | priced |
+| **Qualified** | every gate clears on confirmed facts (the utility's figure with a confirmed will-serve, gig fiber on site, the zoning, the chargers drawn) | at the rent typed for the site; with none typed, the market reference, marked not an offer |
+| **Qualified with conditions** | confirmed, with an engineering or contract condition (e.g. the utility's kW carries the compute but the battery recharge is capped) | as for Qualified |
 | **Needs further qualification** | anything open, or resting on the drawing or the public record; the result lists exactly what closes it | an **indicative range, marked "not an offer"** — or none at all while fiber or zoning only looks *unlikely* on the public record |
 | **Does not qualify** | only a confirmed fact: the utility declined a new service, the utility's own kW is under one skid, zoning the rep entered is residential | none |
 
 Each gate says the same in its own chip: *Clears*, *Clears with conditions*,
 *Needs qualification*, *Unlikely — confirm*, *Does not qualify*.
 
-**The lease card** (`omega-core-lease-v1`, ⚠ a seed, not comps): **$750 /
-$1,000 / $1,500 per skid per month**, escalating 2.0 / 2.5 / 3.0% a year, priced
-over the term (5-year minimum, up to 15). Low is compute-lease's floor; base is
-75 kW at compute-lease's high capacity band plus about three parking stalls of
-ground; high is for a site that clears every gate on evidence. Every entitled
-caller sees the offer; the build-up is staff-only. Replace with signed comps and
-bump the version before quoting it as ClearSky's position.
+**The rent — typed for the site, or a market reference.** ClearSky has not set
+an Omega-Core rent (Tommy, 3 October 2026: "idk the lease amounts yet we will
+need to manually input that or go with a market standard if there is such a
+thing"). There is no published standard for an edge-compute skid on a charging
+site, so:
+
+- **Rent per skid per month** and **Rent escalator** are fields in the dialog.
+  A rent typed there ($1–$10,000; anything else is set aside and the result
+  says so) prices the lease as one figure, escalating at the typed rate or
+  2.5%, and the host's payback, revenue uplift and ClearSky's outlay follow it.
+  It is saved with the project's answers. A typed rent never qualifies a site:
+  on an open site it is still headed *indicative until the site qualifies*.
+- **Left blank, the lease is the market reference** (`omega-core-lease-v2`):
+  **$750 / $1,000 / $1,500 per skid per month**, escalating 2.0 / 2.5 / 3.0% a
+  year, over the term (5-year minimum, up to 15). It is headed *market
+  reference, not an offer* **whatever the verdict**, and shown with what it is
+  read off:
+
+  | Comparable | Figure | Source |
+  |---|---|---|
+  | Cell-tower ground leases, new in 2026 — a carrier's equipment on its own meter, paying rent (the nearest model) | most new proposals $500–$1,250 a month; suburban/commercial $800–$1,500; urban $1,200–$2,500+; average $1,300; escalators 2–3% | [Steel in the Air](https://www.steelintheair.com/cell-tower-lease-rates/) |
+  | Surface parking — the ground the skid and its clearances take, about three stalls | $100–$300 a stall a month, ~$155 average → ~$300–$900 a month | [MyCurbSpot](https://www.mycurbspot.com/tools/parking-spot-value) |
+
+  Low sits under the suburban/commercial tower band and over three stalls at
+  the average (and is compute-lease's floor); base is inside that band and the
+  2026 new-proposal range; high is its top, for a site that clears every gate on
+  evidence. Every entitled caller sees the range and its sources; the build-up
+  is staff-only.
+
+When ClearSky sets a standard rent, it replaces `RATE_CARD.monthlyPerSkid`
+and the version moves; the typed rent per site stays.
 
 **What it does to the charging site** — read off the Run: net cost, year-1
 revenue, payback before and after the lease, the uplift on year-1 revenue, the
@@ -178,7 +202,10 @@ client's `collect()` against a fake session, the project field, and the R60.
 - **Compute revenue.** The skid's own GPU revenue and ClearSky's return on the
   $450,000 are not modelled here; `api/_lib/compute-site.js` is where that
   belongs when the Solela figures arrive.
-- **A signed comp set** for the lease card and the buyout band.
+- **ClearSky's own Omega-Core rent.** Until it is set, a rent is typed per
+  site or the market reference is shown. A staff setting for the standard rent
+  (rather than a code change) is not built.
+- **A signed comp set** for the buyout band.
 - **The utility's answer.** Hosting capacity is not public; the power gate
   asks for it.
 - **A one-line node** for the skid's own service; the host's one-line simply
