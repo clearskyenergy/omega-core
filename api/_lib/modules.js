@@ -109,7 +109,7 @@ var FEATURES = {
   compute: ['Compute campus design', 'Power and load screening', 'Compute site pro forma and land lease proposals'],
   ops: ['Site lifecycle', 'Field service', 'Owner reporting'],
   whitelabel: ['Your branded storefront', 'Embedded customer experience', 'Reseller delivery'],
-  permitting: ['Permitting matrices (BETA)', 'Jurisdiction checklist', 'Verified coverage shown below'],
+  permitting: ['Permitting matrices', 'Jurisdiction checklist', 'Verified coverage shown below'],
   sitefinder: ['Site discovery', 'Parcel studies', 'Northern Illinois coverage'],
   'logic-office': ['Orders and customers', 'Office workflow', 'Fulfilment tracking'],
   'logic-plant': ['Production board', 'Work instructions', 'Plant release'],

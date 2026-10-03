@@ -2337,7 +2337,7 @@ window.onerror = function(msg, src, line, col, err) {
              no export to sell. Gated at export.blueprint, granted at
              standard, inherited upward. -->
         <button class="rbtn" data-cap="export.blueprint" onclick="rbRun(openBlueprintExport)" title="Full blueprint / Print to PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Blueprint<br>/ PDF</span></button>
-        <button class="rbtn omega-beta" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — in beta, access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span><span class="omega-beta-tag">BETA</span></button>
+        <button class="rbtn omega-beta" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span><span class="omega-new-tag">NEW</span></button>
         <!-- Original call preserved; re-enable by restoring this onclick:
              <button class="rbtn" onclick="rbRun(sendToPermitCreator)" data-cap="permitting" title="Assemble the full permit set"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span></button> -->
       </div>
@@ -77115,7 +77115,7 @@ window._crmToastModal=_crmToastModal;
   /* ---------------- PERMIT CREATOR (beta gate) ---------------- */
   window.omegaPermitBeta=function(){
     modal('&#128203; Permit Creator <span style="font:700 8px/1 monospace;letter-spacing:.08em;'
-        + 'color:#16202B;background:#F59E0B;border-radius:2px;padding:2px 4px;margin-left:6px">BETA</span>',
+        + 'color:#FFFFFF;background:#2B5FA8;border-radius:2px;padding:2px 4px;margin-left:6px">NEW</span>',
       /* Just the customer-facing line. The previous version appended an
          internal note explaining that the feature was "still installed,
          only gated" - accurate, but that is a message to a developer, not
@@ -106364,6 +106364,8 @@ button[style*="linear-gradient"][aria-disabled="true"]{
         if (!discovery || view.modules.indexOf(discovery.key) >= 0) return;
       }
       if ((!view && el.hasAttribute('data-cap-blocked')) || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-packaging-retired')) return;
+      /* hidden at the owner's request (the gating HIDE list): not runnable by name either */
+      if (el.classList && el.classList.contains('omega-gated-hidden')) return;
       var name = textOf(el);
       if (!name) return;
       if (seenEl.indexOf(el) >= 0) return;
@@ -118956,7 +118958,7 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
     if (!btn.style.position) btn.style.position = 'relative';
     var s = document.createElement('span');
     s.className = (label === 'NEW') ? 'omega-new-tag' : 'omega-beta-tag';
-    s.textContent = label || 'BETA';
+    s.textContent = label || 'NEW';
     btn.appendChild(s);
     return true;
   }
@@ -118985,7 +118987,7 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
       if (typeof re === 'string') {
         return tagButton(document.getElementById(re), label) ? 1 : 0;
       }
-      MARKS.push([re, label || 'BETA']);
+      MARKS.push([re, label || 'NEW']);
       return apply();
     },
     list: function () {
