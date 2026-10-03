@@ -26,7 +26,7 @@ module.exports=async function(req,res){
     var atlas=await invoke(require('./grid-atlas'),{method:'POST',headers:req.headers,body:body},25000);
     if(atlas.status!==200){notes.push('Verify grid/location: lookup unavailable or address unmatched.');return res.status(200).json(result);}
     var a=atlas.body;
-    result.gridEvidence={lines:(a.lines||[]).slice(0,50),substations:(a.substations||[]).slice(0,50),sources:a.sources||{},checkedAt:result.checkedAt};
+    result.gridEvidence={lines:(a.lines||[]).slice(0,50),substations:(a.substations||[]).slice(0,50),pipelines:(a.pipelines||[]).slice(0,50),sources:a.sources||{},checkedAt:result.checkedAt};
     result.resolvedAddress=a.resolvedAddress;
     if(a.geocode&&a.geocode.precision!=='exact'){
       notes.push('Verify location: '+(a.geocode.note||'the address match is approximate')+'. No parcel was selected.');

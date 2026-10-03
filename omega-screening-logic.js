@@ -15,6 +15,7 @@
     el('pageIntro').textContent=mode==='bess'?'Turn your site list into a prioritized battery storage pipeline. Compare site suitability and preliminary system sizes, with clear next steps for each location.':'Evaluate one property or an entire portfolio. Review site details and project constraints, compare locations, and move promising sites into design.';
     el('parcelTab').className='button'+(mode==='parcel'?' active':'');el('bessTab').className='button'+(mode==='bess'?' active':'');
     el('file').accept=mode==='parcel'?'.xlsx,.csv,.json,.kml,.kmz':'.xlsx,.csv,.json';
+    el('lookupLabel').textContent=mode==='parcel'?'Look up parcel/grid context and compute connectivity for each address':'Look up missing parcel and grid context for each address';
     el('fileHelp').textContent='XLSX, CSV or a saved portfolio'+(mode==='parcel'?', plus multiple KML / KMZ files':'')+'. Up to 500 sites.';
   }
   function invalidate(){report=null;el('results').hidden=true;}
@@ -53,6 +54,7 @@
     });
     if(!s.features&&!s.kml&&r.features&&r.features.length)s.features=r.features;
     if(r.gridEvidence)s.gridEvidence=r.gridEvidence;
+    delete s.networkEvidence;
     s.lookupAt=r.checkedAt;
     s.source=s.source||'Parcel and Grid Atlas lookup';s.sourceDate=s.sourceDate||r.checkedAt;
   }
@@ -62,19 +64,32 @@
     var index=0,lookup=!skipLookup&&el('enrich').checked;
     function step(){
       if(!lookup||stopped||index>=sites.length)return Promise.resolve();
-      var s=sites[index++];
+      var s=sites[index++];delete s.networkEvidence;
       el('progress').value=(index-1)/sites.length*85;el('progressLabel').textContent='Looking up site '+index+' of '+sites.length;
       if(!s.address && !(s.latitude!=null&&s.longitude!=null))return step();
-      return request('/api/portfolio-enrich',{mode:mode,address:s.address,latitude:s.latitude,longitude:s.longitude}).then(function(r){merge(s,r);},function(e){if(e.status===401||e.status===403)throw e;s.lookupNotes=['Verify lookup: '+e.message];}).then(step);
+      return request('/api/portfolio-enrich',{mode:mode,address:s.address,latitude:s.latitude,longitude:s.longitude}).then(function(r){
+        merge(s,r);
+        if(mode!=='parcel'||r.fields.latitude==null||r.fields.longitude==null)return;
+        el('progressLabel').textContent='Checking compute connectivity for site '+index+' of '+sites.length;
+        return request('/api/network-proximity',{lat:r.fields.latitude,lng:r.fields.longitude},65000).then(function(network){
+          /* Keep report evidence, not the provider's national map geometries. */
+          s.networkEvidence={fiber:network.fiber,capacity:network.capacity,datacenter:network.datacenter,summary:network.summary,sources:network.sources,build:network.build,checkedAt:new Date().toISOString()};
+        },function(e){if(e.status===401||e.status===403)throw e;s.lookupNotes.push('Verify compute connectivity: '+e.message);});
+      },function(e){delete s.networkEvidence;if(e.status===401||e.status===403)throw e;s.lookupNotes=['Verify lookup: '+e.message];}).then(step);
     }
     step().then(function(){
-      if(stopped){sites.slice(index).forEach(function(s){s.lookupNotes=['Verify: lookup was not run for this site.'];});}
+      if(stopped){sites.slice(index).forEach(function(s){delete s.networkEvidence;s.lookupNotes=['Verify: lookup was not run for this site.'];});}
       el('progress').value=90;el('progressLabel').textContent='Ranking '+sites.length+' sites';
       return request('/api/portfolio-screening',{mode:mode,sites:sites},45000);
     }).then(function(r){
       report=r;render();say('Screened '+r.rows.length+' sites.'+(stopped?' Lookup stopped early; unprocessed sites are retained for verification.':''));
       el('results').scrollIntoView({behavior:'smooth',block:'start'});
     }).catch(function(e){say(e.message,true);}).then(function(){setBusy(false);});
+  }
+  function computeContext(r){
+    if(r.mode!=='parcel')return '';
+    var c=r.connectivity||{};
+    return '<div class="compute-context"><div><small>Fiber reach</small><b>'+esc(c.verdict||'Verify')+'</b></div><div><small>Route diversity</small><b>'+esc(c.routeDiversity||'Verify')+'</b></div><div><small>Data-center connectivity</small><b>'+esc(c.datacenterVerdict||'Verify')+(c.datacenterScore!=null?' · '+n(c.datacenterScore)+'/100':'')+'</b></div><div><small>Planning MW · utility capacity: Verify</small><b>'+n(r.planningMw)+'</b></div></div>';
   }
   function render(){
     if(!report)return;el('results').hidden=false;
@@ -87,9 +102,9 @@
     el('resultList').innerHTML=list.map(function(r){
       var s=r.sizing||{},p=s.physicalOption,score=r.score==null?(r.scoreRange?r.scoreRange[0]+'–'+r.scoreRange[1]:'Verify'):r.score+'/100';
       var badge=r.decision==='Priority Go'?'go':r.decision==='Hold / Needs Review'?'hold':'';
-      return '<article class="result"><div class="result-top"><div class="rank">'+r.rank+'</div><div class="site"><div class="site-title">'+esc(r.address||r.name)+'</div><span class="badge '+badge+'">'+esc(r.decision)+'</span>'+(r.address&&r.name?'<div class="help">'+esc(r.name)+'</div>':'')+'</div><div class="metric"><small>Score</small><b>'+esc(score)+'</b><span>'+(r.score==null?'Verify missing inputs':mode==='bess'?'Physical screen':esc(r.confidence)+' confidence')+'</span></div>'+
+      return '<article class="result"><div class="result-top"><div class="rank">'+r.rank+'</div><div class="site"><div class="site-title">'+esc(r.address||r.name)+'</div><span class="badge '+badge+'">'+esc(r.decision)+'</span>'+(r.address&&r.name?'<div class="help">'+esc(r.name)+'</div>':'')+'</div><div class="metric"><small>Score</small><b>'+esc(score)+'</b><span>'+(r.score==null?'Verify missing inputs':mode==='bess'?'Physical screen':'Power / parcel · '+esc(r.confidence)+' confidence')+'</span></div>'+
         (mode==='bess'?'<div class="metric"><small>Physical-fit option</small><b>'+size(p&&p.kw,p&&p.kwh)+'</b><span>Preliminary size estimate</span></div><div class="metric"><small>Recommended size</small><b>'+size(s.recommendedKw,s.recommendedKwh)+'</b><span>'+esc(s.status||'Verify')+'</span></div>':'<div class="metric"><small>Parcel size</small><b>'+n(r.acres)+'</b><span>acres</span></div><div class="metric"><small>Grid context</small><b>'+n(r.grid&&r.grid.kv)+' kV</b><span>Capacity: Verify</span></div>')+
-        '</div><div class="result-bottom"><div class="next"><b>Next:</b> '+esc(r.nextAction)+'</div><button data-edit="'+esc(r.id)+'">Review site</button></div><div class="print-only">'+esc((r.reasons||[]).join(' '))+'<br><b>Verify:</b> '+esc((r.verify||[]).join(' '))+'</div></article>';
+        '</div>'+computeContext(r)+'<div class="result-bottom"><div class="next"><b>Next:</b> '+esc(r.nextAction)+'</div><button data-edit="'+esc(r.id)+'">Review site</button></div><div class="print-only">'+esc((r.reasons||[]).join(' '))+'<br><b>Verify:</b> '+esc((r.verify||[]).join(' '))+'</div></article>';
     }).join('')||'<div class="empty">No sites match this filter.</div>';
     el('methodology').textContent=report.methodology+' '+report.ranking+' Physical-fit options are reference systems, not engineered layouts. Unknown values do not earn points or become zero-capacity approvals. Recommended sizing requires a documented objective, layout, utility limits, recharge feasibility and business case.';
     el('printStamp').textContent='Screening date: '+report.checkedAt+' · Model: '+report.version+' · '+report.methodology;
@@ -129,6 +144,7 @@
     var r=report&&report.rows.filter(function(r){return r.id===id;})[0],html='';
     if(r){
       html='<p><span class="badge">'+esc(r.decision)+'</span> '+(r.score==null?'Score: Verify':r.score+'/100')+'</p>';
+      if(r.mode==='parcel'){var c=r.connectivity||{};html+=computeContext(r)+'<p>'+esc(c.summary||'Compute connectivity has not been verified.')+'</p><p class="help">'+esc(c.scope||'')+' MW is a voltage/acreage planning heuristic. Deliverable power and bandwidth remain Verify.</p><ul>'+(c.reasons||[]).concat(c.notes||[]).map(function(v){return '<li>'+esc(v)+'</li>';}).join('')+'</ul><p class="help">Network source: '+esc(c.build||'Verify')+' · '+esc(c.checkedAt||'Not checked')+'</p>'; }
       if(r.full&&r.half)html+='<table class="score-table"><thead><tr><th>Screening criterion</th><th>Full</th><th>Half</th><th>Max</th></tr></thead><tbody>'+r.full.components.map(function(c,i){return '<tr><td>'+esc(c.label)+'</td><td>'+n(c.points)+'</td><td>'+n(r.half.components[i].points)+'</td><td>'+c.max+'</td></tr>';}).join('')+'</tbody></table>';
       if(r.sizing){var z=r.sizing;html+='<div class="notice"><b>Recommended size: '+size(z.recommendedKw,z.recommendedKwh)+'</b><br>'+esc(z.reason)+'<br>Supplied-limit maximum: '+size(z.maxKw,z.maxKwh)+'</div>';}
       html+='<h3>Why this site ranks here</h3><ul>'+(r.reasons||[]).concat(r.risks||[]).map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul><h3>Verify before advancing</h3><ul>'+(r.verify||[]).map(function(t){return '<li>'+esc(t)+'</li>';}).join('')+'</ul>';
@@ -154,8 +170,8 @@
   function closeDetail(){el('dialog').hidden=true;document.body.style.overflow='';selected=null;if(previousFocus&&document.body.contains(previousFocus))previousFocus.focus();}
   function exportResults(){
     if(!report)return;
-    var rows=[['Rank','Site address','Site name','Tax ID','Decision','Score /100','Score range','Physical option kW','Physical option kWh','Recommended kW','Recommended kWh','Sizing status','Why','Risks','Verify','Next action','Source','Source date','Screened at','Model version']];
-    report.rows.forEach(function(r){var s=r.sizing||{},p=s.physicalOption||{};rows.push([r.rank,r.address,r.name,r.taxId,r.decision,r.score==null?'Verify':r.score,r.scoreRange?r.scoreRange.join('–'):'',p.kw==null?'Verify':p.kw,p.kwh==null?'Verify':p.kwh,s.recommendedKw==null?'Verify':s.recommendedKw,s.recommendedKwh==null?'Verify':s.recommendedKwh,s.status||'Verify',(r.reasons||[]).join(' | '),(r.risks||[]).join(' | '),(r.verify||[]).join(' | '),r.nextAction,r.source,r.sourceDate,report.checkedAt,report.version]);});
+    var rows=[['Rank','Site address','Site name','Tax ID','Decision','Score /100','Score range','Physical option kW','Physical option kWh','Recommended kW','Recommended kWh','Sizing status','Why','Risks','Verify','Next action','Source','Source date','Screened at','Model version','Power priority','Planning MW (not approved)','Approved MW','Fiber reach','Route diversity','Connectivity class','DC connectivity verdict','DC connectivity score','Network checked at']];
+    report.rows.forEach(function(r){var s=r.sizing||{},p=s.physicalOption||{};rows.push([r.rank,r.address,r.name,r.taxId,r.decision,r.score==null?'Verify':r.score,r.scoreRange?r.scoreRange.join('–'):'',p.kw==null?'Verify':p.kw,p.kwh==null?'Verify':p.kwh,s.recommendedKw==null?'Verify':s.recommendedKw,s.recommendedKwh==null?'Verify':s.recommendedKwh,s.status||'Verify',(r.reasons||[]).join(' | '),(r.risks||[]).join(' | '),(r.verify||[]).join(' | '),r.nextAction,r.source,r.sourceDate,report.checkedAt,report.version,r.powerDecision,r.planningMw==null?'Verify':r.planningMw,'Verify',(r.connectivity||{}).verdict,(r.connectivity||{}).routeDiversity,(r.connectivity||{}).connectivityClass,(r.connectivity||{}).datacenterVerdict,(r.connectivity||{}).datacenterScore,(r.connectivity||{}).checkedAt]);});
     download('omega-'+mode+'-screening-results.csv',I.toCsv(rows),'text/csv;charset=utf-8');
   }
   drawMode();
@@ -189,7 +205,7 @@
     }
     Array.prototype.forEach.call(el('editInputs').querySelectorAll('input,select'),function(input){selected[input.name]=input.value;});
     if(selected.address!==String(oldAddress||'')||String(selected.latitude)!==String(oldLat==null?'':oldLat)||String(selected.longitude)!==String(oldLng==null?'':oldLng)){
-      delete selected.gridEvidence;delete selected.features;delete selected.kml;
+      delete selected.gridEvidence;delete selected.features;delete selected.kml;delete selected.networkEvidence;
       if(selected.address!==String(oldAddress||'')&&String(selected.latitude)===String(oldLat==null?'':oldLat)&&String(selected.longitude)===String(oldLng==null?'':oldLng)){selected.latitude='';selected.longitude='';}
       selected.lookupNotes=['Verify the corrected location. Run parcel/grid lookup again before using its map context.'];
     }
