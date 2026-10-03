@@ -115,7 +115,13 @@ eq(PS.at(RAL[0], RAL[1]).map(function (s) { return s.id; }), ['nc'], 'Raleigh: N
 eq(PS.at(SARATOGA[0], SARATOGA[1]).map(function (s) { return s.id; }), ['ny'], 'Saratoga: New York\'s box');
 eq(PS.at(KANSAS[0], KANSAS[1]), [], 'Kansas: no public layer');
 ok(PS.at(40.675254, -89.610850).map(function (s) { return s.id; }).indexOf('peoria') >= 0, '107 Cass St, Peoria: inside Peoria County\'s box (and Tazewell\'s, across the river)');
-eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['cook', 'will', 'grundy'], 'a view touching Cook\'s, Will\'s and Grundy\'s boxes');
+var kk = PS.byId('kankakee'), tk = tileOf(41.12, -87.8612, 17), kurl = PS.tileUrl(kk, tk[0], tk[1], 17);
+var kdyn = JSON.parse(decodeURIComponent(/dynamicLayers=([^&]+)/.exec(kurl)[1]));
+ok(kk.lines === true && kdyn[0].drawingInfo.renderer.symbol.type === 'esriSLS' && kdyn[0].drawingInfo.renderer.symbol.color.join() === PS.LINE_RGBA.join(),
+   'a line layer (Kankakee\'s parcel fabric) is drawn as the line itself, in the one colour (a fill symbol would be ignored)');
+ok(dyn[0].drawingInfo.renderer.symbol.type === 'esriSFS', 'a polygon layer keeps the outline-only fill');
+PS.SOURCES.forEach(function (s) { if (s.lines !== undefined) ok(s.lines === true && s.restyle === true, s.id + ': lines only with restyle'); });
+eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['cook', 'will', 'grundy', 'kankakee'], 'a view touching Cook\'s, Will\'s, Grundy\'s and Kankakee\'s boxes');
 PS.SOURCES.forEach(function (s) {
   ok(Array.isArray(s.test) && s.test[0] >= s.bbox[0] && s.test[0] <= s.bbox[2] && s.test[1] >= s.bbox[1] && s.test[1] <= s.bbox[3]
      && PS.at(s.test[0], s.test[1]).indexOf(s) >= 0, s.id + ': its test point (scripts/check-parcel-sources.js) is inside its box');

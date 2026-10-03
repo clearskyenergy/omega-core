@@ -183,6 +183,35 @@
       lineLayer: 15, restyle: true, minZoom: 15,
       bbox: [42.14, -89.41, 42.51, -88.93], test: [42.2711, -89.0957],
       lookup: { layer: 13, idField: 'PIN', owner: 'OwnerLastName', county: 'Winnebago County' } },
+    /* Added 2026-10-03, verified the same day. Champaign, Vermilion and Moline are
+       county layers published by their largest city (Champaign's and Danville's
+       layers are county-wide; Moline's is the city alone, the only public Rock
+       Island parcels). Kankakee publishes a parcel fabric's boundary LINES, drawn
+       with the line style (lines: true). Kendall's public layer is two townships. */
+    { id: 'champaign', label: 'Champaign County, IL',
+      service: 'https://gisportal.champaignil.gov/ms/rest/services/OpenGov/Open_Gov_Map_Service/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [39.87, -88.47, 40.41, -87.92], test: [40.1167, -88.2441],
+      lookup: { layer: 0, idField: 'PIN', owner: 'TaxPayer_Name', county: 'Champaign County' } },
+    { id: 'kankakee', label: 'Kankakee County, IL',
+      service: 'https://k3gis.com/arcgis/rest/services/Cadastral/Cadastral/MapServer',
+      lineLayer: 20, restyle: true, lines: true, minZoom: 15,
+      bbox: [40.99, -88.26, 41.31, -87.52], test: [41.1200, -87.8612] },
+    { id: 'kendall', label: 'Kendall County, IL (Oswego and Bristol townships)',
+      service: 'https://maps.co.kendall.il.us/server/rest/services/Hosted/OswegoERPMap/MapServer',
+      lineLayer: 10, restyle: true, minZoom: 16,
+      bbox: [41.63, -88.49, 41.73, -88.25], test: [41.6455, -88.4466],
+      lookup: { layer: 10, idField: 'pin', owner: 'owner_name', county: 'Kendall County' } },
+    { id: 'vermilion', label: 'Vermilion County, IL',
+      service: 'https://gis.cityofdanville.org/arcgis/rest/services/Property/Property/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [39.86, -87.95, 40.50, -87.52], test: [40.1250, -87.6296],
+      lookup: { layer: 0, idField: 'PIN', owner: 'FullName', county: 'Vermilion County' } },
+    { id: 'moline', label: 'City of Moline, IL',
+      service: 'https://gis2.moline.il.us/arcgis/rest/services/Mobile_Map2/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 17,
+      bbox: [41.42, -90.54, 41.52, -90.43], test: [41.5065, -90.5160],
+      lookup: { layer: 0, idField: 'NEW_PIN', owner: 'NAME', county: 'Rock Island County' } },
     { id: 'nc', label: 'North Carolina (statewide)',
       service: 'https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
@@ -401,6 +430,39 @@
       lineLayer: 1, restyle: true, minZoom: 14,
       bbox: [42.42, -83.70, 42.90, -83.07], test: [42.4895, -83.1446],
       lookup: { layer: 1, idField: 'PIN', owner: null, county: 'Oakland County' } },
+    /* Michigan (no statewide parcel layer). Wayne's layer holds Detroit.
+       Washtenaw, Ingham, Genesee and Kalamazoo publish parcels only behind a
+       token or as hosted FeatureServers (no picture to draw). Added 2026-10-03. */
+    { id: 'wayne', label: 'Wayne County, MI',
+      service: 'https://www.waynecounty.com/gisserver/rest/services/ParcelViewer/prcls_fullAdd_parsed_FINAL/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.03, -83.56, 42.46, -82.86], test: [42.3360, -83.0490],
+      lookup: { layer: 0, idField: 'packedParc', owner: 'ownername1', county: 'Wayne County' } },
+    { id: 'kent', label: 'Kent County, MI',
+      service: 'https://gis.kentcountymi.gov/agisprod/rest/services/OpenData/Parcel_Related_Layers/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.76, -85.80, 43.30, -85.30], test: [42.9634, -85.6681],
+      lookup: { layer: 0, idField: 'PNUM', owner: null, county: 'Kent County' } },
+    { id: 'macomb', label: 'Macomb County, MI',
+      service: 'https://gis.macombgov.org/arcgis1/rest/services/PARCEL_FABRIC/Parcels_Web/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 15,
+      bbox: [42.44, -83.12, 42.91, -82.70], test: [42.5803, -82.9196],
+      lookup: { layer: 0, idField: 'TAX_ID', owner: 'ownername1', county: 'Macomb County' } },
+    { id: 'ottawa', label: 'Ottawa County, MI',
+      service: 'https://gis.miottawa.org/arcgis/rest/services/HostedServices/ParcelsPublic/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 14,
+      bbox: [42.72, -86.28, 43.21, -85.77], test: [42.7905, -86.1050],
+      lookup: { layer: 0, idField: 'FinalPIN', owner: 'OwnerName', county: 'Ottawa County' } },
+    { id: 'muskegon', label: 'Muskegon County, MI',
+      service: 'https://maps.muskegoncountygis.com/arcgis/rest/services/Layers/Parcels_Base/MapServer',
+      lineLayer: 30, restyle: true, minZoom: 17,
+      bbox: [43.11, -86.47, 43.48, -85.79], test: [43.2330, -86.2500],
+      lookup: { layer: 30, idField: 'PIN', owner: 'Owner_Name1', county: 'Muskegon County' } },
+    { id: 'jacksonmi', label: 'Jackson County, MI',
+      service: 'https://gis.mijackson.org/countygis/rest/services/RealEstate/RealEstateParcels/MapServer',
+      lineLayer: 0, restyle: true, minZoom: 16,
+      bbox: [42.07, -84.72, 42.43, -84.13], test: [42.2459, -84.4013],
+      lookup: { layer: 0, idField: 'PIN', owner: 'OWNER', county: 'Jackson County' } },
     /* PA DEP's statewide layer: Philadelphia and Allegheny included. */
     { id: 'pa', label: 'Pennsylvania (statewide)',
       service: 'https://gis.dep.pa.gov/depgisprd/rest/services/Parcels/PA_Parcels/MapServer',
@@ -468,7 +530,7 @@
   /* The server asks these for the parcel under a point, in this order:
      tightest box first, Cook last (its box holds DuPage's). */
   var LOOKUP_ORDER = ['dupage', 'lake', 'peoria', 'kane', 'sangamon', 'mclean', 'stclair', 'macon', 'tazewell', 'grundy', 'lasalle', 'madison', 'adams', 'coles', 'knox', 'lee', 'boone', 'winnebago',
-    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'pa', 'cook'];
+    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'champaign', 'kendall', 'vermilion', 'moline', 'wayne', 'kent', 'macomb', 'ottawa', 'muskegon', 'jacksonmi', 'pa', 'cook'];
 
   /* One line style for every layer that takes one: a warm yellow that reads
      on satellite and on the light basemap, never an editor colour. */
@@ -521,16 +583,19 @@
     return out;
   }
 
-  /* dynamicLayers: the source's own line layer, outline only, labels off. */
-  function lineStyle(layerId) {
+  /* dynamicLayers: the source's own layer, labels off, in the one line
+     style: a polygon layer as an outline with no fill, a line layer
+     (`lines: true`, a parcel fabric's boundaries such as Kankakee's) as the
+     line itself, because a fill symbol on a line layer is ignored and the
+     county's own colour comes back. */
+  function lineStyle(layerId, lines) {
+    var line = { type: 'esriSLS', style: 'esriSLSSolid', color: LINE_RGBA, width: LINE_WIDTH };
     return JSON.stringify([{
       id: layerId,
       source: { type: 'mapLayer', mapLayerId: layerId },
       drawingInfo: {
         showLabels: false,
-        renderer: { type: 'simple', symbol: {
-          type: 'esriSFS', style: 'esriSFSNull',
-          outline: { type: 'esriSLS', style: 'esriSLSSolid', color: LINE_RGBA, width: LINE_WIDTH } } }
+        renderer: { type: 'simple', symbol: lines ? line : { type: 'esriSFS', style: 'esriSFSNull', outline: line } }
       }
     }]);
   }
@@ -548,7 +613,7 @@
     if (!overlaps(src.bbox, tileBox(x, y, z))) return null;
     var bb = tileBbox(x, y, z);
     var which = src.restyle
-      ? 'dynamicLayers=' + encodeURIComponent(lineStyle(src.lineLayer))
+      ? 'dynamicLayers=' + encodeURIComponent(lineStyle(src.lineLayer, src.lines))
       : 'layers=' + encodeURIComponent('show:' + src.lineLayer);
     return src.service + '/export'
       + '?bbox=' + bb.join('%2C')
