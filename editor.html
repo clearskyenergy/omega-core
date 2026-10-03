@@ -165,6 +165,9 @@ function openHeliosIntake(){
 <script src="/omega-compute-lease.js"></script>
 <script src="/omega-bess-result.js"></script>
 <script src="/omega-parcel-report.js"></script>
+<!-- The ONE list of public county and state parcel layers: View › Parcel
+     Lines draws them on the map, and api/parcel.js asks the same counties. -->
+<script src="/omega-parcel-sources.js"></script>
 <!-- Helios Energy Advisors' first-pass checklist from the Output tab: gathers
      what this session knows and talks to api/helios-intake, which fills
      their own PDF and sends it. -->
@@ -2294,6 +2297,7 @@ window.onerror = function(msg, src, line, col, err) {
      <button class="rbtn" id="rb-clearplot" onclick="clearPlot()" title="Clear the committed plot and return to the live interactive map"><span class="rb-ico">✕</span><span class="rb-lbl">Clear<br>Plot</span></button> -->
         <button class="rbtn" id="rb-recenter" onclick="recenterOnEquipment()" title="Recenter the view on your placed equipment — brings any off-screen equipment back into the window"><span class="rb-ico" style="color:#34A853">⊕</span><span class="rb-lbl">Recenter</span></button>
         <button class="rbtn" id="btn-pv-view" onclick="omegaPvViewCycle()" title="Solar view — cycle individual modules → row bands → outline only. A view setting: it is not saved with the drawing and never changes a number."><span class="rb-ico" style="color:var(--accent-2)">☷</span><span class="rb-lbl">Solar<br>Panels</span></button>
+        <button class="rbtn" id="rb-parcels" aria-pressed="false" onclick="rbRun(pcToggle)" title="Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey."><span class="rb-ico" style="color:#FFD60A">▱</span><span class="rb-lbl">Parcel<br>Lines</span></button>
         <button class="rbtn" id="btn-3d" onclick="toggle3D()" title="3D site review &mdash; inspect equipment massing, roof context and sightlines. Editing pauses while tilted; press 2D or Esc to return." style="position:relative"><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>Review</span></button>
         <button class="rbtn" id="rb-crosshair" onclick="nnToggleCrosshair()" title="Toggle the AutoCAD-style crosshair cursor in draw/placement modes"><span class="rb-ico">✛</span><span class="rb-lbl">Crosshair</span></button>
       </div>
@@ -31203,142 +31207,242 @@ window.OmegaUI={
 })();
 
 /* ====================================================================
- *  PARCEL BOUNDARIES  (zoning / property lines)
+ *  PARCEL LINES  (View › Parcel Lines — property lines on the map)
  *  --------------------------------------------------------------------
- *  Google's JavaScript API publishes no parcel layer. The property lines
- *  visible in the consumer Maps app are not exposed to developers, so an
- *  overlay has to come from a cadastral source.
+ *  A customer asked (2026-10-02) to "have the map show the parcels so
+ *  they know property lines". Google's JavaScript API publishes no parcel
+ *  layer — the property lines in the consumer Maps app are not offered to
+ *  developers — so the lines come from two places, both drawn on the same
+ *  live Google map:
  *
- *  Parcels are maintained by county assessors, and most publish an ArcGIS
- *  service. Point this at the county covering the site and it draws real
- *  boundaries; there is no national free source that covers everywhere.
- *  Statewide services exist in some states and are used where they do.
+ *   1. PUBLIC LINES. Every county and state layer in
+ *      omega-parcel-sources.js (the ONE list; api/parcel.js reads the same
+ *      counties) as an ImageMapType: the county draws a picture of each
+ *      tile and Google owns tiling and panning, so there is nothing to
+ *      anchor or reproject. Free, no key, and only where a layer exists.
+ *   2. THE PARCEL AT THE MAP CENTRE. /api/parcel through
+ *      OmegaAutopilot.parcel (the call Site Data Layers › Parcels makes),
+ *      drawn as a native outline and named by APN and acres: Regrid where
+ *      the tenant's plan carries it, the county layers otherwise. It is
+ *      asked when the lines come on, then as the map settles somewhere new
+ *      only where no public layer draws, at most PC_LOOKUPS times a page,
+ *      because Regrid is metered per lookup. An answer is kept for the
+ *      page, so off and on again never spends a second lookup.
  *
- *  Two ways to add a county:
- *    1. Find its parcel FeatureServer/MapServer (search
- *       "<county> parcels arcgis rest services").
- *    2. OmegaParcels.addSource({name, url, type:'tile'|'query'}).
+ *  A VIEW setting, like Solar Panels: remembered per browser, never saved
+ *  with the drawing, never a shape on the plan and never a number. Making
+ *  the parcel part of the DRAWING (setbacks, the sheets, Design Site) is
+ *  Site › Set as boundary or the autopilot's parcel step. Reference only:
+ *  an assessor's line is a tax map, not a survey, and every message says so.
  *
- *  Commercial wall-to-wall coverage (Regrid, ReportAll, LightBox) is a
- *  paid API; register one with OmegaParcels.setKey() if you licence it.
- *
- *  Drawn as an ImageMapType where the service exports images, so Google
- *  owns tiling and panning and there is nothing to anchor or reproject.
+ *  OmegaParcels.status() / .sources() in the console say what is drawing.
  * ==================================================================== */
-var PARCEL_SOURCES = [
-  /* Statewide services — verified public ArcGIS endpoints. */
-  { id:'nc',   name:'North Carolina — statewide parcels',
-    url:'https://services.nconemap.gov/secure/rest/services/NC1Map_Parcels/MapServer',
-    type:'tile', layers:'show:0' },
-  { id:'sc',   name:'South Carolina — statewide parcels',
-    url:'https://services1.arcgis.com/VaY7cY9pvUYUP1Lf/ArcGIS/rest/services/Parcels/MapServer',
-    type:'tile', layers:'show:0' },
-  { id:'fl',   name:'Florida — statewide parcels (FDOR)',
-    url:'https://services9.arcgis.com/Gh9awoU677aKree0/arcgis/rest/services/Florida_Statewide_Cadastral/MapServer',
-    type:'tile', layers:'show:0' }
-];
+var PC_PREF='omegaParcelLines';
+var PC_LOOKUPS=12;
+var PC_INK='#FFD60A';
+var _pc={ on:false, map:null, layers:[], polys:[], idle:null, timer:null, watch:null,
+          found:[], asked:{}, lookups:0, opacity:0.9, last:'', loudNext:false };
 
-var _pc = { layer:null, srcId:null, opacity:0.85 };
+function _pcSources(){ return window.OmegaParcelSources||null; }
 
 /* Which map are we drawing on? Same resolution the rest of the file uses. */
 function _pcMap(){
   try{
     var m=(typeof _gmap!=='undefined'&&_gmap)?_gmap:window._gmap;
-    return (m && m.overlayMapTypes) ? m : null;
+    return (m && m.overlayMapTypes && window.google && google.maps) ? m : null;
   }catch(e){ return null; }
 }
 
-function _pcSource(id){
-  for(var i=0;i<PARCEL_SOURCES.length;i++){
-    if(PARCEL_SOURCES[i].id===id) return PARCEL_SOURCES[i];
-  }
+function _pcPrefRead(){ try{ return localStorage.getItem(PC_PREF)==='1'; }catch(e){ return false; } }
+function _pcPrefWrite(on){ try{ localStorage.setItem(PC_PREF, on?'1':'0'); }catch(e){} }
+
+/* The ribbon button tells the truth: pressed while on, and its tooltip
+   carries the last thing said about what is drawing. */
+function _pcPaint(){
+  var b=document.getElementById('rb-parcels'); if(!b) return;
+  b.setAttribute('aria-pressed', _pc.on?'true':'false');
+  b.title = _pc.on
+    ? 'Parcel lines on — '+(_pc.last||'waiting for the site map')+' Click to hide.'
+    : 'Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey.';
+}
+
+/* loud: a banner as well, for what the person just did. A settle of the
+   map only updates the tooltip, or every pan would flash a message. */
+function _pcSay(msg, loud){
+  _pc.last=msg; _pcPaint();
+  if(loud && typeof showBanner==='function'){ try{ showBanner('shape', msg); }catch(e){} }
+}
+
+function _pcDescribe(p){
+  var bits=[];
+  if(p.apn) bits.push('APN '+p.apn);
+  if(p.acres!=null) bits.push(p.acres+' ac');
+  if(p.county) bits.push(p.county);
+  return (bits.join(' · ')||'a parcel record')+(p.source?' ('+p.source+')':'');
+}
+
+function _pcOutline(p){
+  if(!_pc.map || !p || !p.ring || p.ring.length<3) return;
+  try{
+    var path=p.ring.map(function(q){ return { lat:+q[0], lng:+q[1] }; });
+    _pc.polys.push(new google.maps.Polygon({ paths:path, map:_pc.map, clickable:false,
+      strokeColor:PC_INK, strokeOpacity:1, strokeWeight:3, fillColor:PC_INK, fillOpacity:0.06, zIndex:5 }));
+  }catch(e){ if(window.console) console.warn('[parcels] outline:', e&&e.message); }
+}
+
+/* The record already found that holds this point, or null. */
+function _pcFoundAt(lat, lng){
+  var S=_pcSources(); if(!S) return null;
+  for(var i=0;i<_pc.found.length;i++){ if(S.inRing(_pc.found[i].ring, lat, lng)) return _pc.found[i]; }
   return null;
 }
 
-/* Web-mercator bbox for an XYZ tile — same maths the 3DEP layer uses. */
-function _pcTileBbox(x,y,z){
-  var W=20037508.342789244, n=Math.pow(2,z), sz=(W*2)/n;
-  return [ -W + x*sz, W - (y+1)*sz, -W + (x+1)*sz, W - y*sz ];
+function _pcAttach(m){
+  var S=_pcSources();
+  _pc.map=m;
+  if(S){
+    S.SOURCES.forEach(function(src){
+      try{
+        var layer=new google.maps.ImageMapType({
+          name:'Parcel lines — '+src.label,
+          tileSize:new google.maps.Size(256,256),
+          minZoom:src.minZoom||14, maxZoom:22, opacity:_pc.opacity,
+          getTileUrl:function(c, z){ return S.tileUrl(src, c.x, c.y, z); }
+        });
+        m.overlayMapTypes.push(layer);
+        _pc.layers.push(layer);
+      }catch(e){ if(window.console) console.warn('[parcels] '+src.id+':', e&&e.message); }
+    });
+  }
+  _pc.found.forEach(_pcOutline);
+  try{ _pc.idle=google.maps.event.addListener(m, 'idle', function(){
+    clearTimeout(_pc.timer); _pc.timer=setTimeout(function(){ _pcLook(false); }, 900);
+  }); }catch(e){}
+  var loud=_pc.loudNext; _pc.loudNext=false;
+  _pcLook(loud);
 }
 
-function _pcOff(){
-  var m=_pcMap();
-  if(m && _pc.layer){
+function _pcDetach(){
+  var m=_pc.map;
+  if(m){
     try{
       var arr=m.overlayMapTypes;
-      for(var i=arr.getLength()-1;i>=0;i--){ if(arr.getAt(i)===_pc.layer) arr.removeAt(i); }
+      for(var i=arr.getLength()-1;i>=0;i--){ if(_pc.layers.indexOf(arr.getAt(i))>=0) arr.removeAt(i); }
     }catch(e){}
   }
-  _pc.layer=null; _pc.srcId=null;
+  _pc.polys.forEach(function(p){ try{ p.setMap(null); }catch(e){} });
+  if(_pc.idle){ try{ google.maps.event.removeListener(_pc.idle); }catch(e){} }
+  clearTimeout(_pc.timer);
+  _pc.map=null; _pc.layers=[]; _pc.polys=[]; _pc.idle=null;
 }
 
-function _pcOn(id){
-  var src=_pcSource(id);
-  if(!src){ if(window.console) console.warn('[parcels] unknown source: '+id); return false; }
+/* What is drawing at the map centre, and the parcel there. */
+function _pcLook(loud){
+  if(!_pc.on || !_pc.map) return;
+  var c=null, z=0;
+  try{ c=_pc.map.getCenter(); z=_pc.map.getZoom()||0; }catch(e){}
+  if(!c) return;
+  var lat=c.lat(), lng=c.lng(), S=_pcSources();
+  var covered=S ? S.at(lat, lng) : [];
+  var minZ=99;
+  covered.forEach(function(s){ minZ=Math.min(minZ, s.minZoom||14); });
+  var cov=!S ? 'The public parcel list did not load (omega-parcel-sources.js)'
+    : covered.length ? 'Lines from '+covered.map(function(s){ return s.label; }).join(', ')
+                       +(z<minZ ? ' — zoom in to see them' : '')
+    : 'No public parcel layer covers this area';
+  var tail=' Reference only — not a survey.';
+
+  if(z<14){ _pcSay(cov+'. Zoom in to the site to look up its parcel.', loud); return; }
+  var have=_pcFoundAt(lat, lng);
+  if(have){ _pcSay(cov+'. Parcel at the centre: '+_pcDescribe(have)+'.'+tail, loud); return; }
+  /* Following the map: where public lines already draw, they show the
+     neighbours; a lookup is spent only where nothing else would. */
+  if(!loud && covered.length && _pc.found.length){ _pcSay(cov+'.'+tail, loud); return; }
+  var AP=window.OmegaAutopilot;
+  if(!AP || typeof AP.parcel!=='function'){ _pcSay(cov+'.'+tail, loud); return; }
+  var k=lat.toFixed(4)+','+lng.toFixed(4);
+  if(_pc.asked[k]){ _pcSay(cov+'.'+tail, loud); return; }
+  if(_pc.lookups>=PC_LOOKUPS){
+    _pcSay(cov+'. This page has used its '+PC_LOOKUPS+' parcel lookups; reload to look up more.'+tail, loud);
+    return;
+  }
+  _pc.asked[k]=1; _pc.lookups++;
+  _pcSay(cov+'. Looking up the parcel at the map centre…', loud);
+  AP.parcel(lat, lng).then(function(p){
+    if(p && p.ring && p.ring.length>=3 && !_pcFoundAt(lat, lng)){ _pc.found.push(p); _pcOutline(p); }
+    if(!_pc.on) return;
+    _pcSay(p ? cov+'. Parcel at the centre: '+_pcDescribe(p)+'.'+tail
+             : cov+'. No parcel record at the map centre.', loud);
+  }, function(e){
+    delete _pc.asked[k];
+    if(!_pc.on) return;
+    var why=(e && e.message) || '';
+    _pcSay(/signed out/.test(why) ? cov+'. Sign in to look up the parcel at the map centre.'
+                                  : cov+'. The parcel lookup did not answer'+(why?' ('+why+')':'')+'.', loud);
+  });
+}
+
+/* The map can be built again (a new address, the GPS dialog, a restore);
+   follow whichever one is live while the lines are on. */
+function _pcWatch(){
+  if(_pc.watch) return;
+  _pc.watch=setInterval(function(){
+    if(!_pc.on){ clearInterval(_pc.watch); _pc.watch=null; return; }
+    var m=_pcMap();
+    if(m && m!==_pc.map){ _pcDetach(); _pcAttach(m); }
+  }, 1500);
+}
+
+function _pcOn(loud){
+  _pc.on=true; _pcPrefWrite(true); _pcWatch();
   var m=_pcMap();
   if(!m){
-    if(typeof showBanner==='function'){
-      try{ showBanner('shape','No live map yet \u2014 load the satellite view first.'); }catch(e){}
-    }
-    return false;
+    _pc.loudNext=!!loud;
+    _pcSay('Parcel lines are on; they appear once the site map loads.', loud);
+    return true;
   }
-  _pcOff();
-
-  var layer=new google.maps.ImageMapType({
-    name:'Parcels \u2014 '+src.name,
-    tileSize:new google.maps.Size(256,256),
-    minZoom:12,                /* boundaries are noise when zoomed out */
-    maxZoom:22,
-    opacity:_pc.opacity,
-    getTileUrl:function(coord,zoom){
-      var n=Math.pow(2,zoom);
-      var x=((coord.x%n)+n)%n;
-      if(coord.y<0||coord.y>=n) return null;
-      var bb=_pcTileBbox(x,coord.y,zoom);
-      return src.url+'/export'
-        + '?bbox='+bb.join('%2C')
-        + '&bboxSR=3857&imageSR=3857&size=256%2C256'
-        + '&layers='+encodeURIComponent(src.layers||'show:0')
-        + '&format=png32&transparent=true&f=image';
-    }
-  });
-  m.overlayMapTypes.push(layer);
-  _pc.layer=layer; _pc.srcId=id;
-
-  if(typeof showBanner==='function'){
-    try{ showBanner('shape','Parcel boundaries: '+src.name
-      + ' \u2014 reference only, confirm against the recorded plat before relying on a setback.'); }catch(e){}
-  }
+  if(m!==_pc.map){ _pcDetach(); _pc.loudNext=!!loud; _pcAttach(m); }
+  else _pcLook(!!loud);
   return true;
 }
 
+function _pcOff(loud){
+  _pc.on=false; _pcPrefWrite(false); _pcDetach();
+  if(_pc.watch){ clearInterval(_pc.watch); _pc.watch=null; }
+  _pc.last=''; _pcPaint();
+  if(loud && typeof showBanner==='function'){ try{ showBanner('shape','Parcel lines off.'); }catch(e){} }
+  return false;
+}
+
+/* View › Parcel Lines */
+function pcToggle(){ return _pc.on ? _pcOff(true) : _pcOn(true); }
+
+/* A choice made in this browser comes back with the page. */
+(function(){
+  function boot(){ _pcPaint(); if(_pcPrefRead()) _pcOn(false); }
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded', boot);
+  else boot();
+})();
+
 window.OmegaParcels={
   sources:function(){
-    var rows=PARCEL_SOURCES.map(function(s){ return {id:s.id, name:s.name, type:s.type}; });
+    var S=_pcSources();
+    var rows=S ? S.SOURCES.map(function(s){ return { id:s.id, name:s.label, fromZoom:s.minZoom, box:s.bbox.join(', ') }; }) : [];
     console.table?console.table(rows):console.log(rows);
-    console.info('[parcels] OmegaParcels.on(\'<id>\') to show. '
-      + 'OmegaParcels.addSource({id,name,url}) to add a county.');
     return rows;
   },
-  on:function(id){ return _pcOn(id||(PARCEL_SOURCES[0]&&PARCEL_SOURCES[0].id)); },
-  off:function(){ _pcOff(); console.info('[parcels] off'); return true; },
-  toggle:function(id){ return _pc.layer ? (this.off(), false) : this.on(id); },
+  on:function(){ return _pcOn(true); },
+  off:function(){ return _pcOff(true); },
+  toggle:pcToggle,
   opacity:function(v){
     var o=parseFloat(v); if(!isFinite(o)) return _pc.opacity;
     _pc.opacity=Math.max(0,Math.min(1,o));
-    if(_pc.layer) try{ _pc.layer.setOpacity(_pc.opacity); }catch(e){}
+    _pc.layers.forEach(function(l){ try{ l.setOpacity(_pc.opacity); }catch(e){} });
     return _pc.opacity;
   },
-  addSource:function(cfg){
-    if(!cfg||!cfg.url||!cfg.id){ console.warn('[parcels] need {id, name, url}'); return false; }
-    PARCEL_SOURCES.push({ id:cfg.id, name:cfg.name||cfg.id, url:cfg.url,
-                          type:cfg.type||'tile', layers:cfg.layers||'show:0' });
-    console.info('[parcels] added '+cfg.id+' \u2014 OmegaParcels.on(\''+cfg.id+'\')');
-    return true;
-  },
   status:function(){
-    var o={ on:!!_pc.layer, source:_pc.srcId||'(none)',
-            opacity:_pc.opacity, liveMap:!!_pcMap(), sources:PARCEL_SOURCES.length };
+    var o={ on:_pc.on, liveMap:!!_pcMap(), drawing:_pc.layers.length, parcelsFound:_pc.found.length,
+            lookupsUsed:_pc.lookups+' of '+PC_LOOKUPS, said:_pc.last||'(nothing yet)' };
     console.table?console.table(o):console.log(o);
     return o;
   }
@@ -77110,6 +77214,7 @@ window._crmToastModal=_crmToastModal;
      ==================================================== -->
 <style>
   #rb-native[aria-pressed="true"]{ background:var(--hl-dim); border-color:var(--accent); color:var(--accent); }
+  #rb-parcels[aria-pressed="true"]{ background:var(--hl-dim); border-color:var(--accent); color:var(--accent); }
 </style>
 <script>
 (function(){
