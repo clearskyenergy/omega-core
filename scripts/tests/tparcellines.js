@@ -57,7 +57,7 @@ eq(lookKeys.slice(0, 3), ['dupage', 'lake', 'peoria'], 'the server asks DuPage, 
 ok(lookKeys[lookKeys.length - 1] === 'cook' && lookKeys.length >= 43, 'then the rest of the counties, Cook last (' + lookKeys.length + ')');
 ok(lookKeys.indexOf('pa') === lookKeys.length - 2, 'Pennsylvania\'s statewide layer after every county inside it (Allegheny names its own)');
 lookKeys.forEach(function (k) {
-  ok(/\/MapServer\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && (/ County$/.test(LOOK[k].label) || (k === 'pa' && LOOK[k].label === 'Pennsylvania')),
+  ok(/\/(?:MapServer|FeatureServer)\/\d+$/.test(LOOK[k].url) && LOOK[k].idField && (/ County$/.test(LOOK[k].label) || (k === 'pa' && LOOK[k].label === 'Pennsylvania') || (k === 'ct' && LOOK[k].label === 'Connecticut')),
      k + ': a polygon layer, an id field and a county (or state) name for the lookup');
 });
 lookKeys.filter(function (k) { return ['dupage', 'lake', 'peoria', 'cook'].indexOf(k) < 0; }).forEach(function (k) { delete LOOK[k]; });
@@ -119,6 +119,18 @@ eq(PS.within([41.0, -88.5, 41.5, -88.0]).map(function (s) { return s.id; }), ['c
 PS.SOURCES.forEach(function (s) {
   ok(Array.isArray(s.test) && s.test[0] >= s.bbox[0] && s.test[0] <= s.bbox[2] && s.test[1] >= s.bbox[1] && s.test[1] <= s.bbox[3]
      && PS.at(s.test[0], s.test[1]).indexOf(s) >= 0, s.id + ': its test point (scripts/check-parcel-sources.js) is inside its box');
+});
+var ct = PS.byId('ct');
+eq(ct.parts.length, 169, 'Connecticut covers all 169 municipal layers');
+var ctTile = tileOf(41.177, -73.17, 18);
+var ctUrl = PS.tileUrl(ct, ctTile[0], ctTile[1], 18);
+var ctLayers = JSON.parse(new URL(ctUrl).searchParams.get('dynamicLayers'));
+ok(ctLayers.some(function (l) { return l.id === 40; }), 'Bridgeport draws its municipal layer');
+ok(ctLayers.length < 5 && ctUrl.length < 8000, 'a tile asks only nearby towns, within URL limits');
+ok(PS.tileUrl(ct, t[0], t[1], 17) === null, 'Connecticut never draws on Chicago');
+ok(PS.lookupLayers().ct.url.indexOf('2025/FeatureServer/0') > 0, 'point lookup uses the state 2025 collection');
+ct.parts.forEach(function (part) {
+  ok(part.bbox.length === 4 && part.bbox[0] < part.bbox[2] && part.bbox[1] < part.bbox[3], 'valid CT town extent');
 });
 var sq = [[0, 0], [0, 1], [1, 1], [1, 0]];
 ok(PS.inRing(sq, 0.5, 0.5) && !PS.inRing(sq, 1.5, 0.5) && !PS.inRing(sq, 0.5, -0.1) && !PS.inRing([[0, 0], [1, 1]], 0.5, 0.5),

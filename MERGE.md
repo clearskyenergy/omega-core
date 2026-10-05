@@ -1,5 +1,29 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Dashboard member invitations (2026-10-05)
+
+The workspace Team button now adds a named person with a role through
+`/api/workspace-team`, using the existing audited `logic-members` writer.
+Verified owners/admins (and verified ClearSky staff) can add company members;
+outsiders still require the existing ClearSky `org_members` grant. The API
+checks workspace status, membership and billing without requiring Logic Office.
+No new collections or rules changes. Account creation, role checks, claims and
+password-link generation stay server-side; passwords and reset links are never
+returned to the inviting administrator. Email failures preserve membership and
+are reported explicitly with retry/Forgot password guidance. Existing members
+cannot be re-roled through this add-only door. People includes provisioned
+members before their first presence record.
+
+Signed-out workspace visitors now reach `/login.html` after one Firebase null
+event; previously the redirect waited for repeated events Firebase never sent.
+A restored session cancels the redirect. Tests cover permissions, company scope,
+mail failure, existing accounts, duplicates, resend, the sign-in timer and a
+mocked desktop/mobile browser flow. Production has no SMTP mailbox for this helper, so the dashboard falls back
+to Firebase Auth password email after the server saves membership. Both email
+paths failing retains explicit retry guidance. Real email delivery and production sign-in
+remain deployment checks; no production accounts were changed.
+
+
 ## Sales compute screening parity (2026-10-03)
 
 Sales Parcel Screening calls the same OmegaSiteIntel intake/gridScore engine
@@ -2852,6 +2876,31 @@ and "these should have their own tab in the panel finance".
   box it touches (usually one), and a layer that refuses a tile hides its
   image. Seventy-four ImageMapTypes would have put a tile slot per layer
   per tile on the map. `OmegaParcels.opacity()` reaches the live tiles.
+
+
+
+## 2026-10-05 — Connecticut parcel coverage
+
+Added CT ECO's public municipal polygon service to the shared parcel source
+registry. Its 169 municipal extents select only the town layers touching each
+map tile; dynamic rendering keeps yellow outlines legible on satellite imagery
+without sending all 169 layers in every URL. The existing editor overlay and
+capture integration consume the same registry. UConn's municipal map vintages
+vary; these are reference boundaries, not a survey or a claim of 2025 outlines.
+The service does not advertise CORS on exported images, so captures may omit
+these tiles under the existing capture policy.
+
+Point lookup uses the CT GIS Office's separate 2025 FeatureServer collection,
+through the existing authenticated, tenant/billing-checked /api/parcel chain.
+Optional lookup.service allows display and record services to differ without
+copying source URLs into the API or editor. No new pricing, scoring or eligibility
+logic; existing server controls are unchanged. No collections or data migration.
+
+Verified live yellow map tiles near Seaview Avenue in Bridgeport, Hartford and
+New London, and a 2025 parcel record at 902 Seaview Avenue. The address in the
+screenshot (925) was not asserted as an assessor-record address. Regression tests
+cover municipal selection, bounded tile URLs, out-of-state exclusion, Connecticut
+record mapping, existing county overlays and Regrid behavior.
 
 ---
 

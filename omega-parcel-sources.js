@@ -197,6 +197,187 @@
       service: 'https://gisservices.its.ny.gov/arcgis/rest/services/NYS_Tax_Parcels_Public/MapServer',
       lineLayer: 1, restyle: true, minZoom: 14,
       bbox: [40.49, -79.77, 45.02, -71.79], test: [42.6526, -73.7562] },
+    /* CT ECO publishes one polygon layer per town. Select only towns touching
+       each tile: exporting all 169 dynamic layers exceeds normal URL limits.
+       Verified 2026-10-05; municipal map vintages vary. Point records use the
+       state's separate 2025 collection, not the older display attribution. */
+    { id: 'ct', label: 'Connecticut (CT ECO municipal parcels)',
+      service: 'https://cteco.uconn.edu/ctmaps/rest/services/Parcels/Parcels_tiled/MapServer',
+      lineLayer: 40, restyle: true, minZoom: 15,
+      bbox: [40.98, -73.74, 42.06, -71.78], test: [41.177, -73.17],
+      lookup: { service: 'https://services3.arcgis.com/3FL1kr7L4LvwA2Kb/arcgis/rest/services/Connecticut_CAMA_and_Parcel_Layer_2025/FeatureServer',
+        layer: 0, idField: 'Parcel_ID', owner: 'Owner', county: 'Connecticut' },
+      parts: [
+        { layer: 1, bbox: [41.6964, -72.4232, 41.7675, -72.3281] }, // Andover
+        { layer: 2, bbox: [41.7579, -72.9279, 41.825, -72.7971] }, // Avon
+        { layer: 3, bbox: [41.5538, -72.8399, 41.6527, -72.711] }, // Berlin
+        { layer: 4, bbox: [41.8002, -72.7989, 41.9062, -72.6855] }, // Bloomfield
+        { layer: 5, bbox: [41.7271, -72.474, 41.807, -72.4035] }, // Bolton
+        { layer: 6, bbox: [41.8055, -72.9547, 41.9216, -72.8701] }, // Canton
+        { layer: 7, bbox: [41.6435, -72.357, 41.7386, -72.2395] }, // Columbia
+        { layer: 8, bbox: [41.7176, -72.4219, 41.8384, -72.2491] }, // Coventry
+        { layer: 9, bbox: [41.8925, -72.7859, 41.9863, -72.6876] }, // East Granby
+        { layer: 10, bbox: [41.7246, -72.6647, 41.8006, -72.5711] }, // East Hartford
+        { layer: 11, bbox: [41.8674, -72.6226, 41.9455, -72.5136] }, // East Windsor
+        { layer: 12, bbox: [41.8565, -72.5186, 41.9576, -72.3061] }, // Ellington
+        { layer: 13, bbox: [41.9342, -72.6215, 42.0347, -72.4927] }, // Enfield
+        { layer: 14, bbox: [41.6878, -72.9091, 41.7764, -72.762] }, // Farmington
+        { layer: 15, bbox: [41.6327, -72.6489, 41.7458, -72.4518] }, // Glastonbury
+        { layer: 16, bbox: [41.918, -72.9069, 42.0376, -72.763] }, // Granby
+        { layer: 17, bbox: [41.7236, -72.7183, 41.8106, -72.642] }, // Hartford
+        { layer: 18, bbox: [41.5885, -72.4609, 41.7318, -72.3235] }, // Hebron
+        { layer: 19, bbox: [41.7335, -72.5842, 41.8206, -72.4635] }, // Manchester
+        { layer: 20, bbox: [41.7281, -72.3169, 41.8363, -72.1562] }, // Mansfield
+        { layer: 21, bbox: [41.5836, -72.5057, 41.6887, -72.4075] }, // Marlborough
+        { layer: 22, bbox: [41.6454, -72.8241, 41.7159, -72.7503] }, // New Britain
+        { layer: 23, bbox: [41.6468, -72.7624, 41.7243, -72.7004] }, // Newington
+        { layer: 24, bbox: [41.6494, -72.893, 41.6981, -72.8153] }, // Plainville
+        { layer: 25, bbox: [41.6275, -72.7155, 41.688, -72.6101] }, // Rocky Hill
+        { layer: 26, bbox: [41.8161, -72.8766, 41.9208, -72.7589] }, // Simsbury
+        { layer: 27, bbox: [41.9471, -72.5088, 42.0345, -72.3975] }, // Somers
+        { layer: 28, bbox: [41.5448, -72.9459, 41.6561, -72.8141] }, // Southington
+        { layer: 29, bbox: [41.7975, -72.6464, 41.8703, -72.4972] }, // South Windsor
+        { layer: 30, bbox: [41.9396, -72.4076, 42.0332, -72.2031] }, // Stafford
+        { layer: 31, bbox: [41.943, -72.7796, 42.037, -72.6047] }, // Suffield
+        { layer: 32, bbox: [41.8244, -72.4323, 41.93, -72.2905] }, // Tolland
+        { layer: 33, bbox: [41.7982, -72.5078, 41.8748, -72.4181] }, // Vernon
+        { layer: 34, bbox: [41.7185, -72.8007, 41.8066, -72.714] }, // West Hartford
+        { layer: 35, bbox: [41.6689, -72.7083, 41.7299, -72.616] }, // Wethersfield
+        { layer: 36, bbox: [41.8352, -72.3123, 41.9586, -72.216] }, // Willington
+        { layer: 37, bbox: [41.8013, -72.7433, 41.9285, -72.6205] }, // Windsor
+        { layer: 38, bbox: [41.8998, -72.6961, 41.9483, -72.6163] }, // Windsor Locks
+        { layer: 40, bbox: [41.1414, -73.2442, 41.2297, -73.1535] }, // Bridgeport
+        { layer: 41, bbox: [41.2118, -73.3691, 41.332, -73.2348] }, // Easton
+        { layer: 42, bbox: [41.1175, -73.3387, 41.2322, -73.2174] }, // Fairfield
+        { layer: 43, bbox: [41.2921, -73.308, 41.3923, -73.1566] }, // Monroe
+        { layer: 44, bbox: [41.1471, -73.165, 41.2693, -73.086] }, // Stratford
+        { layer: 45, bbox: [41.2202, -73.2753, 41.2999, -73.1407] }, // Trumbull
+        { layer: 47, bbox: [41.8325, -72.2176, 41.9594, -72.1099] }, // Ashford
+        { layer: 48, bbox: [41.7422, -72.1151, 41.9573, -71.8856] }, // Brooklyn
+        { layer: 49, bbox: [41.6342, -72.0622, 41.7601, -71.9136] }, // Canterbury
+        { layer: 50, bbox: [41.7444, -72.1656, 41.835, -72.0921] }, // Chaplin
+        { layer: 51, bbox: [41.7795, -72.1513, 41.9593, -71.9163] }, // Eastford
+        { layer: 52, bbox: [41.7307, -72.1151, 41.9573, -71.9163] }, // Hampton
+        { layer: 53, bbox: [41.7584, -71.9287, 41.9056, -71.7894] }, // Killingly
+        { layer: 54, bbox: [41.6329, -71.9674, 41.7697, -71.8387] }, // Plainfield
+        { layer: 55, bbox: [41.8045, -72.0448, 41.9169, -71.9043] }, // Pomfret
+        { layer: 56, bbox: [41.8683, -71.9345, 41.9334, -71.7964] }, // Putnam
+        { layer: 57, bbox: [41.6521, -72.1231, 41.7458, -72.0521] }, // Scotland
+        { layer: 58, bbox: [41.6398, -71.8579, 41.775, -71.7856] }, // Sterling
+        { layer: 59, bbox: [41.9303, -71.9644, 42.0263, -71.7966] }, // Thompson
+        { layer: 60, bbox: [41.9583, -72.2344, 42.0311, -72.0991] }, // Union
+        { layer: 61, bbox: [41.5055, -71.8845, 41.6442, -71.7876] }, // Voluntown
+        { layer: 62, bbox: [41.9147, -72.1022, 42.0289, -71.9271] }, // Woodstock
+        { layer: 64, bbox: [41.8872, -73.054, 41.9736, -72.8874] }, // Barkhamsted
+        { layer: 65, bbox: [41.7119, -73.0171, 41.8089, -72.8983] }, // Burlington
+        { layer: 66, bbox: [41.9156, -73.3734, 42.0032, -73.2445] }, // Canann
+        { layer: 67, bbox: [41.9597, -73.1521, 42.0421, -73.0087] }, // Colebrook
+        { layer: 68, bbox: [41.7784, -73.4154, 41.9193, -73.2616] }, // Cornwall
+        { layer: 69, bbox: [41.779, -73.3025, 41.917, -73.1641] }, // Goshen
+        { layer: 70, bbox: [41.9666, -73.0298, 42.0391, -72.8635] }, // Hartland
+        { layer: 71, bbox: [41.7068, -73.1208, 41.7989, -72.999] }, // Harwinton
+        { layer: 72, bbox: [41.6655, -73.5196, 41.7924, -73.3785] }, // Kent
+        { layer: 73, bbox: [41.6726, -73.2988, 41.7943, -73.0685] }, // Litchfield
+        { layer: 74, bbox: [41.6644, -73.2765, 41.7162, -73.1413] }, // Morris
+        { layer: 75, bbox: [41.7979, -73.0768, 41.8953, -72.9362] }, // New Hartford
+        { layer: 76, bbox: [41.9129, -73.2638, 42.0454, -73.1264] }, // Norfolk
+        { layer: 77, bbox: [41.9935, -73.3597, 42.0489, -73.2325] }, // North Canaan
+        { layer: 78, bbox: [41.5038, -73.3488, 41.6034, -73.2545] }, // Roxbury
+        { layer: 79, bbox: [41.9178, -73.4983, 42.0512, -73.339] }, // Salisbury
+        { layer: 80, bbox: [41.7877, -73.5097, 41.9227, -73.3572] }, // Sharon
+        { layer: 81, bbox: [41.7755, -73.2026, 41.8947, -73.0531] }, // Torrington
+        { layer: 82, bbox: [41.6965, -73.4018, 41.7815, -73.2925] }, // Warren
+        { layer: 83, bbox: [41.595, -73.3842, 41.7089, -73.2534] }, // Washington
+        { layer: 84, bbox: [41.8725, -73.1713, 41.9657, -73.0339] }, // Winchester
+        { layer: 86, bbox: [41.3236, -73.1026, 41.3635, -73.0388] }, // Ansonia
+        { layer: 87, bbox: [41.404, -73.0928, 41.469, -73.0245] }, // Beacon Falls
+        { layer: 88, bbox: [41.6045, -73.2616, 41.6693, -73.1577] }, // Bethlehem
+        { layer: 89, bbox: [41.6392, -72.9985, 41.7232, -72.8827] }, // Bristol
+        { layer: 90, bbox: [41.4479, -72.9697, 41.5641, -72.8458] }, // Cheshire
+        { layer: 91, bbox: [41.3014, -73.124, 41.3533, -73.0371] }, // Derby
+        { layer: 92, bbox: [41.4875, -73.1647, 41.5702, -73.0689] }, // Middlebury
+        { layer: 93, bbox: [41.4559, -73.1048, 41.5194, -72.9987] }, // Naugatuck
+        { layer: 94, bbox: [41.3676, -73.2083, 41.4898, -73.0764] }, // Oxford
+        { layer: 95, bbox: [41.6095, -73.0655, 41.714, -72.9828] }, // Plymouth
+        { layer: 96, bbox: [41.4646, -73.0185, 41.5336, -72.9339] }, // Prospect
+        { layer: 97, bbox: [41.3452, -73.1481, 41.4239, -73.041] }, // Seymour
+        { layer: 98, bbox: [41.2553, -73.2052, 41.3773, -73.065] }, // Shelton
+        { layer: 99, bbox: [41.4196, -73.3271, 41.5144, -73.1543] }, // Southbury
+        { layer: 100, bbox: [41.6065, -73.1422, 41.7085, -73.0507] }, // Thomaston
+        { layer: 101, bbox: [41.5141, -73.0945, 41.6156, -72.9567] }, // Waterbury
+        { layer: 102, bbox: [41.5576, -73.1709, 41.6727, -73.0574] }, // Watertown
+        { layer: 103, bbox: [41.5528, -73.0217, 41.6442, -72.933] }, // Wolcott
+        { layer: 104, bbox: [41.5086, -73.2676, 41.6128, -73.1449] }, // Woodbury
+        { layer: 106, bbox: [41.3763, -72.5398, 41.4339, -72.4249] }, // Chester
+        { layer: 107, bbox: [41.2536, -72.5861, 41.3414, -72.4857] }, // Clinton
+        { layer: 108, bbox: [41.5721, -72.716, 41.6401, -72.6115] }, // Cromwell
+        { layer: 109, bbox: [41.3339, -72.524, 41.4021, -72.3827] }, // Deep River
+        { layer: 110, bbox: [41.4235, -72.7462, 41.5001, -72.6078] }, // Durham
+        { layer: 111, bbox: [41.4223, -72.4879, 41.5398, -72.3049] }, // East Haddam
+        { layer: 112, bbox: [41.5107, -72.5643, 41.6475, -72.4303] }, // East Hampton
+        { layer: 113, bbox: [41.324, -72.4729, 41.3828, -72.3691] }, // Essex
+        { layer: 114, bbox: [41.4141, -72.6373, 41.5196, -72.4507] }, // Haddam
+        { layer: 115, bbox: [41.3098, -72.6548, 41.4427, -72.5112] }, // Killingworth
+        { layer: 116, bbox: [41.343, -72.4315, 41.441, -72.276] }, // Lyme
+        { layer: 117, bbox: [41.4835, -72.7488, 41.5498, -72.6777] }, // Middlefield
+        { layer: 118, bbox: [41.4947, -72.7533, 41.6042, -72.5503] }, // Middletown
+        { layer: 119, bbox: [41.2776, -72.3647, 41.3671, -72.2482] }, // Old Lyme
+        { layer: 120, bbox: [41.2604, -72.4332, 41.3428, -72.3425] }, // Old Saybrook
+        { layer: 121, bbox: [41.555, -72.6492, 41.6429, -72.529] }, // Portland
+        { layer: 122, bbox: [41.2553, -72.5139, 41.348, -72.4162] }, // Westbrook
+        { layer: 124, bbox: [41.5038, -72.23, 41.5907, -72.131] }, // Bozrah
+        { layer: 125, bbox: [41.5176, -72.4669, 41.619, -72.2178] }, // Colchester
+        { layer: 126, bbox: [41.2854, -72.2831, 41.4438, -72.1752] }, // East Lyme
+        { layer: 127, bbox: [41.563, -72.194, 41.6674, -72.1029] }, // Franklin
+        { layer: 128, bbox: [41.5143, -71.9928, 41.642, -71.8625] }, // Griswold
+        { layer: 129, bbox: [41.3061, -72.096, 41.4004, -71.959] }, // Groton
+        { layer: 130, bbox: [41.5398, -72.3349, 41.7148, -72.1573] }, // Lebanon
+        { layer: 131, bbox: [41.3975, -72.0971, 41.4884, -71.9417] }, // Ledyard
+        { layer: 132, bbox: [41.5538, -72.0479, 41.6474, -71.9762] }, // Lisbon
+        { layer: 133, bbox: [41.4111, -72.2431, 41.5175, -72.0711] }, // Montville
+        { layer: 134, bbox: [41.2715, -72.1293, 41.387, -72.0805] }, // New London
+        { layer: 135, bbox: [41.4078, -71.9686, 41.5288, -71.7927] }, // North Stonington
+        { layer: 136, bbox: [41.4905, -72.141, 41.6085, -72.0397] }, // Norwich
+        { layer: 137, bbox: [41.4636, -72.0809, 41.5701, -71.9019] }, // Preston
+        { layer: 138, bbox: [41.4328, -72.3235, 41.5396, -72.2119] }, // Salem
+        { layer: 139, bbox: [41.5948, -72.1211, 41.6624, -72.0304] }, // Sprague
+        { layer: 140, bbox: [41.3097, -71.9797, 41.434, -71.8291] }, // Stonington
+        { layer: 141, bbox: [41.2991, -72.2203, 41.4281, -72.095] }, // Waterford
+        { layer: 142, bbox: [41.6574, -72.2537, 41.7564, -72.1121] }, // Windham
+        { layer: 144, bbox: [41.3884, -73.048, 41.4702, -72.9407] }, // Bethany
+        { layer: 145, bbox: [41.2408, -72.8644, 41.3242, -72.7271] }, // Branford
+        { layer: 146, bbox: [41.2419, -72.9012, 41.364, -72.8174] }, // East Haven
+        { layer: 147, bbox: [41.2422, -72.7475, 41.4339, -72.6315] }, // Guilford
+        { layer: 148, bbox: [41.3266, -72.9759, 41.4649, -72.8513] }, // Hamden
+        { layer: 149, bbox: [41.2483, -72.6813, 41.4385, -72.5341] }, // Madison
+        { layer: 150, bbox: [41.4966, -72.8613, 41.5789, -72.7444] }, // Meriden
+        { layer: 151, bbox: [41.1722, -73.1212, 41.277, -72.9862] }, // Milford
+        { layer: 152, bbox: [41.2462, -72.9983, 41.3508, -72.8606] }, // New Haven
+        { layer: 153, bbox: [41.3048, -72.8244, 41.4273, -72.7213] }, // North Branford
+        { layer: 154, bbox: [41.3328, -72.9082, 41.4345, -72.8173] }, // North Haven
+        { layer: 155, bbox: [41.2446, -73.087, 41.3148, -72.9799] }, // Orange
+        { layer: 156, bbox: [41.3964, -72.887, 41.516, -72.7337] }, // Wallingford
+        { layer: 157, bbox: [41.2327, -72.995, 41.3138, -72.9172] }, // West Haven
+        { layer: 158, bbox: [41.3092, -73.0498, 41.3964, -72.9552] }, // Woodbridge
+        { layer: 160, bbox: [41.335, -73.4356, 41.429, -73.3473] }, // Bethel
+        { layer: 161, bbox: [41.4669, -73.4055, 41.5661, -73.3117] }, // Bridgewater
+        { layer: 162, bbox: [41.4196, -73.4449, 41.5159, -73.3312] }, // Brookfield
+        { layer: 163, bbox: [41.326, -73.5435, 41.4638, -73.4] }, // Danbury
+        { layer: 164, bbox: [41.0357, -73.5187, 41.1149, -73.4445] }, // Darien
+        { layer: 165, bbox: [40.9799, -73.7285, 41.1446, -73.554] }, // Greenwich
+        { layer: 166, bbox: [41.1136, -73.556, 41.2122, -73.448] }, // New Canaan
+        { layer: 167, bbox: [41.4404, -73.5379, 41.5348, -73.4263] }, // New Fairfield
+        { layer: 168, bbox: [41.4914, -73.5071, 41.6834, -73.342] }, // New Milford
+        { layer: 169, bbox: [41.3181, -73.3792, 41.4734, -73.1829] }, // Newtown
+        { layer: 170, bbox: [41.0412, -73.4751, 41.1719, -73.3693] }, // Norwalk
+        { layer: 171, bbox: [41.2541, -73.4695, 41.3499, -73.3047] }, // Redding
+        { layer: 172, bbox: [41.2366, -73.5525, 41.3775, -73.438] }, // Ridgefield
+        { layer: 173, bbox: [41.5202, -73.5332, 41.6671, -73.4507] }, // Sherman
+        { layer: 174, bbox: [41.0161, -73.6343, 41.1803, -73.4968] }, // Stamford
+        { layer: 175, bbox: [41.1744, -73.43, 41.2756, -73.323] }, // Weston
+        { layer: 176, bbox: [41.0594, -73.3893, 41.1951, -73.2955] }, // Westport
+        { layer: 177, bbox: [41.1532, -73.5024, 41.2655, -73.3787] } // Wilton
+      ] },
     { id: 'de', label: 'Delaware (statewide)',
       service: 'https://enterprise.firstmap.delaware.gov/arcgis/rest/services/PlanningCadastre/DE_StateParcels/MapServer',
       lineLayer: 0, restyle: true, minZoom: 15,
@@ -204,7 +385,7 @@
     /* ── Statewide, found and verified 2026-10-03 (two z17 tiles each, in
        different parts of the state). Idaho's IDWR layer is left out: its
        description says the data "cannot be shared outside IDWR". Hosted
-       FeatureServers only (no /export to draw from): Connecticut, Indiana,
+       FeatureServers only (no /export to draw from): Indiana,
        Utah, Tennessee, North Dakota, Alaska, Iowa (2017). Nothing public:
        Georgia, South Carolina, Alabama, Louisiana, Michigan, Kentucky,
        Kansas, Oklahoma, South Dakota, Arizona, Wyoming, New Mexico (draws
@@ -468,7 +649,7 @@
   /* The server asks these for the parcel under a point, in this order:
      tightest box first, Cook last (its box holds DuPage's). */
   var LOOKUP_ORDER = ['dupage', 'lake', 'peoria', 'kane', 'sangamon', 'mclean', 'stclair', 'macon', 'tazewell', 'grundy', 'lasalle', 'madison', 'adams', 'coles', 'knox', 'lee', 'boone', 'winnebago',
-    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'pa', 'cook'];
+    'lacounty', 'orange', 'riverside', 'sacramento', 'harris', 'tarrant', 'travis', 'maricopa', 'pima', 'clark', 'franklin', 'oakland', 'allegheny', 'hennepin', 'jackson', 'stlouisco', 'marion', 'davidson', 'jefferson', 'saltlake', 'multnomah', 'hillsborough', 'miamidade', 'ct', 'pa', 'cook'];
 
   /* One line style for every layer that takes one: a warm yellow that reads
      on satellite and on the light basemap, never an editor colour. */
@@ -523,16 +704,17 @@
 
   /* dynamicLayers: the source's own line layer, outline only, labels off. */
   function lineStyle(layerId) {
-    return JSON.stringify([{
-      id: layerId,
-      source: { type: 'mapLayer', mapLayerId: layerId },
+    var ids = Array.isArray(layerId) ? layerId : [layerId];
+    return JSON.stringify(ids.map(function (id) { return {
+      id: id,
+      source: { type: 'mapLayer', mapLayerId: id },
       drawingInfo: {
         showLabels: false,
         renderer: { type: 'simple', symbol: {
           type: 'esriSFS', style: 'esriSFSNull',
           outline: { type: 'esriSLS', style: 'esriSLSSolid', color: LINE_RGBA, width: LINE_WIDTH } } }
       }
-    }]);
+    }; }));
   }
 
   /* The picture of one tile of one layer, or null when there is nothing to
@@ -546,9 +728,16 @@
     if (z < (src.minZoom || 0)) return null;
     x = ((x % n) + n) % n;
     if (!overlaps(src.bbox, tileBox(x, y, z))) return null;
+    var layers = src.lineLayer;
+    if (src.parts) {
+      var tile = tileBox(x, y, z);
+      layers = src.parts.filter(function (part) { return overlaps(part.bbox, tile); })
+        .map(function (part) { return part.layer; });
+      if (!layers.length) return null;
+    }
     var bb = tileBbox(x, y, z);
     var which = src.restyle
-      ? 'dynamicLayers=' + encodeURIComponent(lineStyle(src.lineLayer))
+      ? 'dynamicLayers=' + encodeURIComponent(lineStyle(layers))
       : 'layers=' + encodeURIComponent('show:' + src.lineLayer);
     return src.service + '/export'
       + '?bbox=' + bb.join('%2C')
@@ -563,7 +752,7 @@
     var out = {};
     for (var i = 0; i < LOOKUP_ORDER.length; i++) {
       var s = byId(LOOKUP_ORDER[i]);
-      out[s.id] = { url: s.service + '/' + s.lookup.layer, idField: s.lookup.idField,
+      out[s.id] = { url: (s.lookup.service || s.service) + '/' + s.lookup.layer, idField: s.lookup.idField,
                     owner: s.lookup.owner, label: s.lookup.county, bbox: s.bbox.slice() };
     }
     return out;

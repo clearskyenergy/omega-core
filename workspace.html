@@ -253,6 +253,8 @@ body.ows a.bh-mod{color:#EAF7FB}a.bh-mod:hover{background:rgba(255,255,255,.12)}
 @media (max-width:1040px){.hero{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media (max-width:700px){.next .row{grid-template-columns:4px minmax(0,1fr)}.next .row .ows-pill{grid-column:2;justify-self:start}}
 @media (prefers-reduced-motion:reduce){.tool,.tg,.tg::after{transition:none}}
+/* Team onboarding drawer */
+#invite-form{display:grid;gap:14px}#invite-form .field{margin:0}#invite-form select{width:100%;padding:11px 12px;border:1px solid var(--line,#dce4e9);border-radius:10px;background:#fff;color:inherit;font:inherit}#invite-form .sub{margin:0}#invite-submit{justify-self:start}#invite-result:empty{display:none}#invite-result{margin:0;line-height:1.5}#invite-people{display:grid;gap:16px}#invite-people .pr{display:flex;flex-wrap:wrap;gap:10px;align-items:center;border-bottom:1px solid #e6edf1;padding-bottom:14px}#invite-people .pr>div{min-width:0;flex:1 1 180px}#invite-people small{display:block;overflow-wrap:anywhere;color:#587086;margin-top:4px}
 </style>
 </head>
 <body class="ows">
@@ -423,15 +425,18 @@ document.addEventListener('click', function (e) {
 });
 
 /* ── sign-in: the same chain as every signed-in page ────────────────────── */
-var nullSeen = 0, tries = 0;
+var signInTimer = null;
 auth.onAuthStateChanged(function (user) {
+  clearTimeout(signInTimer);
   if (!user) {
     var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
-    if (nullSeen++ < (had ? 20 : 4)) { setTimeout(function () { if (!auth.currentUser && nullSeen >= (had ? 20 : 4)) window.location.href = '/'; }, 400); return; }
-    if (!auth.currentUser) window.location.href = '/';
+    // Firebase emits one null event for a signed-out visitor, not repeated polls.
+    signInTimer = setTimeout(function () {
+      if (!auth.currentUser) window.location.replace('/login.html');
+    }, had ? 8000 : 1600);
     return;
   }
-  nullSeen = 0; bind(user, 0);
+  bind(user, 0);
 });
 function bind(user, n, t) {
   /* never show the workspace through an unwrapped showApp while the terms runtime is loaded but has not wrapped it */
@@ -548,6 +553,7 @@ function load() {
     DATA.todos = r[2]; DATA.messages = r[3]; DATA.members = r[4]; DATA.pinned = r[5] || []; DATA.prefs = r[6]; PROFILE = r[7]; DATA.rfqsSent = r[8]; DATA.rfqsReceived = r[9]; DATA.referrals = r[10]; DATA.finance = r[11] || [];
     S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() });
     render();
+    loadWorkspacePeople();
   });
 }
 /* ── the capital-partner side (Tommy, 2026-09-29, of a financing firm: "likes to find
@@ -1033,7 +1039,7 @@ function renderAround() {
   }
   {
     var list = DATA.members.slice().sort(function (x, y) { var o = { on: 0, away: 1, off: 2 }; return o[presence(x)] - o[presence(y)] || String(x.name || '').localeCompare(String(y.name || '')); });
-    h += '<div class="panel" data-in="team"' + off('presence') + '><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(seenAt(m)) + ' ago' : 'Last seen ' + ago(seenAt(m)) + ' ago') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Invite</button><a class="ows-pill" href="/projects.html">Share a project</a></div></div>';
+    h += '<div class="panel" data-in="team"' + off('presence') + '><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(seenAt(m)) + ' ago' : '' + (seenAt(m) ? 'Last seen ' + ago(seenAt(m)) + ' ago' : 'Added · awaiting first visit') + '') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Add person</button><a class="ows-pill" href="/projects.html">Share a project</a></div></div>';
   }
   h += pulsePanel(off('pulse'));
   {
@@ -1754,8 +1760,72 @@ function saveName() {
     ['catch'](function (err) { S.toast('Could not save: ' + (err && err.message)); });
 }
 function inviteDrawer() {
-  var link = window.location.origin + '/';
-  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Invite a colleague', html: '<div class="ows-note">Anyone with an <b>@' + esc(WS.orgId) + '</b> email signs in at <b>' + esc(link) + '</b> and joins this workspace as a member. No invitation to send: the address is the key.</div>', rows: [{ key: 'copy', name: 'Copy the sign-in link', sub: link, icon: S.ICON.feed, cta: 'Copy', onClick: function () { try { navigator.clipboard.writeText(link).then(function () { S.toast('Copied'); }, function () { S.toast(link); }); } catch (e) { S.toast(link); } } }] });
+  var org = WS.orgId;
+  S.drawer({ eyebrow: WS.clientName || org, title: 'Add people', html: '<p role="status">Loading team access…</p>' });
+  var overlay = byId('ows-overlay');
+  OmegaPackageMenu.api('/api/workspace-team?org=' + encodeURIComponent(org)).then(function (team) {
+    if (WS.orgId !== org || byId('ows-overlay') !== overlay) return;
+    if (!team.manage) {
+      S.drawer({ title: 'Add people', html: '<div class="ows-note">Your account is a member of this workspace. Ask your workspace owner or administrator to add people or update your role.</div>' });
+      return;
+    }
+    var html = '<p>Add a colleague to this workspace. We email them a link to choose their own password. Then they sign in with their email and password, or Google.</p>'
+      + '<form id="invite-form"><div class="field"><label for="invite-name">Full name</label><input id="invite-name" autocomplete="name" maxlength="120" required></div>'
+      + '<div class="field"><label for="invite-email">Work email</label><input id="invite-email" type="email" autocomplete="email" maxlength="160" placeholder="name@' + esc(org) + '" required></div>'
+      + '<div class="field"><label for="invite-role">Workspace role</label><select id="invite-role">' + team.assignable.map(function (r) { return '<option value="' + esc(r) + '">' + esc(r.charAt(0).toUpperCase() + r.slice(1)) + '</option>'; }).join('') + '</select></div>'
+      + '<p class="sub">Members work with the team. Viewers have read-only access. Administrators can manage people.</p>'
+      + '<button class="ows-pill primary" id="invite-submit" type="submit">Add person &amp; send email</button></form><p id="invite-result" role="status" aria-live="polite"></p>'
+      + '<h3>Already on the team</h3><div id="invite-people">' + team.people.map(function (m, i) { return '<div class="pr"><div><b>' + esc(m.name || m.email) + '</b><small>' + esc(m.email) + ' · ' + esc(m.role || 'member') + ' · ' + esc(m.status) + '</small></div>' + (m.status === 'active' && (team.assignable.indexOf('owner') >= 0 || m.role !== 'owner') ? '<button type="button" class="ows-pill sm" data-password="' + i + '">Send password email</button>' : '') + '</div>'; }).join('') + '</div>'
+      + (team.limited ? '<p>Showing the first 200 people.</p>' : '');
+    S.drawer({ eyebrow: WS.clientName || org, title: 'Add people', html: html, ready: function (el) {
+      var form = el.querySelector('#invite-form'), result = el.querySelector('#invite-result'), busy = false;
+      function send(body, button) {
+        if (busy) return; busy = true; button.disabled = true; result.textContent = 'Saving and sending…';
+        body.org = org;
+        OmegaPackageMenu.api('/api/workspace-team', body).then(function (out) {
+          if (out.mail === 'sent') return out;
+          // Firebase's own password email works without a separate SMTP mailbox.
+          // Only run after the server has authorized and saved membership.
+          return auth.sendPasswordResetEmail(out.email, { url: out.frontDoor }).then(function () {
+            out.note = 'Password setup email requested for ' + out.email + '. Ask them to check their inbox and spam folder, then choose a password to sign in.';
+            return out;
+          }, function () { return out; });
+        }).then(function (out) {
+          result.textContent = out.note;
+          if (body.role) {
+            form.reset();
+            // Reload authoritative membership so an invite appears before first sign-in.
+            loadWorkspacePeople();
+            var row = document.createElement('div'); row.className = 'pr';
+            var label = document.createElement('span'); label.textContent = out.email + ' · ' + out.role; row.appendChild(label);
+            var retry = document.createElement('button'); retry.type = 'button'; retry.className = 'ows-pill sm'; retry.textContent = 'Send password email';
+            retry.addEventListener('click', function () { send({ email: out.email, resetLink: true }, retry); }); row.appendChild(retry);
+            el.querySelector('#invite-people').appendChild(row);
+          }
+        }, function (err) { result.textContent = err.message || 'Could not add this person. Try again.'; }).then(function () { busy = false; button.disabled = false; });
+      }
+      form.addEventListener('submit', function (e) { e.preventDefault(); if (!form.checkValidity()) { form.reportValidity(); return; }
+        send({ name: el.querySelector('#invite-name').value.trim(), email: el.querySelector('#invite-email').value.trim(), role: el.querySelector('#invite-role').value }, el.querySelector('#invite-submit'));
+      });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-password]'), function (button) { button.addEventListener('click', function () {
+        send({ email: team.people[Number(button.getAttribute('data-password'))].email, resetLink: true }, button);
+      }); });
+    } });
+  }, function (err) {
+    if (byId('ows-overlay') === overlay) S.drawer({ title: 'Add people', html: '<p role="alert">' + esc(err.message || 'Could not load team access. Try again.') + '</p>', rows: [{ key: 'retry', name: 'Try again', onClick: inviteDrawer }] });
+  });
+}
+function loadWorkspacePeople() {
+  var org = WS.orgId;
+  return OmegaPackageMenu.api('/api/workspace-team?org=' + encodeURIComponent(org)).then(function (team) {
+    if (WS.orgId !== org) return;
+    team.people.forEach(function (m) {
+      if (m.status !== 'active') return;
+      var exists = DATA.members.some(function (p) { return String(p.email || '').toLowerCase() === m.email; });
+      if (!exists) DATA.members.push(m);
+    });
+    renderAround();
+  }, function () { /* Presence still renders when the membership API is unavailable. */ });
 }
 function customizeDrawer() {
   var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['pulse', 'Omega pulse', 'What the whole platform did this week, counts only.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
