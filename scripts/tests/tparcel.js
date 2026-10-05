@@ -111,8 +111,8 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
   ok(H.COUNTY_ORDER[H.COUNTY_ORDER.length - 1] === 'cook', 'Cook is always asked last');
   ok(Object.keys(H.PARCELS).every(k => { const b = H.PARCELS[k].bbox; return b[0] < b[2] && b[1] < b[3]; }),
      'every bbox is [south, west, north, east] with south < north and west < east');
-  ok(Object.keys(H.PARCELS).every(k => /^https:\/\/[^/]+\/.+\/MapServer\/\d+$/.test(H.PARCELS[k].url)),
-     'every layer url is a MapServer layer root with no trailing /query');
+  ok(Object.keys(H.PARCELS).every(k => /^https:\/\/[^/]+\/.+\/(?:MapServer|FeatureServer)\/\d+$/.test(H.PARCELS[k].url)),
+     'every layer url is an ArcGIS layer root with no trailing /query');
 
   /* ── 2 · numbers ───────────────────────────────────────────────────── */
   console.log('coordinates as numbers');
@@ -157,6 +157,11 @@ const REGRID_HIT = { parcels: { type: 'FeatureCollection', features: [{
   ok(H.acresFromAttrs({ TOTAL_ACRES: 4, ACRES: 3 }) === 3, 'an exact name beats a loose match');
   ok(H.zoningFromAttrs({ ZONING: ' M-1 ' }) === 'M-1' && H.zoningFromAttrs({ zone_class: 'I2' }) === 'I2', 'zoning by either common name');
   ok(H.zoningFromAttrs({ PIN: 'x' }) === null && H.zoningFromAttrs({ ZONING: '' }) === null, 'and null when absent or blank');
+
+  ok(same(H.countiesAt(41.1758, -73.1721), ['ct']), 'Seaview Avenue asks the Connecticut 2025 layer');
+  var ctHit = H.fromEsri({ features: [{ attributes: { Parcel_ID: '601-3', Owner: 'TEST OWNER', Land_Acres: 0.1, Zone: 'TEST' },
+    geometry: { rings: [[[-73.1723,41.1757],[-73.172,41.1757],[-73.172,41.1759],[-73.1723,41.1757]]] } }] }, 'ct');
+  ok(ctHit && ctHit.apn === '601-3' && ctHit.owner === 'TEST OWNER' && ctHit.source === 'ct', 'Connecticut fields become the existing parcel contract');
 
   /* ── 6 · a county answer → the contract ────────────────────────────── */
   console.log('a county answer becomes the contract');
