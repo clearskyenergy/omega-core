@@ -18,7 +18,9 @@ Signed-out workspace visitors now reach `/login.html` after one Firebase null
 event; previously the redirect waited for repeated events Firebase never sent.
 A restored session cancels the redirect. Tests cover permissions, company scope,
 mail failure, existing accounts, duplicates, resend, the sign-in timer and a
-mocked desktop/mobile browser flow. Real email delivery and production sign-in
+mocked desktop/mobile browser flow. Production has no SMTP mailbox for this helper, so the dashboard falls back
+to Firebase Auth password email after the server saves membership. Both email
+paths failing retains explicit retry guidance. Real email delivery and production sign-in
 remain deployment checks; no production accounts were changed.
 
 
