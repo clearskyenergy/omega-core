@@ -1783,6 +1783,14 @@ function inviteDrawer() {
         if (busy) return; busy = true; button.disabled = true; result.textContent = 'Saving and sending…';
         body.org = org;
         OmegaPackageMenu.api('/api/workspace-team', body).then(function (out) {
+          if (out.mail === 'sent') return out;
+          // Firebase's own password email works without a separate SMTP mailbox.
+          // Only run after the server has authorized and saved membership.
+          return auth.sendPasswordResetEmail(out.email, { url: out.frontDoor }).then(function () {
+            out.note = 'Password setup email requested for ' + out.email + '. Ask them to check their inbox and spam folder, then choose a password to sign in.';
+            return out;
+          }, function () { return out; });
+        }).then(function (out) {
           result.textContent = out.note;
           if (body.role) {
             form.reset();
