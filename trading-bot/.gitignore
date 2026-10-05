@@ -1,0 +1,9 @@
+# Your own copies and what the bot writes while it runs
+.env
+settings.json
+data/
+journal/
+results/
+# Regenerate with `python3 run.py record`
+dashboard/replay.json
+__pycache__/

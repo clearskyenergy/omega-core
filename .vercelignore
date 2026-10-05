@@ -55,3 +55,9 @@ private-fiber/
 *.fiber-backup
 __pycache__/
 *.pyc
+
+# ── TRADING CITY ─────────────────────────────────────────────────────────
+# trading-bot/ is a personal paper-trading tool that runs with Python on a
+# computer or VPS (`python3 trading-bot/run.py demo`). It is not a page of
+# this site and nothing in it is for the public.
+trading-bot/

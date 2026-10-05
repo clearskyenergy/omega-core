@@ -1,0 +1,20 @@
+{
+  "account": { "starting_cash": 350, "type": "cash" },
+  "symbols": ["SPY", "QQQ", "IWM"],
+  "strategies": ["vwap", "ema50", "orb15"],
+  "signals": {
+    "squeeze_atr_frac": 0.15,
+    "cooldown_minutes": 5,
+    "first_entry": "09:45",
+    "last_entry": "15:30",
+    "flatten_at": "15:50"
+  },
+  "exits": { "basis": "underlying", "stop_atr": 1.0, "target_atr": 1.5, "premium_stop_pct": 0.40 },
+  "risk": {
+    "max_cost_per_trade_pct": 0.45,
+    "max_open_positions": 1,
+    "max_trades_per_day": 6,
+    "daily_profit_brake": 40,
+    "daily_loss_brake": 60
+  }
+}
