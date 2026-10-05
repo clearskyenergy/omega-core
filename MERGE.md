@@ -2877,3 +2877,27 @@ and "these should have their own tab in the panel finance".
   image. Seventy-four ImageMapTypes would have put a tile slot per layer
   per tile on the map. `OmegaParcels.opacity()` reaches the live tiles.
 
+
+
+## 2026-10-05 — Connecticut parcel coverage
+
+Added CT ECO's public municipal polygon service to the shared parcel source
+registry. Its 169 municipal extents select only the town layers touching each
+map tile; dynamic rendering keeps yellow outlines legible on satellite imagery
+without sending all 169 layers in every URL. The existing editor overlay and
+capture integration consume the same registry. UConn's municipal map vintages
+vary; these are reference boundaries, not a survey or a claim of 2025 outlines.
+The service does not advertise CORS on exported images, so captures may omit
+these tiles under the existing capture policy.
+
+Point lookup uses the CT GIS Office's separate 2025 FeatureServer collection,
+through the existing authenticated, tenant/billing-checked /api/parcel chain.
+Optional lookup.service allows display and record services to differ without
+copying source URLs into the API or editor. No new pricing, scoring or eligibility
+logic; existing server controls are unchanged. No collections or data migration.
+
+Verified live yellow map tiles near Seaview Avenue in Bridgeport, Hartford and
+New London, and a 2025 parcel record at 902 Seaview Avenue. The address in the
+screenshot (925) was not asserted as an assessor-record address. Regression tests
+cover municipal selection, bounded tile URLs, out-of-state exclusion, Connecticut
+record mapping, existing county overlays and Regrid behavior.
