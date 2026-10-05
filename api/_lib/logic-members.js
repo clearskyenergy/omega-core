@@ -88,10 +88,11 @@ function keepAnOwner(owners, m, target) {
    Team page says which colleague added them. Every value is escaped. */
 function invitation(o, m, role, link) {
   var name = o.orgName || o.orgId;
-  if (o.via === 'team') {
-    return { subject: 'You have been added to ' + name + ' on Omega Logic',
-      html: M.layout('You have been added to ' + name, '<p>' + M.esc(o.by) + ' added you to <b>' + M.esc(name) + '</b> on Omega Logic' + (role ? ' as ' + M.esc(role) : '') + '.</p><p>Choose your password to get in. The link is good for about an hour; after that, use “Forgot password” on the sign-in page with this address. If this address is a Google account you can sign in with Google instead.</p>' + M.button(link, 'Set your password')),
-      text: o.by + ' added you to ' + name + ' on Omega Logic. Set your password: ' + link };
+  if (o.via === 'team' || o.via === 'workspace-team') {
+    var product = o.via === 'workspace-team' ? 'Omega Workspace' : 'Omega Logic';
+    return { subject: 'You have been added to ' + name + ' on ' + product,
+      html: M.layout('You have been added to ' + name, '<p>' + M.esc(o.by) + ' added you to <b>' + M.esc(name) + '</b> on ' + product + (role ? ' as ' + M.esc(role) : '') + '.</p><p>Choose your password to get in. The link is good for about an hour; after that, use “Forgot password” on the sign-in page with this address. If this address is a Google account you can sign in with Google instead.</p>' + M.button(link, 'Set your password')),
+      text: o.by + ' added you to ' + name + ' on ' + product + '. Set your password: ' + link };
   }
   return { subject: name + ' on ClearSky-OMEGA — set your password',
     html: M.layout('Your ' + name + ' workspace is ready', '<p>ClearSky has set up <b>' + M.esc(name) + '</b> at <b>' + M.esc(o.host) + '</b>.</p><p>Choose your password to get in. The link is good for about an hour; after that, use “Forgot password” on the sign-in page with this address.</p>' + M.button(link, 'Set your password')),
@@ -160,6 +161,7 @@ async function change(o) {
       tx.set(ref, patch, { merge: true });
       row = { uid: u.uid, role: m.role, status: patch.status };
     }
+    if (o.addOnly && m.role && (target || (cur && cur.exists))) throw A.httpError(409, 'This person is already on the team');
     if (o.audit !== false && (m.role || m.status)) {
       tx.set(root.collection('admin_audit').doc(rid(at)), { action: 'member', orgId: o.orgId, via: via, by: o.by, at: at,
         email: m.email, uid: row.uid, role: row.role || null, status: row.status, account: account,

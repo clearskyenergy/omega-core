@@ -1,5 +1,27 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Dashboard member invitations (2026-10-05)
+
+The workspace Team button now adds a named person with a role through
+`/api/workspace-team`, using the existing audited `logic-members` writer.
+Verified owners/admins (and verified ClearSky staff) can add company members;
+outsiders still require the existing ClearSky `org_members` grant. The API
+checks workspace status, membership and billing without requiring Logic Office.
+No new collections or rules changes. Account creation, role checks, claims and
+password-link generation stay server-side; passwords and reset links are never
+returned to the inviting administrator. Email failures preserve membership and
+are reported explicitly with retry/Forgot password guidance. Existing members
+cannot be re-roled through this add-only door. People includes provisioned
+members before their first presence record.
+
+Signed-out workspace visitors now reach `/login.html` after one Firebase null
+event; previously the redirect waited for repeated events Firebase never sent.
+A restored session cancels the redirect. Tests cover permissions, company scope,
+mail failure, existing accounts, duplicates, resend, the sign-in timer and a
+mocked desktop/mobile browser flow. Real email delivery and production sign-in
+remain deployment checks; no production accounts were changed.
+
+
 ## Sales compute screening parity (2026-10-03)
 
 Sales Parcel Screening calls the same OmegaSiteIntel intake/gridScore engine

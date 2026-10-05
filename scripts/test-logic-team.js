@@ -300,6 +300,45 @@ async function main() {
     assert.ok(!/can no longer sign in/.test(page), 'the Team page does not promise what Disable does not do');
     assert.match(page, /They can no longer open this workspace’s office, plant app or orders\./);
   });
+  var workspace = require('../api/workspace-team');
+  function wp(body, caller) { return workspace({ method: 'POST', body: Object.assign({ org: ORG }, body), caller: caller || OWNER }, res); }
+  await test('workspace: basic dashboard plan can invite without Logic Office; email contains workspace return path', async function () {
+    seed(); db.seed(O + '/billing/current', { tier: 'standard', status: 'active' });
+    var out = await wp({ email: 'new@cleancell.us', role: 'member', name: 'New Colleague' });
+    assert.equal(out.mail, 'sent'); assert.equal(member('u_new@cleancell.us').role, 'member');
+    assert.equal(created.length, 1); assert.equal(mails.length, 1); assert.match(mails[0].subject, /Omega Workspace/);
+    assert.ok(links[0].includes(encodeURIComponent('/workspace?tenant=' + ORG)));
+    assert.equal(out.resetLink, undefined); assert.equal(lastAudit().via, 'workspace-team');
+  });
+  await test('workspace: existing Auth user is added without changing their password or home claims', async function () {
+    seed(); var out = await wp({ email: 'helper@othercorp.example', role: 'member' }).then(function () { throw Error('should deny'); }, function (e) { assert.equal(e.status, 403); });
+    db.seed('org_members/helper@othercorp.example', { orgId: ORG, active: true });
+    out = await wp({ email: 'helper@othercorp.example', role: 'member' });
+    assert.equal(created.length, 0); assert.equal(out.mail, 'sent'); assert.equal(claims.helper, undefined);
+  });
+  await test('workspace: permissions, tenant scope, verification and billing checked before account creation', async function () {
+    seed(); var b = { email: 'new@cleancell.us', role: 'member' };
+    await rejects(wp(b, MEMBER), 403); await rejects(wp(b, VIEWER), 403); await rejects(wp(b, GONE), 403);
+    await rejects(wp(b, OTHER_ADMIN), 403); await rejects(wp(b, Object.assign({}, OWNER, { claims: { email_verified: false } })), 403);
+    await rejects(wp({ email: 'new@cleancell.us', role: 'owner' }, ADMIN), 403);
+    db.seed(O + '/billing/current', { status: 'past_due' }); await rejects(wp(b), 403);
+    db.seed(O + '/billing/current', { packaged: true, modules: ['lite'], packagingState: 'trial', trialStartedAt: '2020-01-01', trialEndsAt: '2020-01-10', accessUntil: '2020-01-10' }); await rejects(wp(b), 403);
+    assert.equal(created.length, 0);
+  });
+  await test('workspace: duplicates preserve roles; resend goes to recipient only; disabled accounts stay disabled', async function () {
+    seed(); await rejects(wp({ email: OWNER.email, role: 'member' }), 409);
+    assert.equal(member(OWNER.uid).role, 'owner');
+    var out = await wp({ email: MEMBER.email, resetLink: true }); assert.equal(out.mail, 'sent'); assert.equal(out.resetLink, undefined);
+    await rejects(wp({ email: GONE.email, resetLink: true }), 403);
+    var list = await workspace({ method: 'GET', query: { org: ORG }, caller: MEMBER }, res);
+    assert.equal(list.manage, false); assert.deepEqual(list.assignable, []);
+  });
+  await test('workspace: mail failure is explicit while membership remains saved', async function () {
+    seed(); var mail = require('../api/_lib/mail'), old = mail.send;
+    mail.send = async function () { return { ok: false }; };
+    try { var out = await wp({ email: 'new@cleancell.us', role: 'member' }); assert.match(out.note, /could not be sent/); assert.ok(member('u_new@cleancell.us')); }
+    finally { mail.send = old; }
+  });
   console.log('\n' + count + ' team checks passed. No network calls.');
 }
 main().catch(function (e) { console.error(e); process.exit(1); });
