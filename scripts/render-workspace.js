@@ -242,6 +242,7 @@ var srv = http.createServer(function (req, res) {
   function json(o, status) { res.writeHead(status || 200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
   if (u.indexOf('/api/') === 0) {
     apiCalls.push(req.method + ' ' + u);
+    if (u === '/api/workspace-team') return json({ manage: true, assignable: ['member', 'viewer', 'admin'], people: [], limited: false });
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
     if (u === '/api/offerings' && !post) return json(OFFERINGS.view(BOOK.proposed(), 'proposed'));
@@ -472,6 +473,30 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   /* Sales -> Screening is a subject containing the two portfolio tools. */
   var screeningFixture = FX.legacyEnterprise(HOST);
   screeningFixture.docs['omega_orgs/' + screeningFixture.org + '/billing/current'].addons = [];
+  await scenario('team-invite', FX.northstar(HOST), { url: '/workspace#team', steps: async function (p) {
+    var people = [], posts = [];
+    await p.route('**/api/workspace-team*', async function (r) {
+      if (r.request().method() === 'POST') {
+        var b = r.request().postDataJSON(); posts.push(b);
+        if (b.role) people.push({ email: b.email, name: b.name, role: b.role, status: 'active' });
+        return r.fulfill({ json: { ok: true, email: b.email, role: b.role, mail: 'sent', note: 'Password setup email sent to ' + b.email } });
+      }
+      return r.fulfill({ json: { manage: true, assignable: ['member', 'viewer', 'admin'], people: people } });
+    });
+    await p.locator('#invite').click();
+    await p.locator('#invite-name').fill('Taylor Example');
+    await p.locator('#invite-email').fill('taylor@northstar.example');
+    await p.locator('#invite-submit').click();
+    await p.waitForFunction(function () { return /Password setup email sent/.test(document.getElementById('invite-result').textContent); });
+    ok('invite sends identity and role, never a password', posts.length === 1 && posts[0].role === 'member' && !('password' in posts[0]) && !!posts[0].org, posts);
+    await p.locator('#invite-people button').click();
+    await p.waitForFunction(function () { return /Password setup email sent/.test(document.getElementById('invite-result').textContent); });
+    ok('invite can resend without changing a role', posts.length === 2 && posts[1].resetLink === true && !posts[1].role, posts);
+    await p.locator('#ows-overlay .x').click();
+    ok('new colleague appears before signing in', /Taylor Example/.test(await p.locator('#around').innerText()));
+    if (shotsAt) { await p.locator('#invite').click(); await p.locator('#invite-form').waitFor(); await p.screenshot({ path: path.join(shotsAt, 'team-invite.png'), fullPage: true }); }
+  } });
+
   await scenario('sales-screening', screeningFixture, { steps: async function (p) {
     await p.locator('[data-hub="sales"]').click();
     var subject = p.locator('#ows-overlay a.ows-row').filter({ hasText: 'Parcel and BESS portfolio screening' });
