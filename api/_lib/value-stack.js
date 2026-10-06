@@ -162,40 +162,170 @@
      Two shapes that behave differently: a tax credit is a fraction of what
      you spend, a rebate is a rate against what you install.
 
-     THE COMED STORAGE REBATE IS GENUINELY PER kWh, and it is large enough
-     that it looks like a typo. Their own DG Rebate Terms and Conditions:
-     owners of a DG facility "are eligible for a rebate of $250 per
-     kilowatt-hour ('kWh') or $300 per kWh of nameplate capacity for
-     eligible energy storage facilities associated with a qualified DG
-     facility". At 5,407 kWh that is $1.35M, which can exceed the whole
-     project — this programme is designed to do that.
+     THE ILLINOIS STORAGE REBATE IS GENUINELY PER kWh, and it is large
+     enough that it looks like a typo. ComEd's own DG Rebate Terms and
+     Conditions (2026 edition): owners of a qualified DG facility at a
+     large C&I customer are eligible for $250 per kWh of nameplate storage
+     capacity ($300 per kWh residential and small C&I). At 5,407 kWh that
+     is $1.35M, which can exceed the whole project — the programme is
+     designed to do that.
 
-     So the rebate is applied as entered. What is carried with it are the
-     two conditions that decide whether it arrives at all, because they are
-     where this goes wrong in practice and neither is visible in the
-     headline rate:
+     So a rebate is applied as entered. What is carried with it are the
+     conditions that decide whether it arrives at all, because they are
+     where this goes wrong in practice and none is visible in the headline
+     rate. THE 2026 T&C CHANGED THEM: the old "take supply under Rate BESH
+     for the life of the facility" is gone; what stands now is the DG
+     pairing and participation in ComEd's Scheduled Dispatch Virtual Power
+     Plant programme (Rider SDVPP, anticipated effective 1 March 2027).
+     This is exactly why the incentive book below carries an asOf on every
+     row and the incentive scout re-verifies it against the primary
+     documents (.claude/agents/incentive-scout.md).
 
-       the storage must be ASSOCIATED WITH A QUALIFIED DG FACILITY, and
-       the customer must take supply under RATE BESH for the life of the
-       storage facility.
-
-     A flag still fires when the rebate exceeds the project, not to dispute
-     the rate but to make sure somebody has confirmed those two before a
-     number that large is put in front of a customer. */
+     A flag still fires when a rebate exceeds 60% of the project, not to
+     dispute the rate but to make sure somebody has confirmed the row's own
+     conditions before a number that large goes in front of a customer. */
   var COMED_REBATE = {
     perKwh: 250,
-    ref: "ComEd Distributed Generation Rebate Terms and Conditions: a rebate of "
-       + "$250 per kWh (or $300 per kWh for some classes) of nameplate capacity "
-       + "for eligible energy storage facilities associated with a qualified DG "
-       + "facility.",
+    resPerKwh: 300,
+    ref: "ComEd Distributed Generation Rebate Terms and Conditions (2026): $250 "
+       + "per kWh of nameplate capacity for eligible energy storage facilities "
+       + "associated with a qualified DG facility at a large C&I customer; $300 "
+       + "per kWh residential and small C&I.",
     url: "https://www.comed.com/cdn/assets/v3/assets/blt3ebb3fed6084be2a/"
-       + "blt2810b689df2e361f/67741700adc7815acf7dba44/"
-       + "DGRebate_TermsConditions-2024-v2.pdf",
-    conditions: "Two conditions decide whether this arrives: the storage must be "
-       + "associated with a qualified DG facility, and the customer must take "
-       + "supply under Rate BESH for the life of the storage facility."
+       + "blt2810b689df2e361f/6a19a2f492d70cb21c15fe39/"
+       + "DG-Rebate-Terms-and-Conditions--2026.pdf",
+    conditions: "What decides whether this arrives: the storage must be "
+       + "associated with a qualified DG facility (the DG itself need not take "
+       + "a rebate), and the customer must agree to participate in ComEd's "
+       + "Scheduled Dispatch Virtual Power Plant programme for the required "
+       + "term (Rider SDVPP, anticipated effective 1 March 2027). For "
+       + "interconnection agreements signed after 1 June 2026, state law is "
+       + "reported to cap the rebate at 5 kWh per kW of participating power "
+       + "and 25,000 kWh in total — confirm against the current tariff."
   };
   V.COMED_REBATE = COMED_REBATE;
+
+  /* ── THE ONE-TIME INCENTIVE BOOK, utility and market specific ────────
+     One row per standing programme, selected by WHERE THE SITE IS (the
+     locate() answer: state, the ComEd and NYC flags) and the segment.
+     Every row carries the primary source, an asOf, and the conditions
+     that decide whether the money arrives. A territory with no row gets
+     the ITC alone and the response says so — an empty answer is a true
+     answer; an invented rebate is not.
+
+     Verified against the primary documents 2026-10-06; the incentive
+     scout (.claude/agents/incentive-scout.md) re-verifies daily. */
+  V.INCENTIVE_BOOK = [
+    {
+      id: "comed.dg.storage", utility: "ComEd", name: "ComEd storage rebate (DG Rebate)",
+      state: "IL", comed: true,
+      perKwh: COMED_REBATE.perKwh, resPerKwh: COMED_REBATE.resPerKwh,
+      tier: "published", asOf: "2026 Terms and Conditions, read 2026-10-06",
+      ref: COMED_REBATE.ref, url: COMED_REBATE.url, conditions: COMED_REBATE.conditions
+    },
+    {
+      id: "ameren.cgr.storage", utility: "Ameren Illinois", name: "Ameren Illinois storage rebate (Rider CGR)",
+      state: "IL", comed: false,
+      perKwh: 250, resPerKwh: 300,
+      tier: "published", asOf: "Rider CGR / CUB fact sheet, March 2026; read 2026-10-06",
+      ref: "Illinois' DG rebate on Ameren Illinois' paper (Rider CGR — Customer "
+         + "Generation & Storage Rebate): $250 per kWh of nameplate storage capacity "
+         + "for large C&I, $300 per kWh residential and small C&I.",
+      url: "https://www.citizensutilityboard.org/wp-content/uploads/2026/03/Solar_Storage_Rebates_Final.pdf",
+      conditions: "The same Illinois rebate as ComEd's, on Ameren's tariff: DG-paired "
+         + "storage, dispatch-programme participation, and new requirements for rebates "
+         + "on or after 1 June 2026. The ZIP places this site outside ComEd, so Ameren "
+         + "Illinois is assumed — municipal utilities and co-ops are not covered; "
+         + "confirm the serving utility."
+    },
+    {
+      id: "ca.sgip.storage", utility: "PG&E / SCE / SoCalGas / SDG&E (SGIP)", name: "California SGIP, large-scale storage",
+      state: "CA", nonresidential: true,
+      perKwh: 250, perKwhItc: 180,
+      tier: "published", asOf: "Step 5, statewide, as of 2026-09-23; read 2026-10-06",
+      ref: "CPUC Self-Generation Incentive Program, large-scale storage (over 10 kW), "
+         + "Step 5: $0.25/Wh, or $0.18/Wh for projects claiming the federal ITC. The "
+         + "open step's rate on selfgenca.com replaces this.",
+      url: "https://www.selfgenca.com/home/program_metrics/",
+      conditions: "Paid through the IOU programme administrators (PG&E, SCE, SoCalGas "
+         + "and SDG&E territories — confirm the serving utility); each step's budget "
+         + "subscribes and the next pays less. This screening assumes the ITC is "
+         + "claimed, so the ITC-adjusted rate is used. A resiliency adder of $0.15/Wh "
+         + "exists for critical facilities. Residential budgets differ and are not "
+         + "priced here."
+    },
+    {
+      id: "ny.nyserda.retail", utility: "NYSERDA", name: "NYSERDA Retail Energy Storage Incentive",
+      state: "NY", nonresidential: true,
+      perKwh: 175, perKwhNyc: 125, maxKwh: 20000,
+      tier: "published", asOf: "current MWh block, 2026; read 2026-10-06",
+      ref: "NYSERDA Retail Energy Storage Incentive (MWh-block design under the "
+         + "2024–2030 implementation plan): the current block pays $175 per kWh "
+         + "upstate and $125 per kWh in New York City and Westchester, on systems up "
+         + "to 20,000 kWh. The region's open block on NYSERDA's dashboard replaces this.",
+      url: "https://www.nyserda.ny.gov/All-Programs/Energy-Storage-Program/Commercial-Energy-Storage",
+      conditions: "A declining block per region: the open block's rate decides, and a "
+         + "fully subscribed region pays less or nothing until new funds are allocated. "
+         + "Westchester prices at the New York City rate. A Retail Inclusive rate of "
+         + "$350 per kWh exists for critical facilities in disadvantaged communities."
+    },
+    {
+      id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
+      state: "MD", nonresidential: true,
+      pctOfCost: 0.30, capUsd: 150000,
+      tier: "planning", asOf: "FY2026 programme; read 2026-10-06",
+      ref: "Maryland Energy Administration Residential and Commercial Energy Storage "
+         + "(RCES) grant: 30% of total installed cost, up to $150,000 for a commercial "
+         + "system. It replaced the storage income tax credit, inactive since the end "
+         + "of 2024.",
+      url: "https://energy.maryland.gov/Pages/Energy-Storage-Grant-Program.aspx",
+      conditions: "First-come grants from a small annual budget ($2M in FY26; 76% "
+         + "reserved by May 2026 and applications closed 5 June 2026), so this is "
+         + "planning-grade until the current fiscal year's round is confirmed open "
+         + "with funds remaining."
+    }
+  ];
+
+  /* The book rows that apply to THIS site, resolved to concrete figures.
+     loc is vpp-sim's locate() answer ({ state, comed, nyc, ... });
+     opts.itcClaimed picks the ITC-adjusted rate where a programme pays
+     differently when the credit is taken (SGIP does). */
+  V.rebatesFor = function (loc, segment, opts) {
+    loc = loc || {};
+    opts = opts || {};
+    var residential = segment === "residential";
+    var out = [], i;
+    for (i = 0; i < V.INCENTIVE_BOOK.length; i++) {
+      var b = V.INCENTIVE_BOOK[i];
+      if (b.state && b.state !== loc.state) continue;
+      if (b.comed === true && !loc.comed) continue;
+      if (b.comed === false && loc.comed) continue;
+      if (b.nonresidential && residential) continue;
+      var perKwh = b.perKwh;
+      if (residential && isFinite(+b.resPerKwh)) perKwh = b.resPerKwh;
+      if (opts.itcClaimed && isFinite(+b.perKwhItc)) perKwh = b.perKwhItc;
+      if (loc.nyc && isFinite(+b.perKwhNyc)) perKwh = b.perKwhNyc;
+      out.push({
+        id: b.id, name: b.name, utility: b.utility,
+        perKwh: perKwh, pctOfCost: b.pctOfCost, capUsd: b.capUsd, maxKwh: b.maxKwh,
+        tier: b.tier, asOf: b.asOf, ref: b.ref, url: b.url, conditions: b.conditions
+      });
+    }
+    return out;
+  };
+
+  function rebateFlag(row, applied, capex) {
+    return "The " + (row.name || "rebate") + " comes to $" + Math.round(applied).toLocaleString() +
+      " against a $" + Math.round(capex).toLocaleString() + " project. That is not " +
+      "necessarily wrong — a per-kWh programme is designed to run this large — but " +
+      "confirm the conditions before a number this size goes to a customer: " +
+      (row.conditions || "the programme's own terms decide.");
+  }
+
+  /* incentives({ capexUsd, kwh, itcRate, rebates: [rows] }) — or the
+     legacy single-rebate fields (rebatePerKwh, rebateName, rebateCapUsd,
+     rebateRef, rebateConditions, rebateUrl), which api/price-site.js still
+     sends; both run through the ONE arithmetic below. */
   V.incentives = function (input) {
     input = input || {};
     var capex = +input.capexUsd, kwh = +input.kwh;
@@ -209,36 +339,51 @@
                  /* The condition, short enough to survive onto a card. The
                     full rate is not automatic and a customer who reads only
                     the number will assume it is. */
-                 short: Math.round(itcRate * 100) + "% \u00b7 needs prevailing wage",
+                 short: Math.round(itcRate * 100) + "% · needs prevailing wage",
                  ref: "Statutory. The full rate requires the prevailing-wage and "
                     + "apprenticeship conditions; without them the base rate applies." });
     }
 
+    var rebates = Array.isArray(input.rebates) ? input.rebates.slice() : [];
     var reb = +input.rebatePerKwh;
-    if (isFinite(reb) && reb > 0 && isFinite(kwh)) {
-      var raw = reb * kwh;
-      var cap = +input.rebateCapUsd;
-      var applied = (isFinite(cap) && cap > 0) ? Math.min(raw, cap) : raw;
-      if (isFinite(capex) && applied > capex * 0.6) {
-        flags.push("The rebate comes to $" + Math.round(applied).toLocaleString() +
-          " against a $" + Math.round(capex).toLocaleString() + " project. That is not " +
-          "necessarily wrong — the ComEd programme is per kWh and is designed to run " +
-          "this large — but confirm both conditions before a number this size goes to a " +
-          "customer: the storage must be associated with a qualified DG facility, and " +
-          "the customer must take supply under Rate BESH for the life of the facility.");
-      }
-      out.push({ id: "rebate", name: input.rebateName || "Utility rebate",
-                 usd: applied, tier: "published",
-                 how: "$" + reb + " / kWh on " + Math.round(kwh).toLocaleString() + " kWh" +
-                      ((isFinite(cap) && cap > 0 && raw > cap)
-                        ? ", capped at $" + Math.round(cap).toLocaleString() : ""),
-                 short: "$" + reb + " / kWh \u00b7 needs paired DG + Rate BESH",
-                 ref: input.rebateRef || COMED_REBATE.ref,
-                 conditions: input.rebateConditions || COMED_REBATE.conditions,
-                 url: input.rebateUrl || COMED_REBATE.url });
+    if (isFinite(reb) && reb > 0) {
+      rebates.push({ id: "rebate", name: input.rebateName || "Utility rebate",
+                     perKwh: reb, capUsd: input.rebateCapUsd,
+                     tier: "published",
+                     ref: input.rebateRef || COMED_REBATE.ref,
+                     conditions: input.rebateConditions || COMED_REBATE.conditions,
+                     url: input.rebateUrl || COMED_REBATE.url });
     }
 
-    var tot = 0, i;
+    var i;
+    for (i = 0; i < rebates.length; i++) {
+      var row = rebates[i];
+      var usd = null, how = "";
+      var cap = +row.capUsd;
+      if (isFinite(+row.perKwh) && +row.perKwh > 0 && isFinite(kwh)) {
+        var maxKwh = +row.maxKwh;
+        var paidKwh = (isFinite(maxKwh) && maxKwh > 0) ? Math.min(kwh, maxKwh) : kwh;
+        var raw = +row.perKwh * paidKwh;
+        usd = (isFinite(cap) && cap > 0) ? Math.min(raw, cap) : raw;
+        how = "$" + row.perKwh + " / kWh on " + Math.round(paidKwh).toLocaleString() + " kWh" +
+              (paidKwh < kwh ? " (the programme pays at most " + Math.round(maxKwh).toLocaleString() + " kWh)" : "") +
+              (usd < raw ? ", capped at $" + Math.round(cap).toLocaleString() : "");
+      } else if (isFinite(+row.pctOfCost) && +row.pctOfCost > 0 && isFinite(capex)) {
+        var rawP = capex * +row.pctOfCost;
+        usd = (isFinite(cap) && cap > 0) ? Math.min(rawP, cap) : rawP;
+        how = Math.round(+row.pctOfCost * 100) + "% of installed cost" +
+              (usd < rawP ? ", capped at $" + Math.round(cap).toLocaleString() : "");
+      }
+      if (usd == null || !(usd > 0)) continue;
+      if (isFinite(capex) && usd > capex * 0.6) flags.push(rebateFlag(row, usd, capex));
+      out.push({ id: row.id || "rebate", name: row.name || "Utility rebate",
+                 usd: usd, tier: row.tier || "published", how: how,
+                 short: row.short || null, utility: row.utility || null,
+                 asOf: row.asOf || null,
+                 ref: row.ref, conditions: row.conditions, url: row.url || null });
+    }
+
+    var tot = 0;
     for (i = 0; i < out.length; i++) tot += out[i].usd;
     return { items: out, total: tot, flags: flags };
   };

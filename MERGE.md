@@ -2954,3 +2954,22 @@ only. The panel shows the bankable case beside the all-in IRR; the report
 gains "Revenue quality — what an investor can underwrite" (the ladder,
 the four subtotals, the two-case comparison, the paperwork list: ESA,
 aggregator/CSP agreement, assignable enrolments, §6418 ITC transfer).
+
+Addendum 2 (2026-10-06): **the incentive book is utility- and market-
+specific, and a daily scout keeps it true.** `value-stack.js` gained
+`V.INCENTIVE_BOOK` + `rebatesFor(loc, segment, { itcClaimed })` — ComEd and
+Ameren Illinois DG/storage rebates ($250/kWh large C&I, $300 residential,
+each utility's own paper), California SGIP large-scale storage (Step 5;
+the ITC-adjusted $180/kWh when the credit is claimed), NYSERDA's retail
+blocks ($125 NYC/Westchester, $175 upstate, 20,000 kWh ceiling) and
+Maryland's RCES grant (30% to $150k, planning-grade: first-come annual
+budget). Every row carries tier, asOf, primary source and conditions; a
+territory with no row gets the ITC alone and the response says so.
+`incentives()` now takes a rebate LIST through the one arithmetic (the
+legacy single-rebate fields stay for price-site.js). The ComEd conditions
+were re-verified against the 2026 T&C, which RETIRED the Rate BESH supply
+commitment in favour of SDVPP participation (Rider SDVPP, anticipated
+2027-03-01) — the book and the tests now pin the 2026 terms.
+`.claude/agents/incentive-scout.md` + a daily Routine (6:56am CT, fresh
+session) re-verify every row against primary documents and open a draft PR
+when something moved; data only, never the math, never a merge.

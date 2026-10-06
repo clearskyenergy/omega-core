@@ -217,8 +217,10 @@ Promise.resolve()
     if (r.status !== 200) { ok('a priced run returns 200', false, r.body); return; }
     var R = r.body.result;
     ok('the run\'s own cost is used and named', R.cost.capexUsd === 1200000 && R.cost.source === 'site-map', R.cost);
-    ok('ComEd territory gets the rebate WITH its two conditions',
-      R.incentives.items.some(function (x) { return x.id === 'rebate' && /Rate BESH/.test(x.conditions || ''); }),
+    ok('ComEd territory gets ComEd\'s rebate with the 2026 conditions (SDVPP, not Rate BESH)',
+      R.incentives.items.some(function (x) {
+        return x.id === 'comed.dg.storage' && /SDVPP/.test(x.conditions || '') && !/Rate BESH/.test(x.conditions || '');
+      }),
       R.incentives.items.map(function (x) { return x.id; }));
     ok('the ITC is there at the base rate', R.incentives.items.some(function (x) {
       return x.id === 'itc' && Math.round(x.usd) === Math.round(1200000 * 0.30);
@@ -233,15 +235,37 @@ Promise.resolve()
   return post(docsWith(ACTIVE, STANDARD), est({ site: { zip: '78701' }, cost: { capexUsd: 1200000 } }))
   .then(function (r) {
     var R = r.status === 200 && r.body.result;
-    ok('outside ComEd there is no ComEd rebate', R && !R.incentives.items.some(function (x) { return x.id === 'rebate'; }),
-      R ? R.incentives.items : r.body);
+    ok('a territory with no programme gets the ITC alone, and SAYS so',
+      R && !R.incentives.items.some(function (x) { return x.id !== 'itc'; })
+        && /no one-time utility or state storage incentive/i.test(R.incentives.note || ''),
+      R ? { items: R.incentives.items.map(function (x) { return x.id; }), note: R.incentives.note } : r.body);
+  });
+})
+.then(function () {
+  return post(docsWith(ACTIVE, STANDARD), est({ site: { zip: '90015' }, cost: { capexUsd: 1200000 } }))
+  .then(function (r) {
+    var R = r.status === 200 && r.body.result;
+    var sgip = R && R.incentives.items.filter(function (x) { return x.id === 'ca.sgip.storage'; })[0];
+    ok('California gets SGIP at the ITC-adjusted rate ($180/kWh × 800 kWh)',
+      sgip && Math.round(sgip.usd) === 180 * 800 && /selfgenca|CPUC/i.test(sgip.ref || ''),
+      sgip || (R && R.incentives.items));
+  });
+})
+.then(function () {
+  return post(docsWith(ACTIVE, STANDARD), est({ site: { zip: '10001' }, cost: { capexUsd: 1200000 } }))
+  .then(function (r) {
+    var R = r.status === 200 && r.body.result;
+    var ny = R && R.incentives.items.filter(function (x) { return x.id === 'ny.nyserda.retail'; })[0];
+    ok('New York City gets NYSERDA at the NYC block rate ($125/kWh)',
+      ny && Math.round(ny.usd) === 125 * 800, ny || (R && R.incentives.items));
   });
 })
 .then(function () {
   return post(docsWith(ACTIVE, STANDARD), est({ finance: { rebatePerKwh: 0 }, cost: { capexUsd: 1200000 } }))
   .then(function (r) {
     var R = r.status === 200 && r.body.result;
-    ok('rebatePerKwh 0 drops the rebate even in ComEd', R && !R.incentives.items.some(function (x) { return x.id === 'rebate'; }),
+    ok('rebatePerKwh 0 turns the whole book off, even in ComEd',
+      R && !R.incentives.items.some(function (x) { return x.id !== 'itc'; }),
       R ? R.incentives.items : r.body);
   });
 })

@@ -234,16 +234,27 @@ function estimate(body) {
       var rebatePerKwh = num(fin.rebatePerKwh, null);
       var incIn = { capexUsd: cost.capexUsd, kwh: kwh, itcRate: itcRate };
       if (rebatePerKwh != null && rebatePerKwh >= 0) {
+        /* the caller's own rebate replaces the book; 0 turns every book row off */
         if (rebatePerKwh > 0) {
           incIn.rebatePerKwh = clamp(rebatePerKwh, 0, 1000);
           incIn.rebateName = typeof fin.rebateName === 'string' ? fin.rebateName.slice(0, 120) : 'Utility rebate';
           if (typeof fin.rebateRef === 'string') incIn.rebateRef = fin.rebateRef.slice(0, 500);
         }
-      } else if (loc.ok && loc.comed) {
-        incIn.rebatePerKwh = V.COMED_REBATE.perKwh;
-        incIn.rebateName = 'ComEd storage rebate';
+      } else if (loc.ok) {
+        /* the utility- and market-specific book: which programmes stand at
+           THIS site, each priced by its own terms (SGIP's ITC-adjusted rate,
+           NYSERDA's regional block and 20,000 kWh ceiling, Illinois' class
+           rates), with its asOf, source and conditions on the row */
+        incIn.rebates = V.rebatesFor(loc, sim.site.segment, { itcClaimed: itcRate > 0 });
       }
       incentives = V.incentives(incIn);
+      var hasRebate = incentives.items.some(function (x) { return x.id !== 'itc'; });
+      if (!hasRebate) {
+        incentives.note = 'No one-time utility or state storage incentive is on file for '
+          + (loc.ok ? loc.state + ' (' + (sim.site.marketName || sim.site.market) + ')' : 'this territory')
+          + ' — the screening carries the federal ITC alone. The book is re-verified against '
+          + 'the primary documents daily; a programme found later only improves the case.';
+      }
       netCostUsd = Math.max(0, cost.capexUsd - incentives.total);
       var lcInput = function (streams) {
         return {
@@ -279,7 +290,13 @@ function estimate(body) {
                   area: loc.ok ? loc.area : null },
       site: sim.site, load: sim.load, solar: sim.solar, battery: sim.battery,
       tariff: sim.tariff, bill: sim.bill,
-      streams: sim.streams, missing: sim.missing, totals: sim.totals,
+      streams: sim.streams,
+      /* the simulation's own "not counted" list, minus its one-time
+         incentives line — THIS response prices those, from the book */
+      missing: incentives ? sim.missing.filter(function (m) {
+        return !/^One-time incentives/.test(m);
+      }) : sim.missing,
+      totals: sim.totals,
       split: sim.split, monthly: sim.monthly, sampleDay: sim.sampleDay,
       confidence: sim.confidence,
       cost: cost,

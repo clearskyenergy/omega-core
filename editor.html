@@ -94566,6 +94566,9 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         html += '<div style="font-size:9.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">⚠ '
           + esc(R.incentives.flags[0]) + '</div>';
       }
+      if (R.incentives && R.incentives.note) {
+        html += '<div style="font-size:9px;color:#6B8AAD;line-height:1.5;margin-bottom:4px">' + esc(R.incentives.note) + '</div>';
+      }
       /* the investor's case: planning-grade rates out */
       var BK = R.bankability, BL = BK && BK.lifecycle;
       if (BL) {
@@ -94800,14 +94803,18 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         + R.incentives.items.map(function (x) {
             return '<tr><td style="padding:6px 8px;border-bottom:1px solid ' + CH.grid + ';font-size:11.5px">' + esc(x.name)
               + '<div style="font-size:9.5px;color:' + CH.sub + '">' + esc(x.how || '')
-              + (x.conditions ? (x.how ? '. ' : '') + esc(x.conditions) : '') + '</div></td>'
+              + (x.conditions ? (x.how ? '. ' : '') + esc(x.conditions) : '') + '</div>'
+              + (x.utility || x.asOf ? '<div style="font-size:9px;color:' + CH.sub + ';margin-top:2px">'
+                  + esc([x.utility, x.asOf ? 'as of ' + x.asOf : ''].filter(function (t) { return t; }).join(' · ')) + '</div>' : '')
+              + '</td>'
               + '<td style="padding:6px 8px;border-bottom:1px solid ' + CH.grid + ';font:600 11.5px \'IBM Plex Mono\',monospace;text-align:right;vertical-align:top">' + money(x.usd) + '</td></tr>';
           }).join('')
         + '<tr><td style="padding:6px 8px;font-weight:700;font-size:11.5px">Total</td>'
         + '<td style="padding:6px 8px;font:700 11.5px \'IBM Plex Mono\',monospace;text-align:right">' + money(R.incentives.total) + '</td></tr></table>'
         + (R.incentives.flags || []).map(function (f) {
             return '<div style="margin-top:6px;padding:8px 10px;background:#FFF8E6;border-left:3px solid #B98100;font-size:10.5px;line-height:1.5;color:#5c4a00">' + esc(f) + '</div>';
-          }).join('');
+          }).join('')
+        + (R.incentives.note ? small(esc(R.incentives.note)) : '');
     }
 
     /* the investor's page: who pays each stream, under what paper, and the

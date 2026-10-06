@@ -88,13 +88,21 @@ ok('the ComEd rebate is per kWh, as their own terms state', function(){
   assert(/comed\.com/.test(V.COMED_REBATE.url), 'no link to the source document');
 });
 
-ok('the two conditions that decide the rebate travel with it', function(){
+ok('the conditions that decide the rebate travel with it, per the 2026 T&C', function(){
+  /* The 2026 Terms and Conditions REPLACED the old Rate BESH supply
+     commitment with participation in ComEd's SDVPP programme. Pinning the
+     current conditions is the point: when ComEd changes them again, this
+     test is how the change is noticed. */
   const inc = V.incentives({ capexUsd: 1021000, kwh: 5407, itcRate: 0.30,
                              rebatePerKwh: 250 });
   const reb = inc.items.filter(x => x.id === 'rebate')[0];
   assert(/qualified DG facility/i.test(reb.conditions),
     'the DG pairing condition is missing');
-  assert(/Rate BESH/i.test(reb.conditions), 'the Rate BESH commitment is missing');
+  assert(/SDVPP|Scheduled Dispatch/i.test(reb.conditions),
+    'the SDVPP participation condition is missing');
+  assert(!/Rate BESH/i.test(reb.conditions),
+    'the retired Rate BESH condition is still being told to customers');
+  assert(/2026/.test(V.COMED_REBATE.ref), 'the citation does not date itself');
 });
 
 ok('a rebate larger than the project is flagged, not suppressed', function(){
@@ -105,8 +113,8 @@ ok('a rebate larger than the project is flagged, not suppressed', function(){
      right; I doubted it and ComEd's own terms say otherwise. A flag that
      tells somebody their correct number looks wrong trains them to ignore
      flags. */
-  assert(/qualified DG facility/i.test(inc.flags[0]) && /Rate BESH/i.test(inc.flags[0]),
-    'the flag does not name the two conditions that actually decide the rebate');
+  assert(/qualified DG facility/i.test(inc.flags[0]) && /SDVPP|Scheduled Dispatch/i.test(inc.flags[0]),
+    'the flag does not name the conditions that actually decide the rebate');
   assert(/not necessarily wrong|designed to run this large/i.test(inc.flags[0]),
     'the flag reads as a dispute of the rate rather than a prompt to confirm terms');
   const reb = inc.items.filter(x => x.id === 'rebate')[0];
@@ -120,6 +128,66 @@ ok('a cap is applied when one is entered', function(){
   const reb = inc.items.filter(x => x.id === 'rebate')[0];
   assert.strictEqual(Math.round(reb.usd), 400000, 'the cap was ignored');
   assert(/capped/.test(reb.how), 'the cap is not disclosed in the working');
+});
+
+/* ── the incentive book: utility and market specific ──────────────────── */
+ok('every book row carries its source, date and conditions', function(){
+  V.INCENTIVE_BOOK.forEach(function (b) {
+    assert(b.id && b.name && b.utility, (b.id || '?') + ' has no identity');
+    assert(b.tier && b.asOf, b.id + ' has no tier or asOf — an undated incentive is a rumour');
+    assert(b.ref && b.ref.length > 40 && b.url, b.id + ' cites nothing');
+    assert(b.conditions && b.conditions.length > 40, b.id + ' carries no conditions');
+  });
+});
+
+ok('ComEd and Ameren split Illinois; nobody else gets an Illinois rebate', function(){
+  const comed = V.rebatesFor({ state: 'IL', comed: true }, 'commercial', {});
+  const ameren = V.rebatesFor({ state: 'IL', comed: false }, 'commercial', {});
+  assert.strictEqual(comed.length, 1);
+  assert.strictEqual(comed[0].id, 'comed.dg.storage');
+  assert.strictEqual(ameren.length, 1);
+  assert.strictEqual(ameren[0].id, 'ameren.cgr.storage');
+  assert(/confirm the serving utility/i.test(ameren[0].conditions),
+    'the Ameren assumption from the ZIP is not disclosed');
+  const mo = V.rebatesFor({ state: 'MO' }, 'commercial', {});
+  assert.strictEqual(mo.length, 0, 'a state with no programme invented one');
+});
+
+ok('Illinois pays by customer class: $250 large C&I, $300 residential', function(){
+  assert.strictEqual(V.rebatesFor({ state: 'IL', comed: true }, 'commercial', {})[0].perKwh, 250);
+  assert.strictEqual(V.rebatesFor({ state: 'IL', comed: true }, 'residential', {})[0].perKwh, 300);
+});
+
+ok('SGIP prices at the ITC-adjusted rate when the ITC is claimed', function(){
+  assert.strictEqual(V.rebatesFor({ state: 'CA' }, 'commercial', { itcClaimed: true })[0].perKwh, 180);
+  assert.strictEqual(V.rebatesFor({ state: 'CA' }, 'commercial', { itcClaimed: false })[0].perKwh, 250);
+});
+
+ok('NYSERDA pays by region, and only the first 20,000 kWh', function(){
+  const nyc = V.rebatesFor({ state: 'NY', nyc: true }, 'commercial', {})[0];
+  const ros = V.rebatesFor({ state: 'NY', nyc: false }, 'commercial', {})[0];
+  assert.strictEqual(nyc.perKwh, 125);
+  assert.strictEqual(ros.perKwh, 175);
+  const inc = V.incentives({ capexUsd: 20000000, kwh: 25000, rebates: [ros] });
+  const row = inc.items.filter(x => x.id === 'ny.nyserda.retail')[0];
+  assert.strictEqual(Math.round(row.usd), 175 * 20000,
+    'the 20,000 kWh programme ceiling was not applied');
+  assert(/at most 20,000 kWh/.test(row.how), 'the ceiling is not shown in the working');
+});
+
+ok('Maryland is a percent-of-cost grant, capped, and planning-grade', function(){
+  const md = V.rebatesFor({ state: 'MD' }, 'commercial', {})[0];
+  assert.strictEqual(md.tier, 'planning', 'a first-come grant from a tiny budget read as bankable');
+  const inc = V.incentives({ capexUsd: 1000000, kwh: 800, rebates: [md] });
+  const row = inc.items.filter(x => x.id === 'md.rces.grant')[0];
+  assert.strictEqual(Math.round(row.usd), 150000, '30% of $1M should cap at $150k');
+  assert(/capped/.test(row.how));
+});
+
+ok('residential-only exclusions hold: SGIP/NYSERDA/MD rows are nonresidential', function(){
+  assert.strictEqual(V.rebatesFor({ state: 'CA' }, 'residential', {}).length, 0);
+  assert.strictEqual(V.rebatesFor({ state: 'NY', nyc: true }, 'residential', {}).length, 0);
+  assert.strictEqual(V.rebatesFor({ state: 'MD' }, 'residential', {}).length, 0);
 });
 
 /* ── utility cost, both directions ────────────────────────────────────── */
