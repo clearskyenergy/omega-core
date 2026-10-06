@@ -191,6 +191,24 @@ setTimeout(function () {
   ok(/not underwriteable/.test(doc), 'a planning rate is flagged as upside, not collateral');
   ok(/Bankable IRR/.test(doc), 'the bankable-case IRR is a headline number');
 
-  console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
-  process.exit(fails ? 1 : 0);
+  /* incentives that cover the cost (760 kWh under the Ameren rebate,
+     2026-10-06): the net IRR is undefined and the panel showed a dash. The
+     tiles and the report carry the return on the full cost, labelled. */
+  var L = RESULT.lifecycle;
+  RESULT.netCostUsd = 0; L.incentiveUsd = 950000; L.netCostUsd = 0; L.irr = null; L.paybackYears = 0;
+  L.incentivesCoverCost = true; L.irrNote = 'Incentives cover the full cost, so nothing of yours is at risk: there is no net IRR to quote and payback is day one.';
+  L.gross = { capexUsd: 950000, irr: 0.113, npv: 41000, paybackYears: 8.2 };
+  fetched.length = 0; box.OmegaValue.run();
+  setTimeout(function () {
+    var panel2 = els['omega-valuestack'].innerHTML;
+    ok(/IRR · full cost/.test(panel2) && /11\.3%/.test(panel2), 'the IRR tile carries the full-cost return, labelled', panel2.slice(0, 200));
+    ok(/Payback · full cost/.test(panel2) && /8\.2 yrs/.test(panel2), 'the payback tile carries the full-cost payback');
+    ok(/nothing of yours is at risk/.test(panel2), 'the note says why the net view is empty');
+    written.length = 0; box.OmegaValue.print();
+    var doc2 = written.join('');
+    ok(/IRR on full cost/.test(doc2) && /11\.3%/.test(doc2) && /Payback on full cost/.test(doc2), 'the report headlines the full-cost return');
+
+    console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
+    process.exit(fails ? 1 : 0);
+  }, 20);
 }, 20);

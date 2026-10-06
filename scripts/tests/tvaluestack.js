@@ -230,6 +230,30 @@ ok('the IRR and payback are the finance engine\'s own, on these flows', function
   assert(r.irr > 0 && r.irr < 0.5, 'IRR outside any plausible band: ' + r.irr);
 });
 
+ok('incentives that cover the cost: no net IRR, day-one payback, and the full-cost view beside it', function(){
+  /* 760 kWh in Ameren territory, 2026-10-06: the storage rebate alone
+     exceeded the project cost, net $0, and the panel showed a dash. */
+  const i = LC_IN(); i.capexUsd = 178802; i.incentiveUsd = 243641;
+  const r = V.lifecycle(i);
+  assert(r.ok, r.error);
+  assert.strictEqual(r.netCostUsd, 0, 'the net cost is not zero');
+  assert.strictEqual(r.incentivesCoverCost, true);
+  assert.strictEqual(r.irr, null, 'an IRR on nothing at risk');
+  assert.strictEqual(r.paybackYears, 0, 'payback is not day one');
+  const gf = r.rows.map(x => x.net); gf[0] = -178802;
+  assert.strictEqual(r.gross.capexUsd, 178802);
+  assert.strictEqual(r.gross.irr, PF.irr(gf), 'the full-cost IRR is not the engine\'s on the full-cost flows');
+  assert.strictEqual(r.gross.paybackYears, PF.payback(gf));
+  assert(r.gross.irr > 0, 'a 760 kWh battery earning $100k+ a year against $179k has no return: ' + r.gross.irr);
+  assert(/full cost/i.test(r.irrNote) && /day one/i.test(r.irrNote), 'the note does not say why: ' + r.irrNote);
+  assert(r.assumptions.some(a => /full cost/i.test(a)), 'the assumption list does not carry it');
+  /* an ordinary case carries the full-cost view too, and no note */
+  const o = V.lifecycle(LC_IN());
+  assert.strictEqual(o.incentivesCoverCost, false);
+  assert.strictEqual(o.irrNote, null);
+  assert(o.gross && o.gross.irr < o.irr, 'the full-cost IRR should sit below the net one');
+});
+
 ok('year 1 already carries a year of fade and no escalation bump', function(){
   /* Indexing fade from year 1 gifts the model a free year of a brand-new
      battery; escalating year 1 charges the customer a year early. */
