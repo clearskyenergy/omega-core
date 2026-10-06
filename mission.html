@@ -380,7 +380,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .deskGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;flex:none}
 .desk{border:var(--edge);background:rgba(0,0,0,.22);padding:10px 12px;display:flex;flex-direction:column;gap:5px;min-width:0}
 .desk .dh{display:flex;align-items:center;gap:8px}
-.desk .dh .nm{font-family:var(--mono);font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:var(--ink);flex:1;min-width:0}
+.desk .dh .pn{font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap}
+.desk .dh .nm{font-family:var(--mono);font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim);flex:1;min-width:0}
 .desk .dh .sch{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);white-space:nowrap}
 .desk .role{font-size:12.5px;line-height:1.45;color:var(--ink)}
 .desk .may{font-size:11.5px;line-height:1.45;color:var(--dim)}
@@ -8336,31 +8337,33 @@ function wireSales(){
 }
 
 /* ── THE OFFICE ──────────────────────────────────────────────────────────
-   Six teams, each a Claude Code Routine on a schedule (jarvis/agents/office).
+   Six teams, each a Claude Code Routine on a schedule (jarvis/agents/office),
+   each with a name and a mailbox (an alias on Thomas's own account; the
+   roster's "The people" is the one list and this is its copy).
    A desk is read, never driven: every run logs `agent-run` to the sales log
    with a summary that starts with the team's name, and this page draws what
    it finds. The roster is a copy of jarvis/agents/office/README.md — the
    Routines live in claude.ai, which has no endpoint to ask, so a desk that
    is "never" here may still exist there and have nothing to log with. */
 const OFFICE_DESKS=[
-  {key:'sales', name:'Sales', sched:'weekdays 8:05', grace:30,
+  {key:'sales', name:'Sales', who:'Nora', mail:'nora@clearsky-usa.com', sched:'weekdays 8:05', grace:30,
    role:'Answers demo requests, works the accounts, researches prospects.',
    may:'Sends email as Thomas and books 30-minute demos, 8:30–2:30 Central.', sends:true,
    tools:'Gmail · Google Calendar · Google Drive'},
-  {key:'marketing', name:'Marketing', sched:'Tue · Thu 10:05', grace:100,
+  {key:'marketing', name:'Marketing', who:'Mila', mail:'mila@clearsky-usa.com', sched:'Tue · Thu 10:05', grace:100,
    role:'One product-update email to accounts and people who wrote in. The LinkedIn post is its own routine, 7:57.',
    may:'Sends to accounts and recent contacts. Never a cold list, never a price.', sends:true, tools:'Gmail'},
-  {key:'software', name:'Software', sched:'daily 8:00', grace:30,
+  {key:'software', name:'Software', who:'Theo', mail:'theo@clearsky-usa.com', sched:'daily 8:00', grace:30,
    role:'The steward: tests, integrity, a pull request for what is small and obviously right.',
    may:'Opens pull requests. Never merges, never deploys.', tools:'GitHub',
    ext:'https://github.com/clearskyenergy/omega-core/pulls', extText:'reports on GitHub, not here'},
-  {key:'support', name:'Support', sched:'weekdays 8:35 · 1:35', grace:30,
+  {key:'support', name:'Support', who:'Sam', mail:'sam@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', grace:30,
    role:'Reads what customers asked, answers from the manuals, logs a bug as an issue.',
    may:'Drafts only. Never sends, never promises a refund.', tools:'Gmail · GitHub'},
-  {key:'billing', name:'Billing', sched:'weekdays 9:35', grace:30,
+  {key:'billing', name:'Billing', who:'June', mail:'june@clearsky-usa.com', sched:'weekdays 9:35', grace:30,
    role:'A/R aging and open invoices from QuickBooks: what is past due, oldest first.',
    may:'Drafts reminders. Never changes an invoice, never charges a card.', tools:'QuickBooks · Gmail'},
-  {key:'admin', name:'Admin', sched:'weekdays 7:35', grace:30,
+  {key:'admin', name:'Admin', who:'Ada', mail:'ada@clearsky-usa.com', sched:'weekdays 7:35', grace:30,
    role:'The day’s logistics: meetings, unanswered mail, promises due, tomorrow.',
    may:'One email to Thomas. Everything else is a draft.', tools:'Gmail · Google Calendar'}
 ];
@@ -8419,14 +8422,15 @@ function renderOffice(){
       const x=document.createElement('div'); x.className='desk '+cls;
       const h=document.createElement('div'); h.className='dh';
       const dot=document.createElement('span'); dot.className='dot '+(cls==='ran'?'ok':cls==='late'?'warn':'off');
+      const who=document.createElement('span'); who.className='pn'; who.textContent=d.who;
       const nm=document.createElement('span'); nm.className='nm'; nm.textContent=d.name;
       const sc=document.createElement('span'); sc.className='sch'; sc.textContent=d.sched;
-      h.appendChild(dot); h.appendChild(nm); h.appendChild(sc); x.appendChild(h);
+      h.appendChild(dot); h.appendChild(who); h.appendChild(nm); h.appendChild(sc); x.appendChild(h);
       const role=document.createElement('div'); role.className='role'; role.textContent=d.role; x.appendChild(role);
       const may=document.createElement('div'); may.className='may';
       if(d.sends){ const b=document.createElement('b'); b.textContent='Sends. '; may.appendChild(b); }
       may.appendChild(document.createTextNode(d.may)); x.appendChild(may);
-      const tl=document.createElement('div'); tl.className='tools'; tl.textContent=d.tools; x.appendChild(tl);
+      const tl=document.createElement('div'); tl.className='tools'; tl.textContent=d.mail+' · '+d.tools; x.appendChild(tl);
       const lastEl=document.createElement('div'); lastEl.className='last';
       const st=document.createElement('span'); st.className='st';
       if(last){
