@@ -39,7 +39,84 @@ model are staff-only (`disclosed`), exactly as the lease card's build-up is.
 
 ## 2. Who buys compute, honestly, and in what order
 
-<!-- TARGETS: filled from the 2026-10-06 research; see §2a–2c -->
+Researched 6 October 2026 from the companies' own pages, filings and
+releases; the whole list with doors, minimums, named people and evidence
+URLs is `docs/compute-offtake-targets.csv` (54 companies). Tier A and B
+(34) are filed as prospects, `vertical: offtaker`, tag `compute-offtake`,
+each with a `COMPUTE:` next action; tier C is in the sheet as notes only.
+A named person on a row is one the company's own site or a public LinkedIn
+page names; no email was guessed. What the research established, honestly:
+
+- **Nobody signs a direct contract for one skid.** No hyperscaler or AI lab
+  has publicly signed third-party GPU capacity below tens of megawatts: the
+  smallest standalone contracts are Cipher 168 MW, IREN 200 MW and Hut 8
+  245 MW, at $3B to $45B over 5 to 15 years; the smallest disclosed tranche
+  inside a bigger deal is Cipher's 56 MW add-on for Fluidstack and Google.
+  One skid is about 48 GPUs, roughly a two-thousandth of that.
+- **Google buys through intermediaries, at scale.** Google Cloud buys and
+  resells CoreWeave capacity, backstops Fluidstack's leases with the miners
+  (TeraWulf, Cipher, Hut 8) and takes equity in them, and pays SpaceX for
+  xAI capacity by the month; its supplier enrollment is invitation-only.
+  Microsoft's procurement page says it is not an application process.
+- **The only proof of offtake for our exact thesis is a competitor's.**
+  Xeal's Laitent (Sep 2026) puts GPU pods on idle EV-charging power with a
+  Tier 1 inference provider committed to up to 5 MW. The buyer exists; the
+  contract was 5 MW across many sites, not one.
+- **So the ladder is three rungs, and the meetings this quarter are rungs
+  one and two.**
+
+### 2a. Tier A: a published door that takes a skid-sized operator today
+
+| Company | Door | What it buys | The catch |
+|---|---|---|---|
+| Baseten | Partners inquiry form | Pools GPUs across 20+ clouds and regions, routed by latency; publicly courts capacity providers | Wants an API-provisionable, reliable pool |
+| Vultr | Partner Portal application | A GPU cloud that already puts its racks in other people's powered space (Verizon central offices, colo halls) | We would be the site, they the operator |
+| Vast.ai | Certified Data Center application (reviewed in 2 business days) | Any host lists at once; the DC tier needs 5+ GPU servers, ISO 27001, a registered business | Spot revenue, host-priced; not a reservation |
+| TensorDock (Voltage Park) | Host form; hello@ published | H100/L40S hosts, 25% revenue share, paid by Stripe, 1 Gbps per location | "Must be hosted in a data center" is the argument to win |
+| Spheron | Supplier form (answers in 24 h) or a partnerships call | H100/H200/B200 from data centers and neoclouds; supplier sets the floor and approves each deal; USD, monthly | Vetted on uptime history and DC tier |
+| Hyperbolic | Published supply inbox; Forge onboards providers with only SSH access | On-demand, reserved and private-cloud deployments; hiring a Head of Supply for 70 to 100+ providers | Young demand book |
+| Aethir | HubSpot host application | Enterprise GPU-as-a-service contracts from hosts with 8+ GPUs, 99% monthly uptime, KYC | Paid in ATH tokens; weakens bankability |
+| Akash | Provider Console; GPU Provider Incentive Pilot | Open marketplace; the pilot wants one 8-GPU node in a DC or colo with partial redundancy; Prime Intellect buys its supply | Paid in AKT/USDC; auction pricing |
+| io.net, Lium, Clore | Self-serve worker or provider install | Permissionless listing of H100-class nodes; Lium pays idle H100s even unrented | Token-settled; utilization, not offtake |
+| NSF NAIRR | Join as a partner; published program inbox | Welcomes contributing compute partners of any size | In kind: a federal reference, not revenue |
+
+### 2b. Tier B: strategic, metro-edge, an intro or a portfolio
+
+| Company | Why them | The door |
+|---|---|---|
+| Xeal / Laitent | The competitor that signed 5 MW of charging-site inference; learn the buyer, or sell skids into its demand | Waitlist for compute customers and hosts; CEO named |
+| Akamai | Building distributed inference in 20+ metros, now capacity-constrained by an $11.6B Anthropic commitment | Channel program; sales form |
+| Fireworks AI, DeepInfra | Inference buyers that rent or build in the 1 to 2 MW class and just raised to expand capacity | Sales forms; no supplier page |
+| Verizon Business (AI Connect), T-Mobile | Carriers turning central offices and cell sites into GPU hosts; a charging site is the same product one hop nearer the vehicles | Named executives; partner channels |
+| Vapor IO, Armada | Neutral-host micro data centers in 36 metros; modular containers with an open infrastructure-partner form | Armada's form answers in 2 business days; verify Vapor IO's state first |
+| Rafay | The orchestration layer Laitent runs on; turns a fleet of skids into a metered cloud and knows who wants charging-site capacity | Contact; CEO named |
+| Uber Autonomous Solutions | Assembling AV depots and charging hubs in US metros with over $100M; its AV partners are the tenants | Intro only |
+| Compute Exchange, Shadeform, Hydra Host, SF Compute, Nebius | Supply-side exchanges and aggregators that contract reserved capacity in USD with SLAs; Compute Exchange names energy-infrastructure operators as a supplier class; Nebius takes partner-owned facilities at MW scale | Partner programs and forms; a single skid may sit under their floor, a portfolio does not |
+
+### 2c. The Google door, and the other hyperscalers
+
+Google Cloud, Microsoft, Meta, OpenAI, Anthropic, NVIDIA's DGX Cloud Lepton
+and Fluidstack are filed as prospects with no due date: the record holds the
+door and the named executive (Mark Lohmeyer at Google Cloud, Jonathan Tinter
+at Microsoft, Santosh Janardhan at Meta, Sachin Katti at OpenAI, César
+Maklary at Fluidstack), and nothing goes out until Tommy decides §7.5. The
+way to them that the public record supports:
+
+1. Rung one: tier A contracts and a revenue history from the first skids.
+2. Rung two: NVIDIA Cloud Partner qualification, which puts capacity on DGX
+   Cloud Lepton where the hyperscalers and the neoclouds already sit, and
+   an NAIRR contribution for a federal reference.
+3. Rung three: a portfolio of skids measured in tens of megawatts under one
+   operator contract, taken to Fluidstack (which aggregated hundreds of
+   providers before it leased campuses, and now supplies Google and
+   Anthropic) or to the business-development groups that originate the
+   hyperscaler deals. Alphabet's own edge (Waymo) runs its compute on board
+   and its cloud at Google; it is a note, not a lead.
+
+Tier C in the sheet (CoreWeave, Crusoe, Nscale, Oracle, AWS, xAI, Together,
+RunPod, the AV fleets, the colo operators, the carriers that doubt the far
+edge) are sellers, builders or doubters on the public record; the desk does
+not write to them.
 
 ## 3. The ask, the titles, the words
 
@@ -153,8 +230,15 @@ so in the Sunday plan with the reason.
    whether to spend the desk's hours on that door now or after the first
    tier-A contract.
 
-## 8. Not built
+## 8. Not built, and one step after deploy
 
+- **The vertical on the filed rows.** The 34 prospects were filed on
+  2026-10-06 before `offtaker` was deployed, so the server stored no
+  vertical on them; `docs/compute-offtake-prospects.json` is the exact
+  payload, and once the fifth vertical is live, `node scripts/sales-cli.js
+  upsert docs/compute-offtake-prospects.json` fills it (the merge is
+  additive: nothing typed since is overwritten, no stage moves). Until then
+  the tag is the list.
 - A compute-specific view on the Office or the Sales dashboard: the `SALES:
   COMPUTE` prefix and the `offtaker` vertical are what a view would read.
 - A public Omega-Core page and the capacity one-pager (Marketing's, under
