@@ -214,6 +214,12 @@ What Omega-Core adds:
   the default"); the workbook's CMDC range (general-purpose air-cooled high,
   $724,471), the chipset-scaled estimate and a typed figure stay as choices.
   The dialog says which was used.
+- **A pricing basis**, defaulting to CoreWeave's public **spot** rate (Tommy,
+  6 October 2026: "use spot as the default"; the workbook's cash-flow sheet
+  runs on it, $2.46 per GPU-hour for the H100). On-demand ($6.16), inference
+  and a typed $/GPU-hour stay as choices; a chipset with no public price on
+  the chosen basis says so instead of pricing, and an unknown basis falls
+  back to spot and says so.
 - **A customer view** (`compute.customer`): the headline figures, the
   bankability verdict and the assumptions in plain words — no cost reference,
   no price sheet, no proxy index. The build-up (`buildUp`: the CMDC

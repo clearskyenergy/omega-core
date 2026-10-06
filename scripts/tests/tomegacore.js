@@ -146,6 +146,9 @@ var CM = OC.COMPUTE;
 function near(got, want, tol, l) { ok(got != null && Math.abs(got - want) <= tol, l, 'got ' + got + ', want ' + want + ' ±' + tol); }
 eq(CM.evaluate({}, {}).capex.amount, 450000, 'the default CAPEX is the recorded $450,000 skid price (Tommy, 2026-10-06: "use the 450k skid price as the default")');
 eq(CM.evaluate({}, {}).capex.basis, 'skid', 'on the skid basis');
+eq(CM.evaluate({}, {}).inputs.pricingBasis, 'spot', 'compute is priced at the spot rate by default (Tommy, 2026-10-06: "use spot as the default")');
+eq(CM.evaluate({ pricingBasis: 'nonsense' }, {}).inputs.pricingBasis, 'spot', 'an unknown pricing basis falls back to spot, and says so');
+ok(CM.evaluate({ pricingBasis: 'nonsense' }, {}).notes.some(function (t) { return /spot is used/.test(t); }), 'the fallback is named in the notes');
 eq(CM.evaluate({ capexBasis: 'nonsense' }, {}).capex.amount, 450000, 'an unknown basis falls back to the skid price, and says so');
 var W = CM.evaluate({ capexBasis: 'cmdc' }, { units: 1 });   /* the workbook's own figures: H100, spot, GP air-cooled high, 70% LTC */
 eq(W.chipset.key, 'h100', 'the default chipset is the H100 the workbook anchors on');
