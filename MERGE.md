@@ -2947,7 +2947,10 @@ CAPEX and the cash flow stay in `/api/`; the browser carries no rate. Four
 cells the sheet had pointing at the wrong row are corrected and named. The
 default CAPEX basis is the recorded $450,000 skid price (Tommy, 2026-10-06:
 "use the 450k skid price as the default"); the workbook's figures are pinned
-on its own CMDC basis.
+on its own CMDC basis. Compute is priced at CoreWeave's public spot rate by
+default (Tommy, 2026-10-06: "use spot as the default"; $2.46 per GPU-hour for
+the H100, the cash-flow sheet's own basis), pinned with its fallback in
+`tomegacore.js`; on-demand, inference and a typed rate stay choices.
 
 **The rent (2026-10-03).** No Omega-Core rent is set, so the card
 (`omega-core-lease-v2`) is a market reference read off cell-tower ground
