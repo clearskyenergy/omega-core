@@ -65,8 +65,12 @@
 'use strict';
 
 var CL = require('../compute-lease')._model;
+/* The skid's own economics — the 75 kW compute cash flow, levered, by
+   chipset (the iQGen workbook Tommy handed over on 2026-10-05, white-labelled
+   Omega Core Skid). One module, read here and nowhere else. */
+var CM = require('./omega-compute-model');
 
-var BUILD = '2026-10-02.omega-core-v1';
+var BUILD = '2026-10-05.omega-core-v2';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THE PRODUCT — facts a host may be told
@@ -773,6 +777,15 @@ function evaluate(body, opts) {
   }
   var host = hostEconomics(run, offer);
   var program = programOf(proposed, term, offer, gates);
+  /* The skid's compute cash flow, priced on the skids proposed, with the
+     host's rent (the offer's base, or the rent typed) as one of its costs.
+     The dialog sends its inputs inside rep (so they ride on the project
+     with the other answers); a direct caller may send body.compute. */
+  var compute = CM.evaluate(body.compute != null ? body.compute : rep.compute, {
+    units: proposed,
+    lease: offer ? { monthly: offer.monthlyPerSkid.base, escalatorPct: offer.escalatorPct.base, source: offer.source } : null,
+    disclose: !!opts.disclose
+  });
 
   var asks = [], seen = {};
   ORDER.forEach(function (k) {
@@ -843,6 +856,7 @@ function evaluate(body, opts) {
     offer: offer,
     host: host,
     program: program,
+    compute: compute,
     terms: terms,
     asks: asks,
     findings: findings,
@@ -865,7 +879,7 @@ function evaluate(body, opts) {
 }
 
 module.exports = {
-  evaluate: evaluate, PRODUCT: PRODUCT, TERMS: TERMS, RATE_CARD: RATE_CARD, BUILD: BUILD,
+  evaluate: evaluate, PRODUCT: PRODUCT, TERMS: TERMS, RATE_CARD: RATE_CARD, BUILD: BUILD, COMPUTE: CM,
   gatePower: gatePower, gateLocation: gateLocation, gateFiber: gateFiber, verdictOf: verdictOf,
   buildOffer: buildOffer, rentOf: rentOf, offerLabel: offerLabel, hostEconomics: hostEconomics, programOf: programOf,
   serviceAmps: serviceAmps, serviceKw: serviceKw, fmvShare: fmvShare, hostPeakKw: hostPeakKw

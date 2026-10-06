@@ -137,6 +137,109 @@ ok(/indicative until the site qualifies/.test(openRent.offer.label), 'and is hea
 var noLease = clone(GOOD); noLease.rep.willServe = 'none'; noLease.rep.leaseMonthly = 1200;
 eq(OC.evaluate(noLease, {}).offer, null, 'a site that does not qualify gets no lease, typed rent or not');
 
+/* THE SKID'S OWN ECONOMICS (Tommy, 2026-10-05, handing over the iQGen 75 kW
+   cash-flow workbook: "this is how the Omega-Compute needs to be modeled …
+   white labeling it Omega Core Skid … customer facing version … show
+   bankability"). api/_lib/omega-compute-model.js is that workbook; its
+   visible sheet's figures are pinned here so the model cannot drift. */
+var CM = OC.COMPUTE;
+function near(got, want, tol, l) { ok(got != null && Math.abs(got - want) <= tol, l, 'got ' + got + ', want ' + want + ' ±' + tol); }
+var W = CM.evaluate({}, { units: 1 });                       /* the workbook's defaults: H100, spot, GP air-cooled high, 70% LTC */
+eq(W.chipset.key, 'h100', 'the default chipset is the H100 the workbook anchors on');
+eq(W.capacity.nodes, 6, '6 nodes fit 75 kW less 5% overhead at 10.2 kW a node');
+eq(W.capacity.gpus, 48, '48 GPUs');
+eq(W.capacity.installedKw, 61.2, '61.2 kW installed');
+eq(W.capacity.facilityKw, 73.44, '73.44 kW at the meter (PUE 1.2)');
+eq(W.capex.amount, 724471, 'CAPEX: the CMDC general-purpose air-cooled high end, $724,471 (the sheet\'s selection)');
+ok(!/CMDC|CoreWeave/.test(JSON.stringify([W.capex, W.notes, W.customer])), 'a tenant\'s capex label, notes and customer view name no internal cost reference');
+eq(OC.evaluate({ rep: { compute: { chipset: 'a100' } } }, {}).compute.chipset.key, 'a100', 'the dialog\'s inputs ride inside rep.compute and reach the model');
+eq(W.capex.perItKw, 9660, '$9,660 an IT kW');
+var wcf = W.cashFlow, wm = wcf.months;
+eq(wcf.debt.funded, 507130, 'debt funded 507,130 (70% LTC)');
+eq(wcf.debt.fee, 10143, 'a 2% fee');
+eq(wcf.debt.reserve, 12678, 'a 3-month debt service reserve');
+eq(wcf.debt.equityCapex, 217341, 'equity in the CAPEX');
+eq(wcf.debt.initialEquity, 240162, 'initial equity required');
+near(wcf.debt.principalAfterIo, 8452.16, 0.01, 'monthly principal after interest-only');
+near(wm[0].revenue, 35956.4, 0.5, 'month-1 revenue at a 50% ramp on spot pricing');
+near(wm[0].electricity, 3940.42, 0.05, 'month-1 electricity');
+near(wm[0].ebitda, 23420.3, 0.5, 'month-1 EBITDA');
+near(wm[0].equity, -220968, 1, 'month-1 equity cash flow: the equity, fee and reserve out, less operations and interest');
+near(wm[6].debtService, 12678.2, 0.1, 'month 7: the first amortising payment');
+near(wm[6].dscr, 3.865, 0.001, 'month-7 DSCR 3.87x');
+near(wm[59].residual, 72447.1, 0.1, 'the 10% residual in month 60');
+near(wm[59].balloon, 50713, 0.5, 'the 10% balloon in month 60');
+eq(wm[59].debtEnding, 0, 'the debt is repaid at maturity');
+eq(wcf.years.length, 5, 'five years');
+eq(wcf.years[0].revenue, 755699, 'year-1 revenue (the sheet\'s own cell summed the wrong row)');
+eq(wcf.years[0].ebitda, 531735, 'year-1 EBITDA');
+eq(wcf.years[0].debtService, 100369, 'year-1 debt service');
+eq(wcf.years[0].equity, 191203, 'year-1 equity cash flow');
+eq(wcf.years[1].revenue, 764368, 'year-2 revenue');
+eq(wcf.years[4].equity, 269077, 'year-5 equity cash flow (residual and balloon in)');
+eq(wcf.returns.projectPaybackMonth, 17, 'project payback month 17');
+eq(wcf.returns.equityPaybackMonth, 7, 'equity payback month 7');
+near(wcf.returns.year1Dscr, 5.3, 0.01, 'year-1 DSCR is EBITDA over debt service, not two blank cells');
+near(wcf.returns.projectCashMultiple, 3.27, 0.01, '5-year project multiple is cash over CAPEX, not principal over CAPEX');
+ok(wcf.returns.equityIrrPct > 100 && wcf.returns.projectIrrPct > 50, 'IRRs are annualised from the monthly flows');
+eq(wcf.bankability.meetsTarget, true, 'bankability: the minimum amortising DSCR clears 1.25x');
+near(wcf.bankability.minDscrAmortizing, 3.149, 0.001, 'the minimum is month 59, 3.15x');
+eq(wcf.bankability.monthsBelowTarget, 0, 'no month under the target');
+eq(wcf.bankability.balloonMonth, 60, 'the balloon month is named apart');
+near(wcf.bankability.balloonMonthDscr, 0.47, 0.01, 'and its own cover from operations');
+ok(wcf.bankability.debtCapacityAtTarget > wcf.debt.funded, 'debt capacity at the target exceeds the loan assumed');
+eq(wcf.lease.included, false, 'with no offer there is no rent in the cash flow');
+eq(W.disclosed, false, 'a tenant does not see the build-up');
+ok(!W.buildUp && W.customer && W.customer.headline.length >= 8 && W.customer.assumptions.length >= 6, 'but gets the customer view: headline figures and plain-word assumptions');
+ok(!JSON.stringify(W.customer).match(/CMDC|CoreWeave|index/), 'the customer view names no cost reference, price sheet or proxy');
+ok(CM.evaluate({}, { disclose: true }).buildUp.corrections.length >= 4, 'staff see the build-up, with the workbook\'s corrections named');
+/* the hidden Revenue Model / Scenario Comparison world: on-demand, $0.10 */
+var SC = CM.evaluate({ pricingBasis: 'on-demand', electricity: 0.10 }, {}).scenarios;
+var h100 = SC.rows[0], l40s = SC.rows.filter(function (x) { return x.key === 'l40s'; })[0], gb200 = SC.rows.filter(function (x) { return x.key === 'gb200'; })[0];
+near(h100.annualRevenue, 2155850, 2, 'scenario H100: $2.156M a year on demand');
+near(h100.contribution, 1859048, 2, 'contribution $1.859M');
+near(h100.capexMid, 1935625, 2, 'chipset-scaled CAPEX midpoint $1,935,625');
+near(h100.paybackMonths, 12.5, 0.05, 'payback 12.5 months');
+near(h100.cashOnCashYieldPct, 96.04, 0.01, 'cash-on-cash yield 96.0%');
+eq(l40s.nodes + '/' + l40s.gpus, '15/120', 'L40S: 15 nodes, 120 GPUs in the same 75 kW');
+eq(SC.bestYield, 'gb200', 'GB200 NVL72 has the best yield');
+near(gb200.cashOnCashYieldPct, 99.98, 0.01, 'at 99.98%');
+eq(SC.fastestPayback, 'gb200', 'and the fastest payback — never a chipset with no price');
+ok(SC.rows.filter(function (x) { return !x.priced; }).length === 2, 'B300 and GB300 have no public on-demand price and say so');
+var SE = CM.evaluate({ pricingBasis: 'on-demand' }, {}).sensitivity;
+near(SE.annualRevenue[4][4], 2155850, 2, 'sensitivity: 85% utilisation at 100% price is the base');
+near(SE.annualRevenue[0][0], 760888, 2, '50% utilisation at 60% price');
+eq(CM.cmdcTotals('general-air').high, 724471, 'the CMDC general-purpose high end');
+eq(CM.cmdcTotals('accelerated-liquid').low, 1357684, 'the accelerated low end');
+/* what Omega-Core adds */
+var LC = CM.evaluate({}, { units: 2, lease: { monthly: 1000, escalatorPct: 2.5, source: 'market' } });
+eq(LC.cashFlow.lease.included, true, 'the host\'s rent is a cost of the skid');
+eq(LC.cashFlow.months[0].lease, 1000, 'a skid a month');
+eq(LC.cashFlow.months[12].lease, 1025, 'escalating yearly');
+eq(LC.cashFlow.returns.year1Ebitda, 531735 - 12000, 'and comes off EBITDA');
+eq(LC.totals.capex, 724471 * 2, 'two skids: the totals scale');
+eq(LC.totals.year1Revenue, 755699 * 2, 'revenue too');
+eq(CM.evaluate({ includeLease: 'no' }, { lease: { monthly: 1000, escalatorPct: 2.5 } }).cashFlow.lease.included, false, 'switched off, the skid is shown alone');
+eq(CM.evaluate({ capexBasis: 'skid' }, {}).capex.amount, 450000, 'the Omega-Core skid price is a CAPEX basis');
+eq(CM.evaluate({ capexBasis: 'custom', capexCustom: 600000 }, {}).capex.amount, 600000, 'and so is a typed figure');
+eq(CM.evaluate({ capexBasis: 'dynamic', capexCase: 'mid' }, {}).capex.amount, 1935626, 'and the chipset-scaled estimate');
+var BB = CM.evaluate({ chipset: 'b200', pricingBasis: 'on-demand', utilization: 85, debt: { ltc: 60, rate: 9 } }, {});
+eq(BB.chipset.key + '/' + BB.capacity.gpus, 'b200/32', 'B200: 4 nodes of 14.3 kW, 32 GPUs');
+eq(BB.inputs.utilization, 0.85, 'a percent typed as 85 is read as 85%');
+eq(BB.inputs.debt.ltc + '/' + BB.inputs.debt.rate, '0.6/0.09', 'debt fields too');
+var BAD = CM.evaluate({ chipset: 'zzz', utilization: 150, electricity: 'x', debt: { ltc: 99 } }, {});
+ok(BAD.notes.some(function (t) { return /not in the library/.test(t); }) && BAD.notes.some(function (t) { return /Utilization of 150/.test(t); }) && BAD.inputs.debt.ltc === 0.7, 'an input out of range is set aside and said, never clamped into a number nobody typed');
+ok(CM.evaluate({ chipset: 'gb300' }, {}).notes.some(function (t) { return /no public spot price/.test(t); }), 'a chipset with no price on the basis says so instead of pricing');
+/* through the Omega-Core door */
+eq(r.compute && r.compute.units, 1, 'the Omega-Core answer carries the compute model on the skids proposed');
+eq(r.compute.cashFlow.lease.monthly, 1000, 'with the offer\'s base rent as a cost');
+eq(OC.evaluate(rent, {}).compute.cashFlow.lease.monthly, 1500, 'or the rent typed');
+var many4 = clone(GOOD); many4.rep.units = 6; many4.rep.availableKw = 300;
+eq(OC.evaluate(many4, {}).compute.units, 4, 'on the skids the power carries');
+eq(OC.evaluate(GOOD, { disclose: true }).compute.disclosed, true, 'staff see the compute build-up through the door');
+eq(OC.evaluate(GOOD, {}).compute.disclosed, false, 'a tenant does not');
+eq(OC.evaluate({ rep: {}, compute: { chipset: 'h200' } }, {}).compute.chipset.key, 'h200', 'the rep\'s compute inputs reach the model');
+
 /* NO FALSE RESULTS: a firm answer only on a confirmed fact */
 eq(OC.evaluate(GOOD, {}).verdictLabel, 'Qualified', 'Qualified, in those words');
 var drawnOnly = clone(GOOD); delete drawnOnly.rep.availableKw; drawnOnly.rep.willServe = 'unknown';
@@ -412,6 +515,10 @@ function editorChecks() {
   ok(/'Needs further qualification'/.test(mod) && /section\(o\.label \|\| 'Land lease'\)/.test(mod) && /esc\(r\.offer\.label \|\| 'Land lease'\)/.test(mod),
      'the dialog says "Needs further qualification" and heads the lease, on screen and printed, with the server\'s words');
   ok(/inp\('oc-leaseMonthly'/.test(mod) && /r\.leaseMonthly = lm/.test(mod) && /r\.leaseEscalatorPct = le/.test(mod), 'the rent and its escalator are typed in the dialog and sent');
+  ok(/sel\('occ-chipset'/.test(mod) && /sel\('occ-pricingBasis'/.test(mod) && /sel\('occ-capex'/.test(mod) && /sel\('occ-includeLease'/.test(mod) && /r\.compute = c/.test(mod), 'the compute inputs are chosen in the dialog and sent as rep.compute');
+  ok(!/8760|10\.2|49\.24|19\.71|724471|CMDC|1\.25/.test(mod), 'no rate, node power, price, CAPEX figure or DSCR target in the browser');
+  ok(/function computeHtml\(c, r\)/.test(mod) && /Bankability/.test(mod) && /debtCapacityAtTarget/.test(mod), 'the dialog shows the compute economics and the bankability block');
+  ok(/print\(\\'customer\\'\)/.test(mod) && /print\(\\'full\\'\)/.test(mod) && /function printCustomer\(r, f\)/.test(mod) && /c\.disclosed && c\.buildUp/.test(mod), 'a customer version and a full report print; the build-up only where the server disclosed it');
   ok(/o\.market\.sources/.test(mod) && /rel="noopener"/.test(mod), 'a market reference is shown with its sources');
 
   /* the project field, saved and restored */
@@ -434,7 +541,8 @@ function editorChecks() {
   var place = bodyFrom(ED, 'function _doPlaceBesPad(p,spec,opts){');
   ok(/a\.key==='pcs'   && _ce\._incPCS===true/.test(place) && /a\.key==='xfmr'  && _ce\._incXfmr===true/.test(place) && /a\.key==='disco' && _ce\._incDisco===true/.test(place), 'every BESS Pad path places the R60 with its disconnect and without a second PCS or a transformer');
   ok(!/data-auto-off/.test(ED), 'and the modal no longer second-guesses the box');
-  ok(R && !/derived/.test(JSON.stringify(R)) && /'CC-R60':[^\n]*h:'SEE MFR SUBMITTAL'/.test(ED), 'its height is not derived while the drawing and the datasheet disagree');
+  ok(/'CC-R60':[^\n]*h:'6\\'-10\.75"'[^\n]*hf:6\.9 \}/.test(ED) && R && /82\.75 in overall/.test(R.verified) && /2200 H mm/.test(R.cabinet),
+     'its height is the drawing\'s 82.75 in overall (Tommy, 2026-10-05), with the datasheet\'s cabinet kept as the cabinet');
   ok((ED.match(/&& !p\.evSkid\)/g) || []).length === 2, 'the auto-sizer never recommends an EV skid');
 }
 

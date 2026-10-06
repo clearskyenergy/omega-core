@@ -6691,11 +6691,11 @@ const GOTION_CATALOG_DIMS = {
   /* The R60 is a SKID, and the footprint is the skid: 336 x 87 in from the
      skid drawing ClearSky supplied (2026-10-02; two Autel dispensers at the
      ends, the cabinet in the middle), not from the datasheet, which prints
-     only the cabinet (1100 x 750 x 2200 mm). Height is NOT stated: that
-     drawing's 82.75 in overall and the datasheet's 2,200 mm (86.6 in)
-     cabinet disagree, so it reads "see submittal" until Clean Cell confirms
-     it. Weight is unpublished and says so. */
-  'CC-R60':           { l:'28\'-0"',    w:'7\'-3"',    h:'SEE MFR SUBMITTAL', wt:'SEE MFR SUBMITTAL', lf:28.0, wf:7.25 },
+     only the cabinet (1100 x 750 x 2200 mm). Height is the same drawing's
+     82.75 in overall (Tommy, 2026-10-05: "use the drawing height 82.75");
+     the datasheet's 2,200 mm (86.6 in) is the cabinet alone and stays on
+     the catalog row as `cabinet`. Weight is unpublished and says so. */
+  'CC-R60':           { l:'28\'-0"',    w:'7\'-3"',    h:'6\'-10.75"', wt:'SEE MFR SUBMITTAL', lf:28.0, wf:7.25, hf:6.9 },
 };
 
 const CTYPES=[
@@ -21785,10 +21785,10 @@ const BESS_CATALOG = {
     ingress:'Battery IP55; PCS IP65 / NEMA 3R',noise:'PCS < 30 dB at 1 m, 25C',
     controller:'CAN BMS to PCS (active BMS comms required); Wi-Fi + Ethernet monitoring; PCS parallel up to 10 units',
     certs:'UL 9540:2023 (reported, confirm SGS certificate), UL 9540A (cabinet platform reported tested), UL 1973 (reported), IEC 62619 + UN 38.3 (documentation by configuration); PCS UL 1741-2021 incl. SB, CSA C22.2 No. 107.1-16, IEEE 1547',
-    cabinet:'1100 W x 750 D x 2200 H mm (battery cabinet)',dims:'8534x2210mm skid (336 x 87 in)',
+    cabinet:'1100 W x 750 D x 2200 H mm (battery cabinet)',dims:'8534x2210x2102mm skid (336 x 87 x 82.75 in)',
     installType:'Floor-mounted transportable commercial skid',
     evChargers:{count:2,mfr:'Autel',kind:'DC fast-charging dispenser',kw:null},
-    verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 in per the skid drawing ClearSky supplied (2026-10-02)',
+    verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 x 82.75 in overall per the skid drawing ClearSky supplied (2026-10-02)',
     notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: quote required. Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
 };
 

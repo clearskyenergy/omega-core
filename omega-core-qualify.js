@@ -20,6 +20,16 @@
    call (CLAUDE.md, IP protection). If you find yourself adding a number
    here, it belongs in api/_lib/omega-core.js.
 
+   The same answer carries the skid's own compute economics (the iQGen 75 kW
+   cash-flow workbook, white-labelled Omega Core Skid: api/_lib/
+   omega-compute-model.js) — capacity by chipset, the 60-month levered cash
+   flow, bankability, every chipset side by side, the sensitivity grid. The
+   rep may change the chipset, the pricing basis, utilisation, electricity,
+   the CAPEX basis, the debt and whether the host's rent is a cost of the
+   skid; every rate and price stays on the server. Print gives a CUSTOMER
+   VERSION (results and assumptions in plain words) or the FULL REPORT (the
+   staff build-up where the server disclosed it).
+
    An answer the rep edits re-scores against the evidence already gathered:
    it never re-runs a 55-second fiber lookup. The rep's answers and the last
    verdict ride on the project as S.omegaCore (saved in saveProject's
@@ -254,6 +264,50 @@
       + field('Rent escalator (%/yr)', inp('oc-leaseEscalatorPct', dflt('leaseEscalatorPct', ''), 'blank = 2.5', 'number'), '0 1 140px')
       + '<div style="flex:1 1 220px;min-width:0;align-self:flex-end;font-size:10px;color:#64748B;line-height:1.5">No Omega-Core rent is set yet. '
       + 'Leave it blank for the market reference; type the rent agreed for this site and the lease and the host\'s figures follow it.</div>'
+      + '</div>' + computeInputsHtml(f);
+  }
+
+  /* The compute model's inputs. Blank is the server's default; the figure
+     the server used is shown as the placeholder once it has answered. The
+     chipset list and the pricing bases are the server's too. */
+  function computeInputsHtml(f) {
+    var s = (f.saved && f.saved.compute) || {};
+    var c = st.result && st.result.compute, eff = (c && c.inputs) || {};
+    var dflt = function (k, v) { return s[k] != null && s[k] !== '' ? s[k] : v; };
+    var ph = function (v, d) { return v != null ? String(v) : d; };
+    var chips = (c && c.chipsets) ? c.chipsets.map(function (x) { return [x.key, x.name]; }) : [['h100', 'NVIDIA HGX H100 (default)']];
+    var bases = (c && c.bases) ? c.bases.map(function (x) { return [x.key, x.label]; }) : [['spot', 'Spot'], ['on-demand', 'On-demand'], ['inference', 'Inference (per GPU)'], ['custom', 'Custom $/GPU-hour']];
+    var capexSel = s.capexBasis ? (s.capexBasis === 'cmdc' ? 'cmdc:' + (s.capexConfig || 'general-air') + ':' + (s.capexCase || 'high')
+                 : s.capexBasis === 'dynamic' ? 'dynamic:' + (s.capexCase || 'mid') : s.capexBasis) : 'cmdc:general-air:high';
+    var opt = c && c.capex && c.capex.options;
+    var lab = function (t, v) { return t + (v != null ? ' — ' + money(v) : ''); };
+    var capexOpts = [
+      ['cmdc:general-air:low', lab('75 kW container, air-cooled, low', opt && opt.cmdc.config === 'general-air' ? opt.cmdc.low : null)],
+      ['cmdc:general-air:mid', lab('75 kW container, air-cooled, mid', opt && opt.cmdc.config === 'general-air' ? opt.cmdc.mid : null)],
+      ['cmdc:general-air:high', lab('75 kW container, air-cooled, high', opt && opt.cmdc.config === 'general-air' ? opt.cmdc.high : null)],
+      ['cmdc:accelerated-liquid:low', lab('75 kW container, liquid-cooled accelerated, low', opt && opt.cmdc.config === 'accelerated-liquid' ? opt.cmdc.low : null)],
+      ['cmdc:accelerated-liquid:mid', lab('75 kW container, liquid-cooled accelerated, mid', opt && opt.cmdc.config === 'accelerated-liquid' ? opt.cmdc.mid : null)],
+      ['cmdc:accelerated-liquid:high', lab('75 kW container, liquid-cooled accelerated, high', opt && opt.cmdc.config === 'accelerated-liquid' ? opt.cmdc.high : null)],
+      ['dynamic:low', lab('Scaled to the chipset, low', opt ? opt.dynamic.low : null)],
+      ['dynamic:mid', lab('Scaled to the chipset, mid', opt ? opt.dynamic.mid : null)],
+      ['dynamic:high', lab('Scaled to the chipset, high', opt ? opt.dynamic.high : null)],
+      ['skid', lab('Omega-Core skid price as recorded', opt ? opt.skid : null)],
+      ['custom', 'Type a figure']
+    ];
+    var dbt = eff.debt || {};
+    return section('Omega Core Skid — compute model inputs (blank = default)')
+      + '<div style="display:flex;gap:10px;flex-wrap:wrap">'
+      + field('Chipset', sel('occ-chipset', dflt('chipset', eff.chipset || 'h100'), chips), '1 1 220px')
+      + field('Pricing basis', sel('occ-pricingBasis', dflt('pricingBasis', eff.pricingBasis || 'spot'), bases), '0 1 160px')
+      + field('Custom $/GPU-hour', inp('occ-customGpuHour', dflt('customGpuHour', ''), 'with Custom', 'number'), '0 1 120px')
+      + field('Utilization (%)', inp('occ-utilization', dflt('utilization', ''), ph(eff.utilization != null ? Math.round(eff.utilization * 100) : null, 'default'), 'number'), '0 1 110px')
+      + field('Electricity ($/kWh)', inp('occ-electricity', dflt('electricity', ''), ph(eff.electricity, 'default'), 'number'), '0 1 120px')
+      + '</div><div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px">'
+      + field('Capital cost basis', sel('occ-capex', capexSel, capexOpts), '1 1 300px')
+      + field('Custom CAPEX ($)', inp('occ-capexCustom', dflt('capexCustom', ''), 'with Type a figure', 'number'), '0 1 140px')
+      + field('Debt (% of cost)', inp('occ-ltc', dflt('ltc', ''), ph(dbt.ltc != null ? Math.round(dbt.ltc * 100) : null, 'default'), 'number'), '0 1 110px')
+      + field('Debt rate (%)', inp('occ-rate', dflt('rate', ''), ph(dbt.rate != null ? Math.round(dbt.rate * 1000) / 10 : null, 'default'), 'number'), '0 1 100px')
+      + field('Host\'s rent as a cost', sel('occ-includeLease', dflt('includeLease', 'yes'), [['yes', 'Yes — in the cash flow'], ['no', 'No — the skid alone']]), '0 1 170px')
       + '</div>';
   }
 
@@ -277,7 +331,34 @@
     r.endOfTerm = val('oc-endOfTerm') || 'undecided';
     var lm = num(val('oc-leaseMonthly')); if (lm != null) r.leaseMonthly = lm;
     var le = num(val('oc-leaseEscalatorPct')); if (le != null) r.leaseEscalatorPct = le;
+    var c = readCompute(saved.compute || {}); if (c) r.compute = c;
     return r;
+  }
+  /* The compute inputs the rep set: a choice made now or on an earlier
+     visit, or a figure typed. Nothing else is sent, so the server's defaults
+     keep deciding. Null when none. */
+  function readCompute(saved) {
+    var c = {}, any = false;
+    function chosen(id, key) { return !!st.dirty[id] || saved[key] != null; }
+    if (chosen('occ-chipset', 'chipset') && val('occ-chipset')) { c.chipset = val('occ-chipset'); any = true; }
+    if (chosen('occ-pricingBasis', 'pricingBasis') && val('occ-pricingBasis')) { c.pricingBasis = val('occ-pricingBasis'); any = true; }
+    var cg = num(val('occ-customGpuHour')); if (cg != null) { c.customGpuHour = cg; any = true; }
+    var u = num(val('occ-utilization')); if (u != null) { c.utilization = u; any = true; }
+    var e = num(val('occ-electricity')); if (e != null) { c.electricity = e; any = true; }
+    if (chosen('occ-capex', 'capexBasis') && val('occ-capex')) {
+      var parts = val('occ-capex').split(':');
+      c.capexBasis = parts[0];
+      if (parts[0] === 'cmdc') { c.capexConfig = parts[1]; c.capexCase = parts[2]; }
+      else if (parts[0] === 'dynamic') c.capexCase = parts[1];
+      any = true;
+    }
+    var cc = num(val('occ-capexCustom')); if (cc != null) { c.capexCustom = cc; any = true; }
+    var ltc = num(val('occ-ltc')), rate = num(val('occ-rate'));
+    if (ltc != null) { c.ltc = ltc; any = true; }
+    if (rate != null) { c.rate = rate; any = true; }
+    if (ltc != null || rate != null) { c.debt = {}; if (ltc != null) c.debt.ltc = ltc; if (rate != null) c.debt.rate = rate; }
+    if (chosen('occ-includeLease', 'includeLease') && val('occ-includeLease')) { c.includeLease = val('occ-includeLease') === 'yes' ? 'yes' : 'no'; any = true; }
+    return any ? c : null;
   }
 
   function sourcesHtml() {
@@ -391,7 +472,102 @@
         return '<div style="font-size:10.5px;color:' + (fd.severity === 'risk' ? '#FDE68A' : 'var(--sub)') + ';margin-top:3px">' + (fd.severity === 'risk' ? '⚠ ' : '· ') + esc(fd.text) + '</div>';
       }).join('') + '</div>';
     }
+    h += computeHtml(r.compute, r);
     h += '<div style="font-size:9.5px;color:#64748B;margin-top:12px;line-height:1.55">' + esc(r.disclaimer || '') + ' Lease card ' + esc(r.rateCardVersion || '') + '.</div>';
+    return h;
+  }
+
+  /* ── the skid's compute economics, as the server returned them ──────── */
+  function tile(l, v, sub) {
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--navy)"><div style="font-size:9.5px;color:#64748B;text-transform:uppercase;letter-spacing:.3px">' + esc(l) + '</div>'
+      + '<div style="font-size:14px;font-weight:800;color:var(--text);margin-top:2px">' + v + '</div>' + (sub ? '<div style="font-size:10px;color:var(--sub)">' + sub + '</div>' : '') + '</div>';
+  }
+  function grid(cells, min) { return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(' + (min || 150) + 'px,1fr));gap:8px">' + cells.join('') + '</div>'; }
+  function pctTxt(v, d) { return v == null ? '—' : (Math.round(v * (d ? 10 : 1)) / (d ? 10 : 1)) + '%'; }
+  function xTxt(v) { return v == null ? '—' : v.toFixed(2) + 'x'; }
+  function moTxt(m) { return m == null ? 'beyond the term' : m + ' mo'; }
+  function kTxt(v) { return v == null ? '—' : '$' + Math.round(v / 1000).toLocaleString('en-US') + 'k'; }
+  var TH = 'text-align:right;padding:4px 6px;color:#64748B;font-size:10px;text-transform:uppercase;white-space:nowrap';
+  var TD = 'text-align:right;padding:4px 6px;border-top:1px solid var(--border);white-space:nowrap';
+  function computeHtml(c, r) {
+    if (!c || !c.cashFlow) return '';
+    var cf = c.cashFlow, rt = cf.returns, b = cf.bankability, cap = c.capacity, d = cf.debt;
+    var n = c.units || 1;
+    var h = section('Omega Core Skid — compute economics (' + esc(c.chipset.name) + ', ' + esc(cf.pricingBasisLabel) + ')');
+    h += '<div style="font-size:11px;color:var(--text);margin-bottom:8px">' + esc(cap.nodes) + ' node' + (cap.nodes === 1 ? '' : 's') + ' · ' + esc(cap.gpus) + ' GPUs · ' + esc(cap.installedKw) + ' kW installed of ' + esc(c.inputs.itLoadKw) + ' kW IT · ' + esc(cap.facilityKw) + ' kW at the meter'
+      + (cf.priced ? ' · $' + cf.realizedGpuHour.toFixed(2) + '/GPU-hr' : ' · <span style="color:#FDE68A">no public price on this basis</span>')
+      + (n > 1 ? ' · <span style="color:var(--sub)">per skid, × ' + n + ' below</span>' : '') + '</div>';
+    h += grid([
+      tile('Capital cost', money(c.capex.amount), esc(c.capex.label) + ' · ' + money(c.capex.perItKw) + '/IT kW'),
+      tile('Debt funded', money(d.funded), Math.round(d.ltc * 100) + '% of cost at ' + (Math.round(d.rate * 1000) / 10) + '%, ' + d.maturityMonths + ' mo'),
+      tile('Initial equity', money(d.initialEquity), 'equity ' + money(d.equityCapex) + ' + fee ' + money(d.fee) + ' + reserve ' + money(d.reserve)),
+      tile('Year-1 revenue', money(rt.year1Revenue), 'year-1 operating cash flow ' + money(rt.year1Ebitda)),
+      tile('Payback', moTxt(rt.projectPaybackMonth) + ' project · ' + moTxt(rt.equityPaybackMonth) + ' equity'),
+      tile('5-year multiples', xTxt(rt.projectCashMultiple) + ' project · ' + xTxt(rt.equityCashMultiple) + ' equity', 'IRR ' + pctTxt(rt.projectIrrPct, 1) + ' project · ' + pctTxt(rt.equityIrrPct, 1) + ' equity')
+    ], 170);
+    if (n > 1 && c.totals) h += '<div style="font-size:10.5px;color:var(--sub);margin-top:6px">For ' + n + ' skids: capital ' + money(c.totals.capex) + ' · debt ' + money(c.totals.debtFunded) + ' · initial equity ' + money(c.totals.initialEquity)
+      + ' · year-1 revenue ' + money(c.totals.year1Revenue) + ' · year-1 operating cash flow ' + money(c.totals.year1Ebitda) + '</div>';
+
+    /* bankability */
+    var okc = b.minDscrAmortizing == null ? '#94A3B8' : b.meetsTarget ? '#22C55E' : '#EF4444';
+    h += '<div style="margin-top:10px;padding:10px 12px;border-radius:9px;border:1px solid ' + okc + ';background:rgba(255,255,255,.02)">'
+      + '<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap"><div style="font-weight:800;color:var(--text);font-size:12.5px">Bankability</div>'
+      + chip(okc, b.minDscrAmortizing == null ? 'Unlevered' : b.meetsTarget ? 'Min DSCR ' + b.minDscrAmortizing.toFixed(2) + 'x ≥ ' + b.targetDscr.toFixed(2) + 'x' : 'Min DSCR ' + b.minDscrAmortizing.toFixed(2) + 'x < ' + b.targetDscr.toFixed(2) + 'x') + '</div>'
+      + '<div style="font-size:11px;color:var(--text);margin-top:4px">' + esc(c.customer.bankability.verdict) + (b.monthsBelowTarget ? ' (' + b.monthsBelowTarget + ' of ' + b.amortizingMonths + ' months).' : '.')
+      + (b.debtCapacityAtTarget != null ? ' At the ' + b.targetDscr.toFixed(2) + 'x target the cash flow carries up to ' + money(b.debtCapacityAtTarget) + ' of debt (' + Math.round(b.ltcAtTarget * 100) + '% of cost).' : '')
+      + (b.balloonMonth ? ' Balloon ' + money(d.balloon) + ' in month ' + b.balloonMonth + (b.balloonMonthDscr != null ? ' (that month\'s cover ' + b.balloonMonthDscr.toFixed(2) + 'x from operations' + (rt.residualValue ? ', before the ' + money(rt.residualValue) + ' residual' : '') + ')' : '') + '.' : '')
+      + (d.balanceAtTermEnd > 0 ? ' <span style="color:#FDE68A">' + money(d.balanceAtTermEnd) + ' of debt outstanding at the end of the term.</span>' : '') + '</div></div>';
+
+    /* annual table */
+    h += '<div style="overflow-x:auto;margin-top:10px"><table style="width:100%;border-collapse:collapse;font-size:11px"><tr><th style="' + TH + ';text-align:left">Year</th><th style="' + TH + '">Revenue</th><th style="' + TH + '">OpEx</th>'
+      + (cf.lease.included ? '<th style="' + TH + '">of which rent</th>' : '') + '<th style="' + TH + '">Operating CF</th><th style="' + TH + '">Debt service</th><th style="' + TH + '">Equity CF</th><th style="' + TH + '">DSCR</th></tr>';
+    cf.years.forEach(function (y) {
+      h += '<tr><td style="' + TD + ';text-align:left">' + y.year + '</td><td style="' + TD + '">' + money(y.revenue) + '</td><td style="' + TD + '">' + money(y.opex) + '</td>'
+        + (cf.lease.included ? '<td style="' + TD + '">' + money(y.lease) + '</td>' : '') + '<td style="' + TD + ';font-weight:800;color:var(--text)">' + money(y.ebitda) + '</td><td style="' + TD + '">' + money(y.debtService) + '</td>'
+        + '<td style="' + TD + '">' + money(y.equity) + '</td><td style="' + TD + '">' + (y.dscr != null ? y.dscr.toFixed(2) + 'x' : '—') + '</td></tr>';
+    });
+    h += '</table></div><div style="font-size:10px;color:#64748B;margin-top:4px">Per skid. Equity cash flow in year 1 is after the equity, fee and reserve paid in month 1; year ' + cf.years.length + ' includes the ' + money(rt.residualValue) + ' residual and the balloon.</div>';
+
+    /* every chipset */
+    var sc = c.scenarios;
+    if (sc && sc.rows) {
+      h += '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:11px;color:var(--text);font-weight:700">Every chipset in the same ' + esc(c.inputs.itLoadKw) + ' kW, unlevered</summary>'
+        + '<div style="overflow-x:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:10.5px"><tr><th style="' + TH + ';text-align:left">Chipset</th><th style="' + TH + '">Nodes · GPUs</th><th style="' + TH + '">$/GPU-hr</th><th style="' + TH + '">Revenue / yr</th><th style="' + TH + '">Contribution</th><th style="' + TH + '">Margin</th><th style="' + TH + '">CAPEX mid</th><th style="' + TH + '">Payback</th><th style="' + TH + '">Yield</th></tr>';
+      sc.rows.forEach(function (x) {
+        var hi = x.key === sc.bestYield ? ';color:#86EFAC' : x.key === c.chipset.key ? ';color:var(--text);font-weight:700' : '';
+        h += '<tr><td style="' + TD + ';text-align:left' + hi + '">' + esc(x.name) + (x.key === sc.bestYield ? ' ★' : '') + '</td><td style="' + TD + '">' + x.nodes + ' · ' + x.gpus + '</td>'
+          + (x.priced ? '<td style="' + TD + '">$' + x.gpuHourPrice.toFixed(2) + '</td><td style="' + TD + '">' + money(x.annualRevenue) + '</td><td style="' + TD + '">' + money(x.contribution) + '</td><td style="' + TD + '">' + pctTxt(x.marginPct, 1) + '</td><td style="' + TD + '">' + money(x.capexMid) + '</td><td style="' + TD + '">' + (x.paybackMonths != null ? x.paybackMonths + ' mo' : '—') + '</td><td style="' + TD + '">' + pctTxt(x.cashOnCashYieldPct, 1) + '</td>'
+            : '<td style="' + TD + ';text-align:left;color:#FDE68A" colspan="7">' + esc(x.note || 'no public price') + '</td>') + '</tr>';
+      });
+      h += '</table></div><div style="font-size:10px;color:#64748B;margin-top:4px">' + esc(sc.basis) + ' ★ best cash-on-cash yield.</div></details>';
+    }
+    /* sensitivity */
+    var se = c.sensitivity;
+    if (se && se.priced) {
+      h += '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:var(--text);font-weight:700">Revenue sensitivity — utilisation × price realisation</summary>'
+        + '<div style="overflow-x:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:10.5px"><tr><th style="' + TH + ';text-align:left">Price ↓ / Util →</th>' + se.utilization.map(function (u) { return '<th style="' + TH + '">' + Math.round(u * 100) + '%</th>'; }).join('') + '</tr>';
+      se.priceRealization.forEach(function (pr, i) {
+        h += '<tr><td style="' + TD + ';text-align:left;color:#64748B">' + Math.round(pr * 100) + '%</td>' + se.annualRevenue[i].map(function (v, j) {
+          var base = Math.abs(pr - 1) < 1e-9 && Math.abs(se.utilization[j] - c.inputs.utilization) < 1e-9;
+          return '<td style="' + TD + (base ? ';font-weight:800;color:var(--text)' : '') + '">' + kTxt(v) + '</td>';
+        }).join('') + '</tr>';
+      });
+      h += '</table></div><div style="font-size:10px;color:#64748B;margin-top:4px">' + esc(se.basis) + '</div></details>';
+    }
+    /* the build-up, where the server disclosed it */
+    if (c.disclosed && c.buildUp) {
+      var bu = c.buildUp, cfgKey = c.inputs.capexConfig === 'accelerated-liquid' ? 'acc' : 'gp';
+      h += '<details style="margin-top:8px"><summary style="cursor:pointer;font-size:11px;color:#FDE68A;font-weight:700">Staff only — how the costs are built</summary>'
+        + '<div style="font-size:10.5px;color:var(--sub);margin-top:6px">' + esc(bu.sources.capex.what) + '. Chipset-scaled rows use the accelerated endpoints: compute × GPUs ÷ 48 × $/GPU index (' + esc(bu.chipsetLibrary.filter(function (x) { return x.key === c.chipset.key; })[0].indexBasis) + ').</div>'
+        + '<div style="overflow-x:auto;margin-top:6px"><table style="width:100%;border-collapse:collapse;font-size:10.5px"><tr><th style="' + TH + ';text-align:left">Category</th><th style="' + TH + '">' + (cfgKey === 'acc' ? 'Accelerated' : 'General purpose') + ' low</th><th style="' + TH + '">high</th><th style="' + TH + '">Scaled low</th><th style="' + TH + '">Scaled mid</th><th style="' + TH + '">Scaled high</th><th style="' + TH + '">Factor</th></tr>';
+      bu.cmdc.categories.forEach(function (cat, i) {
+        var dr = bu.dynamicCapex.rows[i];
+        h += '<tr><td style="' + TD + ';text-align:left">' + esc(cat.label) + '</td><td style="' + TD + '">' + money(cat[cfgKey][0]) + '</td><td style="' + TD + '">' + money(cat[cfgKey][1]) + '</td><td style="' + TD + '">' + money(dr.low) + '</td><td style="' + TD + '">' + money(dr.mid) + '</td><td style="' + TD + '">' + money(dr.high) + '</td><td style="' + TD + '">' + dr.factor + '×</td></tr>';
+      });
+      h += '</table></div><div style="font-size:10px;color:#64748B;margin-top:6px">Pricing: ' + esc(bu.sources.pricing.what) + ', ' + esc(bu.sources.pricing.asOf) + '. Corrections to the workbook: ' + bu.corrections.map(esc).join(' ') + '</div></details>';
+    }
+    (c.notes || []).forEach(function (t) { h += '<div style="font-size:10.5px;color:var(--sub);margin-top:5px">· ' + esc(t) + '</div>'; });
+    h += '<div style="font-size:9.5px;color:#64748B;margin-top:6px;line-height:1.55">' + esc(c.disclaimer || '') + '</div>';
     return h;
   }
 
@@ -401,7 +577,8 @@
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px">'
       + '<button id="oc-screen" onclick="OmegaCoreQualify.screen()"' + (st.busy ? ' disabled' : '') + ' style="flex:1 1 200px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(34,211,238,.14);border:1px solid rgba(34,211,238,.5);color:#A5F3FC">' + (st.evidence ? 'Re-run the lookups' : 'Screen the site') + ' — power, location, fiber</button>'
       + '<button id="oc-rescore" onclick="OmegaCoreQualify.rescore()"' + (st.busy ? ' disabled' : '') + ' style="flex:1 1 160px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(74,222,128,.12);border:1px solid rgba(74,222,128,.45);color:#86EFAC">Qualify with these answers</button>'
-      + (st.result ? '<button onclick="OmegaCoreQualify.print()" style="flex:0 1 120px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.4);color:var(--text)">Print</button>' : '')
+      + (st.result ? '<button onclick="OmegaCoreQualify.print(\'customer\')" style="flex:0 1 170px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.4);color:var(--text)">Print customer version</button>'
+        + '<button onclick="OmegaCoreQualify.print(\'full\')" style="flex:0 1 130px;padding:10px;border-radius:8px;cursor:pointer;font-family:inherit;font-weight:700;font-size:12px;background:rgba(148,163,184,.12);border:1px solid rgba(148,163,184,.4);color:var(--text)">Print full report</button>' : '')
       + '</div>' + '<div id="oc-sources">' + sourcesHtml() + '</div>'
       + '<div id="oc-log" style="margin-top:8px;font-size:11px;color:var(--sub)"></div>'
       + '<div id="oc-result">' + resultHtml(st.result) + '</div></div>';
@@ -441,7 +618,9 @@
       /* ride on the project: the answers and the headline, never the card */
       S.omegaCore = { rep: rep, at: new Date().toISOString(), verdict: r.verdict, units: r.units && r.units.proposed,
                       monthlyPerSkidBase: r.offer ? r.offer.monthlyPerSkid.base : null, termYears: r.terms && r.terms.termYears,
-                      leaseSource: r.offer ? r.offer.source : null, rateCardVersion: r.rateCardVersion || null };
+                      leaseSource: r.offer ? r.offer.source : null, rateCardVersion: r.rateCardVersion || null,
+                      compute: r.compute && r.compute.cashFlow ? { chipset: r.compute.chipset.key, capex: r.compute.capex.amount, year1Ebitda: r.compute.cashFlow.returns.year1Ebitda,
+                                                                  minDscr: r.compute.cashFlow.bankability.minDscrAmortizing, build: r.compute.build } : null };
       /* what is in the fields NOW (typed while the request ran) survives the repaint */
       f.saved = readRep() || rep;
       onSource('score', r.verdict === 'not-qualified' ? 'bad' : (r.verdict === 'qualified' || r.verdict === 'conditional') ? 'ok' : 'warn',
@@ -508,12 +687,68 @@
 
   /* A printable summary, printed through a hidden frame so no pop-up
      blocker eats it. Everything on it came back from the server. */
-  function print() {
+  var PRINT_CSS = '<style>body{font:12px/1.5 Arial,Helvetica,sans-serif;color:#111;margin:28px}h1{font-size:20px;margin:0 0 2px}h2{font-size:13px;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.5px;color:#334155}'
+      + 'table{border-collapse:collapse;width:100%}td,th{padding:4px 6px;border-top:1px solid #e2e8f0;text-align:right}td:first-child,th:first-child{text-align:left}th{font-size:10px;color:#64748b;text-transform:uppercase;border-top:0}'
+      + 'ul,ol{margin:0;padding-left:18px}.k{color:#64748b;text-align:left}.v{font-weight:700}.small{font-size:10px;color:#64748b}.tiles{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}.tile{border:1px solid #e2e8f0;border-radius:8px;padding:8px 10px}.tile .l{font-size:9.5px;color:#64748b;text-transform:uppercase}.tile .n{font-size:15px;font-weight:800}</style>';
+  function computePrint(c, full) {
+    if (!c || !c.cashFlow) return '';
+    var cf = c.cashFlow, cu = c.customer, b = cu.bankability, doc = '';
+    doc += '<h2>' + esc(cu.title) + '</h2><div class="tiles">' + cu.headline.map(function (t) { return '<div class="tile"><div class="l">' + esc(t.label) + '</div><div class="n">' + esc(t.value) + '</div></div>'; }).join('') + '</div>';
+    doc += '<h2>Bankability</h2><div>' + esc(b.verdict) + '.' + (b.debtCapacityAtTarget != null ? ' At a ' + b.targetDscr.toFixed(2) + 'x target the cash flow carries up to ' + money(b.debtCapacityAtTarget) + ' of debt (' + Math.round(b.ltcAtTargetPct) + '% of cost); ' + money(b.debtFunded) + ' (' + Math.round(b.ltcPct) + '%) is assumed.' : '')
+      + (b.balloonMonth ? ' The ' + money(b.balloon) + ' balloon falls in month ' + b.balloonMonth + (b.balloonMonthDscr != null ? ', covered ' + b.balloonMonthDscr.toFixed(2) + 'x from that month\'s operations before the residual' : '') + '.' : '') + (b.repaidInTerm === false ? ' Debt remains outstanding at the end of the term.' : '') + '</div>';
+    doc += '<h2>Five years, per skid</h2><table><tr><th>Year</th><th>Revenue</th><th>Operating costs</th>' + (cf.lease.included ? '<th>of which rent to host</th>' : '') + '<th>Operating cash flow</th><th>Debt service</th><th>Equity cash flow</th><th>DSCR</th></tr>'
+      + cf.years.map(function (y) { return '<tr><td>' + y.year + '</td><td>' + money(y.revenue) + '</td><td>' + money(y.opex) + '</td>' + (cf.lease.included ? '<td>' + money(y.lease) + '</td>' : '') + '<td class="v">' + money(y.ebitda) + '</td><td>' + money(y.debtService) + '</td><td>' + money(y.equity) + '</td><td>' + (y.dscr != null ? y.dscr.toFixed(2) + 'x' : '—') + '</td></tr>'; }).join('') + '</table>';
+    if (c.units > 1 && c.totals) doc += '<div class="small">For ' + c.units + ' skids: capital ' + money(c.totals.capex) + ', debt ' + money(c.totals.debtFunded) + ', initial equity ' + money(c.totals.initialEquity) + ', year-1 revenue ' + money(c.totals.year1Revenue) + ', year-1 operating cash flow ' + money(c.totals.year1Ebitda) + '.</div>';
+    doc += '<h2>Assumptions</h2><ul>' + cu.assumptions.map(function (a) { return '<li>' + esc(a) + '</li>'; }).join('') + '</ul>';
+    if (full && c.scenarios) {
+      doc += '<h2>Every chipset in the same ' + esc(c.inputs.itLoadKw) + ' kW (unlevered)</h2><table><tr><th>Chipset</th><th>Nodes · GPUs</th><th>$/GPU-hr</th><th>Revenue / yr</th><th>Contribution</th><th>Margin</th><th>CAPEX mid</th><th>Payback</th><th>Yield</th></tr>'
+        + c.scenarios.rows.map(function (x) { return '<tr><td>' + esc(x.name) + (x.key === c.scenarios.bestYield ? ' ★' : '') + '</td><td>' + x.nodes + ' · ' + x.gpus + '</td>' + (x.priced ? '<td>$' + x.gpuHourPrice.toFixed(2) + '</td><td>' + money(x.annualRevenue) + '</td><td>' + money(x.contribution) + '</td><td>' + pctTxt(x.marginPct, 1) + '</td><td>' + money(x.capexMid) + '</td><td>' + (x.paybackMonths != null ? x.paybackMonths + ' mo' : '—') + '</td><td>' + pctTxt(x.cashOnCashYieldPct, 1) + '</td>' : '<td colspan="7" style="text-align:left">' + esc(x.note || '') + '</td>') + '</tr>'; }).join('') + '</table><div class="small">' + esc(c.scenarios.basis) + '</div>';
+      if (c.sensitivity && c.sensitivity.priced) {
+        var se = c.sensitivity;
+        doc += '<h2>Revenue sensitivity</h2><table><tr><th>Price ↓ / Utilisation →</th>' + se.utilization.map(function (u) { return '<th>' + Math.round(u * 100) + '%</th>'; }).join('') + '</tr>'
+          + se.priceRealization.map(function (pr, i) { return '<tr><td>' + Math.round(pr * 100) + '%</td>' + se.annualRevenue[i].map(function (v) { return '<td>' + kTxt(v) + '</td>'; }).join('') + '</tr>'; }).join('') + '</table>';
+      }
+      if (c.disclosed && c.buildUp) {
+        var bu = c.buildUp, k = c.inputs.capexConfig === 'accelerated-liquid' ? 'acc' : 'gp';
+        doc += '<h2>Staff only — cost build-up</h2><div class="small">' + esc(bu.sources.capex.what) + '</div><table><tr><th>Category</th><th>Reference low</th><th>Reference high</th><th>Scaled low</th><th>Scaled mid</th><th>Scaled high</th><th>Factor</th></tr>'
+          + bu.cmdc.categories.map(function (cat, i) { var dr = bu.dynamicCapex.rows[i]; return '<tr><td>' + esc(cat.label) + '</td><td>' + money(cat[k][0]) + '</td><td>' + money(cat[k][1]) + '</td><td>' + money(dr.low) + '</td><td>' + money(dr.mid) + '</td><td>' + money(dr.high) + '</td><td>' + dr.factor + '×</td></tr>'; }).join('') + '</table>'
+          + '<div class="small">Pricing: ' + esc(bu.sources.pricing.what) + ', ' + esc(bu.sources.pricing.asOf) + '. ' + bu.corrections.map(esc).join(' ') + '</div>';
+      }
+    }
+    doc += '<p class="small">' + esc(c.disclaimer || '') + '</p>';
+    return doc;
+  }
+  function printDoc(doc) {
+    var fr = document.createElement('iframe');
+    fr.setAttribute('style', 'position:fixed;right:0;bottom:0;width:0;height:0;border:0');
+    document.body.appendChild(fr);
+    try {
+      var d = fr.contentWindow.document; d.open(); d.write(doc); d.close();
+      setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) {} setTimeout(function () { fr.remove(); }, 1500); }, 150);
+    } catch (e) { fr.remove(); }
+  }
+  /* The customer version: the skid, the site's verdict in one line, the
+     lease, the compute economics and their assumptions in plain words — no
+     gate basis, no cost build-up, no third-party price sheet. */
+  function printCustomer(r, f) {
+    var b = r.brand || {}, o = r.offer, t = r.terms || {};
+    var doc = '<!doctype html><html><head><meta charset="utf-8"><title>Omega Core Skid — ' + esc(f.site.name || f.site.address || 'site') + '</title>' + PRINT_CSS + '</head><body>'
+      + '<div class="small">' + esc(b.name || 'ClearSky') + ' · Omega Core Skid · ' + esc(new Date().toISOString().slice(0, 10)) + '</div>'
+      + '<h1>' + esc(f.site.name || 'Omega Core Skid') + '</h1><div>' + esc(f.site.address || '') + '</div>'
+      + '<h2>The skid</h2><div>' + esc(r.product.compute.kw) + ' kW of edge compute with a ' + esc(r.product.battery.kwh) + ' kWh / ' + esc(r.product.battery.kw) + ' kW battery on one ' + esc(r.product.skid.lengthIn) + ' × ' + esc(r.product.skid.depthIn) + ' in skid, on its own utility meter. '
+      + esc(t.ownership || '') + ' ' + esc(t.minTermYears) + '-year minimum; ' + esc((t.endOfTerm || {}).remove || '') + ' ' + esc((t.endOfTerm || {}).buyout || '') + '</div>'
+      + '<h2>Site</h2><div class="v">' + esc((VERDICT[r.verdict] || ['', r.verdictLabel || r.verdict])[1]) + ' — ' + esc(r.units.proposed) + ' skid' + (r.units.proposed > 1 ? 's' : '') + '</div><div>' + esc(r.verdictReason) + '</div>';
+    if (o) doc += '<h2>' + esc(o.label || 'Land lease to the host') + '</h2><div>' + money(o.monthlyPerSkid.base) + ' per skid per month' + (o.source === 'market' ? ' (market reference ' + money(o.monthlyPerSkid.low) + '–' + money(o.monthlyPerSkid.high) + ', not an offer)' : '') + ' · ' + money(o.annual.base) + ' a year for ' + esc(o.units) + ' skid' + (o.units > 1 ? 's' : '') + ' · ' + money(o.termTotal.base) + ' over ' + esc(o.termYears) + ' years at ' + esc(o.escalatorPct.base) + '%/yr.</div>';
+    doc += computePrint(r.compute, false);
+    doc += '<p class="small">' + esc(r.disclaimer) + '</p></body></html>';
+    return doc;
+  }
+
+  function print(mode) {
     var r = st.result, f = st.facts; if (!r || !f) return;
+    if (mode === 'customer') return printDoc(printCustomer(r, f));
     var b = r.brand || {};
-    var doc = '<!doctype html><html><head><meta charset="utf-8"><title>Omega-Core — ' + esc(f.site.name || f.site.address || 'site') + '</title>'
-      + '<style>body{font:12px/1.5 Arial,Helvetica,sans-serif;color:#111;margin:28px}h1{font-size:20px;margin:0 0 2px}h2{font-size:13px;margin:18px 0 6px;text-transform:uppercase;letter-spacing:.5px;color:#334155}'
-      + 'table{border-collapse:collapse;width:100%}td{padding:4px 6px;border-top:1px solid #e2e8f0}ul,ol{margin:0;padding-left:18px}.k{color:#64748b}.v{font-weight:700}.small{font-size:10px;color:#64748b}</style></head><body>';
+    var doc = '<!doctype html><html><head><meta charset="utf-8"><title>Omega-Core — ' + esc(f.site.name || f.site.address || 'site') + '</title>' + PRINT_CSS + '</head><body>';
     doc += '<div class="small">' + esc(b.name || 'ClearSky') + ' · Omega-Core site qualification · ' + esc(new Date().toISOString().slice(0, 10)) + '</div>'
       + '<h1>' + esc(f.site.name || 'Omega-Core site') + '</h1><div>' + esc(f.site.address || '') + '</div>'
       + '<h2>Verdict</h2><div class="v">' + esc((VERDICT[r.verdict] || ['', r.verdictLabel || r.verdict])[1]) + ' — ' + esc(r.units.proposed) + ' skid' + (r.units.proposed > 1 ? 's' : '') + '</div><div>' + esc(r.verdictReason) + '</div>'
@@ -533,14 +768,9 @@
     doc += '<h2>Terms</h2><ul><li>' + esc(t.minTermYears) + '-year minimum term. ' + esc(t.renewal) + '</li><li>' + esc(t.meter) + '</li><li>' + esc(t.ownership) + '</li><li>' + esc((t.endOfTerm || {}).remove) + '</li><li>' + esc((t.endOfTerm || {}).buyout)
       + ' Indicative: ' + money(fmv.low) + '–' + money(fmv.high) + ' per skid at year ' + esc((t.endOfTerm || {}).year) + ' on a ' + money(p.systemCostPerSkid) + ' system.</li></ul>';
     if (r.asks && r.asks.length) doc += '<h2>' + (r.verdict === 'qualified' || r.verdict === 'conditional' ? 'Still to do' : 'What it needs to qualify') + '</h2><ol>' + r.asks.map(function (a) { return '<li>' + esc(a.gate) + ': ' + esc(a.ask) + '</li>'; }).join('') + '</ol>';
+    doc += computePrint(r.compute, true);
     doc += '<p class="small">' + esc(r.disclaimer) + ' Lease card ' + esc(r.rateCardVersion) + '.</p></body></html>';
-    var fr = document.createElement('iframe');
-    fr.setAttribute('style', 'position:fixed;right:0;bottom:0;width:0;height:0;border:0');
-    document.body.appendChild(fr);
-    try {
-      var d = fr.contentWindow.document; d.open(); d.write(doc); d.close();
-      setTimeout(function () { try { fr.contentWindow.focus(); fr.contentWindow.print(); } catch (e) {} setTimeout(function () { fr.remove(); }, 1500); }, 150);
-    } catch (e) { fr.remove(); }
+    printDoc(doc);
   }
 
   function open() {
