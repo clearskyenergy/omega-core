@@ -8416,30 +8416,35 @@ function wireSales(){
    (the same), and the Sales agent's own switch (sales_config). */
 const OFFICE_DESKS=[
   {key:'sales', name:'Sales', who:'Nora', last:'Hale', mail:'sales@clearsky-usa.com', sched:'weekdays 8:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:1,w:7,d:6},
-   role:'Answers demo requests, works the accounts, researches prospects.',
-   may:'Sends email as Thomas and books 30-minute demos, 8:30–2:30 Central.', sends:true,
+   role:'Answers demo requests, works the accounts, follows up, researches prospects, and emails Thomas ten LinkedIn people a day to connect with (the note and the message written).',
+   may:'Sends email as Thomas and books 30-minute demos, 8:30–2:30 Central, for Thomas or Mike, with Thomas and Andrew on every invitation.', sends:true,
    tools:'Gmail · Google Calendar · Google Drive'},
   {key:'marketing', name:'Marketing', who:'Mila', last:'Sorensen', mail:'marketing@clearsky-usa.com', sched:'weekdays 10:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:0,w:7,d:5},
-   role:'The press desk: pitches the Omega-Core story to the trade press on the beat, and one update to accounts when something ships. The LinkedIn post is its own routine, 7:57.',
-   may:'Pitches outlets, never a price; an interview, quote or exclusive is Thomas’s to give.', sends:true, tools:'Gmail'},
+   role:'The press desk and the campaigns: pitches the Omega-Core story to the trade press on the beat, builds one campaign at a time for Thomas to approve, and one update to accounts when something ships. The LinkedIn post is its own routine, 7:57.',
+   may:'Pitches outlets, never a price; an expense, an interview, a quote or an exclusive waits for Thomas’s APPROVE by email.', sends:true, tools:'Gmail · Typefully'},
   {key:'software', name:'Software', who:'Theo', last:'Varga', mail:'dev@clearsky-usa.com', sched:'daily 8:00', days:[0,1,2,3,4,5,6], perDay:1, grace:30, room:{x:17,y:1,w:7,d:6},
-   role:'The steward: tests, integrity, a pull request for what is small and obviously right.',
-   may:'Opens pull requests. Never merges, never deploys.', tools:'GitHub',
-   ext:'https://github.com/clearskyenergy/omega-core/pulls', extText:'reports on GitHub, not here'},
+   role:'The steward: tests, production, the bugs Sam hands over, a pull request for what is small and obviously right.',
+   may:'Opens pull requests and answers Sam’s handoffs. Never merges, never deploys.', tools:'GitHub · Gmail',
+   ext:'https://github.com/clearskyenergy/omega-core/pulls', extText:'also reports on GitHub'},
   {key:'support', name:'Support', who:'Sam', last:'Okafor', mail:'support@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', days:[1,2,3,4,5], perDay:2, grace:30, room:{x:1,y:9,w:7,d:6},
-   role:'Reads what customers asked, answers from the manuals, logs a bug as an issue.',
-   may:'Drafts only. Never sends, never promises a refund.', tools:'Gmail · GitHub'},
+   role:'Reads what customers asked, answers from the manuals, hands a bug to Theo as an issue and tells the customer.',
+   may:'Sends how-to answers as Thomas. A refund, a credit or anything angry waits for Thomas.', sends:true, tools:'Gmail · GitHub'},
   {key:'billing', name:'Billing', who:'June', last:'Castellano', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:17,y:9,w:7,d:6},
-   role:'A/R aging and open invoices from QuickBooks: what is past due, oldest first.',
-   may:'Drafts reminders. Never changes an invoice, never charges a card.', tools:'QuickBooks · Gmail'},
+   role:'A/R aging and open invoices from QuickBooks, billing questions answered, reminders at 7 and 14 days, and the weekly P&L to Thomas on Monday.',
+   may:'Sends the first two reminders. 30+ days, a dispute, a refund or a credit waits for Thomas’s APPROVE. Never changes an invoice, never charges a card.', sends:true, tools:'QuickBooks · Gmail'},
   {key:'admin', name:'Admin', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
-   role:'The day’s logistics: meetings, unanswered mail, promises due, tomorrow. Sunday night: the weekly plan for every desk, for Thomas to approve.',
+   role:'The day’s logistics: meetings, the office’s open approvals and handoffs, unanswered mail, promises due, tomorrow. Sunday night: the weekly plan for every desk, for Thomas to approve.',
    may:'One email to Thomas. Everything else is a draft.', tools:'Gmail · Google Calendar'}
 ];
 const OFFICE_LOBBY={x:9,y:6,w:7,d:5};
 const OFFICE_DESK_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\b[:\s·—–-]*/i;
 const OFFICE_PLAN_RE=/^\s*PLAN\s+(\d{4}-W\d{2})\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*(proposed|approved|changed|skipped)\b\s*[—–:-]*\s*([\s\S]*)$/i;
 const OFFICE_NOTE_RE=/^\s*NOTE\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*([\s\S]*)$/i;
+/* the office protocol (jarvis/agents/office/protocol.md): a desk asks Thomas by
+   email and logs `<DESK>: APPROVAL #<ID> requested — …`, then `done` or
+   `declined`; work between desks is `<DESK>: HANDOFF #<ID> → <desk>: …`. */
+const OFFICE_APPROVAL_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*APPROVAL\s+#?([A-Z]+-\d{8}-\d+)\s*(requested|done|declined)\b\s*[—–:-]*\s*([\s\S]*)$/i;
+const OFFICE_HANDOFF_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*HANDOFF\s+#?([A-Z]+-\d{8}-\d+)\s*(?:→|->)\s*(\w+)\s*:\s*([\s\S]*)$/i;
 let officeActs=null, officeAt=0, officeBusy=false, officeSel=null;
 /* Firestore hands a timestamp back three ways (an ISO string, millis, or
    {_seconds}); the dashboard payload normalises, the activity view does not. */
@@ -8466,8 +8471,11 @@ async function officeFetchActivity(){
     const ms=officeMs(a.at), s=String(a.summary||'');
     const plan=a.kind==='note'?OFFICE_PLAN_RE.exec(s):null, note=a.kind==='note'?OFFICE_NOTE_RE.exec(s):null;
     const row=Object.assign({},a,{ms, desk:null, plan:null, memo:null});
+    const appr=a.kind==='note'?OFFICE_APPROVAL_RE.exec(s):null, hand=a.kind==='note'?OFFICE_HANDOFF_RE.exec(s):null;
     if(plan){ row.desk=plan[2].toLowerCase(); row.plan={week:plan[1].toUpperCase(), status:plan[3].toLowerCase(), text:plan[4].trim()}; }
     else if(note){ row.desk=note[1].toLowerCase(); row.memo=note[2].trim(); }
+    else if(appr){ row.desk=appr[1].toLowerCase(); row.approval={id:appr[2].toUpperCase(), status:appr[3].toLowerCase(), text:appr[4].trim()}; }
+    else if(hand){ row.desk=hand[1].toLowerCase(); row.handoff={id:hand[2].toUpperCase(), to:hand[3].toLowerCase(), text:hand[4].trim()}; }
     else if(/^agent:/i.test(String(a.by||''))){ const m=OFFICE_DESK_RE.exec(s); if(m) row.desk=m[1].toLowerCase(); }
     row.text=row.plan?row.plan.text:row.memo!=null?row.memo:s.replace(OFFICE_DESK_RE,'');
     return row;
@@ -8496,7 +8504,8 @@ function officeState(){
   const acts=officeActs||[], now=Date.now(), week=officeWeek(new Date());
   const day0=new Date(); day0.setHours(0,0,0,0);
   const by={};
-  OFFICE_DESKS.forEach(d=>{ by[d.key]={desk:d, last:null, today:0, plan:null, proposed:null, notes:[], rows:[]}; });
+  OFFICE_DESKS.forEach(d=>{ by[d.key]={desk:d, last:null, today:0, plan:null, proposed:null, notes:[], rows:[], approvals:[], handoffs:[]}; });
+  const settled={}, approvals=[], handoffs=[];
   acts.forEach(r=>{
     if(!r.desk || !by[r.desk]) return;
     const s=by[r.desk];
@@ -8505,6 +8514,14 @@ function officeState(){
       return;
     }
     if(r.memo!=null){ if(now-r.ms<=7*864e5) s.notes.push(r); return; }
+    if(r.approval){
+      /* newest first: a done or declined line settles the id before its request is read */
+      if(r.approval.status!=='requested'){ settled[r.approval.id]=r.approval.status; }
+      else if(!settled[r.approval.id] && now-r.ms<=14*864e5){ settled[r.approval.id]='waiting'; s.approvals.push(r); approvals.push(r); }
+      s.rows.push(r); if(r.ms>=day0.getTime()) s.today++;
+      return;
+    }
+    if(r.handoff){ if(now-r.ms<=7*864e5){ s.handoffs.push(r); handoffs.push(r); } s.rows.push(r); if(r.ms>=day0.getTime()) s.today++; return; }
     s.rows.push(r);
     if(r.kind==='agent-run' && !s.last) s.last=r;
     if(r.ms>=day0.getTime()) s.today++;
@@ -8513,7 +8530,7 @@ function officeState(){
     const s=by[k], d=s.desk, hrs=s.last?(now-s.last.ms)/36e5:null;
     s.cls=!s.last?'never':(hrs<=d.grace?'ran':'late');
   });
-  return {by, week, runs:acts.filter(a=>a.kind==='agent-run')};
+  return {by, week, runs:acts.filter(a=>a.kind==='agent-run'), approvals, handoffs};
 }
 /* ── the floor ── an isometric room a desk; iso() is the city's projection */
 function officeIso(x,y,z){ return [500+(x-y)*19, 70+(x+y)*9.5-(z||0)]; }
@@ -8616,7 +8633,9 @@ function renderOfficeSide(st){
     const t2=officeH('div','ptitle','What the office needs'); t2.style.marginTop='14px'; host.appendChild(t2);
     const needs=[], logged=st.runs.length>0, late=OFFICE_DESKS.filter(d=>st.by[d.key].cls==='late').length;
     if(!logged) needs.push({level:'act', text:'No desk has logged a run. A Routine writes here only with OMEGA_SALES_KEY in its cloud environment (claude.ai → the Tommy Digital Twin environment → Edit) and its connectors attached in claude.ai → Routines. Until then each run reports it has no mail, calendar or books, and sends nothing.'});
-    if(!st.by.sales.last) needs.push({level:'act', text:'Sales has never logged a run. Its Routine is created by hand in claude.ai → Routines from jarvis/agents/office/sales.md (weekdays 8:05 Central; Gmail, Google Calendar, Google Drive).'});
+    if(!st.by.sales.last) needs.push({level:'act', text:'Sales has never logged a run. Its Routine (Agent Office — Sales, weekdays 8:05 Central) writes here once OMEGA_SALES_KEY is in its environment and Gmail, Google Calendar and Google Drive are attached to it in claude.ai → Routines.'});
+    if(st.approvals.length) needs.push({level:'act', text:st.approvals.length+(st.approvals.length===1?' approval is':' approvals are')+' waiting on you: '+st.approvals.map(r=>'#'+r.approval.id+' ('+r.desk+': '+r.approval.text.slice(0,60)+')').join(', ')+'. Reply APPROVE #id or DECLINE #id on the desk’s email; the desk acts on its next run.'});
+    if(st.handoffs.length) needs.push({level:'watch', text:st.handoffs.length+(st.handoffs.length===1?' handoff':' handoffs')+' between desks this week: '+st.handoffs.map(r=>r.desk+' → '+r.handoff.to+' #'+r.handoff.id).join(', ')+'.'});
     if(!cfg.enabled) needs.push({level:'act', text:'The agent switch is off (Sales → Agent settings, or the Sales room here). Off means report only: the Sales desk drafts nothing, sends nothing, books nothing.'});
     if(!cfg.sender || !cfg.postalAddressSet) needs.push({level:'watch', text:'Cold email is blocked until Agent settings has a clearsky-usa.com sender and a postal address (CAN-SPAM). Replies to people who wrote to us, and to accounts, go out regardless.'});
     const waiting=OFFICE_DESKS.filter(d=>st.by[d.key].plan && st.by[d.key].plan.plan.status==='proposed').length;
@@ -8672,7 +8691,13 @@ function renderOfficeSide(st){
    ['Replies · 30d', String(p30.replies), p7.replies+' this week', '']
   ].forEach(t=>{ const x=officeH('div','lTile'+(t[3]?' '+t[3]:'')); x.appendChild(officeH('div','t',t[0])); x.appendChild(officeH('div','v',t[1])); x.appendChild(officeH('div','s',t[2])); grid.appendChild(x); });
   ps.appendChild(grid);
-  if(d.ext) ps.appendChild(officeH('p',null,'The steward reports in pull requests and the Integrity panel, not in this log; its numbers here stay at zero.'));
+  if(d.ext) ps.appendChild(officeH('p',null,'The steward also reports in pull requests and the Integrity panel; its sends here are its answers to Sam’s handoffs.'));
+  /* what waits on Thomas, and what moved between desks */
+  if(s.approvals.length || s.handoffs.length){
+    const os=officeH('div','dsec'); os.appendChild(officeH('h4',null,'Waiting on you · handoffs')); host.appendChild(os);
+    const ol=officeH('div'); ol.id='deskOffice'; os.appendChild(ol);
+    listInto('deskOffice', s.approvals.concat(s.handoffs), r=>({ time:sStamp(new Date(r.ms).toISOString()), left:r.approval?('APPROVAL #'+r.approval.id+' — '+r.approval.text+' · reply APPROVE #'+r.approval.id+' or DECLINE #'+r.approval.id+' on '+d.who+'’s email'):('HANDOFF #'+r.handoff.id+' → '+r.handoff.to+': '+r.handoff.text), right:r.approval?'waiting':'', clamp:true }), '');
+  }
   /* decisions and doors */
   const ds=officeH('div','dsec'); ds.appendChild(officeH('h4',null,'Decisions')); host.appendChild(ds);
   const dl=officeH('div','dlinks');
@@ -8684,7 +8709,7 @@ function renderOfficeSide(st){
     const bk=officeH('a',null,cfg.demoLink?'Booking link ↗':'No booking link: Sales → Agent settings'); bk.href=cfg.demoLink||'#'; if(cfg.demoLink){ bk.target='_blank'; bk.rel='noopener'; } else bk.addEventListener('click',ev=>{ ev.preventDefault(); showView('sales'); }); dl.appendChild(bk);
   }
   const mb=officeH('a',null,'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);
-  const jn=officeH('a',null,'Job note ↗'); jn.href='https://github.com/clearskyenergy/jarvis/blob/main/agents/office/'+(d.key==='software'?'README':d.key)+'.md'; jn.target='_blank'; jn.rel='noopener'; dl.appendChild(jn);
+  const jn=officeH('a',null,'Job note ↗'); jn.href='https://github.com/clearskyenergy/jarvis/blob/main/agents/office/'+d.key+'.md'; jn.target='_blank'; jn.rel='noopener'; dl.appendChild(jn);
   if(d.key==='software'){ const pr=officeH('a',null,'Pull requests ↗'); pr.href=d.ext; pr.target='_blank'; pr.rel='noopener'; dl.appendChild(pr); const is=officeH('a',null,'Support issues ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='support'){ const is=officeH('a',null,'Issues it opened ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='billing'){ const qb=officeH('a',null,'QuickBooks ↗'); qb.href='https://app.qbo.intuit.com/app/invoices'; qb.target='_blank'; qb.rel='noopener'; dl.appendChild(qb); }
