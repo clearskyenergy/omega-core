@@ -27,11 +27,14 @@ daily approval.
   `linkedin.com/company/clearsky-energy`, the company page. Never X or any
   other platform.
 - The Typefully plan has a **publishing allowance** (`publishing_quota` on
-  the social set: 10 a month when this was written, resetting on the 1st).
-  Every run reads it first. With fewer remaining than days left in the
-  month, the agent tells the founder that day, and when it reaches zero it
-  publishes nothing and sends the post to paste instead. It never spends the
-  allowance on anything but the day's calendar post.
+  the social set: 10 a month on the free plan, resetting on the 1st).
+  Every run reads it first. The founder is trialling the free plan before
+  paying (2026-10-06): the agent publishes until the allowance is spent,
+  says so once when it starts and once more at 2 remaining (never a daily
+  warning), and at zero publishes nothing and sends the post to paste
+  instead until the reset. It never spends the allowance on anything but the
+  day's calendar post. The Monday reports on 2026-10-12 and 2026-10-19
+  compare the agent's weeks with the week the founder posted by hand.
 - It may schedule tomorrow's calendar post during today's run, so the 8:00
   slot never depends on a late wake-up; it still checks the queue first so a
   post is never scheduled twice.
