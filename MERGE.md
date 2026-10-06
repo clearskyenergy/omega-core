@@ -2902,6 +2902,51 @@ screenshot (925) was not asserted as an assessor-record address. Regression test
 cover municipal selection, bounded tile URLs, out-of-state exclusion, Connecticut
 record mapping, existing county overlays and Regrid behavior.
 
+---
+
+## 2026-10-02 · Omega-Core: the skid, the R60, and its qualification in `/api/`
+
+Omega-Core (Solela Edge Compute 75 kW + CleanCell R60 61.44 kWh / 60 kW on one
+336 × 87 in skid, its own utility meter, a land lease to the charging-site
+host, $450,000, 5-year minimum, removal or a fair-market-value buyout) went
+into the editor as `DC_CATALOG.dc_omegacore` and Output › Omega-Core.
+
+**Logic placed server-side before it was ever in a page** (CLAUDE.md, IP
+protection): the three gates, the skid count the power carries, the lease
+card, the host's payback arithmetic and the buyout band are
+`api/_lib/omega-core.js` behind `api/omega-core.js`. The browser
+(`omega-core-qualify.js`) collects the Run and the drawing, fans out through
+`OmegaComputeLease.evidence` and renders. The price is not in `editor.html`.
+
+**One rule each.** The fiber gate and the zoning classifier are
+`api/compute-lease.js`'s `_model` (the first `_lib` to require an endpoint's
+model — on purpose, rather than a second copy of the hard gate); the lateral
+band and the escalated annuity are its too.
+
+**The skid is not the host's.** A `derdc` shape was host load, host capex
+(the $30k/kW pod benchmark and the DC electrical ROM) and a data-centre
+classifier everywhere; `sh.omegaCore` is now skipped by each of those readers
+(listed in `docs/OMEGA-CORE.md`) and counted as itself in the legend, the
+Results rail, the BOM and the spec sheet.
+
+**`applyBMCatalog` changed for every entry that carries an explicit `_inc*`
+flag** (the R60 and every tenant product merged by `omega-bess-products.js`):
+the catalog's own word on its PCS, transformer and disconnect now wins over
+the >760 kW size rule. Entries without the flags behave as before.
+
+**The rent (2026-10-03).** No Omega-Core rent is set, so the card
+(`omega-core-lease-v2`) is a market reference read off cell-tower ground
+leases and parking-stall rent, never an offer whatever the verdict, and the
+dialog takes a rent (and escalator) typed per site, which the lease and the
+host's figures follow. Still server-side: the browser sends the number, the
+model prices it.
+
+Open: compute revenue and ClearSky's return on the skid (belongs in
+`api/_lib/compute-site.js` when Solela's figures arrive); ClearSky's own
+standard rent; a signed comp set for the buyout band; the R60 in Clean Cell's
+own tenant product list.
+
+
 ## 2026-10-06 — Value Stack: rates server-side, IRR, printable report
 
 The editor's Analyze › Value Stack panel carried its own ZIP→state table,
