@@ -166,7 +166,7 @@ ok('SGIP prices at the ITC-adjusted rate when the ITC is claimed', function(){
 ok('NYSERDA pays by region, and only the first 20,000 kWh', function(){
   const nyc = V.rebatesFor({ state: 'NY', nyc: true }, 'commercial', {})[0];
   const ros = V.rebatesFor({ state: 'NY', nyc: false }, 'commercial', {})[0];
-  assert.strictEqual(nyc.perKwh, 125);
+  assert.strictEqual(nyc.perKwh, 75);
   assert.strictEqual(ros.perKwh, 175);
   const inc = V.incentives({ capexUsd: 20000000, kwh: 25000, rebates: [ros] });
   const row = inc.items.filter(x => x.id === 'ny.nyserda.retail')[0];

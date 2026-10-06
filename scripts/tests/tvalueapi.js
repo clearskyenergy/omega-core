@@ -256,8 +256,8 @@ Promise.resolve()
   .then(function (r) {
     var R = r.status === 200 && r.body.result;
     var ny = R && R.incentives.items.filter(function (x) { return x.id === 'ny.nyserda.retail'; })[0];
-    ok('New York City gets NYSERDA at the NYC block rate ($125/kWh)',
-      ny && Math.round(ny.usd) === 125 * 800, ny || (R && R.incentives.items));
+    ok('New York City gets NYSERDA at the NYC block rate ($75/kWh)',
+      ny && Math.round(ny.usd) === 75 * 800, ny || (R && R.incentives.items));
   });
 })
 .then(function () {
