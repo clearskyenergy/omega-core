@@ -374,29 +374,77 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .sSug{font-size:12.5px;line-height:1.5;padding:6px 0 6px 10px;margin-bottom:6px;border-left:2px solid rgba(0,243,255,.3);color:var(--ink)}
 .sSug.act{border-left-color:var(--warn)}
 .sSug.ok{border-left-color:var(--good);color:var(--dim)}
-/* The office: one desk a team. A desk that never ran still draws, with its
-   schedule on it, because an empty desk beside a busy one is the shape of
-   a missing key or a connector nobody attached. */
-.deskGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;flex:none}
-.desk{border:var(--edge);background:rgba(0,0,0,.22);padding:10px 12px;display:flex;flex-direction:column;gap:5px;min-width:0}
-.desk .dh{display:flex;align-items:center;gap:8px}
-.desk .dh .pn{font-size:14px;font-weight:600;color:var(--ink);white-space:nowrap}
-.desk .dh .nm{font-family:var(--mono);font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:var(--dim);flex:1;min-width:0}
-.desk .dh .sch{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim);white-space:nowrap}
-.desk .role{font-size:12.5px;line-height:1.45;color:var(--ink)}
-.desk .may{font-size:11.5px;line-height:1.45;color:var(--dim)}
-.desk .may b{color:var(--warn);font-weight:600}
-.desk .tools{font-family:var(--mono);font-size:9px;letter-spacing:1px;color:var(--dim)}
-.desk .last{font-size:11.5px;line-height:1.45;color:var(--dim);border-top:1px solid rgba(0,243,255,.08);padding-top:6px;margin-top:2px;
-            display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.desk .last .st{font-family:var(--mono);font-size:9px;letter-spacing:1px;text-transform:uppercase;margin-right:6px}
-.desk.ran .last .st{color:var(--good)}
-.desk.late .last .st{color:var(--warn)}
-.desk.never .last .st{color:var(--dim)}
-.desk .last a{color:var(--glow-cyan);text-decoration:none}
-.officeGrid{display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:12px;flex:1;min-height:0}
-@media (max-width:1100px){ .deskGrid{grid-template-columns:repeat(2,minmax(0,1fr))} .officeGrid{grid-template-columns:minmax(0,1fr)} }
-@media (max-width:640px){ .deskGrid{grid-template-columns:minmax(0,1fr)} }
+/* The office floor: an isometric room a desk, drawn by renderOfficeFloor()
+   off the same records the cards it replaced were read from. A room that
+   never ran is dim with an empty chair; one that ran is lit and its person
+   types; an overdue one burns amber. Click a room and the drawer on the
+   right opens on that department: the week's plan to approve, a note to
+   the desk, its numbers, its days. No light here is decoration: every one
+   is a fact off the log. */
+.officeGrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(330px,.9fr);gap:12px;flex:1;min-height:0}
+.floorPanel{display:flex;flex-direction:column;min-height:0;padding:0;overflow:hidden;position:relative}
+.floorPanel svg{width:100%;height:100%;min-height:380px;display:block;background:radial-gradient(ellipse at 50% 35%,rgba(0,243,255,.07),transparent 62%)}
+.floorLegend{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;text-transform:uppercase;color:var(--dim);padding:6px 12px;border-top:1px solid rgba(0,243,255,.08);display:flex;gap:14px;flex-wrap:wrap}
+.floorLegend i{display:inline-block;width:7px;height:7px;border-radius:50%;margin-right:5px;vertical-align:middle}
+.slab{fill:rgba(0,243,255,.02);stroke:rgba(0,243,255,.15);stroke-width:1}
+.tile{stroke:rgba(0,243,255,.06);stroke-width:.6;fill:none}
+.room{cursor:pointer;outline:none}
+.room .rf{fill:rgba(0,243,255,.05);stroke:rgba(0,243,255,.28);stroke-width:1;transition:fill .15s}
+.room:hover .rf,.room:focus .rf{fill:rgba(0,243,255,.13)}
+.room.sel .rf{fill:rgba(0,243,255,.16);stroke:var(--glow-cyan);stroke-width:1.5}
+.room.ran .rf{fill:rgba(61,255,139,.07)}
+.room.late .rf{fill:rgba(255,183,51,.07)}
+.room.never{opacity:.62}
+.room .wall{fill:rgba(0,243,255,.09);stroke:rgba(0,243,255,.22);stroke-width:1}
+.room .desk{fill:#0b2a46;stroke:rgba(0,243,255,.45);stroke-width:1}
+.room .deskTop{fill:#123b5e;stroke:rgba(0,243,255,.45);stroke-width:1}
+.room .mon{fill:#061a2e;stroke:rgba(0,243,255,.5);stroke-width:1}
+.room.ran .mon{fill:rgba(0,243,255,.55);filter:drop-shadow(0 0 4px var(--glow-cyan));animation:monFlicker 3.1s infinite}
+.room.late .mon{fill:rgba(255,183,51,.35)}
+.room .chair{fill:#0a2340;stroke:rgba(0,243,255,.3)}
+.room .person{fill:#dceefc}
+.room .personBody{fill:#1e6fa6}
+.room.never .person,.room.never .personBody{display:none}
+.room.ran .who{animation:typing 1.1s ease-in-out infinite}
+.room .lamp{fill:var(--dim)}
+.room.ran .lamp{fill:var(--good);filter:drop-shadow(0 0 5px var(--good))}
+.room.late .lamp{fill:var(--warn);filter:drop-shadow(0 0 5px var(--warn))}
+.room .paper{fill:#eaf6ff;stroke:#89a9c4;stroke-width:.5}
+.room .rname{font-family:var(--mono);font-size:8.5px;letter-spacing:1.4px;text-transform:uppercase;fill:var(--dim)}
+.room .rwho{font-family:var(--ui);font-size:12.5px;font-weight:600;fill:var(--ink)}
+.room .rstat{font-family:var(--mono);font-size:8px;letter-spacing:1px;fill:var(--dim)}
+.room.ran .rstat{fill:var(--good)}
+.room.late .rstat{fill:var(--warn)}
+.lobby .rf{fill:rgba(0,243,255,.03);stroke:rgba(0,243,255,.18);stroke-dasharray:3 3}
+.lobby .hex{fill:none;stroke:rgba(0,243,255,.4);stroke-width:1}
+.lobby text{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;text-transform:uppercase;fill:var(--dim)}
+.plant{fill:#1f7a4d}
+.pot{fill:#5b3a1e}
+@keyframes typing{0%,100%{transform:translateY(0)}50%{transform:translateY(-1.3px)}}
+@keyframes monFlicker{0%,92%,100%{opacity:1}95%{opacity:.75}}
+.drawerHead{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px}
+.drawerHead .big{font-size:16px;font-weight:600;color:var(--ink)}
+.drawerHead .sub{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;color:var(--dim);text-transform:uppercase}
+.drawerHead button{margin-left:auto}
+.dsec{margin-top:14px}
+.dsec h4{font-family:var(--mono);font-size:9px;letter-spacing:1.6px;text-transform:uppercase;color:var(--glow-cyan);margin:0 0 6px;font-weight:500}
+.dsec p{font-size:12.5px;line-height:1.5;color:var(--dim);margin:0 0 6px}
+.planBox{border-left:2px solid rgba(0,243,255,.3);padding:6px 0 6px 10px;font-size:12.5px;line-height:1.5;color:var(--ink)}
+.planBox .st{font-family:var(--mono);font-size:9px;letter-spacing:1.2px;text-transform:uppercase;margin-right:8px;color:var(--glow-cyan)}
+.planBox.approved{border-left-color:var(--good)}.planBox.approved .st{color:var(--good)}
+.planBox.changed{border-left-color:var(--warn)}.planBox.changed .st{color:var(--warn)}
+.planBox.skipped{border-left-color:var(--dim)}.planBox.skipped .st{color:var(--dim)}
+.dacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;align-items:center}
+.dacts button,.drawerHead button{font-family:var(--mono);font-size:10px;letter-spacing:1.4px;text-transform:uppercase;background:transparent;color:var(--glow-cyan);border:var(--edge);border-radius:4px;padding:6px 10px;cursor:pointer}
+.dacts button:disabled{opacity:.5;cursor:default}
+.dacts .sMsg{font-size:11.5px;color:var(--dim)}
+.dacts textarea{width:100%;background:rgba(0,0,0,.35);color:var(--ink);font:13px var(--ui);border:1px solid rgba(0,243,255,.22);border-radius:5px;padding:7px 8px;min-height:48px;resize:vertical}
+.perfGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.perfGrid .lTile .v{font-size:18px}
+.dayH{font-family:var(--mono);font-size:9px;letter-spacing:1.4px;text-transform:uppercase;color:var(--dim);margin:8px 0 2px}
+.dlinks{display:flex;gap:8px;flex-wrap:wrap}
+.dlinks a,.dlinks button{font-family:var(--mono);font-size:10px;letter-spacing:1px;text-transform:uppercase;color:var(--glow-cyan);text-decoration:none;border:var(--edge);padding:4px 8px;border-radius:4px;background:transparent;cursor:pointer}
+@media (max-width:1100px){ .officeGrid{grid-template-columns:minmax(0,1fr)} .floorPanel svg{min-height:300px} }
 .sForm{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .sForm .full{grid-column:1/-1}
 .sForm label{font-family:var(--mono);font-size:8.5px;letter-spacing:1.4px;color:var(--dim);text-transform:uppercase;
@@ -2229,25 +2277,26 @@ body.arranging .scroll{pointer-events:none}
     </section>
 
     <!-- ========== OFFICE ==========
-         The Agent Office: six teams, each a Claude Code Routine on a schedule
-         whose job note is jarvis/agents/office/<team>.md. Nothing runs from
-         here. A desk is READ off the sales log, where every run logs one
-         `agent-run` whose summary starts with the team's name, so this page
-         says what ran and when, never that something might have. The roster
-         is a copy of jarvis/agents/office/README.md: the Routines live in
-         claude.ai, which has no endpoint to ask. -->
+         The Agent Office as a FLOOR: six rooms, one a desk, each a Claude
+         Code Routine on a schedule whose job note is jarvis/agents/office/
+         <team>.md. Nothing runs from here. A room is READ off the sales log
+         (every run logs `agent-run`; every entry carries the desk's name
+         first) and lit by it. Clicking a room opens the department on the
+         right: the week's plan Ada proposed on Sunday (Approve, Change and
+         Skip write the PLAN line the desk reads before it works), a note to
+         the desk (a NOTE line, read the same way), its numbers and its days.
+         The roster is a copy of jarvis/agents/office/README.md: the
+         Routines live in claude.ai, which has no endpoint to ask. -->
     <section class="view" data-view="office">
       <div class="salesWrap">
         <div class="logicNote" id="officeNote">Reading the office…</div>
-        <div class="deskGrid" id="officeDesks"></div>
         <div class="officeGrid">
-          <div class="panel" style="min-height:0">
-            <div class="ptitle">Runs<span class="live" id="officeRunsN"></span></div>
-            <div id="officeRuns" class="scroll"></div>
+          <div class="panel floorPanel">
+            <svg id="officeFloor" viewBox="150 40 850 500" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
+            <div class="floorLegend"><span><i style="background:var(--good)"></i>ran on schedule</span><span><i style="background:var(--warn)"></i>overdue</span><span><i style="background:var(--dim)"></i>never ran</span><span>papers on a desk: today's entries</span><span>click a room to open it</span></div>
           </div>
-          <div class="panel" style="min-height:0">
-            <div class="ptitle">What the office needs</div>
-            <div id="officeNeeds" class="scroll"></div>
+          <div class="panel" style="min-height:0;display:flex;flex-direction:column">
+            <div id="officeSide" class="scroll" style="flex:1;min-height:0"></div>
           </div>
         </div>
       </div>
@@ -8339,35 +8388,47 @@ function wireSales(){
 /* ── THE OFFICE ──────────────────────────────────────────────────────────
    Six teams, each a Claude Code Routine on a schedule (jarvis/agents/office),
    each with a name and a role mailbox on clearsky-usa.com (the roster's
-   "The people" is the one list and this is its copy).
-   A desk is read, never driven: every run logs `agent-run` to the sales log
-   with a summary that starts with the team's name, and this page draws what
-   it finds. The roster is a copy of jarvis/agents/office/README.md — the
-   Routines live in claude.ai, which has no endpoint to ask, so a desk that
-   is "never" here may still exist there and have nothing to log with. */
+   "The people" is the one list and this is its copy). A desk is read, never
+   driven: every run logs `agent-run` to the sales log, every entry a desk
+   logs carries its name first in the summary, and this page draws what it
+   finds. The Routines live in claude.ai, which has no endpoint to ask, so a
+   room that is "never" here may still exist there with nothing to log with.
+
+   The floor is isometric SVG. Thomas, 2026-10-06: "visual ... interactive
+   ... look at a floor of the office ... it feels like the sims but i click
+   on the department and i can analyze and make decisions and check
+   performance and deep dive into the daily activities." The decisions a
+   room offers are the ones the records can carry: the week's plan Ada
+   proposed on Sunday (PLAN <week> <DESK>: approved | changed — … | skipped,
+   a `note` entry the desk reads before it works), a NOTE <DESK>: … line
+   (the same), and the Sales agent's own switch (sales_config). */
 const OFFICE_DESKS=[
-  {key:'sales', name:'Sales', who:'Nora', mail:'sales@clearsky-usa.com', sched:'weekdays 8:05', grace:30,
+  {key:'sales', name:'Sales', who:'Nora', mail:'sales@clearsky-usa.com', sched:'weekdays 8:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:1,w:7,d:6},
    role:'Answers demo requests, works the accounts, researches prospects.',
    may:'Sends email as Thomas and books 30-minute demos, 8:30–2:30 Central.', sends:true,
    tools:'Gmail · Google Calendar · Google Drive'},
-  {key:'marketing', name:'Marketing', who:'Mila', mail:'marketing@clearsky-usa.com', sched:'weekdays 10:05', grace:30,
+  {key:'marketing', name:'Marketing', who:'Mila', mail:'marketing@clearsky-usa.com', sched:'weekdays 10:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:0,w:7,d:5},
    role:'The press desk: pitches the Omega-Core story to the trade press on the beat, and one update to accounts when something ships. The LinkedIn post is its own routine, 7:57.',
    may:'Pitches outlets, never a price; an interview, quote or exclusive is Thomas’s to give.', sends:true, tools:'Gmail'},
-  {key:'software', name:'Software', who:'Theo', mail:'dev@clearsky-usa.com', sched:'daily 8:00', grace:30,
+  {key:'software', name:'Software', who:'Theo', mail:'dev@clearsky-usa.com', sched:'daily 8:00', days:[0,1,2,3,4,5,6], perDay:1, grace:30, room:{x:17,y:1,w:7,d:6},
    role:'The steward: tests, integrity, a pull request for what is small and obviously right.',
    may:'Opens pull requests. Never merges, never deploys.', tools:'GitHub',
    ext:'https://github.com/clearskyenergy/omega-core/pulls', extText:'reports on GitHub, not here'},
-  {key:'support', name:'Support', who:'Sam', mail:'support@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', grace:30,
+  {key:'support', name:'Support', who:'Sam', mail:'support@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', days:[1,2,3,4,5], perDay:2, grace:30, room:{x:1,y:9,w:7,d:6},
    role:'Reads what customers asked, answers from the manuals, logs a bug as an issue.',
    may:'Drafts only. Never sends, never promises a refund.', tools:'Gmail · GitHub'},
-  {key:'billing', name:'Billing', who:'June', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', grace:30,
+  {key:'billing', name:'Billing', who:'June', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:17,y:9,w:7,d:6},
    role:'A/R aging and open invoices from QuickBooks: what is past due, oldest first.',
    may:'Drafts reminders. Never changes an invoice, never charges a card.', tools:'QuickBooks · Gmail'},
-  {key:'admin', name:'Admin', who:'Ada', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35', grace:30,
-   role:'The day’s logistics: meetings, unanswered mail, promises due, tomorrow.',
+  {key:'admin', name:'Admin', who:'Ada', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
+   role:'The day’s logistics: meetings, unanswered mail, promises due, tomorrow. Sunday night: the weekly plan for every desk, for Thomas to approve.',
    may:'One email to Thomas. Everything else is a draft.', tools:'Gmail · Google Calendar'}
 ];
-let officeRuns=null, officeAt=0, officeBusy=false;
+const OFFICE_LOBBY={x:9,y:6,w:7,d:5};
+const OFFICE_DESK_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\b[:\s·—–-]*/i;
+const OFFICE_PLAN_RE=/^\s*PLAN\s+(\d{4}-W\d{2})\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*(proposed|approved|changed|skipped)\b\s*[—–:-]*\s*([\s\S]*)$/i;
+const OFFICE_NOTE_RE=/^\s*NOTE\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*([\s\S]*)$/i;
+let officeActs=null, officeAt=0, officeBusy=false, officeSel=null;
 /* Firestore hands a timestamp back three ways (an ISO string, millis, or
    {_seconds}); the dashboard payload normalises, the activity view does not. */
 function officeMs(at){
@@ -8377,27 +8438,37 @@ function officeMs(at){
   if(typeof at==='object'){ const s=at._seconds!=null?at._seconds:at.seconds; if(s!=null) return s*1000; }
   return NaN;
 }
-async function officeFetchRuns(){
+/* the ISO week the plans are keyed by (2026-W41), on the browser's own day */
+function officeWeek(d){
+  const t=new Date(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())); const day=t.getUTCDay()||7;
+  t.setUTCDate(t.getUTCDate()+4-day); const y=t.getUTCFullYear();
+  const w=Math.ceil((((t-Date.UTC(y,0,1))/864e5)+1)/7); return y+'-W'+String(w).padStart(2,'0');
+}
+async function officeFetchActivity(){
   const u=auth.currentUser; if(!u) throw Object.assign(new Error('not signed in'),{status:401});
   const t=await u.getIdToken();
-  const r=await fetch('/api/sales?view=activity&kind=agent-run&limit=60',{headers:{Authorization:'Bearer '+t}});
+  const r=await fetch('/api/sales?view=activity&limit=400',{headers:{Authorization:'Bearer '+t}});
   let j=null; try{ j=await r.json(); }catch(_){}
   if(!r.ok) throw Object.assign(new Error((j&&j.error)||('HTTP '+r.status)),{status:r.status});
-  return ((j&&j.activity)||[]).map(a=>Object.assign({},a,{ms:officeMs(a.at)})).filter(a=>!isNaN(a.ms)).sort((a,b)=>b.ms-a.ms);
+  return ((j&&j.activity)||[]).map(a=>{
+    const ms=officeMs(a.at), s=String(a.summary||'');
+    const plan=a.kind==='note'?OFFICE_PLAN_RE.exec(s):null, note=a.kind==='note'?OFFICE_NOTE_RE.exec(s):null;
+    const row=Object.assign({},a,{ms, desk:null, plan:null, memo:null});
+    if(plan){ row.desk=plan[2].toLowerCase(); row.plan={week:plan[1].toUpperCase(), status:plan[3].toLowerCase(), text:plan[4].trim()}; }
+    else if(note){ row.desk=note[1].toLowerCase(); row.memo=note[2].trim(); }
+    else { const m=OFFICE_DESK_RE.exec(s); if(m) row.desk=m[1].toLowerCase(); }
+    row.text=row.plan?row.plan.text:row.memo!=null?row.memo:s.replace(OFFICE_DESK_RE,'');
+    return row;
+  }).filter(a=>!isNaN(a.ms)).sort((a,b)=>b.ms-a.ms);
 }
-/* a run belongs to the desk its summary names first: "SALES: …" */
-function officeTeamOf(summary){
-  const w=String(summary||'').trim().toUpperCase();
-  const d=OFFICE_DESKS.find(x=>w.indexOf(x.name.toUpperCase())===0);
-  return d?d.key:null;
-}
+function officeTeamOf(summary){ const m=OFFICE_DESK_RE.exec(summary||''); return m?m[1].toLowerCase():null; }
 async function loadOffice(force){
   if(officeBusy) return;
-  if(officeRuns && !force && Date.now()-officeAt<SALES_EVERY){ renderOffice(); return; }
+  if(officeActs && !force && Date.now()-officeAt<SALES_EVERY){ renderOffice(); return; }
   officeBusy=true;
   try{
     if(!salesData) await loadSales(false);
-    officeRuns=await officeFetchRuns(); officeAt=Date.now();
+    officeActs=await officeFetchActivity(); officeAt=Date.now();
     renderOffice();
   }catch(e){
     const who=(auth.currentUser||{}).email||'?';
@@ -8407,71 +8478,227 @@ async function loadOffice(force){
       : 'Could not read the office’s log (/api/sales) — '+e.message+'. Nothing is shown rather than an empty floor.';
   }finally{ officeBusy=false; }
 }
-function renderOffice(){
-  const runs=officeRuns||[], now=Date.now(), latest={};
-  runs.forEach(r=>{ const k=officeTeamOf(r.summary); if(k && !latest[k]) latest[k]=r; });   /* sorted newest first */
+/* what the records say about each desk: its last run, today's entries, the
+   week's plan and Thomas's notes */
+function officeState(){
+  const acts=officeActs||[], now=Date.now(), week=officeWeek(new Date());
+  const day0=new Date(); day0.setHours(0,0,0,0);
+  const by={};
+  OFFICE_DESKS.forEach(d=>{ by[d.key]={desk:d, last:null, today:0, plan:null, proposed:null, notes:[], rows:[]}; });
+  acts.forEach(r=>{
+    if(!r.desk || !by[r.desk]) return;
+    const s=by[r.desk];
+    if(r.plan){
+      if(r.plan.week===week){ if(!s.plan) s.plan=r; if(r.plan.status==='proposed' && !s.proposed) s.proposed=r; }
+      return;
+    }
+    if(r.memo!=null){ if(now-r.ms<=7*864e5) s.notes.push(r); return; }
+    s.rows.push(r);
+    if(r.kind==='agent-run' && !s.last) s.last=r;
+    if(r.ms>=day0.getTime()) s.today++;
+  });
+  Object.keys(by).forEach(k=>{
+    const s=by[k], d=s.desk, hrs=s.last?(now-s.last.ms)/36e5:null;
+    s.cls=!s.last?'never':(hrs<=d.grace?'ran':'late');
+  });
+  return {by, week, runs:acts.filter(a=>a.kind==='agent-run')};
+}
+/* ── the floor ── an isometric room a desk; iso() is the city's projection */
+function officeIso(x,y,z){ return [500+(x-y)*19, 70+(x+y)*9.5-(z||0)]; }
+function officePoly(pts,cls){ const p=document.createElementNS('http://www.w3.org/2000/svg','polygon'); p.setAttribute('points',pts.map(q=>q[0].toFixed(1)+','+q[1].toFixed(1)).join(' ')); if(cls) p.setAttribute('class',cls); return p; }
+function officeText(x,y,cls,txt,anchor){ const t=document.createElementNS('http://www.w3.org/2000/svg','text'); t.setAttribute('x',x.toFixed(1)); t.setAttribute('y',y.toFixed(1)); t.setAttribute('class',cls); t.setAttribute('text-anchor',anchor||'middle'); t.textContent=txt; return t; }
+function officeBox(g,x,y,w,d,h,topCls,sideCls){
+  /* three faces of an iso box: the two front faces, then the top */
+  g.appendChild(officePoly([officeIso(x,y+d,h),officeIso(x+w,y+d,h),officeIso(x+w,y+d,0),officeIso(x,y+d,0)],sideCls));
+  g.appendChild(officePoly([officeIso(x+w,y,h),officeIso(x+w,y+d,h),officeIso(x+w,y+d,0),officeIso(x+w,y,0)],sideCls));
+  g.appendChild(officePoly([officeIso(x,y,h),officeIso(x+w,y,h),officeIso(x+w,y+d,h),officeIso(x,y+d,h)],topCls));
+}
+function renderOfficeFloor(st){
+  const svg=el('officeFloor'); if(!svg) return;
+  svg.textContent='';
+  const NS='http://www.w3.org/2000/svg';
+  /* the slab and its tiles */
+  svg.appendChild(officePoly([officeIso(0,0),officeIso(25,0),officeIso(25,17),officeIso(0,17)],'slab'));
+  const tiles=document.createElementNS(NS,'g');
+  for(let i=0;i<=25;i++){ const a=officeIso(i,0), b=officeIso(i,17); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
+  for(let j=0;j<=17;j++){ const a=officeIso(0,j), b=officeIso(25,j); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
+  svg.appendChild(tiles);
+  /* the lobby: Thomas's desk and the mark, in the middle of the floor */
+  const L=OFFICE_LOBBY, lob=document.createElementNS(NS,'g'); lob.setAttribute('class','lobby');
+  lob.appendChild(officePoly([officeIso(L.x,L.y),officeIso(L.x+L.w,L.y),officeIso(L.x+L.w,L.y+L.d),officeIso(L.x,L.y+L.d)],'rf'));
+  const c=officeIso(L.x+L.w/2,L.y+L.d/2), hex=[]; for(let k=0;k<6;k++){ const a=Math.PI/3*k; hex.push([c[0]+Math.cos(a)*30, c[1]+Math.sin(a)*15]); }
+  lob.appendChild(officePoly(hex,'hex'));
+  lob.appendChild(officeText(c[0],c[1]+3,'','OMEGA'));
+  lob.appendChild(officeText(c[0],c[1]+30,'','Thomas · the office'));
+  svg.appendChild(lob);
+  /* the rooms, back to front */
+  OFFICE_DESKS.slice().sort((a,b)=>(a.room.x+a.room.y)-(b.room.x+b.room.y)).forEach(d=>{
+    const s=st.by[d.key], R=d.room, g=document.createElementNS(NS,'g');
+    g.setAttribute('class','room '+s.cls+(officeSel===d.key?' sel':'')); g.dataset.desk=d.key; g.setAttribute('tabindex','0'); g.setAttribute('role','button');
+    const stat=s.last?(s.cls==='ran'?'ran '+sStamp(new Date(s.last.ms).toISOString()):'last '+sStamp(new Date(s.last.ms).toISOString())+' · overdue'):(d.ext?'reports on GitHub':'never ran');
+    g.setAttribute('aria-label',d.who+' · '+d.name+' · '+stat);
+    const title=document.createElementNS(NS,'title'); title.textContent=d.who+' · '+d.name+' · '+d.sched+' · '+stat; g.appendChild(title);
+    /* back walls, then the floor */
+    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x+R.w,R.y,0),officeIso(R.x+R.w,R.y,18),officeIso(R.x,R.y,18)],'wall'));
+    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x,R.y+R.d,0),officeIso(R.x,R.y+R.d,18),officeIso(R.x,R.y,18)],'wall'));
+    g.appendChild(officePoly([officeIso(R.x,R.y),officeIso(R.x+R.w,R.y),officeIso(R.x+R.w,R.y+R.d),officeIso(R.x,R.y+R.d)],'rf'));
+    /* the lamp in the back corner says the state at a glance */
+    const lp=officeIso(R.x+R.w-0.5,R.y+0.5,24), lamp=document.createElementNS(NS,'circle'); lamp.setAttribute('cx',lp[0]); lamp.setAttribute('cy',lp[1]); lamp.setAttribute('r','3'); lamp.setAttribute('class','lamp'); g.appendChild(lamp);
+    /* a plant in the front-left corner */
+    const pp=officeIso(R.x+0.7,R.y+R.d-0.7,0), pot=document.createElementNS(NS,'rect'); pot.setAttribute('x',pp[0]-3); pot.setAttribute('y',pp[1]-6); pot.setAttribute('width','6'); pot.setAttribute('height','6'); pot.setAttribute('class','pot'); g.appendChild(pot);
+    const pl=document.createElementNS(NS,'circle'); pl.setAttribute('cx',pp[0]); pl.setAttribute('cy',pp[1]-9); pl.setAttribute('r','5'); pl.setAttribute('class','plant'); g.appendChild(pl);
+    /* the chair and the person, behind the desk */
+    const dx=R.x+R.w/2-1.1, dy=R.y+1.6, ch=officeIso(dx+1.1,dy-0.5,0);
+    const chair=document.createElementNS(NS,'ellipse'); chair.setAttribute('cx',ch[0]); chair.setAttribute('cy',ch[1]); chair.setAttribute('rx','6'); chair.setAttribute('ry','3.5'); chair.setAttribute('class','chair'); g.appendChild(chair);
+    const who=document.createElementNS(NS,'g'); who.setAttribute('class','who');
+    const body=document.createElementNS(NS,'ellipse'); body.setAttribute('cx',ch[0]); body.setAttribute('cy',ch[1]-7); body.setAttribute('rx','5'); body.setAttribute('ry','6'); body.setAttribute('class','personBody'); who.appendChild(body);
+    const head=document.createElementNS(NS,'circle'); head.setAttribute('cx',ch[0]); head.setAttribute('cy',ch[1]-16); head.setAttribute('r','3.6'); head.setAttribute('class','person'); who.appendChild(head);
+    g.appendChild(who);
+    /* the desk, its monitor and today's papers */
+    officeBox(g,dx,dy,2.2,1.1,10,'deskTop','desk');
+    const mp=officeIso(dx+1.1,dy+0.25,10), mon=document.createElementNS(NS,'rect'); mon.setAttribute('x',mp[0]-7); mon.setAttribute('y',mp[1]-11); mon.setAttribute('width','14'); mon.setAttribute('height','9'); mon.setAttribute('rx','1'); mon.setAttribute('class','mon'); g.appendChild(mon);
+    const papers=Math.min(6,s.today), pb=officeIso(dx+1.9,dy+0.55,10);
+    for(let k=0;k<papers;k++){ const pr=document.createElementNS(NS,'rect'); pr.setAttribute('x',pb[0]-4); pr.setAttribute('y',pb[1]-4-k*1.6); pr.setAttribute('width','8'); pr.setAttribute('height','5'); pr.setAttribute('class','paper'); g.appendChild(pr); }
+    /* the nameplate, in the front half of the room */
+    const lb=officeIso(R.x+R.w/2,R.y+R.d-1.2,0);
+    g.appendChild(officeText(lb[0],lb[1]-14,'rwho',d.who));
+    g.appendChild(officeText(lb[0],lb[1]-2,'rname',d.name+' · '+d.sched));
+    g.appendChild(officeText(lb[0],lb[1]+9,'rstat',stat));
+    g.addEventListener('click',()=>officeSelect(d.key));
+    g.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); officeSelect(d.key); } });
+    svg.appendChild(g);
+  });
+}
+function officeSelect(key){ officeSel=(officeSel===key)?null:key; renderOffice(); }
+/* ── the side: the overview, or one department ── */
+function officeH(tag,cls,text){ const e=document.createElement(tag); if(cls) e.className=cls; if(text!=null) e.textContent=text; return e; }
+function officePerf(s,days){
+  const since=Date.now()-days*864e5, rows=s.rows.filter(r=>r.ms>=since), out={runs:0, sent:0, meetings:0, drafts:0, replies:0, other:0};
+  rows.forEach(r=>{ if(r.kind==='agent-run') out.runs++; else if(r.kind==='email-sent') out.sent++; else if(r.kind==='meeting') out.meetings++; else if(r.kind==='email-drafted'||r.kind==='linkedin-drafted') out.drafts++; else if(r.kind==='reply') out.replies++; else out.other++; });
+  /* expected runs: the scheduled days inside the window, times runs a day */
+  let expected=0; const d=new Date(); d.setHours(12,0,0,0);
+  for(let i=0;i<days;i++){ const t=new Date(d.getTime()-i*864e5); if(s.desk.days.indexOf(t.getDay())>=0) expected+=s.desk.perDay; }
+  out.expected=expected; out.onTime=expected?Math.min(100,Math.round(out.runs/expected*100)):null;
+  return out;
+}
+async function officeLog(summary, note){
+  if(note) note.textContent='writing…';
+  try{
+    const r=await salesFetch({method:'POST', body:JSON.stringify({action:'log', entries:[{kind:'note', summary:summary.slice(0,300)}]})});
+    const res=(r.results||[])[0]||{}; if(!res.ok) throw new Error(res.error||'refused');
+    if(note) note.textContent='Recorded.';
+    await loadOffice(true);
+  }catch(err){ if(note) note.textContent='Not recorded: '+err.message; }
+}
+function renderOfficeSide(st){
+  const host=el('officeSide'); if(!host) return;
+  host.textContent='';
   const cfg=((salesData||{}).config)||{};
-  const host=el('officeDesks');
-  let ran=0, late=0;
-  if(host){
-    host.textContent='';
-    OFFICE_DESKS.forEach(d=>{
-      const last=latest[d.key], hrs=last?(now-last.ms)/36e5:null;
-      const cls=!last?'never':(hrs<=d.grace?'ran':'late');
-      if(cls==='ran') ran++; else if(cls==='late') late++;
-      const x=document.createElement('div'); x.className='desk '+cls;
-      const h=document.createElement('div'); h.className='dh';
-      const dot=document.createElement('span'); dot.className='dot '+(cls==='ran'?'ok':cls==='late'?'warn':'off');
-      const who=document.createElement('span'); who.className='pn'; who.textContent=d.who;
-      const nm=document.createElement('span'); nm.className='nm'; nm.textContent=d.name;
-      const sc=document.createElement('span'); sc.className='sch'; sc.textContent=d.sched;
-      h.appendChild(dot); h.appendChild(who); h.appendChild(nm); h.appendChild(sc); x.appendChild(h);
-      const role=document.createElement('div'); role.className='role'; role.textContent=d.role; x.appendChild(role);
-      const may=document.createElement('div'); may.className='may';
-      if(d.sends){ const b=document.createElement('b'); b.textContent='Sends. '; may.appendChild(b); }
-      may.appendChild(document.createTextNode(d.may)); x.appendChild(may);
-      const tl=document.createElement('div'); tl.className='tools'; tl.textContent=d.mail+' · '+d.tools; x.appendChild(tl);
-      const lastEl=document.createElement('div'); lastEl.className='last';
-      const st=document.createElement('span'); st.className='st';
-      if(last){
-        st.textContent=cls==='ran'?'ran '+sStamp(new Date(last.ms).toISOString()):'last '+sStamp(new Date(last.ms).toISOString())+' · overdue';
-        lastEl.appendChild(st);
-        lastEl.appendChild(document.createTextNode(' '+String(last.summary||'').replace(/^[A-Za-z]+[:\s·—-]*/,'')));
-      }else if(d.ext){
-        st.textContent='no log'; lastEl.appendChild(st);
-        const a=document.createElement('a'); a.href=d.ext; a.target='_blank'; a.rel='noopener'; a.textContent=d.extText+' ↗'; lastEl.appendChild(a);
-      }else{
-        st.textContent='never'; lastEl.appendChild(st);
-        lastEl.appendChild(document.createTextNode('No run logged yet.'));
-      }
-      x.appendChild(lastEl); host.appendChild(x);
-    });
+  if(!officeSel){
+    /* the overview: the runs, then what the office needs */
+    const t1=officeH('div','ptitle','Runs'); const n1=officeH('span','live',st.runs.length?st.runs.length+' LATEST':''); t1.appendChild(n1); host.appendChild(t1);
+    const runsBox=officeH('div'); runsBox.id='officeRuns'; host.appendChild(runsBox);
+    listInto('officeRuns', st.runs.slice(0,40), r=>{ const d=OFFICE_DESKS.find(x=>x.key===r.desk);
+      return { time:sStamp(new Date(r.ms).toISOString()), left:(d?d.name+': ':'')+r.text, right:r.by?(String(r.by).indexOf('agent:')===0?'agent':String(r.by).split('@')[0]):'', clamp:true }; },
+      'No run logged yet. Each desk writes one line here when it finishes.');
+    const t2=officeH('div','ptitle','What the office needs'); t2.style.marginTop='14px'; host.appendChild(t2);
+    const needs=[], logged=st.runs.length>0, late=OFFICE_DESKS.filter(d=>st.by[d.key].cls==='late').length;
+    if(!logged) needs.push({level:'act', text:'No desk has logged a run. A Routine writes here only with OMEGA_SALES_KEY in its cloud environment (claude.ai → the Tommy Digital Twin environment → Edit) and its connectors attached in claude.ai → Routines. Until then each run reports it has no mail, calendar or books, and sends nothing.'});
+    if(!st.by.sales.last) needs.push({level:'act', text:'Sales has never logged a run. Its Routine is created by hand in claude.ai → Routines from jarvis/agents/office/sales.md (weekdays 8:05 Central; Gmail, Google Calendar, Google Drive).'});
+    if(!cfg.enabled) needs.push({level:'act', text:'The agent switch is off (Sales → Agent settings, or the Sales room here). Off means report only: the Sales desk drafts nothing, sends nothing, books nothing.'});
+    if(!cfg.sender || !cfg.postalAddressSet) needs.push({level:'watch', text:'Cold email is blocked until Agent settings has a clearsky-usa.com sender and a postal address (CAN-SPAM). Replies to people who wrote to us, and to accounts, go out regardless.'});
+    const waiting=OFFICE_DESKS.filter(d=>st.by[d.key].plan && st.by[d.key].plan.plan.status==='proposed').length;
+    if(waiting) needs.push({level:'act', text:waiting+(waiting===1?' desk has':' desks have')+' a plan for '+st.week+' waiting for your approval. Click the room.'});
+    if(late) needs.push({level:'watch', text:late+(late===1?' desk is':' desks are')+' overdue: the last run is older than its schedule. A Routine that fails says why in claude.ai → Routines; the weekly usage limit stops every desk at once.'});
+    if(!needs.length) needs.push({level:'ok', text:'Every desk ran on schedule and nothing waits on you.'});
+    const nd=officeH('div'); nd.id='officeNeeds'; needs.forEach(n=>{ const p=officeH('div','sSug '+n.level,n.text); nd.appendChild(p); }); host.appendChild(nd);
+    const pill=el('nOffice'); if(pill) pill.textContent=needs.filter(n=>n.level==='act').length||'';
+    return;
   }
-
-  /* what stands between the office and a day's work: read off the record,
-     not assumed. The Routines themselves cannot be seen from here. */
-  const needs=[];
-  const logged=runs.length>0;
-  if(!logged) needs.push({level:'act', text:'No desk has logged a run. A Routine writes here only with OMEGA_SALES_KEY in its cloud environment (claude.ai → the Tommy Digital Twin environment → Edit) and its connectors attached in claude.ai → Routines. Until then each run reports it has no mail, calendar or books, and sends nothing.'});
-  if(!latest.sales) needs.push({level:'act', text:'Sales has never logged a run. Its Routine is created by hand in claude.ai → Routines from jarvis/agents/office/sales.md (weekdays 8:05 Central; Gmail, Google Calendar, Google Drive).'});
-  if(!cfg.enabled) needs.push({level:'act', text:'The agent switch is off (Sales → Agent settings). Off means report only: the Sales desk drafts nothing, sends nothing, books nothing.'});
-  if(!cfg.sender || !cfg.postalAddressSet) needs.push({level:'watch', text:'Cold email is blocked until Agent settings has a clearsky-usa.com sender and a postal address (CAN-SPAM). Replies to people who wrote to us, and to accounts, go out regardless.'});
-  if(late) needs.push({level:'watch', text:late+(late===1?' desk is':' desks are')+' overdue: the last run is older than its schedule. A Routine that fails says why in claude.ai → Routines; the weekly usage limit stops every desk at once.'});
-  if(!needs.length) needs.push({level:'ok', text:'Every desk ran on schedule and nothing waits on you.'});
-  const nd=el('officeNeeds');
-  if(nd){ nd.textContent=''; needs.forEach(n=>{ const p=document.createElement('div'); p.className='sSug '+n.level; p.textContent=n.text; nd.appendChild(p); }); }
-  const pill=el('nOffice'); if(pill) pill.textContent=needs.filter(n=>n.level==='act').length||'';
-
-  listInto('officeRuns', runs, r=>{
-    const k=officeTeamOf(r.summary), d=OFFICE_DESKS.find(x=>x.key===k);
-    return { time:sStamp(new Date(r.ms).toISOString()), left:(d?d.name+': ':'')+String(r.summary||'').replace(d?/^[A-Za-z]+[:\s·—-]*/:/^$/,''),
-      right:r.by?(String(r.by).indexOf('agent:')===0?'agent':String(r.by).split('@')[0]):'', clamp:true };
-  }, 'No run logged yet. Each desk writes one line here when it finishes.');
-  const rn=el('officeRunsN'); if(rn) rn.textContent=runs.length?runs.length+' LATEST':'';
-
+  /* one department */
+  const d=OFFICE_DESKS.find(x=>x.key===officeSel), s=st.by[d.key], DESK=d.name.toUpperCase();
+  const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' · '+d.name)); hd.appendChild(officeH('span','sub',d.mail+' · '+d.sched));
+  const back=officeH('button',null,'◀ Office'); back.id='officeBack'; back.addEventListener('click',()=>officeSelect(d.key)); hd.appendChild(back); host.appendChild(hd);
+  const stat=s.last?(s.cls==='ran'?'Ran '+sStamp(new Date(s.last.ms).toISOString())+'.':'Last ran '+sStamp(new Date(s.last.ms).toISOString())+', overdue.'):(d.ext?'Reports on GitHub, not here.':'Never logged a run.');
+  const intro=officeH('div','dsec'); intro.appendChild(officeH('p',null,d.role+' '+d.may+' '+stat)); host.appendChild(intro);
+  /* the week's plan: Ada's Sunday proposal, and the decision */
+  const sec=officeH('div','dsec'); sec.appendChild(officeH('h4',null,'This week’s plan · '+st.week)); host.appendChild(sec);
+  if(s.plan){
+    const p=s.plan.plan, box=officeH('div','planBox '+p.status);
+    box.appendChild(officeH('span','st',p.status));
+    const txt=p.status==='proposed'?p.text:(p.text||(s.proposed?s.proposed.plan.text:''));
+    box.appendChild(document.createTextNode(txt||'(no text)'));
+    if(p.status==='changed' && s.proposed && s.proposed.plan.text){ const q=officeH('div',null,'Proposed: '+s.proposed.plan.text); q.style.cssText='color:var(--dim);font-size:11.5px;margin-top:4px'; box.appendChild(q); }
+    sec.appendChild(box);
+    const acts=officeH('div','dacts'), msg=officeH('span','sMsg','');
+    if(p.status==='proposed'){
+      const ap=officeH('button',null,'Approve'); ap.id='planApprove'; ap.addEventListener('click',()=>officeLog('PLAN '+st.week+' '+DESK+': approved',msg)); acts.appendChild(ap);
+      const ch=officeH('button',null,'Change…'); ch.id='planChange'; ch.addEventListener('click',()=>{ const w=prompt('What should '+d.who+' do differently this week?'); if(w&&w.trim()) officeLog('PLAN '+st.week+' '+DESK+': changed — '+w.trim(),msg); }); acts.appendChild(ch);
+      const sk=officeH('button',null,'Skip this week'); sk.id='planSkip'; sk.addEventListener('click',()=>officeLog('PLAN '+st.week+' '+DESK+': skipped',msg)); acts.appendChild(sk);
+      msg.textContent='The desk reads your answer before its next run.';
+    } else {
+      const re=officeH('button',null,'Change…'); re.addEventListener('click',()=>{ const w=prompt('What should '+d.who+' do differently this week?'); if(w&&w.trim()) officeLog('PLAN '+st.week+' '+DESK+': changed — '+w.trim(),msg); }); acts.appendChild(re);
+      msg.textContent=p.status==='approved'?'Approved. The desk follows it.':p.status==='changed'?'Changed. The desk follows the change.':'Skipped. The desk does only what the inbox asks by name.';
+    }
+    acts.appendChild(msg); sec.appendChild(acts);
+  } else {
+    sec.appendChild(officeH('p',null,'No plan proposed for '+st.week+'. Ada writes one every Sunday at 7:05 PM and emails it to you; the desk runs its standing job until then.'));
+  }
+  /* a note to the desk */
+  const ns=officeH('div','dsec'); ns.appendChild(officeH('h4',null,'Tell '+d.who)); host.appendChild(ns);
+  const na=officeH('div','dacts'); const ta=officeH('textarea'); ta.id='deskNote'; ta.placeholder='One instruction. '+d.who+' reads it before the next run and for seven days after.'; ta.maxLength=280; na.appendChild(ta);
+  const go=officeH('button',null,'Send'); go.id='deskNoteGo'; const nm=officeH('span','sMsg',''); go.addEventListener('click',()=>{ const w=ta.value.trim(); if(!w){ nm.textContent='Say what you want done.'; return; } officeLog('NOTE '+DESK+': '+w,nm).then(()=>{ ta.value=''; }); }); na.appendChild(go); na.appendChild(nm); ns.appendChild(na);
+  if(s.notes.length){ const nl=officeH('div'); nl.id='deskNotes'; ns.appendChild(nl); listInto('deskNotes', s.notes, r=>({ time:sStamp(new Date(r.ms).toISOString()), left:r.text, right:r.by?String(r.by).split('@')[0]:'', clamp:true }), ''); }
+  /* the numbers */
+  const ps=officeH('div','dsec'); ps.appendChild(officeH('h4',null,'Performance · 7 and 30 days')); host.appendChild(ps);
+  const p7=officePerf(s,7), p30=officePerf(s,30), grid=officeH('div','perfGrid');
+  [['Runs · 7d', p7.runs+' of '+p7.expected, p7.onTime==null?'':p7.onTime+'% on schedule', p7.expected&&p7.onTime<100?'warnT':''],
+   ['Runs · 30d', p30.runs+' of '+p30.expected, p30.onTime==null?'':p30.onTime+'% on schedule', ''],
+   ['Sent · 30d', String(p30.sent), p7.sent+' this week', ''],
+   ['Meetings · 30d', String(p30.meetings), p7.meetings+' this week', ''],
+   ['Drafts · 30d', String(p30.drafts), p7.drafts+' this week', ''],
+   ['Replies · 30d', String(p30.replies), p7.replies+' this week', '']
+  ].forEach(t=>{ const x=officeH('div','lTile'+(t[3]?' '+t[3]:'')); x.appendChild(officeH('div','t',t[0])); x.appendChild(officeH('div','v',t[1])); x.appendChild(officeH('div','s',t[2])); grid.appendChild(x); });
+  ps.appendChild(grid);
+  if(d.ext) ps.appendChild(officeH('p',null,'The steward reports in pull requests and the Integrity panel, not in this log; its numbers here stay at zero.'));
+  /* decisions and doors */
+  const ds=officeH('div','dsec'); ds.appendChild(officeH('h4',null,'Decisions')); host.appendChild(ds);
+  const dl=officeH('div','dlinks');
+  if(d.key==='sales'){
+    const sw=officeH('button',null,cfg.enabled?'Switch the agent off':'Switch the agent on'); sw.id='salesSwitch';
+    sw.addEventListener('click',async()=>{ sw.disabled=true; try{ await salesFetch({method:'POST', body:JSON.stringify({action:'config', enabled:!cfg.enabled})}); await loadSales(true); renderOffice(); }catch(err){ sw.textContent='Not changed: '+err.message; sw.disabled=false; } });
+    dl.appendChild(sw);
+    const ap=officeH('a',null,'Approve signups ↗'); ap.href='/admin/'; ap.target='_blank'; ap.rel='noopener'; dl.appendChild(ap);
+    const bk=officeH('a',null,cfg.demoLink?'Booking link ↗':'No booking link: Sales → Agent settings'); bk.href=cfg.demoLink||'#'; if(cfg.demoLink){ bk.target='_blank'; bk.rel='noopener'; } else bk.addEventListener('click',ev=>{ ev.preventDefault(); showView('sales'); }); dl.appendChild(bk);
+  }
+  const mb=officeH('a',null,'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);
+  const jn=officeH('a',null,'Job note ↗'); jn.href='https://github.com/clearskyenergy/jarvis/blob/main/agents/office/'+(d.key==='software'?'README':d.key)+'.md'; jn.target='_blank'; jn.rel='noopener'; dl.appendChild(jn);
+  if(d.key==='software'){ const pr=officeH('a',null,'Pull requests ↗'); pr.href=d.ext; pr.target='_blank'; pr.rel='noopener'; dl.appendChild(pr); const is=officeH('a',null,'Support issues ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
+  if(d.key==='support'){ const is=officeH('a',null,'Issues it opened ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
+  if(d.key==='billing'){ const qb=officeH('a',null,'QuickBooks ↗'); qb.href='https://app.qbo.intuit.com/app/invoices'; qb.target='_blank'; qb.rel='noopener'; dl.appendChild(qb); }
+  const rt=officeH('a',null,'Routine ↗'); rt.href='https://claude.ai/code'; rt.target='_blank'; rt.rel='noopener'; dl.appendChild(rt);
+  ds.appendChild(dl);
+  /* the days */
+  const ys=officeH('div','dsec'); ys.appendChild(officeH('h4',null,'Daily activities · 14 days')); host.appendChild(ys);
+  const since=Date.now()-14*864e5, rows=s.rows.filter(r=>r.ms>=since);
+  if(!rows.length) ys.appendChild(officeH('p',null,'Nothing logged in the last 14 days.'));
+  let lastDay='';
+  rows.forEach(r=>{
+    const day=new Date(r.ms).toLocaleDateString(undefined,{weekday:'short',month:'short',day:'numeric'});
+    if(day!==lastDay){ ys.appendChild(officeH('div','dayH',day)); lastDay=day; }
+    const row=officeH('div','row'); const tm=officeH('span','tm',new Date(r.ms).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})); row.appendChild(tm);
+    const k=officeH('span','k clamp',(SALES_KIND[r.kind]||r.kind)+': '+r.text); k.title='click to expand'; k.addEventListener('click',()=>k.classList.toggle('open')); row.appendChild(k); ys.appendChild(row);
+  });
+}
+function renderOffice(){
+  const st=officeState();
+  renderOfficeFloor(st);
+  renderOfficeSide(st);
+  const ran=OFFICE_DESKS.filter(d=>st.by[d.key].cls==='ran').length;
+  const waiting=OFFICE_DESKS.filter(d=>st.by[d.key].plan && st.by[d.key].plan.plan.status==='proposed').length;
   const note=el('officeNote');
-  if(note) note.textContent='As of '+sStamp(new Date(officeAt||now).toISOString())+'. '+ran+' of '+OFFICE_DESKS.length+' desks ran on schedule. '
-    +'Every desk is a Claude Code Routine in claude.ai; the job notes are jarvis/agents/office. Sales and Marketing send; the rest prepare.';
+  if(note) note.textContent='As of '+sStamp(new Date(officeAt||Date.now()).toISOString())+'. '+ran+' of '+OFFICE_DESKS.length+' desks ran on schedule'+(waiting?'; '+waiting+' plan'+(waiting===1?'':'s')+' for '+st.week+' waiting for your approval':'')+'. '
+    +'Every desk is a Claude Code Routine in claude.ai; the job notes are jarvis/agents/office. Sales and Marketing send; the rest prepare. Click a room.';
 }
 
 /* ── the platform ────────────────────────────────────────────────────────
