@@ -427,7 +427,10 @@ function finish(caller, org, b, pricing) {
       + ' kW at ' + r.hours + ' hours.';
 
   var stack = V.stack({ kw: r.kw, hours: r.hours, demandLoPerKwMonth: 8,
-    demandHiPerKwMonth: 14, vppPerKwYear: 150 });
+    demandHiPerKwMonth: 14, vppPerKwYear: 10,
+    vppRef: 'ComEd Rider SDVPP (ICC-approved; tariff sheets effective 16 July '
+      + '2026, service begins no later than 1 March 2027): $10 per kW of '
+      + 'performance per season, measured 4–6 pm weekdays June–September.' });
   var incentives = V.incentives({ capexUsd: r.total.base, kwh: r.kwh, itcRate: 0.30,
     rebatePerKwh: V.COMED_REBATE.perKwh, rebateName: 'ComEd storage rebate' });
   var netCost = Math.max(0, r.total.base - incentives.total);

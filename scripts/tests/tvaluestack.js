@@ -70,7 +70,9 @@ ok('every stream carries a tier and a working', function(){
 });
 
 ok('the VPP rate is NOT presented as published without a citation', function(){
-  /* ComEd's Rider VPP / BYODLR is still before the ICC. */
+  /* A caller-supplied rate with no source (here the retired $150 planning
+     figure) must stay planning-grade; the published rate is Rider SDVPP's
+     $10/kW-season, which a caller cites through vppRef. */
   const s = V.stack({ kw: 826, hours: 6, vppPerKwYear: 150 });
   const vpp = s.streams.filter(x => x.id === 'vpp')[0];
   assert.strictEqual(vpp.tier, 'planning',
