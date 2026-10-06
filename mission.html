@@ -1669,6 +1669,7 @@ body.arranging .scroll{pointer-events:none}
       <button class="navItem" data-view="platform">⬡  Platform<span class="pill" id="nPlat"></span></button>
       <button class="navItem" data-view="logic">⬢  Omega Logic<span class="pill" id="nLogic"></span></button>
       <button class="navItem" data-view="board">▦  Board<span class="pill" id="nBoard"></span></button>
+      <button class="navItem" data-view="trading">▲  Trading City<span class="pill" id="nTrade"></span></button>
       <button class="navItem" data-view="openwork">◎  Open work<span class="pill" id="nWork"></span></button>
       <button class="navItem" data-view="messages">✆  Messages<span class="pill" id="nMsg"></span></button>
       <button class="navItem" data-view="sessions">⧉  Sessions<span class="pill" id="nSess"></span></button>
@@ -1871,6 +1872,27 @@ body.arranging .scroll{pointer-events:none}
           <button id="bdRead" title="Read the whole board first">READ THE BOARD</button>
         </div>
       </div>
+      </div>
+    </section>
+
+    <!-- ========== TRADING CITY ========== -->
+    <!-- Thomas's paper-trading bots (~/jarvis/trading-bot) run on the Mac and
+         serve their own city on 127.0.0.1:8765. This page reads the scorecard
+         off that port (loopback is trustworthy from https — the neural link's
+         own permission) and frames the city itself; it decides nothing and
+         presses nothing. The Emergency stop lives on the city's own page.
+         Paper money only; live trading is not built (jarvis/CLAUDE.md). -->
+    <section class="view" data-view="trading">
+      <div class="cmdGrid" style="grid-template-columns:330px 1fr">
+        <div class="panel" data-widget="tradeScore" style="flex:0 0 330px;min-height:0">
+          <div class="ptitle">Trading City<span class="live" id="tcState">—</span></div>
+          <div id="tcScore" class="scroll"></div>
+          <div class="cardActs"><button id="tcOpen">OPEN ↗</button></div>
+        </div>
+        <div class="panel" data-widget="tradeCity" style="flex:1;min-height:0;padding:0;overflow:hidden;position:relative">
+          <iframe id="tcFrame" title="Trading City" style="width:100%;height:100%;min-height:560px;border:0;background:#0c0b26;display:none"></iframe>
+          <div id="tcDark" class="scroll" style="padding:18px"></div>
+        </div>
       </div>
     </section>
 
@@ -5195,6 +5217,70 @@ function openBoard(){
   const w=window.open(BOARD+'/stage.html?v=81094&theme='+theme,'jarvis-board'); if(w){ boardWin=w; w.focus(); }
 }
 let boardWin=null;
+/* ── TRADING CITY ── the paper-trading bots in ~/jarvis/trading-bot, serving
+   their own dashboard on 127.0.0.1:8765. Read here, never driven: the account
+   (fake money), the nightly scorecard and each bot's day, with the city
+   framed beside it. The bot's server grants this origin a GET of /api/state
+   and nothing else, so the only thing this page could ever do to it is look. */
+const TRADE='http://127.0.0.1:8765';
+let tradeOn=false, tradeState=null;
+async function probeTrade(){
+  const was=tradeOn;
+  try{
+    const c=new AbortController(); const tm=setTimeout(()=>c.abort(),2500);
+    const r=await fetch(TRADE+'/api/state',{cache:'no-store',signal:c.signal}); clearTimeout(tm);
+    const j=await r.json(); if(!j||!j.bots) throw new Error('not the city');
+    tradeOn=true; tradeState=j;
+  }catch(_){ tradeOn=false; tradeState=null; }
+  if(was!==tradeOn){ try{ renderConns(lastStatus||{}); }catch(_){} }
+  try{ renderTrade(); }catch(_){}
+}
+function openTrade(){ const w=window.open(TRADE+'/','jarvis-trading'); if(w) w.focus(); }
+function tcMoney(x){ if(x==null||isNaN(x)) return '—'; const a=Math.abs(x).toFixed(2); return (x>0.004?'+$':x<-0.004?'-$':'$')+a; }
+function tradeLine(){
+  if(!tradeState) return 'off';
+  const a=tradeState.account||{}, day=(a.dayRealized||0)+(a.dayUnrealized||0);
+  const open=(tradeState.risk||{}).openPositions||0;
+  return tcMoney(a.equity).replace(/^\+?/,'$')+' · today '+tcMoney(day)+(open?' · '+open+' open':'')+(tradeState.source==='alpaca-paper'?' · Alpaca paper':' · demo prices');
+}
+function renderTrade(){
+  const pill=el('nTrade'); if(pill) pill.textContent = tradeOn ? ((tradeState.risk||{}).openPositions||'') : '';
+  const st=el('tcState'), score=el('tcScore'), dark=el('tcDark'), fr=el('tcFrame');
+  if(!st) return;
+  if(!tradeOn){
+    st.textContent='off'; score.textContent='';
+    fr.style.display='none'; if(fr.src) fr.src='about:blank';
+    dark.textContent='';
+    const h=document.createElement('div'); h.className='why';
+    h.textContent='The city is dark: the paper-trading bot is not running on this Mac. It is a launchd agent (com.clearsky.jarvis-trading); jarvis-doctor trading says why, and `cd ~/jarvis/trading-bot && python3 run.py demo` lights it by hand. Paper money only.';
+    dark.appendChild(h);
+    return;
+  }
+  st.textContent=tradeState.source==='alpaca-paper'?'Alpaca paper · $0 real':'demo prices · $0 real';
+  if(fr.style.display==='none'){ fr.src=TRADE+'/'; fr.style.display='block'; dark.textContent=''; }
+  const a=tradeState.account||{}, rv=tradeState.review, risk=tradeState.risk||{};
+  const rows=[
+    ['Equity', tcMoney(a.equity).replace(/^\+/,'')],
+    ['Today', tcMoney((a.dayRealized||0)+(a.dayUnrealized||0))],
+    ['Since $'+Math.round(a.start||0), tcMoney(a.allTime)],
+    ['Trades today', (risk.tradesToday||0)+' of '+(risk.maxTradesPerDay||0)],
+    ['Brakes', risk.killed?'EMERGENCY STOP':risk.lossStopped?'loss brake hit':risk.profitLocked?'profit locked':'clear'],
+  ];
+  if(rv&&rv.days) rows.push(['Scorecard','day '+rv.days+' of '+rv.minDays+' · '+tcMoney(rv.pnl)+' · drawdown '+tcMoney(rv.maxDrawdown)+' · '+rv.verdict]);
+  if((tradeState.disabled||[]).length) rows.push(['Switched off', tradeState.disabled.join(', ')]);
+  score.textContent='';
+  rows.forEach(([k,v])=>{ const d=document.createElement('div'); d.className='conn';
+    const w=document.createElement('span'); w.className='who'; w.textContent=k;
+    const y=document.createElement('span'); y.className='why'; y.textContent=v; d.appendChild(w); d.appendChild(y); score.appendChild(d); });
+  const bots=(tradeState.bots||[]).slice().sort((x,y)=>(y.dayPnl||0)-(x.dayPnl||0));
+  bots.forEach(b=>{ const d=document.createElement('div'); d.className='conn';
+    const dot=document.createElement('span'); dot.className='dot '+(b.position?'ok':b.state==='halted'?'warn':'off');
+    const w=document.createElement('span'); w.className='who'; w.textContent=b.label;
+    const y=document.createElement('span'); y.className='why'; y.textContent=(b.position?(b.position.kind.toUpperCase()+' '):'')+tcMoney(b.dayPnl)+' · '+b.state;
+    d.appendChild(dot); d.appendChild(w); d.appendChild(y); score.appendChild(d); });
+}
+function wireTrade(){ const o=el('tcOpen'); if(o&&!o.dataset.w){ o.dataset.w='1'; o.addEventListener('click',openTrade); } }
+setInterval(()=>{ if(document.visibilityState==='visible' && document.querySelector('.view.on')?.dataset.view==='trading') probeTrade(); }, 5000);
 /* The glass follows the mode. Two seams, both the board's own: the ring
    tints by mood (state/mood.json — amber is gold, green is its teal), written
    by the brain on this Mac; the page chrome takes a theme by URL or by a
@@ -5210,7 +5296,7 @@ function syncBoardTheme(){
   }catch(_){}
 }
 async function probeBrain(){
-  probeBoard();
+  probeBoard(); probeTrade();
   const was=brainOn;
   try{
     const c=new AbortController(); const tm=setTimeout(()=>c.abort(),1500);
@@ -5591,6 +5677,7 @@ const VIEW_WORDS = {
   clients:  ['clients','my clients','the clients','customers','accounts'],
   platform: ['platform','the platform','omega'],
   board:    ['board','the board','whiteboard','white board'],
+  trading:  ['trading','trading city','the city','the bots','trading bots','the vault'],
   openwork: ['open work','openwork','open items','the open work','work'],
   messages: ['messages','my messages','the messages','texts','my texts','text messages','imessage','imessages'],
   sessions: ['sessions','my sessions','coding sessions','the sessions','agents','coding agents'],
@@ -6156,6 +6243,7 @@ function showView(name){
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
+  if(name==='trading'){ wireTrade(); probeTrade(); }
   if(name==='openwork'){ loadOpenWork(); }
   if(name==='messages'){ wireMessages(); loadMessages(); }
   if(name==='sessions'){ wireSessions(); loadSessions(false); }
@@ -6414,6 +6502,9 @@ function renderConns(s){
        the glass, from the same panel that says whether it is up. */
     ['Glass board', boardOn?'ok':'off',
       boardOn?'up on this Mac · OPEN ↗':'off — Desktop: JARVIS barehands · OPEN ↗', openBoard],
+    /* The paper-trading bots. Fake money by construction; the row says so. */
+    ['Trading City', tradeOn?'ok':'off',
+      tradeOn?(tradeLine()+' · OPEN ↗'):'off — ~/jarvis/trading-bot · OPEN ↗', openTrade],
     ['Gmail', mins==null?'off':(mins<90?'ok':'warn'),
       mins==null?'no run recorded':('read '+mins+' min ago')],
     ['Calendar', (s.schedule||[]).length?'ok':'warn',
@@ -6445,7 +6536,7 @@ function renderConns(s){
     const dot=document.createElement('span'); dot.className='dot '+state;
     const w=document.createElement('span'); w.className='who'; w.textContent=who;
     const y=document.createElement('span'); y.className='why'; y.textContent=why;
-    if(act){ d.style.cursor='pointer'; d.title='Open the glass board'; d.setAttribute('role','link'); d.addEventListener('click',act); }
+    if(act){ d.style.cursor='pointer'; d.title='Open '+who; d.setAttribute('role','link'); d.addEventListener('click',act); }
     d.appendChild(dot); d.appendChild(w); d.appendChild(y); host.appendChild(d);
   });
 }
@@ -9096,6 +9187,7 @@ const IX_VIEWS=[
   ['platform','Platform','OMEGA, and the stone'],
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
+  ['trading','Trading City','the paper-trading bots, on this Mac — fake money'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
   ['messages','Messages','your iMessage threads, and a reply box'],
   ['sessions','Sessions','Claude Code and Codex, running on this Mac'],
