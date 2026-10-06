@@ -8415,24 +8415,24 @@ function wireSales(){
    a `note` entry the desk reads before it works), a NOTE <DESK>: … line
    (the same), and the Sales agent's own switch (sales_config). */
 const OFFICE_DESKS=[
-  {key:'sales', name:'Sales', who:'Nora', mail:'sales@clearsky-usa.com', sched:'weekdays 8:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:1,w:7,d:6},
+  {key:'sales', name:'Sales', who:'Nora', last:'Hale', mail:'sales@clearsky-usa.com', sched:'weekdays 8:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:1,w:7,d:6},
    role:'Answers demo requests, works the accounts, follows up, researches prospects, and emails Thomas ten LinkedIn people a day to connect with (the note and the message written).',
    may:'Sends email as Thomas and books 30-minute demos, 8:30–2:30 Central, for Thomas or Mike, with Thomas and Andrew on every invitation.', sends:true,
    tools:'Gmail · Google Calendar · Google Drive'},
-  {key:'marketing', name:'Marketing', who:'Mila', mail:'marketing@clearsky-usa.com', sched:'weekdays 10:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:0,w:7,d:5},
+  {key:'marketing', name:'Marketing', who:'Mila', last:'Sorensen', mail:'marketing@clearsky-usa.com', sched:'weekdays 10:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:0,w:7,d:5},
    role:'The press desk and the campaigns: pitches the Omega-Core story to the trade press on the beat, builds one campaign at a time for Thomas to approve, and one update to accounts when something ships. The LinkedIn post is its own routine, 7:57.',
    may:'Pitches outlets, never a price; an expense, an interview, a quote or an exclusive waits for Thomas’s APPROVE by email.', sends:true, tools:'Gmail · Typefully'},
-  {key:'software', name:'Software', who:'Theo', mail:'dev@clearsky-usa.com', sched:'daily 8:00', days:[0,1,2,3,4,5,6], perDay:1, grace:30, room:{x:17,y:1,w:7,d:6},
+  {key:'software', name:'Software', who:'Theo', last:'Varga', mail:'dev@clearsky-usa.com', sched:'daily 8:00', days:[0,1,2,3,4,5,6], perDay:1, grace:30, room:{x:17,y:1,w:7,d:6},
    role:'The steward: tests, production, the bugs Sam hands over, a pull request for what is small and obviously right.',
    may:'Opens pull requests and answers Sam’s handoffs. Never merges, never deploys.', tools:'GitHub · Gmail',
    ext:'https://github.com/clearskyenergy/omega-core/pulls', extText:'also reports on GitHub'},
-  {key:'support', name:'Support', who:'Sam', mail:'support@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', days:[1,2,3,4,5], perDay:2, grace:30, room:{x:1,y:9,w:7,d:6},
+  {key:'support', name:'Support', who:'Sam', last:'Okafor', mail:'support@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', days:[1,2,3,4,5], perDay:2, grace:30, room:{x:1,y:9,w:7,d:6},
    role:'Reads what customers asked, answers from the manuals, hands a bug to Theo as an issue and tells the customer.',
    may:'Sends how-to answers as Thomas. A refund, a credit or anything angry waits for Thomas.', sends:true, tools:'Gmail · GitHub'},
-  {key:'billing', name:'Billing', who:'June', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:17,y:9,w:7,d:6},
+  {key:'billing', name:'Billing', who:'June', last:'Castellano', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:17,y:9,w:7,d:6},
    role:'A/R aging and open invoices from QuickBooks, billing questions answered, reminders at 7 and 14 days, and the weekly P&L to Thomas on Monday.',
    may:'Sends the first two reminders. 30+ days, a dispute, a refund or a credit waits for Thomas’s APPROVE. Never changes an invoice, never charges a card.', sends:true, tools:'QuickBooks · Gmail'},
-  {key:'admin', name:'Admin', who:'Ada', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
+  {key:'admin', name:'Admin', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
    role:'The day’s logistics: meetings, the office’s open approvals and handoffs, unanswered mail, promises due, tomorrow. Sunday night: the weekly plan for every desk, for Thomas to approve.',
    may:'One email to Thomas. Everything else is a draft.', tools:'Gmail · Google Calendar'}
 ];
@@ -8476,7 +8476,7 @@ async function officeFetchActivity(){
     else if(note){ row.desk=note[1].toLowerCase(); row.memo=note[2].trim(); }
     else if(appr){ row.desk=appr[1].toLowerCase(); row.approval={id:appr[2].toUpperCase(), status:appr[3].toLowerCase(), text:appr[4].trim()}; }
     else if(hand){ row.desk=hand[1].toLowerCase(); row.handoff={id:hand[2].toUpperCase(), to:hand[3].toLowerCase(), text:hand[4].trim()}; }
-    else { const m=OFFICE_DESK_RE.exec(s); if(m) row.desk=m[1].toLowerCase(); }
+    else if(/^agent:/i.test(String(a.by||''))){ const m=OFFICE_DESK_RE.exec(s); if(m) row.desk=m[1].toLowerCase(); }
     row.text=row.plan?row.plan.text:row.memo!=null?row.memo:s.replace(OFFICE_DESK_RE,'');
     return row;
   }).filter(a=>!isNaN(a.ms)).sort((a,b)=>b.ms-a.ms);
@@ -8565,8 +8565,8 @@ function renderOfficeFloor(st){
     const s=st.by[d.key], R=d.room, g=document.createElementNS(NS,'g');
     g.setAttribute('class','room '+s.cls+(officeSel===d.key?' sel':'')); g.dataset.desk=d.key; g.setAttribute('tabindex','0'); g.setAttribute('role','button');
     const stat=s.last?(s.cls==='ran'?'ran '+sStamp(new Date(s.last.ms).toISOString()):'last '+sStamp(new Date(s.last.ms).toISOString())+' · overdue'):(d.ext?'reports on GitHub':'never ran');
-    g.setAttribute('aria-label',d.who+' · '+d.name+' · '+stat);
-    const title=document.createElementNS(NS,'title'); title.textContent=d.who+' · '+d.name+' · '+d.sched+' · '+stat; g.appendChild(title);
+    g.setAttribute('aria-label',d.who+' '+d.last+' · '+d.name+' · '+stat);
+    const title=document.createElementNS(NS,'title'); title.textContent=d.who+' '+d.last+' · '+d.name+' · '+d.sched+' · '+stat; g.appendChild(title);
     /* back walls, then the floor */
     g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x+R.w,R.y,0),officeIso(R.x+R.w,R.y,18),officeIso(R.x,R.y,18)],'wall'));
     g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x,R.y+R.d,0),officeIso(R.x,R.y+R.d,18),officeIso(R.x,R.y,18)],'wall'));
@@ -8590,7 +8590,7 @@ function renderOfficeFloor(st){
     for(let k=0;k<papers;k++){ const pr=document.createElementNS(NS,'rect'); pr.setAttribute('x',pb[0]-4); pr.setAttribute('y',pb[1]-4-k*1.6); pr.setAttribute('width','8'); pr.setAttribute('height','5'); pr.setAttribute('class','paper'); g.appendChild(pr); }
     /* the nameplate, in the front half of the room */
     const lb=officeIso(R.x+R.w/2,R.y+R.d-1.2,0);
-    g.appendChild(officeText(lb[0],lb[1]-14,'rwho',d.who));
+    g.appendChild(officeText(lb[0],lb[1]-14,'rwho',d.who+' '+d.last));
     g.appendChild(officeText(lb[0],lb[1]-2,'rname',d.name+' · '+d.sched));
     g.appendChild(officeText(lb[0],lb[1]+9,'rstat',stat));
     g.addEventListener('click',()=>officeSelect(d.key));
@@ -8648,7 +8648,7 @@ function renderOfficeSide(st){
   }
   /* one department */
   const d=OFFICE_DESKS.find(x=>x.key===officeSel), s=st.by[d.key], DESK=d.name.toUpperCase();
-  const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' · '+d.name)); hd.appendChild(officeH('span','sub',d.mail+' · '+d.sched));
+  const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' '+d.last+' · '+d.name)); hd.appendChild(officeH('span','sub',d.mail+' · '+d.sched));
   const back=officeH('button',null,'◀ Office'); back.id='officeBack'; back.addEventListener('click',()=>officeSelect(d.key)); hd.appendChild(back); host.appendChild(hd);
   const stat=s.last?(s.cls==='ran'?'Ran '+sStamp(new Date(s.last.ms).toISOString())+'.':'Last ran '+sStamp(new Date(s.last.ms).toISOString())+', overdue.'):(d.ext?'Reports on GitHub, not here.':'Never logged a run.');
   const intro=officeH('div','dsec'); intro.appendChild(officeH('p',null,d.role+' '+d.may+' '+stat)); host.appendChild(intro);

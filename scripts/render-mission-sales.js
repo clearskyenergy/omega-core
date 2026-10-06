@@ -213,7 +213,7 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     await page.click('#officeFloor g.room[data-desk="sales"]');
     await page.waitForSelector('#officeBack', { timeout: 8000 }).catch(function () {});
     var dr = await page.evaluate(function () { var e = document.getElementById('officeSide'); return { text: e ? e.textContent.replace(/\s+/g, ' ').trim() : '', sel: !!document.querySelector('#officeFloor g.room.sel[data-desk="sales"]') }; });
-    ok(dr.sel && /Nora · Sales/.test(dr.text) && /sales@clearsky-usa.com/.test(dr.text), 'the Sales room opens Nora\'s drawer and stays lit as selected', dr.text.slice(0, 200));
+    ok(dr.sel && /Nora Hale · Sales/.test(dr.text) && /sales@clearsky-usa.com/.test(dr.text), 'the Sales room opens Nora Hale\'s drawer and stays lit as selected', dr.text.slice(0, 200));
     ok(/proposed/.test(dr.text) && /3 demos booked/.test(dr.text), 'the week\'s proposed plan is shown', dr.text.slice(0, 600));
     ok(/Runs · 7d1 of 5/.test(dr.text) && /Runs · 30d1 of 2[0-3]/.test(dr.text), 'the numbers: one run of the five a week expected', dr.text.slice(0, 900));
     ok(/Switch the agent off/.test(dr.text) && /Mailbox/.test(dr.text) && /Job note/.test(dr.text), 'the decisions: the switch and the doors', dr.text.slice(-500));
