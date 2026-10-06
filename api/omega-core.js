@@ -29,7 +29,11 @@
    caller, the build-up to staff only.
 
    GET is a health check: the build, the card's version, the gates. It
-   never returns the lease card or the price.
+   never returns the lease card, the price, or a chipset's rate.
+
+   POST also answers the skid's own compute cash flow (body.compute, the
+   iQGen workbook as api/_lib/omega-compute-model.js): the results and a
+   customer view to every entitled caller, the cost build-up to staff.
 
    ENVIRONMENT VARIABLES — none. This function does no network I/O.
    ═══════════════════════════════════════════════════════════════════════════════ */
@@ -71,13 +75,14 @@ module.exports = function (req, res) {
   res.setHeader('Cache-Control', 'private, no-store');
   if (req.method === 'GET') {
     return res.status(200).json({
-      ok: true, build: OC.BUILD, model: 'omega-core-v1',
+      ok: true, build: OC.BUILD, model: 'omega-core-v2', computeModel: OC.COMPUTE.BUILD,
       rateCard: { version: OC.RATE_CARD.version, asOf: OC.RATE_CARD.asOf },
       product: { name: OC.PRODUCT.name, computeKw: OC.PRODUCT.compute.kw, batteryKwh: OC.PRODUCT.battery.kwh,
                  batteryKw: OC.PRODUCT.battery.kw, skidIn: OC.PRODUCT.skid.lengthIn + ' x ' + OC.PRODUCT.skid.depthIn },
       gates: ['power', 'location', 'fiber (hard gate)'],
       body: 'POST { site:{name,address,lat,lng}, drawing:{units,chargers,service,xfmrKva,dcLoadKw,buildingKw}, '
-          + 'run:{capex,incentive,netCost,annualRevenue,at,stale}, evidence:{gridAtlas,network,parcel,fiberOnFile}, rep:{...} }'
+          + 'run:{capex,incentive,netCost,annualRevenue,at,stale}, evidence:{gridAtlas,network,parcel,fiberOnFile}, rep:{...}, '
+          + 'compute:{chipset,pricingBasis,utilization,electricity,capexBasis,debt:{ltc,rate,...},includeLease} }'
     });
   }
   if (req.method !== 'POST') return res.status(405).json({ build: OC.BUILD, error: 'GET or POST.' });

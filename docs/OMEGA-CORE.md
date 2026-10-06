@@ -173,6 +173,60 @@ a longer term, never under 5%. ClearSky's program outlay is the system cost,
 the fiber lateral at compute-lease's $45k–$250k/mile midpoint where fiber is not
 on site, and the lease.
 
+## The skid's own economics — `api/_lib/omega-compute-model.js`
+
+Tommy, 5 October 2026, handing over the iQGen *75 kW IT Load Cash Flow Model*
+workbook: "this is how the Omega-Compute needs to be modeled … it's an iQGen
+set but we are white labeling it Omega Core Skid and when we place it here are
+the numbers and we need to make a customer facing version and be able to show
+bankability." The module is that workbook, sheet by sheet, pure and
+server-side, and `POST /api/omega-core` returns it as `compute` beside the
+site verdict, priced on the skids proposed:
+
+| Sheet | Here | What it holds |
+|---|---|---|
+| Chipset Library | `CHIPSETS` | ten NVIDIA platforms: GPUs and kW per node, CoreWeave North America public pricing (spot, on-demand, inference $/GPU-hr, 2026-10-05), the relative $/GPU CAPEX index. A price CoreWeave does not publish is `null`, never zero. |
+| CapEx Reference | `CMDC` | the 75 kW container CAPEX by category (container, cooling, compute, power), general-purpose air-cooled and accelerated liquid-cooled, ±15% |
+| Dynamic CapEx | `dynamicCapex()` | the accelerated reference scaled to the chipset: compute × GPUs ÷ 48 × index, cooling and power by factor |
+| Dynamic Cash Flow | `cashFlow()` | the 60-month model: whole-node capacity, revenue with a 50/65/80/100% ramp and −8%/yr pricing, electricity at PUE, network + storage 5%, other 3%, fixed $5,000/mo, a 2% maintenance reserve, a 10% residual; debt at 70% LTC, 10%, 60 months, 6 interest-only, 10% balloon, 2% fee, a 3-month reserve; equity cash flow, paybacks, DSCR |
+| Scenario Comparison | `scenarios()` | every chipset under the same inputs, unlevered: capacity, revenue, contribution, chipset-scaled CAPEX, payback, cash-on-cash yield |
+| Sensitivity | `sensitivity()` | utilisation (50–95%) × price realisation (60–120%) |
+
+The workbook's defaults are the model's defaults, and `scripts/tests/
+tomegacore.js` pins its figures (month-1 revenue $35,956, year-1 $755,699,
+debt $507,130, payback months 17 and 7, the H100 scenario at $2.156M and
+96.0%). Where a cell pointed at the wrong row it is corrected and the
+correction named in the staff build-up (`buildUp.corrections`).
+
+What Omega-Core adds:
+
+- **The land lease to the host is a cost of the skid.** The offer's base rent
+  (or the rent typed) is a line in the cash flow, escalating yearly; *Host's
+  rent as a cost: No* shows the skid alone.
+- **Bankability**: the minimum DSCR over the amortising months against the
+  target (1.25x), the months under it, the balloon month's own cover, and
+  the **debt capacity at the target** — debt service is linear in the loan
+  for fixed terms, so the largest loan the cash flow carries is the minimum
+  over amortising months of EBITDA ÷ (target × service per dollar) — plus
+  project and equity IRR.
+- **A CAPEX basis**: the CMDC range (the workbook's default, general-purpose
+  air-cooled high, $724,471), the chipset-scaled estimate, the Omega-Core skid
+  price ClearSky recorded ($450,000), or a typed figure. Which one is
+  ClearSky's position is not decided; the dialog says which was used.
+- **A customer view** (`compute.customer`): the headline figures, the
+  bankability verdict and the assumptions in plain words — no cost reference,
+  no price sheet, no proxy index. The build-up (`buildUp`: the CMDC
+  categories, the index per chipset, the sources, the corrections) is
+  staff-only, as the lease card's is.
+- Inputs the rep may set in the dialog: chipset, pricing basis (or a custom
+  $/GPU-hour), utilisation, electricity $/kWh, the CAPEX basis, the debt's LTC
+  and rate, and the rent switch. Anything out of range is set aside and said.
+
+**Print** gives the *customer version* (the skid, the site's verdict in one
+line, the lease, the compute economics, bankability, the five years and the
+assumptions) or the *full report* (everything, with every chipset, the
+sensitivity grid and, for staff, the build-up).
+
 ## The door — `api/omega-core.js`
 
 The verify-token flavour, no service account. A packaged workspace must hold
@@ -197,9 +251,14 @@ client's `collect()` against a fake session, the project field, and the R60.
 
 ## Not built
 
-- **Compute revenue.** The skid's own GPU revenue and ClearSky's return on the
-  $450,000 are not modelled here; `api/_lib/compute-site.js` is where that
-  belongs when the Solela figures arrive.
+- **OEM quotes for the CAPEX.** The compute model's costs are the CMDC
+  estimated range and a market-value proxy per chipset (the workbook's own
+  note: replace with OEM/server quotes before investment approval), and which
+  CAPEX basis is ClearSky's position — the $450,000 skid price or the 75 kW
+  container range — is not decided.
+- **Taxes, GPU degradation and a released reserve** are not in the compute
+  cash flow (as the workbook has it): the price decline stands in for
+  degradation and the debt service reserve is funded and not released.
 - **ClearSky's own Omega-Core rent.** Until it is set, a rent is typed per
   site or the market reference is shown. A staff setting for the standard rent
   (rather than a code change) is not built.

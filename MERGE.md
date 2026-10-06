@@ -2934,6 +2934,18 @@ flag** (the R60 and every tenant product merged by `omega-bess-products.js`):
 the catalog's own word on its PCS, transformer and disconnect now wins over
 the >760 kW size rule. Entries without the flags behave as before.
 
+**The skid's own economics (2026-10-05).** Tommy handed over the iQGen 75 kW
+IT Load Cash Flow Model workbook ("this is how the Omega-Compute needs to be
+modeled … white labeling it Omega Core Skid … customer facing version …
+bankability"). `api/_lib/omega-compute-model.js` is that workbook as one pure
+function — Chipset Library, CapEx Reference, Dynamic CapEx, Dynamic Cash Flow,
+Scenario Comparison, Sensitivity — returned as `compute` on the Omega-Core
+answer with the host's rent as a cost, bankability and a customer view; the
+dialog takes the chipset, basis, utilisation, electricity, CAPEX basis, debt
+and rent switch and prints a customer version or the full report. Pricing,
+CAPEX and the cash flow stay in `/api/`; the browser carries no rate. Four
+cells the sheet had pointing at the wrong row are corrected and named.
+
 **The rent (2026-10-03).** No Omega-Core rent is set, so the card
 (`omega-core-lease-v2`) is a market reference read off cell-tower ground
 leases and parking-stall rent, never an offer whatever the verdict, and the

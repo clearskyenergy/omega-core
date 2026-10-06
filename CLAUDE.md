@@ -1245,7 +1245,16 @@ leases and parking-stall rent (`RATE_CARD.sources`, shown with it), never an
 offer whatever the verdict, until a rent is typed for the site (`rep.leaseMonthly`,
 `rep.leaseEscalatorPct`; out of range is set aside and said); the host's
 figures follow the typed rent. When ClearSky sets the rent, it goes on the
-card and the version moves. A legacy plan must open
+card and the version moves. **The skid's own economics** (Tommy, 2026-10-05,
+the iQGen 75 kW cash-flow workbook, "white labeling it Omega Core Skid …
+customer facing version … show bankability"): `api/_lib/omega-compute-model.js`
+is that workbook, pure and server-side — chipset library with CoreWeave's
+public $/GPU-hr, the CMDC 75 kW CAPEX range, the 60-month levered cash flow,
+every chipset side by side, the sensitivity grid — returned as `compute` on
+the same answer, priced on the skids proposed, with the host's rent as a cost
+of the skid, bankability (min DSCR vs target, debt capacity at the target,
+IRR) and a customer view; the build-up is staff-only; its figures are pinned
+by `tomegacore.js`. A legacy plan must open
 the compute cap (`addons.judge`), as the button does. `S.omegaCore` rides on
 the project. **No false results** (Tommy, 2026-10-02): a firm answer either way
 only on a confirmed fact — Qualified / Qualified with conditions / **Needs
