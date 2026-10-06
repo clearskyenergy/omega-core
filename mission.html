@@ -5350,8 +5350,20 @@ function renderTrade(){
     fr.style.display='none'; if(fr.src) fr.src='about:blank';
     dark.textContent='';
     const h=document.createElement('div'); h.className='why';
-    h.textContent='The city is dark: the paper-trading bot is not running on this Mac. It is a launchd agent (com.clearsky.jarvis-trading); jarvis-doctor trading says why, and `cd ~/jarvis/trading-bot && python3 run.py demo` lights it by hand. Paper money only.';
+    h.textContent='The city is dark: the paper-trading bots are not running on this Mac. They are launchd agents (com.clearsky.jarvis-trading, its review and its Friday sweep) that have to be installed once, from the Mac itself; this page can only look. Paper money only.';
     dark.appendChild(h);
+    /* the install, ready to paste: three lines in Terminal, or hand them to
+       a Claude session on the Mac. Copy, because a dark city that only
+       describes its cure is the kind of outage nobody fixes. */
+    const cmd='cd ~/jarvis && git pull && bin/install-agents --apply --only jarvis-trading && bin/jarvis-doctor trading';
+    const pre=document.createElement('pre'); pre.style.cssText='margin:12px 0 8px;padding:10px 12px;border:var(--edge);border-radius:6px;font:12px var(--mono);color:var(--ink);white-space:pre-wrap;word-break:break-all;background:rgba(0,0,0,.3)'; pre.textContent=cmd; dark.appendChild(pre);
+    const acts=document.createElement('div'); acts.className='cardActs';
+    const cp=document.createElement('button'); cp.textContent='COPY THE INSTALL'; cp.id='tcCopy';
+    cp.addEventListener('click',async()=>{ try{ await navigator.clipboard.writeText(cmd); cp.textContent='COPIED · PASTE IN TERMINAL'; }catch(_){ cp.textContent='SELECT THE LINE ABOVE AND COPY'; } });
+    acts.appendChild(cp); dark.appendChild(acts);
+    const n=document.createElement('div'); n.className='why'; n.style.marginTop='8px';
+    n.textContent='The towers light on their own within seconds of the install; this panel looks every five seconds. Demo prices until Alpaca paper keys are in ~/jarvis/trading-bot/.env.';
+    dark.appendChild(n);
     return;
   }
   st.textContent=tradeState.source==='alpaca-paper'?'Alpaca paper · $0 real':'demo prices · $0 real';
