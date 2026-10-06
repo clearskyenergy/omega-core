@@ -539,6 +539,21 @@
     var npv = 0;
     for (y = 0; y < flows.length; y++) npv += flows[y] / Math.pow(1 + disc, y);
 
+    /* THE FULL-COST VIEW. When the incentives cover the whole project the
+       owner has nothing at risk: net cost $0, so there is no IRR (every
+       dollar back is return on nothing) and payback is day one. That is
+       the truth, and it reads like a broken panel. So the same cash flows
+       are also judged against the FULL cost, incentives ignored, which is
+       the return the project earns on its own and the one to quote when
+       the rebate is in doubt (the Ameren storage rebate at $250/kWh can
+       exceed a small project's cost; whether it is paid in full is a
+       programme question, not an arithmetic one). Always computed, so a
+       reader can compare; headlined only when the net view is empty. */
+    var grossFlows = flows.slice(); grossFlows[0] = -capex;
+    var grossNpv = 0;
+    for (y = 0; y < grossFlows.length; y++) grossNpv += grossFlows[y] / Math.pow(1 + disc, y);
+    var coverCost = net <= 0;
+
     var assumptions = [
       "An unlevered, pre-tax project IRR on the owner's share of the stack over " +
         years + " years, incentives taken at year 0. Tax, depreciation, debt and " +
@@ -553,6 +568,16 @@
     ];
     if (incCapped) assumptions.push("Incentives were capped at the project cost; " +
       "the uncapped figure exceeded it.");
+    var irrNote = null;
+    if (coverCost) {
+      irrNote = "Incentives cover the full cost, so nothing of yours is at risk: there " +
+        "is no net IRR to quote and payback is day one. The return on the full cost, " +
+        "before incentives, is the project's own: IRR " +
+        (PF.irr(grossFlows) == null ? "n/a" : (PF.irr(grossFlows) * 100).toFixed(1) + "%") +
+        ", payback " + (PF.payback(grossFlows) == null ? "never" : PF.payback(grossFlows).toFixed(1) + " yrs") +
+        ". Confirm the rebate is paid in full before you lean on the net view.";
+      assumptions.push(irrNote);
+    }
 
     return {
       ok: true,
@@ -562,6 +587,10 @@
       irr: PF.irr(flows),
       npv: npv, discountRate: disc,
       paybackYears: PF.payback(flows),
+      incentivesCoverCost: coverCost,
+      irrNote: irrNote,
+      gross: { capexUsd: capex, irr: PF.irr(grossFlows), npv: grossNpv,
+               paybackYears: PF.payback(grossFlows) },
       augmentations: augmented,
       omYear1Usd: om1,
       assumptions: assumptions

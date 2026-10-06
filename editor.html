@@ -36916,6 +36916,24 @@ function omegaRenderResults(){
   var net   = _omNum(window._NET_COST); if(net===null) net=gross;
   var perKw = _omNum(window._COST_PER_KW);
   var rev   = _omNum(window._YR1_REV);
+  /* A battery drawn on the map earns through the Value Stack (Analyze ›
+     Value Stack), whose answer the run's own revenue list knows nothing
+     about: with no stream entered the rail read "—" beside a 760 kWh BESS
+     (Thomas, 2026-10-06). When the Value Stack has run for this drawing,
+     its owner's year-1 dollars and its net-of-incentives cost are what
+     the rail judges, unless the run entered revenue of its own. */
+  var _vsR = null, _fullCost = false;
+  try{ _vsR = (window._VS_SERVER && window._VS_SERVER.ok && window._VS_SERVER.totals) ? window._VS_SERVER : null; }catch(e){}
+  if(_vsR){
+    if(!(rev > 0) && _omNum(_vsR.totals.owner) > 0) rev = _omNum(_vsR.totals.owner);
+    if(_omNum(window._NET_COST)===null && _omNum(_vsR.netCostUsd)!==null && _vsR.cost && _vsR.cost.capexUsd > 0){
+      net = _omNum(_vsR.netCostUsd);
+      if(gross===null) gross = _omNum(_vsR.cost.capexUsd);
+    }
+  }
+  /* incentives that cover the cost leave nothing at risk: no net IRR, a
+     day-one payback. The rail then judges the FULL cost and says so. */
+  if(net!==null && net<=0 && gross>0){ net = gross; _fullCost = true; }
   /* $12,941 was a flat fallback: the same O&M on a 380 kW site ($34/kW-yr)
      and a 10 MW one ($1.29/kW-yr). Scale the default with the system and
      say it is a default, so a blank field cannot quietly price a project. */
@@ -36960,12 +36978,21 @@ function omegaRenderResults(){
   fi += _omRow('Net of incentives', _omMoney(net));
   fi += _omRow('$/W', perW!==null ? '$'+perW.toFixed(2) : null);
   fi += _omRow('$/kW', perKw ? '$'+Math.round(perKw).toLocaleString() : null);
-  fi += _omRow('Payback', (payback!==null && payback>0) ? payback.toFixed(1)+' yrs' : null);
-  fi += _omRow('Cash-on-cash (yr 1)', coc!==null ? coc.toFixed(1)+' %' : null,
+  var _fc = _fullCost ? ' · full cost' : '';
+  fi += _omRow('Payback'+_fc, (payback!==null && payback>0) ? payback.toFixed(1)+' yrs' : null);
+  fi += _omRow('Cash-on-cash (yr 1)'+_fc, coc!==null ? coc.toFixed(1)+' %' : null,
                coc!==null ? (coc>=10?'rr-pos':'') : '');
-  fi += _omRow('IRR (10 yr)', irr!==null ? irr.toFixed(1)+' %' : null,
+  fi += _omRow('IRR (10 yr)'+_fc, irr!==null ? irr.toFixed(1)+' %' : null,
                irr!==null ? (irr>=10?'rr-pos':'') : '');
-  fi += _omRow('NPV (10 yr)', _omMoney(npv), npv!==null ? (npv>=0?'rr-pos':'rr-neg') : '');
+  fi += _omRow('NPV (10 yr)'+_fc, _omMoney(npv), npv!==null ? (npv>=0?'rr-pos':'rr-neg') : '');
+  if(_fullCost){
+    fi += '<div class="rr-note">Incentives cover the net cost, so nothing is at risk and there is no net IRR; '
+        + 'these figures are on the full cost before incentives.</div>';
+  }
+  if(_vsR && !(_omNum(window._YR1_REV) > 0)){
+    fi += '<div class="rr-note">Year-1 revenue is the Value Stack\u2019s owner share ('+_omMoney(rev)+'). '
+        + 'Its 20-year IRR is in the panel.</div>';
+  }
   fi += _omRow('LCOE', lcoe!==null ? '$'+lcoe.toFixed(4)+'/kWh' : null);
   if(lcoe===null){
     fi += '<div class="rr-gate">LCOE needs annual energy. It unlocks with the '
@@ -94617,6 +94644,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
          answer here; window._VS_ESTIMATE stays the older estimator's. */
       window._VS_SERVER = result;
       paint();
+      try{ if(typeof omegaRenderResults==='function') omegaRenderResults(); }catch(e){}
     }, function (e) {
       state.busy = false; state.error = e.message || String(e);
       paint();
@@ -94824,9 +94852,16 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     /* returns */
     html += '<div style="' + lbl + ';margin:10px 0 5px">Returns — against the project cost</div>';
     if (C && C.capexUsd > 0 && L && L.ok) {
+      /* incentives that cover the whole cost leave nothing at risk: the net
+         IRR is undefined and payback is day one, which reads as a broken
+         panel. The tiles then carry the return on the FULL cost, labelled,
+         and the note under them says why (value-stack.js lifecycle). */
+      var G = L.incentivesCoverCost && L.gross ? L.gross : null;
       html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'
-        + [['IRR', L.irr == null ? '—' : pct(L.irr)],
-           ['Payback', L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs'],
+        + [[G ? 'IRR · full cost' : 'IRR', G ? pct(G.irr) : (L.irr == null ? '—' : pct(L.irr))],
+           [G ? 'Payback · full cost' : 'Payback', G
+              ? (G.paybackYears == null ? 'never' : G.paybackYears.toFixed(1) + ' yrs')
+              : (L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs')],
            ['NPV', money(L.npv)]].map(function (f) {
             return '<div style="background:#0F1B2E;border:1px solid var(--hairline);border-radius:7px;padding:7px 8px;text-align:center">'
               + '<div style="font:800 14px \'IBM Plex Mono\',monospace">' + f[1] + '</div>'
@@ -94836,6 +94871,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         + 'Cost ' + money(C.capexUsd) + ' − incentives ' + money(R.incentives ? R.incentives.total : 0)
         + ' = net ' + money(R.netCostUsd) + '. ' + L.years + '-yr unlevered pre-tax, '
         + (L.augmentations ? 'one augmentation modelled' : 'no augmentation') + '.</div>'
+        + (L.irrNote ? '<div style="font-size:9.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">' + esc(L.irrNote) + '</div>' : '')
         + (C.source === 'model'
             ? '<div style="font-size:9.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">' + esc(C.note) + '</div>'
             : '<div style="font-size:9px;color:#6B8AAD;margin-bottom:4px">' + esc(C.note) + '</div>');
@@ -95051,10 +95087,14 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       + hero('You keep / year', money(R.totals.owner), 'gross ' + money(R.totals.gross))
       + (C && C.capexUsd > 0 ? hero('Net cost', money(R.netCostUsd),
           money(C.capexUsd) + ' − ' + money(R.incentives ? R.incentives.total : 0) + ' incentives') : '')
-      + (L && L.ok ? hero('IRR (' + L.years + ' yr)', L.irr == null ? '—' : pct(L.irr),
-          'unlevered · pre-tax') : '')
-      + (L && L.ok ? hero('Payback', L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs',
-          'NPV ' + money(L.npv) + ' @ ' + pct(L.discountRate, 0)) : '')
+      + (L && L.ok ? (L.incentivesCoverCost && L.gross
+          ? hero('IRR on full cost (' + L.years + ' yr)', pct(L.gross.irr), 'incentives cover the net cost · unlevered · pre-tax')
+          : hero('IRR (' + L.years + ' yr)', L.irr == null ? '—' : pct(L.irr), 'unlevered · pre-tax')) : '')
+      + (L && L.ok ? (L.incentivesCoverCost && L.gross
+          ? hero('Payback on full cost', L.gross.paybackYears == null ? 'never' : L.gross.paybackYears.toFixed(1) + ' yrs',
+              'net payback day one · NPV ' + money(L.npv) + ' @ ' + pct(L.discountRate, 0))
+          : hero('Payback', L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs',
+              'NPV ' + money(L.npv) + ' @ ' + pct(L.discountRate, 0))) : '')
       + (R.bankability && R.bankability.lifecycle && R.bankability.lifecycle.ok
           ? hero('Bankable IRR', R.bankability.lifecycle.irr == null ? '—' : pct(R.bankability.lifecycle.irr),
               'computed + published rates only') : '')
