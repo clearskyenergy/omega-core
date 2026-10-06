@@ -430,6 +430,21 @@ numbers, and the agent's settings. "What to change" is
 5. Each morning: `/sales` (or "run the sales agent" to JARVIS), then clear
    Gmail Drafts and approve on the console.
 
+## 11b. The compute-offtake side strategy (2026-10-06)
+
+Omega-Core (`docs/OMEGA-CORE.md`) gives the sales desk a second thing to
+sell: GPU capacity on ClearSky's own skids. Its buyers are not the four
+verticals, so the book has a fifth, `offtaker` (`api/_lib/sales.js`
+`VERTICALS`; `verticalFrom` reads "hyperscaler", "GPU cloud", "AI lab",
+"compute" into it before the OEM words can claim them). The strategy, the
+target book, the doors and the rules are `docs/COMPUTE-OFFTAKE-SALES.md`;
+the agent's standing step is 6b in `.claude/agents/sales-agent.md`. Every
+row carries the tag `compute-offtake`, every `next.action` begins
+`COMPUTE:`, every log line `SALES: COMPUTE …`, so the Office view and the
+dashboard can tell the side strategy from the platform pipeline without a
+second log. The same rules hold: a person sends, no price, no capacity
+figure the doc does not state, `screen` before every address.
+
 ## 12. Not built
 
 - Rung 3b: sending by the agent, bounce handling, a scheduled cloud run (a

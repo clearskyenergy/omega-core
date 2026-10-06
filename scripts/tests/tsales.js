@@ -353,6 +353,18 @@ db.seed('omega_orgs/trialco.example/billing/current', { tier: 'trial', trialEnds
     var p = S.cleanProspect(S.rowToProspect({ 'Company Name': 'Volt EPC', 'Website': 'https://www.voltepc.example', 'First Name': 'Lee', 'Last Name': 'Ng', 'Title': 'CEO', 'Email': 'lee@voltepc.example', 'State': 'il', 'Business Type': 'EPC / engineering', 'Notes': 'met at RE+' }, m, { label: 'master list' })).prospect;
     assert.equal(p.id, 'voltepc.example'); assert.equal(p.vertical, 'epc'); assert.equal(p.state, 'IL'); assert.equal(p.contacts[0].name, 'Lee Ng'); assert.equal(p.summary, 'met at RE+');
   });
+  await atest('offtaker: a compute buyer is the fifth vertical, read from its words before the OEM words claim it', async function () {
+    assert.deepEqual(S.VERTICALS, ['oem', 'developer', 'epc', 'installer', 'offtaker']);
+    ['offtaker', 'Compute offtaker', 'GPU marketplace', 'Hyperscaler', 'AI lab / inference cloud', 'Neocloud', 'AI technology company (GPU cloud)'].forEach(function (w) {
+      assert.equal(S.verticalFrom(w), 'offtaker', w);
+    });
+    assert.equal(S.verticalFrom('Technology OEM'), 'oem', 'an OEM is still an OEM');
+    assert.equal(S.verticalFrom('Developer/IPP'), 'developer');
+    var p = S.cleanProspect({ domain: 'gpucloud.example', company: 'GPU Cloud', vertical: 'offtaker', tags: ['compute-offtake'],
+      next: { action: 'COMPUTE: apply to the host program', due: '2026-10-08' } }).prospect;
+    assert.equal(p.vertical, 'offtaker'); assert.deepEqual(p.tags, ['compute-offtake']); assert.equal(p.next.due, '2026-10-08');
+    assert.equal(S.cleanProspect({ domain: 'x.example', vertical: 'buyer' }).prospect.vertical, '', 'an unknown word is still no vertical');
+  });
 
   console.log('all ' + n + ' sales checks passed');
 })().catch(function (e) { console.error(e); process.exit(1); });

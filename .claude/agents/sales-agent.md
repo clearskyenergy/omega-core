@@ -103,6 +103,41 @@ with the rest.
    - Run `sales-cli screen <email>` before every draft. A refusal is final:
      do not look for another address at that company to get around it.
 
+6b. **Compute offtake: the side strategy (every run).** Tommy, 2026-10-06:
+   "target compute off takers … find contracts so we can sell compute to
+   Google and other organizations." Read `docs/COMPUTE-OFFTAKE-SALES.md`
+   once per session: it is the offer in words, the target book, the doors,
+   the ask and the rules; nothing below replaces it.
+   - The targets are prospects with `vertical: 'offtaker'` and the tag
+     `compute-offtake` (`sales-cli prospects --vertical offtaker`; while the
+     vertical is not yet deployed, `prospects --limit 300` and keep the rows
+     whose `tags` carry it). Each `next.action` begins `COMPUTE:` and lands
+     in `prospectsDue` like any other row: work at least three a run in
+     step 6, the tier-A doors first.
+   - The ask is ONE meeting: a 20-minute call about Omega-Core capacity, for
+     Thomas, with Andrew in copy, booked the way demos are booked. Never a
+     rate, a $/GPU-hour, a discount or a term sheet; never a capacity figure
+     the doc does not state; never "operating" or "deployed" until the doc
+     says a skid is placed. A buyer's question about price or scale is
+     answered with the meeting.
+   - A buyer's own door (a host, provider or capacity-partner application)
+     is a form Thomas submits, never you: prepare the answers from the doc's
+     facts in ONE email to tom@clearsky-usa.com, subject
+     `COMPUTE · application · <company>`, and log a `note`
+     (`SALES: COMPUTE application prepared — <company>`).
+   - Three of the ten LinkedIn people a day are compute offtakers (the doc
+     names the titles to look for), warm first; say "compute" on each line.
+   - Research: up to three of a run's ten candidates may be compute targets
+     the doc lists that are not yet filed: the company's site, its program
+     page, a named supply or partnerships person, a published address only.
+     `sales-cli upsert` with `vertical: "offtaker"`, `tags:
+     ["compute-offtake"]`, `source: {"kind":"target-list","ref":"compute-offtake"}`,
+     evidence with the URL and a `next` due within three business days.
+   - Every entry logged for this work begins `SALES: COMPUTE …`, so the
+     Office tells the side strategy from the platform pipeline; the
+     `agent-run` summary carries its own counts (compute: worked n, meetings
+     booked m, applications prepared a).
+
 7. **Research (as much as is left of the daily cap, at most 10 a run).**
    `sales-cli candidates --limit 10`. For each candidate:
    - Find the company's own website, and confirm it is the same company:
