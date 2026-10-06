@@ -125,6 +125,15 @@ function openHeliosIntake(){
   if (window.OmegaHeliosIntake && typeof OmegaHeliosIntake.open === 'function') OmegaHeliosIntake.open();
   else alert('The Helios intake module did not load. Reload the page and try again.');
 }
+/* Omega-Core: qualify this charging site for Omega-Core skids (Solela Edge
+   Compute + CleanCell R60 on their own meter) from the Run, the drawing, the
+   power, the location and fiber, and show the host's land lease and the
+   5-year terms (2026-10-02, Tommy). The dialog is omega-core-qualify.js; the
+   gates, the lease card and the buyout band are api/omega-core. */
+function openOmegaCore(){
+  if (window.OmegaCoreQualify && typeof OmegaCoreQualify.open === 'function') OmegaCoreQualify.open();
+  else alert('The Omega-Core module did not load. Reload the page and try again.');
+}
 </script>
 <script src="/omega-brand.js"></script>
 <script src="/omega-editor-gate.js"></script>
@@ -172,6 +181,10 @@ function openHeliosIntake(){
      what this session knows and talks to api/helios-intake, which fills
      their own PDF and sends it. -->
 <script src="/omega-helios-intake.js"></script>
+<!-- Omega-Core from the Output tab: reads the Run and the drawing, fans out
+     through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
+     whether the site takes the skids and what the host is paid. -->
+<script src="/omega-core-qualify.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
      This is the button that gives it a way in, plus the honest labelling: the
@@ -2116,6 +2129,7 @@ window.onerror = function(msg, src, line, col, err) {
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1.77 MW MDC Pad <span class="fi-sub">119 × 45 ft</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})"><span class="fi-ico">▦</span> Triton Pad <span class="fi-sub">120 kW</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})"><span class="fi-ico">▦</span> Cruiser Pad <span class="fi-sub">35 kW</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_omegacore')})" title="Omega-Core — Solela Edge Compute (75 kW) + CleanCell R60 battery (61.44 kWh / 60 kW Sol-Ark) on one 336 × 87 in skid, on its own utility meter. ClearSky-owned on a 5-year land lease that pays the charging-site host. Output › Omega-Core qualifies the site."><span class="fi-ico">▦</span> Omega-Core Skid <span class="fi-sub">28 × 7.25 ft · 75 kW + 61 kWh</span></button>
           </div>
         </div>
       </div>
@@ -2390,6 +2404,17 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" onclick="exportToMonday()" title="Export project tasks as a Monday.com board CSV"><span class="rb-ico">▦</span><span class="rb-lbl">Export to<br>Monday</span></button>
       </div>
       <div class="rpanel-cap">Handoff</div>
+    </div>
+    <!-- Omega-Core: ClearSky's skid (Solela Edge Compute + CleanCell R60) on
+         its own meter at a charging site, paying the host a land lease. Takes
+         the Run and the drawing, screens power, location and fiber, and shows
+         the lease and the 5-year terms. Omega Compute owns it, as it owns the
+         skid's placement (derSetDc). -->
+    <div class="rpanel">
+      <div class="rpanel-body">
+        <button class="rbtn" id="rb-omega-core" onclick="rbRun(openOmegaCore)" data-cap="compute" title="Omega-Core — qualify this charging site for Omega-Core skids (75 kW edge compute + CleanCell R60 60 kW / 61.44 kWh battery on their own meter) from the Run, the available power, the location and fiber, and show the host's land lease, the 5-year minimum and the removal or fair-market-value buyout."><span class="rb-ico" style="color:#22D3EE">&#9670;</span><span class="rb-lbl">Omega-Core</span></button>
+      </div>
+      <div class="rpanel-cap">Omega-Core</div>
     </div>
     <div class="rpanel">
       <div class="rpanel-body">
@@ -4152,6 +4177,9 @@ if(document.readyState==='loading'){
             </optgroup>
             <optgroup label="Autel">
               <option value="AUTEL-ESS-256">Autel 125 kW / 256 kWh ESS -- $180,000</option>
+            </optgroup>
+            <optgroup label="Clean Cell">
+              <option value="CC-R60">CleanCell R60 60 kW / 61.44 kWh skid + 2 Autel DCFC -- Quote Required</option>
             </optgroup>
             <optgroup label="Pytes (3/9/26 pricing)">
               <option value="PYTES-30-60">Pytes 30 kW / 60 kWh Standard -- $34,080</option>
@@ -6411,7 +6439,37 @@ var DC_CATALOG = {
                      + 'concept says CDU, chiller and electrical sizing rise with it and '
                      + 'must be evaluated against the cooling redundancy target, so the '
                      + 'plant on this row is the Option A plant until the vendor resizes it.',
-                  verified:'ZTMM Modular AI Data Center Design Concept EN §2 Option B (2026-09-18)' }
+                  verified:'ZTMM Modular AI Data Center Design Concept EN §2 Option B (2026-09-18)' },
+  /* ── OMEGA-CORE — EDGE COMPUTE ON A CHARGING SITE, ON ITS OWN METER ───
+     One transportable skid, 336 x 87 in (28 x 7.25 ft) on an 8 in base,
+     82.75 in overall: a Solela Edge Compute cabinet (75 kW of compute) beside
+     a CleanCell R60 battery (61.44 kWh LFP, 60 kW Sol-Ark 60K PCS,
+     277/480 V three-phase; BESS_CATALOG['CC-R60'] is the one source for its
+     specs). ClearSky owns and operates it on a 5-year minimum land lease to
+     the charging-site host, who is paid rent and pays nothing.
+
+     It is NOT the host's data centre and NOT the host's battery, and the
+     flag says so: `omegaCore` rides onto the placed shape (_derPlaceDcPad)
+     and every reader of host load, host cost, host battery and site type
+     skips it — a skid on its own utility meter adds nothing at the host's
+     point of interconnection, nothing to the host's Run, and a charging site
+     that hosts one is still a charging site. It is counted as itself
+     (legend, results rail, BOM).
+
+     `kw` here is the skid's compute draw at its own meter, cooling inside the
+     cabinet: no PUE uplift is applied to it because no host reader sees it.
+     The price, the lease and the end-of-term buyout are commercial terms and
+     live in /api/omega-core (CLAUDE.md, IP protection), never in this file. */
+  dc_omegacore: { label:'Omega-Core Skid', kw:75, lf:28, wf:7.25, hf:6.9,
+                  family:'omegacore', omegaCore:true, skid:true, ownMeter:true,
+                  bessKw:60, bessKwh:61.44, bessKey:'CC-R60', bessModel:'CleanCell R60',
+                  pcs:'Sol-Ark 60K', volts:480, phases:3, contractYears:5,
+                  cooling:'integrated', water:0, ups:'battery',
+                  spec:'Omega-Core skid · Solela Edge Compute cabinet 75 kW + CleanCell R60 '
+                     + '61.44 kWh LFP / 60 kW Sol-Ark 60K PCS · 277/480 V 3-ph · own utility meter · '
+                     + '336 × 87 in skid, 8 in base, 82.75 in overall',
+                  verified:'Battery: Clean Cell US R60 Product Data Sheet Rev A (Sep 2026). Skid 336 × 87 × 82.75 in, '
+                         + '75 kW compute and the program terms: ClearSky (2026-10-02).' }
 };
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -6630,6 +6688,14 @@ const GOTION_CATALOG_DIMS = {
   'CSI-SOLBANK3-5016':{ l:'19\'-10.5"',w:'7\'-12.0"', h:'9\'-6.0"',  wt:'~83,000 lbs', lf:19.875, wf:8.0,   hf:9.5   },
   'CSI-CSES351A6':    { l:'129\'-3"',  w:'11\'-2"',   h:'8\'-10"',   wt:'~392,000 lbs',lf:129.3,  wf:11.15, hf:8.86  },
   'CSI-POWERBLOCK-ESPB4H':{ l:'19\'-10.5"',w:'7\'-12.0"',h:'9\'-6.0"',wt:'~85,000 lbs ea',lf:19.875,wf:8.0, hf:9.5 },
+  /* The R60 is a SKID, and the footprint is the skid: 336 x 87 in from the
+     skid drawing ClearSky supplied (2026-10-02; two Autel dispensers at the
+     ends, the cabinet in the middle), not from the datasheet, which prints
+     only the cabinet (1100 x 750 x 2200 mm). Height is NOT stated: that
+     drawing's 82.75 in overall and the datasheet's 2,200 mm (86.6 in)
+     cabinet disagree, so it reads "see submittal" until Clean Cell confirms
+     it. Weight is unpublished and says so. */
+  'CC-R60':           { l:'28\'-0"',    w:'7\'-3"',    h:'SEE MFR SUBMITTAL', wt:'SEE MFR SUBMITTAL', lf:28.0, wf:7.25 },
 };
 
 const CTYPES=[
@@ -11107,6 +11173,22 @@ function _doPlaceBesPad(p,spec,opts){
        - Bollards + fence wrap the combined footprint.
      Parts store FEET-space offsets (dx,dy) from the assembly center (0,0). */
   var auxDefs=_asmAuxSpecs();
+  /* A unit that SAYS what rides on it (the CleanCell R60's side-mounted
+     Sol-Ark, a tenant product's integrates{}) gets no second PCS or
+     transformer beside it — on every path that places it (the modal, quick
+     place, the cluster). The external AC disconnect stays unless the unit
+     says it carries one. */
+  try{
+    var _ce=(typeof BESS_CATALOG!=='undefined') ? BESS_CATALOG[_asmElecFromSpec(spec).key] : null;
+    if(_ce){
+      auxDefs=auxDefs.filter(function(a){
+        if(a.key==='pcs'   && _ce._incPCS===true)   return false;
+        if(a.key==='xfmr'  && _ce._incXfmr===true)  return false;
+        if(a.key==='disco' && _ce._incDisco===true) return false;
+        return true;
+      });
+    }
+  }catch(e){}
   var parts=[];
   var padMargin=2.0;    /* ft of concrete around the whole group */
   var gearVGap=2.5;     /* ft between stacked gear units (vertical) */
@@ -12437,7 +12519,7 @@ function _snapshotCampus(info){
   var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
   function belongs(o){
     if (!o) return false;
-    if (o.omegaCampus === info.tag || MAP[o.kind] === info.tag) return true;
+    if (o.omegaCampus === info.tag || (o.omegaCore ? null : MAP[o.kind]) === info.tag) return true;
     if (!info.foot) return false;
     var c = _shapeCentroid(o);
     return !!(c && _ptInPoly(c.x, c.y, info.foot));
@@ -12736,7 +12818,7 @@ function _campusPredicate(tag, footprint){
   var fences = [], seeds = [];
   (S.shapes||[]).forEach(function(o){
     if (!o || o.isSiteBoundary) return;
-    if (o.omegaCampus === tag || MAP[o.kind] === tag){
+    if (o.omegaCampus === tag || (o.omegaCore ? null : MAP[o.kind]) === tag){
       var c=_shapeWorldCentroid(o); if(c) seeds.push(c);
     }
   });
@@ -12764,7 +12846,7 @@ function _campusPredicate(tag, footprint){
   }
   return function(o){
     if (!o) return false;
-    if (o.omegaCampus === tag || MAP[o.kind] === tag) return true;
+    if (o.omegaCampus === tag || (o.omegaCore ? null : MAP[o.kind]) === tag) return true;
     if (footprint){
       var c = (o.pts ? _shapeWorldCentroid(o) : _shapeCentroid(o));
       if (c && _ptInPoly(c.x, c.y, footprint)) return true;
@@ -20392,7 +20474,7 @@ function fomApplySizing(targetKW, targetKWh) {
   // Exclude CATL quote-only entries with null kw/kwh
 
   const eligible = Object.entries(BESS_CATALOG)
-    .filter(([, p]) => p.kw != null && p.kwh != null && p.kw >= targetKW)
+    .filter(([, p]) => p.kw != null && p.kwh != null && p.kw >= targetKW && !p.evSkid)
     .sort((a, b) => {
       // Primary: closest kWh (least overshoot)
       const aDiff = Math.abs(a[1].kwh - targetKWh);
@@ -20409,7 +20491,7 @@ function fomApplySizing(targetKW, targetKWh) {
   } else {
     // No single unit meets kW requirement -- find best 2-unit config
     const twoUnit = Object.entries(BESS_CATALOG)
-      .filter(([, p]) => p.kw != null && p.kwh != null && p.kw * 2 >= targetKW)
+      .filter(([, p]) => p.kw != null && p.kwh != null && p.kw * 2 >= targetKW && !p.evSkid)
       .sort((a, b) => Math.abs(a[1].kwh*2 - targetKWh) - Math.abs(b[1].kwh*2 - targetKWh));
     if (twoUnit.length > 0) {
       [matchKey, matchProduct] = twoUnit[0];
@@ -21676,6 +21758,38 @@ const BESS_CATALOG = {
     cells:'LFP 314Ah',cooling:'Smart liquid cooling TMS, active-balancing BMS, IP67 packs',
     dims:'20-ft container',certs:'NFPA855, NFPA69, NFPA72, NFPA70E (opt. NFPA68), UL9540/UL9540A',
     notes:'Canadian Solar / e-STORAGE SolBank 3.0 (S-5016-2H / S-5016-4H), 20-ft containerized DC block: 5,016 kWh nominal, up to 2.35 MW at the DC terminal (1.2-2.35 MW depending on paired PCS). 314Ah LFP, ~45% higher density than SolBank 1.0. DC-COUPLED -- needs an external/central PCS + step-up transformer (unlike the all-in-one Energy Station / PowerBlock). Mid-size building block between the KuBank C&I cabinets and the 14 MWh Energy Station; parallels to utility scale. PRICE: quote required. CSI Solar / e-STORAGE. Datasheet SolBank 3.0 v1.6x NA.'},
+  /* ── CLEAN CELL R60 — the dual EV charging skid ─────────────────────────
+     Read off the Clean Cell US R60 Product Data Sheet, Rev A (September 2026):
+     one 61.44 kWh high-voltage LFP cabinet (614.4 VDC, 100 Ah), one
+     side-mounted Sol-Ark 60K three-phase hybrid PCS (60 kW continuous,
+     277/480 V), and two Autel DC fast-charging dispensers on one
+     transportable skid. The PCS is integrated (it rides on the cabinet) and
+     the output is native 277/480 V, so _incPCS and _incXfmr tell the BESS
+     Config, the Guided Build and BESS Pad to add no external PCS and no
+     step-up transformer; _incDisco is false because a site AC disconnect is
+     still required (72.3 A max AC output).
+     The datasheet does NOT publish usable kWh, weight, price or the Autel
+     charger rating ("established in the project engineering package"), so
+     those stay null or say so — never a guess. The 336 x 87 in skid is Clean
+     Cell's skid drawing, not the datasheet; the footprint row in
+     GOTION_CATALOG_DIMS says so. evSkid keeps it out of the auto-sizers:
+     it is an EV charging skid, not a peak-shaving battery to recommend. */
+  'CC-R60': {mfr:'Clean Cell',model:'CleanCell R60 — 60 kW / 61.44 kWh skid (BESS + 2 Autel DCFC)',chem:'LFP (LiFePO4)',
+    kwh:61.44,usable:null,kw:60,dur:1.02,dcv:'614.4V (100Ah)',eqcost:null,
+    inv:'Sol-Ark 60K-3P hybrid PCS (integrated, side-mounted on the cabinet)',ikva:60,
+    xfmr:'N/A',disco:'Project-engineered (72.3 A max AC output)',
+    _incPCS:true,_incXfmr:true,_incDisco:false,evSkid:true,
+    ci:true,gridConnectV:'277/480 VAC 4-wire Wye or 480 VAC 3-wire Delta',acCurrent:72.3,peakKva:'90 kVA for 10 s (off grid)',maxDcA:100,
+    pcsEff:'97.5% max / 96.5% CEC / 96.0% grid-to-battery',cooling:'Forced-air cooling (battery)',
+    tempRange:'Battery charge 0..55C, discharge -20..55C; PCS -40..60C (derating above 45C)',
+    ingress:'Battery IP55; PCS IP65 / NEMA 3R',noise:'PCS < 30 dB at 1 m, 25C',
+    controller:'CAN BMS to PCS (active BMS comms required); Wi-Fi + Ethernet monitoring; PCS parallel up to 10 units',
+    certs:'UL 9540:2023 (reported, confirm SGS certificate), UL 9540A (cabinet platform reported tested), UL 1973 (reported), IEC 62619 + UN 38.3 (documentation by configuration); PCS UL 1741-2021 incl. SB, CSA C22.2 No. 107.1-16, IEEE 1547',
+    cabinet:'1100 W x 750 D x 2200 H mm (battery cabinet)',dims:'8534x2210mm skid (336 x 87 in)',
+    installType:'Floor-mounted transportable commercial skid',
+    evChargers:{count:2,mfr:'Autel',kind:'DC fast-charging dispenser',kw:null},
+    verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 in per the skid drawing ClearSky supplied (2026-10-02)',
+    notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: quote required. Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
 };
 
 /* ── THE TENANT'S OWN PRODUCTS LEAD ─────────────────────────────────────
@@ -21800,6 +21914,9 @@ function applyBMCatalog() {
   set('name', 'BESS-' + String(idx).padStart(2,'0'));
   set('mfr', m.mfr); set('model', m.model); set('kwh', m.kwh); set('usable', m.usable);
   set('kw', m.kw); set('dur', m.dur); set('dcv', m.dcv); set('eqcost', m.eqcost);
+  /* unpublished is blank: the input's 700 kWh default, or the last model's
+     figure, must never save as this unit's usable energy or price */
+  ['usable','eqcost'].forEach(function(k){ var el=document.getElementById('bm-'+k); if(el && m[k]==null) el.value=''; });
   set('inv', m.inv); set('ikva', m.ikva); set('xfmr', m.xfmr); set('disco', m.disco);
   set('notes', m.notes);
   document.getElementById('bm-chem').value = m.chem || 'LFP';
@@ -21807,14 +21924,20 @@ function applyBMCatalog() {
   // step-up transformer on the pad; smaller Edge units typically do not.
   var _big = (+m.kw||0) > 760;
   var _setChk=function(cid,on){var el=document.getElementById('bm-'+cid);if(el)el.checked=!!on;};
-  _setChk('inc-pcs',  _big);
-  _setChk('inc-disco',_big && !!m.disco);
-  _setChk('inc-xfmr', _big && !!m.xfmr);
+  /* An entry that SAYS something rides on its pad (the CleanCell R60's
+     side-mounted Sol-Ark, a tenant product's integrates{}) is believed over
+     the size rule, or a 60 kW skid with its PCS on the cabinet saves as
+     needing an external one and the Guided Build draws it. Only a YES: a
+     tenant row with blank integration columns imports as false, and that is
+     "not said", not "external", so the size rule still decides it. */
+  _setChk('inc-pcs',  m._incPCS===true   || _big);
+  _setChk('inc-disco',m._incDisco===true || (_big && !!m.disco));
+  _setChk('inc-xfmr', m._incXfmr===true  || (_big && !!m.xfmr));
   if(typeof _bmUpdateIntegrationHint==='function') _bmUpdateIntegrationHint();
   // Show preview
   const hasCost = m.eqcost != null;
   preview.innerHTML = `<strong style="color:var(--accent)">${m.model}</strong><br>
-    ${m.chem} . ${m.kwh ? m.kwh+' kWh / '+m.usable+' kWh usable' : '<span style="color:var(--amber)">kWh: Quote Required</span>'} . ${m.kw ? m.kw+' kW' : 'kW: TBD'}<br>
+    ${m.chem} . ${m.kwh ? m.kwh+' kWh / '+(m.usable!=null ? m.usable+' kWh usable' : 'usable not published') : '<span style="color:var(--amber)">kWh: Quote Required</span>'} . ${m.kw ? m.kw+' kW' : 'kW: TBD'}<br>
     DC: ${m.dcv} . ${m.dur ? m.dur+' hr duration' : ''}<br>
     Cost: ${hasCost ? '<strong>$'+m.eqcost.toLocaleString()+'</strong>' : '<span style="color:var(--amber)">!! Quote Required -- enter manually</span>'}<br>
     <span style="font-size:9px;color:var(--sub)">${m.notes}</span>`;
@@ -25867,6 +25990,9 @@ async function saveProject(){
          written forever and read never. */
       omegaFiber:    S.omegaFiber    || null,
       omegaFiberAt:  S.omegaFiberAt  || null,
+      /* OMEGA-CORE: the rep's answers and the last qualification's headline
+         (Output › Omega-Core). Restored in _loadProject beside omegaSizing. */
+      omegaCore:     S.omegaCore     || null,
       /* The run's totals as the record's rollup fields — the ones the
          workspace's Pipeline capex, the dashboard's portfolio table and
          charts, and the asset book read (2026-09-29). Written only from a
@@ -26229,6 +26355,7 @@ async function _loadProject(id){
     S.costOverrides = (d.costOverrides && typeof d.costOverrides==='object') ? d.costOverrides : null;
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
+    S.omegaCore     = (d.omegaCore     && typeof d.omegaCore==='object')     ? d.omegaCore     : null;
     S.omegaFiber    = (d.omegaFiber    && typeof d.omegaFiber==='object')    ? d.omegaFiber    : null;
     S.omegaFiberAt  = d.omegaFiberAt  || null;
     /* The last run's totals (omegaRunRollup) are this session's, never the
@@ -28407,7 +28534,7 @@ function _proposalTypeFromDrawing(){
     var c={pods:0,gen:0,bess:0,pv:0,ev:0};
     (S.shapes||[]).forEach(function(sh){
       if(!sh || sh.omegaFence || sh.omegaCampus) return;
-      if(sh.kind==='derdc') c.pods++;
+      if(sh.kind==='derdc' && !sh.omegaCore) c.pods++;
       else if(sh.kind==='deralt'||sh.kind==='derwind') c.gen++;
       else if(sh.kind==='bespad'||sh.kind==='assembly') c.bess++;
       else if(sh.kind==='dersolar') c.pv++;
@@ -34847,6 +34974,10 @@ function o2Targets(){
    with the campus the selection belongs to. The compound builder writes
    omegaCampus using the same words, so this is a lookup and not a guess.
    Class membership is untouched — the chips still count what they counted. */
+/* An Omega-Core skid is kind derdc but never a member of the host's compute
+   campus (it is ClearSky's, on its own meter): every reader below asks
+   `o.omegaCore ? null : MAP[o.kind]`, so moving, turning or fitting the
+   host's compound never drags the skid, and moving the skid never drags it. */
 var _O2_CAMPUS_OF_KIND = { derdc:'compute', deralt:'generation', derwind:'generation',
                            bespad:'storage', assembly:'storage',
                            dersolar:'solar', solar:'solar' };
@@ -34857,7 +34988,7 @@ function _o2WithFences(targets){
     seen[t.kind + ':' + t.id] = 1;
     if (t.kind !== 'shape') return;
     var sh = (S.shapes||[]).filter(function(x){ return x.id===t.id; })[0];
-    var tag = sh && _O2_CAMPUS_OF_KIND[sh.kind];
+    var tag = sh && !sh.omegaCore && _O2_CAMPUS_OF_KIND[sh.kind];
     if (tag) tags[tag] = 1;
   });
   if (!Object.keys(tags).length) return targets;
@@ -35031,7 +35162,7 @@ function omegaBlockOut(){
       if (!o || o===fence || o.locked || o.isSiteBoundary || !o.pts || o.pts.length<2) return false;
       if (o.omegaCampus) return false;
       var c = _shapeCentroid(o);
-      return (MAP[o.kind] === tag) || !!(c && _ptInPoly(c.x, c.y, fence.pts));
+      return ((o.omegaCore ? null : MAP[o.kind]) === tag) || !!(c && _ptInPoly(c.x, c.y, fence.pts));
     });
     if (!members.length) return;
 
@@ -35106,7 +35237,7 @@ function omegaRecalibrate(){
     var members = (S.shapes||[]).filter(function(o){
       if (!o || o===fence || o.locked || o.isSiteBoundary || !o.pts || o.pts.length<2) return false;
       if (o.omegaCampus === tag) return false;             /* another fence */
-      return (MAP[o.kind] === tag) || _ptInPoly((_shapeCentroid(o)||{}).x,
+      return ((o.omegaCore ? null : MAP[o.kind]) === tag) || _ptInPoly((_shapeCentroid(o)||{}).x,
                                                 (_shapeCentroid(o)||{}).y, fence.pts);
     });
     if (!members.length) return;
@@ -35234,7 +35365,7 @@ function omegaSetLayoutFacing(dir){
   var tags = {};
   (S.shapes||[]).forEach(function(o){
     if (!o || o.isSiteBoundary) return;
-    var t = o.omegaCampus || MAP[o.kind];
+    var t = o.omegaCampus || (o.omegaCore ? null : MAP[o.kind]);
     if (t) tags[t] = 1;
   });
   var names = Object.keys(tags);
@@ -35314,7 +35445,7 @@ function _omegaAxisLabel(deg){
       var tags = {};
       (S.shapes||[]).forEach(function(o){
         if (!o || o.isSiteBoundary) return;
-        var t = o.omegaCampus || MAP[o.kind];
+        var t = o.omegaCampus || (o.omegaCore ? null : MAP[o.kind]);
         if (t) tags[t] = 1;
       });
       var moved = 0, over = [];
@@ -35638,7 +35769,7 @@ function omegaAlignCampus(tag, deg){
     var MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
     var x1=Infinity,y1=Infinity,x2=-Infinity,y2=-Infinity,got=false;
     (S.shapes||[]).forEach(function(o){
-      if (!o || (o.omegaCampus!==tag && MAP[o.kind]!==tag) || !o.pts) return;
+      if (!o || (o.omegaCampus!==tag && (o.omegaCore ? null : MAP[o.kind])!==tag) || !o.pts) return;
       o.pts.forEach(function(p){
         if(p.x<x1)x1=p.x; if(p.y<y1)y1=p.y; if(p.x>x2)x2=p.x; if(p.y>y2)y2=p.y; got=true; });
     });
@@ -35689,7 +35820,7 @@ function omegaAlignToLand(){
   var tags = {}, MAP = (typeof _O2_CAMPUS_OF_KIND !== 'undefined') ? _O2_CAMPUS_OF_KIND : {};
   (S.shapes||[]).forEach(function(o){
     if (!o || o.isSiteBoundary) return;
-    var t = o.omegaCampus || MAP[o.kind];
+    var t = o.omegaCampus || (o.omegaCore ? null : MAP[o.kind]);
     if (t) tags[t] = 1;
   });
   var names = Object.keys(tags);
@@ -36337,7 +36468,7 @@ function omegaDer(){
      source it knows about and this loop does not is still counted. */
   var t={ solarKwDc:0, solarSqft:0, solarUnits:0,
           windKw:0, windUnits:0, altKw:0, altUnits:0,
-          dcLoadKw:0, dcUnits:0 };
+          dcLoadKw:0, dcUnits:0, ocUnits:0, ocKw:0, ocBessKw:0, ocBessKwh:0 };
   try{
     (S.shapes||[]).forEach(function(s){
       if(!s) return;
@@ -36346,6 +36477,9 @@ function omegaDer(){
         t.solarKwDc+=kw; t.solarSqft+=(+s.sqft||0); t.solarUnits++;
       } else if(s.kind==='derwind'){ t.windKw+=kw; t.windUnits++; }
       else if(s.kind==='deralt'){    t.altKw+=kw;  t.altUnits++;  }
+      /* Omega-Core is on its own meter: never host load (dc_omegacore). */
+      else if(s.kind==='derdc' && s.omegaCore){ t.ocUnits++; t.ocKw+=kw;
+        t.ocBessKw+=(+s.bessKw||0); t.ocBessKwh+=(+s.bessKwh||0); }
       else if(s.kind==='derdc'){     t.dcLoadKw+=kw; t.dcUnits++; }
     });
   }catch(e){}
@@ -36626,6 +36760,17 @@ function omegaRenderResults(){
     pw += _omRow('DC compute load', Math.round(dcL).toLocaleString()+' kW',
                  null, 'Data-centre nodes placed on the drawing.');
   }
+  /* Omega-Core skids are on their OWN utility meter, so they are shown and
+     never added to the site load or the net at the POI below. */
+  try{
+    var _ocD=omegaDer();
+    if(_ocD && _ocD.ocUnits>0){
+      pw += _omRow('Omega-Core'+unitSfx(_ocD.ocUnits),
+                   Math.round(_ocD.ocKw).toLocaleString()+' kW \u00b7 '+(Math.round(_ocD.ocBessKwh*100)/100)+' kWh',
+                   null, 'Omega-Core skids: compute + CleanCell R60 battery on their own utility meter. '
+                       + 'Not in the site load, not in the net at the POI. Output \u203a Omega-Core qualifies the site.');
+    }
+  }catch(e){}
   /* EV charging load placed from Draw > EV Catalog. These are shapes, so
      they were never picked up by the element-based totals above and the
      site's charging demand never appeared in the results at all. Counts
@@ -38022,7 +38167,7 @@ function buildBOM() {
      conduit. Counted straight off the drawing, so the BOM cannot
      disagree with the plan. */
   var _cs = { pods:0, podKw:0, gen:0, genKw:0, genModel:'', bess:0, bessKw:0, bessKwh:0,
-              pv:0, pvKw:0, fences:0, fenceFt:0, ctrl:0, mvFt:0, yard:{} };
+              pv:0, pvKw:0, fences:0, fenceFt:0, ctrl:0, mvFt:0, yard:{}, oc:0, ocKw:0, ocKwh:0 };
   try{
     var _ppfB = (S.pxPerFt>0)?S.pxPerFt:0;
     (S.shapes||[]).forEach(function(sh){
@@ -38036,7 +38181,8 @@ function buildBOM() {
         }
         return;
       }
-      if(sh.kind==='derdc'){ _cs.pods++; _cs.podKw += +sh.kw||0; }
+      if(sh.kind==='derdc' && sh.omegaCore){ _cs.oc++; _cs.ocKw += +sh.kw||0; _cs.ocKwh += +sh.bessKwh||0; }
+      else if(sh.kind==='derdc'){ _cs.pods++; _cs.podKw += +sh.kw||0; }
       else if(sh.kind==='deralt'){ _cs.gen++; _cs.genKw += +sh.kw||0; _cs.genModel=sh.model||_cs.genModel; }
       else if(sh.kind==='bespad'){ _cs.bess++; _cs.bessKw += +sh.kw||0; _cs.bessKwh += +sh.kwh||0; }
       else if(sh.kind==='dersolar'){ _cs.pv++; _cs.pvKw += +sh.kw||0; }
@@ -38063,6 +38209,14 @@ function buildBOM() {
     addItem('Compute', 'Modular compute pod', Math.round(_cs.podKw/_cs.pods)+' kW IT each',
             _cs.pods, 'ea', 'Load, not generation \u2014 '+Math.round(_cs.podKw).toLocaleString()+' kW IT total'+_podBasis);
     addItem('Compute', 'Pod foundation / pad + anchoring', '', _cs.pods, 'ea', 'Per pod, on compacted base');
+  }
+  /* Omega-Core is ClearSky's skid on its own meter: listed so the drawing and
+     the BOM agree, never priced into the host's materials. */
+  if(_cs.oc){
+    var _ocItem = addItem('Compute', 'Omega-Core skid (Solela Edge Compute + CleanCell R60)',
+            Math.round(_cs.ocKw/_cs.oc)+' kW compute + '+(Math.round(_cs.ocKwh/_cs.oc*100)/100)+' kWh battery each',
+            _cs.oc, 'ea', 'ClearSky-owned on its own utility meter under the Omega-Core land lease \u2014 not host capex. Output \u203a Omega-Core for terms');
+    if(_ocItem) _ocItem.notHostScope = true;   /* the electrical bid and the RFQ skip it */
   }
   if(_cs.gen){
     var _genBasis = '';
@@ -38646,7 +38800,7 @@ function submitRfqFile() {
     toOrgIds: toOrgIds,
     accounts: accounts,
     note: String((document.getElementById('rfq-note') || {}).value || '').trim(),
-    bom: (st.bom.items || []).map(function (it) {
+    bom: (st.bom.items || []).filter(function (it) { return !it.notHostScope; }).map(function (it) {
       /* manufacturer travels with the line so the server can route a
          catalogue item to its factory even when no /equipment row exists
          for the key yet — see the brand fallback in api/rfq.js. */
@@ -39015,7 +39169,7 @@ function exportSpecSheet() {
      added to the totals, and everything on it gets its own section. */
   const _campus = (function(){
     var c = { pods:0, podKw:0, gen:0, genKw:0, genModel:'', bess:0, bessKw:0, bessKwh:0,
-              pv:0, pvKw:0, sub:null, fences:0, ctrl:0, feederFt:0 };
+              pv:0, pvKw:0, sub:null, fences:0, ctrl:0, feederFt:0, oc:0, ocKw:0, ocKwh:0 };
     try {
       (S.shapes||[]).forEach(function(sh){
         if(!sh) return;
@@ -39024,7 +39178,8 @@ function exportSpecSheet() {
           if(sh.kind==='rect' && sh.campusLabel) c.fences++;
           return;
         }
-        if(sh.kind==='derdc'){ c.pods++; c.podKw += +sh.kw||0; }
+        if(sh.kind==='derdc' && sh.omegaCore){ c.oc++; c.ocKw += +sh.kw||0; c.ocKwh += +sh.bessKwh||0; }
+        else if(sh.kind==='derdc'){ c.pods++; c.podKw += +sh.kw||0; }
         else if(sh.kind==='deralt'){ c.gen++; c.genKw += +sh.kw||0; c.genModel = sh.model||c.genModel; }
         else if(sh.kind==='bespad'){ c.bess++; c.bessKw += +sh.kw||0; c.bessKwh += +sh.kwh||0; }
         else if(sh.kind==='dersolar'){ c.pv++; c.pvKw += +sh.kw||0; }
@@ -39223,6 +39378,9 @@ ${(function(){
   if(c.pods) r += line('Compute pod \u00d7'+c.pods, 'Modular data-centre container',
     Math.round(c.podKw).toLocaleString()+' kW IT total',
     'Load, not generation. Confirm pod rating and PUE with the operator.');
+  if(c.oc) r += line('Omega-Core skid \u00d7'+c.oc, 'Solela Edge Compute + CleanCell R60 (Sol-Ark 60K) on one 336 \u00d7 87 in skid',
+    Math.round(c.ocKw).toLocaleString()+' kW compute \u00b7 '+(Math.round(c.ocKwh*100)/100)+' kWh battery',
+    'ClearSky-owned on its own utility meter under a 5-year minimum land lease \u2014 not on the host service.');
   if(c.gen) r += line('On-site generation \u00d7'+c.gen, c.genModel||'Prime mover',
     Math.round(c.genKw).toLocaleString()+' kW total',
     'Sized to close the gap the utility will not carry. Confirm gas supply.');
@@ -43439,7 +43597,7 @@ function _ppRenderFencing(sizeKey, street){
    This makes the cover sheet reflect the real design instead of boilerplate. */
 function _ppDynamicNotes(){
   var gen=[], elec=[];
-  var eqCount={}, evList={}, derList={}, hasFence=false, hasBollard=false, hasGround=false;
+  var eqCount={}, evList={}, derList={}, hasFence=false, hasBollard=false, hasGround=false, ocSkids=0;
   var i, el, sh;
   /* -- placed equipment icons (EMS, POI, XFMR, meter, panel, disconnect...) -- */
   var eqName={ ems:'Energy Management System (EMS)', util_poi:'Utility Point of Interconnection',
@@ -43457,6 +43615,7 @@ function _ppDynamicNotes(){
       evList[evk]=(evList[evk]||0)+1; }
     if(sh.kind==='dersolar') derList['Solar PV array'+(sh.kw?(' '+sh.kw+' kW-DC'):'')]=(derList['Solar PV array'+(sh.kw?(' '+sh.kw+' kW-DC'):'')]||0)+1;
     if(sh.kind==='derwind') derList['Wind turbine'+(sh.kw?(' '+sh.kw+' kW'):'')]=1;
+    if(sh.kind==='derdc' && sh.omegaCore){ ocSkids++; continue; }   /* own service: not host DER */
     if(sh.kind==='deralt'||sh.kind==='derdc') derList[(sh.model||'Generator')+(sh.kw?(' '+sh.kw+' kW'):'')]=1;
     if(sh.kind==='assembly'){ if(sh.hasFence) hasFence=true; if(sh.hasBollards) hasBollard=true; }
   } }
@@ -43489,6 +43648,7 @@ function _ppDynamicNotes(){
   if(fleet.units>0) elec.push('BESS DC and AC circuits shall be labeled and identified per NEC 690.17, 705 and 706; disconnects may be energized in the open position.');
   if(Object.keys(evList).length) elec.push('EVSE branch circuits shall comply with NEC Article 625; provide GFCI/ground-fault protection and required disconnecting means.');
   if(Object.keys(derList).length) elec.push('DER interconnection shall meet NEC 705 and the serving utility interconnection standard; provide a lockable, visible-blade AC disconnect.');
+  if(ocSkids) elec.push('Omega-Core skid'+(ocSkids>1?'s ('+ocSkids+')':'')+' served by a separate 480 V utility service and meter, not interconnected with this site\'s service; owned and permitted by its operator.');
   if(eqCount['step-up transformer']) elec.push('Transformer secondary and grounding shall comply with NEC 450 and 250; provide required working clearances per NEC 110.26.');
 
   /* ---- Guided Build provenance ---- */
@@ -43526,6 +43686,7 @@ function _ppBuildInventory(){
       inv.ev_chargers.push({ model: sh.model||sh.label||'EV charger', kw: sh.kw||null }); }
     if(sh.kind==='dersolar') inv.der.push({ type:'Solar PV', kw: sh.kw||null });
     if(sh.kind==='derwind') inv.der.push({ type:'Wind', kw: sh.kw||null });
+    if(sh.kind==='derdc' && sh.omegaCore){ inv.separateService=(inv.separateService||[]); inv.separateService.push({ type:'Omega-Core skid (own utility meter)', kw: sh.kw||null, kwh: sh.bessKwh||null }); continue; }
     if(sh.kind==='deralt'||sh.kind==='derdc') inv.der.push({ type: sh.model||'Generator', kw: sh.kw||null });
     if(sh.kind==='assembly'){ if(sh.hasFence) inv.fencing=true; if(sh.hasBollards) inv.bollards=true; }
   } }
@@ -54838,6 +54999,13 @@ var DERC_DC = (function () {
         if (!Object.prototype.hasOwnProperty.call(DC_CATALOG, k)) continue;
         var c = DC_CATALOG[k];
         out[k] = { label:c.label, kw:c.kw, lf:c.lf, wf:c.wf };
+        /* Omega-Core carries what the placed shape must remember: that it is
+           on its own meter, and the battery on the skid. */
+        if (c.omegaCore) {
+          out[k].omegaCore = true; out[k].ownMeter = !!c.ownMeter;
+          out[k].bessKw = c.bessKw; out[k].bessKwh = c.bessKwh;
+          out[k].ocBessKey = c.bessKey; out[k].bessModel = c.bessModel; out[k].hf = c.hf;
+        }
       }
     }
   } catch (e) {}
@@ -55082,9 +55250,20 @@ function _derPlaceDcPad(p){
   var sh={ id:uid(), kind:'derdc', dcId:_derDcId, pts:[{x:p.x,y:p.y}],
            style:(typeof S!=='undefined'?S.shapeStyle:''), lf:spec.lf, wf:spec.wf,
            model:spec.model, kw:spec.kw, scaled:_derScaled() };
+  /* Omega-Core: stamp the flag every host reader skips on, and the skid's
+     battery, so a saved drawing keeps both without the catalog. */
+  var _oc=DERC_DC[_derDcId];
+  if(_oc && _oc.omegaCore){
+    sh.omegaCore=true; sh.ownMeter=true; sh.bessKw=_oc.bessKw; sh.bessKwh=_oc.bessKwh;
+    /* under its own name: a host reader that seeds from `bessKey` (the
+       engineering build's BESS step) must never pick the skid's battery */
+    sh.ocBessKey=_oc.ocBessKey; sh.bessModel=_oc.bessModel; sh.hf=_oc.hf;
+  }
   S.shapes.push(sh); renderShape(sh); updShapeCount(); pushHist();
   if(typeof updateSummaryPanel==='function') updateSummaryPanel();
-  _derBanner(spec.model+' pad placed ('+spec.kw+' kW compute) \u2014 click to add another');
+  _derBanner(sh.omegaCore
+    ? spec.model+' placed ('+spec.kw+' kW compute + '+sh.bessKwh+' kWh / '+sh.bessKw+' kW battery, own meter) \u2014 Output \u203a Omega-Core qualifies the site'
+    : spec.model+' pad placed ('+spec.kw+' kW compute) \u2014 click to add another');
 }
 
 /* Wind turbine pad: single click, place several for an array. */
@@ -55625,6 +55804,48 @@ function _derRenderDc(g, sh){
     return;
   }
 
+  /* ── OMEGA-CORE: THE SKID AS IT LOOKS FROM ABOVE ──────────────────
+     The footprint is the 336 x 87 in skid frame. On it, left to right as
+     the render shows them: the Solela Edge Compute cabinet, the CleanCell
+     R60 battery cabinet (1100 x 750 mm), the Sol-Ark 60K on its side, and
+     the skid's OWN utility meter — drawn, because the meter is the point:
+     the host's service never carries this load. Bollards along the front.
+     Cabinet sizes other than the R60's are proportional, not dimensioned. */
+  if(sh.omegaCore){
+    _derRect(g, x, y, w, h, '#F3F4F6', '#374151', 1.2);              /* skid frame */
+    var ft=function(v){ return v*ppf; };
+    var cy=y+h*0.18, chh=Math.min(h*0.62, ft(2.5));
+    _derRect(g, x+w*0.20, cy, ft(3.0), chh, '#1F2937', '#111827', 1);   /* compute */
+    var leds=Math.max(3, Math.min(8, Math.round(chh/Math.max(1,ppf*0.35))));
+    for(var li=0; li<leds; li++){
+      var dot=_mkNS('circle');
+      dot.setAttribute('cx', x+w*0.20+ft(0.45)); dot.setAttribute('cy', cy+chh*(li+0.5)/leds);
+      dot.setAttribute('r', Math.max(0.4, ppf*0.09)); dot.setAttribute('fill', li%4===2?'#F59E0B':'#34D399');
+      g.appendChild(dot);
+    }
+    _derRect(g, x+w*0.45, cy, ft(3.61), Math.min(h*0.62, ft(2.46)), '#FFFFFF', '#0891B2', 1.1);  /* R60 */
+    _derRect(g, x+w*0.45+ft(3.75), cy, ft(1.6), Math.min(h*0.5, ft(1.0)), '#E5E7EB', '#4B5563', 1);  /* Sol-Ark */
+    var mx=x+w*0.86, my=y+h*0.42, mr=Math.max(1.5, Math.min(h*0.18, ft(0.9)));
+    var mc=_mkNS('circle'); mc.setAttribute('cx',mx); mc.setAttribute('cy',my); mc.setAttribute('r',mr);
+    mc.setAttribute('fill','#FFFFFF'); mc.setAttribute('stroke','#16A34A'); mc.setAttribute('stroke-width',1.1); g.appendChild(mc);
+    if(mr>=4) _derText(g, mx, my+mr*0.45, 'M', Math.max(5,mr*1.2), '#16A34A', 'middle', '700');
+    for(var bi=0; bi<6; bi++){
+      var bo=_mkNS('circle');
+      bo.setAttribute('cx', x+w*(0.06+bi*0.176)); bo.setAttribute('cy', y+h*0.92);
+      bo.setAttribute('r', Math.max(0.6, ppf*0.25)); bo.setAttribute('fill','#9CA3AF');
+      g.appendChild(bo);
+    }
+    if(ppf>=5){
+      var fs=Math.max(5,Math.min(9,ppf*0.45));
+      _derText(g, x+w*0.20+ft(1.5), cy+chh+fs+1, 'COMPUTE', fs, '#111827', 'middle', '700');
+      _derText(g, x+w*0.45+ft(1.8), cy+chh+fs+1, 'R60', fs, '#0E7490', 'middle', '700');
+    }
+    _derText(g, x+w/2, y+h+11, (sh.model||'Omega-Core')+' \u2022 '+(sh.kw||0)+' kW compute \u2022 '
+             +(sh.bessKwh||0)+' kWh / '+(sh.bessKw||0)+' kW \u2022 own meter',
+             Math.max(7,Math.min(12,ppf*0.8)), '#0E7490', 'middle', '700');
+    return;
+  }
+
   var zoned = (+sh.lf||0) >= 80;
   if(!zoned){
     /* Pad is the footprint; the container sits on it. */
@@ -55841,7 +56062,7 @@ function _derRenderSolar(g, sh){
    Projects list labels each row this way); absent means S. */
 function derTotals(st){
   var t={ solarKwDc:0, solarSqft:0, windKw:0, windUnits:0, altKw:0, altUnits:0,
-          dcLoadKw:0, dcUnits:0, solarUnits:0 };
+          dcLoadKw:0, dcUnits:0, solarUnits:0, ocUnits:0, ocKw:0, ocBessKw:0, ocBessKwh:0 };
   if(!st){ if(typeof S==='undefined') return t; st=S; }
   if(!st.shapes) return t;
   for(var i=0;i<st.shapes.length;i++){
@@ -55852,6 +56073,9 @@ function derTotals(st){
     if(s.kind==='dersolar' || s.kind==='solar'){ t.solarKwDc+=(s.kw||0); t.solarSqft+=(s.sqft||0); t.solarUnits++; }
     else if(s.kind==='derwind'){ t.windKw+=(s.kw||0); t.windUnits++; }
     else if(s.kind==='deralt'){ t.altKw+=(s.kw||0); t.altUnits++; }
+    /* Omega-Core is on its own meter: counted as itself, never as host load. */
+    else if(s.kind==='derdc' && s.omegaCore){ t.ocUnits++; t.ocKw+=(s.kw||0);
+      t.ocBessKw+=(+s.bessKw||0); t.ocBessKwh+=(+s.bessKwh||0); }
     else if(s.kind==='derdc'){ t.dcLoadKw+=(s.kw||0); t.dcUnits++; }
   }
   /* also count DC nodes placed as palette equipment (eq elements) */
@@ -55859,7 +56083,7 @@ function derTotals(st){
     for(var j=0;j<st.elements.length;j++){
       var el=st.elements[j];
       var _r=(typeof _eqRole==='function')?_eqRole(el):(el.type==='eq'?el.eqId:null);
-      if(_r && DERC_DC[_r]){ t.dcLoadKw+=DERC_DC[_r].kw; t.dcUnits++; }
+      if(_r && DERC_DC[_r] && !DERC_DC[_r].omegaCore){ t.dcLoadKw+=DERC_DC[_r].kw; t.dcUnits++; }
     }
   }
   return t;
@@ -57858,7 +58082,8 @@ function placeDcClusterAt(p){
     centers.push({x:cx,y:cy}); n++;
   } }
   var ems=(typeof _findEmsNode==='function')?_findEmsNode():null;
-  if(cfg.trench && ems){
+  /* Omega-Core skids are on their own utility meter: no feed from the host's EMS */
+  if(cfg.trench && ems && !spec.omegaCore){
     var ex=ems.x+(ems.w||32)/2, ey=ems.y+(ems.w||32)/2;
     for(var i=0;i<centers.length;i++){
       /* straight run from the EMS directly to the DC unit point */
@@ -64339,6 +64564,8 @@ function omegaOneLineExport(){
       if(!sh) return;
       if(sh.omegaController){ _cs.ctrl++; return; }
       if(sh.omegaFence || sh.omegaCampus) return;
+      /* Omega-Core is on its own utility meter: not on the host's buses */
+      if(sh.kind==='derdc' && sh.omegaCore) return;
       if(sh.kind==='derdc'){ _cs.pods++; _cs.podKw += +sh.kw||0; }
       else if(sh.kind==='deralt'){ _cs.gen++; _cs.genKw += +sh.kw||0; _cs.genModel = sh.model||_cs.genModel; }
       else if(sh.kind==='bespad'){ _cs.bess++; _cs.bessKw += +sh.kw||0; _cs.bessKwh += +sh.kwh||0; }
@@ -66347,7 +66574,8 @@ function omegaDataCenterROM(){
          load; read them. */
       var _pods = 0, _podKw = 0;
       (S.shapes||[]).forEach(function(sh){
-        if(sh && sh.kind==='derdc'){ _pods++; _podKw += +sh.kw||0; }
+        /* Omega-Core skids are ClearSky's, on their own meter: no host ROM */
+        if(sh && sh.kind==='derdc' && !sh.omegaCore){ _pods++; _podKw += +sh.kw||0; }
       });
       if(_pods){
         itKw = _podKw || _pods*1000;
@@ -69513,7 +69741,7 @@ function _cgcBlocks(){
   var out=[], ppf=_cgcPpf();
   try{
     (S.shapes||[]).forEach(function(sh){
-      if(!sh || sh.kind!=='derdc') return;
+      if(!sh || sh.kind!=='derdc' || sh.omegaCore) return;
       var p=(sh.pts&&sh.pts[0])?sh.pts[0]:null; if(!p) return;
       /* pts[0] is the CENTRE of the pad — that is what _derRenderDc draws
          from. Adding half put every tap a pad away from its own block. */
@@ -72836,6 +73064,7 @@ function buildEstimate(){
   var seen = {};   /* base key -> count, to number duplicate lines */
 
   bom.items.forEach(function(it){
+    if(it.notHostScope) return;   /* Omega-Core: ClearSky's skid, not the host's bid */
     var sig = _sig(it);
     var qty = +it.qty || 0;
     var lu  = _laborFor(sig);          /* hrs per unit */
@@ -92735,7 +92964,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       /* default to the unit already on the drawing if there is one */
       try {
         var seed = null;
-        (S_() && S_().shapes || []).forEach(function (x) { if (x && x.bessKey) seed = x.bessKey; });
+        (S_() && S_().shapes || []).forEach(function (x) { if (x && x.bessKey && !x.omegaCore) seed = x.bessKey; });
         if (seed) sel.value = seed;
       } catch (e) {}
       if (!sel.value && units.length) sel.value = units[0].key;
@@ -93125,6 +93354,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         } else { bump('gen'); }
         return;
       }
+      /* Omega-Core sits on its own utility meter: not on this one-line. */
+      if (sh.kind === 'derdc' && sh.omegaCore) return;
       if (sh.kind === 'derdc') {
         bump('compute'); c.computeKw += (sh.kw || 0);
         c.computePods.push({ srcId: sh.id, kw: +(sh.kw || 0),
@@ -160666,6 +160897,7 @@ if (root.console && console.info) {
             if (sh.kind === 'rect' && sh.campusLabel) _c.fences++;
             return;
           }
+          if (sh.kind === 'derdc' && sh.omegaCore) return;   /* own meter, not the host's */
           if (sh.kind === 'derdc') { _c.pods++; _c.podKw += +sh.kw || 0; }
           else if (sh.kind === 'deralt') { _c.gen++; _c.genKw += +sh.kw || 0; }
           else if (sh.kind === 'bespad' && !sh.omegaController) { _c.bess++; _c.bessKwh += +sh.kwh || 0; }
@@ -164919,7 +165151,7 @@ if (root.console && console.info) {
           var tagsF = {};
           (S.shapes || []).forEach(function (o) {
             if (!o || o.isSiteBoundary) return;
-            var t = o.omegaCampus || MAPK[o.kind]; if (t) tagsF[t] = 1;
+            var t = o.omegaCampus || (o.omegaCore ? null : MAPK[o.kind]); if (t) tagsF[t] = 1;
           });
           var tooBig = [];
           Object.keys(tagsF).forEach(function (t) {
@@ -165552,7 +165784,7 @@ if (root.console && console.info) {
   function compute() {
     var n = 0, kw = 0, drawn = 0, auto = 0;
     shapes().forEach(function (s) {
-      if (!s || s.kind !== 'derdc') return;
+      if (!s || s.kind !== 'derdc' || s.omegaCore) return;   /* Omega-Core: own meter */
       var q = +(s.qty || 1);
       n += q;
       kw += (+(s.kw || 0)) * q;
@@ -166611,6 +166843,7 @@ if (root.console && console.info) {
           if (sh.kind === 'rect' && sh.campusLabel) c.fences++;
           return;
         }
+        if (sh.kind === 'derdc' && sh.omegaCore) return;   /* own meter, not the host's */
         if (sh.kind === 'derdc') { c.pods++; c.podKw += +sh.kw || 0; }
         else if (sh.kind === 'deralt') { c.gen++; c.genKw += +sh.kw || 0; c.genModel = sh.model || c.genModel; }
       });
@@ -169511,7 +169744,11 @@ if (root.console && console.info) {
         return;
       }
       switch (sh.kind) {
-        case 'derdc':  add('pod', '\u25a6', sh.model || 'Compute pod', sh.kw); break;
+        case 'derdc':
+          /* Omega-Core is its own row: on its own meter, with its battery */
+          if (sh.omegaCore) add('omegacore', '\u25a6', 'Omega-Core skid (own meter)', sh.kw, sh.bessKwh);
+          else add('pod', '\u25a6', sh.model || 'Compute pod', sh.kw);
+          break;
         case 'compute': add('pod', '\u25a6', sh.model || 'Compute pod', sh.kw); break;
         case 'deralt': add('gen' + (sh.model || ''), '\u2299', sh.model || 'Generator', sh.kw); break;
         case 'derwind': add('wind', '\u2732', sh.model || 'Wind turbine', sh.kw); break;
@@ -171305,7 +171542,9 @@ if (root.console && console.info) {
       is: function (sh) { return sh.kind === 'bespad' || sh.kind === 'assembly'
         || (sh.kind === 'eq' && sh.eqId === 'bess'); } },
     { key: 'compute',    label: 'COMPUTE CAMPUS',
-      is: function (sh) { return sh.kind === 'derdc'; } },
+      /* an Omega-Core skid is ClearSky's, on its own meter: never fenced
+         into the host's compound or tied to the host's controller */
+      is: function (sh) { return sh.kind === 'derdc' && !sh.omegaCore; } },
     { key: 'generation', label: 'ON-SITE GENERATION',
       is: function (sh) { return sh.kind === 'deralt' || sh.kind === 'derwind'; } },
     { key: 'solar',      label: 'SOLAR FIELD',
@@ -172427,7 +172666,8 @@ if (root.console && console.info) {
     var n = 0, kw = 0;
     try {
       (root.S.shapes || []).forEach(function (sh) {
-        if (!sh || sh.kind !== 'derdc') return;
+        /* Omega-Core is ClearSky's, on its own meter: never the host's capex */
+        if (!sh || sh.kind !== 'derdc' || sh.omegaCore) return;
         n++; kw += (+sh.kw || 0);
       });
     } catch (e) {}
@@ -172709,6 +172949,7 @@ if (root.console && console.info) {
         if (!sh) return;
         if (sh.omegaController) { c.ctrl++; return; }
         if (sh.omegaFence || sh.omegaCampus) { if (sh.kind === 'rect' && sh.campusLabel) c.fences++; return; }
+        if (sh.kind === 'derdc' && sh.omegaCore) return;   /* a charging site with a skid is still a charging site */
         if (sh.kind === 'derdc') { c.pods++; c.podKw += +sh.kw || 0; }
         else if (sh.kind === 'deralt' || sh.kind === 'derwind') {
           c.gen++; c.genKw += +sh.kw || 0; c.genModel = sh.model || c.genModel;
@@ -173095,7 +173336,7 @@ if (root.console && console.info) {
     var n = 0, kw = 0;
     try {
       (S_().shapes || []).forEach(function (sh) {
-        if (!sh || sh.kind !== 'derdc') return;
+        if (!sh || sh.kind !== 'derdc' || sh.omegaCore) return;   /* not the host's compute */
         n++; kw += (+sh.kw || 0);
       });
     } catch (e) {}
@@ -173221,7 +173462,8 @@ if (root.console && console.info) {
          yard, the substation, the fences, the controller and the duct
          bank — so the two sections complement each other instead of
          arguing. */
-      if (sh.kind === 'derdc') add('pod', '\u25a6', sh.model || 'Compute pod', sh.kw);
+      if (sh.kind === 'derdc' && sh.omegaCore) add('omegacore', '\u25a6', 'Omega-Core skid (own meter)', sh.kw, sh.bessKwh);
+      else if (sh.kind === 'derdc') add('pod', '\u25a6', sh.model || 'Compute pod', sh.kw);
       else if (sh.kind === 'substation') subs.push(sh);
       else if (sh.omegaYard) add('yard' + (sh.label || sh.kind), '\u25a3',
         sh.label || sh.model || 'Tie-in equipment');
@@ -175119,6 +175361,7 @@ if (root.console && console.info) {
   function classify(sh) {
     if (!sh) return null;
     var k = sh.kind;
+    if (k === 'derdc' && sh.omegaCore) return null;   /* own meter: not on this supply */
     if (LOAD_KINDS[k]) return 'load';
     if (STORE_KINDS[k] || (k === 'derbess')) return 'store';
     if (VAR_KINDS[k]) return 'variable';
@@ -175551,7 +175794,7 @@ if (root.console && console.info) {
     var pods = 0, der = 0, mgc = false;
     shapes().forEach(function (sh) {
       if (!sh) return;
-      if (sh.kind === 'derdc') pods++;
+      if (sh.kind === 'derdc' && !sh.omegaCore) pods++;
       if (sh.kind === 'deralt' || sh.kind === 'dersolar' || sh.kind === 'derwind') der++;
       if (sh.kind === 'utility' && sh.utype === 'mgc') mgc = true;
     });
@@ -175656,7 +175899,7 @@ if (root.console && console.info) {
 
   function facMw() {
     var it = 0;
-    shapes().forEach(function (sh) { if (sh && sh.kind === 'derdc') it += (+sh.kw || 0); });
+    shapes().forEach(function (sh) { if (sh && sh.kind === 'derdc' && !sh.omegaCore) it += (+sh.kw || 0); });
     var pue = 1.3;
     try { if (S_().omegaSizing && +S_().omegaSizing.pue > 0) pue = +S_().omegaSizing.pue; } catch (e) {}
     return it * pue / 1000;
