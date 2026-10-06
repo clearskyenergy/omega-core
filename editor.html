@@ -94647,6 +94647,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       document.body.appendChild(p);
     }
     p.style.display = '';
+    bindDrag(p);
     /* the address and ZIP come off the map automatically; both stay editable */
     try {
       var site = mapSite();
@@ -94661,6 +94662,50 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     return true;
   }
 
+  /* Draggable by its title bar, the conduit schedule's pattern
+     (_engSchedBindDrag): pointer events cover mouse and touch in one code
+     path, the position is clamped so a sliver always stays grabbable, and
+     the listener sits on the PANEL (paint() rebuilds the header's
+     innerHTML, so a listener on the header itself would die on the first
+     repaint). The panel element lives for the page, so where you put it is
+     where it stays. */
+  function bindDrag(p) {
+    if (p._ovsDragBound) return;
+    p._ovsDragBound = true;
+    p.addEventListener('pointerdown', function (ev) {
+      var t = ev.target, head = null;
+      while (t && t !== p) {
+        if (t.tagName === 'BUTTON') return;              /* let × work */
+        if (t.id === 'ovs-head') { head = t; break; }
+        t = t.parentNode;
+      }
+      if (!head) return;
+      ev.preventDefault();
+      var r = p.getBoundingClientRect();
+      var dx = ev.clientX - r.left, dy = ev.clientY - r.top;
+      head.style.cursor = 'grabbing';
+      try { head.setPointerCapture(ev.pointerId); } catch (e) {}
+      function move(m) {
+        /* fixed-position panel: clamp against the viewport so at least a
+           sliver stays on screen to grab back */
+        var left = Math.max(-r.width + 60, Math.min(m.clientX - dx, window.innerWidth - 60));
+        var top = Math.max(0, Math.min(m.clientY - dy, window.innerHeight - 28));
+        p.style.left = left + 'px'; p.style.top = top + 'px';
+        p.style.right = 'auto'; p.style.bottom = 'auto';
+      }
+      function up() {
+        head.style.cursor = 'grab';
+        try { head.releasePointerCapture(ev.pointerId); } catch (e) {}
+        head.removeEventListener('pointermove', move);
+        head.removeEventListener('pointerup', up);
+        head.removeEventListener('pointercancel', up);
+      }
+      head.addEventListener('pointermove', move);
+      head.addEventListener('pointerup', up);
+      head.addEventListener('pointercancel', up);
+    });
+  }
+
   function tierChip(tier) {
     var col = tier === 'computed' ? 'var(--green)' : (tier === 'published' ? '#60A5FA' : '#FBBF24');
     var lbl = tier === 'computed' ? 'computed' : (tier === 'published' ? 'published' : 'planning');
@@ -94672,8 +94717,9 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     if (!p || p.style.display === 'none') return;
     var b = battery();
 
-    var head = '<div id="ovs-head" style="padding:10px 12px;border-bottom:1px solid var(--hairline);'
-      + 'display:flex;gap:8px;align-items:center"><span style="font-size:14px">∑</span>'
+    var head = '<div id="ovs-head" title="Drag to move" style="padding:10px 12px;border-bottom:1px solid var(--hairline);'
+      + 'display:flex;gap:8px;align-items:center;cursor:grab;user-select:none;touch-action:none">'
+      + '<span style="font-size:14px">∑</span>'
       + '<div style="flex:1;font-weight:700;font-size:13px">Value Stack</div>'
       + '<button id="ovs-x" style="background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;line-height:1">×</button></div>';
 
