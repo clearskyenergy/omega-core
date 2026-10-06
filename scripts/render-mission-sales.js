@@ -24,7 +24,11 @@
    post with its numbers, the Command Center's Sales panel and its door, the
    signup and the request in Needs you, logging a reply (the double holds
    it), and the settings refusing a gmail.com sender and saving a
-   clearsky-usa.com one. Not on the npm test chain: needs Chromium.
+   clearsky-usa.com one. Then the OFFICE view on the same book: six desks,
+   the Sales desk green off a run two hours old, Billing amber off one three
+   days old, the desks that never logged saying so, the runs list, and What
+   the office needs naming the cold-email block and the overdue desk. Not
+   on the npm test chain: needs Chromium.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
@@ -78,6 +82,9 @@ var SEED = {
   'sales_prospects/acme.example': { id: 'acme.example', company: 'Acme Solar', stage: 'contacted', inbound: true, score: 65, contacts: [{ name: 'Jane Doe', email: 'jane@acme.example' }], updatedAt: ago(4), createdAt: ago(4) },
   'sales_prospects/bright.example': { id: 'bright.example', company: 'Bright Installers', stage: 'target', score: 35, state: 'IL', next: { action: 'Intro email about plan sets', due: ago(1).slice(0, 10) }, updatedAt: ago(3), createdAt: ago(3) },
   'sales_prospects/volt.example': { id: 'volt.example', company: 'Volt EPC', stage: 'demo', score: 55, updatedAt: ago(4), createdAt: ago(9) },
+  /* the office: two desks have logged a run, the rest never have */
+  'sales_activity/r1': { kind: 'agent-run', at: ago(0.1), by: 'agent:sales', summary: 'SALES: answered 1 demo request with three slots; 0 signups waiting; 4 names researched' },
+  'sales_activity/r2': { kind: 'agent-run', at: ago(3), by: 'agent:billing', summary: 'BILLING: 2 invoices past due, 1 reminder drafted' },
   'sales_candidates/nine-dot-energy': { key: 'nine-dot-energy', company: 'Nine Dot Energy LLC', status: 'new', projects: 77, states: ['NY'] }
 };
 function reset() { db.data.clear(); Object.keys(SEED).forEach(function (k) { db.seed(k, SEED[k]); }); }
@@ -165,6 +172,34 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     ok(v.cfgOn === 'on', 'the settings show the switch on record', v.cfgOn);
     if (vp.name === 'phone') ok(v.sw <= v.vw + 1, 'no sideways scroll on a phone', [v.sw, v.vw]);
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-sales-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
+
+    /* the office: read off the same book */
+    await page.click(vp.name === 'phone' ? '#moreTab' : '.navItem[data-view="office"]');
+    if (vp.name === 'phone') await page.click('#moreList .navItem[data-view="office"]');
+    await page.waitForSelector('#officeDesks .desk', { timeout: 15000 }).catch(function () {});
+    await page.waitForTimeout(400);
+    var o = await page.evaluate(function () {
+      function t(sel) { var e = document.querySelector(sel); return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
+      return {
+        view: (document.querySelector('.view.on') || {}).dataset.view,
+        desks: [].map.call(document.querySelectorAll('#officeDesks .desk'), function (d) { return d.querySelector('.nm').textContent + ':' + d.className.replace('desk ', ''); }),
+        sales: t('#officeDesks .desk.ran .last'), billing: t('#officeDesks .desk.late .last'),
+        software: (document.querySelector('#officeDesks .desk a') || {}).href || '',
+        runs: t('#officeRuns'), runsN: t('#officeRunsN'), needs: t('#officeNeeds'), note: t('#officeNote'), pill: t('#nOffice'),
+        sw: document.documentElement.scrollWidth, vw: window.innerWidth
+      };
+    });
+    ok(o.view === 'office', 'the Office view opens' + (vp.name === 'phone' ? ' from More' : ''), o.view);
+    ok(o.desks.join(',') === 'Sales:ran,Marketing:never,Software:never,Support:never,Billing:late,Admin:never', 'six desks: Sales ran, Billing overdue, the rest never', o.desks);
+    ok(/^ran .* answered 1 demo request/.test(o.sales) && !/SALES/.test(o.sales), 'the Sales desk carries its run without repeating its name', o.sales);
+    ok(/overdue/.test(o.billing) && /2 invoices past due/.test(o.billing), 'the Billing desk says its run is overdue', o.billing);
+    ok(/github\.com\/clearskyenergy\/omega-core\/pulls/.test(o.software), 'the Software desk points at the pull requests', o.software);
+    ok(/Sales: answered/.test(o.runs) && /Billing: 2 invoices/.test(o.runs) && o.runsN === '2 LATEST', 'the runs list, newest first', [o.runs, o.runsN]);
+    ok(!/No desk has logged/.test(o.needs) && /Cold email is blocked/.test(o.needs) && /1 desk is overdue/.test(o.needs), 'What the office needs: the cold-email block and the overdue desk, not the missing-key line', o.needs);
+    ok(/1 of 6 desks ran on schedule/.test(o.note), 'the note counts the desks that ran', o.note);
+    ok(o.pill === '', 'nothing on the pill: no action-level need', o.pill);
+    if (vp.name === 'phone') ok(o.sw <= o.vw + 1, 'no sideways scroll on a phone (office)', [o.sw, o.vw]);
+    if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
 
     if (vp.name === 'desktop') {
       /* the Command Center: the Sales panel and its door, and Needs you */
