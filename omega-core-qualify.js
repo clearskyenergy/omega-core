@@ -278,7 +278,7 @@
     var chips = (c && c.chipsets) ? c.chipsets.map(function (x) { return [x.key, x.name]; }) : [['h100', 'NVIDIA HGX H100 (default)']];
     var bases = (c && c.bases) ? c.bases.map(function (x) { return [x.key, x.label]; }) : [['spot', 'Spot'], ['on-demand', 'On-demand'], ['inference', 'Inference (per GPU)'], ['custom', 'Custom $/GPU-hour']];
     var capexSel = s.capexBasis ? (s.capexBasis === 'cmdc' ? 'cmdc:' + (s.capexConfig || 'general-air') + ':' + (s.capexCase || 'high')
-                 : s.capexBasis === 'dynamic' ? 'dynamic:' + (s.capexCase || 'mid') : s.capexBasis) : 'cmdc:general-air:high';
+                 : s.capexBasis === 'dynamic' ? 'dynamic:' + (s.capexCase || 'mid') : s.capexBasis) : 'skid';
     var opt = c && c.capex && c.capex.options;
     var lab = function (t, v) { return t + (v != null ? ' — ' + money(v) : ''); };
     var capexOpts = [

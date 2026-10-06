@@ -144,13 +144,16 @@ eq(OC.evaluate(noLease, {}).offer, null, 'a site that does not qualify gets no l
    visible sheet's figures are pinned here so the model cannot drift. */
 var CM = OC.COMPUTE;
 function near(got, want, tol, l) { ok(got != null && Math.abs(got - want) <= tol, l, 'got ' + got + ', want ' + want + ' ±' + tol); }
-var W = CM.evaluate({}, { units: 1 });                       /* the workbook's defaults: H100, spot, GP air-cooled high, 70% LTC */
+eq(CM.evaluate({}, {}).capex.amount, 450000, 'the default CAPEX is the recorded $450,000 skid price (Tommy, 2026-10-06: "use the 450k skid price as the default")');
+eq(CM.evaluate({}, {}).capex.basis, 'skid', 'on the skid basis');
+eq(CM.evaluate({ capexBasis: 'nonsense' }, {}).capex.amount, 450000, 'an unknown basis falls back to the skid price, and says so');
+var W = CM.evaluate({ capexBasis: 'cmdc' }, { units: 1 });   /* the workbook's own figures: H100, spot, GP air-cooled high, 70% LTC */
 eq(W.chipset.key, 'h100', 'the default chipset is the H100 the workbook anchors on');
 eq(W.capacity.nodes, 6, '6 nodes fit 75 kW less 5% overhead at 10.2 kW a node');
 eq(W.capacity.gpus, 48, '48 GPUs');
 eq(W.capacity.installedKw, 61.2, '61.2 kW installed');
 eq(W.capacity.facilityKw, 73.44, '73.44 kW at the meter (PUE 1.2)');
-eq(W.capex.amount, 724471, 'CAPEX: the CMDC general-purpose air-cooled high end, $724,471 (the sheet\'s selection)');
+eq(W.capex.amount, 724471, 'CAPEX on the workbook\'s own basis: the CMDC general-purpose air-cooled high end, $724,471');
 ok(!/CMDC|CoreWeave/.test(JSON.stringify([W.capex, W.notes, W.customer])), 'a tenant\'s capex label, notes and customer view name no internal cost reference');
 eq(OC.evaluate({ rep: { compute: { chipset: 'a100' } } }, {}).compute.chipset.key, 'a100', 'the dialog\'s inputs ride inside rep.compute and reach the model');
 eq(W.capex.perItKw, 9660, '$9,660 an IT kW');
@@ -217,10 +220,13 @@ eq(LC.cashFlow.lease.included, true, 'the host\'s rent is a cost of the skid');
 eq(LC.cashFlow.months[0].lease, 1000, 'a skid a month');
 eq(LC.cashFlow.months[12].lease, 1025, 'escalating yearly');
 eq(LC.cashFlow.returns.year1Ebitda, 531735 - 12000, 'and comes off EBITDA');
-eq(LC.totals.capex, 724471 * 2, 'two skids: the totals scale');
+eq(LC.totals.capex, 450000 * 2, 'two skids: the totals scale');
 eq(LC.totals.year1Revenue, 755699 * 2, 'revenue too');
 eq(CM.evaluate({ includeLease: 'no' }, { lease: { monthly: 1000, escalatorPct: 2.5 } }).cashFlow.lease.included, false, 'switched off, the skid is shown alone');
-eq(CM.evaluate({ capexBasis: 'skid' }, {}).capex.amount, 450000, 'the Omega-Core skid price is a CAPEX basis');
+var SK = CM.evaluate({}, {}).cashFlow;
+eq(SK.debt.funded, 315000, 'on the skid price the debt is $315,000 at 70%');
+ok(SK.returns.projectPaybackMonth < W.cashFlow.returns.projectPaybackMonth, 'and the project pays back sooner than on the container range');
+ok(/\$450,000/.test(CM.evaluate({}, {}).customer.headline[2].value), 'the customer view carries the skid price');
 eq(CM.evaluate({ capexBasis: 'custom', capexCustom: 600000 }, {}).capex.amount, 600000, 'and so is a typed figure');
 eq(CM.evaluate({ capexBasis: 'dynamic', capexCase: 'mid' }, {}).capex.amount, 1935626, 'and the chipset-scaled estimate');
 var BB = CM.evaluate({ chipset: 'b200', pricingBasis: 'on-demand', utilization: 85, debt: { ltc: 60, rate: 9 } }, {});

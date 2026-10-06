@@ -209,10 +209,11 @@ What Omega-Core adds:
   for fixed terms, so the largest loan the cash flow carries is the minimum
   over amortising months of EBITDA ÷ (target × service per dollar) — plus
   project and equity IRR.
-- **A CAPEX basis**: the CMDC range (the workbook's default, general-purpose
-  air-cooled high, $724,471), the chipset-scaled estimate, the Omega-Core skid
-  price ClearSky recorded ($450,000), or a typed figure. Which one is
-  ClearSky's position is not decided; the dialog says which was used.
+- **A CAPEX basis**, defaulting to the **Omega-Core skid price ClearSky
+  recorded, $450,000** (Tommy, 6 October 2026: "use the 450k skid price as
+  the default"); the workbook's CMDC range (general-purpose air-cooled high,
+  $724,471), the chipset-scaled estimate and a typed figure stay as choices.
+  The dialog says which was used.
 - **A customer view** (`compute.customer`): the headline figures, the
   bankability verdict and the assumptions in plain words — no cost reference,
   no price sheet, no proxy index. The build-up (`buildUp`: the CMDC
@@ -251,11 +252,10 @@ client's `collect()` against a fake session, the project field, and the R60.
 
 ## Not built
 
-- **OEM quotes for the CAPEX.** The compute model's costs are the CMDC
-  estimated range and a market-value proxy per chipset (the workbook's own
-  note: replace with OEM/server quotes before investment approval), and which
-  CAPEX basis is ClearSky's position — the $450,000 skid price or the 75 kW
-  container range — is not decided.
+- **OEM quotes for the CAPEX.** The default is ClearSky's recorded skid
+  price; the container range and the per-chipset estimate beside it are the
+  CMDC range and a market-value proxy (the workbook's own note: replace with
+  OEM/server quotes before investment approval).
 - **Taxes, GPU degradation and a released reserve** are not in the compute
   cash flow (as the workbook has it): the price decline stands in for
   degradation and the debt service reserve is funded and not released.
