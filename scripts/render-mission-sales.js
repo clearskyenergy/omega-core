@@ -24,11 +24,14 @@
    post with its numbers, the Command Center's Sales panel and its door, the
    signup and the request in Needs you, logging a reply (the double holds
    it), and the settings refusing a gmail.com sender and saving a
-   clearsky-usa.com one. Then the OFFICE view on the same book: six desks,
-   the Sales desk green off a run two hours old, Billing amber off one three
-   days old, the desks that never logged saying so, the runs list, and What
-   the office needs naming the cold-email block and the overdue desk. Not
-   on the npm test chain: needs Chromium.
+   clearsky-usa.com one. Then the OFFICE view on the same book: the floor's
+   six rooms back to front, Sales lit off a run minutes old, Billing amber
+   off one three days old, the rest dark; the overview's runs and needs
+   (the plan waiting, the cold-email block, the overdue desk); clicking the
+   Sales room opens Nora's drawer with the week's proposed plan, Approve
+   writes the PLAN line to the double, a note to the desk writes the NOTE
+   line, the numbers read 1 of 5 runs, and ◀ Office returns the overview.
+   Not on the npm test chain: needs Chromium.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
@@ -62,6 +65,9 @@ FD.mock('../api/_lib/admin', {
 var sales = require('../api/sales');
 
 var DAY = 86400000, NOW = Date.now();
+/* the ISO week the plans are keyed by, computed as the page computes it */
+function isoWeek(d) { var t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate())); var day = t.getUTCDay() || 7; t.setUTCDate(t.getUTCDate() + 4 - day); var y = t.getUTCFullYear(); var w = Math.ceil((((t - Date.UTC(y, 0, 1)) / 864e5) + 1) / 7); return y + '-W' + String(w).padStart(2, '0'); }
+var WEEK = isoWeek(new Date());
 function ago(d) { return new Date(NOW - d * DAY).toISOString(); }
 function ahead(d) { return new Date(NOW + d * DAY).toISOString(); }
 var SEED = {
@@ -83,7 +89,8 @@ var SEED = {
   'sales_prospects/bright.example': { id: 'bright.example', company: 'Bright Installers', stage: 'target', score: 35, state: 'IL', next: { action: 'Intro email about plan sets', due: ago(1).slice(0, 10) }, updatedAt: ago(3), createdAt: ago(3) },
   'sales_prospects/volt.example': { id: 'volt.example', company: 'Volt EPC', stage: 'demo', score: 55, updatedAt: ago(4), createdAt: ago(9) },
   /* the office: two desks have logged a run, the rest never have */
-  'sales_activity/r1': { kind: 'agent-run', at: ago(0.1), by: 'agent:sales', summary: 'SALES: answered 1 demo request with three slots; 0 signups waiting; 4 names researched' },
+  'sales_activity/r1': { kind: 'agent-run', at: ago(0.002), by: 'agent:sales', summary: 'SALES: answered 1 demo request with three slots; 0 signups waiting; 4 names researched' },
+  'sales_activity/pl1': { kind: 'note', at: ago(1), by: 'agent:ada', summary: 'PLAN ' + WEEK + ' SALES: proposed — 3 demos booked; 10 prospects researched; every request answered the same day' },
   'sales_activity/r2': { kind: 'agent-run', at: ago(3), by: 'agent:billing', summary: 'BILLING: 2 invoices past due, 1 reminder drafted' },
   'sales_candidates/nine-dot-energy': { key: 'nine-dot-energy', company: 'Nine Dot Energy LLC', status: 'new', projects: 77, states: ['NY'] }
 };
@@ -173,33 +180,54 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     if (vp.name === 'phone') ok(v.sw <= v.vw + 1, 'no sideways scroll on a phone', [v.sw, v.vw]);
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-sales-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
 
-    /* the office: read off the same book */
+    /* the office: the floor and one department, read off the same book */
     await page.click(vp.name === 'phone' ? '#moreTab' : '.navItem[data-view="office"]');
     if (vp.name === 'phone') await page.click('#moreList .navItem[data-view="office"]');
-    await page.waitForSelector('#officeDesks .desk', { timeout: 15000 }).catch(function () {});
+    await page.waitForSelector('#officeFloor g.room', { timeout: 15000 }).catch(function () {});
     await page.waitForTimeout(400);
     var o = await page.evaluate(function () {
       function t(sel) { var e = document.querySelector(sel); return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
       return {
         view: (document.querySelector('.view.on') || {}).dataset.view,
-        desks: [].map.call(document.querySelectorAll('#officeDesks .desk'), function (d) { return d.querySelector('.nm').textContent + ':' + d.className.replace('desk ', ''); }),
-        sales: t('#officeDesks .desk.ran .last'), billing: t('#officeDesks .desk.late .last'),
-        software: (document.querySelector('#officeDesks .desk a') || {}).href || '',
-        runs: t('#officeRuns'), runsN: t('#officeRunsN'), needs: t('#officeNeeds'), note: t('#officeNote'), pill: t('#nOffice'),
+        rooms: [].map.call(document.querySelectorAll('#officeFloor g.room'), function (g) { return g.dataset.desk + ':' + g.getAttribute('class').replace('room ', ''); }),
+        papers: document.querySelectorAll('#officeFloor g.room[data-desk="sales"] .paper').length,
+        side: t('#officeSide'), note: t('#officeNote'), pill: t('#nOffice'),
         sw: document.documentElement.scrollWidth, vw: window.innerWidth
       };
     });
     ok(o.view === 'office', 'the Office view opens' + (vp.name === 'phone' ? ' from More' : ''), o.view);
-    ok(o.desks.join(',') === 'Sales:ran,Marketing:never,Software:never,Support:never,Billing:late,Admin:never', 'six desks: Sales ran, Billing overdue, the rest never', o.desks);
-    ok(/^ran .* answered 1 demo request/.test(o.sales) && !/SALES/.test(o.sales), 'the Sales desk carries its run without repeating its name', o.sales);
-    ok(/overdue/.test(o.billing) && /2 invoices past due/.test(o.billing), 'the Billing desk says its run is overdue', o.billing);
-    ok(/github\.com\/clearskyenergy\/omega-core\/pulls/.test(o.software), 'the Software desk points at the pull requests', o.software);
-    ok(/Sales: answered/.test(o.runs) && /Billing: 2 invoices/.test(o.runs) && o.runsN === '2 LATEST', 'the runs list, newest first', [o.runs, o.runsN]);
-    ok(!/No desk has logged/.test(o.needs) && /Cold email is blocked/.test(o.needs) && /1 desk is overdue/.test(o.needs), 'What the office needs: the cold-email block and the overdue desk, not the missing-key line', o.needs);
-    ok(/1 of 6 desks ran on schedule/.test(o.note), 'the note counts the desks that ran', o.note);
-    ok(o.pill === '', 'nothing on the pill: no action-level need', o.pill);
+    ok(o.rooms.join(',') === 'sales:ran,marketing:never,support:never,software:never,admin:never,billing:late', 'six rooms back to front: Sales lit, Billing amber, the rest dark', o.rooms);
+    ok(o.papers === 1, 'one paper on the Sales desk for today\'s entry', o.papers);
+    ok(/Sales: answered 1 demo request/.test(o.side) && /2 LATEST/.test(o.side) && /Cold email is blocked/.test(o.side) && /1 desk is overdue/.test(o.side) && !/No desk has logged/.test(o.side) && /1 desk has a plan for/.test(o.side), 'the overview: the runs, the needs, the plan waiting', o.side.slice(0, 700));
+    ok(new RegExp('1 of 6 desks ran on schedule; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
+    ok(o.pill === '1', 'the pill counts the one action: the plan to approve', o.pill);
     if (vp.name === 'phone') ok(o.sw <= o.vw + 1, 'no sideways scroll on a phone (office)', [o.sw, o.vw]);
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
+    /* click the Sales room: Nora's drawer */
+    await page.click('#officeFloor g.room[data-desk="sales"]');
+    await page.waitForSelector('#officeBack', { timeout: 8000 }).catch(function () {});
+    var dr = await page.evaluate(function () { var e = document.getElementById('officeSide'); return { text: e ? e.textContent.replace(/\s+/g, ' ').trim() : '', sel: !!document.querySelector('#officeFloor g.room.sel[data-desk="sales"]') }; });
+    ok(dr.sel && /Nora · Sales/.test(dr.text) && /sales@clearsky-usa.com/.test(dr.text), 'the Sales room opens Nora\'s drawer and stays lit as selected', dr.text.slice(0, 200));
+    ok(/proposed/.test(dr.text) && /3 demos booked/.test(dr.text), 'the week\'s proposed plan is shown', dr.text.slice(0, 600));
+    ok(/Runs · 7d1 of 5/.test(dr.text) && /Runs · 30d1 of 2[0-3]/.test(dr.text), 'the numbers: one run of the five a week expected', dr.text.slice(0, 900));
+    ok(/Switch the agent off/.test(dr.text) && /Mailbox/.test(dr.text) && /Job note/.test(dr.text), 'the decisions: the switch and the doors', dr.text.slice(-500));
+    if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-drawer-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
+    if (vp.name === 'desktop') {
+      await page.click('#planApprove');
+      await page.waitForFunction(function () { return /Approved\. The desk follows it|Not recorded/.test((document.getElementById('officeSide') || {}).textContent || ''); }, null, { timeout: 8000 }).catch(function () {});
+      var planRow = Array.from(db.data.entries()).filter(function (e) { return /^sales_activity\//.test(e[0]) && e[1].kind === 'note' && e[1].summary === 'PLAN ' + WEEK + ' SALES: approved'; });
+      ok(planRow.length === 1 && planRow[0][1].by === 'tom@clearsky-usa.com', 'Approve writes the PLAN line the desk reads, by the person', planRow.map(function (e) { return e[1]; }));
+      ok(/Approved\. The desk follows it/.test(await page.textContent('#officeSide')), 'the drawer re-reads: approved');
+      await page.fill('#deskNote', 'Focus on Joliet this week');
+      await page.click('#deskNoteGo');
+      await page.waitForFunction(function () { return /Recorded\.|Not recorded/.test((document.getElementById('officeSide') || {}).textContent || ''); }, null, { timeout: 8000 }).catch(function () {});
+      var noteRow = Array.from(db.data.entries()).filter(function (e) { return /^sales_activity\//.test(e[0]) && e[1].kind === 'note' && e[1].summary === 'NOTE SALES: Focus on Joliet this week'; });
+      ok(noteRow.length === 1, 'a note to the desk writes the NOTE line', noteRow.map(function (e) { return e[1]; }));
+      ok(/Focus on Joliet this week/.test(await page.textContent('#deskNotes')), 'the note is listed under Tell Nora');
+      await page.click('#officeBack');
+      await page.waitForTimeout(200);
+      ok(/2 LATEST/.test(await page.textContent('#officeSide')) && !(await page.$('#officeBack')), '◀ Office returns the overview');
+    }
 
     if (vp.name === 'desktop') {
       /* the Command Center: the Sales panel and its door, and Needs you */
