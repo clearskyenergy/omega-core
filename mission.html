@@ -8338,32 +8338,32 @@ function wireSales(){
 
 /* ── THE OFFICE ──────────────────────────────────────────────────────────
    Six teams, each a Claude Code Routine on a schedule (jarvis/agents/office),
-   each with a name and a mailbox (an alias on Thomas's own account; the
-   roster's "The people" is the one list and this is its copy).
+   each with a name and a role mailbox on clearsky-usa.com (the roster's
+   "The people" is the one list and this is its copy).
    A desk is read, never driven: every run logs `agent-run` to the sales log
    with a summary that starts with the team's name, and this page draws what
    it finds. The roster is a copy of jarvis/agents/office/README.md — the
    Routines live in claude.ai, which has no endpoint to ask, so a desk that
    is "never" here may still exist there and have nothing to log with. */
 const OFFICE_DESKS=[
-  {key:'sales', name:'Sales', who:'Nora', mail:'nora@clearsky-usa.com', sched:'weekdays 8:05', grace:30,
+  {key:'sales', name:'Sales', who:'Nora', mail:'sales@clearsky-usa.com', sched:'weekdays 8:05', grace:30,
    role:'Answers demo requests, works the accounts, researches prospects.',
    may:'Sends email as Thomas and books 30-minute demos, 8:30–2:30 Central.', sends:true,
    tools:'Gmail · Google Calendar · Google Drive'},
-  {key:'marketing', name:'Marketing', who:'Mila', mail:'mila@clearsky-usa.com', sched:'Tue · Thu 10:05', grace:100,
-   role:'One product-update email to accounts and people who wrote in. The LinkedIn post is its own routine, 7:57.',
-   may:'Sends to accounts and recent contacts. Never a cold list, never a price.', sends:true, tools:'Gmail'},
-  {key:'software', name:'Software', who:'Theo', mail:'theo@clearsky-usa.com', sched:'daily 8:00', grace:30,
+  {key:'marketing', name:'Marketing', who:'Mila', mail:'marketing@clearsky-usa.com', sched:'weekdays 10:05', grace:30,
+   role:'The press desk: pitches the Omega-Core story to the trade press on the beat, and one update to accounts when something ships. The LinkedIn post is its own routine, 7:57.',
+   may:'Pitches outlets, never a price; an interview, quote or exclusive is Thomas’s to give.', sends:true, tools:'Gmail'},
+  {key:'software', name:'Software', who:'Theo', mail:'dev@clearsky-usa.com', sched:'daily 8:00', grace:30,
    role:'The steward: tests, integrity, a pull request for what is small and obviously right.',
    may:'Opens pull requests. Never merges, never deploys.', tools:'GitHub',
    ext:'https://github.com/clearskyenergy/omega-core/pulls', extText:'reports on GitHub, not here'},
-  {key:'support', name:'Support', who:'Sam', mail:'sam@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', grace:30,
+  {key:'support', name:'Support', who:'Sam', mail:'support@clearsky-usa.com', sched:'weekdays 8:35 · 1:35', grace:30,
    role:'Reads what customers asked, answers from the manuals, logs a bug as an issue.',
    may:'Drafts only. Never sends, never promises a refund.', tools:'Gmail · GitHub'},
-  {key:'billing', name:'Billing', who:'June', mail:'june@clearsky-usa.com', sched:'weekdays 9:35', grace:30,
+  {key:'billing', name:'Billing', who:'June', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', grace:30,
    role:'A/R aging and open invoices from QuickBooks: what is past due, oldest first.',
    may:'Drafts reminders. Never changes an invoice, never charges a card.', tools:'QuickBooks · Gmail'},
-  {key:'admin', name:'Admin', who:'Ada', mail:'ada@clearsky-usa.com', sched:'weekdays 7:35', grace:30,
+  {key:'admin', name:'Admin', who:'Ada', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35', grace:30,
    role:'The day’s logistics: meetings, unanswered mail, promises due, tomorrow.',
    may:'One email to Thomas. Everything else is a draft.', tools:'Gmail · Google Calendar'}
 ];
