@@ -434,7 +434,8 @@ function editorChecks() {
   var place = bodyFrom(ED, 'function _doPlaceBesPad(p,spec,opts){');
   ok(/a\.key==='pcs'   && _ce\._incPCS===true/.test(place) && /a\.key==='xfmr'  && _ce\._incXfmr===true/.test(place) && /a\.key==='disco' && _ce\._incDisco===true/.test(place), 'every BESS Pad path places the R60 with its disconnect and without a second PCS or a transformer');
   ok(!/data-auto-off/.test(ED), 'and the modal no longer second-guesses the box');
-  ok(R && !/derived/.test(JSON.stringify(R)) && /'CC-R60':[^\n]*h:'SEE MFR SUBMITTAL'/.test(ED), 'its height is not derived while the drawing and the datasheet disagree');
+  ok(/'CC-R60':[^\n]*h:'6\\'-10\.75"'[^\n]*hf:6\.9 \}/.test(ED) && R && /82\.75 in overall/.test(R.verified) && /2200 H mm/.test(R.cabinet),
+     'its height is the drawing\'s 82.75 in overall (Tommy, 2026-10-05), with the datasheet\'s cabinet kept as the cabinet');
   ok((ED.match(/&& !p\.evSkid\)/g) || []).length === 2, 'the auto-sizer never recommends an EV skid');
 }
 

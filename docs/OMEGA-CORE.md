@@ -66,8 +66,10 @@ with blank integration columns is "not said" and keeps the size rule), and
 every BESS Pad path — the modal, quick place, the cluster — places it with its
 disconnect and without a second PCS or a transformer. An unpublished usable
 kWh or price clears the BESS Config field rather than saving a stale one. Its
-**height is not stated**: the drawing's 82.75 in overall and the datasheet's
-2,200 mm (86.6 in) cabinet disagree — to confirm with Clean Cell. `evSkid: true` keeps the auto-sizer from recommending an EV
+**height is the drawing's 82.75 in overall** (6'-10¾"; Tommy, 5 October 2026:
+"use the drawing height 82.75"), as the Omega-Core skid's is; the datasheet's
+2,200 mm (86.6 in) is the battery cabinet alone and stays on the catalog row as
+`cabinet`. `evSkid: true` keeps the auto-sizer from recommending an EV
 charging skid for a peak-shaving target. Usable kWh, weight, price and the
 Autel charger rating are **not published** and stay null or say so; place the
 two Autel dispensers from the EV Catalog at the rating the project engineering
@@ -194,10 +196,6 @@ client's `collect()` against a fake session, the project field, and the R60.
 `scripts/test-package-producers.js` holds the packaged door.
 
 ## Not built
-
-- **The skid's height.** The drawing says 82.75 in overall; the R60 cabinet
-  alone is 2,200 mm (86.6 in) on the datasheet. Omega-Core carries the
-  drawing's figure; the R60 row states none until Clean Cell confirms.
 
 - **Compute revenue.** The skid's own GPU revenue and ClearSky's return on the
   $450,000 are not modelled here; `api/_lib/compute-site.js` is where that
