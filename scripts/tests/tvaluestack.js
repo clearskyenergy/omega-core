@@ -224,5 +224,68 @@ ok('every lifecycle assumption is stated, with its grade', function(){
   assert(/flat/i.test(all), 'the flat treatment of programme revenue is not disclosed');
 });
 
+/* ── bankability: the investor's cut of the same streams ──────────────── */
+const BK_STREAMS = [
+  { id: 'bill.demand', name: 'Demand charges avoided', category: 'bill', usd: 20000, tier: 'computed', counted: true },
+  { id: 'bill.tou', name: 'TOU energy', category: 'bill', usd: 8000, tier: 'computed', counted: true },
+  { id: 'pjm.capacity', name: 'PJM capacity', category: 'grid', usd: 30000, tier: 'published', counted: true,
+    bank: { paidBy: 'PJM settlement, via a curtailment service provider', vehicle: 'CSP agreement', tenor: 'one delivery year per auction' } },
+  { id: 'pjm.comedvpp', name: 'ComEd Rider VPP', category: 'grid', usd: 40000, tier: 'planning', counted: true,
+    bank: { paidBy: 'ComEd', vehicle: 'rider enrolment', tenor: 'annual' } },
+  { id: 'pjm.plc', name: 'PLC', category: 'grid', usd: 99000, tier: 'planning', counted: false, why: 'same hours' }
+];
+
+ok('a saving is not revenue: bill streams need the ESA, and say so', function(){
+  const b = V.bankability(BK_STREAMS, { owner: 0.7 });
+  const demand = b.rows.filter(r => r.id === 'bill.demand')[0];
+  assert(demand && demand.grade === 'host-contract');
+  assert.strictEqual(demand.paidBy, 'the host customer');
+  assert(/shared-savings|energy services/i.test(demand.vehicle), 'the ESA is not named');
+  assert(/not the project's revenue/i.test(demand.vehicle),
+    'the distinction between a saving and revenue is not stated');
+});
+
+ok('a programme stream carries its real counterparty, net of the share', function(){
+  const b = V.bankability(BK_STREAMS, { owner: 0.7 });
+  const cap = b.rows.filter(r => r.id === 'pjm.capacity')[0];
+  assert.strictEqual(Math.round(cap.usdYr), 21000, 'the owner share was not applied');
+  assert.strictEqual(cap.grossYr, 30000, 'the gross is not disclosed beside it');
+  assert(/curtailment service provider/i.test(cap.paidBy));
+  assert(/delivery year/i.test(cap.tenor), 'the reset cadence is missing');
+});
+
+ok('a planning rate is upside, never collateral', function(){
+  const b = V.bankability(BK_STREAMS, { owner: 0.7 });
+  const vpp = b.rows.filter(r => r.id === 'pjm.comedvpp')[0];
+  assert(/not underwriteable/i.test(vpp.note || ''), 'the planning stream carries no warning');
+  assert.strictEqual(Math.round(b.totals.underwriteableYr), 20000 + 8000 + 21000,
+    'the underwriteable total does not exclude exactly the planning streams');
+  assert.strictEqual(Math.round(b.totals.planningYr), 28000);
+});
+
+ok('an uncounted stream never reaches the investor view', function(){
+  const b = V.bankability(BK_STREAMS, { owner: 0.7 });
+  assert(!b.rows.some(r => r.id === 'pjm.plc'), 'a stream the dispatch refused is in the ladder');
+});
+
+ok('the paperwork list names the three contracts and the ITC transfer', function(){
+  const all = V.bankability(BK_STREAMS, { owner: 0.7 }).contracts.join(' ');
+  assert(/shared-savings/i.test(all), 'no ESA');
+  assert(/curtailment-service-provider|aggregator/i.test(all), 'no aggregator agreement');
+  assert(/assignable/i.test(all), 'assignability to the project entity is not raised');
+  assert(/6418/.test(all), 'the ITC transfer is not mentioned');
+});
+
+ok('every programme in the simulator carries its counterparty facts', function(){
+  /* The bank facts ride each programme row in vpp-sim.js, one copy, beside
+     the ref — a programme without them would print "the programme" in an
+     investor table, which reads like evasion. */
+  const SIM = require(path.join(__dirname, '..', '..', 'api/_lib/vpp-sim.js'));
+  SIM.PROGRAMS.forEach(function (p) {
+    assert(p.bank && p.bank.paidBy && p.bank.vehicle && p.bank.tenor,
+      p.id + ' has no bank facts (paidBy / vehicle / tenor)');
+  });
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);

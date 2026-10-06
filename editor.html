@@ -94523,15 +94523,21 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var counted = R.streams.filter(function (s) { return s.counted && s.usd > 0; });
     var keepPct = Math.round((R.split && R.split.owner || 1) * 100);
     var L = R.lifecycle, C = R.cost;
+    var bankOf = {};
+    if (R.bankability && R.bankability.rows) {
+      R.bankability.rows.forEach(function (b) { bankOf[b.id] = b; });
+    }
 
     var html = '<div style="' + lbl + ';margin-bottom:5px">Annual value — dispatched, not added</div>'
       + counted.map(function (s) {
+          var b = bankOf[s.id];
           return '<div style="padding:7px 0;border-bottom:1px solid var(--hairline)">'
             + '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:600">'
             + '<span>' + esc(s.name) + '</span><span style="white-space:nowrap">' + money(s.usd) + '</span></div>'
             + '<div style="font-size:9.5px;color:var(--sub);margin-top:2px;line-height:1.45">' + esc(s.how)
             + (s.category === 'grid' ? ' — shared: you keep ' + keepPct + '%' : ' · bill-side, not shared') + '</div>'
-            + '<div style="margin-top:2px">' + tierChip(s.tier) + '</div></div>';
+            + '<div style="margin-top:2px;font-size:9px;color:#6B8AAD">' + tierChip(s.tier)
+            + (b ? ' · paid by ' + esc(b.paidBy) + ' · ' + esc(b.tenor) : '') + '</div></div>';
         }).join('')
       + '<div style="display:flex;justify-content:space-between;padding:9px 0 2px;font-size:13px;font-weight:800">'
       + '<span>You keep / year</span><span>' + money(R.totals.owner) + '</span></div>'
@@ -94559,6 +94565,22 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       if (R.incentives && R.incentives.flags && R.incentives.flags.length) {
         html += '<div style="font-size:9.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">⚠ '
           + esc(R.incentives.flags[0]) + '</div>';
+      }
+      /* the investor's case: planning-grade rates out */
+      var BK = R.bankability, BL = BK && BK.lifecycle;
+      if (BL) {
+        html += '<div style="margin:6px 0 4px;padding:8px 10px;background:rgba(96,165,250,.08);'
+          + 'border:1px solid rgba(96,165,250,.3);border-radius:7px;font-size:10.5px;line-height:1.55">'
+          + '<b>Bankable case</b> — computed &amp; published rates only: '
+          + (BL.ok
+              ? '<b>IRR ' + (BL.irr == null ? '—' : pct(BL.irr)) + '</b> · payback '
+                + (BL.paybackYears == null ? 'never' : BL.paybackYears.toFixed(1) + ' yrs') + ' · '
+                + money(BK.totals.underwriteableYr) + '/yr underwriteable'
+                + (BK.totals.planningYr > 0 ? ' · ' + money(BK.totals.planningYr)
+                    + '/yr still planning-grade (upside, not collateral)' : '')
+              : 'nothing underwriteable yet — every stream here is a planning rate until the '
+                + 'programme’s own terms replace it.')
+          + '</div>';
       }
     } else {
       html += '<div style="font-size:10.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">'
@@ -94753,6 +94775,9 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
           'unlevered · pre-tax') : '')
       + (L && L.ok ? hero('Payback', L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs',
           'NPV ' + money(L.npv) + ' @ ' + pct(L.discountRate, 0)) : '')
+      + (R.bankability && R.bankability.lifecycle && R.bankability.lifecycle.ok
+          ? hero('Bankable IRR', R.bankability.lifecycle.irr == null ? '—' : pct(R.bankability.lifecycle.irr),
+              'computed + published rates only') : '')
       + '</div>';
 
     var streamRows = R.streams.map(function (s) {
@@ -94783,6 +94808,52 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         + (R.incentives.flags || []).map(function (f) {
             return '<div style="margin-top:6px;padding:8px 10px;background:#FFF8E6;border-left:3px solid #B98100;font-size:10.5px;line-height:1.5;color:#5c4a00">' + esc(f) + '</div>';
           }).join('');
+    }
+
+    /* the investor's page: who pays each stream, under what paper, and the
+       return when planning-grade figures are left out */
+    var BK = R.bankability, bankHtml = '';
+    if (BK && BK.rows && BK.rows.length) {
+      var BL = BK.lifecycle;
+      bankHtml = h2('Revenue quality — what an investor can underwrite')
+        + small(esc(BK.note || ''))
+        + '<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:10.5px">'
+        + '<tr style="color:' + CH.sub + '">' + ['Stream', 'To the project / yr', 'Paid by', 'Contract', 'Tenor / reset'].map(function (h, i) {
+            return '<th style="padding:4px 6px;text-align:' + (i === 1 ? 'right' : 'left') + ';border-bottom:1px solid ' + CH.grid + ';font-weight:600">' + h + '</th>';
+          }).join('') + '</tr>'
+        + BK.rows.map(function (b) {
+            return '<tr>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top">' + esc(b.name)
+              + (b.note ? '<div style="color:#B98100;font-size:9.5px;margin-top:2px">⚠ ' + esc(b.note) + '</div>' : '') + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';text-align:right;vertical-align:top;font-family:\'IBM Plex Mono\',monospace;white-space:nowrap">' + money(b.usdYr)
+              + (b.grossYr && b.grossYr > b.usdYr ? '<div style="color:' + CH.sub + ';font-size:9px">of ' + money(b.grossYr) + ' gross</div>' : '') + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top;color:' + CH.sub + '">' + esc(b.paidBy) + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top;color:' + CH.sub + '">' + esc(b.vehicle) + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top;color:' + CH.sub + '">' + esc(b.tenor) + '</td>'
+              + '</tr>';
+          }).join('')
+        + '</table>'
+        + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">'
+        + [['Host-contracted (via the ESA)', BK.totals.hostYr],
+           ['Programme & market, your share', BK.totals.programYr],
+           ['Underwriteable today', BK.totals.underwriteableYr],
+           ['Planning-grade upside', BK.totals.planningYr]].map(function (f) {
+            return '<div style="flex:1;min-width:140px;border:1px solid ' + CH.grid + ';border-radius:8px;padding:9px 12px">'
+              + '<div style="font:700 15px \'IBM Plex Mono\',monospace;color:' + CH.ink + '">' + money(f[1]) + '</div>'
+              + '<div style="font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:' + CH.sub + ';margin-top:2px">' + f[0] + '</div></div>';
+          }).join('') + '</div>'
+        + (L && L.ok && BL
+            ? small('<b>Two cases, same cost and incentives.</b> All streams: IRR '
+              + (L.irr == null ? '—' : pct(L.irr)) + ', payback '
+              + (L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs') + '. Bankable case ('
+              + (BL.ok
+                  ? 'computed + published rates only): IRR ' + (BL.irr == null ? '—' : pct(BL.irr)) + ', payback '
+                    + (BL.paybackYears == null ? 'never' : BL.paybackYears.toFixed(1) + ' yrs')
+                  : 'computed + published rates only): nothing underwriteable yet — every counted stream is a planning rate')
+              + '. The difference is exactly what the planning-grade streams claim.')
+            : '')
+        + '<div style="font-size:12px;font-weight:700;margin:12px 0 4px;color:' + CH.ink + '">The paperwork that makes it bankable</div>'
+        + small((BK.contracts || []).map(function (c) { return '• ' + esc(c); }).join('<br>'));
     }
 
     var yearsTable = '';
@@ -94848,6 +94919,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       + '<tr><td style="padding:7px 8px;font-weight:800;font-size:12px">You keep / year</td>'
       + '<td style="padding:7px 8px;font:800 12px \'IBM Plex Mono\',monospace;text-align:right">' + money(R.totals.owner) + '</td><td></td></tr></table>'
       + '</section>'
+
+      + '<section>' + bankHtml + '</section>'
 
       + '<section>' + h2('The utility bill, before and after')
       + small('Before ' + money(R.bill.before) + ' → after ' + money(R.bill.after) + ' a year ('

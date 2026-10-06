@@ -423,6 +423,79 @@
     };
   };
 
+  /* ── BANKABILITY ─────────────────────────────────────────────────────
+     The investor's cut of the same streams. A saving is not revenue: a
+     bill-side stream becomes the PROJECT's income only under a contract
+     with the host (an energy services / shared-savings agreement), and
+     what an investor then underwrites is the host's credit. A programme
+     stream has a real counterparty — a utility, an ISO through an
+     aggregator — and a reset cadence an underwriter must know. Those
+     facts ride each programme row in vpp-sim.js (`bank`); this function
+     only arranges them and refuses to blur the one distinction that
+     matters: a PLANNING rate is not underwriteable until the programme's
+     own terms replace it, however plausible the number.
+
+     streams: vpp-sim's stream rows. split: the revenue share (owner
+     fraction applied to programme earnings, as the totals already do). */
+  V.bankability = function (streams, split) {
+    streams = Array.isArray(streams) ? streams : [];
+    var keep = (split && isFinite(+split.owner)) ? +split.owner : 1;
+    var rows = [], hostYr = 0, programYr = 0, underYr = 0, i;
+    for (i = 0; i < streams.length; i++) {
+      var s = streams[i];
+      if (!s || !s.counted || !(s.usd > 0)) continue;
+      var row;
+      if (s.category === "bill") {
+        hostYr += s.usd;
+        row = {
+          id: s.id, name: s.name, usdYr: s.usd, tier: s.tier, grade: "host-contract",
+          paidBy: "the host customer",
+          vehicle: "an energy services / shared-savings agreement — without one, " +
+                   "these are the host's own savings, not the project's revenue",
+          tenor: "the ESA term you sign; 10–15 years is customary"
+        };
+      } else {
+        var own = s.usd * keep;
+        programYr += own;
+        var b = s.bank || {};
+        row = {
+          id: s.id, name: s.name, usdYr: own, grossYr: s.usd, tier: s.tier, grade: "program",
+          paidBy: b.paidBy || "the programme",
+          vehicle: b.vehicle || "programme enrolment",
+          tenor: b.tenor || "programme year"
+        };
+      }
+      if (s.tier === "planning") {
+        row.note = "a planning rate — not underwriteable until the programme's " +
+                   "own terms replace it";
+      } else {
+        underYr += row.usdYr;
+      }
+      rows.push(row);
+    }
+    var totalYr = hostYr + programYr;
+    return {
+      rows: rows,
+      totals: {
+        hostYr: hostYr, programYr: programYr, totalYr: totalYr,
+        underwriteableYr: underYr, planningYr: totalYr - underYr
+      },
+      /* The paperwork that turns the stack into something a lender reads. */
+      contracts: [
+        "Energy services / shared-savings agreement with the host — the contract " +
+          "that converts demand and TOU savings into the project's contracted revenue; " +
+          "the counterparty an investor underwrites is the host's credit and tenancy.",
+        "Aggregator / curtailment-service-provider agreement — the route to capacity " +
+          "and programme revenue; it fixes the revenue share and can floor a multi-year rate.",
+        "Programme enrolments held in, or assignable to, the project entity — a payment " +
+          "to the host's account is not the SPV's revenue.",
+        "The one-time incentives sit in the capital stack, not the revenue stack: the ITC " +
+          "is transferable for cash under §6418, and a utility rebate pays once at " +
+          "commissioning against its own conditions."
+      ]
+    };
+  };
+
   root.OmegaValueStack = V;
   if (typeof module !== "undefined" && module.exports) module.exports = V;
 })(typeof window !== "undefined" ? window : this);

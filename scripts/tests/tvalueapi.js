@@ -268,6 +268,36 @@ Promise.resolve()
   });
 })
 
+/* ── bankability: the investor's case ──────────────────────────────────── */
+.then(function () {
+  section('bankability');
+  return post(docsWith(ACTIVE, STANDARD), est({
+    site: { zip: '60601', segment: 'industrial' },
+    load: { type: 'profile', annualKwh: 2400000 },
+    cost: { capexUsd: 455000 }
+  })).then(function (r) {
+    var R = r.status === 200 && r.body.result;
+    if (!R) { ok('the ComEd case returns 200', false, r.body); return; }
+    var B = R.bankability;
+    ok('every counted stream is in the ladder with a counterparty',
+      B && B.rows.length > 0 && B.rows.every(function (x) { return x.paidBy && x.vehicle && x.tenor; }),
+      B && B.rows);
+    var vpp = B.rows.filter(function (x) { return x.id === 'pjm.comedvpp'; })[0];
+    ok('the ComEd Rider VPP planning rate is flagged, not underwritten',
+      !vpp || (/not underwriteable/.test(vpp.note || '') &&
+        B.totals.underwriteableYr < B.totals.totalYr), vpp);
+    ok('the bankable lifecycle ran beside the all-in one',
+      B.lifecycle && (B.lifecycle.ok === true || B.lifecycle.ok === false), B.lifecycle);
+    if (B.lifecycle && B.lifecycle.ok && R.lifecycle && R.lifecycle.ok && B.totals.planningYr > 0) {
+      ok('dropping planning streams moves the IRR (same cost, same incentives)',
+        B.lifecycle.irr !== R.lifecycle.irr,
+        { all: R.lifecycle.irr, bankable: B.lifecycle.irr });
+    }
+    ok('the paperwork that makes it bankable travels with the answer',
+      B.contracts && B.contracts.length >= 3 && /shared-savings/i.test(B.contracts.join(' ')), B.contracts);
+  });
+})
+
 /* ── the shape of what leaves ──────────────────────────────────────────── */
 .then(function () {
   section('what leaves');

@@ -188,10 +188,10 @@ function ownerStreams(sim) {
     var s = sim.streams[i];
     if (!s.counted || !(s.usd > 0)) continue;
     if (s.category === 'bill') {
-      out.push({ id: s.id, name: s.name, usd: s.usd,
+      out.push({ id: s.id, name: s.name, usd: s.usd, tier: s.tier,
                  basis: s.id === 'bill.tou' ? 'energy' : 'power', escalates: true });
     } else {
-      out.push({ id: s.id, name: s.name, usd: s.usd * keep, basis: 'power', escalates: false });
+      out.push({ id: s.id, name: s.name, usd: s.usd * keep, tier: s.tier, basis: 'power', escalates: false });
     }
   }
   return out;
@@ -228,7 +228,7 @@ function estimate(body) {
     var bat = { kw: kw, kwh: kwh };
     var cost = costOf(body, bat);
 
-    var incentives = null, netCostUsd = null, lifecycle = null;
+    var incentives = null, netCostUsd = null, lifecycle = null, lifecycleBankable = null;
     if (cost.capexUsd > 0) {
       var itcRate = clamp(num(fin.itcRate, 0.30), 0, 0.5);
       var rebatePerKwh = num(fin.rebatePerKwh, null);
@@ -245,18 +245,28 @@ function estimate(body) {
       }
       incentives = V.incentives(incIn);
       netCostUsd = Math.max(0, cost.capexUsd - incentives.total);
-      lifecycle = V.lifecycle({
-        capexUsd: cost.capexUsd,
-        incentiveUsd: incentives.total,
-        streams: ownerStreams(sim),
-        kwh: kwh,
-        years: fin.years, omUsdYear: fin.omUsdYear, omPctOfCapex: fin.omPctOfCapex,
-        omEscalation: fin.omEscalation, billEscalation: fin.billEscalation,
-        energyFadePct: fin.energyFadePct, powerFadePct: fin.powerFadePct,
-        augmentAtPct: fin.augmentAtPct, augmentCostPerKwh: fin.augmentCostPerKwh,
-        discountRate: fin.discountRate
-      });
+      var lcInput = function (streams) {
+        return {
+          capexUsd: cost.capexUsd,
+          incentiveUsd: incentives.total,
+          streams: streams,
+          kwh: kwh,
+          years: fin.years, omUsdYear: fin.omUsdYear, omPctOfCapex: fin.omPctOfCapex,
+          omEscalation: fin.omEscalation, billEscalation: fin.billEscalation,
+          energyFadePct: fin.energyFadePct, powerFadePct: fin.powerFadePct,
+          augmentAtPct: fin.augmentAtPct, augmentCostPerKwh: fin.augmentCostPerKwh,
+          discountRate: fin.discountRate
+        };
+      };
+      var all = ownerStreams(sim);
+      lifecycle = V.lifecycle(lcInput(all));
+      /* The investor's case: only rates that are computed from this site's
+         tariff or published by the programme — a planning figure is a lead,
+         not collateral. Same cost, same incentives, so the two IRRs differ
+         by exactly what the planning-grade streams claim. */
+      lifecycleBankable = V.lifecycle(lcInput(all.filter(function (s) { return s.tier !== 'planning'; })));
     }
+    var bank = V.bankability(sim.streams, sim.split);
 
     /* Built key by key, the embed-config discipline: a field somebody adds
        to the simulation next year does not ride out of here unreviewed —
@@ -276,6 +286,15 @@ function estimate(body) {
       incentives: incentives,
       netCostUsd: netCostUsd,
       lifecycle: lifecycle,
+      bankability: {
+        rows: bank.rows, totals: bank.totals, contracts: bank.contracts,
+        lifecycle: lifecycleBankable,
+        note: 'A saving is not revenue until a contract makes it one. Host streams become the ' +
+              'project\'s income under an energy services / shared-savings agreement; programme ' +
+              'streams pay through the counterparty named on each row. The bankable case counts ' +
+              'computed and published rates only — planning figures are excluded until the ' +
+              'programme\'s own terms replace them.'
+      },
       disclaimer: 'Planning grade. The stack is a dispatch-constrained simulation on ' +
         (sim.tariff && sim.tariff.source === 'planning' ? 'a regional planning tariff' : 'the tariff given') +
         '; the IRR is unlevered and pre-tax. Programme terms, this customer\'s tariff and the Pro Forma replace it before a customer signs anything.'

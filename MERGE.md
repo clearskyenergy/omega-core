@@ -2942,3 +2942,15 @@ Held by `scripts/tests/tvaluestack.js` (lifecycle honesty rules),
 what leaves) and `tvaluepanel.js` (no rate table ships; the map fills the
 address; the report carries charts and sources) — all three now in
 `npm test` (tvaluestack.js had been orphaned).
+
+Addendum (same day): **bankability**. The goal is bankable revenue, not
+savings (Tommy, 2026-10-06), so each programme row in vpp-sim.js now
+carries its counterparty facts (`bank`: who pays, the contract vehicle,
+the tenor/reset — one copy, beside the ref), `value-stack.js bankability()`
+arranges them into the investor's ladder (host savings become the project's
+revenue only under an ESA; a planning rate is upside, never collateral),
+and the endpoint runs a second lifecycle on computed + published rates
+only. The panel shows the bankable case beside the all-in IRR; the report
+gains "Revenue quality — what an investor can underwrite" (the ladder,
+the four subtotals, the two-case comparison, the paperwork list: ESA,
+aggregator/CSP agreement, assignable enrolments, §6418 ITC transfer).
