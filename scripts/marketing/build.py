@@ -31,7 +31,7 @@ assert len(PAGE['about']) <= 2000, len(PAGE['about'])
 assert len(PAGE['specialties']) <= 20
 assert [p['day'] for p in POSTS] == list(range(1, 31))
 assert len(SEQUENCE[0]['text']) <= 300
-KINDS = ('statement', 'list', 'compare', 'stack', 'carousel', 'quiz', 'checklist', 'leaderboard', 'stopwatch', 'plan', 'drop')
+KINDS = ('statement', 'list', 'compare', 'stack', 'carousel', 'quiz', 'checklist', 'leaderboard', 'stopwatch', 'plan', 'drop', 'guestlist')
 for p in POSTS:
     assert len(p['text']) <= 3000, p['day']
     assert not p.get('answer_card') or p.get('answer'), p['day']

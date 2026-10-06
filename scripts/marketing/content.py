@@ -206,55 +206,46 @@ That's Build Tuesday. What should we build next week?
   card=dict(kind='stopwatch', eyebrow='Build Tuesday', headline='An EV hub, from an address.', clock='GO',
             laps=['Address', 'DCFC Build', 'Load vs. grid', 'DCFC pro forma', 'Add storage'], prompt='What do we build next week?')),
 
- dict(day=10, pillar='quiz', fmt='Image', title='Quiz: what a hosting map tells you',
-  visual="The card. Tomorrow's run posts the answer as a comment.",
-  text="""Quiz.
+ dict(day=10, pillar='quiz', fmt='Image', title='Quiz: what will a lender finance?',
+  visual="The card. Tomorrow's run sends the answer to post as a comment.",
+  text="""Quiz. Which of these will a lender actually finance?
 
-Which of these can a utility's hosting capacity map actually tell you?
+A) A waitlist
+B) A deck that says "coming soon"
+C) A pro forma that ties back to an hourly dispatch
+D) A screenshot of a hosting capacity map
 
-A) Your place in the queue
-B) Your upgrade cost
-C) Roughly what a feeder could take when it was studied
-D) When your study will finish
+Answer in the comments. We'll post the answer tomorrow.
 
-Answer in the comments. Answer tomorrow.
-
-#Interconnection #HostingCapacity #SolarDevelopment""",
+#ProjectFinance #EnergyStorage #Bankability""",
   comment="",
-  card=dict(kind='quiz', eyebrow='Quiz · Wednesday', headline='What does a hosting map actually tell you?',
-            options=['Your place in the queue', 'Your upgrade cost', 'Feeder headroom when studied', 'When your study finishes'],
+  card=dict(kind='quiz', eyebrow='Quiz · Wednesday', headline='Which one will a lender finance?',
+            options=['A waitlist', 'A "coming soon" deck', 'A pro forma tied to an hourly dispatch', 'A hosting map screenshot'],
             prompt='Comment A, B, C or D'),
-  answer="""Answer: C. A hosting capacity map shows roughly how much a feeder section could take when the utility studied it. The queue, the upgrade cost and the study timeline are not on it. It's a first filter, and OMEGA puts that filter next to every parcel."""),
+  answer="""Answer: C. A lender finances numbers it can trace: revenue tied to an hourly dispatch, a layout that matches the estimate, a site that clears the grid and the fire code. A waitlist has none of that. Neither does a screenshot."""),
+ dict(day=11, pillar='already', fmt='Image', title='Already at the party',
+  visual="The card. Make fun of the waitlist, never of a company: no names, logos or screenshots of anyone else's product.",
+  text="""Every month another energy software startup opens a waitlist.
 
- dict(day=11, pillar='stack', fmt='Image', title='Count your re-keys',
-  visual="The card.",
-  text="""The re-key tax.
+Join to be notified. Be first in line. Early access, coming soon.
 
-Count how many times one number gets typed twice on a project:
+Meanwhile, at the party: the grid around the parcel, the layout on satellite with NFPA 855 checked as you draw, the storage sized against the tariff over 8,760 hours, the one-line, the bill of materials, the pro forma and the financing application. On one record, working today.
 
-☐ Layout → estimate
-☐ Sizing → pro forma
-☐ Estimate → RFQ
-☐ Pro forma → lender model
-☐ Drawing → permit set
-☐ Site list → CRM
+We didn't build a waitlist. We built the thing.
 
-Every tick is time gone and a chance to be wrong. In OMEGA they all read the same record.
+What's the longest waitlist you've ever been stuck on?
 
-Comment your count.
-
-#ProjectDevelopment #EnergyStorage""",
+#EnergyStorage #ProjectDevelopment #CleanEnergy""",
   comment="",
-  card=dict(kind='checklist', eyebrow='Count Your Stack · Thursday', headline='Count your re-keys.',
-            items=['Layout → estimate', 'Sizing → pro forma', 'Estimate → RFQ', 'Pro forma → lender model',
-                   'Drawing → permit set', 'Site list → CRM'],
-            scale=[['0–1', 'Clean'], ['2–3', 'Leaky'], ['4–6', 'Ditch it']], prompt='Comment your count')),
-
+  card=dict(kind='guestlist', eyebrow='Already There · Thursday', headline="Everyone's on the waitlist. We're at the party.",
+            waitlist=['"Join for early access"', '"Be first in line"', '"Coming soon"', '"Demo video only"'],
+            inside=['Grid screening', 'Layout, NFPA 855 checked', 'Sizing over 8,760 hours', 'One-line + BOM', 'Pro forma + financing'],
+            prompt='Longest waitlist you were stuck on?')),
  dict(day=12, pillar='speed', fmt='Image', title='Speedrun Friday: 10 sites',
-  visual="Record the run first (sandbox or a real folder with names removed, clock on screen, one take). Card at 8 AM, video at noon with the real time.",
-  text="""Speedrun Friday: 10 sites, screened and ranked.
+  visual="Record the run first (sandbox or a real folder with the names removed, clock on screen, one take). Card at 8 AM, video at noon with the real time. The agent leaves this one as a draft for the video.",
+  text="""10 sites, screened and ranked, on a real clock. Not a waitlist. Not a demo reel.
 
-One folder of KMZs in, a ranked list out, then layouts on the top three. Clock on screen, one take.
+One folder of KMZs in, a ranked list out, then layouts on the top three. One take, clock on screen.
 
 Guess the time before the video drops at noon. Closest guess gets a live build of their own site.
 
@@ -262,8 +253,7 @@ Guess the time before the video drops at noon. Closest guess gets a live build o
   comment="",
   card=dict(kind='stopwatch', eyebrow='Speedrun Friday', headline='10 sites. Guess our time.', clock='?:??',
             laps=['Load 10 KMZs', 'Grid picture', 'Terrain + buildable area', 'Rank', 'Top 3 layouts'],
-            prompt='Guess in the comments · video at noon')),
-
+            prompt='Guess in the comments \u00b7 video at noon')),
  dict(day=13, pillar='board', fmt='Carousel', title="A developer's week, one record",
   visual="Upload the PDF as a document post (Add a document), titled \"A developer's week\".",
   text="""A developer's week, on one record.
@@ -287,7 +277,7 @@ How long does that week take you today?
       dict(eyebrow='Wednesday · Size', headline='Size the storage against the tariff.', sub='Every hour of the year, not the peak.'),
       dict(eyebrow='Thursday · Price', headline='Pull the one-line, the BOM and the estimate.', sub='From the same model. Send the RFQ from the BOM.'),
       dict(eyebrow='Friday · Finance', headline='Run the investment analysis. Send it to capital.', sub='The same numbers as the drawing.'),
-      dict(eyebrow='Your move', headline='Ditch the stack.', sub='Comment BUILD and we\'ll build one of your sites live.', kicker='clearskyomega.com')])),
+      dict(eyebrow='Your move', headline='Not a waitlist. A week.', sub='Comment BUILD and we\'ll build one of your sites live.', kicker='clearskyomega.com')])),
 
  dict(day=14, pillar='talk', fmt='Text', title='Why we built it (founder)',
   visual="A real photo of the founder on a site, if there is one. Post from the founder's own profile; the company page reshares.",
@@ -302,19 +292,20 @@ Now any developer can work from it. If you want to see it on one of your own sit
 [Founder: rewrite this in your own words before it goes out.]""",
   comment="", card=None),
 
- dict(day=15, pillar='drop', fmt='Image', title='Drop a Site: the one nobody wants',
+ dict(day=15, pillar='drop', fmt='Image', title='Drop a Site: feasibility edition',
   visual="The card. Results only, within 24 hours.",
-  text="""Drop a Site: the one nobody wants.
+  text="""Drop the site you're about to option. We'll tell you what the grid says first.
 
-Comment the site everyone told you wouldn't work. We'll screen the grid around the first 10 and reply with what's actually there.
+Comment an address or a ZIP. The first 10 get the nearest substations and lines, plus the hosting capacity where the utility publishes it, before you spend a dollar on the land.
 
 Commercial and industrial sites only.
 
+Feasibility starts with the grid, not the lease.
+
 #EnergyStorage #Interconnection #SolarDevelopment""",
   comment="",
-  card=dict(kind='drop', eyebrow='Drop a Site · Monday', headline='Drop the site nobody wants.',
+  card=dict(kind='drop', eyebrow='Drop a Site \u00b7 feasibility edition', headline='Drop it before you option it.',
             sub='Comment an address or a ZIP. The first 10 get the grid picture around it.', prompt='Comment an address or ZIP')),
-
  dict(day=16, pillar='build', fmt='Video', title='Build Tuesday: a compute campus',
   visual="Best with a sandbox recording (the card is its cover).",
   text="""Build Tuesday: a compute campus.
@@ -344,28 +335,21 @@ Answer in the comments. Answer tomorrow.
   answer_card=dict(kind='plan', variant='lane', flag=3, flagText='Unit 3: inside the fire access lane',
                    eyebrow='The answer', headline='Unit 3.')),
 
- dict(day=18, pillar='stack', fmt='Image', title='What one platform replaces',
+ dict(day=18, pillar='already', fmt='Image', title="You can't put a waitlist in a data room",
   visual="The card.",
-  text="""Ditch the stack: what one platform replaces.
+  text="""You can't put a waitlist in a data room.
 
-Grid and hosting-capacity data → Grid Atlas
-Site-screening consultant or GIS time → Site Intelligence
-Battery-sizing and revenue spreadsheets → Storage Sizing & Revenue
-CAD seat and outsourced drafting → Plan Sets & CAD
-Estimating sheets and RFQs by email → Estimate, BOM & Procurement
-The analyst-built pro forma → Investor & Finance
-An asset-management platform → Operations
+A lender wants evidence: the grid around the site, a layout that clears the fire code, storage sized against an hourly dispatch, an estimate that matches the drawing, and a model that reads from all of it.
 
-Add up what you pay for the left column today. That's the number to beat.
+OMEGA builds that evidence on one record. Not early access. Not coming soon. Today.
 
-#EnergyStorage #SolarDevelopment #CleanEnergy""",
+What's the first thing your lender asks for?
+
+#ProjectFinance #EnergyStorage #Bankability""",
   comment="",
-  card=dict(kind='list', eyebrow='Count Your Stack · Thursday', headline='What one platform replaces.',
-            rows=[['Grid and hosting-capacity data', 'Grid Atlas'], ['Site-screening consultant, GIS time', 'Site Intelligence'],
-                  ['Sizing and revenue spreadsheets', 'Storage Sizing & Revenue'], ['CAD seat, outsourced drafting', 'Plan Sets & CAD'],
-                  ['Estimating sheets, RFQs by email', 'Estimate, BOM & Procurement'], ['The analyst-built pro forma', 'Investor & Finance'],
-                  ['An asset-management platform', 'Operations']])),
-
+  card=dict(kind='statement', eyebrow='Already There \u00b7 Thursday', headline="You can't put a waitlist in a data room.",
+            sub='Grid evidence, a code-clean layout, sizing over 8,760 hours, an estimate that matches the drawing, a model that reads from it. One record, today.',
+            prompt='What does your lender ask for first?')),
  dict(day=19, pillar='speed', fmt='Image', title='Speedrun Friday: move it once',
   visual="Record the revision first (sandbox, clock on screen). Card at 8 AM, video at noon with the real time.",
   text="""Speedrun Friday: move it once.
@@ -380,26 +364,27 @@ Guess how long the whole revision takes. Video at noon.
             laps=['Drag the battery', 'Trench re-routes', 'Schedule re-counts', 'Estimate follows'],
             prompt='Guess in the comments · video at noon')),
 
- dict(day=20, pillar='talk', fmt='Poll', title='Poll: what slows your pipeline?',
-  visual="LinkedIn poll, one week. Options: Interconnection · Land and site control · Financing · Equipment and supply",
-  text="""What slows your pipeline down most right now?""",
+ dict(day=20, pillar='already', fmt='Poll', title='Poll: waitlist inbox',
+  visual="LinkedIn poll, one week. Options: 0 \u00b7 1\u20132 \u00b7 3\u20135 \u00b7 I've lost count",
+  text="""Honest count: how many "you're on the waitlist!" emails from energy software are sitting in your inbox right now?""",
   comment="", card=None),
-
- dict(day=21, pillar='teach', fmt='Image', title='Model the year, not the peak',
+ dict(day=21, pillar='teach', fmt='Image', title='Feasible is not bankable',
   visual="The card.",
-  text="""If your battery was sized to the peak, it was sized on one hour of the year.
+  text="""Feasible and bankable are not the same word.
 
-A peak-shaving estimate is the worst hour of the month, multiplied out. OMEGA runs the system through all 8,760 hours instead: demand charges, time-of-use, capacity, the programs the site can enroll in, and the battery's own limits.
+Feasible: the grid can take it, the land can hold it, the fire code allows it.
 
-When the lender asks where a number came from, the answer is an hour of the year. Not a cell.
+Bankable: a lender believes the numbers. Revenue that ties to an hourly dispatch. Costs that match the drawing. Degradation and warranty, year by year. A source for every assumption.
 
-How was your last battery sized?
+Most tools stop at feasible, or never get past the waitlist. OMEGA carries a site from one to the other on the same record.
 
-#EnergyStorage #ValueStack #BESS""",
+Which one kills more of your deals?
+
+#ProjectFinance #EnergyStorage #Bankability""",
   comment="",
-  card=dict(kind='statement', eyebrow='Field Notes · Sunday', big='8,760', headline='Model the year, not the peak.',
-            sub='Sized to the real load and tariff. Dispatched every hour. The pro forma reads from the dispatch.')),
-
+  card=dict(kind='compare', eyebrow='Bankable \u00b7 Sunday', headline='Feasible is not bankable.',
+            cols=[dict(title='Feasible', items=['The grid can take it', 'The land can hold it', 'The fire code allows it']),
+                  dict(title='Bankable', items=['Revenue tied to an hourly dispatch', 'Costs that match the drawing', 'Degradation and warranty by year'])])),
  dict(day=22, pillar='drop', fmt='Image', title='Drop a Site: fleet depot edition',
   visual="The card. Results only, within 24 hours.",
   text="""Drop a Site: fleet depot edition.
@@ -445,24 +430,24 @@ We'll share the tally next week.
   card=dict(kind='quiz', eyebrow='Vote · Wednesday', headline='What kills more battery projects?',
             options=['Interconnection', 'Local permits', 'Financing', 'Equipment and supply'], prompt='Comment A, B, C or D')),
 
- dict(day=25, pillar='stack', fmt='Image', title='Five quotes, five call lists',
+ dict(day=25, pillar='already', fmt='Image', title="Coming soon is not a feasibility study",
   visual="The card.",
-  text="""Ask five vendors for a quote and you're on five call lists. For good.
+  text=""""Coming soon" is not a feasibility study.
 
-The bill of materials in OMEGA writes itself as equipment lands on the drawing. When you're ready, send a request for quote to the vendors on it.
+You can't option land on a roadmap. You can't take a teaser video to the utility. You can't ask a lender to finance early access.
 
-Each vendor sees only their own lines. Your company stays anonymous until you accept a quote.
+What you can do today in OMEGA: screen the grid around a parcel, lay out the site with the fire code checked, size the storage over 8,760 hours, pull the one-line and the bill of materials, run the pro forma, and send a request for quote to the vendors on the BOM without handing them your phone number.
 
-How many vendors call you a week?
+The party started a while ago. Come in.
 
-#Procurement #EnergyStorage #BESS""",
+#EnergyStorage #ProjectDevelopment #Bankability""",
   comment="",
-  card=dict(kind='statement', eyebrow='Count Your Stack · Thursday', headline='Get the quotes. Keep your number.',
-            sub='Each vendor sees only their own lines. Your name appears when you accept a quote, not before.')),
-
+  card=dict(kind='statement', eyebrow='Already There \u00b7 Thursday', big='SOON', strike=True,
+            headline='Not a feasibility study.', sub="You can't option land on a roadmap. Screen, lay out, size, price and model it today, on one record.",
+            prompt='Come in. The party started.')),
  dict(day=26, pillar='speed', fmt='Image', title='Speedrun Friday: the full run',
-  visual="Record the full run first (sandbox, clock on screen, one take). Card at 8 AM, video at noon with the real time.",
-  text="""Speedrun Friday: the full run.
+  visual="Record the full run first (sandbox, clock on screen, one take). Card at 8 AM, video at noon with the real time. The agent leaves this one as a draft for the video.",
+  text="""Waitlists don't come with a stopwatch. This does.
 
 Address to a proposal a customer could sign: grid check, layout, sizing, one-line and estimate, proposal. One take, no cuts, clock on screen.
 
@@ -471,8 +456,7 @@ Guess the time. Closest guess gets a live build of their own site. Video at noon
 #BESS #EnergyStorage #ProjectDevelopment""",
   comment="",
   card=dict(kind='stopwatch', eyebrow='Speedrun Friday', headline='The full run. Guess our time.', clock='?:??',
-            laps=['Grid check', 'Layout', 'Sizing', 'One-line + estimate', 'Proposal'], prompt='Guess in the comments · video at noon')),
-
+            laps=['Grid check', 'Layout', 'Sizing', 'One-line + estimate', 'Proposal'], prompt='Guess in the comments \u00b7 video at noon')),
  dict(day=27, pillar='board', fmt='Image', title='Site Leaderboard: 24 C&I sites',
   visual="The card (illustrative). Better: a real folder's ranking with the site names removed.",
   text="""24 C&I sites. One sitting. Here's the top of the board.
@@ -506,7 +490,7 @@ What would you add?
 
 #ProjectFinance #EnergyStorage""",
   comment="",
-  card=dict(kind='list', eyebrow='Field Notes · Sunday', headline='What a lender looks for in a storage pro forma.',
+  card=dict(kind='list', eyebrow='Bankable · Sunday', headline='What a lender looks for in a storage pro forma.',
             rows=[['1 · Revenue tied to an hourly dispatch'], ['2 · Degradation and its warranty, by year'], ['3 · Augmentation: when, and what it costs'],
                   ['4 · Every assumption, with its source'], ['5 · A layout and estimate that match the model']])),
 
@@ -526,8 +510,8 @@ Ditch the stack.
             sub='Comment an address. The first 3 get a layout, not just a screen.', prompt='Comment an address')),
 
  dict(day=30, pillar='talk', fmt='Image', title='Live build (event)',
-  visual="Create a LinkedIn Event or Live first; fill in the date and time in the text. The card is the cover.",
-  text="""Live build, [DATE] at [TIME].
+  visual="Create a LinkedIn Event or Live first; fill in the date and time in the text. The card is the cover. A draft until the founder fills the date.",
+  text="""Live build, [DATE] at [TIME]. No waitlist, no slides.
 
 Drop an address in the comments, a real site or a public one. We'll pick three and build them live: grid check, layout, sizing and a first pro forma, in 30 minutes.
 
@@ -535,11 +519,11 @@ Register below.
 
 #EnergyStorage #BESS #ProjectDevelopment""",
   comment="[Event link]",
-  card=dict(kind='statement', eyebrow='Live', headline='Send an address. Watch it get built.',
+  card=dict(kind='statement', eyebrow='Live', headline='No waitlist. No slides. Send an address.',
             sub='Three sites, live: grid check, layout, sizing and a first pro forma in 30 minutes.', prompt='Register: link in the comments')),
 ]
 
-SHEET_LETTER = {'drop': 'A', 'build': 'D', 'quiz': 'Q', 'stack': 'G', 'speed': 'S', 'board': 'R',
+SHEET_LETTER = {'already': 'W', 'drop': 'A', 'build': 'D', 'quiz': 'Q', 'stack': 'G', 'speed': 'S', 'board': 'R',
                 'teach': 'T', 'talk': 'C', 'offer': 'P'}
 
 VOICE = [
@@ -548,6 +532,8 @@ VOICE = [
     'First line under 12 words, a claim, a number or a challenge, strong enough to stop a scroll. Never "Excited to announce".',
     'Show speed, scale and ease; never the method. A real timer from a real recording, a real count of sites, the result on screen.',
     'No prices, plans, discounts or links to the price list. Pricing is for the call.',
+    'Bankability and feasibility are the spine (founder direction 2026-10-06): feasible means the grid, the land and the fire code allow it; bankable means a lender believes the numbers. Say which one a post is about.',
+    'Already There (Thursdays) makes fun of the waitlist habit, never of a company: no names, logos or screenshots of anyone else. Every jab is paired with something OMEGA does today, in the product\'s own words. Never call live what the product marks beta, limited trial or coming soon (the AHJ portal and procurement marketplace are coming soon; Compute is a limited trial).',
     'Specific over clever: MW, feeders, NTP, COD, NFPA 855, the 8,760. Short lines. Three hashtags at most.',
     'Nothing invented: a number is from the product, a recording, a cited source, or labelled illustrative.',
 ]
@@ -637,7 +623,7 @@ RECORDINGS = [
 ]
 
 PILLARS = {
-    'drop': 'Drop a Site', 'build': 'Build Tuesday', 'quiz': 'Guess & Spot', 'stack': 'Count Your Stack',
+    'already': 'Already There', 'drop': 'Drop a Site', 'build': 'Build Tuesday', 'quiz': 'Guess & Spot', 'stack': 'Count Your Stack',
     'speed': 'Speedrun Friday', 'board': 'Site Leaderboard', 'teach': 'Field Notes', 'talk': 'Conversation',
     'offer': 'Invitation',
 }
@@ -894,15 +880,16 @@ GUARDRAILS_DONT = [
     'Invent numbers: no hours saved, times, customer counts or savings unless they come from the product, a recording or a clearly labelled example.',
     'Post a price, a plan, a discount, or a link to the price list or the signup page. Pricing is for the call (founder decision, 2026-09-27).',
     'Show how a ranking or a score is made: the factors, their weights, the data sources behind them. Show the rank and the result.',
+    'Name, picture or link a competitor, its logo or its product, in a joke or anywhere else. The joke is the waitlist, not a company.',
 ]
 
 BLOCKERS = [
     ('Fix the website contact before sending anyone there.',
-     "The footer on www.clearskyomega.com still lists an info@ address on the retired legacy domain, and \"Request a demo\" should reach a clearsky-usa.com inbox somebody reads. The site also lists an AHJ Approval Portal, which the product marks coming soon. Bring the site in line with what ships."),
+     "The footer on www.clearskyomega.com still lists an info@ address on the retired legacy domain, and \"Request a demo\" should reach a clearsky-usa.com inbox somebody reads. The site also lists an AHJ Approval Portal, which the product marks coming soon: a page that mocks waitlists cannot advertise one. Bring the site in line with what ships."),
     ('Know where prices still show.',
      'The posts no longer mention or link to prices, but the public price list (silmarillion.clearskyomega.com/offerings) and the package step of signup still show them to anyone who finds them. Hiding them is a product change: say if you want it. Card payment at signup is also still switched off in production.'),
     ('Approve signups the same day.',
-     'The growth board (GET /api/growth) flags a signup waiting a day or more. A campaign that drives signups needs someone approving them daily.'),
+     'The growth board (GET /api/growth) flags a signup waiting a day or more. The posts now say "not a waitlist": a signup that waits days for approval makes that untrue. Approve the same day.'),
     ('Pick the posting channel.',
      'There is no LinkedIn connector in this session. Connect a scheduler that posts to LinkedIn company pages (Typefully or Metricool are in the connector directory; check that it supports company pages) and a daily routine can queue each post for approval. Without one, the routine can put each day\'s post in Gmail drafts to paste by hand.'),
     ('Pick the sender and the postal address.',
@@ -911,4 +898,4 @@ BLOCKERS = [
      'Legal entity, headquarters (the website footer says Clinton, Iowa), company size, logo and banner.'),
 ]
 
-ROUTINE_PROMPT = """Daily LinkedIn post for ClearSky OMEGA. Read CLAUDE.md and docs/GO-TO-MARKET.md (the guardrails, the voice and the news rules). 1) Today's calendar day: day 1 is [START DATE], one post a day. 2) Search the last 72 hours of energy-development news. If something clears the news rules, write a timely post in the voice instead of the calendar post, with its source for the first comment and a card spec in the same shape as content.py; otherwise take the calendar post and sharpen its first line if you can. 3) Check it against the guardrails and the list of what does not ship; say what you changed. 4) Render the graphic: python3 scripts/marketing/build.py <out>, then node scripts/marketing/card.js <out>/cards.json <out> <dayNN> (a timely post: a one-card JSON of your own). 5) Deliver it ready to paste: the graphic (and the PDF for a carousel), the post, the first comment and today's engagement list. With a scheduler connected, queue it there as a draft for approval instead. Never publish without the founder's approval. 6) Mondays: last week's numbers if the scheduler reports them, and what to do more of. After day 30, write the next week in the same pillars and voice and ask before using it."""
+ROUTINE_PROMPT = """OMEGA Marketing Agent, daily run. In omega-core, git pull on branch claude/loving-planck-uyubl5, then follow docs/MARKETING-AGENT.md (what you may publish on your own and what stays a draft) and docs/GO-TO-MARKET.md (the voice, the news rules, the guardrails). Today's day = days since 2026-09-28 + 1. Deliver yesterday's quiz answer if there is one; check the last 72 hours of news; check the post; render its card; publish or draft it through Typefully per the rules; then report to the founder with the graphic, what was scheduled or drafted, the first comment if any, and today's ten minutes. Never email, never comment, message or invite on LinkedIn, never post a price."""

@@ -23,6 +23,8 @@ Links used everywhere below (change them here once, e.g. for a vanity redirect o
 - First line under 12 words, a claim, a number or a challenge, strong enough to stop a scroll. Never "Excited to announce".
 - Show speed, scale and ease; never the method. A real timer from a real recording, a real count of sites, the result on screen.
 - No prices, plans, discounts or links to the price list. Pricing is for the call.
+- Bankability and feasibility are the spine (founder direction 2026-10-06): feasible means the grid, the land and the fire code allow it; bankable means a lender believes the numbers. Say which one a post is about.
+- Already There (Thursdays) makes fun of the waitlist habit, never of a company: no names, logos or screenshots of anyone else. Every jab is paired with something OMEGA does today, in the product's own words. Never call live what the product marks beta, limited trial or coming soon (the AHJ portal and procurement marketplace are coming soon; Compute is a limited trial).
 - Specific over clever: MW, feeders, NTP, COD, NFPA 855, the 8,760. Short lines. Three hashtags at most.
 - Nothing invented: a number is from the product, a recording, a cited source, or labelled illustrative.
 
@@ -66,12 +68,13 @@ Sell the result, never the method. The pricing, scoring, dispatch and modelling 
 - Invent numbers: no hours saved, times, customer counts or savings unless they come from the product, a recording or a clearly labelled example.
 - Post a price, a plan, a discount, or a link to the price list or the signup page. Pricing is for the call (founder decision, 2026-09-27).
 - Show how a ranking or a score is made: the factors, their weights, the data sources behind them. Show the rank and the result.
+- Name, picture or link a competitor, its logo or its product, in a joke or anywhere else. The joke is the waitlist, not a company.
 
 ## 2. Before launch
 
-1. **Fix the website contact before sending anyone there.** The footer on www.clearskyomega.com still lists an info@ address on the retired legacy domain, and "Request a demo" should reach a clearsky-usa.com inbox somebody reads. The site also lists an AHJ Approval Portal, which the product marks coming soon. Bring the site in line with what ships.
+1. **Fix the website contact before sending anyone there.** The footer on www.clearskyomega.com still lists an info@ address on the retired legacy domain, and "Request a demo" should reach a clearsky-usa.com inbox somebody reads. The site also lists an AHJ Approval Portal, which the product marks coming soon: a page that mocks waitlists cannot advertise one. Bring the site in line with what ships.
 2. **Know where prices still show.** The posts no longer mention or link to prices, but the public price list (silmarillion.clearskyomega.com/offerings) and the package step of signup still show them to anyone who finds them. Hiding them is a product change: say if you want it. Card payment at signup is also still switched off in production.
-3. **Approve signups the same day.** The growth board (GET /api/growth) flags a signup waiting a day or more. A campaign that drives signups needs someone approving them daily.
+3. **Approve signups the same day.** The growth board (GET /api/growth) flags a signup waiting a day or more. The posts now say "not a waitlist": a signup that waits days for approval makes that untrue. Approve the same day.
 4. **Pick the posting channel.** There is no LinkedIn connector in this session. Connect a scheduler that posts to LinkedIn company pages (Typefully or Metricool are in the connector directory; check that it supports company pages) and a daily routine can queue each post for approval. Without one, the routine can put each day's post in Gmail drafts to paste by hand.
 5. **Pick the sender and the postal address.** Cold email needs a monitored clearsky-usa.com mailbox (docs/SALES-AGENT.md §10, decision 1) and a real postal address in every message. Never send cold email from a personal gmail.com address.
 6. **Confirm the page facts.** Legal entity, headquarters (the website footer says Clinton, Iowa), company size, logo and banner.
@@ -264,58 +267,51 @@ That's Build Tuesday. What should we build next week?
 #EVCharging #DCFC #EVInfrastructure
 ```
 
-### Day 10 (Wed) · Quiz: what a hosting map tells you
+### Day 10 (Wed) · Quiz: what will a lender finance?
 
-*Guess & Spot · Image.* Visual: The card. Tomorrow's run posts the answer as a comment. Graphic: `day10.png` (quiz).
+*Guess & Spot · Image.* Visual: The card. Tomorrow's run sends the answer to post as a comment. Graphic: `day10.png` (quiz).
 
 ```text
-Quiz.
+Quiz. Which of these will a lender actually finance?
 
-Which of these can a utility's hosting capacity map actually tell you?
+A) A waitlist
+B) A deck that says "coming soon"
+C) A pro forma that ties back to an hourly dispatch
+D) A screenshot of a hosting capacity map
 
-A) Your place in the queue
-B) Your upgrade cost
-C) Roughly what a feeder could take when it was studied
-D) When your study will finish
+Answer in the comments. We'll post the answer tomorrow.
 
-Answer in the comments. Answer tomorrow.
-
-#Interconnection #HostingCapacity #SolarDevelopment
+#ProjectFinance #EnergyStorage #Bankability
 ```
 
-Next day, as a comment on this post: Answer: C. A hosting capacity map shows roughly how much a feeder section could take when the utility studied it. The queue, the upgrade cost and the study timeline are not on it. It's a first filter, and OMEGA puts that filter next to every parcel.
+Next day, as a comment on this post: Answer: C. A lender finances numbers it can trace: revenue tied to an hourly dispatch, a layout that matches the estimate, a site that clears the grid and the fire code. A waitlist has none of that. Neither does a screenshot.
 
-### Day 11 (Thu) · Count your re-keys
+### Day 11 (Thu) · Already at the party
 
-*Count Your Stack · Image.* Visual: The card. Graphic: `day11.png` (checklist).
+*Already There · Image.* Visual: The card. Make fun of the waitlist, never of a company: no names, logos or screenshots of anyone else's product. Graphic: `day11.png` (guestlist).
 
 ```text
-The re-key tax.
+Every month another energy software startup opens a waitlist.
 
-Count how many times one number gets typed twice on a project:
+Join to be notified. Be first in line. Early access, coming soon.
 
-☐ Layout → estimate
-☐ Sizing → pro forma
-☐ Estimate → RFQ
-☐ Pro forma → lender model
-☐ Drawing → permit set
-☐ Site list → CRM
+Meanwhile, at the party: the grid around the parcel, the layout on satellite with NFPA 855 checked as you draw, the storage sized against the tariff over 8,760 hours, the one-line, the bill of materials, the pro forma and the financing application. On one record, working today.
 
-Every tick is time gone and a chance to be wrong. In OMEGA they all read the same record.
+We didn't build a waitlist. We built the thing.
 
-Comment your count.
+What's the longest waitlist you've ever been stuck on?
 
-#ProjectDevelopment #EnergyStorage
+#EnergyStorage #ProjectDevelopment #CleanEnergy
 ```
 
 ### Day 12 (Fri) · Speedrun Friday: 10 sites
 
-*Speedrun Friday · Image.* Visual: Record the run first (sandbox or a real folder with names removed, clock on screen, one take). Card at 8 AM, video at noon with the real time. Graphic: `day12.png` (stopwatch).
+*Speedrun Friday · Image.* Visual: Record the run first (sandbox or a real folder with the names removed, clock on screen, one take). Card at 8 AM, video at noon with the real time. The agent leaves this one as a draft for the video. Graphic: `day12.png` (stopwatch).
 
 ```text
-Speedrun Friday: 10 sites, screened and ranked.
+10 sites, screened and ranked, on a real clock. Not a waitlist. Not a demo reel.
 
-One folder of KMZs in, a ranked list out, then layouts on the top three. Clock on screen, one take.
+One folder of KMZs in, a ranked list out, then layouts on the top three. One take, clock on screen.
 
 Guess the time before the video drops at noon. Closest guess gets a live build of their own site.
 
@@ -358,16 +354,18 @@ Now any developer can work from it. If you want to see it on one of your own sit
 [Founder: rewrite this in your own words before it goes out.]
 ```
 
-### Day 15 (Mon) · Drop a Site: the one nobody wants
+### Day 15 (Mon) · Drop a Site: feasibility edition
 
 *Drop a Site · Image.* Visual: The card. Results only, within 24 hours. Graphic: `day15.png` (drop).
 
 ```text
-Drop a Site: the one nobody wants.
+Drop the site you're about to option. We'll tell you what the grid says first.
 
-Comment the site everyone told you wouldn't work. We'll screen the grid around the first 10 and reply with what's actually there.
+Comment an address or a ZIP. The first 10 get the nearest substations and lines, plus the hosting capacity where the utility publishes it, before you spend a dollar on the land.
 
 Commercial and industrial sites only.
+
+Feasibility starts with the grid, not the lease.
 
 #EnergyStorage #Interconnection #SolarDevelopment
 ```
@@ -402,24 +400,20 @@ Answer in the comments. Answer tomorrow.
 
 Next day, as a comment on this post with `day17-answer.png`: Answer: unit 3. It's parked in the fire access lane, and the AHJ will send it back. In OMEGA the fix is one drag: move the unit, and the trench, the conduit schedule and the estimate follow.
 
-### Day 18 (Thu) · What one platform replaces
+### Day 18 (Thu) · You can't put a waitlist in a data room
 
-*Count Your Stack · Image.* Visual: The card. Graphic: `day18.png` (list).
+*Already There · Image.* Visual: The card. Graphic: `day18.png` (statement).
 
 ```text
-Ditch the stack: what one platform replaces.
+You can't put a waitlist in a data room.
 
-Grid and hosting-capacity data → Grid Atlas
-Site-screening consultant or GIS time → Site Intelligence
-Battery-sizing and revenue spreadsheets → Storage Sizing & Revenue
-CAD seat and outsourced drafting → Plan Sets & CAD
-Estimating sheets and RFQs by email → Estimate, BOM & Procurement
-The analyst-built pro forma → Investor & Finance
-An asset-management platform → Operations
+A lender wants evidence: the grid around the site, a layout that clears the fire code, storage sized against an hourly dispatch, an estimate that matches the drawing, and a model that reads from all of it.
 
-Add up what you pay for the left column today. That's the number to beat.
+OMEGA builds that evidence on one record. Not early access. Not coming soon. Today.
 
-#EnergyStorage #SolarDevelopment #CleanEnergy
+What's the first thing your lender asks for?
+
+#ProjectFinance #EnergyStorage #Bankability
 ```
 
 ### Day 19 (Fri) · Speedrun Friday: move it once
@@ -436,28 +430,30 @@ Guess how long the whole revision takes. Video at noon.
 #BESS #Engineering #EPC
 ```
 
-### Day 20 (Sat) · Poll: what slows your pipeline?
+### Day 20 (Sat) · Poll: waitlist inbox
 
-*Conversation · Poll.* Visual: LinkedIn poll, one week. Options: Interconnection · Land and site control · Financing · Equipment and supply
+*Already There · Poll.* Visual: LinkedIn poll, one week. Options: 0 · 1–2 · 3–5 · I've lost count
 
 ```text
-What slows your pipeline down most right now?
+Honest count: how many "you're on the waitlist!" emails from energy software are sitting in your inbox right now?
 ```
 
-### Day 21 (Sun) · Model the year, not the peak
+### Day 21 (Sun) · Feasible is not bankable
 
-*Field Notes · Image.* Visual: The card. Graphic: `day21.png` (statement).
+*Field Notes · Image.* Visual: The card. Graphic: `day21.png` (compare).
 
 ```text
-If your battery was sized to the peak, it was sized on one hour of the year.
+Feasible and bankable are not the same word.
 
-A peak-shaving estimate is the worst hour of the month, multiplied out. OMEGA runs the system through all 8,760 hours instead: demand charges, time-of-use, capacity, the programs the site can enroll in, and the battery's own limits.
+Feasible: the grid can take it, the land can hold it, the fire code allows it.
 
-When the lender asks where a number came from, the answer is an hour of the year. Not a cell.
+Bankable: a lender believes the numbers. Revenue that ties to an hourly dispatch. Costs that match the drawing. Degradation and warranty, year by year. A source for every assumption.
 
-How was your last battery sized?
+Most tools stop at feasible, or never get past the waitlist. OMEGA carries a site from one to the other on the same record.
 
-#EnergyStorage #ValueStack #BESS
+Which one kills more of your deals?
+
+#ProjectFinance #EnergyStorage #Bankability
 ```
 
 ### Day 22 (Mon) · Drop a Site: fleet depot edition
@@ -507,28 +503,28 @@ We'll share the tally next week.
 #EnergyStorage #BESS #Interconnection
 ```
 
-### Day 25 (Thu) · Five quotes, five call lists
+### Day 25 (Thu) · Coming soon is not a feasibility study
 
-*Count Your Stack · Image.* Visual: The card. Graphic: `day25.png` (statement).
+*Already There · Image.* Visual: The card. Graphic: `day25.png` (statement).
 
 ```text
-Ask five vendors for a quote and you're on five call lists. For good.
+"Coming soon" is not a feasibility study.
 
-The bill of materials in OMEGA writes itself as equipment lands on the drawing. When you're ready, send a request for quote to the vendors on it.
+You can't option land on a roadmap. You can't take a teaser video to the utility. You can't ask a lender to finance early access.
 
-Each vendor sees only their own lines. Your company stays anonymous until you accept a quote.
+What you can do today in OMEGA: screen the grid around a parcel, lay out the site with the fire code checked, size the storage over 8,760 hours, pull the one-line and the bill of materials, run the pro forma, and send a request for quote to the vendors on the BOM without handing them your phone number.
 
-How many vendors call you a week?
+The party started a while ago. Come in.
 
-#Procurement #EnergyStorage #BESS
+#EnergyStorage #ProjectDevelopment #Bankability
 ```
 
 ### Day 26 (Fri) · Speedrun Friday: the full run
 
-*Speedrun Friday · Image.* Visual: Record the full run first (sandbox, clock on screen, one take). Card at 8 AM, video at noon with the real time. Graphic: `day26.png` (stopwatch).
+*Speedrun Friday · Image.* Visual: Record the full run first (sandbox, clock on screen, one take). Card at 8 AM, video at noon with the real time. The agent leaves this one as a draft for the video. Graphic: `day26.png` (stopwatch).
 
 ```text
-Speedrun Friday: the full run.
+Waitlists don't come with a stopwatch. This does.
 
 Address to a proposal a customer could sign: grid check, layout, sizing, one-line and estimate, proposal. One take, no cuts, clock on screen.
 
@@ -591,10 +587,10 @@ Ditch the stack.
 
 ### Day 30 (Tue) · Live build (event)
 
-*Conversation · Image.* Visual: Create a LinkedIn Event or Live first; fill in the date and time in the text. The card is the cover. Graphic: `day30.png` (statement).
+*Conversation · Image.* Visual: Create a LinkedIn Event or Live first; fill in the date and time in the text. The card is the cover. A draft until the founder fills the date. Graphic: `day30.png` (statement).
 
 ```text
-Live build, [DATE] at [TIME].
+Live build, [DATE] at [TIME]. No waitlist, no slides.
 
 Drop an address in the comments, a real site or a public one. We'll pick three and build them live: grid check, layout, sizing and a first pro forma, in 30 minutes.
 
@@ -1037,7 +1033,7 @@ Build Tuesday and Speedrun Friday need a real screen recording. Setup:
 
 One run each morning: news check, the post, its graphic, the guardrail check, delivered ready to paste (or queued in a connected scheduler for approval). The graphics come from `scripts/marketing/` (`build.py`, then `card.js`; fonts are embedded, no network). Prompt:
 
-> Daily LinkedIn post for ClearSky OMEGA. Read CLAUDE.md and docs/GO-TO-MARKET.md (the guardrails, the voice and the news rules). 1) Today's calendar day: day 1 is [START DATE], one post a day. 2) Search the last 72 hours of energy-development news. If something clears the news rules, write a timely post in the voice instead of the calendar post, with its source for the first comment and a card spec in the same shape as content.py; otherwise take the calendar post and sharpen its first line if you can. 3) Check it against the guardrails and the list of what does not ship; say what you changed. 4) Render the graphic: python3 scripts/marketing/build.py <out>, then node scripts/marketing/card.js <out>/cards.json <out> <dayNN> (a timely post: a one-card JSON of your own). 5) Deliver it ready to paste: the graphic (and the PDF for a carousel), the post, the first comment and today's engagement list. With a scheduler connected, queue it there as a draft for approval instead. Never publish without the founder's approval. 6) Mondays: last week's numbers if the scheduler reports them, and what to do more of. After day 30, write the next week in the same pillars and voice and ask before using it.
+> OMEGA Marketing Agent, daily run. In omega-core, git pull on branch claude/loving-planck-uyubl5, then follow docs/MARKETING-AGENT.md (what you may publish on your own and what stays a draft) and docs/GO-TO-MARKET.md (the voice, the news rules, the guardrails). Today's day = days since 2026-09-28 + 1. Deliver yesterday's quiz answer if there is one; check the last 72 hours of news; check the post; render its card; publish or draft it through Typefully per the rules; then report to the founder with the graphic, what was scheduled or drafted, the first comment if any, and today's ten minutes. Never email, never comment, message or invite on LinkedIn, never post a price.
 
 ## 8. Not done
 

@@ -98,6 +98,18 @@ var CSS = FONTS + [
   '.verdict{align-self:flex-start;font:700 38px Archivo,sans-serif;padding:14px 22px;border:3px solid currentColor}',
   '.verdict.go{color:#5ad39a}.verdict.maybe{color:#ffc857}.verdict.no{color:#ff5a4f}',
   '.stamp{font:500 22px Plex,monospace;letter-spacing:.14em;color:#ff7a52}',
+  /* guest list: the waitlist behind the rope, OMEGA inside */
+  '.gl{display:grid;grid-template-columns:1fr 1fr;gap:26px;align-items:start}',
+  '.rope{grid-column:1/-1;height:70px}.rope svg{width:100%;height:70px;display:block}',
+  '.wl{border:2px dashed rgba(233,240,244,.35);padding:24px 22px;display:flex;flex-direction:column;gap:16px}',
+  '.wl h2,.in h2{margin:0;font:500 21px Plex,monospace;letter-spacing:.14em;text-transform:uppercase}',
+  '.wl h2{color:#9fb6c3}.in h2{color:#ff7a52}',
+  '.wl div{display:flex;gap:12px;font:400 28px/1.25 Inter,sans-serif;color:#8fa9b8}',
+  '.wl div span{flex:none;font:500 19px Plex,monospace;color:#6f8796;padding-top:6px;width:84px}',
+  '.in{border:3px solid #ff7a52;padding:24px 22px;position:relative;display:flex;flex-direction:column;gap:16px}',
+  '.in div{display:flex;gap:12px;font:600 29px/1.25 Inter,sans-serif;color:#fff}.in div b{color:#5ad39a;flex:none}',
+  '.youre{position:absolute;right:-16px;top:-30px;transform:rotate(7deg);background:#ff7a52;color:#0b2733;font:800 27px Archivo,sans-serif;padding:8px 16px;letter-spacing:.03em}',
+  '.big.strike{color:#9fb6c3;text-decoration:line-through;text-decoration-thickness:14px;text-decoration-color:#ff7a52}',
   '.tb{display:grid;grid-template-columns:auto 1fr auto;border-top:2px solid rgba(233,240,244,.6);font:500 19px Plex,monospace;letter-spacing:.08em}',
   '.tb>div{padding:16px 22px;border-right:1px solid rgba(233,240,244,.35);display:flex;flex-direction:column;gap:5px;justify-content:center;min-width:0}',
   '.tb>div:last-child{border-right:0}',
@@ -165,12 +177,21 @@ function inner(c) {
     h += '<h1 style="font-size:84px">' + esc(c.headline) + '</h1>';
     h += '<div class="res">' + (c.rows || []).map(function (r) { return '<div><span>' + esc(r[0]) + '</span><b>' + esc(r[1]) + '</b></div>'; }).join('') + '</div>';
     if (c.verdict) h += '<div class="verdict ' + esc(c.tone || 'maybe') + '">' + esc(c.verdict) + '</div>';
+  } else if (c.kind === 'guestlist') {
+    /* The joke is the waitlist, never a company: the left column holds
+       phrases, not names. Queue numbers are part of the joke. */
+    h += '<h1 style="font-size:84px">' + esc(c.headline) + '</h1>';
+    h += '<div class="gl"><div class="rope">' + rope() + '</div>';
+    h += '<div class="wl"><h2>The waitlist</h2>' + (c.waitlist || []).map(function (x, i) {
+      return '<div><span>#' + (4312 + i * 977).toLocaleString('en-US') + '</span>' + esc(x) + '</div>'; }).join('') + '</div>';
+    h += '<div class="in"><span class="youre">YOU\'RE IN</span><h2>Already inside</h2>' + (c.inside || []).map(function (x) {
+      return '<div><b>✓</b>' + esc(x) + '</div>'; }).join('') + '</div></div>';
   } else if (c.kind === 'drop') {
     h += '<div class="radar">' + radar() + '</div>';
     h += '<h1>' + esc(c.headline) + '</h1>';
     if (c.sub) h += '<div class="sub">' + esc(c.sub) + '</div>';
   } else {
-    if (c.big) h += '<div class="big">' + esc(c.big) + '</div>';
+    if (c.big) h += '<div class="big' + (c.strike ? ' strike' : '') + '">' + esc(c.big) + '</div>';
     h += '<h1>' + esc(c.headline) + '</h1>';
     if (c.sub) h += '<div class="sub">' + esc(c.sub) + '</div>';
   }
@@ -191,6 +212,17 @@ function stopwatch(clock) {
     '<rect x="160" y="18" width="40" height="30" fill="#c4d6e1"/><rect x="150" y="8" width="60" height="14" fill="#c4d6e1"/>' +
     '<circle cx="180" cy="220" r="165" fill="none" stroke="#ff7a52" stroke-width="10"/>' + ticks +
     '<text x="180" y="245" text-anchor="middle" font-family="Plex,monospace" font-weight="500" font-size="84" fill="#ffffff">' + esc(clock) + '</text></svg>';
+}
+
+/* A velvet rope between two brass posts: the line everyone else is in. */
+function rope() {
+  var post = function (x) {
+    return '<rect x="' + (x - 7) + '" y="14" width="14" height="52" rx="3" fill="#c9a24a"/><circle cx="' + x + '" cy="12" r="11" fill="#e3c56f"/><rect x="' + (x - 18) + '" y="62" width="36" height="7" rx="3" fill="#c9a24a"/>';
+  };
+  return '<svg viewBox="0 0 960 70" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">' +
+    '<path d="M24 18 Q 252 66 480 18" fill="none" stroke="#b3263a" stroke-width="9" stroke-linecap="round"/>' +
+    '<path d="M480 18 Q 708 66 936 18" fill="none" stroke="#b3263a" stroke-width="9" stroke-linecap="round" opacity=".35"/>' +
+    post(24) + post(480) + '</svg>';
 }
 
 /* A radar sweep around a dropped pin: the screen, drawn, no data on it. */
