@@ -145,4 +145,47 @@ function many(list, opts) {
   return Promise.all(lanes).then(function () { return out; });
 }
 
-module.exports = { geocode: geocode, peek: peek, many: many, census: census, nominatim: nominatim, UA: UA };
+/* ── REVERSE: a point to a state and ZIP, Census only ────────────────────
+   For the editor's Value Stack, which knows where the map is looking before
+   anybody has typed an address. Census's geographies endpoint answers with
+   the state and the 2020 ZCTA at the point — a ZCTA is the census's drawing
+   of a ZIP, close enough to pick a market and SAID to be that, not a postal
+   ZIP. Same contract as geocode(): resolves null on any miss or outage,
+   NEVER rejects, and caches per rounded point (4 decimals ≈ 11 m — a parcel
+   does not change state inside that). Nominatim is deliberately not a
+   fallback here: reverse calls arrive per map move, not per typed address,
+   and their 1 req/s policy is for people, not pan events. */
+function reverse(lat, lng, opts) {
+  opts = opts || {};
+  var la = Number(lat), ln = Number(lng);
+  if (!isFinite(la) || !isFinite(ln) || la < -90 || la > 90 || ln < -180 || ln > 180) {
+    return Promise.resolve(null);
+  }
+  var key = 'rev:' + la.toFixed(4) + ',' + ln.toFixed(4);
+  if (Object.prototype.hasOwnProperty.call(CACHE, key)) return Promise.resolve(CACHE[key]);
+  var url = 'https://geocoding.geo.census.gov/geocoder/geographies/coordinates'
+          + '?x=' + encodeURIComponent(ln) + '&y=' + encodeURIComponent(la)
+          + '&benchmark=Public_AR_Current&vintage=Current_Current&layers=all&format=json';
+  return getJson(url, opts.timeoutMs).then(function (j) {
+    var g = j && j.result && j.result.geographies;
+    if (!g) return null;
+    var out = { state: null, zip: null, county: null, source: 'census' };
+    Object.keys(g).forEach(function (k) {
+      var row = Array.isArray(g[k]) && g[k][0];
+      if (!row) return;
+      if (/^states$/i.test(k) && row.STUSAB) out.state = String(row.STUSAB);
+      if (/zip code tabulation/i.test(k)) {
+        var z = String(row.GEOID || row.ZCTA5 || row.BASENAME || '');
+        if (/^\d{5}$/.test(z)) out.zip = z;
+      }
+      if (/^counties$/i.test(k) && row.NAME) out.county = String(row.NAME);
+    });
+    return (out.state || out.zip) ? out : null;
+  })['catch'](function () { return null; }).then(function (hit) {
+    if (Object.keys(CACHE).length >= CACHE_CAP) CACHE = {};
+    CACHE[key] = hit || null;
+    return hit || null;
+  });
+}
+
+module.exports = { geocode: geocode, peek: peek, many: many, census: census, nominatim: nominatim, reverse: reverse, UA: UA };

@@ -96,7 +96,9 @@ var RETIRED = {
   'proj-tab-all': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
   'proj-tab-btm': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
   'proj-tab-fom': 'Projects list: the BTM/FOM tabs are gone, every project is listed with its kind (2026-09-27)',
-  'np-market': 'New Project: no BTM/FOM market field; the BESS wizard asks when it runs (2026-09-27)'
+  'np-market': 'New Project: no BTM/FOM market field; the BESS wizard asks when it runs (2026-09-27)',
+  'ovs-mode': 'Value Stack: the panel is server-priced; the simulation is behind-the-meter by design and says what FOM would need (2026-10-06)',
+  'ovs-partner': 'Value Stack: the browser aggregator table moved to /api/value-stack; the owner share is the editable assumption (2026-10-06)'
 };
 if (base) {
   var before = ids(base), after = ids(src), lost = before.filter(function (i) { return after.indexOf(i) < 0 && !RETIRED[i]; });

@@ -94390,159 +94390,46 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
 
 /* ═══════════════════════════════════════════════════════════════════════
-   OMEGA PATCH — 41 : VALUE STACK
+   OMEGA PATCH — 41 : VALUE STACK (server-priced)
    -----------------------------------------------------------------------
-   Analyze > Value Stack. Reads the battery that is actually on the site
-   map, derives the market from the zip code, and puts a first-pass annual
-   value against each revenue stream.
+   Analyze › Value Stack. Reads the battery that is actually on the site
+   map, takes the SITE from the map itself (the address in the search box,
+   else the map centre), and asks POST /api/value-stack for the stack.
 
-   WHAT THE ZIP CODE CAN AND CANNOT TELL YOU
+   WHAT MOVED SERVER-SIDE, AND WHY. The first version of this panel carried
+   its own ZIP→state table, regional rate typicals and aggregator revenue
+   shares in this file — which ships to every browser, so the rate book was
+   public and already disagreed with the server's own figures (its PJM
+   capacity default was three auctions stale when the server's was dated).
+   CLAUDE.md's rule is that revenue math is IP and runs in /api/; the rates,
+   programmes, tariffs and the hour-by-hour dispatch now live there
+   (api/_lib/vpp-sim.js + value-stack.js, behind /api/value-stack), and the
+   browser draws what comes back. Recorded in MERGE.md.
 
-   It reliably gives the state, and from that the ISO or RTO — those
-   boundaries are stable and public. That is genuinely useful, because
-   which streams even EXIST depends on the market: frequency regulation is
-   a PJM/CAISO/ERCOT product, ConnectedSolutions only exists in New
-   England, SGIP only in California.
+   WHAT THE SERVER ADDS over the old panel's arithmetic:
+     - a dispatch-constrained stack: the battery is simulated hour by hour
+       against a real tariff shape, so demand, TOU and programme revenue
+       cannot claim the same kWh twice;
+     - the grid programmes actually open at the ZIP, each with its source
+       and its planning/published tier;
+     - the site resolved from the MAP: a typed ZIP, the geocoded address,
+       or the census geography under the map centre — the result says
+       which one answered;
+     - an IRR: 20 years of the owner's share against the run's own cost
+       (window._COST_TOTAL — the figure the Results rail shows), through
+       the finance engine's own irr/payback. No priced run yet → the cost
+       model's generic estimate, and the panel says so;
+     - a printable report: streams, charts, cash flow, incentives,
+       assumptions and sources (the Print report button).
 
-   It does NOT tell you the demand charge. That comes from the utility's
-   rate schedule and varies from roughly $5/kW to $40/kW inside a single
-   state, sometimes inside a single utility. Any tool that prints a dollar
-   figure from a zip alone is guessing, and a guess dressed as an answer is
-   worse than no answer on a number that drives the whole model.
-
-   So this does two things instead of one:
-
-     - the STRUCTURE comes from the zip: which streams apply, which
-       programs exist, what the market is
-     - the RATES default to a documented regional typical, are labelled as
-       assumptions, and are all editable. If Analyze > Bill Import has a
-       bill loaded, the demand charge comes from that instead, and the
-       panel says so.
-
-   Every figure shows its own arithmetic, so a number you disagree with can
-   be traced rather than argued with.
-
-   PLANNING GRADE. This sizes an opportunity and tells you which streams to
-   chase. It is not a tariff study and must not go to a customer as one.
+   PLANNING GRADE. It sizes an opportunity and says which streams to chase.
+   It is not a tariff study and the report's own footer says so.
    ═══════════════════════════════════════════════════════════════════════ */
 (function () {
   'use strict';
 
   var TAG = '[omega/value]';
-
-  /* ── zip → state. 3-digit prefix ranges; stable public data. ────── */
-  var ZIP = [
-    [995,999,'AK'],[350,369,'AL'],[716,729,'AR'],[850,865,'AZ'],[900,961,'CA'],
-    [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[197,199,'DE'],[320,349,'FL'],
-    [300,319,'GA'],[967,968,'HI'],[500,528,'IA'],[832,838,'ID'],[600,629,'IL'],
-    [460,479,'IN'],[660,679,'KS'],[400,427,'KY'],[700,714,'LA'],[10,27,'MA'],
-    [206,219,'MD'],[39,49,'ME'],[480,499,'MI'],[550,567,'MN'],[630,658,'MO'],
-    [386,397,'MS'],[590,599,'MT'],[270,289,'NC'],[580,588,'ND'],[680,693,'NE'],
-    [30,38,'NH'],[70,89,'NJ'],[870,884,'NM'],[889,898,'NV'],[100,149,'NY'],
-    [430,459,'OH'],[730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],
-    [290,299,'SC'],[570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],
-    [220,246,'VA'],[50,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
-    [820,831,'WY']
-  ];
-  function stateOf(zip) {
-    var p = parseInt(String(zip || '').replace(/\D/g, '').slice(0, 3), 10);
-    if (!isFinite(p)) return null;
-    for (var i = 0; i < ZIP.length; i++) if (p >= ZIP[i][0] && p <= ZIP[i][1]) return ZIP[i][2];
-    return null;
-  }
-
-  /* ── state → market. Which streams exist at all. ───────────────── */
-  var MARKET = {
-    CA:'CAISO', TX:'ERCOT', NY:'NYISO',
-    MA:'ISO-NE', CT:'ISO-NE', RI:'ISO-NE', NH:'ISO-NE', VT:'ISO-NE', ME:'ISO-NE',
-    PA:'PJM', NJ:'PJM', MD:'PJM', DE:'PJM', DC:'PJM', VA:'PJM', WV:'PJM', OH:'PJM', KY:'PJM',
-    IL:'MISO', IN:'MISO', MI:'MISO', MN:'MISO', IA:'MISO', WI:'MISO', MO:'MISO',
-    AR:'MISO', LA:'MISO', MS:'MISO', ND:'MISO', SD:'MISO', MT:'MISO',
-    KS:'SPP', OK:'SPP', NE:'SPP',
-    AZ:'Non-ISO', NV:'Non-ISO', NM:'Non-ISO', UT:'Non-ISO', CO:'Non-ISO', WY:'Non-ISO',
-    ID:'Non-ISO', OR:'Non-ISO', WA:'Non-ISO',
-    GA:'Non-ISO', AL:'Non-ISO', FL:'Non-ISO', SC:'Non-ISO', NC:'Non-ISO', TN:'Non-ISO',
-    AK:'Non-ISO', HI:'Non-ISO'
-  };
-
-  /* ── regional typicals. ASSUMPTIONS, all editable in the panel. ── */
-  /* ── RESEARCHED, with vintage. Anything undated is my estimate. ──
-     PJM capacity: 2027/28 Base Residual Auction cleared at the FERC cap,
-     $333.44/MW-day UCAP (Dec 2025) = $10.14/kW-month. The 2026/27 auction
-     was $329.17 and 2025/26 was $269.92, up from $28.92 in 2024/25 — my
-     original $2.50 default predated that spike by three auctions and was
-     4x low.
-
-     ConnectedSolutions: MA C&I pays ~$200/kW of average summer performance,
-     RI ~$275/kW, Eversource NH ~$175/kW summer-only. BTM ONLY — front-of-
-     meter assets are explicitly excluded — and capped at 150% of the site's
-     annual peak load. I had this named and valued at zero, which on a
-     760 kW system left $152,000/yr out of a New England number. */
-  var TYPICAL = {
-    CAISO:    { demandLo:18, demandHi:38, touSpread:0.22, capacity:0,     ancillary:45,
-                capNote:'RA is bilateral in CA, not an auction',
-                program:'SGIP', programKwYr:0, programOneTimeKwh:150,
-                programNote:'One-time capacity incentive, tiered and declining — check the current step' },
-    'ISO-NE': { demandLo:12, demandHi:22, touSpread:0.10, capacity:2.6,  ancillary:25,
-                capNote:'FCA, softer than PJM',
-                program:'ConnectedSolutions', programKwYr:200, programOneTimeKwh:0,
-                programNote:'MA ~$200/kW-summer, RI ~$275, NH ~$175. BTM only. Capped at 150% of site peak load' },
-    NYISO:    { demandLo:15, demandHi:32, touSpread:0.12, capacity:5.0,  ancillary:30,
-                capNote:'ICAP, zone dependent',
-                program:'NYSERDA + VDER', programKwYr:0, programOneTimeKwh:120,
-                programNote:'Bulk/retail storage incentive stacked with VDER value-stack compensation' },
-    PJM:      { demandLo:8,  demandHi:18, touSpread:0.07, capacity:10.14, ancillary:35,
-                capNote:'2027/28 BRA cleared at the cap, $333.44/MW-day (Dec 2025)',
-                program:null, programKwYr:0, programOneTimeKwh:0, programNote:null },
-    ERCOT:    { demandLo:6,  demandHi:14, touSpread:0.14, capacity:0,     ancillary:55,
-                capNote:'no capacity market — ancillary and scarcity pricing are the play',
-                program:null, programKwYr:0, programOneTimeKwh:0, programNote:null },
-    MISO:     { demandLo:7,  demandHi:15, touSpread:0.06, capacity:1.5,  ancillary:20,
-                capNote:'PRA; third-party aggregated DR is state-by-state and only recently opening',
-                program:null, programKwYr:0, programOneTimeKwh:0, programNote:null },
-    SPP:      { demandLo:6,  demandHi:13, touSpread:0.05, capacity:1.0,  ancillary:18,
-                capNote:'my estimate', program:null, programKwYr:0, programOneTimeKwh:0, programNote:null },
-    'Non-ISO':{ demandLo:8,  demandHi:20, touSpread:0.06, capacity:0,     ancillary:0,
-                capNote:'no organised market — utility tariff and any bilateral only',
-                program:null, programKwYr:0, programOneTimeKwh:0, programNote:null }
-  };
-
-  /* ── WHO RUNS IT. Which streams you can actually reach depends on this. ──
-     Curtailment service providers keep a share of gross market revenue;
-     the C&I customer typically sees 60–80% of it. Portfolio and market
-     strengths from published 2026 vendor comparisons. */
-  var PARTNERS = {
-    self: { name:'Self-managed (direct)', keep:1.00,
-      streams:['demand','tou'],
-      markets:'any',
-      note:'You keep everything, but you are doing enrolment, bidding, telemetry and settlement yourself. Realistically that limits you to bill-side value: demand charge and TOU. Wholesale capacity and ancillary need a registered market participant.' },
-    utility: { name:'Utility program direct (BYOD)', keep:1.00,
-      streams:['demand','tou','program'],
-      markets:'ISO-NE, NYISO, CAISO',
-      note:'Where a utility runs a bring-your-own-device programme you can enrol without an aggregator. ConnectedSolutions is the clearest case. No revenue share, but only the one programme.' },
-    voltus: { name:'Voltus', keep:0.70,
-      streams:['demand','tou','capacity','ancillary','program'],
-      markets:'all 9 North American wholesale markets; strongest ERCOT and MISO',
-      note:'~5.2 GW portfolio. Strong on heavy industrial and crypto/flexible load. Runs a 100 MW VPP with Google on PJM. Aggressive revenue split — assume nearer 70% to you than 80%.' },
-    cpower: { name:'CPower Energy', keep:0.75,
-      streams:['demand','tou','capacity','ancillary','program'],
-      markets:'strongest PJM and ERCOT',
-      note:'~6.5 GW portfolio, Enerwise platform. Deep in commercial and education. Partnered with Vertiv on a standard path for data centres to monetise on-site assets. Revenue share is negotiable and tiered — 75% is a mid estimate.' },
-    enel: { name:'Enel North America', keep:0.78,
-      streams:['demand','tou','capacity','ancillary','program'],
-      markets:'strongest PJM and NYISO',
-      note:'~9 GW, the largest of the three. Client-favourable split at volume, so a large site can do better than the others; a small one usually cannot.' },
-    molecule: { name:'Molecule Systems (EMS + VPP)', keep:0.92,
-      streams:['demand','tou','capacity','ancillary','program','compute'],
-      markets:'market-agnostic via single-API VPP integration',
-      note:'Not a curtailment provider — a control and optimisation layer. Co-optimises bill-side and wholesale value simultaneously rather than picking one, and their own material argues most VPPs deliver about 50% of modelled capability, which is the gap it targets. Platform fee rather than a large revenue share, so the retained share is high; you still need a route to market underneath it.' }
-  };
-
-  /* Emerging and deliberately unpriced. */
-  var COMPUTE_NOTE = 'Co-optimising energy markets against COMPUTE markets — running flexible '
-    + 'AI/HPC load when power is cheap and selling flexibility when it is not. Real but early: '
-    + 'Google/Voltus on PJM, Vertiv/CPower for data centres. There is no defensible $/kW yet, '
-    + 'so it is listed at zero rather than guessed at.';
+  var API = '/api/value-stack';
 
   function S_() { try { return (typeof S !== 'undefined' && S) ? S : null; } catch (e) { return null; } }
 
@@ -94553,14 +94440,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     /* _ppCollectFleet() is the shared collector, and it already handles the
        case this walk cannot see: a guided build commits its battery as an
        ELEMENT via _evAdd('bess', ...) carrying the rating on bgbKw/bgbKwh
-       (or bessKw/bessKwh), with no eqId and no kwh/kw. The walk below looks
-       for eqId === 'bess', finds nothing, and Value Stack reports "no
-       battery on the site map" beside a results rail showing 380 kW.
-
-       The collector's own comment says the legend, the BOM, the cost sheet,
-       Value Stack and the rail all read it so they cannot disagree — but
-       Value Stack was never wired to it. Wire it, and keep the walk below
-       as the fallback for anything the collector does not claim. */
+       (or bessKw/bessKwh), with no eqId and no kwh/kw. The collector's own
+       comment says the legend, the BOM, the cost sheet, Value Stack and the
+       rail all read it so they cannot disagree. The walk below stays as the
+       fallback for anything the collector does not claim. */
     try {
       if (typeof _ppCollectFleet === 'function') {
         var f = _ppCollectFleet();
@@ -94611,266 +94494,709 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     return null;
   }
 
-  /* ── the model ──────────────────────────────────────────────────── */
-  var cfg = { zip:'', dod:0.90, rte:0.88, cycles:250, peakShaveFrac:0.60,
-              demand:null, touSpread:null, capacity:null, ancillary:null, mode:'BTM',
-              partner:'self' };
+  /* ── what the MAP knows about where the site is ───────────────────
+     The address the map was loaded at, and the point it is looking at.
+     The server resolves these to a ZIP and market and reports which one
+     answered; nothing here derives a market. */
+  function mapSite() {
+    var out = { address: '', lat: null, lng: null };
+    try {
+      var ids = ['addr-in', 'omega-addr-in'], i, el, t;
+      for (i = 0; i < ids.length; i++) {
+        el = document.getElementById(ids[i]);
+        t = el && el.value ? String(el.value).trim() : '';
+        if (t) { out.address = t; break; }
+      }
+      if (!out.address) {
+        var s = S_();
+        if (s && s.mapState && s.mapState.address) out.address = String(s.mapState.address);
+      }
+    } catch (e) {}
+    try {
+      if (window._gmap && _gmap.getCenter) {
+        var c = _gmap.getCenter();
+        if (c) { out.lat = c.lat(); out.lng = c.lng(); }
+      }
+      if (out.lat == null && window._lastCenter) {
+        out.lat = +window._lastCenter.lat; out.lng = +window._lastCenter.lng;
+      }
+    } catch (e) {}
+    return out;
+  }
 
-  function compute() {
+  function guessZip() {
+    try {
+      var site = mapSite();
+      var m = /\b(\d{5})(?:-\d{4})?\b/.exec(site.address || '');
+      if (m) return m[1];
+      var ids = ['proj-address', 'site-address', 'sc-lbl', 'proj-zip'];
+      for (var i = 0; i < ids.length; i++) {
+        var el = document.getElementById(ids[i]);
+        var t = el && (el.value || el.textContent) || '';
+        var m2 = /\b(\d{5})(?:-\d{4})?\b/.exec(t);
+        if (m2) return m2[1];
+      }
+      var m3 = /\b(\d{5})(?:-\d{4})?\b/.exec(document.title || '');
+      return m3 ? m3[1] : null;
+    } catch (e) { return null; }
+  }
+
+  /* the run's own cost, exactly as the Results rail shows it */
+  function runCost() {
+    var gross = +window._COST_TOTAL || 0;
+    if (!(gross > 0)) return null;
+    return { capexUsd: Math.round(gross), contracted: !!window._COST_IS_CONTRACTED };
+  }
+
+  /* ── the request and its answer ──────────────────────────────────── */
+  var cfg = { zip: '', address: '', segment: 'commercial',
+              demand: null, ownerShare: null, performance: null, rte: null,
+              itcRate: null, years: null, discountRate: null };
+  var state = { busy: false, error: null, result: null, ranFor: '' };
+
+  function token() {
+    var u = null;
+    try { u = window._currentUser || (window.firebase && firebase.auth().currentUser); } catch (e) {}
+    return u ? u.getIdToken() : Promise.reject(new Error(
+      'Sign in to run the value stack — the rates and programmes live on the server, behind your account.'));
+  }
+
+  function payload() {
+    var b = battery(), site = mapSite(), cost = runCost();
+    var req = {
+      action: 'estimate',
+      site: { segment: cfg.segment },
+      battery: { kw: b.kw, kwh: b.kwh }
+    };
+    if (cfg.zip) req.site.zip = cfg.zip;
+    if (cfg.address) req.site.address = cfg.address;
+    if (site.lat != null && site.lng != null) { req.site.lat = site.lat; req.site.lng = site.lng; }
+    if (cfg.rte != null) req.battery.rte = cfg.rte;
+    var sk = solarKw(); if (sk > 0) req.solarKw = sk;
+    var dem = cfg.demand != null ? cfg.demand : billDemandCharge();
+    if (dem != null && dem > 0) req.tariff = { demandCharge: dem };
+    if (cfg.ownerShare != null) {
+      var rest = Math.max(0, 1 - cfg.ownerShare);
+      req.split = { owner: cfg.ownerShare, platform: rest * 2 / 3, installer: rest / 3 };
+    }
+    if (cfg.performance != null) req.performance = cfg.performance;
+    if (cost) req.cost = cost;
+    var fin = {};
+    if (cfg.itcRate != null) fin.itcRate = cfg.itcRate;
+    if (cfg.years != null) fin.years = cfg.years;
+    if (cfg.discountRate != null) fin.discountRate = cfg.discountRate;
+    if (fin.itcRate != null || fin.years != null || fin.discountRate != null) req.finance = fin;
+    return req;
+  }
+
+  function run() {
     var b = battery();
-    var st = stateOf(cfg.zip);
-    var mkt = st ? (MARKET[st] || 'Non-ISO') : null;
-    var T = mkt ? TYPICAL[mkt] : null;
-    var billed = billDemandCharge();
-
-    var demand = cfg.demand != null ? cfg.demand : (billed != null ? billed : (T ? T.demandLo : 0));
-    var spread = cfg.touSpread != null ? cfg.touSpread : (T ? T.touSpread : 0);
-    var cap    = cfg.capacity  != null ? cfg.capacity  : (T ? T.capacity : 0);
-    var anc    = cfg.ancillary != null ? cfg.ancillary : (T ? T.ancillary : 0);
-
-    var usable = b.kwh * cfg.dod;
-    var deliverable = usable * cfg.rte;
-
-    var P = PARTNERS[cfg.partner] || PARTNERS.self;
-    var can = function (k) { return P.streams.indexOf(k) > -1; };
-    var rows = [];
-
-    /* 1 demand charge management — BTM only, bill-side, never shared */
-    if (cfg.mode === 'BTM' && can('demand')) {
-      var kwShaved = b.kw * cfg.peakShaveFrac;
-      rows.push({ stream:'Demand charge reduction', shared:false,
-        gross: kwShaved * demand * 12,
-        how: b.kw + ' kW \u00d7 ' + (cfg.peakShaveFrac * 100).toFixed(0) + '% coincident \u00d7 $'
-             + demand.toFixed(2) + '/kW-mo \u00d7 12',
-        source: billed != null ? 'from your imported bill' : 'regional typical \u2014 CHECK YOUR TARIFF' });
-    }
-    /* 2 energy arbitrage — bill-side */
-    if (can('tou')) rows.push({ stream:'Energy arbitrage (TOU)', shared:false,
-      gross: deliverable * spread * cfg.cycles,
-      how: deliverable.toFixed(0) + ' kWh deliverable \u00d7 $' + spread.toFixed(3)
-           + '/kWh spread \u00d7 ' + cfg.cycles + ' cycles',
-      source: 'regional typical' });
-    /* 3 wholesale capacity — needs a market participant, so shared */
-    if (cap > 0 && can('capacity')) rows.push({ stream:'Capacity / resource adequacy', shared:true,
-      gross: b.kw * cap * 12,
-      how: b.kw + ' kW \u00d7 $' + cap.toFixed(2) + '/kW-mo \u00d7 12',
-      source: mkt + (T && T.capNote ? ' \u2014 ' + T.capNote : '') });
-    /* 4 ancillary — FOM, shared */
-    if (cfg.mode === 'FOM' && anc > 0 && can('ancillary')) rows.push({ stream:'Frequency regulation', shared:true,
-      gross: b.kw * anc,
-      how: b.kw + ' kW \u00d7 $' + anc.toFixed(0) + '/kW-yr',
-      source: mkt + ' ancillary market' });
-    /* 5 utility DR programme — BTM only where one exists */
-    if (T && T.programKwYr > 0 && can('program')) {
-      var eligible = (cfg.mode === 'BTM');
-      if (eligible) rows.push({ stream:T.program, shared:cfg.partner !== 'utility' && cfg.partner !== 'self',
-        gross: b.kw * T.programKwYr,
-        how: b.kw + ' kW \u00d7 $' + T.programKwYr + '/kW-summer',
-        source: T.programNote || '' });
-    }
-    /* 6 compute co-optimisation — real, unpriced */
-    if (can('compute')) rows.push({ stream:'Compute co-optimisation', shared:true,
-      gross: 0, how: 'no defensible rate yet \u2014 deliberately zero',
-      source: COMPUTE_NOTE });
-
-    rows.forEach(function (r) {
-      r.annual = r.shared ? r.gross * P.keep : r.gross;
+    if (!b.units || !(b.kw > 0) || !(b.kwh > 0)) { paint(); return; }
+    state.busy = true; state.error = null;
+    paint();
+    var req = payload();
+    token().then(function (tok) {
+      return fetch(API, { method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
+        body: JSON.stringify(req) });
+    }).then(function (r) {
+      return r.text().then(function (t) {
+        var j = null; try { j = JSON.parse(t); } catch (e) {}
+        if (!r.ok || !j || !j.ok) {
+          var msg = j && j.errors && j.errors.length
+            ? j.errors.map(function (x) { return x.message; }).join(' ')
+            : (j && j.error) || ('The value stack did not run (' + r.status + ').');
+          throw new Error(msg);
+        }
+        return j.result;
+      });
+    }).then(function (result) {
+      state.busy = false; state.result = result; state.error = null;
+      state.ranFor = b.kw + '/' + b.kwh;
+      /* other modules (the export, the fin cards) may read the server's
+         answer here; window._VS_ESTIMATE stays the older estimator's. */
+      window._VS_SERVER = result;
+      paint();
+    }, function (e) {
+      state.busy = false; state.error = e.message || String(e);
+      paint();
     });
-    var total = rows.reduce(function (a, r) { return a + r.annual; }, 0);
-    var grossTotal = rows.reduce(function (a, r) { return a + r.gross; }, 0);
-    var oneTime = (T && T.programOneTimeKwh) ? T.programOneTimeKwh * b.kwh : 0;
-    return { battery:b, solarKw:solarKw(), state:st, market:mkt, typical:T,
-             usable:usable, deliverable:deliverable, rows:rows, total:total,
-             grossTotal:grossTotal, oneTime:oneTime, partner:P, partnerKey:cfg.partner,
-             billed:billed, program: T && T.program };
   }
 
   /* ── panel ──────────────────────────────────────────────────────── */
   var IN = 'background:#0F1B2E;border:1px solid var(--hairline);color:#E8F0FE;'
     + 'border-radius:5px;padding:5px 7px;font:600 12px "IBM Plex Mono",monospace;width:100%';
 
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function money(v) { return '$' + Math.round(+v || 0).toLocaleString(); }
+  function pct(v, dp) { return v == null ? '—' : (v * 100).toFixed(dp == null ? 1 : dp) + '%'; }
+
   function open() {
     var p = document.getElementById('omega-valuestack');
     if (!p) {
       p = document.createElement('div');
       p.id = 'omega-valuestack';
-      p.style.cssText = 'position:fixed;right:22px;top:110px;z-index:99992;width:414px;'
-        + 'max-height:78vh;overflow:auto;background:#0B1E35;border:1px solid var(--hairline);'
+      p.style.cssText = 'position:fixed;right:22px;top:110px;z-index:99992;width:430px;'
+        + 'max-height:80vh;overflow:auto;background:#0B1E35;border:1px solid var(--hairline);'
         + 'border-radius:10px;box-shadow:0 18px 48px rgba(0,0,0,.6);'
         + 'font-family:"IBM Plex Sans",sans-serif;color:#E8F0FE';
       document.body.appendChild(p);
     }
     p.style.display = '';
-    if (!cfg.zip) { try { cfg.zip = guessZip() || ''; } catch (e) {} }
+    /* the address and ZIP come off the map automatically; both stay editable */
+    try {
+      var site = mapSite();
+      if (!cfg.address && site.address) cfg.address = site.address;
+      if (!cfg.zip) cfg.zip = guessZip() || '';
+    } catch (e) {}
+    var b = battery();
+    var key = b.kw + '/' + b.kwh;
     paint();
+    /* run on open when there is a battery and no answer for THIS system yet */
+    if (b.units && b.kw > 0 && b.kwh > 0 && !state.busy && (!state.result || state.ranFor !== key)) run();
     return true;
   }
 
-  function guessZip() {
-    try {
-      var ids = ['proj-address', 'site-address', 'sc-lbl', 'proj-zip'];
-      for (var i = 0; i < ids.length; i++) {
-        var el = document.getElementById(ids[i]);
-        var t = el && (el.value || el.textContent) || '';
-        var m = /\b(\d{5})(?:-\d{4})?\b/.exec(t);
-        if (m) return m[1];
-      }
-      var m2 = /\b(\d{5})(?:-\d{4})?\b/.exec(document.title || '');
-      return m2 ? m2[1] : null;
-    } catch (e) { return null; }
-  }
-
-  function money(v) {
-    return '$' + Math.round(v).toLocaleString();
+  function tierChip(tier) {
+    var col = tier === 'computed' ? 'var(--green)' : (tier === 'published' ? '#60A5FA' : '#FBBF24');
+    var lbl = tier === 'computed' ? 'computed' : (tier === 'published' ? 'published' : 'planning');
+    return '<span style="font:700 8px/1 sans-serif;letter-spacing:.06em;text-transform:uppercase;color:' + col + '">' + lbl + '</span>';
   }
 
   function paint() {
     var p = document.getElementById('omega-valuestack');
     if (!p || p.style.display === 'none') return;
-    var r = compute();
-    var b = r.battery;
+    var b = battery();
 
     var head = '<div id="ovs-head" style="padding:10px 12px;border-bottom:1px solid var(--hairline);'
-      + 'display:flex;gap:8px;align-items:center"><span style="font-size:14px">\u2211</span>'
+      + 'display:flex;gap:8px;align-items:center"><span style="font-size:14px">∑</span>'
       + '<div style="flex:1;font-weight:700;font-size:13px">Value Stack</div>'
-      + '<button id="ovs-x" style="background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;line-height:1">\u00d7</button></div>';
+      + '<button id="ovs-x" style="background:none;border:none;color:var(--sub);font-size:18px;cursor:pointer;line-height:1">×</button></div>';
 
     if (!b.units) {
       p.innerHTML = head + '<div style="padding:14px 12px;font-size:11.5px;color:var(--amber);line-height:1.5">'
-        + 'No battery on the site map. Place a BESS assembly or container first \u2014 '
+        + 'No battery on the site map. Place a BESS assembly or container first — '
         + 'this reads the system you have actually drawn, not a hypothetical one.</div>';
       p.querySelector('#ovs-x').onclick = function () { p.style.display = 'none'; };
       return;
     }
 
     var lbl = 'font:700 9px/1.5 sans-serif;letter-spacing:.08em;text-transform:uppercase;color:#7D95B4';
+    var R = state.result;
+    var sk = solarKw();
 
-    p.innerHTML = head + '<div style="padding:11px 12px">'
+    var html = head + '<div style="padding:11px 12px">'
 
       /* system as drawn */
       + '<div style="' + lbl + ';margin-bottom:5px">System on the drawing</div>'
       + '<div style="font-size:11.5px;line-height:1.6;margin-bottom:10px">'
-      + b.units + ' unit' + (b.units > 1 ? 's' : '') + ' \u00b7 <b>' + b.kwh.toLocaleString() + ' kWh</b> \u00b7 <b>'
+      + b.units + ' unit' + (b.units > 1 ? 's' : '') + ' · <b>' + b.kwh.toLocaleString() + ' kWh</b> · <b>'
       + b.kw.toLocaleString() + ' kW</b>'
-      + (r.solarKw ? ' \u00b7 ' + r.solarKw + ' kW-DC solar' : '')
-      + '<br><span style="color:var(--sub);font-size:10px">' + Math.round(r.usable).toLocaleString()
-      + ' kWh usable at ' + (cfg.dod * 100).toFixed(0) + '% DoD \u00b7 '
-      + Math.round(r.deliverable).toLocaleString() + ' kWh deliverable at '
-      + (cfg.rte * 100).toFixed(0) + '% RTE</span></div>'
+      + (sk ? ' · ' + sk + ' kW-DC solar' : '') + '</div>'
 
-      /* market */
-      + '<div style="' + lbl + ';margin-bottom:5px">Market</div>'
+      /* the site, off the map */
+      + '<div style="' + lbl + ';margin-bottom:5px">Site — from the map</div>'
       + '<div style="display:flex;gap:7px;align-items:center;margin-bottom:4px">'
-      + '<input id="ovs-zip" value="' + cfg.zip + '" placeholder="ZIP" maxlength="5" style="' + IN + ';width:78px">'
-      + '<select id="ovs-mode" style="' + IN + ';width:104px">'
-      + '<option value="BTM"' + (cfg.mode === 'BTM' ? ' selected' : '') + '>Behind meter</option>'
-      + '<option value="FOM"' + (cfg.mode === 'FOM' ? ' selected' : '') + '>Front of meter</option></select>'
-      + '<div style="flex:1;font-size:11px;text-align:right">'
-      + (r.state ? ('<b>' + r.state + '</b> \u00b7 ' + r.market) : '<span style="color:var(--amber)">enter a ZIP</span>')
-      + '</div></div>'
+      + '<input id="ovs-addr" value="' + esc(cfg.address) + '" placeholder="Site address (auto from the map)" style="' + IN + ';flex:1">'
+      + '<input id="ovs-zip" value="' + esc(cfg.zip) + '" placeholder="ZIP" maxlength="5" style="' + IN + ';width:64px">'
+      + '</div>'
+      + '<div style="display:flex;gap:7px;align-items:center;margin-bottom:8px">'
+      + '<select id="ovs-seg" style="' + IN + ';width:130px">'
+      + ['commercial', 'industrial', 'residential'].map(function (s) {
+          return '<option value="' + s + '"' + (cfg.segment === s ? ' selected' : '') + '>'
+            + s.charAt(0).toUpperCase() + s.slice(1) + '</option>';
+        }).join('') + '</select>'
+      + '<div style="flex:1;font-size:10.5px;text-align:right;color:var(--sub)">'
+      + (R ? '<b style="color:#E8F0FE">' + esc(R.site.state) + '</b> · ' + esc(R.site.marketName || R.site.market)
+           + (R.resolved && R.resolved.area ? ' · ' + esc(R.resolved.area) : '')
+         : 'resolved by the server')
+      + '</div></div>';
 
-      /* who runs it */
-      + '<div style="' + lbl + ';margin:9px 0 4px">Who monetises it</div>'
-      + '<select id="ovs-partner" style="' + IN + ';margin-bottom:4px">'
-      + Object.keys(PARTNERS).map(function (k) {
-        return '<option value="' + k + '"' + (cfg.partner === k ? ' selected' : '') + '>'
-          + PARTNERS[k].name + ' \u2014 you keep ' + Math.round(PARTNERS[k].keep * 100) + '%</option>';
-      }).join('') + '</select>'
-      + '<div style="font-size:9.5px;color:var(--sub);line-height:1.5;margin-bottom:4px">'
-      + r.partner.note + '</div>'
-      + '<div style="font-size:9px;color:#6B8AAD;margin-bottom:9px">Markets: ' + r.partner.markets + '</div>'
-      + (r.program ? '<div style="font-size:9.5px;color:var(--green);margin-bottom:9px">Program available: '
-          + r.program + ((r.typical && r.typical.programNote) ? ' \u2014 ' + r.typical.programNote : '') + '</div>'
-        : '<div style="height:6px"></div>')
+    if (state.busy) {
+      html += '<div style="padding:14px 0;font-size:11.5px;color:var(--sub)">Dispatching 8,760 hours on the server…</div>';
+    } else if (state.error) {
+      html += '<div style="padding:10px;background:rgba(248,113,113,.08);border:1px solid rgba(248,113,113,.35);'
+        + 'border-radius:7px;font-size:11px;color:#FCA5A5;line-height:1.5;margin-bottom:8px">' + esc(state.error) + '</div>'
+        + '<button id="ovs-run" style="width:100%;padding:7px;background:var(--hl-dim,#13365F);border:1px solid rgba(0,212,255,.4);'
+        + 'color:var(--accent,#00D4FF);font-weight:700;font-size:11px;border-radius:6px;cursor:pointer;font-family:inherit">Try again</button>';
+    } else if (R) {
+      html += paintResult(R, lbl);
+    } else {
+      html += '<button id="ovs-run" style="width:100%;padding:7px;background:var(--hl-dim,#13365F);border:1px solid rgba(0,212,255,.4);'
+        + 'color:var(--accent,#00D4FF);font-weight:700;font-size:11px;border-radius:6px;cursor:pointer;font-family:inherit">⚡ Run the value stack</button>';
+    }
 
-      /* the stack */
-      + (r.state
-        ? '<div style="' + lbl + ';margin-bottom:5px">Annual value, first pass</div>'
-          + r.rows.map(function (row) {
-            return '<div style="padding:7px 0;border-bottom:1px solid var(--hairline)">'
-              + '<div style="display:flex;justify-content:space-between;font-size:11.5px;font-weight:600">'
-              + '<span>' + row.stream + '</span><span>' + money(row.annual) + '</span></div>'
-              + '<div style="font-size:9.5px;color:var(--sub);margin-top:2px">' + row.how
-              + (row.shared && row.gross > 0
-                 ? ' \u2014 gross $' + Math.round(row.gross).toLocaleString()
-                   + ', you keep ' + Math.round(r.partner.keep * 100) + '%'
-                 : row.shared ? '' : ' \u00b7 bill-side, not shared') + '</div>'
-              + '<div style="font-size:9px;color:' + (/CHECK/.test(row.source) ? '#FBBF24' : '#6B8AAD')
-              + ';margin-top:1px">' + row.source + '</div></div>';
-          }).join('')
-          + '<div style="display:flex;justify-content:space-between;padding:9px 0 3px;'
-          + 'font-size:13px;font-weight:800"><span>Total / year</span><span>' + money(r.total) + '</span></div>'
-          + '<div style="font-size:10px;color:var(--sub)">'
-          + money(r.total / Math.max(1, b.kwh)) + ' per kWh installed \u00b7 '
-          + money(r.total / Math.max(1, b.kw)) + ' per kW</div>'
-        : '')
-
-      /* assumptions */
-      + '<div style="' + lbl + ';margin:12px 0 5px">Assumptions \u2014 edit any of these</div>'
-      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9.5px;color:var(--sub)">'
-      + [['ovs-demand','Demand $/kW-mo', cfg.demand != null ? cfg.demand : (r.billed != null ? r.billed : (r.typical ? r.typical.demandLo : 0))],
-         ['ovs-spread','TOU spread $/kWh', cfg.touSpread != null ? cfg.touSpread : (r.typical ? r.typical.touSpread : 0)],
-         ['ovs-cycles','Cycles / year', cfg.cycles],
-         ['ovs-shave','Peak shaved %', (cfg.peakShaveFrac * 100).toFixed(0)],
-         ['ovs-dod','Depth of discharge %', (cfg.dod * 100).toFixed(0)],
-         ['ovs-rte','Round-trip eff %', (cfg.rte * 100).toFixed(0)]].map(function (f) {
-        return '<label>' + f[1] + '<input id="' + f[0] + '" value="' + f[2] + '" style="' + IN + ';margin-top:2px"></label>';
-      }).join('') + '</div>'
-
-      + (r.typical ? '<div style="font-size:9.5px;color:var(--sub);margin-top:8px;line-height:1.5">'
-          + 'Demand charges in ' + r.state + ' typically run $' + r.typical.demandLo
-          + '\u2013$' + r.typical.demandHi + '/kW-mo. Defaulted to the LOW end. '
-          + (r.billed != null ? 'Your imported bill says $' + r.billed.toFixed(2) + ' and is being used instead.'
-             : 'Import a bill in Analyze for the real number.') + '</div>' : '')
-
-      /* what is being left on the table */
-      + (r.state ? (function () {
-          var P = r.partner, missing = [];
-          ['capacity','ancillary','program','compute'].forEach(function (k) {
-            if (P.streams.indexOf(k) > -1) return;
-            var best = null;
-            Object.keys(PARTNERS).forEach(function (pk) {
-              if (PARTNERS[pk].streams.indexOf(k) > -1 && (!best || PARTNERS[pk].keep > PARTNERS[best].keep)) best = pk;
-            });
-            if (!best) return;
-            var nm = { capacity:'wholesale capacity', ancillary:'frequency regulation',
-                       program: (r.typical && r.typical.program) || 'the utility programme',
-                       compute:'compute co-optimisation' }[k];
-            if (k === 'program' && !(r.typical && r.typical.programKwYr > 0)) return;
-            if (k === 'capacity' && !(r.typical && r.typical.capacity > 0)) return;
-            if (k === 'ancillary' && cfg.mode !== 'FOM') return;
-            missing.push(nm + ' (' + PARTNERS[best].name + ')');
-          });
-          if (!missing.length) return '<div style="' + lbl + ';margin:11px 0 4px">Optimisation</div>'
-            + '<div style="font-size:10px;color:var(--green);line-height:1.5">This partner can reach every '
-            + 'stream available in ' + r.market + ' for a ' + cfg.mode + ' asset.</div>';
-          return '<div style="' + lbl + ';margin:11px 0 4px">Not reachable this way</div>'
-            + '<div style="font-size:10px;color:var(--amber);line-height:1.55">'
-            + missing.join('<br>') + '</div>';
-        })() : '')
-      + (r.oneTime ? '<div style="font-size:10px;color:var(--green);margin-top:7px">Plus a one-time '
-          + r.typical.program + ' incentive of about ' + money(r.oneTime)
-          + ' (' + r.typical.programOneTimeKwh + '/kWh \u00d7 ' + r.battery.kwh + ' kWh) \u2014 verify the current step</div>' : '')
-
-      + '<div style="margin-top:10px;padding:8px;background:rgba(251,191,36,.1);border-left:2px solid #FBBF24;'
-      + 'font-size:10px;line-height:1.5">Planning grade. The zip fixes the market and which streams exist; '
-      + 'it cannot tell you a demand charge \u2014 that is on the tariff, and it varies several-fold within '
-      + 'one state. Do not send this to a customer as a savings figure.</div>'
-      + '</div>';
+    html += '</div>';
+    p.innerHTML = html;
 
     p.querySelector('#ovs-x').onclick = function () { p.style.display = 'none'; };
-    function bind(id, fn) { var e = p.querySelector('#' + id); if (e) e.onchange = function () { fn(this.value); paint(); }; }
+    function bind(id, fn) { var e = p.querySelector('#' + id); if (e) e.onchange = function () { fn(this.value); }; }
+    bind('ovs-addr', function (v) { cfg.address = String(v).trim(); });
     bind('ovs-zip', function (v) { cfg.zip = String(v).trim(); });
-    bind('ovs-mode', function (v) { cfg.mode = v; });
-    bind('ovs-partner', function (v) { if (PARTNERS[v]) cfg.partner = v; });
-    bind('ovs-demand', function (v) { var n = parseFloat(v); cfg.demand = isFinite(n) ? n : null; });
-    bind('ovs-spread', function (v) { var n = parseFloat(v); cfg.touSpread = isFinite(n) ? n : null; });
-    bind('ovs-cycles', function (v) { var n = parseInt(v, 10); if (n > 0) cfg.cycles = n; });
-    bind('ovs-shave', function (v) { var n = parseFloat(v); if (n > 0 && n <= 100) cfg.peakShaveFrac = n / 100; });
-    bind('ovs-dod', function (v) { var n = parseFloat(v); if (n > 0 && n <= 100) cfg.dod = n / 100; });
-    bind('ovs-rte', function (v) { var n = parseFloat(v); if (n > 0 && n <= 100) cfg.rte = n / 100; });
+    bind('ovs-seg', function (v) { cfg.segment = v; });
+    function numOrNull(v) { var n = parseFloat(v); return isFinite(n) ? n : null; }
+    bind('ovs-demand', function (v) { cfg.demand = numOrNull(v); });
+    bind('ovs-keep', function (v) { var n = numOrNull(v); cfg.ownerShare = n != null && n > 0 && n <= 100 ? n / 100 : null; });
+    bind('ovs-perf', function (v) { var n = numOrNull(v); cfg.performance = n != null && n > 0 && n <= 100 ? n / 100 : null; });
+    bind('ovs-rte', function (v) { var n = numOrNull(v); cfg.rte = n != null && n > 0 && n <= 100 ? n / 100 : null; });
+    bind('ovs-itc', function (v) { var n = numOrNull(v); cfg.itcRate = n != null && n >= 0 && n <= 50 ? n / 100 : null; });
+    bind('ovs-years', function (v) { var n = parseInt(v, 10); cfg.years = n >= 5 && n <= 30 ? n : null; });
+    bind('ovs-disc', function (v) { var n = numOrNull(v); cfg.discountRate = n != null && n >= 0 && n <= 25 ? n / 100 : null; });
+    var runBtn = p.querySelector('#ovs-run'); if (runBtn) runBtn.onclick = run;
+    var prBtn = p.querySelector('#ovs-print'); if (prBtn) prBtn.onclick = function () { printReport(state.result); };
   }
 
+  function paintResult(R, lbl) {
+    var counted = R.streams.filter(function (s) { return s.counted && s.usd > 0; });
+    var keepPct = Math.round((R.split && R.split.owner || 1) * 100);
+    var L = R.lifecycle, C = R.cost;
+    var bankOf = {};
+    if (R.bankability && R.bankability.rows) {
+      R.bankability.rows.forEach(function (b) { bankOf[b.id] = b; });
+    }
+
+    var html = '<div style="' + lbl + ';margin-bottom:5px">Annual value — dispatched, not added</div>'
+      + counted.map(function (s) {
+          var b = bankOf[s.id];
+          return '<div style="padding:7px 0;border-bottom:1px solid var(--hairline)">'
+            + '<div style="display:flex;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:600">'
+            + '<span>' + esc(s.name) + '</span><span style="white-space:nowrap">' + money(s.usd) + '</span></div>'
+            + '<div style="font-size:9.5px;color:var(--sub);margin-top:2px;line-height:1.45">' + esc(s.how)
+            + (s.category === 'grid' ? ' — shared: you keep ' + keepPct + '%' : ' · bill-side, not shared') + '</div>'
+            + '<div style="margin-top:2px;font-size:9px;color:#6B8AAD">' + tierChip(s.tier)
+            + (b ? ' · paid by ' + esc(b.paidBy) + ' · ' + esc(b.tenor) : '') + '</div></div>';
+        }).join('')
+      + '<div style="display:flex;justify-content:space-between;padding:9px 0 2px;font-size:13px;font-weight:800">'
+      + '<span>You keep / year</span><span>' + money(R.totals.owner) + '</span></div>'
+      + '<div style="font-size:10px;color:var(--sub);margin-bottom:8px">gross ' + money(R.totals.gross)
+      + ' · ' + money(R.totals.perKw) + ' per kW · bill ' + money(R.bill.before) + ' → ' + money(R.bill.after) + '</div>';
+
+    /* returns */
+    html += '<div style="' + lbl + ';margin:10px 0 5px">Returns — against the project cost</div>';
+    if (C && C.capexUsd > 0 && L && L.ok) {
+      html += '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">'
+        + [['IRR', L.irr == null ? '—' : pct(L.irr)],
+           ['Payback', L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs'],
+           ['NPV', money(L.npv)]].map(function (f) {
+            return '<div style="background:#0F1B2E;border:1px solid var(--hairline);border-radius:7px;padding:7px 8px;text-align:center">'
+              + '<div style="font:800 14px \'IBM Plex Mono\',monospace">' + f[1] + '</div>'
+              + '<div style="font-size:8.5px;color:var(--sub);text-transform:uppercase;letter-spacing:.06em;margin-top:2px">' + f[0] + '</div></div>';
+          }).join('') + '</div>'
+        + '<div style="font-size:10px;color:var(--sub);line-height:1.5;margin-bottom:4px">'
+        + 'Cost ' + money(C.capexUsd) + ' − incentives ' + money(R.incentives ? R.incentives.total : 0)
+        + ' = net ' + money(R.netCostUsd) + '. ' + L.years + '-yr unlevered pre-tax, '
+        + (L.augmentations ? 'one augmentation modelled' : 'no augmentation') + '.</div>'
+        + (C.source === 'model'
+            ? '<div style="font-size:9.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">' + esc(C.note) + '</div>'
+            : '<div style="font-size:9px;color:#6B8AAD;margin-bottom:4px">' + esc(C.note) + '</div>');
+      if (R.incentives && R.incentives.flags && R.incentives.flags.length) {
+        html += '<div style="font-size:9.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">⚠ '
+          + esc(R.incentives.flags[0]) + '</div>';
+      }
+      if (R.incentives && R.incentives.note) {
+        html += '<div style="font-size:9px;color:#6B8AAD;line-height:1.5;margin-bottom:4px">' + esc(R.incentives.note) + '</div>';
+      }
+      /* the investor's case: planning-grade rates out */
+      var BK = R.bankability, BL = BK && BK.lifecycle;
+      if (BL) {
+        html += '<div style="margin:6px 0 4px;padding:8px 10px;background:rgba(96,165,250,.08);'
+          + 'border:1px solid rgba(96,165,250,.3);border-radius:7px;font-size:10.5px;line-height:1.55">'
+          + '<b>Bankable case</b> — computed &amp; published rates only: '
+          + (BL.ok
+              ? '<b>IRR ' + (BL.irr == null ? '—' : pct(BL.irr)) + '</b> · payback '
+                + (BL.paybackYears == null ? 'never' : BL.paybackYears.toFixed(1) + ' yrs') + ' · '
+                + money(BK.totals.underwriteableYr) + '/yr underwriteable'
+                + (BK.totals.planningYr > 0 ? ' · ' + money(BK.totals.planningYr)
+                    + '/yr still planning-grade (upside, not collateral)' : '')
+              : 'nothing underwriteable yet — every stream here is a planning rate until the '
+                + 'programme’s own terms replace it.')
+          + '</div>';
+      }
+    } else {
+      html += '<div style="font-size:10.5px;color:var(--amber);line-height:1.5;margin-bottom:4px">'
+        + esc((C && C.note) || 'No project cost yet — run the cost estimate and re-run for the IRR.') + '</div>';
+    }
+
+    /* what is NOT counted */
+    if (R.missing && R.missing.length) {
+      html += '<details style="margin:8px 0"><summary style="font-size:10px;color:var(--sub);cursor:pointer">'
+        + 'Not counted — ' + R.missing.length + ' item' + (R.missing.length > 1 ? 's' : '') + ', each with its reason</summary>'
+        + '<div style="font-size:9.5px;color:var(--sub);line-height:1.55;margin-top:5px">'
+        + R.missing.map(function (m) { return '• ' + esc(m); }).join('<br>') + '</div></details>';
+    }
+
+    /* assumptions, editable */
+    var demandShown = cfg.demand != null ? cfg.demand
+      : (R.tariff && R.tariff.rates && R.tariff.rates.demand != null ? R.tariff.rates.demand : (billDemandCharge() || ''));
+    html += '<div style="' + lbl + ';margin:10px 0 5px">Assumptions — edit, then re-run</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;font-size:9.5px;color:var(--sub)">'
+      + [['ovs-demand', 'Demand $/kW-mo', demandShown],
+         ['ovs-keep', 'You keep % of grid rev', keepPct],
+         ['ovs-perf', 'Performance %', Math.round(((cfg.performance != null ? cfg.performance : 0.9)) * 100)],
+         ['ovs-rte', 'Round-trip eff %', Math.round((cfg.rte != null ? cfg.rte : (R.battery && R.battery.rte) || 0.88) * 100)],
+         ['ovs-itc', 'ITC %', Math.round((cfg.itcRate != null ? cfg.itcRate : 0.30) * 100)],
+         ['ovs-years', 'Years', cfg.years != null ? cfg.years : (L && L.years) || 20],
+         ['ovs-disc', 'Discount %', Math.round((cfg.discountRate != null ? cfg.discountRate : (L && L.discountRate) || 0.08) * 100)]]
+        .map(function (f) {
+          return '<label>' + f[1] + '<input id="' + f[0] + '" value="' + esc(f[2]) + '" style="' + IN + ';margin-top:2px"></label>';
+        }).join('') + '</div>'
+      + (R.tariff && R.tariff.source === 'planning'
+          ? '<div style="font-size:9.5px;color:var(--sub);margin-top:6px;line-height:1.5">' + esc(R.tariff.label) + '</div>'
+          : '')
+
+      /* actions */
+      + '<div style="display:flex;gap:8px;margin-top:10px">'
+      + '<button id="ovs-run" style="flex:1;padding:7px;background:var(--hl-dim,#13365F);border:1px solid rgba(0,212,255,.4);'
+      + 'color:var(--accent,#00D4FF);font-weight:700;font-size:11px;border-radius:6px;cursor:pointer;font-family:inherit">⟳ Re-run</button>'
+      + '<button id="ovs-print" style="flex:1;padding:7px;background:rgba(74,222,128,.1);border:1px solid rgba(74,222,128,.4);'
+      + 'color:var(--green,#4ADE80);font-weight:700;font-size:11px;border-radius:6px;cursor:pointer;font-family:inherit">🖨 Print report</button>'
+      + '</div>'
+
+      + '<div style="margin-top:10px;padding:8px;background:rgba(251,191,36,.1);border-left:2px solid #FBBF24;'
+      + 'font-size:10px;line-height:1.5">Planning grade · confidence ' + esc(R.confidence) + '. Site from '
+      + esc(R.resolved && R.resolved.label || 'the ZIP') + '. ' + 'Do not send this to a customer as a savings figure — '
+      + 'the report carries the sources and the same warning.</div>';
+    return html;
+  }
+
+  /* ── THE PRINTABLE REPORT ────────────────────────────────────────────
+     One light, self-contained page in a new tab: the streams, three
+     charts (per-stream value, monthly bill before/after, cumulative cash
+     flow with the payback marked), incentives, the 20-year table and every
+     assumption with its source. Inline SVG, no libraries, prints as it
+     renders. Chart colors are the validated reference palette's first two
+     slots (series identity is fixed, never cycled); single-measure charts
+     use one hue. */
+  var CH = { s1: '#2a78d6', s2: '#eb6834', ink: '#0b0b0b', sub: '#52514e',
+             grid: '#e5e5e2', surface: '#fcfcfb' };
+
+  function fmtMoneyShort(v) {
+    var a = Math.abs(v);
+    if (a >= 1e6) return '$' + (v / 1e6).toFixed(a >= 1e7 ? 0 : 1) + 'M';
+    if (a >= 1e3) return '$' + Math.round(v / 1e3) + 'k';
+    return '$' + Math.round(v);
+  }
+
+  /* per-stream value: magnitude across categories → horizontal bars, ONE
+     hue, direct labels (no legend needed for a single measure) */
+  function chartStreams(streams) {
+    var rows = streams.filter(function (s) { return s.counted && s.usd > 0; });
+    if (!rows.length) return '';
+    var max = rows.reduce(function (a, s) { return Math.max(a, s.usd); }, 0);
+    return '<div style="margin:6px 0 2px">' + rows.map(function (s) {
+      var w = Math.max(1, Math.round(s.usd / max * 100));
+      return '<div style="display:flex;align-items:center;gap:10px;margin:7px 0">'
+        + '<div style="width:220px;font-size:11px;color:' + CH.ink + ';text-align:right">' + esc(s.name) + '</div>'
+        + '<div style="flex:1;height:16px;background:none"><div title="' + esc(s.name) + ': ' + money(s.usd) + '/yr" '
+        + 'style="width:' + w + '%;height:16px;background:' + CH.s1 + ';border-radius:0 4px 4px 0"></div></div>'
+        + '<div style="width:80px;font:600 11px \'IBM Plex Mono\',monospace;color:' + CH.ink + '">' + money(s.usd) + '</div>'
+        + '</div>';
+    }).join('') + '</div>';
+  }
+
+  /* monthly bill, before and after: two series, fixed slots, legend +
+     2px gaps between paired bars */
+  function chartMonthly(monthly) {
+    if (!monthly || !monthly.length) return '';
+    var W = 680, H = 200, padL = 52, padB = 22, padT = 8;
+    var max = monthly.reduce(function (a, m) { return Math.max(a, m.billBefore, m.billAfter); }, 0);
+    if (!(max > 0)) return '';
+    var plotW = W - padL - 8, plotH = H - padB - padT;
+    var step = plotW / 12, bw = Math.max(4, (step - 10) / 2);
+    var mon = ['J', 'F', 'M', 'A', 'M', 'J', 'J', 'A', 'S', 'O', 'N', 'D'];
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-width:' + W + 'px" role="img" aria-label="Monthly bill before and after the battery">';
+    var ticks = 3, t;
+    for (t = 0; t <= ticks; t++) {
+      var v = max * t / ticks, y = padT + plotH - plotH * t / ticks;
+      svg += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - 8) + '" y2="' + y + '" stroke="' + CH.grid + '" stroke-width="1"/>'
+        + '<text x="' + (padL - 6) + '" y="' + (y + 3.5) + '" text-anchor="end" font-size="10" fill="' + CH.sub + '">' + fmtMoneyShort(v) + '</text>';
+    }
+    monthly.forEach(function (m, i) {
+      var x0 = padL + step * i + (step - bw * 2 - 2) / 2;
+      var h1 = Math.max(1, m.billBefore / max * plotH), h2 = Math.max(1, m.billAfter / max * plotH);
+      svg += '<rect x="' + x0 + '" y="' + (padT + plotH - h1) + '" width="' + bw + '" height="' + h1 + '" rx="2" fill="' + CH.s1 + '">'
+        + '<title>' + mon[i] + ' before: ' + money(m.billBefore) + '</title></rect>'
+        + '<rect x="' + (x0 + bw + 2) + '" y="' + (padT + plotH - h2) + '" width="' + bw + '" height="' + h2 + '" rx="2" fill="' + CH.s2 + '">'
+        + '<title>' + mon[i] + ' after: ' + money(m.billAfter) + '</title></rect>'
+        + '<text x="' + (padL + step * i + step / 2) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="' + CH.sub + '">' + mon[i] + '</text>';
+    });
+    svg += '</svg>';
+    var chip = function (c, t2) {
+      return '<span style="display:inline-flex;align-items:center;gap:5px;margin-right:14px;font-size:11px;color:' + CH.sub + '">'
+        + '<span style="width:10px;height:10px;border-radius:2px;background:' + c + '"></span>' + t2 + '</span>';
+    };
+    return '<div style="margin:4px 0 2px">' + chip(CH.s1, 'Bill before') + chip(CH.s2, 'Bill after') + '</div>' + svg;
+  }
+
+  /* cumulative cash flow: one series, one hue, the payback year marked */
+  function chartCashflow(L) {
+    if (!L || !L.ok || !L.rows || L.rows.length < 2) return '';
+    var W = 680, H = 210, padL = 60, padB = 24, padT = 10, padR = 14;
+    var rows = L.rows;
+    var min = 0, max = 0;
+    rows.forEach(function (r) { if (r.cum < min) min = r.cum; if (r.cum > max) max = r.cum; });
+    if (max === min) max = min + 1;
+    var plotW = W - padL - padR, plotH = H - padB - padT;
+    function X(y) { return padL + plotW * y / (rows.length - 1); }
+    function Y(v) { return padT + plotH - plotH * (v - min) / (max - min); }
+    var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" style="width:100%;max-width:' + W + 'px" role="img" aria-label="Cumulative cash flow by year">';
+    [min, 0, max].forEach(function (v, i) {
+      if (i === 1 && (0 < min || 0 > max)) return;
+      var y = Y(v);
+      svg += '<line x1="' + padL + '" y1="' + y + '" x2="' + (W - padR) + '" y2="' + y + '" stroke="'
+        + (v === 0 ? CH.sub : CH.grid) + '" stroke-width="1"/>'
+        + '<text x="' + (padL - 6) + '" y="' + (y + 3.5) + '" text-anchor="end" font-size="10" fill="' + CH.sub + '">' + fmtMoneyShort(v) + '</text>';
+    });
+    var pts = rows.map(function (r, i) { return X(i).toFixed(1) + ',' + Y(r.cum).toFixed(1); }).join(' ');
+    svg += '<polyline points="' + pts + '" fill="none" stroke="' + CH.s1 + '" stroke-width="2"/>';
+    rows.forEach(function (r, i) {
+      if (i % 5 && i !== rows.length - 1) return;
+      svg += '<circle cx="' + X(i) + '" cy="' + Y(r.cum) + '" r="3" fill="' + CH.s1 + '" stroke="' + CH.surface + '" stroke-width="2">'
+        + '<title>Year ' + r.year + ': cumulative ' + money(r.cum) + '</title></circle>'
+        + '<text x="' + X(i) + '" y="' + (H - 8) + '" text-anchor="middle" font-size="10" fill="' + CH.sub + '">' + r.year + '</text>';
+    });
+    if (L.paybackYears != null && L.paybackYears <= rows.length - 1) {
+      var px = X(L.paybackYears);
+      svg += '<line x1="' + px + '" y1="' + padT + '" x2="' + px + '" y2="' + (padT + plotH) + '" stroke="' + CH.sub + '" stroke-width="1" stroke-dasharray="4 3"/>'
+        + '<text x="' + (px + 4) + '" y="' + (padT + 12) + '" font-size="10" fill="' + CH.sub + '">payback ' + L.paybackYears.toFixed(1) + ' yrs</text>';
+    }
+    var last = rows[rows.length - 1];
+    svg += '<text x="' + (X(rows.length - 1) - 4) + '" y="' + Math.max(padT + 10, Y(last.cum) - 8) + '" text-anchor="end" font-size="11" font-weight="600" fill="' + CH.ink + '">'
+      + fmtMoneyShort(last.cum) + '</text>';
+    svg += '</svg>';
+    return svg;
+  }
+
+  function brandName() {
+    try { if (window.OmegaWhiteLabel && OmegaWhiteLabel.platformName) return OmegaWhiteLabel.platformName(); } catch (e) {}
+    return 'ClearSky-OMEGA';
+  }
+  function brandAttribution() {
+    try { if (window.OmegaWhiteLabel && OmegaWhiteLabel.attribution) return OmegaWhiteLabel.attribution() || ''; } catch (e) {}
+    return '';
+  }
+
+  function printReport(R) {
+    if (!R) return false;
+    var w = window.open('', '_blank');
+    if (!w) { alert('The report opens in a new tab; allow pop-ups for this page.'); return false; }
+    var b = R.battery, L = R.lifecycle, C = R.cost;
+    var pname = '';
+    try { var pe = document.getElementById('pname'); pname = pe && pe.value ? String(pe.value).trim() : ''; } catch (e) {}
+    var addr = (R.resolved && R.resolved.address) || cfg.address || '';
+    var date = new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    var counted = R.streams.filter(function (s) { return s.counted && s.usd > 0; });
+    var keepPct = Math.round((R.split && R.split.owner || 1) * 100);
+
+    function hero(label, value, note) {
+      return '<div style="flex:1;min-width:130px;border:1px solid ' + CH.grid + ';border-radius:8px;padding:12px 14px">'
+        + '<div style="font:800 22px \'IBM Plex Mono\',monospace;color:' + CH.ink + '">' + value + '</div>'
+        + '<div style="font-size:10px;letter-spacing:.07em;text-transform:uppercase;color:' + CH.sub + ';margin-top:3px">' + label + '</div>'
+        + (note ? '<div style="font-size:10px;color:' + CH.sub + ';margin-top:2px">' + note + '</div>' : '') + '</div>';
+    }
+    function h2(t) { return '<h2 style="font-size:14px;margin:26px 0 6px;color:' + CH.ink + '">' + t + '</h2>'; }
+    function small(t) { return '<div style="font-size:10.5px;color:' + CH.sub + ';line-height:1.55">' + t + '</div>'; }
+
+    var heroes = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:14px 0">'
+      + hero('You keep / year', money(R.totals.owner), 'gross ' + money(R.totals.gross))
+      + (C && C.capexUsd > 0 ? hero('Net cost', money(R.netCostUsd),
+          money(C.capexUsd) + ' − ' + money(R.incentives ? R.incentives.total : 0) + ' incentives') : '')
+      + (L && L.ok ? hero('IRR (' + L.years + ' yr)', L.irr == null ? '—' : pct(L.irr),
+          'unlevered · pre-tax') : '')
+      + (L && L.ok ? hero('Payback', L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs',
+          'NPV ' + money(L.npv) + ' @ ' + pct(L.discountRate, 0)) : '')
+      + (R.bankability && R.bankability.lifecycle && R.bankability.lifecycle.ok
+          ? hero('Bankable IRR', R.bankability.lifecycle.irr == null ? '—' : pct(R.bankability.lifecycle.irr),
+              'computed + published rates only') : '')
+      + '</div>';
+
+    var streamRows = R.streams.map(function (s) {
+      if (!s.counted && !(s.usd > 0) && s.eligible === false) return '';
+      if (!s.counted && !s.usd) return '';
+      return '<tr>'
+        + '<td style="padding:7px 8px;border-bottom:1px solid ' + CH.grid + ';font-size:11.5px">' + esc(s.name)
+        + '<div style="font-size:9.5px;color:' + CH.sub + ';margin-top:2px">' + esc(s.how || '')
+        + (!s.counted && s.why ? (s.how ? ' ' : '') + esc(s.why) : '') + '</div></td>'
+        + '<td style="padding:7px 8px;border-bottom:1px solid ' + CH.grid + ';font:600 11.5px \'IBM Plex Mono\',monospace;text-align:right;white-space:nowrap;vertical-align:top">'
+        + (s.counted ? money(s.usd) : '<span style="color:' + CH.sub + '">not counted</span>') + '</td>'
+        + '<td style="padding:7px 8px;border-bottom:1px solid ' + CH.grid + ';font-size:9.5px;color:' + CH.sub + ';vertical-align:top;width:90px">'
+        + esc(s.tier || '') + (s.category === 'grid' && s.counted ? '<br>you keep ' + keepPct + '%' : '') + '</td>'
+        + '</tr>';
+    }).join('');
+
+    var incHtml = '';
+    if (R.incentives && R.incentives.items && R.incentives.items.length) {
+      incHtml = h2('Incentives — one-time') + '<table style="width:100%;border-collapse:collapse">'
+        + R.incentives.items.map(function (x) {
+            return '<tr><td style="padding:6px 8px;border-bottom:1px solid ' + CH.grid + ';font-size:11.5px">' + esc(x.name)
+              + '<div style="font-size:9.5px;color:' + CH.sub + '">' + esc(x.how || '')
+              + (x.conditions ? (x.how ? '. ' : '') + esc(x.conditions) : '') + '</div>'
+              + (x.utility || x.asOf ? '<div style="font-size:9px;color:' + CH.sub + ';margin-top:2px">'
+                  + esc([x.utility, x.asOf ? 'as of ' + x.asOf : ''].filter(function (t) { return t; }).join(' · ')) + '</div>' : '')
+              + '</td>'
+              + '<td style="padding:6px 8px;border-bottom:1px solid ' + CH.grid + ';font:600 11.5px \'IBM Plex Mono\',monospace;text-align:right;vertical-align:top">' + money(x.usd) + '</td></tr>';
+          }).join('')
+        + '<tr><td style="padding:6px 8px;font-weight:700;font-size:11.5px">Total</td>'
+        + '<td style="padding:6px 8px;font:700 11.5px \'IBM Plex Mono\',monospace;text-align:right">' + money(R.incentives.total) + '</td></tr></table>'
+        + (R.incentives.flags || []).map(function (f) {
+            return '<div style="margin-top:6px;padding:8px 10px;background:#FFF8E6;border-left:3px solid #B98100;font-size:10.5px;line-height:1.5;color:#5c4a00">' + esc(f) + '</div>';
+          }).join('')
+        + (R.incentives.note ? small(esc(R.incentives.note)) : '');
+    }
+
+    /* the investor's page: who pays each stream, under what paper, and the
+       return when planning-grade figures are left out */
+    var BK = R.bankability, bankHtml = '';
+    if (BK && BK.rows && BK.rows.length) {
+      var BL = BK.lifecycle;
+      bankHtml = h2('Revenue quality — what an investor can underwrite')
+        + small(esc(BK.note || ''))
+        + '<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:10.5px">'
+        + '<tr style="color:' + CH.sub + '">' + ['Stream', 'To the project / yr', 'Paid by', 'Contract', 'Tenor / reset'].map(function (h, i) {
+            return '<th style="padding:4px 6px;text-align:' + (i === 1 ? 'right' : 'left') + ';border-bottom:1px solid ' + CH.grid + ';font-weight:600">' + h + '</th>';
+          }).join('') + '</tr>'
+        + BK.rows.map(function (b) {
+            return '<tr>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top">' + esc(b.name)
+              + (b.note ? '<div style="color:#B98100;font-size:9.5px;margin-top:2px">⚠ ' + esc(b.note) + '</div>' : '') + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';text-align:right;vertical-align:top;font-family:\'IBM Plex Mono\',monospace;white-space:nowrap">' + money(b.usdYr)
+              + (b.grossYr && b.grossYr > b.usdYr ? '<div style="color:' + CH.sub + ';font-size:9px">of ' + money(b.grossYr) + ' gross</div>' : '') + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top;color:' + CH.sub + '">' + esc(b.paidBy) + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top;color:' + CH.sub + '">' + esc(b.vehicle) + '</td>'
+              + '<td style="padding:5px 6px;border-bottom:1px solid ' + CH.grid + ';vertical-align:top;color:' + CH.sub + '">' + esc(b.tenor) + '</td>'
+              + '</tr>';
+          }).join('')
+        + '</table>'
+        + '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:12px 0">'
+        + [['Host-contracted (via the ESA)', BK.totals.hostYr],
+           ['Programme & market, your share', BK.totals.programYr],
+           ['Underwriteable today', BK.totals.underwriteableYr],
+           ['Planning-grade upside', BK.totals.planningYr]].map(function (f) {
+            return '<div style="flex:1;min-width:140px;border:1px solid ' + CH.grid + ';border-radius:8px;padding:9px 12px">'
+              + '<div style="font:700 15px \'IBM Plex Mono\',monospace;color:' + CH.ink + '">' + money(f[1]) + '</div>'
+              + '<div style="font-size:9.5px;letter-spacing:.05em;text-transform:uppercase;color:' + CH.sub + ';margin-top:2px">' + f[0] + '</div></div>';
+          }).join('') + '</div>'
+        + (L && L.ok && BL
+            ? small('<b>Two cases, same cost and incentives.</b> All streams: IRR '
+              + (L.irr == null ? '—' : pct(L.irr)) + ', payback '
+              + (L.paybackYears == null ? 'never' : L.paybackYears.toFixed(1) + ' yrs') + '. Bankable case ('
+              + (BL.ok
+                  ? 'computed + published rates only): IRR ' + (BL.irr == null ? '—' : pct(BL.irr)) + ', payback '
+                    + (BL.paybackYears == null ? 'never' : BL.paybackYears.toFixed(1) + ' yrs')
+                  : 'computed + published rates only): nothing underwriteable yet — every counted stream is a planning rate')
+              + '. The difference is exactly what the planning-grade streams claim.')
+            : '')
+        + '<div style="font-size:12px;font-weight:700;margin:12px 0 4px;color:' + CH.ink + '">The paperwork that makes it bankable</div>'
+        + small((BK.contracts || []).map(function (c) { return '• ' + esc(c); }).join('<br>'));
+    }
+
+    var yearsTable = '';
+    if (L && L.ok) {
+      yearsTable = h2('Cash flow, year by year') + '<table style="width:100%;border-collapse:collapse;font-size:10.5px">'
+        + '<tr style="color:' + CH.sub + '">' + ['Year', 'Capacity', 'Revenue', 'O&M', 'Augment', 'Net', 'Cumulative'].map(function (h, i) {
+            return '<th style="padding:4px 6px;text-align:' + (i ? 'right' : 'left') + ';border-bottom:1px solid ' + CH.grid + ';font-weight:600">' + h + '</th>';
+          }).join('') + '</tr>'
+        + L.rows.map(function (r) {
+            return '<tr><td style="padding:3px 6px;border-bottom:1px solid ' + CH.grid + '">' + r.year + '</td>'
+              + '<td style="padding:3px 6px;text-align:right;border-bottom:1px solid ' + CH.grid + '">' + Math.round(r.capacityPct * 100) + '%</td>'
+              + '<td style="padding:3px 6px;text-align:right;border-bottom:1px solid ' + CH.grid + '">' + (r.year ? money(r.revenue) : '—') + '</td>'
+              + '<td style="padding:3px 6px;text-align:right;border-bottom:1px solid ' + CH.grid + '">' + (r.year ? money(r.om) : '—') + '</td>'
+              + '<td style="padding:3px 6px;text-align:right;border-bottom:1px solid ' + CH.grid + '">' + (r.augment ? money(r.augment) : '—') + '</td>'
+              + '<td style="padding:3px 6px;text-align:right;border-bottom:1px solid ' + CH.grid + ';font-family:\'IBM Plex Mono\',monospace">' + money(r.net) + '</td>'
+              + '<td style="padding:3px 6px;text-align:right;border-bottom:1px solid ' + CH.grid + ';font-family:\'IBM Plex Mono\',monospace">' + money(r.cum) + '</td></tr>';
+          }).join('') + '</table>';
+    }
+
+    var sources = [], seenRef = {};
+    R.streams.forEach(function (s) {
+      if (!s.ref || seenRef[s.ref]) return;
+      seenRef[s.ref] = true;
+      sources.push(esc(s.name) + ' — ' + esc(s.ref));
+    });
+    if (R.incentives) R.incentives.items.forEach(function (x) { if (x.ref) sources.push(esc(x.name) + ' — ' + esc(x.ref)); });
+    if (R.tariff && R.tariff.label) sources.push('Tariff — ' + esc(R.tariff.label));
+    if (L && L.ok) L.assumptions.forEach(function (a) { sources.push(esc(a)); });
+    if (C) sources.push('Project cost — ' + esc(C.note));
+
+    var attrib = brandAttribution();
+    var doc = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">'
+      + '<title>Value Stack Report</title><style>'
+      + 'body{margin:0;background:' + CH.surface + ';color:' + CH.ink + ';font-family:"IBM Plex Sans","Segoe UI",sans-serif;color-scheme:light}'
+      + '.page{max-width:760px;margin:0 auto;padding:34px 28px 44px}'
+      + 'section{page-break-inside:avoid}'
+      + '@media print{.noprint{display:none}.page{padding:0}}'
+      + '</style></head><body><div class="page">'
+
+      + '<div style="display:flex;justify-content:space-between;align-items:baseline;border-bottom:2px solid ' + CH.ink + ';padding-bottom:10px">'
+      + '<div><div style="font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:' + CH.sub + '">' + esc(brandName()) + '</div>'
+      + '<h1 style="font-size:21px;margin:4px 0 0">Battery Value Stack Report</h1></div>'
+      + '<div style="text-align:right;font-size:11px;color:' + CH.sub + '">' + esc(date) + '</div></div>'
+
+      + '<div style="margin:12px 0;font-size:12px;line-height:1.7">'
+      + (pname ? '<b>' + esc(pname) + '</b><br>' : '')
+      + (addr ? esc(addr) + '<br>' : '')
+      + esc(R.site.state || '') + ' · ' + esc(R.site.marketName || R.site.market)
+      + (R.resolved && R.resolved.area ? ' · ' + esc(R.resolved.area) : '')
+      + ' · ZIP ' + esc(R.resolved ? R.resolved.zip : R.site.zip)
+      + ' <span style="color:' + CH.sub + '">(' + esc(R.resolved ? R.resolved.label : 'given') + ')</span><br>'
+      + '<b>' + b.kw.toLocaleString() + ' kW / ' + b.kwh.toLocaleString() + ' kWh</b> battery'
+      + (R.solar ? ' · ' + R.solar.kwdc.toLocaleString() + ' kW-DC solar' : '')
+      + ' · ' + esc(R.load.label) + ' · ' + R.battery.cyclesPerYear + ' cycles/yr as dispatched</div>'
+
+      + '<section>' + heroes + '</section>'
+
+      + '<section>' + h2('Year-1 revenue and savings, by stream')
+      + small('Dispatch-constrained: the battery is simulated hour by hour against the tariff, so the streams below cannot claim the same kWh twice. '
+        + 'Bill-side savings stay with you in full; grid-programme earnings are shown gross, with your ' + keepPct + '% share applied in the totals.')
+      + chartStreams(R.streams)
+      + '<table style="width:100%;border-collapse:collapse;margin-top:8px">' + streamRows
+      + '<tr><td style="padding:7px 8px;font-weight:800;font-size:12px">You keep / year</td>'
+      + '<td style="padding:7px 8px;font:800 12px \'IBM Plex Mono\',monospace;text-align:right">' + money(R.totals.owner) + '</td><td></td></tr></table>'
+      + '</section>'
+
+      + '<section>' + bankHtml + '</section>'
+
+      + '<section>' + h2('The utility bill, before and after')
+      + small('Before ' + money(R.bill.before) + ' → after ' + money(R.bill.after) + ' a year ('
+        + money(R.bill.savings) + ' saved). ' + esc(R.tariff.label || ''))
+      + chartMonthly(R.monthly) + '</section>'
+
+      + (L && L.ok ? '<section>' + h2('Cumulative cash flow — ' + L.years + ' years')
+        + small('Year 0 is the net cost after incentives; each year is the owner’s revenue less O&M'
+          + (L.augmentations ? ', with one augmentation back to nameplate' : '') + '. Unlevered, pre-tax.')
+        + chartCashflow(L) + '</section>' : '')
+
+      + '<section>' + incHtml + '</section>'
+      + '<section>' + yearsTable + '</section>'
+
+      + '<section>' + h2('What is NOT counted, and why')
+      + small((R.missing || []).map(function (m) { return '• ' + esc(m); }).join('<br>')) + '</section>'
+
+      + '<section>' + h2('Assumptions and sources')
+      + small(sources.map(function (s2) { return '• ' + s2; }).join('<br>')) + '</section>'
+
+      + '<div style="margin-top:22px;padding:10px 12px;background:#FFF8E6;border-left:3px solid #B98100;font-size:10.5px;line-height:1.6;color:#5c4a00">'
+      + esc(R.disclaimer) + ' Confidence: ' + esc(R.confidence) + '.</div>'
+
+      + '<div style="margin-top:14px;display:flex;justify-content:space-between;font-size:10px;color:' + CH.sub + '">'
+      + '<span>' + esc(attrib || brandName()) + '</span><span>' + esc(date) + '</span></div>'
+
+      + '<div class="noprint" style="margin-top:18px"><button onclick="window.print()" '
+      + 'style="padding:9px 16px;background:' + CH.s1 + ';color:#fff;border:0;border-radius:7px;font-weight:700;cursor:pointer">Print / save as PDF</button></div>'
+
+      + '</div></body></html>';
+
+    w.document.open();
+    w.document.write(doc);
+    w.document.close();
+    return true;
+  }
+
+  /* ── the Analyze rail button ─────────────────────────────────────── */
   function addButton() {
     if (document.getElementById('rb-valuestack')) return true;
     var host = null;
@@ -94884,8 +95210,8 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     if (!host) return false;
     var b = document.createElement('button');
     b.className = 'rbtn'; b.id = 'rb-valuestack';
-    b.title = 'First-pass annual value stack for the battery on the site map';
-    b.innerHTML = '<span class="rb-ico" style="color:var(--green)">\u2211</span>'
+    b.title = 'Server-priced annual value stack and IRR for the battery on the site map';
+    b.innerHTML = '<span class="rb-ico" style="color:var(--green)">∑</span>'
       + '<span class="rb-lbl">Value<br>Stack</span>';
     b.onclick = open;
     host.appendChild(b);
@@ -94895,7 +95221,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   var n = 0;
   var iv = setInterval(function () {
     var a = addButton();
-    if (a && window.console) console.info(TAG, 'armed \u2014 Analyze \u203a Value Stack, or OmegaValue.open()');
+    if (a && window.console) console.info(TAG, 'armed — Analyze › Value Stack, or OmegaValue.open()');
     if (a || ++n > 300) clearInterval(iv);
   }, 500);
 
@@ -94903,47 +95229,25 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     open: open,
     close: function () { var p = document.getElementById('omega-valuestack'); if (p) p.style.display = 'none'; return true; },
     zip: function (z) { if (z != null) { cfg.zip = String(z); paint(); } return cfg.zip; },
-    mode: function (m) { if (m === 'BTM' || m === 'FOM') { cfg.mode = m; paint(); } return cfg.mode; },
-    partner: function (k) { if (k && PARTNERS[k]) { cfg.partner = k; paint(); } return cfg.partner; },
-    partners: function () {
-      var rows = Object.keys(PARTNERS).map(function (k) {
-        return { key:k, name:PARTNERS[k].name, youKeep:Math.round(PARTNERS[k].keep*100)+'%',
-                 streams:PARTNERS[k].streams.join(', '), markets:PARTNERS[k].markets };
-      });
-      if (console.table) console.table(rows); else console.log(rows);
-      return rows;
-    },
-    compare: function () {
-      var was = cfg.partner, out = [];
-      Object.keys(PARTNERS).forEach(function (k) {
-        cfg.partner = k;
-        var r = compute();
-        out.push({ partner:PARTNERS[k].name, streams:r.rows.length,
-                   gross:'$'+Math.round(r.grossTotal).toLocaleString(),
-                   youKeep:'$'+Math.round(r.total).toLocaleString(),
-                   share:Math.round(PARTNERS[k].keep*100)+'%' });
-      });
-      cfg.partner = was; paint();
-      if (console.table) console.table(out); else console.log(out);
-      console.info(TAG + ' gross is what the streams are worth; \"you keep\" is after the revenue share.');
-      return out;
-    },
-    compute: compute,
-    stateOf: stateOf,
-    market: function (z) { var s = stateOf(z || cfg.zip); return s ? { state: s, market: MARKET[s] || 'Non-ISO' } : null; },
+    address: function (a) { if (a != null) { cfg.address = String(a); paint(); } return cfg.address; },
+    run: run,
+    result: function () { return state.result; },
+    print: function () { return printReport(state.result); },
     report: function () {
-      var r = compute();
-      if (!r.battery.units) { console.warn(TAG, 'no battery on the site map'); return null; }
-      if (!r.state) { console.warn(TAG, 'set a zip first: OmegaValue.zip("60606")'); return null; }
-      console.info(TAG + ' ' + r.state + ' / ' + r.market + ' \u2014 ' + r.battery.kwh + ' kWh, ' + r.battery.kw + ' kW');
-      var rows = r.rows.map(function (x) {
-        return { stream: x.stream, annual: '$' + Math.round(x.annual).toLocaleString(), basis: x.how, source: x.source };
+      var R = state.result;
+      if (!R) { console.warn(TAG, 'no result yet — OmegaValue.open() runs it'); return null; }
+      console.info(TAG + ' ' + R.site.state + ' / ' + R.site.market + ' — '
+        + R.battery.kwh + ' kWh, ' + R.battery.kw + ' kW · site from ' + (R.resolved && R.resolved.label));
+      var rows = R.streams.filter(function (s) { return s.counted; }).map(function (s) {
+        return { stream: s.name, annual: money(s.usd), tier: s.tier, basis: s.how };
       });
       if (console.table) console.table(rows); else console.log(rows);
-      console.info('  total $' + Math.round(r.total).toLocaleString() + '/yr  \u00b7  $'
-        + Math.round(r.total / Math.max(1, r.battery.kwh)) + ' per kWh installed');
-      console.info('  PLANNING GRADE \u2014 the demand charge is an assumption, not a tariff.');
-      return r;
+      console.info('  you keep ' + money(R.totals.owner) + '/yr · gross ' + money(R.totals.gross)
+        + (R.lifecycle && R.lifecycle.ok && R.lifecycle.irr != null
+            ? ' · IRR ' + (R.lifecycle.irr * 100).toFixed(1) + '% · payback '
+              + (R.lifecycle.paybackYears == null ? 'never' : R.lifecycle.paybackYears.toFixed(1) + ' yrs') : ''));
+      console.info('  PLANNING GRADE — the sources and the warning are on the printed report.');
+      return R;
     }
   };
 })();

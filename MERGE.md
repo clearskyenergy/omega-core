@@ -2946,3 +2946,75 @@ Open: compute revenue and ClearSky's return on the skid (belongs in
 standard rent; a signed comp set for the buyout band; the R60 in Clean Cell's
 own tenant product list.
 
+
+## 2026-10-06 — Value Stack: rates server-side, IRR, printable report
+
+The editor's Analyze › Value Stack panel carried its own ZIP→state table,
+regional rate typicals and aggregator revenue shares in editor.html — a rate
+book shipped to every browser, already three PJM auctions stale against the
+server's own dated figure. Moved per the IP rule ("where logic lives"):
+
+- `POST /api/value-stack` (new) composes the pieces that already exist, one
+  copy each: the dispatch-constrained annual stack is `api/_lib/vpp-sim.js`
+  `simulate()` (the ONE hour-by-hour dispatch on the ONE tariff engine, with
+  the grid programmes open at the ZIP and PJM capacity through
+  value-stack.js); incentives are `value-stack.js incentives()` (ITC, and
+  the ComEd rebate with its two conditions when the site is in ComEd); a
+  missing project cost falls back to the ONE cost model at generic rates and
+  the result says so. Gate mirrors `api/vpp-estimate.js` (verify-token, no
+  service account), keyed on the editor tool; fails open on a missing
+  omega_orgs record.
+- `value-stack.js` gained `lifecycle()`: twenty years of the owner's share
+  against the project's cost — degradation by what each stream is paid on,
+  bill-side escalation, flat programme revenue, NREL-ATB-convention O&M, one
+  augmentation back to nameplate — with IRR and payback from the finance
+  engine's own `irr`/`payback` (proforma-engine.js), never a second root
+  finder. Stated grade: unlevered, pre-tax, screening; the Pro Forma is the
+  full treatment.
+- `geocode.js` gained `reverse()` (Census geographies): the panel sends the
+  map's own address and centre, the server resolves the ZIP and says which
+  source answered. Never rejects; cached per rounded point.
+- The panel (editor.html Patch 41) now auto-fills the site from the map,
+  sends the drawn battery, the imported bill's demand charge and the run's
+  own cost (`_COST_TOTAL`), renders the server's streams/IRR/payback, and
+  prints a self-contained report (streams, monthly bill before/after,
+  cumulative cash flow with the payback marked, incentives, every
+  assumption with its source, the planning-grade disclaimer). The older
+  sidebar Value Stack Estimator and `window._VS_ESTIMATE` are untouched.
+
+Held by `scripts/tests/tvaluestack.js` (lifecycle honesty rules),
+`tvalueapi.js` (the gate, the three site resolutions, the composition,
+what leaves) and `tvaluepanel.js` (no rate table ships; the map fills the
+address; the report carries charts and sources) — all three now in
+`npm test` (tvaluestack.js had been orphaned).
+
+Addendum (same day): **bankability**. The goal is bankable revenue, not
+savings (Tommy, 2026-10-06), so each programme row in vpp-sim.js now
+carries its counterparty facts (`bank`: who pays, the contract vehicle,
+the tenor/reset — one copy, beside the ref), `value-stack.js bankability()`
+arranges them into the investor's ladder (host savings become the project's
+revenue only under an ESA; a planning rate is upside, never collateral),
+and the endpoint runs a second lifecycle on computed + published rates
+only. The panel shows the bankable case beside the all-in IRR; the report
+gains "Revenue quality — what an investor can underwrite" (the ladder,
+the four subtotals, the two-case comparison, the paperwork list: ESA,
+aggregator/CSP agreement, assignable enrolments, §6418 ITC transfer).
+
+Addendum 2 (2026-10-06): **the incentive book is utility- and market-
+specific, and a daily scout keeps it true.** `value-stack.js` gained
+`V.INCENTIVE_BOOK` + `rebatesFor(loc, segment, { itcClaimed })` — ComEd and
+Ameren Illinois DG/storage rebates ($250/kWh large C&I, $300 residential,
+each utility's own paper), California SGIP large-scale storage (Step 5;
+the ITC-adjusted $180/kWh when the credit is claimed), NYSERDA's retail
+blocks ($125 NYC/Westchester, $175 upstate, 20,000 kWh ceiling) and
+Maryland's RCES grant (30% to $150k, planning-grade: first-come annual
+budget). Every row carries tier, asOf, primary source and conditions; a
+territory with no row gets the ITC alone and the response says so.
+`incentives()` now takes a rebate LIST through the one arithmetic (the
+legacy single-rebate fields stay for price-site.js). The ComEd conditions
+were re-verified against the 2026 T&C, which RETIRED the Rate BESH supply
+commitment in favour of SDVPP participation (Rider SDVPP, anticipated
+2027-03-01) — the book and the tests now pin the 2026 terms.
+`.claude/agents/incentive-scout.md` + a daily Routine (6:56am CT, fresh
+session) re-verify every row against primary documents and open a draft PR
+when something moved; data only, never the math, never a merge.

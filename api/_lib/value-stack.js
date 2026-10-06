@@ -162,40 +162,170 @@
      Two shapes that behave differently: a tax credit is a fraction of what
      you spend, a rebate is a rate against what you install.
 
-     THE COMED STORAGE REBATE IS GENUINELY PER kWh, and it is large enough
-     that it looks like a typo. Their own DG Rebate Terms and Conditions:
-     owners of a DG facility "are eligible for a rebate of $250 per
-     kilowatt-hour ('kWh') or $300 per kWh of nameplate capacity for
-     eligible energy storage facilities associated with a qualified DG
-     facility". At 5,407 kWh that is $1.35M, which can exceed the whole
-     project — this programme is designed to do that.
+     THE ILLINOIS STORAGE REBATE IS GENUINELY PER kWh, and it is large
+     enough that it looks like a typo. ComEd's own DG Rebate Terms and
+     Conditions (2026 edition): owners of a qualified DG facility at a
+     large C&I customer are eligible for $250 per kWh of nameplate storage
+     capacity ($300 per kWh residential and small C&I). At 5,407 kWh that
+     is $1.35M, which can exceed the whole project — the programme is
+     designed to do that.
 
-     So the rebate is applied as entered. What is carried with it are the
-     two conditions that decide whether it arrives at all, because they are
-     where this goes wrong in practice and neither is visible in the
-     headline rate:
+     So a rebate is applied as entered. What is carried with it are the
+     conditions that decide whether it arrives at all, because they are
+     where this goes wrong in practice and none is visible in the headline
+     rate. THE 2026 T&C CHANGED THEM: the old "take supply under Rate BESH
+     for the life of the facility" is gone; what stands now is the DG
+     pairing and participation in ComEd's Scheduled Dispatch Virtual Power
+     Plant programme (Rider SDVPP, anticipated effective 1 March 2027).
+     This is exactly why the incentive book below carries an asOf on every
+     row and the incentive scout re-verifies it against the primary
+     documents (.claude/agents/incentive-scout.md).
 
-       the storage must be ASSOCIATED WITH A QUALIFIED DG FACILITY, and
-       the customer must take supply under RATE BESH for the life of the
-       storage facility.
-
-     A flag still fires when the rebate exceeds the project, not to dispute
-     the rate but to make sure somebody has confirmed those two before a
-     number that large is put in front of a customer. */
+     A flag still fires when a rebate exceeds 60% of the project, not to
+     dispute the rate but to make sure somebody has confirmed the row's own
+     conditions before a number that large goes in front of a customer. */
   var COMED_REBATE = {
     perKwh: 250,
-    ref: "ComEd Distributed Generation Rebate Terms and Conditions: a rebate of "
-       + "$250 per kWh (or $300 per kWh for some classes) of nameplate capacity "
-       + "for eligible energy storage facilities associated with a qualified DG "
-       + "facility.",
+    resPerKwh: 300,
+    ref: "ComEd Distributed Generation Rebate Terms and Conditions (2026): $250 "
+       + "per kWh of nameplate capacity for eligible energy storage facilities "
+       + "associated with a qualified DG facility at a large C&I customer; $300 "
+       + "per kWh residential and small C&I.",
     url: "https://www.comed.com/cdn/assets/v3/assets/blt3ebb3fed6084be2a/"
-       + "blt2810b689df2e361f/67741700adc7815acf7dba44/"
-       + "DGRebate_TermsConditions-2024-v2.pdf",
-    conditions: "Two conditions decide whether this arrives: the storage must be "
-       + "associated with a qualified DG facility, and the customer must take "
-       + "supply under Rate BESH for the life of the storage facility."
+       + "blt2810b689df2e361f/6a19a2f492d70cb21c15fe39/"
+       + "DG-Rebate-Terms-and-Conditions--2026.pdf",
+    conditions: "What decides whether this arrives: the storage must be "
+       + "associated with a qualified DG facility (the DG itself need not take "
+       + "a rebate), and the customer must agree to participate in ComEd's "
+       + "Scheduled Dispatch Virtual Power Plant programme for the required "
+       + "term (Rider SDVPP, anticipated effective 1 March 2027). For "
+       + "interconnection agreements signed after 1 June 2026, state law is "
+       + "reported to cap the rebate at 5 kWh per kW of participating power "
+       + "and 25,000 kWh in total — confirm against the current tariff."
   };
   V.COMED_REBATE = COMED_REBATE;
+
+  /* ── THE ONE-TIME INCENTIVE BOOK, utility and market specific ────────
+     One row per standing programme, selected by WHERE THE SITE IS (the
+     locate() answer: state, the ComEd and NYC flags) and the segment.
+     Every row carries the primary source, an asOf, and the conditions
+     that decide whether the money arrives. A territory with no row gets
+     the ITC alone and the response says so — an empty answer is a true
+     answer; an invented rebate is not.
+
+     Verified against the primary documents 2026-10-06; the incentive
+     scout (.claude/agents/incentive-scout.md) re-verifies daily. */
+  V.INCENTIVE_BOOK = [
+    {
+      id: "comed.dg.storage", utility: "ComEd", name: "ComEd storage rebate (DG Rebate)",
+      state: "IL", comed: true,
+      perKwh: COMED_REBATE.perKwh, resPerKwh: COMED_REBATE.resPerKwh,
+      tier: "published", asOf: "2026 Terms and Conditions, read 2026-10-06",
+      ref: COMED_REBATE.ref, url: COMED_REBATE.url, conditions: COMED_REBATE.conditions
+    },
+    {
+      id: "ameren.cgr.storage", utility: "Ameren Illinois", name: "Ameren Illinois storage rebate (Rider CGR)",
+      state: "IL", comed: false,
+      perKwh: 250, resPerKwh: 300,
+      tier: "published", asOf: "Rider CGR / CUB fact sheet, March 2026; read 2026-10-06",
+      ref: "Illinois' DG rebate on Ameren Illinois' paper (Rider CGR — Customer "
+         + "Generation & Storage Rebate): $250 per kWh of nameplate storage capacity "
+         + "for large C&I, $300 per kWh residential and small C&I.",
+      url: "https://www.citizensutilityboard.org/wp-content/uploads/2026/03/Solar_Storage_Rebates_Final.pdf",
+      conditions: "The same Illinois rebate as ComEd's, on Ameren's tariff: DG-paired "
+         + "storage, dispatch-programme participation, and new requirements for rebates "
+         + "on or after 1 June 2026. The ZIP places this site outside ComEd, so Ameren "
+         + "Illinois is assumed — municipal utilities and co-ops are not covered; "
+         + "confirm the serving utility."
+    },
+    {
+      id: "ca.sgip.storage", utility: "PG&E / SCE / SoCalGas / SDG&E (SGIP)", name: "California SGIP, large-scale storage",
+      state: "CA", nonresidential: true,
+      perKwh: 250, perKwhItc: 180,
+      tier: "published", asOf: "Step 5, statewide, as of 2026-09-23; read 2026-10-06",
+      ref: "CPUC Self-Generation Incentive Program, large-scale storage (over 10 kW), "
+         + "Step 5: $0.25/Wh, or $0.18/Wh for projects claiming the federal ITC. The "
+         + "open step's rate on selfgenca.com replaces this.",
+      url: "https://www.selfgenca.com/home/program_metrics/",
+      conditions: "Paid through the IOU programme administrators (PG&E, SCE, SoCalGas "
+         + "and SDG&E territories — confirm the serving utility); each step's budget "
+         + "subscribes and the next pays less. This screening assumes the ITC is "
+         + "claimed, so the ITC-adjusted rate is used. A resiliency adder of $0.15/Wh "
+         + "exists for critical facilities. Residential budgets differ and are not "
+         + "priced here."
+    },
+    {
+      id: "ny.nyserda.retail", utility: "NYSERDA", name: "NYSERDA Retail Energy Storage Incentive",
+      state: "NY", nonresidential: true,
+      perKwh: 175, perKwhNyc: 125, maxKwh: 20000,
+      tier: "published", asOf: "current MWh block, 2026; read 2026-10-06",
+      ref: "NYSERDA Retail Energy Storage Incentive (MWh-block design under the "
+         + "2024–2030 implementation plan): the current block pays $175 per kWh "
+         + "upstate and $125 per kWh in New York City and Westchester, on systems up "
+         + "to 20,000 kWh. The region's open block on NYSERDA's dashboard replaces this.",
+      url: "https://www.nyserda.ny.gov/All-Programs/Energy-Storage-Program/Commercial-Energy-Storage",
+      conditions: "A declining block per region: the open block's rate decides, and a "
+         + "fully subscribed region pays less or nothing until new funds are allocated. "
+         + "Westchester prices at the New York City rate. A Retail Inclusive rate of "
+         + "$350 per kWh exists for critical facilities in disadvantaged communities."
+    },
+    {
+      id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
+      state: "MD", nonresidential: true,
+      pctOfCost: 0.30, capUsd: 150000,
+      tier: "planning", asOf: "FY2026 programme; read 2026-10-06",
+      ref: "Maryland Energy Administration Residential and Commercial Energy Storage "
+         + "(RCES) grant: 30% of total installed cost, up to $150,000 for a commercial "
+         + "system. It replaced the storage income tax credit, inactive since the end "
+         + "of 2024.",
+      url: "https://energy.maryland.gov/Pages/Energy-Storage-Grant-Program.aspx",
+      conditions: "First-come grants from a small annual budget ($2M in FY26; 76% "
+         + "reserved by May 2026 and applications closed 5 June 2026), so this is "
+         + "planning-grade until the current fiscal year's round is confirmed open "
+         + "with funds remaining."
+    }
+  ];
+
+  /* The book rows that apply to THIS site, resolved to concrete figures.
+     loc is vpp-sim's locate() answer ({ state, comed, nyc, ... });
+     opts.itcClaimed picks the ITC-adjusted rate where a programme pays
+     differently when the credit is taken (SGIP does). */
+  V.rebatesFor = function (loc, segment, opts) {
+    loc = loc || {};
+    opts = opts || {};
+    var residential = segment === "residential";
+    var out = [], i;
+    for (i = 0; i < V.INCENTIVE_BOOK.length; i++) {
+      var b = V.INCENTIVE_BOOK[i];
+      if (b.state && b.state !== loc.state) continue;
+      if (b.comed === true && !loc.comed) continue;
+      if (b.comed === false && loc.comed) continue;
+      if (b.nonresidential && residential) continue;
+      var perKwh = b.perKwh;
+      if (residential && isFinite(+b.resPerKwh)) perKwh = b.resPerKwh;
+      if (opts.itcClaimed && isFinite(+b.perKwhItc)) perKwh = b.perKwhItc;
+      if (loc.nyc && isFinite(+b.perKwhNyc)) perKwh = b.perKwhNyc;
+      out.push({
+        id: b.id, name: b.name, utility: b.utility,
+        perKwh: perKwh, pctOfCost: b.pctOfCost, capUsd: b.capUsd, maxKwh: b.maxKwh,
+        tier: b.tier, asOf: b.asOf, ref: b.ref, url: b.url, conditions: b.conditions
+      });
+    }
+    return out;
+  };
+
+  function rebateFlag(row, applied, capex) {
+    return "The " + (row.name || "rebate") + " comes to $" + Math.round(applied).toLocaleString() +
+      " against a $" + Math.round(capex).toLocaleString() + " project. That is not " +
+      "necessarily wrong — a per-kWh programme is designed to run this large — but " +
+      "confirm the conditions before a number this size goes to a customer: " +
+      (row.conditions || "the programme's own terms decide.");
+  }
+
+  /* incentives({ capexUsd, kwh, itcRate, rebates: [rows] }) — or the
+     legacy single-rebate fields (rebatePerKwh, rebateName, rebateCapUsd,
+     rebateRef, rebateConditions, rebateUrl), which api/price-site.js still
+     sends; both run through the ONE arithmetic below. */
   V.incentives = function (input) {
     input = input || {};
     var capex = +input.capexUsd, kwh = +input.kwh;
@@ -209,38 +339,306 @@
                  /* The condition, short enough to survive onto a card. The
                     full rate is not automatic and a customer who reads only
                     the number will assume it is. */
-                 short: Math.round(itcRate * 100) + "% \u00b7 needs prevailing wage",
+                 short: Math.round(itcRate * 100) + "% · needs prevailing wage",
                  ref: "Statutory. The full rate requires the prevailing-wage and "
                     + "apprenticeship conditions; without them the base rate applies." });
     }
 
+    var rebates = Array.isArray(input.rebates) ? input.rebates.slice() : [];
     var reb = +input.rebatePerKwh;
-    if (isFinite(reb) && reb > 0 && isFinite(kwh)) {
-      var raw = reb * kwh;
-      var cap = +input.rebateCapUsd;
-      var applied = (isFinite(cap) && cap > 0) ? Math.min(raw, cap) : raw;
-      if (isFinite(capex) && applied > capex * 0.6) {
-        flags.push("The rebate comes to $" + Math.round(applied).toLocaleString() +
-          " against a $" + Math.round(capex).toLocaleString() + " project. That is not " +
-          "necessarily wrong — the ComEd programme is per kWh and is designed to run " +
-          "this large — but confirm both conditions before a number this size goes to a " +
-          "customer: the storage must be associated with a qualified DG facility, and " +
-          "the customer must take supply under Rate BESH for the life of the facility.");
-      }
-      out.push({ id: "rebate", name: input.rebateName || "Utility rebate",
-                 usd: applied, tier: "published",
-                 how: "$" + reb + " / kWh on " + Math.round(kwh).toLocaleString() + " kWh" +
-                      ((isFinite(cap) && cap > 0 && raw > cap)
-                        ? ", capped at $" + Math.round(cap).toLocaleString() : ""),
-                 short: "$" + reb + " / kWh \u00b7 needs paired DG + Rate BESH",
-                 ref: input.rebateRef || COMED_REBATE.ref,
-                 conditions: input.rebateConditions || COMED_REBATE.conditions,
-                 url: input.rebateUrl || COMED_REBATE.url });
+    if (isFinite(reb) && reb > 0) {
+      rebates.push({ id: "rebate", name: input.rebateName || "Utility rebate",
+                     perKwh: reb, capUsd: input.rebateCapUsd,
+                     tier: "published",
+                     ref: input.rebateRef || COMED_REBATE.ref,
+                     conditions: input.rebateConditions || COMED_REBATE.conditions,
+                     url: input.rebateUrl || COMED_REBATE.url });
     }
 
-    var tot = 0, i;
+    var i;
+    for (i = 0; i < rebates.length; i++) {
+      var row = rebates[i];
+      var usd = null, how = "";
+      var cap = +row.capUsd;
+      if (isFinite(+row.perKwh) && +row.perKwh > 0 && isFinite(kwh)) {
+        var maxKwh = +row.maxKwh;
+        var paidKwh = (isFinite(maxKwh) && maxKwh > 0) ? Math.min(kwh, maxKwh) : kwh;
+        var raw = +row.perKwh * paidKwh;
+        usd = (isFinite(cap) && cap > 0) ? Math.min(raw, cap) : raw;
+        how = "$" + row.perKwh + " / kWh on " + Math.round(paidKwh).toLocaleString() + " kWh" +
+              (paidKwh < kwh ? " (the programme pays at most " + Math.round(maxKwh).toLocaleString() + " kWh)" : "") +
+              (usd < raw ? ", capped at $" + Math.round(cap).toLocaleString() : "");
+      } else if (isFinite(+row.pctOfCost) && +row.pctOfCost > 0 && isFinite(capex)) {
+        var rawP = capex * +row.pctOfCost;
+        usd = (isFinite(cap) && cap > 0) ? Math.min(rawP, cap) : rawP;
+        how = Math.round(+row.pctOfCost * 100) + "% of installed cost" +
+              (usd < rawP ? ", capped at $" + Math.round(cap).toLocaleString() : "");
+      }
+      if (usd == null || !(usd > 0)) continue;
+      if (isFinite(capex) && usd > capex * 0.6) flags.push(rebateFlag(row, usd, capex));
+      out.push({ id: row.id || "rebate", name: row.name || "Utility rebate",
+                 usd: usd, tier: row.tier || "published", how: how,
+                 short: row.short || null, utility: row.utility || null,
+                 asOf: row.asOf || null,
+                 ref: row.ref, conditions: row.conditions, url: row.url || null });
+    }
+
+    var tot = 0;
     for (i = 0; i < out.length; i++) tot += out[i].usd;
     return { items: out, total: tot, flags: flags };
+  };
+
+  /* ── THE LIFECYCLE ───────────────────────────────────────────────────
+     Twenty years of the stack against the cost of the project, so the
+     editor can put an IRR beside the year-1 number instead of leaving the
+     reader to divide two figures and call it a return.
+
+     The IRR and payback come from THE finance engine
+     (api/_lib/proforma-engine.js irr/payback — bracketed bisection, the
+     multiple-root guard, the no-payback guard), never a local root finder:
+     two IRR functions that disagree by a tenth of a point cost more trust
+     than either earns. This file only builds the cash flows.
+
+     PLANNING GRADE, and honest about which grade: an UNLEVERED, PRE-TAX
+     project IRR on the owner's share of the stack, incentives taken at
+     year 0. Tax, depreciation, debt and reserves are the Pro Forma's job
+     (api/proforma.js on the same engine); this is the screening number
+     that says whether that work is worth commissioning.
+
+     Degradation follows what each stream is paid on: an energy stream
+     (TOU arbitrage) fades with usable kWh, a power stream (demand,
+     capacity programmes) with deliverable kW. Year 1 already carries a
+     year of fade — indexing from year 1 would gift the model a free year
+     of a brand-new battery. One augmentation back to nameplate is bought
+     when usable energy falls below the threshold, because a 20-year model
+     on a battery that fades out in year 12 is a 12-year model wearing a
+     20-year label. */
+  var PF = null;
+  try {
+    if (typeof module !== "undefined" && module.exports && typeof require === "function") {
+      PF = require("./proforma-engine");
+    }
+  } catch (e) {}
+
+  V.LIFECYCLE_DEFAULTS = {
+    years: 20,
+    omPctOfCapex: 0.025,
+    omRef: "Fixed O&M at 2.5% of installed cost a year, the NREL ATB convention "
+         + "for battery storage. An O&M contract replaces it.",
+    omEscalation: 0.025,
+    billEscalation: 0.02,
+    billEscalationRef: "Bill-side streams (demand, TOU) ride the tariff, escalated "
+         + "2%/yr; programme and market streams are held FLAT, because a cleared "
+         + "price has no claim on next year's auction.",
+    energyFadePct: 0.018,
+    powerFadePct: 0.005,
+    fadeRef: "Planning degradation: usable energy -1.8%/yr, deliverable power "
+         + "-0.5%/yr. The manufacturer's warranted curve replaces both.",
+    augmentAtPct: 0.70,
+    augmentCostPerKwh: 200,
+    augmentRef: "One augmentation back to nameplate when usable energy falls below "
+         + "70%, at $200/kWh — a planning figure for future module cost.",
+    discountRate: 0.08
+  };
+
+  function lcNum(v, dflt, lo, hi) {
+    var n = +v;
+    if (!isFinite(n)) return dflt;
+    if (n < lo) return lo;
+    if (n > hi) return hi;
+    return n;
+  }
+
+  /* input: {
+       capexUsd           required, > 0
+       incentiveUsd       taken at year 0 (ITC + rebates); capped at capex
+       streams            [{ id, name, usd, basis:'energy'|'power'|'fixed',
+                             escalates: bool }] — year-1 OWNER dollars
+       kwh                for sizing the augmentation
+       years, omPctOfCapex | omUsdYear, omEscalation, billEscalation,
+       energyFadePct, powerFadePct, augmentAtPct (0 disables),
+       augmentCostPerKwh, discountRate
+     } */
+  V.lifecycle = function (input) {
+    input = input || {};
+    var capex = +input.capexUsd;
+    if (!isFinite(capex) || capex <= 0) {
+      return { ok: false, error: "No project cost, no IRR. Run the cost estimate " +
+               "(or enter a contracted price) first — a return computed against a " +
+               "guessed cost is a guess wearing a percent sign." };
+    }
+    var raw = Array.isArray(input.streams) ? input.streams : [];
+    var streams = [], i;
+    for (i = 0; i < raw.length; i++) {
+      var s = raw[i];
+      if (s && isFinite(+s.usd) && +s.usd > 0) {
+        streams.push({ id: String(s.id || "stream" + i), name: String(s.name || s.id || "stream"),
+                       usd: +s.usd, basis: s.basis === "energy" ? "energy" : (s.basis === "fixed" ? "fixed" : "power"),
+                       escalates: s.escalates === true });
+      }
+    }
+    if (!streams.length) {
+      return { ok: false, error: "No revenue streams carry a dollar figure, so there " +
+               "is no cash flow to discount." };
+    }
+    if (!PF) return { ok: false, error: "The finance engine is not available here." };
+
+    var D = V.LIFECYCLE_DEFAULTS;
+    var years = Math.round(lcNum(input.years, D.years, 5, 30));
+    var omEsc = lcNum(input.omEscalation, D.omEscalation, 0, 0.1);
+    var billEsc = lcNum(input.billEscalation, D.billEscalation, 0, 0.1);
+    var eFadeR = lcNum(input.energyFadePct, D.energyFadePct, 0, 0.1);
+    var pFadeR = lcNum(input.powerFadePct, D.powerFadePct, 0, 0.1);
+    var augAt = lcNum(input.augmentAtPct, D.augmentAtPct, 0, 0.95);
+    var augCost = lcNum(input.augmentCostPerKwh, D.augmentCostPerKwh, 0, 1000);
+    var disc = lcNum(input.discountRate, D.discountRate, 0, 0.25);
+    var kwh = isFinite(+input.kwh) && +input.kwh > 0 ? +input.kwh : null;
+
+    var om1;
+    if (isFinite(+input.omUsdYear) && +input.omUsdYear >= 0) om1 = +input.omUsdYear;
+    else om1 = capex * lcNum(input.omPctOfCapex, D.omPctOfCapex, 0, 0.1);
+
+    var inc = isFinite(+input.incentiveUsd) && +input.incentiveUsd > 0 ? +input.incentiveUsd : 0;
+    var incCapped = false;
+    if (inc > capex) { inc = capex; incCapped = true; }
+    var net = capex - inc;
+
+    var flows = [-net];
+    var rows = [{ year: 0, capacityPct: 1, revenue: 0, om: 0, augment: 0,
+                  net: -net, cum: -net }];
+    var augmented = 0, augYear = 0, cum = -net, y;
+    for (y = 1; y <= years; y++) {
+      /* Energy fade restarts at the augmentation (new modules); power fade
+         does not (the inverters are not replaced). */
+      var eFade = Math.pow(1 - eFadeR, y - augYear);
+      var pFade = Math.pow(1 - pFadeR, y);
+      var aug = 0;
+      /* never in the final year: modules bought with no years left to earn
+         them back only exist to make year N look bad */
+      if (augAt > 0 && kwh && eFade < augAt && augmented < 1 && y < years) {
+        aug = kwh * (1 - eFade) * augCost;
+        augmented++;
+        augYear = y;
+        eFade = 1;
+      }
+      var esc = Math.pow(1 + billEsc, y - 1);
+      var rev = 0;
+      for (i = 0; i < streams.length; i++) {
+        var st = streams[i];
+        var fade = st.basis === "energy" ? eFade : (st.basis === "power" ? pFade : 1);
+        rev += st.usd * fade * (st.escalates ? esc : 1);
+      }
+      var om = om1 * Math.pow(1 + omEsc, y - 1);
+      var cash = rev - om - aug;
+      flows.push(cash);
+      cum += cash;
+      rows.push({ year: y, capacityPct: eFade, revenue: rev, om: om,
+                  augment: aug, net: cash, cum: cum });
+    }
+
+    var npv = 0;
+    for (y = 0; y < flows.length; y++) npv += flows[y] / Math.pow(1 + disc, y);
+
+    var assumptions = [
+      "An unlevered, pre-tax project IRR on the owner's share of the stack over " +
+        years + " years, incentives taken at year 0. Tax, depreciation, debt and " +
+        "reserves are the Pro Forma's job; this is the screening number.",
+      D.fadeRef, D.billEscalationRef,
+      "O&M $" + Math.round(om1).toLocaleString() + " in year 1 (" + D.omRef + "), " +
+        "escalated " + (omEsc * 100).toFixed(1) + "%/yr.",
+      augAt > 0 && kwh ? D.augmentRef
+        : "No augmentation is modelled" + (kwh ? " (disabled)" : " — the battery's kWh was not given") +
+          ", so late years ride the faded battery.",
+      "NPV discounted at " + (disc * 100).toFixed(1) + "%."
+    ];
+    if (incCapped) assumptions.push("Incentives were capped at the project cost; " +
+      "the uncapped figure exceeded it.");
+
+    return {
+      ok: true,
+      years: years,
+      capexUsd: capex, incentiveUsd: inc, netCostUsd: net,
+      rows: rows,
+      irr: PF.irr(flows),
+      npv: npv, discountRate: disc,
+      paybackYears: PF.payback(flows),
+      augmentations: augmented,
+      omYear1Usd: om1,
+      assumptions: assumptions
+    };
+  };
+
+  /* ── BANKABILITY ─────────────────────────────────────────────────────
+     The investor's cut of the same streams. A saving is not revenue: a
+     bill-side stream becomes the PROJECT's income only under a contract
+     with the host (an energy services / shared-savings agreement), and
+     what an investor then underwrites is the host's credit. A programme
+     stream has a real counterparty — a utility, an ISO through an
+     aggregator — and a reset cadence an underwriter must know. Those
+     facts ride each programme row in vpp-sim.js (`bank`); this function
+     only arranges them and refuses to blur the one distinction that
+     matters: a PLANNING rate is not underwriteable until the programme's
+     own terms replace it, however plausible the number.
+
+     streams: vpp-sim's stream rows. split: the revenue share (owner
+     fraction applied to programme earnings, as the totals already do). */
+  V.bankability = function (streams, split) {
+    streams = Array.isArray(streams) ? streams : [];
+    var keep = (split && isFinite(+split.owner)) ? +split.owner : 1;
+    var rows = [], hostYr = 0, programYr = 0, underYr = 0, i;
+    for (i = 0; i < streams.length; i++) {
+      var s = streams[i];
+      if (!s || !s.counted || !(s.usd > 0)) continue;
+      var row;
+      if (s.category === "bill") {
+        hostYr += s.usd;
+        row = {
+          id: s.id, name: s.name, usdYr: s.usd, tier: s.tier, grade: "host-contract",
+          paidBy: "the host customer",
+          vehicle: "an energy services / shared-savings agreement — without one, " +
+                   "these are the host's own savings, not the project's revenue",
+          tenor: "the ESA term you sign; 10–15 years is customary"
+        };
+      } else {
+        var own = s.usd * keep;
+        programYr += own;
+        var b = s.bank || {};
+        row = {
+          id: s.id, name: s.name, usdYr: own, grossYr: s.usd, tier: s.tier, grade: "program",
+          paidBy: b.paidBy || "the programme",
+          vehicle: b.vehicle || "programme enrolment",
+          tenor: b.tenor || "programme year"
+        };
+      }
+      if (s.tier === "planning") {
+        row.note = "a planning rate — not underwriteable until the programme's " +
+                   "own terms replace it";
+      } else {
+        underYr += row.usdYr;
+      }
+      rows.push(row);
+    }
+    var totalYr = hostYr + programYr;
+    return {
+      rows: rows,
+      totals: {
+        hostYr: hostYr, programYr: programYr, totalYr: totalYr,
+        underwriteableYr: underYr, planningYr: totalYr - underYr
+      },
+      /* The paperwork that turns the stack into something a lender reads. */
+      contracts: [
+        "Energy services / shared-savings agreement with the host — the contract " +
+          "that converts demand and TOU savings into the project's contracted revenue; " +
+          "the counterparty an investor underwrites is the host's credit and tenancy.",
+        "Aggregator / curtailment-service-provider agreement — the route to capacity " +
+          "and programme revenue; it fixes the revenue share and can floor a multi-year rate.",
+        "Programme enrolments held in, or assignable to, the project entity — a payment " +
+          "to the host's account is not the SPV's revenue.",
+        "The one-time incentives sit in the capital stack, not the revenue stack: the ITC " +
+          "is transferable for cash under §6418, and a utility rebate pays once at " +
+          "commissioning against its own conditions."
+      ]
+    };
   };
 
   root.OmegaValueStack = V;
