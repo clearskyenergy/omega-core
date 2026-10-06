@@ -45,9 +45,12 @@
      for fixed terms, so the largest loan the cash flow carries at the
      target is min over amortising months of EBITDA ÷ (target × service per
      dollar)). Project and equity IRR, monthly cash flows annualised.
-   · The CAPEX basis is a choice: the CMDC range (the workbook's default,
-     general-purpose air-cooled, high), the chipset-scaled dynamic range, the
-     Omega-Core skid price ClearSky recorded ($450,000), or a typed figure.
+   · The CAPEX basis is a choice, and the DEFAULT is the Omega-Core skid
+     price ClearSky recorded, $450,000 (Tommy, 2026-10-06: "use the 450k
+     skid price as the default"); the workbook's CMDC range (general-purpose
+     air-cooled, high, $724,471), the chipset-scaled dynamic range and a
+     typed figure stay as choices. The workbook's own figures are pinned in
+     the tests on its own basis.
    · A CUSTOMER view: the results and the assumptions in plain words, with
      no cost build-up, no proxy index and no third-party price sheet. The
      build-up (CMDC categories, the $/GPU index, where each price came from)
@@ -159,7 +162,7 @@ var DEFAULTS = {
   fixedOpexEscalationPct: 0.03,
   maintenanceReservePct: 0.02,
   residualPct: 0.10,               /* of initial CAPEX, in the final month */
-  capexBasis: 'cmdc',              /* cmdc | dynamic | skid | custom */
+  capexBasis: 'skid',              /* skid (the default) | cmdc | dynamic | custom */
   capexConfig: 'general-air',      /* cmdc: general-air | accelerated-liquid */
   capexCase: 'high',               /* low | mid | high */
   capexCustom: null,
@@ -217,11 +220,11 @@ function readInputs(raw) {
     var rr = raw.ramp.slice(0, 12).map(function (v) { var n = share(num(v)); return n == null || n < 0 || n > 1 ? null : n; });
     if (rr.indexOf(null) >= 0) notes.push('A ramp step was outside 0–1; the default ramp is used.'); else d.ramp = rr;
   }
-  if (raw.capexBasis != null) { if (['cmdc', 'dynamic', 'skid', 'custom'].indexOf(raw.capexBasis) >= 0) d.capexBasis = raw.capexBasis; else notes.push('CAPEX basis "' + raw.capexBasis + '" is unknown; the CMDC range is used.'); }
+  if (raw.capexBasis != null) { if (['cmdc', 'dynamic', 'skid', 'custom'].indexOf(raw.capexBasis) >= 0) d.capexBasis = raw.capexBasis; else notes.push('CAPEX basis "' + raw.capexBasis + '" is unknown; the skid price is used.'); }
   if (raw.capexConfig != null) { if (raw.capexConfig === 'general-air' || raw.capexConfig === 'accelerated-liquid') d.capexConfig = raw.capexConfig; else notes.push('CAPEX configuration "' + raw.capexConfig + '" is unknown; general-purpose air-cooled is used.'); }
   if (raw.capexCase != null) { if (['low', 'mid', 'high'].indexOf(raw.capexCase) >= 0) d.capexCase = raw.capexCase; else notes.push('CAPEX case "' + raw.capexCase + '" is unknown; high is used.'); }
   take('capexCustom', d, false, 'Custom CAPEX');
-  if (d.capexBasis === 'custom' && d.capexCustom == null) { notes.push('A custom CAPEX basis needs a figure; the CMDC range is used.'); d.capexBasis = 'cmdc'; }
+  if (d.capexBasis === 'custom' && d.capexCustom == null) { notes.push('A custom CAPEX basis needs a figure; the skid price is used.'); d.capexBasis = 'skid'; }
   if (raw.includeLease != null) d.includeLease = !(raw.includeLease === false || raw.includeLease === 'false' || raw.includeLease === 0 || raw.includeLease === '0' || raw.includeLease === 'no');
   var rd = obj(raw.debt);
   /* the debt fields may also arrive flat (a form) */

@@ -2944,7 +2944,10 @@ answer with the host's rent as a cost, bankability and a customer view; the
 dialog takes the chipset, basis, utilisation, electricity, CAPEX basis, debt
 and rent switch and prints a customer version or the full report. Pricing,
 CAPEX and the cash flow stay in `/api/`; the browser carries no rate. Four
-cells the sheet had pointing at the wrong row are corrected and named.
+cells the sheet had pointing at the wrong row are corrected and named. The
+default CAPEX basis is the recorded $450,000 skid price (Tommy, 2026-10-06:
+"use the 450k skid price as the default"); the workbook's figures are pinned
+on its own CMDC basis.
 
 **The rent (2026-10-03).** No Omega-Core rent is set, so the card
 (`omega-core-lease-v2`) is a market reference read off cell-tower ground

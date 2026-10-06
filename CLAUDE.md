@@ -1254,7 +1254,8 @@ every chipset side by side, the sensitivity grid — returned as `compute` on
 the same answer, priced on the skids proposed, with the host's rent as a cost
 of the skid, bankability (min DSCR vs target, debt capacity at the target,
 IRR) and a customer view; the build-up is staff-only; its figures are pinned
-by `tomegacore.js`. A legacy plan must open
+by `tomegacore.js`. The default CAPEX is the recorded $450,000 skid price
+(Tommy, 2026-10-06); the workbook's container range stays a choice. A legacy plan must open
 the compute cap (`addons.judge`), as the button does. `S.omegaCore` rides on
 the project. **No false results** (Tommy, 2026-10-02): a firm answer either way
 only on a confirmed fact — Qualified / Qualified with conditions / **Needs
