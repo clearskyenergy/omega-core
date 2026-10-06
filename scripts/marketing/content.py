@@ -193,13 +193,13 @@ Data centers don't shop for acreage. They shop for interconnection. Let's see wh
 
  dict(day=9, pillar='build', fmt='Video', title='Build Tuesday: a fast-charging hub',
   visual="Best with a 30–60 s sandbox recording (the card is its cover). Without one, post the card.",
-  text="""Build Tuesday: a fast-charging hub.
+  text="""Type an address. Pick DCFC Build. Watch a fast-charging hub lay itself out.
 
-Type an address. Pick DCFC Build. The chargers, switchgear and transformer land on the site, the load gets checked against what the grid can serve, and a DCFC pro forma fills in: utilization, IRR, payback.
+The fast-charging bank, the AC distribution and a battery for demand management land on the site, and a DCFC pro forma fills in: utilization, IRR, payback.
 
-Add a battery to shave the demand charge and watch the payback move.
+Add more storage to shave the demand charge and watch the payback move.
 
-What should we build next Tuesday?
+That's Build Tuesday. What should we build next week?
 
 #EVCharging #DCFC #EVInfrastructure""",
   comment="",
