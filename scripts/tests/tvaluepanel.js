@@ -41,6 +41,8 @@ ok(!/demandLo/.test(MOD) && !/programKwYr/.test(MOD) && !/touSpread\s*:\s*0\./.t
 ok(!/keep:\s*0\.\d/.test(MOD), 'no aggregator revenue-share table remains in the browser');
 ok(!/'CAISO'|"CAISO"|CAISO:/.test(MOD), 'no market table remains in the browser');
 ok(/Planning grade/i.test(MOD), 'the planning-grade warning is still worn');
+ok(/setPointerCapture/.test(MOD) && /ovs-head/.test(MOD) && /pointercancel/.test(MOD) && /cursor:grab/.test(MOD),
+  'the panel drags by its title bar (the conduit schedule’s pointer pattern)');
 
 /* ── run it against stubs ───────────────────────────────────────────────── */
 console.log('\nthe panel against stubs');
@@ -48,6 +50,7 @@ console.log('\nthe panel against stubs');
 function mkEl() {
   return { id: '', style: { cssText: '', display: '' }, innerHTML: '', value: '',
            onclick: null, title: '',
+           addEventListener: function () {}, removeEventListener: function () {},
            querySelector: function () { return { onclick: null, onchange: null }; },
            appendChild: function () {}, getAttribute: function () { return ''; } };
 }
