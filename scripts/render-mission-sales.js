@@ -92,6 +92,11 @@ var SEED = {
   'sales_activity/r1': { kind: 'agent-run', at: ago(0.002), by: 'agent:sales', summary: 'SALES: answered 1 demo request with three slots; 0 signups waiting; 4 names researched' },
   'sales_activity/pl1': { kind: 'note', at: ago(1), by: 'agent:ada', summary: 'PLAN ' + WEEK + ' SALES: proposed — 3 demos booked; 10 prospects researched; every request answered the same day' },
   'sales_activity/r2': { kind: 'agent-run', at: ago(3), by: 'agent:billing', summary: 'BILLING: 2 invoices past due, 1 reminder drafted' },
+  /* the protocol: one approval waiting on Thomas (a second was answered), one handoff between desks */
+  'sales_activity/ap1': { kind: 'note', at: ago(0.5), by: 'agent:billing', summary: 'BILLING: APPROVAL #BILLING-20261006-1 requested — credit of one month for Acme Solar, invoice 1042' },
+  'sales_activity/ap2': { kind: 'note', at: ago(2), by: 'agent:sales', summary: 'SALES: APPROVAL #SALES-20261004-1 requested — cold email to a public mailbox' },
+  'sales_activity/ap3': { kind: 'note', at: ago(1.5), by: 'agent:sales', summary: 'SALES: APPROVAL #SALES-20261004-1 declined' },
+  'sales_activity/h1': { kind: 'note', at: ago(0.3), by: 'agent:support', summary: 'SUPPORT: HANDOFF #SUPPORT-20261006-1 → Theo: Grid Atlas map blank on Safari' },
   'sales_candidates/nine-dot-energy': { key: 'nine-dot-energy', company: 'Nine Dot Energy LLC', status: 'new', projects: 77, states: ['NY'] }
 };
 function reset() { db.data.clear(); Object.keys(SEED).forEach(function (k) { db.seed(k, SEED[k]); }); }
@@ -200,7 +205,8 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     ok(o.papers === 1, 'one paper on the Sales desk for today\'s entry', o.papers);
     ok(/Sales: answered 1 demo request/.test(o.side) && /2 LATEST/.test(o.side) && /Cold email is blocked/.test(o.side) && /1 desk is overdue/.test(o.side) && !/No desk has logged/.test(o.side) && /1 desk has a plan for/.test(o.side), 'the overview: the runs, the needs, the plan waiting', o.side.slice(0, 700));
     ok(new RegExp('1 of 6 desks ran on schedule; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
-    ok(o.pill === '1', 'the pill counts the one action: the plan to approve', o.pill);
+    ok(/1 approval is waiting on you: #BILLING-20261006-1 \(billing: credit of one month/.test(o.side) && !/SALES-20261004-1/.test(o.side) && /1 handoff between desks this week: support → theo #SUPPORT-20261006-1/.test(o.side), 'the protocol: the open approval named (the declined one not), the handoff counted', o.side.slice(0, 1200));
+    ok(o.pill === '2', 'the pill counts the two actions: the plan to approve and the approval waiting', o.pill);
     if (vp.name === 'phone') ok(o.sw <= o.vw + 1, 'no sideways scroll on a phone (office)', [o.sw, o.vw]);
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
     /* click the Sales room: Nora's drawer */
