@@ -243,6 +243,186 @@
     return { items: out, total: tot, flags: flags };
   };
 
+  /* ── THE LIFECYCLE ───────────────────────────────────────────────────
+     Twenty years of the stack against the cost of the project, so the
+     editor can put an IRR beside the year-1 number instead of leaving the
+     reader to divide two figures and call it a return.
+
+     The IRR and payback come from THE finance engine
+     (api/_lib/proforma-engine.js irr/payback — bracketed bisection, the
+     multiple-root guard, the no-payback guard), never a local root finder:
+     two IRR functions that disagree by a tenth of a point cost more trust
+     than either earns. This file only builds the cash flows.
+
+     PLANNING GRADE, and honest about which grade: an UNLEVERED, PRE-TAX
+     project IRR on the owner's share of the stack, incentives taken at
+     year 0. Tax, depreciation, debt and reserves are the Pro Forma's job
+     (api/proforma.js on the same engine); this is the screening number
+     that says whether that work is worth commissioning.
+
+     Degradation follows what each stream is paid on: an energy stream
+     (TOU arbitrage) fades with usable kWh, a power stream (demand,
+     capacity programmes) with deliverable kW. Year 1 already carries a
+     year of fade — indexing from year 1 would gift the model a free year
+     of a brand-new battery. One augmentation back to nameplate is bought
+     when usable energy falls below the threshold, because a 20-year model
+     on a battery that fades out in year 12 is a 12-year model wearing a
+     20-year label. */
+  var PF = null;
+  try {
+    if (typeof module !== "undefined" && module.exports && typeof require === "function") {
+      PF = require("./proforma-engine");
+    }
+  } catch (e) {}
+
+  V.LIFECYCLE_DEFAULTS = {
+    years: 20,
+    omPctOfCapex: 0.025,
+    omRef: "Fixed O&M at 2.5% of installed cost a year, the NREL ATB convention "
+         + "for battery storage. An O&M contract replaces it.",
+    omEscalation: 0.025,
+    billEscalation: 0.02,
+    billEscalationRef: "Bill-side streams (demand, TOU) ride the tariff, escalated "
+         + "2%/yr; programme and market streams are held FLAT, because a cleared "
+         + "price has no claim on next year's auction.",
+    energyFadePct: 0.018,
+    powerFadePct: 0.005,
+    fadeRef: "Planning degradation: usable energy -1.8%/yr, deliverable power "
+         + "-0.5%/yr. The manufacturer's warranted curve replaces both.",
+    augmentAtPct: 0.70,
+    augmentCostPerKwh: 200,
+    augmentRef: "One augmentation back to nameplate when usable energy falls below "
+         + "70%, at $200/kWh — a planning figure for future module cost.",
+    discountRate: 0.08
+  };
+
+  function lcNum(v, dflt, lo, hi) {
+    var n = +v;
+    if (!isFinite(n)) return dflt;
+    if (n < lo) return lo;
+    if (n > hi) return hi;
+    return n;
+  }
+
+  /* input: {
+       capexUsd           required, > 0
+       incentiveUsd       taken at year 0 (ITC + rebates); capped at capex
+       streams            [{ id, name, usd, basis:'energy'|'power'|'fixed',
+                             escalates: bool }] — year-1 OWNER dollars
+       kwh                for sizing the augmentation
+       years, omPctOfCapex | omUsdYear, omEscalation, billEscalation,
+       energyFadePct, powerFadePct, augmentAtPct (0 disables),
+       augmentCostPerKwh, discountRate
+     } */
+  V.lifecycle = function (input) {
+    input = input || {};
+    var capex = +input.capexUsd;
+    if (!isFinite(capex) || capex <= 0) {
+      return { ok: false, error: "No project cost, no IRR. Run the cost estimate " +
+               "(or enter a contracted price) first — a return computed against a " +
+               "guessed cost is a guess wearing a percent sign." };
+    }
+    var raw = Array.isArray(input.streams) ? input.streams : [];
+    var streams = [], i;
+    for (i = 0; i < raw.length; i++) {
+      var s = raw[i];
+      if (s && isFinite(+s.usd) && +s.usd > 0) {
+        streams.push({ id: String(s.id || "stream" + i), name: String(s.name || s.id || "stream"),
+                       usd: +s.usd, basis: s.basis === "energy" ? "energy" : (s.basis === "fixed" ? "fixed" : "power"),
+                       escalates: s.escalates === true });
+      }
+    }
+    if (!streams.length) {
+      return { ok: false, error: "No revenue streams carry a dollar figure, so there " +
+               "is no cash flow to discount." };
+    }
+    if (!PF) return { ok: false, error: "The finance engine is not available here." };
+
+    var D = V.LIFECYCLE_DEFAULTS;
+    var years = Math.round(lcNum(input.years, D.years, 5, 30));
+    var omEsc = lcNum(input.omEscalation, D.omEscalation, 0, 0.1);
+    var billEsc = lcNum(input.billEscalation, D.billEscalation, 0, 0.1);
+    var eFadeR = lcNum(input.energyFadePct, D.energyFadePct, 0, 0.1);
+    var pFadeR = lcNum(input.powerFadePct, D.powerFadePct, 0, 0.1);
+    var augAt = lcNum(input.augmentAtPct, D.augmentAtPct, 0, 0.95);
+    var augCost = lcNum(input.augmentCostPerKwh, D.augmentCostPerKwh, 0, 1000);
+    var disc = lcNum(input.discountRate, D.discountRate, 0, 0.25);
+    var kwh = isFinite(+input.kwh) && +input.kwh > 0 ? +input.kwh : null;
+
+    var om1;
+    if (isFinite(+input.omUsdYear) && +input.omUsdYear >= 0) om1 = +input.omUsdYear;
+    else om1 = capex * lcNum(input.omPctOfCapex, D.omPctOfCapex, 0, 0.1);
+
+    var inc = isFinite(+input.incentiveUsd) && +input.incentiveUsd > 0 ? +input.incentiveUsd : 0;
+    var incCapped = false;
+    if (inc > capex) { inc = capex; incCapped = true; }
+    var net = capex - inc;
+
+    var flows = [-net];
+    var rows = [{ year: 0, capacityPct: 1, revenue: 0, om: 0, augment: 0,
+                  net: -net, cum: -net }];
+    var augmented = 0, augYear = 0, cum = -net, y;
+    for (y = 1; y <= years; y++) {
+      /* Energy fade restarts at the augmentation (new modules); power fade
+         does not (the inverters are not replaced). */
+      var eFade = Math.pow(1 - eFadeR, y - augYear);
+      var pFade = Math.pow(1 - pFadeR, y);
+      var aug = 0;
+      /* never in the final year: modules bought with no years left to earn
+         them back only exist to make year N look bad */
+      if (augAt > 0 && kwh && eFade < augAt && augmented < 1 && y < years) {
+        aug = kwh * (1 - eFade) * augCost;
+        augmented++;
+        augYear = y;
+        eFade = 1;
+      }
+      var esc = Math.pow(1 + billEsc, y - 1);
+      var rev = 0;
+      for (i = 0; i < streams.length; i++) {
+        var st = streams[i];
+        var fade = st.basis === "energy" ? eFade : (st.basis === "power" ? pFade : 1);
+        rev += st.usd * fade * (st.escalates ? esc : 1);
+      }
+      var om = om1 * Math.pow(1 + omEsc, y - 1);
+      var cash = rev - om - aug;
+      flows.push(cash);
+      cum += cash;
+      rows.push({ year: y, capacityPct: eFade, revenue: rev, om: om,
+                  augment: aug, net: cash, cum: cum });
+    }
+
+    var npv = 0;
+    for (y = 0; y < flows.length; y++) npv += flows[y] / Math.pow(1 + disc, y);
+
+    var assumptions = [
+      "An unlevered, pre-tax project IRR on the owner's share of the stack over " +
+        years + " years, incentives taken at year 0. Tax, depreciation, debt and " +
+        "reserves are the Pro Forma's job; this is the screening number.",
+      D.fadeRef, D.billEscalationRef,
+      "O&M $" + Math.round(om1).toLocaleString() + " in year 1 (" + D.omRef + "), " +
+        "escalated " + (omEsc * 100).toFixed(1) + "%/yr.",
+      augAt > 0 && kwh ? D.augmentRef
+        : "No augmentation is modelled" + (kwh ? " (disabled)" : " — the battery's kWh was not given") +
+          ", so late years ride the faded battery.",
+      "NPV discounted at " + (disc * 100).toFixed(1) + "%."
+    ];
+    if (incCapped) assumptions.push("Incentives were capped at the project cost; " +
+      "the uncapped figure exceeded it.");
+
+    return {
+      ok: true,
+      years: years,
+      capexUsd: capex, incentiveUsd: inc, netCostUsd: net,
+      rows: rows,
+      irr: PF.irr(flows),
+      npv: npv, discountRate: disc,
+      paybackYears: PF.payback(flows),
+      augmentations: augmented,
+      omYear1Usd: om1,
+      assumptions: assumptions
+    };
+  };
+
   root.OmegaValueStack = V;
   if (typeof module !== "undefined" && module.exports) module.exports = V;
 })(typeof window !== "undefined" ? window : this);

@@ -135,5 +135,94 @@ ok('utility cost reports capex AND opex, and guesses neither', function(){
   assert.strictEqual(Math.round(u2.opexPerYear), 826 * 2 * 12);
 });
 
+/* ── the lifecycle: the stack against the cost of the project ─────────── */
+const PF = require(path.join(__dirname, '..', '..', 'api/_lib/proforma-engine.js'));
+const LC_IN = () => ({ capexUsd: 1000000, incentiveUsd: 300000, kwh: 1600,
+  streams: [
+    { id: 'bill.demand', name: 'Demand', usd: 60000, basis: 'power', escalates: true },
+    { id: 'bill.tou', name: 'TOU', usd: 15000, basis: 'energy', escalates: true },
+    { id: 'prog', name: 'Programme', usd: 30000, basis: 'power', escalates: false }
+  ] });
+
+ok('no project cost, no IRR — a refusal, not a guess', function(){
+  const r = V.lifecycle({ streams: LC_IN().streams });
+  assert.strictEqual(r.ok, false);
+  assert(/cost/i.test(r.error), 'the error does not say what is missing');
+  const r2 = V.lifecycle({ capexUsd: 1000000, streams: [] });
+  assert.strictEqual(r2.ok, false, 'an empty stack produced a cash flow');
+});
+
+ok('the IRR and payback are the finance engine\'s own, on these flows', function(){
+  const r = V.lifecycle(LC_IN());
+  assert(r.ok, r.error);
+  const flows = r.rows.map(x => x.net);
+  assert.strictEqual(r.rows[0].net, -(1000000 - 300000), 'year 0 is not the net cost');
+  assert.strictEqual(r.irr, PF.irr(flows), 'a second IRR implementation crept in');
+  assert.strictEqual(r.paybackYears, PF.payback(flows), 'a second payback implementation crept in');
+  assert(r.irr > 0 && r.irr < 0.5, 'IRR outside any plausible band: ' + r.irr);
+});
+
+ok('year 1 already carries a year of fade and no escalation bump', function(){
+  /* Indexing fade from year 1 gifts the model a free year of a brand-new
+     battery; escalating year 1 charges the customer a year early. */
+  const base = LC_IN();
+  base.streams = [{ id: 'tou', name: 'TOU', usd: 10000, basis: 'energy', escalates: true }];
+  base.augmentAtPct = 0;
+  const r = V.lifecycle(base);
+  assert(Math.abs(r.rows[1].revenue - 10000 * Math.pow(1 - 0.018, 1)) < 1,
+    'year 1 revenue is ' + r.rows[1].revenue + ', not one year of fade on the quoted dollars');
+});
+
+ok('energy streams fade faster than power streams', function(){
+  const mk = basis => {
+    const i = LC_IN();
+    i.streams = [{ id: 's', name: 's', usd: 10000, basis: basis, escalates: false }];
+    i.augmentAtPct = 0;
+    return V.lifecycle(i);
+  };
+  const e = mk('energy'), p = mk('power');
+  assert(e.rows[10].revenue < p.rows[10].revenue,
+    'an energy-paid stream does not fade faster than a power-paid one');
+});
+
+ok('one augmentation, bought when usable falls below the line, resets energy fade', function(){
+  /* A faster fade pulls the augmentation into mid-horizon so the years
+     after it are on the table to inspect. */
+  const fast = LC_IN(); fast.energyFadePct = 0.05;
+  const r = V.lifecycle(fast);
+  assert.strictEqual(r.augmentations, 1, 'expected exactly one augmentation');
+  const augRow = r.rows.filter(x => x.augment > 0)[0];
+  assert(augRow, 'no row carries the augmentation cost');
+  assert(augRow.capacityPct === 1, 'the augment year does not return to nameplate');
+  assert(r.rows[augRow.year + 1].capacityPct >= 0.94,
+    'the year AFTER the augmentation fell straight back to the old fade — the buy-back lasted one year');
+  const off = LC_IN(); off.augmentAtPct = 0;
+  assert.strictEqual(V.lifecycle(off).augmentations, 0, 'augmentAtPct 0 does not disable it');
+});
+
+ok('incentives are capped at the project cost and the cap is disclosed', function(){
+  const i = LC_IN(); i.incentiveUsd = 2000000;
+  const r = V.lifecycle(i);
+  assert.strictEqual(r.netCostUsd, 0, 'net cost went negative');
+  assert(r.assumptions.join(' ').indexOf('capped') >= 0, 'the cap is silent');
+});
+
+ok('a project that never pays back says so, in both figures', function(){
+  const i = LC_IN();
+  i.streams = [{ id: 's', name: 's', usd: 100, basis: 'power', escalates: false }];
+  const r = V.lifecycle(i);
+  assert.strictEqual(r.paybackYears, null, 'a payback was reported for a project that has none');
+  assert.strictEqual(r.irr, null, 'an IRR was reported with no sign change in the flows');
+});
+
+ok('every lifecycle assumption is stated, with its grade', function(){
+  const r = V.lifecycle(LC_IN());
+  const all = r.assumptions.join(' ');
+  assert(/unlevered, pre-tax/i.test(all), 'the IRR\'s grade is not stated');
+  assert(/Pro Forma/i.test(all), 'the reader is not pointed at the full treatment');
+  assert(/NREL ATB/i.test(all), 'the O&M convention cites nothing');
+  assert(/flat/i.test(all), 'the flat treatment of programme revenue is not disclosed');
+});
+
 console.log(fails ? '\n' + fails + ' failed' : '\nall passed');
 process.exit(fails ? 1 : 0);

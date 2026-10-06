@@ -2901,3 +2901,44 @@ New London, and a 2025 parcel record at 902 Seaview Avenue. The address in the
 screenshot (925) was not asserted as an assessor-record address. Regression tests
 cover municipal selection, bounded tile URLs, out-of-state exclusion, Connecticut
 record mapping, existing county overlays and Regrid behavior.
+
+## 2026-10-06 — Value Stack: rates server-side, IRR, printable report
+
+The editor's Analyze › Value Stack panel carried its own ZIP→state table,
+regional rate typicals and aggregator revenue shares in editor.html — a rate
+book shipped to every browser, already three PJM auctions stale against the
+server's own dated figure. Moved per the IP rule ("where logic lives"):
+
+- `POST /api/value-stack` (new) composes the pieces that already exist, one
+  copy each: the dispatch-constrained annual stack is `api/_lib/vpp-sim.js`
+  `simulate()` (the ONE hour-by-hour dispatch on the ONE tariff engine, with
+  the grid programmes open at the ZIP and PJM capacity through
+  value-stack.js); incentives are `value-stack.js incentives()` (ITC, and
+  the ComEd rebate with its two conditions when the site is in ComEd); a
+  missing project cost falls back to the ONE cost model at generic rates and
+  the result says so. Gate mirrors `api/vpp-estimate.js` (verify-token, no
+  service account), keyed on the editor tool; fails open on a missing
+  omega_orgs record.
+- `value-stack.js` gained `lifecycle()`: twenty years of the owner's share
+  against the project's cost — degradation by what each stream is paid on,
+  bill-side escalation, flat programme revenue, NREL-ATB-convention O&M, one
+  augmentation back to nameplate — with IRR and payback from the finance
+  engine's own `irr`/`payback` (proforma-engine.js), never a second root
+  finder. Stated grade: unlevered, pre-tax, screening; the Pro Forma is the
+  full treatment.
+- `geocode.js` gained `reverse()` (Census geographies): the panel sends the
+  map's own address and centre, the server resolves the ZIP and says which
+  source answered. Never rejects; cached per rounded point.
+- The panel (editor.html Patch 41) now auto-fills the site from the map,
+  sends the drawn battery, the imported bill's demand charge and the run's
+  own cost (`_COST_TOTAL`), renders the server's streams/IRR/payback, and
+  prints a self-contained report (streams, monthly bill before/after,
+  cumulative cash flow with the payback marked, incentives, every
+  assumption with its source, the planning-grade disclaimer). The older
+  sidebar Value Stack Estimator and `window._VS_ESTIMATE` are untouched.
+
+Held by `scripts/tests/tvaluestack.js` (lifecycle honesty rules),
+`tvalueapi.js` (the gate, the three site resolutions, the composition,
+what leaves) and `tvaluepanel.js` (no rate table ships; the map fills the
+address; the report carries charts and sources) — all three now in
+`npm test` (tvaluestack.js had been orphaned).
