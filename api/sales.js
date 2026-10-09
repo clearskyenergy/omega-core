@@ -96,6 +96,7 @@ function dashboard(db, now) {
       prospects: r[1], activity: r[2], config: r[3], suppressed: r[4].count
     }, now);
     d.candidates = r[5];
+    d.salesPipeline = r[1];
     d.caps = { prospects: MAX_PROSPECTS, activity: MAX_ACTIVITY, capped: r[1].length >= MAX_PROSPECTS || r[2].length >= MAX_ACTIVITY };
     return { d: d, records: records, prospects: r[1], activity: r[2], config: r[3], suppressed: r[4] };
   });
@@ -462,6 +463,7 @@ module.exports = A.handler(function (req) {
   var readOnly = action === 'screen' || action === 'lint-post';
   return K.staffOrAgent(req, readOnly ? 'sales:read' : 'sales:write').then(function (caller) {
     var db = A.db();
+    if (action === 'sales-owner') return require('./_lib/sales-ownership').save(db, caller, b, now);
     if (action === 'upsert-prospects') return upsertProspects(db, caller, b, now);
     if (action === 'log') return logEntries(db, caller, b, now);
     if (action === 'upsert-candidates') return upsertCandidates(db, caller, b, now);
