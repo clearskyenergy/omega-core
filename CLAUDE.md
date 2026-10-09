@@ -1267,6 +1267,25 @@ while fiber or zoning only looks unlikely) / Does not qualify (a declined
 will-serve, the utility's own kW under one skid, zoning the rep entered).
 `docs/OMEGA-CORE.md`, `scripts/tests/tomegacore.js`.
 
+## Omega-Core: selling the compute, and the capital partner (2026-10-06)
+
+**The compute-offtake side strategy** is the Sales desk's (Tommy: "target
+compute off takers … sell compute to Google and other organizations"):
+`docs/COMPUTE-OFFTAKE-SALES.md` is the strategy, `docs/compute-offtake-targets.csv`
+the researched book (54 companies; nobody signs for one skid, the
+hyperscalers buy through intermediaries at 100 MW and up, Xeal's Laitent is
+the one proof of charging-site offtake), the sales book's fifth vertical is
+`offtaker` (`api/_lib/sales.js`), the agent's standing step is 6b in
+`.claude/agents/sales-agent.md`, every row is tagged `compute-offtake` and
+every log line begins `SALES: COMPUTE`. iQGen (Reshaud Henry) builds the set
+and works the offtake with the desk, Tommy in copy; Topeka is the pilot.
+**The capital partner's money** is `scripts/omega-core-partner-split.js`
+(pinned by `scripts/tests/tpartnersplit.js`) on `docs/OMEGA-CORE-CAPITAL-PARTNER.md`:
+the skid's own cash flow unlevered, the host lease and ClearSky's operating
+fee as costs, three structures (waterfall, sale-leaseback, revenue share),
+four cases, every split figure a PROPOSED placeholder Tommy sets; staff-only,
+never to a prospect.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by

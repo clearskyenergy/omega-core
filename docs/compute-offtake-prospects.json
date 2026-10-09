@@ -1,0 +1,1299 @@
+{
+ "prospects": [
+  {
+   "company": "Baseten",
+   "domain": "baseten.co",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 metro-edge inference / fleet buyer \u00b7 The archetypal buyer of third-party GPU capacity: it owns no data centers and routes by latency and region; a metro-edge pool of H100/B200 nodes on contract is what MCM onboards",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.baseten.co/talk-to-us/partner/ (Partners inquiry form)",
+     "url": "https://www.baseten.co/talk-to-us/partner/"
+    },
+    {
+     "text": "Baseten's MCM is a universal orchestration layer that pools GPUs across multiple cloud providers and regions, treating them as a single elastic, always-available resource (Sep 2025)",
+     "url": "https://www.baseten.co/blog/mcm-cloud-ecosystem-partners-nvidia/"
+    },
+    {
+     "text": "How we built Multi-cloud Capacity Management: unifies GPUs across 20+ clouds and regions; autoscaling, failover, latency-aware routing",
+     "url": "https://www.baseten.co/blog/how-we-built-multi-cloud-capacity-management/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://www.baseten.co/talk-to-us/partner/ (Partners inquiry form)) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-07"
+   }
+  },
+  {
+   "company": "Vultr",
+   "domain": "vultr.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 metro-edge inference / fleet buyer \u00b7 Already proves the pattern ClearSky needs: a GPU cloud that colocates its racks in someone else's powered space (telco central offices); an Omega-Core skid is a powered, fibered micro-site it could stock and sell through its API",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Kevin Cochrane",
+     "title": "CMO, Vultr"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.vultr.com/resources/partners/ (partner application via the Partner Portal); Cloud Alliance https://www.vultr.com/cloudalliance/",
+     "url": "https://www.vultr.com/resources/partners/"
+    },
+    {
+     "text": "As the demand for real-time AI processing continues to soar, GPUs are becoming more critical, especially at the edge; AMD and NVIDIA GPU suites across Verizon facilities (Jan 2025)",
+     "url": "https://blogs.vultr.com/AI-Verizon"
+    },
+    {
+     "text": "Vultr partner program application and tiers",
+     "url": "https://www.vultr.com/resources/partners/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://www.vultr.com/resources/partners/ (partner application via the Partner Portal); Cloud Alliance https://www.vultr.com/cloudalliance/) for Thomas and ask for 20",
+    "due": "2026-10-07"
+   }
+  },
+  {
+   "company": "NSF National AI Research Resource (NAIRR)",
+   "domain": "nsf.gov",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 hyperscaler, AI lab or intermediary \u00b7 The one government door that explicitly invites compute contributions of any size; in-kind, so a reference customer path rather than revenue",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.nsf.gov/focus-areas/ai/nairr (Join as a partner); published contact NAIRR_Pilot@nsf.gov",
+     "url": "https://www.nsf.gov/focus-areas/ai/nairr"
+    },
+    {
+     "text": "NSF NAIRR page: welcomes additional contributing partners; NAIRR Operations Center",
+     "url": "https://www.nsf.gov/focus-areas/ai/nairr"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://www.nsf.gov/focus-areas/ai/nairr (Join as a partner); published contact NAIRR_Pilot@nsf.gov) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-07"
+   }
+  },
+  {
+   "company": "Aethir",
+   "domain": "aethir.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Publicly recruits enterprise GPU hosts with 8+ GPUs and SLA tiers a skid can meet; token payment weakens bankability",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: Aethir Cloud Host \u00b7 https://share.hsforms.com/1sJF-5cQ8Q_61CG8MdLNEXAq8ovb",
+     "url": "https://share.hsforms.com/1sJF-5cQ8Q_61CG8MdLNEXAq8ovb"
+    },
+    {
+     "text": "99% Monthly Uptime Rate; daily cumulative offline time < 30 minutes; bare-metal servers; each server must be assigned a publicly routable IP address",
+     "url": "https://docs.aethir.com/aethir-cloud/aethir-cloud-host/operational-requirements-for-cloud-hosts"
+    },
+    {
+     "text": "Apply to become an Aethir Cloud Host by filling out this form; KYC verification required",
+     "url": "https://ecosystem.aethir.com/blog-posts/step-by-step-guide-onboarding-as-an-aethir-cloud-host"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://share.hsforms.com/1sJF-5cQ8Q_61CG8MdLNEXAq8ovb) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-07"
+   }
+  },
+  {
+   "company": "Akash Network (Overclock Labs)",
+   "domain": "akash.network",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Open marketplace with a published 8-GPU-node pilot that a skid node meets; Prime Intellect already buys Akash supply",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Anil Murty",
+     "title": "VP, Product & Engineering, Overclock Labs (Akash)",
+     "linkedin": "https://www.linkedin.com/in/anilmurty"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: Akash Provider (Provider Console) and the GPU Provider Incentive Pilot \u00b7 https://provider-console.akash.network/",
+     "url": "https://provider-console.akash.network/"
+    },
+    {
+     "text": "Must have a minimum of one 8 GPU node of the referenced GPU models; should operate in a DC or colocation center with at least partial power and cooling redundancy; yearly uptime of at least 99.741%",
+     "url": "https://github.com/orgs/akash-network/discussions/696"
+    },
+    {
+     "text": "NVIDIA GPUs only; minimum 100 Mbps symmetrical, recommended 1+ Gbps; at least one static public IP",
+     "url": "https://akash.network/docs/providers/getting-started/hardware-requirements/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://provider-console.akash.network/) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-08"
+   }
+  },
+  {
+   "company": "Clore.ai",
+   "domain": "clore.ai",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Zero-barrier listing for any size site, but crypto-settled consumer-grade demand, not bankable offtake",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: Host on Clore marketplace \u00b7 https://docs.clore.ai/gpu-marketplace/installng-clore-hosting/installng-clore-hosting-software",
+     "url": "https://docs.clore.ai/gpu-marketplace/installng-clore-hosting/installng-clore-hosting-software"
+    },
+    {
+     "text": "No hard-coded minimum specs; servers with at least one NVIDIA GPU and a stable internet connection; hosts earn the rental price minus the platform fee",
+     "url": "https://docs.clore.ai/help/faq"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://docs.clore.ai/gpu-marketplace/installng-clore-hosting/installng-clore-hosting-software) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-08"
+   }
+  },
+  {
+   "company": "Hyperbolic",
+   "domain": "hyperbolic.ai",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Actively building a supplier network with a published inbox and tooling built for small heterogeneous providers",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Jasper Zhang",
+     "title": "Co-founder & CEO",
+     "linkedin": "https://www.linkedin.com/in/yuezhang95/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: List Your GPU Capacity (Forge) \u00b7 https://www.hyperbolic.ai/",
+     "url": "https://www.hyperbolic.ai/"
+    },
+    {
+     "text": "Turn available GPU capacity into revenue through Hyperbolic's global AI cloud network; List Your GPU Capacity -> christopher@hyperbolic.ai",
+     "url": "https://www.hyperbolic.ai/"
+    },
+    {
+     "text": "Forge makes it easier for Hyperbolic to work with a broader range of GPU providers, including providers that do not expose mature provisioning APIs",
+     "url": "https://www.hyperbolic.ai/blog/introducing-forge-the-infrastructure-layer-behind-reliable-gpu-provisioning"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://www.hyperbolic.ai/) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-08"
+   }
+  },
+  {
+   "company": "io.net",
+   "domain": "io.net",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Permissionless listing of H100/H200-class nodes with uptime rewards; demand depth and token settlement are the risk",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: IO Worker supplier onboarding \u00b7 https://io.net/docs/guides/workers/supported-devices",
+     "url": "https://io.net/docs/guides/workers/supported-devices"
+    },
+    {
+     "text": "Supported devices include H100 80GB HBM3, H100 PCIe, A100 80GB, L40S, B200, H200",
+     "url": "https://io.net/docs/guides/workers/supported-devices"
+    },
+    {
+     "text": "GPU suppliers must stake 200 IO per chip and pass Proof-of-Work plus Proof of Time-Lock verification",
+     "url": "https://io.net/docs/guides/faq"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://io.net/docs/guides/workers/supported-devices) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-08"
+   }
+  },
+  {
+   "company": "Lium (Bittensor Subnet 51, Datura)",
+   "domain": "lium.io",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Pays for idle H100-class GPUs even when unrented and has no site-size floor; revenue is token-denominated",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: Lium Provider Portal \u00b7 https://provider.lium.io/",
+     "url": "https://provider.lium.io/"
+    },
+    {
+     "text": "A listed GPU that is not rented earns idle pay; datacenter H100, H200, B200, A100, L40S supported; a public IP with an open port range and at least 100 Mbps download",
+     "url": "https://provider.lium.io/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://provider.lium.io/) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-09"
+   }
+  },
+  {
+   "company": "Spheron Network",
+   "domain": "spheron.network",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Live supplier-side door with USD settlement and supplier-controlled pricing; already resells TensorDock, Voltage Park, Hyperstack, DataCrunch",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Prashant Maurya",
+     "title": "Co-Founder & CEO, Spheron",
+     "linkedin": "https://www.linkedin.com/in/techprashantmaurya/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: Spheron GPU Supplier Program \u00b7 https://www.spheron.network/partner/",
+     "url": "https://www.spheron.network/partner/"
+    },
+    {
+     "text": "Tell us about your fleet, your SKUs, your regions, and your data center tier; responses < 24h; you set the floor, you approve the deal",
+     "url": "https://www.spheron.network/partner/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://www.spheron.network/partner/) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-09"
+   }
+  },
+  {
+   "company": "TensorDock (a Voltage Park company)",
+   "domain": "tensordock.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Onboards small independent hosts today and is the supply door into Voltage Park/Lightning AI; the must-be-in-a-data-center rule is the one thing a skid on an EV lot has to argue",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Jonathan Lei",
+     "title": "Founder of TensorDock; General Manager of On-Demand at Voltage Park",
+     "linkedin": "https://www.linkedin.com/in/jonathanlei0"
+    },
+    {
+     "name": "Melissa Du",
+     "title": "General Manager, TensorDock"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: Host program: Earn money with your GPUs \u00b7 https://www.tensordock.com/host.html",
+     "url": "https://www.tensordock.com/host.html"
+    },
+    {
+     "text": "1 Gigabit Internet Connection; all new hardware added to our platform must be hosted in a data center; 25% revenue-share fee; paid through Stripe",
+     "url": "https://www.tensordock.com/host.html"
+    },
+    {
+     "text": "Voltage Park acquires TensorDock; Jonathan Lei moves to General Manager of On-Demand at Voltage Park; Melissa Du leads TensorDock",
+     "url": "https://www.businesswire.com/news/home/20250326476295/en/Voltage-Park-Acquires-TensorDock-Expanding-GPU-Cloud-Services-for-AI-and-Machine-Learning"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://www.tensordock.com/host.html) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-09"
+   }
+  },
+  {
+   "company": "Vast.ai",
+   "domain": "vast.ai",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 A \u00b7 GPU marketplace / aggregator \u00b7 Permissionless host onboarding today; a 48-GPU skid lists as a regular host immediately, and 5+ servers meets the DC-tier server count",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-a",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Travis Cannell",
+     "title": "COO (business operations, partnerships, growth)",
+     "linkedin": "https://www.linkedin.com/in/traviscannell/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: Host program (Start Hosting) + Certified Data Center application \u00b7 https://vast.ai/data-center-application",
+     "url": "https://vast.ai/data-center-application"
+    },
+    {
+     "text": "At least 5 servers equipped with flagship-class GPU hardware (e.g. A100, H100, H200); servers housed in a professionally managed data center facility; applications reviewed within 2 business days",
+     "url": "https://vast.ai/data-center-application"
+    },
+    {
+     "text": "The host must have at least 5 GPU servers listed on Vast.ai; ISO/IEC 27001 certificate must be active",
+     "url": "https://docs.vast.ai/documentation/host/datacenter-status"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: prepare the application (https://vast.ai/data-center-application) for Thomas and ask for 20 min on a pilot skid",
+    "due": "2026-10-09"
+   }
+  },
+  {
+   "company": "Akamai",
+   "domain": "akamai.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 The most aggressive public builder of distributed inference capacity in US metros and now capacity-constrained; a bankable offtaker if it will lease metro skids, but today it deploys in its own and colo PoPs",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 Channel https://partners.akamai.com/ ; sales https://www.akamai.com/why-akamai/contact-us/contact-sales",
+     "url": "https://partners.akamai.com/"
+    },
+    {
+     "text": "Akamai Inference Cloud transforms AI from core to edge with NVIDIA: RTX PRO servers, 20 initial locations (Oct 2025)",
+     "url": "https://www.akamai.com/newsroom/press-release/akamai-inference-cloud-transforms-ai-from-core-to-edge-with-nvidia"
+    },
+    {
+     "text": "Akamai announces $11.6 billion multi-year agreement with Anthropic (8-K, Sep 24 2026): a continuum of compute from core to edge",
+     "url": "https://www.sec.gov/Archives/edgar/data/0001086222/000119312526401048/d288154dex991.htm"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-12"
+   }
+  },
+  {
+   "company": "Armada",
+   "domain": "armada.ai",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 A competitor on hardware, but its customers are remote, not metro, and its platform could run on Omega-Core skids as a metro tier; the infrastructure-partner door is open now",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Dan Wright",
+     "title": "Co-founder & CEO, Armada",
+     "linkedin": "https://www.linkedin.com/in/wrightdh/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.armada.ai/partners#partnerForm (Apply to Partner; reply within two business days)",
+     "url": "https://www.armada.ai/partners#partnerForm"
+    },
+    {
+     "text": "Armada partner program: four categories including Infrastructure (computing platform providers); Apply to Partner form",
+     "url": "https://www.armada.ai/partners"
+    },
+    {
+     "text": "Edge data center firm Armada raises $230m; customers include energy, mining, manufacturing, logistics and DoD",
+     "url": "https://www.datacenterdynamics.com/en/news/edge-data-center-firm-armada-raises-230m-in-latest-funding-round/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-12"
+   }
+  },
+  {
+   "company": "DeepInfra",
+   "domain": "deepinfra.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 Builds its own sites in the 1-2 MW class, so a candidate to lease powered, fibered metro skids rather than wait on colo",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://deepinfra.com/ (contact form)",
+     "url": "https://deepinfra.com/"
+    },
+    {
+     "text": "We own and operate our GPU infrastructure across eight U.S. data centers; funding targets expanding our global compute capacity (May 2026)",
+     "url": "https://deepinfra.com/series-b"
+    },
+    {
+     "text": "DeepInfra opens first international data center in Toronto, 1.7 MW, over 1,000 NVIDIA Blackwell B300 GPUs (Jul 2026)",
+     "url": "https://www.globenewswire.com/news-release/2026/07/08/3324125/0/en/DeepInfra-Expands-AI-Inference-Capacity-with-First-International-Data-Center-in-Toronto.html"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-12"
+   }
+  },
+  {
+   "company": "Fireworks AI",
+   "domain": "fireworks.ai",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 Large, growing inference buyer that rents rather than builds; regional low-latency capacity suits its real-time and voice workloads; no public supplier door, so an intro",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://fireworks.ai/ (contact/sales form); no capacity-supplier page",
+     "url": "https://fireworks.ai/"
+    },
+    {
+     "text": "This funding lets us expand our compute infrastructure (Series D, Jul 15 2026)",
+     "url": "https://fireworks.ai/blog/series-d-announcement"
+    },
+    {
+     "text": "Fireworks draws on computing capacity from more than 20 suppliers (SiliconANGLE, secondary)",
+     "url": "https://siliconangle.com/2026/07/16/ai-infrastructure-startup-fireworks-closes-1-5b-round-17-5b-valuation/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-13"
+   }
+  },
+  {
+   "company": "Rafay Systems",
+   "domain": "rafay.co",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 A channel, not a buyer: Rafay turns a fleet of skids into a multi-tenant, token-metered GPU cloud and already knows which inference providers want charging-site capacity",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Haseeb Budhani",
+     "title": "CEO, Rafay Systems"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://rafay.co/ (contact/partners)",
+     "url": "https://rafay.co/"
+    },
+    {
+     "text": "Rafay Systems brings software standardization to neocloud and sovereign AI factories through its NVIDIA-validated platform (May 2026)",
+     "url": "https://rafay.co/press-release/rafay-systems-brings-software-standardization-to-neocloud-and-sovereign-ai-factories-through-its-nvidia-validated-platform"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-13"
+   }
+  },
+  {
+   "company": "T-Mobile US",
+   "domain": "t-mobile.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 The most pro-far-edge US carrier; its physical-AI developers need metro GPU capacity near cameras and vehicles, which charging sites with 5G backhaul can supply as a neutral host",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.t-mobile.com/news/network/nvidia-t-mobile-and-partners-integrate-physical-ai-applications-on-ai-ran-ready-infrastructure (AI-RAN Innovation Center; T-Mobile for Business partner channel)",
+     "url": "https://www.t-mobile.com/news/network/nvidia-t-mobile-and-partners-integrate-physical-ai-applications-on-ai-ran-ready-infrastructure"
+    },
+    {
+     "text": "NVIDIA, T-Mobile and partners integrate physical AI applications on AI-RAN-ready infrastructure (Mar 16 2026)",
+     "url": "https://nvidianews.nvidia.com/news/nvidia-t-mobile-and-partners-integrate-physical-ai-applications-on-ai-ran-ready-infrastructure"
+    },
+    {
+     "text": "T-Mobile views its 85,000 cell sites as prime real estate for AI (Light Reading)",
+     "url": "https://www.lightreading.com/ai-machine-learning/at-t-cto-casts-doubt-on-ai-compute-at-the-far-edge"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-13"
+   }
+  },
+  {
+   "company": "Uber (Uber Autonomous Solutions)",
+   "domain": "uber.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 The one actor assembling many AV fleets' depots and charging hubs in US metros; its depots are natural Omega-Core hosts and its AV partners the compute tenants; needs an intro",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.uber.com/us/en/newsroom/autonomous/",
+     "url": "https://www.uber.com/us/en/newsroom/autonomous/"
+    },
+    {
+     "text": "Uber to invest over $100 million in autonomous vehicle charging hubs; fast chargers at its autonomous depots; EVgo utilization guarantees (Feb 18 2026)",
+     "url": "https://finance.yahoo.com/news/uber-invest-over-100-million-120148489.html"
+    },
+    {
+     "text": "Uber, Nuro and Lucid to bring robotaxi service to Houston in 2027: 50,000 sq ft depot and dedicated charging pitstop",
+     "url": "https://investor.uber.com/news-events/news/press-release-details/2026/Uber-Nuro-and-Lucid-to-Bring-Robotaxi-Service-to-Houston-in-2027/default.aspx"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-14"
+   }
+  },
+  {
+   "company": "Vapor IO",
+   "domain": "vapor.io",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 The closest existing neutral-host operator of metro GPU micro-sites; a wholesale buyer or operator of Omega-Core skids as Kinetic Grid nodes, or a competitor for the same sites",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Cole Crawford",
+     "title": "Founder & CEO, Vapor IO"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.vapor.io/resources/press-releases/ ; LinkedIn https://www.linkedin.com/company/vaporio",
+     "url": "https://www.vapor.io/resources/press-releases/"
+    },
+    {
+     "text": "Vapor IO and Supermicro launch Zero Gap AI (NVIDIA GH200) across Kinetic Grid in 36 US cities",
+     "url": "https://www.nasdaq.com/press-release/vapor-io-and-supermicro-launch-zero-gaptm-ai-powered-by-the-nvidia-gh200-grace-hopper"
+    },
+    {
+     "text": "Veea and Vapor IO partner to deliver turnkey AI-as-a-Service for edge computing (Feb 2025)",
+     "url": "https://www.thefastmode.com/technology-solutions/39673-veea-vapor-io-partner-to-deliver-ai-as-a-service-for-edge-computing"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-14"
+   }
+  },
+  {
+   "company": "Verizon Business (AI Connect)",
+   "domain": "verizon.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 Verizon is monetising powered, fibered telco real estate for GPU tenants; a charging-site skid with dedicated fiber is the same product one hop closer to vehicles; strategic, needs an intro",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Kyle Malady",
+     "title": "CEO, Verizon Business"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://www.verizon.com/business/solutions/ai-connect/",
+     "url": "https://www.verizon.com/business/solutions/ai-connect/"
+    },
+    {
+     "text": "Verizon unveils AI strategy: AI Connect uses 5G, fiber, edge compute environments and space, power and cooling infrastructure (Jan 24 2025)",
+     "url": "https://www.verizon.com/about/news/verizon-unveils-ai-strategy-power-next-gen-ai-demands"
+    },
+    {
+     "text": "Vultr initially deploying GPU-as-a-Service in one of Verizon's data centers",
+     "url": "https://www.datacenterdynamics.com/en/news/verizon-announces-ai-centric-network-offering-partners-with-vultr/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-14"
+   }
+  },
+  {
+   "company": "Xeal (Laitent)",
+   "domain": "laitent.ai",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 metro-edge inference / fleet buyer \u00b7 Direct competitor on the thesis and the clearest proof that an inference provider will contract 5 MW of charging-site GPU capacity; a conversation to learn who the Tier 1 provider is, or to pitch skids as pods into its demand",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "edge"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Nikhil S. Bharadwaj",
+     "title": "Co-founder & CEO, Xeal",
+     "linkedin": "https://www.linkedin.com/in/nikhilsbharadwaj/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 https://laitent.ai/ (waitlist for compute customers and property hosts); https://www.xealenergy.com/partners",
+     "url": "https://laitent.ai/"
+    },
+    {
+     "text": "Xeal to launch Laitent, edge inference compute using idle EV charging capacity (Sep 18 2026): Rafay, Spectrum Business, dozens of property managers, a Tier 1 inference provider for up to 5 MW; first pod with JVM Realty by end of 2026",
+     "url": "https://www.01net.it/xeal-to-launch-laitent-worlds-first-edge-inference-compute-using-idle-ev-charging-capacity/"
+    },
+    {
+     "text": "DCD: EV charging sites typically run under 10% of permitted capacity; unnamed inference provider committed to up to 5 MW",
+     "url": "https://www.datacenterdynamics.com/en/news/xeal-wants-to-use-spare-ev-charging-capacity-to-power-edge-data-centers-for-ai-inference/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-15"
+   }
+  },
+  {
+   "company": "Anthropic",
+   "domain": "anthropic.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 hyperscaler, AI lab or intermediary \u00b7 Fastest-growing buyer, but every deal is 245 MW to multi-GW and routed through Fluidstack, Nscale, xAI or a hyperscaler",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Anthropic invests $50 billion in American AI infrastructure with Fluidstack (Nov 2025)",
+     "url": "https://www.anthropic.com/news/anthropic-invests-50-billion-in-american-ai-infrastructure"
+    },
+    {
+     "text": "Anthropic's $45 billion Nscale deal buys 460 MW of Vera Rubin (Forbes, Aug 2026)",
+     "url": "https://www.forbes.com/sites/jonmarkman/2026/08/28/anthropics-45-billion-nscale-deal-buys-460-megawatts-of-vera-rubin/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: portfolio door (docs/COMPUTE-OFFTAKE-SALES.md \u00a72c); no outreach until Thomas decides \u00a77.5"
+   }
+  },
+  {
+   "company": "Fluidstack",
+   "domain": "fluidstack.io",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 hyperscaler, AI lab or intermediary \u00b7 The intermediary that actually supplies Google and Anthropic, with an aggregation heritage; a portfolio of tens of MW is the smallest thing worth bringing it",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "C\u00e9sar Maklary",
+     "title": "Co-founder and President, Fluidstack",
+     "linkedin": "https://www.linkedin.com/in/cesarmaklary/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "TeraWulf signs 200+ MW, 10-year hosting agreements with Fluidstack, Google backstop $1.8B",
+     "url": "https://investors.terawulf.com/news-events/press-releases/detail/112/terawulf-signs-200-mw-10-year-ai-hosting-agreements-with-fluidstack"
+    },
+    {
+     "text": "Fluidstack hit $18B valuation building Google and Anthropic data centers (Forbes, Sep 2026)",
+     "url": "https://www.forbes.com/sites/iainmartin/2026/09/03/a-tiny-startup-helping-google-take-on-nvidia-is-now-worth-18-billion/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: portfolio door (docs/COMPUTE-OFFTAKE-SALES.md \u00a72c); no outreach until Thomas decides \u00a77.5"
+   }
+  },
+  {
+   "company": "Google Cloud (Alphabet)",
+   "domain": "google.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 hyperscaler, AI lab or intermediary \u00b7 The one hyperscaler that publicly buys and resells third-party GPU capacity and finances the landlords, but every disclosed deal is 100 MW to GW and arrives through Fluidstack, CoreWeave or SpaceX, never direct from a small operator",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Mark Lohmeyer",
+     "title": "VP/GM, AI and Computing Infrastructure, Google Cloud",
+     "linkedin": "https://www.linkedin.com/in/marklohmeyer/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 Supplier enrollment is invitation-only via SAP Ariba: https://support.google.com/corporate-suppliers/answer/9847530 ; supplier diversity interest form https://www.google.com/diversity/suppliers/register/",
+     "url": "https://support.google.com/corporate-suppliers/answer/9847530"
+    },
+    {
+     "text": "CoreWeave to provide compute capacity for Google's OpenAI deal (Jun 2025)",
+     "url": "https://www.datacenterdynamics.com/en/news/coreweave-to-provide-compute-capacity-for-googles-openai-deal-report/"
+    },
+    {
+     "text": "Cipher Mining 168 MW, 10-year hosting agreement with Fluidstack; Google backstops $1.4B and takes a 5.4% stake (8-K, Sep 2025)",
+     "url": "https://www.globenewswire.com/news-release/2025/09/25/3156107/0/en/cipher-mining-signs-168-mw-10-year-ai-hosting-agreement-with-fluidstack.html"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: portfolio door (docs/COMPUTE-OFFTAKE-SALES.md \u00a72c); no outreach until Thomas decides \u00a77.5"
+   }
+  },
+  {
+   "company": "Meta Platforms",
+   "domain": "meta.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 hyperscaler, AI lab or intermediary \u00b7 Second-largest neocloud buyer, but contracts are $3B-$27B dedicated clusters; the only route for small capacity is as a sub-supplier to a Nebius or CoreWeave-class vendor",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Santosh Janardhan",
+     "title": "Head of Infrastructure, Meta; co-leads Meta Compute",
+     "linkedin": "https://www.linkedin.com/in/sjanardhan/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "CoreWeave stock closes up 12% after $14 billion deal with Meta (CNBC, Sep 2025)",
+     "url": "https://www.cnbc.com/2025/09/30/coreweave-meta-deal-ai.html"
+    },
+    {
+     "text": "Nebius signs new AI infrastructure agreement with Meta, up to $27B (Mar 2026)",
+     "url": "https://www.businesswire.com/news/home/20260316469367/en/Nebius-Signs-New-AI-Infrastructure-Agreement-with-Meta"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: portfolio door (docs/COMPUTE-OFFTAKE-SALES.md \u00a72c); no outreach until Thomas decides \u00a77.5"
+   }
+  },
+  {
+   "company": "Microsoft",
+   "domain": "microsoft.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 hyperscaler, AI lab or intermediary \u00b7 Buys the most third-party GPU capacity of anyone, but each contract is a dedicated 50-200 MW+ cluster with multi-billion prepayments; business development, not procurement, originates them",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Jonathan Tinter",
+     "title": "President, Business Development and Ventures, Microsoft (quoted on the IREN and Nscale deals)",
+     "linkedin": "https://www.linkedin.com/in/jontinter/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 No open application: the procurement page is a resource only. Small-business interest registration: https://www.microsoft.com/en-us/procurement/diversity-small-business",
+     "url": "https://www.microsoft.com/en-us/procurement/diversity-small-business"
+    },
+    {
+     "text": "IREN 8-K: $9.7B, 5-year GB300 contract, 200 MW critical IT; quote from Jonathan Tinter, President, Business Development and Ventures",
+     "url": "https://www.sec.gov/Archives/edgar/data/1878848/000114036125040072/ef20058139_ex99-1.htm"
+    },
+    {
+     "text": "Nscale: ~200,000 GB300 for Microsoft across Texas, Portugal (12,600 GPUs), UK, Norway",
+     "url": "https://www.nscale.com/press-releases/nscale-microsoft-2025"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: portfolio door (docs/COMPUTE-OFFTAKE-SALES.md \u00a72c); no outreach until Thomas decides \u00a77.5"
+   }
+  },
+  {
+   "company": "NVIDIA (DGX Cloud Lepton / NVIDIA Cloud Partner program)",
+   "domain": "nvidia.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 hyperscaler, AI lab or intermediary \u00b7 The only hyperscale-adjacent door that aggregates many providers, regional ones included, into one marketplace the labs see; entry runs through NCP qualification, not a size threshold",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: partner program \u00b7 NVIDIA Partner Network, Cloud Partner track: https://www.nvidia.com/en-us/data-center/gpu-cloud-computing/partners/ ; NCP status requires NVIDIA's reference architecture (docs.nvidia.com/dsx/ncp); no public minimum MW",
+     "url": "https://www.nvidia.com/en-us/data-center/gpu-cloud-computing/partners/"
+    },
+    {
+     "text": "NVIDIA announces DGX Cloud Lepton (May 2025)",
+     "url": "https://nvidianews.nvidia.com/news/nvidia-announces-dgx-cloud-lepton-to-connect-developers-to-nvidias-global-compute-ecosystem"
+    },
+    {
+     "text": "NVIDIA commits $6.3B for CoreWeave's unused capacity through 2032",
+     "url": "https://www.datacenterdynamics.com/en/news/nvidia-to-purchase-unsold-compute-capacity-from-coreweave-for-63bn/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: portfolio door (docs/COMPUTE-OFFTAKE-SALES.md \u00a72c); no outreach until Thomas decides \u00a77.5"
+   }
+  },
+  {
+   "company": "OpenAI",
+   "domain": "openai.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 hyperscaler, AI lab or intermediary \u00b7 Buys through hyperscalers and neoclouds at GW scale; reachable only as a sub-supplier to Oracle, CoreWeave, Crusoe or AWS",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "hyperscale"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Sachin Katti",
+     "title": "VP, Compute Strategy and GPT-Infra, OpenAI",
+     "linkedin": "https://www.linkedin.com/in/sachin-katti-72777943/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "CoreWeave expands agreement with OpenAI by up to $6.5B, total $22.4B (Sep 2025)",
+     "url": "https://investors.coreweave.com/news/news-details/2025/CoreWeave-Expands-Agreement-with-OpenAI-by-up-to-6-5B/default.aspx"
+    },
+    {
+     "text": "AWS and OpenAI announce multi-year strategic partnership, $38B",
+     "url": "https://openai.com/index/aws-and-openai-partnership/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: portfolio door (docs/COMPUTE-OFFTAKE-SALES.md \u00a72c); no outreach until Thomas decides \u00a77.5"
+   }
+  },
+  {
+   "company": "Compute Exchange",
+   "domain": "compute.exchange",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 GPU marketplace / aggregator \u00b7 The only venue explicitly naming energy-infrastructure operators as a supplier class and selling forward reservations, which is what a lender wants",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Carmen Li",
+     "title": "CEO (also CEO of Silicon Data)",
+     "linkedin": "https://www.linkedin.com/in/carmenrli/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: Provider Partner Program \u00b7 https://compute.exchange/partner-program",
+     "url": "https://compute.exchange/partner-program"
+    },
+    {
+     "text": "Infrastructure Operators: vertically integrated power and data-center operators converting energy infrastructure to GPU compute; counterparties vetted on corporate registration, operational track record, SLA terms",
+     "url": "https://compute.exchange/"
+    },
+    {
+     "text": "Apply to the Program; our partnerships team reviews every application and follows up with a call; dedicated partner manager",
+     "url": "https://compute.exchange/partner-program"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-15"
+   }
+  },
+  {
+   "company": "Hydra Host",
+   "domain": "hydrahost.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 GPU marketplace / aggregator \u00b7 Positions itself as an offtake network for data-center partners who own hardware; $100M Series A (June 2026) to double the fleet; an NVIDIA Cloud Partner on DGX Cloud Lepton",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Aaron Ginn",
+     "title": "CEO & Co-Founder",
+     "linkedin": "https://www.linkedin.com/in/aginn/"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: Brokkr AI Factory Operating System for data centers / AI Factory Accelerator \u00b7 https://hydrahost.com/ai-factory/",
+     "url": "https://hydrahost.com/ai-factory/"
+    },
+    {
+     "text": "Designs, procures, deploys, manages and monetizes AI Factory hardware end to end; interruptible capacity for burst workloads, on-demand and reserved",
+     "url": "https://hydrahost.com/"
+    },
+    {
+     "text": "Hydra Host raises $100M Series A; Brokkr deployed at more than 50 data centers; plans to double its 30,000-unit fleet",
+     "url": "https://siliconangle.com/2026/06/15/gpu-infrastructure-management-startup-hydra-host-raises-100m/"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-15"
+   }
+  },
+  {
+   "company": "Nebius",
+   "domain": "nebius.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 GPU marketplace / aggregator \u00b7 A real partner-capacity door, but scoped to facility-scale builders, not 75 kW skids",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: Nebius for infrastructure partners \u00b7 https://nebius.com/infrastructure-partners",
+     "url": "https://nebius.com/infrastructure-partners"
+    },
+    {
+     "text": "The partner funds and owns the facility and its hardware, including the GPUs, in full; the partner's data center joins the Nebius capacity pool",
+     "url": "https://nebius.com/infrastructure-partners"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-16"
+   }
+  },
+  {
+   "company": "SF Compute",
+   "domain": "sfcompute.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 GPU marketplace / aggregator \u00b7 Deep, liquid demand and real SLAs, but built for InfiniBand clusters far above one 75 kW skid",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [],
+   "evidence": [
+    {
+     "text": "Door: Cluster provider onboarding (build, operate and lease supercomputers on a partner's behalf) \u00b7 https://sfcompute.com/contact",
+     "url": "https://sfcompute.com/contact"
+    },
+    {
+     "text": "Partners with financially motivated parties as a technical partner to build, operate and lease supercomputers on their behalf",
+     "url": "https://sfcompute.com/about"
+    },
+    {
+     "text": "h100i requirements: 1 TB RAM, 100 Gbps primary network, 400 Gbps RDMA compute fabric",
+     "url": "https://fogdocs.sfcompute.com/docs/instance-types"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-16"
+   }
+  },
+  {
+   "company": "Shadeform",
+   "domain": "shadeform.com",
+   "vertical": "offtaker",
+   "stage": "target",
+   "summary": "Compute offtake \u00b7 B \u00b7 GPU marketplace / aggregator \u00b7 Aggregator with a public provider form and a newly hired supply team scouting powered capacity; an API-fronted skid fleet fits, a single skid may be below their threshold",
+   "tags": [
+    "compute-offtake",
+    "omega-core",
+    "tier-b",
+    "marketplace"
+   ],
+   "source": {
+    "kind": "target-list",
+    "ref": "compute-offtake"
+   },
+   "contacts": [
+    {
+     "name": "Caroline Teitelbaum",
+     "title": "Head of Data Center and Colo Supply",
+     "linkedin": "https://www.linkedin.com/in/cteitelb/"
+    },
+    {
+     "name": "Jean-Michael Desrosiers",
+     "title": "Head of Cloud Infrastructure"
+    }
+   ],
+   "evidence": [
+    {
+     "text": "Door: List Your Cloud (plus Shadeform Capacity Solutions for data center / colo supply) \u00b7 https://shadeform.com/list-your-cloud",
+     "url": "https://shadeform.com/list-your-cloud"
+    },
+    {
+     "text": "List Your Cloud: detail your available capacity; do you have an API",
+     "url": "https://shadeform.com/list-your-cloud"
+    },
+    {
+     "text": "Caroline Teitelbaum, Head of Data Center and Colo Supply; Jean-Michael Desrosiers, Head of Cloud Infrastructure",
+     "url": "https://www.prnewswire.com/news-releases/shadeform-strengthens-supply-chain-expertise-with-director-level-hires-across-colo-powered-land-and-compute-302859642.html"
+    }
+   ],
+   "next": {
+    "action": "COMPUTE: LinkedIn queue: the partnerships/capacity lead; ask for 20 min on a pilot skid in their metro",
+    "due": "2026-10-16"
+   }
+  }
+ ]
+}

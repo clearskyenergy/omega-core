@@ -46,7 +46,12 @@ var DAY = 86400000, HOUR = 3600000;
 
 var STAGES = ['target', 'contacted', 'demo', 'trial', 'proposal', 'won', 'lost'];
 var OPEN = ['target', 'contacted', 'demo', 'trial', 'proposal'];
-var VERTICALS = ['oem', 'developer', 'epc', 'installer'];
+/* The four verticals the platform sells to, plus `offtaker`: a buyer of
+   Omega-Core compute (a GPU marketplace, an inference cloud, a hyperscaler,
+   an AI lab, a fleet operator) — the compute-offtake side strategy
+   (docs/COMPUTE-OFFTAKE-SALES.md, 2026-10-06). It never buys the platform;
+   it is in the same book so one morning run works one list. */
+var VERTICALS = ['oem', 'developer', 'epc', 'installer', 'offtaker'];
 
 /* Every activity kind, and the channel it counts under. An unknown kind is
    refused rather than stored: the dashboard adds up kinds by name, and a
@@ -296,6 +301,8 @@ function verticalFrom(text) {
   var t = String(text || '').toLowerCase();
   if (!t) return '';
   if (VERTICALS.indexOf(t) >= 0) return t;
+  /* first: "AI technology company" or "cloud equipment" is an offtaker, not an OEM */
+  if (/\b(offtak|off-tak|compute|gpu|hyperscal|neocloud|cloud provider|inference|ai lab|marketplace|colocation|data cent)/.test(t)) return 'offtaker';
   if (/\b(oem|manufactur|distribut|technology|equipment|supplier|vendor)/.test(t)) return 'oem';
   if (/\b(epc|engineer|construction|contractor services)/.test(t)) return 'epc';
   if (/\b(develop|owner|ipp|capital|fund|invest|utility|asset)/.test(t)) return 'developer';
