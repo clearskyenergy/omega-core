@@ -2337,6 +2337,26 @@ body.arranging .scroll{pointer-events:none}
           </div>
         </div>
         <div class="col">
+          <div class="panel" data-widget="ai-provider" style="flex:none">
+            <div class="ptitle">AI provider<span class="live" id="aiProviderActive">CHECKING</span></div>
+            <form id="aiProviderForm" class="characterSettings">
+              <label for="aiProviderMode">Power Jarvis with</label>
+              <select id="aiProviderMode" disabled>
+                <option value="claude">Claude</option>
+                <option value="chatgpt">ChatGPT · Codex</option>
+                <option value="auto">Auto · Claude, then ChatGPT</option>
+              </select>
+              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the other provider when an account reaches its limit, before any work starts.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button type="submit" id="aiProviderSave" class="sw" disabled>SAVE</button>
+                <button type="button" id="aiProviderRefresh" class="sw">REFRESH</button>
+              </div>
+              <div id="aiProviderStatus" role="status" aria-live="polite">Connecting to Jarvis on this computer…</div>
+              <div id="aiProviderAccounts" style="font-size:12px;line-height:1.6;overflow-wrap:anywhere"></div>
+              <div id="aiProviderScope" style="font-size:12px;line-height:1.6;color:var(--dim)"></div>
+              <a id="aiProviderHelp" href="https://github.com/clearskyenergy/jarvis/blob/main/docs/PROVIDER-SWITCH.md" target="_blank" rel="noopener" style="font-size:12px;color:var(--glow-cyan)">Setup and connection help ↗</a>
+            </form>
+          </div>
           <div class="panel" data-widget="spend" style="flex:none">
             <div class="ptitle">Spend</div>
             <div id="spend"></div>
@@ -5419,6 +5439,81 @@ async function probeBrain(){
   if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} if(brainOn){ glassSync(true); try{ syncBoardTheme(); }catch(_){} } }
   return brainOn;
 }
+/* AI provider settings belong to the running bridge, never localStorage.
+   A failed save re-reads the bridge; it never presents the requested choice
+   as applied. Old bridge versions remain compatible with this page. */
+let aiProviderData=null, aiProviderBusy=false;
+const aiProviderNames={claude:'Claude',chatgpt:'ChatGPT',auto:'Auto'};
+function renderAIProvider(data){
+  aiProviderData=data;
+  el('aiProviderMode').value=data.settings.mode;
+  el('aiProviderMode').disabled=!!data.busy;
+  el('aiProviderSave').disabled=!!data.busy;
+  el('aiProviderActive').textContent=data.active?aiProviderNames[data.active].toUpperCase():'READY';
+  const host=el('aiProviderAccounts'); host.textContent='';
+  ['claude','chatgpt'].forEach(key=>{
+    const p=data.providers[key]||{};
+    const row=document.createElement('div');
+    row.textContent=aiProviderNames[key]+': '+(p.detail||'Connection not checked');
+    host.appendChild(row);
+  });
+  el('aiProviderStatus').textContent=data.busy?'Jarvis is working. Change providers when this request finishes.':
+    'Saved choice: '+aiProviderNames[data.settings.mode]+'. '+(data.lastSwitch||'Applies to the next Jarvis request.');
+  el('aiProviderScope').textContent='Jarvis chat and new terminal sessions use this choice. Trading City runs independently. Office schedules currently run in Claude and require migration to switch providers.';
+}
+async function aiProviderRequest(method, body){
+  const c=new AbortController(); const timer=setTimeout(()=>c.abort(),10000);
+  try{
+    const r=await fetch(BRAIN+'/providers',{method,cache:'no-store',signal:c.signal,
+      headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===404) throw new Error('Update and restart Jarvis on this Mac to enable the provider switch.');
+    if(!r.ok||!j.ok||!j.settings||!aiProviderNames[j.settings.mode]) throw new Error(j.error||'Could not read AI settings.');
+    return j;
+  } finally { clearTimeout(timer); }
+}
+async function loadAIProvider(){
+  if(aiProviderBusy) return;
+  aiProviderBusy=true;
+  el('aiProviderRefresh').disabled=true;
+  el('aiProviderSave').disabled=true;
+  el('aiProviderMode').disabled=true;
+  try { renderAIProvider(await aiProviderRequest('GET')); }
+  catch(e){
+    aiProviderData=null;
+    el('aiProviderActive').textContent='NOT CONNECTED';
+    el('aiProviderAccounts').textContent='';
+    el('aiProviderStatus').textContent=e.name==='TypeError'||e.name==='AbortError'?
+      'Cannot reach Jarvis on this computer. Open it on the Mac, then refresh.':e.message;
+  } finally { aiProviderBusy=false; el('aiProviderRefresh').disabled=false; }
+}
+el('aiProviderRefresh').addEventListener('click',loadAIProvider);
+el('aiProviderForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();
+  if(aiProviderBusy||!aiProviderData) return;
+  const choice=el('aiProviderMode').value;
+  aiProviderBusy=true;
+  el('aiProviderSave').disabled=true; el('aiProviderMode').disabled=true;
+  el('aiProviderRefresh').disabled=true;
+  el('aiProviderStatus').textContent='Saving to Jarvis…';
+  try{
+    const j=await aiProviderRequest('POST',{mode:choice});
+    renderAIProvider(j);
+    const ready=choice==='auto'?Object.values(j.providers).some(p=>p.ready):j.providers[choice].ready;
+    el('aiProviderStatus').textContent='Saved: '+aiProviderNames[j.settings.mode]+'. '+
+      (ready?'The next request uses this choice.':'Complete the connection below before sending a request.');
+    probeBrain();
+  }catch(e){
+    // The write may have reached the Mac even if its response was lost.
+    try { renderAIProvider(await aiProviderRequest('GET')); }
+    catch(_){ aiProviderData=null; el('aiProviderActive').textContent='UNKNOWN'; }
+    el('aiProviderStatus').textContent='Save could not be confirmed: '+e.message;
+  }finally{
+    aiProviderBusy=false; el('aiProviderRefresh').disabled=false;
+    if(!aiProviderData){el('aiProviderSave').disabled=true;el('aiProviderMode').disabled=true;}
+  }
+});
+
 /* What the twin knows right now, small enough to ride along with every
    question: the counts, today's meetings, the top of the plate, what is
    waiting to go out. The brain has no credential to the twin and should not
@@ -6352,6 +6447,7 @@ function showView(name){
   if(name==='logic'){ loadLogic(false); }
   if(name==='sales'){ wireSales(); loadSales(false); }
   if(name==='office'){ loadOffice(false); }
+  if(name==='system'){ loadAIProvider(); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
@@ -6609,7 +6705,7 @@ function renderConns(s){
        subscription; off means the twin is on its own and will ask before
        it spends. */
     ['Neural link', brainOn?'ok':'off',
-      brainOn?'on this Mac · $0':'off — Desktop: JARVIS neural link'],
+      brainOn?('on this Mac · '+(brainInfo?.provider?aiProviderNames[brainInfo.provider]:'ready')):'off — Desktop: JARVIS neural link'],
     /* The board. The row IS the quick-link: one click opens (or re-focuses)
        the glass, from the same panel that says whether it is up. */
     ['Glass board', boardOn?'ok':'off',
