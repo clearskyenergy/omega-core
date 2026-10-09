@@ -406,7 +406,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .room .chair{fill:#0a2340;stroke:rgba(0,243,255,.3)}
 .room .person{fill:#dceefc}
 .room .personBody{fill:#1e6fa6}
-.room.never .person,.room.never .personBody{display:none}
+/* People represent the department, not a claim that a routine is running. */
 .room.ran .who{animation:typing 1.1s ease-in-out infinite}
 .room .lamp{fill:var(--dim)}
 .room.ran .lamp{fill:var(--good);filter:drop-shadow(0 0 5px var(--good))}
@@ -1804,6 +1804,27 @@ body.officeReading::before{display:none!important}
 @media(max-width:1450px) and (min-width:1101px){.officeDepartmentDock{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:620px){.floorHeader{padding:18px 16px 0;gap:8px;align-items:flex-start}.floorHeader h3{font-size:18px}.floorEyebrow{font-size:9px;letter-spacing:1.2px}.floorCount{font-size:10px;padding:5px 7px}.officeDepartmentDock{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 12px 14px}.floorPanel .floorLegend{padding:12px 16px}.floorLegendHint{width:100%;margin:0}[data-view="office"] .officeTabs button{padding:9px 10px;font-size:13px}}
 @media(prefers-reduced-motion:reduce){#officeFloor *, .officeDepartmentDock button{animation:none!important;transition:none!important}}
+
+
+/* People-first Office: portraits and furniture remain visible in every state. */
+#officeFloor .room .seatedColleague{animation:none;filter:none}
+#officeFloor .chairFrame{fill:none;stroke:#607c91;stroke-width:3;stroke-linecap:round}
+#officeFloor .seatBack{fill:#142436;stroke:#6f99b2;stroke-width:1.4}
+#officeFloor .avatarLegs{fill:none;stroke:#344a63;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+#officeFloor .avatarJacket{fill:var(--department);stroke:#d2e5ee;stroke-width:.6}
+#officeFloor .avatarArms{fill:none;stroke:var(--department);stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
+#officeFloor .avatarFace{stroke:#e5c6b4;stroke-width:.6}
+#officeFloor .deskLight{stroke:var(--department);stroke-width:2;stroke-linecap:round}
+#officeFloor .holoScreen{fill:#123a50;fill-opacity:.92;stroke:#91e5f1;stroke-width:1.2}
+#officeFloor .holoScreen.secondary{fill:#153249;stroke:#87b8d3}
+#officeFloor .screenTrace{fill:none;stroke:#b5f4f6;stroke-width:1.4;stroke-linejoin:round}
+#officeFloor .screenLine{stroke:#8bccdf;stroke-width:1.1;opacity:.85}
+#officeFloor .screenStand{stroke:#6c9bb3;stroke-width:2;fill:none}
+#officeFloor .keyboard{fill:#122335;stroke:#8ab2c8;stroke-width:.6}
+#officeFloor .room .rwho{font-size:15px}#officeFloor .room .rname{font-size:11px}
+#officeFloor .room .namePlate{fill:#0b1a29;fill-opacity:.85;stroke-opacity:.35}
+#officeFloor .coreRing{fill:none;stroke:#6bbdd7;stroke-width:1;stroke-opacity:.5}
+#officeFloor .coreRing.upper{stroke:#a4e9fa;stroke-opacity:.8}
 
 </style>
 </head>
@@ -8785,6 +8806,10 @@ function officeBox(g,x,y,w,d,h,topCls,sideCls){
   g.appendChild(officePoly([officeIso(x+w,y,h),officeIso(x+w,y+d,h),officeIso(x+w,y+d,0),officeIso(x+w,y,0)],sideCls));
   g.appendChild(officePoly([officeIso(x,y,h),officeIso(x+w,y,h),officeIso(x+w,y+d,h),officeIso(x,y+d,h)],topCls));
 }
+function officeShape(parent,tag,attrs){
+  const node=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  Object.keys(attrs).forEach(k=>node.setAttribute(k,attrs[k]));parent.appendChild(node);return node;
+}
 function renderOfficeFloor(st){
   const svg=el('officeFloor'); if(!svg) return;
   svg.textContent='';
@@ -8813,6 +8838,8 @@ function renderOfficeFloor(st){
   const L=OFFICE_LOBBY, lob=document.createElementNS(NS,'g'); lob.setAttribute('class','lobby');
   lob.appendChild(officePoly([officeIso(L.x,L.y),officeIso(L.x+L.w,L.y),officeIso(L.x+L.w,L.y+L.d),officeIso(L.x,L.y+L.d)],'rf'));
   const c=officeIso(L.x+L.w/2,L.y+L.d/2), hex=[]; for(let k=0;k<6;k++){ const a=Math.PI/3*k; hex.push([c[0]+Math.cos(a)*30, c[1]+Math.sin(a)*15]); }
+  officeShape(lob,'ellipse',{cx:c[0],cy:c[1],rx:45,ry:22,class:'coreRing'});
+  officeShape(lob,'ellipse',{cx:c[0],cy:c[1]-7,rx:37,ry:18,class:'coreRing upper'});
   lob.appendChild(officePoly(hex,'hex'));
   lob.appendChild(officeText(c[0],c[1]+3,'','OMEGA'));
   lob.appendChild(officeText(c[0],c[1]+30,'','Thomas · the office'));
@@ -8837,24 +8864,41 @@ function renderOfficeFloor(st){
     /* a plant in the front-left corner */
     const pp=officeIso(R.x+0.7,R.y+R.d-0.7,0), pot=document.createElementNS(NS,'rect'); pot.setAttribute('x',pp[0]-3); pot.setAttribute('y',pp[1]-6); pot.setAttribute('width','6'); pot.setAttribute('height','6'); pot.setAttribute('class','pot'); g.appendChild(pot);
     const pl=document.createElementNS(NS,'circle'); pl.setAttribute('cx',pp[0]); pl.setAttribute('cy',pp[1]-9); pl.setAttribute('r','5'); pl.setAttribute('class','plant'); g.appendChild(pl);
-    /* the chair and the person, behind the desk */
-    const dx=R.x+R.w/2-1.1, dy=R.y+1.6, ch=officeIso(dx+1.1,dy-0.5,0);
-    const chair=document.createElementNS(NS,'ellipse'); chair.setAttribute('cx',ch[0]); chair.setAttribute('cy',ch[1]); chair.setAttribute('rx','6'); chair.setAttribute('ry','3.5'); chair.setAttribute('class','chair'); g.appendChild(chair);
-    const who=document.createElementNS(NS,'g'); who.setAttribute('class','who');
-    const body=document.createElementNS(NS,'ellipse'); body.setAttribute('cx',ch[0]); body.setAttribute('cy',ch[1]-7); body.setAttribute('rx','5'); body.setAttribute('ry','6'); body.setAttribute('class','personBody'); who.appendChild(body);
-    const head=document.createElementNS(NS,'circle'); head.setAttribute('cx',ch[0]); head.setAttribute('cy',ch[1]-16); head.setAttribute('r','3.6'); head.setAttribute('class','person'); who.appendChild(head);
+    /* Stylized seated colleagues are always visible; only status lamps encode runs. */
+    const dx=R.x+R.w/2-1.7, dy=R.y+1.8, ch=officeIso(dx+0.6,dy-0.1,0);
+    const who=document.createElementNS(NS,'g');who.setAttribute('class','who seatedColleague');who.setAttribute('transform','translate('+ch[0]+','+ch[1]+')');
+    const skin={sales:'#e6b69c',marketing:'#bf8568',software:'#d9a580',support:'#895b43',billing:'#d8ae8d',admin:'#e7c3a7',legal:'#b88c70'}[d.key];
+    officeShape(who,'ellipse',{cx:0,cy:4,rx:22,ry:9,fill:'#06121d',opacity:.45});
+    officeShape(who,'path',{d:'M0 -5 L0 8 M-13 12 L0 8 L14 13 M0 8 L4 17',class:'chairFrame'});
+    officeShape(who,'rect',{x:-15,y:-39,width:29,height:33,rx:10,class:'seatBack'});
+    officeShape(who,'path',{d:'M-6 -12 L-8 4 L2 10 M7 -12 L12 1 L23 7',class:'avatarLegs'});
+    officeShape(who,'path',{d:'M-12 -31 Q0 -42 12 -31 L12 -12 Q0 -7 -11 -13 Z',class:'avatarJacket'});
+    officeShape(who,'path',{d:'M-9 -30 L-15 -19 L-3 -14 M10 -30 L17 -20 L29 -17',class:'avatarArms'});
+    officeShape(who,'circle',{cx:-3,cy:-14,r:3,fill:skin});officeShape(who,'circle',{cx:29,cy:-17,r:3,fill:skin});
+    officeShape(who,'rect',{x:-3,y:-42,width:7,height:7,rx:2,fill:skin});
+    officeShape(who,'ellipse',{cx:0,cy:-49,rx:8.5,ry:10,fill:skin,class:'avatarFace'});
+    officeShape(who,'path',{d:d.key==='admin'||d.key==='marketing'?'M-9 -47 Q-13 -63 0 -62 Q14 -61 10 -43 L6 -50 L-4 -55 L-7 -43 Z':'M-9 -50 Q-9 -63 3 -60 Q11 -59 9 -51 L3 -54 L-5 -53 Z',fill:d.key==='admin'?'#c7a173':d.key==='billing'?'#727780':'#263240'});
+    officeShape(who,'path',{d:'M3 -50 L7 -49 M4 -44 L7 -44',stroke:'#654d46','stroke-width':.8,fill:'none'});
+    officeShape(who,'path',{d:'M-10 -30 L-10 -17',stroke:'#deeff7','stroke-width':1.2,opacity:.7});
     g.appendChild(who);
-    /* the desk, its monitor and today's papers */
-    officeBox(g,dx,dy,2.2,1.1,10,'deskTop','desk');
-    const mp=officeIso(dx+1.1,dy+0.25,10), mon=document.createElementNS(NS,'rect'); mon.setAttribute('x',mp[0]-7); mon.setAttribute('y',mp[1]-11); mon.setAttribute('width','14'); mon.setAttribute('height','9'); mon.setAttribute('rx','1'); mon.setAttribute('class','mon'); g.appendChild(mon);
-    const papers=Math.min(6,s.today), pb=officeIso(dx+1.9,dy+0.55,10);
-    for(let k=0;k<papers;k++){ const pr=document.createElementNS(NS,'rect'); pr.setAttribute('x',pb[0]-4); pr.setAttribute('y',pb[1]-4-k*1.6); pr.setAttribute('width','8'); pr.setAttribute('height','5'); pr.setAttribute('class','paper'); g.appendChild(pr); }
-    /* A horizontal plaque is readable without following the floor perspective. */
-    const lb=officeIso(R.x+R.w/2,R.y+R.d-1.1,0), plaque=document.createElementNS(NS,'rect');
-    plaque.setAttribute('x',lb[0]-82);plaque.setAttribute('y',lb[1]-28);plaque.setAttribute('width','164');plaque.setAttribute('height','54');plaque.setAttribute('rx','7');plaque.setAttribute('class','namePlate');g.appendChild(plaque);
-    g.appendChild(officeText(lb[0],lb[1]-12,'rname',d.name));
-    g.appendChild(officeText(lb[0],lb[1]+5,'rwho',d.who+' '+d.last));
-    g.appendChild(officeText(lb[0],lb[1]+19,'rstat',s.cls==='ran'?'On schedule':s.cls==='late'?'Overdue':'No run recorded'));
+    /* A substantial workstation with two floating displays and a lit desk edge. */
+    officeBox(g,dx,dy,3.5,1.5,14,'deskTop','desk');
+    const edge=officeIso(dx,dy+1.5,13),edge2=officeIso(dx+3.5,dy+1.5,13);
+    officeShape(g,'line',{x1:edge[0],y1:edge[1],x2:edge2[0],y2:edge2[1],class:'deskLight'});
+    const mp=officeIso(dx+2.6,dy+0.3,14), displays=officeShape(g,'g',{class:'holoDisplays','aria-hidden':'true'});
+    officeShape(displays,'path',{d:'M'+mp[0]+' '+mp[1]+' v-10',class:'screenStand'});
+    officeShape(displays,'rect',{x:mp[0]-15,y:mp[1]-35,width:35,height:25,rx:3,class:'holoScreen'});
+    officeShape(displays,'rect',{x:mp[0]-38,y:mp[1]-29,width:20,height:18,rx:2,class:'holoScreen secondary'});
+    officeShape(displays,'path',{d:'M'+(mp[0]-10)+' '+(mp[1]-17)+' l7 -7 6 3 10 -9',class:'screenTrace'});
+    for(let k=0;k<3;k++)officeShape(displays,'line',{x1:mp[0]-34,y1:mp[1]-24+k*4,x2:mp[0]-23+(k%2)*3,y2:mp[1]-24+k*4,class:'screenLine'});
+    const keys=officeIso(dx+1.8,dy+1.1,14);officeShape(g,'path',{d:'M'+(keys[0]-10)+' '+(keys[1]-4)+' l15 7 -5 3 -15 -7 Z',class:'keyboard'});
+    const papers=Math.min(6,s.today),pb=officeIso(dx+3.1,dy+1.1,14);
+    for(let k=0;k<papers;k++)officeShape(g,'rect',{x:pb[0]-4,y:pb[1]-4-k*1.6,width:8,height:5,class:'paper'});
+    /* Low nameplates keep the seated people and their screens in view. */
+    const lb=officeIso(R.x+R.w/2,R.y+R.d-0.7,0);
+    officeShape(g,'rect',{x:lb[0]-81,y:lb[1]-1,width:162,height:37,rx:6,class:'namePlate'});
+    g.appendChild(officeText(lb[0],lb[1]+13,'rwho',d.who+' '+d.last));
+    g.appendChild(officeText(lb[0],lb[1]+27,'rname',d.name));
     g.addEventListener('click',()=>officeSelect(d.key));
     g.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); officeSelect(d.key); } });
     svg.appendChild(g);
@@ -8993,7 +9037,7 @@ function renderOfficeSide(st){
   });
 }
 /* Office management uses the same authenticated sales API as the CRM. */
-let officeBook={agents:[],tasks:[]}, officeAccounts=[], officeMode='team', officeBookError='';
+let officeBook={agents:[],tasks:[]}, officeAccounts=[], officeMode='floor', officeBookError='';
 async function officeGet(view){
   const token=await auth.currentUser.getIdToken();
   const r=await fetch('/api/sales?view='+view,{headers:{Authorization:'Bearer '+token}});
@@ -9094,7 +9138,7 @@ function renderOfficeWorkspace(st){
   const host=el('officeWorkspace');if(!host)return;host.textContent='';
   const heading=officeH('div','officeHeading');heading.appendChild(officeH('h2','','Your office'));heading.appendChild(officeH('p','','People, accounts and the next action.'));host.appendChild(heading);
   const actions=officeH('div','officeActions');officeButton(actions,'+ Add agent',()=>officeAgentForm());officeButton(actions,'+ Assign activity',()=>officeTaskForm());officeButton(actions,'Import accounts',officeImport);host.appendChild(actions);
-  const tabs=officeH('div','officeTabs');[['team','Team'],['activities','Activities'],['accounts','Accounts'],['floor','Office map']].forEach(x=>{const b=officeButton(tabs,x[1],()=>{officeMode=x[0];renderOffice();});b.setAttribute('aria-pressed',String(officeMode===x[0]));});host.appendChild(tabs);
+  const tabs=officeH('div','officeTabs');[['floor','Office map'],['team','Team'],['activities','Activities'],['accounts','Accounts']].forEach(x=>{const b=officeButton(tabs,x[1],()=>{officeMode=x[0];renderOffice();});b.setAttribute('aria-pressed',String(officeMode===x[0]));});host.appendChild(tabs);
   const floor=el('officeFloor').parentElement;floor.hidden=officeMode!=='floor';
   if(officeBook.capped)host.appendChild(officeH('p','officeFeedback','Showing the first 1,000 Office records. Older work may be outside this view.'));
   if(officeAccounts.length>=500)host.appendChild(officeH('p','officeHint','Showing up to 500 CRM accounts.'));

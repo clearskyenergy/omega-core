@@ -192,10 +192,10 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     if (vp.name === 'phone') ok(v.sw <= v.vw + 1, 'no sideways scroll on a phone', [v.sw, v.vw]);
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-sales-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
 
-    /* the office: readable cards and the optional map, from the same book */
+    /* The Office opens on people at desks; Team remains available. */
     await page.click(vp.name === 'phone' ? '#moreTab' : '.navItem[data-view="office"]');
     if (vp.name === 'phone') await page.click('#moreList .navItem[data-view="office"]');
-    await page.waitForSelector('#officeWorkspace .officeCard', { timeout: 15000 }).catch(function () {});
+    await page.waitForSelector('#officeFloor .seatedColleague', { timeout: 15000 }).catch(function () {});
     await page.waitForTimeout(400);
     var o = await page.evaluate(function () {
       function t(sel) { var e = document.querySelector(sel); return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
@@ -207,6 +207,8 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
         sw: document.documentElement.scrollWidth, vw: window.innerWidth
       };
     });
+    ok(await page.isVisible('#officeFloor') && await page.getByRole('button',{name:'Office map',exact:true}).getAttribute('aria-pressed')==='true', 'the Office floor opens by default');
+    ok(await page.locator('#officeFloor .seatedColleague').count()===7, 'every department has a seated colleague regardless of run history');
     ok(o.view === 'office', 'the Office view opens' + (vp.name === 'phone' ? ' from More' : ''), o.view);
     ok(o.rooms.join(',') === 'sales:ran,marketing:never,support:never,software:never,legal:never,admin:never,billing:late', 'seven rooms back to front: Sales lit, Billing amber, the rest dark', o.rooms);
     ok(o.papers === 1, 'one paper on the Sales desk for today\'s entry', o.papers);
