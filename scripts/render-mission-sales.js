@@ -218,7 +218,8 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
     /* click the Sales room: Nora's drawer */
     await page.getByRole('button', {name:'Office map',exact:true}).click();
-    await page.click('#officeFloor g.room[data-desk="sales"]');
+    if(shotsAt) await page.screenshot({path:path.join(shotsAt,'mission-office-map-'+vp.name+'.png'),fullPage:vp.name==='phone'});
+    await page.getByRole('button',{name:'Open Sales · Nora Hale',exact:true}).press('Enter');
     await page.waitForSelector('#officeBack', { timeout: 8000 }).catch(function () {});
     var dr = await page.evaluate(function () { var e = document.getElementById('officeSide'); return { text: e ? e.textContent.replace(/\s+/g, ' ').trim() : '', sel: !!document.querySelector('#officeFloor g.room.sel[data-desk="sales"]') }; });
     ok(dr.sel && /Nora Hale · Sales/.test(dr.text) && /sales@clearsky-usa.com/.test(dr.text), 'the Sales room opens Nora Hale\'s drawer and stays lit as selected', dr.text.slice(0, 200));

@@ -381,13 +381,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .sSug{font-size:12.5px;line-height:1.5;padding:6px 0 6px 10px;margin-bottom:6px;border-left:2px solid rgba(0,243,255,.3);color:var(--ink)}
 .sSug.act{border-left-color:var(--warn)}
 .sSug.ok{border-left-color:var(--good);color:var(--dim)}
-/* The office floor: an isometric room a desk, drawn by renderOfficeFloor()
-   off the same records the cards it replaced were read from. A room that
-   never ran is dim with an empty chair; one that ran is lit and its person
-   types; an overdue one burns amber. Click a room and the drawer on the
-   right opens on that department: the week's plan to approve, a note to
-   the desk, its numbers, its days. No light here is decoration: every one
-   is a fact off the log. */
+/* Isometric Office: department accents are decorative; status lamps and
+   labels come only from recorded activity. */
 .officeGrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(330px,.9fr);gap:12px;flex:1;min-height:0}
 .floorPanel{display:flex;flex-direction:column;min-height:0;padding:0;overflow:hidden;position:relative}
 .floorPanel svg{width:100%;height:100%;min-height:380px;display:block;background:radial-gradient(ellipse at 50% 35%,rgba(0,243,255,.07),transparent 62%)}
@@ -1756,6 +1751,60 @@ body.officeReading::before{display:none!important}
 #chiefOfStaff li{padding:0 0 8px;line-height:1.6}
 #chiefOfStaff details{margin:16px 0}#chiefOfStaff summary{cursor:pointer;line-height:1.6}
 .adaConversation{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.adaConversation:empty{display:none}
+
+/* Office visual refresh: dimensional scene, quiet light, legible controls. */
+[data-view="office"] .floorPanel.panel{background:linear-gradient(145deg,#122535 0%,#0b1726 60%,#152034 100%)!important;border:1px solid #365366!important;border-radius:18px;box-shadow:0 18px 48px #03091250!important}
+.floorHeader{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 26px 0;color:#eff8ff}
+.floorEyebrow{font:600 10px/1.5 var(--mono);letter-spacing:2px;color:#89b8cc}
+.floorHeader h3{font:500 22px/1.3 var(--ui);letter-spacing:-.5px;margin:7px 0 0}
+.floorCount{font:500 12px/1.5 var(--ui);color:#c4dce8;border:1px solid #39566a;background:#172c3d;padding:7px 11px;border-radius:20px;white-space:nowrap}
+.floorPanel #officeFloor{height:auto;min-height:0;aspect-ratio:965/535;background:radial-gradient(ellipse at 50% 40%,#24576a45,transparent 66%);padding:14px 0 0;box-sizing:border-box;overflow:visible}
+#officeFloor .slab{fill:url(#officeSlab);stroke:#3b6075;stroke-width:1.2}
+#officeFloor .slabEdge{fill:#091626;stroke:#244557;stroke-width:1}
+#officeFloor .tile{stroke:#7495ad;stroke-opacity:.09;stroke-width:.8}
+#officeFloor .room{--department:#83d8e5;opacity:1}
+#officeFloor .room .rf{fill:url(#officeRoom);stroke:var(--department);stroke-opacity:.65;stroke-width:1.2;transition:fill .18s,stroke-opacity .18s}
+#officeFloor .room .roomEdge{fill:#112537;stroke:#365365;stroke-width:.7}
+#officeFloor .room .wall{fill:url(#officeGlass);stroke:#8dbbd1;stroke-opacity:.4;stroke-width:.8}
+#officeFloor .room .lightStrip{fill:none;stroke:var(--department);stroke-width:2;stroke-opacity:.8}
+#officeFloor .room .rug{fill:var(--department);fill-opacity:.065;stroke:var(--department);stroke-opacity:.12;stroke-width:.8}
+#officeFloor .room .desk{fill:#132c43;stroke:#54758d;stroke-width:.8}
+#officeFloor .room .deskTop{fill:url(#officeDesk);stroke:#8bb3c9;stroke-width:1}
+#officeFloor .room .mon{fill:#142b3d;stroke:#a3d4e6;stroke-width:1;animation:none;filter:none}
+#officeFloor .room.ran .mon{fill:#72d6d7}
+#officeFloor .room.late .mon{fill:#997642}
+#officeFloor .room .chair{fill:#27384d;stroke:#73899b}
+#officeFloor .room .personBody{fill:#7caabd}
+#officeFloor .room .person{fill:#dfecf4}
+#officeFloor .room .who{animation:none}
+#officeFloor .room .namePlate{fill:#0b1a29;fill-opacity:.93;stroke:#526a80;stroke-opacity:.55;stroke-width:.7}
+#officeFloor .room .rname{fill:var(--department);font:600 13px var(--ui);letter-spacing:.3px;text-transform:none}
+#officeFloor .room .rwho{fill:#f1f7fc;font:600 17px var(--ui)}
+#officeFloor .room .rstat{fill:#aebfd0;font:10px var(--ui);letter-spacing:.15px}
+#officeFloor .room.ran .rstat{fill:#a3e5bd}#officeFloor .room.late .rstat{fill:#f0c487}
+#officeFloor .room:hover .rf,#officeFloor .room:focus .rf,#officeFloor .room.sel .rf{fill:#27475b;stroke-opacity:1;stroke-width:2.5}
+#officeFloor .room:hover .namePlate,#officeFloor .room:focus .namePlate,#officeFloor .room.sel .namePlate{stroke:var(--department);stroke-opacity:1}
+#officeFloor .lobby .rf{fill:#142c3e;stroke:#52788d;stroke-dasharray:none}
+#officeFloor .lobby .hex{fill:#25485d;stroke:#9bc9dc;stroke-width:1.2}
+#officeFloor .lobby text{fill:#d0e4ef;font:500 10px var(--ui);letter-spacing:1.5px}
+#officeFloor .plant{fill:#4e9c82;stroke:#83b99b;stroke-width:.5}#officeFloor .pot{fill:#789393}
+.officeDepartmentDock{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px 20px 20px}
+.officeDepartmentDock button{display:flex;align-items:center;gap:10px;min-width:0;text-align:left;border:1px solid #30495d;border-radius:10px;background:#102132;color:#eaf3fb;padding:12px 10px;cursor:pointer;transition:background .15s,border-color .15s}
+.officeDepartmentDock button:hover,.officeDepartmentDock button[aria-pressed="true"]{background:#223a4e;border-color:var(--department)}
+.officeDepartmentDock button:focus-visible{outline:2px solid #c3ebff;outline-offset:2px}
+.officeDepartmentDock .departmentIcon{display:grid;place-items:center;width:30px;height:34px;flex-shrink:0;border-radius:8px;color:var(--department);background:#23394b;font:600 12px var(--ui)}
+.officeDepartmentDock .departmentCopy{min-width:0;display:flex;flex-direction:column;gap:3px}
+.officeDepartmentDock strong{font:600 12px/1.3 var(--ui);color:#eaf3fb}.officeDepartmentDock small{font:11px/1.4 var(--ui);color:#acbdcd}
+.floorPanel .floorLegend{font:11px/1.5 var(--ui);letter-spacing:0;text-transform:none;border-top:1px solid #30495d;padding:13px 22px;color:#b1c4d4;gap:10px 16px;background:#0a152350}.floorLegendHint{margin-left:auto;color:#9cc7d6}
+[data-view="office"] .officeHeading h2{font-weight:500;font-size:32px;letter-spacing:-1px}
+[data-view="office"] .officeActions button:first-child{background:#b7e5ed;color:#112534;border-color:#b7e5ed;box-shadow:0 3px 14px #7bd8e015}
+[data-view="office"] .officeTabs{gap:4px;border:0;background:#0a142180;padding:5px;border-radius:12px;width:fit-content;max-width:100%}
+[data-view="office"] .officeTabs button{border-color:transparent;background:transparent;border-radius:8px;color:#b6c8d9}
+[data-view="office"] .officeTabs button[aria-pressed="true"]{background:#294557;color:#effaff;border-color:#4c7082;box-shadow:0 2px 8px #0002}
+@media(max-width:1450px) and (min-width:1101px){.officeDepartmentDock{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.floorHeader{padding:18px 16px 0;gap:8px;align-items:flex-start}.floorHeader h3{font-size:18px}.floorEyebrow{font-size:9px;letter-spacing:1.2px}.floorCount{font-size:10px;padding:5px 7px}.officeDepartmentDock{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 12px 14px}.floorPanel .floorLegend{padding:12px 16px}.floorLegendHint{width:100%;margin:0}[data-view="office"] .officeTabs button{padding:9px 10px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){#officeFloor *, .officeDepartmentDock button{animation:none!important;transition:none!important}}
+
 </style>
 </head>
 <body>
@@ -2351,8 +2400,10 @@ body.officeReading::before{display:none!important}
         <div class="logicNote" id="officeNote">Reading the office…</div>
         <div class="officeGrid">
           <div class="officeMain scroll"><div id="officeWorkspace"></div><div class="panel floorPanel" hidden>
-            <svg id="officeFloor" viewBox="40 40 960 520" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
-            <div class="floorLegend"><span><i style="background:var(--good)"></i>ran on schedule</span><span><i style="background:var(--warn)"></i>overdue</span><span><i style="background:var(--dim)"></i>never ran</span><span>papers on a desk: today's entries</span><span>click a room to open it</span></div>
+            <div class="floorHeader"><div><span class="floorEyebrow">JARVIS / WORKSPACE</span><h3>Your team, in one place.</h3></div><span id="floorRunCount" class="floorCount"></span></div>
+            <svg id="officeFloor" viewBox="35 30 965 535" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
+            <div id="officeDepartmentDock" class="officeDepartmentDock" aria-label="Office departments"></div>
+            <div class="floorLegend"><span><i style="background:var(--good)"></i>ran on schedule</span><span><i style="background:var(--warn)"></i>overdue</span><span><i style="background:var(--dim)"></i>never ran</span><span class="floorLegendHint">Select a department to step inside ↗</span></div>
           </div>
           </div><div class="panel" style="min-height:0;display:flex;flex-direction:column">
             <div id="officeSide" class="scroll" style="flex:1;min-height:0"></div>
@@ -8738,6 +8789,20 @@ function renderOfficeFloor(st){
   const svg=el('officeFloor'); if(!svg) return;
   svg.textContent='';
   const NS='http://www.w3.org/2000/svg';
+  svg.innerHTML='<defs><linearGradient id="officeSlab" x2="0" y2="1"><stop stop-color="#254255"/><stop offset="1" stop-color="#122b3e"/></linearGradient><linearGradient id="officeRoom" x2="0" y2="1"><stop stop-color="#294658"/><stop offset="1" stop-color="#193144"/></linearGradient><linearGradient id="officeGlass" x2="0" y2="1"><stop stop-color="#7cb6cc" stop-opacity=".28"/><stop offset="1" stop-color="#3c6a84" stop-opacity=".08"/></linearGradient><linearGradient id="officeDesk" x2="0" y2="1"><stop stop-color="#5c8299"/><stop offset="1" stop-color="#2b4d66"/></linearGradient></defs>';
+  const colors={sales:'#80d8e8',marketing:'#c5b2f0',software:'#8cbafa',support:'#91d8ba',billing:'#e4c38c',admin:'#aebcfa',legal:'#b9cedb'};
+  el('floorRunCount').textContent=OFFICE_DESKS.filter(d=>st.by[d.key].cls==='ran').length+' of '+OFFICE_DESKS.length+' on schedule';
+  const dock=el('officeDepartmentDock');dock.textContent='';
+  OFFICE_DESKS.forEach(d=>{
+    const status=st.by[d.key],button=officeH('button');button.type='button';button.style.setProperty('--department',colors[d.key]);
+    button.setAttribute('aria-pressed',String(officeSel===d.key));button.setAttribute('aria-label','Open '+d.name+' · '+d.who+' '+d.last);
+    button.appendChild(officeH('span','departmentIcon',d.key==='legal'?'GC':d.who.charAt(0)+d.last.charAt(0)));
+    const copy=officeH('span','departmentCopy');copy.appendChild(officeH('strong','',d.name));copy.appendChild(officeH('small','',status.cls==='ran'?'On schedule':status.cls==='late'?'Overdue':'No run recorded'));button.appendChild(copy);
+    button.addEventListener('click',()=>officeSelect(d.key));dock.appendChild(button);
+  });
+  /* A raised foundation gives the floor weight; activity lights remain factual. */
+  svg.appendChild(officePoly([officeIso(0,23),officeIso(25,23),officeIso(25,23,-16),officeIso(0,23,-16)],'slabEdge'));
+  svg.appendChild(officePoly([officeIso(25,0),officeIso(25,23),officeIso(25,23,-16),officeIso(25,0,-16)],'slabEdge'));
   /* the slab and its tiles */
   svg.appendChild(officePoly([officeIso(0,0),officeIso(25,0),officeIso(25,23),officeIso(0,23)],'slab'));
   const tiles=document.createElementNS(NS,'g');
@@ -8755,14 +8820,18 @@ function renderOfficeFloor(st){
   /* the rooms, back to front */
   OFFICE_DESKS.slice().sort((a,b)=>(a.room.x+a.room.y)-(b.room.x+b.room.y)).forEach(d=>{
     const s=st.by[d.key], R=d.room, g=document.createElementNS(NS,'g');
-    g.setAttribute('class','room '+s.cls+(officeSel===d.key?' sel':'')); g.dataset.desk=d.key; g.setAttribute('tabindex','0'); g.setAttribute('role','button');
+    g.style.setProperty('--department',colors[d.key]);g.setAttribute('class','room '+s.cls+(officeSel===d.key?' sel':'')); g.dataset.desk=d.key; g.setAttribute('tabindex','0'); g.setAttribute('role','button');
     const stat=s.last?(s.cls==='ran'?'ran '+sStamp(new Date(s.last.ms).toISOString()):'last '+sStamp(new Date(s.last.ms).toISOString())+' · overdue'):(d.ext?'reports on GitHub':'never ran');
     g.setAttribute('aria-label',d.who+' '+d.last+' · '+d.name+' · '+stat);
     const title=document.createElementNS(NS,'title'); title.textContent=d.who+' '+d.last+' · '+d.name+' · '+d.sched+' · '+stat; g.appendChild(title);
-    /* back walls, then the floor */
-    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x+R.w,R.y,0),officeIso(R.x+R.w,R.y,18),officeIso(R.x,R.y,18)],'wall'));
-    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x,R.y+R.d,0),officeIso(R.x,R.y+R.d,18),officeIso(R.x,R.y,18)],'wall'));
+    /* Raised room edge, glass walls and illuminated architectural trim. */
+    g.appendChild(officePoly([officeIso(R.x,R.y+R.d),officeIso(R.x+R.w,R.y+R.d),officeIso(R.x+R.w,R.y+R.d,-7),officeIso(R.x,R.y+R.d,-7)],'roomEdge'));
+    g.appendChild(officePoly([officeIso(R.x+R.w,R.y),officeIso(R.x+R.w,R.y+R.d),officeIso(R.x+R.w,R.y+R.d,-7),officeIso(R.x+R.w,R.y,-7)],'roomEdge'));
+    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x+R.w,R.y,0),officeIso(R.x+R.w,R.y,26),officeIso(R.x,R.y,26)],'wall'));
+    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x,R.y+R.d,0),officeIso(R.x,R.y+R.d,26),officeIso(R.x,R.y,26)],'wall'));
     g.appendChild(officePoly([officeIso(R.x,R.y),officeIso(R.x+R.w,R.y),officeIso(R.x+R.w,R.y+R.d),officeIso(R.x,R.y+R.d)],'rf'));
+    const trim=document.createElementNS(NS,'polyline');trim.setAttribute('points',[officeIso(R.x,R.y+R.d,26),officeIso(R.x,R.y,26),officeIso(R.x+R.w,R.y,26)].map(p=>p.join(',')).join(' '));trim.setAttribute('class','lightStrip');g.appendChild(trim);
+    g.appendChild(officePoly([officeIso(R.x+1,R.y+1),officeIso(R.x+R.w-1,R.y+1),officeIso(R.x+R.w-1,R.y+R.d-1),officeIso(R.x+1,R.y+R.d-1)],'rug'));
     /* the lamp in the back corner says the state at a glance */
     const lp=officeIso(R.x+R.w-0.5,R.y+0.5,24), lamp=document.createElementNS(NS,'circle'); lamp.setAttribute('cx',lp[0]); lamp.setAttribute('cy',lp[1]); lamp.setAttribute('r','3'); lamp.setAttribute('class','lamp'); g.appendChild(lamp);
     /* a plant in the front-left corner */
@@ -8780,11 +8849,12 @@ function renderOfficeFloor(st){
     const mp=officeIso(dx+1.1,dy+0.25,10), mon=document.createElementNS(NS,'rect'); mon.setAttribute('x',mp[0]-7); mon.setAttribute('y',mp[1]-11); mon.setAttribute('width','14'); mon.setAttribute('height','9'); mon.setAttribute('rx','1'); mon.setAttribute('class','mon'); g.appendChild(mon);
     const papers=Math.min(6,s.today), pb=officeIso(dx+1.9,dy+0.55,10);
     for(let k=0;k<papers;k++){ const pr=document.createElementNS(NS,'rect'); pr.setAttribute('x',pb[0]-4); pr.setAttribute('y',pb[1]-4-k*1.6); pr.setAttribute('width','8'); pr.setAttribute('height','5'); pr.setAttribute('class','paper'); g.appendChild(pr); }
-    /* the nameplate, in the front half of the room */
-    const lb=officeIso(R.x+R.w/2,R.y+R.d-1.2,0);
-    g.appendChild(officeText(lb[0],lb[1]-14,'rwho',d.who+' '+d.last));
-    g.appendChild(officeText(lb[0],lb[1]-2,'rname',d.name+' · '+d.sched));
-    g.appendChild(officeText(lb[0],lb[1]+9,'rstat',stat));
+    /* A horizontal plaque is readable without following the floor perspective. */
+    const lb=officeIso(R.x+R.w/2,R.y+R.d-1.1,0), plaque=document.createElementNS(NS,'rect');
+    plaque.setAttribute('x',lb[0]-82);plaque.setAttribute('y',lb[1]-28);plaque.setAttribute('width','164');plaque.setAttribute('height','54');plaque.setAttribute('rx','7');plaque.setAttribute('class','namePlate');g.appendChild(plaque);
+    g.appendChild(officeText(lb[0],lb[1]-12,'rname',d.name));
+    g.appendChild(officeText(lb[0],lb[1]+5,'rwho',d.who+' '+d.last));
+    g.appendChild(officeText(lb[0],lb[1]+19,'rstat',s.cls==='ran'?'On schedule':s.cls==='late'?'Overdue':'No run recorded'));
     g.addEventListener('click',()=>officeSelect(d.key));
     g.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); officeSelect(d.key); } });
     svg.appendChild(g);
