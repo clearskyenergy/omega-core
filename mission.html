@@ -2344,9 +2344,10 @@ body.arranging .scroll{pointer-events:none}
               <select id="aiProviderMode" disabled>
                 <option value="claude">Claude</option>
                 <option value="chatgpt">ChatGPT · Codex</option>
-                <option value="auto">Auto · Claude, then ChatGPT</option>
+                <option value="grok">Grok</option>
+                <option value="auto">Auto · Claude, then ChatGPT, then Grok</option>
               </select>
-              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the other provider when an account reaches its limit, before any work starts.</p>
+              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the next provider when an account reaches its limit, before any work starts. Grok answers in text only and is skipped until an xAI key is set.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button type="submit" id="aiProviderSave" class="sw" disabled>SAVE</button>
                 <button type="button" id="aiProviderRefresh" class="sw">REFRESH</button>
@@ -5443,7 +5444,7 @@ async function probeBrain(){
    A failed save re-reads the bridge; it never presents the requested choice
    as applied. Old bridge versions remain compatible with this page. */
 let aiProviderData=null, aiProviderBusy=false;
-const aiProviderNames={claude:'Claude',chatgpt:'ChatGPT',auto:'Auto'};
+const aiProviderNames={claude:'Claude',chatgpt:'ChatGPT',grok:'Grok',auto:'Auto'};
 function renderAIProvider(data){
   aiProviderData=data;
   el('aiProviderMode').value=data.settings.mode;
@@ -5451,10 +5452,12 @@ function renderAIProvider(data){
   el('aiProviderSave').disabled=!!data.busy;
   el('aiProviderActive').textContent=data.active?aiProviderNames[data.active].toUpperCase():'READY';
   const host=el('aiProviderAccounts'); host.textContent='';
-  ['claude','chatgpt'].forEach(key=>{
-    const p=data.providers[key]||{};
+  ['claude','chatgpt','grok'].forEach(key=>{
+    const p=data.providers[key];
     const row=document.createElement('div');
-    row.textContent=aiProviderNames[key]+': '+(p.detail||'Connection not checked');
+    // An older Jarvis bridge reports no Grok entry; say so instead of "not checked".
+    row.textContent=aiProviderNames[key]+': '+(p?(p.detail||'Connection not checked'):
+      (key==='grok'?'Update and restart Jarvis on this Mac to enable Grok':'Connection not checked'));
     host.appendChild(row);
   });
   el('aiProviderStatus').textContent=data.busy?'Jarvis is working. Change providers when this request finishes.':
@@ -5499,7 +5502,7 @@ el('aiProviderForm').addEventListener('submit',async ev=>{
   try{
     const j=await aiProviderRequest('POST',{mode:choice});
     renderAIProvider(j);
-    const ready=choice==='auto'?Object.values(j.providers).some(p=>p.ready):j.providers[choice].ready;
+    const ready=choice==='auto'?Object.values(j.providers).some(p=>p.ready):(j.providers[choice]||{}).ready;
     el('aiProviderStatus').textContent='Saved: '+aiProviderNames[j.settings.mode]+'. '+
       (ready?'The next request uses this choice.':'Complete the connection below before sending a request.');
     probeBrain();

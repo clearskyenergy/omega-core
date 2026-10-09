@@ -52,11 +52,12 @@ const TWIN={counts:{},spend:{},schedule:[],todos:[],draftList:[],people:[],routi
   await page.waitForFunction(()=>!document.getElementById('aiProviderMode').disabled).catch(async e=>{
    console.error({errors,status:await page.locator('#aiProviderStatus').textContent()});throw e;
   });
-  for(const mode of ['chatgpt','claude','auto']){
+  for(const mode of ['chatgpt','grok','claude','auto']){
    await page.selectOption('#aiProviderMode',mode);await page.click('#aiProviderSave');
    await page.waitForFunction(()=>/^Saved:/.test(document.getElementById('aiProviderStatus').textContent));
    const saved=await (await fetch('http://127.0.0.1:8795/providers')).json();assert.equal(saved.settings.mode,mode);
   }
+  assert(/^Grok: /m.test(await page.locator('#aiProviderAccounts').innerText()),'Grok status line');
   await page.reload();await page.waitForFunction(()=>!document.getElementById('aiProviderMode').disabled);
   assert.equal(await page.inputValue('#aiProviderMode'),'auto');
   const result=await page.evaluate(async()=>{const r=await fetch('http://127.0.0.1:8795/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'simulate limit'})});return r.json();});
