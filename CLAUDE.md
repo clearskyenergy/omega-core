@@ -1311,6 +1311,12 @@ address (warmth is READ from the records), a price in a LinkedIn post
 agent is `.claude/agents/sales-agent.md` + `/sales`; it drafts in Gmail and
 never sends, posts or approves. JARVIS runs the same agent and draws the
 same data (mission.html › Sales, `npm run check:sales`).
+The sales team's own guide is `docs/OMEGA-Sales-Guide.pdf` (internal;
+docs/ is not served), rendered by `scripts/sales-guide/build.js` (`npm run
+guide:sales`) from `scripts/sales-guide/sales-guide.html`: every price,
+module, plan, meter, starter package and discovery question is read from
+the catalog, the price book, the pricing engine and the proposal's
+questions at build time, never typed. Rebuild it when any of those change.
 
 ## Silmarillion 2.0 — joint development
 
