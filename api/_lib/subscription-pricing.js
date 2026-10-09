@@ -22,10 +22,16 @@ function fee(book, plan, choice, year) {
   if (['standard', 'custom', 'waived'].indexOf(mode) < 0) fail('Invalid service fee mode');
   if (['first-year', 'every-year'].indexOf(scope) < 0) fail('Invalid service fee scope');
   if (mode !== 'standard' && (typeof choice.reason !== 'string' || !choice.reason.trim())) fail('A service fee reason is required');
-  var standard = book.serviceFees[plan] == null ? book.serviceFees.lite : book.serviceFees[plan];
+  /* The service fee is a PLAN fee: Field, Pro and Enterprise carry one.
+     Omega Design alone (Lite, the à la carte plan) carries none: it is a
+     $500/month minimum, nothing more (Tommy, 2026-09-29: "there is no
+     service fee; it's a $500 minimum base for Omega Lite"). The rule lives
+     here, not in the book's number, because the seeded 2026-10 book still
+     carries the old Lite figure and a used version is never repriced. */
+  var standard = (plan === 'alacarte' || plan === 'lite' || book.serviceFees[plan] == null) ? 0 : book.serviceFees[plan];
   var amount = mode === 'custom' ? B.integer(choice.amountCents, 'custom service fee') : (mode === 'waived' ? 0 : standard);
   if (year > 1 && scope === 'first-year') amount = standard;
-  return { mode: mode, amountCents: amount, amountDollars: (amount / 100).toFixed(2), standardCents: standard, appliesTo: scope, reason: choice.reason || '', display: amount ? money(amount) + '/year' : 'Waived' };
+  return { mode: mode, amountCents: amount, amountDollars: (amount / 100).toFixed(2), standardCents: standard, appliesTo: scope, reason: choice.reason || '', display: amount ? money(amount) + '/year' : (mode === 'waived' ? 'Waived' : 'None') };
 }
 function quote(keys, book, options) {
   B.validate(book); options = options || {};
