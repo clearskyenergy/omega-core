@@ -9166,6 +9166,63 @@ function renderOfficeWorkspace(st){
 
 /* Personal data comes only from the owner-only twin endpoint, never sales_config.
    This is a compact view of existing records, not a new financial data store. */
+// Owner-authenticated phone transport. Only the signed-in Mac browser claims work.
+let officeRelayBusy=false,officeRelayResult=null;
+async function officeCloud(action,data,read){
+  const idToken=await token();if(!idToken)throw new Error('Sign in to your private Office first.');
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),20000);
+  try{
+    const url=CHAT+'/office-chat'+(read?'?'+new URLSearchParams(Object.assign({action},data)):'');
+    const r=await fetch(url,{method:read?'GET':'POST',headers:{Authorization:'Bearer '+idToken,'Content-Type':'application/json'},body:read?undefined:JSON.stringify(Object.assign({action},data)),signal:controller.signal});
+    const result=await r.json();if(!r.ok)throw new Error(result.error||'Office connection unavailable');return result;
+  }finally{clearTimeout(timer);}
+}
+async function officeMacAvailable(){
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),1800);
+  try{const r=await fetch(BRAIN+'/health',{signal:controller.signal});return r.ok;}catch(e){return false;}finally{clearTimeout(timer);}
+}
+async function officeRelayTick(){
+  if(officeRelayBusy||!auth.currentUser||String(auth.currentUser.email).toLowerCase()!=='tom@clearsky-usa.com')return;
+  officeRelayBusy=true;
+  try{
+    if(officeRelayResult){await officeCloud('finish',officeRelayResult);officeRelayResult=null;}
+    if(!await officeMacAvailable())return;
+    const next=await officeCloud('claim',{});if(!next.request)return;
+    const job=next.request;
+    if(!['admin','sales','marketing','software','support','billing','legal'].includes(job.desk))throw new Error('Unknown desk');
+    officeRelayResult={id:job.id,claim:job.claim,answer:'',error:'',provider:''};
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),610000);
+    try{
+      const endpoint=job.desk==='admin'?'/ada':'/office/'+job.desk;
+      const r=await fetch(BRAIN+endpoint+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:job.text}),signal:controller.signal});
+      const result=await r.json();if(!r.ok||!result.ok)throw new Error(result.error||'No confirmed answer');
+      officeRelayResult.answer=String(result.text||'');officeRelayResult.provider=result.provider||'';
+    }catch(e){officeRelayResult.error=('No confirmed answer. Work may have started; check before resending. '+e.message).slice(0,1000);}
+    finally{clearTimeout(timer);}
+    await officeCloud('finish',officeRelayResult);officeRelayResult=null;
+  }catch(e){/* Retain a completed response for delivery; never run the job again. */}
+  finally{officeRelayBusy=false;}
+}
+setInterval(officeRelayTick,10000);
+async function officeAsk(endpoint,desk,text,status,signal){
+  if(await officeMacAvailable()){
+    const r=await fetch(BRAIN+endpoint+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal});
+    const result=await r.json();if(!r.ok||!result.ok)throw new Error(result.error||'The conversation service is unavailable.');return result;
+  }
+  const id=crypto.randomUUID();
+  await officeCloud('send',{id,desk,text});
+  status('Queued for your Mac. Keep Jarvis open and signed in there.');
+  const until=Date.now()+610000;
+  while(Date.now()<until&&!signal.aborted){
+    await new Promise(resolve=>setTimeout(resolve,3000));
+    const result=await officeCloud('status',{id},true);
+    if(result.status==='answered')return {ok:true,text:result.answer,provider:result.provider};
+    if(['expired','unconfirmed'].includes(result.status))throw new Error(result.status==='expired'?'Your Mac did not pick up this message before it expired.':result.error||'The Mac has not confirmed completion.');
+    status(result.status==='running'?'Your colleague is working on your Mac…':'Queued for your Mac. Keep Jarvis open and signed in there.');
+  }
+  throw new Error('Still waiting for confirmation. Reopen this desk to check history before resending.');
+}
+
 const officeConversations={};
 function renderOfficeConversation(sec,d){
   sec.classList.add('officeChat');
@@ -9173,7 +9230,7 @@ function renderOfficeConversation(sec,d){
   const endpoint=ada?'/ada':'/office/'+d.key;
   const state=officeConversations[d.key]||(officeConversations[d.key]={items:[],draft:'',pending:false,status:'',loaded:false});
   sec.appendChild(officeH('h4',null,'Talk with '+name));
-  sec.appendChild(officeH('p','officeHint','A separate conversation on your Mac. Ask for an update, work through a decision, or give a specific next step.'));
+  sec.appendChild(officeH('p','officeHint','Talk here from your Mac or phone. Phone messages reach this colleague while Jarvis is open and signed in on your Mac.'));
   const log=officeH('div','adaConversation');log.id=prefix+'Conversation';log.setAttribute('role','log');log.setAttribute('aria-live','polite');sec.appendChild(log);
   const starters=officeH('div','dacts officeChatStarters');sec.appendChild(starters);
   const prompts=ada?['What needs my attention today?','Help me plan my day','Review my upcoming bills']:['What are you working on?','What needs my decision?','Help me with a new assignment'];
@@ -9188,8 +9245,7 @@ function renderOfficeConversation(sec,d){
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),610000);
     try{
       // Do not copy Jarvis's personal dashboard context into department conversations.
-      const response=await fetch(BRAIN+endpoint+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:controller.signal});
-      const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'The conversation service is unavailable.');
+      const result=await officeAsk(endpoint,d.key,text,message=>{state.status=message;state.paint();},controller.signal);
       state.items.push({role:'assistant',text:result.text});state.draft='';state.status='Answered through '+(result.provider||'Jarvis')+(result.fallback?' · fallback used':'')+'.';
     }catch(e){state.status='No confirmed answer: '+e.message+' Check history or the terminal before resending; work may have started.';}
     finally{clearTimeout(timer);state.pending=false;state.paint();}
@@ -9204,9 +9260,15 @@ function renderOfficeConversation(sec,d){
   };
   state.paint();
   if(!state.loaded){state.loaded=true;
-    fetch(BRAIN+endpoint+'/history',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(data=>{
-      if(!state.pending&&!state.items.length)state.items=data.items||[];state.paint();
-    }).catch(()=>{state.loaded=false;if(!state.pending&&!state.items.length){state.status='Chat needs Jarvis running on your Mac. On a phone, this local connection is unavailable. Your message has not been sent.';state.paint();}});
+    (async()=>{
+      if(await officeMacAvailable()){
+        const r=await fetch(BRAIN+endpoint+'/history',{cache:'no-store'});if(!r.ok)throw new Error('unavailable');return r.json();
+      }
+      const result=await officeCloud('history',{desk:d.key},true),items=[];
+      (result.items||[]).forEach(row=>{items.push({role:'user',text:row.text});if(row.answer)items.push({role:'assistant',text:row.answer});else items.push({role:'assistant',text:row.error||({queued:'Waiting for your Mac.',running:'Working on your Mac.',expired:'Expired before your Mac picked it up.',unconfirmed:'No confirmed answer. Check before resending.'}[row.status]||row.status)});});
+      return {items};
+    })().then(data=>{if(!state.pending&&!state.items.length)state.items=data.items||[];state.paint();})
+      .catch(()=>{state.loaded=false;if(!state.pending&&!state.items.length){state.status='Conversation history is unavailable. Sign in and check your connection.';state.paint();}});
   }
 }
 function renderAdaConversation(sec){renderOfficeConversation(sec,OFFICE_DESKS.find(d=>d.key==='admin'));}

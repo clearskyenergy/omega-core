@@ -146,6 +146,7 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     await page.route('**/*', function (route) {
       var u = route.request().url();
       if (u.indexOf(base) === 0) return route.continue();
+      if (/127\.0\.0\.1:8795\/health/.test(u)) return route.fulfill({status:200,contentType:'application/json',body:'{\"ok\":true}'});
       if (/gstatic\.com\/firebasejs\/.*firebase-app\.js/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_APP });
       if (/gstatic\.com\/firebasejs\/.*firebase-auth\.js/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_AUTH });
       if (/gstatic\.com\/firebasejs\/.*firebase-firestore\.js/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_FS });
@@ -241,6 +242,20 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     ok(!/sales assignment/.test(await page.textContent('#colleagueConversation')),'Mila does not inherit Nora conversation');
     await page.click('#officeFloor g.room[data-desk="sales"]');
     ok(/sales assignment/.test(await page.textContent('#colleagueConversation')),'Nora conversation survives changing desks');
+    if(vp.name==='phone'){
+      var phoneRequest;
+      await page.route('**/127.0.0.1:8795/health',route=>route.abort());
+      await page.route('**/twinChat/office-chat**',route=>{
+        var request=route.request(),data=request.method()==='POST'?request.postDataJSON():{};
+        if(data.action==='send')phoneRequest=data;
+        return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify(request.method()==='GET'?{status:'answered',answer:'Phone relay reply from Nora',provider:'chatgpt'}:{status:'queued',request:null})});
+      });
+      await page.fill('#colleagueMessage','Phone-only message');
+      await page.getByRole('button',{name:'Send to Nora',exact:true}).click();
+      await page.waitForFunction(()=>/Phone relay reply/.test(document.getElementById('colleagueConversation').textContent));
+      ok(phoneRequest&&phoneRequest.desk==='sales'&&phoneRequest.text==='Phone-only message'&&!phoneRequest.context,'phone sends through authenticated relay to the correct desk');
+      await page.unroute('**/127.0.0.1:8795/health');
+    }
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-drawer-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
     if (vp.name === 'desktop') {
       await page.click('#planApprove');
