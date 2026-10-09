@@ -141,7 +141,10 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
   for (var vp of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'phone', width: 390, height: 844 }]) {
     reset();   /* each viewport starts from the same book */
     var page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
-    var errors = [];
+    var errors = [], restoredTask = false;
+    var twinState = JSON.parse(TWIN);
+    twinState.draftList=[{id:'draft-test',subject:'Buyer proposal',to:'buyer@buyerco.example',emailContext:{state:'linked',threadId:'abc123',latestAt:new Date().toISOString(),direction:'in',changedSinceDraft:true}}];
+
     page.on('pageerror', function (e) { errors.push(e.message); });
     await page.route('**/*', function (route) {
       var u = route.request().url();
@@ -150,7 +153,12 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
       if (/gstatic\.com\/firebasejs\/.*firebase-app\.js/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_APP });
       if (/gstatic\.com\/firebasejs\/.*firebase-auth\.js/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_AUTH });
       if (/gstatic\.com\/firebasejs\/.*firebase-firestore\.js/.test(u)) return route.fulfill({ status: 200, contentType: 'text/javascript', body: STUB_FS });
-      if (/cloudfunctions\.net\/twinChat/.test(u)) return route.fulfill({ status: 200, contentType: 'application/json', headers: { 'Access-Control-Allow-Origin': '*' }, body: TWIN });
+      if (/cloudfunctions\.net\/twinChat/.test(u)) {
+        var response=twinState;
+        if(u.indexOf('/tasks/archive')>=0) response={items:restoredTask?[]:[{id:'archived-test',title:'Archived project follow-up'}]};
+        if(u.indexOf('/tasks/restore')>=0){restoredTask=true;twinState.todos=[{id:'archived-test',title:'Archived project follow-up',triage:{score:10,why:['restored'],days:null}}];response={ok:true};}
+        return route.fulfill({status:200,contentType:'application/json',headers:{'Access-Control-Allow-Origin':'*'},body:JSON.stringify(response)});
+      }
       return route.abort();
     });
     console.log('\n' + vp.name);
@@ -191,6 +199,25 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     ok(v.pill === '2', 'the rail pill counts what waits on him', v.pill);
     ok(v.cfgOn === 'on', 'the settings show the switch on record', v.cfgOn);
     if (vp.name === 'phone') ok(v.sw <= v.vw + 1, 'no sideways scroll on a phone', [v.sw, v.vw]);
+    await page.locator('#salesOwners button').first().click();
+    await page.locator('#salesOwnerForm [name=ownerName]').fill('Andrew Dunn');
+    await page.locator('#salesOwnerForm [name=dealValue]').fill('25000');
+    await page.locator('#salesOwnerForm [name=referral]').fill('Mike Lopez');
+    await page.locator('#salesOwnerForm [name=nextAction]').fill('Review proposal with buyer');
+    await page.locator('#salesOwnerForm [name=nextDue]').fill('2026-10-20');
+    await page.locator('#salesOwnerForm button').click();
+    await page.waitForFunction(function(){return document.getElementById('salesOwners').textContent.indexOf('Andrew Dunn')>=0;});
+    var owned=Array.from(db.data.values()).find(function(p){return p.owner&&p.owner.name==='Andrew Dunn';});
+    ok(owned && owned.referral==='Mike Lopez' && owned.dealValue===25000 && owned.next.due==='2026-10-20','owner, referral, value and follow-up persist from the form');
+    await page.locator('#salesOwners select').selectOption({label:'Andrew Dunn'});
+    ok((await page.locator('#salesOwners .row').count())===1,'filter shows the selected owner’s sales');
+    await page.locator('#salesOwners button').first().click();
+    await page.locator('#salesOwnerForm [name=ownerName]').fill('Nora');
+    await page.locator('#salesOwnerForm [name=ownerKind]').selectOption('ai');
+    await page.locator('#salesOwnerForm button').click();
+    await page.waitForFunction(function(){return document.getElementById('salesOwners').textContent.indexOf('Nora (ai)')>=0;});
+    ok(Array.from(db.data.values()).some(function(p){return p.owner&&p.owner.name==='Nora'&&p.owner.kind==='ai';}),'an AI agent can own a real sales record');
+    await page.locator('#salesOwnerForm').evaluate(function(f){f.closest('details').open=false;});
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-sales-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
 
     /* The Office opens on people at desks; Team remains available. */
@@ -363,6 +390,16 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
       ok(/Sender: dev@clearsky-usa.com/.test(await page.textContent('#salesNote')), 'the board re-reads after saving');
       if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-sales-desktop-after.png') });
     }
+    await page.locator('.navItem[data-view=tasks]').first().evaluate(function(b){b.click();});
+    await page.locator('#todos button').filter({hasText:/^ARCHIVE$/}).click();
+    await page.waitForSelector('#todos button:text-is("RESTORE")');
+    ok((await page.locator('#todos').textContent()).indexOf('Archived project follow-up')>=0,'archive is accessible');
+    await page.locator('#todos button:text-is("RESTORE")').click();
+    await page.waitForFunction(function(){return document.getElementById('todos').textContent.indexOf('restored')>=0;});
+    ok(restoredTask,'restore returns the task to the active list');
+    await page.locator('.navItem[data-view=outbox]').first().evaluate(function(b){b.click();});
+    ok((await page.locator('#drafts').textContent()).indexOf('review draft')>=0,'Outbox warns about email received after the draft');
+    ok((await page.locator('#drafts a').getAttribute('href')).indexOf('#all/abc123')>=0,'Outbox links to the matching Gmail thread');
     ok(!errors.length, 'no uncaught page error', errors);
     console.log(JSON.stringify({ viewport: vp.name, tiles: v.tiles.length, today: (v.today.match(/TODAY|SOON/gi) || []).length, errors: errors.length }));
     await page.close();

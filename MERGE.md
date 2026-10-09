@@ -3037,6 +3037,14 @@ commitment in favour of SDVPP participation (Rider SDVPP, anticipated
 session) re-verify every row against primary documents and open a draft PR
 when something moved; data only, never the math, never a merge.
 
+
+## 2026-10-09 — Mission tasks, email context and sales ownership
+
+- Task priority scoring moves from mission.html to omega-twin functions/lib/task-priority.js. The same server score protects NOW tasks from automatic archiving, alongside explicit now/today/high priorities.
+- The twin archives proposed tasks after 14 days without task/email activity, retains every document, and supports restore. Meeting replay preserves existing tasks and drafts. Deploy the companion twinChat, runIngest and runAnalyze changes before this UI.
+- Outbox rows show Gmail thread context from the ingest loop, with sent/incoming dates and changed-since-draft warnings. Matching requires exact normalized subject and recipient; ambiguous matches remain unlinked. It does not infer that a sent message completed a task or send mail.
+- Sales uses existing sales_prospects and sales_activity: human/AI owner, referral attribution, USD value, stage and next action/date. Staff writes are transactional; agents cannot overwrite ownership or deal values. Existing contacts and history remain. No collections or rule changes.
+- Validated sales unit/API checks, lifecycle pagination and Gmail-context tests, and desktop/phone browser checks.
 ## 2026-10-09 — Office agent workspace (local, pending release)
 
 Mission Office gains readable cards, editable Sales/Marketing profiles,

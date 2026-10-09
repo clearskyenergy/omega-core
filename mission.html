@@ -2327,6 +2327,24 @@ body.officeReading::before{display:none!important}
       <div class="salesWrap">
         <div class="logicNote" id="salesNote">Reading the sales board…</div>
         <div class="tileRow" id="salesTiles"></div>
+        <div class="panel" style="flex:none;max-height:48vh;overflow:auto">
+          <div class="ptitle">Sales pipeline · people, AI agents &amp; referrals</div>
+          <div id="salesOwners"></div>
+          <details><summary>Add or update a sale</summary>
+            <form class="sForm" id="salesOwnerForm">
+              <label>Company domain or contact email<input name="prospectId" required placeholder="company.com"></label>
+              <label>Company<input name="company"></label>
+              <label>Owner<input name="ownerName" list="salesOwnerNames" required><datalist id="salesOwnerNames"><option value="Andrew Dunn"><option value="Mike Lopez"></datalist></label>
+              <label>Owner type<select name="ownerKind"><option value="human">Person</option><option value="ai">AI agent</option></select></label>
+              <label>Stage<select name="stage"><option>target</option><option>contacted</option><option>demo</option><option>trial</option><option>proposal</option><option>won</option><option>lost</option></select></label>
+              <label>Deal value (USD)<input name="dealValue" type="number" min="0" step="0.01"></label>
+              <label>Referred by<input name="referral" placeholder="Person or source"></label>
+              <label>Follow-up date<input name="nextDue" type="date"></label>
+              <label class="full">Next action<input name="nextAction"></label>
+              <div class="acts"><button type="submit">SAVE SALE</button><span id="salesOwnerNote" role="status"></span></div>
+            </form>
+          </details>
+        </div>
         <div class="salesGrid">
           <div class="col">
             <div class="panel" style="flex:1;min-height:0">
@@ -4570,7 +4588,7 @@ async function load(){
     }, 'nothing on the calendar');
 
     buildTriage(s.todos||[]);
-    renderTasks();
+    if(!taskArchiveOpen) renderTasks();
 
     /* The order rendered here IS the order he speaks to. Held so that
        "execute 1 through 4" resolves against exactly what is on his screen
@@ -4579,7 +4597,7 @@ async function load(){
        not show a body and recipients fetched against the one before it. */
     draftCache.clear();
     outboxAll = (s.draftList||[]).map((d,i)=>({ n:i+1, id:d.id,
-      label: d.subject || '(no subject)', to: d.to || null }));
+      emailContext: d.emailContext || null, label: d.subject || '(no subject)', to: d.to || null }));
     renderOutbox();
 
     const ing=s.ingest;
@@ -6939,12 +6957,36 @@ async function taskAct(id, verb, text){
 
 
 
+let taskArchiveOpen=false;
+async function showTaskArchive(){
+  taskArchiveOpen=true;
+  const host=el('todos'); host.textContent='Loading archive…';
+  try{
+    const tok=await token(); const res=await fetch(CHAT+'/tasks/archive',{headers:{Authorization:'Bearer '+tok}});
+    const data=await res.json(); if(!res.ok) throw new Error(data.error||'Archive unavailable');
+    host.textContent=''; const back=document.createElement('button'); back.textContent='BACK TO ACTIVE'; back.onclick=()=>{taskArchiveOpen=false;renderTasks();}; host.appendChild(back);
+    if(!data.items.length){ const empty=document.createElement('p'); empty.textContent='No archived tasks.'; host.appendChild(empty); }
+    data.items.forEach(t=>{
+      const row=document.createElement('div'); row.className='row'; const title=document.createElement('span'); title.className='k'; title.textContent=t.title||'(untitled)';
+      const restore=document.createElement('button'); restore.textContent='RESTORE'; restore.onclick=async()=>{
+        restore.disabled=true;
+        try{ const r=await fetch(CHAT+'/tasks/restore',{method:'POST',headers:{Authorization:'Bearer '+await token(),'Content-Type':'application/json'},body:JSON.stringify({id:t.id})});
+          if(!r.ok) throw new Error('Could not restore task'); taskArchiveOpen=false; await load();
+        }catch(e){ restore.disabled=false; say('jarvis',e.message); }
+      }; row.append(title,restore); host.appendChild(row);
+    });
+  }catch(e){ host.textContent=e.message; const back=document.createElement('button'); back.textContent='BACK'; back.onclick=()=>{taskArchiveOpen=false;renderTasks();}; host.appendChild(back); }
+}
+
 /* The task list, in the order it actually deserves. */
 const SIZE={S:'small',M:'medium',L:'large',XL:'x-large'};
 function renderTasks(){
   const host=el('todos'); if(!host) return;
   host.textContent='';
 
+  const archiveButton=document.createElement('button'); archiveButton.textContent='ARCHIVE';
+  archiveButton.addEventListener('click',showTaskArchive); host.appendChild(archiveButton);
+  const policy=document.createElement('div'); policy.className='note'; policy.textContent='Tasks with no activity for 14 days move to Archive. High-priority tasks stay active.'; host.appendChild(policy);
   const hidden=triaged.filter(r=>r.noise||r.dupeOf).length;
   const bar=document.createElement('div'); bar.className='triBar';
   const mkChip=(label,on,fn)=>{
@@ -7908,7 +7950,13 @@ function renderOutbox(){
     const why=document.createElement('span'); why.className='triWhy';
     const bits=r.why.filter(w=>w!=='ready to send').slice(0,2);
     if(r.dupes) bits.push('+'+r.dupes+' like it');
+    const mail=r.d.emailContext;
+    if(mail && mail.state==='linked') bits.unshift((mail.direction==='out'?'You sent email':'Incoming email')+' '+sStamp(mail.latestAt)+(mail.changedSinceDraft?' · review draft':''));
+    else bits.unshift(mail && mail.state==='ambiguous'?'Multiple matching threads':mail && mail.state==='unavailable'?'Email sync unavailable':'No linked email yet');
     why.textContent=bits.join(' · ');
+    if(mail && mail.state==='linked' && /^[a-zA-Z0-9_-]+$/.test(mail.threadId||'')){
+      const link=document.createElement('a'); link.textContent='EMAIL ↗'; link.href='https://mail.google.com/mail/u/?authuser=tom%40clearsky-usa.com#all/'+encodeURIComponent(mail.threadId); link.target='_blank'; link.rel='noopener'; link.onclick=e=>e.stopPropagation(); row.appendChild(link);
+    }
     const v=document.createElement('span');
     v.className='v '+(r.ready?'good':'warn');
     v.textContent=r.ready ? (r.d.to.split(',')[0].trim().slice(0,26)) : 'no recipient';
@@ -7937,79 +7985,6 @@ function renderOutbox(){
    NOTHING IS DELETED. Noise is hidden behind a count you can switch off. A
    filter that silently drops work is worse than no filter, because you cannot
    tell the difference between "there is nothing to do" and "it ate it". */
-
-const MONTHS='jan feb mar apr may jun jul aug sep oct nov dec'.split(' ');
-
-/* Dates that people actually write in a task title. Returns days from now —
-   negative is past. Deliberately conservative: it would rather find no date
-   than invent one, because a wrong date outranks real work. */
-function whenIn(text){
-  const s=String(text||'').toLowerCase();
-  const now=new Date();
-  if(/\btoday\b|\btonight\b/.test(s)) return 0;
-  if(/\btomorrow\b/.test(s)) return 1;
-  if(/\bthis week\b/.test(s)) return 3;
-  if(/\bnext week\b/.test(s)) return 9;
-  /* "Sept 8", "September 8", "9/8" */
-  let m=s.match(/\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+(\d{1,2})\b/);
-  if(m){
-    const mi=MONTHS.indexOf(m[1]), d=+m[2];
-    if(mi>=0 && d>=1 && d<=31){
-      let y=now.getFullYear();
-      let when=new Date(y,mi,d);
-      /* A date more than six months back is almost certainly next year's. */
-      const diff=Math.round((when-now)/86400000);
-      if(diff < -183) when=new Date(y+1,mi,d);
-      return Math.round((when-now)/86400000);
-    }
-  }
-  return null;
-}
-
-/* What kind of work is this, and how loudly is it asking. */
-function triage(t){
-  const s=String(t.title||'').toLowerCase();
-  let score=0; const why=[];
-  const add=(n,label)=>{ score+=n; if(label&&why.indexOf(label)===-1) why.push(label); };
-
-  /* An urgency he set by hand is a fact, not a signal to be weighed against
-     the wording. It goes straight to the top of its band. */
-  if(t.urgency==='now')   add(60,'you said now');
-  if(t.urgency==='today') add(38,'you said today');
-
-  const d=whenIn(s);
-  if(d!==null){
-    if(d<0)       add(50,'past its date');
-    else if(d<=1) add(40,'today');
-    else if(d<=7) add(24,'this week');
-    else          add(6,'dated');
-  }
-  if(/\boverdue\b|\bpast due\b|\blate\b/.test(s))              add(45,'overdue');
-  /* ESCALATE earns its place here: the cluster "ESCALATE — second Bronx
-     20 MW: $800k nonrefundable deposit" was being folded UNDER a blander
-     "Track: second Bronx 20 MW" because nothing scored the shouting. When two
-     rows are the same errand, the one carrying the alarm has to be the one
-     that survives. */
-  if(/\burgent\b|\basap\b|\bimmediately\b|\bright away\b|\bescalate\b|\bcritical\b|\bblocker\b/.test(s)) add(35,'urgent');
-  if(/^[A-Z\s]{6,}[—:-]/.test(String(t.title||''))) add(8,'flagged');
-  /* Someone is waiting on him — the most expensive kind of delay, because it
-     is costing somebody else time as well. */
-  if(/\bowes?\b|\bchase\b|\bfollow[- ]?up\b|\bwaiting\b|\bawaiting\b/.test(s)) add(22,'someone is waiting');
-  if(/\b(invoice|payment|paid|billing|pricing|cost[- ]of[- ]capital|quote|deposit)\b/.test(s)) add(20,'money');
-  if(/\b(gates?|blocks?|before the|prereq|depends on|until)\b/.test(s))  add(18,'blocks others');
-  if(/\b(nda|contract|agreement|msa|loi|sign|countersign|execute)\b/.test(s)) add(15,'legal');
-  if(/\b(call|meeting|reconvene|working session)\b/.test(s))    add(10,'a conversation');
-  /* The twin filing work about itself. Real sometimes, but it should never
-     outrank a customer. */
-  if(/\bjarvis\b|\btwin\b|\bmemory core\b|\bdashboard\b/.test(s)) add(-30,'about the twin');
-  if(/\b(maybe|consider|think about|explore|at some point|someday)\b/.test(s)) add(-12,'speculative');
-
-  /* The loop's own rank still counts for something — it read the meeting this
-     came out of, which none of the above did. Small, and it only breaks ties. */
-  if(typeof t.rank==='number') score += Math.max(0, 12 - t.rank*0.06);
-
-  return {score:Math.round(score), why, days:d};
-}
 
 function band(score){
   if(score>=45) return {k:'NOW',   c:'bad'};
@@ -8048,7 +8023,7 @@ let triaged=[], hideNoise=true, sortMode='priority';
 
 function buildTriage(list){
   const rows=(list||[]).map((t,i)=>{
-    const tr=triage(t);
+    const tr=t.triage || {score:0,why:['Priority unavailable'],days:null};
     return {t, i, score:tr.score, why:tr.why, days:tr.days,
             noise:noiseOf(t), dupeOf:null};
   });
@@ -8472,7 +8447,38 @@ function sItem(host, pri, label, why, link){
 }
 function sEmpty(host, text){ const d=document.createElement('div'); d.className='logicNote'; d.textContent=text; host.appendChild(d); }
 
+function renderSalesOwners(){
+  const host=el('salesOwners'); if(!host||!salesData) return; host.textContent='';
+  const list=salesData.salesPipeline||[];
+  const filter=document.createElement('select'); filter.setAttribute('aria-label','Filter by sales owner'); filter.style.cssText='background:var(--bg);color:var(--ink);border:1px solid var(--line);padding:8px;margin:8px 0;max-width:100%';
+  const names=[...new Set(list.map(p=>p.owner&&p.owner.name).filter(Boolean))].sort();
+  ['Active sales','All owners','Unassigned'].concat(names).forEach(n=>{const o=document.createElement('option'); o.textContent=n; filter.appendChild(o);});
+  host.appendChild(filter); const body=document.createElement('div'); host.appendChild(body);
+  const form=el('salesOwnerForm');
+  function draw(){
+    body.textContent=''; const visible=list.filter(p=>(filter.value==='Active sales' && p.stage!=='won' && p.stage!=='lost' && (!!p.owner || p.stage!=='target'))||filter.value==='All owners'||(filter.value==='Unassigned'?!p.owner:p.owner&&p.owner.name===filter.value));
+    if(!visible.length){ body.textContent='No sales recorded for this owner.'; return; }
+    visible.forEach(p=>{
+      const row=document.createElement('div'); row.className='row'; const desc=document.createElement('span'); desc.className='k';
+      desc.textContent=(p.company||p.id)+' · '+(p.owner?p.owner.name+' ('+p.owner.kind+')':'Unassigned')+' · '+p.stage+' · '+(p.dealValue==null?'Value not set':new Intl.NumberFormat('en-US',{style:'currency',currency:'USD'}).format(p.dealValue))+(p.referral?' · Referral: '+p.referral:'')+(p.next&&p.next.action?' · Next: '+p.next.action+(p.next.due?' — '+p.next.due:''):' · No follow-up set');
+      const edit=document.createElement('button'); edit.textContent='EDIT'; edit.onclick=()=>{
+        form.closest('details').open=true;
+        const vals={prospectId:p.id,company:p.company,ownerName:p.owner&&p.owner.name,ownerKind:p.owner&&p.owner.kind||'human',stage:p.stage,dealValue:p.dealValue,referral:p.referral,nextDue:p.next&&p.next.due,nextAction:p.next&&p.next.action};
+        Object.keys(vals).forEach(k=>form.elements[k].value=vals[k]==null?'':vals[k]); form.elements.ownerName.focus();
+      }; row.append(desc,edit); body.appendChild(row);
+    });
+  }
+  filter.onchange=draw; draw();
+  const dl=el('salesOwnerNames'); dl.textContent=''; [...new Set(['Andrew Dunn','Mike Lopez'].concat(names))].forEach(n=>{const o=document.createElement('option');o.value=n;dl.appendChild(o);});
+  if(!form.dataset.bound){form.dataset.bound='1';form.onsubmit=async e=>{
+    e.preventDefault(); const button=form.querySelector('button'); button.disabled=true;
+    try{const payload=Object.fromEntries(new FormData(form));payload.action='sales-owner';await salesFetch({method:'POST',body:JSON.stringify(payload)});el('salesOwnerNote').textContent='Saved';await loadSales(true);}
+    catch(err){el('salesOwnerNote').textContent=err.message;}finally{button.disabled=false;}
+  };}
+}
+
 function renderSales(){
+  renderSalesOwners();
   const d=salesData; if(!d) return;
   const cfg=d.config||{}, ap=d.approvals||{}, pend=ap.pending||[], inb=d.inbound||{}, out=d.outreach||{}, o30=out.d30||{},
         li=d.linkedin||{}, fu=d.funnel||{}, cand=d.candidates||{};
