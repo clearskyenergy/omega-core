@@ -6,6 +6,7 @@
 const fs=require('fs'), path=require('path'), http=require('http'), assert=require('assert');
 const {chromium}=require(require.resolve('playwright',{paths:[process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES||'',process.cwd()]}));
 const root=path.join(__dirname,'..');
+const FIXTURE='http://127.0.0.1:'+String(process.env.PROVIDER_FIXTURE_PORT||18795);
 const server=http.createServer((req,res)=>{
   const p=path.resolve(root,'.'+new URL(req.url,'http://x').pathname);
   if(!p.startsWith(root+path.sep)||!fs.existsSync(p)||!fs.statSync(p).isFile()){res.writeHead(404);return res.end();}
@@ -19,13 +20,13 @@ const TWIN={counts:{},spend:{},schedule:[],todos:[],draftList:[],people:[],routi
  await new Promise(r=>server.listen(8088,'127.0.0.1',r));
  let fixtureReady=false;
  for(let n=0;n<50&&!fixtureReady;n++){
-  try{fixtureReady=(await (await fetch('http://127.0.0.1:8795/providers')).json()).ok;}catch(_){}
+  try{fixtureReady=(await (await fetch(FIXTURE+'/providers')).json()).testFixture===true;}catch(_){}
   if(!fixtureReady)await new Promise(r=>setTimeout(r,100));
  }
  assert(fixtureReady,'start the local Jarvis HTTP fixture before this test');
  const pack=process.env.CHROMIUM_PACKAGE?require(process.env.CHROMIUM_PACKAGE):null;
  const packaged=pack&&(pack.default||pack);
- const browser=await chromium.launch(packaged?{headless:true,executablePath:await packaged.executablePath(),args:packaged.args.filter(a=>!['--single-process','--disable-web-security'].includes(a))}:{headless:true});
+ const browser=await chromium.launch(packaged?{headless:true,executablePath:await packaged.executablePath(),args:packaged.args.filter(a=>!['--single-process','--disable-web-security'].includes(a))}:process.env.CHROME_PATH?{headless:true,executablePath:process.env.CHROME_PATH}:{headless:true});
  try{
  for(const viewport of [{width:1440,height:1000},{width:390,height:844}]){
   const page=await browser.newPage({viewport}); const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -37,7 +38,8 @@ const TWIN={counts:{},spend:{},schedule:[],todos:[],draftList:[],people:[],routi
     if(bridge==='offline')return route.abort();
     if(!/^\/(providers|ask|health)$/.test(new URL(u).pathname))return route.fulfill({contentType:'application/json',body:'{}'});
     // A localhost test fixture is used, no calls to the user's Mac.
-    return route.continue();
+    const response=await fetch(FIXTURE+new URL(u).pathname,{method:route.request().method(),headers:{'Content-Type':'application/json','Origin':'http://127.0.0.1:8088'},body:route.request().postData()||undefined});
+    return route.fulfill({status:response.status,headers:{'Access-Control-Allow-Origin':'*'},contentType:'application/json',body:await response.text()});
    }
    if(u.startsWith('http://127.0.0.1:8088')){
     if(u.includes('/api/'))return route.fulfill({status:200,contentType:'application/json',body:'{}'});
@@ -52,11 +54,13 @@ const TWIN={counts:{},spend:{},schedule:[],todos:[],draftList:[],people:[],routi
   await page.waitForFunction(()=>!document.getElementById('aiProviderMode').disabled).catch(async e=>{
    console.error({errors,status:await page.locator('#aiProviderStatus').textContent()});throw e;
   });
-  for(const mode of ['chatgpt','claude','auto']){
+  for(const mode of ['chatgpt','grok','claude','auto']){
    await page.selectOption('#aiProviderMode',mode);await page.click('#aiProviderSave');
    await page.waitForFunction(()=>/^Saved:/.test(document.getElementById('aiProviderStatus').textContent));
-   const saved=await (await fetch('http://127.0.0.1:8795/providers')).json();assert.equal(saved.settings.mode,mode);
+   const saved=await (await fetch(FIXTURE+'/providers')).json();assert.equal(saved.settings.mode,mode);
   }
+  assert(/Meta Muse:/.test(await page.locator('#aiCompanionApps').innerText()),'Muse status visible');
+  assert(/^Grok: /m.test(await page.locator('#aiProviderAccounts').innerText()),'Grok status line');
   await page.reload();await page.waitForFunction(()=>!document.getElementById('aiProviderMode').disabled);
   assert.equal(await page.inputValue('#aiProviderMode'),'auto');
   const result=await page.evaluate(async()=>{const r=await fetch('http://127.0.0.1:8795/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text:'simulate limit'})});return r.json();});
@@ -70,8 +74,8 @@ const TWIN={counts:{},spend:{},schedule:[],todos:[],draftList:[],people:[],routi
   assert.deepEqual(errors,[]);console.log('PASS provider settings '+viewport.width+'px: save, reload, fallback, old/offline bridge, no overflow or JS errors');
   await page.close();
  }
- const invalid=await fetch('http://127.0.0.1:8795/providers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'wrong'})});assert.equal(invalid.status,400);
- const foreign=await fetch('http://127.0.0.1:8795/providers',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://evil.example'},body:'{"mode":"chatgpt"}'});assert.equal(foreign.status,403);
+ const invalid=await fetch(FIXTURE+'/providers',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({mode:'wrong'})});assert.equal(invalid.status,400);
+ const foreign=await fetch(FIXTURE+'/providers',{method:'POST',headers:{'Content-Type':'application/json',Origin:'https://evil.example'},body:'{"mode":"chatgpt"}'});assert.equal(foreign.status,403);
  console.log('PASS invalid values and foreign-origin writes refused');
  }finally{await browser.close();server.close();}
 })().catch(e=>{console.error(e);server.close();process.exitCode=1;});

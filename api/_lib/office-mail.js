@@ -20,7 +20,9 @@ function provision(db, caller, b) {
     /* Stable provider client_id recovers unknown outcomes without new inboxes. */
     var body = { display_name: p.name + ' | ClearSky AI assistant', client_id: 'clearsky-office-' + p.id };
     if (process.env.AGENTMAIL_DOMAIN) body.domain = process.env.AGENTMAIL_DOMAIN;
-    return request('/inboxes', 'POST', body).then(function (inbox) {
+    var existing = String(b.inboxId || '').trim();
+    if (existing && (!/^[a-zA-Z0-9@._+-]{3,254}$/.test(existing))) throw A.httpError(400, 'Invalid inbox ID');
+    return (existing ? request('/inboxes/' + encodeURIComponent(existing), 'GET') : request('/inboxes', 'POST', body)).then(function (inbox) {
       if (!inbox.inbox_id || !inbox.email) throw A.httpError(502, 'AgentMail returned no inbox identity');
       var mailbox = { provider: 'agentmail', inboxId: inbox.inbox_id, email: inbox.email, connectedAt: new Date().toISOString() };
       return ref.set({ mailbox: mailbox, sender: inbox.email }, { merge: true }).then(function () { return { ok: true, mailbox: mailbox }; });

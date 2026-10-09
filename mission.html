@@ -1750,6 +1750,11 @@ body.officeReading::before{display:none!important}
 @media(max-width:700px){:root[data-reading="calm"] header>div:last-child{flex-wrap:wrap;justify-content:flex-end}:root[data-reading="calm"] header button{font-size:12px;min-height:34px;padding:6px 8px}:root[data-reading="calm"] .row{flex-wrap:wrap;gap:5px 10px}:root[data-reading="calm"] .row .k{min-width:50%}}
 @media(prefers-reduced-motion:reduce){body::before,body::after{display:none!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
 
+#chiefOfStaff label{display:block;margin:18px 0 7px;font-size:14px}
+#chiefOfStaff textarea{display:block;box-sizing:border-box;width:100%;min-height:90px;margin:0 0 10px;padding:12px;background:#0c1724;color:#edf3fa;border:1px solid #55778b;border-radius:6px;font:15px/1.5 system-ui;resize:vertical}
+#chiefOfStaff ol{padding-left:22px;margin:10px 0 18px;list-style:decimal}
+#chiefOfStaff li{padding:0 0 8px;line-height:1.6}
+#chiefOfStaff details{margin:16px 0}#chiefOfStaff summary{cursor:pointer;line-height:1.6}
 </style>
 </head>
 <body>
@@ -2345,7 +2350,7 @@ body.officeReading::before{display:none!important}
         <div class="logicNote" id="officeNote">Reading the office…</div>
         <div class="officeGrid">
           <div class="officeMain scroll"><div id="officeWorkspace"></div><div class="panel floorPanel" hidden>
-            <svg id="officeFloor" viewBox="150 40 850 500" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
+            <svg id="officeFloor" viewBox="40 40 960 520" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
             <div class="floorLegend"><span><i style="background:var(--good)"></i>ran on schedule</span><span><i style="background:var(--warn)"></i>overdue</span><span><i style="background:var(--dim)"></i>never ran</span><span>papers on a desk: today's entries</span><span>click a room to open it</span></div>
           </div>
           </div><div class="panel" style="min-height:0;display:flex;flex-direction:column">
@@ -2401,15 +2406,18 @@ body.officeReading::before{display:none!important}
               <select id="aiProviderMode" disabled>
                 <option value="claude">Claude</option>
                 <option value="chatgpt">ChatGPT · Codex</option>
-                <option value="auto">Auto · Claude, then ChatGPT</option>
+                <option value="grok">Grok · text responses</option>
+                <option value="muse" disabled>Meta Muse · app only, bridge not connected</option>
+                <option value="auto">Auto · Claude, then ChatGPT, then Grok</option>
               </select>
-              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the other provider when an account reaches its limit, before any work starts.</p>
+              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the next provider when an account reaches its limit, before any work starts. Grok answers in text only and is skipped until an xAI key is set.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button type="submit" id="aiProviderSave" class="sw" disabled>SAVE</button>
                 <button type="button" id="aiProviderRefresh" class="sw">REFRESH</button>
               </div>
               <div id="aiProviderStatus" role="status" aria-live="polite">Connecting to Jarvis on this computer…</div>
               <div id="aiProviderAccounts" style="font-size:12px;line-height:1.6;overflow-wrap:anywhere"></div>
+              <div id="aiCompanionApps" style="font-size:13px;line-height:1.7"></div>
               <div id="aiProviderScope" style="font-size:12px;line-height:1.6;color:var(--dim)"></div>
               <a id="aiProviderHelp" href="https://github.com/clearskyenergy/jarvis/blob/main/docs/PROVIDER-SWITCH.md" target="_blank" rel="noopener" style="font-size:12px;color:var(--glow-cyan)">Setup and connection help ↗</a>
             </form>
@@ -5517,7 +5525,7 @@ async function probeBrain(){
    A failed save re-reads the bridge; it never presents the requested choice
    as applied. Old bridge versions remain compatible with this page. */
 let aiProviderData=null, aiProviderBusy=false;
-const aiProviderNames={claude:'Claude',chatgpt:'ChatGPT',auto:'Auto'};
+const aiProviderNames={claude:'Claude',chatgpt:'ChatGPT',grok:'Grok',auto:'Auto'};
 function renderAIProvider(data){
   aiProviderData=data;
   el('aiProviderMode').value=data.settings.mode;
@@ -5525,15 +5533,23 @@ function renderAIProvider(data){
   el('aiProviderSave').disabled=!!data.busy;
   el('aiProviderActive').textContent=data.active?aiProviderNames[data.active].toUpperCase():'READY';
   const host=el('aiProviderAccounts'); host.textContent='';
-  ['claude','chatgpt'].forEach(key=>{
-    const p=data.providers[key]||{};
+  ['claude','chatgpt','grok'].forEach(key=>{
+    const p=data.providers[key];
     const row=document.createElement('div');
-    row.textContent=aiProviderNames[key]+': '+(p.detail||'Connection not checked');
+    // An older Jarvis bridge reports no Grok entry; say so instead of "not checked".
+    row.textContent=aiProviderNames[key]+': '+(p?(p.detail||'Connection not checked'):
+      (key==='grok'?'Update and restart Jarvis on this Mac to enable Grok':'Connection not checked'));
     host.appendChild(row);
+  });
+  const companions=el('aiCompanionApps');companions.textContent='';
+  [['muse','Meta Muse','https://muse.ai/'],['grokbot','Grok Bot','https://docs.x.ai/grok-bot/overview']].forEach(([key,label,url])=>{
+    const p=(data.companions||{})[key],row=document.createElement('div');
+    row.textContent=label+': '+(p?p.detail:'App connection not checked by this Jarvis bridge')+' ';
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=key==='muse'?'Open Muse ↗':'Grok Bot guide ↗';row.appendChild(a);companions.appendChild(row);
   });
   el('aiProviderStatus').textContent=data.busy?'Jarvis is working. Change providers when this request finishes.':
     'Saved choice: '+aiProviderNames[data.settings.mode]+'. '+(data.lastSwitch||'Applies to the next Jarvis request.');
-  el('aiProviderScope').textContent='Jarvis chat and new terminal sessions use this choice. Trading City runs independently. '+(data.office&&data.office.enabled?'Office routines use this shared provider switch.':'Office runner status is unavailable or disabled.');
+  el('aiProviderScope').textContent='Jarvis chat uses this choice. Terminal sessions support Claude/ChatGPT. Trading City runs independently. '+(data.office&&data.office.enabled?'Office routines execute through Claude/ChatGPT. Grok is text-only and does not run Office tools.':'Office runner status is unavailable or disabled.');
 }
 async function aiProviderRequest(method, body){
   const c=new AbortController(); const timer=setTimeout(()=>c.abort(),10000);
@@ -5556,7 +5572,7 @@ async function loadAIProvider(){
   catch(e){
     aiProviderData=null;
     el('aiProviderActive').textContent='NOT CONNECTED';
-    el('aiProviderAccounts').textContent='';
+    el('aiProviderAccounts').textContent='';el('aiCompanionApps').textContent='Meta Muse / Grok Bot: local app status unavailable.';
     el('aiProviderStatus').textContent=e.name==='TypeError'||e.name==='AbortError'?
       'Cannot reach Jarvis on this computer. Open it on the Mac, then refresh.':e.message;
   } finally { aiProviderBusy=false; el('aiProviderRefresh').disabled=false; }
@@ -5573,7 +5589,7 @@ el('aiProviderForm').addEventListener('submit',async ev=>{
   try{
     const j=await aiProviderRequest('POST',{mode:choice});
     renderAIProvider(j);
-    const ready=choice==='auto'?Object.values(j.providers).some(p=>p.ready):j.providers[choice].ready;
+    const ready=choice==='auto'?Object.values(j.providers).some(p=>p.ready):(j.providers[choice]||{}).ready;
     el('aiProviderStatus').textContent='Saved: '+aiProviderNames[j.settings.mode]+'. '+
       (ready?'The next request uses this choice.':'Complete the connection below before sending a request.');
     probeBrain();
@@ -8603,19 +8619,22 @@ const OFFICE_DESKS=[
   {key:'billing', name:'Billing', who:'June', last:'Castellano', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:17,y:9,w:7,d:6},
    role:'A/R aging and open invoices from QuickBooks, billing questions answered, reminders at 7 and 14 days, and the weekly P&L to Thomas on Monday.',
    may:'Sends the first two reminders. 30+ days, a dispute, a refund or a credit waits for Thomas’s APPROVE. Never changes an invoice, never charges a card.', sends:true, tools:'QuickBooks · Gmail'},
-  {key:'admin', name:'Admin', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
-   role:'The day’s logistics: meetings, the office’s open approvals and handoffs, unanswered mail, promises due, tomorrow. Sunday night: the weekly plan for every desk, for Thomas to approve.',
-   may:'One email to Thomas. Everything else is a draft.', tools:'Gmail · Google Calendar'}
+  {key:'admin', name:'Chief of Staff', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
+   role:'Your day, your priorities, and the follow-through across every department. Ada turns open work into a short brief and prepares the weekly plan.',
+   may:'Three priorities, decisions for you, and delegated next steps. Household finances await a connected source.', tools:'Private twin · Gmail · Google Calendar · Office reports'},
+  {key:'legal', name:'Legal', who:'Legal', last:'assistant', lead:'Scott Henry · General Counsel', mail:'scott@clearsky-usa.com', sched:'weekdays 9:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:17,w:7,d:5},
+   role:'Intake, contract and renewal tracking, and review packets for Scott Henry, General Counsel.',
+   may:'AI preparation only. Scott reviews legal conclusions and terms. Review drafts are addressed to scott@clearsky-usa.com; nothing is sent automatically.', tools:'Office intake · Gmail · Google Drive'}
 ];
 const OFFICE_LOBBY={x:9,y:6,w:7,d:5};
-const OFFICE_DESK_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\b[:\s·—–-]*/i;
-const OFFICE_PLAN_RE=/^\s*PLAN\s+(\d{4}-W\d{2})\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*(proposed|approved|changed|skipped)\b\s*[—–:-]*\s*([\s\S]*)$/i;
-const OFFICE_NOTE_RE=/^\s*NOTE\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*([\s\S]*)$/i;
+const OFFICE_DESK_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\b[:\s·—–-]*/i;
+const OFFICE_PLAN_RE=/^\s*PLAN\s+(\d{4}-W\d{2})\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*(proposed|approved|changed|skipped)\b\s*[—–:-]*\s*([\s\S]*)$/i;
+const OFFICE_NOTE_RE=/^\s*NOTE\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*([\s\S]*)$/i;
 /* the office protocol (jarvis/agents/office/protocol.md): a desk asks Thomas by
    email and logs `<DESK>: APPROVAL #<ID> requested — …`, then `done` or
    `declined`; work between desks is `<DESK>: HANDOFF #<ID> → <desk>: …`. */
-const OFFICE_APPROVAL_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*APPROVAL\s+#?([A-Z]+-\d{8}-\d+)\s*(requested|done|declined)\b\s*[—–:-]*\s*([\s\S]*)$/i;
-const OFFICE_HANDOFF_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*HANDOFF\s+#?([A-Z]+-\d{8}-\d+)\s*(?:→|->)\s*(\w+)\s*:\s*([\s\S]*)$/i;
+const OFFICE_APPROVAL_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*APPROVAL\s+#?([A-Z]+-\d{8}-\d+)\s*(requested|done|declined)\b\s*[—–:-]*\s*([\s\S]*)$/i;
+const OFFICE_HANDOFF_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*HANDOFF\s+#?([A-Z]+-\d{8}-\d+)\s*(?:→|->)\s*(\w+)\s*:\s*([\s\S]*)$/i;
 let officeActs=null, officeAt=0, officeBusy=false, officeSel=null;
 /* Firestore hands a timestamp back three ways (an ISO string, millis, or
    {_seconds}); the dashboard payload normalises, the activity view does not. */
@@ -8718,10 +8737,10 @@ function renderOfficeFloor(st){
   svg.textContent='';
   const NS='http://www.w3.org/2000/svg';
   /* the slab and its tiles */
-  svg.appendChild(officePoly([officeIso(0,0),officeIso(25,0),officeIso(25,17),officeIso(0,17)],'slab'));
+  svg.appendChild(officePoly([officeIso(0,0),officeIso(25,0),officeIso(25,23),officeIso(0,23)],'slab'));
   const tiles=document.createElementNS(NS,'g');
-  for(let i=0;i<=25;i++){ const a=officeIso(i,0), b=officeIso(i,17); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
-  for(let j=0;j<=17;j++){ const a=officeIso(0,j), b=officeIso(25,j); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
+  for(let i=0;i<=25;i++){ const a=officeIso(i,0), b=officeIso(i,23); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
+  for(let j=0;j<=23;j++){ const a=officeIso(0,j), b=officeIso(25,j); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
   svg.appendChild(tiles);
   /* the lobby: Thomas's desk and the mark, in the middle of the floor */
   const L=OFFICE_LOBBY, lob=document.createElementNS(NS,'g'); lob.setAttribute('class','lobby');
@@ -8818,11 +8837,12 @@ function renderOfficeSide(st){
     return;
   }
   /* one department */
-  const d=OFFICE_DESKS.find(x=>x.key===officeSel), s=st.by[d.key], DESK=d.name.toUpperCase();
-  const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' '+d.last+' · '+d.name)); hd.appendChild(officeH('span','sub',d.mail+' · '+d.sched));
+  const d=OFFICE_DESKS.find(x=>x.key===officeSel), s=st.by[d.key], DESK=d.key.toUpperCase();
+  const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' '+d.last+' · '+d.name)); hd.appendChild(officeH('span','sub',(d.lead||d.mail)+' · '+d.sched));
   const back=officeH('button',null,'◀ Office'); back.id='officeBack'; back.addEventListener('click',()=>officeSelect(d.key)); hd.appendChild(back); host.appendChild(hd);
   const stat=s.last?(s.cls==='ran'?'Ran '+sStamp(new Date(s.last.ms).toISOString())+'.':'Last ran '+sStamp(new Date(s.last.ms).toISOString())+', overdue.'):(d.ext?'Reports on GitHub, not here.':'Never logged a run.');
   const intro=officeH('div','dsec'); intro.appendChild(officeH('p',null,d.role+' '+d.may+' '+stat)); host.appendChild(intro);
+  if(d.key==='admin') renderChiefOfStaff(host,st);
   /* the week's plan: Ada's Sunday proposal, and the decision */
   const sec=officeH('div','dsec'); sec.appendChild(officeH('h4',null,'This week’s plan · '+st.week)); host.appendChild(sec);
   if(s.plan){
@@ -8847,7 +8867,9 @@ function renderOfficeSide(st){
     sec.appendChild(officeH('p',null,'No plan proposed for '+st.week+'. Ada writes one every Sunday at 7:05 PM and emails it to you; the desk runs its standing job until then.'));
   }
   /* a note to the desk */
-  const ns=officeH('div','dsec'); ns.appendChild(officeH('h4',null,'Tell '+d.who)); host.appendChild(ns);
+  const ns=officeH('div','dsec'); ns.appendChild(officeH('h4',null,d.key==='admin'?'Department instruction for Ada':'Tell '+d.who)); host.appendChild(ns);
+  if(d.key==='legal') ns.appendChild(officeH('p','officeHint','Shared intake: a short request or document reference only. Keep contract text and confidential legal advice in the private review channel.'));
+  if(d.key==='admin') ns.appendChild(officeH('p','officeHint','Shared with the office. Use the private capture above for personal matters.'));
   const na=officeH('div','dacts'); const ta=officeH('textarea'); ta.id='deskNote'; ta.placeholder='One instruction. '+d.who+' reads it before the next run and for seven days after.'; ta.maxLength=280; na.appendChild(ta);
   const go=officeH('button',null,'Send'); go.id='deskNoteGo'; const nm=officeH('span','sMsg',''); go.addEventListener('click',()=>{ const w=ta.value.trim(); if(!w){ nm.textContent='Say what you want done.'; return; } officeLog('NOTE '+DESK+': '+w,nm).then(()=>{ ta.value=''; }); }); na.appendChild(go); na.appendChild(nm); ns.appendChild(na);
   if(s.notes.length){ const nl=officeH('div'); nl.id='deskNotes'; ns.appendChild(nl); listInto('deskNotes', s.notes, r=>({ time:sStamp(new Date(r.ms).toISOString()), left:r.text, right:r.by?String(r.by).split('@')[0]:'', clamp:true }), ''); }
@@ -8879,7 +8901,7 @@ function renderOfficeSide(st){
     const ap=officeH('a',null,'Approve signups ↗'); ap.href='/admin/'; ap.target='_blank'; ap.rel='noopener'; dl.appendChild(ap);
     const bk=officeH('a',null,cfg.demoLink?'Booking link ↗':'No booking link: Sales → Agent settings'); bk.href=cfg.demoLink||'#'; if(cfg.demoLink){ bk.target='_blank'; bk.rel='noopener'; } else bk.addEventListener('click',ev=>{ ev.preventDefault(); showView('sales'); }); dl.appendChild(bk);
   }
-  const mb=officeH('a',null,'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);
+  if(d.mail){const mb=officeH('a',null,d.key==='legal'?'Counsel correspondence ↗':'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);}
   const jn=officeH('a',null,'Job note ↗'); jn.href='https://github.com/clearskyenergy/jarvis/blob/main/agents/office/'+d.key+'.md'; jn.target='_blank'; jn.rel='noopener'; dl.appendChild(jn);
   if(d.key==='software'){ const pr=officeH('a',null,'Pull requests ↗'); pr.href=d.ext; pr.target='_blank'; pr.rel='noopener'; dl.appendChild(pr); const is=officeH('a',null,'Support issues ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='support'){ const is=officeH('a',null,'Issues it opened ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
@@ -8935,6 +8957,10 @@ function officeAgentForm(agent){
     form.appendChild(officeH('p','officeHint','Dedicated agent inboxes require a connected email service. Entering an address does not create a mailbox.'));
     if(p.mailbox) sender.disabled=true;
     if(agent&&!p.mailbox) officeButton(form,'Create dedicated AgentMail inbox',async()=>{msg.textContent='Connecting…';try{await officeWrite({action:'office-mailbox',id:p.id});await officeReadBook();dialog.close();renderOffice();}catch(e){msg.textContent=e.message;}});
+    if(agent&&!p.mailbox){
+      const inbox=officeField(form,'AgentMail inbox ID or address already created','');
+      officeButton(form,'Connect existing AgentMail inbox',async()=>{if(!inbox.value.trim()){msg.textContent='Enter the existing inbox ID or address.';return;}msg.textContent='Verifying inbox…';try{await officeWrite({action:'office-mailbox',id:p.id,inboxId:inbox.value.trim()});await officeReadBook();dialog.close();renderOffice();}catch(e){msg.textContent=e.message;}});
+    }
     const cc=officeField(form,'CC on account emails',p.cc.join(', '));
     const instructions=officeField(form,'Responsibilities and working instructions',p.instructions,'textarea');
     const enabled=officeField(form,'Assigned work',p.enabled?'yes':'no',null,[['yes','Active — picked up by department routine'],['no','Paused']]);
@@ -9006,7 +9032,7 @@ function renderOfficeWorkspace(st){
     const grid=officeH('div','officeCards');host.appendChild(grid);
     OFFICE_DESKS.forEach(d=>{const s=st.by[d.key],card=officeH('article','officeCard');
       const tag=officeH('span','officeBadge',s.last?'Last run '+sStamp(new Date(s.last.ms).toISOString()):'No run recorded');card.appendChild(tag);
-      card.appendChild(officeH('h3','',d.who+' '+d.last));card.appendChild(officeH('p','officeDepartment',d.name));card.appendChild(officeH('p','',d.role));card.appendChild(officeH('p','officeHint',d.sched+' · Central'));officeButton(card,'View desk',()=>officeSelect(d.key));grid.appendChild(card);});
+      card.appendChild(officeH('h3','',d.who+' '+d.last));card.appendChild(officeH('p','officeDepartment',d.name));if(d.lead)card.appendChild(officeH('p','',d.lead));card.appendChild(officeH('p','',d.role));card.appendChild(officeH('p','officeHint',d.sched+' · Central'));officeButton(card,'View desk',()=>officeSelect(d.key));grid.appendChild(card);});
     officeBook.agents.forEach(p=>{const card=officeH('article','officeCard custom'),tasks=officeBook.tasks.filter(t=>t.agentId===p.id);
       card.appendChild(officeH('span','officeBadge',p.enabled?'Active · '+p.desk+' routine':'Paused'));card.appendChild(officeH('h3','',p.name));card.appendChild(officeH('p','officeDepartment',p.desk==='sales'?'Business development':'Marketing'));card.appendChild(officeH('p','',p.instructions||'Add responsibilities to guide this agent.'));card.appendChild(officeH('p','officeHint',p.sender||'Mailbox not connected'));card.appendChild(officeH('p','officeHint',tasks.filter(t=>t.status!=='completed').length+' open activities · CC '+p.cc.join(', ')));officeButton(card,'Edit agent',()=>officeAgentForm(p));officeButton(card,'Assign work',()=>officeTaskForm(p));grid.appendChild(card);});
   }else if(officeMode==='activities'){
@@ -9018,6 +9044,43 @@ function renderOfficeWorkspace(st){
     const search=officeField(host,'Find an account','','search'),list=officeH('div');host.appendChild(list);
     function draw(){list.textContent='';officeAccounts.filter(p=>(p.company+' '+p.id).toLowerCase().includes(search.value.toLowerCase())).forEach(p=>{const row=officeH('article','officeWorkRow');row.appendChild(officeH('h3','',p.company||p.id));row.appendChild(officeH('p','',p.id+' · '+(p.stage||'target')));(p.contacts||[]).forEach(c=>row.appendChild(officeH('p','officeHint',[c.name,c.email,c.phone].filter(Boolean).join(' · '))));if(p.next)row.appendChild(officeH('p','',p.next.action+' · '+(p.next.due||'')));list.appendChild(row);});if(!list.children.length)list.appendChild(officeH('p','officeEmpty','No matching accounts. Import your target list to get started.'));}search.oninput=draw;draw();
   }
+}
+
+/* Personal data comes only from the owner-only twin endpoint, never sales_config.
+   This is a compact view of existing records, not a new financial data store. */
+function renderChiefOfStaff(host,st){
+  const sec=officeH('section','dsec');sec.id='chiefOfStaff';host.appendChild(sec);
+  sec.appendChild(officeH('h4',null,'Your short brief'));
+  const owner=auth.currentUser && String(auth.currentUser.email||'').toLowerCase()==='tom@clearsky-usa.com';
+  if(!owner){sec.appendChild(officeH('p','officeHint','Personal brief is available to Thomas in his private twin.'));return;}
+  sec.appendChild(officeH('p','officeHint','From your private task list and calendar, plus recorded department work. This view does not run or delegate tasks.'));
+  function section(title,items,empty){
+    sec.appendChild(officeH('h4',null,title));
+    if(!items.length){sec.appendChild(officeH('p','officeHint',empty));return;}
+    const list=officeH('ol');items.slice(0,3).forEach(text=>list.appendChild(officeH('li',null,text)));sec.appendChild(list);
+  }
+  const priorities=triaged.filter(r=>!r.noise&&!r.dupeOf).sort((a,b)=>b.score-a.score).slice(0,3);
+  section('Focus · up to three',priorities.map(r=>r.t.title),'No priorities in the loaded task list. Open Tasks to refresh or capture one below.');
+  const approvals=[],handoffs=[];
+  OFFICE_DESKS.forEach(d=>{st.by[d.key].approvals.forEach(r=>approvals.push(r));st.by[d.key].handoffs.forEach(r=>handoffs.push(r));});
+  approvals.sort((a,b)=>a.ms-b.ms);handoffs.sort((a,b)=>a.ms-b.ms);
+  section('Decisions for you',approvals.map(r=>'#'+r.approval.id+' — '+r.approval.text),'No open decisions in the loaded office records.');
+  section('Department follow-through',handoffs.map(r=>r.desk+' → '+r.handoff.to+': '+r.handoff.text),'No handoffs in the loaded office records.');
+  const next=(lastStatus.schedule||[]).filter(e=>new Date(e.startsAt).getTime()>Date.now()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt))[0];
+  if(next)sec.appendChild(officeH('p',null,'Next: '+next.title+' · '+sStamp(next.startsAt)));
+  const links=officeH('div','dacts');sec.appendChild(links);
+  officeButton(links,'All tasks',()=>showView('tasks'));officeButton(links,'My calendar',()=>showView('calendar'));
+  const details=officeH('details');details.appendChild(officeH('summary',null,'Wealth and household goals · setup needed'));
+  details.appendChild(officeH('p',null,'ClearSky: revenue, cash collection and business value. Household: income, bills, debt, savings, assets and creditworthiness.'));
+  details.appendChild(officeH('p','officeHint','No household financial source is connected here yet. Balances, due dates and progress will remain unknown until verified. Payments and account changes require your action.'));sec.appendChild(details);
+  const label=officeH('label',null,'Private capture for Ada');label.htmlFor='chiefCapture';sec.appendChild(label);
+  const input=officeH('textarea');input.id='chiefCapture';input.maxLength=280;input.placeholder='One next step, with a due date if needed';sec.appendChild(input);
+  const msg=officeH('p','sMsg');msg.setAttribute('role','status');
+  const save=officeButton(sec,'Add to my private tasks',async()=>{
+    const title=input.value.trim();if(!title){msg.textContent='Add a next step first.';return;}save.disabled=true;
+    try{const t=await token();const r=await fetch(CHAT+'/task',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({title:'Ada: '+title,urgency:'queue'})});const j=await r.json();if(!r.ok)throw new Error(j.error||'Task not saved');input.value='';msg.textContent='Added to your private task queue. It has not been executed.';load();}
+    catch(e){msg.textContent='Not saved: '+e.message;}finally{save.disabled=false;}
+  });sec.appendChild(msg);
 }
 
 function renderOffice(){
@@ -9934,7 +9997,7 @@ const IX_VIEWS=[
   ['platform','Platform','OMEGA, and the stone'],
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
-  ['office','Office','the six teams: what each ran, what it may send'],
+  ['office','Office','the departments: people, work and decisions'],
   ['trading','Trading City','the paper-trading bots, on this Mac — fake money'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
   ['messages','Messages','your iMessage threads, and a reply box'],
