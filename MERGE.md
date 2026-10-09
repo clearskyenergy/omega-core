@@ -3061,7 +3061,7 @@ from origin/main is preserved; its Office scope text now reflects runner state.
 
 ## 2026-10-09 — Chief of Staff, Legal, and provider visibility
 
-Ada retains the ADMIN machine ID with a Chief of Staff label, a compact view of existing private twin tasks/calendar and office decisions, and owner-only capture through the existing authenticated twin `/task`. Household balances/payment automation are unconnected; no financial data is written to the sales book. The Legal AI desk supports human General Counsel Scott Henry, keeps confidential material out of shared intake, and explicitly shows missing counsel routing. Existing mailbox connection verifies the inbox with AgentMail before storing its identity.
+Ada retains the ADMIN machine ID with a Chief of Staff label, a compact view of existing private twin tasks/calendar and office decisions, and owner-only capture through the existing authenticated twin `/task`. Household balances/payment automation are unconnected; no financial data is written to the sales book. The Legal AI desk supports human General Counsel Scott Henry, keeps confidential material out of shared intake, and uses Scott’s address verified in existing sent correspondence (scott@clearsky-usa.com); no automatic legal sends. Existing mailbox connection verifies the inbox with AgentMail before storing its identity.
 
 Reviewed and integrated the Grok UI from PR #270 without changing partner access controls. System separates Grok text responses from the Muse/Grok Bot companion apps and shows missing bridges honestly. Office execution stays on tool-capable Claude/ChatGPT. No proprietary calculations added to browser code; no new Firestore collections or rules.
 

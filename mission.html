@@ -8622,9 +8622,9 @@ const OFFICE_DESKS=[
   {key:'admin', name:'Chief of Staff', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
    role:'Your day, your priorities, and the follow-through across every department. Ada turns open work into a short brief and prepares the weekly plan.',
    may:'Three priorities, decisions for you, and delegated next steps. Household finances await a connected source.', tools:'Private twin · Gmail · Google Calendar · Office reports'},
-  {key:'legal', name:'Legal', who:'Legal', last:'assistant', lead:'Scott Henry · General Counsel', mail:'', sched:'weekdays 9:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:17,w:7,d:5},
+  {key:'legal', name:'Legal', who:'Legal', last:'assistant', lead:'Scott Henry · General Counsel', mail:'scott@clearsky-usa.com', sched:'weekdays 9:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:17,w:7,d:5},
    role:'Intake, contract and renewal tracking, and review packets for Scott Henry, General Counsel.',
-   may:'AI preparation only. Scott reviews legal conclusions and terms. Counsel email routing is not connected yet.', tools:'Office intake · Gmail · Google Drive'}
+   may:'AI preparation only. Scott reviews legal conclusions and terms. Review drafts are addressed to scott@clearsky-usa.com; nothing is sent automatically.', tools:'Office intake · Gmail · Google Drive'}
 ];
 const OFFICE_LOBBY={x:9,y:6,w:7,d:5};
 const OFFICE_DESK_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\b[:\s·—–-]*/i;
@@ -8901,7 +8901,7 @@ function renderOfficeSide(st){
     const ap=officeH('a',null,'Approve signups ↗'); ap.href='/admin/'; ap.target='_blank'; ap.rel='noopener'; dl.appendChild(ap);
     const bk=officeH('a',null,cfg.demoLink?'Booking link ↗':'No booking link: Sales → Agent settings'); bk.href=cfg.demoLink||'#'; if(cfg.demoLink){ bk.target='_blank'; bk.rel='noopener'; } else bk.addEventListener('click',ev=>{ ev.preventDefault(); showView('sales'); }); dl.appendChild(bk);
   }
-  if(d.mail){const mb=officeH('a',null,'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);}
+  if(d.mail){const mb=officeH('a',null,d.key==='legal'?'Counsel correspondence ↗':'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);}
   const jn=officeH('a',null,'Job note ↗'); jn.href='https://github.com/clearskyenergy/jarvis/blob/main/agents/office/'+d.key+'.md'; jn.target='_blank'; jn.rel='noopener'; dl.appendChild(jn);
   if(d.key==='software'){ const pr=officeH('a',null,'Pull requests ↗'); pr.href=d.ext; pr.target='_blank'; pr.rel='noopener'; dl.appendChild(pr); const is=officeH('a',null,'Support issues ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='support'){ const is=officeH('a',null,'Issues it opened ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
