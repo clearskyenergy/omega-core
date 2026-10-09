@@ -1755,6 +1755,7 @@ body.officeReading::before{display:none!important}
 #chiefOfStaff ol{padding-left:22px;margin:10px 0 18px;list-style:decimal}
 #chiefOfStaff li{padding:0 0 8px;line-height:1.6}
 #chiefOfStaff details{margin:16px 0}#chiefOfStaff summary{cursor:pointer;line-height:1.6}
+.adaConversation{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.adaConversation:empty{display:none}
 </style>
 </head>
 <body>
@@ -2408,9 +2409,9 @@ body.officeReading::before{display:none!important}
                 <option value="chatgpt">ChatGPT · Codex</option>
                 <option value="grok">Grok · text responses</option>
                 <option value="muse" disabled>Meta Muse · app only, bridge not connected</option>
-                <option value="auto">Auto · Claude, then ChatGPT, then Grok</option>
+                <option value="auto">Auto · connected execution providers</option>
               </select>
-              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the next provider when an account reaches its limit, before any work starts. Grok answers in text only and is skipped until an xAI key is set.</p>
+              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the next connected execution provider before work starts. Requested order: Claude, ChatGPT, Grok Bot, Meta Muse. Missing bridges are shown below; Grok text API is a separate manual option.</p>
               <div style="display:flex;gap:8px;flex-wrap:wrap">
                 <button type="submit" id="aiProviderSave" class="sw" disabled>SAVE</button>
                 <button type="button" id="aiProviderRefresh" class="sw">REFRESH</button>
@@ -5542,11 +5543,12 @@ function renderAIProvider(data){
     host.appendChild(row);
   });
   const companions=el('aiCompanionApps');companions.textContent='';
-  [['muse','Meta Muse','https://muse.ai/'],['grokbot','Grok Bot','https://docs.x.ai/grok-bot/overview']].forEach(([key,label,url])=>{
+  [['muse','Meta Muse','https://dev.meta.ai/docs/muse-code'],['grokbot','Grok Bot','https://docs.x.ai/grok-bot/overview']].forEach(([key,label,url])=>{
     const p=(data.companions||{})[key],row=document.createElement('div');
     row.textContent=label+': '+(p?p.detail:'App connection not checked by this Jarvis bridge')+' ';
-    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=key==='muse'?'Open Muse ↗':'Grok Bot guide ↗';row.appendChild(a);companions.appendChild(row);
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=key==='muse'?'Muse connection guide ↗':'Grok Bot guide ↗';row.appendChild(a);companions.appendChild(row);
   });
+  if(data.continuity){const row=document.createElement('p');row.textContent='Requested order: Claude → ChatGPT → Grok Bot → Meta Muse. Connected execution: Claude → ChatGPT. Grok Bot and Muse bridges are not configured. '+data.continuity.host;companions.appendChild(row);}
   el('aiProviderStatus').textContent=data.busy?'Jarvis is working. Change providers when this request finishes.':
     'Saved choice: '+aiProviderNames[data.settings.mode]+'. '+(data.lastSwitch||'Applies to the next Jarvis request.');
   el('aiProviderScope').textContent='Jarvis chat uses this choice. Terminal sessions support Claude/ChatGPT. Trading City runs independently. '+(data.office&&data.office.enabled?'Office routines execute through Claude/ChatGPT. Grok is text-only and does not run Office tools.':'Office runner status is unavailable or disabled.');
@@ -9048,11 +9050,38 @@ function renderOfficeWorkspace(st){
 
 /* Personal data comes only from the owner-only twin endpoint, never sales_config.
    This is a compact view of existing records, not a new financial data store. */
+function renderAdaConversation(sec){
+  sec.appendChild(officeH('h4',null,'Talk with Ada'));
+  sec.appendChild(officeH('p','officeHint','Your own conversation with Ada, on this Mac. She uses Jarvis’s connected tools and provider setting. For terminal work, open her authenticated terminal.'));
+  const log=officeH('div','adaConversation');log.id='adaConversation';log.setAttribute('role','log');log.setAttribute('aria-live','polite');sec.appendChild(log);
+  function line(role,text){const p=officeH('p');p.appendChild(officeH('strong',null,(role==='user'?'You':'Ada')+': '));p.appendChild(document.createTextNode(text));log.appendChild(p);log.scrollTop=log.scrollHeight;}
+  const label=officeH('label',null,'Message Ada');label.htmlFor='adaMessage';sec.appendChild(label);
+  const input=officeH('textarea');input.id='adaMessage';input.maxLength=4000;input.placeholder='Talk to Ada about your day, finances or next step';sec.appendChild(input);
+  const status=officeH('p','officeHint');status.id='adaChatStatus';status.setAttribute('role','status');sec.appendChild(status);
+  const actions=officeH('div','dacts');sec.appendChild(actions);
+  let pending=false;
+  const send=officeButton(actions,'Send to Ada',async()=>{
+    const text=input.value.trim();if(!text||pending)return;pending=true;send.disabled=true;input.disabled=true;status.textContent='Ada is working…';line('user',text);
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),610000);
+    try{
+      const response=await fetch(BRAIN+'/ada/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,context:brainContext()}),signal:controller.signal});
+      const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Ada is unavailable. Update/restart Jarvis on this Mac.');
+      line('assistant',result.text);input.value='';status.textContent='Answered through '+(result.provider||'Jarvis')+(result.fallback?' · fallback used':'')+'.';
+    }catch(e){status.textContent='No confirmed answer: '+e.message+' Check the conversation or terminal before resending; work may have started.';}
+    finally{clearTimeout(timer);pending=false;send.disabled=false;input.disabled=false;}
+  });
+  const terminal=officeH('a','sbtn','Open Ada terminal ↗');terminal.href='http://127.0.0.1:7682';terminal.target='_blank';terminal.rel='noopener';terminal.id='adaTerminal';actions.appendChild(terminal);
+  fetch(BRAIN+'/ada/history',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(data=>{
+    if(!pending&&!log.children.length)(data.items||[]).forEach(item=>line(item.role,item.text));
+  }).catch(()=>{if(!pending)status.textContent='Ada needs the updated Jarvis service on this Mac. Your message has not been sent.';});
+}
+
 function renderChiefOfStaff(host,st){
   const sec=officeH('section','dsec');sec.id='chiefOfStaff';host.appendChild(sec);
-  sec.appendChild(officeH('h4',null,'Your short brief'));
   const owner=auth.currentUser && String(auth.currentUser.email||'').toLowerCase()==='tom@clearsky-usa.com';
   if(!owner){sec.appendChild(officeH('p','officeHint','Personal brief is available to Thomas in his private twin.'));return;}
+  renderAdaConversation(sec);
+  sec.appendChild(officeH('h4',null,'Your short brief'));
   sec.appendChild(officeH('p','officeHint','From your private task list and calendar, plus recorded department work. This view does not run or delegate tasks.'));
   function section(title,items,empty){
     sec.appendChild(officeH('h4',null,title));

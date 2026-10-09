@@ -245,10 +245,18 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
 
     await page.click('#officeFloor g.room[data-desk="legal"]');
     var legalText=await page.textContent('#officeSide');
-    ok(/Scott Henry · General Counsel/.test(legalText) && /AI preparation only/.test(legalText), 'Legal identifies human counsel separately from the AI assistant');
+    ok(/Scott Henry · General Counsel/.test(legalText) && /Only after your approval/.test(legalText), 'Legal identifies human counsel separately from the AI assistant');
     ok(!/to:legal@/.test(await page.innerHTML('#officeSide')), 'Legal never links an invented mailbox');
     await page.click('#officeFloor g.room[data-desk="admin"]');
     ok(/Chief of Staff/.test(await page.textContent('#officeSide')) && await page.isVisible('#chiefCapture'), 'Ada opens a private Chief of Staff brief');
+    var adaRequest;
+    await page.route('**/ada/ask',function(route){adaRequest=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,text:'I can help you reconcile verified bills.',provider:'chatgpt',fallback:true})});});
+    var beforeAda=db.data.size;
+    await page.fill('#adaMessage','Help me plan my week');
+    await page.getByRole('button',{name:'Send to Ada',exact:true}).click();
+    await page.waitForFunction(function(){return /reconcile verified bills/.test(document.getElementById('adaConversation').textContent);});
+    ok(adaRequest.text==='Help me plan my week'&&db.data.size===beforeAda,'Ada chat uses its private endpoint and does not log personal content to CRM');
+    ok(await page.getAttribute('#adaTerminal','href')==='http://127.0.0.1:7682','Ada has her authenticated terminal entry point');
     var captureRequest;
     await page.route('**/twinChat/task',function(route){captureRequest=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true})});});
     var sharedCount=db.data.size;
