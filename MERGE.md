@@ -3045,3 +3045,32 @@ when something moved; data only, never the math, never a merge.
 - Outbox rows show Gmail thread context from the ingest loop, with sent/incoming dates and changed-since-draft warnings. Matching requires exact normalized subject and recipient; ambiguous matches remain unlinked. It does not infer that a sent message completed a task or send mail.
 - Sales uses existing sales_prospects and sales_activity: human/AI owner, referral attribution, USD value, stage and next action/date. Staff writes are transactional; agents cannot overwrite ownership or deal values. Existing contacts and history remain. No collections or rule changes.
 - Validated sales unit/API checks, lifecycle pagination and Gmail-context tests, and desktop/phone browser checks.
+## 2026-10-09 — Office agent workspace (local, pending release)
+
+Mission Office gains readable cards, editable Sales/Marketing profiles,
+account import and multi-account activities. Profiles/tasks use the existing
+server-only sales_config collection; prospects and audit events stay in the
+existing CRM collections. Claim/state validation, assignment authorization,
+and optional AgentMail provisioning/drafting are in api/_lib/office-roster.js
+and api/_lib/office-mail.js, never browser logic. No pricing/financial logic
+was added or moved. No rules, tenant data, or provider-switch settings changed.
+Calling and new-identity sends remain unavailable; the interface reports that
+explicitly. The optional email service needs its server credential and a real
+account before inboxes can be created. Jarvis runner integration is paired
+with the CLI changes; see jarvis/docs/OFFICE-RUNNER.md for release ordering.
+
+
+The same release adds default Reading Comfort across Mission: larger system
+text, opaque slate panels, no scanline/dimming overlays or text glow, clearer
+controls, and a persisted Comfort/Cinematic toggle plus larger-text setting.
+Character selection stays independent. Browser checks cover both viewport
+sizes and reading preference persistence. The existing provider settings UI
+from origin/main is preserved; its Office scope text now reflects runner state.
+
+## 2026-10-09 — Chief of Staff, Legal, and provider visibility
+
+Ada retains the ADMIN machine ID with a Chief of Staff label, a compact view of existing private twin tasks/calendar and office decisions, and owner-only capture through the existing authenticated twin `/task`. Household balances/payment automation are unconnected; no financial data is written to the sales book. The Legal AI desk supports human General Counsel Scott Henry, keeps confidential material out of shared intake, and uses Scott’s address verified in existing sent correspondence (scott@clearsky-usa.com); no automatic legal sends. Existing mailbox connection verifies the inbox with AgentMail before storing its identity.
+
+Reviewed and integrated the Grok UI from PR #270 without changing partner access controls. System separates Grok text responses from the Muse/Grok Bot companion apps and shows missing bridges honestly. Office execution stays on tool-capable Claude/ChatGPT. No proprietary calculations added to browser code; no new Firestore collections or rules.
+
+Validation: sales/roster/mail suites; desktop and 390px Office/private-capture tests; provider settings on an isolated HTTP fixture (18795, never live 8795); inline JS parse and diff checks.

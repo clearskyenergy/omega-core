@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-reading="calm" data-text="standard">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
@@ -25,6 +25,13 @@
 <link rel="apple-touch-icon" href="/icons/mission-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/mission-32.png">
 <link rel="manifest" href="/mission.webmanifest">
+<script>
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+try {
+  document.documentElement.dataset.reading = localStorage.getItem('jarvisReading') === 'cinematic' ? 'cinematic' : 'calm';
+  document.documentElement.dataset.text = localStorage.getItem('jarvisText') === 'large' ? 'large' : 'standard';
+} catch (_) {}
+</script>
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
       --ink:#dceefc;--dim:#89a9c4;--good:#3dff8b;--warn:#ffb733;--bad:#ff6b6b;
@@ -374,13 +381,8 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .sSug{font-size:12.5px;line-height:1.5;padding:6px 0 6px 10px;margin-bottom:6px;border-left:2px solid rgba(0,243,255,.3);color:var(--ink)}
 .sSug.act{border-left-color:var(--warn)}
 .sSug.ok{border-left-color:var(--good);color:var(--dim)}
-/* The office floor: an isometric room a desk, drawn by renderOfficeFloor()
-   off the same records the cards it replaced were read from. A room that
-   never ran is dim with an empty chair; one that ran is lit and its person
-   types; an overdue one burns amber. Click a room and the drawer on the
-   right opens on that department: the week's plan to approve, a note to
-   the desk, its numbers, its days. No light here is decoration: every one
-   is a fact off the log. */
+/* Isometric Office: department accents are decorative; status lamps and
+   labels come only from recorded activity. */
 .officeGrid{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(330px,.9fr);gap:12px;flex:1;min-height:0}
 .floorPanel{display:flex;flex-direction:column;min-height:0;padding:0;overflow:hidden;position:relative}
 .floorPanel svg{width:100%;height:100%;min-height:380px;display:block;background:radial-gradient(ellipse at 50% 35%,rgba(0,243,255,.07),transparent 62%)}
@@ -404,7 +406,7 @@ button.on{background:rgba(255,60,60,.18);border-color:var(--bad);color:#ff9d9d}
 .room .chair{fill:#0a2340;stroke:rgba(0,243,255,.3)}
 .room .person{fill:#dceefc}
 .room .personBody{fill:#1e6fa6}
-.room.never .person,.room.never .personBody{display:none}
+/* People represent the department, not a claim that a routine is running. */
 .room.ran .who{animation:typing 1.1s ease-in-out infinite}
 .room .lamp{fill:var(--dim)}
 .room.ran .lamp{fill:var(--good);filter:drop-shadow(0 0 5px var(--good))}
@@ -1698,6 +1700,132 @@ body.arranging .scroll{pointer-events:none}
   .brainGrid{display:flex;flex-direction:column}
   header{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -10px;padding:6px 10px 8px}
 }
+
+body.officeReading::before{display:none!important}
+/* Readable Office workspace; preserve the map as an optional view. */
+[data-view="office"] .officeGrid{grid-template-columns:minmax(0,1.65fr) minmax(320px,1fr);gap:20px}
+.officeMain{min-height:0;padding:4px 4px 20px}.officeHeading h2{font:600 28px system-ui;margin:0;color:#f4f7fc}.officeHeading p{color:#aab9cc;font:15px system-ui;margin:8px 0 20px}
+.officeActions,.officeTabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.officeActions button,.officeTabs button,.officeCard button,.officeWorkRow button,.officeDialog button{font:500 14px system-ui;letter-spacing:0;text-transform:none;padding:10px 14px;border-radius:7px;min-height:40px}
+.officeTabs{border-bottom:1px solid #314258;padding-bottom:12px}.officeTabs button[aria-pressed="true"]{background:#173b4c;border-color:#56c7d8;color:white}
+.officeCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.officeCard,.officeWorkRow{background:#101c2c;border:1px solid #304159;border-radius:12px;padding:20px;color:#e6edf7;font:14px/1.55 system-ui;overflow-wrap:anywhere}.officeCard h3,.officeWorkRow h3{font-size:21px;line-height:1.3;margin:14px 0 4px;color:#fff}.officeCard p{margin:8px 0}.officeCard .officeDepartment{color:#6ed4df;font-weight:600}.officeCard button{margin:8px 8px 0 0}.officeCard.custom{border-color:#4c807d}.officeBadge{font:500 12px/1.5 system-ui;background:#223449;color:#dbe8f7;padding:4px 8px;border-radius:5px;display:inline-block}.officeHint{color:#aebed0;font:13px/1.5 system-ui}.officeWorkRow{margin:12px 0}.officeEmpty{font:16px/1.6 system-ui;color:#b8c6d9;padding:24px}
+.officeDialog{width:min(620px,calc(100vw - 40px));max-height:85vh;box-sizing:border-box;overflow:auto;background:#101c2c;color:#edf3fa;border:1px solid #55778b;border-radius:14px;padding:28px;font:15px/1.5 system-ui}.officeDialog::backdrop{background:#020814c9}.officeDialog h2{margin:0 70px 24px 0;font-size:24px}.officeDialog .officeClose{position:absolute;right:16px;top:16px}.officeField{display:block;margin:14px 0;color:#cbd8e8;font:14px/1.5 system-ui}.officeField span{display:block;margin-bottom:6px}.officeField input,.officeField select,.officeField textarea{box-sizing:border-box;width:100%;padding:11px;border:1px solid #476079;border-radius:6px;background:#091322;color:#f4f7fc;font:15px/1.5 system-ui}.officeField textarea{min-height:90px;resize:vertical}.officeFeedback{color:#ffc56a;font:14px/1.5 system-ui}.officeCard button:focus-visible,.officeTabs button:focus-visible{outline:3px solid #6ed4df;outline-offset:3px}
+[data-view="office"] #officeSide{font-size:14px;line-height:1.6;padding:8px}[data-view="office"] .floorPanel[hidden]{display:none}[data-view="office"] .logicNote{font:14px/1.6 system-ui;color:#bac9db;padding-bottom:12px}
+@media(max-width:1100px){[data-view="office"] .officeGrid{grid-template-columns:1fr}.officeMain{overflow:visible}}
+@media(max-width:620px){.officeCards{grid-template-columns:1fr}.officeCard{padding:16px}.officeDialog{padding:20px}.officeHeading h2{font-size:24px}}
+
+
+/* Reading comfort is independent of the selected character. Calm is default. */
+:root[data-reading="calm"]{--bg:#111923!important;--panel:#192533!important;--ink:#e8eef5!important;--dim:#b4c1d0!important;--glow-cyan:#8acbdc!important;--glow-gold:#d8c18e!important;--good:#91d4b2!important;--warn:#efc281!important;--bad:#f5a4a4!important;--edge:1px solid #384858!important;--reading-size:15px}
+:root[data-reading="calm"] body{font-size:var(--reading-size);line-height:1.55}
+:root[data-reading="calm"] body::before,:root[data-reading="calm"] body::after{display:none!important}
+:root[data-reading="calm"] .panel,:root[data-reading="calm"] .card{background:#192533!important;box-shadow:none!important;border:1px solid #384858!important;border-radius:10px}
+:root[data-reading="calm"] .panel::before,:root[data-reading="calm"] .panel::after{display:none}
+:root[data-reading="calm"] .title,:root[data-reading="calm"] .badge,:root[data-reading="calm"] .cardName,:root[data-reading="calm"] .cName,:root[data-reading="calm"] .gName,:root[data-reading="calm"] .bname,:root[data-reading="calm"] .coreName{text-shadow:none!important}
+:root[data-reading="calm"] .badge.neural,:root[data-reading="calm"] .wave,:root[data-reading="calm"] .room .mon,:root[data-reading="calm"] .room .who{animation:none!important;filter:none!important}
+:root[data-reading="calm"] .navItem{font-size:15px;min-height:40px;padding:9px 10px;color:var(--dim)}
+:root[data-reading="calm"] .navItem.on{background:#2a3c4b!important;color:#fff!important;border-color:#617b91!important}
+:root[data-reading="calm"] button{font-family:var(--ui);font-size:14px;letter-spacing:0;line-height:1.4;min-height:36px}
+:root[data-reading="calm"] button:focus-visible,:root[data-reading="calm"] a:focus-visible{outline:2px solid #b0dfee;outline-offset:3px}
+:root[data-reading="calm"] .ptitle{font-family:var(--ui);font-size:15px;letter-spacing:.3px;text-transform:none;font-weight:600;color:#e8eef5;opacity:1;padding-bottom:10px;border-bottom-color:#384858}
+:root[data-reading="calm"] .row,:root[data-reading="calm"] .cardRow,:root[data-reading="calm"] .draftBody,:root[data-reading="calm"] .msg,:root[data-reading="calm"] .sSug,:root[data-reading="calm"] .dsec p{font-size:var(--reading-size);line-height:1.65}
+:root[data-reading="calm"] .row{padding:11px 0;border-bottom-color:#2e3e4e}
+:root[data-reading="calm"] .row .v,:root[data-reading="calm"] .tm,:root[data-reading="calm"] .live,:root[data-reading="calm"] .badge,:root[data-reading="calm"] .foot,:root[data-reading="calm"] .hDate,:root[data-reading="calm"] .lTile .t,:root[data-reading="calm"] .lTile .s,:root[data-reading="calm"] .logicStage .sk,:root[data-reading="calm"] .logicStage .sw{font-family:var(--ui);font-size:12px;letter-spacing:.2px;opacity:1}
+:root[data-reading="calm"] .quick button,:root[data-reading="calm"] .toolNode,:root[data-reading="calm"] .phoneRows,:root[data-reading="calm"] .logicNote{font-size:14px;line-height:1.6}
+:root[data-reading="calm"] .bsub{font-size:10px;letter-spacing:.7px}
+:root[data-reading="calm"] .pill{font-size:12px;background:#2b3d4c!important;color:#d6e3ef}
+:root[data-reading="calm"] .talkBar{background:#192533;border-color:#475c70;box-shadow:none}
+:root[data-reading="calm"] .scroll{scrollbar-width:auto;scrollbar-color:#687f95 #182431}
+:root[data-reading="calm"] .scroll::-webkit-scrollbar{width:9px}
+:root[data-reading="calm"] .scroll::-webkit-scrollbar-thumb{background:#687f95}
+:root[data-reading="calm"] .characterSettings{font-size:14px;line-height:1.6}
+:root[data-reading="calm"] .characterSettings select{font:15px var(--ui);min-height:42px;background:#111923;color:#e8eef5;border:1px solid #607588;border-radius:6px;padding:8px;width:100%}
+:root[data-reading="calm"][data-text="large"]{--reading-size:17px}
+:root[data-reading="calm"][data-text="large"] .navItem,:root[data-reading="calm"][data-text="large"] .officeCard,:root[data-reading="calm"][data-text="large"] .officeWorkRow{font-size:17px}
+:root[data-reading="calm"] .officeCard,:root[data-reading="calm"] .officeWorkRow{background:#192533;border-color:#384858}
+@media(max-width:700px){:root[data-reading="calm"] header>div:last-child{flex-wrap:wrap;justify-content:flex-end}:root[data-reading="calm"] header button{font-size:12px;min-height:34px;padding:6px 8px}:root[data-reading="calm"] .row{flex-wrap:wrap;gap:5px 10px}:root[data-reading="calm"] .row .k{min-width:50%}}
+@media(prefers-reduced-motion:reduce){body::before,body::after{display:none!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+
+#chiefOfStaff label{display:block;margin:18px 0 7px;font-size:14px}
+#chiefOfStaff textarea{display:block;box-sizing:border-box;width:100%;min-height:90px;margin:0 0 10px;padding:12px;background:#0c1724;color:#edf3fa;border:1px solid #55778b;border-radius:6px;font:15px/1.5 system-ui;resize:vertical}
+#chiefOfStaff ol{padding-left:22px;margin:10px 0 18px;list-style:decimal}
+#chiefOfStaff li{padding:0 0 8px;line-height:1.6}
+#chiefOfStaff details{margin:16px 0}#chiefOfStaff summary{cursor:pointer;line-height:1.6}
+.adaConversation{max-height:360px;min-height:90px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.adaConversation:empty{display:none}.adaConversation p{padding:12px 14px;margin:6px 0;border-radius:12px;line-height:1.6}.officeChatUser{background:rgba(104,196,220,.12);margin-left:20px!important}.officeChatReply{background:rgba(130,150,180,.09);margin-right:12px!important}.officeChat label{display:block;margin:12px 0 8px}.officeChat textarea{display:block;box-sizing:border-box;width:100%;min-height:100px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:14px;font:inherit;line-height:1.5}.officeChat textarea:focus{outline:2px solid var(--cyan);outline-offset:2px}.officeChatStarters{margin:12px 0}.officeChatStarters button{text-transform:none;letter-spacing:0}
+
+/* Office visual refresh: dimensional scene, quiet light, legible controls. */
+[data-view="office"] .floorPanel.panel{background:linear-gradient(145deg,#122535 0%,#0b1726 60%,#152034 100%)!important;border:1px solid #365366!important;border-radius:18px;box-shadow:0 18px 48px #03091250!important}
+.floorHeader{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:24px 26px 0;color:#eff8ff}
+.floorEyebrow{font:600 10px/1.5 var(--mono);letter-spacing:2px;color:#89b8cc}
+.floorHeader h3{font:500 22px/1.3 var(--ui);letter-spacing:-.5px;margin:7px 0 0}
+.floorCount{font:500 12px/1.5 var(--ui);color:#c4dce8;border:1px solid #39566a;background:#172c3d;padding:7px 11px;border-radius:20px;white-space:nowrap}
+.floorPanel #officeFloor{height:auto;min-height:0;aspect-ratio:965/535;background:radial-gradient(ellipse at 50% 40%,#24576a45,transparent 66%);padding:14px 0 0;box-sizing:border-box;overflow:visible}
+#officeFloor .slab{fill:url(#officeSlab);stroke:#3b6075;stroke-width:1.2}
+#officeFloor .slabEdge{fill:#091626;stroke:#244557;stroke-width:1}
+#officeFloor .tile{stroke:#7495ad;stroke-opacity:.09;stroke-width:.8}
+#officeFloor .room{--department:#83d8e5;opacity:1}
+#officeFloor .room .rf{fill:url(#officeRoom);stroke:var(--department);stroke-opacity:.65;stroke-width:1.2;transition:fill .18s,stroke-opacity .18s}
+#officeFloor .room .roomEdge{fill:#112537;stroke:#365365;stroke-width:.7}
+#officeFloor .room .wall{fill:url(#officeGlass);stroke:#8dbbd1;stroke-opacity:.4;stroke-width:.8}
+#officeFloor .room .lightStrip{fill:none;stroke:var(--department);stroke-width:2;stroke-opacity:.8}
+#officeFloor .room .rug{fill:var(--department);fill-opacity:.065;stroke:var(--department);stroke-opacity:.12;stroke-width:.8}
+#officeFloor .room .desk{fill:#132c43;stroke:#54758d;stroke-width:.8}
+#officeFloor .room .deskTop{fill:url(#officeDesk);stroke:#8bb3c9;stroke-width:1}
+#officeFloor .room .mon{fill:#142b3d;stroke:#a3d4e6;stroke-width:1;animation:none;filter:none}
+#officeFloor .room.ran .mon{fill:#72d6d7}
+#officeFloor .room.late .mon{fill:#997642}
+#officeFloor .room .chair{fill:#27384d;stroke:#73899b}
+#officeFloor .room .personBody{fill:#7caabd}
+#officeFloor .room .person{fill:#dfecf4}
+#officeFloor .room .who{animation:none}
+#officeFloor .room .namePlate{fill:#0b1a29;fill-opacity:.93;stroke:#526a80;stroke-opacity:.55;stroke-width:.7}
+#officeFloor .room .rname{fill:var(--department);font:600 13px var(--ui);letter-spacing:.3px;text-transform:none}
+#officeFloor .room .rwho{fill:#f1f7fc;font:600 17px var(--ui)}
+#officeFloor .room .rstat{fill:#aebfd0;font:10px var(--ui);letter-spacing:.15px}
+#officeFloor .room.ran .rstat{fill:#a3e5bd}#officeFloor .room.late .rstat{fill:#f0c487}
+#officeFloor .room:hover .rf,#officeFloor .room:focus .rf,#officeFloor .room.sel .rf{fill:#27475b;stroke-opacity:1;stroke-width:2.5}
+#officeFloor .room:hover .namePlate,#officeFloor .room:focus .namePlate,#officeFloor .room.sel .namePlate{stroke:var(--department);stroke-opacity:1}
+#officeFloor .lobby .rf{fill:#142c3e;stroke:#52788d;stroke-dasharray:none}
+#officeFloor .lobby .hex{fill:#25485d;stroke:#9bc9dc;stroke-width:1.2}
+#officeFloor .lobby text{fill:#d0e4ef;font:500 10px var(--ui);letter-spacing:1.5px}
+#officeFloor .plant{fill:#4e9c82;stroke:#83b99b;stroke-width:.5}#officeFloor .pot{fill:#789393}
+.officeDepartmentDock{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:10px 20px 20px}
+.officeDepartmentDock button{display:flex;align-items:center;gap:10px;min-width:0;text-align:left;border:1px solid #30495d;border-radius:10px;background:#102132;color:#eaf3fb;padding:12px 10px;cursor:pointer;transition:background .15s,border-color .15s}
+.officeDepartmentDock button:hover,.officeDepartmentDock button[aria-pressed="true"]{background:#223a4e;border-color:var(--department)}
+.officeDepartmentDock button:focus-visible{outline:2px solid #c3ebff;outline-offset:2px}
+.officeDepartmentDock .departmentIcon{display:grid;place-items:center;width:30px;height:34px;flex-shrink:0;border-radius:8px;color:var(--department);background:#23394b;font:600 12px var(--ui)}
+.officeDepartmentDock .departmentCopy{min-width:0;display:flex;flex-direction:column;gap:3px}
+.officeDepartmentDock strong{font:600 12px/1.3 var(--ui);color:#eaf3fb}.officeDepartmentDock small{font:11px/1.4 var(--ui);color:#acbdcd}
+.floorPanel .floorLegend{font:11px/1.5 var(--ui);letter-spacing:0;text-transform:none;border-top:1px solid #30495d;padding:13px 22px;color:#b1c4d4;gap:10px 16px;background:#0a152350}.floorLegendHint{margin-left:auto;color:#9cc7d6}
+[data-view="office"] .officeHeading h2{font-weight:500;font-size:32px;letter-spacing:-1px}
+[data-view="office"] .officeActions button:first-child{background:#b7e5ed;color:#112534;border-color:#b7e5ed;box-shadow:0 3px 14px #7bd8e015}
+[data-view="office"] .officeTabs{gap:4px;border:0;background:#0a142180;padding:5px;border-radius:12px;width:fit-content;max-width:100%}
+[data-view="office"] .officeTabs button{border-color:transparent;background:transparent;border-radius:8px;color:#b6c8d9}
+[data-view="office"] .officeTabs button[aria-pressed="true"]{background:#294557;color:#effaff;border-color:#4c7082;box-shadow:0 2px 8px #0002}
+@media(max-width:1450px) and (min-width:1101px){.officeDepartmentDock{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:620px){.floorHeader{padding:18px 16px 0;gap:8px;align-items:flex-start}.floorHeader h3{font-size:18px}.floorEyebrow{font-size:9px;letter-spacing:1.2px}.floorCount{font-size:10px;padding:5px 7px}.officeDepartmentDock{grid-template-columns:repeat(2,minmax(0,1fr));padding:8px 12px 14px}.floorPanel .floorLegend{padding:12px 16px}.floorLegendHint{width:100%;margin:0}[data-view="office"] .officeTabs button{padding:9px 10px;font-size:13px}}
+@media(prefers-reduced-motion:reduce){#officeFloor *, .officeDepartmentDock button{animation:none!important;transition:none!important}}
+
+
+/* People-first Office: portraits and furniture remain visible in every state. */
+#officeFloor .room .seatedColleague{animation:none;filter:none}
+#officeFloor .chairFrame{fill:none;stroke:#607c91;stroke-width:3;stroke-linecap:round}
+#officeFloor .seatBack{fill:#142436;stroke:#6f99b2;stroke-width:1.4}
+#officeFloor .avatarLegs{fill:none;stroke:#344a63;stroke-width:8;stroke-linecap:round;stroke-linejoin:round}
+#officeFloor .avatarJacket{fill:var(--department);stroke:#d2e5ee;stroke-width:.6}
+#officeFloor .avatarArms{fill:none;stroke:var(--department);stroke-width:7;stroke-linecap:round;stroke-linejoin:round}
+#officeFloor .avatarFace{stroke:#e5c6b4;stroke-width:.6}
+#officeFloor .deskLight{stroke:var(--department);stroke-width:2;stroke-linecap:round}
+#officeFloor .holoScreen{fill:#123a50;fill-opacity:.92;stroke:#91e5f1;stroke-width:1.2}
+#officeFloor .holoScreen.secondary{fill:#153249;stroke:#87b8d3}
+#officeFloor .screenTrace{fill:none;stroke:#b5f4f6;stroke-width:1.4;stroke-linejoin:round}
+#officeFloor .screenLine{stroke:#8bccdf;stroke-width:1.1;opacity:.85}
+#officeFloor .screenStand{stroke:#6c9bb3;stroke-width:2;fill:none}
+#officeFloor .keyboard{fill:#122335;stroke:#8ab2c8;stroke-width:.6}
+#officeFloor .room .rwho{font-size:15px}#officeFloor .room .rname{font-size:11px}
+#officeFloor .room .namePlate{fill:#0b1a29;fill-opacity:.85;stroke-opacity:.35}
+#officeFloor .coreRing{fill:none;stroke:#6bbdd7;stroke-width:1;stroke-opacity:.5}
+#officeFloor .coreRing.upper{stroke:#a4e9fa;stroke-opacity:.8}
+
 </style>
 </head>
 <body>
@@ -1789,6 +1917,7 @@ body.arranging .scroll{pointer-events:none}
         <div class="badge neural" id="neural" hidden>◈ NEURAL LINK</div>
         <div class="badge" id="badge">CONNECTING</div>
         <button id="mic">🎙 VOICE OFF</button>
+        <button id="readingToggle" aria-pressed="true" title="Toggle reading comfort">Comfort on</button>
         <button id="refresh">REFRESH</button>
         <button id="resetLayout" hidden title="Put every panel back where the page puts it">↺ LAYOUT</button>
       </div>
@@ -2309,11 +2438,13 @@ body.arranging .scroll{pointer-events:none}
       <div class="salesWrap">
         <div class="logicNote" id="officeNote">Reading the office…</div>
         <div class="officeGrid">
-          <div class="panel floorPanel">
-            <svg id="officeFloor" viewBox="150 40 850 500" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
-            <div class="floorLegend"><span><i style="background:var(--good)"></i>ran on schedule</span><span><i style="background:var(--warn)"></i>overdue</span><span><i style="background:var(--dim)"></i>never ran</span><span>papers on a desk: today's entries</span><span>click a room to open it</span></div>
+          <div class="officeMain scroll"><div id="officeWorkspace"></div><div class="panel floorPanel" hidden>
+            <div class="floorHeader"><div><span class="floorEyebrow">JARVIS / WORKSPACE</span><h3>Your team, in one place.</h3></div><span id="floorRunCount" class="floorCount"></span></div>
+            <svg id="officeFloor" viewBox="35 30 965 535" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
+            <div id="officeDepartmentDock" class="officeDepartmentDock" aria-label="Office departments"></div>
+            <div class="floorLegend"><span><i style="background:var(--good)"></i>ran on schedule</span><span><i style="background:var(--warn)"></i>overdue</span><span><i style="background:var(--dim)"></i>never ran</span><span class="floorLegendHint">Select a department to step inside ↗</span></div>
           </div>
-          <div class="panel" style="min-height:0;display:flex;flex-direction:column">
+          </div><div class="panel" style="min-height:0;display:flex;flex-direction:column">
             <div id="officeSide" class="scroll" style="flex:1;min-height:0"></div>
           </div>
         </div>
@@ -2327,6 +2458,10 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" data-widget="pipeline" style="flex:none">
             <div class="ptitle">Character & appearance</div>
             <div class="characterSettings">
+              <label for="readingMode">Reading style</label>
+              <select id="readingMode"><option value="calm">Comfort — clear text, quiet colors</option><option value="cinematic">Cinematic — original effects</option></select>
+              <label for="readingSize">Text size in Comfort mode</label>
+              <select id="readingSize"><option value="standard">Standard</option><option value="large">Larger</option></select>
               <label for="characterMode">Jarvis character</label>
               <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="armour">Iron Man · the armour</option><option value="witchking">The Witch-king of Angmar</option><option value="onering">The One Ring</option><option value="quantum">Jarvis · Quantum core</option></select>
               <div id="doomAppearance" style="display:grid;gap:10px">
@@ -2355,6 +2490,29 @@ body.arranging .scroll{pointer-events:none}
           </div>
         </div>
         <div class="col">
+          <div class="panel" data-widget="ai-provider" style="flex:none">
+            <div class="ptitle">AI provider<span class="live" id="aiProviderActive">CHECKING</span></div>
+            <form id="aiProviderForm" class="characterSettings">
+              <label for="aiProviderMode">Power Jarvis with</label>
+              <select id="aiProviderMode" disabled>
+                <option value="claude">Claude</option>
+                <option value="chatgpt">ChatGPT · Codex</option>
+                <option value="grok">Grok · text responses</option>
+                <option value="muse" disabled>Meta Muse · app only, bridge not connected</option>
+                <option value="auto">Auto · connected execution providers</option>
+              </select>
+              <p style="margin:0;color:var(--dim);font-size:12px;line-height:1.5">Auto uses the next connected execution provider before work starts. Requested order: Claude, ChatGPT, Grok Bot, Meta Muse. Missing bridges are shown below; Grok text API is a separate manual option.</p>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <button type="submit" id="aiProviderSave" class="sw" disabled>SAVE</button>
+                <button type="button" id="aiProviderRefresh" class="sw">REFRESH</button>
+              </div>
+              <div id="aiProviderStatus" role="status" aria-live="polite">Connecting to Jarvis on this computer…</div>
+              <div id="aiProviderAccounts" style="font-size:12px;line-height:1.6;overflow-wrap:anywhere"></div>
+              <div id="aiCompanionApps" style="font-size:13px;line-height:1.7"></div>
+              <div id="aiProviderScope" style="font-size:12px;line-height:1.6;color:var(--dim)"></div>
+              <a id="aiProviderHelp" href="https://github.com/clearskyenergy/jarvis/blob/main/docs/PROVIDER-SWITCH.md" target="_blank" rel="noopener" style="font-size:12px;color:var(--glow-cyan)">Setup and connection help ↗</a>
+            </form>
+          </div>
           <div class="panel" data-widget="spend" style="flex:none">
             <div class="ptitle">Spend</div>
             <div id="spend"></div>
@@ -4336,6 +4494,23 @@ const doomCore = {
   say(v) { classicDoomCore.say(v); characterState = v > 0 ? 'speaking' : 'idle'; if (missionDoom) { missionDoom.setState(characterState); missionDoom.setEnergy(v); } },
   resize() { classicDoomCore.resize(); }
 };
+function syncReadingControls(){
+  const comfortable=document.documentElement.dataset.reading==='calm';
+  el('readingMode').value=comfortable?'calm':'cinematic';
+  el('readingSize').value=document.documentElement.dataset.text||'standard';
+  el('readingToggle').textContent=comfortable?'Comfort on':'Comfort off';
+  el('readingToggle').setAttribute('aria-pressed',String(comfortable));
+}
+function setReading(mode,size){
+  document.documentElement.dataset.reading=mode==='cinematic'?'cinematic':'calm';
+  document.documentElement.dataset.text=size==='large'?'large':'standard';
+  try{localStorage.setItem('jarvisReading',document.documentElement.dataset.reading);localStorage.setItem('jarvisText',document.documentElement.dataset.text);}catch(_){}
+  syncReadingControls();
+}
+el('readingToggle').addEventListener('click',()=>setReading(document.documentElement.dataset.reading==='calm'?'cinematic':'calm',document.documentElement.dataset.text));
+el('readingMode').addEventListener('change',e=>setReading(e.target.value,document.documentElement.dataset.text));
+el('readingSize').addEventListener('change',e=>setReading(document.documentElement.dataset.reading,e.target.value));
+syncReadingControls();
 el('characterMode').addEventListener('change', e => setMode(e.target.value, false));
 el('doomCharacter').addEventListener('change', e => {
   doomCharacter = e.target.value;
@@ -5437,6 +5612,90 @@ async function probeBrain(){
   if(was!==brainOn){ try{ renderConns(lastStatus||{}); }catch(_){} if(brainOn){ glassSync(true); try{ syncBoardTheme(); }catch(_){} } }
   return brainOn;
 }
+/* AI provider settings belong to the running bridge, never localStorage.
+   A failed save re-reads the bridge; it never presents the requested choice
+   as applied. Old bridge versions remain compatible with this page. */
+let aiProviderData=null, aiProviderBusy=false;
+const aiProviderNames={claude:'Claude',chatgpt:'ChatGPT',grok:'Grok',auto:'Auto'};
+function renderAIProvider(data){
+  aiProviderData=data;
+  el('aiProviderMode').value=data.settings.mode;
+  el('aiProviderMode').disabled=!!data.busy;
+  el('aiProviderSave').disabled=!!data.busy;
+  el('aiProviderActive').textContent=data.active?aiProviderNames[data.active].toUpperCase():'READY';
+  const host=el('aiProviderAccounts'); host.textContent='';
+  ['claude','chatgpt','grok'].forEach(key=>{
+    const p=data.providers[key];
+    const row=document.createElement('div');
+    // An older Jarvis bridge reports no Grok entry; say so instead of "not checked".
+    row.textContent=aiProviderNames[key]+': '+(p?(p.detail||'Connection not checked'):
+      (key==='grok'?'Update and restart Jarvis on this Mac to enable Grok':'Connection not checked'));
+    host.appendChild(row);
+  });
+  const companions=el('aiCompanionApps');companions.textContent='';
+  [['muse','Meta Muse','https://dev.meta.ai/docs/muse-code'],['grokbot','Grok Bot','https://docs.x.ai/grok-bot/overview']].forEach(([key,label,url])=>{
+    const p=(data.companions||{})[key],row=document.createElement('div');
+    row.textContent=label+': '+(p?p.detail:'App connection not checked by this Jarvis bridge')+' ';
+    const a=document.createElement('a');a.href=url;a.target='_blank';a.rel='noopener';a.textContent=key==='muse'?'Muse connection guide ↗':'Grok Bot guide ↗';row.appendChild(a);companions.appendChild(row);
+  });
+  if(data.continuity){const row=document.createElement('p');row.textContent='Requested order: Claude → ChatGPT → Grok Bot → Meta Muse. Connected execution: Claude → ChatGPT. Grok Bot and Muse bridges are not configured. '+data.continuity.host;companions.appendChild(row);}
+  el('aiProviderStatus').textContent=data.busy?'Jarvis is working. Change providers when this request finishes.':
+    'Saved choice: '+aiProviderNames[data.settings.mode]+'. '+(data.lastSwitch||'Applies to the next Jarvis request.');
+  el('aiProviderScope').textContent='Jarvis chat uses this choice. Terminal sessions support Claude/ChatGPT. Trading City runs independently. '+(data.office&&data.office.enabled?'Office routines execute through Claude/ChatGPT. Grok is text-only and does not run Office tools.':'Office runner status is unavailable or disabled.');
+}
+async function aiProviderRequest(method, body){
+  const c=new AbortController(); const timer=setTimeout(()=>c.abort(),10000);
+  try{
+    const r=await fetch(BRAIN+'/providers',{method,cache:'no-store',signal:c.signal,
+      headers:body?{'Content-Type':'application/json'}:{},body:body?JSON.stringify(body):undefined});
+    const j=await r.json().catch(()=>({}));
+    if(r.status===404) throw new Error('Update and restart Jarvis on this Mac to enable the provider switch.');
+    if(!r.ok||!j.ok||!j.settings||!aiProviderNames[j.settings.mode]) throw new Error(j.error||'Could not read AI settings.');
+    return j;
+  } finally { clearTimeout(timer); }
+}
+async function loadAIProvider(){
+  if(aiProviderBusy) return;
+  aiProviderBusy=true;
+  el('aiProviderRefresh').disabled=true;
+  el('aiProviderSave').disabled=true;
+  el('aiProviderMode').disabled=true;
+  try { renderAIProvider(await aiProviderRequest('GET')); }
+  catch(e){
+    aiProviderData=null;
+    el('aiProviderActive').textContent='NOT CONNECTED';
+    el('aiProviderAccounts').textContent='';el('aiCompanionApps').textContent='Meta Muse / Grok Bot: local app status unavailable.';
+    el('aiProviderStatus').textContent=e.name==='TypeError'||e.name==='AbortError'?
+      'Cannot reach Jarvis on this computer. Open it on the Mac, then refresh.':e.message;
+  } finally { aiProviderBusy=false; el('aiProviderRefresh').disabled=false; }
+}
+el('aiProviderRefresh').addEventListener('click',loadAIProvider);
+el('aiProviderForm').addEventListener('submit',async ev=>{
+  ev.preventDefault();
+  if(aiProviderBusy||!aiProviderData) return;
+  const choice=el('aiProviderMode').value;
+  aiProviderBusy=true;
+  el('aiProviderSave').disabled=true; el('aiProviderMode').disabled=true;
+  el('aiProviderRefresh').disabled=true;
+  el('aiProviderStatus').textContent='Saving to Jarvis…';
+  try{
+    const j=await aiProviderRequest('POST',{mode:choice});
+    renderAIProvider(j);
+    const ready=choice==='auto'?Object.values(j.providers).some(p=>p.ready):(j.providers[choice]||{}).ready;
+    el('aiProviderStatus').textContent='Saved: '+aiProviderNames[j.settings.mode]+'. '+
+      (ready?'The next request uses this choice.':'Complete the connection below before sending a request.');
+    probeBrain();
+  }catch(e){
+    // The write may have reached the Mac even if its response was lost.
+    try { renderAIProvider(await aiProviderRequest('GET')); }
+    catch(_){ aiProviderData=null; el('aiProviderActive').textContent='UNKNOWN'; }
+    el('aiProviderStatus').textContent='Save could not be confirmed: '+e.message;
+  }finally{
+    aiProviderBusy=false; el('aiProviderRefresh').disabled=false;
+    if(!aiProviderData){el('aiProviderSave').disabled=true;el('aiProviderMode').disabled=true;}
+  }
+});
+
 /* What the twin knows right now, small enough to ride along with every
    question: the counts, today's meetings, the top of the plate, what is
    waiting to go out. The brain has no credential to the twin and should not
@@ -6350,6 +6609,7 @@ function wireTerm(){
 }
 
 function showView(name){
+  document.body.classList.toggle("officeReading",name==="office");
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
   const inBar=['command','tasks','outbox','calendar'].includes(name);
@@ -6370,6 +6630,7 @@ function showView(name){
   if(name==='logic'){ loadLogic(false); }
   if(name==='sales'){ wireSales(); loadSales(false); }
   if(name==='office'){ loadOffice(false); }
+  if(name==='system'){ loadAIProvider(); }
   if(name==='brain'){ bpoke(); loadBrain(); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
@@ -6627,7 +6888,7 @@ function renderConns(s){
        subscription; off means the twin is on its own and will ask before
        it spends. */
     ['Neural link', brainOn?'ok':'off',
-      brainOn?'on this Mac · $0':'off — Desktop: JARVIS neural link'],
+      brainOn?('on this Mac · '+(brainInfo?.provider?aiProviderNames[brainInfo.provider]:'ready')):'off — Desktop: JARVIS neural link'],
     /* The board. The row IS the quick-link: one click opens (or re-focuses)
        the glass, from the same panel that says whether it is up. */
     ['Glass board', boardOn?'ok':'off',
@@ -8438,19 +8699,22 @@ const OFFICE_DESKS=[
   {key:'billing', name:'Billing', who:'June', last:'Castellano', mail:'billing@clearsky-usa.com', sched:'weekdays 9:35', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:17,y:9,w:7,d:6},
    role:'A/R aging and open invoices from QuickBooks, billing questions answered, reminders at 7 and 14 days, and the weekly P&L to Thomas on Monday.',
    may:'Sends the first two reminders. 30+ days, a dispute, a refund or a credit waits for Thomas’s APPROVE. Never changes an invoice, never charges a card.', sends:true, tools:'QuickBooks · Gmail'},
-  {key:'admin', name:'Admin', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
-   role:'The day’s logistics: meetings, the office’s open approvals and handoffs, unanswered mail, promises due, tomorrow. Sunday night: the weekly plan for every desk, for Thomas to approve.',
-   may:'One email to Thomas. Everything else is a draft.', tools:'Gmail · Google Calendar'}
+  {key:'admin', name:'Chief of Staff', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
+   role:'Your day, personal finances, and follow-through across every department. Ada keeps the brief short: bills to verify, cash to reserve, and the next income or savings action.',
+   may:'Weekday money check, Monday review and Friday look-ahead. Household sources must be verified; scheduled payments are not confirmed payments. You approve transactions.', tools:'Private twin · Gmail · Google Calendar · Office reports'},
+  {key:'legal', name:'Legal', who:'Legal', last:'assistant', lead:'Scott Henry · General Counsel', mail:'scott@clearsky-usa.com', sched:'weekdays 9:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:17,w:7,d:5},
+   role:'Sends approved standard NDAs, reads contracts before you sign, and gives you short feedback with the changes and decisions that matter.',
+   may:'If a real lawyer is needed, the assistant sends you the proposed referral for approval first. Only after your approval does it send that packet to Scott Henry at scott@clearsky-usa.com. It never signs or accepts terms for you. Sending needs an available authorized email connection.', tools:'Office intake · Gmail · Google Drive'}
 ];
 const OFFICE_LOBBY={x:9,y:6,w:7,d:5};
-const OFFICE_DESK_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\b[:\s·—–-]*/i;
-const OFFICE_PLAN_RE=/^\s*PLAN\s+(\d{4}-W\d{2})\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*(proposed|approved|changed|skipped)\b\s*[—–:-]*\s*([\s\S]*)$/i;
-const OFFICE_NOTE_RE=/^\s*NOTE\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*([\s\S]*)$/i;
+const OFFICE_DESK_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\b[:\s·—–-]*/i;
+const OFFICE_PLAN_RE=/^\s*PLAN\s+(\d{4}-W\d{2})\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*(proposed|approved|changed|skipped)\b\s*[—–:-]*\s*([\s\S]*)$/i;
+const OFFICE_NOTE_RE=/^\s*NOTE\s+(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*([\s\S]*)$/i;
 /* the office protocol (jarvis/agents/office/protocol.md): a desk asks Thomas by
    email and logs `<DESK>: APPROVAL #<ID> requested — …`, then `done` or
    `declined`; work between desks is `<DESK>: HANDOFF #<ID> → <desk>: …`. */
-const OFFICE_APPROVAL_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*APPROVAL\s+#?([A-Z]+-\d{8}-\d+)\s*(requested|done|declined)\b\s*[—–:-]*\s*([\s\S]*)$/i;
-const OFFICE_HANDOFF_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN)\s*:\s*HANDOFF\s+#?([A-Z]+-\d{8}-\d+)\s*(?:→|->)\s*(\w+)\s*:\s*([\s\S]*)$/i;
+const OFFICE_APPROVAL_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*APPROVAL\s+#?([A-Z]+-\d{8}-\d+)\s*(requested|done|declined)\b\s*[—–:-]*\s*([\s\S]*)$/i;
+const OFFICE_HANDOFF_RE=/^\s*(SALES|MARKETING|SOFTWARE|SUPPORT|BILLING|ADMIN|LEGAL)\s*:\s*HANDOFF\s+#?([A-Z]+-\d{8}-\d+)\s*(?:→|->)\s*(\w+)\s*:\s*([\s\S]*)$/i;
 let officeActs=null, officeAt=0, officeBusy=false, officeSel=null;
 /* Firestore hands a timestamp back three ways (an ISO string, millis, or
    {_seconds}); the dashboard payload normalises, the activity view does not. */
@@ -8494,7 +8758,7 @@ async function loadOffice(force){
   officeBusy=true;
   try{
     if(!salesData) await loadSales(false);
-    officeActs=await officeFetchActivity(); officeAt=Date.now();
+    officeActs=await officeFetchActivity(); await officeReadBook(); officeAt=Date.now();
     renderOffice();
   }catch(e){
     const who=(auth.currentUser||{}).email||'?';
@@ -8548,20 +8812,40 @@ function officeBox(g,x,y,w,d,h,topCls,sideCls){
   g.appendChild(officePoly([officeIso(x+w,y,h),officeIso(x+w,y+d,h),officeIso(x+w,y+d,0),officeIso(x+w,y,0)],sideCls));
   g.appendChild(officePoly([officeIso(x,y,h),officeIso(x+w,y,h),officeIso(x+w,y+d,h),officeIso(x,y+d,h)],topCls));
 }
+function officeShape(parent,tag,attrs){
+  const node=document.createElementNS('http://www.w3.org/2000/svg',tag);
+  Object.keys(attrs).forEach(k=>node.setAttribute(k,attrs[k]));parent.appendChild(node);return node;
+}
 function renderOfficeFloor(st){
   const svg=el('officeFloor'); if(!svg) return;
   svg.textContent='';
   const NS='http://www.w3.org/2000/svg';
+  svg.innerHTML='<defs><linearGradient id="officeSlab" x2="0" y2="1"><stop stop-color="#254255"/><stop offset="1" stop-color="#122b3e"/></linearGradient><linearGradient id="officeRoom" x2="0" y2="1"><stop stop-color="#294658"/><stop offset="1" stop-color="#193144"/></linearGradient><linearGradient id="officeGlass" x2="0" y2="1"><stop stop-color="#7cb6cc" stop-opacity=".28"/><stop offset="1" stop-color="#3c6a84" stop-opacity=".08"/></linearGradient><linearGradient id="officeDesk" x2="0" y2="1"><stop stop-color="#5c8299"/><stop offset="1" stop-color="#2b4d66"/></linearGradient></defs>';
+  const colors={sales:'#80d8e8',marketing:'#c5b2f0',software:'#8cbafa',support:'#91d8ba',billing:'#e4c38c',admin:'#aebcfa',legal:'#b9cedb'};
+  el('floorRunCount').textContent=OFFICE_DESKS.filter(d=>st.by[d.key].cls==='ran').length+' of '+OFFICE_DESKS.length+' on schedule';
+  const dock=el('officeDepartmentDock');dock.textContent='';
+  OFFICE_DESKS.forEach(d=>{
+    const status=st.by[d.key],button=officeH('button');button.type='button';button.style.setProperty('--department',colors[d.key]);
+    button.setAttribute('aria-pressed',String(officeSel===d.key));button.setAttribute('aria-label','Open '+d.name+' · '+d.who+' '+d.last);
+    button.appendChild(officeH('span','departmentIcon',d.key==='legal'?'GC':d.who.charAt(0)+d.last.charAt(0)));
+    const copy=officeH('span','departmentCopy');copy.appendChild(officeH('strong','',d.name));copy.appendChild(officeH('small','',status.cls==='ran'?'On schedule':status.cls==='late'?'Overdue':'No run recorded'));button.appendChild(copy);
+    button.addEventListener('click',()=>officeSelect(d.key));dock.appendChild(button);
+  });
+  /* A raised foundation gives the floor weight; activity lights remain factual. */
+  svg.appendChild(officePoly([officeIso(0,23),officeIso(25,23),officeIso(25,23,-16),officeIso(0,23,-16)],'slabEdge'));
+  svg.appendChild(officePoly([officeIso(25,0),officeIso(25,23),officeIso(25,23,-16),officeIso(25,0,-16)],'slabEdge'));
   /* the slab and its tiles */
-  svg.appendChild(officePoly([officeIso(0,0),officeIso(25,0),officeIso(25,17),officeIso(0,17)],'slab'));
+  svg.appendChild(officePoly([officeIso(0,0),officeIso(25,0),officeIso(25,23),officeIso(0,23)],'slab'));
   const tiles=document.createElementNS(NS,'g');
-  for(let i=0;i<=25;i++){ const a=officeIso(i,0), b=officeIso(i,17); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
-  for(let j=0;j<=17;j++){ const a=officeIso(0,j), b=officeIso(25,j); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
+  for(let i=0;i<=25;i++){ const a=officeIso(i,0), b=officeIso(i,23); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
+  for(let j=0;j<=23;j++){ const a=officeIso(0,j), b=officeIso(25,j); const l=document.createElementNS(NS,'line'); l.setAttribute('x1',a[0]); l.setAttribute('y1',a[1]); l.setAttribute('x2',b[0]); l.setAttribute('y2',b[1]); l.setAttribute('class','tile'); tiles.appendChild(l); }
   svg.appendChild(tiles);
   /* the lobby: Thomas's desk and the mark, in the middle of the floor */
   const L=OFFICE_LOBBY, lob=document.createElementNS(NS,'g'); lob.setAttribute('class','lobby');
   lob.appendChild(officePoly([officeIso(L.x,L.y),officeIso(L.x+L.w,L.y),officeIso(L.x+L.w,L.y+L.d),officeIso(L.x,L.y+L.d)],'rf'));
   const c=officeIso(L.x+L.w/2,L.y+L.d/2), hex=[]; for(let k=0;k<6;k++){ const a=Math.PI/3*k; hex.push([c[0]+Math.cos(a)*30, c[1]+Math.sin(a)*15]); }
+  officeShape(lob,'ellipse',{cx:c[0],cy:c[1],rx:45,ry:22,class:'coreRing'});
+  officeShape(lob,'ellipse',{cx:c[0],cy:c[1]-7,rx:37,ry:18,class:'coreRing upper'});
   lob.appendChild(officePoly(hex,'hex'));
   lob.appendChild(officeText(c[0],c[1]+3,'','OMEGA'));
   lob.appendChild(officeText(c[0],c[1]+30,'','Thomas · the office'));
@@ -8569,36 +8853,58 @@ function renderOfficeFloor(st){
   /* the rooms, back to front */
   OFFICE_DESKS.slice().sort((a,b)=>(a.room.x+a.room.y)-(b.room.x+b.room.y)).forEach(d=>{
     const s=st.by[d.key], R=d.room, g=document.createElementNS(NS,'g');
-    g.setAttribute('class','room '+s.cls+(officeSel===d.key?' sel':'')); g.dataset.desk=d.key; g.setAttribute('tabindex','0'); g.setAttribute('role','button');
+    g.style.setProperty('--department',colors[d.key]);g.setAttribute('class','room '+s.cls+(officeSel===d.key?' sel':'')); g.dataset.desk=d.key; g.setAttribute('tabindex','0'); g.setAttribute('role','button');
     const stat=s.last?(s.cls==='ran'?'ran '+sStamp(new Date(s.last.ms).toISOString()):'last '+sStamp(new Date(s.last.ms).toISOString())+' · overdue'):(d.ext?'reports on GitHub':'never ran');
     g.setAttribute('aria-label',d.who+' '+d.last+' · '+d.name+' · '+stat);
     const title=document.createElementNS(NS,'title'); title.textContent=d.who+' '+d.last+' · '+d.name+' · '+d.sched+' · '+stat; g.appendChild(title);
-    /* back walls, then the floor */
-    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x+R.w,R.y,0),officeIso(R.x+R.w,R.y,18),officeIso(R.x,R.y,18)],'wall'));
-    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x,R.y+R.d,0),officeIso(R.x,R.y+R.d,18),officeIso(R.x,R.y,18)],'wall'));
+    /* Raised room edge, glass walls and illuminated architectural trim. */
+    g.appendChild(officePoly([officeIso(R.x,R.y+R.d),officeIso(R.x+R.w,R.y+R.d),officeIso(R.x+R.w,R.y+R.d,-7),officeIso(R.x,R.y+R.d,-7)],'roomEdge'));
+    g.appendChild(officePoly([officeIso(R.x+R.w,R.y),officeIso(R.x+R.w,R.y+R.d),officeIso(R.x+R.w,R.y+R.d,-7),officeIso(R.x+R.w,R.y,-7)],'roomEdge'));
+    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x+R.w,R.y,0),officeIso(R.x+R.w,R.y,26),officeIso(R.x,R.y,26)],'wall'));
+    g.appendChild(officePoly([officeIso(R.x,R.y,0),officeIso(R.x,R.y+R.d,0),officeIso(R.x,R.y+R.d,26),officeIso(R.x,R.y,26)],'wall'));
     g.appendChild(officePoly([officeIso(R.x,R.y),officeIso(R.x+R.w,R.y),officeIso(R.x+R.w,R.y+R.d),officeIso(R.x,R.y+R.d)],'rf'));
+    const trim=document.createElementNS(NS,'polyline');trim.setAttribute('points',[officeIso(R.x,R.y+R.d,26),officeIso(R.x,R.y,26),officeIso(R.x+R.w,R.y,26)].map(p=>p.join(',')).join(' '));trim.setAttribute('class','lightStrip');g.appendChild(trim);
+    g.appendChild(officePoly([officeIso(R.x+1,R.y+1),officeIso(R.x+R.w-1,R.y+1),officeIso(R.x+R.w-1,R.y+R.d-1),officeIso(R.x+1,R.y+R.d-1)],'rug'));
     /* the lamp in the back corner says the state at a glance */
     const lp=officeIso(R.x+R.w-0.5,R.y+0.5,24), lamp=document.createElementNS(NS,'circle'); lamp.setAttribute('cx',lp[0]); lamp.setAttribute('cy',lp[1]); lamp.setAttribute('r','3'); lamp.setAttribute('class','lamp'); g.appendChild(lamp);
     /* a plant in the front-left corner */
     const pp=officeIso(R.x+0.7,R.y+R.d-0.7,0), pot=document.createElementNS(NS,'rect'); pot.setAttribute('x',pp[0]-3); pot.setAttribute('y',pp[1]-6); pot.setAttribute('width','6'); pot.setAttribute('height','6'); pot.setAttribute('class','pot'); g.appendChild(pot);
     const pl=document.createElementNS(NS,'circle'); pl.setAttribute('cx',pp[0]); pl.setAttribute('cy',pp[1]-9); pl.setAttribute('r','5'); pl.setAttribute('class','plant'); g.appendChild(pl);
-    /* the chair and the person, behind the desk */
-    const dx=R.x+R.w/2-1.1, dy=R.y+1.6, ch=officeIso(dx+1.1,dy-0.5,0);
-    const chair=document.createElementNS(NS,'ellipse'); chair.setAttribute('cx',ch[0]); chair.setAttribute('cy',ch[1]); chair.setAttribute('rx','6'); chair.setAttribute('ry','3.5'); chair.setAttribute('class','chair'); g.appendChild(chair);
-    const who=document.createElementNS(NS,'g'); who.setAttribute('class','who');
-    const body=document.createElementNS(NS,'ellipse'); body.setAttribute('cx',ch[0]); body.setAttribute('cy',ch[1]-7); body.setAttribute('rx','5'); body.setAttribute('ry','6'); body.setAttribute('class','personBody'); who.appendChild(body);
-    const head=document.createElementNS(NS,'circle'); head.setAttribute('cx',ch[0]); head.setAttribute('cy',ch[1]-16); head.setAttribute('r','3.6'); head.setAttribute('class','person'); who.appendChild(head);
+    /* Stylized seated colleagues are always visible; only status lamps encode runs. */
+    const dx=R.x+R.w/2-1.7, dy=R.y+1.8, ch=officeIso(dx+0.6,dy-0.1,0);
+    const who=document.createElementNS(NS,'g');who.setAttribute('class','who seatedColleague');who.setAttribute('transform','translate('+ch[0]+','+ch[1]+')');
+    const skin={sales:'#e6b69c',marketing:'#bf8568',software:'#d9a580',support:'#895b43',billing:'#d8ae8d',admin:'#e7c3a7',legal:'#b88c70'}[d.key];
+    officeShape(who,'ellipse',{cx:0,cy:4,rx:22,ry:9,fill:'#06121d',opacity:.45});
+    officeShape(who,'path',{d:'M0 -5 L0 8 M-13 12 L0 8 L14 13 M0 8 L4 17',class:'chairFrame'});
+    officeShape(who,'rect',{x:-15,y:-39,width:29,height:33,rx:10,class:'seatBack'});
+    officeShape(who,'path',{d:'M-6 -12 L-8 4 L2 10 M7 -12 L12 1 L23 7',class:'avatarLegs'});
+    officeShape(who,'path',{d:'M-12 -31 Q0 -42 12 -31 L12 -12 Q0 -7 -11 -13 Z',class:'avatarJacket'});
+    officeShape(who,'path',{d:'M-9 -30 L-15 -19 L-3 -14 M10 -30 L17 -20 L29 -17',class:'avatarArms'});
+    officeShape(who,'circle',{cx:-3,cy:-14,r:3,fill:skin});officeShape(who,'circle',{cx:29,cy:-17,r:3,fill:skin});
+    officeShape(who,'rect',{x:-3,y:-42,width:7,height:7,rx:2,fill:skin});
+    officeShape(who,'ellipse',{cx:0,cy:-49,rx:8.5,ry:10,fill:skin,class:'avatarFace'});
+    officeShape(who,'path',{d:d.key==='admin'||d.key==='marketing'?'M-9 -47 Q-13 -63 0 -62 Q14 -61 10 -43 L6 -50 L-4 -55 L-7 -43 Z':'M-9 -50 Q-9 -63 3 -60 Q11 -59 9 -51 L3 -54 L-5 -53 Z',fill:d.key==='admin'?'#c7a173':d.key==='billing'?'#727780':'#263240'});
+    officeShape(who,'path',{d:'M3 -50 L7 -49 M4 -44 L7 -44',stroke:'#654d46','stroke-width':.8,fill:'none'});
+    officeShape(who,'path',{d:'M-10 -30 L-10 -17',stroke:'#deeff7','stroke-width':1.2,opacity:.7});
     g.appendChild(who);
-    /* the desk, its monitor and today's papers */
-    officeBox(g,dx,dy,2.2,1.1,10,'deskTop','desk');
-    const mp=officeIso(dx+1.1,dy+0.25,10), mon=document.createElementNS(NS,'rect'); mon.setAttribute('x',mp[0]-7); mon.setAttribute('y',mp[1]-11); mon.setAttribute('width','14'); mon.setAttribute('height','9'); mon.setAttribute('rx','1'); mon.setAttribute('class','mon'); g.appendChild(mon);
-    const papers=Math.min(6,s.today), pb=officeIso(dx+1.9,dy+0.55,10);
-    for(let k=0;k<papers;k++){ const pr=document.createElementNS(NS,'rect'); pr.setAttribute('x',pb[0]-4); pr.setAttribute('y',pb[1]-4-k*1.6); pr.setAttribute('width','8'); pr.setAttribute('height','5'); pr.setAttribute('class','paper'); g.appendChild(pr); }
-    /* the nameplate, in the front half of the room */
-    const lb=officeIso(R.x+R.w/2,R.y+R.d-1.2,0);
-    g.appendChild(officeText(lb[0],lb[1]-14,'rwho',d.who+' '+d.last));
-    g.appendChild(officeText(lb[0],lb[1]-2,'rname',d.name+' · '+d.sched));
-    g.appendChild(officeText(lb[0],lb[1]+9,'rstat',stat));
+    /* A substantial workstation with two floating displays and a lit desk edge. */
+    officeBox(g,dx,dy,3.5,1.5,14,'deskTop','desk');
+    const edge=officeIso(dx,dy+1.5,13),edge2=officeIso(dx+3.5,dy+1.5,13);
+    officeShape(g,'line',{x1:edge[0],y1:edge[1],x2:edge2[0],y2:edge2[1],class:'deskLight'});
+    const mp=officeIso(dx+2.6,dy+0.3,14), displays=officeShape(g,'g',{class:'holoDisplays','aria-hidden':'true'});
+    officeShape(displays,'path',{d:'M'+mp[0]+' '+mp[1]+' v-10',class:'screenStand'});
+    officeShape(displays,'rect',{x:mp[0]-15,y:mp[1]-35,width:35,height:25,rx:3,class:'holoScreen'});
+    officeShape(displays,'rect',{x:mp[0]-38,y:mp[1]-29,width:20,height:18,rx:2,class:'holoScreen secondary'});
+    officeShape(displays,'path',{d:'M'+(mp[0]-10)+' '+(mp[1]-17)+' l7 -7 6 3 10 -9',class:'screenTrace'});
+    for(let k=0;k<3;k++)officeShape(displays,'line',{x1:mp[0]-34,y1:mp[1]-24+k*4,x2:mp[0]-23+(k%2)*3,y2:mp[1]-24+k*4,class:'screenLine'});
+    const keys=officeIso(dx+1.8,dy+1.1,14);officeShape(g,'path',{d:'M'+(keys[0]-10)+' '+(keys[1]-4)+' l15 7 -5 3 -15 -7 Z',class:'keyboard'});
+    const papers=Math.min(6,s.today),pb=officeIso(dx+3.1,dy+1.1,14);
+    for(let k=0;k<papers;k++)officeShape(g,'rect',{x:pb[0]-4,y:pb[1]-4-k*1.6,width:8,height:5,class:'paper'});
+    /* Low nameplates keep the seated people and their screens in view. */
+    const lb=officeIso(R.x+R.w/2,R.y+R.d-0.7,0);
+    officeShape(g,'rect',{x:lb[0]-81,y:lb[1]-1,width:162,height:37,rx:6,class:'namePlate'});
+    g.appendChild(officeText(lb[0],lb[1]+13,'rwho',d.who+' '+d.last));
+    g.appendChild(officeText(lb[0],lb[1]+27,'rname',d.name));
     g.addEventListener('click',()=>officeSelect(d.key));
     g.addEventListener('keydown',ev=>{ if(ev.key==='Enter'||ev.key===' '){ ev.preventDefault(); officeSelect(d.key); } });
     svg.appendChild(g);
@@ -8646,18 +8952,21 @@ function renderOfficeSide(st){
     if(!cfg.sender || !cfg.postalAddressSet) needs.push({level:'watch', text:'Cold email is blocked until Agent settings has a clearsky-usa.com sender and a postal address (CAN-SPAM). Replies to people who wrote to us, and to accounts, go out regardless.'});
     const waiting=OFFICE_DESKS.filter(d=>st.by[d.key].plan && st.by[d.key].plan.plan.status==='proposed').length;
     if(waiting) needs.push({level:'act', text:waiting+(waiting===1?' desk has':' desks have')+' a plan for '+st.week+' waiting for your approval. Click the room.'});
-    if(late) needs.push({level:'watch', text:late+(late===1?' desk is':' desks are')+' overdue: the last run is older than its schedule. A Routine that fails says why in claude.ai → Routines; the weekly usage limit stops every desk at once.'});
+    if(late) needs.push({level:'watch', text:late+(late===1?' desk is':' desks are')+' overdue: the last run is older than its schedule. Check the Jarvis runner report for the actual provider and any blockers.'});
     if(!needs.length) needs.push({level:'ok', text:'Every desk ran on schedule and nothing waits on you.'});
     const nd=officeH('div'); nd.id='officeNeeds'; needs.forEach(n=>{ const p=officeH('div','sSug '+n.level,n.text); nd.appendChild(p); }); host.appendChild(nd);
     const pill=el('nOffice'); if(pill) pill.textContent=needs.filter(n=>n.level==='act').length||'';
     return;
   }
   /* one department */
-  const d=OFFICE_DESKS.find(x=>x.key===officeSel), s=st.by[d.key], DESK=d.name.toUpperCase();
-  const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' '+d.last+' · '+d.name)); hd.appendChild(officeH('span','sub',d.mail+' · '+d.sched));
+  const d=OFFICE_DESKS.find(x=>x.key===officeSel), s=st.by[d.key], DESK=d.key.toUpperCase();
+  const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' '+d.last+' · '+d.name)); hd.appendChild(officeH('span','sub',(d.lead||d.mail)+' · '+d.sched));
   const back=officeH('button',null,'◀ Office'); back.id='officeBack'; back.addEventListener('click',()=>officeSelect(d.key)); hd.appendChild(back); host.appendChild(hd);
   const stat=s.last?(s.cls==='ran'?'Ran '+sStamp(new Date(s.last.ms).toISOString())+'.':'Last ran '+sStamp(new Date(s.last.ms).toISOString())+', overdue.'):(d.ext?'Reports on GitHub, not here.':'Never logged a run.');
-  const intro=officeH('div','dsec'); intro.appendChild(officeH('p',null,d.role+' '+d.may+' '+stat)); host.appendChild(intro);
+  const intro=officeH('details','dsec');intro.appendChild(officeH('summary',null,'Responsibilities and last run'));intro.appendChild(officeH('p',null,d.role+' '+d.may+' '+stat));
+  if(d.key==='admin') renderChiefOfStaff(host,st);
+  else if(auth.currentUser && String(auth.currentUser.email||'').toLowerCase()==='tom@clearsky-usa.com'){const chat=officeH('section','dsec');host.appendChild(chat);renderOfficeConversation(chat,d);}
+  host.appendChild(intro);
   /* the week's plan: Ada's Sunday proposal, and the decision */
   const sec=officeH('div','dsec'); sec.appendChild(officeH('h4',null,'This week’s plan · '+st.week)); host.appendChild(sec);
   if(s.plan){
@@ -8682,9 +8991,11 @@ function renderOfficeSide(st){
     sec.appendChild(officeH('p',null,'No plan proposed for '+st.week+'. Ada writes one every Sunday at 7:05 PM and emails it to you; the desk runs its standing job until then.'));
   }
   /* a note to the desk */
-  const ns=officeH('div','dsec'); ns.appendChild(officeH('h4',null,'Tell '+d.who)); host.appendChild(ns);
+  const ns=officeH('div','dsec'); ns.appendChild(officeH('h4',null,'Next routine · instruction for '+d.who)); host.appendChild(ns);
+  if(d.key==='legal') ns.appendChild(officeH('p','officeHint','Shared intake: a short request or document reference only. Keep contract text and confidential legal advice in the private review channel.'));
+  if(d.key==='admin') ns.appendChild(officeH('p','officeHint','Shared with the office. Use the private capture above for personal matters.'));
   const na=officeH('div','dacts'); const ta=officeH('textarea'); ta.id='deskNote'; ta.placeholder='One instruction. '+d.who+' reads it before the next run and for seven days after.'; ta.maxLength=280; na.appendChild(ta);
-  const go=officeH('button',null,'Send'); go.id='deskNoteGo'; const nm=officeH('span','sMsg',''); go.addEventListener('click',()=>{ const w=ta.value.trim(); if(!w){ nm.textContent='Say what you want done.'; return; } officeLog('NOTE '+DESK+': '+w,nm).then(()=>{ ta.value=''; }); }); na.appendChild(go); na.appendChild(nm); ns.appendChild(na);
+  const go=officeH('button',null,'Save routine instruction'); go.id='deskNoteGo'; const nm=officeH('span','sMsg',''); go.addEventListener('click',()=>{ const w=ta.value.trim(); if(!w){ nm.textContent='Say what you want done.'; return; } officeLog('NOTE '+DESK+': '+w,nm).then(()=>{ ta.value=''; }); }); na.appendChild(go); na.appendChild(nm); ns.appendChild(na);
   if(s.notes.length){ const nl=officeH('div'); nl.id='deskNotes'; ns.appendChild(nl); listInto('deskNotes', s.notes, r=>({ time:sStamp(new Date(r.ms).toISOString()), left:r.text, right:r.by?String(r.by).split('@')[0]:'', clamp:true }), ''); }
   /* the numbers */
   const ps=officeH('div','dsec'); ps.appendChild(officeH('h4',null,'Performance · 7 and 30 days')); host.appendChild(ps);
@@ -8714,12 +9025,12 @@ function renderOfficeSide(st){
     const ap=officeH('a',null,'Approve signups ↗'); ap.href='/admin/'; ap.target='_blank'; ap.rel='noopener'; dl.appendChild(ap);
     const bk=officeH('a',null,cfg.demoLink?'Booking link ↗':'No booking link: Sales → Agent settings'); bk.href=cfg.demoLink||'#'; if(cfg.demoLink){ bk.target='_blank'; bk.rel='noopener'; } else bk.addEventListener('click',ev=>{ ev.preventDefault(); showView('sales'); }); dl.appendChild(bk);
   }
-  const mb=officeH('a',null,'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);
+  if(d.mail){const mb=officeH('a',null,d.key==='legal'?'Counsel correspondence ↗':'Mailbox ↗'); mb.href='https://mail.google.com/mail/u/0/#search/'+encodeURIComponent('to:'+d.mail); mb.target='_blank'; mb.rel='noopener'; dl.appendChild(mb);}
   const jn=officeH('a',null,'Job note ↗'); jn.href='https://github.com/clearskyenergy/jarvis/blob/main/agents/office/'+d.key+'.md'; jn.target='_blank'; jn.rel='noopener'; dl.appendChild(jn);
   if(d.key==='software'){ const pr=officeH('a',null,'Pull requests ↗'); pr.href=d.ext; pr.target='_blank'; pr.rel='noopener'; dl.appendChild(pr); const is=officeH('a',null,'Support issues ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='support'){ const is=officeH('a',null,'Issues it opened ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='billing'){ const qb=officeH('a',null,'QuickBooks ↗'); qb.href='https://app.qbo.intuit.com/app/invoices'; qb.target='_blank'; qb.rel='noopener'; dl.appendChild(qb); }
-  const rt=officeH('a',null,'Routine ↗'); rt.href='https://claude.ai/code'; rt.target='_blank'; rt.rel='noopener'; dl.appendChild(rt);
+  const rt=officeH('a',null,'Routine ↗'); rt.href='https://github.com/clearskyenergy/jarvis/blob/main/docs/OFFICE-RUNNER.md'; rt.target='_blank'; rt.rel='noopener'; dl.appendChild(rt);
   ds.appendChild(dl);
   /* the days */
   const ys=officeH('div','dsec'); ys.appendChild(officeH('h4',null,'Daily activities · 14 days')); host.appendChild(ys);
@@ -8733,15 +9044,225 @@ function renderOfficeSide(st){
     const k=officeH('span','k clamp',(SALES_KIND[r.kind]||r.kind)+': '+r.text); k.title='click to expand'; k.addEventListener('click',()=>k.classList.toggle('open')); row.appendChild(k); ys.appendChild(row);
   });
 }
+/* Office management uses the same authenticated sales API as the CRM. */
+let officeBook={agents:[],tasks:[]}, officeAccounts=[], officeMode='floor', officeBookError='';
+async function officeGet(view){
+  const token=await auth.currentUser.getIdToken();
+  const r=await fetch('/api/sales?view='+view,{headers:{Authorization:'Bearer '+token}});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||'Office request failed'); return j;
+}
+async function officeReadBook(){
+  try { const r=await Promise.all([officeGet('office'),officeGet('prospects&limit=500')]); officeBook=r[0]; officeAccounts=r[1].prospects; officeBookError=''; }
+  catch(e){ officeBookError=e.message; }
+}
+function officeButton(parent,label,fn){ const b=officeH('button','',label); b.type='button'; b.onclick=fn; parent.appendChild(b); return b; }
+function officeField(parent,label,value,type,options){
+  const wrap=officeH('label','officeField'), caption=officeH('span','',label); wrap.appendChild(caption);
+  const input=document.createElement(type==='textarea'?'textarea':options?'select':'input');
+  if(options) options.forEach(o=>{const opt=document.createElement('option');opt.value=o[0];opt.textContent=o[1];input.appendChild(opt);});
+  else if(type!=='textarea') input.type=type||'text';
+  input.value=value||(options&&options.length?options[0][0]:''); wrap.appendChild(input);parent.appendChild(wrap);return input;
+}
+function officeUid(){ return 'w-'+crypto.randomUUID(); }
+function officeDialog(title,build){
+  const dialog=document.createElement('dialog'); dialog.className='officeDialog'; const form=officeH('form');form.method='dialog';
+  form.appendChild(officeH('h2','',title)); const msg=officeH('p','officeFeedback');msg.setAttribute('role','status');
+  const close=officeH('button','officeClose','Close');close.type='button';close.onclick=()=>dialog.close();form.appendChild(close);
+  dialog.appendChild(form);document.body.appendChild(dialog);build(form,msg,dialog);form.appendChild(msg);
+  dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();return dialog;
+}
+async function officeWrite(body){return salesFetch({method:'POST',body:JSON.stringify(body)});}
+function officeAgentForm(agent){
+  const p=agent||{id:officeUid(),desk:'sales',enabled:true,cc:['mike@clearsky-usa.com','tom@clearsky-usa.com']};
+  officeDialog(agent?'Edit agent':'Add an agent',(form,msg,dialog)=>{
+    const name=officeField(form,'Agent name',p.name);name.required=true;
+    const desk=officeField(form,'Department',p.desk,null,[['sales','Sales / business development'],['marketing','Marketing']]);desk.disabled=!!agent;
+    const sender=officeField(form,'Existing mailbox (optional until connected)',p.sender,'email');
+    form.appendChild(officeH('p','officeHint','Dedicated agent inboxes require a connected email service. Entering an address does not create a mailbox.'));
+    if(p.mailbox) sender.disabled=true;
+    if(agent&&!p.mailbox) officeButton(form,'Create dedicated AgentMail inbox',async()=>{msg.textContent='Connecting…';try{await officeWrite({action:'office-mailbox',id:p.id});await officeReadBook();dialog.close();renderOffice();}catch(e){msg.textContent=e.message;}});
+    if(agent&&!p.mailbox){
+      const inbox=officeField(form,'AgentMail inbox ID or address already created','');
+      officeButton(form,'Connect existing AgentMail inbox',async()=>{if(!inbox.value.trim()){msg.textContent='Enter the existing inbox ID or address.';return;}msg.textContent='Verifying inbox…';try{await officeWrite({action:'office-mailbox',id:p.id,inboxId:inbox.value.trim()});await officeReadBook();dialog.close();renderOffice();}catch(e){msg.textContent=e.message;}});
+    }
+    const cc=officeField(form,'CC on account emails',p.cc.join(', '));
+    const instructions=officeField(form,'Responsibilities and working instructions',p.instructions,'textarea');
+    const enabled=officeField(form,'Assigned work',p.enabled?'yes':'no',null,[['yes','Active — picked up by department routine'],['no','Paused']]);
+    const save=officeButton(form,'Save agent',async()=>{
+      if(!form.reportValidity())return;save.disabled=true;msg.textContent='Saving…';
+      try{await officeWrite({action:'office-agent',id:p.id,name:name.value,desk:desk.value,sender:sender.value,cc:cc.value.split(',').map(x=>x.trim()).filter(Boolean),instructions:instructions.value,enabled:enabled.value==='yes'});await officeReadBook();dialog.close();renderOffice();}
+      catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+  });
+}
+function officeTaskForm(agent){
+  if(!officeBook.agents.length){officeAgentForm();return;}
+  officeDialog('Assign an activity',(form,msg,dialog)=>{
+    const taskId=officeUid();
+    const who=officeField(form,'Agent',agent&&agent.id,null,officeBook.agents.map(x=>[x.id,x.name+' · '+x.desk]));
+    const account=officeField(form,'CRM account','',null,officeAccounts.map(x=>[x.id,x.company||x.id]));
+    account.multiple=true;account.size=5;account.required=true;
+    form.appendChild(officeH('p','officeHint','Select one or more accounts. Use Command/Ctrl to select several.'));
+    officeButton(form,'Select all listed accounts',()=>{Array.from(account.options).forEach(o=>o.selected=true);});
+    const kind=officeField(form,'Activity','research',null,[['research','Research account'],['email-draft','Prepare an email'],['follow-up','Follow up on account'],['call','Call account — phone connection required']]);
+    const title=officeField(form,'Objective','');title.required=true;
+    const due=officeField(form,'Due date (Central time)',new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),'date');due.required=true;
+    const detail=officeField(form,'Context and expected outcome','','textarea');
+    form.appendChild(officeH('p','officeHint','Research and email preparation run with the department routine. Calls remain blocked until a calling service is connected.'));
+    const save=officeButton(form,'Assign activity',async()=>{
+      if(!form.reportValidity())return;save.disabled=true;
+      try{const selected=Array.from(account.selectedOptions);for(let i=0;i<selected.length;i++){msg.textContent='Assigning '+(i+1)+' of '+selected.length+'…';await officeWrite({action:'office-add-task',id:taskId+'-'+selected[i].index,agentId:who.value,prospectId:selected[i].value,kind:kind.value,title:title.value,due:due.value,instructions:detail.value});}await officeReadBook();dialog.close();officeMode='activities';renderOffice();}
+      catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+    if(!officeAccounts.length){save.disabled=true;msg.textContent='Add accounts to the CRM first.';}
+  });
+}
+function officeImport(){
+  officeDialog('Add accounts to the CRM',(form,msg,dialog)=>{
+    form.appendChild(officeH('p','officeHint','Paste rows from your account list, separated by tabs. Columns: Company, Website/domain, Contact name, Email, Phone. Up to 200 accounts.'));
+    const input=officeField(form,'Account rows','','textarea');input.rows=8;
+    const save=officeButton(form,'Import accounts',async()=>{
+      const lines=input.value.trim().split(/\r?\n/).filter(Boolean);if(lines.length&&/^company\t/i.test(lines[0]))lines.shift();if(!lines.length||lines.length>200){msg.textContent='Enter 1–200 account rows.';return;}
+      const prospects=lines.map(line=>{const c=line.split('\t');return {company:c[0],domain:c[1],contacts:[{name:c[2]||'',email:c[3]||'',phone:c[4]||''}]};});
+      save.disabled=true;try{const r=await officeWrite({action:'upsert-prospects',prospects});await officeReadBook();renderOffice();
+        if(r.errors&&r.errors.length){msg.textContent='Imported '+r.created.length+' new and '+r.updated.length+' existing accounts. Fix these rows: '+r.errors.map(x=>(x.index+1)+': '+x.error).join('; ');save.disabled=false;}
+        else dialog.close();
+      }catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+  });
+}
+function officeRecord(t){
+  officeDialog('Record activity outcome',(form,msg,dialog)=>{
+    form.appendChild(officeH('p','',t.title+' · '+t.prospectId));
+    const outcome=officeField(form,'What happened? Include the result and next step.','','textarea');outcome.required=true;
+    const save=officeButton(form,'Record completed activity',async()=>{
+      if(!form.reportValidity())return;save.disabled=true;
+      try{await officeWrite({action:'office-task',operation:'record',id:t.id,outcome:outcome.value});await officeReadBook();officeActs=await officeFetchActivity();dialog.close();renderOffice();}
+      catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+  });
+}
+function renderOfficeWorkspace(st){
+  const host=el('officeWorkspace');if(!host)return;host.textContent='';
+  const heading=officeH('div','officeHeading');heading.appendChild(officeH('h2','','Your office'));heading.appendChild(officeH('p','','People, accounts and the next action.'));host.appendChild(heading);
+  const actions=officeH('div','officeActions');officeButton(actions,'+ Add agent',()=>officeAgentForm());officeButton(actions,'+ Assign activity',()=>officeTaskForm());officeButton(actions,'Import accounts',officeImport);host.appendChild(actions);
+  const tabs=officeH('div','officeTabs');[['floor','Office map'],['team','Team'],['activities','Activities'],['accounts','Accounts']].forEach(x=>{const b=officeButton(tabs,x[1],()=>{officeMode=x[0];renderOffice();});b.setAttribute('aria-pressed',String(officeMode===x[0]));});host.appendChild(tabs);
+  const floor=el('officeFloor').parentElement;floor.hidden=officeMode!=='floor';
+  if(officeBook.capped)host.appendChild(officeH('p','officeFeedback','Showing the first 1,000 Office records. Older work may be outside this view.'));
+  if(officeAccounts.length>=500)host.appendChild(officeH('p','officeHint','Showing up to 500 CRM accounts.'));
+  if(officeBookError)host.appendChild(officeH('p','officeFeedback','Agent management unavailable: '+officeBookError));
+  if(officeMode==='floor')return;
+  if(officeMode==='team'){
+    const grid=officeH('div','officeCards');host.appendChild(grid);
+    OFFICE_DESKS.forEach(d=>{const s=st.by[d.key],card=officeH('article','officeCard');
+      const tag=officeH('span','officeBadge',s.last?'Last run '+sStamp(new Date(s.last.ms).toISOString()):'No run recorded');card.appendChild(tag);
+      card.appendChild(officeH('h3','',d.who+' '+d.last));card.appendChild(officeH('p','officeDepartment',d.name));if(d.lead)card.appendChild(officeH('p','',d.lead));card.appendChild(officeH('p','',d.role));card.appendChild(officeH('p','officeHint',d.sched+' · Central'));officeButton(card,'View desk',()=>officeSelect(d.key));grid.appendChild(card);});
+    officeBook.agents.forEach(p=>{const card=officeH('article','officeCard custom'),tasks=officeBook.tasks.filter(t=>t.agentId===p.id);
+      card.appendChild(officeH('span','officeBadge',p.enabled?'Active · '+p.desk+' routine':'Paused'));card.appendChild(officeH('h3','',p.name));card.appendChild(officeH('p','officeDepartment',p.desk==='sales'?'Business development':'Marketing'));card.appendChild(officeH('p','',p.instructions||'Add responsibilities to guide this agent.'));card.appendChild(officeH('p','officeHint',p.sender||'Mailbox not connected'));card.appendChild(officeH('p','officeHint',tasks.filter(t=>t.status!=='completed').length+' open activities · CC '+p.cc.join(', ')));officeButton(card,'Edit agent',()=>officeAgentForm(p));officeButton(card,'Assign work',()=>officeTaskForm(p));grid.appendChild(card);});
+  }else if(officeMode==='activities'){
+    if(!officeBook.tasks.length)host.appendChild(officeH('p','officeEmpty','No assigned activities yet. Add an agent, import your accounts, then assign work.'));
+    officeBook.tasks.slice().sort((a,b)=>a.due.localeCompare(b.due)).forEach(t=>{const row=officeH('article','officeWorkRow'),p=officeBook.agents.find(a=>a.id===t.agentId);
+      row.appendChild(officeH('span','officeBadge',t.status.replace('_',' ')));row.appendChild(officeH('h3','',t.title));row.appendChild(officeH('p','',(p?p.name:t.agentId)+' · '+t.prospectId+' · Due '+t.due));if(t.outcome)row.appendChild(officeH('p','',t.outcome));
+      if(['queued','blocked','needs_review'].includes(t.status))officeButton(row,'Record outcome',()=>officeRecord(t));host.appendChild(row);});
+  }else{
+    const search=officeField(host,'Find an account','','search'),list=officeH('div');host.appendChild(list);
+    function draw(){list.textContent='';officeAccounts.filter(p=>(p.company+' '+p.id).toLowerCase().includes(search.value.toLowerCase())).forEach(p=>{const row=officeH('article','officeWorkRow');row.appendChild(officeH('h3','',p.company||p.id));row.appendChild(officeH('p','',p.id+' · '+(p.stage||'target')));(p.contacts||[]).forEach(c=>row.appendChild(officeH('p','officeHint',[c.name,c.email,c.phone].filter(Boolean).join(' · '))));if(p.next)row.appendChild(officeH('p','',p.next.action+' · '+(p.next.due||'')));list.appendChild(row);});if(!list.children.length)list.appendChild(officeH('p','officeEmpty','No matching accounts. Import your target list to get started.'));}search.oninput=draw;draw();
+  }
+}
+
+/* Personal data comes only from the owner-only twin endpoint, never sales_config.
+   This is a compact view of existing records, not a new financial data store. */
+const officeConversations={};
+function renderOfficeConversation(sec,d){
+  sec.classList.add('officeChat');
+  const ada=d.key==='admin',name=ada?'Ada':d.who,prefix=ada?'ada':'colleague';
+  const endpoint=ada?'/ada':'/office/'+d.key;
+  const state=officeConversations[d.key]||(officeConversations[d.key]={items:[],draft:'',pending:false,status:'',loaded:false});
+  sec.appendChild(officeH('h4',null,'Talk with '+name));
+  sec.appendChild(officeH('p','officeHint','A separate conversation on your Mac. Ask for an update, work through a decision, or give a specific next step.'));
+  const log=officeH('div','adaConversation');log.id=prefix+'Conversation';log.setAttribute('role','log');log.setAttribute('aria-live','polite');sec.appendChild(log);
+  const starters=officeH('div','dacts officeChatStarters');sec.appendChild(starters);
+  const prompts=ada?['What needs my attention today?','Help me plan my day','Review my upcoming bills']:['What are you working on?','What needs my decision?','Help me with a new assignment'];
+  prompts.forEach(prompt=>officeButton(starters,prompt,()=>{if(!state.pending){state.draft=prompt;input.value=prompt;input.focus();}}));
+  const label=officeH('label',null,'Message '+name);label.htmlFor=prefix+'Message';sec.appendChild(label);
+  const input=officeH('textarea');input.id=prefix+'Message';input.maxLength=4000;input.placeholder='Message '+name+'…';input.value=state.draft;input.oninput=()=>{state.draft=input.value;};sec.appendChild(input);
+  const status=officeH('p','officeHint');status.id=prefix+'ChatStatus';status.setAttribute('role','status');sec.appendChild(status);
+  const actions=officeH('div','dacts');sec.appendChild(actions);
+  const send=officeButton(actions,'Send to '+name,async()=>{
+    const text=state.draft.trim();if(!text||state.pending)return;
+    state.pending=true;state.status=name+' is working…';state.items.push({role:'user',text});state.paint();
+    const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),610000);
+    try{
+      // Do not copy Jarvis's personal dashboard context into department conversations.
+      const response=await fetch(BRAIN+endpoint+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:controller.signal});
+      const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'The conversation service is unavailable.');
+      state.items.push({role:'assistant',text:result.text});state.draft='';state.status='Answered through '+(result.provider||'Jarvis')+(result.fallback?' · fallback used':'')+'.';
+    }catch(e){state.status='No confirmed answer: '+e.message+' Check history or the terminal before resending; work may have started.';}
+    finally{clearTimeout(timer);state.pending=false;state.paint();}
+  });
+  input.addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();send.click();}});
+  if(ada){const terminal=officeH('a','sbtn','Open Ada terminal ↗');terminal.href='http://127.0.0.1:7682';terminal.target='_blank';terminal.rel='noopener';terminal.id='adaTerminal';actions.appendChild(terminal);}
+  sec.appendChild(officeH('p','officeHint','⌘ / Ctrl + Enter to send. For the next scheduled run, use the routine instruction below.'));
+  state.paint=()=>{
+    if(!sec.isConnected)return;
+    log.textContent='';state.items.forEach(item=>{const p=officeH('p',item.role==='user'?'officeChatUser':'officeChatReply');p.appendChild(officeH('strong',null,(item.role==='user'?'You':name)+': '));p.appendChild(document.createTextNode(item.text));log.appendChild(p);});
+    log.scrollTop=log.scrollHeight;status.textContent=state.status;input.disabled=state.pending;send.disabled=state.pending;input.value=state.draft;
+  };
+  state.paint();
+  if(!state.loaded){state.loaded=true;
+    fetch(BRAIN+endpoint+'/history',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(data=>{
+      if(!state.pending&&!state.items.length)state.items=data.items||[];state.paint();
+    }).catch(()=>{state.loaded=false;if(!state.pending&&!state.items.length){state.status='Chat needs Jarvis running on your Mac. On a phone, this local connection is unavailable. Your message has not been sent.';state.paint();}});
+  }
+}
+function renderAdaConversation(sec){renderOfficeConversation(sec,OFFICE_DESKS.find(d=>d.key==='admin'));}
+
+function renderChiefOfStaff(host,st){
+  const sec=officeH('section','dsec');sec.id='chiefOfStaff';host.appendChild(sec);
+  const owner=auth.currentUser && String(auth.currentUser.email||'').toLowerCase()==='tom@clearsky-usa.com';
+  if(!owner){sec.appendChild(officeH('p','officeHint','Personal brief is available to Thomas in his private twin.'));return;}
+  renderAdaConversation(sec);
+  sec.appendChild(officeH('h4',null,'Your short brief'));
+  sec.appendChild(officeH('p','officeHint','From your private task list and calendar, plus recorded department work. This view does not run or delegate tasks.'));
+  function section(title,items,empty){
+    sec.appendChild(officeH('h4',null,title));
+    if(!items.length){sec.appendChild(officeH('p','officeHint',empty));return;}
+    const list=officeH('ol');items.slice(0,3).forEach(text=>list.appendChild(officeH('li',null,text)));sec.appendChild(list);
+  }
+  const priorities=triaged.filter(r=>!r.noise&&!r.dupeOf).sort((a,b)=>b.score-a.score).slice(0,3);
+  section('Focus · up to three',priorities.map(r=>r.t.title),'No priorities in the loaded task list. Open Tasks to refresh or capture one below.');
+  const approvals=[],handoffs=[];
+  OFFICE_DESKS.forEach(d=>{st.by[d.key].approvals.forEach(r=>approvals.push(r));st.by[d.key].handoffs.forEach(r=>handoffs.push(r));});
+  approvals.sort((a,b)=>a.ms-b.ms);handoffs.sort((a,b)=>a.ms-b.ms);
+  section('Decisions for you',approvals.map(r=>'#'+r.approval.id+' — '+r.approval.text),'No open decisions in the loaded office records.');
+  section('Department follow-through',handoffs.map(r=>r.desk+' → '+r.handoff.to+': '+r.handoff.text),'No handoffs in the loaded office records.');
+  const next=(lastStatus.schedule||[]).filter(e=>new Date(e.startsAt).getTime()>Date.now()).sort((a,b)=>new Date(a.startsAt)-new Date(b.startsAt))[0];
+  if(next)sec.appendChild(officeH('p',null,'Next: '+next.title+' · '+sStamp(next.startsAt)));
+  const links=officeH('div','dacts');sec.appendChild(links);
+  officeButton(links,'All tasks',()=>showView('tasks'));officeButton(links,'My calendar',()=>showView('calendar'));
+  const details=officeH('details');details.appendChild(officeH('summary',null,'Personal finances · source setup needed'));
+  details.appendChild(officeH('p',null,'Pay / verify: upcoming bills and payment evidence. Reserve / save: cash needed for obligations and your savings goals. Earn / review: one income, debt or capital decision. Household money stays separate from ClearSky cash.'));
+  details.appendChild(officeH('p','officeHint','Household inbox, accounts and targets have not been confirmed. Ada cannot yet verify that every bill is covered or calculate available surplus. Connect or identify the source first; payments and account changes require your action.'));sec.appendChild(details);
+  const label=officeH('label',null,'Private capture for Ada');label.htmlFor='chiefCapture';sec.appendChild(label);
+  const input=officeH('textarea');input.id='chiefCapture';input.maxLength=280;input.placeholder='One next step, with a due date if needed';sec.appendChild(input);
+  const msg=officeH('p','sMsg');msg.setAttribute('role','status');
+  const save=officeButton(sec,'Add to my private tasks',async()=>{
+    const title=input.value.trim();if(!title){msg.textContent='Add a next step first.';return;}save.disabled=true;
+    try{const t=await token();const r=await fetch(CHAT+'/task',{method:'POST',headers:{Authorization:'Bearer '+t,'Content-Type':'application/json'},body:JSON.stringify({title:'Ada: '+title,urgency:'queue'})});const j=await r.json();if(!r.ok)throw new Error(j.error||'Task not saved');input.value='';msg.textContent='Added to your private task queue. It has not been executed.';load();}
+    catch(e){msg.textContent='Not saved: '+e.message;}finally{save.disabled=false;}
+  });sec.appendChild(msg);
+}
+
 function renderOffice(){
   const st=officeState();
   renderOfficeFloor(st);
   renderOfficeSide(st);
+  renderOfficeWorkspace(st);
   const ran=OFFICE_DESKS.filter(d=>st.by[d.key].cls==='ran').length;
   const waiting=OFFICE_DESKS.filter(d=>st.by[d.key].plan && st.by[d.key].plan.plan.status==='proposed').length;
   const note=el('officeNote');
-  if(note) note.textContent='As of '+sStamp(new Date(officeAt||Date.now()).toISOString())+'. '+ran+' of '+OFFICE_DESKS.length+' desks ran on schedule'+(waiting?'; '+waiting+' plan'+(waiting===1?'':'s')+' for '+st.week+' waiting for your approval':'')+'. '
-    +'Every desk is a Claude Code Routine in claude.ai; the job notes are jarvis/agents/office. Sales and Marketing send; the rest prepare. Click a room.';
+  if(note) note.textContent='As of '+sStamp(new Date(officeAt||Date.now()).toISOString())+'. '+ran+' of '+OFFICE_DESKS.length+' desks have a recent recorded run'+(waiting?'; '+waiting+' plan'+(waiting===1?'':'s')+' for '+st.week+' waiting for your approval':'')+'. '
+    +'Routines use Jarvis’s shared provider switch. Agent profiles and assigned work share the CRM. Last-run times come from the activity log.';
 }
 
 /* ── the platform ────────────────────────────────────────────────────────
@@ -9646,7 +10167,7 @@ const IX_VIEWS=[
   ['platform','Platform','OMEGA, and the stone'],
   ['brain','Brain','how it all connects'],
   ['board','Board','post-its for the loose thinking'],
-  ['office','Office','the six teams: what each ran, what it may send'],
+  ['office','Office','the departments: people, work and decisions'],
   ['trading','Trading City','the paper-trading bots, on this Mac — fake money'],
   ['openwork','Open work','Active Priorities and Decisions, from the vault'],
   ['messages','Messages','your iMessage threads, and a reply box'],

@@ -45,6 +45,7 @@ var K = require('./_lib/agent-auth');
 var S = require('./_lib/sales');
 var G = require('./_lib/growth');
 var B = require('./_lib/growth-board');
+var O = require('./_lib/office-roster');
 
 var MAX_PROSPECTS = 5000, MAX_ACTIVITY = 1000, MAX_SUPPRESSED = 5000;
 var MAX_UPSERT = 200, MAX_LOG = 100, MAX_SCREEN = 200, MAX_CANDIDATES = 500;
@@ -428,6 +429,7 @@ module.exports = A.handler(function (req) {
         });
       }
       var view = String(q.view || '');
+      if (view === 'office') return O.list(db);
       if (view === 'agent') return agentPacket(db, now);
       if (view === 'prospects') {
         return loadProspects(db).then(function (list) {
@@ -464,6 +466,11 @@ module.exports = A.handler(function (req) {
   return K.staffOrAgent(req, readOnly ? 'sales:read' : 'sales:write').then(function (caller) {
     var db = A.db();
     if (action === 'sales-owner') return require('./_lib/sales-ownership').save(db, caller, b, now);
+    if (action === 'office-mail') return require('./_lib/office-mail').activity(db, caller, b);
+    if (action === 'office-mailbox') return require('./_lib/office-mail').provision(db, caller, b);
+    if (action === 'office-agent') return O.save(db, caller, b, now);
+    if (action === 'office-add-task') return O.addTask(db, caller, b, now);
+    if (action === 'office-task') return O.transition(db, caller, b, now);
     if (action === 'upsert-prospects') return upsertProspects(db, caller, b, now);
     if (action === 'log') return logEntries(db, caller, b, now);
     if (action === 'upsert-candidates') return upsertCandidates(db, caller, b, now);
