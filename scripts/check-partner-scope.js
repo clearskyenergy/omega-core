@@ -55,7 +55,8 @@ var CLEARSKY = [
    than as a silent hole. */
 var CLEARSKY_GIT_EMAILS = [
   'tom@clearsky-usa.com',
-  'noreply@anthropic.com'
+  'noreply@anthropic.com',
+  'clearskyenergy@users.noreply.github.com'
 ];
 
 /* ── Identities allowed as a COMMITTER but never as an AUTHOR ─────────────
