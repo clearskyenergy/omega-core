@@ -228,6 +228,19 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     ok(/proposed/.test(dr.text) && /3 demos booked/.test(dr.text), 'the week\'s proposed plan is shown', dr.text.slice(0, 600));
     ok(/Runs · 7d1 of 5/.test(dr.text) && /Runs · 30d1 of 2[0-3]/.test(dr.text), 'the numbers: one run of the five a week expected', dr.text.slice(0, 900));
     ok(/Switch the agent off/.test(dr.text) && /Mailbox/.test(dr.text) && /Job note/.test(dr.text), 'the decisions: the switch and the doors', dr.text.slice(-500));
+    var noraRequest;
+    await page.route('**/office/sales/ask',function(route){noraRequest=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true,text:'I have your sales assignment. No email has been sent.',provider:'chatgpt'})});});
+    var beforeChat=db.data.size;
+    await page.getByRole('button',{name:'What needs my decision?',exact:true}).click();
+    ok(await page.inputValue('#colleagueMessage')==='What needs my decision?','quick prompts prepare a message without executing work');
+    await page.fill('#colleagueMessage','Review my target accounts');
+    await page.getByRole('button',{name:'Send to Nora',exact:true}).click();
+    await page.waitForFunction(function(){return /sales assignment/.test(document.getElementById('colleagueConversation').textContent);});
+    ok(noraRequest.text==='Review my target accounts'&&!noraRequest.context&&db.data.size===beforeChat,'desk chat does not leak personal dashboard context or write a shared routine note');
+    await page.click('#officeFloor g.room[data-desk="marketing"]');
+    ok(!/sales assignment/.test(await page.textContent('#colleagueConversation')),'Mila does not inherit Nora conversation');
+    await page.click('#officeFloor g.room[data-desk="sales"]');
+    ok(/sales assignment/.test(await page.textContent('#colleagueConversation')),'Nora conversation survives changing desks');
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-drawer-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
     if (vp.name === 'desktop') {
       await page.click('#planApprove');

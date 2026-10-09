@@ -1750,7 +1750,7 @@ body.officeReading::before{display:none!important}
 #chiefOfStaff ol{padding-left:22px;margin:10px 0 18px;list-style:decimal}
 #chiefOfStaff li{padding:0 0 8px;line-height:1.6}
 #chiefOfStaff details{margin:16px 0}#chiefOfStaff summary{cursor:pointer;line-height:1.6}
-.adaConversation{max-height:260px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.adaConversation:empty{display:none}
+.adaConversation{max-height:360px;min-height:90px;overflow:auto;border:1px solid var(--line);border-radius:8px;padding:10px;margin:10px 0;white-space:pre-wrap;overflow-wrap:anywhere}.adaConversation:empty{display:none}.adaConversation p{padding:12px 14px;margin:6px 0;border-radius:12px;line-height:1.6}.officeChatUser{background:rgba(104,196,220,.12);margin-left:20px!important}.officeChatReply{background:rgba(130,150,180,.09);margin-right:12px!important}.officeChat label{display:block;margin:12px 0 8px}.officeChat textarea{display:block;box-sizing:border-box;width:100%;min-height:100px;resize:vertical;background:var(--bg);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:14px;font:inherit;line-height:1.5}.officeChat textarea:focus{outline:2px solid var(--cyan);outline-offset:2px}.officeChatStarters{margin:12px 0}.officeChatStarters button{text-transform:none;letter-spacing:0}
 
 /* Office visual refresh: dimensional scene, quiet light, legible controls. */
 [data-view="office"] .floorPanel.panel{background:linear-gradient(145deg,#122535 0%,#0b1726 60%,#152034 100%)!important;border:1px solid #365366!important;border-radius:18px;box-shadow:0 18px 48px #03091250!important}
@@ -8957,8 +8957,10 @@ function renderOfficeSide(st){
   const hd=officeH('div','drawerHead'); hd.appendChild(officeH('span','big',d.who+' '+d.last+' · '+d.name)); hd.appendChild(officeH('span','sub',(d.lead||d.mail)+' · '+d.sched));
   const back=officeH('button',null,'◀ Office'); back.id='officeBack'; back.addEventListener('click',()=>officeSelect(d.key)); hd.appendChild(back); host.appendChild(hd);
   const stat=s.last?(s.cls==='ran'?'Ran '+sStamp(new Date(s.last.ms).toISOString())+'.':'Last ran '+sStamp(new Date(s.last.ms).toISOString())+', overdue.'):(d.ext?'Reports on GitHub, not here.':'Never logged a run.');
-  const intro=officeH('div','dsec'); intro.appendChild(officeH('p',null,d.role+' '+d.may+' '+stat)); host.appendChild(intro);
+  const intro=officeH('details','dsec');intro.appendChild(officeH('summary',null,'Responsibilities and last run'));intro.appendChild(officeH('p',null,d.role+' '+d.may+' '+stat));
   if(d.key==='admin') renderChiefOfStaff(host,st);
+  else if(auth.currentUser && String(auth.currentUser.email||'').toLowerCase()==='tom@clearsky-usa.com'){const chat=officeH('section','dsec');host.appendChild(chat);renderOfficeConversation(chat,d);}
+  host.appendChild(intro);
   /* the week's plan: Ada's Sunday proposal, and the decision */
   const sec=officeH('div','dsec'); sec.appendChild(officeH('h4',null,'This week’s plan · '+st.week)); host.appendChild(sec);
   if(s.plan){
@@ -8983,11 +8985,11 @@ function renderOfficeSide(st){
     sec.appendChild(officeH('p',null,'No plan proposed for '+st.week+'. Ada writes one every Sunday at 7:05 PM and emails it to you; the desk runs its standing job until then.'));
   }
   /* a note to the desk */
-  const ns=officeH('div','dsec'); ns.appendChild(officeH('h4',null,d.key==='admin'?'Department instruction for Ada':'Tell '+d.who)); host.appendChild(ns);
+  const ns=officeH('div','dsec'); ns.appendChild(officeH('h4',null,'Next routine · instruction for '+d.who)); host.appendChild(ns);
   if(d.key==='legal') ns.appendChild(officeH('p','officeHint','Shared intake: a short request or document reference only. Keep contract text and confidential legal advice in the private review channel.'));
   if(d.key==='admin') ns.appendChild(officeH('p','officeHint','Shared with the office. Use the private capture above for personal matters.'));
   const na=officeH('div','dacts'); const ta=officeH('textarea'); ta.id='deskNote'; ta.placeholder='One instruction. '+d.who+' reads it before the next run and for seven days after.'; ta.maxLength=280; na.appendChild(ta);
-  const go=officeH('button',null,'Send'); go.id='deskNoteGo'; const nm=officeH('span','sMsg',''); go.addEventListener('click',()=>{ const w=ta.value.trim(); if(!w){ nm.textContent='Say what you want done.'; return; } officeLog('NOTE '+DESK+': '+w,nm).then(()=>{ ta.value=''; }); }); na.appendChild(go); na.appendChild(nm); ns.appendChild(na);
+  const go=officeH('button',null,'Save routine instruction'); go.id='deskNoteGo'; const nm=officeH('span','sMsg',''); go.addEventListener('click',()=>{ const w=ta.value.trim(); if(!w){ nm.textContent='Say what you want done.'; return; } officeLog('NOTE '+DESK+': '+w,nm).then(()=>{ ta.value=''; }); }); na.appendChild(go); na.appendChild(nm); ns.appendChild(na);
   if(s.notes.length){ const nl=officeH('div'); nl.id='deskNotes'; ns.appendChild(nl); listInto('deskNotes', s.notes, r=>({ time:sStamp(new Date(r.ms).toISOString()), left:r.text, right:r.by?String(r.by).split('@')[0]:'', clamp:true }), ''); }
   /* the numbers */
   const ps=officeH('div','dsec'); ps.appendChild(officeH('h4',null,'Performance · 7 and 30 days')); host.appendChild(ps);
@@ -9164,31 +9166,50 @@ function renderOfficeWorkspace(st){
 
 /* Personal data comes only from the owner-only twin endpoint, never sales_config.
    This is a compact view of existing records, not a new financial data store. */
-function renderAdaConversation(sec){
-  sec.appendChild(officeH('h4',null,'Talk with Ada'));
-  sec.appendChild(officeH('p','officeHint','Your own conversation with Ada, on this Mac. She uses Jarvis’s connected tools and provider setting. For terminal work, open her authenticated terminal.'));
-  const log=officeH('div','adaConversation');log.id='adaConversation';log.setAttribute('role','log');log.setAttribute('aria-live','polite');sec.appendChild(log);
-  function line(role,text){const p=officeH('p');p.appendChild(officeH('strong',null,(role==='user'?'You':'Ada')+': '));p.appendChild(document.createTextNode(text));log.appendChild(p);log.scrollTop=log.scrollHeight;}
-  const label=officeH('label',null,'Message Ada');label.htmlFor='adaMessage';sec.appendChild(label);
-  const input=officeH('textarea');input.id='adaMessage';input.maxLength=4000;input.placeholder='Talk to Ada about your day, finances or next step';sec.appendChild(input);
-  const status=officeH('p','officeHint');status.id='adaChatStatus';status.setAttribute('role','status');sec.appendChild(status);
+const officeConversations={};
+function renderOfficeConversation(sec,d){
+  sec.classList.add('officeChat');
+  const ada=d.key==='admin',name=ada?'Ada':d.who,prefix=ada?'ada':'colleague';
+  const endpoint=ada?'/ada':'/office/'+d.key;
+  const state=officeConversations[d.key]||(officeConversations[d.key]={items:[],draft:'',pending:false,status:'',loaded:false});
+  sec.appendChild(officeH('h4',null,'Talk with '+name));
+  sec.appendChild(officeH('p','officeHint','A separate conversation on your Mac. Ask for an update, work through a decision, or give a specific next step.'));
+  const log=officeH('div','adaConversation');log.id=prefix+'Conversation';log.setAttribute('role','log');log.setAttribute('aria-live','polite');sec.appendChild(log);
+  const starters=officeH('div','dacts officeChatStarters');sec.appendChild(starters);
+  const prompts=ada?['What needs my attention today?','Help me plan my day','Review my upcoming bills']:['What are you working on?','What needs my decision?','Help me with a new assignment'];
+  prompts.forEach(prompt=>officeButton(starters,prompt,()=>{if(!state.pending){state.draft=prompt;input.value=prompt;input.focus();}}));
+  const label=officeH('label',null,'Message '+name);label.htmlFor=prefix+'Message';sec.appendChild(label);
+  const input=officeH('textarea');input.id=prefix+'Message';input.maxLength=4000;input.placeholder='Message '+name+'…';input.value=state.draft;input.oninput=()=>{state.draft=input.value;};sec.appendChild(input);
+  const status=officeH('p','officeHint');status.id=prefix+'ChatStatus';status.setAttribute('role','status');sec.appendChild(status);
   const actions=officeH('div','dacts');sec.appendChild(actions);
-  let pending=false;
-  const send=officeButton(actions,'Send to Ada',async()=>{
-    const text=input.value.trim();if(!text||pending)return;pending=true;send.disabled=true;input.disabled=true;status.textContent='Ada is working…';line('user',text);
+  const send=officeButton(actions,'Send to '+name,async()=>{
+    const text=state.draft.trim();if(!text||state.pending)return;
+    state.pending=true;state.status=name+' is working…';state.items.push({role:'user',text});state.paint();
     const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),610000);
     try{
-      const response=await fetch(BRAIN+'/ada/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text,context:brainContext()}),signal:controller.signal});
-      const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'Ada is unavailable. Update/restart Jarvis on this Mac.');
-      line('assistant',result.text);input.value='';status.textContent='Answered through '+(result.provider||'Jarvis')+(result.fallback?' · fallback used':'')+'.';
-    }catch(e){status.textContent='No confirmed answer: '+e.message+' Check the conversation or terminal before resending; work may have started.';}
-    finally{clearTimeout(timer);pending=false;send.disabled=false;input.disabled=false;}
+      // Do not copy Jarvis's personal dashboard context into department conversations.
+      const response=await fetch(BRAIN+endpoint+'/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text}),signal:controller.signal});
+      const result=await response.json();if(!response.ok||!result.ok)throw new Error(result.error||'The conversation service is unavailable.');
+      state.items.push({role:'assistant',text:result.text});state.draft='';state.status='Answered through '+(result.provider||'Jarvis')+(result.fallback?' · fallback used':'')+'.';
+    }catch(e){state.status='No confirmed answer: '+e.message+' Check history or the terminal before resending; work may have started.';}
+    finally{clearTimeout(timer);state.pending=false;state.paint();}
   });
-  const terminal=officeH('a','sbtn','Open Ada terminal ↗');terminal.href='http://127.0.0.1:7682';terminal.target='_blank';terminal.rel='noopener';terminal.id='adaTerminal';actions.appendChild(terminal);
-  fetch(BRAIN+'/ada/history',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(data=>{
-    if(!pending&&!log.children.length)(data.items||[]).forEach(item=>line(item.role,item.text));
-  }).catch(()=>{if(!pending)status.textContent='Ada needs the updated Jarvis service on this Mac. Your message has not been sent.';});
+  input.addEventListener('keydown',event=>{if(event.key==='Enter'&&(event.metaKey||event.ctrlKey)){event.preventDefault();send.click();}});
+  if(ada){const terminal=officeH('a','sbtn','Open Ada terminal ↗');terminal.href='http://127.0.0.1:7682';terminal.target='_blank';terminal.rel='noopener';terminal.id='adaTerminal';actions.appendChild(terminal);}
+  sec.appendChild(officeH('p','officeHint','⌘ / Ctrl + Enter to send. For the next scheduled run, use the routine instruction below.'));
+  state.paint=()=>{
+    if(!sec.isConnected)return;
+    log.textContent='';state.items.forEach(item=>{const p=officeH('p',item.role==='user'?'officeChatUser':'officeChatReply');p.appendChild(officeH('strong',null,(item.role==='user'?'You':name)+': '));p.appendChild(document.createTextNode(item.text));log.appendChild(p);});
+    log.scrollTop=log.scrollHeight;status.textContent=state.status;input.disabled=state.pending;send.disabled=state.pending;input.value=state.draft;
+  };
+  state.paint();
+  if(!state.loaded){state.loaded=true;
+    fetch(BRAIN+endpoint+'/history',{cache:'no-store'}).then(r=>{if(!r.ok)throw new Error('unavailable');return r.json();}).then(data=>{
+      if(!state.pending&&!state.items.length)state.items=data.items||[];state.paint();
+    }).catch(()=>{state.loaded=false;if(!state.pending&&!state.items.length){state.status='Chat needs Jarvis running on your Mac. On a phone, this local connection is unavailable. Your message has not been sent.';state.paint();}});
+  }
 }
+function renderAdaConversation(sec){renderOfficeConversation(sec,OFFICE_DESKS.find(d=>d.key==='admin'));}
 
 function renderChiefOfStaff(host,st){
   const sec=officeH('section','dsec');sec.id='chiefOfStaff';host.appendChild(sec);
