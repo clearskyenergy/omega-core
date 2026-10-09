@@ -8620,8 +8620,8 @@ const OFFICE_DESKS=[
    role:'A/R aging and open invoices from QuickBooks, billing questions answered, reminders at 7 and 14 days, and the weekly P&L to Thomas on Monday.',
    may:'Sends the first two reminders. 30+ days, a dispute, a refund or a credit waits for Thomas’s APPROVE. Never changes an invoice, never charges a card.', sends:true, tools:'QuickBooks · Gmail'},
   {key:'admin', name:'Chief of Staff', who:'Ada', last:'Lindqvist', mail:'admin@clearsky-usa.com', sched:'weekdays 7:35 · Sun 7:05 PM', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:9,y:12,w:7,d:5},
-   role:'Your day, your priorities, and the follow-through across every department. Ada turns open work into a short brief and prepares the weekly plan.',
-   may:'Three priorities, decisions for you, and delegated next steps. Household finances await a connected source.', tools:'Private twin · Gmail · Google Calendar · Office reports'},
+   role:'Your day, personal finances, and follow-through across every department. Ada keeps the brief short: bills to verify, cash to reserve, and the next income or savings action.',
+   may:'Weekday money check, Monday review and Friday look-ahead. Household sources must be verified; scheduled payments are not confirmed payments. You approve transactions.', tools:'Private twin · Gmail · Google Calendar · Office reports'},
   {key:'legal', name:'Legal', who:'Legal', last:'assistant', lead:'Scott Henry · General Counsel', mail:'scott@clearsky-usa.com', sched:'weekdays 9:05', days:[1,2,3,4,5], perDay:1, grace:30, room:{x:1,y:17,w:7,d:5},
    role:'Sends approved standard NDAs, reads contracts before you sign, and gives you short feedback with the changes and decisions that matter.',
    may:'If a real lawyer is needed, the assistant sends you the proposed referral for approval first. Only after your approval does it send that packet to Scott Henry at scott@clearsky-usa.com. It never signs or accepts terms for you. Sending needs an available authorized email connection.', tools:'Office intake · Gmail · Google Drive'}
@@ -9070,9 +9070,9 @@ function renderChiefOfStaff(host,st){
   if(next)sec.appendChild(officeH('p',null,'Next: '+next.title+' · '+sStamp(next.startsAt)));
   const links=officeH('div','dacts');sec.appendChild(links);
   officeButton(links,'All tasks',()=>showView('tasks'));officeButton(links,'My calendar',()=>showView('calendar'));
-  const details=officeH('details');details.appendChild(officeH('summary',null,'Wealth and household goals · setup needed'));
-  details.appendChild(officeH('p',null,'ClearSky: revenue, cash collection and business value. Household: income, bills, debt, savings, assets and creditworthiness.'));
-  details.appendChild(officeH('p','officeHint','No household financial source is connected here yet. Balances, due dates and progress will remain unknown until verified. Payments and account changes require your action.'));sec.appendChild(details);
+  const details=officeH('details');details.appendChild(officeH('summary',null,'Personal finances · source setup needed'));
+  details.appendChild(officeH('p',null,'Pay / verify: upcoming bills and payment evidence. Reserve / save: cash needed for obligations and your savings goals. Earn / review: one income, debt or capital decision. Household money stays separate from ClearSky cash.'));
+  details.appendChild(officeH('p','officeHint','Household inbox, accounts and targets have not been confirmed. Ada cannot yet verify that every bill is covered or calculate available surplus. Connect or identify the source first; payments and account changes require your action.'));sec.appendChild(details);
   const label=officeH('label',null,'Private capture for Ada');label.htmlFor='chiefCapture';sec.appendChild(label);
   const input=officeH('textarea');input.id='chiefCapture';input.maxLength=280;input.placeholder='One next step, with a due date if needed';sec.appendChild(input);
   const msg=officeH('p','sMsg');msg.setAttribute('role','status');
