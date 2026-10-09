@@ -137,7 +137,7 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
 (async function () {
   await new Promise(function (r) { server.listen(0, '127.0.0.1', r); });
   var port = server.address().port, base = 'http://127.0.0.1:' + port;
-  var browser = await chromium.launch();
+  var browser = await chromium.launch(process.env.CHROME_PATH ? {executablePath:process.env.CHROME_PATH} : {});
   for (var vp of [{ name: 'desktop', width: 1440, height: 1000 }, { name: 'phone', width: 390, height: 844 }]) {
     reset();   /* each viewport starts from the same book */
     var page = await browser.newPage({ viewport: { width: vp.width, height: vp.height } });
@@ -156,6 +156,13 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     await page.goto(base + '/mission.html?view=sales', { waitUntil: 'load' });
     await page.waitForSelector('#salesTiles .lTile', { timeout: 15000 }).catch(function () {});
     await page.waitForTimeout(400);
+    var reading = await page.evaluate(function(){ return {mode:document.documentElement.dataset.reading,overlay:getComputedStyle(document.body,'::before').display,font:getComputedStyle(document.querySelector('.navItem')).fontSize}; });
+    ok(reading.mode==='calm'&&reading.overlay==='none'&&parseFloat(reading.font)>=15,'Comfort defaults to readable text with no scanlines',reading);
+    await page.click('#readingToggle');
+    await page.reload({waitUntil:'load'});
+    await page.waitForSelector('#salesTiles .lTile');
+    ok(await page.evaluate(function(){return document.documentElement.dataset.reading==='cinematic';}),'reading choice survives reload');
+    await page.click('#readingToggle');
     var v = await page.evaluate(function () {
       function t(sel) { var e = document.querySelector(sel); return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
       var first = document.querySelector('#salesToday .sItem');
@@ -185,10 +192,10 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     if (vp.name === 'phone') ok(v.sw <= v.vw + 1, 'no sideways scroll on a phone', [v.sw, v.vw]);
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-sales-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
 
-    /* the office: the floor and one department, read off the same book */
+    /* the office: readable cards and the optional map, from the same book */
     await page.click(vp.name === 'phone' ? '#moreTab' : '.navItem[data-view="office"]');
     if (vp.name === 'phone') await page.click('#moreList .navItem[data-view="office"]');
-    await page.waitForSelector('#officeFloor g.room', { timeout: 15000 }).catch(function () {});
+    await page.waitForSelector('#officeWorkspace .officeCard', { timeout: 15000 }).catch(function () {});
     await page.waitForTimeout(400);
     var o = await page.evaluate(function () {
       function t(sel) { var e = document.querySelector(sel); return e ? e.textContent.replace(/\s+/g, ' ').trim() : ''; }
@@ -204,12 +211,13 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     ok(o.rooms.join(',') === 'sales:ran,marketing:never,support:never,software:never,admin:never,billing:late', 'six rooms back to front: Sales lit, Billing amber, the rest dark', o.rooms);
     ok(o.papers === 1, 'one paper on the Sales desk for today\'s entry', o.papers);
     ok(/Sales: answered 1 demo request/.test(o.side) && /2 LATEST/.test(o.side) && /Cold email is blocked/.test(o.side) && /1 desk is overdue/.test(o.side) && !/No desk has logged/.test(o.side) && /1 desk has a plan for/.test(o.side), 'the overview: the runs, the needs, the plan waiting', o.side.slice(0, 700));
-    ok(new RegExp('1 of 6 desks ran on schedule; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
+    ok(new RegExp('1 of 6 desks have a recent recorded run; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
     ok(/1 approval is waiting on you: #BILLING-20261006-1 \(billing: credit of one month/.test(o.side) && !/SALES-20261004-1/.test(o.side) && /1 handoff between desks this week: support → theo #SUPPORT-20261006-1/.test(o.side), 'the protocol: the open approval named (the declined one not), the handoff counted', o.side.slice(0, 1200));
     ok(o.pill === '2', 'the pill counts the two actions: the plan to approve and the approval waiting', o.pill);
     if (vp.name === 'phone') ok(o.sw <= o.vw + 1, 'no sideways scroll on a phone (office)', [o.sw, o.vw]);
     if (shotsAt) await page.screenshot({ path: path.join(shotsAt, 'mission-office-' + vp.name + '.png'), fullPage: vp.name === 'phone' });
     /* click the Sales room: Nora's drawer */
+    await page.getByRole('button', {name:'Office map',exact:true}).click();
     await page.click('#officeFloor g.room[data-desk="sales"]');
     await page.waitForSelector('#officeBack', { timeout: 8000 }).catch(function () {});
     var dr = await page.evaluate(function () { var e = document.getElementById('officeSide'); return { text: e ? e.textContent.replace(/\s+/g, ' ').trim() : '', sel: !!document.querySelector('#officeFloor g.room.sel[data-desk="sales"]') }; });
@@ -234,6 +242,31 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
       await page.waitForTimeout(200);
       ok(/2 LATEST/.test(await page.textContent('#officeSide')) && !(await page.$('#officeBack')), '◀ Office returns the overview');
     }
+
+    /* The new BDM workflow writes to the real API on the Firestore double. */
+    await page.getByRole('button',{name:'Team',exact:true}).click();
+    await page.getByRole('button',{name:'+ Add agent',exact:true}).click();
+    await page.getByLabel('Agent name',{exact:true}).fill('Alex · Business development');
+    await page.getByLabel('Responsibilities and working instructions').fill('Research target accounts, prepare introductions and keep the next step current.');
+    await page.getByRole('button',{name:'Save agent',exact:true}).click();
+    await page.waitForSelector('.officeCard.custom');
+    var profile=Array.from(db.data.values()).find(function(x){return x.officeType==='agent';});
+    ok(profile && profile.cc.join(',')==='mike@clearsky-usa.com,tom@clearsky-usa.com','new agent saves default CCs in the existing database');
+    await page.getByRole('button',{name:'+ Assign activity',exact:true}).click();
+    await page.locator('dialog select').nth(1).selectOption('acme.example');
+    await page.locator('dialog select').nth(2).selectOption('call');
+    await page.getByLabel('Objective',{exact:true}).fill('Call Acme about Joliet');
+    await page.getByRole('button',{name:'Assign activity',exact:true}).click();
+    await page.waitForSelector('.officeWorkRow');
+    ok(/Calling service is not connected/.test(await page.textContent('#officeWorkspace')),'call is blocked honestly instead of pretending to dial');
+    await page.getByRole('button',{name:'Record outcome',exact:true}).click();
+    await page.getByLabel('What happened? Include the result and next step.').fill('Thomas called Jane; send a proposal Monday.');
+    await page.getByRole('button',{name:'Record completed activity',exact:true}).click();
+    await page.waitForSelector('dialog',{state:'detached'});
+    ok(Array.from(db.data.values()).some(function(x){return x.officeType==='task'&&x.status==='completed';}),'manual call outcome persists');
+    ok(Array.from(db.data.values()).some(function(x){return x.kind==='call'&&x.prospectId==='acme.example'&&/Thomas called Jane/.test(x.summary);}), 'outcome appears on the CRM account');
+    await page.getByRole('button',{name:'Team',exact:true}).click();
+    if(shotsAt) await page.screenshot({path:path.join(shotsAt,'office-team-'+vp.name+'.png'),fullPage:vp.name==='phone'});
 
     if (vp.name === 'desktop') {
       /* the Command Center: the Sales panel and its door, and Needs you */

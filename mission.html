@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-reading="calm" data-text="standard">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
@@ -25,6 +25,13 @@
 <link rel="apple-touch-icon" href="/icons/mission-180.png">
 <link rel="icon" type="image/png" sizes="32x32" href="/icons/mission-32.png">
 <link rel="manifest" href="/mission.webmanifest">
+<script>
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+try {
+  document.documentElement.dataset.reading = localStorage.getItem('jarvisReading') === 'cinematic' ? 'cinematic' : 'calm';
+  document.documentElement.dataset.text = localStorage.getItem('jarvisText') === 'large' ? 'large' : 'standard';
+} catch (_) {}
+</script>
 <style>
 :root{--bg:#020813;--panel:rgba(6,18,36,.6);--glow-cyan:#00f3ff;--glow-blue:#0044ff;
       --ink:#dceefc;--dim:#89a9c4;--good:#3dff8b;--warn:#ffb733;--bad:#ff6b6b;
@@ -1698,6 +1705,51 @@ body.arranging .scroll{pointer-events:none}
   .brainGrid{display:flex;flex-direction:column}
   header{position:sticky;top:0;z-index:30;background:var(--bg);margin:0 -10px;padding:6px 10px 8px}
 }
+
+body.officeReading::before{display:none!important}
+/* Readable Office workspace; preserve the map as an optional view. */
+[data-view="office"] .officeGrid{grid-template-columns:minmax(0,1.65fr) minmax(320px,1fr);gap:20px}
+.officeMain{min-height:0;padding:4px 4px 20px}.officeHeading h2{font:600 28px system-ui;margin:0;color:#f4f7fc}.officeHeading p{color:#aab9cc;font:15px system-ui;margin:8px 0 20px}
+.officeActions,.officeTabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:18px}.officeActions button,.officeTabs button,.officeCard button,.officeWorkRow button,.officeDialog button{font:500 14px system-ui;letter-spacing:0;text-transform:none;padding:10px 14px;border-radius:7px;min-height:40px}
+.officeTabs{border-bottom:1px solid #314258;padding-bottom:12px}.officeTabs button[aria-pressed="true"]{background:#173b4c;border-color:#56c7d8;color:white}
+.officeCards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.officeCard,.officeWorkRow{background:#101c2c;border:1px solid #304159;border-radius:12px;padding:20px;color:#e6edf7;font:14px/1.55 system-ui;overflow-wrap:anywhere}.officeCard h3,.officeWorkRow h3{font-size:21px;line-height:1.3;margin:14px 0 4px;color:#fff}.officeCard p{margin:8px 0}.officeCard .officeDepartment{color:#6ed4df;font-weight:600}.officeCard button{margin:8px 8px 0 0}.officeCard.custom{border-color:#4c807d}.officeBadge{font:500 12px/1.5 system-ui;background:#223449;color:#dbe8f7;padding:4px 8px;border-radius:5px;display:inline-block}.officeHint{color:#aebed0;font:13px/1.5 system-ui}.officeWorkRow{margin:12px 0}.officeEmpty{font:16px/1.6 system-ui;color:#b8c6d9;padding:24px}
+.officeDialog{width:min(620px,calc(100vw - 40px));max-height:85vh;box-sizing:border-box;overflow:auto;background:#101c2c;color:#edf3fa;border:1px solid #55778b;border-radius:14px;padding:28px;font:15px/1.5 system-ui}.officeDialog::backdrop{background:#020814c9}.officeDialog h2{margin:0 70px 24px 0;font-size:24px}.officeDialog .officeClose{position:absolute;right:16px;top:16px}.officeField{display:block;margin:14px 0;color:#cbd8e8;font:14px/1.5 system-ui}.officeField span{display:block;margin-bottom:6px}.officeField input,.officeField select,.officeField textarea{box-sizing:border-box;width:100%;padding:11px;border:1px solid #476079;border-radius:6px;background:#091322;color:#f4f7fc;font:15px/1.5 system-ui}.officeField textarea{min-height:90px;resize:vertical}.officeFeedback{color:#ffc56a;font:14px/1.5 system-ui}.officeCard button:focus-visible,.officeTabs button:focus-visible{outline:3px solid #6ed4df;outline-offset:3px}
+[data-view="office"] #officeSide{font-size:14px;line-height:1.6;padding:8px}[data-view="office"] .floorPanel[hidden]{display:none}[data-view="office"] .logicNote{font:14px/1.6 system-ui;color:#bac9db;padding-bottom:12px}
+@media(max-width:1100px){[data-view="office"] .officeGrid{grid-template-columns:1fr}.officeMain{overflow:visible}}
+@media(max-width:620px){.officeCards{grid-template-columns:1fr}.officeCard{padding:16px}.officeDialog{padding:20px}.officeHeading h2{font-size:24px}}
+
+
+/* Reading comfort is independent of the selected character. Calm is default. */
+:root[data-reading="calm"]{--bg:#111923!important;--panel:#192533!important;--ink:#e8eef5!important;--dim:#b4c1d0!important;--glow-cyan:#8acbdc!important;--glow-gold:#d8c18e!important;--good:#91d4b2!important;--warn:#efc281!important;--bad:#f5a4a4!important;--edge:1px solid #384858!important;--reading-size:15px}
+:root[data-reading="calm"] body{font-size:var(--reading-size);line-height:1.55}
+:root[data-reading="calm"] body::before,:root[data-reading="calm"] body::after{display:none!important}
+:root[data-reading="calm"] .panel,:root[data-reading="calm"] .card{background:#192533!important;box-shadow:none!important;border:1px solid #384858!important;border-radius:10px}
+:root[data-reading="calm"] .panel::before,:root[data-reading="calm"] .panel::after{display:none}
+:root[data-reading="calm"] .title,:root[data-reading="calm"] .badge,:root[data-reading="calm"] .cardName,:root[data-reading="calm"] .cName,:root[data-reading="calm"] .gName,:root[data-reading="calm"] .bname,:root[data-reading="calm"] .coreName{text-shadow:none!important}
+:root[data-reading="calm"] .badge.neural,:root[data-reading="calm"] .wave,:root[data-reading="calm"] .room .mon,:root[data-reading="calm"] .room .who{animation:none!important;filter:none!important}
+:root[data-reading="calm"] .navItem{font-size:15px;min-height:40px;padding:9px 10px;color:var(--dim)}
+:root[data-reading="calm"] .navItem.on{background:#2a3c4b!important;color:#fff!important;border-color:#617b91!important}
+:root[data-reading="calm"] button{font-family:var(--ui);font-size:14px;letter-spacing:0;line-height:1.4;min-height:36px}
+:root[data-reading="calm"] button:focus-visible,:root[data-reading="calm"] a:focus-visible{outline:2px solid #b0dfee;outline-offset:3px}
+:root[data-reading="calm"] .ptitle{font-family:var(--ui);font-size:15px;letter-spacing:.3px;text-transform:none;font-weight:600;color:#e8eef5;opacity:1;padding-bottom:10px;border-bottom-color:#384858}
+:root[data-reading="calm"] .row,:root[data-reading="calm"] .cardRow,:root[data-reading="calm"] .draftBody,:root[data-reading="calm"] .msg,:root[data-reading="calm"] .sSug,:root[data-reading="calm"] .dsec p{font-size:var(--reading-size);line-height:1.65}
+:root[data-reading="calm"] .row{padding:11px 0;border-bottom-color:#2e3e4e}
+:root[data-reading="calm"] .row .v,:root[data-reading="calm"] .tm,:root[data-reading="calm"] .live,:root[data-reading="calm"] .badge,:root[data-reading="calm"] .foot,:root[data-reading="calm"] .hDate,:root[data-reading="calm"] .lTile .t,:root[data-reading="calm"] .lTile .s,:root[data-reading="calm"] .logicStage .sk,:root[data-reading="calm"] .logicStage .sw{font-family:var(--ui);font-size:12px;letter-spacing:.2px;opacity:1}
+:root[data-reading="calm"] .quick button,:root[data-reading="calm"] .toolNode,:root[data-reading="calm"] .phoneRows,:root[data-reading="calm"] .logicNote{font-size:14px;line-height:1.6}
+:root[data-reading="calm"] .bsub{font-size:10px;letter-spacing:.7px}
+:root[data-reading="calm"] .pill{font-size:12px;background:#2b3d4c!important;color:#d6e3ef}
+:root[data-reading="calm"] .talkBar{background:#192533;border-color:#475c70;box-shadow:none}
+:root[data-reading="calm"] .scroll{scrollbar-width:auto;scrollbar-color:#687f95 #182431}
+:root[data-reading="calm"] .scroll::-webkit-scrollbar{width:9px}
+:root[data-reading="calm"] .scroll::-webkit-scrollbar-thumb{background:#687f95}
+:root[data-reading="calm"] .characterSettings{font-size:14px;line-height:1.6}
+:root[data-reading="calm"] .characterSettings select{font:15px var(--ui);min-height:42px;background:#111923;color:#e8eef5;border:1px solid #607588;border-radius:6px;padding:8px;width:100%}
+:root[data-reading="calm"][data-text="large"]{--reading-size:17px}
+:root[data-reading="calm"][data-text="large"] .navItem,:root[data-reading="calm"][data-text="large"] .officeCard,:root[data-reading="calm"][data-text="large"] .officeWorkRow{font-size:17px}
+:root[data-reading="calm"] .officeCard,:root[data-reading="calm"] .officeWorkRow{background:#192533;border-color:#384858}
+@media(max-width:700px){:root[data-reading="calm"] header>div:last-child{flex-wrap:wrap;justify-content:flex-end}:root[data-reading="calm"] header button{font-size:12px;min-height:34px;padding:6px 8px}:root[data-reading="calm"] .row{flex-wrap:wrap;gap:5px 10px}:root[data-reading="calm"] .row .k{min-width:50%}}
+@media(prefers-reduced-motion:reduce){body::before,body::after{display:none!important}*,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;scroll-behavior:auto!important}}
+
 </style>
 </head>
 <body>
@@ -1789,6 +1841,7 @@ body.arranging .scroll{pointer-events:none}
         <div class="badge neural" id="neural" hidden>◈ NEURAL LINK</div>
         <div class="badge" id="badge">CONNECTING</div>
         <button id="mic">🎙 VOICE OFF</button>
+        <button id="readingToggle" aria-pressed="true" title="Toggle reading comfort">Comfort on</button>
         <button id="refresh">REFRESH</button>
         <button id="resetLayout" hidden title="Put every panel back where the page puts it">↺ LAYOUT</button>
       </div>
@@ -2291,11 +2344,11 @@ body.arranging .scroll{pointer-events:none}
       <div class="salesWrap">
         <div class="logicNote" id="officeNote">Reading the office…</div>
         <div class="officeGrid">
-          <div class="panel floorPanel">
+          <div class="officeMain scroll"><div id="officeWorkspace"></div><div class="panel floorPanel" hidden>
             <svg id="officeFloor" viewBox="150 40 850 500" preserveAspectRatio="xMidYMid meet" role="group" aria-label="The office floor: one room a department. Click a room to open it."></svg>
             <div class="floorLegend"><span><i style="background:var(--good)"></i>ran on schedule</span><span><i style="background:var(--warn)"></i>overdue</span><span><i style="background:var(--dim)"></i>never ran</span><span>papers on a desk: today's entries</span><span>click a room to open it</span></div>
           </div>
-          <div class="panel" style="min-height:0;display:flex;flex-direction:column">
+          </div><div class="panel" style="min-height:0;display:flex;flex-direction:column">
             <div id="officeSide" class="scroll" style="flex:1;min-height:0"></div>
           </div>
         </div>
@@ -2309,6 +2362,10 @@ body.arranging .scroll{pointer-events:none}
           <div class="panel" data-widget="pipeline" style="flex:none">
             <div class="ptitle">Character & appearance</div>
             <div class="characterSettings">
+              <label for="readingMode">Reading style</label>
+              <select id="readingMode"><option value="calm">Comfort — clear text, quiet colors</option><option value="cinematic">Cinematic — original effects</option></select>
+              <label for="readingSize">Text size in Comfort mode</label>
+              <select id="readingSize"><option value="standard">Standard</option><option value="large">Larger</option></select>
               <label for="characterMode">Jarvis character</label>
               <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="armour">Iron Man · the armour</option><option value="witchking">The Witch-king of Angmar</option><option value="onering">The One Ring</option><option value="quantum">Jarvis · Quantum core</option></select>
               <div id="doomAppearance" style="display:grid;gap:10px">
@@ -4338,6 +4395,23 @@ const doomCore = {
   say(v) { classicDoomCore.say(v); characterState = v > 0 ? 'speaking' : 'idle'; if (missionDoom) { missionDoom.setState(characterState); missionDoom.setEnergy(v); } },
   resize() { classicDoomCore.resize(); }
 };
+function syncReadingControls(){
+  const comfortable=document.documentElement.dataset.reading==='calm';
+  el('readingMode').value=comfortable?'calm':'cinematic';
+  el('readingSize').value=document.documentElement.dataset.text||'standard';
+  el('readingToggle').textContent=comfortable?'Comfort on':'Comfort off';
+  el('readingToggle').setAttribute('aria-pressed',String(comfortable));
+}
+function setReading(mode,size){
+  document.documentElement.dataset.reading=mode==='cinematic'?'cinematic':'calm';
+  document.documentElement.dataset.text=size==='large'?'large':'standard';
+  try{localStorage.setItem('jarvisReading',document.documentElement.dataset.reading);localStorage.setItem('jarvisText',document.documentElement.dataset.text);}catch(_){}
+  syncReadingControls();
+}
+el('readingToggle').addEventListener('click',()=>setReading(document.documentElement.dataset.reading==='calm'?'cinematic':'calm',document.documentElement.dataset.text));
+el('readingMode').addEventListener('change',e=>setReading(e.target.value,document.documentElement.dataset.text));
+el('readingSize').addEventListener('change',e=>setReading(document.documentElement.dataset.reading,e.target.value));
+syncReadingControls();
 el('characterMode').addEventListener('change', e => setMode(e.target.value, false));
 el('doomCharacter').addEventListener('change', e => {
   doomCharacter = e.target.value;
@@ -5459,7 +5533,7 @@ function renderAIProvider(data){
   });
   el('aiProviderStatus').textContent=data.busy?'Jarvis is working. Change providers when this request finishes.':
     'Saved choice: '+aiProviderNames[data.settings.mode]+'. '+(data.lastSwitch||'Applies to the next Jarvis request.');
-  el('aiProviderScope').textContent='Jarvis chat and new terminal sessions use this choice. Trading City runs independently. Office schedules currently run in Claude and require migration to switch providers.';
+  el('aiProviderScope').textContent='Jarvis chat and new terminal sessions use this choice. Trading City runs independently. '+(data.office&&data.office.enabled?'Office routines use this shared provider switch.':'Office runner status is unavailable or disabled.');
 }
 async function aiProviderRequest(method, body){
   const c=new AbortController(); const timer=setTimeout(()=>c.abort(),10000);
@@ -6427,6 +6501,7 @@ function wireTerm(){
 }
 
 function showView(name){
+  document.body.classList.toggle("officeReading",name==="office");
   [...document.querySelectorAll('.view')].forEach(v=>v.classList.toggle('on', v.dataset.view===name));
   [...document.querySelectorAll('.navItem')].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
   const inBar=['command','tasks','outbox','calendar'].includes(name);
@@ -8584,7 +8659,7 @@ async function loadOffice(force){
   officeBusy=true;
   try{
     if(!salesData) await loadSales(false);
-    officeActs=await officeFetchActivity(); officeAt=Date.now();
+    officeActs=await officeFetchActivity(); await officeReadBook(); officeAt=Date.now();
     renderOffice();
   }catch(e){
     const who=(auth.currentUser||{}).email||'?';
@@ -8736,7 +8811,7 @@ function renderOfficeSide(st){
     if(!cfg.sender || !cfg.postalAddressSet) needs.push({level:'watch', text:'Cold email is blocked until Agent settings has a clearsky-usa.com sender and a postal address (CAN-SPAM). Replies to people who wrote to us, and to accounts, go out regardless.'});
     const waiting=OFFICE_DESKS.filter(d=>st.by[d.key].plan && st.by[d.key].plan.plan.status==='proposed').length;
     if(waiting) needs.push({level:'act', text:waiting+(waiting===1?' desk has':' desks have')+' a plan for '+st.week+' waiting for your approval. Click the room.'});
-    if(late) needs.push({level:'watch', text:late+(late===1?' desk is':' desks are')+' overdue: the last run is older than its schedule. A Routine that fails says why in claude.ai → Routines; the weekly usage limit stops every desk at once.'});
+    if(late) needs.push({level:'watch', text:late+(late===1?' desk is':' desks are')+' overdue: the last run is older than its schedule. Check the Jarvis runner report for the actual provider and any blockers.'});
     if(!needs.length) needs.push({level:'ok', text:'Every desk ran on schedule and nothing waits on you.'});
     const nd=officeH('div'); nd.id='officeNeeds'; needs.forEach(n=>{ const p=officeH('div','sSug '+n.level,n.text); nd.appendChild(p); }); host.appendChild(nd);
     const pill=el('nOffice'); if(pill) pill.textContent=needs.filter(n=>n.level==='act').length||'';
@@ -8809,7 +8884,7 @@ function renderOfficeSide(st){
   if(d.key==='software'){ const pr=officeH('a',null,'Pull requests ↗'); pr.href=d.ext; pr.target='_blank'; pr.rel='noopener'; dl.appendChild(pr); const is=officeH('a',null,'Support issues ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='support'){ const is=officeH('a',null,'Issues it opened ↗'); is.href='https://github.com/clearskyenergy/omega-core/issues?q=is%3Aissue+is%3Aopen+label%3Asupport'; is.target='_blank'; is.rel='noopener'; dl.appendChild(is); }
   if(d.key==='billing'){ const qb=officeH('a',null,'QuickBooks ↗'); qb.href='https://app.qbo.intuit.com/app/invoices'; qb.target='_blank'; qb.rel='noopener'; dl.appendChild(qb); }
-  const rt=officeH('a',null,'Routine ↗'); rt.href='https://claude.ai/code'; rt.target='_blank'; rt.rel='noopener'; dl.appendChild(rt);
+  const rt=officeH('a',null,'Routine ↗'); rt.href='https://github.com/clearskyenergy/jarvis/blob/main/docs/OFFICE-RUNNER.md'; rt.target='_blank'; rt.rel='noopener'; dl.appendChild(rt);
   ds.appendChild(dl);
   /* the days */
   const ys=officeH('div','dsec'); ys.appendChild(officeH('h4',null,'Daily activities · 14 days')); host.appendChild(ys);
@@ -8823,15 +8898,138 @@ function renderOfficeSide(st){
     const k=officeH('span','k clamp',(SALES_KIND[r.kind]||r.kind)+': '+r.text); k.title='click to expand'; k.addEventListener('click',()=>k.classList.toggle('open')); row.appendChild(k); ys.appendChild(row);
   });
 }
+/* Office management uses the same authenticated sales API as the CRM. */
+let officeBook={agents:[],tasks:[]}, officeAccounts=[], officeMode='team', officeBookError='';
+async function officeGet(view){
+  const token=await auth.currentUser.getIdToken();
+  const r=await fetch('/api/sales?view='+view,{headers:{Authorization:'Bearer '+token}});
+  const j=await r.json(); if(!r.ok) throw new Error(j.error||'Office request failed'); return j;
+}
+async function officeReadBook(){
+  try { const r=await Promise.all([officeGet('office'),officeGet('prospects&limit=500')]); officeBook=r[0]; officeAccounts=r[1].prospects; officeBookError=''; }
+  catch(e){ officeBookError=e.message; }
+}
+function officeButton(parent,label,fn){ const b=officeH('button','',label); b.type='button'; b.onclick=fn; parent.appendChild(b); return b; }
+function officeField(parent,label,value,type,options){
+  const wrap=officeH('label','officeField'), caption=officeH('span','',label); wrap.appendChild(caption);
+  const input=document.createElement(type==='textarea'?'textarea':options?'select':'input');
+  if(options) options.forEach(o=>{const opt=document.createElement('option');opt.value=o[0];opt.textContent=o[1];input.appendChild(opt);});
+  else if(type!=='textarea') input.type=type||'text';
+  input.value=value||(options&&options.length?options[0][0]:''); wrap.appendChild(input);parent.appendChild(wrap);return input;
+}
+function officeUid(){ return 'w-'+crypto.randomUUID(); }
+function officeDialog(title,build){
+  const dialog=document.createElement('dialog'); dialog.className='officeDialog'; const form=officeH('form');form.method='dialog';
+  form.appendChild(officeH('h2','',title)); const msg=officeH('p','officeFeedback');msg.setAttribute('role','status');
+  const close=officeH('button','officeClose','Close');close.type='button';close.onclick=()=>dialog.close();form.appendChild(close);
+  dialog.appendChild(form);document.body.appendChild(dialog);build(form,msg,dialog);form.appendChild(msg);
+  dialog.addEventListener('close',()=>dialog.remove());dialog.showModal();return dialog;
+}
+async function officeWrite(body){return salesFetch({method:'POST',body:JSON.stringify(body)});}
+function officeAgentForm(agent){
+  const p=agent||{id:officeUid(),desk:'sales',enabled:true,cc:['mike@clearsky-usa.com','tom@clearsky-usa.com']};
+  officeDialog(agent?'Edit agent':'Add an agent',(form,msg,dialog)=>{
+    const name=officeField(form,'Agent name',p.name);name.required=true;
+    const desk=officeField(form,'Department',p.desk,null,[['sales','Sales / business development'],['marketing','Marketing']]);desk.disabled=!!agent;
+    const sender=officeField(form,'Existing mailbox (optional until connected)',p.sender,'email');
+    form.appendChild(officeH('p','officeHint','Dedicated agent inboxes require a connected email service. Entering an address does not create a mailbox.'));
+    if(p.mailbox) sender.disabled=true;
+    if(agent&&!p.mailbox) officeButton(form,'Create dedicated AgentMail inbox',async()=>{msg.textContent='Connecting…';try{await officeWrite({action:'office-mailbox',id:p.id});await officeReadBook();dialog.close();renderOffice();}catch(e){msg.textContent=e.message;}});
+    const cc=officeField(form,'CC on account emails',p.cc.join(', '));
+    const instructions=officeField(form,'Responsibilities and working instructions',p.instructions,'textarea');
+    const enabled=officeField(form,'Assigned work',p.enabled?'yes':'no',null,[['yes','Active — picked up by department routine'],['no','Paused']]);
+    const save=officeButton(form,'Save agent',async()=>{
+      if(!form.reportValidity())return;save.disabled=true;msg.textContent='Saving…';
+      try{await officeWrite({action:'office-agent',id:p.id,name:name.value,desk:desk.value,sender:sender.value,cc:cc.value.split(',').map(x=>x.trim()).filter(Boolean),instructions:instructions.value,enabled:enabled.value==='yes'});await officeReadBook();dialog.close();renderOffice();}
+      catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+  });
+}
+function officeTaskForm(agent){
+  if(!officeBook.agents.length){officeAgentForm();return;}
+  officeDialog('Assign an activity',(form,msg,dialog)=>{
+    const taskId=officeUid();
+    const who=officeField(form,'Agent',agent&&agent.id,null,officeBook.agents.map(x=>[x.id,x.name+' · '+x.desk]));
+    const account=officeField(form,'CRM account','',null,officeAccounts.map(x=>[x.id,x.company||x.id]));
+    account.multiple=true;account.size=5;account.required=true;
+    form.appendChild(officeH('p','officeHint','Select one or more accounts. Use Command/Ctrl to select several.'));
+    officeButton(form,'Select all listed accounts',()=>{Array.from(account.options).forEach(o=>o.selected=true);});
+    const kind=officeField(form,'Activity','research',null,[['research','Research account'],['email-draft','Prepare an email'],['follow-up','Follow up on account'],['call','Call account — phone connection required']]);
+    const title=officeField(form,'Objective','');title.required=true;
+    const due=officeField(form,'Due date (Central time)',new Intl.DateTimeFormat('en-CA',{timeZone:'America/Chicago',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date()),'date');due.required=true;
+    const detail=officeField(form,'Context and expected outcome','','textarea');
+    form.appendChild(officeH('p','officeHint','Research and email preparation run with the department routine. Calls remain blocked until a calling service is connected.'));
+    const save=officeButton(form,'Assign activity',async()=>{
+      if(!form.reportValidity())return;save.disabled=true;
+      try{const selected=Array.from(account.selectedOptions);for(let i=0;i<selected.length;i++){msg.textContent='Assigning '+(i+1)+' of '+selected.length+'…';await officeWrite({action:'office-add-task',id:taskId+'-'+selected[i].index,agentId:who.value,prospectId:selected[i].value,kind:kind.value,title:title.value,due:due.value,instructions:detail.value});}await officeReadBook();dialog.close();officeMode='activities';renderOffice();}
+      catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+    if(!officeAccounts.length){save.disabled=true;msg.textContent='Add accounts to the CRM first.';}
+  });
+}
+function officeImport(){
+  officeDialog('Add accounts to the CRM',(form,msg,dialog)=>{
+    form.appendChild(officeH('p','officeHint','Paste rows from your account list, separated by tabs. Columns: Company, Website/domain, Contact name, Email, Phone. Up to 200 accounts.'));
+    const input=officeField(form,'Account rows','','textarea');input.rows=8;
+    const save=officeButton(form,'Import accounts',async()=>{
+      const lines=input.value.trim().split(/\r?\n/).filter(Boolean);if(lines.length&&/^company\t/i.test(lines[0]))lines.shift();if(!lines.length||lines.length>200){msg.textContent='Enter 1–200 account rows.';return;}
+      const prospects=lines.map(line=>{const c=line.split('\t');return {company:c[0],domain:c[1],contacts:[{name:c[2]||'',email:c[3]||'',phone:c[4]||''}]};});
+      save.disabled=true;try{const r=await officeWrite({action:'upsert-prospects',prospects});await officeReadBook();renderOffice();
+        if(r.errors&&r.errors.length){msg.textContent='Imported '+r.created.length+' new and '+r.updated.length+' existing accounts. Fix these rows: '+r.errors.map(x=>(x.index+1)+': '+x.error).join('; ');save.disabled=false;}
+        else dialog.close();
+      }catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+  });
+}
+function officeRecord(t){
+  officeDialog('Record activity outcome',(form,msg,dialog)=>{
+    form.appendChild(officeH('p','',t.title+' · '+t.prospectId));
+    const outcome=officeField(form,'What happened? Include the result and next step.','','textarea');outcome.required=true;
+    const save=officeButton(form,'Record completed activity',async()=>{
+      if(!form.reportValidity())return;save.disabled=true;
+      try{await officeWrite({action:'office-task',operation:'record',id:t.id,outcome:outcome.value});await officeReadBook();officeActs=await officeFetchActivity();dialog.close();renderOffice();}
+      catch(e){msg.textContent=e.message;save.disabled=false;}
+    });
+  });
+}
+function renderOfficeWorkspace(st){
+  const host=el('officeWorkspace');if(!host)return;host.textContent='';
+  const heading=officeH('div','officeHeading');heading.appendChild(officeH('h2','','Your office'));heading.appendChild(officeH('p','','People, accounts and the next action.'));host.appendChild(heading);
+  const actions=officeH('div','officeActions');officeButton(actions,'+ Add agent',()=>officeAgentForm());officeButton(actions,'+ Assign activity',()=>officeTaskForm());officeButton(actions,'Import accounts',officeImport);host.appendChild(actions);
+  const tabs=officeH('div','officeTabs');[['team','Team'],['activities','Activities'],['accounts','Accounts'],['floor','Office map']].forEach(x=>{const b=officeButton(tabs,x[1],()=>{officeMode=x[0];renderOffice();});b.setAttribute('aria-pressed',String(officeMode===x[0]));});host.appendChild(tabs);
+  const floor=el('officeFloor').parentElement;floor.hidden=officeMode!=='floor';
+  if(officeBook.capped)host.appendChild(officeH('p','officeFeedback','Showing the first 1,000 Office records. Older work may be outside this view.'));
+  if(officeAccounts.length>=500)host.appendChild(officeH('p','officeHint','Showing up to 500 CRM accounts.'));
+  if(officeBookError)host.appendChild(officeH('p','officeFeedback','Agent management unavailable: '+officeBookError));
+  if(officeMode==='floor')return;
+  if(officeMode==='team'){
+    const grid=officeH('div','officeCards');host.appendChild(grid);
+    OFFICE_DESKS.forEach(d=>{const s=st.by[d.key],card=officeH('article','officeCard');
+      const tag=officeH('span','officeBadge',s.last?'Last run '+sStamp(new Date(s.last.ms).toISOString()):'No run recorded');card.appendChild(tag);
+      card.appendChild(officeH('h3','',d.who+' '+d.last));card.appendChild(officeH('p','officeDepartment',d.name));card.appendChild(officeH('p','',d.role));card.appendChild(officeH('p','officeHint',d.sched+' · Central'));officeButton(card,'View desk',()=>officeSelect(d.key));grid.appendChild(card);});
+    officeBook.agents.forEach(p=>{const card=officeH('article','officeCard custom'),tasks=officeBook.tasks.filter(t=>t.agentId===p.id);
+      card.appendChild(officeH('span','officeBadge',p.enabled?'Active · '+p.desk+' routine':'Paused'));card.appendChild(officeH('h3','',p.name));card.appendChild(officeH('p','officeDepartment',p.desk==='sales'?'Business development':'Marketing'));card.appendChild(officeH('p','',p.instructions||'Add responsibilities to guide this agent.'));card.appendChild(officeH('p','officeHint',p.sender||'Mailbox not connected'));card.appendChild(officeH('p','officeHint',tasks.filter(t=>t.status!=='completed').length+' open activities · CC '+p.cc.join(', ')));officeButton(card,'Edit agent',()=>officeAgentForm(p));officeButton(card,'Assign work',()=>officeTaskForm(p));grid.appendChild(card);});
+  }else if(officeMode==='activities'){
+    if(!officeBook.tasks.length)host.appendChild(officeH('p','officeEmpty','No assigned activities yet. Add an agent, import your accounts, then assign work.'));
+    officeBook.tasks.slice().sort((a,b)=>a.due.localeCompare(b.due)).forEach(t=>{const row=officeH('article','officeWorkRow'),p=officeBook.agents.find(a=>a.id===t.agentId);
+      row.appendChild(officeH('span','officeBadge',t.status.replace('_',' ')));row.appendChild(officeH('h3','',t.title));row.appendChild(officeH('p','',(p?p.name:t.agentId)+' · '+t.prospectId+' · Due '+t.due));if(t.outcome)row.appendChild(officeH('p','',t.outcome));
+      if(['queued','blocked','needs_review'].includes(t.status))officeButton(row,'Record outcome',()=>officeRecord(t));host.appendChild(row);});
+  }else{
+    const search=officeField(host,'Find an account','','search'),list=officeH('div');host.appendChild(list);
+    function draw(){list.textContent='';officeAccounts.filter(p=>(p.company+' '+p.id).toLowerCase().includes(search.value.toLowerCase())).forEach(p=>{const row=officeH('article','officeWorkRow');row.appendChild(officeH('h3','',p.company||p.id));row.appendChild(officeH('p','',p.id+' · '+(p.stage||'target')));(p.contacts||[]).forEach(c=>row.appendChild(officeH('p','officeHint',[c.name,c.email,c.phone].filter(Boolean).join(' · '))));if(p.next)row.appendChild(officeH('p','',p.next.action+' · '+(p.next.due||'')));list.appendChild(row);});if(!list.children.length)list.appendChild(officeH('p','officeEmpty','No matching accounts. Import your target list to get started.'));}search.oninput=draw;draw();
+  }
+}
+
 function renderOffice(){
   const st=officeState();
   renderOfficeFloor(st);
   renderOfficeSide(st);
+  renderOfficeWorkspace(st);
   const ran=OFFICE_DESKS.filter(d=>st.by[d.key].cls==='ran').length;
   const waiting=OFFICE_DESKS.filter(d=>st.by[d.key].plan && st.by[d.key].plan.plan.status==='proposed').length;
   const note=el('officeNote');
-  if(note) note.textContent='As of '+sStamp(new Date(officeAt||Date.now()).toISOString())+'. '+ran+' of '+OFFICE_DESKS.length+' desks ran on schedule'+(waiting?'; '+waiting+' plan'+(waiting===1?'':'s')+' for '+st.week+' waiting for your approval':'')+'. '
-    +'Every desk is a Claude Code Routine in claude.ai; the job notes are jarvis/agents/office. Sales and Marketing send; the rest prepare. Click a room.';
+  if(note) note.textContent='As of '+sStamp(new Date(officeAt||Date.now()).toISOString())+'. '+ran+' of '+OFFICE_DESKS.length+' desks have a recent recorded run'+(waiting?'; '+waiting+' plan'+(waiting===1?'':'s')+' for '+st.week+' waiting for your approval':'')+'. '
+    +'Routines use Jarvis’s shared provider switch. Agent profiles and assigned work share the CRM. Last-run times come from the activity log.';
 }
 
 /* ── the platform ────────────────────────────────────────────────────────
