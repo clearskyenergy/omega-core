@@ -3074,3 +3074,7 @@ Ada retains the ADMIN machine ID with a Chief of Staff label, a compact view of 
 Reviewed and integrated the Grok UI from PR #270 without changing partner access controls. System separates Grok text responses from the Muse/Grok Bot companion apps and shows missing bridges honestly. Office execution stays on tool-capable Claude/ChatGPT. No proprietary calculations added to browser code; no new Firestore collections or rules.
 
 Validation: sales/roster/mail suites; desktop and 390px Office/private-capture tests; provider settings on an isolated HTTP fixture (18795, never live 8795); inline JS parse and diff checks.
+
+
+### Brain inventory — 2026-10-09 (local, not released)
+Owner-only `/api/brain-inventory` counts all root collections and 27 known nested collection groups, subtracting root overlaps. Counts and illustrative time-value scenarios run server-side in `api/_lib/brain-inventory.js`; no raw records or credentials leave that endpoint. `mission.html` adds an independent mobile-first summary, coverage gaps, honest error states and graph work only while the Brain view is visible. Existing unrelated Office edits remain in the working tree; release only the Brain patch. Checks: `scripts/test-brain-inventory.js`, `scripts/render-brain-inventory.js`, inline-script parse check. No data migration or production write.
