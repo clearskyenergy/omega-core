@@ -25,7 +25,7 @@
    signup and the request in Needs you, logging a reply (the double holds
    it), and the settings refusing a gmail.com sender and saving a
    clearsky-usa.com one. Then the OFFICE view on the same book: the floor's
-   six rooms back to front, Sales lit off a run minutes old, Billing amber
+   seven rooms back to front, Sales lit off a run minutes old, Billing amber
    off one three days old, the rest dark; the overview's runs and needs
    (the plan waiting, the cold-email block, the overdue desk); clicking the
    Sales room opens Nora's drawer with the week's proposed plan, Approve
@@ -208,10 +208,10 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
       };
     });
     ok(o.view === 'office', 'the Office view opens' + (vp.name === 'phone' ? ' from More' : ''), o.view);
-    ok(o.rooms.join(',') === 'sales:ran,marketing:never,support:never,software:never,admin:never,billing:late', 'six rooms back to front: Sales lit, Billing amber, the rest dark', o.rooms);
+    ok(o.rooms.join(',') === 'sales:ran,marketing:never,support:never,software:never,legal:never,admin:never,billing:late', 'seven rooms back to front: Sales lit, Billing amber, the rest dark', o.rooms);
     ok(o.papers === 1, 'one paper on the Sales desk for today\'s entry', o.papers);
     ok(/Sales: answered 1 demo request/.test(o.side) && /2 LATEST/.test(o.side) && /Cold email is blocked/.test(o.side) && /1 desk is overdue/.test(o.side) && !/No desk has logged/.test(o.side) && /1 desk has a plan for/.test(o.side), 'the overview: the runs, the needs, the plan waiting', o.side.slice(0, 700));
-    ok(new RegExp('1 of 6 desks have a recent recorded run; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
+    ok(new RegExp('1 of 7 desks have a recent recorded run; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
     ok(/1 approval is waiting on you: #BILLING-20261006-1 \(billing: credit of one month/.test(o.side) && !/SALES-20261004-1/.test(o.side) && /1 handoff between desks this week: support → theo #SUPPORT-20261006-1/.test(o.side), 'the protocol: the open approval named (the declined one not), the handoff counted', o.side.slice(0, 1200));
     ok(o.pill === '2', 'the pill counts the two actions: the plan to approve and the approval waiting', o.pill);
     if (vp.name === 'phone') ok(o.sw <= o.vw + 1, 'no sideways scroll on a phone (office)', [o.sw, o.vw]);
@@ -242,6 +242,22 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
       await page.waitForTimeout(200);
       ok(/2 LATEST/.test(await page.textContent('#officeSide')) && !(await page.$('#officeBack')), '◀ Office returns the overview');
     }
+
+    await page.click('#officeFloor g.room[data-desk="legal"]');
+    var legalText=await page.textContent('#officeSide');
+    ok(/Scott Henry · General Counsel/.test(legalText) && /AI preparation only/.test(legalText), 'Legal identifies human counsel separately from the AI assistant');
+    ok(!/to:legal@/.test(await page.innerHTML('#officeSide')), 'Legal never links an invented mailbox');
+    await page.click('#officeFloor g.room[data-desk="admin"]');
+    ok(/Chief of Staff/.test(await page.textContent('#officeSide')) && await page.isVisible('#chiefCapture'), 'Ada opens a private Chief of Staff brief');
+    var captureRequest;
+    await page.route('**/twinChat/task',function(route){captureRequest=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:JSON.stringify({ok:true})});});
+    var sharedCount=db.data.size;
+    await page.fill('#chiefCapture','Review household bill dates tomorrow');
+    await page.getByRole('button',{name:'Add to my private tasks',exact:true}).click();
+    await page.waitForFunction(function(){return /Added to your private task queue/.test(document.getElementById('chiefOfStaff').textContent);});
+    ok(captureRequest.title==='Ada: Review household bill dates tomorrow' && db.data.size===sharedCount, 'Personal capture uses the private twin and never the shared CRM');
+    if(shotsAt) await page.screenshot({path:path.join(shotsAt,'chief-of-staff-'+vp.name+'.png'),fullPage:vp.name==='phone'});
+    await page.click('#officeBack');
 
     /* The new BDM workflow writes to the real API on the Firestore double. */
     await page.getByRole('button',{name:'Team',exact:true}).click();

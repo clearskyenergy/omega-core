@@ -4,7 +4,7 @@ var assert=require('node:assert/strict'), FD=require('./_lib/firestore-double');
 FD.mock('../api/_lib/admin',{httpError:function(s,m){var e=new Error(m);e.status=s;return e;}});
 var M=require('../api/_lib/office-mail'),db=new FD.DB(), calls=[];
 var staff={staff:true,by:'tom@clearsky-usa.com'},bot={agent:true,by:'agent:sales'};
-global.fetch=async function(url,opts){calls.push({url:url,body:JSON.parse(opts.body||'{}')});return {ok:true,json:async function(){return url.endsWith('/drafts')?{draft_id:'draft-1'}:{inbox_id:'inbox-1',email:'bdm@agentmail.to'};}};}; 
+global.fetch=async function(url,opts){calls.push({url:url,method:opts.method,body:JSON.parse(opts.body||'{}')});return {ok:true,json:async function(){return url.endsWith('/drafts')?{draft_id:'draft-1'}:{inbox_id:'inbox-1',email:'bdm@agentmail.to'};}};};
 async function main(){
   delete process.env.AGENTMAIL_API_KEY;
   assert.throws(function(){M.request('/inboxes','POST',{});},/not connected/);
@@ -23,6 +23,13 @@ async function main(){
   assert.match(calls[1].body.text,/AI assistant/);assert.equal(calls[1].body.send_at,undefined);
   await M.activity(db,bot,b);assert.equal(calls.length,2);
   assert.equal(db.data.get('sales_activity/office_draft_t1').ref,'draft-1');
+  db.seed('sales_config/office_agent_existing',{id:'existing',name:'BDM',desk:'sales'});
+  await M.provision(db,staff,{id:'existing',inboxId:'clearsky-bdm@agentmail.to'});
+  assert.equal(calls[calls.length-1].method,'GET');
+  assert.match(calls[calls.length-1].url,/clearsky-bdm%40agentmail.to$/);
+  assert.equal(db.data.get('sales_config/office_agent_existing').mailbox.inboxId,'inbox-1');
+  db.seed('sales_config/office_agent_invalid',{id:'invalid'});
+  await assert.rejects(M.provision(db,staff,{id:'invalid',inboxId:'../../keys'}),/Invalid inbox/);
   delete process.env.AGENTMAIL_API_KEY;
   console.log('AgentMail: missing credentials, staff-only provisioning, stable inbox ID, claim checks, CRM recipient binding, enforced CCs, draft reuse and audit logging passed.');
 }
