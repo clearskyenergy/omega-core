@@ -1,0 +1,20 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+'use strict';const assert=require('assert/strict'),E=require('../api/_lib/brain-evidence');
+(async()=>{
+ const data={projects:[{id:'p1',orgId:'fenecon.us',address:'present',updatedAt:'2026-10-09T00:00:00Z'},{id:'p2'}],omega_orgs:[{id:'fenecon.com'}],fin_projects:[{id:'f1',mw:0,ask:0,status:'draft',outcome:'active'}],deals:[{id:'d1',projectId:'not-there',finProjectId:'f1'}],twin_sources:[{id:'s1',source:'otter',parsed:false,receivedAt:'2026-10-09T00:00:00Z',rawText:'NEVER EXPOSE'}],twin_meetings:[{id:'m1',sourceIds:['s1'],analyzedAt:'2026-10-09T00:00:00Z'},{id:'m2',sourceIds:['missing']}],twin_events:[{id:'e1',name:'tool.error',staff:false},{id:'e2',name:'tool.error',staff:true}],sales_activity:[],orders:[],plant_units:[]};
+ const read=async n=>({rows:data[n]||[],total:(data[n]||[]).length});let p=await E.collect(read,new Date('2026-10-09T12:00:00Z'));
+ const find=id=>p.findings.find(f=>f.id===id);assert.equal(find('project-org-missing').count,1);assert(!find('project-org-unresolved'));assert.equal(find('finance-size-missing').count,1);assert.equal(find('deal-link-projects').count,1);assert(!find('meeting-source-link'));assert.equal(find('meeting-source-unresolved').count,1);assert.equal(find('platform-recorded-errors').count,1);assert.equal(p.bankability.status,'not_assessed');assert(!JSON.stringify(p).includes('NEVER EXPOSE'));
+ assert.equal(p.sources.find(s=>s.source==='projects').missingTimestamp,1);
+ assert(E.forDesk(p,'software').findings.every(f=>f.desk==='software'));assert.equal(E.forDesk(p,'marketing').findings.length,0);assert.throws(()=>E.forDesk(p,'../admin'));
+ p=await E.collect(async n=>n==='projects'?{rows:data.projects,total:2000}:read(n));assert.equal(p.status,'partial');assert(!p.findings.some(f=>f.id==='deal-link-projects'),'cannot call a capped-away link missing');
+ p=await E.collect(async n=>{if(n==='fin_projects')throw Error('offline');return read(n);});assert.equal(p.sources.find(s=>s.source==='fin_projects').status,'unavailable');assert.equal(p.checks.find(c=>c.id==='finance-size-missing').matched,null);assert(!p.findings.some(f=>f.id.startsWith('finance-')));
+ const backlog={...data,twin_sources:[{id:'exhausted',source:'otter',parsed:false,analyzeAttempts:3,lastAnalyzeError:'Your credit balance is too low'},{id:'secondary',source:'otter',parsed:false,isPrimary:false,analyzeAttempts:0}]};
+ const bp=await E.collect(async n=>({rows:backlog[n]||[],total:(backlog[n]||[]).length}));assert.equal(bp.ingest.primaryUnparsed,1);assert.equal(bp.ingest.secondaryUnparsed,1);assert.equal(bp.ingest.failures['provider billing'],1);assert(!bp.findings.some(f=>f.id==='meeting-ingest-pending'));assert.equal(bp.findings.find(f=>f.id==='meeting-ingest-exhausted').count,1);
+ const ap=require.resolve('../api/_lib/admin');let caller={email:'staff@clearsky-usa.com',claims:{email_verified:true}},reads=0;
+ require.cache[ap]={id:ap,filename:ap,loaded:true,exports:{handler:f=>f,authenticate:async()=>caller,httpError:(s,m)=>Object.assign(Error(m),{status:s}),db:()=>{reads++;return {collection:()=>({select:()=>({limit:()=>({get:async()=>({docs:[]})})}),count:()=>({get:async()=>({data:()=>({count:0})})})})};}}};
+ const api=require('../api/brain-evidence'),res={setHeader:()=>{}};
+ await assert.rejects(()=>api({method:'GET'},res),e=>e.status===403);assert.equal(reads,0);
+ caller={email:'tom@clearsky-usa.com',claims:{email_verified:false}};await assert.rejects(()=>api({method:'GET'},res),e=>e.status===403);caller.claims.email_verified=true;
+ await api({method:'GET'},res);assert.equal(reads,1);caller.email='other@example.com';await assert.rejects(()=>api({method:'GET'},res),e=>e.status===403);await assert.rejects(()=>api({method:'POST'},res),e=>e.status===405);
+ console.log('PASS evidence: canonical sourceIds, aliases, exact links, source failure/caps, private-field omission, desk filtering and owner authorization.');
+})().catch(e=>{console.error(e);process.exitCode=1;});

@@ -2241,6 +2241,11 @@ body.officeReading::before{display:none!important}
         <div id="brainInventoryStatus" class="brainSummary" role="status">Open the Brain to measure stored data.</div>
         <div id="brainInventoryBody"></div>
       </div>
+      <div class="panel brainOverview" aria-label="Evidence for bots">
+        <div class="ptitle">Connected evidence &amp; improvement queue <button id="brainEvidenceRefresh" type="button">Check connections</button></div>
+        <div id="brainEvidenceStatus" role="status">Open the Brain to check source reads.</div>
+        <div id="brainEvidenceBody"></div>
+      </div>
       <div class="cmdGrid brainGrid">
 
         <div class="panel brainSide">
@@ -6652,7 +6657,7 @@ function showView(name){
   if(name==='sales'){ wireSales(); loadSales(false); }
   if(name==='office'){ loadOffice(false); }
   if(name==='system'){ loadAIProvider(); }
-  if(name==='brain'){ bpoke(); loadBrainInventory(); loadBrain().catch(e=>{el('brainHint').textContent='Relationship graph unavailable: '+e.message;}); }
+  if(name==='brain'){ bpoke(); loadBrainInventory(); loadBrainEvidence(); loadBrain().catch(e=>{el('brainHint').textContent='Relationship graph unavailable: '+e.message;}); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   if(name==='trading'){ wireTrade(); probeTrade(); }
@@ -11167,6 +11172,31 @@ function bfit(){
   bview.k=Math.max(0.15,Math.min(2.2,k));
   bview.x=-((x0+x1)/2)*bview.k; bview.y=-((y0+y1)/2)*bview.k;
 }
+
+
+let brainEvidenceBusy=false;
+async function loadBrainEvidence(){
+ if(brainEvidenceBusy)return;brainEvidenceBusy=true;
+ const status=el('brainEvidenceStatus'),host=el('brainEvidenceBody'),button=el('brainEvidenceRefresh');
+ status.textContent='Checking source reads and record links…';host.textContent='';button.disabled=true;
+ const c=new AbortController(),timer=setTimeout(()=>c.abort(),25000);
+ try{
+  const t=await token();if(!t)throw Error('Sign in to check private evidence.');
+  const r=await fetch('/api/brain-evidence',{headers:{Authorization:'Bearer '+t},signal:c.signal,cache:'no-store'});if(!r.ok)throw Error('Evidence check unavailable (HTTP '+r.status+').');
+  const j=await r.json();if(!j.ok||!Array.isArray(j.sources))throw Error('Incomplete evidence response.');
+  status.textContent=j.sources.filter(s=>s.status!=='unavailable').length+'/'+j.sources.length+' sources readable · '+j.findings.length+' improvement findings · '+(j.status==='read_complete'?'complete read':'partial read');
+  host.appendChild(biNode('p','Observed '+new Date(j.asOf).toLocaleString()+'. Readable does not mean healthy or fully connected. Bots receive source-linked proposals through the local Office runner; this page does not prove a bot acted.','brainCoverage'));
+  const health=biNode('details');health.open=true;health.appendChild(biNode('summary','Source reads, coverage and freshness'));
+  j.sources.forEach(s=>health.appendChild(biNode('p',s.source+' · '+s.status+' · '+(s.scanned===null?'unknown':s.scanned+' / '+s.total+' read')+(s.truncated?' · partial':'')+' · latest '+(s.latest?new Date(s.latest).toLocaleString():'unknown')+' · '+(s.missingTimestamp===null?'unknown':s.missingTimestamp)+' undated','brainCoverage')));host.appendChild(health);
+  const queue=biNode('details');queue.open=true;queue.appendChild(biNode('summary','Evidence-backed proposals'));
+  j.findings.forEach(f=>{const d=biNode('details');d.appendChild(biNode('summary',f.count+' · '+f.title+' · '+f.desk));d.appendChild(biNode('p',f.next,'brainCoverage'));d.appendChild(biNode('p','Baseline: '+f.baselineMetric+'; '+f.countScope+'. Evidence: '+f.evidence.map(e=>e.ref).join(', ')+(f.evidenceLimited?' (first 20 shown)':''),'brainCoverage'));queue.appendChild(d);});
+  if(!j.findings.length)queue.appendChild(biNode('p','No findings in the available checks. Review missing sources before interpreting this result.','brainCoverage'));host.appendChild(queue);
+  const bank=biNode('details');bank.appendChild(biNode('summary','Bankability: not assessed'));bank.appendChild(biNode('p',j.bankability.meaning,'brainCoverage'));j.bankability.requiredEvidence.forEach(x=>bank.appendChild(biNode('p',x+' — requires independent evidence review','brainCoverage')));const a=biNode('a','DOE due-diligence framework');a.href=j.bankability.source;a.target='_blank';a.rel='noopener';bank.appendChild(a);host.appendChild(bank);
+  host.appendChild(biNode('p','Improvement loop: '+j.improvementContract.required.join(' → ')+'. Customer changes and release decisions retain their existing approval gates.','brainCoverage'));
+ }catch(e){status.textContent=e.name==='AbortError'?'Evidence check timed out; connectivity remains unverified.':e.message;}
+ finally{clearTimeout(timer);button.disabled=false;brainEvidenceBusy=false;}
+}
+el('brainEvidenceRefresh').addEventListener('click',loadBrainEvidence);
 
 let brainInventoryBusy=false;
 function biNode(tag,text,cls){const n=document.createElement(tag);n.textContent=text||'';if(cls)n.className=cls;return n;}
