@@ -3036,3 +3036,25 @@ commitment in favour of SDVPP participation (Rider SDVPP, anticipated
 `.claude/agents/incentive-scout.md` + a daily Routine (6:56am CT, fresh
 session) re-verify every row against primary documents and open a draft PR
 when something moved; data only, never the math, never a merge.
+
+## 2026-10-09 — Office agent workspace (local, pending release)
+
+Mission Office gains readable cards, editable Sales/Marketing profiles,
+account import and multi-account activities. Profiles/tasks use the existing
+server-only sales_config collection; prospects and audit events stay in the
+existing CRM collections. Claim/state validation, assignment authorization,
+and optional AgentMail provisioning/drafting are in api/_lib/office-roster.js
+and api/_lib/office-mail.js, never browser logic. No pricing/financial logic
+was added or moved. No rules, tenant data, or provider-switch settings changed.
+Calling and new-identity sends remain unavailable; the interface reports that
+explicitly. The optional email service needs its server credential and a real
+account before inboxes can be created. Jarvis runner integration is paired
+with the CLI changes; see jarvis/docs/OFFICE-RUNNER.md for release ordering.
+
+
+The same release adds default Reading Comfort across Mission: larger system
+text, opaque slate panels, no scanline/dimming overlays or text glow, clearer
+controls, and a persisted Comfort/Cinematic toggle plus larger-text setting.
+Character selection stays independent. Browser checks cover both viewport
+sizes and reading preference persistence. The existing provider settings UI
+from origin/main is preserved; its Office scope text now reflects runner state.
