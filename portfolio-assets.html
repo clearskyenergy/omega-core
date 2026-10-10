@@ -1,0 +1,297 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     Workspace > Projects > Portfolio — the asset register (Portfolio & Assets).
+     docs/PORTFOLIO-ASSET-MANAGER-PLAN.md. Static page, ES5, no build. Everything
+     it shows comes from /api/portfolio-assets, which checks the workspace flag,
+     the verified identity and the member role on every call; this page hides
+     nothing that the server does not also refuse. Unknown values say
+     "Not provided" — never a zero, never a green dot. -->
+<html lang="en"><head><script src="/omega-splash.js"></script><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Portfolio &amp; Assets · OMEGA</title>
+<style>
+:root{--navy:#0e1c2b;--ink:#182d3d;--muted:#536d7e;--teal:#087e73;--line:#d7e2e8;--bg:#f2f6f8;--card:#fff;--amber:#8c5708;--red:#a83832;--focus:#1a6fd1}
+@media(prefers-color-scheme:dark){:root{--ink:#e3edf2;--muted:#9fb4c1;--line:#2c4252;--bg:#0f1b25;--card:#162633;--teal:#3fb8aa;--amber:#e0a84d;--red:#ef7d75}}
+*{box-sizing:border-box}html,body{max-width:100%;overflow-x:hidden}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+a{color:var(--teal)}:focus-visible{outline:3px solid var(--focus);outline-offset:2px}
+.top{display:flex;align-items:center;gap:12px;padding:10px 18px;background:var(--navy);color:#fff}.top a{color:#fff;text-decoration:none;font-weight:600}.top img{width:26px;height:26px}.top .ws{margin-left:auto;font-size:13px;opacity:.85;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:50vw}
+.wrap{max-width:1400px;margin:0 auto;padding:18px}.crumb{font-size:13px;color:var(--muted)}.crumb a{color:var(--muted)}
+h1{font-size:24px;margin:6px 0 2px}h2{font-size:17px;margin:0 0 8px}.muted{color:var(--muted)}.small{font-size:13px}
+.cards{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:10px;margin:14px 0}.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;min-width:0}.card b{display:block;font-size:20px;overflow-wrap:anywhere}.card small{display:block;color:var(--muted);font-size:12px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:flex-end;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;margin-bottom:10px}.toolbar label{display:flex;flex-direction:column;font-size:12px;color:var(--muted);min-width:0}
+input,select,button,textarea{font:inherit;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:8px;padding:8px 10px;min-height:40px;max-width:100%}button{cursor:pointer;font-weight:600}button.primary{background:var(--teal);border-color:var(--teal);color:#fff}button:disabled{opacity:.55;cursor:not-allowed}
+.region{background:var(--card);border:1px solid var(--line);border-radius:10px;overflow:auto;max-width:100%}table{border-collapse:collapse;width:100%;min-width:900px;font-size:14px}th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{position:sticky;top:0;background:var(--card);font-size:12px;color:var(--muted);white-space:nowrap}
+td.pin,th.pin{position:sticky;left:0;background:var(--card);z-index:1}.num{text-align:right;font-variant-numeric:tabular-nums}.np{color:var(--muted);font-style:italic}
+.tag{display:inline-block;border:1px solid var(--amber);color:var(--amber);border-radius:999px;padding:0 7px;font-size:11px;margin:1px;white-space:nowrap}
+.pager{display:flex;gap:8px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin:10px 0}
+.cardlist{display:none}.sitecard{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:8px}.sitecard button{width:100%;text-align:left;border:0;padding:0;background:none;min-height:44px}
+.status{min-height:22px;margin:8px 0;font-size:14px}.status.err{color:var(--red)}
+dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000px,100vw);max-height:92vh;background:var(--card);color:var(--ink)}dialog::backdrop{background:rgba(5,15,25,.55)}.dhead{display:flex;gap:10px;align-items:flex-start;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--card);z-index:2}.dbody{padding:14px 16px;overflow-wrap:anywhere}
+.tabs{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}.tabs button[aria-selected=true]{background:var(--teal);color:#fff;border-color:var(--teal)}
+.ctx{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}.ctx button{font-size:13px}
+.facts{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}.fact{border:1px solid var(--line);border-radius:8px;padding:8px}.fact .lbl{font-size:12px;color:var(--muted)}.fact .val{font-weight:600}.fact .src{font-size:11px;color:var(--muted)}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;font-size:13px}.steps span{padding:3px 8px;border-radius:999px;border:1px solid var(--line)}.steps span.on{background:var(--teal);color:#fff;border-color:var(--teal)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.grid2 label{display:flex;flex-direction:column;font-size:12px;color:var(--muted)}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+@media(max-width:1100px){.cards{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:700px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.region.table{display:none}.cardlist{display:block}.facts,.grid2{grid-template-columns:1fr}.wrap{padding:12px}.toolbar label,.toolbar select,.toolbar input{width:100%}.toolbar label{flex:1 1 100%}dialog{max-height:100vh;height:100vh;border-radius:0}}
+@media(max-width:360px){.cards{grid-template-columns:1fr}h1{font-size:20px}}
+</style></head><body>
+<header class="top"><a href="/workspace"><img src="/clearsky-omega-mark-white.png" alt="" width="26" height="26"> OMEGA</a><span class="ws" id="ws">Checking workspace…</span></header>
+<main class="wrap" id="main">
+  <nav class="crumb" aria-label="Breadcrumb"><a href="/workspace">Projects</a> › <span aria-current="page">Portfolio</span></nav>
+  <h1>Portfolio &amp; Assets</h1>
+  <p class="muted small" id="intro">Your sites, energy assets and opportunities. Imported facts keep their source cell; screened figures are preliminary and never approved capacity.</p>
+  <div id="status" class="status" role="status" aria-live="polite"></div>
+  <section aria-label="Portfolio summary" class="cards" id="cards"></section>
+  <section class="toolbar" aria-label="Filters and actions">
+    <label for="q">Search<input id="q" type="search" placeholder="Name, ID, city" autocomplete="off"></label>
+    <label for="fState">State<select id="fState"><option value="">All</option></select></label>
+    <label for="fMeter">Meter flag<select id="fMeter"><option value="">Any</option><option value="true">Reported true</option><option value="false">Reported false</option><option value="unknown">Not provided</option></select></label>
+    <label for="fPower">Reported power<select id="fPower"><option value="">Any</option><option value="known">Provided</option><option value="unknown">Not provided</option></select></label>
+    <label for="fFlag">Attention<select id="fFlag"><option value="">Any</option><option value="POWER_EXCEEDS_INSTALLED">Power &gt; installed</option><option value="POWER_DEFINITION_CONFLICT">Power definition unresolved</option><option value="TERM_ZERO_REVIEW">Zero remaining term</option></select></label>
+    <label for="fSort">Sort<select id="fSort"><option value="externalId:asc">Source ID</option><option value="name:asc">Name</option><option value="state:asc">State</option><option value="installedChargerKw:desc">Installed EV kW (high first)</option><option value="shaRemainingYears:desc">Remaining term (long first)</option></select></label>
+    <label for="views">Saved view<select id="views"><option value="">—</option></select></label>
+    <button id="saveView" type="button">Save view</button>
+    <button id="export" type="button">Export CSV</button>
+    <button id="importBtn" type="button" class="primary">Import sites</button>
+    <button id="importsBtn" type="button">Import history</button>
+  </section>
+  <div class="pager"><span id="count" class="small muted" aria-live="polite"></span>
+    <span><label class="small"><input type="radio" name="scope" value="all_matching" checked> All matching</label> <label class="small"><input type="radio" name="scope" value="this_page"> This page</label></span>
+    <span><button id="prev" type="button" aria-label="Previous page">‹ Prev</button> <span id="pageNo" class="small"></span> <button id="next" type="button" aria-label="Next page">Next ›</button></span></div>
+  <div class="region table" role="region" aria-label="Sites table" tabindex="0"><table><thead><tr><th class="pin" scope="col">Site</th><th scope="col">Location</th><th scope="col">Operating status</th><th scope="col">Utility</th><th scope="col" class="num">Installed EV kW <span class="sr">(charger nameplate)</span></th><th scope="col">Approved import limit</th><th scope="col">Headroom</th><th scope="col">Compute opportunity</th><th scope="col">Remaining term</th><th scope="col">Attention</th></tr></thead><tbody id="rows"></tbody></table></div>
+  <div class="cardlist" id="cardlist" aria-label="Sites"></div>
+</main>
+
+<dialog id="site" aria-labelledby="siteTitle"><div class="dhead"><div><div class="small muted" id="siteSub"></div><h2 id="siteTitle">Site</h2></div><button type="button" id="closeSite" aria-label="Close site">✕</button></div>
+  <div class="dbody"><div class="ctx" id="ctx"></div><div class="tabs" role="tablist" id="tabs"></div><div id="tabBody" role="tabpanel" tabindex="0"></div></div></dialog>
+
+<dialog id="imp" aria-labelledby="impTitle"><div class="dhead"><h2 id="impTitle">Import sites</h2><button type="button" id="closeImp" aria-label="Close import">✕</button></div>
+  <div class="dbody"><div class="steps" id="steps"><span>1 Upload</span><span>2 Map columns</span><span>3 Review matches &amp; issues</span><span>4 Confirm</span></div><div id="impBody"></div></div></dialog>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script><script src="/omega-brand.js"></script><script src="/omega-tenant.js"></script><script src="/omega-sso.js"></script>
+<script>
+(function () {
+  'use strict';
+  var API = '/api/portfolio-assets', S = { page: 0, pageSize: 50, data: null, site: null, tab: 'overview', user: null, preview: null };
+  function el(id) { return document.getElementById(id); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function np(v, unit) { return v == null || v === '' ? '<span class="np">Not provided</span>' : esc(v) + (unit ? ' ' + esc(unit) : ''); }
+  function say(msg, bad) { var s = el('status'); s.textContent = msg || ''; s.className = 'status' + (bad ? ' err' : ''); }
+  function token() { return S.user ? S.user.getIdToken() : Promise.reject(new Error('Sign in to open your portfolio')); }
+  function call(method, params, body) {
+    return token().then(function (t) {
+      var url = API + (params ? '?' + Object.keys(params).map(function (k) { return encodeURIComponent(k) + '=' + encodeURIComponent(params[k]); }).join('&') : '');
+      return fetch(url, { method: method, headers: { Authorization: 'Bearer ' + t, 'Content-Type': 'application/json' }, body: body ? JSON.stringify(body) : undefined });
+    }).then(function (r) {
+      var ct = r.headers.get('Content-Type') || '';
+      if (ct.indexOf('json') < 0) return r.ok ? r.blob() : Promise.reject(new Error('Request failed (' + r.status + ')'));
+      return r.json().then(function (j) { if (!r.ok) throw new Error(j.error || 'Request failed'); return j; });
+    });
+  }
+  function view() {
+    var sort = el('fSort').value.split(':'), scope = document.querySelector('input[name=scope]:checked').value;
+    return { filters: { q: el('q').value, states: el('fState').value ? [el('fState').value] : null, meter: el('fMeter').value || null, power: el('fPower').value || null, flag: el('fFlag').value || null }, sort: { field: sort[0], dir: sort[1] }, page: S.page, pageSize: S.pageSize, scope: scope };
+  }
+  function setView(v) {
+    var f = v.filters || {}; el('q').value = f.q || ''; el('fState').value = f.states && f.states[0] || ''; el('fMeter').value = f.meter || ''; el('fPower').value = f.power || ''; el('fFlag').value = f.flag || '';
+    if (v.sort) el('fSort').value = v.sort.field + ':' + v.sort.dir; S.page = v.page || 0;
+    var r = document.querySelector('input[name=scope][value=' + (v.scope === 'this_page' ? 'this_page' : 'all_matching') + ']'); if (r) r.checked = true;
+  }
+  function persist() { try { sessionStorage.setItem('pa.view', JSON.stringify(view())); } catch (e) {} }
+  function cards(sm) {
+    if (!sm) return;
+    var a = sm.attention || {}, attn = Object.keys(a).reduce(function (t, k) { return t + a[k]; }, 0), sc = sm.powerOpportunity.screened;
+    var items = [
+      ['Properties', sm.properties.sites, Object.keys(sm.properties.byState).map(function (k) { return k + ' ' + sm.properties.byState[k]; }).join(' · ')],
+      ['Installed EV nameplate', (sm.installed.evChargingNameplateKw || 0).toLocaleString() + ' kW', 'Charger nameplate, not service capacity · ' + sm.installed.coverage.notProvided + ' not provided'],
+      ['Verified headroom', 'Not provided', sm.powerOpportunity.verifiedNote],
+      ['Screened potential', sc.pods + ' pods', sc.scenario + ' · preliminary, unverified · ' + sc.unableSites + ' unable to estimate'],
+      ['Performance & cost', 'No live data connection', 'Import bills or connect telemetry'],
+      ['Attention needed', attn, 'Review flags across sites']
+    ];
+    el('cards').innerHTML = items.map(function (c) { return '<div class="card"><small>' + esc(c[0]) + '</small><b>' + esc(c[1]) + '</b><small>' + esc(c[2]) + '</small></div>'; }).join('');
+    var st = el('fState'), cur = st.value; if (st.options.length <= 1) Object.keys(sm.properties.byState).sort().forEach(function (k) { var o = document.createElement('option'); o.value = k; o.textContent = k; st.appendChild(o); }); st.value = cur;
+  }
+  function load() {
+    persist(); say('Loading sites…');
+    return call('GET', { view: JSON.stringify(view()) }).then(function (d) {
+      S.data = d; say(''); cards(d.summary);
+      el('count').textContent = d.total + ' site' + (d.total === 1 ? '' : 's') + ' match · ' + d.selection.count + ' selected (' + (d.selection.scope === 'this_page' ? 'this page' : 'all matching') + ') · power provided for ' + d.coverage.reportedPowerKw.known + ' of ' + d.coverage.sites;
+      var pages = Math.max(1, Math.ceil(d.total / d.pageSize)); el('pageNo').textContent = 'Page ' + (d.page + 1) + ' of ' + pages; el('prev').disabled = d.page <= 0; el('next').disabled = d.page + 1 >= pages;
+      el('rows').innerHTML = d.rows.map(function (r) {
+        return '<tr><td class="pin"><a href="#site=' + encodeURIComponent(r.siteId) + '" data-site="' + esc(r.siteId) + '">' + esc(r.name) + '</a><div class="small muted">' + esc((r.namespace || '') + ' ' + (r.externalId || '')) + '</div></td>' +
+          '<td>' + np([r.city, r.state].filter(Boolean).join(', ')) + '</td><td><span class="np">Not provided</span></td><td>' + np(r.utility) + '</td><td class="num">' + np(r.installedChargerKw) + '</td>' +
+          '<td><span class="np">Not provided</span></td><td><span class="np">Needs verification</span></td><td>' + esc(r.opportunity) + '</td><td>' + (r.shaRemainingYears == null ? np(null) : esc(r.shaRemainingYears) + ' yrs <span class="small muted">(reported)</span>') + '</td>' +
+          '<td>' + (r.attention.length ? r.attention.map(function (a) { return '<span class="tag">' + esc(a.replace(/_/g, ' ').toLowerCase()) + '</span>'; }).join('') : '<span class="small muted">None flagged</span>') + '</td></tr>';
+      }).join('') || '<tr><td colspan="10">No sites yet. Use <b>Import sites</b> to upload a CSV or XLSX site list — no map needed.</td></tr>';
+      el('cardlist').innerHTML = d.rows.map(function (r) {
+        return '<div class="sitecard"><button type="button" data-site="' + esc(r.siteId) + '"><b>' + esc(r.name) + '</b><div class="small muted">' + esc([r.city, r.state].filter(Boolean).join(', ')) + ' · ' + esc((r.namespace || '') + ' ' + (r.externalId || '')) + '</div>' +
+          '<div class="small">Installed EV: ' + (r.installedChargerKw == null ? 'Not provided' : esc(r.installedChargerKw) + ' kW nameplate') + ' · ' + esc(r.opportunity) + '</div>' + (r.attention.length ? '<div>' + r.attention.map(function (a) { return '<span class="tag">' + esc(a.replace(/_/g, ' ').toLowerCase()) + '</span>'; }).join('') + '</div>' : '') + '</button></div>';
+      }).join('') || '<p>No sites yet.</p>';
+      el('importBtn').disabled = d.caps.indexOf('import') < 0; el('export').disabled = d.caps.indexOf('export') < 0; el('saveView').disabled = d.caps.indexOf('manageViews') < 0;
+    }).catch(function (e) { say(e.message, true); });
+  }
+  function loadViews() { return call('GET', { views: 1 }).then(function (d) { var s = el('views'); s.innerHTML = '<option value="">—</option>' + d.views.map(function (v) { return '<option value="' + esc(v.id) + '">' + esc(v.name) + ' (' + esc(v.savedResult && v.savedResult.total) + ')</option>'; }).join(''); S.views = d.views; }).catch(function () {}); }
+
+  /* ── site detail ─────────────────────────────────────────────────── */
+  var TABS = [['overview', 'Overview'], ['power', 'Power & utility'], ['equipment', 'Equipment'], ['agreements', 'Ownership & agreements'], ['performance', 'Performance & costs'], ['development', 'Development & finance'], ['documents', 'Documents & activity']];
+  var LABELS = { installedChargerKw: 'Installed EV charger nameplate', reportedPowerKw: 'Reported power statistic (definition unresolved)', evcsOwnsMeter: 'Meter ownership flag (reported)', shaRemainingYears: 'Reported remaining term', shaTermYears: 'Reported original term', utility: 'Utility', rateSchedule: 'Rate schedule (reported, not a bill)', switchgearRaw: 'Switchgear (as stored)', switchgearAmps: 'Switchgear amps', revShare: 'Revenue share', monthlyRentUsd: 'Monthly rent', revSharePerKwh: 'Revenue share per kWh', hostAccount: 'Site host (label)', capacityStatus: 'Capacity-request status (source)' };
+  function fact(site, k) {
+    var f = site.facts && site.facts[k], v;
+    if (!f || f.value == null) v = '<span class="np">Not provided</span>';
+    else if (k === 'revShare') v = esc(Math.round(f.value * 10000) / 100) + '% <span class="small muted">(source ' + esc(f.raw) + ', whole percent)</span>';
+    else if (typeof f.value === 'boolean') v = f.value ? 'Yes (reported)' : 'No (reported)';
+    else v = esc(f.value) + (f.unit ? ' ' + esc(f.unit) : '');
+    var src = f && f.source ? [f.source.sheet, f.source.cell].filter(Boolean).join('!') || (f.source.enteredBy ? 'entered by ' + f.source.enteredBy : '') : '';
+    return '<div class="fact"><div class="lbl">' + esc(LABELS[k] || k) + '</div><div class="val">' + v + '</div>' + (f && f.note ? '<div class="src">' + esc(f.note) + '</div>' : '') +
+      (f ? '<div class="src">' + esc(f.kind || '') + (src ? ' · ' + esc(src) : '') + ' · ' + esc((f.reviewStatus || '').replace(/_/g, ' ')) + '</div>' : '') +
+      (S.detail && S.detail.caps.indexOf('edit') >= 0 ? '<button type="button" class="small" data-edit="' + esc(k) + '">Edit</button>' : '') + '</div>';
+  }
+  function openSite(id) {
+    S.siteId = id; try { sessionStorage.setItem('pa.site', id); } catch (e) {}
+    if (location.hash !== '#site=' + encodeURIComponent(id)) history.replaceState(null, '', '#site=' + encodeURIComponent(id));
+    say('Opening site…');
+    return call('GET', { site: id }).then(function (d) {
+      S.detail = d; say(''); var s = d.site, ext = s.externalSiteIds || {};
+      el('siteTitle').textContent = s.name; el('siteSub').textContent = Object.keys(ext).map(function (k) { return k + ' ' + ext[k]; }).join(' · ') + ' · ' + [s.address && s.address.street, s.address && s.address.city, s.address && s.address.state].filter(Boolean).join(', ') + ' · revision ' + s.revision;
+      var why = 'Arrives in a later phase (Connected development). Nothing is launched from here yet.';
+      el('ctx').innerHTML = [['Upload documents', 'documents', ''], ['Open Site Map', '', why], ['Run screening', '', why], ['Model scenario', '', why], ['Prepare finance package', '', 'Needs a saved site map and reviewed energy bills; not available in this phase.']].map(function (a) {
+        return a[1] ? '<button type="button" data-tab="' + a[1] + '">' + esc(a[0]) + '</button>' : '<button type="button" disabled aria-disabled="true" title="' + esc(a[2]) + '">' + esc(a[0]) + '</button><span class="sr">' + esc(a[2]) + '</span>';
+      }).join('');
+      if (!el('site').open) el('site').showModal(); tab(S.tab);
+    }).catch(function (e) { say(e.message, true); });
+  }
+  function tab(key) {
+    S.tab = key; var d = S.detail, s = d.site, h = '';
+    el('tabs').innerHTML = TABS.map(function (t) { return '<button type="button" role="tab" aria-selected="' + (t[0] === key) + '" data-tab="' + t[0] + '">' + esc(t[1]) + '</button>'; }).join('');
+    if (key === 'overview') {
+      var lp = s.opportunity && s.opportunity.legacyProxy;
+      h = '<div class="facts">' + ['installedChargerKw', 'reportedPowerKw', 'utility', 'shaRemainingYears'].map(function (k) { return fact(s, k); }).join('') + '</div>' +
+        '<h2 style="margin-top:12px">Opportunity (preliminary)</h2>' + (lp ? '<p>' + esc(lp.label) + (lp.pods != null ? ': ' + lp.pods + ' pod(s), ' + lp.itKw + ' kW IT / ' + lp.facilityKw + ' kW facility' : '') + '<br><span class="small muted">' + esc(lp.scenario) + ' — ' + esc(lp.caveat) + (lp.status === 'unable' ? ' Legacy workbook convention recorded separately: ' + lp.legacyHistoricalPods + ' pods.' : '') + '</span></p>' : '<p class="np">Not screened</p>') +
+        '<h2>Attention</h2>' + ((s.flags || []).length ? '<ul>' + s.flags.map(function (f) { return '<li><b>' + esc(f.code.replace(/_/g, ' ').toLowerCase()) + '</b> — ' + esc(f.message) + '</li>'; }).join('') + '</ul>' : '<p>None flagged</p>');
+    } else if (key === 'power') {
+      h = '<div class="facts">' + ['utility', 'rateSchedule', 'evcsOwnsMeter', 'reportedPowerKw', 'switchgearRaw', 'switchgearAmps', 'capacityStatus'].map(function (k) { return fact(s, k); }).join('') + '</div><p class="small muted">Approved import limit: Not provided. Verified headroom needs reviewed service limits, topology and interval data; nameplate is never relabelled as approval.</p>';
+    } else if (key === 'equipment') {
+      h = list(d.equipment, function (q) { return '<b>' + esc(q.label || q.category) + '</b> · ' + esc(q.status) + '<div class="small">' + Object.keys(q.ratings || {}).filter(function (k) { return q.ratings[k] != null; }).map(function (k) { return esc(k) + ': ' + esc(q.ratings[k]); }).join(' · ') + '</div>' + (q.quantityNote ? '<div class="small muted">' + esc(q.quantityNote) + '</div>' : ''); }) + form('equipment', [['category', 'Category', 'select:ev_charger,bess,solar,compute,switchgear,transformer,meter,controls,other'], ['status', 'Status', 'select:installed,proposed,removed'], ['manufacturer', 'Manufacturer'], ['model', 'Model'], ['serial', 'Serial'], ['quantity', 'Quantity'], ['kw', 'Rated kW'], ['kwh', 'Rated kWh']]);
+    } else if (key === 'agreements') {
+      h = list(d.agreements, function (a) { var e = a.economics || {}; return '<b>' + esc(a.label || a.type) + '</b> · <span class="tag">' + esc(a.termDisplay || 'Needs agreement review') + '</span><div class="small">Reported term: ' + np(a.reportedTermYears, 'yrs') + ' · reported remaining: ' + np(a.reportedRemainingYears, 'yrs') + ' · rent: ' + np(e.fixedRentUsdMonthly, 'USD/mo') + ' · revenue share: ' + (e.revShareFraction == null ? np(null) : esc(Math.round(e.revShareFraction * 10000) / 100) + '%') + ' · applies to compute: ' + esc(e.appliesToCompute || 'unknown') + '</div>'; }) +
+        form('agreement', [['type', 'Type', 'select:site_host_agreement,lease,license,loa,easement,utility_service,interconnection,offtake,other'], ['label', 'Label'], ['startDate', 'Start (YYYY-MM-DD)'], ['endDate', 'End (YYYY-MM-DD)'], ['revSharePercent', 'Revenue share (%)'], ['fixedRentUsdMonthly', 'Monthly rent (USD)'], ['renewalOptions', 'Renewal options']]);
+    } else if (key === 'performance') {
+      h = '<p><b>No live data connection.</b> No performance values are shown until bills, interval files or telemetry are imported and reviewed.</p>';
+    } else if (key === 'development') {
+      h = '<p>Linked projects: ' + (s.projectId ? esc(s.projectId) : '<span class="np">None linked</span>') + '</p><h2>Tasks</h2>' + list(d.tasks, function (t) { return '<b>' + esc(t.title) + '</b> · ' + esc(t.status) + (t.assignee ? ' · ' + esc(t.assignee) : '') + (t.dueDate ? ' · due ' + esc(t.dueDate) : '') + (t.evidenceRequired ? '<div class="small muted">Evidence: ' + esc(t.evidenceRequired) + '</div>' : '') + (t.status !== 'done' && d.caps.indexOf('tasks') >= 0 ? ' <button type="button" class="small" data-done="' + esc(t.id) + '">Mark done</button>' : ''); }) +
+        form('task', [['title', 'Task'], ['assignee', 'Assignee'], ['dueDate', 'Due (YYYY-MM-DD)'], ['evidenceRequired', 'Evidence required']]);
+    } else if (key === 'documents') {
+      h = list(d.files, function (f) { return '<a href="#" data-file="' + esc(f.id) + '">' + esc(f.name) + '</a> · ' + esc(f.category) + ' · ' + esc(f.reviewStatus) + ' <span class="small muted">' + esc(f.uploadedAt) + ' by ' + esc(f.uploadedBy) + '</span>'; }) +
+        (d.caps.indexOf('files') >= 0 ? '<div class="grid2"><label>Category<select id="fileCat"><option value="energy_bill">Energy bill</option><option value="agreement">Agreement</option><option value="utility_letter">Utility letter</option><option value="one_line">One-line</option><option value="equipment_spec">Equipment spec</option><option value="other">Other</option></select></label><label>File<input type="file" id="fileIn" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.txt,.dwg,.dxf,.kmz,.kml,.docx"></label></div><button type="button" id="fileUp">Upload privately</button>' : '') +
+        '<h2 style="margin-top:12px">Source</h2><ul>' + (s.sourceRefs || []).map(function (r) { return '<li>' + esc(r.file || 'import') + (r.row ? ' row ' + esc(r.row) : '') + ' <span class="small muted">' + esc(r.profile || '') + '</span></li>'; }).join('') + '</ul>';
+    }
+    el('tabBody').innerHTML = h;
+  }
+  function list(items, fn) { return (items && items.length) ? '<ul>' + items.map(function (x) { return '<li>' + fn(x) + '</li>'; }).join('') + '</ul>' : '<p class="np">None recorded</p>'; }
+  function form(kind, fields) {
+    if (S.detail.caps.indexOf(kind === 'task' ? 'tasks' : 'edit') < 0) return '';
+    return '<details><summary>Add ' + kind + '</summary><form data-kind="' + kind + '" class="grid2">' + fields.map(function (f) {
+      var id = 'f_' + kind + '_' + f[0];
+      if (f[2] && f[2].indexOf('select:') === 0) return '<label for="' + id + '">' + esc(f[1]) + '<select id="' + id + '" name="' + f[0] + '">' + f[2].slice(7).split(',').map(function (o) { return '<option>' + o + '</option>'; }).join('') + '</select></label>';
+      return '<label for="' + id + '">' + esc(f[1]) + '<input id="' + id + '" name="' + f[0] + '"></label>';
+    }).join('') + '<button type="submit" class="primary">Save</button></form></details>';
+  }
+  function submitForm(f) {
+    var kind = f.getAttribute('data-kind'), v = {}; Array.prototype.forEach.call(f.elements, function (e) { if (e.name) v[e.name] = e.value; });
+    var body = { action: kind + '-upsert', siteId: S.siteId };
+    if (kind === 'agreement') body.agreement = { type: v.type, label: v.label, startDate: v.startDate, endDate: v.endDate, renewalOptions: v.renewalOptions, economics: { revSharePercent: v.revSharePercent, fixedRentUsdMonthly: v.fixedRentUsdMonthly } };
+    if (kind === 'equipment') body.equipment = { category: v.category, status: v.status, manufacturer: v.manufacturer, model: v.model, serial: v.serial, quantity: v.quantity, ratings: { kw: v.kw, kwh: v.kwh } };
+    if (kind === 'task') body.task = v;
+    return call('POST', null, body).then(function () { say('Saved.'); return openSite(S.siteId); }).catch(function (e) { say(e.message, true); });
+  }
+
+  /* ── import: upload → map → review → confirm ─────────────────────── */
+  function steps(n) { Array.prototype.forEach.call(el('steps').children, function (s, i) { s.className = i < n ? 'on' : ''; }); }
+  function openImport() {
+    S.preview = null; steps(1);
+    el('impBody').innerHTML = '<p class="small muted">CSV or XLSX. Macros, external links and embedded objects are refused; formulas are read by their saved value only. The original file is kept privately.</p>' +
+      '<div class="grid2"><label for="impFile">Site list<input id="impFile" type="file" accept=".csv,.xlsx"></label><label for="impNs">Source namespace (optional)<input id="impNs" placeholder="e.g. evcs"></label></div><button type="button" class="primary" id="impGo">Read file</button>';
+    el('imp').showModal();
+  }
+  function readB64(file) { return new Promise(function (ok, no) { var r = new FileReader(); r.onload = function () { ok(String(r.result).split(',')[1] || ''); }; r.onerror = function () { no(new Error('Could not read the file')); }; r.readAsDataURL(file); }); }
+  function preview() {
+    var f = el('impFile').files[0]; if (!f) { say('Choose a file first', true); return; }
+    el('impBody').insertAdjacentHTML('beforeend', '<p role="status">Reading ' + esc(f.name) + '…</p>');
+    readB64(f).then(function (b64) { return call('POST', null, { action: 'import-preview', fileName: f.name, base64: b64, namespace: el('impNs').value || undefined }); }).then(function (p) {
+      S.preview = p; steps(p.alreadyCommitted ? 4 : 3);
+      if (p.alreadyCommitted) { el('impBody').innerHTML = '<p>' + esc(p.note) + '</p>'; return; }
+      var c = p.counts, m = p.meta || {};
+      el('impBody').innerHTML = '<h2>Columns</h2><p class="small">Profile <b>' + esc(p.profile) + '</b> · sheet ' + esc(m.sheet || 'CSV') + ' · headers on row ' + esc(m.headerRow) + (m.formulaCells ? ' · ' + m.formulaCells + ' formula cell(s) read by saved value' : '') + (m.unknownHeaders && m.unknownHeaders.length ? ' · unrecognised: ' + esc(m.unknownHeaders.join(', ')) : '') + '</p>' +
+        ((m.definitionNotes || []).length ? '<p class="small"><span class="tag">definition note</span> ' + esc(m.definitionNotes[0].text) + '</p>' : '') +
+        '<h2>Review</h2><p><b>' + c.created + '</b> to create · <b>' + c.updated + '</b> to update · <b>' + c.unchanged + '</b> unchanged · <b>' + c.rejected + '</b> rejected · <b>' + c.conflicts + '</b> conflict(s) with reviewed values</p>' +
+        (p.conflicts.length ? '<fieldset><legend>Reviewed values the file would change (unchecked = keep reviewed value)</legend>' + p.conflicts.map(function (x, i) { return '<label class="small"><input type="checkbox" data-accept="' + esc(x.siteId + ':' + x.field) + '"> ' + esc(x.externalSiteId) + ' · ' + esc(x.field) + ': ' + esc(x.from) + ' → ' + esc(x.to) + '</label><br>'; }).join('') + '</fieldset>' : '') +
+        (p.changes.length ? '<details><summary>Field changes (' + p.changes.length + (p.changesTruncated ? '+' : '') + ')</summary><ul class="small">' + p.changes.slice(0, 200).map(function (x) { return '<li>' + esc(x.externalSiteId) + ' · ' + esc(x.field) + ': ' + esc(JSON.stringify(x.from)) + ' → ' + esc(JSON.stringify(x.to)) + (x.action === 'blank_in_source' ? ' (blank in file; kept)' : '') + '</li>'; }).join('') + '</ul></details>' : '') +
+        (p.suggestions.length ? '<details><summary>Possible same-address sites (' + p.suggestions.length + ') — kept separate</summary><ul class="small">' + p.suggestions.map(function (x) { return '<li>' + esc(x.externalSiteId) + ': ' + esc(x.note) + '</li>'; }).join('') + '</ul></details>' : '') +
+        (p.rejected.length ? '<details><summary>Rejected rows (' + p.rejected.length + ')</summary><ul class="small">' + p.rejected.map(function (x) { return '<li>Row ' + esc(x.row) + ': ' + esc(x.reason) + '</li>'; }).join('') + '</ul><button type="button" id="errCsv">Download error report</button></details>' : '') +
+        '<p><button type="button" class="primary" id="impCommit">Confirm import</button></p>';
+    }).catch(function (e) { say(e.message, true); el('impBody').insertAdjacentHTML('beforeend', '<p class="status err" role="alert">' + esc(e.message) + '</p>'); });
+  }
+  function commit() {
+    var accept = Array.prototype.map.call(document.querySelectorAll('[data-accept]:checked'), function (c) { return c.getAttribute('data-accept'); });
+    el('impCommit').disabled = true;
+    call('POST', null, { action: 'import-commit', importId: S.preview.importId, planHash: S.preview.planHash, acceptConflicts: accept }).then(function (r) {
+      steps(4); el('impBody').innerHTML = '<p>Imported: ' + r.written + ' site record(s) written (' + r.counts.created + ' created, ' + r.counts.updated + ' updated, ' + r.counts.unchanged + ' unchanged). You can undo this import from Import history.</p>'; load();
+    }).catch(function (e) { el('impCommit').disabled = false; say(e.message, true); });
+  }
+  function errorCsv() {
+    var rows = [['Row', 'Reason']].concat(S.preview.rejected.map(function (x) { return [x.row, x.reason]; }));
+    var csv = rows.map(function (r) { return r.map(function (v) { v = String(v == null ? '' : v); if (/^[=+\-@\t\r]/.test(v)) v = "'" + v; return '"' + v.replace(/"/g, '""') + '"'; }).join(','); }).join('\r\n');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = 'import-errors.csv'; a.click();
+  }
+  function importHistory() {
+    call('GET', { imports: 1 }).then(function (d) {
+      steps(0);
+      el('impBody').innerHTML = '<h2>Import history</h2>' + list(d.imports, function (i) { return esc(i.fileName) + ' · ' + esc(i.status) + ' · ' + esc(i.counts ? i.counts.created + ' created / ' + i.counts.updated + ' updated' : '') + ' <span class="small muted">' + esc(i.committedAt || i.createdAt) + '</span>' + (i.status === 'committed' ? ' <button type="button" data-undo="' + esc(i.id) + '">Undo this import</button>' : ''); });
+      el('imp').showModal();
+    }).catch(function (e) { say(e.message, true); });
+  }
+
+  /* ── wiring ──────────────────────────────────────────────────────── */
+  var t; function soon() { clearTimeout(t); t = setTimeout(function () { S.page = 0; load(); }, 250); }
+  el('q').addEventListener('input', soon);
+  ['fState', 'fMeter', 'fPower', 'fFlag', 'fSort'].forEach(function (id) { el(id).addEventListener('change', function () { S.page = 0; load(); }); });
+  Array.prototype.forEach.call(document.querySelectorAll('input[name=scope]'), function (r) { r.addEventListener('change', load); });
+  el('prev').addEventListener('click', function () { S.page = Math.max(0, S.page - 1); load(); });
+  el('next').addEventListener('click', function () { S.page++; load(); });
+  el('views').addEventListener('change', function () { var v = (S.views || []).filter(function (x) { return x.id === el('views').value; })[0]; if (v) { setView(v.view); load(); } });
+  el('saveView').addEventListener('click', function () { var name = window.prompt('Name this view'); if (!name) return; call('POST', null, { action: 'view-save', name: name, view: view() }).then(function (r) { say('View saved (' + r.total + ' sites).'); loadViews(); }).catch(function (e) { say(e.message, true); }); });
+  el('export').addEventListener('click', function () { call('GET', { export: 'csv', view: JSON.stringify(view()) }).then(function (blob) { var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'portfolio-assets.csv'; a.click(); }).catch(function (e) { say(e.message, true); }); });
+  el('importBtn').addEventListener('click', openImport); el('importsBtn').addEventListener('click', importHistory);
+  el('closeImp').addEventListener('click', function () { el('imp').close(); });
+  el('closeSite').addEventListener('click', function () { el('site').close(); });
+  el('site').addEventListener('close', function () { S.siteId = null; try { sessionStorage.removeItem('pa.site'); } catch (e) {} history.replaceState(null, '', location.pathname + location.search); });
+  document.addEventListener('click', function (ev) {
+    var a = ev.target.closest('[data-site]'); if (a) { ev.preventDefault(); openSite(a.getAttribute('data-site')); return; }
+    var tb = ev.target.closest('[data-tab]'); if (tb && el('site').contains(tb)) { tab(tb.getAttribute('data-tab')); return; }
+    if (ev.target.id === 'impGo') preview(); if (ev.target.id === 'impCommit') commit(); if (ev.target.id === 'errCsv') errorCsv();
+    var u = ev.target.closest('[data-undo]'); if (u) call('POST', null, { action: 'import-undo', importId: u.getAttribute('data-undo') }).then(function (r) { say('Undo applied to ' + r.applied + ' site(s); ' + r.skipped.length + ' skipped (changed since).'); el('imp').close(); load(); }).catch(function (e) { say(e.message, true); });
+    var dn = ev.target.closest('[data-done]'); if (dn) { var task = S.detail.tasks.filter(function (x) { return x.id === dn.getAttribute('data-done'); })[0]; call('POST', null, { action: 'task-upsert', siteId: S.siteId, task: Object.assign({}, task, { status: 'done' }) }).then(function () { openSite(S.siteId); }).catch(function (e) { say(e.message, true); }); }
+    var ed = ev.target.closest('[data-edit]'); if (ed) { var k = ed.getAttribute('data-edit'), val = window.prompt('New value for ' + (LABELS[k] || k) + ' (leave empty for Not provided)'); if (val === null) return; var reason = window.prompt('Reason / evidence for this change') || ''; var num = val !== '' && isFinite(Number(val)) ? Number(val) : (val === '' ? null : val); call('POST', null, { action: 'field-review', siteId: S.siteId, field: k, value: num, reason: reason, expectedRevision: S.detail.site.revision }).then(function () { openSite(S.siteId); }).catch(function (e) { say(e.message, true); }); }
+    var fl = ev.target.closest('[data-file]'); if (fl) { ev.preventDefault(); call('GET', { site: S.siteId, file: fl.getAttribute('data-file') }).then(function (blob) { var x = document.createElement('a'); x.href = URL.createObjectURL(blob); x.download = fl.textContent; x.click(); }).catch(function (e) { say(e.message, true); }); }
+    if (ev.target.id === 'fileUp') { var file = el('fileIn').files[0]; if (!file) return; readB64(file).then(function (b64) { return call('POST', null, { action: 'file-attach', siteId: S.siteId, fileName: file.name, base64: b64, category: el('fileCat').value }); }).then(function () { say('Stored privately.'); openSite(S.siteId); }).catch(function (e) { say(e.message, true); }); }
+  });
+  document.addEventListener('submit', function (ev) { if (ev.target.getAttribute('data-kind')) { ev.preventDefault(); submitForm(ev.target); } });
+  function boot(u) {
+    S.user = u; el('ws').textContent = u ? u.email : 'Sign in to open your portfolio';
+    if (!u) { say('Sign in through your OMEGA workspace to open Portfolio & Assets.', true); return; }
+    try { var sv = sessionStorage.getItem('pa.view'); if (sv) setView(JSON.parse(sv)); } catch (e) {}
+    load().then(loadViews).then(function () {
+      var m = /#site=([^&]+)/.exec(location.hash), id = m ? decodeURIComponent(m[1]) : null;
+      try { id = id || sessionStorage.getItem('pa.site'); } catch (e) {}
+      if (id) openSite(id);
+    });
+  }
+  if (window.firebase && firebase.auth) firebase.auth().onAuthStateChanged(boot); else boot(null);
+})();
+</script>
+</body></html>

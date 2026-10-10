@@ -38,7 +38,7 @@
   'use strict';
   var AREAS = [
     { key: 'today',    label: 'Today',    icon: '◷', hint: 'what needs you', centre: true },
-    { key: 'projects', label: 'Projects', icon: '▥', hint: 'all sites', always: true, href: '/projects.html', pages: [['In flight', 'Every project and how far along it is', '#flight'], ['All projects', 'Every site, who has it, where it is', '/projects.html']] },
+    { key: 'projects', label: 'Projects', icon: '▥', hint: 'all sites', always: true, href: '/projects.html', pages: [['Portfolio', 'Your sites, energy assets and opportunities', '/portfolio-assets.html', 'portfolio-assets'], ['In flight', 'Every project and how far along it is', '#flight'], ['All projects', 'Every site, who has it, where it is', '/projects.html']] },
     { key: 'orders',   label: 'Orders',   icon: '◷', hint: 'office', logic: 'logic-office',    pages: [['Orders', 'Price, accept, invoice', '/omega-logic#orders'], ['Customers', 'Accounts and people', '/portals/customer/admin.html'], ['Office app', 'On a phone', '/office/app']] },
     { key: 'plant',    label: 'Plant',    icon: '⚙', hint: 'build',  logic: 'logic-plant',     pages: [['Work order board', 'What to build', '/plant/work-orders.html'], ['Plant board', 'Live station map', '/plant/manager.html'], ['Plant app', 'The bench', '/plant/app']] },
     { key: 'deliver',  label: 'Deliver',  icon: '➜', hint: 'ship, custody', logic: 'logic-logistics', pages: [['Shipping & receiving', 'Loads and lanes', '/logic-logistics.html'], ['Sites & custody', 'Where every unit is', '/logic-custody.html']] },
@@ -89,7 +89,11 @@
   function items(key, ctx) {
     var a = byKey(key); if (!a) return [];
     ctx = ctx || {};
-    var out = (a.pages || []).map(function (p) { return { name: p[0], sub: p[1], href: p[2], page: true }; });
+    /* a page with a 4th element is behind that workspace flag (billing
+       toolOverrides, read into ctx.flags): Portfolio is a tenant-scoped
+       preview until ClearSky switches it on. Hidden is not refused — the
+       page's API checks the same flag. */
+    var out = (a.pages || []).filter(function (p) { return !p[3] || !!(ctx.flags && ctx.flags[p[3]] === true); }).map(function (p) { return { name: p[0], sub: p[1], href: p[2], page: true }; });
     var grouped = [];
     (a.subjects || []).forEach(function (s) {
       grouped = grouped.concat(s.tools || []);
