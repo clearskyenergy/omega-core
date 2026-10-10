@@ -1,0 +1,28 @@
+name: CleanCell catalog
+on:
+  pull_request:
+    paths:
+      - 'omega-cleancell-catalog.js'
+      - 'omega-bess-products.js'
+      - 'scripts/tests/tcleancellcatalog.js'
+      - '.github/workflows/cleancell-catalog.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'omega-cleancell-catalog.js'
+      - 'omega-bess-products.js'
+      - 'scripts/tests/tcleancellcatalog.js'
+      - '.github/workflows/cleancell-catalog.yml'
+permissions:
+  contents: read
+jobs:
+  catalog-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Specifications, isolation, picker and loader checks
+        run: node scripts/tests/tcleancellcatalog.js
