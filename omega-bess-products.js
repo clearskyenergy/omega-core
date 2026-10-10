@@ -256,12 +256,12 @@
 (function (root) {
   'use strict';
   var doc = root.document;
-  if (!doc) return;
+  if (!doc || typeof doc.getElementById !== 'function') return;
   function loadReferenceCatalog() {
     if (!doc.getElementById('bm-catalog') || doc.getElementById('omega-cleancell-catalog-script')) return;
     var script = doc.createElement('script');
     script.id = 'omega-cleancell-catalog-script';
-    script.src = '/omega-cleancell-catalog.js?v=20261009-revh1';
+    script.src = '/omega-cleancell-catalog.js?v=20261010-revh2';
     script.async = true;
     (doc.head || doc.documentElement).appendChild(script);
   }
