@@ -38,7 +38,7 @@
   'use strict';
   var AREAS = [
     { key: 'today',    label: 'Today',    icon: '◷', hint: 'what needs you', centre: true },
-    { key: 'projects', label: 'Projects', icon: '▥', hint: 'all sites', always: true, href: '/projects.html', pages: [['In flight', 'Every project and how far along it is', '#flight'], ['All projects', 'Every site, who has it, where it is', '/projects.html']] },
+    { key: 'projects', label: 'Projects', icon: '▥', hint: 'all sites', always: true, href: '/projects.html', pages: [['Portfolio', 'Your sites, energy assets and opportunities', '/portfolio.html'], ['In flight', 'Every project and how far along it is', '#flight'], ['All projects', 'Every site, who has it, where it is', '/projects.html']] },
     { key: 'orders',   label: 'Orders',   icon: '◷', hint: 'office', logic: 'logic-office',    pages: [['Orders', 'Price, accept, invoice', '/omega-logic#orders'], ['Customers', 'Accounts and people', '/portals/customer/admin.html'], ['Office app', 'On a phone', '/office/app']] },
     { key: 'plant',    label: 'Plant',    icon: '⚙', hint: 'build',  logic: 'logic-plant',     pages: [['Work order board', 'What to build', '/plant/work-orders.html'], ['Plant board', 'Live station map', '/plant/manager.html'], ['Plant app', 'The bench', '/plant/app']] },
     { key: 'deliver',  label: 'Deliver',  icon: '➜', hint: 'ship, custody', logic: 'logic-logistics', pages: [['Shipping & receiving', 'Loads and lanes', '/logic-logistics.html'], ['Sites & custody', 'Where every unit is', '/logic-custody.html']] },
@@ -269,208 +269,58 @@
     var a = billing && billing.addOns;
     if (!a || !Array.isArray(a.live) || !a.live.length) return [];
     var until = typeof a.accessUntil === 'number' ? a.accessUntil : Date.parse(a.accessUntil);
-    return isFinite(until) && (now == null ? Date.now() : now) < until ? a.live.slice() : [];
+    return isFinite(until) && until < (now || Date.now()) ? [] : a.live.slice();
   }
   function legacyCtx(o) {
     o = o || {};
-    var T = o.tools || null, ws = o.ws || {}, bl = o.billing || null;
-    function tool(k) { return T && T.byKey ? T.byKey(k) || null : null; }
-    var who = o.who || {};
-    if (!who.orgId && ws.orgId) who = { email: who.email, emailVerified: who.emailVerified, orgId: ws.orgId };
-    var c = { packaged: false, modules: [], addons: ws.addons || (bl && bl.addons) || [], tierLevel: ws.tierLevel, hideMarketplace: !!ws.hideMarketplace,
-      addOns: o.addOns || ws.addOns || liveAddOns(bl, o.now),
-      /* the storefront is on where its own gate opens it (moduleState asks
-         storefront() with these): the record's switch or add-on, or the
-         tenant record's staff-written whiteLabel, never the tier */
-      billing: bl, whiteLabel: o.whiteLabel || ws.whiteLabel || null,
+    var tools = o.tools, ws = o.ws || {}, billing = o.billing, who = o.who || {};
+    var canOpen = typeof o.canOpen === 'function' ? o.canOpen : function (k) {
+      return tools && typeof tools.isUnlocked === 'function' ? tools.isUnlocked(k) : true;
+    };
+    var visible = tools && typeof tools.isVisible === 'function' ? function (k) { return tools.isVisible(k); } : null;
+    var tool = tools && typeof tools.byKey === 'function' ? function (k) { return tools.byKey(k); } : null;
+    var addOns = Array.isArray(o.addOns) ? o.addOns : liveAddOns(billing, o.now);
+    var e = editorCtx(o.caps || (root && root.OmegaCaps), billing, who);
+    return {
+      canOpen: canOpen,
       tool: tool,
-      canOpen: o.canOpen || function (k) { var t = tool(k); return !!t && !!T.isUnlocked && T.isUnlocked(t, ws); },
-      visible: function (k) { var t = tool(k); return !!t && (!T.isVisible || T.isVisible(t, ws)); } };
-    /* a workspace judged with no person (the server's add-on check, the
-       master console) reads its record as capsFor does; a person's page
-       reads it as the editor resolves for that person */
-    var caps = o.caps || (root && root.OmegaCaps);
-    var e = editorCtx(caps, who.email ? bl : workspaceRecord(bl, String(who.orgId || '').toLowerCase(), caps), who);
-    if (e) { c.canCap = e.canCap; c.editorCan = e.editorCan; c.ungated = e.ungated; c.editorTier = e.tier; }
-    return c;
+      visible: visible,
+      modules: ws.modules || [],
+      addons: ws.addons || [],
+      addOns: addOns,
+      editorModules: addOns,
+      hideMarketplace: !!ws.hideMarketplace,
+      packaged: !!ws.packaged,
+      tierLevel: typeof ws.tierLevel === 'number' ? ws.tierLevel : 0,
+      billing: billing,
+      whiteLabel: ws.whiteLabel,
+      canCap: e ? e.canCap : null,
+      ungated: e ? e.ungated : null,
+      editorCan: e ? e.editorCan : null
+    };
   }
-  /* ── ONE CARD, ONE STATUS, AT MOST ONE ACTION (Tommy, 2026-09-27: "the
-     opt in and opt out stuff you need to make that make sense"). Every
-     surface that shows a module to a workspace — the Modules page, Plan &
-     billing's chips and changes in progress — reads its card here, so a
-     module can never say Live in one place and Opt in in another.
-       m        the catalog entry (key, name, shelf, tools, legacyGates)
-       ctx      as moduleState takes it
-       billing  billing/current as the workspace reads it: subscription,
-                optIns{}, optOuts{}, removalRequests[], paymentLink, and a
-                legacy plan's card-bought add-ons (addOns: modules, live,
-                pending[], ending{}, nextInvoiceOn: api/_lib/addons.js)
-       summary  GET /api/plan-change, or null while it loads or failed:
-                pending[], gate{canApply, reason}, nextReviewOn, addOns; its
-                subscription, removalRequests, optIns, optOuts and addOns
-                stand in only where billing/current carries none
-       opts     { admin, pendingApproval, planName, company, price }
-     The card carries the record its state rests on (record: the change
-     invoice, the add-on invoice, the queued removal, the opt-out or the
-     opt-in), so Plan & billing lists what is in flight FROM the cards: a
-     request the plan has already answered (an opt-in on a module now held,
-     an opt-out on one no longer held) is never shown as in flight anywhere.
-     A state, first match wins:
-       included  Lite (Omega Design), the floor every plan stands on
-       awaiting  a change invoice for it is open (packaged), or the add-on
-                 invoice that buys it is (legacy, bought by card)
-       bought    in the subscription, not switched on yet (packaged)
-       removing  an opt-out is queued (packaged: for the review; legacy:
-                 with ClearSky; a card-bought add-on: at the end of the
-                 month paid for)
-       live      on the plan (a legacy add-on's renewal waiting for payment
-                 says so and pays)
-       requested an opt-in is recorded, waiting on ClearSky (legacy)
-       part      some of it is on the plan (legacy)
-       available not on the plan
-     The words are the contract's: Opt in, Opt out, Cancel request; never
-     Subscribe or Ask. The action is what the button does; the ONE menu
-     (omega-package-menu.js) confirms it and states the money before
-     anything is written (for a legacy plan it asks the server first
-     whether the module can be bought by card now, or is a recorded
-     request). Nothing here prices: the price is the server's display
-     string, handed in, shown once on the card. card.via says whose path a
-     change takes: 'package' (the engine), 'addon' (a legacy plan's card
-     add-on) or 'request' (a legacy plan's recorded request). */
-  var MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  /* a calendar day as people read it; 'YYYY-MM-DD' is that day wherever
-     the reader is (new Date('2026-12-20') is the 19th in Chicago) */
-  function shortDay(v) {
-    if (!v) return '';
-    var s = String(v), d = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s);
-    if (d) return MON[+d[2] - 1] + ' ' + (+d[3]);
-    var t = new Date(typeof v === 'number' ? v : s);
-    return isNaN(t.getTime()) ? '' : MON[t.getMonth()] + ' ' + t.getDate();
+  /* one card for a module: status, note, at most one action (Open / Buy /
+     Ask). The Modules page and the marketplace store both render this. */
+  function moduleCard(m, ctx) {
+    var state = moduleState(m, ctx);
+    var note = state === 'part' ? moduleNote(m, ctx) : '';
+    return { key: m.key, name: m.name || m.key, state: state, note: note };
   }
-  function listed(obj, key) { var o = obj && typeof obj === 'object' ? obj[key] : null; return o && o.status === 'requested' ? o : null; }
-  function cap1(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
-  /* a legacy plan's card add-ons (api/_lib/addons.js): the stored record
-     (billing/current.addOns) or the summary's view of it. `ending` is a map
-     of stop requests on the record and a list in the view. */
-  function addOnPending(ao, key, purpose) {
-    var list = ao && Array.isArray(ao.pending) ? ao.pending : [];
-    for (var i = 0; i < list.length; i++) { var p = list[i]; if (p && (p.purpose || 'purchase') === purpose && has(p.add, key)) return p; }
-    return null;
-  }
-  function addOnEnding(ao, key) {
-    var e = ao && ao.ending;
-    if (!e) return null;
-    if (Array.isArray(e)) { for (var i = 0; i < e.length; i++) if (e[i] && e[i].key === key) return e[i]; return null; }
-    return e[key] && e[key].status === 'requested' ? e[key] : null;
-  }
-  function moduleCard(m, ctx, billing, summary, opts) {
-    ctx = ctx || {}; billing = billing || {}; opts = opts || {};
-    var key = m && m.key, packaged = !!ctx.packaged, price = opts.price || '', plan = opts.planName || 'your plan', co = opts.company || 'your workspace';
-    var card = { key: key, state: 'available', pill: 'Not on your plan', tone: 'off', held: false, priceLine: price, note: '', action: null, secondary: null, adminLine: '', record: null, via: packaged ? 'package' : 'request' };
-    var st = moduleState(m, ctx), sm = summary || {};
-    var sub = billing.subscription && Array.isArray(billing.subscription.modules) ? billing.subscription.modules : Array.isArray(sm.subscription) ? sm.subscription : [];
-    var wait = null;
-    (sm.pending || []).forEach(function (p) { if (!wait && Array.isArray(p.add) && p.add.indexOf(key) >= 0) wait = p; });
-    var queued = null;
-    (Array.isArray(billing.removalRequests) ? billing.removalRequests : Array.isArray(sm.removalRequests) ? sm.removalRequests : []).forEach(function (r) { if (r && r.module === key) queued = r; });
-    var optOut = !packaged ? listed(billing.optOuts || sm.optOuts, key) : null, optIn = !packaged ? listed(billing.optIns || sm.optIns, key) : null;
-    /* a legacy plan's card add-ons: what waits for payment, what is on, what is stopping */
-    var ao = packaged ? null : (billing.addOns && typeof billing.addOns === 'object' ? billing.addOns : sm.addOns && typeof sm.addOns === 'object' ? sm.addOns : null);
-    var aoLive = !packaged && (has(ctx.addOns, key) || (!ctx.addOns && ao && has(ao.live, key))) && st === 'held';
-    var aoBuy = ao && !aoLive && st !== 'held' ? addOnPending(ao, key, 'purchase') : null;
-    var aoRenew = aoLive ? addOnPending(ao, key, 'renewal') : null;
-    var aoEnd = aoLive ? addOnEnding(ao, key) : null;
-    function payAction(p) { return p.paymentLink ? { kind: 'pay', label: 'Pay' + (p.display ? ' ' + p.display : ''), href: p.paymentLink, payWith: p.payWith || 'QuickBooks' } : { kind: 'billing', label: 'Plan & billing' }; }
-    if (key === 'lite') {
-      card.state = 'included'; card.pill = 'Live · always included'; card.tone = 'live'; card.held = true;
-      card.priceLine = 'In every plan'; card.note = 'Always on. Nothing to opt in to or out of.';
-      return card;
-    }
-    if (packaged && wait) {
-      card.state = 'awaiting'; card.pill = 'Waiting for payment'; card.tone = 'wait';
-      /* the server expires an unpaid change at its cycle end: said as such, the same words as the menu */
-      card.note = (wait.display ? wait.display + ' invoice · ' : '') + 'switches on when paid' + (wait.expiresOn ? ' · expires unpaid on ' + shortDay(wait.expiresOn) : '');
-      card.action = wait.paymentLink ? { kind: 'pay', label: 'Pay' + (wait.display ? ' ' + wait.display : ''), href: wait.paymentLink, payWith: wait.payWith || sm.payWith || '' } : { kind: 'billing', label: 'Plan & billing' };
-      card.secondary = { kind: 'cancel', label: 'Cancel request' }; card.record = wait;
-    } else if (aoBuy) {
-      /* bought by card on a legacy plan, its QuickBooks invoice still open */
-      card.state = 'awaiting'; card.pill = 'Waiting for payment'; card.tone = 'wait'; card.via = 'addon';
-      card.note = (aoBuy.display ? aoBuy.display + ' invoice · ' : '') + 'switches on when paid' + (aoBuy.expiresOn ? ' · expires unpaid on ' + shortDay(aoBuy.expiresOn) : '');
-      card.action = payAction(aoBuy);
-      card.secondary = { kind: 'cancel', label: 'Cancel request', via: 'addon', addOnId: aoBuy.id };
-      card.record = { kind: 'addon', id: aoBuy.id, purpose: 'purchase', add: aoBuy.add, names: aoBuy.names, display: aoBuy.display, paymentLink: aoBuy.paymentLink, payWith: aoBuy.payWith || 'QuickBooks', expiresOn: aoBuy.expiresOn, date: aoBuy.date };
-    } else if (aoRenew && !aoEnd) {
-      /* on now; the month's renewal waits for payment (no opt-out until it is paid) */
-      card.state = 'live'; card.pill = 'Waiting for payment'; card.tone = 'wait'; card.held = true; card.via = 'addon';
-      card.note = (aoRenew.display ? aoRenew.display + ' renewal' : 'The renewal') + ' is waiting for payment. It stays on while the invoice is open.';
-      card.action = payAction(aoRenew);
-      card.record = { kind: 'addon', id: aoRenew.id, purpose: 'renewal', add: aoRenew.add, names: aoRenew.names, display: aoRenew.display, paymentLink: aoRenew.paymentLink, payWith: aoRenew.payWith || 'QuickBooks', date: aoRenew.date };
-    } else if (packaged && st !== 'held' && sub.indexOf(key) >= 0) {
-      card.state = 'bought'; card.pill = 'Bought · not on yet'; card.tone = 'wait';
-      card.note = 'Switches on when your open invoice is paid.';
-      card.action = billing.paymentLink ? { kind: 'pay', label: 'Pay now', href: billing.paymentLink, payWith: sm.payWith || '' } : { kind: 'billing', label: 'Plan & billing' };
-    } else if (aoEnd) {
-      /* a card add-on stopping: on until the month paid for ends, never renewed */
-      var ends = aoEnd.endsOn || (ao && ao.nextInvoiceOn) || '';
-      card.state = 'removing'; card.pill = 'Opting out'; card.tone = 'wait'; card.held = true; card.via = 'addon';
-      card.priceLine = price || 'Add-on';
-      card.note = 'Stays on until ' + (ends ? shortDay(ends) : 'the end of the month you paid for') + (ends ? ', the end of the month you paid for,' : '') + ' and is not renewed.';
-      card.action = { kind: 'cancel', label: 'Cancel request', via: 'addon-stop' };
-      card.record = { kind: 'addon-stop', key: key, endsOn: ends || null, requestedAt: aoEnd.requestedAt || null };
-    } else if ((packaged && queued && st === 'held') || (optOut && (st === 'held' || st === 'part'))) {
-      card.state = 'removing'; card.pill = 'Opting out'; card.tone = 'wait'; card.held = true;
-      var review = (queued && queued.reviewOn) || (summary && summary.nextReviewOn) || null;
-      card.note = packaged
-        ? 'Stays on, and billed, until ' + (review ? 'your review on ' + shortDay(review) : 'your next quarterly review') + '.'
-        : 'Requested ' + shortDay(optOut.requestedAt) + '. ClearSky confirms the date and any price change in writing; access is unchanged until then.';
-      card.action = { kind: 'cancel', label: 'Cancel request' }; card.record = packaged ? queued : optOut;
-    } else if (st === 'held') {
-      /* the money column carries the bare price, as every other card does
-         (with the words beside it, a long name and a four-figure price ran
-         past the card's edge on a phone); the note says where it is billed */
-      card.state = 'live'; card.pill = 'Live'; card.tone = 'live'; card.held = true;
-      if (aoLive) {
-        card.via = 'addon'; card.priceLine = price || 'Add-on';
-        card.note = 'Add-on · paid by card' + (ao && ao.nextInvoiceOn ? ', renews on ' + shortDay(ao.nextInvoiceOn) : '') + '.';
-        card.action = { kind: 'remove', label: 'Opt out', via: 'addon' };
-      } else {
-        card.priceLine = packaged ? (price || 'In your plan') : 'Included in ' + plan;
-        card.note = packaged && price ? 'On your plan · in your monthly fee.' : 'On your plan.';
-        card.action = { kind: 'remove', label: 'Opt out' };
-      }
-    } else if (optIn) {
-      card.state = 'requested'; card.pill = 'Opt-in requested'; card.tone = 'wait';
-      card.priceLine = optIn.display || price;
-      card.note = 'Requested ' + shortDay(optIn.requestedAt) + (optIn.display || price ? ' at ' + (optIn.display || price) : '') + '. It joins your monthly invoice once ClearSky moves you to monthly billing; nothing is charged before you approve that invoice.';
-      card.action = { kind: 'cancel', label: 'Cancel request' }; card.record = optIn;
-    } else if (st === 'part') {
-      /* moduleNote is the ONE "Partly" sentence: both halves, tools and Site Map */
-      var said = moduleNote(m, ctx);
-      card.state = 'part'; card.pill = 'Partly included'; card.tone = 'part';
-      card.note = (said ? cap1(said) + '. ' : 'Part of it is in ' + plan + '. ') + 'Opting in adds the rest' + (price ? ' for ' + price : '') + '.';
-      card.action = { kind: 'add', label: 'Opt in' };
-    } else {
-      var gate = summary && summary.gate;
-      /* a legacy plan: Opt in asks the server first whether the module can
-         be bought by card now or goes to ClearSky as a request, and the
-         menu says which before anything is sent */
-      card.note = packaged
-        ? (gate && gate.canApply === false && gate.reason ? gate.reason : 'Prorated today, then ' + (price || 'its monthly price') + '.')
-        : 'Adds ' + (price || 'its monthly price') + '. Opting in shows how it is billed before anything is charged.';
-      card.action = { kind: 'add', label: 'Opt in' };
-      if (packaged && gate && gate.canApply === false) card.action.disabled = true;
-    }
-    /* who may press it: a workspace waiting on approval changes nothing yet,
-       a module on its plan included (an opt-out filed before approval would
-       mail ClearSky a request about a plan it has not approved); anyone but
-       an owner or administrator reads the card and is told who changes it
-       (the server refuses them too), and may still pay an open invoice */
-    if (opts.pendingApproval) { card.note = card.held ? 'On your plan. It opens when ClearSky approves ' + co + '.' : 'Opens when ClearSky approves ' + co + '.'; card.action = null; card.secondary = null; }
-    else if (opts.admin === false && card.action && card.action.kind !== 'billing') { card.action = card.action.kind === 'pay' ? card.action : null; card.secondary = null; card.adminLine = 'An owner or administrator of ' + co + ' changes modules.'; }
-    return card;
-  }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, moduleCard: moduleCard,
-    editorCtx: editorCtx, capsFor: capsFor, legacyCtx: legacyCtx, liveAddOns: liveAddOns, storefront: storefront, holdsLogic: holdsLogic, shortDay: shortDay, RING_MAX: RING_MAX };
-  if (typeof module !== 'undefined' && module.exports) module.exports = API;
-  if (root) root.OmegaWorkspaceHub = API;
-})(typeof window !== 'undefined' ? window : null);
+  var api = {
+    AREAS: AREAS,
+    compose: compose,
+    items: items,
+    moduleState: moduleState,
+    moduleTools: moduleTools,
+    moduleEditor: moduleEditor,
+    moduleNote: moduleNote,
+    moduleCard: moduleCard,
+    editorCtx: editorCtx,
+    capsFor: capsFor,
+    legacyCtx: legacyCtx,
+    storefront: storefront,
+    liveAddOns: liveAddOns
+  };
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  root.OmegaWorkspaceHub = api;
+})(typeof window !== 'undefined' ? window : global);
