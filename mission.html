@@ -727,6 +727,22 @@ body.arranging .scroll{pointer-events:none}
   font-family:var(--mono);font-size:10px;color:var(--glow-cyan)}
 @keyframes orbIn{from{transform:scale(.2);opacity:0}to{transform:none;opacity:1}}
 
+/* Brain inventory leads on every screen; the graph is supporting detail. */
+.view[data-view="brain"]{overflow-y:auto;overflow-x:hidden}
+.brainOverview{flex:none;margin-bottom:14px;gap:12px}
+.brainSummary{font-size:20px;line-height:1.4;color:var(--ink)}
+.brainAssets{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.brainAsset{padding:12px;border:1px solid rgba(120,180,210,.25);border-radius:8px;min-width:0}
+.brainAsset strong{display:block;font-size:24px;color:var(--ink)}
+.brainAsset p,.brainCoverage{font-size:12px;line-height:1.6;color:var(--dim)}
+.brainInventoryTable{width:100%;font-size:12px;border-collapse:collapse}
+.brainInventoryTable td,.brainInventoryTable th{text-align:left;padding:6px;overflow-wrap:anywhere;border-bottom:1px solid rgba(120,180,210,.15)}
+.brainOverview a{color:var(--glow-cyan)}
+.brainOverview summary{cursor:pointer;padding:10px 0;color:var(--ink)}
+.brainOverview details{flex:none;min-width:0;overflow-wrap:anywhere}
+.view[data-view="brain"] .brainGrid{min-height:480px;flex:none}
+@media(max-width:700px){.brainAssets{grid-template-columns:repeat(2,minmax(0,1fr))}.brainSummary{font-size:18px}.brainOverview{padding:12px}.view[data-view="brain"] .brainStage{min-height:320px;height:40vh}}
+
 /* ── the brain ───────────────────────────────────────────────────────────
    A force-directed graph of what the twin actually knows, with the controls
    beside it rather than buried: search, an inspector, the hubs ranked by how
@@ -2276,6 +2292,16 @@ body.officeReading::before{display:none!important}
 
     <!-- ========== BRAIN ========== -->
     <section class="view" data-view="brain">
+      <div class="panel brainOverview" aria-label="Operational data inventory">
+        <div class="ptitle">Operational memory <button id="brainInventoryRefresh" type="button">Refresh inventory</button></div>
+        <div id="brainInventoryStatus" class="brainSummary" role="status">Open the Brain to measure stored data.</div>
+        <div id="brainInventoryBody"></div>
+      </div>
+      <div class="panel brainOverview" aria-label="Evidence for bots">
+        <div class="ptitle">Connected evidence &amp; improvement queue <button id="brainEvidenceRefresh" type="button">Check connections</button></div>
+        <div id="brainEvidenceStatus" role="status">Open the Brain to check source reads.</div>
+        <div id="brainEvidenceBody"></div>
+      </div>
       <div class="cmdGrid brainGrid">
 
         <div class="panel brainSide">
@@ -6689,7 +6715,7 @@ function showView(name){
   if(name==='sales'){ wireSales(); loadSales(false); }
   if(name==='office'){ loadOffice(false); }
   if(name==='system'){ loadAIProvider(); }
-  if(name==='brain'){ bpoke(); loadBrain(); }
+  if(name==='brain'){ bpoke(); loadBrainInventory(); loadBrainEvidence(); loadBrain().catch(e=>{el('brainHint').textContent='Relationship graph unavailable: '+e.message;}); }
   if(name==='index'){ loadIndex(); }
   if(name==='board'){ bdLoad(); }
   if(name==='trading'){ wireTrade(); probeTrade(); }
@@ -10725,7 +10751,12 @@ function btour(){
   balpha = Math.max(balpha, 0.02);   /* keep the layout breathing under it */
 }
 
-function bloop(){ btick(); btour(); bdraw(); braf=requestAnimationFrame(bloop); }
+function bloop(){
+  if(document.visibilityState==='visible' && document.querySelector('.view.on')?.dataset.view==='brain'){
+    btick(); btour(); bdraw();
+  }
+  braf=requestAnimationFrame(bloop);
+}
 
 /* ── shortest path between two nodes (plain BFS) ─────────────────────── */
 function bfsPath(a,b){
@@ -11216,13 +11247,77 @@ function bfit(){
   bview.x=-((x0+x1)/2)*bview.k; bview.y=-((y0+y1)/2)*bview.k;
 }
 
+
+let brainEvidenceBusy=false;
+async function loadBrainEvidence(){
+ if(brainEvidenceBusy)return;brainEvidenceBusy=true;
+ const status=el('brainEvidenceStatus'),host=el('brainEvidenceBody'),button=el('brainEvidenceRefresh');
+ status.textContent='Checking source reads and record links…';host.textContent='';button.disabled=true;
+ const c=new AbortController(),timer=setTimeout(()=>c.abort(),25000);
+ try{
+  const t=await token();if(!t)throw Error('Sign in to check private evidence.');
+  const r=await fetch('/api/brain-evidence',{headers:{Authorization:'Bearer '+t},signal:c.signal,cache:'no-store'});if(!r.ok)throw Error('Evidence check unavailable (HTTP '+r.status+').');
+  const j=await r.json();if(!j.ok||!Array.isArray(j.sources))throw Error('Incomplete evidence response.');
+  status.textContent=j.sources.filter(s=>s.status!=='unavailable').length+'/'+j.sources.length+' sources readable · '+j.findings.length+' improvement findings · '+(j.status==='read_complete'?'complete read':'partial read');
+  host.appendChild(biNode('p','Observed '+new Date(j.asOf).toLocaleString()+'. Readable does not mean healthy or fully connected. Bots receive source-linked proposals through the local Office runner; this page does not prove a bot acted.','brainCoverage'));
+  const health=biNode('details');health.open=true;health.appendChild(biNode('summary','Source reads, coverage and freshness'));
+  j.sources.forEach(s=>health.appendChild(biNode('p',s.source+' · '+s.status+' · '+(s.scanned===null?'unknown':s.scanned+' / '+s.total+' read')+(s.truncated?' · partial':'')+' · latest '+(s.latest?new Date(s.latest).toLocaleString():'unknown')+' · '+(s.missingTimestamp===null?'unknown':s.missingTimestamp)+' undated','brainCoverage')));host.appendChild(health);
+  const queue=biNode('details');queue.open=true;queue.appendChild(biNode('summary','Evidence-backed proposals'));
+  j.findings.forEach(f=>{const d=biNode('details');d.appendChild(biNode('summary',f.count+' · '+f.title+' · '+f.desk));d.appendChild(biNode('p',f.next,'brainCoverage'));d.appendChild(biNode('p','Baseline: '+f.baselineMetric+'; '+f.countScope+'. Evidence: '+f.evidence.map(e=>e.ref).join(', ')+(f.evidenceLimited?' (first 20 shown)':''),'brainCoverage'));queue.appendChild(d);});
+  if(!j.findings.length)queue.appendChild(biNode('p','No findings in the available checks. Review missing sources before interpreting this result.','brainCoverage'));host.appendChild(queue);
+  const bank=biNode('details');bank.appendChild(biNode('summary','Bankability: not assessed'));bank.appendChild(biNode('p',j.bankability.meaning,'brainCoverage'));j.bankability.requiredEvidence.forEach(x=>bank.appendChild(biNode('p',x+' — requires independent evidence review','brainCoverage')));const a=biNode('a','DOE due-diligence framework');a.href=j.bankability.source;a.target='_blank';a.rel='noopener';bank.appendChild(a);host.appendChild(bank);
+  host.appendChild(biNode('p','Improvement loop: '+j.improvementContract.required.join(' → ')+'. Customer changes and release decisions retain their existing approval gates.','brainCoverage'));
+ }catch(e){status.textContent=e.name==='AbortError'?'Evidence check timed out; connectivity remains unverified.':e.message;}
+ finally{clearTimeout(timer);button.disabled=false;brainEvidenceBusy=false;}
+}
+el('brainEvidenceRefresh').addEventListener('click',loadBrainEvidence);
+
+let brainInventoryBusy=false;
+function biNode(tag,text,cls){const n=document.createElement(tag);n.textContent=text||'';if(cls)n.className=cls;return n;}
+async function loadBrainInventory(){
+  if(brainInventoryBusy)return;brainInventoryBusy=true;
+  const status=el('brainInventoryStatus'),host=el('brainInventoryBody'),button=el('brainInventoryRefresh');
+  button.disabled=true;status.textContent='Measuring stored data…';host.textContent='';
+  const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),25000);
+  try{
+    const t=await token();if(!t)throw Error('Sign in to view the private inventory.');
+    const r=await fetch('/api/brain-inventory',{headers:{Authorization:'Bearer '+t},signal:controller.signal,cache:'no-store'});
+    if(!r.ok)throw Error(r.status===403?'This inventory is private to Thomas.':'Inventory unavailable (HTTP '+r.status+').');
+    const j=await r.json();if(!j.ok||!Array.isArray(j.groups))throw Error('Inventory response was incomplete.');
+    status.textContent=j.total.toLocaleString()+' stored documents · '+j.collections.length+' collection counts'+(j.failed?' · partial count':'');
+    host.appendChild(biNode('p','Measured '+new Date(j.asOf).toLocaleString()+'. '+j.scope+' Counts refresh at most every five minutes.','brainCoverage'));
+    if(j.customers){
+      const c=j.customers,section=biNode('details');section.open=true;section.appendChild(biNode('summary','Customers: tenants, users & projects'));
+      section.appendChild(biNode('p',c.tenants.length+' tenant workspaces read · '+c.projectLinks.scanned+' project records read · '+c.status+' coverage. '+c.scope,'brainCoverage'));
+      section.appendChild(biNode('p',(c.complete.projects?c.projectLinks.missingOrgId:c.projectLinks.missingOrgId+' observed (partial)')+' projects lack orgId; '+(c.projectLinks.unresolvedOrg===null?'unknown number of':c.projectLinks.unresolvedOrg)+' project organizations do not resolve to the tenant registry. These records remain in the inventory.','brainCoverage'));
+      const known=(n,v)=>c.complete[n]?String(v):v+' observed (partial)';
+      c.tenants.forEach(o=>{const item=biNode('details');item.appendChild(biNode('summary',o.name+' · '+o.id+' · '+o.status));item.appendChild(biNode('p',known('projects',o.projects.length)+' owned projects · '+known('projects',o.sharedProjects.length)+' shared projects · '+known('members',o.memberships.length)+' workspace membership records · '+known('team_members',o.teamRecords.length)+' team records · '+known('omega_users',o.partnerUserRecords.length)+' partner user records.','brainCoverage'));
+        [['Owned project IDs',o.projects],['Shared project IDs',o.sharedProjects]].forEach(([label,ids])=>{if(ids.length)item.appendChild(biNode('p',label+': '+ids.join(', '),'brainCoverage'));});section.appendChild(item);});
+      section.appendChild(biNode('p',c.unresolved.teamRecords.length+' observed team records and '+c.unresolved.partnerUserRecords.length+' observed partner-user records are not linked to a tenant in this read.','brainCoverage'));
+      c.sources.forEach(x=>section.appendChild(biNode('p',x.source+': '+x.scanned+' read / '+(x.total===null?'unknown':x.total)+' records · '+x.status,'brainCoverage')));host.appendChild(section);
+    }
+    const cards=biNode('div','','brainAssets');host.appendChild(cards);
+    j.groups.forEach(g=>{const card=biNode('div','','brainAsset');card.appendChild(biNode('strong',g.count.toLocaleString()+(g.failed?' + unknown':'')));card.appendChild(biNode('div',g.label));card.appendChild(biNode('p',g.use));const b=biNode('button','Open '+({command:'Command Center',clients:'Clients',sales:'Sales',logic:'Operations',platform:'Platform'}[g.view]||g.view));b.type='button';b.onclick=()=>showView(g.view);card.appendChild(b);cards.appendChild(card);});
+    const val=biNode('details');val.open=true;val.appendChild(biNode('summary','Potential value'));val.appendChild(biNode('p',j.value.status+' '+j.value.formula,'brainCoverage'));
+    j.value.scenarios.forEach(v=>val.appendChild(biNode('p',v.hours+' hours/week × $'+v.rate+'/hour × '+v.weeks+' weeks = $'+v.annual.toLocaleString()+'/year gross capacity value.','brainCoverage')));
+    val.appendChild(biNode('p',j.value.next,'brainCoverage'));const source=biNode('a','Valuation framework: OECD');source.href=j.value.source;source.target='_blank';source.rel='noopener';val.appendChild(source);host.appendChild(val);
+    const gaps=biNode('details');gaps.open=true;gaps.appendChild(biNode('summary','Coverage & next improvements'));j.gaps.forEach(g=>gaps.appendChild(biNode('p',g,'brainCoverage')));host.appendChild(gaps);
+    const detail=biNode('details');detail.appendChild(biNode('summary','All collections · measured counts'));
+    const table=biNode('table','','brainInventoryTable'),head=biNode('tr');['Collection','Documents','Status'].forEach(x=>head.appendChild(biNode('th',x)));table.appendChild(head);
+    j.collections.forEach(c=>{const row=biNode('tr');[c.id,c.count===null?'Unknown':c.count.toLocaleString(),c.status].forEach(x=>row.appendChild(biNode('td',x)));table.appendChild(row);});detail.appendChild(table);host.appendChild(detail);
+  }catch(e){status.textContent=e.name==='AbortError'?'Inventory timed out. Retry to measure data.':e.message;host.appendChild(biNode('p','No total is reported until the database answers. The relationship graph below is a separate, partial view.','brainCoverage'));}
+  finally{clearTimeout(timer);button.disabled=false;brainInventoryBusy=false;}
+}
+el('brainInventoryRefresh').addEventListener('click',loadBrainInventory);
+
 let brainReady=false;
 async function loadBrain(){
   /* Needs all three planes before the joins mean anything. The relationship
      layer is fetched alongside them and is allowed to fail: if the Mac is
      asleep the graph still draws, simply without any history in it. */
-  await Promise.all([loadBook(false), loadPlatform(), loadRelations(false)]);
+  await Promise.allSettled([loadBook(false), loadPlatform(), loadRelations(false)]);
   buildBrain();
+  el('brainHint').textContent=BGX ? 'Relationship view · partial record · drag to pan · click a node' : 'Relationship view · Mac meeting history unavailable here · cloud inventory above remains independent';
   bhubs(); btypes(); bwire(); binspect(null);
   el('brainN').textContent=BG.nodes.length+' NODES · '+BG.links.length+' LINKS';
   const nb=el('nBrain'); if(nb) nb.textContent=BG.nodes.length;
