@@ -5,7 +5,7 @@
  * ES5 browser script; no build step. */
 (function (root) {
   'use strict';
-  var SOURCE = 'CleanCell US / InCharge Product Brochure, Rev H, 6 October 2026';
+  var SOURCE = 'CleanCell US Product Brochure, Rev H, 6 October 2026';
   var KEYS = ['CLEANCELL-CC290-125-REV-H', 'CLEANCELL-LGJP2-1000-REV-H', 'CLEANCELL-SM-1000-REV-H'];
   var COMMON = 'Planning specification, not released engineering. AC coupled; 480 VAC, three-phase, 60 Hz target; Modbus TCP over Ethernet; grid-following. Delivered AC energy, PCS compatibility, electrical/fire clearances, final drawings and warranty require confirmation. Backup, islanding and grid forming are separate scope. Equipment pricing requires an authorized quote; freight, taxes, tariffs, site works and installation are separate.';
   var PRODUCTS = [
