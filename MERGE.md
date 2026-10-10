@@ -3086,3 +3086,25 @@ Expanded the inventory into a read-only evidence feed: ten canonical sources, ex
 Customer coverage correction: Brain separates tenant/user records from sales and displays registered tenants with owned/shared project references, direct workspace membership counts, team records and partner-user records. No unique-user or paying-customer claim. Bounded projected reads explicitly label unavailable/partial sources. The bot evidence reader now checks team and partner-user tenant links. Preview screenshots carry a TEST PREVIEW banner. Verified live 2026-10-10T00:22Z: 26 active-status tenant records, 288 projects (269 linked, 17 missing org, 2 unresolved), 37 workspace memberships, 60 team records (5 unresolved), 7 partner-user records. No production data changed.
 ### Outbox correspondence — 2026-10-09
 Draft subjects generated from meeting actions often differ from actual Gmail subjects. The ingest worker now supplies recent recipient correspondence (90 days, five threads), separately labelled from exact matches. Outbox exposes the real subjects, sent/received dates and Gmail links. Recipient-only correspondence never completes a draft or reopens a task. Missing recipients are explicit. Matching and Gmail access remain server-side in omega-twin.
+
+
+## 2026-10-10 - CleanCell references in BOTH battery pickers
+
+The sizing catalog and the BESS Pad placement menu now consume the same
+revisioned CleanCell reference records. Both feature the three Rev H products
+first, retain other manufacturers and keep selection by SKU rather than array
+position. Late tenant-catalog loading cannot displace the featured group.
+
+The placement menu previously read only GOTION_CATALOG_DIMS, so adding a record
+to BESS_CATALOG could never expose it there. The adapter does not invent entries
+in that dimensions table: CC290 uses its cabinet reference; the two 1 MW
+products require an entered footprint and retain an unverified geometry basis.
+Model identity, AC kW, DC kWh and geometry provenance survive plain, assembly,
+cluster and quick placement. Catalog package-arrangement flags override the
+legacy size heuristic only on explicitly marked reference records. No pricing,
+scoring, dispatch or approval engine changed; no database mutation or migration.
+
+Regression: scripts/render-cleancell-pickers.js runs the actual editor
+functions and actual pad modal at 1280px and 390px, with map rendering, auth and
+network stubbed. It tests both orders, late tenant load, manual dimensions,
+identity/ratings, native placement, integrated PCS, custom entry and reopen.

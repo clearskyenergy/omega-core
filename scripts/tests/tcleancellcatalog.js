@@ -129,7 +129,7 @@ var sb = { window: { document: d3 } }; vm.createContext(sb); vm.runInContext(boo
 check(!d3.getElementById('omega-cleancell-catalog-script'), 'loader waits for DOM');
 d3.ready();
 var script = d3.getElementById('omega-cleancell-catalog-script');
-check(script && script.src === '/omega-cleancell-catalog.js?v=20261009-revh1', 'same-origin versioned loader');
+check(script && script.src === '/omega-cleancell-catalog.js?v=20261010-revh2', 'same-origin versioned loader');
 vm.runInContext(bootstrap, sb);
 check(d3.head.children.length === 1, 'loader runs once');
 console.log('CleanCell catalog: ' + n + ' checks passed');

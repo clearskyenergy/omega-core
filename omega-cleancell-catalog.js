@@ -92,6 +92,7 @@
       p.acVoltage = 480; p.acPhases = 3; p.acFrequencyHz = 60;
       p.acPowerStatus = 'project-design-target'; p.durationBasis = 'DC-nameplate-ratio-not-delivered-AC';
       p.source = SOURCE; p.sourceRevision = 'H'; p.sourceDate = '2026-10-06';
+      p.integrationBasis = 'catalog-package-arrangement';
       p.catalogStatus = 'planning-verify'; p.pricingStatus = 'quote-required';
       p.notes = p.energyBasis + '. ' + p.packaging + ' ' + p.productNotes + ' ' + p.verification + ' ' + COMMON;
       out[KEYS[i]] = p;
@@ -112,6 +113,42 @@
     return added;
   }
 
+  /* One reference record drives both electrical selection and placement.
+   * Missing released dimensions must not be replaced by generic containers. */
+  function pickerLabel(p) {
+    var name = p.sku === 'CC290-125' ? 'CC290/125' :
+      (p.sku === 'CC-LGJP2-1000' ? 'LG JP-2 (BABA-oriented)' : 'Smart Module (non-BABA)');
+    return 'CleanCell ' + name + ' - ' + p.kw + ' kW / '
+      + (p.nominalEnergyApproximate ? '~' : '') + p.kwh + ' kWh DC';
+  }
+  function padModels(legacy, catalog) {
+    var out = [], ids = mergeInto(catalog), seen = {};
+    for (var i = 0; i < ids.length; i++) {
+      var key = ids[i], p = catalog[key];
+      seen[key] = true;
+      out.push({ id: key, name: p.model, pickerLabel: pickerLabel(p),
+        lf: p.widthFt, wf: p.depthFt, sysQty: 0, featured: true,
+        requiresDimensions: !(p.widthFt > 0 && p.depthFt > 0),
+        geometryBasis: p.dimensionsStatus,
+        geometryNote: p.packaging + ' ' + p.dims
+          + '. Reference layout only; confirm external equipment footprints and required clearances.' });
+    }
+    for (var j = 0; j < (legacy || []).length; j++) {
+      if (!seen[legacy[j].id]) out.push(legacy[j]);
+    }
+    return out;
+  }
+  function featureFirst(sel, group) {
+    var children = sel.children, first = null;
+    for (var i = 0; i < children.length; i++) {
+      var c = children[i], tag = String(c.tagName || c.tag || '').toLowerCase();
+      if (c === group) return;
+      if (tag === 'option' && !c.value) continue;
+      first = c; break;
+    }
+    if (first) sel.insertBefore(group, first);
+  }
+
   function install(catalog, doc) {
     var keys = mergeInto(catalog);
     if (!doc || !keys.length) return keys;
@@ -121,7 +158,7 @@
     if (!group) {
       group = doc.createElement('optgroup');
       group.id = 'bm-cat-cleancell-revh';
-      group.label = 'CleanCell US - Rev H (planning specifications)';
+      group.label = 'Featured - CleanCell US';
       sel.appendChild(group);
     }
     for (var i = 0; i < keys.length; i++) {
@@ -129,8 +166,16 @@
       if (doc.getElementById(optionId)) continue;
       var option = doc.createElement('option');
       option.id = optionId; option.value = key;
-      option.textContent = p.model + ' | ' + p.kw + ' kW AC / ' + (p.nominalEnergyApproximate ? '~' : '') + p.kwh + ' kWh DC';
+      option.textContent = pickerLabel(p);
       group.appendChild(option);
+    }
+    featureFirst(sel, group);
+    /* Tenant products may arrive after the reference script. Keep featured
+     * presentation first without changing a tenant's products or selection. */
+    if (root.MutationObserver && !sel._omegaCleanCellFeaturedObserver) {
+      var observer = new root.MutationObserver(function () { featureFirst(sel, group); });
+      observer.observe(sel, { childList: true });
+      sel._omegaCleanCellFeaturedObserver = observer;
     }
     var panel = doc.getElementById('bm-cleancell-revh-details');
     if (!panel) {
@@ -166,7 +211,8 @@
     return keys;
   }
 
-  var api = { entries: entries, mergeInto: mergeInto, install: install, revision: 'H' };
+  var api = { entries: entries, mergeInto: mergeInto, install: install, padModels: padModels,
+    pickerLabel: pickerLabel, revision: 'H', build: '20261010-featured2' };
   root.OmegaCleanCellCatalog = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
@@ -176,7 +222,12 @@
     var catalog = null;
     try { if (typeof BESS_CATALOG !== 'undefined') catalog = BESS_CATALOG; } catch (e) {}
     if (!catalog) catalog = root.BESS_CATALOG;
-    if (catalog) install(catalog, root.document);
+    if (catalog) {
+      install(catalog, root.document);
+      /* Refresh an already-open placement picker after an asynchronous load. */
+      if (typeof root._fillPadModels === 'function') root._fillPadModels();
+      if (typeof root._padModelChange === 'function') root._padModelChange();
+    }
   }
   if (root.document) {
     if (root.document.readyState === 'loading') root.document.addEventListener('DOMContentLoaded', boot);
