@@ -739,7 +739,7 @@ body.arranging .scroll{pointer-events:none}
 .brainInventoryTable td,.brainInventoryTable th{text-align:left;padding:6px;overflow-wrap:anywhere;border-bottom:1px solid rgba(120,180,210,.15)}
 .brainOverview a{color:var(--glow-cyan)}
 .brainOverview summary{cursor:pointer;padding:10px 0;color:var(--ink)}
-.brainOverview details{flex:none}
+.brainOverview details{flex:none;min-width:0;overflow-wrap:anywhere}
 .view[data-view="brain"] .brainGrid{min-height:480px;flex:none}
 @media(max-width:700px){.brainAssets{grid-template-columns:repeat(2,minmax(0,1fr))}.brainSummary{font-size:18px}.brainOverview{padding:12px}.view[data-view="brain"] .brainStage{min-height:320px;height:40vh}}
 
@@ -11212,6 +11212,16 @@ async function loadBrainInventory(){
     const j=await r.json();if(!j.ok||!Array.isArray(j.groups))throw Error('Inventory response was incomplete.');
     status.textContent=j.total.toLocaleString()+' stored documents · '+j.collections.length+' collection counts'+(j.failed?' · partial count':'');
     host.appendChild(biNode('p','Measured '+new Date(j.asOf).toLocaleString()+'. '+j.scope+' Counts refresh at most every five minutes.','brainCoverage'));
+    if(j.customers){
+      const c=j.customers,section=biNode('details');section.open=true;section.appendChild(biNode('summary','Customers: tenants, users & projects'));
+      section.appendChild(biNode('p',c.tenants.length+' tenant workspaces read · '+c.projectLinks.scanned+' project records read · '+c.status+' coverage. '+c.scope,'brainCoverage'));
+      section.appendChild(biNode('p',(c.complete.projects?c.projectLinks.missingOrgId:c.projectLinks.missingOrgId+' observed (partial)')+' projects lack orgId; '+(c.projectLinks.unresolvedOrg===null?'unknown number of':c.projectLinks.unresolvedOrg)+' project organizations do not resolve to the tenant registry. These records remain in the inventory.','brainCoverage'));
+      const known=(n,v)=>c.complete[n]?String(v):v+' observed (partial)';
+      c.tenants.forEach(o=>{const item=biNode('details');item.appendChild(biNode('summary',o.name+' · '+o.id+' · '+o.status));item.appendChild(biNode('p',known('projects',o.projects.length)+' owned projects · '+known('projects',o.sharedProjects.length)+' shared projects · '+known('members',o.memberships.length)+' workspace membership records · '+known('team_members',o.teamRecords.length)+' team records · '+known('omega_users',o.partnerUserRecords.length)+' partner user records.','brainCoverage'));
+        [['Owned project IDs',o.projects],['Shared project IDs',o.sharedProjects]].forEach(([label,ids])=>{if(ids.length)item.appendChild(biNode('p',label+': '+ids.join(', '),'brainCoverage'));});section.appendChild(item);});
+      section.appendChild(biNode('p',c.unresolved.teamRecords.length+' observed team records and '+c.unresolved.partnerUserRecords.length+' observed partner-user records are not linked to a tenant in this read.','brainCoverage'));
+      c.sources.forEach(x=>section.appendChild(biNode('p',x.source+': '+x.scanned+' read / '+(x.total===null?'unknown':x.total)+' records · '+x.status,'brainCoverage')));host.appendChild(section);
+    }
     const cards=biNode('div','','brainAssets');host.appendChild(cards);
     j.groups.forEach(g=>{const card=biNode('div','','brainAsset');card.appendChild(biNode('strong',g.count.toLocaleString()+(g.failed?' + unknown':'')));card.appendChild(biNode('div',g.label));card.appendChild(biNode('p',g.use));const b=biNode('button','Open '+({command:'Command Center',clients:'Clients',sales:'Sales',logic:'Operations',platform:'Platform'}[g.view]||g.view));b.type='button';b.onclick=()=>showView(g.view);card.appendChild(b);cards.appendChild(card);});
     const val=biNode('details');val.open=true;val.appendChild(biNode('summary','Potential value'));val.appendChild(biNode('p',j.value.status+' '+j.value.formula,'brainCoverage'));

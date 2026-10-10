@@ -5,9 +5,10 @@
 // documents of the same name, so a project is never counted twice.
 var NESTED = ['fin_views','offers','inquiries','unlocks','catalog','quote','invoice','messages','private','recipients','events','custody_events','billing','history','invoices','operations','members','layouts','customers','users','projects','contacts','activity','files','customer_index','notifications','storefront'];
 var GROUPS = [
+  ['customers','Tenants & user records', /^(omega_orgs|omega_users|org_members|team_members|tenant_public)$|^nested:(members|customers|users|customer_index)$/,'clients','Connect tenant workspaces, user memberships and customer records to their projects. Counts are records, not unique customers.'],
   ['knowledge','Mail, meetings & decisions', /^(twin_sources|twin_meetings|twin_people|twin_memory|twin_chat|twin_backlog|twin_drafts)$/,'command','Recover decisions and follow through on commitments.'],
   ['projects','Projects, sites & infrastructure', /^(projects|sites|intake_|circuitCapacity|capacityAllocations|slc_|fc_|parcel_)/,'clients','Reuse site diligence and compare engineering assumptions.'],
-  ['commercial','Customers, sales & finance', /^(sales_(prospects|activity|candidates)|omega_orgs|omega_contracts|omega_partner_orgs|deals|referrals|fin_(projects|profiles|orgs)|mkt_|vdc_|subscription_proposals|pricebook|distributors)/,'sales','Prioritize opportunities and shorten proposal preparation.'],
+  ['commercial','Sales & finance', /^(sales_(prospects|activity|candidates)|omega_contracts|omega_partner_orgs|deals|referrals|fin_(projects|profiles|orgs)|mkt_|vdc_|subscription_proposals|pricebook|distributors)/,'sales','Prioritize opportunities and shorten proposal preparation.'],
   ['operations','Delivery & operations', /^(plant_|orders|om_|fs_|sla_|rpt_|team_(convo|messages|todos))/,'logic','Trace delivery, equipment and service outcomes.'],
   ['telemetry','Automation & usage logs', /^(twin_runs|twin_events|omega_audit)$/,'platform','Diagnose failures and learn which workflows are used.'],
   ['nested','Nested business records', /^nested:/,'clients','Bring billing, customer history and project detail into the inventory.'],

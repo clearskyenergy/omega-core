@@ -5,6 +5,8 @@ var SOURCES={
  projects:{fields:['orgId','address','mapState.address','createdAt','updatedAt'],time:['updatedAt','createdAt']},
  fin_projects:{fields:['orgId','packagedByOrg','mw','ask','status','outcome','sizePending','createdAt','updatedAt'],time:['updatedAt','createdAt']},
  deals:{fields:['orgId','projectId','finProjectId','createdAt','updatedAt'],time:['updatedAt','createdAt']},
+ team_members:{fields:['orgId','lastSeen','createdAt'],time:['lastSeen','createdAt']},
+ omega_users:{fields:['orgId','status','createdAt','updatedAt'],time:['updatedAt','createdAt']},
  omega_orgs:{fields:['status','updatedAt','createdAt'],time:['updatedAt','createdAt']},
  twin_sources:{fields:['source','parsed','receivedAt','isPrimary','analyzeAttempts','givenUp','lastAnalyzeError'],time:['receivedAt']},
  twin_meetings:{fields:['sourceIds','date','analyzedAt'],time:['analyzedAt']},
@@ -35,6 +37,8 @@ function analyze(data,health,at){
  add('project-address-missing','projects','Projects lack a usable site address','support',d=>!String(d.address||(d.mapState||{}).address||'').trim(),'Request an address through the existing project workflow.','projects missing address');
  if(complete('omega_orgs')){
   var orgs=new Set(rows('omega_orgs').map(d=>domain(d.id)).concat(['clearsky-usa.com']));
+  add('team-tenant-unresolved','team_members','Team records do not resolve to a tenant','software',d=>!orgs.has(domain(d.orgId||(d.id.includes('__')?d.id.split('__')[0]:''))),'Verify the workspace and identity source before proposing a link; do not infer customer ownership from an email alone.','team records without a resolved tenant');
+  add('partner-user-tenant-unresolved','omega_users','Partner users do not resolve to a tenant','software',d=>!orgs.has(domain(d.orgId)),'Verify the partner user and tenant registry before changing access.','partner user records without a resolved tenant');
   add('project-org-unresolved','projects','Project ownership does not resolve to the tenant registry','software',d=>domain(d.orgId)&&!orgs.has(domain(d.orgId)),'Review aliases and tenant provenance before proposing a repair.','unresolved project organizations');
  }
  add('finance-size-missing','fin_projects','Financing records lack positive MW','billing',d=>!positive(d.mw),'Verify engineering size and its dated source; request missing evidence.','financing records without valid MW');
