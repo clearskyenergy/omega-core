@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio &amp; Assets · ClearSky-OMEGA</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cs-navy:#16202B;--cs-dark:#0F1720;--cs-blue:#2B5FA8;--cs-sky:#2B5FA8;
+  --cs-text:#14171A;--cs-sub:#5B6672;
+  --cs-bg:#F5F4F0;--cs-surface:#FFFFFF;--cs-border:#DCD9D2;--cs-red:#D9482B;
+  --sap-blue:#2B5FA8;--sap-blue-hi:#3F76C4;--sap-page:#F5F4F0;--sap-card-border:#E4E8EC;
+  --sap-ink:#16202B;--sap-ink-2:#5B6672;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--cs-text);min-height:100vh}
+#topbar{display:flex;align-items:center;gap:0;background:#fff;color:var(--sap-ink);padding:0 24px;height:60px;position:sticky;top:0;z-index:200;border-bottom:1px solid var(--sap-card-border);box-shadow:0 1px 2px rgba(20,40,60,.04)}
+.tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
+.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-logo-txt span{color:var(--sap-blue)}
+.tb-sep{width:1px;height:22px;background:var(--sap-card-border);margin:0 16px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-nav{display:flex;align-items:center;gap:2px;margin-left:20px;height:56px}
+.tb-tab{display:flex;align-items:center;gap:6px;text-decoration:none;background:transparent;border:none;border-bottom:3px solid transparent;color:var(--sap-ink);border-radius:0;padding:0 14px;height:56px;cursor:pointer;font:500 13.5px/1 'DM Sans',sans-serif;white-space:nowrap}
+.tb-tab svg{width:15px;height:15px;flex:none;opacity:.7}
+.tb-tab:hover{color:var(--sap-blue)}
+.tb-tab.active{color:var(--sap-blue);border-bottom-color:var(--sap-blue-hi);font-weight:600}
+.tb-spacer{flex:1}
+.tb-user{display:flex;align-items:center;gap:10px}
+.tb-avatar{width:32px;height:32px;border-radius:50%;background:var(--sap-blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.tb-name{color:var(--sap-ink);font-size:13px;font-weight:500}
+.btn{background:var(--sap-blue);border:none;color:#fff;border-radius:6px;padding:8px 16px;cursor:pointer;font:600 12.5px 'DM Sans',sans-serif}
+.btn:hover{background:var(--sap-blue-hi)}
+.btn-ghost{background:#fff;border:1px solid var(--sap-card-border);color:var(--sap-ink);border-radius:6px;padding:8px 14px;cursor:pointer;font:500 12.5px 'DM Sans',sans-serif}
+#main{max-width:1200px;margin:0 auto;padding:36px 24px}
+.page-title{font-size:28px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px}
+.page-sub{font-size:14px;color:var(--cs-sub);margin-top:4px;max-width:760px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:24px 0}
+.card{background:#fff;border:1px solid var(--sap-card-border);border-radius:12px;padding:16px}
+.card .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--cs-sub)}
+.card .v{font-size:26px;font-weight:700;color:var(--cs-navy);margin-top:6px}
+.card .n{font-size:11.5px;color:var(--cs-sub);margin-top:4px;line-height:1.4}
+.toolbar{display:flex;gap:10px;margin:20px 0;align-items:center;flex-wrap:wrap}
+.search-wrap{flex:1;min-width:200px;position:relative}
+.search-wrap input{width:100%;border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12px 9px 36px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;color:var(--cs-text);outline:none}
+.search-wrap input:focus{border-color:var(--cs-sky)}
+.search-wrap svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--cs-sub)}
+select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;color:var(--cs-text);outline:none;cursor:pointer}
+.tbl{background:#fff;border:1px solid var(--cs-border);border-radius:12px;overflow:hidden}
+.tr{display:grid;grid-template-columns:2fr 1.2fr 90px 90px 90px 70px 80px;gap:8px;padding:13px 16px;border-bottom:1px solid rgba(0,0,0,.04);align-items:center}
+.tr.head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--cs-sub);background:#FAFBFC}
+.tr.body{cursor:pointer}
+.tr.body:hover{background:#F4F7FB}
+.tr:last-child{border-bottom:none}
+.t-name{font-size:14px;font-weight:600;color:var(--cs-navy)}
+.t-sub{font-size:11.5px;color:var(--cs-sub);margin-top:2px}
+.t-num{font-size:13px;color:var(--cs-text);font-variant-numeric:tabular-nums}
+.t-mut{font-size:12.5px;color:#9AA3AD;font-style:italic}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap}
+.pill-ok{background:rgba(0,169,164,.13);color:#00736F}
+.pill-no{background:rgba(217,72,43,.10);color:#B03A1E}
+.pill-unk{background:#EEF1F4;color:var(--cs-sub)}
+.pill-warn{background:rgba(217,119,6,.12);color:#B45309}
+.empty{text-align:center;padding:60px;color:var(--cs-sub)}
+.loading{display:flex;align-items:center;justify-content:center;padding:60px;gap:10px;color:var(--cs-sub)}
+.spin{width:18px;height:18px;border:2px solid var(--cs-border);border-top-color:var(--cs-sky);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.err{background:#FDF0EC;border:1px solid #F3C4B5;color:#B03A1E;border-radius:9px;padding:12px 16px;font-size:13px;margin:16px 0}
+.note{font-size:12px;color:var(--cs-sub);margin-top:14px;line-height:1.5}
+@media(max-width:900px){.tr{grid-template-columns:2fr 1fr 80px}.tr>div:nth-child(n+4){display:none}}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <a class="tb-logo" href="/"><span class="tb-logo-txt">ClearSky<span>OMEGA</span></span></a>
+  <div class="tb-sep"></div><span class="tb-portal">EnergyOS</span>
+  <div class="tb-nav">
+    <a class="tb-tab" href="/" id="tab-portal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Portal</a>
+    <a class="tb-tab" href="/marketplace.html" id="tab-marketplace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>Marketplace</a>
+    <a class="tb-tab" href="/projects.html" id="tab-projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Projects</a>
+    <a class="tb-tab active" href="/portfolio.html" id="tab-portfolio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 4-7"/></svg>Portfolio</a>
+  </div>
+  <div class="tb-spacer"></div>
+  <div class="tb-user"><div class="tb-avatar" id="tb-avatar">–</div><span class="tb-name" id="tb-name"></span></div>
+</div>
+
+<div id="main">
+  <div class="page-title">Portfolio &amp; Assets</div>
+  <div class="page-sub">The workspace's system of record for energy sites: what each site is, who owns the meter, how much term is left, and what the screening says. Screened figures are a labeled legacy proxy, never verified capacity.</div>
+  <div id="err"></div>
+  <div class="cards" id="cards" style="display:none">
+    <div class="card"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n">in this workspace's register</div></div>
+    <div class="card"><div class="k">Screened pods</div><div class="v" id="c-pods">–</div><div class="n">EVCS legacy proxy v1 · unverified</div></div>
+    <div class="card"><div class="k">Meter + 5-yr term</div><div class="v" id="c-qual">–</div><div class="n">sites passing the legacy screen filter</div></div>
+    <div class="card"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
+  </div>
+  <div class="toolbar">
+    <div class="search-wrap">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+      <input id="q" type="search" placeholder="Search name, city, or site ID…" autocomplete="off">
+    </div>
+    <select class="fsel" id="f-state"><option value="">All states</option></select>
+    <select class="fsel" id="f-meter">
+      <option value="">Meter: any</option><option value="yes">Meter owned</option>
+      <option value="no">No meter</option><option value="unk">Unknown</option>
+    </select>
+    <select class="fsel" id="f-pods">
+      <option value="">Pods: any</option><option value="yes">Screened pods &gt; 0</option><option value="no">No screened pods</option>
+    </select>
+    <button class="btn-ghost" id="btn-add">+ Register site</button>
+  </div>
+  <div class="tbl" id="tbl"><div class="loading"><div class="spin"></div>Loading the register…</div></div>
+  <div class="note">Unknown values show as <i>Not provided</i> or <i>Needs verification</i>, never as zeros. Reported peak kW is an unresolved workbook statistic, flagged on each site, never approved capacity.</div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-tenant.js"></script>
+<script>
+(function () {
+  'use strict';
+  firebase.initializeApp(CFG.firebase);
+  var auth = firebase.auth();
+  var ORG = '', SITES = [], CANEDIT = false;
+
+  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
+  function err(m) { document.getElementById('err').innerHTML = m ? '<div class="err">' + esc(m) + '</div>' : ''; }
+  function org() {
+    var w = window.OMEGA_WORKSPACE || {};
+    if (w.orgId) return w.orgId;
+    var u = auth.currentUser;
+    return u && u.email ? (u.email.split('@')[1] || '').toLowerCase() : '';
+  }
+  function api(path, opts) {
+    return auth.currentUser.getIdToken().then(function (t) {
+      var h = { 'Authorization': 'Bearer ' + t };
+      if (opts && opts.json) h['Content-Type'] = 'application/json';
+      return fetch(path, { method: (opts && opts.method) || 'GET', headers: h, body: opts && opts.json ? JSON.stringify(opts.json) : undefined });
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error((j && (j.message || j.error)) || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+  function unk(v) { return v == null || v === ''; }
+  function meterPill(s) {
+    if (s.meterOwned === true) return '<span class="pill pill-ok">Owned</span>';
+    if (s.meterOwned === false) return '<span class="pill pill-no">No meter</span>';
+    return '<span class="pill pill-unk" title="Needs verification">Unknown</span>';
+  }
+  function termCell(s) {
+    if (unk(s.termYearsRemaining)) return '<span class="t-mut">Not provided</span>';
+    var t = Number(s.termYearsRemaining);
+    return '<span class="t-num">' + t + ' yr</span>';
+  }
+  function podsCell(s) {
+    var p = s.screening && s.screening.pods;
+    if (unk(p)) return '<span class="t-mut">–</span>';
+    return '<span class="t-num">' + Number(p) + '</span>';
+  }
+  function filtered() {
+    var q = document.getElementById('q').value.trim().toLowerCase();
+    var st = document.getElementById('f-state').value;
+    var mt = document.getElementById('f-meter').value;
+    var pd = document.getElementById('f-pods').value;
+    return SITES.filter(function (s) {
+      if (q) {
+        var hay = ((s.name || '') + ' ' + (s.city || '') + ' ' + ((s.externalSiteIds || {}).evcs || '') + ' ' + s.id).toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      if (st && s.state !== st) return false;
+      if (mt === 'yes' && s.meterOwned !== true) return false;
+      if (mt === 'no' && s.meterOwned !== false) return false;
+      if (mt === 'unk' && s.meterOwned != null) return false;
+      var p = s.screening && s.screening.pods;
+      if (pd === 'yes' && !(Number(p) > 0)) return false;
+      if (pd === 'no' && Number(p) > 0) return false;
+      return true;
+    });
+  }
+  function render() {
+    var rows = filtered();
+    var states = {};
+    SITES.forEach(function (s) { if (s.state) states[s.state] = true; });
+    var sel = document.getElementById('f-state'), cur = sel.value;
+    sel.innerHTML = '<option value="">All states</option>' + Object.keys(states).sort().map(function (x) {
+      return '<option value="' + esc(x) + '"' + (x === cur ? ' selected' : '') + '>' + esc(x) + '</option>';
+    }).join('');
+    var el = document.getElementById('tbl');
+    if (!rows.length) { el.innerHTML = '<div class="empty">No sites match. ' + (CANEDIT ? 'Register the first one above.' : '') + '</div>'; return; }
+    el.innerHTML = '<div class="tr head"><div>Site</div><div>Location</div><div>Installed kW</div><div>Peak kW</div><div>Meter</div><div>Term</div><div>Pods</div></div>' +
+      rows.map(function (s) {
+        var loc = [s.city, s.state].filter(Boolean).join(', ');
+        return '<div class="tr body" data-id="' + esc(s.id) + '">' +
+          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc((s.externalSiteIds || {}).evcs ? 'EVCS ' + s.externalSiteIds.evcs : s.id) + '</div></div>' +
+          '<div class="t-num">' + (loc ? esc(loc) : '<span class="t-mut">Not provided</span>') + '</div>' +
+          '<div class="t-num">' + (unk(s.installedKw) ? '<span class="t-mut">–</span>' : esc(s.installedKw)) + '</div>' +
+          '<div class="t-num">' + (unk(s.reportedPeakKw) ? '<span class="t-mut">–</span>' : esc(s.reportedPeakKw) + (s.peakUnresolved ? ' <span class="pill pill-warn" title="Unresolved workbook statistic">?</span>' : '')) + '</div>' +
+          '<div>' + meterPill(s) + '</div>' +
+          '<div>' + termCell(s) + '</div>' +
+          '<div>' + podsCell(s) + '</div></div>';
+      }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('.tr.body'), function (r) {
+      r.addEventListener('click', function () { window.location.href = '/site-crm.html?site=' + encodeURIComponent(r.getAttribute('data-id')); });
+    });
+  }
+  function renderCards() {
+    document.getElementById('cards').style.display = 'grid';
+    document.getElementById('c-sites').textContent = SITES.length;
+    var pods = 0, qual = 0, unkN = 0;
+    SITES.forEach(function (s) {
+      pods += Number((s.screening || {}).pods) || 0;
+      if (s.meterOwned === true && Number(s.termYearsRemaining) >= 5) qual++;
+      if (s.meterOwned == null || unk(s.termYearsRemaining)) unkN++;
+    });
+    document.getElementById('c-pods').textContent = pods;
+    document.getElementById('c-qual').textContent = qual;
+    document.getElementById('c-unk').textContent = unkN;
+  }
+  function load() {
+    err('');
+    document.getElementById('tbl').innerHTML = '<div class="loading"><div class="spin"></div>Loading the register…</div>';
+    api('/api/site-crm?org=' + encodeURIComponent(ORG)).then(function (j) {
+      SITES = j.sites || [];
+      CANEDIT = true;
+      renderCards(); render();
+    }).catch(function (e) { err(e.message); document.getElementById('tbl').innerHTML = '<div class="empty">Could not load the register.</div>'; });
+  }
+  document.getElementById('q').addEventListener('input', render);
+  document.getElementById('f-state').addEventListener('change', render);
+  document.getElementById('f-meter').addEventListener('change', render);
+  document.getElementById('f-pods').addEventListener('change', render);
+  document.getElementById('btn-add').addEventListener('click', function () {
+    var name = prompt('Site name:');
+    if (!name) return;
+    api('/api/site-crm', { method: 'POST', json: { org: ORG, action: 'site-save', name: name } })
+      .then(function (j) { window.location.href = '/site-crm.html?site=' + encodeURIComponent(j.id); })
+      .catch(function (e) { err(e.message); });
+  });
+  auth.onAuthStateChanged(function (u) {
+    if (!u) { window.location.href = '/'; return; }
+    document.getElementById('tb-avatar').textContent = (u.email || '?').charAt(0).toUpperCase();
+    document.getElementById('tb-name').textContent = u.displayName || u.email;
+    if (window.OmegaTenant && OmegaTenant.boot) {
+      OmegaTenant.boot().then(function () { ORG = org(); load(); }).catch(function () { ORG = org(); load(); });
+    } else { ORG = org(); load(); }
+  });
+})();
+</script>
+</body>
+</html>
