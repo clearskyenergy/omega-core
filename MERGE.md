@@ -3074,3 +3074,6 @@ Ada retains the ADMIN machine ID with a Chief of Staff label, a compact view of 
 Reviewed and integrated the Grok UI from PR #270 without changing partner access controls. System separates Grok text responses from the Muse/Grok Bot companion apps and shows missing bridges honestly. Office execution stays on tool-capable Claude/ChatGPT. No proprietary calculations added to browser code; no new Firestore collections or rules.
 
 Validation: sales/roster/mail suites; desktop and 390px Office/private-capture tests; provider settings on an isolated HTTP fixture (18795, never live 8795); inline JS parse and diff checks.
+
+### Outbox correspondence — 2026-10-09
+Draft subjects generated from meeting actions often differ from actual Gmail subjects. The ingest worker now supplies recent recipient correspondence (90 days, five threads), separately labelled from exact matches. Outbox exposes the real subjects, sent/received dates and Gmail links. Recipient-only correspondence never completes a draft or reopens a task. Missing recipients are explicit. Matching and Gmail access remain server-side in omega-twin.
