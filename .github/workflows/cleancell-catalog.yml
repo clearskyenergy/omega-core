@@ -2,27 +2,42 @@ name: CleanCell catalog
 on:
   pull_request:
     paths:
+      - 'editor.html'
       - 'omega-cleancell-catalog.js'
       - 'omega-bess-products.js'
       - 'scripts/tests/tcleancellcatalog.js'
+      - 'scripts/render-cleancell-pickers.js'
       - '.github/workflows/cleancell-catalog.yml'
   push:
     branches: [main]
     paths:
+      - 'editor.html'
       - 'omega-cleancell-catalog.js'
       - 'omega-bess-products.js'
       - 'scripts/tests/tcleancellcatalog.js'
+      - 'scripts/render-cleancell-pickers.js'
       - '.github/workflows/cleancell-catalog.yml'
 permissions:
   contents: read
 jobs:
   catalog-regression:
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
       - name: Specifications, isolation, picker and loader checks
-        run: node scripts/tests/tcleancellcatalog.js
+        run: |
+          node scripts/tests/tcleancellcatalog.js
+          node scripts/test-bess-products.js
+          node scripts/tests/tomegacore.js
+      - name: Install browser regression dependency
+        run: |
+          npm i --prefix /tmp/catalog-browser --no-save --no-audit --no-fund playwright@1.63.0
+          node /tmp/catalog-browser/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Native sizing and placement pickers on desktop and phone
+        env:
+          PLAYWRIGHT: /tmp/catalog-browser/node_modules/playwright
+        run: node scripts/render-cleancell-pickers.js
