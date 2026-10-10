@@ -1,0 +1,166 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio & Assets · ClearSky-OMEGA</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --cs-navy:#16202B;--cs-dark:#0F1720;--cs-blue:#2B5FA8;--cs-sky:#2B5FA8;
+  --cs-accent:#2B5FA8;--cs-gold:#3F76C4;--cs-text:#14171A;--cs-sub:#5B6672;
+  --cs-bg:#F5F4F0;--cs-surface:#FFFFFF;--cs-border:#DCD9D2;--cs-red:#D9482B;
+  --sap-blue:#2B5FA8;--sap-blue-hi:#3F76C4;--sap-page:#F5F4F0;--sap-card-border:#E4E8EC;
+  --sap-ink:#1D2D3E;--sap-ink-2:#5B6672;
+}
+body{font-family:'DM Sans',sans-serif;background:var(--cs-bg);color:var(--cs-text);min-height:100vh}
+#topbar{display:flex;align-items:center;gap:0;background:#fff;color:var(--sap-ink);padding:0 24px;height:60px;position:sticky;top:0;z-index:200;border-bottom:1px solid var(--sap-card-border);box-shadow:0 1px 2px rgba(20,40,60,.04)}
+.tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit}
+.tb-logo-txt{font-weight:700;font-size:15px;letter-spacing:-.2px}
+.tb-logo-txt span{color:var(--sap-blue)}
+.tb-sep{width:1px;height:22px;background:var(--sap-card-border);margin:0 16px}
+.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
+.tb-spacer{flex:1}
+.tb-back{font-size:13px;color:var(--sap-blue);text-decoration:none;font-weight:500}
+.tb-back:hover{text-decoration:underline}
+main{max-width:1280px;margin:0 auto;padding:28px 24px 64px}
+.hd{display:flex;flex-wrap:wrap;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:24px}
+.hd h1{font-size:22px;font-weight:700;letter-spacing:-.3px}
+.hd .sub{color:var(--cs-sub);font-size:14px;margin-top:4px;max-width:560px;line-height:1.45}
+.actions{display:flex;flex-wrap:wrap;gap:8px}
+.btn{display:inline-flex;align-items:center;gap:6px;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid var(--sap-card-border);background:#fff;color:var(--sap-ink);text-decoration:none}
+.btn:hover{border-color:var(--sap-blue);color:var(--sap-blue)}
+.btn.primary{background:var(--sap-blue);color:#fff;border-color:var(--sap-blue)}
+.btn.primary:hover{background:var(--sap-blue-hi)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.summaries{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:24px}
+.card{background:#fff;border:1px solid var(--sap-card-border);border-radius:10px;padding:14px 16px}
+.card .k{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.4px;color:var(--cs-sub);margin-bottom:6px}
+.card .v{font-size:20px;font-weight:700;letter-spacing:-.3px}
+.card .hint{font-size:12px;color:var(--cs-sub);margin-top:4px}
+.toolbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-bottom:14px}
+.toolbar input[type=search]{flex:1;min-width:180px;border:1px solid var(--sap-card-border);border-radius:8px;padding:8px 12px;font-size:13px;font-family:inherit}
+.tabs{display:flex;gap:4px;border-bottom:1px solid var(--sap-card-border);margin-bottom:16px}
+.tab{padding:10px 14px;font-size:13px;font-weight:600;color:var(--cs-sub);background:none;border:none;border-bottom:2px solid transparent;cursor:pointer}
+.tab.active{color:var(--sap-blue);border-bottom-color:var(--sap-blue)}
+.table-wrap{background:#fff;border:1px solid var(--sap-card-border);border-radius:10px;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px}
+th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--sap-card-border);white-space:nowrap}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.3px;color:var(--cs-sub);background:#fafafa;position:sticky;top:0}
+td.muted,th.muted{color:var(--cs-sub)}
+.empty{padding:48px 24px;text-align:center;color:var(--cs-sub)}
+.empty h2{font-size:16px;color:var(--cs-text);margin-bottom:8px}
+.empty p{font-size:13px;max-width:420px;margin:0 auto 16px;line-height:1.5}
+.badge{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:999px;background:#f0f2f5;color:var(--cs-sub)}
+.badge.warn{background:#fff3e6;color:#a65c00}
+.badge.ok{background:#e8f5e9;color:#2e7d32}
+.note{font-size:12px;color:var(--cs-sub);margin-top:12px;line-height:1.45}
+@media (max-width:640px){
+  main{padding:16px 12px 48px}
+  .summaries{grid-template-columns:1fr 1fr}
+  th:nth-child(n+5),td:nth-child(n+5){display:none}
+}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <a class="tb-logo" href="/workspace">
+    <span class="tb-logo-txt">ClearSky <span>OMEGA</span></span>
+  </a>
+  <div class="tb-sep"></div>
+  <span class="tb-portal">Portfolio & Assets</span>
+  <div class="tb-spacer"></div>
+  <a class="tb-back" href="/workspace">‹ Workspace</a>
+</div>
+
+<main>
+  <div class="hd">
+    <div>
+      <h1>Portfolio & Assets</h1>
+      <p class="sub">Your sites, energy assets and opportunities. Import a fleet without drawing maps first. Verified capacity stays separate from screened opportunity.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="btn" id="btn-import" disabled title="Import lands in a later Phase 1 commit">Import sites</button>
+      <button type="button" class="btn primary" id="btn-add" disabled title="Add site lands in a later Phase 1 commit">+ Add site</button>
+    </div>
+  </div>
+
+  <div class="summaries" id="summaries">
+    <div class="card"><div class="k">Properties</div><div class="v" id="s-sites">—</div><div class="hint">Unique sites</div></div>
+    <div class="card"><div class="k">Installed EV</div><div class="v" id="s-ev">—</div><div class="hint">Nameplate kW (not service capacity)</div></div>
+    <div class="card"><div class="k">Power opportunity</div><div class="v" id="s-opp">—</div><div class="hint">Screened only — not approved</div></div>
+    <div class="card"><div class="k">Attention</div><div class="v" id="s-attn">—</div><div class="hint">Missing evidence or review</div></div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button type="button" class="tab active" data-view="sites">Sites</button>
+    <button type="button" class="tab" data-view="opportunities" disabled title="Opportunities view — Phase 2">Opportunities</button>
+    <button type="button" class="tab" data-view="performance" disabled title="Performance view — Phase 5">Performance</button>
+  </div>
+
+  <div class="toolbar">
+    <input type="search" id="q" placeholder="Search name, ID, city, utility…" disabled>
+    <button type="button" class="btn" disabled>Filters</button>
+    <button type="button" class="btn" disabled>Export</button>
+  </div>
+
+  <div class="table-wrap">
+    <div class="empty" id="empty">
+      <h2>No sites in this portfolio yet</h2>
+      <p>Upload an XLSX or CSV site list to create durable asset records. Maps are optional for portfolio management and initial screening. Unknown values stay unknown — they are never shown as zero or healthy.</p>
+      <button type="button" class="btn primary" id="empty-import" disabled>Import sites</button>
+      <p class="note">Phase 1 will enable import with provenance, null preservation, and EVCS profile support. Legacy screened opportunity is never labeled approved service capacity.</p>
+    </div>
+    <table id="sites-table" style="display:none">
+      <thead>
+        <tr>
+          <th></th>
+          <th>Site / ID</th>
+          <th>Location</th>
+          <th>Status</th>
+          <th>Utility</th>
+          <th>Installed EV kW</th>
+          <th>Headroom</th>
+          <th>Compute opp.</th>
+          <th>Site control</th>
+          <th>Readiness</th>
+          <th>Next action</th>
+        </tr>
+      </thead>
+      <tbody id="sites-body"></tbody>
+    </table>
+  </div>
+
+  <p class="note">This surface is the workspace asset register. It reuses existing <code>sites</code> / portfolio identity foundations and does not create a second database. See <code>docs/PORTFOLIO-ASSET-MANAGER.md</code>.</p>
+</main>
+
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-sso.js"></script>
+<script>
+(function () {
+  'use strict';
+  /* Phase 1 shell: no live data yet. Summaries show em dash, not zero.
+     Import and list wiring land in subsequent commits against the existing
+     portfolio API and sites identity. */
+  function setDash() {
+    ['s-sites', 's-ev', 's-opp', 's-attn'].forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) el.textContent = '—';
+    });
+  }
+  setDash();
+
+  document.querySelectorAll('.tab').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      if (btn.disabled) return;
+      document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+    });
+  });
+})();
+</script>
+</body>
+</html>
