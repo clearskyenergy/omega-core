@@ -250,3 +250,21 @@
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.OmegaBessProducts;
 })(typeof window !== 'undefined' ? window : this);
+
+/* Public reference specifications extend the existing battery picker only.
+ * Org products and authenticated pricing keep their existing loading path. */
+(function (root) {
+  'use strict';
+  var doc = root.document;
+  if (!doc) return;
+  function loadReferenceCatalog() {
+    if (!doc.getElementById('bm-catalog') || doc.getElementById('omega-cleancell-catalog-script')) return;
+    var script = doc.createElement('script');
+    script.id = 'omega-cleancell-catalog-script';
+    script.src = '/omega-cleancell-catalog.js?v=20261009-revh1';
+    script.async = true;
+    (doc.head || doc.documentElement).appendChild(script);
+  }
+  if (doc.readyState === 'loading') doc.addEventListener('DOMContentLoaded', loadReferenceCatalog);
+  else loadReferenceCatalog();
+})(typeof window !== 'undefined' ? window : this);
