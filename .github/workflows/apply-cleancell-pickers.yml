@@ -1,0 +1,49 @@
+name: Apply CleanCell picker correction
+on:
+  push:
+    branches: [codex/cleancell-both-pickers-featured]
+    paths: ['.github/workflows/apply-cleancell-pickers.yml']
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.ref == 'refs/heads/codex/cleancell-both-pickers-featured'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: codex/cleancell-both-pickers-featured
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Apply context-checked native source update
+        run: python3 scripts/apply-cleancell-picker-fix.py
+      - name: Catalog and existing product regressions
+        run: |
+          node scripts/tests/tcleancellcatalog.js
+          node scripts/test-bess-products.js
+          node scripts/test-wl-preview.js
+          node scripts/tests/tomegacore.js
+          git diff --check
+      - name: Browser fixture dependency
+        run: |
+          npm i --prefix /tmp/catalog-browser --no-save --no-audit --no-fund playwright@1.63.0
+          node /tmp/catalog-browser/node_modules/playwright/cli.js install --with-deps chromium
+      - name: Execute actual sizing and placement functions in Chromium
+        env:
+          PLAYWRIGHT: /tmp/catalog-browser/node_modules/playwright
+          SCREENSHOT_DIR: /tmp/catalog-screenshots
+        run: node scripts/render-cleancell-pickers.js
+      - name: Commit tested source files to feature branch, never main
+        run: |
+          git config user.name 'ClearSky catalog automation'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add editor.html omega-cleancell-catalog.js omega-bess-products.js scripts/tests/tcleancellcatalog.js MERGE.md
+          git commit -m 'Fix both BESS pickers and feature CleanCell references first'
+          git push origin HEAD:refs/heads/codex/cleancell-both-pickers-featured
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cleancell-picker-verification
+          retention-days: 1
+          path: /tmp/catalog-screenshots/
