@@ -7964,7 +7964,9 @@ function renderOutbox(){
 
   const rows=outboxAll.map(d=>{
     const t=draftTriage(d,orgNames);
-    return {d, score:t.score, why:t.why, ready:!!d.to, dupeOf:null};
+    const recipients=String(d.to||'').split(/[,;]/).map(a=>a.trim());
+    const validRecipients=recipients.length>0 && recipients.every(a=>/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(a));
+    return {d, score:t.score, why:t.why, ready:validRecipients, dupeOf:null};
   });
   /* Fold the cluster: keep the strongest, count the rest. */
   const kept=[];
