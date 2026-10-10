@@ -1842,6 +1842,62 @@ body.officeReading::before{display:none!important}
 #officeFloor .coreRing{fill:none;stroke:#6bbdd7;stroke-width:1;stroke-opacity:.5}
 #officeFloor .coreRing.upper{stroke:#a4e9fa;stroke-opacity:.8}
 
+
+/* Clean silver — Thomas's October 2026 visual reference. */
+:root[data-mode="silver"]{--bg:#0b0b0d!important;--panel:#141416!important;--ink:#eeeeef!important;--dim:#aaaab2!important;--glow-cyan:#dddde1!important;--glow-blue:#88888f!important;--edge:1px solid #35353a!important}
+:root[data-mode="silver"] body{background:radial-gradient(ellipse at 55% 30%,#1b1b1e 0,transparent 55%),var(--bg)}
+:root[data-mode="silver"] .panel,:root[data-mode="silver"] .card{background:#141416!important;border-color:#343438!important;border-radius:16px}
+:root[data-mode="silver"] .rail,:root[data-mode="silver"] .brand,:root[data-mode="silver"] .railFoot{border-color:#2b2b30}
+:root[data-mode="silver"] .mark{border-radius:50%;border-color:#8e8e97;box-shadow:none;animation:none}
+:root[data-mode="silver"] .bname{font-family:var(--ui);font-weight:400;letter-spacing:4px}
+:root[data-mode="silver"] .navItem.on{background:#26262b!important;border-color:#4b4b53!important}
+:root[data-mode="silver"] button:hover{background:#ffffff0d}
+:root[data-mode="silver"] button:focus-visible,:root[data-mode="silver"] a:focus-visible{outline-color:#eeeef2}
+:root[data-mode="silver"] .ptitle{color:#e8e8eb;border-bottom-color:#303036}
+:root[data-mode="silver"] .row{border-bottom-color:#2a2a30}
+:root[data-mode="silver"] .pill{background:#2a2a30!important;color:#dedee3}
+:root[data-mode="silver"] .talkBar{background:#141416;border-color:#414148;border-radius:16px}
+:root[data-mode="silver"] .badge{background:#ffffff06;border-color:#45454c}
+:root[data-mode="silver"] .badge.neural{background:#ffffff09;color:#dddde1;border-color:#666670}
+:root[data-mode="silver"] .quick button{border-color:#3b3b42;border-radius:8px}
+:root[data-mode="silver"] .scroll{scrollbar-color:#61616b #141416}
+:root[data-mode="silver"] .scroll::-webkit-scrollbar-thumb{background:#61616b}
+:root[data-mode="silver"] .characterSettings select{background:#101013;border-color:#55555e;color:#eeeef2}
+:root[data-mode="silver"] .officeCard,:root[data-mode="silver"] .officeWorkRow{background:#141416;border-color:#343438}
+.cleanIdentity{display:none}
+:root[data-mode="silver"] #coreLayer{visibility:hidden}
+:root[data-mode="silver"] .coreHole{display:flex;align-items:center;justify-content:center;min-height:240px;position:relative;overflow:hidden;border:1px solid #ffffff13;border-radius:28px;background:radial-gradient(ellipse at center,#25252955,transparent 68%)}
+:root[data-mode="silver"] .cleanIdentity{display:flex;position:relative;width:100%;height:100%;min-height:240px;align-items:center;justify-content:center;flex-direction:column;isolation:isolate}
+/* Vector metal keeps the fine highlights sharp at every screen density. */
+.cleanOrbit{position:absolute;width:min(86%,330px);height:auto;aspect-ratio:1;z-index:-1;overflow:visible}
+/* Lights orbit on the ring radii; the metal and wordmark stay fixed. */
+.cleanOrbitalLights{transform-box:view-box;transform-origin:200px 200px;animation:cleanLightOrbit 18s linear infinite;animation-play-state:paused}
+.cleanOrbitalLights.inner{animation-name:cleanInnerOrbit;animation-duration:13s}
+.view.on .cleanOrbitalLights{animation-play-state:running}
+@keyframes cleanLightOrbit{from{transform:rotate(-46deg)}to{transform:rotate(314deg)}}
+@keyframes cleanInnerOrbit{from{transform:rotate(-52deg)}to{transform:rotate(-412deg)}}
+@media(prefers-reduced-motion:reduce){.cleanOrbitalLights{animation:none!important;transform:rotate(-46deg)}.cleanOrbitalLights.inner{transform:rotate(-52deg)}}
+.cleanSpark{position:absolute;inset:0;z-index:-1;background:radial-gradient(ellipse 7px 6px at 50% 48%,#fff 0,#fff9 25%,transparent 100%),radial-gradient(ellipse 35px 27px at 50% 48%,#ffffff50,transparent 75%),radial-gradient(ellipse 155px 1px at 50% 48%,#ffffff70,transparent),radial-gradient(ellipse 90px 60px at 50% 48%,#ffffff0a,transparent)}
+.cleanWord{font:300 clamp(34px,4.2vw,72px)/1.2 var(--ui);letter-spacing:.2em;padding-left:.2em;color:#eee;background:linear-gradient(170deg,#fff 5%,#f2f2f4 36%,#b8bac1 49%,#fff 53%,#d2d3d9 68%,#92949e 100%);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;filter:drop-shadow(0 1px 0 #ffffff25) drop-shadow(0 3px 9px #000);position:relative}
+.cleanTagline{font:400 10px/1.5 var(--ui);letter-spacing:.42em;padding-left:.42em;color:#b5b6bf;margin-top:20px;text-shadow:0 1px 5px #000}
+:root[data-mode="silver"]{--bg:#080809!important;--panel:#111113!important;--ink:#f1f1f3!important;--dim:#b2b3bc!important}
+:root[data-mode="silver"] body{background:radial-gradient(ellipse at 55% 20%,#20202355,transparent 55%),var(--bg);-webkit-font-smoothing:antialiased}
+:root[data-mode="silver"] .panel,:root[data-mode="silver"] .card{background:linear-gradient(145deg,#19191c 0%,#111113 48%,#0e0e10 100%)!important;border-color:#39393f!important;box-shadow:inset 0 1px 0 #ffffff0d,0 8px 24px #00000018!important}
+:root[data-mode="silver"] .ptitle{font-weight:500;letter-spacing:.2px;border-bottom-color:#ffffff10}
+:root[data-mode="silver"] .navItem.on{background:linear-gradient(130deg,#34343b,#1b1b20)!important;border-color:#64646e!important;box-shadow:inset 0 1px 0 #ffffff15,0 3px 12px #0003}
+:root[data-mode="silver"] .talkBar{background:linear-gradient(175deg,#202024,#101012 70%);border-color:#55555f;box-shadow:inset 0 1px 0 #ffffff13,0 -8px 28px #0002}
+:root[data-mode="silver"] .quick button{background:linear-gradient(160deg,#ffffff06,transparent 65%);border-color:#45454d;box-shadow:inset 0 1px 0 #ffffff08;transition:border-color .18s,background .18s}
+:root[data-mode="silver"] .quick button:hover{border-color:#999ba8;background:#ffffff0d}
+:root[data-mode="silver"] .coreHole{background:radial-gradient(ellipse at 50% 46%,#27272d55,transparent 65%),linear-gradient(135deg,#111113,#09090b 65%,#141416);border-color:#55555c;box-shadow:inset 0 1px 0 #ffffff19,inset 0 0 0 1px #ffffff03,0 15px 40px #0003}
+:root[data-mode="silver"] .ptabs{background:#111114;border-color:#36363c}
+:root[data-mode="silver"] .ptabs button.on{color:#fff;background:#ffffff0b;border-color:#777780}
+@media(min-width:1281px){:root[data-mode="silver"] .view[data-view="command"] .col{overflow-y:auto;scrollbar-width:thin;scrollbar-color:#61616b transparent;padding-right:3px}:root[data-mode="silver"] .view[data-view="command"] .col>.panel{flex-shrink:0}:root[data-mode="silver"] .view[data-view="command"] [data-widget="schedule"]:not(.zoom){flex:0 0 180px!important}:root[data-mode="silver"] .view[data-view="command"] .cmdGrid{grid-template-columns:minmax(210px,.85fr) minmax(290px,1.2fr) minmax(260px,1fr);gap:16px}}
+@media(max-width:700px){
+ :root[data-mode="silver"] .view[data-view="command"] .coreHole{order:-1;height:220px;min-height:220px;flex:none;margin:4px 0 6px}
+ .cleanIdentity{min-height:220px!important}.cleanOrbit{width:205px}.cleanWord{font-size:44px}.cleanTagline{font-size:9px;margin-top:14px}
+ :root[data-mode="silver"] .main > .talkBar{border-radius:14px 14px 0 0}
+}
+
 </style>
 </head>
 <body>
@@ -1967,7 +2023,7 @@ body.officeReading::before{display:none!important}
         </div>
 
         <div class="col">
-          <div class="coreHole"></div>
+          <div class="coreHole"><div class="cleanIdentity" role="img" aria-label="Jarvis. At your service."><svg class="cleanOrbit" viewBox="0 0 400 400" aria-hidden="true" focusable="false"><defs><linearGradient id="cleanMetal" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff"/><stop offset=".23" stop-color="#d8dae2"/><stop offset=".43" stop-color="#45464f"/><stop offset=".6" stop-color="#121216"/><stop offset=".79" stop-color="#b7bac5"/><stop offset="1" stop-color="#f7f8ff"/></linearGradient><linearGradient id="cleanInner" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eef0f8"/><stop offset=".3" stop-color="#6c6e79"/><stop offset=".65" stop-color="#24242c"/><stop offset="1" stop-color="#8e919e"/></linearGradient><radialGradient id="cleanGlint"><stop stop-color="#fff"/><stop offset=".12" stop-color="#fff" stop-opacity=".8"/><stop offset=".35" stop-color="#e7ebff" stop-opacity=".2"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><circle cx="200" cy="200" r="176" fill="none" stroke="#ffffff" stroke-opacity=".035" stroke-width="12"/><circle cx="200" cy="200" r="178" fill="none" stroke="#fff" stroke-opacity=".09" stroke-width=".7"/><circle cx="200" cy="200" r="174" fill="none" stroke="url(#cleanMetal)" stroke-width="3.2" stroke-dasharray="261 7 114 10 235 6 130 12 305 14" transform="rotate(-91 200 200)"/><circle cx="200" cy="200" r="170" fill="none" stroke="url(#cleanMetal)" stroke-opacity=".3" stroke-width=".65"/><circle cx="200" cy="200" r="100" fill="none" stroke="url(#cleanInner)" stroke-width="1.1"/><path d="M 68 86 A 174 174 0 0 1 190 26" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width=".85"/><g class="cleanOrbitalLights outer"><circle cx="200" cy="26" r="30" fill="url(#cleanGlint)"/><circle cx="200" cy="374" r="21" fill="url(#cleanGlint)"/></g><g class="cleanOrbitalLights inner"><circle cx="200" cy="100" r="18" fill="url(#cleanGlint)"/></g></svg><span class="cleanSpark" aria-hidden="true"></span><span class="cleanWord" aria-hidden="true">JARVIS</span><span class="cleanTagline" aria-hidden="true">AT YOUR SERVICE</span></div></div>
           <div class="panel" data-widget="quick-commands" style="flex:none">
             <div class="ptitle">Quick commands</div>
             <div class="quick" id="quick"></div>
@@ -2489,7 +2545,7 @@ body.officeReading::before{display:none!important}
               <label for="readingSize">Text size in Comfort mode</label>
               <select id="readingSize"><option value="standard">Standard</option><option value="large">Larger</option></select>
               <label for="characterMode">Jarvis character</label>
-              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="armour">Iron Man · the armour</option><option value="witchking">The Witch-king of Angmar</option><option value="onering">The One Ring</option><option value="quantum">Jarvis · Quantum core</option></select>
+              <select id="characterMode"><option value="ironman">Jarvis · Iron Man core</option><option value="doom">Doctor Doom</option><option value="armour">Iron Man · the armour</option><option value="witchking">The Witch-king of Angmar</option><option value="onering">The One Ring</option><option value="quantum">Jarvis · Quantum core</option><option value="silver">Jarvis · Silver Orbit</option></select>
               <div id="doomAppearance" style="display:grid;gap:10px">
               <label for="doomCharacter">Doom appearance</label>
               <select id="doomCharacter"><option value="rigged">Dr Doom V2 · animated 3D</option><option value="mask">Doctor Doom's Mask · talking bust</option><option value="portrait">Original Doom · depth portrait</option><option value="classic">Classic Doom visual</option></select>
@@ -2797,7 +2853,7 @@ function makeBurst(id, opts){
     /* Doom owns the canvas in doom mode, the gold sphere in quantum. Stand
        down without clearing. */
     const md = document.documentElement.dataset.mode;
-    if(md === 'doom' || md === 'quantum'){ requestAnimationFrame(frame); return; }
+    if(md === 'doom' || md === 'quantum' || md === 'silver'){ requestAnimationFrame(frame); return; }
 
     ctx.clearRect(0,0,W,H);
     const cx=W/2, cy=H/2;
@@ -4493,7 +4549,7 @@ function syncDoomCharacter() {
   layer.classList.remove('characterReady'); host.style.display = 'none';
   el('doomCharacter').value = doomCharacter;
   const figureKey = currentFigure();
-  el('doomAppearance').style.display = (document.documentElement.dataset.figure || 'doom') === 'doom' ? 'grid' : 'none';
+  el('doomAppearance').style.display = document.documentElement.dataset.mode === 'doom' && (document.documentElement.dataset.figure || 'doom') === 'doom' ? 'grid' : 'none';
   if (document.documentElement.dataset.mode !== 'doom' || figureKey === 'classic') return;
   host.style.display = 'block';
   el('characterStatus').textContent = 'Loading character…';
@@ -5428,7 +5484,7 @@ function confirmCommand(cmd){
 
    No number changes. A skin that edits the truth is not a skin. */
 const MODE_CMD = /^(?:hey\s+)?(?:jarvis[,\s]+)?(?:(?:go|switch\s+to|enter|activate)\s+)?(doom|quantum|armou?r|suit|stark|witch[\s-]*king|nazgul|(?:the\s+)?(?:one\s+)?ring|precious|iron\s*man|ironman|normal|jarvis|standard)(?:\s+mode)?(?:\s+(?:on|please))?$/i;
-const MODES = ['ironman','doom','armour','witchking','onering','quantum'];
+const MODES = ['ironman','doom','armour','witchking','onering','quantum','silver'];
 
 /* Three skins on one page: Iron Man (the burst), Doom (the icosahedron) and
    Quantum (the gold sphere, for the command centre). dataset.mode carries the
@@ -5437,13 +5493,14 @@ const MODES = ['ironman','doom','armour','witchking','onering','quantum'];
 function setMode(mode, announce){
   const m = MODES.includes(mode) ? mode : 'ironman';   /* anything else is Iron Man mode */
   const figureMode = FIGURE_MODES[m], doom = !!figureMode, quantum = m==='quantum';
-  document.documentElement.dataset.mode = doom ? 'doom' : quantum ? m : '';
+  document.documentElement.dataset.mode = doom ? 'doom' : (quantum || m==='silver') ? m : '';
   if (doom) document.documentElement.dataset.figure = m; else delete document.documentElement.dataset.figure;
   el('characterMode').value = m;
   syncDoomCharacter();
+  if(!doom) el('characterStatus').textContent = m==='silver' ? 'Silver Orbit — lights follow the rings. Saved on this browser.' : 'Saved on this browser.';
   try{ localStorage.setItem('jarvisMode', m); }catch(_){}
   const name = doom ? figureMode.name : 'J.A.R.V.I.S';
-  const tag  = doom ? figureMode.tag : quantum ? 'QUANTUM CORE' : 'AI CORE';
+  const tag  = doom ? figureMode.tag : quantum ? 'QUANTUM CORE' : m==='silver' ? 'SILVER ORBIT' : 'AI CORE';
   const n=document.querySelector('.cName'), sub=document.querySelector('.cSub');
   if(n) n.textContent = name;
   if(sub) sub.textContent = tag;
@@ -5461,6 +5518,7 @@ function setMode(mode, announce){
   if(announce){
     const line = doom    ? figureMode.line
                : quantum ? 'Quantum mode. Same numbers, in gold.'
+               : m==='silver' ? 'Silver Orbit mode.'
                :           'Iron Man mode.';
     say('jarvis', line, 0);
     if(voiceOut) speakReply(line);
@@ -7932,7 +7990,9 @@ function renderOutbox(){
 
   const rows=outboxAll.map(d=>{
     const t=draftTriage(d,orgNames);
-    return {d, score:t.score, why:t.why, ready:!!d.to, dupeOf:null};
+    const recipients=String(d.to||'').split(/[,;]/).map(a=>a.trim());
+    const validRecipients=recipients.length>0 && recipients.every(a=>/^[^\s<>@]+@[^\s<>@]+\.[^\s<>@]+$/.test(a));
+    return {d, score:t.score, why:t.why, ready:validRecipients, dupeOf:null};
   });
   /* Fold the cluster: keep the strongest, count the rest. */
   const kept=[];
@@ -7978,15 +8038,29 @@ function renderOutbox(){
     if(r.dupes) bits.push('+'+r.dupes+' like it');
     const mail=r.d.emailContext;
     if(mail && mail.state==='linked') bits.unshift((mail.direction==='out'?'You sent email':'Incoming email')+' '+sStamp(mail.latestAt)+(mail.changedSinceDraft?' · review draft':''));
-    else bits.unshift(mail && mail.state==='ambiguous'?'Multiple matching threads':mail && mail.state==='unavailable'?'Email sync unavailable':'No linked email yet');
+    else if(mail && mail.state==='related' && mail.conversations && mail.conversations.length) {
+      const latest=mail.conversations[0];
+      bits.unshift('Recipient correspondence · '+(latest.direction==='out'?'you sent ':'incoming ')+sStamp(latest.latestAt)+(latest.changedSinceDraft?' · newer than draft':''));
+    } else bits.unshift(!mail?'Email not checked yet':mail.state==='missing_recipient'?'Add a recipient to check email':mail && mail.state==='ambiguous'?'Multiple matching threads':mail && mail.state==='unavailable'?'Email sync unavailable':'No email with recipient in 90 days');
     why.textContent=bits.join(' · ');
     if(mail && mail.state==='linked' && /^[a-zA-Z0-9_-]+$/.test(mail.threadId||'')){
-      const link=document.createElement('a'); link.textContent='EMAIL ↗'; link.href='https://mail.google.com/mail/u/?authuser=tom%40clearsky-usa.com#all/'+encodeURIComponent(mail.threadId); link.target='_blank'; link.rel='noopener'; link.onclick=e=>e.stopPropagation(); row.appendChild(link);
+      const link=document.createElement('a'); link.textContent='EMAIL ↗'; link.style.color='#89d7e8'; link.href='https://mail.google.com/mail/u/?authuser=tom%40clearsky-usa.com#all/'+encodeURIComponent(mail.threadId); link.target='_blank'; link.rel='noopener'; link.onclick=e=>e.stopPropagation(); row.appendChild(link);
     }
     const v=document.createElement('span');
     v.className='v '+(r.ready?'good':'warn');
     v.textContent=r.ready ? (r.d.to.split(',')[0].trim().slice(0,26)) : 'no recipient';
     row.append(n,k,why,v);
+    if(mail && mail.state==='related' && Array.isArray(mail.conversations)) {
+      const threads=document.createElement('details'); threads.style.cssText='flex-basis:100%;font-size:12px;padding:6px 0';
+      const summary=document.createElement('summary'); summary.textContent='Recent email with recipient ('+mail.conversations.length+')'; threads.appendChild(summary);
+      const note=document.createElement('div'); note.textContent='Related correspondence; draft completion is not confirmed.'; threads.appendChild(note);
+      mail.conversations.forEach(c=>{
+        if(!/^[a-zA-Z0-9_-]+$/.test(c.threadId||'')) return;
+        const link=document.createElement('a'); link.style.cssText='display:block;padding:5px 0;color:#89d7e8;overflow-wrap:anywhere'; link.textContent=(c.direction==='out'?'Sent · ':'Received · ')+sStamp(c.latestAt)+' · '+(c.subject||'(no subject)');
+        link.href='https://mail.google.com/mail/u/?authuser=tom%40clearsky-usa.com#all/'+encodeURIComponent(c.threadId); link.target='_blank'; link.rel='noopener'; threads.appendChild(link);
+      });
+      threads.addEventListener('click',e=>e.stopPropagation()); row.style.flexWrap='wrap'; row.appendChild(threads);
+    }
     /* The row opens the draft. outbox[i] carries the number he would say.
        No id, no pointer: showDraft() would open nothing. */
     if(r.d.id){

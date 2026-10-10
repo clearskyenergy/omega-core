@@ -145,6 +145,8 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     var twinState = JSON.parse(TWIN);
     twinState.draftList=[{id:'draft-test',subject:'Buyer proposal',to:'buyer@buyerco.example',emailContext:{state:'linked',threadId:'abc123',latestAt:new Date().toISOString(),direction:'in',changedSinceDraft:true}}];
 
+    twinState.draftList.push({id:'related-test',subject:'Meeting action title',to:'partner@example.com',emailContext:{state:'related',conversations:[{threadId:'def456',subject:'Actual ongoing conversation',latestAt:new Date().toISOString(),direction:'out',changedSinceDraft:true}]}});
+    twinState.draftList.push({id:'invalid-recipient',subject:'Needs an address',to:'Grant Scheffer',emailContext:{state:'missing_recipient'}});
     page.on('pageerror', function (e) { errors.push(e.message); });
     await page.route('**/*', function (route) {
       var u = route.request().url();
@@ -399,7 +401,16 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
     ok(restoredTask,'restore returns the task to the active list');
     await page.locator('.navItem[data-view=outbox]').first().evaluate(function(b){b.click();});
     ok((await page.locator('#drafts').textContent()).indexOf('review draft')>=0,'Outbox warns about email received after the draft');
-    ok((await page.locator('#drafts a').getAttribute('href')).indexOf('#all/abc123')>=0,'Outbox links to the matching Gmail thread');
+    ok((await page.locator('#drafts a').first().getAttribute('href')).indexOf('#all/abc123')>=0,'Outbox links to the matching Gmail thread');
+    await page.locator('#drafts summary').click();
+    ok((await page.locator('#drafts').textContent()).indexOf('Recipient correspondence')>=0,'Outbox distinguishes recipient correspondence from exact matches');
+    ok(await page.locator('#drafts a[href$="def456"]').isVisible(),'Actual recipient conversation is accessible');
+    ok((await page.locator('#drafts a[href$="def456"]').textContent()).indexOf('Actual ongoing conversation')>=0,'Conversation has its actual Gmail subject');
+    ok(await page.evaluate(function(){return document.documentElement.scrollWidth<=window.innerWidth;}),'Outbox fits viewport');
+    if(shotsAt) await page.screenshot({path:path.join(shotsAt,'mission-outbox-'+vp.name+'.png')});
+    ok((await page.locator('#drafts .triBar').textContent()).indexOf('READY 2')>=0,'A name without an email address is not ready to send');
+    await page.locator('#drafts .ixChip').filter({hasText:/^NO RECIPIENT/}).click();
+    ok((await page.locator('#drafts').textContent()).indexOf('Needs an address')>=0,'Name-only recipient appears under no recipient');
     ok(!errors.length, 'no uncaught page error', errors);
     console.log(JSON.stringify({ viewport: vp.name, tiles: v.tiles.length, today: (v.today.match(/TODAY|SOON/gi) || []).length, errors: errors.length }));
     await page.close();
