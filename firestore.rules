@@ -2304,6 +2304,19 @@ service cloud.firestore {
        by the endpoints in a transaction. A browser that could write it would
        reset its own allowance. Stated, like the lines above. */
     match /omega_orgs/{orgId}/geocode_usage/{usageId} { allow read, write: if false; }
+    /* Portfolio & Assets (api/portfolio-assets.js, docs/PORTFOLIO-ASSET-
+       MANAGER-PLAN.md): the workspace asset register — canonical sites with
+       their agreements, equipment, tasks and file records, import previews
+       and undo images, saved views, portfolio groupings and an append-only
+       audit. Customer contracts, rent and account details live here, so a
+       browser reads nothing directly; the endpoint checks the workspace flag,
+       the verified identity and the member role on every call. Stated, like
+       the lines above. */
+    match /omega_orgs/{orgId}/asset_sites/{siteId}/{document=**} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_imports/{importId}/{document=**} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_views/{viewId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_portfolios/{portfolioId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_audit/{eventId} { allow read, write: if false; }
     /* Packaged usage counters (Phase 7): one document per billing cycle,
        counted by the producing endpoints in a transaction and idempotent by
        client id (the events subcollection). A browser that could write it

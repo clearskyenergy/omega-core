@@ -25,3 +25,10 @@ dist/
 scripts/sandbox/index.html
 scripts/sandbox/look-*.png
 scripts/sandbox/ph-*.png
+
+# Portfolio & Assets: the real customer workbooks are PRIVATE QA fixtures.
+# Never commit them; scripts/tests/tportfolioassets-real.js reads them from
+# a path in EVCS_WB1_PATH / EVCS_WB2_PATH outside the repository.
+private-fixtures/
+COMPUTE_DC_intake*.xlsx
+EVCS_Solela_Site_Model*.xlsx
