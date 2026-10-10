@@ -7958,7 +7958,7 @@ function renderOutbox(){
     } else bits.unshift(!mail?'Email not checked yet':mail.state==='missing_recipient'?'Add a recipient to check email':mail && mail.state==='ambiguous'?'Multiple matching threads':mail && mail.state==='unavailable'?'Email sync unavailable':'No email with recipient in 90 days');
     why.textContent=bits.join(' · ');
     if(mail && mail.state==='linked' && /^[a-zA-Z0-9_-]+$/.test(mail.threadId||'')){
-      const link=document.createElement('a'); link.textContent='EMAIL ↗'; link.href='https://mail.google.com/mail/u/?authuser=tom%40clearsky-usa.com#all/'+encodeURIComponent(mail.threadId); link.target='_blank'; link.rel='noopener'; link.onclick=e=>e.stopPropagation(); row.appendChild(link);
+      const link=document.createElement('a'); link.textContent='EMAIL ↗'; link.style.color='#89d7e8'; link.href='https://mail.google.com/mail/u/?authuser=tom%40clearsky-usa.com#all/'+encodeURIComponent(mail.threadId); link.target='_blank'; link.rel='noopener'; link.onclick=e=>e.stopPropagation(); row.appendChild(link);
     }
     const v=document.createElement('span');
     v.className='v '+(r.ready?'good':'warn');
@@ -7970,7 +7970,7 @@ function renderOutbox(){
       const note=document.createElement('div'); note.textContent='Related correspondence; draft completion is not confirmed.'; threads.appendChild(note);
       mail.conversations.forEach(c=>{
         if(!/^[a-zA-Z0-9_-]+$/.test(c.threadId||'')) return;
-        const link=document.createElement('a'); link.style.cssText='display:block;padding:5px 0'; link.textContent=(c.direction==='out'?'Sent · ':'Received · ')+sStamp(c.latestAt)+' · '+(c.subject||'(no subject)');
+        const link=document.createElement('a'); link.style.cssText='display:block;padding:5px 0;color:#89d7e8;overflow-wrap:anywhere'; link.textContent=(c.direction==='out'?'Sent · ':'Received · ')+sStamp(c.latestAt)+' · '+(c.subject||'(no subject)');
         link.href='https://mail.google.com/mail/u/?authuser=tom%40clearsky-usa.com#all/'+encodeURIComponent(c.threadId); link.target='_blank'; link.rel='noopener'; threads.appendChild(link);
       });
       threads.addEventListener('click',e=>e.stopPropagation()); row.style.flexWrap='wrap'; row.appendChild(threads);
