@@ -30,7 +30,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var crypto = require('crypto');
-var csv = require('./csv'), xlsx = require('./xlsx'), I = require('./ingest'), EVCS = require('./evcs');
+var csv = require('./csv'), xlsx = require('./xlsx'), I = require('./ingest'), EVCS = require('./evcs'), EM = require('./evcs-model');
 
 var SCHEMA_VERSION = 1;
 var MAX_SITES = 2000;
@@ -83,6 +83,13 @@ function readUpload(upload, opts) {
     if (!xlsx.isXlsx(bytes)) fail(400, 'This .xlsx file is not a valid workbook');
     if (/\.(xlsm|xlsb|xls)$/i.test(name)) fail(400, 'Macro-enabled or legacy Excel files are not accepted; save as .xlsx');
     var info = xlsx.inspect(bytes); xlsx.assertSafe(info);
+    var names = info.sheets.map(function (s) { return s.name; });
+    if (EM.detect(names)) {
+      /* A multi-sheet analysis package, not a site list: it enriches existing sites. */
+      var gs = {}; EM.SHEETS.forEach(function (sh) { gs[sh] = xlsx.sheetGrid(bytes, { sheet: sh, maxRows: MAX_SITES + 50 }); });
+      var en = EM.parse(gs, { file: name });
+      return { fileName: name, fileSha: sha(bytes), size: bytes.length, profile: EM.PROFILE, meta: { profile: EM.PROFILE, sheets: names, headerRow: en.meta.portfolioHeaderRow, footer: [], formulaCells: 0 }, records: [], rejected: en.rejected, enrichment: en };
+    }
     var order = info.sheets.map(function (s) { return s.name; }).sort(function (a, b) { return (b === 'Intake') - (a === 'Intake'); });
     order.forEach(function (sh) { grids.push(xlsx.sheetGrid(bytes, { sheet: sh, maxRows: MAX_SITES + 50 })); });
   } else if (/\.(csv|txt)$/i.test(name)) {
@@ -289,7 +296,7 @@ function summary(sites, opts) {
     asOf: opts.now || null,
     properties: { sites: live.length, byState: states, operatingState: 'Not provided (declared/verified operating state not imported)' },
     installed: { evChargingNameplateKw: Math.round(nameplate * 1000) / 1000, label: 'EV charger nameplate (L2+L3, as supplied) — not approved service capacity', coverage: { known: nameplateKnown, notProvided: live.length - nameplateKnown } },
-    powerOpportunity: { verifiedHeadroomKw: null, verifiedNote: 'No verified headroom: no reviewed service limits exist yet', screened: Object.assign({ scenario: 'EVCS legacy proxy v1', label: 'Screened potential (preliminary proxy; unverified)' }, screened) },
+    powerOpportunity: { workbookScenario: live.some(function (s) { return s.opportunity && s.opportunity.wb2Legacy; }) ? EM.totals(live) : null, verifiedHeadroomKw: null, verifiedNote: 'No verified headroom: no reviewed service limits exist yet', screened: Object.assign({ scenario: 'EVCS legacy proxy v1', label: 'Screened potential (preliminary proxy; unverified)' }, screened) },
     performance: { status: 'No live data connection', measured: null },
     attention: attention,
     coverage: coverage(live)

@@ -15,6 +15,10 @@ var zip = require('./zip');
 function fail(msg) { var e = new Error(msg); e.status = 400; throw e; }
 function unescape(s) { return String(s).replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, function (m, n) { return String.fromCharCode(+n); }).replace(/&amp;/g, '&'); }
 function textOf(xml) { return unescape(String(xml).replace(/<[^>]+>/g, '')); }
+/* Strict-OOXML/.NET writers prefix every element (<x:sheet>, <x:row>, <x:c>):
+   drop element prefixes so one set of patterns reads both. Attributes such as
+   r:id are untouched. Found on a real EVCS model workbook, 2026-10-10. */
+function unprefix(xml) { return String(xml).replace(/<(\/?)[A-Za-z][A-Za-z0-9]*:(?=[A-Za-z])/g, '<$1'); }
 function colIndex(ref) { var m = /^([A-Z]+)/.exec(ref || ''); if (!m) return 0; var n = 0; for (var i = 0; i < m[1].length; i++) n = n * 26 + (m[1].charCodeAt(i) - 64); return n - 1; }
 
 function sheetRows(buf, opts) {
@@ -25,21 +29,21 @@ function sheetRows(buf, opts) {
   if (!wbEntry) fail('Not an Excel workbook (.xlsx)');
   var shared = [];
   if (byName['xl/sharedStrings.xml']) {
-    var ss = zip.read(buf, byName['xl/sharedStrings.xml']).toString('utf8');
+    var ss = unprefix(zip.read(buf, byName['xl/sharedStrings.xml']).toString('utf8'));
     var re = /<si>([\s\S]*?)<\/si>/g, m;
     while ((m = re.exec(ss))) shared.push(textOf(m[1]));
   }
   /* The first sheet in workbook order, resolved through the relationships. */
-  var wb = zip.read(buf, wbEntry).toString('utf8'), sheetMatch = /<sheet [^>]*r:id="([^"]+)"[^>]*>/.exec(wb);
+  var wb = unprefix(zip.read(buf, wbEntry).toString('utf8')), sheetMatch = /<sheet [^>]*r:id="([^"]+)"[^>]*>/.exec(wb);
   var target = 'xl/worksheets/sheet1.xml';
   if (sheetMatch && byName['xl/_rels/workbook.xml.rels']) {
-    var rels = zip.read(buf, byName['xl/_rels/workbook.xml.rels']).toString('utf8');
+    var rels = unprefix(zip.read(buf, byName['xl/_rels/workbook.xml.rels']).toString('utf8'));
     var rel = new RegExp('<Relationship [^>]*Id="' + sheetMatch[1] + '"[^>]*Target="([^"]+)"').exec(rels) || new RegExp('<Relationship [^>]*Target="([^"]+)"[^>]*Id="' + sheetMatch[1] + '"').exec(rels);
     if (rel) target = rel[1].replace(/^\/?(xl\/)?/, 'xl/');
   }
   var sheetEntry = byName[target] || byName['xl/worksheets/sheet1.xml'];
   if (!sheetEntry) fail('The workbook has no readable worksheet');
-  var xml = zip.read(buf, sheetEntry).toString('utf8'), rows = [], rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g, r, max = opts.maxRows || 5000;
+  var xml = unprefix(zip.read(buf, sheetEntry).toString('utf8')), rows = [], rowRe = /<row[^>]*>([\s\S]*?)<\/row>/g, r, max = opts.maxRows || 5000;
   while ((r = rowRe.exec(xml)) && rows.length < max) {
     var cells = [], cellRe = /<c ([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g, c;
     while ((c = cellRe.exec(r[1]))) {
@@ -87,7 +91,7 @@ function inspect(buf) {
   var entries = zip.list(buf), names = entries.map(function (e) { return e.name; }), byName = {};
   entries.forEach(function (e) { byName[e.name] = e; });
   if (!byName['xl/workbook.xml']) fail('Not an Excel workbook (.xlsx)');
-  var wb = zip.read(buf, byName['xl/workbook.xml']).toString('utf8'), rels = byName['xl/_rels/workbook.xml.rels'] ? zip.read(buf, byName['xl/_rels/workbook.xml.rels']).toString('utf8') : '';
+  var wb = unprefix(zip.read(buf, byName['xl/workbook.xml']).toString('utf8')), rels = byName['xl/_rels/workbook.xml.rels'] ? unprefix(zip.read(buf, byName['xl/_rels/workbook.xml.rels']).toString('utf8')) : '';
   var sheets = [], re = /<sheet ([^>]*?)\/?>/g, m;
   while ((m = re.exec(wb))) {
     var a = m[1], name = unescape((/name="([^"]*)"/.exec(a) || [])[1] || ''), rid = (/r:id="([^"]+)"/.exec(a) || [])[1], target = null;
@@ -115,12 +119,12 @@ function sheetGrid(buf, opts) {
   var info = inspect(buf); assertSafe(info);
   var byName = {}; zip.list(buf).forEach(function (e) { byName[e.name] = e; });
   var shared = [];
-  if (byName['xl/sharedStrings.xml']) { var ss = zip.read(buf, byName['xl/sharedStrings.xml']).toString('utf8'), sre = /<si>([\s\S]*?)<\/si>/g, sm; while ((sm = sre.exec(ss))) shared.push(textOf(sm[1].replace(/<rPh[\s\S]*?<\/rPh>/g, ''))); }
+  if (byName['xl/sharedStrings.xml']) { var ss = unprefix(zip.read(buf, byName['xl/sharedStrings.xml']).toString('utf8')), sre = /<si>([\s\S]*?)<\/si>/g, sm; while ((sm = sre.exec(ss))) shared.push(textOf(sm[1].replace(/<rPh[\s\S]*?<\/rPh>/g, ''))); }
   var sheet = opts.sheet ? info.sheets.filter(function (s) { return s.name === opts.sheet; })[0] : info.sheets[0];
   if (!sheet) fail('The workbook has no sheet named ' + String(opts.sheet).slice(0, 60));
   var entry = byName[sheet.target];
   if (!entry) fail('The workbook has no readable worksheet');
-  var xml = zip.read(buf, entry).toString('utf8'), rows = [], rowRe = /<row([^>]*)>([\s\S]*?)<\/row>/g, r, max = opts.maxRows || 5000, formulas = 0, seq = 0;
+  var xml = unprefix(zip.read(buf, entry).toString('utf8')), rows = [], rowRe = /<row([^>]*)>([\s\S]*?)<\/row>/g, r, max = opts.maxRows || 5000, formulas = 0, seq = 0;
   while ((r = rowRe.exec(xml)) && rows.length < max) {
     seq++;
     var rn = +((/\br="(\d+)"/.exec(r[1]) || [])[1] || seq); seq = rn;

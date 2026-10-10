@@ -105,8 +105,26 @@ Flags raised: `POWER_DEFINITION_CONFLICT`, `POWER_EXCEEDS_INSTALLED` (no clampin
 ### 4.2 Generic site list (`template-v1`)
 This is the existing `ingest.siteList` template, so the same headers the customer portal accepts. The header row is detected, and provenance is converted to facts.
 
-### 4.3 WB2 (`EVCS_Solela_Site_Model.xlsx`)
-**Not imported in Phase 1.** Phase 2 will treat it as a multi-sheet analysis package bound by Location ID, never as five site lists. The real-workbook test checks only that it is recognisable and safe.
+### 4.3 WB2 (`EVCS_Solela_Site_Model.xlsx`): Phase 2 started (`api/_lib/portfolio/evcs-model.js`, profile `evcs-model-v1`)
+
+WB2 is recognised by its sheet set: Summary, Inputs, Monthly, Portfolio and 10 Sites. It is imported as **one analysis package**, never as site lists, and it **never creates sites**. Each sheet is handled differently:
+
+| Sheet | Becomes | Binding and safeguards |
+|---|---|---|
+| Portfolio | A `opportunity.wb2Legacy` record on each existing site | Bound by Location ID through the canonical `evcs` namespace. Columns are matched by header name; the source row is kept for traceability only. |
+| Inputs | An assumption set (`kind: assumed`, with the cell reference) | Stored on one immutable `omega_orgs/{org}/asset_analyses/{id}` record |
+| Summary | Reconciliation metrics | Stored on the same analysis record |
+| 10 Sites | The shortlist: members and the TOTAL row | Stored on the same analysis record |
+| Monthly | Row count only | Financial parity (T26) is Phase 4 |
+
+Further rules:
+- WB2's meter, term and power columns are **not** imported, so the three WB1 blank meter flags stay unknown.
+- Each site's WB1-derived proxy is reconciled against WB2. Mismatches are listed in the preview and on the analysis record.
+- Re-import is idempotent.
+- IDs with no matching site are reported, not created.
+- The rules add a deny line for `asset_analyses`.
+
+**Real-file finding (fixed):** WB2's XML uses `x:`-prefixed elements (`<x:sheet>`, `<x:row>`, `<x:c>`). Before the fix, `xlsx.js` saw zero sheets. It now strips element prefixes (`unprefix`) in every XML read. A synthetic prefixed fixture guards this.
 
 ### 4.4 Re-import semantics
 - **Same file:** every site is unchanged and **nothing is written**. Committing twice is a no-op.
@@ -170,7 +188,7 @@ What the synthetic fixture **does not** prove: real header spellings and cell ty
   - The file category list is fixed.
   - Imports are synchronous and capped at 2,000 sites and 3 MB.
   - No live end-to-end run against the `clearsky-portal` Firebase project.
-- **Phase 2:** WB2 import as linked scenarios and the 10-site shortlist (T02, T09, T10), power-evidence classification, an interval-ready interface, and service/meter/constraint entities (T11–T18, T35).
+- **Phase 2:** WB2 import as linked scenarios and shortlist **started; T02/T09/T10 pass on the real files** (see §4.3). Still open: a shortlist UI, creating projects from the shortlist, power-evidence classification, an interval-ready interface, and service/meter/constraint entities (T11–T18, T35).
 - **Phase 3:** editor, Grid Atlas, fiber, parcel and BESS handoffs with persisted analysis records (T20, T21), and bill review and extraction (T22).
 - **Phase 4:** dated cash flows and IRR (T26–T28), server-side publish gates and explicit submission (T23–T25).
 - **Phase 5:** telemetry/accounting imports (T31), durable jobs (T32), alerts.

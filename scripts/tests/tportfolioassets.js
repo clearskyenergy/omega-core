@@ -303,6 +303,23 @@ test('Phase 1 records: agreements, equipment, tasks, files and portfolio members
   assert.equal(Object.keys(sitesIn(h)).length, 1, 'only sites without later work were removed by undo');
 });
 
+test('T02/T09/T10 (synthetic) WB2-shaped package with x:-prefixed XML enriches WB1 sites, never creates, keeps unknown meters, reconciles', async function () {
+  var W2 = require('../fixtures/evcs-wb2-synthetic').build(), EM = require('../../api/_lib/portfolio/evcs-model');
+  assert.deepEqual(X.inspect(W2.buffer).sheets.map(function (s) { return s.name; }), ['Summary', 'Inputs', 'Monthly', 'Portfolio', '10 Sites'], 'prefixed workbook XML is read');
+  var h = env(); await importFile(h, 'owner', NAME, WB1); var r = await importFile(h, 'owner', 'EVCS_Solela_Site_Model_SYNTHETIC.xlsx', W2.buffer);
+  assert.equal(r.preview.profile, 'evcs-model-v1'); assert.equal(r.preview.counts.created, 0); assert.equal(r.preview.counts.matched, 292); assert.equal(r.preview.counts.reconciliationMismatches, 0);
+  var sites = sitesIn(h), list = Object.keys(sites).map(function (k) { return sites[k]; });
+  assert.equal(list.length, 292, 'not 584'); assert.equal(list.filter(function (s) { return s.opportunity.wb2Legacy; }).length, 292);
+  FX.expected.blankMeter.forEach(function (id) { assert.equal(sites[AS.canonicalSiteId(ORG, 'evcs', id)].facts.evcsOwnsMeter, undefined); });
+  var lp = list.reduce(function (a, s) { return a + (s.opportunity.legacyProxy.pods || 0); }, 0), tt = EM.totals(list); assert.equal(tt.pods, lp);
+  var an = await h.get('owner', { analyses: 1 }); assert.equal(an.body.analyses.length, 1);
+  assert.deepEqual(an.body.analyses[0].shortlist.members.map(function (m) { return m.externalSiteId; }), W2.shortlist); assert.equal(an.body.analyses[0].shortlist.total.pods, W2.shortlistPods);
+  var again = await h.post('owner', { action: 'import-preview', fileName: 'x.xlsx', base64: b64(W2.buffer) }); assert.equal(again.body.counts.unchanged, 292);
+  /* WB2 alone, with no WB1 sites: nothing is created, every ID reported unmatched */
+  var h2 = env(), only = await h2.post('owner', { action: 'import-preview', fileName: 'x.xlsx', base64: b64(W2.buffer) });
+  assert.equal(only.body.counts.created, 0); assert.equal(only.body.counts.unmatched, 292);
+});
+
 test('Workspace hub: Portfolio entry appears only behind the workspace flag (T34 guard)', function () {
   var HUB = require('../../omega-workspace-hub.js');
   var off = HUB.items('projects', { canOpen: function () { return false; } }), on = HUB.items('projects', { canOpen: function () { return false; }, flags: { 'portfolio-assets': true } });

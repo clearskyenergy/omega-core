@@ -27,6 +27,8 @@
      omega_orgs/{org}/asset_portfolios/{portfolioId}         groupings (membership
                                                              is siteIds; no copies)
      omega_orgs/{org}/asset_audit/{id}                       append-only events
+     omega_orgs/{org}/asset_analyses/{id}                    an analysis package (WB2):
+                                                             assumptions, summary, shortlist
    Private Storage: asset-portfolio/{org}/imports/{sha256}, …/files/{siteId}/{sha256}
 
    GET  ?org=[&view=<json>|&viewId=]               sites (page) + summary + coverage
@@ -39,7 +41,7 @@
           view-save | view-delete | portfolio-save | site-archive }
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var AS = require('./_lib/portfolio/assets');
+var AS = require('./_lib/portfolio/assets'), EM = require('./_lib/portfolio/evcs-model');
 
 var FLAG = 'portfolio-assets', MAX_UPLOAD = 3 * 1024 * 1024;
 function clean(v, n) { return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n || 160); }
@@ -77,6 +79,17 @@ function make(deps) {
       attention: (s.flags || []).filter(function (f) { return f.severity === 'review'; }).map(function (f) { return f.code; }), revision: s.revision, lifecycleStatus: s.lifecycleStatus };
   }
   async function loadImportFile(scope, imp) { var r = await deps.bucket().file('asset-portfolio/' + scope.org + '/imports/' + imp.fileSha).download(); return r[0]; }
+  /* One planner for both kinds of upload: a site list (creates/updates
+     sites) or an analysis package (enriches existing sites, never creates). */
+  function planFor(up, ex, scope) {
+    if (up.enrichment) {
+      var ep = EM.plan(up.enrichment, ex, { orgId: scope.org, namespace: 'evcs', canonicalSiteId: AS.canonicalSiteId });
+      var c = { created: 0, updated: ep.counts.updated, unchanged: ep.counts.unchanged, rejected: ep.counts.rejected + ep.counts.unmatched, conflicts: 0, conflictOnly: 0, matched: ep.counts.matched, unmatched: ep.counts.unmatched, reconciliationMismatches: ep.counts.reconciliationMismatches };
+      ep.counts = c; ep.suggestions = []; ep.planHash = AS.sha(JSON.stringify([ep.changes.map(function (x) { return [x.siteId, x.fieldChanges[0].to]; }), ep.unmatched, up.fileSha]));
+      return ep;
+    }
+    return AS.planImport(up.records, ex, { orgId: scope.org, rejected: up.rejected });
+  }
   async function siteRef(scope, id) { var ref = scope.root.collection('asset_sites').doc(docId(id)), s = await ref.get(); if (!s.exists) throw err(404, 'Site not found'); return { ref: ref, data: s.data() }; }
 
   return A.handler(async function (req, res) {
@@ -106,6 +119,7 @@ function make(deps) {
       }
       if (b.views) { var vs = await scope.root.collection('asset_views').limit(200).get(); return { views: vs.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }) }; }
       if (b.imports) { var is = await scope.root.collection('asset_imports').limit(200).get(); return { imports: is.docs.map(function (d) { var x = d.data(); return { id: d.id, status: x.status, fileName: x.fileName, profile: x.profile, counts: x.counts, createdAt: x.createdAt, committedAt: x.committedAt || null, undoneAt: x.undoneAt || null }; }) }; }
+      if (b.analyses) { var an = await scope.root.collection('asset_analyses').limit(50).get(); return { analyses: an.docs.map(function (d) { return d.data(); }) }; }
       if (b.portfolios) { var ps = await scope.root.collection('asset_portfolios').limit(200).get(); return { portfolios: ps.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }) }; }
       var sites = await allSites(scope), view = await parseView(b, scope), result = AS.applyView(sites, view), byId = {};
       sites.forEach(function (s) { byId[s.siteId] = s; });
@@ -127,7 +141,7 @@ function make(deps) {
       if (bytes2.length > MAX_UPLOAD) throw err(413, 'Upload limit is 3 MB per site list');
       var up = AS.readUpload({ name: b.fileName, bytes: bytes2 }, { namespace: b.namespace, now: now });
       var ex = {}; (await allSites(scope)).forEach(function (s) { ex[s.siteId] = s; });
-      var plan = AS.planImport(up.records, ex, { orgId: scope.org, rejected: up.rejected });
+      var plan = planFor(up, ex, scope);
       var importId = 'imp_' + AS.sha(scope.org + '|' + up.fileSha + '|' + (b.namespace || '') + '|' + plan.planHash).slice(0, 24), iref = scope.root.collection('asset_imports').doc(importId), prior = await iref.get();
       if (prior.exists && prior.data().status === 'committed') return { ok: true, importId: importId, alreadyCommitted: true, counts: prior.data().counts, note: 'This exact import was already applied; nothing to do.' };
       await deps.bucket().file('asset-portfolio/' + scope.org + '/imports/' + up.fileSha).save(bytes2, { resumable: false, contentType: 'application/octet-stream', metadata: { cacheControl: 'private, no-store', contentDisposition: 'attachment' } });
@@ -138,7 +152,7 @@ function make(deps) {
         rejected: up.rejected.slice(0, 500), suggestions: plan.suggestions.slice(0, 200), conflicts: conflicts.slice(0, 500), createdAt: now, createdBy: caller.email };
       await iref.set(imp);
       await audit(scope, caller, 'import-preview', { importId: importId, counts: plan.counts });
-      return { ok: true, importId: importId, planHash: plan.planHash, profile: up.profile, counts: plan.counts, meta: imp.meta, rejected: imp.rejected, suggestions: imp.suggestions, conflicts: imp.conflicts, changes: diffs.slice(0, 500), changesTruncated: diffs.length > 500 };
+      return { ok: true, importId: importId, planHash: plan.planHash, profile: up.profile, counts: plan.counts, analysis: up.enrichment ? { unmatched: plan.unmatched.slice(0, 300), mismatches: plan.mismatches.slice(0, 300), shortlistMissing: plan.shortlistMissing, assumptions: up.enrichment.assumptions.length, shortlistMembers: up.enrichment.shortlist ? up.enrichment.shortlist.members.length : 0 } : null, meta: imp.meta, rejected: imp.rejected, suggestions: imp.suggestions, conflicts: imp.conflicts, changes: diffs.slice(0, 500), changesTruncated: diffs.length > 500 };
     }
     if (action === 'import-commit') {
       need(scope, 'import');
@@ -150,18 +164,29 @@ function make(deps) {
       if (b.planHash !== ci.planHash) throw err(409, 'The preview you confirmed is not the latest; preview again');
       var file = await loadImportFile(scope, ci), up2 = AS.readUpload({ name: ci.fileName, bytes: file }, { namespace: ci.namespace, now: now });
       var ex2 = {}; (await allSites(scope)).forEach(function (s) { ex2[s.siteId] = s; });
-      var plan2 = AS.planImport(up2.records, ex2, { orgId: scope.org, rejected: up2.rejected });
+      var plan2 = planFor(up2, ex2, scope);
       if (plan2.planHash !== ci.planHash) throw err(409, 'The register changed since this preview; preview again');
       var accept = Array.isArray(b.acceptConflicts) ? b.acceptConflicts.map(function (x) { return clean(x, 120); }).slice(0, 2000) : [];
       if (accept.length) need(scope, 'review');
-      var applied = AS.applyPlan(plan2, up2.records, ex2, { orgId: scope.org, importId: cref.id, now: now, actor: caller.email, acceptConflicts: accept, profile: up2.profile, file: ci.fileName });
+      var analysisId = up2.enrichment ? 'ana_' + cref.id.slice(4) : null;
+      var applied = up2.enrichment ? EM.apply(plan2, up2.enrichment, ex2, { importId: cref.id, analysisId: analysisId, now: now })
+        : AS.applyPlan(plan2, up2.records, ex2, { orgId: scope.org, importId: cref.id, now: now, actor: caller.email, acceptConflicts: accept, profile: up2.profile, file: ci.fileName });
+      if (up2.enrichment) {
+        /* The package itself: assumption set, summary for reconciliation and the
+           shortlist, as one immutable analysis record linked from each site. */
+        var en = up2.enrichment;
+        await scope.root.collection('asset_analyses').doc(analysisId).set({ id: analysisId, importId: cref.id, profile: EM.PROFILE, scenario: EM.SCENARIO, fileName: ci.fileName, fileSha: ci.fileSha, createdAt: now, createdBy: caller.email,
+          assumptions: en.assumptions, summary: en.summary, monthlyRows: en.monthlyRows, reconciliation: { mismatches: plan2.mismatches.slice(0, 300), unmatched: plan2.unmatched.slice(0, 300) },
+          shortlist: en.shortlist ? Object.assign({}, en.shortlist, { siteIds: plan2.shortlistSiteIds, missing: plan2.shortlistMissing }) : null,
+          caveat: 'Workbook scenario using shared per-pod assumptions; not individually underwritten sites, approved capacity or a return promise.' });
+      }
       var touched = [];
       for (var sid in applied.writes) {
         if (!Object.prototype.hasOwnProperty.call(applied.writes, sid)) continue;
         var doc = applied.writes[sid], sref = scope.root.collection('asset_sites').doc(sid);
         if (applied.before[sid]) await cref.collection('before').doc(sid).set(applied.before[sid]);
         await sref.set(doc);
-        var kids = AS.derivedChildren(doc);
+        var kids = up2.enrichment ? {} : AS.derivedChildren(doc);
         for (var kind in kids) { for (var q = 0; q < kids[kind].length; q++) { var kr = sref.collection(kind).doc(kids[kind][q].id), ks = await kr.get(); if (!ks.exists) await kr.set(Object.assign({}, kids[kind][q], { createdAt: now, importId: cref.id })); } }
         touched.push({ siteId: sid, created: !applied.before[sid], revisionAfter: doc.revision });
       }
