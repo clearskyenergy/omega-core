@@ -1,0 +1,14 @@
+{
+  "orgId": "evcs.com",
+  "name": "EVCS",
+  "domains": [
+    "evcs.com"
+  ],
+  "vertical": "ev-charging",
+  "tier": "standard",
+  "shell": "evcs",
+  "logoUrl": "/clearsky-omega-mark-white.png",
+  "status": "active",
+  "receivesFullBom": false,
+  "_note": "Baseline customer for the OMEGA site CRM / Portfolio asset manager. orgId is the email domain users sign in with; domains[] are the HOSTNAMES the portal answers on. VERIFY domains and tier before running scripts/seed-omega-orgs.js --apply."
+}
