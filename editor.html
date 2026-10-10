@@ -104293,6 +104293,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var r=_r; if(!r) return;
     if(typeof S==='undefined'||!S.shapes){ alert('No active project.'); return; }
     if(r.pods<1 && r.fcBlocks<1){ alert('Nothing to place \u2014 set an IT load.'); return; }
+    /* The parcel packer (build()) reads its sizing from window._omegaComputeLast,
+       not from this closure. The guided-build hand-off sizes from an explicit
+       config via placeWith(), bypassing the size() wrapper that publishes that
+       cache -- so without this the packer falls back to a zero-load recalc and
+       the map click places nothing. */
+    try{ if(r.facKw>0 && typeof window!=='undefined') window._omegaComputeLast=r; }catch(e){}
     var m0=document.getElementById('ocb-modal'); if(m0) m0.remove();
     try{
       if(typeof setMode==='function'){ setMode('computeplace'); return true; }
