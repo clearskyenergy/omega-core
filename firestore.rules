@@ -2279,7 +2279,20 @@ service cloud.firestore {
        api/my-sites.js, which judge every move against the one status
        machine; a browser that could write a site or a receipt could start a
        warranty it is not owed. Stated, like the two lines above. */
-    match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/sites/{siteId} {
+      allow read, write: if false;
+      /* The site CRM (api/site-crm.js): a site's contacts, activity log,
+         documents and pro forma scenarios are read and written only through
+         the endpoint, which checks the caller's workspace role key by key.
+         A browser that could read a record could read an office-only
+         document; one that could write `shared` or `path` could show the
+         customer anything, or point a record at another site's bytes.
+         Stated, like the customers CRM above. */
+      match /contacts/{contactId}   { allow read, write: if false; }
+      match /activity/{activityId} { allow read, write: if false; }
+      match /files/{fileId}        { allow read, write: if false; }
+      match /proforma/{scenarioId} { allow read, write: if false; }
+    }
     match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
     /* Freight quotes (api/_lib/freight.js, api/logic-logistics.js): what a
@@ -2299,6 +2312,10 @@ service cloud.firestore {
        would then reset it. Stated, like the two lines above. */
     match /omega_orgs/{orgId}/crm_followups/{followId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/crm_upload_usage/{usageId} { allow read, write: if false; }
+    /* The site CRM's open follow-ups across every site (the portfolio Today
+       hub, api/site-crm.js). Same rationale as crm_followups: written only
+       by the endpoint, which keys each entry to its site and activity. */
+    match /omega_orgs/{orgId}/sitecrm_followups/{followId} { allow read, write: if false; }
     /* A pasted site list's daily map-lookup allowance, per customer account,
        for all customers and for the office (api/_lib/site-geo.js), counted
        by the endpoints in a transaction. A browser that could write it would
