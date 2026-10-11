@@ -82,6 +82,15 @@ async function check(name, fn) { try { await fn(); passed++; console.log('PASS '
       if (SHOTS) await page.screenshot({ path: path.join(SHOTS, 'portfolio-site-' + w + '.png') });
       await page.keyboard.press('Escape');
     });
+    await check(w + 'px CRM tab, pipeline and bills views open and close by keyboard', async function () {
+      await page.click(w <= 700 ? '#cardlist [data-site]' : '#rows [data-site]'); await page.waitForSelector('#site[open]');
+      await page.click('#tabs [data-tab=crm]'); await page.waitForFunction(function () { var x = document.getElementById('crmHere'); return x && /Stage:/.test(x.textContent); });
+      await page.click('#tabs [data-tab=power]'); assert(await page.$('#tabBody form[data-act=power-evidence]'), 'power-evidence form for owners');
+      await page.keyboard.press('Escape'); await page.waitForFunction(function () { return !document.getElementById('site').open; });
+      await page.click('#pipeBtn'); await page.waitForSelector('#hub[open]'); assert(/pipeline/i.test(await page.textContent('#hubTitle')));
+      await page.keyboard.press('Escape'); await page.waitForFunction(function () { return !document.getElementById('hub').open; });
+      await page.click('#billsBtn'); await page.waitForSelector('#hub[open]'); await page.keyboard.press('Escape'); await page.waitForFunction(function () { return !document.getElementById('hub').open; });
+    });
     await check(w + 'px import: upload a CSV, review counts, confirm', async function () {
       await page.click('#importBtn'); await page.waitForSelector('#imp[open]');
       await page.setInputFiles('#impFile', { name: 'extra-' + w + '.csv', mimeType: 'text/csv', buffer: Buffer.from('Site ID,Site name,Street address,City,State,ZIP code\nUI-' + w + ',UI Site ' + w + ',1 Test St,Town,CA,90001\n') });

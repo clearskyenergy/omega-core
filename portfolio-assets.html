@@ -55,6 +55,9 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
     <button id="export" type="button">Export CSV</button>
     <button id="importBtn" type="button" class="primary">Import sites</button>
     <button id="importsBtn" type="button">Import history</button>
+    <button id="pipeBtn" type="button">Pipeline</button>
+    <button id="billsBtn" type="button">Bills to review</button>
+    <button id="slBtn" type="button">Shortlists &amp; scenarios</button>
   </section>
   <div class="pager"><span id="count" class="small muted" aria-live="polite"></span>
     <span><label class="small"><input type="radio" name="scope" value="all_matching" checked> All matching</label> <label class="small"><input type="radio" name="scope" value="this_page"> This page</label></span>
@@ -65,6 +68,8 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
 
 <dialog id="site" aria-labelledby="siteTitle"><div class="dhead"><div><div class="small muted" id="siteSub"></div><h2 id="siteTitle">Site</h2></div><button type="button" id="closeSite" aria-label="Close site">✕</button></div>
   <div class="dbody"><div class="ctx" id="ctx"></div><div class="tabs" role="tablist" id="tabs"></div><div id="tabBody" role="tabpanel" tabindex="0"></div></div></dialog>
+
+<dialog id="hub" aria-labelledby="hubTitle"><div class="dhead"><h2 id="hubTitle">Portfolio</h2><button type="button" id="closeHub" aria-label="Close">✕</button></div><div class="dbody" id="hubBody"></div></dialog>
 
 <dialog id="imp" aria-labelledby="impTitle"><div class="dhead"><h2 id="impTitle">Import sites</h2><button type="button" id="closeImp" aria-label="Close import">✕</button></div>
   <div class="dbody"><div class="steps" id="steps"><span>1 Upload</span><span>2 Map columns</span><span>3 Review matches &amp; issues</span><span>4 Confirm</span></div><div id="impBody"></div></div></dialog>
@@ -119,7 +124,7 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
   function load() {
     persist(); say('Loading sites…');
     return call('GET', { view: JSON.stringify(view()) }).then(function (d) {
-      S.data = d; say(''); cards(d.summary);
+      S.data = d; S.caps = d.caps || []; say(''); cards(d.summary);
       el('count').textContent = d.total + ' site' + (d.total === 1 ? '' : 's') + ' match · ' + d.selection.count + ' selected (' + (d.selection.scope === 'this_page' ? 'this page' : 'all matching') + ') · power provided for ' + d.coverage.reportedPowerKw.known + ' of ' + d.coverage.sites;
       var pages = Math.max(1, Math.ceil(d.total / d.pageSize)); el('pageNo').textContent = 'Page ' + (d.page + 1) + ' of ' + pages; el('prev').disabled = d.page <= 0; el('next').disabled = d.page + 1 >= pages;
       el('rows').innerHTML = d.rows.map(function (r) {
@@ -138,7 +143,7 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
   function loadViews() { return call('GET', { views: 1 }).then(function (d) { var s = el('views'); s.innerHTML = '<option value="">—</option>' + d.views.map(function (v) { return '<option value="' + esc(v.id) + '">' + esc(v.name) + ' (' + esc(v.savedResult && v.savedResult.total) + ')</option>'; }).join(''); S.views = d.views; }).catch(function () {}); }
 
   /* ── site detail ─────────────────────────────────────────────────── */
-  var TABS = [['overview', 'Overview'], ['power', 'Power & utility'], ['equipment', 'Equipment'], ['agreements', 'Ownership & agreements'], ['performance', 'Performance & costs'], ['development', 'Development & finance'], ['documents', 'Documents & activity']];
+  var TABS = [['overview', 'Overview'], ['power', 'Power & utility'], ['equipment', 'Equipment'], ['agreements', 'Ownership & agreements'], ['crm', 'Customer & pipeline'], ['performance', 'Bills & costs'], ['development', 'Development & finance'], ['documents', 'Documents & activity']];
   var LABELS = { installedChargerKw: 'Installed EV charger nameplate', reportedPowerKw: 'Reported power statistic (definition unresolved)', evcsOwnsMeter: 'Meter ownership flag (reported)', shaRemainingYears: 'Reported remaining term', shaTermYears: 'Reported original term', utility: 'Utility', rateSchedule: 'Rate schedule (reported, not a bill)', switchgearRaw: 'Switchgear (as stored)', switchgearAmps: 'Switchgear amps', revShare: 'Revenue share', monthlyRentUsd: 'Monthly rent', revSharePerKwh: 'Revenue share per kWh', hostAccount: 'Site host (label)', capacityStatus: 'Capacity-request status (source)' };
   function fact(site, k) {
     var f = site.facts && site.facts[k], v;
@@ -156,11 +161,12 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
     if (location.hash !== '#site=' + encodeURIComponent(id)) history.replaceState(null, '', '#site=' + encodeURIComponent(id));
     say('Opening site…');
     return call('GET', { site: id }).then(function (d) {
-      S.detail = d; say(''); var s = d.site, ext = s.externalSiteIds || {};
+      S.detail = d; S.caps = d.caps || S.caps || []; say(''); var s = d.site, ext = s.externalSiteIds || {};
       el('siteTitle').textContent = s.name; el('siteSub').textContent = Object.keys(ext).map(function (k) { return k + ' ' + ext[k]; }).join(' · ') + ' · ' + [s.address && s.address.street, s.address && s.address.city, s.address && s.address.state].filter(Boolean).join(', ') + ' · revision ' + s.revision;
-      var why = 'Arrives in a later phase (Connected development). Nothing is launched from here yet.';
-      el('ctx').innerHTML = [['Upload documents', 'documents', ''], ['Open Site Map', '', why], ['Run screening', '', why], ['Model scenario', '', why], ['Prepare finance package', '', 'Needs a saved site map and reviewed energy bills; not available in this phase.']].map(function (a) {
-        return a[1] ? '<button type="button" data-tab="' + a[1] + '">' + esc(a[0]) + '</button>' : '<button type="button" disabled aria-disabled="true" title="' + esc(a[2]) + '">' + esc(a[0]) + '</button><span class="sr">' + esc(a[2]) + '</span>';
+      var cp = function (k) { return d.caps.indexOf(k) >= 0; };
+      el('ctx').innerHTML = [['Upload documents', 'data-tab="documents"', true], ['Open Site Map', 'data-go="editor"', cp('analyze')], ['Customer & pipeline', 'data-tab="crm"', true], ['Model scenario', 'data-tab="development"', cp('finance')], ['Prepare finance package', 'data-prep="1"', cp('finance')], ['Connect live monitoring', '', false, 'No telemetry connector is enabled in this release; nothing live is shown.']].map(function (a) {
+        var why = a[3] || 'Your role cannot do this';
+        return '<button type="button" ' + a[1] + (a[2] ? '' : ' disabled aria-disabled="true" title="' + esc(why) + '"') + '>' + esc(a[0]) + '</button>' + (a[2] ? '' : '<span class="sr">' + esc(why) + '</span>');
       }).join('');
       if (!el('site').open) el('site').showModal(); tab(S.tab);
     }).catch(function (e) { say(e.message, true); });
@@ -174,24 +180,124 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
         '<h2 style="margin-top:12px">Opportunity (preliminary)</h2>' + (lp ? '<p>' + esc(lp.label) + (lp.pods != null ? ': ' + lp.pods + ' pod(s), ' + lp.itKw + ' kW IT / ' + lp.facilityKw + ' kW facility' : '') + '<br><span class="small muted">' + esc(lp.scenario) + ' — ' + esc(lp.caveat) + (lp.status === 'unable' ? ' Legacy workbook convention recorded separately: ' + lp.legacyHistoricalPods + ' pods.' : '') + '</span></p>' : '<p class="np">Not screened</p>') +
         '<h2>Attention</h2>' + ((s.flags || []).length ? '<ul>' + s.flags.map(function (f) { return '<li><b>' + esc(f.code.replace(/_/g, ' ').toLowerCase()) + '</b> — ' + esc(f.message) + '</li>'; }).join('') + '</ul>' : '<p>None flagged</p>');
     } else if (key === 'power') {
-      h = '<div class="facts">' + ['utility', 'rateSchedule', 'evcsOwnsMeter', 'reportedPowerKw', 'switchgearRaw', 'switchgearAmps', 'capacityStatus'].map(function (k) { return fact(s, k); }).join('') + '</div><p class="small muted">Approved import limit: Not provided. Verified headroom needs reviewed service limits, topology and interval data; nameplate is never relabelled as approval.</p>';
+      h = '<div class="facts">' + ['utility', 'rateSchedule', 'evcsOwnsMeter', 'reportedPowerKw', 'switchgearRaw', 'switchgearAmps', 'capacityStatus'].map(function (k) { return fact(s, k); }).join('') + '</div>' + powerHtml(s, d.caps);
     } else if (key === 'equipment') {
       h = list(d.equipment, function (q) { return '<b>' + esc(q.label || q.category) + '</b> · ' + esc(q.status) + '<div class="small">' + Object.keys(q.ratings || {}).filter(function (k) { return q.ratings[k] != null; }).map(function (k) { return esc(k) + ': ' + esc(q.ratings[k]); }).join(' · ') + '</div>' + (q.quantityNote ? '<div class="small muted">' + esc(q.quantityNote) + '</div>' : ''); }) + form('equipment', [['category', 'Category', 'select:ev_charger,bess,solar,compute,switchgear,transformer,meter,controls,other'], ['status', 'Status', 'select:installed,proposed,removed'], ['manufacturer', 'Manufacturer'], ['model', 'Model'], ['serial', 'Serial'], ['quantity', 'Quantity'], ['kw', 'Rated kW'], ['kwh', 'Rated kWh']]);
     } else if (key === 'agreements') {
       h = list(d.agreements, function (a) { var e = a.economics || {}; return '<b>' + esc(a.label || a.type) + '</b> · <span class="tag">' + esc(a.termDisplay || 'Needs agreement review') + '</span><div class="small">Reported term: ' + np(a.reportedTermYears, 'yrs') + ' · reported remaining: ' + np(a.reportedRemainingYears, 'yrs') + ' · rent: ' + np(e.fixedRentUsdMonthly, 'USD/mo') + ' · revenue share: ' + (e.revShareFraction == null ? np(null) : esc(Math.round(e.revShareFraction * 10000) / 100) + '%') + ' · applies to compute: ' + esc(e.appliesToCompute || 'unknown') + '</div>'; }) +
         form('agreement', [['type', 'Type', 'select:site_host_agreement,lease,license,loa,easement,utility_service,interconnection,offtake,other'], ['label', 'Label'], ['startDate', 'Start (YYYY-MM-DD)'], ['endDate', 'End (YYYY-MM-DD)'], ['revSharePercent', 'Revenue share (%)'], ['fixedRentUsdMonthly', 'Monthly rent (USD)'], ['renewalOptions', 'Renewal options']]);
     } else if (key === 'performance') {
-      h = '<p><b>No live data connection.</b> No performance values are shown until bills, interval files or telemetry are imported and reviewed.</p>';
+      h = '<p><b>No live data connection.</b> No performance values are shown until bills, interval files or telemetry are imported and reviewed.</p><div id="billsHere"><p class="small muted">Loading bills…</p></div>'; later(siteBills);
+    } else if (key === 'crm') {
+      h = '<div id="crmHere"><p class="small muted">Loading customer record…</p></div>'; later(siteCrm);
     } else if (key === 'development') {
-      h = '<p>Linked projects: ' + (s.projectId ? esc(s.projectId) : '<span class="np">None linked</span>') + '</p><h2>Tasks</h2>' + list(d.tasks, function (t) { return '<b>' + esc(t.title) + '</b> · ' + esc(t.status) + (t.assignee ? ' · ' + esc(t.assignee) : '') + (t.dueDate ? ' · due ' + esc(t.dueDate) : '') + (t.evidenceRequired ? '<div class="small muted">Evidence: ' + esc(t.evidenceRequired) + '</div>' : '') + (t.status !== 'done' && d.caps.indexOf('tasks') >= 0 ? ' <button type="button" class="small" data-done="' + esc(t.id) + '">Mark done</button>' : ''); }) +
+      later(siteResults);
+      h = '<p>Linked Site Map project: ' + (s.links && s.links.projectId ? esc(s.links.projectId) + ' · map ' + esc(s.links.map ? s.links.map.state + ' (revision ' + s.links.map.revision + ')' : 'not synced') : '<span class="np">None linked</span>') + '</p>' + devHtml(s, d.caps) + '<div id="resHere"></div><h2>Tasks</h2>' + list(d.tasks, function (t) { return '<b>' + esc(t.title) + '</b> · ' + esc(t.status) + (t.assignee ? ' · ' + esc(t.assignee) : '') + (t.dueDate ? ' · due ' + esc(t.dueDate) : '') + (t.evidenceRequired ? '<div class="small muted">Evidence: ' + esc(t.evidenceRequired) + '</div>' : '') + (t.status !== 'done' && d.caps.indexOf('tasks') >= 0 ? ' <button type="button" class="small" data-done="' + esc(t.id) + '">Mark done</button>' : ''); }) +
         form('task', [['title', 'Task'], ['assignee', 'Assignee'], ['dueDate', 'Due (YYYY-MM-DD)'], ['evidenceRequired', 'Evidence required']]);
     } else if (key === 'documents') {
       h = list(d.files, function (f) { return '<a href="#" data-file="' + esc(f.id) + '">' + esc(f.name) + '</a> · ' + esc(f.category) + ' · ' + esc(f.reviewStatus) + ' <span class="small muted">' + esc(f.uploadedAt) + ' by ' + esc(f.uploadedBy) + '</span>'; }) +
         (d.caps.indexOf('files') >= 0 ? '<div class="grid2"><label>Category<select id="fileCat"><option value="energy_bill">Energy bill</option><option value="agreement">Agreement</option><option value="utility_letter">Utility letter</option><option value="one_line">One-line</option><option value="equipment_spec">Equipment spec</option><option value="other">Other</option></select></label><label>File<input type="file" id="fileIn" accept=".pdf,.png,.jpg,.jpeg,.csv,.xlsx,.txt,.dwg,.dxf,.kmz,.kml,.docx"></label></div><button type="button" id="fileUp">Upload privately</button>' : '') +
         '<h2 style="margin-top:12px">Source</h2><ul>' + (s.sourceRefs || []).map(function (r) { return '<li>' + esc(r.file || 'import') + (r.row ? ' row ' + esc(r.row) : '') + ' <span class="small muted">' + esc(r.profile || '') + '</span></li>'; }).join('') + '</ul>';
     }
-    el('tabBody').innerHTML = h;
+    el('tabBody').innerHTML = h; (S.after || []).splice(0).forEach(function (f) { f(); });
   }
+  function later(f) { (S.after = S.after || []).push(f); }
+  function fv(f) { var v = {}; Array.prototype.forEach.call(f.elements, function (e) { if (e.name) v[e.name] = e.type === 'checkbox' ? e.checked : e.value; }); return v; }
+  function inp(name, label, type) { return '<label for="x_' + name + '">' + esc(label) + '<input id="x_' + name + '" name="' + name + '"' + (type ? ' type="' + type + '"' : '') + '></label>'; }
+  function chk(name, label) { return '<label for="x_' + name + '"><span><input id="x_' + name + '" type="checkbox" name="' + name + '"> ' + esc(label) + '</span></label>'; }
+  function act(name, inner, cap, btn) { return S.detail.caps.indexOf(cap) < 0 ? '' : '<details><summary>' + esc(btn) + '</summary><form data-act="' + name + '" class="grid2">' + inner + '<button type="submit" class="primary">' + esc(btn) + '</button></form></details>'; }
+  var TOOLNAMES = [['gridatlas', 'Grid screen'], ['fiber', 'Fiber proximity'], ['parcel', 'Parcel screening'], ['bess', 'BESS screening'], ['valuestack', 'Value stack'], ['compute', 'Compute pro forma']];
+  function powerHtml(s, caps) {
+    var pe = s.powerEvidence || {}, hr = pe.headroom, cl = pe.classification;
+    return '<h2 style="margin-top:12px">Power evidence</h2><p>' + (cl ? '<b>' + esc(cl.label) + '</b>' : '<span class="np">Not classified</span>') + (cl && cl.missing && cl.missing.length ? '<span class="small muted"> · missing: ' + esc(cl.missing.join('; ')) + '</span>' : '') + '</p>' +
+      '<p>Approved import limit: ' + (pe.limits && pe.limits.approvedImport ? esc(pe.limits.approvedImport.kw) + ' kW' + (pe.limits.approvedImport.source ? ' <span class="small muted">(' + esc(pe.limits.approvedImport.source) + ')</span>' : '') : 'Not provided') + '</p><p>Verified headroom: ' + (hr && hr.verifiedKw != null ? esc(hr.verifiedKw) + ' kW (binding: ' + esc(hr.bindingLimit) + ')' + (pe.fit && pe.fit.pods != null ? ' · fits ' + pe.fit.pods + ' pod(s), ' + pe.fit.itKw + ' kW IT / ' + pe.fit.facilityKw + ' kW facility' : '') : '<span class="np">Not provided</span>' + (hr && hr.reason ? ' <span class="small muted">(' + esc(hr.reason) + ')</span>' : '')) + '</p>' +
+      '<p class="small muted">Nameplate is never relabelled as approval. Unknown limits keep headroom unknown.</p>' +
+      (pe.interval ? '<p class="small">Interval coverage ' + esc(Math.round(pe.interval.coverage.coverage * 1000) / 10) + '% ' + esc((pe.interval.coverage.warnings || []).join('; ')) + '</p>' : '') +
+      act('power-evidence', inp('approvedImport', 'Approved import limit (kW)') + inp('source', 'Evidence (utility letter, one-line)') + inp('baselineKw', 'Existing baseline load (kW)') + inp('reserveKw', 'Reserve margin (kW)') + inp('signedBy', 'Engineering review signed by') + inp('validUntil', 'Review valid until (YYYY-MM-DD)') + chk('topologyConfirmed', 'Service / meter / transformer path confirmed'), 'review', 'Record power evidence') +
+      act('interval-upload', '<label for="x_iv">Interval CSV (timestamp,kW)<input id="x_iv" type="file" name="file" accept=".csv"></label>' + inp('intervalMin', 'Interval minutes') + chk('activeOnly', 'Feed reports only while active'), 'analyze', 'Upload interval data');
+  }
+  function devHtml(s, caps) {
+    return '<h2>Tools</h2><div class="ctx">' + [['editor', 'Open Site Map']].concat(TOOLNAMES).map(function (t) { return '<button type="button" data-go="' + t[0] + '"' + (caps.indexOf('analyze') < 0 ? ' disabled' : '') + '>' + esc(t[1]) + '</button>'; }).join('') +
+      (s.links && s.links.projectId ? '<button type="button" data-sync="1">Refresh map status</button>' + (caps.indexOf('review') >= 0 ? '<button type="button" data-sync="review">Mark map reviewed</button>' : '') : '') + '</div>' +
+      '<h2>Finance scenarios</h2><p class="small muted">Pre-tax, unlevered workbook-convention scenarios. The legacy model set is never overwritten; hardware sets (e.g. IQGEN) run alongside it. Not a return promise.</p>' +
+      act('scenario-run', '<label for="x_set">Assumption set<select id="x_set" name="set"><option value="wb2-legacy">Legacy model workbook</option>' + (S.sets || []).map(function (x) { return '<option value="' + esc(x.id) + '">' + esc(x.label + ' · ' + (x.fileName || '')) + '</option>'; }).join('') + '</select></label>' + inp('chipset', 'Chipset (hardware sets)') + inp('pods', 'Pods (blank = from power fit)') + inp('startDate', 'Start date for dated XIRR (YYYY-MM-DD)') + inp('scenarioId', 'Scenario name'), 'finance', 'Run scenario');
+  }
+  function pct(r) { if (!r) return '<span class="np">Not defined</span>'; if (r.status !== 'ok') return '<span class="np">' + esc(r.status + ': ' + (r.reason || '')) + '</span>'; return esc((Math.round((r.annualized != null ? r.annualized : r.irr) * 1e6) / 1e4) + '%') + ' <span class="small muted">' + esc(r.convention || 'dated XIRR') + '</span>'; }
+  function siteResults() {
+    call('GET', { results: S.siteId }).then(function (d) { var x = el('resHere'); if (!x) return; x.innerHTML = '<h2>Results</h2>' + list(d.results, function (r) { return '<b>' + esc(r.kind) + '</b> v' + esc(r.version) + ' · <span class="tag">' + esc(r.status) + '</span>' + (r.staleReason ? ' <span class="small">(' + esc(r.staleReason) + ' changed; re-run)</span>' : '') + (r.kind === 'finance' ? '<div class="small">' + esc(r.model) + ' · project IRR ' + pct(r.projectIrr) + ' · investor IRR ' + pct(r.investorIrr) + ' · payback ' + (r.paybackMonths == null ? 'not reached' : esc(r.paybackMonths) + ' months') + (r.dated ? ' · dated project XIRR ' + pct(r.dated.project) : '') + '</div>' : ''); }); }).catch(function () {});
+  }
+  function billRow(b) { var e = b.entered || {}; return esc((e.periodStart || '?') + ' → ' + (e.periodEnd || '?')) + ' · meter ' + np(e.meterId) + ' · ' + np(e.kwh, 'kWh') + ' · ' + np(e.totalUsd, 'USD') + ' · <span class="tag">' + esc(b.state) + '</span>' + ((b.problems || []).length ? '<div class="small">' + esc(b.problems.join(', ')) + '</div>' : '') + (S.caps && S.caps.indexOf('review') >= 0 && b.state !== 'accepted' && b.state !== 'rejected' ? ' <button type="button" data-bill="' + esc(b.id) + '" data-ok="1">Accept</button> <button type="button" data-bill="' + esc(b.id) + '" data-ok="0">Reject</button>' : ''); }
+  function siteBills() {
+    call('GET', { bills: 'all' }).then(function (d) {
+      var mine = d.bills.filter(function (b) { return b.siteId === S.siteId; }), x = el('billsHere'); if (!x) return;
+      x.innerHTML = '<h2>Energy bills</h2>' + list(mine, billRow) + act('bill-save', inp('periodStart', 'Period start (YYYY-MM-DD)') + inp('periodEnd', 'Period end (YYYY-MM-DD)') + inp('meterId', 'Meter ID') + inp('kwh', 'kWh') + inp('billedKw', 'Billed demand kW') + inp('totalUsd', 'Total (USD)') + inp('tariff', 'Tariff') + inp('fileId', 'Attached bill file ID (Documents)') + chk('estimatedRead', 'Estimated read'), 'edit', 'Enter a bill for review') +
+        '<p class="small muted">Automatic bill extraction is not enabled in this release; entered or extracted values always wait for a person to review.</p>';
+    }).catch(function (e) { say(e.message, true); });
+  }
+  function siteCrm() {
+    call('GET', { crm: S.siteId }).then(function (d) {
+      var x = el('crmHere'); if (!x) return; var c = d.crm || {};
+      x.innerHTML = '<p>Stage: <b>' + esc(c.stage || 'unassigned') + '</b> · account: ' + np(c.customerId) + ' · owner: ' + np(c.owner) + ' · next follow-up: ' + np(c.nextFollowUp) + '</p>' +
+        act('crm-link', '<label for="x_stage">Pipeline stage<select id="x_stage" name="stage">' + d.stages.map(function (st) { return '<option' + (st === c.stage ? ' selected' : '') + '>' + st + '</option>'; }).join('') + '</select></label>' + inp('customerId', 'Customer account ID (Customers)') + inp('owner', 'Owner'), 'crm', 'Update stage & account') +
+        '<h2>Contacts</h2>' + list(d.contacts, function (k) { return esc(k.name) + (k.title ? ' · ' + esc(k.title) : '') + (k.email ? ' · ' + esc(k.email) : '') + (k.phone ? ' · ' + esc(k.phone) : '') + (k.primary ? ' <span class="tag">primary</span>' : ''); }) +
+        '<h2>Activity</h2>' + list(d.activity, function (a) { return '<b>' + esc(a.type) + '</b> · ' + esc(a.subject || '') + ' <span class="small muted">' + esc(a.at) + ' · ' + esc(a.by) + '</span>' + (a.body ? '<div class="small">' + esc(a.body) + '</div>' : ''); }) +
+        act('activity-log', '<label for="x_type">Type<select id="x_type" name="type"><option>note</option><option>call</option><option>meeting</option><option>email-logged</option><option>site-visit</option></select></label>' + inp('subject', 'Subject') + inp('body', 'Notes') + inp('followUpAt', 'Follow up on (YYYY-MM-DD)'), 'crm', 'Log activity') +
+        '<p class="small muted">Logging an email records it here; nothing is sent from Portfolio.</p>';
+    }).catch(function (e) { say(e.message, true); });
+  }
+  function actBody(name, v, f) {
+    var b = { action: name, siteId: S.siteId };
+    if (name === 'power-evidence') { b.expectedRevision = S.detail.site.revision; b.limits = v.approvedImport ? { approvedImport: { kw: v.approvedImport, source: v.source } } : {}; b.baselineKw = v.baselineKw; b.reserveKw = v.reserveKw; b.topologyConfirmed = v.topologyConfirmed; if (v.signedBy) b.review = { signedBy: v.signedBy, validUntil: v.validUntil }; }
+    if (name === 'bill-save') { b.manual = !v.fileId; b.fileId = v.fileId || null; b.entered = { periodStart: v.periodStart, periodEnd: v.periodEnd, meterId: v.meterId, kwh: v.kwh, billedKw: v.billedKw, totalUsd: v.totalUsd, tariff: v.tariff, estimatedRead: v.estimatedRead }; }
+    if (name === 'crm-link') { b.stage = v.stage; b.customerId = v.customerId || null; b.owner = v.owner; }
+    if (name === 'activity-log') { b.type = v.type; b.subject = v.subject; b.body = v.body; if (v.followUpAt) b.followUpAt = v.followUpAt; }
+    if (name === 'scenario-run') { if (v.set !== 'wb2-legacy') { b.assumptionSet = 'iqgen'; b.assumptionSetId = v.set; b.chipset = v.chipset; } if (v.pods) b.pods = v.pods; if (v.startDate) b.startDate = v.startDate; if (v.scenarioId) b.scenarioId = v.scenarioId; }
+    if (name === 'interval-upload') { var file = f.querySelector('input[type=file]').files[0]; if (!file) return Promise.reject(new Error('Choose a CSV')); return file.text().then(function (t) { return { action: name, siteId: S.siteId, csv: t, intervalMin: v.intervalMin, activeOnly: v.activeOnly }; }); }
+    return Promise.resolve(b);
+  }
+  function runAct(f) {
+    var name = f.getAttribute('data-act'), v = fv(f);
+    actBody(name, v, f).then(function (b) { return call('POST', null, b); }).then(function (r) {
+      if (r && r.ok === false) { say((r.reason || r.message || r.status) + (r.missing ? ' — missing: ' + r.missing.join(', ') : '') + (r.problems ? ' — ' + r.problems.join(', ') : ''), true); return; }
+      say(name === 'scenario-run' ? 'Scenario saved.' : 'Saved.'); return openSite(S.siteId);
+    }).catch(function (e) { say(e.message, true); });
+  }
+  function go(tool) {
+    call('POST', null, { action: 'handoff', siteId: S.siteId, tool: tool }).then(function (r) {
+      if (r.status === 'needs-project') { if (!window.confirm(r.message)) return null; return call('POST', null, { action: 'handoff', siteId: S.siteId, tool: tool, createProject: true }); }
+      return r;
+    }).then(function (r) { if (!r) return; if (r.ok && r.url) { location.href = r.url; return; } say((r.action ? r.action + ': ' : '') + (r.reason || r.status), true); }).catch(function (e) { say(e.message, true); });
+  }
+  function sync(review) { call('POST', null, { action: 'map-sync', siteId: S.siteId, markReviewed: review }).then(function (r) { say('Map: ' + r.map.state + (r.staleMarked ? ' · ' + r.staleMarked + ' result(s) marked stale' : '')); openSite(S.siteId); }).catch(function (e) { say(e.message, true); }); }
+  function prep() {
+    var sc = window.prompt('Scenario to package', 'sc_wb2-legacy'); if (sc === null) return;
+    call('POST', null, { action: 'package-prepare', siteId: S.siteId, scenarioId: sc || 'sc_wb2-legacy' }).then(function (r) {
+      var g = r.package.gates; el('hubTitle').textContent = 'Finance package (private draft)';
+      el('hubBody').innerHTML = g.ok ? '<p><b>All gates pass.</b> ' + esc(g.partialHistory || '') + '</p>' + (S.caps.indexOf('submit') >= 0 ? '<p><label for="subOk"><input type="checkbox" id="subOk"> I authorize one private submission snapshot of this package. Nothing is published or sent.</label></p><button type="button" class="primary" data-submit="' + esc(r.package.id) + '">Submit privately</button>' : '<p>An owner or admin must submit.</p>')
+        : '<p>Submission is blocked until these are resolved:</p><ul>' + g.codes.map(function (c) { return '<li><b>' + esc(c.code) + '</b> — ' + esc(c.fix) + '</li>'; }).join('') + '</ul>';
+      if (!el('hub').open) el('hub').showModal();
+    }).catch(function (e) { say(e.message, true); });
+  }
+  function submitPkg(id) {
+    if (!el('subOk') || !el('subOk').checked) { say('Tick the authorization box first', true); return; }
+    call('POST', null, { action: 'package-submit', packageId: id, confirm: true, idempotencyKey: id }).then(function (r) { el('hubBody').innerHTML = '<p><b>' + (r.duplicate ? 'Already submitted' : 'Submitted privately') + '</b> on ' + esc(r.submission.submittedAt) + '. ' + esc(r.submission.publication.reason) + '</p>'; }).catch(function (e) { say(e.message, true); el('hubBody').insertAdjacentHTML('beforeend', '<p class="status err" role="alert">' + esc(e.message) + '</p>'); });
+  }
+  function hub(kind) {
+    var H = el('hubBody'), T = el('hubTitle'), show = function () { if (!el('hub').open) el('hub').showModal(); };
+    if (kind === 'pipeline') { T.textContent = 'Customer pipeline'; return call('GET', { pipeline: 1 }).then(function (d) { H.innerHTML = '<p class="small muted">Each site’s stage, account and next follow-up. Open a site to log activity.</p>' + d.pipeline.filter(function (p) { return p.count; }).map(function (p) { return '<h2>' + esc(p.stage) + ' (' + p.count + ')</h2>' + list(p.sites.slice(0, 50), function (x) { return '<a href="#site=' + encodeURIComponent(x.siteId) + '" data-site="' + esc(x.siteId) + '">' + esc(x.name) + '</a>' + (x.nextFollowUp ? ' · follow up ' + esc(x.nextFollowUp) : ''); }); }).join(''); show(); }).catch(function (e) { say(e.message, true); }); }
+    if (kind === 'bills') { T.textContent = 'Bills to review'; return call('GET', { bills: 1 }).then(function (d) { H.innerHTML = '<p class="small muted">Entered or extracted bills wait here for a person to review. Only accepted bills count toward a finance package.</p>' + list(d.bills, function (b) { return '<a href="#site=' + encodeURIComponent(b.siteId) + '" data-site="' + esc(b.siteId) + '">Open site</a> · ' + billRow(b); }); show(); }).catch(function (e) { say(e.message, true); }); }
+    if (kind === 'shortlists') { T.textContent = 'Shortlists & scenarios'; return Promise.all([call('GET', { analyses: 1 }), call('GET', { assumptionSets: 1 })]).then(function (r) { var an = r[0].analyses.filter(function (a) { return a.shortlist; }); S.sets = r[1].sets;
+      H.innerHTML = '<h2>Shortlists</h2>' + list(an, function (a) { return '<button type="button" data-sl="' + esc(a.id) + '">' + esc(a.shortlist.name || 'Shortlist') + '</button> <span class="small muted">' + esc(a.shortlist.total ? a.shortlist.total.pods + ' pods' : '') + '</span>'; }) + '<div id="slHere"></div>' +
+        '<h2>Assumption sets</h2>' + list(r[1].sets, function (x) { return esc(x.label) + ' · ' + esc(x.fileName || '') + ' · ' + esc((x.chipsets || []).length) + ' chipsets<div class="small muted">' + esc((x.caveats || []).join(' ')) + '</div>'; }) +
+        (S.caps.indexOf('finance') >= 0 ? '<form data-hub="aset" class="grid2"><label for="x_aset">Compute economics workbook (IQGEN format)<input id="x_aset" type="file" accept=".xlsx"></label><button type="submit">Import as a separate assumption set</button></form>' : ''); show(); }).catch(function (e) { say(e.message, true); }); }
+  }
+  function shortlist(id) { call('GET', { shortlist: id }).then(function (d) { S.slId = id; el('slHere').innerHTML = '<p class="small muted">' + esc(d.caveat) + '</p><form data-hub="slp"><ul>' + d.members.map(function (m) { return '<li><label><input type="checkbox" value="' + esc(m.siteId) + '"' + (m.projectId || m.missing ? ' disabled' : '') + '> ' + esc(m.externalSiteId) + ' · ' + esc(m.name || 'missing site') + ' · ' + esc(m.pods) + ' pods · power: ' + esc(m.power ? m.power.level : 'n/a') + (m.projectId ? ' · project ' + esc(m.projectId) : '') + '</label></li>'; }).join('') + '</ul>' + (S.caps.indexOf('edit') >= 0 ? '<button type="submit" class="primary">Create linked projects for the chosen sites</button>' : '') + '</form>'; }).catch(function (e) { say(e.message, true); }); }
+  function hubForm(f) {
+    var k = f.getAttribute('data-hub');
+    if (k === 'slp') { var ids = Array.prototype.map.call(f.querySelectorAll('input:checked'), function (c) { return c.value; }); if (!ids.length) { say('Choose at least one site', true); return; } call('POST', null, { action: 'shortlist-create-projects', analysisId: S.slId, siteIds: ids }).then(function (r) { say(r.projects.filter(function (p) { return p.created; }).length + ' project(s) created, linked to their sites.'); shortlist(S.slId); }).catch(function (e) { say(e.message, true); }); }
+    if (k === 'aset') { var file = el('x_aset').files[0]; if (!file) return; readB64(file).then(function (b64) { return call('POST', null, { action: 'assumption-set-import', fileName: file.name, base64: b64 }); }).then(function (r) { say('Assumption set imported: ' + r.chipsets + ' chipsets' + (r.formulaErrors.length ? ', ' + r.formulaErrors.length + ' formula-error cell(s) excluded' : '') + '.'); hub('shortlists'); }).catch(function (e) { say(e.message, true); }); }
+  }
+
   function list(items, fn) { return (items && items.length) ? '<ul>' + items.map(function (x) { return '<li>' + fn(x) + '</li>'; }).join('') + '</ul>' : '<p class="np">None recorded</p>'; }
   function form(kind, fields) {
     if (S.detail.caps.indexOf(kind === 'task' ? 'tasks' : 'edit') < 0) return '';
@@ -272,6 +378,12 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
   el('site').addEventListener('close', function () { S.siteId = null; try { sessionStorage.removeItem('pa.site'); } catch (e) {} history.replaceState(null, '', location.pathname + location.search); });
   document.addEventListener('click', function (ev) {
     var a = ev.target.closest('[data-site]'); if (a) { ev.preventDefault(); openSite(a.getAttribute('data-site')); return; }
+    var g2 = ev.target.closest('[data-go]'); if (g2 && !g2.disabled) { go(g2.getAttribute('data-go')); return; }
+    var sy = ev.target.closest('[data-sync]'); if (sy) { sync(sy.getAttribute('data-sync') === 'review'); return; }
+    if (ev.target.closest('[data-prep]')) { prep(); return; }
+    var sb = ev.target.closest('[data-submit]'); if (sb) { submitPkg(sb.getAttribute('data-submit')); return; }
+    var sl = ev.target.closest('[data-sl]'); if (sl) { shortlist(sl.getAttribute('data-sl')); return; }
+    var bl = ev.target.closest('[data-bill]'); if (bl) { var ok = bl.getAttribute('data-ok') === '1', why = ok ? '' : window.prompt('Reason for rejecting'); if (!ok && why === null) return; call('POST', null, { action: 'bill-review', billId: bl.getAttribute('data-bill'), accept: ok, reject: !ok, reason: why }).then(function (r) { if (r.ok === false) say(r.message + ': ' + r.problems.join(', '), true); else say('Bill ' + r.state + '.'); if (el('hub').open && /Bills/.test(el('hubTitle').textContent)) hub('bills'); else if (S.siteId) openSite(S.siteId); }).catch(function (e) { say(e.message, true); }); return; }
     var tb = ev.target.closest('[data-tab]'); if (tb && el('site').contains(tb)) { tab(tb.getAttribute('data-tab')); return; }
     if (ev.target.id === 'impGo') preview(); if (ev.target.id === 'impCommit') commit(); if (ev.target.id === 'errCsv') errorCsv();
     var u = ev.target.closest('[data-undo]'); if (u) call('POST', null, { action: 'import-undo', importId: u.getAttribute('data-undo') }).then(function (r) { say('Undo applied to ' + r.applied + ' site(s); ' + r.skipped.length + ' skipped (changed since).'); el('imp').close(); load(); }).catch(function (e) { say(e.message, true); });
@@ -280,7 +392,9 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
     var fl = ev.target.closest('[data-file]'); if (fl) { ev.preventDefault(); call('GET', { site: S.siteId, file: fl.getAttribute('data-file') }).then(function (blob) { var x = document.createElement('a'); x.href = URL.createObjectURL(blob); x.download = fl.textContent; x.click(); }).catch(function (e) { say(e.message, true); }); }
     if (ev.target.id === 'fileUp') { var file = el('fileIn').files[0]; if (!file) return; readB64(file).then(function (b64) { return call('POST', null, { action: 'file-attach', siteId: S.siteId, fileName: file.name, base64: b64, category: el('fileCat').value }); }).then(function () { say('Stored privately.'); openSite(S.siteId); }).catch(function (e) { say(e.message, true); }); }
   });
-  document.addEventListener('submit', function (ev) { if (ev.target.getAttribute('data-kind')) { ev.preventDefault(); submitForm(ev.target); } });
+  document.addEventListener('submit', function (ev) { var f = ev.target; if (f.getAttribute('data-kind')) { ev.preventDefault(); submitForm(f); } else if (f.getAttribute('data-act')) { ev.preventDefault(); runAct(f); } else if (f.getAttribute('data-hub')) { ev.preventDefault(); hubForm(f); } });
+  el('pipeBtn').addEventListener('click', function () { hub('pipeline'); }); el('billsBtn').addEventListener('click', function () { hub('bills'); }); el('slBtn').addEventListener('click', function () { hub('shortlists'); });
+  el('closeHub').addEventListener('click', function () { el('hub').close(); });
   function boot(u) {
     S.user = u; el('ws').textContent = u ? u.email : 'Sign in to open your portfolio';
     if (!u) { say('Sign in through your OMEGA workspace to open Portfolio & Assets.', true); return; }
@@ -288,7 +402,8 @@ dialog{border:1px solid var(--line);border-radius:12px;padding:0;width:min(1000p
     load().then(loadViews).then(function () {
       var m = /#site=([^&]+)/.exec(location.hash), id = m ? decodeURIComponent(m[1]) : null;
       try { id = id || sessionStorage.getItem('pa.site'); } catch (e) {}
-      if (id) openSite(id);
+      call('GET', { assumptionSets: 1 }).then(function (r) { S.sets = r.sets; }).catch(function () {});
+      if (/^#pipeline/.test(location.hash)) hub('pipeline'); else if (/^#bills/.test(location.hash)) hub('bills'); else if (/^#import/.test(location.hash)) openImport(); else if (id) openSite(id);
     });
   }
   if (window.firebase && firebase.auth) firebase.auth().onAuthStateChanged(boot); else boot(null);
