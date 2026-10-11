@@ -2318,6 +2318,15 @@ service cloud.firestore {
     match /omega_orgs/{orgId}/asset_portfolios/{portfolioId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/asset_audit/{eventId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/asset_analyses/{analysisId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_envelopes/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_allocations/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_handoffs/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_results/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_bills/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_assumption_sets/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_packages/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_submissions/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/asset_jobs/{docId} { allow read, write: if false; }
     /* Packaged usage counters (Phase 7): one document per billing cycle,
        counted by the producing endpoints in a transaction and idempotent by
        client id (the events subcollection). A browser that could write it

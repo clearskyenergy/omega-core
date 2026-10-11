@@ -153,7 +153,7 @@ Further rules:
 
 ## 6. Feature flag, enablement and rollback
 
-**Enable for one tenant (ClearSky staff only; billing is ClearSky-written).** Set `omega_orgs/{org}/billing/current.toolOverrides['portfolio-assets'] = true`. Do it through the existing admin or console path or a reviewed script; this branch adds no new write path. Then deploy `firestore.rules`, which is additive.
+**Default ON for every tenant (Thomas, 2026-10-11); per-tenant off-switch.** Every workspace sees Portfolio (Projects > Portfolio and the Portfolio & assets widget beside Pulse/feed). ClearSky turns one org off with `omega_orgs/{org}/billing/current.toolOverrides['portfolio-assets'] = false` (ClearSky-written; a tenant cannot change it). Data is always tenant-private.
 
 **Rollback, in order of cost:**
 1. **Per tenant:** set the override to `false`. The page then 403s and the hub hides the entry. Data is kept.
@@ -177,18 +177,38 @@ What the synthetic fixture **does not** prove: real header spellings and cell ty
 
 ---
 
-## 8. Remaining work, by phase
+## 8. Phases 2–5, CRM and the workspace widget (2026-10-11)
 
-- **Phase 1 leftovers:**
-  - Saved views store columns and pinned columns, but the table does not yet let you choose or pin columns (the first column is pinned by CSS).
-  - No inline cell editing in the grid; editing is per fact in the site detail.
-  - No XLSX export.
-  - No bulk actions beyond the selection scope.
-  - No geographic view.
-  - The file category list is fixed.
-  - Imports are synchronous and capped at 2,000 sites and 3 MB.
-  - No live end-to-end run against the `clearsky-portal` Firebase project.
-- **Phase 2:** WB2 import as linked scenarios and shortlist **started; T02/T09/T10 pass on the real files** (see §4.3). Still open: a shortlist UI, creating projects from the shortlist, power-evidence classification, an interval-ready interface, and service/meter/constraint entities (T11–T18, T35).
-- **Phase 3:** editor, Grid Atlas, fiber, parcel and BESS handoffs with persisted analysis records (T20, T21), and bill review and extraction (T22).
-- **Phase 4:** dated cash flows and IRR (T26–T28), server-side publish gates and explicit submission (T23–T25).
-- **Phase 5:** telemetry/accounting imports (T31), durable jobs (T32), alerts.
+Scope decisions from Thomas supersede the spec where they differ: visible to every tenant (per-org off-switch), a workspace widget beside Pulse and the feed as the entry point, a CRM on the register for each tenant's customers, EVCS data only in the EVCS tenant, IQGEN as an alternate compute-economics set.
+
+### 8.1 Delivered
+
+| Area | Where | Notes |
+|---|---|---|
+| Shortlist view + create linked projects | `GET ?shortlist=`, `shortlist-create-projects` | Explicit site choice, ≤25 per call, deterministic `projects/pa_<siteId>` in the shape `omega-newproject.js` writes, idempotent, org-checked |
+| Power evidence (§7) | `power.js`, `power-evidence`, `interval-upload`, `envelope-save`, `allocation-reserve`, `bess-check` | Headroom contract, PUE once, baseline membership, shared envelopes in a transaction with idempotency keys, interval coverage (no annual/firm claims from partial or active-only data), BESS energy budget |
+| Tool handoffs (§8.2) | `handoff.js`, `handoff`, `handoff-result` | Routes pinned to `omega-tools.js` keys and existing files; opaque selectors only; locked / unavailable / no-coverage / failed are recorded honestly with no result |
+| Site Map link (§8.3) | `map-sync` | Empty project = not a map; revision by content hash; review marks a revision; a new revision marks design + package stale |
+| Bills | `bill-save`, `bill-review`, `GET ?bills=` | Manual or extracted entry → review queue; meter mismatch, missing fields, estimated reads, non-reconciling charges block acceptance. **Automatic extraction (OCR/LLM) is not enabled**; the `extraction` field records provenance when one is added |
+| Versioned results + stale propagation (T25) | `asset_results`, `readiness.propagate` | Bill/map/power/agreement/equipment changes mark dependent results and packages stale; nothing re-runs or republishes silently |
+| Scenarios + economics (§9.1) | `economics.js`, `scenario-run`, `portfolio-irr` | Legacy per-pod model reproduces WB2 (T26 parity on the private file); dated XIRR with no-root / multi-root disclosure; portfolio IRR from aggregated dated flows |
+| IQGEN | `iqgen.js`, `assumption-set-import` | Stored as `asset_assumption_sets/iqgen_*` (kind `iqgen-hardware-v1`) with cell provenance; runs on the same engine; never touches the WB2 legacy set |
+| Packages + submission (§9.2) | `package-prepare`, `package-submit` | Server-side gates (map, reviewed bills, meter, site control, power class, current finance, permission) at prepare and again inside the submit transaction; explicit confirm; one private snapshot per package; publication disabled |
+| CRM | `crm-link`, `activity-log`, `GET ?crm=`, `GET ?pipeline=` | Links a site to the workspace's existing `customers/{id}` (+contacts); pipeline stage, owner, activity log, follow-up tasks. Nothing is sent from Portfolio |
+| Workspace widget | `GET ?widget=1`, `workspace.html` `portfolioPanel` | Counts only for the caller's org; Customize toggle; links into Portfolio, pipeline, bills |
+| Phase 5 (honest scaffolding) | `GET ?performance=1`, `job-start/step/cancel` | No connector → no values (T31). Durable, resumable, client-driven jobs with per-site failure isolation (T32); there is no server-side worker yet |
+| EVCS seed | `scripts/seed-evcs-portfolio.js` | Offline dry run by default; `--apply` refuses unless `omega_orgs/{org}` exists and `--confirm-org` repeats it; never creates tenants, users or passwords |
+
+### 8.2 Tests
+
+`scripts/tests/tportfolio-phases.js` (in `npm test`): T11–T18, T20–T25, T27, T28, T31, T32, T35, shortlist/projects, power workflow, scenarios incl. an IQGEN-shaped set, CRM, widget. `scripts/tests/tportfolio-economics-real.js` (SKIPs without `EVCS_WB2_PATH`): T26 parity at 1e-7 and IQGEN on the private file. `tportfolioassets-ui.js` adds the CRM tab, power form, pipeline and bills dialogs.
+
+### 8.3 Still open / disabled
+
+- Bill OCR/LLM extraction (queue and provenance exist; no extractor).
+- Live telemetry/accounting connectors and alerts (Phase 5): "Connect live monitoring" is disabled with its reason.
+- Server-side background worker for jobs (jobs are durable and resumable, but advance only while a client calls `job-step`).
+- Tools do not yet read `?handoff=` or post `handoff-result` back automatically; results are recorded through the endpoint.
+- Financing-marketplace publication of a submitted package (deliberately disabled).
+- Agreement `reviewStatus` can be set by any editor; a reviewer-only check is a follow-up.
+- Value-stack scenarios beyond the compute model (the Value stack tool is reachable by handoff).
