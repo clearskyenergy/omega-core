@@ -22,6 +22,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var P = require('./power'), R = require('./readiness'), H = require('./handoff'), E = require('./economics'), Q = require('./iqgen'), AS = require('./assets'), xlsx = require('./xlsx'), crypto = require('crypto');
+var LEGACY_FIELDS = Object.keys(E.LEGACY_KEYS).map(function (k) { return E.LEGACY_KEYS[k]; });
 var PIPELINE = ['lead', 'qualifying', 'proposal', 'negotiation', 'contracted', 'in-development', 'operating', 'on-hold', 'lost'];
 var ACTIVITY = ['note', 'call', 'meeting', 'email-logged', 'site-visit'];
 function sha(x) { return crypto.createHash('sha256').update(typeof x === 'string' ? x : JSON.stringify(x)).digest('hex'); }
@@ -238,7 +239,7 @@ function make(c) {
       var sr2 = await siteRef(scope, b.siteId), anq = await scope.root.collection('asset_analyses').limit(20).get(), legacy = anq.docs.map(function (d) { return d.data(); }).filter(function (x) { return x.assumptions && x.assumptions.length; })[0];
       if (!legacy) throw err(409, 'No legacy assumption set: import the model workbook first');
       var base = E.fromAssumptions(legacy.assumptions), w = sr2.data.opportunity && sr2.data.opportunity.wb2Legacy, kind = clean(b.assumptionSet, 20) || 'wb2-legacy', res, setRef = { kind: 'wb2-legacy', analysisId: legacy.id };
-      var ov = b.overrides && typeof b.overrides === 'object' ? b.overrides : {}; Object.keys(ov).slice(0, 30).forEach(function (k) { if (Object.prototype.hasOwnProperty.call(base, k)) { var n = num(ov[k]); if (!isFinite(n)) throw err(400, k + ' must be a number'); base[k] = n; } });
+      var ov = b.overrides && typeof b.overrides === 'object' ? b.overrides : {}; Object.keys(ov).slice(0, 30).forEach(function (k) { if (Object.prototype.hasOwnProperty.call(base, k) || LEGACY_FIELDS.indexOf(k) >= 0) { var n = num(ov[k]); if (!isFinite(n)) throw err(400, k + ' must be a number'); base[k] = n; } });
       if (kind === 'iqgen') { var qs = await scope.root.collection('asset_assumption_sets').doc(docId(b.assumptionSetId)).get(); if (!qs.exists) throw err(404, 'Assumption set not found'); res = E.iqgenPod(qs.data().set, clean(b.chipset, 80) || qs.data().set.selectedChipset, base); setRef = { kind: 'iqgen-hardware-v1', id: qs.id }; }
       else res = E.legacyPod(base);
       if (res.status !== 'ok') return { ok: false, status: res.status, missing: res.missing, reason: res.reason };
@@ -269,7 +270,7 @@ function make(c) {
         if (ml && synced && synced.hash !== ml.hash) ml.packageRevision = -1;
         var ag = await scope.root.collection('asset_sites').doc(siteDoc.siteId).collection('agreements').limit(50).get();
         return { site: siteDoc, scenario: { id: scenarioId }, mapLink: ml, bills: bq.docs.map(function (d) { return d.data(); }), analyses: rq2.docs.map(function (d) { return d.data(); }),
-          siteControlReviewed: ag.docs.some(function (d) { var x = d.data(); return x.reviewStatus === 'reviewed' && x.computeUseAllowed === true; }), powerClass: P.classify(siteDoc).level, canPublish: scope.caps.indexOf('submit') >= 0 };
+          siteControlReviewed: ag.docs.some(function (d) { var x = d.data(); return x.reviewStatus === 'reviewed' && x.computePermitted === true; }), powerClass: P.classify(siteDoc).level, canPublish: scope.caps.indexOf('submit') >= 0 };
       }
       if (!isSubmit) {
         var ps2 = await siteRef(scope, b.siteId), scn = docId(b.scenarioId || 'sc_wb2-legacy'), cx = await ctxFor(ps2.data, scn), g = R.gates(cx);
@@ -345,6 +346,6 @@ function make(c) {
     }
     return undefined;
   }
-  return { get: get, post: post };
+  return { get: get, post: post, staleFor: staleFor };
 }
 module.exports = { make: make, PIPELINE: PIPELINE };

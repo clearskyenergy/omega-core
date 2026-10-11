@@ -241,6 +241,7 @@ function make(deps) {
       if (kindName === 'tasks') { var was = prev.exists ? prev.data().status : null; merged.history = (base.history || []).concat(was !== rec.status ? [{ at: now, by: caller.email, status: rec.status }] : []).slice(-50); if (rec.status === 'done' && was !== 'done') { merged.completedAt = now; merged.completedBy = caller.email; } }
       await cref2.set(merged);
       await host.ref.set({ linkedWork: true, updatedAt: now }, { merge: true });
+      if (kindName !== 'tasks') await ext.staleFor(scope, host.data.siteId, kindName === 'agreements' ? 'agreement' : 'equipment', now); /* T25 */
       await audit(scope, caller, action, { siteId: host.data.siteId, id: cref2.id });
       return { ok: true, id: cref2.id, record: merged };
     }

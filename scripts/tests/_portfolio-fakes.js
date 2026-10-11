@@ -19,7 +19,9 @@ function store() {
   }
   function colRef(path) {
     function q(limit) { return { get: function () { var depth = path.split('/').length + 1, docs = Object.keys(data).filter(function (k) { return k.indexOf(path + '/') === 0 && k.split('/').length === depth; }).sort().slice(0, limit || 1e9).map(snap); return Promise.resolve({ docs: docs, size: docs.length, empty: !docs.length }); } }; }
-    return { path: path, doc: function (id) { return docRef(path + '/' + (id || ('auto' + (++n) + Math.random().toString(36).slice(2, 8)))); }, limit: function (k) { return q(k); }, get: q().get };
+    function wq(field, val) { return { limit: function (k) { return { get: function () { return q().get().then(function (r) { var docs = r.docs.filter(function (d) { var x = d.data(); return x && x[field] === val; }).slice(0, k || 1e9); return { docs: docs, size: docs.length, empty: !docs.length }; }); } }; } }; }
+    return { path: path, doc: function (id) { return docRef(path + '/' + (id || ('auto' + (++n) + Math.random().toString(36).slice(2, 8)))); }, limit: function (k) { return q(k); }, get: q().get,
+      where: function (f, op, v) { if (op !== '==') throw new Error('fake where supports == only'); return wq(f, v); } };
   }
   var db = { collection: function (name) { return colRef(name); },
     runTransaction: function (fn) { var tx = { get: function (ref) { return ref.get(); }, set: function (ref, v, o) { ref.set(v, o); } }; return Promise.resolve(fn(tx)); } };
