@@ -123,7 +123,7 @@ select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12
 <script>
 (function () {
   'use strict';
-  firebase.initializeApp(CFG.firebase);
+  firebase.initializeApp((window.CLEARSKY_CONFIG||window.CFG||{}).firebase);
   var auth = firebase.auth();
   var ORG = '', SITES = [], CANEDIT = false;
 
