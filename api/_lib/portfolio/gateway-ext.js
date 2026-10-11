@@ -29,6 +29,16 @@ function sha(x) { return crypto.createHash('sha256').update(typeof x === 'string
 function num(v) { if (v === null || v === undefined || v === '') return null; var n = Number(v); return isFinite(n) ? n : NaN; }
 function kwOrNull(v, err, name) { var n = num(v); if (n === null) return null; if (!isFinite(n) || n < 0 || n > 1e6) throw err(400, name + ' must be a kW value'); return n; }
 
+/* PURE: the widget's numbers. Nothing synthesised: zero is a count, never a guess. */
+function widgetSummary(sites, bills, packages, results, today) {
+  var live = sites.filter(function (s) { return s.lifecycleStatus !== 'archived'; }), stages = {}, due = 0, open = 0, states = {}, linked = 0;
+  live.forEach(function (s) { var st = s.crm && s.crm.stage; if (st) stages[st] = (stages[st] || 0) + 1; var f = s.crm && s.crm.nextFollowUp; if (f) { open++; if (f <= today) due++; } var a = s.address && s.address.state; if (a) states[a] = (states[a] || 0) + 1; if (s.links && s.links.projectId) linked++; });
+  return { sites: live.length, states: Object.keys(states).length, linkedProjects: linked, pipeline: stages, inPipeline: Object.keys(stages).reduce(function (a, k) { return a + (k === 'lost' ? 0 : stages[k]); }, 0),
+    followUps: { open: open, due: due }, billsToReview: bills.filter(function (x) { return x.state && x.state !== 'accepted' && x.state !== 'rejected'; }).length,
+    packages: { draft: packages.filter(function (x) { return x.status === 'draft'; }).length, ready: packages.filter(function (x) { return x.status === 'draft' && x.gates && x.gates.ok; }).length, submitted: packages.filter(function (x) { return x.status === 'submitted'; }).length },
+    staleResults: results.filter(function (x) { return x.status === 'stale'; }).length, performance: 'no-live-connection', href: '/portfolio-assets.html' };
+}
+
 function make(c) {
   var err = c.err, docId = c.docId, clean = c.clean, need = c.need, audit = c.audit, siteRef = c.siteRef;
 
@@ -67,6 +77,11 @@ function make(c) {
     if (b.performance) {
       /* T31: no connector → no values. Never synthesised. */
       return { status: 'no-live-connection', label: 'No live data connection', connectors: [], kpis: null, note: 'Measured performance appears only from an authorized connector or a reviewed monthly import.' };
+    }
+    if (b.widget) {
+      /* Workspace widget (the Pulse / feed area): counts only, this org only. */
+      var ws = await c.allSites(scope), wb = await scope.root.collection('asset_bills').limit(500).get(), wp = await scope.root.collection('asset_packages').limit(200).get(), wr = await scope.root.collection('asset_results').limit(1000).get();
+      return widgetSummary(ws, wb.docs.map(function (d) { return d.data(); }), wp.docs.map(function (d) { return d.data(); }), wr.docs.map(function (d) { return d.data(); }), (c.today && c.today()) || new Date().toISOString().slice(0, 10));
     }
     if (b.pipeline) {
       var all = await c.allSites(scope), by = {}; PIPELINE.forEach(function (p) { by[p] = []; }); by.unassigned = [];
@@ -348,4 +363,4 @@ function make(c) {
   }
   return { get: get, post: post, staleFor: staleFor };
 }
-module.exports = { make: make, PIPELINE: PIPELINE };
+module.exports = { make: make, PIPELINE: PIPELINE, widgetSummary: widgetSummary };

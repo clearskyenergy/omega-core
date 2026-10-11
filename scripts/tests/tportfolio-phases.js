@@ -201,6 +201,17 @@ test('CRM on the register: account link, pipeline stage, activity, follow-up tas
   assert.equal((await h.get('outsider', { crm: id })).statusCode, 404);
 });
 
+/* ── Workspace widget (Pulse / feed area) ────────────────────────────── */
+test('Workspace widget: counts only, this tenant only, entry into Portfolio; panel gated by the per-org switch', async function () {
+  var L = await loaded(), h = L.h, id = L.analysis.shortlist.siteIds[0];
+  await h.post('owner', { action: 'crm-link', siteId: id, stage: 'proposal' }); await h.post('owner', { action: 'activity-log', siteId: id, type: 'note', subject: 'x', followUpAt: '2026-10-01' });
+  var w = (await h.get('owner', { widget: 1 })).body; assert.equal(w.sites, 292); assert.equal(w.inPipeline, 1); assert.deepEqual(w.followUps, { open: 1, due: 1 }); assert.equal(w.performance, 'no-live-connection'); assert.equal(w.href, '/portfolio-assets.html');
+  var o = (await h.get('outsider', { widget: 1 })).body; assert.equal(o.sites, 0, 'another tenant sees only its own (empty) register');
+  var html = require('fs').readFileSync(require('path').join(__dirname, '../../workspace.html'), 'utf8');
+  assert(/if \(hubFlags\(\)\['portfolio-assets'\]\) h \+= portfolioPanel\(off\('portfolio'\)\)/.test(html)); assert(/portfolio: true/.test(html)); assert(/\['portfolio', 'Portfolio & assets'/.test(html));
+  assert(/o\['portfolio-assets'\] !== false/.test(html), 'default on, ClearSky off-switch');
+});
+
 /* ── Phase 5 ─────────────────────────────────────────────────────────── */
 test('T31 no telemetry connection → no live values, no generated KPIs', async function () {
   var L = await loaded(), r = await L.h.get('owner', { performance: 1 }); assert.equal(r.body.status, 'no-live-connection'); assert.equal(r.body.kpis, null); assert.deepEqual(r.body.connectors, []);

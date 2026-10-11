@@ -93,7 +93,7 @@ function make(deps) {
   }
   async function siteRef(scope, id) { var ref = scope.root.collection('asset_sites').doc(docId(id)), s = await ref.get(); if (!s.exists) throw err(404, 'Site not found'); return { ref: ref, data: s.data() }; }
 
-  var ext = GX.make({ err: err, docId: docId, clean: clean, need: need, audit: audit, siteRef: siteRef, allSites: allSites, bucket: function () { return deps.bucket(); }, billing: function (o) { return A.billingOf(o); }, MAX_UPLOAD: MAX_UPLOAD });
+  var ext = GX.make({ err: err, docId: docId, clean: clean, need: need, audit: audit, siteRef: siteRef, allSites: allSites, bucket: function () { return deps.bucket(); }, billing: function (o) { return A.billingOf(o); }, MAX_UPLOAD: MAX_UPLOAD, today: function () { return String(deps.now()).slice(0, 10); } });
 
   return A.handler(async function (req, res) {
     res.setHeader('Cache-Control', 'private, no-store');

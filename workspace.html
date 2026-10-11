@@ -337,7 +337,8 @@ var S = window.OmegaWorkspaceShell, HUB = window.OmegaWorkspaceHub, T = window.O
 var esc = S.esc, byId = function (id) { return document.getElementById(id); };
 var WS = null, USER = null, ME = '', PROFILE = null;
 var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [], finance: [], capital: null };
-var PREFS_DEFAULT = { presence: true, feed: true, pulse: true, partners: true, guides: false };
+var PREFS_DEFAULT = { presence: true, feed: true, pulse: true, portfolio: true, partners: true, guides: false };
+var PORTFOLIO = null, PORTFOLIO_ASKED = false;
 var PULSE = null, PULSE_ASKED = false;
 var STAGE_KEYS = ['candidate', 'package', 'submitted', 'interconnect', 'permitting', 'finance', 'construction', 'online'];
 var STAGE_LABEL = { candidate: 'Candidate', package: 'Site package', submitted: 'Submitted to utility', interconnect: 'Interconnection', permitting: 'Permitting', finance: 'Finance ready', construction: 'Construction', online: 'Online' };
@@ -477,7 +478,7 @@ window.showApp = function (user) {
   OmegaNewProject.configure({ db: db, auth: auth, orgId: function () { return WS.orgId; }, ownerName: function () { return who(); }, afterCreate: openProject });
   render();
   load();
-  loadPulse();
+  loadPulse(); loadPortfolio();
   OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
   /* a later look (a module added to the plan, a paid invoice) arrives here: the rail's Omega Logic group follows too */
   window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); logicSection(); } });
@@ -1047,6 +1048,7 @@ function renderAround() {
     h += '<div class="panel" data-in="team"' + off('presence') + '><div class="hd"><h3>People</h3><span class="ows-chip">' + (list.length || 1) + ' in workspace</span></div><div class="people">' + (list.length ? list.map(function (m) { var me = String(m.email || '').toLowerCase() === ME, st = presence(m); return '<div class="pr"><span class="av' + (me ? ' me' : '') + '">' + esc(ini(m.name || m.email)) + '</span><div>' + esc(m.name || String(m.email || '').split('@')[0]) + (me ? ' <small>You · ' + esc(WS.role || 'member') + '</small>' : '<small><span class="dot ' + (st === 'on' ? '' : st) + '"></span> ' + (st === 'on' ? 'In the workspace' : st === 'away' ? 'Seen ' + ago(seenAt(m)) + ' ago' : '' + (seenAt(m) ? 'Last seen ' + ago(seenAt(m)) + ' ago' : 'Added · awaiting first visit') + '') + '</small>') + '</div></div>'; }).join('') : '<div class="empty"><b>You are the whole team here.</b> Anyone with an @' + esc(WS.orgId) + ' address signs in and joins as a member.</div>') + '</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="ows-pill" type="button" id="invite">+ Add person</button><a class="ows-pill" href="/projects.html">Share a project</a></div></div>';
   }
   h += pulsePanel(off('pulse'));
+  if (hubFlags()['portfolio-assets']) h += portfolioPanel(off('portfolio'));
   {
     /* joint development partners on projects, and the vendors who answered this workspace's requests for quote (a recipient is a vendor the workspace itself chose; identity beyond that shows only after a quote is accepted) */
     var partners = {}, org = WS.orgId;
@@ -1059,7 +1061,7 @@ function renderAround() {
   {
     h += '<div class="panel" data-in="board"' + off('guides') + '><div class="hd"><h3>Guides</h3><span class="ows-chip">For your tools</span></div><div class="ows-rows">' + [['Omega Logic app', 'The office on a phone', '/guides/Omega-Logic-App.pdf']].map(function (g) { return '<a class="ows-row" href="' + g[2] + '" target="_blank" rel="noopener"><span class="ic">' + S.ICON.file + '</span><div><b>' + esc(g[0]) + '</b><small>' + esc(g[1]) + '</small></div><span class="ows-pill sm ghost">Open</span></a>'; }).join('') + '</div></div>';
   }
-  if (!P.feed && !P.presence && !P.pulse && !P.partners && !P.guides) h += '<div class="empty board-empty">Every panel is off. Turn one on in Customize.</div>';
+  if (!P.feed && !P.presence && !P.pulse && !P.portfolio && !P.partners && !P.guides) h += '<div class="empty board-empty">Every panel is off. Turn one on in Customize.</div>';
   a.innerHTML = h;
   var form = byId('post'); if (form) form.addEventListener('submit', post);
   var inv = byId('invite'); if (inv) inv.addEventListener('click', inviteDrawer);
@@ -1111,6 +1113,27 @@ function pulseFinance() {
   return h + '<div class="insight">' + esc(line) + (cap ? ' <a href="' + esc(TODAY.dealHref(null, 'market')) + '">Browse the opportunities</a> · <a href="' + esc(TODAY.dealHref(null, 'room')) + '">Open your deal room</a>' : '') + '</div>';
 }
 function pulsePanel(attrs) { return '<div class="panel pulse" id="pulse" data-in="feed"' + (attrs || '') + '><div class="hd"><h3>Omega pulse</h3><span class="ows-chip">This week · counts only</span></div><div id="pulse-body">' + pulseHtml() + '</div></div>'; }
+/* ── Portfolio & assets widget: the entry point into the asset-management
+   ecosystem (register, CRM pipeline, bills, packages). Counts come from
+   GET /api/portfolio-assets?widget=1 for THIS workspace only; a failed
+   read says so, nothing is invented, and there is no live telemetry. */
+function loadPortfolio() {
+  if (PORTFOLIO_ASKED || !hubFlags()['portfolio-assets']) return; PORTFOLIO_ASKED = true;
+  var api = window.OmegaPackageMenu && OmegaPackageMenu.api; if (!api) return;
+  api('/api/portfolio-assets?widget=1&org=' + encodeURIComponent(WS.orgId)).then(function (r) { PORTFOLIO = r || { failed: true }; renderPortfolioInto(); }, function () { PORTFOLIO = { failed: true }; renderPortfolioInto(); });
+}
+function portfolioHtml() {
+  if (!PORTFOLIO) return '<div class="empty">Reading your portfolio…</div>';
+  if (PORTFOLIO.failed) return '<div class="empty">Portfolio counts are unavailable right now. <a href="/portfolio-assets.html">Open Portfolio</a></div>';
+  var w = PORTFOLIO; if (!w.sites) return '<div class="empty"><b>No sites yet.</b> Import a fleet spreadsheet to start your asset register and customer pipeline.</div><div style="display:flex;gap:8px"><a class="ows-pill primary" href="/portfolio-assets.html#import">Import sites</a></div>';
+  function st(v, l, href) { return '<a class="stat go" href="' + esc(href) + '"><div class="v num">' + esc(String(v)) + '</div><div class="l">' + esc(l) + '</div></a>'; }
+  return '<div class="stats">' + st(w.sites, 'sites · ' + w.states + ' state' + (w.states === 1 ? '' : 's'), '/portfolio-assets.html') + st(w.inPipeline, 'in your customer pipeline', '/portfolio-assets.html#pipeline')
+    + st(w.followUps.due, 'follow-ups due (' + w.followUps.open + ' open)', '/portfolio-assets.html#pipeline') + st(w.billsToReview, 'bills to review', '/portfolio-assets.html#bills') + '</div>'
+    + (w.staleResults || w.packages.ready ? '<div class="insight">' + (w.packages.ready ? '<b>' + w.packages.ready + ' package' + (w.packages.ready === 1 ? '' : 's') + ' ready to submit.</b> ' : '') + (w.staleResults ? w.staleResults + ' result' + (w.staleResults === 1 ? '' : 's') + ' need a re-run after source changes.' : '') + '</div>' : '')
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap"><a class="ows-pill primary" href="/portfolio-assets.html">Open Portfolio</a><a class="ows-pill" href="/portfolio-assets.html#pipeline">Pipeline</a></div><div class="ows-note" style="font-size:12px">Live performance: no data connection.</div>';
+}
+function portfolioPanel(attrs) { return '<div class="panel pulse" id="portfolio" data-in="feed"' + (attrs || '') + '><div class="hd"><h3>Portfolio &amp; assets</h3><span class="ows-chip">Your sites · CRM</span></div><div id="portfolio-body">' + portfolioHtml() + '</div></div>'; }
+function renderPortfolioInto() { var b = byId('portfolio-body'); if (b) b.innerHTML = portfolioHtml(); }
 function renderPulseInto() { var b = byId('pulse-body'); if (b) b.innerHTML = pulseHtml(); }
 function post(e) {
   e.preventDefault(); var inp = byId('post-text'), text = (inp.value || '').trim(); if (!text) return;
@@ -1833,7 +1856,7 @@ function loadWorkspacePeople() {
   }, function () { /* Presence still renders when the membership API is unavailable. */ });
 }
 function customizeDrawer() {
-  var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['pulse', 'Omega pulse', 'What the whole platform did this week, counts only.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
+  var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['pulse', 'Omega pulse', 'What the whole platform did this week, counts only.'], ['portfolio', 'Portfolio & assets', 'Your sites, customer pipeline, follow-ups and what needs review.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Customize your home', sub: 'Your plan sets the hub. You choose what else is around it. Saved for you.', html: '<div>' + opts.map(function (o) { return '<div class="opt"><div><b>' + esc(o[1]) + '</b><small>' + esc(o[2]) + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (P[o[0]] ? 'true' : 'false') + '" data-opt="' + o[0] + '" aria-label="' + esc(o[1]) + '"></button></div>'; }).join('') + '</div>', ready: function (el) {
     Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); DATA.prefs = p; renderToday(); renderAround(); savePrefs(p); }); });
   } });
