@@ -1,0 +1,228 @@
+# One-off review runner. Never deploys Firebase or writes main.
+# Only a successful validation may stage firestore.rules on a separate branch.
+name: Site CRM rules preservation review
+on:
+  push:
+    branches: [automation/sitecrm-rules-verify-20261011]
+    paths: [.github/workflows/sitecrm-rules-verify.yml]
+permissions:
+  contents: read
+concurrency:
+  group: sitecrm-rules-preservation-review
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 51d7423492472a5dc610e66397044b5896fc31d5
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Preserve the exact base and add only the reviewed clauses
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/sitecrm-review"
+          export REVIEW_DIR="$RUNNER_TEMP/sitecrm-review"
+          python3 - <<'PY'
+          import os, hashlib, pathlib, json, difflib
+          root = pathlib.Path(os.environ['REVIEW_DIR'])
+          p = pathlib.Path('firestore.rules')
+          before = p.read_bytes()
+          assert hashlib.sha256(before).hexdigest() == 'b02906483ff4d5a1a136248af2f82726b4f374146d136b5e670ddafd5941c5aa', 'Base rules changed; stop rather than overwrite'
+          (root / 'baseline-firestore.rules').write_bytes(before)
+          s = before.decode('utf-8')
+          old = '    match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }'
+          new = '''    match /omega_orgs/{orgId}/sites/{siteId} {
+                allow read, write: if false;
+                /* The site CRM (api/site-crm.js): a site's contacts, activity log,
+                   documents and pro forma scenarios are read and written only through
+                   the endpoint, which checks the caller's workspace role key by key.
+                   A browser that could read a record could read an office-only
+                   document; one that could write `shared` or `path` could show the
+                   customer anything, or point a record at another site's bytes.
+                   Stated, like the customers CRM above. */
+                match /contacts/{contactId}   { allow read, write: if false; }
+                match /activity/{activityId} { allow read, write: if false; }
+                match /files/{fileId}        { allow read, write: if false; }
+                match /proforma/{scenarioId} { allow read, write: if false; }
+              }'''
+          # Strip the additional YAML/Python literal indentation, not source text.
+          lines = new.splitlines()
+          new = lines[0] + '\n' + '\n'.join(line[10:] for line in lines[1:])
+          anchor = '    match /omega_orgs/{orgId}/crm_upload_usage/{usageId} { allow read, write: if false; }\n'
+          addition = '''    /* The site CRM's open follow-ups across every site (the portfolio Today
+                 hub, api/site-crm.js). Same rationale as crm_followups: written only
+                 by the endpoint, which keys each entry to its site and activity. */
+              match /omega_orgs/{orgId}/sitecrm_followups/{followId} { allow read, write: if false; }
+          '''
+          lines = addition.splitlines()
+          addition = lines[0] + '\n' + '\n'.join(line[10:] for line in lines[1:]) + '\n'
+          assert s.count(old) == 1 and s.count(anchor) == 1, 'Ambiguous patch anchors'
+          after = s.replace(old, new, 1).replace(anchor, anchor + addition, 1).encode('utf-8')
+          assert hashlib.sha256(after).hexdigest() == '4db3827f9f0fcc9c0e9032aa815fc201b4ff85f91e729c39553d1f6f8ae86b27', 'Candidate must match the uploaded reviewed file exactly'
+          assert after.decode().replace(new, old, 1).replace(addition, '', 1).encode() == before
+          p.write_bytes(after)
+          (root / 'candidate-firestore.rules').write_bytes(after)
+          (root / 'sitecrm.patch').write_text(''.join(difflib.unified_diff(before.decode().splitlines(True), after.decode().splitlines(True), fromfile='a/firestore.rules', tofile='b/firestore.rules')))
+          (root / 'preservation.json').write_text(json.dumps({'base_commit':'51d7423492472a5dc610e66397044b5896fc31d5','existing_allow_clauses_preserved':385,'new_false_clauses':5,'baseline_sha256':hashlib.sha256(before).hexdigest(),'candidate_sha256':hashlib.sha256(after).hexdigest(),'production_deployment':False}, indent=2))
+          print('PASS: reviewed candidate matches upload; reversing the two changes reproduces the entire base file.')
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = 'firestore.rules'
+          node scripts/check-rules.js firestore.rules | tee "$REVIEW_DIR/structural-check.log"
+      - name: Existing offline Site CRM API and pro forma tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/test-site-crm.js 2>&1 | tee "$RUNNER_TEMP/sitecrm-review/site-crm-tests.log"
+      - name: Install isolated emulator-only test tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/sitecrm-test-tools"
+          npm install --prefix "$RUNNER_TEMP/sitecrm-test-tools" --ignore-scripts --no-audit --no-fund --save-exact firebase-tools@14.12.0 @firebase/rules-unit-testing@4.0.1 firebase@11.10.0
+      - name: Compile both rulesets and test denied paths plus preserved access
+        shell: bash
+        env:
+          FIREBASE_TOKEN: ''
+          GOOGLE_APPLICATION_CREDENTIALS: ''
+          CI: 'true'
+        run: |
+          set -euo pipefail
+          export REVIEW_DIR="$RUNNER_TEMP/sitecrm-review"
+          export NODE_PATH="$RUNNER_TEMP/sitecrm-test-tools/node_modules"
+          python3 - <<'PY'
+          import os, json, pathlib
+          root = pathlib.Path(os.environ['REVIEW_DIR'])
+          config = {'firestore': {'rules': str(root / 'candidate-firestore.rules')}, 'emulators': {'firestore': {'host': '127.0.0.1', 'port': 8187}, 'ui': {'enabled': False}, 'singleProjectMode': True}}
+          (root / 'firebase.emulator.json').write_text(json.dumps(config))
+          PY
+          cat > "$REVIEW_DIR/test-rules.cjs" <<'JS'
+          'use strict';
+          const fs = require('node:fs');
+          const path = require('node:path');
+          const assert = require('node:assert/strict');
+          const T = require('@firebase/rules-unit-testing');
+          const F = require('firebase/firestore');
+          const root = process.env.REVIEW_DIR;
+          const projectId = 'demo-omega-sitecrm';
+          const org = 'rules.example';
+          const orgPath = 'omega_orgs/' + org;
+          const sitePath = orgPath + '/sites/synthetic-site';
+          const privatePaths = ['contacts', 'activity', 'files', 'proforma'].map(x => sitePath + '/' + x + '/synthetic-record').concat([orgPath + '/sitecrm_followups/synthetic-followup', sitePath]);
+          const actors = [null, ['member', org], ['owner', org], ['admin', org], ['viewer', org], ['disabled', org], ['outside', 'other.example'], ['staff', 'clearsky-usa.com'], ['unverified', org, false]];
+          async function checkVersion(version) {
+            let env;
+            let checks = 0;
+            const yes = async promise => { await T.assertSucceeds(promise); checks++; };
+            const no = async promise => { await T.assertFails(promise); checks++; };
+            try {
+              env = await T.initializeTestEnvironment({projectId, firestore: {host: '127.0.0.1', port: 8187, rules: fs.readFileSync(path.join(root, version + '-firestore.rules'), 'utf8')}});
+              await env.clearFirestore();
+              await env.withSecurityRulesDisabled(async context => {
+                const db = context.firestore();
+                await F.setDoc(F.doc(db, orgPath), {status: 'active', name: 'Synthetic fixture'});
+                for (const role of ['owner', 'admin', 'member', 'viewer', 'disabled']) {
+                  await F.setDoc(F.doc(db, orgPath + '/members/' + role), {role: role === 'disabled' ? 'member' : role, status: role === 'disabled' ? 'disabled' : 'active'});
+                }
+                await F.setDoc(F.doc(db, 'projects/synthetic-saved'), {orgId: org, uid: 'member', orgsInvolved: [], name: 'Saved work'});
+                await F.setDoc(F.doc(db, 'projects/synthetic-other'), {orgId: 'other.example', uid: 'outside', orgsInvolved: [], name: 'Other workspace'});
+                for (const p of privatePaths) await F.setDoc(F.doc(db, p), {orgId: org, name: 'Synthetic record', shared: false, path: 'synthetic-only'});
+              });
+              for (const actor of actors) {
+                const context = actor ? env.authenticatedContext(actor[0], {email: actor[0] + '@' + actor[1], email_verified: actor[2] !== false}) : env.unauthenticatedContext();
+                const db = context.firestore();
+                for (const p of privatePaths) {
+                  await no(F.getDoc(F.doc(db, p)));
+                  await no(F.getDocs(F.collection(db, p.slice(0, p.lastIndexOf('/'))))));
+                  await no(F.setDoc(F.doc(db, p + '-new'), {orgId: org, shared: true}));
+                  await no(F.updateDoc(F.doc(db, p), {shared: true, path: 'other-site'}));
+                  await no(F.deleteDoc(F.doc(db, p)));
+                }
+              }
+              const member = env.authenticatedContext('member', {email: 'member@' + org, email_verified: true}).firestore();
+              const staff = env.authenticatedContext('staff', {email: 'staff@clearsky-usa.com', email_verified: true}).firestore();
+              await yes(F.getDoc(F.doc(member, 'projects/synthetic-saved')));
+              await yes(F.updateDoc(F.doc(member, 'projects/synthetic-saved'), {name: 'Existing project remains editable'}));
+              await no(F.getDoc(F.doc(member, 'projects/synthetic-other')));
+              await yes(F.getDoc(F.doc(member, orgPath)));
+              await yes(F.getDoc(F.doc(staff, 'projects/synthetic-other')));
+              await env.withSecurityRulesDisabled(async context => {
+                for (const p of privatePaths) {
+                  await F.updateDoc(F.doc(context.firestore(), p), {serverUpdated: true});
+                  assert.equal((await F.getDoc(F.doc(context.firestore(), p))).data().serverUpdated, true);
+                  checks++;
+                }
+              });
+              console.log('PASS ' + version + ': ' + checks + ' emulator assertions; synthetic demo data only.');
+              return checks;
+            } finally {
+              if (env) await env.cleanup();
+            }
+          }
+          (async () => {
+            const baseline = await checkVersion('baseline');
+            const candidate = await checkVersion('candidate');
+            assert.equal(candidate, baseline);
+            fs.writeFileSync(path.join(root, 'emulator-results.json'), JSON.stringify({baseline_checks: baseline, candidate_checks: candidate, status: 'passed', production_access: false}, null, 2));
+          })().catch(error => { console.error(error); process.exitCode = 1; });
+          JS
+          node --check "$REVIEW_DIR/test-rules.cjs"
+          "$NODE_PATH/.bin/firebase" emulators:exec --only firestore --project demo-omega-sitecrm --config "$REVIEW_DIR/firebase.emulator.json" "node $REVIEW_DIR/test-rules.cjs" 2>&1 | tee "$REVIEW_DIR/emulator.log"
+      - name: Preserve review evidence, including failures
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sitecrm-rules-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/sitecrm-review/
+          retention-days: 14
+          if-no-files-found: error
+  stage-reviewed-rules:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - uses: actions/download-artifact@v4
+        with:
+          name: sitecrm-rules-review-${{ github.run_id }}
+          path: ${{ runner.temp }}/sitecrm-reviewed
+      - name: Stage only verified rules on a new branch, never main
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '51d7423492472a5dc610e66397044b5896fc31d5'
+          test "$(git hash-object firestore.rules)" = 'e8baddbdeace0400955a8225df8c7f7df488b301'
+          export REVIEW_DIR="$RUNNER_TEMP/sitecrm-reviewed"
+          python3 - <<'PY'
+          import os, pathlib, hashlib, json
+          root = pathlib.Path(os.environ['REVIEW_DIR'])
+          report = json.loads((root / 'emulator-results.json').read_text())
+          assert report['status'] == 'passed' and report['production_access'] is False
+          candidate = (root / 'candidate-firestore.rules').read_bytes()
+          assert hashlib.sha256(candidate).hexdigest() == '4db3827f9f0fcc9c0e9032aa815fc201b4ff85f91e729c39553d1f6f8ae86b27'
+          pathlib.Path('firestore.rules').write_bytes(candidate)
+          PY
+          git diff --check
+          test "$(git diff --name-only)" = 'firestore.rules'
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git switch -c review/sitecrm-rules-20261011
+          git add -- firestore.rules
+          git commit -m 'Site CRM: explicit server-only rules; preserve all existing policies'
+          git push origin HEAD:refs/heads/review/sitecrm-rules-20261011
+          echo "Reviewed rules commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'No Firebase deployment. No customer data import. Main is unchanged.' >> "$GITHUB_STEP_SUMMARY"
