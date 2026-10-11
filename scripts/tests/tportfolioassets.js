@@ -245,8 +245,9 @@ test('T29 cross-tenant / collaborator / role / flag: list, detail, download, exp
   assert(Object.keys(h.store.data).some(function (k) { return k.indexOf('omega_orgs/' + ORG + '/asset_audit/') === 0 && h.store.data[k].action === 'file-download'; }));
   assert.equal((await h.get('staff', { org: ORG })).statusCode, 200);
   assert.equal((await h.get('nobody', {})).statusCode, 401);
-  /* flag off: refused for everyone, staff included */
-  var off = env({ billing: {} });
+  /* default ON with no override; off-switch refuses everyone, staff included */
+  assert.equal((await env({ billing: {} }).get('owner', {})).statusCode, 200);
+  var offB = {}; offB[ORG] = { toolOverrides: { 'portfolio-assets': false } }; var off = env({ billing: offB });
   assert.equal((await off.get('owner', {})).statusCode, 403); assert.equal((await off.get('staff', { org: ORG })).statusCode, 403);
   /* path injection through org or ids */
   assert.equal((await h.get('staff', { org: ORG + '/customers/x' })).statusCode, 400);

@@ -7,8 +7,8 @@
    is untouched; this endpoint is the WORKSPACE's own fleet register and
    reuses the same parsing modules under api/_lib/portfolio/.
 
-   Behind a TENANT-SCOPED FLAG: omega_orgs/{org}/billing/current
-   .toolOverrides['portfolio-assets'] === true. Billing is ClearSky-written
+   ON for every workspace; per-org OFF-SWITCH (rollback): omega_orgs/{org}/billing/current
+   .toolOverrides['portfolio-assets'] === false. Billing is ClearSky-written
    (rules), so a tenant cannot switch it on for itself. Off → 403 for
    everyone, staff included, so a preview is a deliberate act.
 
@@ -41,7 +41,7 @@
           view-save | view-delete | portfolio-save | site-archive }
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var AS = require('./_lib/portfolio/assets'), EM = require('./_lib/portfolio/evcs-model');
+var AS = require('./_lib/portfolio/assets'), EM = require('./_lib/portfolio/evcs-model'), GX = require('./_lib/portfolio/gateway-ext');
 
 var FLAG = 'portfolio-assets', MAX_UPLOAD = 3 * 1024 * 1024;
 function clean(v, n) { return String(v == null ? '' : v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n || 160); }
@@ -56,7 +56,8 @@ function make(deps) {
     if (requested && A.safeOrg(requested) !== org) throw err(403, 'Not your workspace');
     var db = deps.db(), root = db.collection('omega_orgs').doc(org);
     var billing = await A.billingOf(org);
-    if (!(billing && billing.toolOverrides && billing.toolOverrides[FLAG] === true)) throw err(403, 'Portfolio & Assets is not enabled for this workspace');
+    /* Default ON for every workspace; ClearSky can switch one org off. */
+    if (billing && billing.toolOverrides && billing.toolOverrides[FLAG] === false) throw err(403, 'Portfolio & Assets is switched off for this workspace');
     var role = 'viewer';
     if (caller.staff) role = 'owner';
     else { var m = await root.collection('members').doc(caller.uid).get(); if (m.exists) { var d = m.data() || {}; if (d.status === 'disabled') throw err(403, 'Your access to this workspace is disabled'); role = ['owner', 'admin', 'member', 'viewer'].indexOf(d.role) >= 0 ? d.role : 'viewer'; } }
@@ -92,6 +93,8 @@ function make(deps) {
   }
   async function siteRef(scope, id) { var ref = scope.root.collection('asset_sites').doc(docId(id)), s = await ref.get(); if (!s.exists) throw err(404, 'Site not found'); return { ref: ref, data: s.data() }; }
 
+  var ext = GX.make({ err: err, docId: docId, clean: clean, need: need, audit: audit, siteRef: siteRef, allSites: allSites, bucket: function () { return deps.bucket(); }, billing: function (o) { return A.billingOf(o); }, MAX_UPLOAD: MAX_UPLOAD });
+
   return A.handler(async function (req, res) {
     res.setHeader('Cache-Control', 'private, no-store');
     if (['GET', 'POST'].indexOf(req.method) < 0) throw err(405, 'GET or POST only');
@@ -121,6 +124,7 @@ function make(deps) {
       if (b.imports) { var is = await scope.root.collection('asset_imports').limit(200).get(); return { imports: is.docs.map(function (d) { var x = d.data(); return { id: d.id, status: x.status, fileName: x.fileName, profile: x.profile, counts: x.counts, createdAt: x.createdAt, committedAt: x.committedAt || null, undoneAt: x.undoneAt || null }; }) }; }
       if (b.analyses) { var an = await scope.root.collection('asset_analyses').limit(50).get(); return { analyses: an.docs.map(function (d) { return d.data(); }) }; }
       if (b.portfolios) { var ps = await scope.root.collection('asset_portfolios').limit(200).get(); return { portfolios: ps.docs.map(function (d) { return Object.assign({ id: d.id }, d.data()); }) }; }
+      var xg = await ext.get(b, scope, caller); if (xg !== undefined) return xg;
       var sites = await allSites(scope), view = await parseView(b, scope), result = AS.applyView(sites, view), byId = {};
       sites.forEach(function (s) { byId[s.siteId] = s; });
       if (b.export === 'csv') {
@@ -289,6 +293,7 @@ function make(deps) {
       await audit(scope, caller, b.restore ? 'site-restore' : 'site-archive', { siteId: ar.data.siteId });
       return { ok: true };
     }
+    var xp = await ext.post(action, b, scope, caller, now); if (xp !== undefined) return xp;
     throw err(400, 'Unknown action');
   });
 }

@@ -328,9 +328,9 @@ function exportCsv(sites) {
 
 /* ── Access: role → capability (spec §11.2) ──────────────────────────── */
 var CAPS = {
-  owner: ['read', 'edit', 'import', 'review', 'manageViews', 'archive', 'export', 'files', 'tasks'],
-  admin: ['read', 'edit', 'import', 'review', 'manageViews', 'archive', 'export', 'files', 'tasks'],
-  member: ['read', 'edit', 'import', 'manageViews', 'export', 'files', 'tasks'],
+  owner: ['read', 'edit', 'import', 'review', 'manageViews', 'archive', 'export', 'files', 'tasks', 'analyze', 'finance', 'crm', 'submit'],
+  admin: ['read', 'edit', 'import', 'review', 'manageViews', 'archive', 'export', 'files', 'tasks', 'analyze', 'finance', 'crm', 'submit'],
+  member: ['read', 'edit', 'import', 'manageViews', 'export', 'files', 'tasks', 'analyze', 'finance', 'crm'],
   viewer: ['read']
 };
 function capabilities(role, staff) { if (staff) return CAPS.owner.slice(); return (CAPS[role] || []).slice(); }

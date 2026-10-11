@@ -606,10 +606,10 @@ function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, 
    editorCtx, the ONE mirror of OmegaCaps.resolve: billed tier capped by
    capTier, JV grants, add-ons, a verified ClearSky address with no record
    runs 'internal'). A packaged workspace is its projection alone. */
-/* Workspace flags for hub pages behind a preview (Portfolio): the billing
-   record's toolOverrides, which only ClearSky writes. Display only; the
+/* Workspace flags for hub pages (Portfolio): ON for every workspace unless
+   the billing record's toolOverrides sets it false (ClearSky-only rollback). Display only; the
    page's API checks the same flag server-side. */
-function hubFlags() { var b = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null, o = b && b.toolOverrides || {}; return { 'portfolio-assets': o['portfolio-assets'] === true }; }
+function hubFlags() { var b = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null, o = b && b.toolOverrides || {}; return { 'portfolio-assets': o['portfolio-assets'] !== false }; }
 function hubCtx() { var c = hubCtxBase(); c.flags = hubFlags(); return c; }
 function hubCtxBase() {
   var pa = WS.packageAccess, packaged = !!(pa && pa.packaged), canOpen = function (k) { return open(tool(k)); };
