@@ -1121,7 +1121,7 @@ function areaDrawer(key) {
     if (r.page) return { key: 'p:' + r.href, name: r.name, sub: r.sub, href: r.href, icon: S.ICON.projects, onClick: r.href.charAt(0) === '#' ? function () { S.closeDrawer(); go(r.href.slice(1)); } : null };
     var t = tool(r.key); return { key: r.key, name: r.name, sub: r.sub, locked: r.locked, icon: toolIcon(t), href: r.locked ? null : (t.action ? null : href(t)), onClick: function () { S.closeDrawer(); launch(t); } };
   });
-  if (key === 'projects') rows = rows.concat(DATA.projects.slice(0, 6).map(function (p) { return { key: 'proj:' + p.id, name: p.name || 'Untitled', sub: (STAGE_LABEL[p.stage] || 'Candidate') + ' · ' + ago(p.updatedAt || p.createdAt), icon: S.ICON.projects, onClick: function () { openProject(p.id); } }; }));
+  if (key === 'projects') rows = rows.concat(DATA.projects.slice(0, 6).map(function (p) { return { key: 'proj:' + p.id, name: p.name || 'Untitled', sub: (STAGE_LABEL[p.stage] || 'Candidate') + ' · ' + ago(p.updatedAt || p.createdAt), icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>', onClick: function () { openProject(p.id); } }; }));
   var why = a.always ? 'Every workspace has this.' : a.logic ? 'Shown because this workspace holds Omega Logic ' + esc(a.label) + '.' : 'Shown because at least one of these tools is open on your plan. A locked one says what carries it.';
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: a.icon + ' ' + a.label, sub: a.hint, rows: rows, note: why + ' Showing a link is never access: every tool checks the same plan.', onLocked: function (r) { S.closeDrawer(); lockedDrawer(tool(r.key)); } });
 }
