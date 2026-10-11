@@ -142,7 +142,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
 <script>
 (function () {
   'use strict';
-  firebase.initializeApp(CFG.firebase);
+  firebase.initializeApp((window.CLEARSKY_CONFIG||window.CFG||{}).firebase);
   var auth = firebase.auth();
   var ORG = '', SITE = '', DATA = null, CANEDIT = false, CANARCHIVE = false, TAB = 'overview';
 
