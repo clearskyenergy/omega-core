@@ -68,8 +68,36 @@ select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12
 .spin{width:18px;height:18px;border:2px solid var(--cs-border);border-top-color:var(--cs-sky);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 .err{background:#FDF0EC;border:1px solid #F3C4B5;color:#B03A1E;border-radius:9px;padding:12px 16px;font-size:13px;margin:16px 0}
+.okmsg{background:#EDF7F6;border:1px solid #BFE3E0;color:#00736F;border-radius:9px;padding:12px 16px;font-size:13px;margin:16px 0}
+.li-meta{font-size:11.5px;color:var(--cs-sub)}
 .note{font-size:12px;color:var(--cs-sub);margin-top:14px;line-height:1.5}
 @media(max-width:900px){.tr{grid-template-columns:2fr 1fr 80px}.tr>div:nth-child(n+4){display:none}}
+.tb-burger{display:none;background:#fff;border:1px solid var(--sap-card-border);border-radius:8px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex:none;padding:0;margin-left:auto}
+.tb-burger svg{width:20px;height:20px;stroke:var(--sap-ink);stroke-width:2;fill:none;stroke-linecap:round}
+.tb-scrim{position:fixed;inset:0;background:rgba(8,25,40,.5);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.tb-scrim.open{opacity:1;pointer-events:auto}
+@media(max-width:900px){
+#topbar{height:54px;padding:0 12px;gap:8px}
+.tb-burger{display:flex}
+.tb-sep,.tb-portal,.tb-name{display:none}
+.tb-nav{position:fixed;top:0;right:0;bottom:0;left:auto;width:270px;max-width:82vw;height:100vh;height:100dvh;background:#fff;flex-direction:column;align-items:stretch;gap:0;margin:0;padding:64px 0 20px;box-shadow:-8px 0 30px rgba(0,0,0,.28);transform:translateX(100%);transition:transform .24s ease;z-index:1000;overflow-y:auto}
+.tb-nav.open{transform:translateX(0)}
+.tb-tab{height:auto;padding:15px 22px;border-bottom:1px solid var(--sap-card-border);border-left:3px solid transparent;font-size:15px;justify-content:flex-start}
+.tb-tab.active{border-bottom-color:var(--sap-card-border);border-left-color:var(--sap-blue);background:rgba(0,112,242,.06)}
+#main{padding:24px 14px 48px}
+.page-title{font-size:23px}
+.toolbar{flex-wrap:wrap}
+.search-wrap{flex:1 1 100%}
+.search-wrap input{font-size:16px;padding:12px 12px 12px 36px}
+select.fsel{flex:1;font-size:15px;padding:11px 12px}
+.cards{grid-template-columns:1fr 1fr}
+}
+@media(max-width:600px){
+#main{padding:20px 12px 44px}
+.page-title{font-size:20px}
+input[type=text],input[type=number],input[type=date],input[type=search],select,textarea{font-size:16px}
+#btn-add,#btn-import,#btn-export{flex:1}
+}
 </style>
 </head>
 <body>
@@ -92,7 +120,7 @@ select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12
   <div id="err"></div>
   <div class="cards" id="cards" style="display:none">
     <div class="card"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n">in this workspace's register</div></div>
-    <div class="card"><div class="k">Screened pods</div><div class="v" id="c-pods">–</div><div class="n">EVCS legacy proxy v1 · unverified</div></div>
+    <div class="card"><div class="k">Screened pods</div><div class="v" id="c-pods">–</div><div class="n">Screening proxy · unverified</div></div>
     <div class="card"><div class="k">Meter + 5-yr term</div><div class="v" id="c-qual">–</div><div class="n">sites passing the legacy screen filter</div></div>
     <div class="card"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
   </div>
@@ -110,9 +138,23 @@ select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12
       <option value="">Pods: any</option><option value="yes">Screened pods &gt; 0</option><option value="no">No screened pods</option>
     </select>
     <button class="btn-ghost" id="btn-add">+ Register site</button>
+    <button class="btn-ghost" id="btn-import">Import sites</button>
+    <button class="btn-ghost" id="btn-export">Download CSV</button>
   </div>
   <div class="tbl" id="tbl"><div class="loading"><div class="spin"></div>Loading the register…</div></div>
   <div class="note">Unknown values show as <i>Not provided</i> or <i>Needs verification</i>, never as zeros. Reported peak kW is an unresolved workbook statistic, flagged on each site, never approved capacity.</div>
+</div>
+
+<div id="import-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,32,.55);z-index:500;align-items:center;justify-content:center">
+  <div style="background:#fff;border-radius:14px;max-width:880px;width:94%;max-height:88vh;overflow:auto;padding:24px">
+    <div class="page-title" style="font-size:19px">Import sites</div>
+    <div class="page-sub" style="margin:6px 0 14px">Upload a CSV or XLSX of your sites. The first row must be headers. Every imported site lands in <b>this workspace only</b>; other workspaces never see it.</div>
+    <div id="im-msg"></div>
+    <div class="toolbar" style="margin:0 0 12px"><input type="file" id="im-file" accept=".csv,.xlsx,.xls,.txt"><span class="t-mut" id="im-filename"></span></div>
+    <div id="im-map"></div>
+    <div id="im-preview" style="margin-top:12px"></div>
+    <div class="toolbar" style="margin-top:16px"><button class="btn" id="im-go" disabled>Import</button><button class="btn-ghost" id="im-close">Cancel</button></div>
+  </div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -123,7 +165,7 @@ select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12
 <script>
 (function () {
   'use strict';
-  firebase.initializeApp((window.CLEARSKY_CONFIG||window.CFG||{}).firebase);
+  firebase.initializeApp(CFG.firebase);
   var auth = firebase.auth();
   var ORG = '', SITES = [], CANEDIT = false;
 
@@ -197,7 +239,7 @@ select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12
       rows.map(function (s) {
         var loc = [s.city, s.state].filter(Boolean).join(', ');
         return '<div class="tr body" data-id="' + esc(s.id) + '">' +
-          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc((s.externalSiteIds || {}).evcs ? 'EVCS ' + s.externalSiteIds.evcs : s.id) + '</div></div>' +
+          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc(function(){var e=s.externalSiteIds||{},k=Object.keys(e);return k.length?e[k[0]]:s.id;}()) + '</div></div>' +
           '<div class="t-num">' + (loc ? esc(loc) : '<span class="t-mut">Not provided</span>') + '</div>' +
           '<div class="t-num">' + (unk(s.installedKw) ? '<span class="t-mut">–</span>' : esc(s.installedKw)) + '</div>' +
           '<div class="t-num">' + (unk(s.reportedPeakKw) ? '<span class="t-mut">–</span>' : esc(s.reportedPeakKw) + (s.peakUnresolved ? ' <span class="pill pill-warn" title="Unresolved workbook statistic">?</span>' : '')) + '</div>' +
@@ -250,6 +292,223 @@ select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12
       OmegaTenant.boot().then(function () { ORG = org(); load(); }).catch(function () { ORG = org(); load(); });
     } else { ORG = org(); load(); }
   });
+
+  /* ── site import: CSV/XLSX into this workspace only ── */
+  var IMFIELDS = [
+    { key: 'name', label: 'Site name *', syn: ['name', 'sitename', 'site'] },
+    { key: 'city', label: 'City', syn: ['city', 'town'] },
+    { key: 'state', label: 'State', syn: ['state', 'province'] },
+    { key: 'address', label: 'Address', syn: ['address', 'street'] },
+    { key: 'installedKw', label: 'Installed kW', syn: ['installedkw', 'installed', 'nameplatekw', 'nameplate'] },
+    { key: 'reportedPeakKw', label: 'Reported peak kW', syn: ['peakkw', 'reportedpeak', 'peak'] },
+    { key: 'meterOwned', label: 'Meter owned (yes/no)', syn: ['meterowned', 'meter', 'meterownership'] },
+    { key: 'termYearsRemaining', label: 'Term years remaining', syn: ['termyearsremaining', 'term', 'yearsremaining'] },
+    { key: 'availablePowerMw', label: 'Available power (MW)', syn: ['availablepowermw', 'availablemw', 'availablepower'] },
+    { key: 'serviceCapacityKw', label: 'Service capacity (kW)', syn: ['servicecapacitykw', 'servicekw', 'servicecapacity'] },
+    { key: 'existingPeakKw', label: 'Existing peak (kW)', syn: ['existingpeak'] },
+    { key: 'powerPricePerKwh', label: 'Power price ($/kWh)', syn: ['powerpriceperkwh', 'powerprice'] },
+    { key: 'annualUsageKwh', label: 'Annual usage (kWh)', syn: ['annualusagekwh', 'annualkwh', 'annualusage'] },
+    { key: 'externalId', label: 'External ID (optional)', syn: ['externalid', 'siteid', 'id'] }
+  ];
+  var IMHEAD = [], IMDATA = [];
+  function imNorm(h) { return String(h == null ? '' : h).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function imAutoMap(h) {
+    var n = imNorm(h), f, s;
+    for (var i = 0; i < IMFIELDS.length; i++) {
+      f = IMFIELDS[i];
+      for (s = 0; s < f.syn.length; s++) if (f.syn[s] === n) return f.key;
+    }
+    return '';
+  }
+  function imMsg(html, ok) {
+    document.getElementById('im-msg').innerHTML = html ? '<div class="' + (ok ? 'okmsg' : 'err') + '" style="margin:0 0 12px">' + html + '</div>' : '';
+  }
+  function parseCSV(text) {
+    var rows = [], row = [], field = '', inQ = false, i, c;
+    for (i = 0; i < text.length; i++) {
+      c = text[i];
+      if (inQ) {
+        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
+        else field += c;
+      } else if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c !== '\r') field += c;
+    }
+    row.push(field);
+    if (!(row.length === 1 && row[0] === '')) rows.push(row);
+    return rows;
+  }
+  function loadSheetJS(cb) {
+    if (window.XLSX) return cb(null);
+    var s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload = function () { cb(null); };
+    s.onerror = function () { cb(new Error('Could not load the spreadsheet parser (network). Save the file as CSV and retry.')); };
+    document.head.appendChild(s);
+  }
+  function imRenderMap() {
+    var html = '<div class="li-meta" style="margin-bottom:6px">Match each column to a site field:</div><div class="tbl"><div class="tr head" style="grid-template-columns:1fr 1fr"><div>File column</div><div>Site field</div></div>';
+    html += IMHEAD.map(function (h, c) {
+      var opts = '<option value="">(skip)</option>' + IMFIELDS.map(function (f) {
+        return '<option value="' + f.key + '"' + (imAutoMap(h) === f.key ? ' selected' : '') + '>' + esc(f.label) + '</option>';
+      }).join('');
+      return '<div class="tr body" style="grid-template-columns:1fr 1fr;cursor:default"><div class="t-name">' + esc(h || ('Column ' + (c + 1))) + '</div>' +
+        '<div><select class="fsel" id="im-col-' + c + '" style="width:100%">' + opts + '</select></div></div>';
+    }).join('') + '</div>';
+    document.getElementById('im-map').innerHTML = html;
+    var prev = '<div class="li-meta" style="margin-bottom:6px">Preview (first 5 rows):</div><div class="tbl"><div class="tr head" style="grid-template-columns:repeat(' +
+      Math.min(IMHEAD.length, 4) + ',1fr)"><div>' + IMHEAD.slice(0, 4).map(esc).join('</div><div>') + '</div></div>';
+    prev += IMDATA.slice(1, 6).map(function (r) {
+      return '<div class="tr body" style="grid-template-columns:repeat(' + Math.min(IMHEAD.length, 4) + ',1fr);cursor:default"><div>' +
+        r.slice(0, 4).map(function (x) { return esc(String(x == null ? '' : x).slice(0, 40)); }).join('</div><div>') + '</div></div>';
+    }).join('') + '</div>';
+    document.getElementById('im-preview').innerHTML = prev;
+    document.getElementById('im-go').disabled = false;
+    imMsg('');
+  }
+  function imHandleFile(f) {
+    imMsg('');
+    document.getElementById('im-filename').textContent = f.name;
+    var done = function (rows) {
+      if (!rows || rows.length < 2) { imMsg('No data rows found. The first row must be headers.'); return; }
+      IMHEAD = rows[0].map(function (x) { return String(x == null ? '' : x).trim(); });
+      IMDATA = rows;
+      imMsg(rows.length - 1 + ' data rows found.', true);
+      imRenderMap();
+    };
+    if (/\.csv$/i.test(f.name) || f.type.indexOf('csv') >= 0 || /\.txt$/i.test(f.name)) {
+      var rd = new FileReader();
+      rd.onload = function () { done(parseCSV(String(rd.result))); };
+      rd.onerror = function () { imMsg('Could not read the file.'); };
+      rd.readAsText(f);
+    } else {
+      loadSheetJS(function (e) {
+        if (e) { imMsg(esc(e.message)); return; }
+        var rd2 = new FileReader();
+        rd2.onload = function () {
+          try {
+            var wb = XLSX.read(rd2.result, { type: 'array' });
+            var ws = wb.Sheets[wb.SheetNames[0]];
+            done(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }));
+          } catch (ex) { imMsg('Could not parse the spreadsheet: ' + esc(ex.message)); }
+        };
+        rd2.onerror = function () { imMsg('Could not read the file.'); };
+        rd2.readAsArrayBuffer(f);
+      });
+    }
+  }
+  function imBuildRows() {
+    var rows = [], c;
+    var map = IMHEAD.map(function (h, i) { var el = document.getElementById('im-col-' + i); return el ? el.value : ''; });
+    if (map.indexOf('name') < 0) { imMsg('Map one column to <b>Site name</b> before importing.'); return null; }
+    for (var i = 1; i < IMDATA.length; i++) {
+      var r = IMDATA[i], obj = {}, ext = '', empty = true;
+      for (c = 0; c < IMHEAD.length; c++) {
+        var key = map[c];
+        if (!key) continue;
+        var v = String(r[c] == null ? '' : r[c]).trim();
+        if (v !== '') empty = false;
+        if (key === 'externalId') { ext = v; continue; }
+        if (key === 'meterOwned') obj[key] = /^(y|yes|true|1|owned)$/i.test(v) ? true : (/^(n|no|false|0)$/i.test(v) ? false : null);
+        else obj[key] = v;
+      }
+      if (empty) continue;
+      if (ext) obj.externalSiteIds = { import: ext };
+      rows.push(obj);
+    }
+    return rows;
+  }
+  /* ── CSV download: the register as a spreadsheet ── */
+  function csvCell(v) {
+    if (v == null) return '';
+    var s = String(v);
+    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  document.getElementById('btn-export').addEventListener('click', function () {
+    var cols = [
+      ['Site name', 'name'], ['City', 'city'], ['State', 'state'], ['Address', 'address'],
+      ['Status', 'status'], ['Tags', function (s) { return (s.tags || []).join('; '); }],
+      ['Installed kW', 'installedKw'], ['Reported peak kW', 'reportedPeakKw'],
+      ['Meter owned', function (s) { return s.meterOwned == null ? '' : (s.meterOwned ? 'yes' : 'no'); }],
+      ['Term years remaining', 'termYearsRemaining'], ['Available power (MW)', 'availablePowerMw'],
+      ['Service capacity (kW)', 'serviceCapacityKw'], ['Existing peak (kW)', 'existingPeakKw'],
+      ['Power price ($/kWh)', 'powerPricePerKwh'], ['Annual usage (kWh)', 'annualUsageKwh'],
+      ['Screened pods', function (s) { return (s.screening || {}).pods == null ? '' : s.screening.pods; }],
+      ['External IDs', function (s) { var e = s.externalSiteIds || {}; return Object.keys(e).map(function (k) { return k + ':' + e[k]; }).join('; '); }],
+      ['Notes', 'notes']
+    ];
+    var lines = [cols.map(function (c) { return csvCell(c[0]); }).join(',')];
+    SITES.forEach(function (s) {
+      lines.push(cols.map(function (c) {
+        var v = typeof c[1] === 'function' ? c[1](s) : s[c[1]];
+        return csvCell(v);
+      }).join(','));
+    });
+    var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+    var a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'portfolio-sites-' + new Date().toISOString().slice(0, 10) + '.csv';
+    document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  });
+  document.getElementById('btn-import').addEventListener('click', function () {
+    var m = document.getElementById('import-modal');
+    m.style.display = 'flex';
+    imMsg(''); document.getElementById('im-map').innerHTML = ''; document.getElementById('im-preview').innerHTML = '';
+    document.getElementById('im-filename').textContent = ''; document.getElementById('im-go').disabled = true;
+    IMHEAD = []; IMDATA = [];
+  });
+  document.getElementById('im-close').addEventListener('click', function () {
+    document.getElementById('import-modal').style.display = 'none';
+  });
+  document.getElementById('im-file').addEventListener('change', function () {
+    if (this.files.length) imHandleFile(this.files[0]);
+    this.value = '';
+  });
+  document.getElementById('im-go').addEventListener('click', function () {
+    var rows = imBuildRows();
+    if (!rows) return;
+    if (!rows.length) { imMsg('No rows to import.'); return; }
+    if (rows.length > 500) { imMsg('At most 500 rows per import; split the file and retry.'); return; }
+    imMsg('Importing ' + rows.length + ' site(s)\u2026', true);
+    document.getElementById('im-go').disabled = true;
+    api('/api/site-crm', { method: 'POST', json: { org: ORG, action: 'site-import', rows: rows } })
+      .then(function (j) {
+        if (j.ok === false) {
+          imMsg('<b>Nothing was written.</b> Fix the flagged rows and re-import:<br>' +
+            (j.errors || []).map(function (e) { return 'Row ' + e.row + ': ' + esc(e.error); }).join('<br>') +
+            (j.errorCount > (j.errors || []).length ? '<br>\u2026and ' + (j.errorCount - j.errors.length) + ' more.' : ''));
+        } else {
+          imMsg('<b>' + j.imported + ' site(s) imported</b> into this workspace.', true);
+          load();
+        }
+        document.getElementById('im-go').disabled = false;
+      })
+      .catch(function (e) { imMsg(esc(e.message)); document.getElementById('im-go').disabled = false; });
+  });
+})();
+
+/* ── mobile nav drawer (same pattern as projects.html) ── */
+(function () {
+  var bar = document.getElementById('topbar'), nav = document.querySelector('.tb-nav');
+  if (!bar || !nav || document.getElementById('tb-burger')) return;
+  var b = document.createElement('button');
+  b.id = 'tb-burger'; b.className = 'tb-burger'; b.setAttribute('aria-label', 'Menu'); b.setAttribute('aria-expanded', 'false');
+  b.innerHTML = '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+  bar.appendChild(b);
+  var s = document.createElement('div'); s.className = 'tb-scrim'; s.id = 'tb-scrim'; document.body.appendChild(s);
+  var navHome = nav.parentNode, navNext = nav.nextSibling;
+  function closeNav() { nav.classList.remove('open'); s.classList.remove('open'); b.setAttribute('aria-expanded', 'false'); }
+  function toggleNav() { var o = nav.classList.toggle('open'); s.classList.toggle('open', o); b.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+  function place() {
+    if (window.innerWidth <= 900) { if (nav.parentNode !== document.body) document.body.appendChild(nav); }
+    else { closeNav(); if (nav.parentNode !== navHome) { if (navNext && navNext.parentNode === navHome) navHome.insertBefore(nav, navNext); else navHome.appendChild(nav); } }
+  }
+  place(); window.addEventListener('resize', place);
+  b.addEventListener('click', toggleNav); s.addEventListener('click', closeNav);
+  nav.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tb-tab')) closeNav(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(); });
 })();
 </script>
 </body>
