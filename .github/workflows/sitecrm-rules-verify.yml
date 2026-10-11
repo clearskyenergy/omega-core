@@ -17,8 +17,6 @@ jobs:
       run:
         shell: bash
         working-directory: source
-    env:
-      REVIEW_DIR: ${{ runner.temp }}/sitecrm-review
     steps:
       - uses: actions/checkout@v4
         with:
@@ -42,6 +40,8 @@ jobs:
       - name: Preserve the base and apply only the reviewed patch
         run: |
           set -euo pipefail
+          export REVIEW_DIR="$RUNNER_TEMP/sitecrm-review"
+          echo "REVIEW_DIR=$REVIEW_DIR" >> "$GITHUB_ENV"
           mkdir -p "$REVIEW_DIR"
           test "$(git hash-object firestore.rules)" = 'e8baddbdeace0400955a8225df8c7f7df488b301'
           cp firestore.rules "$REVIEW_DIR/baseline-firestore.rules"
