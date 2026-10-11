@@ -3108,3 +3108,82 @@ Regression: scripts/render-cleancell-pickers.js runs the actual editor
 functions and actual pad modal at 1280px and 390px, with map rendering, auth and
 network stubbed. It tests both orders, late tenant load, manual dimensions,
 identity/ratings, native placement, integrated PCS, custom entry and reopen.
+
+## 2026-10-11 — Portfolio & Assets on the workspace shell; the register acts on a selection
+
+`portfolio.html` and `site-crm.html` wear `omega-workspace-shell.js` (the
+rail with Portfolio on it, the switcher topbar, the side panel, the phone tab
+bar) instead of their own EnergyOS topbar; `OmegaWorkspaceShell.currentKey()`
+marks both pages Portfolio. The register had been stuck on "Loading…": the page
+started Firebase a second time after `omega-tenant.js` had, and the throw
+killed its boot before sign-in was read. Both pages now boot the way the
+marketplace does (the sign-in, then `OmegaTenant.onEntitlements`, with the
+address as the fallback workspace).
+
+The register reads each site's stored pro forma (`latestProforma`, which
+`proforma-run` now carries with capital, NPV, payback, pods and kW) and shows
+investor IRR, capital and payback per row; a row opens the side panel with the
+figures and the hand-offs. The checkboxes make a selection (shift-click for a
+range) and the action bar asks the endpoint per site: `send-to-editor` (ONE
+`projects/{id}` per site, in `omega-newproject.js`'s shape, `siteId` on the
+project and `projectId` on the site, idempotent), `send-to-finance` (ONE
+`fin_projects/{id}` per site in the financing portal's own shape: `open` with
+the investor capital as the ask when a scenario is on file, else a `draft`),
+`proforma-bulk`, `site-set-status`, `site-tag`, `site-archive` /
+`site-restore` (`?archived=1` lists them), `site-delete` (admin). Export IRR is
+a CSV of the selection; Export term sheets is one PDF per site from
+`GET /api/site-crm?agreement=1`: `api/_lib/site-agreement.js` composes the Site
+SPV term sheet from the record and the latest scenario (read, never invented;
+a blank is "Not provided"; an unsized site names no capital or return; the
+site's flags print as conditions) and renders it with the self-hosted pdf-lib
+(`vercel.json` bundles it for the function). Every page of it says DRAFT.
+
+Tests: `scripts/test-site-crm.js` (30, now on `npm test`); the workspace
+render check (`npm run check:workspace`, flow) boots the register and the site
+record on the Firebase double, answers `/api/site-crm` in the endpoint's
+shape, and asserts the shell, the stored IRR per row, the side panel, the
+action bar, a posted bulk action and the phone layout.
+
+**The compute IRR, the deck and the capital request (same day).** `site-model`
+(`api/_lib/site-model.js`: the ONE mapping from a site record to the Compute
+Site Pro Forma's input; what is missing is named, nothing defaulted) runs
+`compute-site.js` on the one finance engine behind the compute pro forma's own
+gate, stores the answer whole under `sites/{id}/models/{id}` and its figures
+as `latestModel`; `site-model-bulk` runs ten at a time. The site record's
+*Investor deck & capital* tab shows the IRR tool's headline tiles, the three
+structures and the SAME investor deck (`proforma-logic.js`, print to PDF);
+the register's IRR and Project cost columns read the model once it has run,
+and a `Capital` column reads the deal LIVE (`capitalJoin`): Not sent, Draft,
+Open · n offers, Funded (awarded). `send-to-finance` asks for the total
+project cost (`askOf`, `capitalRequest{}` on the deal). Grid Atlas takes
+`?q=<address>` and opens there. Tests: `scripts/test-site-crm.js` (34) and
+the render check's portfolio and site-record flows, which run the real model
+on the fixture site.
+
+**The asset-manager draft folded in (PR #286, same day).** One collection set,
+one door, one page: `api/_lib/portfolio/register.js` + `register-ext.js` (the
+draft's gateway, renamed onto `sites` and `site_*`, our `omega_audit`, our
+file records; `site-bridge.js` keeps the register's facts and the CRM's flat
+fields on one record) are mounted on `/api/site-crm` by `REG.owns(req)`.
+Folded: the previewed import with diff, conflicts and undo (EVCS intake by
+signature, the EVCS model package, the generic list; the `x:`-prefixed XLSX
+reader fix and the macro / external-link refusal), facts with provenance and
+review, saved views, portfolios, CSV export, power evidence and shared
+envelopes, interval coverage, bills and the review queue, versioned results
+with stale propagation, XIRR with no-root / multi-root disclosure,
+`legacyPod` on `proforma.js` (parity pinned offline; T26 on the private
+file), IQGEN as a separate set, finance packages with server-side gates and
+one private submission, the CRM pipeline (its follow-ups on the site CRM's
+own Today index), durable jobs, the workspace widget beside Pulse and the
+feed. Dropped: `asset_*`, `api/portfolio-assets.js`, `portfolio-assets.html`,
+the hub flag, the draft's page UI test, and our `scripts/import-evcs-sites.js`
+(the register's profile and `scripts/seed-evcs-portfolio.js` are the one
+importer). The site record gains *Power & bills* and the package + Terra
+cards on the capital tab; the register page sends a workbook through the
+previewed import and ranks positive IRRs first. `send-to-partner` mails a
+site to Terra Energy (the solar partner) with the address from the
+environment or the deal room's settings, never a constant. Tests:
+`npm run test:portfolio` (the draft's T01–T35 re-homed on the register
+module; the real-workbook suites skip without the private files).
+Before go-live: deploy `firestore.rules` by hand before or with the API; the
+EVCS seed refuses unless `omega_orgs/evcs.com` exists; close PR #286.

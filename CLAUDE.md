@@ -1141,6 +1141,83 @@ forward to the Modules page. Enterprise is "Contact for pricing":
 no Enterprise figure (the book keeps it for the contract). Design, launch
 order and the honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
 
+## Portfolio & Assets (2026-10-11)
+
+`portfolio.html` is the register of a workspace's energy SITES
+(`omega_orgs/{org}/sites`, Admin SDK only; `api/site-crm.js` is the ONE
+door, `site-crm.html` the one record). Both pages wear
+`omega-workspace-shell.js` (Portfolio is on the rail; `currentKey()` marks
+them) and boot the marketplace's way: sign-in, then
+`OmegaTenant.onEntitlements`, the address as the fallback. Never start
+Firebase a second time on a page that loads `omega-tenant.js`: that throw
+is what left the register on "Loading…". A site's figures are its STORED
+scenario, `latestProforma`, written only by `proforma-run` /
+`proforma-bulk` (`latestOf`): the register, the side panel, the CSV and
+the finance hand-off read it and never recompute. The selection's actions
+are the endpoint's, per site, idempotent on the hand-offs: `send-to-editor`
+makes ONE project per site (`siteId` ↔ `projectId`, the shape
+`omega-newproject.js` writes, `siteScopes` from the tags and the sizing);
+`send-to-finance` makes ONE `fin_projects` deal per site in the portal's
+own shape, `open` with the investor capital as the ask only when a scenario
+is on file, else `draft`. **The compute IRR and its presentation are the IRR
+tool's** (2026-10-11, Tommy: "this is the most important … print out an IRR and
+give us a similar presentation like we get from the IRR tool … it needs to
+match the style"): `site-model` maps the record to the Compute Site Pro
+Forma by ONE rule (`api/_lib/site-model.js inputFor`: the service on record,
+the chargers from the nameplate, the usage, the power price as a flat rate,
+the pods from the pod pro forma or the screening; a ZIP, a service figure or
+a pod count that is missing is NAMED, never defaulted), runs
+`compute-site.js model` behind the compute pro forma's own gate (Omega
+Compute / the tier, `computeAccess`), stores the engine's whole answer under
+`sites/{id}/models/{id}` and its figures as `latestModel` (`summaryOf`:
+after-tax IRR, total project cost = sources and uses, equity, debt, the
+three structures, the verdict). The site record's *Investor deck & capital*
+tab draws the SAME deck with `proforma-logic.js` (`OmegaProformaReport`)
+from `GET …&model=1` and prints it; the register's IRR column is that IRR
+once it has run (the pod case until then). **The capital request is the
+total project cost** (`askOf`): `send-to-finance` sends it as the deal's
+`ask` with `capitalRequest{}` on the deal, and the register reads the deal
+LIVE (`capitalJoin` → `site.capital`): open with offers, or FUNDED once a
+partner's offer is accepted (`awarded`). Grid Atlas opens at the site's
+address (`/grid-atlas.html?q=`). The Site SPV term sheet is
+`api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
+is pdf-lib, DRAFT on every page) behind `GET …&agreement=1`; it is never
+stored as a fact. **The register** (`api/_lib/portfolio/register.js` +
+`register-ext.js`, folded in from the asset-manager draft PR #286 on
+2026-10-11, mounted on the same door by `REG.owns(req)`): imports with a
+field-level diff, conflicts on reviewed facts and undo (the EVCS intake by
+its header signature, the EVCS model package that enriches and never
+creates, the generic list), facts with cell provenance and review, saved
+views, portfolios, CSV export, agreements / equipment / tasks, power
+evidence (headroom contract, PUE once, shared envelopes in a transaction,
+interval coverage, BESS energy budget), bills and their review queue,
+versioned results with stale propagation, scenarios on the one engine
+(`economics.legacyPod` runs `proforma.js monthlyFlows`; XIRR discloses
+no-root and multi-root; IQGEN is a separate set), finance packages with
+server-side gates and ONE private submission, the CRM pipeline and the
+widget. ONE collection set: the register's facts, flags, revision and
+lifecycle live on the CRM's `sites/{id}` record beside the flat fields
+(`site-bridge.js` normalize / flatten is the one bridge; `address` is one
+object, `addressLine()` reads either shape), its own records beside it as
+`site_*` (all stated in the rules), every write in `omega_audit`. ONE EVCS
+importer: the intake profile through import-preview / import-commit and
+`scripts/seed-evcs-portfolio.js` (dry run offline; `--apply` refuses
+without the org and `--confirm-org`); the data.json script is gone. The
+site record's *Power & bills* tab and the package on the capital tab are
+its UI; `portfolio.html` sends a workbook through the previewed import and
+ranks POSITIVE IRRs first (Tommy, 2026-10-11: "the point is to get positive
+IRRs"). **Terra Energy is the solar partner** (`api/_lib/partners.js`,
+`send-to-partner`): the site's facts, the compute case and the links mailed
+to the address in `TERRA_ENERGY_EMAIL` or `fin_settings/dealroom.orgs.terra`
+(never a constant; none → refused, nothing mailed), the sender in copy,
+recorded on the site (`partners.terra`) and in `partner_requests`, 25 a
+workspace a day; Terra funds its own package and is a partner, not the
+capital request. Held by `scripts/test-site-crm.js`, `npm run
+test:portfolio` (the draft's T01–T35 re-homed; T26 pinned offline) and the
+workspace render check's portfolio flow. `docs/PORTFOLIO-ASSET-MANAGER-PLAN.md`
+carries the fold-in status and the go-live steps (deploy the rules by hand
+first; verify the EVCS org exists before seeding; no accounts are made).
+
 ## Helios Intake (2026-09-30)
 
 **Helios Energy Advisors' first-pass checklist, filled from the project and

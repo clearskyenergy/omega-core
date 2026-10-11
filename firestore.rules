@@ -2279,7 +2279,55 @@ service cloud.firestore {
        api/my-sites.js, which judge every move against the one status
        machine; a browser that could write a site or a receipt could start a
        warranty it is not owed. Stated, like the two lines above. */
-    match /omega_orgs/{orgId}/sites/{siteId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/sites/{siteId} {
+      allow read, write: if false;
+      /* The site CRM and the portfolio register (api/site-crm.js on
+         api/_lib/portfolio/register.js): a site's contacts, activity log,
+         documents, pro forma scenarios, the compute model's stored answers,
+         agreements, equipment and tasks are read and written only through
+         the endpoint, which checks the caller's workspace role key by key.
+         A browser that could read a record could read an office-only
+         document; one that could write `shared` or `path` could show the
+         customer anything, or point a record at another site's bytes.
+         Stated, like the customers CRM above. */
+      match /contacts/{contactId}   { allow read, write: if false; }
+      match /activity/{activityId} { allow read, write: if false; }
+      match /files/{fileId}        { allow read, write: if false; }
+      match /proforma/{scenarioId} { allow read, write: if false; }
+      match /models/{modelId}      { allow read, write: if false; }
+      match /agreements/{id}       { allow read, write: if false; }
+      match /equipment/{id}        { allow read, write: if false; }
+      match /tasks/{id}            { allow read, write: if false; }
+    }
+    /* The site CRM's open follow-ups across every site (the portfolio Today
+       hub). Same rationale as crm_followups: written only by the endpoint,
+       which keys each entry to its site and activity. */
+    match /omega_orgs/{orgId}/sitecrm_followups/{followId} { allow read, write: if false; }
+    /* The portfolio register beside the sites (api/_lib/portfolio/register.js,
+       folded in from the asset-manager draft onto the one collection set):
+       import previews and undo images, saved views, portfolios, analysis
+       packages, shared power envelopes and the allocation ledger, tool
+       hand-offs, versioned results, bills and their review queue, assumption
+       sets, finance packages and the one private submission, durable jobs.
+       Customer contracts, rent and bills live here, so a browser reads nothing
+       directly; the endpoint checks the identity and the role on every call.
+       Stated, like the lines above. */
+    match /omega_orgs/{orgId}/site_imports/{importId}/{document=**} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_views/{viewId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_portfolios/{portfolioId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_analyses/{analysisId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_envelopes/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_allocations/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_handoffs/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_results/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_bills/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_assumption_sets/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_packages/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_submissions/{docId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/site_jobs/{docId} { allow read, write: if false; }
+    /* A site sent to a partner (Terra Energy's solar package; api/site-crm.js
+       send-to-partner): the record of what went where, and the day's count. */
+    match /omega_orgs/{orgId}/partner_requests/{requestId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
     /* Freight quotes (api/_lib/freight.js, api/logic-logistics.js): what a
