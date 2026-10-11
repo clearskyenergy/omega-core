@@ -104888,6 +104888,16 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     try{
       (S.shapes||[]).forEach(function(sh){
         if(!sh||sh.omegaCompute) return;
+        /* DER POI: the point where existing solar/DER connects. Compute
+           trenching should be able to tie into it, not just the raw
+           generation shapes. */
+        if(sh.eqId==='der_poi'||sh.eqId==='util_poi'){
+          var b=box(sh);
+          out.push({ id:sh.id, kind:'poi', kw:0,
+                     label:(sh.label||(sh.eqId==='der_poi'?'DER POI':'Utility POI')),
+                     cx:b.cx, cy:b.cy });
+          return;
+        }
         if(sh.kind==='dersolar'||sh.kind==='solar'||sh.kind==='derwind'||sh.kind==='deralt'){
           var b=box(sh);
           out.push({ id:sh.id, kind:sh.kind, kw:+sh.kw||0,
@@ -162538,16 +162548,19 @@ if (root.console && console.info) {
   }
 
   function buildAt(pt) {
-    var poly = null;
-    try { poly = boundary(); } catch (e) {}
-    if (poly && poly.length >= 3) return build();
-    /* No parcel: anchor the grid on the click. legacyPlace is the original
-       OmegaCompute.place, whose placeAt() takes that anchor. */
+    /* The user clicked a specific spot; the blocks go there. A boundary on
+       the site (e.g., the solar array's) must never dictate where compute
+       gets placed. Parcel packing via build() is only for auto-layout when
+       there is no click point at all. */
     try {
-      if (root.OmegaCompute && typeof root.OmegaCompute.placeAt === 'function') {
+      if (pt && root.OmegaCompute && typeof root.OmegaCompute.placeAt === 'function') {
         return root.OmegaCompute.placeAt(pt);
       }
     } catch (e) {}
+    /* No click point or placeAt unavailable: fall back to parcel packing. */
+    var poly = null;
+    try { poly = boundary(); } catch (e) {}
+    if (poly && poly.length >= 3) return build();
     return build();
   }
 
