@@ -20,8 +20,8 @@
      · a document's bytes are decided by their content, capped at 2 MB, kept
        in private Storage under sitecrm/{org}/{siteId}/{fileId} and served
        only by the endpoint; the path is never taken from the request
-     · the import is idempotent on externalSiteIds.evcs and never coerces a
-       blank meter to false or a whole-percent share to a fraction of itself
+     · the EVCS intake is imported by the register (scripts/tests/
+       tportfolioassets.js); the one mapping lives there
      · the pro forma reproduces the workbook case (tolerance 1e-7), reports
        "Not defined" when there is no IRR root (never 0%), and stores each
        run as an immutable scenario
@@ -38,6 +38,9 @@ var A = { db: function () { return db; }, safeOrg: function (v) { return /^[a-z0
   init: function () { throw new Error('the Admin SDK must not be reached in a test'); },
   FieldValue: function () { return { serverTimestamp: function () { return '2026-09-24T12:00:00Z'; } }; } };
 mock('../api/_lib/admin', A);
+/* no mailbox is reached: every send is recorded here */
+var MAILS = [], MAIL_FAIL = false;
+mock('../api/_lib/mail', { send: async function (to, subject, html, text, opts) { if (MAIL_FAIL) throw new Error('smtp down'); MAILS.push({ to: to, subject: subject, html: html, opts: opts }); return { ok: true }; }, esc: function (s) { return String(s == null ? '' : s).replace(/[&<>]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]; }); }, layout: function (t, b) { return '<title>' + t + '</title>' + b; }, row: function (k, v) { return '<tr><td>' + k + '</td><td>' + (v == null ? '\u2014' : v) + '</td></tr>'; } });
 /* Nothing in the site CRM deletes a document: a delete fails the test. */
 FD.Ref.prototype.delete = async function () { throw new Error('deleted ' + this.path); };
 var bucket = { file: function (p) { return {
@@ -46,7 +49,6 @@ var bucket = { file: function (p) { return {
 var I = require('../api/_lib/po-intake'); I.bucket = function () { return bucket; };
 var PF = require('../api/_lib/proforma');
 var siteCrm = require('../api/site-crm');
-var imp = require('./import-evcs-sites');
 
 var ORG = 'evcs.com', O = 'omega_orgs/' + ORG, SITE = 'evcs-335';
 function who(uid, orgId, extra) { return Object.assign({ uid: uid, email: uid + '@' + orgId, orgId: orgId, claims: { email_verified: true } }, extra || {}); }
@@ -176,30 +178,6 @@ function seed() {
   });
 
   console.log('\nimport mapping');
-  await test('the import is idempotent on externalSiteIds.evcs', async function () {
-    var a = imp.mapRow({ id: 335, name: 'A', city: 'LA', state: 'CA', term: 5, meter: true, installed: 100, peak: 95, rent: null, share: null, kwhshare: 0.05, reserve: 10, screen: 50, pods: 1 });
-    var b = imp.mapRow({ id: 335, name: 'A', city: 'LA', state: 'CA', term: 5, meter: true, installed: 100, peak: 95, rent: null, share: null, kwhshare: 0.05, reserve: 10, screen: 50, pods: 1 });
-    assert.equal(a.docId, b.docId);
-    assert.deepEqual(a.externalSiteIds, { evcs: '335' });
-    /* The seeded site already carries evcs:335, so a second run writes nothing. */
-    var have = {};
-    db.data.forEach(function (v, k) { var ids = (v.externalSiteIds || {}); if (ids.evcs) have[String(ids.evcs)] = true; });
-    var fresh = [a, b].filter(function (m) { return !have[m.externalSiteIds.evcs]; });
-    assert.equal(fresh.length, 0);
-  });
-  await test('import traps: blank meter stays unknown, whole-percent share becomes a fraction', async function () {
-    var m = imp.mapRow({ id: 202, name: 'B', city: 'X', state: 'CA', term: null, meter: null, installed: 50, peak: null, rent: null, share: 6, kwhshare: null, reserve: 0, screen: 0, pods: 0 });
-    assert.equal(m.meterOwned, null);
-    assert.equal(m.flags.meterUnknown, true);
-    assert.equal(m.commercial.revenueShare, 0.06);
-    assert.equal(m.reportedPeakKw, null);
-    assert.equal(m.peakUnresolved, false);
-    assert.equal(m.termYearsRemaining, null);
-    assert.equal(m.screening.label, 'EVCS legacy proxy v1');
-    var over = imp.mapRow({ id: 9, name: 'C', city: 'X', state: 'CA', term: 1, meter: false, installed: 100, peak: 120, rent: null, share: null, kwhshare: null, reserve: 0, screen: 0, pods: 0 });
-    assert.equal(over.flags.peakExceedsInstalled, true);
-    assert.equal(over.reportedPeakKw, 120);
-  });
 
   console.log('\npro forma');
   await test('the workbook case reproduces within 1e-7', async function () {
@@ -310,12 +288,6 @@ function seed() {
     assert.ok(audits('sitecrm-import').length >= 2);
     await rejects(call('POST', { action: 'site-import', rows: [{ name: 'X' }] }, VIEWER), 403);
     await rejects(call('POST', { action: 'site-import', rows: [] }, PM), 400);
-  });
-  await test('the EVCS seed script refuses non-EVCS orgs', async function () {
-    assert.equal(imp.checkSeedOrg('evcs.com', []), null);
-    assert.match(imp.checkSeedOrg('acme.com', []), /Refusing/);
-    assert.match(imp.checkSeedOrg('acme.com', ['--allow-other-org']), /WARNING/);
-    assert.deepEqual(imp.EVCS_SEED_ORGS, ['evcs.com']);
   });
 
   console.log('\nthe register\u2019s actions: hand-offs, exports, archive');
@@ -511,6 +483,41 @@ function seed() {
     assert.match(r.note, /1 compute model\(s\) run; 1 site\(s\) could not be modelled: B/);
     var many = []; for (var i = 0; i < 11; i++) many.push((await call('POST', { action: 'site-save', name: 'S' + i }, PM)).id);
     await rejects(call('POST', { action: 'site-model-bulk', ids: many, pods: 1 }, PM), 400, /at most 10/);
+  });
+
+  console.log('\nthe solar partner');
+  await test('send-to-partner mails Terra Energy the site facts and figures, records it on the site, caps the day, and refuses with no address', async function () {
+    var P = require('../api/_lib/partners');
+    assert.deepEqual(P.recipients('terra', {}, {}), { to: [], source: null });
+    assert.deepEqual(P.recipients('terra', { TERRA_ENERGY_EMAIL: 'solar@terra.example, ops@terra.example' }, {}), { to: ['solar@terra.example', 'ops@terra.example'], source: 'TERRA_ENERGY_EMAIL' });
+    assert.deepEqual(P.recipients('terra', {}, { orgs: { terra: ['pkg@terra.example'] } }).to, ['pkg@terra.example']);
+    MAILS = [];
+    await rejects(call('POST', { action: 'send-to-partner', ids: [SITE], partner: 'nobody' }, PM), 400, /Which partner/);
+    await rejects(call('POST', { action: 'send-to-partner', ids: [SITE], partner: 'terra' }, PM), 409, /no address/);
+    assert.equal(MAILS.length, 0, 'nothing mailed without an address');
+    db.seed('fin_settings/dealroom', { orgs: { terra: ['solar@terra.example'] } });
+    await call('POST', { action: 'site-save', id: SITE, name: 'The Elysian Apartments', city: 'Los Angeles', state: 'CA', serviceCapacityKw: 400, installedKw: 100, zip: '90012', powerPricePerKwh: 0.19 }, PM);
+    await call('POST', { site: SITE, action: 'site-model', pods: 2 }, PM);
+    await rejects(call('POST', { action: 'send-to-partner', ids: [SITE], partner: 'terra' }, VIEWER), 403);
+    var r = await call('POST', { action: 'send-to-partner', ids: [SITE], partner: 'terra', note: 'Roof is 40,000 sq ft, south facing.' }, PM);
+    assert.equal(r.sent.length, 1); assert.equal(r.sent[0].status, 'sent'); assert.deepEqual(r.to, ['solar@terra.example']); assert.match(r.note, /sent to Terra Energy/);
+    assert.equal(MAILS.length, 1); assert.equal(MAILS[0].to, 'solar@terra.example'); assert.equal(MAILS[0].opts.cc, 'pm@evcs.com'); assert.equal(MAILS[0].opts.replyTo, 'pm@evcs.com');
+    assert.match(MAILS[0].subject, /\[EVCS\] Terra Energy: The Elysian Apartments, Los Angeles, CA/);
+    assert.match(MAILS[0].html, /Roof is 40,000 sq ft/); assert.match(MAILS[0].html, /400 kW/); assert.match(MAILS[0].html, /Total project cost/); assert.match(MAILS[0].html, /Not provided/); assert.ok(!/undefined|NaN/.test(MAILS[0].html));
+    assert.match(MAILS[0].html, /site-crm\.html\?site=/);
+    var site = db.data.get(O + '/sites/' + SITE);
+    assert.equal(site.partners.terra.status, 'sent'); assert.deepEqual(site.partners.terra.to, ['solar@terra.example']);
+    var reqs = []; db.data.forEach(function (v, k) { if (k.indexOf(O + '/partner_requests/') === 0 && v.partner) reqs.push(v); });
+    assert.equal(reqs.length, 1); assert.equal(reqs[0].packet.compute.pods, 2); assert.equal(reqs[0].packet.power.serviceCapacityKw, 400);
+    assert.equal((await call('GET', {}, PM)).sites[0].partners.terra.status, 'sent');
+    assert.equal(audits('sitecrm-send-to-partner').length, 1);
+    var today = new Date().toISOString().slice(0, 10);
+    db.seed(O + '/partner_requests/count_' + today, { count: 25 });
+    await rejects(call('POST', { action: 'send-to-partner', ids: [SITE], partner: 'terra' }, PM), 429, /25 sites a day/);
+    db.seed(O + '/partner_requests/count_' + today, { count: 0 });
+    MAIL_FAIL = true;
+    await rejects(call('POST', { action: 'send-to-partner', ids: [SITE], partner: 'terra' }, PM), 502, /could not be sent/);
+    MAIL_FAIL = false;
   });
 
   console.log('\naudit');

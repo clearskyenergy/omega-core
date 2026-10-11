@@ -3159,3 +3159,31 @@ project cost (`askOf`, `capitalRequest{}` on the deal). Grid Atlas takes
 `?q=<address>` and opens there. Tests: `scripts/test-site-crm.js` (34) and
 the render check's portfolio and site-record flows, which run the real model
 on the fixture site.
+
+**The asset-manager draft folded in (PR #286, same day).** One collection set,
+one door, one page: `api/_lib/portfolio/register.js` + `register-ext.js` (the
+draft's gateway, renamed onto `sites` and `site_*`, our `omega_audit`, our
+file records; `site-bridge.js` keeps the register's facts and the CRM's flat
+fields on one record) are mounted on `/api/site-crm` by `REG.owns(req)`.
+Folded: the previewed import with diff, conflicts and undo (EVCS intake by
+signature, the EVCS model package, the generic list; the `x:`-prefixed XLSX
+reader fix and the macro / external-link refusal), facts with provenance and
+review, saved views, portfolios, CSV export, power evidence and shared
+envelopes, interval coverage, bills and the review queue, versioned results
+with stale propagation, XIRR with no-root / multi-root disclosure,
+`legacyPod` on `proforma.js` (parity pinned offline; T26 on the private
+file), IQGEN as a separate set, finance packages with server-side gates and
+one private submission, the CRM pipeline (its follow-ups on the site CRM's
+own Today index), durable jobs, the workspace widget beside Pulse and the
+feed. Dropped: `asset_*`, `api/portfolio-assets.js`, `portfolio-assets.html`,
+the hub flag, the draft's page UI test, and our `scripts/import-evcs-sites.js`
+(the register's profile and `scripts/seed-evcs-portfolio.js` are the one
+importer). The site record gains *Power & bills* and the package + Terra
+cards on the capital tab; the register page sends a workbook through the
+previewed import and ranks positive IRRs first. `send-to-partner` mails a
+site to Terra Energy (the solar partner) with the address from the
+environment or the deal room's settings, never a constant. Tests:
+`npm run test:portfolio` (the draft's T01–T35 re-homed on the register
+module; the real-workbook suites skip without the private files).
+Before go-live: deploy `firestore.rules` by hand before or with the API; the
+EVCS seed refuses unless `omega_orgs/evcs.com` exists; close PR #286.

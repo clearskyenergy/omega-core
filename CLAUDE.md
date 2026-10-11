@@ -1182,8 +1182,41 @@ partner's offer is accepted (`awarded`). Grid Atlas opens at the site's
 address (`/grid-atlas.html?q=`). The Site SPV term sheet is
 `api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
 is pdf-lib, DRAFT on every page) behind `GET …&agreement=1`; it is never
-stored as a fact. Held by `scripts/test-site-crm.js` and the workspace
-render check's portfolio flow.
+stored as a fact. **The register** (`api/_lib/portfolio/register.js` +
+`register-ext.js`, folded in from the asset-manager draft PR #286 on
+2026-10-11, mounted on the same door by `REG.owns(req)`): imports with a
+field-level diff, conflicts on reviewed facts and undo (the EVCS intake by
+its header signature, the EVCS model package that enriches and never
+creates, the generic list), facts with cell provenance and review, saved
+views, portfolios, CSV export, agreements / equipment / tasks, power
+evidence (headroom contract, PUE once, shared envelopes in a transaction,
+interval coverage, BESS energy budget), bills and their review queue,
+versioned results with stale propagation, scenarios on the one engine
+(`economics.legacyPod` runs `proforma.js monthlyFlows`; XIRR discloses
+no-root and multi-root; IQGEN is a separate set), finance packages with
+server-side gates and ONE private submission, the CRM pipeline and the
+widget. ONE collection set: the register's facts, flags, revision and
+lifecycle live on the CRM's `sites/{id}` record beside the flat fields
+(`site-bridge.js` normalize / flatten is the one bridge; `address` is one
+object, `addressLine()` reads either shape), its own records beside it as
+`site_*` (all stated in the rules), every write in `omega_audit`. ONE EVCS
+importer: the intake profile through import-preview / import-commit and
+`scripts/seed-evcs-portfolio.js` (dry run offline; `--apply` refuses
+without the org and `--confirm-org`); the data.json script is gone. The
+site record's *Power & bills* tab and the package on the capital tab are
+its UI; `portfolio.html` sends a workbook through the previewed import and
+ranks POSITIVE IRRs first (Tommy, 2026-10-11: "the point is to get positive
+IRRs"). **Terra Energy is the solar partner** (`api/_lib/partners.js`,
+`send-to-partner`): the site's facts, the compute case and the links mailed
+to the address in `TERRA_ENERGY_EMAIL` or `fin_settings/dealroom.orgs.terra`
+(never a constant; none → refused, nothing mailed), the sender in copy,
+recorded on the site (`partners.terra`) and in `partner_requests`, 25 a
+workspace a day; Terra funds its own package and is a partner, not the
+capital request. Held by `scripts/test-site-crm.js`, `npm run
+test:portfolio` (the draft's T01–T35 re-homed; T26 pinned offline) and the
+workspace render check's portfolio flow. `docs/PORTFOLIO-ASSET-MANAGER-PLAN.md`
+carries the fold-in status and the go-live steps (deploy the rules by hand
+first; verify the EVCS org exists before seeding; no accounts are made).
 
 ## Helios Intake (2026-09-30)
 

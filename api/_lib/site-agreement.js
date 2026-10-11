@@ -81,7 +81,7 @@ function compose(input) {
   sections.push({ heading: '2. The site', rows: [
     ['Site', text(site.name)],
     ['Location', has(loc) ? loc : NOT_PROVIDED],
-    ['Address', text(site.address)],
+    ['Address', text(typeof site.address === 'string' ? site.address : (site.address && site.address.street) || null)],
     ['Installed chargers', has(site.installedKw) ? kw(site.installedKw) + ' nameplate (not approved capacity)' : NOT_PROVIDED],
     ['Reported peak', has(site.reportedPeakKw) ? kw(site.reportedPeakKw) + (site.peakUnresolved ? ' (unresolved workbook statistic)' : '') : NOT_PROVIDED],
     ['Meter', site.meterOwned === true ? 'Owned by the host' : site.meterOwned === false ? 'Not owned by the host' : 'Unknown (needs verification)'],

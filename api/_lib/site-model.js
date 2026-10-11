@@ -87,7 +87,7 @@ function inputFor(site, over, ctx) {
   var annual = annualKwhOf(site), price = pos(site.powerPricePerKwh), ev = evOf(site, hostType), cm = site.commercial || {};
   var input = {
     site: { name: str(site.name, 120) || 'Site', host: str(site.name, 160), hostType: hostType, city: str(site.city, 80), zip: zip.slice(0, 5),
-            street: str(site.address, 160), sponsor: str(ctx.orgName, 120) },
+            street: str(typeof site.address === 'string' ? site.address : (site.address && site.address.street) || '', 160), sponsor: str(ctx.orgName, 120) },
     service: { kw: svc.kw },
     load: annual ? { annualKwh: annual } : {},
     ev: { ports: ev.ports, kwPerPort: ev.kwPerPort, existing: true, pattern: ev.pattern },

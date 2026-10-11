@@ -106,6 +106,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     <button class="tab" data-t="activity">Activity</button>
     <button class="tab" data-t="files">Files</button>
     <button class="tab" data-t="proforma">Pro forma</button>
+    <button class="tab" data-t="power">Power &amp; bills</button>
     <button class="tab" data-t="deck">Investor deck &amp; capital</button>
   </div>
   <div class="tabpane active" id="pane-overview"></div>
@@ -113,6 +114,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   <div class="tabpane" id="pane-activity"></div>
   <div class="tabpane" id="pane-files"></div>
   <div class="tabpane" id="pane-proforma"></div>
+  <div class="tabpane" id="pane-power"></div>
   <div class="tabpane" id="pane-deck"></div>
 </div>
 
@@ -283,7 +285,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<label class="fl">Host type (for the compute model)</label><select id="ef-hostType" class="inline" style="width:100%">' +
       [['', 'Not set (multifamily assumed)'], ['multifamily', 'Multifamily (house meter)'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']].map(function (o) { return '<option value="' + o[0] + '"' + ((s.hostType || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
       txtIn('ef-status', 'Status', s.status) +
-      txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + '</div><div>' +
+      txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + txtIn('ef-meters', 'Meter IDs (comma-separated; a bill must name one)', (s.meters || []).join(', ')) + '</div><div>' +
       numIn('ef-installedKw', 'Installed chargers (kW)', s.installedKw) + numIn('ef-reportedPeakKw', 'Reported peak (kW)', s.reportedPeakKw) +
       '<label class="fl">Meter owned</label><select id="ef-meterOwned" class="inline" style="width:100%">' +
       '<option value=""' + (s.meterOwned == null ? ' selected' : '') + '>Unknown</option>' +
@@ -316,7 +318,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         id: SITE,
         name: str('ef-name'), city: str('ef-city'), state: str('ef-state'), address: str('ef-address'), zip: str('ef-zip'), hostType: str('ef-hostType'),
         status: str('ef-status'), notes: str('ef-notes'),
-        tags: tg ? tg.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [],
+        tags: tg ? tg.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [], meters: str('ef-meters') || [],
         installedKw: num('ef-installedKw'), reportedPeakKw: num('ef-reportedPeakKw'),
         meterOwned: mv === '' ? null : mv === 'true',
         termYearsRemaining: num('ef-termYearsRemaining'),
@@ -673,7 +675,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   }
   function renderDeck() {
     var s = DATA.site;
-    document.getElementById('pane-deck').innerHTML = capitalCard(s) + modelForm(s) + resultsCard(s) + deckCard(s);
+    document.getElementById('pane-deck').innerHTML = capitalCard(s) + terraCard(s) + packageCard(s) + modelForm(s) + resultsCard(s) + deckCard(s);
+    wirePackage(); wireTerra();
     var send = document.getElementById('cap-send');
     if (send) send.addEventListener('click', function () {
       if (!confirm('Send this site to the finance marketplace? It is listed OPEN to approved capital partners with the total project cost as the ask.')) return;
@@ -696,6 +699,139 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   }
   window.addEventListener('resize', function () { if (TAB === 'deck' && MODEL) { clearTimeout(window._rz); window._rz = setTimeout(drawDeck, 200); } });
 
+  /* ── Power & bills: the register's evidence on this site ─────────────────
+     Power evidence (the approved import or service limit with its source,
+     the baseline, the reserve, an engineer's review) → verified headroom and
+     the pods that fit, classified proxy / interval / reviewed; interval data
+     → coverage; bills → the review queue (a meter mismatch, a missing field,
+     an estimated read or charges that do not reconcile block acceptance);
+     the host agreement's review for compute. Every figure is the server's
+     (api/_lib/portfolio/register.js); nothing is computed here. */
+  var BILLS = null;
+  function pwEl(id) { return document.getElementById(id); }
+  function regPost(action, body) { return api('/api/site-crm', { method: 'POST', json: Object.assign({ org: ORG, siteId: SITE, action: action }, body || {}) }); }
+  function renderPower() {
+    var s = DATA.site, pe = s.powerEvidence || {}, cls = pe.classification || null, hr = pe.headroom || null, fit = pe.fit || null, lim = pe.limits || {};
+    function val(v) { return v == null ? '' : String(v); }
+    function numIn(id, label, v, hint) { return '<div><label class="fl">' + label + '</label><input type="number" id="' + id + '" class="inline" value="' + esc(val(v)) + '" style="width:100%">' + (hint ? '<div class="li-meta">' + hint + '</div>' : '') + '</div>'; }
+    var h = '<div class="card"><h3>Power evidence <span class="li-meta">' + (cls ? esc(cls.label) : 'none yet') + '</span></h3>' +
+      '<div class="kpis">' + kpi(hr && hr.verifiedKw != null ? esc(Math.round(hr.verifiedKw).toLocaleString('en-US')) + ' kW' : '<span class="t-mut">Not provided</span>', 'verified headroom<br>' + (hr && hr.reason ? esc(hr.reason === 'UNKNOWN_LIMIT' ? 'no approved limit on record' : 'no baseline on record') : hr && hr.bindingLimit ? 'binding: ' + esc(hr.bindingLimit) : 'limit − baseline − commitments − reserve')) +
+      kpi(fit && fit.pods != null ? esc(fit.pods) : '<span class="t-mut">–</span>', 'pods that fit<br>' + (fit && fit.pods != null ? esc(fit.itKw) + ' kW IT · ' + esc(fit.facilityKw) + ' kW facility, PUE once' : 'after verified headroom')) +
+      kpi(cls ? esc(cls.level) : 'none', 'evidence level<br>proxy · interval · reviewed') +
+      kpi(pe.interval && pe.interval.coverage ? esc((pe.interval.coverage.coverage * 100).toFixed(0)) + '%' : '<span class="t-mut">none</span>', 'interval coverage<br>' + (pe.interval && pe.interval.coverage && pe.interval.coverage.completeYear ? 'a complete year' : 'no annual or firm claim without a full year')) + '</div>' +
+      (cls && cls.missing && cls.missing.length ? '<div class="assume">Still missing: ' + esc(cls.missing.join('; ')) + '.</div>' : '') +
+      (CANEDIT ? '<div class="grid2" style="margin-top:12px">' + numIn('pw-approved', 'Approved import limit (kW)', lim.approvedImport && lim.approvedImport.kw, 'the utility letter or one-line figure') +
+        '<div><label class="fl">Source of the limit</label><input type="text" id="pw-source" value="' + esc(val(lim.approvedImport && lim.approvedImport.source)) + '" style="width:100%" placeholder="utility letter 2026-09-12, one-line …"></div>' +
+        numIn('pw-service', 'Service limit (kW)', lim.service && lim.service.kw, 'optional, the service rating') + numIn('pw-baseline', 'Baseline load (kW)', pe.baseline && pe.baseline.kw, 'the building and the chargers today') +
+        numIn('pw-reserve', 'Reserve (kW)', pe.reserveKw, 'held back for the host') +
+        '<div><label class="fl">Engineer’s review</label><input type="text" id="pw-signed" value="' + esc(val(pe.review && pe.review.signedBy)) + '" style="width:100%" placeholder="signed by (PE)"><input type="date" id="pw-valid" value="' + esc(val(pe.review && pe.review.validUntil)) + '" style="width:100%;margin-top:6px"><div class="li-meta">a signed review with a date makes the evidence reviewed</div></div>' +
+        '<label style="font-size:12.5px;display:flex;gap:6px;align-items:center"><input type="checkbox" id="pw-topology"' + (pe.topologyConfirmed ? ' checked' : '') + '> Service / meter / transformer path confirmed</label>' +
+        '</div><div class="row" style="margin-top:12px"><button class="btn" id="pw-save">' + (CANARCHIVE ? 'Save power evidence' : 'Save (an administrator reviews)') + '</button><span class="li-meta">Nameplate is never treated as approval; an unknown limit leaves headroom blank.</span></div>' : '') + '</div>';
+    h += '<div class="card"><h3>Interval data</h3><div class="li-meta">A CSV with a kW column (last column), 15-minute intervals unless set. Partial or charging-only data earns no annual energy or firm-capacity claim.</div>' +
+      (CANEDIT ? '<div class="row" style="margin-top:8px"><input type="file" id="iv-file" accept=".csv,.txt"><label class="fl" style="margin:0">Minutes</label><input type="number" id="iv-min" class="inline" value="15" style="width:70px"><label style="font-size:12.5px"><input type="checkbox" id="iv-active"> reports only while charging</label><button class="btn-ghost" id="iv-go">Upload</button></div>' : '') +
+      (pe.interval && pe.interval.coverage ? '<div class="assume">' + esc(pe.interval.coverage.intervals.toLocaleString('en-US')) + ' intervals · peak ' + esc(pe.interval.coverage.peakKw) + ' kW' + (pe.interval.coverage.annualKwh != null ? ' · ' + esc(Math.round(pe.interval.coverage.annualKwh).toLocaleString('en-US')) + ' kWh a year' : '') + (pe.interval.coverage.warnings.length ? ' · ' + esc(pe.interval.coverage.warnings.join('; ')) : '') + '</div>' : '') + '</div>';
+    h += '<div class="card"><h3>Bills <span class="li-meta">entered, then reviewed; an accepted bill is what a finance package needs</span></h3><div id="bill-list"><div class="li-meta">Loading…</div></div>' +
+      (CANEDIT ? '<div class="grid2" style="margin-top:12px"><div><label class="fl">Period start</label><input type="date" id="bl-start" style="width:100%"><label class="fl">Period end</label><input type="date" id="bl-end" style="width:100%"><label class="fl">Meter</label><input type="text" id="bl-meter" style="width:100%" placeholder="' + esc((s.meters || []).join(', ') || 'meter id on the bill') + '"></div>' +
+        '<div><label class="fl">kWh</label><input type="number" id="bl-kwh" style="width:100%"><label class="fl">Billed kW (demand)</label><input type="number" id="bl-kw" style="width:100%"><label class="fl">Total ($)</label><input type="number" id="bl-total" step="0.01" style="width:100%"><label style="font-size:12.5px;display:block;margin-top:8px"><input type="checkbox" id="bl-est"> estimated read</label></div></div>' +
+        '<div class="row" style="margin-top:10px"><button class="btn" id="bl-save">Enter bill</button><span class="li-meta">Meters on record: ' + esc((s.meters || []).join(', ') || 'none (set them on the Overview tab)') + '</span></div>' : '') + '</div>';
+    h += '<div class="card"><h3>Site control for compute</h3><div class="li-meta">The finance package needs the host agreement reviewed with compute permitted. An administrator records the review.</div>' +
+      (CANARCHIVE ? '<div class="row" style="margin-top:8px"><label style="font-size:12.5px"><input type="checkbox" id="ag-signed" checked> signed</label><label style="font-size:12.5px"><input type="checkbox" id="ag-compute" checked> compute permitted</label><label class="fl" style="margin:0">Ends</label><input type="date" id="ag-end" class="inline"><button class="btn-ghost" id="ag-save">Record the reviewed agreement</button></div>' : '') + '<div id="ag-state" class="li-meta" style="margin-top:6px"></div></div>';
+    document.getElementById('pane-power').innerHTML = h;
+    var save = pwEl('pw-save');
+    if (save) save.addEventListener('click', function () {
+      function n(id) { var v = pwEl(id).value.trim(); return v === '' ? null : Number(v); }
+      var limits = {}; if (n('pw-approved') != null) limits.approvedImport = { kw: n('pw-approved'), source: pwEl('pw-source').value.trim() }; if (n('pw-service') != null) limits.service = { kw: n('pw-service') };
+      var body = { expectedRevision: s.revision, limits: limits, required: ['approvedImport'], baselineKw: n('pw-baseline'), reserveKw: n('pw-reserve') || 0, topologyConfirmed: pwEl('pw-topology').checked };
+      if (pwEl('pw-signed').value.trim()) body.review = { signedBy: pwEl('pw-signed').value.trim(), validUntil: pwEl('pw-valid').value };
+      msg('Saving…', true);
+      regPost('power-evidence', body).then(function (j) { msg('Power evidence saved: ' + esc(j.powerEvidence.classification.label) + (j.powerEvidence.verifiedKw != null ? ', ' + esc(Math.round(j.powerEvidence.verifiedKw)) + ' kW verified headroom, ' + esc(j.powerEvidence.fit.pods) + ' pod(s) fit' : '') + '.', true); load(true); }).catch(function (e) { msg(esc(e.message)); });
+    });
+    var iv = pwEl('iv-go');
+    if (iv) iv.addEventListener('click', function () {
+      var f = pwEl('iv-file').files[0]; if (!f) { msg('Choose the interval CSV first.'); return; }
+      var rd = new FileReader(); rd.onload = function () { msg('Reading…', true); regPost('interval-upload', { csv: String(rd.result), intervalMin: Number(pwEl('iv-min').value) || 15, activeOnly: pwEl('iv-active').checked }).then(function (j) { msg('Interval coverage ' + esc((j.coverage.coverage * 100).toFixed(1)) + '% of a year' + (j.coverage.warnings.length ? ': ' + esc(j.coverage.warnings.join('; ')) : '') + '.', true); load(true); }).catch(function (e) { msg(esc(e.message)); }); };
+      rd.readAsText(f);
+    });
+    var bs = pwEl('bl-save');
+    if (bs) bs.addEventListener('click', function () {
+      function n(id) { var v = pwEl(id).value.trim(); return v === '' ? undefined : Number(v); }
+      var entered = { periodStart: pwEl('bl-start').value || undefined, periodEnd: pwEl('bl-end').value || undefined, meterId: pwEl('bl-meter').value.trim() || undefined, kwh: n('bl-kwh'), billedKw: n('bl-kw'), totalUsd: n('bl-total') };
+      if (pwEl('bl-est').checked) entered.estimatedRead = true;
+      msg('Saving…', true);
+      regPost('bill-save', { manual: true, entered: entered }).then(function (j) { msg('Bill entered: ' + esc(j.bill.state) + (j.bill.problems.length ? ' · ' + esc(j.bill.problems.join(', ')) : ' · ready for review'), true); loadBills(); }).catch(function (e) { msg(esc(e.message)); });
+    });
+    var ag = pwEl('ag-save');
+    if (ag) ag.addEventListener('click', function () {
+      msg('Recording…', true);
+      regPost('agreement-upsert', { agreement: { type: 'site_host_agreement', label: 'Site host agreement (reviewed)', signed: pwEl('ag-signed').checked, computePermitted: pwEl('ag-compute').checked, reviewStatus: 'reviewed', endDate: pwEl('ag-end').value || null } }).then(function (j) { msg('Agreement recorded: ' + esc(j.record.termDisplay) + '.', true); loadAgreement(); }).catch(function (e) { msg(esc(e.message)); });
+    });
+    loadBills(); loadAgreement();
+  }
+  function loadAgreement() {
+    api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(SITE) + '&register=1').then(function (j) {
+      var ok = (j.agreements || []).filter(function (a) { return a.reviewStatus === 'reviewed' && a.computePermitted === true; })[0], el = pwEl('ag-state');
+      if (el) el.innerHTML = ok ? '<span class="pill pill-ok">Reviewed · compute permitted</span> ' + esc(ok.termDisplay || '') : (j.agreements || []).length ? '<span class="pill pill-warn">' + esc(j.agreements[0].termDisplay || 'Needs agreement review') + '</span>' : 'No agreement on record.';
+    }).catch(function () {});
+  }
+  function loadBills() {
+    api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&bills=all').then(function (j) {
+      BILLS = (j.bills || []).filter(function (b) { return b.siteId === SITE; }).sort(function (a, b) { return (a.entered.periodStart || '') < (b.entered.periodStart || '') ? 1 : -1; });
+      var el = pwEl('bill-list'); if (!el) return;
+      el.innerHTML = BILLS.length ? BILLS.map(function (b) {
+        var e = b.entered || {}, pill = b.state === 'accepted' ? 'pill-ok' : b.state === 'rejected' ? 'pill-no' : 'pill-warn';
+        return '<div class="list-item"><div class="li-head"><span class="pill ' + pill + '">' + esc(b.state) + '</span><span class="li-title">' + esc((e.periodStart || '?') + ' → ' + (e.periodEnd || '?')) + '</span><span class="li-meta">' + esc(e.meterId || 'no meter') + ' · ' + (e.kwh != null ? esc(e.kwh.toLocaleString('en-US')) + ' kWh' : 'kWh?') + (e.totalUsd != null ? ' · $' + esc(e.totalUsd) : '') + '</span></div>' +
+          (b.problems && b.problems.length ? '<div class="li-meta">' + esc(b.problems.join(', ')) + '</div>' : '') +
+          (CANARCHIVE && b.state !== 'accepted' && b.state !== 'rejected' ? '<div class="row" style="margin-top:6px;margin-bottom:0"><button class="btn-ghost" data-bill-accept="' + esc(b.id) + '">Accept</button><button class="btn-danger" data-bill-reject="' + esc(b.id) + '">Reject</button></div>' : '') + '</div>';
+      }).join('') : '<div class="li-meta">No bills entered yet.</div>';
+      Array.prototype.forEach.call(el.querySelectorAll('[data-bill-accept]'), function (bt) { bt.addEventListener('click', function () { regPost('bill-review', { billId: bt.getAttribute('data-bill-accept'), accept: true }).then(function (j) { msg(j.ok ? 'Bill ' + esc(j.state) + '.' : esc(j.message + ': ' + (j.problems || []).join(', ')), !!j.ok); loadBills(); }).catch(function (e) { msg(esc(e.message)); }); }); });
+      Array.prototype.forEach.call(el.querySelectorAll('[data-bill-reject]'), function (bt) { bt.addEventListener('click', function () { var why = window.prompt('Reason:'); if (why == null) return; regPost('bill-review', { billId: bt.getAttribute('data-bill-reject'), reject: true, reason: why }).then(function () { msg('Bill rejected.', true); loadBills(); }).catch(function (e) { msg(esc(e.message)); }); }); });
+    }).catch(function (e) { var el = pwEl('bill-list'); if (el) el.innerHTML = '<div class="li-meta">' + esc(e.message) + '</div>'; });
+  }
+
+  /* ── the finance package: the gates the server checks at prepare and again inside the submission, and the one private submission ── */
+  function packageCard(s) {
+    return '<div class="card" id="package-card"><h3>Finance package <span class="li-meta">the diligence gate: map, reviewed bills, site control, power evidence, a current compute case</span></h3>' +
+      '<div id="pkg-body"><div class="li-meta">Loading…</div></div>' +
+      (CANEDIT ? '<div class="row" style="margin-top:10px"><button class="btn-ghost" id="pkg-map">Sync Site Map</button><button class="btn" id="pkg-prepare">Prepare the package</button>' + (CANARCHIVE ? '<button class="btn-ghost" id="pkg-submit" disabled>Submit (private)</button>' : '') + '</div>' : '') +
+      '<div class="assume">Submission is private: one snapshot per package, never published or mailed by itself. The capital request above is the marketplace listing; this is what a partner diligences.</div></div>';
+  }
+  var PKG = null;
+  function loadPackage() {
+    api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&packages=1').then(function (j) {
+      PKG = (j.packages || []).filter(function (p) { return p.siteId === SITE; }).sort(function (a, b) { return (a.preparedAt || '') < (b.preparedAt || '') ? 1 : -1; })[0] || null;
+      drawPackage();
+    }).catch(function (e) { var el = document.getElementById('pkg-body'); if (el) el.innerHTML = '<div class="li-meta">' + esc(e.message) + '</div>'; });
+  }
+  function drawPackage() {
+    var el = document.getElementById('pkg-body'), sub = document.getElementById('pkg-submit'); if (!el) return;
+    if (!PKG) { el.innerHTML = '<div class="li-meta">No package prepared yet. Prepare one to see which gates are open and which are closed.</div>'; if (sub) sub.disabled = true; return; }
+    var g = PKG.gates || { ok: false, codes: [] };
+    el.innerHTML = '<div class="cap-state"><span class="pill ' + (PKG.status === 'submitted' ? 'pill-funded' : g.ok ? 'pill-ok' : PKG.status === 'stale' ? 'pill-warn' : 'pill-unk') + '">' + esc(PKG.status === 'submitted' ? 'Submitted (private)' : PKG.status === 'stale' ? 'Stale: ' + (PKG.staleReason || 'inputs changed') : g.ok ? 'Ready to submit' : (g.codes.length + ' gate(s) closed')) + '</span><span class="li-meta">prepared ' + esc(String(PKG.preparedAt || '').slice(0, 10)) + (g.partialHistory ? ' · ' + esc(g.partialHistory) : '') + '</span></div>' +
+      (g.codes.length ? '<ul style="margin:8px 0 0 18px;font-size:13px;line-height:1.6">' + g.codes.map(function (c) { return '<li><b>' + esc(c.code) + '</b>: ' + esc(c.fix) + '</li>'; }).join('') + '</ul>' : '');
+    if (sub) sub.disabled = !(g.ok && PKG.status === 'draft');
+  }
+  function wirePackage() {
+    var pm = document.getElementById('pkg-map'), pp = document.getElementById('pkg-prepare'), ps = document.getElementById('pkg-submit');
+    if (pm) pm.addEventListener('click', function () { msg('Reading the Site Map…', true); regPost('map-sync', { markReviewed: CANARCHIVE }).then(function (j) { msg('Site Map: ' + esc(j.map.state) + (j.revision ? ' · revision ' + esc(j.revision) : '') + '.', true); loadPackage(); }).catch(function (e) { msg(esc(e.message)); }); });
+    if (pp) pp.addEventListener('click', function () { msg('Checking the gates…', true); regPost('package-prepare', { scenarioId: 'sc_compute' }).then(function (j) { PKG = j.package; drawPackage(); msg(j.package.gates.ok ? 'Every gate is open: the package is ready to submit.' : (j.package.gates.codes.length + ' gate(s) are closed; each says what to do.'), j.package.gates.ok); }).catch(function (e) { msg(esc(e.message)); }); });
+    if (ps) ps.addEventListener('click', function () { if (!PKG || !window.confirm('Submit this package? One private snapshot is recorded; nothing is published or mailed.')) return; regPost('package-submit', { packageId: PKG.id, confirm: true }).then(function (j) { msg(j.duplicate ? 'Already submitted.' : 'Submitted: one private snapshot (' + esc(j.submission.publication.state) + ').', true); loadPackage(); }).catch(function (e) { msg(esc(e.message)); }); });
+    loadPackage();
+  }
+  function terraCard(s) {
+    var t = s.partners && s.partners.terra;
+    return '<div class="card" id="terra-card"><h3>Terra Energy <span class="li-meta">the solar partner: a solar package and detail for the site</span></h3>' +
+      '<div class="cap-state">' + (t ? '<span class="pill pill-ok">Sent ' + esc(String(t.sentAt || '').slice(0, 10)) + '</span><span class="li-meta">to ' + esc((t.to || []).join(', ')) + ' by ' + esc(t.by || '') + (t.status === 'not-sent' ? ' · no mailbox was configured, so it is recorded only' : '') + '</span>' : '<span class="pill pill-unk">Not sent</span><span class="li-meta">Terra usually funds its own package; it is one of the partners, not the capital request.</span>') + '</div>' +
+      (CANEDIT ? '<div class="row" style="margin-top:10px"><input type="text" id="terra-note" placeholder="A note for Terra (roof, land, what you want sized)" style="flex:1;min-width:220px"><button class="btn" id="terra-send">' + (t ? 'Send to Terra again' : 'Send to Terra Energy') + '</button></div>' : '') + '</div>';
+  }
+  function wireTerra() {
+    var b = document.getElementById('terra-send'); if (!b) return;
+    b.addEventListener('click', function () {
+      if (!window.confirm('Send this site to Terra Energy for a solar package? They receive the site facts, the compute case on file and a link to the record, with you in copy.')) return;
+      msg('Sending…', true);
+      api('/api/site-crm', { method: 'POST', json: { org: ORG, action: 'send-to-partner', partner: 'terra', ids: [SITE], note: document.getElementById('terra-note').value } }).then(function (j) { msg(esc(j.note), true); load(true); }).catch(function (e) { msg(esc(e.message)); });
+    });
+  }
+
   /* ── boot ── */
   function showTab(t) {
     TAB = t;
@@ -706,6 +842,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (t === 'activity') renderActivity();
     if (t === 'files') renderFiles();
     if (t === 'proforma') renderProforma();
+    if (t === 'power') renderPower();
     if (t === 'deck') renderDeck();
   }
   function load(keepTab) {
@@ -714,7 +851,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       DATA = j; CANEDIT = !!j.canEdit; CANARCHIVE = !!j.canArchive;
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
       renderHead();
-      showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : 'overview'));
+      showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : window.location.hash === '#power' ? 'power' : 'overview'));
     }).catch(function (e) {
       document.getElementById('site-head').innerHTML = '<div class="err">' + esc(e.message) + '</div>';
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {}

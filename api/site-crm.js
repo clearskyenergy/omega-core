@@ -35,6 +35,24 @@
    GET  /api/site-crm?org=&site=&agreement=1 the site's SPV term sheet (PDF,
                        DRAFT; api/_lib/site-agreement.js) as an attachment
    GET  /api/site-crm?org=&archived=1        the register WITH archived sites
+   THE REGISTER (api/_lib/portfolio/register.js, folded in from the asset-
+   manager draft, on this same collection) answers through this door:
+     GET  ?view=|?viewId=|?export=csv|?views=1|?imports=1|?analyses=1|
+          ?portfolios=1|?shortlist=|?handoff=|?bills=1|?results=|
+          ?assumptionSets=1|?packages=1|?job=|?performance=1|?widget=1|
+          ?pipeline=1|?crm=
+     POST import-preview / import-commit / import-undo (a workbook or CSV:
+          the EVCS intake by its header signature, the EVCS model package,
+          or the generic site list; a field-level diff, conflicts on
+          reviewed facts, undo), field-review, agreement-upsert,
+          equipment-upsert, task-upsert, file-attach, view-save,
+          view-delete, portfolio-save, site-archive {siteId,
+          expectedRevision}, shortlist-create-projects, power-evidence,
+          interval-upload, envelope-save, allocation-reserve, bess-check,
+          handoff, handoff-result, map-sync, bill-save, bill-review,
+          assumption-set-import, scenario-run, portfolio-irr,
+          package-prepare, package-submit, crm-link, activity-log,
+          job-start, job-step, job-cancel
 
    Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
      site-archive / site-restore    hide from, or return to, the register
@@ -60,6 +78,13 @@
                        the site as latestModel). The gate is the compute
                        pro forma's (Omega Compute / the tier).
      site-model-bulk { ids, …the same }  at most 10 a call
+     send-to-partner { ids, partner: 'terra', note? }
+                       the site's facts, figures and links mailed to a
+                       development partner (api/_lib/partners.js: Terra
+                       Energy's solar package); recorded on the site
+                       (partners.<key>) and in partner_requests; 25 a
+                       workspace a day; no address configured → refused,
+                       nothing mailed
    GET  /api/site-crm?org=&site=&model=1   the latest model's full answer
                        (the deck's input) with the workspace's deck brand
      proforma-bulk { sizeFromPower:true | pods, discountRateAnnual?,
@@ -85,11 +110,14 @@
 var A = require('./_lib/admin'), C = require('./_lib/crm'), PF = require('./_lib/proforma');
 var I = require('./_lib/po-intake'), G = require('./_lib/site-agreement');
 var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA = require('./_lib/package-access'), CP = require('./compute-proforma'), DECK = require('./_lib/deck-brand');
+var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge');
+var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
+var PARTNER_DAILY_CAP = 25;
 
 var EDITORS = ['owner', 'admin', 'member'], ADMINS = ['owner', 'admin'];
 var LIST_CAP = 200, FOLLOW_SCAN = 2000, FOLLOW_CAP = 200, SCAN = 500;
 var PROFORMA_CAP = 25, BULK_CAP = 200;
-var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-tag', 'send-to-editor', 'send-to-finance', 'proforma-bulk', 'site-model-bulk'];
+var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk'];
 var MODEL_BULK_CAP = 10, PLATFORM = 'ClearSky-OMEGA';
 
 /* level: 'read' | 'write' | 'admin'. The caller's org comes from the verified
@@ -167,6 +195,7 @@ function siteInput(b) {
     usageNotes: C.text(b.usageNotes, 2000, 'Usage notes', { multiline: true }),
     zip: optZip(b.zip),
     hostType: optEnum(b.hostType, SM.HOST_TYPES, 'Host type'),
+    meters: tagList(b.meters),
     status: C.text(b.status, 60, 'Status'),
     notes: C.text(b.notes, 4000, 'Notes', { multiline: true }),
     externalSiteIds: ids,
@@ -176,7 +205,7 @@ function siteInput(b) {
 function siteView(id, s) {
   s = s || {};
   return {
-    id: id, name: s.name || '', city: s.city || '', state: s.state || '', address: s.address || '',
+    id: id, name: s.name || '', city: s.city || '', state: s.state || '', address: BR.addressLine(s),
     installedKw: s.installedKw == null ? null : Number(s.installedKw),
     reportedPeakKw: s.reportedPeakKw == null ? null : Number(s.reportedPeakKw),
     peakDefinition: s.peakDefinition || null,
@@ -193,11 +222,12 @@ function siteView(id, s) {
     screening: s.screening || null,
     status: s.status || '', notes: s.notes || '',
     latestProforma: s.latestProforma || null,
-    zip: s.zip || null, hostType: s.hostType || null,
+    zip: s.zip || null, hostType: s.hostType || null, meters: Array.isArray(s.meters) ? s.meters : [],
     latestModel: s.latestModel || null,
     projectId: s.projectId || null, projectAt: C.iso(s.projectAt),
     finProjectId: s.finProjectId || null, finProjectAt: C.iso(s.finProjectAt), finProjectStatus: s.finProjectStatus || null,
     archived: s.archived === true, archivedAt: C.iso(s.archivedAt),
+    partners: s.partners || null, revision: s.revision || 1,
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
     createdAt: C.iso(s.createdAt), createdBy: s.createdBy || null,
     updatedAt: C.iso(s.updatedAt), updatedBy: s.updatedBy || null,
@@ -379,7 +409,11 @@ var handler = A.handler(async function (req, res) {
       var cur = id ? await tx.get(cref) : null;
       if (id && !cur.exists) throw A.httpError(404, 'That site is not in this workspace');
       var doc;
-      if (id) { doc = Object.assign({}, cur.data(), input, { updatedAt: now, updatedBy: by }); tx.update(cref, Object.assign({}, input, { updatedAt: now, updatedBy: by })); }
+      if (id) {
+        var curD = cur.data() || {}, patchD = Object.assign({}, input, { updatedAt: now, updatedBy: by });
+        if (curD.address && typeof curD.address === 'object') patchD.address = Object.assign({}, curD.address, { street: input.address || null, city: input.city || curD.address.city || null, state: input.state || curD.address.state || null, zip: input.zip || curD.address.zip || null });
+        doc = Object.assign({}, curD, patchD); tx.update(cref, patchD);
+      }
       else { doc = Object.assign({ orgId: org }, input, { archived: false, createdAt: now, createdBy: by }); tx.create(cref, doc); }
       audit(tx, db, 'sitecrm-site-save', org, cref.id, by, now, { created: !id, site: input });
       return { ok: true, id: cref.id, site: siteView(cref.id, doc), note: id ? 'Site saved.' : 'Site added.' };
@@ -532,6 +566,43 @@ var handler = A.handler(async function (req, res) {
       var opened = madeF.filter(function (m) { return m.created && m.status === 'open'; }).length, drafted = madeF.filter(function (m) { return m.created && m.status === 'draft'; }).length;
       return { ok: true, deals: madeF, opened: opened, drafted: drafted,
         note: (opened ? opened + ' deal(s) open to capital partners' : '') + (opened && drafted ? '; ' : '') + (drafted ? drafted + ' saved as draft(s): run a pro forma to list them with an ask' : '') + (madeF.length > opened + drafted ? (opened || drafted ? '; ' : '') + (madeF.length - opened - drafted) + ' already on the marketplace' : '') + '.' };
+    }
+
+    /* ── send to a development partner (Terra Energy: the solar package) ──
+       The partner's address is read from the environment or the deal
+       room's settings, never a constant; with none configured nothing is
+       mailed and the page says so. One record per site per send, the
+       day's count held on a counter no rule opens, the sender in copy. */
+    if (action === 'send-to-partner') {
+      var partner = PARTNERS.get(String(b.partner || ''));
+      if (!partner) throw A.httpError(400, 'Which partner? ' + PARTNERS.list().map(function (p) { return p.key + ' (' + p.name + ')'; }).join(', '));
+      var settingsDoc = await db.collection('fin_settings').doc('dealroom').get(), rcpt = PARTNERS.recipients(partner, process.env, settingsDoc.exists ? settingsDoc.data() : null);
+      if (!rcpt.to.length) throw A.httpError(409, partner.name + ' has no address on this deployment (' + partner.env + ', or fin_settings/dealroom.orgs.' + partner.settings + '). Nothing was sent.');
+      var orgRecP = await root.get(), orgNmP = orgRecP.exists ? ((orgRecP.data() || {}).name || org) : org, day = now.slice(0, 10), noteP = C.text(b.note, 1000, 'Note', { multiline: true });
+      var counterRef = root.collection('partner_requests').doc('count_' + day);
+      await db.runTransaction(async function (tx) {
+        var cnt = await tx.get(counterRef), n = cnt.exists ? (cnt.data().count || 0) : 0;
+        if (n + rows.length > PARTNER_DAILY_CAP) throw A.httpError(429, 'At most ' + PARTNER_DAILY_CAP + ' sites a day can be sent to a partner from this workspace (' + n + ' sent today).');
+        tx.set(counterRef, { count: n + rows.length, day: day, updatedAt: now }, { merge: true });
+      });
+      var sentP = [], host = String((req.headers && req.headers.host) || '').replace(/[^A-Za-z0-9.:-]/g, '');
+      for (var pi2 = 0; pi2 < rows.length; pi2++) {
+        var rp = rows[pi2], packet = partnerPacket(rp.id, rp.data, orgNmP, host), reqRef = root.collection('partner_requests').doc();
+        var subject = '[' + orgNmP + '] ' + partner.name + ': ' + packet.title;
+        var html = partnerMail(packet, partner, orgNmP, by, noteP);
+        var sentMail;
+        try { sentMail = await mail.send(rcpt.to.join(', '), subject, html, null, { replyTo: by, cc: by }); }
+        catch (e) { throw A.httpError(502, 'The mail to ' + partner.name + ' could not be sent: ' + e.message); }
+        var rec = { orgId: org, siteId: rp.id, partner: partner.key, partnerName: partner.name, to: rcpt.to, source: rcpt.source, by: by, at: now, note: noteP || null, status: sentMail && sentMail.skipped ? 'not-sent' : 'sent', packet: packet };
+        var batchP2 = db.batch(), onSite = {}; onSite['partners.' + partner.key] = { sentAt: now, by: by, to: rcpt.to, status: rec.status, requestId: reqRef.id };
+        batchP2.set(reqRef, rec); batchP2.update(rp.ref, Object.assign(onSite, { updatedAt: now, updatedBy: by }));
+        batchP2.create(db.collection('omega_audit').doc(), { action: 'sitecrm-send-to-partner', orgId: org, siteId: rp.id, by: by, at: now, partner: partner.key, to: rcpt.to, requestId: reqRef.id, status: rec.status });
+        await batchP2.commit();
+        sentP.push({ siteId: rp.id, requestId: reqRef.id, status: rec.status });
+      }
+      var skipped = sentP.filter(function (x) { return x.status === 'not-sent'; }).length;
+      return { ok: true, partner: { key: partner.key, name: partner.name }, to: rcpt.to, sent: sentP,
+        note: skipped ? 'No mailbox is configured on this server, so nothing was mailed; the request is recorded for ' + skipped + ' site(s).' : sentP.length + ' site(s) sent to ' + partner.name + ' (' + rcpt.to.join(', ') + ') with you in copy.' };
     }
 
     /* ── pro forma on every selected site ───────────────────────────────── */
@@ -754,8 +825,14 @@ async function runModel(db, org, site, b, by, now, orgName) {
   var facts = { latestModel: summary, updatedAt: now, updatedBy: by };
   if (over.zip && optZip(over.zip)) facts.zip = optZip(over.zip);
   if (over.hostType && SM.HOST_TYPES.indexOf(over.hostType) >= 0) facts.hostType = over.hostType;
+  /* the register's versioned result (site_results, kind finance, scenario sc_compute): what a finance package snapshots and what a later bill, map, agreement or power change marks stale */
+  var resRef = db.collection('omega_orgs').doc(org).collection('site_results').doc('res_compute_' + site.id), prevRes = await resRef.get();
+  var resRec = { id: resRef.id, siteId: site.id, kind: 'finance', scenarioId: 'sc_compute', modelId: mref.id, version: prevRes.exists ? ((prevRes.data() || {}).version || 1) + 1 : 1, status: 'current', model: 'Compute Site Pro Forma (' + (result.version || '') + ')', engineVersion: summary.financeVersion || null,
+    projectIrr: summary.preTaxIrr == null ? null : { status: 'ok', annualized: summary.preTaxIrr }, investorIrr: summary.irr == null ? { status: 'not-defined', reason: 'No capital invested under this structure' } : { status: 'ok', annualized: summary.irr }, paybackMonths: summary.paybackYears == null ? null : Math.round(summary.paybackYears * 12),
+    capital: summary.totalProjectCost, inputHash: require('crypto').createHash('sha256').update(JSON.stringify([mapped.input, site.data && site.data.revision])).digest('hex'), at: now, by: by };
   await db.runTransaction(async function (tx) {
     tx.create(mref, { orgId: org, siteId: site.id, input: mapped.input, basis: mapped.basis, result: result, summary: summary, label: label, createdAt: now, createdBy: by });
+    tx.set(resRef, resRec);
     tx.update(site.ref, facts);
     audit(tx, db, 'sitecrm-site-model', org, site.id, by, now, { modelId: mref.id, pods: summary.pods, structure: summary.structure, irr: summary.irr, totalProjectCost: summary.totalProjectCost });
   });
@@ -794,6 +871,36 @@ function optEnum(v, list, label) {
   if (v === undefined || v === null || v === '') return null;
   if (list.indexOf(v) < 0) throw C.fail(400, label + ' must be one of ' + list.join(', '));
   return v;
+}
+/* What a partner receives of a site: the facts on record, the figures the
+   workspace has produced (read, never recomputed) and where to open the
+   record. No bills, no contacts, no documents: those are shared by hand. */
+function partnerPacket(siteId, s, orgName, host) {
+  var lm = s.latestModel || null, lp = s.latestProforma || null, cap = s.capital || null, av = SM.serviceOf(s), base = host ? 'https://' + host : '';
+  function n(v) { return v == null || v === '' ? null : Number(v); }
+  return {
+    title: (s.name || 'Site') + (s.city ? ', ' + s.city + (s.state ? ', ' + s.state : '') : ''),
+    site: { id: siteId, name: s.name || '', address: BR.addressLine(s), city: s.city || null, state: s.state || null, zip: s.zip || null, hostType: s.hostType || null, status: s.status || null, tags: s.tags || [] },
+    power: { installedChargerKw: n(s.installedKw), reportedPeakKw: n(s.reportedPeakKw), peakUnresolved: s.peakUnresolved === true, serviceCapacityKw: n(s.serviceCapacityKw), existingPeakKw: n(s.existingPeakKw), availablePowerMw: n(s.availablePowerMw), serviceBasis: av ? av.basis : null, powerPricePerKwh: n(s.powerPricePerKwh), annualUsageKwh: n(s.annualUsageKwh), meterOwned: s.meterOwned == null ? null : s.meterOwned === true, termYearsRemaining: n(s.termYearsRemaining), evidence: s.powerEvidence && s.powerEvidence.classification ? s.powerEvidence.classification.level : null, verifiedHeadroomKw: s.powerEvidence && s.powerEvidence.verifiedKw != null ? s.powerEvidence.verifiedKw : null },
+    compute: lm ? { pods: lm.pods, gpu: lm.gpuName, structure: lm.structureLabel, irr: lm.irr, totalProjectCost: lm.totalProjectCost, equity: lm.equity, verdict: lm.verdict && lm.verdict.label, at: lm.at } : null,
+    pods: lp ? { pods: lp.pods, investorIrr: lp.investorIrrDefined ? lp.investorIrrAnnual : null, investorCapital: lp.investorCapital, at: lp.at } : null,
+    capital: cap ? { status: cap.status, funded: cap.funded, ask: cap.ask, awardedToOrg: cap.awardedToOrg || null } : null,
+    links: { record: base + '/site-crm.html?site=' + encodeURIComponent(siteId), deck: lm ? base + '/site-crm.html?site=' + encodeURIComponent(siteId) + '#deck' : null, editor: s.projectId ? base + '/editor.html?id=' + encodeURIComponent(s.projectId) : null },
+    workspace: orgName
+  };
+}
+function partnerMail(p, partner, orgName, by, note) {
+  var E = mail.esc, R = mail.row || function (k, v) { return '<tr><td style="padding:4px 12px 4px 0;color:#6B7C8C">' + E(k) + '</td><td style="padding:4px 0"><b>' + E(v == null || v === '' ? '\u2014' : v) + '</b></td></tr>'; };
+  function kw(v) { return v == null ? 'Not provided' : Number(v).toLocaleString('en-US') + ' kW'; }
+  function usd(v) { return v == null ? 'Not provided' : '$' + Math.round(v).toLocaleString('en-US'); }
+  function pct(v) { return v == null ? 'n/a' : (v * 100).toFixed(2) + '%'; }
+  var pw = p.power, h = '<p>' + E(orgName) + ' is sending you <b>' + E(p.title) + '</b> for ' + E(partner.asks) + '.' + (note ? '</p><p>' + E(note).replace(/\n/g, '<br>') : '') + '</p>';
+  h += '<h3 style="margin:16px 0 6px">The site</h3><table>' + R('Address', [p.site.address, p.site.city, p.site.state, p.site.zip].filter(Boolean).join(', ')) + R('Host type', p.site.hostType) + R('Installed chargers (nameplate)', kw(pw.installedChargerKw)) + R('Reported peak' + (pw.peakUnresolved ? ' (unresolved statistic)' : ''), kw(pw.reportedPeakKw)) + R('Service capacity', kw(pw.serviceCapacityKw)) + R('Existing peak', kw(pw.existingPeakKw)) + R('Available for new load', pw.availablePowerMw == null ? (pw.serviceBasis || 'Not provided') : (pw.availablePowerMw * 1000).toLocaleString('en-US') + ' kW (as entered)') + R('Verified headroom', pw.verifiedHeadroomKw == null ? 'None yet (' + (pw.evidence || 'no power evidence') + ')' : kw(pw.verifiedHeadroomKw)) + R('Power price', pw.powerPricePerKwh == null ? 'Not provided' : '$' + pw.powerPricePerKwh + '/kWh') + R('Annual usage', pw.annualUsageKwh == null ? 'Not provided' : pw.annualUsageKwh.toLocaleString('en-US') + ' kWh') + R('Meter', pw.meterOwned === true ? 'Owned by the host' : pw.meterOwned === false ? 'Not owned by the host' : 'Unknown') + R('Remaining term', pw.termYearsRemaining == null ? 'Not provided' : pw.termYearsRemaining + ' years (snapshot)') + '</table>';
+  if (p.compute) h += '<h3 style="margin:16px 0 6px">The compute case on file</h3><table>' + R('Pods', p.compute.pods + ' \u00d7 ' + (p.compute.gpu || '')) + R('Structure', p.compute.structure) + R('After-tax IRR', pct(p.compute.irr)) + R('Total project cost', usd(p.compute.totalProjectCost)) + R('Verdict', p.compute.verdict) + '</table><p style="color:#6B7C8C;font-size:12px">Screening results from the Compute Site Pro Forma; not a return promise.</p>';
+  if (p.capital) h += '<p>Capital request on the finance marketplace: <b>' + E(p.capital.funded ? 'Funded by ' + (p.capital.awardedToOrg || 'a capital partner') : p.capital.status || 'sent') + '</b>' + (p.capital.ask != null ? ' \u00b7 ask ' + usd(p.capital.ask) : '') + '.</p>';
+  h += '<p><a href="' + E(p.links.record) + '">Open the site record</a>' + (p.links.deck ? ' \u00b7 <a href="' + E(p.links.deck) + '">Investor deck</a>' : '') + (p.links.editor ? ' \u00b7 <a href="' + E(p.links.editor) + '">Site Map</a>' : '') + '</p>';
+  h += '<p style="color:#6B7C8C;font-size:12px">' + E(partner.funds) + ' Reply to ' + E(by) + '. Figures marked Not provided are not on the record; nothing here is invented.</p>';
+  return typeof mail.layout === 'function' ? mail.layout(partner.name + ': ' + p.title, h) : h;
 }
 function ownerOf(caller, by) { return (caller.claims && (caller.claims.name || caller.claims.displayName)) || String(by || '').split('@')[0]; }
 function tagList(v) {
@@ -848,7 +955,14 @@ function proformaView(id, s) {
   };
 }
 
-module.exports = handler;
+/* ONE DOOR. The portfolio register (api/_lib/portfolio/register.js: imports
+   with diff, conflicts and undo; facts with provenance; views; power
+   evidence; bills; scenarios; packages and the one private submission;
+   the pipeline; the widget) answers the requests it owns, on the same
+   collection; everything else is the site CRM's. */
+module.exports = function (req, res) { return REG.owns(req) ? REG(req, res) : handler(req, res); };
+module.exports.handler = handler;
+module.exports.register = REG;
 module.exports.store = store;
 module.exports.stream = stream;
 module.exports.siteInput = siteInput;

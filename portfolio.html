@@ -128,7 +128,7 @@
   <div id="msg"></div>
   <div class="pf-stats" id="stats" style="display:none">
     <div class="pf-stat"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n" id="c-sites-n">in this workspace's register</div></div>
-    <div class="pf-stat"><div class="k">Modelled</div><div class="v" id="c-pf">–</div><div class="n" id="c-pf-n">sites with a model or scenario on file</div></div>
+    <div class="pf-stat"><div class="k">Positive IRR</div><div class="v" id="c-pf">–</div><div class="n" id="c-pf-n">sites whose case returns more than it costs</div></div>
     <div class="pf-stat"><div class="k">In Site Map</div><div class="v" id="c-editor">–</div><div class="n">sites with a project in the editor</div></div>
     <div class="pf-stat"><div class="k">Capital</div><div class="v" id="c-fin">–</div><div class="n" id="c-fin-n">sites sent to the finance marketplace</div></div>
     <div class="pf-stat"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
@@ -145,6 +145,7 @@
     <span class="count"><span id="selcount">0 selected</span><small id="selall-wrap" style="display:none">· <a id="selall">select all <span id="selall-n"></span></a></small></span>
     <button type="button" id="ba-editor" title="One Site Map project per site; a site that already has one opens it">Open in Site Map</button>
     <button type="button" id="ba-finance" title="One deal per site on the finance marketplace">Send to marketplace</button>
+    <button type="button" id="ba-terra" title="Mail the site facts and figures to Terra Energy for a solar package and detail">Send to Terra (solar)</button>
     <button type="button" id="ba-model" title="The Compute Site Pro Forma on each site, from its service, chargers, usage and pods; ten at a time">Run compute model</button>
     <span class="menu"><button type="button" id="ba-proforma" aria-haspopup="true">Pod pro forma ▾</button></span>
     <span class="menu"><button type="button" id="ba-status" aria-haspopup="true">Set status ▾</button></span>
@@ -166,11 +167,12 @@
 <div class="pf-modal" id="import-modal" role="dialog" aria-label="Import sites">
   <div class="box">
     <h2>Import sites</h2>
-    <div class="sub">Upload a CSV or XLSX of your sites. The first row must be headers. Every imported site lands in <b>this workspace only</b>; other workspaces never see it.</div>
+    <div class="sub">Upload a CSV or XLSX of your sites. A workbook is read on the server: the EVCS intake is recognised by its headers, the EVCS model package enriches the sites it names, and any other sheet is matched by its headers, with a preview of what changes (and what a reviewed value would conflict with) before anything is written. A CSV in this page's template maps column by column. Every site lands in <b>this workspace only</b>.</div>
     <div id="im-msg"></div>
     <div class="row"><input type="file" id="im-file" accept=".csv,.xlsx,.xls,.txt"><span class="t-mut" id="im-filename"></span></div>
     <div id="im-map" class="im-map"></div>
     <div id="im-preview" class="im-prev" style="margin-top:12px"></div>
+    <div id="im-history"></div>
     <div class="row" style="margin-top:16px"><button class="ows-pill primary" id="im-go" type="button" disabled>Import</button><button class="ows-pill" id="im-close" type="button">Cancel</button></div>
   </div>
 </div>
@@ -196,7 +198,8 @@
   var auth = firebase.auth();
   var S = window.OmegaWorkspaceShell, esc = S.esc;
   var ORG = '', WS = null, USER = null, SITES = [], NEXT = null, CANEDIT = false, CANADMIN = false, LOADED = false;
-  var SEL = {}, LAST_CLICK = null, SORT = { key: 'name', dir: 'asc' }, OPEN = null;
+  /* the point of the register: the positive IRRs first (Tommy, 2026-10-11) */
+  var SEL = {}, LAST_CLICK = null, SORT = { key: 'irr', dir: 'desc' }, OPEN = null;
   var STATUSES = ['In editor', 'Funding', 'Development', 'Operating', 'On hold'];
   function byId(id) { return document.getElementById(id); }
 
@@ -278,6 +281,7 @@
     h += '<a href="' + atlasHref(s) + '" data-stop title="Grid Atlas at this address">Atlas ↗</a>';
     if (s.latestModel) h += '<a href="' + deckHref(s) + '" data-stop title="The investor deck from the compute model">Deck ↗</a>';
     if (s.finProjectId) h += '<a href="' + dealHref(s) + '" data-stop title="The deal on the finance marketplace">' + (s.capital && s.capital.funded ? 'Funded' : s.finProjectStatus === 'draft' ? 'Draft deal' : 'Marketplace') + ' ↗</a>';
+    if (s.partners && s.partners.terra) h += '<a href="' + siteHref(s) + '#deck" data-stop title="Sent to Terra Energy ' + esc(String(s.partners.terra.sentAt || '').slice(0, 10)) + '">Terra ✓</a>';
     return h ? '<div class="links">' + h + '</div>' : '<span class="t-mut">–</span>';
   }
 
@@ -369,11 +373,11 @@
   function renderStats() {
     byId('stats').style.display = 'grid';
     var live = SITES.filter(function (s) { return !s.archived; }), pf = 0, cap = 0, ed = 0, fin = 0, unkN = 0;
-    var funded = 0, fundedUsd = 0;
-    live.forEach(function (s) { if (s.latestProforma || s.latestModel) { pf++; cap += Number(costOf(s)) || 0; } if (s.projectId) ed++; if (s.finProjectId) fin++; if (s.capital && s.capital.funded) { funded++; fundedUsd += Number(s.capital.ask) || 0; } if (needsVerification(s)) unkN++; });
+    var funded = 0, fundedUsd = 0, pos = 0;
+    live.forEach(function (s) { if (s.latestProforma || s.latestModel) { pf++; cap += Number(costOf(s)) || 0; var ir = irrOf(s); if (ir != null && ir > 0) pos++; } if (s.projectId) ed++; if (s.finProjectId) fin++; if (s.capital && s.capital.funded) { funded++; fundedUsd += Number(s.capital.ask) || 0; } if (needsVerification(s)) unkN++; });
     byId('c-sites').textContent = live.length;
     byId('c-sites-n').textContent = SITES.length > live.length ? 'in the register · ' + (SITES.length - live.length) + ' archived' : 'in this workspace’s register';
-    byId('c-pf').textContent = pf; byId('c-pf-n').textContent = pf ? 'sites modelled · ' + money(cap) + ' project cost' : 'sites with a model or scenario on file';
+    byId('c-pf').textContent = pos; byId('c-pf-n').textContent = pf ? pos + ' of ' + pf + ' modelled · ' + money(cap) + ' project cost' : 'run the compute model to find them';
     byId('c-editor').textContent = ed; byId('c-fin').textContent = funded ? funded + ' funded' : fin; byId('c-fin-n').textContent = funded ? money(fundedUsd) + ' accepted · ' + fin + ' sent to the marketplace' : 'sites sent to the finance marketplace'; byId('c-unk').textContent = unkN;
   }
 
@@ -437,6 +441,10 @@
     var sel = selected();
     if (sel.length > 10) { msg('Run the compute model on up to 10 sites at a time.'); return; }
     act('site-model-bulk', null, null);
+  });
+  byId('ba-terra').addEventListener('click', function () {
+    var sel = selected();
+    act('send-to-partner', { partner: 'terra' }, 'Send ' + sel.length + ' site(s) to Terra Energy for a solar package?\n\nThey receive the site facts, the compute case on file and a link to the record, with you in copy. No bills, contacts or documents are sent.');
   });
   byId('ba-proforma').addEventListener('click', function () {
     menu(this, [
@@ -544,7 +552,8 @@
     }
     html += '<div class="dr-sec">Capital request</div><div class="dr-facts">' +
       fact('Request', costOf(s) != null ? esc(money(costOf(s))) : null, lm ? 'total project cost' : lp ? 'investor capital, pods' : 'run the compute model') +
-      fact('Marketplace', cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap ? capitalPill(s) : s.finProjectId ? 'Sent' : '<span class="t-mut">Not sent</span>', cap && cap.funded ? 'accepted by ' + (cap.awardedToOrg || 'a capital partner') + (cap.awardedAt ? ' on ' + String(cap.awardedAt).slice(0, 10) : '') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting for your answer' : cap && cap.status === 'open' ? 'open to capital partners, no offer yet' : '') + '</div>';
+      fact('Marketplace', cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap ? capitalPill(s) : s.finProjectId ? 'Sent' : '<span class="t-mut">Not sent</span>', cap && cap.funded ? 'accepted by ' + (cap.awardedToOrg || 'a capital partner') + (cap.awardedAt ? ' on ' + String(cap.awardedAt).slice(0, 10) : '') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting for your answer' : cap && cap.status === 'open' ? 'open to capital partners, no offer yet' : '') +
+      fact('Terra Energy (solar)', s.partners && s.partners.terra ? '<span class="pill pill-ok">Sent</span>' : '<span class="t-mut">Not sent</span>', s.partners && s.partners.terra ? 'solar package asked for on ' + String(s.partners.terra.sentAt || '').slice(0, 10) : 'a solar package and detail, funded by Terra') + '</div>';
     html += '<div class="dr-sec">Pod pro forma</div>';
     if (lp) {
       html += '<div class="dr-irr"><div class="big">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b><span>investor IRR, annualised</span>' : '<b class="undef">Not defined</b><span>no IRR root in the cash flows</span>') + '</div>' +
@@ -574,6 +583,7 @@
     html += '<div class="dr-acts" id="dr-acts">' +
       (CANEDIT ? '<button type="button" class="primary" data-act="editor">' + (s.projectId ? 'Open in Site Map' : 'Open in Site Map') + '</button>' : '') +
       (CANEDIT ? '<button type="button" data-act="finance">' + (s.finProjectId ? 'Marketplace deal' : 'Send to marketplace') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="terra">' + (s.partners && s.partners.terra ? 'Send to Terra again' : 'Send to Terra (solar)') + '</button>' : '') +
       (CANEDIT ? '<button type="button" data-act="model">' + (lm ? 'Re-run compute model' : 'Run compute model') + '</button>' : '') +
       (CANEDIT ? '<button type="button" data-act="proforma">' + (lp ? 'Re-run pods from power' : 'Size pods from power') + '</button>' : '') +
       '<button type="button" data-act="irr">Export IRR</button><button type="button" data-act="agreement">Export term sheet</button>' +
@@ -586,6 +596,7 @@
             var a = b.getAttribute('data-act'); SEL = {}; SEL[s.id] = true;
             if (a === 'editor') { if (s.projectId) { window.location.href = editorHref(s); return; } S.closeDrawer(); byId('ba-editor').click(); }
             else if (a === 'finance') { if (s.finProjectId) { window.location.href = dealHref(s); return; } S.closeDrawer(); byId('ba-finance').click(); }
+            else if (a === 'terra') { S.closeDrawer(); byId('ba-terra').click(); }
             else if (a === 'model') { S.closeDrawer(); act('site-model-bulk', null, null, function (j) { if (j.failed && j.failed.length) msg(j.failed[0].error + ' Open the full record to add it.'); openDrawer(s.id); }); }
             else if (a === 'proforma') { S.closeDrawer(); act('proforma-bulk', { sizeFromPower: true, label: 'Sized from power' }, null, function () { openDrawer(s.id); }); }
             else if (a === 'irr') downloadCsv([s], 'irr-' + (s.name || s.id).replace(/[^A-Za-z0-9]+/g, '-') + '-');
@@ -709,6 +720,8 @@
     };
     if (/\.csv$/i.test(f.name) || f.type.indexOf('csv') >= 0 || /\.txt$/i.test(f.name)) {
       var rd = new FileReader(); rd.onload = function () { done(parseCSV(String(rd.result))); }; rd.onerror = function () { imMsg('Could not read the file.'); }; rd.readAsText(f);
+    } else if (/\.xlsx$/i.test(f.name)) {
+      registerPreview(f); return;
     } else {
       loadSheetJS(function (e) {
         if (e) { imMsg(esc(e.message)); return; }
@@ -735,14 +748,50 @@
     }
     return rows;
   }
+  /* the register's import: preview (counts, rejected rows, conflicts on reviewed facts, the model package's reconciliation), then commit; a committed import can be undone from the list */
+  var REG_PREVIEW = null;
+  function registerPreview(f) {
+    imMsg('Reading the workbook on the server\u2026', true); byId('im-map').innerHTML = ''; byId('im-preview').innerHTML = ''; byId('im-go').disabled = true; REG_PREVIEW = null;
+    var rd = new FileReader();
+    rd.onload = function () {
+      var b64 = String(rd.result).split(',')[1] || '';
+      post('import-preview', { fileName: f.name, base64: b64 }).then(function (j) {
+        REG_PREVIEW = j;
+        if (j.alreadyCommitted) { imMsg('This exact file was already imported; nothing to do.', true); return; }
+        var c = j.counts || {}, h = '<div class="t-sub" style="margin-bottom:6px">Recognised as <b>' + esc(j.profile) + '</b>' + (j.meta && j.meta.headerRow ? ' · headers on row ' + esc(j.meta.headerRow) : '') + (j.meta && j.meta.formulaCells ? ' · ' + esc(j.meta.formulaCells) + ' formula cell(s) read by cached value' : '') + '</div>';
+        h += '<div class="pf-stats" style="margin:8px 0">' + [['New sites', c.created], ['Updated', c.updated], ['Unchanged', c.unchanged], ['Rejected rows', c.rejected], ['Conflicts', c.conflicts]].map(function (x) { return '<div class="pf-stat"><div class="k">' + x[0] + '</div><div class="v">' + esc(x[1] == null ? 0 : x[1]) + '</div></div>'; }).join('') + '</div>';
+        if (j.analysis) h += '<div class="pf-msg ok">A model package: it enriches ' + esc(c.matched || 0) + ' existing site(s) and creates none. ' + (j.analysis.unmatched.length ? esc(j.analysis.unmatched.length) + ' ID(s) have no site here. ' : '') + (j.analysis.mismatches.length ? esc(j.analysis.mismatches.length) + ' site(s) reconcile differently from the intake.' : 'Every site reconciles with the intake.') + '</div>';
+        if ((j.conflicts || []).length) h += '<div class="pf-msg err">' + esc(j.conflicts.length) + ' reviewed value(s) differ in this file and are kept as reviewed: ' + j.conflicts.slice(0, 5).map(function (x) { return esc(x.externalSiteId + ' ' + x.field + ' ' + x.from + ' → ' + x.to); }).join('; ') + (j.conflicts.length > 5 ? '…' : '') + '</div>';
+        if ((j.rejected || []).length) h += '<div class="pf-msg err">' + esc(j.rejected.length) + ' row(s) rejected: ' + j.rejected.slice(0, 5).map(function (x) { return 'row ' + esc(x.row) + ' ' + esc(x.reason); }).join('; ') + (j.rejected.length > 5 ? '…' : '') + '</div>';
+        if ((j.suggestions || []).length) h += '<div class="t-sub">' + esc(j.suggestions.length) + ' site(s) share an address with another source ID: kept separate, flagged for review.</div>';
+        byId('im-preview').innerHTML = h; byId('im-go').disabled = !((c.created || 0) + (c.updated || 0)) && !j.analysis;
+        imMsg('Nothing is written until you press Import.', true);
+      }).catch(function (e) { imMsg(esc(e.message)); });
+    };
+    rd.onerror = function () { imMsg('Could not read the file.'); }; rd.readAsDataURL(f);
+  }
+  function registerImports() {
+    api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&imports=1').then(function (j) {
+      var list = (j.imports || []).filter(function (x) { return x.status === 'committed'; }).sort(function (a, b) { return a.committedAt < b.committedAt ? 1 : -1; }).slice(0, 5);
+      byId('im-history').innerHTML = list.length ? '<div class="t-sub" style="margin:14px 0 6px">Recent imports</div>' + list.map(function (x) { return '<div class="t-sub">' + esc(String(x.committedAt || '').slice(0, 10)) + ' · ' + esc(x.fileName) + ' · ' + esc(x.profile) + ' · ' + esc((x.counts || {}).created || 0) + ' new, ' + esc((x.counts || {}).updated || 0) + ' updated <a href="#" data-undo="' + esc(x.id) + '">Undo</a></div>'; }).join('') : '';
+      Array.prototype.forEach.call(byId('im-history').querySelectorAll('[data-undo]'), function (a) { a.addEventListener('click', function (ev) { ev.preventDefault(); if (!window.confirm('Undo this import? Only its own changes are reverted; a site changed since, or with linked work, is kept.')) return; post('import-undo', { importId: a.getAttribute('data-undo') }).then(function (j) { imMsg(esc(j.applied + ' site(s) reverted' + (j.skipped && j.skipped.length ? '; ' + j.skipped.length + ' kept: ' + j.skipped.slice(0, 3).map(function (k) { return k.reason; }).join('; ') : '') + '.'), true); registerImports(); load(true); }).catch(function (e) { imMsg(esc(e.message)); }); }); });
+    }).catch(function () {});
+  }
   byId('btn-import').addEventListener('click', function () {
-    byId('import-modal').classList.add('on'); imMsg(''); byId('im-map').innerHTML = ''; byId('im-preview').innerHTML = ''; byId('im-filename').textContent = ''; byId('im-go').disabled = true; IMHEAD = []; IMDATA = [];
+    byId('import-modal').classList.add('on'); REG_PREVIEW = null; registerImports(); imMsg(''); byId('im-map').innerHTML = ''; byId('im-preview').innerHTML = ''; byId('im-filename').textContent = ''; byId('im-go').disabled = true; IMHEAD = []; IMDATA = [];
   });
   byId('im-close').addEventListener('click', function () { byId('import-modal').classList.remove('on'); });
   byId('import-modal').addEventListener('click', function (e) { if (e.target === byId('import-modal')) byId('import-modal').classList.remove('on'); });
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') byId('import-modal').classList.remove('on'); });
   byId('im-file').addEventListener('change', function () { if (this.files.length) imHandleFile(this.files[0]); this.value = ''; });
   byId('im-go').addEventListener('click', function () {
+    if (REG_PREVIEW && REG_PREVIEW.importId) {
+      imMsg('Importing\u2026', true); byId('im-go').disabled = true;
+      post('import-commit', { importId: REG_PREVIEW.importId, planHash: REG_PREVIEW.planHash, acceptConflicts: [] }).then(function (j) {
+        imMsg('<b>' + esc(j.written) + ' site(s) written</b> (' + esc((j.counts || {}).created || 0) + ' new, ' + esc((j.counts || {}).updated || 0) + ' updated). Reviewed values were kept.', true); REG_PREVIEW = null; registerImports(); load(true);
+      }).catch(function (e) { imMsg(esc(e.message)); byId('im-go').disabled = false; });
+      return;
+    }
     var rows = imBuildRows(); if (!rows) return;
     if (!rows.length) { imMsg('No rows to import.'); return; }
     if (rows.length > 500) { imMsg('At most 500 rows per import; split the file and retry.'); return; }
