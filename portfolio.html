@@ -165,7 +165,7 @@ input[type=text],input[type=number],input[type=date],input[type=search],select,t
 <script>
 (function () {
   'use strict';
-  firebase.initializeApp(CFG.firebase);
+  firebase.initializeApp((window.CLEARSKY_CONFIG||window.CFG||{}).firebase);
   var auth = firebase.auth();
   var ORG = '', SITES = [], CANEDIT = false;
 
