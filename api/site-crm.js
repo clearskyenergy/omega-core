@@ -153,6 +153,7 @@ function siteView(id, s) {
     usageNotes: s.usageNotes || null,
     screening: s.screening || null,
     status: s.status || '', notes: s.notes || '',
+    latestProforma: s.latestProforma || null,
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
     createdAt: C.iso(s.createdAt), createdBy: s.createdBy || null,
     updatedAt: C.iso(s.updatedAt), updatedBy: s.updatedBy || null,
@@ -230,7 +231,8 @@ var handler = A.handler(async function (req, res) {
     var q = root.collection('sites').orderBy('__name__').limit(LIST_CAP + 1);
     if (b.startAfter) q = root.collection('sites').orderBy('__name__').startAfter(b.startAfter).limit(LIST_CAP + 1);
     var snap = await q.get();
-    var sites = snap.docs.slice(0, LIST_CAP).map(function (d) { return siteView(d.id, d.data()); });
+    var sites = snap.docs.filter(function (d) { return (d.data() || {}).archived !== true; })
+      .slice(0, LIST_CAP).map(function (d) { return siteView(d.id, d.data()); });
     return { org: org, sites: sites,
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
       limited: snap.docs.length > LIST_CAP };
@@ -239,7 +241,8 @@ var handler = A.handler(async function (req, res) {
   var action = String(b.action || 'read');
   var adminOnly = action === 'file-archive' || action === 'contact-archive';
   var who = await access(caller, org, adminOnly ? 'admin' : req.method === 'POST' ? 'write' : 'read');
-  if (!b.site && action !== 'site-save' && action !== 'site-import') throw A.httpError(400, 'Which site?');
+  var BULK = action === 'site-archive' || action === 'site-delete' || action === 'site-set-status';
+  if (!b.site && action !== 'site-save' && action !== 'site-import' && !BULK) throw A.httpError(400, 'Which site?');
   var sid = b.site ? C.recordId(b.site, 'Site') : null;
   var siteRef = sid ? root.collection('sites').doc(sid) : null;
   var siteSnap = siteRef ? await siteRef.get() : null;
@@ -340,6 +343,36 @@ var handler = A.handler(async function (req, res) {
     await batch.commit();
     return { ok: true, imported: prepared.length, ids: ids,
       note: prepared.length + ' site(s) imported into this workspace.' };
+  }
+
+  /* ── bulk site actions: archive, delete, set status ───────────────────
+     ids: [siteId, …] (max 200). Archive hides from the register; delete is
+     permanent; set-status moves sites between stages (editor / funding /
+     development). Deeper connectors (editor handoff, funding pipeline)
+     attach later; the status field is the contract they will read. */
+  if (action === 'site-archive' || action === 'site-delete' || action === 'site-set-status') {
+    var ids = Array.isArray(b.ids) ? b.ids.map(function (x) { return C.recordId(x, 'Site'); }).filter(Boolean) : [];
+    if (!ids.length) throw A.httpError(400, 'No sites selected');
+    if (ids.length > 200) throw A.httpError(400, 'At most 200 sites per action');
+    if (action === 'site-delete' && !who.admin)
+      throw A.httpError(403, 'Only an administrator can permanently delete sites');
+    var st = action === 'site-set-status' ? C.text(b.status, 60, 'Status', { required: true }) : null;
+    var batch2 = db.batch(), n2 = 0;
+    ids.forEach(function (id) {
+      var r = root.collection('sites').doc(id);
+      if (action === 'site-delete') batch2.delete(r);
+      else if (action === 'site-archive') batch2.update(r, { archived: true, updatedAt: now, updatedBy: by });
+      else batch2.update(r, { status: st, updatedAt: now, updatedBy: by });
+      n2++;
+      batch2.create(db.collection('omega_audit').doc(),
+        { action: 'sitecrm-' + action, orgId: org, siteId: id, by: by, at: now, status: st });
+      n2++;
+    });
+    await batch2.commit();
+    var note2 = action === 'site-delete' ? n2 / 2 + ' site(s) permanently deleted.'
+      : action === 'site-archive' ? n2 / 2 + ' site(s) archived.'
+      : n2 / 2 + ' site(s) moved to "' + st + '".';
+    return { ok: true, count: ids.length, note: note2 };
   }
 
   /* ── contacts ───────────────────────────────────────────────────────── */
@@ -460,8 +493,14 @@ var handler = A.handler(async function (req, res) {
     } catch (e) { throw A.httpError(e.status || 400, e.message); }
     scen.orgId = org; scen.siteId = sid; scen.createdBy = by;
     var sref = proformaCol.doc(scen.scenarioId);
+    var lp = { scenarioId: scen.scenarioId, pods: scen.results.pods,
+      investorIrrAnnual: scen.results.investorIrr.defined ? scen.results.investorIrr.annual : null,
+      investorIrrDefined: scen.results.investorIrr.defined === true,
+      projectIrrAnnual: scen.results.projectIrr.defined ? scen.results.projectIrr.annual : null,
+      assumptionVersion: scen.assumptionVersion, label: scen.inputs.label || '', at: scen.createdAt };
     await db.runTransaction(async function (tx) {
       tx.create(sref, scen);
+      tx.update(siteRef, { latestProforma: lp, updatedAt: now, updatedBy: by });
       audit(tx, db, 'sitecrm-proforma-run', org, sid, by, now, { scenarioId: scen.scenarioId, pods: scen.inputs.pods, assumptionVersion: scen.assumptionVersion });
     });
     return { ok: true, scenario: proformaView(scen.scenarioId, scen), note: 'Scenario saved. A re-run creates a new scenario; this one never changes.' };
