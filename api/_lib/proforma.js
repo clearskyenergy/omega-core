@@ -14,6 +14,12 @@
    to NewCo. NewCo's gross power spread is reported separately and never
    mixed into investor distributions.
 
+   Sizing: sizePodsFromPower(kw, a) fits whole pods into available power
+   (itKwPerPod * pue per pod); runProforma accepts sizeFromPowerKw to size
+   the run instead of an explicit pod count, and records the derivation in
+   inputs.sizing / results.sizing. deriveAvailableKw(site) reads a site
+   record's availablePowerMw, or derives service-minus-peak.
+
    Rules, per the build spec:
    - No valid IRR root → { defined: false }. Never a fabricated 0%.
    - Portfolio IRR is recomputed from aggregated dated cash flows, never an
@@ -26,11 +32,12 @@ var crypto = require('crypto');
 
 function fail(status, message) { var e = new Error(message); e.status = status; return e; }
 
-/* Versioned assumption set. Any change to a value below is a NEW version;
+/* Versioned assumption sets. Any change to a value below is a NEW version;
    scenarios record the version they ran under, so old results stay
-   reproducible. */
-var ASSUMPTIONS = {
-  version: 'evcs-compute-v1',
+   reproducible. evcs-compute-v1 is the EVCS workbook case, kept for
+   existing scenarios. omega-compute-v1 is the same math under a neutral
+   label and is the default for new runs in every workspace. */
+var BASE_ASSUMPTIONS = {
   months: 60,
   hoursPerMonth: 730,
   itKwPerPod: 75,
@@ -54,6 +61,23 @@ var ASSUMPTIONS = {
   newCoUtilityCostPerKwh: 0.13
 };
 
+var ASSUMPTION_VERSIONS = ['evcs-compute-v1', 'omega-compute-v1'];
+var DEFAULT_ASSUMPTION_VERSION = 'omega-compute-v1';
+
+/* The versioned set: base values plus the version label. */
+function assumptionSet(version) {
+  var v = version || DEFAULT_ASSUMPTION_VERSION;
+  if (ASSUMPTION_VERSIONS.indexOf(v) < 0)
+    throw fail(400, 'Unknown assumption version: ' + v + ' (known: ' + ASSUMPTION_VERSIONS.join(', ') + ')');
+  var a = {}, k;
+  for (k in BASE_ASSUMPTIONS) a[k] = BASE_ASSUMPTIONS[k];
+  a.ramp = { 1: 0.5, 2: 0.65, 3: 0.8 };
+  a.version = v;
+  return a;
+}
+/* Backward-compat: ASSUMPTIONS is the EVCS workbook set. */
+var ASSUMPTIONS = assumptionSet('evcs-compute-v1');
+
 var OVERRIDABLE = ['gpuPricePerHour', 'billableUtilization', 'technicalUptime',
   'annualGpuPriceChange', 'powerPricePerKwh', 'annualCostEscalation',
   'fixedOpexPerPodMonth', 'networkVariablePctRevenue', 'maintenanceReservePctRevenue',
@@ -73,10 +97,11 @@ function num(v, label, min, max) {
   return n;
 }
 
-function assumptions(overrides) {
-  var a = {}, k;
-  for (k in ASSUMPTIONS) a[k] = ASSUMPTIONS[k];
-  a.ramp = { 1: 0.5, 2: 0.65, 3: 0.8 };
+function assumptions(overrides, version) {
+  var a = assumptionSet(version), k, base = {};
+  for (k in a) base[k] = a[k];
+  base.ramp = { 1: 0.5, 2: 0.65, 3: 0.8 };
+  a = base;
   var used = {};
   var o = overrides || {};
   OVERRIDABLE.forEach(function (key) {
@@ -161,14 +186,48 @@ function sha256(obj) {
   return crypto.createHash('sha256').update(JSON.stringify(obj)).digest('hex');
 }
 
+/* How many pods fit in the available power. A pod draws itKwPerPod * pue
+   kW of facility power; anything left over is headroom. */
+function sizePodsFromPower(powerKwAvailable, a) {
+  var perPod = a.itKwPerPod * a.pue;
+  var pods = Math.floor(powerKwAvailable / perPod);
+  return { pods: pods, powerKwAvailable: powerKwAvailable, powerKwPerPod: perPod,
+    powerKwUsed: pods * perPod, headroomKw: powerKwAvailable - pods * perPod };
+}
+
+/* Available kW for new load, from a site record. Prefers an explicitly
+   entered availablePowerMw; otherwise derives service minus existing peak.
+   Returns { kw, basis, label } with kw null when neither is known. */
+function deriveAvailableKw(site) {
+  site = site || {};
+  var mw = site.availablePowerMw;
+  if (mw != null && mw !== '' && isFinite(Number(mw)) && Number(mw) > 0)
+    return { kw: Number(mw) * 1000, basis: 'direct', label: 'Available power, as entered' };
+  var svc = site.serviceCapacityKw, peak = site.existingPeakKw;
+  if (svc != null && svc !== '' && peak != null && peak !== '' && isFinite(Number(svc)) && isFinite(Number(peak)))
+    return { kw: Math.max(0, Number(svc) - Number(peak)), basis: 'service-minus-peak',
+      label: 'Service capacity minus existing peak, derived' };
+  return { kw: null, basis: null, label: null };
+}
+
 function runProforma(input) {
   input = input || {};
-  var pods = Math.floor(num(input.pods, 'Pods', 1, 100000));
+  var assumed = assumptions(input.overrides, input.assumptionVersion);
+  var a = assumed.a;
+  var sizing = null, pods;
+  if (input.sizeFromPowerKw != null && input.sizeFromPowerKw !== '') {
+    var kwAvail = num(input.sizeFromPowerKw, 'Available power', 0, 1e9);
+    sizing = sizePodsFromPower(kwAvail, a);
+    pods = sizing.pods;
+    if (!(pods >= 1))
+      throw fail(400, 'Available power (' + kwAvail + ' kW) fits no whole pod: one pod needs ' + sizing.powerKwPerPod + ' kW of facility power.');
+    sizing.basis = input.sizeBasis || null;
+  } else {
+    pods = Math.floor(num(input.pods, 'Pods', 1, 100000));
+  }
   var discountAnnual = input.discountRateAnnual == null || input.discountRateAnnual === ''
     ? 0.08 : num(input.discountRateAnnual, 'Discount rate', 0, 1);
   var label = String(input.label || '').slice(0, 120);
-  var assumed = assumptions(input.overrides);
-  var a = assumed.a;
   var flows = monthlyFlows(pods, a);
   var pIrrM = irrMonthly(flows, 'spvCash');
   var iIrrM = irrMonthly(flows, 'investorCash');
@@ -190,10 +249,13 @@ function runProforma(input) {
     year1Revenue: sumKey(flows, 'revenue', 1, 12),
     year1InvestorCash: sumKey(flows, 'investorCash', 1, 12),
     totalRevenue: sumKey(flows, 'revenue', 1, a.months),
-    months: a.months
+    months: a.months,
+    sizing: sizing
   };
   var canonical = { pods: pods, discountRateAnnual: discountAnnual, overrides: assumed.used,
-    assumptionVersion: a.version, label: label };
+    assumptionVersion: a.version, label: label,
+    sizeFromPowerKw: sizing ? sizing.powerKwAvailable : null,
+    sizeBasis: sizing ? sizing.basis : null };
   return {
     scenarioId: 'pf_' + crypto.randomBytes(9).toString('hex'),
     assumptionVersion: a.version,
@@ -222,8 +284,13 @@ function portfolioIrr(seriesList) {
 }
 
 module.exports = {
-  ASSUMPTION_VERSION: ASSUMPTIONS.version,
+  ASSUMPTION_VERSION: DEFAULT_ASSUMPTION_VERSION,
+  DEFAULT_ASSUMPTION_VERSION: DEFAULT_ASSUMPTION_VERSION,
+  ASSUMPTION_VERSIONS: ASSUMPTION_VERSIONS,
   ASSUMPTIONS: ASSUMPTIONS,
+  assumptionSet: assumptionSet,
+  sizePodsFromPower: sizePodsFromPower,
+  deriveAvailableKw: deriveAvailableKw,
   runProforma: runProforma,
   monthlyFlows: monthlyFlows,
   irrMonthly: irrMonthly,
