@@ -78,6 +78,29 @@ table.cf th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:
 @media(max-width:700px){.grid2{grid-template-columns:1fr}}
 select.inline,input.inline{padding:6px 9px;font-size:12.5px}
 label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.5px}
+.tb-burger{display:none;background:#fff;border:1px solid var(--sap-card-border);border-radius:8px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex:none;padding:0;margin-left:auto}
+.tb-burger svg{width:20px;height:20px;stroke:var(--sap-ink);stroke-width:2;fill:none;stroke-linecap:round}
+.tb-scrim{position:fixed;inset:0;background:rgba(8,25,40,.5);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
+.tb-scrim.open{opacity:1;pointer-events:auto}
+@media(max-width:900px){
+#topbar{height:54px;padding:0 12px;gap:8px}
+.tb-burger{display:flex}
+.tb-sep,.tb-portal,.tb-name{display:none}
+.tb-nav{position:fixed;top:0;right:0;bottom:0;left:auto;width:270px;max-width:82vw;height:100vh;height:100dvh;background:#fff;flex-direction:column;align-items:stretch;gap:0;margin:0;padding:64px 0 20px;box-shadow:-8px 0 30px rgba(0,0,0,.28);transform:translateX(100%);transition:transform .24s ease;z-index:1000;overflow-y:auto}
+.tb-nav.open{transform:translateX(0)}
+.tb-tab{height:auto;padding:15px 22px;border-bottom:1px solid var(--sap-card-border);border-left:3px solid transparent;font-size:15px;justify-content:flex-start}
+.tb-tab.active{border-bottom-color:var(--sap-card-border);border-left-color:var(--sap-blue);background:rgba(0,112,242,.06)}
+#main{padding:24px 14px 48px}
+.tabs{overflow-x:auto}
+.tab{white-space:nowrap;padding:10px 12px}
+.site-head{padding:18px}
+.site-head h1{font-size:20px}
+}
+@media(max-width:600px){
+#main{padding:20px 12px 44px}
+input[type=text],input[type=number],input[type=date],select,textarea{font-size:16px}
+.facts{grid-template-columns:1fr 1fr;gap:10px}
+}
 </style>
 </head>
 <body>
@@ -119,7 +142,7 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
 <script>
 (function () {
   'use strict';
-  firebase.initializeApp((window.CLEARSKY_CONFIG||window.CFG||{}).firebase);
+  firebase.initializeApp(CFG.firebase);
   var auth = firebase.auth();
   var ORG = '', SITE = '', DATA = null, CANEDIT = false, CANARCHIVE = false, TAB = 'overview';
 
@@ -171,6 +194,10 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
       : '<span class="pill pill-unk">Meter: needs verification</span>';
     var term = unk(s.termYearsRemaining) ? needsVer() : esc(s.termYearsRemaining) + ' years <span class="n">remaining (snapshot)</span>';
     var pods = s.screening && !unk(s.screening.pods) ? esc(s.screening.pods) + ' pods' : notProvided();
+    var availKw = s.availablePowerMw != null ? Number(s.availablePowerMw) * 1000
+      : (s.serviceCapacityKw != null && s.existingPeakKw != null ? Math.max(0, Number(s.serviceCapacityKw) - Number(s.existingPeakKw)) : null);
+    var availBasis = s.availablePowerMw != null ? 'as entered'
+      : (availKw != null ? 'service \u2212 peak, derived' : null);
     document.getElementById('site-head').innerHTML =
       '<h1>' + esc(s.name || 'Unnamed site') + '</h1>' +
       '<div class="loc">' + esc([s.city, s.state].filter(Boolean).join(', ') || 'Location not provided') + '</div>' +
@@ -179,7 +206,8 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
       '<div class="fact"><div class="k">Reported peak</div><div class="v">' + (unk(s.reportedPeakKw) ? notProvided() : esc(s.reportedPeakKw) + ' kW ' + (s.peakUnresolved ? '<span class="pill pill-warn">unresolved</span>' : '')) + '</div><div class="n">workbook statistic; definition in dispute</div></div>' +
       '<div class="fact"><div class="k">Meter</div><div class="v">' + meter + '</div><div class="n">ownership at this site</div></div>' +
       '<div class="fact"><div class="k">Remaining term</div><div class="v">' + term + '</div></div>' +
-      '<div class="fact"><div class="k">Screened pods</div><div class="v">' + pods + '</div><div class="n">EVCS legacy proxy v1 · unverified</div></div>' +
+      '<div class="fact"><div class="k">Available power</div><div class="v">' + (availKw == null ? notProvided() : esc(availKw) + ' kW') + '</div><div class="n">' + (availBasis ? esc(availBasis) : 'for new load') + '</div></div>' +
+      '<div class="fact"><div class="k">Screened pods</div><div class="v">' + pods + '</div><div class="n">Screening proxy \u00b7 unverified</div></div>' +
       '</div>';
     document.getElementById('tabs').style.display = 'flex';
   }
@@ -203,10 +231,95 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
       '<div class="li-body">' + (open ? '<span class="pill pill-warn">' + open + ' open follow-up' + (open > 1 ? 's' : '') + '</span>' : 'No open follow-ups.') + '</div>' +
       ((s.flags && s.flags.peakExceedsInstalled) ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
       ((s.flags && s.flags.meterUnknown) ? '<div class="li-body" style="margin-top:8px">Meter ownership ' + needsVer() + '.</div>' : '') +
-      '</div></div>';
+      '</div></div>' +
+      '<div class="grid2">' + usageCardHtml(s, fact) + (CANEDIT ? '<div class="card"><h3>Edit site facts</h3>' + editFormHtml(s) + '</div>' : '<div></div>') + '</div>';
+    wireEditForm();
     function fact(k, v, pre) {
       return '<div style="margin-bottom:8px"><div class="li-meta">' + esc(k) + '</div><div style="font-size:13.5px">' + (unk(v) ? notProvided() : esc((pre || '') + v)) + '</div></div>';
     }
+  }
+
+  /* ── power & usage card ── */
+  function usageCardHtml(s, fact) {
+    var mu = s.monthlyUsageKwh, muHtml = '';
+    if (Array.isArray(mu)) {
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      muHtml = '<div class="li-meta" style="margin:10px 0 4px">Monthly kWh</div><div style="font-size:12px;line-height:1.9">' +
+        months.map(function (m, i) {
+          return '<span style="display:inline-block;min-width:88px">' + m + ' <b>' + (mu[i] == null ? '\u2013' : Number(mu[i]).toLocaleString('en-US')) + '</b></span>';
+        }).join('') + '</div>';
+    }
+    var lf = (s.annualUsageKwh != null && s.existingPeakKw) ? (Number(s.annualUsageKwh) / (Number(s.existingPeakKw) * 8760)) : null;
+    return '<div class="card"><h3>Power &amp; usage</h3>' +
+      fact('Available power', s.availablePowerMw != null ? s.availablePowerMw + ' MW' : null) +
+      fact('Service capacity', s.serviceCapacityKw != null ? Number(s.serviceCapacityKw).toLocaleString('en-US') + ' kW' : null) +
+      fact('Existing peak', s.existingPeakKw != null ? Number(s.existingPeakKw).toLocaleString('en-US') + ' kW' : null) +
+      fact('Power price', s.powerPricePerKwh != null ? '$' + s.powerPricePerKwh + '/kWh' : null) +
+      fact('Annual usage', s.annualUsageKwh != null ? Number(s.annualUsageKwh).toLocaleString('en-US') + ' kWh' : null) +
+      fact('Load factor', lf != null && isFinite(lf) ? (lf * 100).toFixed(1) + '%' : null) +
+      muHtml +
+      (s.usageNotes ? '<div style="margin-top:10px"><div class="li-meta">Usage notes</div><div class="li-body">' + esc(s.usageNotes) + '</div></div>' : '') +
+      '<div class="assume">Available power drives pod sizing on the Pro forma tab: one pod takes 90 kW of facility power (75 kW IT \u00d7 PUE 1.2).</div>' +
+      '</div>';
+  }
+
+  /* ── edit site facts form ── */
+  function editFormHtml(s) {
+    function val(v) { return v == null ? '' : String(v); }
+    function numIn(id, label, v, step) {
+      return '<label class="fl">' + label + '</label><input type="number" id="' + id + '" value="' + esc(val(v)) + '"' + (step ? ' step="' + step + '"' : '') + ' style="width:100%">';
+    }
+    function txtIn(id, label, v) {
+      return '<label class="fl">' + label + '</label><input type="text" id="' + id + '" value="' + esc(val(v)) + '" style="width:100%">';
+    }
+    var mu = Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh.map(function (x) { return x == null ? '' : x; }).join(', ') : '';
+    return '<div class="grid2"><div>' +
+      txtIn('ef-name', 'Site name *', s.name) + txtIn('ef-city', 'City', s.city) + txtIn('ef-state', 'State', s.state) +
+      txtIn('ef-address', 'Address', s.address) + txtIn('ef-status', 'Status', s.status) +
+      txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + '</div><div>' +
+      numIn('ef-installedKw', 'Installed chargers (kW)', s.installedKw) + numIn('ef-reportedPeakKw', 'Reported peak (kW)', s.reportedPeakKw) +
+      '<label class="fl">Meter owned</label><select id="ef-meterOwned" class="inline" style="width:100%">' +
+      '<option value=""' + (s.meterOwned == null ? ' selected' : '') + '>Unknown</option>' +
+      '<option value="true"' + (s.meterOwned === true ? ' selected' : '') + '>Yes</option>' +
+      '<option value="false"' + (s.meterOwned === false ? ' selected' : '') + '>No</option></select>' +
+      numIn('ef-termYearsRemaining', 'Remaining term (years)', s.termYearsRemaining) + '</div></div>' +
+      '<div class="grid2"><div>' +
+      numIn('ef-availablePowerMw', 'Available power (MW)', s.availablePowerMw, '0.01') +
+      numIn('ef-serviceCapacityKw', 'Service capacity (kW)', s.serviceCapacityKw) +
+      numIn('ef-existingPeakKw', 'Existing peak (kW)', s.existingPeakKw) +
+      numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') + '</div><div>' +
+      numIn('ef-annualUsageKwh', 'Annual usage (kWh)', s.annualUsageKwh) +
+      '<label class="fl">Monthly usage kWh (Jan..Dec, comma-separated)</label>' +
+      '<input type="text" id="ef-monthlyUsageKwh" value="' + esc(mu) + '" style="width:100%" placeholder="e.g. 12000, 11500, ...">' +
+      '<label class="fl">Usage notes</label><textarea id="ef-usageNotes" style="min-height:52px">' + esc(val(s.usageNotes)) + '</textarea>' +
+      '</div></div>' +
+      '<label class="fl">Notes</label><textarea id="ef-notes">' + esc(val(s.notes)) + '</textarea>' +
+      '<div class="row" style="margin-top:12px"><button class="btn" id="ef-save">Save site facts</button></div>';
+  }
+  function wireEditForm() {
+    var btn = document.getElementById('ef-save');
+    if (!btn) return;
+    btn.addEventListener('click', function () {
+      function num(id) { var v = document.getElementById(id).value.trim(); return v === '' ? null : Number(v); }
+      function str(id) { var v = document.getElementById(id).value.trim(); return v === '' ? null : v; }
+      var mv = document.getElementById('ef-meterOwned').value;
+      var tg = str('ef-tags');
+      msg('Saving\u2026', true);
+      post('site-save', {
+        id: SITE,
+        name: str('ef-name'), city: str('ef-city'), state: str('ef-state'), address: str('ef-address'),
+        status: str('ef-status'), notes: str('ef-notes'),
+        tags: tg ? tg.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [],
+        installedKw: num('ef-installedKw'), reportedPeakKw: num('ef-reportedPeakKw'),
+        meterOwned: mv === '' ? null : mv === 'true',
+        termYearsRemaining: num('ef-termYearsRemaining'),
+        availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'),
+        existingPeakKw: num('ef-existingPeakKw'), powerPricePerKwh: num('ef-powerPricePerKwh'),
+        annualUsageKwh: num('ef-annualUsageKwh'), monthlyUsageKwh: str('ef-monthlyUsageKwh'),
+        usageNotes: str('ef-usageNotes')
+      }).then(function (j) { msg(esc(j.note), true); load(true); })
+        .catch(function (e) { msg(esc(e.message)); });
+    });
   }
 
   /* ── contacts ── */
@@ -364,6 +477,11 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
   function renderProforma() {
     var s = DATA.site, sc = s.screening || {};
     var defPods = sc.pods != null ? sc.pods : 1;
+    var availKw = s.availablePowerMw != null ? Number(s.availablePowerMw) * 1000
+      : (s.serviceCapacityKw != null && s.existingPeakKw != null ? Math.max(0, Number(s.serviceCapacityKw) - Number(s.existingPeakKw)) : null);
+    var availLine = availKw == null ? 'No available power entered \u2014 add it on the Overview tab to size from power.'
+      : 'Available: ' + availKw.toLocaleString('en-US') + ' kW \u2192 ' + Math.floor(availKw / 90) + ' pods at 90 kW each' +
+        (s.availablePowerMw != null ? ' (as entered)' : ' (service \u2212 peak, derived)');
     var hist = (DATA.proforma || []).map(function (p) {
       return '<div class="list-item"><div class="li-head"><span class="li-title">' + esc(p.label || p.scenarioId) + '</span>' +
         '<span class="li-meta">' + esc(p.createdAt || '') + ' · ' + esc(p.assumptionVersion || '') + '</span></div>' +
@@ -374,11 +492,17 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
     var html = '<div class="card"><h3>Size it</h3>' +
       '<div class="row"><label class="fl" style="margin:0">Pods</label>' +
       '<input type="number" id="pf-pods" class="inline" min="1" max="100000" value="' + esc(defPods) + '" style="width:110px">' +
-      '<label class="fl" style="margin:0">Discount rate</label>' +
+      (CANEDIT ? '<button class="btn-ghost" id="pf-size">Size pods from available power</button>' : '') +
+      '<span class="li-meta" id="pf-avail">' + esc(availLine) + '</span></div>' +
+      '<div class="row"><label class="fl" style="margin:0">Discount rate</label>' +
       '<input type="number" id="pf-disc" class="inline" min="0" max="1" step="0.01" value="0.08" style="width:90px">' +
+      '<label class="fl" style="margin:0">Assumptions</label>' +
+      '<select id="pf-ver" class="inline"><option value="omega-compute-v1">omega-compute-v1</option><option value="evcs-compute-v1">evcs-compute-v1 (legacy workbook)</option></select>' +
       '<input type="text" id="pf-label" placeholder="Scenario label (optional)" style="flex:1;min-width:160px">' +
       (CANEDIT ? '<button class="btn" id="pf-run">Run pro forma</button>' : '') + '</div>' +
-      '<div class="assume"><b>Assumption set evcs-compute-v1</b> (from the EVCS workbook Inputs): 75 kW IT/pod · PUE 1.2 · 48 GPUs/pod · $2.46375/GPU-hr · 85% billable · 98% uptime · −8%/yr GPU price · $0.15/kWh power · 3%/yr escalation · $5,000/mo fixed opex · 8% network + 2% maintenance of revenue · capex $1,986,375 + $100,000 BESS + $25,000 liquidity per pod · 100% to investor until capital recovered, then 80/20. 60 months. A screening case, not a return promise.</div></div>';
+      (s.powerPricePerKwh != null && CANEDIT ?
+        '<div class="row"><label style="font-size:12.5px"><input type="checkbox" id="pf-useprice" checked> Use this site\u2019s power price ($' + esc(s.powerPricePerKwh) + '/kWh) instead of the $0.15 default</label></div>' : '') +
+      '<div class="assume"><b>Assumption set <span id="pf-vername">omega-compute-v1</span></b>: 75 kW IT/pod \u00b7 PUE 1.2 (90 kW facility per pod) \u00b7 48 GPUs/pod \u00b7 $2.46375/GPU-hr \u00b7 85% billable \u00b7 98% uptime \u00b7 \u22128%/yr GPU price \u00b7 $0.15/kWh power \u00b7 3%/yr escalation \u00b7 $5,000/mo fixed opex \u00b7 8% network + 2% maintenance of revenue \u00b7 capex $1,986,375 + $100,000 BESS + $25,000 liquidity per pod \u00b7 100% to investor until capital recovered, then 80/20. 60 months. A screening case, not a return promise.</div></div>';
     html += '<div id="pf-result"></div>';
     html += '<div class="card"><h3>Saved scenarios</h3>' + (hist || '<div class="li-meta">No runs yet.</div>') + '</div>';
     document.getElementById('pane-proforma').innerHTML = html;
@@ -391,14 +515,35 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
           .catch(function (e) { msg(esc(e.message)); });
       });
     });
+    var verSel = document.getElementById('pf-ver');
+    if (verSel) verSel.addEventListener('change', function () {
+      document.getElementById('pf-vername').textContent = verSel.value;
+    });
+    function pfOverrides() {
+      var use = document.getElementById('pf-useprice');
+      if (use && use.checked && s.powerPricePerKwh != null) return { powerPricePerKwh: Number(s.powerPricePerKwh) };
+      return null;
+    }
+    function pfBody(extra) {
+      return Object.assign({
+        discountRateAnnual: Number(document.getElementById('pf-disc').value),
+        label: document.getElementById('pf-label').value,
+        assumptionVersion: verSel ? verSel.value : 'omega-compute-v1',
+        overrides: pfOverrides()
+      }, extra || {});
+    }
+    var sizeBtn = document.getElementById('pf-size');
+    if (sizeBtn) sizeBtn.addEventListener('click', function () {
+      msg('Sizing from available power\u2026', true);
+      post('proforma-run', pfBody({ sizeFromPower: true }))
+        .then(function (j) { SCEN = j.scenario; msg(esc(j.note), true); load(true); renderScen(); })
+        .catch(function (e) { msg(esc(e.message)); });
+    });
     var run = document.getElementById('pf-run');
     if (run) run.addEventListener('click', function () {
-      msg('Running…', true);
-      post('proforma-run', {
-        pods: Number(document.getElementById('pf-pods').value),
-        discountRateAnnual: Number(document.getElementById('pf-disc').value),
-        label: document.getElementById('pf-label').value
-      }).then(function (j) { SCEN = j.scenario; msg(esc(j.note), true); load(true); renderScen(); })
+      msg('Running\u2026', true);
+      post('proforma-run', pfBody({ pods: Number(document.getElementById('pf-pods').value) }))
+        .then(function (j) { SCEN = j.scenario; msg(esc(j.note), true); load(true); renderScen(); })
         .catch(function (e) { msg(esc(e.message)); });
     });
     if (SCEN) renderScen();
@@ -407,10 +552,16 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
     var el = document.getElementById('pf-result');
     if (!el || !SCEN) return;
     var r = SCEN.results || {};
+    var sz = r.sizing || (SCEN.inputs && SCEN.inputs.sizeFromPowerKw != null
+      ? { pods: r.pods, powerKwAvailable: SCEN.inputs.sizeFromPowerKw, powerKwPerPod: 90, basis: SCEN.inputs.sizeBasis } : null);
+    var sizingHtml = sz ? '<div class="li-meta" style="margin:6px 0 10px">Sized <b>' + esc(sz.pods) + ' pods</b> from ' +
+      Number(sz.powerKwAvailable).toLocaleString('en-US') + ' kW available (' +
+      (sz.basis === 'direct' ? 'as entered' : 'service \u2212 peak, derived') + ') at ' + esc(sz.powerKwPerPod) + ' kW per pod.</div>' : '';
     var rows = (SCEN.cashFlows || []).filter(function (f, i) { return i % 12 === 0 || f.month === 60; }).map(function (f) {
       return '<tr><td>' + f.month + '</td><td>' + money(f.revenue) + '</td><td>' + money(f.powerCost) + '</td><td>' + money(f.otherCost) + '</td><td>' + money(f.spvCash) + '</td><td>' + money(f.investorCash) + '</td></tr>';
     }).join('');
-    el.innerHTML = '<div class="card"><h3>' + esc(SCEN.label || SCEN.scenarioId) + ' <span class="li-meta">' + esc(SCEN.assumptionVersion || '') + ' · ' + esc(SCEN.createdAt || '') + '</span></h3>' +
+    el.innerHTML = '<div class="card"><h3>' + esc(SCEN.label || SCEN.scenarioId) + ' <span class="li-meta">' + esc(SCEN.assumptionVersion || '') + ' \u00b7 ' + esc(SCEN.createdAt || '') + '</span></h3>' +
+      sizingHtml +
       '<div class="facts">' +
       '<div class="fact"><div class="k">Project IRR</div><div class="v">' + irrText(r.projectIrr) + '</div><div class="n">annualized, pre-tax, no exit value</div></div>' +
       '<div class="fact"><div class="k">Investor IRR</div><div class="v">' + irrText(r.investorIrr) + '</div><div class="n">annualized, after the waterfall</div></div>' +
@@ -457,6 +608,28 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
       OmegaTenant.boot().then(function () { ORG = org(); load(); }).catch(function () { ORG = org(); load(); });
     } else { ORG = org(); load(); }
   });
+})();
+
+/* ── mobile nav drawer (same pattern as projects.html) ── */
+(function () {
+  var bar = document.getElementById('topbar'), nav = document.querySelector('.tb-nav');
+  if (!bar || !nav || document.getElementById('tb-burger')) return;
+  var b = document.createElement('button');
+  b.id = 'tb-burger'; b.className = 'tb-burger'; b.setAttribute('aria-label', 'Menu'); b.setAttribute('aria-expanded', 'false');
+  b.innerHTML = '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
+  bar.appendChild(b);
+  var s = document.createElement('div'); s.className = 'tb-scrim'; s.id = 'tb-scrim'; document.body.appendChild(s);
+  var navHome = nav.parentNode, navNext = nav.nextSibling;
+  function closeNav() { nav.classList.remove('open'); s.classList.remove('open'); b.setAttribute('aria-expanded', 'false'); }
+  function toggleNav() { var o = nav.classList.toggle('open'); s.classList.toggle('open', o); b.setAttribute('aria-expanded', o ? 'true' : 'false'); }
+  function place() {
+    if (window.innerWidth <= 900) { if (nav.parentNode !== document.body) document.body.appendChild(nav); }
+    else { closeNav(); if (nav.parentNode !== navHome) { if (navNext && navNext.parentNode === navHome) navHome.insertBefore(nav, navNext); else navHome.appendChild(nav); } }
+  }
+  place(); window.addEventListener('resize', place);
+  b.addEventListener('click', toggleNav); s.addEventListener('click', closeNav);
+  nav.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tb-tab')) closeNav(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(); });
 })();
 </script>
 </body>
