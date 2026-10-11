@@ -71,7 +71,7 @@ async function seed(call, list) {
   require('./_lib/live-admin')(A);
   var org = await A.db().collection('omega_orgs').doc(ORG).get();
   if (!org.exists) { console.error('Refusing: omega_orgs/' + ORG + ' does not exist. Create the EVCS workspace through the normal tenant onboarding first; this script never creates tenants, users or passwords.'); process.exit(3); }
-  var live = make({ A: A, db: function () { return A.db(); }, bucket: function () { return require('../api/_lib/po-intake').bucket(); }, authenticate: function () { return Promise.resolve(STAFF); }, now: function () { return new Date().toISOString(); } });
+  var live = make({ A: A, db: require('../api/_lib/portfolio/register').regDb, bucket: function () { return require('../api/_lib/po-intake').bucket(); }, authenticate: function () { return Promise.resolve(STAFF); }, now: function () { return new Date().toISOString(); } });
   var res = await seed(caller(live), list);
   console.log(JSON.stringify({ mode: 'APPLIED', org: ORG, result: res }, null, 2));
 })().catch(function (e) { console.error(e.message); process.exit(1); });
