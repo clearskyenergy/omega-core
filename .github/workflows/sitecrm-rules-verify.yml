@@ -71,10 +71,11 @@ jobs:
           print('PASS: all existing clauses preserved; exact uploaded candidate hash verified.')
           PY
           node scripts/check-rules.js firestore.rules | tee "$REVIEW_DIR/structural-check.log"
-      - name: Existing offline Site CRM API and pro forma tests
+      - name: Compare unchanged API suite on baseline and candidate; retain failures
         run: |
           set -euo pipefail
-          node scripts/test-site-crm.js 2>&1 | tee "$REVIEW_DIR/site-crm-tests.log"
+          python3 "$GITHUB_WORKSPACE/review/scripts/review/compare-api-tests.py"
+          test "$(git hash-object firestore.rules)" = 'a6efb085f9c6e80b01ca5855b97222255603e8f0'
       - name: Install isolated emulator-only test tools
         run: |
           set -euo pipefail
@@ -113,7 +114,7 @@ jobs:
         with:
           name: sitecrm-rules-review-${{ github.run_id }}
           path: ${{ runner.temp }}/sitecrm-reviewed
-      - name: Stage verified rules on a separate branch, never main
+      - name: Stage rules for review only, never merge or deploy
         shell: bash
         run: |
           set -euo pipefail
@@ -124,10 +125,13 @@ jobs:
           import os, pathlib, hashlib, json
           root = pathlib.Path(os.environ['REVIEW_DIR'])
           report = json.loads((root / 'emulator-results.json').read_text())
+          api = json.loads((root / 'api-results.json').read_text())
           assert report['status'] == 'passed' and report['production_access'] is False
+          assert api['identical_outcomes'] is True
           candidate = (root / 'candidate-firestore.rules').read_bytes()
           assert hashlib.sha256(candidate).hexdigest() == '4db3827f9f0fcc9c0e9032aa815fc201b4ff85f91e729c39553d1f6f8ae86b27'
           pathlib.Path('firestore.rules').write_bytes(candidate)
+          print('API suite passed:', api['suite_passed'], '; baseline/candidate identical:', api['identical_outcomes'])
           PY
           git diff --check
           test "$(git diff --name-only)" = 'firestore.rules'
@@ -137,5 +141,6 @@ jobs:
           git add -- firestore.rules
           git commit -m 'Site CRM: explicit server-only rules; preserve all existing policies'
           git push origin HEAD:refs/heads/review/sitecrm-rules-20261011
-          echo "Reviewed rules commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Rules-only review commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+          echo 'API outcomes and failures are in api-results.json. This is not a production release approval.' >> "$GITHUB_STEP_SUMMARY"
           echo 'No Firebase deployment. No customer data import. Main is unchanged.' >> "$GITHUB_STEP_SUMMARY"
