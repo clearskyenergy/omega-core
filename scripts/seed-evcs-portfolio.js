@@ -7,7 +7,9 @@
    - Default is an OFFLINE DRY RUN against an in-memory store: it reads the
      two private workbooks, runs the exact gateway import (preview → commit)
      twice, and prints aggregate counts only. No network, no credentials.
-   - --apply writes to Firestore through the same gateway code path
+   - --apply writes to Firestore through the same gateway code path, as
+     FIREBASE_SERVICE_ACCOUNT when it is set, else the Firebase CLI's
+     signed-in account (firebase login) through scripts/_lib/live-admin.js
      (api/_lib/portfolio/register.js, the one door /api/site-crm), as a ClearSky staff identity scoped to --org.
      It REFUSES unless omega_orgs/{org} already exists (it never creates a
      tenant, a user, a member or a password) and unless --confirm-org repeats
@@ -66,6 +68,7 @@ async function seed(call, list) {
     return;
   }
   if (CONFIRM !== ORG) { console.error('Refusing: --confirm-org must repeat --org (' + ORG + ').'); process.exit(2); }
+  require('./_lib/live-admin')(A);
   var org = await A.db().collection('omega_orgs').doc(ORG).get();
   if (!org.exists) { console.error('Refusing: omega_orgs/' + ORG + ' does not exist. Create the EVCS workspace through the normal tenant onboarding first; this script never creates tenants, users or passwords.'); process.exit(3); }
   var live = make({ A: A, db: function () { return A.db(); }, bucket: function () { return require('../api/_lib/po-intake').bucket(); }, authenticate: function () { return Promise.resolve(STAFF); }, now: function () { return new Date().toISOString(); } });
