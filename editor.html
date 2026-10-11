@@ -69829,7 +69829,11 @@ function _cgcBlocks(){
   var out=[], ppf=_cgcPpf();
   try{
     (S.shapes||[]).forEach(function(sh){
-      if(!sh || sh.kind!=='derdc' || sh.omegaCore) return;
+      if(!sh) return;
+      /* Compute blocks: kind derdc (standard or ZTMM), not the Omega-Core skid.
+         Also accept omegaCompute flag as a fallback for blocks placed via placeAt. */
+      var isCompute = (sh.kind==='derdc' && !sh.omegaCore) || (sh.omegaCompute && sh.kind!=='bess');
+      if(!isCompute) return;
       var p=(sh.pts&&sh.pts[0])?sh.pts[0]:null; if(!p) return;
       /* pts[0] is the CENTRE of the pad — that is what _derRenderDc draws
          from. Adding half put every tap a pad away from its own block. */
