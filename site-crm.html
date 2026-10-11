@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <script src="/omega-splash.js?v=1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Site · ClearSky-OMEGA</title>
+<title>Site · Omega Workspace</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -15,18 +15,8 @@
   --sap-ink:#16202B;--sap-ink-2:#5B6672;
 }
 body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--cs-text);min-height:100vh}
-#topbar{display:flex;align-items:center;background:#fff;padding:0 24px;height:60px;position:sticky;top:0;z-index:200;border-bottom:1px solid var(--sap-card-border)}
-.tb-logo{text-decoration:none}.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px}.tb-logo-txt span{color:var(--sap-blue)}
-.tb-sep{width:1px;height:22px;background:var(--sap-card-border);margin:0 16px}
-.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
-.tb-nav{display:flex;align-items:center;gap:2px;margin-left:20px;height:56px}
-.tb-tab{display:flex;align-items:center;gap:6px;text-decoration:none;border-bottom:3px solid transparent;color:var(--sap-ink);padding:0 14px;height:56px;font:500 13.5px/1 'DM Sans',sans-serif;white-space:nowrap}
-.tb-tab:hover{color:var(--sap-blue)}
-.tb-tab.active{color:var(--sap-blue);border-bottom-color:var(--sap-blue-hi);font-weight:600}
-.tb-spacer{flex:1}.tb-user{display:flex;align-items:center;gap:10px}
-.tb-avatar{width:32px;height:32px;border-radius:50%;background:var(--sap-blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
-.tb-name{font-size:13px;font-weight:500}
-#main{max-width:1100px;margin:0 auto;padding:32px 24px}
+#main{max-width:1240px}
+/* the chrome (rail, switcher, side panel, phone tab bar) is omega-workspace-shell.js; this page builds none of it */
 .crumb{font-size:12.5px;color:var(--cs-sub);margin-bottom:10px}
 .crumb a{color:var(--sap-blue);text-decoration:none}
 .site-head{background:#fff;border:1px solid var(--sap-card-border);border-radius:14px;padding:24px;margin-bottom:0}
@@ -77,19 +67,21 @@ table.cf th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 @media(max-width:700px){.grid2{grid-template-columns:1fr}}
 select.inline,input.inline{padding:6px 9px;font-size:12.5px}
+/* the deck tab: the IRR tool's own headline tiles, the three structures, the deck */
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:6px}
+.kpi{background:#FAFBFC;border:1px solid var(--sap-card-border);border-radius:10px;padding:14px}
+.kpi .v{font-size:22px;font-weight:700;letter-spacing:-.3px;font-variant-numeric:tabular-nums}.kpi .l{font-size:11.5px;color:var(--cs-sub);margin-top:4px;line-height:1.4}
+.kpi.good .v{color:#2E7D5B}.kpi.warn .v{color:#B45309}
+.cap-state{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:12px;font-size:13px}
+.cap-state .pill{font-size:12px;padding:4px 11px}
+.pill-funded{background:#2E7D5B;color:#fff}
+.deck-box{overflow:hidden;border-radius:10px;background:#E8ECF1;border:1px solid var(--sap-card-border);padding:16px 16px 0;margin-top:12px;--pf-scale:.5}
+.deck-box .empty{padding:0 0 16px;color:var(--cs-sub);font-size:13px}
+.deals{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:8px}.deals th,.deals td{text-align:right;padding:7px 8px;border-bottom:1px solid rgba(0,0,0,.05);font-variant-numeric:tabular-nums}.deals th:first-child,.deals td:first-child{text-align:left}.deals th{font-size:10.5px;text-transform:uppercase;letter-spacing:.6px;color:var(--cs-sub)}.deals tr.on td{font-weight:700}
+.links{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.links a{display:inline-flex;align-items:center;gap:5px;font-size:12.5px;font-weight:600;padding:6px 12px;border-radius:999px;border:1px solid var(--sap-card-border);background:#fff;color:var(--sap-blue);text-decoration:none}
+@media print{#side-nav,#topbar,.ows-tabs,.tabs,.crumb,.site-head,#pane-deck .card:not(#deck-card){display:none!important}}
 label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);margin:10px 0 4px;text-transform:uppercase;letter-spacing:.5px}
-.tb-burger{display:none;background:#fff;border:1px solid var(--sap-card-border);border-radius:8px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex:none;padding:0;margin-left:auto}
-.tb-burger svg{width:20px;height:20px;stroke:var(--sap-ink);stroke-width:2;fill:none;stroke-linecap:round}
-.tb-scrim{position:fixed;inset:0;background:rgba(8,25,40,.5);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
-.tb-scrim.open{opacity:1;pointer-events:auto}
 @media(max-width:900px){
-#topbar{height:54px;padding:0 12px;gap:8px}
-.tb-burger{display:flex}
-.tb-sep,.tb-portal,.tb-name{display:none}
-.tb-nav{position:fixed;top:0;right:0;bottom:0;left:auto;width:270px;max-width:82vw;height:100vh;height:100dvh;background:#fff;flex-direction:column;align-items:stretch;gap:0;margin:0;padding:64px 0 20px;box-shadow:-8px 0 30px rgba(0,0,0,.28);transform:translateX(100%);transition:transform .24s ease;z-index:1000;overflow-y:auto}
-.tb-nav.open{transform:translateX(0)}
-.tb-tab{height:auto;padding:15px 22px;border-bottom:1px solid var(--sap-card-border);border-left:3px solid transparent;font-size:15px;justify-content:flex-start}
-.tb-tab.active{border-bottom-color:var(--sap-card-border);border-left-color:var(--sap-blue);background:rgba(0,112,242,.06)}
 #main{padding:24px 14px 48px}
 .tabs{overflow-x:auto}
 .tab{white-space:nowrap;padding:10px 12px}
@@ -104,18 +96,6 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
 </style>
 </head>
 <body>
-<div id="topbar">
-  <a class="tb-logo" href="/"><span class="tb-logo-txt">ClearSky<span>OMEGA</span></span></a>
-  <div class="tb-sep"></div><span class="tb-portal">EnergyOS</span>
-  <div class="tb-nav">
-    <a class="tb-tab" href="/">Portal</a>
-    <a class="tb-tab" href="/marketplace.html">Marketplace</a>
-    <a class="tb-tab" href="/projects.html">Projects</a>
-    <a class="tb-tab active" href="/portfolio.html">Portfolio</a>
-  </div>
-  <div class="tb-spacer"></div>
-  <div class="tb-user"><div class="tb-avatar" id="tb-avatar">–</div><span class="tb-name" id="tb-name"></span></div>
-</div>
 <div id="main">
   <div class="crumb"><a href="/portfolio.html">Portfolio</a> · <span id="crumb-site">…</span></div>
   <div id="msg"></div>
@@ -126,24 +106,41 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     <button class="tab" data-t="activity">Activity</button>
     <button class="tab" data-t="files">Files</button>
     <button class="tab" data-t="proforma">Pro forma</button>
+    <button class="tab" data-t="deck">Investor deck &amp; capital</button>
   </div>
   <div class="tabpane active" id="pane-overview"></div>
   <div class="tabpane" id="pane-contacts"></div>
   <div class="tabpane" id="pane-activity"></div>
   <div class="tabpane" id="pane-files"></div>
   <div class="tabpane" id="pane-proforma"></div>
+  <div class="tabpane" id="pane-deck"></div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-jd-nav.js?v=1"></script>
+<script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-workspace-shell.js"></script>
+<!-- the investor deck is the BESS Pro Forma's own (proforma-logic.js); every figure on it is the finance engine's -->
+<script src="/proforma-logic.js"></script>
 <script>
 (function () {
   'use strict';
-  firebase.initializeApp((window.CLEARSKY_CONFIG||window.CFG||{}).firebase);
+  /* omega-tenant.js starts Firebase the moment it loads; a second start throws */
+  try { firebase.initializeApp((window.CLEARSKY_CONFIG || {}).firebase); } catch (e) { if (!/already exists/.test(String(e && e.message))) throw e; }
   var auth = firebase.auth();
+  var S = window.OmegaWorkspaceShell, WS = null, USER = null, LOADED = false, ENT_TIMER = null;
+  S.mount({ current: 'portfolio', tabs: true, search: false });
+  document.getElementById('main').classList.add('ows-content');
+  function paint() {
+    S.paint({ ws: WS || window.OMEGA_WORKSPACE || {}, user: USER || {} });
+    if (!S.wantsWorkspace()) Array.prototype.forEach.call(document.querySelectorAll('#side-nav a[data-key="home"], .ows-tabs a[data-tab="home"]'), function (a) { a.setAttribute('href', '/'); });
+  }
   var ORG = '', SITE = '', DATA = null, CANEDIT = false, CANARCHIVE = false, TAB = 'overview';
 
   function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
@@ -152,7 +149,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function notProvided() { return '<span class="t-mut">Not provided</span>'; }
   function needsVer() { return '<span class="t-mut">Needs verification</span>'; }
   function org() {
-    var w = window.OMEGA_WORKSPACE || {};
+    var w = WS || window.OMEGA_WORKSPACE || {};
     if (w.orgId) return w.orgId;
     var u = auth.currentUser;
     return u && u.email ? (u.email.split('@')[1] || '').toLowerCase() : '';
@@ -173,11 +170,12 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     var body = Object.assign({ org: ORG, site: SITE, action: action }, extra || {});
     return api('/api/site-crm', { method: 'POST', json: body });
   }
-  function money(n) {
-    if (!isFinite(n)) return '–';
+  function money(n, short) {
+    if (n == null || !isFinite(n)) return '–';
     var a = Math.abs(n);
-    var s = a >= 1e6 ? (n / 1e6).toFixed(2) + 'M' : a >= 1e3 ? (n / 1e3).toFixed(1) + 'k' : n.toFixed(0);
-    return (n < 0 ? '−$' : '$') + s.replace('-', '');
+    if (short === false) return (n < 0 ? '−$' : '$') + Math.round(a).toLocaleString('en-US');
+    var s = a >= 1e6 ? (a / 1e6).toFixed(2) + 'M' : a >= 1e3 ? (a / 1e3).toFixed(1) + 'k' : a.toFixed(0);
+    return (n < 0 ? '−$' : '$') + s;
   }
   function pct(n, d) {
     if (!isFinite(n)) return '–';
@@ -208,10 +206,16 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="fact"><div class="k">Remaining term</div><div class="v">' + term + '</div></div>' +
       '<div class="fact"><div class="k">Available power</div><div class="v">' + (availKw == null ? notProvided() : esc(availKw) + ' kW') + '</div><div class="n">' + (availBasis ? esc(availBasis) : 'for new load') + '</div></div>' +
       '<div class="fact"><div class="k">Screened pods</div><div class="v">' + pods + '</div><div class="n">Screening proxy \u00b7 unverified</div></div>' +
-      '</div>';
+      capitalFact(s) + '</div>';
     document.getElementById('tabs').style.display = 'flex';
   }
 
+  function capitalFact(s) {
+    var lm = s.latestModel, cap = s.capital;
+    var v = cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap && cap.status && cap.status !== 'missing' ? '<span class="pill pill-ok">' + esc(cap.status === 'draft' ? 'Draft deal' : 'On the marketplace') + '</span>' : lm && lm.totalProjectCost > 0 ? esc(money(lm.totalProjectCost, true)) : notProvided();
+    var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) : 'run the compute model';
+    return '<div class="fact"><div class="k">Capital</div><div class="v">' + v + '</div><div class="n">' + n + '</div></div>';
+  }
   /* ── overview ── */
   function renderOverview() {
     var s = DATA.site, sc = s.screening || {}, cm = s.commercial || {};
@@ -275,7 +279,10 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     var mu = Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh.map(function (x) { return x == null ? '' : x; }).join(', ') : '';
     return '<div class="grid2"><div>' +
       txtIn('ef-name', 'Site name *', s.name) + txtIn('ef-city', 'City', s.city) + txtIn('ef-state', 'State', s.state) +
-      txtIn('ef-address', 'Address', s.address) + txtIn('ef-status', 'Status', s.status) +
+      txtIn('ef-address', 'Address', s.address) + txtIn('ef-zip', 'ZIP code (the compute model reads the tariff book and climate from it)', s.zip) +
+      '<label class="fl">Host type (for the compute model)</label><select id="ef-hostType" class="inline" style="width:100%">' +
+      [['', 'Not set (multifamily assumed)'], ['multifamily', 'Multifamily (house meter)'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']].map(function (o) { return '<option value="' + o[0] + '"' + ((s.hostType || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      txtIn('ef-status', 'Status', s.status) +
       txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + '</div><div>' +
       numIn('ef-installedKw', 'Installed chargers (kW)', s.installedKw) + numIn('ef-reportedPeakKw', 'Reported peak (kW)', s.reportedPeakKw) +
       '<label class="fl">Meter owned</label><select id="ef-meterOwned" class="inline" style="width:100%">' +
@@ -307,7 +314,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       msg('Saving\u2026', true);
       post('site-save', {
         id: SITE,
-        name: str('ef-name'), city: str('ef-city'), state: str('ef-state'), address: str('ef-address'),
+        name: str('ef-name'), city: str('ef-city'), state: str('ef-state'), address: str('ef-address'), zip: str('ef-zip'), hostType: str('ef-hostType'),
         status: str('ef-status'), notes: str('ef-notes'),
         tags: tg ? tg.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [],
         installedKw: num('ef-installedKw'), reportedPeakKw: num('ef-reportedPeakKw'),
@@ -573,6 +580,122 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="assume">Scenario <b>' + esc(SCEN.scenarioId) + '</b> · inputs hash <span style="font-family:monospace">' + esc((SCEN.inputsHash || '').slice(0, 16)) + '…</span> · immutable: a re-run creates a new scenario, this one never changes.</div></div>';
   }
 
+
+  /* ── the investor deck and the capital request ──────────────────────────
+     The compute model is the Compute Site Pro Forma's (POST site-model: the
+     record mapped by api/_lib/site-model.js, the one finance engine's answer
+     stored on the site); the deck is proforma-logic.js drawn from that
+     answer, exactly as the IRR tool draws it. The capital request is the
+     total project cost, sent to the finance marketplace as the deal's ask;
+     the deal's state is read live (site.capital). Nothing is computed here. */
+  var MODEL = null;
+  function irrPct(v) { return v == null || !isFinite(v) ? 'n/a' : (v * 100).toFixed(2) + '%'; }
+  function kpi(v, l, cls) { return '<div class="kpi' + (cls ? ' ' + cls : '') + '"><div class="v">' + v + '</div><div class="l">' + l + '</div></div>'; }
+  function siteLinks(s) {
+    var addr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(', ');
+    return '<div class="links">' +
+      (s.projectId ? '<a href="/editor.html?id=' + encodeURIComponent(s.projectId) + '">Open in Site Map ↗</a>' : '<a href="/portfolio.html" title="Select the site on the register and press Open in Site Map">Site Map: not yet ↗</a>') +
+      (addr ? '<a href="/grid-atlas.html?q=' + encodeURIComponent(addr) + '">Grid Atlas at this address ↗</a>' : '<a href="/grid-atlas.html">Grid Atlas ↗</a>') +
+      '<a href="/compute-proforma.html">Compute Site Pro Forma ↗</a>' +
+      (s.finProjectId ? '<a href="/finance#deal=' + encodeURIComponent(s.finProjectId) + '&tab=market">The deal on the marketplace ↗</a>' : '') + '</div>';
+  }
+  function capitalCard(s) {
+    var lm = s.latestModel, lp = s.latestProforma, cap = s.capital || null;
+    var ask = lm && lm.totalProjectCost > 0 ? { amount: lm.totalProjectCost, equity: lm.equity, debt: lm.debt, irr: lm.irr, label: (lm.structureLabel || '') + ' · ' + (lm.termYears || 10) + '-year term', src: 'Compute Site Pro Forma' }
+      : lp && lp.investorCapital > 0 ? { amount: lp.investorCapital, equity: lp.investorCapital, debt: 0, irr: lp.investorIrrDefined ? lp.investorIrrAnnual : null, label: lp.pods + ' pod(s), 60-month investor case', src: 'pod pro forma' } : null;
+    var h = '<div class="card" id="capital-card"><h3>Capital request</h3>';
+    if (!ask) h += '<div class="li-body">No figure to request yet: run the compute model below (or a pod pro forma) and the total project cost becomes the request.</div>';
+    else h += '<div class="kpis">' + kpi(money(ask.amount), 'total project cost<br>the request') + kpi(money(ask.equity), 'equity sought') + kpi(ask.debt > 0 ? money(ask.debt) : 'none', 'debt') + kpi(irrPct(ask.irr), 'after-tax IRR') + '</div>' +
+      '<div class="li-meta" style="margin-top:8px">' + esc(ask.label) + ' · from the ' + esc(ask.src) + '</div>';
+    var state = '';
+    if (!cap) state = '<span class="pill pill-unk">Not sent</span>' + (CANEDIT && ask ? '<button class="btn" id="cap-send">Send to the finance marketplace</button>' : '') + (ask ? '<span class="li-meta">Opens the request to approved capital partners with the total project cost as the ask.</span>' : '');
+    else if (cap.funded) state = '<span class="pill pill-funded">Funded</span><span>Accepted by <b>' + esc(cap.awardedToOrg || 'a capital partner') + '</b>' + (cap.awardedAt ? ' on ' + esc(String(cap.awardedAt).slice(0, 10)) : '') + (cap.ask != null ? ' · ' + esc(money(cap.ask, false)) : '') + '</span>';
+    else if (cap.status === 'draft') state = '<span class="pill pill-warn">Draft on the marketplace</span><span class="li-meta">Only you see it; finish it in the portal, or run the model and send again.</span>';
+    else if (cap.status === 'missing') state = '<span class="pill pill-no">Deal not found</span><span class="li-meta">' + esc(cap.note || '') + '</span>';
+    else state = '<span class="pill pill-ok">' + esc(cap.status === 'awarded' ? 'Awarded' : 'Open to capital partners') + '</span><span>' + (cap.offerCount ? '<b>' + cap.offerCount + ' offer' + (cap.offerCount > 1 ? 's' : '') + '</b> waiting for your answer' : 'No offer yet') + (cap.ask != null ? ' · ask ' + esc(money(cap.ask, false)) : '') + '</span>';
+    h += '<div class="cap-state">' + state + '</div>' + siteLinks(s) + '</div>';
+    return h;
+  }
+  function modelForm(s) {
+    var lm = s.latestModel, pods = lm && lm.pods || (s.latestProforma && s.latestProforma.pods) || (s.screening && s.screening.pods) || 1;
+    function sel(id, label, opts, cur) { return '<label class="fl" style="margin:0">' + label + '</label><select id="' + id + '" class="inline">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; }
+    return '<div class="card"><h3>Run the compute model</h3>' +
+      '<div class="li-meta" style="margin-bottom:8px">The Compute Site Pro Forma on this site: the service, chargers, usage and power price on record, the pods below, one year hour by hour, then the finance engine. A fact the record lacks is asked for, never assumed.</div>' +
+      '<div class="row"><label class="fl" style="margin:0">ZIP</label><input type="text" id="md-zip" class="inline" value="' + esc(s.zip || '') + '" placeholder="5 digits" style="width:90px">' +
+      '<label class="fl" style="margin:0">Pods</label><input type="number" id="md-pods" class="inline" min="1" max="40" value="' + esc(pods) + '" style="width:80px">' +
+      sel('md-gpu', 'GPU', [['h200', 'NVIDIA H200'], ['rtxpro6000', 'RTX PRO 6000'], ['b300', 'NVIDIA B300']], lm && lm.gpuClass || 'h200') +
+      sel('md-structure', 'Structure', [['own', 'Own and operate'], ['infra', 'Own the power and pod layer'], ['lease', 'Lease the power']], lm && lm.structure || 'own') +
+      sel('md-host', 'Host', [['multifamily', 'Multifamily'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']], s.hostType || (lm && lm.hostType) || 'multifamily') +
+      (CANEDIT ? '<button class="btn" id="md-run">Run the compute model</button>' : '') + '</div>' +
+      '<div class="li-meta" id="md-basis">' + (lm ? 'Last run ' + esc(String(lm.at || '').slice(0, 10)) + (lm.label ? ' · ' + esc(lm.label) : '') + ' · ' + esc(lm.gpuName || '') + ' · ' + esc(lm.structureLabel || '') : 'Not run yet.') + '</div></div>';
+  }
+  function resultsCard(s) {
+    var lm = s.latestModel; if (!lm) return '';
+    var v = lm.verdict || {}, h = '<div class="card" id="results-card"><h3>Headline returns <span class="li-meta">' + esc(lm.structureLabel || '') + ' · ' + (lm.levered ? 'levered' : '100% equity, unlevered') + '</span></h3>';
+    if (lm.irr == null) h += '<div class="li-body">No capital is invested under this structure, so there is no IRR. Choose Own or the pod layer above for the full pro forma.</div>';
+    else h += '<div class="kpis">' + kpi(money(lm.equity), lm.levered ? 'equity sought<br>beside ' + money(lm.debt) + ' of debt' : 'total investment sought<br>100% equity') +
+      kpi(irrPct(lm.irr), 'after-tax ' + (lm.levered ? 'equity' : 'unlevered') + ' IRR<br>over the ' + esc(lm.termYears || 10) + '-year term', lm.irr > 0.1 ? 'good' : lm.irr < 0 ? 'warn' : '') +
+      kpi(money(lm.totalReturns), 'total investor returns<br>over the life of the project') + kpi(lm.paybackYears == null ? 'n/a' : '~' + Number(lm.paybackYears).toFixed(1) + ' yr', 'after-tax payback') + '</div>';
+    h += '<div class="cap-state"><span class="pill ' + (v.tone === 'ok' ? 'pill-ok' : v.tone === 'warn' ? 'pill-warn' : 'pill-unk') + '">' + esc(v.label || 'No verdict') + '</span>' + (v.gate ? '<span class="li-meta">Next: ' + esc(v.gate) + '</span>' : '') + '</div>';
+    var deals = lm.deals || {};
+    h += '<table class="deals"><tr><th>Structure</th><th>Capital</th><th>Equity</th><th>IRR</th><th>NPV</th><th>Payback</th><th>Year 1</th></tr>' +
+      Object.keys(deals).map(function (k) { var d = deals[k]; return '<tr class="' + (k === lm.structure ? 'on' : '') + '"><td>' + esc(d.label) + '</td><td>' + money(d.capital, false) + '</td><td>' + (d.equity == null ? '—' : money(d.equity, false)) + '</td><td>' + irrPct(d.irr) + '</td><td>' + (d.npv == null ? '—' : money(d.npv, false)) + '</td><td>' + (d.payback == null ? '—' : d.payback + ' yr') + '</td><td>' + money(d.year1, false) + '</td></tr>'; }).join('') + '</table>' +
+      '<div class="assume">Screening results from the Compute Site Pro Forma under the site’s facts and the model’s published and planning figures; confidence <b>' + esc(lm.confidence || 'n/a') + '</b>. Not a return promise.</div></div>';
+    return h;
+  }
+  function deckCard(s) {
+    return '<div class="card" id="deck-card"><h3>Investor deck <span class="li-meta">in your company’s brand</span></h3>' +
+      '<div class="row"><button class="btn" id="deck-print"' + (s.latestModel ? '' : ' disabled') + '>Print / save as PDF</button><span class="li-meta">The same deck the Compute Site Pro Forma prints: cover, overview, the numbers, the cash flow, disclosures.</span></div>' +
+      '<div class="deck-box" id="deck-box"><div class="empty">' + (s.latestModel ? 'Loading the deck…' : 'The deck appears once the compute model has run.') + '</div></div></div>';
+  }
+  function deckOpts(res) { var st = res && res.story || {}; return { include: { cashflow: true, disclosures: true }, title: st.title, flow: st.flow, terms: st.terms, narrative: st.narrative }; }
+  function brandNow() {
+    var P = window.OmegaProformaReport, b = MODEL && MODEL.brand || {};
+    if (P && typeof P.brandFrom === 'function') { try { return P.brandFrom(b, {}); } catch (e) {} }
+    return { name: b.name || '', accent: '#2563EB' };
+  }
+  function drawDeck() {
+    var box = document.getElementById('deck-box'), P = window.OmegaProformaReport, res = MODEL && MODEL.model && MODEL.model.result;
+    if (!box) return;
+    if (!P || typeof P.render !== 'function') { box.innerHTML = '<div class="empty">The report module did not load, so the deck cannot be drawn. Reload the page.</div>'; return; }
+    if (!res) { box.innerHTML = '<div class="empty">The deck appears once the compute model has run.</div>'; return; }
+    if (!res.proforma) { box.innerHTML = '<div class="empty">No capital is invested under the lease structure, so there is no investor deck; run the model as Own or the pod layer.</div>'; return; }
+    if (!document.getElementById('pf-deck-css') && typeof P.css === 'function') { var st = document.createElement('style'); st.id = 'pf-deck-css'; st.textContent = P.css(); document.head.appendChild(st); }
+    box.style.setProperty('--pf-scale', String(Math.max(0.2, Math.min(1, ((box.clientWidth || 700) - 32) / 960))));
+    try { box.innerHTML = P.render(res.proforma, brandNow(), deckOpts(res)) || '<div class="empty">The deck could not be drawn from this result.</div>'; }
+    catch (e) { box.innerHTML = '<div class="empty">The deck could not be drawn: ' + esc(e && e.message) + '</div>'; }
+  }
+  function printDeck() {
+    var P = window.OmegaProformaReport, res = MODEL && MODEL.model && MODEL.model.result;
+    if (!res || !res.proforma || !P) { msg('The deck is drawn from the compute model; run it first.'); return; }
+    var ok = false; try { ok = P.print(res.proforma, brandNow(), deckOpts(res)) !== false; } catch (e) { ok = false; }
+    if (!ok) msg('The browser blocked the print window. Allow pop-ups for this site and try again.');
+  }
+  function renderDeck() {
+    var s = DATA.site;
+    document.getElementById('pane-deck').innerHTML = capitalCard(s) + modelForm(s) + resultsCard(s) + deckCard(s);
+    var send = document.getElementById('cap-send');
+    if (send) send.addEventListener('click', function () {
+      if (!confirm('Send this site to the finance marketplace? It is listed OPEN to approved capital partners with the total project cost as the ask.')) return;
+      msg('Sending…', true);
+      api('/api/site-crm', { method: 'POST', json: { org: ORG, action: 'send-to-finance', ids: [SITE] } }).then(function (j) { msg(esc(j.note), true); load(true); }).catch(function (e) { msg(esc(e.message)); });
+    });
+    var run = document.getElementById('md-run');
+    if (run) run.addEventListener('click', function () {
+      msg('Running the compute model…', true); run.disabled = true;
+      post('site-model', { zip: document.getElementById('md-zip').value.trim(), pods: Number(document.getElementById('md-pods').value), gpuClass: document.getElementById('md-gpu').value,
+        structure: document.getElementById('md-structure').value, hostType: document.getElementById('md-host').value })
+        .then(function (j) { MODEL = { model: { id: j.modelId, result: j.result }, brand: j.brand }; msg(esc(j.note), true); load(true); })
+        .catch(function (e) { msg(esc(e.message)); run.disabled = false; });
+    });
+    var pr = document.getElementById('deck-print'); if (pr) pr.addEventListener('click', printDeck);
+    if (!s.latestModel) { MODEL = null; return; }
+    if (MODEL && MODEL.model && MODEL.model.id === s.latestModel.modelId) { drawDeck(); return; }
+    api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(SITE) + '&model=1').then(function (j) { MODEL = j; if (TAB === 'deck') drawDeck(); })
+      .catch(function (e) { var box = document.getElementById('deck-box'); if (box) box.innerHTML = '<div class="empty">' + esc(e.message) + '</div>'; });
+  }
+  window.addEventListener('resize', function () { if (TAB === 'deck' && MODEL) { clearTimeout(window._rz); window._rz = setTimeout(drawDeck, 200); } });
+
   /* ── boot ── */
   function showTab(t) {
     TAB = t;
@@ -583,54 +706,46 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (t === 'activity') renderActivity();
     if (t === 'files') renderFiles();
     if (t === 'proforma') renderProforma();
+    if (t === 'deck') renderDeck();
   }
   function load(keepTab) {
     msg('');
     api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(SITE)).then(function (j) {
       DATA = j; CANEDIT = !!j.canEdit; CANARCHIVE = !!j.canArchive;
+      try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
       renderHead();
-      showTab(keepTab ? TAB : 'overview');
+      showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : 'overview'));
     }).catch(function (e) {
       document.getElementById('site-head').innerHTML = '<div class="err">' + esc(e.message) + '</div>';
+      try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {}
     });
   }
   Array.prototype.forEach.call(document.querySelectorAll('.tab'), function (b) {
     b.addEventListener('click', function () { showTab(b.getAttribute('data-t')); });
   });
-  auth.onAuthStateChanged(function (u) {
-    if (!u) { window.location.href = '/'; return; }
-    document.getElementById('tb-avatar').textContent = (u.email || '?').charAt(0).toUpperCase();
-    document.getElementById('tb-name').textContent = u.displayName || u.email;
+  /* who is here: the sign-in, then the entitlements (the workspace) */
+  function onAuth(u, tries) {
+    if (!u) {
+      var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+      if ((tries || 0) < (had ? 20 : 4) && !auth.currentUser) { setTimeout(function () { onAuth(auth.currentUser, (tries || 0) + 1); }, 300); return; }
+      window.location.href = '/login.html'; return;
+    }
+    USER = u; paint();
     var m = /[?&]site=([^&]+)/.exec(window.location.search);
     SITE = m ? decodeURIComponent(m[1]) : '';
-    if (!SITE) { document.getElementById('site-head').innerHTML = '<div class="err">No site selected. <a href="/portfolio.html">Back to the portfolio</a>.</div>'; return; }
-    if (window.OmegaTenant && OmegaTenant.boot) {
-      OmegaTenant.boot().then(function () { ORG = org(); load(); }).catch(function () { ORG = org(); load(); });
-    } else { ORG = org(); load(); }
-  });
+    if (!SITE) { document.getElementById('site-head').innerHTML = '<div class="err">No site selected. <a href="/portfolio.html">Back to the portfolio</a>.</div>'; try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {} return; }
+    function start(ws) {
+      clearTimeout(ENT_TIMER);
+      WS = ws || window.OMEGA_WORKSPACE || (window.OmegaTenant && OmegaTenant.workspace) || {};
+      paint(); ORG = org();
+      if (!LOADED && ORG) { LOADED = true; load(); }
+    }
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(start);
+    ENT_TIMER = setTimeout(function () { if (!LOADED) start(null); }, 3500);
+  }
+  auth.onAuthStateChanged(function (u) { onAuth(u, 0); });
 })();
 
-/* ── mobile nav drawer (same pattern as projects.html) ── */
-(function () {
-  var bar = document.getElementById('topbar'), nav = document.querySelector('.tb-nav');
-  if (!bar || !nav || document.getElementById('tb-burger')) return;
-  var b = document.createElement('button');
-  b.id = 'tb-burger'; b.className = 'tb-burger'; b.setAttribute('aria-label', 'Menu'); b.setAttribute('aria-expanded', 'false');
-  b.innerHTML = '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
-  bar.appendChild(b);
-  var s = document.createElement('div'); s.className = 'tb-scrim'; s.id = 'tb-scrim'; document.body.appendChild(s);
-  var navHome = nav.parentNode, navNext = nav.nextSibling;
-  function closeNav() { nav.classList.remove('open'); s.classList.remove('open'); b.setAttribute('aria-expanded', 'false'); }
-  function toggleNav() { var o = nav.classList.toggle('open'); s.classList.toggle('open', o); b.setAttribute('aria-expanded', o ? 'true' : 'false'); }
-  function place() {
-    if (window.innerWidth <= 900) { if (nav.parentNode !== document.body) document.body.appendChild(nav); }
-    else { closeNav(); if (nav.parentNode !== navHome) { if (navNext && navNext.parentNode === navHome) navHome.insertBefore(nav, navNext); else navHome.appendChild(nav); } }
-  }
-  place(); window.addEventListener('resize', place);
-  b.addEventListener('click', toggleNav); s.addEventListener('click', closeNav);
-  nav.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tb-tab')) closeNav(); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(); });
-})();
 </script>
 </body>
 </html>

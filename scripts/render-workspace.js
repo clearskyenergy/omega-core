@@ -237,6 +237,52 @@ function cardRoute(body) {
   return { error: 'render-workspace does not answer ' + body.action };
 }
 var STAFF_CALLER = false;
+/* THE PORTFOLIO REGISTER (api/site-crm.js), as the endpoint answers it: a
+   site sized by a stored scenario (its latestProforma is what the endpoint
+   denormalises, so the page shows the stored figure, never one it works
+   out), a site with no scenario and a meter to verify, and an archived
+   site that only ?archived=1 lists. The posts are recorded and answered
+   in the endpoint's shape, so the check can assert what was asked. */
+var SITES_FX = { posts: [], model: null };
+/* the compute model on the sized site: the REAL engine on the fixture's
+   facts (api/_lib/site-model.js → compute-site.js), so the register's IRR,
+   the deck and the capital request are the engine's own figures */
+function siteCrmModel() {
+  if (SITES_FX.model) return SITES_FX.model;
+  var SMm = require('../api/_lib/site-model'), CSm = require('../api/_lib/compute-site');
+  var site = { name: 'Riverside Garage', city: 'Oakland', address: '1 Embarcadero W', zip: '94607', serviceCapacityKw: 400, installedKw: 120, annualUsageKwh: 410000, powerPricePerKwh: 0.17, latestProforma: { pods: 3 } };
+  var inp = SMm.inputFor(site, {}, { orgName: 'Northstar Development' }), res = CSm.model(inp.input);
+  if (!inp.ok || !res.ok) throw new Error('fixture model failed');
+  SITES_FX.model = { id: 'm_fixture', input: inp.input, basis: inp.basis, result: res, summary: SMm.summaryOf(res, inp.input, { modelId: 'm_fixture', at: '2026-10-10T16:00:00.000Z', by: 'ann@northstar.example', label: 'Fixture' }) };
+  return SITES_FX.model;
+}
+function siteCrmSites() {
+  var at = '2026-10-10T15:00:00.000Z', M = siteCrmModel();
+  return [
+    { id: 's-riverside', name: 'Riverside Garage', city: 'Oakland', state: 'CA', address: '1 Embarcadero W', status: 'In editor', tags: ['l2', 'priority'], installedKw: 120, reportedPeakKw: 95, peakUnresolved: true, meterOwned: true, termYearsRemaining: 8,
+      availablePowerMw: 0.3, serviceCapacityKw: null, existingPeakKw: null, powerPricePerKwh: 0.17, annualUsageKwh: 410000, screening: { label: 'Screening proxy', pods: 3 }, externalSiteIds: { fleet: 'RG-14' }, archived: false,
+      latestProforma: { scenarioId: 'pf_riverside1', pods: 3, itKw: 225, facilityKw: 270, investorIrrAnnual: 0.0053, investorIrrDefined: true, projectIrrAnnual: 0.0065, projectIrrDefined: true, npv: -42000, discountRateAnnual: 0.08, paybackMonth: 59, investorCapital: 6334125, year1Revenue: 1980000, months: 60, assumptionVersion: 'omega-compute-v1', label: 'Sized from power', at: at },
+      projectId: 'p-riverside', projectAt: at, finProjectId: 'f-riverside', finProjectStatus: 'open', latestModel: M.summary, zip: '94607',
+      capital: { status: 'awarded', funded: true, offerCount: 2, ask: M.summary.totalProjectCost, awardedTo: 'uid-ridgeline', awardedToOrg: 'Ridgeline Capital', awardedAt: '2026-10-11T09:00:00.000Z', request: { amount: M.summary.totalProjectCost, source: 'compute-model' }, dealId: 'f-riverside' } },
+    { id: 's-maple', name: 'Maple Yard Chargers', city: 'Austin', state: 'TX', address: '', status: '', tags: ['dcfc'], installedKw: 350, reportedPeakKw: null, peakUnresolved: false, meterOwned: null, termYearsRemaining: null,
+      availablePowerMw: null, serviceCapacityKw: 400, existingPeakKw: 150, powerPricePerKwh: null, annualUsageKwh: null, screening: null, externalSiteIds: {}, archived: false, latestProforma: null, projectId: null, finProjectId: null, finProjectStatus: null },
+    { id: 's-harbor', name: 'Harbor Lot', city: 'Tacoma', state: 'WA', address: '', status: 'On hold', tags: [], installedKw: null, reportedPeakKw: null, peakUnresolved: false, meterOwned: false, termYearsRemaining: 2,
+      availablePowerMw: null, serviceCapacityKw: null, existingPeakKw: null, powerPricePerKwh: null, annualUsageKwh: null, screening: null, externalSiteIds: {}, archived: true, archivedAt: at, latestProforma: null, projectId: null, finProjectId: null, finProjectStatus: null }
+  ];
+}
+function siteCrmRoute(method, qs, body) {
+  var all = siteCrmSites();
+  if (method === 'GET' && qs.site && qs.model === '1') { var Mm = siteCrmModel(); return qs.site === 's-riverside' ? { model: { id: Mm.id, input: Mm.input, basis: Mm.basis, result: Mm.result, summary: Mm.summary, label: 'Fixture', createdAt: '2026-10-10T16:00:00.000Z' }, brand: { name: 'Northstar Development', accent: '#2B5FA8', platform: 'ClearSky-OMEGA' } } : { model: null }; }
+  if (method === 'GET' && qs.site) { var one = all.filter(function (x) { return x.id === qs.site; })[0]; if (!one) return { __status: 404, error: 'Site not found' }; return { site: one, contacts: [], activity: [], followUps: [], files: [], proforma: [], canEdit: true, canArchive: true, limited: false }; }
+  if (method === 'GET') return { org: CURRENT_FX ? CURRENT_FX.org : 'northstar.example', sites: all.filter(function (x) { return qs.archived === '1' || !x.archived; }), archivedIncluded: qs.archived === '1', canEdit: true, canArchive: true, next: null, limited: false };
+  SITES_FX.posts.push(body);
+  var ids = body.ids || [];
+  if (body.action === 'send-to-editor') return { ok: true, created: ids.length, projects: ids.map(function (id) { return { siteId: id, projectId: 'p-new-' + id, created: true }; }), note: ids.length + ' project(s) created in Site Map.' };
+  if (body.action === 'send-to-finance') return { ok: true, opened: 1, drafted: ids.length - 1, deals: ids.map(function (id, i) { return { siteId: id, finProjectId: 'f-' + id, status: i ? 'draft' : 'open', created: true }; }), note: '1 deal(s) open to capital partners.' };
+  if (body.action === 'proforma-bulk') return { ok: true, ran: ids.map(function (id) { return { siteId: id, scenarioId: 'pf_' + id }; }), failed: [], note: ids.length + ' scenario(s) saved.' };
+  if (body.action === 'site-model-bulk') return { ok: true, ran: ids.map(function (id) { return { siteId: id, modelId: 'm_' + id }; }), failed: [], note: ids.length + ' compute model(s) run.' };
+  return { ok: true, count: ids.length, ids: ids, note: ids.length + ' site(s) done.' };
+}
 var srv = http.createServer(function (req, res) {
   var u = req.url.split('?')[0], post = req.method === 'POST';
   function json(o, status) { res.writeHead(status || 200, { 'Content-Type': 'application/json' }); res.end(JSON.stringify(o)); }
@@ -266,6 +312,7 @@ var srv = http.createServer(function (req, res) {
       var chunks = []; req.on('data', function (c) { chunks.push(c); }); req.on('end', function () { var body = {}; try { body = chunks.length ? JSON.parse(Buffer.concat(chunks).toString()) : {}; } catch (e) {}
         Promise.resolve().then(function () { return storeRoute(u, req.method, body); }).then(function (r) { var st = r && r.__status; if (st) delete r.__status; json(r, st || 200); }, function (e) { json({ error: e.message }, e.status || 500); }); }); return;
     }
+    if (u === '/api/site-crm') { var sc = []; req.on('data', function (c) { sc.push(c); }); req.on('end', function () { var sb = {}; try { sb = sc.length ? JSON.parse(Buffer.concat(sc).toString()) : {}; } catch (e) {} var qs = {}; String(req.url.split('?')[1] || '').split('&').forEach(function (kv) { var p = kv.split('='); if (p[0]) qs[decodeURIComponent(p[0])] = decodeURIComponent(p[1] || ''); }); var ans = siteCrmRoute(req.method, qs, sb); json(ans, ans.__status || 200); }); return; }
     missing.push(req.method + ' ' + u); return json({ error: 'render-workspace does not answer ' + u }, 404);
   }
   var f = path.join(ROOT, u === '/' ? 'index.html' : u);
@@ -415,7 +462,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var product = await p.$eval('#ows-product', function (e) { return e.textContent; }).catch(function () { return ''; });
     ok(name + ': the rail wears the product name', product === 'Omega Workspace', product);
     var rail = await p.$$eval('#side-nav .sn-item', function (r) { return r.filter(function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return a.querySelector('span').textContent.trim(); }); });
-    ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
+    ok(name + ': the rail is Home · Projects · All tools · Modules · Marketplace · Quote Desk · Team · Feed · Plan & billing · Settings', rail.join('|') === 'Home|Projects|Portfolio|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings', rail);
     var board = await p.evaluate(function () { function shown(id) { var e = document.getElementById(id); return !!e && getComputedStyle(e).display !== 'none'; } return { flight: shown('flight'), team: shown('team'), tools: shown('tools'), pulse: !!document.querySelector('#pulse .stats .stat'), stats: (function () { var g = document.querySelector('#pulse .stats'); return g ? g.querySelectorAll('.stat').length : 0; })(), fin: document.querySelectorAll('#pulse .stats')[1] ? document.querySelectorAll('#pulse .stats')[1].querySelectorAll('.stat').length : 0, finLink: (document.querySelector('#pulse a[data-pulse="market"]') || { getAttribute: function () { return null; } }).getAttribute('href'), spark: !!document.querySelector('#pulse .spark path'), insight: (document.querySelector('#pulse .insight') || {}).textContent || '', homeMods: Array.prototype.filter.call(document.querySelectorAll('.mod'), function (e) { return e.getClientRects().length > 0; }).length, mymods: !!document.getElementById('mymods') }; });
     ok(name + ': the module cards live on the Modules page, never on the home', board.homeMods === 0 && !board.mymods, board);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '-home-' + p.viewportSize().width + '.png'), fullPage: true });
@@ -1828,15 +1875,62 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       var items = Array.prototype.filter.call(document.querySelectorAll('#side-nav .sn-item'), function (a) { return getComputedStyle(a).display !== 'none'; }).map(function (a) { return (a.querySelector('span') || a).textContent.trim() + (a.classList.contains('active') ? '*' : ''); });
       var home = document.querySelector('a[data-sn="dashboard"]');
       function vis(sel) { var e = document.querySelector(sel); return !!e && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().height > 0; }
-      return { url: location.pathname, items: items, home: home && home.getAttribute('href'), theme: document.body.classList.contains('ows-theme'), grid: /linear-gradient/.test(getComputedStyle(document.body).backgroundImage), worn: document.body.classList.contains('ows-worn') && !!document.querySelector('#topbar.ows-top') && !!document.querySelector('#side-nav.ows-rail'), h1: (document.querySelector('.mkt-banner h1') || {}).textContent || '',
+      return { url: location.pathname, items: items, home: home && home.getAttribute('href'), theme: document.body.classList.contains('ows-theme') || document.body.classList.contains('ows'), grid: /linear-gradient/.test(getComputedStyle(document.body).backgroundImage), worn: document.body.classList.contains('ows-worn') && !!document.querySelector('#topbar.ows-top') && !!document.querySelector('#side-nav.ows-rail'), h1: (document.querySelector('.mkt-banner h1') || {}).textContent || '',
         store: !!document.getElementById('mkt-store') || !!document.querySelector('.mkt-mod, .mkt-planc'), catalogue: vis('#market-grid') && vis('.mkt-tabbar'), text: (document.getElementById('main') || document.body).innerText, mailto: document.querySelectorAll('#main a[href^="mailto:"]').length };
     });
     if (page === '/marketplace.html') out.cards = await p.evaluate(MARKET_CARDS);
     var name = 'flow ' + page;
     if (page === '/') ok(name + (opts.label || '') + ': a dashboard visit with the workspace as home lands on /workspace', /\/workspace$/.test(out.url), out.url);
     else {
-      ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
+      ok(name + ': the rail is the workspace rail with this page current', out.items.join('|') === 'Home|Projects|Portfolio|All tools|Modules|Marketplace|Quote Desk|Team|Feed|Plan & billing|Settings'.replace(current, current + '*'), out.items);
       ok(name + ': Dashboard points at /workspace and the ground is the blueprint grid', out.home === '/workspace' && out.theme && out.grid, out);
+      if (page === '/portfolio.html') {
+        /* the register in the shell: every row's IRR is the stored scenario's; a row opens the side panel with the figures; the selection bar works the way a mail client's does, and every action is asked of the endpoint */
+        await p.waitForFunction(function () { return document.querySelectorAll('.pf-tr.body').length > 0 || /Could not load|No sites/.test((document.getElementById('tbl') || {}).innerText || ''); }, null, { timeout: 6000 }).catch(function () {});
+        var pf = await p.evaluate(function () {
+          var rows = Array.prototype.map.call(document.querySelectorAll('.pf-tr.body'), function (r) { var c = r.children; return { name: c[1].querySelector('.t-name').textContent, status: c[3].textContent.trim(), power: c[4].textContent.trim(), pods: c[5].textContent.trim(), irr: c[6].textContent.trim(), capital: c[7].textContent.trim(), funding: c[8].textContent.trim(), links: Array.prototype.map.call(c[9].querySelectorAll('a'), function (a) { return a.getAttribute('href'); }) }; });
+          var shell = document.body.classList.contains('ows') && !!document.querySelector('#side-nav.ows-rail') && !!document.querySelector('#topbar.ows-top') && !!document.querySelector('.ows-tabs');
+          return { rows: rows, shell: shell, stats: getComputedStyle(document.getElementById('stats')).display, bar: document.getElementById('bar').classList.contains('on'), sites: document.getElementById('c-sites').textContent, pfN: document.getElementById('c-pf').textContent, fin: document.getElementById('c-fin').textContent, title: document.title, archivedShown: !!document.querySelector('.pf-tr.body.archived') };
+        });
+        function rowNamed(n) { return pf.rows.filter(function (r) { return r.name === n; })[0] || {}; }
+        var rv = rowNamed('Riverside Garage'), mp = rowNamed('Maple Yard Chargers');
+        var MX = siteCrmModel().summary, mIrr = (MX.irr * 100).toFixed(2) + '%', mCost = '$' + (MX.totalProjectCost / 1e6).toFixed(2) + 'M';
+        ok(name + ': the register wears the workspace shell (rail, switcher topbar, phone tab bar) and lists the live sites with the compute model\'s after-tax IRR, total project cost and Funded state, with Site Map, Atlas, Deck and the deal as hand-offs; an unsized site reads Not run and Not sent; the archived one is not listed', pf.shell && pf.rows.length === 2 && rv.name === 'Riverside Garage' && rv.irr === mIrr && rv.capital === mCost && rv.funding === 'Funded' && rv.pods === '3' && rv.status === 'In editor' && rv.power === '300 kW' && rv.links.join('|') === '/editor.html?id=p-riverside|/grid-atlas.html?q=1%20Embarcadero%20W%2C%20Oakland%2C%20CA%2C%2094607|/site-crm.html?site=s-riverside#deck|/finance#deal=f-riverside&tab=market' && mp.irr === 'Not run' && mp.funding === 'Not sent' && mp.power === '250 kW' && mp.links.join('|') === '/grid-atlas.html?q=Austin%2C%20TX' && pf.stats === 'grid' && pf.sites === '2' && pf.pfN === '1' && pf.fin === '1 funded' && !pf.bar && !pf.archivedShown, { pf: pf, want: { irr: mIrr, cost: mCost } });
+        await p.click('.pf-tr.body[data-id="s-riverside"] .t-name'); await wait(400);
+        var dr = await p.evaluate(function () { var d = document.querySelector('.ows-drawer'); return d ? { title: d.querySelector('h2').textContent, text: d.innerText.replace(/\s+/g, ' '), full: (d.querySelector('a.ows-row') || {}).getAttribute ? d.querySelector('a.ows-row').getAttribute('href') : null, acts: Array.prototype.map.call(d.querySelectorAll('#dr-acts button'), function (b) { return b.textContent.trim(); }) } : null; });
+        ok(name + ': a row opens the side panel with the compute model (after-tax IRR, total project cost, structure, verdict), the capital request read Funded by the partner, the pod pro forma, the Grid Atlas and deck links, the actions and a link to the full record', !!dr && dr.title === 'Riverside Garage' && dr.text.indexOf(mIrr) >= 0 && /after-tax IRR, 10-year term/.test(dr.text) && dr.text.indexOf(mCost) >= 0 && /Own and operate/.test(dr.text) && /Funded/.test(dr.text) && /accepted by Ridgeline Capital on 2026-10-11/.test(dr.text) && /0\.53%/.test(dr.text) && /month 59/.test(dr.text) && /Open at this address/.test(dr.text) && /Open the deck/.test(dr.text) && dr.full === '/site-crm.html?site=s-riverside' && dr.acts.indexOf('Export term sheet') >= 0 && dr.acts.indexOf('Open in Site Map') >= 0 && dr.acts.indexOf('Re-run compute model') >= 0, dr);
+        await p.keyboard.press('Escape'); await wait(200);
+        await p.click('#sel-all'); await wait(300);
+        var selA = await p.evaluate(function () { return { bar: document.getElementById('bar').classList.contains('on'), count: document.getElementById('selcount').textContent, checked: document.querySelectorAll('.sel-one:checked').length, del: getComputedStyle(document.getElementById('ba-delete')).display, buttons: Array.prototype.filter.call(document.querySelectorAll('#bar button'), function (b) { return getComputedStyle(b).display !== 'none'; }).map(function (b) { return b.textContent.trim(); }) }; });
+        ok(name + ': select-all raises the action bar over the register with every site checked, the editor, marketplace, pro forma, status, tag, export and archive actions, and Delete for an administrator', selA.bar && selA.count === '2 selected' && selA.checked === 2 && selA.del !== 'none' && ['Open in Site Map', 'Send to marketplace', 'Run compute model', 'Pod pro forma ▾', 'Set status ▾', 'Tag ▾', 'Export IRR', 'Export term sheets', 'Archive', 'Delete'].every(function (b) { return selA.buttons.indexOf(b) >= 0; }), selA);
+        SITES_FX.posts = [];
+        await p.click('#ba-status'); await wait(200);
+        var menuItems = await p.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('.pf-menu button'), function (b) { return b.firstChild.textContent.trim(); }); });
+        await p.click('.pf-menu button'); await wait(600);
+        var afterStatus = await p.evaluate(function () { return { msg: (document.getElementById('msg') || {}).innerText || '', bar: document.getElementById('bar').classList.contains('on') }; });
+        ok(name + ': Set status offers the stages and asks the endpoint for the selection (site-set-status with both ids); the answer is said and the register re-read', menuItems[0] === 'In editor' && menuItems.indexOf('Funding') >= 0 && SITES_FX.posts.length === 1 && SITES_FX.posts[0].action === 'site-set-status' && SITES_FX.posts[0].status === 'In editor' && SITES_FX.posts[0].ids.join() === 's-riverside,s-maple' && /2 site\(s\) done/.test(afterStatus.msg), { items: menuItems, posts: SITES_FX.posts, after: afterStatus });
+        var posted = await p.evaluate(function () { return { stop: document.querySelector('.pf-tr.body[data-id="s-riverside"] a[data-stop]') ? document.querySelector('.pf-tr.body[data-id="s-riverside"] a[data-stop]').getAttribute('href') : null }; });
+        ok(name + ': the Site Map chip on a row is a link to the project, not a row click', posted.stop === '/editor.html?id=p-riverside', posted);
+        await p.setViewportSize({ width: 390, height: 844 }); await wait(300);
+        var phone = await p.evaluate(function () { var tabs = document.querySelector('.ows-tabs'), burger = document.getElementById('ows-burger'), head = document.querySelector('.pf-tr.head'); return { scroll: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1, tabs: !!tabs && getComputedStyle(tabs).display === 'grid', burger: !!burger && getComputedStyle(burger).display !== 'none', rows: document.querySelectorAll('.pf-tr.body').length, cols: Array.prototype.filter.call(head.children, function (c) { return getComputedStyle(c).display !== 'none'; }).map(function (c) { return c.textContent.trim(); }) }; });
+        ok(name + ': on a phone the tab bar and the burger show, the rows keep the site, its status, its IRR and its capital state, and nothing scrolls sideways', !phone.scroll && phone.tabs && phone.burger && phone.rows === 2 && phone.cols.join('|') === '|Site|Status|IRR|Capital', phone);
+        if (shotsAt) { await p.screenshot({ path: path.join(shotsAt, 'portfolio-390.png'), fullPage: true }); await p.setViewportSize({ width: 1366, height: 900 }); await wait(200); await p.screenshot({ path: path.join(shotsAt, 'portfolio-1366.png'), fullPage: true }); }
+      }
+      if (page === '/site-crm.html') {
+        await p.waitForFunction(function () { return !!document.querySelector('#site-head h1'); }, null, { timeout: 6000 }).catch(function () {});
+        var sc = await p.evaluate(function () { return { h1: (document.querySelector('#site-head h1') || {}).textContent, shell: document.body.classList.contains('ows') && !!document.querySelector('#side-nav.ows-rail') && !!document.querySelector('#topbar.ows-top'), tabs: Array.prototype.map.call(document.querySelectorAll('#tabs .tab'), function (b) { return b.textContent; }), old: !!document.querySelector('.tb-nav') }; });
+        ok(name + ': the site record wears the same shell, with Portfolio current, opens on the site and reads Funded in its head', sc.shell && sc.h1 === 'Riverside Garage' && sc.tabs.indexOf('Pro forma') >= 0 && sc.tabs.indexOf('Investor deck & capital') >= 0 && !sc.old, sc);
+        await p.click('#tabs .tab[data-t="deck"]');
+        await p.waitForFunction(function () { return !!document.querySelector('#deck-box .pf-frame'); }, null, { timeout: 8000 }).catch(function () {});
+        var dk = await p.evaluate(function () {
+          var cap = document.getElementById('capital-card'), res = document.getElementById('results-card'), box = document.getElementById('deck-box');
+          return { cap: cap ? cap.innerText.replace(/\s+/g, ' ') : '', res: res ? res.innerText.replace(/\s+/g, ' ') : '', frames: box ? box.querySelectorAll('.pf-frame').length : 0, deckText: box ? box.innerText.replace(/\s+/g, ' ').slice(0, 400) : '', print: !document.getElementById('deck-print').disabled, head: (document.querySelector('#site-head') || {}).innerText || '' };
+        });
+        var MX2 = siteCrmModel().summary, mIrr2 = (MX2.irr * 100).toFixed(2) + '%';
+        ok(name + ': the Investor deck & capital tab shows the capital request (total project cost, equity, after-tax IRR) read Funded by Ridgeline Capital, the IRR tool\'s headline tiles and the three structures, and draws the same investor deck with Print enabled', /Capital request/.test(dk.cap) && /total project cost/.test(dk.cap) && dk.cap.indexOf(mIrr2) >= 0 && /Funded/.test(dk.cap) && /Accepted by Ridgeline Capital on 2026-10-11/.test(dk.cap) && /Grid Atlas at this address/.test(dk.cap) && /Headline returns/.test(dk.res) && dk.res.indexOf(mIrr2) >= 0 && /Own and operate the stack/.test(dk.res) && /Lease the power/.test(dk.res) && dk.frames >= 4 && /Northstar Development/.test(dk.deckText) && dk.print && /Funded/.test(dk.head), { cap: dk.cap.slice(0, 300), res: dk.res.slice(0, 200), frames: dk.frames, deck: dk.deckText.slice(0, 160), print: dk.print });
+        if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'site-crm-deck-1366.png'), fullPage: true });
+        if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'site-crm-1366.png'), fullPage: true });
+      }
       if (page === '/marketplace.html') {
         /* a legacy (unpackaged) Standard tenant on the workspace home: the tool catalogue in the workspace chrome, no store; a locked tool names the module that carries it (the public price list's) and links to it on the Modules page, a tool no module carries says the plan, a live one opens */
         var real = out.cards.filter(function (c) { return c.act !== 'Coming soon'; }), live = real.filter(function (c) { return !c.locked; }), locked = real.filter(function (c) { return c.locked; });
@@ -1858,6 +1952,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await ctx.close();
   }
   await flow('/projects.html', 'Projects'); await flow('/marketplace.html', 'Marketplace'); await flow('/', '');
+  await flow('/portfolio.html', 'Portfolio'); await flow('/site-crm.html', 'Portfolio', { query: '?site=s-riverside&home=workspace' });
   /* the classic choice: a browser that asked for the classic dashboard is sent there from /workspace, and index keeps it (the same rule on both pages, so no loop) */
   if (!ONLY || ONLY.test('flow')) await (async function () {
     var ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });

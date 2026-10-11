@@ -1141,6 +1141,50 @@ forward to the Modules page. Enterprise is "Contact for pricing":
 no Enterprise figure (the book keeps it for the contract). Design, launch
 order and the honest list of what is not built: `docs/OMEGA-WORKSPACE.md`.
 
+## Portfolio & Assets (2026-10-11)
+
+`portfolio.html` is the register of a workspace's energy SITES
+(`omega_orgs/{org}/sites`, Admin SDK only; `api/site-crm.js` is the ONE
+door, `site-crm.html` the one record). Both pages wear
+`omega-workspace-shell.js` (Portfolio is on the rail; `currentKey()` marks
+them) and boot the marketplace's way: sign-in, then
+`OmegaTenant.onEntitlements`, the address as the fallback. Never start
+Firebase a second time on a page that loads `omega-tenant.js`: that throw
+is what left the register on "Loading…". A site's figures are its STORED
+scenario, `latestProforma`, written only by `proforma-run` /
+`proforma-bulk` (`latestOf`): the register, the side panel, the CSV and
+the finance hand-off read it and never recompute. The selection's actions
+are the endpoint's, per site, idempotent on the hand-offs: `send-to-editor`
+makes ONE project per site (`siteId` ↔ `projectId`, the shape
+`omega-newproject.js` writes, `siteScopes` from the tags and the sizing);
+`send-to-finance` makes ONE `fin_projects` deal per site in the portal's
+own shape, `open` with the investor capital as the ask only when a scenario
+is on file, else `draft`. **The compute IRR and its presentation are the IRR
+tool's** (2026-10-11, Tommy: "this is the most important … print out an IRR and
+give us a similar presentation like we get from the IRR tool … it needs to
+match the style"): `site-model` maps the record to the Compute Site Pro
+Forma by ONE rule (`api/_lib/site-model.js inputFor`: the service on record,
+the chargers from the nameplate, the usage, the power price as a flat rate,
+the pods from the pod pro forma or the screening; a ZIP, a service figure or
+a pod count that is missing is NAMED, never defaulted), runs
+`compute-site.js model` behind the compute pro forma's own gate (Omega
+Compute / the tier, `computeAccess`), stores the engine's whole answer under
+`sites/{id}/models/{id}` and its figures as `latestModel` (`summaryOf`:
+after-tax IRR, total project cost = sources and uses, equity, debt, the
+three structures, the verdict). The site record's *Investor deck & capital*
+tab draws the SAME deck with `proforma-logic.js` (`OmegaProformaReport`)
+from `GET …&model=1` and prints it; the register's IRR column is that IRR
+once it has run (the pod case until then). **The capital request is the
+total project cost** (`askOf`): `send-to-finance` sends it as the deal's
+`ask` with `capitalRequest{}` on the deal, and the register reads the deal
+LIVE (`capitalJoin` → `site.capital`): open with offers, or FUNDED once a
+partner's offer is accepted (`awarded`). Grid Atlas opens at the site's
+address (`/grid-atlas.html?q=`). The Site SPV term sheet is
+`api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
+is pdf-lib, DRAFT on every page) behind `GET …&agreement=1`; it is never
+stored as a fact. Held by `scripts/test-site-crm.js` and the workspace
+render check's portfolio flow.
+
 ## Helios Intake (2026-09-30)
 
 **Helios Energy Advisors' first-pass checklist, filled from the project and

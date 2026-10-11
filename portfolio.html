@@ -4,171 +4,174 @@
 <meta charset="UTF-8">
 <script src="/omega-splash.js?v=1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Portfolio &amp; Assets · ClearSky-OMEGA</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<title>Portfolio · Omega Workspace</title>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     Portfolio & Assets — the workspace's register of energy SITES, in the
+     workspace chrome (omega-workspace-shell.js: the rail, the switcher, the
+     side panel, the phone tab bar; this page builds none of it).
+
+     The register is read from GET /api/site-crm (Admin SDK; the rules close
+     the collection to browsers). Every row carries the site's latest pro
+     forma — investor IRR, capital, payback — denormalised onto the record by
+     the endpoint when a scenario runs, so the figures on this page are the
+     stored scenario's, never recomputed here. A row opens the side panel
+     with the site's details and figures; the checkboxes make a selection,
+     and the action bar works on it the way a mail client does: open in the
+     editor (one Site Map project per site), send to the finance marketplace
+     (one deal per site), run the pro forma, set a status, tag, export the
+     IRR as CSV, export the SPV term sheet (one PDF per site), archive,
+     delete. Every action is the endpoint's; showing a button is never
+     access, and the server answers per site. ES5, no build step. -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --cs-navy:#16202B;--cs-dark:#0F1720;--cs-blue:#2B5FA8;--cs-sky:#2B5FA8;
-  --cs-text:#14171A;--cs-sub:#5B6672;
-  --cs-bg:#F5F4F0;--cs-surface:#FFFFFF;--cs-border:#DCD9D2;--cs-red:#D9482B;
-  --sap-blue:#2B5FA8;--sap-blue-hi:#3F76C4;--sap-page:#F5F4F0;--sap-card-border:#E4E8EC;
-  --sap-ink:#16202B;--sap-ink-2:#5B6672;
-}
-body{font-family:'DM Sans',sans-serif;background:var(--sap-page);color:var(--cs-text);min-height:100vh}
-#topbar{display:flex;align-items:center;gap:0;background:#fff;color:var(--sap-ink);padding:0 24px;height:60px;position:sticky;top:0;z-index:200;border-bottom:1px solid var(--sap-card-border);box-shadow:0 1px 2px rgba(20,40,60,.04)}
-.tb-logo{display:flex;align-items:center;gap:10px;text-decoration:none}
-.tb-logo-txt{color:var(--sap-ink);font-weight:700;font-size:15px;letter-spacing:-.2px}
-.tb-logo-txt span{color:var(--sap-blue)}
-.tb-sep{width:1px;height:22px;background:var(--sap-card-border);margin:0 16px}
-.tb-portal{color:var(--sap-ink-2);font-size:12px;font-weight:600;letter-spacing:.3px;text-transform:uppercase}
-.tb-nav{display:flex;align-items:center;gap:2px;margin-left:20px;height:56px}
-.tb-tab{display:flex;align-items:center;gap:6px;text-decoration:none;background:transparent;border:none;border-bottom:3px solid transparent;color:var(--sap-ink);border-radius:0;padding:0 14px;height:56px;cursor:pointer;font:500 13.5px/1 'DM Sans',sans-serif;white-space:nowrap}
-.tb-tab svg{width:15px;height:15px;flex:none;opacity:.7}
-.tb-tab:hover{color:var(--sap-blue)}
-.tb-tab.active{color:var(--sap-blue);border-bottom-color:var(--sap-blue-hi);font-weight:600}
-.tb-spacer{flex:1}
-.tb-user{display:flex;align-items:center;gap:10px}
-.tb-avatar{width:32px;height:32px;border-radius:50%;background:var(--sap-blue);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
-.tb-name{color:var(--sap-ink);font-size:13px;font-weight:500}
-.btn{background:var(--sap-blue);border:none;color:#fff;border-radius:6px;padding:8px 16px;cursor:pointer;font:600 12.5px 'DM Sans',sans-serif}
-.btn:hover{background:var(--sap-blue-hi)}
-.btn-ghost{background:#fff;border:1px solid var(--sap-card-border);color:var(--sap-ink);border-radius:6px;padding:8px 14px;cursor:pointer;font:500 12.5px 'DM Sans',sans-serif}
-#main{max-width:1200px;margin:0 auto;padding:36px 24px}
-.page-title{font-size:28px;font-weight:700;color:var(--cs-navy);letter-spacing:-.3px}
-.page-sub{font-size:14px;color:var(--cs-sub);margin-top:4px;max-width:760px}
-.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin:24px 0}
-.card{background:#fff;border:1px solid var(--sap-card-border);border-radius:12px;padding:16px}
-.card .k{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--cs-sub)}
-.card .v{font-size:26px;font-weight:700;color:var(--cs-navy);margin-top:6px}
-.card .n{font-size:11.5px;color:var(--cs-sub);margin-top:4px;line-height:1.4}
-.toolbar{display:flex;gap:10px;margin:20px 0;align-items:center;flex-wrap:wrap}
-.search-wrap{flex:1;min-width:200px;position:relative}
-.search-wrap input{width:100%;border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12px 9px 36px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;color:var(--cs-text);outline:none}
-.search-wrap input:focus{border-color:var(--cs-sky)}
-.search-wrap svg{position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--cs-sub)}
-select.fsel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9px 12px;font-size:13px;font-family:'DM Sans',sans-serif;background:#fff;color:var(--cs-text);outline:none;cursor:pointer}
-.tbl{background:#fff;border:1px solid var(--cs-border);border-radius:12px;overflow:hidden}
-.tr{display:grid;grid-template-columns:34px 2fr 1.2fr 90px 90px 90px 90px 70px 80px;gap:8px;padding:13px 16px;border-bottom:1px solid rgba(0,0,0,.04);align-items:center}
-.selrow{display:flex;align-items:center;justify-content:center}
-.selrow input{width:16px;height:16px;accent-color:var(--sap-blue);cursor:pointer}
-.bulkactions{display:none;gap:8px;align-items:center;background:#fff;border:1px solid var(--sap-card-border);border-radius:10px;padding:10px 14px;margin:0 0 12px;flex-wrap:wrap}
-.bulkactions.on{display:flex}
-.bulkactions .count{font-size:13px;font-weight:600;color:var(--sap-ink)}
-.bulkactions .lbl{font-size:11.5px;color:var(--cs-sub);width:100%}
-.tr.head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--cs-sub);background:#FAFBFC}
-.tr.body{cursor:pointer}
-.tr.body:hover{background:#F4F7FB}
-.tr:last-child{border-bottom:none}
-.t-name{font-size:14px;font-weight:600;color:var(--cs-navy)}
-.t-sub{font-size:11.5px;color:var(--cs-sub);margin-top:2px}
-.t-num{font-size:13px;color:var(--cs-text);font-variant-numeric:tabular-nums}
-.t-mut{font-size:12.5px;color:#9AA3AD;font-style:italic}
-.pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap}
-.pill-ok{background:rgba(0,169,164,.13);color:#00736F}
-.pill-no{background:rgba(217,72,43,.10);color:#B03A1E}
-.pill-unk{background:#EEF1F4;color:var(--cs-sub)}
-.pill-warn{background:rgba(217,119,6,.12);color:#B45309}
-.empty{text-align:center;padding:60px;color:var(--cs-sub)}
-.loading{display:flex;align-items:center;justify-content:center;padding:60px;gap:10px;color:var(--cs-sub)}
-.spin{width:18px;height:18px;border:2px solid var(--cs-border);border-top-color:var(--cs-sky);border-radius:50%;animation:spin .7s linear infinite}
+/* the page's own sections; the chrome's rules live in omega-workspace-shell.js */
+.pf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.pf-head h1{margin:0;font:600 24px/1.2 Poppins,"DM Sans",sans-serif;letter-spacing:-.3px}
+.pf-head .sub{color:var(--ows-ink2);font-size:13.5px;margin-top:4px;max-width:720px}
+.pf-head .acts{display:flex;gap:8px;flex-wrap:wrap}
+.pf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.pf-stat{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:14px 16px;box-shadow:var(--ows-shadow)}
+.pf-stat .k{font:500 10.5px "DM Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
+.pf-stat .v{font:600 24px/1.1 Poppins,"DM Sans",sans-serif;margin-top:6px;font-variant-numeric:tabular-nums}
+.pf-stat .n{font-size:11.5px;color:var(--ows-ink2);margin-top:4px;line-height:1.4}
+.pf-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pf-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:10px;padding:0 12px;color:var(--ows-ink3)}
+.pf-search input{border:0;background:transparent;flex:1;font:inherit;color:var(--ows-ink);outline:none;min-width:0;padding:9px 0}
+.pf-sel{border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px;font:inherit;font-size:13px;background:var(--ows-paper);color:var(--ows-ink);outline:none;cursor:pointer}
+.pf-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ows-ink2);cursor:pointer;white-space:nowrap}
+.pf-toggle input{accent-color:var(--ows-brand)}
+/* the selection bar: over the table, under the topbar, as a mail client's */
+.pf-bar{position:sticky;top:60px;z-index:20;display:none;align-items:center;gap:6px;flex-wrap:wrap;background:var(--ows-rail);color:#fff;border-radius:12px;padding:8px 10px 8px 14px;box-shadow:var(--ows-shadow)}
+.pf-bar.on{display:flex}
+.pf-bar .count{font-weight:600;font-size:13px;margin-right:6px;white-space:nowrap}
+.pf-bar .count small{font-weight:500;color:var(--ows-rail-dim);margin-left:6px}
+.pf-bar .count a{color:#9ED8EA;text-decoration:underline;cursor:pointer;font-weight:500}
+.pf-bar button,.pf-bar .menu>button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;border-radius:8px;padding:6px 10px;font:500 12.5px "DM Sans",sans-serif;cursor:pointer;white-space:nowrap}
+.pf-bar button:hover,.pf-bar .menu>button:hover{background:rgba(255,255,255,.14)}
+.pf-bar button.danger{border-color:rgba(238,90,79,.6);color:#FFB3AD}
+.pf-bar .sp{flex:1}
+.pf-bar .x{border:0;background:none;font-size:18px;line-height:1;padding:2px 8px}
+.pf-bar .menu{position:relative}
+.pf-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:220px;background:var(--ows-paper);color:var(--ows-ink);border:1px solid var(--ows-line);border-radius:10px;box-shadow:var(--ows-shadow);padding:6px;z-index:40}
+.pf-menu button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ows-ink);border-radius:8px;padding:8px 10px;font:500 13px "DM Sans",sans-serif;cursor:pointer}
+.pf-menu button:hover{background:var(--ows-sunk)}
+.pf-menu button small{display:block;color:var(--ows-ink3);font-size:11.5px;font-weight:400}
+.pf-menu .hd{padding:6px 10px 4px;font:500 10.5px "DM Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
+/* the register */
+.pf-table{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;box-shadow:var(--ows-shadow)}
+.pf-tr{display:grid;grid-template-columns:34px minmax(180px,2fr) minmax(100px,1fr) 104px 86px 50px 82px 92px 128px 150px;gap:8px;padding:11px 14px;border-bottom:1px solid var(--ows-line);align-items:center;min-height:52px}
+.pf-tr.head{font:500 10.5px "DM Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ows-ink3);background:#FAFBFC;min-height:40px;position:sticky;top:0}
+.pf-tr.head .sort{cursor:pointer;user-select:none;white-space:nowrap}
+.pf-tr.head .sort:hover{color:var(--ows-brand)}
+.pf-tr.head .sort[data-dir="asc"]::after{content:" ▴"}.pf-tr.head .sort[data-dir="desc"]::after{content:" ▾"}
+.pf-tr.body{cursor:pointer}.pf-tr.body:hover{background:#F4F7FB}.pf-tr.body.sel{background:var(--ows-brand-soft)}
+.pf-tr.body.archived .t-name{color:var(--ows-ink3);text-decoration:line-through}
+.pf-tr:last-child{border-bottom:none}
+.selrow{display:flex;align-items:center;justify-content:center}.selrow input{width:16px;height:16px;accent-color:var(--ows-brand);cursor:pointer}
+.t-name{font-weight:600;color:var(--ows-ink);font-size:14px}.t-sub{font-size:11.5px;color:var(--ows-ink3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-num{font-size:13px;font-variant-numeric:tabular-nums}.t-mut{font-size:12.5px;color:var(--ows-ink3);font-style:italic}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;background:var(--ows-sunk);color:var(--ows-ink2)}
+.pill-ok{background:var(--ows-green-soft);color:var(--ows-green)}.pill-no{background:#FDECEA;color:#B03A1E}.pill-warn{background:var(--ows-amber-soft);color:var(--ows-amber)}
+.pill-blue{background:var(--ows-brand-soft);color:var(--ows-brand-ink)}.pill-teal{background:var(--ows-teal-soft);color:var(--ows-teal-d)}.pill-funded{background:var(--ows-green);color:#fff}
+.links{display:flex;gap:5px;flex-wrap:wrap}
+.links a{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:999px;border:1px solid var(--ows-line);background:var(--ows-paper);color:var(--ows-brand-ink);white-space:nowrap}
+.links a:hover{background:var(--ows-sunk)}
+.pf-empty{text-align:center;padding:56px 20px;color:var(--ows-ink2)}.pf-empty b{display:block;font-size:16px;color:var(--ows-ink);margin-bottom:6px}
+.pf-loading{display:flex;align-items:center;justify-content:center;padding:56px;gap:10px;color:var(--ows-ink2)}
+.spin{width:18px;height:18px;border:2px solid var(--ows-line2);border-top-color:var(--ows-brand);border-radius:50%;animation:spin .7s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-.err{background:#FDF0EC;border:1px solid #F3C4B5;color:#B03A1E;border-radius:9px;padding:12px 16px;font-size:13px;margin:16px 0}
-.okmsg{background:#EDF7F6;border:1px solid #BFE3E0;color:#00736F;border-radius:9px;padding:12px 16px;font-size:13px;margin:16px 0}
-.li-meta{font-size:11.5px;color:var(--cs-sub)}
-.note{font-size:12px;color:var(--cs-sub);margin-top:14px;line-height:1.5}
-@media(max-width:900px){.tr{grid-template-columns:34px 2fr 1fr 80px}.tr>div:nth-child(n+5){display:none}}
-.tb-burger{display:none;background:#fff;border:1px solid var(--sap-card-border);border-radius:8px;width:38px;height:38px;align-items:center;justify-content:center;cursor:pointer;flex:none;padding:0;margin-left:auto}
-.tb-burger svg{width:20px;height:20px;stroke:var(--sap-ink);stroke-width:2;fill:none;stroke-linecap:round}
-.tb-scrim{position:fixed;inset:0;background:rgba(8,25,40,.5);z-index:999;opacity:0;pointer-events:none;transition:opacity .2s}
-.tb-scrim.open{opacity:1;pointer-events:auto}
-@media(max-width:900px){
-#topbar{height:54px;padding:0 12px;gap:8px}
-.tb-burger{display:flex}
-.tb-sep,.tb-portal,.tb-name{display:none}
-.tb-nav{position:fixed;top:0;right:0;bottom:0;left:auto;width:270px;max-width:82vw;height:100vh;height:100dvh;background:#fff;flex-direction:column;align-items:stretch;gap:0;margin:0;padding:64px 0 20px;box-shadow:-8px 0 30px rgba(0,0,0,.28);transform:translateX(100%);transition:transform .24s ease;z-index:1000;overflow-y:auto}
-.tb-nav.open{transform:translateX(0)}
-.tb-tab{height:auto;padding:15px 22px;border-bottom:1px solid var(--sap-card-border);border-left:3px solid transparent;font-size:15px;justify-content:flex-start}
-.tb-tab.active{border-bottom-color:var(--sap-card-border);border-left-color:var(--sap-blue);background:rgba(0,112,242,.06)}
-#main{padding:24px 14px 48px}
-.page-title{font-size:23px}
-.toolbar{flex-wrap:wrap}
-.search-wrap{flex:1 1 100%}
-.search-wrap input{font-size:16px;padding:12px 12px 12px 36px}
-select.fsel{flex:1;font-size:15px;padding:11px 12px}
-.cards{grid-template-columns:1fr 1fr}
-}
-@media(max-width:600px){
-#main{padding:20px 12px 44px}
-.page-title{font-size:20px}
-input[type=text],input[type=number],input[type=date],input[type=search],select,textarea{font-size:16px}
-#btn-add,#btn-import,#btn-export{flex:1}
+.pf-msg{border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.5}.pf-msg.err{background:#FDF0EC;border:1px solid #F3C4B5;color:#B03A1E}.pf-msg.ok{background:var(--ows-green-soft);border:1px solid #BFE3D0;color:var(--ows-green)}
+.pf-foot{font-size:12px;color:var(--ows-ink2);line-height:1.5}
+.pf-more{text-align:center;padding:12px}
+/* the side panel's site facts */
+.dr-facts{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.dr-fact .k{font:500 10.5px "DM Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ows-ink3)}
+.dr-fact .v{font-size:14px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}.dr-fact .n{font-size:11.5px;color:var(--ows-ink2);margin-top:2px}
+.dr-irr{background:var(--ows-sunk);border-radius:12px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.dr-irr .big{grid-column:1/-1;display:flex;align-items:baseline;gap:10px}
+.dr-irr .big b{font:600 28px/1 Poppins,"DM Sans",sans-serif;color:var(--ows-green)}.dr-irr .big b.undef{color:var(--ows-ink3);font-size:18px}
+.dr-irr .big span{font-size:12.5px;color:var(--ows-ink2)}
+.dr-sec{font:600 12px "DM Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3);margin:4px 0 -6px}
+.dr-acts{display:flex;flex-wrap:wrap;gap:8px}
+.dr-acts button,.dr-acts a{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-weight:600;font-size:12.5px;border:1px solid var(--ows-line2);background:var(--ows-paper);color:var(--ows-ink);cursor:pointer}
+.dr-acts .primary{background:var(--ows-brand);border-color:var(--ows-brand);color:#fff}
+.dr-acts .danger{color:#B03A1E;border-color:#F3C4B5}
+/* import */
+.pf-modal{display:none;position:fixed;inset:0;background:rgba(11,42,61,.45);z-index:80;align-items:center;justify-content:center;padding:16px}
+.pf-modal.on{display:flex}
+.pf-modal .box{background:var(--ows-paper);border-radius:14px;max-width:880px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px;box-shadow:var(--ows-shadow)}
+.pf-modal h2{margin:0 0 4px;font:600 18px Poppins,"DM Sans",sans-serif}.pf-modal .sub{color:var(--ows-ink2);font-size:13px;margin-bottom:14px}
+.im-map .pf-tr{grid-template-columns:1fr 1fr;cursor:default;min-height:44px}
+.im-prev .pf-tr{cursor:default;min-height:40px}
+.pf-modal .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+@media (max-width:900px){
+  .pf-bar{top:54px}
+  /* a phone keeps the checkbox, the site, its status and its IRR */
+  .pf-tr{grid-template-columns:34px minmax(120px,2fr) 72px 64px 72px}
+  .pf-tr>div:nth-child(3),.pf-tr>div:nth-child(5),.pf-tr>div:nth-child(6),.pf-tr>div:nth-child(8),.pf-tr>div:nth-child(10){display:none}
+  .pf-stats{grid-template-columns:1fr 1fr}
+  .dr-facts{grid-template-columns:1fr 1fr}
 }
 </style>
 </head>
 <body>
-<div id="topbar">
-  <a class="tb-logo" href="/"><span class="tb-logo-txt">ClearSky<span>OMEGA</span></span></a>
-  <div class="tb-sep"></div><span class="tb-portal">EnergyOS</span>
-  <div class="tb-nav">
-    <a class="tb-tab" href="/" id="tab-portal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Portal</a>
-    <a class="tb-tab" href="/marketplace.html" id="tab-marketplace"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l1-5h16l1 5"/><path d="M4 9v10a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1V9"/><path d="M9 22V12h6v10"/></svg>Marketplace</a>
-    <a class="tb-tab" href="/projects.html" id="tab-projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Projects</a>
-    <a class="tb-tab active" href="/portfolio.html" id="tab-portfolio"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3v18h18"/><path d="M7 15l4-6 4 3 4-7"/></svg>Portfolio</a>
-  </div>
-  <div class="tb-spacer"></div>
-  <div class="tb-user"><div class="tb-avatar" id="tb-avatar">–</div><span class="tb-name" id="tb-name"></span></div>
-</div>
-
-<div id="main">
-  <div class="page-title">Portfolio &amp; Assets</div>
-  <div class="page-sub">The workspace's system of record for energy sites: what each site is, who owns the meter, how much term is left, and what the screening says. Screened figures are a labeled legacy proxy, never verified capacity.</div>
-  <div id="err"></div>
-  <div class="cards" id="cards" style="display:none">
-    <div class="card"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n">in this workspace's register</div></div>
-    <div class="card"><div class="k">Screened pods</div><div class="v" id="c-pods">–</div><div class="n">Screening proxy · unverified</div></div>
-    <div class="card"><div class="k">Meter + 5-yr term</div><div class="v" id="c-qual">–</div><div class="n">sites passing the legacy screen filter</div></div>
-    <div class="card"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
-  </div>
-  <div class="toolbar">
-    <div class="search-wrap">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
-      <input id="q" type="search" placeholder="Search name, city, or site ID…" autocomplete="off">
+<main id="main">
+  <div class="pf-head">
+    <div><h1>Portfolio &amp; Assets</h1><div class="sub">Your register of energy sites: what each site is, who owns the meter, how much term is left, and what the pro forma says. Select sites to open them in Site Map, send them to the finance marketplace, run the pro forma, or export the IRR and the SPV term sheet.</div></div>
+    <div class="acts">
+      <button class="ows-pill" id="btn-import" type="button">Import sites</button>
+      <button class="ows-pill" id="btn-export" type="button">Download CSV</button>
+      <button class="ows-pill primary" id="btn-add" type="button">+ Register site</button>
     </div>
-    <select class="fsel" id="f-state"><option value="">All states</option></select>
-    <select class="fsel" id="f-meter">
-      <option value="">Meter: any</option><option value="yes">Meter owned</option>
-      <option value="no">No meter</option><option value="unk">Unknown</option>
-    </select>
-    <select class="fsel" id="f-pods">
-      <option value="">Pods: any</option><option value="yes">Screened pods &gt; 0</option><option value="no">No screened pods</option>
-    </select>
-    <button class="btn-ghost" id="btn-add">+ Register site</button>
-    <button class="btn-ghost" id="btn-import">Import sites</button>
-    <button class="btn-ghost" id="btn-export">Download CSV</button>
   </div>
-  <div class="bulkactions" id="bulkactions">
-    <span class="count" id="selcount">0 selected</span>
-    <button class="btn-ghost" id="ba-editor">Send to editor</button>
-    <button class="btn-ghost" id="ba-funding">Mark for funding</button>
-    <button class="btn-ghost" id="ba-develop">Mark for development</button>
-    <button class="btn-ghost" id="ba-archive">Archive</button>
-    <button class="btn-danger" id="ba-delete">Delete</button>
-    <span class="lbl">Deeper integrations (editor handoff, funding pipeline) attach later; for now these set the site's stage.</span>
+  <div id="msg"></div>
+  <div class="pf-stats" id="stats" style="display:none">
+    <div class="pf-stat"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n" id="c-sites-n">in this workspace's register</div></div>
+    <div class="pf-stat"><div class="k">Modelled</div><div class="v" id="c-pf">–</div><div class="n" id="c-pf-n">sites with a model or scenario on file</div></div>
+    <div class="pf-stat"><div class="k">In Site Map</div><div class="v" id="c-editor">–</div><div class="n">sites with a project in the editor</div></div>
+    <div class="pf-stat"><div class="k">Capital</div><div class="v" id="c-fin">–</div><div class="n" id="c-fin-n">sites sent to the finance marketplace</div></div>
+    <div class="pf-stat"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
   </div>
-  <div class="tbl" id="tbl"><div class="loading"><div class="spin"></div>Loading the register…</div></div>
-  <div class="note">Unknown values show as <i>Not provided</i> or <i>Needs verification</i>, never as zeros. Reported peak kW is an unresolved workbook statistic, flagged on each site, never approved capacity.</div>
-</div>
+  <div class="pf-tools">
+    <label class="pf-search"><span>⌕</span><input id="q" type="search" placeholder="Search name, city, address, tag or site ID…" autocomplete="off" aria-label="Search sites"></label>
+    <select class="pf-sel" id="f-state" aria-label="State"><option value="">All states</option></select>
+    <select class="pf-sel" id="f-status" aria-label="Status"><option value="">Any status</option></select>
+    <select class="pf-sel" id="f-meter" aria-label="Meter"><option value="">Meter: any</option><option value="yes">Meter owned</option><option value="no">No meter</option><option value="unk">Unknown</option></select>
+    <select class="pf-sel" id="f-pf" aria-label="Pro forma"><option value="">Pro forma: any</option><option value="yes">Run</option><option value="no">Not run</option></select>
+    <label class="pf-toggle"><input type="checkbox" id="f-archived"> Show archived</label>
+  </div>
+  <div class="pf-bar" id="bar" role="toolbar" aria-label="Selected sites">
+    <span class="count"><span id="selcount">0 selected</span><small id="selall-wrap" style="display:none">· <a id="selall">select all <span id="selall-n"></span></a></small></span>
+    <button type="button" id="ba-editor" title="One Site Map project per site; a site that already has one opens it">Open in Site Map</button>
+    <button type="button" id="ba-finance" title="One deal per site on the finance marketplace">Send to marketplace</button>
+    <button type="button" id="ba-model" title="The Compute Site Pro Forma on each site, from its service, chargers, usage and pods; ten at a time">Run compute model</button>
+    <span class="menu"><button type="button" id="ba-proforma" aria-haspopup="true">Pod pro forma ▾</button></span>
+    <span class="menu"><button type="button" id="ba-status" aria-haspopup="true">Set status ▾</button></span>
+    <span class="menu"><button type="button" id="ba-tag" aria-haspopup="true">Tag ▾</button></span>
+    <button type="button" id="ba-irr">Export IRR</button>
+    <button type="button" id="ba-agreement">Export term sheets</button>
+    <button type="button" id="ba-edit" style="display:none">Edit</button>
+    <button type="button" id="ba-archive">Archive</button>
+    <button type="button" id="ba-restore" style="display:none">Restore</button>
+    <button type="button" class="danger" id="ba-delete" style="display:none">Delete</button>
+    <span class="sp"></span>
+    <button type="button" class="x" id="ba-clear" aria-label="Clear selection">×</button>
+  </div>
+  <div class="pf-table" id="tbl"><div class="pf-loading"><div class="spin"></div>Loading the register…</div></div>
+  <div class="pf-more" id="more" style="display:none"><button class="ows-pill" id="btn-more" type="button">Load more sites</button></div>
+  <div class="pf-foot">Unknown values show as <i>Not provided</i> or <i>Needs verification</i>, never as zeros. Reported peak kW is an unresolved workbook statistic, flagged on each site, never approved capacity. IRR figures are the site's latest stored pro forma scenario under its named assumption set: screening results, not a return promise.</div>
+</main>
 
-<div id="import-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,32,.55);z-index:500;align-items:center;justify-content:center">
-  <div style="background:#fff;border-radius:14px;max-width:880px;width:94%;max-height:88vh;overflow:auto;padding:24px">
-    <div class="page-title" style="font-size:19px">Import sites</div>
-    <div class="page-sub" style="margin:6px 0 14px">Upload a CSV or XLSX of your sites. The first row must be headers. Every imported site lands in <b>this workspace only</b>; other workspaces never see it.</div>
+<div class="pf-modal" id="import-modal" role="dialog" aria-label="Import sites">
+  <div class="box">
+    <h2>Import sites</h2>
+    <div class="sub">Upload a CSV or XLSX of your sites. The first row must be headers. Every imported site lands in <b>this workspace only</b>; other workspaces never see it.</div>
     <div id="im-msg"></div>
-    <div class="toolbar" style="margin:0 0 12px"><input type="file" id="im-file" accept=".csv,.xlsx,.xls,.txt"><span class="t-mut" id="im-filename"></span></div>
-    <div id="im-map"></div>
-    <div id="im-preview" style="margin-top:12px"></div>
-    <div class="toolbar" style="margin-top:16px"><button class="btn" id="im-go" disabled>Import</button><button class="btn-ghost" id="im-close">Cancel</button></div>
+    <div class="row"><input type="file" id="im-file" accept=".csv,.xlsx,.xls,.txt"><span class="t-mut" id="im-filename"></span></div>
+    <div id="im-map" class="im-map"></div>
+    <div id="im-preview" class="im-prev" style="margin-top:12px"></div>
+    <div class="row" style="margin-top:16px"><button class="ows-pill primary" id="im-go" type="button" disabled>Import</button><button class="ows-pill" id="im-close" type="button">Cancel</button></div>
   </div>
 </div>
 
@@ -176,27 +179,48 @@ input[type=text],input[type=number],input[type=date],input[type=search],select,t
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 <script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-jd-nav.js?v=1"></script>
+<script src="/omega-brand.js"></script>
 <script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-workspace-shell.js"></script>
 <script>
 (function () {
   'use strict';
-  firebase.initializeApp(CFG.firebase);
+  var CFG = window.CLEARSKY_CONFIG || {};
+  /* omega-tenant.js starts Firebase the moment it loads; a second start of
+     the same app throws, and that throw is what left the register on
+     "Loading…" with nobody signed in. */
+  try { firebase.initializeApp(CFG.firebase); } catch (e) { if (!/already exists/.test(String(e && e.message))) throw e; }
   var auth = firebase.auth();
-  var ORG = '', SITES = [], CANEDIT = false;
+  var S = window.OmegaWorkspaceShell, esc = S.esc;
+  var ORG = '', WS = null, USER = null, SITES = [], NEXT = null, CANEDIT = false, CANADMIN = false, LOADED = false;
+  var SEL = {}, LAST_CLICK = null, SORT = { key: 'name', dir: 'asc' }, OPEN = null;
+  var STATUSES = ['In editor', 'Funding', 'Development', 'Operating', 'On hold'];
+  function byId(id) { return document.getElementById(id); }
 
-  function esc(s) { return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
-  function err(m, ok) { document.getElementById('err').innerHTML = m ? '<div class="' + (ok ? 'okmsg' : 'err') + '">' + esc(m) + '</div>' : ''; }
-  function org() {
-    var w = window.OMEGA_WORKSPACE || {};
-    if (w.orgId) return w.orgId;
-    var u = auth.currentUser;
-    return u && u.email ? (u.email.split('@')[1] || '').toLowerCase() : '';
+  /* ── the chrome, before anyone is known ─────────────────────────────── */
+  S.mount({ current: 'portfolio', tabs: true, search: function (q) { byId('q').value = q; render(); } });
+  byId('main').classList.add('ows-content');
+  function paint() {
+    S.paint({ ws: WS || window.OMEGA_WORKSPACE || {}, user: USER || {}, plan: planName() });
+    /* a classic-home tenant keeps its home: the rail's Home goes there */
+    if (!S.wantsWorkspace()) Array.prototype.forEach.call(document.querySelectorAll('#side-nav a[data-key="home"], .ows-tabs a[data-tab="home"]'), function (a) { a.setAttribute('href', '/'); });
   }
+  function planName() {
+    var ws = WS || {}, b = (window.OmegaTenant && OmegaTenant.billing) || {}, pa = ws.packageAccess;
+    if (pa && pa.packaged) return b.plan || 'Packaged';
+    var labels = (window.OmegaTenant && OmegaTenant.tierLabels) || {};
+    return ws.accountTier || labels[b.tier] || '';
+  }
+
+  /* ── the server ─────────────────────────────────────────────────────── */
   function api(path, opts) {
     return auth.currentUser.getIdToken().then(function (t) {
       var h = { 'Authorization': 'Bearer ' + t };
       if (opts && opts.json) h['Content-Type'] = 'application/json';
-      return fetch(path, { method: (opts && opts.method) || 'GET', headers: h, body: opts && opts.json ? JSON.stringify(opts.json) : undefined });
+      return fetch(path, { method: (opts && opts.method) || 'GET', headers: h, body: opts && opts.json ? JSON.stringify(opts.json) : undefined, cache: 'no-store' });
     }).then(function (r) {
       return r.json().then(function (j) {
         if (!r.ok) throw new Error((j && (j.message || j.error)) || ('HTTP ' + r.status));
@@ -204,170 +228,427 @@ input[type=text],input[type=number],input[type=date],input[type=search],select,t
       });
     });
   }
+  function post(action, extra) { return api('/api/site-crm', { method: 'POST', json: Object.assign({ org: ORG, action: action }, extra || {}) }); }
+  function msg(text, ok) { byId('msg').innerHTML = text ? '<div class="pf-msg ' + (ok ? 'ok' : 'err') + '">' + esc(text) + '</div>' : ''; }
+
+  /* ── reading a site ─────────────────────────────────────────────────── */
   function unk(v) { return v == null || v === ''; }
+  function money(n) { if (n == null || !isFinite(n)) return null; var a = Math.abs(n), s = a >= 1e6 ? (a / 1e6).toFixed(2) + 'M' : a >= 1e3 ? Math.round(a / 1e3) + 'k' : String(Math.round(a)); return (n < 0 ? '−$' : '$') + s; }
+  function pct(n, d) { return n == null || !isFinite(n) ? null : (n * 100).toFixed(d == null ? 2 : d) + '%'; }
+  /* the IRR a row shows: the compute model's after-tax IRR (the one finance engine) once it has run, else the pod pro forma's investor IRR */
+  function irrOf(s) {
+    var lm = s.latestModel; if (lm && lm.irr != null && isFinite(lm.irr)) return Number(lm.irr);
+    var lp = s.latestProforma; return lp && lp.investorIrrDefined && lp.investorIrrAnnual != null ? Number(lp.investorIrrAnnual) : null;
+  }
+  function irrSource(s) { return s.latestModel && s.latestModel.irr != null ? 'compute model, after tax' : s.latestProforma ? 'pod pro forma, investor' : ''; }
+  function costOf(s) { var lm = s.latestModel; if (lm && lm.totalProjectCost > 0) return lm.totalProjectCost; var lp = s.latestProforma; return lp && lp.investorCapital != null ? lp.investorCapital : null; }
+  function capitalPill(s) {
+    var c = s.capital;
+    if (!c) return s.finProjectId ? '<span class="pill">Sent</span>' : '<span class="t-mut">Not sent</span>';
+    if (c.funded) return '<span class="pill pill-funded" title="Accepted by ' + esc(c.awardedToOrg || 'a capital partner') + '">Funded</span>';
+    if (c.status === 'draft') return '<span class="pill pill-warn">Draft</span>';
+    if (c.status === 'missing') return '<span class="pill pill-no">Deal gone</span>';
+    return '<span class="pill pill-ok">Open' + (c.offerCount ? ' \u00b7 ' + c.offerCount + ' offer' + (c.offerCount > 1 ? 's' : '') : '') + '</span>';
+  }
+  function atlasHref(s) { var addr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(', '); return '/grid-atlas.html' + (addr ? '?q=' + encodeURIComponent(addr) : ''); }
+  function deckHref(s) { return siteHref(s) + '#deck'; }
+  function availKw(s) {
+    if (s.availablePowerMw != null) return { kw: Number(s.availablePowerMw) * 1000, basis: 'as entered' };
+    if (s.serviceCapacityKw != null && s.existingPeakKw != null) return { kw: Math.max(0, Number(s.serviceCapacityKw) - Number(s.existingPeakKw)), basis: 'service − peak' };
+    return { kw: null, basis: null };
+  }
   function meterPill(s) {
     if (s.meterOwned === true) return '<span class="pill pill-ok">Owned</span>';
     if (s.meterOwned === false) return '<span class="pill pill-no">No meter</span>';
-    return '<span class="pill pill-unk" title="Needs verification">Unknown</span>';
+    return '<span class="pill" title="Needs verification">Unknown</span>';
   }
-  function termCell(s) {
-    if (unk(s.termYearsRemaining)) return '<span class="t-mut">Not provided</span>';
-    var t = Number(s.termYearsRemaining);
-    return '<span class="t-num">' + t + ' yr</span>';
+  function statusPill(s) {
+    if (s.archived) return '<span class="pill">Archived</span>';
+    var st = s.status || ''; if (!st) return '<span class="t-mut">–</span>';
+    var cls = /editor/i.test(st) ? 'pill-blue' : /fund/i.test(st) ? 'pill-warn' : /develop/i.test(st) ? 'pill-teal' : /operat/i.test(st) ? 'pill-ok' : '';
+    return '<span class="pill ' + cls + '">' + esc(st) + '</span>';
   }
-  function podsCell(s) {
-    var p = s.screening && s.screening.pods;
-    if (unk(p)) return '<span class="t-mut">–</span>';
-    return '<span class="t-num">' + Number(p) + '</span>';
+  function needsVerification(s) { return s.meterOwned == null || unk(s.termYearsRemaining); }
+  function siteHref(s) { return '/site-crm.html?site=' + encodeURIComponent(s.id); }
+  function editorHref(s) { return '/editor.html?id=' + encodeURIComponent(s.projectId); }
+  function dealHref(s) { return '/finance#deal=' + encodeURIComponent(s.finProjectId) + '&tab=market'; }
+  function linkChips(s) {
+    var h = '';
+    if (s.projectId) h += '<a href="' + editorHref(s) + '" data-stop title="Open this site’s project in Site Map">Site Map ↗</a>';
+    h += '<a href="' + atlasHref(s) + '" data-stop title="Grid Atlas at this address">Atlas ↗</a>';
+    if (s.latestModel) h += '<a href="' + deckHref(s) + '" data-stop title="The investor deck from the compute model">Deck ↗</a>';
+    if (s.finProjectId) h += '<a href="' + dealHref(s) + '" data-stop title="The deal on the finance marketplace">' + (s.capital && s.capital.funded ? 'Funded' : s.finProjectStatus === 'draft' ? 'Draft deal' : 'Marketplace') + ' ↗</a>';
+    return h ? '<div class="links">' + h + '</div>' : '<span class="t-mut">–</span>';
   }
+
+  /* ── filters, sort, render ──────────────────────────────────────────── */
   function filtered() {
-    var q = document.getElementById('q').value.trim().toLowerCase();
-    var st = document.getElementById('f-state').value;
-    var mt = document.getElementById('f-meter').value;
-    var pd = document.getElementById('f-pods').value;
-    return SITES.filter(function (s) {
+    var q = byId('q').value.trim().toLowerCase(), st = byId('f-state').value, mt = byId('f-meter').value, pf = byId('f-pf').value, ss = byId('f-status').value;
+    var rows = SITES.filter(function (s) {
       if (q) {
-        var hay = ((s.name || '') + ' ' + (s.city || '') + ' ' + ((s.externalSiteIds || {}).evcs || '') + ' ' + s.id).toLowerCase();
+        var ids = s.externalSiteIds || {}, hay = [s.name, s.city, s.state, s.address, s.status, (s.tags || []).join(' '), s.id].concat(Object.keys(ids).map(function (k) { return ids[k]; })).join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       if (st && s.state !== st) return false;
+      if (ss && (s.status || '') !== ss) return false;
       if (mt === 'yes' && s.meterOwned !== true) return false;
       if (mt === 'no' && s.meterOwned !== false) return false;
       if (mt === 'unk' && s.meterOwned != null) return false;
-      var p = s.screening && s.screening.pods;
-      if (pd === 'yes' && !(Number(p) > 0)) return false;
-      if (pd === 'no' && Number(p) > 0) return false;
+      if (pf === 'yes' && !s.latestProforma) return false;
+      if (pf === 'no' && s.latestProforma) return false;
       return true;
     });
+    var k = SORT.key, dir = SORT.dir === 'desc' ? -1 : 1;
+    function val(s) {
+      if (k === 'irr') return irrOf(s);
+      if (k === 'capital') return costOf(s);
+      if (k === 'funding') return s.capital ? (s.capital.funded ? 3 : s.capital.status === 'draft' ? 1 : 2) : 0;
+      if (k === 'power') return availKw(s).kw;
+      if (k === 'location') return [s.state, s.city].filter(Boolean).join(' ').toLowerCase();
+      if (k === 'status') return (s.status || '').toLowerCase();
+      return String(s.name || '').toLowerCase();
+    }
+    rows.sort(function (a, b) {
+      var x = val(a), y = val(b);
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * dir;
+    });
+    return rows;
+  }
+  function fillSelect(id, values, first) {
+    var sel = byId(id), cur = sel.value;
+    sel.innerHTML = '<option value="">' + first + '</option>' + values.map(function (x) { return '<option value="' + esc(x) + '"' + (x === cur ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('');
   }
   function render() {
-    var rows = filtered();
-    var states = {};
-    SITES.forEach(function (s) { if (s.state) states[s.state] = true; });
-    var sel = document.getElementById('f-state'), cur = sel.value;
-    sel.innerHTML = '<option value="">All states</option>' + Object.keys(states).sort().map(function (x) {
-      return '<option value="' + esc(x) + '"' + (x === cur ? ' selected' : '') + '>' + esc(x) + '</option>';
-    }).join('');
-    var el = document.getElementById('tbl');
-    if (!rows.length) { el.innerHTML = '<div class="empty">No sites match. ' + (CANEDIT ? 'Register the first one above.' : '') + '</div>'; return; }
-    el.innerHTML = '<div class="tr head"><div class="selrow"><input type="checkbox" id="sel-all" aria-label="Select all"></div><div>Site</div><div>Location</div><div>Installed kW</div><div>IRR</div><div>Peak kW</div><div>Meter</div><div>Term</div><div>Pods</div></div>' +
-      rows.map(function (s) {
-        var loc = [s.city, s.state].filter(Boolean).join(', ');
-        var lp = s.latestProforma || {}, irr = lp.investorIrrDefined && isFinite(lp.investorIrrAnnual) ? (lp.investorIrrAnnual * 100).toFixed(2) + '%' : null;
-        return '<div class="tr body" data-id="' + esc(s.id) + '">' +
-          '<div class="selrow"><input type="checkbox" class="sel-one" value="' + esc(s.id) + '" aria-label="Select ' + esc(s.name || 'site') + '"></div>' +
-          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc(function(){var e=s.externalSiteIds||{},k=Object.keys(e);return k.length?e[k[0]]:s.id;}()) + '</div></div>' +
-          '<div class="t-num">' + (loc ? esc(loc) : '<span class="t-mut">Not provided</span>') + '</div>' +
-          '<div class="t-num">' + (unk(s.installedKw) ? '<span class="t-mut">–</span>' : esc(s.installedKw)) + '</div>' +
-          '<div class="t-num">' + (irr ? esc(irr) : '<span class="t-mut">–</span>') + '</div>' +
-          '<div class="t-num">' + (unk(s.reportedPeakKw) ? '<span class="t-mut">–</span>' : esc(s.reportedPeakKw) + (s.peakUnresolved ? ' <span class="pill pill-warn" title="Unresolved workbook statistic">?</span>' : '')) + '</div>' +
-          '<div>' + meterPill(s) + '</div>' +
-          '<div>' + termCell(s) + '</div>' +
-          '<div>' + podsCell(s) + '</div></div>';
-      }).join('');
-    Array.prototype.forEach.call(el.querySelectorAll('.tr.body'), function (r) {
-      r.addEventListener('click', function (ev) {
-        if (ev.target && ev.target.classList && ev.target.classList.contains('sel-one')) return;
-        window.location.href = '/site-crm.html?site=' + encodeURIComponent(r.getAttribute('data-id'));
-      });
-    });
-    wireSelection();
-  }
-  /* ── bulk selection + actions ── */
-  function selIds() {
-    return Array.prototype.map.call(document.querySelectorAll('.sel-one:checked'), function (c) { return c.value; });
-  }
-  function wireSelection() {
-    var all = document.getElementById('sel-all'), bar = document.getElementById('bulkactions');
-    function refresh() {
-      var n = selIds().length;
-      document.getElementById('selcount').textContent = n + ' selected';
-      bar.classList.toggle('on', n > 0);
-      if (all) all.checked = n > 0 && document.querySelectorAll('.sel-one').length === n;
+    var states = {}, statuses = {};
+    SITES.forEach(function (s) { if (s.state) states[s.state] = true; if (s.status) statuses[s.status] = true; });
+    fillSelect('f-state', Object.keys(states).sort(), 'All states');
+    fillSelect('f-status', Object.keys(statuses).sort(), 'Any status');
+    var rows = filtered(), el = byId('tbl');
+    if (!rows.length) {
+      el.innerHTML = '<div class="pf-empty"><b>' + (SITES.length ? 'No sites match.' : 'No sites yet.') + '</b>' + (SITES.length ? 'Clear a filter or search for something else.' : (CANEDIT ? 'Register the first one, or import a spreadsheet of your sites.' : 'Nothing has been registered in this workspace.')) + '</div>';
+      bar(); return;
     }
-    if (all) all.addEventListener('change', function () {
-      Array.prototype.forEach.call(document.querySelectorAll('.sel-one'), function (c) { c.checked = all.checked; });
-      refresh();
+    function th(label, key, extra) { return '<div class="sort' + (extra ? ' ' + extra : '') + '" data-sort="' + key + '"' + (SORT.key === key ? ' data-dir="' + SORT.dir + '"' : '') + '>' + label + '</div>'; }
+    el.innerHTML = '<div class="pf-tr head"><div class="selrow"><input type="checkbox" id="sel-all" aria-label="Select every site shown"></div>' +
+      th('Site', 'name') + th('Location', 'location') + th('Status', 'status') + th('Power', 'power') + '<div>Pods</div>' + th('IRR', 'irr') + th('Project cost', 'capital') + th('Capital', 'funding') + '<div>Hand-offs</div></div>' +
+      rows.map(function (s) {
+        var lp = s.latestProforma || null, irr = irrOf(s), av = availKw(s), loc = [s.city, s.state].filter(Boolean).join(', ');
+        var ids = s.externalSiteIds || {}, idKey = Object.keys(ids)[0];
+        var sub = [idKey ? ids[idKey] : '', (s.tags || []).slice(0, 3).join(' · ')].filter(Boolean).join(' · ') || (unk(s.termYearsRemaining) ? 'Term not provided' : s.termYearsRemaining + ' yr term');
+        return '<div class="pf-tr body' + (SEL[s.id] ? ' sel' : '') + (s.archived ? ' archived' : '') + '" data-id="' + esc(s.id) + '" role="button" tabindex="0">' +
+          '<div class="selrow"><input type="checkbox" class="sel-one" value="' + esc(s.id) + '"' + (SEL[s.id] ? ' checked' : '') + ' aria-label="Select ' + esc(s.name || 'site') + '"></div>' +
+          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc(sub) + '</div></div>' +
+          '<div class="t-num">' + (loc ? esc(loc) : '<span class="t-mut">Not provided</span>') + '</div>' +
+          '<div>' + statusPill(s) + '</div>' +
+          '<div class="t-num">' + (av.kw == null ? (unk(s.installedKw) ? '<span class="t-mut">–</span>' : esc(s.installedKw) + ' kW <span class="t-mut">inst.</span>') : esc(Math.round(av.kw).toLocaleString('en-US')) + ' kW') + '</div>' +
+          '<div class="t-num">' + (s.latestModel && s.latestModel.pods != null ? esc(s.latestModel.pods) : lp && lp.pods != null ? esc(lp.pods) : (s.screening && s.screening.pods != null ? '<span class="t-mut" title="Screening proxy, unverified">' + esc(s.screening.pods) + '?</span>' : '<span class="t-mut">–</span>')) + '</div>' +
+          '<div class="t-num" title="' + esc(irrSource(s)) + '">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b>' : lp || s.latestModel ? '<span class="t-mut" title="No IRR: no capital invested or no IRR root">Not defined</span>' : '<span class="t-mut">Not run</span>') + '</div>' +
+          '<div class="t-num">' + (costOf(s) != null ? esc(money(costOf(s))) : '<span class="t-mut">–</span>') + '</div>' +
+          '<div>' + capitalPill(s) + '</div>' +
+          '<div>' + linkChips(s) + '</div></div>';
+      }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('.pf-tr.body'), function (r) {
+      r.addEventListener('click', function (ev) {
+        var t = ev.target;
+        if (t.closest && t.closest('[data-stop]')) return;
+        if (t.classList && t.classList.contains('sel-one')) { pick(r.getAttribute('data-id'), t.checked, ev.shiftKey, rows); return; }
+        openDrawer(r.getAttribute('data-id'));
+      });
+      r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') openDrawer(r.getAttribute('data-id')); if (ev.key === ' ') { ev.preventDefault(); pick(r.getAttribute('data-id'), !SEL[r.getAttribute('data-id')], false, rows); } });
     });
-    Array.prototype.forEach.call(document.querySelectorAll('.sel-one'), function (c) {
-      c.addEventListener('change', refresh);
+    Array.prototype.forEach.call(el.querySelectorAll('.pf-tr.head .sort'), function (h) {
+      h.addEventListener('click', function () { var k = h.getAttribute('data-sort'); SORT = { key: k, dir: SORT.key === k && SORT.dir === 'asc' ? 'desc' : 'asc' }; render(); });
     });
-    refresh();
+    var all = byId('sel-all');
+    all.checked = rows.length > 0 && rows.every(function (s) { return SEL[s.id]; });
+    all.addEventListener('change', function () { rows.forEach(function (s) { if (all.checked) SEL[s.id] = true; else delete SEL[s.id]; }); render(); });
+    byId('more').style.display = NEXT ? '' : 'none';
+    bar();
   }
-  function bulkAction(action, extra, confirmText) {
-    var ids = selIds();
-    if (!ids.length) return;
-    if (confirmText && !confirm(confirmText)) return;
-    err('');
-    var body = Object.assign({ org: ORG, action: action, ids: ids }, extra || {});
-    api('/api/site-crm', { method: 'POST', json: body }).then(function (j) {
-      err(j.note || 'Done.', true); load();
-    }).catch(function (e) { err(e.message); });
+  function renderStats() {
+    byId('stats').style.display = 'grid';
+    var live = SITES.filter(function (s) { return !s.archived; }), pf = 0, cap = 0, ed = 0, fin = 0, unkN = 0;
+    var funded = 0, fundedUsd = 0;
+    live.forEach(function (s) { if (s.latestProforma || s.latestModel) { pf++; cap += Number(costOf(s)) || 0; } if (s.projectId) ed++; if (s.finProjectId) fin++; if (s.capital && s.capital.funded) { funded++; fundedUsd += Number(s.capital.ask) || 0; } if (needsVerification(s)) unkN++; });
+    byId('c-sites').textContent = live.length;
+    byId('c-sites-n').textContent = SITES.length > live.length ? 'in the register · ' + (SITES.length - live.length) + ' archived' : 'in this workspace’s register';
+    byId('c-pf').textContent = pf; byId('c-pf-n').textContent = pf ? 'sites modelled · ' + money(cap) + ' project cost' : 'sites with a model or scenario on file';
+    byId('c-editor').textContent = ed; byId('c-fin').textContent = funded ? funded + ' funded' : fin; byId('c-fin-n').textContent = funded ? money(fundedUsd) + ' accepted · ' + fin + ' sent to the marketplace' : 'sites sent to the finance marketplace'; byId('c-unk').textContent = unkN;
   }
-  document.getElementById('ba-delete').addEventListener('click', function () {
-    var n = selIds().length;
-    bulkAction('site-delete', null, 'Permanently delete ' + n + ' site(s)? This cannot be undone.');
-  });
-  document.getElementById('ba-archive').addEventListener('click', function () {
-    bulkAction('site-archive', null, 'Archive the selected site(s)? They will leave the register.');
-  });
-  document.getElementById('ba-editor').addEventListener('click', function () {
-    bulkAction('site-set-status', { status: 'In editor' }, null);
-  });
-  document.getElementById('ba-funding').addEventListener('click', function () {
-    bulkAction('site-set-status', { status: 'Funding' }, null);
-  });
-  document.getElementById('ba-develop').addEventListener('click', function () {
-    bulkAction('site-set-status', { status: 'Development' }, null);
-  });
-  function renderCards() {
-    document.getElementById('cards').style.display = 'grid';
-    document.getElementById('c-sites').textContent = SITES.length;
-    var pods = 0, qual = 0, unkN = 0;
-    SITES.forEach(function (s) {
-      pods += Number((s.screening || {}).pods) || 0;
-      if (s.meterOwned === true && Number(s.termYearsRemaining) >= 5) qual++;
-      if (s.meterOwned == null || unk(s.termYearsRemaining)) unkN++;
+
+  /* ── the selection and its bar ─────────────────────────────────────── */
+  function selected() { return SITES.filter(function (s) { return SEL[s.id]; }); }
+  function pick(id, on, shift, rows) {
+    if (shift && LAST_CLICK && rows) {
+      var ids = rows.map(function (s) { return s.id; }), a = ids.indexOf(LAST_CLICK), b = ids.indexOf(id);
+      if (a >= 0 && b >= 0) ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function (x) { if (on) SEL[x] = true; else delete SEL[x]; });
+    }
+    if (on) SEL[id] = true; else delete SEL[id];
+    LAST_CLICK = id; render();
+  }
+  function bar() {
+    var sel = selected(), n = sel.length, shown = filtered().length, el = byId('bar');
+    el.classList.toggle('on', n > 0);
+    byId('selcount').textContent = n + ' selected';
+    byId('selall-wrap').style.display = n && n < shown ? '' : 'none'; byId('selall-n').textContent = shown;
+    byId('ba-edit').style.display = n === 1 ? '' : 'none';
+    byId('ba-delete').style.display = CANADMIN ? '' : 'none';
+    var anyArchived = sel.some(function (s) { return s.archived; }), anyLive = sel.some(function (s) { return !s.archived; });
+    byId('ba-archive').style.display = anyLive ? '' : 'none'; byId('ba-restore').style.display = anyArchived ? '' : 'none';
+  }
+  function clearSel() { SEL = {}; render(); }
+  byId('ba-clear').addEventListener('click', clearSel);
+  byId('selall').addEventListener('click', function () { filtered().forEach(function (s) { SEL[s.id] = true; }); render(); });
+
+  function menu(btn, items) {
+    closeMenus();
+    var m = document.createElement('div'); m.className = 'pf-menu'; m.setAttribute('role', 'menu');
+    m.innerHTML = items.map(function (it, i) { return it.hd ? '<div class="hd">' + esc(it.hd) + '</div>' : '<button type="button" role="menuitem" data-i="' + i + '">' + esc(it.label) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</button>'; }).join('');
+    btn.parentNode.appendChild(m);
+    Array.prototype.forEach.call(m.querySelectorAll('button'), function (b) { b.addEventListener('click', function () { closeMenus(); items[Number(b.getAttribute('data-i'))].run(); }); });
+    setTimeout(function () { document.addEventListener('click', function h(e) { if (!m.contains(e.target) && e.target !== btn) { closeMenus(); document.removeEventListener('click', h); } }); }, 0);
+  }
+  function closeMenus() { Array.prototype.forEach.call(document.querySelectorAll('.pf-menu'), function (m) { m.parentNode.removeChild(m); }); }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(); });
+
+  /* every action is the server's; the answer is said and the register re-read */
+  function act(action, extra, confirmText, after) {
+    var sel = selected(); if (!sel.length) return Promise.resolve();
+    if (confirmText && !window.confirm(confirmText)) return Promise.resolve();
+    msg('Working on ' + sel.length + ' site(s)…', true);
+    return post(action, Object.assign({ ids: sel.map(function (s) { return s.id; }) }, extra || {})).then(function (j) {
+      msg(j.note || 'Done.', true); S.toast(j.note || 'Done.');
+      return load(true).then(function () { if (after) after(j); });
+    }).catch(function (e) { msg(e.message); });
+  }
+  byId('ba-editor').addEventListener('click', function () {
+    var sel = selected();
+    act('send-to-editor', null, null, function (j) {
+      var one = sel.length === 1 && j.projects && j.projects[0];
+      if (one && one.projectId) window.location.href = '/editor.html?id=' + encodeURIComponent(one.projectId);
     });
-    document.getElementById('c-pods').textContent = pods;
-    document.getElementById('c-qual').textContent = qual;
-    document.getElementById('c-unk').textContent = unkN;
-  }
-  function load() {
-    err('');
-    document.getElementById('tbl').innerHTML = '<div class="loading"><div class="spin"></div>Loading the register…</div>';
-    api('/api/site-crm?org=' + encodeURIComponent(ORG)).then(function (j) {
-      SITES = j.sites || [];
-      CANEDIT = true;
-      renderCards(); render();
-    }).catch(function (e) { err(e.message); document.getElementById('tbl').innerHTML = '<div class="empty">Could not load the register.</div>'; });
-  }
-  document.getElementById('q').addEventListener('input', render);
-  document.getElementById('f-state').addEventListener('change', render);
-  document.getElementById('f-meter').addEventListener('change', render);
-  document.getElementById('f-pods').addEventListener('change', render);
-  document.getElementById('btn-add').addEventListener('click', function () {
-    var name = prompt('Site name:');
-    if (!name) return;
-    api('/api/site-crm', { method: 'POST', json: { org: ORG, action: 'site-save', name: name } })
-      .then(function (j) { window.location.href = '/site-crm.html?site=' + encodeURIComponent(j.id); })
-      .catch(function (e) { err(e.message); });
   });
-  auth.onAuthStateChanged(function (u) {
-    if (!u) { window.location.href = '/'; return; }
-    document.getElementById('tb-avatar').textContent = (u.email || '?').charAt(0).toUpperCase();
-    document.getElementById('tb-name').textContent = u.displayName || u.email;
-    if (window.OmegaTenant && OmegaTenant.boot) {
-      OmegaTenant.boot().then(function () { ORG = org(); load(); }).catch(function () { ORG = org(); load(); });
-    } else { ORG = org(); load(); }
+  byId('ba-finance').addEventListener('click', function () {
+    var sel = selected(), withPf = sel.filter(function (s) { return s.latestProforma && s.latestProforma.investorCapital > 0; }).length;
+    act('send-to-finance', null, 'Send ' + sel.length + ' site(s) to the finance marketplace?\n\n' + withPf + ' with a pro forma will be listed OPEN to approved capital partners with the investor capital as the ask; ' + (sel.length - withPf) + ' without one will be saved as a draft only you see until a pro forma is run.');
+  });
+  byId('ba-model').addEventListener('click', function () {
+    var sel = selected();
+    if (sel.length > 10) { msg('Run the compute model on up to 10 sites at a time.'); return; }
+    act('site-model-bulk', null, null);
+  });
+  byId('ba-proforma').addEventListener('click', function () {
+    menu(this, [
+      { label: 'Size from available power', sub: 'Whole 90 kW pods that fit the site’s available power; a site without power is named, not sized', run: function () { act('proforma-bulk', { sizeFromPower: true, label: 'Sized from power' }); } },
+      { label: 'A set number of pods…', sub: 'The same pod count on every selected site', run: function () { var n = window.prompt('Pods per site:', '1'); if (n == null) return; if (!(Number(n) >= 1)) { msg('Pods must be a whole number of 1 or more.'); return; } act('proforma-bulk', { pods: Math.floor(Number(n)), label: Math.floor(Number(n)) + ' pod(s)' }); } }
+    ]);
+  });
+  byId('ba-status').addEventListener('click', function () {
+    var items = [{ hd: 'Move to' }].concat(STATUSES.map(function (st) { return { label: st, run: function () { act('site-set-status', { status: st }); } }; }));
+    items.push({ label: 'Another status…', run: function () { var st = window.prompt('Status:'); if (st && st.trim()) act('site-set-status', { status: st.trim() }); } });
+    menu(this, items);
+  });
+  byId('ba-tag').addEventListener('click', function () {
+    menu(this, [
+      { label: 'Add a tag…', run: function () { var t = window.prompt('Tag to add (comma-separate for several):'); if (t && t.trim()) act('site-tag', { add: t.split(',') }); } },
+      { label: 'Remove a tag…', run: function () { var t = window.prompt('Tag to remove:'); if (t && t.trim()) act('site-tag', { remove: t.split(',') }); } }
+    ]);
+  });
+  byId('ba-archive').addEventListener('click', function () { act('site-archive', null, 'Archive the selected site(s)? They leave the register and are kept on record; Show archived lists them and Restore brings them back.'); });
+  byId('ba-restore').addEventListener('click', function () { act('site-restore'); });
+  byId('ba-delete').addEventListener('click', function () { act('site-delete', null, 'Permanently delete ' + selected().length + ' site(s)? This cannot be undone. Archive keeps them on record instead.'); });
+  byId('ba-edit').addEventListener('click', function () { var s = selected()[0]; if (s) window.location.href = siteHref(s); });
+  byId('ba-irr').addEventListener('click', function () { downloadCsv(selected(), 'portfolio-irr-'); });
+  byId('ba-agreement').addEventListener('click', function () { exportAgreements(selected()); });
+
+  /* ── exports ────────────────────────────────────────────────────────── */
+  function csvCell(v) { if (v == null) return ''; var s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  var CSV_COLS = [
+    ['Site name', 'name'], ['City', 'city'], ['State', 'state'], ['Address', 'address'], ['Status', 'status'],
+    ['Tags', function (s) { return (s.tags || []).join('; '); }],
+    ['Installed kW', 'installedKw'], ['Reported peak kW', 'reportedPeakKw'],
+    ['Meter owned', function (s) { return s.meterOwned == null ? '' : (s.meterOwned ? 'yes' : 'no'); }],
+    ['Term years remaining', 'termYearsRemaining'], ['Available power (MW)', 'availablePowerMw'],
+    ['Service capacity (kW)', 'serviceCapacityKw'], ['Existing peak (kW)', 'existingPeakKw'],
+    ['Power price ($/kWh)', 'powerPricePerKwh'], ['Annual usage (kWh)', 'annualUsageKwh'],
+    ['Screened pods', function (s) { return (s.screening || {}).pods == null ? '' : s.screening.pods; }],
+    ['Compute model: after-tax IRR', function (s) { var lm = s.latestModel; return lm ? (lm.irr == null ? 'n/a' : (lm.irr * 100).toFixed(4) + '%') : ''; }],
+    ['Compute model: total project cost ($)', function (s) { var lm = s.latestModel; return lm && lm.totalProjectCost != null ? Math.round(lm.totalProjectCost) : ''; }],
+    ['Compute model: equity ($)', function (s) { var lm = s.latestModel; return lm && lm.equity != null ? Math.round(lm.equity) : ''; }],
+    ['Compute model: structure', function (s) { return s.latestModel ? s.latestModel.structureLabel || s.latestModel.structure : ''; }],
+    ['Compute model: pods', function (s) { return s.latestModel ? s.latestModel.pods : ''; }],
+    ['Compute model: verdict', function (s) { return s.latestModel && s.latestModel.verdict ? s.latestModel.verdict.label || '' : ''; }],
+    ['Capital request status', function (s) { var c = s.capital; return c ? (c.funded ? 'funded by ' + (c.awardedToOrg || 'a capital partner') : c.status + (c.offerCount ? ' · ' + c.offerCount + ' offers' : '')) : (s.finProjectId ? 'sent' : ''); }],
+    ['Pro forma pods', function (s) { return s.latestProforma ? s.latestProforma.pods : ''; }],
+    ['Investor IRR (annual)', function (s) { var i = irrOf(s); return i == null ? (s.latestProforma ? 'not defined' : '') : (i * 100).toFixed(4) + '%'; }],
+    ['Project IRR (annual)', function (s) { var lp = s.latestProforma; return lp && lp.projectIrrDefined && lp.projectIrrAnnual != null ? (lp.projectIrrAnnual * 100).toFixed(4) + '%' : (lp ? 'not defined' : ''); }],
+    ['Investor capital ($)', function (s) { return s.latestProforma && s.latestProforma.investorCapital != null ? Math.round(s.latestProforma.investorCapital) : ''; }],
+    ['NPV ($)', function (s) { return s.latestProforma && s.latestProforma.npv != null ? Math.round(s.latestProforma.npv) : ''; }],
+    ['Payback (month)', function (s) { return s.latestProforma && s.latestProforma.paybackMonth != null ? s.latestProforma.paybackMonth : ''; }],
+    ['Year 1 revenue ($)', function (s) { return s.latestProforma && s.latestProforma.year1Revenue != null ? Math.round(s.latestProforma.year1Revenue) : ''; }],
+    ['Assumption set', function (s) { return s.latestProforma ? s.latestProforma.assumptionVersion : ''; }],
+    ['Scenario', function (s) { return s.latestProforma ? s.latestProforma.scenarioId : ''; }],
+    ['Scenario date', function (s) { return s.latestProforma ? s.latestProforma.at : ''; }],
+    ['Site Map project', function (s) { return s.projectId || ''; }], ['Marketplace deal', function (s) { return s.finProjectId || ''; }],
+    ['External IDs', function (s) { var e = s.externalSiteIds || {}; return Object.keys(e).map(function (k) { return k + ':' + e[k]; }).join('; '); }],
+    ['Site ID', 'id'], ['Notes', 'notes']
+  ];
+  function downloadCsv(rows, prefix) {
+    if (!rows.length) { msg('Nothing to export.'); return; }
+    var lines = [CSV_COLS.map(function (c) { return csvCell(c[0]); }).join(',')];
+    rows.forEach(function (s) { lines.push(CSV_COLS.map(function (c) { return csvCell(typeof c[1] === 'function' ? c[1](s) : s[c[1]]); }).join(',')); });
+    saveBlob(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }), (prefix || 'portfolio-sites-') + new Date().toISOString().slice(0, 10) + '.csv');
+    S.toast(rows.length + ' site(s) exported with their IRR.');
+  }
+  function saveBlob(blob, name) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.setAttribute('data-leave', ''); document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  }
+  byId('btn-export').addEventListener('click', function () { downloadCsv(filtered(), 'portfolio-sites-'); });
+  /* one PDF per site, from the server, in turn; the file is named by the server */
+  function exportAgreements(rows) {
+    if (!rows.length) return;
+    if (rows.length > 20) { msg('Export term sheets for up to 20 sites at a time.'); return; }
+    var i = 0, noPf = 0;
+    msg('Preparing ' + rows.length + ' term sheet(s)…', true);
+    (function next() {
+      if (i >= rows.length) { msg(rows.length + ' term sheet(s) downloaded as DRAFTS' + (noPf ? '; ' + noPf + ' had no pro forma on file, so capital and returns are blank in them' : '') + '.', true); return; }
+      var s = rows[i++];
+      auth.currentUser.getIdToken().then(function (t) {
+        return fetch('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(s.id) + '&agreement=1', { headers: { 'Authorization': 'Bearer ' + t } });
+      }).then(function (r) {
+        if (!r.ok) return r.json().then(function (j) { throw new Error((j && j.error) || ('HTTP ' + r.status)); });
+        if (r.headers.get('X-Omega-Agreement') === 'no-proforma') noPf++;
+        var cd = r.headers.get('Content-Disposition') || '', m = /filename="([^"]+)"/.exec(cd);
+        return r.blob().then(function (b) { saveBlob(b, m ? m[1] : 'SPV-term-sheet-' + s.id + '.pdf'); });
+      }).then(function () { setTimeout(next, 350); }).catch(function (e) { msg('Term sheet for ' + (s.name || s.id) + ': ' + e.message); });
+    })();
+  }
+
+  /* ── the side panel: one site, its figures, its actions ─────────────── */
+  function openDrawer(id) {
+    var s = SITES.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+    OPEN = id;
+    var lp = s.latestProforma, av = availKw(s), loc = [s.city, s.state].filter(Boolean).join(', ');
+    /* the pod block shows the pod case's own IRR, never the compute model's */
+    var irr = lp && lp.investorIrrDefined && lp.investorIrrAnnual != null ? Number(lp.investorIrrAnnual) : null;
+    function fact(k, v, n) { return '<div class="dr-fact"><div class="k">' + esc(k) + '</div><div class="v">' + (v == null || v === '' ? '<span class="t-mut">Not provided</span>' : v) + '</div>' + (n ? '<div class="n">' + esc(n) + '</div>' : '') + '</div>'; }
+    var lm = s.latestModel, cap = s.capital, html = '';
+    if (lm) {
+      var v = lm.verdict || {};
+      html += '<div class="dr-sec">Compute model</div><div class="dr-irr"><div class="big">' + (lm.irr != null ? '<b>' + esc(pct(lm.irr)) + '</b><span>after-tax IRR, ' + esc(lm.termYears || 10) + '-year term</span>' : '<b class="undef">No IRR</b><span>no capital is invested under this structure</span>') + '</div>' +
+        fact('Total project cost', lm.totalProjectCost != null ? esc(money(lm.totalProjectCost)) : null, 'the capital request') + fact('Equity', lm.equity != null ? esc(money(lm.equity)) : null, lm.debt > 0 ? 'beside ' + money(lm.debt) + ' of debt' : '100% equity') +
+        fact('Structure', esc(lm.structureLabel || lm.structure || '')) + fact('Pods', lm.pods != null ? esc(lm.pods) + ' × ' + esc(lm.gpuName || lm.gpuClass || '') : null, lm.serviceKw ? 'on a ' + Math.round(lm.serviceKw) + ' kW service' : '') +
+        '<div class="dr-fact" style="grid-column:1/-1"><span class="pill ' + (v.tone === 'ok' ? 'pill-ok' : v.tone === 'warn' ? 'pill-warn' : '') + '">' + esc(v.label || '') + '</span><div class="n">' + esc((lm.at ? String(lm.at).slice(0, 10) + ' · ' : '') + 'Compute Site Pro Forma · screening, not a return promise') + '</div></div></div>';
+    }
+    html += '<div class="dr-sec">Capital request</div><div class="dr-facts">' +
+      fact('Request', costOf(s) != null ? esc(money(costOf(s))) : null, lm ? 'total project cost' : lp ? 'investor capital, pods' : 'run the compute model') +
+      fact('Marketplace', cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap ? capitalPill(s) : s.finProjectId ? 'Sent' : '<span class="t-mut">Not sent</span>', cap && cap.funded ? 'accepted by ' + (cap.awardedToOrg || 'a capital partner') + (cap.awardedAt ? ' on ' + String(cap.awardedAt).slice(0, 10) : '') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting for your answer' : cap && cap.status === 'open' ? 'open to capital partners, no offer yet' : '') + '</div>';
+    html += '<div class="dr-sec">Pod pro forma</div>';
+    if (lp) {
+      html += '<div class="dr-irr"><div class="big">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b><span>investor IRR, annualised</span>' : '<b class="undef">Not defined</b><span>no IRR root in the cash flows</span>') + '</div>' +
+        fact('Project IRR', lp.projectIrrDefined && lp.projectIrrAnnual != null ? esc(pct(lp.projectIrrAnnual)) : '<span class="t-mut">Not defined</span>') +
+        fact('Investor capital', lp.investorCapital != null ? esc(money(lp.investorCapital)) : null) +
+        fact('NPV', lp.npv != null ? esc(money(lp.npv)) : null, lp.discountRateAnnual != null ? 'at ' + pct(lp.discountRateAnnual, 0) : '') +
+        fact('Capital recovered', lp.paybackMonth != null ? 'month ' + esc(lp.paybackMonth) : '<span class="t-mut">Not in term</span>') +
+        fact('Pods', lp.pods != null ? esc(lp.pods) : null, lp.itKw != null ? lp.itKw + ' kW IT · ' + lp.facilityKw + ' kW facility' : '') +
+        fact('Year 1 revenue', lp.year1Revenue != null ? esc(money(lp.year1Revenue)) : null) +
+        '<div class="dr-fact" style="grid-column:1/-1"><div class="n">' + esc((lp.label ? lp.label + ' · ' : '') + (lp.assumptionVersion || '') + (lp.at ? ' · ' + String(lp.at).slice(0, 10) : '')) + ' · screening, not a return promise</div></div></div>';
+    } else {
+      html += '<div class="ows-note">No pod pro forma on this site yet. ' + (av.kw != null ? 'It has ' + Math.round(av.kw).toLocaleString('en-US') + ' kW available (' + av.basis + '): size it from power below.' : 'Enter its available power (MW), or service capacity and existing peak, on the full record to size it.') + '</div>';
+    }
+    html += '<div class="dr-sec">Site</div><div class="dr-facts">' +
+      fact('Location', loc ? esc(loc) : null) + fact('Status', s.status ? statusPill(s) : null) +
+      fact('Available power', av.kw != null ? esc(Math.round(av.kw).toLocaleString('en-US')) + ' kW' : null, av.basis || 'for new load') +
+      fact('Installed chargers', unk(s.installedKw) ? null : esc(s.installedKw) + ' kW', 'nameplate, not approved capacity') +
+      fact('Reported peak', unk(s.reportedPeakKw) ? null : esc(s.reportedPeakKw) + ' kW' + (s.peakUnresolved ? ' <span class="pill pill-warn">unresolved</span>' : ''), 'workbook statistic') +
+      fact('Meter', meterPill(s)) + fact('Remaining term', unk(s.termYearsRemaining) ? '<span class="t-mut">Needs verification</span>' : esc(s.termYearsRemaining) + ' yr') +
+      fact('Tags', (s.tags || []).length ? esc(s.tags.join(', ')) : null) +
+      (s.address ? fact('Address', esc(s.address)) : '') + '</div>';
+    html += '<div class="dr-sec">Hand-offs</div><div class="dr-facts">' +
+      fact('Site Map', s.projectId ? '<a href="' + editorHref(s) + '" style="color:var(--ows-brand-ink)">Open the project ↗</a>' : '<span class="t-mut">Not in the editor yet</span>') +
+      fact('Grid Atlas', '<a href="' + atlasHref(s) + '" style="color:var(--ows-brand-ink)">' + (s.address || s.city ? 'Open at this address ↗' : 'Open ↗') + '</a>') +
+      fact('Investor deck', lm ? '<a href="' + deckHref(s) + '" style="color:var(--ows-brand-ink)">Open the deck ↗</a>' : '<span class="t-mut">After the compute model runs</span>') +
+      fact('Finance marketplace', s.finProjectId ? '<a href="' + dealHref(s) + '" style="color:var(--ows-brand-ink)">' + (s.finProjectStatus === 'draft' ? 'Draft deal' : 'Open deal') + ' ↗</a>' : '<span class="t-mut">Not sent yet</span>') + '</div>';
+    html += '<div class="dr-acts" id="dr-acts">' +
+      (CANEDIT ? '<button type="button" class="primary" data-act="editor">' + (s.projectId ? 'Open in Site Map' : 'Open in Site Map') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="finance">' + (s.finProjectId ? 'Marketplace deal' : 'Send to marketplace') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="model">' + (lm ? 'Re-run compute model' : 'Run compute model') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="proforma">' + (lp ? 'Re-run pods from power' : 'Size pods from power') + '</button>' : '') +
+      '<button type="button" data-act="irr">Export IRR</button><button type="button" data-act="agreement">Export term sheet</button>' +
+      (CANEDIT ? '<button type="button" class="danger" data-act="' + (s.archived ? 'restore' : 'archive') + '">' + (s.archived ? 'Restore' : 'Archive') + '</button>' : '') + '</div>';
+    S.drawer({ eyebrow: 'Site' + (s.archived ? ' · archived' : ''), title: s.name || 'Unnamed site', sub: (s.externalSiteIds && Object.keys(s.externalSiteIds).length ? Object.keys(s.externalSiteIds).map(function (k) { return k + ' ' + s.externalSiteIds[k]; }).join(' · ') : s.id), html: html,
+      rows: [{ key: 'full', name: 'Open the full record', sub: 'Contacts, activity, documents, every scenario', href: siteHref(s), icon: S.ICON.file, cta: 'Open' }],
+      ready: function (aside) {
+        Array.prototype.forEach.call(aside.querySelectorAll('#dr-acts [data-act]'), function (b) {
+          b.addEventListener('click', function () {
+            var a = b.getAttribute('data-act'); SEL = {}; SEL[s.id] = true;
+            if (a === 'editor') { if (s.projectId) { window.location.href = editorHref(s); return; } S.closeDrawer(); byId('ba-editor').click(); }
+            else if (a === 'finance') { if (s.finProjectId) { window.location.href = dealHref(s); return; } S.closeDrawer(); byId('ba-finance').click(); }
+            else if (a === 'model') { S.closeDrawer(); act('site-model-bulk', null, null, function (j) { if (j.failed && j.failed.length) msg(j.failed[0].error + ' Open the full record to add it.'); openDrawer(s.id); }); }
+            else if (a === 'proforma') { S.closeDrawer(); act('proforma-bulk', { sizeFromPower: true, label: 'Sized from power' }, null, function () { openDrawer(s.id); }); }
+            else if (a === 'irr') downloadCsv([s], 'irr-' + (s.name || s.id).replace(/[^A-Za-z0-9]+/g, '-') + '-');
+            else if (a === 'agreement') exportAgreements([s]);
+            else if (a === 'archive') { S.closeDrawer(); act('site-archive', null, 'Archive ' + (s.name || 'this site') + '? It leaves the register and is kept on record.'); }
+            else if (a === 'restore') { S.closeDrawer(); act('site-restore'); }
+            render();
+          });
+        });
+      } });
+  }
+
+  /* ── loading ────────────────────────────────────────────────────────── */
+  function load(keep, more) {
+    if (!more) { if (!keep) byId('tbl').innerHTML = '<div class="pf-loading"><div class="spin"></div>Loading the register…</div>'; }
+    var url = '/api/site-crm?org=' + encodeURIComponent(ORG) + (byId('f-archived').checked ? '&archived=1' : '') + (more && NEXT ? '&startAfter=' + encodeURIComponent(NEXT) : '');
+    return api(url).then(function (j) {
+      var rows = j.sites || [];
+      SITES = more ? SITES.concat(rows) : rows; NEXT = j.next || null;
+      CANEDIT = j.canEdit !== false; CANADMIN = j.canArchive === true;
+      Object.keys(SEL).forEach(function (id) { if (!SITES.some(function (s) { return s.id === id; })) delete SEL[id]; });
+      renderStats(); render(); LOADED = true;
+      if (OPEN && byId('ows-overlay')) openDrawer(OPEN);
+      try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
+    }).catch(function (e) { msg(e.message); byId('tbl').innerHTML = '<div class="pf-empty"><b>Could not load the register.</b>' + esc(e.message) + '</div>'; try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {} });
+  }
+  byId('btn-more').addEventListener('click', function () { load(true, true); });
+  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
+  byId('f-archived').addEventListener('change', function () { load(); });
+  byId('btn-add').addEventListener('click', function () {
+    var name = window.prompt('Site name:'); if (!name || !name.trim()) return;
+    post('site-save', { name: name.trim() }).then(function (j) { window.location.href = '/site-crm.html?site=' + encodeURIComponent(j.id); }).catch(function (e) { msg(e.message); });
   });
 
-  /* ── site import: CSV/XLSX into this workspace only ── */
+  /* ── who is here: the sign-in, then the entitlements (the workspace) ── */
+  var ENT_TIMER = null;
+  function onAuth(u, tries) {
+    if (!u) {
+      var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+      if ((tries || 0) < (had ? 20 : 4) && !auth.currentUser) { setTimeout(function () { onAuth(auth.currentUser, (tries || 0) + 1); }, 300); return; }
+      window.location.href = '/login.html'; return;
+    }
+    USER = u; paint();
+    function start(ws) {
+      clearTimeout(ENT_TIMER);
+      WS = ws || window.OMEGA_WORKSPACE || (window.OmegaTenant && OmegaTenant.workspace) || {};
+      ORG = (WS.orgId || (u.email || '').split('@')[1] || '').toLowerCase();
+      paint();
+      if (!LOADED && ORG) load();
+    }
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(start);
+    /* a workspace with no record (derived from the address) may never fire them: go on the address */
+    ENT_TIMER = setTimeout(function () { if (!LOADED) start(null); }, 3500);
+  }
+  auth.onAuthStateChanged(function (u) { onAuth(u, 0); });
+
+  /* ── site import: CSV/XLSX into this workspace only ─────────────────── */
   var IMFIELDS = [
     { key: 'name', label: 'Site name *', syn: ['name', 'sitename', 'site'] },
     { key: 'city', label: 'City', syn: ['city', 'town'] },
     { key: 'state', label: 'State', syn: ['state', 'province'] },
     { key: 'address', label: 'Address', syn: ['address', 'street'] },
+    { key: 'status', label: 'Status', syn: ['status', 'stage'] },
     { key: 'installedKw', label: 'Installed kW', syn: ['installedkw', 'installed', 'nameplatekw', 'nameplate'] },
     { key: 'reportedPeakKw', label: 'Reported peak kW', syn: ['peakkw', 'reportedpeak', 'peak'] },
     { key: 'meterOwned', label: 'Meter owned (yes/no)', syn: ['meterowned', 'meter', 'meterownership'] },
@@ -381,25 +662,14 @@ input[type=text],input[type=number],input[type=date],input[type=search],select,t
   ];
   var IMHEAD = [], IMDATA = [];
   function imNorm(h) { return String(h == null ? '' : h).toLowerCase().replace(/[^a-z0-9]/g, ''); }
-  function imAutoMap(h) {
-    var n = imNorm(h), f, s;
-    for (var i = 0; i < IMFIELDS.length; i++) {
-      f = IMFIELDS[i];
-      for (s = 0; s < f.syn.length; s++) if (f.syn[s] === n) return f.key;
-    }
-    return '';
-  }
-  function imMsg(html, ok) {
-    document.getElementById('im-msg').innerHTML = html ? '<div class="' + (ok ? 'okmsg' : 'err') + '" style="margin:0 0 12px">' + html + '</div>' : '';
-  }
+  function imAutoMap(h) { var n = imNorm(h); for (var i = 0; i < IMFIELDS.length; i++) if (IMFIELDS[i].syn.indexOf(n) >= 0) return IMFIELDS[i].key; return ''; }
+  function imMsg(html, ok) { byId('im-msg').innerHTML = html ? '<div class="pf-msg ' + (ok ? 'ok' : 'err') + '" style="margin:0 0 12px">' + html + '</div>' : ''; }
   function parseCSV(text) {
     var rows = [], row = [], field = '', inQ = false, i, c;
     for (i = 0; i < text.length; i++) {
       c = text[i];
-      if (inQ) {
-        if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; }
-        else field += c;
-      } else if (c === '"') inQ = true;
+      if (inQ) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; } else field += c; }
+      else if (c === '"') inQ = true;
       else if (c === ',') { row.push(field); field = ''; }
       else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
       else if (c !== '\r') field += c;
@@ -417,70 +687,47 @@ input[type=text],input[type=number],input[type=date],input[type=search],select,t
     document.head.appendChild(s);
   }
   function imRenderMap() {
-    var html = '<div class="li-meta" style="margin-bottom:6px">Match each column to a site field:</div><div class="tbl"><div class="tr head" style="grid-template-columns:1fr 1fr"><div>File column</div><div>Site field</div></div>';
+    var html = '<div class="t-sub" style="margin-bottom:6px">Match each column to a site field:</div><div class="pf-table"><div class="pf-tr head" style="grid-template-columns:1fr 1fr"><div>File column</div><div>Site field</div></div>';
     html += IMHEAD.map(function (h, c) {
-      var opts = '<option value="">(skip)</option>' + IMFIELDS.map(function (f) {
-        return '<option value="' + f.key + '"' + (imAutoMap(h) === f.key ? ' selected' : '') + '>' + esc(f.label) + '</option>';
-      }).join('');
-      return '<div class="tr body" style="grid-template-columns:1fr 1fr;cursor:default"><div class="t-name">' + esc(h || ('Column ' + (c + 1))) + '</div>' +
-        '<div><select class="fsel" id="im-col-' + c + '" style="width:100%">' + opts + '</select></div></div>';
+      var opts = '<option value="">(skip)</option>' + IMFIELDS.map(function (f) { return '<option value="' + f.key + '"' + (imAutoMap(h) === f.key ? ' selected' : '') + '>' + esc(f.label) + '</option>'; }).join('');
+      return '<div class="pf-tr"><div class="t-name">' + esc(h || ('Column ' + (c + 1))) + '</div><div><select class="pf-sel" id="im-col-' + c + '" style="width:100%">' + opts + '</select></div></div>';
     }).join('') + '</div>';
-    document.getElementById('im-map').innerHTML = html;
-    var prev = '<div class="li-meta" style="margin-bottom:6px">Preview (first 5 rows):</div><div class="tbl"><div class="tr head" style="grid-template-columns:repeat(' +
-      Math.min(IMHEAD.length, 4) + ',1fr)"><div>' + IMHEAD.slice(0, 4).map(esc).join('</div><div>') + '</div></div>';
-    prev += IMDATA.slice(1, 6).map(function (r) {
-      return '<div class="tr body" style="grid-template-columns:repeat(' + Math.min(IMHEAD.length, 4) + ',1fr);cursor:default"><div>' +
-        r.slice(0, 4).map(function (x) { return esc(String(x == null ? '' : x).slice(0, 40)); }).join('</div><div>') + '</div></div>';
-    }).join('') + '</div>';
-    document.getElementById('im-preview').innerHTML = prev;
-    document.getElementById('im-go').disabled = false;
+    byId('im-map').innerHTML = html;
+    var n = Math.min(IMHEAD.length, 4);
+    var prev = '<div class="t-sub" style="margin-bottom:6px">Preview (first 5 rows):</div><div class="pf-table"><div class="pf-tr head" style="grid-template-columns:repeat(' + n + ',1fr)"><div>' + IMHEAD.slice(0, 4).map(esc).join('</div><div>') + '</div></div>';
+    prev += IMDATA.slice(1, 6).map(function (r) { return '<div class="pf-tr" style="grid-template-columns:repeat(' + n + ',1fr)"><div>' + r.slice(0, 4).map(function (x) { return esc(String(x == null ? '' : x).slice(0, 40)); }).join('</div><div>') + '</div></div>'; }).join('') + '</div>';
+    byId('im-preview').innerHTML = prev;
+    byId('im-go').disabled = false;
     imMsg('');
   }
   function imHandleFile(f) {
-    imMsg('');
-    document.getElementById('im-filename').textContent = f.name;
+    imMsg(''); byId('im-filename').textContent = f.name;
     var done = function (rows) {
       if (!rows || rows.length < 2) { imMsg('No data rows found. The first row must be headers.'); return; }
-      IMHEAD = rows[0].map(function (x) { return String(x == null ? '' : x).trim(); });
-      IMDATA = rows;
-      imMsg(rows.length - 1 + ' data rows found.', true);
-      imRenderMap();
+      IMHEAD = rows[0].map(function (x) { return String(x == null ? '' : x).trim(); }); IMDATA = rows;
+      imMsg(rows.length - 1 + ' data rows found.', true); imRenderMap();
     };
     if (/\.csv$/i.test(f.name) || f.type.indexOf('csv') >= 0 || /\.txt$/i.test(f.name)) {
-      var rd = new FileReader();
-      rd.onload = function () { done(parseCSV(String(rd.result))); };
-      rd.onerror = function () { imMsg('Could not read the file.'); };
-      rd.readAsText(f);
+      var rd = new FileReader(); rd.onload = function () { done(parseCSV(String(rd.result))); }; rd.onerror = function () { imMsg('Could not read the file.'); }; rd.readAsText(f);
     } else {
       loadSheetJS(function (e) {
         if (e) { imMsg(esc(e.message)); return; }
         var rd2 = new FileReader();
-        rd2.onload = function () {
-          try {
-            var wb = XLSX.read(rd2.result, { type: 'array' });
-            var ws = wb.Sheets[wb.SheetNames[0]];
-            done(XLSX.utils.sheet_to_json(ws, { header: 1, raw: false }));
-          } catch (ex) { imMsg('Could not parse the spreadsheet: ' + esc(ex.message)); }
-        };
-        rd2.onerror = function () { imMsg('Could not read the file.'); };
-        rd2.readAsArrayBuffer(f);
+        rd2.onload = function () { try { var wb = XLSX.read(rd2.result, { type: 'array' }); done(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false })); } catch (ex) { imMsg('Could not parse the spreadsheet: ' + esc(ex.message)); } };
+        rd2.onerror = function () { imMsg('Could not read the file.'); }; rd2.readAsArrayBuffer(f);
       });
     }
   }
   function imBuildRows() {
-    var rows = [], c;
-    var map = IMHEAD.map(function (h, i) { var el = document.getElementById('im-col-' + i); return el ? el.value : ''; });
+    var rows = [], c, map = IMHEAD.map(function (h, i) { var el = byId('im-col-' + i); return el ? el.value : ''; });
     if (map.indexOf('name') < 0) { imMsg('Map one column to <b>Site name</b> before importing.'); return null; }
     for (var i = 1; i < IMDATA.length; i++) {
       var r = IMDATA[i], obj = {}, ext = '', empty = true;
       for (c = 0; c < IMHEAD.length; c++) {
-        var key = map[c];
-        if (!key) continue;
-        var v = String(r[c] == null ? '' : r[c]).trim();
-        if (v !== '') empty = false;
+        var key = map[c]; if (!key) continue;
+        var v = String(r[c] == null ? '' : r[c]).trim(); if (v !== '') empty = false;
         if (key === 'externalId') { ext = v; continue; }
-        if (key === 'meterOwned') obj[key] = /^(y|yes|true|1|owned)$/i.test(v) ? true : (/^(n|no|false|0)$/i.test(v) ? false : null);
-        else obj[key] = v;
+        if (key === 'meterOwned') obj[key] = /^(y|yes|true|1|owned)$/i.test(v) ? true : (/^(n|no|false|0)$/i.test(v) ? false : null); else obj[key] = v;
       }
       if (empty) continue;
       if (ext) obj.externalSiteIds = { import: ext };
@@ -488,96 +735,24 @@ input[type=text],input[type=number],input[type=date],input[type=search],select,t
     }
     return rows;
   }
-  /* ── CSV download: the register as a spreadsheet ── */
-  function csvCell(v) {
-    if (v == null) return '';
-    var s = String(v);
-    return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
-  }
-  document.getElementById('btn-export').addEventListener('click', function () {
-    var cols = [
-      ['Site name', 'name'], ['City', 'city'], ['State', 'state'], ['Address', 'address'],
-      ['Status', 'status'], ['Tags', function (s) { return (s.tags || []).join('; '); }],
-      ['Installed kW', 'installedKw'], ['Reported peak kW', 'reportedPeakKw'],
-      ['Meter owned', function (s) { return s.meterOwned == null ? '' : (s.meterOwned ? 'yes' : 'no'); }],
-      ['Term years remaining', 'termYearsRemaining'], ['Available power (MW)', 'availablePowerMw'],
-      ['Service capacity (kW)', 'serviceCapacityKw'], ['Existing peak (kW)', 'existingPeakKw'],
-      ['Power price ($/kWh)', 'powerPricePerKwh'], ['Annual usage (kWh)', 'annualUsageKwh'],
-      ['Screened pods', function (s) { return (s.screening || {}).pods == null ? '' : s.screening.pods; }],
-      ['External IDs', function (s) { var e = s.externalSiteIds || {}; return Object.keys(e).map(function (k) { return k + ':' + e[k]; }).join('; '); }],
-      ['Notes', 'notes']
-    ];
-    var lines = [cols.map(function (c) { return csvCell(c[0]); }).join(',')];
-    SITES.forEach(function (s) {
-      lines.push(cols.map(function (c) {
-        var v = typeof c[1] === 'function' ? c[1](s) : s[c[1]];
-        return csvCell(v);
-      }).join(','));
-    });
-    var blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' });
-    var a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'portfolio-sites-' + new Date().toISOString().slice(0, 10) + '.csv';
-    document.body.appendChild(a); a.click();
-    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500);
+  byId('btn-import').addEventListener('click', function () {
+    byId('import-modal').classList.add('on'); imMsg(''); byId('im-map').innerHTML = ''; byId('im-preview').innerHTML = ''; byId('im-filename').textContent = ''; byId('im-go').disabled = true; IMHEAD = []; IMDATA = [];
   });
-  document.getElementById('btn-import').addEventListener('click', function () {
-    var m = document.getElementById('import-modal');
-    m.style.display = 'flex';
-    imMsg(''); document.getElementById('im-map').innerHTML = ''; document.getElementById('im-preview').innerHTML = '';
-    document.getElementById('im-filename').textContent = ''; document.getElementById('im-go').disabled = true;
-    IMHEAD = []; IMDATA = [];
-  });
-  document.getElementById('im-close').addEventListener('click', function () {
-    document.getElementById('import-modal').style.display = 'none';
-  });
-  document.getElementById('im-file').addEventListener('change', function () {
-    if (this.files.length) imHandleFile(this.files[0]);
-    this.value = '';
-  });
-  document.getElementById('im-go').addEventListener('click', function () {
-    var rows = imBuildRows();
-    if (!rows) return;
+  byId('im-close').addEventListener('click', function () { byId('import-modal').classList.remove('on'); });
+  byId('import-modal').addEventListener('click', function (e) { if (e.target === byId('import-modal')) byId('import-modal').classList.remove('on'); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') byId('import-modal').classList.remove('on'); });
+  byId('im-file').addEventListener('change', function () { if (this.files.length) imHandleFile(this.files[0]); this.value = ''; });
+  byId('im-go').addEventListener('click', function () {
+    var rows = imBuildRows(); if (!rows) return;
     if (!rows.length) { imMsg('No rows to import.'); return; }
     if (rows.length > 500) { imMsg('At most 500 rows per import; split the file and retry.'); return; }
-    imMsg('Importing ' + rows.length + ' site(s)\u2026', true);
-    document.getElementById('im-go').disabled = true;
-    api('/api/site-crm', { method: 'POST', json: { org: ORG, action: 'site-import', rows: rows } })
-      .then(function (j) {
-        if (j.ok === false) {
-          imMsg('<b>Nothing was written.</b> Fix the flagged rows and re-import:<br>' +
-            (j.errors || []).map(function (e) { return 'Row ' + e.row + ': ' + esc(e.error); }).join('<br>') +
-            (j.errorCount > (j.errors || []).length ? '<br>\u2026and ' + (j.errorCount - j.errors.length) + ' more.' : ''));
-        } else {
-          imMsg('<b>' + j.imported + ' site(s) imported</b> into this workspace.', true);
-          load();
-        }
-        document.getElementById('im-go').disabled = false;
-      })
-      .catch(function (e) { imMsg(esc(e.message)); document.getElementById('im-go').disabled = false; });
+    imMsg('Importing ' + rows.length + ' site(s)…', true); byId('im-go').disabled = true;
+    post('site-import', { rows: rows }).then(function (j) {
+      if (j.ok === false) imMsg('<b>Nothing was written.</b> Fix the flagged rows and re-import:<br>' + (j.errors || []).map(function (e) { return 'Row ' + e.row + ': ' + esc(e.error); }).join('<br>') + (j.errorCount > (j.errors || []).length ? '<br>…and ' + (j.errorCount - j.errors.length) + ' more.' : ''));
+      else { imMsg('<b>' + j.imported + ' site(s) imported</b> into this workspace.', true); load(true); }
+      byId('im-go').disabled = false;
+    }).catch(function (e) { imMsg(esc(e.message)); byId('im-go').disabled = false; });
   });
-})();
-
-/* ── mobile nav drawer (same pattern as projects.html) ── */
-(function () {
-  var bar = document.getElementById('topbar'), nav = document.querySelector('.tb-nav');
-  if (!bar || !nav || document.getElementById('tb-burger')) return;
-  var b = document.createElement('button');
-  b.id = 'tb-burger'; b.className = 'tb-burger'; b.setAttribute('aria-label', 'Menu'); b.setAttribute('aria-expanded', 'false');
-  b.innerHTML = '<svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>';
-  bar.appendChild(b);
-  var s = document.createElement('div'); s.className = 'tb-scrim'; s.id = 'tb-scrim'; document.body.appendChild(s);
-  var navHome = nav.parentNode, navNext = nav.nextSibling;
-  function closeNav() { nav.classList.remove('open'); s.classList.remove('open'); b.setAttribute('aria-expanded', 'false'); }
-  function toggleNav() { var o = nav.classList.toggle('open'); s.classList.toggle('open', o); b.setAttribute('aria-expanded', o ? 'true' : 'false'); }
-  function place() {
-    if (window.innerWidth <= 900) { if (nav.parentNode !== document.body) document.body.appendChild(nav); }
-    else { closeNav(); if (nav.parentNode !== navHome) { if (navNext && navNext.parentNode === navHome) navHome.insertBefore(nav, navNext); else navHome.appendChild(nav); } }
-  }
-  place(); window.addEventListener('resize', place);
-  b.addEventListener('click', toggleNav); s.addEventListener('click', closeNav);
-  nav.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('.tb-tab')) closeNav(); });
-  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeNav(); });
 })();
 </script>
 </body>

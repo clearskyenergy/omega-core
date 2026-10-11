@@ -32,6 +32,40 @@
                        on the scenario. assumptionVersion defaults to
                        omega-compute-v1 (evcs-compute-v1 stays available).
      proforma-get    { scenarioId? }  (latest when omitted)
+   GET  /api/site-crm?org=&site=&agreement=1 the site's SPV term sheet (PDF,
+                       DRAFT; api/_lib/site-agreement.js) as an attachment
+   GET  /api/site-crm?org=&archived=1        the register WITH archived sites
+
+   Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
+     site-archive / site-restore    hide from, or return to, the register
+     site-delete                    permanent; workspace admin
+     site-set-status { status }     the stage word on each site
+     site-tag { add[], remove[] }   tags added and taken off
+     send-to-editor                 ONE Site Map project per site
+                                    (projects/{id}, siteId on it, projectId
+                                    on the site), idempotent: a site that
+                                    already has one gets the same one back
+     send-to-finance                ONE finance-marketplace deal per site
+                                    (fin_projects/{id}, the sponsor is the
+                                    caller, the ask is the latest pro forma's
+                                    investor capital): `open` to capital
+                                    partners when a pro forma is on file,
+                                    else a `draft` the sponsor finishes in
+                                    the portal; idempotent the same way
+     site-model (one site) { pods?, gpuClass?, structure?, zip?, hostType?,
+                       label? }     the Compute Site Pro Forma on THIS site
+                       (api/_lib/site-model.js maps the record to
+                       api/_lib/compute-site.js; the one finance engine's
+                       answer is stored under models/{id}, its figures on
+                       the site as latestModel). The gate is the compute
+                       pro forma's (Omega Compute / the tier).
+     site-model-bulk { ids, …the same }  at most 10 a call
+   GET  /api/site-crm?org=&site=&model=1   the latest model's full answer
+                       (the deck's input) with the workspace's deck brand
+     proforma-bulk { sizeFromPower:true | pods, discountRateAnnual?,
+                     assumptionVersion?, label? }
+                                    proforma-run on each site; a site that
+                                    cannot be sized is named, not fatal
 
    Where: omega_orgs/{org}/sites/{siteId}, subcollections contacts|activity|
    files|proforma, and the follow-up index omega_orgs/{org}/sitecrm_followups
@@ -49,11 +83,14 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var A = require('./_lib/admin'), C = require('./_lib/crm'), PF = require('./_lib/proforma');
-var I = require('./_lib/po-intake');
+var I = require('./_lib/po-intake'), G = require('./_lib/site-agreement');
+var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA = require('./_lib/package-access'), CP = require('./compute-proforma'), DECK = require('./_lib/deck-brand');
 
 var EDITORS = ['owner', 'admin', 'member'], ADMINS = ['owner', 'admin'];
 var LIST_CAP = 200, FOLLOW_SCAN = 2000, FOLLOW_CAP = 200, SCAN = 500;
-var PROFORMA_CAP = 25;
+var PROFORMA_CAP = 25, BULK_CAP = 200;
+var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-tag', 'send-to-editor', 'send-to-finance', 'proforma-bulk', 'site-model-bulk'];
+var MODEL_BULK_CAP = 10, PLATFORM = 'ClearSky-OMEGA';
 
 /* level: 'read' | 'write' | 'admin'. The caller's org comes from the verified
    identity; staff pass everywhere. */
@@ -128,6 +165,8 @@ function siteInput(b) {
     annualUsageKwh: optNum(b.annualUsageKwh, 'Annual usage (kWh)', 0, 1e15),
     monthlyUsageKwh: optMonthlyUsage(b.monthlyUsageKwh),
     usageNotes: C.text(b.usageNotes, 2000, 'Usage notes', { multiline: true }),
+    zip: optZip(b.zip),
+    hostType: optEnum(b.hostType, SM.HOST_TYPES, 'Host type'),
     status: C.text(b.status, 60, 'Status'),
     notes: C.text(b.notes, 4000, 'Notes', { multiline: true }),
     externalSiteIds: ids,
@@ -154,6 +193,11 @@ function siteView(id, s) {
     screening: s.screening || null,
     status: s.status || '', notes: s.notes || '',
     latestProforma: s.latestProforma || null,
+    zip: s.zip || null, hostType: s.hostType || null,
+    latestModel: s.latestModel || null,
+    projectId: s.projectId || null, projectAt: C.iso(s.projectAt),
+    finProjectId: s.finProjectId || null, finProjectAt: C.iso(s.finProjectAt), finProjectStatus: s.finProjectStatus || null,
+    archived: s.archived === true, archivedAt: C.iso(s.archivedAt),
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
     createdAt: C.iso(s.createdAt), createdBy: s.createdBy || null,
     updatedAt: C.iso(s.updatedAt), updatedBy: s.updatedBy || null,
@@ -227,13 +271,14 @@ var handler = A.handler(async function (req, res) {
 
   /* ── the register ───────────────────────────────────────────────────── */
   if (req.method === 'GET' && !b.site) {
-    await access(caller, org, 'read');
+    var reader = await access(caller, org, 'read');
     var q = root.collection('sites').orderBy('__name__').limit(LIST_CAP + 1);
     if (b.startAfter) q = root.collection('sites').orderBy('__name__').startAfter(b.startAfter).limit(LIST_CAP + 1);
-    var snap = await q.get();
-    var sites = snap.docs.filter(function (d) { return (d.data() || {}).archived !== true; })
+    var snap = await q.get(), withArchived = b.archived === '1' || b.archived === 'true' || b.archived === true;
+    var sites = snap.docs.filter(function (d) { return withArchived || (d.data() || {}).archived !== true; })
       .slice(0, LIST_CAP).map(function (d) { return siteView(d.id, d.data()); });
-    return { org: org, sites: sites,
+    await capitalJoin(db, sites);
+    return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
       limited: snap.docs.length > LIST_CAP };
   }
@@ -241,7 +286,7 @@ var handler = A.handler(async function (req, res) {
   var action = String(b.action || 'read');
   var adminOnly = action === 'file-archive' || action === 'contact-archive';
   var who = await access(caller, org, adminOnly ? 'admin' : req.method === 'POST' ? 'write' : 'read');
-  var BULK = action === 'site-archive' || action === 'site-delete' || action === 'site-set-status';
+  var BULK = BULK_ACTIONS.indexOf(action) >= 0;
   if (!b.site && action !== 'site-save' && action !== 'site-import' && !BULK) throw A.httpError(400, 'Which site?');
   var sid = b.site ? C.recordId(b.site, 'Site') : null;
   var siteRef = sid ? root.collection('sites').doc(sid) : null;
@@ -256,6 +301,34 @@ var handler = A.handler(async function (req, res) {
     var fs = await filesCol.doc(C.recordId(b.file, 'Document')).get(), f = fs.exists ? fs.data() || {} : null;
     if (!f || f.archived === true) throw A.httpError(404, 'Document not found');
     return stream(res, org, sid, f);
+  }
+
+  /* ── the SPV term sheet: composed from the record and the latest scenario,
+     rendered on the way out, never stored as a fact. A DRAFT every time. */
+  if (req.method === 'GET' && (b.agreement === '1' || b.agreement === 'true')) {
+    var latestQ = await proformaCol.orderBy('createdAt', 'desc').limit(1).get();
+    var latest = latestQ.docs.length ? latestQ.docs[0].data() : null;
+    var orgDoc = await root.get(), orgName = orgDoc.exists ? ((orgDoc.data() || {}).name || org) : org;
+    var primary = await contactsCol.where('archived', '==', false).where('primary', '==', true).limit(1).get();
+    var host = primary.docs.length ? ((primary.docs[0].data() || {}).name || null) : null;
+    var sheet = G.compose({ site: Object.assign({ id: sid }, site.data), scenario: latest, org: org, workspaceName: orgName, hostName: host, by: by, now: now });
+    var bytes = await G.render(sheet);
+    await db.collection('omega_audit').add({ action: 'sitecrm-agreement-export', orgId: org, siteId: sid, by: by, at: now, scenarioId: sheet.meta.scenarioId, ready: sheet.ready, fileName: sheet.fileName });
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
+    res.setHeader('Cache-Control', 'private, no-store');
+    res.setHeader('Content-Disposition', C.disposition(sheet.fileName));
+    res.setHeader('X-Omega-Agreement', sheet.ready ? 'ready' : 'no-proforma');
+    return res.end(Buffer.from(bytes));
+  }
+
+  if (req.method === 'GET' && (b.model === '1' || b.model === 'true')) {
+    var mq = b.modelId ? [await siteRef.collection('models').doc(C.recordId(b.modelId, 'Model')).get()] : (await siteRef.collection('models').orderBy('createdAt', 'desc').limit(1).get()).docs;
+    var md = mq[0] && mq[0].exists ? mq[0].data() : null;
+    if (!md) return { model: null, note: 'No compute model has run on this site yet.' };
+    var orgDocM = await root.get();
+    return { model: { id: mq[0].id, input: md.input, basis: md.basis || null, result: md.result, summary: md.summary || null, label: md.label || '', createdAt: md.createdAt, createdBy: md.createdBy || null },
+      brand: DECK.brandOf(orgDocM.exists ? orgDocM.data() : null, org, PLATFORM) };
   }
 
   if (req.method === 'GET' && action === 'proforma-get') {
@@ -286,8 +359,9 @@ var handler = A.handler(async function (req, res) {
     var activityRaw = got[1].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); });
     var live = got[2].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); }).filter(function (x) { return x.uploadState === 'stored'; })
       .sort(function (x, y) { return C.millis(y.uploadedAt) - C.millis(x.uploadedAt); });
+    var siteOut = siteView(sid, site.data); await capitalJoin(db, [siteOut]);
     return {
-      site: siteView(sid, site.data),
+      site: siteOut,
       contacts: contacts,
       activity: activityRaw.map(function (a) { return siteActivityView(a.id, a, contactNames); }),
       followUps: got[3].docs.map(function (d) { return siteFollowUpView(d.data() || {}, site.data.name || '', contactNames); }).sort(C.byDue),
@@ -345,34 +419,147 @@ var handler = A.handler(async function (req, res) {
       note: prepared.length + ' site(s) imported into this workspace.' };
   }
 
-  /* ── bulk site actions: archive, delete, set status ───────────────────
-     ids: [siteId, …] (max 200). Archive hides from the register; delete is
-     permanent; set-status moves sites between stages (editor / funding /
-     development). Deeper connectors (editor handoff, funding pipeline)
-     attach later; the status field is the contract they will read. */
-  if (action === 'site-archive' || action === 'site-delete' || action === 'site-set-status') {
+  /* ── bulk site actions ──────────────────────────────────────────────────
+     ids: [siteId, …] (max 200), the register's selection. Archive hides a
+     site from the register and restore returns it; delete is permanent and
+     an administrator's; set-status is the stage word; tag adds and removes.
+     Every id is checked against THIS workspace's register first, so a
+     selection from another tab cannot touch a site that moved. */
+  if (BULK) {
     var ids = Array.isArray(b.ids) ? b.ids.map(function (x) { return C.recordId(x, 'Site'); }).filter(Boolean) : [];
     if (!ids.length) throw A.httpError(400, 'No sites selected');
-    if (ids.length > 200) throw A.httpError(400, 'At most 200 sites per action');
+    if (ids.length > BULK_CAP) throw A.httpError(400, 'At most ' + BULK_CAP + ' sites per action');
+    ids = ids.filter(function (x, i) { return ids.indexOf(x) === i; });
     if (action === 'site-delete' && !who.admin)
       throw A.httpError(403, 'Only an administrator can permanently delete sites');
-    var st = action === 'site-set-status' ? C.text(b.status, 60, 'Status', { required: true }) : null;
-    var batch2 = db.batch(), n2 = 0;
-    ids.forEach(function (id) {
-      var r = root.collection('sites').doc(id);
-      if (action === 'site-delete') batch2.delete(r);
-      else if (action === 'site-archive') batch2.update(r, { archived: true, updatedAt: now, updatedBy: by });
-      else batch2.update(r, { status: st, updatedAt: now, updatedBy: by });
-      n2++;
-      batch2.create(db.collection('omega_audit').doc(),
-        { action: 'sitecrm-' + action, orgId: org, siteId: id, by: by, at: now, status: st });
-      n2++;
-    });
-    await batch2.commit();
-    var note2 = action === 'site-delete' ? n2 / 2 + ' site(s) permanently deleted.'
-      : action === 'site-archive' ? n2 / 2 + ' site(s) archived.'
-      : n2 / 2 + ' site(s) moved to "' + st + '".';
-    return { ok: true, count: ids.length, note: note2 };
+    var picked = await Promise.all(ids.map(function (id) { return root.collection('sites').doc(id).get(); }));
+    var missing = picked.filter(function (s) { return !s.exists; }).map(function (s) { return s.id; });
+    if (missing.length) throw A.httpError(404, 'Not in this workspace’s register: ' + missing.slice(0, 5).join(', '));
+    var rows = picked.map(function (s) { return { id: s.id, ref: s.ref, data: s.data() || {} }; });
+
+    if (action === 'site-archive' || action === 'site-restore' || action === 'site-delete' || action === 'site-set-status' || action === 'site-tag') {
+      var st = action === 'site-set-status' ? C.text(b.status, 60, 'Status', { required: true }) : null;
+      var addTags = action === 'site-tag' ? tagList(b.add) : [], dropTags = action === 'site-tag' ? tagList(b.remove) : [];
+      if (action === 'site-tag' && !addTags.length && !dropTags.length) throw A.httpError(400, 'Name a tag to add or remove');
+      var batch2 = db.batch();
+      rows.forEach(function (rw) {
+        var patch = null;
+        if (action === 'site-delete') batch2.delete(rw.ref);
+        else if (action === 'site-archive') patch = { archived: true, archivedAt: now, archivedBy: by };
+        else if (action === 'site-restore') patch = { archived: false, restoredAt: now, restoredBy: by };
+        else if (action === 'site-set-status') patch = { status: st };
+        else {
+          var tags = (Array.isArray(rw.data.tags) ? rw.data.tags : []).filter(function (t) { return dropTags.indexOf(t) < 0; });
+          addTags.forEach(function (t) { if (tags.indexOf(t) < 0) tags.push(t); });
+          patch = { tags: tags.slice(0, 20) };
+        }
+        if (patch) batch2.update(rw.ref, Object.assign(patch, { updatedAt: now, updatedBy: by }));
+        batch2.create(db.collection('omega_audit').doc(),
+          { action: 'sitecrm-' + action, orgId: org, siteId: rw.id, by: by, at: now, status: st, add: addTags, remove: dropTags, was: action === 'site-delete' ? rw.data : null });
+      });
+      await batch2.commit();
+      var n2 = rows.length;
+      var note2 = action === 'site-delete' ? n2 + ' site(s) permanently deleted.'
+        : action === 'site-archive' ? n2 + ' site(s) archived. They are kept on record; Show archived lists them.'
+        : action === 'site-restore' ? n2 + ' site(s) back on the register.'
+        : action === 'site-set-status' ? n2 + ' site(s) moved to "' + st + '".'
+        : n2 + ' site(s) tagged.';
+      return { ok: true, count: n2, ids: rows.map(function (rw) { return rw.id; }), note: note2 };
+    }
+
+    /* ── send to the editor: one Site Map project per site ──────────────
+       The project is the shape omega-newproject.js writes (the editor and
+       the dashboard read it), with the site named on it and the project
+       named on the site. A site that already has a project that still
+       exists gets the same one back: pressing the button twice never makes
+       two drawings of one site. */
+    if (action === 'send-to-editor') {
+      var ownerName = (caller.claims && (caller.claims.name || caller.claims.displayName)) || String(by || '').split('@')[0];
+      var madeP = [], FVp = A.FieldValue();
+      for (var pi = 0; pi < rows.length; pi++) {
+        var rw = rows[pi], existingP = rw.data.projectId ? await db.collection('projects').doc(rw.data.projectId).get() : null;
+        if (existingP && existingP.exists) { madeP.push({ siteId: rw.id, projectId: existingP.id, created: false }); continue; }
+        var scopes = siteScopes(rw.data), pref = db.collection('projects').doc();
+        var proj = { uid: caller.uid, orgId: org, ownerEmail: String(by || '').toLowerCase(), ownerName: ownerName,
+          name: rw.data.name || 'Site', address: [rw.data.address, rw.data.city, rw.data.state].filter(Boolean).join(', '),
+          type: scopes[0] === 'der' ? 'solar' : scopes[0], client: '', siteScopes: scopes, stage: 'candidate',
+          siteId: rw.id, siteOrgId: org, source: 'portfolio',
+          createdAt: FVp.serverTimestamp(), updatedAt: FVp.serverTimestamp(),
+          elements: [], conduits: [], bessList: [], annotations: [] };
+        var batchP = db.batch();
+        batchP.set(pref, proj);
+        batchP.update(rw.ref, { projectId: pref.id, projectAt: now, updatedAt: now, updatedBy: by });
+        batchP.create(db.collection('omega_audit').doc(), { action: 'sitecrm-send-to-editor', orgId: org, siteId: rw.id, by: by, at: now, projectId: pref.id, siteScopes: scopes });
+        await batchP.commit();
+        madeP.push({ siteId: rw.id, projectId: pref.id, created: true });
+      }
+      var newP = madeP.filter(function (m) { return m.created; }).length;
+      return { ok: true, projects: madeP, created: newP,
+        note: newP + ' project(s) created in Site Map' + (madeP.length > newP ? '; ' + (madeP.length - newP) + ' already had one' : '') + '.' };
+    }
+
+    /* ── send to the finance marketplace: one deal per site ───────────────
+       The deal is the shape the financing portal's own form writes
+       (portals/finance/app.js), the sponsor is the caller, and the ask is
+       the latest pro forma's investor capital. With a pro forma on file the
+       deal is OPEN to approved capital partners at once; without one it is a
+       DRAFT only the sponsor sees, finished in the portal. Idempotent as
+       the editor hand-off is. */
+    if (action === 'send-to-finance') {
+      var orgRec = await root.get(), orgNm = orgRec.exists ? ((orgRec.data() || {}).name || org) : org;
+      var madeF = [], FVf = A.FieldValue();
+      for (var fi = 0; fi < rows.length; fi++) {
+        var rf = rows[fi], existingF = rf.data.finProjectId ? await db.collection('fin_projects').doc(rf.data.finProjectId).get() : null;
+        if (existingF && existingF.exists) { madeF.push({ siteId: rf.id, finProjectId: existingF.id, status: (existingF.data() || {}).status || null, created: false }); continue; }
+        var ask = SM.askOf(rf.data), lp = rf.data.latestProforma || null, lm = rf.data.latestModel || null, ready = !!ask, fref = db.collection('fin_projects').doc();
+        var deal = { name: rf.data.name || 'Site', type: 'compute', location: [rf.data.city, rf.data.state].filter(Boolean).join(', '),
+          capacityKw: lm && lm.serviceKw != null ? lm.serviceKw : lp && lp.itKw != null ? lp.itKw : (rf.data.installedKw == null ? null : Number(rf.data.installedKw)),
+          costBasis: ready ? ask.amount : null, ask: ready ? ask.amount : null,
+          mw: lm && lm.serviceKw > 0 ? Math.round(lm.serviceKw / 1000 * 1000) / 1000 : lp && lp.facilityKw > 0 ? Math.round(lp.facilityKw / 1000 * 1000) / 1000 : null,
+          proformaSummary: ready ? (ask.source === 'compute-model' ? modelLine(lm) : proformaLine(lp)) : '',
+          capitalRequest: ready ? Object.assign({ sentAt: now, sentBy: by }, ask) : null, notes: 'From the ' + orgNm + ' portfolio register (site ' + rf.id + ').',
+          developerUid: caller.uid, developerOrg: orgNm, developerName: ownerOf(caller, by), submitterRole: 'developer', submitterEmail: String(by || '').toLowerCase(),
+          status: ready ? 'open' : 'draft', offerCount: 0, awardedTo: null, awardedToOrg: null, docs: {}, links: [],
+          orgId: org, siteId: rf.id, siteOrgId: org, source: 'portfolio', sourceScenarioId: ask && ask.scenarioId || null, sourceModelId: ask && ask.modelId || null,
+          createdAt: FVf.serverTimestamp(), updatedAt: FVf.serverTimestamp() };
+        var batchF = db.batch();
+        batchF.set(fref, deal);
+        batchF.update(rf.ref, { finProjectId: fref.id, finProjectAt: now, finProjectStatus: deal.status, updatedAt: now, updatedBy: by });
+        batchF.create(db.collection('omega_audit').doc(), { action: 'sitecrm-send-to-finance', orgId: org, siteId: rf.id, by: by, at: now, finProjectId: fref.id, status: deal.status, ask: deal.ask });
+        await batchF.commit();
+        madeF.push({ siteId: rf.id, finProjectId: fref.id, status: deal.status, created: true });
+      }
+      var opened = madeF.filter(function (m) { return m.created && m.status === 'open'; }).length, drafted = madeF.filter(function (m) { return m.created && m.status === 'draft'; }).length;
+      return { ok: true, deals: madeF, opened: opened, drafted: drafted,
+        note: (opened ? opened + ' deal(s) open to capital partners' : '') + (opened && drafted ? '; ' : '') + (drafted ? drafted + ' saved as draft(s): run a pro forma to list them with an ask' : '') + (madeF.length > opened + drafted ? (opened || drafted ? '; ' : '') + (madeF.length - opened - drafted) + ' already on the marketplace' : '') + '.' };
+    }
+
+    /* ── pro forma on every selected site ───────────────────────────────── */
+    if (action === 'proforma-bulk') {
+      var ran = [], failed = [];
+      for (var ri = 0; ri < rows.length; ri++) {
+        try {
+          var out = await runScenario(db, org, rows[ri], b, by, now);
+          ran.push({ siteId: rows[ri].id, scenarioId: out.scenario.scenarioId, latestProforma: out.latestProforma });
+        } catch (e) { failed.push({ siteId: rows[ri].id, name: rows[ri].data.name || '', error: e.message }); }
+      }
+      return { ok: true, ran: ran, failed: failed,
+        note: ran.length + ' scenario(s) saved' + (failed.length ? '; ' + failed.length + ' site(s) could not be sized: ' + failed.slice(0, 3).map(function (f) { return (f.name || f.siteId) + ' (' + f.error + ')'; }).join('; ') : '') + '.' };
+    }
+
+    /* ── the compute model on every selected site: a year of hourly dispatch
+       and a finance run each, so ten a call ─────────────────────────────── */
+    if (action === 'site-model-bulk') {
+      if (rows.length > MODEL_BULK_CAP) throw A.httpError(400, 'Run the compute model on at most ' + MODEL_BULK_CAP + ' sites at a time');
+      await computeAccess(caller, org, root);
+      var orgDocB = await root.get(), orgNameB = orgDocB.exists ? ((orgDocB.data() || {}).name || org) : org, ranM = [], failedM = [];
+      for (var mi = 0; mi < rows.length; mi++) {
+        try { var one = await runModel(db, org, rows[mi], b, by, now, orgNameB); ranM.push({ siteId: rows[mi].id, modelId: one.modelId, latestModel: one.summary }); }
+        catch (e) { failedM.push({ siteId: rows[mi].id, name: rows[mi].data.name || '', error: e.message }); }
+      }
+      return { ok: true, ran: ranM, failed: failedM,
+        note: ranM.length + ' compute model(s) run' + (failedM.length ? '; ' + failedM.length + ' site(s) could not be modelled: ' + failedM.slice(0, 3).map(function (f) { return (f.name || f.siteId) + ' (' + f.error + ')'; }).join('; ') : '') + '.' };
+    }
   }
 
   /* ── contacts ───────────────────────────────────────────────────────── */
@@ -477,37 +664,156 @@ var handler = A.handler(async function (req, res) {
      updated. A re-run is a new scenario. The math lives in
      api/_lib/proforma.js and is versioned (omega-compute-v1 default;
      evcs-compute-v1 stays available for the workbook case). */
+  if (action === 'site-model') {
+    await computeAccess(caller, org, root);
+    var orgDoc1 = await root.get(), orgName1 = orgDoc1.exists ? ((orgDoc1.data() || {}).name || org) : org;
+    var ranOne = await runModel(db, org, site, b, by, now, orgName1);
+    return { ok: true, modelId: ranOne.modelId, latestModel: ranOne.summary, result: ranOne.result, basis: ranOne.basis,
+      brand: DECK.brandOf(orgDoc1.exists ? orgDoc1.data() : null, org, PLATFORM),
+      note: 'Compute model saved: ' + (ranOne.summary.title || ranOne.summary.pods + ' pod(s)') + '.' };
+  }
+
   if (action === 'proforma-run') {
-    var scen;
-    try {
-      var runInput = { pods: b.pods, discountRateAnnual: b.discountRateAnnual, overrides: b.overrides,
-        label: b.label, assumptionVersion: b.assumptionVersion };
-      if (b.sizeFromPower === true || b.sizeFromPower === 'true') {
-        var avail = PF.deriveAvailableKw(site.data || {});
-        if (avail.kw == null || !(avail.kw > 0))
-          throw A.httpError(400, 'This site has no usable available power. Enter available MW \u2014 or service capacity and existing peak \u2014 on the Overview tab first.');
-        runInput.sizeFromPowerKw = avail.kw;
-        runInput.sizeBasis = avail.basis;
-      }
-      scen = PF.runProforma(runInput);
-    } catch (e) { throw A.httpError(e.status || 400, e.message); }
-    scen.orgId = org; scen.siteId = sid; scen.createdBy = by;
-    var sref = proformaCol.doc(scen.scenarioId);
-    var lp = { scenarioId: scen.scenarioId, pods: scen.results.pods,
-      investorIrrAnnual: scen.results.investorIrr.defined ? scen.results.investorIrr.annual : null,
-      investorIrrDefined: scen.results.investorIrr.defined === true,
-      projectIrrAnnual: scen.results.projectIrr.defined ? scen.results.projectIrr.annual : null,
-      assumptionVersion: scen.assumptionVersion, label: scen.inputs.label || '', at: scen.createdAt };
-    await db.runTransaction(async function (tx) {
-      tx.create(sref, scen);
-      tx.update(siteRef, { latestProforma: lp, updatedAt: now, updatedBy: by });
-      audit(tx, db, 'sitecrm-proforma-run', org, sid, by, now, { scenarioId: scen.scenarioId, pods: scen.inputs.pods, assumptionVersion: scen.assumptionVersion });
-    });
-    return { ok: true, scenario: proformaView(scen.scenarioId, scen), note: 'Scenario saved. A re-run creates a new scenario; this one never changes.' };
+    var ran1 = await runScenario(db, org, site, b, by, now);
+    return { ok: true, scenario: proformaView(ran1.scenario.scenarioId, ran1.scenario), latestProforma: ran1.latestProforma, note: 'Scenario saved. A re-run creates a new scenario; this one never changes.' };
   }
 
   throw A.httpError(400, 'Unknown site-CRM action');
 });
+
+/* One pro forma run on one site: sized from the site's power when asked,
+   stored immutable under its scenarioId, and summarised onto the site as
+   latestProforma \u2014 the figures the register, the side panel and the
+   finance hand-off read without opening the scenario. */
+async function runScenario(db, org, site, b, by, now) {
+  var scen;
+  try {
+    var runInput = { pods: b.pods, discountRateAnnual: b.discountRateAnnual, overrides: b.overrides,
+      label: b.label, assumptionVersion: b.assumptionVersion };
+    if (b.sizeFromPower === true || b.sizeFromPower === 'true') {
+      var avail = PF.deriveAvailableKw(site.data || {});
+      if (avail.kw == null || !(avail.kw > 0))
+        throw A.httpError(400, 'This site has no usable available power. Enter available MW \u2014 or service capacity and existing peak \u2014 on the Overview tab first.');
+      runInput.sizeFromPowerKw = avail.kw;
+      runInput.sizeBasis = avail.basis;
+    }
+    scen = PF.runProforma(runInput);
+  } catch (e) { throw A.httpError(e.status || 400, e.message); }
+  scen.orgId = org; scen.siteId = site.id; scen.createdBy = by;
+  var sref = site.ref.collection('proforma').doc(scen.scenarioId), lp = latestOf(scen);
+  await db.runTransaction(async function (tx) {
+    tx.create(sref, scen);
+    tx.update(site.ref, { latestProforma: lp, updatedAt: now, updatedBy: by });
+    audit(tx, db, 'sitecrm-proforma-run', org, site.id, by, now, { scenarioId: scen.scenarioId, pods: scen.inputs.pods, assumptionVersion: scen.assumptionVersion });
+  });
+  return { scenario: scen, latestProforma: lp };
+}
+function latestOf(scen) {
+  var r = scen.results || {};
+  return { scenarioId: scen.scenarioId, pods: r.pods, itKw: r.itKw == null ? null : r.itKw, facilityKw: r.facilityKw == null ? null : r.facilityKw,
+    investorIrrAnnual: r.investorIrr && r.investorIrr.defined ? r.investorIrr.annual : null,
+    investorIrrDefined: !!(r.investorIrr && r.investorIrr.defined === true),
+    projectIrrAnnual: r.projectIrr && r.projectIrr.defined ? r.projectIrr.annual : null,
+    projectIrrDefined: !!(r.projectIrr && r.projectIrr.defined === true),
+    npv: r.npv == null ? null : r.npv, discountRateAnnual: r.discountRateAnnual == null ? null : r.discountRateAnnual,
+    paybackMonth: r.paybackMonth == null ? null : r.paybackMonth, investorCapital: r.investorCapital == null ? null : r.investorCapital,
+    year1Revenue: r.year1Revenue == null ? null : r.year1Revenue, months: r.months || null,
+    assumptionVersion: scen.assumptionVersion, label: scen.inputs && scen.inputs.label || '', at: scen.createdAt };
+}
+function proformaLine(lp) {
+  var irr = lp.investorIrrDefined && lp.investorIrrAnnual != null ? (lp.investorIrrAnnual * 100).toFixed(2) + '%' : 'not defined';
+  return lp.pods + ' pod(s), ' + (lp.itKw != null ? lp.itKw + ' kW IT, ' : '') + 'investor capital $' + Math.round(lp.investorCapital).toLocaleString('en-US') +
+    ', investor IRR ' + irr + (lp.paybackMonth != null ? ', capital recovered month ' + lp.paybackMonth : '') + ' (' + lp.assumptionVersion + ', screening, not a return promise).';
+}
+/* The Compute Site Pro Forma's own gate, on the Admin SDK's reads: a
+   packaged workspace needs Omega Compute (package-access), a legacy one the
+   tool's tier and allowlists (compute-proforma's refusal); staff pass. */
+async function computeAccess(caller, org, root) {
+  if (caller.staff) return;
+  var got = await Promise.all([root.get(), root.collection('billing').doc('current').get(), root.collection('members').doc(caller.uid).get()]);
+  var orgDoc = got[0].exists ? got[0].data() : null, billing = got[1].exists ? got[1].data() : null, member = got[2].exists ? got[2].data() : null;
+  var projection;
+  try { projection = PA.project(caller, billing, orgDoc, member, Date.now()); PA.requireModule(projection, CP._gate.MODULE, { tools: [CP._gate.TOOL_KEY] }); }
+  catch (e) { throw A.httpError(e.status || 403, e.message); }
+  var why = projection.packaged ? null : CP._gate.refusal(billing || {}, member);
+  if (why) throw A.httpError(403, why);
+}
+/* One compute model on one site: the record mapped to the model's input
+   (api/_lib/site-model.js), the ONE finance engine's answer stored whole
+   under models/{id} and summarised onto the site as latestModel. A ZIP or
+   host type given with the run is kept on the site, as facts. */
+async function runModel(db, org, site, b, by, now, orgName) {
+  var over = { pods: b.pods, gpuClass: b.gpuClass, structure: b.structure, zip: b.zip, hostType: b.hostType };
+  var mapped = SM.inputFor(site.data || {}, over, { orgName: orgName });
+  if (!mapped.ok) throw A.httpError(400, 'The compute model needs ' + mapped.missing.join('; ') + '.');
+  var result;
+  try { result = CS.model(mapped.input); } catch (e) { throw A.httpError(500, 'The compute model could not run: ' + e.message); }
+  if (!result || result.ok === false) throw A.httpError(400, 'The compute model refused the site: ' + (result && result.errors || []).map(function (x) { return x.message; }).join(' '));
+  var label = C.text(b.label, 120, 'Label'), mref = site.ref.collection('models').doc(C.newId('m_'));
+  var summary = SM.summaryOf(result, mapped.input, { modelId: mref.id, at: now, by: by, label: label });
+  var facts = { latestModel: summary, updatedAt: now, updatedBy: by };
+  if (over.zip && optZip(over.zip)) facts.zip = optZip(over.zip);
+  if (over.hostType && SM.HOST_TYPES.indexOf(over.hostType) >= 0) facts.hostType = over.hostType;
+  await db.runTransaction(async function (tx) {
+    tx.create(mref, { orgId: org, siteId: site.id, input: mapped.input, basis: mapped.basis, result: result, summary: summary, label: label, createdAt: now, createdBy: by });
+    tx.update(site.ref, facts);
+    audit(tx, db, 'sitecrm-site-model', org, site.id, by, now, { modelId: mref.id, pods: summary.pods, structure: summary.structure, irr: summary.irr, totalProjectCost: summary.totalProjectCost });
+  });
+  return { modelId: mref.id, summary: summary, result: result, basis: mapped.basis };
+}
+function modelLine(lm) {
+  var irr = lm.irr == null ? 'n/a (no capital invested)' : (lm.irr * 100).toFixed(2) + '%';
+  function usd(n) { return '$' + Math.round(n || 0).toLocaleString('en-US'); }
+  return (lm.title || lm.pods + ' pod(s)') + ': ' + (lm.structureLabel || lm.structure) + ', total project cost ' + usd(lm.totalProjectCost) +
+    ' (equity ' + usd(lm.equity) + (lm.debt > 0 ? ', debt ' + usd(lm.debt) : '') + '), after-tax IRR ' + irr +
+    ' over ' + (lm.termYears || 10) + ' years' + (lm.verdict && lm.verdict.label ? '; ' + lm.verdict.label : '') + ' (Compute Site Pro Forma, screening, not a return promise).';
+}
+/* What the finance marketplace says of each site's capital request, read
+   LIVE off its deal: sent, open with offers, or funded (awarded). The
+   site's own finProjectStatus is only the state at sending. */
+async function capitalJoin(db, sites) {
+  var withDeal = sites.filter(function (s) { return s.finProjectId; });
+  if (!withDeal.length) return sites;
+  var docs = await Promise.all(withDeal.map(function (s) { return db.collection('fin_projects').doc(s.finProjectId).get(); }));
+  withDeal.forEach(function (s, i) {
+    var d = docs[i].exists ? docs[i].data() || {} : null;
+    if (!d) { s.capital = { status: 'missing', funded: false, note: 'The deal is no longer on the marketplace.' }; return; }
+    var funded = d.status === 'awarded' || !!d.awardedTo;
+    s.capital = { status: d.status || null, funded: funded, offerCount: Number(d.offerCount) || 0, ask: d.ask == null ? null : Number(d.ask),
+      awardedTo: d.awardedTo || null, awardedToOrg: d.awardedToOrg || null, awardedAt: C.iso(d.awardedAt), request: d.capitalRequest || null, dealId: s.finProjectId, updatedAt: C.iso(d.updatedAt) };
+  });
+  return sites;
+}
+function optZip(v) {
+  if (v === undefined || v === null || v === '') return null;
+  var z = String(v).trim();
+  if (!/^\d{5}(-\d{4})?$/.test(z)) throw C.fail(400, 'ZIP must be a five-digit US ZIP code');
+  return z.slice(0, 5);
+}
+function optEnum(v, list, label) {
+  if (v === undefined || v === null || v === '') return null;
+  if (list.indexOf(v) < 0) throw C.fail(400, label + ' must be one of ' + list.join(', '));
+  return v;
+}
+function ownerOf(caller, by) { return (caller.claims && (caller.claims.name || caller.claims.displayName)) || String(by || '').split('@')[0]; }
+function tagList(v) {
+  if (v == null || v === '') return [];
+  var arr = Array.isArray(v) ? v : String(v).split(',');
+  return arr.map(function (t) { return C.text(t, 40, 'Tag'); }).filter(Boolean).filter(function (t, i, a) { return a.indexOf(t) === i; }).slice(0, 20);
+}
+/* What a portfolio site contains, in omega-newproject.js's scope keys: the
+   chargers it has (Level 2 unless a DC fast-charging tag or a large
+   nameplate says otherwise), and compute when it has been screened or
+   sized for pods. The editor opens the build those scopes select. */
+function siteScopes(s) {
+  var tags = (Array.isArray(s.tags) ? s.tags : []).map(function (t) { return String(t).toLowerCase(); });
+  var scopes = [];
+  if (tags.indexOf('dcfc') >= 0 || (Number(s.installedKw) >= 150 && tags.indexOf('l2') < 0)) scopes.push('dcfc'); else scopes.push('l2');
+  var pods = s.latestProforma && s.latestProforma.pods, screened = s.screening && s.screening.pods;
+  if ((pods != null && pods > 0) || (screened != null && screened > 0) || tags.indexOf('compute') >= 0) scopes.push('compute');
+  if (tags.indexOf('bess') >= 0 || tags.indexOf('storage') >= 0) scopes.push('bess');
+  return scopes;
+}
 
 function siteActivityView(id, a, names) {
   names = names || {};
