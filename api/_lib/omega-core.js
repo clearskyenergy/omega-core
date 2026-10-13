@@ -16,7 +16,9 @@
 
    The contract is a 5-year minimum. At the end ClearSky removes the skid and
    has the meter turned off, or the host buys the skid at fair market value.
-   System cost: $450,000 per skid (Tommy, 2026-10-02).
+   System cost: $639,000 per skid (Tommy, 2026-10-13: "update the skid to
+   639k"; $450,000 from 2026-10-02 until then). The R60 on it is $24,000
+   (same day), recorded on its catalog row, BESS_CATALOG['CC-R60'].eqcost.
 
    ─────────────────────────────────────────────────────────────────────────────
    WHAT THIS ANSWERS, FROM THE EDITOR'S OUTPUT TAB
@@ -83,7 +85,7 @@ var PRODUCT = {
   key: 'omega-core',
   name: 'Omega-Core',
   catalogId: 'dc_omegacore',
-  systemCostUsd: 450000,
+  systemCostUsd: 639000,
   compute: { make: 'Solela', model: 'Solela Edge Compute', kw: 75 },
   battery: {
     make: 'Clean Cell US', model: 'CleanCell R60', catalogKey: 'CC-R60',

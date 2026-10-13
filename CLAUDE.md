@@ -1298,7 +1298,8 @@ the balance. `docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
 the host** (Tommy: "use the land lease offering from this unit to provide
 payment on charging sites to help increase the profitability of the site").
 One 336 × 87 in skid: Solela Edge Compute (75 kW) + CleanCell R60 (61.44 kWh,
-60 kW Sol-Ark 60K, Clean Cell's datasheet Rev A), $450,000, 5-year minimum,
+60 kW Sol-Ark 60K, Clean Cell's datasheet Rev A), $639,000 (2026-10-13; $450,000
+before; the R60 alone is $24,000 on its catalog row), 5-year minimum,
 then removed with the meter turned off or bought by the host at fair market
 value. Draw › Data Ctr › Omega-Core Skid is `DC_CATALOG.dc_omegacore`; the
 placed `derdc` carries `omegaCore: true`, and EVERY reader of host load, host
@@ -1331,8 +1332,9 @@ every chipset side by side, the sensitivity grid — returned as `compute` on
 the same answer, priced on the skids proposed, with the host's rent as a cost
 of the skid, bankability (min DSCR vs target, debt capacity at the target,
 IRR) and a customer view; the build-up is staff-only; its figures are pinned
-by `tomegacore.js`. The default CAPEX is the recorded $450,000 skid price
-(Tommy, 2026-10-06); the workbook's container range stays a choice. Compute is
+by `tomegacore.js`. The default CAPEX is the recorded skid price, $639,000
+(Tommy, 2026-10-13; the default was set to the recorded price 2026-10-06); the
+workbook's container range stays a choice. Compute is
 priced at CoreWeave's public SPOT rate by default (Tommy, 2026-10-06: "use spot
 as the default"); on-demand, inference and a typed $/GPU-hour stay choices. A legacy plan must open
 the compute cap (`addons.judge`), as the button does. `S.omegaCore` rides on

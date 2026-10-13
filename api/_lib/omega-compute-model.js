@@ -46,8 +46,9 @@
      target is min over amortising months of EBITDA ÷ (target × service per
      dollar)). Project and equity IRR, monthly cash flows annualised.
    · The CAPEX basis is a choice, and the DEFAULT is the Omega-Core skid
-     price ClearSky recorded, $450,000 (Tommy, 2026-10-06: "use the 450k
-     skid price as the default"); the workbook's CMDC range (general-purpose
+     price ClearSky recorded, $639,000 (Tommy, 2026-10-13: "update the skid
+     to 639k"; the default was set to the recorded price on 2026-10-06, "use
+     the 450k skid price as the default"); the workbook's CMDC range (general-purpose
      air-cooled, high, $724,471), the chipset-scaled dynamic range and a
      typed figure stay as choices. The workbook's own figures are pinned in
      the tests on its own basis.
@@ -166,7 +167,7 @@ var DEFAULTS = {
   capexConfig: 'general-air',      /* cmdc: general-air | accelerated-liquid */
   capexCase: 'high',               /* low | mid | high */
   capexCustom: null,
-  skidPriceUsd: 450000,            /* the Omega-Core skid as ClearSky recorded it */
+  skidPriceUsd: 639000,            /* the Omega-Core skid as ClearSky recorded it (2026-10-13) */
   includeLease: true,
   debt: { ltc: 0.7, rate: 0.10, maturityMonths: 60, interestOnlyMonths: 6, balloonPct: 0.10, feePct: 0.02, reserveMonths: 3, targetDscr: 1.25 }
 };
