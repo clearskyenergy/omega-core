@@ -74,17 +74,28 @@ function evOf(site, hostType) {
 function inputFor(site, over, ctx) {
   site = site || {}; over = over || {}; ctx = ctx || {};
   var missing = [];
+  /* THE DESIGN (2026-10-13): what Site Map drew and ran, synced onto the
+     record as latestDesign (api/_lib/portfolio/design-read.js). Where it
+     speaks it wins — the pods placed, the chargers drawn, the battery and
+     solar on the plan, the Run's cost — so the IRR is the design's. A run
+     may set over.useDesign === false to model the record's facts alone. */
+  var d = over.useDesign === false ? null : (site.latestDesign && typeof site.latestDesign === 'object' ? site.latestDesign : null);
   var zip = str(over.zip || site.zip, 10);
   if (!/^\d{5}(-\d{4})?$/.test(zip)) missing.push('the site’s five-digit ZIP code (the tariff book and the climate are read from it)');
   var svc = serviceOf(site);
   if (!svc) missing.push('the service capacity (kW), or the available power (MW) together with the existing peak (kW)');
-  var pods = podsOf(site, over);
+  var pods = pos(over && over.pods) ? podsOf(site, over) : (d && d.compute && pos(d.compute.units) ? { pods: Math.floor(d.compute.units), basis: 'Site Map design' } : podsOf(site, over));
   if (!pods) missing.push('a pod count: run the pod pro forma, or enter the pods to model');
   var hostType = HOST_TYPES.indexOf(over.hostType) >= 0 ? over.hostType : HOST_TYPES.indexOf(site.hostType) >= 0 ? site.hostType : 'multifamily';
   var gpu = GPU_CLASSES.indexOf(over.gpuClass) >= 0 ? over.gpuClass : 'h200';
   var structure = STRUCTURES.indexOf(over.structure) >= 0 ? over.structure : 'own';
   if (missing.length) return { ok: false, missing: missing };
   var annual = annualKwhOf(site), price = pos(site.powerPricePerKwh), ev = evOf(site, hostType), cm = site.commercial || {};
+  if (d && d.chargers && pos(d.chargers.installedKw) && pos(d.chargers.ports)) {
+    var dc = (d.chargers.dcfcKw || 0) >= (d.chargers.l2Kw || 0);
+    ev = { ports: d.chargers.ports, kwPerPort: Math.max(1, Math.round(d.chargers.installedKw / d.chargers.ports * 10) / 10), existing: true, pattern: PATTERN[hostType] || 'overnight',
+      basis: (dc ? 'DC fast chargers' : 'Level 2 chargers') + ' as drawn in Site Map: ' + d.chargers.ports + ' ports, ' + d.chargers.installedKw + ' kW' };
+  }
   var input = {
     site: { name: str(site.name, 120) || 'Site', host: str(site.name, 160), hostType: hostType, city: str(site.city, 80), zip: zip.slice(0, 5),
             street: str(typeof site.address === 'string' ? site.address : (site.address && site.address.street) || '', 160), sponsor: str(ctx.orgName, 120) },
@@ -92,14 +103,18 @@ function inputFor(site, over, ctx) {
     load: annual ? { annualKwh: annual } : {},
     ev: { ports: ev.ports, kwPerPort: ev.kwPerPort, existing: true, pattern: ev.pattern },
     compute: { pods: pods.pods, gpuClass: gpu },
-    battery: { kw: 0, kwh: 0 },
+    battery: d && d.bess && pos(d.bess.kwh) ? { kw: d.bess.kw || 0, kwh: d.bess.kwh } : { kw: 0, kwh: 0 },
     deal: { structure: structure }
   };
+  if (d && d.solar && pos(d.solar.kwDc)) input.solar = { kwdc: d.solar.kwDc };
+  if (d && pos(d.capex) && d.capexSource === 'site-map') input.capex = { total: d.capex, basis: 'Site Map cost run' + (d.capexAt ? ' of ' + String(d.capexAt).slice(0, 10) : '') };
   if (svc.loadingPct != null) input.service.loadingPct = svc.loadingPct;
   if (price) input.tariff = { onPeakRate: price, offPeakRate: price };
   if (pos(cm.rentMonthly)) input.deal.rentPerYear = pos(cm.rentMonthly) * 12;
   var basis = { service: svc.basis, pods: pods.basis, chargers: ev.basis, load: annual ? 'annual usage on record' : 'a typical ' + hostType + ' load (none on record)',
-                tariff: price ? 'the site’s power price as a flat rate' : 'the planning rate book for the ZIP', gpuClass: gpu, structure: structure };
+                tariff: price ? 'the site’s power price as a flat rate' : 'the planning rate book for the ZIP', gpuClass: gpu, structure: structure,
+                battery: input.battery.kwh > 0 ? 'the battery on the Site Map plan' : 'none', solar: input.solar ? 'the solar on the Site Map plan' : 'none',
+                capex: input.capex ? input.capex.basis : 'the model\u2019s catalog', design: d ? (d.at ? 'Site Map design of ' + String(d.at).slice(0, 10) : 'Site Map design') : null };
   return { ok: true, input: input, basis: basis };
 }
 

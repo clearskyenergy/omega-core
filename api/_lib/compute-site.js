@@ -213,6 +213,12 @@ function read(input) {
 
   c.load = obj(x.load);
   c.tariff = x.tariff;
+  /* CAPEX FROM THE DESIGN (2026-10-13): a site designed and costed in Site
+     Map hands its Run total here. The catalog's lines are kept for their
+     asset classes and tax treatment and SCALED to it, so the returns are the
+     returns of what was drawn. Nothing when absent. */
+  var cx = obj(x.capex);
+  c.capex = { total: rd(e, 'capex.total', cx.total, { def: 0, min: 0, max: 1e10, label: 'The project cost from the design ($)' }), basis: str(cx.basis, 120) };
 
   var ports = rd(e, 'ev.ports', ev.ports, { def: 8, min: 0, max: 400, int: true, label: 'The number of EV ports' });
   var pattern = pick(e, 'ev.pattern', ev.pattern, Object.keys(EV_PATTERNS), 'overnight', 'The charging pattern');
@@ -742,6 +748,13 @@ function schedule(c, y1, y0, who) {
   var spotNo = y0 ? y0.revenue.spot : y1.revenue.spot, spotBat = y1.revenue.spot - spotNo;
   var capexTotal = 0, lines0 = capexLines(c, y1.pods, y1.battery, who);
   lines0.forEach(function (l) { capexTotal += l.amount; });
+  var capexScale = null;
+  if (c.capex && c.capex.total > 0 && who !== 'lease' && capexTotal > 0) {
+    capexScale = { from: capexTotal, to: Math.round(c.capex.total), basis: c.capex.basis || 'the design' };
+    var fac = c.capex.total / capexTotal, acc = 0;
+    lines0.forEach(function (l, i) { l.amount = i === lines0.length - 1 ? Math.round(c.capex.total) - acc : Math.round(l.amount * fac); acc += l.amount; l.scaled = true; });
+    capexTotal = Math.round(c.capex.total);
+  }
   var gpuCost = y1.pods * k.gpusPerPod * k.capexPerGpu;
   var kwhTotal = y1.computeKwh + y1.evGridKwh + y1.batteryKwh.losses;
   for (t = 1; t <= N; t++) {
@@ -804,7 +817,7 @@ function schedule(c, y1, y0, who) {
     }
   }
   var totals = { gross: lines.off.map(function (x, i) { return x + lines.edge[i] + lines.spot[i]; }), refresh: events };
-  return { revenue: rev, opex: opex, capex: lines0, capexTotal: capexTotal, events: events, gpuCost: gpuCost, totals: totals };
+  return { revenue: rev, opex: opex, capex: lines0, capexTotal: capexTotal, capexScale: capexScale, events: events, gpuCost: gpuCost, totals: totals };
 }
 
 /* The finance engine's inputs for one structure. */
@@ -1115,6 +1128,9 @@ function model(input) {
     res.sensitivity = res.sensitivity.concat(computeSensitivity(c, ctx, y1, y0, who, res));
     res.warnings = siteWarnings(c, ctx, y1, out).concat(res.warnings || []);
     res.assumptions = siteAssumptions(c, ctx, y1, y0, who, main.schedule).concat(res.assumptions || []);
+    if (main.schedule.capexScale) res.assumptions.unshift('Project cost is the Site Map cost run, $' + fmt(main.schedule.capexScale.to) + ' (' + main.schedule.capexScale.basis +
+      '); the catalog\u2019s own lines ($' + fmt(main.schedule.capexScale.from) + ') are kept for their asset classes and scaled to it.');
+    res.capexScale = main.schedule.capexScale;
   }
   out.structure = { key: who, label: STRUCTURES[who] };
   out.deals = deals;

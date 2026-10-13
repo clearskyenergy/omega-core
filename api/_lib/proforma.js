@@ -113,10 +113,12 @@ function assumptions(overrides, version) {
   return { a: a, used: used };
 }
 
-function monthlyFlows(pods, a) {
+function monthlyFlows(pods, a, capexTotal) {
   var facKw = a.itKwPerPod * a.pue;
   var capexEach = a.gpuPodCapex + a.bessCapexPerPod + a.openingLiquidityPerPod;
-  var capex = capexEach * pods;
+  /* the investor's outlay: Site Map's cost run when the site was designed
+     and run (input.capexTotal), else the assumption set's per-pod figure */
+  var capex = capexTotal != null && capexTotal > 0 ? capexTotal : capexEach * pods;
   var flows = [{ month: 0, revenue: 0, powerCost: 0, otherCost: 0, spvCash: -capex,
     investorCash: -capex, newCoCash: 0, unrecovered: capex, cumulativeSpv: -capex,
     cumulativeInvestor: -capex, powerSpread: 0 }];
@@ -228,10 +230,16 @@ function runProforma(input) {
   var discountAnnual = input.discountRateAnnual == null || input.discountRateAnnual === ''
     ? 0.08 : num(input.discountRateAnnual, 'Discount rate', 0, 1);
   var label = String(input.label || '').slice(0, 120);
-  var flows = monthlyFlows(pods, a);
+  /* CAPEX FROM THE DESIGN (2026-10-13): a site designed and costed in Site
+     Map hands its Run total here, so the IRR is the IRR of what was drawn,
+     not of the assumption set's pod price. Recorded on the scenario with
+     its basis; the per-pod figure stands where nothing was designed. */
+  var capexTotal = input.capexTotal == null || input.capexTotal === '' ? null : num(input.capexTotal, 'Capex total', 1, 1e12);
+  var capexBasis = capexTotal != null ? String(input.capexBasis || 'entered').slice(0, 120) : 'assumption set';
+  var flows = monthlyFlows(pods, a, capexTotal);
   var pIrrM = irrMonthly(flows, 'spvCash');
   var iIrrM = irrMonthly(flows, 'investorCash');
-  var capex = (a.gpuPodCapex + a.bessCapexPerPod + a.openingLiquidityPerPod) * pods;
+  var capex = capexTotal != null ? capexTotal : (a.gpuPodCapex + a.bessCapexPerPod + a.openingLiquidityPerPod) * pods;
   var results = {
     investorCapital: capex,
     pods: pods,
@@ -250,10 +258,12 @@ function runProforma(input) {
     year1InvestorCash: sumKey(flows, 'investorCash', 1, 12),
     totalRevenue: sumKey(flows, 'revenue', 1, a.months),
     months: a.months,
-    sizing: sizing
+    sizing: sizing,
+    capexBasis: capexBasis
   };
   var canonical = { pods: pods, discountRateAnnual: discountAnnual, overrides: assumed.used,
     assumptionVersion: a.version, label: label,
+    capexTotal: capexTotal, capexBasis: capexBasis,
     sizeFromPowerKw: sizing ? sizing.powerKwAvailable : null,
     sizeBasis: sizing ? sizing.basis : null };
   return {

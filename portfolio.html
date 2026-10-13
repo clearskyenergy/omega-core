@@ -143,7 +143,7 @@
   <div class="pf-stats" id="stats" style="display:none">
     <div class="pf-stat"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n" id="c-sites-n">in this workspace's register</div></div>
     <div class="pf-stat"><div class="k">Positive IRR</div><div class="v" id="c-pf">–</div><div class="n" id="c-pf-n">sites whose case returns more than it costs</div></div>
-    <div class="pf-stat"><div class="k">In Site Map</div><div class="v" id="c-editor">–</div><div class="n">sites with a project in the editor</div></div>
+    <div class="pf-stat"><div class="k">In Site Map</div><div class="v" id="c-editor">–</div><div class="n" id="c-editor-n">sites with a project in the editor</div></div>
     <div class="pf-stat"><div class="k">Capital</div><div class="v" id="c-fin">–</div><div class="n" id="c-fin-n">sites sent to the finance marketplace</div></div>
     <div class="pf-stat"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
   </div>
@@ -159,6 +159,7 @@
   <div class="pf-bar" id="bar" role="toolbar" aria-label="Selected sites">
     <span class="count"><span id="selcount">0 selected</span><small id="selall-wrap" style="display:none">· <a id="selall">select all <span id="selall-n"></span></a></small></span>
     <button type="button" id="ba-editor" title="One Site Map project per site; a site that already has one opens it">Open in Site Map</button>
+    <button type="button" id="ba-design" title="Read each site's Site Map project: the units, chargers, battery, solar and the cost run, so the IRR follows the design">Sync Site Map</button>
     <button type="button" id="ba-finance" title="One deal per site on the finance marketplace">Send to marketplace</button>
     <button type="button" id="ba-terra" title="Mail the site facts and figures to Terra Energy for a solar package and detail">Send to Terra (solar)</button>
     <button type="button" id="ba-model" title="The Compute Site Pro Forma on each site, from its service, chargers, usage and pods; ten at a time">Run compute model</button>
@@ -395,7 +396,8 @@
     byId('c-sites').textContent = live.length;
     byId('c-sites-n').textContent = SITES.length > live.length ? 'in the register · ' + (SITES.length - live.length) + ' archived' : 'in this workspace’s register';
     byId('c-pf').textContent = pos; byId('c-pf-n').textContent = pf ? pos + ' of ' + pf + ' modelled · ' + money(cap) + ' project cost' : 'run the compute model to find them';
-    byId('c-editor').textContent = ed; byId('c-fin').textContent = funded ? funded + ' funded' : fin; byId('c-fin-n').textContent = funded ? money(fundedUsd) + ' accepted · ' + fin + ' sent to the marketplace' : 'sites sent to the finance marketplace'; byId('c-unk').textContent = unkN;
+    var designed = live.filter(function (s) { return s.latestDesign; }).length, costed = live.filter(function (s) { return s.latestDesign && s.latestDesign.capex != null; }).length;
+    byId('c-editor').textContent = ed; if (byId('c-editor-n')) byId('c-editor-n').textContent = designed ? designed + ' drawn · ' + costed + ' with a cost run' : 'sites with a project in the editor'; byId('c-fin').textContent = funded ? funded + ' funded' : fin; byId('c-fin-n').textContent = funded ? money(fundedUsd) + ' accepted · ' + fin + ' sent to the marketplace' : 'sites sent to the finance marketplace'; byId('c-unk').textContent = unkN;
   }
 
   /* ── the selection and its bar ─────────────────────────────────────── */
@@ -450,6 +452,7 @@
       if (one && one.projectId) window.location.href = '/editor.html?id=' + encodeURIComponent(one.projectId);
     });
   });
+  byId('ba-design').addEventListener('click', function () { act('design-sync', null, null); });
   byId('ba-finance').addEventListener('click', function () {
     var sel = selected(), withPf = sel.filter(function (s) { return s.latestProforma && s.latestProforma.investorCapital > 0; }).length;
     act('send-to-finance', null, 'Send ' + sel.length + ' site(s) to the finance marketplace?\n\n' + withPf + ' with a pro forma will be listed OPEN to approved capital partners with the investor capital as the ask; ' + (sel.length - withPf) + ' without one will be saved as a draft only you see until a pro forma is run.');
@@ -593,6 +596,14 @@
       fact('Project type', kindLabels(s).length ? esc(kindLabels(s).join(' + ')) : null) +
       fact('Tags', (s.tags || []).length ? esc(s.tags.join(', ')) : null) +
       (s.address ? fact('Address', esc(s.address)) : '') + '</div>';
+    if (s.latestDesign) {
+      var dg = s.latestDesign, dc = dg.compute || {}, dch = dg.chargers || {}, db2 = dg.bess || {}, dso = dg.solar || {};
+      html += '<div class="dr-sec">Site Map design</div><div class="dr-facts">' +
+        fact('Compute units', dc.units ? esc(dc.units) + (dc.kwIt ? ' · ' + esc(dc.kwIt) + ' kW IT' : '') : null) +
+        fact('Chargers', dch.installedKw ? esc(dch.installedKw) + ' kW · ' + esc(dch.ports) + ' ports' : null) +
+        fact('Battery', db2.kwh ? esc(db2.kw) + ' kW / ' + esc(db2.kwh) + ' kWh' : null) + fact('Solar', dso.kwDc ? esc(dso.kwDc) + ' kW-dc' : null) +
+        fact('Cost run', dg.capex != null ? esc(money(dg.capex)) : null, dg.capexAt ? String(dg.capexAt).slice(0, 10) : 'not run yet') + '</div>';
+    }
     html += '<div class="dr-sec">Hand-offs</div><div class="dr-facts">' +
       fact('Site Map', s.projectId ? '<a href="' + editorHref(s) + '" style="color:var(--ows-brand-ink)">Open the project ↗</a>' : '<span class="t-mut">Not in the editor yet</span>') +
       fact('Grid Atlas', '<a href="' + atlasHref(s) + '" style="color:var(--ows-brand-ink)">' + (s.address || s.city ? 'Open at this address ↗' : 'Open ↗') + '</a>') +

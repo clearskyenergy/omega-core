@@ -557,6 +557,95 @@ function seed() {
     assert.match(sc, /<script src="\/omega-newproject\.js">/); assert.match(sc, /ef-kind-/); assert.match(sc, /siteScopes: kindsChecked\(\)/); assert.match(sc, /Project type/);
     new Function(pf.split('<script>').pop().split('</script>')[0]); new Function(sc.split('<script>').pop().split('</script>')[0]);
   });
+
+  console.log('\nthe Site Map design');
+  await test('what Site Map drew and ran is read onto the site when it opens, once per change, and both IRRs run on it', async function () {
+    var DR = require('../api/_lib/portfolio/design-read');
+    assert.equal(DR.designOf({ name: 'empty' }, 'p0'), null, 'a project with no drawing and no run is no design');
+    var PRJ = { orgId: ORG, name: 'Sunnyside', capex: 1840000, incentive: 120000, annualRevenue: 310000, capexAt: '2026-10-12T15:00:00Z', capexSource: 'site-map', bessKw: 250, bessKwh: 1000,
+      omegaCore: { verdict: 'qualified', units: 1, at: '2026-10-12T15:10:00Z' },
+      shapes: [
+        { kind: 'derdc', kw: 75 }, { kind: 'derdc', kw: 75 }, { kind: 'derdc', kw: 75 }, { kind: 'derdc', kw: 75 }, { kind: 'derdc', kw: 75, omegaCore: true, bessKw: 60, bessKwh: 61 },
+        { kind: 'evl2', kw: 11.5, ports: 2 }, { kind: 'evl2', kw: 11.5, ports: 2 }, { kind: 'evpost', kw: 150, ports: 2 }, { kind: 'evl2', kw: 11.5, ports: 2, evFuture: true },
+        { kind: 'dersolar', kw: 350 }, { kind: 'bespad', kw: 250, kwh: 1000 }
+      ],
+      elements: [{ type: 'evgear', evKind: 'charger', evLevel: 'L2', units: 2, kw: 11.5, ports: 2 }, { type: 'evgear', evKind: 'charger', kw: 150, ports: 2, label: 'FUTURE phase 2' }] };
+    db.seed('projects/p_design', PRJ);
+    db.seed('projects/p_other', Object.assign({}, PRJ, { orgId: 'joules.example' }));
+    var d = DR.designOf(PRJ, 'p_design');
+    assert.equal(d.compute.units, 5); assert.equal(d.compute.kwIt, 375); assert.equal(d.compute.omegaCoreUnits, 1); assert.equal(d.compute.omegaCoreBessKwh, 61);
+    assert.equal(d.chargers.l2Units, 4); assert.equal(d.chargers.dcfcUnits, 1); assert.equal(d.chargers.installedKw, 196); assert.equal(d.chargers.ports, 8, 'two L2 shapes, one DCFC, a dual L2 pedestal');
+    assert.equal(d.chargers.futureUnits, 2, 'a future-flagged stall and a FUTURE-labelled charger are counted apart');
+    assert.deepEqual(d.bess, { kw: 250, kwh: 1000, basis: 'run rollup' }); assert.equal(d.solar.kwDc, 350);
+    assert.equal(d.capex, 1840000); assert.equal(d.capexSource, 'site-map'); assert.equal(d.omegaCore.verdict, 'qualified');
+    assert.equal(DR.designOf({ shapes: [{ kind: 'derdc', kw: 75 }] }, 'p').capex, null, 'a project nobody ran has no capex, not 0');
+    assert.equal(DR.designOf({ shapes: [{ kind: 'bespad', kw: 100, kwh: 200 }] }, 'p').bess.basis, 'pads drawn');
+    assert.match(DR.line(d), /5 compute units .*196 kW of chargers.*1000 kWh battery.*350 kW-dc solar.*cost run \$1,840,000/);
+    /* the site opens: the design is read once and kept */
+    await call('POST', { action: 'site-save', id: SITE, name: 'The Elysian Apartments', siteScopes: ['compute', 'bess'] }, PM);
+    db.data.get(O + '/sites/' + SITE).projectId = 'p_design';
+    var page = await call('GET', { site: SITE }, PM);
+    assert.equal(page.site.latestDesign.compute.units, 5); assert.equal(page.site.latestDesign.capex, 1840000); assert.ok(page.site.latestDesign.syncedAt);
+    var hash1 = db.data.get(O + '/sites/' + SITE).latestDesign.hash, synced1 = db.data.get(O + '/sites/' + SITE).latestDesign.syncedAt;
+    await call('GET', { site: SITE }, PM);
+    assert.equal(db.data.get(O + '/sites/' + SITE).latestDesign.syncedAt, synced1, 'an unchanged drawing is not rewritten');
+    db.data.get('projects/p_design').capex = 1900000;
+    var again = await call('GET', { site: SITE }, PM);
+    assert.equal(again.site.latestDesign.capex, 1900000); assert.notEqual(again.site.latestDesign.hash, hash1);
+    /* another workspace's project is never read */
+    var other = await call('POST', { action: 'site-save', name: 'Other', siteScopes: ['compute'] }, PM);
+    db.data.get(O + '/sites/' + other.id).projectId = 'p_other';
+    assert.equal((await call('GET', { site: other.id }, PM)).site.latestDesign, null);
+    /* the pod pro forma runs on the units placed and the cost run, unless told otherwise */
+    var run = await call('POST', { site: SITE, action: 'proforma-run' }, PM);
+    assert.equal(run.scenario.results.pods, 5); assert.equal(run.scenario.results.investorCapital, 1900000); assert.equal(run.scenario.results.capexBasis, 'Site Map cost run of 2026-10-12');
+    assert.equal(run.latestProforma.capexBasis, 'Site Map cost run of 2026-10-12'); assert.equal(run.latestProforma.investorCapital, 1900000);
+    assert.equal(run.scenario.inputs.designHash, db.data.get(O + '/sites/' + SITE).latestDesign.hash);
+    var typed = await call('POST', { site: SITE, action: 'proforma-run', pods: 2 }, PM);
+    assert.equal(typed.scenario.results.pods, 2); assert.equal(typed.scenario.results.capexBasis, 'assumption set');
+    var units = await call('POST', { site: SITE, action: 'proforma-run', fromDesign: true, useDesignCapex: false }, PM);
+    assert.equal(units.scenario.results.pods, 5); assert.equal(units.scenario.results.capexBasis, 'assumption set');
+    await call('POST', { action: 'site-save', id: SITE, name: 'The Elysian Apartments', serviceCapacityKw: 900, existingPeakKw: 100 }, PM);
+    var sized = await call('POST', { site: SITE, action: 'proforma-run', sizeFromPower: true }, PM);
+    assert.equal(sized.scenario.results.sizing.basis, 'service-minus-peak', 'sizing from power still sizes from power');
+    db.data.get('projects/p_design').capex = null;
+    var noRun = await call('GET', { site: SITE }, PM);
+    assert.equal(noRun.site.latestDesign.capex, null);
+    var unpriced = await call('POST', { site: SITE, action: 'proforma-run' }, PM);
+    assert.equal(unpriced.scenario.results.pods, 5); assert.equal(unpriced.scenario.results.capexBasis, 'assumption set', 'units from the drawing, capex from the set when nobody ran the cost');
+    /* the compute model takes the chargers, the battery, the solar and the cost from the design */
+    var SM = require('../api/_lib/site-model');
+    var mapped = SM.inputFor({ zip: '94607', serviceCapacityKw: 900, latestDesign: Object.assign({}, d, { capex: 1840000 }) }, {}, {});
+    assert.equal(mapped.ok, true); assert.equal(mapped.input.compute.pods, 5); assert.equal(mapped.basis.pods, 'Site Map design');
+    assert.deepEqual(mapped.input.battery, { kw: 250, kwh: 1000 }); assert.deepEqual(mapped.input.solar, { kwdc: 350 });
+    assert.equal(mapped.input.ev.ports, 8); assert.equal(mapped.input.ev.kwPerPort, 24.5); assert.match(mapped.basis.chargers, /as drawn in Site Map/);
+    assert.equal(mapped.input.capex.total, 1840000); assert.match(mapped.input.capex.basis, /Site Map cost run of 2026-10-12/);
+    var alone = SM.inputFor({ zip: '94607', serviceCapacityKw: 900, installedKw: 100, screening: { pods: 2 }, latestDesign: d }, { useDesign: false }, {});
+    assert.equal(alone.input.compute.pods, 2); assert.equal(alone.input.capex, undefined); assert.deepEqual(alone.input.battery, { kw: 0, kwh: 0 });
+    var typedPods = SM.inputFor({ zip: '94607', serviceCapacityKw: 900, latestDesign: d }, { pods: 3 }, {});
+    assert.equal(typedPods.input.compute.pods, 3); assert.equal(typedPods.basis.pods, 'entered');
+    db.data.get('projects/p_design').capex = 1840000;
+    await call('POST', { action: 'site-save', id: SITE, name: 'The Elysian Apartments', zip: '90012', serviceCapacityKw: 900, existingPeakKw: 100 }, PM);
+    await call('GET', { site: SITE }, PM);
+    var model = await call('POST', { site: SITE, action: 'site-model', label: 'on the design' }, PM);
+    assert.equal(model.latestModel.pods, 5); assert.equal(model.latestModel.capex, 1840000, 'the model’s capex is the cost run');
+    assert.equal(model.basis.capex, 'Site Map cost run of 2026-10-12'); assert.match(model.basis.design, /Site Map design/);
+    assert.ok(model.result.proforma.capexScale && model.result.proforma.capexScale.to === 1840000);
+    var catalog = await call('POST', { site: SITE, action: 'site-model', useDesign: false, pods: 2 }, PM);
+    assert.equal(catalog.latestModel.pods, 2); assert.notEqual(catalog.latestModel.capex, 1840000);
+    /* the register's bulk sync, and a site with no project */
+    var bulk = await call('POST', { action: 'design-sync', ids: [SITE, other.id] }, PM);
+    assert.equal(bulk.synced, 2); assert.equal(bulk.noProject, 0); assert.equal(audits('sitecrm-design-sync').length, 2);
+    var fresh = await call('POST', { action: 'site-save', name: 'Fresh' }, PM);
+    var none = await call('POST', { action: 'design-sync', ids: [fresh.id] }, PM);
+    assert.equal(none.noProject, 1); assert.match(none.note, /not designed yet/);
+    await rejects(call('POST', { action: 'design-sync', ids: [SITE] }, VIEWER), 403);
+  });
+  await test('the pages carry the design: the site card and its pro forma button, the register’s sync and drawer', async function () {
+    var pf = fs.readFileSync(path.join(__dirname, '..', 'portfolio.html'), 'utf8'), sc = fs.readFileSync(path.join(__dirname, '..', 'site-crm.html'), 'utf8');
+    assert.match(pf, /id="ba-design"/); assert.match(pf, /act\('design-sync'/); assert.match(pf, /Site Map design/); assert.match(pf, /id="c-editor-n"/);
+    assert.match(sc, /id="design-card"/); assert.match(sc, /pf-design/); assert.match(sc, /fromDesign: true/); assert.match(sc, /design-sync/); assert.match(sc, /ds-proforma/);
+  });
   console.log('\naudit');
   await test('every write is audited', async function () {
     await call('POST', { site: SITE, action: 'log', type: 'note', subject: 'n' }, PM);
