@@ -26193,6 +26193,8 @@ async function saveProject(){
     try { window._lastSaveError = null; } catch(_e){}
     _setSaved('saved');
     window._workDirty = false;   // successfully persisted
+    /* the portfolio site this project belongs to reads the design again */
+    try{ if(typeof omegaSiteDesignPush==='function') omegaSiteDesignPush(); }catch(_e){}
   }catch(e){
     /* Set BEFORE _setSaved, which reads it for the indicator's tooltip. */
     /* An over-size failure already wrote a message that names the size and
@@ -26469,6 +26471,13 @@ async function _loadProject(id){
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
     S.omegaCore     = (d.omegaCore     && typeof d.omegaCore==='object')     ? d.omegaCore     : null;
+    /* THE SITE THIS PROJECT BELONGS TO (the portfolio register's
+       send-to-editor writes siteId/siteOrgId on the record). Read so a save
+       can tell the site to read the design again (omegaSiteDesignPush);
+       never written back by the editor, and reset on every load so a site
+       never follows another project. */
+    S.siteId        = (typeof d.siteId==='string' && d.siteId) ? d.siteId : null;
+    S.siteOrgId     = (typeof d.siteOrgId==='string' && d.siteOrgId) ? d.siteOrgId : null;
     S.omegaFiber    = (d.omegaFiber    && typeof d.omegaFiber==='object')    ? d.omegaFiber    : null;
     S.omegaFiberAt  = d.omegaFiberAt  || null;
     /* The last run's totals (omegaRunRollup) are this session's, never the
@@ -37189,6 +37198,35 @@ function omegaRunSave(){
   return true;
 }
 window.omegaRunSave = omegaRunSave;
+
+/* THE SITE FOLLOWS THE DESIGN (2026-10-13; Tommy: "when I do a site map for
+   a project that is in the portfolio panel, that information should
+   automatically translate into the site's details … I don't want to have
+   to open up the site and input the details"). A project the portfolio
+   register made (siteId / siteOrgId on the record, read in _loadProject)
+   tells its site to read the design again after each save: POST
+   /api/site-crm design-sync, the register's ONE door, which reads the
+   drawing and the Run onto the site and runs the compute model on it
+   (hash-bound: an unchanged design is a cheap no-op). Fire and forget,
+   debounced behind the autosave; a refusal is the site's business and
+   never the editor's. Never a second writer of the site record. */
+var _siteSyncTimer = null;
+function omegaSiteDesignPush(){
+  if(!(S && S.siteId && window._currentUser && window._projectId)) return false;
+  clearTimeout(_siteSyncTimer);
+  _siteSyncTimer = setTimeout(function(){
+    var org = S.siteOrgId || ((typeof _projOrgId==='function') ? _projOrgId() : null);
+    var u = window._currentUser;
+    if(!org || !u || typeof u.getIdToken!=='function') return;
+    Promise.resolve(u.getIdToken()).then(function(tok){
+      return fetch('/api/site-crm', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+tok },
+                                       body: JSON.stringify({ org: org, action:'design-sync', ids:[S.siteId], source:'editor' }) });
+    }).then(function(r){ try{ window._omegaSiteSyncAt = Date.now(); window._omegaSiteSyncOk = !!(r && r.ok); }catch(e){} })
+      .catch(function(){ try{ window._omegaSiteSyncOk = false; }catch(e){} });
+  }, 4000);
+  return true;
+}
+window.omegaSiteDesignPush = omegaSiteDesignPush;
 
 /* ---- rail chrome ---------------------------------------------------- */
 

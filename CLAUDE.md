@@ -1184,7 +1184,28 @@ once it has run (the pod case until then). **The capital request is the
 total project cost** (`askOf`): `send-to-finance` sends it as the deal's
 `ask` with `capitalRequest{}` on the deal, and the register reads the deal
 LIVE (`capitalJoin` → `site.capital`): open with offers, or FUNDED once a
-partner's offer is accepted (`awarded`). Grid Atlas opens at the site's
+partner's offer is accepted (`awarded`). **The compute model runs by itself on the Site Map design**
+(2026-10-13, Tommy: "all the data based on the site zipcode, the map that we
+made, those details should auto input into the compute site pro forma … I
+don't want to have to open up the site and input the details … it's the
+Omega Core skid … as much as possible is done for the user from the drawing
+and our tools"): `api/site-crm.js designModel()` runs `site-model` whenever
+the design is read onto the site (a GET, the register's Sync Site Map, the
+editor's own save through `omegaSiteDesignPush` → `design-sync`) and the
+design or the facts changed, under the compute pro forma's gate (no Omega
+Compute: not modelled, no error), marked `auto` on `latestModel`, with what
+stopped it kept as `designModel`. The ZIP is read off the address
+(`site-bridge.zipFromAddress`, the ONE reader). A design whose compute is
+Omega-Core skids and nothing else is the SKID'S own case (`site-model
+.skidInput`): its own meter (`service.own`, `load.none` in
+`compute-site.js`), its R60 inside its price, 48 H100 at the public spot
+reference and the skid's operating figures off `omega-compute-model.js`,
+the skid as recorded ($639,000 + the $125,000 controller), rent from the
+record else the market reference; the host's battery, solar and cost run
+are the host's project, named, never blended; a mixed design runs the
+host's case. The pod pro forma prices a skid as recorded, never on the cost
+run (which never counts it). Nothing a tenant reads names the source
+workbook; it is the Omega-Core skid. `docs/OMEGA-CORE.md`. Grid Atlas opens at the site's
 address (`/grid-atlas.html?q=`). The Site SPV term sheet is
 `api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
 is pdf-lib, DRAFT on every page) behind `GET …&agreement=1`; it is never

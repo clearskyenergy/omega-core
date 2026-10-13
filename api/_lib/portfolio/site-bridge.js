@@ -96,4 +96,15 @@ function flatten(doc) {
 
 /* the street line, whichever shape the record holds */
 function addressLine(site) { var a = site && site.address; return typeof a === 'string' ? a : (a && a.street) || ''; }
-module.exports = { normalize: normalize, flatten: flatten, addressLine: addressLine, MAP: MAP };
+/* The ZIP an address carries, read the one way (2026-10-13, Tommy: "all the
+   data based on the site zipcode"): the object's own zip, else the five
+   digits after a state code ("…, CA 91304"), else five digits closing the
+   line. A street number ("22125 Roscoe Blvd") is never taken for one. */
+function zipFromAddress(a) {
+  if (a && typeof a === 'object') { var z = String(a.zip == null ? '' : a.zip).trim(); if (/^\d{5}(-\d{4})?$/.test(z)) return z.slice(0, 5); a = a.street; }
+  var t = String(a == null ? '' : a);
+  var m = /\b[A-Z]{2}\.?,?\s+(\d{5})(?:-\d{4})?\b/.exec(t);
+  if (!m && !/\b(?:box|suite|ste|unit|apt|#)\s*\d{5}/i.test(t)) m = /(\d{5})(?:-\d{4})?\s*(?:,?\s*(?:USA|US|United States))?\s*$/i.exec(t);
+  return m ? m[1] : null;
+}
+module.exports = { normalize: normalize, flatten: flatten, addressLine: addressLine, zipFromAddress: zipFromAddress, MAP: MAP };
