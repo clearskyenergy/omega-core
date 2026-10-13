@@ -3196,3 +3196,33 @@ largest PLAIN outline (no `omegaRole`, `_visArch`, `omegaBuilding`,
 `omegaFence`, `omegaCampus`, `omegaCompute`, `isSiteBoundary`, `locked`).
 `scripts/tests/tcanopytrace.js` cuts both blocks out of the page and holds
 it (it fails on the editor before the change).
+
+## 2026-10-13 — Solar priced per kW-DC by mount, on its own; a selected array frames itself
+
+Tommy: "make sure the solar is priced correctly per kw and that is
+generated independant on what the compute skid is." The cost engine priced
+every array at the sector band by size, so a traced canopy cost the same
+$/W as a ground array. `api/_lib/editor-cost.js` now prices solar per
+mount — ground and rooftop at the sector band of the whole programme,
+a canopy at `BENCH.pvCanopy` ($2.75/Wdc, an industry range, named in
+`sources.pvCanopy`) — the sheet's Solar PV ($/Wdc) winning for every
+mount, one row per mount on `lines.solar.rows` (kW the page could not
+place by mount, a previewed layout, is plain PV at the band), and nothing
+else on the drawing moves it: the Omega-Core skid is never a pod there
+and the line is the same with or without it. The page sends
+`q.solar.byMount` (`omegaSolarByMount()`: `canopy` / `mount:'adjacent'`
+→ canopy, `roof` → rooftop, else ground), the cost breakdown shows each
+mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
+rate beside the project's blended $/W. `_shapeBBox` gives a one-point
+array (`dersolar` with `wPx`/`hPx`) and a compute unit (`derdc`, lf × wf
+about its point) their real box, so a selected canopy is framed with its
+handles and delete X on its corner instead of a 1×1 box. **The field lock
+no longer makes a canopy unclickable** (Tommy: "i need to be able to click
+on this and the x comes up and i click it x and delete it"): the lock's
+capture-phase guard swallowed every press on an auto-layout array, so a
+traced canopy could be neither selected nor deleted; it now SELECTS the
+shape in Select mode (frame, handles, delete X; once per press) and only
+refuses the drag, so the lock still stops a pan from nudging the field.
+Custom Shape and Custom Area both land their array selected in Select
+mode. Held by `scripts/tests/teditorcost.js` (solar by mount, the page
+collector with and without the skid) and `tcanopytrace.js` §6–8.

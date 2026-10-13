@@ -107,3 +107,49 @@ assert.equal(cp.lines.bess.autoByKwh['760'], 84740); assert.equal(cp.lines.bess.
 assert.ok(!/eqcost:\d/.test(ed), 'no unit price on the page\'s catalog'); count++;
 assert.match(ed, /catalogKey:k \}; \}\);/); assert.match(ed, /catalogKey:b\.catalogKey\|\|'' \}; \}\);/); count += 2;
 console.log('teditorcost (catalog prices): assertions added');
+
+/* ── solar is priced per kW-DC by MOUNT, on its own line, whatever else is
+   on the drawing (Tommy, 2026-10-13: "make sure the solar is priced
+   correctly per kw and that is generated independant on what the compute
+   skid is"). A canopy is a canopy; the sheet's $/Wdc wins for every mount;
+   kW the page cannot place by mount (a previewed layout) is plain PV at
+   the size band. ───────────────────────────────────────────────────── */
+var can = EC.rollup({ solarKwDc: 176, solar: { byMount: { canopy: 176 } } });
+assert.equal(can.lines.solar.rows.length, 1); assert.equal(can.lines.solar.rows[0].mount, 'canopy'); assert.equal(can.lines.solar.rows[0].rate, 2.75); count += 3;
+assert.equal(can.totals.solar, 176 * 1000 * 2.75, 'a canopy at the canopy rate, never the ground band'); assert.equal(can.lines.solar.isBenchmark, true); count += 2;
+var mix = EC.rollup({ solarKwDc: 400, solar: { byMount: { ground: 300, canopy: 100 } } });
+assert.equal(mix.totals.solar, 300e3 * 1.55 + 100e3 * 2.75); assert.equal(mix.lines.solar.rows.map(function (r) { return r.mount; }).join(','), 'ground,canopy'); count += 2;
+assert.ok(Math.abs(mix.lines.solar.rate - mix.totals.solar / 400e3) < 1e-9, 'the blended rate is the line over its watts'); count++;
+var ovr = EC.rollup({ solarKwDc: 200, solar: { byMount: { ground: 100, canopy: 100 } }, sheet: { pvWdc: 2 } });
+assert.equal(ovr.totals.solar, 400000, 'the sheet wins for every mount'); assert.equal(ovr.lines.solar.isBenchmark, false); assert.equal(ovr.lines.solar.rows[1].rate, 2); count += 3;
+var prev = EC.rollup({ solarKwDc: 500, solar: { byMount: { ground: 200 } } });
+assert.equal(prev.lines.solar.rows.length, 2); assert.equal(prev.lines.solar.rows[1].mount, 'unspecified'); assert.equal(prev.lines.solar.rows[1].kwDc, 300); count += 3;
+assert.equal(prev.totals.solar, 500e3 * 1.55, 'a previewed layout the page cannot place by mount is plain PV at the band'); count++;
+assert.equal(EC.pvRate(176, 'canopy'), 2.75); assert.equal(EC.pvRate(176, 'roof'), 1.55); assert.equal(EC.pvRate(25000, 'canopy'), 2.75, 'a canopy never takes the utility band'); count += 3;
+assert.equal(EC._tables.BENCH.pvCanopy, 2.75); assert.match(can.sources.pvCanopy, /2\.50-3\.50/); count += 2;
+/* nothing else on the drawing moves it: pods, the DC package and generation beside it */
+var alone = EC.rollup({ solarKwDc: 176, solar: { byMount: { canopy: 176 } } });
+var crowd = EC.rollup({ solarKwDc: 176, solar: { byMount: { canopy: 176 } }, compute: { podsN: 2, podKw: 2000 }, dc: { pods: 2, podKw: 2000 }, gen: [{ kind: 'deralt', model: 'Gas turbine', kw: 20000 }] });
+assert.deepEqual(crowd.lines.solar, alone.lines.solar, 'the solar line is its own'); count++;
+
+/* the page: the arrays by mount off the drawing, through the real collector
+   and the real engine, with and without an Omega-Core skid on the drawing */
+function collect(shapes) {
+  var S2 = { bessList: [], elements: [], shapes: shapes, conduits: [], pxPerFt: 10, costOverrides: {}, omegaSizing: {} };
+  var c2 = { S: S2, window: {}, document: { getElementById: function () { return null; }, activeElement: null },
+    $v: function () { return undefined; }, JSON: JSON, Object: Object, Math: Math, Promise: Promise, String: String, Number: Number,
+    _ppCollectFleet: function () { return { units: 0, byModel: {} }; }, _vendorOverrides: function () { return {}; }, omegaBessFleet: function () { return { kwh: 0, kw: 0 }; },
+    omegaSolarKwDc: function () { return 500; }, omegaDer: function () { return { solarKwDc: 500, windKw: 0, altKw: 0 }; }, bnzAll: function () { return { capex: 0 }; }, OMEGA_PRICE_BASIS: 'cost' };
+  vm.createContext(c2);
+  vm.runInContext(cut('_costSheetValues') + cut('_evQuantities') + cut('omegaSolarByMount') + cut('omegaCostQuantities') + '\nthis.q = omegaCostQuantities();', c2);
+  return c2.q;
+}
+var arrays = [{ kind: 'dersolar', kw: 176, mount: 'adjacent', canopy: true, autoLayout: true }, { kind: 'dersolar', kw: 324, mount: 'ground' }];
+var qa = collect(arrays), qs = collect(arrays.concat([{ kind: 'derdc', kw: 75, omegaCore: true, bessKw: 60, bessKwh: 61 }]));
+assert.deepEqual(Object.assign({}, qa.solar.byMount), { ground: 324, roof: 0, canopy: 176 }, 'the page sends kW by mount, never a price');   /* copied out of the vm realm */ count++;
+var ra = EC.rollup(qa), rs = EC.rollup(qs);
+assert.equal(ra.lines.solar.rows[0].mount, 'ground'); assert.equal(ra.lines.solar.rows[1].mount, 'canopy'); assert.equal(ra.lines.solar.rows[1].rate, 2.75); count += 3;
+assert.equal(ra.totals.solar, 324e3 * 1.55 + 176e3 * 2.75, 'the traced canopy priced as a canopy beside a ground array'); count++;
+assert.deepEqual(rs.lines.solar, ra.lines.solar, 'the Omega-Core skid changes nothing about the solar'); assert.equal(rs.totals.total, ra.totals.total, 'nor the Run total'); assert.equal(qs.dc.pods, 0); count += 3;
+assert.match(ed, /q\.solar=\{ byMount:\(typeof omegaSolarByMount==='function'\)\?omegaSolarByMount\(\):null \};/); assert.match(ed, /LN\.solar\.rows\|\|\[\]/); assert.match(ed, /_omRow\('Solar \$\/W'/); count += 3;
+console.log('teditorcost (solar by mount): ' + count + ' assertions passed');

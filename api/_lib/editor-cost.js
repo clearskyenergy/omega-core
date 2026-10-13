@@ -15,7 +15,9 @@
 /* ── The benchmark book (NREL/DOE SETO PV 2024; NREL storage 2025; EIA
    AEO2025 generation; an operator's pod figure, Sep 2026) ─────────── */
 var BENCH = {
-  pvResidential: 3.25, pvCommercial: 1.55, pvUtility: 1.15,   /* $/Wdc by sector */
+  pvResidential: 3.25, pvCommercial: 1.55, pvUtility: 1.15,   /* $/Wdc by sector, ground and rooftop */
+  pvCanopy: 2.75,                                             /* $/Wdc, a solar canopy: the steel structure over the array */
+  pvCanopySource: 'Commercial solar canopy (carport), installed: industry range $2.50-3.50/Wdc, the structure premium over a ground or rooftop array; re-quote per structure',
   bessKwh: 241, bessKw: 379,                                   /* energy + power split */
   podAllInPerKw: 30000, podAllInLoPerKw: 20000, podAllInHiPerKw: 40000,
   podSource: 'Operator figure, Sep 2026: $30M +/- $10M per populated 1 MW pod',
@@ -71,7 +73,10 @@ function n(v, d) { var x = Number(v); return (v === '' || v == null || !isFinite
 function pos(v, d) { var x = Number(v); return (isFinite(x) && x > 0) ? x : d; }
 function r0(x) { return Math.round(x); }
 
-function pvRate(kwDc) { var k = +kwDc || 0; if (k < 100) return BENCH.pvResidential; if (k < 20000) return BENCH.pvCommercial; return BENCH.pvUtility; }
+/* $/Wdc for an array: a canopy is its own structure at its own rate; ground
+   and rooftop follow the sector band of the whole programme's size. */
+function pvRate(kwDc, mount) { var k = +kwDc || 0; if (mount === 'canopy') return BENCH.pvCanopy; if (k < 100) return BENCH.pvResidential; if (k < 20000) return BENCH.pvCommercial; return BENCH.pvUtility; }
+var SOLAR_MOUNTS = [['ground', 'Solar PV, ground mount'], ['roof', 'Solar PV, rooftop'], ['canopy', 'Solar canopy']];
 function bessAuto(kwh, override) { if (override > 0) return override; if (!kwh || kwh <= 0) return 0; return r0(kwh * BESS_EQ_PER_KWH); }
 
 /* Which benchmark a placed prime mover falls under. */
@@ -192,9 +197,23 @@ function rollup(q) {
   ev.total = ev.eq + ev.install;
   out.lines.ev = ev;
 
-  /* solar: the sector benchmark for the array on the drawing */
-  var solarKw = +(q.solarKwDc || 0), solarTotal = solarKw > 0 ? solarKw * 1000 * pos(sheet.pvWdc, pvRate(solarKw)) : 0;
-  out.lines.solar = { total: solarTotal, kwDc: solarKw, rate: solarKw > 0 ? pos(sheet.pvWdc, pvRate(solarKw)) : 0, isBenchmark: solarTotal > 0 && !(sheet.pvWdc > 0) };
+  /* solar: priced per kW-DC by how each array is MOUNTED (a canopy is a
+     canopy, never a ground array) and the size of the programme, the
+     sheet's $/Wdc winning for every mount; one line per mount. Nothing
+     else on the drawing moves it: a compute skid is on its own meter and
+     its own line. kW the page could not place by mount (a previewed
+     layout) is priced as plain PV at the size band. */
+  var solarKw = +(q.solarKwDc || 0), byMount = (q.solar && q.solar.byMount) || null, solarSheet = pos(sheet.pvWdc, 0), solarRows = [], solarTotal = 0, solarPlaced = 0;
+  if (byMount) SOLAR_MOUNTS.forEach(function (m) {
+    var kw = +byMount[m[0]] || 0; if (!(kw > 0)) return;
+    var rate = solarSheet > 0 ? solarSheet : pvRate(solarKw, m[0]), tot = kw * 1000 * rate;
+    solarRows.push({ mount: m[0], label: m[1], kwDc: kw, rate: rate, total: tot, isBenchmark: !(solarSheet > 0) }); solarTotal += tot; solarPlaced += kw;
+  });
+  var solarRest = solarKw - solarPlaced;
+  if (solarRest > 0.05) { var restRate = solarSheet > 0 ? solarSheet : pvRate(solarKw), restTot = solarRest * 1000 * restRate; solarRows.push({ mount: 'unspecified', label: 'Solar PV', kwDc: solarRest, rate: restRate, total: restTot, isBenchmark: !(solarSheet > 0) }); solarTotal += restTot; }
+  var solarKwPriced = solarPlaced + Math.max(0, solarRest);
+  out.lines.solar = { total: solarTotal, kwDc: solarKwPriced, rate: solarKwPriced > 0 ? solarTotal / (solarKwPriced * 1000) : 0, rows: solarRows, isBenchmark: solarTotal > 0 && !(solarSheet > 0), canopyRate: BENCH.pvCanopy };
+  out.sources.pvCanopy = BENCH.pvCanopySource;
 
   /* building envelope: audited in the page from the assembly catalog; its capex rides through */
   var bnzTotal = +(q.bnzCapex || 0);
@@ -270,5 +289,5 @@ function rollup(q) {
   return out;
 }
 
-module.exports = { rollup: rollup, pvRate: pvRate, bessAuto: bessAuto, genClass: genClass, evBook: evBook, evEst: evEst, catalogPrice: catalogPrice,
+module.exports = { rollup: rollup, pvRate: pvRate, SOLAR_MOUNTS: SOLAR_MOUNTS, bessAuto: bessAuto, genClass: genClass, evBook: evBook, evEst: evEst, catalogPrice: catalogPrice,
   _tables: { BENCH: BENCH, BESS_EQ_PER_KWH: BESS_EQ_PER_KWH, BESS_INSTALL_RATIO: BESS_INSTALL_RATIO, SHEET: SHEET, DC_ROM: DC_ROM, AUTEL: AUTEL, EV_OTHER: EV_OTHER } };

@@ -11885,6 +11885,21 @@ function _shapeBBox(sh){
     var pr=Math.hypot(pv.x-pc.x, pv.y-pc.y);
     return { x:pc.x-pr, y:pc.y-pr, w:2*pr, h:2*pr };
   }
+  /* A solar array draws from ONE origin point plus its size (an auto-layout
+     array: pts[0] is the boundary's top-left, wPx/hPx its box; a drawn
+     array keeps wPx/hPx in step with the feet it is drawn from), and a
+     compute unit from its centre and lf/wf feet. The point fallback below
+     gave both a 1x1 box, so a selected canopy framed nothing: the corner
+     handles stacked on its top-left corner with the delete X beside them
+     (Tommy, 2026-10-13: "the x should come up"). */
+  if(sh.kind==='dersolar' && sh.pts && sh.pts.length===1 && sh.wPx>0 && sh.hPx>0){
+    return { x:sh.pts[0].x, y:sh.pts[0].y, w:sh.wPx, h:sh.hPx };
+  }
+  if(sh.kind==='derdc' && sh.pts && sh.pts.length===1){
+    var dppf=(typeof _derScale==='function')?_derScale():((S.pxPerFt&&S.pxPerFt>0)?S.pxPerFt:6);
+    var dw=(sh.lf||20)*dppf, dh=(sh.wf||8)*dppf;
+    return { x:sh.pts[0].x-dw/2, y:sh.pts[0].y-dh/2, w:dw, h:dh };
+  }
   /* line / rect / polyline: bbox over points */
   var xs=[], ys=[];
   for(var i=0;i<sh.pts.length;i++){ xs.push(sh.pts[i].x); ys.push(sh.pts[i].y); }
@@ -16007,8 +16022,13 @@ function alGenerate(){
     if(typeof showBanner==='function') showBanner('wiz','!! No tables fit \u2014 boundary may be smaller than the setbacks.');
     return;
   }
-  applyGroundLayout(boundary, layout, window._alExclusions||[]);
+  var placedArr=applyGroundLayout(boundary, layout, window._alExclusions||[]);
   var host=document.getElementById('autolayout-modal'); if(host) host.remove();
+  /* Custom Area left the page in polyline mode, where a click on the new
+     array would start a stray line. Back to Select with the array selected:
+     its frame, handles and delete X are there at once. */
+  try{ if(typeof setMode==='function') setMode('select'); }catch(e){}
+  try{ if(placedArr && typeof selectShape==='function') selectShape(placedArr.id); }catch(e){}
   if(typeof showBanner==='function'){
     showBanner('cal','  Auto-layout: '+layout.tableCount.toLocaleString()+' tables, '
       +layout.kw.toLocaleString()+' kW-DC'+(layout.tooMany?' (density view)':'')+'.');
@@ -29118,6 +29138,7 @@ function omegaCostQuantities(){
   q.sheet=_costSheetValues();
   q.ev=_evQuantities(); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
   q.solarKwDc=(typeof omegaSolarKwDc==='function')?(+omegaSolarKwDc()||0):0;
+  q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null };   /* a canopy is priced as a canopy */
   q.placedKw=0; try{ var _d=(typeof omegaDer==='function')?omegaDer():null; if(_d) q.placedKw=(+_d.solarKwDc||0)+(+_d.windKw||0)+(+_d.altKw||0); }catch(e){}
   q.bnzCapex=0; try{ if(typeof bnzAll==='function') q.bnzCapex=+bnzAll().capex||0; }catch(e){}
   q.compute={ podsN:0, podKw:0, shellPerPod:0, itPerPod:0, excludeIt:false };
@@ -29324,7 +29345,8 @@ function _renderCostEst(ans, stale) {
       </div>`;
     var CM=LN.compute, G=LN.gen;
     bd.innerHTML =
-      (T.solar > 0 ? row('  Solar PV (equip + install)', T.solar, '#FBBF24') : '') +
+      (T.solar > 0 ? ((LN.solar.rows||[]).map(function(sr){ return row('  '+sr.label+' — '+Math.round(sr.kwDc).toLocaleString()+' kW-DC at $'+(+sr.rate).toFixed(2)+'/W'+(sr.isBenchmark?' (benchmark)':''), sr.total, '#FBBF24'); }).join('')
+                     || row('  Solar PV (equip + install)', T.solar, '#FBBF24')) : '') +
       (T.compute > 0
         ? row('  Compute pods ×' + T.computePods + (F.computeBenchmark ? ' (benchmark, all-in)' : (CM.excludeIt ? ' (enclosures only)' : ' (entered)')), T.compute, '#60A5FA')
         : (T.computePods > 0
@@ -36031,6 +36053,22 @@ function omegaDer(){
   return t;
 }
 
+/* The arrays by how they are MOUNTED, for the cost engine: a canopy (Solar
+   → Canopy, or Custom Shape) is priced as a canopy, a rooftop as rooftop,
+   the rest as ground. kW only; the rate is the server's. */
+function omegaSolarByMount(){
+  var t={ ground:0, roof:0, canopy:0 };
+  try{
+    (S.shapes||[]).forEach(function(s){
+      if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return;
+      var kw=+s.kw||0; if(!(kw>0)) return;
+      t[(s.canopy || s.mount==='adjacent') ? 'canopy' : (s.mount==='roof' ? 'roof' : 'ground')]+=kw;
+    });
+  }catch(e){}
+  return t;
+}
+window.omegaSolarByMount=omegaSolarByMount;
+
 function omegaSolarKwDc(){
   var d=omegaDer();
   if(d.solarKwDc>0) return d.solarKwDc;
@@ -36511,6 +36549,13 @@ function omegaRenderResults(){
   fi += _omRow('Total install', _omMoney(gross));
   fi += _omRow('Net of incentives', _omMoney(net));
   fi += _omRow('$/W', perW!==null ? '$'+perW.toFixed(2) : null);
+  /* The solar's OWN rate: its line over its watts, by mount (a canopy at
+     the canopy rate), never the project's blended figure. */
+  var _sl=(window._COST_SERVER && window._COST_SERVER.lines && window._COST_SERVER.lines.solar) || null;
+  if(sDc>0 && _sl && _sl.rate>0){
+    var _slMounts=(_sl.rows||[]).map(function(r){ return r.mount==='unspecified'?'':r.mount; }).filter(Boolean);
+    fi += _omRow('Solar $/W'+(_slMounts.length?' ('+_slMounts.join(' + ')+')':''), '$'+(+_sl.rate).toFixed(2));
+  }
   fi += _omRow('$/kW', perKw ? '$'+Math.round(perKw).toLocaleString() : null);
   var _fc = _fullCost ? ' · full cost' : '';
   fi += _omRow('Payback'+_fc, (payback!==null && payback>0) ? payback.toFixed(1)+' yrs' : null);
@@ -80853,9 +80898,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     }
     try{ if(typeof updShapeCount==='function') updShapeCount(); }catch(e){}
     try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
+    /* The trace left the page in polyline mode, where a click on the new
+       canopy would start another line. Back to Select with the canopy
+       selected, so its frame and delete X are there at once. */
+    try{ if(typeof setMode==='function') setMode('select'); }catch(e){}
+    try{ if(typeof selectShape==='function') selectShape(made.id); }catch(e){}
     if(typeof showBanner==='function'){
       try{ showBanner('shape','Canopy created \u2014 '+layout.tableCount+' tables, '
-        +Math.round(layout.kw)+' kW, fitted to your outline.'); }catch(e){}
+        +Math.round(layout.kw)+' kW, fitted to your outline. Delete or its \u00d7 removes it.'); }catch(e){}
     }
     return made;
   };
@@ -163112,6 +163162,7 @@ if (root.console && console.info) {
   /* ── 2. lock ────────────────────────────────────────────────────────── */
 
   var locked = true;   /* placed equipment starts locked */
+  var lastSelect = { id: null, at: 0 };   /* one selection per press, not three */
 
   /* WHAT THE LOCK IS FOR.
      The problem it solves is nudging one of two hundred identical
@@ -163144,8 +163195,26 @@ if (root.console && console.info) {
       try { sh = (S.shapes || []).filter(function (s) { return s && s.id === id; })[0]; }
       catch (e2) {}
       if (!isPlaced(sh)) return;
+      /* Locked means it will not MOVE. It is still a thing on the drawing
+         that can be looked at and taken off: in Select mode the press
+         SELECTS it (the frame, the handles and the delete X), and only
+         the drag is refused, because the press never reaches the
+         editor's drag handler. Before this the lock swallowed the press
+         whole, so a traced solar canopy (an auto-layout array, locked
+         from the moment it was built) could not be clicked at all and
+         there was no way to delete it (Tommy, 2026-10-13: "i need to be
+         able to click on this and the x comes up and i click it x and
+         delete it"). A press arrives as up to three events (pointer,
+         mouse, touch); the shape is selected once. */
       e.stopPropagation();
       e.preventDefault();
+      try {
+        if (S.mode === 'select' && typeof selectShape === 'function'
+            && !(lastSelect.id === sh.id && (Date.now() - lastSelect.at) < 400)) {
+          lastSelect = { id: sh.id, at: Date.now() };
+          selectShape(sh.id);
+        }
+      } catch (e3) {}
     };
     ['mousedown', 'touchstart', 'pointerdown'].forEach(function (t) {
       document.addEventListener(t, guard, true);
@@ -173763,7 +173832,7 @@ if (root.console && console.info) {
     if(g.units) (g.lines||[]).forEach(function(l){ push('Generation: '+l.model+' x'+l.units+' ('+Math.round(l.kw).toLocaleString()+' kW)', l.cost, (l.overridden?'project override ':'EIA benchmark ')+'$'+Math.round(l.rate).toLocaleString()+'/kW, BoP excluded'); });
     else push('On-site generation', 0, 'none on the drawing');
     push('DC electrical package', root._DC_TOTAL, root._DC_TOTAL>0 ? 'ROM (Eaton EESS)' : 'no compute load');
-    push('Solar PV', root._SOLAR_TOTAL, root._SOLAR_IS_BENCHMARK ? 'benchmark $/Wdc by size' : (root._SOLAR_TOTAL>0?'entered':'none'));
+    push('Solar PV', root._SOLAR_TOTAL, root._SOLAR_IS_BENCHMARK ? 'benchmark $/Wdc by mount and size' : (root._SOLAR_TOTAL>0?'entered':'none'));
     push('Storage', root._BESS_TOTAL, root._BESS_IS_BENCHMARK ? 'benchmark $/kWh + $/kW' : (root._BESS_TOTAL>0?'itemised':'none'));
     push('EV charging', root._EV_TOTAL, root._EV_TOTAL>0?'catalog':'none');
     push('Building envelope', root._BNZ_TOTAL, root._BNZ_TOTAL>0?'assembly catalog':'none');
