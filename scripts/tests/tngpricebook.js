@@ -46,10 +46,15 @@ function grabVar(name){
   }
   return html.slice(i, k + 1) + ';';
 }
-const src = ['NG_PRICE','NG_SERVICE_OPTIONS','NG_SERVICE_KEYS','NG_ROW_ALIAS','NG_BOOK_ROWS','NG_UTIL_ROWS','BLOCKS_NG_MA','NG_LAYOUT']
+/* The book itself runs on the server since 2026-10-13 (api/_lib/ev-pricebook.js);
+   the page keeps the sheet's rows, the change table and the rollup. The
+   test prices with the library and reads the sheet with the page's code. */
+const EV = require(path.join(ROOT, 'api/_lib/ev-pricebook'));
+const src = ['NG_SERVICE_OPTIONS','NG_SERVICE_KEYS','NG_ROW_ALIAS','NG_BOOK_ROWS','NG_UTIL_ROWS','BLOCKS_NG_MA','NG_LAYOUT']
   .map(grabVar).join('\n') + '\n' +
-  ['num','r2','money','ngRound','ngStationsFor','ngRowOf','ngTaxBase','ngPriceBook','ngChanges','ngRowLabel'].map(grab).join('\n');
-const ctx = { console };
+  ['num','r2','money','ngRound','ngStationsFor','ngRowOf','ngTaxBase','ngChanges','ngRowLabel'].map(grab).join('\n')
+  + '\nfunction ngPriceBook(Q){ var R = __ng(Q); R.changes = ngChanges(Q.submitted||[], R.lines); return R; }';
+const ctx = { console, NG_PRICE: EV._tables.NG_PRICE, __ng: EV.ng };
 vm.createContext(ctx);
 vm.runInContext(src, ctx);
 const P = ctx;
