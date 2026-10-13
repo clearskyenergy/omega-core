@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* POST /api/stripe-webhook — Stripe → billing/current
    An OMEGA PACKAGE invoice (metadata omegaPackage, written by
    _lib/stripe-billing.js) is answered FIRST: the engine's own reconcile runs

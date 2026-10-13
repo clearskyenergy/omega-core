@@ -104,13 +104,13 @@ function ignored(rel) {
 }
 /* ignored() of a directory is asked with its trailing slash, as git does */
 var TEXT = /\.(html?|m?js|cjs|json|css|webmanifest|csv|txt|svg|xml|md)$/i;
-var SKIP_DIRS = { '.git': 1, node_modules: 1, api: 1, '.vercel': 1 };
+var SKIP_DIRS = { '.git': 1, node_modules: 1, api: 1, '.vercel': 1, '.claude': 1 };
 function served() {
   var out = [];
   (function walk(rel) {
     fs.readdirSync(path.join(ROOT, rel)).forEach(function (name) {
       var r = rel ? rel + '/' + name : name, st = fs.statSync(path.join(ROOT, r));
-      if (st.isDirectory()) { if (!rel && SKIP_DIRS[name]) return; if (name === '.git' || name === 'node_modules') return; if (!ignored(r + '/')) walk(r); return; }
+      if (st.isDirectory()) { if (!rel && SKIP_DIRS[name]) return; if (name === '.git' || name === 'node_modules' || name === '.claude') return; if (!ignored(r + '/')) walk(r); return; }
       if (TEXT.test(name) && !ignored(r)) out.push(r);
     });
   }(''));
@@ -125,7 +125,7 @@ function apiFiles() {
   (function walk(rel) {
     fs.readdirSync(path.join(ROOT, rel)).forEach(function (name) {
       var r = rel + '/' + name, st = fs.statSync(path.join(ROOT, r));
-      if (st.isDirectory()) { if (name !== 'node_modules') walk(r); return; }
+      if (st.isDirectory()) { if (name !== 'node_modules' && name !== '.claude') walk(r); return; }
       if (/\.(js|json)$/.test(name)) out.push(r);
     });
   }('api'));
@@ -191,7 +191,7 @@ function everyFile() {
   var out = [];
   (function walk(rel) {
     fs.readdirSync(path.join(ROOT, rel || '.')).forEach(function (name) {
-      if (name === '.git' || name === 'node_modules' || name === '.vercel') return;
+      if (name === '.git' || name === 'node_modules' || name === '.vercel' || name === '.claude') return;
       var r = rel ? rel + '/' + name : name, st = fs.statSync(path.join(ROOT, r));
       if (st.isDirectory()) { walk(r); return; }
       if ((TEXT.test(name) || /\.(rules|py|sh)$/.test(name)) && st.size < 20 * 1024 * 1024) out.push(r);

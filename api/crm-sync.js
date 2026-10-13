@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 // ============================================================
 // ClearSky OMEGA — CRM Sync Proxy (Vercel serverless)
 // Deploy path:  /api/crm-sync   (file: api/crm-sync.js)

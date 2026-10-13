@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* Consumer / public email providers. A workspace is a COMPANY; orgId is the
    email domain; so a workspace keyed on one of these would hold strangers.
    Signup refuses them. Extend as you meet new ones — never remove. */

@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* POST /api/tenant-approve — ClearSky staff only.
    Body: { orgId, action: 'approve'|'reject'|'suspend'|'reactivate', tier?, note? }
    approve  → status active (+ optional tier), mirrors tenant_public, notifies the owner

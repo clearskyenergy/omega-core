@@ -3231,3 +3231,122 @@ applier is gone; the pass still follows a guided site build
 (`OmegaSiteBuild.build`) and runs when asked for (Design Site,
 `from:'campus'`; the Fence & Tie button, `bop:true`). Held by
 `scripts/tests/tfencepass.js` (fails on the editor before).
+
+## 2026-10-12 — Editor IP audit: the notices are the LLC, the inventory is written
+
+A customer's engineer proposed rebuilding Site Map. Audit in
+`docs/EDITOR-IP-AUDIT-2026-10-12.md`. Fixed: every ownership notice in
+`editor.html` named an individual and the console banner printed
+`brandName()` — the tenant's white label — as the copyright holder; all are
+`© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.`
+by literal now, with `<link rel="license">` to `/terms.html`. 64 shipped
+files had no notice at all (root tool pages, `omega-sso.js`, `omega-tools.js`,
+16 `api/` files, the consoles, the finance portal); all carry it.
+`scripts/tests/tcopyright.js` holds it in `npm test`. CLAUDE.md no longer
+claims a minifying build step (there is none). Still in the browser and
+listed for the move, in order: the utility rate book, the pre-qual and
+interconnect scorers, the cost engine, the viability thresholds, the
+ground layout, catalog prices. `tsplash.js` now skips `.claude/` (a stale
+worktree under it was failing the walk).
+
+## 2026-10-12 — The utility rate book moved to the server (editor IP audit, item 1)
+
+`api/_lib/utility-rates.js` (pure, ES5) now holds what `editor.html` carried
+as three literals: the detailed IL/CT/MA/IN tables with their ZIP prefixes,
+every state's primary utility and rates, the ZIP3→state ranges;
+`GET /api/utility-rates?zip=|state=` answers ONE record to a workspace
+sign-in or staff, never the table and never a utility's `zips`. The page
+keeps `_FOM_UTIL_CACHE`, one record per ZIP prefix: `_fomGetUtility(zip)`
+stays synchronous for its readers and returns the cached object (the bill
+import's in-place edits persist as they did on the table entry) or a
+pending one whose `_promise` resolves to the real record; the FOM demand
+analysis, the Value Stack estimate, the interconnect score panel and the
+report's Location tab re-run themselves when it lands; `_btmServiceAcceptance`
+already guarded a null rate. `_fomStateForZip` (postal fact) stays.
+`scripts/tests/tutilityrates.js` holds the library, the endpoint's gate, the
+page (the book absent, the cache present, every reader pending-safe) and
+runs the page's own cache block under a fake fetch. Editor render checks
+(theme, plan chip, legacy gates) pass with it. Next on the list:
+the cost engine (`docs/EDITOR-IP-AUDIT-2026-10-12.md`).
+
+## 2026-10-13 — The cost engine moved to the server (editor IP audit, item 3)
+
+`api/_lib/editor-cost.js` (pure, ES5) is Site Map's cost engine:
+`rollup(q)` prices what `updateCostEst` priced in the page, with every
+table the page carried — the benchmark book (PV by sector, the NREL
+energy/power split, the pod band, the EIA generation classes), the $85/kWh
+container rate and the 55% install share, the cost sheet's defaults, the
+Eaton data-centre ROM with its N+1 rules, the EV price book (Autel dealer
+cost beside list by tier, the other makes, the per-kW estimators) — and the
+roll-up rules: scope gate, contingency, the range, the ITC basis, $/kW,
+the contracted override. `POST /api/cost-rollup` (a workspace sign-in or
+staff) answers it. The page's `updateCostEst()` is now a client:
+`omegaCostQuantities()` gathers what is placed and what the sheet says
+(the fleet by model, the configured list, counts, feet, the chargers as
+quantities with the basis, generation shapes, the pods, the data-centre
+facts, the solar kW, the building capex), one request per distinct
+drawing coalesced over 120 ms with the latest winning, `_renderCostEst`
+draws the lines and publishes every `window._COST_*` exactly as before,
+and `omegaRunDesign` waits for the answer before it rolls up and saves.
+`getBessCostAuto`, `omegaSolarCost`, `omegaBessBenchCost`,
+`omegaGenBenchCost`, `omegaDataCenterROM`, `evChargerCosts`, `_evBook` and
+`OmegaComputeCost.figures` read the last answer; `OMEGA_BENCH` and `DC_ROM`
+keep only the citations and ratings the sheets print. A refused answer
+reads "Not priced … Try again" and never wipes a priced figure. Held by
+`scripts/tests/teditorcost.js` (the engine against the page's former
+arithmetic, the gate, the page carrying no table, the collector cut from
+the page and fed into the engine) and `scripts/render-editor-plan.js`,
+which now answers `/api/cost-rollup` with the real engine in Chromium and
+asserts the round trip (quantities out, no price in the request, the
+server's total on the panel and in the Run). `tomegacore.js` reads the
+skid's exclusion off the collector. Next: the pre-qual and interconnect
+scorers (`docs/EDITOR-IP-AUDIT-2026-10-12.md`).
+
+## 2026-10-13 — The two screening scorers moved to the server (editor IP audit, items 3–4)
+
+`api/_lib/editor-score.js` (pure, ES5) behind `POST /api/editor-score
+{action:'prequal'|'interconnect'}`: the pre-qualification tiers (benchmark
+pair or the configured system's footprint tiers), the component scores,
+the Priority Go / Conditional Go thresholds, the recommendation and the
+capacity flag; the ISO map and friendliness scores, the headroom,
+substation-distance and size curves, permitting, queue and parcel fit,
+the factor weights and the evidence share. The server looks the utility
+up itself from the rate book. The page sends facts (`_pqSystemFacts`, the
+site's `_SITE_DATA`) through one cached `_scoreRequest`, and
+`computeSitePreQual` / `computeInterconnectScore` stay synchronous for
+their callers: a pending result carries `promise`, and `pqRecalc`, the
+score panel and the report's Location tab re-run themselves. The answer
+carries labels and ratings, never tiers or weights. `scripts/tests/
+teditorscore.js` holds the engine, the gate, the page and the wrappers
+cut from it; `render-editor-plan.js` answers the call with the real
+library in Chromium and asserts both scores.
+
+## 2026-10-13 — The Viability Workflow's judgment and the catalog's prices moved to the server (editor IP audit, items 5 and 7)
+
+`api/_lib/editor-score.js` `viability` (action `viability` on
+`POST /api/editor-score`): the Phase 1 site score — factor points for
+space, demand, bill, clearance and site control (POI capacity and gen-tie
+on an FTM project), the hard disqualifiers, the target-utility list, the
+ordinance killers and blockers with their penalty, the Must-Have share and
+the PASS / CONDITIONAL / FAIL thresholds; the Phase 2 BTM and FTM path
+points; the Phase 6 revenue sum; the Phase 7 gate — capex build-up,
+incentives, NPV, a bisected IRR (undefined when no root), payback and the
+INVEST / HOLD / REDESIGN / REJECT thresholds; and the overall decision from
+the gate statuses. The page's `calcP1`, `calcBTM`/`calcFTM`, `calcFin` and
+`renderDecision` send the workflow's answers and gates through one cached
+`_vwJudge()` and draw the answer; each says "Scoring…" while pending and
+re-runs itself (`_vwPending`), Phase 2 re-draws when the path points land,
+and `VW.fin` is still written for the scenario and the print. The thirteen
+`eqcost` figures on `BESS_CATALOG` are `null` in the page and live in
+`api/_lib/editor-cost.js` `CATALOG_PRICES`; the cost request carries the
+catalog key per fleet model and configured unit, the engine prices it,
+and the config dialog says a blank cost is priced from ClearSky's book.
+Held by `teditorscore.js` and `teditorcost.js`.
+
+Not moved, on purpose: the ground-layout walk (`computeGroundLayout`) is
+called synchronously by fourteen drawing and sizing flows, one in a GCR
+search loop; a round trip there would make auto-layout unusable, and its
+assumptions (GCR, W/sqft, table sizes, DC:AC) are published convention.
+The guided-build step tables are UI sequences bound to page functions by
+name; they encode electrical convention, not a method. Both are recorded
+in `docs/EDITOR-IP-AUDIT-2026-10-12.md` as left in the page and why.
