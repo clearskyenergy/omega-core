@@ -93,6 +93,8 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
 input[type=text],input[type=number],input[type=date],select,textarea{font-size:16px}
 .facts{grid-template-columns:1fr 1fr;gap:10px}
 }
+.ef-kinds{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin:4px 0 2px}
+.ef-kind{font-size:13px;display:flex;align-items:center;gap:6px}
 </style>
 </head>
 <body>
@@ -128,6 +130,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
 <script src="/omega-tenant.js"></script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-workspace-shell.js"></script>
+<script src="/omega-newproject.js"></script>
 <!-- the investor deck is the BESS Pro Forma's own (proforma-logic.js); every figure on it is the finance engine's -->
 <script src="/proforma-logic.js"></script>
 <script>
@@ -202,6 +205,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<h1>' + esc(s.name || 'Unnamed site') + '</h1>' +
       '<div class="loc">' + esc([s.city, s.state].filter(Boolean).join(', ') || 'Location not provided') + '</div>' +
       '<div class="facts">' +
+      '<div class="fact"><div class="k">Project type</div><div class="v">' + (kindLabels(s).length ? esc(kindLabels(s).join(' + ')) : notProvided()) + '</div><div class="n">what Site Map opens on</div></div>' +
+      '<div class="fact"><div class="k">Site Map</div><div class="v">' + (s.latestDesign ? esc(designShort(s.latestDesign)) : (s.projectId ? '<span class="pill pill-unk">Nothing drawn yet</span>' : notProvided())) + '</div><div class="n">' + (s.latestDesign && s.latestDesign.capex != null ? 'cost run ' + esc(String(s.latestDesign.capexAt || s.latestDesign.at || '').slice(0, 10)) : 'the design the IRR follows') + '</div></div>' +
       '<div class="fact"><div class="k">Installed chargers</div><div class="v">' + (unk(s.installedKw) ? notProvided() : esc(s.installedKw) + ' kW') + '</div><div class="n">nameplate, not approved capacity</div></div>' +
       '<div class="fact"><div class="k">Reported peak</div><div class="v">' + (unk(s.reportedPeakKw) ? notProvided() : esc(s.reportedPeakKw) + ' kW ' + (s.peakUnresolved ? '<span class="pill pill-warn">unresolved</span>' : '')) + '</div><div class="n">workbook statistic; definition in dispute</div></div>' +
       '<div class="fact"><div class="k">Meter</div><div class="v">' + meter + '</div><div class="n">ownership at this site</div></div>' +
@@ -225,12 +230,13 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     document.getElementById('pane-overview').innerHTML =
       '<div class="grid2"><div class="card"><h3>Site facts</h3>' +
       fact('Address', s.address) + fact('External IDs', Object.keys(s.externalSiteIds || {}).map(function (k) { return k + ': ' + s.externalSiteIds[k]; }).join('; ')) +
-      fact('Status', s.status) + fact('Tags', (s.tags || []).join(', ')) +
+      fact('Project type', kindLabels(s).join(' + ')) + fact('Status', s.status) + fact('Tags', (s.tags || []).join(', ')) +
       (s.notes ? '<div style="margin-top:10px"><div class="li-meta">Notes</div><div class="li-body">' + esc(s.notes) + '</div></div>' : '') +
       '</div><div class="card"><h3>Screening · ' + esc(sc.label || 'none') + '</h3>' +
       fact('Screened kW', sc.screenKw) + fact('Pods', sc.pods) + fact('Reserve kW', sc.reserveKw) +
       '<div class="assume">A legacy screening proxy (75 kW IT per pod, PUE 1.2). <b>Not verified capacity.</b> ' + esc(sc.note || '') + '</div>' +
       '</div></div>' +
+      '<div class="grid2">' + designCardHtml(s) + '</div>' +
       '<div class="grid2"><div class="card"><h3>Commercial</h3>' +
       fact('Rent / month', cm.rentMonthly, '$') + fact('Revenue share', cm.revenueShare != null ? pct(cm.revenueShare) : null) + fact('kWh share', cm.kwhShare != null ? pct(cm.kwhShare) : null) +
       '</div><div class="card"><h3>Attention</h3>' +
@@ -240,6 +246,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '</div></div>' +
       '<div class="grid2">' + usageCardHtml(s, fact) + (CANEDIT ? '<div class="card"><h3>Edit site facts</h3>' + editFormHtml(s) + '</div>' : '<div></div>') + '</div>';
     wireEditForm();
+    wireDesign();
     function fact(k, v, pre) {
       return '<div style="margin-bottom:8px"><div class="li-meta">' + esc(k) + '</div><div style="font-size:13.5px">' + (unk(v) ? notProvided() : esc((pre || '') + v)) + '</div></div>';
     }
@@ -270,6 +277,60 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   }
 
   /* ── edit site facts form ── */
+  /* ── the Site Map design: what was drawn and run on the linked project,
+     read onto the site every time it opens (latestDesign). The pro forma
+     and the compute model run on it; the card says what it holds. ── */
+  function designShort(d) {
+    var p = [];
+    if (d.compute && d.compute.units) p.push(d.compute.units + ' compute unit' + (d.compute.units === 1 ? '' : 's'));
+    if (d.chargers && d.chargers.installedKw) p.push(d.chargers.installedKw + ' kW chargers');
+    if (d.bess && d.bess.kwh) p.push(d.bess.kwh + ' kWh battery');
+    if (d.solar && d.solar.kwDc) p.push(d.solar.kwDc + ' kW solar');
+    if (d.capex != null) p.push(money(d.capex));
+    return p.join(' \u00b7 ') || 'drawing, no equipment yet';
+  }
+  function designCardHtml(s) {
+    var d = s.latestDesign, html = '<div class="card" id="design-card"><h3>Site Map design <span class="li-meta">what the IRR follows</span></h3>';
+    if (!s.projectId) {
+      html += '<div class="li-body">Not designed yet. Open the site in Site Map, place the compute units, chargers, battery and solar on the parcel and run the cost; the figures come back here on their own.</div>' +
+        (CANEDIT ? '<div class="row" style="margin-top:10px"><button class="btn" id="ds-make">Design in Site Map</button></div>' : '');
+    } else if (!d) {
+      html += '<div class="li-body">The project exists but nothing is drawn or run yet.</div>' +
+        '<div class="row" style="margin-top:10px"><a class="btn" style="text-decoration:none" href="/editor.html?id=' + encodeURIComponent(s.projectId) + '">Open in Site Map</a>' + (CANEDIT ? '<button class="btn-ghost" id="ds-sync">Read it again</button>' : '') + '</div>';
+    } else {
+      var c = d.compute || {}, ch = d.chargers || {}, b = d.bess || {}, so = d.solar || {};
+      html += '<div class="grid2" style="gap:6px 14px">' +
+        dfact('Compute units', c.units ? c.units + (c.kwIt ? ' \u00b7 ' + c.kwIt + ' kW IT' : '') + (c.omegaCoreUnits ? ' \u00b7 ' + c.omegaCoreUnits + ' Omega-Core' : '') : null) +
+        dfact('Chargers', ch.installedKw ? ch.installedKw + ' kW \u00b7 ' + ch.ports + ' ports' + (ch.dcfcUnits ? ' \u00b7 ' + ch.dcfcUnits + ' DCFC' : '') + (ch.l2Units ? ' \u00b7 ' + ch.l2Units + ' L2' : '') + (ch.futureUnits ? ' \u00b7 ' + ch.futureUnits + ' future' : '') : null) +
+        dfact('Battery', b.kwh ? b.kw + ' kW / ' + b.kwh + ' kWh' + (b.basis ? ' (' + b.basis + ')' : '') : null) +
+        dfact('Solar', so.kwDc ? so.kwDc + ' kW-dc' + (so.units ? ' \u00b7 ' + so.units + ' arrays' : '') : null) +
+        dfact('Cost run', d.capex != null ? money(d.capex) + (d.incentive ? ' \u00b7 incentives ' + money(d.incentive) : '') + (d.annualRevenue ? ' \u00b7 year-1 revenue ' + money(d.annualRevenue) : '') + (d.capexAt ? ' \u00b7 ' + String(d.capexAt).slice(0, 10) : '') : null, d.capex == null ? 'not run yet: Run in Site Map prices the design' : null) +
+        dfact('Omega-Core', d.omegaCore && d.omegaCore.verdict ? d.omegaCore.verdict + (d.omegaCore.units ? ' \u00b7 ' + d.omegaCore.units + ' skids' : '') : null) +
+        '</div>' +
+        '<div class="row" style="margin-top:10px"><a class="btn" style="text-decoration:none" href="/editor.html?id=' + encodeURIComponent(s.projectId) + '">Open in Site Map</a>' +
+        (CANEDIT ? '<button class="btn-ghost" id="ds-sync">Read it again</button>' + (c.units ? '<button class="btn-ghost" id="ds-proforma">Run the pro forma on this design</button>' : '') : '') + '</div>' +
+        '<div class="assume">Read from the project ' + esc(String(d.syncedAt || d.at || '').slice(0, 16).replace('T', ' ')) + '. The pod pro forma runs on the ' + (c.units || 0) + ' unit' + (c.units === 1 ? '' : 's') + ' placed' + (d.capex != null ? ' and the cost run\u2019s ' + money(d.capex) : '') + '; the compute model takes the chargers, the battery, the solar' + (d.capex != null ? ' and the cost' : '') + ' from it. Size from power, or type a pod count, to model something else.</div>';
+    }
+    return html + '</div>';
+  }
+  function dfact(k, v, n) { return '<div style="margin-bottom:6px"><div class="li-meta">' + esc(k) + '</div><div style="font-size:13.5px">' + (v == null ? notProvided() : esc(v)) + '</div>' + (n ? '<div class="li-meta">' + esc(n) + '</div>' : '') + '</div>'; }
+  function wireDesign() {
+    var mk = document.getElementById('ds-make'), sy = document.getElementById('ds-sync'), pf = document.getElementById('ds-proforma');
+    if (mk) mk.addEventListener('click', function () { mk.disabled = true; post('send-to-editor', { ids: [SITE] }).then(function (j) { var p = j.projects && j.projects[0]; if (p && p.projectId) window.location.href = '/editor.html?id=' + encodeURIComponent(p.projectId); else load(true); }).catch(function (e) { mk.disabled = false; msg(esc(e.message)); }); });
+    if (sy) sy.addEventListener('click', function () { msg('Reading the Site Map project\u2026', true); post('design-sync', { ids: [SITE] }).then(function (j) { msg(esc(j.note), true); load(true); }).catch(function (e) { msg(esc(e.message)); }); });
+    if (pf) pf.addEventListener('click', function () { msg('Running the pro forma on the design\u2026', true); post('proforma-run', { fromDesign: true, label: 'Site Map design' }).then(function (j) { msg(esc(j.note), true); load(true); }).catch(function (e) { msg(esc(e.message)); }); });
+  }
+  /* what KIND of project the site is: the New project dialog's own cards
+     (OmegaNewProject.SCOPES, the ONE list), stored on the site as siteScopes
+     and carried onto the Site Map project the site makes. */
+  function kinds() { return (window.OmegaNewProject && OmegaNewProject.SCOPES) || []; }
+  function kindLabels(s) {
+    var L = kinds();
+    return ((s && s.siteScopes) || []).map(function (k) { var d = L.filter(function (x) { return x.key === k; })[0]; return d ? d.label : k; });
+  }
+  function kindsChecked() {
+    return Array.prototype.map.call(document.querySelectorAll('.ef-kinds input:checked'), function (i) { return i.value; });
+  }
   function editFormHtml(s) {
     function val(v) { return v == null ? '' : String(v); }
     function numIn(id, label, v, step) {
@@ -284,6 +345,9 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       txtIn('ef-address', 'Address', s.address) + txtIn('ef-zip', 'ZIP code (the compute model reads the tariff book and climate from it)', s.zip) +
       '<label class="fl">Host type (for the compute model)</label><select id="ef-hostType" class="inline" style="width:100%">' +
       [['', 'Not set (multifamily assumed)'], ['multifamily', 'Multifamily (house meter)'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']].map(function (o) { return '<option value="' + o[0] + '"' + ((s.hostType || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<label class="fl">Project type (pick every one that applies)</label><div class="ef-kinds">' + kinds().map(function (k) {
+        return '<label class="ef-kind"><input type="checkbox" id="ef-kind-' + esc(k.key) + '" value="' + esc(k.key) + '"' + ((s.siteScopes || []).indexOf(k.key) >= 0 ? ' checked' : '') + '> ' + esc(k.label) + '</label>';
+      }).join('') + '</div>' +
       txtIn('ef-status', 'Status', s.status) +
       txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + txtIn('ef-meters', 'Meter IDs (comma-separated; a bill must name one)', (s.meters || []).join(', ')) + '</div><div>' +
       numIn('ef-installedKw', 'Installed chargers (kW)', s.installedKw) + numIn('ef-reportedPeakKw', 'Reported peak (kW)', s.reportedPeakKw) +
@@ -317,7 +381,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       post('site-save', {
         id: SITE,
         name: str('ef-name'), city: str('ef-city'), state: str('ef-state'), address: str('ef-address'), zip: str('ef-zip'), hostType: str('ef-hostType'),
-        status: str('ef-status'), notes: str('ef-notes'),
+        status: str('ef-status'), notes: str('ef-notes'), siteScopes: kindsChecked(),
         tags: tg ? tg.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [], meters: str('ef-meters') || [],
         installedKw: num('ef-installedKw'), reportedPeakKw: num('ef-reportedPeakKw'),
         meterOwned: mv === '' ? null : mv === 'true',
@@ -494,7 +558,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     var hist = (DATA.proforma || []).map(function (p) {
       return '<div class="list-item"><div class="li-head"><span class="li-title">' + esc(p.label || p.scenarioId) + '</span>' +
         '<span class="li-meta">' + esc(p.createdAt || '') + ' · ' + esc(p.assumptionVersion || '') + '</span></div>' +
-        '<div class="li-meta">Investor IRR ' + irrText(p.results && p.results.investorIrr) +
+        '<div class="li-meta">' + (p.results && p.results.capexBasis && p.results.capexBasis !== 'assumption set' ? '<span class="pill pill-ok">' + esc(p.results.capexBasis) + '</span> ' : '') + 'Investor IRR ' + irrText(p.results && p.results.investorIrr) +
         ' · payback ' + (p.results && p.results.paybackMonth != null ? p.results.paybackMonth + ' mo' : '–') +
         ' · <a href="#" data-scen="' + esc(p.scenarioId) + '">open</a></div></div>';
     }).join('');
@@ -502,6 +566,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="row"><label class="fl" style="margin:0">Pods</label>' +
       '<input type="number" id="pf-pods" class="inline" min="1" max="100000" value="' + esc(defPods) + '" style="width:110px">' +
       (CANEDIT ? '<button class="btn-ghost" id="pf-size">Size pods from available power</button>' : '') +
+      (CANEDIT && s.latestDesign && s.latestDesign.compute && s.latestDesign.compute.units ? '<button class="btn-ghost" id="pf-design" title="The units placed in Site Map and its cost run">From the Site Map design: ' + esc(s.latestDesign.compute.units) + ' unit' + (s.latestDesign.compute.units === 1 ? '' : 's') + (s.latestDesign.capex != null ? ' \u00b7 ' + esc(money(s.latestDesign.capex)) : '') + '</button>' : '') +
       '<span class="li-meta" id="pf-avail">' + esc(availLine) + '</span></div>' +
       '<div class="row"><label class="fl" style="margin:0">Discount rate</label>' +
       '<input type="number" id="pf-disc" class="inline" min="0" max="1" step="0.01" value="0.08" style="width:90px">' +
@@ -541,6 +606,13 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         overrides: pfOverrides()
       }, extra || {});
     }
+    var designBtn = document.getElementById('pf-design');
+    if (designBtn) designBtn.addEventListener('click', function () {
+      msg('Running on the Site Map design\u2026', true);
+      post('proforma-run', pfBody({ fromDesign: true }))
+        .then(function (j) { SCEN = j.scenario; msg(esc(j.note), true); load(true); renderScen(); })
+        .catch(function (e) { msg(esc(e.message)); });
+    });
     var sizeBtn = document.getElementById('pf-size');
     if (sizeBtn) sizeBtn.addEventListener('click', function () {
       msg('Sizing from available power\u2026', true);
@@ -619,7 +691,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     return h;
   }
   function modelForm(s) {
-    var lm = s.latestModel, pods = lm && lm.pods || (s.latestProforma && s.latestProforma.pods) || (s.screening && s.screening.pods) || 1;
+    var dsg = s.latestDesign, lm = s.latestModel, pods = (dsg && dsg.compute && dsg.compute.units) || (lm && lm.pods) || (s.latestProforma && s.latestProforma.pods) || (s.screening && s.screening.pods) || 1;
     function sel(id, label, opts, cur) { return '<label class="fl" style="margin:0">' + label + '</label><select id="' + id + '" class="inline">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; }
     return '<div class="card"><h3>Run the compute model</h3>' +
       '<div class="li-meta" style="margin-bottom:8px">The Compute Site Pro Forma on this site: the service, chargers, usage and power price on record, the pods below, one year hour by hour, then the finance engine. A fact the record lacks is asked for, never assumed.</div>' +
@@ -629,6 +701,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       sel('md-structure', 'Structure', [['own', 'Own and operate'], ['infra', 'Own the power and pod layer'], ['lease', 'Lease the power']], lm && lm.structure || 'own') +
       sel('md-host', 'Host', [['multifamily', 'Multifamily'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']], s.hostType || (lm && lm.hostType) || 'multifamily') +
       (CANEDIT ? '<button class="btn" id="md-run">Run the compute model</button>' : '') + '</div>' +
+      (dsg ? '<div class="li-meta" style="margin-top:6px"><span class="pill pill-ok">Site Map design</span> ' + esc(designShort(dsg)) + ' \u2014 the model takes the chargers, the battery, the solar' + (dsg.capex != null ? ' and the cost run' : '') + ' from it.</div>' : '') +
       '<div class="li-meta" id="md-basis">' + (lm ? 'Last run ' + esc(String(lm.at || '').slice(0, 10)) + (lm.label ? ' · ' + esc(lm.label) : '') + ' · ' + esc(lm.gpuName || '') + ' · ' + esc(lm.structureLabel || '') : 'Not run yet.') + '</div></div>';
   }
   function resultsCard(s) {

@@ -1,0 +1,32 @@
+{
+  "org": "example.com",
+  "askedBy": "who asked for these sites to be entered, and when",
+  "sites": [
+    {
+      "site": {
+        "name": "Example Care Center",
+        "address": "100 Main St, Springfield, IL 62701",
+        "city": "Springfield", "state": "IL",
+        "serviceCapacityKw": null, "existingPeakKw": null, "installedKw": null,
+        "availablePowerMw": null, "powerPricePerKwh": null, "annualUsageKwh": null,
+        "meterOwned": null, "termYearsRemaining": 25,
+        "status": "PPA executed · pre-COD",
+        "tags": ["solar", "bess", "executed-ppa"],
+        "externalSiteIds": { "docusign": "ENVELOPE-ID-site", "nextnrg": "example-microgrid" },
+        "usageNotes": "What the bills and the agreement say about usage; leave blank what is not known.",
+        "notes": "What the agreement is, who signed, the system, the term and the price, and what it does NOT cover (compute, fiber, site control)."
+      },
+      "contacts": [
+        { "name": "Pat Example", "title": "CFO (purchaser)", "email": "pat@example.org", "phone": "555 555 0100", "primary": true, "notes": "Signed the PPA." }
+      ],
+      "activity": [
+        { "type": "note", "subject": "Site registered from the executed PPA", "body": "Entered from the PDF; blanks are blanks until confirmed." },
+        { "type": "task", "subject": "Confirm service capacity and existing peak (panel schedule, 12 months of bills)", "body": "Needed before pods can be sized.", "followUpAt": "2026-11-01" },
+        { "type": "task", "subject": "Confirm fiber at the site: 1 Gbps bidirectional (the hard gate for compute)", "followUpAt": "2026-11-01" }
+      ],
+      "files": [
+        { "path": "/absolute/path/to/Executed PPA.pdf", "name": "Executed PPA - Example Care Center.pdf", "category": "agreement", "note": "Executed Solar PPA, signed 2026-01-01." }
+      ]
+    }
+  ]
+}
