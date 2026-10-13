@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ═══════════════════════════════════════════════════════════════════════════
    ClearSky-OMEGA · omega-grid-infra.js
    SUBSTATIONS + TRANSMISSION LINES as toggleable layers on the ComEd

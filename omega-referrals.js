@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ══════════════════════════════════════════════════════════════════════════
    CLEARSKY-OMEGA · REFERRAL INBOX  (omega-referrals.js)
    -----------------------------------------------------

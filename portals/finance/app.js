@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ============================================================
    ClearSky-OMEGA · Financing Partners Portal
    app.js — single-file ES5 application logic
