@@ -52,9 +52,13 @@ ok(/utilityStatus\s*=\s*'pending'/.test(src),
 
 console.log('site pre-qualification — confirmation, never assumption');
 
-ok(/zoningOk\s*=\s*inp\.zoningOk\s*===\s*true/.test(src),
+/* The pre-qualification scorer moved to the server (#297, api/_lib/
+   editor-score.js); the editor still sends only an explicit confirmation.
+   Both ends are held: the rule in the scorer, the strict send in the page. */
+const scorer = fs.readFileSync(path.join(__dirname, '..', '..', 'api', '_lib', 'editor-score.js'), 'utf8');
+ok(/zoningOk\s*=\s*inp\.zoningOk\s*===\s*true/.test(scorer) && /zoningOk\s*:\s*inp\.zoningOk\s*===\s*true/.test(src),
    'zoning counts only when explicitly confirmed');
-ok(/floodOk\s*=\s*inp\.floodOk\s*===\s*true/.test(src),
+ok(/floodOk\s*=\s*inp\.floodOk\s*===\s*true/.test(scorer) && /floodOk\s*:\s*inp\.floodOk\s*===\s*true/.test(src),
    'flood status counts only when explicitly confirmed');
 
 /* A pre-checked box hands back a confirmation the user never gave. */

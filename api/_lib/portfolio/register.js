@@ -296,9 +296,25 @@ function make(deps) {
 }
 
 var A = require('../admin');
-module.exports = make({ A: A, db: function () { return A.db(); }, authenticate: function (req) { return A.authenticate(req); }, bucket: function () { return require('../po-intake').bucket(); }, now: function () { return new Date().toISOString(); } });
+/* The register's own Firestore client: the draft's records carry optional
+   fields as undefined (a CSV has no sheet, an import no footer), which the
+   real SDK refuses unless told to drop them. A second named app on the same
+   credential, so the setting never touches the site CRM's or any other
+   endpoint's writes. A.db() is asked first so a degraded server (no
+   credential) still answers 503 the one way. */
+var REG_APP = 'portfolio-register';
+function regDb() {
+  A.db(); var admin = A.init(), base = admin.app(), app = null;
+  admin.apps.forEach(function (x) { if (x && x.name === REG_APP) app = x; });
+  if (!app) app = admin.initializeApp(base.options, REG_APP);
+  var d = admin.firestore(app);
+  if (!d.__omegaRegister) { try { d.settings({ ignoreUndefinedProperties: true }); } catch (e) {} d.__omegaRegister = true; }
+  return d;
+}
+module.exports = make({ A: A, db: regDb, authenticate: function (req) { return A.authenticate(req); }, bucket: function () { return require('../po-intake').bucket(); }, now: function () { return new Date().toISOString(); } });
 module.exports._make = make;
 module.exports.FLAG = FLAG;
 module.exports.owns = owns;
+module.exports.regDb = regDb;
 module.exports.GET_KEYS = GET_KEYS;
 module.exports.POST_ACTIONS = POST_ACTIONS;

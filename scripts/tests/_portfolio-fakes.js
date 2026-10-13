@@ -3,7 +3,20 @@
    Solutions LLC. Only the calls the gateway makes are implemented; anything
    else throws, so a new call cannot silently pass against a stub. */
 'use strict';
-var A = require('../../api/_lib/admin');
+/* CI's unit job runs with no npm install (tests.yml: "No install step"), so
+   firebase-admin is not there. api/_lib/admin.js requires it at load; the
+   harness never reaches Firestore (the store below is the database), so when
+   the SDK cannot be resolved it is intercepted with a stub that throws if
+   anything does reach it — the pattern tstaffverified.js uses. With the SDK
+   installed nothing is intercepted. */
+var A = (function () {
+  try { require.resolve('firebase-admin'); return require('../../api/_lib/admin'); } catch (e) { if (e.code !== 'MODULE_NOT_FOUND') throw e; }
+  var Module = require('module'), load = Module._load;
+  function unreachable() { throw new Error('firebase-admin is not installed; the portfolio fakes never reach Firestore'); }
+  var STUB = { apps: [], initializeApp: unreachable, credential: { cert: unreachable, applicationDefault: unreachable }, auth: unreachable, firestore: unreachable };
+  Module._load = function (request) { return request === 'firebase-admin' ? STUB : load.apply(this, arguments); };
+  try { return require('../../api/_lib/admin'); } finally { Module._load = load; }
+})();
 
 function store() {
   var data = {}, n = 0;
