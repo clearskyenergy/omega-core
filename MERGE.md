@@ -1,5 +1,79 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## NextNRG Microgrids: their module, their storage, their controller (2026-10-13)
+
+NextNRG's products are in the system as something that can be sold, read off
+their Q4 2026 brochure (Tommy: "use their specs … label them as nextnrg
+product … the microcontrol … 125k/unit … auto built into the omega core skid
+… utility equipment for the draw function … increase the efficiency of energy
+on a site by 7%"). `api/_lib/nextnrg.js` is the ONE record (specs, the
+$125,000 controller price, the 7% dispatch-uplift rule); the page carries the
+specs in its own catalogs and `scripts/tests/tnextnrg.js` holds them to the
+record figure by figure. Draw › Power Gen › Solar now draws with NextNRG's
+JinkoSolar EAGLE G7B (640 W, 22.0 W/ft² off its own frame, the string sizer's
+watts, the 3D pattern, the BOM line; `DER_PV_MODULES`, a Module choice in Solar
+Assumptions, the former 550 W rule of thumb kept as a choice). `BESS_CATALOG`
+has a NextNRG group of ONLY the blocks the brochure's specification page
+names (three Saft Intensium Flex blocks, the Intensium Max 20 HE; no kW the
+sheet does not publish; no price) — anything else NextNRG sells enters through
+their own product list (Tommy: "the only batteries for NextNRG that should be
+showing up as NextNRG is if they've actually manually inputted something or
+it's off of that spec sheet"). **NextNRG Solar — Custom** (Draw › Power Gen)
+is the same trace as Solar — Custom Area with NextNRG's module chosen first;
+every auto-laid array records its module, and one built on a product carries
+`product` / `mfr` / `sku`, named on the drawing, both legend keys, the
+inventory and the BOM. The NextNRG Microgrid Controller is first in the
+Controls group of the long Draw › Utility list (the BOP installer now draws a
+row off `UTILITY_CATALOG` first; `mgcAsset` reads the same row), priced on the Run by the server
+cost engine (`lines.controller`, `counts.mgc` = utility shapes only), a
+Controls line on the BOM, and BUILT INTO every Omega-Core skid (`DC_CATALOG`,
+the placed shape, the drawing, the BOM and spec-sheet rows, `PRODUCT.controller`):
+the skid's system cost is $450,000 + $125,000 = $575,000 with a breakdown, which
+the outlay, the FMV band and the compute cash flow's skid basis follow
+(`tomegacore.js` pins moved). The uplift is applied ONCE by the one dispatch
+(`vpp-sim.js simulate()`, `input.controller`) to the dispatch-decided bill
+streams only — never PJM, a programme rate or an incentive — each stream saying
+so, the result carrying a `controller` summary with the brochure's own caveat
+("modelled rather than measured, not a performance guarantee"); `/api/value-stack`
+passes the flag in and the summary out; the editor's Value Stack panel sends it
+when a controller is on the host's drawing and shows the summary. For the RFQ,
+`tenants/nextnrg/tenant.json` carries `brands: ["nextnrg"]` and the seed copies
+it (a deploy step: seed, or type it on the account page). No price in a browser.
+Design and the not-built list: `docs/NEXTNRG-MICROGRID.md`.
+
+**A click on a BESS pad opens the panel that edits its bollards and fencing**
+(Tommy, 2026-10-13: "click on a bess pad and have that panel pop up …
+idk why that disapeared"). The panel (`asm-panel`) only ever opened from an
+assembly's PARTS, so a plain pad (Draw › BESS Pad with nothing ticked) had no
+panel and the Omega-Core skid none either. `_shapeMouseDown` now opens it on
+every pad: a plain pad becomes an assembly of one part in place
+(`_padToAssembly`: same id, centred where it was, no fence or bollards until
+set, re-anchored, drawn by the assembly renderer from then on); an assembly
+opens it on a body click; the Omega-Core skid gets the perimeter fields
+(`_skidProtection`) and the same panel headed as the skid. The fence sides,
+bollards and the count the take-off reads are ONE drawer, `_drawProtection`,
+cut out of `_renderAssembly` and handed a box: the assembly's parts, or the
+skid frame. `scripts/tests/tpadpanel.js` (in `npm test`) runs the conversion
+and pins the click, the drawer and the panel's guards.
+
+**The BOM lists every battery placed from Draw › BESS Pad, and never calls a
+traced array "ground"** (Tommy, 2026-10-13, from the BOM: "The battery that
+we placed from NextNRG from the draw feature is not showing up in the BOM";
+"it's showing as a ground mount, and we put this as a roof … it really
+should just say solar, unless we go in and edit the array and choose it").
+`buildBOM` gathered batteries only from guided-build elements and plain
+pads, read by a field the pad tool never writes; it now counts every pad and
+assembly off the drawing (not the master controller), rated as
+`_ppCollectFleet` reads them, one *Energy Storage* line per product with its
+catalogue key and brand. A traced area (`openAutoLayout` handed an outline)
+lays out as `mount: 'custom'`: *Solar PV array (custom area)* on the BOM,
+*CUSTOM AREA* on the drawing, left out of `omegaSolarByMount` so the server
+prices it as plain PV at the size band; *Array — Edit Size / Capacity* has a
+**Mount** choice (not chosen / ground / rooftop / canopy) applied before
+anything is recomputed; the BOM emits one solar line per mount as drawn.
+`scripts/tests/tnextnrg.js` §8 runs the census and the lines against a
+drawing and pins the mount path.
+
 ## Dashboard member invitations (2026-10-05)
 
 The workspace Team button now adds a named person with a role through

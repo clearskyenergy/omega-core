@@ -32,6 +32,11 @@ var CATALOG_PRICES = { 'GOTION-HOME-5': 558, 'GOTION-EDGE-760': 84740, 'GOTION-G
   'AUTEL-ESS-256': 180000, 'PYTES-30-60': 34080, 'PYTES-60-120': 56354, 'PYTES-30-60-SE': 44307, 'PYTES-60-120-SE': 77058, 'PYTES-60-193-SEMAX': 80245 };
 function catalogPrice(key) { return (key && CATALOG_PRICES.hasOwnProperty(key)) ? CATALOG_PRICES[key] : null; }
 var BESS_INSTALL_RATIO = 0.55;   /* install as a share of equipment */
+/* The NextNRG Microgrid Controller: the one price (api/_lib/nextnrg.js),
+   per unit placed from Draw › Utility on the HOST'S drawing. A controller
+   inside an Omega-Core skid is ClearSky's and is never counted here. */
+var NEXTNRG = require('./nextnrg');
+var MGC_EACH = NEXTNRG.CONTROLLER.priceUsd;
 /* The cost sheet's defaults: applied where a field is blank. */
 var SHEET = {
   pad: 4800, disco: 3200, meter: 3850, bollards: 600, jbox: 850, panel: 18500, misc: 0, xfmr: 0,
@@ -152,6 +157,11 @@ function rollup(q) {
   var siteEq = pad + disco + meter + boll + jbox + panel + misc + xfmrCost;
   out.lines.site = { total: siteEq, pad: pad, disco: disco, meter: meter, bollards: boll, jbox: jbox, panel: panel, misc: misc, xfmr: xfmrCost, counts: { pad: cnt('pad'), disco: cnt('disco'), meter: cnt('meter'), bollard: cnt('bollard'), jbox: cnt('jbox'), panel: cnt('panel') } };
 
+  /* the microgrid controller: NextNRG's unit, at ClearSky's price, per unit on the drawing */
+  var mgcN = cnt('mgc'), mgcTotal = mgcN * MGC_EACH;
+  out.lines.controller = { qty: mgcN, each: MGC_EACH, total: mgcTotal, key: NEXTNRG.CONTROLLER.key, make: NEXTNRG.CONTROLLER.make, model: NEXTNRG.CONTROLLER.model,
+    basis: NEXTNRG.CONTROLLER.priceBasis, uplift: { pct: Math.round(NEXTNRG.UPLIFT.pct * 100), appliesTo: NEXTNRG.UPLIFT.appliesTo, caveat: NEXTNRG.UPLIFT.caveat } };
+
   /* conduit: materials estimate for the BOM, never added to the total */
   var ft = q.conduitFt || {}, runs = q.conduitRuns || {};
   var dcFt = +ft['RMC-DC'] || 0, acFt = +ft['RMC-AC'] || 0, bmsFt = +ft['EMT-BMS'] || 0, ugFt = +ft['PVC-UG'] || 0;
@@ -269,8 +279,8 @@ function rollup(q) {
 
   /* scope gate: allowances apply only once something priceable is placed */
   var placedKw = +(q.placedKw || 0);
-  var inScope = bessTotal > 0 || ev.total > 0 || placedKw > 0 || solarTotal > 0 || dcTotal > 0 || bnzTotal > 0 || computeTotal > 0 || pn > 0 || gen.total > 0;
-  var sub = inScope ? (bessTotal + solarTotal + siteEq + indirect + ev.total + dcTotal + bnzTotal + computeTotal + gen.total) : 0;
+  var inScope = bessTotal > 0 || ev.total > 0 || placedKw > 0 || solarTotal > 0 || dcTotal > 0 || bnzTotal > 0 || computeTotal > 0 || pn > 0 || gen.total > 0 || mgcTotal > 0;
+  var sub = inScope ? (bessTotal + solarTotal + siteEq + indirect + ev.total + dcTotal + bnzTotal + computeTotal + gen.total + mgcTotal) : 0;
   var contPct = S('contPct') / 100, cont = sub * contPct, TOTAL = sub + cont;
   var subLo = sub - computeTotal + computeLo, subHi = sub - computeTotal + computeHi;
   var costLow = inScope ? subLo * (1 + contPct) : 0, costHigh = inScope ? subHi * (1 + contPct) : 0;
@@ -283,7 +293,8 @@ function rollup(q) {
   out.totals = { total: TOTAL, sub: sub, cont: cont, contPct: contPct, contPctRound: r0(contPct * 100), low: costLow, high: costHigh,
     itcBasis: itcBasis, itcExcluded: itcExcluded * (1 + contPct), inScope: inScope, contracted: actual > 0, benchmark: benchmarkTotal,
     totalKW: totalKW, costPerKW: costPerKW, bess: bessTotal, solar: solarTotal, ev: ev.total, dc: dcTotal, bnz: bnzTotal, compute: computeTotal, computePods: pn, gen: gen.total,
-    siteEq: inScope ? siteEq : 0, siteEqRaw: siteEq, xfmr: xfmrCost, indirect: inScope ? indirect : 0, indirectRaw: indirect, emsSetup: inScope ? emsSetup : 0, conduit: condTotal };
+    siteEq: inScope ? siteEq : 0, siteEqRaw: siteEq, xfmr: xfmrCost, indirect: inScope ? indirect : 0, indirectRaw: indirect, emsSetup: inScope ? emsSetup : 0, conduit: condTotal,
+    controller: mgcTotal, controllerUnits: mgcN };
   out.flags = { bessBenchmark: benchBess > 0, solarBenchmark: solarTotal > 0, computeBenchmark: comp.isBenchmark, genBenchmark: gen.total > 0,
     benchmarked: benchBess > 0 || solarTotal > 0 || comp.isBenchmark || gen.total > 0 };
   return out;

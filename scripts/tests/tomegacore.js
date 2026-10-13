@@ -41,7 +41,11 @@ var D = require('../_lib/firestore-double');
 var OC = require('../../api/_lib/omega-core');
 var CL = require('../../api/compute-lease')._model;
 
-eq(OC.PRODUCT.systemCostUsd, 450000, 'the system costs $450,000 a skid');
+eq(OC.PRODUCT.skidPriceUsd, 450000, 'the skid as recorded is $450,000');
+eq(OC.NEXTNRG.CONTROLLER.priceUsd, 125000, 'the NextNRG Microgrid Controller is $125,000 a unit (Tommy, 2026-10-13)');
+eq(OC.PRODUCT.systemCostUsd, 575000, 'the system is the skid plus the controller built into it: $575,000');
+ok(OC.PRODUCT.controller && /NextNRG Microgrid Controller/.test(OC.PRODUCT.controller.model) && OC.PRODUCT.controller.catalogKey === 'NEXTNRG-MGC', 'the controller is on the product record, under NextNRG\'s name');
+ok(OC.PRODUCT.systemCostBreakdown.length === 2 && OC.PRODUCT.systemCostBreakdown[0].usd + OC.PRODUCT.systemCostBreakdown[1].usd === OC.PRODUCT.systemCostUsd, 'and the breakdown adds up');
 eq(OC.PRODUCT.compute.kw, 75, '75 kW of compute');
 eq(OC.PRODUCT.battery.kwh, 61.44, 'the R60: 61.44 kWh (datasheet)');
 eq(OC.PRODUCT.battery.kw, 60, 'the R60: 60 kW through the Sol-Ark 60K');
@@ -80,8 +84,11 @@ eq(r.host.run.netCost, 1100000, 'the Run\'s capex less its incentives');
 eq(r.host.paybackYearsBefore, 5, 'payback before: 1.1M / 220k');
 eq(r.host.paybackYearsAfter, Math.round(1100000 / 232000 * 10) / 10, 'payback after: the lease added to the Run\'s revenue');
 eq(r.host.revenueUpliftPct, Math.round(12000 / 220000 * 1000) / 10, 'the lease as a share of year-one revenue');
-eq(r.program.systemCost, 450000, 'ClearSky\'s system cost for one skid');
-eq(JSON.stringify(r.program.fmvAtEndPerSkid), JSON.stringify({ low: 90000, base: 135000, high: 180000 }), 'fair market value at year 5: 20 / 30 / 40% of $450k, indicative');
+eq(r.program.systemCost, 575000, 'ClearSky\'s system cost for one skid, controller included');
+ok(r.program.systemCostBreakdown && r.program.systemCostBreakdown[1].usd === 125000, 'the answer carries the breakdown (skid + controller)');
+eq(JSON.stringify(r.program.fmvAtEndPerSkid), JSON.stringify({ low: 115000, base: 173000, high: 230000 }), 'fair market value at year 5: 20 / 30 / 40% of $575k, indicative');
+eq(r.compute.capex.amount, 575000, 'the skid\'s compute cash flow is built on the same $575,000');
+ok(/\$450,000\) \+ NextNRG Microgrid Controller \(\$125,000\)/.test(r.compute.capex.label), 'and its label says what the figure is made of');
 eq(r.terms.minTermYears, 5, 'the terms carry the 5-year minimum');
 eq(r.terms.endOfTerm.preference, 'remove', 'and the host\'s end-of-term preference');
 ok(/appraisal/.test(r.disclaimer), 'the disclaimer says FMV is an appraisal');
@@ -355,7 +362,7 @@ var shortT = clone(GOOD); shortT.rep.termYears = 3;
 eq(OC.evaluate(shortT, {}).offer.termYears, 5, 'a term under 5 years is priced at the 5-year minimum');
 ok(OC.evaluate(shortT, {}).asks.some(function (a) { return /program minimum is 5/.test(a.ask); }), 'and the host is told the minimum');
 var longT = clone(GOOD); longT.rep.termYears = 10;
-eq(OC.evaluate(longT, {}).program.fmvAtEndPerSkid.base, Math.round(450000 * 0.09 / 1000) * 1000, 'a longer term leaves less value: 0.3^2 at year 10');
+eq(OC.evaluate(longT, {}).program.fmvAtEndPerSkid.base, Math.round(OC.PRODUCT.systemCostUsd * 0.09 / 1000) * 1000, 'a longer term leaves less value: 0.3^2 at year 10');
 var noRun = clone(GOOD); delete noRun.run;
 var nr2 = OC.evaluate(noRun, {});
 eq(nr2.host.paybackYearsBefore, null, 'no Run: no payback invented');
@@ -395,7 +402,7 @@ function expect(code, label, body) { return call('POST', body === undefined ? { 
 var doorChecks = [
   function () { setup(null); return call('GET').then(function (o) {
     eq(o.status, 200, 'GET answers'); eq(o.body.product.name, 'Omega-Core', 'with the product\'s name and size');
-    ok(!/450000/.test(JSON.stringify(o.body)), 'never the price on an unauthenticated GET');
+    ok(!/450000|575000|125000/.test(JSON.stringify(o.body)), 'never the price on an unauthenticated GET');
     ok(!o.body.rateCard.monthlyPerSkid, 'and never the lease card'); }); },
   function () { setup(null); return expect(400, 'a body without rep:{} is a 400', {}); },
   function () { setup(null); return expect(200, 'a legacy Enterprise member is answered').then(function (o) {
@@ -471,7 +478,7 @@ function editorChecks() {
   /* every reader of host compute, cost and site type skips it */
   [['the data-centre electrical ROM (its quantities, sent to the server cost engine)', 'function omegaCostQuantities(', /sh\.kind==='derdc'&&!sh\.omegaCore/],
    ['the one-line export', 'function omegaOneLineExport(', /sh\.omegaCore\) return;/],
-   ['the BOM (its own line, not a pod)', 'function buildBOM(', /Omega-Core skid \(Solela Edge Compute \+ CleanCell R60\)/],
+   ['the BOM (its own line, not a pod)', 'function buildBOM(', /Omega-Core skid \(Solela Edge Compute \+ CleanCell R60 \+ NextNRG Microgrid Controller\)/],
    ['the spec sheet (its own row)', 'function exportSpecSheet(', /Omega-Core skid \\u00d7/],
    ['the proposal type', 'function _proposalTypeFromDrawing(', /sh\.kind==='derdc' && !sh\.omegaCore/],
    ['the Results rail (its own row)', 'function omegaRenderResults(', /'Omega-Core'\+unitSfx/]
@@ -513,7 +520,7 @@ function editorChecks() {
   var mod = fs.readFileSync(path.join(ROOT, 'omega-core-qualify.js'), 'utf8');
   ok(!/=>|\bconst\b|\blet\b|`/.test(mod), 'the module is ES5');
   ok(/© 2025–2026 ClearSky Energy Solutions LLC/.test(mod), 'and carries the header');
-  ok(!/450000|450,000|monthlyPerSkid\s*:\s*\{|fmvAtYear5/.test(mod), 'no price, lease card or buyout band in the browser');
+  ok(!/450000|450,000|575000|575,000|125000|125,000|monthlyPerSkid\s*:\s*\{|fmvAtYear5/.test(mod), 'no price, lease card or buyout band in the browser');
   ok(/OmegaComputeLease/.test(mod) && /\.evidence\(/.test(mod), 'it fans out through OmegaComputeLease.evidence, not a second copy');
   ok(/rescore\(\)\.then\(function \(r\) \{ if \(r && !st\.evidence\) screen\(\); \}\)/.test(mod) && /if \(st\.refused\)/.test(mod), 'a caller the door refused never sets off the metered lookups');
   ok(/function close\(\) \{[^}]*st\.gen\+\+/.test(mod) && (mod.match(/if \(!live\(gen, pid\)\) return/g) || []).length >= 4, 'a request that lands after the dialog closed (or moved project) answers nothing and writes nothing');

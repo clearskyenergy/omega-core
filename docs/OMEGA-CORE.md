@@ -18,8 +18,9 @@ overall**, carrying:
 |---|---|---|
 | Compute | Solela Edge Compute cabinet, **75 kW** | ClearSky |
 | Battery | **CleanCell R60** — 61.44 kWh LFP, 614.4 VDC / 100 Ah, one Sol-Ark 60K three-phase hybrid PCS (60 kW continuous, 277/480 V, 72.3 A max AC, 90 kVA for 10 s off grid), 97.5% max / 96.5% CEC / 96.0% grid-to-battery, CAN BMS, battery IP55 / PCS IP65 NEMA 3R, UL 9540:2023 (reported), UL 9540A (reported tested), UL 1973 (reported), PCS UL 1741 SB / IEEE 1547 | Clean Cell US R60 Product Data Sheet, Rev A, September 2026 |
+| Controller | **NextNRG Microgrid Controller** — 15-minute dispatch on a 24-hour horizon, economic / resilience / islanded with black start, Modbus TCP to the site PLC, IP55 500 × 750 × 210 mm, IEEE 1547 / IEC 62443 / NERC CIP aligned; it schedules the R60 against the compute load on the skid's own tariff, holds the reserve for the compute and islands the skid when the grid drops. Built into every skid (Tommy, 2026-10-13) | NextNRG Microgrids brochure, Q4 2026, p. 7–8; `api/_lib/nextnrg.js` |
 | Skid | 336 × 87 in, 8 in base, 82.75 in overall | ClearSky's drawing |
-| Price | **$450,000 per skid** | ClearSky |
+| Price | **$450,000 per skid as recorded (2026-10-02) + $125,000 for the controller = $575,000** (`PRODUCT.systemCostBreakdown`) | ClearSky |
 
 ClearSky owns and operates it. It sits on an EV charging site on **its own
 utility service and meter**, and ClearSky pays the site host a **land lease**.
@@ -50,7 +51,12 @@ limit), about an hour at 60 kW. Nobody should sell it as a full UPS.
   a "compute campus".
 - **It is counted as itself:** its own legend row ("Omega-Core skid (own
   meter)" with kW and kWh), an Omega-Core row on the Results rail, a BOM line
-  and a spec-sheet row, each saying ClearSky-owned and not host capex.
+  and a spec-sheet row, each saying ClearSky-owned and not host capex. The
+  BOM line and the spec-sheet row name the NextNRG Microgrid Controller built
+  into it; the drawing shows it (the MGC box under the Sol-Ark); the placed
+  shape carries `controller` / `controllerKey`. The host's Run never prices the
+  skid's controller: `omegaCostQuantities` counts only controllers placed from
+  Draw › Utility (`docs/NEXTNRG-MICROGRID.md`).
 - **Output › Omega-Core** (`openOmegaCore`, `data-cap="compute"`, owned by
   Omega Compute in `api/_lib/modules.js` as `derSetDc` is) opens
   `omega-core-qualify.js`.
@@ -168,8 +174,9 @@ the drawing, is said and not papered over.
 
 **The end of term** — removal and meter off at ClearSky's cost, or a buyout at
 fair market value by independent appraisal. The indicative band is 20 / 30 /
-40% of the $450,000 at year 5 ($90k / $135k / $180k), declining geometrically for
-a longer term, never under 5%. ClearSky's program outlay is the system cost,
+40% of the $575,000 system cost (the skid plus its controller) at year 5
+($115k / $173k / $230k), declining geometrically for a longer term, never
+under 5%. ClearSky's program outlay is the system cost,
 the fiber lateral at compute-lease's $45k–$250k/mile midpoint where fiber is not
 on site, and the lease.
 
@@ -195,7 +202,7 @@ site verdict, priced on the skids proposed:
 The workbook's defaults are the model's defaults, and `scripts/tests/
 tomegacore.js` pins its figures (month-1 revenue $35,956, year-1 $755,699,
 debt $507,130, payback months 17 and 7, the H100 scenario at $2.156M and
-96.0%). Where a cell pointed at the wrong row it is corrected and the
+96.0%) and the skid at $575,000 with its breakdown. Where a cell pointed at the wrong row it is corrected and the
 correction named in the staff build-up (`buildUp.corrections`).
 
 What Omega-Core adds:
@@ -209,11 +216,14 @@ What Omega-Core adds:
   for fixed terms, so the largest loan the cash flow carries is the minimum
   over amortising months of EBITDA ÷ (target × service per dollar) — plus
   project and equity IRR.
-- **A CAPEX basis**, defaulting to the **Omega-Core skid price ClearSky
-  recorded, $450,000** (Tommy, 6 October 2026: "use the 450k skid price as
-  the default"); the workbook's CMDC range (general-purpose air-cooled high,
-  $724,471), the chipset-scaled estimate and a typed figure stay as choices.
-  The dialog says which was used.
+- **A CAPEX basis**, defaulting to the **Omega-Core skid as built: the
+  $450,000 ClearSky recorded (Tommy, 6 October 2026: "use the 450k skid
+  price as the default") plus the $125,000 NextNRG Microgrid Controller built
+  into it, $575,000** — `omega-core.js` hands the compute model the product
+  record's figure (`opts.skidPriceUsd`) and its label says what it is made of;
+  the model's own default stays the recorded skid price. The workbook's CMDC
+  range (general-purpose air-cooled high, $724,471), the chipset-scaled
+  estimate and a typed figure stay as choices. The dialog says which was used.
 - **A pricing basis**, defaulting to CoreWeave's public **spot** rate (Tommy,
   6 October 2026: "use spot as the default"; the workbook's cash-flow sheet
   runs on it, $2.46 per GPU-hour for the H100). On-demand ($6.16), inference

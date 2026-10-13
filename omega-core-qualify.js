@@ -211,7 +211,7 @@
   function header() {
     return '<div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:12px">'
       + '<div><div style="font-size:16px;font-weight:800;color:var(--text)">◆ Omega-Core — qualify this charging site</div>'
-      + '<div style="font-size:10.5px;color:#64748B;margin-top:2px">Solela Edge Compute 75 kW + CleanCell R60 61.44 kWh / 60 kW on one 28 × 7.25 ft skid · its own utility meter · land lease to the host · 5-year minimum</div></div>'
+      + '<div style="font-size:10.5px;color:#64748B;margin-top:2px">Solela Edge Compute 75 kW + CleanCell R60 61.44 kWh / 60 kW + NextNRG Microgrid Controller on one 28 × 7.25 ft skid · its own utility meter · land lease to the host · 5-year minimum</div></div>'
       + '<button onclick="OmegaCoreQualify.close()" aria-label="Close" style="background:none;border:none;color:#64748B;font-size:20px;cursor:pointer;line-height:1">×</button></div>';
   }
 
@@ -455,7 +455,8 @@
     if (p.systemCostPerSkid) {
       var fmv = p.fmvAtEndPerSkid || {};
       h += '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-top:10px">'
-        + '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--navy)"><div style="font-size:9.5px;color:#64748B;text-transform:uppercase">System cost</div><div style="font-size:14px;font-weight:800;color:var(--text)">' + money(p.systemCostPerSkid) + ' <span style="font-size:10px;color:#64748B">per skid</span></div><div style="font-size:10px;color:var(--sub)">' + money(p.systemCost) + ' for ' + esc(r.units.proposed) + ' · ClearSky\'s, not the host\'s</div></div>'
+        + '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--navy)"><div style="font-size:9.5px;color:#64748B;text-transform:uppercase">System cost</div><div style="font-size:14px;font-weight:800;color:var(--text)">' + money(p.systemCostPerSkid) + ' <span style="font-size:10px;color:#64748B">per skid</span></div><div style="font-size:10px;color:var(--sub)">' + money(p.systemCost) + ' for ' + esc(r.units.proposed) + ' · ClearSky\'s, not the host\'s</div>'
+        + ((p.systemCostBreakdown || []).length ? '<div style="font-size:9.5px;color:#64748B;margin-top:3px">' + p.systemCostBreakdown.map(function (b) { return esc(b.label) + ' ' + money(b.usd); }).join(' + ') + '</div>' : '') + '</div>'
         + '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--navy)"><div style="font-size:9.5px;color:#64748B;text-transform:uppercase">Buyout at FMV, year ' + esc((t.endOfTerm || {}).year) + '</div><div style="font-size:14px;font-weight:800;color:var(--text)">' + money(fmv.low) + '–' + money(fmv.high) + '</div><div style="font-size:10px;color:var(--sub)">per skid, indicative · base ' + money(fmv.base) + '</div></div>'
         + (p.fiberLateral ? '<div style="border:1px solid var(--border);border-radius:8px;padding:8px 10px;background:var(--navy)"><div style="font-size:9.5px;color:#64748B;text-transform:uppercase">Fiber lateral (ClearSky)</div><div style="font-size:14px;font-weight:800;color:var(--text)">' + esc(p.fiberLateral.mi) + ' mi</div><div style="font-size:10px;color:var(--sub)">' + (p.fiberLateral.capexMid ? money(p.fiberLateral.capexMid) + ' at the midpoint' : 'on site') + '</div></div>' : '')
         + '</div><div style="font-size:10px;color:#64748B;margin-top:5px">' + esc(p.fmvNote || '') + '</div>';

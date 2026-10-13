@@ -218,7 +218,9 @@ function estimate(body) {
       load: body.load,
       tariff: body.tariff,
       split: body.split,
-      performance: body.performance
+      performance: body.performance,
+      /* a NextNRG Microgrid Controller on the host's drawing (true, or its key) */
+      controller: body.controller === true || typeof body.controller === 'string' ? body.controller : null
     };
     var sim = SIM.simulate(simInput);
     if (!sim.ok) return { status: 400, body: { ok: false, errors: sim.errors || [] } };
@@ -291,6 +293,8 @@ function estimate(body) {
       site: sim.site, load: sim.load, solar: sim.solar, battery: sim.battery,
       tariff: sim.tariff, bill: sim.bill,
       streams: sim.streams,
+      /* the controller's uplift, with its caveat (null without one) */
+      controller: sim.controller || null,
       /* the simulation's own "not counted" list, minus its one-time
          incentives line — THIS response prices those, from the book */
       missing: incentives ? sim.missing.filter(function (m) {
