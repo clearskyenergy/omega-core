@@ -29,7 +29,8 @@ var BESS_EQ_PER_KWH = 85;        /* flat container equipment rate, $/kWh namepla
 /* The catalog's own unit prices, by catalog key (they rode on the page's
    BESS_CATALOG as `eqcost`; a tenant's product list never carries one). */
 var CATALOG_PRICES = { 'GOTION-HOME-5': 558, 'GOTION-EDGE-760': 84740, 'GOTION-GRID-3421': 381486, 'GOTION-GRID-3441': 383627, 'GOTION-HOME-10': 1115, 'GOTION-HOME-15': 1673, 'GOTION-HOME-20': 2230,
-  'AUTEL-ESS-256': 180000, 'PYTES-30-60': 34080, 'PYTES-60-120': 56354, 'PYTES-30-60-SE': 44307, 'PYTES-60-120-SE': 77058, 'PYTES-60-193-SEMAX': 80245 };
+  'AUTEL-ESS-256': 180000, 'PYTES-30-60': 34080, 'PYTES-60-120': 56354, 'PYTES-30-60-SE': 44307, 'PYTES-60-120-SE': 77058, 'PYTES-60-193-SEMAX': 80245,
+  'CC-R60': 24000 /* the R60 on the Omega-Core skid (Tommy, 2026-10-13; #296) */ };
 function catalogPrice(key) { return (key && CATALOG_PRICES.hasOwnProperty(key)) ? CATALOG_PRICES[key] : null; }
 var BESS_INSTALL_RATIO = 0.55;   /* install as a share of equipment */
 /* The cost sheet's defaults: applied where a field is blank. */
