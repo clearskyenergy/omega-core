@@ -3187,3 +3187,47 @@ environment or the deal room's settings, never a constant. Tests:
 module; the real-workbook suites skip without the private files).
 Before go-live: deploy `firestore.rules` by hand before or with the API; the
 EVCS seed refuses unless `omega_orgs/evcs.com` exists; close PR #286.
+
+## 2026-10-13 — Custom Shape canopy and Custom Area trace a new outline every press
+
+Tommy: "when i do the custom solar canopy and i go to do it again it keeps
+generating on what we have and doesnt let me do another solar spot." Both
+Solar → Canopy (Custom Shape) and Solar → Custom Area built at once when
+any closed shape was already on the canvas, on the LARGEST one — a traced
+building, the parcel, a compound fence — so once anything was drawn the
+second press rebuilt over the building instead of letting a second spot be
+traced. Each press now arms the polyline and builds on the outline THAT
+press produced, told apart by id (never by count or by size); ESC ends the
+watch. `openAutoLayout(boundaryPts)` takes the outline it is handed, else
+guesses as before; `omegaCanopyFromShape()` with no shape falls back to the
+largest PLAIN outline (no `omegaRole`, `_visArch`, `omegaBuilding`,
+`omegaFence`, `omegaCampus`, `omegaCompute`, `isSiteBoundary`, `locked`).
+`scripts/tests/tcanopytrace.js` cuts both blocks out of the page and holds
+it (it fails on the editor before the change).
+
+## 2026-10-13 — A selected array frames itself; Custom Area lands its array selected
+
+`_shapeBBox` gives a one-point array (`dersolar` with `wPx`/`hPx`) and a
+compute unit (`derdc`, lf × wf about its point) their real box, so a
+selected canopy is framed with its handles and delete X on its corners
+instead of a 1×1 box at the top-left corner (Tommy, 2026-10-13: "the x
+should come up"). Auto Layout's Generate (Custom Area) lands its array
+selected in Select mode, as Custom Shape does (#295). The field lock
+itself is #295's: it covers only what the pack placed. Held by
+`scripts/tests/tcanopytrace.js` §6–7.
+
+## 2026-10-13 — Laying out a solar array never runs the fence-and-tie pass
+
+Tommy: "when i hit generate its doing a compute system it should only be
+doing solar if im doing a custom solar system"; "because i have placed a
+bess its putting a whole thing." The pass that fences every compound,
+places a master controller, trenches a duct bank from each back to it and
+draws the access road and bollards (editor patch 83, `OmegaFenceTie`)
+followed `applyGroundLayout`, and its solar-only guard holds only while
+solar is ALL there is: with a battery or the Omega-Core skid on the
+drawing, Auto Layout's Generate (Custom Area, Custom Shape) placed the
+panels and then the whole balance of plant. The hook on the layout
+applier is gone; the pass still follows a guided site build
+(`OmegaSiteBuild.build`) and runs when asked for (Design Site,
+`from:'campus'`; the Fence & Tie button, `bop:true`). Held by
+`scripts/tests/tfencepass.js` (fails on the editor before).

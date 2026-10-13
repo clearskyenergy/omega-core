@@ -11969,6 +11969,21 @@ function _shapeBBox(sh){
     var pr=Math.hypot(pv.x-pc.x, pv.y-pc.y);
     return { x:pc.x-pr, y:pc.y-pr, w:2*pr, h:2*pr };
   }
+  /* A solar array draws from ONE origin point plus its size (an auto-layout
+     array: pts[0] is the boundary's top-left, wPx/hPx its box; a drawn
+     array keeps wPx/hPx in step with the feet it is drawn from), and a
+     compute unit from its centre and lf/wf feet. The point fallback below
+     gave both a 1x1 box, so a selected canopy framed nothing: the corner
+     handles stacked on its top-left corner with the delete X beside them
+     (Tommy, 2026-10-13: "the x should come up"). */
+  if(sh.kind==='dersolar' && sh.pts && sh.pts.length===1 && sh.wPx>0 && sh.hPx>0){
+    return { x:sh.pts[0].x, y:sh.pts[0].y, w:sh.wPx, h:sh.hPx };
+  }
+  if(sh.kind==='derdc' && sh.pts && sh.pts.length===1){
+    var dppf=(typeof _derScale==='function')?_derScale():((S.pxPerFt&&S.pxPerFt>0)?S.pxPerFt:6);
+    var dw=(sh.lf||20)*dppf, dh=(sh.wf||8)*dppf;
+    return { x:sh.pts[0].x-dw/2, y:sh.pts[0].y-dh/2, w:dw, h:dh };
+  }
   /* line / rect / polyline: bbox over points */
   var xs=[], ys=[];
   for(var i=0;i<sh.pts.length;i++){ xs.push(sh.pts[i].x); ys.push(sh.pts[i].y); }
@@ -15468,9 +15483,10 @@ function _derRenderAutoLayout(g, sh){
 /* ── AUTO-LAYOUT UI ────────────────────────────────────────────────────
    Uses the most recently drawn closed shape as the boundary. Any smaller
    closed shapes tagged as exclusions are subtracted. */
-function openAutoLayout(){
-  /* Find candidate boundary: the last polygon/rect shape drawn. */
-  var boundary=_alFindBoundary();
+function openAutoLayout(boundaryPts){
+  /* The outline the caller traced for this (Solar - Custom Area hands the
+     one just drawn), else the largest closed shape on the canvas. */
+  var boundary=(boundaryPts && boundaryPts.length>=3) ? boundaryPts : _alFindBoundary();
   var host=document.getElementById('autolayout-modal');
   if(!host){
     host=document.createElement('div');
@@ -16090,8 +16106,13 @@ function alGenerate(){
     if(typeof showBanner==='function') showBanner('wiz','!! No tables fit \u2014 boundary may be smaller than the setbacks.');
     return;
   }
-  applyGroundLayout(boundary, layout, window._alExclusions||[]);
+  var placedArr=applyGroundLayout(boundary, layout, window._alExclusions||[]);
   var host=document.getElementById('autolayout-modal'); if(host) host.remove();
+  /* Custom Area left the page in polyline mode, where a click on the new
+     array would start a stray line. Back to Select with the array selected:
+     its frame, handles and delete X are there at once. */
+  try{ if(typeof setMode==='function') setMode('select'); }catch(e){}
+  try{ if(placedArr && typeof selectShape==='function') selectShape(placedArr.id); }catch(e){}
   if(typeof showBanner==='function'){
     showBanner('cal','  Auto-layout: '+layout.tableCount.toLocaleString()+' tables, '
       +layout.kw.toLocaleString()+' kW-DC'+(layout.tooMany?' (density view)':'')+'.');
@@ -81729,17 +81750,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     });
   }
 
+  /* EVERY PRESS IS A NEW TRACE. This used to go straight to layout when
+     any closed shape was already on the canvas - and Auto Layout fills the
+     LARGEST one. With a building, a parcel or a fence drawn, that meant a
+     second array could never be traced: the press filled the building
+     again. Now the tool always arms the polyline, and the layout runs on
+     the outline that press produced and nothing else. */
   window.omegaSolarCustomArea=function(){
     var s=S_(); if(!s) return false;
-    var have=closedShapes();
-
-    if(have.length){
-      /* A usable outline is already on the canvas - go straight to layout. */
-      openLayout(have.length);
-      return true;
-    }
-
-    /* Otherwise put them in polyline mode and say what happens next. */
     try{ if(typeof setMode==='function') setMode('polyline'); }catch(e){}
     if(typeof showBanner==='function'){
       try{ showBanner('shape',
@@ -81750,24 +81768,36 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     return true;
   };
 
-  /* Wait for them to finish the outline, then continue into layout. */
-  var watching=false;
+  /* Wait for the outline this press produces, then lay out THAT one.
+     Shapes are told apart by id, never by count, so a building or boundary
+     already drawn is never taken for the new area. ESC (the mode leaving
+     polyline with nothing drawn) ends the watch; a second press restarts it. */
+  var watchIv=null;
   function watchForOutline(){
-    if(watching) return;
-    watching=true;
-    var before=closedShapes().length, tries=0;
-    var iv=setInterval(function(){
-      if(++tries>600){ clearInterval(iv); watching=false; return; }   /* ~2 min */
-      var now=closedShapes().length;
-      if(now>before){
-        clearInterval(iv); watching=false;
-        setTimeout(function(){ openLayout(now); }, 250);
+    if(watchIv){ clearInterval(watchIv); watchIv=null; }
+    var seen={}; closedShapes().forEach(function(sh){ if(sh.id!=null) seen[sh.id]=true; });
+    var tries=0;
+    watchIv=setInterval(function(){
+      var s=S_();
+      if(++tries>600 || !s || (s.mode!=='polyline' && !s.shapeDrawing)){   /* ~2 min, or cancelled */
+        clearInterval(watchIv); watchIv=null; return;
+      }
+      var fresh=closedShapes().filter(function(sh){ return sh.id==null || !seen[sh.id]; });
+      if(fresh.length){
+        clearInterval(watchIv); watchIv=null;
+        var made=fresh[fresh.length-1];
+        setTimeout(function(){ openLayout(1, made); }, 250);
       }
     }, 200);
   }
 
-  function openLayout(n){
-    var fn = window.openAutoLayout || window.alOpen || window.rbAutoLayout;
+  function openLayout(n, outline){
+    var pts=null;
+    try{ pts = outline ? ((typeof _shapeWorldPts==='function' ? _shapeWorldPts(outline) : null)
+                          || (typeof _alShapePts==='function' ? _alShapePts(outline) : null)
+                          || (outline.pts||[]).map(function(p){ return {x:p.x,y:p.y}; })) : null; }catch(e){ pts=null; }
+    if(typeof window.openAutoLayout==='function'){ try{ window.openAutoLayout(pts); return; }catch(e){} }
+    var fn = window.alOpen || window.rbAutoLayout;
     if(typeof fn==='function'){ try{ fn(); return; }catch(e){} }
     /* fall back to the ribbon button so we do not depend on one name */
     var btn=document.getElementById('rb-autolayout')
@@ -81819,12 +81849,21 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
 (function(){
   function S_(){ try{ return (typeof S!=='undefined'&&S)?S:null; }catch(e){ return null; } }
 
+  /* A plain traced outline: closed, and not something that already means
+     something else on the drawing - the parcel or an exclusion (omegaRole),
+     a building or a model block (_visArch, omegaBuilding), a compound fence
+     or a tie (omegaFence, omegaCampus), the site boundary. Those are what a
+     second press used to build a canopy over. */
+  function plain(sh){
+    return !!sh && (sh.kind==='polyline'||sh.kind==='poly'||sh.kind==='rect')
+           && sh.pts && sh.pts.length>=3
+           && !sh.omegaRole && !sh._visArch && !sh.omegaBuilding && !sh._modelPrimitive
+           && !sh.omegaFence && !sh.omegaCampus && !sh.omegaCompute
+           && !sh.isSiteBoundary && !sh.locked;
+  }
   function outlines(){
     var s=S_(); if(!s) return [];
-    return (s.shapes||[]).filter(function(sh){
-      return (sh.kind==='polyline'||sh.kind==='poly'||sh.kind==='rect')
-             && sh.pts && sh.pts.length>=3;
-    });
+    return (s.shapes||[]).filter(plain);
   }
   function largest(){
     var best=null, area=0;
@@ -81895,21 +81934,34 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     return made;
   };
 
-  /* One action: trace, then it builds itself. */
+  /* One action: trace, then it builds itself - EVERY press a new trace.
+     This used to build at once on the largest closed shape already on the
+     canvas, so with a building or a boundary drawn a second canopy could
+     never be traced: the press rebuilt over the building. Now the press
+     always arms the polyline, and the canopy is built from the outline
+     that press produced - told apart by id, never by count or by size.
+     ESC (the mode leaving polyline with nothing drawn) ends the watch. */
+  var watchIv=null;
   window.omegaCanopyCustom=function(){
     var s=S_(); if(!s) return false;
-    if(largest()){ omegaCanopyFromShape(); return true; }
+    if(watchIv){ clearInterval(watchIv); watchIv=null; }
     try{ if(typeof setMode==='function') setMode('polyline'); }catch(e){}
     if(typeof showBanner==='function'){
       try{ showBanner('shape','Trace the canopy \u2014 click each corner, double-click to close. '
         +'Panels will fit that exact shape at any angle.'); }catch(e){}
     }
-    var before=outlines().length, tries=0;
-    var iv=setInterval(function(){
-      if(++tries>600){ clearInterval(iv); return; }
-      if(outlines().length>before){
-        clearInterval(iv);
-        setTimeout(function(){ omegaCanopyFromShape(); }, 300);
+    var seen={}; outlines().forEach(function(sh){ if(sh.id!=null) seen[sh.id]=true; });
+    var tries=0;
+    watchIv=setInterval(function(){
+      var st=S_();
+      if(++tries>600 || !st || (st.mode!=='polyline' && !st.shapeDrawing)){
+        clearInterval(watchIv); watchIv=null; return;
+      }
+      var fresh=outlines().filter(function(sh){ return sh.id==null || !seen[sh.id]; });
+      if(fresh.length){
+        clearInterval(watchIv); watchIv=null;
+        var made=fresh[fresh.length-1];
+        setTimeout(function(){ omegaCanopyFromShape(made); }, 300);
       }
     }, 200);
     return true;
@@ -81924,7 +81976,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
               canopies:(s.shapes||[]).filter(function(x){ return x.kind==='dersolar' && x.mount==='adjacent'; }).length,
               calibrated:(typeof _derScaled==='function')?_derScaled():null };
       o.verdict = !o.calibrated ? 'Not calibrated - load the map first or panels will be sized wrong.'
-        : o.outlines ? o.outlines+' outline(s) ready - Solar \u2192 Canopy (Custom Shape) will fit panels to the largest.'
+        : o.outlines ? o.outlines+' plain outline(s) on the canvas - OmegaCanopy.fromShape(shape) fits panels to one; Solar \u2192 Canopy (Custom Shape) always traces a new one.'
         : 'No outline. Solar \u2192 Canopy (Custom Shape) to trace one.';
       console.table?console.table(o):console.log(o);
       console.info(o.verdict);
@@ -172756,10 +172808,23 @@ if (root.console && console.info) {
 
   /* ── run it without being asked ─────────────────────────────────────── */
 
-  /* Design Site fences its own compounds. Everything else — Auto Layout,
-     the guided builds, hand placement — never had a fence, so this
-     follows those and draws one. Debounced, because a build places
-     hundreds of shapes and each one would otherwise trigger a pass. */
+  /* Design Site fences its own compounds. A guided site build places a
+     battery yard, and a battery yard with no fence is not a permit drawing,
+     so this follows that build and draws one. Debounced, because a build
+     places hundreds of shapes and each one would otherwise trigger a pass.
+
+     NOT applyGroundLayout. Laying out a solar array asks for a solar array
+     and nothing else. This used to follow it too, and the solar-only guard
+     in run() only holds while solar is ALL there is: with a battery or an
+     Omega-Core skid already on the drawing, the moment Auto Layout's
+     Generate (or Custom Area, or Custom Shape) placed the panels this pass
+     fenced the battery, the skid and the array as three compounds, put a
+     master controller down, trenched a duct bank from each back to it, drew
+     the access road and the bollards (Tommy, 2026-10-13: "when i hit
+     generate its doing a compute system it should only be doing solar";
+     "because i have placed a bess its putting a whole thing"). Balance of
+     plant comes when it is asked for: Design Site, a guided site build, or
+     Fence & Tie. */
   var pending = null;
   function later() {
     clearTimeout(pending);
@@ -172773,7 +172838,6 @@ if (root.console && console.info) {
       obj[key] = function () { var r = orig.apply(this, arguments); later(); return r; };
       obj[key].__fence = true; done++;
     };
-    after(root, 'applyGroundLayout');
     after(root.OmegaSiteBuild, 'build');
     return done;
   }
