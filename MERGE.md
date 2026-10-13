@@ -3374,3 +3374,23 @@ ev-pricebook-goldens.json`, two reference jobs, every bucket × row) hold
 the library in `scripts/tests/tevpricebook.js`; `tngpricebook.js`,
 `tesma.js` and `tsvcped.js` now price with the library and read the
 sheet with the page.
+
+## 2026-10-13 — Solar priced per kW-DC by mount, on its own line
+
+Tommy: "make sure the solar is priced correctly per kw and that is
+generated independant on what the compute skid is." The cost engine priced
+every array at the sector band by size, so a traced canopy cost the same
+$/W as a ground array. `api/_lib/editor-cost.js` now prices solar per
+mount — ground and rooftop at the sector band of the whole programme,
+a canopy at `BENCH.pvCanopy` ($2.75/Wdc, an industry range, named in
+`sources.pvCanopy`) — the sheet's Solar PV ($/Wdc) winning for every
+mount, one row per mount on `lines.solar.rows` (kW the page could not
+place by mount, a previewed layout, is plain PV at the band), and nothing
+else on the drawing moves it: the Omega-Core skid is never a pod there
+and the line is the same with or without it. The page sends
+`q.solar.byMount` (`omegaSolarByMount()`: `canopy` / `mount:'adjacent'`
+→ canopy, `roof` → rooftop, else ground), the cost breakdown shows each
+mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
+rate beside the project's blended $/W. Held by
+`scripts/tests/teditorcost.js` (solar by mount; the page collector with
+and without the skid).

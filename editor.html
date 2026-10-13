@@ -29231,6 +29231,7 @@ function omegaCostQuantities(){
   q.sheet=_costSheetValues();
   q.ev=_evQuantities(); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
   q.solarKwDc=(typeof omegaSolarKwDc==='function')?(+omegaSolarKwDc()||0):0;
+  q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null };   /* a canopy is priced as a canopy */
   q.placedKw=0; try{ var _d=(typeof omegaDer==='function')?omegaDer():null; if(_d) q.placedKw=(+_d.solarKwDc||0)+(+_d.windKw||0)+(+_d.altKw||0); }catch(e){}
   q.bnzCapex=0; try{ if(typeof bnzAll==='function') q.bnzCapex=+bnzAll().capex||0; }catch(e){}
   q.compute={ podsN:0, podKw:0, shellPerPod:0, itPerPod:0, excludeIt:false };
@@ -29437,7 +29438,8 @@ function _renderCostEst(ans, stale) {
       </div>`;
     var CM=LN.compute, G=LN.gen;
     bd.innerHTML =
-      (T.solar > 0 ? row('  Solar PV (equip + install)', T.solar, '#FBBF24') : '') +
+      (T.solar > 0 ? ((LN.solar.rows||[]).map(function(sr){ return row('  '+sr.label+' — '+Math.round(sr.kwDc).toLocaleString()+' kW-DC at $'+(+sr.rate).toFixed(2)+'/W'+(sr.isBenchmark?' (benchmark)':''), sr.total, '#FBBF24'); }).join('')
+                     || row('  Solar PV (equip + install)', T.solar, '#FBBF24')) : '') +
       (T.compute > 0
         ? row('  Compute pods ×' + T.computePods + (F.computeBenchmark ? ' (benchmark, all-in)' : (CM.excludeIt ? ' (enclosures only)' : ' (entered)')), T.compute, '#60A5FA')
         : (T.computePods > 0
@@ -36262,6 +36264,22 @@ function omegaDer(){
   return t;
 }
 
+/* The arrays by how they are MOUNTED, for the cost engine: a canopy (Solar
+   → Canopy, or Custom Shape) is priced as a canopy, a rooftop as rooftop,
+   the rest as ground. kW only; the rate is the server's. */
+function omegaSolarByMount(){
+  var t={ ground:0, roof:0, canopy:0 };
+  try{
+    (S.shapes||[]).forEach(function(s){
+      if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return;
+      var kw=+s.kw||0; if(!(kw>0)) return;
+      t[(s.canopy || s.mount==='adjacent') ? 'canopy' : (s.mount==='roof' ? 'roof' : 'ground')]+=kw;
+    });
+  }catch(e){}
+  return t;
+}
+window.omegaSolarByMount=omegaSolarByMount;
+
 function omegaSolarKwDc(){
   var d=omegaDer();
   if(d.solarKwDc>0) return d.solarKwDc;
@@ -36742,6 +36760,13 @@ function omegaRenderResults(){
   fi += _omRow('Total install', _omMoney(gross));
   fi += _omRow('Net of incentives', _omMoney(net));
   fi += _omRow('$/W', perW!==null ? '$'+perW.toFixed(2) : null);
+  /* The solar's OWN rate: its line over its watts, by mount (a canopy at
+     the canopy rate), never the project's blended figure. */
+  var _sl=(window._COST_SERVER && window._COST_SERVER.lines && window._COST_SERVER.lines.solar) || null;
+  if(sDc>0 && _sl && _sl.rate>0){
+    var _slMounts=(_sl.rows||[]).map(function(r){ return r.mount==='unspecified'?'':r.mount; }).filter(Boolean);
+    fi += _omRow('Solar $/W'+(_slMounts.length?' ('+_slMounts.join(' + ')+')':''), '$'+(+_sl.rate).toFixed(2));
+  }
   fi += _omRow('$/kW', perKw ? '$'+Math.round(perKw).toLocaleString() : null);
   var _fc = _fullCost ? ' · full cost' : '';
   fi += _omRow('Payback'+_fc, (payback!==null && payback>0) ? payback.toFixed(1)+' yrs' : null);
@@ -174040,7 +174065,7 @@ if (root.console && console.info) {
     if(g.units) (g.lines||[]).forEach(function(l){ push('Generation: '+l.model+' x'+l.units+' ('+Math.round(l.kw).toLocaleString()+' kW)', l.cost, (l.overridden?'project override ':'EIA benchmark ')+'$'+Math.round(l.rate).toLocaleString()+'/kW, BoP excluded'); });
     else push('On-site generation', 0, 'none on the drawing');
     push('DC electrical package', root._DC_TOTAL, root._DC_TOTAL>0 ? 'ROM (Eaton EESS)' : 'no compute load');
-    push('Solar PV', root._SOLAR_TOTAL, root._SOLAR_IS_BENCHMARK ? 'benchmark $/Wdc by size' : (root._SOLAR_TOTAL>0?'entered':'none'));
+    push('Solar PV', root._SOLAR_TOTAL, root._SOLAR_IS_BENCHMARK ? 'benchmark $/Wdc by mount and size' : (root._SOLAR_TOTAL>0?'entered':'none'));
     push('Storage', root._BESS_TOTAL, root._BESS_IS_BENCHMARK ? 'benchmark $/kWh + $/kW' : (root._BESS_TOTAL>0?'itemised':'none'));
     push('EV charging', root._EV_TOTAL, root._EV_TOTAL>0?'catalog':'none');
     push('Building envelope', root._BNZ_TOTAL, root._BNZ_TOTAL>0?'assembly catalog':'none');
