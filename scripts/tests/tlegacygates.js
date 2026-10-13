@@ -58,16 +58,28 @@ ok('a chain names the tab first, then the command\'s own cap', chains.every(func
    a legacy plan, as a package does: a legacy tier below Enterprise hides
    the Compute tab, so a Lite command left there is one the plan cannot
    reach. Its list is held to the catalog, so a Lite command added to the
-   Compute tab's PLAN cannot be stranded there again. */
+   Compute tab's PLAN cannot be stranded there again. Trace Boundary and
+   Fence & Tie are Compute's (Tommy, 2026-10-13: "made for the compute")
+   and stay on the Compute tab, with no twin of either left there. */
 var plan = /var PLAN = \{([\s\S]*?)\};/.exec(html), liteList = /var LITE_PAGE = '([a-z]+)', LITE = \[([^\]]*)\];/.exec(html);
 ok('the Compute tab\'s mover names a plan and its Lite list', !!plan && !!liteList);
 if (plan && liteList) {
   var ids = (plan[1].match(/'[^']+'/g) || []).map(function (q) { return q.slice(1, -1); });
   var lite = M.get('lite'), owned = ids.filter(function (id) { return lite.ribbon.indexOf('#' + id) >= 0; }).sort();
   var listed = (liteList[2].match(/'[^']+'/g) || []).map(function (q) { return q.slice(1, -1); }).sort();
-  ok('the mover\'s Lite list is exactly the Compute-tab commands the catalog gives Lite', owned.length === 3 && JSON.stringify(owned) === JSON.stringify(listed), { catalog: owned, mover: listed });
-  ok('and sends them to Lite\'s page in the catalog (' + lite.editorPage + ')', liteList[1] === lite.editorPage, liteList[1]);
+  ok('the mover\'s Lite list is exactly the Compute-tab commands the catalog gives Lite', owned.length === 1 && JSON.stringify(owned) === JSON.stringify(listed), { catalog: owned, mover: listed });
+  ok('and that is Move System alone', listed.join() === 'rb-move-system', listed);
+  ok('and sends it to Lite\'s page in the catalog (' + lite.editorPage + ')', liteList[1] === lite.editorPage, liteList[1]);
   ok('so no Omega Design command sits behind the Compute tab on a legacy plan', (lite.legacyGates || []).indexOf('compute') < 0, lite.legacyGates);
+  var compute = M.get('compute');
+  ['rb-trace-boundary', 'rb-fence-tie'].forEach(function (id) {
+    ok(id + ' is Compute\'s in the catalog and nobody else\'s', M.owners(id, '').join() === 'compute', M.owners(id, ''));
+    ok(id + ' is on the Compute tab\'s plan', ids.indexOf(id) >= 0, ids);
+    ok(id + ' is not on the mover\'s Lite list', listed.indexOf(id) < 0, listed);
+  });
+  ['rb-compute-trace-boundary', 'rb-compute-fence-tie'].forEach(function (twin) {
+    ok('the Compute tab carries no twin ' + twin, html.indexOf(twin) < 0 && compute.ribbon.indexOf('#' + twin) < 0);
+  });
 }
 
 console.log('tlegacygates: ' + pass + ' passed, ' + fail + ' failed');
