@@ -171781,10 +171781,23 @@ if (root.console && console.info) {
 
   /* ── run it without being asked ─────────────────────────────────────── */
 
-  /* Design Site fences its own compounds. Everything else — Auto Layout,
-     the guided builds, hand placement — never had a fence, so this
-     follows those and draws one. Debounced, because a build places
-     hundreds of shapes and each one would otherwise trigger a pass. */
+  /* Design Site fences its own compounds. A guided site build places a
+     battery yard, and a battery yard with no fence is not a permit drawing,
+     so this follows that build and draws one. Debounced, because a build
+     places hundreds of shapes and each one would otherwise trigger a pass.
+
+     NOT applyGroundLayout. Laying out a solar array asks for a solar array
+     and nothing else. This used to follow it too, and the solar-only guard
+     in run() only holds while solar is ALL there is: with a battery or an
+     Omega-Core skid already on the drawing, the moment Auto Layout's
+     Generate (or Custom Area, or Custom Shape) placed the panels this pass
+     fenced the battery, the skid and the array as three compounds, put a
+     master controller down, trenched a duct bank from each back to it, drew
+     the access road and the bollards (Tommy, 2026-10-13: "when i hit
+     generate its doing a compute system it should only be doing solar";
+     "because i have placed a bess its putting a whole thing"). Balance of
+     plant comes when it is asked for: Design Site, a guided site build, or
+     Fence & Tie. */
   var pending = null;
   function later() {
     clearTimeout(pending);
@@ -171798,7 +171811,6 @@ if (root.console && console.info) {
       obj[key] = function () { var r = orig.apply(this, arguments); later(); return r; };
       obj[key].__fence = true; done++;
     };
-    after(root, 'applyGroundLayout');
     after(root.OmegaSiteBuild, 'build');
     return done;
   }
