@@ -398,9 +398,15 @@ Jarvis run only what `OmegaCaps.allowedElement` allows, which on a legacy
 plan is every `data-cap` from the tab in to the command (a tier gates whole
 tabs), and Jarvis names and opens only `OmegaCaps.tabOpen` tabs
 (`render-legacy-gates.js`). So nothing is stranded behind a hidden tab,
-Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move System) live
-on Draw on every plan, where a package puts them: `LITE` in the Compute
-tab's mover, held to the catalog by `scripts/tests/tlegacygates.js`.
+Omega Design's drawing tool Move System lives on Draw on every plan, where
+a package puts it: `LITE` in the Compute tab's mover, held to the catalog by
+`scripts/tests/tlegacygates.js`. **Trace Boundary and Fence & Tie are Omega
+Compute's** (2026-10-13, Tommy: "trace boundary and fence & tie is in the
+draw panel but is made for the compute that should be moved"): `IDS.compute`
+in `api/_lib/modules.js`, on the Compute tab's Site and Design groups on
+every plan, behind the tab's `compute` gate on a legacy tier, and the
+"Draw Site Area" and second Fence & Tie twins the tab once carried are gone
+(`render-legacy-gates.js`, `tlegacygates.js`).
 Omega Storefront (`whitelabel`, no tools, no editor commands) is held where
 the public storefront's own gate opens it, never on the tier:
 `api/_lib/storefront.js` `storefrontEntitled`, which `api/_lib/embed.js`

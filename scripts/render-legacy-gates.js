@@ -18,8 +18,11 @@
  *     table lists one the editor no longer has (drift either way);
  *   - for any tier, the table and OmegaCaps.canWith predict a command to be
  *     open or closed and the editor disagrees;
- *   - Omega Design's drawing tools (Trace Boundary, Fence & Tie, Move
- *     System) are not on Draw, shown and runnable, on every plan;
+ *   - Omega Design's drawing tool Move System is not on Draw, shown and
+ *     runnable, on every plan; or Trace Boundary and Fence & Tie (Omega
+ *     Compute's, 2026-10-13) are not on the Compute tab, open and in
+ *     Search tools exactly when the plan opens Compute, or a twin of
+ *     either is left on that tab;
  *   - Search tools (Ctrl+K) or Ask Jarvis lists or runs a command on a tab
  *     the plan hides, or Jarvis is told of or opens such a tab. They run a
  *     command by clicking it, so they reached what the ribbon did not show;
@@ -184,7 +187,7 @@ async function boot(browser, base, tier, addons, live) {
     return { leaked: leaked, listed: listed.length, blockedTabs: blockedTabs, jarvisTabs: jarvisTabs, named: hidden.length };
   });
   rows.ran = {};
-  for (var id of ['rb-valuestack', 'rb-compute-cost', 'rb-trace-boundary', 'rb-site-screen']) {
+  for (var id of ['rb-valuestack', 'rb-compute-cost', 'rb-trace-boundary', 'rb-site-screen', 'rb-move-system']) {
     var before = await page.evaluate(function (id) {
       var el = document.getElementById(id); if (!el) return null;
       window.__ran = false; el.addEventListener('click', function () { window.__ran = true; }, { capture: true, once: true });
@@ -238,19 +241,39 @@ async function boot(browser, base, tier, addons, live) {
     out.closed = !after || !after.offsetParent;
     return out;
   });
-  /* Omega Design's drawing tools live on Draw on every plan, where a
-     package puts them, not on the Compute tab a legacy tier below
-     Enterprise hides. Draw is a Pro tab, so Pro is where they are seen. */
+  /* Omega Design's drawing tool Move System lives on Draw on every plan,
+     where a package puts it, not on the Compute tab a legacy tier below
+     Enterprise hides. Draw is a Pro tab, so Pro is where it is seen. */
   rows.lite = await page.evaluate(function () {
     if (window.OmegaMode) OmegaMode.set('pro');
     window.rbTab('draw');
     var names = OmegaCommands.list().map(function (c) { return c.name; });
-    return ['rb-trace-boundary', 'rb-fence-tie', 'rb-move-system'].map(function (id) {
+    return ['rb-move-system'].map(function (id) {
       var el = document.getElementById(id), page = el && el.closest('.ribbon-page'), lbl = el && el.querySelector('.rb-lbl');
       var name = lbl ? lbl.innerHTML.replace(/<br\s*\/?>/gi, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim() : '';
       return { id: id, page: page ? page.getAttribute('data-page') : null, shown: !!(el && el.offsetParent && el.getBoundingClientRect().width > 0),
         open: !!el && OmegaCaps.allowedElement(el), listed: names.indexOf(name) >= 0 };
     });
+  });
+  /* Trace Boundary and Fence & Tie are Omega Compute's (Tommy, 2026-10-13:
+     "made for the compute"): on the Compute tab's Site and Design groups on
+     every plan, open and in Search tools exactly when the plan opens the
+     tab, and the twins the tab once carried ("Draw Site Area", a second
+     Fence & Tie) are gone. The tab is opened only where the plan opens it;
+     elsewhere it is the Opt in, which rows.optin reads. */
+  rows.computeTools = await page.evaluate(function () {
+    if (window.OmegaMode) OmegaMode.set('pro');
+    var open = OmegaCaps.tabOpen('compute');
+    if (open) window.rbTab('compute');
+    var names = OmegaCommands.list().map(function (c) { return c.name; });
+    var out = [['rb-trace-boundary', 'site'], ['rb-fence-tie', 'design']].map(function (c) {
+      var el = document.getElementById(c[0]), page = el && el.closest('.ribbon-page'), group = el && el.closest('.rpanel'), lbl = el && el.querySelector('.rb-lbl');
+      var name = lbl ? lbl.innerHTML.replace(/<br\s*\/?>/gi, ' ').replace(/&amp;/g, '&').replace(/\s+/g, ' ').trim() : '';
+      return { id: c[0], page: page ? page.getAttribute('data-page') : null, group: group ? group.getAttribute('data-ct') : null, wantGroup: c[1],
+        shown: !!(el && el.offsetParent && el.getBoundingClientRect().width > 0), open: !!el && OmegaCaps.allowedElement(el), listed: names.indexOf(name) >= 0 };
+    });
+    window.rbTab('home');
+    return { tabOpen: open, tools: out, twins: ['rb-compute-trace-boundary', 'rb-compute-fence-tie'].filter(function (id) { return !!document.getElementById(id); }) };
   });
   await context.close();
   rows.shownBlockedTabs = shownBlockedTabs;
@@ -387,14 +410,19 @@ async function run() {
       /* run by name: Search tools (Ctrl+K) and Ask Jarvis */
       var b = seen[tier].rows.byName, ran = seen[tier].rows.ran, jt = seen[tier].rows.jarvisTab;
       ok(b.listed > 0 && !b.leaked.length, tier + ': Search tools lists nothing from a tab the plan hides (' + b.named + ' hidden)' + (b.leaked.length ? ': ' + b.leaked.slice(0, 8).join('; ') : ''));
-      [['rb-valuestack', 'engineering'], ['rb-compute-cost', 'compute'], ['rb-trace-boundary', ''], ['rb-site-screen', 'compute']].forEach(function (c) {
+      [['rb-valuestack', 'engineering'], ['rb-compute-cost', 'compute'], ['rb-trace-boundary', 'compute'], ['rb-site-screen', 'compute'], ['rb-move-system', '']].forEach(function (c) {
         var open = !c[1] || C.canWith(plan.tier, c[1], { addons: plan.addons });
         ok(ran[c[0]] === open, tier + ': ' + c[0] + ' (behind ' + c[1] + ') ' + (open ? 'runs' : 'does not run') + ' by name (Search tools, Jarvis): ran=' + ran[c[0]]);
       });
       ok(!b.blockedTabs.some(function (t) { return b.jarvisTabs.indexOf(t) >= 0; }) && b.jarvisTabs.indexOf('home') >= 0,
          tier + ': Jarvis is told only the tabs the plan opens: ' + b.jarvisTabs.join(','));
       var misplaced = seen[tier].rows.lite.filter(function (l) { return !(l.page === 'draw' && l.shown && l.open && l.listed); });
-      ok(!misplaced.length, tier + ': Trace Boundary, Fence & Tie and Move System sit on Draw, shown in Pro, open and in Search tools' + (misplaced.length ? ': ' + JSON.stringify(misplaced) : ''));
+      ok(!misplaced.length, tier + ': Move System sits on Draw, shown in Pro, open and in Search tools' + (misplaced.length ? ': ' + JSON.stringify(misplaced) : ''));
+      var ct = seen[tier].rows.computeTools, computeOpen = C.canWith(plan.tier, 'compute', { addons: plan.addons });
+      ok(ct.tabOpen === computeOpen, tier + ': the Compute tab is open exactly when the plan opens compute: ' + JSON.stringify(ct));
+      var astray = ct.tools.filter(function (t) { return !(t.page === 'compute' && t.group === t.wantGroup && t.open === computeOpen && t.listed === computeOpen && t.shown === computeOpen); });
+      ok(!astray.length, tier + ': Trace Boundary (Site) and Fence & Tie (Design) sit on the Compute tab, ' + (computeOpen ? 'shown in Pro, open and in Search tools' : 'shut and not in Search tools') + (astray.length ? ': ' + JSON.stringify(astray) : ''));
+      ok(!ct.twins.length, tier + ': the Compute tab carries no twin of either' + (ct.twins.length ? ': ' + ct.twins.join(', ') : ''));
       ['analyze', 'compute'].forEach(function (tab) {
         var open = C.canWith(plan.tier, tab === 'compute' ? 'compute' : 'engineering', { addons: plan.addons });
         ok(jt[tab].opened === open && jt[tab].active === (open ? tab : 'home'),

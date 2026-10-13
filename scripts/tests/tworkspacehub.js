@@ -143,7 +143,7 @@ ok('ClearSky\'s own workspace with no tier on record reads as the editor opens i
 ok('a trial opens every tool but only the designer in the editor: Storage is partly on, Plan Sets partly', st('storage', trial) === 'part' && st('plansets', trial) === 'part', [st('storage', trial), st('plansets', trial)]);
 /* Omega Design (lite) is the floor every plan stands on: always held, even
    on a trial that cannot print a blueprint (the editor half still counts it) */
-ok('Core and Performance hold Omega Design: its drawing tools (Trace Boundary, Fence & Tie, Move System) live on Draw on every plan, not on the Compute tab', st('lite', perf) === 'held' && st('lite', core) === 'held' && HUB.moduleEditor(MODS.lite, core).open === HUB.moduleEditor(MODS.lite, core).total, HUB.moduleEditor(MODS.lite, core));
+ok('Core and Performance hold Omega Design: its drawing tool Move System lives on Draw on every plan, not on the Compute tab (Trace Boundary and Fence & Tie are Compute\'s)', st('lite', perf) === 'held' && st('lite', core) === 'held' && HUB.moduleEditor(MODS.lite, core).open === HUB.moduleEditor(MODS.lite, core).total, HUB.moduleEditor(MODS.lite, core));
 ok('Trial cannot print a blueprint, yet Omega Design is held', st('lite', trial) === 'held' && HUB.moduleEditor(MODS.lite, trial).open < HUB.moduleEditor(MODS.lite, trial).total);
 /* Omega Storefront has no tools and no editor commands: it is on exactly
    where the public storefront's own gate opens it (api/_lib/storefront.js

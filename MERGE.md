@@ -1,5 +1,26 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Trace Boundary and Fence & Tie are Compute's (2026-10-13)
+
+Tommy, of the Draw tab's Select group: "trace boundary and fence & tie is
+in the draw panel but is made for the compute that should be moved". Both
+are now Omega Compute commands (`IDS.compute` in `api/_lib/modules.js`) and
+sit on the Compute tab's Site and Design groups on every plan: the mover's
+`LITE` list (what it sends to Draw) is Move System alone, and the twins the
+tab carried while the real buttons lived on Draw ("Draw Site Area",
+`rb-compute-trace-boundary`; a second Fence & Tie, `rb-compute-fence-tie`)
+are deleted, one address per tool. What follows from the one rule that a
+legacy tier gates whole tabs: on Core, Performance and Trial the two are
+behind the Compute tab's `compute` gate (the tab reads Opt in), and a
+packaged workspace reaches them with Omega Compute. Omega Design's
+`legacyGates` are unchanged (`['', 'export.blueprint']`), so Core and
+Performance still hold Omega Design in full. Held by `tlegacygates.js`
+(the catalog, the plan, no twin) and `render-legacy-gates.js` (per tier:
+the pair on Compute, open and in Search tools exactly when the plan opens
+Compute; Move System on Draw; Trace Boundary runs by name only on a plan
+with Compute, Move System on every plan). The parcel checklist points at
+Compute › Trace Boundary.
+
 ## Merging origin/main into the NextNRG branch (2026-10-13)
 
 Local main had five commits origin never saw (the editor IP protection and
