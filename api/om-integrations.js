@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ============================================================
    ClearSky OMEGA — /api/om-integrations  (Vercel serverless)
    ------------------------------------------------------------

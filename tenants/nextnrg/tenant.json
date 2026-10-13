@@ -21,5 +21,9 @@
   "shell": "default",
   "status": "active",
   "receivesFullBom": false,
-  "_note": "Seeded from the legacy repo config.js. VERIFY domains, tier and orgId before running scripts/seed-omega-orgs.js --apply. orgId is the email domain users sign in with; domains[] are the HOSTNAMES the portal answers on."
+  "_note": "Seeded from the legacy repo config.js. VERIFY domains, tier and orgId before running scripts/seed-omega-orgs.js --apply. orgId is the email domain users sign in with; domains[] are the HOSTNAMES the portal answers on.",
+  "brands": [
+    "nextnrg"
+  ],
+  "_brandsNote": "brands[] is what /api/rfq.js matches a BOM line's manufacturer against (lowercased): a NextNRG-labelled battery, module or controller on a customer's BOM routes its quote request here. Copied onto omega_orgs/{orgId} by scripts/seed-omega-orgs.js; editable on the account page."
 }

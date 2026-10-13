@@ -1,5 +1,126 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Trace Boundary and Fence & Tie are Compute's (2026-10-13)
+
+Tommy, of the Draw tab's Select group: "trace boundary and fence & tie is
+in the draw panel but is made for the compute that should be moved". Both
+are now Omega Compute commands (`IDS.compute` in `api/_lib/modules.js`) and
+sit on the Compute tab's Site and Design groups on every plan: the mover's
+`LITE` list (what it sends to Draw) is Move System alone, and the twins the
+tab carried while the real buttons lived on Draw ("Draw Site Area",
+`rb-compute-trace-boundary`; a second Fence & Tie, `rb-compute-fence-tie`)
+are deleted, one address per tool. What follows from the one rule that a
+legacy tier gates whole tabs: on Core, Performance and Trial the two are
+behind the Compute tab's `compute` gate (the tab reads Opt in), and a
+packaged workspace reaches them with Omega Compute. Omega Design's
+`legacyGates` are unchanged (`['', 'export.blueprint']`), so Core and
+Performance still hold Omega Design in full. Held by `tlegacygates.js`
+(the catalog, the plan, no twin) and `render-legacy-gates.js` (per tier:
+the pair on Compute, open and in Search tools exactly when the plan opens
+Compute; Move System on Draw; Trace Boundary runs by name only on a plan
+with Compute, Move System on every plan). The parcel checklist points at
+Compute › Trace Boundary.
+
+## Merging origin/main into the NextNRG branch (2026-10-13)
+
+Local main had five commits origin never saw (the editor IP protection and
+the server cost engine, the EV price books, the canopy and custom-area
+traces, the fence-and-tie pass) and origin had fifty-nine it never saw.
+Three things both sides had changed, resolved here: (1) **the Omega-Core
+skid price** is origin's $639,000 (#296) and the NextNRG controller is built
+in on top of it, $764,000 a skid, every pinned figure moved with it; (2) the
+CleanCell R60's **$24,000** rode on the catalog row for a day (#296) and the
+cost engine on this side forbids a price in the browser, so it lives in
+`api/_lib/editor-cost.js` `CATALOG_PRICES` — where that commit said it would
+go; (3) **a traced canopy** was fixed twice for the same complaint: origin
+unlocked it (`isPlaced` no longer locks `autoLayout`; `tfieldlock.js`) and
+this side made a locked shape select on press (the guard; `tcanopytrace.js`).
+Both stand: the pack's own fills stay locked and select on press, a traced
+canopy is an ordinary shape. Two files origin added since the notice went on
+every shipped file (`site-crm.html`, `omega-cleancell-catalog.js`) carry it
+now. The compute-desk work this machine had STAGED but never committed
+(`api/compute-desk.js`, `api/_lib/compute-desk.js`, `portals/finance/
+compute.html`, `scripts/tests/tcomputedesk.js`, its CLAUDE.md and MERGE.md
+entries) is not in this branch: origin has its own Site CRM and Portfolio
+history and the two need reconciling by hand. While this branch was open the
+same five local commits landed on main as #294 and #297, with the same
+merge-time fixes (the R60's price in the server book, the notices); a second
+merge of main took their wording and kept every addition of this branch.
+
+## NextNRG Microgrids: their module, their storage, their controller (2026-10-13)
+
+NextNRG's products are in the system as something that can be sold, read off
+their Q4 2026 brochure (Tommy: "use their specs … label them as nextnrg
+product … the microcontrol … 125k/unit … auto built into the omega core skid
+… utility equipment for the draw function … increase the efficiency of energy
+on a site by 7%"). `api/_lib/nextnrg.js` is the ONE record (specs, the
+$125,000 controller price, the 7% dispatch-uplift rule); the page carries the
+specs in its own catalogs and `scripts/tests/tnextnrg.js` holds them to the
+record figure by figure. Draw › Power Gen › Solar now draws with NextNRG's
+JinkoSolar EAGLE G7B (640 W, 22.0 W/ft² off its own frame, the string sizer's
+watts, the 3D pattern, the BOM line; `DER_PV_MODULES`, a Module choice in Solar
+Assumptions, the former 550 W rule of thumb kept as a choice). `BESS_CATALOG`
+has a NextNRG group of ONLY the blocks the brochure's specification page
+names (three Saft Intensium Flex blocks, the Intensium Max 20 HE; no kW the
+sheet does not publish; no price) — anything else NextNRG sells enters through
+their own product list (Tommy: "the only batteries for NextNRG that should be
+showing up as NextNRG is if they've actually manually inputted something or
+it's off of that spec sheet"). **NextNRG Solar — Custom** (Draw › Power Gen)
+is the same trace as Solar — Custom Area with NextNRG's module chosen first;
+every auto-laid array records its module, and one built on a product carries
+`product` / `mfr` / `sku`, named on the drawing, both legend keys, the
+inventory and the BOM. The NextNRG Microgrid Controller is first in the
+Controls group of the long Draw › Utility list (the BOP installer now draws a
+row off `UTILITY_CATALOG` first; `mgcAsset` reads the same row), priced on the Run by the server
+cost engine (`lines.controller`, `counts.mgc` = utility shapes only), a
+Controls line on the BOM, and BUILT INTO every Omega-Core skid (`DC_CATALOG`,
+the placed shape, the drawing, the BOM and spec-sheet rows, `PRODUCT.controller`):
+the skid's system cost is $639,000 + $125,000 = $764,000 with a breakdown, which
+the outlay, the FMV band and the compute cash flow's skid basis follow
+(`tomegacore.js` pins moved). The uplift is applied ONCE by the one dispatch
+(`vpp-sim.js simulate()`, `input.controller`) to the dispatch-decided bill
+streams only — never PJM, a programme rate or an incentive — each stream saying
+so, the result carrying a `controller` summary with the brochure's own caveat
+("modelled rather than measured, not a performance guarantee"); `/api/value-stack`
+passes the flag in and the summary out; the editor's Value Stack panel sends it
+when a controller is on the host's drawing and shows the summary. For the RFQ,
+`tenants/nextnrg/tenant.json` carries `brands: ["nextnrg"]` and the seed copies
+it (a deploy step: seed, or type it on the account page). No price in a browser.
+Design and the not-built list: `docs/NEXTNRG-MICROGRID.md`.
+
+**A click on a BESS pad opens the panel that edits its bollards and fencing**
+(Tommy, 2026-10-13: "click on a bess pad and have that panel pop up …
+idk why that disapeared"). The panel (`asm-panel`) only ever opened from an
+assembly's PARTS, so a plain pad (Draw › BESS Pad with nothing ticked) had no
+panel and the Omega-Core skid none either. `_shapeMouseDown` now opens it on
+every pad: a plain pad becomes an assembly of one part in place
+(`_padToAssembly`: same id, centred where it was, no fence or bollards until
+set, re-anchored, drawn by the assembly renderer from then on); an assembly
+opens it on a body click; the Omega-Core skid gets the perimeter fields
+(`_skidProtection`) and the same panel headed as the skid. The fence sides,
+bollards and the count the take-off reads are ONE drawer, `_drawProtection`,
+cut out of `_renderAssembly` and handed a box: the assembly's parts, or the
+skid frame. `scripts/tests/tpadpanel.js` (in `npm test`) runs the conversion
+and pins the click, the drawer and the panel's guards.
+
+**The BOM lists every battery placed from Draw › BESS Pad, and never calls a
+traced array "ground"** (Tommy, 2026-10-13, from the BOM: "The battery that
+we placed from NextNRG from the draw feature is not showing up in the BOM";
+"it's showing as a ground mount, and we put this as a roof … it really
+should just say solar, unless we go in and edit the array and choose it").
+`buildBOM` gathered batteries only from guided-build elements and plain
+pads, read by a field the pad tool never writes; it now counts every pad and
+assembly off the drawing (not the master controller), rated as
+`_ppCollectFleet` reads them, one *Energy Storage* line per product with its
+catalogue key and brand. A traced area (`openAutoLayout` handed an outline)
+lays out as `mount: 'custom'`: *Solar PV array (custom area)* on the BOM,
+*CUSTOM AREA* on the drawing, left out of `omegaSolarByMount` so the server
+prices it as plain PV at the size band; *Array — Edit Size / Capacity* has a
+**Mount** choice (not chosen / ground / rooftop / canopy) applied before
+anything is recomputed; the BOM emits one solar line per mount as drawn.
+`scripts/tests/tnextnrg.js` §8 runs the census and the lines against a
+drawing and pins the mount path.
+
 ## Dashboard member invitations (2026-10-05)
 
 The workspace Team button now adds a named person with a role through
@@ -3037,6 +3158,211 @@ commitment in favour of SDVPP participation (Rider SDVPP, anticipated
 session) re-verify every row against primary documents and open a draft PR
 when something moved; data only, never the math, never a merge.
 
+## 2026-10-12 — Editor IP audit: the notices are the LLC, the inventory is written
+
+A customer's engineer proposed rebuilding Site Map. Audit in
+`docs/EDITOR-IP-AUDIT-2026-10-12.md`. Fixed: every ownership notice in
+`editor.html` named an individual and the console banner printed
+`brandName()` — the tenant's white label — as the copyright holder; all are
+`© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.`
+by literal now, with `<link rel="license">` to `/terms.html`. 64 shipped
+files had no notice at all (root tool pages, `omega-sso.js`, `omega-tools.js`,
+16 `api/` files, the consoles, the finance portal); all carry it.
+`scripts/tests/tcopyright.js` holds it in `npm test`. CLAUDE.md no longer
+claims a minifying build step (there is none). Still in the browser and
+listed for the move, in order: the utility rate book, the pre-qual and
+interconnect scorers, the cost engine, the viability thresholds, the
+ground layout, catalog prices. `tsplash.js` now skips `.claude/` (a stale
+worktree under it was failing the walk).
+
+## 2026-10-12 — The utility rate book moved to the server (editor IP audit, item 1)
+
+`api/_lib/utility-rates.js` (pure, ES5) now holds what `editor.html` carried
+as three literals: the detailed IL/CT/MA/IN tables with their ZIP prefixes,
+every state's primary utility and rates, the ZIP3→state ranges;
+`GET /api/utility-rates?zip=|state=` answers ONE record to a workspace
+sign-in or staff, never the table and never a utility's `zips`. The page
+keeps `_FOM_UTIL_CACHE`, one record per ZIP prefix: `_fomGetUtility(zip)`
+stays synchronous for its readers and returns the cached object (the bill
+import's in-place edits persist as they did on the table entry) or a
+pending one whose `_promise` resolves to the real record; the FOM demand
+analysis, the Value Stack estimate, the interconnect score panel and the
+report's Location tab re-run themselves when it lands; `_btmServiceAcceptance`
+already guarded a null rate. `_fomStateForZip` (postal fact) stays.
+`scripts/tests/tutilityrates.js` holds the library, the endpoint's gate, the
+page (the book absent, the cache present, every reader pending-safe) and
+runs the page's own cache block under a fake fetch. Editor render checks
+(theme, plan chip, legacy gates) pass with it. Next on the list:
+the cost engine (`docs/EDITOR-IP-AUDIT-2026-10-12.md`).
+
+## 2026-10-13 — The cost engine moved to the server (editor IP audit, item 3)
+
+`api/_lib/editor-cost.js` (pure, ES5) is Site Map's cost engine:
+`rollup(q)` prices what `updateCostEst` priced in the page, with every
+table the page carried — the benchmark book (PV by sector, the NREL
+energy/power split, the pod band, the EIA generation classes), the $85/kWh
+container rate and the 55% install share, the cost sheet's defaults, the
+Eaton data-centre ROM with its N+1 rules, the EV price book (Autel dealer
+cost beside list by tier, the other makes, the per-kW estimators) — and the
+roll-up rules: scope gate, contingency, the range, the ITC basis, $/kW,
+the contracted override. `POST /api/cost-rollup` (a workspace sign-in or
+staff) answers it. The page's `updateCostEst()` is now a client:
+`omegaCostQuantities()` gathers what is placed and what the sheet says
+(the fleet by model, the configured list, counts, feet, the chargers as
+quantities with the basis, generation shapes, the pods, the data-centre
+facts, the solar kW, the building capex), one request per distinct
+drawing coalesced over 120 ms with the latest winning, `_renderCostEst`
+draws the lines and publishes every `window._COST_*` exactly as before,
+and `omegaRunDesign` waits for the answer before it rolls up and saves.
+`getBessCostAuto`, `omegaSolarCost`, `omegaBessBenchCost`,
+`omegaGenBenchCost`, `omegaDataCenterROM`, `evChargerCosts`, `_evBook` and
+`OmegaComputeCost.figures` read the last answer; `OMEGA_BENCH` and `DC_ROM`
+keep only the citations and ratings the sheets print. A refused answer
+reads "Not priced … Try again" and never wipes a priced figure. Held by
+`scripts/tests/teditorcost.js` (the engine against the page's former
+arithmetic, the gate, the page carrying no table, the collector cut from
+the page and fed into the engine) and `scripts/render-editor-plan.js`,
+which now answers `/api/cost-rollup` with the real engine in Chromium and
+asserts the round trip (quantities out, no price in the request, the
+server's total on the panel and in the Run). `tomegacore.js` reads the
+skid's exclusion off the collector. Next: the pre-qual and interconnect
+scorers (`docs/EDITOR-IP-AUDIT-2026-10-12.md`).
+
+## 2026-10-13 — The two screening scorers moved to the server (editor IP audit, items 3–4)
+
+`api/_lib/editor-score.js` (pure, ES5) behind `POST /api/editor-score
+{action:'prequal'|'interconnect'}`: the pre-qualification tiers (benchmark
+pair or the configured system's footprint tiers), the component scores,
+the Priority Go / Conditional Go thresholds, the recommendation and the
+capacity flag; the ISO map and friendliness scores, the headroom,
+substation-distance and size curves, permitting, queue and parcel fit,
+the factor weights and the evidence share. The server looks the utility
+up itself from the rate book. The page sends facts (`_pqSystemFacts`, the
+site's `_SITE_DATA`) through one cached `_scoreRequest`, and
+`computeSitePreQual` / `computeInterconnectScore` stay synchronous for
+their callers: a pending result carries `promise`, and `pqRecalc`, the
+score panel and the report's Location tab re-run themselves. The answer
+carries labels and ratings, never tiers or weights. `scripts/tests/
+teditorscore.js` holds the engine, the gate, the page and the wrappers
+cut from it; `render-editor-plan.js` answers the call with the real
+library in Chromium and asserts both scores.
+
+## 2026-10-13 — The Viability Workflow's judgment and the catalog's prices moved to the server (editor IP audit, items 5 and 7)
+
+`api/_lib/editor-score.js` `viability` (action `viability` on
+`POST /api/editor-score`): the Phase 1 site score — factor points for
+space, demand, bill, clearance and site control (POI capacity and gen-tie
+on an FTM project), the hard disqualifiers, the target-utility list, the
+ordinance killers and blockers with their penalty, the Must-Have share and
+the PASS / CONDITIONAL / FAIL thresholds; the Phase 2 BTM and FTM path
+points; the Phase 6 revenue sum; the Phase 7 gate — capex build-up,
+incentives, NPV, a bisected IRR (undefined when no root), payback and the
+INVEST / HOLD / REDESIGN / REJECT thresholds; and the overall decision from
+the gate statuses. The page's `calcP1`, `calcBTM`/`calcFTM`, `calcFin` and
+`renderDecision` send the workflow's answers and gates through one cached
+`_vwJudge()` and draw the answer; each says "Scoring…" while pending and
+re-runs itself (`_vwPending`), Phase 2 re-draws when the path points land,
+and `VW.fin` is still written for the scenario and the print. The thirteen
+`eqcost` figures on `BESS_CATALOG` are `null` in the page and live in
+`api/_lib/editor-cost.js` `CATALOG_PRICES`; the cost request carries the
+catalog key per fleet model and configured unit, the engine prices it,
+and the config dialog says a blank cost is priced from ClearSky's book.
+Held by `teditorscore.js` and `teditorcost.js`.
+
+Not moved, on purpose: the ground-layout walk (`computeGroundLayout`) is
+called synchronously by fourteen drawing and sizing flows, one in a GCR
+search loop; a round trip there would make auto-layout unusable, and its
+assumptions (GCR, W/sqft, table sizes, DC:AC) are published convention.
+The guided-build step tables are UI sequences bound to page functions by
+name; they encode electrical convention, not a method. Both are recorded
+in `docs/EDITOR-IP-AUDIT-2026-10-12.md` as left in the page and why.
+
+## 2026-10-13 — The EV Cost Workbook's price books moved to the server
+
+`api/_lib/ev-pricebook.js` (pure, ES5) behind `POST /api/ev-price
+{action:'rates'|'baseline'|'ng'|'dcfc'}`: the Eversource rate card
+calibrated on five filed submissions, the Level 2 baseline from four closed
+jobs, the standard items, the National Grid price book (the confirmed
+$2,000 / $3,050 a plug, the per-plug band, the panel packages), the DCFC
+baseline and its labour curves, `designRate`, `scopeNote` and the whole
+`standardRate` switch (`standardRateIn`, over a context the page sends).
+The page's `standardRate`, `applyBaselineFromSite` and `ngPriceBook` are
+cached clients: a pending rate is `undefined` and `syncCivil`,
+`syncDesign`, `priceCivilFromDrawing` and `addStandardRows` leave the line
+as it is and come back when the answer lands (one re-render per batch);
+the baseline lands on the sheet when its answer does; the National Grid
+check reads the version, band and panel figure off the answer (`NG_LAST`).
+Rate settings keep a rep's overrides as the record and ride them on every
+request; the defaults the panel shows are the answer's card. Permitting
+stays a 3% rule on the page (it is printed in the note). Goldens captured
+from the page before the move (`scripts/tests/fixtures/
+ev-pricebook-goldens.json`, two reference jobs, every bucket × row) hold
+the library in `scripts/tests/tevpricebook.js`; `tngpricebook.js`,
+`tesma.js` and `tsvcped.js` now price with the library and read the
+sheet with the page.
+
+## 2026-10-13 — Custom Shape canopy and Custom Area trace a new outline every press
+
+Tommy: "when i do the custom solar canopy and i go to do it again it keeps
+generating on what we have and doesnt let me do another solar spot." Both
+Solar → Canopy (Custom Shape) and Solar → Custom Area built at once when
+any closed shape was already on the canvas, on the LARGEST one — a traced
+building, the parcel, a compound fence — so once anything was drawn the
+second press rebuilt over the building instead of letting a second spot be
+traced. Each press now arms the polyline and builds on the outline THAT
+press produced, told apart by id (never by count or by size); ESC ends the
+watch. `openAutoLayout(boundaryPts)` takes the outline it is handed, else
+guesses as before; `omegaCanopyFromShape()` with no shape falls back to the
+largest PLAIN outline (no `omegaRole`, `_visArch`, `omegaBuilding`,
+`omegaFence`, `omegaCampus`, `omegaCompute`, `isSiteBoundary`, `locked`).
+`scripts/tests/tcanopytrace.js` cuts both blocks out of the page and holds
+it (it fails on the editor before the change).
+
+## 2026-10-13 — Solar priced per kW-DC by mount, on its own; a selected array frames itself
+
+Tommy: "make sure the solar is priced correctly per kw and that is
+generated independant on what the compute skid is." The cost engine priced
+every array at the sector band by size, so a traced canopy cost the same
+$/W as a ground array. `api/_lib/editor-cost.js` now prices solar per
+mount — ground and rooftop at the sector band of the whole programme,
+a canopy at `BENCH.pvCanopy` ($2.75/Wdc, an industry range, named in
+`sources.pvCanopy`) — the sheet's Solar PV ($/Wdc) winning for every
+mount, one row per mount on `lines.solar.rows` (kW the page could not
+place by mount, a previewed layout, is plain PV at the band), and nothing
+else on the drawing moves it: the Omega-Core skid is never a pod there
+and the line is the same with or without it. The page sends
+`q.solar.byMount` (`omegaSolarByMount()`: `canopy` / `mount:'adjacent'`
+→ canopy, `roof` → rooftop, else ground), the cost breakdown shows each
+mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
+rate beside the project's blended $/W. `_shapeBBox` gives a one-point
+array (`dersolar` with `wPx`/`hPx`) and a compute unit (`derdc`, lf × wf
+about its point) their real box, so a selected canopy is framed with its
+handles and delete X on its corner instead of a 1×1 box. **The field lock
+no longer makes a canopy unclickable** (Tommy: "i need to be able to click
+on this and the x comes up and i click it x and delete it"): the lock's
+capture-phase guard swallowed every press on an auto-layout array, so a
+traced canopy could be neither selected nor deleted; it now SELECTS the
+shape in Select mode (frame, handles, delete X; once per press) and only
+refuses the drag, so the lock still stops a pan from nudging the field.
+Custom Shape and Custom Area both land their array selected in Select
+mode. Held by `scripts/tests/teditorcost.js` (solar by mount, the page
+collector with and without the skid) and `tcanopytrace.js` §6–8.
+
+## 2026-10-13 — Laying out a solar array never runs the fence-and-tie pass
+
+Tommy: "when i hit generate its doing a compute system it should only be
+doing solar if im doing a custom solar system"; "because i have placed a
+bess its putting a whole thing." The pass that fences every compound,
+places a master controller, trenches a duct bank from each back to it and
+draws the access road and bollards (editor patch 83, `OmegaFenceTie`)
+followed `applyGroundLayout`, and its solar-only guard holds only while
+solar is ALL there is: with a battery or the Omega-Core skid on the
+drawing, Auto Layout's Generate (Custom Area, Custom Shape) placed the
+panels and then the whole balance of plant. The hook on the layout
+applier is gone; the pass still follows a guided site build
+(`OmegaSiteBuild.build`) and runs when asked for (Design Site,
+`from:'campus'`; the Fence & Tie button, `bop:true`). Held by
+`scripts/tests/tfencepass.js` (fails on the editor before).
 
 ## 2026-10-09 — Mission tasks, email context and sales ownership
 
@@ -3187,3 +3513,210 @@ environment or the deal room's settings, never a constant. Tests:
 module; the real-workbook suites skip without the private files).
 Before go-live: deploy `firestore.rules` by hand before or with the API; the
 EVCS seed refuses unless `omega_orgs/evcs.com` exists; close PR #286.
+
+## 2026-10-13 — Custom Shape canopy and Custom Area trace a new outline every press
+
+Tommy: "when i do the custom solar canopy and i go to do it again it keeps
+generating on what we have and doesnt let me do another solar spot." Both
+Solar → Canopy (Custom Shape) and Solar → Custom Area built at once when
+any closed shape was already on the canvas, on the LARGEST one — a traced
+building, the parcel, a compound fence — so once anything was drawn the
+second press rebuilt over the building instead of letting a second spot be
+traced. Each press now arms the polyline and builds on the outline THAT
+press produced, told apart by id (never by count or by size); ESC ends the
+watch. `openAutoLayout(boundaryPts)` takes the outline it is handed, else
+guesses as before; `omegaCanopyFromShape()` with no shape falls back to the
+largest PLAIN outline (no `omegaRole`, `_visArch`, `omegaBuilding`,
+`omegaFence`, `omegaCampus`, `omegaCompute`, `isSiteBoundary`, `locked`).
+`scripts/tests/tcanopytrace.js` cuts both blocks out of the page and holds
+it (it fails on the editor before the change).
+
+## 2026-10-13 — A selected array frames itself; Custom Area lands its array selected
+
+`_shapeBBox` gives a one-point array (`dersolar` with `wPx`/`hPx`) and a
+compute unit (`derdc`, lf × wf about its point) their real box, so a
+selected canopy is framed with its handles and delete X on its corners
+instead of a 1×1 box at the top-left corner (Tommy, 2026-10-13: "the x
+should come up"). Auto Layout's Generate (Custom Area) lands its array
+selected in Select mode, as Custom Shape does (#295). The field lock
+itself is #295's: it covers only what the pack placed. Held by
+`scripts/tests/tcanopytrace.js` §6–7.
+
+## 2026-10-13 — Laying out a solar array never runs the fence-and-tie pass
+
+Tommy: "when i hit generate its doing a compute system it should only be
+doing solar if im doing a custom solar system"; "because i have placed a
+bess its putting a whole thing." The pass that fences every compound,
+places a master controller, trenches a duct bank from each back to it and
+draws the access road and bollards (editor patch 83, `OmegaFenceTie`)
+followed `applyGroundLayout`, and its solar-only guard holds only while
+solar is ALL there is: with a battery or the Omega-Core skid on the
+drawing, Auto Layout's Generate (Custom Area, Custom Shape) placed the
+panels and then the whole balance of plant. The hook on the layout
+applier is gone; the pass still follows a guided site build
+(`OmegaSiteBuild.build`) and runs when asked for (Design Site,
+`from:'campus'`; the Fence & Tie button, `bop:true`). Held by
+`scripts/tests/tfencepass.js` (fails on the editor before).
+
+## 2026-10-12 — Editor IP audit: the notices are the LLC, the inventory is written
+
+A customer's engineer proposed rebuilding Site Map. Audit in
+`docs/EDITOR-IP-AUDIT-2026-10-12.md`. Fixed: every ownership notice in
+`editor.html` named an individual and the console banner printed
+`brandName()` — the tenant's white label — as the copyright holder; all are
+`© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.`
+by literal now, with `<link rel="license">` to `/terms.html`. 64 shipped
+files had no notice at all (root tool pages, `omega-sso.js`, `omega-tools.js`,
+16 `api/` files, the consoles, the finance portal); all carry it.
+`scripts/tests/tcopyright.js` holds it in `npm test`. CLAUDE.md no longer
+claims a minifying build step (there is none). Still in the browser and
+listed for the move, in order: the utility rate book, the pre-qual and
+interconnect scorers, the cost engine, the viability thresholds, the
+ground layout, catalog prices. `tsplash.js` now skips `.claude/` (a stale
+worktree under it was failing the walk).
+
+## 2026-10-12 — The utility rate book moved to the server (editor IP audit, item 1)
+
+`api/_lib/utility-rates.js` (pure, ES5) now holds what `editor.html` carried
+as three literals: the detailed IL/CT/MA/IN tables with their ZIP prefixes,
+every state's primary utility and rates, the ZIP3→state ranges;
+`GET /api/utility-rates?zip=|state=` answers ONE record to a workspace
+sign-in or staff, never the table and never a utility's `zips`. The page
+keeps `_FOM_UTIL_CACHE`, one record per ZIP prefix: `_fomGetUtility(zip)`
+stays synchronous for its readers and returns the cached object (the bill
+import's in-place edits persist as they did on the table entry) or a
+pending one whose `_promise` resolves to the real record; the FOM demand
+analysis, the Value Stack estimate, the interconnect score panel and the
+report's Location tab re-run themselves when it lands; `_btmServiceAcceptance`
+already guarded a null rate. `_fomStateForZip` (postal fact) stays.
+`scripts/tests/tutilityrates.js` holds the library, the endpoint's gate, the
+page (the book absent, the cache present, every reader pending-safe) and
+runs the page's own cache block under a fake fetch. Editor render checks
+(theme, plan chip, legacy gates) pass with it. Next on the list:
+the cost engine (`docs/EDITOR-IP-AUDIT-2026-10-12.md`).
+
+## 2026-10-13 — The cost engine moved to the server (editor IP audit, item 3)
+
+`api/_lib/editor-cost.js` (pure, ES5) is Site Map's cost engine:
+`rollup(q)` prices what `updateCostEst` priced in the page, with every
+table the page carried — the benchmark book (PV by sector, the NREL
+energy/power split, the pod band, the EIA generation classes), the $85/kWh
+container rate and the 55% install share, the cost sheet's defaults, the
+Eaton data-centre ROM with its N+1 rules, the EV price book (Autel dealer
+cost beside list by tier, the other makes, the per-kW estimators) — and the
+roll-up rules: scope gate, contingency, the range, the ITC basis, $/kW,
+the contracted override. `POST /api/cost-rollup` (a workspace sign-in or
+staff) answers it. The page's `updateCostEst()` is now a client:
+`omegaCostQuantities()` gathers what is placed and what the sheet says
+(the fleet by model, the configured list, counts, feet, the chargers as
+quantities with the basis, generation shapes, the pods, the data-centre
+facts, the solar kW, the building capex), one request per distinct
+drawing coalesced over 120 ms with the latest winning, `_renderCostEst`
+draws the lines and publishes every `window._COST_*` exactly as before,
+and `omegaRunDesign` waits for the answer before it rolls up and saves.
+`getBessCostAuto`, `omegaSolarCost`, `omegaBessBenchCost`,
+`omegaGenBenchCost`, `omegaDataCenterROM`, `evChargerCosts`, `_evBook` and
+`OmegaComputeCost.figures` read the last answer; `OMEGA_BENCH` and `DC_ROM`
+keep only the citations and ratings the sheets print. A refused answer
+reads "Not priced … Try again" and never wipes a priced figure. Held by
+`scripts/tests/teditorcost.js` (the engine against the page's former
+arithmetic, the gate, the page carrying no table, the collector cut from
+the page and fed into the engine) and `scripts/render-editor-plan.js`,
+which now answers `/api/cost-rollup` with the real engine in Chromium and
+asserts the round trip (quantities out, no price in the request, the
+server's total on the panel and in the Run). `tomegacore.js` reads the
+skid's exclusion off the collector. Next: the pre-qual and interconnect
+scorers (`docs/EDITOR-IP-AUDIT-2026-10-12.md`).
+
+## 2026-10-13 — The two screening scorers moved to the server (editor IP audit, items 3–4)
+
+`api/_lib/editor-score.js` (pure, ES5) behind `POST /api/editor-score
+{action:'prequal'|'interconnect'}`: the pre-qualification tiers (benchmark
+pair or the configured system's footprint tiers), the component scores,
+the Priority Go / Conditional Go thresholds, the recommendation and the
+capacity flag; the ISO map and friendliness scores, the headroom,
+substation-distance and size curves, permitting, queue and parcel fit,
+the factor weights and the evidence share. The server looks the utility
+up itself from the rate book. The page sends facts (`_pqSystemFacts`, the
+site's `_SITE_DATA`) through one cached `_scoreRequest`, and
+`computeSitePreQual` / `computeInterconnectScore` stay synchronous for
+their callers: a pending result carries `promise`, and `pqRecalc`, the
+score panel and the report's Location tab re-run themselves. The answer
+carries labels and ratings, never tiers or weights. `scripts/tests/
+teditorscore.js` holds the engine, the gate, the page and the wrappers
+cut from it; `render-editor-plan.js` answers the call with the real
+library in Chromium and asserts both scores.
+
+## 2026-10-13 — The Viability Workflow's judgment and the catalog's prices moved to the server (editor IP audit, items 5 and 7)
+
+`api/_lib/editor-score.js` `viability` (action `viability` on
+`POST /api/editor-score`): the Phase 1 site score — factor points for
+space, demand, bill, clearance and site control (POI capacity and gen-tie
+on an FTM project), the hard disqualifiers, the target-utility list, the
+ordinance killers and blockers with their penalty, the Must-Have share and
+the PASS / CONDITIONAL / FAIL thresholds; the Phase 2 BTM and FTM path
+points; the Phase 6 revenue sum; the Phase 7 gate — capex build-up,
+incentives, NPV, a bisected IRR (undefined when no root), payback and the
+INVEST / HOLD / REDESIGN / REJECT thresholds; and the overall decision from
+the gate statuses. The page's `calcP1`, `calcBTM`/`calcFTM`, `calcFin` and
+`renderDecision` send the workflow's answers and gates through one cached
+`_vwJudge()` and draw the answer; each says "Scoring…" while pending and
+re-runs itself (`_vwPending`), Phase 2 re-draws when the path points land,
+and `VW.fin` is still written for the scenario and the print. The thirteen
+`eqcost` figures on `BESS_CATALOG` are `null` in the page and live in
+`api/_lib/editor-cost.js` `CATALOG_PRICES`; the cost request carries the
+catalog key per fleet model and configured unit, the engine prices it,
+and the config dialog says a blank cost is priced from ClearSky's book.
+Held by `teditorscore.js` and `teditorcost.js`.
+
+Not moved, on purpose: the ground-layout walk (`computeGroundLayout`) is
+called synchronously by fourteen drawing and sizing flows, one in a GCR
+search loop; a round trip there would make auto-layout unusable, and its
+assumptions (GCR, W/sqft, table sizes, DC:AC) are published convention.
+The guided-build step tables are UI sequences bound to page functions by
+name; they encode electrical convention, not a method. Both are recorded
+in `docs/EDITOR-IP-AUDIT-2026-10-12.md` as left in the page and why.
+
+## 2026-10-13 — The EV Cost Workbook's price books moved to the server
+
+`api/_lib/ev-pricebook.js` (pure, ES5) behind `POST /api/ev-price
+{action:'rates'|'baseline'|'ng'|'dcfc'}`: the Eversource rate card
+calibrated on five filed submissions, the Level 2 baseline from four closed
+jobs, the standard items, the National Grid price book (the confirmed
+$2,000 / $3,050 a plug, the per-plug band, the panel packages), the DCFC
+baseline and its labour curves, `designRate`, `scopeNote` and the whole
+`standardRate` switch (`standardRateIn`, over a context the page sends).
+The page's `standardRate`, `applyBaselineFromSite` and `ngPriceBook` are
+cached clients: a pending rate is `undefined` and `syncCivil`,
+`syncDesign`, `priceCivilFromDrawing` and `addStandardRows` leave the line
+as it is and come back when the answer lands (one re-render per batch);
+the baseline lands on the sheet when its answer does; the National Grid
+check reads the version, band and panel figure off the answer (`NG_LAST`).
+Rate settings keep a rep's overrides as the record and ride them on every
+request; the defaults the panel shows are the answer's card. Permitting
+stays a 3% rule on the page (it is printed in the note). Goldens captured
+from the page before the move (`scripts/tests/fixtures/
+ev-pricebook-goldens.json`, two reference jobs, every bucket × row) hold
+the library in `scripts/tests/tevpricebook.js`; `tngpricebook.js`,
+`tesma.js` and `tsvcped.js` now price with the library and read the
+sheet with the page.
+
+## 2026-10-13 — Solar priced per kW-DC by mount, on its own line
+
+Tommy: "make sure the solar is priced correctly per kw and that is
+generated independant on what the compute skid is." The cost engine priced
+every array at the sector band by size, so a traced canopy cost the same
+$/W as a ground array. `api/_lib/editor-cost.js` now prices solar per
+mount — ground and rooftop at the sector band of the whole programme,
+a canopy at `BENCH.pvCanopy` ($2.75/Wdc, an industry range, named in
+`sources.pvCanopy`) — the sheet's Solar PV ($/Wdc) winning for every
+mount, one row per mount on `lines.solar.rows` (kW the page could not
+place by mount, a previewed layout, is plain PV at the band), and nothing
+else on the drawing moves it: the Omega-Core skid is never a pod there
+and the line is the same with or without it. The page sends
+`q.solar.byMount` (`omegaSolarByMount()`: `canopy` / `mount:'adjacent'`
+→ canopy, `roof` → rooftop, else ground), the cost breakdown shows each
+mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
+rate beside the project's blended $/W. Held by
+`scripts/tests/teditorcost.js` (solar by mount; the page collector with
+and without the skid).

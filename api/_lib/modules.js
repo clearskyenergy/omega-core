@@ -17,7 +17,7 @@ function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
 var CATALOG = [
   record('lite', 'Omega Design', 'floor', 'editor sandbox sales intake opportunity financing signal vppsim',
     'design view export.blueprint',
-    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle pcToggle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
+    'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea omegaNextnrgSolarCustom openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle pcToggle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
   record('storage', 'Omega Storage', 'standard', 'batterysizer proforma valuestack isocalc bessscreening', 'storage',
@@ -68,13 +68,14 @@ BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cos
   "openRpPanel('summary','estimate')");
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
-  lite: 'rb-color rb-fence-tie rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-trace-boundary rb-design-ai rb-nrel-key',
+  lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key',
   gridatlas: 'rb-gridatlas', storage: 'omega-btn-bill-analysis rb-valuestack',
   estimate: 'rb-takeoff-budget', evrebates: 'rb-ev-future',
   plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',
   engineering: 'rb-optimizer rb-optimise rb-elec rb-circuit omega-terr-btn',
-  compute: 'rb-sub-envelope rb-feas-csv rb-place-sub rb-gas-tie rb-fiber-tie rb-max-fit rb-site-build rb-max-load rb-load-screen rb-site-screen rb-compute-cost rb-supply-link rb-intercon rb-compute-lease rb-design-site rb-ladder-toggle rb-compute-site-setup rb-compute-trace-boundary rb-compute-fence-tie',
+  /* Trace Boundary and Fence & Tie are Compute's (Tommy, 2026-10-13: "made for the compute"): the site area Design Site fills, and the fence, controller and duct banks after it. They sit on the Compute tab on every plan. */
+  compute: 'rb-sub-envelope rb-feas-csv rb-place-sub rb-gas-tie rb-fiber-tie rb-max-fit rb-site-build rb-max-load rb-load-screen rb-site-screen rb-compute-cost rb-supply-link rb-intercon rb-compute-lease rb-design-site rb-ladder-toggle rb-compute-site-setup rb-trace-boundary rb-fence-tie',
   ops: 'rb-omlife rb-fom',
   permitting: 'omega-btn-permit-matrix'
 };

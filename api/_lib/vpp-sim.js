@@ -40,6 +40,9 @@
 'use strict';
 var T = require('./bess-tariff');
 var V = require('./value-stack');
+/* The NextNRG Microgrid Controller's dispatch uplift: ONE rule, applied
+   here because this is the ONE dispatch (api/_lib/nextnrg.js). */
+var NN = require('./nextnrg');
 
 var VERSION = 'vpp-sim-1';
 var HOURS_YEAR = 8760;
@@ -853,6 +856,13 @@ function simulate(input) {
   var G = programs(ctx);
   for (var i = 0; i < G.all.length; i++) if (G.all[i].eligible) streams.push(G.all[i]);
 
+  /* A site with the NextNRG Microgrid Controller: the brochure's modelled
+     uplift on the dispatch-decided bill savings, once, before the totals,
+     so every reader (totals, the owner's share, the lifecycle, the bank)
+     sees one set of numbers; each touched stream says so, and the
+     summary carries the caveat. Never PJM, never a programme rate. */
+  var controller = NN.wantsController(input.controller) ? NN.applyUplift(streams) : null;
+
   var split = input.split && typeof input.split === 'object'
     ? { owner: num(input.split.owner, 0.7), platform: num(input.split.platform, 0.2), installer: num(input.split.installer, 0.1), ref: 'Your split.' }
     : SPLIT;
@@ -902,6 +912,7 @@ function simulate(input) {
     tariff: { source: tf.source, label: tf.label, rates: tf.rates || null, calibration: calib },
     bill: { before: r0(before.total), after: r0(after.total), savings: r0(before.total - after.total) },
     streams: streams, missing: missing,
+    controller: controller,
     totals: {
       gross: r0(gross), billSavings: r0(billTotal), gridEarnings: r0(gridTotal),
       owner: r0(billTotal + ownerGrid), platform: r0(gridTotal * split.platform), installer: r0(gridTotal * split.installer),

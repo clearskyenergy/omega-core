@@ -135,7 +135,7 @@ and show it. About 90 of the editor's functions. Full list in Appendix A.
 | Site setup and map | Site Setup (calibrated satellite backdrop), address search, satellite / aerial / street views, Upload Image + B&W stencil trace, Lock Map, Calibrate Scale, Set Plot, GPS Place, Native Layer, Compass, Layers, Coordinates, Recenter, Dock |
 | Draw and annotate | Select/Move, Line, Polyline, Rectangle, Circle, EV and ADA stencils, Colour, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Undo/Redo, command search (Ctrl+K) (Designer/Pro modes are for unpackaged plans only; a package shows everything it owns) |
 | Equipment | BESS cabinet and pad, PCS/inverter, transformer, UPS, generator, solar, wind, fuel cell, panelboard, AC disconnect, meter, junction box, EV chargers (L2 + DCFC catalog), utility pole, Source/POI, concrete pad, fence, bollard, hydrant, camera, parking stall array, custom equipment |
-| **Guided builds** | BESS Build, DER Build, Auto Layout, Full Topology, Level 2 Build, DCFC Build, Solar + Storage, BESS Config, Move System, Cluster tools, Fence & Tie, charger pads **(decide: in Lite, as the reason Lite is worth $500)** |
+| **Guided builds** | BESS Build, DER Build, Auto Layout, Full Topology, Level 2 Build, DCFC Build, Solar + Storage, BESS Config, Move System, Cluster tools, charger pads **(decide: in Lite, as the reason Lite is worth $500)**; Trace Boundary and Fence & Tie moved to Compute 2026-10-13 |
 | Conduit and trench | Conduit runs, MV trench, home-run auto-routing, conduit schedule, BESS run checklist, re-anchor and diagnose |
 | Review and present | Summary, Meters, live takeoff, 3D Review, Presentation mode, Snapshot |
 | Outputs | **Blueprint / PDF** (the drawing you show, not a permit set), client Proposal, Spec Sheet, Interactive Report, Export to Monday (BETA), CRM integration and sync |
@@ -608,7 +608,7 @@ Status column: `NEW`/`BETA` as the editor's own `OmegaTags` list marks them.
 | Module | Ribbon location | Functions |
 |---|---|---|
 | Lite | Build › Site | Site Setup, address search, Upload Image, Stencil B&W, Lock Map, Calibrate Scale, Clear Scale, Set Plot, Clear Plot, GPS Place, Recenter |
-| Lite | Build › Build (guided) | DER Build, Auto Layout, BESS Build, Full Topology, Level 2, DCFC Build, Solar + Storage, BESS Config, Move System, Cluster tools, Fence & Tie |
+| Lite | Build › Build (guided) | DER Build, Auto Layout, BESS Build, Full Topology, Level 2, DCFC Build, Solar + Storage, BESS Config, Move System (on Draw), Cluster tools |
 | Lite | Insert | BESS Cabinet, PCS/Inverter, Transformer, UPS, Generator, Solar, Wind, Fuel Cell, Panelboard, AC Disconnect, Meter, Junction Box, EV Charger (L2/DCFC catalog), Utility Pole, Source/POI, Utility, Parking Stalls, Concrete Pad, Fence, Bollard, Fire Hydrant, Camera, custom equipment |
 | Lite | Draw / Annotate / Edit | Select/Move, Line, Polyline, Rectangle, Circle, EV Stencil, ADA Symbol, ADA Aisle, Colour, Conduit runs, MV Trench, home-run routing, Text Note, Callout Arrow, Dimension, Zone Box, Labels, Duplicate, Delete, Undo/Redo, Clear |
 | Lite | View | Layers, Compass, Coordinates, Crosshair, Native Layer, Dock Left, Diagnose, Conduit Schedule, Solar panel view, 3D Review, Summary, Meters, live takeoff, Presentation, Snapshot, command search |
@@ -623,7 +623,7 @@ Status column: `NEW`/`BETA` as the editor's own `OmegaTags` list marks them.
 | Site Intelligence | Analyze › Assessment; Insert › Site & Safety | Network Proximity, Site Pre-Screen, Site Pre-Qual, Site Score, Viability Workflow, Project Intelligence, GIS Layers (NEW), Buildable Area, Add Exclusion, Terrain Layer, 3DEP Tiles, Terrain Key, Parcel Screening Register, acoustic screening (BETA) |
 | Engineering | Analyze | Circuit Analysis (NEW), NEC 220 load calc, Electrical Sizing (NEC 690.7), network analysis (BETA), DER Generation, Generation Analysis / PVWatts, design optimizer (BETA), Optimise Layout, terrain screen, pile schedule, stringing CSV, Export for Validation (BETA), Validation Status (BETA), Digital Twin handoff |
 | Investor & Finance | Output › Marketplace | Push to Marketplace (NEW), Apply for Financing (DLL), city net-zero investment case, Building Net-Zero |
-| Compute | Compute (behind `compute`) | Compute Build, ZTMM container data centre, Lay Out Site, Max Load, Load Siting Screen, prime-mover compare, gas / fiber tie-in, Compute Cost, Supply Link, Land Lease, compute campus proposal |
+| Compute | Compute (behind `compute`) | Trace Boundary, Fence & Tie (both moved here from Draw, 2026-10-13), Compute Build, ZTMM container data centre, Lay Out Site, Max Load, Load Siting Screen, prime-mover compare, gas / fiber tie-in, Compute Cost, Supply Link, Land Lease, compute campus proposal |
 | Permitting Matrix | Output › Permit Documents | Permit Creator (hidden today), Permitting Matrix (BETA: Vista / SDG&E verified), Gantt timeline, dependencies & risk, fee summary, required-documents checklist |
 
 186 distinct user-facing functions in all (a full sweep found 189 rows across 13 categories: site intelligence 28, design and drawing 41, guided builds 13, conduit 9, electrical 16, drawings and exports 13, permitting 6, BOM and cost 6, revenue 13, compute 20, collaboration 8, AI 8, imports 8). Items in §4.2 are listed where they live but are not sold until live. The builder must reconcile this table

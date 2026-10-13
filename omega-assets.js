@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ══════════════════════════════════════════════════════════════════════════
    CLEARSKY-OMEGA · ASSET OWNER COMMAND CENTER  (omega-assets.js)
    ------------------------------------------------------------------

@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ══════════════════════════════════════════════════════════════════════════
    CLEARSKY-OMEGA · SERVICE DELIVERY CONSOLE  (omega-delivery.js)
 

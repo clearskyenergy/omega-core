@@ -46,8 +46,9 @@
      target is min over amortising months of EBITDA ÷ (target × service per
      dollar)). Project and equity IRR, monthly cash flows annualised.
    · The CAPEX basis is a choice, and the DEFAULT is the Omega-Core skid
-     price ClearSky recorded, $450,000 (Tommy, 2026-10-06: "use the 450k
-     skid price as the default"); the workbook's CMDC range (general-purpose
+     price ClearSky recorded, $639,000 (Tommy, 2026-10-13: "update the skid
+     to 639k"; the default was set to the recorded price on 2026-10-06, "use
+     the 450k skid price as the default"); the workbook's CMDC range (general-purpose
      air-cooled, high, $724,471), the chipset-scaled dynamic range and a
      typed figure stay as choices. The workbook's own figures are pinned in
      the tests on its own basis.
@@ -166,7 +167,9 @@ var DEFAULTS = {
   capexConfig: 'general-air',      /* cmdc: general-air | accelerated-liquid */
   capexCase: 'high',               /* low | mid | high */
   capexCustom: null,
-  skidPriceUsd: 450000,            /* the Omega-Core skid as ClearSky recorded it */
+  skidPriceUsd: 639000,            /* the Omega-Core skid as ClearSky recorded it (2026-10-13); omega-core.js
+                                      hands in the skid WITH the NextNRG controller built into it (opts.skidPriceUsd) */
+  skidPriceLabel: null,            /* what that figure is made of, when the caller says */
   includeLease: true,
   debt: { ltc: 0.7, rate: 0.10, maturityMonths: 60, interestOnlyMonths: 6, balloonPct: 0.10, feePct: 0.02, reserveMonths: 3, targetDscr: 1.25 }
 };
@@ -254,7 +257,7 @@ function capacity(c, I) {
 function capexOf(c, cap, I) {
   var cm = cmdcTotals(I.capexConfig), dyn = dynamicCapex(c, cap.gpus);
   var out = { basis: I.capexBasis, cmdc: { config: I.capexConfig, low: cm.low, mid: cm.mid, high: cm.high }, dynamic: { low: dyn.low, mid: dyn.mid, high: dyn.high }, skidPriceUsd: I.skidPriceUsd };
-  if (I.capexBasis === 'skid') { out.amount = I.skidPriceUsd; out.label = 'Omega-Core skid price as recorded ($' + fmt(I.skidPriceUsd) + ')'; }
+  if (I.capexBasis === 'skid') { out.amount = I.skidPriceUsd; out.label = I.skidPriceLabel || ('Omega-Core skid price as recorded ($' + fmt(I.skidPriceUsd) + ')'); }
   else if (I.capexBasis === 'custom') { out.amount = Math.round(I.capexCustom); out.label = 'Entered CAPEX'; }
   else if (I.capexBasis === 'dynamic') { out.amount = dyn[I.capexCase]; out.label = 'Chipset-scaled estimate, ' + I.capexCase + ' (' + c.name + ')'; }
   else { out.amount = cm[I.capexCase]; out.label = '75 kW container estimate, ' + (I.capexConfig === 'accelerated-liquid' ? 'accelerated liquid-cooled' : 'general-purpose air-cooled') + ', ' + I.capexCase; }
@@ -427,7 +430,10 @@ function sensitivity(c, cap, I) {
 /* opts: { units, lease: { monthly, escalatorPct, source }, disclose } */
 function evaluate(raw, opts) {
   opts = opts || {};
-  var I = readInputs(raw), c = chipset(I.chipset), cap = capacity(c, I), cx = capexOf(c, cap, I);
+  var I = readInputs(raw);
+  /* the skid price is the product record's, when the caller carries it */
+  if (num(opts.skidPriceUsd) != null && num(opts.skidPriceUsd) > 0) { I.skidPriceUsd = num(opts.skidPriceUsd); I.skidPriceLabel = typeof opts.skidPriceLabel === 'string' ? opts.skidPriceLabel : null; }
+  var c = chipset(I.chipset), cap = capacity(c, I), cx = capexOf(c, cap, I);
   var units = Math.max(1, Math.round(num(opts.units) || 1));
   var lease = opts.lease && num(opts.lease.monthly) != null ? { monthly: num(opts.lease.monthly), escalatorPct: num(opts.lease.escalatorPct), source: opts.lease.source || null } : null;
   var cf = cashFlow(c, cap, cx.amount, I, lease);

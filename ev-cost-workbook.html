@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
 <html lang="en">
 <head>
 <meta charset="utf-8">
@@ -477,181 +478,39 @@ function proposalName(){
    ══════════════════════════════════════════════════════════════════════ */
 var DCFC_BASELINE = {
   source:'Master formula template — 50 Fitch St, New Haven CT, 2 x 320kW',
-  taxRate:6.35,
+  /* the programme's own terms; the baseline's unit prices and labour curves
+     live on the server (api/_lib/ev-pricebook.js, 2026-10-13) */
   rebateCap:250000,
-  evseEligibleShare:0.5,          /* =SUM(I39:I41,I43)/2 in their sheet */
-
-  perSite:{ design:{lab:11200}, permit:{lab:7500}, survey:{lab:8934},
-            panel1200A:{mat:39050, lab:14000},
-            xfmrVault:{mat:11000, lab:0} },
-  perUnit:{ charger320:{mat:120000, lab:0},
-            shipping:{mat:5000, lab:0},
-            install:{mat:0, lab:15000},
-            powerPack:{mat:2500, lab:0},
-            concretePad:{mat:4500, lab:6750},
-            bollard:{mat:450, lab:0},
-            activation:{mat:4000, lab:0} },
-  perFoot:{ trenchPaved:{mat:60, labPerFt:80},        /* =E19*80, flat */
-            trenchTurf:{mat:40, stepped:'trench'},
-            conduitUG:{mat:32, stepped:'trench'},
-            conduitAG:{mat:22, stepped:'trench'},
-            restoration:{mat:17.5, stepped:'trench'},
-            fpPrimary:{mat:35, stepped:'fp'} },
-  agStandardFt:30,                /* their sheet standardises AG run at 30 */
-  fpSlackFt:7                     /* stub slack into in-ground junction */
+  evseEligibleShare:0.5
 };
 
 /* Their stepped labor curve, exactly as written:
    IFS(x<=50, base, x<=100, base+(x-50)*8, x>100, 2400+(x-100)*6)
    Flat rates under-price short runs (mobilisation) and over-price long
    ones, which is why they moved off a per-foot number. */
-function dcfcSteppedLabor(ft, kind){
-  ft=num(ft); if(ft<=0) return 0;
-  var base=(kind==='fp')?1000:2000;
-  if(ft<=50)  return base;
-  if(ft<=100) return base+(ft-50)*8;
-  return 2400+(ft-100)*6;
-}
-window.dcfcSteppedLabor=dcfcSteppedLabor;
+/* dcfcSteppedLabor: on the server (POST /api/ev-price action dcfc) */
 
 /* Restoration labor on future proofing uses its own curve. */
-function dcfcRestorationLabor(ft){
-  ft=num(ft); if(ft<=0) return 0;
-  if(ft<=25) return ft*35*1.3;
-  return 25*35*1.3 + (ft-25)*1.25;
-}
-window.dcfcRestorationLabor=dcfcRestorationLabor;
+/* dcfcRestorationLabor: on the server (POST /api/ev-price action dcfc) */
 
 /* Rebate maths from the master sheet:
      Eligible rebate = MIN(make-ready + half of EVSE, 250k)
      Invoice total   = make-ready + all EVSE + ineligible          */
-function dcfcRebate(makeReady, evseEligible, ineligible){
-  var half=r2(num(evseEligible)*DCFC_BASELINE.evseEligibleShare);
-  return { evseHalf:half,
-           rebate:Math.min(r2(num(makeReady)+half), DCFC_BASELINE.rebateCap),
-           capped:(num(makeReady)+half)>DCFC_BASELINE.rebateCap,
-           invoice:r2(num(makeReady)+half*2+num(ineligible)) };
-}
-window.dcfcRebate=dcfcRebate;
+/* dcfcRebate: on the server (POST /api/ev-price action dcfc) */
 
 /* Permitting runs ~3% of project cost on the Massachusetts jobs. On 75 Avon
    it is exact: (176,554.85 - 5,142.37) x 3% = 5,142.37. Self-referential in
    their sheet, so it is applied to the subtotal before permitting here. */
-var PERMIT_PCT = 0.03;
+var PERMIT_PCT = 0.03;   /* also the server's; a Rate settings override rides on the request */
 function permitFromSubtotal(subtotalExPermit){ return r2(num(subtotalExPermit)*PERMIT_PCT); }
 window.permitFromSubtotal=permitFromSubtotal;
 
 /* Standard line items that appear on every job and should never need
    retyping. Prices are editable; the point is that they auto-populate. */
-var STANDARD_ITEMS = {
-  l2:{ networking:{mat:480, lab:0, per:'port', label:'EVSE networking / software'},
-       freight:{mat:0, lab:162.50, per:'port', label:'EVSE freight / shipping'},
-       wallMount:{mat:225, lab:500, per:'port', label:'Wall-mount kits'},
-       pedestal:{mat:1250, lab:500, per:'pedestal', label:'Pedestals & mounting'},
-       /* ── THE PEDESTAL THE HARDWARE ACTUALLY SITS ON ──────────────────
-          A floor-standing L2 charger needs a pedestal, one per UNIT — a
-          single-port AC Pro gets its own, a dual-port AC Ultra shares one
-          between its two ports. At about $450 each.
-
-          Separate from the `pedestal` allowance above, which is the
-          $1,250 + $500 "pedestal & mounting" figure carried on the filed
-          Eversource sheets and is left alone. This is the accessory line
-          that was missing entirely: on a 10 x Autel AC Pro job the
-          utility form's "Other (cable management, mounting kits)" row
-          came out at zero, because STANDARD had no pedestal entry and
-          standardRate had no case for one. */
-       pedestalUnit:{mat:450, lab:0, per:'unit', label:'Charger pedestals'},
-       bollard:{mat:250, lab:300, per:'pedestal', label:'Protective bollards'},
-       metering:{mat:210, lab:2000, per:'site', label:'Metering equipment'},
-       /* ── A SERVICE PEDESTAL DRAWN ON THE SITE MAP ─────────────────────
-          A freestanding meter socket + main breaker on its own base, fed
-          by an underground lateral: a NEW utility service out by the
-          stalls ("2 new pedestal services", 431-437 Sunderland St,
-          2026-09-28). The editor counts them (counts.servicePedestal) and
-          the Utility metering row is priced per pedestal: the filed
-          metering rate for the socket and its labour, plus this pedestal
-          hardware. The hardware figure is an ALLOWANCE, not a filed rate;
-          the row says so and the rep confirms it against the utility spec. */
-       servicePedestal:{mat:1450, lab:0, per:'pedestal', label:'Service pedestal (meter socket + main, freestanding)'},
-       housePanel:{mat:0, lab:1250, per:'site', label:'House panel upgrade'},
-       xfmrPad:{mat:1200, lab:1300, per:'site', label:'Utility transformer pad'} },
-  dcfc:{ activation:{mat:4000, lab:0, per:'unit', label:'Activation fee'},
-         powerPack:{mat:2500, lab:0, per:'unit', label:'Power packs / commissioning'},
-         shipping:{mat:5000, lab:0, per:'unit', label:'Shipping & handling / freight'},
-         bollard:{mat:450, lab:0, per:'unit', label:'Protective bollards'},
-         survey:{mat:0, lab:8934, per:'site', label:'A2 survey & other'} }
-};
+/* STANDARD_ITEMS: on the server (api/_lib/ev-pricebook.js, 2026-10-13). */
 window.STANDARD_ITEMS=STANDARD_ITEMS;
 
-var L2_BASELINE = {
-  /* Calibrated against four closed Lionheart / Three Phase jobs rather than
-     one, so the rates hold across site sizes instead of fitting a single bid:
-
-       1040 Barnum Ave   UI CT      2 ports     $46,350
-       27 Oak Street     ES CT      4 ports     $58,327
-       17 Calhoun St     ES MA      4 ports     $56,949
-       75 Avon Place     ES MA     10 ports    $176,555
-
-     Design & engineering lands on $1,000/port in ALL FOUR — $2,000 at two
-     ports, $4,000 at four (twice), $10,000 at ten. That is a rate, not a
-     coincidence, and it is the strongest scaling signal in the data.
-     Bollards ($250 + $300), pedestals ($1,250), EVSE install ($1,250/port)
-     and networking ($480/port) are identical across all four as well.
-
-     Where the jobs disagree it is by STATE, not by chance: CT trench
-     material runs $15/lf, MA $25/lf. So state-dependent rates are split
-     rather than averaged into a number that is wrong everywhere. */
-  source:'4 closed jobs, 2–10 ports, CT + MA, 2026',
-  taxRate:6.35,
-
-  perPort:  { charger:{mat:2495.00, lab:0},        /* CT; MA runs 2200      */
-              chargerMA:{mat:2200.00, lab:0},
-              install:{mat:0, lab:1250.00},        /* identical all 4 jobs  */
-              design:{mat:0, lab:1000.00},         /* $1,000/port, all 4    */
-              networking:{mat:480.00, lab:0} },    /* public L2 / MUD only  */
-  perUnit:  { pedestal:{mat:1250.00, lab:500.00},  /* one per 2 ports       */
-              bollard:{mat:250.00, lab:300.00},
-              concreteBase:{mat:800.00, lab:400.00},
-              xfmrPad:{mat:1200.00, lab:1300.00} },/* NOT default — see below */
-  perSite:  { permit:{mat:0, lab:1032.00},
-              panel:{mat:2747.00, lab:4000.00},
-              housePanel:{mat:1500.00, lab:2500.00},
-              metering:{mat:1050.00, lab:2000.00} },
-  perFoot:  { trenchCT:{mat:15.00, lab:80.00},
-              trenchMA:{mat:25.00, lab:120.00},
-              trenchTurf:{mat:10.00, lab:55.00},
-              /* Conduit and cable priced together, per foot of RUN, from a
-                 submitted Eversource sheet that cleared review:
-
-                   underground   1,168 LF  ->  $2,277.60 mat / $2,920.00 lab
-                   above ground    240 LF  ->  $1,203.00 mat / $1,230.00 lab
-
-                 = $1.95 + $2.50 per foot underground, $5.01 + $5.13 above.
-                 The old split rates summed to $5.25 material and $17.34
-                 LABOR per foot — seven times the real figure, which on that
-                 1,168 LF run bills $20,253 against an actual $2,920. The
-                 National Grid jobs corroborate the labor at $2.50-$3.04.
-
-                 Above ground costs more per foot and nothing to dig: RMC,
-                 straps and standoffs, and on a new service the lateral
-                 structure rides in this row. */
-              conduitCableUG:{mat:1.95, lab:2.50},
-              conduitCableAG:{mat:5.0125, lab:5.125},
-              conduitUG:{mat:2.75, lab:13.87},   /* legacy split, unused    */
-              conduitAG:{mat:4.25, lab:21.26},
-              cableUG:{mat:2.50, lab:3.47},
-              cableAG:{mat:2.50, lab:21.00},
-              restoration:{mat:43.00, lab:20.00} },
-  futureProof:{ trench:{mat:0, lab:27.83}, conduit:{mat:4.73, lab:6.79} },
-
-  /* A utility transformer pad appeared on two of the four jobs and was left
-     blank on the other two — 27 Oak and 1040 Barnum both tap an existing
-     service and need no pad at all. At $2,500 installed it moves a small
-     job several percent, so it is opt-in. Defaulting it on quietly inflates
-     every estimate for a site that does not need one. */
-  optional:{ transformerPad:false, metering:false, housePanel:false,
-             networking:false, concreteBase:true }
-};
+/* L2_BASELINE: on the server (api/_lib/ev-pricebook.js, 2026-10-13). */
 
 /* Of a blended paved trench dollar, how much Eversource wants shown as
    restoration rather than trench & backfill. */
@@ -662,94 +521,18 @@ var ES_SPLIT = { restorationPct:0.27 };
    over quantities but no pricing, so a sheet is never blank. */
 function applyBaselineFromSite(opts){
   opts=opts||{};
-  var B=L2_BASELINE, OPT=B.optional;
-  var ports=Math.max(1, num(DATA.plugs)||1);
-  var state=String(DATA.state||DATA.city||'CT').toUpperCase().indexOf('MA')>=0 ? 'MA' : 'CT';
-  var ft={ trench:num(DATA.ftTrench), conduit:num(DATA.ftConduit), cable:num(DATA.ftCable) };
-  var turf=String(DATA.trenchSurface||'paved').toLowerCase().indexOf('turf')>=0;
-  var add=[];
-  function L(cat,desc,qty,unit,mat,lab,bucket,row){
-    if(!mat && !lab) return;
-    add.push({ id:'bl'+(_nid++), cat:cat, desc:desc, qty:qty, unit:unit, size:'',
-               mat:r2(mat), lab:r2(lab), bucket:bucket, row:row, fp:0, baseline:true });
-  }
-  var chg = (state==='MA') ? B.perPort.chargerMA : B.perPort.charger;
-  var trn = turf ? B.perFoot.trenchTurf : (state==='MA' ? B.perFoot.trenchMA : B.perFoot.trenchCT);
-  var peds = Math.max(1, Math.ceil(ports/2));   /* dual-port pedestals */
-
-  /* ── EVSE hardware ────────────────────────────────────────────────
-     When the editor handed over a real fleet, price each model at its
-     price-book figure and name the part number, instead of collapsing
-     everything into one generic $/port line. The rate card stays as the
-     fallback for a workbook opened without a handoff. */
-  if(EDITOR_FLEET && EDITOR_FLEET.length){
-    for(var _q=0; _q<EDITOR_FLEET.length; _q++){
-      var _u = EDITOR_FLEET[_q];
-      var _lbl = 'EVSE hardware \u2014 ' + (_u.mfr ? _u.mfr+' ' : '') + (_u.model||'charger')
-               + (_u.kw ? ' ('+_u.kw+' kW)' : '')
-               + (_u.pn ? ' \u00b7 PN '+_u.pn : '');
-      L('EVSE', _lbl, _u.qty, 'EA', (_u.unitCost||0)*_u.qty, 0, 'evse','charger');
-      if(_u.unitInstall)
-        L('EVSE','EVSE installation \u2014 '+(_u.model||'charger'), _u.qty,'EA',
-          0, (_u.unitInstall||0)*_u.qty, 'mr','other');
-    }
-  } else {
-    L('EVSE','EVSE hardware \u2014 '+(DATA.evModel||'Level 2'), ports,'EA',
-      chg.mat*ports, 0, 'evse','charger');
-  }
-  L('EVSE','Pedestals & mounting', peds,'EA',
-    B.perUnit.pedestal.mat*peds, B.perUnit.pedestal.lab*peds, 'evse','pedestal');
-  if(!(EDITOR_FLEET && EDITOR_FLEET.length))
-    L('EVSE','EVSE installation', ports,'EA', 0, B.perPort.install.lab*ports, 'mr','other');
-  L('Soft cost','Design & engineering', ports,'EA', 0, B.perPort.design.lab*ports, 'mr','design');
-  L('Soft cost','Permitting & inspections', 1,'LS', 0, B.perSite.permit.lab, 'mr','permit');
-  /* No panel line by default. Most make-ready jobs land on existing gear,
-     and a baseline that always billed a new distribution panel put several
-     thousand dollars of equipment nobody had specified onto the sheet —
-     which the utility then asks to see an invoice for. Turn on
-     "New panel / service equipment" in Site & program if the site needs it. */
-  if(d('needPanel')==='Yes')
-    L('Electrical','Distribution equipment / panel', 1,'LS',
-      B.perSite.panel.mat, B.perSite.panel.lab, 'mr','panel');
-  L('Civil','Trenching & backfill \u2014 '+(turf?'non-continuously paved':'continuously paved'),
-    ft.trench,'LF', trn.mat*ft.trench, trn.lab*ft.trench, 'mr','trench');
-  L('Civil','Restoration and/or remediation', ft.trench,'LF',
-    B.perFoot.restoration.mat*ft.trench, B.perFoot.restoration.lab*ft.trench, 'mr','restore');
-  L('Conduit','Conduit & cable \u2014 underground', ft.conduit,'LF',
-    (B.perFoot.conduitUG.mat+B.perFoot.cableUG.mat)*ft.conduit,
-    (B.perFoot.conduitUG.lab+B.perFoot.cableUG.lab)*ft.conduit, 'mr','conduit');
-  L('Wire','Conduit & cable \u2014 above ground / indoor', ft.cable,'LF',
-    (B.perFoot.conduitAG.mat+B.perFoot.cableAG.mat)*ft.cable,
-    (B.perFoot.conduitAG.lab+B.perFoot.cableAG.lab)*ft.cable, 'mr','wire');
-  L('Site','Protective bollards', ports,'EA',
-    B.perUnit.bollard.mat*ports, B.perUnit.bollard.lab*ports, 'ne','bollard');
-  if(OPT.concreteBase)
-    L('Civil','Concrete EVSE bases', peds,'EA',
-      B.perUnit.concreteBase.mat*peds, B.perUnit.concreteBase.lab*peds, 'mr','concrete');
-
-  /* Opt-in only. Two of the four reference jobs had no transformer pad,
-     no separate metering and no house-panel upgrade; adding them by
-     default overstates a simple existing-service tap by thousands. */
-  if(OPT.transformerPad)
-    L('Utility','Utility transformer pad', 1,'EA',
-      B.perUnit.xfmrPad.mat, B.perUnit.xfmrPad.lab, 'mr','xfmrpad');
-  if(OPT.metering)
-    L('Utility','Metering equipment', 1,'LS',
-      B.perSite.metering.mat, B.perSite.metering.lab, 'mr','meter');
-  if(OPT.housePanel)
-    L('Electrical','House panel upgrade', 1,'LS',
-      B.perSite.housePanel.mat, B.perSite.housePanel.lab, 'mr','boards');
-  if(OPT.networking)
-    L('EVSE','EVSE networking / software', ports,'EA',
-      B.perPort.networking.mat*ports, 0, 'ne','network');
-
+  var keep = ['plugs','state','city','ftTrench','ftConduit','ftCable','trenchSurface','needPanel','evModel'];
+  var data = {}; keep.forEach(function(k){ if(DATA[k]!=null && DATA[k]!=='') data[k]=DATA[k]; });
+  var fleet = (typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length) ? EDITOR_FLEET.map(function(u){ return { qty:u.qty, kw:u.kw, model:u.model, mfr:u.mfr, pn:u.pn, unitCost:u.unitCost, unitInstall:u.unitInstall }; }) : [];
+  var R = _evpRequest('baseline', { data:data, fleet:fleet, opt:opts.opt||{} });
+  if(R._pending){ R._promise.then(function(){ applyBaselineFromSite(opts); }, function(){}); return 0; }
+  var add = (R||[]).map(function(l){ var o={}; for(var k in l) if(l.hasOwnProperty(k)) o[k]=l[k]; o.id='bl'+(_nid++); return o; });
   if(opts.replace) LINES=[];
   LINES=LINES.concat(add);
   if(typeof render==='function') render();
   return add.length;
 }
 window.applyBaselineFromSite=applyBaselineFromSite;
-window.L2_BASELINE=L2_BASELINE;
 
 var BLOCKS_MAKEREADY = [
   { id:'evse', title:'EVSE Eligible Costs Total', fill:'FFBFBFBF', rows:[
@@ -1153,15 +936,7 @@ var FORM_ES_CT_L2 = {
    $1,000/port + 3% model on two of the three jobs, so that model is kept
    rather than a new one fitted to three points.
    ══════════════════════════════════════════════════════════════════════ */
-var NG_MA_RATES = {
-  source:'3 closed National Grid MA submissions, 4-6 ports, 2026',
-  bollard:{ mat:250,  lab:300  },        /* each  — all three jobs */
-  charger:{ mat:2200, lab:0    },        /* port  — all three jobs */
-  mount:{   mat:1250, lab:0    },        /* each  — all three jobs */
-  network:{ mat:480,  lab:0    },        /* port  — all three + NG chart */
-  trenchPaved:{ mat:25, lab:120 },       /* LF    — Oxford + East St */
-  trenchTurf:{  mat:15, lab:100 }        /* LF    — East St */
-};
+/* NG_MA_RATES: on the server (api/_lib/ev-pricebook.js, 2026-10-13). */
 
 /* The MUD incentive table, effective 15 Nov 2025 (CM8214D MUD 11/25). */
 var NG_MUD_INCENTIVE = {
@@ -1216,37 +991,11 @@ function ngIsMUD(){ return /MUD|Multi-Unit/i.test(d('category')); }
    proposal layout (s9) and editing an uploaded workbook in place (s10) --
    docs/NATIONAL-GRID-PRICE-BOOK.md. */
 var NG_PRICE = {
-  version:'v2 (2026-09-28)',
-  designPerPort:1423,                            /* row 10: labour x P     */
-  trenchPaved:{ mat:30, lab:110 },                /* row 12: per LF ($100 labour before 2026-09-28) */
-  trenchUnpaved:null,                            /* row 13: NO RATE -- ask  */
-  conduit:{ matPerFt:1.90, labBase:1100, labPerFt:2.50 },   /* row 14   */
-  bollard:{ mat:250, lab:300 },                  /* row 15: x S (was two a station) */
-  handhole:null,                                 /* row 16: NO RATE -- ask  */
-  pad:{ mat:500, lab:1000 },                     /* row 17: x S            */
-  panel:{                                        /* row 18                 */
-    standard:{ key:'standard', mat:1451.22, lab:621,   qty:2, label:'Standard panel package (no new service)' },
-    single:  { key:'single',   mat:6600,    lab:12550, qty:1, label:'New 200A single-phase service' },
-    three:   { key:'three',    mat:8910,    lab:12550, qty:1, label:'New 200A three-phase service' }  /* 6,600 x 1.35 */
-  },
-  other:{ mat:1200, labPerPort:2360 },           /* row 19: materials flat, install labour x P */
-  /* row 27: x P. Both CONFIRMED (Tommy, 2026-09-29: "50 amp $2k/plug,
-     80 amp $3,050/plug. use that pricing"): the AC Elite 50A at $2,000 a
-     plug ($4,000 a dual-port station) and the AC Pro 80A at $3,050 a plug
-     ($6,100 a station), the figure Concord's filed sheets carried. For the
-     record, Autel's April 2026 list (LHE_Autel Charger Product Price,
-     Drive) has the AC Pro at $1,599 MSRP / $1,119.30 Lionheart and the
-     Elite at $1,066 / $799.50, so the 80 A sells at 2.7x its Lionheart cost
-     against the 50 A's 2.5x. A per-job figure under Program details
-     overrides the 80 A; null puts the ask back. */
-  hardware:{ a50:2000, a80:3050 },
-  kw80:15,                                       /* kW at or above this is an 80 A (19.2 kW) unit */
-  pedestal:1150,                                 /* row 28: x S            */
-  freightPerPort:50,                             /* row 29: x P            */
-  networkPerPort:480,                            /* row 32 (MUD, Public) or 45: x P */
-  signage:{ mat:400, lab:190 },                  /* row 34: lump sum, P + 1 labels */
-  taxRate:0.0625,
-  band:{ lo:10500, hi:13500, target:12000 }
+  /* The National Grid price book lives on the server (api/_lib/ev-pricebook.js,
+     2026-10-13); its version, band and panel figures come back on each
+     pricing (NG_LAST). Only the electrical threshold the page needs to
+     describe the job stays here. */
+  kw80:15                                        /* kW at or above this is an 80 A (19.2 kW) unit */
 };
 /* The row-18 question, asked on the form. The first option is the answer
    "nobody has said", which prices the standard package and flags it. */
@@ -1305,125 +1054,11 @@ function ngTaxBase(lines){
    from, the flags a person has to see (ask:true is a hard stop the rep
    answers on the form), and the Submitted | Corrected changes. */
 function ngPriceBook(Q){
-  var B=NG_PRICE, P=num(Q.ports), S=ngStationsFor(P), lines=[], flags=[];
-  function add(bucket,row,desc,qty,unit,mat,lab,note){
-    var o={ desc:desc, bucket:bucket, row:row, qty:qty, unit:unit||'', size:'', cat:'',
-            mat:ngRound(mat), lab:ngRound(lab), fp:0, src:'ngbook', note:note||'' };
-    lines.push(o); return o;
-  }
-  function ask(t){ flags.push({ ask:true, text:t }); }
-  function note(t){ flags.push({ ask:false, text:t }); }
-  function $(n){ return money(n); }
-  if(!(P>0)){
-    ask('Number of Ports is not set — every quantity in the price book is P or P ÷ 2.');
-    return { lines:lines, flags:flags, changes:[], P:P, S:S };
-  }
-  if(P%2) note(P+' ports is not an even number. Every station is dual-port, so S is rounded up to '+S+'.');
-
-  /* row 10 */
-  add('mr','design','Design/Engineering/Permitting', P, 'ports', 0, B.designPerPort*P,
-      P+' ports × $'+B.designPerPort);
-  /* row 12 */
-  var paved=num(Q.paved), unpaved=num(Q.unpaved), cond=num(Q.conduit), hh=num(Q.handholes);
-  if(paved>0)
-    add('mr','trench','Trenching & Backfill — paved (asphalt/concrete)', paved, 'ft',
-        B.trenchPaved.mat*paved, B.trenchPaved.lab*paved,
-        paved+' LF × $'+B.trenchPaved.mat+' / $'+B.trenchPaved.lab);
-  /* row 13: no rate */
-  if(unpaved>0){
-    var ut=Q.unpavedTyped||null;
-    add('mr','trenchTurf','Trenching & Backfill — unpaved (grass)', unpaved, 'ft',
-        ut?ut.mat:0, ut?ut.lab:0, ut?'typed — no price-book rate':'NO RATE — ask');
-    ask(unpaved+' LF of unpaved trench (row 13) has no price-book rate. '
-        +(ut ? 'Priced at the typed '+$(ut.mat)+' material / '+$(ut.lab)+' labour — confirm it, and the split (it moves the sales tax).'
-             : 'It is on the sheet at $0 until a rate is confirmed: type the material and labour over the line.'));
-  }
-  /* row 14 */
-  if(cond>0)
-    add('mr','conduit','Conduit & Cable — underground/above ground/indoor', cond, 'ft',
-        B.conduit.matPerFt*cond, B.conduit.labBase+B.conduit.labPerFt*cond,
-        cond+' LF × $'+B.conduit.matPerFt+'; labour $'+B.conduit.labBase+' + $'+B.conduit.labPerFt+'/LF');
-  else note('No conduit footage — row 14 is blank. Measure the runs, or type Total Feet of Conduit under Program details.');
-  /* row 15 */
-  add('mr','bollard','Protective Bollards', S, 'ea', B.bollard.mat*S, B.bollard.lab*S, S+' — one per station');
-  /* row 16: no rate */
-  if(hh>0){
-    var ht=Q.handholeTyped||null;
-    add('mr','handhole','Handholes/Manholes', hh, 'ea', ht?ht.mat:0, ht?ht.lab:0,
-        ht?'typed — no price-book rate':'NO RATE — ask');
-    ask(hh+' handhole'+(hh>1?'s':'')+' (row 16): no price-book rate. '
-        +(ht ? 'Priced at the typed '+$(ht.mat)+' / '+$(ht.lab)+' — confirm it.'
-             : 'On the sheet at $0 until a rate is confirmed: type the material and labour over the line.'));
-  }
-  /* row 17 */
-  add('mr','concrete','Concrete Work/Bases/Pads', S, 'ea', B.pad.mat*S, B.pad.lab*S, S+' pads — one per station');
-  /* row 18 */
-  var svc=B.panel[Q.service]||null, opt=B.panel, nsp=num(Q.servicePedestals);
-  if(!svc){
-    svc=opt.standard;
-    ask((nsp ? 'The drawing has '+nsp+' service pedestal'+(nsp>1?'s':'')+' — a new utility service — but the phase is not confirmed. '
-             : '')
-        +'Service scope (row 18) is not confirmed — priced as the standard panel package ('
-        +$(opt.standard.mat+opt.standard.lab)+'). Choose under Program details: standard '
-        +$(opt.standard.mat+opt.standard.lab)+' · new 200A single-phase '+$(opt.single.mat+opt.single.lab)
-        +' · new 200A three-phase '+$(opt.three.mat+opt.three.lab)+'. "A new meter is being added" still needs the phase.');
-  }
-  if(svc.key==='standard' && nsp)
-    note('Row 18 is the standard package, but the drawing has '+nsp+' service pedestal'+(nsp>1?'s':'')
-        +' (a new utility service). Confirm the service scope.');
-  add('mr','panel',
-      svc.key==='standard' ? 'Utility service point and utility service meter equipment'
-                           : svc.label+' — utility service point and new utility service meter',
-      svc.qty, svc.qty===2?'ea':'lump', svc.mat, svc.lab, svc.label);
-  /* row 19 */
-  add('mr','install','Installation and commissioning of all ports (site grounding, fire-stop and seal-off)',
-      P, 'ports', B.other.mat, B.other.labPerPort*P,
-      'materials $'+B.other.mat+' flat; install labour '+P+' × $'+B.other.labPerPort);
-  /* row 27 */
-  var p80=Math.min(P, Math.round(num(Q.ports80))), p50=P-p80, hw80=num(Q.hw80PerPort)||num(B.hardware.a80);
-  add('evse','charger',
-      p80 ? 'Level 2 charging hardware — '+p50+' × 50 A and '+p80+' × 80 A ports'
-          : 'Level 2 charging hardware — Autel AC Elite 50A dual-port (12 kW)',
-      P, 'ports', B.hardware.a50*p50 + (hw80 ? hw80*p80 : 0), 0,
-      p50+' × $'+B.hardware.a50+(p80 ? ' + '+p80+' × '+(hw80 ? '$'+hw80 : 'no rate') : ''));
-  if(p80 && !hw80)
-    ask(p80+' port'+(p80>1?'s are':' is')+' on an 80 A (19.2 kW) unit and the book has no rate for it. '
-        +'Those ports are on the sheet at $0 until a price per port is entered under Program details.');
-  /* row 28 */
-  add('evse','pedestal','Pedestals and mounting hardware', S, 'ea', B.pedestal*S, 0, S+' × $'+B.pedestal);
-  /* row 29 */
-  add('evse','shipping','EVSE Freight/Shipping', P, 'ports', B.freightPerPort*P, 0, P+' × $'+B.freightPerPort);
-  /* row 32 */
-  add('evse','network','Network service (Green Joulez)', P, 'ports', B.networkPerPort*P, 0, P+' × $'+B.networkPerPort);
-  if(/workplace|fleet|dcfc/i.test(String(Q.segment||'')))
-    note('A '+Q.segment+' site: networking belongs on row 45 (ineligible), not row 32. Left on row 32 pending the decision '
-        +'— moving it shifts '+$(B.networkPerPort*P)+' from Eligible to Ineligible without changing the total.');
-  /* row 34 */
-  add('ne','striping','Fire/arc-flash warning and equipment labels', P+1, 'ea', B.signage.mat, B.signage.lab,
-      (P+1)+' labels — lump sum');
-
-  /* what the book has no row for passes through, and says so */
-  var i, l, util=0, utilNames=[], nobook=[], ex=Q.extras||[];
-  for(i=0;i<ex.length;i++){
-    l=ex[i]; lines.push(l);
-    if(l.util){ util+=num(l.mat)+num(l.lab); utilNames.push(l.desc); }
-    else if(l.bucket!=='fp' && (num(l.mat)||num(l.lab))) nobook.push(l.desc+' '+$(num(l.mat)+num(l.lab)));
-  }
-  if(util>0)
-    note('Utility-side rows 21–25 carry '+$(util)+' ('+utilNames.join(', ')+'): kept on the sheet in H54, out of H53 '
-        +'and out of the proposal. Ask whether to remove them or include them in the client proposal.');
-  if(nobook.length) note('Not in the price book, carried as submitted: '+nobook.join('; ')+'.');
-  /* the counts the sheet asks for */
-  if(num(Q.stationsTyped) && num(Q.stationsTyped)!==S)
-    note('Number of Stations was '+num(Q.stationsTyped)+'; C7 is written as S = '+S+' (P ÷ 2, dual-port pedestals). '
-        +'Open question whether National Grid expects C7 to count ports.');
-  if(num(Q.pedestalsDrawn) && num(Q.pedestalsDrawn)!==S)
-    note('The drawing placed '+num(Q.pedestalsDrawn)+' pedestals; the book prices S = '+S+' (one dual-port pedestal per two ports).');
-  if(num(Q.padsDrawn) && num(Q.padsDrawn)!==S)
-    note('The drawing placed '+num(Q.padsDrawn)+' pads; the book prices S = '+S+', one per station.');
-  if(num(Q.markupPct))
-    note('The '+num(Q.markupPct)+'% markup is not applied on National Grid: the book’s unit prices are never scaled.');
-  return { lines:lines, flags:flags, changes:ngChanges(Q.submitted||[], lines), P:P, S:S };
+  var R = _evpRequest('ng', { q:Q });
+  if(R._pending) return { lines:(Q.submitted||[]).concat(Q.extras||[]), flags:[{ ask:false, text:'Pricing to the National Grid book\u2026' }], changes:[], P:num(Q.ports), S:ngStationsFor(num(Q.ports)), pending:true };
+  var out = { lines:R.lines, flags:R.flags, P:R.P, S:R.S, version:R.version, band:R.band, panelSingleTotal:R.panelSingleTotal, taxRate:R.taxRate };
+  out.changes = ngChanges(Q.submitted||[], R.lines);
+  return out;
 }
 
 /* Mode 2's table: Line | Submitted | Corrected, by sheet row, for every
@@ -1522,10 +1157,10 @@ function ngGross(m){
   return r2(ngSum(byRow,10,19)+ngSum(byRow,27,30)+ngSum(byRow,32,32)+ngSum(byRow,34,46)+num(m.taxTotal));
 }
 function ngBandDriver(pp, byRow, P){
-  var B=NG_PRICE.band, why=[];
+  var B=(NG_LAST&&NG_LAST.band)||{ lo:0, hi:Infinity }, why=[];
   if(pp>B.hi){
     var p18=byRow[18] ? r2(byRow[18].mat+byRow[18].lab) : 0;
-    if(p18>=NG_PRICE.panel.single.mat+NG_PRICE.panel.single.lab-1) why.push('a new 200A service ('+money(p18)+') spread over '+P+' plugs');
+    if(NG_LAST && NG_LAST.panelSingleTotal && p18>=NG_LAST.panelSingleTotal-1) why.push('a new 200A service ('+money(p18)+') spread over '+P+' plugs');
     var lf=(byRow[12]?num(byRow[12].qty):0)+(byRow[13]?num(byRow[13].qty):0);
     if(lf>100) why.push('a long trench run ('+lf+' LF)');
     if(!why.length) why.push('check the quantities against the drawing');
@@ -1534,10 +1169,10 @@ function ngBandDriver(pp, byRow, P){
   return 'small scope — a short trench and no new service push the price under the floor';
 }
 function ngPriceCheckHTML(m){
-  var R=NG_LAST||{ flags:[], changes:[] }, byRow=ngRollup(m), P=num(DATA.plugs), B=NG_PRICE.band, h='', i, f;
+  var R=NG_LAST||{ flags:[], changes:[] }, byRow=ngRollup(m), P=num(DATA.plugs), B=R.band||{ lo:0, hi:Infinity }, h='', i, f;
   var gross=ngGross(m), pp=P>0 ? ngRound(gross/P) : 0, inBand=P>0 && pp>=B.lo && pp<=B.hi;
   h+='<div class="card" style="margin-top:12px"><h3>National Grid price check'
-    +'<span class="hint">price book '+esc(NG_PRICE.version)+'</span></h3><div class="body">';
+    +'<span class="hint">price book '+esc(R.version||'\u2014')+'</span></h3><div class="body">';
   h+='<div class="note">Grand total (H53) '+money(gross)+' = <b>'+money(pp)+' per plug</b>'
     +(P>0 ? (inBand ? ' — inside the '+money(B.lo)+'–'+money(B.hi)+' band.'
                     : ' — <b>outside</b> the '+money(B.lo)+'–'+money(B.hi)+' band: '+esc(ngBandDriver(pp, byRow, P))+'.')
@@ -3270,47 +2905,7 @@ var STANDARD=[
    credible. "1168 LF" tells them nothing; the scope behind it tells them
    what the money bought and which code the work is priced to. These read the
    way the sheets that cleared review read. */
-function scopeNote(row, qty, ports){
-  var q=r2(qty)||0, n=Math.round(q);
-  switch(row){
-    case 'trench':
-      return n+' LF \u2014 Trenching & backfill through continuously-paved area '
-        +'(asphalt/concrete). Scope includes: saw-cutting pavement, excavation to required depth, '
-        +'spoils haul-off/disposal, gravel and sand bedding & backfill, mechanical compaction in '
-        +'lifts, base-course millings, hot-mix asphalt patch, and rolling to restore the driving '
-        +'surface to compacted grade. Per NEC 300.5 (24-in min cover, warning tape).';
-    case 'trenchTurf':
-      return n+' LF \u2014 Trenching & backfill through non-continuously-paved area (grass/ground '
-        +'cover). Scope includes: sod/topsoil strip and set aside, excavation to required depth, '
-        +'sand bedding, backfill and compaction in lifts, topsoil replacement, seed or sod '
-        +'restoration. Per NEC 300.5 (24-in min cover, warning tape).';
-    case 'conduit':
-      return n+' LF \u2014 Underground conduit & cable (make-ready). Scope includes: furnish & '
-        +'install Sch 40 PVC conduit in parallel runs, pull conductors (3 wires/run + EGC), '
-        +'couplings/sweeps/fittings, mule tape, and terminations from the service to each charging '
-        +'station. Footage includes elevation/slack per run. Code-compliant trench per NEC 300.5.';
-    case 'wire':
-      return n+' LF \u2014 Above-ground/indoor conduit & cable. Scope includes: furnish & install '
-        +'RMC (exposed/riser) or PVC where permitted, straps/standoffs, fittings, conductor pull '
-        +'and terminations from the house/owner panel to the outdoor distribution panel.';
-    case 'restore':
-      return n+' LF \u2014 Surface restoration and/or remediation over the trench route. Scope '
-        +'includes: base-course millings, hot-mix asphalt patch or concrete replacement to match '
-        +'existing, rolling to compacted grade, and landscape reinstatement where disturbed.';
-    case 'concrete':
-      return n+' EA \u2014 Concrete EVSE equipment bases (one per dual-port pedestal, serving '
-        +(num(ports)||n*2)+' ports). Scope includes: form & pour reinforced concrete pad or '
-        +'sonotube, anchor bolts/template, conduit stub-ups, finish & cure to charger mounting spec.';
-    case 'bollard':
-      return n+' EA \u2014 Protective bollards. Scope includes: furnish & install concrete-filled '
-        +'steel pipe bollards, core/excavate footing, set in concrete, prime & paint safety-yellow.';
-    case 'xfmrpad':
-      return n+" EA \u2014 Utility transformer/service pad (3'x5'). Scope includes: excavate & form, "
-        +'pour reinforced concrete pad, set conduit stub-ups and grounding, finish & cure for the '
-        +'new pad-mount service.';
-    default: return n+'';
-  }
-}
+/* scopeNote: on the server with the rate switch. */
 
 /* ══════════════════════════════════════════════════════════════════════
    MASTER RATE CARD — back-solved from submitted cost matrices
@@ -3337,71 +2932,12 @@ function scopeNote(row, qty, ports){
    than port count, so both stay driven by the estimate.
    ══════════════════════════════════════════════════════════════════════ */
 var RATE_CARD = {
+  /* The rate card lives on the server (api/_lib/ev-pricebook.js, 2026-10-13):
+     the page sends a rep's overrides with every pricing and shows the
+     defaults the answer carries. The formulas below are counting rules. */
   source:'5 Eversource MA submissions, 4-10 ports, 2026',
-
-  /* per foot of run ─────────────────────────────────────────────────── */
-  trenchPaved:   { mat:15.00, lab:80.00, n:5, note:'continuously paved (asphalt/concrete)' },
-  trenchTurf:    { mat:10.00, lab:60.00, n:1, note:'non-continuously paved (grass/ground cover)' },
-  conduitCableUG:{ mat:1.95,  lab:2.50,  n:5, note:'conduit + conductors, underground' },
-  /* Above ground is NOT a per-foot labor rate. It looked like one and the
-     three filed jobs disagreed wildly ($3.25, $3.85, $5.13 per foot) — but
-     solving a + b*ft gives $1,170 + $0.25/LF, which is EXACT on all three:
-     240 LF -> $1,230.00 | 325 LF -> $1,251.25 | 390 LF -> $1,267.50.
-     It is a setup cost (risers, standoffs, terminations at both ends) with a
-     small per-foot component, so a mid per-foot rate was wrong at every
-     length. Material is a clean $1.95/LF on all three. */
-  conduitCableAG:{ mat:1.95, labBase:1170, labPerFt:0.25, n:3,
-                   note:'above ground/indoor; labor is setup + $0.25/LF' },
-  /* 17 Calhoun carries $735 more material than $1.95/LF, and its own note
-     says why: "includes new-service structure (underground lateral - no
-     riser) per Price Guide". That is a scope item, not a rate, so it is
-     added only when the job actually has a new service — never silently. */
-  newServiceStructure:{ mat:735, lab:0, n:1 },
-
-  /* each ────────────────────────────────────────────────────────────── */
-  bollard:       { mat:250,  lab:300,  n:5 },
-  concreteBase:  { mat:800,  lab:400,  n:4, note:'one per dual-port pedestal' },
-  xfmrPad:       { mat:1200, lab:1300, n:3, note:"3'x5' utility transformer pad" },
-  mountKit:      { mat:1250, lab:500,  n:4, note:'pedestal / mounting kit per unit' },
-
-  /* per port ────────────────────────────────────────────────────────── */
-  charger:       { mat:2200, lab:0,    n:5 },
-  install:       { mat:0,    lab:1250, n:5, note:'EVSE installation labor' },
-  network:       { mat:480,  lab:0,    n:5, note:'matches the National Grid MUD chart too' },
-
-  /* per site ────────────────────────────────────────────────────────── */
-  housePanel:    { mat:0,    lab:1250, n:2, note:'house/owner panel upgrade' },
-  metering:      { mat:210,  lab:2000, n:3, note:'meter socket; 788 on a CT-cabinet service' },
-
-  /* formulas, not prices ────────────────────────────────────────────── */
   pedestalsFor:  function(ports){ return Math.max(1, Math.ceil(num(ports)/2)); },
-  breakersFor:   function(ports){ return num(ports)+3; },
-  /* Both halves are overridable in Rate settings. */
-  freightFor:    function(ports){
-                   var b=num(RATE_CARD._freightBase), p=num(RATE_CARD._freightPort);
-                   return (b||250) + (p||100)*num(ports);
-                 },
-
-  /* ── FUTURE PROOFING ────────────────────────────────────────────────
-     A position built out now but not energised: spare conduit and cable
-     pulled to the pad while the trench is open, plus a panel position held
-     for it. No EVSE, no networking, no install labour — there is no port
-     yet, which is why every programme books it as INELIGIBLE rather than
-     make-ready. What it saves is the second mobilisation and a second
-     trench, not the materials. */
-  fpPanelPosition:{ mat:500, lab:1000, n:1, note:'per position, from the 50 Fitch St FP block' },
-  /* Future proofing extends the DITCH by a stall or two, not by the length
-     of the job. The 112 Willow baseline is explicit: 156 LF of live trench
-     and 10 LF on the future-proofing row — one parking space. Carrying the
-     whole run into future proofing put thousands of ineligible excavation
-     on a sheet for a ditch already dug and already claimed.
-
-     The spare CONDUIT is different: the pipe is pulled the whole route
-     alongside the live run, which is why that same sheet shows 156 LF of
-     future-proofing conduit against 10 LF of future-proofing trench. */
-  fpStallWidthFt: 10,                 /* one parking space of extra ditch */
-  fpMaxStalls: 2,                     /* "one or two spaces", not the job  */
-  fpConduit: { mat:1.95, lab:2.50 }   /* same pipe, same ditch, dug once */
+  breakersFor:   function(ports){ return num(ports)+3; }
 };
 
 /* Design & engineering: a FLAT figure on a form that says so (both
@@ -3409,243 +2945,53 @@ var RATE_CARD = {
    the National Grid jobs fit. Pure, so the export prices it for the form being written and
    scripts/tests/tesma.js pins it. `card` is RATE_CARD; its `_designFlat` and
    `_designPerPort` are the Rate settings overrides. */
-function designRate(form, ports, card){
-  card=card||{};
-  var flat = (form && form.designFlat) ? (num(card._designFlat) || num(form.designFlat)) : 0;
-  if(flat) return { qty:1, unit:'LS', mat:0, lab:r2(flat),
-                    note:'flat per site \u2014 '+(form.short||form.utility||'this program') };
-  ports=num(ports);
-  return ports>0 ? { qty:ports, unit:'EA', mat:0,
-                     lab:(num(card._designPerPort)||1000)*ports,
-                     note:ports+' ports \u00d7 design & engineering' } : null;
+/* designRate: on the server (api/_lib/ev-pricebook.js). */
+
+/* ═══ THE PRICE BOOKS RUN ON THE SERVER (2026-10-13) ═══════════════════
+   The rate card, the Level 2 baseline, the standard items and the National
+   Grid book, and the rate switch over them, live in api/_lib/ev-pricebook.js
+   behind POST /api/ev-price. The page sends the job's facts and draws the
+   answer. Each wrapper stays synchronous for its callers: a cached answer
+   comes back at once; otherwise the wrapper answers `undefined` (leave the
+   line as it is) and re-renders when the answer lands. */
+var _EVP_CACHE = {}, _EVP_RERUN = null;
+function _evpRequest(action, body){
+  var key = action + ':' + JSON.stringify(body), hit = _EVP_CACHE[key];
+  if(hit) return hit;
+  var user = window.firebase && firebase.auth && firebase.auth().currentUser;
+  var p = (user ? user.getIdToken() : Promise.reject(new Error('Sign in to price the job.')))
+    .then(function(t){ return fetch('/api/ev-price', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+t }, body: JSON.stringify(Object.assign({ action:action }, body)) }); })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || 'Pricing service unavailable'); return j; }); })
+    .then(function(ans){ _EVP_CACHE[key] = ans; return ans; }, function(err){ delete _EVP_CACHE[key]; throw err; });
+  var pending = { _pending:true, _promise:p };
+  _EVP_CACHE[key] = pending;
+  /* one re-render per batch of answers, so a sheet with many rows asks once */
+  p.then(function(){ if(_EVP_RERUN) return; _EVP_RERUN = setTimeout(function(){ _EVP_RERUN = null; try{ if(typeof render==='function') render(); }catch(e){} }, 30); }, function(e){ try{ if(typeof msg==='function') msg('mapMsg', (e && e.message) || 'Pricing service unavailable'); }catch(e2){} });
+  return pending;
 }
-
+/* What the rate switch needs to know about this job. */
+function _evpContext(){
+  var ts = trenchSplit(), fleetUnits = 0;
+  try{ if(typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length){ for(var i=0;i<EDITOR_FLEET.length;i++) fleetUnits += (num(EDITOR_FLEET[i].qty)||0); } }catch(e){}
+  var hasAG = {}; ['mr','evse','ne','fp'].forEach(function(b){ try{ hasAG[b] = !!rowExists(b,'conduitAG'); }catch(e){ hasAG[b]=false; } });
+  var keep = ['plugs','ftTrench','ftConduit','ftCable','ftConduitUG','ftConduitAG','ftConduitFP','ftTrenchFP','nBollard','nPad','nPedestal','nServicePedestal','nFpPositions','evModel','needPanel','city','state','trenchSurface'];
+  var data = {}; keep.forEach(function(k){ if(DATA[k]!=null && DATA[k]!=='') data[k]=DATA[k]; });
+  return { data:data, ports:Math.max(1, num(DATA.plugs)||1), paved:ts.paved, turf:ts.turf, newService:isNewService(),
+    ma:String(DATA.city||DATA.state||'').toUpperCase().indexOf('MA')>=0,
+    form:(typeof FORM!=='undefined' && FORM) ? { designFlat:FORM.designFlat||0, short:FORM.short||'', utility:FORM.utility||'' } : null,
+    chargerClass:chargerClass(), fleetUnits:fleetUnits, trenchSurfacePaved:trenchSurfacePaved(), hasConduitAG:hasAG,
+    overrides:(typeof RATE_OVERRIDES!=='undefined') ? RATE_OVERRIDES : {} };
+}
+var _RATE_DEFAULTS = null;
+/* The standard rate for a row: the server's, cached per job; `undefined`
+   while it is being priced (leave the line alone), null when there is none. */
 function standardRate(row, bucket){
-  /* The future-proofing block reuses the SAME row keys as make-ready
-     ('conduit', 'panel'), so the bucket is what distinguishes a spare run
-     from a live one. Without this, a future-proofing row would be priced at
-     the live rate off the live footage and the ineligible total would carry
-     the whole job's conduit. */
-  if(bucket==='fp'){
-    if(row==='conduit' || row==='wire')       return standardRate('_fpConduit','fp');
-    if(row==='panel'   || row==='boards')     return standardRate('_fpPanel','fp');
-    if(row==='trench'  || row==='trenchTurf') return standardRate('_fpTrench','fp');
-  }
-  var B=L2_BASELINE, ST=STANDARD_ITEMS.l2;
-  var ports=Math.max(1, num(DATA.plugs)||1);
-  var peds =Math.max(1, Math.ceil(ports/2));       /* dual-port pedestals */
-  var ftT  =num(DATA.ftTrench), ftC=num(DATA.ftConduit), ftW=num(DATA.ftCable);
-  var ftUG =num(DATA.ftConduitUG) || ftC, ftAG=num(DATA.ftConduitAG);
-  var _ts=trenchSplit(), ftTurf=_ts.turf;
-  /* A new service is a fact about the site, not a price. Explicit flag first;
-     otherwise a site being given new panel/service gear implies one. */
-  /* the $735 lateral structure and the utility pad belong to a NEW service,
-     not to an upgrade that reuses the existing one */
-  var newSvc = isNewService();
-  /* Paved footage when it is measured; only derive it as the balance when
-     nobody has said. Subtracting from an already-explicit paved figure left
-     11 Marble with 0.24 LF of trench against a filed 44.12. */
-  ftT=_ts.paved;
-  var MA   =String(DATA.city||DATA.state||'').toUpperCase().indexOf('MA')>=0;
-
-  switch(row){
-    /* $1,000/port in all four reference jobs; flat where the form says so. */
-    case 'design':     return designRate(FORM, ports, RATE_CARD);
-    /* Permitting runs ~3% of project cost; exact on 75 Avon. */
-    case 'permit':     return { qty:1, unit:'LS', mat:0, lab:permitFromSubtotal(subtotalExcluding('permit')),
-                                note:'3% of project cost' };
-    case 'activation': return { qty:ports, unit:'EA', mat:395*ports, lab:0, note:'$395/port' };
-    /* ── ONE PEDESTAL PER CHARGER UNIT ────────────────────────────────
-       Counted per UNIT, not per port: a single-port AC Pro stands on its
-       own pedestal, a dual-port AC Ultra shares one between its ports.
-       Ten AC Pro therefore bill ten pedestals, not five.
-
-       The unit count comes from the editor fleet when the drawing handed
-       one over, because that is the only place that knows how many
-       ENCLOSURES were placed rather than how many plugs they carry. With
-       no fleet, fall back to the port count — nearly every L2 model is
-       single-port, so port-per-unit is the safer guess, and it errs
-       toward including a pedestal rather than dropping one from a
-       submission.
-
-       Material only. The labour to set it is already in the EVSE
-       installation line, and inventing a second labour figure would
-       inflate the eligible total on a form somebody has to justify. */
-    case 'pedestal':   /* Level 2 only. A DCFC dispenser is bolted to a
-                          concrete foundation that the civil lines already
-                          carry, not stood on a $450 pole, and billing one
-                          would put an item on a utility form that is not
-                          on the job. */
-                       if(typeof chargerClass==='function' && chargerClass()==='dcfc') return null;
-                       /* The drawing wins when it placed pedestals: a dual
-                          pedestal carries two chargers on ONE pedestal, so
-                          "one per charger" would bill twice. */
-                       var _pu=num(DATA.nPedestal)||0, _puHow='';
-                       if(_pu){ _puHow=' (from the drawing: one per pedestal placed)'; }
-                       else {
-                         try{
-                           if(typeof EDITOR_FLEET!=='undefined' && EDITOR_FLEET && EDITOR_FLEET.length){
-                             for(var _pi=0;_pi<EDITOR_FLEET.length;_pi++) _pu += (num(EDITOR_FLEET[_pi].qty)||0);
-                           }
-                         }catch(e){}
-                         if(!_pu) _pu = ports;
-                         _puHow=' (one per charger)';
-                       }
-                       return _pu>0 ? { qty:_pu, unit:'EA',
-                                mat:ST.pedestalUnit.mat*_pu, lab:0,
-                                note:_pu+' \u00d7 $'+ST.pedestalUnit.mat+' pedestal'+_puHow } : null;
-    /* Both per port, identical on all five submitted jobs. They were the
-       only cost lines with no rate at all \u2014 they arrived from the estimate
-       or not at all, so a hand-built job silently lost them. */
-    case 'charger':    return ports>0 ? { qty:ports, unit:'EA',
-                                mat:RATE_CARD.charger.mat*ports, lab:0,
-                                note:ports+' ports \u00d7 $'+RATE_CARD.charger.mat+'/port' } : null;
-    case 'install':    return ports>0 ? { qty:ports, unit:'EA', mat:0,
-                                lab:RATE_CARD.install.lab*ports,
-                                note:'EVSE installation \u2014 '+ports+' ports \u00d7 $'+RATE_CARD.install.lab } : null;
-    /* $250 + $100/port, exact on every submitted job (4p $650, 6p $850,
-       10p $1,250) \u2014 it was a flat per-port figure before. */
-    case 'shipping':   return ports>0 ? { qty:ports, unit:'EA', mat:0,
-                                lab:RATE_CARD.freightFor(ports),
-                                note:ports+' port freight \u2014 $250 mobilisation + $100/port' } : null;
-    case 'network':    return { qty:ports, unit:'EA', mat:ST.networking.mat*ports, lab:0,
-                                note:'$480/port \u2014 public L2 / MUD only' };
-    case 'warranty':   return { qty:ports, unit:'EA', mat:0, lab:0,
-                                note:'quote from the OEM \u2014 not carried on the reference jobs' };
-    case 'striping':   return { qty:ports, unit:'EA', mat:0, lab:0, note:'' };
-    /* One bollard per Level 2 PORT is the standing rule, so every port
-       carries protection whether or not it was drawn. The drawing still
-       wins when it shows MORE than the rule requires — extra bollards get
-       drawn for a reason.
-
-       Worth knowing: all five filed Eversource sheets carry one per
-       PEDESTAL, not per port (4 ports/2 bollards, 10 ports/5). This rule
-       roughly doubles that line, so the sheet now says plainly how the
-       count was reached. */
-    case 'bollard':    var drawn=num(DATA.nBollard)||0;
-                       var perPort=(chargerClass()==='l2') ? ports : 0;
-                       var nb=Math.max(drawn, perPort);
-                       if(!nb) return null;
-                       return { qty:nb, unit:'EA',
-                                mat:RATE_CARD.bollard.mat*nb, lab:RATE_CARD.bollard.lab*nb,
-                                note:scopeNote('bollard', nb)
-                                     + (drawn && drawn<perPort
-                                        ? ' Count is one per Level 2 port ('+perPort+'); the drawing shows '
-                                          + drawn + '.'
-                                        : drawn>perPort
-                                        ? ' Count taken from the drawing ('+drawn+'), above the one-per-port minimum.'
-                                        : ' One per Level 2 port.') };
-    case 'pedestal':   return { qty:peds, unit:'EA', mat:ST.pedestal.mat*peds, lab:ST.pedestal.lab*peds,
-                                note:peds+' dual-port pedestals' };
-    case 'meter':      return { qty:1, unit:'LS', mat:ST.metering.mat, lab:ST.metering.lab, note:'' };
-    /* Mounting hardware is per PORT, not per pedestal, and it was the single
-       biggest thing missing when this was reconciled against 11 Marble:
-       4 wall-mount kits at $225 + $500 labor is $2,900 on a $56k job. */
-    case 'mount':      return { qty:ports, unit:'EA', mat:ST.wallMount.mat*ports,
-                                lab:ST.wallMount.lab*ports, note:ports+' \u00d7 wall-mount kits' };
-    case 'housePanel': return { qty:1, unit:'LS', mat:0, lab:ST.housePanel.lab, note:'' };
-    /* service pedestals counted off the drawing: the metering socket and its
-       labour per pedestal, plus the pedestal hardware allowance */
-    case 'svcPedestal': var _nsp=num(DATA.nServicePedestal)||0;
-                       if(!(_nsp>0)) return null;
-                       return { qty:_nsp, unit:'EA',
-                                mat:(ST.metering.mat+ST.servicePedestal.mat)*_nsp,
-                                lab:ST.metering.lab*_nsp,
-                                note:_nsp+' service pedestal'+(_nsp===1?'':'s')+' on the site map \u2014 meter socket + main on a freestanding pedestal, a new utility service; pedestal hardware is an allowance, confirm against the utility spec' };
-    case 'xfmrpad':    return isNewService() ? { qty:1, unit:'EA',
-                                mat:RATE_CARD.xfmrPad.mat, lab:RATE_CARD.xfmrPad.lab,
-                                note:scopeNote('xfmrpad', 1) } : null;
-    case 'restore':    return ftT>0 ? { qty:ftT, unit:'LF', mat:B.perFoot.restoration.mat*ftT,
-                                        lab:B.perFoot.restoration.lab*ftT, note:scopeNote('restore', ftT) } : null;
-    /* The rate card has carried per-foot conduit, cable and trench rates all
-       along, but nothing ever applied them: a drawing with 746 LF of conduit
-       still exported a Conduit & Cable row reading $0 next to a priced
-       trench, because these rows were only filled when the estimate happened
-       to carry a matching line. Underground and above ground price
-       separately — an indoor run costs more per foot and less to dig. */
-    /* ── FUTURE-PROOFING ROWS ─────────────────────────────────────
-       Driven by the FP positions drawn on the map. They live in the 'fp'
-       bucket, which every programme form books as ineligible, so they
-       never inflate the rebate base. */
-    /* Spare conduit runs the live route — same trench, pulled at the same
-       time — so it defaults to the measured underground run, not a
-       per-position guess. */
-    case '_fpConduit': var nfp=num(DATA.nFpPositions)||0;
-                       if(!nfp) return null;
-                       var fpLf=num(DATA.ftConduitFP) || num(DATA.ftConduitUG) || 0;
-                       if(!fpLf) return null;
-                       return { qty:fpLf, unit:'LF',
-                                mat:RATE_CARD.fpConduit.mat*fpLf,
-                                lab:RATE_CARD.fpConduit.lab*fpLf,
-                                note:Math.round(fpLf)+' LF \u2014 spare conduit & conductors to '
-                                     +nfp+' future position'+(nfp===1?'':'s')
-                                     +', pulled while the trench is open. Not energised.' };
-    /* The only NEW excavation future proofing needs: the ditch extended past
-       the last live stall to reach the future one. One space per position,
-       two at most — beyond that the run is being rebuilt, not extended. */
-    case '_fpTrench':  var nft=num(DATA.nFpPositions)||0;
-                       if(!nft) return null;
-                       var stalls=Math.min(nft, RATE_CARD.fpMaxStalls);
-                       var fpTrenchLf=num(DATA.ftTrenchFP) || (stalls*RATE_CARD.fpStallWidthFt);
-                       var _tr=trenchSurfacePaved()?RATE_CARD.trenchPaved:RATE_CARD.trenchTurf;
-                       return { qty:fpTrenchLf, unit:'LF',
-                                mat:_tr.mat*fpTrenchLf, lab:_tr.lab*fpTrenchLf,
-                                note:fpTrenchLf+' LF \u2014 ditch extended '+stalls+' parking space'
-                                     +(stalls===1?'':'s')+' to reach '+nft+' future position'
-                                     +(nft===1?'':'s')+'. The live run is already dug and claimed.' };
-    case '_fpPanel':   var np2=num(DATA.nFpPositions)||0;
-                       if(!np2) return null;
-                       return { qty:np2, unit:'EA',
-                                mat:RATE_CARD.fpPanelPosition.mat*np2,
-                                lab:RATE_CARD.fpPanelPosition.lab*np2,
-                                note:np2+' panel position'+(np2===1?'':'s')
-                                     +' held for future EVSE \u2014 breaker space, bus and '
-                                     +'terminations. No charger, no networking.' };
-    case 'conduit':    return ftUG>0 ? { qty:ftUG, unit:'LF',
-                                        mat:RATE_CARD.conduitCableUG.mat*ftUG,
-                                        lab:RATE_CARD.conduitCableUG.lab*ftUG,
-                                        note:scopeNote('conduit', ftUG) } : null;
-    /* The new-service structure rides on this row: $735 of material on three
-       of the five filed jobs, two of which have ZERO above-ground footage —
-       so the row has to appear for the adder alone, and the adder must not
-       scale with feet. Driven by the site being a new service, never added
-       silently on an existing-service job. */
-    /* Above-ground footage belongs on the form's ABOVE-GROUND row. On the
-       Eversource matrix 'wire' is "Cable - Underground" and the above-ground
-       row is keyed conduitAG — so 15 LF of interior EMT was being priced
-       onto an underground line. Price conduitAG where the form has it, and
-       fall back to 'wire' only on forms that use it as the AG row. */
-    case 'conduitAG':  return ftAG>0 ? { qty:ftAG, unit:'LF',
-                                mat:RATE_CARD.conduitCableAG.mat*ftAG
-                                    + (newSvc?RATE_CARD.newServiceStructure.mat:0),
-                                lab:RATE_CARD.conduitCableAG.labBase
-                                    + RATE_CARD.conduitCableAG.labPerFt*ftAG,
-                                note:scopeNote('wire', ftAG) } : null;
-    case 'wire':       if(rowExists(bucket,'conduitAG')) return null;   /* AG lives there */
-                       if(!(ftAG>0) && newSvc)
-                         return { qty:0, unit:'LF', mat:RATE_CARD.newServiceStructure.mat, lab:0,
-                                  note:'New-service structure (underground lateral, no riser) per Price Guide' };
-                       return ftAG>0 ? { qty:ftAG, unit:'LF',
-                                        mat:RATE_CARD.conduitCableAG.mat*ftAG
-                                            + (newSvc?RATE_CARD.newServiceStructure.mat:0),
-                                        lab:RATE_CARD.conduitCableAG.labBase
-                                            + RATE_CARD.conduitCableAG.labPerFt*ftAG,
-                                        note:scopeNote('wire', ftAG) } : null;
-    case 'trench':     return ftT>0 ? { qty:ftT, unit:'LF',
-                                        mat:RATE_CARD.trenchPaved.mat*ftT,
-                                        lab:RATE_CARD.trenchPaved.lab*ftT,
-                                        note:scopeNote('trench', ftT) } : null;
-    case 'trenchTurf': return ftTurf>0 ? { qty:ftTurf, unit:'LF',
-                                        mat:RATE_CARD.trenchTurf.mat*ftTurf,
-                                        lab:RATE_CARD.trenchTurf.lab*ftTurf,
-                                        note:scopeNote('trenchTurf', ftTurf) } : null;
-    case 'concrete':   var np=num(DATA.nPad)||0;
-                       return np ? { qty:np, unit:'EA',
-                                mat:RATE_CARD.concreteBase.mat*np,
-                                lab:RATE_CARD.concreteBase.lab*np,
-                                note:scopeNote('concrete', np, ports) } : null;
-    default: return null;
-  }
+  var R = _evpRequest('rates', _evpContext());
+  if(R._pending) return undefined;
+  if(R.card) _RATE_DEFAULTS = R.card;
+  if(row==='permit') return { qty:1, unit:'LS', mat:0, lab:permitFromSubtotal(subtotalExcluding('permit')), note:'3% of project cost' };
+  var r = R.rates ? R.rates[bucket+'|'+row] : null;
+  return r ? { qty:r.qty, unit:r.unit, mat:r.mat, lab:r.lab, note:r.note||'' } : null;
 }
 
 /* Sum everything except one row, so the 3% permitting rate has a base. */
@@ -3678,6 +3024,7 @@ function syncCivil(){
     l=LINES[i];
     if(l.src!=='standard' || !CIVIL_ROWS[l.row] || l.pinned) continue;
     rate=standardRate(l.row, l.bucket);
+    if(rate===undefined) continue;             /* being priced: leave the line as it is */
     /* Flipping the trench surface does not zero the excavation, it MOVES it:
        the row itself migrates to the other surface rather than leaving the
        sheet with no trench at all. */
@@ -3719,7 +3066,7 @@ function syncDesign(){
     if(l.row!=='design' || l.pinned) continue;
     if(l.src!=='standard' && !l.baseline) continue;
     rate=standardRate('design', l.bucket);
-    if(!rate) continue;
+    if(!rate) continue;                        /* none, or still being priced */
     if(r2(num(l.lab))!==r2(rate.lab) || r2(num(l.mat))!==r2(rate.mat) || num(l.qty)!==num(rate.qty)){
       l.mat=r2(rate.mat); l.lab=r2(rate.lab); l.qty=rate.qty; l.unit=rate.unit; l.note=rate.note||'';
     }
@@ -3748,6 +3095,7 @@ function priceCivilFromDrawing(){
     }
     if(have){ skipped.push(label+' \u2014 already priced by the estimate'); continue; }
     rate=standardRate(row,bucket);
+    if(rate===undefined){ skipped.push(label+' \u2014 being priced, try again in a moment'); continue; }
     if(!rate){ continue; }                     /* nothing measured for it */
     LINES.push({ id:_nid++, desc:label, size:'', cat:'', qty:rate.qty, unit:rate.unit,
                  mat:r2(rate.mat), lab:r2(rate.lab), note:rate.note||'',
@@ -3788,9 +3136,12 @@ function scopeGroup(row){
   return null;
 }
 
+var _evpPendingStd=false;
 function addStandardRows(opts){
   opts=opts||{};
   var i, j, have, existing, rate, filled=0, added=0;
+  _evpPendingStd=false;
+  (function(){ var R=_evpRequest('rates', _evpContext()); if(R._pending) R._promise.then(function(){ try{ addStandardRows(opts); }catch(e){} }, function(){}); })();
   for(i=0;i<STANDARD.length;i++){
     var bucket=STANDARD[i][1], row=STANDARD[i][2];
     if(!rowExists(bucket,row)) continue;          /* form may not have that row */
@@ -3810,6 +3161,7 @@ function addStandardRows(opts){
       if(have) continue;      /* sibling has it — nothing to add or fill */
     }
     rate=standardRate(STANDARD[i][4]||row, bucket);
+    if(rate===undefined){ _evpPendingStd=true; continue; }   /* being priced: add it when the answer lands */
     /* nothing measured to price it with — leave the row out rather than
        adding a $0 line that looks like a decision */
     if(!rate && STANDARD[i][3]) continue;
@@ -4431,43 +3783,21 @@ var RATE_FIELDS = [
 /* The synthetic keys above map onto values that do not sit in a
    {mat,lab} pair, so they are read and written through here. */
 function rateGet(k, which){
-  var o=RATE_CARD;
-  switch(k){
-    case '_agBase':      return o.conduitCableAG.labBase;
-    case '_agPerFt':     return o.conduitCableAG.labPerFt;
-    case '_fpStall':     return o.fpStallWidthFt;
-    case '_design':      return 1000;
-    case '_designFlat':  return 2000;
-    case '_freightBase': return 250;
-    case '_freightPort': return 100;
-    case '_permitPct':   return PERMIT_PCT*100;
-    default: return o[k] ? num(o[k][which]) : 0;
-  }
+  var o=RATE_OVERRIDES[k];
+  if(o && o[which]!=null) return num(o[which]);
+  var d=_RATE_DEFAULTS && _RATE_DEFAULTS[k];
+  return d ? num(d[which]) : 0;
 }
 function rateSet(k, which, v){
-  v=num(v);
-  var o=RATE_CARD;
-  switch(k){
-    case '_agBase':      o.conduitCableAG.labBase=v; return;
-    case '_agPerFt':     o.conduitCableAG.labPerFt=v; return;
-    case '_fpStall':     o.fpStallWidthFt=v; return;
-    case '_design':      RATE_CARD._designPerPort=v; return;
-    case '_designFlat':  RATE_CARD._designFlat=v; return;
-    case '_freightBase': RATE_CARD._freightBase=v; return;
-    case '_freightPort': RATE_CARD._freightPort=v; return;
-    case '_permitPct':   PERMIT_PCT=v/100; return;
-    default: if(o[k]) o[k][which]=v;
-  }
+  /* the server prices with these; the page only records them */
+  if(!RATE_OVERRIDES[k]) RATE_OVERRIDES[k]={};
+  RATE_OVERRIDES[k][which]=num(v);
+  if(k==='_permitPct') PERMIT_PCT=num(v)/100;
 }
 function rateDefaults(){
-  if(!RATE_CARD._defaults){
-    RATE_CARD._defaults={};
-    for(var i=0;i<RATE_FIELDS.length;i++){
-      var f=RATE_FIELDS[i]; if(!f.k) continue;
-      RATE_CARD._defaults[f.k]={ mat:rateGet(f.k,'mat'), lab:rateGet(f.k,'lab') };
-    }
-  }
-  return RATE_CARD._defaults;
+  var out={}, i;
+  for(i=0;i<RATE_FIELDS.length;i++){ var f=RATE_FIELDS[i]; if(!f.k) continue; var d=_RATE_DEFAULTS && _RATE_DEFAULTS[f.k]; out[f.k]={ mat:d?num(d.mat):0, lab:d?num(d.lab):0 }; }
+  return out;
 }
 function setRate(k, which, v){
   rateDefaults();
@@ -4478,24 +3808,21 @@ function setRate(k, which, v){
   render();
 }
 function resetRate(k){
-  var d=rateDefaults()[k]; if(!d) return;
-  rateSet(k,'mat',d.mat); rateSet(k,'lab',d.lab);
   delete RATE_OVERRIDES[k];
+  if(k==='_permitPct') PERMIT_PCT=0.03;
   saveRateOverrides();
   render();
 }
 function resetAllRates(){
-  var d=rateDefaults(), k;
-  for(k in d) if(d.hasOwnProperty(k)){ rateSet(k,'mat',d[k].mat); rateSet(k,'lab',d[k].lab); }
-  RATE_OVERRIDES={};
+  RATE_OVERRIDES={}; PERMIT_PCT=0.03;
   saveRateOverrides();
   render();
 }
 function applyOverrideObj(o){
-  var k, w;
+  var k;
   for(k in o) if(o.hasOwnProperty(k) && o[k] && typeof o[k]==='object'){
-    for(w in o[k]) if(o[k].hasOwnProperty(w)) rateSet(k,w,o[k][w]);
     RATE_OVERRIDES[k]=o[k];
+    if(k==='_permitPct' && o[k].mat!=null) PERMIT_PCT=num(o[k].mat)/100;
   }
 }
 function loadRateOverrides(){
@@ -4522,10 +3849,7 @@ function loadRateOverrides(){
 }
 /* Reset without writing anything back — used before applying the account
    copy so a rate cleared on another machine does not linger here. */
-function resetAllRatesQuiet(){
-  var d=rateDefaults(), k;
-  for(k in d) if(d.hasOwnProperty(k)){ rateSet(k,'mat',d[k].mat); rateSet(k,'lab',d[k].lab); }
-}
+function resetAllRatesQuiet(){ RATE_OVERRIDES={}; PERMIT_PCT=0.03; }
 
 /* One document per account. Keyed by the org domain so a company shares one
    rate card, which is the point: pricing is the company's, not the rep's. */
@@ -4874,8 +4198,8 @@ function renderSiteForm(){
                           'Non-continuously paved (ground cover, turf)'] })
    + '<div class="note" style="margin-top:-4px;margin-bottom:12px">'
    + 'Sets which row the excavation lands on and at what rate \u2014 '
-   + money(RATE_CARD.trenchPaved.mat)+'/'+money(RATE_CARD.trenchPaved.lab)+' per foot paved, '
-   + money(RATE_CARD.trenchTurf.mat)+'/'+money(RATE_CARD.trenchTurf.lab)+' turf. '
+   + money(rateGet('trenchPaved','mat'))+'/'+money(rateGet('trenchPaved','lab'))+' per foot paved, '
+   + money(rateGet('trenchTurf','mat'))+'/'+money(rateGet('trenchTurf','lab'))+' turf. '
    + 'The editor marks every run \u201cin-ground\u201d, which means buried, not unpaved, so it '
    + 'cannot decide this for you.</div>';
 

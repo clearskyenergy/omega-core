@@ -70,10 +70,12 @@ function grab(name){
 const NAMES = ['num','r2','d','uniqJoin','_xmlEsc','_xmlUnesc','_colNum','_colLetter','esmaSetCell',
                'esmaTable','esmaColName','esmaA1','esmaFormulasToA1','esmaCells','esmaEval',
                'esmaCacheResults','esmaTableXmlPlain','esmaWorkbookXml','esmaSheetName','esmaResolve',
-               'esmaRollup','esmaFillXml','designRate'];
+               'esmaRollup','esmaFillXml'];
+/* designRate moved to the server with the price books (2026-10-13) */
+const EV = require(path.join(ROOT, 'api/_lib/ev-pricebook'));
 const direct = /var ESMA_MAT_DIRECT\s*=\s*(\{[^}]*\});/.exec(html);
 ok(!!direct, 'ESMA_MAT_DIRECT is on the page');
-const ctx = { DATA:{}, EDITOR_FLEET:null, console };
+const ctx = { DATA:{}, EDITOR_FLEET:null, console, designRate: EV.designRate };
 vm.createContext(ctx);
 vm.runInContext('var ESMA_MAT_DIRECT=' + direct[1] + ';\n' + NAMES.map(grab).join('\n') + '\n', ctx);
 const P = ctx;
@@ -187,7 +189,7 @@ ok(r && r.lab === 2000 && r.qty === 1, 'Eversource CT, four ports: $2,000 flat, 
 r = P.designRate(CT, 4, { _designPerPort:1200 });
 ok(r && r.lab === 4800, 'the per-port override still applies there');
 ok(P.designRate(CT, 0, {}) === null, 'no ports, no per-port design line');
-ok(/case 'design':\s*return designRate\(FORM, ports, RATE_CARD\);/.test(html), 'standardRate asks designRate');
+ok(/case 'design':\s*return designRate\(C\.form, ports, RATE_CARD\);/.test(fs.readFileSync(path.join(ROOT, 'api/_lib/ev-pricebook.js'), 'utf8')), 'standardRate asks designRate (on the server since 2026-10-13)');
 ok(/function render\(\)\{ syncCivil\(\); syncDesign\(\); syncPermit\(\);/.test(html), 'render re-reads design before permitting');
 ok(/form\.designFlat && l\.row==='design' && !l\.pinned/.test(html), 'buildModel prices design for the form being written');
 ok(/\(LINES\[i\]\.row==='permit'\|\|LINES\[i\]\.row==='design'\) && \(field==='mat'\|\|field==='lab'\)\) LINES\[i\]\.pinned=true/.test(html), 'a typed-over design figure is pinned');

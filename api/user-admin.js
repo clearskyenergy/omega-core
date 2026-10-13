@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* POST /api/user-admin — ClearSky staff only. The account operations a support
    desk actually needs, which Firestore rules cannot express because they act on
    Firebase Auth rather than on a document.

@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* provider -> feeds map, mirrors om-telemetry-gate.js catalog.
    Keep in sync when you add providers. Used by the proxy to
    recompute hasTelemetry on the status doc. */

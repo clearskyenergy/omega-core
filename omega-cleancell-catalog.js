@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ClearSky-OMEGA | CleanCell US reference catalog, brochure Rev H (2026-10-06).
  * Specifications only. Quotes, component costs and the supplier PDF do not
  * belong in this public repository. This extends the editor's BESS_CATALOG;

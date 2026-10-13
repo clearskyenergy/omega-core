@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* POST /api/stripe-portal — tenant admin opens the Stripe Customer Portal
    (add card, turn on autopay, download invoices). Returns { url }.
    Stripe hosts the whole UI; we never touch card data. */

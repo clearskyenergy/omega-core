@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ============================================================================
    OMEGA SSO — the tenant side. ONE SCRIPT TAG, nothing else to change.
 
