@@ -108,7 +108,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var A = require('./_lib/admin'), C = require('./_lib/crm'), PF = require('./_lib/proforma');
-var I = require('./_lib/po-intake'), G = require('./_lib/site-agreement');
+var I = require('./_lib/po-intake'), G = require('./_lib/site-agreement'), K = require('./_lib/site-kinds');
 var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA = require('./_lib/package-access'), CP = require('./compute-proforma'), DECK = require('./_lib/deck-brand');
 var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
@@ -199,8 +199,18 @@ function siteInput(b) {
     status: C.text(b.status, 60, 'Status'),
     notes: C.text(b.notes, 4000, 'Notes', { multiline: true }),
     externalSiteIds: ids,
-    tags: tags
+    tags: tags,
+    /* what KIND of project the site is: the Site Map project's own scope keys
+       (api/_lib/site-kinds.js). Absent from the body = unchanged; [] clears. */
+    siteScopes: K.scopesInput(b.siteScopes)
   };
+}
+/* A field the caller did not send is not a field set to null: strip it, so a
+   save from an older form or an import sheet leaves the stored value alone
+   (Firestore refuses undefined outright). */
+function sentFields(input) {
+  Object.keys(input).forEach(function (k) { if (input[k] === undefined) delete input[k]; });
+  return input;
 }
 function siteView(id, s) {
   s = s || {};
@@ -229,6 +239,7 @@ function siteView(id, s) {
     archived: s.archived === true, archivedAt: C.iso(s.archivedAt),
     partners: s.partners || null, revision: s.revision || 1,
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
+    siteScopes: Array.isArray(s.siteScopes) ? s.siteScopes : [],
     createdAt: C.iso(s.createdAt), createdBy: s.createdBy || null,
     updatedAt: C.iso(s.updatedAt), updatedBy: s.updatedBy || null,
     source: s.source || null
@@ -404,7 +415,7 @@ var handler = A.handler(async function (req, res) {
 
   /* ── site facts ─────────────────────────────────────────────────────── */
   if (action === 'site-save') {
-    var input = siteInput(b), id = b.id ? C.recordId(b.id, 'Site') : null, cref = id ? root.collection('sites').doc(id) : root.collection('sites').doc();
+    var input = sentFields(siteInput(b)), id = b.id ? C.recordId(b.id, 'Site') : null, cref = id ? root.collection('sites').doc(id) : root.collection('sites').doc();
     return db.runTransaction(async function (tx) {
       var cur = id ? await tx.get(cref) : null;
       if (id && !cur.exists) throw A.httpError(404, 'That site is not in this workspace');
@@ -430,7 +441,7 @@ var handler = A.handler(async function (req, res) {
     if (rows.length > 500) throw A.httpError(400, 'At most 500 rows per import; split the file and retry');
     var prepared = [], importErrors = [];
     rows.forEach(function (r, i) {
-      try { prepared.push(siteInput(r || {})); }
+      try { prepared.push(sentFields(siteInput(r || {}))); }
       catch (e) { importErrors.push({ row: i + 1, error: e.message }); }
     });
     if (importErrors.length)
@@ -913,6 +924,9 @@ function tagList(v) {
    nameplate says otherwise), and compute when it has been screened or
    sized for pods. The editor opens the build those scopes select. */
 function siteScopes(s) {
+  /* declared on the record wins; the derivation below is for a site that
+     was registered before the picker existed */
+  if (Array.isArray(s.siteScopes) && s.siteScopes.length) return s.siteScopes.slice();
   var tags = (Array.isArray(s.tags) ? s.tags : []).map(function (t) { return String(t).toLowerCase(); });
   var scopes = [];
   if (tags.indexOf('dcfc') >= 0 || (Number(s.installedKw) >= 150 && tags.indexOf('l2') < 0)) scopes.push('dcfc'); else scopes.push('l2');

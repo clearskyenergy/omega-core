@@ -113,6 +113,20 @@
   .pf-stats{grid-template-columns:1fr 1fr}
   .dr-facts{grid-template-columns:1fr 1fr}
 }
+.reg-ov{position:fixed;inset:0;background:rgba(14,26,36,.42);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.reg-dlg{background:var(--ows-paper);border-radius:16px;box-shadow:var(--ows-shadow);width:min(640px,100%);max-height:92vh;overflow:auto;padding:20px 22px 18px}
+.reg-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}.reg-head h2{margin:0;font-size:18px}
+.reg-x{border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--ows-ink2);padding:4px 8px}
+.reg-l{display:block;font-size:11.5px;font-weight:600;color:var(--ows-ink2);margin:12px 0 4px;letter-spacing:.02em}.reg-hint{font-weight:400;color:var(--ows-ink2)}
+.reg-in{width:100%;border:1px solid var(--ows-line);border-radius:10px;padding:9px 11px;font:inherit;font-size:14px;background:var(--ows-paper);color:var(--ows-ink);box-sizing:border-box}
+.reg-row{display:grid;grid-template-columns:1fr 120px;gap:10px}
+.reg-kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-top:6px}
+.reg-kind{text-align:left;border:1.5px solid var(--ows-line);border-radius:12px;background:var(--ows-paper);padding:10px 12px;cursor:pointer;font:inherit;color:var(--ows-ink)}
+.reg-kind b{display:block;font-size:13.5px}.reg-kind span{display:block;font-size:11.5px;color:var(--ows-ink2);margin-top:2px}
+.reg-kind.on{border-color:var(--ows-brand);background:var(--ows-brand-soft);box-shadow:0 0 0 3px rgba(0,137,189,.12)}
+.reg-err{min-height:18px;color:#B03A1E;font-size:12.5px;margin-top:8px}
+.reg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+@media(max-width:520px){.reg-row{grid-template-columns:1fr}.reg-kinds{grid-template-columns:1fr 1fr}}
 </style>
 </head>
 <body>
@@ -139,6 +153,7 @@
     <select class="pf-sel" id="f-status" aria-label="Status"><option value="">Any status</option></select>
     <select class="pf-sel" id="f-meter" aria-label="Meter"><option value="">Meter: any</option><option value="yes">Meter owned</option><option value="no">No meter</option><option value="unk">Unknown</option></select>
     <select class="pf-sel" id="f-pf" aria-label="Pro forma"><option value="">Pro forma: any</option><option value="yes">Run</option><option value="no">Not run</option></select>
+    <select class="pf-sel" id="f-kind" aria-label="Project type"><option value="">Any type</option></select>
     <label class="pf-toggle"><input type="checkbox" id="f-archived"> Show archived</label>
   </div>
   <div class="pf-bar" id="bar" role="toolbar" aria-label="Selected sites">
@@ -187,6 +202,7 @@
 <script src="/omega-tenant.js"></script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-workspace-shell.js"></script>
+<script src="/omega-newproject.js"></script>
 <script>
 (function () {
   'use strict';
@@ -287,8 +303,9 @@
 
   /* ── filters, sort, render ──────────────────────────────────────────── */
   function filtered() {
-    var q = byId('q').value.trim().toLowerCase(), st = byId('f-state').value, mt = byId('f-meter').value, pf = byId('f-pf').value, ss = byId('f-status').value;
+    var q = byId('q').value.trim().toLowerCase(), st = byId('f-state').value, mt = byId('f-meter').value, pf = byId('f-pf').value, ss = byId('f-status').value, kd = byId('f-kind').value;
     var rows = SITES.filter(function (s) {
+      if (kd && (s.siteScopes || []).indexOf(kd) < 0) return false;
       if (q) {
         var ids = s.externalSiteIds || {}, hay = [s.name, s.city, s.state, s.address, s.status, (s.tags || []).join(' '), s.id].concat(Object.keys(ids).map(function (k) { return ids[k]; })).join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) return false;
@@ -339,7 +356,7 @@
       rows.map(function (s) {
         var lp = s.latestProforma || null, irr = irrOf(s), av = availKw(s), loc = [s.city, s.state].filter(Boolean).join(', ');
         var ids = s.externalSiteIds || {}, idKey = Object.keys(ids)[0];
-        var sub = [idKey ? ids[idKey] : '', (s.tags || []).slice(0, 3).join(' · ')].filter(Boolean).join(' · ') || (unk(s.termYearsRemaining) ? 'Term not provided' : s.termYearsRemaining + ' yr term');
+        var sub = [kindLabels(s).join(' + '), idKey ? ids[idKey] : '', (s.tags || []).slice(0, 3).join(' · ')].filter(Boolean).join(' · ') || (unk(s.termYearsRemaining) ? 'Term not provided' : s.termYearsRemaining + ' yr term');
         return '<div class="pf-tr body' + (SEL[s.id] ? ' sel' : '') + (s.archived ? ' archived' : '') + '" data-id="' + esc(s.id) + '" role="button" tabindex="0">' +
           '<div class="selrow"><input type="checkbox" class="sel-one" value="' + esc(s.id) + '"' + (SEL[s.id] ? ' checked' : '') + ' aria-label="Select ' + esc(s.name || 'site') + '"></div>' +
           '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc(sub) + '</div></div>' +
@@ -573,6 +590,7 @@
       fact('Installed chargers', unk(s.installedKw) ? null : esc(s.installedKw) + ' kW', 'nameplate, not approved capacity') +
       fact('Reported peak', unk(s.reportedPeakKw) ? null : esc(s.reportedPeakKw) + ' kW' + (s.peakUnresolved ? ' <span class="pill pill-warn">unresolved</span>' : ''), 'workbook statistic') +
       fact('Meter', meterPill(s)) + fact('Remaining term', unk(s.termYearsRemaining) ? '<span class="t-mut">Needs verification</span>' : esc(s.termYearsRemaining) + ' yr') +
+      fact('Project type', kindLabels(s).length ? esc(kindLabels(s).join(' + ')) : null) +
       fact('Tags', (s.tags || []).length ? esc(s.tags.join(', ')) : null) +
       (s.address ? fact('Address', esc(s.address)) : '') + '</div>';
     html += '<div class="dr-sec">Hand-offs</div><div class="dr-facts">' +
@@ -624,12 +642,62 @@
     }).catch(function (e) { msg(e.message); byId('tbl').innerHTML = '<div class="pf-empty"><b>Could not load the register.</b>' + esc(e.message) + '</div>'; try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {} });
   }
   byId('btn-more').addEventListener('click', function () { load(true, true); });
-  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
+  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf', 'f-kind'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
   byId('f-archived').addEventListener('change', function () { load(); });
-  byId('btn-add').addEventListener('click', function () {
-    var name = window.prompt('Site name:'); if (!name || !name.trim()) return;
-    post('site-save', { name: name.trim() }).then(function (j) { window.location.href = '/site-crm.html?site=' + encodeURIComponent(j.id); }).catch(function (e) { msg(e.message); });
-  });
+  byId('btn-add').addEventListener('click', openRegister);
+
+  /* ── Register site: the name, where it is, and what KIND of project it is
+     (Tommy, 2026-10-13: "if i put a site and register a site in here i need
+     to be able to select what kind of project it is"). The kinds are the
+     New project dialog's own cards (OmegaNewProject.SCOPES, the ONE list),
+     stored on the site as siteScopes and carried onto the Site Map project
+     the site makes. More than one may apply (solar + storage + chargers). */
+  function kinds() { return (window.OmegaNewProject && OmegaNewProject.SCOPES) || []; }
+  function kindLabels(s) {
+    var L = kinds();
+    return (s.siteScopes || []).map(function (k) { var d = L.filter(function (x) { return x.key === k; })[0]; return d ? d.label : k; });
+  }
+  function fillKindFilter() {
+    var sel = byId('f-kind'); if (!sel || sel.options.length > 1) return;
+    kinds().forEach(function (k) { var o = document.createElement('option'); o.value = k.key; o.textContent = k.label; sel.appendChild(o); });
+  }
+  function openRegister() {
+    if (byId('reg-overlay')) return;
+    var ov = document.createElement('div'); ov.id = 'reg-overlay'; ov.className = 'reg-ov';
+    ov.innerHTML = '<div class="reg-dlg" role="dialog" aria-modal="true" aria-labelledby="reg-h">' +
+      '<div class="reg-head"><h2 id="reg-h">Register a site</h2><button type="button" class="reg-x" id="reg-close" aria-label="Close">\u00d7</button></div>' +
+      '<label class="reg-l" for="reg-name">Site name *</label><input class="reg-in" id="reg-name" type="text" placeholder="e.g. Sunnyside Nursing and Post-Acute Care Center" maxlength="200">' +
+      '<label class="reg-l" for="reg-address">Address</label><input class="reg-in" id="reg-address" type="text" placeholder="Street address" maxlength="300">' +
+      '<div class="reg-row"><div><label class="reg-l" for="reg-city">City</label><input class="reg-in" id="reg-city" type="text" maxlength="120"></div>' +
+      '<div><label class="reg-l" for="reg-state">State</label><input class="reg-in" id="reg-state" type="text" placeholder="CA" maxlength="10"></div></div>' +
+      '<div class="reg-l" style="margin-top:14px">What kind of project is it? <span class="reg-hint">Pick every one that applies; Site Map opens on them.</span></div>' +
+      '<div class="reg-kinds" id="reg-kinds">' + kinds().map(function (k) {
+        return '<button type="button" class="reg-kind" data-kind="' + esc(k.key) + '" aria-pressed="false"><b>' + esc(k.label) + '</b><span>' + esc(k.desc || '') + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="reg-err" id="reg-err"></div>' +
+      '<div class="reg-foot"><button type="button" class="ows-pill" id="reg-cancel">Cancel</button><button type="button" class="ows-pill primary" id="reg-go">Register site</button></div></div>';
+    document.body.appendChild(ov);
+    function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    byId('reg-close').addEventListener('click', close); byId('reg-cancel').addEventListener('click', close);
+    Array.prototype.forEach.call(ov.querySelectorAll('.reg-kind'), function (b) {
+      b.addEventListener('click', function () { var on = b.getAttribute('aria-pressed') === 'true'; b.setAttribute('aria-pressed', on ? 'false' : 'true'); b.classList.toggle('on', !on); });
+    });
+    byId('reg-go').addEventListener('click', function () {
+      var name = byId('reg-name').value.trim(), err = byId('reg-err');
+      var picked = Array.prototype.map.call(ov.querySelectorAll('.reg-kind.on'), function (b) { return b.getAttribute('data-kind'); });
+      if (!name) { err.textContent = 'A site needs a name.'; byId('reg-name').focus(); return; }
+      if (!picked.length) { err.textContent = 'Pick at least one project type.'; return; }
+      err.textContent = ''; byId('reg-go').disabled = true;
+      post('site-save', { name: name, address: byId('reg-address').value.trim(), city: byId('reg-city').value.trim(), state: byId('reg-state').value.trim().toUpperCase(), siteScopes: picked })
+        .then(function (j) { window.location.href = '/site-crm.html?site=' + encodeURIComponent(j.id); })
+        .catch(function (e) { byId('reg-go').disabled = false; err.textContent = e.message; });
+    });
+    byId('reg-name').focus();
+  }
+  fillKindFilter();
 
   /* ── who is here: the sign-in, then the entitlements (the workspace) ── */
   var ENT_TIMER = null;

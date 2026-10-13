@@ -29,7 +29,7 @@
    node scripts/test-site-crm.js
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var assert = require('node:assert/strict');
+var assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
 var FD = require('./_lib/firestore-double'), DB = FD.DB, mock = FD.mock;
 var db, store = {}, failSave = false;
 var A = { db: function () { return db; }, safeOrg: function (v) { return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v || '') ? v : ''; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; },
@@ -520,6 +520,43 @@ function seed() {
     MAIL_FAIL = false;
   });
 
+
+  console.log('\nproject type');
+  await test('a site declares what KIND of project it is: the Site Map scope keys, judged by the one type table, carried onto the project it makes', async function () {
+    var made = await call('POST', { action: 'site-save', name: 'Sunnyside', siteScopes: ['der', 'bess'] }, PM);
+    assert.deepEqual(made.site.siteScopes, ['der', 'bess']);
+    await rejects(call('POST', { action: 'site-save', name: 'X', siteScopes: ['warehouse'] }, PM), 400, /not one the platform knows/);
+    await rejects(call('POST', { action: 'site-save', name: 'X', siteScopes: ['l2', 'dcfc', 'bess', 'der', 'compute', 'microgrid', 'building', 'solar'] }, PM), 400, /At most/);
+    var kept = await call('POST', { action: 'site-save', id: made.id, name: 'Sunnyside', city: 'Torrance' }, PM);
+    assert.deepEqual(kept.site.siteScopes, ['der', 'bess'], 'a save that does not mention the type leaves it alone');
+    assert.equal(kept.site.city, 'Torrance');
+    var more = await call('POST', { action: 'site-save', id: made.id, name: 'Sunnyside', siteScopes: 'solar, BESS, l2, bess' }, PM);
+    assert.deepEqual(more.site.siteScopes, ['solar', 'bess', 'l2'], 'a comma list, lower-cased, unique; an alias the table knows is kept as typed');
+    var cleared = await call('POST', { action: 'site-save', id: made.id, name: 'Sunnyside', siteScopes: [] }, PM);
+    assert.deepEqual(cleared.site.siteScopes, []);
+    assert.deepEqual((await call('GET', { site: made.id }, PM)).site.siteScopes, []);
+    /* the project the site makes opens on what was declared */
+    await call('POST', { action: 'site-save', id: made.id, name: 'Sunnyside', siteScopes: ['der', 'bess'] }, PM);
+    var sent = await call('POST', { action: 'send-to-editor', ids: [made.id] }, PM);
+    var proj = db.data.get('projects/' + sent.projects[0].projectId);
+    assert.deepEqual(proj.siteScopes, ['der', 'bess']); assert.equal(proj.type, 'solar');
+    /* a site registered before the picker still derives its scopes from its facts */
+    var old = await call('POST', { action: 'send-to-editor', ids: [SITE] }, PM);
+    assert.ok(db.data.get('projects/' + old.projects[0].projectId).siteScopes.length >= 1);
+    /* an import sheet may carry it; a row without the column stores nothing for it */
+    await call('POST', { action: 'site-import', rows: [{ name: 'Imp A', siteScopes: ['l2'] }, { name: 'Imp B' }] }, PM);
+    var byName = {}; db.data.forEach(function (v, k) { if (k.indexOf(O + '/sites/') === 0 && k.split('/').length === 4) byName[v.name] = v; });
+    assert.deepEqual(byName['Imp A'].siteScopes, ['l2']); assert.equal('siteScopes' in byName['Imp B'], false);
+  });
+  await test('the pages carry the picker: Register site is a dialog with the type cards, the register filters and labels by type, the site page shows it and edits it', async function () {
+    var pf = fs.readFileSync(path.join(__dirname, '..', 'portfolio.html'), 'utf8'), sc = fs.readFileSync(path.join(__dirname, '..', 'site-crm.html'), 'utf8');
+    assert.match(pf, /<script src="\/omega-newproject\.js">/, 'the cards are the New project dialog’s own list');
+    assert.match(pf, /OmegaNewProject\.SCOPES/); assert.ok(!/window\.prompt\('Site name/.test(pf), 'no prompt');
+    assert.match(pf, /id="reg-overlay"|reg-overlay'/); assert.match(pf, /class="reg-kind"/); assert.match(pf, /siteScopes: picked/);
+    assert.match(pf, /id="f-kind"/); assert.match(pf, /kindLabels\(s\)\.join/);
+    assert.match(sc, /<script src="\/omega-newproject\.js">/); assert.match(sc, /ef-kind-/); assert.match(sc, /siteScopes: kindsChecked\(\)/); assert.match(sc, /Project type/);
+    new Function(pf.split('<script>').pop().split('</script>')[0]); new Function(sc.split('<script>').pop().split('</script>')[0]);
+  });
   console.log('\naudit');
   await test('every write is audited', async function () {
     await call('POST', { site: SITE, action: 'log', type: 'note', subject: 'n' }, PM);

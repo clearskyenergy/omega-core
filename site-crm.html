@@ -93,6 +93,8 @@ label.fl{display:block;font-size:11.5px;font-weight:600;color:var(--cs-sub);marg
 input[type=text],input[type=number],input[type=date],select,textarea{font-size:16px}
 .facts{grid-template-columns:1fr 1fr;gap:10px}
 }
+.ef-kinds{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;margin:4px 0 2px}
+.ef-kind{font-size:13px;display:flex;align-items:center;gap:6px}
 </style>
 </head>
 <body>
@@ -128,6 +130,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
 <script src="/omega-tenant.js"></script>
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-workspace-shell.js"></script>
+<script src="/omega-newproject.js"></script>
 <!-- the investor deck is the BESS Pro Forma's own (proforma-logic.js); every figure on it is the finance engine's -->
 <script src="/proforma-logic.js"></script>
 <script>
@@ -202,6 +205,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<h1>' + esc(s.name || 'Unnamed site') + '</h1>' +
       '<div class="loc">' + esc([s.city, s.state].filter(Boolean).join(', ') || 'Location not provided') + '</div>' +
       '<div class="facts">' +
+      '<div class="fact"><div class="k">Project type</div><div class="v">' + (kindLabels(s).length ? esc(kindLabels(s).join(' + ')) : notProvided()) + '</div><div class="n">what Site Map opens on</div></div>' +
       '<div class="fact"><div class="k">Installed chargers</div><div class="v">' + (unk(s.installedKw) ? notProvided() : esc(s.installedKw) + ' kW') + '</div><div class="n">nameplate, not approved capacity</div></div>' +
       '<div class="fact"><div class="k">Reported peak</div><div class="v">' + (unk(s.reportedPeakKw) ? notProvided() : esc(s.reportedPeakKw) + ' kW ' + (s.peakUnresolved ? '<span class="pill pill-warn">unresolved</span>' : '')) + '</div><div class="n">workbook statistic; definition in dispute</div></div>' +
       '<div class="fact"><div class="k">Meter</div><div class="v">' + meter + '</div><div class="n">ownership at this site</div></div>' +
@@ -225,7 +229,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     document.getElementById('pane-overview').innerHTML =
       '<div class="grid2"><div class="card"><h3>Site facts</h3>' +
       fact('Address', s.address) + fact('External IDs', Object.keys(s.externalSiteIds || {}).map(function (k) { return k + ': ' + s.externalSiteIds[k]; }).join('; ')) +
-      fact('Status', s.status) + fact('Tags', (s.tags || []).join(', ')) +
+      fact('Project type', kindLabels(s).join(' + ')) + fact('Status', s.status) + fact('Tags', (s.tags || []).join(', ')) +
       (s.notes ? '<div style="margin-top:10px"><div class="li-meta">Notes</div><div class="li-body">' + esc(s.notes) + '</div></div>' : '') +
       '</div><div class="card"><h3>Screening · ' + esc(sc.label || 'none') + '</h3>' +
       fact('Screened kW', sc.screenKw) + fact('Pods', sc.pods) + fact('Reserve kW', sc.reserveKw) +
@@ -270,6 +274,17 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   }
 
   /* ── edit site facts form ── */
+  /* what KIND of project the site is: the New project dialog's own cards
+     (OmegaNewProject.SCOPES, the ONE list), stored on the site as siteScopes
+     and carried onto the Site Map project the site makes. */
+  function kinds() { return (window.OmegaNewProject && OmegaNewProject.SCOPES) || []; }
+  function kindLabels(s) {
+    var L = kinds();
+    return ((s && s.siteScopes) || []).map(function (k) { var d = L.filter(function (x) { return x.key === k; })[0]; return d ? d.label : k; });
+  }
+  function kindsChecked() {
+    return Array.prototype.map.call(document.querySelectorAll('.ef-kinds input:checked'), function (i) { return i.value; });
+  }
   function editFormHtml(s) {
     function val(v) { return v == null ? '' : String(v); }
     function numIn(id, label, v, step) {
@@ -284,6 +299,9 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       txtIn('ef-address', 'Address', s.address) + txtIn('ef-zip', 'ZIP code (the compute model reads the tariff book and climate from it)', s.zip) +
       '<label class="fl">Host type (for the compute model)</label><select id="ef-hostType" class="inline" style="width:100%">' +
       [['', 'Not set (multifamily assumed)'], ['multifamily', 'Multifamily (house meter)'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']].map(function (o) { return '<option value="' + o[0] + '"' + ((s.hostType || '') === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>' +
+      '<label class="fl">Project type (pick every one that applies)</label><div class="ef-kinds">' + kinds().map(function (k) {
+        return '<label class="ef-kind"><input type="checkbox" id="ef-kind-' + esc(k.key) + '" value="' + esc(k.key) + '"' + ((s.siteScopes || []).indexOf(k.key) >= 0 ? ' checked' : '') + '> ' + esc(k.label) + '</label>';
+      }).join('') + '</div>' +
       txtIn('ef-status', 'Status', s.status) +
       txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + txtIn('ef-meters', 'Meter IDs (comma-separated; a bill must name one)', (s.meters || []).join(', ')) + '</div><div>' +
       numIn('ef-installedKw', 'Installed chargers (kW)', s.installedKw) + numIn('ef-reportedPeakKw', 'Reported peak (kW)', s.reportedPeakKw) +
@@ -317,7 +335,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       post('site-save', {
         id: SITE,
         name: str('ef-name'), city: str('ef-city'), state: str('ef-state'), address: str('ef-address'), zip: str('ef-zip'), hostType: str('ef-hostType'),
-        status: str('ef-status'), notes: str('ef-notes'),
+        status: str('ef-status'), notes: str('ef-notes'), siteScopes: kindsChecked(),
         tags: tg ? tg.split(',').map(function (t) { return t.trim(); }).filter(Boolean) : [], meters: str('ef-meters') || [],
         installedKw: num('ef-installedKw'), reportedPeakKw: num('ef-reportedPeakKw'),
         meterOwned: mv === '' ? null : mv === 'true',
