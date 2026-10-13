@@ -81,12 +81,33 @@ var BUILD = '2026-10-05.omega-core-v2';
    (September 2026). The skid dimensions, the 75 kW of compute and the price
    are ClearSky's. Nothing below is a planning estimate except where it says
    so (`meter`, which is how the skid is served, not a datasheet line). */
+/* The NextNRG Microgrid Controller is BUILT INTO the skid (Tommy,
+   2026-10-13: "it needs to be auto built into the omega core skid"): the
+   one record of its specs and ClearSky's price is api/_lib/nextnrg.js. The
+   skid as recorded ($639,000 on 2026-10-13; $450,000 before) did not carry
+   one, so the system cost is the skid plus the controller, and the breakdown
+   travels with it. */
+var NN = require('./nextnrg');
+var SKID_PRICE_USD = 639000;   /* 2026-10-13 ("update the skid to 639k"); $450,000 from 2026-10-02 until then */
 var PRODUCT = {
   key: 'omega-core',
   name: 'Omega-Core',
   catalogId: 'dc_omegacore',
-  systemCostUsd: 639000,
+  skidPriceUsd: SKID_PRICE_USD,
+  systemCostUsd: SKID_PRICE_USD + NN.CONTROLLER.priceUsd,
+  systemCostBreakdown: [
+    { key: 'skid', label: 'Omega-Core skid as recorded (Solela Edge Compute 75 kW + CleanCell R60)', usd: SKID_PRICE_USD, source: 'ClearSky, 2026-10-13' },
+    { key: 'controller', label: NN.CONTROLLER.model, usd: NN.CONTROLLER.priceUsd, source: NN.CONTROLLER.priceBasis }
+  ],
   compute: { make: 'Solela', model: 'Solela Edge Compute', kw: 75 },
+  controller: {
+    make: NN.CONTROLLER.make, model: NN.CONTROLLER.model, catalogKey: NN.CONTROLLER.key,
+    dispatch: NN.CONTROLLER.dispatchIntervalMin + '-minute dispatch on a ' + NN.CONTROLLER.horizonHours + '-hour horizon; economic, resilience and islanded modes; black start',
+    comms: NN.CONTROLLER.comms, enclosure: NN.CONTROLLER.enclosure + ', ' + NN.CONTROLLER.widthMm + ' × ' + NN.CONTROLLER.heightMm + ' × ' + NN.CONTROLLER.depthMm + ' mm, ' + NN.CONTROLLER.weightKg + ' kg',
+    standards: NN.CONTROLLER.standards + '; ' + NN.CONTROLLER.cybersecurity,
+    role: 'Runs the skid: schedules the R60 against the compute load and the skid\'s own tariff, holds the reserve for the compute, and islands the skid when the grid drops.',
+    source: NN.CONTROLLER.source
+  },
   battery: {
     make: 'Clean Cell US', model: 'CleanCell R60', catalogKey: 'CC-R60',
     chemistry: 'LFP (LiFePO4)', kwh: 61.44, kw: 60, dcV: 614.4, ah: 100,
@@ -717,6 +738,7 @@ function programOf(n, term, offer, gates) {
   });
   return {
     systemCostPerSkid: PRODUCT.systemCostUsd,
+    systemCostBreakdown: PRODUCT.systemCostBreakdown.map(function (b) { return { key: b.key, label: b.label, usd: b.usd, usdAll: b.usd * n }; }),
     systemCost: sys,
     /* no lateral to build when the service is already on site */
     fiberLateral: (lateralMi == null || gates.fiber.status === 'pass') ? null : { mi: round(lateralMi, 2), capexMid: lateralMid },
@@ -785,6 +807,9 @@ function evaluate(body, opts) {
      with the other answers); a direct caller may send body.compute. */
   var compute = CM.evaluate(body.compute != null ? body.compute : rep.compute, {
     units: proposed,
+    /* the skid price the compute model defaults to is THIS record's: the
+       skid plus the controller built into it, never a second figure */
+    skidPriceUsd: PRODUCT.systemCostUsd, skidPriceLabel: 'Omega-Core skid as recorded ($' + fmtUsd(SKID_PRICE_USD) + ') + ' + NN.CONTROLLER.model + ' ($' + fmtUsd(NN.CONTROLLER.priceUsd) + ')',
     lease: offer ? { monthly: offer.monthlyPerSkid.base, escalatorPct: offer.escalatorPct.base, source: offer.source } : null,
     disclose: !!opts.disclose
   });
@@ -880,8 +905,10 @@ function evaluate(body, opts) {
   return out;
 }
 
+function fmtUsd(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+
 module.exports = {
-  evaluate: evaluate, PRODUCT: PRODUCT, TERMS: TERMS, RATE_CARD: RATE_CARD, BUILD: BUILD, COMPUTE: CM,
+  evaluate: evaluate, PRODUCT: PRODUCT, TERMS: TERMS, RATE_CARD: RATE_CARD, BUILD: BUILD, COMPUTE: CM, NEXTNRG: NN,
   gatePower: gatePower, gateLocation: gateLocation, gateFiber: gateFiber, verdictOf: verdictOf,
   buildOffer: buildOffer, rentOf: rentOf, offerLabel: offerLabel, hostEconomics: hostEconomics, programOf: programOf,
   serviceAmps: serviceAmps, serviceKw: serviceKw, fmvShare: fmvShare, hostPeakKw: hostPeakKw

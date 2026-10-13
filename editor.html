@@ -2130,7 +2130,7 @@ window.onerror = function(msg, src, line, col, err) {
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_leviathan')})"><span class="fi-ico">▦</span> 1.77 MW MDC Pad <span class="fi-sub">119 × 45 ft</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_triton')})"><span class="fi-ico">▦</span> Triton Pad <span class="fi-sub">120 kW</span></button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_cruiser')})"><span class="fi-ico">▦</span> Cruiser Pad <span class="fi-sub">35 kW</span></button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_omegacore')})" title="Omega-Core — Solela Edge Compute (75 kW) + CleanCell R60 battery (61.44 kWh / 60 kW Sol-Ark) on one 336 × 87 in skid, on its own utility meter. ClearSky-owned on a 5-year land lease that pays the charging-site host. Output › Omega-Core qualifies the site."><span class="fi-ico">▦</span> Omega-Core Skid <span class="fi-sub">28 × 7.25 ft · 75 kW + 61 kWh</span></button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-dc',function(){derSetDc('dc_omegacore')})" title="Omega-Core — Solela Edge Compute (75 kW) + CleanCell R60 battery (61.44 kWh / 60 kW Sol-Ark) + NextNRG Microgrid Controller on one 336 × 87 in skid, on its own utility meter. ClearSky-owned on a 5-year land lease that pays the charging-site host. Output › Omega-Core qualifies the site."><span class="fi-ico">▦</span> Omega-Core Skid <span class="fi-sub">28 × 7.25 ft · 75 kW + 61 kWh</span></button>
           </div>
         </div>
       </div>
@@ -2150,6 +2150,7 @@ window.onerror = function(msg, src, line, col, err) {
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',function(){openArrayProps()})" title="Tilt, ground clearance and the row pitch they imply"><span class="fi-ico">≡</span> Array Geometry — Tilt / Height</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',omegaCanopyCustom)" title="Trace the canopy outline - panels fit that exact shape, no rotating"><span class="fi-ico">⬡</span> Canopy — Custom Shape</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',omegaSolarCustomArea)" title="Trace any shape - the panels fill it at any angle, no rotating"><span class="fi-ico">▱</span> Solar — Custom Area</button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-der',omegaNextnrgSolarCustom)" title="Trace any shape - NextNRG's module (JinkoSolar EAGLE G7B 640 W, 23.69%) fills it, and the array is NextNRG's product on the drawing, the legend and the BOM"><span class="fi-ico">▱</span> NextNRG Solar — Custom</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',function(){derSetSolar('adjacent')})"><span class="fi-ico">☀</span> Solar Canopy</button>
             <div class="rb-fly-head">Other Generation</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',function(){derSetWind('wind_100')})"><span class="fi-ico">✲</span> Wind Turbine <span class="fi-sub">100 kW</span></button>
@@ -4181,6 +4182,12 @@ if(document.readyState==='loading'){
             </optgroup>
             <optgroup label="Clean Cell">
               <option value="CC-R60">CleanCell R60 60 kW / 61.44 kWh skid + 2 Autel DCFC -- Quote Required</option>
+            </optgroup>
+            <optgroup label="NextNRG Microgrids (storage specified to the site)">
+              <option value="NEXTNRG-SAFT-IFLEX-3400">NextNRG Microgrid Storage -- Saft Intensium Flex 3.4 MWh block (LFP) -- Quote Required</option>
+              <option value="NEXTNRG-SAFT-IFLEX-4300">NextNRG Microgrid Storage -- Saft Intensium Flex 4.3 MWh block (LFP) -- Quote Required</option>
+              <option value="NEXTNRG-SAFT-IFLEX-5100">NextNRG Microgrid Storage -- Saft Intensium Flex 5.1 MWh block (LFP) -- Quote Required</option>
+              <option value="NEXTNRG-SAFT-IMAX20-HE">NextNRG Microgrid Storage -- Saft Intensium Max 20 High Energy 2.5 MWh (NMC, 20 ft) -- Quote Required</option>
             </optgroup>
             <optgroup label="Pytes (3/9/26 pricing)">
               <option value="PYTES-30-60">Pytes 30 kW / 60 kWh Standard -- $34,080</option>
@@ -6465,11 +6472,19 @@ var DC_CATALOG = {
                   family:'omegacore', omegaCore:true, skid:true, ownMeter:true,
                   bessKw:60, bessKwh:61.44, bessKey:'CC-R60', bessModel:'CleanCell R60',
                   pcs:'Sol-Ark 60K', volts:480, phases:3, contractYears:5,
+                  /* The NextNRG Microgrid Controller is built into every skid
+                     (Tommy, 2026-10-13): it schedules the R60 against the
+                     compute load on the skid's own tariff and islands the
+                     skid when the grid drops. UTILITY_CATALOG.mgc is the same
+                     unit placed for a host; its price is the server's. */
+                  controller:'NextNRG Microgrid Controller', controllerKey:'NEXTNRG-MGC', controllerMake:'NextNRG',
                   cooling:'integrated', water:0, ups:'battery',
                   spec:'Omega-Core skid · Solela Edge Compute cabinet 75 kW + CleanCell R60 '
-                     + '61.44 kWh LFP / 60 kW Sol-Ark 60K PCS · 277/480 V 3-ph · own utility meter · '
+                     + '61.44 kWh LFP / 60 kW Sol-Ark 60K PCS + NextNRG Microgrid Controller (15-min dispatch, '
+                     + 'economic / resilience / islanded) · 277/480 V 3-ph · own utility meter · '
                      + '336 × 87 in skid, 8 in base, 82.75 in overall',
-                  verified:'Battery: Clean Cell US R60 Product Data Sheet Rev A (Sep 2026). Skid 336 × 87 × 82.75 in, '
+                  verified:'Battery: Clean Cell US R60 Product Data Sheet Rev A (Sep 2026). Controller: NextNRG Microgrids '
+                         + 'brochure Q4 2026 (built in: ClearSky, 2026-10-13). Skid 336 × 87 × 82.75 in, '
                          + '75 kW compute and the program terms: ClearSky (2026-10-02).' }
 };
 
@@ -6697,6 +6712,13 @@ const GOTION_CATALOG_DIMS = {
      the datasheet's 2,200 mm (86.6 in) is the cabinet alone and stays on
      the catalog row as `cabinet`. Weight is unpublished and says so. */
   'CC-R60':           { l:'28\'-0"',    w:'7\'-3"',    h:'6\'-10.75"', wt:'SEE MFR SUBMITTAL', lf:28.0, wf:7.25, hf:6.9 },
+  /* NextNRG's containerised blocks: the brochure says 'standard ISO
+     footprint' (20 ft for the Intensium Max 20, explicitly); weight is not
+     published and says so. Confirm the block drawing on the submittal. */
+  'NEXTNRG-SAFT-IFLEX-3400': { l:'19\'-10.5"',w:'7\'-12.0"', h:'9\'-6.0"',  wt:'SEE MFR SUBMITTAL', lf:19.875, wf:8.0, hf:9.5 },
+  'NEXTNRG-SAFT-IFLEX-4300': { l:'19\'-10.5"',w:'7\'-12.0"', h:'9\'-6.0"',  wt:'SEE MFR SUBMITTAL', lf:19.875, wf:8.0, hf:9.5 },
+  'NEXTNRG-SAFT-IFLEX-5100': { l:'19\'-10.5"',w:'7\'-12.0"', h:'9\'-6.0"',  wt:'SEE MFR SUBMITTAL', lf:19.875, wf:8.0, hf:9.5 },
+  'NEXTNRG-SAFT-IMAX20-HE':  { l:'19\'-10.5"',w:'7\'-12.0"', h:'9\'-6.0"',  wt:'SEE MFR SUBMITTAL', lf:19.875, wf:8.0, hf:9.5 },
 };
 
 const CTYPES=[
@@ -10912,7 +10934,15 @@ var UTILITY_CATALOG = {
   xfmr:    { label:'UTILITY XFMR',          lf:6.0, wf:5.0, abbr:'T'  },
   disco:   { label:'AC DISCONNECT',         lf:2.5, wf:1.5, abbr:'DS' },
   ct:      { label:'CT CABINET',            lf:3.0, wf:2.0, abbr:'CT' },
-  mpoi:    { label:'M-POI (POINT OF INTERCONNECT)', lf:3.0, wf:2.0, abbr:'POI' }
+  mpoi:    { label:'M-POI (POINT OF INTERCONNECT)', lf:3.0, wf:2.0, abbr:'POI' },
+  /* The NextNRG Microgrid Controller (brochure Q4 2026, p. 7-8): a 500 x
+     750 x 210 mm IP55 enclosure, wall or pad mounted, drawn here as its
+     pad face (2.46 x 1.64 ft, to the quarter foot). Specs only: its price
+     is the cost engine's (api/_lib/nextnrg.js) and reaches the page as a
+     line on the Run, never as a figure in this file. */
+  mgc:     { label:'NEXTNRG MICROGRID CONTROLLER', lf:2.5, wf:1.75, abbr:'MGC', mfr:'NextNRG', model:'NextNRG Microgrid Controller', sku:'NEXTNRG-MGC',
+             spec:'500 x 750 x 210 mm (19.69 x 29.53 x 8.27 in), IP55, 40 kg; 15-minute dispatch on a 24-hour horizon; Modbus TCP to the site PLC (DNP3 optional); 10 x 100/1000 Mbps; 0-40C, active cooling std; IEEE 1547, IEC 62443, NERC CIP aligned',
+             source:'NextNRG Microgrids brochure, Q4 2026, p. 7-8' }
 };
 var _pendingUtilType = 'xfmr';
 function setUtilityType(t){ _pendingUtilType = UTILITY_CATALOG[t] ? t : 'xfmr'; rbMode('utility');
@@ -11557,60 +11587,14 @@ function _renderBesPad(g, sh){
   g.appendChild(t2);
 }
 
-/* --- Full BESS assembly (matches the E1.1 plot-plan arrangement) -----
-   Renders, centered on (sh.cx, sh.cy):
-     - BESS pad (to scale, lf x wf feet)
-     - aux equipment row (transformer, PCS/inverter, disconnect) along the
-       top long side of the pad, sized to typical footprints
-     - fire bollards ringed around the pad (offset 2.33', spaced 3.0' O.C.)
-     - security/privacy fence at 10.5' clearance around the whole group
-   All feet-space, scaled by current pxPerFt (or 6px/ft preview). */
-function _asmAuxSpecs(){
-  /* Real-world pad-mount footprints from the reference E1.1 dimension callouts.
-     Order = the row order butted against the container end:
-     Battery Inverter (PCS) -> Transformer (largest) -> AC Disconnect. */
-  return [
-    { key:'pcs',   label:'BATTERY INVERTER', lf:3.58, wf:1.79 },
-    { key:'xfmr',  label:'XFMR',             lf:5.42, wf:5.08 },
-    { key:'disco', label:'AC DISCONNECT',    lf:3.0,  wf:2.92 }
-  ];
-}
-function _asmRect(g, x, y, w, h, sw, hatch, label){
-  var r=_mkNS('rect');
-  r.setAttribute('x',x); r.setAttribute('y',y);
-  r.setAttribute('width',w); r.setAttribute('height',h);
-  r.setAttribute('fill','rgba(200,200,200,0.10)');
-  r.setAttribute('stroke',SHAPE_STROKE); r.setAttribute('stroke-width',sw);
-  g.appendChild(r);
-  if(hatch && w>8 && h>8){
-    var inner=_mkNS('rect');
-    inner.setAttribute('x',x+3); inner.setAttribute('y',y+3);
-    inner.setAttribute('width',Math.max(0,w-6)); inner.setAttribute('height',Math.max(0,h-6));
-    inner.setAttribute('fill','none'); inner.setAttribute('stroke',SHAPE_STROKE);
-    inner.setAttribute('stroke-width','0.6'); inner.setAttribute('stroke-dasharray','2,2');
-    g.appendChild(inner);
-  }
-  if(label && w>16){
-    var t=_mkNS('text');
-    t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2);
-    t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','middle');
-    t.setAttribute('fill',SHAPE_STROKE); t.setAttribute('font-size','7');
-    t.setAttribute('font-family','monospace'); t.setAttribute('pointer-events','none');
-    t.textContent=label;
-    g.appendChild(t);
-  }
-}
-function _renderAssembly(g, sh){
-  var ppf=(S.pxPerFt && S.pxPerFt>0) ? S.pxPerFt : 6;
-  /* backward-compat: synthesize parts for older assemblies */
-  if(!sh.parts){
-    sh.parts=[{ key:'pad', label:sh.model||'BESS', lf:sh.lf, wf:sh.wf, dx:0, dy:0, hatch:false }];
-  }
-  var pad=_asmPad(sh);
-  var padWpx=pad.lf*ppf, padHpx=pad.wf*ppf;
-  var padCx=sh.cx + pad.dx*ppf, padCy=sh.cy + pad.dy*ppf;
-  var padX=padCx - padWpx/2, padY=padCy - padHpx/2;
-
+/* The perimeter protection — fence sides, fire bollards, the count the
+   take-off reads — around any box: an assembly's parts, or the Omega-Core
+   skid (Tommy, 2026-10-13: a click on a pad opens the panel that edits
+   bollards and fencing, and the skid is a pad too). ONE drawer; `bb` is
+   the box in px, `sh` carries sides, fenceClear, bollardOffset and
+   bollardSpacing. Returns the fence rectangle for callers that place
+   labels against it. */
+function _drawProtection(g, sh, bb, ppf){
   /* --- resolve per-side protection (backward-compat from old flags) --- */
   var sides=_asmSides(sh);
   function _sideHasFence(v){ return v==='fence'||v==='both'; }
@@ -11619,7 +11603,6 @@ function _renderAssembly(g, sh){
 
   /* fence perimeter rectangle bounds (union of parts + clearance) */
   var clr=sh.fenceClear*ppf;
-  var bb=_asmPartsBBoxPx(sh, ppf);
   var fx=bb.x-clr, fy=bb.y-clr, fw=bb.w+clr*2, fh=bb.h+clr*2;
   /* the four fence-line segments, keyed by side */
   var fenceEdges={
@@ -11721,6 +11704,66 @@ function _renderAssembly(g, sh){
      _bollardCount, so that path never saw a drawn bollard and fell back to a
      hardcoded 8 on any shape someone had flagged by hand. */
   sh.bollardCount = trueCount;
+  return { fx:fx, fy:fy, fw:fw, fh:fh, clr:clr, sides:sides, anyFence:anyFence };
+}
+
+/* --- Full BESS assembly (matches the E1.1 plot-plan arrangement) -----
+   Renders, centered on (sh.cx, sh.cy):
+     - BESS pad (to scale, lf x wf feet)
+     - aux equipment row (transformer, PCS/inverter, disconnect) along the
+       top long side of the pad, sized to typical footprints
+     - fire bollards ringed around the pad (offset 2.33', spaced 3.0' O.C.)
+     - security/privacy fence at 10.5' clearance around the whole group
+   All feet-space, scaled by current pxPerFt (or 6px/ft preview). */
+function _asmAuxSpecs(){
+  /* Real-world pad-mount footprints from the reference E1.1 dimension callouts.
+     Order = the row order butted against the container end:
+     Battery Inverter (PCS) -> Transformer (largest) -> AC Disconnect. */
+  return [
+    { key:'pcs',   label:'BATTERY INVERTER', lf:3.58, wf:1.79 },
+    { key:'xfmr',  label:'XFMR',             lf:5.42, wf:5.08 },
+    { key:'disco', label:'AC DISCONNECT',    lf:3.0,  wf:2.92 }
+  ];
+}
+function _asmRect(g, x, y, w, h, sw, hatch, label){
+  var r=_mkNS('rect');
+  r.setAttribute('x',x); r.setAttribute('y',y);
+  r.setAttribute('width',w); r.setAttribute('height',h);
+  r.setAttribute('fill','rgba(200,200,200,0.10)');
+  r.setAttribute('stroke',SHAPE_STROKE); r.setAttribute('stroke-width',sw);
+  g.appendChild(r);
+  if(hatch && w>8 && h>8){
+    var inner=_mkNS('rect');
+    inner.setAttribute('x',x+3); inner.setAttribute('y',y+3);
+    inner.setAttribute('width',Math.max(0,w-6)); inner.setAttribute('height',Math.max(0,h-6));
+    inner.setAttribute('fill','none'); inner.setAttribute('stroke',SHAPE_STROKE);
+    inner.setAttribute('stroke-width','0.6'); inner.setAttribute('stroke-dasharray','2,2');
+    g.appendChild(inner);
+  }
+  if(label && w>16){
+    var t=_mkNS('text');
+    t.setAttribute('x',x+w/2); t.setAttribute('y',y+h/2);
+    t.setAttribute('text-anchor','middle'); t.setAttribute('dominant-baseline','middle');
+    t.setAttribute('fill',SHAPE_STROKE); t.setAttribute('font-size','7');
+    t.setAttribute('font-family','monospace'); t.setAttribute('pointer-events','none');
+    t.textContent=label;
+    g.appendChild(t);
+  }
+}
+function _renderAssembly(g, sh){
+  var ppf=(S.pxPerFt && S.pxPerFt>0) ? S.pxPerFt : 6;
+  /* backward-compat: synthesize parts for older assemblies */
+  if(!sh.parts){
+    sh.parts=[{ key:'pad', label:sh.model||'BESS', lf:sh.lf, wf:sh.wf, dx:0, dy:0, hatch:false }];
+  }
+  var pad=_asmPad(sh);
+  var padWpx=pad.lf*ppf, padHpx=pad.wf*ppf;
+  var padCx=sh.cx + pad.dx*ppf, padCy=sh.cy + pad.dy*ppf;
+  var padX=padCx - padWpx/2, padY=padCy - padHpx/2;
+
+  /* --- the perimeter: fence sides and fire bollards, ONE drawer --- */
+  var _prot=_drawProtection(g, sh, _asmPartsBBoxPx(sh, ppf), ppf);
+  var sides=_prot.sides, anyFence=_prot.anyFence, clr=_prot.clr, fx=_prot.fx, fy=_prot.fy, fw=_prot.fw, fh=_prot.fh;
   /* hasBollards is NOT written here. The properties panel derives it from
      the per-side settings (sh.hasFence/hasBollards, set together), and the
      fence-clearance geometry reads it back. Recomputing an equivalent value
@@ -12527,6 +12570,16 @@ function _shapeMouseDown(e, id){
   if(e.cancelable) e.preventDefault();
   selectShape(id);
   var sh=S.shapes.find(function(s){return s.id===id;}); if(!sh) return;
+  /* A BESS pad opens its panel on click — bollards and fencing live there
+     (Tommy, 2026-10-13: "click on a bess pad and have that panel pop up
+     that allows me to edit the bollards and fencing"). A plain pad becomes
+     an assembly of one part so the same panel serves it; the Omega-Core
+     skid gets the perimeter half of it. */
+  try{
+    if(sh.kind==='bespad'){ var _cv=_padToAssembly(sh); if(_cv){ sh=_cv; _drawShapeHandles(sh); _openAsmPanel(sh, 0); } }
+    else if(sh.kind==='assembly'){ _openAsmPanel(sh, -1); }
+    else if(sh.kind==='derdc' && sh.omegaCore){ _skidProtection(sh); _openAsmPanel(sh, -1); }
+  }catch(e){}
   var xy=_evtXY(e);
   S.shapeDrag=id;
   S.shDox=xy.x; S.shDoy=xy.y;
@@ -13490,6 +13543,46 @@ function _rerouteShapeConduits(sh){
   }
 }
 
+/* A plain BESS pad (kind 'bespad': a to-scale rectangle, no parts) becomes
+   an assembly of ONE part — the container — centred where the pad was, with
+   no fence and no bollards until the panel sets them. Same id, so conduits
+   and the fleet keep pointing at it; re-anchored on the map; drawn by the
+   assembly renderer from then on. Returns the shape, or null if it was not
+   a pad. */
+function _padToAssembly(sh){
+  if(!sh || sh.kind!=='bespad' || !sh.pts || !sh.pts[0]) return null;
+  var ppf=(S.pxPerFt && S.pxPerFt>0) ? S.pxPerFt : 6;
+  var wPx=(+sh.lf||0)*ppf, hPx=(+sh.wf||0)*ppf;
+  sh.kind='assembly';
+  sh.cx=sh.pts[0].x + wPx/2; sh.cy=sh.pts[0].y + hPx/2;
+  delete sh.pts;
+  sh.parts=[{ key:'bess', label:sh.model||'BESS CONTAINER', lf:sh.lf, wf:sh.wf, dx:0, dy:0, hatch:false, isBattery:true }];
+  sh.hasAssembly=false; sh.hasFence=!!sh.hasFence; sh.hasBollards=!!sh.hasBollards;
+  var v=(sh.hasFence&&sh.hasBollards)?'both':(sh.hasFence?'fence':(sh.hasBollards?'bollards':'none'));
+  if(!sh.sides) sh.sides={ n:v, e:v, s:v, w:v };
+  if(sh.fenceClear==null) sh.fenceClear=10.5;
+  if(sh.bollardOffset==null) sh.bollardOffset=2.33;
+  if(sh.bollardSpacing==null) sh.bollardSpacing=3.0;
+  if(sh.auxGap==null) sh.auxGap=3.0;
+  if(sh.padMargin==null) sh.padMargin=2.0;
+  if(sh.gearVGap==null) sh.gearVGap=2.5;
+  if(sh.containerGap==null) sh.containerGap=3.0;
+  try{ if(typeof _geoRestampOne==='function') _geoRestampOne(sh); }catch(e){}
+  if(typeof renderShape==='function') renderShape(sh);
+  return sh;
+}
+/* The Omega-Core skid is a pad too: it carries the same perimeter fields
+   (no fence, no bollards until set) and the panel edits them; the skid
+   renderer draws the ring round the skid frame. */
+function _skidProtection(sh){
+  if(!sh) return sh;
+  if(!sh.sides) sh.sides={ n:'none', e:'none', s:'none', w:'none' };
+  if(sh.fenceClear==null) sh.fenceClear=10.5;
+  if(sh.bollardOffset==null) sh.bollardOffset=2.33;
+  if(sh.bollardSpacing==null) sh.bollardSpacing=3.0;
+  return sh;
+}
+
 /* ==== ASSEMBLY PART EDITING (move individual components + panel) ===== */
 var _selAsmPart={ id:null, idx:-1 };
 function _asmPartMouseDown(e, shId, idx){
@@ -13651,12 +13744,13 @@ function _fillAsmPanel(sh, activeIdx){
   /* Header pinned so it cannot scroll away and leave the panel looking
      cut off at the top. */
   h+='<div style="flex:0 0 auto;display:flex;align-items:center;justify-content:space-between;padding:8px 10px;border-bottom:1px solid var(--border);background:var(--surface);border-radius:6px 6px 0 0">';
-  h+='<span style="font-size:11px;font-weight:700;color:var(--text)">BESS Assembly</span>';
+  h+='<span style="font-size:11px;font-weight:700;color:var(--text)">'+(sh.kind==='derdc' ? 'Omega-Core skid \u2014 perimeter' : 'BESS Assembly')+'</span>';
   h+='<span onclick="_closeAsmPanel()" style="cursor:pointer;color:var(--sub);font-size:16px;line-height:1;padding:0 2px">\u00d7</span></div>';
   h+='<div style="flex:1 1 auto;padding:9px 10px;overflow-y:auto;min-height:0">';
-  /* component list */
-  h+='<div style="font-size:9px;color:var(--sub);letter-spacing:.06em;margin-bottom:5px">COMPONENTS</div>';
-  for(var i=0;i<sh.parts.length;i++){
+  /* component list (a skid has none: its parts are the skid's own) */
+  var _parts=sh.parts||[];
+  if(_parts.length) h+='<div style="font-size:9px;color:var(--sub);letter-spacing:.06em;margin-bottom:5px">COMPONENTS</div>';
+  for(var i=0;i<_parts.length;i++){
     var pt=sh.parts[i];
     var sel=(String(i)===String(activeIdx));
     h+='<div onclick="_asmSelectPart(\''+sh.id+'\','+i+')" style="display:flex;align-items:center;gap:6px;padding:5px 6px;margin-bottom:3px;border-radius:4px;cursor:pointer;background:'+(sel?'var(--hl-dim)':'transparent')+';border:1px solid '+(sel?'var(--hl)':'transparent')+'">';
@@ -13664,8 +13758,8 @@ function _fillAsmPanel(sh, activeIdx){
     h+='<span style="font-size:9px;color:var(--sub);font-family:monospace">'+pt.lf+'\u2032\u00d7'+pt.wf+'\u2032</span></div>';
   }
   /* active part size editor */
-  if(activeIdx>=0 && sh.parts[activeIdx]){
-    var ap=sh.parts[activeIdx];
+  if(activeIdx>=0 && _parts[activeIdx]){
+    var ap=_parts[activeIdx];
     h+='<div style="border-top:1px solid var(--border);margin:8px 0;padding-top:8px">';
     h+='<div style="font-size:9px;color:var(--sub);letter-spacing:.06em;margin-bottom:5px">SIZE \u2014 '+(ap.label||ap.key)+' (ft)</div>';
     h+='<div style="display:flex;gap:6px;margin-bottom:6px">';
@@ -13692,7 +13786,7 @@ function _fillAsmPanel(sh, activeIdx){
   h+=_asmNumRow('Bollard spacing (ft)','asm-bsp',sh.bollardSpacing,sh.id);
   h+=_asmNumRow('Bollard offset (ft)','asm-boff',sh.bollardOffset,sh.id);
   h+='</div>';
-  h+='<button onclick="_asmResetLayout(\''+sh.id+'\')" style="width:100%;padding:7px;margin-top:4px;background:var(--panel);border:1px solid var(--border);color:var(--sub);border-radius:5px;font-size:10px;cursor:pointer;font-family:inherit">\u21ba Reset layout</button>';
+  if(_parts.length>1) h+='<button onclick="_asmResetLayout(\''+sh.id+'\')" style="width:100%;padding:7px;margin-top:4px;background:var(--panel);border:1px solid var(--border);color:var(--sub);border-radius:5px;font-size:10px;cursor:pointer;font-family:inherit">\u21ba Reset layout</button>';
   h+='</div>';
   p.innerHTML=h;
 }
@@ -13740,7 +13834,7 @@ function _asmSyncFlags(sh){
   sh.hasFence=anyF; sh.hasBollards=anyB;
 }
 function _asmResetLayout(shId){
-  var sh=S.shapes.find(function(s){return s.id===shId;}); if(!sh) return;
+  var sh=S.shapes.find(function(s){return s.id===shId;}); if(!sh || !sh.parts) return;
   /* rebuild the equipment row (battery + aux) left-to-right, centered,
      then reflow the concrete pad to enclose it. Sizes preserved. */
   var rowGap=(sh.rowGap!=null)?sh.rowGap:2.5;
@@ -15403,7 +15497,7 @@ function applyGroundLayout(boundary, layout, exclusions){
   var ppf=(typeof _derScale==='function')?_derScale():6;
   var bb=_gmBBox(boundary);
   var sh={
-    id:uid(), kind:'dersolar', mount:'ground',
+    id:uid(), kind:'dersolar', mount:(window._alMount==='custom'?'custom':'ground'),
     pts:[{x:bb.minX,y:bb.minY}], wPx:bb.w, hPx:bb.h,
     /* auto-layout payload */
     autoLayout:true,
@@ -15422,6 +15516,17 @@ function applyGroundLayout(boundary, layout, exclusions){
     style:(typeof S!=='undefined'?S.shapeStyle:''),
     scaled:(typeof _derScaled==='function')?_derScaled():false
   };
+  /* The module this array was built with and, when that module is a
+     product somebody sells (NextNRG's EAGLE G7B), whose product it is: the
+     drawing, the legend, the inventory and the BOM read it off the shape. */
+  try{
+    var _A=(typeof _solarAssume==='function')?_solarAssume('ground'):null, _M=_A&&_A.module;
+    if(_M){
+      sh.moduleKey=_A.moduleKey; sh.moduleWatts=_M.watts||null;
+      if(_M.mfr){ sh.mfr=_M.mfr; sh.sku=_M.sku||null;
+        sh.product=_M.mfr+' Solar PV \u2014 '+(_M.make?_M.make+' ':'')+(_M.line||'')+(_M.watts?' '+_M.watts+' W':''); }
+    }
+  }catch(e){}
   S.shapes.push(sh);
   if(typeof renderShape==='function') renderShape(sh);
   if(typeof updShapeCount==='function') updShapeCount();
@@ -15488,6 +15593,11 @@ function openAutoLayout(boundaryPts){
   /* The outline the caller traced for this (Solar - Custom Area hands the
      one just drawn), else the largest closed shape on the canvas. */
   var boundary=(boundaryPts && boundaryPts.length>=3) ? boundaryPts : _alFindBoundary();
+  /* A traced area (Solar — Custom Area, NextNRG Solar — Custom) is a custom
+     array: it claims no mount until the array editor chooses one. The
+     ribbon's Auto Layout, with no outline handed in, is the ground-mount
+     tool it always was. */
+  window._alMount=(boundaryPts && boundaryPts.length>=3)?'custom':'ground';
   var host=document.getElementById('autolayout-modal');
   if(!host){
     host=document.createElement('div');
@@ -15509,7 +15619,7 @@ function openAutoLayout(boundaryPts){
   host.innerHTML=
     '<div style="background:var(--panel);border:1px solid #FBBF24;border-radius:12px;max-width:460px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.55)">'
     + '<div style="padding:15px 18px;border-bottom:1px solid var(--border)">'
-    +   '<div style="font-size:15px;font-weight:800;color:var(--amber)">\u2600 Auto-Layout Ground Mount</div>'
+    +   '<div style="font-size:15px;font-weight:800;color:var(--amber)">'+(window._alMount==='custom'?'\u2600 Auto-Layout \u2014 Custom Area':'\u2600 Auto-Layout Ground Mount')+'</div>'
     +   '<div style="font-size:9.5px;color:var(--sub);margin-top:3px">Fills a drawn boundary with racking rows \u2014 flat-ground takeoff estimator</div>'
     + '</div>'
     + '<div style="padding:15px 18px">'
@@ -18813,8 +18923,10 @@ function renderLegend(){
   try{
     if(typeof derTotals==='function'){
       var d=derTotals();
+      /* an array drawn as somebody's product (NextNRG Solar — Custom) is named as theirs */
+      var _pvProd=null; try{ (S.shapes||[]).forEach(function(x){ if(x && x.kind==='dersolar' && x.product && !_pvProd) _pvProd=x.product; }); }catch(e){}
       if(d.solarKwDc>0) eqRows+='<div class="li"><div class="li-ico" style="font-size:13px">\u2600</div>'
-        +'<span class="li-txt">Solar PV'+(d.solarUnits>1?(' \u00d7'+d.solarUnits):'')
+        +'<span class="li-txt">'+(_pvProd||'Solar PV')+(d.solarUnits>1?(' \u00d7'+d.solarUnits):'')
         +'<br><span style="font-size:8px;opacity:.65">'+Math.round(d.solarKwDc).toLocaleString()+' kW-DC</span></span></div>';
       if(d.windKw>0) eqRows+='<div class="li"><div class="li-ico" style="font-size:13px">\u2732</div>'
         +'<span class="li-txt">Wind'+(d.windUnits>1?(' \u00d7'+d.windUnits):'')
@@ -19569,6 +19681,14 @@ function renderSolarAssumePanel(){
     if(!DER_SOLAR_PRESETS.hasOwnProperty(k)) continue;
     opts += '<option value="'+k+'"'+(k===A.presetKey?' selected':'')+'>'+DER_SOLAR_PRESETS[k].label+'</option>';
   }
+  var mopts='';
+  for(var mk in DER_PV_MODULES){
+    if(!DER_PV_MODULES.hasOwnProperty(mk)) continue;
+    mopts += '<option value="'+mk+'"'+(mk===A.moduleKey?' selected':'')+'>'+DER_PV_MODULES[mk].label+'</option>';
+  }
+  var M=A.module||{};
+  var mline=M.watts ? (M.watts+' W'+(M.effPct?' \u00b7 '+M.effPct+'%':'')+(M.widthMm?' \u00b7 '+M.heightMm+' \u00d7 '+M.widthMm+' mm':'')
+                      +' \u00b7 '+(Math.round(_pvModuleWpsf(M)*100)/100)+' W/ft\u00b2'+(M.warranty?' \u00b7 '+M.warranty:'')+(M.source?' \u2014 '+M.source:'')) : '';
   // Effective density implied by the current assumptions, for sanity-check.
   var wPerLandSqft = A.gcr * A.wpsf;                 // W per sqft of land (pre-setback)
   var mwPerAcre = (wPerLandSqft*43560)/1e6;
@@ -19597,6 +19717,11 @@ function renderSolarAssumePanel(){
     +   'These drive every kW-DC on the map: <span style="color:var(--text);font-family:\'IBM Plex Mono\',monospace">kW = buildable ft² × GCR × W/ft²</span>. '
     +   (isUser ? 'You have overridden the shipped defaults.'
               : '<strong style="color:var(--warn)">Shipped values are planning rules-of-thumb, not validated against built projects.</strong> Tune them below or calibrate from a known site.')
+    + '</div>'
+    + '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">'
+    +   '<span style="font-size:8.5px;color:var(--sub);font-weight:600">Module</span>'
+    +   '<select onchange="setSolarAssume(\'moduleKey\',this.value)" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:6px 8px;font-size:11px;font-family:inherit;width:100%">'+mopts+'</select>'
+    +   '<span style="font-size:8px;color:#6B8299;line-height:1.4;margin-top:2px">'+mline+'</span>'
     + '</div>'
     + '<div style="display:flex;flex-direction:column;gap:3px;margin-bottom:8px">'
     +   '<span style="font-size:8.5px;color:var(--sub);font-weight:600">Racking / mount preset</span>'
@@ -21713,6 +21838,63 @@ const BESS_CATALOG = {
     evChargers:{count:2,mfr:'Autel',kind:'DC fast-charging dispenser',kw:null},
     verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 x 82.75 in overall per the skid drawing ClearSky supplied (2026-10-02)',
     notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: $24,000 (ClearSky, 2026-10-13). Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
+  /* ── NEXTNRG MICROGRIDS — storage specified to the site ─────────────
+     Read off the NextNRG Microgrids brochure (Q4 2026, p. 5-6) on
+     2026-10-13. NextNRG holds every supplied system to one requirement
+     (LFP preferred, containerised ISO, 2-8 hr, 85-90% AC round trip,
+     20-year design life, 300% daily throughput, liquid cooled, UL 1973 /
+     IEC 62619, NFPA 855, IP54) and names Saft and A123 Systems as its
+     supply relationships. The blocks below are the ones the brochure
+     names on its specification page, each labelled as NextNRG's product
+     (Tommy, 2026-10-13: 'in the battery part use their specs and label
+     them as nextnrg product'; and: 'the only batteries for NextNRG that
+     should be showing up as NextNRG is if they've actually manually
+     inputted something or it's off of that spec sheet') — nothing the
+     sheet does not name, and no kW the sheet does not publish. Anything
+     else NextNRG sells enters through their own product list (Your
+     equipment library). api/_lib/nextnrg.js is the server's copy of the
+     same figures; scripts/tests/tnextnrg.js holds the two together. No
+     price here, ever. */
+  'NEXTNRG-SAFT-IFLEX-3400': {mfr:'NextNRG',model:'NextNRG Microgrid Storage — Saft Intensium Flex 3.4 MWh block (LFP)',chem:'LFP',kwh:3400,usable:null,kw:null,dur:null,dcv:'Per project PCS',eqcost:null,
+    inv:'Project PCS, sized per site (duration 2-8 hr)',ikva:null,xfmr:'Per project (MV step-up for a containerised block)',disco:'Per project',
+    greenfield:true,configurable:true,durRange:'2-8 hr',nextnrg:true,
+    rte:'85-90% AC, configuration dependent',designLife:'Up to 20 years at >97% availability',throughput:'Up to 300% daily energy throughput',
+    cooling:'Liquid cooled; module and BMS cooling on an integrated heat-exchanger circuit',siting:'Back-to-back and side-by-side placement',
+    certs:'UL 1973 + IEC 62619 (system), UL 1642 (cell), IEC 62477, UN 3536 Class 9; NFPA 855 aligned; IP54 minimum',
+    dims:'20 ft ISO container (standard ISO footprint)',weight:'SEE MFR SUBMITTAL',controller:'NextNRG Microgrid Controller (Modbus TCP setpoints to the site PLC every 15 min)',
+    supply:'Saft Intensium Flex, containerised LFP, with I-Sight cloud monitoring',
+    verified:'NextNRG Microgrids brochure, Q4 2026, p. 5-6 (system requirement, named supply relationships); 20 ft ISO footprint per the brochure\'s \'standard ISO footprint\', confirm the block drawing',
+    notes:'NextNRG specifies storage to the site, not to one catalogue product; this block is the brochure\'s named supply. Power is NOT published per block (the brochure gives a 2 to 8 hour duration range): the PCS is sized per site, so enter kW from the site assessment. Usable kWh, weight and price are not published. Cells by supply relationship: A123 Systems 587 Ah prismatic LFP, 1P13S 41.6 V module, Dukosi chip-on-cell monitoring, Nuvation Energy L2 BMS (UL 1973 Recognized). PRICE: quote required. NextNRG, info@nextnrg.com.'},
+  'NEXTNRG-SAFT-IFLEX-4300': {mfr:'NextNRG',model:'NextNRG Microgrid Storage — Saft Intensium Flex 4.3 MWh block (LFP)',chem:'LFP',kwh:4300,usable:null,kw:null,dur:null,dcv:'Per project PCS',eqcost:null,
+    inv:'Project PCS, sized per site (duration 2-8 hr)',ikva:null,xfmr:'Per project (MV step-up for a containerised block)',disco:'Per project',
+    greenfield:true,configurable:true,durRange:'2-8 hr',nextnrg:true,
+    rte:'85-90% AC, configuration dependent',designLife:'Up to 20 years at >97% availability',throughput:'Up to 300% daily energy throughput',
+    cooling:'Liquid cooled; module and BMS cooling on an integrated heat-exchanger circuit',siting:'Back-to-back and side-by-side placement',
+    certs:'UL 1973 + IEC 62619 (system), UL 1642 (cell), IEC 62477, UN 3536 Class 9; NFPA 855 aligned; IP54 minimum',
+    dims:'20 ft ISO container (standard ISO footprint)',weight:'SEE MFR SUBMITTAL',controller:'NextNRG Microgrid Controller (Modbus TCP setpoints to the site PLC every 15 min)',
+    supply:'Saft Intensium Flex, containerised LFP, with I-Sight cloud monitoring',
+    verified:'NextNRG Microgrids brochure, Q4 2026, p. 5-6 (system requirement, named supply relationships); 20 ft ISO footprint per the brochure\'s \'standard ISO footprint\', confirm the block drawing',
+    notes:'NextNRG specifies storage to the site, not to one catalogue product; this block is the brochure\'s named supply. Power is NOT published per block (the brochure gives a 2 to 8 hour duration range): the PCS is sized per site, so enter kW from the site assessment. Usable kWh, weight and price are not published. Cells by supply relationship: A123 Systems 587 Ah prismatic LFP, 1P13S 41.6 V module, Dukosi chip-on-cell monitoring, Nuvation Energy L2 BMS (UL 1973 Recognized). PRICE: quote required. NextNRG, info@nextnrg.com.'},
+  'NEXTNRG-SAFT-IFLEX-5100': {mfr:'NextNRG',model:'NextNRG Microgrid Storage — Saft Intensium Flex 5.1 MWh block (LFP)',chem:'LFP',kwh:5100,usable:null,kw:null,dur:null,dcv:'Per project PCS',eqcost:null,
+    inv:'Project PCS, sized per site (duration 2-8 hr)',ikva:null,xfmr:'Per project (MV step-up for a containerised block)',disco:'Per project',
+    greenfield:true,configurable:true,durRange:'2-8 hr',nextnrg:true,
+    rte:'85-90% AC, configuration dependent',designLife:'Up to 20 years at >97% availability',throughput:'Up to 300% daily energy throughput',
+    cooling:'Liquid cooled; module and BMS cooling on an integrated heat-exchanger circuit',siting:'Back-to-back and side-by-side placement',
+    certs:'UL 1973 + IEC 62619 (system), UL 1642 (cell), IEC 62477, UN 3536 Class 9; NFPA 855 aligned; IP54 minimum',
+    dims:'20 ft ISO container (standard ISO footprint)',weight:'SEE MFR SUBMITTAL',controller:'NextNRG Microgrid Controller (Modbus TCP setpoints to the site PLC every 15 min)',
+    supply:'Saft Intensium Flex, containerised LFP, with I-Sight cloud monitoring',
+    verified:'NextNRG Microgrids brochure, Q4 2026, p. 5-6 (system requirement, named supply relationships); 20 ft ISO footprint per the brochure\'s \'standard ISO footprint\', confirm the block drawing',
+    notes:'NextNRG specifies storage to the site, not to one catalogue product; this block is the brochure\'s named supply. Power is NOT published per block (the brochure gives a 2 to 8 hour duration range): the PCS is sized per site, so enter kW from the site assessment. Usable kWh, weight and price are not published. Cells by supply relationship: A123 Systems 587 Ah prismatic LFP, 1P13S 41.6 V module, Dukosi chip-on-cell monitoring, Nuvation Energy L2 BMS (UL 1973 Recognized). PRICE: quote required. NextNRG, info@nextnrg.com.'},
+  'NEXTNRG-SAFT-IMAX20-HE': {mfr:'NextNRG',model:'NextNRG Microgrid Storage — Saft Intensium Max 20 High Energy 2.5 MWh (NMC, 20 ft)',chem:'NMC (advanced, where the duty cycle justifies it)',kwh:2500,usable:null,kw:null,dur:null,dcv:'Per project PCS',eqcost:null,
+    inv:'Project PCS, sized per site (duration 2-8 hr)',ikva:null,xfmr:'Per project (MV step-up for a containerised block)',disco:'Per project',
+    greenfield:true,configurable:true,durRange:'2-8 hr',nextnrg:true,rteDc:'96% DC round trip',
+    rte:'85-90% AC, configuration dependent',designLife:'Up to 20 years at >97% availability',throughput:'Up to 300% daily energy throughput',
+    cooling:'Liquid cooled; module and BMS cooling on an integrated heat-exchanger circuit',siting:'Back-to-back and side-by-side placement',
+    certs:'UL 1973 + IEC 62619 (system), UL 1642 (cell), IEC 62477, UN 3536 Class 9; NFPA 855 aligned; IP54 minimum',
+    dims:'20 ft ISO container (standard ISO footprint)',weight:'SEE MFR SUBMITTAL',controller:'NextNRG Microgrid Controller (Modbus TCP setpoints to the site PLC every 15 min)',
+    supply:'Saft Intensium Max 20 High Energy, 2.5 MWh NMC per twenty-foot container',
+    verified:'NextNRG Microgrids brochure, Q4 2026, p. 5-6 (system requirement, named supply relationships); 20 ft ISO footprint per the brochure\'s \'standard ISO footprint\', confirm the block drawing',
+    notes:'NextNRG specifies storage to the site, not to one catalogue product; this block is the brochure\'s named supply. Power is NOT published per block (the brochure gives a 2 to 8 hour duration range): the PCS is sized per site, so enter kW from the site assessment. Usable kWh, weight and price are not published. Cells by supply relationship: A123 Systems 587 Ah prismatic LFP, 1P13S 41.6 V module, Dukosi chip-on-cell monitoring, Nuvation Energy L2 BMS (UL 1973 Recognized). PRICE: quote required. NextNRG, info@nextnrg.com.'},
 };
 
 /* ── THE TENANT'S OWN PRODUCTS LEAD ─────────────────────────────────────
@@ -29219,6 +29401,9 @@ function omegaCostQuantities(){
   var _n=function(id){ return (S.elements||[]).filter(function(e){ return e && e.eqId===id; }).length; };
   q.counts={ pad:_n('pad'), disco:_n('disco'), meter:_n('meter'), bollard:_n('bollard')+((typeof _padBollardCount==='function')?_padBollardCount():0), jbox:_n('jbox'), panel:_n('panel'),
     hasXfmr: !!((S.elements||[]).some(function(e){ return e&&(e.eqId==='transformer'||e.eqId==='xfmr'); }) || (S.bessList||[]).some(function(b){ return b.xfmr && b.xfmr!=='N/A'; })) };
+  /* the NextNRG Microgrid Controller placed for the HOST (Draw › Utility);
+     the one inside an Omega-Core skid is ClearSky's and never counted here */
+  q.counts.mgc=(S.shapes||[]).filter(function(sh){ return sh && sh.kind==='utility' && sh.utype==='mgc'; }).length;
   q.conduitFt={}; q.conduitRuns={};
   (S.conduits||[]).forEach(function(c){
     var ft = (c.condType==='PVC-UG') ? (c.ftLen||0) : (c.ftLen || (S.pxPerFt ? c.pxLen/S.pxPerFt : 0));
@@ -29309,7 +29494,7 @@ function _renderCostUnavailable(err){
   var totalEl=document.getElementById('rp-total-cost'); if(totalEl) totalEl.textContent='$--';
   var bd=document.getElementById('rp-cost-breakdown'); if(bd) bd.innerHTML='<div style="font-size:10px;color:var(--amber);padding:6px 0">Not priced: '+msg+'. <a href="#" onclick="updateCostEst();return false" style="color:var(--accent)">Try again</a></div>';
   if(!window._COST_SERVER){
-    ['_COST_TOTAL','_COST_LOW','_COST_HIGH','_COST_ITC_BASIS','_COST_ITC_EXCLUDED','_SOLAR_TOTAL','_BESS_TOTAL','_EV_TOTAL','_SITE_EQ_TOTAL','_CONDUIT_TOTAL','_INDIRECT_TOTAL','_EMS_COST_TOTAL','_EMS_SETUP','_CONT_TOTAL','_EMS_ANNUAL','_COMPUTE_TOTAL','_COMPUTE_PODS','_GEN_TOTAL','_DC_TOTAL','_BNZ_TOTAL','_COST_PER_KW','_COST_BENCHMARK'].forEach(function(k){ window[k]=0; });
+    ['_COST_TOTAL','_COST_LOW','_COST_HIGH','_COST_ITC_BASIS','_COST_ITC_EXCLUDED','_SOLAR_TOTAL','_BESS_TOTAL','_EV_TOTAL','_SITE_EQ_TOTAL','_CONDUIT_TOTAL','_INDIRECT_TOTAL','_EMS_COST_TOTAL','_EMS_SETUP','_CONT_TOTAL','_EMS_ANNUAL','_COMPUTE_TOTAL','_COMPUTE_PODS','_GEN_TOTAL','_DC_TOTAL','_BNZ_TOTAL','_MGC_TOTAL','_COST_PER_KW','_COST_BENCHMARK'].forEach(function(k){ window[k]=0; });
     window._IN_SCOPE=false; window._COST_IS_CONTRACTED=false;
   }
 }
@@ -29420,6 +29605,7 @@ function _renderCostEst(ans, stale) {
   window._COMPUTE_TOTAL = T.compute; window._COMPUTE_PODS = T.computePods; window._COMPUTE_IS_BENCHMARK = !!F.computeBenchmark;
   window._GEN_TOTAL = T.gen; window._GEN_DETAIL = LN.gen; window._GEN_IS_BENCHMARK = T.gen > 0;
   window._DC_ROM_DETAIL = LN.dc; window._DC_TOTAL = T.dc;
+  window._MGC_TOTAL = T.controller || 0; window._MGC_DETAIL = LN.controller || null;
   window._BESS_IS_BENCHMARK = !!F.bessBenchmark; window._SOLAR_IS_BENCHMARK = !!F.solarBenchmark;
   window._COST_PER_KW = T.costPerKW;
 
@@ -29455,6 +29641,7 @@ function _renderCostEst(ans, stale) {
       (T.ev > 0 ? row('  EV Charging (equip + install)', T.ev, '#22D3EE') : '') +
       row('   Site Equipment', T.siteEqRaw - T.xfmr, 'var(--amber)') +
       (T.xfmr > 0 ? row('  Transformer', T.xfmr, '#F97316') : '') +
+      (T.controller > 0 ? row('  NextNRG Microgrid Controller \u00d7' + T.controllerUnits, T.controller, '#54B442') : '') +
       row('  Engineering + Permitting', T.indirectRaw - LN.indirect.emsSetup, 'var(--sub)') +
       (LN.ems.on ? row(' EMS Software (setup)', LN.indirect.emsSetup, '#A78BFA') : '') +
       row(`  Contingency (${T.contPctRound}%)`, T.cont, 'var(--sub)') +
@@ -36273,6 +36460,9 @@ function omegaSolarByMount(){
     (S.shapes||[]).forEach(function(s){
       if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return;
       var kw=+s.kw||0; if(!(kw>0)) return;
+      /* a traced custom area claims no mount: the server prices what it
+         cannot place by mount as plain PV at the size band */
+      if(s.mount==='custom' && !s.canopy) return;
       t[(s.canopy || s.mount==='adjacent') ? 'canopy' : (s.mount==='roof' ? 'roof' : 'ground')]+=kw;
     });
   }catch(e){}
@@ -37989,8 +38179,8 @@ function buildBOM() {
      40 MW campus produced a bill of materials with nothing on it but
      conduit. Counted straight off the drawing, so the BOM cannot
      disagree with the plan. */
-  var _cs = { pods:0, podKw:0, gen:0, genKw:0, genModel:'', bess:0, bessKw:0, bessKwh:0,
-              pv:0, pvKw:0, fences:0, fenceFt:0, ctrl:0, mvFt:0, yard:{}, oc:0, ocKw:0, ocKwh:0 };
+  var _cs = { pods:0, podKw:0, gen:0, genKw:0, genModel:'', bess:0, bessKw:0, bessKwh:0, bessBy:{}, bessOrder:[],
+              pv:0, pvKw:0, pvBy:{}, pvOrder:[], fences:0, fenceFt:0, ctrl:0, mvFt:0, yard:{}, oc:0, ocKw:0, ocKwh:0, mgc:0 };
   try{
     var _ppfB = (S.pxPerFt>0)?S.pxPerFt:0;
     (S.shapes||[]).forEach(function(sh){
@@ -38007,8 +38197,34 @@ function buildBOM() {
       if(sh.kind==='derdc' && sh.omegaCore){ _cs.oc++; _cs.ocKw += +sh.kw||0; _cs.ocKwh += +sh.bessKwh||0; }
       else if(sh.kind==='derdc'){ _cs.pods++; _cs.podKw += +sh.kw||0; }
       else if(sh.kind==='deralt'){ _cs.gen++; _cs.genKw += +sh.kw||0; _cs.genModel=sh.model||_cs.genModel; }
-      else if(sh.kind==='bespad'){ _cs.bess++; _cs.bessKw += +sh.kw||0; _cs.bessKwh += +sh.kwh||0; }
-      else if(sh.kind==='dersolar'){ _cs.pv++; _cs.pvKw += +sh.kw||0; }
+      else if((sh.kind==='bespad' || sh.kind==='assembly') && !sh.omegaController){
+        /* A pad OR an assembly from Draw › BESS Pad — the library's product
+           included — counted here. Only plain pads were, and only by a field
+           the pad tool never writes, so a NextNRG unit placed from Your
+           equipment library was on the legend and the Results and missing
+           from the BOM (Tommy, 2026-10-13). Rated the two ways a unit is
+           (unitKwh from the pad tool, kwh from the campus builder, as
+           _ppCollectFleet reads them) and grouped by product, so the line
+           names what was placed with its catalogue key and brand for the
+           RFQ. The master controller is drawn as a pad and is not a battery. */
+        var _bkwh=(sh.unitKwh!=null?+sh.unitKwh:(sh.kwh!=null?+sh.kwh:0))||0, _bkw=(sh.unitKw!=null?+sh.unitKw:(sh.kw!=null?+sh.kw:0))||0;
+        _cs.bess++; _cs.bessKw += _bkw; _cs.bessKwh += _bkwh;
+        var _bpk=sh.catalogKey||sh.model||'BESS Unit';
+        if(!_cs.bessBy[_bpk]){
+          var _bcat=null; try{ _bcat=(typeof BESS_CATALOG!=='undefined' && sh.catalogKey)?BESS_CATALOG[sh.catalogKey]:null; }catch(e){}
+          _cs.bessBy[_bpk]={ sku:sh.catalogKey||'', model:sh.model||(_bcat&&_bcat.model)||'', mfr:(_bcat&&_bcat.mfr)||'', n:0, kw:0, kwh:0, assemblies:0 };
+          _cs.bessOrder.push(_bpk);
+        }
+        var _bg=_cs.bessBy[_bpk]; _bg.n++; _bg.kw+=_bkw; _bg.kwh+=_bkwh; if(sh.kind==='assembly') _bg.assemblies++;
+      }
+      else if(sh.kind==='dersolar'){
+        _cs.pv++; _cs.pvKw += +sh.kw||0;
+        /* by mount AS DRAWN: a traced custom area claims none */
+        var _pm=(sh.canopy||sh.mount==='adjacent')?'adjacent':(sh.mount==='roof'?'roof':(sh.mount==='custom'?'custom':'ground'));
+        if(!_cs.pvBy[_pm]){ _cs.pvBy[_pm]={ n:0, kw:0 }; _cs.pvOrder.push(_pm); }
+        _cs.pvBy[_pm].n++; _cs.pvBy[_pm].kw += +sh.kw||0;
+      }
+      else if(sh.kind==='utility' && sh.utype==='mgc'){ _cs.mgc++; }
       else if(sh.omegaYard){
         var _k=(sh.label||sh.model||'Tie-in equipment');
         _cs.yard[_k]=(_cs.yard[_k]||0)+1;
@@ -38036,10 +38252,19 @@ function buildBOM() {
   /* Omega-Core is ClearSky's skid on its own meter: listed so the drawing and
      the BOM agree, never priced into the host's materials. */
   if(_cs.oc){
-    var _ocItem = addItem('Compute', 'Omega-Core skid (Solela Edge Compute + CleanCell R60)',
+    var _ocItem = addItem('Compute', 'Omega-Core skid (Solela Edge Compute + CleanCell R60 + NextNRG Microgrid Controller)',
             Math.round(_cs.ocKw/_cs.oc)+' kW compute + '+(Math.round(_cs.ocKwh/_cs.oc*100)/100)+' kWh battery each',
             _cs.oc, 'ea', 'ClearSky-owned on its own utility meter under the Omega-Core land lease \u2014 not host capex. Output \u203a Omega-Core for terms');
     if(_ocItem) _ocItem.notHostScope = true;   /* the electrical bid and the RFQ skip it */
+  }
+  /* The NextNRG Microgrid Controller placed for the host: a line with its
+     catalogue key and brand, so the RFQ routes it to NextNRG (the brand
+     fallback in /api/rfq.js) and the Run prices it (the cost engine). */
+  if(_cs.mgc){
+    var _mcat=(typeof UTILITY_CATALOG!=='undefined'&&UTILITY_CATALOG.mgc)||{};
+    addItem('Controls', _mcat.model||'NextNRG Microgrid Controller', '500 x 750 x 210 mm, IP55, wall or pad', _cs.mgc, 'ea',
+            '15-minute dispatch on a 24-hour forecast; economic / resilience / islanded; Modbus TCP to the site PLC \u2014 priced on the Run, its modelled dispatch uplift in the Value Stack',
+            _mcat.sku||'NEXTNRG-MGC', _mcat.mfr||'NextNRG');
   }
   if(_cs.gen){
     var _genBasis = '';
@@ -38053,13 +38278,36 @@ function buildBOM() {
             'Per unit; fuel piping by others until the gas letter is in hand');
   }
   if(_cs.bess){
-    addItem('Energy Storage', 'Outdoor battery enclosure',
-            (_cs.bessKwh?Math.round(_cs.bessKwh/_cs.bess)+' kWh each':''),
-            _cs.bess, 'ea', Math.round(_cs.bessKwh).toLocaleString()+' kWh total');
+    /* one line per product placed, under its name, with its catalogue key and brand */
+    _cs.bessOrder.forEach(function(k){
+      var G=_cs.bessBy[k];
+      var _each=G.n?(G.kwh/G.n):0, _eachKw=G.n?(G.kw/G.n):0;
+      addItem('Energy Storage', (G.model||'Outdoor battery enclosure')+((G.mfr && String(G.model||'').indexOf(G.mfr)<0)?' ('+G.mfr+')':''),
+              (_each?Math.round(_each).toLocaleString()+' kWh':'')+(_eachKw?((_each?' / ':'')+Math.round(_eachKw).toLocaleString()+' kW'):'')+((_each||_eachKw)?' each':''),
+              G.n, 'ea',
+              (G.kwh?Math.round(G.kwh).toLocaleString()+' kWh total':'rating not on the unit \u2014 set it in BESS Config')
+                +(G.assemblies?' \u00b7 placed as an assembly (pad, fence and bollards as drawn)':' \u00b7 outdoor enclosure on its pad'),
+              G.sku||'', G.mfr||'');
+    });
   }
   if(_cs.pv){
-    addItem('Solar', 'Ground-mount PV array', Math.round(_cs.pvKw).toLocaleString()+' kW-DC',
-            _cs.pv, 'lot', 'Modules, racking and DC BOS \u2014 see the PV layout for table count');
+    var _pvm=(typeof _pvModule==='function')?_pvModule():null;
+    /* an array stamped as a product (NextNRG Solar — Custom) names it; else the module in the assumptions */
+    var _pvs=null; try{ _pvs=(S.shapes||[]).filter(function(x){ return x && x.kind==='dersolar' && x.product; })[0]||null; }catch(e){}
+    /* one line per MOUNT AS DRAWN: Solar Ground and Solar Roof say which; a
+       traced custom area says neither until the array editor chooses one
+       (Tommy, 2026-10-13: "it's showing as a ground mount, and we put this
+       as a roof … it really should just say solar, unless we go in and
+       edit the array and choose it"). */
+    var _pvLabel={ ground:'Ground-mount PV array', roof:'Rooftop PV array', adjacent:'Solar canopy array', custom:'Solar PV array (custom area)' };
+    _cs.pvOrder.forEach(function(m){
+      var G=_cs.pvBy[m];
+      addItem('Solar', (_pvLabel[m]||'Solar PV array')+(_pvs?' \u2014 '+_pvs.product:(_pvm&&_pvm.label?' \u2014 '+_pvm.label:'')), Math.round(G.kw).toLocaleString()+' kW-DC',
+              G.n, 'lot', 'Modules, racking and DC BOS \u2014 see the PV layout for table count'
+                +(_pvm&&_pvm.watts?' \u00b7 '+Math.round(G.kw*1000/_pvm.watts).toLocaleString()+' \u00d7 '+_pvm.watts+' W modules':'')
+                +(m==='custom'?' \u00b7 mount not chosen: Array \u2014 Edit Size / Capacity sets ground, roof or canopy':''),
+              (_pvm&&_pvm.sku)||'', (_pvm&&_pvm.mfr)||'');
+    });
   }
   Object.keys(_cs.yard).forEach(function(k){
     addItem('Interconnection Yard', k, '', _cs.yard[k], 'ea', 'Placed by Design Site');
@@ -39201,7 +39449,7 @@ ${(function(){
   if(c.pods) r += line('Compute pod \u00d7'+c.pods, 'Modular data-centre container',
     Math.round(c.podKw).toLocaleString()+' kW IT total',
     'Load, not generation. Confirm pod rating and PUE with the operator.');
-  if(c.oc) r += line('Omega-Core skid \u00d7'+c.oc, 'Solela Edge Compute + CleanCell R60 (Sol-Ark 60K) on one 336 \u00d7 87 in skid',
+  if(c.oc) r += line('Omega-Core skid \u00d7'+c.oc, 'Solela Edge Compute + CleanCell R60 (Sol-Ark 60K) + NextNRG Microgrid Controller on one 336 \u00d7 87 in skid',
     Math.round(c.ocKw).toLocaleString()+' kW compute \u00b7 '+(Math.round(c.ocKwh*100)/100)+' kWh battery',
     'ClearSky-owned on its own utility meter under a 5-year minimum land lease \u2014 not on the host service.');
   if(c.gen) r += line('On-site generation \u00d7'+c.gen, c.genModel||'Prime mover',
@@ -43507,7 +43755,7 @@ function _ppBuildInventory(){
   if(S.shapes){ for(i=0;i<S.shapes.length;i++){ var sh=S.shapes[i];
     if(sh.kind==='evpost'||sh.kind==='evcab'||sh.kind==='evunit'||sh.kind==='evl2'){
       inv.ev_chargers.push({ model: sh.model||sh.label||'EV charger', kw: sh.kw||null }); }
-    if(sh.kind==='dersolar') inv.der.push({ type:'Solar PV', kw: sh.kw||null });
+    if(sh.kind==='dersolar') inv.der.push({ type: sh.product||'Solar PV', kw: sh.kw||null, module: sh.moduleKey||null });
     if(sh.kind==='derwind') inv.der.push({ type:'Wind', kw: sh.kw||null });
     if(sh.kind==='derdc' && sh.omegaCore){ inv.separateService=(inv.separateService||[]); inv.separateService.push({ type:'Omega-Core skid (own utility meter)', kw: sh.kw||null, kwh: sh.bessKwh||null }); continue; }
     if(sh.kind==='deralt'||sh.kind==='derdc') inv.der.push({ type: sh.model||'Generator', kw: sh.kw||null });
@@ -54710,6 +54958,7 @@ var DERC_DC = (function () {
           out[k].omegaCore = true; out[k].ownMeter = !!c.ownMeter;
           out[k].bessKw = c.bessKw; out[k].bessKwh = c.bessKwh;
           out[k].ocBessKey = c.bessKey; out[k].bessModel = c.bessModel; out[k].hf = c.hf;
+          out[k].controller = c.controller; out[k].controllerKey = c.controllerKey;
         }
       }
     }
@@ -54767,7 +55016,42 @@ var DERC_ALT = {
    Solar Assumptions panel, and _pvWpsf() below derives the exact figure
    when a specific module is known. Anyone with a real module spec should
    enter it. */
-var DER_PV_WPSF = 20;      /* W per sqft of module area (DC, STC) */
+/* ── THE MODULE (one list; NextNRG's specification is the default) ──────
+   Draw › Power Gen › Solar draws with a real module, not a rule of thumb
+   (Tommy, 2026-10-13: "when i click on solar in the draw and power gen,
+   lets use their specs on the solar"). NextNRG specifies JinkoSolar's
+   N-type TOPCon EAGLE G7B — 640 W at 23.69%, 2382 x 1134 x 30 mm — read
+   off the NextNRG Microgrids brochure (Q4 2026, p. 3-4); the generic
+   550 W module that was the planning default stays as a choice. The
+   module decides W/ft² unless a density is typed in Solar Assumptions,
+   the string sizer's module watts, and the 3D module pattern. The server
+   carries the same record (api/_lib/nextnrg.js); tnextnrg.js holds the
+   two together. Specs only — no price in a browser. */
+var DER_PV_MODULES = {
+  'nextnrg-eagle-g7b': { label:'JinkoSolar EAGLE G7B 640 W \u2014 NextNRG-specified', mfr:'NextNRG', make:'JinkoSolar', line:'EAGLE G7B', sku:'NEXTNRG-PV-EAGLE-G7B', nextnrg:true,
+    watts:640, wattsMin:615, effPct:23.69, effMinPct:22.77, cell:'N-type TOPCon, bifacial, 132 half cells (2 x 66), 80% bifaciality',
+    widthMm:1134, heightMm:2382, depthMm:30, weightLb:71.4, maxVdc:1500, fuseA:35, tempCoeffPct:-0.29, fire:'Type 29',
+    warranty:'12-year product; 30-year linear performance, at or above 87.4% at year 30 (<=1% first year, <=0.4%/yr after)',
+    certs:'IEC 61215, IEC 61730, UL 61730', source:'NextNRG Microgrids brochure, Q4 2026, p. 3-4',
+    note:'Forecast, not measured: generation forecast from 15-minute intervals out to 7 days, consumed first by the NextNRG Microgrid Controller.' },
+  'generic-550':       { label:'Generic 550 W crystalline-Si (planning)', watts:550, effPct:21.3, widthMm:1134, heightMm:2278, depthMm:35,
+    source:'Planning default before 2026-10-13', note:'A rule-of-thumb module; pick a real one for a takeoff.' }
+};
+var DER_PV_MODULE_DEFAULT = 'nextnrg-eagle-g7b';
+/* W per square foot of module area from a module's own nameplate and frame. */
+function _pvModuleWpsf(m){
+  var w=+(m&&m.watts), a=(+(m&&m.widthMm)/1000)*(+(m&&m.heightMm)/1000);
+  if(!(w>0) || !(a>0)) return 20;
+  return w/(a*10.7639);
+}
+function _pvModule(key){
+  var k=(key && DER_PV_MODULES[key]) ? key : null;
+  if(!k){ try{ var o=(typeof S!=='undefined' && S.solarAssume) ? S.solarAssume.moduleKey : null; if(o && DER_PV_MODULES[o]) k=o; }catch(e){} }
+  return DER_PV_MODULES[k||DER_PV_MODULE_DEFAULT];
+}
+/* the chosen module's nameplate, for the string sizer */
+function _pvModuleWatts(){ var m=_pvModule(); return (m && m.watts>0) ? m.watts : 550; }
+var DER_PV_WPSF = Math.round(_pvModuleWpsf(DER_PV_MODULES[DER_PV_MODULE_DEFAULT])*100)/100;   /* 22.01 W/ft² for the EAGLE G7B */
 
 /* Exact power density from a module's nameplate and physical size --
    use this instead of the default whenever the module is actually known. */
@@ -54963,11 +55247,14 @@ function _derPlaceDcPad(p){
     /* under its own name: a host reader that seeds from `bessKey` (the
        engineering build's BESS step) must never pick the skid's battery */
     sh.ocBessKey=_oc.ocBessKey; sh.bessModel=_oc.bessModel; sh.hf=_oc.hf;
+    /* the controller built into the skid (NextNRG), named so the BOM and
+       the spec sheet can say so without the catalog */
+    sh.controller=_oc.controller; sh.controllerKey=_oc.controllerKey;
   }
   S.shapes.push(sh); renderShape(sh); updShapeCount(); pushHist();
   if(typeof updateSummaryPanel==='function') updateSummaryPanel();
   _derBanner(sh.omegaCore
-    ? spec.model+' placed ('+spec.kw+' kW compute + '+sh.bessKwh+' kWh / '+sh.bessKw+' kW battery, own meter) \u2014 Output \u203a Omega-Core qualifies the site'
+    ? spec.model+' placed ('+spec.kw+' kW compute + '+sh.bessKwh+' kWh / '+sh.bessKw+' kW battery + NextNRG controller, own meter) \u2014 Output \u203a Omega-Core qualifies the site'
     : spec.model+' pad placed ('+spec.kw+' kW compute) \u2014 click to add another');
 }
 
@@ -55047,6 +55334,12 @@ function _solarAssume(mount){
   var out = { presetKey:presetKey, label:P.label, note:P.note,
               gcr:P.gcr, wpsf:P.wpsf, setbackFt:P.setbackFt, cf:P.cf,
               mountClass:cls, source:'default' };
+  /* THE MODULE decides the density unless a W/ft² is typed below: NextNRG's
+     specification (JinkoSolar EAGLE G7B 640 W) by default, whatever the
+     mount. A saved project's choice rides on S.solarAssume.moduleKey. */
+  var mk = (over && over.moduleKey && DER_PV_MODULES[over.moduleKey]) ? over.moduleKey : DER_PV_MODULE_DEFAULT;
+  out.moduleKey = mk; out.module = DER_PV_MODULES[mk];
+  out.wpsf = Math.round(_pvModuleWpsf(out.module)*100)/100;
   /* Per-field user overrides win over the preset — but only for the class
      the override targets. */
   if(over && overApplies){
@@ -55076,6 +55369,12 @@ function setSolarAssume(field, val){
   try{
     if(typeof S==='undefined') return;
     S.solarAssume = S.solarAssume || {};
+    if(field==='moduleKey'){
+      if(!DER_PV_MODULES[val]) return;             /* reject unknown modules */
+      S.solarAssume.moduleKey = val;
+      delete S.solarAssume.wpsf;                   /* the module decides the density again */
+      _solarRecalcAll(); return;
+    }
     if(field==='presetKey'){
       if(!DER_SOLAR_PRESETS[val]) return;          /* reject unknown presets */
       S.solarAssume.presetKey = val;
@@ -55530,6 +55829,11 @@ function _derRenderDc(g, sh){
     }
     _derRect(g, x+w*0.45, cy, ft(3.61), Math.min(h*0.62, ft(2.46)), '#FFFFFF', '#0891B2', 1.1);  /* R60 */
     _derRect(g, x+w*0.45+ft(3.75), cy, ft(1.6), Math.min(h*0.5, ft(1.0)), '#E5E7EB', '#4B5563', 1);  /* Sol-Ark */
+    /* the NextNRG Microgrid Controller, under the Sol-Ark: its 750 x 500 mm
+       enclosure face (2.46 x 1.64 ft) */
+    var mgy=cy+Math.min(h*0.5, ft(1.0))+ft(0.2), mgh=Math.min(h*0.28, ft(1.64));
+    _derRect(g, x+w*0.45+ft(3.75), mgy, ft(2.46), mgh, '#DCFCE7', '#16A34A', 1);
+    if(ppf>=5 && mgh>=6) _derText(g, x+w*0.45+ft(3.75)+ft(1.23), mgy+mgh*0.5+Math.max(2,Math.min(4,ppf*0.3)), 'MGC', Math.max(5,Math.min(8,ppf*0.4)), '#166534', 'middle', '700');
     var mx=x+w*0.86, my=y+h*0.42, mr=Math.max(1.5, Math.min(h*0.18, ft(0.9)));
     var mc=_mkNS('circle'); mc.setAttribute('cx',mx); mc.setAttribute('cy',my); mc.setAttribute('r',mr);
     mc.setAttribute('fill','#FFFFFF'); mc.setAttribute('stroke','#16A34A'); mc.setAttribute('stroke-width',1.1); g.appendChild(mc);
@@ -55546,8 +55850,10 @@ function _derRenderDc(g, sh){
       _derText(g, x+w*0.45+ft(1.8), cy+chh+fs+1, 'R60', fs, '#0E7490', 'middle', '700');
     }
     _derText(g, x+w/2, y+h+11, (sh.model||'Omega-Core')+' \u2022 '+(sh.kw||0)+' kW compute \u2022 '
-             +(sh.bessKwh||0)+' kWh / '+(sh.bessKw||0)+' kW \u2022 own meter',
+             +(sh.bessKwh||0)+' kWh / '+(sh.bessKw||0)+' kW \u2022 NextNRG MGC \u2022 own meter',
              Math.max(7,Math.min(12,ppf*0.8)), '#0E7490', 'middle', '700');
+    /* the skid's own perimeter protection, set in the pad panel (click it) */
+    if(sh.sides){ try{ _drawProtection(g, sh, { x:x, y:y, w:w, h:h }, ppf); }catch(e){} }
     return;
   }
 
@@ -55751,7 +56057,7 @@ function _derRenderSolar(g, sh){
      with zoom instead of with the design. */
   _pvDrawModules(g, gx, gy, gw, gh, ppf, sh);
   _derText(g, x+w/2, y+h/2, '\u2600 '+(sh.kw||0)+' kW-DC', 11, '#1D4ED8', 'middle', '800');
-  var _ml = sh.mount==='roof'?'ROOFTOP':(sh.mount==='adjacent'?'SOLAR CANOPY':'GROUND');
+  var _ml = sh.mount==='custom'?'CUSTOM AREA':(sh.mount==='roof'?'ROOFTOP':(sh.mount==='adjacent'?'SOLAR CANOPY':'GROUND'));
   _derText(g, x+w/2, y+h/2+13, _ml+' \u2022 '+(sh.sqft||0).toLocaleString()+' sqft', 8, '#3B82F6', 'middle', '600');
   /* Third line: the layout assumptions driving the kW, so a reviewer can
      see why capacity differs from gross area. */
@@ -55760,6 +56066,8 @@ function _derRenderSolar(g, sh){
       'GCR '+Number(sh.gcr).toFixed(2)+' \u2022 '+(sh.setbackFt||0)+' ft setback',
       7, '#60A5FA', 'middle', '500');
   }
+  /* whose product the array is (NextNRG's module), said on the drawing */
+  if(sh.product) _derText(g, x+w/2, y+h/2+(sh.gcr?35:24), sh.product, 7, '#1E40AF', 'middle', '700');
 }
 
 /* ---- DER TOTALS (read from placed shapes) --------------------------- */
@@ -80962,6 +81270,21 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     return true;
   };
 
+  /* NextNRG Solar — Custom (Tommy, 2026-10-13: "they have a polyline in
+     here that is a NextNRG Solar - Custom"): the same trace, with NextNRG's
+     module chosen for the project first, so the array that fills the
+     outline is built on the EAGLE G7B and stamped as NextNRG's product
+     (applyGroundLayout reads the module off the assumptions). */
+  window.omegaNextnrgSolarCustom=function(){
+    var s=S_(); if(!s) return false;
+    try{ if(typeof setSolarAssume==='function') setSolarAssume('moduleKey','nextnrg-eagle-g7b'); }catch(e){}
+    if(typeof showBanner==='function'){
+      try{ showBanner('shape','NextNRG Solar \u2014 trace the array area, double-click to close. The JinkoSolar EAGLE G7B 640 W fills it as NextNRG\'s product.'); }catch(e){}
+    }
+    var r = window.omegaSolarCustomArea();
+    return r;
+  };
+
   /* Wait for the outline this press produces, then lay out THAT one.
      Shapes are told apart by id, never by count, so a building or boundary
      already drawn is never taken for the new area. ESC (the mode leaving
@@ -84700,6 +85023,16 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
       + '<input id="' + id + '" type="number" step="' + (step || 'any') + '" value="' + val + '" style="' + CSS + '"></div>';
   }
 
+  /* The mount is a CHOICE made here (or by Solar Ground / Solar Roof when
+     the array was drawn), never a guess: a traced custom area reads
+     "Solar PV array" until one is chosen. */
+  var MOUNTS = [['custom', 'Not chosen \u2014 reads "Solar PV array (custom area)"'], ['ground', 'Ground mount'], ['roof', 'Rooftop'], ['adjacent', 'Solar canopy']];
+  function mountOf(sh) { return (sh.canopy || sh.mount === 'adjacent') ? 'adjacent' : (sh.mount === 'roof' ? 'roof' : (sh.mount === 'custom' ? 'custom' : 'ground')); }
+  function mountSelect(sh) {
+    var cur = mountOf(sh);
+    return '<div style="margin-bottom:9px"><label style="' + LBL + '">Mount \u2014 what the BOM, the Run and the drawing call this array</label>'
+      + '<select id="osz-mount" style="' + CSS + '">' + MOUNTS.map(function (m) { return '<option value="' + m[0] + '"' + (m[0] === cur ? ' selected' : '') + '>' + m[1] + '</option>'; }).join('') + '</select></div>';
+  }
   function presetOptions(sel) {
     var out = '<option value="">\u2014 keep current numbers \u2014</option>';
     try {
@@ -84818,6 +85151,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         + 'padding:8px 10px;font:700 11px inherit;cursor:pointer">Size to kW</button>'
         + '</div>'
 
+        + mountSelect(sel)
         + '<div style="font:700 10px/1.4 \'IBM Plex Sans\';letter-spacing:.08em;text-transform:uppercase;color:var(--sub);margin:4px 0 7px">Racking assumptions</div>'
         + '<div style="margin-bottom:9px"><label style="' + LBL + '">Preset \u2014 changing this refills the outline</label>'
         + '<select id="osz-preset" style="' + CSS + '">' + presetOptions(sel) + '</select></div>'
@@ -84842,7 +85176,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:14px">'
         + field('Width (ft)', 'osz-w', Math.round((sel.wPx || 0) / P), 1)
         + field('Depth (ft)', 'osz-h', Math.round((sel.hPx || 0) / P), 1)
-        + '</div>')
+        + '</div>'
+        + mountSelect(sel))
 
       + '<div id="osz-msg" style="font-size:11px;color:var(--amber);min-height:15px;margin:8px 0 2px"></div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
@@ -84908,6 +85243,10 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
   function apply() {
     var sh = byId(currentId()); if (!sh) return;
     var P = ppf();
+    /* the mount, chosen: it travels to the BOM's line, the Run's $/W by
+       mount, the legend and the label on the drawing */
+    var mv = document.getElementById('osz-mount');
+    if (mv && mv.value && MOUNTS.some(function (m) { return m[0] === mv.value; })) { sh.mount = mv.value; sh.canopy = (mv.value === 'adjacent'); }
     if (!sh.autoLayout) {
       var wf = num('osz-w', 0), hf = num('osz-h', 0);
       if (wf > 0) sh.wPx = wf * P;
@@ -87603,7 +87942,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
        is separate again and faster than both -- protection is not control.
        So: control conduits terminate at the MGC, and the MGC gets a
        dedicated hardwired run to the PCC. */
-    mgc: { label: 'MICROGRID CONTROLLER (IEEE 2030.7)', lf: 3.0, wf: 2.5, abbr: 'MGC' },
+    /* The unit is NextNRG's (2026-10-13); UTILITY_CATALOG.mgc, defined
+       first, is the one row and wins at install — this entry only keeps the
+       key in the BOP list that the menu and OmegaBOP.list() read. */
+    mgc: { label: 'NEXTNRG MICROGRID CONTROLLER', lf: 2.5, wf: 1.75, abbr: 'MGC' },
 
     /* --- AC distribution ---------------------------------------------- */
     mdp: { label: 'MAIN SWITCHGEAR / MDP', lf: 10.0, wf: 3.0, abbr: 'MDP' },
@@ -87638,7 +87980,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
   /* Grouped for the menu, in the order you would walk the one-line. */
   var MENU = [
-    ['Controls', [['ems', '▤'], ['scada', '▥']]],
+    ['Controls', [['mgc', '◧'], ['ems', '▤'], ['scada', '▥']]],
     ['AC distribution', [['mdp', '▦'], ['swbd', '▦'], ['panel', '▯'], ['ats', '⧉']]],
     ['Medium voltage', [['mvswgr', '▧'], ['recloser', '⊗'], ['padxfmr', '⬢']]],
     ['Conversion', [['pcs', '▩'], ['inverter', '◨'], ['combiner', '▫']]],
@@ -87672,7 +88014,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         fly.appendChild(h);
 
         grp[1].forEach(function (item) {
-          var key = item[0], ico = item[1], def = BOP[key];
+          var key = item[0], ico = item[1], def = UTILITY_CATALOG[key] || BOP[key];
           var b = document.createElement('button');
           b.className = 'rb-fly-item';
           b.title = def.label + ' — ' + def.lf + '\u2032 \u00d7 ' + def.wf + '\u2032 footprint';
@@ -93977,6 +94319,16 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     return +kw.toFixed(1);
   }
 
+  /* a NextNRG Microgrid Controller placed for the HOST (Draw › Utility):
+     its dispatch uplift is the server's (api/_lib/nextnrg.js). The one
+     inside an Omega-Core skid runs the skid, not this site's battery. */
+  function controllerOnDrawing() {
+    var s = S_(); if (!s) return null;
+    var key = null;
+    (s.shapes || []).forEach(function (sh) { if (sh && sh.kind === 'utility' && sh.utype === 'mgc') key = 'NEXTNRG-MGC'; });
+    return key;
+  }
+
   /* a bill loaded by Analyze > Bill Import beats any regional typical */
   function billDemandCharge() {
     try {
@@ -94077,6 +94429,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     }
     if (cfg.performance != null) req.performance = cfg.performance;
     if (cost) req.cost = cost;
+    var mgc = controllerOnDrawing(); if (mgc) req.controller = mgc;
     var fin = {};
     if (cfg.itcRate != null) fin.itcRate = cfg.itcRate;
     if (cfg.years != null) fin.years = cfg.years;
@@ -94316,7 +94669,10 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       + '<div style="display:flex;justify-content:space-between;padding:9px 0 2px;font-size:13px;font-weight:800">'
       + '<span>You keep / year</span><span>' + money(R.totals.owner) + '</span></div>'
       + '<div style="font-size:10px;color:var(--sub);margin-bottom:8px">gross ' + money(R.totals.gross)
-      + ' · ' + money(R.totals.perKw) + ' per kW · bill ' + money(R.bill.before) + ' → ' + money(R.bill.after) + '</div>';
+      + ' · ' + money(R.totals.perKw) + ' per kW · bill ' + money(R.bill.before) + ' → ' + money(R.bill.after) + '</div>'
+      + (R.controller ? '<div style="padding:7px 9px;margin-bottom:8px;border:1px solid rgba(84,180,66,.45);border-radius:7px;background:rgba(84,180,66,.08);font-size:10px;line-height:1.5">'
+          + '<strong style="color:#54B442">' + esc(R.controller.model) + '</strong> — +' + esc(R.controller.pct) + '% on the dispatch-decided bill savings, '
+          + money(R.controller.usdPerYear) + ' a year, already in the streams above. ' + esc(R.controller.caveat) + '</div>' : '');
 
     /* returns */
     html += '<div style="' + lbl + ';margin:10px 0 5px">Returns — against the project cost</div>';
@@ -98119,7 +98475,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     cfg = cfg || {};
     if (!tables || !tables.length) return null;
 
-    var moduleW = num(cfg.moduleWatts, 550);
+    var moduleW = num(cfg.moduleWatts, (typeof _pvModuleWatts==='function') ? _pvModuleWatts() : 550);
     var perString = Math.max(4, num(cfg.modulesPerString, 28));
     var strPerComb = Math.max(2, num(cfg.stringsPerCombiner, 16));
     var blockKw = num(cfg.blockKwDc, layout && layout.blockKwTarget ? layout.blockKwTarget : 2000);
@@ -104160,10 +104516,14 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       if(sh && sh.kind==='utility' && sh.utype==='mgc') found=sh;
     });
     if(found) return found;
+    /* The same controller Draw › Utility places: NextNRG's, off the one
+       catalog row, so the guided build and a hand placement agree. */
+    var _mc=(typeof UTILITY_CATALOG!=='undefined'&&UTILITY_CATALOG.mgc)||{label:'MICROGRID CONTROLLER',lf:3,wf:2.5,abbr:'MGC'};
+    var _mp=clampToSite(nearX+(10*ppf()), nearY+(10*ppf()), _mc.lf*ppf(), _mc.wf*ppf());
     var sh={ id:(typeof uid==='function'?uid():'mgc'+Date.now()),
-             kind:'utility', utype:'mgc', label:'MICROGRID CONTROLLER',
-             lf:3, wf:2.5, abbr:'MGC', omegaMgc:true, scaled:!!(S.pxPerFt>0),
-             pts:[clampToSite(nearX+(10*ppf()), nearY+(10*ppf()), 3*ppf(), 2.5*ppf())] };
+             kind:'utility', utype:'mgc', label:_mc.label,
+             lf:_mc.lf, wf:_mc.wf, abbr:_mc.abbr, omegaMgc:true, scaled:!!(S.pxPerFt>0),
+             pts:[_mp], cx:_mp.x, cy:_mp.y };
     S.shapes.push(sh);
     try{ if(typeof renderShape==='function') renderShape(sh); }catch(e){}
     return sh;
@@ -144188,6 +144548,8 @@ function buildMaterials(){
    module. Cached by rounded repeat because a site can hold dozens of
    arrays and each uncached material is a shader compile. */
 var MOD_W_FT = 3.3, MOD_H_FT = 6.5;
+/* the chosen module's frame (the EAGLE G7B is 1134 x 2382 mm: 3.72 x 7.81 ft) */
+try{ var _m3=(typeof _pvModule==='function')?_pvModule():null; if(_m3 && _m3.widthMm>0 && _m3.heightMm>0){ MOD_W_FT=_m3.widthMm/304.8; MOD_H_FT=_m3.heightMm/304.8; } }catch(e){}
 var _panelMats = {};
 function panelMat(wf, lf){
   var rx = Math.max(1, Math.round(wf / MOD_W_FT));
@@ -163394,6 +163756,7 @@ if (root.console && console.info) {
   /* ── 2. lock ────────────────────────────────────────────────────────── */
 
   var locked = true;   /* placed equipment starts locked */
+  var lastSelect = { id: null, at: 0 };   /* one selection per press, not three */
 
   /* WHAT THE LOCK IS FOR.
      The problem it solves is nudging one of two hundred identical
@@ -163434,8 +163797,26 @@ if (root.console && console.info) {
       try { sh = (S.shapes || []).filter(function (s) { return s && s.id === id; })[0]; }
       catch (e2) {}
       if (!isPlaced(sh)) return;
+      /* Locked means it will not MOVE. It is still a thing on the drawing
+         that can be looked at and taken off: in Select mode the press
+         SELECTS it (the frame, the handles and the delete X), and only
+         the drag is refused, because the press never reaches the
+         editor's drag handler. Before this the lock swallowed the press
+         whole, so a traced solar canopy (an auto-layout array, locked
+         from the moment it was built) could not be clicked at all and
+         there was no way to delete it (Tommy, 2026-10-13: "i need to be
+         able to click on this and the x comes up and i click it x and
+         delete it"). A press arrives as up to three events (pointer,
+         mouse, touch); the shape is selected once. */
       e.stopPropagation();
       e.preventDefault();
+      try {
+        if (S.mode === 'select' && typeof selectShape === 'function'
+            && !(lastSelect.id === sh.id && (Date.now() - lastSelect.at) < 400)) {
+          lastSelect = { id: sh.id, at: Date.now() };
+          selectShape(sh.id);
+        }
+      } catch (e3) {}
     };
     ['mousedown', 'touchstart', 'pointerdown'].forEach(function (t) {
       document.addEventListener(t, guard, true);
@@ -169641,7 +170022,7 @@ if (root.console && console.info) {
         case 'derwind': add('wind', '\u2732', sh.model || 'Wind turbine', sh.kw); break;
         case 'bespad': add('bess' + (sh.model || ''), '\u25ac', sh.model || 'BESS container',
                            sh.kw, sh.kwh); break;
-        case 'dersolar': add('pv', '\u2600', 'Solar array', sh.kw); break;
+        case 'dersolar': add(sh.product ? ('pv:'+sh.product) : 'pv', '\u2600', sh.product || 'Solar array', sh.kw); break;
         case 'substation': subs.push(sh); break;
         default:
           if (sh.omegaYard) add('yard' + (sh.label || sh.kind), '\u25a3',

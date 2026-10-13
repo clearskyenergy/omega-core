@@ -31,6 +31,14 @@ function fn(name) {
   return SRC.slice(k, i + 1);
 }
 const AL_GENERATE = fn('alGenerate'), SHAPE_BBOX = fn('_shapeBBox');
+/* the field lock's rule and its capture-phase guard, cut out of their closure */
+function braces(needle) {
+  const k = SRC.indexOf(needle); if (k < 0) throw new Error(needle);
+  let i = SRC.indexOf('{', k), d = 0;
+  for (;; i++) { if (SRC[i] === '{') d++; else if (SRC[i] === '}') { d--; if (!d) break; } }
+  return SRC.slice(k, i + 1);
+}
+const IS_PLACED = braces('function isPlaced(sh)'), GUARD = braces('var guard = function (e)');
 /* the one line of openAutoLayout that takes a handed outline */
 const OPEN_AL = SRC.indexOf('function openAutoLayout(boundaryPts){') >= 0
   ? SRC.slice(SRC.indexOf('function openAutoLayout(boundaryPts){'), SRC.indexOf('var host=document.getElementById(\'autolayout-modal\');'))
@@ -162,6 +170,29 @@ const sq = (x, y, w) => [{ x, y }, { x: x + w, y }, { x: x + w, y: y + w }, { x,
     chk('bbox: an auto-layout array is its wPx x hPx box from pts[0]', b.x === 10 && b.y === 20 && b.w === 300 && b.h === 200);
     const d = ctx._shapeBBox({ kind: 'derdc', pts: [{ x: 100, y: 100 }], lf: 20, wf: 8 });
     chk('bbox: a compute unit is centred on its point at lf x wf feet', d.x === 0 && d.y === 60 && d.w === 200 && d.h === 80);
+  }
+
+  /* 8. the field lock: a locked array still SELECTS on a press (so its delete X
+        comes up), the drag never starts, and nothing else changes. A TRACED
+        canopy is not locked at all (a traced outline is a decision, like the
+        substation; #295): only what the pack placed (omegaCompute) is. */
+  {
+    const S = { mode: 'select', shapes: [{ id: 'c1', kind: 'dersolar', autoLayout: true, omegaCompute: true }, { id: 'p1', kind: 'polyline' }, { id: 'u1', kind: 'derdc', omegaCompute: true }, { id: 't1', kind: 'dersolar', autoLayout: true, mount: 'adjacent', canopy: true }] };
+    const log = { selected: [], stopped: 0 };
+    const ctx = { S, Date, selectShape(id) { log.selected.push(id); }, console };
+    vm.createContext(ctx);
+    vm.runInContext(IS_PLACED + '\nvar locked = true; var lastSelect = { id: null, at: 0 };\n' + GUARD + ';', ctx);
+    const press = (id, type) => ctx.guard({ type, target: { closest: () => ({ getAttribute: () => id }) }, stopPropagation() { log.stopped++; }, preventDefault() {} });
+    ['pointerdown', 'mousedown', 'touchstart'].forEach(t => press('c1', t));
+    chk('lock: a press on a locked canopy is swallowed (no drag) and selects it once', log.stopped === 3 && log.selected.join(',') === 'c1');
+    press('u1', 'mousedown');
+    chk('lock: a locked compute unit selects the same way', log.selected.join(',') === 'c1,u1');
+    log.stopped = 0; press('p1', 'mousedown');
+    chk('lock: a plain traced outline is not the lock\'s business', log.stopped === 0 && log.selected.length === 2);
+    S.mode = 'polyline'; log.stopped = 0; press('c1', 'mousedown');
+    chk('lock: outside Select mode the press is swallowed and nothing is selected', log.stopped === 1 && log.selected.length === 2);
+    S.mode = 'select'; log.stopped = 0; press('t1', 'mousedown');
+    chk('lock: a traced canopy is not locked — the press goes through to the ordinary select and drag', log.stopped === 0 && log.selected.length === 2);
   }
 
   console.log(all ? 'tcanopytrace: all passed' : 'tcanopytrace: FAILED');
