@@ -469,7 +469,7 @@ function editorChecks() {
   eq(od.ocUnits, 1, 'omegaDer counts it as Omega-Core');
 
   /* every reader of host compute, cost and site type skips it */
-  [['the data-centre electrical ROM', 'function omegaDataCenterROM(', /sh\.omegaCore/],
+  [['the data-centre electrical ROM (its quantities, sent to the server cost engine)', 'function omegaCostQuantities(', /sh\.kind==='derdc'&&!sh\.omegaCore/],
    ['the one-line export', 'function omegaOneLineExport(', /sh\.omegaCore\) return;/],
    ['the BOM (its own line, not a pod)', 'function buildBOM(', /Omega-Core skid \(Solela Edge Compute \+ CleanCell R60\)/],
    ['the spec sheet (its own row)', 'function exportSpecSheet(', /Omega-Core skid \\u00d7/],

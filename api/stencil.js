@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 // Vercel serverless function: /api/stencil
 // Proxies a Google Gemini 2.5 Flash Image ("Nano Banana") image-to-image call
 // so the API key stays server-side and the browser avoids CORS.

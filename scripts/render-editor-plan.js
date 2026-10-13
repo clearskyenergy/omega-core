@@ -33,6 +33,8 @@ var F = require('./_lib/firestore-double');
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, db: function () { return null; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; } });
 var M = require('../api/_lib/modules'), X = require('../api/_lib/package-access'), B = require('../api/_lib/pricebook');
 var OFFER = require('../api/offerings').view(B.proposed(), 'proposed');
+var EC = require('../api/_lib/editor-cost');   /* the cost engine the editor's Run posts to */
+var ES = require('../api/_lib/editor-score');  /* the screening scorers the editor posts to */
 var ROOT = path.join(__dirname, '..'), output = process.env.EDITOR_PLAN_SHOTS || path.join(os.tmpdir(), 'omega-editor-plan');
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium, count = 0;
 function ok(value, label) { assert(value, label); count++; }
@@ -165,7 +167,7 @@ async function run() {
   var browser = await chromium.launch({ executablePath: process.env.CHROME || chromium.executablePath() });
   try {
     for (var theme of ['light', 'dark']) {
-      var view = project(['lite']), figures = null, paid = false, calls = { catalog: 0, access: 0, reconcile: [], summary: 0, offerings: 0 };
+      var view = project(['lite']), figures = null, paid = false, calls = { catalog: 0, access: 0, reconcile: [], summary: 0, offerings: 0, cost: [], score: [] };
       var context = await browser.newContext({ viewport: { width: 1280, height: 900 }, colorScheme: theme });
       await context.addInitScript(fixture);
       await context.route('**/*', function (route) {
@@ -180,6 +182,9 @@ async function run() {
           calls.summary++;
           return figures ? json(200, figures) : json(503, { error: 'Price book not seeded' });
         }
+        /* the cost engine: the real library on the quantities the page posted */
+        if (url.pathname === '/api/cost-rollup') { var q = req.postDataJSON(); calls.cost.push(q); return json(200, EC.rollup(q)); }
+        if (url.pathname === '/api/editor-score') { var sb = req.postDataJSON(); calls.score.push(sb); return json(200, sb.action === 'prequal' ? ES.prequal(sb) : ES.interconnect(sb)); }
         if (url.pathname.indexOf('/api/') === 0) return json(503, { error: 'Offline producer' });
         return route.continue();
       });
@@ -367,6 +372,44 @@ async function run() {
       await page.hover('#omega-plan-chip'); await page.waitForTimeout(150);
       ok(await page.evaluate(function () { return document.getElementById('omega-plan-chip').matches(':hover'); }) && await page.evaluate(chipContrast) >= 4.5, theme + ': desktop chip text reads at 4.5:1 or better under the pointer');
       await page.mouse.move(1, 899);
+
+      /* The cost engine runs on the server (2026-10-13): a configured battery
+         and a drawn pad go up as quantities, the lines come back, the panel
+         draws them, and the Run's roll-up carries the server's total. */
+      var costed = await page.evaluate(async function () {
+        S.bessList = [{ id: 'rc1', name: 'EDGE 760', kwh: 760, kw: 380, qty: 1, mfr: 'Gotion', chem: 'LFP' }];
+        S.elements = (S.elements || []).concat([{ eqId: 'pad', type: 'eq', x: 10, y: 10 }]);
+        updateCostEst();
+        var ans = window._COST_PROMISE ? await window._COST_PROMISE : null;
+        await new Promise(function (r) { setTimeout(r, 50); });
+        return { ans: ans, total: window._COST_TOTAL, text: document.getElementById('rp-total-cost').textContent,
+          rows: document.getElementById('ce-bess-items').textContent, breakdown: document.getElementById('rp-cost-breakdown').textContent,
+          auto: getBessCostAuto(760, 0), pending: window._COST_PENDING, unchecked: window._COST_UNCHECKED };
+      });
+      ok(calls.cost.length >= 1, theme + ': the page posted its quantities to the cost engine');
+      var posted = calls.cost[calls.cost.length - 1];
+      ok(posted && posted.configured && posted.configured[0] && posted.configured[0].kwh === 760 && posted.counts && posted.counts.pad === 1, theme + ': quantities, not prices: the configured unit and the drawn pad');
+      ok(!/"(eq|msrp|perUnit|pn|tier|rate|benchmark|total)":/.test(JSON.stringify(posted)), theme + ': the request carries no price');
+      ok(costed.ans && costed.ans.totals && costed.total === costed.ans.totals.total && costed.total > 0, theme + ': the Run total is the server\'s: ' + costed.total);
+      ok(/^\$[\d,]+$/.test(costed.text), theme + ': the panel draws the server\'s total: ' + costed.text);
+      ok(/EDGE 760/.test(costed.rows) && /configured/.test(costed.rows), theme + ': the configured unit is listed, not counted');
+      ok(/BESS Equipment \+ Install/.test(costed.breakdown) && /Contingency \(10%\)/.test(costed.breakdown), theme + ': the breakdown lines come from the answer');
+      ok(costed.auto === 64600, theme + ': the per-unit rate is read off the answer, never the page');
+      ok(!costed.pending && !costed.unchecked, theme + ': priced and checked');
+      /* The scorers run on the server too: the score panel asks with the
+         site's facts and draws the factors that come back. */
+      var scored = await page.evaluate(async function () {
+        var addr = document.getElementById('addr-in'); if (addr) addr.value = '123 Main St, Chicago, IL 60601';
+        window._SITE_DATA = { gridAtlas: { nearestSubstationKm: 1.4, nearestSubstationKv: 138, nearestSubstationName: 'Fisk' } };
+        var r1 = computeInterconnectScore(); if (r1.pending) await r1.promise;
+        var r2 = computeInterconnectScore();
+        var pq = computeSitePreQual({ propertyAreaSf: 3000, parkingSpaces: 5, pins: 2 }); if (pq.pending) await pq.promise;
+        var pq2 = computeSitePreQual({ propertyAreaSf: 3000, parkingSpaces: 5, pins: 2 });
+        return { pending1: !!r1.pending, pct: r2.pct, iso: r2.iso, keys: (r2.factors || []).map(function (f) { return f.key; }), hasWeight: !!(r2.factors && r2.factors[0] && 'weight' in r2.factors[0]), tier: pq2.tier, label: pq2.system && pq2.system.full && pq2.system.full.label };
+      });
+      ok(calls.score.length >= 2 && calls.score.some(function (c) { return c.action === 'interconnect' && c.zip === '60601'; }) && calls.score.some(function (c) { return c.action === 'prequal'; }), theme + ': the scorers were asked with the site\'s facts');
+      ok(scored.pending1 && scored.pct === 69 && scored.iso === 'PJM' && scored.keys.length === 5 && !scored.hasWeight, theme + ': the interconnect score is the server\'s, without its weights: ' + scored.pct + ' ' + scored.iso);
+      ok(scored.tier === 'Conditional — Capacity Pending' && /Benchmark|Configured/.test(scored.label || ''), theme + ': the pre-qual tier and system label are the server\'s: ' + scored.tier);
 
       ok(!errors.length, theme + ': no editor errors: ' + errors.join('; '));
       await context.close();

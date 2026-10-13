@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* POST /api/stripe-create — ClearSky staff only. Creates/links a Stripe
    Customer for a tenant and (optionally) a subscription or payment link.
    Body: { orgId, email, tier, priceId?, mode: 'subscription'|'payment_link' }

@@ -67,12 +67,13 @@ window.addEventListener('unhandledrejection', function(e) {
 });
 </script>
 <meta charset="UTF-8">
-<meta name="copyright" content="Copyright 2026 Tommy Gilmer. All rights reserved. Unauthorized reproduction or distribution is prohibited.">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. All rights reserved. Licensed, not sold; use is governed by the ClearSky OMEGA Terms of Service. Unauthorized copying, reverse engineering, or derivative development is prohibited.">
+<link rel="license" href="/terms.html">
 <meta name="author" content="ClearSky Energy Solutions LLC">
 <meta name="build-id" content="Constellation-15.2-2026-08-18">
-<!-- (c) 2026 Tommy Gilmer. This software is proprietary and confidential. -->
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
 <!-- Unauthorized copying, modification, or distribution is strictly prohibited. -->
-<!-- Original author: Thomas / Tommy Gilmer. Protected by US copyright law. -->
+<!-- Original author: Tommy Gilmer, for ClearSky Energy Solutions LLC. Protected by U.S. copyright law (17 U.S.C.) and trade secret law. Transmission of this code to a browser is a technical requirement of operating the service, not a publication, and grants no licence beyond the Terms of Service. -->
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1770,8 +1771,8 @@ window.onerror = function(msg, src, line, col, err) {
 </script>
 </head>
 <body>
-<!-- (c)2026 Tommy Gilmer. Proprietary. Token:D1FCEE6924ECB1F5. Author:Tommy Gilmer. -->
-<div id="_tg_copyright" aria-hidden="true" style="display:none;position:absolute;width:0;height:0;overflow:hidden" data-owner="Tommy Gilmer" data-build="TG-SITEPRO-v4.26" data-token="D1FCEE6924ECB1F5" data-year="2026" data-author="Thomas"></div>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. Token:D1FCEE6924ECB1F5. Author:Tommy Gilmer. -->
+<div id="_tg_copyright" aria-hidden="true" style="display:none;position:absolute;width:0;height:0;overflow:hidden" data-owner="ClearSky Energy Solutions LLC" data-build="TG-SITEPRO-v4.26" data-token="D1FCEE6924ECB1F5" data-year="2026" data-author="Thomas"></div>
 
 
 <div id="portal-nav">
@@ -16037,47 +16038,48 @@ function alGenerate(){
    visit. This tool decides what's worth surveying, not what's buildable.
    ══════════════════════════════════════════════════════════════════════ */
 
-/* System-size options (kW / kWh). Full is the portfolio target; Half is the
-   area-constrained alternative. Footprint is treated as ~proportional to
-   energy for screening — confirmed once a real ESS unit is selected. */
-var PQ_SYSTEMS = {
-  full: { label:'Full System',  kw:1000, kwh:3500,
-          areaTiers:[[4000,60],[3000,45],[1500,25],[0,5]] },
-  half: { label:'Half System',  kw:500,  kwh:1750,
-          areaTiers:[[2000,60],[1500,45],[750,25],[0,5]] }
-};
-
-/* Score a single component set against one system size. */
-function _pqAreaScore(availSf, sys){
-  var tiers=sys.areaTiers;
-  for(var i=0;i<tiers.length;i++){ if(availSf>=tiers[i][0]) return tiers[i][1]; }
-  return 0;
+/* ═══ THE SCORER RUNS ON THE SERVER (2026-10-13) ═══════════════════════
+   The system-size tiers, the component scores, the Priority Go /
+   Conditional Go thresholds, the size recommendation and the capacity flag
+   live in api/_lib/editor-score.js behind POST /api/editor-score. The page
+   sends the facts (areas, parking, title, zoning, flood, hosting capacity,
+   the configured system's rating and footprint) and draws the answer.
+   computeSitePreQual(inp) stays synchronous for pqRecalc: a cached answer
+   comes back at once; otherwise a pending one whose _promise resolves to
+   the real result, and pqRecalc re-runs itself. */
+var _SCORE_CACHE = {};
+function _scoreRequest(action, body){
+  var key = action + ':' + JSON.stringify(body), hit = _SCORE_CACHE[key];
+  if(hit) return hit;
+  var user = window.firebase && firebase.auth && firebase.auth().currentUser;
+  var payload = Object.assign({ action: action }, body);
+  var p = (user ? user.getIdToken() : Promise.reject(new Error('Sign in to score the site.')))
+    .then(function(t){ return fetch('/api/editor-score', { method:'POST', headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer '+t }, body: JSON.stringify(payload) }); })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error || 'Scoring service unavailable'); return j; }); })
+    .then(function(ans){ _SCORE_CACHE[key] = ans; return ans; }, function(err){ delete _SCORE_CACHE[key]; throw err; });
+  var pending = { _pending: true, _promise: p };
+  _SCORE_CACHE[key] = pending;
+  return pending;
 }
-function _pqParkScore(spaces){
-  spaces=+spaces||0;
-  return spaces===0 ? 20 : (spaces<=3 ? 12 : 6);
+/* The system actually configured in the project, as facts for the server
+   (the old fixed 1 MW / 3.5 MWh pair made every parcel answer the same). */
+function _pqSystemFacts(){
+  var list=(S&&S.bessList)||[],kw=0,kwh=0;
+  list.forEach(function(b){var q=+(b.qty||1);kw+=+(b.kw||0)*q;kwh+=+(b.kwh||0)*q});
+  var footprint=(typeof _estBessFootprintFt2==='function')?_estBessFootprintFt2():0;
+  return { kw: Math.round(kw), kwh: Math.round(kwh), footprintFt2: Math.round(footprint||0) };
 }
-function _pqTitleScore(pins){
-  return (+pins||1)<=1 ? 10 : 5;    /* combined parcels add doc complexity */
+function _pqSyncLiveSystem(){ var f=_pqSystemFacts(); return f.kw>0 && f.kwh>0; }
+/* Screening score for a parcel: the server's answer, cached per input set. */
+function computeSitePreQual(inp){
+  inp=inp||{};
+  var body = { propertyAreaSf:+inp.propertyAreaSf||0, buildingFootprintSf:+inp.buildingFootprintSf||0, parkingSpaces:+inp.parkingSpaces||0, pins:+inp.pins||1,
+    zoningOk:inp.zoningOk===true, floodOk:inp.floodOk===true, hostingCapacityKw:(inp.hostingCapacityKw==null||inp.hostingCapacityKw==='')?null:+inp.hostingCapacityKw,
+    system:_pqSystemFacts() };
+  var r = _scoreRequest('prequal', body);
+  if(r._pending) return { pending:true, promise:r._promise, inputComplete:false, tier:'Scoring\u2026', bestScore:0, fullScore:0, halfScore:0, availableSf:body.propertyAreaSf, breakdown:{area:{full:0,half:0},parking:0,title:0,zoning:0}, capacity:{level:'pending',text:''}, recommend:{size:'full',why:''}, system:{full:{label:''},half:{label:''}} };
+  return r;
 }
-function _pqZoningScore(zoningOk, floodOk){
-  /* Both must be confirmed for the full 10; this is a confirmation gate. */
-  return (zoningOk && floodOk) ? 10 : (zoningOk||floodOk ? 5 : 0);
-}
-function _pqTier(score){
-  return score>=85 ? 'Priority Go' : (score>=65 ? 'Conditional Go' : 'Hold / Needs Review');
-}
-
-/* Hosting-capacity flag. capKw is a plain number (any utility). The ComEd
-   band preset just fills that number. Compared against the two system kW. */
-function _pqCapacityFlag(capKw, fullKw, halfKw){
-  if(capKw==null || capKw==='' || !isFinite(+capKw)) return { text:'Pending \u2014 enter hosting capacity', level:'pending' };
-  capKw=+capKw;
-  if(capKw>=fullKw)  return { text:'Ample capacity for either system size', level:'good' };
-  if(capKw>=halfKw)  return { text:'Half system likely fits; verify full system with the utility', level:'ok' };
-  return { text:'Below half-system size; likely needs a capacity upgrade', level:'risk' };
-}
-
 /* ComEd's published Energy Storage Hosting Capacity bands — offered as a
    benchmark preset. Value is the LOWER bound of each band in kW, which is
    the conservative screening number. */
@@ -16086,73 +16088,6 @@ var PQ_COMED_BANDS = {
   '501-1000':   { label:'501 \u2013 1,000 kW (ComEd)',    kw:501 },
   '1001+':      { label:'1,001 kW or more (ComEd)',       kw:1001 }
 };
-
-/* Full scorer. Returns both system scores, best, tier, recommended size,
-   and the capacity flag. Pure — no DOM — so it's testable and reusable. */
-function computeSitePreQual(inp){
-  inp=inp||{};
-  var propArea =+inp.propertyAreaSf||0;
-  var bldg     =+inp.buildingFootprintSf||0;
-  var avail    = Math.max(0, propArea-bldg);
-  var spaces   =+inp.parkingSpaces||0;
-  var pins     =+inp.pins||1;
-  var zoningOk = inp.zoningOk===true;    /* confirmation, never assumption */
-  var floodOk  = inp.floodOk===true;
-
-  function scoreFor(sys){
-    return _pqAreaScore(avail,sys) + _pqParkScore(spaces)
-         + _pqTitleScore(pins) + _pqZoningScore(zoningOk,floodOk);
-  }
-  var full=scoreFor(PQ_SYSTEMS.full);
-  var half=scoreFor(PQ_SYSTEMS.half);
-  var best=Math.max(full,half);
-
-  /* Recommended size — mirrors the workbook's logic:
-     - Full already Priority Go: keep Full (don't give up capacity).
-     - Half scores higher and clears 65: recommend downsizing.
-     - Half higher but under 65: note Half as the better option.
-     - Otherwise keep Full. */
-  var rec;
-  if(full>=85) rec={size:'full', why:'Full system already scores Priority Go \u2014 no reason to downsize.'};
-  else if(half>full && half>=65) rec={size:'half', why:'Half system reaches a better tier \u2014 downsizing recommended.'};
-  else if(half>full) rec={size:'half', why:'Half system scores higher, though still below Conditional Go.'};
-  else rec={size:'full', why:'Full system is the better or equal option.'};
-
-  var capFlag=_pqCapacityFlag(inp.hostingCapacityKw,
-                              PQ_SYSTEMS.full.kw, PQ_SYSTEMS.half.kw);
-
-  var inputComplete=propArea>0;
-  var decisionTier=!inputComplete?'Incomplete — property area required'
-    :(capFlag.level==='risk'?'Hold — Grid Constraint'
-    :(capFlag.level==='pending'&&best>=65?'Conditional — Capacity Pending':_pqTier(best)));
-  return {
-    availableSf:avail, fullScore:full, halfScore:half, bestScore:best,
-    tier:decisionTier, recommend:rec, capacity:capFlag, inputComplete:inputComplete,
-    breakdown:{
-      area:{ full:_pqAreaScore(avail,PQ_SYSTEMS.full), half:_pqAreaScore(avail,PQ_SYSTEMS.half) },
-      parking:_pqParkScore(spaces), title:_pqTitleScore(pins),
-      zoning:_pqZoningScore(zoningOk,floodOk)
-    }
-  };
-}
-
-/* Screen the system actually configured in the project. The old fixed
-   1 MW / 3.5 MWh pair made the same parcel answer appear for every design. */
-function _pqSyncLiveSystem(){
-  var list=(S&&S.bessList)||[],kw=0,kwh=0;
-  list.forEach(function(b){var q=+(b.qty||1);kw+=+(b.kw||0)*q;kwh+=+(b.kwh||0)*q});
-  if(!(kw>0&&kwh>0)){
-    PQ_SYSTEMS.full={label:'Benchmark: 1 MW / 3.5 MWh',kw:1000,kwh:3500,areaTiers:[[4000,60],[3000,45],[1500,25],[0,5]]};
-    PQ_SYSTEMS.half={label:'Benchmark: 0.5 MW / 1.75 MWh',kw:500,kwh:1750,areaTiers:[[2000,60],[1500,45],[750,25],[0,5]]};
-    return false;
-  }
-  var footprint=(typeof _estBessFootprintFt2==='function')?_estBessFootprintFt2():0;
-  var req=Math.max(1200,Math.round((footprint||kwh/4)*1.65));
-  function tiers(a){return[[a,60],[a*.75,45],[a*.38,25],[0,5]].map(function(x){return[Math.round(x[0]),x[1]]})}
-  PQ_SYSTEMS.full={label:'Configured System',kw:Math.round(kw),kwh:Math.round(kwh),areaTiers:tiers(req)};
-  PQ_SYSTEMS.half={label:'50% Alternative',kw:Math.round(kw/2),kwh:Math.round(kwh/2),areaTiers:tiers(Math.round(req/2))};
-  return true;
-}
 
 /* ── UI ────────────────────────────────────────────────────────────── */
 function openSitePreQual(){
@@ -16266,6 +16201,12 @@ function pqRecalc(){
     zoningOk:chk('pq2-zoning'), floodOk:chk('pq2-flood'),
     hostingCapacityKw:g('pq2-cap')
   });
+  if(r.pending){
+    window._PQ_LATEST=null;
+    out.innerHTML='<div role="status" style="color:var(--sub);font-size:12px;padding:8px">Scoring the site\u2026</div>';
+    r.promise.then(function(){ pqRecalc(); }, function(e){ out.innerHTML='<div role="status" style="color:var(--amber);font-size:12px;padding:8px">'+((e&&e.message)||'Scoring service unavailable')+' <a href="#" onclick="pqRecalc();return false" style="color:var(--accent)">Try again</a></div>'; });
+    return;
+  }
   window._PQ_LATEST=r;
   if(!r.inputComplete){
     out.innerHTML='<div style="padding:8px;color:var(--amber);font-weight:700">Property area required</div>'
@@ -16296,7 +16237,7 @@ var tierColor = r.capacity.level==='risk' ? '#EF4444' : r.capacity.level==='pend
     +   '<strong style="font-size:15px;color:'+tierColor+'">'+r.bestScore+'/100</strong></div>'
     + '<div style="text-align:center;margin-top:4px;font-size:13px;font-weight:800;color:'+tierColor+'">'+r.tier+'</div>'
     + '<div style="margin-top:8px;padding:8px 10px;background:var(--hover);border-radius:6px;font-size:9.5px;color:#B8C6D6;line-height:1.5">'
-    +   '<strong>Recommended: '+PQ_SYSTEMS[r.recommend.size].label+'</strong><br>'+r.recommend.why+'</div>'
+    +   '<strong>Recommended: '+r.system[r.recommend.size].label+'</strong><br>'+r.recommend.why+'</div>'
     + '<div style="margin-top:6px;padding:8px 10px;border-radius:6px;font-size:9.5px;line-height:1.5;'
     +   'background:rgba('+(r.capacity.level==='risk'?'239,68,68':r.capacity.level==='good'?'34,197,94':'100,116,139')+',.1);color:'+capColor+'">'
     +   '\u26a1 '+r.capacity.text+'</div>'
@@ -16311,7 +16252,7 @@ function pqSaveToProject(){
     buildingFootprintSf:+val('pq2-bldg')||0,parkingSpaces:+val('pq2-park')||0,
     pins:+val('pq2-pins')||1,zoningVerified:ck('pq2-zoning'),floodVerified:ck('pq2-flood'),
     hostingCapacityKw:val('pq2-cap')===''?null:+val('pq2-cap'),result:r,
-    system:{full:PQ_SYSTEMS.full,half:PQ_SYSTEMS.half}};
+    system:{full:r.system.full,half:r.system.half}};
   try{if(typeof pushHist==='function')pushHist()}catch(e){}
   try{if(typeof _setSaved==='function')_setSaved('unsaved')}catch(e){}
   if(typeof showBanner==='function')showBanner('cal','Site screening saved to this project — '+r.tier+', '+r.bestScore+'/100.');
@@ -19986,99 +19927,6 @@ function _bmUpdateIntegrationHint(){
   hint.textContent='Guided Build will skip: '+skip.join(', ')+' -- conduit re-routes from the BESS AC output straight to the next placed device.';
 }
 
-// -- FOM PEAK DEMAND SHAVING SIZER -----------------------------------------
-// Built-in utility rate tables -- IL + CT/MA service territories by zip prefix
-// Sources: ComEd BSLRD/BSLD tariff, Ameren IL DS-2, Eversource CT Rate 30/35, Eversource MA G-2
-const IL_UTILITY_RATES = {
-  // ComEd (Northern IL) -- zip prefixes 600-606, 610-614, 620, 622-624
-  comed: {
-    name: 'ComEd (Northern Illinois)',
-    demandRate: 19.85,
-    energyRate: 0.0681,
-    demandPct: 0.38,
-    tou: true,
-    peakWindow: '2PM-7PM weekdays (Jun-Sep), 6AM-10PM (Oct-May)',
-    ratchet: 0.70,
-    zips: ['600','601','602','603','604','605','606','610','611','612','613','614','620','622','623','624']
-  },
-  // Ameren Illinois (Central/Southern IL)
-  ameren: {
-    name: 'Ameren Illinois',
-    demandRate: 14.22,
-    energyRate: 0.0594,
-    demandPct: 0.33,
-    tou: true,
-    peakWindow: '2PM-8PM weekdays (Jun-Aug)',
-    ratchet: 0.65,
-    zips: ['615','616','617','618','619','621','625','626','627','628','629']
-  },
-  // MidAmerican Energy (Rock Island/western IL)
-  midamerican: {
-    name: 'MidAmerican Energy',
-    demandRate: 12.50,
-    energyRate: 0.0512,
-    demandPct: 0.30,
-    tou: false,
-    peakWindow: 'Seasonal on-peak (Jun-Sep)',
-    ratchet: 0.60,
-    zips: ['612','614']
-  },
-  // Eversource CT -- zip prefixes 060-069
-  eversource_ct: {
-    name: 'Eversource Energy (Connecticut)',
-    demandRate: 25.49,        // Transmission $11.27 + Local Delivery $14.22/kW blended
-    energyRate: 0.10999,
-    demandPct: 0.35,
-    tou: false,
-    peakWindow: 'On-peak: 8AM-8PM weekdays (Rate 30/35)',
-    ratchet: 0.0,             // CT does not have a standard demand ratchet
-    zips: ['060','061','062','063','064','065','066','067','068','069']
-  },
-  // Eversource MA -- zip prefixes 010-027
-  eversource_ma: {
-    name: 'Eversource Energy (Massachusetts)',
-    demandRate: 18.74,
-    energyRate: 0.0921,
-    demandPct: 0.32,
-    tou: true,
-    peakWindow: 'On-peak: 8AM-8PM weekdays Jun-Sep',
-    ratchet: 0.0,
-    zips: ['010','011','012','013','014','015','016','017','018','019','020','021','022','023','024','025','026','027']
-  },
-  // National Grid MA
-  ngrid_ma: {
-    name: 'National Grid (Massachusetts)',
-    demandRate: 17.20,
-    energyRate: 0.0875,
-    demandPct: 0.31,
-    tou: true,
-    peakWindow: 'On-peak: 8AM-8PM weekdays',
-    ratchet: 0.0,
-    zips: ['028','029']
-  },
-  // AEP Indiana Michigan Power (I&M) -- Northern IN incl. South Bend; settles in PJM AEP zone
-  aep_in: {
-    name: 'AEP Indiana Michigan Power (I&M) -- PJM/AEP zone',
-    demandRate: 14.90,
-    energyRate: 0.0690,
-    demandPct: 0.34,
-    tou: true,
-    peakWindow: 'On-peak: weekday afternoons (summer)',
-    ratchet: 0.60,
-    zips: ['460','461','462','463','464','465','466','467','468','469','470','471','472','473','474','475','476','477','478','479']
-  },
-  // UI (United Illuminating) CT
-  ui_ct: {
-    name: 'United Illuminating (Connecticut)',
-    demandRate: 22.15,
-    energyRate: 0.1050,
-    demandPct: 0.34,
-    tou: false,
-    peakWindow: 'On-peak: 8AM-8PM weekdays',
-    ratchet: 0.0,
-    zips: ['064','065','066']
-  },
-};
 
 // Facility load profile multipliers -- peak demand as % of avg demand
 const FACILITY_PROFILES = {
@@ -20097,65 +19945,6 @@ const FACILITY_PROFILES = {
   healthcare:   { peakMultiplier: 1.40, demandBillPct: 0.44, loadFactor: 0.68, label: 'Healthcare/Hospital' },
 };
 
-/* State's primary investor-owned utility with representative C&I demand +
-   energy rates, so a ZIP outside the detailed IL/CT/MA/IN tables above still
-   resolves to the CORRECT serving utility instead of silently defaulting to
-   ComEd. Rates are planning-grade directional figures (blended large-C&I),
-   editable in the panel; the point is the right NAME and a sane starting rate.
-   Keyed by USPS state. */
-const STATE_PRIMARY_UTILITY = {
-  AL:{name:'Alabama Power',demandRate:16.5,energyRate:0.070,demandPct:0.34,tou:false,ratchet:0.60},
-  AK:{name:'Chugach Electric',demandRate:15.0,energyRate:0.150,demandPct:0.30,tou:false,ratchet:0.0},
-  AZ:{name:'Arizona Public Service (APS)',demandRate:17.8,energyRate:0.075,demandPct:0.36,tou:true,ratchet:0.50},
-  AR:{name:'Entergy Arkansas',demandRate:13.9,energyRate:0.062,demandPct:0.32,tou:false,ratchet:0.60},
-  CA:{name:'Pacific Gas & Electric (PG&E)',demandRate:24.0,energyRate:0.180,demandPct:0.35,tou:true,ratchet:0.50},
-  CO:{name:'Xcel Energy (Public Service Co. of Colorado)',demandRate:16.2,energyRate:0.078,demandPct:0.34,tou:true,ratchet:0.60},
-  CT:{name:'Eversource Energy (Connecticut)',demandRate:25.49,energyRate:0.110,demandPct:0.35,tou:false,ratchet:0.0},
-  DE:{name:'Delmarva Power (Exelon)',demandRate:14.5,energyRate:0.085,demandPct:0.33,tou:true,ratchet:0.60},
-  DC:{name:'Pepco (Exelon)',demandRate:15.8,energyRate:0.090,demandPct:0.34,tou:true,ratchet:0.60},
-  FL:{name:'Florida Power & Light (FPL)',demandRate:12.8,energyRate:0.078,demandPct:0.32,tou:false,ratchet:0.60},
-  GA:{name:'Georgia Power',demandRate:15.9,energyRate:0.070,demandPct:0.34,tou:true,ratchet:0.60},
-  HI:{name:'Hawaiian Electric (HECO)',demandRate:20.0,energyRate:0.330,demandPct:0.32,tou:true,ratchet:0.0},
-  IA:{name:'MidAmerican Energy',demandRate:12.50,energyRate:0.051,demandPct:0.30,tou:false,ratchet:0.60},
-  ID:{name:'Idaho Power',demandRate:11.5,energyRate:0.062,demandPct:0.32,tou:true,ratchet:0.50},
-  IL:{name:'ComEd (Northern Illinois)',demandRate:19.85,energyRate:0.0681,demandPct:0.38,tou:true,ratchet:0.70},
-  IN:{name:'Duke Energy Indiana',demandRate:14.9,energyRate:0.069,demandPct:0.34,tou:true,ratchet:0.60},
-  KS:{name:'Evergy (Kansas)',demandRate:14.2,energyRate:0.070,demandPct:0.33,tou:true,ratchet:0.60},
-  KY:{name:'LG&E / KU',demandRate:13.5,energyRate:0.065,demandPct:0.33,tou:false,ratchet:0.60},
-  LA:{name:'Entergy Louisiana',demandRate:13.2,energyRate:0.058,demandPct:0.32,tou:false,ratchet:0.60},
-  ME:{name:'Central Maine Power (CMP)',demandRate:16.0,energyRate:0.100,demandPct:0.33,tou:false,ratchet:0.0},
-  MD:{name:'Baltimore Gas & Electric (BGE)',demandRate:15.5,energyRate:0.088,demandPct:0.34,tou:true,ratchet:0.60},
-  MA:{name:'Eversource Energy (Massachusetts)',demandRate:18.74,energyRate:0.0921,demandPct:0.32,tou:true,ratchet:0.0},
-  MI:{name:'DTE Energy',demandRate:15.6,energyRate:0.082,demandPct:0.34,tou:true,ratchet:0.60},
-  MN:{name:'Xcel Energy (Northern States Power)',demandRate:15.0,energyRate:0.075,demandPct:0.34,tou:true,ratchet:0.60},
-  MS:{name:'Entergy Mississippi',demandRate:13.4,energyRate:0.060,demandPct:0.32,tou:false,ratchet:0.60},
-  MO:{name:'Ameren Missouri',demandRate:13.8,energyRate:0.065,demandPct:0.33,tou:true,ratchet:0.60},
-  MT:{name:'NorthWestern Energy',demandRate:12.8,energyRate:0.070,demandPct:0.32,tou:false,ratchet:0.50},
-  NE:{name:'Nebraska Public Power District (NPPD)',demandRate:11.9,energyRate:0.058,demandPct:0.31,tou:false,ratchet:0.60},
-  NV:{name:'NV Energy',demandRate:14.5,energyRate:0.078,demandPct:0.34,tou:true,ratchet:0.50},
-  NH:{name:'Eversource Energy (New Hampshire)',demandRate:17.5,energyRate:0.105,demandPct:0.33,tou:false,ratchet:0.0},
-  NJ:{name:'PSE&G',demandRate:15.2,energyRate:0.095,demandPct:0.34,tou:true,ratchet:0.60},
-  NM:{name:'PNM (Public Service Co. of New Mexico)',demandRate:13.6,energyRate:0.068,demandPct:0.33,tou:true,ratchet:0.50},
-  NY:{name:'Consolidated Edison (Con Edison)',demandRate:22.0,energyRate:0.130,demandPct:0.35,tou:true,ratchet:0.60},
-  NC:{name:'Duke Energy Carolinas',demandRate:14.6,energyRate:0.068,demandPct:0.34,tou:true,ratchet:0.60},
-  ND:{name:'Xcel Energy (Northern States Power)',demandRate:12.2,energyRate:0.060,demandPct:0.31,tou:false,ratchet:0.60},
-  OH:{name:'AEP Ohio',demandRate:14.8,energyRate:0.072,demandPct:0.34,tou:true,ratchet:0.60},
-  OK:{name:'Oklahoma Gas & Electric (OG&E)',demandRate:13.5,energyRate:0.062,demandPct:0.33,tou:true,ratchet:0.60},
-  OR:{name:'Portland General Electric (PGE)',demandRate:12.9,energyRate:0.078,demandPct:0.33,tou:true,ratchet:0.50},
-  PA:{name:'PECO (Exelon)',demandRate:14.9,energyRate:0.085,demandPct:0.34,tou:true,ratchet:0.60},
-  RI:{name:'Rhode Island Energy',demandRate:17.8,energyRate:0.105,demandPct:0.33,tou:false,ratchet:0.0},
-  SC:{name:'Dominion Energy South Carolina',demandRate:14.2,energyRate:0.066,demandPct:0.34,tou:true,ratchet:0.60},
-  SD:{name:'MidAmerican Energy',demandRate:12.2,energyRate:0.055,demandPct:0.31,tou:false,ratchet:0.60},
-  TN:{name:'Tennessee Valley Authority (TVA) LPC',demandRate:13.0,energyRate:0.062,demandPct:0.33,tou:false,ratchet:0.60},
-  TX:{name:'Oncor (delivery) / retail choice',demandRate:11.5,energyRate:0.085,demandPct:0.35,tou:true,ratchet:0.60},
-  UT:{name:'Rocky Mountain Power (PacifiCorp)',demandRate:12.6,energyRate:0.068,demandPct:0.33,tou:true,ratchet:0.50},
-  VT:{name:'Green Mountain Power',demandRate:16.5,energyRate:0.100,demandPct:0.33,tou:false,ratchet:0.0},
-  VA:{name:'Dominion Energy Virginia',demandRate:14.6,energyRate:0.075,demandPct:0.34,tou:true,ratchet:0.60},
-  WA:{name:'Puget Sound Energy',demandRate:12.4,energyRate:0.075,demandPct:0.33,tou:true,ratchet:0.50},
-  WV:{name:'Appalachian Power (AEP)',demandRate:13.8,energyRate:0.070,demandPct:0.33,tou:false,ratchet:0.60},
-  WI:{name:'We Energies (WEC)',demandRate:15.4,energyRate:0.080,demandPct:0.34,tou:true,ratchet:0.60},
-  WY:{name:'Rocky Mountain Power (PacifiCorp)',demandRate:11.8,energyRate:0.062,demandPct:0.32,tou:false,ratchet:0.50}
-};
 /* Self-contained ZIP->state (3-digit prefix ranges) so utility resolution
    never depends on an IIFE-local helper defined later in the file. */
 const _FOM_ZIP3_STATE = [
@@ -20179,37 +19968,52 @@ function _fomStateForZip(zip){
   }
   return null;
 }
-/* Build a utility record (same shape as IL_UTILITY_RATES entries) from the
-   state table, so downstream code that reads .name/.demandRate/.energyRate/
-   etc. works unchanged. */
+/* The utility rate book LIVES ON THE SERVER (api/_lib/utility-rates.js,
+   GET /api/utility-rates?zip=). It was three object literals here — the
+   detailed tables, every state's primary utility, their rates — readable by
+   any signed-in user of any tenant, and a customer's engineer proposing to
+   build their own tool is exactly who would copy it (2026-10-12). The page
+   keeps a cache of ONE record per ZIP prefix, fetched on demand.
+   _fomGetUtility(zip) stays synchronous for its readers: a cached record
+   comes back as before (the same object, so the bill import's edits to it
+   persist, as they did on the table entry); an unknown ZIP starts the fetch
+   and returns a pending record whose _promise resolves to the real one,
+   and each screen re-runs itself then. The ZIP3 to state ranges below are
+   postal fact, not the book, and stay for the synchronous readers. */
+var _FOM_UTIL_CACHE = {};
+function _fomUtilKey(zip, state){
+  var z=String(zip||'').replace(/\D/g,'');
+  return z.length>=3 ? 'zip:'+z.slice(0,3) : (state ? 'state:'+String(state).toUpperCase() : 'zip:');
+}
+function _fomUtilityFetch(zip, state){
+  var key=_fomUtilKey(zip, state), hit=_FOM_UTIL_CACHE[key];
+  if(hit && !hit._pending) return Promise.resolve(hit);
+  if(hit && hit._promise) return hit._promise;
+  var z=String(zip||'').replace(/\D/g,'').slice(0,5);
+  var q = z.length>=3 ? 'zip='+z : (state ? 'state='+encodeURIComponent(state) : 'zip=');
+  var user=window.firebase && firebase.auth && firebase.auth().currentUser;
+  var p=(user ? user.getIdToken() : Promise.reject(new Error('Sign in to look up the serving utility.')))
+    .then(function(token){ return fetch('/api/utility-rates?'+q,{headers:{'Authorization':'Bearer '+token}}); })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'Utility lookup unavailable'); return j; }); })
+    .then(function(rec){ _FOM_UTIL_CACHE[key]=rec; return rec; },
+          function(err){ delete _FOM_UTIL_CACHE[key]; throw err; });
+  _FOM_UTIL_CACHE[key]={ _pending:true, _promise:p, name:'Looking up the serving utility\u2026', demandRate:null, energyRate:null, demandPct:null, tou:false, ratchet:null, peakWindow:'' };
+  return p;
+}
+/* Synchronous reader, as every screen expects. Returns the cached record or
+   a pending one (demandRate null) with the fetch under way. */
+function _fomGetUtility(zip){
+  var key=_fomUtilKey(zip,'');
+  if(!_FOM_UTIL_CACHE[key]) _fomUtilityFetch(zip,'');
+  return _FOM_UTIL_CACHE[key];
+}
 function _fomUtilityFromState(state, zip){
-  var u=STATE_PRIMARY_UTILITY[state];
-  if(!u) return null;
-  return {
-    name:u.name, demandRate:u.demandRate, energyRate:u.energyRate,
-    demandPct:u.demandPct, tou:!!u.tou,
-    peakWindow:u.tou?'Seasonal on-peak (afternoons)':'Non-TOU / flat demand',
-    ratchet:(u.ratchet!=null?u.ratchet:0.60),
-    zips:[], _state:state, _stateResolved:true
-  };
+  if(!state) return null;
+  var key=_fomUtilKey('', state);
+  if(!_FOM_UTIL_CACHE[key]) _fomUtilityFetch('', state);
+  return _FOM_UTIL_CACHE[key];
 }
-
-function _fomGetUtility(zip) {
-  if (!zip || zip.length < 3) return IL_UTILITY_RATES.comed;
-  const p3 = zip.slice(0,3);
-  const p2 = zip.slice(0,2);
-  for (const [, r] of Object.entries(IL_UTILITY_RATES)) {
-    if (r.zips.some(z => p3.startsWith(z) || p2 === z)) return r;
-  }
-  /* Not in the detailed rate tables: resolve the ACTUAL serving utility from
-     the ZIP's state instead of silently returning ComEd. E.g. a Sioux City,
-     Iowa ZIP (510xx/511xx) now returns MidAmerican Energy, not ComEd. */
-  var st = _fomStateForZip(zip);
-  var byState = st ? _fomUtilityFromState(st, zip) : null;
-  if (byState) return byState;
-  // Truly unknown ZIP: ComEd values, flagged so the UI can warn the user.
-  return Object.assign({}, IL_UTILITY_RATES.comed, { _fallback: true, _fallbackNote: 'No utility on file for ZIP ' + zip + ' -- showing ComEd defaults. Verify the serving utility for this address.' });
-}
+function _fomUtilPending(u){ return !!(u && u._pending); }
 
 function fomRunDemandAnalysis() {
   const bill    = parseFloat(document.getElementById('fom-annual-bill')?.value) || 0;
@@ -20225,6 +20029,15 @@ function fomRunDemandAnalysis() {
   }
 
   const util    = _fomGetUtility(zip);
+  if (_fomUtilPending(util)) {
+    /* The rate book answers from the server; this screen re-runs itself
+       when the record lands (one fetch per ZIP prefix, then cached). */
+    resEl.innerHTML = '<div style="color:var(--sub);text-align:center;padding:6px 0">Looking up the serving utility\u2026</div>';
+    util._promise.then(function(){ fomRunDemandAnalysis(); }, function(e){
+      resEl.innerHTML = '<div style="color:var(--amber);text-align:center;padding:6px 0">' + (e && e.message || 'Utility lookup unavailable') + '</div>';
+    });
+    return;
+  }
   const profile = FACILITY_PROFILES[facType];
 
   // -- Core sizing math ----------------------------------------------------
@@ -20859,13 +20672,17 @@ If a field is not available or cannot be determined, use null.`;
 
     // Update demand rate tables with actual bill data if available
     if (bill.blendedDemandRate && bill.zip) {
-      const util = _fomGetUtility(bill.zip);
-      util.demandRate  = bill.blendedDemandRate;
-      util.name        = bill.utility || util.name;
-      if (bill.blendedEnergyRate) util.energyRate = bill.blendedEnergyRate;
-      if (bill.demandChargesTotal && bill.totalAmountDue) {
-        util.demandPct = bill.demandChargesTotal / bill.totalAmountDue;
-      }
+      /* The record comes from the server; the bill's own figures overwrite
+         it in the cache once it lands, as they overwrote the table entry. */
+      _fomUtilityFetch(bill.zip).then(function(util){
+        util.demandRate  = bill.blendedDemandRate;
+        util.name        = bill.utility || util.name;
+        if (bill.blendedEnergyRate) util.energyRate = bill.blendedEnergyRate;
+        if (bill.demandChargesTotal && bill.totalAmountDue) {
+          util.demandPct = bill.demandChargesTotal / bill.totalAmountDue;
+        }
+        fomRunDemandAnalysis();
+      }, function(){});
     }
 
     // If we have monthly kWh history, build on-peak/off-peak breakdown
@@ -21695,31 +21512,31 @@ function bmExportAnalysis() {
 }
 // -- BESS CATALOG ------------------------------------------
 const BESS_CATALOG = {
-  'GOTION-EDGE-760': {mfr:'Gotion',model:'Gotion EDGE 760 kWh C&I BESS',chem:'LFP',kwh:760,usable:700,kw:380,dur:2,dcv:'1267.2V',eqcost:84740,inv:'Dynapower CPS-1250',ikva:802,xfmr:'1000KVA 480/480V',disco:'1200A 480V',notes:'1267.2 Vdc nominal; 480V 3-phase AC via PCS/transformer. Verify against Gotion submittal.'},
+  'GOTION-EDGE-760': {mfr:'Gotion',model:'Gotion EDGE 760 kWh C&I BESS',chem:'LFP',kwh:760,usable:700,kw:380,dur:2,dcv:'1267.2V',eqcost:null,inv:'Dynapower CPS-1250',ikva:802,xfmr:'1000KVA 480/480V',disco:'1200A 480V',notes:'1267.2 Vdc nominal; 480V 3-phase AC via PCS/transformer. Verify against Gotion submittal.'},
   'AWG-20AWG5MW': {mfr:'Aspen Woods Group',model:'Aspen Woods 20AWG5MW (2.58MW / 5MWh unit)',chem:'LFP',kwh:5015,usable:4750,kw:2580,maxKw:2838,dur:1.94,dcv:'1164.8-1476.8V',eqcost:null,inv:'CBAC-430-HA-M (Grid-Forming PCS)',ikva:2838,xfmr:'3150KVA 690V/MV (13.2kV/34.5kV) step-up',disco:'2500A 690V',greenfield:true,gridForming:true,gridConnectV:'690V 3W+PE',acCurrent:2158,dcStrings:12,stringModel:'LS417',cells:'3.2V/314Ah',cycleLife:'8,000 @ 70% / 0.5C 25C',dims:'6058x2438x2896mm',weight:'44t',cooling:'Liquid (battery + PCS)',bms:'SPAC BMS',controller:'GridPoint Controller (GPC)',certs:'UL9540, IEC62933, UN3536, CE',notes:'GRID-FORMING (VSG) containerized BESS UNIT for GREENFIELD/utility sites. Rated AC 2,580kW nominal / 2,838kW max; 5,015kWh @ 20ft. Interconnects 690V 3W+PE -> step-up to MV (13.2kV/34.5kV) utility. Seamless PQ<->GFM (VSG) mode switching, inertia emulation + autonomous freq/voltage regulation. PRICE TBD -- enter manually. For a full 5MW/20MWh site use the 4-unit system preset. Verify final Aspen Woods submittal + interconnection study.'},
   'AWG-5MW-SYSTEM': {mfr:'Aspen Woods Group',model:'Aspen Woods 5MW / 20MWh System (4× 20AWG5MW)',chem:'LFP',kwh:20060,usable:19000,kw:5000,maxKw:11352,dur:4.0,dcv:'1164.8-1476.8V',eqcost:null,inv:'4× CBAC-430-HA-M (Grid-Forming PCS)',ikva:11352,xfmr:'4× 3150KVA 690V/MV step-up → shared MV collector bus',disco:'MV collector + POI breaker',greenfield:true,gridForming:true,isSystem:true,unitKey:'AWG-20AWG5MW',unitQty:4,poiCapKw:5000,gridConnectV:'690V 3W+PE (per unit) → MV collector',acCurrent:'2,158A per unit',dcStrings:'12 per unit (48 total)',stringModel:'LS417',cells:'3.2V/314Ah',cycleLife:'8,000 @ 70% / 0.5C 25C',dims:'4× 6058x2438x2896mm',weight:'~176t (4× 44t)',cooling:'Liquid (battery + PCS)',bms:'SPAC BMS (per unit)',controller:'GridPoint Controller (GPC)',certs:'UL9540, IEC62933, UN3536, CE',notes:'5MW / 20MWh GREENFIELD SITE = 4× 20AWG5MW containers on a shared MV collector bus. Installed AC capacity 10.32MW nominal (4×2.58MW); POI-rated / offered at 5MW (4-hour duration @ 20MWh). Each unit: BESS→GFM PCS(690V)→step-up→shared MV collector→POI. Grid-forming VSG. PRICE TBD -- enter manually. Verify interconnection study + POI cap with utility.'},
   'FENECON-IND-XXL': {mfr:'FENECON',model:'FENECON Industrial XXL — 2.508 MW / 5.015 MWh (20ft Liquid-Cooled)',chem:'LFP',kwh:5015,usable:4750,kw:2508,dur:2,dcv:'1331.2V (1,040–1,500V)',eqcost:null,inv:'Central Inverter, 2.5 MW class (3-ph 480V AC)',ikva:2508,xfmr:'3000KVA 480/480V',disco:'4000A 480V',
     cells:'3.2V / 314Ah',dcStrings:12,stringModel:'8 packs per string',cooling:'Liquid heating & cooling',bms:'FENECON BMS',controller:'FEMS (open-source core)',gridConnectV:'480V 3-phase AC',
     certs:'UL 9540, UL 9540A, UL 1973, UN 38.3, UN 3536',dims:'20 ft x 8.0 ft x 9.5 ft',weight:'~95,000 lbs',
     notes:'FENECON Industrial XXL, 20ft container. 5,015 kWh / 2,508 kW, LFP 314Ah cell, 12P x (1P52S x 8S), 12 strings x 8 packs. 1,331.2 Vdc nominal, 1,040-1,500 Vdc range, max I/O current 2,460 A. Central PCS 2.5 MW class, 3-phase 480 V AC, IEEE 1547 / UL 1741 SA, >95% round-trip efficiency. Liquid cooled, IP55, system-level fire protection, -25C to 55C (derate >50C). LAN/RS485/RS232; FEMS open API, DERMS / VPP / SCADA ready; FEMS EMS included with free firmware + app updates. Usable kWh shown at ~95% DoD -- CONFIRM with FENECON. PRICE: quote required. FENECON USA, Greenville SC, +1 (864) 920-7758.'},
-  'GOTION-GRID-3421': {mfr:'Gotion',model:'Gotion Grid 3.42 MWh Container',chem:'LFP',kwh:3421.4,usable:3150,kw:1710,dur:2,dcv:'~1267V',eqcost:381486,inv:'Dynapower MPS-1250',ikva:1710,xfmr:'2000KVA 480/480V',disco:'3200A 480V',notes:'Model ESD1267-05P3421. Medium-voltage interconnection via PCS/transformer.'},
-  'GOTION-GRID-3441': {mfr:'Gotion',model:'Gotion Grid 3.44 MWh Container',chem:'LFP',kwh:3440.6,usable:3165,kw:1720,dur:2,dcv:'~1228.8V',eqcost:383627,inv:'Dynapower MPS-1250',ikva:1720,xfmr:'2000KVA 480/480V',disco:'3200A 480V',notes:'~1228.8 Vdc class. 0.5P nominal. Verify final Gotion container submittal.'},
+  'GOTION-GRID-3421': {mfr:'Gotion',model:'Gotion Grid 3.42 MWh Container',chem:'LFP',kwh:3421.4,usable:3150,kw:1710,dur:2,dcv:'~1267V',eqcost:null,inv:'Dynapower MPS-1250',ikva:1710,xfmr:'2000KVA 480/480V',disco:'3200A 480V',notes:'Model ESD1267-05P3421. Medium-voltage interconnection via PCS/transformer.'},
+  'GOTION-GRID-3441': {mfr:'Gotion',model:'Gotion Grid 3.44 MWh Container',chem:'LFP',kwh:3440.6,usable:3165,kw:1720,dur:2,dcv:'~1228.8V',eqcost:null,inv:'Dynapower MPS-1250',ikva:1720,xfmr:'2000KVA 480/480V',disco:'3200A 480V',notes:'~1228.8 Vdc class. 0.5P nominal. Verify final Gotion container submittal.'},
   'GOTION-GRID-4608': {mfr:'Gotion',model:'Gotion GRID 4608 kWh Container (Liquid-Cooled)',chem:'LFP',kwh:4608,usable:4300,kw:2304,dur:2,dcv:'1280V',eqcost:null,inv:'Dynapower MPS-2500',ikva:2304,xfmr:'3000KVA 480/480V',disco:'4000A 480V',notes:'Model ESD1280-05P4608. LFP-300Ah cell, 12P400S config. Liquid-cooled 20ft container. IP54. NFPA855 compliant. Quote required.'},
   'GOTION-GRID-5068': {mfr:'Gotion',model:'Gotion GRID 5068 kWh Container (Liquid-Cooled)',chem:'LFP',kwh:5068,usable:4800,kw:2534,dur:2,dcv:'1280V',eqcost:null,inv:'Dynapower MPS-2500',ikva:2534,xfmr:'3000KVA 480/480V',disco:'4000A 480V',notes:'Model ESD1280-05P5068. LFP-330Ah cell, 1P100S config. Liquid-cooled 20ft container. IP55. 12,000 cycle life. NFPA855 compliant. Quote required.'},
   'GOTION-GRID-5015': {mfr:'Gotion',model:'Gotion GRID 5015 kWh Container (Liquid-Cooled)',chem:'LFP',kwh:5015,usable:4750,kw:2508,dur:2,dcv:'1331V',eqcost:null,inv:'Dynapower MPS-2500',ikva:2508,xfmr:'3000KVA 480/480V',disco:'4000A 480V',notes:'Model ESD1331-05P5015. LFP-314Ah cell, 1P104S config. Liquid-cooled 20ft container. IP55. 12,000 cycle life. NFPA855 compliant. Quote required.'},
   'GOTION-GRID-2703': {mfr:'Gotion',model:'Gotion GRID 2703 kWh Container (Air-Cooled)',chem:'LFP',kwh:2703,usable:2528,kw:1351,dur:2,dcv:'1126.4V',eqcost:null,inv:'Dynapower MPS-1250',ikva:1351,xfmr:'1500KVA 480/480V',disco:'2400A 480V',notes:'Model ESD1126-05P2703. LFP-100Ah cell, 24P352S config. Air-cooled 20ft container. IP54. HFC-227ea fire suppression. NFPA855 compliant. Quote required.'},
   'GOTION-EDGE-220': {mfr:'Gotion',model:'Gotion EDGE 220 kWh C&I Cabinet (Air-Cooled)',chem:'LFP',kwh:220,usable:200,kw:100,dur:2.2,dcv:'672~864V',eqcost:null,inv:'Integrated (Gotion)',ikva:100,xfmr:'150KVA 480/480V',disco:'200A 480V',notes:'Model ESD768-05P220. LFP-96Ah cell, 3P16Sx15 config. Air-cooled outdoor C&I cabinet. IP54. 98% max conversion efficiency. THD <3%. Quote required.'},
   'GOTION-EDGE-160': {mfr:'Gotion',model:'Gotion EDGE 160 kWh C&I Cabinet (Air-Cooled)',chem:'LFP',kwh:160,usable:150,kw:75,dur:2.13,dcv:'728~936V',eqcost:null,inv:'Integrated (Gotion)',ikva:75,xfmr:'100KVA 480/480V',disco:'150A 480V',notes:'Model ESD832-05P160. LFP-96Ah cell, 2P20Sx13 config. Air-cooled outdoor C&I cabinet. IP54. 98.4% max conversion efficiency. THD <3%. Quote required.'},
-  'GOTION-HOME-5':  {mfr:'Gotion',model:'Gotion HOME 5 kWh Residential ESS',chem:'LFP',kwh:5,usable:4.85,kw:5,dur:1,dcv:'51.2V (44.8-57.6V)',eqcost:558,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P5L. 1 module, 100Ah. IP65 indoor/outdoor. Floor stand or wall mount. 30-min install. 0.16m  footprint. Residential only. @$111.50/kWh platform cost.'},
-  'GOTION-HOME-10': {mfr:'Gotion',model:'Gotion HOME 10 kWh Residential ESS',chem:'LFP',kwh:10,usable:9.7,kw:5,dur:2,dcv:'51.2V (44.8-57.6V)',eqcost:1115,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P10L. 2 modules, 200Ah. IP65 indoor/outdoor. Floor stand or wall mount. Modular expandable. Residential only. @$111.50/kWh platform cost.'},
-  'GOTION-HOME-15': {mfr:'Gotion',model:'Gotion HOME 15 kWh Residential ESS',chem:'LFP',kwh:15,usable:14.55,kw:5,dur:3,dcv:'51.2V (44.8-57.6V)',eqcost:1673,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P15L. 3 modules, 300Ah. IP65 indoor/outdoor. Floor stand or wall mount. Modular expandable. Residential only. @$111.50/kWh platform cost.'},
-  'GOTION-HOME-20': {mfr:'Gotion',model:'Gotion HOME 20 kWh Residential ESS',chem:'LFP',kwh:20,usable:19.4,kw:5,dur:4,dcv:'51.2V (44.8-57.6V)',eqcost:2230,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P20L. 4 modules, 400Ah. IP65 indoor/outdoor. Floor stand or wall mount. Modular expandable -- start with 5kWh, add modules. Residential only. @$111.50/kWh platform cost.'},
-  'AUTEL-ESS-256': {mfr:'Autel',model:'Autel 125 kW / 256 kWh ESS',chem:'LFP',kwh:256,usable:230,kw:125,dur:2.05,dcv:'480V class',eqcost:180000,inv:'Autel Integrated',ikva:125,xfmr:'200KVA 480/480V',disco:'400A 480V',notes:'125 kW output / 256 kWh capacity. 480V class interconnection.'},
-  'PYTES-30-60': {mfr:'Pytes',model:'Pytes 30 kW / 60 kWh Standard',chem:'LFP',kwh:61.44,usable:55,kw:30,dur:2.05,dcv:'285-345.6V',eqcost:34080,inv:'Sol-Ark 30K-3P',ikva:30,xfmr:'75KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 30K-3P + HV48100 6S2P. Pytes Installer Pricing 3/9/26.'},
-  'PYTES-60-120': {mfr:'Pytes',model:'Pytes 60 kW / 120 kWh Standard',chem:'LFP',kwh:122.88,usable:110,kw:60,dur:2.05,dcv:'570-691.2V',eqcost:56354,inv:'Sol-Ark 60K-3P',ikva:60,xfmr:'100KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 60K-3P + HV48100 12S1P. Pytes Installer Pricing 3/9/26.'},
-  'PYTES-30-60-SE': {mfr:'Pytes',model:'Pytes 30 kW / 60 kWh SE Bundle',chem:'LFP',kwh:61.44,usable:55,kw:30,dur:2.05,dcv:'285-345.6V',eqcost:44307,inv:'Sol-Ark 30K-3P',ikva:30,xfmr:'75KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 30K-3P + HV48100 SE 6S2P. Pytes Installer Pricing 3/9/26.'},
-  'PYTES-60-120-SE': {mfr:'Pytes',model:'Pytes 60 kW / 120 kWh SE Bundle',chem:'LFP',kwh:122.88,usable:110,kw:60,dur:2.05,dcv:'570-691.2V',eqcost:77058,inv:'Sol-Ark 60K-3P',ikva:60,xfmr:'100KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 60K-3P + HV48100 SE 12S1P. Pytes Installer Pricing 3/9/26.'},
-  'PYTES-60-193-SEMAX': {mfr:'Pytes',model:'Pytes 60 kW / 192.9 kWh SE MAX',chem:'LFP',kwh:192.92,usable:174,kw:60,dur:3.22,dcv:'537.6-691.2V',eqcost:80245,inv:'Sol-Ark 60K-3P',ikva:60,xfmr:'100KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 60K-3P + HV48300SE MAX-12S1P. Pytes Installer Pricing 3/9/26.'},
+  'GOTION-HOME-5':  {mfr:'Gotion',model:'Gotion HOME 5 kWh Residential ESS',chem:'LFP',kwh:5,usable:4.85,kw:5,dur:1,dcv:'51.2V (44.8-57.6V)',eqcost:null,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P5L. 1 module, 100Ah. IP65 indoor/outdoor. Floor stand or wall mount. 30-min install. 0.16m  footprint. Residential only. @$111.50/kWh platform cost.'},
+  'GOTION-HOME-10': {mfr:'Gotion',model:'Gotion HOME 10 kWh Residential ESS',chem:'LFP',kwh:10,usable:9.7,kw:5,dur:2,dcv:'51.2V (44.8-57.6V)',eqcost:null,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P10L. 2 modules, 200Ah. IP65 indoor/outdoor. Floor stand or wall mount. Modular expandable. Residential only. @$111.50/kWh platform cost.'},
+  'GOTION-HOME-15': {mfr:'Gotion',model:'Gotion HOME 15 kWh Residential ESS',chem:'LFP',kwh:15,usable:14.55,kw:5,dur:3,dcv:'51.2V (44.8-57.6V)',eqcost:null,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P15L. 3 modules, 300Ah. IP65 indoor/outdoor. Floor stand or wall mount. Modular expandable. Residential only. @$111.50/kWh platform cost.'},
+  'GOTION-HOME-20': {mfr:'Gotion',model:'Gotion HOME 20 kWh Residential ESS',chem:'LFP',kwh:20,usable:19.4,kw:5,dur:4,dcv:'51.2V (44.8-57.6V)',eqcost:null,inv:'External inverter required',ikva:5,xfmr:'N/A',disco:'N/A',notes:'Model HSD51-05P20L. 4 modules, 400Ah. IP65 indoor/outdoor. Floor stand or wall mount. Modular expandable -- start with 5kWh, add modules. Residential only. @$111.50/kWh platform cost.'},
+  'AUTEL-ESS-256': {mfr:'Autel',model:'Autel 125 kW / 256 kWh ESS',chem:'LFP',kwh:256,usable:230,kw:125,dur:2.05,dcv:'480V class',eqcost:null,inv:'Autel Integrated',ikva:125,xfmr:'200KVA 480/480V',disco:'400A 480V',notes:'125 kW output / 256 kWh capacity. 480V class interconnection.'},
+  'PYTES-30-60': {mfr:'Pytes',model:'Pytes 30 kW / 60 kWh Standard',chem:'LFP',kwh:61.44,usable:55,kw:30,dur:2.05,dcv:'285-345.6V',eqcost:null,inv:'Sol-Ark 30K-3P',ikva:30,xfmr:'75KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 30K-3P + HV48100 6S2P. Pytes Installer Pricing 3/9/26.'},
+  'PYTES-60-120': {mfr:'Pytes',model:'Pytes 60 kW / 120 kWh Standard',chem:'LFP',kwh:122.88,usable:110,kw:60,dur:2.05,dcv:'570-691.2V',eqcost:null,inv:'Sol-Ark 60K-3P',ikva:60,xfmr:'100KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 60K-3P + HV48100 12S1P. Pytes Installer Pricing 3/9/26.'},
+  'PYTES-30-60-SE': {mfr:'Pytes',model:'Pytes 30 kW / 60 kWh SE Bundle',chem:'LFP',kwh:61.44,usable:55,kw:30,dur:2.05,dcv:'285-345.6V',eqcost:null,inv:'Sol-Ark 30K-3P',ikva:30,xfmr:'75KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 30K-3P + HV48100 SE 6S2P. Pytes Installer Pricing 3/9/26.'},
+  'PYTES-60-120-SE': {mfr:'Pytes',model:'Pytes 60 kW / 120 kWh SE Bundle',chem:'LFP',kwh:122.88,usable:110,kw:60,dur:2.05,dcv:'570-691.2V',eqcost:null,inv:'Sol-Ark 60K-3P',ikva:60,xfmr:'100KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 60K-3P + HV48100 SE 12S1P. Pytes Installer Pricing 3/9/26.'},
+  'PYTES-60-193-SEMAX': {mfr:'Pytes',model:'Pytes 60 kW / 192.9 kWh SE MAX',chem:'LFP',kwh:192.92,usable:174,kw:60,dur:3.22,dcv:'537.6-691.2V',eqcost:null,inv:'Sol-Ark 60K-3P',ikva:60,xfmr:'100KVA 480/480V',disco:'200A 480V',notes:'Sol-Ark 60K-3P + HV48300SE MAX-12S1P. Pytes Installer Pricing 3/9/26.'},
   'GENERIC-BESS': {mfr:'',model:'Generic BESS — size only, make/model TBD',chem:'LFP (assumed)',kwh:null,usable:null,kw:null,dur:null,dcv:'TBD',eqcost:null,inv:'Integrated PCS (assumed)',ikva:null,xfmr:'TBD',disco:'TBD',placeholder:true,notes:'PLACEHOLDER used by the guided build. Carries capacity (kW/kWh) through the design while the manufacturer is undecided. Enter kW and kWh; everything else stays TBD until a real unit is selected.'},
   'CATL-QUOTE-REQ-CI': {mfr:'CATL',model:'CATL C&I BESS -- Quote Required',chem:'LFP',kwh:null,usable:null,kw:null,dur:null,dcv:'TBD',eqcost:null,inv:'TBD',ikva:null,xfmr:'TBD',disco:'TBD',notes:'Manufacturer/vendor quote required. Contact CATL integrator.'},
   'CATL-QUOTE-REQ-UTILITY': {mfr:'CATL',model:'CATL Utility-Scale BESS -- Quote Required',chem:'LFP',kwh:null,usable:null,kw:null,dur:null,dcv:'TBD',eqcost:null,inv:'TBD',ikva:null,xfmr:'TBD',disco:'TBD',notes:'Manufacturer/vendor quote required. Contact CATL integrator.'},
@@ -21939,7 +21756,7 @@ function applyBMCatalog() {
   preview.innerHTML = `<strong style="color:var(--accent)">${m.model}</strong><br>
     ${m.chem} . ${m.kwh ? m.kwh+' kWh / '+(m.usable!=null ? m.usable+' kWh usable' : 'usable not published') : '<span style="color:var(--amber)">kWh: Quote Required</span>'} . ${m.kw ? m.kw+' kW' : 'kW: TBD'}<br>
     DC: ${m.dcv} . ${m.dur ? m.dur+' hr duration' : ''}<br>
-    Cost: ${hasCost ? '<strong>$'+m.eqcost.toLocaleString()+'</strong>' : '<span style="color:var(--amber)">!! Quote Required -- enter manually</span>'}<br>
+    Cost: ${hasCost ? '<strong>$'+m.eqcost.toLocaleString()+'</strong>' : '<span style="color:var(--sub)">priced from ClearSky\'s book when left blank; enter a quote to override</span>'}<br>
     <span style="font-size:9px;color:var(--sub)">${m.notes}</span>`;
   preview.style.display = 'block';
   // Auto-run pre-qual if we have an address and valid kW
@@ -28252,9 +28069,8 @@ async function _captureCanvasWithSVG(el, opts) {
 // == PROPOSAL EXPORT ==========================================
 
 function getBESSCost(kwh, override) {
-  if (override && override > 0) return override;
-  if (!kwh || kwh <= 0) return 0;
-  return Math.round(kwh * (typeof BESS_EQ_PER_KWH!=='undefined' ? BESS_EQ_PER_KWH : 85));
+  /* the one per-unit rule, off the server's answer (getBessCostAuto) */
+  return getBessCostAuto(kwh, (override && override > 0) ? override : 0);
 }
 
 function calcProposalCosts() {
@@ -28280,7 +28096,7 @@ function calcProposalCosts() {
   if((window._BESS_TOTAL||0) > 0){
     (S.bessList||[]).forEach(b => {
       const eq  = getBessCostAuto(+(b.kwh||0), +(b.eqcost||0));
-      const ins = +(b.installcost||0) || Math.round(eq * 0.55);
+      const ins = +(b.installcost||0) || _bessInstallAuto(eq);
       bessEqOnly  += eq  * (+(b.qty||1));
       bessInstOnly += ins * (+(b.qty||1));
     });
@@ -29123,33 +28939,22 @@ window.addEventListener('DOMContentLoaded', function() {
 // COST & FINANCIAL ENGINE
 // ===============================================================
 
-// -- PRICING CONSTANTS (from NextNRG proposal generator) ------
-const PROP_PRICING = {
-  bess: { 220:65992, 440:131456, 760:220328, 1000:371300 },
-  inverter_per_kw: 34500/125,
-  smart_meter: 3850,
-  concrete_pad: 4800,
-  ac_disco: 3200,
-  transformer_per_kva: 8.5,
-  bollards_each: 600,
-  jbox: 850,
-  panel_2000a: 18500,
-  misc: 8500,
-  eng: 15000,
-  perm: 3500,
-  comm: 8500,
-  cont_pct: 0.10,
-  conduit: { 'RMC-DC':46.5, 'RMC-AC':28, 'EMT-BMS':15.5, 'PVC-UG':46.5 }
-};
+/* The pricing constants and every cost table moved to the server with the
+   cost engine (api/_lib/editor-cost.js, POST /api/cost-rollup, 2026-10-13). */
 
-// BESS equipment cost. If an explicit override ($) is provided (>0), use it.
-// Otherwise default to a flat $85/kWh of nameplate — the standard container
-// equipment rate — scaled by the configured system size.
-var BESS_EQ_PER_KWH = 85;
+// BESS equipment cost per unit. An explicit override ($) wins; otherwise the
+// server's flat container rate, read off the last cost answer for the sizes
+// it priced (the rate itself lives in api/_lib/editor-cost.js).
 function getBessCostAuto(kwh, override) {
   if(override > 0) return override;
   if(!kwh || kwh<=0) return 0;
-  return Math.round(kwh * BESS_EQ_PER_KWH);
+  var a = window._COST_SERVER && window._COST_SERVER.lines && window._COST_SERVER.lines.bess && window._COST_SERVER.lines.bess.autoByKwh;
+  return (a && a[String(kwh)]!=null) ? +a[String(kwh)] : 0;
+}
+// Install as the server's share of equipment (the ratio rides on the answer).
+function _bessInstallAuto(eq){
+  var b = window._COST_SERVER && window._COST_SERVER.lines && window._COST_SERVER.lines.bess;
+  return (b && b.installRatio > 0) ? Math.round(eq * b.installRatio) : 0;
 }
 
 // -- INCENTIVE CATALOG -----------------------------------------
@@ -29231,212 +29036,238 @@ function setVendorPrice(modelKey, val){
   try{ if(typeof omegaSetStale==='function') omegaSetStale(true); }catch(e){}
   if(typeof updateCostEst==='function') updateCostEst();
 }
+/* ═══════════════════════════════════════════════════════════════════
+ *  THE COST ENGINE RUNS ON THE SERVER (2026-10-13).
+ *  updateCostEst() used to price the drawing here, with the benchmark
+ *  book, the vendor price book, the data-centre ROM, the generation
+ *  classes, the EV estimators and the roll-up rules in this file, where
+ *  any signed-in user could read them. It now sends QUANTITIES — what is
+ *  placed, what the cost sheet says — to POST /api/cost-rollup
+ *  (api/_lib/editor-cost.js) and draws the LINES that come back. It stays
+ *  synchronous for its 29 callers: a drawing already priced renders at
+ *  once from the cached answer; a changed drawing shows the last figures,
+ *  marks the total as updating, and re-renders when the answer lands
+ *  (one request per distinct drawing, coalesced over 120 ms). Run waits
+ *  for the answer before it rolls up (omegaRunDesign). window._COST_*
+ *  are published exactly as before, so every downstream reader (the
+ *  proposal, the BOM, the ROI, the Results rail, the save) is unchanged.
+ * ═══════════════════════════════════════════════════════════════════ */
+/* State lives on window and is made on first touch: updateCostEst() is
+   called from earlier in this script block than these lines run, and a
+   hoisted `var` would still be undefined then. */
+function _CR(){ return window._COST_REQ || (window._COST_REQ = { key:null, inflight:null, timer:null, waiters:[], latest:null, server:null, serverKey:null }); }
+
+function _costSheetValues(){
+  return { pad:$v('ce-pad'), disco:$v('ce-disco'), meter:$v('ce-meter'), bollards:$v('ce-bollards'), jbox:$v('ce-jbox'), panel:$v('ce-panel'),
+    misc:$v('ce-misc'), xfmr:$v('ce-xfmr'), rmcMat:$v('ce-rmc-mat'), rmcLabor:$v('ce-rmc-labor'), emtMat:$v('ce-emt-mat'), emtLabor:$v('ce-emt-labor'),
+    bmsMat:$v('ce-bms-mat'), bmsLabor:$v('ce-bms-labor'), emsRate:$v('ems-rate'), emsSetup:$v('ems-setup'), eng:$v('ce-eng'), perm:$v('ce-perm'),
+    comm:$v('ce-comm'), contPct:$v('ce-cont'), actualTotal:$v('ce-actual-total'), pvWdc:$v('ce-pv-wdc'), bessKwh:$v('ce-bess-kwh'), bessKw:$v('ce-bess-kw') };
+}
+/* The chargers on the map, as quantities: the price book is the server's. */
+function _evQuantities(){
+  var out={ items:[], futureUnits:0, futureMakeReady:0 };
+  if(typeof S==='undefined') return out;
+  function _fut(o){ try{ return !!(window.OmegaEVFuture && window.OmegaEVFuture.isFuture(o)); }catch(e){ return false; } }
+  var i,s;
+  for(i=0;S.shapes&&i<S.shapes.length;i++){
+    s=S.shapes[i]; if(!s) continue;
+    if(s.kind!=='evpost' && s.kind!=='evunit' && s.kind!=='evl2' && s.kind!=='evcab') continue;
+    if(_fut(s)){ out.futureUnits++; continue; }
+    out.items.push({ key:(s.model||s.evId||s.kind), kind:s.kind, evId:s.evId||null, kw:+s.kw||0, mfr:s.mfr||'', qty:1,
+      eqOverride:(s.eqCostOverride!=null?+s.eqCostOverride:null), installOverride:(s.installCostOverride!=null?+s.installCostOverride:null) });
+  }
+  for(i=0;S.elements&&i<S.elements.length;i++){
+    var e=S.elements[i]; if(!e || e.type!=='evgear' || e.evKind!=='charger') continue;
+    if(_fut(e)){ out.futureUnits++; continue; }
+    out.items.push({ key:(e.evModel||e.evId||'DCFC'), kind:'evunit', evId:e.evId||null, kw:+e.kw||0, mfr:e.mfr||'', qty:(e.units>1?e.units:1) });
+  }
+  try{ if(window.OmegaEVFuture && out.futureUnits>0){ out.futureMakeReady=+(window.OmegaEVFuture.cost().total)||0; } }catch(e){}
+  return out;
+}
+/* Everything the server prices: what is on the drawing and what the sheet says. */
+function omegaCostQuantities(){
+  var q={};
+  var fleet=(typeof _ppCollectFleet==='function')?_ppCollectFleet():{units:0,byModel:{}};
+  q.fleet={ units:fleet.units||0, byModel:{} };
+  Object.keys(fleet.byModel||{}).forEach(function(k){ var b=fleet.byModel[k];
+    q.fleet.byModel[k]={ qty:+b.qty||0, kwh:+b.kwh||0, kw:+b.kw||0, cost:(b.cost!=null?+b.cost:null), groupCost:+b.groupCost||0, mixed:!!b.mixed, catalogKey:k }; });
+  q.overrides=(typeof _vendorOverrides==='function')?_vendorOverrides():{};
+  /* the configured list, one row per distinct unit (display only; never in the total) */
+  var _seen={}, _uniq=[];
+  (S.bessList||[]).forEach(function(b){
+    var sig=(b.kwh||0)+'|'+(b.kw||0)+'|'+(b.chem||'')+'|'+(b.mfr||'')+'|'+(b.eqcost||0)+'|'+(b.installcost||0);
+    if(_seen[sig]!=null){ _uniq[_seen[sig]]._qty++; return; }
+    _seen[sig]=_uniq.length; b._qty=1; _uniq.push(b);
+  });
+  q.configured=_uniq.map(function(b){ return { id:b.id, name:b.name, kwh:+b.kwh||0, kw:+b.kw||0, mfr:b.mfr||'', eqcost:+b.eqcost||0, installcost:+b.installcost||0, qty:b._qty||1, catalogKey:b.catalogKey||'' }; });
+  var fr={kwh:0,kw:0}; try{ if(typeof omegaBessFleet==='function') fr=omegaBessFleet(); }catch(e){}
+  q.fleetRating={ kwh:+fr.kwh||0, kw:+fr.kw||0 };
+  var _n=function(id){ return (S.elements||[]).filter(function(e){ return e && e.eqId===id; }).length; };
+  q.counts={ pad:_n('pad'), disco:_n('disco'), meter:_n('meter'), bollard:_n('bollard')+((typeof _padBollardCount==='function')?_padBollardCount():0), jbox:_n('jbox'), panel:_n('panel'),
+    hasXfmr: !!((S.elements||[]).some(function(e){ return e&&(e.eqId==='transformer'||e.eqId==='xfmr'); }) || (S.bessList||[]).some(function(b){ return b.xfmr && b.xfmr!=='N/A'; })) };
+  q.conduitFt={}; q.conduitRuns={};
+  (S.conduits||[]).forEach(function(c){
+    var ft = (c.condType==='PVC-UG') ? (c.ftLen||0) : (c.ftLen || (S.pxPerFt ? c.pxLen/S.pxPerFt : 0));
+    q.conduitFt[c.condType]=(q.conduitFt[c.condType]||0)+ft; q.conduitRuns[c.condType]=(q.conduitRuns[c.condType]||0)+1;
+  });
+  q.firstBessKw=(S.bessList&&S.bessList[0])?(+(S.bessList[0].kw||380)):380;
+  q.emsOn = document.getElementById('ems-toggle')?.checked === true;
+  q.configuredKwh=(S.bessList||[]).reduce(function(s,b){ return s+(+(b.kwh||0))*(+(b.qty||1)); },0);
+  q.configuredKw =(S.bessList||[]).reduce(function(s,b){ return s+(+(b.kw ||0))*(+(b.qty||1)); },0);
+  q.sheet=_costSheetValues();
+  q.ev=_evQuantities(); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
+  q.solarKwDc=(typeof omegaSolarKwDc==='function')?(+omegaSolarKwDc()||0):0;
+  q.placedKw=0; try{ var _d=(typeof omegaDer==='function')?omegaDer():null; if(_d) q.placedKw=(+_d.solarKwDc||0)+(+_d.windKw||0)+(+_d.altKw||0); }catch(e){}
+  q.bnzCapex=0; try{ if(typeof bnzAll==='function') q.bnzCapex=+bnzAll().capex||0; }catch(e){}
+  q.compute={ podsN:0, podKw:0, shellPerPod:0, itPerPod:0, excludeIt:false };
+  try{ if(window.OmegaComputeCost){ var _p=window.OmegaComputeCost.pods(), _c=window.OmegaComputeCost.config();
+    q.compute={ podsN:_p.n, podKw:_p.kw, shellPerPod:+_c.shellPerPod||0, itPerPod:+_c.itPerPod||0, excludeIt:!!_c.excludeIt }; } }catch(e){}
+  q.gen=[]; (S.shapes||[]).forEach(function(sh){ if(!sh||(sh.kind!=='deralt'&&sh.kind!=='derwind')) return;
+    q.gen.push({ kind:sh.kind, altId:sh.altId||null, genId:sh.genId||null, model:sh.model||null, label:sh.label||null, kw:+sh.kw||0, fuel:sh.fuel||null }); });
+  q.genOverrides=(S.costOverrides&&S.costOverrides.genPerKw)||{};
+  q.dc={};
+  var dcEl=(S.elements||[]).filter(function(e){ return e && (e.loadKind==='datacenter') && (+e.loadKw>0 || +e.loadItKw>0); })[0];
+  if(dcEl){ q.dc.element={ itKw:+dcEl.loadItKw||0, pue:+dcEl.loadPue||0, kw:+dcEl.loadKw||0 }; }
+  else { var _pods=0,_podKw=0; (S.shapes||[]).forEach(function(sh){ if(sh&&sh.kind==='derdc'&&!sh.omegaCore){ _pods++; _podKw+=+sh.kw||0; } });
+    q.dc.pods=_pods; q.dc.podKw=_podKw; try{ q.dc.pue=(S.omegaSizing&&+S.omegaSizing.pue)||0; }catch(e){} }
+  return q;
+}
+window.omegaCostQuantities=omegaCostQuantities;
+
+function _costRequest(q, key){
+  var user=window.firebase && firebase.auth && firebase.auth().currentUser;
+  var p=(user ? user.getIdToken() : Promise.reject(new Error('Sign in to price the site.')))
+    .then(function(t){ return fetch('/api/cost-rollup',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+t},body:key}); })
+    .then(function(r){ return r.json().then(function(j){ if(!r.ok) throw new Error(j.error||'Cost service unavailable'); return j; }); });
+  _CR().inflight=p;
+  return p.then(function(ans){
+    if(_CR().inflight===p) _CR().inflight=null;
+    if(_CR().latest!==key) return window._COST_SERVER;          /* a newer drawing is on its way */
+    _CR().server=ans; _CR().serverKey=key; window._COST_SERVER=ans;
+    window._COST_PENDING=false; window._COST_UNCHECKED=false;
+    try{ _renderCostEst(ans); }catch(e){ if(window.console) console.warn('[omega/cost] render', e); }
+    return ans;
+  }, function(err){
+    if(_CR().inflight===p) _CR().inflight=null;
+    if(_CR().latest===key){ _CR().latest=null; window._COST_PENDING=false; window._COST_UNCHECKED=true; try{ _renderCostUnavailable(err); }catch(e){} }
+    return null;
+  });
+}
+/* One request per distinct drawing, the latest wins, coalesced over 120 ms. */
+function _costSchedule(q, key){
+  _CR().latest=key; window._COST_PENDING=true;
+  return new Promise(function(res){
+    _CR().waiters.push(res);
+    clearTimeout(_CR().timer);
+    _CR().timer=setTimeout(function(){
+      var w=_CR().waiters; _CR().waiters=[];
+      _costRequest(q, key).then(function(a){ w.forEach(function(f){ f(a); }); });
+    }, 120);
+  });
+}
 function updateCostEst() {
-  const fmt = n => n > 0 ? '$' + Math.round(n).toLocaleString() : '$--';
-
-  // Are we mid-typing inside one of this panel's number inputs? If so, DON'T
-  // rebuild the input DOM (that destroys the field you're typing in and resets
-  // the caret -- the "have to type it 3 times" bug). We still recompute all the
-  // TOTALS below; we just skip the innerHTML rebuild of the item lists.
-  var _ae = document.activeElement;
-  var _typingInPanel = !!(_ae && _ae.classList && _ae.classList.contains('ce-inp'));
-
   // Keep the throughput sizer's flow readout current with placed generation,
   // but never while the user is typing in one of its own inputs.
+  var _ae = document.activeElement;
   if(typeof ceThruSizerCalc==='function' && !(_ae && _ae.id && _ae.id.indexOf('ce-thru-')===0)){
     try{ ceThruSizerCalc(); }catch(e){}
   }
+  var q = omegaCostQuantities(), key = JSON.stringify(q);
+  if(window._COST_SERVER && _CR().serverKey===key){
+    if(!_CR().inflight) { window._COST_PENDING=false; _CR().latest=key; }
+    _renderCostEst(window._COST_SERVER);
+    return +window._COST_TOTAL || 0;
+  }
+  if(_CR().latest!==key) window._COST_PROMISE=_costSchedule(q, key);
+  if(window._COST_SERVER) _renderCostEst(window._COST_SERVER, true); else _renderCostPending();
+  return +window._COST_TOTAL || 0;
+}
+window.updateCostEst=updateCostEst;
 
-  // BESS equipment costs -- source from PLACED systems on the canvas (drawn
-  // pads/assemblies) so inserting a system feeds the cost sheet automatically.
-  // Falls back to configured S.bessList only if nothing is drawn.
+function _renderCostPending(){
+  var totalEl=document.getElementById('rp-total-cost'); if(totalEl) totalEl.textContent='pricing…';
+  var bessItems=document.getElementById('ce-bess-items');
+  if(bessItems && !bessItems.innerHTML) bessItems.innerHTML='<div style="font-size:10px;color:var(--sub);padding:4px 0">Pricing the drawing…</div>';
+}
+function _renderCostUnavailable(err){
+  var msg=(err && err.message) || 'Cost service unavailable';
+  var totalEl=document.getElementById('rp-total-cost'); if(totalEl) totalEl.textContent='$--';
+  var bd=document.getElementById('rp-cost-breakdown'); if(bd) bd.innerHTML='<div style="font-size:10px;color:var(--amber);padding:6px 0">Not priced: '+msg+'. <a href="#" onclick="updateCostEst();return false" style="color:var(--accent)">Try again</a></div>';
+  if(!window._COST_SERVER){
+    ['_COST_TOTAL','_COST_LOW','_COST_HIGH','_COST_ITC_BASIS','_COST_ITC_EXCLUDED','_SOLAR_TOTAL','_BESS_TOTAL','_EV_TOTAL','_SITE_EQ_TOTAL','_CONDUIT_TOTAL','_INDIRECT_TOTAL','_EMS_COST_TOTAL','_EMS_SETUP','_CONT_TOTAL','_EMS_ANNUAL','_COMPUTE_TOTAL','_COMPUTE_PODS','_GEN_TOTAL','_DC_TOTAL','_BNZ_TOTAL','_COST_PER_KW','_COST_BENCHMARK'].forEach(function(k){ window[k]=0; });
+    window._IN_SCOPE=false; window._COST_IS_CONTRACTED=false;
+  }
+}
+/* Draw what the server priced. `stale` means a newer drawing is being priced. */
+function _renderCostEst(ans, stale) {
+  const fmt = n => n > 0 ? '$' + Math.round(n).toLocaleString() : '$--';
+  var _ae = document.activeElement;
+  var _typingInPanel = !!(_ae && _ae.classList && _ae.classList.contains('ce-inp'));
+  var LN=ans.lines, T=ans.totals, F=ans.flags||{};
+
+  // BESS rows: the placed fleet by model, else the configured list for reference
   const bessItems = document.getElementById('ce-bess-items');
-  let bessTotal = 0;
-  var _fleet = (typeof _ppCollectFleet==='function') ? _ppCollectFleet() : {units:0,byModel:{}};
-  if(bessItems && _fleet.units > 0) {
+  if(bessItems && LN.bess.rows.length) {
     var _rows = '';
-    var _mk = Object.keys(_fleet.byModel);
-    for(var _i=0;_i<_mk.length;_i++){
-      var _k=_mk[_i], _bm=_fleet.byModel[_k];
-      var _ov = _vendorOverrides()[_k];
-      var _perUnit = (_ov!=null) ? _ov : (_bm.cost!=null ? _bm.cost : getBessCostAuto(+(_bm.kwh||0),0));
-      /* For a mixed group (same model name, different sizes) per-unit x qty
-         is wrong — use the summed group cost when we have it. A vendor
-         override is explicitly per-unit, so it still multiplies by qty. */
-      var _eq;
-      if(_ov==null && _bm.mixed && _bm.groupCost>0){ _eq = _bm.groupCost; }
-      else { _eq = _perUnit * _bm.qty; }
-      var _inst = Math.round(_eq * 0.55);
-      var _tot = _eq + _inst;
-      bessTotal += _tot;
-      var _missing = (_bm.cost==null && _ov==null);
+    LN.bess.rows.forEach(function(r){
       _rows += '<div class="ce-row" style="align-items:flex-start;margin-bottom:4px">'
         + '<div style="flex:1;min-width:0">'
-        + '<div style="font-size:11px;font-weight:700;color:var(--text)">' + String(_k).replace('GOTION-','')
-        + ' <span style="color:var(--sub);font-weight:400">x' + _bm.qty + '</span></div>'
-        + '<div style="font-size:9px;color:var(--sub)">' + (_bm.kwh? _bm.kwh + 'kWh ea':'')
-        + (_missing? ' <span style="color:var(--amber)">quote req \u2014 enter $/unit</span>':'') + '</div>'
+        + '<div style="font-size:11px;font-weight:700;color:var(--text)">' + String(r.key).replace('GOTION-','')
+        + ' <span style="color:var(--sub);font-weight:400">x' + r.qty + '</span></div>'
+        + '<div style="font-size:9px;color:var(--sub)">' + (r.kwh? r.kwh + 'kWh ea':'')
+        + (r.missing? ' <span style="color:var(--amber)">quote req — enter $/unit</span>':'') + '</div>'
         + '<div style="display:flex;gap:8px;margin-top:3px">'
         + '<span style="font-size:9px;color:var(--sub)">$/unit: <input class="ce-inp" style="width:84px" type="number" value="'
-        + Math.round(_perUnit) + '" oninput="setVendorPrice(\'' + _k + '\',this.value)" onfocus="this.select()"></span>'
+        + Math.round(r.perUnit) + '" oninput="setVendorPrice(\'' + r.key + '\',this.value)" onfocus="this.select()"></span>'
         + '</div></div>'
         + '<div style="font-size:11px;font-weight:700;color:var(--green);font-family:\'IBM Plex Mono\',monospace;flex-shrink:0">'
-        + fmt(_tot) + '</div></div>';
-    }
-    // Only rewrite the DOM when NOT actively typing in this panel.
-    if(!_typingInPanel) bessItems.innerHTML = _rows;
-  } else if(bessItems && S.bessList.length > 0) {
-    // FALLBACK: nothing placed on the canvas yet. Show CONFIGURED units for
-    // reference, but do NOT add them to the cost total -- otherwise a configured
-    // (but unplaced) BESS shows up as a phantom "ghost" line in cost/proposal
-    // for EV-only or not-yet-built projects. Cost reflects what's PLACED.
-    var _ghostFree = true;   // display-only; no bessTotal accumulation
-    var _seen = {};
-    var _uniq = [];
-    S.bessList.forEach(function(b){
-      var sig = (b.kwh||0)+'|'+(b.kw||0)+'|'+(b.chem||'')+'|'+(b.mfr||'')+'|'+(b.eqcost||0)+'|'+(b.installcost||0);
-      if(_seen[sig]!=null){ _uniq[_seen[sig]]._qty++; return; }
-      _seen[sig]=_uniq.length;
-      var clone = b; clone._qty = 1; _uniq.push(clone);
+        + fmt(r.total) + '</div></div>';
     });
-    var _fbRows = _uniq.map(function(b){
-      const eqCost = getBessCostAuto(+(b.kwh||0), +(b.eqcost||0));
-      const installCost = +(b.installcost||0) || Math.round(eqCost * 0.55);
-      const qty = b._qty || 1;
-      const total = (eqCost + installCost) * qty;
-      b._computedEqCost = eqCost;
-      b._computedInstall = installCost;
-      /* NOTE: intentionally NOT adding `total` to bessTotal here -- see above. */
-      var qtyBadge = qty>1 ? ' <span style="color:var(--sub);font-weight:400">x'+qty+'</span>' : '';
+    if(!_typingInPanel) bessItems.innerHTML = _rows;
+  } else if(bessItems && LN.bess.configured.length) {
+    var _byId={}; (S.bessList||[]).forEach(function(x){ _byId[x.id]=x; });
+    var _fbRows = LN.bess.configured.map(function(b){
+      var _bl=_byId[b.id]; if(_bl){ _bl._computedEqCost=b.eq; _bl._computedInstall=b.install; }
+      var qtyBadge = b.qty>1 ? ' <span style="color:var(--sub);font-weight:400">x'+b.qty+'</span>' : '';
       return `<div class="ce-row" style="align-items:flex-start;margin-bottom:4px">
         <div style="flex:1;min-width:0">
           <div style="font-size:11px;font-weight:700;color:var(--text);display:flex;align-items:center;gap:6px">
             <span>${b.name}${qtyBadge}</span>
-            <button onclick="deleteBess('${b.id}')" title="Remove this configured unit" style="background:rgba(229,57,53,.14);color:var(--red);border:1px solid rgba(229,57,53,.3);border-radius:3px;padding:0 6px;cursor:pointer;font-size:11px;font-weight:700;line-height:1.5;flex-shrink:0">&times;</button>
+            <button onclick="deleteBess('${b.id}')" title="Remove this configured unit" style="background:rgba(229,57,53,.14);color:var(--red);border:1px solid rgba(229,57,53,.3);border-radius:4px;padding:1px 6px;font-size:10px;cursor:pointer;line-height:1.3">✕</button>
           </div>
-          <div style="font-size:9px;color:var(--sub)">${b.kwh}kWh . ${b.mfr||''} <span style="color:var(--amber)">configured \u2014 not yet placed</span></div>
+          <div style="font-size:9px;color:var(--sub)">${b.kwh}kWh . ${b.mfr||''} <span style="color:var(--amber)">configured — not yet placed</span></div>
           <div style="display:flex;gap:8px;margin-top:3px">
-            <span style="font-size:9px;color:var(--sub)">Eq: <input class="ce-inp" style="width:72px" type="number" value="${eqCost}" oninput="setBessEqCost('${b.id}',this.value)" onfocus="this.select()" onclick="this.select()"></span>
-            <span style="font-size:9px;color:var(--sub)">Install: <input class="ce-inp" style="width:72px" type="number" value="${installCost}" oninput="setBessInstallCost('${b.id}',this.value)" onfocus="this.select()" onclick="this.select()"></span>
+            <span style="font-size:9px;color:var(--sub)">Eq: <input class="ce-inp" style="width:72px" type="number" value="${b.eq}" oninput="setBessEqCost('${b.id}',this.value)" onfocus="this.select()"></span>
+            <span style="font-size:9px;color:var(--sub)">Install: <input class="ce-inp" style="width:72px" type="number" value="${b.install}" oninput="setBessInstallCost('${b.id}',this.value)" onfocus="this.select()"></span>
           </div>
         </div>
-        <div id="ce-bess-total-${b.id}" style="font-size:11px;font-weight:700;color:var(--green);font-family:'IBM Plex Mono',monospace;flex-shrink:0">${fmt(total)}</div>
+        <div id="ce-bess-total-${b.id}" style="font-size:11px;font-weight:700;color:var(--green);font-family:'IBM Plex Mono',monospace;flex-shrink:0">${fmt(b.total)}</div>
       </div>`;
     }).join('');
     if(!_typingInPanel) bessItems.innerHTML = _fbRows;
   } else if(bessItems) {
     bessItems.innerHTML = '<div style="font-size:10px;color:var(--sub);padding:4px 0">Draw a BESS pad on the map, or click Config to add one.</div>';
   }
+  window._SITE_EQ_COUNTS = LN.site.counts;
 
-  // Site equipment
-  /* ── SITE EQUIPMENT: unit price x WHAT IS ACTUALLY PLACED ───────────
-     These were summed as flat allowances, so an empty drawing carried
-     $44,500 of pads, disconnects, meters, bollards, j-boxes and a 2000A
-     panelboard that nobody had drawn. Each line is now the unit price on
-     the cost sheet multiplied by the count of that item on the canvas, so
-     the estimate grows as the design does.
-
-     The input fields keep their unit prices -- edit those to re-rate a
-     line. `ce-bollards` was labelled "Bollards (8x)" as a lot price; it is
-     now read per bollard, so its default is the lot divided by 8. */
-  const _n = (id) => (S.elements||[]).filter(function(e){ return e && e.eqId===id; }).length;
-  const _padN  = _n('pad');
-  const _discoN= _n('disco');
-  const _meterN= _n('meter');
-  /* Bollards come from two places and the cost sheet only ever saw one.
-     A bollard placed from the palette is an element with eqId 'bollard'.
-     The ring round a BESS pad is drawn by the assembly renderer as part of
-     the shape, so it is not an element and never reached this line — the
-     protection was on the drawing and in the legend, and free. */
-  const _bollN = _n('bollard') + (typeof _padBollardCount==='function' ? _padBollardCount() : 0);
-  const _jboxN = _n('jbox');
-  const _panelN= _n('panel');
-
-  const pad      = (+($v('ce-pad')     ||4800)) * _padN;
-  const disco    = (+($v('ce-disco')   ||3200)) * _discoN;
-  const meter    = (+($v('ce-meter')   ||3850)) * _meterN;
-  const bollards = (+($v('ce-bollards')|| 600)) * _bollN;
-  const jbox     = (+($v('ce-jbox')    || 850)) * _jboxN;
-  const panel    = (+($v('ce-panel')   ||18500))* _panelN;
-  /* Misc site hardware is a judgement allowance, so it only applies once
-     there is real site equipment to be miscellaneous about. */
-  const _siteItems = _padN+_discoN+_meterN+_bollN+_jboxN+_panelN;
-  const misc = _siteItems > 0 ? +($v('ce-misc')||0) : 0;
-
-  // Transformer cost line (added to site equipment if needed)
-  const hasXfmr = S.elements.some(e=>e.eqId==='transformer'||e.eqId==='xfmr') || S.bessList.some(b=>b.xfmr && b.xfmr !== 'N/A');
-  /* Transformer is quote-driven: kVA, primary voltage, pad vs pole and
-     lead time move it by tens of thousands, so a default here just
-     becomes a number somebody has to remember to overwrite. The line
-     stays visible whenever a transformer is on the drawing; it prices at
-     zero until a real figure is entered. */
-  const xfmrCost = hasXfmr ? +($v('ce-xfmr')||0) : 0;
-  const siteEq = pad + disco + meter + bollards + jbox + panel + misc + xfmrCost;
-  window._SITE_EQ_COUNTS = { pad:_padN, disco:_discoN, meter:_meterN,
-                             bollard:_bollN, jbox:_jboxN, panel:_panelN };
-
-  // Conduit from actual drawn runs
-  let condTotal = 0;
-  const condFtByType = {};
-  S.conduits.forEach(c => {
-    const ft = c.ftLen || (S.pxPerFt ? c.pxLen/S.pxPerFt : 0);
-    condFtByType[c.condType] = (condFtByType[c.condType]||0) + ft;
-  });
-  // DC conduit mat+labor
-  const rmcMat   = +($v('ce-rmc-mat')||11.5);
-  const rmcLabor = +($v('ce-rmc-labor')||35);
-  const emtMat   = +($v('ce-emt-mat')||8);
-  const emtLabor = +($v('ce-emt-labor')||35);
-  const bmsMat   = +($v('ce-bms-mat')||3.5);
-  const bmsLabor = +($v('ce-bms-labor')||18);
-  const dcFt  = condFtByType['RMC-DC']||0;
-  const acFt  = condFtByType['RMC-AC']||0;
-  const bmsFt = condFtByType['EMT-BMS']||0;
-  const dcMatCost    = dcFt  * rmcMat;
-  const dcLaborCost  = dcFt  * rmcLabor;
-  const acMatCost    = acFt  * emtMat;
-  const acLaborCost  = acFt  * emtLabor;
-  const bmsCost      = bmsFt * (bmsMat + bmsLabor);
-  condTotal = dcMatCost + dcLaborCost + acMatCost + acLaborCost + bmsCost;
-  // Update ft labels
-  const el_rmc = document.getElementById('ce-rmc-ft');
-  const el_emt = document.getElementById('ce-emt-ft');
-  const el_bms = document.getElementById('ce-bms-ft');
-  if(el_rmc) el_rmc.textContent = Math.round(dcFt)+' ft';
-  if(el_emt) el_emt.textContent = Math.round(acFt)+' ft';
-  if(el_bms) el_bms.textContent = Math.round(bmsFt)+' ft';
-  // Update detailed conduit schedule block
+  // Conduit: feet, the schedule, the breakdown
+  var C=LN.conduit;
+  const el_rmc = document.getElementById('ce-rmc-ft'), el_emt = document.getElementById('ce-emt-ft'), el_bms = document.getElementById('ce-bms-ft');
+  if(el_rmc) el_rmc.textContent = Math.round(C.dcFt)+' ft';
+  if(el_emt) el_emt.textContent = Math.round(C.acFt)+' ft';
+  if(el_bms) el_bms.textContent = Math.round(C.bmsFt)+' ft';
   const condSchedEl = document.getElementById('ce-conduit-schedule');
   if(condSchedEl) {
-    const b = S.bessList[0];
-    const kw = b ? +(b.kw||380) : 380;
-    const amps = Math.round(kw*1000/(480*1.732));
-    const wireGauge = amps > 300 ? '#350 kcmil' : amps > 200 ? '#2/0 AWG' : amps > 100 ? '#1/0 AWG' : '#2 AWG';
-    const dcRuns = S.conduits.filter(c=>c.condType==='RMC-DC');
-    const acRuns = S.conduits.filter(c=>c.condType==='RMC-AC');
-    const bmsRuns = S.conduits.filter(c=>c.condType==='EMT-BMS');
-    const ugRuns  = S.conduits.filter(c=>c.condType==='PVC-UG');
-    var rows = '';
-    const row = (type,size,qty,ft,wire,matR,laborR) => {
-      const mat = Math.round(ft*matR), labor = Math.round(ft*laborR);
-      return `<tr>
-        <td style="color:var(--text);font-weight:600">${type}</td>
-        <td style="color:var(--sub)">${size}</td>
-        <td style="color:#C5A55A;text-align:center">${qty}</td>
-        <td style="color:var(--accent-2);text-align:right">${Math.round(ft)} LF</td>
-        <td style="color:var(--sub);font-size:8.5px">${wire}</td>
-        <td style="color:var(--green);text-align:right">$${mat.toLocaleString()}</td>
-        <td style="color:var(--green);text-align:right">$${labor.toLocaleString()}</td>
-        <td style="color:#fff;font-weight:700;text-align:right">$${(mat+labor).toLocaleString()}</td>
-      </tr>`;
-    };
-    if(dcFt>0)  rows += row('RMC-DC','2" RMC',dcRuns.length,dcFt,'3-'+wireGauge+' CU + #6 GND',rmcMat,rmcLabor);
-    if(acFt>0)  rows += row('RMC-AC','2" RMC',acRuns.length,acFt,'3-'+wireGauge+' CU + #6 GND',emtMat,emtLabor);
-    if(bmsFt>0) rows += row('EMT-BMS','3/4" EMT',bmsRuns.length,bmsFt,'Cat6+RS485',bmsMat,bmsLabor);
-    if(ugRuns.length>0) {
-      const ugFt = ugRuns.reduce((s,c)=>s+(c.ftLen||0),0);
-      rows += row('PVC-UG','2" PVC Sch40',ugRuns.length,ugFt,'3-'+wireGauge+' CU + #6 GND',9,28);
-    }
+    var rows = C.schedule.map(function(s){ return `<tr>
+        <td style="color:var(--text);font-weight:600">${s.type}</td>
+        <td style="color:var(--sub)">${s.size}</td>
+        <td style="color:#C5A55A;text-align:center">${s.runs}</td>
+        <td style="color:var(--accent-2);text-align:right">${Math.round(s.ft)} LF</td>
+        <td style="color:var(--sub);font-size:8.5px">${s.wire}</td>
+        <td style="color:var(--green);text-align:right">$${s.mat.toLocaleString()}</td>
+        <td style="color:var(--green);text-align:right">$${s.labor.toLocaleString()}</td>
+        <td style="color:#fff;font-weight:700;text-align:right">$${s.total.toLocaleString()}</td>
+      </tr>`; }).join('');
     condSchedEl.innerHTML = rows ?
       `<div style="font-size:9px;font-weight:700;color:#C5A55A;margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px">Conduit Schedule — Qty & LF Detail</div>
        <div style="overflow-x:auto">
@@ -29455,186 +29286,34 @@ function updateCostEst() {
        </table></div>` :
       '<div style="font-size:9px;color:var(--sub);text-align:center;padding:8px 0">Draw conduit runs to see schedule</div>';
   }
-  // Update breakdown display
   const upd = (id,v) => { const e=document.getElementById(id); if(e) e.textContent=v>0?fmt(v):'$--'; };
-  upd('ce-rmc-mat-total',   dcMatCost);
-  upd('ce-rmc-labor-total', dcLaborCost);
-  upd('ce-emt-mat-total',   acMatCost);
-  upd('ce-emt-labor-total', acLaborCost);
-  upd('ce-bms-total',       bmsCost);
+  upd('ce-rmc-mat-total', C.dcMat); upd('ce-rmc-labor-total', C.dcLabor); upd('ce-emt-mat-total', C.acMat); upd('ce-emt-labor-total', C.acLabor); upd('ce-bms-total', C.bms);
   const ctEl = document.getElementById('ce-conduit-total');
-  if(ctEl) ctEl.textContent = condTotal>0 ? fmt(condTotal) : '$--';
+  if(ctEl) ctEl.textContent = C.total>0 ? fmt(C.total) : '$--';
 
-  // EMS Software fee
-  const emsOn = document.getElementById('ems-toggle')?.checked === true;
-  const emsRate = +($v('ems-rate')||12);
-  const emsSetup = +($v('ems-setup')||4500);
-  /* The old `|| 760` invented 760 kWh of storage whenever bessList was empty,
-     so an empty drawing was billed 760 x $12 = $9,120/yr of EMS software plus
-     a $4,500 setup. EMS is priced per kWh of storage: no storage, no fee. */
-  const kwh_total = S.bessList.reduce((s,b)=>s+(+(b.kwh||0))*(+(b.qty||1)),0);
-  const emsAnnual = (emsOn && kwh_total > 0) ? kwh_total * emsRate : 0;
-  const emsCost   = (emsOn && kwh_total > 0) ? emsSetup + emsAnnual : 0; // Year 1 cost
+  // EMS
   const emsCalcEl = document.getElementById('ems-calc');
-  if(emsCalcEl) emsCalcEl.textContent = emsOn ? `$${Math.round(emsAnnual).toLocaleString()}/yr` : 'OFF';
-  // Store annual EMS for ROI
-  window._EMS_ANNUAL = emsAnnual;
+  if(emsCalcEl) emsCalcEl.textContent = LN.ems.on ? `$${Math.round(LN.ems.annual).toLocaleString()}/yr` : 'OFF';
+  window._EMS_ANNUAL = LN.ems.annual;
 
-  // Indirect
-  /* Soft costs are entered on the cost sheet when the job is actually
-     scoped -- they are not allowances the drawing can infer. Blank means
-     zero, not "assume $27,000". */
-  const eng = +($v('ce-eng')||0), perm = +($v('ce-perm')||0);
-  const comm = +($v('ce-comm')||0);
-  /* EMS: the SETUP is capex, the annual fee is O&M. emsCost is setup+annual,
-     and the annual half is separately added to O&M through _EMS_ANNUAL — so
-     rolling emsCost into indirect charged the year-1 subscription twice,
-     once in the build and once in operations, and every payback and IRR
-     downstream inherited the overstated capex. Capex takes the setup only. */
-  const emsSetupCapex = (emsOn && kwh_total > 0) ? emsSetup : 0;
-  const indirect = eng + perm + comm + emsSetupCapex;
+  // Detail blocks every downstream reader expects
+  window._BNZ_DETAIL = (typeof bnzAll==='function') ? (function(){ try{ return bnzAll(); }catch(e){ return {count:0,capex:T.bnz}; } })() : {count:0,capex:T.bnz};
+  window._BNZ_TOTAL = T.bnz;
+  window._COMPUTE_IT_TOTAL = LN.compute.itTotal || 0;
+  window._COMPUTE_MW = LN.compute.mw || 0;
+  window._COMPUTE_DETAIL = Object.assign({}, LN.compute, { cfg: (window.OmegaComputeCost ? window.OmegaComputeCost.config() : {}) });
+  window._COMPUTE_TOTAL = T.compute; window._COMPUTE_PODS = T.computePods; window._COMPUTE_IS_BENCHMARK = !!F.computeBenchmark;
+  window._GEN_TOTAL = T.gen; window._GEN_DETAIL = LN.gen; window._GEN_IS_BENCHMARK = T.gen > 0;
+  window._DC_ROM_DETAIL = LN.dc; window._DC_TOTAL = T.dc;
+  window._BESS_IS_BENCHMARK = !!F.bessBenchmark; window._SOLAR_IS_BENCHMARK = !!F.solarBenchmark;
+  window._COST_PER_KW = T.costPerKW;
 
-  // EV charging equipment + install (from chargers placed on the map).
-  var _evCosts = (typeof evChargerCosts==='function') ? evChargerCosts() : {eq:0,install:0,total:0,units:0,byModel:{}};
-  const evTotal = _evCosts.total || 0;
-
-  // Sub-total & contingency.
-  // NOTE: conduit & wiring is NOT added here — its labor + material is already
-  // covered inside the BESS install cost. condTotal is tracked purely as a
-  // MATERIALS estimate (for the sourcing BOM), not as an extra project charge.
-  /* ── SCOPE GATE ────────────────────────────────────────────────────
-     Site equipment ($44,500 of pad / disconnect / meter / bollards / j-box /
-     panel / misc allowances) and the indirects ($15,000 engineering + $3,500
-     permitting + $8,500 commissioning) are FIXED DEFAULTS on the Construction
-     Cost form. They were summed unconditionally, so a drawing with nothing on
-     it still totalled $93,632 -- allowances against a scope that does not
-     exist yet.
-
-     These are real line items once there IS a project, so they are kept, but
-     they only apply when something priceable has actually been placed. This
-     follows the rule already stated in the BESS block above: cost reflects
-     what's PLACED. Annotations and dimension shapes do not count -- a label
-     on a roof is not a scope of work. */
-  var _placedKw = 0;
-  try{
-    var _d = (typeof omegaDer==='function') ? omegaDer() : null;
-    if(_d) _placedKw = (+_d.solarKwDc||0) + (+_d.windKw||0) + (+_d.altKw||0);
-  }catch(e){}
-
-  /* ── SOLAR ────────────────────────────────────────────────────────
-     There was no PV line in this model at all: `sub` summed BESS, site
-     equipment, indirects and EV only, so a 6,125 kW-DC array was priced
-     at ZERO and a multi-megawatt job totalled a few hundred thousand
-     dollars. Priced off the benchmark $/Wdc for the array size. */
-  var solarTotal = 0;
-  try{ solarTotal = omegaSolarCost(); }catch(e){}
-
-  /* ── BESS FALLBACK ────────────────────────────────────────────────
-     bessTotal comes off S.bessList, which is the itemised vendor list.
-     A fleet placed on the drawing but never itemised left it at zero
-     while the Results rail happily read 2,580 kW / 5,015 kWh from the
-     same drawing. Fall back to the benchmark so the two agree. */
-  /* Data centre electrical package (transformers, switchgear, UPS,
-     microgrid controls, e-house, design). Without this a 750 kW compute
-     load priced like a building panel. */
-  /* Building envelope scope (BNZ). Priced per sf of wall/roof/floor from
-     the assembly catalog; empty layers contribute zero. */
-  var _bnz = { count:0, capex:0 };
-  try{ if(typeof bnzAll==='function') _bnz = bnzAll(); }catch(e){}
-  var bnzTotal = _bnz.capex || 0;
-  window._BNZ_DETAIL = _bnz;
-  window._BNZ_TOTAL = bnzTotal;
-
-  /* Patch 112: THE PODS ARE THE BUDGET. Patch 93 priced them at $0 until a
-     quote was typed in, so a 40-pod campus totalled $58M -- the batteries,
-     the PV and the switchgear -- while the one line that is ~95% of the
-     job was missing and nothing on the panel said the number was short.
-     Pods are now priced like solar and storage: off the canvas, at a
-     stated benchmark ($30M +/- $10M per 1 MW pod, operator figure), all-in,
-     flagged as a benchmark wherever it prints, replaced by whatever is
-     entered in Compute Cost. Enclosures-only is still available there as
-     an explicit choice. */
-  var _computeTotal = 0, _computePods = 0, _computeLo = 0, _computeHi = 0, _computeBench = false;
-  try{
-    if(window.OmegaComputeCost){
-      var _cc = OmegaComputeCost.figures();
-      _computePods = _cc.pods || 0;
-      _computeTotal = _cc.projectCapex || 0;
-      _computeLo = (_cc.projectLo > 0) ? _cc.projectLo : _computeTotal;
-      _computeHi = (_cc.projectHi > 0) ? _cc.projectHi : _computeTotal;
-      _computeBench = !!_cc.isBenchmark;
-      window._COMPUTE_IT_TOTAL = _cc.itTotal || 0;
-      window._COMPUTE_MW = _cc.mw || 0;
-      window._COMPUTE_DETAIL = _cc;
-    }
-  }catch(e){}
-  window._COMPUTE_TOTAL = _computeTotal;
-  window._COMPUTE_PODS = _computePods;
-  window._COMPUTE_IS_BENCHMARK = _computeBench;
-
-  /* Patch 112: ON-SITE GENERATION. Three 30 MW turbines on the drawing
-     reached the legend, the BOM and the power balance, and never the
-     estimate: no line read the deralt/derwind shapes. Priced at the EIA
-     class benchmark until a quote replaces it. */
-  var _gen = { total:0, kw:0, units:0, lines:[], gasKw:0, gasTotal:0 };
-  try{ if(typeof omegaGenBenchCost==='function') _gen = omegaGenBenchCost(); }catch(e){}
-  var genTotal = _gen.total || 0;
-  window._GEN_TOTAL = genTotal;
-  window._GEN_DETAIL = _gen;
-  window._GEN_IS_BENCHMARK = genTotal > 0;
-
-  var _dcRom = { active:false, total:0, lines:[] };
-  try{ if(typeof omegaDataCenterROM==='function') _dcRom = omegaDataCenterROM(); }catch(e){}
-  var dcTotal = _dcRom.active ? _dcRom.total : 0;
-  window._DC_ROM_DETAIL = _dcRom;
-  window._DC_TOTAL = dcTotal;
-
-  var _benchBess = 0;
-  if(bessTotal <= 0){
-    try{ _benchBess = omegaBessBenchCost(); }catch(e){}
-    if(_benchBess > 0){ bessTotal = _benchBess; }
-  }
-  window._BESS_IS_BENCHMARK = _benchBess > 0;
-  window._SOLAR_IS_BENCHMARK = solarTotal > 0;
-
-  const inScope = (bessTotal > 0) || (evTotal > 0) || (_placedKw > 0) || (solarTotal > 0) || (dcTotal > 0) || (bnzTotal > 0) || (_computeTotal > 0) || (_computePods > 0) || (genTotal > 0);
-
-  const sub = inScope ? (bessTotal + solarTotal + siteEq + indirect + evTotal + dcTotal + bnzTotal + _computeTotal + genTotal) : 0;
-  const contPct = +($v('ce-cont')||10)/100;
-  const cont = sub * contPct;
-  let TOTAL = sub + cont;
-
-  /* Patch 112: the range. Only the pods carry a stated band; every other
-     line is a point benchmark or an entered price. */
-  var _subLo = sub - _computeTotal + _computeLo, _subHi = sub - _computeTotal + _computeHi;
-  var _costLow = inScope ? _subLo * (1 + contPct) : 0, _costHigh = inScope ? _subHi * (1 + contPct) : 0;
-
-  /* Patch 112: what a federal ITC can be claimed on. The credit is on
-     energy property -- storage, PV, wind, fuel cells and their share of
-     the site works -- not on GPU pods, gas turbines, the compute
-     electrical package or a building shell. 30% of a $1.3B total would
-     have printed a $400M tax credit on a proposal. */
-  var _itcExcluded = _computeTotal + dcTotal + bnzTotal + (_gen.gasTotal || 0);
-  var _itcSub = Math.max(0, sub - _itcExcluded);
-  var _itcBasis = _itcSub * (1 + contPct);
-
-  // $/kW metric -- over everything placed that has a rating, not just the batteries
-  const _bessKW = S.bessList.reduce((s,b)=>s+(+(b.kw||0))*(+(b.qty||1)),0);
-  const totalKW = _bessKW + Math.round((window._COMPUTE_MW || 0) * 1000) + Math.round(_gen.kw || 0);
-  const costPerKW = totalKW > 0 ? Math.round(TOTAL / totalKW) : 0;
-  window._COST_PER_KW = costPerKW;
-  // Update total display
+  var TOTAL=T.total, costPerKW=T.costPerKW, totalKW=T.totalKW, contPct=T.contPct;
   const totalEl = document.getElementById('rp-total-cost');
-  if(totalEl) totalEl.textContent = TOTAL > 0 ? '$' + Math.round(TOTAL).toLocaleString() : '$--';
-
-  // $/kW badge
+  if(totalEl) totalEl.textContent = (TOTAL > 0 ? '$' + Math.round(TOTAL).toLocaleString() : '$--') + (stale ? ' …' : '');
   const cpkwEl = document.getElementById('rp-cost-per-kw');
-  if(cpkwEl) {
-    cpkwEl.textContent = costPerKW > 0 ? '$'+costPerKW.toLocaleString()+'/kW installed' : '';
-    cpkwEl.style.display = costPerKW > 0 ? 'block' : 'none';
-  }
+  if(cpkwEl) { cpkwEl.textContent = costPerKW > 0 ? '$'+costPerKW.toLocaleString()+'/kW installed' : ''; cpkwEl.style.display = costPerKW > 0 ? 'block' : 'none'; }
 
-  // Breakdown lines
   const bd = document.getElementById('rp-cost-breakdown');
   if(bd && TOTAL > 0) {
     const row = (label, val, color='var(--sub)') =>
@@ -29642,26 +29321,27 @@ function updateCostEst() {
         <span style="color:${color};font-size:10px">${label}</span>
         <span style="color:var(--text);font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace">${fmt(val)}</span>
       </div>`;
+    var CM=LN.compute, G=LN.gen;
     bd.innerHTML =
-      (solarTotal > 0 ? row('  Solar PV (equip + install)', solarTotal, '#FBBF24') : '') +
-      (_computeTotal > 0
-        ? row('  Compute pods \u00d7' + _computePods + (_computeBench ? ' (benchmark, all-in)' : (window._COMPUTE_DETAIL && window._COMPUTE_DETAIL.excludeIt ? ' (enclosures only)' : ' (entered, all-in)')), _computeTotal, '#8B7BD8')
-        : (_computePods > 0
+      (T.solar > 0 ? row('  Solar PV (equip + install)', T.solar, '#FBBF24') : '') +
+      (T.compute > 0
+        ? row('  Compute pods ×' + T.computePods + (F.computeBenchmark ? ' (benchmark, all-in)' : (CM.excludeIt ? ' (enclosures only)' : ' (entered)')), T.compute, '#60A5FA')
+        : (T.computePods > 0
           ? `<div style="display:flex;justify-content:space-between;padding:6px 0">
-              <span style="color:var(--sub);font-size:10.5px">Compute pods \u00d7${_computePods}
-                <span style="opacity:.75">\u2014 enclosures-only is on with no enclosure price</span></span>
+              <span style="color:var(--sub);font-size:10.5px">Compute pods ×${T.computePods}
+                <span style="opacity:.75">— enclosures-only is on with no enclosure price</span></span>
               <span style="color:var(--amber);font-size:10.5px;font-family:'IBM Plex Mono',monospace">set in Compute Cost</span>
             </div>` : '')) +
-      (genTotal > 0 ? row('  On-site generation \u00d7' + _gen.units + ' (' + Math.round(_gen.kw).toLocaleString() + ' kW, benchmark)', genTotal, '#F472B6') : '') +
-      (dcTotal > 0 ? row('  Data Centre Electrical (ROM)', dcTotal, '#38BDF8') : '') +
-      (bnzTotal > 0 ? row('  Building Envelope', bnzTotal, '#A78BFA') : '') +
-      row('  BESS Equipment + Install', bessTotal, 'var(--accent)') +
-      (evTotal > 0 ? row('  EV Charging (equip + install)', evTotal, '#22D3EE') : '') +
-      row('   Site Equipment', siteEq - xfmrCost, 'var(--amber)') +
-      (xfmrCost > 0 ? row('  Transformer', xfmrCost, '#F97316') : '') +
-      row('  Engineering + Permitting', indirect - emsSetupCapex, 'var(--sub)') +
-      (emsOn ? row(' EMS Software (setup)', emsSetupCapex, '#A78BFA') : '') +
-      row(`  Contingency (${Math.round(contPct*100)}%)`, cont, 'var(--sub)') +
+      (T.gen > 0 ? row('  On-site generation ×' + G.units + ' (' + Math.round(G.kw).toLocaleString() + ' kW, benchmark)', T.gen, '#F472B6') : '') +
+      (T.dc > 0 ? row('  Data Centre Electrical (ROM)', T.dc, '#38BDF8') : '') +
+      (T.bnz > 0 ? row('  Building Envelope', T.bnz, '#A78BFA') : '') +
+      row('  BESS Equipment + Install', T.bess, 'var(--accent)') +
+      (T.ev > 0 ? row('  EV Charging (equip + install)', T.ev, '#22D3EE') : '') +
+      row('   Site Equipment', T.siteEqRaw - T.xfmr, 'var(--amber)') +
+      (T.xfmr > 0 ? row('  Transformer', T.xfmr, '#F97316') : '') +
+      row('  Engineering + Permitting', T.indirectRaw - LN.indirect.emsSetup, 'var(--sub)') +
+      (LN.ems.on ? row(' EMS Software (setup)', LN.indirect.emsSetup, '#A78BFA') : '') +
+      row(`  Contingency (${T.contPctRound}%)`, T.cont, 'var(--sub)') +
       `<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:2px">
         <span style="color:var(--text);font-weight:700;font-size:11px">Total</span>
         <span style="color:var(--green);font-weight:700;font-size:14px;font-family:'IBM Plex Mono',monospace">${fmt(TOTAL)}</span>
@@ -29669,69 +29349,28 @@ function updateCostEst() {
       (costPerKW > 0 ? `<div style="text-align:right;font-size:10px;color:var(--sub);margin-top:2px">
         <span style="color:var(--accent);font-weight:700;font-family:'IBM Plex Mono',monospace">$${costPerKW.toLocaleString()}/kW</span> installed . ${totalKW.toLocaleString()} kW placed
       </div>` : '') +
-      (_computeBench && _costHigh > _costLow ? `<div style="text-align:right;font-size:10px;color:var(--amber);margin-top:2px;line-height:1.5">
-        Range ${fmt(_costLow)} \u2013 ${fmt(_costHigh)} \u00b7 pods at the $20\u201340M/MW operator benchmark until a quote is entered in Compute Cost
+      (F.computeBenchmark && T.high > T.low ? `<div style="text-align:right;font-size:10px;color:var(--amber);margin-top:2px;line-height:1.5">
+        Range ${fmt(T.low)} – ${fmt(T.high)} · pods at the operator benchmark until a quote is entered in Compute Cost
       </div>` : '') +
-      // Informational — conduit/wiring materials are already inside install cost.
-      (condTotal > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0 2px;margin-top:6px;border-top:1px dashed var(--hairline)">
+      (C.total > 0 ? `<div style="display:flex;justify-content:space-between;padding:6px 0 2px;margin-top:6px;border-top:1px dashed var(--hairline)">
         <span style="color:var(--sub);font-size:9px">Conduit & wiring materials <span style="opacity:.7">(in install — not added)</span></span>
-        <span style="color:var(--sub);font-size:9px;font-family:'IBM Plex Mono',monospace">${fmt(condTotal)}</span>
+        <span style="color:var(--sub);font-size:9px;font-family:'IBM Plex Mono',monospace">${fmt(C.total)}</span>
       </div>` : '');
-  }
+  } else if(bd) { bd.innerHTML=''; }
 
-  // Store all line totals for export
-  /* Publish zeros when out of scope so every downstream consumer -- the
-     Results rail, the proposal, the BOM, the CSV export -- agrees with the
-     panel instead of each re-deriving its own phantom subtotal. */
-  /* ── CONTRACTED COST OVERRIDE ──────────────────────────────────────
-     A benchmark build-up is what you use BEFORE a price exists. Once a
-     pro forma or an EPC number is in hand, that number is the truth and
-     the estimate should stop arguing with it. Entering it here drives
-     the proposal, the ITC basis, IRR, payback and LCOE, so the whole
-     document set agrees with the deal rather than with the model. */
-  var _actual = +($v('ce-actual-total')||0);
-  if(_actual > 0){ TOTAL = _actual; }
-  window._COST_IS_CONTRACTED = _actual > 0;
-  window._COST_BENCHMARK = sub + cont;   /* keep the build-up for comparison */
-  /* Patch 112: range and ITC basis follow the contracted number when there is one. */
-  if(_actual > 0){
-    _costLow = _actual; _costHigh = _actual;
-    _itcBasis = (sub > 0) ? _actual * (_itcSub / sub) : _actual;
-  }
-  window._COST_LOW = _costLow;
-  window._COST_HIGH = _costHigh;
-  window._COST_ITC_BASIS = _itcBasis;
-  window._COST_ITC_EXCLUDED = _itcExcluded * (1 + contPct);
-
-  window._IN_SCOPE = inScope;
+  // Publish every total exactly as before, for every downstream reader.
+  window._COST_IS_CONTRACTED = !!T.contracted;
+  window._COST_BENCHMARK = T.benchmark;
+  window._COST_LOW = T.low; window._COST_HIGH = T.high;
+  window._COST_ITC_BASIS = T.itcBasis; window._COST_ITC_EXCLUDED = T.itcExcluded;
+  window._IN_SCOPE = T.inScope;
   window._COST_TOTAL = TOTAL;
-  window._SOLAR_TOTAL = solarTotal;
-  window._BESS_TOTAL = bessTotal;
-  window._EV_TOTAL = evTotal;
-  window._EV_COST_DETAIL = _evCosts;
-  window._SITE_EQ_TOTAL = inScope ? siteEq : 0;
-  window._CONDUIT_TOTAL = condTotal;
-  window._INDIRECT_TOTAL = inScope ? indirect : 0;
-  /* The capex total now carries the EMS SETUP only, so the figure the cost
-     breakdown and the spec sheet display has to match it — otherwise the
-     line items would sum past the total they sit under. The annual fee is
-     still reported, as O&M, where it belongs. */
-  window._EMS_COST_TOTAL = inScope ? emsSetupCapex : 0;
-  window._EMS_SETUP = emsSetupCapex;
-  window._CONT_TOTAL = cont;
-  window._CONT_PCT = Math.round(contPct*100);
-  // Refresh the live cost-breakdown bar wherever it's shown.
+  window._SOLAR_TOTAL = T.solar; window._BESS_TOTAL = T.bess; window._EV_TOTAL = T.ev; window._EV_COST_DETAIL = LN.ev;
+  window._SITE_EQ_TOTAL = T.siteEq; window._CONDUIT_TOTAL = T.conduit; window._INDIRECT_TOTAL = T.indirect;
+  window._EMS_COST_TOTAL = T.emsSetup; window._EMS_SETUP = LN.indirect.emsSetup;
+  window._CONT_TOTAL = T.cont; window._CONT_PCT = T.contPctRound;
+  window._CONDUIT_DETAIL = C.detail; window._CONDUIT_MAT_TOTAL = C.matTotal; window._CONDUIT_LABOR_TOTAL = C.laborTotal;
   if(typeof renderCostBreakdownBar==='function') try{ renderCostBreakdownBar(); }catch(e){}
-
-  // Per-LF conduit material + labor detail, so the proposal export can show the
-  // material vs. labor split by run type (was missing from the exported PDF).
-  window._CONDUIT_DETAIL = [
-    { type:'RMC-DC',  label:'DC Power (2" RMC)',   ft:dcFt,  matRate:rmcMat, laborRate:rmcLabor, mat:dcMatCost,  labor:dcLaborCost },
-    { type:'RMC-AC',  label:'AC Power (2" RMC)',   ft:acFt,  matRate:emtMat, laborRate:emtLabor, mat:acMatCost,  labor:acLaborCost },
-    { type:'EMT-BMS', label:'BMS/Data (3/4" EMT)', ft:bmsFt, matRate:bmsMat, laborRate:bmsLabor, mat:Math.round(bmsFt*bmsMat), labor:Math.round(bmsFt*bmsLabor) }
-  ].filter(function(r){ return r.ft > 0; });
-  window._CONDUIT_MAT_TOTAL   = dcMatCost + acMatCost + Math.round(bmsFt*bmsMat);
-  window._CONDUIT_LABOR_TOTAL = dcLaborCost + acLaborCost + Math.round(bmsFt*bmsLabor);
   updateIncentiveSummary();
   updateROI();
   return TOTAL;
@@ -29753,7 +29392,7 @@ function setBessInstallCost(id, val) {
 function _liveBessRowUpdate(b) {
   var qty = b._qty || 1;
   var eq = getBessCostAuto(+(b.kwh||0), +(b.eqcost||0));
-  var inst = +(b.installcost||0) || Math.round(eq * 0.55);
+  var inst = +(b.installcost||0) || _bessInstallAuto(eq);
   var rowTot = (eq + inst) * qty;
   var el = document.getElementById('ce-bess-total-' + b.id);
   if (el) el.textContent = rowTot > 0 ? '$' + Math.round(rowTot).toLocaleString() : '$--';
@@ -29990,20 +29629,8 @@ window._SITE_DATA = window._SITE_DATA || {
 
 // ISO-level interconnection friendliness (queue speed, storage-as-transmission
 // rules, fast-track thresholds). Higher = easier. These are directional.
-function _ixIsoScore(state){
-  var iso = _isoForState(state);
-  var map = { PJM:62, NYISO:55, ISONE:60, ERCOT:88, CAISO:52, MISO:70, SPP:75, OTHER:60 };
-  return { iso:iso, score: (map[iso]!=null?map[iso]:60) };
-}
-function _isoForState(state){
-  var PJM=['IL','PA','NJ','MD','DE','VA','WV','OH','KY','DC','IN','NC','MI'];
-  var NYISO=['NY'], ISONE=['CT','MA','RI','NH','ME','VT'], ERCOT=['TX'], CAISO=['CA'];
-  var MISO=['IA','MN','WI','MO','AR','LA','MS','ND','SD','MT'], SPP=['KS','OK','NE'];
-  if(PJM.indexOf(state)>=0)return'PJM'; if(NYISO.indexOf(state)>=0)return'NYISO';
-  if(ISONE.indexOf(state)>=0)return'ISONE'; if(ERCOT.indexOf(state)>=0)return'ERCOT';
-  if(CAISO.indexOf(state)>=0)return'CAISO'; if(MISO.indexOf(state)>=0)return'MISO';
-  if(SPP.indexOf(state)>=0)return'SPP'; return'OTHER';
-}
+/* The ISO map and its friendliness scores live on the server with the
+   interconnection scorer (api/_lib/editor-score.js, 2026-10-13). */
 
 /* ── WHERE THE SITE IS ──────────────────────────────────────────────────
    A STREET NUMBER IS NOT A ZIP. This used to take the address, and when it
@@ -30047,127 +29674,24 @@ function _ixSiteLocation(text){
 }
 
 // Compute the full interconnection-ease score for the current site.
+/* Interconnection-ease score for the current site: the server's answer
+   (api/_lib/editor-score.js — the ISO table, the headroom, distance and
+   size curves, the factor weights and the evidence share live there),
+   cached per set of facts. Synchronous for its callers: a pending result
+   carries `promise`, and the score panel and the report's Location tab
+   re-run themselves when the answer lands. */
 function computeInterconnectScore(){
   var _loc = _ixSiteLocation((document.getElementById('addr-in')||{}).value || '');
-  var zip = _loc.zip, state = _loc.state;
-  /* A ZIP resolves the serving utility from the rate tables. A state alone
-     resolves only that state's PRIMARY utility, which is a different claim:
-     California's is PG&E, and Calexico is Imperial Irrigation District. It is
-     offered, and it is labelled, and it never counts as evidence. */
-  var util = null;
-  if(typeof _fomGetUtility==='function' && zip) util = _fomGetUtility(zip);
-  else if(typeof _fomUtilityFromState==='function' && state) util = _fomUtilityFromState(state, '');
   var D = window._SITE_DATA || {};
-
-  // System size drives capacity + queue expectations.
   var b = (S.bessList && S.bessList[0]) ? S.bessList[0] : null;
-  var sysKW = b ? +(b.kw||0) : 0;
-
-  var factors = [];
-
-  // 1. UTILITY / ISO FRIENDLINESS  (REAL where zip resolves)
-  var isoInfo = _ixIsoScore(state);
-  var utilScore = isoInfo.score;
-  /* Evidence means the ZIP matched a utility in the rate tables. A state
-     default and a ComEd fallback are estimates wearing the same shape. */
-  var utilReal = !!(zip && util && !util._fallback && !util._stateResolved);
-  var utilEst = !!(util && (util._fallback || util._stateResolved));
-  // Nudge by demand-charge richness (higher demand $ = better BESS econ = utility
-  // more used to storage interconnects).
-  if(util && util.demandRate){ utilScore = Math.min(100, utilScore + Math.min(15, (util.demandRate-12))); }
-  var utilNote = !util ? ' — add the site ZIP to identify it'
-               : util._fallback ? ' — no utility on file for this ZIP, defaults shown'
-               : util._stateResolved ? ' — ' + state + ' state default, confirm the serving utility'
-               : '';
-  factors.push({ key:'utility', label:'Utility / ISO', score:Math.round(utilScore),
-    detail: (util?util.name:'Utility not identified') + utilNote + ' · ' + isoInfo.iso,
-    real: utilReal, source:utilReal?'data':'estimate', weight:0.28 });
-
-  // 2. GRID CAPACITY HEADROOM  (STUB unless hosting-capacity wired)
-  var capScore, capDetail, capReal=false, capSource='estimate';
-  if(D.hostingCapacityKW!=null && sysKW>0){
-    var ratio = D.hostingCapacityKW / sysKW;
-    capScore = ratio>=2 ? 95 : ratio>=1.2 ? 78 : ratio>=1 ? 60 : ratio>=0.6 ? 38 : 18;
-    capDetail = Math.round(D.hostingCapacityKW).toLocaleString()+' kW feeder headroom vs '+Math.round(sysKW).toLocaleString()+' kW system';
-    capReal = true;
-    capSource = 'data';
-  } else if(D.gridAtlas && D.gridAtlas.nearestSubstationKm!=null){
-    /* A MEASURED substation distance beats a size heuristic. This is not
-       hosting capacity — proximity is not headroom, and a site can sit beside
-       a substation with nothing available in it — so it does not claim to be.
-       But "the nearest substation is 1.4 km away" is a fact somebody can
-       check on a map, and the fallback below is a guess from system size
-       alone. The curve is steep early because that is where the
-       interconnection cost lives: 0.5 km versus 2 km is most of the spend,
-       while 20 versus 30 km barely differ because both need a line. */
-    var _km = +D.gridAtlas.nearestSubstationKm;
-    capScore = _km<=0.8 ? 92 : _km<=2 ? 80 : _km<=5 ? 62 : _km<=10 ? 44 : _km<=20 ? 30 : 20;
-    var _kv = D.gridAtlas.nearestSubstationKv;
-    capDetail = 'Nearest substation ' + _km.toFixed(1) + ' km'
-              + (_kv ? ' at ' + _kv + ' kV' : '')
-              + (D.gridAtlas.nearestSubstationName ? ' (' + D.gridAtlas.nearestSubstationName + ')' : '')
-              + ' — Grid Atlas. Proximity, not available headroom.';
-    capReal = true;
-    capSource = 'proxy';
-  } else {
-    // Heuristic: smaller systems interconnect more easily (fast-track thresholds).
-    capScore = sysKW<=0 ? 55 : sysKW<250 ? 82 : sysKW<1000 ? 68 : sysKW<5000 ? 50 : 34;
-    capDetail = sysKW>0 ? ('~'+Math.round(sysKW).toLocaleString()+' kW · fast-track likelihood (est.)') : 'Configure BESS for capacity read';
-  }
-  factors.push({ key:'capacity', label:'Grid Capacity', score:Math.round(capScore), detail:capDetail, real:capReal, source:capSource, weight:0.24 });
-
-  // 3. PERMITTING DIFFICULTY (AHJ)  (STUB unless AHJ data wired)
-  var permScore, permDetail, permReal=false;
-  if(D.ahjPermitDays!=null){
-    permScore = D.ahjPermitDays<=30 ? 92 : D.ahjPermitDays<=60 ? 74 : D.ahjPermitDays<=120 ? 50 : 28;
-    permDetail = (D.ahjName||'AHJ')+' · ~'+D.ahjPermitDays+' day permit turnaround';
-    permReal = true;
-  } else {
-    permScore = 60;  // neutral until AHJ data is wired
-    permDetail = (D.ahjName? D.ahjName+' · ' : '') + 'Permit timeline not yet on file (est. neutral)';
-  }
-  factors.push({ key:'permit', label:'Permitting (AHJ)', score:Math.round(permScore), detail:permDetail, real:permReal, source:permReal?'data':'estimate', weight:0.20 });
-
-  // 4. INTERCONNECTION QUEUE / TARIFF  (ISO real; queue STUB)
-  var qScore, qDetail, qReal=false;
-  if(D.iqQueueMonths!=null){
-    qScore = D.iqQueueMonths<=6 ? 90 : D.iqQueueMonths<=12 ? 70 : D.iqQueueMonths<=24 ? 45 : 25;
-    qDetail = '~'+D.iqQueueMonths+' mo study queue · '+isoInfo.iso;
-    qReal = true;
-  } else {
-    qScore = isoInfo.score;  // fall back to ISO-level friendliness
-    qDetail = isoInfo.iso+' interconnection process (ISO-level est.)';
-  }
-  factors.push({ key:'queue', label:'IX Queue / Tariff', score:Math.round(qScore), detail:qDetail, real:qReal, source:qReal?'data':'estimate', weight:0.16 });
-
-  // 5. LAND / PARCEL FIT  (drawn area real; parcel STUB)
-  var landScore, landDetail, landReal=false;
-  var footprintFt2 = _estBessFootprintFt2();
-  if(D.parcelAcres!=null){
-    var parcelFt2 = D.parcelAcres*43560;
-    var fit = footprintFt2>0 ? parcelFt2/footprintFt2 : 99;
-    landScore = fit>=8 ? 92 : fit>=4 ? 76 : fit>=2 ? 58 : fit>=1 ? 36 : 16;
-    landDetail = D.parcelAcres+' ac parcel'+(D.parcelZoning?(' · '+D.parcelZoning):'')+' vs ~'+Math.round(footprintFt2).toLocaleString()+' ft² footprint';
-    landReal = true;
-  } else {
-    landScore = 65;  // neutral-positive until parcel data wired
-    landDetail = footprintFt2>0 ? ('~'+Math.round(footprintFt2).toLocaleString()+' ft² equipment footprint (parcel data pending)') : 'Parcel data pending';
-  }
-  factors.push({ key:'land', label:'Land / Parcel Fit', score:Math.round(landScore), detail:landDetail, real:landReal, source:landReal?'data':'estimate', weight:0.12 });
-
-  // Weighted blend → 0–5.
-  var total=0, wsum=0;
-  factors.forEach(function(f){ total += f.score*f.weight; wsum += f.weight; });
-  var pct = wsum>0 ? total/wsum : 0;
-  var stars = Math.round((pct/100*5)*10)/10;
-  var anyReal = factors.some(function(f){return f.real;});
-  var dataWeight=0, proxyWeight=0;
-  factors.forEach(function(f){ if(f.source==='data') dataWeight+=f.weight; else if(f.source==='proxy') proxyWeight+=f.weight; });
-  var evidencePct=Math.round((dataWeight + proxyWeight*0.45)*100);
-
-  return { score:stars, pct:Math.round(pct), factors:factors, zip:zip, state:state,
-           iso:isoInfo.iso, utility: util?util.name:'', utilityEstimated: utilEst, anyReal:anyReal, sysKW:sysKW,
-           evidencePct:evidencePct, dataWeight:dataWeight, proxyWeight:proxyWeight };
+  var body = { zip:_loc.zip||'', state:_loc.state||'', sysKW: b ? +(b.kw||0) : 0, footprintFt2: Math.round(_estBessFootprintFt2()||0),
+    facts: { hostingCapacityKW: (D.hostingCapacityKW!=null ? +D.hostingCapacityKW : null),
+      gridAtlas: (D.gridAtlas && D.gridAtlas.nearestSubstationKm!=null) ? { nearestSubstationKm:+D.gridAtlas.nearestSubstationKm, nearestSubstationKv:D.gridAtlas.nearestSubstationKv||null, nearestSubstationName:D.gridAtlas.nearestSubstationName||null } : null,
+      ahjPermitDays: (D.ahjPermitDays!=null ? +D.ahjPermitDays : null), ahjName: D.ahjName||null, iqQueueMonths: (D.iqQueueMonths!=null ? +D.iqQueueMonths : null),
+      parcelAcres: (D.parcelAcres!=null ? +D.parcelAcres : null), parcelZoning: D.parcelZoning||null } };
+  var r = _scoreRequest('interconnect', body);
+  if(r._pending) return { pending:true, promise:r._promise, score:0, pct:0, factors:[], zip:body.zip, state:body.state, iso:'', utility:'', utilityEstimated:false, anyReal:false, sysKW:body.sysKW, evidencePct:0, dataWeight:0, proxyWeight:0 };
+  return r;
 }
 
 // Rough equipment footprint (ft²) from placed BESS assemblies + pads.
@@ -30198,6 +29722,7 @@ function _scoreColor(pct){
 function renderScorePanel(){
   var host = document.getElementById('scorep-body'); if(!host) return;
   var r = computeInterconnectScore();
+  if(r.pending) r.promise.then(function(){ renderScorePanel(); }, function(){});
   var col = _scoreColor(r.pct);
   var stars = '';
   var full = Math.floor(r.score);
@@ -30370,6 +29895,7 @@ function reportTab(tab){
 // LOCATION tab — interconnection score + site facts.
 function _reportLocationHTML(){
   var r = computeInterconnectScore();
+  if(r.pending) r.promise.then(function(){ if(_reportState.tab==='location' && document.getElementById('report-body')) reportTab('location'); }, function(){});
   var col = _scoreColor(r.pct);
   var factorRows = r.factors.map(function(f){
     var fc=_scoreColor(f.score);
@@ -30597,7 +30123,14 @@ function runValueStackEstimate() {
     return;
   }
 
-  var util = _fomGetUtility(zip);                 // reuses built-in rate table
+  var util = _fomGetUtility(zip);                 // the server's rate book, cached per ZIP prefix
+  if (_fomUtilPending(util)) {
+    if(out){ out.style.display='block'; out.innerHTML = '<span style="color:var(--sub)">Looking up the serving utility\u2026</span>'; }
+    util._promise.then(function(){ runValueStackEstimate(); }, function(e){
+      if(out){ out.innerHTML = '<span style="color:var(--amber)">' + (e && e.message || 'Utility lookup unavailable') + '</span>'; }
+    });
+    return;
+  }
   var prof = FACILITY_PROFILES[ftype] || FACILITY_PROFILES.commercial;
   var state = (typeof Z3S!=='undefined' && Z3S[zip.slice(0,3)]) ? Z3S[zip.slice(0,3)] : '';
 
@@ -37107,21 +36640,27 @@ function omegaRunDesign(){
   if(lbl) lbl.textContent='Running...';
 
   setTimeout(function(){
-    try{
-      if(typeof updateCostEst==='function') updateCostEst();
-      if(typeof updateROI==='function')     updateROI();
-      if(typeof pqRecalc==='function')      pqRecalc();
-      if(typeof renderTrenchCorridors==='function') renderTrenchCorridors();
-    }catch(e){
-      if(window.console) console.warn('[omega] run failed', e);
-    }
-    S.lastRunAt = Date.now();
-    try{ omegaRunRollup(); }catch(e){}
-    try{ omegaRenderResults(); }catch(e){}
-    S.running   = false;
-    if(btn) btn.classList.remove('rr-busy');
-    try{ omegaSetStale(false); }catch(e){}
-    try{ omegaRunSave(); }catch(e){}
+    /* The cost engine answers from the server; the roll-up waits for it
+       (one answer per drawing, cached), so the figure saved is the one priced. */
+    try{ if(typeof updateCostEst==='function') updateCostEst(); }catch(e){ if(window.console) console.warn('[omega] run failed', e); }
+    var finish=function(){
+      try{
+        if(typeof updateROI==='function')     updateROI();
+        if(typeof pqRecalc==='function')      pqRecalc();
+        if(typeof renderTrenchCorridors==='function') renderTrenchCorridors();
+      }catch(e){
+        if(window.console) console.warn('[omega] run failed', e);
+      }
+      S.lastRunAt = Date.now();
+      try{ omegaRunRollup(); }catch(e){}
+      try{ omegaRenderResults(); }catch(e){}
+      S.running   = false;
+      if(btn) btn.classList.remove('rr-busy');
+      try{ omegaSetStale(false); }catch(e){}
+      try{ omegaRunSave(); }catch(e){}
+    };
+    if(window._COST_PENDING && window._COST_PROMISE && typeof window._COST_PROMISE.then==='function') window._COST_PROMISE.then(finish, finish);
+    else finish();
   }, 30);
 }
 
@@ -38092,7 +37631,7 @@ function buildBOM() {
               (_m.mfr?_m.mfr+' \u00b7 ':'') + 'equip $'+Math.round(_m.eq).toLocaleString()
               + ' + install $'+Math.round(_m.install).toLocaleString());
       var _unit = (_m.qty>0) ? (_m.eq/_m.qty) : 0;
-      var _src  = (typeof EVC_COST!=='undefined' && EVC_COST[_mk[_e]]) || null;
+      var _src  = _evBook(_mk[_e]);
       try{
         var _tgt = _it;
         if(_tgt){
@@ -52210,7 +51749,7 @@ window.exportGridReport=function(){
 // ===================================================================
 
 // ============================================================
-// (c) 2026 Tommy Gilmer. All rights reserved.
+// © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 // Proprietary software -- unauthorized use prohibited.
 // Build: TG-SITEPRO-v4.25 | Token: D1FCEE6924ECB1F5 | 2026-06-26
 // ============================================================
@@ -52824,16 +52363,18 @@ window.frExportInvoice = function() {
 
 window.renderFreqReg = renderFreqReg;
 
-// Ownership declaration -- do not remove
+// Ownership declaration -- do not remove. The owner is ClearSky Energy
+// Solutions LLC, literally: brandName() is the white label, and a tenant's
+// name must never be printed as the copyright holder of our code.
 (function(){
-  var _o = brandName();
+  var _o = 'ClearSky Energy Solutions LLC';
   var _b = 'TG-SITEPRO-v4.25';
   var _t = 'D1FCEE6924ECB1F5';
-  var _y = '2026';
+  var _y = '2025\u20132026';
   if(typeof console !== 'undefined'){
     console.log('%c(c) '+_y+' '+_o+' -- All rights reserved','color:#C5A55A;font-weight:bold;font-size:12px');
     console.log('%cBuild: '+_b+' | Token: '+_t,'color:#888;font-size:10px');
-    console.log('%cThis software is proprietary. Unauthorized use prohibited.','color:#888;font-size:10px');
+    console.log('%cThis software is proprietary and confidential. Licensed, not sold. Copying, reverse engineering or derivative development is prohibited by the Terms of Service (/terms.html).','color:#888;font-size:10px');
   }
   // Embed in window for runtime verification
   window._tgOwnership = {owner:_o, build:_b, token:_t, year:_y};
@@ -53971,116 +53512,35 @@ function P1(){
     +GATE('p1',[{s:'strong',l:'PASS — Proceed'},{s:'moderate',l:'CONDITIONAL — Resolve Issues'},{s:'weak',l:'CAUTION — Major Gaps'},{s:'fail',l:'FAIL — Do Not Proceed'}]);
 }
 
+/* ═══ THE WORKFLOW'S JUDGMENT RUNS ON THE SERVER (2026-10-13) ═══════════
+   The site score's factor points, the hard disqualifiers, the ordinance
+   penalty and the PASS / CONDITIONAL / FAIL thresholds; the BTM and FTM
+   path points; the investment gate's payback, NPV and IRR with its
+   INVEST / HOLD / REDESIGN / REJECT thresholds; and the overall decision
+   live in api/_lib/editor-score.js (action 'viability'). The page sends
+   the workflow's answers and the gate statuses through one cached
+   request and draws what comes back; while it is pending each panel says
+   so and re-runs itself. */
+function _vwJudge(){
+  var body = { data: VW.data || {}, ftm: (typeof isFTM==='function') && isFTM(), txTsps: Object.keys(typeof TX_TSP!=='undefined' ? TX_TSP : {}), scores: VW.scores || {} };
+  return _scoreRequest('viability', body);
+}
+function _vwPending(J, el, rerun){
+  if(!J || !J._pending) return false;
+  if(el) el.innerHTML='<div style="font-size:11px;color:var(--sub);padding:8px">Scoring…</div>';
+  J._promise.then(function(){ try{ rerun(); }catch(e){} }, function(e){ if(el) el.innerHTML='<div style="font-size:11px;color:var(--amber);padding:8px">'+((e&&e.message)||'Scoring service unavailable')+'</div>'; });
+  return true;
+}
 function calcP1(){
   var el=document.getElementById('vw-p1-score'); if(!el) return;
+  var J=_vwJudge(); if(_vwPending(J, el, calcP1)) return;
+  var P=J.p1;
+  var vColor, vBg, vBorder, vIcon;
+  if(P.verdict==='PASS'){ vColor='#22C55E'; vBg='rgba(34,197,94,.1)'; vBorder='rgba(34,197,94,.4)'; vIcon='✓'; }
+  else if(P.verdict==='CONDITIONAL'){ vColor='#F59E0B'; vBg='rgba(245,158,11,.08)'; vBorder='rgba(245,158,11,.35)'; vIcon='△'; }
+  else { vColor='#EF4444'; vBg='rgba(239,68,68,.1)'; vBorder='rgba(239,68,68,.4)'; vIcon='✗'; }
 
-  // ── CHECKLIST COMPLETION ──────────────────────────────────────────────
-  var MUST = ['ck_address','ck_utility','ck_site_control','ck_zoning_cert','ck_title',
-              'ck_bills','ck_clearance','ck_fire_access','ck_comed_moratorium'];
-  var SHOULD = ['ck_rate_class','ck_oneline','ck_site_photos','ck_gas_clear',
-                'ck_julie','ck_floodplain','ck_comed_filed','ck_ul9540',
-                'ck_ul9540a','ck_suppression','ck_dpd_inquiry'];
-  var mustDone  = MUST.filter(function(k){return gv(k)==='1'||gv(k)==='na';}).length;
-  var shouldDone= SHOULD.filter(function(k){return gv(k)==='1'||gv(k)==='na';}).length;
-  var mustPct   = Math.round(mustDone/MUST.length*100);
-  var shouldPct = Math.round(shouldDone/SHOULD.length*100);
-
-  // ── SITE SCORING FACTORS ─────────────────────────────────────────────
-  var SPACE   = +gv('p0_avail_area');
-  var PEAK    = +gv('p0_peak_kw');
-  var BILL    = +gv('p0_avg_bill');
-  var CLR     = +gv('p0_bldg_clearance');
-  var CTRL    = gv('p0_site_control');
-  var UTIL    = gv('p0_utility');
-  var FLOOD   = gv('p0_flood')==='1';
-
-  /* ── FTM projects are scored on interconnection, not on a utility bill ──
-     "Peak demand" (25 pts) and "Monthly bill size" (15 pts) are 40% of the
-     score and both are meaningless for a merchant asset, so a perfectly
-     good 100 MW standalone BESS scored 0/40 and failed a Must-Have. For an
-     FTM project those two slots are replaced by the things that actually
-     determine viability: how much capacity the POI will take, and how far
-     the gen-tie has to run. Weights are preserved so the two modes remain
-     comparable on a 100-point scale. */
-  var _ftm  = (typeof isFTM==='function') && isFTM();
-  var POIMW = +gv('p4_export_mw');
-  var GTIE  = +gv('p4_gentie_mi');
-  var ICSTAT= gv('p4_ic_status_ercot') || gv('p4_app_status');
-
-  var loadFactors = _ftm ? [
-    {cat:'Grid',  l:'POI export capacity',
-      pts: POIMW>=100?25:POIMW>=20?18:POIMW>0?10:0, max:25, ok:POIMW>=20,
-      detail: POIMW?POIMW+' MW export limit':'Not entered'},
-    /* Gen-tie is the classic FTM cost killer -- a long run can exceed the
-       battery. Shorter scores higher; unentered scores zero, same as any
-       other unknown. */
-    {cat:'Grid',  l:'Gen-tie distance',
-      pts: (GTIE>0&&GTIE<=1)?15:(GTIE>1&&GTIE<=3)?11:(GTIE>3&&GTIE<=8)?6:GTIE>8?2:0,
-      max:15, ok:(GTIE>0&&GTIE<=3),
-      detail: GTIE?GTIE+' mi to POI':'Not entered'},
-  ] : [
-    {cat:'Load',  l:'Peak demand',            pts: PEAK>=200?25:PEAK>=100?18:PEAK>=50?10:0,       max:25, ok:PEAK>=100,   detail: PEAK?PEAK+' kW'          :'Not entered'},
-    {cat:'Fin',   l:'Monthly bill size',      pts: BILL>=10000?15:BILL>=5000?10:BILL>0?5:0,       max:15, ok:BILL>=5000,  detail: BILL?'$'+BILL+'/mo'      :'Not entered'},
-  ];
-
-  var factors = [
-    {cat:'Site',  l:'Available space',        pts: SPACE>=500?25:SPACE>=300?18:SPACE>=100?10:0,  max:25, ok:SPACE>=300,   detail: SPACE?SPACE+' sq ft'    :'Not entered'},
-  ].concat(loadFactors).concat([
-    {cat:'Site',  l:'Building clearance',     pts: CLR>=15?15:CLR>=10?12:CLR>0?5:0,              max:15, ok:CLR>=10,     detail: CLR?CLR+' ft'            :'Not entered'},
-    {cat:'Legal', l:'Site control',           pts: CTRL==='owned'||CTRL==='long_lease'?20:CTRL==='loi'?10:0, max:20, ok:CTRL==='owned'||CTRL==='long_lease', detail:CTRL||'Not selected'},
-  ]);
-
-  // ── HARD DISQUALIFIERS ───────────────────────────────────────────────
-  var DQ = [];
-  /* A merchant project interconnects to a TSP, not to a retail utility, so
-     "utility territory not confirmed" is the wrong question -- ask for the
-     TSP instead. And the allow-list below had no Texas entries at all, so
-     every Oncor / AEP Texas / co-op project was disqualified as "not in
-     target market" purely because the list predated the TX build-out. */
-  if(_ftm){
-    if(!gv('p4_tsp')) DQ.push('Transmission/distribution service provider (TSP) not identified');
-    if(!gv('p4_poi'))  DQ.push('Point of interconnection not identified');
-  } else {
-    if(!UTIL) DQ.push('Utility territory not confirmed');
-  }
-  var _TARGET_UTILS = ['comed','ameren','pge','sce','sdge','ladwp','other']
-        .concat(Object.keys(typeof TX_TSP!=='undefined' ? TX_TSP : {}));
-  if(UTIL && _TARGET_UTILS.indexOf(UTIL) < 0) DQ.push('Utility territory not in target market');
-  if(FLOOD)                          DQ.push('FEMA floodplain risk flagged');
-  if(SPACE>0&&SPACE<100)             DQ.push('Available area <100 sq ft (too small)');
-  if(CLR>0&&CLR<10)                  DQ.push('Building clearance <10 ft (NFPA minimum)');
-  if(gv('ck_comed_moratorium')==='1'&&gv('ord_moratorium')==='1')
-                                     DQ.push('ComEd feeder moratorium confirmed');
-
-  // ── ORDINANCE PENALTY ───────────────────────────────────────────────
-  var KILLERS=['ord_zoning_notlisted','ord_aldermanic','ord_moratorium'];
-  var BLOCKERS=['ord_fire_code_interim','ord_accessory_use','ord_chicago_elec','ord_express_permit_cap','ord_gas_meter','ord_deed_title','ord_comed_ic'];
-  var ordKills  = KILLERS.filter(function(k){return gv(k)==='1';}).length;
-  var ordBlocks = BLOCKERS.filter(function(k){return gv(k)==='1';}).length;
-  var ordPenalty= Math.min(60,ordKills*30)+Math.min(30,ordBlocks*10);
-
-  var rawScore   = factors.reduce(function(s,f){return s+f.pts;},0);   // max 100
-  var finalScore = Math.max(0, rawScore - ordPenalty);
-  var hasKiller  = DQ.length>0 || ordKills>0;
-
-  // ── VERDICT ─────────────────────────────────────────────────────────
-  var verdict, vColor, vBg, vBorder, vIcon, vDesc;
-  if(hasKiller){
-    verdict='FAIL'; vColor='#EF4444'; vBg='rgba(239,68,68,.1)'; vBorder='rgba(239,68,68,.4)';
-    vIcon='✗'; vDesc='Hard disqualifier present. Do not commit engineering resources.';
-  } else if(finalScore>=75&&mustPct>=80){
-    verdict='PASS'; vColor='#22C55E'; vBg='rgba(34,197,94,.1)'; vBorder='rgba(34,197,94,.4)';
-    vIcon='✓'; vDesc='Site is a viable BESS candidate. Proceed to engineering feasibility.';
-  } else if(finalScore>=50&&mustPct>=50){
-    verdict='CONDITIONAL'; vColor='#F59E0B'; vBg='rgba(245,158,11,.08)'; vBorder='rgba(245,158,11,.35)';
-    vIcon='△'; vDesc='Viable with conditions. Address gaps below before committing capital.';
-  } else {
-    verdict='FAIL'; vColor='#EF4444'; vBg='rgba(239,68,68,.1)'; vBorder='rgba(239,68,68,.4)';
-    vIcon='✗'; vDesc='Score too low or intake incomplete. Fill in site data to reassess.';
-  }
-
-  // ── FACTOR ROWS ─────────────────────────────────────────────────────
-  var factorRows = factors.map(function(f){
+  var factorRows = P.factors.map(function(f){
     var pct = Math.round(f.pts/f.max*100);
     return '<div style="display:grid;grid-template-columns:1fr 90px 36px;gap:8px;align-items:center;margin-bottom:6px">'
       +'<div><div style="font-size:10px;color:'+(f.ok?'#E8F0FE':'#F59E0B')+'">'+(f.ok?'✅':'⚠')+' '+f.l+'</div>'
@@ -54091,50 +53551,41 @@ function calcP1(){
       +'<div style="font-size:10px;color:var(--sub);text-align:right">'+f.pts+'/'+f.max+'</div>'
       +'</div>';
   }).join('');
-
-  // ── DQ ROWS ─────────────────────────────────────────────────────────
-  var dqRows = (DQ.length>0||ordKills>0) ? '<div style="margin-top:10px">'
-    +(DQ.map(function(d){return '<div style="font-size:9.5px;color:#EF4444;padding:3px 0">✗ '+d+'</div>';}).join(''))
-    +(ordKills>0?'<div style="font-size:9.5px;color:#EF4444;padding:3px 0">✗ '+ordKills+' ordinance KILLER(s) flagged — attorney required</div>':'')
-    +(ordBlocks>0?'<div style="font-size:9.5px;color:var(--warn);padding:3px 0">⚠ '+ordBlocks+' ordinance BLOCKER(s) flagged — resolution required</div>':'')
+  var dqRows = (P.dq.length>0||P.ordKills>0) ? '<div style="margin-top:10px">'
+    +(P.dq.map(function(d){return '<div style="font-size:9.5px;color:#EF4444;padding:3px 0">✗ '+d+'</div>';}).join(''))
+    +(P.ordKills>0?'<div style="font-size:9.5px;color:#EF4444;padding:3px 0">✗ '+P.ordKills+' ordinance KILLER(s) flagged — attorney required</div>':'')
+    +(P.ordBlocks>0?'<div style="font-size:9.5px;color:var(--warn);padding:3px 0">⚠ '+P.ordBlocks+' ordinance BLOCKER(s) flagged — resolution required</div>':'')
     +'</div>' : '';
-
-  // ── CHECKLIST BARS ───────────────────────────────────────────────────
   var ckBars = '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">'
     +'<div>'
-      +'<div style="font-size:9px;color:var(--sub);margin-bottom:3px">Must-Have Items ('+mustDone+'/'+MUST.length+')</div>'
+      +'<div style="font-size:9px;color:var(--sub);margin-bottom:3px">Must-Have Items ('+P.mustDone+'/'+P.mustN+')</div>'
       +'<div style="background:var(--hover);border-radius:3px;height:7px">'
-        +'<div style="width:'+mustPct+'%;background:'+(mustPct>=100?'#22C55E':mustPct>=60?'#F59E0B':'#EF4444')+';height:100%;border-radius:3px;transition:width .3s"></div>'
+        +'<div style="width:'+P.mustPct+'%;background:'+(P.mustPct>=100?'#22C55E':P.mustPct>=60?'#F59E0B':'#EF4444')+';height:100%;border-radius:3px;transition:width .3s"></div>'
       +'</div>'
     +'</div>'
     +'<div>'
-      +'<div style="font-size:9px;color:var(--sub);margin-bottom:3px">Should-Have Items ('+shouldDone+'/'+SHOULD.length+')</div>'
+      +'<div style="font-size:9px;color:var(--sub);margin-bottom:3px">Should-Have Items ('+P.shouldDone+'/'+P.shouldN+')</div>'
       +'<div style="background:var(--hover);border-radius:3px;height:7px">'
-        +'<div style="width:'+shouldPct+'%;background:'+(shouldPct>=80?'#22C55E':shouldPct>=50?'#F59E0B':'#EF4444')+';height:100%;border-radius:3px;transition:width .3s"></div>'
+        +'<div style="width:'+P.shouldPct+'%;background:'+(P.shouldPct>=80?'#22C55E':P.shouldPct>=50?'#F59E0B':'#EF4444')+';height:100%;border-radius:3px;transition:width .3s"></div>'
       +'</div>'
     +'</div>'
     +'</div>';
-
   el.innerHTML =
-    // ── BIG VERDICT BOX ─────────────────────────────────────────────
     '<div style="border:2px solid '+vBorder+';border-radius:10px;background:'+vBg+';padding:16px;margin-bottom:14px;text-align:center">'
       +'<div style="font-size:48px;font-weight:900;color:'+vColor+';line-height:1">'+vIcon+'</div>'
-      +'<div style="font-size:22px;font-weight:900;color:'+vColor+';letter-spacing:2px;margin:4px 0">'+verdict+'</div>'
-      +'<div style="font-size:10px;color:'+vColor+';opacity:.8">'+vDesc+'</div>'
-      +'<div style="font-size:30px;font-weight:900;color:'+vColor+';margin-top:8px">'+finalScore+' <span style="font-size:14px;font-weight:400;color:var(--sub)">/ 100</span></div>'
+      +'<div style="font-size:22px;font-weight:900;color:'+vColor+';letter-spacing:2px;margin:4px 0">'+P.verdict+'</div>'
+      +'<div style="font-size:10px;color:'+vColor+';opacity:.8">'+P.desc+'</div>'
+      +'<div style="font-size:30px;font-weight:900;color:'+vColor+';margin-top:8px">'+P.finalScore+' <span style="font-size:14px;font-weight:400;color:var(--sub)">/ 100</span></div>'
     +'</div>'
-    // ── FACTOR BREAKDOWN ─────────────────────────────────────────────
     +'<div style="background:var(--hover);border:1px solid var(--hairline);border-radius:8px;padding:12px;margin-bottom:10px">'
       +'<div style="font-size:9px;font-weight:700;color:#C5A55A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">Score Breakdown</div>'
       +factorRows
-      +(ordPenalty>0?'<div style="border-top:1px solid var(--hairline);padding-top:6px;margin-top:4px;display:flex;justify-content:space-between;font-size:9.5px"><span style="color:#EF4444">Ordinance penalty</span><span style="color:#EF4444">−'+ordPenalty+' pts</span></div>':'')
+      +(P.ordPenalty>0?'<div style="border-top:1px solid var(--hairline);padding-top:6px;margin-top:4px;display:flex;justify-content:space-between;font-size:9.5px"><span style="color:#EF4444">Ordinance penalty</span><span style="color:#EF4444">−'+P.ordPenalty+'</span></div>':'')
     +'</div>'
-    // ── CHECKLIST COMPLETION ─────────────────────────────────────────
     +'<div style="background:var(--hover);border:1px solid var(--hairline);border-radius:8px;padding:12px;margin-bottom:10px">'
       +'<div style="font-size:9px;font-weight:700;color:#C5A55A;text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Checklist Completion</div>'
       +ckBars
     +'</div>'
-    // ── DISQUALIFIERS ───────────────────────────────────────────────
     +dqRows;
 }
 
@@ -54170,8 +53621,15 @@ function P2(){
     +F('p2_rationale','Path Rationale','textarea',{rows:2})
     +GATE('p2',[{s:'pass',l:'BTM Confirmed'},{s:'strong',l:'FTM Confirmed'},{s:'cond',l:'Dual-Path'},{s:'fail',l:'Not Viable'}]);
 }
-function calcBTM(){var s=0;if(+gv('p0_peak_kw')>=100)s+=30;if(gv('p2_offset_load')==='Yes')s+=20;if(gv('p0_ev')==='1')s+=15;if(gv('p2_rebate')==='Yes')s+=15;if(gv('p2_resiliency')==='Yes')s+=10;if(gv('p2_host_owner')==='Yes')s+=10;return Math.min(100,s);}
-function calcFTM(){var s=0;if(gv('p2_export')==='Yes')s+=30;if(gv('p2_new_meter')==='Yes')s+=20;if(gv('p2_wholesale')==='Yes')s+=25;if(+gv('p0_avail_area')>=2000)s+=15;if(gv('p2_vpp')==='Yes')s+=10;return Math.min(100,s);}
+/* The BTM and FTM path points are the server's; while pending the phase
+   re-draws itself when the answer lands. */
+function _vwPathScores(){
+  var J=_vwJudge();
+  if(J._pending){ J._promise.then(function(){ try{ if(VW.phase===2 && typeof renderPhase==='function') renderPhase(2); }catch(e){} }, function(){}); return { btm:0, ftm:0, pending:true }; }
+  return { btm:J.btm, ftm:J.ftm, pending:false };
+}
+function calcBTM(){ return _vwPathScores().btm; }
+function calcFTM(){ return _vwPathScores().ftm; }
 
 // P3 — Engineering
 function P3(){
@@ -54495,56 +53953,21 @@ function P7(){
 }
 function calcFin(){
   var el=document.getElementById('vw-fin-out');if(!el)return;
-  var g=function(k){return parseFloat(gv(k))||0;};
-  var hw=g('p7_bess')+g('p7_pcs')+g('p7_xfmr')+g('p7_switchgear')+g('p7_meter')+g('p7_ems');
-  var cv=g('p7_civil')+g('p7_pad')+g('p7_trench')+g('p7_conduit')+g('p7_bollards')+g('p7_fire');
-  var sf=g('p7_eng')+g('p7_permit')+g('p7_ic_fee')+g('p7_util_upgrade')+g('p7_labor')+g('p7_commissioning')+g('p7_networking')+g('p7_dev_fee');
-  var sub=hw+cv+sf;
-  var cont=sub*((g('p7_contingency')||10)/100);
-  var gross=sub+cont;
-  var rebate=g('p7_rebate');
-  var itc=gross*((g('p7_itc_pct')||0)/100);
-  var otherInc=g('p7_other_inc');
-  var net=gross-rebate-itc-otherInc;
-  var rev=VW.fin.annual_rev||0;
-  var opex=g('p7_om')+g('p7_insurance')+g('p7_warranty');
-  var netAnn=rev-opex;
-  var pb=netAnn>0?net/netAnn:999;
-  var disc=(g('p7_discount')||8)/100;
-  var life=g('p7_life')||20;
-  var npv=-net;
-  for(var y=1;y<=life;y++)npv+=netAnn/Math.pow(1+disc,y);
-  /* Newton from a single guess, clamped at -0.99 when it wandered, reported
-     that clamp AS the IRR. Bisect the same flows instead: a bracketed root
-     always converges, and a series with no sign change returns null rather
-     than a number that was really a guard rail. */
-  var irr=null;
-  try{
-    var _fl=[-net]; for(var _y=1;_y<=life;_y++) _fl.push(netAnn);
-    if(window.OmegaValueStack && window.OmegaValueStack.irr){
-      irr = window.OmegaValueStack.irr(_fl);
-    } else {
-      var _npv=function(fs,rr){var s=0;for(var t=0;t<fs.length;t++)s+=fs[t]/Math.pow(1+rr,t);return s;};
-      var lo=-0.95, hi=10, fl2=_npv(_fl,lo), fh=_npv(_fl,hi);
-      if(fl2*fh<=0){ for(var i2=0;i2<200;i2++){ var mid=(lo+hi)/2, fm=_npv(_fl,mid);
-        if(fl2*fm<0){hi=mid;} else {lo=mid;fl2=fm;} } irr=(lo+hi)/2; }
-    }
-  }catch(e){ irr=null; }
-  VW.fin=Object.assign(VW.fin||{},{gross,net,netAnn,pb,npv,irr,rev,opex});
-  var dec='pending';
-  if(net>0&&rev>0){if(pb<=7&&npv>0)dec='invest';else if(pb<=12&&npv>-net*0.2)dec='hold';else if(pb<=18)dec='redesign';else dec='reject';}
-  VW.fin.decision=dec;save();renderDecision();
+  var J=_vwJudge(); if(_vwPending(J, el, calcFin)) return;
+  var F=J.fin;
+  VW.fin=Object.assign(VW.fin||{},{gross:F.gross,net:F.net,netAnn:F.netAnn,pb:F.pb,npv:F.npv,irr:F.irr,rev:F.rev,opex:F.opex});
+  VW.fin.decision=F.decision;save();renderDecision();
   var fmt=function(n){return '$'+Math.round(n).toLocaleString();};
   var fpct=function(n){return(n*100).toFixed(1)+'%';};
   var fyr=function(n){return n>=99?'N/A':n.toFixed(1)+' yrs';};
   el.innerHTML='<div style="display:grid;grid-template-columns:1fr 1fr;gap:7px">'
-    +kpi('Gross CapEx',fmt(gross),'#fff')
-    +kpi('Net CapEx (after incentives)',fmt(net),'#4ADE80')
-    +kpi('Annual Net Revenue',fmt(netAnn)+'/yr','#22D3EE')
-    +kpi('Simple Payback',fyr(pb),pb<=7?'#22C55E':pb<=12?'#F59E0B':'#EF4444')
-    +kpi('NPV ('+fpct(disc)+' discount)',fmt(npv),npv>0?'#22C55E':'#EF4444')
-    +kpi('IRR',fpct(irr),irr>0.1?'#22C55E':irr>0?'#F59E0B':'#EF4444')
-    +'</div><div style="margin-top:8px;font-size:9px;color:var(--sub)">ITC: '+fmt(itc)+' | Rebate: '+fmt(rebate)+' | OpEx: '+fmt(opex)+'/yr | Life: '+life+' yrs</div>';
+    +kpi('Gross CapEx',fmt(F.gross),'#fff')
+    +kpi('Net CapEx (after incentives)',fmt(F.net),'#4ADE80')
+    +kpi('Annual Net Revenue',fmt(F.netAnn)+'/yr','#22D3EE')
+    +kpi('Simple Payback',fyr(F.pb),F.pb<=7?'#22C55E':F.pb<=12?'#F59E0B':'#EF4444')
+    +kpi('NPV ('+fpct(F.disc)+' discount)',fmt(F.npv),F.npv>0?'#22C55E':'#EF4444')
+    +kpi('IRR',F.irr==null?'undefined':fpct(F.irr),F.irr>0.1?'#22C55E':F.irr>0?'#F59E0B':'#EF4444')
+    +'</div><div style="margin-top:8px;font-size:9px;color:var(--sub)">ITC: '+fmt(F.itc)+' | Rebate: '+fmt(F.rebate)+' | OpEx: '+fmt(F.opex)+'/yr | Life: '+F.life+' yrs</div>';
 }
 function kpi(l,v,c){return '<div style="background:var(--hover);border-radius:5px;padding:8px"><div style="font-size:8px;color:var(--sub);margin-bottom:2px">'+l+'</div><div style="font-size:14px;font-weight:800;color:'+(c||'#fff')+'">'+v+'</div></div>';}
 
@@ -54588,16 +54011,14 @@ function renderScores(){
 
 // ── Decision ─────────────────────────────────────────────────
 function renderDecision(){
-  var scores=Object.values(VW.scores);
-  var fails=scores.filter(function(s){return s==='fail'||s==='reject';}).length;
-  var fd=VW.fin&&VW.fin.decision;
+  var J=_vwJudge();
   var dec='pending',ico='⏳',lbl='Pending',sub='Complete all phases.',c='#6B7280';
-  if(fails>=2){dec='reject';ico='🔴';lbl='REJECT';sub='Multiple blocking issues.';c='#EF4444';}
-  else if(fails===1){dec='redesign';ico='🔄';lbl='REDESIGN';sub='Address blocking constraint.';c='#F97316';}
-  else if(fd==='invest'&&scores.filter(function(s){return s==='pending';}).length===0){dec='invest';ico='🟢';lbl='INVEST';sub='All gates passed. Execute.';c='#22C55E';}
-  else if(fd==='hold'||scores.some(function(s){return s==='pending';})){dec='hold';ico='🟡';lbl='HOLD';sub='Awaiting confirmations.';c='#F59E0B';}
-  else if(fd==='redesign'){dec='redesign';ico='🔄';lbl='REDESIGN';sub='Adjust economics or scope.';c='#F97316';}
-  else if(fd==='reject'){dec='reject';ico='🔴';lbl='REJECT';sub='Economics do not support.';c='#EF4444';}
+  if(J._pending){ lbl='Scoring…'; J._promise.then(function(){ try{ renderDecision(); }catch(e){} }, function(){}); }
+  else {
+    dec=J.decision.dec; sub=J.decision.sub;
+    var M={ reject:['🔴','REJECT','#EF4444'], redesign:['🔄','REDESIGN','#F97316'], invest:['🟢','INVEST','#22C55E'], hold:['🟡','HOLD','#F59E0B'] };
+    if(M[dec]){ ico=M[dec][0]; lbl=M[dec][1]; c=M[dec][2]; }
+  }
   var di=document.getElementById('vw-dec-icon');
   var dl=document.getElementById('vw-dec-label');
   var ds=document.getElementById('vw-dec-sub');
@@ -60697,116 +60118,28 @@ function _dcfcPickSite(id){ DCFC.siteType=id;
  *  the right order of magnitude before vendor pricing lands. Every one
  *  is editable on the Construction Cost sheet.
  * ═══════════════════════════════════════════════════════════════════ */
+/* The benchmark book (NREL/DOE SETO PV, NREL storage, EIA AEO2025 generation,
+   the operator's pod figure) lives on the server with the cost engine
+   (api/_lib/editor-cost.js, 2026-10-13). The page keeps the citations it
+   prints; every figure comes back on the cost answer. */
 var OMEGA_BENCH = {
-  pvResidential: 3.25,   // $/Wdc
-  pvCommercial:  1.55,   // $/Wdc
-  pvUtility:     1.15,   // $/Wdc
-  bessKwh:        241,   // $/kWh (energy component)
-  bessKw:         379,   // $/kW  (power component)
-  /* Patch 112: a populated 1 MW AI compute pod, ALL-IN -- enclosure, cooling,
-     busway, accelerators, servers, network. Operator figure, Sep 2026:
-     about $30M per pod, plus or minus $10M. Scaled by each pod's IT kW so a
-     500 kW module prices at half. Entered per-pod prices in Compute Cost
-     override this; until then the estimate carries the band, and says so. */
-  podAllInPerKw:   30000,   // $/kW IT  = $30M per 1 MW pod
-  podAllInLoPerKw: 20000,
-  podAllInHiPerKw: 40000,
   podSource: 'Operator figure, Sep 2026: $30M +/- $10M per populated 1 MW pod',
-  /* Patch 112: installed $/kW of on-site generation by prime-mover class.
-     Anchored on the EIA AEO2025 overnight capital cost table (2024$),
-     rounded to the nearest hundred. Turbine figures are the generator
-     package plus normal install; inlet, exhaust, SCR and gas compression
-     are balance of plant and are NOT in them. Wind is land-based. */
-  genPerKw: { sofc:6500, gen_ng:1200, recip:2000, recip_l:1800,
-              turbine:1500, turbine_l:1000, wind:1900, other:1500 },
   genSource: 'EIA AEO2025 capital cost assumptions, rounded; BoP excluded',
   source: 'NREL/DOE SETO PV benchmark (2024) . NREL utility-scale storage 2025 update'
 };
 window.OMEGA_BENCH = OMEGA_BENCH;
-
-/* Sector rate by array size -- a 6 MW ground mount is not priced like a
-   200 kW rooftop, and neither is priced like a 200 MW utility farm. */
-function omegaPvRate(kwDc){
-  var k = +kwDc || 0;
-  if(k < 100)    return OMEGA_BENCH.pvResidential;
-  if(k < 20000)  return OMEGA_BENCH.pvCommercial;
-  return OMEGA_BENCH.pvUtility;
-}
-window.omegaPvRate = omegaPvRate;
-
-/* Benchmark cost of whatever solar is actually on the drawing. */
-function omegaSolarCost(){
-  var kw = (typeof omegaSolarKwDc==='function') ? (+omegaSolarKwDc()||0) : 0;
-  if(kw <= 0) return 0;
-  var r = +(($v && $v('ce-pv-wdc')) || 0) || omegaPvRate(kw);
-  return kw * 1000 * r;
-}
+function _costAns(){ return window._COST_SERVER || null; }
+/* Benchmark cost of whatever solar is on the drawing: the server's line. */
+function omegaSolarCost(){ var a=_costAns(); return (a && a.totals) ? (+a.totals.solar||0) : 0; }
 window.omegaSolarCost = omegaSolarCost;
-
-/* Benchmark cost of the placed BESS fleet, for when nothing has been
-   itemised on the BESS list yet. */
-function omegaBessBenchCost(){
-  var kwh = (typeof omegaBessKwh==='function') ? (+omegaBessKwh()||0) : 0;
-  var kw  = (typeof omegaBessKw ==='function') ? (+omegaBessKw() ||0) : 0;
-  if(kwh<=0 && kw<=0) return 0;
-  var rE = +(($v && $v('ce-bess-kwh')) || 0) || OMEGA_BENCH.bessKwh;
-  var rP = +(($v && $v('ce-bess-kw'))  || 0) || OMEGA_BENCH.bessKw;
-  return kwh*rE + kw*rP;
-}
+/* Benchmark cost of the placed BESS fleet when nothing is itemised: the server's line. */
+function omegaBessBenchCost(){ var a=_costAns(); return (a && a.lines && a.lines.bess) ? (+a.lines.bess.benchmark||0) : 0; }
 window.omegaBessBenchCost = omegaBessBenchCost;
-
-/* Patch 112: which benchmark a placed prime mover falls under. The shape
-   carries altId when it came from the picker; a hand-placed or custom unit
-   only has a model string, so the string is read as a last resort. */
-function omegaGenClass(sh){
-  var id = String((sh && (sh.altId || sh.genId)) || '').toLowerCase();
-  var B = (window.OMEGA_BENCH && OMEGA_BENCH.genPerKw) || {};
-  if(sh && sh.kind==='derwind') return 'wind';
-  if(B[id] != null) return id;
-  var m = String((sh && (sh.model || sh.label)) || '').toLowerCase();
-  if(/fuel\s*cell|sofc|bloom/.test(m)) return 'sofc';
-  if(/wind/.test(m)) return 'wind';
-  if(/large gas turbine|frame/.test(m)) return 'turbine_l';
-  if(/turbine|aero/.test(m)) return 'turbine';
-  if(/large recip/.test(m)) return 'recip_l';
-  if(/recip|engine/.test(m)) return 'recip';
-  if(/genset|generator/.test(m)) return 'gen_ng';
-  var kw = +(sh && sh.kw) || 0;
-  if(kw >= 40000) return 'turbine_l';
-  if(kw >= 15000) return 'turbine';
-  if(kw >= 5000)  return 'recip_l';
-  if(kw >= 1000)  return 'recip';
-  return 'other';
-}
-window.omegaGenClass = omegaGenClass;
-
-/* Patch 112: benchmark cost of the generation actually on the drawing.
-   A 90 MW turbine plant priced at $0 before this because nothing read the
-   deralt shapes; it was the second-largest silent zero after the pods.
-   Per-class $/kW can be overridden per project in S.costOverrides.genPerKw. */
+/* Benchmark cost of the generation on the drawing, by prime-mover class: the server's lines. */
 function omegaGenBenchCost(){
-  var out = { total:0, kw:0, units:0, lines:[], gasKw:0, gasTotal:0, isBenchmark:true,
-              source:(window.OMEGA_BENCH && OMEGA_BENCH.genSource) || '' };
-  try{
-    var B = (window.OMEGA_BENCH && OMEGA_BENCH.genPerKw) || {};
-    var O = (S.costOverrides && S.costOverrides.genPerKw) || {};
-    var by = {};
-    (S.shapes||[]).forEach(function(sh){
-      if(!sh || (sh.kind!=='deralt' && sh.kind!=='derwind')) return;
-      var cls = omegaGenClass(sh), kw = +sh.kw || 0;
-      var rate = (+O[cls] > 0) ? +O[cls] : (+B[cls] > 0 ? +B[cls] : +B.other || 0);
-      var key = cls + '|' + (sh.model || sh.label || cls);
-      if(!by[key]) by[key] = { cls:cls, model:(sh.model || sh.label || cls), units:0, kw:0, rate:rate, cost:0,
-                              overridden: (+O[cls] > 0), fuel:(sh.fuel || (cls==='wind' ? 'wind' : 'natural gas')) };
-      by[key].units++; by[key].kw += kw; by[key].cost += kw * rate;
-    });
-    Object.keys(by).forEach(function(k){
-      var l = by[k]; out.lines.push(l);
-      out.total += l.cost; out.kw += l.kw; out.units += l.units;
-      if(l.cls !== 'wind' && l.cls !== 'sofc'){ out.gasKw += l.kw; out.gasTotal += l.cost; }
-    });
-  }catch(e){}
-  return out;
+  var a=_costAns();
+  if(a && a.lines && a.lines.gen) return a.lines.gen;
+  return { total:0, kw:0, units:0, lines:[], gasKw:0, gasTotal:0, isBenchmark:true, source:OMEGA_BENCH.genSource };
 }
 window.omegaGenBenchCost = omegaGenBenchCost;
 
@@ -65720,7 +65053,7 @@ window.OmegaBuild = {
     envelopeReport: function(){ return typeof bnzReportHtml==='function'; },
     oneLineExport:  function(){ return typeof omegaOneLineExport==='function'; },
     networkProximity:function(){ return typeof omegaNetworkProximity==='function'; },
-    autelPriceBook: function(){ return typeof AUTEL_PRICES!=='undefined'; },
+    autelPriceBook: function(){ return typeof _evBook==='function'; },   /* the book is the server's; the reader is here */
     solarInEstimate:function(){ return typeof omegaSolarCost==='function'; },
     elRenderCenter: function(){ return typeof _elRenderSize==='function'; },
     elementZoomScale:function(){ return typeof omegaRescaleElements==='function'; },
@@ -66547,17 +65880,11 @@ window.OmegaTwin = {
  *  so a data centre one-line lands in the right order of magnitude
  *  instead of being priced like a building load.
  * ═══════════════════════════════════════════════════════════════════ */
+/* The data-centre electrical ROM (amounts, N+1 rules, the design share)
+   lives on the server with the cost engine (api/_lib/editor-cost.js,
+   2026-10-13). The page keeps the two ratings the one-line prints. */
 var DC_ROM = {
-  xfmrEach:        185000,   /* 1500 kVA padmount, three phase            */
-  xfmrKva:           1500,
-  switchgear:      800500,   /* 480 V LVA switchgear lineup               */
-  microgridCtrl:   325000,   /* incl. generator paralleling               */
-  upsEach:         450500,   /* 9395/9395P, 900 kW ISBM frame, 750 kW rtd */
-  upsRatedKw:         750,
-  eHouseLow:      3000000,
-  eHouseHigh:     3500000,
-  designPctLow:      0.05,   /* 5-6% of equipment pricing                 */
-  designPctHigh:     0.06,
+  xfmrKva: 1500, upsRatedKw: 750,
   source: 'Eaton EESS ROM, Flux Core microgrid, rev 0.0 (30 Apr 2026) -- budgetary, re-quote before use'
 };
 window.DC_ROM = DC_ROM;
@@ -66580,73 +65907,9 @@ window.DC_SPEC = DC_SPEC;
    the transformers actually carry -- pricing off the IT figure is the
    error that undersizes the whole lineup. */
 function omegaDataCenterROM(){
-  var out = { active:false, lines:[], total:0, itKw:0, facilityKw:0,
-              ups:0, xfmr:0, source:DC_ROM.source };
-  try{
-    var el = (S.elements||[]).filter(function(e){
-      return e && (e.loadKind==='datacenter') && (+e.loadKw>0 || +e.loadItKw>0);
-    })[0];
-
-    var itKw = 0, pue = 0, facKw = 0;
-    if(el){
-      itKw  = +el.loadItKw || 0;
-      pue   = +el.loadPue  || 0;
-      facKw = +el.loadKw   || (itKw && pue ? itKw*pue : itKw);
-    } else {
-      /* Patch 93: this only ever fired on a Compute Build ELEMENT. A campus
-         laid out by Design Site places compute pods as SHAPES and never
-         creates that element, so 40 MW of IT priced at zero and the
-         proposal, the cost panel and the spec sheet all agreed with each
-         other about nothing being there. The pods on the drawing are the
-         load; read them. */
-      var _pods = 0, _podKw = 0;
-      (S.shapes||[]).forEach(function(sh){
-        /* Omega-Core skids are ClearSky's, on their own meter: no host ROM */
-        if(sh && sh.kind==='derdc' && !sh.omegaCore){ _pods++; _podKw += +sh.kw||0; }
-      });
-      if(_pods){
-        itKw = _podKw || _pods*1000;
-        try{ pue = (S.omegaSizing && +S.omegaSizing.pue) || 0; }catch(e){}
-        if(!(pue>0)) pue = 1.3;
-        facKw = itKw*pue;
-        out.fromDrawing = true;
-        out.pods = _pods;
-      }
-    }
-    if(!(facKw>0)) return out;
-
-    out.active=true; out.itKw=itKw; out.facilityKw=facKw;
-
-    /* UPS: N+1 on the IT load, which is what the UPS actually supports. */
-    var upsBase = Math.max(1, Math.ceil((itKw||facKw) / DC_ROM.upsRatedKw));
-    var upsQty  = upsBase + 1;                      /* the +1 of N+1 */
-    out.ups = upsQty;
-
-    /* Transformers: facility kW at 0.9 pf, N+1, 80% loading allowance. */
-    var kva     = facKw / 0.9;
-    var xfmrN   = Math.max(1, Math.ceil(kva / (DC_ROM.xfmrKva*0.8)));
-    var xfmrQty = xfmrN + 1;
-    out.xfmr = xfmrQty;
-
-    function L(desc, qty, each){
-      var amt = qty*each;
-      out.lines.push({ desc:desc, qty:qty, each:each, amount:amt });
-      out.total += amt;
-    }
-    L(DC_ROM.xfmrKva+' kVA padmount transformer (N+1)', xfmrQty, DC_ROM.xfmrEach);
-    L('480 V LVA switchgear lineup', 1, DC_ROM.switchgear);
-    L('UPS '+DC_SPEC.ups.family+' '+DC_ROM.upsRatedKw+' kW (N+1)', upsQty, DC_ROM.upsEach);
-    L('Microgrid control package incl. gen paralleling', 1, DC_ROM.microgridCtrl);
-    L('E-house enclosures (all equipment)', 1, DC_ROM.eHouseLow);
-
-    /* Design is quoted as a percentage of equipment, so it goes last. */
-    var design = out.total * DC_ROM.designPctLow;
-    out.lines.push({ desc:'Electrical engineering design ('+Math.round(DC_ROM.designPctLow*100)+'% of equipment)',
-                     qty:1, each:Math.round(design), amount:Math.round(design) });
-    out.total += design;
-    out.total = Math.round(out.total);
-  }catch(e){}
-  return out;
+  var a=window._COST_SERVER;
+  if(a && a.lines && a.lines.dc) return a.lines.dc;
+  return { active:false, lines:[], total:0, itKw:0, facilityKw:0, ups:0, xfmr:0, source:DC_ROM.source };
 }
 window.omegaDataCenterROM = omegaDataCenterROM;
 
@@ -70959,121 +70222,27 @@ var OMEGA_PRICE_BASIS = 'cost';
 function omegaPriceBasis(b){
   if(b==='cost'||b==='msrp'){
     OMEGA_PRICE_BASIS=b;
-    try{ _rebuildEvCost(); if(typeof updateCostEstimate==='function') updateCostEstimate(); }catch(e){}
+    try{ if(typeof _debounceCost==='function') _debounceCost(); }catch(e){}
   }
   return OMEGA_PRICE_BASIS;
 }
 window.omegaPriceBasis=omegaPriceBasis;
 
 /* pn = Autel part number, so a quote can be raised straight off this. */
-var AUTEL_PRICES = {
-  /* ---- Level 2 AC ------------------------------------------------- */
-  autel_ac_elite:  { cost:714,    msrp:1190,   install:2200, pn:'MCC50AHI',        tier:'T1 40%',     note:'AC Elite Commercial 50A, in-body holster' },
-  autel_single:    { cost:800,    msrp:1143,   install:1800, pn:'UW12-J0650CA0002',tier:'Lionheart',  note:'AC Single 50A LCD, J1772, 19 ft, 5 yr warranty' },
-  autel_ac_pro:    { cost:1119,   msrp:1599,   install:2600, pn:'UW19L002',        tier:'Lionheart',  note:'AC Pro 80A commercial, J1772, 25 ft' },
-  autel_ac_ultra:  { cost:5835,   msrp:7780,   install:3400, pn:'MU38FP7C',        tier:'Lionheart',  note:'AC Ultra floor-standing dual-port full set: 25 ft cable + front post + 9 ft CMS + POS' },
-  /* ---- DC ---------------------------------------------------------- */
-  autel_dc_compact:   { cost:10725, msrp:16500,  install:16000, pn:'UW040A2501', tier:'T1 35%',    note:'DC Compact 40 kW, dual CCS. No pedestal/POS/trolley.' },
-  autel_fast_disp:    { cost:63400, msrp:79250,  install:20000, pn:'UF240A4001', tier:'Lionheart', note:'DC Fast 240 kW, boost cable' },
-  autel_fast_cab:     { cost:63400, msrp:79250,  install:34000, pn:'UF240A4001', tier:'Lionheart', note:'DC Fast 240 kW large cabinet' },
-  autel_dc_fast_aio:  { cost:63400, msrp:79250,  install:36000, pn:'UF240A4001', tier:'Lionheart', note:'DC Fast 240 kW all-in-one' },
-  autel_dh240:        { cost:77850, msrp:103800, install:42000, pn:'UH320',      tier:'Lionheart', note:'DH320 air-cooled two-port + POS + CMS (nearest listed to 240 kW class)' },
-  autel_dh480:        { cost:86250, msrp:115000, install:60000, pn:'UH480',      tier:'Lionheart', note:'DH480 air-cooled two-port, 15in screen, POS + CMS' },
-  autel_hipower_cab:  { cost:113600,msrp:142000, install:45000, pn:'HP640',      tier:'T2 20%',    note:'HiPower 640 kW power cabinet only' },
-  autel_dc_hipower:   { cost:160800,msrp:201000, install:80000, pn:'HP640+LCD',  tier:'T2 20%',    note:'HiPower 640 kW cabinet + liquid-cooled dual-port dispenser' },
-  autel_hipower_disp: { cost:47200, msrp:59000,  install:22000, pn:'LCDP',       tier:'T2 20%',    note:'HiPower liquid-cooled dual-port dispenser (CMS std)' }
-};
-window.AUTEL_PRICES = AUTEL_PRICES;
-
-var EVC_COST = {
-  /* Non-Autel units keep their prior estimates -- no price book for these. */
-  tesla_v4_post:      { eq:45000,  install:38000 },
-  tesla_v4_unit:      { eq:45000,  install:38000 },
-  tesla_v3_cab:       { eq:70000,  install:30000 },
-  alpitronic_hyc400:  { eq:165000, install:70000 }
-};
-
-/* Fold the Autel book into EVC_COST at the active basis. */
-function _rebuildEvCost(){
-  var useMsrp = (OMEGA_PRICE_BASIS === 'msrp');
-  for(var k in AUTEL_PRICES){
-    if(!AUTEL_PRICES.hasOwnProperty(k)) continue;
-    var a = AUTEL_PRICES[k];
-    EVC_COST[k] = { eq: useMsrp ? a.msrp : a.cost, install: a.install,
-                    pn: a.pn, tier: a.tier, msrp: a.msrp, cost: a.cost };
-  }
-  window.EVC_COST = EVC_COST;
-}
-_rebuildEvCost();
-/* Estimate a cost when no explicit entry exists: scale by kW for DC, flat-ish
-   for L2. Returns {eq, install}. */
-function _evEstCost(kind, def){
-  var kw=(def && def.kw) || 0;
-  if(kind==='evl2'){
-    var eqL2=Math.max(800, Math.round(kw*90));
-    return { eq:eqL2, install:Math.round(eqL2*1.4) };
-  }
-  /* DC: ~ $260-$320 / kW equipment, install ~55% of equipment */
-  var eqDc=Math.max(20000, Math.round(kw*300));
-  return { eq:eqDc, install:Math.round(eqDc*0.55) };
-}
-/* Resolve cost for a placed shape (honors user overrides stored on the shape). */
-function evShapeCost(sh){
-  if(!sh) return { eq:0, install:0 };
-  var id=sh.evId;
-  var c=(id && EVC_COST[id]) ? { eq:EVC_COST[id].eq, install:EVC_COST[id].install }
-                             : _evEstCost(sh.kind, sh);
-  if(sh.eqCostOverride!=null)      c.eq=+sh.eqCostOverride;
-  if(sh.installCostOverride!=null) c.install=+sh.installCostOverride;
-  return c;
-}
-/* Sum charger equipment + install across the map, grouped by model. */
+/* The EV price book (Autel dealer cost beside list, by tier; the other
+   makes' estimates; the per-kW estimators) lives on the server with the
+   cost engine (api/_lib/editor-cost.js, 2026-10-13). The page sends the
+   chargers on the map as quantities (_evQuantities) and reads the lines
+   back; the basis (cost | msrp) rides on the request. */
+/* Charger equipment + install across the map, grouped by model: the server's lines. */
 function evChargerCosts(){
-  var out={ eq:0, install:0, total:0, units:0, futureUnits:0, futureMakeReady:0, byModel:{} };
-  if(typeof S==='undefined') return out;
-  /* A future-proofed stall is make-ready, not hardware. Quoting the unit
-     and its commissioning for a charger the customer has not ordered is
-     the single most expensive way this drawing can be wrong. */
-  function _fut(o){
-    try { return !!(window.OmegaEVFuture && OmegaEVFuture.isFuture(o)); } catch(e){ return false; }
-  }
-  var i,s,c,key;
-  for(i=0;S.shapes&&i<S.shapes.length;i++){
-    s=S.shapes[i];
-    if(s.kind!=='evpost' && s.kind!=='evunit' && s.kind!=='evl2' && s.kind!=='evcab') continue;
-    if(_fut(s)){ out.futureUnits++; continue; }
-    c=evShapeCost(s);
-    out.eq+=c.eq; out.install+=c.install; out.units++;
-    key=s.model||s.evId||s.kind;
-    if(!out.byModel[key]) out.byModel[key]={ qty:0, eq:0, install:0, kw:(s.kw||0), mfr:(s.mfr||'') };
-    out.byModel[key].qty++; out.byModel[key].eq+=c.eq; out.byModel[key].install+=c.install;
-  }
-  // Guided-build DCFC chargers live in S.elements as evgear/charger.
-  for(i=0;S.elements&&i<S.elements.length;i++){
-    var e=S.elements[i];
-    if(e.type!=='evgear' || e.evKind!=='charger') continue;
-    if(_fut(e)){ out.futureUnits++; continue; }
-    var cc=(e.evId && typeof EVC_COST!=='undefined' && EVC_COST[e.evId])
-           ? { eq:EVC_COST[e.evId].eq, install:EVC_COST[e.evId].install }
-           : _evEstCost('evunit', { kw:e.kw||0 });
-    /* a dual pedestal element prices as the two chargers it carries */
-    var _n=(e.units>1)?e.units:1;
-    out.eq+=cc.eq*_n; out.install+=cc.install*_n; out.units+=_n;
-    key=e.evModel||e.evId||'DCFC';
-    if(!out.byModel[key]) out.byModel[key]={ qty:0, eq:0, install:0, kw:(e.kw||0), mfr:(e.mfr||'') };
-    out.byModel[key].qty+=_n; out.byModel[key].eq+=cc.eq*_n; out.byModel[key].install+=cc.install*_n;
-  }
-  /* The make-ready that DOES get built today, itemised in the module. */
-  try {
-    if(window.OmegaEVFuture && out.futureUnits>0){
-      var _f=OmegaEVFuture.cost();
-      out.futureMakeReady=_f.total;
-      out.install+=_f.total;
-    }
-  } catch(e){}
-  out.total=out.eq+out.install;
-  return out;
+  var a=window._COST_SERVER;
+  if(a && a.lines && a.lines.ev) return a.lines.ev;
+  return { eq:0, install:0, total:0, units:0, futureUnits:0, futureMakeReady:0, byModel:{}, book:{} };
 }
+/* The book entry (part number, tier, list and cost) for a model on the map. */
+function _evBook(key){ var a=window._COST_SERVER; return (a && a.lines && a.lines.ev && a.lines.ev.book && a.lines.ev.book[key]) || null; }
+window._evBook=_evBook;
 
 /* st: a saved project record instead of the live drawing (the Projects
    list calls Level 2 and DCFC by this same rule); absent means S. */
@@ -71114,7 +70283,7 @@ function evChargerTotals(st){
 /* ---- EXPORT to window ------------------------------------------------- */
 window.EVC_POST=EVC_POST; window.EVC_CAB=EVC_CAB; window.EVC_UNIT=EVC_UNIT; window.EVC_L2=EVC_L2;
 window.evSetPost=evSetPost; window.evSetUnit=evSetUnit; window.evSetL2=evSetL2;
-window.evChargerTotals=evChargerTotals; window.evChargerCosts=evChargerCosts; window.evShapeCost=evShapeCost;
+window.evChargerTotals=evChargerTotals; window.evChargerCosts=evChargerCosts;
 window.evToggleDisp=evToggleDisp; window.evToggleSnap=evToggleSnap;
 window.openEvChargerDialog=openEvChargerDialog;
 window._evDlgPlace=_evDlgPlace; window._evSnapFromChk=_evSnapFromChk;
@@ -72905,7 +72074,7 @@ window.stampEV=stampEV; window.stampADA=stampADA; window.stampADAAisle=stampADAA
          = SELL PRICE  (the bid)
 
      Every dollar is editable in the modal. ES5, no build step, single file.
-     Author: Tommy Gilmer.  (c) 2026.
+     Author: Tommy Gilmer.  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
      ═══════════════════════════════════════════════════════════════════════ -->
 <script>
 (function(){
@@ -73760,7 +72929,7 @@ function _evPackSite(name){
       for(var k in _c.byModel){
         if(!_c.byModel.hasOwnProperty(k)) continue;
         var m = _c.byModel[k];
-        var bk = (typeof EVC_COST!=='undefined' && EVC_COST[k]) || null;
+        var bk = _evBook(k);
         chargers.push({
           id:k, model:k, mfr:m.mfr||'', qty:m.qty, kw:m.kw||0,
           ports:(m.ports||null),
@@ -104232,6 +103401,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     var r=_r; if(!r) return;
     if(typeof S==='undefined'||!S.shapes){ alert('No active project.'); return; }
     if(r.pods<1 && r.fcBlocks<1){ alert('Nothing to place \u2014 set an IT load.'); return; }
+    /* The parcel packer (build()) reads its sizing from window._omegaComputeLast,
+       not from this closure. The guided-build hand-off sizes from an explicit
+       config via placeWith(), bypassing the size() wrapper that publishes that
+       cache -- so without this the packer falls back to a zero-load recalc and
+       the map click places nothing. */
+    try{ if(r.facKw>0 && typeof window!=='undefined') window._omegaComputeLast=r; }catch(e){}
     var m0=document.getElementById('ocb-modal'); if(m0) m0.remove();
     try{
       if(typeof setMode==='function'){ setMode('computeplace'); return true; }
@@ -173066,44 +172241,16 @@ if (root.console && console.info) {
 
   function figures() {
     var c = cfg(), p = pods();
-    var shell = c.shellPerPod > 0 ? c.shellPerPod * p.n : 0;
-    var it = c.itPerPod > 0 ? c.itPerPod * p.n : 0;
-    var mw = p.kw / 1000;
-    /* Patch 112: nothing entered no longer means $0. The pods are the
-       budget of the site, and a total that leaves them out is not a
-       conservative number, it is a wrong one. Until a quote is entered the
-       estimate carries the operator benchmark ($30M +/- $10M per 1 MW pod,
-       scaled by IT kW) and every place it prints says it is a benchmark. */
-    var B = root.OMEGA_BENCH || {};
-    var midR = +B.podAllInPerKw || 30000, loR = +B.podAllInLoPerKw || 20000, hiR = +B.podAllInHiPerKw || 40000;
-    var entered = (c.shellPerPod > 0) || (c.itPerPod > 0);
-    var benchMid = p.kw * midR, benchLo = p.kw * loR, benchHi = p.kw * hiR;
-    var allIn = entered ? (shell + it) : benchMid;
-    var allInLo = entered ? allIn : benchLo, allInHi = entered ? allIn : benchHi;
-    /* What the project total carries. Accelerators can be kept out of the
-       site pro-forma on purpose (different owner, different life) -- but
-       that needs an enclosure price to be entered, or the line is $0 and
-       the panel says so. */
-    var projectCapex, projectLo, projectHi;
-    if (c.excludeIt) { projectCapex = shell; projectLo = shell; projectHi = shell; }
-    else { projectCapex = allIn; projectLo = allInLo; projectHi = allInHi; }
-    return {
-      pods: p.n, mw: mw, cfg: c,
-      shellTotal: shell, itTotal: it,
-      shellPerMw: mw > 0 && shell > 0 ? shell / mw : 0,
-      itPerMw: mw > 0 && it > 0 ? it / mw : 0,
-      entered: entered,
-      isBenchmark: !entered && p.n > 0 && !c.excludeIt,
-      benchPerPod: p.n > 0 ? benchMid / p.n : midR * 1000,
-      benchLoPerPod: p.n > 0 ? benchLo / p.n : loR * 1000,
-      benchHiPerPod: p.n > 0 ? benchHi / p.n : hiR * 1000,
-      benchSource: B.podSource || '',
-      allIn: allIn, allInLo: allInLo, allInHi: allInHi,
-      allInPerMw: mw > 0 && allIn > 0 ? allIn / mw : 0,
-      projectCapex: projectCapex, projectLo: projectLo, projectHi: projectHi,
-      excludeIt: !!c.excludeIt,
-      siteCapex: projectCapex          /* kept for older readers: what the site total carries */
-    };
+    /* Priced on the server with the rest of the drawing (api/_lib/editor-cost.js,
+       2026-10-13): the operator band and the rules live there. The last cost
+       answer is read when it priced these pods; before it has, the counts
+       stand with nothing priced. */
+    var a = root._COST_SERVER, srv = a && a.lines && a.lines.compute;
+    if (srv && srv.pods === p.n) { var o = {}; for (var k in srv) if (srv.hasOwnProperty(k)) o[k] = srv[k]; o.cfg = c; o.pending = false; return o; }
+    return { pods: p.n, mw: p.kw / 1000, cfg: c, pending: true, shellTotal: 0, itTotal: 0, shellPerMw: 0, itPerMw: 0,
+      entered: (c.shellPerPod > 0) || (c.itPerPod > 0), isBenchmark: false, benchPerPod: 0, benchLoPerPod: 0, benchHiPerPod: 0,
+      benchSource: (root.OMEGA_BENCH && root.OMEGA_BENCH.podSource) || '', allIn: 0, allInLo: 0, allInHi: 0, allInPerMw: 0,
+      projectCapex: 0, projectLo: 0, projectHi: 0, excludeIt: !!c.excludeIt, siteCapex: 0 };
   }
 
   var IN = 'width:100%;background:var(--navy);border:1px solid var(--border);color:var(--text);'
@@ -173147,10 +172294,10 @@ if (root.console && console.info) {
       + 'Enclosures only in the project total (keep accelerators out of the site pro-forma)</label>'
       + '<div style="font-size:10.5px;color:var(--sub);margin-top:10px;line-height:1.6">'
       + 'With nothing entered the estimate carries the operator benchmark: '
-      + '<b style="color:var(--text)">' + money((root.OMEGA_BENCH && root.OMEGA_BENCH.podAllInPerKw || 30000) * 1000)
+      + '<b style="color:var(--text)">' + (f.pending ? '(priced when the drawing is)' : money(f.pods > 0 ? f.benchPerPod * (1000 / Math.max(1, (f.mw * 1000) / f.pods)) : f.benchPerPod))
       + ' per 1 MW pod, all-in</b>, range '
-      + money((root.OMEGA_BENCH && root.OMEGA_BENCH.podAllInLoPerKw || 20000) * 1000) + '\u2013'
-      + money((root.OMEGA_BENCH && root.OMEGA_BENCH.podAllInHiPerKw || 40000) * 1000)
+      + (f.pending ? '\u2014' : money(f.pods > 0 ? f.benchLoPerPod * (1000 / Math.max(1, (f.mw * 1000) / f.pods)) : f.benchLoPerPod)) + '\u2013'
+      + (f.pending ? '\u2014' : money(f.pods > 0 ? f.benchHiPerPod * (1000 / Math.max(1, (f.mw * 1000) / f.pods)) : f.benchHiPerPod))
       + ', scaled by each pod\u2019s IT kW. It prints as a benchmark everywhere. Enter quoted '
       + 'prices above and the benchmark drops out. Almost all of an all-in pod price is '
       + 'accelerators; if you have the split, put it in the right boxes.</div>'

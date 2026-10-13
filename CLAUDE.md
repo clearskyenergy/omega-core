@@ -1393,8 +1393,17 @@ tenant. Treat it that way.
   `/api/` and move it. Record the move in `MERGE.md`.
 - `omega-sso.js` refuses to boot unless `location.hostname` matches a
   domain on a `tenants/{orgId}` doc (or the staging/preview allowlist).
-- Shipped JS is minified in the Vercel build step; source in the repo stays
-  readable. Obfuscation is a speed bump, not a control — do not rely on it.
+- Shipped JS is NOT minified: there is no build step (see the first
+  constraint), so every page ships as readable source with its comments.
+  Obfuscation would be a speed bump, not a control — never rely on it.
+  What protects the IP is (1) the math living in `/api/`, (2) the Terms
+  (`omega-legal-docs.js` §5: no retention, reverse engineering or derivative
+  development; transmission to a browser is not publication) and (3) the
+  notice on every shipped file, held by `scripts/tests/tcopyright.js`. The
+  owner named in a notice is the LLC, literally — never `brandName()`, which
+  is the tenant's white label. `docs/EDITOR-IP-AUDIT-2026-10-12.md` is the
+  inventory of what still runs in the editor's browser code and the order
+  to move it.
 - Every source file carries the header:
   `© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.`
 - Never commit secrets. Firebase Admin credentials, Stripe keys, and API

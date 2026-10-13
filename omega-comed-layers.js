@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ==========================================================================
    omega-comed-layers.js  ·  ClearSky-OMEGA shared platform file
    --------------------------------------------------------------------------

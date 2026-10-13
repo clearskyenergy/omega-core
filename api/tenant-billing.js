@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* POST /api/tenant-billing — ClearSky staff only. Sets the commercial terms on
    omega_orgs/{orgId}/billing/current.
    Body: { orgId, tier?, addons?, toolOverrides?, paymentLink?, amountDue?,

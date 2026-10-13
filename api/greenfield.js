@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 // api/greenfield.js  —  ClearSky-OMEGA Grid Atlas greenfield land proxy
 // Deploy at /api/greenfield on the tool host (Vercel). Browser can't call land sites
 // directly (CORS + anti-bot), so this function does it server-side and returns
