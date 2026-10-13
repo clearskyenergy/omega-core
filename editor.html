@@ -10649,6 +10649,25 @@ function _bespadModels(){
       }
     }
   }catch(e){}
+  /* The org's own Equipment Library (Draw ▸ Equipment Library ▸ + New
+     equipment): a BESS entry saved there is a pad this picker offers,
+     under its own heading, so adding a unit to the library IS adding it
+     to the BESS Pad tool (Tommy, 2026-10-13: "if a customer adds a product
+     they should be able to draw it"). One with no footprint on file asks
+     its size when picked (requiresDimensions, as a featured row without
+     dimensions does) and is placed as itself, by key. */
+  try{
+    var seen={};
+    for(var i0=0;i0<list.length;i0++) seen[list[i0].id]=1;
+    _bessLibraryUnits().forEach(function(u){
+      if(seen[u.key]) return;
+      seen[u.key]=1;
+      list.push({ id:u.key, name:u.name, lf:u.lf, wf:u.wf, sysQty:0, org:true,
+        requiresDimensions:!u.sized,
+        geometryBasis:u.sized?'equipment-library':'',
+        geometryNote:u.sized?'Footprint as entered in your equipment library.':'' });
+    });
+  }catch(e){}
   /* Preserve a legacy numeric quick-place choice before featured rows move
      the positions. New choices remember the catalog key, never an index. */
   if(!window._padModelKey && window._padModelIdx!=null && list[window._padModelIdx])
@@ -11036,6 +11055,18 @@ function _placeBesPad(p){
   if(!m){ _doPlaceBesPad(p,{lf:BESPAD_DEFAULT_LF,wf:BESPAD_DEFAULT_WF,model:'BESS Pad'},{assembly:true,fence:true,bollards:true}); return; }
   _fillPadModels(); _padModelChange(); _padScaleNote();
   m.style.display='flex';
+  _padLibraryRefill();
+}
+/* The org's library loads at sign-in; a pad opened before that lands
+   refills its list once it does, without losing the pick. */
+function _padLibraryRefill(){
+  try{
+    if(typeof OmegaEq==='undefined' || OmegaEq.isLoaded()) return;
+    OmegaEq.load().then(function(){
+      var m=document.getElementById('pad-modal');
+      if(m && m.style.display==='flex'){ _fillPadModels(); _padModelChange(); }
+    });
+  }catch(e){}
 }
 /* Resolve the currently-selected pad spec, defaulting to the first catalog
    model or the last one picked in the modal. */
@@ -11059,6 +11090,7 @@ function _openPadConfig(){
   var m=document.getElementById('pad-modal'); if(!m) return;
   _fillPadModels(); _padModelChange(); _padScaleNote();
   m.style.display='flex';
+  _padLibraryRefill();
 }
 function _fillPadModels(){
   var sel=document.getElementById('pad-model'); if(!sel) return;
@@ -11069,7 +11101,7 @@ function _fillPadModels(){
   sel.innerHTML='';
   var target=sel;
   for(var i=0;i<models.length;i++){
-    var m=models[i], label=m.featured?'Featured - CleanCell US':'Other battery systems';
+    var m=models[i], label=m.featured?'Featured - CleanCell US':(m.org?'Your equipment library':'Other battery systems');
     if(group!==label){
       target=document.createElement('optgroup'); target.label=label;
       sel.appendChild(target); group=label;
@@ -33771,6 +33803,7 @@ var OmegaEq = (function(){
                on every load, so the cluster dialog and the Data Ctr flyout
                see them without the library ever having been opened. */
             try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){}
+            try{ if(typeof _bessLibrarySync==='function') _bessLibrarySync(); }catch(e){}
             resolve(all());
           })
           .catch(function(err){
@@ -33810,6 +33843,9 @@ var OmegaEq = (function(){
         /* Archiving a compute module from the library must take it out of
            the pickers now, not on the next page load. */
         if(doc.cat==='datacenter'){ try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){} }
+        /* A BESS unit saved or archived shows in, or leaves, the BESS Pad
+           picker and the BESS Config list at once, not on the next load. */
+        if(doc.cat==='bess'){ try{ if(typeof _bessLibrarySync==='function') _bessLibrarySync(); }catch(e){} }
         resolve(doc);
       }).catch(reject);
     });
@@ -33932,6 +33968,118 @@ function _dcCatalogSync(){
   }
   try{ _dcFlyoutSync(live); }catch(e){}
   return n;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   BESS UNITS FROM THE EQUIPMENT LIBRARY — PLACEABLE PADS
+   ──────────────────────────────────────────────────────────────────────
+   The BESS Pad tool offered only GOTION_CATALOG_DIMS, a source literal, so
+   a unit saved through the library's "+ New equipment" (cat 'bess') was
+   listed in the library and nowhere a rep could place it. This is the
+   same bridge _dcCatalogSync builds for compute modules:
+
+     _bessLibraryUnits()  the org's live BESS entries that carry a length
+                          and a width — the only ones that can be drawn —
+                          in feet, with a display name. _bespadModels()
+                          appends them to the picker.
+     _bessLibrarySync()   projects the same units into BESS_CATALOG under
+                          their own key (never over a shipped entry), so
+                          _asmElecFromSpec resolves kWh / kW / what is
+                          integrated on the pad by key, the fleet rollup,
+                          the BOM and the schedule read them as any other
+                          unit, and the BESS Config picker lists them under
+                          their own heading. Re-run on every load and
+                          every save: an archived unit leaves the picker.
+
+   Drawings store lf/wf/model/catalogKey on the shape, so a unit archived
+   later still renders where it was placed. No pricing: `eqcost` is what
+   the library holds, or null.
+   ══════════════════════════════════════════════════════════════════════ */
+
+function _bessLibraryUnits(){
+  var out=[], FT=304.8;
+  if(typeof OmegaEq==='undefined') return out;
+  OmegaEq.all().forEach(function(it){
+    if(!it || it.cat!=='bess' || it._seed || it.archived) return;
+    var key=String(it.key||''); if(!key) return;
+    /* "Publish seed library" copies the shipped entries into Firestore
+       under their own keys; those already have dims in the shipped table. */
+    try{ if(typeof GOTION_CATALOG_DIMS!=='undefined' && GOTION_CATALOG_DIMS[key]) return; }catch(e){}
+    var lf=+it.lengthFt||(it.lengthMm?+it.lengthMm/FT:0);
+    var wf=+it.widthFt ||(it.widthMm ?+it.widthMm /FT:0);
+    /* No footprint on file is not "not placeable": the pad asks the size
+       when it is picked (Custom size, with the unit's own name, kWh and
+       kW), and the record is placed as itself. */
+    var sized=(lf>0 && wf>0);
+    lf=sized?Math.round(lf*100)/100:0; wf=sized?Math.round(wf*100)/100:0;
+    var hf=+it.heightFt||(it.heightMm?Math.round(+it.heightMm/FT*100)/100:0);
+    var name=((it.manufacturer||'')+' '+(it.model||'')).replace(/\s+/g,' ').trim()||key;
+    out.push({ key:key, name:name, lf:lf, wf:wf, hf:hf, sized:sized, rec:it });
+  });
+  out.sort(function(a,b){ return a.name<b.name?-1:(a.name>b.name?1:0); });
+  return out;
+}
+
+function _bessLibrarySync(){
+  if(typeof BESS_CATALOG==='undefined' || typeof OmegaEq==='undefined') return 0;
+  var live={}, n=0;
+  _bessLibraryUnits().forEach(function(u){
+    var it=u.rec;
+    /* A shipped entry is never overwritten; a tenant product (merged by
+       omega-bess-products.js) keeps its own record too. */
+    if(BESS_CATALOG[u.key] && !BESS_CATALOG[u.key].org) return;
+    var integrated=/integrated/i.test(String(it.type||''))||/integrated/i.test(String(it.inv||''));
+    live[u.key]={
+      mfr:it.manufacturer||'', model:u.name, chem:it.chem||'',
+      kwh:(+it.energyKwh>0?+it.energyKwh:null), usable:null,
+      kw:(+it.powerKw>0?+it.powerKw:null), maxKw:(+it.pmaxKw>0?+it.pmaxKw:null),
+      dur:(+it.energyKwh>0&&+it.powerKw>0)?+(it.energyKwh/it.powerKw).toFixed(2):null,
+      dcv:it.dcv||'TBD', eqcost:(it.eqcost==null?null:+it.eqcost),
+      inv:it.inv||(integrated?'Integrated PCS':'TBD'), ikva:(+it.pnomKva>0?+it.pnomKva:null),
+      xfmr:it.xfmr||'TBD', disco:it.disco||'TBD',
+      dims:(it.lengthMm&&it.widthMm)?(it.lengthMm+'x'+it.widthMm+'x'+(it.heightMm||0)+'mm'):'',
+      _incPCS:integrated||undefined,
+      notes:it.notes||'', org:true, libraryKey:u.key
+    };
+    n++;
+  });
+  var k;
+  for(k in BESS_CATALOG){
+    if(!Object.prototype.hasOwnProperty.call(BESS_CATALOG,k)) continue;
+    if(BESS_CATALOG[k] && BESS_CATALOG[k].org && !live[k]) delete BESS_CATALOG[k];
+  }
+  for(k in live){
+    if(!Object.prototype.hasOwnProperty.call(live,k)) continue;
+    BESS_CATALOG[k]=live[k];
+  }
+  try{ _bessConfigPickerSync(live); }catch(e){}
+  return n;
+}
+
+/* The BESS Config picker (#bm-catalog) lists the shipped catalog as static
+   options and the tenant's products as one optgroup; the org's library
+   units get their own, rebuilt on every sync. */
+function _bessConfigPickerSync(live){
+  var sel=document.getElementById('bm-catalog'); if(!sel) return;
+  var old=document.getElementById('bm-cat-org');
+  if(old) old.parentNode.removeChild(old);
+  var keys=Object.keys(live||{}); if(!keys.length) return;
+  var grp=document.createElement('optgroup');
+  grp.id='bm-cat-org'; grp.label='Your equipment library';
+  keys.sort(function(a,b){ return (live[a].model||a)<(live[b].model||b)?-1:1; });
+  for(var i=0;i<keys.length;i++){
+    var e=live[keys[i]], o=document.createElement('option');
+    o.value=keys[i];
+    o.textContent=e.model+' \u2014 '+(e.kw||'?')+'kW / '+(e.kwh||'?')+'kWh'+(e._incPCS?' \u00b7 PCS integrated':'');
+    grp.appendChild(o);
+  }
+  var tenant=document.getElementById('bm-cat-tenant');
+  if(tenant && tenant.nextSibling) sel.insertBefore(grp, tenant.nextSibling);
+  else if(tenant) sel.appendChild(grp);
+  else {
+    var first=sel.querySelector('optgroup');
+    if(first) sel.insertBefore(grp, first); else sel.appendChild(grp);
+  }
 }
 
 /* The Data Ctr flyout is static markup listing the four seed pads. Append
@@ -34399,7 +34547,9 @@ function e3NewOpen(){
   };
   b.innerHTML =
       '<div class="e3-note info">Saved to your organisation only \u2014 <strong>'
-    +   _omEsc(OmegaEq.orgId())+'</strong>. Nobody outside it sees this entry.</div>'
+    +   _omEsc(OmegaEq.orgId())+'</strong>. Nobody outside it sees this entry. '
+    +   'With a <strong>length and width</strong> it is offered by <strong>Draw \u203a BESS Pad</strong> '
+    +   'and BESS Config, to scale, as soon as it is saved.</div>'
     + '<div class="e3-grid">'
     +   f('mfr','MANUFACTURER')
     +   f('model','MODEL')
@@ -81730,9 +81880,17 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     }
     try{ if(typeof updShapeCount==='function') updShapeCount(); }catch(e){}
     try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
+    /* THE CANOPY IS SELECTED THE MOMENT IT EXISTS (Tommy, 2026-10-13: a
+       canopy had no delete while a drawn array did). finishPolyline leaves
+       the editor in polyline mode ("click to start another"), so a click
+       on the new canopy started a stray line instead of selecting it, and
+       Delete had nothing selected. Back to Select, and the canopy carries
+       its handles and its delete X, as any placed array does. */
+    try{ if(typeof setMode==='function') setMode('select'); }catch(e){}
+    try{ if(typeof selectShape==='function') selectShape(made.id); }catch(e){}
     if(typeof showBanner==='function'){
       try{ showBanner('shape','Canopy created \u2014 '+layout.tableCount+' tables, '
-        +Math.round(layout.kw)+' kW, fitted to your outline.'); }catch(e){}
+        +Math.round(layout.kw)+' kW, fitted to your outline. Drag to move, Delete or the \u00d7 to remove.'); }catch(e){}
     }
     return made;
   };
@@ -160010,7 +160168,8 @@ if (root.console && console.info) {
     var lay = root.computeGroundLayout({ boundary: ringPx, exclusions: blds || [] });
     if (!lay || !(lay.tableCount > 0))
       throw new Error('the parcel is too small for an array once setbacks and buildings are taken out');
-    root.applyGroundLayout(ringPx, lay, blds || []);
+    var made = root.applyGroundLayout(ringPx, lay, blds || []);
+    if (made) made.omegaCompute = true;   /* the pack's field: the field lock covers it */
     return lay;
   }
 
@@ -163136,7 +163295,7 @@ if (root.console && console.info) {
                  : 'no table fits inside the boundary at the current scale and setback' };
     }
 
-    try { applyGroundLayout(poly, layout, excl); }
+    try { var made = applyGroundLayout(poly, layout, excl); if (made) made.omegaCompute = true; }
     catch (e) { return { ok: false, why: 'the layout could not be drawn: ' + ((e && e.message) || 'unknown') }; }
     return { ok: true, tables: layout.tableCount, kwDc: layout.kw, kwAc: layout.kwAc, gcr: layout.gcr };
   }
@@ -164004,7 +164163,15 @@ if (root.console && console.info) {
     if (sh.kind === 'substation') return false;   /* sited by hand */
     if (sh.omegaGasTie) return false;             /* a bearing you set  */
     if (sh.omegaRole) return false;               /* boundary, exclusion */
-    return !!(sh.omegaCompute || sh.autoLayout);
+    /* ONLY WHAT THE PACK PLACED. This also locked every `autoLayout`
+       array, and a canopy or a custom area a person TRACED is built
+       through the same applyGroundLayout, so it carried the flag: the
+       guard below swallowed the mousedown at capture and the canopy could
+       be neither selected nor deleted while a rectangle array could
+       (Tommy, 2026-10-13). A traced outline is a decision, like the
+       substation. The pack's own solar fills mark themselves
+       omegaCompute, so the generated field stays locked. */
+    return !!sh.omegaCompute;
   }
 
   /* Blocks the gesture at capture, before the editor's own handlers see
