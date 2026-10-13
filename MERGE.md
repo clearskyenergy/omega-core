@@ -3350,3 +3350,27 @@ assumptions (GCR, W/sqft, table sizes, DC:AC) are published convention.
 The guided-build step tables are UI sequences bound to page functions by
 name; they encode electrical convention, not a method. Both are recorded
 in `docs/EDITOR-IP-AUDIT-2026-10-12.md` as left in the page and why.
+
+## 2026-10-13 — The EV Cost Workbook's price books moved to the server
+
+`api/_lib/ev-pricebook.js` (pure, ES5) behind `POST /api/ev-price
+{action:'rates'|'baseline'|'ng'|'dcfc'}`: the Eversource rate card
+calibrated on five filed submissions, the Level 2 baseline from four closed
+jobs, the standard items, the National Grid price book (the confirmed
+$2,000 / $3,050 a plug, the per-plug band, the panel packages), the DCFC
+baseline and its labour curves, `designRate`, `scopeNote` and the whole
+`standardRate` switch (`standardRateIn`, over a context the page sends).
+The page's `standardRate`, `applyBaselineFromSite` and `ngPriceBook` are
+cached clients: a pending rate is `undefined` and `syncCivil`,
+`syncDesign`, `priceCivilFromDrawing` and `addStandardRows` leave the line
+as it is and come back when the answer lands (one re-render per batch);
+the baseline lands on the sheet when its answer does; the National Grid
+check reads the version, band and panel figure off the answer (`NG_LAST`).
+Rate settings keep a rep's overrides as the record and ride them on every
+request; the defaults the panel shows are the answer's card. Permitting
+stays a 3% rule on the page (it is printed in the note). Goldens captured
+from the page before the move (`scripts/tests/fixtures/
+ev-pricebook-goldens.json`, two reference jobs, every bucket × row) hold
+the library in `scripts/tests/tevpricebook.js`; `tngpricebook.js`,
+`tesma.js` and `tsvcped.js` now price with the library and read the
+sheet with the page.

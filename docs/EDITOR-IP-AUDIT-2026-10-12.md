@@ -96,3 +96,17 @@ asserts the browser no longer carries the figures:
   in question before any letter goes out.
 - A copyright registration with the U.S. Copyright Office is what unlocks
   statutory damages and fees; the notice alone does not. Not a code change.
+
+## Beyond the editor (2026-10-13)
+
+A scan of every other shipped page for the same classes of exposure, ranked
+by signs of browser-side pricing, scoring and finance math.
+
+| Page | Finding | Status |
+|---|---|---|
+| `ev-cost-workbook.html` | The Eversource rate card, the Level 2 baseline, the National Grid price book with confirmed per-plug prices, the DCFC baseline and the whole rate switch were literals in the page | **DONE 2026-10-13**: `api/_lib/ev-pricebook.js` behind `POST /api/ev-price` (`tevpricebook.js`) |
+| `valuestack.html` | A ten-utility rate and programme table (`UTIL`), the federal credit table and the standalone dispatch and finance model, with no API call | Next. The editor's own Value Stack already runs on `api/_lib/value-stack.js`; this legacy page should post to it or be retired |
+| `apartment-bess.html` | State incentive curation, aggregator revenue splits (`AGG_DATA`), compute tiers and the portfolio model, with no API call and no sign-in runtime loaded | Next. Move the tables and `recalc` server-side and give the page the standard sign-in |
+| `clearsky-cost-estimator.html` | Loads `omega-cost-model.js`, which is presentation metadata only; prices come from `/api/price-site` | Fine |
+| `sales-proposal.html` | A Google Maps browser key as a literal fallback; the Claude key is user-entered | Replace the literal with `OMEGA_CONFIG.mapsKey` only (low) |
+| `proforma.html`, `bess-grid-sizing.html`, `site-optimizer.html` | Defaults and small finance helpers; engines are server-side | Fine |
