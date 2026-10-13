@@ -14,6 +14,7 @@
      designOf(project, projectId) → null when the project has no drawing and
        no run, else
        { projectId, at, featureCount, hash,
+         address, zip,                    the project's address and its ZIP
          capex, netCost, incentive, annualRevenue, capexAt, capexSource,
          contracted,                      the Run's rollup, as saved
          compute: { units, kwIt, omegaCoreUnits, omegaCoreKw,
@@ -33,6 +34,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var crypto = require('crypto');
+var BR = require('./site-bridge');
 
 function num(v) { if (v === null || v === undefined || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
 function pos(v) { var n = num(v); return n != null && n > 0 ? n : null; }
@@ -87,8 +89,13 @@ function designOf(p, projectId) {
   var featureCount = shapes.length + elements.length + (Array.isArray(p.conduits) ? p.conduits.length : 0) + (Array.isArray(p.bessList) ? p.bessList.length : 0);
   var oc = p.omegaCore && typeof p.omegaCore === 'object' ? { verdict: p.omegaCore.verdict || null, units: num(p.omegaCore.units), at: iso(p.omegaCore.at) } : null;
   if (!featureCount && !ran && !oc) return null;
+  /* the address the editor holds (geocoded, or typed), and the ZIP in it:
+     the compute model reads the tariff book and the climate from the ZIP,
+     and the site record may carry none (2026-10-13) */
+  var addr = typeof p.siteAddr === 'string' && p.siteAddr.trim() ? p.siteAddr.trim() : typeof p.address === 'string' ? p.address.trim() : '';
   var out = {
     projectId: projectId || null, at: iso(p.capexAt) || iso(p.updatedAt) || null, featureCount: featureCount,
+    address: addr.slice(0, 200) || null, zip: BR.zipFromAddress(p.zip != null && p.zip !== '' ? { zip: p.zip, street: addr } : addr),
     capex: ran ? r0(capex) : null, netCost: ran ? r0(num(p.netCost)) : null, incentive: ran ? r0(num(p.incentive) || 0) : null,
     annualRevenue: ran ? r0(num(p.annualRevenue)) : null, capexAt: iso(p.capexAt), capexSource: ran ? (p.capexSource || null) : null,
     contracted: p.contracted === true,
@@ -97,7 +104,7 @@ function designOf(p, projectId) {
     bess: bess, solar: { kwDc: r0(so.kwDc), units: so.units }, wind: { kw: r0(wd.kw), units: wd.units },
     omegaCore: oc
   };
-  out.hash = crypto.createHash('sha256').update(JSON.stringify([out.capex, out.incentive, out.annualRevenue, out.capexAt, out.compute, out.chargers, out.bess, out.solar, out.wind, out.omegaCore, featureCount])).digest('hex').slice(0, 16);
+  out.hash = crypto.createHash('sha256').update(JSON.stringify([out.capex, out.incentive, out.annualRevenue, out.capexAt, out.compute, out.chargers, out.bess, out.solar, out.wind, out.omegaCore, featureCount, out.zip])).digest('hex').slice(0, 16);
   return out;
 }
 
@@ -105,7 +112,8 @@ function designOf(p, projectId) {
 function line(d) {
   if (!d) return '';
   var parts = [];
-  if (d.compute.units) parts.push(d.compute.units + ' compute unit' + (d.compute.units === 1 ? '' : 's') + (d.compute.kwIt ? ' (' + d.compute.kwIt + ' kW IT)' : ''));
+  if (d.compute.omegaCoreUnits && d.compute.omegaCoreUnits === d.compute.units) parts.push(d.compute.units + ' Omega-Core skid' + (d.compute.units === 1 ? '' : 's') + (d.compute.kwIt ? ' (' + d.compute.kwIt + ' kW of compute)' : ''));
+  else if (d.compute.units) parts.push(d.compute.units + ' compute unit' + (d.compute.units === 1 ? '' : 's') + (d.compute.kwIt ? ' (' + d.compute.kwIt + ' kW IT)' : '') + (d.compute.omegaCoreUnits ? ', ' + d.compute.omegaCoreUnits + ' of them Omega-Core skids' : ''));
   if (d.chargers.installedKw) parts.push(d.chargers.installedKw + ' kW of chargers');
   if (d.bess.kwh) parts.push(d.bess.kw + ' kW / ' + d.bess.kwh + ' kWh battery');
   if (d.solar.kwDc) parts.push(d.solar.kwDc + ' kW-dc solar');

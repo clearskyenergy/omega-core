@@ -62,6 +62,20 @@ ok('an unknown structure is refused', errs({ deal: { structure: 'magic' } }).ind
 ok('a text number is refused, not read as zero', errs({ compute: { pods: 'two' } }).indexOf('compute.pods') >= 0);
 
 /* ── the physics ───────────────────────────────────────────────────────── */
+/* compute on its OWN meter (the Omega-Core skid, 2026-10-13): no building
+   behind it, nothing assumed, its own words */
+var OWN = { site: { zip: '91304', hostType: 'commercial' }, service: { kw: 135, loadingPct: 100, own: true, volts: 480 }, load: { none: true }, ev: { ports: 0 },
+  compute: { pods: 1, gpuClass: 'custom', gpuName: 'Omega-Core skid \u00b7 NVIDIA HGX H100', gpuShort: 'Omega-Core H100', gpusPerPod: 48, kwPerGpu: 1.275, overheadPct: 0, pue: 1.2,
+             tiers: { offtake: { sharePct: 0, price: 2.46 }, edge: { sharePct: 0, price: 2.46 }, spot: { sharePct: 100, price: 2.46, utilPct: 85 } }, spotMode: 'always', capexPerGpu: 13312.5, podInfraPerPod: 125000 },
+  battery: { kw: 60, kwh: 61.44, capexPerKwh: 0 }, deal: { structure: 'own', rentPerYear: 12000 } };
+var own = CS.model(OWN);
+ok('a compute unit on its own meter runs with no building load: the load is none, zero kWh, known exactly (never assumed, never a warning)', own.ok && own.load.source === 'none' && own.load.annualKwh === 0 && own.load.quality === 'high' && !own.proforma.warnings.some(function (w) { return w.code === 'LOAD_ASSUMED'; }), own.ok ? own.load : own.errors);
+ok('the custom accelerator wears the name its caller gave it', own.ok && own.compute.gpuName === 'Omega-Core skid \u00b7 NVIDIA HGX H100' && /48 Omega-Core H100 GPUs/.test(own.story.flow[0][1]), own.ok && own.story.flow);
+ok('the service reads as the compute\u2019s own meter, not a shared building service', own.ok && own.story.flow.some(function (f) { return f[0] === 'grid' && f[1] === 'Own service' && /own meter/.test(f[2]); }) && /on its own 135 kW service/.test(own.story.narrative) && own.proforma.assumptions.some(function (a) { return /own meter billed/.test(a) && /no building load/.test(a); }), own.ok && own.story);
+ok('a battery priced inside another line ($0/kWh) has no $0 line of its own, and the GPU and pod lines carry the skid\u2019s price', own.ok && !own.schedule.capex.some(function (l) { return l.id === 'bess'; }) && own.schedule.capex.filter(function (l) { return l.id === 'gpu'; })[0].amount === Math.round(639000 * 1.08) && own.schedule.capex.filter(function (l) { return l.id === 'pods'; })[0].amount === Math.round(125000 * 1.08), own.ok && own.schedule.capex);
+ok('the meter balances: the skid\u2019s compute and battery never exceed its own 135 kW', own.ok && own.balance.limitKw === 135 && own.balance.overloadHours === 0 && own.balance.peakKw > 0 && own.balance.peakKw <= 135, own.ok && own.balance);
+ok('a shared service still reads shared', CS.model(BASE).story.flow.some(function (f) { return f[0] === 'grid' && f[1] === 'Existing service'; }));
+
 section('Compute and charging loads');
 var run = X.start(BASE), c = run.c, ctx = run.ctx;
 var cl = X.computeLoad(c, ctx, 1);

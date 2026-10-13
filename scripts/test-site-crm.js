@@ -598,8 +598,9 @@ function seed() {
     assert.equal((await call('GET', { site: other.id }, PM)).site.latestDesign, null);
     /* the pod pro forma runs on the units placed and the cost run, unless told otherwise */
     var run = await call('POST', { site: SITE, action: 'proforma-run' }, PM);
-    assert.equal(run.scenario.results.pods, 5); assert.equal(run.scenario.results.investorCapital, 1900000); assert.equal(run.scenario.results.capexBasis, 'Site Map cost run of 2026-10-12');
-    assert.equal(run.latestProforma.capexBasis, 'Site Map cost run of 2026-10-12'); assert.equal(run.latestProforma.investorCapital, 1900000);
+    /* the skid is ClearSky's and the cost run never counts it: its capital is the skid as recorded ($764,000), the host's cost run stands for the four pods beside it */
+    assert.equal(run.scenario.results.pods, 5); assert.equal(run.scenario.results.investorCapital, 1900000 + 764000); assert.equal(run.scenario.results.capexBasis, '1 Omega-Core skid as recorded ($764,000 each) + Site Map cost run of 2026-10-12');
+    assert.equal(run.latestProforma.capexBasis, '1 Omega-Core skid as recorded ($764,000 each) + Site Map cost run of 2026-10-12'); assert.equal(run.latestProforma.investorCapital, 2664000);
     assert.equal(run.scenario.inputs.designHash, db.data.get(O + '/sites/' + SITE).latestDesign.hash);
     var typed = await call('POST', { site: SITE, action: 'proforma-run', pods: 2 }, PM);
     assert.equal(typed.scenario.results.pods, 2); assert.equal(typed.scenario.results.capexBasis, 'assumption set');
@@ -612,11 +613,18 @@ function seed() {
     var noRun = await call('GET', { site: SITE }, PM);
     assert.equal(noRun.site.latestDesign.capex, null);
     var unpriced = await call('POST', { site: SITE, action: 'proforma-run' }, PM);
-    assert.equal(unpriced.scenario.results.pods, 5); assert.equal(unpriced.scenario.results.capexBasis, 'assumption set', 'units from the drawing, capex from the set when nobody ran the cost');
+    assert.equal(unpriced.scenario.results.pods, 5); assert.equal(unpriced.scenario.results.capexBasis, '1 Omega-Core skid as recorded ($764,000 each)', 'the skid keeps its recorded price when nobody ran the cost; the pods beside it have none');
+    assert.equal(unpriced.scenario.results.investorCapital, 764000);
+    db.data.get('projects/p_design').shapes = db.data.get('projects/p_design').shapes.filter(function (x) { return !x.omegaCore; });
+    await call('GET', { site: SITE }, PM);
+    var noSkid = await call('POST', { site: SITE, action: 'proforma-run' }, PM);
+    assert.equal(noSkid.scenario.results.pods, 4); assert.equal(noSkid.scenario.results.capexBasis, 'assumption set', 'units from the drawing, capex from the set when nobody ran the cost and no skid is on it');
+    db.data.get('projects/p_design').shapes = PRJ.shapes;
     /* the compute model takes the chargers, the battery, the solar and the cost from the design */
     var SM = require('../api/_lib/site-model');
     var mapped = SM.inputFor({ zip: '94607', serviceCapacityKw: 900, latestDesign: Object.assign({}, d, { capex: 1840000 }) }, {}, {});
-    assert.equal(mapped.ok, true); assert.equal(mapped.input.compute.pods, 5); assert.equal(mapped.basis.pods, 'Site Map design');
+    /* the host's case: its four pods on its service; the skid on the design is on its own meter and said so */
+    assert.equal(mapped.ok, true); assert.equal(mapped.input.compute.pods, 4); assert.match(mapped.basis.pods, /^Site Map design \(its 1 Omega-Core skid on its own meter/); assert.match(mapped.basis.skids, /1 Omega-Core skid on the design is on its own meter/);
     assert.deepEqual(mapped.input.battery, { kw: 250, kwh: 1000 }); assert.deepEqual(mapped.input.solar, { kwdc: 350 });
     assert.equal(mapped.input.ev.ports, 8); assert.equal(mapped.input.ev.kwPerPort, 24.5); assert.match(mapped.basis.chargers, /as drawn in Site Map/);
     assert.equal(mapped.input.capex.total, 1840000); assert.match(mapped.input.capex.basis, /Site Map cost run of 2026-10-12/);
@@ -628,9 +636,10 @@ function seed() {
     await call('POST', { action: 'site-save', id: SITE, name: 'The Elysian Apartments', zip: '90012', serviceCapacityKw: 900, existingPeakKw: 100 }, PM);
     await call('GET', { site: SITE }, PM);
     var model = await call('POST', { site: SITE, action: 'site-model', label: 'on the design' }, PM);
-    assert.equal(model.latestModel.pods, 5); assert.equal(model.latestModel.capex, 1840000, 'the model’s capex is the cost run');
+    assert.equal(model.latestModel.pods, 4); assert.equal(model.latestModel.capex, 1840000, 'the model’s capex is the cost run');
     assert.equal(model.basis.capex, 'Site Map cost run of 2026-10-12'); assert.match(model.basis.design, /Site Map design/);
     assert.ok(model.result.proforma.capexScale && model.result.proforma.capexScale.to === 1840000);
+    assert.equal(model.latestModel.designHash, db.data.get(O + '/sites/' + SITE).latestDesign.hash, 'the run records the design it stood on'); assert.equal(model.latestModel.auto, false);
     var catalog = await call('POST', { site: SITE, action: 'site-model', useDesign: false, pods: 2 }, PM);
     assert.equal(catalog.latestModel.pods, 2); assert.notEqual(catalog.latestModel.capex, 1840000);
     /* the register's bulk sync, and a site with no project */
@@ -641,10 +650,92 @@ function seed() {
     assert.equal(none.noProject, 1); assert.match(none.note, /not designed yet/);
     await rejects(call('POST', { action: 'design-sync', ids: [SITE] }, VIEWER), 403);
   });
+  await test('an Omega-Core skid on the design runs the compute model by itself: the ZIP off the address, the skid on its own meter and its own numbers, once per design', async function () {
+    var OC = require('../api/_lib/omega-core');
+    var SKID = { orgId: ORG, name: 'Topanga Terrace', address: '22125 Roscoe Blvd, Canoga Park, CA 91304', capex: 918000, incentive: 0, annualRevenue: 61000, capexAt: '2026-10-13T19:35:00Z', capexSource: 'site-map', bessKw: 500, bessKwh: 2000,
+      shapes: [{ kind: 'derdc', kw: 75, omegaCore: true, bessKw: 60, bessKwh: 61.44 }, { kind: 'dersolar', kw: 368 }, { kind: 'bespad', kw: 500, kwh: 2000 }], elements: [] };
+    db.seed('projects/p_skid', SKID);
+    var made = await call('POST', { action: 'site-save', name: 'Topanga Terrace', city: 'Canoga Park', state: 'CA', address: '22125 Roscoe Blvd, Canoga Park, CA 91304', siteScopes: ['der', 'bess'] }, PM);
+    db.data.get(O + '/sites/' + made.id).projectId = 'p_skid';
+    /* a viewer's open sets it off too: it is the system reading the design, not the viewer writing */
+    var page = await call('GET', { site: made.id }, VIEWER), s = page.site, lm = s.latestModel;
+    assert.ok(lm, 'the model ran on the open'); assert.equal(page.autoModel.modelId, lm.modelId); assert.equal(lm.auto, true); assert.equal(lm.designHash, s.latestDesign.hash); assert.equal(lm.label, 'Site Map design');
+    assert.equal(lm.pods, 1); assert.equal(lm.skid.units, 1); assert.equal(lm.skid.chipset, 'h100'); assert.equal(lm.skid.gpus, 48); assert.equal(lm.skid.systemCostUsd, OC.PRODUCT.systemCostUsd); assert.equal(lm.skid.priceBasis, 'spot');
+    assert.match(lm.gpuName, /^Omega-Core skid/); assert.equal(lm.zip, '91304', 'the ZIP read off the address'); assert.equal(s.zip, '91304', 'and kept on the site');
+    assert.ok(lm.irr > 0.15 && lm.irr < 0.6, 'the skid\u2019s after-tax IRR is the skid\u2019s, not the pod case\u2019s half a percent: ' + lm.irr);
+    assert.ok(lm.totalProjectCost > 900000 && lm.totalProjectCost < 1100000, 'the skid as recorded plus the model\u2019s own site costs: ' + lm.totalProjectCost);
+    assert.equal(page.skid.systemCostUsd, OC.PRODUCT.systemCostUsd); assert.ok(page.skid.chipsets.length >= 8 && page.skid.chipsets.filter(function (c) { return c.pricePerGpuHour; }).length >= 8);
+    assert.equal(s.designModel.modelId, lm.modelId); assert.equal(s.designModel.hash, s.latestDesign.hash);
+    assert.match(s.latestDesign.address, /Roscoe/); assert.equal(s.latestDesign.zip, '91304');
+    var stored = db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId), inp = stored.input;
+    assert.equal(inp.service.kw, OC.PRODUCT.meter.peakKw); assert.equal(inp.service.own, true); assert.equal(inp.service.loadingPct, 100); assert.equal(inp.load.none, true); assert.equal(inp.ev.ports, 0);
+    assert.equal(inp.compute.gpuClass, 'custom'); assert.equal(inp.compute.gpusPerPod, 48); assert.equal(inp.compute.kwPerGpu, 1.275); assert.equal(inp.compute.pue, 1.2);
+    assert.equal(inp.compute.capexPerGpu, OC.PRODUCT.skidPriceUsd / 48); assert.equal(inp.compute.podInfraPerPod, OC.PRODUCT.systemCostUsd - OC.PRODUCT.skidPriceUsd);
+    assert.equal(inp.compute.tiers.spot.sharePct, 100); assert.equal(inp.compute.tiers.spot.utilPct, 85); assert.equal(inp.compute.tiers.spot.price, 2.46); assert.equal(inp.compute.availabilityPct, 98); assert.equal(inp.compute.priceDeclinePct, 8); assert.equal(inp.compute.platformFeePct, 8); assert.equal(inp.compute.podOmPerYear, 60000);
+    assert.deepEqual(inp.battery, { kw: 60, kwh: 61, capexPerKwh: 0 }); assert.equal(inp.solar, undefined); assert.equal(inp.capex, undefined);
+    assert.equal(inp.deal.rentPerYear, OC.RATE_CARD.monthlyPerSkid.base * 12); assert.equal(inp.deal.rentEscPct, OC.RATE_CARD.escalatorPct.base);
+    assert.match(stored.basis.host, /500 kW \/ 2000 kWh battery/); assert.match(stored.basis.host, /368 kW-dc solar/); assert.match(stored.basis.host, /\$918,000/); assert.match(stored.basis.rent, /market reference/); assert.match(stored.basis.zip, /read from the site’s address/);
+    assert.match(stored.basis.capex, /\$639,000 a skid, plus the NextNRG Microgrid Controller built into it, \$125,000/); assert.match(stored.basis.gpuClass, /48 × NVIDIA HGX H100 .* public spot market reference, \$2\.46 a GPU-hour/);
+    assert.ok(!/iQGen|IQGEN|CMDC/i.test(JSON.stringify([stored.basis, stored.summary, page.skid, stored.result.story, stored.result.proforma.assumptions])), 'nothing a tenant reads names the source workbook or the cost reference');
+    assert.ok(!stored.result.proforma.warnings.some(function (w) { return w.code === 'LOAD_ASSUMED'; }), 'no building is assumed behind a skid on its own meter');
+    assert.ok(stored.result.story.flow.some(function (f) { return f[1] === 'Own service'; }));
+    var autos = audits('sitecrm-site-model').filter(function (a) { return a.auto === true; });
+    assert.equal(autos.length, 1); assert.equal(autos[0].designHash, s.latestDesign.hash);
+    /* the same design is not run again by another open */
+    var n1 = audits('sitecrm-site-model').length;
+    await call('GET', { site: made.id }, PM); await call('GET', { site: made.id }, VIEWER);
+    assert.equal(audits('sitecrm-site-model').length, n1, 'an unchanged design is not modelled twice');
+    /* the design changes (a second skid): it runs again, on two skids on their own 270 kW of service */
+    db.data.get('projects/p_skid').shapes.push({ kind: 'derdc', kw: 75, omegaCore: true, bessKw: 60, bessKwh: 61.44 });
+    var again = await call('GET', { site: made.id }, PM), lm2 = again.site.latestModel;
+    assert.equal(lm2.pods, 2); assert.equal(lm2.skid.units, 2); assert.notEqual(lm2.modelId, lm.modelId); assert.equal(again.autoModel.modelId, lm2.modelId);
+    assert.equal(db.data.get(O + '/sites/' + made.id + '/models/' + lm2.modelId).input.service.kw, OC.PRODUCT.meter.peakKw * 2);
+    assert.equal((await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0].latestModel.skid.units, 2, 'the register reads the skid\u2019s run');
+    /* rent on record replaces the market reference; a chipset chosen by hand comes from the skid\u2019s own library; a hand run is not auto */
+    db.data.get(O + '/sites/' + made.id).commercial = { rentMonthly: 1500 };
+    var chosen = await call('POST', { site: made.id, action: 'site-model', gpuClass: 'h200', pods: 1 }, PM);
+    assert.equal(chosen.latestModel.skid.chipset, 'h200'); assert.equal(chosen.latestModel.pods, 1); assert.equal(chosen.latestModel.auto, false); assert.equal(chosen.latestModel.designHash, again.site.latestDesign.hash);
+    var st2 = db.data.get(O + '/sites/' + made.id + '/models/' + chosen.modelId);
+    assert.equal(st2.input.deal.rentPerYear, 18000); assert.match(st2.basis.rent, /on record/); assert.equal(st2.input.compute.tiers.spot.price, 2.62);
+    await rejects(call('POST', { site: made.id, action: 'site-model', gpuClass: 'gb300' }, PM), 400, /public GPU-hour price/);
+    var n2 = audits('sitecrm-site-model').length; await call('GET', { site: made.id }, PM);
+    assert.equal(audits('sitecrm-site-model').length, n2, 'a hand run on the current design satisfies the automatic one');
+    /* the pod pro forma on this design prices the skid as recorded */
+    var pf = await call('POST', { site: made.id, action: 'proforma-run' }, PM);
+    assert.equal(pf.scenario.results.pods, 2); assert.equal(pf.scenario.results.investorCapital, OC.PRODUCT.systemCostUsd * 2); assert.match(pf.scenario.results.capexBasis, /^2 Omega-Core skids as recorded \(\$764,000 each\)$/);
+    assert.ok(pf.scenario.results.investorIrr.annual > 0.3, 'the pod case on the skid\u2019s price is no longer half a percent: ' + pf.scenario.results.investorIrr.annual);
+    /* the register\u2019s sync (the editor\u2019s save goes through it too) runs the model on a fresh site and says so */
+    var two = await call('POST', { action: 'site-save', name: 'Second', address: '1 Main St, Burbank, CA 91502' }, PM);
+    db.seed('projects/p_skid2', Object.assign({}, SKID, { address: '1 Main St, Burbank, CA 91502' })); db.data.get(O + '/sites/' + two.id).projectId = 'p_skid2';
+    var sync = await call('POST', { action: 'design-sync', ids: [two.id], source: 'editor' }, PM);
+    assert.equal(sync.modelled.length, 1); assert.match(sync.note, /the compute model ran on 1/); assert.equal(sync.designs[0].model.auto, true);
+    var last = audits('sitecrm-design-sync').slice(-1)[0]; assert.equal(last.source, 'editor'); assert.equal(last.modelId, sync.modelled[0].modelId);
+    /* what stops it is kept and said, and the same facts are not tried twice; a fact added runs it */
+    var three = await call('POST', { action: 'site-save', name: 'Third', address: '1 Main St' }, PM);
+    db.seed('projects/p_skid3', Object.assign({}, SKID, { address: '1 Main St' })); db.data.get(O + '/sites/' + three.id).projectId = 'p_skid3';
+    var p3 = await call('GET', { site: three.id }, PM);
+    assert.equal(p3.site.latestModel, null); assert.match(p3.site.designModel.missing[0], /ZIP/); assert.equal(p3.autoModel, null);
+    var n3 = audits('sitecrm-site-model').length; await call('GET', { site: three.id }, PM); assert.equal(audits('sitecrm-site-model').length, n3, 'the same facts are not tried twice');
+    await call('POST', { action: 'site-save', id: three.id, name: 'Third', zip: '91502' }, PM);
+    var p3b = await call('GET', { site: three.id }, PM); assert.ok(p3b.site.latestModel, 'a fact added runs it'); assert.equal(p3b.site.latestModel.zip, '91502');
+    /* a workspace without Omega Compute is simply not modelled: no error, no record; the design is still read */
+    db.seed(O + '/billing/current', { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 86400000, modules: ['lite'] });
+    var four = await call('POST', { action: 'site-save', name: 'Fourth', address: '1 Main St, Burbank, CA 91502' }, PM);
+    db.seed('projects/p_skid4', Object.assign({}, SKID, { address: '1 Main St, Burbank, CA 91502' })); db.data.get(O + '/sites/' + four.id).projectId = 'p_skid4';
+    var p4 = await call('GET', { site: four.id }, PM);
+    assert.ok(p4.site.latestDesign); assert.equal(p4.site.latestModel, null); assert.equal(p4.site.designModel, null); assert.equal(p4.autoModel, null);
+    var p4s = await call('POST', { action: 'design-sync', ids: [four.id] }, PM); assert.equal(p4s.modelled.length, 0); assert.equal(p4s.stopped.length, 0);
+  });
   await test('the pages carry the design: the site card and its pro forma button, the register’s sync and drawer', async function () {
     var pf = fs.readFileSync(path.join(__dirname, '..', 'portfolio.html'), 'utf8'), sc = fs.readFileSync(path.join(__dirname, '..', 'site-crm.html'), 'utf8');
     assert.match(pf, /id="ba-design"/); assert.match(pf, /act\('design-sync'/); assert.match(pf, /Site Map design/); assert.match(pf, /id="c-editor-n"/);
     assert.match(sc, /id="design-card"/); assert.match(sc, /pf-design/); assert.match(sc, /fromDesign: true/); assert.match(sc, /design-sync/); assert.match(sc, /ds-proforma/);
+    /* the automatic run, the skid and what it ran on, in the pages; the editor tells the site after a save */
+    assert.match(sc, /runs on this design by itself/); assert.match(sc, /j\.autoModel/); assert.match(sc, /DATA\.skid/); assert.match(sc, /sk\.chipsets\.filter/); assert.match(sc, /id="model-basis"/); assert.match(sc, /designModel\.missing/); assert.match(sc, /Omega-Core skid/);
+    assert.ok(!/iQGen|IQGEN/i.test(sc) && !/iQGen|IQGEN/i.test(pf), 'the pages never name the source workbook');
+    assert.match(pf, /run the compute model on it by itself/);
+    var ed = fs.readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
+    assert.match(ed, /function omegaSiteDesignPush\(\)/); assert.match(ed, /action:'design-sync', ids:\[S\.siteId\], source:'editor'/); assert.match(ed, /S\.siteId\s*=\s*\(typeof d\.siteId==='string'/); assert.match(ed, /omegaSiteDesignPush\(\); \}catch\(_e\)\{\}/);
   });
   console.log('\naudit');
   await test('every write is audited', async function () {

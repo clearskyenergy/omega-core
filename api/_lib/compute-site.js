@@ -205,6 +205,9 @@ function read(input) {
   if (kw == null && amps != null) kw = amps * volts * (phases === 3 ? Math.sqrt(3) : 1) * pf / 1000;
   c.service = {
     kw: kw, amps: amps, volts: volts, phases: phases, pf: pf,
+    /* own: the compute's OWN meter (an Omega-Core skid), not a building's
+       shared service; the words change, the balance does not (2026-10-13) */
+    own: bool(sv.own, false),
     loadingPct: rd(e, 'service.loadingPct', sv.loadingPct, { def: 80, min: 50, max: 100, label: 'The continuous loading limit (%)' }),
     upgradeKw: rd(e, 'service.upgradeKw', sv.upgradeKw, { def: 0, min: 0, max: 50000, label: 'The service upgrade (kW)' }),
     upgradeCost: rd(e, 'service.upgradeCost', sv.upgradeCost, { def: 0, min: 0, max: 1e8, label: 'The service upgrade cost ($)' })
@@ -264,7 +267,10 @@ function read(input) {
   var shareSum = tv.offtake.sharePct + tv.edge.sharePct + tv.spot.sharePct;
   if (Math.abs(shareSum - 100) > 0.01) e.push(err('compute.tiers', 'The three contract shares must add up to 100% (they add up to ' + r1(shareSum) + '%).'));
   c.compute = {
-    gpuClass: cls, gpuName: G.name, gpuShort: G.short, pods: pods,
+    /* a custom accelerator may be named by its caller (the Omega-Core skid
+       names its chipset); the catalog's names stand for the catalog's classes */
+    gpuClass: cls, gpuName: cls === 'custom' && str(cp.gpuName, 80) ? str(cp.gpuName, 80) : G.name,
+    gpuShort: cls === 'custom' && str(cp.gpuShort, 40) ? str(cp.gpuShort, 40) : G.short, pods: pods,
     kwPerGpu: rd(e, 'compute.kwPerGpu', cp.kwPerGpu, { def: G.kw, min: 0.05, max: 5, label: 'Power per GPU (kW)' }),
     gpusPerPod: rd(e, 'compute.gpusPerPod', cp.gpusPerPod, { def: G.podMax, min: 1, max: G.podMax, int: true, label: 'GPUs per pod' }),
     overheadPct: rd(e, 'compute.overheadPct', cp.overheadPct, { def: 20, min: 0, max: 150, label: 'Server overhead (%)' }),
@@ -351,7 +357,13 @@ function prepare(c) {
   if (!loc.ok) return { ok: false, errors: [err('site.zip', loc.error)] };
   var seg = c.site.hostType;
   var tariffSeg = seg === 'industrial' ? 'industrial' : 'commercial';
-  var L = S.buildLoad({ load: c.load }, loc, seg);
+  /* NO BUILDING LOAD (2026-10-13): compute on its own meter (an Omega-Core
+     skid) has no building behind it. The meter carries the compute, its
+     battery and nothing else; nothing is assumed, and the load is known
+     exactly (zero), so it never weakens the confidence. */
+  var L = c.load && c.load.none === true
+    ? { ok: true, kw: zeros(H), source: 'none', quality: 'high', notes: ['No building load: the compute is on its own meter.'], label: 'No building load (own meter)' }
+    : S.buildLoad({ load: c.load }, loc, seg);
   if (!L.ok) return { ok: false, errors: [err('load', L.error)] };
   var building = L.kw, h;
   var ct = S.calibratedTariff({ tariff: c.tariff }, loc, tariffSeg, L);
@@ -710,7 +722,9 @@ function capexLines(c, pods, bat, who) {
       add('fiber', 'Fiber backhaul installation', k.fiberInstall, 'other', 'macrs7');
     }
     if (!c.ev.existing && c.ev.ports > 0) add('ev', 'EV chargers, ' + c.ev.ports + ' ports at ' + c.ev.kwPerPort + ' kW', c.ev.ports * c.ev.capexPerPort, 'ev');
-    if (bat.kwh > 0) {
+    /* a battery priced at $0/kWh is inside another line's price (the R60
+       inside the Omega-Core skid): no $0 line of its own */
+    if (bat.kwh > 0 && bat.kwh * c.battery.capexPerKwh > 0) {
       out.push({ id: 'bess', label: 'Battery, ' + fmt(bat.kw) + ' kW / ' + fmt(bat.kwh) + ' kWh', amount: Math.round(bat.kwh * c.battery.capexPerKwh * soft), asset: 'storage' });
     }
     if (c.solar.kwdc > 0) out.push({ id: 'solar', label: 'Solar, ' + fmt(c.solar.kwdc) + ' kW-dc', amount: Math.round(c.solar.kwdc * 1000 * c.solar.capexPerW * soft), asset: 'solar' });
@@ -992,7 +1006,9 @@ function story(c, ctx, y1, who, res) {
   if (y1.battery.kwh > 0) flow.push(['bess', fmt(y1.battery.kw) + ' kW / ' + fmt(y1.battery.kwh) + ' kWh BESS', 'Holds the service limit and the peak']);
   if (c.solar.kwdc > 0) flow.unshift(['solar', fmt(c.solar.kwdc) + ' kW DC Solar', 'On the host site']);
   flow.push(['host', c.site.host || 'Site host', HOST_TYPES[c.site.hostType] + (c.site.city ? ', ' + c.site.city : '')]);
-  flow.push(['grid', 'Existing service', fmt(c.service.kw) + ' kW' + (c.service.volts ? ' at ' + fmt(c.service.volts) + ' V' : '') + ', shared']);
+  flow.push(c.service.own
+    ? ['grid', 'Own service', fmt(c.service.kw) + ' kW' + (c.service.volts ? ' at ' + fmt(c.service.volts) + ' V' : '') + ', the compute\u2019s own meter']
+    : ['grid', 'Existing service', fmt(c.service.kw) + ' kW' + (c.service.volts ? ' at ' + fmt(c.service.volts) + ' V' : '') + ', shared']);
   var terms = [c.finance.years + '-year analysis'];
   if (who === 'own') terms.push('Compute sold ' + k.tiers.offtake.sharePct + '% offtake · ' + k.tiers.edge.sharePct + '% edge · ' + k.tiers.spot.sharePct + '% on-demand');
   if (who === 'own' && (c.deal.rentPerYear > 0 || c.deal.rentSharePct > 0)) terms.push('Host rent ' + money(c.deal.rentPerYear) + '/yr' + (c.deal.rentSharePct ? ' + ' + c.deal.rentSharePct + '% of gross' : ''));
@@ -1006,7 +1022,7 @@ function story(c, ctx, y1, who, res) {
   if (y1.battery.kwh > 0) sys.push('a ' + fmt(y1.battery.kw) + ' kW / ' + fmt(y1.battery.kwh) + ' kWh battery');
   var where = (c.site.host ? ' at ' + c.site.host : '') + (place ? ' in ' + place : '');
   var narrative = su ? who1 + ' is seeking ' + ask(su.equity) + ' investment in a project that installs ' + listWords(sys) + where +
-    ', on the building\'s existing ' + fmt(c.service.kw) + ' kW service. ' +
+    (c.service.own ? ', on its own ' + fmt(c.service.kw) + ' kW service. ' : ', on the building\'s existing ' + fmt(c.service.kw) + ' kW service. ') +
     (who === 'own' ? 'The project sells GPU-hours to inference customers and charging to drivers, and pays the site\'s added electricity. '
       : who === 'infra' ? 'The project owns the power and pod layer and receives ' + c.deal.infraSharePct + '% of gross compute revenue from the operator that owns the GPUs. '
       : 'The host leases the power to a compute operator. ') +
@@ -1224,7 +1240,9 @@ function siteAssumptions(c, ctx, y1, y0, who, sch) {
     a.push('The ' + fmt(y1.battery.kw) + ' kW / ' + fmt(y1.battery.kwh) + ' kWh battery (' + c.battery.rtePct + '% round trip, ' + c.battery.dodPct +
       '% usable) holds a monthly demand target searched for the most value, charges in the cheapest hours with room, and fades ' + c.battery.fadePct + '% a year.');
   }
-  a.push('Electricity is the whole meter billed with the project less the building billed alone, on ' + ctx.tariff.label + '; it escalates ' +
+  a.push((ctx.load.source === 'none'
+    ? 'Electricity is the project\'s own meter billed on ' + ctx.tariff.label + ' (there is no building load on it)'
+    : 'Electricity is the whole meter billed with the project less the building billed alone, on ' + ctx.tariff.label) + '; it escalates ' +
     c.finance.utilityEscPct + '% a year. Surplus solar is not credited.');
   if (who === 'own') a.push('The project pays the operator\'s platform fee of ' + k.platformFeePct + '% of gross compute' +
     (c.deal.rentPerYear || c.deal.rentSharePct ? ' and the host ' + money(c.deal.rentPerYear) + ' a year' + (c.deal.rentSharePct ? ' plus ' + c.deal.rentSharePct + '% of gross compute' : '') : '') + '.');
