@@ -24,6 +24,13 @@ function block(marker) {
 }
 const CANOPY = block('<!-- ================= CANOPY FROM A TRACED SHAPE');
 const AREA = block('<!-- ================= SOLAR: CUSTOM AREA');
+function fn(name) {
+  const k = SRC.indexOf('function ' + name + '('); if (k < 0) throw new Error(name);
+  let i = SRC.indexOf('{', k), d = 0;
+  for (;; i++) { if (SRC[i] === '{') d++; else if (SRC[i] === '}') { d--; if (!d) break; } }
+  return SRC.slice(k, i + 1);
+}
+const AL_GENERATE = fn('alGenerate'), SHAPE_BBOX = fn('_shapeBBox');
 /* the one line of openAutoLayout that takes a handed outline */
 const OPEN_AL = SRC.indexOf('function openAutoLayout(boundaryPts){') >= 0
   ? SRC.slice(SRC.indexOf('function openAutoLayout(boundaryPts){'), SRC.indexOf('var host=document.getElementById(\'autolayout-modal\');'))
@@ -43,13 +50,15 @@ function world() {
     document: { querySelector() { return null; }, getElementById() { return null; } },
     setInterval, clearInterval, setTimeout,
     setMode(m) { log.modes.push(m); S.mode = m; },
+    selectShape(id) { log.selected = id; },
     showBanner(k, t) { log.banners.push(t); },
     _alPolyAreaPx(pts) { let a = 0; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) a += (pts[j].x + pts[i].x) * (pts[j].y - pts[i].y); return a / 2; },
     _derScaled() { return true; },
     computeGroundLayout(o) { return { tableCount: 4, kw: 40, boundary: o.boundary }; },
     applyGroundLayout(boundary, layout) {
-      S.shapes.push({ id: 'arr' + (++n), kind: 'dersolar', pts: boundary.slice(), mount: 'ground' });
-      log.built.push(boundary);
+      const sh = { id: 'arr' + (++n), kind: 'dersolar', pts: boundary.slice(), mount: 'ground' };
+      S.shapes.push(sh); log.built.push(boundary);
+      return sh;   /* as the editor's does */
     },
     renderShape() {}, updShapeCount() {}, pushHist() {},
     _alFindBoundary() { log.layouts.push('guessed'); return null; },
@@ -61,6 +70,7 @@ function world() {
   vm.runInContext(OPEN_AL + ' window._alBoundary=boundary; log.layouts.push(boundary); }', Object.assign(ctx, { log }));
   vm.runInContext(CANOPY, ctx);
   vm.runInContext(AREA, ctx);
+  vm.runInContext(AL_GENERATE + '\n' + SHAPE_BBOX, ctx);
   /* finishPolyline as the editor does it: the traced points become a shape */
   ctx.trace = pts => { S.shapeDrawing = true; S.shapeDrawing = false; const sh = { id: ctx.uid(), kind: 'polyline', pts }; S.shapes.push(sh); return sh; };
   return { S, ctx, log };
@@ -86,6 +96,7 @@ const sq = (x, y, w) => [{ x, y }, { x: x + w, y }, { x: x + w, y: y + w }, { x,
     chk('canopy: the outline is consumed, the building stays', S.shapes.indexOf(first) < 0 && S.shapes.some(s => s.id === 'bldg'));
     const made = S.shapes.filter(s => s.kind === 'dersolar')[0];
     chk('canopy: mount adjacent, canopy flag', made && made.mount === 'adjacent' && made.canopy === true);
+    chk('canopy: built, the page is back in Select with the canopy selected', S.mode === 'select' && log.selected === made.id, 'mode=' + S.mode + ' selected=' + log.selected + ' made=' + (made && made.id));
 
     /* 2. the second press: a second spot, not the first again */
     ctx.omegaCanopyCustom();
@@ -132,6 +143,25 @@ const sq = (x, y, w) => [{ x, y }, { x: x + w, y }, { x: x + w, y: y + w }, { x,
     ctx.trace(sq(4000, 4000, 100));
     await sleep(700);
     chk('area: a second press lays out the second outline', log.layouts.length === 2 && log.layouts[1][0].x === 4000);
+  }
+
+  /* 6. Custom Area's Generate lands the array selected, in Select mode */
+  {
+    const { S, ctx, log } = world();
+    S.mode = 'polyline';
+    ctx._alBoundary = sq(0, 0, 400); ctx._alLayout = { tableCount: 4, kw: 40 }; ctx._alExclusions = [];
+    ctx.alGenerate();
+    const arr = S.shapes.filter(s => s.kind === 'dersolar')[0];
+    chk('area: Generate builds one array, back in Select, selected', !!arr && S.mode === 'select' && log.selected === arr.id);
+  }
+  /* 7. a selected array frames its real box (it used to be a 1x1 box at the corner) */
+  {
+    const { ctx } = world();
+    ctx._derScale = () => 10;
+    const b = ctx._shapeBBox({ kind: 'dersolar', autoLayout: true, pts: [{ x: 10, y: 20 }], wPx: 300, hPx: 200 });
+    chk('bbox: an auto-layout array is its wPx x hPx box from pts[0]', b.x === 10 && b.y === 20 && b.w === 300 && b.h === 200);
+    const d = ctx._shapeBBox({ kind: 'derdc', pts: [{ x: 100, y: 100 }], lf: 20, wf: 8 });
+    chk('bbox: a compute unit is centred on its point at lf x wf feet', d.x === 0 && d.y === 60 && d.w === 200 && d.h === 80);
   }
 
   console.log(all ? 'tcanopytrace: all passed' : 'tcanopytrace: FAILED');

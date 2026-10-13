@@ -11969,6 +11969,21 @@ function _shapeBBox(sh){
     var pr=Math.hypot(pv.x-pc.x, pv.y-pc.y);
     return { x:pc.x-pr, y:pc.y-pr, w:2*pr, h:2*pr };
   }
+  /* A solar array draws from ONE origin point plus its size (an auto-layout
+     array: pts[0] is the boundary's top-left, wPx/hPx its box; a drawn
+     array keeps wPx/hPx in step with the feet it is drawn from), and a
+     compute unit from its centre and lf/wf feet. The point fallback below
+     gave both a 1x1 box, so a selected canopy framed nothing: the corner
+     handles stacked on its top-left corner with the delete X beside them
+     (Tommy, 2026-10-13: "the x should come up"). */
+  if(sh.kind==='dersolar' && sh.pts && sh.pts.length===1 && sh.wPx>0 && sh.hPx>0){
+    return { x:sh.pts[0].x, y:sh.pts[0].y, w:sh.wPx, h:sh.hPx };
+  }
+  if(sh.kind==='derdc' && sh.pts && sh.pts.length===1){
+    var dppf=(typeof _derScale==='function')?_derScale():((S.pxPerFt&&S.pxPerFt>0)?S.pxPerFt:6);
+    var dw=(sh.lf||20)*dppf, dh=(sh.wf||8)*dppf;
+    return { x:sh.pts[0].x-dw/2, y:sh.pts[0].y-dh/2, w:dw, h:dh };
+  }
   /* line / rect / polyline: bbox over points */
   var xs=[], ys=[];
   for(var i=0;i<sh.pts.length;i++){ xs.push(sh.pts[i].x); ys.push(sh.pts[i].y); }
@@ -16091,8 +16106,13 @@ function alGenerate(){
     if(typeof showBanner==='function') showBanner('wiz','!! No tables fit \u2014 boundary may be smaller than the setbacks.');
     return;
   }
-  applyGroundLayout(boundary, layout, window._alExclusions||[]);
+  var placedArr=applyGroundLayout(boundary, layout, window._alExclusions||[]);
   var host=document.getElementById('autolayout-modal'); if(host) host.remove();
+  /* Custom Area left the page in polyline mode, where a click on the new
+     array would start a stray line. Back to Select with the array selected:
+     its frame, handles and delete X are there at once. */
+  try{ if(typeof setMode==='function') setMode('select'); }catch(e){}
+  try{ if(placedArr && typeof selectShape==='function') selectShape(placedArr.id); }catch(e){}
   if(typeof showBanner==='function'){
     showBanner('cal','  Auto-layout: '+layout.tableCount.toLocaleString()+' tables, '
       +layout.kw.toLocaleString()+' kW-DC'+(layout.tooMany?' (density view)':'')+'.');

@@ -3204,3 +3204,14 @@ largest PLAIN outline (no `omegaRole`, `_visArch`, `omegaBuilding`,
 `omegaFence`, `omegaCampus`, `omegaCompute`, `isSiteBoundary`, `locked`).
 `scripts/tests/tcanopytrace.js` cuts both blocks out of the page and holds
 it (it fails on the editor before the change).
+
+## 2026-10-13 — A selected array frames itself; Custom Area lands its array selected
+
+`_shapeBBox` gives a one-point array (`dersolar` with `wPx`/`hPx`) and a
+compute unit (`derdc`, lf × wf about its point) their real box, so a
+selected canopy is framed with its handles and delete X on its corners
+instead of a 1×1 box at the top-left corner (Tommy, 2026-10-13: "the x
+should come up"). Auto Layout's Generate (Custom Area) lands its array
+selected in Select mode, as Custom Shape does (#295). The field lock
+itself is #295's: it covers only what the pack placed. Held by
+`scripts/tests/tcanopytrace.js` §6–7.
