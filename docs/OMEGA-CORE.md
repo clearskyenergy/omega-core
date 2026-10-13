@@ -20,7 +20,8 @@ overall**, carrying:
 | Battery | **CleanCell R60** — 61.44 kWh LFP, 614.4 VDC / 100 Ah, one Sol-Ark 60K three-phase hybrid PCS (60 kW continuous, 277/480 V, 72.3 A max AC, 90 kVA for 10 s off grid), 97.5% max / 96.5% CEC / 96.0% grid-to-battery, CAN BMS, battery IP55 / PCS IP65 NEMA 3R, UL 9540:2023 (reported), UL 9540A (reported tested), UL 1973 (reported), PCS UL 1741 SB / IEEE 1547 | Clean Cell US R60 Product Data Sheet, Rev A, September 2026 |
 | Controller | **NextNRG Microgrid Controller** — 15-minute dispatch on a 24-hour horizon, economic / resilience / islanded with black start, Modbus TCP to the site PLC, IP55 500 × 750 × 210 mm, IEEE 1547 / IEC 62443 / NERC CIP aligned; it schedules the R60 against the compute load on the skid's own tariff, holds the reserve for the compute and islands the skid when the grid drops. Built into every skid (Tommy, 2026-10-13) | NextNRG Microgrids brochure, Q4 2026, p. 7–8; `api/_lib/nextnrg.js` |
 | Skid | 336 × 87 in, 8 in base, 82.75 in overall | ClearSky's drawing |
-| Price | **$450,000 per skid as recorded (2026-10-02) + $125,000 for the controller = $575,000** (`PRODUCT.systemCostBreakdown`) | ClearSky |
+| Price | **$639,000 per skid as recorded (13 October 2026; $450,000 from 2 October until then) + $125,000 for the NextNRG Microgrid Controller = $764,000** (`PRODUCT.systemCostBreakdown`) | ClearSky |
+| Battery price | **$24,000** for the CleanCell R60 on its own, in the server price book (`api/_lib/editor-cost.js` `CATALOG_PRICES`; 13 October 2026) | ClearSky |
 
 ClearSky owns and operates it. It sits on an EV charging site on **its own
 utility service and meter**, and ClearSky pays the site host a **land lease**.
@@ -174,8 +175,8 @@ the drawing, is said and not papered over.
 
 **The end of term** — removal and meter off at ClearSky's cost, or a buyout at
 fair market value by independent appraisal. The indicative band is 20 / 30 /
-40% of the $575,000 system cost (the skid plus its controller) at year 5
-($115k / $173k / $230k), declining geometrically for a longer term, never
+40% of the $764,000 system cost (the $639,000 skid plus its $125,000 controller) at
+year 5 ($153k / $229k / $306k), declining geometrically for a longer term, never
 under 5%. ClearSky's program outlay is the system cost,
 the fiber lateral at compute-lease's $45k–$250k/mile midpoint where fiber is not
 on site, and the lease.
@@ -217,13 +218,14 @@ What Omega-Core adds:
   over amortising months of EBITDA ÷ (target × service per dollar) — plus
   project and equity IRR.
 - **A CAPEX basis**, defaulting to the **Omega-Core skid as built: the
-  $450,000 ClearSky recorded (Tommy, 6 October 2026: "use the 450k skid
-  price as the default") plus the $125,000 NextNRG Microgrid Controller built
-  into it, $575,000** — `omega-core.js` hands the compute model the product
-  record's figure (`opts.skidPriceUsd`) and its label says what it is made of;
-  the model's own default stays the recorded skid price. The workbook's CMDC
-  range (general-purpose air-cooled high, $724,471), the chipset-scaled
-  estimate and a typed figure stay as choices. The dialog says which was used.
+  $639,000 ClearSky recorded (13 October 2026; $450,000 from 6 October, Tommy:
+  "use the 450k skid price as the default") plus the $125,000 NextNRG Microgrid
+  Controller built into it, $764,000** — `omega-core.js` hands the compute model
+  the product record's figure (`opts.skidPriceUsd`) and its label says what it
+  is made of; the model's own default stays the recorded skid price. The
+  workbook's CMDC range (general-purpose air-cooled high, $724,471), the
+  chipset-scaled estimate and a typed figure stay as choices. The dialog says
+  which was used.
 - **A pricing basis**, defaulting to CoreWeave's public **spot** rate (Tommy,
   6 October 2026: "use spot as the default"; the workbook's cash-flow sheet
   runs on it, $2.46 per GPU-hour for the H100). On-demand ($6.16), inference

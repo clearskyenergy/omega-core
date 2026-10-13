@@ -266,6 +266,17 @@ function docs(org, bill, member) {
 }
 var SCR = { action: 'screen', site: BASE };
 var PKG = function (mods) { return { packaged: true, packagingState: 'paid', accessUntil: 4102444800000, modules: mods }; };
+
+section('The design’s cost');
+var D0 = CS.model(site({ compute: { pods: 2 } })), D1 = CS.model(site({ compute: { pods: 2 }, capex: { total: 1500000, basis: 'Site Map cost run' } }));
+ok('without a design cost the catalog prices the capex and nothing is scaled', D0.ok !== false && D0.proforma.capexScale == null);
+ok('the Site Map cost run replaces the catalog total, the lines kept for their asset classes and scaled to it', D1.ok !== false && D1.proforma.capex.total === 1500000 && D1.proforma.capexScale.to === 1500000 && D1.proforma.capexScale.from === D0.proforma.capex.total, D1.proforma && D1.proforma.capexScale);
+ok('the scaled lines sum to the run exactly', D1.schedule.capex.reduce(function (a, l) { return a + l.amount; }, 0) === 1500000 && D1.schedule.capex.every(function (l) { return l.scaled === true; }));
+ok('the assumptions say so', D1.proforma.assumptions.some(function (a) { return /Site Map cost run, \$1,500,000/.test(a); }), D1.proforma.assumptions[0]);
+ok('a different cost is a different IRR', D0.proforma.metrics.afterTaxIrr !== D1.proforma.metrics.afterTaxIrr);
+var DL = CS.model(site({ compute: { pods: 2 }, deal: { structure: 'lease' }, capex: { total: 1500000 } }));
+ok('a lease carries no equipment capex, so the design cost does not apply', DL.ok !== false && (DL.proforma == null || DL.proforma.capexScale == null));
+ok('a nonsense cost is refused', CS.model(site({ capex: { total: -5 } })).ok === false);
 later(function () { section('Gate'); });
 [
   ['GET answers with no auth and no numbers', {}, null, { method: 'GET', token: 'none' }, function (r) { return r.status === 200 && r.body.engines && !r.body.result; }],

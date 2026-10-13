@@ -1,0 +1,887 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portfolio · Omega Workspace</title>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+     Portfolio & Assets — the workspace's register of energy SITES, in the
+     workspace chrome (omega-workspace-shell.js: the rail, the switcher, the
+     side panel, the phone tab bar; this page builds none of it).
+
+     The register is read from GET /api/site-crm (Admin SDK; the rules close
+     the collection to browsers). Every row carries the site's latest pro
+     forma — investor IRR, capital, payback — denormalised onto the record by
+     the endpoint when a scenario runs, so the figures on this page are the
+     stored scenario's, never recomputed here. A row opens the side panel
+     with the site's details and figures; the checkboxes make a selection,
+     and the action bar works on it the way a mail client does: open in the
+     editor (one Site Map project per site), send to the finance marketplace
+     (one deal per site), run the pro forma, set a status, tag, export the
+     IRR as CSV, export the SPV term sheet (one PDF per site), archive,
+     delete. Every action is the endpoint's; showing a button is never
+     access, and the server answers per site. ES5, no build step. -->
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+/* the page's own sections; the chrome's rules live in omega-workspace-shell.js */
+.pf-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.pf-head h1{margin:0;font:600 24px/1.2 Poppins,"DM Sans",sans-serif;letter-spacing:-.3px}
+.pf-head .sub{color:var(--ows-ink2);font-size:13.5px;margin-top:4px;max-width:720px}
+.pf-head .acts{display:flex;gap:8px;flex-wrap:wrap}
+.pf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.pf-stat{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:14px 16px;box-shadow:var(--ows-shadow)}
+.pf-stat .k{font:500 10.5px "DM Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
+.pf-stat .v{font:600 24px/1.1 Poppins,"DM Sans",sans-serif;margin-top:6px;font-variant-numeric:tabular-nums}
+.pf-stat .n{font-size:11.5px;color:var(--ows-ink2);margin-top:4px;line-height:1.4}
+.pf-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.pf-search{flex:1;min-width:220px;display:flex;align-items:center;gap:8px;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:10px;padding:0 12px;color:var(--ows-ink3)}
+.pf-search input{border:0;background:transparent;flex:1;font:inherit;color:var(--ows-ink);outline:none;min-width:0;padding:9px 0}
+.pf-sel{border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px;font:inherit;font-size:13px;background:var(--ows-paper);color:var(--ows-ink);outline:none;cursor:pointer}
+.pf-toggle{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ows-ink2);cursor:pointer;white-space:nowrap}
+.pf-toggle input{accent-color:var(--ows-brand)}
+/* the selection bar: over the table, under the topbar, as a mail client's */
+.pf-bar{position:sticky;top:60px;z-index:20;display:none;align-items:center;gap:6px;flex-wrap:wrap;background:var(--ows-rail);color:#fff;border-radius:12px;padding:8px 10px 8px 14px;box-shadow:var(--ows-shadow)}
+.pf-bar.on{display:flex}
+.pf-bar .count{font-weight:600;font-size:13px;margin-right:6px;white-space:nowrap}
+.pf-bar .count small{font-weight:500;color:var(--ows-rail-dim);margin-left:6px}
+.pf-bar .count a{color:#9ED8EA;text-decoration:underline;cursor:pointer;font-weight:500}
+.pf-bar button,.pf-bar .menu>button{border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;border-radius:8px;padding:6px 10px;font:500 12.5px "DM Sans",sans-serif;cursor:pointer;white-space:nowrap}
+.pf-bar button:hover,.pf-bar .menu>button:hover{background:rgba(255,255,255,.14)}
+.pf-bar button.danger{border-color:rgba(238,90,79,.6);color:#FFB3AD}
+.pf-bar .sp{flex:1}
+.pf-bar .x{border:0;background:none;font-size:18px;line-height:1;padding:2px 8px}
+.pf-bar .menu{position:relative}
+.pf-menu{position:absolute;top:calc(100% + 6px);left:0;min-width:220px;background:var(--ows-paper);color:var(--ows-ink);border:1px solid var(--ows-line);border-radius:10px;box-shadow:var(--ows-shadow);padding:6px;z-index:40}
+.pf-menu button{display:block;width:100%;text-align:left;border:0;background:none;color:var(--ows-ink);border-radius:8px;padding:8px 10px;font:500 13px "DM Sans",sans-serif;cursor:pointer}
+.pf-menu button:hover{background:var(--ows-sunk)}
+.pf-menu button small{display:block;color:var(--ows-ink3);font-size:11.5px;font-weight:400}
+.pf-menu .hd{padding:6px 10px 4px;font:500 10.5px "DM Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
+/* the register */
+.pf-table{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;box-shadow:var(--ows-shadow)}
+.pf-tr{display:grid;grid-template-columns:34px minmax(180px,2fr) minmax(100px,1fr) 104px 86px 50px 82px 92px 128px 150px;gap:8px;padding:11px 14px;border-bottom:1px solid var(--ows-line);align-items:center;min-height:52px}
+.pf-tr.head{font:500 10.5px "DM Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ows-ink3);background:#FAFBFC;min-height:40px;position:sticky;top:0}
+.pf-tr.head .sort{cursor:pointer;user-select:none;white-space:nowrap}
+.pf-tr.head .sort:hover{color:var(--ows-brand)}
+.pf-tr.head .sort[data-dir="asc"]::after{content:" ▴"}.pf-tr.head .sort[data-dir="desc"]::after{content:" ▾"}
+.pf-tr.body{cursor:pointer}.pf-tr.body:hover{background:#F4F7FB}.pf-tr.body.sel{background:var(--ows-brand-soft)}
+.pf-tr.body.archived .t-name{color:var(--ows-ink3);text-decoration:line-through}
+.pf-tr:last-child{border-bottom:none}
+.selrow{display:flex;align-items:center;justify-content:center}.selrow input{width:16px;height:16px;accent-color:var(--ows-brand);cursor:pointer}
+.t-name{font-weight:600;color:var(--ows-ink);font-size:14px}.t-sub{font-size:11.5px;color:var(--ows-ink3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.t-num{font-size:13px;font-variant-numeric:tabular-nums}.t-mut{font-size:12.5px;color:var(--ows-ink3);font-style:italic}
+.pill{display:inline-block;font-size:11px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;background:var(--ows-sunk);color:var(--ows-ink2)}
+.pill-ok{background:var(--ows-green-soft);color:var(--ows-green)}.pill-no{background:#FDECEA;color:#B03A1E}.pill-warn{background:var(--ows-amber-soft);color:var(--ows-amber)}
+.pill-blue{background:var(--ows-brand-soft);color:var(--ows-brand-ink)}.pill-teal{background:var(--ows-teal-soft);color:var(--ows-teal-d)}.pill-funded{background:var(--ows-green);color:#fff}
+.links{display:flex;gap:5px;flex-wrap:wrap}
+.links a{display:inline-flex;align-items:center;gap:4px;font-size:11.5px;font-weight:600;padding:3px 8px;border-radius:999px;border:1px solid var(--ows-line);background:var(--ows-paper);color:var(--ows-brand-ink);white-space:nowrap}
+.links a:hover{background:var(--ows-sunk)}
+.pf-empty{text-align:center;padding:56px 20px;color:var(--ows-ink2)}.pf-empty b{display:block;font-size:16px;color:var(--ows-ink);margin-bottom:6px}
+.pf-loading{display:flex;align-items:center;justify-content:center;padding:56px;gap:10px;color:var(--ows-ink2)}
+.spin{width:18px;height:18px;border:2px solid var(--ows-line2);border-top-color:var(--ows-brand);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pf-msg{border-radius:10px;padding:11px 14px;font-size:13px;line-height:1.5}.pf-msg.err{background:#FDF0EC;border:1px solid #F3C4B5;color:#B03A1E}.pf-msg.ok{background:var(--ows-green-soft);border:1px solid #BFE3D0;color:var(--ows-green)}
+.pf-foot{font-size:12px;color:var(--ows-ink2);line-height:1.5}
+.pf-more{text-align:center;padding:12px}
+/* the side panel's site facts */
+.dr-facts{display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.dr-fact .k{font:500 10.5px "DM Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ows-ink3)}
+.dr-fact .v{font-size:14px;font-weight:600;margin-top:3px;font-variant-numeric:tabular-nums}.dr-fact .n{font-size:11.5px;color:var(--ows-ink2);margin-top:2px}
+.dr-irr{background:var(--ows-sunk);border-radius:12px;padding:14px;display:grid;grid-template-columns:1fr 1fr;gap:10px 14px}
+.dr-irr .big{grid-column:1/-1;display:flex;align-items:baseline;gap:10px}
+.dr-irr .big b{font:600 28px/1 Poppins,"DM Sans",sans-serif;color:var(--ows-green)}.dr-irr .big b.undef{color:var(--ows-ink3);font-size:18px}
+.dr-irr .big span{font-size:12.5px;color:var(--ows-ink2)}
+.dr-sec{font:600 12px "DM Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3);margin:4px 0 -6px}
+.dr-acts{display:flex;flex-wrap:wrap;gap:8px}
+.dr-acts button,.dr-acts a{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 12px;font-weight:600;font-size:12.5px;border:1px solid var(--ows-line2);background:var(--ows-paper);color:var(--ows-ink);cursor:pointer}
+.dr-acts .primary{background:var(--ows-brand);border-color:var(--ows-brand);color:#fff}
+.dr-acts .danger{color:#B03A1E;border-color:#F3C4B5}
+/* import */
+.pf-modal{display:none;position:fixed;inset:0;background:rgba(11,42,61,.45);z-index:80;align-items:center;justify-content:center;padding:16px}
+.pf-modal.on{display:flex}
+.pf-modal .box{background:var(--ows-paper);border-radius:14px;max-width:880px;width:100%;max-height:88vh;overflow:auto;padding:22px 24px;box-shadow:var(--ows-shadow)}
+.pf-modal h2{margin:0 0 4px;font:600 18px Poppins,"DM Sans",sans-serif}.pf-modal .sub{color:var(--ows-ink2);font-size:13px;margin-bottom:14px}
+.im-map .pf-tr{grid-template-columns:1fr 1fr;cursor:default;min-height:44px}
+.im-prev .pf-tr{cursor:default;min-height:40px}
+.pf-modal .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:10px 0}
+@media (max-width:900px){
+  .pf-bar{top:54px}
+  /* a phone keeps the checkbox, the site, its status and its IRR */
+  .pf-tr{grid-template-columns:34px minmax(120px,2fr) 72px 64px 72px}
+  .pf-tr>div:nth-child(3),.pf-tr>div:nth-child(5),.pf-tr>div:nth-child(6),.pf-tr>div:nth-child(8),.pf-tr>div:nth-child(10){display:none}
+  .pf-stats{grid-template-columns:1fr 1fr}
+  .dr-facts{grid-template-columns:1fr 1fr}
+}
+.reg-ov{position:fixed;inset:0;background:rgba(14,26,36,.42);z-index:80;display:flex;align-items:center;justify-content:center;padding:16px}
+.reg-dlg{background:var(--ows-paper);border-radius:16px;box-shadow:var(--ows-shadow);width:min(640px,100%);max-height:92vh;overflow:auto;padding:20px 22px 18px}
+.reg-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:6px}.reg-head h2{margin:0;font-size:18px}
+.reg-x{border:0;background:transparent;font-size:22px;line-height:1;cursor:pointer;color:var(--ows-ink2);padding:4px 8px}
+.reg-l{display:block;font-size:11.5px;font-weight:600;color:var(--ows-ink2);margin:12px 0 4px;letter-spacing:.02em}.reg-hint{font-weight:400;color:var(--ows-ink2)}
+.reg-in{width:100%;border:1px solid var(--ows-line);border-radius:10px;padding:9px 11px;font:inherit;font-size:14px;background:var(--ows-paper);color:var(--ows-ink);box-sizing:border-box}
+.reg-row{display:grid;grid-template-columns:1fr 120px;gap:10px}
+.reg-kinds{display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px;margin-top:6px}
+.reg-kind{text-align:left;border:1.5px solid var(--ows-line);border-radius:12px;background:var(--ows-paper);padding:10px 12px;cursor:pointer;font:inherit;color:var(--ows-ink)}
+.reg-kind b{display:block;font-size:13.5px}.reg-kind span{display:block;font-size:11.5px;color:var(--ows-ink2);margin-top:2px}
+.reg-kind.on{border-color:var(--ows-brand);background:var(--ows-brand-soft);box-shadow:0 0 0 3px rgba(0,137,189,.12)}
+.reg-err{min-height:18px;color:#B03A1E;font-size:12.5px;margin-top:8px}
+.reg-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
+@media(max-width:520px){.reg-row{grid-template-columns:1fr}.reg-kinds{grid-template-columns:1fr 1fr}}
+</style>
+</head>
+<body>
+<main id="main">
+  <div class="pf-head">
+    <div><h1>Portfolio &amp; Assets</h1><div class="sub">Your register of energy sites: what each site is, who owns the meter, how much term is left, and what the pro forma says. Select sites to open them in Site Map, send them to the finance marketplace, run the pro forma, or export the IRR and the SPV term sheet.</div></div>
+    <div class="acts">
+      <button class="ows-pill" id="btn-import" type="button">Import sites</button>
+      <button class="ows-pill" id="btn-export" type="button">Download CSV</button>
+      <button class="ows-pill primary" id="btn-add" type="button">+ Register site</button>
+    </div>
+  </div>
+  <div id="msg"></div>
+  <div class="pf-stats" id="stats" style="display:none">
+    <div class="pf-stat"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n" id="c-sites-n">in this workspace's register</div></div>
+    <div class="pf-stat"><div class="k">Positive IRR</div><div class="v" id="c-pf">–</div><div class="n" id="c-pf-n">sites whose case returns more than it costs</div></div>
+    <div class="pf-stat"><div class="k">In Site Map</div><div class="v" id="c-editor">–</div><div class="n" id="c-editor-n">sites with a project in the editor</div></div>
+    <div class="pf-stat"><div class="k">Capital</div><div class="v" id="c-fin">–</div><div class="n" id="c-fin-n">sites sent to the finance marketplace</div></div>
+    <div class="pf-stat"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
+  </div>
+  <div class="pf-tools">
+    <label class="pf-search"><span>⌕</span><input id="q" type="search" placeholder="Search name, city, address, tag or site ID…" autocomplete="off" aria-label="Search sites"></label>
+    <select class="pf-sel" id="f-state" aria-label="State"><option value="">All states</option></select>
+    <select class="pf-sel" id="f-status" aria-label="Status"><option value="">Any status</option></select>
+    <select class="pf-sel" id="f-meter" aria-label="Meter"><option value="">Meter: any</option><option value="yes">Meter owned</option><option value="no">No meter</option><option value="unk">Unknown</option></select>
+    <select class="pf-sel" id="f-pf" aria-label="Pro forma"><option value="">Pro forma: any</option><option value="yes">Run</option><option value="no">Not run</option></select>
+    <select class="pf-sel" id="f-kind" aria-label="Project type"><option value="">Any type</option></select>
+    <label class="pf-toggle"><input type="checkbox" id="f-archived"> Show archived</label>
+  </div>
+  <div class="pf-bar" id="bar" role="toolbar" aria-label="Selected sites">
+    <span class="count"><span id="selcount">0 selected</span><small id="selall-wrap" style="display:none">· <a id="selall">select all <span id="selall-n"></span></a></small></span>
+    <button type="button" id="ba-editor" title="One Site Map project per site; a site that already has one opens it">Open in Site Map</button>
+    <button type="button" id="ba-design" title="Read each site's Site Map project: the units, chargers, battery, solar and the cost run, so the IRR follows the design">Sync Site Map</button>
+    <button type="button" id="ba-finance" title="One deal per site on the finance marketplace">Send to marketplace</button>
+    <button type="button" id="ba-terra" title="Mail the site facts and figures to Terra Energy for a solar package and detail">Send to Terra (solar)</button>
+    <button type="button" id="ba-model" title="The Compute Site Pro Forma on each site, from its service, chargers, usage and pods; ten at a time">Run compute model</button>
+    <span class="menu"><button type="button" id="ba-proforma" aria-haspopup="true">Pod pro forma ▾</button></span>
+    <span class="menu"><button type="button" id="ba-status" aria-haspopup="true">Set status ▾</button></span>
+    <span class="menu"><button type="button" id="ba-tag" aria-haspopup="true">Tag ▾</button></span>
+    <button type="button" id="ba-irr">Export IRR</button>
+    <button type="button" id="ba-agreement">Export term sheets</button>
+    <button type="button" id="ba-edit" style="display:none">Edit</button>
+    <button type="button" id="ba-archive">Archive</button>
+    <button type="button" id="ba-restore" style="display:none">Restore</button>
+    <button type="button" class="danger" id="ba-delete" style="display:none">Delete</button>
+    <span class="sp"></span>
+    <button type="button" class="x" id="ba-clear" aria-label="Clear selection">×</button>
+  </div>
+  <div class="pf-table" id="tbl"><div class="pf-loading"><div class="spin"></div>Loading the register…</div></div>
+  <div class="pf-more" id="more" style="display:none"><button class="ows-pill" id="btn-more" type="button">Load more sites</button></div>
+  <div class="pf-foot">Unknown values show as <i>Not provided</i> or <i>Needs verification</i>, never as zeros. Reported peak kW is an unresolved workbook statistic, flagged on each site, never approved capacity. IRR figures are the site's latest stored pro forma scenario under its named assumption set: screening results, not a return promise.</div>
+</main>
+
+<div class="pf-modal" id="import-modal" role="dialog" aria-label="Import sites">
+  <div class="box">
+    <h2>Import sites</h2>
+    <div class="sub">Upload a CSV or XLSX of your sites. A workbook is read on the server: the EVCS intake is recognised by its headers, the EVCS model package enriches the sites it names, and any other sheet is matched by its headers, with a preview of what changes (and what a reviewed value would conflict with) before anything is written. A CSV in this page's template maps column by column. Every site lands in <b>this workspace only</b>.</div>
+    <div id="im-msg"></div>
+    <div class="row"><input type="file" id="im-file" accept=".csv,.xlsx,.xls,.txt"><span class="t-mut" id="im-filename"></span></div>
+    <div id="im-map" class="im-map"></div>
+    <div id="im-preview" class="im-prev" style="margin-top:12px"></div>
+    <div id="im-history"></div>
+    <div class="row" style="margin-top:16px"><button class="ows-pill primary" id="im-go" type="button" disabled>Import</button><button class="ows-pill" id="im-close" type="button">Cancel</button></div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-jd-nav.js?v=1"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-workspace-shell.js"></script>
+<script src="/omega-newproject.js"></script>
+<script>
+(function () {
+  'use strict';
+  var CFG = window.CLEARSKY_CONFIG || {};
+  /* omega-tenant.js starts Firebase the moment it loads; a second start of
+     the same app throws, and that throw is what left the register on
+     "Loading…" with nobody signed in. */
+  try { firebase.initializeApp(CFG.firebase); } catch (e) { if (!/already exists/.test(String(e && e.message))) throw e; }
+  var auth = firebase.auth();
+  var S = window.OmegaWorkspaceShell, esc = S.esc;
+  var ORG = '', WS = null, USER = null, SITES = [], NEXT = null, CANEDIT = false, CANADMIN = false, LOADED = false;
+  /* the point of the register: the positive IRRs first (Tommy, 2026-10-11) */
+  var SEL = {}, LAST_CLICK = null, SORT = { key: 'irr', dir: 'desc' }, OPEN = null;
+  var STATUSES = ['In editor', 'Funding', 'Development', 'Operating', 'On hold'];
+  function byId(id) { return document.getElementById(id); }
+
+  /* ── the chrome, before anyone is known ─────────────────────────────── */
+  S.mount({ current: 'portfolio', tabs: true, search: function (q) { byId('q').value = q; render(); } });
+  byId('main').classList.add('ows-content');
+  function paint() {
+    S.paint({ ws: WS || window.OMEGA_WORKSPACE || {}, user: USER || {}, plan: planName() });
+    /* a classic-home tenant keeps its home: the rail's Home goes there */
+    if (!S.wantsWorkspace()) Array.prototype.forEach.call(document.querySelectorAll('#side-nav a[data-key="home"], .ows-tabs a[data-tab="home"]'), function (a) { a.setAttribute('href', '/'); });
+  }
+  function planName() {
+    var ws = WS || {}, b = (window.OmegaTenant && OmegaTenant.billing) || {}, pa = ws.packageAccess;
+    if (pa && pa.packaged) return b.plan || 'Packaged';
+    var labels = (window.OmegaTenant && OmegaTenant.tierLabels) || {};
+    return ws.accountTier || labels[b.tier] || '';
+  }
+
+  /* ── the server ─────────────────────────────────────────────────────── */
+  function api(path, opts) {
+    return auth.currentUser.getIdToken().then(function (t) {
+      var h = { 'Authorization': 'Bearer ' + t };
+      if (opts && opts.json) h['Content-Type'] = 'application/json';
+      return fetch(path, { method: (opts && opts.method) || 'GET', headers: h, body: opts && opts.json ? JSON.stringify(opts.json) : undefined, cache: 'no-store' });
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error((j && (j.message || j.error)) || ('HTTP ' + r.status));
+        return j;
+      });
+    });
+  }
+  function post(action, extra) { return api('/api/site-crm', { method: 'POST', json: Object.assign({ org: ORG, action: action }, extra || {}) }); }
+  function msg(text, ok) { byId('msg').innerHTML = text ? '<div class="pf-msg ' + (ok ? 'ok' : 'err') + '">' + esc(text) + '</div>' : ''; }
+
+  /* ── reading a site ─────────────────────────────────────────────────── */
+  function unk(v) { return v == null || v === ''; }
+  function money(n) { if (n == null || !isFinite(n)) return null; var a = Math.abs(n), s = a >= 1e6 ? (a / 1e6).toFixed(2) + 'M' : a >= 1e3 ? Math.round(a / 1e3) + 'k' : String(Math.round(a)); return (n < 0 ? '−$' : '$') + s; }
+  function pct(n, d) { return n == null || !isFinite(n) ? null : (n * 100).toFixed(d == null ? 2 : d) + '%'; }
+  /* the IRR a row shows: the compute model's after-tax IRR (the one finance engine) once it has run, else the pod pro forma's investor IRR */
+  function irrOf(s) {
+    var lm = s.latestModel; if (lm && lm.irr != null && isFinite(lm.irr)) return Number(lm.irr);
+    var lp = s.latestProforma; return lp && lp.investorIrrDefined && lp.investorIrrAnnual != null ? Number(lp.investorIrrAnnual) : null;
+  }
+  function irrSource(s) { return s.latestModel && s.latestModel.irr != null ? 'compute model, after tax' : s.latestProforma ? 'pod pro forma, investor' : ''; }
+  function costOf(s) { var lm = s.latestModel; if (lm && lm.totalProjectCost > 0) return lm.totalProjectCost; var lp = s.latestProforma; return lp && lp.investorCapital != null ? lp.investorCapital : null; }
+  function capitalPill(s) {
+    var c = s.capital;
+    if (!c) return s.finProjectId ? '<span class="pill">Sent</span>' : '<span class="t-mut">Not sent</span>';
+    if (c.funded) return '<span class="pill pill-funded" title="Accepted by ' + esc(c.awardedToOrg || 'a capital partner') + '">Funded</span>';
+    if (c.status === 'draft') return '<span class="pill pill-warn">Draft</span>';
+    if (c.status === 'missing') return '<span class="pill pill-no">Deal gone</span>';
+    return '<span class="pill pill-ok">Open' + (c.offerCount ? ' \u00b7 ' + c.offerCount + ' offer' + (c.offerCount > 1 ? 's' : '') : '') + '</span>';
+  }
+  function atlasHref(s) { var addr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(', '); return '/grid-atlas.html' + (addr ? '?q=' + encodeURIComponent(addr) : ''); }
+  function deckHref(s) { return siteHref(s) + '#deck'; }
+  function availKw(s) {
+    if (s.availablePowerMw != null) return { kw: Number(s.availablePowerMw) * 1000, basis: 'as entered' };
+    if (s.serviceCapacityKw != null && s.existingPeakKw != null) return { kw: Math.max(0, Number(s.serviceCapacityKw) - Number(s.existingPeakKw)), basis: 'service − peak' };
+    return { kw: null, basis: null };
+  }
+  function meterPill(s) {
+    if (s.meterOwned === true) return '<span class="pill pill-ok">Owned</span>';
+    if (s.meterOwned === false) return '<span class="pill pill-no">No meter</span>';
+    return '<span class="pill" title="Needs verification">Unknown</span>';
+  }
+  function statusPill(s) {
+    if (s.archived) return '<span class="pill">Archived</span>';
+    var st = s.status || ''; if (!st) return '<span class="t-mut">–</span>';
+    var cls = /editor/i.test(st) ? 'pill-blue' : /fund/i.test(st) ? 'pill-warn' : /develop/i.test(st) ? 'pill-teal' : /operat/i.test(st) ? 'pill-ok' : '';
+    return '<span class="pill ' + cls + '">' + esc(st) + '</span>';
+  }
+  function needsVerification(s) { return s.meterOwned == null || unk(s.termYearsRemaining); }
+  function siteHref(s) { return '/site-crm.html?site=' + encodeURIComponent(s.id); }
+  function editorHref(s) { return '/editor.html?id=' + encodeURIComponent(s.projectId); }
+  function dealHref(s) { return '/finance#deal=' + encodeURIComponent(s.finProjectId) + '&tab=market'; }
+  function linkChips(s) {
+    var h = '';
+    if (s.projectId) h += '<a href="' + editorHref(s) + '" data-stop title="Open this site’s project in Site Map">Site Map ↗</a>';
+    h += '<a href="' + atlasHref(s) + '" data-stop title="Grid Atlas at this address">Atlas ↗</a>';
+    if (s.latestModel) h += '<a href="' + deckHref(s) + '" data-stop title="The investor deck from the compute model">Deck ↗</a>';
+    if (s.finProjectId) h += '<a href="' + dealHref(s) + '" data-stop title="The deal on the finance marketplace">' + (s.capital && s.capital.funded ? 'Funded' : s.finProjectStatus === 'draft' ? 'Draft deal' : 'Marketplace') + ' ↗</a>';
+    if (s.partners && s.partners.terra) h += '<a href="' + siteHref(s) + '#deck" data-stop title="Sent to Terra Energy ' + esc(String(s.partners.terra.sentAt || '').slice(0, 10)) + '">Terra ✓</a>';
+    return h ? '<div class="links">' + h + '</div>' : '<span class="t-mut">–</span>';
+  }
+
+  /* ── filters, sort, render ──────────────────────────────────────────── */
+  function filtered() {
+    var q = byId('q').value.trim().toLowerCase(), st = byId('f-state').value, mt = byId('f-meter').value, pf = byId('f-pf').value, ss = byId('f-status').value, kd = byId('f-kind').value;
+    var rows = SITES.filter(function (s) {
+      if (kd && (s.siteScopes || []).indexOf(kd) < 0) return false;
+      if (q) {
+        var ids = s.externalSiteIds || {}, hay = [s.name, s.city, s.state, s.address, s.status, (s.tags || []).join(' '), s.id].concat(Object.keys(ids).map(function (k) { return ids[k]; })).join(' ').toLowerCase();
+        if (hay.indexOf(q) < 0) return false;
+      }
+      if (st && s.state !== st) return false;
+      if (ss && (s.status || '') !== ss) return false;
+      if (mt === 'yes' && s.meterOwned !== true) return false;
+      if (mt === 'no' && s.meterOwned !== false) return false;
+      if (mt === 'unk' && s.meterOwned != null) return false;
+      if (pf === 'yes' && !s.latestProforma) return false;
+      if (pf === 'no' && s.latestProforma) return false;
+      return true;
+    });
+    var k = SORT.key, dir = SORT.dir === 'desc' ? -1 : 1;
+    function val(s) {
+      if (k === 'irr') return irrOf(s);
+      if (k === 'capital') return costOf(s);
+      if (k === 'funding') return s.capital ? (s.capital.funded ? 3 : s.capital.status === 'draft' ? 1 : 2) : 0;
+      if (k === 'power') return availKw(s).kw;
+      if (k === 'location') return [s.state, s.city].filter(Boolean).join(' ').toLowerCase();
+      if (k === 'status') return (s.status || '').toLowerCase();
+      return String(s.name || '').toLowerCase();
+    }
+    rows.sort(function (a, b) {
+      var x = val(a), y = val(b);
+      if (x == null && y == null) return 0; if (x == null) return 1; if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * dir;
+    });
+    return rows;
+  }
+  function fillSelect(id, values, first) {
+    var sel = byId(id), cur = sel.value;
+    sel.innerHTML = '<option value="">' + first + '</option>' + values.map(function (x) { return '<option value="' + esc(x) + '"' + (x === cur ? ' selected' : '') + '>' + esc(x) + '</option>'; }).join('');
+  }
+  function render() {
+    var states = {}, statuses = {};
+    SITES.forEach(function (s) { if (s.state) states[s.state] = true; if (s.status) statuses[s.status] = true; });
+    fillSelect('f-state', Object.keys(states).sort(), 'All states');
+    fillSelect('f-status', Object.keys(statuses).sort(), 'Any status');
+    var rows = filtered(), el = byId('tbl');
+    if (!rows.length) {
+      el.innerHTML = '<div class="pf-empty"><b>' + (SITES.length ? 'No sites match.' : 'No sites yet.') + '</b>' + (SITES.length ? 'Clear a filter or search for something else.' : (CANEDIT ? 'Register the first one, or import a spreadsheet of your sites.' : 'Nothing has been registered in this workspace.')) + '</div>';
+      bar(); return;
+    }
+    function th(label, key, extra) { return '<div class="sort' + (extra ? ' ' + extra : '') + '" data-sort="' + key + '"' + (SORT.key === key ? ' data-dir="' + SORT.dir + '"' : '') + '>' + label + '</div>'; }
+    el.innerHTML = '<div class="pf-tr head"><div class="selrow"><input type="checkbox" id="sel-all" aria-label="Select every site shown"></div>' +
+      th('Site', 'name') + th('Location', 'location') + th('Status', 'status') + th('Power', 'power') + '<div>Pods</div>' + th('IRR', 'irr') + th('Project cost', 'capital') + th('Capital', 'funding') + '<div>Hand-offs</div></div>' +
+      rows.map(function (s) {
+        var lp = s.latestProforma || null, irr = irrOf(s), av = availKw(s), loc = [s.city, s.state].filter(Boolean).join(', ');
+        var ids = s.externalSiteIds || {}, idKey = Object.keys(ids)[0];
+        var sub = [kindLabels(s).join(' + '), idKey ? ids[idKey] : '', (s.tags || []).slice(0, 3).join(' · ')].filter(Boolean).join(' · ') || (unk(s.termYearsRemaining) ? 'Term not provided' : s.termYearsRemaining + ' yr term');
+        return '<div class="pf-tr body' + (SEL[s.id] ? ' sel' : '') + (s.archived ? ' archived' : '') + '" data-id="' + esc(s.id) + '" role="button" tabindex="0">' +
+          '<div class="selrow"><input type="checkbox" class="sel-one" value="' + esc(s.id) + '"' + (SEL[s.id] ? ' checked' : '') + ' aria-label="Select ' + esc(s.name || 'site') + '"></div>' +
+          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc(sub) + '</div></div>' +
+          '<div class="t-num">' + (loc ? esc(loc) : '<span class="t-mut">Not provided</span>') + '</div>' +
+          '<div>' + statusPill(s) + '</div>' +
+          '<div class="t-num">' + (av.kw == null ? (unk(s.installedKw) ? '<span class="t-mut">–</span>' : esc(s.installedKw) + ' kW <span class="t-mut">inst.</span>') : esc(Math.round(av.kw).toLocaleString('en-US')) + ' kW') + '</div>' +
+          '<div class="t-num">' + (s.latestModel && s.latestModel.pods != null ? esc(s.latestModel.pods) : lp && lp.pods != null ? esc(lp.pods) : (s.screening && s.screening.pods != null ? '<span class="t-mut" title="Screening proxy, unverified">' + esc(s.screening.pods) + '?</span>' : '<span class="t-mut">–</span>')) + '</div>' +
+          '<div class="t-num" title="' + esc(irrSource(s)) + '">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b>' : lp || s.latestModel ? '<span class="t-mut" title="No IRR: no capital invested or no IRR root">Not defined</span>' : '<span class="t-mut">Not run</span>') + '</div>' +
+          '<div class="t-num">' + (costOf(s) != null ? esc(money(costOf(s))) : '<span class="t-mut">–</span>') + '</div>' +
+          '<div>' + capitalPill(s) + '</div>' +
+          '<div>' + linkChips(s) + '</div></div>';
+      }).join('');
+    Array.prototype.forEach.call(el.querySelectorAll('.pf-tr.body'), function (r) {
+      r.addEventListener('click', function (ev) {
+        var t = ev.target;
+        if (t.closest && t.closest('[data-stop]')) return;
+        if (t.classList && t.classList.contains('sel-one')) { pick(r.getAttribute('data-id'), t.checked, ev.shiftKey, rows); return; }
+        openDrawer(r.getAttribute('data-id'));
+      });
+      r.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') openDrawer(r.getAttribute('data-id')); if (ev.key === ' ') { ev.preventDefault(); pick(r.getAttribute('data-id'), !SEL[r.getAttribute('data-id')], false, rows); } });
+    });
+    Array.prototype.forEach.call(el.querySelectorAll('.pf-tr.head .sort'), function (h) {
+      h.addEventListener('click', function () { var k = h.getAttribute('data-sort'); SORT = { key: k, dir: SORT.key === k && SORT.dir === 'asc' ? 'desc' : 'asc' }; render(); });
+    });
+    var all = byId('sel-all');
+    all.checked = rows.length > 0 && rows.every(function (s) { return SEL[s.id]; });
+    all.addEventListener('change', function () { rows.forEach(function (s) { if (all.checked) SEL[s.id] = true; else delete SEL[s.id]; }); render(); });
+    byId('more').style.display = NEXT ? '' : 'none';
+    bar();
+  }
+  function renderStats() {
+    byId('stats').style.display = 'grid';
+    var live = SITES.filter(function (s) { return !s.archived; }), pf = 0, cap = 0, ed = 0, fin = 0, unkN = 0;
+    var funded = 0, fundedUsd = 0, pos = 0;
+    live.forEach(function (s) { if (s.latestProforma || s.latestModel) { pf++; cap += Number(costOf(s)) || 0; var ir = irrOf(s); if (ir != null && ir > 0) pos++; } if (s.projectId) ed++; if (s.finProjectId) fin++; if (s.capital && s.capital.funded) { funded++; fundedUsd += Number(s.capital.ask) || 0; } if (needsVerification(s)) unkN++; });
+    byId('c-sites').textContent = live.length;
+    byId('c-sites-n').textContent = SITES.length > live.length ? 'in the register · ' + (SITES.length - live.length) + ' archived' : 'in this workspace’s register';
+    byId('c-pf').textContent = pos; byId('c-pf-n').textContent = pf ? pos + ' of ' + pf + ' modelled · ' + money(cap) + ' project cost' : 'run the compute model to find them';
+    var designed = live.filter(function (s) { return s.latestDesign; }).length, costed = live.filter(function (s) { return s.latestDesign && s.latestDesign.capex != null; }).length;
+    byId('c-editor').textContent = ed; if (byId('c-editor-n')) byId('c-editor-n').textContent = designed ? designed + ' drawn · ' + costed + ' with a cost run' : 'sites with a project in the editor'; byId('c-fin').textContent = funded ? funded + ' funded' : fin; byId('c-fin-n').textContent = funded ? money(fundedUsd) + ' accepted · ' + fin + ' sent to the marketplace' : 'sites sent to the finance marketplace'; byId('c-unk').textContent = unkN;
+  }
+
+  /* ── the selection and its bar ─────────────────────────────────────── */
+  function selected() { return SITES.filter(function (s) { return SEL[s.id]; }); }
+  function pick(id, on, shift, rows) {
+    if (shift && LAST_CLICK && rows) {
+      var ids = rows.map(function (s) { return s.id; }), a = ids.indexOf(LAST_CLICK), b = ids.indexOf(id);
+      if (a >= 0 && b >= 0) ids.slice(Math.min(a, b), Math.max(a, b) + 1).forEach(function (x) { if (on) SEL[x] = true; else delete SEL[x]; });
+    }
+    if (on) SEL[id] = true; else delete SEL[id];
+    LAST_CLICK = id; render();
+  }
+  function bar() {
+    var sel = selected(), n = sel.length, shown = filtered().length, el = byId('bar');
+    el.classList.toggle('on', n > 0);
+    byId('selcount').textContent = n + ' selected';
+    byId('selall-wrap').style.display = n && n < shown ? '' : 'none'; byId('selall-n').textContent = shown;
+    byId('ba-edit').style.display = n === 1 ? '' : 'none';
+    byId('ba-delete').style.display = CANADMIN ? '' : 'none';
+    var anyArchived = sel.some(function (s) { return s.archived; }), anyLive = sel.some(function (s) { return !s.archived; });
+    byId('ba-archive').style.display = anyLive ? '' : 'none'; byId('ba-restore').style.display = anyArchived ? '' : 'none';
+  }
+  function clearSel() { SEL = {}; render(); }
+  byId('ba-clear').addEventListener('click', clearSel);
+  byId('selall').addEventListener('click', function () { filtered().forEach(function (s) { SEL[s.id] = true; }); render(); });
+
+  function menu(btn, items) {
+    closeMenus();
+    var m = document.createElement('div'); m.className = 'pf-menu'; m.setAttribute('role', 'menu');
+    m.innerHTML = items.map(function (it, i) { return it.hd ? '<div class="hd">' + esc(it.hd) + '</div>' : '<button type="button" role="menuitem" data-i="' + i + '">' + esc(it.label) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</button>'; }).join('');
+    btn.parentNode.appendChild(m);
+    Array.prototype.forEach.call(m.querySelectorAll('button'), function (b) { b.addEventListener('click', function () { closeMenus(); items[Number(b.getAttribute('data-i'))].run(); }); });
+    setTimeout(function () { document.addEventListener('click', function h(e) { if (!m.contains(e.target) && e.target !== btn) { closeMenus(); document.removeEventListener('click', h); } }); }, 0);
+  }
+  function closeMenus() { Array.prototype.forEach.call(document.querySelectorAll('.pf-menu'), function (m) { m.parentNode.removeChild(m); }); }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(); });
+
+  /* every action is the server's; the answer is said and the register re-read */
+  function act(action, extra, confirmText, after) {
+    var sel = selected(); if (!sel.length) return Promise.resolve();
+    if (confirmText && !window.confirm(confirmText)) return Promise.resolve();
+    msg('Working on ' + sel.length + ' site(s)…', true);
+    return post(action, Object.assign({ ids: sel.map(function (s) { return s.id; }) }, extra || {})).then(function (j) {
+      msg(j.note || 'Done.', true); S.toast(j.note || 'Done.');
+      return load(true).then(function () { if (after) after(j); });
+    }).catch(function (e) { msg(e.message); });
+  }
+  byId('ba-editor').addEventListener('click', function () {
+    var sel = selected();
+    act('send-to-editor', null, null, function (j) {
+      var one = sel.length === 1 && j.projects && j.projects[0];
+      if (one && one.projectId) window.location.href = '/editor.html?id=' + encodeURIComponent(one.projectId);
+    });
+  });
+  byId('ba-design').addEventListener('click', function () { act('design-sync', null, null); });
+  byId('ba-finance').addEventListener('click', function () {
+    var sel = selected(), withPf = sel.filter(function (s) { return s.latestProforma && s.latestProforma.investorCapital > 0; }).length;
+    act('send-to-finance', null, 'Send ' + sel.length + ' site(s) to the finance marketplace?\n\n' + withPf + ' with a pro forma will be listed OPEN to approved capital partners with the investor capital as the ask; ' + (sel.length - withPf) + ' without one will be saved as a draft only you see until a pro forma is run.');
+  });
+  byId('ba-model').addEventListener('click', function () {
+    var sel = selected();
+    if (sel.length > 10) { msg('Run the compute model on up to 10 sites at a time.'); return; }
+    act('site-model-bulk', null, null);
+  });
+  byId('ba-terra').addEventListener('click', function () {
+    var sel = selected();
+    act('send-to-partner', { partner: 'terra' }, 'Send ' + sel.length + ' site(s) to Terra Energy for a solar package?\n\nThey receive the site facts, the compute case on file and a link to the record, with you in copy. No bills, contacts or documents are sent.');
+  });
+  byId('ba-proforma').addEventListener('click', function () {
+    menu(this, [
+      { label: 'Size from available power', sub: 'Whole 90 kW pods that fit the site’s available power; a site without power is named, not sized', run: function () { act('proforma-bulk', { sizeFromPower: true, label: 'Sized from power' }); } },
+      { label: 'A set number of pods…', sub: 'The same pod count on every selected site', run: function () { var n = window.prompt('Pods per site:', '1'); if (n == null) return; if (!(Number(n) >= 1)) { msg('Pods must be a whole number of 1 or more.'); return; } act('proforma-bulk', { pods: Math.floor(Number(n)), label: Math.floor(Number(n)) + ' pod(s)' }); } }
+    ]);
+  });
+  byId('ba-status').addEventListener('click', function () {
+    var items = [{ hd: 'Move to' }].concat(STATUSES.map(function (st) { return { label: st, run: function () { act('site-set-status', { status: st }); } }; }));
+    items.push({ label: 'Another status…', run: function () { var st = window.prompt('Status:'); if (st && st.trim()) act('site-set-status', { status: st.trim() }); } });
+    menu(this, items);
+  });
+  byId('ba-tag').addEventListener('click', function () {
+    menu(this, [
+      { label: 'Add a tag…', run: function () { var t = window.prompt('Tag to add (comma-separate for several):'); if (t && t.trim()) act('site-tag', { add: t.split(',') }); } },
+      { label: 'Remove a tag…', run: function () { var t = window.prompt('Tag to remove:'); if (t && t.trim()) act('site-tag', { remove: t.split(',') }); } }
+    ]);
+  });
+  byId('ba-archive').addEventListener('click', function () { act('site-archive', null, 'Archive the selected site(s)? They leave the register and are kept on record; Show archived lists them and Restore brings them back.'); });
+  byId('ba-restore').addEventListener('click', function () { act('site-restore'); });
+  byId('ba-delete').addEventListener('click', function () { act('site-delete', null, 'Permanently delete ' + selected().length + ' site(s)? This cannot be undone. Archive keeps them on record instead.'); });
+  byId('ba-edit').addEventListener('click', function () { var s = selected()[0]; if (s) window.location.href = siteHref(s); });
+  byId('ba-irr').addEventListener('click', function () { downloadCsv(selected(), 'portfolio-irr-'); });
+  byId('ba-agreement').addEventListener('click', function () { exportAgreements(selected()); });
+
+  /* ── exports ────────────────────────────────────────────────────────── */
+  function csvCell(v) { if (v == null) return ''; var s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+  var CSV_COLS = [
+    ['Site name', 'name'], ['City', 'city'], ['State', 'state'], ['Address', 'address'], ['Status', 'status'],
+    ['Tags', function (s) { return (s.tags || []).join('; '); }],
+    ['Installed kW', 'installedKw'], ['Reported peak kW', 'reportedPeakKw'],
+    ['Meter owned', function (s) { return s.meterOwned == null ? '' : (s.meterOwned ? 'yes' : 'no'); }],
+    ['Term years remaining', 'termYearsRemaining'], ['Available power (MW)', 'availablePowerMw'],
+    ['Service capacity (kW)', 'serviceCapacityKw'], ['Existing peak (kW)', 'existingPeakKw'],
+    ['Power price ($/kWh)', 'powerPricePerKwh'], ['Annual usage (kWh)', 'annualUsageKwh'],
+    ['Screened pods', function (s) { return (s.screening || {}).pods == null ? '' : s.screening.pods; }],
+    ['Compute model: after-tax IRR', function (s) { var lm = s.latestModel; return lm ? (lm.irr == null ? 'n/a' : (lm.irr * 100).toFixed(4) + '%') : ''; }],
+    ['Compute model: total project cost ($)', function (s) { var lm = s.latestModel; return lm && lm.totalProjectCost != null ? Math.round(lm.totalProjectCost) : ''; }],
+    ['Compute model: equity ($)', function (s) { var lm = s.latestModel; return lm && lm.equity != null ? Math.round(lm.equity) : ''; }],
+    ['Compute model: structure', function (s) { return s.latestModel ? s.latestModel.structureLabel || s.latestModel.structure : ''; }],
+    ['Compute model: pods', function (s) { return s.latestModel ? s.latestModel.pods : ''; }],
+    ['Compute model: verdict', function (s) { return s.latestModel && s.latestModel.verdict ? s.latestModel.verdict.label || '' : ''; }],
+    ['Capital request status', function (s) { var c = s.capital; return c ? (c.funded ? 'funded by ' + (c.awardedToOrg || 'a capital partner') : c.status + (c.offerCount ? ' · ' + c.offerCount + ' offers' : '')) : (s.finProjectId ? 'sent' : ''); }],
+    ['Pro forma pods', function (s) { return s.latestProforma ? s.latestProforma.pods : ''; }],
+    ['Investor IRR (annual)', function (s) { var i = irrOf(s); return i == null ? (s.latestProforma ? 'not defined' : '') : (i * 100).toFixed(4) + '%'; }],
+    ['Project IRR (annual)', function (s) { var lp = s.latestProforma; return lp && lp.projectIrrDefined && lp.projectIrrAnnual != null ? (lp.projectIrrAnnual * 100).toFixed(4) + '%' : (lp ? 'not defined' : ''); }],
+    ['Investor capital ($)', function (s) { return s.latestProforma && s.latestProforma.investorCapital != null ? Math.round(s.latestProforma.investorCapital) : ''; }],
+    ['NPV ($)', function (s) { return s.latestProforma && s.latestProforma.npv != null ? Math.round(s.latestProforma.npv) : ''; }],
+    ['Payback (month)', function (s) { return s.latestProforma && s.latestProforma.paybackMonth != null ? s.latestProforma.paybackMonth : ''; }],
+    ['Year 1 revenue ($)', function (s) { return s.latestProforma && s.latestProforma.year1Revenue != null ? Math.round(s.latestProforma.year1Revenue) : ''; }],
+    ['Assumption set', function (s) { return s.latestProforma ? s.latestProforma.assumptionVersion : ''; }],
+    ['Scenario', function (s) { return s.latestProforma ? s.latestProforma.scenarioId : ''; }],
+    ['Scenario date', function (s) { return s.latestProforma ? s.latestProforma.at : ''; }],
+    ['Site Map project', function (s) { return s.projectId || ''; }], ['Marketplace deal', function (s) { return s.finProjectId || ''; }],
+    ['External IDs', function (s) { var e = s.externalSiteIds || {}; return Object.keys(e).map(function (k) { return k + ':' + e[k]; }).join('; '); }],
+    ['Site ID', 'id'], ['Notes', 'notes']
+  ];
+  function downloadCsv(rows, prefix) {
+    if (!rows.length) { msg('Nothing to export.'); return; }
+    var lines = [CSV_COLS.map(function (c) { return csvCell(c[0]); }).join(',')];
+    rows.forEach(function (s) { lines.push(CSV_COLS.map(function (c) { return csvCell(typeof c[1] === 'function' ? c[1](s) : s[c[1]]); }).join(',')); });
+    saveBlob(new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' }), (prefix || 'portfolio-sites-') + new Date().toISOString().slice(0, 10) + '.csv');
+    S.toast(rows.length + ' site(s) exported with their IRR.');
+  }
+  function saveBlob(blob, name) {
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.setAttribute('data-leave', ''); document.body.appendChild(a); a.click();
+    setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800);
+  }
+  byId('btn-export').addEventListener('click', function () { downloadCsv(filtered(), 'portfolio-sites-'); });
+  /* one PDF per site, from the server, in turn; the file is named by the server */
+  function exportAgreements(rows) {
+    if (!rows.length) return;
+    if (rows.length > 20) { msg('Export term sheets for up to 20 sites at a time.'); return; }
+    var i = 0, noPf = 0;
+    msg('Preparing ' + rows.length + ' term sheet(s)…', true);
+    (function next() {
+      if (i >= rows.length) { msg(rows.length + ' term sheet(s) downloaded as DRAFTS' + (noPf ? '; ' + noPf + ' had no pro forma on file, so capital and returns are blank in them' : '') + '.', true); return; }
+      var s = rows[i++];
+      auth.currentUser.getIdToken().then(function (t) {
+        return fetch('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(s.id) + '&agreement=1', { headers: { 'Authorization': 'Bearer ' + t } });
+      }).then(function (r) {
+        if (!r.ok) return r.json().then(function (j) { throw new Error((j && j.error) || ('HTTP ' + r.status)); });
+        if (r.headers.get('X-Omega-Agreement') === 'no-proforma') noPf++;
+        var cd = r.headers.get('Content-Disposition') || '', m = /filename="([^"]+)"/.exec(cd);
+        return r.blob().then(function (b) { saveBlob(b, m ? m[1] : 'SPV-term-sheet-' + s.id + '.pdf'); });
+      }).then(function () { setTimeout(next, 350); }).catch(function (e) { msg('Term sheet for ' + (s.name || s.id) + ': ' + e.message); });
+    })();
+  }
+
+  /* ── the side panel: one site, its figures, its actions ─────────────── */
+  function openDrawer(id) {
+    var s = SITES.filter(function (x) { return x.id === id; })[0]; if (!s) return;
+    OPEN = id;
+    var lp = s.latestProforma, av = availKw(s), loc = [s.city, s.state].filter(Boolean).join(', ');
+    /* the pod block shows the pod case's own IRR, never the compute model's */
+    var irr = lp && lp.investorIrrDefined && lp.investorIrrAnnual != null ? Number(lp.investorIrrAnnual) : null;
+    function fact(k, v, n) { return '<div class="dr-fact"><div class="k">' + esc(k) + '</div><div class="v">' + (v == null || v === '' ? '<span class="t-mut">Not provided</span>' : v) + '</div>' + (n ? '<div class="n">' + esc(n) + '</div>' : '') + '</div>'; }
+    var lm = s.latestModel, cap = s.capital, html = '';
+    if (lm) {
+      var v = lm.verdict || {};
+      html += '<div class="dr-sec">Compute model</div><div class="dr-irr"><div class="big">' + (lm.irr != null ? '<b>' + esc(pct(lm.irr)) + '</b><span>after-tax IRR, ' + esc(lm.termYears || 10) + '-year term</span>' : '<b class="undef">No IRR</b><span>no capital is invested under this structure</span>') + '</div>' +
+        fact('Total project cost', lm.totalProjectCost != null ? esc(money(lm.totalProjectCost)) : null, 'the capital request') + fact('Equity', lm.equity != null ? esc(money(lm.equity)) : null, lm.debt > 0 ? 'beside ' + money(lm.debt) + ' of debt' : '100% equity') +
+        fact('Structure', esc(lm.structureLabel || lm.structure || '')) + fact('Pods', lm.pods != null ? esc(lm.pods) + ' × ' + esc(lm.gpuName || lm.gpuClass || '') : null, lm.serviceKw ? 'on a ' + Math.round(lm.serviceKw) + ' kW service' : '') +
+        '<div class="dr-fact" style="grid-column:1/-1"><span class="pill ' + (v.tone === 'ok' ? 'pill-ok' : v.tone === 'warn' ? 'pill-warn' : '') + '">' + esc(v.label || '') + '</span><div class="n">' + esc((lm.at ? String(lm.at).slice(0, 10) + ' · ' : '') + 'Compute Site Pro Forma · screening, not a return promise') + '</div></div></div>';
+    }
+    html += '<div class="dr-sec">Capital request</div><div class="dr-facts">' +
+      fact('Request', costOf(s) != null ? esc(money(costOf(s))) : null, lm ? 'total project cost' : lp ? 'investor capital, pods' : 'run the compute model') +
+      fact('Marketplace', cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap ? capitalPill(s) : s.finProjectId ? 'Sent' : '<span class="t-mut">Not sent</span>', cap && cap.funded ? 'accepted by ' + (cap.awardedToOrg || 'a capital partner') + (cap.awardedAt ? ' on ' + String(cap.awardedAt).slice(0, 10) : '') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting for your answer' : cap && cap.status === 'open' ? 'open to capital partners, no offer yet' : '') +
+      fact('Terra Energy (solar)', s.partners && s.partners.terra ? '<span class="pill pill-ok">Sent</span>' : '<span class="t-mut">Not sent</span>', s.partners && s.partners.terra ? 'solar package asked for on ' + String(s.partners.terra.sentAt || '').slice(0, 10) : 'a solar package and detail, funded by Terra') + '</div>';
+    html += '<div class="dr-sec">Pod pro forma</div>';
+    if (lp) {
+      html += '<div class="dr-irr"><div class="big">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b><span>investor IRR, annualised</span>' : '<b class="undef">Not defined</b><span>no IRR root in the cash flows</span>') + '</div>' +
+        fact('Project IRR', lp.projectIrrDefined && lp.projectIrrAnnual != null ? esc(pct(lp.projectIrrAnnual)) : '<span class="t-mut">Not defined</span>') +
+        fact('Investor capital', lp.investorCapital != null ? esc(money(lp.investorCapital)) : null) +
+        fact('NPV', lp.npv != null ? esc(money(lp.npv)) : null, lp.discountRateAnnual != null ? 'at ' + pct(lp.discountRateAnnual, 0) : '') +
+        fact('Capital recovered', lp.paybackMonth != null ? 'month ' + esc(lp.paybackMonth) : '<span class="t-mut">Not in term</span>') +
+        fact('Pods', lp.pods != null ? esc(lp.pods) : null, lp.itKw != null ? lp.itKw + ' kW IT · ' + lp.facilityKw + ' kW facility' : '') +
+        fact('Year 1 revenue', lp.year1Revenue != null ? esc(money(lp.year1Revenue)) : null) +
+        '<div class="dr-fact" style="grid-column:1/-1"><div class="n">' + esc((lp.label ? lp.label + ' · ' : '') + (lp.assumptionVersion || '') + (lp.at ? ' · ' + String(lp.at).slice(0, 10) : '')) + ' · screening, not a return promise</div></div></div>';
+    } else {
+      html += '<div class="ows-note">No pod pro forma on this site yet. ' + (av.kw != null ? 'It has ' + Math.round(av.kw).toLocaleString('en-US') + ' kW available (' + av.basis + '): size it from power below.' : 'Enter its available power (MW), or service capacity and existing peak, on the full record to size it.') + '</div>';
+    }
+    html += '<div class="dr-sec">Site</div><div class="dr-facts">' +
+      fact('Location', loc ? esc(loc) : null) + fact('Status', s.status ? statusPill(s) : null) +
+      fact('Available power', av.kw != null ? esc(Math.round(av.kw).toLocaleString('en-US')) + ' kW' : null, av.basis || 'for new load') +
+      fact('Installed chargers', unk(s.installedKw) ? null : esc(s.installedKw) + ' kW', 'nameplate, not approved capacity') +
+      fact('Reported peak', unk(s.reportedPeakKw) ? null : esc(s.reportedPeakKw) + ' kW' + (s.peakUnresolved ? ' <span class="pill pill-warn">unresolved</span>' : ''), 'workbook statistic') +
+      fact('Meter', meterPill(s)) + fact('Remaining term', unk(s.termYearsRemaining) ? '<span class="t-mut">Needs verification</span>' : esc(s.termYearsRemaining) + ' yr') +
+      fact('Project type', kindLabels(s).length ? esc(kindLabels(s).join(' + ')) : null) +
+      fact('Tags', (s.tags || []).length ? esc(s.tags.join(', ')) : null) +
+      (s.address ? fact('Address', esc(s.address)) : '') + '</div>';
+    if (s.latestDesign) {
+      var dg = s.latestDesign, dc = dg.compute || {}, dch = dg.chargers || {}, db2 = dg.bess || {}, dso = dg.solar || {};
+      html += '<div class="dr-sec">Site Map design</div><div class="dr-facts">' +
+        fact('Compute units', dc.units ? esc(dc.units) + (dc.kwIt ? ' · ' + esc(dc.kwIt) + ' kW IT' : '') : null) +
+        fact('Chargers', dch.installedKw ? esc(dch.installedKw) + ' kW · ' + esc(dch.ports) + ' ports' : null) +
+        fact('Battery', db2.kwh ? esc(db2.kw) + ' kW / ' + esc(db2.kwh) + ' kWh' : null) + fact('Solar', dso.kwDc ? esc(dso.kwDc) + ' kW-dc' : null) +
+        fact('Cost run', dg.capex != null ? esc(money(dg.capex)) : null, dg.capexAt ? String(dg.capexAt).slice(0, 10) : 'not run yet') + '</div>';
+    }
+    html += '<div class="dr-sec">Hand-offs</div><div class="dr-facts">' +
+      fact('Site Map', s.projectId ? '<a href="' + editorHref(s) + '" style="color:var(--ows-brand-ink)">Open the project ↗</a>' : '<span class="t-mut">Not in the editor yet</span>') +
+      fact('Grid Atlas', '<a href="' + atlasHref(s) + '" style="color:var(--ows-brand-ink)">' + (s.address || s.city ? 'Open at this address ↗' : 'Open ↗') + '</a>') +
+      fact('Investor deck', lm ? '<a href="' + deckHref(s) + '" style="color:var(--ows-brand-ink)">Open the deck ↗</a>' : '<span class="t-mut">After the compute model runs</span>') +
+      fact('Finance marketplace', s.finProjectId ? '<a href="' + dealHref(s) + '" style="color:var(--ows-brand-ink)">' + (s.finProjectStatus === 'draft' ? 'Draft deal' : 'Open deal') + ' ↗</a>' : '<span class="t-mut">Not sent yet</span>') + '</div>';
+    html += '<div class="dr-acts" id="dr-acts">' +
+      (CANEDIT ? '<button type="button" class="primary" data-act="editor">' + (s.projectId ? 'Open in Site Map' : 'Open in Site Map') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="finance">' + (s.finProjectId ? 'Marketplace deal' : 'Send to marketplace') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="terra">' + (s.partners && s.partners.terra ? 'Send to Terra again' : 'Send to Terra (solar)') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="model">' + (lm ? 'Re-run compute model' : 'Run compute model') + '</button>' : '') +
+      (CANEDIT ? '<button type="button" data-act="proforma">' + (lp ? 'Re-run pods from power' : 'Size pods from power') + '</button>' : '') +
+      '<button type="button" data-act="irr">Export IRR</button><button type="button" data-act="agreement">Export term sheet</button>' +
+      (CANEDIT ? '<button type="button" class="danger" data-act="' + (s.archived ? 'restore' : 'archive') + '">' + (s.archived ? 'Restore' : 'Archive') + '</button>' : '') + '</div>';
+    S.drawer({ eyebrow: 'Site' + (s.archived ? ' · archived' : ''), title: s.name || 'Unnamed site', sub: (s.externalSiteIds && Object.keys(s.externalSiteIds).length ? Object.keys(s.externalSiteIds).map(function (k) { return k + ' ' + s.externalSiteIds[k]; }).join(' · ') : s.id), html: html,
+      rows: [{ key: 'full', name: 'Open the full record', sub: 'Contacts, activity, documents, every scenario', href: siteHref(s), icon: S.ICON.file, cta: 'Open' }],
+      ready: function (aside) {
+        Array.prototype.forEach.call(aside.querySelectorAll('#dr-acts [data-act]'), function (b) {
+          b.addEventListener('click', function () {
+            var a = b.getAttribute('data-act'); SEL = {}; SEL[s.id] = true;
+            if (a === 'editor') { if (s.projectId) { window.location.href = editorHref(s); return; } S.closeDrawer(); byId('ba-editor').click(); }
+            else if (a === 'finance') { if (s.finProjectId) { window.location.href = dealHref(s); return; } S.closeDrawer(); byId('ba-finance').click(); }
+            else if (a === 'terra') { S.closeDrawer(); byId('ba-terra').click(); }
+            else if (a === 'model') { S.closeDrawer(); act('site-model-bulk', null, null, function (j) { if (j.failed && j.failed.length) msg(j.failed[0].error + ' Open the full record to add it.'); openDrawer(s.id); }); }
+            else if (a === 'proforma') { S.closeDrawer(); act('proforma-bulk', { sizeFromPower: true, label: 'Sized from power' }, null, function () { openDrawer(s.id); }); }
+            else if (a === 'irr') downloadCsv([s], 'irr-' + (s.name || s.id).replace(/[^A-Za-z0-9]+/g, '-') + '-');
+            else if (a === 'agreement') exportAgreements([s]);
+            else if (a === 'archive') { S.closeDrawer(); act('site-archive', null, 'Archive ' + (s.name || 'this site') + '? It leaves the register and is kept on record.'); }
+            else if (a === 'restore') { S.closeDrawer(); act('site-restore'); }
+            render();
+          });
+        });
+      } });
+  }
+
+  /* ── loading ────────────────────────────────────────────────────────── */
+  function load(keep, more) {
+    if (!more) { if (!keep) byId('tbl').innerHTML = '<div class="pf-loading"><div class="spin"></div>Loading the register…</div>'; }
+    var url = '/api/site-crm?org=' + encodeURIComponent(ORG) + (byId('f-archived').checked ? '&archived=1' : '') + (more && NEXT ? '&startAfter=' + encodeURIComponent(NEXT) : '');
+    return api(url).then(function (j) {
+      var rows = j.sites || [];
+      SITES = more ? SITES.concat(rows) : rows; NEXT = j.next || null;
+      CANEDIT = j.canEdit !== false; CANADMIN = j.canArchive === true;
+      Object.keys(SEL).forEach(function (id) { if (!SITES.some(function (s) { return s.id === id; })) delete SEL[id]; });
+      renderStats(); render(); LOADED = true;
+      if (OPEN && byId('ows-overlay')) openDrawer(OPEN);
+      try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
+    }).catch(function (e) { msg(e.message); byId('tbl').innerHTML = '<div class="pf-empty"><b>Could not load the register.</b>' + esc(e.message) + '</div>'; try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {} });
+  }
+  byId('btn-more').addEventListener('click', function () { load(true, true); });
+  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf', 'f-kind'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
+  byId('f-archived').addEventListener('change', function () { load(); });
+  byId('btn-add').addEventListener('click', openRegister);
+
+  /* ── Register site: the name, where it is, and what KIND of project it is
+     (Tommy, 2026-10-13: "if i put a site and register a site in here i need
+     to be able to select what kind of project it is"). The kinds are the
+     New project dialog's own cards (OmegaNewProject.SCOPES, the ONE list),
+     stored on the site as siteScopes and carried onto the Site Map project
+     the site makes. More than one may apply (solar + storage + chargers). */
+  function kinds() { return (window.OmegaNewProject && OmegaNewProject.SCOPES) || []; }
+  function kindLabels(s) {
+    var L = kinds();
+    return (s.siteScopes || []).map(function (k) { var d = L.filter(function (x) { return x.key === k; })[0]; return d ? d.label : k; });
+  }
+  function fillKindFilter() {
+    var sel = byId('f-kind'); if (!sel || sel.options.length > 1) return;
+    kinds().forEach(function (k) { var o = document.createElement('option'); o.value = k.key; o.textContent = k.label; sel.appendChild(o); });
+  }
+  function openRegister() {
+    if (byId('reg-overlay')) return;
+    var ov = document.createElement('div'); ov.id = 'reg-overlay'; ov.className = 'reg-ov';
+    ov.innerHTML = '<div class="reg-dlg" role="dialog" aria-modal="true" aria-labelledby="reg-h">' +
+      '<div class="reg-head"><h2 id="reg-h">Register a site</h2><button type="button" class="reg-x" id="reg-close" aria-label="Close">\u00d7</button></div>' +
+      '<label class="reg-l" for="reg-name">Site name *</label><input class="reg-in" id="reg-name" type="text" placeholder="e.g. Sunnyside Nursing and Post-Acute Care Center" maxlength="200">' +
+      '<label class="reg-l" for="reg-address">Address</label><input class="reg-in" id="reg-address" type="text" placeholder="Street address" maxlength="300">' +
+      '<div class="reg-row"><div><label class="reg-l" for="reg-city">City</label><input class="reg-in" id="reg-city" type="text" maxlength="120"></div>' +
+      '<div><label class="reg-l" for="reg-state">State</label><input class="reg-in" id="reg-state" type="text" placeholder="CA" maxlength="10"></div></div>' +
+      '<div class="reg-l" style="margin-top:14px">What kind of project is it? <span class="reg-hint">Pick every one that applies; Site Map opens on them.</span></div>' +
+      '<div class="reg-kinds" id="reg-kinds">' + kinds().map(function (k) {
+        return '<button type="button" class="reg-kind" data-kind="' + esc(k.key) + '" aria-pressed="false"><b>' + esc(k.label) + '</b><span>' + esc(k.desc || '') + '</span></button>';
+      }).join('') + '</div>' +
+      '<div class="reg-err" id="reg-err"></div>' +
+      '<div class="reg-foot"><button type="button" class="ows-pill" id="reg-cancel">Cancel</button><button type="button" class="ows-pill primary" id="reg-go">Register site</button></div></div>';
+    document.body.appendChild(ov);
+    function close() { if (ov.parentNode) ov.parentNode.removeChild(ov); document.removeEventListener('keydown', onKey); }
+    function onKey(e) { if (e.key === 'Escape') close(); }
+    document.addEventListener('keydown', onKey);
+    ov.addEventListener('click', function (e) { if (e.target === ov) close(); });
+    byId('reg-close').addEventListener('click', close); byId('reg-cancel').addEventListener('click', close);
+    Array.prototype.forEach.call(ov.querySelectorAll('.reg-kind'), function (b) {
+      b.addEventListener('click', function () { var on = b.getAttribute('aria-pressed') === 'true'; b.setAttribute('aria-pressed', on ? 'false' : 'true'); b.classList.toggle('on', !on); });
+    });
+    byId('reg-go').addEventListener('click', function () {
+      var name = byId('reg-name').value.trim(), err = byId('reg-err');
+      var picked = Array.prototype.map.call(ov.querySelectorAll('.reg-kind.on'), function (b) { return b.getAttribute('data-kind'); });
+      if (!name) { err.textContent = 'A site needs a name.'; byId('reg-name').focus(); return; }
+      if (!picked.length) { err.textContent = 'Pick at least one project type.'; return; }
+      err.textContent = ''; byId('reg-go').disabled = true;
+      post('site-save', { name: name, address: byId('reg-address').value.trim(), city: byId('reg-city').value.trim(), state: byId('reg-state').value.trim().toUpperCase(), siteScopes: picked })
+        .then(function (j) { window.location.href = '/site-crm.html?site=' + encodeURIComponent(j.id); })
+        .catch(function (e) { byId('reg-go').disabled = false; err.textContent = e.message; });
+    });
+    byId('reg-name').focus();
+  }
+  fillKindFilter();
+
+  /* ── who is here: the sign-in, then the entitlements (the workspace) ── */
+  var ENT_TIMER = null;
+  function onAuth(u, tries) {
+    if (!u) {
+      var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+      if ((tries || 0) < (had ? 20 : 4) && !auth.currentUser) { setTimeout(function () { onAuth(auth.currentUser, (tries || 0) + 1); }, 300); return; }
+      window.location.href = '/login.html'; return;
+    }
+    USER = u; paint();
+    function start(ws) {
+      clearTimeout(ENT_TIMER);
+      WS = ws || window.OMEGA_WORKSPACE || (window.OmegaTenant && OmegaTenant.workspace) || {};
+      ORG = (WS.orgId || (u.email || '').split('@')[1] || '').toLowerCase();
+      paint();
+      if (!LOADED && ORG) load();
+    }
+    if (window.OmegaTenant && OmegaTenant.onEntitlements) OmegaTenant.onEntitlements(start);
+    /* a workspace with no record (derived from the address) may never fire them: go on the address */
+    ENT_TIMER = setTimeout(function () { if (!LOADED) start(null); }, 3500);
+  }
+  auth.onAuthStateChanged(function (u) { onAuth(u, 0); });
+
+  /* ── site import: CSV/XLSX into this workspace only ─────────────────── */
+  var IMFIELDS = [
+    { key: 'name', label: 'Site name *', syn: ['name', 'sitename', 'site'] },
+    { key: 'city', label: 'City', syn: ['city', 'town'] },
+    { key: 'state', label: 'State', syn: ['state', 'province'] },
+    { key: 'address', label: 'Address', syn: ['address', 'street'] },
+    { key: 'status', label: 'Status', syn: ['status', 'stage'] },
+    { key: 'installedKw', label: 'Installed kW', syn: ['installedkw', 'installed', 'nameplatekw', 'nameplate'] },
+    { key: 'reportedPeakKw', label: 'Reported peak kW', syn: ['peakkw', 'reportedpeak', 'peak'] },
+    { key: 'meterOwned', label: 'Meter owned (yes/no)', syn: ['meterowned', 'meter', 'meterownership'] },
+    { key: 'termYearsRemaining', label: 'Term years remaining', syn: ['termyearsremaining', 'term', 'yearsremaining'] },
+    { key: 'availablePowerMw', label: 'Available power (MW)', syn: ['availablepowermw', 'availablemw', 'availablepower'] },
+    { key: 'serviceCapacityKw', label: 'Service capacity (kW)', syn: ['servicecapacitykw', 'servicekw', 'servicecapacity'] },
+    { key: 'existingPeakKw', label: 'Existing peak (kW)', syn: ['existingpeak'] },
+    { key: 'powerPricePerKwh', label: 'Power price ($/kWh)', syn: ['powerpriceperkwh', 'powerprice'] },
+    { key: 'annualUsageKwh', label: 'Annual usage (kWh)', syn: ['annualusagekwh', 'annualkwh', 'annualusage'] },
+    { key: 'externalId', label: 'External ID (optional)', syn: ['externalid', 'siteid', 'id'] }
+  ];
+  var IMHEAD = [], IMDATA = [];
+  function imNorm(h) { return String(h == null ? '' : h).toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function imAutoMap(h) { var n = imNorm(h); for (var i = 0; i < IMFIELDS.length; i++) if (IMFIELDS[i].syn.indexOf(n) >= 0) return IMFIELDS[i].key; return ''; }
+  function imMsg(html, ok) { byId('im-msg').innerHTML = html ? '<div class="pf-msg ' + (ok ? 'ok' : 'err') + '" style="margin:0 0 12px">' + html + '</div>' : ''; }
+  function parseCSV(text) {
+    var rows = [], row = [], field = '', inQ = false, i, c;
+    for (i = 0; i < text.length; i++) {
+      c = text[i];
+      if (inQ) { if (c === '"') { if (text[i + 1] === '"') { field += '"'; i++; } else inQ = false; } else field += c; }
+      else if (c === '"') inQ = true;
+      else if (c === ',') { row.push(field); field = ''; }
+      else if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; }
+      else if (c !== '\r') field += c;
+    }
+    row.push(field);
+    if (!(row.length === 1 && row[0] === '')) rows.push(row);
+    return rows;
+  }
+  function loadSheetJS(cb) {
+    if (window.XLSX) return cb(null);
+    var s = document.createElement('script');
+    s.src = 'https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+    s.onload = function () { cb(null); };
+    s.onerror = function () { cb(new Error('Could not load the spreadsheet parser (network). Save the file as CSV and retry.')); };
+    document.head.appendChild(s);
+  }
+  function imRenderMap() {
+    var html = '<div class="t-sub" style="margin-bottom:6px">Match each column to a site field:</div><div class="pf-table"><div class="pf-tr head" style="grid-template-columns:1fr 1fr"><div>File column</div><div>Site field</div></div>';
+    html += IMHEAD.map(function (h, c) {
+      var opts = '<option value="">(skip)</option>' + IMFIELDS.map(function (f) { return '<option value="' + f.key + '"' + (imAutoMap(h) === f.key ? ' selected' : '') + '>' + esc(f.label) + '</option>'; }).join('');
+      return '<div class="pf-tr"><div class="t-name">' + esc(h || ('Column ' + (c + 1))) + '</div><div><select class="pf-sel" id="im-col-' + c + '" style="width:100%">' + opts + '</select></div></div>';
+    }).join('') + '</div>';
+    byId('im-map').innerHTML = html;
+    var n = Math.min(IMHEAD.length, 4);
+    var prev = '<div class="t-sub" style="margin-bottom:6px">Preview (first 5 rows):</div><div class="pf-table"><div class="pf-tr head" style="grid-template-columns:repeat(' + n + ',1fr)"><div>' + IMHEAD.slice(0, 4).map(esc).join('</div><div>') + '</div></div>';
+    prev += IMDATA.slice(1, 6).map(function (r) { return '<div class="pf-tr" style="grid-template-columns:repeat(' + n + ',1fr)"><div>' + r.slice(0, 4).map(function (x) { return esc(String(x == null ? '' : x).slice(0, 40)); }).join('</div><div>') + '</div></div>'; }).join('') + '</div>';
+    byId('im-preview').innerHTML = prev;
+    byId('im-go').disabled = false;
+    imMsg('');
+  }
+  function imHandleFile(f) {
+    imMsg(''); byId('im-filename').textContent = f.name;
+    var done = function (rows) {
+      if (!rows || rows.length < 2) { imMsg('No data rows found. The first row must be headers.'); return; }
+      IMHEAD = rows[0].map(function (x) { return String(x == null ? '' : x).trim(); }); IMDATA = rows;
+      imMsg(rows.length - 1 + ' data rows found.', true); imRenderMap();
+    };
+    if (/\.csv$/i.test(f.name) || f.type.indexOf('csv') >= 0 || /\.txt$/i.test(f.name)) {
+      var rd = new FileReader(); rd.onload = function () { done(parseCSV(String(rd.result))); }; rd.onerror = function () { imMsg('Could not read the file.'); }; rd.readAsText(f);
+    } else if (/\.xlsx$/i.test(f.name)) {
+      registerPreview(f); return;
+    } else {
+      loadSheetJS(function (e) {
+        if (e) { imMsg(esc(e.message)); return; }
+        var rd2 = new FileReader();
+        rd2.onload = function () { try { var wb = XLSX.read(rd2.result, { type: 'array' }); done(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false })); } catch (ex) { imMsg('Could not parse the spreadsheet: ' + esc(ex.message)); } };
+        rd2.onerror = function () { imMsg('Could not read the file.'); }; rd2.readAsArrayBuffer(f);
+      });
+    }
+  }
+  function imBuildRows() {
+    var rows = [], c, map = IMHEAD.map(function (h, i) { var el = byId('im-col-' + i); return el ? el.value : ''; });
+    if (map.indexOf('name') < 0) { imMsg('Map one column to <b>Site name</b> before importing.'); return null; }
+    for (var i = 1; i < IMDATA.length; i++) {
+      var r = IMDATA[i], obj = {}, ext = '', empty = true;
+      for (c = 0; c < IMHEAD.length; c++) {
+        var key = map[c]; if (!key) continue;
+        var v = String(r[c] == null ? '' : r[c]).trim(); if (v !== '') empty = false;
+        if (key === 'externalId') { ext = v; continue; }
+        if (key === 'meterOwned') obj[key] = /^(y|yes|true|1|owned)$/i.test(v) ? true : (/^(n|no|false|0)$/i.test(v) ? false : null); else obj[key] = v;
+      }
+      if (empty) continue;
+      if (ext) obj.externalSiteIds = { import: ext };
+      rows.push(obj);
+    }
+    return rows;
+  }
+  /* the register's import: preview (counts, rejected rows, conflicts on reviewed facts, the model package's reconciliation), then commit; a committed import can be undone from the list */
+  var REG_PREVIEW = null;
+  function registerPreview(f) {
+    imMsg('Reading the workbook on the server\u2026', true); byId('im-map').innerHTML = ''; byId('im-preview').innerHTML = ''; byId('im-go').disabled = true; REG_PREVIEW = null;
+    var rd = new FileReader();
+    rd.onload = function () {
+      var b64 = String(rd.result).split(',')[1] || '';
+      post('import-preview', { fileName: f.name, base64: b64 }).then(function (j) {
+        REG_PREVIEW = j;
+        if (j.alreadyCommitted) { imMsg('This exact file was already imported; nothing to do.', true); return; }
+        var c = j.counts || {}, h = '<div class="t-sub" style="margin-bottom:6px">Recognised as <b>' + esc(j.profile) + '</b>' + (j.meta && j.meta.headerRow ? ' · headers on row ' + esc(j.meta.headerRow) : '') + (j.meta && j.meta.formulaCells ? ' · ' + esc(j.meta.formulaCells) + ' formula cell(s) read by cached value' : '') + '</div>';
+        h += '<div class="pf-stats" style="margin:8px 0">' + [['New sites', c.created], ['Updated', c.updated], ['Unchanged', c.unchanged], ['Rejected rows', c.rejected], ['Conflicts', c.conflicts]].map(function (x) { return '<div class="pf-stat"><div class="k">' + x[0] + '</div><div class="v">' + esc(x[1] == null ? 0 : x[1]) + '</div></div>'; }).join('') + '</div>';
+        if (j.analysis) h += '<div class="pf-msg ok">A model package: it enriches ' + esc(c.matched || 0) + ' existing site(s) and creates none. ' + (j.analysis.unmatched.length ? esc(j.analysis.unmatched.length) + ' ID(s) have no site here. ' : '') + (j.analysis.mismatches.length ? esc(j.analysis.mismatches.length) + ' site(s) reconcile differently from the intake.' : 'Every site reconciles with the intake.') + '</div>';
+        if ((j.conflicts || []).length) h += '<div class="pf-msg err">' + esc(j.conflicts.length) + ' reviewed value(s) differ in this file and are kept as reviewed: ' + j.conflicts.slice(0, 5).map(function (x) { return esc(x.externalSiteId + ' ' + x.field + ' ' + x.from + ' → ' + x.to); }).join('; ') + (j.conflicts.length > 5 ? '…' : '') + '</div>';
+        if ((j.rejected || []).length) h += '<div class="pf-msg err">' + esc(j.rejected.length) + ' row(s) rejected: ' + j.rejected.slice(0, 5).map(function (x) { return 'row ' + esc(x.row) + ' ' + esc(x.reason); }).join('; ') + (j.rejected.length > 5 ? '…' : '') + '</div>';
+        if ((j.suggestions || []).length) h += '<div class="t-sub">' + esc(j.suggestions.length) + ' site(s) share an address with another source ID: kept separate, flagged for review.</div>';
+        byId('im-preview').innerHTML = h; byId('im-go').disabled = !((c.created || 0) + (c.updated || 0)) && !j.analysis;
+        imMsg('Nothing is written until you press Import.', true);
+      }).catch(function (e) { imMsg(esc(e.message)); });
+    };
+    rd.onerror = function () { imMsg('Could not read the file.'); }; rd.readAsDataURL(f);
+  }
+  function registerImports() {
+    api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&imports=1').then(function (j) {
+      var list = (j.imports || []).filter(function (x) { return x.status === 'committed'; }).sort(function (a, b) { return a.committedAt < b.committedAt ? 1 : -1; }).slice(0, 5);
+      byId('im-history').innerHTML = list.length ? '<div class="t-sub" style="margin:14px 0 6px">Recent imports</div>' + list.map(function (x) { return '<div class="t-sub">' + esc(String(x.committedAt || '').slice(0, 10)) + ' · ' + esc(x.fileName) + ' · ' + esc(x.profile) + ' · ' + esc((x.counts || {}).created || 0) + ' new, ' + esc((x.counts || {}).updated || 0) + ' updated <a href="#" data-undo="' + esc(x.id) + '">Undo</a></div>'; }).join('') : '';
+      Array.prototype.forEach.call(byId('im-history').querySelectorAll('[data-undo]'), function (a) { a.addEventListener('click', function (ev) { ev.preventDefault(); if (!window.confirm('Undo this import? Only its own changes are reverted; a site changed since, or with linked work, is kept.')) return; post('import-undo', { importId: a.getAttribute('data-undo') }).then(function (j) { imMsg(esc(j.applied + ' site(s) reverted' + (j.skipped && j.skipped.length ? '; ' + j.skipped.length + ' kept: ' + j.skipped.slice(0, 3).map(function (k) { return k.reason; }).join('; ') : '') + '.'), true); registerImports(); load(true); }).catch(function (e) { imMsg(esc(e.message)); }); }); });
+    }).catch(function () {});
+  }
+  byId('btn-import').addEventListener('click', function () {
+    byId('import-modal').classList.add('on'); REG_PREVIEW = null; registerImports(); imMsg(''); byId('im-map').innerHTML = ''; byId('im-preview').innerHTML = ''; byId('im-filename').textContent = ''; byId('im-go').disabled = true; IMHEAD = []; IMDATA = [];
+  });
+  byId('im-close').addEventListener('click', function () { byId('import-modal').classList.remove('on'); });
+  byId('import-modal').addEventListener('click', function (e) { if (e.target === byId('import-modal')) byId('import-modal').classList.remove('on'); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape') byId('import-modal').classList.remove('on'); });
+  byId('im-file').addEventListener('change', function () { if (this.files.length) imHandleFile(this.files[0]); this.value = ''; });
+  byId('im-go').addEventListener('click', function () {
+    if (REG_PREVIEW && REG_PREVIEW.importId) {
+      imMsg('Importing\u2026', true); byId('im-go').disabled = true;
+      post('import-commit', { importId: REG_PREVIEW.importId, planHash: REG_PREVIEW.planHash, acceptConflicts: [] }).then(function (j) {
+        imMsg('<b>' + esc(j.written) + ' site(s) written</b> (' + esc((j.counts || {}).created || 0) + ' new, ' + esc((j.counts || {}).updated || 0) + ' updated). Reviewed values were kept.', true); REG_PREVIEW = null; registerImports(); load(true);
+      }).catch(function (e) { imMsg(esc(e.message)); byId('im-go').disabled = false; });
+      return;
+    }
+    var rows = imBuildRows(); if (!rows) return;
+    if (!rows.length) { imMsg('No rows to import.'); return; }
+    if (rows.length > 500) { imMsg('At most 500 rows per import; split the file and retry.'); return; }
+    imMsg('Importing ' + rows.length + ' site(s)…', true); byId('im-go').disabled = true;
+    post('site-import', { rows: rows }).then(function (j) {
+      if (j.ok === false) imMsg('<b>Nothing was written.</b> Fix the flagged rows and re-import:<br>' + (j.errors || []).map(function (e) { return 'Row ' + e.row + ': ' + esc(e.error); }).join('<br>') + (j.errorCount > (j.errors || []).length ? '<br>…and ' + (j.errorCount - j.errors.length) + ' more.' : ''));
+      else { imMsg('<b>' + j.imported + ' site(s) imported</b> into this workspace.', true); load(true); }
+      byId('im-go').disabled = false;
+    }).catch(function (e) { imMsg(esc(e.message)); byId('im-go').disabled = false; });
+  });
+})();
+</script>
+</body>
+</html>

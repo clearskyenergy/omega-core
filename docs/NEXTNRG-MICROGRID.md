@@ -109,9 +109,9 @@ catalog.
   with it (the MGC box under the Sol-Ark), the BOM line and the spec-sheet row
   name it, and the server's product record (`api/_lib/omega-core.js`
   `PRODUCT.controller`) describes what it does on the skid. **The system cost is
-  the skid plus the controller: $450,000 + $125,000 = $575,000** a skid
+  the skid plus the controller: $639,000 + $125,000 = $764,000** a skid
   (`systemCostBreakdown`), which ClearSky's outlay, the fair-market-value band
-  (20 / 30 / 40% at year 5: $115k / $173k / $230k) and the compute cash flow's
+  (20 / 30 / 40% at year 5: $153k / $229k / $306k) and the compute cash flow's
   skid basis all follow; the compute model's own default stays the recorded
   skid price and `omega-core.js` hands it the built skid. The host never pays
   for the skid's controller: `counts.mgc` counts utility shapes only.

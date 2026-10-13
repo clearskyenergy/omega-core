@@ -3420,7 +3420,7 @@ if(document.readyState==='loading'){
 
     <!-- BESS pad picker modal -->
     <div id="pad-modal" style="position:absolute;inset:0;background:var(--scrim);display:none;align-items:center;justify-content:center;z-index:300">
-      <div class="cal-box">
+      <div class="cal-box" style="max-width:calc(100vw - 24px);max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box">
         <h3>▬ Place BESS Assembly (to scale)</h3>
         <p>Pick a model to size the pad in real feet, then choose what to include.</p>
         <div style="margin-bottom:10px">
@@ -10672,6 +10672,31 @@ function _bespadModels(){
       }
     }
   }catch(e){}
+  /* The org's own Equipment Library (Draw ▸ Equipment Library ▸ + New
+     equipment): a BESS entry saved there is a pad this picker offers,
+     under its own heading, so adding a unit to the library IS adding it
+     to the BESS Pad tool (Tommy, 2026-10-13: "if a customer adds a product
+     they should be able to draw it"). One with no footprint on file asks
+     its size when picked (requiresDimensions, as a featured row without
+     dimensions does) and is placed as itself, by key. */
+  try{
+    var seen={};
+    for(var i0=0;i0<list.length;i0++) seen[list[i0].id]=1;
+    _bessLibraryUnits().forEach(function(u){
+      if(seen[u.key]) return;
+      seen[u.key]=1;
+      list.push({ id:u.key, name:u.name, lf:u.lf, wf:u.wf, sysQty:0, org:true,
+        requiresDimensions:!u.sized,
+        geometryBasis:u.sized?'equipment-library':'',
+        geometryNote:u.sized?'Footprint as entered in your equipment library.':'' });
+    });
+  }catch(e){}
+  /* Preserve a legacy numeric quick-place choice before featured rows move
+     the positions. New choices remember the catalog key, never an index. */
+  if(!window._padModelKey && window._padModelIdx!=null && list[window._padModelIdx])
+    window._padModelKey=list[window._padModelIdx].id;
+  if(window.OmegaCleanCellCatalog && typeof BESS_CATALOG!=='undefined')
+    return OmegaCleanCellCatalog.padModels(list, BESS_CATALOG);
   return list;
 }
 var BESPAD_DEFAULT_LF = 19.875;  /* GRID container footprint if scale unknown */
@@ -11046,106 +11071,164 @@ function _placeBesPad(p){
      the user can pick model + quantity (Units/Cols) and drop N pads in a grid. */
   if(window._padQuickPlace){
     var spec=_padCurrentSpec();
-    var opts={ assembly:true, fence:true, bollards:true };
-    var qty=(window._padQty&&window._padQty>1)?window._padQty:1;
-    var cols=(window._padCols||0);
-    if(qty>1){ _doPlaceBesPadGrid(p,spec,opts,qty,cols); }
-    else { _doPlaceBesPad(p,spec,opts); }
-    return;
+    if(spec){
+      var opts=window._padOpts||{ assembly:true, fence:true, bollards:true };
+      var qty=(window._padQty&&window._padQty>1)?window._padQty:1;
+      var cols=(window._padCols||0);
+      if(qty>1){ _doPlaceBesPadGrid(p,spec,opts,qty,cols); }
+      else { _doPlaceBesPad(p,spec,opts); }
+      return;
+    }
+    window._padQuickPlace=false;
   }
   _pendingPadPt={x:p.x,y:p.y};
   var m=document.getElementById('pad-modal');
   if(!m){ _doPlaceBesPad(p,{lf:BESPAD_DEFAULT_LF,wf:BESPAD_DEFAULT_WF,model:'BESS Pad'},{assembly:true,fence:true,bollards:true}); return; }
   _fillPadModels(); _padModelChange(); _padScaleNote();
   m.style.display='flex';
+  _padLibraryRefill();
+}
+/* The org's library loads at sign-in; a pad opened before that lands
+   refills its list once it does, without losing the pick. */
+function _padLibraryRefill(){
+  try{
+    if(typeof OmegaEq==='undefined' || OmegaEq.isLoaded()) return;
+    OmegaEq.load().then(function(){
+      var m=document.getElementById('pad-modal');
+      if(m && m.style.display==='flex'){ _fillPadModels(); _padModelChange(); }
+    });
+  }catch(e){}
 }
 /* Resolve the currently-selected pad spec, defaulting to the first catalog
    model or the last one picked in the modal. */
 function _padCurrentSpec(){
-  var models=_bespadModels();
-  var idx=(window._padModelIdx!=null)?window._padModelIdx:0;
-  var sm=models[idx]||models[0];
-  if(sm) return { lf:sm.lf, wf:sm.wf, model:sm.name };
+  if(window._padSpec && window._padSpec.lf>0 && window._padSpec.wf>0)
+    return JSON.parse(JSON.stringify(window._padSpec));
+  var models=_bespadModels(), sm=null;
+  for(var i=0;i<models.length;i++) if(models[i].id===window._padModelKey) sm=models[i];
+  sm=sm||models[0];
+  if(sm && sm.requiresDimensions) return null;
+  if(sm) return { lf:sm.lf, wf:sm.wf, model:sm.name, catalogKey:sm.id,
+    geometryBasis:sm.geometryBasis||'', geometryNote:sm.geometryNote||'' };
   return { lf:BESPAD_DEFAULT_LF, wf:BESPAD_DEFAULT_WF, model:'BESS Pad' };
 }
 /* Config button: open the modal to choose model/qty and enable quick-place mode
    so subsequent clicks drop the configured system(s) without reopening. */
 function _openPadConfig(){
   _pendingPadPt=null;
-  window._padQuickPlace=true;
+  /* Quick-place is enabled only after a valid configuration is confirmed. */
   try{ if(typeof setMode==='function') setMode('bespad'); }catch(e){}
   var m=document.getElementById('pad-modal'); if(!m) return;
   _fillPadModels(); _padModelChange(); _padScaleNote();
   m.style.display='flex';
+  _padLibraryRefill();
 }
 function _fillPadModels(){
   var sel=document.getElementById('pad-model'); if(!sel) return;
-  var models=_bespadModels();
-  var html='';
+  var previous=sel.value==='custom' ? 'custom' :
+    ((sel._padModelKeys||[])[parseInt(sel.value,10)]||window._padModelKey||'');
+  var models=_bespadModels(), selected=-1, group='', keys=[];
+  /* Build DOM nodes, not HTML from a supplier's model name. */
+  sel.innerHTML='';
+  var target=sel;
   for(var i=0;i<models.length;i++){
-    html+='<option value="'+i+'">'+models[i].name+'  ('+models[i].lf+'\u2032 x '+models[i].wf+'\u2032)</option>';
+    var m=models[i], label=m.featured?'Featured - CleanCell US':(m.org?'Your equipment library':'Other battery systems');
+    if(group!==label){
+      target=document.createElement('optgroup'); target.label=label;
+      sel.appendChild(target); group=label;
+    }
+    var opt=document.createElement('option'); opt.value=String(i);
+    var dims=m.requiresDimensions?'enter footprint':
+      ((Math.round(m.lf*1000)/1000)+' ft x '+(Math.round(m.wf*1000)/1000)+' ft');
+    opt.textContent=(m.pickerLabel||m.name)+' ('+dims+')';
+    opt.setAttribute('data-catalog-key',m.id);
+    target.appendChild(opt); keys.push(m.id);
+    if(m.id===previous) selected=i;
   }
-  html+='<option value="custom">Custom size\u2026</option>';
-  sel.innerHTML=html;
+  var custom=document.createElement('option'); custom.value='custom';
+  custom.textContent='Custom size...'; sel.appendChild(custom);
+  sel._padModelKeys=keys;
+  if(previous==='custom') sel.value='custom';
+  else if(selected>=0) sel.value=String(selected);
 }
 function _padModelChange(){
-  var sel=document.getElementById('pad-model');
-  var row=document.getElementById('pad-custom-row');
+  var sel=document.getElementById('pad-model'), row=document.getElementById('pad-custom-row');
   if(!sel||!row) return;
-  row.style.display=(sel.value==='custom')?'flex':'none';
-  // If the picked model is a multi-unit SYSTEM preset (e.g. AWG 5MW = 4 units),
-  // auto-fill the cluster Units field so it drops the whole array to hit the
-  // rated site output (5MW / 20MWh = 4x 20AWG5MW on a shared MV collector).
-  try{
-    if(sel.value!=='custom'){
-      var models=_bespadModels();
-      var sm=models[parseInt(sel.value,10)];
-      var qtyEl=document.getElementById('pad-qty');
-      if(sm && sm.sysQty && qtyEl){ qtyEl.value=sm.sysQty; }
-    }
-  }catch(e){}
+  var models=_bespadModels(), sm=sel.value==='custom'?null:models[parseInt(sel.value,10)];
+  var needs=!!(sm&&sm.requiresDimensions), key=sm?sm.id:'custom';
+  row.style.display=(sel.value==='custom'||needs)?'flex':'none';
+  if(needs && sel._padDimensionKey!==key){
+    var saved=window._padSpec, same=saved&&saved.catalogKey===key;
+    var lf=document.getElementById('pad-lf'), wf=document.getElementById('pad-wf');
+    if(lf) lf.value=same?saved.lf:'';
+    if(wf) wf.value=same?saved.wf:'';
+  }
+  sel._padDimensionKey=key;
+  var qtyEl=document.getElementById('pad-qty');
+  if(sm && sm.sysQty && qtyEl) qtyEl.value=sm.sysQty;
+  _padScaleNote();
 }
 function _padScaleNote(){
   var note=document.getElementById('pad-scale-note'); if(!note) return;
+  var sel=document.getElementById('pad-model'), models=_bespadModels();
+  var sm=sel&&sel.value!=='custom'?models[parseInt(sel.value,10)]:null;
   var ppf=(S.pxPerFt && S.pxPerFt>0);
-  if(ppf){ note.style.color='var(--sub)'; note.textContent='Drawing is calibrated \u2014 pad will be true-to-scale.'; }
-  else { note.style.color='var(--gold)'; note.textContent='Not calibrated \u2014 pad drops at preview scale. Use the Calibrate tool for true scale.'; }
+  note.setAttribute('role','status');
+  note.style.color=sm&&sm.geometryNote?'var(--gold)':'var(--sub)';
+  if(sm&&sm.requiresDimensions){
+    note.textContent='Enter the battery enclosure length and width in feet before placing. '
+      +sm.geometryNote+' User-entered dimensions are not manufacturer-verified.';
+    return;
+  }
+  note.textContent=(ppf?'Drawing calibrated - geometry uses the listed dimensions.':
+    'Not calibrated - preview scale only. Use Calibrate for true scale.')
+    +(sm&&sm.geometryNote?' '+sm.geometryNote:'');
+}
+/* Keep the product identity when its footprint must be entered manually. */
+function _padReadSpec(){
+  var sel=document.getElementById('pad-model'), models=_bespadModels();
+  var sm=sel&&sel.value!=='custom'?models[parseInt(sel.value,10)||0]:null;
+  var custom=sel&&sel.value==='custom', needs=!!(sm&&sm.requiresDimensions);
+  var lf=sm?sm.lf:BESPAD_DEFAULT_LF, wf=sm?sm.wf:BESPAD_DEFAULT_WF;
+  if(custom||needs){
+    lf=parseFloat((document.getElementById('pad-lf')||{}).value);
+    wf=parseFloat((document.getElementById('pad-wf')||{}).value);
+    if(needs && (!(lf>0)||!(wf>0)||!isFinite(lf)||!isFinite(wf))){
+      var note=document.getElementById('pad-scale-note');
+      if(note){ note.textContent='Length and width are required for this model. Enter positive finite dimensions in feet; no generic container footprint will be substituted.'; note.style.color='var(--gold)'; }
+      return null;
+    }
+    if(!(lf>0)||!isFinite(lf)) lf=BESPAD_DEFAULT_LF;
+    if(!(wf>0)||!isFinite(wf)) wf=BESPAD_DEFAULT_WF;
+  }
+  return { lf:lf, wf:wf, model:sm?sm.name:('Custom '+lf+' ft x '+wf+' ft'),
+    catalogKey:sm?sm.id:null,
+    geometryBasis:needs?'user-entered-unverified':(sm&&sm.geometryBasis||''),
+    geometryNote:sm&&sm.geometryNote||'' };
 }
 function _padModalCancel(){
   var m=document.getElementById('pad-modal'); if(m) m.style.display='none';
   _pendingPadPt=null;
 }
 function _padModalConfirm(){
+  var spec=_padReadSpec(); if(!spec) return;
   var sel=document.getElementById('pad-model');
-  var spec=null;
-  if(sel && sel.value==='custom'){
-    var lf=parseFloat((document.getElementById('pad-lf')||{}).value);
-    var wf=parseFloat((document.getElementById('pad-wf')||{}).value);
-    if(!lf||lf<=0) lf=BESPAD_DEFAULT_LF;
-    if(!wf||wf<=0) wf=BESPAD_DEFAULT_WF;
-    spec={ lf:lf, wf:wf, model:'Custom '+lf+'\u2032x'+wf+'\u2032' };
-  } else {
-    var models=_bespadModels();
-    var idx=sel?parseInt(sel.value,10):0;
-    window._padModelIdx=idx;                       /* remember for auto-place */
-    var sm=models[idx];
-    spec=sm?{ lf:sm.lf, wf:sm.wf, model:sm.name }:{ lf:BESPAD_DEFAULT_LF, wf:BESPAD_DEFAULT_WF, model:'BESS Pad' };
-  }
+  window._padModelKey=spec.catalogKey||'custom';
+  window._padModelIdx=sel&&sel.value!=='custom'?parseInt(sel.value,10):null;
+  window._padSpec=JSON.parse(JSON.stringify(spec));
   var m=document.getElementById('pad-modal'); if(m) m.style.display='none';
-  var opts={
-    assembly: _cbChecked('pad-assembly'),
-    fence:    _cbChecked('pad-fence'),
-    bollards: _cbChecked('pad-bollards')
-  };
+  var opts={ assembly:_cbChecked('pad-assembly'), fence:_cbChecked('pad-fence'), bollards:_cbChecked('pad-bollards') };
   var qty=parseInt((document.getElementById('pad-qty')||{}).value,10)||1;
   var cols=parseInt((document.getElementById('pad-cols')||{}).value,10)||0;
-  window._padQty=qty; window._padCols=cols;         /* remember for auto-place */
-  /* If opened via Config (no pending click), just save prefs; the next canvas
-     click auto-places with these settings. */
-  if(!_pendingPadPt){ if(typeof showBanner==='function') showBanner('shape',' Quick-place set ('+qty+' unit'+(qty>1?'s':'')+') \u2014 click the map to drop, click again for more.'); return; }
+  window._padQty=qty; window._padCols=cols; window._padOpts=opts;
+  if(!_pendingPadPt){
+    window._padQuickPlace=true;
+    if(typeof showBanner==='function') showBanner('shape','Quick-place set ('+qty+' units) - click the map to place.');
+    return;
+  }
   var p=_pendingPadPt; _pendingPadPt=null;
-  if(qty>1){ _doPlaceBesPadGrid(p,spec,opts,qty,cols); }
-  else { _doPlaceBesPad(p,spec,opts); }
+  if(qty>1) _doPlaceBesPadGrid(p,spec,opts,qty,cols);
+  else _doPlaceBesPad(p,spec,opts);
 }
 /* Place N identical BESS assemblies in a grid starting near p. Each is an independent
    shape (movable individually); all editable after. Spacing derives from the unit
@@ -11189,7 +11272,8 @@ function _doPlaceBesPad(p,spec,opts){
     var _pelec=_asmElecFromSpec(spec);
     var sh={ id:uid(), kind:'bespad', pts:[{x:p.x - wPx/2, y:p.y - hPx/2}],
              style:S.shapeStyle, color:SHAPE_STROKE, lf:spec.lf, wf:spec.wf, model:spec.model, scaled:!!ppf,
-             catalogKey:_pelec.key, unitKwh:_pelec.kwh, unitKw:_pelec.kw, unitCost:_pelec.cost };
+             catalogKey:_pelec.key, unitKwh:_pelec.kwh, unitKw:_pelec.kw, unitCost:_pelec.cost,
+             geometryBasis:spec.geometryBasis||'', geometryNote:spec.geometryNote||'' };
     S.shapes.push(sh); renderShape(sh);
     updShapeCount(); pushHist();
     if(!ppf) showBanner('shape',' Pad placed at preview scale \u2014 calibrate for true-to-scale sizing');
@@ -11274,6 +11358,7 @@ function _doPlaceBesPad(p,spec,opts){
             cx:p.x, cy:p.y,
             model:spec.model, lf:spec.lf, wf:spec.wf, scaled:!!ppf,
             catalogKey:_elec.key, unitKwh:_elec.kwh, unitKw:_elec.kw, unitCost:_elec.cost,
+            geometryBasis:spec.geometryBasis||'', geometryNote:spec.geometryNote||'',
             parts:parts, padMargin:padMargin, gearVGap:gearVGap, containerGap:containerGap,
             hasAssembly:!!opts.assembly, hasFence:!!opts.fence,
             /* Guided builds do not add bollards - gating only the wizard
@@ -21738,7 +21823,7 @@ const BESS_CATALOG = {
      GOTION_CATALOG_DIMS says so. evSkid keeps it out of the auto-sizers:
      it is an EV charging skid, not a peak-shaving battery to recommend. */
   'CC-R60': {mfr:'Clean Cell',model:'CleanCell R60 — 60 kW / 61.44 kWh skid (BESS + 2 Autel DCFC)',chem:'LFP (LiFePO4)',
-    kwh:61.44,usable:null,kw:60,dur:1.02,dcv:'614.4V (100Ah)',eqcost:null,
+    kwh:61.44,usable:null,kw:60,dur:1.02,dcv:'614.4V (100Ah)',eqcost:null, /* $24,000 (Tommy, 2026-10-13) lives in the server book: api/_lib/editor-cost.js CATALOG_PRICES */
     inv:'Sol-Ark 60K-3P hybrid PCS (integrated, side-mounted on the cabinet)',ikva:60,
     xfmr:'N/A',disco:'Project-engineered (72.3 A max AC output)',
     _incPCS:true,_incXfmr:true,_incDisco:false,evSkid:true,
@@ -21752,7 +21837,7 @@ const BESS_CATALOG = {
     installType:'Floor-mounted transportable commercial skid',
     evChargers:{count:2,mfr:'Autel',kind:'DC fast-charging dispenser',kw:null},
     verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 x 82.75 in overall per the skid drawing ClearSky supplied (2026-10-02)',
-    notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: quote required. Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
+    notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: $24,000 (ClearSky, 2026-10-13). Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
   /* ── NEXTNRG MICROGRIDS — storage specified to the site ─────────────
      Read off the NextNRG Microgrids brochure (Q4 2026, p. 5-6) on
      2026-10-13. NextNRG holds every supplied system to one requirement
@@ -21950,9 +22035,17 @@ function applyBMCatalog() {
      needing an external one and the Guided Build draws it. Only a YES: a
      tenant row with blank integration columns imports as false, and that is
      "not said", not "external", so the size rule still decides it. */
+  var _explicit=m.integrationBasis==='catalog-package-arrangement';
   _setChk('inc-pcs',  m._incPCS===true   || _big);
   _setChk('inc-disco',m._incDisco===true || (_big && !!m.disco));
   _setChk('inc-xfmr', m._incXfmr===true  || (_big && !!m.xfmr));
+  if(_explicit){
+    _setChk('inc-pcs',m._incPCS===true);
+    _setChk('inc-disco',m._incDisco===true);
+    _setChk('inc-xfmr',m._incXfmr===true);
+    set('acv',m.acVoltage);
+    var kva=document.getElementById('bm-ikva'); if(kva && m.ikva==null) kva.value='';
+  }
   if(typeof _bmUpdateIntegrationHint==='function') _bmUpdateIntegrationHint();
   // Show preview
   const hasCost = m.eqcost != null;
@@ -33453,6 +33546,7 @@ var OmegaEq = (function(){
                on every load, so the cluster dialog and the Data Ctr flyout
                see them without the library ever having been opened. */
             try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){}
+            try{ if(typeof _bessLibrarySync==='function') _bessLibrarySync(); }catch(e){}
             resolve(all());
           })
           .catch(function(err){
@@ -33492,6 +33586,9 @@ var OmegaEq = (function(){
         /* Archiving a compute module from the library must take it out of
            the pickers now, not on the next page load. */
         if(doc.cat==='datacenter'){ try{ if(typeof _dcCatalogSync==='function') _dcCatalogSync(); }catch(e){} }
+        /* A BESS unit saved or archived shows in, or leaves, the BESS Pad
+           picker and the BESS Config list at once, not on the next load. */
+        if(doc.cat==='bess'){ try{ if(typeof _bessLibrarySync==='function') _bessLibrarySync(); }catch(e){} }
         resolve(doc);
       }).catch(reject);
     });
@@ -33614,6 +33711,118 @@ function _dcCatalogSync(){
   }
   try{ _dcFlyoutSync(live); }catch(e){}
   return n;
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   BESS UNITS FROM THE EQUIPMENT LIBRARY — PLACEABLE PADS
+   ──────────────────────────────────────────────────────────────────────
+   The BESS Pad tool offered only GOTION_CATALOG_DIMS, a source literal, so
+   a unit saved through the library's "+ New equipment" (cat 'bess') was
+   listed in the library and nowhere a rep could place it. This is the
+   same bridge _dcCatalogSync builds for compute modules:
+
+     _bessLibraryUnits()  the org's live BESS entries that carry a length
+                          and a width — the only ones that can be drawn —
+                          in feet, with a display name. _bespadModels()
+                          appends them to the picker.
+     _bessLibrarySync()   projects the same units into BESS_CATALOG under
+                          their own key (never over a shipped entry), so
+                          _asmElecFromSpec resolves kWh / kW / what is
+                          integrated on the pad by key, the fleet rollup,
+                          the BOM and the schedule read them as any other
+                          unit, and the BESS Config picker lists them under
+                          their own heading. Re-run on every load and
+                          every save: an archived unit leaves the picker.
+
+   Drawings store lf/wf/model/catalogKey on the shape, so a unit archived
+   later still renders where it was placed. No pricing: `eqcost` is what
+   the library holds, or null.
+   ══════════════════════════════════════════════════════════════════════ */
+
+function _bessLibraryUnits(){
+  var out=[], FT=304.8;
+  if(typeof OmegaEq==='undefined') return out;
+  OmegaEq.all().forEach(function(it){
+    if(!it || it.cat!=='bess' || it._seed || it.archived) return;
+    var key=String(it.key||''); if(!key) return;
+    /* "Publish seed library" copies the shipped entries into Firestore
+       under their own keys; those already have dims in the shipped table. */
+    try{ if(typeof GOTION_CATALOG_DIMS!=='undefined' && GOTION_CATALOG_DIMS[key]) return; }catch(e){}
+    var lf=+it.lengthFt||(it.lengthMm?+it.lengthMm/FT:0);
+    var wf=+it.widthFt ||(it.widthMm ?+it.widthMm /FT:0);
+    /* No footprint on file is not "not placeable": the pad asks the size
+       when it is picked (Custom size, with the unit's own name, kWh and
+       kW), and the record is placed as itself. */
+    var sized=(lf>0 && wf>0);
+    lf=sized?Math.round(lf*100)/100:0; wf=sized?Math.round(wf*100)/100:0;
+    var hf=+it.heightFt||(it.heightMm?Math.round(+it.heightMm/FT*100)/100:0);
+    var name=((it.manufacturer||'')+' '+(it.model||'')).replace(/\s+/g,' ').trim()||key;
+    out.push({ key:key, name:name, lf:lf, wf:wf, hf:hf, sized:sized, rec:it });
+  });
+  out.sort(function(a,b){ return a.name<b.name?-1:(a.name>b.name?1:0); });
+  return out;
+}
+
+function _bessLibrarySync(){
+  if(typeof BESS_CATALOG==='undefined' || typeof OmegaEq==='undefined') return 0;
+  var live={}, n=0;
+  _bessLibraryUnits().forEach(function(u){
+    var it=u.rec;
+    /* A shipped entry is never overwritten; a tenant product (merged by
+       omega-bess-products.js) keeps its own record too. */
+    if(BESS_CATALOG[u.key] && !BESS_CATALOG[u.key].org) return;
+    var integrated=/integrated/i.test(String(it.type||''))||/integrated/i.test(String(it.inv||''));
+    live[u.key]={
+      mfr:it.manufacturer||'', model:u.name, chem:it.chem||'',
+      kwh:(+it.energyKwh>0?+it.energyKwh:null), usable:null,
+      kw:(+it.powerKw>0?+it.powerKw:null), maxKw:(+it.pmaxKw>0?+it.pmaxKw:null),
+      dur:(+it.energyKwh>0&&+it.powerKw>0)?+(it.energyKwh/it.powerKw).toFixed(2):null,
+      dcv:it.dcv||'TBD', eqcost:(it.eqcost==null?null:+it.eqcost),
+      inv:it.inv||(integrated?'Integrated PCS':'TBD'), ikva:(+it.pnomKva>0?+it.pnomKva:null),
+      xfmr:it.xfmr||'TBD', disco:it.disco||'TBD',
+      dims:(it.lengthMm&&it.widthMm)?(it.lengthMm+'x'+it.widthMm+'x'+(it.heightMm||0)+'mm'):'',
+      _incPCS:integrated||undefined,
+      notes:it.notes||'', org:true, libraryKey:u.key
+    };
+    n++;
+  });
+  var k;
+  for(k in BESS_CATALOG){
+    if(!Object.prototype.hasOwnProperty.call(BESS_CATALOG,k)) continue;
+    if(BESS_CATALOG[k] && BESS_CATALOG[k].org && !live[k]) delete BESS_CATALOG[k];
+  }
+  for(k in live){
+    if(!Object.prototype.hasOwnProperty.call(live,k)) continue;
+    BESS_CATALOG[k]=live[k];
+  }
+  try{ _bessConfigPickerSync(live); }catch(e){}
+  return n;
+}
+
+/* The BESS Config picker (#bm-catalog) lists the shipped catalog as static
+   options and the tenant's products as one optgroup; the org's library
+   units get their own, rebuilt on every sync. */
+function _bessConfigPickerSync(live){
+  var sel=document.getElementById('bm-catalog'); if(!sel) return;
+  var old=document.getElementById('bm-cat-org');
+  if(old) old.parentNode.removeChild(old);
+  var keys=Object.keys(live||{}); if(!keys.length) return;
+  var grp=document.createElement('optgroup');
+  grp.id='bm-cat-org'; grp.label='Your equipment library';
+  keys.sort(function(a,b){ return (live[a].model||a)<(live[b].model||b)?-1:1; });
+  for(var i=0;i<keys.length;i++){
+    var e=live[keys[i]], o=document.createElement('option');
+    o.value=keys[i];
+    o.textContent=e.model+' \u2014 '+(e.kw||'?')+'kW / '+(e.kwh||'?')+'kWh'+(e._incPCS?' \u00b7 PCS integrated':'');
+    grp.appendChild(o);
+  }
+  var tenant=document.getElementById('bm-cat-tenant');
+  if(tenant && tenant.nextSibling) sel.insertBefore(grp, tenant.nextSibling);
+  else if(tenant) sel.appendChild(grp);
+  else {
+    var first=sel.querySelector('optgroup');
+    if(first) sel.insertBefore(grp, first); else sel.appendChild(grp);
+  }
 }
 
 /* The Data Ctr flyout is static markup listing the four seed pads. Append
@@ -34081,7 +34290,9 @@ function e3NewOpen(){
   };
   b.innerHTML =
       '<div class="e3-note info">Saved to your organisation only \u2014 <strong>'
-    +   _omEsc(OmegaEq.orgId())+'</strong>. Nobody outside it sees this entry.</div>'
+    +   _omEsc(OmegaEq.orgId())+'</strong>. Nobody outside it sees this entry. '
+    +   'With a <strong>length and width</strong> it is offered by <strong>Draw \u203a BESS Pad</strong> '
+    +   'and BESS Config, to scale, as soon as it is saved.</div>'
     + '<div class="e3-grid">'
     +   f('mfr','MANUFACTURER')
     +   f('model','MODEL')
@@ -69385,7 +69596,11 @@ function _cgcBlocks(){
   var out=[], ppf=_cgcPpf();
   try{
     (S.shapes||[]).forEach(function(sh){
-      if(!sh || sh.kind!=='derdc' || sh.omegaCore) return;
+      if(!sh) return;
+      /* Compute blocks: kind derdc (standard or ZTMM), not the Omega-Core skid.
+         Also accept omegaCompute flag as a fallback for blocks placed via placeAt. */
+      var isCompute = (sh.kind==='derdc' && !sh.omegaCore) || (sh.omegaCompute && sh.kind!=='bess');
+      if(!isCompute) return;
       var p=(sh.pts&&sh.pts[0])?sh.pts[0]:null; if(!p) return;
       /* pts[0] is the CENTRE of the pad — that is what _derRenderDc draws
          from. Adding half put every tap a pad away from its own block. */
@@ -81221,14 +81436,17 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     }
     try{ if(typeof updShapeCount==='function') updShapeCount(); }catch(e){}
     try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
-    /* The trace left the page in polyline mode, where a click on the new
-       canopy would start another line. Back to Select with the canopy
-       selected, so its frame and delete X are there at once. */
+    /* THE CANOPY IS SELECTED THE MOMENT IT EXISTS (Tommy, 2026-10-13: a
+       canopy had no delete while a drawn array did). finishPolyline leaves
+       the editor in polyline mode ("click to start another"), so a click
+       on the new canopy started a stray line instead of selecting it, and
+       Delete had nothing selected. Back to Select, and the canopy carries
+       its handles and its delete X, as any placed array does. */
     try{ if(typeof setMode==='function') setMode('select'); }catch(e){}
     try{ if(typeof selectShape==='function') selectShape(made.id); }catch(e){}
     if(typeof showBanner==='function'){
       try{ showBanner('shape','Canopy created \u2014 '+layout.tableCount+' tables, '
-        +Math.round(layout.kw)+' kW, fitted to your outline. Delete or its \u00d7 removes it.'); }catch(e){}
+        +Math.round(layout.kw)+' kW, fitted to your outline. Drag to move, Delete or the \u00d7 to remove.'); }catch(e){}
     }
     return made;
   };
@@ -104438,6 +104656,16 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     try{
       (S.shapes||[]).forEach(function(sh){
         if(!sh||sh.omegaCompute) return;
+        /* DER POI: the point where existing solar/DER connects. Compute
+           trenching should be able to tie into it, not just the raw
+           generation shapes. */
+        if(sh.eqId==='der_poi'||sh.eqId==='util_poi'){
+          var b=box(sh);
+          out.push({ id:sh.id, kind:'poi', kw:0,
+                     label:(sh.label||(sh.eqId==='der_poi'?'DER POI':'Utility POI')),
+                     cx:b.cx, cy:b.cy });
+          return;
+        }
         if(sh.kind==='dersolar'||sh.kind==='solar'||sh.kind==='derwind'||sh.kind==='deralt'){
           var b=box(sh);
           out.push({ id:sh.id, kind:sh.kind, kw:+sh.kw||0,
@@ -159548,7 +159776,8 @@ if (root.console && console.info) {
     var lay = root.computeGroundLayout({ boundary: ringPx, exclusions: blds || [] });
     if (!lay || !(lay.tableCount > 0))
       throw new Error('the parcel is too small for an array once setbacks and buildings are taken out');
-    root.applyGroundLayout(ringPx, lay, blds || []);
+    var made = root.applyGroundLayout(ringPx, lay, blds || []);
+    if (made) made.omegaCompute = true;   /* the pack's field: the field lock covers it */
     return lay;
   }
 
@@ -162090,16 +162319,19 @@ if (root.console && console.info) {
   }
 
   function buildAt(pt) {
-    var poly = null;
-    try { poly = boundary(); } catch (e) {}
-    if (poly && poly.length >= 3) return build();
-    /* No parcel: anchor the grid on the click. legacyPlace is the original
-       OmegaCompute.place, whose placeAt() takes that anchor. */
+    /* The user clicked a specific spot; the blocks go there. A boundary on
+       the site (e.g., the solar array's) must never dictate where compute
+       gets placed. Parcel packing via build() is only for auto-layout when
+       there is no click point at all. */
     try {
-      if (root.OmegaCompute && typeof root.OmegaCompute.placeAt === 'function') {
+      if (pt && root.OmegaCompute && typeof root.OmegaCompute.placeAt === 'function') {
         return root.OmegaCompute.placeAt(pt);
       }
     } catch (e) {}
+    /* No click point or placeAt unavailable: fall back to parcel packing. */
+    var poly = null;
+    try { poly = boundary(); } catch (e) {}
+    if (poly && poly.length >= 3) return build();
     return build();
   }
 
@@ -162671,7 +162903,7 @@ if (root.console && console.info) {
                  : 'no table fits inside the boundary at the current scale and setback' };
     }
 
-    try { applyGroundLayout(poly, layout, excl); }
+    try { var made = applyGroundLayout(poly, layout, excl); if (made) made.omegaCompute = true; }
     catch (e) { return { ok: false, why: 'the layout could not be drawn: ' + ((e && e.message) || 'unknown') }; }
     return { ok: true, tables: layout.tableCount, kwDc: layout.kw, kwAc: layout.kwAc, gcr: layout.gcr };
   }
@@ -163540,7 +163772,15 @@ if (root.console && console.info) {
     if (sh.kind === 'substation') return false;   /* sited by hand */
     if (sh.omegaGasTie) return false;             /* a bearing you set  */
     if (sh.omegaRole) return false;               /* boundary, exclusion */
-    return !!(sh.omegaCompute || sh.autoLayout);
+    /* ONLY WHAT THE PACK PLACED. This also locked every `autoLayout`
+       array, and a canopy or a custom area a person TRACED is built
+       through the same applyGroundLayout, so it carried the flag: the
+       guard below swallowed the mousedown at capture and the canopy could
+       be neither selected nor deleted while a rectangle array could
+       (Tommy, 2026-10-13). A traced outline is a decision, like the
+       substation. The pack's own solar fills mark themselves
+       omegaCompute, so the generated field stays locked. */
+    return !!sh.omegaCompute;
   }
 
   /* Blocks the gesture at capture, before the editor's own handlers see

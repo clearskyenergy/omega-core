@@ -20,6 +20,9 @@
      candidates [--limit n] [--status new|enriched|skipped]
      activity [--kind k] [--limit n]
      suppressions
+     office                       agent profiles and assigned CRM activities
+     office-task <file.json|->    claim or finish an assigned activity
+     office-mail <file.json|->    read messages or prepare an AgentMail draft
 
    WRITE (the key needs sales:write)
      upsert <file.json|->          prospects: [ {...} ] or { prospects: [...] }
@@ -55,6 +58,9 @@ function readJson(f) { return JSON.parse(readInput(f)); }
 function out(x) { process.stdout.write(JSON.stringify(x, null, 2) + '\n'); }
 
 var run = {
+  office: function () { return C.get('/api/sales', { view: 'office' }); },
+  'office-mail': function () { var x = readJson(args[0]); x.action = 'office-mail'; return C.post(x); },
+  'office-task': function () { var x = readJson(args[0]); x.action = 'office-task'; return C.post(x); },
   agent: function () { return C.get('/api/sales', { view: 'agent' }); },
   dash: function () { return C.get('/api/sales'); },
   board: function () { return C.get('/api/growth'); },

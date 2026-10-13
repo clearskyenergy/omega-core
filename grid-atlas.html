@@ -2070,6 +2070,14 @@ q.addEventListener("keydown",function(e){
   if(e.key!=="Enter")return;
   geocodeChain(q.value);
 });
+/* ?q=<address> opens the atlas AT a place (the portfolio register links a
+   site here): the search runs once the map is up, exactly as typing it would. */
+(function(){
+  var qq=gaParam("q"); if(!qq) return;
+  q.value=qq;
+  function go(){ if(typeof map==="undefined"||!map){ setTimeout(go,150); return; } geocodeChain(qq); }
+  if(document.readyState==="complete") go(); else window.addEventListener("load",go);
+})();
 
 /* ---------- Boot ---------- */
 (function buildLegend(){

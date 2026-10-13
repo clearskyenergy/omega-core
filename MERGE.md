@@ -1,5 +1,28 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Merging origin/main into the NextNRG branch (2026-10-13)
+
+Local main had five commits origin never saw (the editor IP protection and
+the server cost engine, the EV price books, the canopy and custom-area
+traces, the fence-and-tie pass) and origin had fifty-nine it never saw.
+Three things both sides had changed, resolved here: (1) **the Omega-Core
+skid price** is origin's $639,000 (#296) and the NextNRG controller is built
+in on top of it, $764,000 a skid, every pinned figure moved with it; (2) the
+CleanCell R60's **$24,000** rode on the catalog row for a day (#296) and the
+cost engine on this side forbids a price in the browser, so it lives in
+`api/_lib/editor-cost.js` `CATALOG_PRICES` — where that commit said it would
+go; (3) **a traced canopy** was fixed twice for the same complaint: origin
+unlocked it (`isPlaced` no longer locks `autoLayout`; `tfieldlock.js`) and
+this side made a locked shape select on press (the guard; `tcanopytrace.js`).
+Both stand: the pack's own fills stay locked and select on press, a traced
+canopy is an ordinary shape. Two files origin added since the notice went on
+every shipped file (`site-crm.html`, `omega-cleancell-catalog.js`) carry it
+now. The compute-desk work this machine had STAGED but never committed
+(`api/compute-desk.js`, `api/_lib/compute-desk.js`, `portals/finance/
+compute.html`, `scripts/tests/tcomputedesk.js`, its CLAUDE.md and MERGE.md
+entries) is not in this branch: origin has its own Site CRM and Portfolio
+history and the two need reconciling by hand.
+
 ## NextNRG Microgrids: their module, their storage, their controller (2026-10-13)
 
 NextNRG's products are in the system as something that can be sold, read off
@@ -28,7 +51,7 @@ row off `UTILITY_CATALOG` first; `mgcAsset` reads the same row), priced on the R
 cost engine (`lines.controller`, `counts.mgc` = utility shapes only), a
 Controls line on the BOM, and BUILT INTO every Omega-Core skid (`DC_CATALOG`,
 the placed shape, the drawing, the BOM and spec-sheet rows, `PRODUCT.controller`):
-the skid's system cost is $450,000 + $125,000 = $575,000 with a breakdown, which
+the skid's system cost is $639,000 + $125,000 = $764,000 with a breakdown, which
 the outlay, the FMV band and the compute cash flow's skid basis follow
 (`tomegacore.js` pins moved). The uplift is applied ONCE by the one dispatch
 (`vpp-sim.js simulate()`, `input.controller`) to the dispatch-decided bill
@@ -3316,3 +3339,153 @@ applier is gone; the pass still follows a guided site build
 (`OmegaSiteBuild.build`) and runs when asked for (Design Site,
 `from:'campus'`; the Fence & Tie button, `bop:true`). Held by
 `scripts/tests/tfencepass.js` (fails on the editor before).
+
+## 2026-10-09 — Mission tasks, email context and sales ownership
+
+- Task priority scoring moves from mission.html to omega-twin functions/lib/task-priority.js. The same server score protects NOW tasks from automatic archiving, alongside explicit now/today/high priorities.
+- The twin archives proposed tasks after 14 days without task/email activity, retains every document, and supports restore. Meeting replay preserves existing tasks and drafts. Deploy the companion twinChat, runIngest and runAnalyze changes before this UI.
+- Outbox rows show Gmail thread context from the ingest loop, with sent/incoming dates and changed-since-draft warnings. Matching requires exact normalized subject and recipient; ambiguous matches remain unlinked. It does not infer that a sent message completed a task or send mail.
+- Sales uses existing sales_prospects and sales_activity: human/AI owner, referral attribution, USD value, stage and next action/date. Staff writes are transactional; agents cannot overwrite ownership or deal values. Existing contacts and history remain. No collections or rule changes.
+- Validated sales unit/API checks, lifecycle pagination and Gmail-context tests, and desktop/phone browser checks.
+## 2026-10-09 — Office agent workspace (local, pending release)
+
+Mission Office gains readable cards, editable Sales/Marketing profiles,
+account import and multi-account activities. Profiles/tasks use the existing
+server-only sales_config collection; prospects and audit events stay in the
+existing CRM collections. Claim/state validation, assignment authorization,
+and optional AgentMail provisioning/drafting are in api/_lib/office-roster.js
+and api/_lib/office-mail.js, never browser logic. No pricing/financial logic
+was added or moved. No rules, tenant data, or provider-switch settings changed.
+Calling and new-identity sends remain unavailable; the interface reports that
+explicitly. The optional email service needs its server credential and a real
+account before inboxes can be created. Jarvis runner integration is paired
+with the CLI changes; see jarvis/docs/OFFICE-RUNNER.md for release ordering.
+
+
+The same release adds default Reading Comfort across Mission: larger system
+text, opaque slate panels, no scanline/dimming overlays or text glow, clearer
+controls, and a persisted Comfort/Cinematic toggle plus larger-text setting.
+Character selection stays independent. Browser checks cover both viewport
+sizes and reading preference persistence. The existing provider settings UI
+from origin/main is preserved; its Office scope text now reflects runner state.
+
+## 2026-10-09 — Chief of Staff, Legal, and provider visibility
+
+Ada retains the ADMIN machine ID with a Chief of Staff label, a compact view of existing private twin tasks/calendar and office decisions, and owner-only capture through the existing authenticated twin `/task`. Household balances/payment automation are unconnected; no financial data is written to the sales book. The Legal AI desk supports human General Counsel Scott Henry, keeps confidential material out of shared intake, and uses Scott’s address verified in existing sent correspondence (scott@clearsky-usa.com); no automatic legal sends. Existing mailbox connection verifies the inbox with AgentMail before storing its identity.
+
+Reviewed and integrated the Grok UI from PR #270 without changing partner access controls. System separates Grok text responses from the Muse/Grok Bot companion apps and shows missing bridges honestly. Office execution stays on tool-capable Claude/ChatGPT. No proprietary calculations added to browser code; no new Firestore collections or rules.
+
+Validation: sales/roster/mail suites; desktop and 390px Office/private-capture tests; provider settings on an isolated HTTP fixture (18795, never live 8795); inline JS parse and diff checks.
+
+
+### Brain inventory — 2026-10-09 (local, not released)
+Owner-only `/api/brain-inventory` counts all root collections and 27 known nested collection groups, subtracting root overlaps. Counts and illustrative time-value scenarios run server-side in `api/_lib/brain-inventory.js`; no raw records or credentials leave that endpoint. `mission.html` adds an independent mobile-first summary, coverage gaps, honest error states and graph work only while the Brain view is visible. Existing unrelated Office edits remain in the working tree; release only the Brain patch. Checks: `scripts/test-brain-inventory.js`, `scripts/render-brain-inventory.js`, inline-script parse check. No data migration or production write.
+
+
+### Brain evidence consumption — 2026-10-09 (local, not released)
+Expanded the inventory into a read-only evidence feed: ten canonical sources, exact deal/project/financing and meeting/source links, coverage and date metadata, primary/exhausted analysis classification, source-referenced findings and an explicit unassessed bankability checklist. One `brain-evidence` module serves the private owner API and read-only CLI; no raw messages, financial amounts, or customer names in the packet. Department bot preflight lives in Jarvis `jarvis_knowledge.py` / `jarvis_office.py`, adds a receipt and validates model-declared finding IDs. Local reader copies installed in the primary core checkout for the existing scheduler; they must match this release. The cloud dashboard is still pending release. No retry flags, customer records, schedules, permissions or finance settings changed. Tests: evidence module/API, existing inventory, Office scheduling (15), knowledge handoff (3), phone/desktop rendering and inline scripts. A real Codex read-only consumption run returned the live packet ID and correct source-linked counts; this was not an operational bot run or proof of a financial benefit.
+
+Customer coverage correction: Brain separates tenant/user records from sales and displays registered tenants with owned/shared project references, direct workspace membership counts, team records and partner-user records. No unique-user or paying-customer claim. Bounded projected reads explicitly label unavailable/partial sources. The bot evidence reader now checks team and partner-user tenant links. Preview screenshots carry a TEST PREVIEW banner. Verified live 2026-10-10T00:22Z: 26 active-status tenant records, 288 projects (269 linked, 17 missing org, 2 unresolved), 37 workspace memberships, 60 team records (5 unresolved), 7 partner-user records. No production data changed.
+### Outbox correspondence — 2026-10-09
+Draft subjects generated from meeting actions often differ from actual Gmail subjects. The ingest worker now supplies recent recipient correspondence (90 days, five threads), separately labelled from exact matches. Outbox exposes the real subjects, sent/received dates and Gmail links. Recipient-only correspondence never completes a draft or reopens a task. Missing recipients are explicit. Matching and Gmail access remain server-side in omega-twin.
+
+
+## 2026-10-10 - CleanCell references in BOTH battery pickers
+
+The sizing catalog and the BESS Pad placement menu now consume the same
+revisioned CleanCell reference records. Both feature the three Rev H products
+first, retain other manufacturers and keep selection by SKU rather than array
+position. Late tenant-catalog loading cannot displace the featured group.
+
+The placement menu previously read only GOTION_CATALOG_DIMS, so adding a record
+to BESS_CATALOG could never expose it there. The adapter does not invent entries
+in that dimensions table: CC290 uses its cabinet reference; the two 1 MW
+products require an entered footprint and retain an unverified geometry basis.
+Model identity, AC kW, DC kWh and geometry provenance survive plain, assembly,
+cluster and quick placement. Catalog package-arrangement flags override the
+legacy size heuristic only on explicitly marked reference records. No pricing,
+scoring, dispatch or approval engine changed; no database mutation or migration.
+
+Regression: scripts/render-cleancell-pickers.js runs the actual editor
+functions and actual pad modal at 1280px and 390px, with map rendering, auth and
+network stubbed. It tests both orders, late tenant load, manual dimensions,
+identity/ratings, native placement, integrated PCS, custom entry and reopen.
+
+## 2026-10-11 — Portfolio & Assets on the workspace shell; the register acts on a selection
+
+`portfolio.html` and `site-crm.html` wear `omega-workspace-shell.js` (the
+rail with Portfolio on it, the switcher topbar, the side panel, the phone tab
+bar) instead of their own EnergyOS topbar; `OmegaWorkspaceShell.currentKey()`
+marks both pages Portfolio. The register had been stuck on "Loading…": the page
+started Firebase a second time after `omega-tenant.js` had, and the throw
+killed its boot before sign-in was read. Both pages now boot the way the
+marketplace does (the sign-in, then `OmegaTenant.onEntitlements`, with the
+address as the fallback workspace).
+
+The register reads each site's stored pro forma (`latestProforma`, which
+`proforma-run` now carries with capital, NPV, payback, pods and kW) and shows
+investor IRR, capital and payback per row; a row opens the side panel with the
+figures and the hand-offs. The checkboxes make a selection (shift-click for a
+range) and the action bar asks the endpoint per site: `send-to-editor` (ONE
+`projects/{id}` per site, in `omega-newproject.js`'s shape, `siteId` on the
+project and `projectId` on the site, idempotent), `send-to-finance` (ONE
+`fin_projects/{id}` per site in the financing portal's own shape: `open` with
+the investor capital as the ask when a scenario is on file, else a `draft`),
+`proforma-bulk`, `site-set-status`, `site-tag`, `site-archive` /
+`site-restore` (`?archived=1` lists them), `site-delete` (admin). Export IRR is
+a CSV of the selection; Export term sheets is one PDF per site from
+`GET /api/site-crm?agreement=1`: `api/_lib/site-agreement.js` composes the Site
+SPV term sheet from the record and the latest scenario (read, never invented;
+a blank is "Not provided"; an unsized site names no capital or return; the
+site's flags print as conditions) and renders it with the self-hosted pdf-lib
+(`vercel.json` bundles it for the function). Every page of it says DRAFT.
+
+Tests: `scripts/test-site-crm.js` (30, now on `npm test`); the workspace
+render check (`npm run check:workspace`, flow) boots the register and the site
+record on the Firebase double, answers `/api/site-crm` in the endpoint's
+shape, and asserts the shell, the stored IRR per row, the side panel, the
+action bar, a posted bulk action and the phone layout.
+
+**The compute IRR, the deck and the capital request (same day).** `site-model`
+(`api/_lib/site-model.js`: the ONE mapping from a site record to the Compute
+Site Pro Forma's input; what is missing is named, nothing defaulted) runs
+`compute-site.js` on the one finance engine behind the compute pro forma's own
+gate, stores the answer whole under `sites/{id}/models/{id}` and its figures
+as `latestModel`; `site-model-bulk` runs ten at a time. The site record's
+*Investor deck & capital* tab shows the IRR tool's headline tiles, the three
+structures and the SAME investor deck (`proforma-logic.js`, print to PDF);
+the register's IRR and Project cost columns read the model once it has run,
+and a `Capital` column reads the deal LIVE (`capitalJoin`): Not sent, Draft,
+Open · n offers, Funded (awarded). `send-to-finance` asks for the total
+project cost (`askOf`, `capitalRequest{}` on the deal). Grid Atlas takes
+`?q=<address>` and opens there. Tests: `scripts/test-site-crm.js` (34) and
+the render check's portfolio and site-record flows, which run the real model
+on the fixture site.
+
+**The asset-manager draft folded in (PR #286, same day).** One collection set,
+one door, one page: `api/_lib/portfolio/register.js` + `register-ext.js` (the
+draft's gateway, renamed onto `sites` and `site_*`, our `omega_audit`, our
+file records; `site-bridge.js` keeps the register's facts and the CRM's flat
+fields on one record) are mounted on `/api/site-crm` by `REG.owns(req)`.
+Folded: the previewed import with diff, conflicts and undo (EVCS intake by
+signature, the EVCS model package, the generic list; the `x:`-prefixed XLSX
+reader fix and the macro / external-link refusal), facts with provenance and
+review, saved views, portfolios, CSV export, power evidence and shared
+envelopes, interval coverage, bills and the review queue, versioned results
+with stale propagation, XIRR with no-root / multi-root disclosure,
+`legacyPod` on `proforma.js` (parity pinned offline; T26 on the private
+file), IQGEN as a separate set, finance packages with server-side gates and
+one private submission, the CRM pipeline (its follow-ups on the site CRM's
+own Today index), durable jobs, the workspace widget beside Pulse and the
+feed. Dropped: `asset_*`, `api/portfolio-assets.js`, `portfolio-assets.html`,
+the hub flag, the draft's page UI test, and our `scripts/import-evcs-sites.js`
+(the register's profile and `scripts/seed-evcs-portfolio.js` are the one
+importer). The site record gains *Power & bills* and the package + Terra
+cards on the capital tab; the register page sends a workbook through the
+previewed import and ranks positive IRRs first. `send-to-partner` mails a
+site to Terra Energy (the solar partner) with the address from the
+environment or the deal room's settings, never a constant. Tests:
+`npm run test:portfolio` (the draft's T01–T35 re-homed on the register
+module; the real-workbook suites skip without the private files).
+Before go-live: deploy `firestore.rules` by hand before or with the API; the
+EVCS seed refuses unless `omega_orgs/evcs.com` exists; close PR #286.

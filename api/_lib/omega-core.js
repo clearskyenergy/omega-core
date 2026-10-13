@@ -16,7 +16,9 @@
 
    The contract is a 5-year minimum. At the end ClearSky removes the skid and
    has the meter turned off, or the host buys the skid at fair market value.
-   System cost: $450,000 per skid (Tommy, 2026-10-02).
+   System cost: $639,000 per skid (Tommy, 2026-10-13: "update the skid to
+   639k"; $450,000 from 2026-10-02 until then). The R60 on it is $24,000
+   (same day), recorded on its catalog row, BESS_CATALOG['CC-R60'].eqcost.
 
    ─────────────────────────────────────────────────────────────────────────────
    WHAT THIS ANSWERS, FROM THE EDITOR'S OUTPUT TAB
@@ -82,10 +84,11 @@ var BUILD = '2026-10-05.omega-core-v2';
 /* The NextNRG Microgrid Controller is BUILT INTO the skid (Tommy,
    2026-10-13: "it needs to be auto built into the omega core skid"): the
    one record of its specs and ClearSky's price is api/_lib/nextnrg.js. The
-   skid as recorded ($450,000, 2026-10-02) did not carry one, so the system
-   cost is the skid plus the controller, and the breakdown travels with it. */
+   skid as recorded ($639,000 on 2026-10-13; $450,000 before) did not carry
+   one, so the system cost is the skid plus the controller, and the breakdown
+   travels with it. */
 var NN = require('./nextnrg');
-var SKID_PRICE_USD = 450000;
+var SKID_PRICE_USD = 639000;   /* 2026-10-13 ("update the skid to 639k"); $450,000 from 2026-10-02 until then */
 var PRODUCT = {
   key: 'omega-core',
   name: 'Omega-Core',
@@ -93,7 +96,7 @@ var PRODUCT = {
   skidPriceUsd: SKID_PRICE_USD,
   systemCostUsd: SKID_PRICE_USD + NN.CONTROLLER.priceUsd,
   systemCostBreakdown: [
-    { key: 'skid', label: 'Omega-Core skid as recorded (Solela Edge Compute 75 kW + CleanCell R60)', usd: SKID_PRICE_USD, source: 'ClearSky, 2026-10-02' },
+    { key: 'skid', label: 'Omega-Core skid as recorded (Solela Edge Compute 75 kW + CleanCell R60)', usd: SKID_PRICE_USD, source: 'ClearSky, 2026-10-13' },
     { key: 'controller', label: NN.CONTROLLER.model, usd: NN.CONTROLLER.priceUsd, source: NN.CONTROLLER.priceBasis }
   ],
   compute: { make: 'Solela', model: 'Solela Edge Compute', kw: 75 },
