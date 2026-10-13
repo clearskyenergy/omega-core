@@ -15384,9 +15384,10 @@ function _derRenderAutoLayout(g, sh){
 /* ── AUTO-LAYOUT UI ────────────────────────────────────────────────────
    Uses the most recently drawn closed shape as the boundary. Any smaller
    closed shapes tagged as exclusions are subtracted. */
-function openAutoLayout(){
-  /* Find candidate boundary: the last polygon/rect shape drawn. */
-  var boundary=_alFindBoundary();
+function openAutoLayout(boundaryPts){
+  /* The outline the caller traced for this (Solar - Custom Area hands the
+     one just drawn), else the largest closed shape on the canvas. */
+  var boundary=(boundaryPts && boundaryPts.length>=3) ? boundaryPts : _alFindBoundary();
   var host=document.getElementById('autolayout-modal');
   if(!host){
     host=document.createElement('div');
@@ -80683,17 +80684,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     });
   }
 
+  /* EVERY PRESS IS A NEW TRACE. This used to go straight to layout when
+     any closed shape was already on the canvas - and Auto Layout fills the
+     LARGEST one. With a building, a parcel or a fence drawn, that meant a
+     second array could never be traced: the press filled the building
+     again. Now the tool always arms the polyline, and the layout runs on
+     the outline that press produced and nothing else. */
   window.omegaSolarCustomArea=function(){
     var s=S_(); if(!s) return false;
-    var have=closedShapes();
-
-    if(have.length){
-      /* A usable outline is already on the canvas - go straight to layout. */
-      openLayout(have.length);
-      return true;
-    }
-
-    /* Otherwise put them in polyline mode and say what happens next. */
     try{ if(typeof setMode==='function') setMode('polyline'); }catch(e){}
     if(typeof showBanner==='function'){
       try{ showBanner('shape',
@@ -80704,24 +80702,36 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     return true;
   };
 
-  /* Wait for them to finish the outline, then continue into layout. */
-  var watching=false;
+  /* Wait for the outline this press produces, then lay out THAT one.
+     Shapes are told apart by id, never by count, so a building or boundary
+     already drawn is never taken for the new area. ESC (the mode leaving
+     polyline with nothing drawn) ends the watch; a second press restarts it. */
+  var watchIv=null;
   function watchForOutline(){
-    if(watching) return;
-    watching=true;
-    var before=closedShapes().length, tries=0;
-    var iv=setInterval(function(){
-      if(++tries>600){ clearInterval(iv); watching=false; return; }   /* ~2 min */
-      var now=closedShapes().length;
-      if(now>before){
-        clearInterval(iv); watching=false;
-        setTimeout(function(){ openLayout(now); }, 250);
+    if(watchIv){ clearInterval(watchIv); watchIv=null; }
+    var seen={}; closedShapes().forEach(function(sh){ if(sh.id!=null) seen[sh.id]=true; });
+    var tries=0;
+    watchIv=setInterval(function(){
+      var s=S_();
+      if(++tries>600 || !s || (s.mode!=='polyline' && !s.shapeDrawing)){   /* ~2 min, or cancelled */
+        clearInterval(watchIv); watchIv=null; return;
+      }
+      var fresh=closedShapes().filter(function(sh){ return sh.id==null || !seen[sh.id]; });
+      if(fresh.length){
+        clearInterval(watchIv); watchIv=null;
+        var made=fresh[fresh.length-1];
+        setTimeout(function(){ openLayout(1, made); }, 250);
       }
     }, 200);
   }
 
-  function openLayout(n){
-    var fn = window.openAutoLayout || window.alOpen || window.rbAutoLayout;
+  function openLayout(n, outline){
+    var pts=null;
+    try{ pts = outline ? ((typeof _shapeWorldPts==='function' ? _shapeWorldPts(outline) : null)
+                          || (typeof _alShapePts==='function' ? _alShapePts(outline) : null)
+                          || (outline.pts||[]).map(function(p){ return {x:p.x,y:p.y}; })) : null; }catch(e){ pts=null; }
+    if(typeof window.openAutoLayout==='function'){ try{ window.openAutoLayout(pts); return; }catch(e){} }
+    var fn = window.alOpen || window.rbAutoLayout;
     if(typeof fn==='function'){ try{ fn(); return; }catch(e){} }
     /* fall back to the ribbon button so we do not depend on one name */
     var btn=document.getElementById('rb-autolayout')
@@ -80773,12 +80783,21 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
 (function(){
   function S_(){ try{ return (typeof S!=='undefined'&&S)?S:null; }catch(e){ return null; } }
 
+  /* A plain traced outline: closed, and not something that already means
+     something else on the drawing - the parcel or an exclusion (omegaRole),
+     a building or a model block (_visArch, omegaBuilding), a compound fence
+     or a tie (omegaFence, omegaCampus), the site boundary. Those are what a
+     second press used to build a canopy over. */
+  function plain(sh){
+    return !!sh && (sh.kind==='polyline'||sh.kind==='poly'||sh.kind==='rect')
+           && sh.pts && sh.pts.length>=3
+           && !sh.omegaRole && !sh._visArch && !sh.omegaBuilding && !sh._modelPrimitive
+           && !sh.omegaFence && !sh.omegaCampus && !sh.omegaCompute
+           && !sh.isSiteBoundary && !sh.locked;
+  }
   function outlines(){
     var s=S_(); if(!s) return [];
-    return (s.shapes||[]).filter(function(sh){
-      return (sh.kind==='polyline'||sh.kind==='poly'||sh.kind==='rect')
-             && sh.pts && sh.pts.length>=3;
-    });
+    return (s.shapes||[]).filter(plain);
   }
   function largest(){
     var best=null, area=0;
@@ -80841,21 +80860,34 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     return made;
   };
 
-  /* One action: trace, then it builds itself. */
+  /* One action: trace, then it builds itself - EVERY press a new trace.
+     This used to build at once on the largest closed shape already on the
+     canvas, so with a building or a boundary drawn a second canopy could
+     never be traced: the press rebuilt over the building. Now the press
+     always arms the polyline, and the canopy is built from the outline
+     that press produced - told apart by id, never by count or by size.
+     ESC (the mode leaving polyline with nothing drawn) ends the watch. */
+  var watchIv=null;
   window.omegaCanopyCustom=function(){
     var s=S_(); if(!s) return false;
-    if(largest()){ omegaCanopyFromShape(); return true; }
+    if(watchIv){ clearInterval(watchIv); watchIv=null; }
     try{ if(typeof setMode==='function') setMode('polyline'); }catch(e){}
     if(typeof showBanner==='function'){
       try{ showBanner('shape','Trace the canopy \u2014 click each corner, double-click to close. '
         +'Panels will fit that exact shape at any angle.'); }catch(e){}
     }
-    var before=outlines().length, tries=0;
-    var iv=setInterval(function(){
-      if(++tries>600){ clearInterval(iv); return; }
-      if(outlines().length>before){
-        clearInterval(iv);
-        setTimeout(function(){ omegaCanopyFromShape(); }, 300);
+    var seen={}; outlines().forEach(function(sh){ if(sh.id!=null) seen[sh.id]=true; });
+    var tries=0;
+    watchIv=setInterval(function(){
+      var st=S_();
+      if(++tries>600 || !st || (st.mode!=='polyline' && !st.shapeDrawing)){
+        clearInterval(watchIv); watchIv=null; return;
+      }
+      var fresh=outlines().filter(function(sh){ return sh.id==null || !seen[sh.id]; });
+      if(fresh.length){
+        clearInterval(watchIv); watchIv=null;
+        var made=fresh[fresh.length-1];
+        setTimeout(function(){ omegaCanopyFromShape(made); }, 300);
       }
     }, 200);
     return true;
@@ -80870,7 +80902,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
               canopies:(s.shapes||[]).filter(function(x){ return x.kind==='dersolar' && x.mount==='adjacent'; }).length,
               calibrated:(typeof _derScaled==='function')?_derScaled():null };
       o.verdict = !o.calibrated ? 'Not calibrated - load the map first or panels will be sized wrong.'
-        : o.outlines ? o.outlines+' outline(s) ready - Solar \u2192 Canopy (Custom Shape) will fit panels to the largest.'
+        : o.outlines ? o.outlines+' plain outline(s) on the canvas - OmegaCanopy.fromShape(shape) fits panels to one; Solar \u2192 Canopy (Custom Shape) always traces a new one.'
         : 'No outline. Solar \u2192 Canopy (Custom Shape) to trace one.';
       console.table?console.table(o):console.log(o);
       console.info(o.verdict);
