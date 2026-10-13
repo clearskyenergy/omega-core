@@ -41,7 +41,7 @@ var D = require('../_lib/firestore-double');
 var OC = require('../../api/_lib/omega-core');
 var CL = require('../../api/compute-lease')._model;
 
-eq(OC.PRODUCT.systemCostUsd, 450000, 'the system costs $450,000 a skid');
+eq(OC.PRODUCT.systemCostUsd, 639000, 'the system costs $639,000 a skid (Tommy, 2026-10-13: "update the skid to 639k")');
 eq(OC.PRODUCT.compute.kw, 75, '75 kW of compute');
 eq(OC.PRODUCT.battery.kwh, 61.44, 'the R60: 61.44 kWh (datasheet)');
 eq(OC.PRODUCT.battery.kw, 60, 'the R60: 60 kW through the Sol-Ark 60K');
@@ -80,8 +80,8 @@ eq(r.host.run.netCost, 1100000, 'the Run\'s capex less its incentives');
 eq(r.host.paybackYearsBefore, 5, 'payback before: 1.1M / 220k');
 eq(r.host.paybackYearsAfter, Math.round(1100000 / 232000 * 10) / 10, 'payback after: the lease added to the Run\'s revenue');
 eq(r.host.revenueUpliftPct, Math.round(12000 / 220000 * 1000) / 10, 'the lease as a share of year-one revenue');
-eq(r.program.systemCost, 450000, 'ClearSky\'s system cost for one skid');
-eq(JSON.stringify(r.program.fmvAtEndPerSkid), JSON.stringify({ low: 90000, base: 135000, high: 180000 }), 'fair market value at year 5: 20 / 30 / 40% of $450k, indicative');
+eq(r.program.systemCost, 639000, 'ClearSky\'s system cost for one skid');
+eq(JSON.stringify(r.program.fmvAtEndPerSkid), JSON.stringify({ low: 128000, base: 192000, high: 256000 }), 'fair market value at year 5: 20 / 30 / 40% of $639k to the nearest $1,000, indicative');
 eq(r.terms.minTermYears, 5, 'the terms carry the 5-year minimum');
 eq(r.terms.endOfTerm.preference, 'remove', 'and the host\'s end-of-term preference');
 ok(/appraisal/.test(r.disclaimer), 'the disclaimer says FMV is an appraisal');
@@ -144,12 +144,12 @@ eq(OC.evaluate(noLease, {}).offer, null, 'a site that does not qualify gets no l
    visible sheet's figures are pinned here so the model cannot drift. */
 var CM = OC.COMPUTE;
 function near(got, want, tol, l) { ok(got != null && Math.abs(got - want) <= tol, l, 'got ' + got + ', want ' + want + ' ±' + tol); }
-eq(CM.evaluate({}, {}).capex.amount, 450000, 'the default CAPEX is the recorded $450,000 skid price (Tommy, 2026-10-06: "use the 450k skid price as the default")');
+eq(CM.evaluate({}, {}).capex.amount, 639000, 'the default CAPEX is the recorded skid price, $639,000 (Tommy, 2026-10-13; 2026-10-06: "use the 450k skid price as the default")');
 eq(CM.evaluate({}, {}).capex.basis, 'skid', 'on the skid basis');
 eq(CM.evaluate({}, {}).inputs.pricingBasis, 'spot', 'compute is priced at the spot rate by default (Tommy, 2026-10-06: "use spot as the default")');
 eq(CM.evaluate({ pricingBasis: 'nonsense' }, {}).inputs.pricingBasis, 'spot', 'an unknown pricing basis falls back to spot, and says so');
 ok(CM.evaluate({ pricingBasis: 'nonsense' }, {}).notes.some(function (t) { return /spot is used/.test(t); }), 'the fallback is named in the notes');
-eq(CM.evaluate({ capexBasis: 'nonsense' }, {}).capex.amount, 450000, 'an unknown basis falls back to the skid price, and says so');
+eq(CM.evaluate({ capexBasis: 'nonsense' }, {}).capex.amount, 639000, 'an unknown basis falls back to the skid price, and says so');
 var W = CM.evaluate({ capexBasis: 'cmdc' }, { units: 1 });   /* the workbook's own figures: H100, spot, GP air-cooled high, 70% LTC */
 eq(W.chipset.key, 'h100', 'the default chipset is the H100 the workbook anchors on');
 eq(W.capacity.nodes, 6, '6 nodes fit 75 kW less 5% overhead at 10.2 kW a node');
@@ -223,13 +223,13 @@ eq(LC.cashFlow.lease.included, true, 'the host\'s rent is a cost of the skid');
 eq(LC.cashFlow.months[0].lease, 1000, 'a skid a month');
 eq(LC.cashFlow.months[12].lease, 1025, 'escalating yearly');
 eq(LC.cashFlow.returns.year1Ebitda, 531735 - 12000, 'and comes off EBITDA');
-eq(LC.totals.capex, 450000 * 2, 'two skids: the totals scale');
+eq(LC.totals.capex, 639000 * 2, 'two skids: the totals scale');
 eq(LC.totals.year1Revenue, 755699 * 2, 'revenue too');
 eq(CM.evaluate({ includeLease: 'no' }, { lease: { monthly: 1000, escalatorPct: 2.5 } }).cashFlow.lease.included, false, 'switched off, the skid is shown alone');
 var SK = CM.evaluate({}, {}).cashFlow;
-eq(SK.debt.funded, 315000, 'on the skid price the debt is $315,000 at 70%');
+eq(SK.debt.funded, 447300, 'on the skid price the debt is $447,300 at 70%');
 ok(SK.returns.projectPaybackMonth < W.cashFlow.returns.projectPaybackMonth, 'and the project pays back sooner than on the container range');
-ok(/\$450,000/.test(CM.evaluate({}, {}).customer.headline[2].value), 'the customer view carries the skid price');
+ok(/\$639,000/.test(CM.evaluate({}, {}).customer.headline[2].value), 'the customer view carries the skid price');
 eq(CM.evaluate({ capexBasis: 'custom', capexCustom: 600000 }, {}).capex.amount, 600000, 'and so is a typed figure');
 eq(CM.evaluate({ capexBasis: 'dynamic', capexCase: 'mid' }, {}).capex.amount, 1935626, 'and the chipset-scaled estimate');
 var BB = CM.evaluate({ chipset: 'b200', pricingBasis: 'on-demand', utilization: 85, debt: { ltc: 60, rate: 9 } }, {});
@@ -355,7 +355,7 @@ var shortT = clone(GOOD); shortT.rep.termYears = 3;
 eq(OC.evaluate(shortT, {}).offer.termYears, 5, 'a term under 5 years is priced at the 5-year minimum');
 ok(OC.evaluate(shortT, {}).asks.some(function (a) { return /program minimum is 5/.test(a.ask); }), 'and the host is told the minimum');
 var longT = clone(GOOD); longT.rep.termYears = 10;
-eq(OC.evaluate(longT, {}).program.fmvAtEndPerSkid.base, Math.round(450000 * 0.09 / 1000) * 1000, 'a longer term leaves less value: 0.3^2 at year 10');
+eq(OC.evaluate(longT, {}).program.fmvAtEndPerSkid.base, Math.round(639000 * 0.09 / 1000) * 1000, 'a longer term leaves less value: 0.3^2 at year 10');
 var noRun = clone(GOOD); delete noRun.run;
 var nr2 = OC.evaluate(noRun, {});
 eq(nr2.host.paybackYearsBefore, null, 'no Run: no payback invented');
@@ -395,7 +395,7 @@ function expect(code, label, body) { return call('POST', body === undefined ? { 
 var doorChecks = [
   function () { setup(null); return call('GET').then(function (o) {
     eq(o.status, 200, 'GET answers'); eq(o.body.product.name, 'Omega-Core', 'with the product\'s name and size');
-    ok(!/450000/.test(JSON.stringify(o.body)), 'never the price on an unauthenticated GET');
+    ok(!/639000|639,000/.test(JSON.stringify(o.body)), 'never the price on an unauthenticated GET');
     ok(!o.body.rateCard.monthlyPerSkid, 'and never the lease card'); }); },
   function () { setup(null); return expect(400, 'a body without rep:{} is a 400', {}); },
   function () { setup(null); return expect(200, 'a legacy Enterprise member is answered').then(function (o) {
@@ -437,7 +437,7 @@ function editorChecks() {
   eq(row && row.kw, 75, '75 kW of compute');
   eq(row && row.bessKwh, 61.44, 'the R60 on the skid: 61.44 kWh');
   eq(row && row.bessKey, 'CC-R60', 'one source for the battery: BESS_CATALOG[\'CC-R60\']');
-  ok(!/450/.test(JSON.stringify(row)), 'the price is not in the browser');
+  ok(!/639000|639,000|639k/.test(JSON.stringify(row)), 'the skid price is not in the browser');
   ok(/onclick="rbFlyDo\('fly-dc',function\(\)\{derSetDc\('dc_omegacore'\)\}\)"[^>]*>.*Omega-Core Skid/.test(ED), 'Draw › Data Ctr has Omega-Core Skid');
 
   /* placement stamps the flag and the battery */
@@ -513,7 +513,7 @@ function editorChecks() {
   var mod = fs.readFileSync(path.join(ROOT, 'omega-core-qualify.js'), 'utf8');
   ok(!/=>|\bconst\b|\blet\b|`/.test(mod), 'the module is ES5');
   ok(/© 2025–2026 ClearSky Energy Solutions LLC/.test(mod), 'and carries the header');
-  ok(!/450000|450,000|monthlyPerSkid\s*:\s*\{|fmvAtYear5/.test(mod), 'no price, lease card or buyout band in the browser');
+  ok(!/639000|639,000|monthlyPerSkid\s*:\s*\{|fmvAtYear5/.test(mod), 'no price, lease card or buyout band in the browser');
   ok(/OmegaComputeLease/.test(mod) && /\.evidence\(/.test(mod), 'it fans out through OmegaComputeLease.evidence, not a second copy');
   ok(/rescore\(\)\.then\(function \(r\) \{ if \(r && !st\.evidence\) screen\(\); \}\)/.test(mod) && /if \(st\.refused\)/.test(mod), 'a caller the door refused never sets off the metered lookups');
   ok(/function close\(\) \{[^}]*st\.gen\+\+/.test(mod) && (mod.match(/if \(!live\(gen, pid\)\) return/g) || []).length >= 4, 'a request that lands after the dialog closed (or moved project) answers nothing and writes nothing');

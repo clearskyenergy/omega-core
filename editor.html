@@ -21860,7 +21860,7 @@ const BESS_CATALOG = {
      GOTION_CATALOG_DIMS says so. evSkid keeps it out of the auto-sizers:
      it is an EV charging skid, not a peak-shaving battery to recommend. */
   'CC-R60': {mfr:'Clean Cell',model:'CleanCell R60 — 60 kW / 61.44 kWh skid (BESS + 2 Autel DCFC)',chem:'LFP (LiFePO4)',
-    kwh:61.44,usable:null,kw:60,dur:1.02,dcv:'614.4V (100Ah)',eqcost:null,
+    kwh:61.44,usable:null,kw:60,dur:1.02,dcv:'614.4V (100Ah)',eqcost:24000, /* Tommy, 2026-10-13 */
     inv:'Sol-Ark 60K-3P hybrid PCS (integrated, side-mounted on the cabinet)',ikva:60,
     xfmr:'N/A',disco:'Project-engineered (72.3 A max AC output)',
     _incPCS:true,_incXfmr:true,_incDisco:false,evSkid:true,
@@ -21874,7 +21874,7 @@ const BESS_CATALOG = {
     installType:'Floor-mounted transportable commercial skid',
     evChargers:{count:2,mfr:'Autel',kind:'DC fast-charging dispenser',kw:null},
     verified:'Clean Cell US R60 Product Data Sheet Rev A (Sep 2026); skid 336 x 87 x 82.75 in overall per the skid drawing ClearSky supplied (2026-10-02)',
-    notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: quote required. Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
+    notes:'CleanCell R60 dual EV charging system: one high-voltage LFP battery cabinet, one side-mounted Sol-Ark 60K PCS and two Autel DC fast-charging dispensers on a transportable skid. Battery contribution is capped at 60 kW through the PCS; charging above 60 kW is supplied by the grid or another AC source, so battery energy lengthens charging support and never raises it above 60 kW. Place the two chargers from the EV Catalog (their rating is set in the project engineering package). Usable kWh, weight and charger rating are not published -- confirm on the submittal. PRICE: $24,000 (ClearSky, 2026-10-13). Clean Cell US Ltd., 997 Morrison Drive, Charleston, SC 29403.'},
 };
 
 /* ── THE TENANT'S OWN PRODUCTS LEAD ─────────────────────────────────────

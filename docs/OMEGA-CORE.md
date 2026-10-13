@@ -19,7 +19,8 @@ overall**, carrying:
 | Compute | Solela Edge Compute cabinet, **75 kW** | ClearSky |
 | Battery | **CleanCell R60** — 61.44 kWh LFP, 614.4 VDC / 100 Ah, one Sol-Ark 60K three-phase hybrid PCS (60 kW continuous, 277/480 V, 72.3 A max AC, 90 kVA for 10 s off grid), 97.5% max / 96.5% CEC / 96.0% grid-to-battery, CAN BMS, battery IP55 / PCS IP65 NEMA 3R, UL 9540:2023 (reported), UL 9540A (reported tested), UL 1973 (reported), PCS UL 1741 SB / IEEE 1547 | Clean Cell US R60 Product Data Sheet, Rev A, September 2026 |
 | Skid | 336 × 87 in, 8 in base, 82.75 in overall | ClearSky's drawing |
-| Price | **$450,000 per skid** | ClearSky |
+| Price | **$639,000 per skid** (13 October 2026; $450,000 from 2 October until then) | ClearSky |
+| Battery price | **$24,000** for the CleanCell R60 on its own, on its catalog row (13 October 2026) | ClearSky |
 
 ClearSky owns and operates it. It sits on an EV charging site on **its own
 utility service and meter**, and ClearSky pays the site host a **land lease**.
@@ -168,7 +169,7 @@ the drawing, is said and not papered over.
 
 **The end of term** — removal and meter off at ClearSky's cost, or a buyout at
 fair market value by independent appraisal. The indicative band is 20 / 30 /
-40% of the $450,000 at year 5 ($90k / $135k / $180k), declining geometrically for
+40% of the $639,000 at year 5 ($128k / $192k / $256k), declining geometrically for
 a longer term, never under 5%. ClearSky's program outlay is the system cost,
 the fiber lateral at compute-lease's $45k–$250k/mile midpoint where fiber is not
 on site, and the lease.
@@ -210,8 +211,8 @@ What Omega-Core adds:
   over amortising months of EBITDA ÷ (target × service per dollar) — plus
   project and equity IRR.
 - **A CAPEX basis**, defaulting to the **Omega-Core skid price ClearSky
-  recorded, $450,000** (Tommy, 6 October 2026: "use the 450k skid price as
-  the default"); the workbook's CMDC range (general-purpose air-cooled high,
+  recorded, $639,000** (13 October 2026; Tommy, 6 October 2026: "use the 450k
+  skid price as the default"); the workbook's CMDC range (general-purpose air-cooled high,
   $724,471), the chipset-scaled estimate and a typed figure stay as choices.
   The dialog says which was used.
 - **A pricing basis**, defaulting to CoreWeave's public **spot** rate (Tommy,
