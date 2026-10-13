@@ -99,6 +99,11 @@ function plan(t) {
      omega-tenant.js mergeEntitlements() reads it there once a user is signed
      in. Only the allowlisted subset reaches tenant_public below. */
   if (t.whiteLabel) org.whiteLabel = t.whiteLabel;
+  /* brands[]: the manufacturer names /api/rfq.js routes a BOM line by (its
+     brand fallback, lowercased). A tenant.json may carry it so a seeded
+     manufacturer (NextNRG) receives its RFQs from the first run; the
+     account page edits it afterwards. */
+  if (Array.isArray(t.brands) && t.brands.length) org.brands = t.brands.map(function (b) { return String(b).trim().toLowerCase(); }).filter(Boolean);
   var billing = { tier: t.tier || 'standard', addons: t.addons || [], toolOverrides: t.toolOverrides || {}, paymentProvider: t.paymentProvider || 'manual', trialEndsAt: t.trialEndsAt || null, subscriptionDue: t.subscriptionDue || null };
   /* toolAccess — THE ALLOWLIST, and therefore the PRODUCT. When a tenant.json
      carries it, that account gets exactly these tools whatever its tier: the

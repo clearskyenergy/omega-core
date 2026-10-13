@@ -9,7 +9,7 @@
 var assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
 var ROOT = path.join(__dirname, '../..'), count = 0;
 function read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
-function walk(dir, out) { fs.readdirSync(path.join(ROOT, dir)).forEach(function (n) { var rel = path.join(dir, n), abs = path.join(ROOT, rel); if (fs.statSync(abs).isDirectory()) { if (['node_modules', '.git', 'app-sandbox', 'docs', 'scripts', 'tenants', 'embed', 'vendor'].indexOf(n) < 0 && dir.split(path.sep).length < 3) walk(rel, out); } else if (/\.html$/.test(n)) out.push(rel); }); return out; }
+function walk(dir, out) { fs.readdirSync(path.join(ROOT, dir)).forEach(function (n) { var rel = path.join(dir, n), abs = path.join(ROOT, rel); if (fs.statSync(abs).isDirectory()) { if (['node_modules', '.git', '.claude', 'app-sandbox', 'docs', 'scripts', 'tenants', 'embed', 'vendor'].indexOf(n) < 0 && dir.split(path.sep).length < 3) walk(rel, out); } else if (/\.html$/.test(n)) out.push(rel); }); return out; }
 var splash = read('omega-splash.js');
 assert.match(splash, /© 2025–2026 ClearSky Energy Solutions LLC/); count++;
 assert.ok(!/=>|\blet\s|\bconst\s|`/.test(splash), 'ES5'); count++;

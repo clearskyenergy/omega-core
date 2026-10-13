@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* POST /api/stripe-invoices — invoice history for one tenant.
    Body: { orgId?, limit? }   (orgId defaults to the caller's own org)
 

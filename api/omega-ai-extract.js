@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ══════════════════════════════════════════════════════════════════════
    /api/omega-ai-extract.js   ·  ClearSky-OMEGA
    NO-SERVICE-ACCOUNT BUILD

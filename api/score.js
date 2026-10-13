@@ -1,3 +1,4 @@
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ═══════════════════════════════════════════════════════════════════════════════
    /api/score.js — relay to OGI Solar's screening tools
    Vercel serverless function.

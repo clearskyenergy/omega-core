@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 /* ══════════════════════════════════════════════════════════════════════
    PREFLIGHT — run this before every deploy.
    ----------------------------------------------------------------------

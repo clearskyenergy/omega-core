@@ -108,7 +108,7 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var A = require('./_lib/admin'), C = require('./_lib/crm'), PF = require('./_lib/proforma');
-var I = require('./_lib/po-intake'), G = require('./_lib/site-agreement');
+var I = require('./_lib/po-intake'), G = require('./_lib/site-agreement'), K = require('./_lib/site-kinds'), DR = require('./_lib/portfolio/design-read');
 var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA = require('./_lib/package-access'), CP = require('./compute-proforma'), DECK = require('./_lib/deck-brand');
 var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
@@ -117,7 +117,7 @@ var PARTNER_DAILY_CAP = 25;
 var EDITORS = ['owner', 'admin', 'member'], ADMINS = ['owner', 'admin'];
 var LIST_CAP = 200, FOLLOW_SCAN = 2000, FOLLOW_CAP = 200, SCAN = 500;
 var PROFORMA_CAP = 25, BULK_CAP = 200;
-var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk'];
+var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk', 'design-sync'];
 var MODEL_BULK_CAP = 10, PLATFORM = 'ClearSky-OMEGA';
 
 /* level: 'read' | 'write' | 'admin'. The caller's org comes from the verified
@@ -199,8 +199,18 @@ function siteInput(b) {
     status: C.text(b.status, 60, 'Status'),
     notes: C.text(b.notes, 4000, 'Notes', { multiline: true }),
     externalSiteIds: ids,
-    tags: tags
+    tags: tags,
+    /* what KIND of project the site is: the Site Map project's own scope keys
+       (api/_lib/site-kinds.js). Absent from the body = unchanged; [] clears. */
+    siteScopes: K.scopesInput(b.siteScopes)
   };
+}
+/* A field the caller did not send is not a field set to null: strip it, so a
+   save from an older form or an import sheet leaves the stored value alone
+   (Firestore refuses undefined outright). */
+function sentFields(input) {
+  Object.keys(input).forEach(function (k) { if (input[k] === undefined) delete input[k]; });
+  return input;
 }
 function siteView(id, s) {
   s = s || {};
@@ -229,6 +239,8 @@ function siteView(id, s) {
     archived: s.archived === true, archivedAt: C.iso(s.archivedAt),
     partners: s.partners || null, revision: s.revision || 1,
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
+    siteScopes: Array.isArray(s.siteScopes) ? s.siteScopes : [],
+    latestDesign: s.latestDesign && typeof s.latestDesign === 'object' ? s.latestDesign : null,
     createdAt: C.iso(s.createdAt), createdBy: s.createdBy || null,
     updatedAt: C.iso(s.updatedAt), updatedBy: s.updatedBy || null,
     source: s.source || null
@@ -389,6 +401,9 @@ var handler = A.handler(async function (req, res) {
     var activityRaw = got[1].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); });
     var live = got[2].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); }).filter(function (x) { return x.uploadState === 'stored'; })
       .sort(function (x, y) { return C.millis(y.uploadedAt) - C.millis(x.uploadedAt); });
+    /* the design first: what Site Map drew and ran, read off the linked
+       project so the page, the pro forma and the compute model see it */
+    try { await syncDesign(db, org, site, now); } catch (e) { console.error('[site-crm] design sync', e && e.message); }
     var siteOut = siteView(sid, site.data); await capitalJoin(db, [siteOut]);
     return {
       site: siteOut,
@@ -404,7 +419,7 @@ var handler = A.handler(async function (req, res) {
 
   /* ── site facts ─────────────────────────────────────────────────────── */
   if (action === 'site-save') {
-    var input = siteInput(b), id = b.id ? C.recordId(b.id, 'Site') : null, cref = id ? root.collection('sites').doc(id) : root.collection('sites').doc();
+    var input = sentFields(siteInput(b)), id = b.id ? C.recordId(b.id, 'Site') : null, cref = id ? root.collection('sites').doc(id) : root.collection('sites').doc();
     return db.runTransaction(async function (tx) {
       var cur = id ? await tx.get(cref) : null;
       if (id && !cur.exists) throw A.httpError(404, 'That site is not in this workspace');
@@ -430,7 +445,7 @@ var handler = A.handler(async function (req, res) {
     if (rows.length > 500) throw A.httpError(400, 'At most 500 rows per import; split the file and retry');
     var prepared = [], importErrors = [];
     rows.forEach(function (r, i) {
-      try { prepared.push(siteInput(r || {})); }
+      try { prepared.push(sentFields(siteInput(r || {}))); }
       catch (e) { importErrors.push({ row: i + 1, error: e.message }); }
     });
     if (importErrors.length)
@@ -507,6 +522,20 @@ var handler = A.handler(async function (req, res) {
        named on the site. A site that already has a project that still
        exists gets the same one back: pressing the button twice never makes
        two drawings of one site. */
+    /* ── read the Site Map design onto each site ───────────────────────── */
+    if (action === 'design-sync') {
+      var syncedD = [], noProject = [], batchD = db.batch();
+      for (var di = 0; di < rows.length; di++) {
+        if (!rows[di].data.projectId) { noProject.push(rows[di].id); continue; }
+        var dsg = await syncDesign(db, org, rows[di], now);
+        syncedD.push({ siteId: rows[di].id, design: dsg });
+        batchD.create(db.collection('omega_audit').doc(), { action: 'sitecrm-design-sync', orgId: org, siteId: rows[di].id, by: by, at: now, projectId: rows[di].data.projectId, hash: dsg ? dsg.hash : null });
+      }
+      if (syncedD.length) await batchD.commit();
+      return { ok: true, synced: syncedD.length, noProject: noProject.length, designs: syncedD,
+        note: syncedD.length + ' site(s) read from Site Map' + (noProject.length ? '; ' + noProject.length + ' not designed yet' : '') + '.' };
+    }
+
     if (action === 'send-to-editor') {
       var ownerName = (caller.claims && (caller.claims.name || caller.claims.displayName)) || String(by || '').split('@')[0];
       var madeP = [], FVp = A.FieldValue();
@@ -761,7 +790,20 @@ async function runScenario(db, org, site, b, by, now) {
   try {
     var runInput = { pods: b.pods, discountRateAnnual: b.discountRateAnnual, overrides: b.overrides,
       label: b.label, assumptionVersion: b.assumptionVersion };
-    if (b.sizeFromPower === true || b.sizeFromPower === 'true') {
+    /* THE DESIGN (2026-10-13): a site designed in Site Map runs on what was
+       drawn and costed — the units placed and the Run's total — unless the
+       caller sizes from power or names a pod count. fromDesign asks for it
+       outright; useDesignCapex:false keeps the units but prices them on the
+       assumption set. */
+    var dsn = site.data && site.data.latestDesign, sizing = b.sizeFromPower === true || b.sizeFromPower === 'true';
+    var fromDesign = b.fromDesign === true || (!sizing && !(Number(b.pods) > 0) && !!(dsn && dsn.compute && dsn.compute.units > 0));
+    if (fromDesign) {
+      if (!(dsn && dsn.compute && dsn.compute.units > 0)) throw A.httpError(400, 'No compute units on the Site Map design yet: place the pods or skids in Site Map, save, and come back.');
+      runInput.pods = dsn.compute.units; sizing = false;
+      if (dsn.capex > 0 && dsn.capexSource === 'site-map' && b.useDesignCapex !== false) { runInput.capexTotal = dsn.capex; runInput.capexBasis = 'Site Map cost run' + (dsn.capexAt ? ' of ' + String(dsn.capexAt).slice(0, 10) : ''); }
+      runInput.designAt = dsn.at || null; runInput.designHash = dsn.hash || null;
+    }
+    if (sizing) {
       var avail = PF.deriveAvailableKw(site.data || {});
       if (avail.kw == null || !(avail.kw > 0))
         throw A.httpError(400, 'This site has no usable available power. Enter available MW \u2014 or service capacity and existing peak \u2014 on the Overview tab first.');
@@ -771,6 +813,7 @@ async function runScenario(db, org, site, b, by, now) {
     scen = PF.runProforma(runInput);
   } catch (e) { throw A.httpError(e.status || 400, e.message); }
   scen.orgId = org; scen.siteId = site.id; scen.createdBy = by;
+  if (runInput.designAt || runInput.designHash) { scen.inputs = Object.assign({}, scen.inputs, { designAt: runInput.designAt, designHash: runInput.designHash }); }
   var sref = site.ref.collection('proforma').doc(scen.scenarioId), lp = latestOf(scen);
   await db.runTransaction(async function (tx) {
     tx.create(sref, scen);
@@ -789,7 +832,29 @@ function latestOf(scen) {
     npv: r.npv == null ? null : r.npv, discountRateAnnual: r.discountRateAnnual == null ? null : r.discountRateAnnual,
     paybackMonth: r.paybackMonth == null ? null : r.paybackMonth, investorCapital: r.investorCapital == null ? null : r.investorCapital,
     year1Revenue: r.year1Revenue == null ? null : r.year1Revenue, months: r.months || null,
-    assumptionVersion: scen.assumptionVersion, label: scen.inputs && scen.inputs.label || '', at: scen.createdAt };
+    assumptionVersion: scen.assumptionVersion, label: scen.inputs && scen.inputs.label || '', at: scen.createdAt,
+    capexBasis: r.capexBasis || null, designAt: scen.inputs && scen.inputs.designAt || null };
+}
+
+/* ── the design: what the linked Site Map project says, kept on the site ──
+   Read off projects/{projectId} (api/_lib/portfolio/design-read.js) and
+   written as latestDesign only when it changed (the hash), so an unchanged
+   drawing never rewrites the record. A project of another workspace, or
+   one that is gone, leaves what the site has. Never bumps updatedBy: this
+   is the system reading, not a person editing. */
+async function syncDesign(db, org, site, now) {
+  var pid = site.data && site.data.projectId; if (!pid) return null;
+  var ps = await db.collection('projects').doc(pid).get(), cur = site.data.latestDesign || null;
+  if (!ps.exists) return cur;
+  var p = ps.data() || {};
+  if (String(p.orgId || '').toLowerCase() !== org) return cur;
+  var d = DR.designOf(p, pid);
+  if (!d) return cur;
+  if (cur && cur.hash === d.hash) return cur;
+  d.syncedAt = now;
+  await site.ref.update({ latestDesign: d });
+  site.data.latestDesign = d;
+  return d;
 }
 function proformaLine(lp) {
   var irr = lp.investorIrrDefined && lp.investorIrrAnnual != null ? (lp.investorIrrAnnual * 100).toFixed(2) + '%' : 'not defined';
@@ -814,7 +879,7 @@ async function computeAccess(caller, org, root) {
    under models/{id} and summarised onto the site as latestModel. A ZIP or
    host type given with the run is kept on the site, as facts. */
 async function runModel(db, org, site, b, by, now, orgName) {
-  var over = { pods: b.pods, gpuClass: b.gpuClass, structure: b.structure, zip: b.zip, hostType: b.hostType };
+  var over = { pods: b.pods, gpuClass: b.gpuClass, structure: b.structure, zip: b.zip, hostType: b.hostType, useDesign: b.useDesign === false ? false : undefined };
   var mapped = SM.inputFor(site.data || {}, over, { orgName: orgName });
   if (!mapped.ok) throw A.httpError(400, 'The compute model needs ' + mapped.missing.join('; ') + '.');
   var result;
@@ -913,6 +978,9 @@ function tagList(v) {
    nameplate says otherwise), and compute when it has been screened or
    sized for pods. The editor opens the build those scopes select. */
 function siteScopes(s) {
+  /* declared on the record wins; the derivation below is for a site that
+     was registered before the picker existed */
+  if (Array.isArray(s.siteScopes) && s.siteScopes.length) return s.siteScopes.slice();
   var tags = (Array.isArray(s.tags) ? s.tags : []).map(function (t) { return String(t).toLowerCase(); });
   var scopes = [];
   if (tags.indexOf('dcfc') >= 0 || (Number(s.installedKw) >= 150 && tags.indexOf('l2') < 0)) scopes.push('dcfc'); else scopes.push('l2');

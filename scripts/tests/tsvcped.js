@@ -98,14 +98,16 @@ console.log('\nthe counts the workbook receives');
 
 console.log('\nthe workbook prices it as a new service');
 {
-  const items = eval('(' + bodyFrom(WB, 'var STANDARD_ITEMS = {').replace(/^var STANDARD_ITEMS = /, '') + ')');
+  /* the standard items and the rate switch are the server's since 2026-10-13 */
+  const EV = require(path.join(ROOT, 'api/_lib/ev-pricebook')), LIB = fs.readFileSync(path.join(ROOT, 'api/_lib/ev-pricebook.js'), 'utf8');
+  const items = EV._tables.STANDARD_ITEMS;
   chk('a pedestal hardware allowance, on the Level 2 card, labelled as what it is', items.l2.servicePedestal && items.l2.servicePedestal.mat > 0 && /freestanding/.test(items.l2.servicePedestal.label));
   const std = eval('(' + arrayFrom(WB, 'var STANDARD=[') + ')');
   const row = std.filter(r => r[4] === 'svcPedestal')[0];
   chk('a standard row on the metering line, gated on the drawing, priced by its own rate', !!row && row[1] === 'mr' && row[2] === 'meter' && row[3] === true);
   chk('addStandardRows prices a row by its fifth field when it has one', /rate=standardRate\(STANDARD\[i\]\[4\]\|\|row, bucket\);/.test(WB));
-  chk('the rate is the socket and its labour per pedestal plus the allowance, and nothing without a pedestal', /case 'svcPedestal':[\s\S]{0,200}if\(!\(_nsp>0\)\) return null;[\s\S]{0,400}mat:\(ST\.metering\.mat\+ST\.servicePedestal\.mat\)\*_nsp,\s*lab:ST\.metering\.lab\*_nsp/.test(WB));
-  chk('the note on the sheet says the hardware is an allowance to confirm', /pedestal hardware is an allowance, confirm against the utility spec/.test(WB));
+  chk('the rate is the socket and its labour per pedestal plus the allowance, and nothing without a pedestal', /case 'svcPedestal':[\s\S]{0,200}if\(!\(_nsp>0\)\) return null;[\s\S]{0,400}mat:\(ST\.metering\.mat\+ST\.servicePedestal\.mat\)\*_nsp,\s*lab:ST\.metering\.lab\*_nsp/.test(LIB));
+  chk('the note on the sheet says the hardware is an allowance to confirm', /pedestal hardware is an allowance, confirm against the utility spec/.test(WB + LIB));
   chk('the count arrives from the editor', /if\(num\(EDITOR_COUNTS\.servicePedestal\)>0\) DATA\.nServicePedestal = num\(EDITOR_COUNTS\.servicePedestal\);/.test(WB));
   chk('and answers the service question as New service, after an existing meter bank has had its say', /EDITOR_COUNTS\.existingService\)\s*DATA\.serviceScenario = SERVICE_SCENARIOS\[0\];\s*else if\(!d\('serviceScenario'\) && \(num\(EDITOR_COUNTS\.servicePedestal\)>0 \|\| EDITOR_COUNTS\.newService\)\)\s*DATA\.serviceScenario = SERVICE_SCENARIOS\[2\];/.test(WB));
   const scen = eval('(' + arrayFrom(WB, 'var SERVICE_SCENARIOS = [') + ')');

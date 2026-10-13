@@ -1298,7 +1298,8 @@ the balance. `docs/COMPUTE-PROFORMA.md`, `scripts/tests/tcomputesite.js`,
 the host** (Tommy: "use the land lease offering from this unit to provide
 payment on charging sites to help increase the profitability of the site").
 One 336 × 87 in skid: Solela Edge Compute (75 kW) + CleanCell R60 (61.44 kWh,
-60 kW Sol-Ark 60K, Clean Cell's datasheet Rev A), $450,000, 5-year minimum,
+60 kW Sol-Ark 60K, Clean Cell's datasheet Rev A), $639,000 (2026-10-13; $450,000
+before; the R60 alone is $24,000, in the server price book), 5-year minimum,
 then removed with the meter turned off or bought by the host at fair market
 value. Draw › Data Ctr › Omega-Core Skid is `DC_CATALOG.dc_omegacore`; the
 placed `derdc` carries `omegaCore: true`, and EVERY reader of host load, host
@@ -1331,8 +1332,9 @@ every chipset side by side, the sensitivity grid — returned as `compute` on
 the same answer, priced on the skids proposed, with the host's rent as a cost
 of the skid, bankability (min DSCR vs target, debt capacity at the target,
 IRR) and a customer view; the build-up is staff-only; its figures are pinned
-by `tomegacore.js`. The default CAPEX is the recorded $450,000 skid price
-(Tommy, 2026-10-06); the workbook's container range stays a choice. Compute is
+by `tomegacore.js`. The default CAPEX is the recorded skid price, $639,000
+(Tommy, 2026-10-13; the default was set to the recorded price 2026-10-06); the
+workbook's container range stays a choice. Compute is
 priced at CoreWeave's public SPOT rate by default (Tommy, 2026-10-06: "use spot
 as the default"); on-demand, inference and a typed $/GPU-hour stay choices. A legacy plan must open
 the compute cap (`addons.judge`), as the button does. `S.omegaCore` rides on
@@ -1343,6 +1345,38 @@ a missing answer; its lease is marked indicative, not an offer, or withheld
 while fiber or zoning only looks unlikely) / Does not qualify (a declined
 will-serve, the utility's own kW under one skid, zoning the rep entered).
 `docs/OMEGA-CORE.md`, `scripts/tests/tomegacore.js`.
+
+## NextNRG Microgrids (2026-10-13)
+
+**NextNRG's module, storage and controller are sold through the platform**
+(Tommy: "use their specs … label them as nextnrg product … the cost is
+125k/unit … auto built into the omega core skid … utility equipment for the
+draw function … increase the efficiency of energy on a site by 7%").
+`api/_lib/nextnrg.js` is the ONE record: the brochure's figures, the
+controller's price ($125,000 a unit, ClearSky's) and the dispatch uplift
+(the brochure's 6–8% modelled ROI uplift, carried as 7%). A battery wears the
+NextNRG name ONLY off that spec sheet (the four Saft blocks it names, no kW
+it does not publish) or from NextNRG's own product list; nothing is invented.
+*NextNRG Solar — Custom* (Draw › Power Gen) traces with their module and the
+array carries `product`/`mfr`/`sku`, named everywhere. The controller is
+first under Controls in the Draw › Utility list. The page's catalogs
+(`DER_PV_MODULES`, the NextNRG group in `BESS_CATALOG`, `UTILITY_CATALOG.mgc`,
+`DC_CATALOG.dc_omegacore.controller`) carry the SPECS only and
+`scripts/tests/tnextnrg.js` holds them to the record; never a price in a
+browser. Draw › Power Gen › Solar draws with the EAGLE G7B by default (the
+module decides W/ft², the string sizer's watts and the 3D pattern; the
+Module choice is in Solar Assumptions). The NextNRG Microgrid Controller is
+Draw › Utility, priced on the Run by `editor-cost.js` (`counts.mgc`: utility
+shapes placed for the host, never the skid's), a Controls line on the BOM,
+and built into every Omega-Core skid: the skid's system cost is $639,000 +
+$125,000 = $764,000 (`PRODUCT.systemCostBreakdown`; the outlay, the FMV band
+and the compute cash flow follow it). The uplift is applied once, by the ONE
+dispatch (`vpp-sim.js`, `input.controller`), to the dispatch-decided bill
+streams only, each stream saying so, with the brochure's caveat on the
+`controller` summary; `/api/value-stack` passes the flag in and the summary
+out; the editor sends it when a controller is on the host's drawing. The RFQ
+routes a NextNRG line by brand: `tenants/nextnrg/tenant.json brands`, copied
+by the seed. `docs/NEXTNRG-MICROGRID.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
@@ -1470,8 +1504,17 @@ tenant. Treat it that way.
   `/api/` and move it. Record the move in `MERGE.md`.
 - `omega-sso.js` refuses to boot unless `location.hostname` matches a
   domain on a `tenants/{orgId}` doc (or the staging/preview allowlist).
-- Shipped JS is minified in the Vercel build step; source in the repo stays
-  readable. Obfuscation is a speed bump, not a control — do not rely on it.
+- Shipped JS is NOT minified: there is no build step (see the first
+  constraint), so every page ships as readable source with its comments.
+  Obfuscation would be a speed bump, not a control — never rely on it.
+  What protects the IP is (1) the math living in `/api/`, (2) the Terms
+  (`omega-legal-docs.js` §5: no retention, reverse engineering or derivative
+  development; transmission to a browser is not publication) and (3) the
+  notice on every shipped file, held by `scripts/tests/tcopyright.js`. The
+  owner named in a notice is the LLC, literally — never `brandName()`, which
+  is the tenant's white label. `docs/EDITOR-IP-AUDIT-2026-10-12.md` is the
+  inventory of what still runs in the editor's browser code and the order
+  to move it.
 - Every source file carries the header:
   `© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.`
 - Never commit secrets. Firebase Admin credentials, Stripe keys, and API
