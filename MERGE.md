@@ -3215,3 +3215,19 @@ should come up"). Auto Layout's Generate (Custom Area) lands its array
 selected in Select mode, as Custom Shape does (#295). The field lock
 itself is #295's: it covers only what the pack placed. Held by
 `scripts/tests/tcanopytrace.js` §6–7.
+
+## 2026-10-13 — Laying out a solar array never runs the fence-and-tie pass
+
+Tommy: "when i hit generate its doing a compute system it should only be
+doing solar if im doing a custom solar system"; "because i have placed a
+bess its putting a whole thing." The pass that fences every compound,
+places a master controller, trenches a duct bank from each back to it and
+draws the access road and bollards (editor patch 83, `OmegaFenceTie`)
+followed `applyGroundLayout`, and its solar-only guard holds only while
+solar is ALL there is: with a battery or the Omega-Core skid on the
+drawing, Auto Layout's Generate (Custom Area, Custom Shape) placed the
+panels and then the whole balance of plant. The hook on the layout
+applier is gone; the pass still follows a guided site build
+(`OmegaSiteBuild.build`) and runs when asked for (Design Site,
+`from:'campus'`; the Fence & Tie button, `bop:true`). Held by
+`scripts/tests/tfencepass.js` (fails on the editor before).
