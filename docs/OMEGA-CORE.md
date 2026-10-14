@@ -329,20 +329,20 @@ cost as well … so that the compute IRR reflects the total ask of the project
 system now with the cost of the compute system and the payback on that. the
 cost of the nextnrg bess and the next nrg solar is $6.00 per watt".
 
-- **NextNRG's solar + storage is ONE installed system at $6.00 per W-DC of
-  solar** (`api/_lib/nextnrg.js SYSTEM_RATE`; NextNRG's own Topanga one-pager
-  corroborates it: $1,780,063 for 315 kW DC + 300 kW / 1.8 MWh, $5.65/W DC).
-  The Site Map cost engine (`editor-cost.js`) prices a NextNRG array at it —
-  the array, the storage beside it and the installation labor, all in, no
-  contingency on a vendor's installed price, energy property for the ITC —
-  and NextNRG storage with no NextNRG solar beside it at $6.00 per W of
-  rated power. An array is NextNRG's when it is stamped as its product
+- **NextNRG's solar is $6.00 per W-DC installed and NextNRG's storage is $6.00
+  per W of rated power installed, each its own line** (`api/_lib/nextnrg.js
+  SYSTEM_RATE`; Tommy, 2026-10-14: "the array is a separate price as well";
+  NextNRG's own Topanga one-pager corroborates the order of the figure:
+  $1,780,063 for 315 kW DC + 300 kW / 1.8 MWh, $5.65/W DC). The Site Map
+  cost engine (`editor-cost.js`) prices a NextNRG array and a NextNRG
+  battery at those rates, labor in, no contingency on a vendor's installed
+  price, energy property for the ITC. An array is NextNRG's when it is stamped as its product
   (*NextNRG Solar — Custom*: `sku NEXTNRG-PV-…`, `mfr NextNRG`), a battery
   when it is the catalog's NextNRG group (`nextnrg: true`); in NextNRG's OWN
   workspace (`vendorOrg`, stamped by `api/cost-rollup.js` off the caller,
   never the body) every array and battery is NextNRG's, because what NextNRG
   draws is what NextNRG sells. Topanga: 368 kW-DC → $2,208,000 with the
-  250 kW / 1,000 kWh battery inside it.
+  250 kW / 1,000 kWh battery beside it at $1,500,000.
 - **The Run's lines ride the record** (`omegaRunRollup` `capexLines`: solar,
   bess, nextnrgSystem, ev, controller, compute, dc, gen, envelope, site,
   indirect, contingency; `design-read.js` reads them onto `latestDesign`).

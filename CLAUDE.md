@@ -1454,12 +1454,13 @@ streams only, each stream saying so, with the brochure's caveat on the
 `controller` summary; `/api/value-stack` passes the flag in and the summary
 out; the editor sends it when a controller is on the host's drawing. The RFQ
 routes a NextNRG line by brand: `tenants/nextnrg/tenant.json brands`, copied
-by the seed. **NextNRG's solar + storage is ONE installed system at $6.00
-per W-DC of solar** (2026-10-14, Tommy: "the cost of the nextnrg bess and
-the next nrg solar is $6.00 per watt"; `nextnrg.js SYSTEM_RATE`, corroborated
-by NextNRG's Topanga one-pager at $5.65/W DC): the array, the storage beside
-it and the labor, no contingency, energy property; storage alone at $6.00 per
-W of rated power. An array stamped NextNRG's, a battery of the catalog's
+by the seed. **NextNRG's solar is $6.00 per W-DC installed and NextNRG's storage is
+$6.00 per W of rated power installed, EACH ITS OWN LINE** (2026-10-14,
+Tommy: "the cost of the nextnrg bess and the next nrg solar is $6.00 per
+watt" and "the array is a separate price as well"; `nextnrg.js
+SYSTEM_RATE`, corroborated by NextNRG's Topanga one-pager at $5.65/W DC):
+the array and its labor, the battery and its labor, no contingency, energy
+property; never the battery folded into the solar line. An array stamped NextNRG's, a battery of the catalog's
 NextNRG group, and in NextNRG's own workspace every array and battery
 (`vendorOrg`, stamped by `cost-rollup.js` off the caller). The Run's lines
 ride the record (`capexLines`). `docs/NEXTNRG-MICROGRID.md`.

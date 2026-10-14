@@ -29678,8 +29678,8 @@ function _renderCostEst(ans, stale) {
     var CM=LN.compute, G=LN.gen;
     var NNL = LN.nextnrg || null;
     bd.innerHTML =
-      (NNL && T.nextnrg > 0 ? row('  '+NNL.label+' \u2014 '+Math.round(NNL.solarKwDc).toLocaleString()+' kW-DC at $'+(+NNL.rate).toFixed(2)+'/W'+(NNL.storage && NNL.storage.inside ? ' (the '+Math.round(NNL.storage.kw).toLocaleString()+' kW / '+Math.round(NNL.storage.kwh).toLocaleString()+' kWh storage inside it)' : '')+', labor included', T.nextnrg, '#54B442') : '') +
-      (NNL && NNL.storage && NNL.storage.total > 0 ? row('  '+NNL.label+' \u2014 '+Math.round(NNL.storage.kw).toLocaleString()+' kW at $'+(+NNL.storage.ratePerW).toFixed(2)+'/W, labor included', NNL.storage.total, '#54B442') : '') +
+      (NNL && T.nextnrg > 0 ? row('  '+NNL.label+' \u2014 '+Math.round(NNL.solarKwDc).toLocaleString()+' kW-DC at $'+(+NNL.rate).toFixed(2)+'/W, labor included', T.nextnrg, '#54B442') : '') +
+      (NNL && NNL.storage && NNL.storage.total > 0 ? row('  '+(NNL.storage.label||'NextNRG storage, installed')+' \u2014 '+Math.round(NNL.storage.kw).toLocaleString()+' kW / '+Math.round(NNL.storage.kwh).toLocaleString()+' kWh at $'+(+NNL.storage.ratePerW).toFixed(2)+'/W, labor included', NNL.storage.total, '#54B442') : '') +
       (T.solar > 0 ? ((LN.solar.rows||[]).map(function(sr){ return row('  '+sr.label+' — '+Math.round(sr.kwDc).toLocaleString()+' kW-DC at $'+(+sr.rate).toFixed(2)+'/W'+(sr.isBenchmark?' (benchmark)':''), sr.total, '#FBBF24'); }).join('')
                      || row('  Solar PV (equip + install)', T.solar, '#FBBF24')) : '') +
       (T.compute > 0
@@ -29693,7 +29693,8 @@ function _renderCostEst(ans, stale) {
       (T.gen > 0 ? row('  On-site generation ×' + G.units + ' (' + Math.round(G.kw).toLocaleString() + ' kW, benchmark)', T.gen, '#F472B6') : '') +
       (T.dc > 0 ? row('  Data Centre Electrical (ROM)', T.dc, '#38BDF8') : '') +
       (T.bnz > 0 ? row('  Building Envelope', T.bnz, '#A78BFA') : '') +
-      (LN.bess && LN.bess.inSystem && !(T.bess > 0) ? row('  BESS \u2014 inside the NextNRG system price', 0, 'var(--accent)') : (LN.bess && LN.bess.nextnrgAlone > 0 && T.bess === LN.bess.nextnrgAlone ? '' : row('  BESS Equipment + Install', T.bess, 'var(--accent)'))) +
+      /* NextNRG's storage is its own line above; this row is the rest of the fleet */
+      ((T.bess - ((LN.bess && LN.bess.nextnrgAlone) || 0)) > 0 || !(LN.bess && LN.bess.nextnrgAlone > 0) ? row('  BESS Equipment + Install', T.bess - ((LN.bess && LN.bess.nextnrgAlone) || 0), 'var(--accent)') : '') +
       (T.ev > 0 ? row('  EV Charging (equip + install)', T.ev, '#22D3EE') : '') +
       row('   Site Equipment', T.siteEqRaw - T.xfmr, 'var(--amber)') +
       (T.xfmr > 0 ? row('  Transformer', T.xfmr, '#F97316') : '') +
@@ -29701,7 +29702,7 @@ function _renderCostEst(ans, stale) {
       (T.omegaCore > 0 ? row('  Omega-Core skid \u00d7' + T.omegaCoreSkids + ' \u2014 as recorded, NextNRG Microgrid Controller built in (' + ((LN.omegaCore && LN.omegaCore.breakdown) || []).map(function(b){ return fmt(b.each); }).join(' + ') + ' each)', T.omegaCore, '#60A5FA') : '') +
       row('  Engineering + Permitting', T.indirectRaw - LN.indirect.emsSetup, 'var(--sub)') +
       (LN.ems.on ? row(' EMS Software (setup)', LN.indirect.emsSetup, '#A78BFA') : '') +
-      row(`  Contingency (${T.contPctRound}%)` + (T.noContingency > 0 ? ' \u2014 none on ' + [T.nextnrg > 0 || (LN.bess && LN.bess.nextnrgAlone > 0) ? 'NextNRG\u2019s installed price' : '', T.omegaCore > 0 ? 'the Omega-Core skid\u2019s recorded price' : ''].filter(Boolean).join(' or ') : ''), T.cont, 'var(--sub)') +
+      row(`  Contingency (${T.contPctRound}%)` + (T.noContingency > 0 ? ' \u2014 none on ' + [T.nextnrg > 0 || (LN.bess && LN.bess.nextnrgAlone > 0) ? 'NextNRG\u2019s installed prices' : '', T.omegaCore > 0 ? 'the Omega-Core skid\u2019s recorded price' : ''].filter(Boolean).join(' or ') : ''), T.cont, 'var(--sub)') +
       `<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:2px">
         <span style="color:var(--text);font-weight:700;font-size:11px">Total</span>
         <span style="color:var(--green);font-weight:700;font-size:14px;font-family:'IBM Plex Mono',monospace">${fmt(TOTAL)}</span>
@@ -36514,7 +36515,7 @@ function omegaDer(){
    the rest as ground. kW only; the rate is the server's. */
 /* An array that is NextNRG's product (NextNRG Solar — Custom stamps the
    shape with NextNRG's sku and mfr): the cost engine prices it at NextNRG's
-   installed system rate, with the storage beside it inside the price
+   installed rate; its storage is its own installed price beside it
    (api/_lib/nextnrg.js SYSTEM_RATE), so it is kept out of the mount bands
    and sent as its own kW. The rate itself never reaches the page. */
 function omegaSolarIsNextnrg(s){
@@ -37052,8 +37053,8 @@ function omegaRenderResults(){
      its $/W, the Omega-Core skids, the NextNRG controller placed for the
      host. Each is the server's own line, published by _renderCostEst. */
   var _nnL=window._NEXTNRG_SYSTEM_DETAIL||null, _nnT=_omNum(window._NEXTNRG_SYSTEM_TOTAL);
-  if(_nnT>0 && _nnL) fi += _omRow('NextNRG solar + storage ('+Math.round(+_nnL.solarKwDc||0).toLocaleString()+' kW-DC at $'+(+_nnL.rate).toFixed(2)+'/W)', _omMoney(_nnT));
-  else if(_nnL && _nnL.storage && _omNum(_nnL.storage.total)>0) fi += _omRow('NextNRG storage ('+Math.round(+_nnL.storage.kw||0).toLocaleString()+' kW at $'+(+_nnL.storage.ratePerW).toFixed(2)+'/W)', _omMoney(_nnL.storage.total));
+  if(_nnT>0 && _nnL) fi += _omRow('NextNRG solar ('+Math.round(+_nnL.solarKwDc||0).toLocaleString()+' kW-DC at $'+(+_nnL.rate).toFixed(2)+'/W, installed)', _omMoney(_nnT));
+  if(_nnL && _nnL.storage && _omNum(_nnL.storage.total)>0) fi += _omRow('NextNRG storage ('+Math.round(+_nnL.storage.kw||0).toLocaleString()+' kW / '+Math.round(+_nnL.storage.kwh||0).toLocaleString()+' kWh at $'+(+_nnL.storage.ratePerW).toFixed(2)+'/W, installed)', _omMoney(_nnL.storage.total));
   var _ocL=window._OMEGACORE_DETAIL||null, _ocT=_omNum(window._OMEGACORE_TOTAL);
   if(_ocT>0 && _ocL) fi += _omRow('Omega-Core skid'+(_ocL.skids>1?' \u00d7'+_ocL.skids:'')+' (as recorded + controller)', _omMoney(_ocT));
   var _mgL=window._MGC_DETAIL||null, _mgT=_omNum(window._MGC_TOTAL);
