@@ -246,6 +246,135 @@ line, the lease, the compute economics, bankability, the five years and the
 assumptions) or the *full report* (everything, with every chipset, the
 sensitivity grid and, for staff, the build-up).
 
+## The skid on a portfolio site — the compute model runs by itself (2026-10-13)
+
+Tommy, 13 October 2026, over a Topanga Terrace site whose Site Map carried one
+Omega-Core skid, a 2 MWh battery and 368 kW of solar while its Pro forma tab
+read 0.54% and a 59-month payback: "that information should automatically
+translate into the site's details so it runs an accurate IRR and compute
+model … all the data based on the site zipcode, the map that we made, those
+details should auto input into the compute site pro forma … I don't want to
+have to open up the site and input that details … it's the Omega Core skid …
+as much as actually possible is done for the user from the drawing and our
+tools so that they can just put in minimal information."
+
+- **The skid is modelled as the skid is.** `api/_lib/site-model.js`
+  `skidInput()` maps a design whose compute is Omega-Core skids and nothing
+  else onto the Compute Site Pro Forma as the skid's own case: on its OWN
+  480 V meter (`PRODUCT.meter.peakKw`, 135 kW planning peak a skid, 100%
+  loading; `service.own`), no building load behind it (`load.none`, a new
+  reading of `compute-site.js`: zero kWh, known exactly, never assumed, never
+  a warning), its own CleanCell R60 as the battery at $0/kWh because it is
+  inside the skid's price, 48 H100 GPUs (the skid's own whole-node capacity
+  rule, `omega-compute-model.js capacity()`) sold 100% at the public spot
+  market reference (CoreWeave North America, $2.46 a GPU-hour, 85% sold,
+  98% up, −8% a year, 8% of revenue variable, $5,000 a month fixed — the
+  skid's own operating figures, read off the one module), the skid priced
+  as recorded ($639,000 as the GPU-servers line, the $125,000 controller as
+  the pod line) with the engine's own site make-ready, fiber and soft costs
+  beside them, and the rent to the host from the record's *Rent / month*,
+  else the Omega-Core market reference ($1,000 a skid a month, 2.5% a year,
+  never an offer). The host's battery, solar, chargers and Site Map cost run
+  are on the HOST'S meter: named in the basis, never blended. A design that
+  mixes the host's own pods with skids runs the host's case (its pods on its
+  service, the cost run) and names the skids as on their own meter. A chipset
+  may be chosen from the skid's own library (one with a public price;
+  GB300 has none and is refused by name).
+- **The ZIP is read, never asked, when the address carries it**
+  (`site-model.zipOf`: the run's, the record's, the site address's, the
+  Site Map project's; `site-bridge.zipFromAddress` is the one reader and
+  never takes a street number or a PO box for a ZIP). A ZIP the run read is
+  kept on the site.
+- **The model runs by itself.** `api/site-crm.js designModel()`: whenever
+  the design is read onto the site (a GET of the site, the register's *Sync
+  Site Map*, the editor's own save through `omegaSiteDesignPush` →
+  `design-sync {source:'editor'}`) and the design is new or changed (its
+  hash) or the site's facts changed since the last try, the model runs with
+  no one typing, under the compute pro forma's own gate (a workspace without
+  Omega Compute is simply not modelled: no error, no record), labelled
+  *Site Map design* and marked `auto: true` on `latestModel`, the audit row
+  and the page. What stopped it (the facts missing, the engine's refusal) is
+  kept on the site as `designModel` so the page says so and the same facts
+  are not tried twice; `latestModel.designHash` is the design it stood on.
+  At most ten models run per bulk sync; the rest run on their next open.
+- **The pod pro forma prices the skid as recorded** (`runScenario`
+  `fromDesign`): the Site Map cost run never counts the skid
+  (`editor-cost.js`), so a skid's capital is $764,000 each, the host's cost
+  run standing only for plain pods beside it — the 48-GPU spot case on the
+  skid's price instead of the $2.1 M container. **It runs by itself too**
+  (2026-10-14; `designProforma`, once per design, `latestProforma.designHash`,
+  `auto` on the audit row, never bumping `updatedAt`): Topanga's pod block
+  read 0.43% on a $2.1 M assumption-set pod a day after the skid was priced
+  as recorded, beside a compute model at 27%. The two are judged on the SAME
+  capital now, and each says its convention: the pod case is **60 operating
+  months, pre-tax, unlevered, no exit value, the skid alone**
+  (`latestProforma.convention`); the compute model is **after tax over the
+  model's term, the skid and the host's system together**. The assumption
+  set (`proforma.js BASE_ASSUMPTIONS`) IS the iQGen baseline Tommy handed
+  over — 48 GPUs at CoreWeave's H100 spot ($2.46375 a GPU-hour), 85% sold,
+  98% up, −8% a year, $5,000 a month fixed, 8% of revenue variable, 2%
+  maintenance — the same figures `omega-compute-model.js DEFAULTS` carries;
+  only the capital and the convention differ between the two engines.
+
+## The whole project — the host's system in the ask (2026-10-14)
+
+Tommy: "the site map needs to reflect the costs of the total install of the
+project … the pricing on the solar the bess install and then add the labor
+cost as well … so that the compute IRR reflects the total ask of the project
+… the IRR to reflect the build of the system existing and the cost of that
+system now with the cost of the compute system and the payback on that. the
+cost of the nextnrg bess and the next nrg solar is $6.00 per watt".
+
+- **NextNRG's solar + storage is ONE installed system at $6.00 per W-DC of
+  solar** (`api/_lib/nextnrg.js SYSTEM_RATE`; NextNRG's own Topanga one-pager
+  corroborates it: $1,780,063 for 315 kW DC + 300 kW / 1.8 MWh, $5.65/W DC).
+  The Site Map cost engine (`editor-cost.js`) prices a NextNRG array at it —
+  the array, the storage beside it and the installation labor, all in, no
+  contingency on a vendor's installed price, energy property for the ITC —
+  and NextNRG storage with no NextNRG solar beside it at $6.00 per W of
+  rated power. An array is NextNRG's when it is stamped as its product
+  (*NextNRG Solar — Custom*: `sku NEXTNRG-PV-…`, `mfr NextNRG`), a battery
+  when it is the catalog's NextNRG group (`nextnrg: true`); in NextNRG's OWN
+  workspace (`vendorOrg`, stamped by `api/cost-rollup.js` off the caller,
+  never the body) every array and battery is NextNRG's, because what NextNRG
+  draws is what NextNRG sells. Topanga: 368 kW-DC → $2,208,000 with the
+  250 kW / 1,000 kWh battery inside it.
+- **The Run's lines ride the record** (`omegaRunRollup` `capexLines`: solar,
+  bess, nextnrgSystem, ev, controller, compute, dc, gen, envelope, site,
+  indirect, contingency; `design-read.js` reads them onto `latestDesign`).
+- **The compute model carries the host's system as money, never dispatch**
+  (`site-model.js hostOf()` → `compute-site.js input.host`): the Run's lines
+  on their asset classes (the NextNRG system and the balance of site
+  equipment, indirects and contingency as *blended* energy property; solar,
+  storage, chargers and the controller as themselves; pods, the electrical
+  package, generation and a shell never energy property), unscaled, with no
+  soft cost added twice; the host's solar sold under **the PPA on the site
+  record** (`ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears` — Topanga's
+  executed PPA: $0.2250/kWh, 2.5% a year, 28 years — through the ONE finance
+  engine's own PPA on the solar it generates), else the Run's year-one
+  revenue rising with inflation, else NO revenue, said as a warning
+  (`HOST_NO_REVENUE`) with the cost still in the ask; its O&M $6/kWh-yr on
+  the battery and $20/kW-yr on the solar. The skid still runs on its own
+  meter; the host's battery is the engine's storage asset. **The capital
+  request is the whole** (`latestModel.totalProjectCost`; `computeCapex`
+  and `host.capex` apart), and the register, the side panel and the finance
+  hand-off read it. Held by `tcomputesite.js`, `test-site-crm.js`,
+  `teditorcost.js`, `tnextnrg.js`, `tcostrollup.js`.
+- **Nothing a tenant reads names the source workbook or the cost
+  reference**: the basis, the summary, the page and the skid facts name the
+  Omega-Core skid, the public spot reference and ClearSky's recorded price
+  (held by `scripts/test-site-crm.js`).
+- Pages: the site record's header reads *1 Omega-Core skid*, the design card
+  says the model runs by itself and what stopped it, *Investor deck &
+  capital* offers the skid's chipsets and prints *What it ran on* from the
+  model record's basis, the Pro forma tab says the site's IRR is the
+  model's, and the register's *Sync Site Map* says it runs the model.
+
+Not built: the host's service size and usage still come from the record
+(the editor keeps the BESS Config service on the page, not on the project),
+so a plain-pod design on a site with no service on record is named, not
+modelled; a mixed design (host pods and skids) gives one case, the host's.
+
 ## The door — `api/omega-core.js`
 
 The verify-token flavour, no service account. A packaged workspace must hold

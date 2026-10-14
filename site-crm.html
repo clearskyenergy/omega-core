@@ -221,7 +221,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function capitalFact(s) {
     var lm = s.latestModel, cap = s.capital;
     var v = cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap && cap.status && cap.status !== 'missing' ? '<span class="pill pill-ok">' + esc(cap.status === 'draft' ? 'Draft deal' : 'On the marketplace') + '</span>' : lm && lm.totalProjectCost > 0 ? esc(money(lm.totalProjectCost, true)) : notProvided();
-    var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) : 'run the compute model';
+    var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) + (lm.auto ? ' \u00b7 from the design' : '') : s.designModel && s.designModel.missing ? 'the model needs what the design card names' : s.latestDesign ? 'runs by itself from the design' : 'run the compute model';
     return '<div class="fact"><div class="k">Capital</div><div class="v">' + v + '</div><div class="n">' + n + '</div></div>';
   }
   /* ── overview ── */
@@ -240,6 +240,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="grid2">' + designCardHtml(s) + '</div>' +
       '<div class="grid2"><div class="card"><h3>Commercial</h3>' +
       fact('Rent / month', cm.rentMonthly, '$') + fact('Revenue share', cm.revenueShare != null ? pct(cm.revenueShare) : null) + fact('kWh share', cm.kwhShare != null ? pct(cm.kwhShare) : null) +
+      fact('PPA rate, year one', s.ppaRatePerKwh != null ? '$' + s.ppaRatePerKwh + '/kWh' : null) + fact('PPA escalator', s.ppaEscalatorPct != null ? s.ppaEscalatorPct + '% a year' : null) + fact('PPA term', s.ppaTermYears != null ? s.ppaTermYears + ' years' : null) +
+      '<div class="assume">The PPA the host\u2019s solar + storage is sold under: the compute model prices the host\u2019s system on it, so the IRR and the capital request are the whole project\u2019s. No PPA on record means the host\u2019s system earns the Site Map run\u2019s revenue, or nothing, and the model says so.</div>' +
       '</div><div class="card"><h3>Attention</h3>' +
       '<div class="li-body">' + (open ? '<span class="pill pill-warn">' + open + ' open follow-up' + (open > 1 ? 's' : '') + '</span>' : 'No open follow-ups.') + '</div>' +
       ((s.flags && s.flags.peakExceedsInstalled) ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
@@ -282,8 +284,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
      read onto the site every time it opens (latestDesign). The pro forma
      and the compute model run on it; the card says what it holds. ── */
   function designShort(d) {
-    var p = [];
-    if (d.compute && d.compute.units) p.push(d.compute.units + ' compute unit' + (d.compute.units === 1 ? '' : 's'));
+    var p = [], c = d.compute || {};
+    if (c.units) p.push(c.omegaCoreUnits && c.omegaCoreUnits === c.units ? c.units + ' Omega-Core skid' + (c.units === 1 ? '' : 's') : c.units + ' compute unit' + (c.units === 1 ? '' : 's') + (c.omegaCoreUnits ? ' (' + c.omegaCoreUnits + ' Omega-Core)' : ''));
     if (d.chargers && d.chargers.installedKw) p.push(d.chargers.installedKw + ' kW chargers');
     if (d.bess && d.bess.kwh) p.push(d.bess.kwh + ' kWh battery');
     if (d.solar && d.solar.kwDc) p.push(d.solar.kwDc + ' kW solar');
@@ -310,9 +312,23 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         '</div>' +
         '<div class="row" style="margin-top:10px"><a class="btn" style="text-decoration:none" href="/editor.html?id=' + encodeURIComponent(s.projectId) + '">Open in Site Map</a>' +
         (CANEDIT ? '<button class="btn-ghost" id="ds-sync">Read it again</button>' + (c.units ? '<button class="btn-ghost" id="ds-proforma">Run the pro forma on this design</button>' : '') : '') + '</div>' +
-        '<div class="assume">Read from the project ' + esc(String(d.syncedAt || d.at || '').slice(0, 16).replace('T', ' ')) + '. The pod pro forma runs on the ' + (c.units || 0) + ' unit' + (c.units === 1 ? '' : 's') + ' placed' + (d.capex != null ? ' and the cost run\u2019s ' + money(d.capex) : '') + '; the compute model takes the chargers, the battery, the solar' + (d.capex != null ? ' and the cost' : '') + ' from it. Size from power, or type a pod count, to model something else.</div>';
+        '<div class="assume">Read from the project ' + esc(String(d.syncedAt || d.at || '').slice(0, 16).replace('T', ' ')) + '. ' + designRunWords(s) + '</div>' + designModelWords(s);
     }
     return html + '</div>';
+  }
+  /* the design's compute is Omega-Core skids and nothing else: the skid's own case */
+  function skidOnly(s) { var c = s && s.latestDesign && s.latestDesign.compute; return !!(c && c.omegaCoreUnits > 0 && c.omegaCoreUnits === c.units && DATA && DATA.skid); }
+  function designRunWords(s) {
+    var d = s.latestDesign, c = d.compute || {}, sk = DATA && DATA.skid;
+    if (skidOnly(s)) return 'The compute model runs on this design by itself: the ' + c.units + ' Omega-Core skid' + (c.units === 1 ? '' : 's') + ' on its own meter and its own numbers (the skid as recorded, ' + money(sk.systemCostUsd) + ' with the controller built in, its ' + esc(sk.battery.model) + ', its GPUs at the public spot reference), the ZIP read from the address; the host\u2019s battery, solar and cost run are the host\u2019s own project beside it. The pod pro forma prices the skid as recorded.';
+    return 'The compute model runs on this design by itself (the units placed, the chargers, the battery, the solar' + (d.capex != null ? ', the cost run\u2019s ' + money(d.capex) : '') + '; the ZIP is read from the address)' + (c.omegaCoreUnits ? '; its ' + c.omegaCoreUnits + ' Omega-Core skid' + (c.omegaCoreUnits === 1 ? ' is' : 's are') + ' on its own meter and not in it' : '') + '. The pod pro forma runs on the ' + (c.units || 0) + ' unit' + (c.units === 1 ? '' : 's') + ' placed' + (d.capex != null ? ' and the cost run' : '') + '. Size from power, or type a pod count, to model something else.';
+  }
+  function designModelWords(s) {
+    var m = s.designModel; if (!m) return '';
+    if (m.missing && m.missing.length) return '<div class="assume" style="margin-top:6px"><b>The compute model could not run on its own:</b> it needs ' + esc(m.missing.join('; ')) + '.' + (CANEDIT ? ' Add it under Edit site facts and it runs on the next open.' : '') + '</div>';
+    if (m.error) return '<div class="assume" style="margin-top:6px"><b>The compute model refused the design:</b> ' + esc(m.error) + '</div>';
+    if (m.modelId) return '<div class="li-meta" style="margin-top:6px">The compute model last ran by itself on this design ' + esc(String(m.at || '').slice(0, 16).replace('T', ' ')) + ' \u2014 see Investor deck &amp; capital.</div>';
+    return '';
   }
   function dfact(k, v, n) { return '<div style="margin-bottom:6px"><div class="li-meta">' + esc(k) + '</div><div style="font-size:13.5px">' + (v == null ? notProvided() : esc(v)) + '</div>' + (n ? '<div class="li-meta">' + esc(n) + '</div>' : '') + '</div>'; }
   function wireDesign() {
@@ -361,7 +377,10 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       numIn('ef-availablePowerMw', 'Available power (MW)', s.availablePowerMw, '0.01') +
       numIn('ef-serviceCapacityKw', 'Service capacity (kW)', s.serviceCapacityKw) +
       numIn('ef-existingPeakKw', 'Existing peak (kW)', s.existingPeakKw) +
-      numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') + '</div><div>' +
+      numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') +
+      numIn('ef-ppaRatePerKwh', 'PPA rate, year one ($/kWh; the host\u2019s solar + storage is sold under it)', s.ppaRatePerKwh, '0.0001') +
+      numIn('ef-ppaEscalatorPct', 'PPA escalator (% a year)', s.ppaEscalatorPct, '0.1') +
+      numIn('ef-ppaTermYears', 'PPA term (years)', s.ppaTermYears) + '</div><div>' +
       numIn('ef-annualUsageKwh', 'Annual usage (kWh)', s.annualUsageKwh) +
       '<label class="fl">Monthly usage kWh (Jan..Dec, comma-separated)</label>' +
       '<input type="text" id="ef-monthlyUsageKwh" value="' + esc(mu) + '" style="width:100%" placeholder="e.g. 12000, 11500, ...">' +
@@ -389,6 +408,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         termYearsRemaining: num('ef-termYearsRemaining'),
         availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'),
         existingPeakKw: num('ef-existingPeakKw'), powerPricePerKwh: num('ef-powerPricePerKwh'),
+        ppaRatePerKwh: num('ef-ppaRatePerKwh'), ppaEscalatorPct: num('ef-ppaEscalatorPct'), ppaTermYears: num('ef-ppaTermYears'),
         annualUsageKwh: num('ef-annualUsageKwh'), monthlyUsageKwh: str('ef-monthlyUsageKwh'),
         usageNotes: str('ef-usageNotes')
       }).then(function (j) { msg(esc(j.note), true); load(true); })
@@ -563,7 +583,9 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         ' · payback ' + (p.results && p.results.paybackMonth != null ? p.results.paybackMonth + ' mo' : '–') +
         ' · <a href="#" data-scen="' + esc(p.scenarioId) + '">open</a></div></div>';
     }).join('');
-    var html = '<div class="card"><h3>Size it</h3>' +
+    var sk = DATA.skid, html = '';
+    if (skidOnly(s)) html += '<div class="card"><h3>Omega-Core skid</h3><div class="li-body">This site\u2019s compute is ' + esc(s.latestDesign.compute.units) + ' Omega-Core skid' + (s.latestDesign.compute.units === 1 ? '' : 's') + ' on its own meter. The site\u2019s IRR is the compute model\u2019s, run on the design by itself (Investor deck &amp; capital). The pod pro forma below prices the skid as ClearSky recorded it, ' + esc(money(sk.systemCostUsd)) + ' each (' + esc(sk.breakdown.map(function (b) { return money(b.usd) + ' ' + b.label.replace(/ as recorded.*$/, ''); }).join(' + ')) + '); its revenue is the 48-GPU case at the public spot reference.</div></div>';
+    html += '<div class="card"><h3>Size it</h3>' +
       '<div class="row"><label class="fl" style="margin:0">Pods</label>' +
       '<input type="number" id="pf-pods" class="inline" min="1" max="100000" value="' + esc(defPods) + '" style="width:110px">' +
       (CANEDIT ? '<button class="btn-ghost" id="pf-size">Size pods from available power</button>' : '') +
@@ -692,18 +714,25 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     return h;
   }
   function modelForm(s) {
-    var dsg = s.latestDesign, lm = s.latestModel, pods = (dsg && dsg.compute && dsg.compute.units) || (lm && lm.pods) || (s.latestProforma && s.latestProforma.pods) || (s.screening && s.screening.pods) || 1;
+    var dsg = s.latestDesign, lm = s.latestModel, sk = DATA.skid, skid = skidOnly(s);
+    var pods = (dsg && dsg.compute && (skid ? dsg.compute.omegaCoreUnits : dsg.compute.units)) || (lm && lm.pods) || (s.latestProforma && s.latestProforma.pods) || (s.screening && s.screening.pods) || 1;
     function sel(id, label, opts, cur) { return '<label class="fl" style="margin:0">' + label + '</label><select id="' + id + '" class="inline">' + opts.map(function (o) { return '<option value="' + o[0] + '"' + (o[0] === cur ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('') + '</select>'; }
+    var intro = skid
+      ? 'The Compute Site Pro Forma on this site\u2019s Omega-Core skid: the skid on its own ' + esc(sk.meter.volts) + ' V meter (' + esc(sk.meter.peakKw) + ' kW planning peak a skid), its ' + esc(sk.battery.model) + ', its GPUs sold at the public spot reference (as of ' + esc(sk.pricingAsOf) + '), the skid as recorded, ' + esc(money(sk.systemCostUsd)) + ', the rent to the host from the record or the market reference, one year hour by hour, then the finance engine. It runs by itself when the design changes; run it again here to change the chipset or the structure.'
+      : 'The Compute Site Pro Forma on this site: the service, chargers, usage and power price on record, the Site Map design, the pods below, one year hour by hour, then the finance engine. It runs by itself when the design changes; a fact the record lacks is asked for, never assumed.';
+    var gpuSel = skid
+      ? sel('md-gpu', 'Chipset', sk.chipsets.filter(function (c) { return c.pricePerGpuHour != null; }).map(function (c) { return [c.key, c.name + ' \u00b7 $' + c.pricePerGpuHour.toFixed(2) + '/GPU-hr ' + c.basis]; }), lm && lm.skid && lm.skid.chipset || 'h100')
+      : sel('md-gpu', 'GPU', [['h200', 'NVIDIA H200'], ['rtxpro6000', 'RTX PRO 6000'], ['b300', 'NVIDIA B300']], lm && lm.gpuClass || 'h200');
     return '<div class="card"><h3>Run the compute model</h3>' +
-      '<div class="li-meta" style="margin-bottom:8px">The Compute Site Pro Forma on this site: the service, chargers, usage and power price on record, the pods below, one year hour by hour, then the finance engine. A fact the record lacks is asked for, never assumed.</div>' +
+      '<div class="li-meta" style="margin-bottom:8px">' + intro + '</div>' +
       '<div class="row"><label class="fl" style="margin:0">ZIP</label><input type="text" id="md-zip" class="inline" value="' + esc(s.zip || '') + '" placeholder="5 digits" style="width:90px">' +
-      '<label class="fl" style="margin:0">Pods</label><input type="number" id="md-pods" class="inline" min="1" max="40" value="' + esc(pods) + '" style="width:80px">' +
-      sel('md-gpu', 'GPU', [['h200', 'NVIDIA H200'], ['rtxpro6000', 'RTX PRO 6000'], ['b300', 'NVIDIA B300']], lm && lm.gpuClass || 'h200') +
+      '<label class="fl" style="margin:0">' + (skid ? 'Skids' : 'Pods') + '</label><input type="number" id="md-pods" class="inline" min="1" max="40" value="' + esc(pods) + '" style="width:80px">' +
+      gpuSel +
       sel('md-structure', 'Structure', [['own', 'Own and operate'], ['infra', 'Own the power and pod layer'], ['lease', 'Lease the power']], lm && lm.structure || 'own') +
       sel('md-host', 'Host', [['multifamily', 'Multifamily'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']], s.hostType || (lm && lm.hostType) || 'multifamily') +
       (CANEDIT ? '<button class="btn" id="md-run">Run the compute model</button>' : '') + '</div>' +
-      (dsg ? '<div class="li-meta" style="margin-top:6px"><span class="pill pill-ok">Site Map design</span> ' + esc(designShort(dsg)) + ' \u2014 the model takes the chargers, the battery, the solar' + (dsg.capex != null ? ' and the cost run' : '') + ' from it.</div>' : '') +
-      '<div class="li-meta" id="md-basis">' + (lm ? 'Last run ' + esc(String(lm.at || '').slice(0, 10)) + (lm.label ? ' · ' + esc(lm.label) : '') + ' · ' + esc(lm.gpuName || '') + ' · ' + esc(lm.structureLabel || '') : 'Not run yet.') + '</div></div>';
+      (dsg ? '<div class="li-meta" style="margin-top:6px"><span class="pill pill-ok">Site Map design</span> ' + esc(designShort(dsg)) + ' \u2014 ' + (skid ? 'the skid\u2019s own case; the host\u2019s battery, solar and cost run are the host\u2019s project beside it.' : 'the model takes the chargers, the battery, the solar' + (dsg.capex != null ? ' and the cost run' : '') + ' from it.') + '</div>' : '') +
+      '<div class="li-meta" id="md-basis">' + (lm ? 'Last run ' + esc(String(lm.at || '').slice(0, 10)) + (lm.auto ? ' \u00b7 by itself, from the Site Map design' : '') + (lm.label && !lm.auto ? ' · ' + esc(lm.label) : '') + ' · ' + esc(lm.gpuName || '') + ' · ' + esc(lm.structureLabel || '') : 'Not run yet.') + '</div></div>';
   }
   function resultsCard(s) {
     var lm = s.latestModel; if (!lm) return '';
@@ -716,8 +745,17 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     var deals = lm.deals || {};
     h += '<table class="deals"><tr><th>Structure</th><th>Capital</th><th>Equity</th><th>IRR</th><th>NPV</th><th>Payback</th><th>Year 1</th></tr>' +
       Object.keys(deals).map(function (k) { var d = deals[k]; return '<tr class="' + (k === lm.structure ? 'on' : '') + '"><td>' + esc(d.label) + '</td><td>' + money(d.capital, false) + '</td><td>' + (d.equity == null ? '—' : money(d.equity, false)) + '</td><td>' + irrPct(d.irr) + '</td><td>' + (d.npv == null ? '—' : money(d.npv, false)) + '</td><td>' + (d.payback == null ? '—' : d.payback + ' yr') + '</td><td>' + money(d.year1, false) + '</td></tr>'; }).join('') + '</table>' +
-      '<div class="assume">Screening results from the Compute Site Pro Forma under the site’s facts and the model’s published and planning figures; confidence <b>' + esc(lm.confidence || 'n/a') + '</b>. Not a return promise.</div></div>';
+      '<div class="assume">Screening results from the Compute Site Pro Forma under the site’s facts and the model’s published and planning figures; confidence <b>' + esc(lm.confidence || 'n/a') + '</b>. Not a return promise.</div>' +
+      '<div id="model-basis"></div></div>';
     return h;
+  }
+  /* what the run stood on, in the server's own words (the model record's basis): never worked out here */
+  var BASIS_KEYS = [['service', 'Service'], ['pods', 'Compute units'], ['zip', 'ZIP'], ['gpuClass', 'Compute'], ['capex', 'Capital cost'], ['battery', 'Battery'], ['solar', 'Solar'], ['chargers', 'Chargers'], ['load', 'Building load'], ['tariff', 'Electricity'], ['rent', 'Rent to the host'], ['host', 'The host\u2019s project'], ['plainPods', ''], ['skids', ''], ['structure', 'Structure'], ['design', 'Design']];
+  function drawBasis() {
+    var el = document.getElementById('model-basis'), m = MODEL && MODEL.model, b = m && m.basis, sm = m && m.summary;
+    if (!el || !b) return;
+    var rows = BASIS_KEYS.filter(function (k) { return b[k[0]]; }).map(function (k) { return '<li>' + (k[1] ? '<b>' + k[1] + ':</b> ' : '') + esc(String(b[k[0]])) + '</li>'; });
+    el.innerHTML = rows.length ? '<div class="assume"><b>What it ran on' + (sm && sm.auto ? ' \u2014 by itself, from the Site Map design' : '') + '</b><ul style="margin:6px 0 0 18px;padding:0">' + rows.join('') + '</ul></div>' : '';
   }
   function deckCard(s) {
     return '<div class="card" id="deck-card"><h3>Investor deck <span class="li-meta">in your company’s brand</span></h3>' +
@@ -732,6 +770,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   }
   function drawDeck() {
     var box = document.getElementById('deck-box'), P = window.OmegaProformaReport, res = MODEL && MODEL.model && MODEL.model.result;
+    drawBasis();
     if (!box) return;
     if (!P || typeof P.render !== 'function') { box.innerHTML = '<div class="empty">The report module did not load, so the deck cannot be drawn. Reload the page.</div>'; return; }
     if (!res) { box.innerHTML = '<div class="empty">The deck appears once the compute model has run.</div>'; return; }
@@ -925,6 +964,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       DATA = j; CANEDIT = !!j.canEdit; CANARCHIVE = !!j.canArchive;
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
       renderHead();
+      if (j.autoModel && j.autoModel.latestModel) { var am = j.autoModel.latestModel; msg('The compute model ran by itself on the Site Map design: ' + (am.title || am.pods + ' unit(s)') + ', after-tax IRR ' + irrPct(am.irr) + ', total project cost ' + money(am.totalProjectCost) + '.', true); }
       showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : window.location.hash === '#power' ? 'power' : 'overview'));
     }).catch(function (e) {
       document.getElementById('site-head').innerHTML = '<div class="err">' + esc(e.message) + '</div>';

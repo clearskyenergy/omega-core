@@ -38,6 +38,14 @@ var BESS_INSTALL_RATIO = 0.55;   /* install as a share of equipment */
    inside an Omega-Core skid is ClearSky's and is never counted here. */
 var NEXTNRG = require('./nextnrg');
 var MGC_EACH = NEXTNRG.CONTROLLER.priceUsd;
+/* NextNRG's solar + storage SYSTEM, $6.00 per W-DC of solar installed with
+   the storage beside it and the labor (api/_lib/nextnrg.js SYSTEM_RATE,
+   2026-10-14): a NextNRG array (stamped as its product, or any array in
+   NextNRG's own workspace, q.vendorOrg) is priced at it instead of the
+   benchmark; NextNRG storage beside it is inside the price; NextNRG
+   storage alone is the rate on its rated power. A vendor's installed
+   price carries no contingency. */
+var NN_RATE = NEXTNRG.SYSTEM_RATE;
 /* The cost sheet's defaults: applied where a field is blank. */
 var SHEET = {
   pad: 4800, disco: 3200, meter: 3850, bollards: 600, jbox: 850, panel: 18500, misc: 0, xfmr: 0,
@@ -123,16 +131,29 @@ function rollup(q) {
   /* BESS: placed fleet by model, else the configured list for display only */
   var fleet = q.fleet || { units: 0, byModel: {} }, overrides = q.overrides || {}, bessTotal = 0, bessRows = [], autoByKwh = {}, k;
   var models = Object.keys(fleet.byModel || {});
+  /* NextNRG: every array and battery in NextNRG's own workspace, else the
+     arrays and batteries stamped as its product */
+  var nnAll = NEXTNRG.isVendorOrg(q.vendorOrg), solarKwAll = +(q.solarKwDc || 0);
+  var nnSolarKw = nnAll ? solarKwAll : Math.min(solarKwAll, +((q.solar && q.solar.nextnrgKwDc) || 0));
+  var nnStorage = { kw: 0, kwh: 0, units: 0, inside: false, alone: 0 };
   if (fleet.units > 0 && models.length) {
     for (var i = 0; i < models.length; i++) {
       k = models[i]; var bm = fleet.byModel[k] || {}, ov = overrides[k], auto = bessAuto(+(bm.kwh || 0), 0);
       var cat = catalogPrice(bm.catalogKey || k), known = bm.cost != null ? +bm.cost : cat;
       if (bm.kwh > 0) autoByKwh[String(bm.kwh)] = cat != null && bm.cost == null ? cat : auto;
+      var isNN = nnAll || bm.nextnrg === true, qty = +bm.qty || 0, inSystem = false, nnRate = false;
       var perUnit = (ov != null) ? +ov : (known != null ? known : auto);
-      var eq = (ov == null && bm.mixed && bm.groupCost > 0) ? +bm.groupCost : perUnit * (+bm.qty || 0);
-      var inst = r0(eq * BESS_INSTALL_RATIO), tot = eq + inst;
+      var eq = (ov == null && bm.mixed && bm.groupCost > 0) ? +bm.groupCost : perUnit * qty;
+      var inst = r0(eq * BESS_INSTALL_RATIO);
+      if (isNN && ov == null && bm.cost == null) {
+        nnStorage.units += qty; nnStorage.kw += (+bm.kw || 0) * qty; nnStorage.kwh += (+bm.kwh || 0) * qty;
+        if (nnSolarKw > 0) { inSystem = true; perUnit = 0; eq = 0; inst = 0; nnStorage.inside = true; }
+        else { nnRate = true; perUnit = r0((+bm.kw || 0) * 1000 * NN_RATE.storageOnlyPerW); eq = perUnit * qty; inst = 0; nnStorage.alone += eq; }
+      }
+      var tot = eq + inst;
       bessTotal += tot;
-      bessRows.push({ key: k, qty: +bm.qty || 0, kwh: +bm.kwh || 0, perUnit: perUnit, eq: eq, install: inst, total: tot, missing: (known == null && ov == null), catalog: (bm.cost == null && cat != null) });
+      bessRows.push({ key: k, qty: qty, kwh: +bm.kwh || 0, perUnit: perUnit, eq: eq, install: inst, total: tot, missing: (known == null && ov == null && !isNN), catalog: (bm.cost == null && cat != null),
+        nextnrg: isNN, inSystem: inSystem, nextnrgRate: nnRate });
     }
   }
   var cfgRows = [];
@@ -143,12 +164,17 @@ function rollup(q) {
     cfgRows.push({ id: b.id, name: b.name, kwh: +b.kwh || 0, mfr: b.mfr || '', qty: qty, eq: eq2, install: ins, total: (eq2 + ins) * qty });
   });
   /* placed but never itemised: the benchmark, so the sheet and the rail agree */
-  var rating = q.fleetRating || { kwh: 0, kw: 0 }, benchBess = 0;
-  if (bessTotal <= 0 && ((+rating.kwh || 0) > 0 || (+rating.kw || 0) > 0)) {
-    benchBess = (+rating.kwh || 0) * pos(sheet.bessKwh, BENCH.bessKwh) + (+rating.kw || 0) * pos(sheet.bessKw, BENCH.bessKw);
-    if (benchBess > 0) bessTotal = benchBess;
+  var rating = q.fleetRating || { kwh: 0, kw: 0 }, benchBess = 0, ratingInside = false, ratingAlone = 0;
+  if (bessTotal <= 0 && !nnStorage.inside && ((+rating.kwh || 0) > 0 || (+rating.kw || 0) > 0)) {
+    if (nnAll && nnSolarKw > 0) { ratingInside = true; nnStorage.inside = true; nnStorage.kw += +rating.kw || 0; nnStorage.kwh += +rating.kwh || 0; }
+    else if (nnAll) { ratingAlone = r0((+rating.kw || 0) * 1000 * NN_RATE.storageOnlyPerW); bessTotal = ratingAlone; nnStorage.alone += ratingAlone; nnStorage.kw += +rating.kw || 0; nnStorage.kwh += +rating.kwh || 0; }
+    else {
+      benchBess = (+rating.kwh || 0) * pos(sheet.bessKwh, BENCH.bessKwh) + (+rating.kw || 0) * pos(sheet.bessKw, BENCH.bessKw);
+      if (benchBess > 0) bessTotal = benchBess;
+    }
   }
-  out.lines.bess = { total: bessTotal, rows: bessRows, configured: cfgRows, isBenchmark: benchBess > 0, benchmark: benchBess, autoByKwh: autoByKwh, installRatio: BESS_INSTALL_RATIO };
+  out.lines.bess = { total: bessTotal, rows: bessRows, configured: cfgRows, isBenchmark: benchBess > 0, benchmark: benchBess, autoByKwh: autoByKwh, installRatio: BESS_INSTALL_RATIO,
+    nextnrg: nnStorage.units > 0 || ratingInside || ratingAlone > 0, inSystem: nnStorage.inside, nextnrgAlone: nnStorage.alone };
 
   /* site equipment: unit price × what is placed */
   var c = q.counts || {}, cnt = function (x) { return +c[x] || 0; };
@@ -215,15 +241,30 @@ function rollup(q) {
      its own line. kW the page could not place by mount (a previewed
      layout) is priced as plain PV at the size band. */
   var solarKw = +(q.solarKwDc || 0), byMount = (q.solar && q.solar.byMount) || null, solarSheet = pos(sheet.pvWdc, 0), solarRows = [], solarTotal = 0, solarPlaced = 0;
+  /* NextNRG's system first: its solar at the system rate, with its storage
+     and the labor inside; the page keeps NextNRG arrays out of byMount, and
+     in NextNRG's own workspace every array is the system */
+  var nnTotal = 0, nnLine = null;
+  if (nnSolarKw > 0) {
+    nnTotal = r0(nnSolarKw * 1000 * NN_RATE.perWdc);
+    if (nnAll) byMount = null;
+    nnLine = { total: nnTotal, solarKwDc: nnSolarKw, rate: NN_RATE.perWdc, label: NN_RATE.label, includes: NN_RATE.includes.slice(), basis: NN_RATE.basis,
+      storage: { kw: nnStorage.kw, kwh: nnStorage.kwh, units: nnStorage.units, inside: nnStorage.inside }, vendor: nnAll ? 'workspace' : 'product', contingency: NN_RATE.contingency };
+  } else if (nnStorage.alone > 0) {
+    nnLine = { total: 0, solarKwDc: 0, rate: NN_RATE.perWdc, label: 'NextNRG storage, installed', includes: ['the storage', 'installation labor'], basis: NN_RATE.basis,
+      storage: { kw: nnStorage.kw, kwh: nnStorage.kwh, units: nnStorage.units, inside: false, total: nnStorage.alone, ratePerW: NN_RATE.storageOnlyPerW }, vendor: nnAll ? 'workspace' : 'product', contingency: NN_RATE.contingency };
+  }
+  out.lines.nextnrg = nnLine;
+  out.sources.nextnrg = nnLine ? NN_RATE.corroboration : undefined;
   if (byMount) SOLAR_MOUNTS.forEach(function (m) {
     var kw = +byMount[m[0]] || 0; if (!(kw > 0)) return;
     var rate = solarSheet > 0 ? solarSheet : pvRate(solarKw, m[0]), tot = kw * 1000 * rate;
     solarRows.push({ mount: m[0], label: m[1], kwDc: kw, rate: rate, total: tot, isBenchmark: !(solarSheet > 0) }); solarTotal += tot; solarPlaced += kw;
   });
-  var solarRest = solarKw - solarPlaced;
+  var solarRest = solarKw - nnSolarKw - solarPlaced;
   if (solarRest > 0.05) { var restRate = solarSheet > 0 ? solarSheet : pvRate(solarKw), restTot = solarRest * 1000 * restRate; solarRows.push({ mount: 'unspecified', label: 'Solar PV', kwDc: solarRest, rate: restRate, total: restTot, isBenchmark: !(solarSheet > 0) }); solarTotal += restTot; }
   var solarKwPriced = solarPlaced + Math.max(0, solarRest);
-  out.lines.solar = { total: solarTotal, kwDc: solarKwPriced, rate: solarKwPriced > 0 ? solarTotal / (solarKwPriced * 1000) : 0, rows: solarRows, isBenchmark: solarTotal > 0 && !(solarSheet > 0), canopyRate: BENCH.pvCanopy };
+  out.lines.solar = { total: solarTotal, kwDc: solarKwPriced, rate: solarKwPriced > 0 ? solarTotal / (solarKwPriced * 1000) : 0, rows: solarRows, isBenchmark: solarTotal > 0 && !(solarSheet > 0), canopyRate: BENCH.pvCanopy, nextnrgKwDc: nnSolarKw };
   out.sources.pvCanopy = BENCH.pvCanopySource;
 
   /* building envelope: audited in the page from the assembly catalog; its capex rides through */
@@ -280,13 +321,15 @@ function rollup(q) {
 
   /* scope gate: allowances apply only once something priceable is placed */
   var placedKw = +(q.placedKw || 0);
-  var inScope = bessTotal > 0 || ev.total > 0 || placedKw > 0 || solarTotal > 0 || dcTotal > 0 || bnzTotal > 0 || computeTotal > 0 || pn > 0 || gen.total > 0 || mgcTotal > 0;
-  var sub = inScope ? (bessTotal + solarTotal + siteEq + indirect + ev.total + dcTotal + bnzTotal + computeTotal + gen.total + mgcTotal) : 0;
-  var contPct = S('contPct') / 100, cont = sub * contPct, TOTAL = sub + cont;
+  var inScope = bessTotal > 0 || ev.total > 0 || placedKw > 0 || solarTotal > 0 || nnTotal > 0 || dcTotal > 0 || bnzTotal > 0 || computeTotal > 0 || pn > 0 || gen.total > 0 || mgcTotal > 0;
+  var sub = inScope ? (bessTotal + solarTotal + nnTotal + siteEq + indirect + ev.total + dcTotal + bnzTotal + computeTotal + gen.total + mgcTotal) : 0;
+  /* a vendor's installed price (NextNRG's system, its storage alone) carries no contingency */
+  var noCont = inScope ? nnTotal + nnStorage.alone : 0;
+  var contPct = S('contPct') / 100, cont = (sub - noCont) * contPct, TOTAL = sub + cont;
   var subLo = sub - computeTotal + computeLo, subHi = sub - computeTotal + computeHi;
-  var costLow = inScope ? subLo * (1 + contPct) : 0, costHigh = inScope ? subHi * (1 + contPct) : 0;
+  var costLow = inScope ? (subLo - noCont) * (1 + contPct) + noCont : 0, costHigh = inScope ? (subHi - noCont) * (1 + contPct) + noCont : 0;
   /* the ITC is on energy property: never pods, gas generation, the compute electrical package or a shell */
-  var itcExcluded = computeTotal + dcTotal + bnzTotal + (gen.gasTotal || 0), itcSub = Math.max(0, sub - itcExcluded), itcBasis = itcSub * (1 + contPct);
+  var itcExcluded = computeTotal + dcTotal + bnzTotal + (gen.gasTotal || 0), itcSub = Math.max(0, sub - itcExcluded), itcBasis = (itcSub - noCont) * (1 + contPct) + noCont;
   var bessKW = +(q.configuredKw || 0), totalKW = bessKW + r0((pkw / 1000) * 1000) + r0(gen.kw || 0), costPerKW = totalKW > 0 ? r0(TOTAL / totalKW) : 0;
   /* a contracted number is the truth once it exists */
   var actual = pos(sheet.actualTotal, 0), benchmarkTotal = sub + cont;
@@ -295,11 +338,12 @@ function rollup(q) {
     itcBasis: itcBasis, itcExcluded: itcExcluded * (1 + contPct), inScope: inScope, contracted: actual > 0, benchmark: benchmarkTotal,
     totalKW: totalKW, costPerKW: costPerKW, bess: bessTotal, solar: solarTotal, ev: ev.total, dc: dcTotal, bnz: bnzTotal, compute: computeTotal, computePods: pn, gen: gen.total,
     siteEq: inScope ? siteEq : 0, siteEqRaw: siteEq, xfmr: xfmrCost, indirect: inScope ? indirect : 0, indirectRaw: indirect, emsSetup: inScope ? emsSetup : 0, conduit: condTotal,
-    controller: mgcTotal, controllerUnits: mgcN };
+    controller: mgcTotal, controllerUnits: mgcN,
+    nextnrg: nnTotal, nextnrgKwDc: nnSolarKw, nextnrgStorageAlone: nnStorage.alone, noContingency: noCont };
   out.flags = { bessBenchmark: benchBess > 0, solarBenchmark: solarTotal > 0, computeBenchmark: comp.isBenchmark, genBenchmark: gen.total > 0,
-    benchmarked: benchBess > 0 || solarTotal > 0 || comp.isBenchmark || gen.total > 0 };
+    benchmarked: benchBess > 0 || solarTotal > 0 || comp.isBenchmark || gen.total > 0, nextnrg: nnTotal > 0 || nnStorage.alone > 0 };
   return out;
 }
 
-module.exports = { rollup: rollup, pvRate: pvRate, SOLAR_MOUNTS: SOLAR_MOUNTS, bessAuto: bessAuto, genClass: genClass, evBook: evBook, evEst: evEst, catalogPrice: catalogPrice,
+module.exports = { rollup: rollup, pvRate: pvRate, NN_RATE: NN_RATE, SOLAR_MOUNTS: SOLAR_MOUNTS, bessAuto: bessAuto, genClass: genClass, evBook: evBook, evEst: evEst, catalogPrice: catalogPrice,
   _tables: { BENCH: BENCH, BESS_EQ_PER_KWH: BESS_EQ_PER_KWH, BESS_INSTALL_RATIO: BESS_INSTALL_RATIO, SHEET: SHEET, DC_ROM: DC_ROM, AUTEL: AUTEL, EV_OTHER: EV_OTHER } };

@@ -151,6 +151,43 @@ var CONTROLLER = {
   source: SOURCE.what + ', p. 7–8'
 };
 
+/* ── THE PRICE OF THE SYSTEM (2026-10-14) ───────────────────────────────
+   Tommy: "the cost of the nextnrg bess and the next nrg solar is $6.00 per
+   watt … wire that into the site map editor so that is reflected". NextNRG
+   sells its solar and its storage as ONE installed system, priced per
+   W-DC of solar: the array, the storage beside it and the installation
+   labor, all in. NextNRG's own Topanga investor one-pager (Q3 2026) prices
+   315 kW DC of solar with a 300 kW / 1.8 MWh battery at $1,780,063
+   installed — $5.65/W DC for the whole system — which is what the rate
+   describes. The Site Map cost engine (api/_lib/editor-cost.js) prices a
+   NextNRG array at this rate, counts the NextNRG storage beside it as
+   inside the price, and adds no contingency to it (it is a vendor's
+   installed price, like a contracted number). NextNRG storage placed with
+   no NextNRG solar beside it is priced at the same rate on its rated
+   power, installed. Never a second copy of the figure in a page. */
+var SYSTEM_RATE = {
+  perWdc: 6.00,
+  storageOnlyPerW: 6.00,
+  label: 'NextNRG solar + storage system, installed',
+  includes: ['the solar array', 'the storage beside it', 'installation labor'],
+  basis: 'ClearSky, 2026-10-14 (Tommy: "the cost of the nextnrg bess and the next nrg solar is $6.00 per watt"): per W-DC of NextNRG solar, the storage beside it and the installation labor included',
+  corroboration: 'NextNRG — Topanga Solar + Storage investor one-pager, Q3 2026: total installed cost $1,780,063 for 315 kW DC of solar with a 300 kW / 1.8 MWh BESS, $5.65/W DC',
+  contingency: false
+};
+/* Which arrays and batteries are NextNRG's: an array stamped as NextNRG's
+   product (the NextNRG Solar — Custom tool; sku NEXTNRG-PV-…, mfr NextNRG),
+   a battery from the NextNRG group of the catalog (nextnrg: true) or
+   NextNRG's own product list — and, in NextNRG's OWN workspace, every
+   array and battery drawn, because what NextNRG draws is what NextNRG
+   sells. */
+function isVendorOrg(orgId) { return String(orgId || '').toLowerCase() === VENDOR.orgId; }
+function isNextnrgSolar(s) {
+  if (!s || typeof s !== 'object') return false;
+  if (s.nextnrg === true) return true;
+  if (/^NEXTNRG-/i.test(String(s.sku || ''))) return true;
+  return String(s.mfr || '').toLowerCase() === 'nextnrg';
+}
+
 /* ── THE UPLIFT ──────────────────────────────────────────────────────────
    The brochure models a 6 to 8% improvement in project return on a site
    pairing PV with storage, from a controller that solves the next
@@ -205,5 +242,6 @@ module.exports = {
   SOLAR_MODULE: SOLAR_MODULE, moduleWpsf: moduleWpsf,
   STORAGE_SPEC: STORAGE_SPEC, STORAGE: STORAGE,
   CONTROLLER: CONTROLLER,
+  SYSTEM_RATE: SYSTEM_RATE, isVendorOrg: isVendorOrg, isNextnrgSolar: isNextnrgSolar,
   UPLIFT: UPLIFT, applyUplift: applyUplift, wantsController: wantsController
 };

@@ -1204,7 +1204,41 @@ once it has run (the pod case until then). **The capital request is the
 total project cost** (`askOf`): `send-to-finance` sends it as the deal's
 `ask` with `capitalRequest{}` on the deal, and the register reads the deal
 LIVE (`capitalJoin` → `site.capital`): open with offers, or FUNDED once a
-partner's offer is accepted (`awarded`). Grid Atlas opens at the site's
+partner's offer is accepted (`awarded`). **The compute model runs by itself on the Site Map design**
+(2026-10-13, Tommy: "all the data based on the site zipcode, the map that we
+made, those details should auto input into the compute site pro forma … I
+don't want to have to open up the site and input the details … it's the
+Omega Core skid … as much as possible is done for the user from the drawing
+and our tools"): `api/site-crm.js designModel()` runs `site-model` whenever
+the design is read onto the site (a GET, the register's Sync Site Map, the
+editor's own save through `omegaSiteDesignPush` → `design-sync`) and the
+design or the facts changed, under the compute pro forma's gate (no Omega
+Compute: not modelled, no error), marked `auto` on `latestModel`, with what
+stopped it kept as `designModel`. The ZIP is read off the address
+(`site-bridge.zipFromAddress`, the ONE reader). A design whose compute is
+Omega-Core skids and nothing else is the SKID'S own case (`site-model
+.skidInput`): its own meter (`service.own`, `load.none` in
+`compute-site.js`), its R60 inside its price, 48 H100 at the public spot
+reference and the skid's operating figures off `omega-compute-model.js`,
+the skid as recorded ($639,000 + the $125,000 controller), rent from the
+record else the market reference; a mixed design runs the host's case.
+**The capital request is the WHOLE project** (2026-10-14, Tommy: "the
+compute IRR reflects the total ask of the project … the cost of that system
+now with the cost of the compute system and the payback on that"): the
+host's own solar and storage beside the skid are in the case as MONEY,
+never dispatch (`site-model.hostOf` → `compute-site input.host`: the Run's
+lines on their asset classes, unscaled; the solar sold under the PPA on the
+site record — `ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears`, Topanga's
+executed PPA $0.2250/kWh, 2.5%, 28 years — else the Run's revenue, else a
+named warning with the cost still in the ask), so `totalProjectCost`,
+`computeCapex` and `host.capex` are read by the register, the panel and
+the hand-off. The pod pro forma runs by itself on the design too
+(`designProforma`, once per design) on the skid's recorded price, and each
+engine states its convention (the pod case 60 months pre-tax unlevered
+alone; the compute model after tax, the whole); the assumption set IS the
+iQGen / CoreWeave baseline. The pod pro forma prices a skid as recorded, never on the cost
+run (which never counts it). Nothing a tenant reads names the source
+workbook; it is the Omega-Core skid. `docs/OMEGA-CORE.md`. Grid Atlas opens at the site's
 address (`/grid-atlas.html?q=`). The Site SPV term sheet is
 `api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
 is pdf-lib, DRAFT on every page) behind `GET …&agreement=1`; it is never
@@ -1402,7 +1436,15 @@ streams only, each stream saying so, with the brochure's caveat on the
 `controller` summary; `/api/value-stack` passes the flag in and the summary
 out; the editor sends it when a controller is on the host's drawing. The RFQ
 routes a NextNRG line by brand: `tenants/nextnrg/tenant.json brands`, copied
-by the seed. `docs/NEXTNRG-MICROGRID.md`.
+by the seed. **NextNRG's solar + storage is ONE installed system at $6.00
+per W-DC of solar** (2026-10-14, Tommy: "the cost of the nextnrg bess and
+the next nrg solar is $6.00 per watt"; `nextnrg.js SYSTEM_RATE`, corroborated
+by NextNRG's Topanga one-pager at $5.65/W DC): the array, the storage beside
+it and the labor, no contingency, energy property; storage alone at $6.00 per
+W of rated power. An array stamped NextNRG's, a battery of the catalog's
+NextNRG group, and in NextNRG's own workspace every array and battery
+(`vendorOrg`, stamped by `cost-rollup.js` off the caller). The Run's lines
+ride the record (`capexLines`). `docs/NEXTNRG-MICROGRID.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 

@@ -159,7 +159,7 @@
   <div class="pf-bar" id="bar" role="toolbar" aria-label="Selected sites">
     <span class="count"><span id="selcount">0 selected</span><small id="selall-wrap" style="display:none">· <a id="selall">select all <span id="selall-n"></span></a></small></span>
     <button type="button" id="ba-editor" title="One Site Map project per site; a site that already has one opens it">Open in Site Map</button>
-    <button type="button" id="ba-design" title="Read each site's Site Map project: the units, chargers, battery, solar and the cost run, so the IRR follows the design">Sync Site Map</button>
+    <button type="button" id="ba-design" title="Read each site's Site Map project (the units, chargers, battery, solar and the cost run) and run the compute model on it by itself, so the IRR follows the design. An Omega-Core skid runs on its own meter and its own numbers.">Sync Site Map</button>
     <button type="button" id="ba-finance" title="One deal per site on the finance marketplace">Send to marketplace</button>
     <button type="button" id="ba-terra" title="Mail the site facts and figures to Terra Energy for a solar package and detail">Send to Terra (solar)</button>
     <button type="button" id="ba-model" title="The Compute Site Pro Forma on each site, from its service, chargers, usage and pods; ten at a time">Run compute model</button>
@@ -565,8 +565,10 @@
     var lm = s.latestModel, cap = s.capital, html = '';
     if (lm) {
       var v = lm.verdict || {};
-      html += '<div class="dr-sec">Compute model</div><div class="dr-irr"><div class="big">' + (lm.irr != null ? '<b>' + esc(pct(lm.irr)) + '</b><span>after-tax IRR, ' + esc(lm.termYears || 10) + '-year term</span>' : '<b class="undef">No IRR</b><span>no capital is invested under this structure</span>') + '</div>' +
-        fact('Total project cost', lm.totalProjectCost != null ? esc(money(lm.totalProjectCost)) : null, 'the capital request') + fact('Equity', lm.equity != null ? esc(money(lm.equity)) : null, lm.debt > 0 ? 'beside ' + money(lm.debt) + ' of debt' : '100% equity') +
+      var hst = lm.host || null;
+      html += '<div class="dr-sec">Compute model' + (hst ? ' \u00b7 the whole project' : '') + '</div><div class="dr-irr"><div class="big">' + (lm.irr != null ? '<b>' + esc(pct(lm.irr)) + '</b><span>after-tax IRR, ' + esc(lm.termYears || 10) + '-year term' + (hst ? ', the skid and the host\u2019s system together' : '') + '</span>' : '<b class="undef">No IRR</b><span>no capital is invested under this structure</span>') + '</div>' +
+        fact('Total project cost', lm.totalProjectCost != null ? esc(money(lm.totalProjectCost)) : null, hst && lm.computeCapex != null ? 'the capital request: ' + money(lm.computeCapex) + ' of compute with its site costs + ' + money(hst.capex) + ' for the host\u2019s ' + (hst.solarKwDc ? Math.round(hst.solarKwDc) + ' kW-dc solar' : '') + (hst.solarKwDc && hst.bessKwh ? ' and ' : '') + (hst.bessKwh ? Math.round(hst.bessKw) + ' kW / ' + Math.round(hst.bessKwh) + ' kWh battery' : '') + (hst.basis ? ' (' + hst.basis + ')' : '') : 'the capital request') + fact('Equity', lm.equity != null ? esc(money(lm.equity)) : null, lm.debt > 0 ? 'beside ' + money(lm.debt) + ' of debt' : '100% equity') +
+        (hst ? fact('Host system revenue', hst.ppa ? 'PPA $' + esc(hst.ppa.ratePerKwh) + '/kWh' : hst.revenuePerYear ? esc(money(hst.revenuePerYear)) + ' / yr' : '<span class="pill pill-warn">None on record</span>', hst.ppa ? esc(hst.ppa.escPct + '% a year' + (hst.ppa.termYears ? ', ' + hst.ppa.termYears + '-year term' : '')) : hst.revenuePerYear ? esc(hst.revenueBasis || '') : 'enter the PPA on the site record for the IRR of the whole') : '') +
         fact('Structure', esc(lm.structureLabel || lm.structure || '')) + fact('Pods', lm.pods != null ? esc(lm.pods) + ' × ' + esc(lm.gpuName || lm.gpuClass || '') : null, lm.serviceKw ? 'on a ' + Math.round(lm.serviceKw) + ' kW service' : '') +
         '<div class="dr-fact" style="grid-column:1/-1"><span class="pill ' + (v.tone === 'ok' ? 'pill-ok' : v.tone === 'warn' ? 'pill-warn' : '') + '">' + esc(v.label || '') + '</span><div class="n">' + esc((lm.at ? String(lm.at).slice(0, 10) + ' · ' : '') + 'Compute Site Pro Forma · screening, not a return promise') + '</div></div></div>';
     }
@@ -576,7 +578,7 @@
       fact('Terra Energy (solar)', s.partners && s.partners.terra ? '<span class="pill pill-ok">Sent</span>' : '<span class="t-mut">Not sent</span>', s.partners && s.partners.terra ? 'solar package asked for on ' + String(s.partners.terra.sentAt || '').slice(0, 10) : 'a solar package and detail, funded by Terra') + '</div>';
     html += '<div class="dr-sec">Pod pro forma</div>';
     if (lp) {
-      html += '<div class="dr-irr"><div class="big">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b><span>investor IRR, annualised</span>' : '<b class="undef">Not defined</b><span>no IRR root in the cash flows</span>') + '</div>' +
+      html += '<div class="dr-irr"><div class="big">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b><span>investor IRR, annualised \u00b7 the pod case alone: 60 months, pre-tax, unlevered, no exit value' + (lp.designHash ? ', on the units placed' : '') + '</span>' : '<b class="undef">Not defined</b><span>no IRR root in the cash flows</span>') + '</div>' +
         fact('Project IRR', lp.projectIrrDefined && lp.projectIrrAnnual != null ? esc(pct(lp.projectIrrAnnual)) : '<span class="t-mut">Not defined</span>') +
         fact('Investor capital', lp.investorCapital != null ? esc(money(lp.investorCapital)) : null) +
         fact('NPV', lp.npv != null ? esc(money(lp.npv)) : null, lp.discountRateAnnual != null ? 'at ' + pct(lp.discountRateAnnual, 0) : '') +

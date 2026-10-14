@@ -26124,6 +26124,7 @@ async function saveProject(){
       bessKw:        _rollup.bessKw,
       capexAt:       _rollup.capexAt,
       capexSource:   _rollup.capexSource,
+      capexLines:    _rollup.capexLines,
       /* Price decks are project data. An 8760 x 7 products is large, so
          only the metadata and series descriptors are guaranteed here --
          see _pdStripForSave for what is dropped when it will not fit. */
@@ -26199,6 +26200,8 @@ async function saveProject(){
     try { window._lastSaveError = null; } catch(_e){}
     _setSaved('saved');
     window._workDirty = false;   // successfully persisted
+    /* the portfolio site this project belongs to reads the design again */
+    try{ if(typeof omegaSiteDesignPush==='function') omegaSiteDesignPush(); }catch(_e){}
   }catch(e){
     /* Set BEFORE _setSaved, which reads it for the indicator's tooltip. */
     /* An over-size failure already wrote a message that names the size and
@@ -26475,6 +26478,13 @@ async function _loadProject(id){
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
     S.omegaCore     = (d.omegaCore     && typeof d.omegaCore==='object')     ? d.omegaCore     : null;
+    /* THE SITE THIS PROJECT BELONGS TO (the portfolio register's
+       send-to-editor writes siteId/siteOrgId on the record). Read so a save
+       can tell the site to read the design again (omegaSiteDesignPush);
+       never written back by the editor, and reset on every load so a site
+       never follows another project. */
+    S.siteId        = (typeof d.siteId==='string' && d.siteId) ? d.siteId : null;
+    S.siteOrgId     = (typeof d.siteOrgId==='string' && d.siteOrgId) ? d.siteOrgId : null;
     S.omegaFiber    = (d.omegaFiber    && typeof d.omegaFiber==='object')    ? d.omegaFiber    : null;
     S.omegaFiberAt  = d.omegaFiberAt  || null;
     /* The last run's totals (omegaRunRollup) are this session's, never the
@@ -29392,7 +29402,9 @@ function omegaCostQuantities(){
   var fleet=(typeof _ppCollectFleet==='function')?_ppCollectFleet():{units:0,byModel:{}};
   q.fleet={ units:fleet.units||0, byModel:{} };
   Object.keys(fleet.byModel||{}).forEach(function(k){ var b=fleet.byModel[k];
-    q.fleet.byModel[k]={ qty:+b.qty||0, kwh:+b.kwh||0, kw:+b.kw||0, cost:(b.cost!=null?+b.cost:null), groupCost:+b.groupCost||0, mixed:!!b.mixed, catalogKey:k }; });
+    q.fleet.byModel[k]={ qty:+b.qty||0, kwh:+b.kwh||0, kw:+b.kw||0, cost:(b.cost!=null?+b.cost:null), groupCost:+b.groupCost||0, mixed:!!b.mixed, catalogKey:k,
+      /* NextNRG's storage (the NextNRG group of the catalog): priced inside NextNRG's system by the server */
+      nextnrg: !!(typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[k] && BESS_CATALOG[k].nextnrg) }; });
   q.overrides=(typeof _vendorOverrides==='function')?_vendorOverrides():{};
   /* the configured list, one row per distinct unit (display only; never in the total) */
   var _seen={}, _uniq=[];
@@ -29422,7 +29434,8 @@ function omegaCostQuantities(){
   q.sheet=_costSheetValues();
   q.ev=_evQuantities(); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
   q.solarKwDc=(typeof omegaSolarKwDc==='function')?(+omegaSolarKwDc()||0):0;
-  q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null };   /* a canopy is priced as a canopy */
+  q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null,   /* a canopy is priced as a canopy */
+            nextnrgKwDc:(typeof omegaSolarNextnrgKwDc==='function')?(+omegaSolarNextnrgKwDc()||0):0 };   /* NextNRG's arrays, priced as its system */
   q.placedKw=0; try{ var _d=(typeof omegaDer==='function')?omegaDer():null; if(_d) q.placedKw=(+_d.solarKwDc||0)+(+_d.windKw||0)+(+_d.altKw||0); }catch(e){}
   q.bnzCapex=0; try{ if(typeof bnzAll==='function') q.bnzCapex=+bnzAll().capex||0; }catch(e){}
   q.compute={ podsN:0, podKw:0, shellPerPod:0, itPerPod:0, excludeIt:false };
@@ -29500,7 +29513,7 @@ function _renderCostUnavailable(err){
   var totalEl=document.getElementById('rp-total-cost'); if(totalEl) totalEl.textContent='$--';
   var bd=document.getElementById('rp-cost-breakdown'); if(bd) bd.innerHTML='<div style="font-size:10px;color:var(--amber);padding:6px 0">Not priced: '+msg+'. <a href="#" onclick="updateCostEst();return false" style="color:var(--accent)">Try again</a></div>';
   if(!window._COST_SERVER){
-    ['_COST_TOTAL','_COST_LOW','_COST_HIGH','_COST_ITC_BASIS','_COST_ITC_EXCLUDED','_SOLAR_TOTAL','_BESS_TOTAL','_EV_TOTAL','_SITE_EQ_TOTAL','_CONDUIT_TOTAL','_INDIRECT_TOTAL','_EMS_COST_TOTAL','_EMS_SETUP','_CONT_TOTAL','_EMS_ANNUAL','_COMPUTE_TOTAL','_COMPUTE_PODS','_GEN_TOTAL','_DC_TOTAL','_BNZ_TOTAL','_MGC_TOTAL','_COST_PER_KW','_COST_BENCHMARK'].forEach(function(k){ window[k]=0; });
+    ['_COST_TOTAL','_COST_LOW','_COST_HIGH','_COST_ITC_BASIS','_COST_ITC_EXCLUDED','_SOLAR_TOTAL','_BESS_TOTAL','_EV_TOTAL','_SITE_EQ_TOTAL','_CONDUIT_TOTAL','_INDIRECT_TOTAL','_EMS_COST_TOTAL','_EMS_SETUP','_CONT_TOTAL','_EMS_ANNUAL','_COMPUTE_TOTAL','_COMPUTE_PODS','_GEN_TOTAL','_DC_TOTAL','_BNZ_TOTAL','_MGC_TOTAL','_NEXTNRG_SYSTEM_TOTAL','_COST_PER_KW','_COST_BENCHMARK'].forEach(function(k){ window[k]=0; });
     window._IN_SCOPE=false; window._COST_IS_CONTRACTED=false;
   }
 }
@@ -29629,7 +29642,10 @@ function _renderCostEst(ans, stale) {
         <span style="color:var(--text);font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace">${fmt(val)}</span>
       </div>`;
     var CM=LN.compute, G=LN.gen;
+    var NNL = LN.nextnrg || null;
     bd.innerHTML =
+      (NNL && T.nextnrg > 0 ? row('  '+NNL.label+' \u2014 '+Math.round(NNL.solarKwDc).toLocaleString()+' kW-DC at $'+(+NNL.rate).toFixed(2)+'/W'+(NNL.storage && NNL.storage.inside ? ' (the '+Math.round(NNL.storage.kw).toLocaleString()+' kW / '+Math.round(NNL.storage.kwh).toLocaleString()+' kWh storage inside it)' : '')+', labor included', T.nextnrg, '#54B442') : '') +
+      (NNL && NNL.storage && NNL.storage.total > 0 ? row('  '+NNL.label+' \u2014 '+Math.round(NNL.storage.kw).toLocaleString()+' kW at $'+(+NNL.storage.ratePerW).toFixed(2)+'/W, labor included', NNL.storage.total, '#54B442') : '') +
       (T.solar > 0 ? ((LN.solar.rows||[]).map(function(sr){ return row('  '+sr.label+' — '+Math.round(sr.kwDc).toLocaleString()+' kW-DC at $'+(+sr.rate).toFixed(2)+'/W'+(sr.isBenchmark?' (benchmark)':''), sr.total, '#FBBF24'); }).join('')
                      || row('  Solar PV (equip + install)', T.solar, '#FBBF24')) : '') +
       (T.compute > 0
@@ -29643,14 +29659,14 @@ function _renderCostEst(ans, stale) {
       (T.gen > 0 ? row('  On-site generation ×' + G.units + ' (' + Math.round(G.kw).toLocaleString() + ' kW, benchmark)', T.gen, '#F472B6') : '') +
       (T.dc > 0 ? row('  Data Centre Electrical (ROM)', T.dc, '#38BDF8') : '') +
       (T.bnz > 0 ? row('  Building Envelope', T.bnz, '#A78BFA') : '') +
-      row('  BESS Equipment + Install', T.bess, 'var(--accent)') +
+      (LN.bess && LN.bess.inSystem && !(T.bess > 0) ? row('  BESS \u2014 inside the NextNRG system price', 0, 'var(--accent)') : (LN.bess && LN.bess.nextnrgAlone > 0 && T.bess === LN.bess.nextnrgAlone ? '' : row('  BESS Equipment + Install', T.bess, 'var(--accent)'))) +
       (T.ev > 0 ? row('  EV Charging (equip + install)', T.ev, '#22D3EE') : '') +
       row('   Site Equipment', T.siteEqRaw - T.xfmr, 'var(--amber)') +
       (T.xfmr > 0 ? row('  Transformer', T.xfmr, '#F97316') : '') +
       (T.controller > 0 ? row('  NextNRG Microgrid Controller \u00d7' + T.controllerUnits, T.controller, '#54B442') : '') +
       row('  Engineering + Permitting', T.indirectRaw - LN.indirect.emsSetup, 'var(--sub)') +
       (LN.ems.on ? row(' EMS Software (setup)', LN.indirect.emsSetup, '#A78BFA') : '') +
-      row(`  Contingency (${T.contPctRound}%)`, T.cont, 'var(--sub)') +
+      row(`  Contingency (${T.contPctRound}%)` + (T.noContingency > 0 ? ' \u2014 none on NextNRG\u2019s installed price' : ''), T.cont, 'var(--sub)') +
       `<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:2px">
         <span style="color:var(--text);font-weight:700;font-size:11px">Total</span>
         <span style="color:var(--green);font-weight:700;font-size:14px;font-family:'IBM Plex Mono',monospace">${fmt(TOTAL)}</span>
@@ -29675,6 +29691,7 @@ function _renderCostEst(ans, stale) {
   window._IN_SCOPE = T.inScope;
   window._COST_TOTAL = TOTAL;
   window._SOLAR_TOTAL = T.solar; window._BESS_TOTAL = T.bess; window._EV_TOTAL = T.ev; window._EV_COST_DETAIL = LN.ev;
+  window._NEXTNRG_SYSTEM_TOTAL = T.nextnrg || 0; window._NEXTNRG_SYSTEM_DETAIL = LN.nextnrg || null;
   window._SITE_EQ_TOTAL = T.siteEq; window._CONDUIT_TOTAL = T.conduit; window._INDIRECT_TOTAL = T.indirect;
   window._EMS_COST_TOTAL = T.emsSetup; window._EMS_SETUP = LN.indirect.emsSetup;
   window._CONT_TOTAL = T.cont; window._CONT_PCT = T.contPctRound;
@@ -36460,12 +36477,30 @@ function omegaDer(){
 /* The arrays by how they are MOUNTED, for the cost engine: a canopy (Solar
    → Canopy, or Custom Shape) is priced as a canopy, a rooftop as rooftop,
    the rest as ground. kW only; the rate is the server's. */
+/* An array that is NextNRG's product (NextNRG Solar — Custom stamps the
+   shape with NextNRG's sku and mfr): the cost engine prices it at NextNRG's
+   installed system rate, with the storage beside it inside the price
+   (api/_lib/nextnrg.js SYSTEM_RATE), so it is kept out of the mount bands
+   and sent as its own kW. The rate itself never reaches the page. */
+function omegaSolarIsNextnrg(s){
+  if(!s) return false;
+  if(s.nextnrg===true) return true;
+  if(/^NEXTNRG-/i.test(String(s.sku||''))) return true;
+  return String(s.mfr||'').toLowerCase()==='nextnrg';
+}
+function omegaSolarNextnrgKwDc(){
+  var kw=0;
+  try{ (S.shapes||[]).forEach(function(s){ if(s && (s.kind==='dersolar'||s.kind==='solar') && omegaSolarIsNextnrg(s)) kw+=(+s.kw||0); }); }catch(e){}
+  return kw;
+}
+window.omegaSolarNextnrgKwDc=omegaSolarNextnrgKwDc;
 function omegaSolarByMount(){
   var t={ ground:0, roof:0, canopy:0 };
   try{
     (S.shapes||[]).forEach(function(s){
       if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return;
       var kw=+s.kw||0; if(!(kw>0)) return;
+      if(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg(s)) return;   /* NextNRG's system, priced as such */
       /* a traced custom area claims no mount: the server prices what it
          cannot place by mount as plain PV at the size band */
       if(s.mount==='custom' && !s.canopy) return;
@@ -37144,6 +37179,17 @@ function omegaRunRollup(){
   var net = +window._NET_COST; if(!isFinite(net)) net = gross - inc;
   var fleet = null;
   try{ fleet = (typeof omegaBessFleet==='function') ? omegaBessFleet() : null; }catch(e){}
+  /* The run's LINES beside its total (2026-10-14): the portfolio's compute
+     model reads them off the record to put the host's solar, storage and
+     NextNRG system on their own asset classes (the ITC, depreciation),
+     and the total ask of the project is the whole of them. Each is the
+     figure the sheet printed; a line the run did not price is 0. */
+  var L = function(k){ var v = +window[k]; return isFinite(v) && v > 0 ? Math.round(v) : 0; };
+  var lines = {
+    solar: L('_SOLAR_TOTAL'), bess: L('_BESS_TOTAL'), nextnrgSystem: L('_NEXTNRG_SYSTEM_TOTAL'), ev: L('_EV_TOTAL'),
+    controller: L('_MGC_TOTAL'), compute: L('_COMPUTE_TOTAL'), dc: L('_DC_TOTAL'), gen: L('_GEN_TOTAL'), envelope: L('_BNZ_TOTAL'),
+    site: L('_SITE_EQ_TOTAL'), indirect: L('_INDIRECT_TOTAL'), contingency: L('_CONT_TOTAL')
+  };
   var r = {
     capex:         Math.round(gross),
     netCost:       Math.round(net),
@@ -37152,6 +37198,7 @@ function omegaRunRollup(){
     bessKw:        Math.round((fleet && +fleet.kw)  || 0),
     bessKwh:       Math.round((fleet && +fleet.kwh) || 0),
     contracted:    !!window._COST_IS_CONTRACTED,
+    capexLines:    lines,
     at:            S.lastRunAt || Date.now()
   };
   S.costRollup = r;
@@ -37168,6 +37215,7 @@ window.omegaRunRollup = omegaRunRollup;
 function omegaRollupFields(r){
   if(!r || !(r.capex > 0)) return {};
   var f = { capex: r.capex, incentive: r.incentive, capexAt: r.at, capexSource: 'site-map' };
+  if(r.capexLines && typeof r.capexLines==='object') f.capexLines = r.capexLines;
   if(r.annualRevenue > 0) f.annualRevenue = r.annualRevenue;
   if(r.bessKwh > 0) f.bessKwh = r.bessKwh;
   if(r.bessKw  > 0) f.bessKw  = r.bessKw;
@@ -37195,6 +37243,35 @@ function omegaRunSave(){
   return true;
 }
 window.omegaRunSave = omegaRunSave;
+
+/* THE SITE FOLLOWS THE DESIGN (2026-10-13; Tommy: "when I do a site map for
+   a project that is in the portfolio panel, that information should
+   automatically translate into the site's details … I don't want to have
+   to open up the site and input the details"). A project the portfolio
+   register made (siteId / siteOrgId on the record, read in _loadProject)
+   tells its site to read the design again after each save: POST
+   /api/site-crm design-sync, the register's ONE door, which reads the
+   drawing and the Run onto the site and runs the compute model on it
+   (hash-bound: an unchanged design is a cheap no-op). Fire and forget,
+   debounced behind the autosave; a refusal is the site's business and
+   never the editor's. Never a second writer of the site record. */
+var _siteSyncTimer = null;
+function omegaSiteDesignPush(){
+  if(!(S && S.siteId && window._currentUser && window._projectId)) return false;
+  clearTimeout(_siteSyncTimer);
+  _siteSyncTimer = setTimeout(function(){
+    var org = S.siteOrgId || ((typeof _projOrgId==='function') ? _projOrgId() : null);
+    var u = window._currentUser;
+    if(!org || !u || typeof u.getIdToken!=='function') return;
+    Promise.resolve(u.getIdToken()).then(function(tok){
+      return fetch('/api/site-crm', { method:'POST', headers:{ 'Content-Type':'application/json', Authorization:'Bearer '+tok },
+                                       body: JSON.stringify({ org: org, action:'design-sync', ids:[S.siteId], source:'editor' }) });
+    }).then(function(r){ try{ window._omegaSiteSyncAt = Date.now(); window._omegaSiteSyncOk = !!(r && r.ok); }catch(e){} })
+      .catch(function(){ try{ window._omegaSiteSyncOk = false; }catch(e){} });
+  }, 4000);
+  return true;
+}
+window.omegaSiteDesignPush = omegaSiteDesignPush;
 
 /* ---- rail chrome ---------------------------------------------------- */
 

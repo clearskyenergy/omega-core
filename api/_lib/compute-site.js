@@ -205,6 +205,9 @@ function read(input) {
   if (kw == null && amps != null) kw = amps * volts * (phases === 3 ? Math.sqrt(3) : 1) * pf / 1000;
   c.service = {
     kw: kw, amps: amps, volts: volts, phases: phases, pf: pf,
+    /* own: the compute's OWN meter (an Omega-Core skid), not a building's
+       shared service; the words change, the balance does not (2026-10-13) */
+    own: bool(sv.own, false),
     loadingPct: rd(e, 'service.loadingPct', sv.loadingPct, { def: 80, min: 50, max: 100, label: 'The continuous loading limit (%)' }),
     upgradeKw: rd(e, 'service.upgradeKw', sv.upgradeKw, { def: 0, min: 0, max: 50000, label: 'The service upgrade (kW)' }),
     upgradeCost: rd(e, 'service.upgradeCost', sv.upgradeCost, { def: 0, min: 0, max: 1e8, label: 'The service upgrade cost ($)' })
@@ -264,7 +267,10 @@ function read(input) {
   var shareSum = tv.offtake.sharePct + tv.edge.sharePct + tv.spot.sharePct;
   if (Math.abs(shareSum - 100) > 0.01) e.push(err('compute.tiers', 'The three contract shares must add up to 100% (they add up to ' + r1(shareSum) + '%).'));
   c.compute = {
-    gpuClass: cls, gpuName: G.name, gpuShort: G.short, pods: pods,
+    /* a custom accelerator may be named by its caller (the Omega-Core skid
+       names its chipset); the catalog's names stand for the catalog's classes */
+    gpuClass: cls, gpuName: cls === 'custom' && str(cp.gpuName, 80) ? str(cp.gpuName, 80) : G.name,
+    gpuShort: cls === 'custom' && str(cp.gpuShort, 40) ? str(cp.gpuShort, 40) : G.short, pods: pods,
     kwPerGpu: rd(e, 'compute.kwPerGpu', cp.kwPerGpu, { def: G.kw, min: 0.05, max: 5, label: 'Power per GPU (kW)' }),
     gpusPerPod: rd(e, 'compute.gpusPerPod', cp.gpusPerPod, { def: G.podMax, min: 1, max: G.podMax, int: true, label: 'GPUs per pod' }),
     overheadPct: rd(e, 'compute.overheadPct', cp.overheadPct, { def: 20, min: 0, max: 150, label: 'Server overhead (%)' }),
@@ -311,8 +317,48 @@ function read(input) {
 
   c.solar = {
     kwdc: rd(e, 'solar.kwdc', so.kwdc, { def: 0, min: 0, max: 50000, label: 'Solar (kW-dc)' }),
-    capexPerW: rd(e, 'solar.capexPerW', so.capexPerW, { def: 2.4, min: 0, max: 20, label: 'Solar cost ($/W-dc)' })
+    capexPerW: rd(e, 'solar.capexPerW', so.capexPerW, { def: 2.4, min: 0, max: 20, label: 'Solar cost ($/W-dc)' }),
+    omPerKwYear: rd(e, 'solar.omPerKwYear', so.omPerKwYear, { def: 20, min: 0, max: 500, label: 'Solar O&M ($/kW-dc a year)' })
   };
+
+  /* THE HOST'S SYSTEM BESIDE THE COMPUTE (2026-10-14, Tommy: "the compute
+     IRR reflects the total ask of the project … the build of the system
+     existing and the cost of that system now with the cost of the compute
+     system and the payback on that"). A compute unit on its own meter (the
+     Omega-Core skid) may stand beside the host's own solar and storage,
+     sold under a PPA: the host's system is MONEY in this model, never
+     dispatch — its cost lines on their own asset classes (the Site Map cost
+     run's lines), its PPA revenue on the solar it generates (the ONE
+     finance engine's own PPA), its O&M — so the sources and uses, the IRR
+     and the payback are the whole project's. Nothing when absent. */
+  var ho = obj(x.host), hoLines = Array.isArray(ho.capexLines) ? ho.capexLines : [];
+  c.host = null;
+  if (hoLines.length || (num(ho.solarKwDc) || 0) > 0 || (num(ho.bessKwh) || 0) > 0) {
+    var hl = [], hSum = 0;
+    hoLines.slice(0, 20).forEach(function (l, i) {
+      l = obj(l);
+      var amt = rd(e, 'host.capexLines[' + i + '].amount', l.amount, { def: 0, min: 0, max: 1e10, label: 'A host cost line ($)' });
+      if (!(amt > 0)) return;
+      var asset = pick(e, 'host.capexLines[' + i + '].asset', l.asset, ['solar', 'storage', 'blended', 'ev', 'controller', 'other'], 'other', 'The asset of a host cost line');
+      hl.push({ id: 'host-' + (str(l.id, 24) || String(i)), label: str(l.label, 120) || 'Host system', amount: Math.round(amt), asset: asset, depClass: asset === 'other' ? 'macrs7' : (asset === 'controller' || asset === 'ev') ? 'macrs5' : undefined, host: true });
+      hSum += Math.round(amt);
+    });
+    var hp = obj(ho.ppa);
+    c.host = {
+      solarKwDc: rd(e, 'host.solarKwDc', ho.solarKwDc, { def: 0, min: 0, max: 50000, label: 'The host\'s solar (kW-dc)' }),
+      bessKw: rd(e, 'host.bessKw', ho.bessKw, { def: 0, min: 0, max: 50000, label: 'The host\'s battery power (kW)' }),
+      bessKwh: rd(e, 'host.bessKwh', ho.bessKwh, { def: 0, min: 0, max: 200000, label: 'The host\'s battery energy (kWh)' }),
+      capexLines: hl, capexTotal: hSum, basis: str(ho.basis, 200),
+      ppa: num(hp.ratePerKwh) > 0 ? { ratePerKwh: rd(e, 'host.ppa.ratePerKwh', hp.ratePerKwh, { min: 0.001, max: 5, label: 'The PPA rate ($/kWh)' }),
+                                     escPct: rd(e, 'host.ppa.escPct', hp.escPct, { def: 2.5, min: -10, max: 20, label: 'The PPA escalator (%/yr)' }),
+                                     termYears: rd(e, 'host.ppa.termYears', hp.termYears, { def: 0, min: 0, max: 40, int: true, label: 'The PPA term (years)' }) } : null,
+      /* the host system's revenue when there is no PPA on record: the Site Map run's year-one figure, escalating with inflation */
+      revenuePerYear: rd(e, 'host.revenuePerYear', ho.revenuePerYear, { def: 0, min: 0, max: 1e9, label: 'The host system\'s year-one revenue ($)' }),
+      revenueBasis: str(ho.revenueBasis, 200)
+    };
+    if ((c.host.bessKw > 0) !== (c.host.bessKwh > 0)) e.push(err('host.bessKwh', 'The host\'s battery needs both its power (kW) and its energy (kWh).'));
+    if (c.host.ppa && !(c.host.solarKwDc > 0)) e.push(err('host.ppa', 'A PPA sells solar energy, so the host needs solar.'));
+  }
 
   var ls = obj(dl.lease);
   c.deal = {
@@ -351,7 +397,13 @@ function prepare(c) {
   if (!loc.ok) return { ok: false, errors: [err('site.zip', loc.error)] };
   var seg = c.site.hostType;
   var tariffSeg = seg === 'industrial' ? 'industrial' : 'commercial';
-  var L = S.buildLoad({ load: c.load }, loc, seg);
+  /* NO BUILDING LOAD (2026-10-13): compute on its own meter (an Omega-Core
+     skid) has no building behind it. The meter carries the compute, its
+     battery and nothing else; nothing is assumed, and the load is known
+     exactly (zero), so it never weakens the confidence. */
+  var L = c.load && c.load.none === true
+    ? { ok: true, kw: zeros(H), source: 'none', quality: 'high', notes: ['No building load: the compute is on its own meter.'], label: 'No building load (own meter)' }
+    : S.buildLoad({ load: c.load }, loc, seg);
   if (!L.ok) return { ok: false, errors: [err('load', L.error)] };
   var building = L.kw, h;
   var ct = S.calibratedTariff({ tariff: c.tariff }, loc, tariffSeg, L);
@@ -710,11 +762,17 @@ function capexLines(c, pods, bat, who) {
       add('fiber', 'Fiber backhaul installation', k.fiberInstall, 'other', 'macrs7');
     }
     if (!c.ev.existing && c.ev.ports > 0) add('ev', 'EV chargers, ' + c.ev.ports + ' ports at ' + c.ev.kwPerPort + ' kW', c.ev.ports * c.ev.capexPerPort, 'ev');
-    if (bat.kwh > 0) {
+    /* a battery priced at $0/kWh is inside another line's price (the R60
+       inside the Omega-Core skid): no $0 line of its own */
+    if (bat.kwh > 0 && bat.kwh * c.battery.capexPerKwh > 0) {
       out.push({ id: 'bess', label: 'Battery, ' + fmt(bat.kw) + ' kW / ' + fmt(bat.kwh) + ' kWh', amount: Math.round(bat.kwh * c.battery.capexPerKwh * soft), asset: 'storage' });
     }
     if (c.solar.kwdc > 0) out.push({ id: 'solar', label: 'Solar, ' + fmt(c.solar.kwdc) + ' kW-dc', amount: Math.round(c.solar.kwdc * 1000 * c.solar.capexPerW * soft), asset: 'solar' });
     if (c.service.upgradeKw > 0 && c.service.upgradeCost > 0) add('upgrade', 'Service upgrade, +' + fmt(c.service.upgradeKw) + ' kW', c.service.upgradeCost, 'other', 'macrs15');
+    /* the host's own system beside the compute: its lines as the Site Map
+       cost run priced them (installed, labor in), never scaled, no soft
+       cost added twice */
+    if (c.host) c.host.capexLines.forEach(function (l) { out.push({ id: l.id, label: l.label, amount: l.amount, asset: l.asset, depClass: l.depClass, host: true }); });
   } else if (c.deal.lease.hostCapex > 0) {
     out.push({ id: 'host', label: c.ev.ports > 0 ? 'Host\'s chargers and make-ready' : 'Host\'s make-ready', amount: Math.round(c.deal.lease.hostCapex), asset: c.ev.ports > 0 ? 'ev' : 'other', depClass: c.ev.ports > 0 ? undefined : 'macrs7' });
   }
@@ -741,7 +799,8 @@ function schedule(c, y1, y0, who) {
   var N = c.finance.years, k = c.compute, dcl = k.priceDeclinePct / 100, esc = c.finance.utilityEscPct / 100, inf = c.finance.inflationPct / 100;
   var events = refreshPlan(c, N), fade = c.battery.fadePct / 100, t;
   var lines = { off: [], edge: [], spot: [], ev: [], share: [], rent: [], billUp: [], billDown: [], platform: [], hostRent: [],
-                fiber: [], hwOm: [], podOm: [], evCost: [], batOm: [], ins: [], opRent: [] };
+                fiber: [], hwOm: [], podOm: [], evCost: [], batOm: [], ins: [], opRent: [], hostRev: [], hostOm: [] };
+  var H0 = who !== 'lease' ? c.host : null;
   var baseBill = y1.baseBill;
   var incWith = y1.bill.total - baseBill, incNo = y0 ? y0.bill.total - baseBill : incWith;
   var batBill = incWith - incNo;                           /* the battery's effect on the bill (≤ 0 is a saving) */
@@ -749,12 +808,13 @@ function schedule(c, y1, y0, who) {
   var capexTotal = 0, lines0 = capexLines(c, y1.pods, y1.battery, who);
   lines0.forEach(function (l) { capexTotal += l.amount; });
   var capexScale = null;
-  if (c.capex && c.capex.total > 0 && who !== 'lease' && capexTotal > 0) {
+  if (c.capex && c.capex.total > 0 && who !== 'lease' && capexTotal > 0 && !c.host) {
     capexScale = { from: capexTotal, to: Math.round(c.capex.total), basis: c.capex.basis || 'the design' };
     var fac = c.capex.total / capexTotal, acc = 0;
     lines0.forEach(function (l, i) { l.amount = i === lines0.length - 1 ? Math.round(c.capex.total) - acc : Math.round(l.amount * fac); acc += l.amount; l.scaled = true; });
     capexTotal = Math.round(c.capex.total);
   }
+  var hostCapex = 0; lines0.forEach(function (l) { if (l.host) hostCapex += l.amount; });
   var gpuCost = y1.pods * k.gpusPerPod * k.capexPerGpu;
   var kwhTotal = y1.computeKwh + y1.evGridKwh + y1.batteryKwh.losses;
   for (t = 1; t <= N; t++) {
@@ -779,6 +839,10 @@ function schedule(c, y1, y0, who) {
     lines.batOm.push(y1.battery.kwh * c.battery.omPerKwhYear * g);
     lines.ins.push(capexTotal * c.deal.insurancePct / 100 * g);
     lines.rent.push(c.deal.lease.rentPerYear * Math.pow(1 + c.deal.lease.escPct / 100, t - 1));
+    /* the host's system: its revenue when no PPA prices it (the engine
+       prices a PPA itself, on the solar it generates), and its O&M */
+    lines.hostRev.push(H0 && !H0.ppa && H0.revenuePerYear > 0 ? H0.revenuePerYear * g : 0);
+    lines.hostOm.push(H0 ? (H0.bessKwh * c.battery.omPerKwhYear + H0.solarKwDc * c.solar.omPerKwYear) * g : 0);
   }
   var rev = [], opex = [];
   function R(label, arr) { if (max(arr) > 0.5) rev.push({ label: label, schedule: arr.map(r0) }); }
@@ -789,6 +853,7 @@ function schedule(c, y1, y0, who) {
     R('Compute: on-demand overflow', lines.spot);
     R('EV charging', lines.ev);
     R('Building bill savings', lines.billDown);
+    R('Host system revenue' + (H0 && H0.revenueBasis ? ' (' + H0.revenueBasis + ')' : ''), lines.hostRev);
     O('power', 'Electricity: the incremental utility bill', lines.billUp);
     O('platform', 'Operator platform fee (' + k.platformFeePct + '% of gross compute)', lines.platform);
     O('host', 'Host rent', lines.hostRent);
@@ -797,6 +862,7 @@ function schedule(c, y1, y0, who) {
     O('podom', 'Pod O&M', lines.podOm);
     O('evops', 'Charger network, O&M and payment processing', lines.evCost);
     O('batom', 'Battery O&M', lines.batOm);
+    O('hostom', 'Host system O&M (solar and storage)', lines.hostOm);
     O('ins', 'Insurance', lines.ins);
   } else if (who === 'infra') {
     R('Share of gross compute (' + c.deal.infraSharePct + '%)', lines.share);
@@ -817,7 +883,7 @@ function schedule(c, y1, y0, who) {
     }
   }
   var totals = { gross: lines.off.map(function (x, i) { return x + lines.edge[i] + lines.spot[i]; }), refresh: events };
-  return { revenue: rev, opex: opex, capex: lines0, capexTotal: capexTotal, capexScale: capexScale, events: events, gpuCost: gpuCost, totals: totals };
+  return { revenue: rev, opex: opex, capex: lines0, capexTotal: capexTotal, capexScale: capexScale, events: events, gpuCost: gpuCost, totals: totals, hostCapex: hostCapex };
 }
 
 /* The finance engine's inputs for one structure. */
@@ -825,18 +891,25 @@ function engineInputs(c, ctx, y1, sch, who) {
   var s = c.site, N = c.finance.years, bat = y1.battery;
   var hasBat = bat.kwh > 0 && who !== 'lease', reps = [];
   if (hasBat && c.battery.lifeYears < N) reps.push({ year: c.battery.lifeYears, cost: Math.round(bat.kwh * c.battery.capexPerKwh * c.battery.replaceCostPct / 100) });
+  var HS = who !== 'lease' ? c.host : null, hostSolar = HS && HS.solarKwDc > 0, hostBat = HS && HS.bessKwh > 0;
   var inp = {
     years: N,
     project: { name: s.name, sponsor: s.sponsor, host: s.host, hostDescription: s.hostDescription || HOST_WORDS[s.hostType],
                street: s.street, city: s.city, state: ctx.loc.state, zip: ctx.loc.zip, utility: s.utility,
                preparedDate: /^\d{4}-\d{2}-\d{2}$/.test(s.preparedDate) ? s.preparedDate : '',
                bocMonth: /^\d{4}-\d{2}$/.test(s.bocMonth) ? s.bocMonth : '', pisMonth: /^\d{4}-\d{2}$/.test(s.pisMonth) ? s.pisMonth : '' },
-    solar: who !== 'lease' && c.solar.kwdc > 0 ? { kwDc: c.solar.kwdc, kwh1: Math.round(c.solar.kwdc * ctx.loc.solarYield) } : null,
-    bess: hasBat ? { kw: bat.kw, kwh: bat.kwh, usableKwh: r2(bat.usable), dischargeKwh1: Math.round(y1.batteryKwh.discharged),
+    solar: who !== 'lease' && c.solar.kwdc > 0 ? { kwDc: c.solar.kwdc, kwh1: Math.round(c.solar.kwdc * ctx.loc.solarYield) }
+         : hostSolar ? { kwDc: HS.solarKwDc, kwh1: Math.round(HS.solarKwDc * ctx.loc.solarYield) } : null,
+    /* the storage asset the engine describes: the host's battery when one
+       stands beside the compute (it carries the storage cost line), else
+       the compute's own */
+    bess: hostBat ? { kw: HS.bessKw, kwh: HS.bessKwh, usableKwh: r2(HS.bessKwh * c.battery.dodPct / 100) }
+        : hasBat ? { kw: bat.kw, kwh: bat.kwh, usableKwh: r2(bat.usable), dischargeKwh1: Math.round(y1.batteryKwh.discharged),
                      sizing: reps.length ? { replacements: reps } : null } : null,
     ev: c.ev.ports > 0 && (who !== 'lease' || c.deal.lease.hostKeepsCharging) ? { kw: r1(c.ev.ports * c.ev.kwPerPort) } : null,
     capex: { lines: sch.capex },
-    revenue: { bess: { mode: hasBat ? 'site' : 'bundled' }, other: sch.revenue },
+    revenue: { bess: { mode: hasBat || hostBat ? 'site' : 'bundled' }, other: sch.revenue,
+               ppa: hostSolar && HS.ppa ? { rate1: HS.ppa.ratePerKwh, escalatorPct: HS.ppa.escPct, basis: 'gross' } : undefined },
     opex: { lines: sch.opex },
     refresh: { mode: c.finance.refreshFunding, events: who === 'own' ? sch.events.map(function (y) {
       return { label: 'GPU refresh', year: y, cost: Math.round(sch.gpuCost * c.compute.refreshCostPct / 100) };
@@ -991,8 +1064,14 @@ function story(c, ctx, y1, who, res) {
   if (c.ev.ports > 0) flow.push(['ev', c.ev.ports + ' EV ports', (c.ev.managed ? 'Managed' : 'Unmanaged') + ' charging, ' + fmt(c.ev.ports * c.ev.kwPerPort) + ' kW']);
   if (y1.battery.kwh > 0) flow.push(['bess', fmt(y1.battery.kw) + ' kW / ' + fmt(y1.battery.kwh) + ' kWh BESS', 'Holds the service limit and the peak']);
   if (c.solar.kwdc > 0) flow.unshift(['solar', fmt(c.solar.kwdc) + ' kW DC Solar', 'On the host site']);
+  if (c.host && who !== 'lease') {
+    if (c.host.bessKwh > 0) flow.push(['bess', fmt(c.host.bessKw) + ' kW / ' + fmt(c.host.bessKwh) + ' kWh host BESS', 'The host\u2019s own storage' + (c.host.ppa ? ', under the PPA' : '')]);
+    if (c.host.solarKwDc > 0) flow.unshift(['solar', fmt(c.host.solarKwDc) + ' kW DC host solar', c.host.ppa ? 'Sold to the host under the PPA' : 'The host\u2019s own array']);
+  }
   flow.push(['host', c.site.host || 'Site host', HOST_TYPES[c.site.hostType] + (c.site.city ? ', ' + c.site.city : '')]);
-  flow.push(['grid', 'Existing service', fmt(c.service.kw) + ' kW' + (c.service.volts ? ' at ' + fmt(c.service.volts) + ' V' : '') + ', shared']);
+  flow.push(c.service.own
+    ? ['grid', 'Own service', fmt(c.service.kw) + ' kW' + (c.service.volts ? ' at ' + fmt(c.service.volts) + ' V' : '') + ', the compute\u2019s own meter']
+    : ['grid', 'Existing service', fmt(c.service.kw) + ' kW' + (c.service.volts ? ' at ' + fmt(c.service.volts) + ' V' : '') + ', shared']);
   var terms = [c.finance.years + '-year analysis'];
   if (who === 'own') terms.push('Compute sold ' + k.tiers.offtake.sharePct + '% offtake · ' + k.tiers.edge.sharePct + '% edge · ' + k.tiers.spot.sharePct + '% on-demand');
   if (who === 'own' && (c.deal.rentPerYear > 0 || c.deal.rentSharePct > 0)) terms.push('Host rent ' + money(c.deal.rentPerYear) + '/yr' + (c.deal.rentSharePct ? ' + ' + c.deal.rentSharePct + '% of gross' : ''));
@@ -1004,9 +1083,13 @@ function story(c, ctx, y1, who, res) {
   if (y1.pods > 0) sys.push(fmt(y1.gpus) + ' ' + k.gpuShort + ' GPUs in ' + y1.pods + ' compute pod' + (y1.pods === 1 ? '' : 's'));
   if (c.ev.ports > 0) sys.push(c.ev.ports + ' EV charging ports');
   if (y1.battery.kwh > 0) sys.push('a ' + fmt(y1.battery.kw) + ' kW / ' + fmt(y1.battery.kwh) + ' kWh battery');
+  if (c.host && who !== 'lease') {
+    if (c.host.solarKwDc > 0) sys.push(fmt(c.host.solarKwDc) + ' kW-dc of solar');
+    if (c.host.bessKwh > 0) sys.push('a ' + fmt(c.host.bessKw) + ' kW / ' + fmt(c.host.bessKwh) + ' kWh battery for the host' + (c.host.ppa ? ' under a PPA' : ''));
+  }
   var where = (c.site.host ? ' at ' + c.site.host : '') + (place ? ' in ' + place : '');
   var narrative = su ? who1 + ' is seeking ' + ask(su.equity) + ' investment in a project that installs ' + listWords(sys) + where +
-    ', on the building\'s existing ' + fmt(c.service.kw) + ' kW service. ' +
+    (c.service.own ? ', on its own ' + fmt(c.service.kw) + ' kW service. ' : ', on the building\'s existing ' + fmt(c.service.kw) + ' kW service. ') +
     (who === 'own' ? 'The project sells GPU-hours to inference customers and charging to drivers, and pays the site\'s added electricity. '
       : who === 'infra' ? 'The project owns the power and pod layer and receives ' + c.deal.infraSharePct + '% of gross compute revenue from the operator that owns the GPUs. '
       : 'The host leases the power to a compute operator. ') +
@@ -1131,7 +1214,12 @@ function model(input) {
     if (main.schedule.capexScale) res.assumptions.unshift('Project cost is the Site Map cost run, $' + fmt(main.schedule.capexScale.to) + ' (' + main.schedule.capexScale.basis +
       '); the catalog\u2019s own lines ($' + fmt(main.schedule.capexScale.from) + ') are kept for their asset classes and scaled to it.');
     res.capexScale = main.schedule.capexScale;
+    if (c.host && !c.host.ppa && !(c.host.revenuePerYear > 0)) res.warnings.unshift({ code: 'HOST_NO_REVENUE', level: 'warn',
+      message: 'The host\u2019s system (' + money(c.host.capexTotal) + ') is in the capital with no revenue on record: enter the PPA on the site, or the system\u2019s revenue, for the IRR of the whole project.' });
   }
+  out.host = c.host && who !== 'lease' ? { solarKwDc: c.host.solarKwDc, bessKw: c.host.bessKw, bessKwh: c.host.bessKwh, capex: main.schedule.hostCapex, basis: c.host.basis,
+    ppa: c.host.ppa, revenuePerYear: c.host.ppa ? null : c.host.revenuePerYear, revenueBasis: c.host.ppa ? 'PPA' : c.host.revenueBasis, lines: main.schedule.capex.filter(function (l) { return l.host; }) } : null;
+  out.computeCapex = main.schedule.capexTotal - (main.schedule.hostCapex || 0);
   out.structure = { key: who, label: STRUCTURES[who] };
   out.deals = deals;
   out.schedule = { refreshYears: main.schedule.events, revenue: main.schedule.revenue, opex: main.schedule.opex, capex: main.schedule.capex };
@@ -1224,7 +1312,9 @@ function siteAssumptions(c, ctx, y1, y0, who, sch) {
     a.push('The ' + fmt(y1.battery.kw) + ' kW / ' + fmt(y1.battery.kwh) + ' kWh battery (' + c.battery.rtePct + '% round trip, ' + c.battery.dodPct +
       '% usable) holds a monthly demand target searched for the most value, charges in the cheapest hours with room, and fades ' + c.battery.fadePct + '% a year.');
   }
-  a.push('Electricity is the whole meter billed with the project less the building billed alone, on ' + ctx.tariff.label + '; it escalates ' +
+  a.push((ctx.load.source === 'none'
+    ? 'Electricity is the project\'s own meter billed on ' + ctx.tariff.label + ' (there is no building load on it)'
+    : 'Electricity is the whole meter billed with the project less the building billed alone, on ' + ctx.tariff.label) + '; it escalates ' +
     c.finance.utilityEscPct + '% a year. Surplus solar is not credited.');
   if (who === 'own') a.push('The project pays the operator\'s platform fee of ' + k.platformFeePct + '% of gross compute' +
     (c.deal.rentPerYear || c.deal.rentSharePct ? ' and the host ' + money(c.deal.rentPerYear) + ' a year' + (c.deal.rentSharePct ? ' plus ' + c.deal.rentSharePct + '% of gross compute' : '') : '') + '.');
@@ -1232,6 +1322,17 @@ function siteAssumptions(c, ctx, y1, y0, who, sch) {
     (c.deal.operatorPaysComputePower ? ', and pays for the compute\'s share of the added electricity' : '') + '.');
   a.push('Capital costs carry ' + c.deal.softCostPct + '% development and soft costs; GPU servers are 5-year MACRS, pods, make-ready and fiber 7-year, chargers ' +
     '5-year, a service upgrade 15-year; the battery and solar are energy property with their credit.');
+  if (c.host && who !== 'lease') {
+    var hs = [];
+    if (c.host.solarKwDc > 0) hs.push(fmt(c.host.solarKwDc) + ' kW-dc of solar');
+    if (c.host.bessKwh > 0) hs.push('a ' + fmt(c.host.bessKw) + ' kW / ' + fmt(c.host.bessKwh) + ' kWh battery');
+    a.push('The host\u2019s own system beside the compute (' + (hs.length ? listWords(hs) : 'its installation') + ') is in the project\u2019s capital at ' + money(c.host.capexTotal) +
+      (c.host.basis ? ' (' + c.host.basis + ')' : '') + ', on its own asset classes, with no soft cost added twice; ' +
+      (c.host.ppa ? 'it sells its solar under the PPA at $' + c.host.ppa.ratePerKwh + '/kWh in year one escalating ' + c.host.ppa.escPct + '% a year' + (c.host.ppa.termYears ? ' (' + c.host.ppa.termYears + '-year term)' : '') :
+        c.host.revenuePerYear > 0 ? 'its revenue is ' + money(c.host.revenuePerYear) + ' a year' + (c.host.revenueBasis ? ' (' + c.host.revenueBasis + ')' : '') + ', rising with inflation' :
+        'NO REVENUE is on record for it, so its cost is in the ask with nothing against it: enter the PPA on the site') +
+      '; its O&M is $' + c.battery.omPerKwhYear + '/kWh-yr on the battery and $' + c.solar.omPerKwYear + '/kW-yr on the solar. It is not dispatched against the compute: it is the host\u2019s.');
+  }
   return a;
 }
 

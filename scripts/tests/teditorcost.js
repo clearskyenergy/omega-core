@@ -29,7 +29,7 @@ assert.equal(r.totals.sub, 98289785); assert.equal(r.totals.total, 108118763.5);
 assert.equal(r.totals.low, 86118763.5); assert.ok(Math.abs(r.totals.high - 130118763.5) < 1e-6, 'the pod band is the only range'); count += 2;
 assert.equal(r.totals.itcBasis, 1417801, 'ITC on energy property only: never pods, gas turbines, the DC package'); count++;
 assert.equal(r.totals.costPerKW, 4750); assert.equal(r.totals.totalKW, 22760); count += 2;
-assert.deepEqual(r.flags, { bessBenchmark: false, solarBenchmark: true, computeBenchmark: true, genBenchmark: true, benchmarked: true }); count++;
+assert.deepEqual(r.flags, { bessBenchmark: false, solarBenchmark: true, computeBenchmark: true, genBenchmark: true, benchmarked: true, nextnrg: false }); count++;
 
 /* scope gate: an empty drawing totals nothing, whatever the sheet says */
 var e = EC.rollup({ sheet: { eng: 15000, perm: 3500, comm: 8500 }, counts: { pad: 3 } });
@@ -57,6 +57,14 @@ assert.equal(EC.pvRate(50), 3.25); assert.equal(EC.pvRate(5000), 1.55); assert.e
 /* ── the endpoint ──────────────────────────────────────────────────── */
 var ep = read('api/cost-rollup.js');
 assert.match(ep, /req\.method !== 'POST'/); assert.match(ep, /A\.authenticate\(req\)/); assert.match(ep, /caller\.orgId \|\| caller\.staff/); assert.match(ep, /EC\.rollup\(q\)/); count += 4;
+assert.match(ep, /q\.vendorOrg = caller\.orgId \|\| null;/, 'the caller\'s workspace is stamped on the request (a vendor prices its own products), never read off the body'); count++;
+/* NextNRG's solar + storage system at $6.00/W-DC installed (api/_lib/nextnrg.js SYSTEM_RATE; scripts/tests/tnextnrg.js holds the cases): the Run total and the ITC basis carry it, the record's lines name it */
+var nn = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 1000, kw: 250, cost: null } } }, counts: { pad: 1 }, sheet: {} });
+assert.equal(nn.totals.nextnrg, 2208000); assert.equal(nn.totals.bess, 0); assert.equal(nn.totals.solar, 0); assert.equal(nn.totals.noContingency, 2208000); count += 4;
+assert.equal(nn.totals.sub, 2208000 + 4800); assert.equal(nn.totals.cont, 480); assert.equal(nn.totals.total, 2208000 + 4800 + 480); assert.equal(nn.totals.itcBasis, 2208000 + 4800 * 1.1); assert.equal(nn.flags.nextnrg, true); count += 5;
+assert.equal(nn.totals.low, nn.totals.total); assert.equal(nn.totals.high, nn.totals.total); count += 2;
+var nnActual = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, sheet: { actualTotal: 2500000 } });
+assert.equal(nnActual.totals.total, 2500000, 'a contracted number still wins'); count++;
 
 /* ── the page: no table, a collector, a cached request, a renderer ─── */
 var ed = read('editor.html');
@@ -105,7 +113,7 @@ var cp = EC.rollup({ fleet: { units: 1, byModel: { 'GOTION-EDGE-760': { qty: 1, 
 assert.equal(cp.lines.bess.rows[0].perUnit, 84740, 'a catalog unit is priced at its catalog price'); assert.equal(cp.lines.bess.rows[0].catalog, true); assert.equal(cp.lines.bess.rows[0].missing, false); count += 3;
 assert.equal(cp.lines.bess.autoByKwh['760'], 84740); assert.equal(cp.lines.bess.configured[0].eq, 56354); assert.equal(cp.lines.bess.configured[1].eq, 50000, 'a typed cost wins'); count += 3;
 assert.ok(!/eqcost:\d/.test(ed), 'no unit price on the page\'s catalog'); count++;
-assert.match(ed, /catalogKey:k \}; \}\);/); assert.match(ed, /catalogKey:b\.catalogKey\|\|'' \}; \}\);/); count += 2;
+assert.match(ed, /catalogKey:k,\s*\/\*[^*]*\*\/\s*nextnrg: !!\(typeof BESS_CATALOG!=='undefined'/); assert.match(ed, /catalogKey:b\.catalogKey\|\|'' \}; \}\);/); count += 2;
 console.log('teditorcost (catalog prices): assertions added');
 
 /* ── solar is priced per kW-DC by MOUNT, on its own line, whatever else is
@@ -151,5 +159,5 @@ var ra = EC.rollup(qa), rs = EC.rollup(qs);
 assert.equal(ra.lines.solar.rows[0].mount, 'ground'); assert.equal(ra.lines.solar.rows[1].mount, 'canopy'); assert.equal(ra.lines.solar.rows[1].rate, 2.75); count += 3;
 assert.equal(ra.totals.solar, 324e3 * 1.55 + 176e3 * 2.75, 'the traced canopy priced as a canopy beside a ground array'); count++;
 assert.deepEqual(rs.lines.solar, ra.lines.solar, 'the Omega-Core skid changes nothing about the solar'); assert.equal(rs.totals.total, ra.totals.total, 'nor the Run total'); assert.equal(qs.dc.pods, 0); count += 3;
-assert.match(ed, /q\.solar=\{ byMount:\(typeof omegaSolarByMount==='function'\)\?omegaSolarByMount\(\):null \};/); assert.match(ed, /LN\.solar\.rows\|\|\[\]/); assert.match(ed, /_omRow\('Solar \$\/W'/); count += 3;
+assert.match(ed, /q\.solar=\{ byMount:\(typeof omegaSolarByMount==='function'\)\?omegaSolarByMount\(\):null,/); assert.match(ed, /LN\.solar\.rows\|\|\[\]/); assert.match(ed, /_omRow\('Solar \$\/W'/); count += 3;
 console.log('teditorcost (solar by mount): ' + count + ' assertions passed');

@@ -77,6 +77,15 @@
                        answer is stored under models/{id}, its figures on
                        the site as latestModel). The gate is the compute
                        pro forma's (Omega Compute / the tier).
+                       IT ALSO RUNS BY ITSELF (2026-10-13): whenever the
+                       Site Map design is read onto the site (a GET of the
+                       site, the register's Sync Site Map, the editor's own
+                       save) and the design is new or changed, the model
+                       runs on it with no one typing — the ZIP off the
+                       address, an Omega-Core skid on its own meter and
+                       its own numbers — once per design and per change of
+                       the site's facts; what stopped it is kept on the
+                       site as designModel. See designModel() below.
      site-model-bulk { ids, …the same }  at most 10 a call
      send-to-partner { ids, partner: 'terra', note? }
                        the site's facts, figures and links mailed to a
@@ -110,6 +119,10 @@
 var A = require('./_lib/admin'), C = require('./_lib/crm'), PF = require('./_lib/proforma');
 var I = require('./_lib/po-intake'), G = require('./_lib/site-agreement'), K = require('./_lib/site-kinds'), DR = require('./_lib/portfolio/design-read');
 var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA = require('./_lib/package-access'), CP = require('./compute-proforma'), DECK = require('./_lib/deck-brand');
+/* the Omega-Core skid's product record: its recorded price is what the pod
+   pro forma charges for a skid on the design (the Site Map cost run never
+   counts the skid: it is ClearSky's, on its own meter) */
+var OC = require('./_lib/omega-core');
 var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
 var PARTNER_DAILY_CAP = 25;
@@ -190,6 +203,12 @@ function siteInput(b) {
     serviceCapacityKw: optNum(b.serviceCapacityKw, 'Service capacity (kW)', 0, 100000000),
     existingPeakKw: optNum(b.existingPeakKw, 'Existing peak kW', 0, 100000000),
     powerPricePerKwh: optNum(b.powerPricePerKwh, 'Power price ($/kWh)', 0, 10),
+    /* the PPA the host's solar + storage is sold under (NextNRG's executed
+       PPA: rate in year one, escalator, term); the compute model prices the
+       host's system on it (api/_lib/site-model.js ppaOf) */
+    ppaRatePerKwh: optNum(b.ppaRatePerKwh, 'PPA rate ($/kWh)', 0, 5),
+    ppaEscalatorPct: optNum(b.ppaEscalatorPct, 'PPA escalator (%/yr)', -10, 20),
+    ppaTermYears: optNum(b.ppaTermYears, 'PPA term (years)', 0, 40),
     annualUsageKwh: optNum(b.annualUsageKwh, 'Annual usage (kWh)', 0, 1e15),
     monthlyUsageKwh: optMonthlyUsage(b.monthlyUsageKwh),
     usageNotes: C.text(b.usageNotes, 2000, 'Usage notes', { multiline: true }),
@@ -226,6 +245,9 @@ function siteView(id, s) {
     serviceCapacityKw: s.serviceCapacityKw == null ? null : Number(s.serviceCapacityKw),
     existingPeakKw: s.existingPeakKw == null ? null : Number(s.existingPeakKw),
     powerPricePerKwh: s.powerPricePerKwh == null ? null : Number(s.powerPricePerKwh),
+    ppaRatePerKwh: s.ppaRatePerKwh == null ? null : Number(s.ppaRatePerKwh),
+    ppaEscalatorPct: s.ppaEscalatorPct == null ? null : Number(s.ppaEscalatorPct),
+    ppaTermYears: s.ppaTermYears == null ? null : Number(s.ppaTermYears),
     annualUsageKwh: s.annualUsageKwh == null ? null : Number(s.annualUsageKwh),
     monthlyUsageKwh: Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh : null,
     usageNotes: s.usageNotes || null,
@@ -241,6 +263,8 @@ function siteView(id, s) {
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
     siteScopes: Array.isArray(s.siteScopes) ? s.siteScopes : [],
     latestDesign: s.latestDesign && typeof s.latestDesign === 'object' ? s.latestDesign : null,
+    /* what the automatic compute model did with the design last: ran (modelId), or what stopped it */
+    designModel: s.designModel && typeof s.designModel === 'object' ? s.designModel : null,
     createdAt: C.iso(s.createdAt), createdBy: s.createdBy || null,
     updatedAt: C.iso(s.updatedAt), updatedBy: s.updatedBy || null,
     source: s.source || null
@@ -402,11 +426,19 @@ var handler = A.handler(async function (req, res) {
     var live = got[2].docs.map(function (d) { return Object.assign({}, d.data() || {}, { id: d.id }); }).filter(function (x) { return x.uploadState === 'stored'; })
       .sort(function (x, y) { return C.millis(y.uploadedAt) - C.millis(x.uploadedAt); });
     /* the design first: what Site Map drew and ran, read off the linked
-       project so the page, the pro forma and the compute model see it */
-    try { await syncDesign(db, org, site, now); } catch (e) { console.error('[site-crm] design sync', e && e.message); }
+       project so the page, the pro forma and the compute model see it —
+       and the compute model on it, by itself, when the design is new */
+    var auto = null;
+    try { await syncDesign(db, org, site, now); auto = await designModel(db, org, site, { caller: caller, root: root, by: by }, now); }
+    catch (e) { console.error('[site-crm] design sync', e && e.message); }
     var siteOut = siteView(sid, site.data); await capitalJoin(db, [siteOut]);
+    var dsgOut = siteOut.latestDesign;
     return {
       site: siteOut,
+      /* the Omega-Core skid's facts for a page whose design carries one: the product record's, never a page's own */
+      skid: dsgOut && dsgOut.compute && dsgOut.compute.omegaCoreUnits > 0 ? SM.skidFacts() : null,
+      autoModel: auto && auto.ran ? { modelId: auto.ran.modelId, latestModel: auto.ran.summary } : null,
+      autoProforma: auto && auto.proforma && auto.proforma.ran ? auto.proforma.ran : null,
       contacts: contacts,
       activity: activityRaw.map(function (a) { return siteActivityView(a.id, a, contactNames); }),
       followUps: got[3].docs.map(function (d) { return siteFollowUpView(d.data() || {}, site.data.name || '', contactNames); }).sort(C.byDue),
@@ -524,16 +556,24 @@ var handler = A.handler(async function (req, res) {
        two drawings of one site. */
     /* ── read the Site Map design onto each site ───────────────────────── */
     if (action === 'design-sync') {
-      var syncedD = [], noProject = [], batchD = db.batch();
+      var syncedD = [], noProject = [], batchD = db.batch(), modelled = [], stopped = [], ctxD = { caller: caller, root: root, by: by }, srcD = b.source === 'editor' ? 'editor' : 'register';
       for (var di = 0; di < rows.length; di++) {
         if (!rows[di].data.projectId) { noProject.push(rows[di].id); continue; }
         var dsg = await syncDesign(db, org, rows[di], now);
-        syncedD.push({ siteId: rows[di].id, design: dsg });
-        batchD.create(db.collection('omega_audit').doc(), { action: 'sitecrm-design-sync', orgId: org, siteId: rows[di].id, by: by, at: now, projectId: rows[di].data.projectId, hash: dsg ? dsg.hash : null });
+        /* the compute model on the design, by itself: a year of hourly
+           dispatch and a finance run each, so at most MODEL_BULK_CAP a call;
+           the rest run on their next open or the next sync */
+        var dmr = modelled.length < MODEL_BULK_CAP ? await designModel(db, org, rows[di], ctxD, now) : null;
+        if (dmr && dmr.ran) modelled.push({ siteId: rows[di].id, modelId: dmr.ran.modelId, latestModel: dmr.ran.summary });
+        else if (dmr && dmr.skipped && dmr.skipped !== 'no-access') stopped.push({ siteId: rows[di].id, name: rows[di].data.name || '', why: dmr.missing ? dmr.missing.join('; ') : dmr.error || dmr.skipped });
+        syncedD.push({ siteId: rows[di].id, design: dsg, model: dmr && dmr.ran ? dmr.ran.summary : null });
+        batchD.create(db.collection('omega_audit').doc(), { action: 'sitecrm-design-sync', orgId: org, siteId: rows[di].id, by: by, at: now, projectId: rows[di].data.projectId, hash: dsg ? dsg.hash : null, source: srcD, modelId: dmr && dmr.ran ? dmr.ran.modelId : null });
       }
       if (syncedD.length) await batchD.commit();
-      return { ok: true, synced: syncedD.length, noProject: noProject.length, designs: syncedD,
-        note: syncedD.length + ' site(s) read from Site Map' + (noProject.length ? '; ' + noProject.length + ' not designed yet' : '') + '.' };
+      return { ok: true, synced: syncedD.length, noProject: noProject.length, designs: syncedD, modelled: modelled, stopped: stopped,
+        note: syncedD.length + ' site(s) read from Site Map' + (modelled.length ? '; the compute model ran on ' + modelled.length : '') +
+          (stopped.length ? '; ' + stopped.length + ' could not be modelled: ' + stopped.slice(0, 3).map(function (f) { return (f.name || f.siteId) + ' (' + f.why + ')'; }).join('; ') : '') +
+          (noProject.length ? '; ' + noProject.length + ' not designed yet' : '') + '.' };
     }
 
     if (action === 'send-to-editor') {
@@ -800,7 +840,16 @@ async function runScenario(db, org, site, b, by, now) {
     if (fromDesign) {
       if (!(dsn && dsn.compute && dsn.compute.units > 0)) throw A.httpError(400, 'No compute units on the Site Map design yet: place the pods or skids in Site Map, save, and come back.');
       runInput.pods = dsn.compute.units; sizing = false;
-      if (dsn.capex > 0 && dsn.capexSource === 'site-map' && b.useDesignCapex !== false) { runInput.capexTotal = dsn.capex; runInput.capexBasis = 'Site Map cost run' + (dsn.capexAt ? ' of ' + String(dsn.capexAt).slice(0, 10) : ''); }
+      var skids = dsn.compute.omegaCoreUnits > 0 ? dsn.compute.omegaCoreUnits : 0, plainPods = dsn.compute.units - skids;
+      var ranCost = dsn.capex > 0 && dsn.capexSource === 'site-map' ? dsn.capex : 0, costRunLabel = 'Site Map cost run' + (dsn.capexAt ? ' of ' + String(dsn.capexAt).slice(0, 10) : '');
+      if (b.useDesignCapex !== false && skids) {
+        /* THE SKID'S PRICE (2026-10-13): an Omega-Core skid is ClearSky's, on
+           its own meter, and the Site Map cost run never counts it
+           (api/_lib/editor-cost.js), so its capital is the skid as recorded;
+           the host's cost run stands only for the plain pods beside it. */
+        runInput.capexTotal = skids * OC.PRODUCT.systemCostUsd + (plainPods > 0 ? ranCost : 0);
+        runInput.capexBasis = skids + ' Omega-Core skid' + (skids === 1 ? '' : 's') + ' as recorded ($' + OC.PRODUCT.systemCostUsd.toLocaleString('en-US') + ' each)' + (plainPods > 0 && ranCost ? ' + ' + costRunLabel : '');
+      } else if (b.useDesignCapex !== false && ranCost) { runInput.capexTotal = ranCost; runInput.capexBasis = costRunLabel; }
       runInput.designAt = dsn.at || null; runInput.designHash = dsn.hash || null;
     }
     if (sizing) {
@@ -817,9 +866,13 @@ async function runScenario(db, org, site, b, by, now) {
   var sref = site.ref.collection('proforma').doc(scen.scenarioId), lp = latestOf(scen);
   await db.runTransaction(async function (tx) {
     tx.create(sref, scen);
-    tx.update(site.ref, { latestProforma: lp, updatedAt: now, updatedBy: by });
-    audit(tx, db, 'sitecrm-proforma-run', org, site.id, by, now, { scenarioId: scen.scenarioId, pods: scen.inputs.pods, assumptionVersion: scen.assumptionVersion });
+    /* the system's own run on the design never bumps updatedAt / updatedBy:
+       that is a person editing the facts (and what the compute model reads
+       as a fact change) */
+    tx.update(site.ref, b.auto === true ? { latestProforma: lp } : { latestProforma: lp, updatedAt: now, updatedBy: by });
+    audit(tx, db, 'sitecrm-proforma-run', org, site.id, by, now, { scenarioId: scen.scenarioId, pods: scen.inputs.pods, assumptionVersion: scen.assumptionVersion, auto: b.auto === true, designHash: lp.designHash });
   });
+  if (site.data) site.data.latestProforma = lp;
   return { scenario: scen, latestProforma: lp };
 }
 function latestOf(scen) {
@@ -833,7 +886,8 @@ function latestOf(scen) {
     paybackMonth: r.paybackMonth == null ? null : r.paybackMonth, investorCapital: r.investorCapital == null ? null : r.investorCapital,
     year1Revenue: r.year1Revenue == null ? null : r.year1Revenue, months: r.months || null,
     assumptionVersion: scen.assumptionVersion, label: scen.inputs && scen.inputs.label || '', at: scen.createdAt,
-    capexBasis: r.capexBasis || null, designAt: scen.inputs && scen.inputs.designAt || null };
+    capexBasis: r.capexBasis || null, designAt: scen.inputs && scen.inputs.designAt || null, designHash: scen.inputs && scen.inputs.designHash || null,
+    convention: '60 operating months, pre-tax, unlevered, no exit value: the pod case' };
 }
 
 /* ── the design: what the linked Site Map project says, kept on the site ──
@@ -855,6 +909,62 @@ async function syncDesign(db, org, site, now) {
   await site.ref.update({ latestDesign: d });
   site.data.latestDesign = d;
   return d;
+}
+/* ── THE MODEL FOLLOWS THE DESIGN (2026-10-13) ─────────────────────────────
+   Tommy: "all the data based on the site zipcode, the map that we made,
+   those details should auto input into the compute site pro forma and that
+   should produce an accurate IRR; I don't want to have to open up the site
+   and input the details … as much as actually possible is done for the
+   user from the drawing and our tools". After the design is read, the
+   compute model runs on it BY ITSELF: once per design (its hash) and per
+   change of the site's facts, when the record maps (api/_lib/site-model.js:
+   the ZIP read off the address; an Omega-Core skid on its own meter needs
+   nothing more) and the workspace holds Omega Compute (the model's own
+   gate; a workspace without it is simply not modelled: no error, no
+   record). What stopped it is kept on the site as designModel (the facts
+   missing, or the engine's refusal) so the page can say so and the same
+   open does not try again; a changed fact or a changed design does. The
+   run is the system reading the design, recorded as such (auto: true)
+   under the person whose open or sync set it off. */
+async function designModel(db, org, site, ctx, now) {
+  var d = site.data && site.data.latestDesign; if (!d || !d.hash) return null;
+  /* the pod pro forma follows the design too (2026-10-14; Topanga's pod
+     block read 0.43% on a $2.1M assumption-set pod a day after the skid was
+     priced as recorded): once per design, on the units placed and the
+     skid's recorded price, so the two IRRs are judged on the same capital */
+  var pf = await designProforma(db, org, site, ctx.by, now, d);
+  var lm = site.data.latestModel, dm = site.data.designModel, factsAt = C.iso(site.data.updatedAt) || null;
+  if (lm && lm.designHash === d.hash) return pf ? { proforma: pf } : null;
+  if (dm && dm.hash === d.hash && dm.factsAt === factsAt) return { skipped: dm.missing ? 'missing' : dm.error ? 'error' : 'done', missing: dm.missing || null, error: dm.error || null, repeat: true };
+  try { await computeAccess(ctx.caller, org, ctx.root); } catch (e) { return { skipped: 'no-access' }; }
+  var orgDoc = await ctx.root.get(), orgName = orgDoc.exists ? ((orgDoc.data() || {}).name || org) : org;
+  var mapped = SM.inputFor(site.data || {}, {}, { orgName: orgName }), rec;
+  if (!mapped.ok) {
+    rec = { hash: d.hash, factsAt: factsAt, at: now, missing: mapped.missing };
+    await site.ref.update({ designModel: rec }); site.data.designModel = rec;
+    return { skipped: 'missing', missing: mapped.missing };
+  }
+  try {
+    var ran = await runModel(db, org, site, { label: 'Site Map design', auto: true }, ctx.by, now, orgName);
+    rec = { hash: d.hash, factsAt: factsAt, at: now, modelId: ran.modelId };
+    await site.ref.update({ designModel: rec }); site.data.designModel = rec;
+    return { ran: ran, proforma: pf };
+  } catch (e) {
+    rec = { hash: d.hash, factsAt: factsAt, at: now, error: String(e && e.message || e).slice(0, 300) };
+    await site.ref.update({ designModel: rec }); site.data.designModel = rec;
+    return { skipped: 'error', error: rec.error };
+  }
+}
+/* The pod pro forma on the design, by itself: the units placed (the skid
+   as recorded), once per design (latestProforma.designHash). A design with
+   no compute units has no pod case. Never throws: what stopped it is the
+   answer. */
+async function designProforma(db, org, site, by, now, d) {
+  if (!(d && d.compute && d.compute.units > 0)) return null;
+  var lp = site.data && site.data.latestProforma;
+  if (lp && lp.designHash === d.hash) return null;
+  try { var r = await runScenario(db, org, site, { fromDesign: true, label: 'Site Map design', auto: true }, by, now); return { ran: r.latestProforma }; }
+  catch (e) { return { error: String(e && e.message || e).slice(0, 300) }; }
 }
 function proformaLine(lp) {
   var irr = lp.investorIrrDefined && lp.investorIrrAnnual != null ? (lp.investorIrrAnnual * 100).toFixed(2) + '%' : 'not defined';
@@ -886,9 +996,14 @@ async function runModel(db, org, site, b, by, now, orgName) {
   try { result = CS.model(mapped.input); } catch (e) { throw A.httpError(500, 'The compute model could not run: ' + e.message); }
   if (!result || result.ok === false) throw A.httpError(400, 'The compute model refused the site: ' + (result && result.errors || []).map(function (x) { return x.message; }).join(' '));
   var label = C.text(b.label, 120, 'Label'), mref = site.ref.collection('models').doc(C.newId('m_'));
-  var summary = SM.summaryOf(result, mapped.input, { modelId: mref.id, at: now, by: by, label: label });
+  /* the design this run stands on (its hash), so the automatic run knows a
+     design it has already modelled; auto marks the system's own run */
+  var dsnM = over.useDesign !== false && site.data && site.data.latestDesign && mapped.basis && mapped.basis.design ? site.data.latestDesign : null;
+  var summary = SM.summaryOf(result, mapped.input, { modelId: mref.id, at: now, by: by, label: label, designHash: dsnM ? dsnM.hash : null, auto: b.auto === true });
   var facts = { latestModel: summary, updatedAt: now, updatedBy: by };
   if (over.zip && optZip(over.zip)) facts.zip = optZip(over.zip);
+  /* a ZIP the run read off the address is kept as the site's, so nobody types what the address already said */
+  else if (!(site.data && site.data.zip) && mapped.input.site && /^\d{5}$/.test(String(mapped.input.site.zip || ''))) facts.zip = mapped.input.site.zip;
   if (over.hostType && SM.HOST_TYPES.indexOf(over.hostType) >= 0) facts.hostType = over.hostType;
   /* the register's versioned result (site_results, kind finance, scenario sc_compute): what a finance package snapshots and what a later bill, map, agreement or power change marks stale */
   var resRef = db.collection('omega_orgs').doc(org).collection('site_results').doc('res_compute_' + site.id), prevRes = await resRef.get();
@@ -899,8 +1014,10 @@ async function runModel(db, org, site, b, by, now, orgName) {
     tx.create(mref, { orgId: org, siteId: site.id, input: mapped.input, basis: mapped.basis, result: result, summary: summary, label: label, createdAt: now, createdBy: by });
     tx.set(resRef, resRec);
     tx.update(site.ref, facts);
-    audit(tx, db, 'sitecrm-site-model', org, site.id, by, now, { modelId: mref.id, pods: summary.pods, structure: summary.structure, irr: summary.irr, totalProjectCost: summary.totalProjectCost });
+    audit(tx, db, 'sitecrm-site-model', org, site.id, by, now, { modelId: mref.id, pods: summary.pods, structure: summary.structure, irr: summary.irr, totalProjectCost: summary.totalProjectCost, auto: b.auto === true, designHash: summary.designHash });
   });
+  /* the record in hand follows the write, so a page answered in the same request sees the run */
+  if (site.data) Object.keys(facts).forEach(function (k) { site.data[k] = facts[k]; });
   return { modelId: mref.id, summary: summary, result: result, basis: mapped.basis };
 }
 function modelLine(lm) {
