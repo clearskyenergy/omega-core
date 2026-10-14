@@ -999,7 +999,7 @@ async function runModel(db, org, site, b, by, now, orgName) {
   /* the design this run stands on (its hash), so the automatic run knows a
      design it has already modelled; auto marks the system's own run */
   var dsnM = over.useDesign !== false && site.data && site.data.latestDesign && mapped.basis && mapped.basis.design ? site.data.latestDesign : null;
-  var summary = SM.summaryOf(result, mapped.input, { modelId: mref.id, at: now, by: by, label: label, designHash: dsnM ? dsnM.hash : null, auto: b.auto === true });
+  var summary = SM.summaryOf(result, mapped.input, { modelId: mref.id, at: now, by: by, label: label, designHash: dsnM ? dsnM.hash : null, auto: b.auto === true, uplift: SM.upliftOf(mapped.input, result) });
   var facts = { latestModel: summary, updatedAt: now, updatedBy: by };
   if (over.zip && optZip(over.zip)) facts.zip = optZip(over.zip);
   /* a ZIP the run read off the address is kept as the site's, so nobody types what the address already said */

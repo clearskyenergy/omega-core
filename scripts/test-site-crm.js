@@ -728,6 +728,10 @@ function seed() {
     assert.equal(st3.result.proforma.inputs.revenue.ppa.rate1, 0.225); assert.ok(st3.result.proforma.rows[0].ppaRevenue > 100000, 'the PPA earns on the solar the engine generates: ' + st3.result.proforma.rows[0].ppaRevenue);
     assert.ok(lm3.totalProjectCost >= lm3.computeCapex + 2300000 && lm3.totalProjectCost < (lm3.computeCapex + 2300000) * 1.05); assert.ok(lm3.irr > 0.02, 'the whole project\u2019s IRR with the PPA: ' + lm3.irr);
     assert.equal(require('../api/_lib/site-model').askOf(withPpa.site).amount, lm3.totalProjectCost, 'the capital request is the whole project');
+    /* what the skid adds (2026-10-14): the host alone, the skid alone, the whole, from the same engine on the same facts */
+    assert.ok(lm3.uplift && lm3.uplift.hostAlone && lm3.uplift.skidAlone && lm3.uplift.whole, 'the summary carries the three cases: ' + JSON.stringify(lm3.uplift));
+    assert.ok(lm3.uplift.hostAlone.irr < lm3.uplift.whole.irr && lm3.uplift.whole.irr < lm3.uplift.skidAlone.irr, 'the whole sits between the host alone and the skid alone: ' + JSON.stringify(lm3.uplift));
+    assert.equal(lm3.uplift.whole.irr, lm3.irr, 'the whole is the headline'); assert.ok(lm3.uplift.hostAlone.capital < lm3.totalProjectCost && lm3.uplift.skidAlone.capital < lm3.totalProjectCost);
     var regRow = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
     assert.equal(regRow.latestModel.totalProjectCost, lm3.totalProjectCost); assert.equal(regRow.latestModel.host.capex, 2300000);
     var n2 = audits('sitecrm-site-model').length; await call('GET', { site: made.id }, PM);
