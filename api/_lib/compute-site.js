@@ -929,6 +929,29 @@ function engineInputs(c, ctx, y1, sch, who) {
   return inp;
 }
 
+/* The terminal value of the host's PPA assets at the end of the term: the
+   PPA's remaining years of revenue less the host's O&M, discounted back to
+   year N at the model's rate. Null when there is no host PPA, the PPA ends
+   within the term, or the remainder is worth nothing. */
+function hostTerminalValue(c, who, inp, res, sch) {
+  var H = who !== 'lease' ? c.host : null, N = c.finance.years;
+  if (!H || !H.ppa || !(H.ppa.termYears > N) || !res || !res.rows || !res.rows[0]) return null;
+  var ppa1 = +res.rows[0].ppaRevenue || 0; if (!(ppa1 > 0)) return null;
+  var deg = (inp.solar && inp.solar.degradationPct != null ? +inp.solar.degradationPct : 0.5) / 100;
+  var esc = H.ppa.escPct / 100, inf = c.finance.inflationPct / 100, d = c.finance.discountPct / 100;
+  var omLine = sch.opex.filter(function (l) { return l.id === 'hostom'; })[0], omN = omLine ? +omLine.schedule[N - 1] || 0 : 0;
+  var M = Math.floor(H.ppa.termYears) - N, pv = 0;
+  for (var k = 1; k <= M; k++) {
+    var t = N + k, f = Math.max(0, 1 - deg * (t - 1));
+    var rev = ppa1 * f * Math.pow(1 + esc, t - 1), om = omN * Math.pow(1 + inf, k);
+    pv += (rev - om) / Math.pow(1 + d, k);
+  }
+  if (!(pv > 0)) return null;
+  var schedule = []; for (var i = 0; i < N; i++) schedule.push(i === N - 1 ? Math.round(pv) : 0);
+  return { amount: Math.round(pv), year: N, yearsLeft: M, discountPct: c.finance.discountPct,
+           line: { id: 'hostterminal', label: 'Host system terminal value: the PPA\u2019s remaining ' + M + ' years after year ' + N + ', less O&M, discounted at ' + c.finance.discountPct + '%', schedule: schedule } };
+}
+
 /* A structure's returns: the engine's whole result, or for a lease with no
    capital, the value of the rent. */
 function finance(c, ctx, y1, y0, who, full) {
@@ -947,6 +970,20 @@ function finance(c, ctx, y1, y0, who, full) {
   var inp = engineInputs(c, ctx, y1, sch, who);
   var res = PF.run(inp);
   if (!res.ok) return { who: who, error: true, errors: res.errors, schedule: sch, inputs: inp };
+  /* The host's solar and storage outlive the compute's term: what the PPA
+     still pays after year N is a terminal value at year N (2026-10-14,
+     Tommy: the whole-project IRR "should improve from having the compute
+     there"; it read the skid's ten years against a 28-year PPA cut off at
+     ten). Priced off the engine's own year-one PPA revenue, with the same
+     degradation and escalator it ran, less the host's O&M, discounted at
+     the model's rate; taken as income in year N, so it is taxed. The
+     engine runs once more with the line in. */
+  var tv = hostTerminalValue(c, who, inp, res, sch);
+  if (tv) {
+    sch.revenue.push(tv.line); sch.hostTerminal = tv;
+    inp = engineInputs(c, ctx, y1, sch, who); res = PF.run(inp);
+    if (!res.ok) return { who: who, error: true, errors: res.errors, schedule: sch, inputs: inp };
+  }
   return { who: who, capital: sch.capexTotal, equity: res.sourcesUses.equity, irr: res.metrics.afterTaxIrr, npv: res.metrics.npv,
            payback: res.metrics.paybackYears, noi1: res.rows[0].ebitda, schedule: sch, inputs: inp, result: full ? res : null };
 }
@@ -1214,11 +1251,14 @@ function model(input) {
     if (main.schedule.capexScale) res.assumptions.unshift('Project cost is the Site Map cost run, $' + fmt(main.schedule.capexScale.to) + ' (' + main.schedule.capexScale.basis +
       '); the catalog\u2019s own lines ($' + fmt(main.schedule.capexScale.from) + ') are kept for their asset classes and scaled to it.');
     res.capexScale = main.schedule.capexScale;
+    if (main.schedule.hostTerminal) res.assumptions.unshift('The host\u2019s solar and storage outlive the ' + c.finance.years + '-year term: the PPA\u2019s remaining ' + main.schedule.hostTerminal.yearsLeft +
+      ' years of revenue less O&M, discounted at ' + main.schedule.hostTerminal.discountPct + '%, are a terminal value of ' + money(main.schedule.hostTerminal.amount) + ' taken as income in year ' + main.schedule.hostTerminal.year + '.');
     if (c.host && !c.host.ppa && !(c.host.revenuePerYear > 0)) res.warnings.unshift({ code: 'HOST_NO_REVENUE', level: 'warn',
       message: 'The host\u2019s system (' + money(c.host.capexTotal) + ') is in the capital with no revenue on record: enter the PPA on the site, or the system\u2019s revenue, for the IRR of the whole project.' });
   }
   out.host = c.host && who !== 'lease' ? { solarKwDc: c.host.solarKwDc, bessKw: c.host.bessKw, bessKwh: c.host.bessKwh, capex: main.schedule.hostCapex, basis: c.host.basis,
-    ppa: c.host.ppa, revenuePerYear: c.host.ppa ? null : c.host.revenuePerYear, revenueBasis: c.host.ppa ? 'PPA' : c.host.revenueBasis, lines: main.schedule.capex.filter(function (l) { return l.host; }) } : null;
+    ppa: c.host.ppa, revenuePerYear: c.host.ppa ? null : c.host.revenuePerYear, revenueBasis: c.host.ppa ? 'PPA' : c.host.revenueBasis, lines: main.schedule.capex.filter(function (l) { return l.host; }),
+    terminalValue: main.schedule.hostTerminal ? { amount: main.schedule.hostTerminal.amount, year: main.schedule.hostTerminal.year, yearsLeft: main.schedule.hostTerminal.yearsLeft } : null } : null;
   out.computeCapex = main.schedule.capexTotal - (main.schedule.hostCapex || 0);
   out.structure = { key: who, label: STRUCTURES[who] };
   out.deals = deals;
