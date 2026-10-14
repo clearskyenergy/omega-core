@@ -221,7 +221,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function capitalFact(s) {
     var lm = s.latestModel, cap = s.capital;
     var v = cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap && cap.status && cap.status !== 'missing' ? '<span class="pill pill-ok">' + esc(cap.status === 'draft' ? 'Draft deal' : 'On the marketplace') + '</span>' : lm && lm.totalProjectCost > 0 ? esc(money(lm.totalProjectCost, true)) : notProvided();
-    var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) + (lm.auto ? ' \u00b7 from the design' : '') : s.designModel && s.designModel.missing ? 'the model needs what the design card names' : s.latestDesign ? 'runs by itself from the design' : 'run the compute model';
+    var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) + (lm.auto ? ' \u00b7 from the design' : '') + (lm.host && lm.host.noRevenue ? ' \u00b7 <b style="color:#B45309">the host\u2019s system has no revenue on record: enter the PPA</b>' : '') : s.designModel && s.designModel.missing ? 'the model needs what the design card names' : s.latestDesign ? 'runs by itself from the design' : 'run the compute model';
     return '<div class="fact"><div class="k">Capital</div><div class="v">' + v + '</div><div class="n">' + n + '</div></div>';
   }
   /* ── overview ── */
@@ -320,7 +320,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function skidOnly(s) { var c = s && s.latestDesign && s.latestDesign.compute; return !!(c && c.omegaCoreUnits > 0 && c.omegaCoreUnits === c.units && DATA && DATA.skid); }
   function designRunWords(s) {
     var d = s.latestDesign, c = d.compute || {}, sk = DATA && DATA.skid;
-    if (skidOnly(s)) return 'The compute model runs on this design by itself: the ' + c.units + ' Omega-Core skid' + (c.units === 1 ? '' : 's') + ' on its own meter and its own numbers (the skid as recorded, ' + money(sk.systemCostUsd) + ' with the controller built in, its ' + esc(sk.battery.model) + ', its GPUs at the public spot reference), the ZIP read from the address; the host\u2019s battery, solar and cost run are the host\u2019s own project beside it. The pod pro forma prices the skid as recorded.';
+    if (skidOnly(s)) return 'The compute model runs on this design by itself: the ' + c.units + ' Omega-Core skid' + (c.units === 1 ? '' : 's') + ' on its own meter and its own numbers (the skid as recorded, ' + money(sk.systemCostUsd) + ' with the controller built in, its ' + esc(sk.battery.model) + ', its GPUs at the public spot reference), the ZIP read from the address, with the host\u2019s battery, solar and cost run IN the case as money: the whole project\u2019s ask and IRR. The pod pro forma prices the skid as recorded, alone.';
     return 'The compute model runs on this design by itself (the units placed, the chargers, the battery, the solar' + (d.capex != null ? ', the cost run\u2019s ' + money(d.capex) : '') + '; the ZIP is read from the address)' + (c.omegaCoreUnits ? '; its ' + c.omegaCoreUnits + ' Omega-Core skid' + (c.omegaCoreUnits === 1 ? ' is' : 's are') + ' on its own meter and not in it' : '') + '. The pod pro forma runs on the ' + (c.units || 0) + ' unit' + (c.units === 1 ? '' : 's') + ' placed' + (d.capex != null ? ' and the cost run' : '') + '. Size from power, or type a pod count, to model something else.';
   }
   function designModelWords(s) {
@@ -731,19 +731,40 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       sel('md-structure', 'Structure', [['own', 'Own and operate'], ['infra', 'Own the power and pod layer'], ['lease', 'Lease the power']], lm && lm.structure || 'own') +
       sel('md-host', 'Host', [['multifamily', 'Multifamily'], ['commercial', 'Office / workplace'], ['retail', 'Retail'], ['industrial', 'Industrial']], s.hostType || (lm && lm.hostType) || 'multifamily') +
       (CANEDIT ? '<button class="btn" id="md-run">Run the compute model</button>' : '') + '</div>' +
-      (dsg ? '<div class="li-meta" style="margin-top:6px"><span class="pill pill-ok">Site Map design</span> ' + esc(designShort(dsg)) + ' \u2014 ' + (skid ? 'the skid\u2019s own case; the host\u2019s battery, solar and cost run are the host\u2019s project beside it.' : 'the model takes the chargers, the battery, the solar' + (dsg.capex != null ? ' and the cost run' : '') + ' from it.') + '</div>' : '') +
+      (dsg ? '<div class="li-meta" style="margin-top:6px"><span class="pill pill-ok">Site Map design</span> ' + esc(designShort(dsg)) + ' \u2014 ' + (skid ? 'the skid and the host\u2019s system together: the host\u2019s battery, solar and cost run are in the case as money, the whole project\u2019s ask.' : 'the model takes the chargers, the battery, the solar' + (dsg.capex != null ? ' and the cost run' : '') + ' from it.') + '</div>' : '') +
       '<div class="li-meta" id="md-basis">' + (lm ? 'Last run ' + esc(String(lm.at || '').slice(0, 10)) + (lm.auto ? ' \u00b7 by itself, from the Site Map design' : '') + (lm.label && !lm.auto ? ' · ' + esc(lm.label) : '') + ' · ' + esc(lm.gpuName || '') + ' · ' + esc(lm.structureLabel || '') : 'Not run yet.') + '</div></div>';
+  }
+  /* What the model still needs from the client, said on the page that
+     shows the number (Tommy, 2026-10-14: "if there are things that the
+     client needs to input then it needs to tell them that"): the PPA when
+     the host's system is in the capital with no revenue, and whatever the
+     design run named as missing. Each with the way to enter it. */
+  function needsFromYou(s) {
+    var lm = s.latestModel, items = [];
+    if (lm && lm.host && lm.host.noRevenue) items.push('<b>The PPA.</b> The host\u2019s system (' + money(lm.host.capex) + ' of solar and storage) is in the capital with no income against it, so the IRR of the whole project is understated until the PPA\u2019s rate, escalator and term are on the record.' + (CANEDIT ? ' <button class="btn" type="button" data-need="ppa">Enter the PPA</button>' : ' Ask an administrator of this workspace to enter it.'));
+    if (s.designModel && s.designModel.missing && s.designModel.missing.length) items.push('<b>For the model to run on the design:</b> ' + esc(s.designModel.missing.join('; ')) + '.' + (CANEDIT ? ' <button class="btn" type="button" data-need="facts">Edit site facts</button>' : ''));
+    if (!items.length) return '';
+    return '<div class="assume" id="needs-from-you" style="border-color:#B45309;margin-bottom:10px"><div style="font-weight:700;margin-bottom:4px">What this model still needs from you</div>' + items.map(function (t) { return '<div style="margin:4px 0">' + t + '</div>'; }).join('') + '</div>';
+  }
+  function wireNeeds() {
+    Array.prototype.forEach.call(document.querySelectorAll('#needs-from-you [data-need]'), function (b) {
+      b.addEventListener('click', function () {
+        showTab('overview');
+        var f = document.getElementById(b.getAttribute('data-need') === 'ppa' ? 'ef-ppaRatePerKwh' : 'ef-name');
+        if (f) { try { f.scrollIntoView({ block: 'center' }); } catch (e) {} f.focus(); }
+      });
+    });
   }
   function resultsCard(s) {
     var lm = s.latestModel; if (!lm) return '';
-    var v = lm.verdict || {}, h = '<div class="card" id="results-card"><h3>Headline returns <span class="li-meta">' + esc(lm.structureLabel || '') + ' · ' + (lm.levered ? 'levered' : '100% equity, unlevered') + '</span></h3>';
+    var v = lm.verdict || {}, h = '<div class="card" id="results-card"><h3>Headline returns <span class="li-meta">' + esc(lm.structureLabel || '') + ' · ' + (lm.levered ? 'levered' : '100% equity, unlevered') + '</span></h3>' + needsFromYou(s);
     if (lm.irr == null) h += '<div class="li-body">No capital is invested under this structure, so there is no IRR. Choose Own or the pod layer above for the full pro forma.</div>';
     else h += '<div class="kpis">' + kpi(money(lm.equity), lm.levered ? 'equity sought<br>beside ' + money(lm.debt) + ' of debt' : 'total investment sought<br>100% equity') +
       kpi(irrPct(lm.irr), 'after-tax ' + (lm.levered ? 'equity' : 'unlevered') + ' IRR<br>over the ' + esc(lm.termYears || 10) + '-year term', lm.irr > 0.1 ? 'good' : lm.irr < 0 ? 'warn' : '') +
       kpi(money(lm.totalReturns), 'total investor returns<br>over the life of the project') + kpi(lm.paybackYears == null ? 'n/a' : '~' + Number(lm.paybackYears).toFixed(1) + ' yr', 'after-tax payback') + '</div>';
     h += '<div class="cap-state"><span class="pill ' + (v.tone === 'ok' ? 'pill-ok' : v.tone === 'warn' ? 'pill-warn' : 'pill-unk') + '">' + esc(v.label || 'No verdict') + '</span>' + (v.gate ? '<span class="li-meta">Next: ' + esc(v.gate) + '</span>' : '') + '</div>';
     var deals = lm.deals || {};
-    h += '<table class="deals"><tr><th>Structure</th><th>Capital</th><th>Equity</th><th>IRR</th><th>NPV</th><th>Payback</th><th>Year 1</th></tr>' +
+    h += '<table class="deals"><tr><th>Structure</th><th>Capital</th><th>Equity</th><th>IRR</th><th>NPV</th><th>Payback</th><th title="Year-one net operating income: revenue less operating cost, before tax and capital">Year 1 NOI</th></tr>' +
       Object.keys(deals).map(function (k) { var d = deals[k]; return '<tr class="' + (k === lm.structure ? 'on' : '') + '"><td>' + esc(d.label) + '</td><td>' + money(d.capital, false) + '</td><td>' + (d.equity == null ? '—' : money(d.equity, false)) + '</td><td>' + irrPct(d.irr) + '</td><td>' + (d.npv == null ? '—' : money(d.npv, false)) + '</td><td>' + (d.payback == null ? '—' : d.payback + ' yr') + '</td><td>' + money(d.year1, false) + '</td></tr>'; }).join('') + '</table>' +
       '<div class="assume">Screening results from the Compute Site Pro Forma under the site’s facts and the model’s published and planning figures; confidence <b>' + esc(lm.confidence || 'n/a') + '</b>. Not a return promise.</div>' +
       '<div id="model-basis"></div></div>';
@@ -789,7 +810,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function renderDeck() {
     var s = DATA.site;
     document.getElementById('pane-deck').innerHTML = capitalCard(s) + terraCard(s) + packageCard(s) + modelForm(s) + resultsCard(s) + deckCard(s);
-    wirePackage(); wireTerra();
+    wirePackage(); wireTerra(); wireNeeds();
     var send = document.getElementById('cap-send');
     if (send) send.addEventListener('click', function () {
       if (!confirm('Send this site to the finance marketplace? It is listed OPEN to approved capital partners with the total project cost as the ask.')) return;
