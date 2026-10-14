@@ -25,7 +25,14 @@ var rules = read('firestore.rules').replace(/\/\*[\s\S]*?\*\//g, '');
 ok('isAdmin() still judges staff by the verified email, never the claim', /function isAdmin\(\)[\s\S]*?email_verified[\s\S]*?clearsky-usa\[\.\]com/.test(rules) && !/function isAdmin\(\)[\s\S]{0,300}token\.orgId/.test(rules));
 
 console.log('\nthe API reads the same claim first');
-var A = require(path.join(ROOT, 'api/_lib/admin.js'));
+/* firebase-admin is intercepted at load: CI runs this with no npm install
+   (tclientadmin.js, tstaffverified.js do the same); only the pure helpers
+   are asked of admin.js here */
+var Module = require('module'), _load = Module._load;
+var FAKE = { apps: [{}], initializeApp: function () {}, credential: { cert: function () {} }, auth: function () { return {}; }, firestore: function () { return { collection: function () { return {}; } }; } };
+Module._load = function (request) { return request === 'firebase-admin' ? FAKE : _load.apply(this, arguments); };
+var A;
+try { A = require(path.join(ROOT, 'api/_lib/admin.js')); } finally { Module._load = _load; }
 ok('admin.js authenticate(): dec.orgId || orgOf(email)', /orgId: dec\.orgId \|\| orgOf\(email\)/.test(read('api/_lib/admin.js')));
 ok('verify-token.js: body.orgId || orgOf(email)', /orgId: body\.orgId \|\| orgOf\(email\)/.test(read('api/_lib/verify-token.js')));
 ok('isPersonalEmail: gmail.com is personal', A.isPersonalEmail('michaelhush6@gmail.com') === true);
