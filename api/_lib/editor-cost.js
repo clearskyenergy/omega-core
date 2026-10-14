@@ -45,13 +45,13 @@ var BESS_INSTALL_RATIO = 0.55;   /* install as a share of equipment */
    inside an Omega-Core skid is ClearSky's and is never counted here. */
 var NEXTNRG = require('./nextnrg');
 var MGC_EACH = NEXTNRG.CONTROLLER.priceUsd;
-/* NextNRG's solar and NextNRG's storage, each priced installed on its own
-   line (api/_lib/nextnrg.js SYSTEM_RATE, 2026-10-14; Tommy: "the array is
-   a separate price as well"): a NextNRG array (stamped as its product, or
-   any array in NextNRG's own workspace, q.vendorOrg) at $6.00 per W-DC
-   instead of the benchmark; NextNRG storage at $6.00 per W of rated
-   power, wherever it stands. A vendor's installed price carries no
-   contingency. */
+/* NextNRG's solar + storage SYSTEM, $6.00 per W-DC of solar installed with
+   the storage beside it and the labor (api/_lib/nextnrg.js SYSTEM_RATE,
+   2026-10-14): a NextNRG array (stamped as its product, or any array in
+   NextNRG's own workspace, q.vendorOrg) is priced at it instead of the
+   benchmark; NextNRG storage beside it is inside the price; NextNRG
+   storage alone is the rate on its rated power. A vendor's installed
+   price carries no contingency. */
 var NN_RATE = NEXTNRG.SYSTEM_RATE;
 /* The Omega-Core skid IS in the Run total (2026-10-14, Tommy: "the compute
    pod is like 639k plus the nextnrg microcontroller is another 125k"): each
@@ -162,11 +162,10 @@ function rollup(q) {
       var perUnit = (ov != null) ? +ov : (known != null ? known : auto);
       var eq = (ov == null && bm.mixed && bm.groupCost > 0) ? +bm.groupCost : perUnit * qty;
       var inst = r0(eq * BESS_INSTALL_RATIO);
-      /* NextNRG storage: its own installed price on its rated power, beside
-         a NextNRG array or not (never folded into the solar line) */
       if (isNN && ov == null && bm.cost == null) {
         nnStorage.units += qty; nnStorage.kw += (+bm.kw || 0) * qty; nnStorage.kwh += (+bm.kwh || 0) * qty;
-        nnRate = true; perUnit = r0((+bm.kw || 0) * 1000 * NN_RATE.storageOnlyPerW); eq = perUnit * qty; inst = 0; nnStorage.alone += eq;
+        if (nnSolarKw > 0) { inSystem = true; perUnit = 0; eq = 0; inst = 0; nnStorage.inside = true; }
+        else { nnRate = true; perUnit = r0((+bm.kw || 0) * 1000 * NN_RATE.storageOnlyPerW); eq = perUnit * qty; inst = 0; nnStorage.alone += eq; }
       }
       var tot = eq + inst;
       bessTotal += tot;
@@ -183,8 +182,9 @@ function rollup(q) {
   });
   /* placed but never itemised: the benchmark, so the sheet and the rail agree */
   var rating = q.fleetRating || { kwh: 0, kw: 0 }, benchBess = 0, ratingInside = false, ratingAlone = 0;
-  if (bessTotal <= 0 && ((+rating.kwh || 0) > 0 || (+rating.kw || 0) > 0)) {
-    if (nnAll) { ratingAlone = r0((+rating.kw || 0) * 1000 * NN_RATE.storageOnlyPerW); bessTotal = ratingAlone; nnStorage.alone += ratingAlone; nnStorage.kw += +rating.kw || 0; nnStorage.kwh += +rating.kwh || 0; }
+  if (bessTotal <= 0 && !nnStorage.inside && ((+rating.kwh || 0) > 0 || (+rating.kw || 0) > 0)) {
+    if (nnAll && nnSolarKw > 0) { ratingInside = true; nnStorage.inside = true; nnStorage.kw += +rating.kw || 0; nnStorage.kwh += +rating.kwh || 0; }
+    else if (nnAll) { ratingAlone = r0((+rating.kw || 0) * 1000 * NN_RATE.storageOnlyPerW); bessTotal = ratingAlone; nnStorage.alone += ratingAlone; nnStorage.kw += +rating.kw || 0; nnStorage.kwh += +rating.kwh || 0; }
     else {
       benchBess = (+rating.kwh || 0) * pos(sheet.bessKwh, BENCH.bessKwh) + (+rating.kw || 0) * pos(sheet.bessKw, BENCH.bessKw);
       if (benchBess > 0) bessTotal = benchBess;
@@ -263,20 +263,18 @@ function rollup(q) {
      its own line. kW the page could not place by mount (a previewed
      layout) is priced as plain PV at the size band. */
   var solarKw = +(q.solarKwDc || 0), byMount = (q.solar && q.solar.byMount) || null, solarSheet = pos(sheet.pvWdc, 0), solarRows = [], solarTotal = 0, solarPlaced = 0;
-  /* NextNRG's solar first: its array at its installed rate (the labor
-     inside); the page keeps NextNRG arrays out of byMount, and in NextNRG's
-     own workspace every array is NextNRG's. Its storage is its own line
-     (`storage.total`, already in the BESS total), never inside the solar's. */
+  /* NextNRG's system first: its solar at the system rate, with its storage
+     and the labor inside; the page keeps NextNRG arrays out of byMount, and
+     in NextNRG's own workspace every array is the system */
   var nnTotal = 0, nnLine = null;
-  var nnStore = { kw: nnStorage.kw, kwh: nnStorage.kwh, units: nnStorage.units, inside: false, total: nnStorage.alone, ratePerW: NN_RATE.storageOnlyPerW, label: NN_RATE.storageLabel, includes: NN_RATE.storageIncludes.slice() };
   if (nnSolarKw > 0) {
     nnTotal = r0(nnSolarKw * 1000 * NN_RATE.perWdc);
     if (nnAll) byMount = null;
     nnLine = { total: nnTotal, solarKwDc: nnSolarKw, rate: NN_RATE.perWdc, label: NN_RATE.label, includes: NN_RATE.includes.slice(), basis: NN_RATE.basis,
-      storage: nnStore, vendor: nnAll ? 'workspace' : 'product', contingency: NN_RATE.contingency };
+      storage: { kw: nnStorage.kw, kwh: nnStorage.kwh, units: nnStorage.units, inside: nnStorage.inside }, vendor: nnAll ? 'workspace' : 'product', contingency: NN_RATE.contingency };
   } else if (nnStorage.alone > 0) {
-    nnLine = { total: 0, solarKwDc: 0, rate: NN_RATE.perWdc, label: NN_RATE.storageLabel, includes: NN_RATE.storageIncludes.slice(), basis: NN_RATE.basis,
-      storage: nnStore, vendor: nnAll ? 'workspace' : 'product', contingency: NN_RATE.contingency };
+    nnLine = { total: 0, solarKwDc: 0, rate: NN_RATE.perWdc, label: 'NextNRG storage, installed', includes: ['the storage', 'installation labor'], basis: NN_RATE.basis,
+      storage: { kw: nnStorage.kw, kwh: nnStorage.kwh, units: nnStorage.units, inside: false, total: nnStorage.alone, ratePerW: NN_RATE.storageOnlyPerW }, vendor: nnAll ? 'workspace' : 'product', contingency: NN_RATE.contingency };
   }
   out.lines.nextnrg = nnLine;
   out.sources.nextnrg = nnLine ? NN_RATE.corroboration : undefined;
@@ -347,7 +345,7 @@ function rollup(q) {
   var placedKw = +(q.placedKw || 0);
   var inScope = bessTotal > 0 || ev.total > 0 || placedKw > 0 || solarTotal > 0 || nnTotal > 0 || dcTotal > 0 || bnzTotal > 0 || computeTotal > 0 || pn > 0 || gen.total > 0 || mgcTotal > 0 || skidTotal > 0;
   var sub = inScope ? (bessTotal + solarTotal + nnTotal + siteEq + indirect + ev.total + dcTotal + bnzTotal + computeTotal + gen.total + mgcTotal + skidTotal) : 0;
-  /* a vendor's installed price (NextNRG's solar, NextNRG's storage) and a recorded price (the Omega-Core skid) carry no contingency */
+  /* a vendor's installed price (NextNRG's system, its storage alone) and a recorded price (the Omega-Core skid) carry no contingency */
   var noCont = inScope ? nnTotal + nnStorage.alone + skidTotal : 0;
   var contPct = S('contPct') / 100, cont = (sub - noCont) * contPct, TOTAL = sub + cont;
   var subLo = sub - computeTotal + computeLo, subHi = sub - computeTotal + computeHi;
