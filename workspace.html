@@ -1777,7 +1777,7 @@ function settingsDrawer() {
   var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';
   var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName },
     /* on a phone, Me is where Plan & billing lives (the tab bar has no room for it) */
-    { key: 'billing', name: 'Plan & billing', sub: planName() + ' · what is due and your invoices', icon: S.ICON.billing, cta: 'Open', onClick: function () { S.closeDrawer(); openBilling(); } }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'out', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];
+    { key: 'billing', name: 'Plan & billing', sub: planName() + ' · what is due and your invoices', icon: S.ICON.billing, cta: 'Open', onClick: function () { S.closeDrawer(); openBilling(); } }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'signout', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];   /* data-row="signout": the render checks' click sweeps never sign the visitor out (2026-10-14) */
   S.drawer({ eyebrow: 'Account', title: 'Settings', html: html, rows: rows });
 }
 function saveName() {
