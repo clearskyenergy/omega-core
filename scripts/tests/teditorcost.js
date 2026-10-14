@@ -114,7 +114,7 @@ var cp = EC.rollup({ fleet: { units: 1, byModel: { 'GOTION-EDGE-760': { qty: 1, 
 assert.equal(cp.lines.bess.rows[0].perUnit, 84740, 'a catalog unit is priced at its catalog price'); assert.equal(cp.lines.bess.rows[0].catalog, true); assert.equal(cp.lines.bess.rows[0].missing, false); count += 3;
 assert.equal(cp.lines.bess.autoByKwh['760'], 84740); assert.equal(cp.lines.bess.configured[0].eq, 56354); assert.equal(cp.lines.bess.configured[1].eq, 50000, 'a typed cost wins'); count += 3;
 assert.ok(!/eqcost:\d/.test(ed), 'no unit price on the page\'s catalog'); count++;
-assert.match(ed, /catalogKey:k,\s*\/\*[^*]*\*\/\s*nextnrg: !!\(typeof BESS_CATALOG!=='undefined'/); assert.match(ed, /catalogKey:b\.catalogKey\|\|'' \}; \}\);/); count += 2;
+assert.match(ed, /catalogKey:ck,\s*\/\*[^*]*\*\/\s*nextnrg: !!\(\(ce && \(ce\.nextnrg===true/); assert.match(ed, /catalogKey:b\.catalogKey\|\|'' \}; \}\);/); count += 2;
 console.log('teditorcost (catalog prices): assertions added');
 
 /* ── solar is priced per kW-DC by MOUNT, on its own line, whatever else is
@@ -184,4 +184,27 @@ assert.match(ed, /field\('kW-DC \\u2014 set by hand \(blank = the layout/, 'the 
 var rail = ed.slice(ed.indexOf("fi += _omRow('Total install'"), ed.indexOf("_omSet('rr-b-fin', fi);"));
 assert.match(rail, /_omRow\('NextNRG solar \+ storage \('\+Math\.round\(\+_nnL\.solarKwDc\|\|0\)/, 'the NextNRG system row'); assert.match(rail, /window\._OMEGACORE_DETAIL/, 'the skid row reads the published line'); assert.match(rail, /_omRow\('Omega-Core skid'/, 'and prints it'); assert.match(rail, /_omRow\('NextNRG Microgrid Controller'/, 'the controller row'); count += 4;
 assert.match(ed, /window\._OMEGACORE_TOTAL = T\.omegaCore \|\| 0; window\._OMEGACORE_DETAIL = LN\.omegaCore \|\| null;/, 'the cost render publishes the skid line'); count++;
+/* NextNRG's storage is told by the catalog key behind the display name, the make, or a model named NextNRG's (2026-10-14: a NextNRG 1,000 kWh pad keyed by its model name ran at the container rate, $144k with contingency, against the $1.5M its 250 kW is at NextNRG's $6.00/W) */
+function collectFleet(byModel, catalog) {
+  var S3 = { bessList: [], elements: [], shapes: [], conduits: [], pxPerFt: 10, costOverrides: {}, omegaSizing: {} };
+  var c3 = { S: S3, window: {}, document: { getElementById: function () { return null; }, activeElement: null }, BESS_CATALOG: catalog,
+    $v: function () { return undefined; }, JSON: JSON, Object: Object, Math: Math, Promise: Promise, String: String, Number: Number, RegExp: RegExp,
+    _ppCollectFleet: function () { return { units: Object.keys(byModel).length, byModel: byModel }; }, _vendorOverrides: function () { return {}; }, omegaBessFleet: function () { return { kwh: 1000, kw: 250 }; },
+    omegaSolarKwDc: function () { return 0; }, omegaDer: function () { return { solarKwDc: 0, windKw: 0, altKw: 0 }; }, bnzAll: function () { return { capex: 0 }; }, OMEGA_PRICE_BASIS: 'cost' };
+  vm.createContext(c3);
+  vm.runInContext(cut('_costSheetValues') + cut('_evQuantities') + cut('omegaSolarByMount') + cut('omegaCostQuantities') + '\nthis.q = omegaCostQuantities();', c3);
+  return c3.q;
+}
+var CAT = { 'NEXTNRG-SAFT-IFLEX-3400': { mfr: 'NextNRG', nextnrg: true, kwh: 3400 }, 'GOTION-EDGE-760': { mfr: 'Gotion', kwh: 760 } };
+var qf = collectFleet({ 'NextNRG Microgrid Storage \u2014 Saft Intensium Flex 3.4 MWh block (LFP)': { qty: 1, kwh: 3400, kw: 850, cost: null, catalogKey: 'NEXTNRG-SAFT-IFLEX-3400', mfr: 'NextNRG' },
+  'NextNRG Model 1': { qty: 1, kwh: 1000, kw: 250, cost: null, catalogKey: null, mfr: '' }, 'Gotion EDGE 760 kWh C&I': { qty: 1, kwh: 760, kw: 380, cost: null, catalogKey: 'GOTION-EDGE-760', mfr: 'Gotion' } }, CAT);
+var fm = JSON.parse(JSON.stringify(qf.fleet.byModel));
+assert.equal(fm['NextNRG Microgrid Storage \u2014 Saft Intensium Flex 3.4 MWh block (LFP)'].nextnrg, true, 'the catalog block placed under its display name is NextNRG\'s by the key behind it'); count++;
+assert.equal(fm['NextNRG Model 1'].nextnrg, true, 'a product named NextNRG\'s (a library product, a guided build) is NextNRG\'s'); assert.equal(fm['Gotion EDGE 760 kWh C&I'].nextnrg, false, 'a Gotion is not'); count += 2;
+assert.equal(fm['Gotion EDGE 760 kWh C&I'].catalogKey, 'GOTION-EDGE-760', 'the catalog key rides to the server behind the display name'); count++;
+var rf = EC.rollup(qf);
+var nnRow = rf.lines.bess.rows.filter(function (r) { return r.key === 'NextNRG Model 1'; })[0], gRow = rf.lines.bess.rows.filter(function (r) { return /Gotion/.test(r.key); })[0];
+assert.equal(nnRow.total, 250 * 1000 * 6, 'the 1,000 kWh / 250 kW NextNRG unit alone is $1,500,000 at $6.00 a watt'); assert.equal(nnRow.nextnrgRate, true); assert.equal(nnRow.install, 0, 'labor inside'); count += 3;
+assert.equal(gRow.total, Math.round(84740 * 1.55), 'the Gotion beside it is priced off its catalog key, not its display name'); count++;
+assert.match(ed, /var cKey=s\.catalogKey\|\|null;/, 'the fleet collector carries the catalog key of each group'); assert.match(ed, /\/\^nextnrg\\b\/i\.test\(String\(k\)\)/, 'and the quantities read the name'); count += 2;
 console.log('teditorcost (solar by mount): ' + count + ' assertions passed');

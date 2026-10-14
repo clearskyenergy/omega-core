@@ -11537,6 +11537,12 @@ function _ppCollectFleet(){
     out.totalKwh+=kwh; out.totalKw+=kw;
     if(cost!=null) out.totalCost+=cost; else out.anyMissingCost=true;
     var key=s.model||s.catalogKey||'BESS Unit';
+    /* the catalog key behind the display name, and the make: the cost
+       quantities tell NextNRG's storage by them (2026-10-14: a NextNRG
+       1,000 kWh pad keyed by its model name missed the catalog's flag and
+       ran at the $85/kWh container rate) */
+    var cKey=s.catalogKey||null;
+    var cMfr=(cKey && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[cKey] && BESS_CATALOG[cKey].mfr) || s.mfr || '';
     /* Accumulate per-model TOTALS. Previously kwh/kw/cost were captured from
        the first unit under a key and never updated, so two differently-sized
        units sharing a model name (e.g. both labeled "BESS") reported the
@@ -11545,9 +11551,11 @@ function _ppCollectFleet(){
        the PER-UNIT figures for display, and mixed flags a non-uniform group. */
     if(!out.byModel[key]){
       out.byModel[key]={ qty:0, kwh:kwh, kw:kw, cost:cost,
-                         groupKwh:0, groupKw:0, groupCost:0, mixed:false };
+                         groupKwh:0, groupKw:0, groupCost:0, mixed:false, catalogKey:cKey, mfr:cMfr };
     }
     var B=out.byModel[key];
+    if(!B.catalogKey && cKey) B.catalogKey=cKey;
+    if(!B.mfr && cMfr) B.mfr=cMfr;
     B.qty++;
     B.groupKwh += kwh; B.groupKw += kw;
     if(cost!=null) B.groupCost += cost;
@@ -29412,9 +29420,15 @@ function omegaCostQuantities(){
   var fleet=(typeof _ppCollectFleet==='function')?_ppCollectFleet():{units:0,byModel:{}};
   q.fleet={ units:fleet.units||0, byModel:{} };
   Object.keys(fleet.byModel||{}).forEach(function(k){ var b=fleet.byModel[k];
-    q.fleet.byModel[k]={ qty:+b.qty||0, kwh:+b.kwh||0, kw:+b.kw||0, cost:(b.cost!=null?+b.cost:null), groupCost:+b.groupCost||0, mixed:!!b.mixed, catalogKey:k,
-      /* NextNRG's storage (the NextNRG group of the catalog): priced inside NextNRG's system by the server */
-      nextnrg: !!(typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[k] && BESS_CATALOG[k].nextnrg) }; });
+    var ck=b.catalogKey||k, ce=(typeof BESS_CATALOG!=='undefined') ? (BESS_CATALOG[ck]||BESS_CATALOG[k]||null) : null;
+    q.fleet.byModel[k]={ qty:+b.qty||0, kwh:+b.kwh||0, kw:+b.kw||0, cost:(b.cost!=null?+b.cost:null), groupCost:+b.groupCost||0, mixed:!!b.mixed, catalogKey:ck,
+      /* NextNRG's storage: the catalog's NextNRG group (by the key behind the
+         display name), a product of NextNRG's (the make on the catalog entry
+         or the group, a model named NextNRG's — a library product, a guided
+         build): priced at NextNRG's rate by the server, never the container
+         rate (2026-10-14, Tommy: a NextNRG 1,000 kWh unit "is coming at
+         144k thats not right it should be like a mill plus") */
+      nextnrg: !!((ce && (ce.nextnrg===true || String(ce.mfr||'').toLowerCase()==='nextnrg')) || String(b.mfr||'').toLowerCase()==='nextnrg' || /^nextnrg\b/i.test(String(k))) }; });
   q.overrides=(typeof _vendorOverrides==='function')?_vendorOverrides():{};
   /* the configured list, one row per distinct unit (display only; never in the total) */
   var _seen={}, _uniq=[];
