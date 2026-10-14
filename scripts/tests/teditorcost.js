@@ -59,10 +59,10 @@ assert.match(String(EC._tables.BENCH.pvSource), /Q1 2025/, 'the book names its s
 var ep = read('api/cost-rollup.js');
 assert.match(ep, /req\.method !== 'POST'/); assert.match(ep, /A\.authenticate\(req\)/); assert.match(ep, /caller\.orgId \|\| caller\.staff/); assert.match(ep, /EC\.rollup\(q\)/); count += 4;
 assert.match(ep, /q\.vendorOrg = caller\.orgId \|\| null;/, 'the caller\'s workspace is stamped on the request (a vendor prices its own products), never read off the body'); count++;
-/* NextNRG's solar + storage system at $6.00/W-DC installed (api/_lib/nextnrg.js SYSTEM_RATE; scripts/tests/tnextnrg.js holds the cases): the Run total and the ITC basis carry it, the record's lines name it */
+/* NextNRG's solar + storage system at $5.65/W-DC installed, the one-pager's own rate with the battery inside (api/_lib/nextnrg.js SYSTEM_RATE; scripts/tests/tnextnrg.js holds the cases): the Run total and the ITC basis carry it, the record's lines name it */
 var nn = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 1000, kw: 250, cost: null } } }, counts: { pad: 1 }, sheet: {} });
-assert.equal(nn.totals.nextnrg, 2208000); assert.equal(nn.totals.bess, 0); assert.equal(nn.totals.solar, 0); assert.equal(nn.totals.noContingency, 2208000); count += 4;
-assert.equal(nn.totals.sub, 2208000 + 4800); assert.equal(nn.totals.cont, 480); assert.equal(nn.totals.total, 2208000 + 4800 + 480); assert.equal(nn.totals.itcBasis, 2208000 + 4800 * 1.1); assert.equal(nn.flags.nextnrg, true); count += 5;
+assert.equal(nn.totals.nextnrg, 2079200); assert.equal(nn.totals.bess, 0, 'the 250 kW / 1,000 kWh NextNRG battery beside the array is inside the system price'); assert.equal(nn.totals.solar, 0); assert.equal(nn.totals.noContingency, 2079200); count += 4;
+assert.equal(nn.totals.sub, 2079200 + 4800); assert.equal(nn.totals.cont, 480); assert.equal(nn.totals.total, 2079200 + 4800 + 480); assert.ok(Math.abs(nn.totals.itcBasis - (2079200 + 4800 * 1.1)) < 1e-6); assert.equal(nn.flags.nextnrg, true); count += 5;
 assert.equal(nn.totals.low, nn.totals.total); assert.equal(nn.totals.high, nn.totals.total); count += 2;
 var nnActual = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, sheet: { actualTotal: 2500000 } });
 assert.equal(nnActual.totals.total, 2500000, 'a contracted number still wins'); count++;

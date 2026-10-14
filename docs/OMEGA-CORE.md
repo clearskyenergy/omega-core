@@ -329,8 +329,8 @@ cost as well … so that the compute IRR reflects the total ask of the project
 system now with the cost of the compute system and the payback on that. the
 cost of the nextnrg bess and the next nrg solar is $6.00 per watt".
 
-- **NextNRG's solar + storage is ONE installed system at $6.00 per W-DC of
-  solar** (`api/_lib/nextnrg.js SYSTEM_RATE`; NextNRG's own Topanga one-pager
+- **NextNRG's solar + storage is ONE installed system at $5.65 per W-DC of
+  solar, the one-pager's own rate** (`api/_lib/nextnrg.js SYSTEM_RATE`; NextNRG's own Topanga one-pager
   corroborates it: $1,780,063 for 315 kW DC + 300 kW / 1.8 MWh, $5.65/W DC).
   The Site Map cost engine (`editor-cost.js`) prices a NextNRG array at it —
   the array, the storage beside it and the installation labor, all in, no
@@ -341,7 +341,7 @@ cost of the nextnrg bess and the next nrg solar is $6.00 per watt".
   when it is the catalog's NextNRG group (`nextnrg: true`); in NextNRG's OWN
   workspace (`vendorOrg`, stamped by `api/cost-rollup.js` off the caller,
   never the body) every array and battery is NextNRG's, because what NextNRG
-  draws is what NextNRG sells. Topanga: 368 kW-DC → $2,208,000 with the
+  draws is what NextNRG sells. Topanga: 368 kW-DC → $2,079,200 with the
   250 kW / 1,000 kWh battery inside it.
 - **The Run's lines ride the record** (`omegaRunRollup` `capexLines`: solar,
   bess, nextnrgSystem, ev, controller, compute, dc, gen, envelope, site,
