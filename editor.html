@@ -15418,7 +15418,7 @@ function computeGroundLayout(opts){
   var boundary=opts.boundary;
   if(!boundary || boundary.length<3) return null;
   var ppf=(typeof _derScale==='function')?_derScale():6;
-  var A=(typeof _solarAssume==='function')?_solarAssume('ground'):{gcr:0.4,wpsf:DER_PV_WPSF,setbackFt:10,presetKey:'fixed-ground'};
+  var A=(typeof _solarAssume==='function')?_solarAssume(opts.mount||'ground'):{gcr:0.4,wpsf:DER_PV_WPSF,setbackFt:10,presetKey:'fixed-ground'};
   var tbl=_gmTable(A.presetKey);
 
   var setbackPx=(A.setbackFt||10)*ppf;
@@ -15503,7 +15503,8 @@ function applyGroundLayout(boundary, layout, exclusions){
   var ppf=(typeof _derScale==='function')?_derScale():6;
   var bb=_gmBBox(boundary);
   var sh={
-    id:uid(), kind:'dersolar', mount:(window._alMount==='custom'?'custom':'ground'),
+    id:uid(), kind:'dersolar', mount:(window._alMount==='roof'||window._alMount==='adjacent')?window._alMount:'ground',
+    canopy:(window._alMount==='adjacent'),
     pts:[{x:bb.minX,y:bb.minY}], wPx:bb.w, hPx:bb.h,
     /* auto-layout payload */
     autoLayout:true,
@@ -15525,14 +15526,7 @@ function applyGroundLayout(boundary, layout, exclusions){
   /* The module this array was built with and, when that module is a
      product somebody sells (NextNRG's EAGLE G7B), whose product it is: the
      drawing, the legend, the inventory and the BOM read it off the shape. */
-  try{
-    var _A=(typeof _solarAssume==='function')?_solarAssume('ground'):null, _M=_A&&_A.module;
-    if(_M){
-      sh.moduleKey=_A.moduleKey; sh.moduleWatts=_M.watts||null;
-      if(_M.mfr){ sh.mfr=_M.mfr; sh.sku=_M.sku||null;
-        sh.product=_M.mfr+' Solar PV \u2014 '+(_M.make?_M.make+' ':'')+(_M.line||'')+(_M.watts?' '+_M.watts+' W':''); }
-    }
-  }catch(e){}
+  try{ _derStampModule(sh, sh.mount); }catch(e){}
   S.shapes.push(sh);
   if(typeof renderShape==='function') renderShape(sh);
   if(typeof updShapeCount==='function') updShapeCount();
@@ -15603,7 +15597,13 @@ function openAutoLayout(boundaryPts){
      array: it claims no mount until the array editor chooses one. The
      ribbon's Auto Layout, with no outline handed in, is the ground-mount
      tool it always was. */
-  window._alMount=(boundaryPts && boundaryPts.length>=3)?'custom':'ground';
+  /* A traced area lays out with the preset of the mount it is ON (Tommy,
+     2026-10-14: a traced roof read far less kW than the roof rectangle
+     over the same area — the trace was filling with the ground preset's
+     0.40 GCR and 10 ft setback). The mount starts as the ribbon's Solar
+     choice and can be changed on the modal; the array carries it. */
+  window._alCustom=!!(boundaryPts && boundaryPts.length>=3);
+  window._alMount=window._alCustom ? ((typeof _derSolarMount!=='undefined' && (_derSolarMount==='roof'||_derSolarMount==='adjacent')) ? _derSolarMount : 'ground') : 'ground';
   var host=document.getElementById('autolayout-modal');
   if(!host){
     host=document.createElement('div');
@@ -15625,7 +15625,7 @@ function openAutoLayout(boundaryPts){
   host.innerHTML=
     '<div style="background:var(--panel);border:1px solid #FBBF24;border-radius:12px;max-width:460px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.55)">'
     + '<div style="padding:15px 18px;border-bottom:1px solid var(--border)">'
-    +   '<div style="font-size:15px;font-weight:800;color:var(--amber)">'+(window._alMount==='custom'?'\u2600 Auto-Layout \u2014 Custom Area':'\u2600 Auto-Layout Ground Mount')+'</div>'
+    +   '<div style="font-size:15px;font-weight:800;color:var(--amber)">'+(window._alCustom?'\u2600 Auto-Layout \u2014 Custom Area':'\u2600 Auto-Layout Ground Mount')+'</div>'
     +   '<div style="font-size:9.5px;color:var(--sub);margin-top:3px">Fills a drawn boundary with racking rows \u2014 flat-ground takeoff estimator</div>'
     + '</div>'
     + '<div style="padding:15px 18px">'
@@ -15640,6 +15640,12 @@ function openAutoLayout(boundaryPts){
         ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:7px;padding:9px 11px;font-size:9.5px;color:var(--warn);line-height:1.55;margin-bottom:10px">'
           +'\u26a0 <strong>No scale set</strong> \u2014 the boundary reads as '+acreTxt+', which is almost certainly wrong. '
           +'Set the real-world scale first \u2014 tap <strong>\ud83d\udccf Calibrate Scale</strong> in the toolbar and trace a known length, or capture a site under <strong>Site Setup</strong> (which calibrates automatically). Then tables and kW are real.</div>'
+        : '')
+    +   (window._alCustom
+        ? '<div style="margin-bottom:10px"><label style="display:block;font-size:9px;color:var(--sub);margin-bottom:3px">Mount \u2014 the layout fills the trace with this mount\u2019s racking (GCR, setback)</label>'
+          +'<select id="al-mount" onchange="alMountChanged(this.value)" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:6px 8px;font-size:11px;font-family:inherit;width:100%">'
+          +[['ground','Ground mount'],['roof','Rooftop'],['adjacent','Solar canopy']].map(function(m){ return '<option value="'+m[0]+'"'+(m[0]===window._alMount?' selected':'')+'>'+m[1]+'</option>'; }).join('')
+          +'</select></div>'
         : '')
     +   '<div style="font-size:9px;color:var(--sub);line-height:1.6;margin-bottom:12px">Racking type, GCR and setback come from <strong style="color:var(--text)">Solar Assumptions</strong> (in the Solar\u2192BESS sizer). Change the preset there to switch fixed-tilt / tracker / carport.</div>'
     +   '<div id="al-preview" style="display:none;background:var(--inset);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:10.5px;line-height:1.8;margin-bottom:12px"></div>'
@@ -16170,9 +16176,13 @@ function _alPolyAcres(pts){
   return Math.abs(_alPolyAreaPx(pts))/(ppf*ppf)/43560;
 }
 
+function alMountChanged(m){
+  window._alMount=(m==='roof'||m==='adjacent')?m:'ground';
+  try{ alPreview(); }catch(e){}
+}
 function alPreview(){
   var boundary=window._alBoundary; if(!boundary) return;
-  var layout=computeGroundLayout({ boundary:boundary, exclusions:window._alExclusions||[] });
+  var layout=computeGroundLayout({ boundary:boundary, exclusions:window._alExclusions||[], mount:window._alMount||'ground' });
   window._alLayout=layout;
   var out=document.getElementById('al-preview'); if(!out||!layout) return;
   out.style.display='block';
@@ -16218,7 +16228,7 @@ function alPreview(){
 function alGenerate(){
   var boundary=window._alBoundary, layout=window._alLayout;
   if(!boundary){ return; }
-  if(!layout){ layout=computeGroundLayout({boundary:boundary,exclusions:window._alExclusions||[]}); }
+  if(!layout){ layout=computeGroundLayout({boundary:boundary,exclusions:window._alExclusions||[],mount:window._alMount||'ground'}); }
   if(!layout || !layout.tableCount){
     if(typeof showBanner==='function') showBanner('wiz','!! No tables fit \u2014 boundary may be smaller than the setbacks.');
     return;
@@ -29449,6 +29459,10 @@ function omegaCostQuantities(){
   if(dcEl){ q.dc.element={ itKw:+dcEl.loadItKw||0, pue:+dcEl.loadPue||0, kw:+dcEl.loadKw||0 }; }
   else { var _pods=0,_podKw=0; (S.shapes||[]).forEach(function(sh){ if(sh&&sh.kind==='derdc'&&!sh.omegaCore){ _pods++; _podKw+=+sh.kw||0; } });
     q.dc.pods=_pods; q.dc.podKw=_podKw; try{ q.dc.pue=(S.omegaSizing&&+S.omegaSizing.pue)||0; }catch(e){} }
+  /* the Omega-Core skids on the drawing: in the Run total at the recorded
+     system price (the skid + the controller built into it), the server's
+     one record (2026-10-14) */
+  q.omegaCore={ skids:(S.shapes||[]).filter(function(sh){ return sh && sh.kind==='derdc' && sh.omegaCore; }).length };
   return q;
 }
 window.omegaCostQuantities=omegaCostQuantities;
@@ -29625,6 +29639,7 @@ function _renderCostEst(ans, stale) {
   window._GEN_TOTAL = T.gen; window._GEN_DETAIL = LN.gen; window._GEN_IS_BENCHMARK = T.gen > 0;
   window._DC_ROM_DETAIL = LN.dc; window._DC_TOTAL = T.dc;
   window._MGC_TOTAL = T.controller || 0; window._MGC_DETAIL = LN.controller || null;
+  window._OMEGACORE_TOTAL = T.omegaCore || 0; window._OMEGACORE_DETAIL = LN.omegaCore || null;
   window._BESS_IS_BENCHMARK = !!F.bessBenchmark; window._SOLAR_IS_BENCHMARK = !!F.solarBenchmark;
   window._COST_PER_KW = T.costPerKW;
 
@@ -29664,9 +29679,10 @@ function _renderCostEst(ans, stale) {
       row('   Site Equipment', T.siteEqRaw - T.xfmr, 'var(--amber)') +
       (T.xfmr > 0 ? row('  Transformer', T.xfmr, '#F97316') : '') +
       (T.controller > 0 ? row('  NextNRG Microgrid Controller \u00d7' + T.controllerUnits, T.controller, '#54B442') : '') +
+      (T.omegaCore > 0 ? row('  Omega-Core skid \u00d7' + T.omegaCoreSkids + ' \u2014 as recorded, NextNRG Microgrid Controller built in (' + ((LN.omegaCore && LN.omegaCore.breakdown) || []).map(function(b){ return fmt(b.each); }).join(' + ') + ' each)', T.omegaCore, '#60A5FA') : '') +
       row('  Engineering + Permitting', T.indirectRaw - LN.indirect.emsSetup, 'var(--sub)') +
       (LN.ems.on ? row(' EMS Software (setup)', LN.indirect.emsSetup, '#A78BFA') : '') +
-      row(`  Contingency (${T.contPctRound}%)` + (T.noContingency > 0 ? ' \u2014 none on NextNRG\u2019s installed price' : ''), T.cont, 'var(--sub)') +
+      row(`  Contingency (${T.contPctRound}%)` + (T.noContingency > 0 ? ' \u2014 none on ' + [T.nextnrg > 0 || (LN.bess && LN.bess.nextnrgAlone > 0) ? 'NextNRG\u2019s installed price' : '', T.omegaCore > 0 ? 'the Omega-Core skid\u2019s recorded price' : ''].filter(Boolean).join(' or ') : ''), T.cont, 'var(--sub)') +
       `<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:2px">
         <span style="color:var(--text);font-weight:700;font-size:11px">Total</span>
         <span style="color:var(--green);font-weight:700;font-size:14px;font-family:'IBM Plex Mono',monospace">${fmt(TOTAL)}</span>
@@ -36486,7 +36502,19 @@ function omegaSolarIsNextnrg(s){
   if(!s) return false;
   if(s.nextnrg===true) return true;
   if(/^NEXTNRG-/i.test(String(s.sku||''))) return true;
-  return String(s.mfr||'').toLowerCase()==='nextnrg';
+  if(String(s.mfr||'').toLowerCase()==='nextnrg') return true;
+  /* An array built with a NextNRG-specified module is NextNRG's product
+     (Tommy, 2026-10-13: "use their specs ... label them as nextnrg
+     product"): the module on the shape, else — for an array drawn before
+     the shape carried one — the module the project draws with, which is
+     what the BOM already names it by. */
+  try{
+    if(typeof DER_PV_MODULES!=='undefined'){
+      var m = s.moduleKey ? DER_PV_MODULES[s.moduleKey] : ((typeof _pvModule==='function') ? _pvModule() : null);
+      if(m && m.nextnrg===true) return true;
+    }
+  }catch(e){}
+  return false;
 }
 function omegaSolarNextnrgKwDc(){
   var kw=0;
@@ -37188,7 +37216,8 @@ function omegaRunRollup(){
   var lines = {
     solar: L('_SOLAR_TOTAL'), bess: L('_BESS_TOTAL'), nextnrgSystem: L('_NEXTNRG_SYSTEM_TOTAL'), ev: L('_EV_TOTAL'),
     controller: L('_MGC_TOTAL'), compute: L('_COMPUTE_TOTAL'), dc: L('_DC_TOTAL'), gen: L('_GEN_TOTAL'), envelope: L('_BNZ_TOTAL'),
-    site: L('_SITE_EQ_TOTAL'), indirect: L('_INDIRECT_TOTAL'), contingency: L('_CONT_TOTAL')
+    site: L('_SITE_EQ_TOTAL'), indirect: L('_INDIRECT_TOTAL'), contingency: L('_CONT_TOTAL'),
+    omegaCore: L('_OMEGACORE_TOTAL')   /* the skids at the recorded price; the compute model takes them out of the host's case */
   };
   var r = {
     capex:         Math.round(gross),
@@ -55489,7 +55518,7 @@ function _solarRecalcAll(){
         var ppf=(typeof _derScale==='function')?_derScale():6;
         var wFt=(sh.wPx||0)/ppf, hFt=(sh.hPx||0)/ppf;
         var L=_derSolarLayout(wFt,hFt,sh.mount);
-        sh.kw=L.kw; sh.sqft=L.grossSqft; sh.buildableSqft=L.buildableSqft;
+        _derApplyKwOverride(sh, L.kw); sh.sqft=L.grossSqft; sh.buildableSqft=L.buildableSqft;
         sh.moduleSqft=L.moduleSqft; sh.setbackFt=L.setbackFt; sh.gcr=L.gcr;
         sh.wFt=L.wFt; sh.hFt=L.hFt;
         if(typeof renderShape==='function'){ try{ renderShape(sh); }catch(e){} }
@@ -55524,6 +55553,33 @@ function _derSolarLayout(wFt, hFt, mount){
            wFt:Math.round(wFt), hFt:Math.round(hFt) };
 }
 
+/* A kW-DC set by hand on an array (Tommy, 2026-10-14: "when i edit an array
+   i should be able to increase or decrease the solar dc number, it should
+   still auto generate but people should be able to manipulate it"):
+   sh.kwOverride wins over the layout's own figure, which is kept beside it
+   as sh.kwAuto so the editor can show both and Clear puts the auto figure
+   back. Every recompute of an array's kW (the rectangle recalc, the traced
+   relayout, exclusions) ends by calling this. */
+function _derApplyKwOverride(sh, autoKw){
+  if(!sh) return 0;
+  sh.kwAuto=Math.round((+autoKw||0)*10)/10;
+  var ov=+sh.kwOverride;
+  if(isFinite(ov) && ov>0){ sh.kw=Math.round(ov*10)/10; }
+  else { delete sh.kwOverride; sh.kw=sh.kwAuto; }
+  return sh.kw;
+}
+/* The module an array was built with (sh.moduleKey, sh.moduleWatts) and,
+   when that module is a product somebody sells, whose product it is
+   (sh.mfr, sh.sku, sh.product): the drawing, the legend, the inventory,
+   the BOM and the Run read them off the shape. One stamp for the rectangle
+   and the traced array alike. */
+function _derStampModule(sh, mount){
+  var _A=(typeof _solarAssume==='function')?_solarAssume(mount||'ground'):null, _M=_A&&_A.module;
+  if(!_M) return;
+  sh.moduleKey=_A.moduleKey; sh.moduleWatts=_M.watts||null;
+  if(_M.mfr){ sh.mfr=_M.mfr; sh.sku=_M.sku||null;
+    sh.product=_M.mfr+' Solar PV \u2014 '+(_M.make?_M.make+' ':'')+(_M.line||'')+(_M.watts?' '+_M.watts+' W':''); }
+}
 /* Solar: two-corner rectangle -> array footprint, kW from buildable area. */
 function _derPlaceSolar(a, b){
   if(typeof _removeTmpShape==='function') _removeTmpShape();
@@ -55547,6 +55603,13 @@ function _derPlaceSolar(a, b){
            sqft:L.grossSqft, buildableSqft:L.buildableSqft, moduleSqft:L.moduleSqft,
            setbackFt:L.setbackFt, gcr:L.gcr, wFt:L.wFt, hFt:L.hFt,
            kw:L.kw, scaled:_derScaled() };
+  /* The module this array is built with and, when it is a product somebody
+     sells (NextNRG's EAGLE G7B, the default), whose product it is — as the
+     traced array already carried (applyGroundLayout). The Run prices a
+     NextNRG array at NextNRG's installed system rate (2026-10-14, Tommy:
+     a 490 kW roof read at the $1.55/W benchmark against the $2.4M NextNRG
+     quoted for it). */
+  try{ _derStampModule(sh, L.mount); }catch(e){}
   S.shapes.push(sh); renderShape(sh); updShapeCount(); pushHist();
   if(typeof updateSummaryPanel==='function') updateSummaryPanel();
   if(typeof ceThruSizerCalc==='function'){ try{ ceThruSizerCalc(); }catch(e){} }
@@ -85064,7 +85127,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     sh.tableCount = L.tableCount; sh.rowCount = L.rowCount;
     sh.pitchFt = L.pitchFt; sh.tableWft = L.tableWft; sh.tableHft = L.tableHft;
     sh.angleDeg = L.angleDeg;
-    sh.kw = L.kw; sh.gcr = L.gcr; sh.setbackFt = L.setbackFt; sh.wpsf = L.wpsf;
+    if (typeof _derApplyKwOverride === 'function') _derApplyKwOverride(sh, L.kw); else sh.kw = L.kw;
+    sh.gcr = L.gcr; sh.setbackFt = L.setbackFt; sh.wpsf = L.wpsf;
     sh.presetKey = L.presetKey; sh.rowGapFt = L.rowGapFt; sh.kwPerAcre = L.kwPerAcre;
     sh.sqft = Math.round(areaPx(sh.boundary) / (P * P));
     sh.acres = L.acres; sh.coverPct = L.coverPct;
@@ -85104,6 +85168,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
   function field(label, id, val, step) {
     return '<div><label style="' + LBL + '">' + label + '</label>'
       + '<input id="' + id + '" type="number" step="' + (step || 'any') + '" value="' + val + '" style="' + CSS + '"></div>';
+  }
+  /* the array's kW-DC, by hand: blank keeps the layout's own figure (and
+     every refill moves it); a number holds through every refill until it
+     is cleared */
+  function kwField(sh) {
+    return '<div style="display:grid;grid-template-columns:1fr auto;gap:9px;margin-bottom:12px;align-items:end">'
+      + field('kW-DC \u2014 set by hand (blank = the layout\u2019s own ' + ((sh.kwAuto != null ? +sh.kwAuto : (sh.kwOverride > 0 ? 0 : +sh.kw || 0)) || 0).toLocaleString() + ' kW)', 'osz-kwset', (sh.kwOverride > 0 ? sh.kwOverride : ''), 0.1)
+      + '<button id="osz-kwclear" type="button" style="background:none;border:1px solid rgba(255,255,255,.18);color:var(--sub);border-radius:6px;padding:8px 12px;font:600 11px inherit;cursor:pointer">Clear</button></div>';
   }
 
   /* The mount is a CHOICE made here (or by Solar Ground / Solar Roof when
@@ -85155,7 +85227,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     var P = ppf(), b = bbox(sh.boundary || [{ x: 0, y: 0 }]);
     return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;'
       + 'background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.3);border-radius:6px;padding:9px 11px;margin-bottom:10px">'
-      + stat('kW-DC', (sh.kw || 0).toLocaleString(), '#60A5FA')
+      + stat('kW-DC' + (sh.kwOverride > 0 ? ' (set by hand)' : ''), (sh.kw || 0).toLocaleString() + (sh.kwOverride > 0 && sh.kwAuto != null ? ' <span style="font-size:9px;color:#8BA3C4">auto ' + (+sh.kwAuto).toLocaleString() + '</span>' : ''), sh.kwOverride > 0 ? '#FBBF24' : '#60A5FA')
       + stat('Tables', (sh.tableCount || 0).toLocaleString())
       + stat('Rows', (sh.rowCount || 0))
       + stat('Row azimuth', (sh.angleDeg != null ? sh.angleDeg + '\u00b0' : '\u2014'))
@@ -85235,6 +85307,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         + '</div>'
 
         + mountSelect(sel)
+        + kwField(sel)
         + '<div style="font:700 10px/1.4 \'IBM Plex Sans\';letter-spacing:.08em;text-transform:uppercase;color:var(--sub);margin:4px 0 7px">Racking assumptions</div>'
         + '<div style="margin-bottom:9px"><label style="' + LBL + '">Preset \u2014 changing this refills the outline</label>'
         + '<select id="osz-preset" style="' + CSS + '">' + presetOptions(sel) + '</select></div>'
@@ -85260,7 +85333,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         + field('Width (ft)', 'osz-w', Math.round((sel.wPx || 0) / P), 1)
         + field('Depth (ft)', 'osz-h', Math.round((sel.hPx || 0) / P), 1)
         + '</div>'
-        + mountSelect(sel))
+        + mountSelect(sel)
+        + kwField(sel))
 
       + '<div id="osz-msg" style="font-size:11px;color:var(--amber);min-height:15px;margin:8px 0 2px"></div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
@@ -85276,6 +85350,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     if (w && w.tagName === 'SELECT') w.onchange = paint;
     document.getElementById('osz-close').onclick = function () { host.style.display = 'none'; };
     document.getElementById('osz-apply').onclick = apply;
+    var kwc = document.getElementById('osz-kwclear');
+    if (kwc) kwc.onclick = function () { var f = document.getElementById('osz-kwset'); if (f) f.value = ''; apply(); };
     var solve = document.getElementById('osz-solve');
     if (solve) solve.onclick = sizeToKw;
     var pk = document.getElementById('osz-preset');
@@ -85330,13 +85406,17 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
        mount, the legend and the label on the drawing */
     var mv = document.getElementById('osz-mount');
     if (mv && mv.value && MOUNTS.some(function (m) { return m[0] === mv.value; })) { sh.mount = mv.value; sh.canopy = (mv.value === 'adjacent'); }
+    /* the kW-DC by hand: a number holds, blank goes back to the layout's own */
+    var kwSet = num('osz-kwset', 0);
+    if (kwSet > 0) sh.kwOverride = kwSet; else delete sh.kwOverride;
     if (!sh.autoLayout) {
       var wf = num('osz-w', 0), hf = num('osz-h', 0);
       if (wf > 0) sh.wPx = wf * P;
       if (hf > 0) sh.hPx = hf * P;
       try { if (typeof _solarRecalcAll === 'function') _solarRecalcAll(); else renderShape(sh); } catch (e) {}
       try { if (typeof pushHist === 'function') pushHist(); } catch (e) {}
-      msg('Footprint updated \u2014 ' + (sh.kw || 0) + ' kW-DC.', '#4ADE80');
+      try { if (typeof updateCostEst === 'function') updateCostEst(); } catch (e) {}
+      msg('Footprint updated \u2014 ' + (sh.kw || 0) + ' kW-DC' + (sh.kwOverride > 0 ? ' (set by hand; the footprint alone gives ' + (sh.kwAuto || 0) + ')' : '') + '.', '#4ADE80');
       paint();
       return;
     }
@@ -85355,8 +85435,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     var L = relayout(sh, optsFromForm());
     try { if (typeof pushHist === 'function') pushHist(); } catch (e) {}
     if (!L) { msg('Could not recompute that layout.'); return; }
+    try { if (typeof updateCostEst === 'function') updateCostEst(); } catch (e) {}
     if (!L.tableCount) msg('No tables fit \u2014 the area is smaller than the setbacks, or the drawing is not calibrated.');
-    else msg('Updated: ' + L.tableCount + ' tables, ' + L.kw + ' kW-DC at ' + L.angleDeg + '\u00b0.', '#4ADE80');
+    else msg('Updated: ' + L.tableCount + ' tables, ' + (sh.kw || L.kw) + ' kW-DC' + (sh.kwOverride > 0 ? ' set by hand (the layout gives ' + L.kw + ')' : '') + ' at ' + L.angleDeg + '\u00b0.', '#4ADE80');
     paint();
   }
 
@@ -100989,7 +101070,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     sh.tables = L.tooMany ? [] : L.tables;
     sh.tableCount = L.tableCount;
     sh.rowCount = L.rowCount;
-    sh.kw = L.kw;
+    if (typeof _derApplyKwOverride === 'function') _derApplyKwOverride(sh, L.kw); else sh.kw = L.kw;
     sh.densityOnly = !!L.tooMany;
     /* The feet model is the source of truth for rendering; drop the stale
        capture so it is rebuilt from the new pixels. */

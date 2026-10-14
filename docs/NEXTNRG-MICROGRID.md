@@ -156,14 +156,33 @@ typing the brand on `/admin/account.html?org=nextnrg.com` is a deploy step.
   master controller, which is drawn as a pad), rated the two ways a unit is
   rated, grouped by product: one *Energy Storage* line per product, with its
   catalogue key and brand, so the RFQ routes it.
-- **A traced array is not called "ground".** *Solar — Custom Area* and
-  *NextNRG Solar — Custom* lay the array out as `mount: 'custom'` — it reads
-  *Solar PV array (custom area)* on the BOM, *CUSTOM AREA* on the drawing,
-  and the Run prices it as plain PV at the size band (never as a ground
-  mount) — until **Array — Edit Size / Capacity** chooses *Ground mount*,
-  *Rooftop* or *Solar canopy*, which the BOM, the Run's $/W by mount, the
-  legend and the label then follow. *Solar Ground* and *Solar Roof* still say
-  what they are. One solar line per mount as drawn.
+- **A traced array lays out with its mount's racking** (2026-10-14, Tommy:
+  the traced roof "is not equaling the same amount of solar production" as
+  the roof rectangle — it was filling with the ground preset's 0.40 GCR and
+  10 ft setback). *Solar — Custom Area* and *NextNRG Solar — Custom* open
+  the Auto-Layout modal with a **Mount** choice (Ground mount, Rooftop,
+  Solar canopy; it starts from the ribbon's last Solar choice), the layout
+  fills with that mount's preset (`computeGroundLayout({ mount })` →
+  `_solarAssume(mount)`), and the array carries the mount, so the BOM, the
+  Run's $/W by mount, the legend and the label follow it at once;
+  **Array — Edit Size / Capacity** can still change it, and changing it
+  refills. An array traced before this (`mount: 'custom'`) still reads
+  *Solar PV array (custom area)* until a mount is chosen. One solar line per
+  mount as drawn.
+- **An array's kW-DC can be set by hand** (Tommy, 2026-10-14: "it should
+  still auto generate but people should be able to manipulate it"):
+  *Array — Edit Size / Capacity* has *kW-DC — set by hand*; a number holds
+  through every refill (`sh.kwOverride`, the layout's own figure kept as
+  `sh.kwAuto` and shown beside it), *Clear* or a blank puts the layout's
+  own back. `_derApplyKwOverride` is the one rule, run by the rectangle
+  recalc, the traced relayout and the exclusion refill.
+- **The rectangle array is NextNRG's too.** *Solar Roof* / *Solar Ground*
+  stamp the array with the project's module exactly as the trace does
+  (`_derStampModule`), and `omegaSolarIsNextnrg` reads the stamp, else the
+  project's module, so an array built with the EAGLE G7B (the default) is
+  priced at NextNRG's $6.00/W system rate; the generic 550 W module in
+  Solar Assumptions is the road to the DOE/NREL benchmark ($2.95 / $1.98 /
+  $1.12 per Wdc, Q1 2025 modeled market price; a canopy $2.75).
 
 ## Tests
 

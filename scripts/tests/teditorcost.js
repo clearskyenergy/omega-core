@@ -23,12 +23,12 @@ assert.equal(r.lines.bess.total, 200260, '2 × 760 kWh at $85 plus 55% install')
 assert.equal(r.lines.ev.total, 292500, 'DH480 dealer cost × 2 plus install'); assert.equal(r.lines.ev.book.autel_dh480.pn, 'UH480'); count += 2;
 assert.equal(r.lines.dc.total, 7000875, 'the Eaton ROM: N+1 UPS and transformers, 5% design'); assert.equal(r.lines.dc.ups, 4); assert.equal(r.lines.dc.xfmr, 4); count += 3;
 assert.equal(r.lines.gen.total, 30000000); assert.equal(r.lines.gen.lines[0].cls, 'turbine'); assert.equal(r.lines.gen.gasTotal, 30000000); count += 3;
-assert.equal(r.totals.solar, 775000, '500 kW commercial at $1.55/Wdc'); assert.equal(r.totals.compute, 60000000, '2 MW of pods at the operator band'); count += 2;
+assert.equal(r.totals.solar, 990000, '500 kW commercial at $1.98/Wdc (DOE/NREL Q1 2025)'); assert.equal(r.totals.compute, 60000000, '2 MW of pods at the operator band'); count += 2;
 assert.equal(r.totals.siteEq, 2 * 4800 + 3200 + 3850); assert.equal(r.totals.indirect, 4500, 'EMS setup only; the annual fee is O&M'); assert.equal(r.lines.ems.annual, 1520 * 12); count += 3;
-assert.equal(r.totals.sub, 98289785); assert.equal(r.totals.total, 108118763.5); assert.equal(r.totals.contPctRound, 10); count += 3;
-assert.equal(r.totals.low, 86118763.5); assert.ok(Math.abs(r.totals.high - 130118763.5) < 1e-6, 'the pod band is the only range'); count += 2;
-assert.equal(r.totals.itcBasis, 1417801, 'ITC on energy property only: never pods, gas turbines, the DC package'); count++;
-assert.equal(r.totals.costPerKW, 4750); assert.equal(r.totals.totalKW, 22760); count += 2;
+assert.equal(r.totals.sub, 98504785); assert.equal(r.totals.total, 108355263.5); assert.equal(r.totals.contPctRound, 10); count += 3;
+assert.equal(r.totals.low, 86355263.5); assert.ok(Math.abs(r.totals.high - 130355263.5) < 1e-6, 'the pod band is the only range'); count += 2;
+assert.ok(Math.abs(r.totals.itcBasis - 1654301) < 1e-6, 'ITC on energy property only: never pods, gas turbines, the DC package'); count++;
+assert.equal(r.totals.costPerKW, 4761); assert.equal(r.totals.totalKW, 22760); count += 2;
 assert.deepEqual(r.flags, { bessBenchmark: false, solarBenchmark: true, computeBenchmark: true, genBenchmark: true, benchmarked: true, nextnrg: false }); count++;
 
 /* scope gate: an empty drawing totals nothing, whatever the sheet says */
@@ -49,10 +49,11 @@ assert.equal(ev.lines.ev.byModel.DC.eq, 80000); assert.equal(ev.lines.ev.byModel
 assert.equal(ev.lines.ev.futureMakeReady, 9000); assert.equal(ev.lines.ev.units, 4); count += 2;
 /* the contracted number is the truth */
 var k = EC.rollup({ solarKwDc: 100, sheet: { actualTotal: 123456 } });
-assert.equal(k.totals.total, 123456); assert.equal(k.totals.contracted, true); assert.equal(k.totals.low, 123456); assert.equal(k.totals.benchmark, 100 * 1000 * 1.55 * 1.1); count += 4;
+assert.equal(k.totals.total, 123456); assert.equal(k.totals.contracted, true); assert.equal(k.totals.low, 123456); assert.ok(Math.abs(k.totals.benchmark - 100 * 1000 * 1.98 * 1.1) < 1e-6); count += 4;
 /* generation classes */
 assert.equal(EC.genClass({ kind: 'derwind' }), 'wind'); assert.equal(EC.genClass({ model: 'Bloom fuel cell' }), 'sofc'); assert.equal(EC.genClass({ kw: 50000 }), 'turbine_l'); assert.equal(EC.genClass({ altId: 'recip' }), 'recip'); count += 4;
-assert.equal(EC.pvRate(50), 3.25); assert.equal(EC.pvRate(5000), 1.55); assert.equal(EC.pvRate(50000), 1.15); count += 3;
+assert.equal(EC.pvRate(8), 2.95, 'residential under 25 kW'); assert.equal(EC.pvRate(50), 1.98, 'a 50 kW commercial roof is commercial, never residential'); assert.equal(EC.pvRate(5000), 1.98); assert.equal(EC.pvRate(50000), 1.12); count += 4;
+assert.match(String(EC._tables.BENCH.pvSource), /Q1 2025/, 'the book names its source and quarter'); count++;
 
 /* ── the endpoint ──────────────────────────────────────────────────── */
 var ep = read('api/cost-rollup.js');
@@ -126,14 +127,14 @@ var can = EC.rollup({ solarKwDc: 176, solar: { byMount: { canopy: 176 } } });
 assert.equal(can.lines.solar.rows.length, 1); assert.equal(can.lines.solar.rows[0].mount, 'canopy'); assert.equal(can.lines.solar.rows[0].rate, 2.75); count += 3;
 assert.equal(can.totals.solar, 176 * 1000 * 2.75, 'a canopy at the canopy rate, never the ground band'); assert.equal(can.lines.solar.isBenchmark, true); count += 2;
 var mix = EC.rollup({ solarKwDc: 400, solar: { byMount: { ground: 300, canopy: 100 } } });
-assert.equal(mix.totals.solar, 300e3 * 1.55 + 100e3 * 2.75); assert.equal(mix.lines.solar.rows.map(function (r) { return r.mount; }).join(','), 'ground,canopy'); count += 2;
+assert.equal(mix.totals.solar, 300e3 * 1.98 + 100e3 * 2.75); assert.equal(mix.lines.solar.rows.map(function (r) { return r.mount; }).join(','), 'ground,canopy'); count += 2;
 assert.ok(Math.abs(mix.lines.solar.rate - mix.totals.solar / 400e3) < 1e-9, 'the blended rate is the line over its watts'); count++;
 var ovr = EC.rollup({ solarKwDc: 200, solar: { byMount: { ground: 100, canopy: 100 } }, sheet: { pvWdc: 2 } });
 assert.equal(ovr.totals.solar, 400000, 'the sheet wins for every mount'); assert.equal(ovr.lines.solar.isBenchmark, false); assert.equal(ovr.lines.solar.rows[1].rate, 2); count += 3;
 var prev = EC.rollup({ solarKwDc: 500, solar: { byMount: { ground: 200 } } });
 assert.equal(prev.lines.solar.rows.length, 2); assert.equal(prev.lines.solar.rows[1].mount, 'unspecified'); assert.equal(prev.lines.solar.rows[1].kwDc, 300); count += 3;
-assert.equal(prev.totals.solar, 500e3 * 1.55, 'a previewed layout the page cannot place by mount is plain PV at the band'); count++;
-assert.equal(EC.pvRate(176, 'canopy'), 2.75); assert.equal(EC.pvRate(176, 'roof'), 1.55); assert.equal(EC.pvRate(25000, 'canopy'), 2.75, 'a canopy never takes the utility band'); count += 3;
+assert.equal(prev.totals.solar, 500e3 * 1.98, 'a previewed layout the page cannot place by mount is plain PV at the band'); count++;
+assert.equal(EC.pvRate(176, 'canopy'), 2.75); assert.equal(EC.pvRate(176, 'roof'), 1.98); assert.equal(EC.pvRate(25000, 'canopy'), 2.75, 'a canopy never takes the utility band'); count += 3;
 assert.equal(EC._tables.BENCH.pvCanopy, 2.75); assert.match(can.sources.pvCanopy, /2\.50-3\.50/); count += 2;
 /* nothing else on the drawing moves it: pods, the DC package and generation beside it */
 var alone = EC.rollup({ solarKwDc: 176, solar: { byMount: { canopy: 176 } } });
@@ -157,7 +158,26 @@ var qa = collect(arrays), qs = collect(arrays.concat([{ kind: 'derdc', kw: 75, o
 assert.deepEqual(Object.assign({}, qa.solar.byMount), { ground: 324, roof: 0, canopy: 176 }, 'the page sends kW by mount, never a price');   /* copied out of the vm realm */ count++;
 var ra = EC.rollup(qa), rs = EC.rollup(qs);
 assert.equal(ra.lines.solar.rows[0].mount, 'ground'); assert.equal(ra.lines.solar.rows[1].mount, 'canopy'); assert.equal(ra.lines.solar.rows[1].rate, 2.75); count += 3;
-assert.equal(ra.totals.solar, 324e3 * 1.55 + 176e3 * 2.75, 'the traced canopy priced as a canopy beside a ground array'); count++;
-assert.deepEqual(rs.lines.solar, ra.lines.solar, 'the Omega-Core skid changes nothing about the solar'); assert.equal(rs.totals.total, ra.totals.total, 'nor the Run total'); assert.equal(qs.dc.pods, 0); count += 3;
+assert.equal(ra.totals.solar, 324e3 * 1.98 + 176e3 * 2.75, 'the traced canopy priced as a canopy beside a ground array'); count++;
+assert.deepEqual(rs.lines.solar, ra.lines.solar, 'the Omega-Core skid changes nothing about the solar'); assert.equal(qs.dc.pods, 0); count += 2;
+/* the skid IS in the Run total (2026-10-14): each at the recorded system price (the skid + the controller built in), no contingency, never ITC energy property; the collector counts it */
+var OC = require(path.join(ROOT, 'api/_lib/omega-core')).PRODUCT;
+assert.equal(qs.omegaCore.skids, 1, 'the page counts the skids'); assert.equal(qa.omegaCore.skids, 0); count += 2;
+assert.equal(rs.lines.omegaCore.total, OC.systemCostUsd); assert.equal(rs.lines.omegaCore.total, 764000, '$639,000 as recorded + the $125,000 NextNRG Microgrid Controller'); assert.equal(rs.lines.omegaCore.breakdown.length, 2); count += 3;
+assert.equal(rs.totals.total, ra.totals.total + 764000, 'the Run total carries the skid at its recorded price, with no contingency on it'); assert.equal(rs.totals.noContingency, 764000); count += 2;
+assert.equal(rs.totals.itcBasis, ra.totals.itcBasis, 'the skid is never the host\'s energy property'); assert.equal(rs.totals.itcExcluded, ra.totals.itcExcluded + 764000); count += 2;
+var two = EC.rollup({ omegaCore: { skids: 2 } }); assert.equal(two.totals.total, 2 * 764000, 'two skids alone are in scope at twice the price'); assert.equal(two.totals.inScope, true); count += 2;
 assert.match(ed, /q\.solar=\{ byMount:\(typeof omegaSolarByMount==='function'\)\?omegaSolarByMount\(\):null,/); assert.match(ed, /LN\.solar\.rows\|\|\[\]/); assert.match(ed, /_omRow\('Solar \$\/W'/); count += 3;
+/* a kW-DC set by hand on an array (2026-10-14): one rule, run at every recompute; blank = the layout's own figure */
+var ko = cut('_derApplyKwOverride'), kc = vm.createContext({});
+vm.runInContext(ko, kc);
+var shA = vm.runInContext('var a={kw:100}; _derApplyKwOverride(a, 123.44); a', kc);
+assert.equal(shA.kw, 123.4); assert.equal(shA.kwAuto, 123.4); assert.equal('kwOverride' in shA, false, 'no hand figure: the layout\'s own, to a tenth'); count += 3;
+var shB = vm.runInContext('var b={kw:100, kwOverride:490}; _derApplyKwOverride(b, 123.4); b', kc);
+assert.equal(shB.kw, 490, 'the hand figure holds through a refill'); assert.equal(shB.kwAuto, 123.4, 'and the layout\'s own is kept beside it'); count += 2;
+var shC = vm.runInContext('var c={kw:490, kwOverride:0}; _derApplyKwOverride(c, 77); c', kc);
+assert.equal(shC.kw, 77); assert.equal('kwOverride' in shC, false, 'cleared goes back to the layout\'s own'); count += 2;
+assert.match(cut('_solarRecalcAll'), /_derApplyKwOverride\(sh, L\.kw\)/, 'the rectangle recalc runs it'); count++;
+assert.match(ed.slice(ed.indexOf('  function relayout(sh, opts) {')), /_derApplyKwOverride\(sh, L\.kw\)/, 'the traced relayout runs it'); count++;
+assert.match(ed, /field\('kW-DC \\u2014 set by hand \(blank = the layout/, 'the array editor offers it'); assert.match(ed, /if \(kwSet > 0\) sh\.kwOverride = kwSet; else delete sh\.kwOverride;/, 'and Apply writes or clears it'); count += 2;
 console.log('teditorcost (solar by mount): ' + count + ' assertions passed');

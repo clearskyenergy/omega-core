@@ -298,9 +298,13 @@ tools so that they can just put in minimal information."
   are not tried twice; `latestModel.designHash` is the design it stood on.
   At most ten models run per bulk sync; the rest run on their next open.
 - **The pod pro forma prices the skid as recorded** (`runScenario`
-  `fromDesign`): the Site Map cost run never counts the skid
-  (`editor-cost.js`), so a skid's capital is $764,000 each, the host's cost
-  run standing only for plain pods beside it — the 48-GPU spot case on the
+  `fromDesign`): a skid's capital is $764,000 each. Since 2026-10-14 the
+  Site Map cost run counts the skid too (its `omegaCore` line in
+  `editor-cost.js`, at `PRODUCT.systemCostUsd`, no contingency, outside the
+  ITC basis; Tommy: "the compute pod is like 639k plus the nextnrg
+  microcontroller is another 125k"), and `site-model.hostOf` subtracts that
+  line from the host's capex, so the host's cost run stands only for the
+  host's own system and plain pods beside it — the 48-GPU spot case on the
   skid's price instead of the $2.1 M container. **It runs by itself too**
   (2026-10-14; `designProforma`, once per design, `latestProforma.designHash`,
   `auto` on the audit row, never bumping `updatedAt`): Topanga's pod block

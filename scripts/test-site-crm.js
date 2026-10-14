@@ -714,11 +714,12 @@ function seed() {
     assert.equal(st2.input.deal.rentPerYear, 18000); assert.match(st2.basis.rent, /on record/); assert.equal(st2.input.compute.tiers.spot.price, 2.62);
     await rejects(call('POST', { site: made.id, action: 'site-model', gpuClass: 'gb300' }, PM), 400, /public GPU-hour price/);
     /* the PPA on record (NextNRG's executed Topanga PPA: $0.2250/kWh, 2.5% a year, 28 years) prices the host's solar; the run's lines put the NextNRG system on its asset class */
-    db.data.get('projects/p_skid').capex = 2300000; db.data.get('projects/p_skid').capexLines = { solar: 0, bess: 0, nextnrgSystem: 2208000, ev: 0, controller: 0, compute: 0, dc: 0, gen: 0, envelope: 0, site: 48000, indirect: 0, contingency: 44000 };
+    /* the Run total carries the skid at its recorded price since 2026-10-14 (its omegaCore line); the host's case takes it back out, so the whole project counts the skid once */
+    db.data.get('projects/p_skid').capex = 2300000 + 764000; db.data.get('projects/p_skid').capexLines = { solar: 0, bess: 0, nextnrgSystem: 2208000, ev: 0, controller: 0, compute: 0, dc: 0, gen: 0, envelope: 0, site: 48000, indirect: 0, contingency: 44000, omegaCore: 764000 };
     await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaRatePerKwh: 0.225, ppaEscalatorPct: 2.5, ppaTermYears: 28 }, PM);
     var withPpa = await call('GET', { site: made.id }, PM), lm3 = withPpa.site.latestModel;
     assert.equal(withPpa.site.ppaRatePerKwh, 0.225); assert.equal(withPpa.site.ppaTermYears, 28);
-    assert.notEqual(lm3.modelId, lm2.modelId, 'a changed design and changed facts run the model again'); assert.deepEqual(lm3.host.ppa, { ratePerKwh: 0.225, escPct: 2.5, termYears: 28 }); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000);
+    assert.notEqual(lm3.modelId, lm2.modelId, 'a changed design and changed facts run the model again'); assert.deepEqual(lm3.host.ppa, { ratePerKwh: 0.225, escPct: 2.5, termYears: 28 }); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000, 'the host\u2019s capex is the Run total less the skid\u2019s own line');
     var st3 = db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId);
     assert.deepEqual(st3.input.host.capexLines.map(function (l) { return [l.id, l.amount, l.asset]; }), [['nextnrg', 2208000, 'blended'], ['balance', 92000, 'blended']]);
     assert.equal(st3.result.proforma.inputs.revenue.ppa.rate1, 0.225); assert.ok(st3.result.proforma.rows[0].ppaRevenue > 100000, 'the PPA earns on the solar the engine generates: ' + st3.result.proforma.rows[0].ppaRevenue);

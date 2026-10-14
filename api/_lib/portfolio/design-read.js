@@ -20,7 +20,10 @@
          capexLines,                      the Run's lines (solar, bess,
                                           nextnrgSystem, ev, controller,
                                           compute, dc, gen, envelope, site,
-                                          indirect, contingency) or null
+                                          indirect, contingency, omegaCore:
+                                          the skids at the recorded price,
+                                          in the Run total since 2026-10-14)
+                                          or null
          compute: { units, kwIt, omegaCoreUnits, omegaCoreKw,
                     omegaCoreBessKw, omegaCoreBessKwh },
          chargers: { dcfcKw, dcfcUnits, l2Kw, l2Units, ports, installedKw,
@@ -88,7 +91,7 @@ function designOf(p, projectId) {
   ch.installedKw = ch.dcfcKw + ch.l2Kw;
   var capex = pos(p.capex), ran = capex != null;
   /* the run's lines, numbers only, as the editor's omegaRunRollup wrote them (2026-10-14) */
-  var LINE_KEYS = ['solar', 'bess', 'nextnrgSystem', 'ev', 'controller', 'compute', 'dc', 'gen', 'envelope', 'site', 'indirect', 'contingency'], lines = null;
+  var LINE_KEYS = ['solar', 'bess', 'nextnrgSystem', 'ev', 'controller', 'compute', 'dc', 'gen', 'envelope', 'site', 'indirect', 'contingency', 'omegaCore'], lines = null;
   if (ran && p.capexLines && typeof p.capexLines === 'object') {
     lines = {};
     LINE_KEYS.forEach(function (k) { var v = num(p.capexLines[k]); lines[k] = v != null && v > 0 ? Math.round(v) : 0; });

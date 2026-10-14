@@ -198,6 +198,13 @@ function hostOf(site, d) {
   var capex = pos(d.capex) && d.capexSource === 'site-map' ? d.capex : 0;
   if (!solarKw && !bess && !capex) return null;
   var energy = solarKw > 0 || !!bess, L = d.capexLines && typeof d.capexLines === 'object' ? d.capexLines : null, lines = [], named = 0;
+  /* The Run total carries the Omega-Core skids at the recorded price since
+     2026-10-14 (its `omegaCore` line). The skid is the compute case's own
+     capex (skidInput prices it), never the host's: take it out of the
+     host's total here so the whole project counts it once. */
+  var skidLine = L ? Math.round(num(L.omegaCore) || 0) : 0;
+  if (capex > 0 && skidLine > 0) capex = Math.max(0, capex - skidLine);
+  if (!solarKw && !bess && !capex) return null;
   function add(id, label, amount, asset) { amount = Math.round(num(amount) || 0); if (!(amount > 0)) return; lines.push({ id: id, label: label, amount: amount, asset: asset }); named += amount; }
   if (capex > 0 && L) {
     add('nextnrg', 'NextNRG solar + storage system, installed (labor included)', L.nextnrgSystem, 'blended');

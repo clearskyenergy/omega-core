@@ -256,13 +256,14 @@ ok(/org\.brands = t\.brands\.map/.test(fs.readFileSync(path.join(ROOT, 'scripts'
   var custom = bodyFrom(ED, 'window.omegaNextnrgSolarCustom=function(){');
   ok(/setSolarAssume\('moduleKey','nextnrg-eagle-g7b'\)/.test(custom) && /window\.omegaSolarCustomArea\(\)/.test(custom), 'it chooses NextNRG\'s module for the project and runs the same trace');
   var agl = bodyFrom(ED, 'function applyGroundLayout(boundary, layout, exclusions){');
-  ok(/sh\.moduleKey=_A\.moduleKey; sh\.moduleWatts=_M\.watts\|\|null;/.test(agl) && /sh\.product=_M\.mfr\+' Solar PV \\u2014 '/.test(agl) && /sh\.sku=_M\.sku\|\|null;/.test(agl), 'the array it lays out carries the module, and NextNRG\'s product name and key');
+  var stampFn = bodyFrom(ED, 'function _derStampModule(sh, mount){');
+  ok(/sh\.moduleKey=_A\.moduleKey; sh\.moduleWatts=_M\.watts\|\|null;/.test(stampFn) && /sh\.product=_M\.mfr\+' Solar PV \\u2014 '/.test(stampFn) && /sh\.sku=_M\.sku\|\|null;/.test(stampFn), 'the one stamp carries the module, and NextNRG\'s product name and key');
+  ok(/_derStampModule\(sh, sh\.mount\)/.test(agl) && /_derStampModule\(sh, L\.mount\)/.test(bodyFrom(ED, 'function _derPlaceSolar(a, b){')), 'the traced array and the rectangle alike are stamped with it (2026-10-14: a rectangle roof was priced at the benchmark beside NextNRG\'s quote)');
   /* run the stamp: NextNRG's module makes a NextNRG product; the generic module makes none */
   var mb2 = ED.slice(ED.indexOf('var DER_PV_MODULES = {'), ED.indexOf('\n', ED.indexOf('var DER_PV_WPSF = ')) + 1);
-  var stamp = agl.slice(agl.indexOf('  try{\n    var _A='), agl.indexOf('  }catch(e){}', agl.indexOf('  try{\n    var _A=')) + 13);
   var c = vm.createContext({ S: { solarAssume: null } });
   vm.runInContext(mb2 + '\nfunction _solarAssume(){ var k=(S.solarAssume&&S.solarAssume.moduleKey)||DER_PV_MODULE_DEFAULT; return { moduleKey:k, module:DER_PV_MODULES[k] }; }'
-    + '\nfunction stampOf(){ var sh={}; ' + stamp + ' return sh; }', c);
+    + '\n' + stampFn + '\nfunction stampOf(){ var sh={}; _derStampModule(sh, "roof"); return sh; }', c);
   var st1 = vm.runInContext('stampOf()', c);
   eq(st1.product, 'NextNRG Solar PV \u2014 JinkoSolar EAGLE G7B 640 W', 'with NextNRG\'s module the array is NextNRG\'s product');
   eq(st1.sku + '/' + st1.mfr + '/' + st1.moduleWatts, 'NEXTNRG-PV-EAGLE-G7B/NextNRG/640', 'with its key, brand and watts');
@@ -317,8 +318,9 @@ ok(/org\.brands = t\.brands\.map/.test(fs.readFileSync(path.join(ROOT, 'scripts'
   ok(/mount not chosen: Array — Edit Size \/ Capacity sets ground, roof or canopy/.test(solar[0].note), 'and the custom line says where a mount is chosen');
   ok(solar.every(function (it) { return it.sku === 'NEXTNRG-PV-EAGLE-G7B' && it.mfr === 'NextNRG'; }), 'every solar line carries the module\'s key and brand');
   /* the mount itself */
-  ok(/window\._alMount=\(boundaryPts && boundaryPts\.length>=3\)\?'custom':'ground';/.test(bodyFrom(ED, 'function openAutoLayout(boundaryPts){')), 'a traced outline opens the layout as a custom area; the ribbon\'s Auto Layout stays ground');
-  ok(/mount:\(window\._alMount==='custom'\?'custom':'ground'\),/.test(bodyFrom(ED, 'function applyGroundLayout(boundary, layout, exclusions){')), 'and the array it lays out carries that');
+  var oal = bodyFrom(ED, 'function openAutoLayout(boundaryPts){');
+  ok(/window\._alCustom=!!\(boundaryPts && boundaryPts\.length>=3\);/.test(oal) && /window\._alMount=window\._alCustom \? \(\(typeof _derSolarMount!=='undefined'/.test(oal) && /<select id="al-mount" onchange="alMountChanged\(this\.value\)"/.test(oal), 'a traced outline opens the layout as a custom area with a mount (the ribbon\'s Solar choice, changeable on the modal); the ribbon\'s Auto Layout stays ground (2026-10-14: a traced roof filled with the ground preset read far less kW than the roof rectangle)');
+  ok(/mount:\(window\._alMount==='roof'\|\|window\._alMount==='adjacent'\)\?window\._alMount:'ground',/.test(bodyFrom(ED, 'function applyGroundLayout(boundary, layout, exclusions){')) && /mount:window\._alMount\|\|'ground' \}\);/.test(bodyFrom(ED, 'function alPreview(){')), 'the layout fills with that mount\'s preset and the array carries it');
   var bm = vm.createContext({ S: { shapes: [{ kind: 'dersolar', mount: 'custom', kw: 368 }, { kind: 'dersolar', mount: 'roof', kw: 120 }, { kind: 'dersolar', mount: 'ground', kw: 50 }, { kind: 'dersolar', mount: 'custom', canopy: true, kw: 7 }] } });
   vm.runInContext(bodyFrom(ED, 'function omegaSolarByMount(){'), bm);
   eq(JSON.stringify(vm.runInContext('omegaSolarByMount()', bm)), JSON.stringify({ ground: 50, roof: 120, canopy: 7 }), 'the Run\'s by-mount kW leaves a custom area out, so the server prices it as plain PV at the size band — never as ground');

@@ -1236,8 +1236,24 @@ the hand-off. The pod pro forma runs by itself on the design too
 (`designProforma`, once per design) on the skid's recorded price, and each
 engine states its convention (the pod case 60 months pre-tax unlevered
 alone; the compute model after tax, the whole); the assumption set IS the
-iQGen / CoreWeave baseline. The pod pro forma prices a skid as recorded, never on the cost
-run (which never counts it). Nothing a tenant reads names the source
+iQGen / CoreWeave baseline. The pod pro forma prices a skid as recorded. **The Run
+total carries the skid** (2026-10-14, Tommy: "the compute pod is like 639k
+plus the nextnrg microcontroller is another 125k"): `editor-cost.js` lines
+`omegaCore` at `PRODUCT.systemCostUsd` a skid (no contingency, never ITC
+energy property), the record's `capexLines.omegaCore` names it and
+`site-model.hostOf` takes it back out of the host's case, so the whole
+project counts it once. **Solar is priced at the DOE/NREL Q1 2025 book**
+(`BENCH.pv*`, modeled market price: residential under 25 kW $2.95/Wdc,
+commercial to 20 MW $1.98, utility $1.12; a canopy $2.75), and a rectangle
+array is stamped with its module like a traced one, so an array built with
+NextNRG's EAGLE G7B (the default) is NextNRG's and priced at its $6.00/W
+system rate (`omegaSolarIsNextnrg`: the stamp, else the project's module);
+the generic 550 W module in Solar Assumptions is the benchmark road. A
+traced area lays out with the preset of its MOUNT (a select on the modal,
+starting from the ribbon's Solar choice) so a traced roof and the roof
+rectangle agree, and an array's kW-DC can be SET BY HAND on Array — Edit
+Size / Capacity (`kwOverride`, `kwAuto` kept beside it, Clear restores;
+`_derApplyKwOverride` runs at every recompute). Nothing a tenant reads names the source
 workbook; it is the Omega-Core skid. `docs/OMEGA-CORE.md`. Grid Atlas opens at the site's
 address (`/grid-atlas.html?q=`). The Site SPV term sheet is
 `api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
