@@ -670,6 +670,9 @@ function seed() {
     assert.equal(lm.host.capex, 918000, 'the host\u2019s system at the Site Map run\u2019s price'); assert.equal(lm.host.solarKwDc, 368); assert.equal(lm.host.bessKwh, 2000);
     assert.ok(lm.totalProjectCost >= lm.computeCapex + 918000 && lm.totalProjectCost < (lm.computeCapex + 918000) * 1.05, 'the capital request is the whole (the capital, then the engine\u2019s own reserves): ' + lm.totalProjectCost);
     assert.equal(lm.host.revenuePerYear, 61000); assert.equal(lm.host.ppa, null); assert.equal(lm.host.noRevenue, false);
+    /* a site with no PPA on record: the stored model carries no undefined anywhere (2026-10-14: Firestore refused `input.host.ppa` and every automatic run on such a site failed) */
+    (function walk(v, path) { if (v === undefined) throw new Error('undefined stored at ' + path); if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { walk(v[k], path + '.' + k); }); })(db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId), 'model');
+    assert.equal('ppa' in db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId).input.host, false, 'no PPA on record: the host block has no ppa key at all');
     assert.ok(lm.irr > 0.02 && lm.irr < 0.6, 'an after-tax IRR of the whole project, not the pod case\u2019s half a percent: ' + lm.irr);
     /* the pod pro forma followed the design too: the skid as recorded, once per design, its convention said */
     var lpA = s.latestProforma;

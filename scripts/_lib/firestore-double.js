@@ -16,10 +16,23 @@
 'use strict';
 var assert = require('node:assert/strict'), path = require('path');
 function clone(v) { return v === undefined ? undefined : JSON.parse(JSON.stringify(v)); }
+/* Real Firestore refuses an undefined anywhere in a written value unless the
+   client was made with ignoreUndefinedProperties; a JSON round trip here used
+   to swallow it, so a mapper that left `ppa: undefined` passed every test and
+   failed in production (2026-10-14, the compute model on a site with no PPA).
+   Writes now refuse it with the SDK's own words. */
+function refuseUndefined(db, v, where) {
+  if (db.ignoreUndefined) return;
+  (function walk(x, p) {
+    if (x === undefined) throw new Error('Value for argument "data" is not a valid Firestore document. Cannot use "undefined" as a Firestore value (found in field "' + p + '"). If you want to ignore undefined values, enable `ignoreUndefinedProperties`.');
+    if (x && typeof x === 'object' && !(x instanceof Date)) Object.keys(x).forEach(function (k) { walk(x[k], p ? p + '.' + k : k); });
+  })(v, where || '');
+}
 function get(o, k) { return k.split('.').reduce(function (v, p) { return v == null ? undefined : v[p]; }, o); }
 function patch(o, values) { Object.keys(values).forEach(function (key) { var parts = key.split('.'), last = parts.pop(), t = o; parts.forEach(function (p) { t = t[p] || (t[p] = {}); }); t[last] = clone(values[key]); }); return o; }
 class DB {
-  constructor() { this.data = new Map(); this.seq = 0; }
+  constructor() { this.data = new Map(); this.seq = 0; this.ignoreUndefined = false; }
+  settings(o) { if (o && o.ignoreUndefinedProperties === true) this.ignoreUndefined = true; }
   collection(p) { return new Query(this, p); }
   doc(p) { return new Ref(this, p); }
   seed(p, v) { this.data.set(p, clone(v)); }
@@ -27,15 +40,15 @@ class DB {
      Firestore's isolation guarantees: a test of a check-then-write race sets
      it and fires two at once. Off by default, so no other test changes. */
   runTransaction(fn) { var db = this; if (!db.serial) return db.runOne(fn); var run = (db.txTail || Promise.resolve()).then(function () { return db.runOne(fn); }); db.txTail = run.then(function () {}, function () {}); return run; }
-  runOne(fn) { var db = this, writes = [], writing = false; var tx = { get: async function (r) { assert.equal(writing, false, 'no reads after writes'); return r.get(); }, create: function (r, v) { writing = true; writes.push(function () { assert(!db.data.has(r.path)); db.seed(r.path, v); }); }, set: function (r, v, o) { writing = true; writes.push(function () { db.seed(r.path, o && o.merge ? Object.assign({}, db.data.get(r.path) || {}, clone(v)) : v); }); }, update: function (r, v) { writing = true; writes.push(function () { assert(db.data.has(r.path)); db.data.set(r.path, patch(clone(db.data.get(r.path)), v)); }); } }; return Promise.resolve(fn(tx)).then(function (out) { writes.forEach(function (w) { w(); }); return out; }); }
+  runOne(fn) { var db = this, writes = [], writing = false; var tx = { get: async function (r) { assert.equal(writing, false, 'no reads after writes'); return r.get(); }, create: function (r, v) { writing = true; refuseUndefined(db, v); writes.push(function () { assert(!db.data.has(r.path)); db.seed(r.path, v); }); }, set: function (r, v, o) { writing = true; refuseUndefined(db, v); writes.push(function () { db.seed(r.path, o && o.merge ? Object.assign({}, db.data.get(r.path) || {}, clone(v)) : v); }); }, update: function (r, v) { writing = true; refuseUndefined(db, v); writes.push(function () { assert(db.data.has(r.path)); db.data.set(r.path, patch(clone(db.data.get(r.path)), v)); }); } }; return Promise.resolve(fn(tx)).then(function (out) { writes.forEach(function (w) { w(); }); return out; }); }
 }
 class Ref {
   constructor(db, p) { this.db = db; this.path = p; this.id = p.split('/').pop(); }
   collection(n) { return new Query(this.db, this.path + '/' + n); }
   async get() { var v = this.db.data.get(this.path), ref = this; return { id: this.id, ref: ref, exists: v !== undefined, data: function () { return clone(v); } }; }
-  async set(v, o) { this.db.seed(this.path, o && o.merge ? Object.assign({}, this.db.data.get(this.path) || {}, clone(v)) : v); }
-  async update(v) { assert(this.db.data.has(this.path)); this.db.data.set(this.path, patch(clone(this.db.data.get(this.path)), v)); }
-  async create(v) { assert(!this.db.data.has(this.path), 'create must not overwrite ' + this.path); this.db.seed(this.path, v); }
+  async set(v, o) { refuseUndefined(this.db, v); this.db.seed(this.path, o && o.merge ? Object.assign({}, this.db.data.get(this.path) || {}, clone(v)) : v); }
+  async update(v) { refuseUndefined(this.db, v); assert(this.db.data.has(this.path)); this.db.data.set(this.path, patch(clone(this.db.data.get(this.path)), v)); }
+  async create(v) { refuseUndefined(this.db, v); assert(!this.db.data.has(this.path), 'create must not overwrite ' + this.path); this.db.seed(this.path, v); }
 }
 class Query {
   constructor(db, p, f, s, cap) { this.db = db; this.path = p; this.f = f || []; this.s = s; this.cap = cap || Infinity; }
