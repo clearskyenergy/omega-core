@@ -200,7 +200,10 @@ var qf = collectFleet({ 'NextNRG Microgrid Storage \u2014 Saft Intensium Flex 3.
   'NextNRG Model 1': { qty: 1, kwh: 1000, kw: 250, cost: null, catalogKey: null, mfr: '' }, 'Gotion EDGE 760 kWh C&I': { qty: 1, kwh: 760, kw: 380, cost: null, catalogKey: 'GOTION-EDGE-760', mfr: 'Gotion' } }, CAT);
 var fm = JSON.parse(JSON.stringify(qf.fleet.byModel));
 assert.equal(fm['NextNRG Microgrid Storage \u2014 Saft Intensium Flex 3.4 MWh block (LFP)'].nextnrg, true, 'the catalog block placed under its display name is NextNRG\'s by the key behind it'); count++;
-assert.equal(fm['NextNRG Model 1'].nextnrg, true, 'a product named NextNRG\'s (a library product, a guided build) is NextNRG\'s'); assert.equal(fm['Gotion EDGE 760 kWh C&I'].nextnrg, false, 'a Gotion is not'); count += 2;
+assert.equal(fm['NextNRG Model 1'].nextnrg, true, 'a product named NextNRG\'s (a library product, a guided build) is NextNRG\'s');
+var qk = collectFleet({ 'Model 1': { qty: 1, kwh: 1000, kw: 250, cost: null, catalogKey: 'ORG-NEXTNRG-MODEL1', mfr: '' } }, {});
+assert.equal(JSON.parse(JSON.stringify(qk.fleet.byModel))['Model 1'].nextnrg, true, 'the equipment-library key names NextNRG before the catalog has synced'); count++;
+assert.match(ed, /mfr:\(_pelec\.key && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG\[_pelec\.key\] && BESS_CATALOG\[_pelec\.key\]\.mfr\)\|\|null,/, 'a placed pad carries its make'); count++; assert.equal(fm['Gotion EDGE 760 kWh C&I'].nextnrg, false, 'a Gotion is not'); count += 2;
 assert.equal(fm['Gotion EDGE 760 kWh C&I'].catalogKey, 'GOTION-EDGE-760', 'the catalog key rides to the server behind the display name'); count++;
 var rf = EC.rollup(qf);
 var nnRow = rf.lines.bess.rows.filter(function (r) { return r.key === 'NextNRG Model 1'; })[0], gRow = rf.lines.bess.rows.filter(function (r) { return /Gotion/.test(r.key); })[0];

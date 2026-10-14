@@ -11279,6 +11279,7 @@ function _doPlaceBesPad(p,spec,opts){
     var sh={ id:uid(), kind:'bespad', pts:[{x:p.x - wPx/2, y:p.y - hPx/2}],
              style:S.shapeStyle, color:SHAPE_STROKE, lf:spec.lf, wf:spec.wf, model:spec.model, scaled:!!ppf,
              catalogKey:_pelec.key, unitKwh:_pelec.kwh, unitKw:_pelec.kw, unitCost:_pelec.cost,
+             mfr:(_pelec.key && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[_pelec.key] && BESS_CATALOG[_pelec.key].mfr)||null,
              geometryBasis:spec.geometryBasis||'', geometryNote:spec.geometryNote||'' };
     S.shapes.push(sh); renderShape(sh);
     updShapeCount(); pushHist();
@@ -29428,7 +29429,7 @@ function omegaCostQuantities(){
          build): priced at NextNRG's rate by the server, never the container
          rate (2026-10-14, Tommy: a NextNRG 1,000 kWh unit "is coming at
          144k thats not right it should be like a mill plus") */
-      nextnrg: !!((ce && (ce.nextnrg===true || String(ce.mfr||'').toLowerCase()==='nextnrg')) || String(b.mfr||'').toLowerCase()==='nextnrg' || /^nextnrg\b/i.test(String(k))) }; });
+      nextnrg: !!((ce && (ce.nextnrg===true || String(ce.mfr||'').toLowerCase()==='nextnrg')) || String(b.mfr||'').toLowerCase()==='nextnrg' || /^nextnrg\b/i.test(String(k)) || /nextnrg/i.test(String(ck||''))) }; });
   q.overrides=(typeof _vendorOverrides==='function')?_vendorOverrides():{};
   /* the configured list, one row per distinct unit (display only; never in the total) */
   var _seen={}, _uniq=[];
