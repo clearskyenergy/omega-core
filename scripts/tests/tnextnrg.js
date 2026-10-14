@@ -65,26 +65,27 @@ ok(/10,326,280/.test(NN.CONTROLLER.patent) && /IEC 62443/.test(NN.CONTROLLER.sta
 /* THE SYSTEM RATE (2026-10-14, Tommy: "the cost of the nextnrg bess and the
    next nrg solar is $6.00 per watt"): one record, read by the cost engine;
    the page sends which arrays and batteries are NextNRG's and never the rate */
-eq(NN.SYSTEM_RATE.perWdc, 6, 'NextNRG solar is $6.00 per W-DC, installed, the labor inside');
-eq(NN.SYSTEM_RATE.storageOnlyPerW, 6, 'NextNRG storage is $6.00 per W of rated power, installed, its own line (Tommy, 2026-10-14: "the array is a separate price as well")');
-ok(NN.SYSTEM_RATE.includes.join(',') === 'the solar array,installation labor' && NN.SYSTEM_RATE.storageIncludes.join(',') === 'the storage,installation labor' && NN.SYSTEM_RATE.contingency === false, 'what each price includes, and no contingency on a vendor\'s installed price');
+eq(NN.SYSTEM_RATE.perWdc, 5.65, 'NextNRG solar + storage is $5.65 per W-DC of solar, installed, the storage and the labor inside: the Topanga one-pager\'s own $1,780,063 for 315 kW DC + 300 kW / 1.8 MWh (2026-10-14, Tommy: "look at the capital sought they requested")');
+ok(NN.SYSTEM_RATE.quote && NN.SYSTEM_RATE.quote.installedUsd === 1780063 && NN.SYSTEM_RATE.quote.solarKwDc === 315 && Math.abs(NN.SYSTEM_RATE.quote.installedUsd / (NN.SYSTEM_RATE.quote.solarKwDc * 1000) - NN.SYSTEM_RATE.perWdc) < 0.005, 'the rate is the quote over its solar, to the cent');
+eq(NN.SYSTEM_RATE.storageOnlyPerW, 6, 'NextNRG storage alone is $6.00 per W of rated power, installed');
+ok(NN.SYSTEM_RATE.includes.join(',') === 'the solar array,the storage beside it,installation labor' && NN.SYSTEM_RATE.contingency === false, 'what the price includes, and no contingency on a vendor\'s installed price');
 ok(/\$1,780,063/.test(NN.SYSTEM_RATE.corroboration) && /\$5\.65\/W DC/.test(NN.SYSTEM_RATE.corroboration), 'corroborated by NextNRG\'s own Topanga one-pager ($5.65/W DC for 315 kW DC + 300 kW / 1.8 MWh)');
 ok(NN.isVendorOrg('nextnrg.com') && NN.isVendorOrg('NextNRG.com') && !NN.isVendorOrg('clearsky-usa.com') && !NN.isVendorOrg(null), 'NextNRG\'s own workspace is the vendor\'s');
 ok(NN.isNextnrgSolar({ sku: 'NEXTNRG-PV-EAGLE-G7B' }) && NN.isNextnrgSolar({ mfr: 'NextNRG' }) && NN.isNextnrgSolar({ nextnrg: true }) && !NN.isNextnrgSolar({ mfr: 'Jinko' }) && !NN.isNextnrgSolar(null), 'an array is NextNRG\'s by its stamp');
 var EC = require(path.join(ROOT, 'api/_lib/editor-cost'));
 ok(EC.NN_RATE === NN.SYSTEM_RATE, 'the cost engine reads the one record');
 var ws = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 1000, kw: 250, cost: null } } }, counts: {}, sheet: {} });
-eq(ws.lines.nextnrg.total, 2208000, 'Topanga: 368 kW-DC at $6.00/W is $2,208,000 in NextNRG\'s own workspace');
-ok(!ws.lines.nextnrg.storage.inside && ws.lines.bess.rows[0].nextnrgRate && ws.lines.bess.total === 1500000 && ws.lines.nextnrg.storage.total === 1500000 && ws.lines.solar.rows.length === 0, 'the 250 kW / 1,000 kWh battery beside it is its own installed price, $1,500,000, never folded into the solar line');
-eq(ws.totals.total, 2208000 + 1500000, 'and no contingency rides on either'); eq(ws.totals.itcBasis, 2208000 + 1500000, 'both are energy property');
+eq(ws.lines.nextnrg.total, 2079200, 'Topanga: 368 kW-DC at $5.65/W is $2,079,200 in NextNRG\'s own workspace');
+ok(ws.lines.nextnrg.storage.inside && ws.lines.bess.rows[0].inSystem && ws.lines.bess.total === 0 && ws.lines.solar.rows.length === 0, 'the 250 kW / 1,000 kWh battery beside it is inside the price, not priced again');
+eq(ws.totals.total, 2079200, 'and no contingency rides on it'); eq(ws.totals.itcBasis, 2079200, 'it is energy property');
 var st = EC.rollup({ solarKwDc: 500, solar: { byMount: { ground: 132 }, nextnrgKwDc: 368 }, fleet: { units: 2, byModel: { 'NEXTNRG-SAFT-IFLEX-3400': { qty: 1, kwh: 3400, kw: 1000, cost: null, nextnrg: true }, 'GOTION-EDGE-760': { qty: 1, kwh: 760, kw: 380, cost: null, catalogKey: 'GOTION-EDGE-760' } } }, counts: {}, sheet: {} });
-ok(st.lines.nextnrg.total === 2208000 && st.lines.nextnrg.vendor === 'product' && st.lines.solar.rows[0].mount === 'ground' && st.lines.solar.rows[0].kwDc === 132, 'in another workspace, only the array stamped NextNRG\'s is the system; the rest is priced by mount');
-ok(st.lines.bess.rows[0].nextnrgRate && st.lines.bess.rows[0].total === 6000000 && !st.lines.bess.rows[1].nextnrgRate && st.lines.bess.rows[1].total === Math.round(84740 * 1.55), 'NextNRG\'s 1,000 kW battery is $6,000,000 on its own line; a Gotion beside it keeps its own price');
-ok(Math.abs(st.totals.cont - (st.totals.sub - 2208000 - 6000000) * 0.1) < 1e-6, 'contingency on everything but the vendor\'s installed prices');
+ok(st.lines.nextnrg.total === 2079200 && st.lines.nextnrg.vendor === 'product' && st.lines.solar.rows[0].mount === 'ground' && st.lines.solar.rows[0].kwDc === 132, 'in another workspace, only the array stamped NextNRG\'s is the system; the rest is priced by mount');
+ok(st.lines.bess.rows[0].inSystem && st.lines.bess.rows[0].total === 0 && !st.lines.bess.rows[1].inSystem && st.lines.bess.rows[1].total === Math.round(84740 * 1.55), 'NextNRG\'s battery is inside the system; a Gotion beside it keeps its own price');
+ok(Math.abs(st.totals.cont - (st.totals.sub - 2079200) * 0.1) < 1e-6, 'contingency on everything but the vendor\'s installed price');
 var alone = EC.rollup({ fleet: { units: 1, byModel: { 'NEXTNRG-SAFT-IFLEX-3400': { qty: 1, kwh: 3400, kw: 1000, cost: null, nextnrg: true } } }, counts: {}, sheet: {} });
 ok(alone.lines.nextnrg.storage.total === 6000000 && alone.lines.bess.rows[0].nextnrgRate && alone.totals.total === 6000000 && alone.totals.cont === 0, 'NextNRG storage with no NextNRG solar beside it: $6.00 per W of rated power, installed, no contingency');
 var typed = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 100, solar: { byMount: { roof: 100 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 500, kw: 250, cost: 90000 } } }, counts: {}, sheet: {} });
-ok(typed.lines.bess.rows[0].total === Math.round(90000 * 1.55) && !typed.lines.bess.rows[0].nextnrgRate, 'a battery whose price was typed keeps it');
+ok(typed.lines.bess.rows[0].total === Math.round(90000 * 1.55) && !typed.lines.bess.rows[0].inSystem, 'a battery whose price was typed keeps it');
 ok(/q\.vendorOrg = caller\.orgId \|\| null;/.test(fs.readFileSync(path.join(ROOT, 'api/cost-rollup.js'), 'utf8')), 'the endpoint stamps whose workspace is pricing; the body never says');
 ok(/nextnrgKwDc:\(typeof omegaSolarNextnrgKwDc==='function'\)/.test(ED) && /nextnrg: !!\(\(ce && \(ce\.nextnrg===true \|\| String\(ce\.mfr\|\|''\)\.toLowerCase\(\)==='nextnrg'\)\) \|\| String\(b\.mfr\|\|''\)\.toLowerCase\(\)==='nextnrg' \|\| \/\^nextnrg\\b\/i\.test\(String\(k\)\) \|\| \/nextnrg\/i\.test\(String\(ck\|\|''\)\)\)/.test(ED), 'the page sends which arrays and batteries are NextNRG\'s, as facts');
 ok(/function omegaSolarIsNextnrg\(s\)/.test(ED) && /if\(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg\(s\)\) return;/.test(bodyFrom(ED, 'function omegaSolarByMount(')), 'a NextNRG array is kept out of the mount bands');
