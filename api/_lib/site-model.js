@@ -344,6 +344,26 @@ function skidInput(site, over, ctx, d) {
 /* summaryOf(result, input, meta): what the site keeps of a run. Every
    figure is the engine's own; a lease with no capital has no IRR and says
    so by null. */
+/* What the compute adds (2026-10-14, Tommy: "the point of adding the
+   compute pod for the system is to improve the total IRR of the project"):
+   the same engine run three ways on the same facts — the host's system
+   alone (no pods), the skid alone (no host system), and the whole — so a
+   page can print the uplift instead of leaving it to be inferred. Null
+   when the case is not a skid beside a host system; a side case that
+   refuses is left null, never invented. */
+function upliftOf(input, result) {
+  if (!input || !input.host || !input.skid || !result || result.ok === false) return null;
+  function side(mut) {
+    try { var x = JSON.parse(JSON.stringify(input)); mut(x); var r = CS.model(x); if (!r || r.ok === false || !r.deals || !r.deals.own) return null;
+          return { irr: r.deals.own.irr == null ? null : r.deals.own.irr, capital: r.deals.own.capital == null ? null : r.deals.own.capital }; }
+    catch (e) { return null; }
+  }
+  var whole = result.deals && result.deals.own ? { irr: result.deals.own.irr == null ? null : result.deals.own.irr, capital: result.deals.own.capital == null ? null : result.deals.own.capital } : null;
+  return { whole: whole,
+           hostAlone: side(function (x) { x.compute.pods = 0; delete x.skid; }),
+           skidAlone: side(function (x) { delete x.host; }) };
+}
+
 function summaryOf(result, input, meta) {
   meta = meta || {};
   var pf = result && result.proforma || null, m = pf && pf.metrics || {}, su = pf && pf.sourcesUses || {}, who = result && result.structure || {};
@@ -377,6 +397,8 @@ function summaryOf(result, input, meta) {
     host: result && result.host ? { solarKwDc: result.host.solarKwDc, bessKw: result.host.bessKw, bessKwh: result.host.bessKwh, capex: result.host.capex, basis: result.host.basis || null,
                                     ppa: result.host.ppa || null, revenuePerYear: result.host.revenuePerYear || null, revenueBasis: result.host.revenueBasis || null, noRevenue: !result.host.ppa && !(result.host.revenuePerYear > 0) } : null,
     computeCapex: result && result.computeCapex != null ? result.computeCapex : null,
+    /* the host alone, the skid alone, the whole: what the compute adds */
+    uplift: meta.uplift || null,
     designHash: meta.designHash || null, auto: meta.auto === true
   };
 }
@@ -393,5 +415,5 @@ function askOf(site) {
 }
 
 module.exports = { inputFor: inputFor, summaryOf: summaryOf, askOf: askOf, podsOf: podsOf, serviceOf: serviceOf, evOf: evOf, zipOf: zipOf,
-  skidInput: skidInput, skidFacts: skidFacts, skidChipsets: skidChipsets, hostOf: hostOf, ppaOf: ppaOf,
+  skidInput: skidInput, skidFacts: skidFacts, skidChipsets: skidChipsets, hostOf: hostOf, ppaOf: ppaOf, upliftOf: upliftOf,
   GPU_CLASSES: GPU_CLASSES, STRUCTURES: STRUCTURES, HOST_TYPES: HOST_TYPES };

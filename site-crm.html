@@ -761,6 +761,9 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (lm.irr == null) h += '<div class="li-body">No capital is invested under this structure, so there is no IRR. Choose Own or the pod layer above for the full pro forma.</div>';
     else h += '<div class="kpis">' + kpi(money(lm.equity), lm.levered ? 'equity sought<br>beside ' + money(lm.debt) + ' of debt' : 'total investment sought<br>100% equity') +
       kpi(irrPct(lm.irr), 'after-tax ' + (lm.levered ? 'equity' : 'unlevered') + ' IRR<br>over the ' + esc(lm.termYears || 10) + '-year term', lm.irr > 0.1 ? 'good' : lm.irr < 0 ? 'warn' : '') +
+      (lm.uplift && lm.uplift.hostAlone && lm.uplift.hostAlone.irr != null && lm.uplift.whole && lm.uplift.whole.irr != null
+        ? kpi(irrPct(lm.uplift.hostAlone.irr) + ' \u2192 ' + irrPct(lm.uplift.whole.irr), 'what the skid adds<br>the host\u2019s system alone \u2192 with the skid' + (lm.uplift.skidAlone && lm.uplift.skidAlone.irr != null ? ' \u00b7 the skid alone ' + irrPct(lm.uplift.skidAlone.irr) : ''), lm.uplift.whole.irr > lm.uplift.hostAlone.irr ? 'good' : 'warn')
+        : '') +
       kpi(money(lm.totalReturns), 'total investor returns<br>over the life of the project') + kpi(lm.paybackYears == null ? 'n/a' : '~' + Number(lm.paybackYears).toFixed(1) + ' yr', 'after-tax payback') + '</div>';
     h += '<div class="cap-state"><span class="pill ' + (v.tone === 'ok' ? 'pill-ok' : v.tone === 'warn' ? 'pill-warn' : 'pill-unk') + '">' + esc(v.label || 'No verdict') + '</span>' + (v.gate ? '<span class="li-meta">Next: ' + esc(v.gate) + '</span>' : '') + '</div>';
     var deals = lm.deals || {};
