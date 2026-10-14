@@ -59,10 +59,12 @@ assert.match(String(EC._tables.BENCH.pvSource), /Q1 2025/, 'the book names its s
 var ep = read('api/cost-rollup.js');
 assert.match(ep, /req\.method !== 'POST'/); assert.match(ep, /A\.authenticate\(req\)/); assert.match(ep, /caller\.orgId \|\| caller\.staff/); assert.match(ep, /EC\.rollup\(q\)/); count += 4;
 assert.match(ep, /q\.vendorOrg = caller\.orgId \|\| null;/, 'the caller\'s workspace is stamped on the request (a vendor prices its own products), never read off the body'); count++;
-/* NextNRG's solar + storage system at $5.65/W-DC installed, the one-pager's own rate with the battery inside (api/_lib/nextnrg.js SYSTEM_RATE; scripts/tests/tnextnrg.js holds the cases): the Run total and the ITC basis carry it, the record's lines name it */
+/* NextNRG's solar at $1.98/W-DC and NextNRG's storage at $6.00 per W of rated power, each installed on its own line (api/_lib/nextnrg.js SYSTEM_RATE; scripts/tests/tnextnrg.js holds the cases): the Run total and the ITC basis carry them, the record's lines name them */
 var nn = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 1000, kw: 250, cost: null } } }, counts: { pad: 1 }, sheet: {} });
-assert.equal(nn.totals.nextnrg, 2079200); assert.equal(nn.totals.bess, 0, 'the 250 kW / 1,000 kWh NextNRG battery beside the array is inside the system price'); assert.equal(nn.totals.solar, 0); assert.equal(nn.totals.noContingency, 2079200); count += 4;
-assert.equal(nn.totals.sub, 2079200 + 4800); assert.equal(nn.totals.cont, 480); assert.equal(nn.totals.total, 2079200 + 4800 + 480); assert.ok(Math.abs(nn.totals.itcBasis - (2079200 + 4800 * 1.1)) < 1e-6); assert.equal(nn.flags.nextnrg, true); count += 5;
+assert.equal(nn.totals.nextnrg, 728640); assert.equal(nn.totals.bess, 1500000, 'the 250 kW / 1,000 kWh NextNRG battery is its own line at $6.00 a watt of rated power'); assert.equal(nn.totals.solar, 0); assert.equal(nn.totals.noContingency, 2228640); count += 4;
+assert.equal(nn.totals.sub, 2228640 + 4800); assert.equal(nn.totals.cont, 480); assert.equal(nn.totals.total, 2228640 + 4800 + 480); assert.ok(Math.abs(nn.totals.itcBasis - (2228640 + 4800 * 1.1)) < 1e-6); assert.equal(nn.flags.nextnrg, true); count += 5;
+var nnSolo = EC.rollup({ solarKwDc: 350, solar: { byMount: { roof: 0 }, nextnrgKwDc: 350 } });
+assert.equal(nnSolo.totals.total, 693000, '350 kW of NextNRG solar alone pays for solar alone: $693,000, never a battery that is not on the drawing (2026-10-14)'); count++;
 assert.equal(nn.totals.low, nn.totals.total); assert.equal(nn.totals.high, nn.totals.total); count += 2;
 var nnActual = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, sheet: { actualTotal: 2500000 } });
 assert.equal(nnActual.totals.total, 2500000, 'a contracted number still wins'); count++;
@@ -182,7 +184,7 @@ assert.match(ed.slice(ed.indexOf('  function relayout(sh, opts) {')), /_derApply
 assert.match(ed, /field\('kW-DC \\u2014 set by hand \(blank = the layout/, 'the array editor offers it'); assert.match(ed, /if \(kwSet > 0\) sh\.kwOverride = kwSet; else delete sh\.kwOverride;/, 'and Apply writes or clears it'); count += 2;
 /* the Results rail prints the drawing's own products at their prices (2026-10-14): NextNRG's system at its $/W, the Omega-Core skids, the controller — the server's lines as published */
 var rail = ed.slice(ed.indexOf("fi += _omRow('Total install'"), ed.indexOf("_omSet('rr-b-fin', fi);"));
-assert.match(rail, /_omRow\('NextNRG solar \+ storage \('\+Math\.round\(\+_nnL\.solarKwDc\|\|0\)/, 'the NextNRG system row'); assert.match(rail, /window\._OMEGACORE_DETAIL/, 'the skid row reads the published line'); assert.match(rail, /_omRow\('Omega-Core skid'/, 'and prints it'); assert.match(rail, /_omRow\('NextNRG Microgrid Controller'/, 'the controller row'); count += 4;
+assert.match(rail, /_omRow\('NextNRG solar \('\+Math\.round\(\+_nnL\.solarKwDc\|\|0\)/, 'the NextNRG solar row'); assert.match(rail, /_omRow\('NextNRG storage \('\+Math\.round\(\+_nnL\.storage\.kw\|\|0\)/, 'and the NextNRG storage row, its own'); count++; assert.match(rail, /window\._OMEGACORE_DETAIL/, 'the skid row reads the published line'); assert.match(rail, /_omRow\('Omega-Core skid'/, 'and prints it'); assert.match(rail, /_omRow\('NextNRG Microgrid Controller'/, 'the controller row'); count += 4;
 assert.match(ed, /window\._OMEGACORE_TOTAL = T\.omegaCore \|\| 0; window\._OMEGACORE_DETAIL = LN\.omegaCore \|\| null;/, 'the cost render publishes the skid line'); count++;
 /* NextNRG's storage is told by the catalog key behind the display name, the make, or a model named NextNRG's (2026-10-14: a NextNRG 1,000 kWh pad keyed by its model name ran at the container rate, $144k with contingency, against the $1.5M its 250 kW is at NextNRG's $6.00/W) */
 function collectFleet(byModel, catalog) {
