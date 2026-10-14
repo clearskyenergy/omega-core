@@ -70,7 +70,10 @@ var run = {
   activity: function () { return C.get('/api/sales', { view: 'activity', kind: opts.kind, limit: opts.limit }); },
   suppressions: function () { return C.get('/api/sales', { view: 'suppressions' }); },
   upsert: function () {
-    var x = readJson(args[0]), list = Array.isArray(x) ? x : (x.prospects || []);
+    /* an array, { prospects: [...] }, or ONE bare prospect object (a desk
+       logged on 2026-10-13 that a bare object silently filed nothing) */
+    var x = readJson(args[0]), list = Array.isArray(x) ? x : (x.prospects || ((x.domain || x.email || x.website || x.company) ? [x] : []));
+    if (!list.length) { console.error('upsert: nothing to file — give an array, { prospects: [...] } or one prospect object with a domain or a contact email'); process.exit(2); }
     return C.chunks(list, 200).reduce(function (p, part) {
       return p.then(function (acc) { return C.post({ action: 'upsert-prospects', label: opts.label, prospects: part }).then(function (r) {
         acc.created = acc.created.concat(r.created); acc.updated = acc.updated.concat(r.updated); acc.errors = acc.errors.concat(r.errors); return acc; }); });
