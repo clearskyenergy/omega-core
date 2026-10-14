@@ -15366,7 +15366,11 @@ var GM_ROW_DRAW_CAP = 1200;   /* max individual tables to render as shapes */
 var GM_TABLE = {
   'fixed-ground': { tableW:20, tableH:12, tiltDeg:25 },  /* 2-portrait-high */
   'tracker-1ax':  { tableW:6,  tableH:180, tiltDeg:0  },  /* long N-S torque tube */
-  'rooftop':      { tableW:20, tableH:10, tiltDeg:10 },
+  /* a flat-roof table: 2-up landscape of the module (2 x 1134 mm = 7.44 ft
+     deep, carried as 7.5) at 10 deg, on a 12.5 ft row pitch (GCR 0.60) —
+     the standard flat-roof row spacing that clears inter-row shading
+     (Tommy, 2026-10-14: "it should be at 12.5 for roof mount") */
+  'rooftop':      { tableW:20, tableH:7.5, tiltDeg:10 },
   'carport':      { tableW:20, tableH:40, tiltDeg:7  }
 };
 function _gmTable(presetKey){ return GM_TABLE[presetKey] || GM_TABLE['fixed-ground']; }
@@ -55207,8 +55211,8 @@ var DER_SOLAR_PRESETS = {
                     note:'Typical fixed-tilt row pitch. Most common utility ground-mount.' },
   'tracker-1ax':  { label:'Single-axis tracker',     gcr:0.33, wpsf:DER_PV_WPSF, setbackFt:15, cf:0.22,
                     note:'Trackers need wider pitch (lower GCR) but gain ~20% capacity factor.' },
-  'rooftop':      { label:'Rooftop (coplanar)',      gcr:0.70, wpsf:DER_PV_WPSF, setbackFt:3,  cf:0.16,
-                    note:'Dense coplanar layout; setback is fire-access driven.' },
+  'rooftop':      { label:'Rooftop (10\u00b0 tilt, 12.5 ft rows)', gcr:0.60, wpsf:DER_PV_WPSF, setbackFt:3,  cf:0.16,
+                    note:'2-up landscape tables at 10\u00b0 on a 12.5 ft row pitch (GCR 0.60): the flat-roof spacing that clears inter-row shading. Setback is fire-access driven.' },
   'carport':      { label:'Carport / canopy',        gcr:0.85, wpsf:DER_PV_WPSF, setbackFt:5,  cf:0.17,
                     note:'Near-continuous deck over parking; little inter-row loss.' },
   'custom':       { label:'Custom (enter your own)', gcr:0.40, wpsf:DER_PV_WPSF, setbackFt:10, cf:0.18,
@@ -55547,7 +55551,7 @@ function _solarRecalcAll(){
         var wFt=(sh.wPx||0)/ppf, hFt=(sh.hPx||0)/ppf;
         var L=_derSolarLayout(wFt,hFt,sh.mount);
         _derApplyKwOverride(sh, L.kw); sh.sqft=L.grossSqft; sh.buildableSqft=L.buildableSqft;
-        sh.moduleSqft=L.moduleSqft; sh.setbackFt=L.setbackFt; sh.gcr=L.gcr;
+        sh.moduleSqft=L.moduleSqft; sh.setbackFt=L.setbackFt; sh.gcr=L.gcr; if(L.pitchFt) sh.pitchFt=L.pitchFt;
         sh.wFt=L.wFt; sh.hFt=L.hFt;
         if(typeof renderShape==='function'){ try{ renderShape(sh); }catch(e){} }
         n++;
@@ -55574,7 +55578,11 @@ function _derSolarLayout(wFt, hFt, mount){
   var buildSqft = bW*bH;
   var modSqft   = buildSqft*gcr;
   var kw = Math.round((modSqft * wpsf)/1000 * 10)/10;
-  return { mount:m, setbackFt:sb, gcr:gcr, wpsf:wpsf, cf:A.cf,
+  /* the row pitch the mount's racking implies (table depth over GCR: a
+     roof's 7.5 ft 2-up at 0.60 is 12.5 ft), so a rectangle reads it too */
+  var tbl=(typeof _gmTable==='function')?_gmTable(A.presetKey):null;
+  var pitchFt=(tbl && tbl.tableH>0 && gcr>0) ? Math.round(tbl.tableH/gcr*10)/10 : null;
+  return { mount:m, setbackFt:sb, gcr:gcr, wpsf:wpsf, cf:A.cf, pitchFt:pitchFt,
            presetKey:A.presetKey, assumeSource:A.source,
            grossSqft:Math.round(grossSqft), buildableSqft:Math.round(buildSqft),
            moduleSqft:Math.round(modSqft), kw:kw,
@@ -55629,7 +55637,7 @@ function _derPlaceSolar(a, b){
            /* sqft stays the GROSS footprint (what's drawn on the map);
               buildable/module/gcr are carried alongside for reporting. */
            sqft:L.grossSqft, buildableSqft:L.buildableSqft, moduleSqft:L.moduleSqft,
-           setbackFt:L.setbackFt, gcr:L.gcr, wFt:L.wFt, hFt:L.hFt,
+           setbackFt:L.setbackFt, gcr:L.gcr, wFt:L.wFt, hFt:L.hFt, pitchFt:L.pitchFt,
            kw:L.kw, scaled:_derScaled() };
   /* The module this array is built with and, when it is a product somebody
      sells (NextNRG's EAGLE G7B, the default), whose product it is — as the
@@ -149708,8 +149716,8 @@ var RACK = {
                     gcr:0.33, maxRot:60, backtrack:true },
   'tracker-tft':  { label:'Single-axis tracker',     tracker:true,  tilt:0,  mount:'open',
                     gcr:0.33, maxRot:60, backtrack:true },
-  'rooftop':      { label:'Rooftop (coplanar)',      tracker:false, tilt:10, mount:'roof',
-                    gcr:0.70, maxRot:0, backtrack:false },
+  'rooftop':      { label:'Rooftop (10\u00b0 tilt, 12.5 ft rows)', tracker:false, tilt:10, mount:'roof',
+                    gcr:0.60, maxRot:0, backtrack:false },
   'carport':      { label:'Carport / canopy',        tracker:false, tilt:7,  mount:'carport',
                     gcr:0.85, maxRot:0, backtrack:false },
   'custom':       { label:'Custom',                  tracker:false, tilt:25, mount:'open',

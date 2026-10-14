@@ -1251,7 +1251,9 @@ system rate (`omegaSolarIsNextnrg`: the stamp, else the project's module);
 the generic 550 W module in Solar Assumptions is the benchmark road. A
 traced area lays out with the preset of its MOUNT (a select on the modal,
 starting from the ribbon's Solar choice) so a traced roof and the roof
-rectangle agree, and an array's kW-DC can be SET BY HAND on Array — Edit
+rectangle agree; a roof's rows are 2-up landscape at 10° on a 12.5 ft pitch
+(`GM_TABLE.rooftop` 7.5 ft deep, the rooftop preset GCR 0.60; Tommy,
+2026-10-14: "it should be at 12.5 for roof mount"), and an array's kW-DC can be SET BY HAND on Array — Edit
 Size / Capacity (`kwOverride`, `kwAuto` kept beside it, Clear restores;
 `_derApplyKwOverride` runs at every recompute). Nothing a tenant reads names the source
 workbook; it is the Omega-Core skid. `docs/OMEGA-CORE.md`. Grid Atlas opens at the site's
