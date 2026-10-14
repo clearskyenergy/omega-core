@@ -36,10 +36,20 @@ function assemble(db, id, org, pendingRequests) {
     soft(ref.collection('billing').doc('profile').get(), { exists: false })
   ]).then(function (r) {
     var billing = r[0].exists ? (r[0].data() || {}) : {}, profile = r[5] && r[5].exists ? (r[5].data() || {}) : {};
-    var members = [], owner = null;
-    r[1].forEach(function (d) { var m = d.data() || {}; members.push(m); if (!owner && m.role === 'owner' && m.email) owner = m.email; });
-    var lastSeen = null;
-    r[2].forEach(function (d) { var ms = G.millis((d.data() || {}).lastSeen); if (ms != null && (lastSeen == null || ms > lastSeen)) lastSeen = ms; });
+    var members = [], owner = null, admin = null, anyone = null;
+    r[1].forEach(function (d) {
+      var m = d.data() || {}; members.push(m);
+      if (!m.email || m.status === 'disabled') return;
+      if (!owner && m.role === 'owner') owner = m.email;
+      else if (!admin && m.role === 'admin') admin = m.email;
+      else if (!anyone) anyone = m.email;
+    });
+    var lastSeen = null, seenEmail = null;
+    r[2].forEach(function (d) {
+      var t = d.data() || {}, ms = G.millis(t.lastSeen);
+      if (ms != null && (lastSeen == null || ms > lastSeen)) { lastSeen = ms; if (t.email) seenEmail = t.email; }
+      else if (!seenEmail && t.email) seenEmail = t.email;
+    });
     var newest = r[4].docs && r[4].docs[0] ? G.millis((r[4].docs[0].data() || {}).createdAt) : null;
     var rq = pendingRequests[id] || null;
     return {
@@ -48,7 +58,12 @@ function assemble(db, id, org, pendingRequests) {
       /* a self-serve signup (start.html → api/tenant-signup) carries signup{};
          a seeded or staff-made workspace does not, and nobody waited on it */
       selfServe: !!(org.signup && org.signup.email),
-      who: profile.email || (org.signup && org.signup.email) || owner || null,
+      /* who to write to: the billing contact, the signup, the owner, an admin,
+         any active member, else whoever the team record last saw. 2026-10-13:
+         13 of 14 board rows read who:null (seeded workspaces carry no signup
+         and no owner record), so trial-ending and past-due work had no
+         recipient; a workspace with a person in it names that person. */
+      who: profile.email || (org.signup && org.signup.email) || owner || admin || anyone || seenEmail || null,
       billing: { tier: billing.tier || null, trialEndsAt: G.millis(billing.trialEndsAt), lastPaidAt: G.millis(billing.lastPaidAt),
         subscriptionDue: G.millis(billing.subscriptionDue), amountDue: billing.amountDue == null ? null : Number(billing.amountDue),
         paymentProvider: billing.paymentProvider || null, status: billing.status || null, paymentFailedAt: G.millis(billing.paymentFailedAt),

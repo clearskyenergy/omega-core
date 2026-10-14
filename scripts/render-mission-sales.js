@@ -238,12 +238,12 @@ function ok(cond, msg, detail) { if (cond) console.log('  ok  ' + msg); else fai
       };
     });
     ok(await page.isVisible('#officeFloor') && await page.getByRole('button',{name:'Office map',exact:true}).getAttribute('aria-pressed')==='true', 'the Office floor opens by default');
-    ok(await page.locator('#officeFloor .seatedColleague').count()===7, 'every department has a seated colleague regardless of run history');
+    ok(await page.locator('#officeFloor .seatedColleague').count()===9, 'every department has a seated colleague regardless of run history');
     ok(o.view === 'office', 'the Office view opens' + (vp.name === 'phone' ? ' from More' : ''), o.view);
-    ok(o.rooms.join(',') === 'sales:ran,marketing:never,support:never,software:never,legal:never,admin:never,billing:late', 'seven rooms back to front: Sales lit, Billing amber, the rest dark', o.rooms);
+    ok(o.rooms.join(',') === 'sales:ran,marketing:never,support:never,software:never,legal:never,admin:never,offtake:never,billing:late,projectdev:never', 'nine rooms back to front: Sales lit, Billing amber, the rest dark', o.rooms);
     ok(o.papers === 1, 'one paper on the Sales desk for today\'s entry', o.papers);
     ok(/Sales: answered 1 demo request/.test(o.side) && /2 LATEST/.test(o.side) && /Cold email is blocked/.test(o.side) && /1 desk is overdue/.test(o.side) && !/No desk has logged/.test(o.side) && /1 desk has a plan for/.test(o.side), 'the overview: the runs, the needs, the plan waiting', o.side.slice(0, 700));
-    ok(new RegExp('1 of 7 desks have a recent recorded run; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
+    ok(new RegExp('1 of 9 desks have a recent recorded run; 1 plan for ' + WEEK + ' waiting').test(o.note), 'the note counts the desks and the plan', o.note);
     ok(/1 approval is waiting on you: #BILLING-20261006-1 \(billing: credit of one month/.test(o.side) && !/SALES-20261004-1/.test(o.side) && /1 handoff between desks this week: support → theo #SUPPORT-20261006-1/.test(o.side), 'the protocol: the open approval named (the declined one not), the handoff counted', o.side.slice(0, 1200));
     ok(o.pill === '2', 'the pill counts the two actions: the plan to approve and the approval waiting', o.pill);
     if (vp.name === 'phone') ok(o.sw <= o.vw + 1, 'no sideways scroll on a phone (office)', [o.sw, o.vw]);
