@@ -223,10 +223,17 @@
      already let a member read, so this needs no widening and no mirror. */
   function decide(user) {
     var email = String(user.email || '').toLowerCase();
-    var org = orgOf(email);
-    if (user.emailVerified === true && STAFF.indexOf(org) >= 0) return Promise.resolve(allow({ org: org, staff: true, reason: 'staff' }));
-    if (!org) { refuse('signed-out'); return Promise.resolve(); }
-
+    var mailOrg = orgOf(email);
+    if (user.emailVerified === true && STAFF.indexOf(mailOrg) >= 0) return Promise.resolve(allow({ org: mailOrg, staff: true, reason: 'staff' }));
+    if (!mailOrg) { refuse('signed-out'); return Promise.resolve(); }
+    /* the home is the orgId claim first (a person on a personal address is
+       homed to a slug-keyed workspace), as firestore.rules userOrg() reads it */
+    var claim = typeof user.getIdTokenResult === 'function'
+      ? user.getIdTokenResult().then(function (r) { return String((r && r.claims && r.claims.orgId) || '').toLowerCase(); }, function () { return ''; })
+      : Promise.resolve('');
+    return claim.then(function (home) { return decideFor(user, home || mailOrg); });
+  }
+  function decideFor(user, org) {
     var fb = global.firebase;
     if (!fb || !fb.firestore || !fb.apps || !fb.apps.length) {
       /* No Firestore on the page at all. Signed in is the requirement that

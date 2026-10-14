@@ -4583,6 +4583,10 @@ var _app, _db, _auth, _storage = null, _currentUser = null, _projectId = null, _
    Falls back to 'clearsky.com' only when no email is available. */
 function _projOrgId() {
   try {
+    /* the orgId CLAIM first, as the rules' userOrg() reads it: a person on
+       a personal address (gmail.com) is homed to a slug-keyed workspace and
+       has no domain that would pass the create rule (set on sign-in below) */
+    if (window._homeOrgClaim) return window._homeOrgClaim;
     var em = _currentUser && _currentUser.email;
     if (em && em.indexOf('@') > -1) {
       var d = em.split('@')[1].toLowerCase();
@@ -4689,6 +4693,8 @@ function _initFirebase() {
 
       if (user) {
         _currentUser = user;
+        /* the home-workspace claim _projOrgId() reads first */
+        try { user.getIdTokenResult().then(function (r) { window._homeOrgClaim = String((r && r.claims && r.claims.orgId) || '').toLowerCase(); }, function () {}); } catch (e) {}
 
         /* The org's equipment library, including any uploaded compute
            modules, so the Data Ctr pickers carry them before the library

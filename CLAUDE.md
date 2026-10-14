@@ -129,6 +129,26 @@ clearsky-sitefinder.html, omega-referrals.js) mirror it. Adding a tenant
 alias means editing all of them; core must expose ONE alias map that
 those clients import.
 
+**An individual on a personal address** (2026-10-14, Tommy: "it needs to be
+able to link tenants to a domain but if there is an individual that is just
+them they need to be able to do that"): a company stays keyed by its domain;
+a workspace for a person on a public provider (gmail.com…,
+`api/_lib/public-domains.js`) is keyed by its host SLUG (`personal: true`,
+`ownerEmail` on the record) because one keyed gmail.com would hold every
+Gmail user. The person is HOMED to it by the `orgId` custom claim that
+`api/set-role.js` mints through `logic-members.change()` (set for the
+tenant's own domain or a personal address, `A.isPersonalEmail`, never a
+staff or partner address). ONE order everywhere, the claim then the email
+domain: `userOrg()` in BOTH rules files, `admin.js authenticate()`,
+`verify-token.js`, `omega-tenant.js` `homeOrg` (read off the token before
+entitlements), the editor's `_projOrgId`, the editor gate, projects.html
+and `omega-tools.orgFromUrl`. The console's New tenant takes an ADDRESS in
+the domain field: `GET /api/set-role?email=` (staff) says whether it is
+personal, the three documents are written, then set-role makes the person
+the owner (the account is made if there is none). A workspace owner or
+admin may add a personal address on Team and set-role the same way.
+`scripts/tests/thomeclaim.js` holds all of it.
+
 ## Access rules (summary)
 
 | Doc                              | tenant owner | tenant admin | member | ClearSky staff  |

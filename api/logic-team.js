@@ -49,7 +49,8 @@ function iso(v) { return v && typeof v.toDate === 'function' ? v.toDate().toISOS
    ClearSky's cross-company grant for this workspace — exactly what
    A.canActInOrg (and so logic-access.authorize) would admit. */
 async function admissible(db, org, email) {
-  if (A.orgOf(email) === org) return true;
+  /* a personal address (gmail.com…) is homed by the claim this write mints */
+  if (A.orgOf(email) === org || A.isPersonalEmail(email)) return true;
   var g = await db.collection('org_members').doc(String(email).toLowerCase()).get();
   return g.exists && g.data().active !== false && g.data().orgId === org;
 }

@@ -72,6 +72,12 @@ function orgOf(email) {
   return ORG_ALIAS[d] || d;
 }
 function isStaffEmail(email) { return STAFF_DOMAINS.indexOf(orgOf(email)) >= 0; }
+/* A personal address (gmail.com and the rest of _lib/public-domains.js) is
+   never a workspace key: a person on one is homed by the orgId claim that
+   logic-members.change() mints, which authenticate() and the rules' userOrg()
+   read first. */
+var PUBLIC_DOMAINS = require('./public-domains');
+function isPersonalEmail(email) { return PUBLIC_DOMAINS.indexOf(orgOf(email)) >= 0; }
 
 /* Verify the bearer token; returns { uid, email, orgId, staff, claims }.
 
@@ -175,6 +181,6 @@ function cors(req, res) {
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
 }
 
-module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, degradedReason: degradedReason, orgOf: orgOf, safeOrg: safeOrg, isStaffEmail: isStaffEmail, authenticate: authenticate,
+module.exports = { admin: admin, init: init, db: db, isDegraded: isDegraded, degradedReason: degradedReason, orgOf: orgOf, safeOrg: safeOrg, isStaffEmail: isStaffEmail, isPersonalEmail: isPersonalEmail, authenticate: authenticate,
   canActInOrg: canActInOrg, isTenantAdmin: isTenantAdmin, clientAdmin: clientAdmin, billingOf: billingOf, httpError: httpError, handler: handler,
   FieldValue: function () { return init().firestore.FieldValue; } };

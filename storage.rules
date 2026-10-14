@@ -68,9 +68,12 @@ service firebase.storage {
            : domain;
     }
     function userOrg() {
-      return request.auth != null
-        ? orgAlias(request.auth.token.email.split('@')[1].lower())
-        : '';
+      /* the orgId claim first, as firestore.rules userOrg() reads it: a
+         person on a personal address is homed to the workspace that
+         admitted them (scripts/tests/thomeclaim.js) */
+      return request.auth == null ? ''
+           : request.auth.token.get('orgId', '') != '' ? request.auth.token.orgId
+           : orgAlias(request.auth.token.email.split('@')[1].lower());
     }
 
     /* ClearSky staff — a VERIFIED email only, the same rule as isAdmin() in
