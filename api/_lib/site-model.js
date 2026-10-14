@@ -303,8 +303,15 @@ function skidInput(site, over, ctx, d) {
      project's ask, IRR and payback); a design with no host system runs the
      skid alone */
   var hostBlock = over.hostSystem === false ? null : hostOf(site, d);
-  if (hostBlock) input.host = { solarKwDc: hostBlock.solarKwDc, bessKw: hostBlock.bessKw, bessKwh: hostBlock.bessKwh, capexLines: hostBlock.capexLines, basis: hostBlock.basis,
-                                ppa: hostBlock.ppa || undefined, revenuePerYear: hostBlock.revenuePerYear || undefined, revenueBasis: hostBlock.revenueBasis || undefined };
+  /* no key is ever undefined: the model's input is stored as written, and
+     Firestore refuses an undefined value (2026-10-14: every automatic run
+     on a site with no PPA on record failed on `input.host.ppa`, and the
+     register kept showing the skid-only model) */
+  if (hostBlock) {
+    input.host = { solarKwDc: hostBlock.solarKwDc, bessKw: hostBlock.bessKw, bessKwh: hostBlock.bessKwh, capexLines: hostBlock.capexLines, basis: hostBlock.basis };
+    if (hostBlock.ppa) input.host.ppa = hostBlock.ppa;
+    if (hostBlock.revenuePerYear) { input.host.revenuePerYear = hostBlock.revenuePerYear; input.host.revenueBasis = hostBlock.revenueBasis || ''; }
+  }
   var host = [];
   if (d.bess && pos(d.bess.kwh)) host.push(d.bess.kw + ' kW / ' + d.bess.kwh + ' kWh battery');
   if (d.solar && pos(d.solar.kwDc)) host.push(d.solar.kwDc + ' kW-dc solar');

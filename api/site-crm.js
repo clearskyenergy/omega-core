@@ -1011,7 +1011,9 @@ async function runModel(db, org, site, b, by, now, orgName) {
     projectIrr: summary.preTaxIrr == null ? null : { status: 'ok', annualized: summary.preTaxIrr }, investorIrr: summary.irr == null ? { status: 'not-defined', reason: 'No capital invested under this structure' } : { status: 'ok', annualized: summary.irr }, paybackMonths: summary.paybackYears == null ? null : Math.round(summary.paybackYears * 12),
     capital: summary.totalProjectCost, inputHash: require('crypto').createHash('sha256').update(JSON.stringify([mapped.input, site.data && site.data.revision])).digest('hex'), at: now, by: by };
   await db.runTransaction(async function (tx) {
-    tx.create(mref, { orgId: org, siteId: site.id, input: mapped.input, basis: mapped.basis, result: result, summary: summary, label: label, createdAt: now, createdBy: by });
+    /* stored as plain data: a JSON round trip drops any undefined a mapper
+       left behind, which Firestore refuses outright (2026-10-14) */
+    tx.create(mref, JSON.parse(JSON.stringify({ orgId: org, siteId: site.id, input: mapped.input, basis: mapped.basis, result: result, summary: summary, label: label, createdAt: now, createdBy: by })));
     tx.set(resRef, resRec);
     tx.update(site.ref, facts);
     audit(tx, db, 'sitecrm-site-model', org, site.id, by, now, { modelId: mref.id, pods: summary.pods, structure: summary.structure, irr: summary.irr, totalProjectCost: summary.totalProjectCost, auto: b.auto === true, designHash: summary.designHash });
