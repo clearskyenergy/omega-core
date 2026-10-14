@@ -180,4 +180,8 @@ assert.equal(shC.kw, 77); assert.equal('kwOverride' in shC, false, 'cleared goes
 assert.match(cut('_solarRecalcAll'), /_derApplyKwOverride\(sh, L\.kw\)/, 'the rectangle recalc runs it'); count++;
 assert.match(ed.slice(ed.indexOf('  function relayout(sh, opts) {')), /_derApplyKwOverride\(sh, L\.kw\)/, 'the traced relayout runs it'); count++;
 assert.match(ed, /field\('kW-DC \\u2014 set by hand \(blank = the layout/, 'the array editor offers it'); assert.match(ed, /if \(kwSet > 0\) sh\.kwOverride = kwSet; else delete sh\.kwOverride;/, 'and Apply writes or clears it'); count += 2;
+/* the Results rail prints the drawing's own products at their prices (2026-10-14): NextNRG's system at its $/W, the Omega-Core skids, the controller — the server's lines as published */
+var rail = ed.slice(ed.indexOf("fi += _omRow('Total install'"), ed.indexOf("_omSet('rr-b-fin', fi);"));
+assert.match(rail, /_omRow\('NextNRG solar \+ storage \('\+Math\.round\(\+_nnL\.solarKwDc\|\|0\)/, 'the NextNRG system row'); assert.match(rail, /window\._OMEGACORE_DETAIL/, 'the skid row reads the published line'); assert.match(rail, /_omRow\('Omega-Core skid'/, 'and prints it'); assert.match(rail, /_omRow\('NextNRG Microgrid Controller'/, 'the controller row'); count += 4;
+assert.match(ed, /window\._OMEGACORE_TOTAL = T\.omegaCore \|\| 0; window\._OMEGACORE_DETAIL = LN\.omegaCore \|\| null;/, 'the cost render publishes the skid line'); count++;
 console.log('teditorcost (solar by mount): ' + count + ' assertions passed');

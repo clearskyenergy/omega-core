@@ -37026,6 +37026,19 @@ function omegaRenderResults(){
     var _slMounts=(_sl.rows||[]).map(function(r){ return r.mount==='unspecified'?'':r.mount; }).filter(Boolean);
     fi += _omRow('Solar $/W'+(_slMounts.length?' ('+_slMounts.join(' + ')+')':''), '$'+(+_sl.rate).toFixed(2));
   }
+  /* What the drawing's own products cost on this run, each at its recorded
+     or vendor price (2026-10-14, Tommy: "when i place these elements from
+     the draw function they need to properly be priced and display properly
+     for the pricing on the run tab"): NextNRG's solar + storage system at
+     its $/W, the Omega-Core skids, the NextNRG controller placed for the
+     host. Each is the server's own line, published by _renderCostEst. */
+  var _nnL=window._NEXTNRG_SYSTEM_DETAIL||null, _nnT=_omNum(window._NEXTNRG_SYSTEM_TOTAL);
+  if(_nnT>0 && _nnL) fi += _omRow('NextNRG solar + storage ('+Math.round(+_nnL.solarKwDc||0).toLocaleString()+' kW-DC at $'+(+_nnL.rate).toFixed(2)+'/W)', _omMoney(_nnT));
+  else if(_nnL && _nnL.storage && _omNum(_nnL.storage.total)>0) fi += _omRow('NextNRG storage ('+Math.round(+_nnL.storage.kw||0).toLocaleString()+' kW at $'+(+_nnL.storage.ratePerW).toFixed(2)+'/W)', _omMoney(_nnL.storage.total));
+  var _ocL=window._OMEGACORE_DETAIL||null, _ocT=_omNum(window._OMEGACORE_TOTAL);
+  if(_ocT>0 && _ocL) fi += _omRow('Omega-Core skid'+(_ocL.skids>1?' \u00d7'+_ocL.skids:'')+' (as recorded + controller)', _omMoney(_ocT));
+  var _mgL=window._MGC_DETAIL||null, _mgT=_omNum(window._MGC_TOTAL);
+  if(_mgT>0 && _mgL) fi += _omRow('NextNRG Microgrid Controller'+(_mgL.qty>1?' \u00d7'+_mgL.qty:''), _omMoney(_mgT));
   fi += _omRow('$/kW', perKw ? '$'+Math.round(perKw).toLocaleString() : null);
   var _fc = _fullCost ? ' · full cost' : '';
   fi += _omRow('Payback'+_fc, (payback!==null && payback>0) ? payback.toFixed(1)+' yrs' : null);
