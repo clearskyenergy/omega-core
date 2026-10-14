@@ -1358,7 +1358,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var r = await SWEEP.run(p, {
       views: SWEEP_VIEWS, scope: '#content', chrome: '#side-nav, #topbar, .ows-tabs',
       clickable: '.next .row[data-row], [data-need], [data-opt]',
-      skip: '#ows-signout', inner: '.ows-row',
+      /* never sign the visitor out: the rail's button and the Settings drawer's row (2026-10-14: the sweep clicked the row, sign-out redirected to login twice, the second time 600 ms later under the next control, and the loading screen it raised hid every control after it) */
+      skip: '#ows-signout, [data-row="signout"]', inner: '.ows-row',
       overlays: '#ows-overlay, #new-proj-modal.on, #ows-menu, #omega-package-menu, #ot-modal, body.ows-rail-open',
       reveal: phone ? [{ within: '#side-nav', open: async function (pg) { if (!(await pg.evaluate(function () { return document.body.classList.contains('ows-rail-open'); }))) await pg.click('#ows-burger'); } }] : [],
       forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },
@@ -1435,7 +1436,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var r = await SWEEP.run(p, {
       views: [{ name: page.replace(/^\/|\.html$/g, ''), enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],
       scope: '#main', chrome: '#side-nav, #topbar, .ows-tabs',
-      skip: '#ows-signout, [onclick*="signOut"], #mkt-filters button', inner: '.ows-row',
+      skip: '#ows-signout, [data-row="signout"], [onclick*="signOut"], #mkt-filters button', inner: '.ows-row',
       overlays: '#ows-overlay, #new-proj-modal.on, #ows-menu, #omega-package-menu, #ot-modal, #upgrade-modal, .tb-nav.open, body.ows-rail-open',
       reveal: phone ? [{ within: '#side-nav', open: async function (pg) { if (!(await pg.evaluate(function () { return document.body.classList.contains('ows-rail-open'); }))) await pg.click('#ows-burger'); } }] : [],
       forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu', 'upgrade-modal'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); var n = document.querySelector('.tb-nav'); if (n) n.classList.remove('open'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },

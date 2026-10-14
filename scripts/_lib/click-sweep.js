@@ -183,7 +183,7 @@ async function run(p, opts) {
   var sel = CLICKABLE + (opts.clickable ? ', ' + opts.clickable : '');
   var settle = opts.settle || 260;
   var reveal = opts.reveal || [];
-  var report = { clicks: 0, held: [], read: [], problems: [], controls: 0, skipped: [], innerSkipped: [], hidden: [], frames: [], tabs: [] };
+  var report = { clicks: 0, held: [], read: [], problems: [], controls: 0, skipped: [], innerSkipped: [], hidden: [], frames: [], tabs: [], late: [] };
   var current = null, held = [], innerSeen = {};
   var said = {};
   function problem(kind, control, detail) { var k = kind + '|' + control + '|' + detail; if (said[k]) return; said[k] = true; report.problems.push({ kind: kind, control: control, detail: detail }); }
@@ -208,7 +208,16 @@ async function run(p, opts) {
 
   await p.route('**/*', function (r) {
     var q = r.request();
-    if (q.isNavigationRequest() && q.frame() === p.mainFrame()) { held.push(q.url()); return r.abort('aborted'); }
+    if (q.isNavigationRequest() && q.frame() === p.mainFrame()) {
+      held.push(q.url());
+      /* a navigation that lands after its click was judged (an auth change,
+         a promise) has already raised the loading screen, which hides every
+         control under it; lower it here, whoever raised it, and note it
+         (2026-10-14: a sign-out's second redirect hid the rest of a sweep) */
+      if (current === null) report.late.push(q.url());
+      setTimeout(function () { p.evaluate(function () { if (window.OmegaSplash) window.OmegaSplash.done(); }).catch(function () {}); }, 0);
+      return r.abort('aborted');
+    }
     /* a page a click loads into a frame is a link too: named, checked, let through */
     if (q.isNavigationRequest() && current && /^https?:/.test(q.url())) { report.frames.push(current + ' → ' + q.url()); var lpf = linkProblem(q.url(), q.url()); if (lpf) problem('link', current, 'loads into a frame ' + lpf); }
     return r.fallback();
