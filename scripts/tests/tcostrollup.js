@@ -45,7 +45,8 @@ global.S = { lastRunAt: null, costRollup: null };
 
 const AT = Date.UTC(2026, 8, 28, 20, 1, 0);
 function sheet(o) {
-  const w = { _COST_TOTAL: 0, _NET_COST: 0, _INC_TOTAL: 0, _YR1_REV: 0, _COST_IS_CONTRACTED: false };
+  const w = { _COST_TOTAL: 0, _NET_COST: 0, _INC_TOTAL: 0, _YR1_REV: 0, _COST_IS_CONTRACTED: false,
+    _SOLAR_TOTAL: 0, _BESS_TOTAL: 0, _NEXTNRG_SYSTEM_TOTAL: 0, _EV_TOTAL: 0, _MGC_TOTAL: 0, _COMPUTE_TOTAL: 0, _DC_TOTAL: 0, _GEN_TOTAL: 0, _BNZ_TOTAL: 0, _SITE_EQ_TOTAL: 0, _INDIRECT_TOTAL: 0, _CONT_TOTAL: 0 };
   Object.keys(o || {}).forEach(k => { w[k] = o[k]; });
   Object.keys(w).forEach(k => { global[k] = w[k]; });
   S.lastRunAt = AT; S.costRollup = null;
@@ -101,6 +102,21 @@ console.log('\nthe record\'s fields, and nothing the run did not produce');
   chk('an incentive of zero is written as zero, the run netted none', 'incentive' in nb && nb.incentive === 0);
 }
 
+console.log('\nthe run carries its lines (2026-10-14): the site\u2019s compute model puts the host\u2019s solar, storage and NextNRG system on their asset classes');
+{
+  sheet({ _COST_TOTAL: 2300000, _NET_COST: 2300000, _SOLAR_TOTAL: 0, _BESS_TOTAL: 0, _NEXTNRG_SYSTEM_TOTAL: 2208000, _EV_TOTAL: 0, _MGC_TOTAL: 0, _COMPUTE_TOTAL: 0, _DC_TOTAL: 0, _GEN_TOTAL: 0, _BNZ_TOTAL: 0, _SITE_EQ_TOTAL: 48000, _INDIRECT_TOTAL: 0, _CONT_TOTAL: 44000 });
+  const r = omegaRunRollup(), f = omegaRollupFields(r);
+  chk('every line the sheet printed, to the dollar, a line it did not price as 0', JSON.stringify(r.capexLines) === JSON.stringify({ solar: 0, bess: 0, nextnrgSystem: 2208000, ev: 0, controller: 0, compute: 0, dc: 0, gen: 0, envelope: 0, site: 48000, indirect: 0, contingency: 44000, omegaCore: 0 }), JSON.stringify(r.capexLines));
+  chk('the lines ride the record\u2019s fields', f.capexLines === r.capexLines && f.capex === 2300000);
+  sheet({ _COST_TOTAL: 9000 }); const nb = omegaRollupFields(omegaRunRollup());
+  chk('a sheet with no line totals published writes zeros, never undefined', nb.capexLines && Object.keys(nb.capexLines).length === 13 && Object.keys(nb.capexLines).every(k => nb.capexLines[k] === 0));
+  const DR = require(path.join(ROOT, 'api/_lib/portfolio/design-read.js'));
+  const d = DR.designOf({ shapes: [{ kind: 'dersolar', kw: 368 }], capex: 2300000, capexSource: 'site-map', capexLines: r.capexLines }, 'p');
+  chk('the design reads the lines off the record', d.capexLines && d.capexLines.nextnrgSystem === 2208000 && d.capexLines.site === 48000 && d.capexLines.solar === 0, JSON.stringify(d.capexLines));
+  const d2 = DR.designOf({ shapes: [{ kind: 'dersolar', kw: 368 }], capex: 2300000, capexSource: 'site-map' }, 'p');
+  chk('a record saved before the lines existed reads none, and the hash tells them apart', d2.capexLines === null && d2.hash !== d.hash);
+}
+
 console.log('\nthe run saves what it priced');
 {
   let saved = 0, marked = [];
@@ -134,7 +150,7 @@ console.log('\nthe editor wires it: Run captures, the payload carries it, a load
   chk('and saves once the results are current', /omegaSetStale\(false\); \}catch\(e\)\{\}\s*try\{ omegaRunSave\(\); \}catch\(e\)\{\}/.test(run));
   const save = bodyFrom(ED, 'async function saveProject(');
   chk('saveProject asks omegaRollupFields for the record\'s fields before the payload literal', /const _rollup = \(typeof omegaRollupFields==='function'\) \? omegaRollupFields\(S\.costRollup\) : \{\};\s*const payload = \{/.test(save));
-  ['capex', 'incentive', 'annualRevenue', 'bessKwh', 'bessKw', 'capexAt', 'capexSource'].forEach(k => {
+  ['capex', 'incentive', 'annualRevenue', 'bessKwh', 'bessKw', 'capexAt', 'capexSource', 'capexLines'].forEach(k => {
     chk(k + ' is in the save payload literal, from the rollup, never a spread', new RegExp('^\\s*' + k + ':\\s+_rollup\\.' + k + ',', 'm').test(save));
   });
   chk('undefined is stripped before the write, so an unpriced save leaves the record\'s figures alone', /_stripUndefinedInPlace\(payload\);/.test(save) && /if\(v===undefined\)\{ delete obj\[k\]; \}/.test(bodyFrom(ED, 'function _stripUndefinedInPlace(')));

@@ -798,7 +798,10 @@ window.OMEGA_WORKSPACE = window.OMEGA_WORKSPACE || WS;
 
 function _wsFromUser(user){
   if (WS.orgId || !user || !user.email) return;
-  var dom = (user.email.split('@')[1] || '').toLowerCase();
+  /* the runtime's one reader: the orgId claim (a personal address homed to
+     a slug-keyed workspace), else the email domain */
+  var dom = (window.OmegaTenant && OmegaTenant.homeOrg) ? OmegaTenant.homeOrg(user) : '';
+  if (!dom) dom = (user.email.split('@')[1] || '').toLowerCase();
   WS.orgId = dom; WS.allowedDomain = dom; WS.clientName = WS.clientName || dom;
 }
 function domainOf(email){ return (email||'').split('@')[1] || ''; }

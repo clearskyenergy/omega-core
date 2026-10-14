@@ -31,6 +31,7 @@ dashboard (`dashboard.nextnrg.com`) with a mobile app on the same database.
 | Storage | Specified to the site, not to one product: LFP preferred, containerised ISO, 2–8 h, 85–90% AC round trip, 20-year design life at >97% availability, 300% daily throughput, liquid cooled, UL 1973 + IEC 62619, UL 1642 cells, NFPA 855, IP54; named supply Saft (Intensium Flex 3.4 / 4.3 / 5.1 MWh blocks; Intensium Max 20 High Energy 2.5 MWh NMC per 20 ft at 96% DC) and A123 (587 Ah prismatic LFP, 1P13S 41.6 V, Dukosi, Nuvation L2 BMS) | p. 5–6 |
 | Controller | 15-minute dispatch, 24-hour horizon, economic / resilience / islanded with black start; Modbus TCP to the site PLC (DNP3 optional), 10 × 100/1000 Mbps, optional LTE; IP55, 500 × 750 × 210 mm, 40 kg, wall or pad, 0–40 °C; IEEE 1547, IEC 62443, NERC CIP aligned; US Patent 10,326,280 B1; **6 to 8% modelled ROI uplift**, "modelled rather than measured, and not a performance guarantee" | p. 7–8 |
 | Price | **$125,000 a controller, installed** | ClearSky (Tommy, 2026-10-13) |
+| System price | **$6.00 per W-DC of NextNRG solar, installed: the array, the storage beside it and the labor** (`SYSTEM_RATE`); NextNRG storage with no NextNRG solar beside it, $6.00 per W of rated power. Priced by the Site Map cost engine with no contingency (a vendor's installed price), as energy property; in NextNRG's own workspace every array and battery is NextNRG's. Topanga: 368 kW-DC with a 250 kW / 1,000 kWh battery = $2,208,000 | ClearSky (Tommy, 2026-10-14); NextNRG's Topanga one-pager, Q3 2026 ($1,780,063 for 315 kW DC + 300 kW / 1.8 MWh, $5.65/W DC) |
 
 ## ONE record — `api/_lib/nextnrg.js`
 
@@ -155,14 +156,33 @@ typing the brand on `/admin/account.html?org=nextnrg.com` is a deploy step.
   master controller, which is drawn as a pad), rated the two ways a unit is
   rated, grouped by product: one *Energy Storage* line per product, with its
   catalogue key and brand, so the RFQ routes it.
-- **A traced array is not called "ground".** *Solar — Custom Area* and
-  *NextNRG Solar — Custom* lay the array out as `mount: 'custom'` — it reads
-  *Solar PV array (custom area)* on the BOM, *CUSTOM AREA* on the drawing,
-  and the Run prices it as plain PV at the size band (never as a ground
-  mount) — until **Array — Edit Size / Capacity** chooses *Ground mount*,
-  *Rooftop* or *Solar canopy*, which the BOM, the Run's $/W by mount, the
-  legend and the label then follow. *Solar Ground* and *Solar Roof* still say
-  what they are. One solar line per mount as drawn.
+- **A traced array lays out with its mount's racking** (2026-10-14, Tommy:
+  the traced roof "is not equaling the same amount of solar production" as
+  the roof rectangle — it was filling with the ground preset's 0.40 GCR and
+  10 ft setback). *Solar — Custom Area* and *NextNRG Solar — Custom* open
+  the Auto-Layout modal with a **Mount** choice (Ground mount, Rooftop,
+  Solar canopy; it starts from the ribbon's last Solar choice), the layout
+  fills with that mount's preset (`computeGroundLayout({ mount })` →
+  `_solarAssume(mount)`), and the array carries the mount, so the BOM, the
+  Run's $/W by mount, the legend and the label follow it at once;
+  **Array — Edit Size / Capacity** can still change it, and changing it
+  refills. An array traced before this (`mount: 'custom'`) still reads
+  *Solar PV array (custom area)* until a mount is chosen. One solar line per
+  mount as drawn.
+- **An array's kW-DC can be set by hand** (Tommy, 2026-10-14: "it should
+  still auto generate but people should be able to manipulate it"):
+  *Array — Edit Size / Capacity* has *kW-DC — set by hand*; a number holds
+  through every refill (`sh.kwOverride`, the layout's own figure kept as
+  `sh.kwAuto` and shown beside it), *Clear* or a blank puts the layout's
+  own back. `_derApplyKwOverride` is the one rule, run by the rectangle
+  recalc, the traced relayout and the exclusion refill.
+- **The rectangle array is NextNRG's too.** *Solar Roof* / *Solar Ground*
+  stamp the array with the project's module exactly as the trace does
+  (`_derStampModule`), and `omegaSolarIsNextnrg` reads the stamp, else the
+  project's module, so an array built with the EAGLE G7B (the default) is
+  priced at NextNRG's $6.00/W system rate; the generic 550 W module in
+  Solar Assumptions is the road to the DOE/NREL benchmark ($2.95 / $1.98 /
+  $1.12 per Wdc, Q1 2025 modeled market price; a canopy $2.75).
 
 ## Tests
 

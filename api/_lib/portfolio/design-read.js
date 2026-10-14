@@ -17,6 +17,13 @@
          address, zip,                    the project's address and its ZIP
          capex, netCost, incentive, annualRevenue, capexAt, capexSource,
          contracted,                      the Run's rollup, as saved
+         capexLines,                      the Run's lines (solar, bess,
+                                          nextnrgSystem, ev, controller,
+                                          compute, dc, gen, envelope, site,
+                                          indirect, contingency, omegaCore:
+                                          the skids at the recorded price,
+                                          in the Run total since 2026-10-14)
+                                          or null
          compute: { units, kwIt, omegaCoreUnits, omegaCoreKw,
                     omegaCoreBessKw, omegaCoreBessKwh },
          chargers: { dcfcKw, dcfcUnits, l2Kw, l2Units, ports, installedKw,
@@ -83,6 +90,12 @@ function designOf(p, projectId) {
   });
   ch.installedKw = ch.dcfcKw + ch.l2Kw;
   var capex = pos(p.capex), ran = capex != null;
+  /* the run's lines, numbers only, as the editor's omegaRunRollup wrote them (2026-10-14) */
+  var LINE_KEYS = ['solar', 'bess', 'nextnrgSystem', 'ev', 'controller', 'compute', 'dc', 'gen', 'envelope', 'site', 'indirect', 'contingency', 'omegaCore'], lines = null;
+  if (ran && p.capexLines && typeof p.capexLines === 'object') {
+    lines = {};
+    LINE_KEYS.forEach(function (k) { var v = num(p.capexLines[k]); lines[k] = v != null && v > 0 ? Math.round(v) : 0; });
+  }
   var bess = pos(p.bessKwh) != null || pos(p.bessKw) != null
     ? { kw: r0(num(p.bessKw) || 0), kwh: r0(num(p.bessKwh) || 0), basis: 'run rollup' }
     : pads.kwh > 0 || pads.kw > 0 ? { kw: r0(pads.kw), kwh: r0(pads.kwh), basis: 'pads drawn' } : { kw: 0, kwh: 0, basis: null };
@@ -98,13 +111,13 @@ function designOf(p, projectId) {
     address: addr.slice(0, 200) || null, zip: BR.zipFromAddress(p.zip != null && p.zip !== '' ? { zip: p.zip, street: addr } : addr),
     capex: ran ? r0(capex) : null, netCost: ran ? r0(num(p.netCost)) : null, incentive: ran ? r0(num(p.incentive) || 0) : null,
     annualRevenue: ran ? r0(num(p.annualRevenue)) : null, capexAt: iso(p.capexAt), capexSource: ran ? (p.capexSource || null) : null,
-    contracted: p.contracted === true,
+    contracted: p.contracted === true, capexLines: lines,
     compute: { units: cp.units, kwIt: r0(cp.kwIt), omegaCoreUnits: cp.omegaCoreUnits, omegaCoreKw: r0(cp.omegaCoreKw), omegaCoreBessKw: r0(cp.omegaCoreBessKw), omegaCoreBessKwh: r0(cp.omegaCoreBessKwh) },
     chargers: { dcfcKw: r0(ch.dcfcKw), dcfcUnits: ch.dcfcUnits, l2Kw: r0(ch.l2Kw), l2Units: ch.l2Units, ports: ch.ports, installedKw: r0(ch.installedKw), futureUnits: ch.futureUnits, futureKw: r0(ch.futureKw) },
     bess: bess, solar: { kwDc: r0(so.kwDc), units: so.units }, wind: { kw: r0(wd.kw), units: wd.units },
     omegaCore: oc
   };
-  out.hash = crypto.createHash('sha256').update(JSON.stringify([out.capex, out.incentive, out.annualRevenue, out.capexAt, out.compute, out.chargers, out.bess, out.solar, out.wind, out.omegaCore, featureCount, out.zip])).digest('hex').slice(0, 16);
+  out.hash = crypto.createHash('sha256').update(JSON.stringify([out.capex, out.incentive, out.annualRevenue, out.capexAt, out.capexLines, out.compute, out.chargers, out.bess, out.solar, out.wind, out.omegaCore, featureCount, out.zip])).digest('hex').slice(0, 16);
   return out;
 }
 

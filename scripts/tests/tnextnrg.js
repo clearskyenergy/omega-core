@@ -62,6 +62,34 @@ eq(NN.CONTROLLER.widthMm + 'x' + NN.CONTROLLER.heightMm + 'x' + NN.CONTROLLER.de
 eq(NN.CONTROLLER.weightKg + '/' + NN.CONTROLLER.ingress + '/' + NN.CONTROLLER.ethernetPorts, '40/IP55/10', '40 kg, IP55, ten Ethernet ports');
 eq(NN.CONTROLLER.modes.join(','), 'economic,resilience,islanded', 'three modes');
 ok(/10,326,280/.test(NN.CONTROLLER.patent) && /IEC 62443/.test(NN.CONTROLLER.standards), 'the patent and the cybersecurity standard are on the record');
+/* THE SYSTEM RATE (2026-10-14, Tommy: "the cost of the nextnrg bess and the
+   next nrg solar is $6.00 per watt"): one record, read by the cost engine;
+   the page sends which arrays and batteries are NextNRG's and never the rate */
+eq(NN.SYSTEM_RATE.perWdc, 6, 'NextNRG solar + storage is $6.00 per W-DC of solar, installed, the storage and the labor inside');
+eq(NN.SYSTEM_RATE.storageOnlyPerW, 6, 'NextNRG storage alone is $6.00 per W of rated power, installed');
+ok(NN.SYSTEM_RATE.includes.join(',') === 'the solar array,the storage beside it,installation labor' && NN.SYSTEM_RATE.contingency === false, 'what the price includes, and no contingency on a vendor\'s installed price');
+ok(/\$1,780,063/.test(NN.SYSTEM_RATE.corroboration) && /\$5\.65\/W DC/.test(NN.SYSTEM_RATE.corroboration), 'corroborated by NextNRG\'s own Topanga one-pager ($5.65/W DC for 315 kW DC + 300 kW / 1.8 MWh)');
+ok(NN.isVendorOrg('nextnrg.com') && NN.isVendorOrg('NextNRG.com') && !NN.isVendorOrg('clearsky-usa.com') && !NN.isVendorOrg(null), 'NextNRG\'s own workspace is the vendor\'s');
+ok(NN.isNextnrgSolar({ sku: 'NEXTNRG-PV-EAGLE-G7B' }) && NN.isNextnrgSolar({ mfr: 'NextNRG' }) && NN.isNextnrgSolar({ nextnrg: true }) && !NN.isNextnrgSolar({ mfr: 'Jinko' }) && !NN.isNextnrgSolar(null), 'an array is NextNRG\'s by its stamp');
+var EC = require(path.join(ROOT, 'api/_lib/editor-cost'));
+ok(EC.NN_RATE === NN.SYSTEM_RATE, 'the cost engine reads the one record');
+var ws = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 1000, kw: 250, cost: null } } }, counts: {}, sheet: {} });
+eq(ws.lines.nextnrg.total, 2208000, 'Topanga: 368 kW-DC at $6.00/W is $2,208,000 in NextNRG\'s own workspace');
+ok(ws.lines.nextnrg.storage.inside && ws.lines.bess.rows[0].inSystem && ws.lines.bess.total === 0 && ws.lines.solar.rows.length === 0, 'the 250 kW / 1,000 kWh battery beside it is inside the price, not priced again');
+eq(ws.totals.total, 2208000, 'and no contingency rides on it'); eq(ws.totals.itcBasis, 2208000, 'it is energy property');
+var st = EC.rollup({ solarKwDc: 500, solar: { byMount: { ground: 132 }, nextnrgKwDc: 368 }, fleet: { units: 2, byModel: { 'NEXTNRG-SAFT-IFLEX-3400': { qty: 1, kwh: 3400, kw: 1000, cost: null, nextnrg: true }, 'GOTION-EDGE-760': { qty: 1, kwh: 760, kw: 380, cost: null, catalogKey: 'GOTION-EDGE-760' } } }, counts: {}, sheet: {} });
+ok(st.lines.nextnrg.total === 2208000 && st.lines.nextnrg.vendor === 'product' && st.lines.solar.rows[0].mount === 'ground' && st.lines.solar.rows[0].kwDc === 132, 'in another workspace, only the array stamped NextNRG\'s is the system; the rest is priced by mount');
+ok(st.lines.bess.rows[0].inSystem && st.lines.bess.rows[0].total === 0 && !st.lines.bess.rows[1].inSystem && st.lines.bess.rows[1].total === Math.round(84740 * 1.55), 'NextNRG\'s battery is inside the system; a Gotion beside it keeps its own price');
+ok(Math.abs(st.totals.cont - (st.totals.sub - 2208000) * 0.1) < 1e-6, 'contingency on everything but the vendor\'s installed price');
+var alone = EC.rollup({ fleet: { units: 1, byModel: { 'NEXTNRG-SAFT-IFLEX-3400': { qty: 1, kwh: 3400, kw: 1000, cost: null, nextnrg: true } } }, counts: {}, sheet: {} });
+ok(alone.lines.nextnrg.storage.total === 6000000 && alone.lines.bess.rows[0].nextnrgRate && alone.totals.total === 6000000 && alone.totals.cont === 0, 'NextNRG storage with no NextNRG solar beside it: $6.00 per W of rated power, installed, no contingency');
+var typed = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 100, solar: { byMount: { roof: 100 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 500, kw: 250, cost: 90000 } } }, counts: {}, sheet: {} });
+ok(typed.lines.bess.rows[0].total === Math.round(90000 * 1.55) && !typed.lines.bess.rows[0].inSystem, 'a battery whose price was typed keeps it');
+ok(/q\.vendorOrg = caller\.orgId \|\| null;/.test(fs.readFileSync(path.join(ROOT, 'api/cost-rollup.js'), 'utf8')), 'the endpoint stamps whose workspace is pricing; the body never says');
+ok(/nextnrgKwDc:\(typeof omegaSolarNextnrgKwDc==='function'\)/.test(ED) && /nextnrg: !!\(\(ce && \(ce\.nextnrg===true \|\| String\(ce\.mfr\|\|''\)\.toLowerCase\(\)==='nextnrg'\)\) \|\| String\(b\.mfr\|\|''\)\.toLowerCase\(\)==='nextnrg' \|\| \/\^nextnrg\\b\/i\.test\(String\(k\)\) \|\| \/nextnrg\/i\.test\(String\(ck\|\|''\)\)\)/.test(ED), 'the page sends which arrays and batteries are NextNRG\'s, as facts');
+ok(/function omegaSolarIsNextnrg\(s\)/.test(ED) && /if\(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg\(s\)\) return;/.test(bodyFrom(ED, 'function omegaSolarByMount(')), 'a NextNRG array is kept out of the mount bands');
+ok(/NNL\.label\+' \\u2014 '\+Math\.round\(NNL\.solarKwDc\)/.test(ED) && /window\._NEXTNRG_SYSTEM_TOTAL = T\.nextnrg \|\| 0;/.test(ED), 'the cost sheet draws the system line and publishes its total');
+ok(!/6\.00|perWdc/.test(bodyFrom(ED, 'function omegaCostQuantities(')), 'no rate in the page\'s request');
 eq(NN.UPLIFT.pct, 0.07, 'the uplift is 7% (the brochure\'s 6 to 8%, carried as the platform\'s 7%)');
 eq(NN.UPLIFT.rangePct.join('-'), '0.06-0.08', 'with its published range');
 eq(NN.UPLIFT.appliesTo, 'bill', 'on the dispatch-decided bill savings only');
@@ -196,7 +224,7 @@ ok(/\(_pvm&&_pvm\.sku\)\|\|'', \(_pvm&&_pvm\.mfr\)\|\|''\);/.test(bodyFrom(ED, '
 var cq = bodyFrom(ED, 'function omegaCostQuantities(){');
 ok(/q\.counts\.mgc=\(S\.shapes\|\|\[\]\)\.filter\(function\(sh\)\{ return sh && sh\.kind==='utility' && sh\.utype==='mgc'; \}\)\.length;/.test(cq), 'the quantities count the controllers placed for the host — utility shapes only, never the skid\'s');
 ok(/T\.controller > 0 \? row\('  NextNRG Microgrid Controller \\u00d7' \+ T\.controllerUnits, T\.controller/.test(ED), 'the Run shows the row');
-ok(/window\._MGC_TOTAL = T\.controller \|\| 0;/.test(ED) && /'_MGC_TOTAL','_COST_PER_KW'/.test(ED), 'published and reset with the other totals');
+ok(/window\._MGC_TOTAL = T\.controller \|\| 0;/.test(ED) && /'_MGC_TOTAL','_NEXTNRG_SYSTEM_TOTAL','_COST_PER_KW'/.test(ED), 'published and reset with the other totals');
 var bom = bodyFrom(ED, 'function buildBOM(');
 ok(/else if\(sh\.kind==='utility' && sh\.utype==='mgc'\)\{ _cs\.mgc\+\+; \}/.test(bom) && /_mcat\.sku\|\|'NEXTNRG-MGC', _mcat\.mfr\|\|'NextNRG'\);/.test(bom), 'the BOM lists it with its key and brand, for the RFQ');
 var vp = ED.slice(ED.indexOf('OMEGA PATCH — 41 : VALUE STACK'), ED.indexOf('OMEGA PATCH — 42'));
@@ -228,13 +256,14 @@ ok(/org\.brands = t\.brands\.map/.test(fs.readFileSync(path.join(ROOT, 'scripts'
   var custom = bodyFrom(ED, 'window.omegaNextnrgSolarCustom=function(){');
   ok(/setSolarAssume\('moduleKey','nextnrg-eagle-g7b'\)/.test(custom) && /window\.omegaSolarCustomArea\(\)/.test(custom), 'it chooses NextNRG\'s module for the project and runs the same trace');
   var agl = bodyFrom(ED, 'function applyGroundLayout(boundary, layout, exclusions){');
-  ok(/sh\.moduleKey=_A\.moduleKey; sh\.moduleWatts=_M\.watts\|\|null;/.test(agl) && /sh\.product=_M\.mfr\+' Solar PV \\u2014 '/.test(agl) && /sh\.sku=_M\.sku\|\|null;/.test(agl), 'the array it lays out carries the module, and NextNRG\'s product name and key');
+  var stampFn = bodyFrom(ED, 'function _derStampModule(sh, mount){');
+  ok(/sh\.moduleKey=_A\.moduleKey; sh\.moduleWatts=_M\.watts\|\|null;/.test(stampFn) && /sh\.product=_M\.mfr\+' Solar PV \\u2014 '/.test(stampFn) && /sh\.sku=_M\.sku\|\|null;/.test(stampFn), 'the one stamp carries the module, and NextNRG\'s product name and key');
+  ok(/_derStampModule\(sh, sh\.mount\)/.test(agl) && /_derStampModule\(sh, L\.mount\)/.test(bodyFrom(ED, 'function _derPlaceSolar(a, b){')), 'the traced array and the rectangle alike are stamped with it (2026-10-14: a rectangle roof was priced at the benchmark beside NextNRG\'s quote)');
   /* run the stamp: NextNRG's module makes a NextNRG product; the generic module makes none */
   var mb2 = ED.slice(ED.indexOf('var DER_PV_MODULES = {'), ED.indexOf('\n', ED.indexOf('var DER_PV_WPSF = ')) + 1);
-  var stamp = agl.slice(agl.indexOf('  try{\n    var _A='), agl.indexOf('  }catch(e){}', agl.indexOf('  try{\n    var _A=')) + 13);
   var c = vm.createContext({ S: { solarAssume: null } });
   vm.runInContext(mb2 + '\nfunction _solarAssume(){ var k=(S.solarAssume&&S.solarAssume.moduleKey)||DER_PV_MODULE_DEFAULT; return { moduleKey:k, module:DER_PV_MODULES[k] }; }'
-    + '\nfunction stampOf(){ var sh={}; ' + stamp + ' return sh; }', c);
+    + '\n' + stampFn + '\nfunction stampOf(){ var sh={}; _derStampModule(sh, "roof"); return sh; }', c);
   var st1 = vm.runInContext('stampOf()', c);
   eq(st1.product, 'NextNRG Solar PV \u2014 JinkoSolar EAGLE G7B 640 W', 'with NextNRG\'s module the array is NextNRG\'s product');
   eq(st1.sku + '/' + st1.mfr + '/' + st1.moduleWatts, 'NEXTNRG-PV-EAGLE-G7B/NextNRG/640', 'with its key, brand and watts');
@@ -289,8 +318,9 @@ ok(/org\.brands = t\.brands\.map/.test(fs.readFileSync(path.join(ROOT, 'scripts'
   ok(/mount not chosen: Array — Edit Size \/ Capacity sets ground, roof or canopy/.test(solar[0].note), 'and the custom line says where a mount is chosen');
   ok(solar.every(function (it) { return it.sku === 'NEXTNRG-PV-EAGLE-G7B' && it.mfr === 'NextNRG'; }), 'every solar line carries the module\'s key and brand');
   /* the mount itself */
-  ok(/window\._alMount=\(boundaryPts && boundaryPts\.length>=3\)\?'custom':'ground';/.test(bodyFrom(ED, 'function openAutoLayout(boundaryPts){')), 'a traced outline opens the layout as a custom area; the ribbon\'s Auto Layout stays ground');
-  ok(/mount:\(window\._alMount==='custom'\?'custom':'ground'\),/.test(bodyFrom(ED, 'function applyGroundLayout(boundary, layout, exclusions){')), 'and the array it lays out carries that');
+  var oal = bodyFrom(ED, 'function openAutoLayout(boundaryPts){');
+  ok(/window\._alCustom=!!\(boundaryPts && boundaryPts\.length>=3\);/.test(oal) && /window\._alMount=window\._alCustom \? \(\(typeof _derSolarMount!=='undefined'/.test(oal) && /<select id="al-mount" onchange="alMountChanged\(this\.value\)"/.test(oal), 'a traced outline opens the layout as a custom area with a mount (the ribbon\'s Solar choice, changeable on the modal); the ribbon\'s Auto Layout stays ground (2026-10-14: a traced roof filled with the ground preset read far less kW than the roof rectangle)');
+  ok(/mount:\(window\._alMount==='roof'\|\|window\._alMount==='adjacent'\)\?window\._alMount:'ground',/.test(bodyFrom(ED, 'function applyGroundLayout(boundary, layout, exclusions){')) && /mount:window\._alMount\|\|'ground' \}\);/.test(bodyFrom(ED, 'function alPreview(){')), 'the layout fills with that mount\'s preset and the array carries it');
   var bm = vm.createContext({ S: { shapes: [{ kind: 'dersolar', mount: 'custom', kw: 368 }, { kind: 'dersolar', mount: 'roof', kw: 120 }, { kind: 'dersolar', mount: 'ground', kw: 50 }, { kind: 'dersolar', mount: 'custom', canopy: true, kw: 7 }] } });
   vm.runInContext(bodyFrom(ED, 'function omegaSolarByMount(){'), bm);
   eq(JSON.stringify(vm.runInContext('omegaSolarByMount()', bm)), JSON.stringify({ ground: 50, roof: 120, canopy: 7 }), 'the Run\'s by-mount kW leaves a custom area out, so the server prices it as plain PV at the size band — never as ground');

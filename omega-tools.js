@@ -838,6 +838,8 @@
       var m = (typeof window !== 'undefined' && window.location && window.location.search)
         ? window.location.search.match(/[?&]org=([^&]+)/) : null;
       if (m && m[1]) return decodeURIComponent(m[1]);
+      /* the runtime's home (the orgId claim for a personal address) first */
+      try { var home = window.OmegaTenant && OmegaTenant.homeOrg && OmegaTenant.homeOrg(); if (home) return home; } catch (e) {}
       if (fallbackEmail && fallbackEmail.indexOf('@') >= 0) {
         return fallbackEmail.split('@')[1].toLowerCase();
       }

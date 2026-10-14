@@ -662,8 +662,20 @@ function seed() {
     assert.ok(lm, 'the model ran on the open'); assert.equal(page.autoModel.modelId, lm.modelId); assert.equal(lm.auto, true); assert.equal(lm.designHash, s.latestDesign.hash); assert.equal(lm.label, 'Site Map design');
     assert.equal(lm.pods, 1); assert.equal(lm.skid.units, 1); assert.equal(lm.skid.chipset, 'h100'); assert.equal(lm.skid.gpus, 48); assert.equal(lm.skid.systemCostUsd, OC.PRODUCT.systemCostUsd); assert.equal(lm.skid.priceBasis, 'spot');
     assert.match(lm.gpuName, /^Omega-Core skid/); assert.equal(lm.zip, '91304', 'the ZIP read off the address'); assert.equal(s.zip, '91304', 'and kept on the site');
-    assert.ok(lm.irr > 0.15 && lm.irr < 0.6, 'the skid\u2019s after-tax IRR is the skid\u2019s, not the pod case\u2019s half a percent: ' + lm.irr);
-    assert.ok(lm.totalProjectCost > 900000 && lm.totalProjectCost < 1100000, 'the skid as recorded plus the model\u2019s own site costs: ' + lm.totalProjectCost);
+    /* THE WHOLE PROJECT (2026-10-14): the skid as recorded with the model's own
+       site costs, PLUS the host's own solar and storage as the Site Map run
+       priced them; the host's system earns the run's revenue until a PPA is on
+       record, and the IRR is of the whole */
+    assert.ok(lm.computeCapex > 900000 && lm.computeCapex < 1100000, 'the skid as recorded plus the model\u2019s own site costs: ' + lm.computeCapex);
+    assert.equal(lm.host.capex, 918000, 'the host\u2019s system at the Site Map run\u2019s price'); assert.equal(lm.host.solarKwDc, 368); assert.equal(lm.host.bessKwh, 2000);
+    assert.ok(lm.totalProjectCost >= lm.computeCapex + 918000 && lm.totalProjectCost < (lm.computeCapex + 918000) * 1.05, 'the capital request is the whole (the capital, then the engine\u2019s own reserves): ' + lm.totalProjectCost);
+    assert.equal(lm.host.revenuePerYear, 61000); assert.equal(lm.host.ppa, null); assert.equal(lm.host.noRevenue, false);
+    assert.ok(lm.irr > 0.02 && lm.irr < 0.6, 'an after-tax IRR of the whole project, not the pod case\u2019s half a percent: ' + lm.irr);
+    /* the pod pro forma followed the design too: the skid as recorded, once per design, its convention said */
+    var lpA = s.latestProforma;
+    assert.ok(lpA && lpA.designHash === s.latestDesign.hash, 'the pod pro forma ran on the design by itself'); assert.equal(lpA.investorCapital, OC.PRODUCT.systemCostUsd); assert.equal(lpA.pods, 1);
+    assert.match(lpA.convention, /60 operating months, pre-tax, unlevered/); assert.equal(page.autoProforma.scenarioId, lpA.scenarioId);
+    assert.ok(lpA.investorIrrAnnual > 0.2, 'on the skid\u2019s own capital the pod case is no longer half a percent: ' + lpA.investorIrrAnnual);
     assert.equal(page.skid.systemCostUsd, OC.PRODUCT.systemCostUsd); assert.ok(page.skid.chipsets.length >= 8 && page.skid.chipsets.filter(function (c) { return c.pricePerGpuHour; }).length >= 8);
     assert.equal(s.designModel.modelId, lm.modelId); assert.equal(s.designModel.hash, s.latestDesign.hash);
     assert.match(s.latestDesign.address, /Roscoe/); assert.equal(s.latestDesign.zip, '91304');
@@ -673,6 +685,9 @@ function seed() {
     assert.equal(inp.compute.capexPerGpu, OC.PRODUCT.skidPriceUsd / 48); assert.equal(inp.compute.podInfraPerPod, OC.PRODUCT.systemCostUsd - OC.PRODUCT.skidPriceUsd);
     assert.equal(inp.compute.tiers.spot.sharePct, 100); assert.equal(inp.compute.tiers.spot.utilPct, 85); assert.equal(inp.compute.tiers.spot.price, 2.46); assert.equal(inp.compute.availabilityPct, 98); assert.equal(inp.compute.priceDeclinePct, 8); assert.equal(inp.compute.platformFeePct, 8); assert.equal(inp.compute.podOmPerYear, 60000);
     assert.deepEqual(inp.battery, { kw: 60, kwh: 61, capexPerKwh: 0 }); assert.equal(inp.solar, undefined); assert.equal(inp.capex, undefined);
+    assert.equal(inp.host.solarKwDc, 368); assert.equal(inp.host.bessKwh, 2000); assert.equal(inp.host.capexLines[0].amount, 918000); assert.equal(inp.host.capexLines[0].asset, 'blended', 'a record with no lines: the whole run as blended energy property');
+    assert.match(stored.basis.hostRevenue, /year-one revenue/); assert.match(stored.basis.host, /IN this case as money/);
+    assert.ok(stored.result.proforma.assumptions.some(function (a) { return /host\u2019s own system beside the compute/.test(a) && /\$918,000/.test(a); }));
     assert.equal(inp.deal.rentPerYear, OC.RATE_CARD.monthlyPerSkid.base * 12); assert.equal(inp.deal.rentEscPct, OC.RATE_CARD.escalatorPct.base);
     assert.match(stored.basis.host, /500 kW \/ 2000 kWh battery/); assert.match(stored.basis.host, /368 kW-dc solar/); assert.match(stored.basis.host, /\$918,000/); assert.match(stored.basis.rent, /market reference/); assert.match(stored.basis.zip, /read from the site’s address/);
     assert.match(stored.basis.capex, /\$639,000 a skid, plus the NextNRG Microgrid Controller built into it, \$125,000/); assert.match(stored.basis.gpuClass, /48 × NVIDIA HGX H100 .* public spot market reference, \$2\.46 a GPU-hour/);
@@ -698,6 +713,20 @@ function seed() {
     var st2 = db.data.get(O + '/sites/' + made.id + '/models/' + chosen.modelId);
     assert.equal(st2.input.deal.rentPerYear, 18000); assert.match(st2.basis.rent, /on record/); assert.equal(st2.input.compute.tiers.spot.price, 2.62);
     await rejects(call('POST', { site: made.id, action: 'site-model', gpuClass: 'gb300' }, PM), 400, /public GPU-hour price/);
+    /* the PPA on record (NextNRG's executed Topanga PPA: $0.2250/kWh, 2.5% a year, 28 years) prices the host's solar; the run's lines put the NextNRG system on its asset class */
+    /* the Run total carries the skid at its recorded price since 2026-10-14 (its omegaCore line); the host's case takes it back out, so the whole project counts the skid once */
+    db.data.get('projects/p_skid').capex = 2300000 + 764000; db.data.get('projects/p_skid').capexLines = { solar: 0, bess: 0, nextnrgSystem: 2208000, ev: 0, controller: 0, compute: 0, dc: 0, gen: 0, envelope: 0, site: 48000, indirect: 0, contingency: 44000, omegaCore: 764000 };
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaRatePerKwh: 0.225, ppaEscalatorPct: 2.5, ppaTermYears: 28 }, PM);
+    var withPpa = await call('GET', { site: made.id }, PM), lm3 = withPpa.site.latestModel;
+    assert.equal(withPpa.site.ppaRatePerKwh, 0.225); assert.equal(withPpa.site.ppaTermYears, 28);
+    assert.notEqual(lm3.modelId, lm2.modelId, 'a changed design and changed facts run the model again'); assert.deepEqual(lm3.host.ppa, { ratePerKwh: 0.225, escPct: 2.5, termYears: 28 }); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000, 'the host\u2019s capex is the Run total less the skid\u2019s own line');
+    var st3 = db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId);
+    assert.deepEqual(st3.input.host.capexLines.map(function (l) { return [l.id, l.amount, l.asset]; }), [['nextnrg', 2208000, 'blended'], ['balance', 92000, 'blended']]);
+    assert.equal(st3.result.proforma.inputs.revenue.ppa.rate1, 0.225); assert.ok(st3.result.proforma.rows[0].ppaRevenue > 100000, 'the PPA earns on the solar the engine generates: ' + st3.result.proforma.rows[0].ppaRevenue);
+    assert.ok(lm3.totalProjectCost >= lm3.computeCapex + 2300000 && lm3.totalProjectCost < (lm3.computeCapex + 2300000) * 1.05); assert.ok(lm3.irr > 0.02, 'the whole project\u2019s IRR with the PPA: ' + lm3.irr);
+    assert.equal(require('../api/_lib/site-model').askOf(withPpa.site).amount, lm3.totalProjectCost, 'the capital request is the whole project');
+    var regRow = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
+    assert.equal(regRow.latestModel.totalProjectCost, lm3.totalProjectCost); assert.equal(regRow.latestModel.host.capex, 2300000);
     var n2 = audits('sitecrm-site-model').length; await call('GET', { site: made.id }, PM);
     assert.equal(audits('sitecrm-site-model').length, n2, 'a hand run on the current design satisfies the automatic one');
     /* the pod pro forma on this design prices the skid as recorded */

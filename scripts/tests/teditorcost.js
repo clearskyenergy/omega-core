@@ -23,13 +23,13 @@ assert.equal(r.lines.bess.total, 200260, '2 × 760 kWh at $85 plus 55% install')
 assert.equal(r.lines.ev.total, 292500, 'DH480 dealer cost × 2 plus install'); assert.equal(r.lines.ev.book.autel_dh480.pn, 'UH480'); count += 2;
 assert.equal(r.lines.dc.total, 7000875, 'the Eaton ROM: N+1 UPS and transformers, 5% design'); assert.equal(r.lines.dc.ups, 4); assert.equal(r.lines.dc.xfmr, 4); count += 3;
 assert.equal(r.lines.gen.total, 30000000); assert.equal(r.lines.gen.lines[0].cls, 'turbine'); assert.equal(r.lines.gen.gasTotal, 30000000); count += 3;
-assert.equal(r.totals.solar, 775000, '500 kW commercial at $1.55/Wdc'); assert.equal(r.totals.compute, 60000000, '2 MW of pods at the operator band'); count += 2;
+assert.equal(r.totals.solar, 990000, '500 kW commercial at $1.98/Wdc (DOE/NREL Q1 2025)'); assert.equal(r.totals.compute, 60000000, '2 MW of pods at the operator band'); count += 2;
 assert.equal(r.totals.siteEq, 2 * 4800 + 3200 + 3850); assert.equal(r.totals.indirect, 4500, 'EMS setup only; the annual fee is O&M'); assert.equal(r.lines.ems.annual, 1520 * 12); count += 3;
-assert.equal(r.totals.sub, 98289785); assert.equal(r.totals.total, 108118763.5); assert.equal(r.totals.contPctRound, 10); count += 3;
-assert.equal(r.totals.low, 86118763.5); assert.ok(Math.abs(r.totals.high - 130118763.5) < 1e-6, 'the pod band is the only range'); count += 2;
-assert.equal(r.totals.itcBasis, 1417801, 'ITC on energy property only: never pods, gas turbines, the DC package'); count++;
-assert.equal(r.totals.costPerKW, 4750); assert.equal(r.totals.totalKW, 22760); count += 2;
-assert.deepEqual(r.flags, { bessBenchmark: false, solarBenchmark: true, computeBenchmark: true, genBenchmark: true, benchmarked: true }); count++;
+assert.equal(r.totals.sub, 98504785); assert.equal(r.totals.total, 108355263.5); assert.equal(r.totals.contPctRound, 10); count += 3;
+assert.equal(r.totals.low, 86355263.5); assert.ok(Math.abs(r.totals.high - 130355263.5) < 1e-6, 'the pod band is the only range'); count += 2;
+assert.ok(Math.abs(r.totals.itcBasis - 1654301) < 1e-6, 'ITC on energy property only: never pods, gas turbines, the DC package'); count++;
+assert.equal(r.totals.costPerKW, 4761); assert.equal(r.totals.totalKW, 22760); count += 2;
+assert.deepEqual(r.flags, { bessBenchmark: false, solarBenchmark: true, computeBenchmark: true, genBenchmark: true, benchmarked: true, nextnrg: false }); count++;
 
 /* scope gate: an empty drawing totals nothing, whatever the sheet says */
 var e = EC.rollup({ sheet: { eng: 15000, perm: 3500, comm: 8500 }, counts: { pad: 3 } });
@@ -49,14 +49,23 @@ assert.equal(ev.lines.ev.byModel.DC.eq, 80000); assert.equal(ev.lines.ev.byModel
 assert.equal(ev.lines.ev.futureMakeReady, 9000); assert.equal(ev.lines.ev.units, 4); count += 2;
 /* the contracted number is the truth */
 var k = EC.rollup({ solarKwDc: 100, sheet: { actualTotal: 123456 } });
-assert.equal(k.totals.total, 123456); assert.equal(k.totals.contracted, true); assert.equal(k.totals.low, 123456); assert.equal(k.totals.benchmark, 100 * 1000 * 1.55 * 1.1); count += 4;
+assert.equal(k.totals.total, 123456); assert.equal(k.totals.contracted, true); assert.equal(k.totals.low, 123456); assert.ok(Math.abs(k.totals.benchmark - 100 * 1000 * 1.98 * 1.1) < 1e-6); count += 4;
 /* generation classes */
 assert.equal(EC.genClass({ kind: 'derwind' }), 'wind'); assert.equal(EC.genClass({ model: 'Bloom fuel cell' }), 'sofc'); assert.equal(EC.genClass({ kw: 50000 }), 'turbine_l'); assert.equal(EC.genClass({ altId: 'recip' }), 'recip'); count += 4;
-assert.equal(EC.pvRate(50), 3.25); assert.equal(EC.pvRate(5000), 1.55); assert.equal(EC.pvRate(50000), 1.15); count += 3;
+assert.equal(EC.pvRate(8), 2.95, 'residential under 25 kW'); assert.equal(EC.pvRate(50), 1.98, 'a 50 kW commercial roof is commercial, never residential'); assert.equal(EC.pvRate(5000), 1.98); assert.equal(EC.pvRate(50000), 1.12); count += 4;
+assert.match(String(EC._tables.BENCH.pvSource), /Q1 2025/, 'the book names its source and quarter'); count++;
 
 /* ── the endpoint ──────────────────────────────────────────────────── */
 var ep = read('api/cost-rollup.js');
 assert.match(ep, /req\.method !== 'POST'/); assert.match(ep, /A\.authenticate\(req\)/); assert.match(ep, /caller\.orgId \|\| caller\.staff/); assert.match(ep, /EC\.rollup\(q\)/); count += 4;
+assert.match(ep, /q\.vendorOrg = caller\.orgId \|\| null;/, 'the caller\'s workspace is stamped on the request (a vendor prices its own products), never read off the body'); count++;
+/* NextNRG's solar + storage system at $6.00/W-DC installed (api/_lib/nextnrg.js SYSTEM_RATE; scripts/tests/tnextnrg.js holds the cases): the Run total and the ITC basis carry it, the record's lines name it */
+var nn = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, fleet: { units: 1, byModel: { 'X': { qty: 1, kwh: 1000, kw: 250, cost: null } } }, counts: { pad: 1 }, sheet: {} });
+assert.equal(nn.totals.nextnrg, 2208000); assert.equal(nn.totals.bess, 0); assert.equal(nn.totals.solar, 0); assert.equal(nn.totals.noContingency, 2208000); count += 4;
+assert.equal(nn.totals.sub, 2208000 + 4800); assert.equal(nn.totals.cont, 480); assert.equal(nn.totals.total, 2208000 + 4800 + 480); assert.equal(nn.totals.itcBasis, 2208000 + 4800 * 1.1); assert.equal(nn.flags.nextnrg, true); count += 5;
+assert.equal(nn.totals.low, nn.totals.total); assert.equal(nn.totals.high, nn.totals.total); count += 2;
+var nnActual = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 368, solar: { byMount: { roof: 368 } }, sheet: { actualTotal: 2500000 } });
+assert.equal(nnActual.totals.total, 2500000, 'a contracted number still wins'); count++;
 
 /* ── the page: no table, a collector, a cached request, a renderer ─── */
 var ed = read('editor.html');
@@ -105,7 +114,7 @@ var cp = EC.rollup({ fleet: { units: 1, byModel: { 'GOTION-EDGE-760': { qty: 1, 
 assert.equal(cp.lines.bess.rows[0].perUnit, 84740, 'a catalog unit is priced at its catalog price'); assert.equal(cp.lines.bess.rows[0].catalog, true); assert.equal(cp.lines.bess.rows[0].missing, false); count += 3;
 assert.equal(cp.lines.bess.autoByKwh['760'], 84740); assert.equal(cp.lines.bess.configured[0].eq, 56354); assert.equal(cp.lines.bess.configured[1].eq, 50000, 'a typed cost wins'); count += 3;
 assert.ok(!/eqcost:\d/.test(ed), 'no unit price on the page\'s catalog'); count++;
-assert.match(ed, /catalogKey:k \}; \}\);/); assert.match(ed, /catalogKey:b\.catalogKey\|\|'' \}; \}\);/); count += 2;
+assert.match(ed, /catalogKey:ck,\s*\/\*[^*]*\*\/\s*nextnrg: !!\(\(ce && \(ce\.nextnrg===true/); assert.match(ed, /catalogKey:b\.catalogKey\|\|'' \}; \}\);/); count += 2;
 console.log('teditorcost (catalog prices): assertions added');
 
 /* ── solar is priced per kW-DC by MOUNT, on its own line, whatever else is
@@ -118,14 +127,14 @@ var can = EC.rollup({ solarKwDc: 176, solar: { byMount: { canopy: 176 } } });
 assert.equal(can.lines.solar.rows.length, 1); assert.equal(can.lines.solar.rows[0].mount, 'canopy'); assert.equal(can.lines.solar.rows[0].rate, 2.75); count += 3;
 assert.equal(can.totals.solar, 176 * 1000 * 2.75, 'a canopy at the canopy rate, never the ground band'); assert.equal(can.lines.solar.isBenchmark, true); count += 2;
 var mix = EC.rollup({ solarKwDc: 400, solar: { byMount: { ground: 300, canopy: 100 } } });
-assert.equal(mix.totals.solar, 300e3 * 1.55 + 100e3 * 2.75); assert.equal(mix.lines.solar.rows.map(function (r) { return r.mount; }).join(','), 'ground,canopy'); count += 2;
+assert.equal(mix.totals.solar, 300e3 * 1.98 + 100e3 * 2.75); assert.equal(mix.lines.solar.rows.map(function (r) { return r.mount; }).join(','), 'ground,canopy'); count += 2;
 assert.ok(Math.abs(mix.lines.solar.rate - mix.totals.solar / 400e3) < 1e-9, 'the blended rate is the line over its watts'); count++;
 var ovr = EC.rollup({ solarKwDc: 200, solar: { byMount: { ground: 100, canopy: 100 } }, sheet: { pvWdc: 2 } });
 assert.equal(ovr.totals.solar, 400000, 'the sheet wins for every mount'); assert.equal(ovr.lines.solar.isBenchmark, false); assert.equal(ovr.lines.solar.rows[1].rate, 2); count += 3;
 var prev = EC.rollup({ solarKwDc: 500, solar: { byMount: { ground: 200 } } });
 assert.equal(prev.lines.solar.rows.length, 2); assert.equal(prev.lines.solar.rows[1].mount, 'unspecified'); assert.equal(prev.lines.solar.rows[1].kwDc, 300); count += 3;
-assert.equal(prev.totals.solar, 500e3 * 1.55, 'a previewed layout the page cannot place by mount is plain PV at the band'); count++;
-assert.equal(EC.pvRate(176, 'canopy'), 2.75); assert.equal(EC.pvRate(176, 'roof'), 1.55); assert.equal(EC.pvRate(25000, 'canopy'), 2.75, 'a canopy never takes the utility band'); count += 3;
+assert.equal(prev.totals.solar, 500e3 * 1.98, 'a previewed layout the page cannot place by mount is plain PV at the band'); count++;
+assert.equal(EC.pvRate(176, 'canopy'), 2.75); assert.equal(EC.pvRate(176, 'roof'), 1.98); assert.equal(EC.pvRate(25000, 'canopy'), 2.75, 'a canopy never takes the utility band'); count += 3;
 assert.equal(EC._tables.BENCH.pvCanopy, 2.75); assert.match(can.sources.pvCanopy, /2\.50-3\.50/); count += 2;
 /* nothing else on the drawing moves it: pods, the DC package and generation beside it */
 var alone = EC.rollup({ solarKwDc: 176, solar: { byMount: { canopy: 176 } } });
@@ -149,7 +158,56 @@ var qa = collect(arrays), qs = collect(arrays.concat([{ kind: 'derdc', kw: 75, o
 assert.deepEqual(Object.assign({}, qa.solar.byMount), { ground: 324, roof: 0, canopy: 176 }, 'the page sends kW by mount, never a price');   /* copied out of the vm realm */ count++;
 var ra = EC.rollup(qa), rs = EC.rollup(qs);
 assert.equal(ra.lines.solar.rows[0].mount, 'ground'); assert.equal(ra.lines.solar.rows[1].mount, 'canopy'); assert.equal(ra.lines.solar.rows[1].rate, 2.75); count += 3;
-assert.equal(ra.totals.solar, 324e3 * 1.55 + 176e3 * 2.75, 'the traced canopy priced as a canopy beside a ground array'); count++;
-assert.deepEqual(rs.lines.solar, ra.lines.solar, 'the Omega-Core skid changes nothing about the solar'); assert.equal(rs.totals.total, ra.totals.total, 'nor the Run total'); assert.equal(qs.dc.pods, 0); count += 3;
-assert.match(ed, /q\.solar=\{ byMount:\(typeof omegaSolarByMount==='function'\)\?omegaSolarByMount\(\):null \};/); assert.match(ed, /LN\.solar\.rows\|\|\[\]/); assert.match(ed, /_omRow\('Solar \$\/W'/); count += 3;
+assert.equal(ra.totals.solar, 324e3 * 1.98 + 176e3 * 2.75, 'the traced canopy priced as a canopy beside a ground array'); count++;
+assert.deepEqual(rs.lines.solar, ra.lines.solar, 'the Omega-Core skid changes nothing about the solar'); assert.equal(qs.dc.pods, 0); count += 2;
+/* the skid IS in the Run total (2026-10-14): each at the recorded system price (the skid + the controller built in), no contingency, never ITC energy property; the collector counts it */
+var OC = require(path.join(ROOT, 'api/_lib/omega-core')).PRODUCT;
+assert.equal(qs.omegaCore.skids, 1, 'the page counts the skids'); assert.equal(qa.omegaCore.skids, 0); count += 2;
+assert.equal(rs.lines.omegaCore.total, OC.systemCostUsd); assert.equal(rs.lines.omegaCore.total, 764000, '$639,000 as recorded + the $125,000 NextNRG Microgrid Controller'); assert.equal(rs.lines.omegaCore.breakdown.length, 2); count += 3;
+assert.equal(rs.totals.total, ra.totals.total + 764000, 'the Run total carries the skid at its recorded price, with no contingency on it'); assert.equal(rs.totals.noContingency, 764000); count += 2;
+assert.equal(rs.totals.itcBasis, ra.totals.itcBasis, 'the skid is never the host\'s energy property'); assert.equal(rs.totals.itcExcluded, ra.totals.itcExcluded + 764000); count += 2;
+var two = EC.rollup({ omegaCore: { skids: 2 } }); assert.equal(two.totals.total, 2 * 764000, 'two skids alone are in scope at twice the price'); assert.equal(two.totals.inScope, true); count += 2;
+assert.match(ed, /q\.solar=\{ byMount:\(typeof omegaSolarByMount==='function'\)\?omegaSolarByMount\(\):null,/); assert.match(ed, /LN\.solar\.rows\|\|\[\]/); assert.match(ed, /_omRow\('Solar \$\/W'/); count += 3;
+/* a kW-DC set by hand on an array (2026-10-14): one rule, run at every recompute; blank = the layout's own figure */
+var ko = cut('_derApplyKwOverride'), kc = vm.createContext({});
+vm.runInContext(ko, kc);
+var shA = vm.runInContext('var a={kw:100}; _derApplyKwOverride(a, 123.44); a', kc);
+assert.equal(shA.kw, 123.4); assert.equal(shA.kwAuto, 123.4); assert.equal('kwOverride' in shA, false, 'no hand figure: the layout\'s own, to a tenth'); count += 3;
+var shB = vm.runInContext('var b={kw:100, kwOverride:490}; _derApplyKwOverride(b, 123.4); b', kc);
+assert.equal(shB.kw, 490, 'the hand figure holds through a refill'); assert.equal(shB.kwAuto, 123.4, 'and the layout\'s own is kept beside it'); count += 2;
+var shC = vm.runInContext('var c={kw:490, kwOverride:0}; _derApplyKwOverride(c, 77); c', kc);
+assert.equal(shC.kw, 77); assert.equal('kwOverride' in shC, false, 'cleared goes back to the layout\'s own'); count += 2;
+assert.match(cut('_solarRecalcAll'), /_derApplyKwOverride\(sh, L\.kw\)/, 'the rectangle recalc runs it'); count++;
+assert.match(ed.slice(ed.indexOf('  function relayout(sh, opts) {')), /_derApplyKwOverride\(sh, L\.kw\)/, 'the traced relayout runs it'); count++;
+assert.match(ed, /field\('kW-DC \\u2014 set by hand \(blank = the layout/, 'the array editor offers it'); assert.match(ed, /if \(kwSet > 0\) sh\.kwOverride = kwSet; else delete sh\.kwOverride;/, 'and Apply writes or clears it'); count += 2;
+/* the Results rail prints the drawing's own products at their prices (2026-10-14): NextNRG's system at its $/W, the Omega-Core skids, the controller — the server's lines as published */
+var rail = ed.slice(ed.indexOf("fi += _omRow('Total install'"), ed.indexOf("_omSet('rr-b-fin', fi);"));
+assert.match(rail, /_omRow\('NextNRG solar \+ storage \('\+Math\.round\(\+_nnL\.solarKwDc\|\|0\)/, 'the NextNRG system row'); assert.match(rail, /window\._OMEGACORE_DETAIL/, 'the skid row reads the published line'); assert.match(rail, /_omRow\('Omega-Core skid'/, 'and prints it'); assert.match(rail, /_omRow\('NextNRG Microgrid Controller'/, 'the controller row'); count += 4;
+assert.match(ed, /window\._OMEGACORE_TOTAL = T\.omegaCore \|\| 0; window\._OMEGACORE_DETAIL = LN\.omegaCore \|\| null;/, 'the cost render publishes the skid line'); count++;
+/* NextNRG's storage is told by the catalog key behind the display name, the make, or a model named NextNRG's (2026-10-14: a NextNRG 1,000 kWh pad keyed by its model name ran at the container rate, $144k with contingency, against the $1.5M its 250 kW is at NextNRG's $6.00/W) */
+function collectFleet(byModel, catalog) {
+  var S3 = { bessList: [], elements: [], shapes: [], conduits: [], pxPerFt: 10, costOverrides: {}, omegaSizing: {} };
+  var c3 = { S: S3, window: {}, document: { getElementById: function () { return null; }, activeElement: null }, BESS_CATALOG: catalog,
+    $v: function () { return undefined; }, JSON: JSON, Object: Object, Math: Math, Promise: Promise, String: String, Number: Number, RegExp: RegExp,
+    _ppCollectFleet: function () { return { units: Object.keys(byModel).length, byModel: byModel }; }, _vendorOverrides: function () { return {}; }, omegaBessFleet: function () { return { kwh: 1000, kw: 250 }; },
+    omegaSolarKwDc: function () { return 0; }, omegaDer: function () { return { solarKwDc: 0, windKw: 0, altKw: 0 }; }, bnzAll: function () { return { capex: 0 }; }, OMEGA_PRICE_BASIS: 'cost' };
+  vm.createContext(c3);
+  vm.runInContext(cut('_costSheetValues') + cut('_evQuantities') + cut('omegaSolarByMount') + cut('omegaCostQuantities') + '\nthis.q = omegaCostQuantities();', c3);
+  return c3.q;
+}
+var CAT = { 'NEXTNRG-SAFT-IFLEX-3400': { mfr: 'NextNRG', nextnrg: true, kwh: 3400 }, 'GOTION-EDGE-760': { mfr: 'Gotion', kwh: 760 } };
+var qf = collectFleet({ 'NextNRG Microgrid Storage \u2014 Saft Intensium Flex 3.4 MWh block (LFP)': { qty: 1, kwh: 3400, kw: 850, cost: null, catalogKey: 'NEXTNRG-SAFT-IFLEX-3400', mfr: 'NextNRG' },
+  'NextNRG Model 1': { qty: 1, kwh: 1000, kw: 250, cost: null, catalogKey: null, mfr: '' }, 'Gotion EDGE 760 kWh C&I': { qty: 1, kwh: 760, kw: 380, cost: null, catalogKey: 'GOTION-EDGE-760', mfr: 'Gotion' } }, CAT);
+var fm = JSON.parse(JSON.stringify(qf.fleet.byModel));
+assert.equal(fm['NextNRG Microgrid Storage \u2014 Saft Intensium Flex 3.4 MWh block (LFP)'].nextnrg, true, 'the catalog block placed under its display name is NextNRG\'s by the key behind it'); count++;
+assert.equal(fm['NextNRG Model 1'].nextnrg, true, 'a product named NextNRG\'s (a library product, a guided build) is NextNRG\'s');
+var qk = collectFleet({ 'Model 1': { qty: 1, kwh: 1000, kw: 250, cost: null, catalogKey: 'ORG-NEXTNRG-MODEL1', mfr: '' } }, {});
+assert.equal(JSON.parse(JSON.stringify(qk.fleet.byModel))['Model 1'].nextnrg, true, 'the equipment-library key names NextNRG before the catalog has synced'); count++;
+assert.match(ed, /mfr:\(_pelec\.key && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG\[_pelec\.key\] && BESS_CATALOG\[_pelec\.key\]\.mfr\)\|\|null,/, 'a placed pad carries its make'); count++; assert.equal(fm['Gotion EDGE 760 kWh C&I'].nextnrg, false, 'a Gotion is not'); count += 2;
+assert.equal(fm['Gotion EDGE 760 kWh C&I'].catalogKey, 'GOTION-EDGE-760', 'the catalog key rides to the server behind the display name'); count++;
+var rf = EC.rollup(qf);
+var nnRow = rf.lines.bess.rows.filter(function (r) { return r.key === 'NextNRG Model 1'; })[0], gRow = rf.lines.bess.rows.filter(function (r) { return /Gotion/.test(r.key); })[0];
+assert.equal(nnRow.total, 250 * 1000 * 6, 'the 1,000 kWh / 250 kW NextNRG unit alone is $1,500,000 at $6.00 a watt'); assert.equal(nnRow.nextnrgRate, true); assert.equal(nnRow.install, 0, 'labor inside'); count += 3;
+assert.equal(gRow.total, Math.round(84740 * 1.55), 'the Gotion beside it is priced off its catalog key, not its display name'); count++;
+assert.match(ed, /var cKey=s\.catalogKey\|\|null;/, 'the fleet collector carries the catalog key of each group'); assert.match(ed, /\/\^nextnrg\\b\/i\.test\(String\(k\)\)/, 'and the quantities read the name'); count += 2;
 console.log('teditorcost (solar by mount): ' + count + ' assertions passed');

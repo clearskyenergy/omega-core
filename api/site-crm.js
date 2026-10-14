@@ -203,6 +203,12 @@ function siteInput(b) {
     serviceCapacityKw: optNum(b.serviceCapacityKw, 'Service capacity (kW)', 0, 100000000),
     existingPeakKw: optNum(b.existingPeakKw, 'Existing peak kW', 0, 100000000),
     powerPricePerKwh: optNum(b.powerPricePerKwh, 'Power price ($/kWh)', 0, 10),
+    /* the PPA the host's solar + storage is sold under (NextNRG's executed
+       PPA: rate in year one, escalator, term); the compute model prices the
+       host's system on it (api/_lib/site-model.js ppaOf) */
+    ppaRatePerKwh: optNum(b.ppaRatePerKwh, 'PPA rate ($/kWh)', 0, 5),
+    ppaEscalatorPct: optNum(b.ppaEscalatorPct, 'PPA escalator (%/yr)', -10, 20),
+    ppaTermYears: optNum(b.ppaTermYears, 'PPA term (years)', 0, 40),
     annualUsageKwh: optNum(b.annualUsageKwh, 'Annual usage (kWh)', 0, 1e15),
     monthlyUsageKwh: optMonthlyUsage(b.monthlyUsageKwh),
     usageNotes: C.text(b.usageNotes, 2000, 'Usage notes', { multiline: true }),
@@ -239,6 +245,9 @@ function siteView(id, s) {
     serviceCapacityKw: s.serviceCapacityKw == null ? null : Number(s.serviceCapacityKw),
     existingPeakKw: s.existingPeakKw == null ? null : Number(s.existingPeakKw),
     powerPricePerKwh: s.powerPricePerKwh == null ? null : Number(s.powerPricePerKwh),
+    ppaRatePerKwh: s.ppaRatePerKwh == null ? null : Number(s.ppaRatePerKwh),
+    ppaEscalatorPct: s.ppaEscalatorPct == null ? null : Number(s.ppaEscalatorPct),
+    ppaTermYears: s.ppaTermYears == null ? null : Number(s.ppaTermYears),
     annualUsageKwh: s.annualUsageKwh == null ? null : Number(s.annualUsageKwh),
     monthlyUsageKwh: Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh : null,
     usageNotes: s.usageNotes || null,
@@ -429,6 +438,7 @@ var handler = A.handler(async function (req, res) {
       /* the Omega-Core skid's facts for a page whose design carries one: the product record's, never a page's own */
       skid: dsgOut && dsgOut.compute && dsgOut.compute.omegaCoreUnits > 0 ? SM.skidFacts() : null,
       autoModel: auto && auto.ran ? { modelId: auto.ran.modelId, latestModel: auto.ran.summary } : null,
+      autoProforma: auto && auto.proforma && auto.proforma.ran ? auto.proforma.ran : null,
       contacts: contacts,
       activity: activityRaw.map(function (a) { return siteActivityView(a.id, a, contactNames); }),
       followUps: got[3].docs.map(function (d) { return siteFollowUpView(d.data() || {}, site.data.name || '', contactNames); }).sort(C.byDue),
@@ -856,9 +866,13 @@ async function runScenario(db, org, site, b, by, now) {
   var sref = site.ref.collection('proforma').doc(scen.scenarioId), lp = latestOf(scen);
   await db.runTransaction(async function (tx) {
     tx.create(sref, scen);
-    tx.update(site.ref, { latestProforma: lp, updatedAt: now, updatedBy: by });
-    audit(tx, db, 'sitecrm-proforma-run', org, site.id, by, now, { scenarioId: scen.scenarioId, pods: scen.inputs.pods, assumptionVersion: scen.assumptionVersion });
+    /* the system's own run on the design never bumps updatedAt / updatedBy:
+       that is a person editing the facts (and what the compute model reads
+       as a fact change) */
+    tx.update(site.ref, b.auto === true ? { latestProforma: lp } : { latestProforma: lp, updatedAt: now, updatedBy: by });
+    audit(tx, db, 'sitecrm-proforma-run', org, site.id, by, now, { scenarioId: scen.scenarioId, pods: scen.inputs.pods, assumptionVersion: scen.assumptionVersion, auto: b.auto === true, designHash: lp.designHash });
   });
+  if (site.data) site.data.latestProforma = lp;
   return { scenario: scen, latestProforma: lp };
 }
 function latestOf(scen) {
@@ -872,7 +886,8 @@ function latestOf(scen) {
     paybackMonth: r.paybackMonth == null ? null : r.paybackMonth, investorCapital: r.investorCapital == null ? null : r.investorCapital,
     year1Revenue: r.year1Revenue == null ? null : r.year1Revenue, months: r.months || null,
     assumptionVersion: scen.assumptionVersion, label: scen.inputs && scen.inputs.label || '', at: scen.createdAt,
-    capexBasis: r.capexBasis || null, designAt: scen.inputs && scen.inputs.designAt || null };
+    capexBasis: r.capexBasis || null, designAt: scen.inputs && scen.inputs.designAt || null, designHash: scen.inputs && scen.inputs.designHash || null,
+    convention: '60 operating months, pre-tax, unlevered, no exit value: the pod case' };
 }
 
 /* ── the design: what the linked Site Map project says, kept on the site ──
@@ -913,8 +928,13 @@ async function syncDesign(db, org, site, now) {
    under the person whose open or sync set it off. */
 async function designModel(db, org, site, ctx, now) {
   var d = site.data && site.data.latestDesign; if (!d || !d.hash) return null;
+  /* the pod pro forma follows the design too (2026-10-14; Topanga's pod
+     block read 0.43% on a $2.1M assumption-set pod a day after the skid was
+     priced as recorded): once per design, on the units placed and the
+     skid's recorded price, so the two IRRs are judged on the same capital */
+  var pf = await designProforma(db, org, site, ctx.by, now, d);
   var lm = site.data.latestModel, dm = site.data.designModel, factsAt = C.iso(site.data.updatedAt) || null;
-  if (lm && lm.designHash === d.hash) return null;
+  if (lm && lm.designHash === d.hash) return pf ? { proforma: pf } : null;
   if (dm && dm.hash === d.hash && dm.factsAt === factsAt) return { skipped: dm.missing ? 'missing' : dm.error ? 'error' : 'done', missing: dm.missing || null, error: dm.error || null, repeat: true };
   try { await computeAccess(ctx.caller, org, ctx.root); } catch (e) { return { skipped: 'no-access' }; }
   var orgDoc = await ctx.root.get(), orgName = orgDoc.exists ? ((orgDoc.data() || {}).name || org) : org;
@@ -928,12 +948,23 @@ async function designModel(db, org, site, ctx, now) {
     var ran = await runModel(db, org, site, { label: 'Site Map design', auto: true }, ctx.by, now, orgName);
     rec = { hash: d.hash, factsAt: factsAt, at: now, modelId: ran.modelId };
     await site.ref.update({ designModel: rec }); site.data.designModel = rec;
-    return { ran: ran };
+    return { ran: ran, proforma: pf };
   } catch (e) {
     rec = { hash: d.hash, factsAt: factsAt, at: now, error: String(e && e.message || e).slice(0, 300) };
     await site.ref.update({ designModel: rec }); site.data.designModel = rec;
     return { skipped: 'error', error: rec.error };
   }
+}
+/* The pod pro forma on the design, by itself: the units placed (the skid
+   as recorded), once per design (latestProforma.designHash). A design with
+   no compute units has no pod case. Never throws: what stopped it is the
+   answer. */
+async function designProforma(db, org, site, by, now, d) {
+  if (!(d && d.compute && d.compute.units > 0)) return null;
+  var lp = site.data && site.data.latestProforma;
+  if (lp && lp.designHash === d.hash) return null;
+  try { var r = await runScenario(db, org, site, { fromDesign: true, label: 'Site Map design', auto: true }, by, now); return { ran: r.latestProforma }; }
+  catch (e) { return { error: String(e && e.message || e).slice(0, 300) }; }
 }
 function proformaLine(lp) {
   var irr = lp.investorIrrDefined && lp.investorIrrAnnual != null ? (lp.investorIrrAnnual * 100).toFixed(2) + '%' : 'not defined';

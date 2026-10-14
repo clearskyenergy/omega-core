@@ -4583,6 +4583,10 @@ var _app, _db, _auth, _storage = null, _currentUser = null, _projectId = null, _
    Falls back to 'clearsky.com' only when no email is available. */
 function _projOrgId() {
   try {
+    /* the orgId CLAIM first, as the rules' userOrg() reads it: a person on
+       a personal address (gmail.com) is homed to a slug-keyed workspace and
+       has no domain that would pass the create rule (set on sign-in below) */
+    if (window._homeOrgClaim) return window._homeOrgClaim;
     var em = _currentUser && _currentUser.email;
     if (em && em.indexOf('@') > -1) {
       var d = em.split('@')[1].toLowerCase();
@@ -4689,6 +4693,8 @@ function _initFirebase() {
 
       if (user) {
         _currentUser = user;
+        /* the home-workspace claim _projOrgId() reads first */
+        try { user.getIdTokenResult().then(function (r) { window._homeOrgClaim = String((r && r.claims && r.claims.orgId) || '').toLowerCase(); }, function () {}); } catch (e) {}
 
         /* The org's equipment library, including any uploaded compute
            modules, so the Data Ctr pickers carry them before the library
@@ -11273,6 +11279,7 @@ function _doPlaceBesPad(p,spec,opts){
     var sh={ id:uid(), kind:'bespad', pts:[{x:p.x - wPx/2, y:p.y - hPx/2}],
              style:S.shapeStyle, color:SHAPE_STROKE, lf:spec.lf, wf:spec.wf, model:spec.model, scaled:!!ppf,
              catalogKey:_pelec.key, unitKwh:_pelec.kwh, unitKw:_pelec.kw, unitCost:_pelec.cost,
+             mfr:(_pelec.key && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[_pelec.key] && BESS_CATALOG[_pelec.key].mfr)||null,
              geometryBasis:spec.geometryBasis||'', geometryNote:spec.geometryNote||'' };
     S.shapes.push(sh); renderShape(sh);
     updShapeCount(); pushHist();
@@ -11531,6 +11538,12 @@ function _ppCollectFleet(){
     out.totalKwh+=kwh; out.totalKw+=kw;
     if(cost!=null) out.totalCost+=cost; else out.anyMissingCost=true;
     var key=s.model||s.catalogKey||'BESS Unit';
+    /* the catalog key behind the display name, and the make: the cost
+       quantities tell NextNRG's storage by them (2026-10-14: a NextNRG
+       1,000 kWh pad keyed by its model name missed the catalog's flag and
+       ran at the $85/kWh container rate) */
+    var cKey=s.catalogKey||null;
+    var cMfr=(cKey && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[cKey] && BESS_CATALOG[cKey].mfr) || s.mfr || '';
     /* Accumulate per-model TOTALS. Previously kwh/kw/cost were captured from
        the first unit under a key and never updated, so two differently-sized
        units sharing a model name (e.g. both labeled "BESS") reported the
@@ -11539,9 +11552,11 @@ function _ppCollectFleet(){
        the PER-UNIT figures for display, and mixed flags a non-uniform group. */
     if(!out.byModel[key]){
       out.byModel[key]={ qty:0, kwh:kwh, kw:kw, cost:cost,
-                         groupKwh:0, groupKw:0, groupCost:0, mixed:false };
+                         groupKwh:0, groupKw:0, groupCost:0, mixed:false, catalogKey:cKey, mfr:cMfr };
     }
     var B=out.byModel[key];
+    if(!B.catalogKey && cKey) B.catalogKey=cKey;
+    if(!B.mfr && cMfr) B.mfr=cMfr;
     B.qty++;
     B.groupKwh += kwh; B.groupKw += kw;
     if(cost!=null) B.groupCost += cost;
@@ -15351,7 +15366,11 @@ var GM_ROW_DRAW_CAP = 1200;   /* max individual tables to render as shapes */
 var GM_TABLE = {
   'fixed-ground': { tableW:20, tableH:12, tiltDeg:25 },  /* 2-portrait-high */
   'tracker-1ax':  { tableW:6,  tableH:180, tiltDeg:0  },  /* long N-S torque tube */
-  'rooftop':      { tableW:20, tableH:10, tiltDeg:10 },
+  /* a flat-roof table: 2-up landscape of the module (2 x 1134 mm = 7.44 ft
+     deep, carried as 7.5) at 10 deg, on a 12.5 ft row pitch (GCR 0.60) —
+     the standard flat-roof row spacing that clears inter-row shading
+     (Tommy, 2026-10-14: "it should be at 12.5 for roof mount") */
+  'rooftop':      { tableW:20, tableH:7.5, tiltDeg:10 },
   'carport':      { tableW:20, tableH:40, tiltDeg:7  }
 };
 function _gmTable(presetKey){ return GM_TABLE[presetKey] || GM_TABLE['fixed-ground']; }
@@ -15412,7 +15431,7 @@ function computeGroundLayout(opts){
   var boundary=opts.boundary;
   if(!boundary || boundary.length<3) return null;
   var ppf=(typeof _derScale==='function')?_derScale():6;
-  var A=(typeof _solarAssume==='function')?_solarAssume('ground'):{gcr:0.4,wpsf:DER_PV_WPSF,setbackFt:10,presetKey:'fixed-ground'};
+  var A=(typeof _solarAssume==='function')?_solarAssume(opts.mount||'ground'):{gcr:0.4,wpsf:DER_PV_WPSF,setbackFt:10,presetKey:'fixed-ground'};
   var tbl=_gmTable(A.presetKey);
 
   var setbackPx=(A.setbackFt||10)*ppf;
@@ -15497,7 +15516,8 @@ function applyGroundLayout(boundary, layout, exclusions){
   var ppf=(typeof _derScale==='function')?_derScale():6;
   var bb=_gmBBox(boundary);
   var sh={
-    id:uid(), kind:'dersolar', mount:(window._alMount==='custom'?'custom':'ground'),
+    id:uid(), kind:'dersolar', mount:(window._alMount==='roof'||window._alMount==='adjacent')?window._alMount:'ground',
+    canopy:(window._alMount==='adjacent'),
     pts:[{x:bb.minX,y:bb.minY}], wPx:bb.w, hPx:bb.h,
     /* auto-layout payload */
     autoLayout:true,
@@ -15519,14 +15539,7 @@ function applyGroundLayout(boundary, layout, exclusions){
   /* The module this array was built with and, when that module is a
      product somebody sells (NextNRG's EAGLE G7B), whose product it is: the
      drawing, the legend, the inventory and the BOM read it off the shape. */
-  try{
-    var _A=(typeof _solarAssume==='function')?_solarAssume('ground'):null, _M=_A&&_A.module;
-    if(_M){
-      sh.moduleKey=_A.moduleKey; sh.moduleWatts=_M.watts||null;
-      if(_M.mfr){ sh.mfr=_M.mfr; sh.sku=_M.sku||null;
-        sh.product=_M.mfr+' Solar PV \u2014 '+(_M.make?_M.make+' ':'')+(_M.line||'')+(_M.watts?' '+_M.watts+' W':''); }
-    }
-  }catch(e){}
+  try{ _derStampModule(sh, sh.mount); }catch(e){}
   S.shapes.push(sh);
   if(typeof renderShape==='function') renderShape(sh);
   if(typeof updShapeCount==='function') updShapeCount();
@@ -15597,7 +15610,13 @@ function openAutoLayout(boundaryPts){
      array: it claims no mount until the array editor chooses one. The
      ribbon's Auto Layout, with no outline handed in, is the ground-mount
      tool it always was. */
-  window._alMount=(boundaryPts && boundaryPts.length>=3)?'custom':'ground';
+  /* A traced area lays out with the preset of the mount it is ON (Tommy,
+     2026-10-14: a traced roof read far less kW than the roof rectangle
+     over the same area — the trace was filling with the ground preset's
+     0.40 GCR and 10 ft setback). The mount starts as the ribbon's Solar
+     choice and can be changed on the modal; the array carries it. */
+  window._alCustom=!!(boundaryPts && boundaryPts.length>=3);
+  window._alMount=window._alCustom ? ((typeof _derSolarMount!=='undefined' && (_derSolarMount==='roof'||_derSolarMount==='adjacent')) ? _derSolarMount : 'ground') : 'ground';
   var host=document.getElementById('autolayout-modal');
   if(!host){
     host=document.createElement('div');
@@ -15619,7 +15638,7 @@ function openAutoLayout(boundaryPts){
   host.innerHTML=
     '<div style="background:var(--panel);border:1px solid #FBBF24;border-radius:12px;max-width:460px;width:100%;box-shadow:0 30px 80px rgba(0,0,0,.55)">'
     + '<div style="padding:15px 18px;border-bottom:1px solid var(--border)">'
-    +   '<div style="font-size:15px;font-weight:800;color:var(--amber)">'+(window._alMount==='custom'?'\u2600 Auto-Layout \u2014 Custom Area':'\u2600 Auto-Layout Ground Mount')+'</div>'
+    +   '<div style="font-size:15px;font-weight:800;color:var(--amber)">'+(window._alCustom?'\u2600 Auto-Layout \u2014 Custom Area':'\u2600 Auto-Layout Ground Mount')+'</div>'
     +   '<div style="font-size:9.5px;color:var(--sub);margin-top:3px">Fills a drawn boundary with racking rows \u2014 flat-ground takeoff estimator</div>'
     + '</div>'
     + '<div style="padding:15px 18px">'
@@ -15634,6 +15653,12 @@ function openAutoLayout(boundaryPts){
         ? '<div style="background:rgba(245,158,11,.12);border:1px solid rgba(245,158,11,.4);border-radius:7px;padding:9px 11px;font-size:9.5px;color:var(--warn);line-height:1.55;margin-bottom:10px">'
           +'\u26a0 <strong>No scale set</strong> \u2014 the boundary reads as '+acreTxt+', which is almost certainly wrong. '
           +'Set the real-world scale first \u2014 tap <strong>\ud83d\udccf Calibrate Scale</strong> in the toolbar and trace a known length, or capture a site under <strong>Site Setup</strong> (which calibrates automatically). Then tables and kW are real.</div>'
+        : '')
+    +   (window._alCustom
+        ? '<div style="margin-bottom:10px"><label style="display:block;font-size:9px;color:var(--sub);margin-bottom:3px">Mount \u2014 the layout fills the trace with this mount\u2019s racking (GCR, setback)</label>'
+          +'<select id="al-mount" onchange="alMountChanged(this.value)" style="background:var(--surface);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:6px 8px;font-size:11px;font-family:inherit;width:100%">'
+          +[['ground','Ground mount'],['roof','Rooftop'],['adjacent','Solar canopy']].map(function(m){ return '<option value="'+m[0]+'"'+(m[0]===window._alMount?' selected':'')+'>'+m[1]+'</option>'; }).join('')
+          +'</select></div>'
         : '')
     +   '<div style="font-size:9px;color:var(--sub);line-height:1.6;margin-bottom:12px">Racking type, GCR and setback come from <strong style="color:var(--text)">Solar Assumptions</strong> (in the Solar\u2192BESS sizer). Change the preset there to switch fixed-tilt / tracker / carport.</div>'
     +   '<div id="al-preview" style="display:none;background:var(--inset);border:1px solid var(--border);border-radius:8px;padding:11px 13px;font-size:10.5px;line-height:1.8;margin-bottom:12px"></div>'
@@ -16164,9 +16189,13 @@ function _alPolyAcres(pts){
   return Math.abs(_alPolyAreaPx(pts))/(ppf*ppf)/43560;
 }
 
+function alMountChanged(m){
+  window._alMount=(m==='roof'||m==='adjacent')?m:'ground';
+  try{ alPreview(); }catch(e){}
+}
 function alPreview(){
   var boundary=window._alBoundary; if(!boundary) return;
-  var layout=computeGroundLayout({ boundary:boundary, exclusions:window._alExclusions||[] });
+  var layout=computeGroundLayout({ boundary:boundary, exclusions:window._alExclusions||[], mount:window._alMount||'ground' });
   window._alLayout=layout;
   var out=document.getElementById('al-preview'); if(!out||!layout) return;
   out.style.display='block';
@@ -16212,7 +16241,7 @@ function alPreview(){
 function alGenerate(){
   var boundary=window._alBoundary, layout=window._alLayout;
   if(!boundary){ return; }
-  if(!layout){ layout=computeGroundLayout({boundary:boundary,exclusions:window._alExclusions||[]}); }
+  if(!layout){ layout=computeGroundLayout({boundary:boundary,exclusions:window._alExclusions||[],mount:window._alMount||'ground'}); }
   if(!layout || !layout.tableCount){
     if(typeof showBanner==='function') showBanner('wiz','!! No tables fit \u2014 boundary may be smaller than the setbacks.');
     return;
@@ -26118,6 +26147,7 @@ async function saveProject(){
       bessKw:        _rollup.bessKw,
       capexAt:       _rollup.capexAt,
       capexSource:   _rollup.capexSource,
+      capexLines:    _rollup.capexLines,
       /* Price decks are project data. An 8760 x 7 products is large, so
          only the metadata and series descriptors are guaranteed here --
          see _pdStripForSave for what is dropped when it will not fit. */
@@ -29395,7 +29425,15 @@ function omegaCostQuantities(){
   var fleet=(typeof _ppCollectFleet==='function')?_ppCollectFleet():{units:0,byModel:{}};
   q.fleet={ units:fleet.units||0, byModel:{} };
   Object.keys(fleet.byModel||{}).forEach(function(k){ var b=fleet.byModel[k];
-    q.fleet.byModel[k]={ qty:+b.qty||0, kwh:+b.kwh||0, kw:+b.kw||0, cost:(b.cost!=null?+b.cost:null), groupCost:+b.groupCost||0, mixed:!!b.mixed, catalogKey:k }; });
+    var ck=b.catalogKey||k, ce=(typeof BESS_CATALOG!=='undefined') ? (BESS_CATALOG[ck]||BESS_CATALOG[k]||null) : null;
+    q.fleet.byModel[k]={ qty:+b.qty||0, kwh:+b.kwh||0, kw:+b.kw||0, cost:(b.cost!=null?+b.cost:null), groupCost:+b.groupCost||0, mixed:!!b.mixed, catalogKey:ck,
+      /* NextNRG's storage: the catalog's NextNRG group (by the key behind the
+         display name), a product of NextNRG's (the make on the catalog entry
+         or the group, a model named NextNRG's — a library product, a guided
+         build): priced at NextNRG's rate by the server, never the container
+         rate (2026-10-14, Tommy: a NextNRG 1,000 kWh unit "is coming at
+         144k thats not right it should be like a mill plus") */
+      nextnrg: !!((ce && (ce.nextnrg===true || String(ce.mfr||'').toLowerCase()==='nextnrg')) || String(b.mfr||'').toLowerCase()==='nextnrg' || /^nextnrg\b/i.test(String(k)) || /nextnrg/i.test(String(ck||''))) }; });
   q.overrides=(typeof _vendorOverrides==='function')?_vendorOverrides():{};
   /* the configured list, one row per distinct unit (display only; never in the total) */
   var _seen={}, _uniq=[];
@@ -29425,7 +29463,8 @@ function omegaCostQuantities(){
   q.sheet=_costSheetValues();
   q.ev=_evQuantities(); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
   q.solarKwDc=(typeof omegaSolarKwDc==='function')?(+omegaSolarKwDc()||0):0;
-  q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null };   /* a canopy is priced as a canopy */
+  q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null,   /* a canopy is priced as a canopy */
+            nextnrgKwDc:(typeof omegaSolarNextnrgKwDc==='function')?(+omegaSolarNextnrgKwDc()||0):0 };   /* NextNRG's arrays, priced as its system */
   q.placedKw=0; try{ var _d=(typeof omegaDer==='function')?omegaDer():null; if(_d) q.placedKw=(+_d.solarKwDc||0)+(+_d.windKw||0)+(+_d.altKw||0); }catch(e){}
   q.bnzCapex=0; try{ if(typeof bnzAll==='function') q.bnzCapex=+bnzAll().capex||0; }catch(e){}
   q.compute={ podsN:0, podKw:0, shellPerPod:0, itPerPod:0, excludeIt:false };
@@ -29439,6 +29478,10 @@ function omegaCostQuantities(){
   if(dcEl){ q.dc.element={ itKw:+dcEl.loadItKw||0, pue:+dcEl.loadPue||0, kw:+dcEl.loadKw||0 }; }
   else { var _pods=0,_podKw=0; (S.shapes||[]).forEach(function(sh){ if(sh&&sh.kind==='derdc'&&!sh.omegaCore){ _pods++; _podKw+=+sh.kw||0; } });
     q.dc.pods=_pods; q.dc.podKw=_podKw; try{ q.dc.pue=(S.omegaSizing&&+S.omegaSizing.pue)||0; }catch(e){} }
+  /* the Omega-Core skids on the drawing: in the Run total at the recorded
+     system price (the skid + the controller built into it), the server's
+     one record (2026-10-14) */
+  q.omegaCore={ skids:(S.shapes||[]).filter(function(sh){ return sh && sh.kind==='derdc' && sh.omegaCore; }).length };
   return q;
 }
 window.omegaCostQuantities=omegaCostQuantities;
@@ -29503,7 +29546,7 @@ function _renderCostUnavailable(err){
   var totalEl=document.getElementById('rp-total-cost'); if(totalEl) totalEl.textContent='$--';
   var bd=document.getElementById('rp-cost-breakdown'); if(bd) bd.innerHTML='<div style="font-size:10px;color:var(--amber);padding:6px 0">Not priced: '+msg+'. <a href="#" onclick="updateCostEst();return false" style="color:var(--accent)">Try again</a></div>';
   if(!window._COST_SERVER){
-    ['_COST_TOTAL','_COST_LOW','_COST_HIGH','_COST_ITC_BASIS','_COST_ITC_EXCLUDED','_SOLAR_TOTAL','_BESS_TOTAL','_EV_TOTAL','_SITE_EQ_TOTAL','_CONDUIT_TOTAL','_INDIRECT_TOTAL','_EMS_COST_TOTAL','_EMS_SETUP','_CONT_TOTAL','_EMS_ANNUAL','_COMPUTE_TOTAL','_COMPUTE_PODS','_GEN_TOTAL','_DC_TOTAL','_BNZ_TOTAL','_MGC_TOTAL','_COST_PER_KW','_COST_BENCHMARK'].forEach(function(k){ window[k]=0; });
+    ['_COST_TOTAL','_COST_LOW','_COST_HIGH','_COST_ITC_BASIS','_COST_ITC_EXCLUDED','_SOLAR_TOTAL','_BESS_TOTAL','_EV_TOTAL','_SITE_EQ_TOTAL','_CONDUIT_TOTAL','_INDIRECT_TOTAL','_EMS_COST_TOTAL','_EMS_SETUP','_CONT_TOTAL','_EMS_ANNUAL','_COMPUTE_TOTAL','_COMPUTE_PODS','_GEN_TOTAL','_DC_TOTAL','_BNZ_TOTAL','_MGC_TOTAL','_NEXTNRG_SYSTEM_TOTAL','_COST_PER_KW','_COST_BENCHMARK'].forEach(function(k){ window[k]=0; });
     window._IN_SCOPE=false; window._COST_IS_CONTRACTED=false;
   }
 }
@@ -29615,6 +29658,7 @@ function _renderCostEst(ans, stale) {
   window._GEN_TOTAL = T.gen; window._GEN_DETAIL = LN.gen; window._GEN_IS_BENCHMARK = T.gen > 0;
   window._DC_ROM_DETAIL = LN.dc; window._DC_TOTAL = T.dc;
   window._MGC_TOTAL = T.controller || 0; window._MGC_DETAIL = LN.controller || null;
+  window._OMEGACORE_TOTAL = T.omegaCore || 0; window._OMEGACORE_DETAIL = LN.omegaCore || null;
   window._BESS_IS_BENCHMARK = !!F.bessBenchmark; window._SOLAR_IS_BENCHMARK = !!F.solarBenchmark;
   window._COST_PER_KW = T.costPerKW;
 
@@ -29632,7 +29676,10 @@ function _renderCostEst(ans, stale) {
         <span style="color:var(--text);font-size:10px;font-weight:600;font-family:'IBM Plex Mono',monospace">${fmt(val)}</span>
       </div>`;
     var CM=LN.compute, G=LN.gen;
+    var NNL = LN.nextnrg || null;
     bd.innerHTML =
+      (NNL && T.nextnrg > 0 ? row('  '+NNL.label+' \u2014 '+Math.round(NNL.solarKwDc).toLocaleString()+' kW-DC at $'+(+NNL.rate).toFixed(2)+'/W'+(NNL.storage && NNL.storage.inside ? ' (the '+Math.round(NNL.storage.kw).toLocaleString()+' kW / '+Math.round(NNL.storage.kwh).toLocaleString()+' kWh storage inside it)' : '')+', labor included', T.nextnrg, '#54B442') : '') +
+      (NNL && NNL.storage && NNL.storage.total > 0 ? row('  '+NNL.label+' \u2014 '+Math.round(NNL.storage.kw).toLocaleString()+' kW at $'+(+NNL.storage.ratePerW).toFixed(2)+'/W, labor included', NNL.storage.total, '#54B442') : '') +
       (T.solar > 0 ? ((LN.solar.rows||[]).map(function(sr){ return row('  '+sr.label+' — '+Math.round(sr.kwDc).toLocaleString()+' kW-DC at $'+(+sr.rate).toFixed(2)+'/W'+(sr.isBenchmark?' (benchmark)':''), sr.total, '#FBBF24'); }).join('')
                      || row('  Solar PV (equip + install)', T.solar, '#FBBF24')) : '') +
       (T.compute > 0
@@ -29646,14 +29693,15 @@ function _renderCostEst(ans, stale) {
       (T.gen > 0 ? row('  On-site generation ×' + G.units + ' (' + Math.round(G.kw).toLocaleString() + ' kW, benchmark)', T.gen, '#F472B6') : '') +
       (T.dc > 0 ? row('  Data Centre Electrical (ROM)', T.dc, '#38BDF8') : '') +
       (T.bnz > 0 ? row('  Building Envelope', T.bnz, '#A78BFA') : '') +
-      row('  BESS Equipment + Install', T.bess, 'var(--accent)') +
+      (LN.bess && LN.bess.inSystem && !(T.bess > 0) ? row('  BESS \u2014 inside the NextNRG system price', 0, 'var(--accent)') : (LN.bess && LN.bess.nextnrgAlone > 0 && T.bess === LN.bess.nextnrgAlone ? '' : row('  BESS Equipment + Install', T.bess, 'var(--accent)'))) +
       (T.ev > 0 ? row('  EV Charging (equip + install)', T.ev, '#22D3EE') : '') +
       row('   Site Equipment', T.siteEqRaw - T.xfmr, 'var(--amber)') +
       (T.xfmr > 0 ? row('  Transformer', T.xfmr, '#F97316') : '') +
       (T.controller > 0 ? row('  NextNRG Microgrid Controller \u00d7' + T.controllerUnits, T.controller, '#54B442') : '') +
+      (T.omegaCore > 0 ? row('  Omega-Core skid \u00d7' + T.omegaCoreSkids + ' \u2014 as recorded, NextNRG Microgrid Controller built in (' + ((LN.omegaCore && LN.omegaCore.breakdown) || []).map(function(b){ return fmt(b.each); }).join(' + ') + ' each)', T.omegaCore, '#60A5FA') : '') +
       row('  Engineering + Permitting', T.indirectRaw - LN.indirect.emsSetup, 'var(--sub)') +
       (LN.ems.on ? row(' EMS Software (setup)', LN.indirect.emsSetup, '#A78BFA') : '') +
-      row(`  Contingency (${T.contPctRound}%)`, T.cont, 'var(--sub)') +
+      row(`  Contingency (${T.contPctRound}%)` + (T.noContingency > 0 ? ' \u2014 none on ' + [T.nextnrg > 0 || (LN.bess && LN.bess.nextnrgAlone > 0) ? 'NextNRG\u2019s installed price' : '', T.omegaCore > 0 ? 'the Omega-Core skid\u2019s recorded price' : ''].filter(Boolean).join(' or ') : ''), T.cont, 'var(--sub)') +
       `<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:2px">
         <span style="color:var(--text);font-weight:700;font-size:11px">Total</span>
         <span style="color:var(--green);font-weight:700;font-size:14px;font-family:'IBM Plex Mono',monospace">${fmt(TOTAL)}</span>
@@ -29678,6 +29726,7 @@ function _renderCostEst(ans, stale) {
   window._IN_SCOPE = T.inScope;
   window._COST_TOTAL = TOTAL;
   window._SOLAR_TOTAL = T.solar; window._BESS_TOTAL = T.bess; window._EV_TOTAL = T.ev; window._EV_COST_DETAIL = LN.ev;
+  window._NEXTNRG_SYSTEM_TOTAL = T.nextnrg || 0; window._NEXTNRG_SYSTEM_DETAIL = LN.nextnrg || null;
   window._SITE_EQ_TOTAL = T.siteEq; window._CONDUIT_TOTAL = T.conduit; window._INDIRECT_TOTAL = T.indirect;
   window._EMS_COST_TOTAL = T.emsSetup; window._EMS_SETUP = LN.indirect.emsSetup;
   window._CONT_TOTAL = T.cont; window._CONT_PCT = T.contPctRound;
@@ -36463,12 +36512,42 @@ function omegaDer(){
 /* The arrays by how they are MOUNTED, for the cost engine: a canopy (Solar
    → Canopy, or Custom Shape) is priced as a canopy, a rooftop as rooftop,
    the rest as ground. kW only; the rate is the server's. */
+/* An array that is NextNRG's product (NextNRG Solar — Custom stamps the
+   shape with NextNRG's sku and mfr): the cost engine prices it at NextNRG's
+   installed system rate, with the storage beside it inside the price
+   (api/_lib/nextnrg.js SYSTEM_RATE), so it is kept out of the mount bands
+   and sent as its own kW. The rate itself never reaches the page. */
+function omegaSolarIsNextnrg(s){
+  if(!s) return false;
+  if(s.nextnrg===true) return true;
+  if(/^NEXTNRG-/i.test(String(s.sku||''))) return true;
+  if(String(s.mfr||'').toLowerCase()==='nextnrg') return true;
+  /* An array built with a NextNRG-specified module is NextNRG's product
+     (Tommy, 2026-10-13: "use their specs ... label them as nextnrg
+     product"): the module on the shape, else — for an array drawn before
+     the shape carried one — the module the project draws with, which is
+     what the BOM already names it by. */
+  try{
+    if(typeof DER_PV_MODULES!=='undefined'){
+      var m = s.moduleKey ? DER_PV_MODULES[s.moduleKey] : ((typeof _pvModule==='function') ? _pvModule() : null);
+      if(m && m.nextnrg===true) return true;
+    }
+  }catch(e){}
+  return false;
+}
+function omegaSolarNextnrgKwDc(){
+  var kw=0;
+  try{ (S.shapes||[]).forEach(function(s){ if(s && (s.kind==='dersolar'||s.kind==='solar') && omegaSolarIsNextnrg(s)) kw+=(+s.kw||0); }); }catch(e){}
+  return kw;
+}
+window.omegaSolarNextnrgKwDc=omegaSolarNextnrgKwDc;
 function omegaSolarByMount(){
   var t={ ground:0, roof:0, canopy:0 };
   try{
     (S.shapes||[]).forEach(function(s){
       if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return;
       var kw=+s.kw||0; if(!(kw>0)) return;
+      if(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg(s)) return;   /* NextNRG's system, priced as such */
       /* a traced custom area claims no mount: the server prices what it
          cannot place by mount as plain PV at the size band */
       if(s.mount==='custom' && !s.canopy) return;
@@ -36966,6 +37045,19 @@ function omegaRenderResults(){
     var _slMounts=(_sl.rows||[]).map(function(r){ return r.mount==='unspecified'?'':r.mount; }).filter(Boolean);
     fi += _omRow('Solar $/W'+(_slMounts.length?' ('+_slMounts.join(' + ')+')':''), '$'+(+_sl.rate).toFixed(2));
   }
+  /* What the drawing's own products cost on this run, each at its recorded
+     or vendor price (2026-10-14, Tommy: "when i place these elements from
+     the draw function they need to properly be priced and display properly
+     for the pricing on the run tab"): NextNRG's solar + storage system at
+     its $/W, the Omega-Core skids, the NextNRG controller placed for the
+     host. Each is the server's own line, published by _renderCostEst. */
+  var _nnL=window._NEXTNRG_SYSTEM_DETAIL||null, _nnT=_omNum(window._NEXTNRG_SYSTEM_TOTAL);
+  if(_nnT>0 && _nnL) fi += _omRow('NextNRG solar + storage ('+Math.round(+_nnL.solarKwDc||0).toLocaleString()+' kW-DC at $'+(+_nnL.rate).toFixed(2)+'/W)', _omMoney(_nnT));
+  else if(_nnL && _nnL.storage && _omNum(_nnL.storage.total)>0) fi += _omRow('NextNRG storage ('+Math.round(+_nnL.storage.kw||0).toLocaleString()+' kW at $'+(+_nnL.storage.ratePerW).toFixed(2)+'/W)', _omMoney(_nnL.storage.total));
+  var _ocL=window._OMEGACORE_DETAIL||null, _ocT=_omNum(window._OMEGACORE_TOTAL);
+  if(_ocT>0 && _ocL) fi += _omRow('Omega-Core skid'+(_ocL.skids>1?' \u00d7'+_ocL.skids:'')+' (as recorded + controller)', _omMoney(_ocT));
+  var _mgL=window._MGC_DETAIL||null, _mgT=_omNum(window._MGC_TOTAL);
+  if(_mgT>0 && _mgL) fi += _omRow('NextNRG Microgrid Controller'+(_mgL.qty>1?' \u00d7'+_mgL.qty:''), _omMoney(_mgT));
   fi += _omRow('$/kW', perKw ? '$'+Math.round(perKw).toLocaleString() : null);
   var _fc = _fullCost ? ' · full cost' : '';
   fi += _omRow('Payback'+_fc, (payback!==null && payback>0) ? payback.toFixed(1)+' yrs' : null);
@@ -37147,6 +37239,18 @@ function omegaRunRollup(){
   var net = +window._NET_COST; if(!isFinite(net)) net = gross - inc;
   var fleet = null;
   try{ fleet = (typeof omegaBessFleet==='function') ? omegaBessFleet() : null; }catch(e){}
+  /* The run's LINES beside its total (2026-10-14): the portfolio's compute
+     model reads them off the record to put the host's solar, storage and
+     NextNRG system on their own asset classes (the ITC, depreciation),
+     and the total ask of the project is the whole of them. Each is the
+     figure the sheet printed; a line the run did not price is 0. */
+  var L = function(k){ var v = +window[k]; return isFinite(v) && v > 0 ? Math.round(v) : 0; };
+  var lines = {
+    solar: L('_SOLAR_TOTAL'), bess: L('_BESS_TOTAL'), nextnrgSystem: L('_NEXTNRG_SYSTEM_TOTAL'), ev: L('_EV_TOTAL'),
+    controller: L('_MGC_TOTAL'), compute: L('_COMPUTE_TOTAL'), dc: L('_DC_TOTAL'), gen: L('_GEN_TOTAL'), envelope: L('_BNZ_TOTAL'),
+    site: L('_SITE_EQ_TOTAL'), indirect: L('_INDIRECT_TOTAL'), contingency: L('_CONT_TOTAL'),
+    omegaCore: L('_OMEGACORE_TOTAL')   /* the skids at the recorded price; the compute model takes them out of the host's case */
+  };
   var r = {
     capex:         Math.round(gross),
     netCost:       Math.round(net),
@@ -37155,6 +37259,7 @@ function omegaRunRollup(){
     bessKw:        Math.round((fleet && +fleet.kw)  || 0),
     bessKwh:       Math.round((fleet && +fleet.kwh) || 0),
     contracted:    !!window._COST_IS_CONTRACTED,
+    capexLines:    lines,
     at:            S.lastRunAt || Date.now()
   };
   S.costRollup = r;
@@ -37171,6 +37276,7 @@ window.omegaRunRollup = omegaRunRollup;
 function omegaRollupFields(r){
   if(!r || !(r.capex > 0)) return {};
   var f = { capex: r.capex, incentive: r.incentive, capexAt: r.at, capexSource: 'site-map' };
+  if(r.capexLines && typeof r.capexLines==='object') f.capexLines = r.capexLines;
   if(r.annualRevenue > 0) f.annualRevenue = r.annualRevenue;
   if(r.bessKwh > 0) f.bessKwh = r.bessKwh;
   if(r.bessKw  > 0) f.bessKw  = r.bessKw;
@@ -55105,8 +55211,8 @@ var DER_SOLAR_PRESETS = {
                     note:'Typical fixed-tilt row pitch. Most common utility ground-mount.' },
   'tracker-1ax':  { label:'Single-axis tracker',     gcr:0.33, wpsf:DER_PV_WPSF, setbackFt:15, cf:0.22,
                     note:'Trackers need wider pitch (lower GCR) but gain ~20% capacity factor.' },
-  'rooftop':      { label:'Rooftop (coplanar)',      gcr:0.70, wpsf:DER_PV_WPSF, setbackFt:3,  cf:0.16,
-                    note:'Dense coplanar layout; setback is fire-access driven.' },
+  'rooftop':      { label:'Rooftop (10\u00b0 tilt, 12.5 ft rows)', gcr:0.60, wpsf:DER_PV_WPSF, setbackFt:3,  cf:0.16,
+                    note:'2-up landscape tables at 10\u00b0 on a 12.5 ft row pitch (GCR 0.60): the flat-roof spacing that clears inter-row shading. Setback is fire-access driven.' },
   'carport':      { label:'Carport / canopy',        gcr:0.85, wpsf:DER_PV_WPSF, setbackFt:5,  cf:0.17,
                     note:'Near-continuous deck over parking; little inter-row loss.' },
   'custom':       { label:'Custom (enter your own)', gcr:0.40, wpsf:DER_PV_WPSF, setbackFt:10, cf:0.18,
@@ -55444,8 +55550,8 @@ function _solarRecalcAll(){
         var ppf=(typeof _derScale==='function')?_derScale():6;
         var wFt=(sh.wPx||0)/ppf, hFt=(sh.hPx||0)/ppf;
         var L=_derSolarLayout(wFt,hFt,sh.mount);
-        sh.kw=L.kw; sh.sqft=L.grossSqft; sh.buildableSqft=L.buildableSqft;
-        sh.moduleSqft=L.moduleSqft; sh.setbackFt=L.setbackFt; sh.gcr=L.gcr;
+        _derApplyKwOverride(sh, L.kw); sh.sqft=L.grossSqft; sh.buildableSqft=L.buildableSqft;
+        sh.moduleSqft=L.moduleSqft; sh.setbackFt=L.setbackFt; sh.gcr=L.gcr; if(L.pitchFt) sh.pitchFt=L.pitchFt;
         sh.wFt=L.wFt; sh.hFt=L.hFt;
         if(typeof renderShape==='function'){ try{ renderShape(sh); }catch(e){} }
         n++;
@@ -55472,13 +55578,44 @@ function _derSolarLayout(wFt, hFt, mount){
   var buildSqft = bW*bH;
   var modSqft   = buildSqft*gcr;
   var kw = Math.round((modSqft * wpsf)/1000 * 10)/10;
-  return { mount:m, setbackFt:sb, gcr:gcr, wpsf:wpsf, cf:A.cf,
+  /* the row pitch the mount's racking implies (table depth over GCR: a
+     roof's 7.5 ft 2-up at 0.60 is 12.5 ft), so a rectangle reads it too */
+  var tbl=(typeof _gmTable==='function')?_gmTable(A.presetKey):null;
+  var pitchFt=(tbl && tbl.tableH>0 && gcr>0) ? Math.round(tbl.tableH/gcr*10)/10 : null;
+  return { mount:m, setbackFt:sb, gcr:gcr, wpsf:wpsf, cf:A.cf, pitchFt:pitchFt,
            presetKey:A.presetKey, assumeSource:A.source,
            grossSqft:Math.round(grossSqft), buildableSqft:Math.round(buildSqft),
            moduleSqft:Math.round(modSqft), kw:kw,
            wFt:Math.round(wFt), hFt:Math.round(hFt) };
 }
 
+/* A kW-DC set by hand on an array (Tommy, 2026-10-14: "when i edit an array
+   i should be able to increase or decrease the solar dc number, it should
+   still auto generate but people should be able to manipulate it"):
+   sh.kwOverride wins over the layout's own figure, which is kept beside it
+   as sh.kwAuto so the editor can show both and Clear puts the auto figure
+   back. Every recompute of an array's kW (the rectangle recalc, the traced
+   relayout, exclusions) ends by calling this. */
+function _derApplyKwOverride(sh, autoKw){
+  if(!sh) return 0;
+  sh.kwAuto=Math.round((+autoKw||0)*10)/10;
+  var ov=+sh.kwOverride;
+  if(isFinite(ov) && ov>0){ sh.kw=Math.round(ov*10)/10; }
+  else { delete sh.kwOverride; sh.kw=sh.kwAuto; }
+  return sh.kw;
+}
+/* The module an array was built with (sh.moduleKey, sh.moduleWatts) and,
+   when that module is a product somebody sells, whose product it is
+   (sh.mfr, sh.sku, sh.product): the drawing, the legend, the inventory,
+   the BOM and the Run read them off the shape. One stamp for the rectangle
+   and the traced array alike. */
+function _derStampModule(sh, mount){
+  var _A=(typeof _solarAssume==='function')?_solarAssume(mount||'ground'):null, _M=_A&&_A.module;
+  if(!_M) return;
+  sh.moduleKey=_A.moduleKey; sh.moduleWatts=_M.watts||null;
+  if(_M.mfr){ sh.mfr=_M.mfr; sh.sku=_M.sku||null;
+    sh.product=_M.mfr+' Solar PV \u2014 '+(_M.make?_M.make+' ':'')+(_M.line||'')+(_M.watts?' '+_M.watts+' W':''); }
+}
 /* Solar: two-corner rectangle -> array footprint, kW from buildable area. */
 function _derPlaceSolar(a, b){
   if(typeof _removeTmpShape==='function') _removeTmpShape();
@@ -55500,8 +55637,15 @@ function _derPlaceSolar(a, b){
            /* sqft stays the GROSS footprint (what's drawn on the map);
               buildable/module/gcr are carried alongside for reporting. */
            sqft:L.grossSqft, buildableSqft:L.buildableSqft, moduleSqft:L.moduleSqft,
-           setbackFt:L.setbackFt, gcr:L.gcr, wFt:L.wFt, hFt:L.hFt,
+           setbackFt:L.setbackFt, gcr:L.gcr, wFt:L.wFt, hFt:L.hFt, pitchFt:L.pitchFt,
            kw:L.kw, scaled:_derScaled() };
+  /* The module this array is built with and, when it is a product somebody
+     sells (NextNRG's EAGLE G7B, the default), whose product it is — as the
+     traced array already carried (applyGroundLayout). The Run prices a
+     NextNRG array at NextNRG's installed system rate (2026-10-14, Tommy:
+     a 490 kW roof read at the $1.55/W benchmark against the $2.4M NextNRG
+     quoted for it). */
+  try{ _derStampModule(sh, L.mount); }catch(e){}
   S.shapes.push(sh); renderShape(sh); updShapeCount(); pushHist();
   if(typeof updateSummaryPanel==='function') updateSummaryPanel();
   if(typeof ceThruSizerCalc==='function'){ try{ ceThruSizerCalc(); }catch(e){} }
@@ -85019,7 +85163,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     sh.tableCount = L.tableCount; sh.rowCount = L.rowCount;
     sh.pitchFt = L.pitchFt; sh.tableWft = L.tableWft; sh.tableHft = L.tableHft;
     sh.angleDeg = L.angleDeg;
-    sh.kw = L.kw; sh.gcr = L.gcr; sh.setbackFt = L.setbackFt; sh.wpsf = L.wpsf;
+    if (typeof _derApplyKwOverride === 'function') _derApplyKwOverride(sh, L.kw); else sh.kw = L.kw;
+    sh.gcr = L.gcr; sh.setbackFt = L.setbackFt; sh.wpsf = L.wpsf;
     sh.presetKey = L.presetKey; sh.rowGapFt = L.rowGapFt; sh.kwPerAcre = L.kwPerAcre;
     sh.sqft = Math.round(areaPx(sh.boundary) / (P * P));
     sh.acres = L.acres; sh.coverPct = L.coverPct;
@@ -85059,6 +85204,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
   function field(label, id, val, step) {
     return '<div><label style="' + LBL + '">' + label + '</label>'
       + '<input id="' + id + '" type="number" step="' + (step || 'any') + '" value="' + val + '" style="' + CSS + '"></div>';
+  }
+  /* the array's kW-DC, by hand: blank keeps the layout's own figure (and
+     every refill moves it); a number holds through every refill until it
+     is cleared */
+  function kwField(sh) {
+    return '<div style="display:grid;grid-template-columns:1fr auto;gap:9px;margin-bottom:12px;align-items:end">'
+      + field('kW-DC \u2014 set by hand (blank = the layout\u2019s own ' + ((sh.kwAuto != null ? +sh.kwAuto : (sh.kwOverride > 0 ? 0 : +sh.kw || 0)) || 0).toLocaleString() + ' kW)', 'osz-kwset', (sh.kwOverride > 0 ? sh.kwOverride : ''), 0.1)
+      + '<button id="osz-kwclear" type="button" style="background:none;border:1px solid rgba(255,255,255,.18);color:var(--sub);border-radius:6px;padding:8px 12px;font:600 11px inherit;cursor:pointer">Clear</button></div>';
   }
 
   /* The mount is a CHOICE made here (or by Solar Ground / Solar Roof when
@@ -85110,7 +85263,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     var P = ppf(), b = bbox(sh.boundary || [{ x: 0, y: 0 }]);
     return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;'
       + 'background:rgba(37,99,235,.10);border:1px solid rgba(37,99,235,.3);border-radius:6px;padding:9px 11px;margin-bottom:10px">'
-      + stat('kW-DC', (sh.kw || 0).toLocaleString(), '#60A5FA')
+      + stat('kW-DC' + (sh.kwOverride > 0 ? ' (set by hand)' : ''), (sh.kw || 0).toLocaleString() + (sh.kwOverride > 0 && sh.kwAuto != null ? ' <span style="font-size:9px;color:#8BA3C4">auto ' + (+sh.kwAuto).toLocaleString() + '</span>' : ''), sh.kwOverride > 0 ? '#FBBF24' : '#60A5FA')
       + stat('Tables', (sh.tableCount || 0).toLocaleString())
       + stat('Rows', (sh.rowCount || 0))
       + stat('Row azimuth', (sh.angleDeg != null ? sh.angleDeg + '\u00b0' : '\u2014'))
@@ -85190,6 +85343,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         + '</div>'
 
         + mountSelect(sel)
+        + kwField(sel)
         + '<div style="font:700 10px/1.4 \'IBM Plex Sans\';letter-spacing:.08em;text-transform:uppercase;color:var(--sub);margin:4px 0 7px">Racking assumptions</div>'
         + '<div style="margin-bottom:9px"><label style="' + LBL + '">Preset \u2014 changing this refills the outline</label>'
         + '<select id="osz-preset" style="' + CSS + '">' + presetOptions(sel) + '</select></div>'
@@ -85215,7 +85369,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
         + field('Width (ft)', 'osz-w', Math.round((sel.wPx || 0) / P), 1)
         + field('Depth (ft)', 'osz-h', Math.round((sel.hPx || 0) / P), 1)
         + '</div>'
-        + mountSelect(sel))
+        + mountSelect(sel)
+        + kwField(sel))
 
       + '<div id="osz-msg" style="font-size:11px;color:var(--amber);min-height:15px;margin:8px 0 2px"></div>'
       + '<div style="display:flex;gap:8px;justify-content:flex-end;margin-top:10px">'
@@ -85231,6 +85386,8 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     if (w && w.tagName === 'SELECT') w.onchange = paint;
     document.getElementById('osz-close').onclick = function () { host.style.display = 'none'; };
     document.getElementById('osz-apply').onclick = apply;
+    var kwc = document.getElementById('osz-kwclear');
+    if (kwc) kwc.onclick = function () { var f = document.getElementById('osz-kwset'); if (f) f.value = ''; apply(); };
     var solve = document.getElementById('osz-solve');
     if (solve) solve.onclick = sizeToKw;
     var pk = document.getElementById('osz-preset');
@@ -85285,13 +85442,17 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
        mount, the legend and the label on the drawing */
     var mv = document.getElementById('osz-mount');
     if (mv && mv.value && MOUNTS.some(function (m) { return m[0] === mv.value; })) { sh.mount = mv.value; sh.canopy = (mv.value === 'adjacent'); }
+    /* the kW-DC by hand: a number holds, blank goes back to the layout's own */
+    var kwSet = num('osz-kwset', 0);
+    if (kwSet > 0) sh.kwOverride = kwSet; else delete sh.kwOverride;
     if (!sh.autoLayout) {
       var wf = num('osz-w', 0), hf = num('osz-h', 0);
       if (wf > 0) sh.wPx = wf * P;
       if (hf > 0) sh.hPx = hf * P;
       try { if (typeof _solarRecalcAll === 'function') _solarRecalcAll(); else renderShape(sh); } catch (e) {}
       try { if (typeof pushHist === 'function') pushHist(); } catch (e) {}
-      msg('Footprint updated \u2014 ' + (sh.kw || 0) + ' kW-DC.', '#4ADE80');
+      try { if (typeof updateCostEst === 'function') updateCostEst(); } catch (e) {}
+      msg('Footprint updated \u2014 ' + (sh.kw || 0) + ' kW-DC' + (sh.kwOverride > 0 ? ' (set by hand; the footprint alone gives ' + (sh.kwAuto || 0) + ')' : '') + '.', '#4ADE80');
       paint();
       return;
     }
@@ -85310,8 +85471,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     var L = relayout(sh, optsFromForm());
     try { if (typeof pushHist === 'function') pushHist(); } catch (e) {}
     if (!L) { msg('Could not recompute that layout.'); return; }
+    try { if (typeof updateCostEst === 'function') updateCostEst(); } catch (e) {}
     if (!L.tableCount) msg('No tables fit \u2014 the area is smaller than the setbacks, or the drawing is not calibrated.');
-    else msg('Updated: ' + L.tableCount + ' tables, ' + L.kw + ' kW-DC at ' + L.angleDeg + '\u00b0.', '#4ADE80');
+    else msg('Updated: ' + L.tableCount + ' tables, ' + (sh.kw || L.kw) + ' kW-DC' + (sh.kwOverride > 0 ? ' set by hand (the layout gives ' + L.kw + ')' : '') + ' at ' + L.angleDeg + '\u00b0.', '#4ADE80');
     paint();
   }
 
@@ -100944,7 +101106,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
     sh.tables = L.tooMany ? [] : L.tables;
     sh.tableCount = L.tableCount;
     sh.rowCount = L.rowCount;
-    sh.kw = L.kw;
+    if (typeof _derApplyKwOverride === 'function') _derApplyKwOverride(sh, L.kw); else sh.kw = L.kw;
     sh.densityOnly = !!L.tooMany;
     /* The feet model is the source of truth for rendering; drop the stale
        capture so it is rebuilt from the new pixels. */
@@ -149554,8 +149716,8 @@ var RACK = {
                     gcr:0.33, maxRot:60, backtrack:true },
   'tracker-tft':  { label:'Single-axis tracker',     tracker:true,  tilt:0,  mount:'open',
                     gcr:0.33, maxRot:60, backtrack:true },
-  'rooftop':      { label:'Rooftop (coplanar)',      tracker:false, tilt:10, mount:'roof',
-                    gcr:0.70, maxRot:0, backtrack:false },
+  'rooftop':      { label:'Rooftop (10\u00b0 tilt, 12.5 ft rows)', tracker:false, tilt:10, mount:'roof',
+                    gcr:0.60, maxRot:0, backtrack:false },
   'carport':      { label:'Carport / canopy',        tracker:false, tilt:7,  mount:'carport',
                     gcr:0.85, maxRot:0, backtrack:false },
   'custom':       { label:'Custom',                  tracker:false, tilt:25, mount:'open',

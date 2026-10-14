@@ -1521,7 +1521,9 @@ function ntSuggest(){
   var dom  = String((document.getElementById('nt-domain')||{}).value || '').trim().toLowerCase();
   var slugEl = document.getElementById('nt-slug');
   if (slugEl && !slugEl.value){
-    var guess = ntSlugify(dom ? dom.split('.')[0] : name);
+    /* an address typed: the host comes from the company name (a personal
+       address's workspace is keyed by this slug, so "gmail" is never it) */
+    var guess = ntSlugify(dom && dom.indexOf('@') < 0 ? dom.split('.')[0] : name);
     if (guess && NT_RESERVED.indexOf(guess) < 0) slugEl.value = guess;
   }
   var slug = ntSlugify((slugEl||{}).value || '');
@@ -1554,29 +1556,46 @@ function createTenant(){
   function say(t){ if(msg) msg.textContent = t; }
 
   var name = String((document.getElementById('nt-name')||{}).value || '').trim();
-  var domain = String((document.getElementById('nt-domain')||{}).value || '')
+  var typed = String((document.getElementById('nt-domain')||{}).value || '')
                  .trim().toLowerCase().replace(/^@/,'').replace(/^https?:\/\//,'').split('/')[0];
+  /* An ADDRESS may be typed instead of a domain (2026-10-14, Tommy: "not
+     everyone has a tenant email"). A work address keys the workspace by its
+     domain, as a domain would, and makes that person its owner. A PERSONAL
+     address (gmail.com…) cannot key anything — one workspace per provider
+     would hold strangers — so the workspace is keyed by its host slug and
+     the person is homed to it by the sign-in claim POST /api/set-role mints
+     (the rules' userOrg() reads the claim first). Which it is, the server
+     says (GET /api/set-role?email=; the provider list never ships here). */
+  var email = typed.indexOf('@') > 0 ? typed : '';
+  var domain = email ? email.split('@')[1] : typed;
   var vertical = (document.getElementById('nt-vertical')||{}).value || 'developer';
   var slug = ntSlugify((document.getElementById('nt-slug')||{}).value || '');
   var logo = String((document.getElementById('nt-logo')||{}).value || '').trim();
   var note = String((document.getElementById('nt-note')||{}).value || '').trim();
 
   if (name.length < 2) return say('Give the company a name.');
-  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) return say('That does not look like an email domain.');
+  if (!/^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(domain)) return say(email ? 'That does not look like an email address.' : 'That does not look like an email domain.');
+  if (email && !/^[^@\s]+@[^@\s]+$/.test(email)) return say('That does not look like an email address.');
   if (!slug) return say('Set a workspace host.');
   if (NT_RESERVED.indexOf(slug) >= 0) return say('“' + slug + '” is reserved — pick another host.');
 
   var host = slug + '.' + NT_BASE_HOST;
   var trialEndsAt = ntTrialEnd();
   var FV = firebase.firestore.FieldValue;
-  var ref = db.collection('omega_orgs').doc(domain);
+  var personal = false, ref = null;
 
   /* The orgId IS the email domain and it never changes, so creating one that
      already exists would quietly overwrite a live tenant's record. Checked
      before anything is written rather than merged over. */
   say('Checking…');
   if (btn) btn.disabled = true;
-  ref.get().then(function(snap){
+  (email ? _authedGet('/api/set-role?email=' + encodeURIComponent(email)) : Promise.resolve({ personal: false }))
+  .then(function(home){
+    personal = !!(home && home.personal);
+    if (personal) domain = slug;             /* the slug is the key; nothing else can be */
+    ref = db.collection('omega_orgs').doc(domain);
+    return ref.get();
+  }).then(function(snap){
     if (snap.exists){
       throw new Error(domain + ' already has a workspace (' + ((snap.data()||{}).name || domain)
         + '). Edit it in the table below instead.');
@@ -1591,6 +1610,9 @@ function createTenant(){
       vertical: vertical, shell: 'default', status: 'active',
       receivesFullBom: false, exportBrand: brand,
       note: note || null,
+      /* a workspace on a personal address: keyed by its slug, its people
+         homed by the claim; ownerEmail is who it was made for */
+      personal: personal || null, ownerEmail: email || null,
       createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp(),
       createdBy: (currentUser && currentUser.email) || 'console',
       approvedAt: FV.serverTimestamp(),
@@ -1610,6 +1632,17 @@ function createTenant(){
     batch.set(db.collection('tenant_public').doc(host), pub);
     return batch.commit();
   }).then(function(){
+    /* The person the workspace was made for is its OWNER, through the one
+       member writer (set-role → logic-members.change: the account is made
+       if there is none, the home claim set, the audit row written). For a
+       personal address this is what admits them at all. Done AFTER the
+       three documents, so a refused role never leaves a half-made owner on
+       a workspace that does not exist. */
+    if (!email) return null;
+    say('Created — making ' + email + ' the owner…');
+    return _authedPost('/api/set-role', { orgId: domain, targetEmail: email, role: 'owner' })
+      .then(function(){ return { owner: true }; }, function(e){ return { owner: false, error: (e && e.message) || 'refused' }; });
+  }).then(function(ownerOut){
     /* Only now — a request marked approved beside a tenant that failed to
        write is a person waiting for a workspace nobody knows to build. */
     if (NT_FROM_REQ) {
@@ -1621,8 +1654,11 @@ function createTenant(){
       }).then(loadAccessRequests)['catch'](function(){});
     }
     if (btn) btn.disabled = false;
+    var ownerLine = '';
+    if (email && ownerOut && ownerOut.owner) ownerLine = ' ' + email + ' is the owner' + (personal ? '; they sign in with that address (if already signed in, sign out and back in once).' : '.');
+    else if (email) ownerLine = ' The owner role was not set (' + ((ownerOut && ownerOut.error) || 'refused') + '); set it from the account page.';
     say('Created — ' + host + (trialEndsAt
-      ? (', trial to ' + new Date(trialEndsAt).toLocaleDateString()) : ', no trial') + '.');
+      ? (', trial to ' + new Date(trialEndsAt).toLocaleDateString()) : ', no trial') + '.' + ownerLine);
     ['nt-name','nt-domain','nt-slug','nt-logo','nt-note'].forEach(function(id){
       var e = document.getElementById(id); if (e) e.value = '';
     });

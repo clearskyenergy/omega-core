@@ -28,7 +28,7 @@ function noUndefined(v, where) {
 
 var db, users = {}, claims = {}, links = [], mails = [], created = [];
 var A = { db: function () { return db; }, safeOrg: function (v) { v = String(v == null ? '' : v).toLowerCase(); return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v) ? v : ''; },
-  httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, orgOf: function (e) { return String(e || '').toLowerCase().split('@')[1] || ''; },
+  httpError: function (s, m) { var e = new Error(m); e.status = s; return e; }, orgOf: function (e) { return String(e || '').toLowerCase().split('@')[1] || ''; }, isPersonalEmail: function (e) { return require('../api/_lib/public-domains').indexOf(String(e || '').toLowerCase().split('@')[1] || '') >= 0; },
   authenticate: async function (r) { return r.caller; }, handler: function (f) { return f; },
   canActInOrg: async function (c, org) { if (c.staff || c.orgId === org) return true; var g = await db.collection('org_members').doc(String(c.email).toLowerCase()).get(); return g.exists && g.data().active !== false && g.data().orgId === org; },
   isTenantAdmin: async function (c, o) { return c.staff || c.orgId === o; },
@@ -188,12 +188,15 @@ async function main() {
   await test('9 · another workspace\'s people, and anybody outside the domain without ClearSky\'s grant, are unreachable', async function () {
     seed(); var otherBefore = JSON.stringify(roster('othercorp.example').map(function (k) { return db.data.get(k); }));
     await rejects(post({ email: 'helper@othercorp.example', role: 'member' }, ADMIN), 403, /outside cleancell\.us/);
-    await rejects(post({ email: 'somebody@gmail.com', role: 'member' }, OWNER), 403, /outside cleancell\.us/);
+    /* a PERSONAL address is not outside anything: the owner may add it and the claim homes it here (2026-10-14) */
+    await post({ email: 'somebody@gmail.com', role: 'member' }, OWNER); assert.equal(member('u_somebody@gmail.com').role, 'member');
+    assert.deepEqual(claims['u_somebody@gmail.com'], { orgId: ORG, role: 'member' }, 'a personal address is homed by the claim');
+    created.length = 0;
     await rejects(post({ email: 'tom@clearsky-usa.com', role: 'viewer' }, OWNER), 403, /outside/);
     db.seed('org_members/helper@othercorp.example', { orgId: 'othercorp.example', active: true });
     await rejects(post({ email: 'helper@othercorp.example', role: 'member' }, OWNER), 403, /outside/, 'a grant for another workspace is not a grant here');
-    db.seed('org_members/contractor@gmail.com', { orgId: ORG, active: false });
-    await rejects(post({ email: 'contractor@gmail.com', role: 'member' }, OWNER), 403, /outside/, 'a revoked grant is no grant');
+    db.seed('org_members/helper2@othercorp.example', { orgId: ORG, active: false });
+    await rejects(post({ email: 'helper2@othercorp.example', role: 'member' }, OWNER), 403, /outside/, 'a revoked grant is no grant');
     await rejects(post({ email: 'helper@othercorp.example', status: 'disabled' }, OWNER), 404, /not a member of this workspace/);
     assert.equal(JSON.stringify(roster('othercorp.example').map(function (k) { return db.data.get(k); })), otherBefore, 'the other workspace is untouched');
     assert.equal(claims.helper, undefined);
@@ -203,11 +206,11 @@ async function main() {
     await rejects(get(STAFF), 403); await rejects(post({ email: 'x@cleancell.us', role: 'member' }, STAFF), 403);
     assert.equal(created.length, 0, 'no sign-in was made for anybody refused');
   });
-  await test('10 · somebody ClearSky has already granted into THIS workspace can be added, and keeps their own sign-in claims', async function () {
+  await test('10 · somebody ClearSky has already granted into THIS workspace can be added; a personal address is homed here by the claim', async function () {
     seed(); db.seed('org_members/contractor@gmail.com', { orgId: ORG, active: true });
     users['contractor@gmail.com'] = { uid: 'contractor', email: 'contractor@gmail.com', customClaims: { orgId: 'gmail.com' } };
     var r = await post({ email: 'contractor@gmail.com', role: 'member' }, ADMIN);
-    assert.equal(r.account, 'existing'); assert.equal(member('contractor').role, 'member'); assert.equal(claims.contractor, undefined, 'claims are only ever set for the workspace\'s own domain');
+    assert.equal(r.account, 'existing'); assert.equal(member('contractor').role, 'member'); assert.deepEqual(claims.contractor, { orgId: ORG, role: 'member' }, 'a personal address is homed here by the claim (its own domain or a personal address; never a partner company\'s)');
     var row = (await get(ADMIN)).people.filter(function (p) { return p.email === 'contractor@gmail.com'; })[0]; assert.equal(row.outside, true);
   });
   await test('11 · a member or viewer changes nothing', async function () {

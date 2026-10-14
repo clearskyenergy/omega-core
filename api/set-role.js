@@ -28,8 +28,27 @@ var A = require('./_lib/admin'), Members = require('./_lib/logic-members');
 
 var ROLES = ['owner', 'admin', 'member', 'viewer'];
 
+/* GET ?email=  (staff only) — where this address is homed: its domain,
+   whether that is a personal provider (so a workspace for it is keyed by a
+   slug and the person by the claim), and the claim it carries now. The admin
+   console asks before it creates a tenant; the list itself never ships to a
+   browser. */
+async function home(req) {
+  var caller = await A.authenticate(req);
+  if (!caller.staff) throw A.httpError(403, 'ClearSky staff only');
+  var email = String((req.query || {}).email || '').trim().toLowerCase();
+  if (!email || email.indexOf('@') < 1) throw A.httpError(400, 'email is required');
+  var out = { email: email, domain: A.orgOf(email), personal: A.isPersonalEmail(email), uid: null, claimOrg: null, role: null };
+  try {
+    var u = await A.init().auth().getUserByEmail(email), c = u.customClaims || {};
+    out.uid = u.uid; out.claimOrg = c.orgId || null; out.role = c.role || null;
+  } catch (e) { if (!(e && e.code === 'auth/user-not-found')) throw e; }
+  return out;
+}
+
 module.exports = A.handler(async function (req) {
-  if (req.method !== 'POST') throw A.httpError(405, 'POST only');
+  if (req.method === 'GET') return home(req);
+  if (req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
   var b = req.body || {};
   var orgId = String(b.orgId || '').toLowerCase();
   var role = b.role;
@@ -38,10 +57,15 @@ module.exports = A.handler(async function (req) {
   if (status !== null && ['active', 'disabled'].indexOf(status) < 0) throw A.httpError(400, 'status must be active or disabled');
 
   var caller = await A.authenticate(req), auth = A.init().auth();
-  var user = b.targetUid ? await auth.getUser(String(b.targetUid)) : await auth.getUserByEmail(String(b.targetEmail || '').trim().toLowerCase());
-  var email = String(user.email || '').toLowerCase();
+  /* An address with no account yet is allowed through by email: the member
+     writer makes the account (as Team's invitation does), so a workspace on
+     a personal address can be commissioned before its owner ever signs in. */
+  var targetEmail = String(b.targetEmail || '').trim().toLowerCase(), user = null;
+  if (b.targetUid) user = await auth.getUser(String(b.targetUid));
+  else { try { user = await auth.getUserByEmail(targetEmail); } catch (e) { if (!(e && e.code === 'auth/user-not-found' && targetEmail)) throw e; } }
+  var email = user ? String(user.email || '').toLowerCase() : targetEmail;
   if (!email) throw A.httpError(400, 'That account has no email address');
-  if (!caller.staff && A.orgOf(email) !== orgId) throw A.httpError(400, 'target is not in ' + orgId);
+  if (!caller.staff && A.orgOf(email) !== orgId && !A.isPersonalEmail(email)) throw A.httpError(400, 'target is not in ' + orgId);
 
   var actor = 'clearsky';
   if (!caller.staff) {

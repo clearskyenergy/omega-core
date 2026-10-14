@@ -34,11 +34,21 @@
    ($639,000) plus the NextNRG Microgrid Controller built into it ($125,000)
    — the R60 is inside that price, so it costs nothing twice — and the
    rent to the host from the record, else the Omega-Core market reference
-   (never an offer). The host's own project beside it (the battery, the
-   solar, the chargers, the Site Map cost run) is on the HOST'S meter and is
-   named, not blended: the skid's IRR is the skid's. The ZIP is read off
-   the address when the record carries none, so a site designed in Site
-   Map runs without anyone typing.
+   (never an offer). The ZIP is read off the address when the record
+   carries none, so a site designed in Site Map runs without anyone typing.
+
+   THE WHOLE PROJECT (2026-10-14, Tommy: "the compute IRR reflects the
+   total ask of the project … the build of the system existing and the cost
+   of that system now with the cost of the compute system and the payback
+   on that"). The host's own system beside the skid — the solar and the
+   storage Site Map drew and the Run costed (the NextNRG system at $6.00 a
+   watt installed, labor in) — is IN the case as money: hostOf() puts the
+   Run's lines on their asset classes (`input.host`), the PPA on record
+   prices the solar (`ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears` on
+   the site; Topanga: $0.225/kWh, 2.5%, 28 years), else the Run's own
+   year-one revenue, else the model says so. The skid still runs on its own
+   meter; the host's system is never dispatched against it. The capital
+   request is the whole: the skid and the host's system.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var CS = require('./compute-site');
@@ -166,6 +176,63 @@ function inputFor(site, over, ctx) {
   return { ok: true, input: input, basis: basis };
 }
 
+/* The PPA on the site record, if one is: the rate, the escalator and the
+   term NextNRG's executed PPA carries (Topanga: $0.2250/kWh in year one,
+   2.5% a year, 28 years). Nothing is invented: no rate, no PPA. */
+function ppaOf(site) {
+  var rate = pos(site.ppaRatePerKwh); if (!rate) return null;
+  var esc = num(site.ppaEscalatorPct), term = pos(site.ppaTermYears);
+  return { ratePerKwh: rate, escPct: esc == null ? 2.5 : esc, termYears: term ? Math.floor(term) : 0 };
+}
+/* The host's system beside the skid, as the compute model's `host` block:
+   the design's solar and storage with the Run's lines on their asset
+   classes (the NextNRG system is blended energy property; chargers and the
+   controller their own classes; pods, the electrical package, generation
+   and a shell never energy property; what the lines do not name — site
+   equipment, indirects, contingency — rides with the energy property when
+   there is any), the PPA on record, else the Run's revenue. Null when the
+   design carries no host system. */
+function hostOf(site, d) {
+  if (!d) return null;
+  var solarKw = d.solar && pos(d.solar.kwDc) ? d.solar.kwDc : 0, bess = d.bess && pos(d.bess.kwh) ? d.bess : null;
+  var capex = pos(d.capex) && d.capexSource === 'site-map' ? d.capex : 0;
+  if (!solarKw && !bess && !capex) return null;
+  var energy = solarKw > 0 || !!bess, L = d.capexLines && typeof d.capexLines === 'object' ? d.capexLines : null, lines = [], named = 0;
+  /* The Run total carries the Omega-Core skids at the recorded price since
+     2026-10-14 (its `omegaCore` line). The skid is the compute case's own
+     capex (skidInput prices it), never the host's: take it out of the
+     host's total here so the whole project counts it once. */
+  var skidLine = L ? Math.round(num(L.omegaCore) || 0) : 0;
+  if (capex > 0 && skidLine > 0) capex = Math.max(0, capex - skidLine);
+  if (!solarKw && !bess && !capex) return null;
+  function add(id, label, amount, asset) { amount = Math.round(num(amount) || 0); if (!(amount > 0)) return; lines.push({ id: id, label: label, amount: amount, asset: asset }); named += amount; }
+  if (capex > 0 && L) {
+    add('nextnrg', 'NextNRG solar + storage system, installed (labor included)', L.nextnrgSystem, 'blended');
+    add('solar', 'Solar PV' + (solarKw ? ', ' + fmtNum(solarKw) + ' kW-dc' : ''), L.solar, 'solar');
+    add('bess', 'Battery' + (bess ? ', ' + fmtNum(bess.kw) + ' kW / ' + fmtNum(bess.kwh) + ' kWh' : ''), L.bess, 'storage');
+    add('ev', 'EV chargers, installed', L.ev, 'ev');
+    add('controller', 'NextNRG Microgrid Controller', L.controller, 'controller');
+    add('noncredit', 'Compute pods, electrical package, generation and envelope', (num(L.compute) || 0) + (num(L.dc) || 0) + (num(L.gen) || 0) + (num(L.envelope) || 0), 'other');
+    var rest = Math.round(capex) - named;
+    if (rest > 0) add('balance', 'Site equipment, engineering, permitting and contingency', rest, energy ? 'blended' : 'other');
+    else if (rest < 0 && lines.length) { lines[lines.length - 1].amount += rest; }
+  } else if (capex > 0) {
+    add('run', 'The host\u2019s system, as the Site Map cost run priced it', capex, energy ? 'blended' : 'other');
+  }
+  var ppa = ppaOf(site), rev = !ppa && pos(d.annualRevenue) ? d.annualRevenue : 0;
+  return {
+    solarKwDc: solarKw, bessKw: bess ? bess.kw || 0 : 0, bessKwh: bess ? bess.kwh : 0,
+    capexLines: lines, basis: capex > 0 ? 'Site Map cost run' + (d.capexAt ? ' of ' + String(d.capexAt).slice(0, 10) : '') : 'no cost run yet',
+    ppa: ppa && solarKw > 0 ? ppa : null,
+    revenuePerYear: rev, revenueBasis: rev ? 'the Site Map run\u2019s year-one revenue' : '',
+    words: (solarKw ? fmtNum(solarKw) + ' kW-dc solar' : '') + (solarKw && bess ? ' and a ' : bess ? 'a ' : '') + (bess ? fmtNum(bess.kw) + ' kW / ' + fmtNum(bess.kwh) + ' kWh battery' : '') +
+           (capex > 0 ? ' costed at ' + fmtUsd(capex) + ' by the Site Map run' + (d.capexAt ? ' of ' + String(d.capexAt).slice(0, 10) : '') : ' with no cost run yet') +
+           (ppa && solarKw > 0 ? ', sold under the PPA on record ($' + ppa.ratePerKwh + '/kWh, ' + ppa.escPct + '% a year' + (ppa.termYears ? ', ' + ppa.termYears + ' years' : '') + ')' :
+            rev ? ', earning the run\u2019s ' + fmtUsd(rev) + ' a year' : ', with NO revenue on record (enter the PPA on the site)')
+  };
+}
+function fmtNum(n) { return Math.round(n).toLocaleString('en-US'); }
+
 /* The Omega-Core skid's chipsets, as a page may offer them: the skid's own
    library, each with its public $/GPU-hour on the basis the skid's cash
    flow runs on (spot, else on-demand), or none. */
@@ -232,6 +299,12 @@ function skidInput(site, over, ctx, d) {
     skid: { units: units, chipset: c.key, chipsetName: c.name, pricePerGpuHour: price, priceBasis: priceBasis, skidPriceUsd: P.skidPriceUsd, systemCostUsd: P.systemCostUsd, gpus: cap.gpus }
   };
   if (sitePrice) input.tariff = { onPeakRate: sitePrice, offPeakRate: sitePrice };
+  /* the host's system beside the skid, in the case as money (the whole
+     project's ask, IRR and payback); a design with no host system runs the
+     skid alone */
+  var hostBlock = over.hostSystem === false ? null : hostOf(site, d);
+  if (hostBlock) input.host = { solarKwDc: hostBlock.solarKwDc, bessKw: hostBlock.bessKw, bessKwh: hostBlock.bessKwh, capexLines: hostBlock.capexLines, basis: hostBlock.basis,
+                                ppa: hostBlock.ppa || undefined, revenuePerYear: hostBlock.revenuePerYear || undefined, revenueBasis: hostBlock.revenueBasis || undefined };
   var host = [];
   if (d.bess && pos(d.bess.kwh)) host.push(d.bess.kw + ' kW / ' + d.bess.kwh + ' kWh battery');
   if (d.solar && pos(d.solar.kwDc)) host.push(d.solar.kwDc + ' kW-dc solar');
@@ -252,7 +325,9 @@ function skidInput(site, over, ctx, d) {
     solar: 'none on the skid\u2019s meter' + (d.solar && pos(d.solar.kwDc) ? '; the host\u2019s ' + d.solar.kwDc + ' kW-dc solar is the host\u2019s own project' : ''),
     capex: 'the Omega-Core skid as recorded, ' + fmtUsd(P.skidPriceUsd) + ' a skid, plus the ' + P.controller.model + ' built into it, ' + fmtUsd(P.systemCostUsd - P.skidPriceUsd) + ', with the model\u2019s own site make-ready, fiber and soft costs beside them',
     rent: rent.basis,
-    host: host.length ? 'the host\u2019s own project beside the skid, on the host\u2019s meter and not in this case: ' + host.join(' \u00b7 ') : null,
+    host: hostBlock ? 'the host\u2019s own system beside the skid, on the host\u2019s meter, IN this case as money (its cost on its own asset classes, its revenue, its O&M), never dispatched against the skid: ' + hostBlock.words + (host.length ? ' (' + host.join(' \u00b7 ') + ')' : '')
+        : host.length ? 'the host\u2019s own project beside the skid, on the host\u2019s meter and not in this case: ' + host.join(' \u00b7 ') : null,
+    hostRevenue: hostBlock ? (hostBlock.ppa ? 'the PPA on record' : hostBlock.revenuePerYear ? hostBlock.revenueBasis : 'none on record') : null,
     plainPods: plain ? plain + ' compute unit' + (plain === 1 ? '' : 's') + ' on the design that are not Omega-Core skids are not in this case' : null,
     design: d.at ? 'Site Map design of ' + String(d.at).slice(0, 10) : 'Site Map design'
   };
@@ -291,6 +366,10 @@ function summaryOf(result, input, meta) {
     zip: input && input.site ? input.site.zip : null, hostType: input && input.site ? input.site.hostType : null,
     /* the Omega-Core skids this run modelled, and the design it ran on */
     skid: input && input.skid ? { units: input.skid.units, chipset: input.skid.chipset, chipsetName: input.skid.chipsetName, pricePerGpuHour: input.skid.pricePerGpuHour, priceBasis: input.skid.priceBasis, systemCostUsd: input.skid.systemCostUsd, gpus: input.skid.gpus } : null,
+    /* the host's system in the case beside the compute: what it cost, what it earns; and the compute's own capital apart */
+    host: result && result.host ? { solarKwDc: result.host.solarKwDc, bessKw: result.host.bessKw, bessKwh: result.host.bessKwh, capex: result.host.capex, basis: result.host.basis || null,
+                                    ppa: result.host.ppa || null, revenuePerYear: result.host.revenuePerYear || null, revenueBasis: result.host.revenueBasis || null, noRevenue: !result.host.ppa && !(result.host.revenuePerYear > 0) } : null,
+    computeCapex: result && result.computeCapex != null ? result.computeCapex : null,
     designHash: meta.designHash || null, auto: meta.auto === true
   };
 }
@@ -307,5 +386,5 @@ function askOf(site) {
 }
 
 module.exports = { inputFor: inputFor, summaryOf: summaryOf, askOf: askOf, podsOf: podsOf, serviceOf: serviceOf, evOf: evOf, zipOf: zipOf,
-  skidInput: skidInput, skidFacts: skidFacts, skidChipsets: skidChipsets,
+  skidInput: skidInput, skidFacts: skidFacts, skidChipsets: skidChipsets, hostOf: hostOf, ppaOf: ppaOf,
   GPU_CLASSES: GPU_CLASSES, STRUCTURES: STRUCTURES, HOST_TYPES: HOST_TYPES };

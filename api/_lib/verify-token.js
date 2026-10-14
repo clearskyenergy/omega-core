@@ -124,7 +124,7 @@ function verifyIdToken(token) {
         uid: body.sub,
         email: email,
         emailVerified: verified,
-        orgId: orgOf(email),
+        orgId: body.orgId || orgOf(email),   /* the home claim first, as admin.js and the rules read it */
         staff: verified && isStaffEmail(email),
         claims: body
       };

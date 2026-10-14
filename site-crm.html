@@ -240,6 +240,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="grid2">' + designCardHtml(s) + '</div>' +
       '<div class="grid2"><div class="card"><h3>Commercial</h3>' +
       fact('Rent / month', cm.rentMonthly, '$') + fact('Revenue share', cm.revenueShare != null ? pct(cm.revenueShare) : null) + fact('kWh share', cm.kwhShare != null ? pct(cm.kwhShare) : null) +
+      fact('PPA rate, year one', s.ppaRatePerKwh != null ? '$' + s.ppaRatePerKwh + '/kWh' : null) + fact('PPA escalator', s.ppaEscalatorPct != null ? s.ppaEscalatorPct + '% a year' : null) + fact('PPA term', s.ppaTermYears != null ? s.ppaTermYears + ' years' : null) +
+      '<div class="assume">The PPA the host\u2019s solar + storage is sold under: the compute model prices the host\u2019s system on it, so the IRR and the capital request are the whole project\u2019s. No PPA on record means the host\u2019s system earns the Site Map run\u2019s revenue, or nothing, and the model says so.</div>' +
       '</div><div class="card"><h3>Attention</h3>' +
       '<div class="li-body">' + (open ? '<span class="pill pill-warn">' + open + ' open follow-up' + (open > 1 ? 's' : '') + '</span>' : 'No open follow-ups.') + '</div>' +
       ((s.flags && s.flags.peakExceedsInstalled) ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
@@ -375,7 +377,10 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       numIn('ef-availablePowerMw', 'Available power (MW)', s.availablePowerMw, '0.01') +
       numIn('ef-serviceCapacityKw', 'Service capacity (kW)', s.serviceCapacityKw) +
       numIn('ef-existingPeakKw', 'Existing peak (kW)', s.existingPeakKw) +
-      numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') + '</div><div>' +
+      numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') +
+      numIn('ef-ppaRatePerKwh', 'PPA rate, year one ($/kWh; the host\u2019s solar + storage is sold under it)', s.ppaRatePerKwh, '0.0001') +
+      numIn('ef-ppaEscalatorPct', 'PPA escalator (% a year)', s.ppaEscalatorPct, '0.1') +
+      numIn('ef-ppaTermYears', 'PPA term (years)', s.ppaTermYears) + '</div><div>' +
       numIn('ef-annualUsageKwh', 'Annual usage (kWh)', s.annualUsageKwh) +
       '<label class="fl">Monthly usage kWh (Jan..Dec, comma-separated)</label>' +
       '<input type="text" id="ef-monthlyUsageKwh" value="' + esc(mu) + '" style="width:100%" placeholder="e.g. 12000, 11500, ...">' +
@@ -403,6 +408,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         termYearsRemaining: num('ef-termYearsRemaining'),
         availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'),
         existingPeakKw: num('ef-existingPeakKw'), powerPricePerKwh: num('ef-powerPricePerKwh'),
+        ppaRatePerKwh: num('ef-ppaRatePerKwh'), ppaEscalatorPct: num('ef-ppaEscalatorPct'), ppaTermYears: num('ef-ppaTermYears'),
         annualUsageKwh: num('ef-annualUsageKwh'), monthlyUsageKwh: str('ef-monthlyUsageKwh'),
         usageNotes: str('ef-usageNotes')
       }).then(function (j) { msg(esc(j.note), true); load(true); })

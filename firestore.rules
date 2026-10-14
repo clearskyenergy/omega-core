@@ -79,8 +79,21 @@ service cloud.firestore {
          userOrg() return 'ConcordEnergyUSA.com', which fails every
          case-sensitive comparison against the record's lowercase orgId —
          so ONE user in a tenant is refused while the rest work. The storage
-         rules already fold case; this was the missing half. */
-      return orgAlias(request.auth.token.email.split('@')[1].lower());
+         rules already fold case; this was the missing half.
+
+         A PERSONAL ADDRESS IS HOMED BY THE orgId CLAIM (2026-10-14, Tommy:
+         "if there is an individual that is just them they need to be able
+         to do that"). A workspace keyed gmail.com would hold every Gmail
+         user, so one made for a person on a public provider is keyed by its
+         slug, and that person's home is the custom claim api/set-role.js
+         mints through logic-members.change() — Admin SDK only, set for the
+         tenant's own domain or a personal address, never a staff or partner
+         address. isAdmin() below still judges staff by the verified email,
+         never this claim. api/_lib/admin.js and verify-token.js read the
+         claim first the same way; scripts/tests/thomeclaim.js holds it. */
+      return request.auth.token.get('orgId', '') != ''
+           ? request.auth.token.orgId
+           : orgAlias(request.auth.token.email.split('@')[1].lower());
     }
 
     /* ── ACTING IN A TENANT ──────────────────────────────────────────────

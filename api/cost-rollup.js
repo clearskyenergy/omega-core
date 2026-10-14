@@ -20,6 +20,10 @@ module.exports = A.handler(function (req, res) {
     if (!caller || !(caller.orgId || caller.staff)) throw A.httpError(403, 'A workspace sign-in is required');
     var q = req.body && typeof req.body === 'object' ? req.body : {};
     if (count(q) > MAX_ITEMS) throw A.httpError(413, 'Too many items for one estimate');
+    /* whose workspace is pricing: a vendor's own workspace prices its own
+       products at its rate (NextNRG, api/_lib/nextnrg.js SYSTEM_RATE); the
+       body never says who */
+    q.vendorOrg = caller.orgId || null;
     res.setHeader('Cache-Control', 'no-store');
     return EC.rollup(q);
   });

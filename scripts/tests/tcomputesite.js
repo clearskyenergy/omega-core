@@ -76,6 +76,29 @@ ok('a battery priced inside another line ($0/kWh) has no $0 line of its own, and
 ok('the meter balances: the skid\u2019s compute and battery never exceed its own 135 kW', own.ok && own.balance.limitKw === 135 && own.balance.overloadHours === 0 && own.balance.peakKw > 0 && own.balance.peakKw <= 135, own.ok && own.balance);
 ok('a shared service still reads shared', CS.model(BASE).story.flow.some(function (f) { return f[0] === 'grid' && f[1] === 'Existing service'; }));
 
+/* THE HOST'S SYSTEM BESIDE THE COMPUTE (2026-10-14, Tommy: "the compute IRR
+   reflects the total ask of the project … the build of the system existing
+   and the cost of that system now with the cost of the compute system and
+   the payback on that"): money, never dispatch */
+var HOST = JSON.parse(JSON.stringify(OWN));
+HOST.host = { solarKwDc: 368, bessKw: 250, bessKwh: 1000, basis: 'Site Map cost run of 2026-10-14', ppa: { ratePerKwh: 0.225, escPct: 2.5, termYears: 28 },
+  capexLines: [{ id: 'nextnrg', label: 'NextNRG solar + storage system, installed (labor included)', amount: 2208000, asset: 'blended' }, { id: 'balance', label: 'Site equipment, engineering, permitting and contingency', amount: 40000, asset: 'blended' }] };
+var hs = CS.model(HOST), hpf = hs.ok && hs.proforma;
+ok('the host\u2019s lines are in the capital, unscaled, on their asset classes, after the compute\u2019s own', hs.ok && hs.schedule.capex.filter(function (l) { return l.host; }).map(function (l) { return [l.id, l.amount, l.asset]; }).join('|') === 'host-nextnrg,2208000,blended|host-balance,40000,blended' && hs.host.capex === 2248000 && hs.computeCapex === own.proforma.capex.total, hs.ok ? hs.schedule.capex : hs.errors);
+ok('the sources and uses are the whole project\u2019s', hs.ok && hpf.sourcesUses.totalUses > own.proforma.sourcesUses.totalUses + 2248000 && hpf.capex.total === own.proforma.capex.total + 2248000, hs.ok && hpf.sourcesUses);
+ok('the PPA prices the solar the engine generates, year by year, escalating', hs.ok && hpf.inputs.revenue.ppa.rate1 === 0.225 && hpf.inputs.solar.kwDc === 368 && hpf.rows[0].ppaRevenue > 100000 && hpf.rows[1].ppaRevenue > hpf.rows[0].ppaRevenue, hs.ok && hpf.rows[0]);
+ok('the NextNRG system is energy property with its credit', hs.ok && hpf.tax.itc.byAsset.blended.basis > 2000000 && hpf.tax.itc.byAsset.blended.basis <= 2248000 && hpf.tax.itc.face > 0, hs.ok && hpf.tax.itc);
+ok('the host\u2019s O&M is a line of its own; the compute\u2019s own revenue and dispatch are unchanged', hs.ok && hs.schedule.opex.some(function (l) { return l.id === 'hostom' && l.schedule[0] === Math.round(1000 * 6 + 368 * 20); }) && hs.compute.revenue.gross === own.compute.revenue.gross && hs.balance.peakKw === own.balance.peakKw, hs.ok && hs.schedule.opex);
+ok('the IRR and the payback are of the whole, and the words say so', hs.ok && hpf.metrics.afterTaxIrr < own.proforma.metrics.afterTaxIrr && hpf.metrics.afterTaxIrr > 0.02 && /368 kW-dc of solar/.test(hs.story.narrative) && /under a PPA/.test(hs.story.narrative) && hpf.assumptions.some(function (a) { return /host\u2019s own system beside the compute/.test(a) && /\$0\.225\/kWh/.test(a); }), hs.ok && [hpf.metrics.afterTaxIrr, hs.story.narrative]);
+var NOREV = JSON.parse(JSON.stringify(HOST)); delete NOREV.host.ppa;
+var nr = CS.model(NOREV);
+ok('a host system with no revenue on record is in the ask with nothing against it, and the model says so', nr.ok && nr.proforma.warnings[0].code === 'HOST_NO_REVENUE' && !nr.schedule.revenue.some(function (l) { return /Host system revenue/.test(l.label); }) && nr.host.revenueBasis === '', nr.ok && nr.proforma.warnings[0]);
+NOREV.host.revenuePerYear = 61000; NOREV.host.revenueBasis = 'the Site Map run\u2019s year-one revenue';
+var rr = CS.model(NOREV);
+ok('the run\u2019s own revenue stands in when there is no PPA, rising with inflation', rr.ok && rr.schedule.revenue.some(function (l) { return /Host system revenue/.test(l.label) && l.schedule[0] === 61000 && l.schedule[1] > 61000; }) && !rr.proforma.warnings.some(function (w) { return w.code === 'HOST_NO_REVENUE'; }), rr.ok && rr.schedule.revenue);
+ok('a PPA needs solar; a host battery needs both figures', errs({ host: { bessKw: 250, bessKwh: 1000, ppa: { ratePerKwh: 0.2 }, capexLines: [] } }).indexOf('host.ppa') >= 0 && errs({ host: { bessKwh: 1000, capexLines: [] } }).indexOf('host.bessKwh') >= 0);
+ok('a lease never carries the host\u2019s system', (function () { var L = JSON.parse(JSON.stringify(HOST)); L.deal.structure = 'lease'; var r = CS.model(L); return r.ok && r.host === null && !r.schedule.capex.some(function (l) { return l.host; }); })());
+
 section('Compute and charging loads');
 var run = X.start(BASE), c = run.c, ctx = run.ctx;
 var cl = X.computeLoad(c, ctx, 1);

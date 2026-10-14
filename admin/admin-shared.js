@@ -87,6 +87,18 @@ function adminFail(what, e){
 
 /* Staff-only endpoints want a bearer token. Kept in one place so a missing
    sign-in fails loudly here rather than as a 401 with no explanation. */
+function _authedGet(path){
+  var u = auth && auth.currentUser;
+  if (!u) return Promise.reject(new Error('Not signed in'));
+  return u.getIdToken().then(function(tok){
+    return fetch(path, { headers:{ 'Authorization':'Bearer '+tok }, cache:'no-store' }).then(function(r){
+      return r.json().catch(function(){ return {}; }).then(function(j){
+        if (!r.ok) throw new Error(j.error || (r.status+' '+r.statusText));
+        return j;
+      });
+    });
+  });
+}
 function _authedPost(path, body){
   var u = auth && auth.currentUser;
   if (!u) return Promise.reject(new Error('Not signed in'));

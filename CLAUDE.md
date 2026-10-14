@@ -129,6 +129,26 @@ clearsky-sitefinder.html, omega-referrals.js) mirror it. Adding a tenant
 alias means editing all of them; core must expose ONE alias map that
 those clients import.
 
+**An individual on a personal address** (2026-10-14, Tommy: "it needs to be
+able to link tenants to a domain but if there is an individual that is just
+them they need to be able to do that"): a company stays keyed by its domain;
+a workspace for a person on a public provider (gmail.com…,
+`api/_lib/public-domains.js`) is keyed by its host SLUG (`personal: true`,
+`ownerEmail` on the record) because one keyed gmail.com would hold every
+Gmail user. The person is HOMED to it by the `orgId` custom claim that
+`api/set-role.js` mints through `logic-members.change()` (set for the
+tenant's own domain or a personal address, `A.isPersonalEmail`, never a
+staff or partner address). ONE order everywhere, the claim then the email
+domain: `userOrg()` in BOTH rules files, `admin.js authenticate()`,
+`verify-token.js`, `omega-tenant.js` `homeOrg` (read off the token before
+entitlements), the editor's `_projOrgId`, the editor gate, projects.html
+and `omega-tools.orgFromUrl`. The console's New tenant takes an ADDRESS in
+the domain field: `GET /api/set-role?email=` (staff) says whether it is
+personal, the three documents are written, then set-role makes the person
+the owner (the account is made if there is none). A workspace owner or
+admin may add a personal address on Team and set-role the same way.
+`scripts/tests/thomeclaim.js` holds all of it.
+
 ## Access rules (summary)
 
 | Doc                              | tenant owner | tenant admin | member | ClearSky staff  |
@@ -1201,10 +1221,41 @@ Omega-Core skids and nothing else is the SKID'S own case (`site-model
 `compute-site.js`), its R60 inside its price, 48 H100 at the public spot
 reference and the skid's operating figures off `omega-compute-model.js`,
 the skid as recorded ($639,000 + the $125,000 controller), rent from the
-record else the market reference; the host's battery, solar and cost run
-are the host's project, named, never blended; a mixed design runs the
-host's case. The pod pro forma prices a skid as recorded, never on the cost
-run (which never counts it). Nothing a tenant reads names the source
+record else the market reference; a mixed design runs the host's case.
+**The capital request is the WHOLE project** (2026-10-14, Tommy: "the
+compute IRR reflects the total ask of the project … the cost of that system
+now with the cost of the compute system and the payback on that"): the
+host's own solar and storage beside the skid are in the case as MONEY,
+never dispatch (`site-model.hostOf` → `compute-site input.host`: the Run's
+lines on their asset classes, unscaled; the solar sold under the PPA on the
+site record — `ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears`, Topanga's
+executed PPA $0.2250/kWh, 2.5%, 28 years — else the Run's revenue, else a
+named warning with the cost still in the ask), so `totalProjectCost`,
+`computeCapex` and `host.capex` are read by the register, the panel and
+the hand-off. The pod pro forma runs by itself on the design too
+(`designProforma`, once per design) on the skid's recorded price, and each
+engine states its convention (the pod case 60 months pre-tax unlevered
+alone; the compute model after tax, the whole); the assumption set IS the
+iQGen / CoreWeave baseline. The pod pro forma prices a skid as recorded. **The Run
+total carries the skid** (2026-10-14, Tommy: "the compute pod is like 639k
+plus the nextnrg microcontroller is another 125k"): `editor-cost.js` lines
+`omegaCore` at `PRODUCT.systemCostUsd` a skid (no contingency, never ITC
+energy property), the record's `capexLines.omegaCore` names it and
+`site-model.hostOf` takes it back out of the host's case, so the whole
+project counts it once. **Solar is priced at the DOE/NREL Q1 2025 book**
+(`BENCH.pv*`, modeled market price: residential under 25 kW $2.95/Wdc,
+commercial to 20 MW $1.98, utility $1.12; a canopy $2.75), and a rectangle
+array is stamped with its module like a traced one, so an array built with
+NextNRG's EAGLE G7B (the default) is NextNRG's and priced at its $6.00/W
+system rate (`omegaSolarIsNextnrg`: the stamp, else the project's module);
+the generic 550 W module in Solar Assumptions is the benchmark road. A
+traced area lays out with the preset of its MOUNT (a select on the modal,
+starting from the ribbon's Solar choice) so a traced roof and the roof
+rectangle agree; a roof's rows are 2-up landscape at 10° on a 12.5 ft pitch
+(`GM_TABLE.rooftop` 7.5 ft deep, the rooftop preset GCR 0.60; Tommy,
+2026-10-14: "it should be at 12.5 for roof mount"), and an array's kW-DC can be SET BY HAND on Array — Edit
+Size / Capacity (`kwOverride`, `kwAuto` kept beside it, Clear restores;
+`_derApplyKwOverride` runs at every recompute). Nothing a tenant reads names the source
 workbook; it is the Omega-Core skid. `docs/OMEGA-CORE.md`. Grid Atlas opens at the site's
 address (`/grid-atlas.html?q=`). The Site SPV term sheet is
 `api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
@@ -1403,7 +1454,15 @@ streams only, each stream saying so, with the brochure's caveat on the
 `controller` summary; `/api/value-stack` passes the flag in and the summary
 out; the editor sends it when a controller is on the host's drawing. The RFQ
 routes a NextNRG line by brand: `tenants/nextnrg/tenant.json brands`, copied
-by the seed. `docs/NEXTNRG-MICROGRID.md`.
+by the seed. **NextNRG's solar + storage is ONE installed system at $6.00
+per W-DC of solar** (2026-10-14, Tommy: "the cost of the nextnrg bess and
+the next nrg solar is $6.00 per watt"; `nextnrg.js SYSTEM_RATE`, corroborated
+by NextNRG's Topanga one-pager at $5.65/W DC): the array, the storage beside
+it and the labor, no contingency, energy property; storage alone at $6.00 per
+W of rated power. An array stamped NextNRG's, a battery of the catalog's
+NextNRG group, and in NextNRG's own workspace every array and battery
+(`vendorOrg`, stamped by `cost-rollup.js` off the caller). The Run's lines
+ride the record (`capexLines`). `docs/NEXTNRG-MICROGRID.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
