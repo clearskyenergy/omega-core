@@ -1246,8 +1246,8 @@ project counts it once. **Solar is priced at the DOE/NREL Q1 2025 book**
 (`BENCH.pv*`, modeled market price: residential under 25 kW $2.95/Wdc,
 commercial to 20 MW $1.98, utility $1.12; a canopy $2.75), and a rectangle
 array is stamped with its module like a traced one, so an array built with
-NextNRG's EAGLE G7B (the default) is NextNRG's and priced at its $5.65/W
-system rate (`omegaSolarIsNextnrg`: the stamp, else the project's module);
+NextNRG's EAGLE G7B (the default) is NextNRG's and priced at its $1.98/W
+solar rate (`omegaSolarIsNextnrg`: the stamp, else the project's module);
 the generic 550 W module in Solar Assumptions is the benchmark road. A
 traced area lays out with the preset of its MOUNT (a select on the modal,
 starting from the ribbon's Solar choice) so a traced roof and the roof
@@ -1454,15 +1454,17 @@ streams only, each stream saying so, with the brochure's caveat on the
 `controller` summary; `/api/value-stack` passes the flag in and the summary
 out; the editor sends it when a controller is on the host's drawing. The RFQ
 routes a NextNRG line by brand: `tenants/nextnrg/tenant.json brands`, copied
-by the seed. **NextNRG's solar + storage is ONE installed system at $5.65 per W-DC
-of solar, NextNRG's OWN quote** (2026-10-14; `nextnrg.js SYSTEM_RATE` with
-the quote on the record: the Topanga one-pager's $1,780,063 installed for
-315 kW DC + 300 kW / 1.8 MWh + the controller. Tommy first said "$6.00 per
-watt", then over a Run that priced the array and the battery as two lines
-beside the one-pager: "does this even make sense??? look at the capital
-sought they requested"): the array, the storage beside it and the labor, no
-contingency, energy property; never the battery as a second line beside a
-NextNRG array; storage alone at $6.00 per W of rated power. An array stamped NextNRG's, a battery of the catalog's
+by the seed. **NextNRG's solar is $1.98 per W-DC installed and NextNRG's storage is
+$6.00 per W of rated power installed, EACH ITS OWN LINE wherever it stands**
+(settled 2026-10-14 after four tries; `nextnrg.js SYSTEM_RATE`. Tommy:
+"make sure for solar that the pricing per kW dc is industry standard", so
+the solar is the DOE/NREL Q1 2025 commercial rate; "the battery at 1.5m
+which is probably accurate", so the storage is $6.00 a rated watt; a system
+rate per watt of solar with the battery inside charged 350 kW of solar
+alone $1.98M: "its showing 1.9m for 350kW of solar"). No contingency,
+energy property; NextNRG's Topanga one-pager ($1,780,063 for 315 kW DC +
+300 kW / 1.8 MWh + controller) stays on the record as what they quoted a
+whole system at, never as the rate. An array stamped NextNRG's, a battery of the catalog's
 NextNRG group, and in NextNRG's own workspace every array and battery
 (`vendorOrg`, stamped by `cost-rollup.js` off the caller). The Run's lines
 ride the record (`capexLines`). `docs/NEXTNRG-MICROGRID.md`.

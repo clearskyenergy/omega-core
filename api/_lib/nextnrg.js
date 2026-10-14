@@ -166,20 +166,28 @@ var CONTROLLER = {
    no NextNRG solar beside it is priced at the same rate on its rated
    power, installed. Never a second copy of the figure in a page. */
 var SYSTEM_RATE = {
-  /* THE RATE IS NEXTNRG'S OWN QUOTE (2026-10-14, Tommy, over a Run that
-     priced the array and the battery as two $6.00/W lines beside the
-     one-pager's $1.79M: "does this even make sense??? look at the capital
-     sought they requested make sure we are quoting the price of the solar
-     correctly and the price of their battery system correctly"): the
-     Topanga investor one-pager prices 315 kW DC of solar with a 300 kW /
-     1.8 MWh battery and the controller at $1,780,063 installed, $5.65 per
-     W-DC of solar for the whole system. That is the book: one price per
-     W-DC of NextNRG solar, the storage beside it inside it. */
-  perWdc: 5.65,
+  /* TWO PRICES, EACH ITS OWN LINE (2026-10-14, settled over four tries).
+     The storage: $6.00 per W of rated power, installed (Tommy, over the
+     Model 1 alone reading $1,500,000: "the battery at 1.5m which is
+     probably accurate"). The solar: the industry rate, DOE/NREL Q1 2025
+     commercial, $1.98 per W-DC installed (Tommy, the same morning: "make
+     sure for solar that the pricing per kW dc is industry standard"; and,
+     over 350 kW of solar alone reading $1.98M at a system rate with the
+     battery inside: "its showing 1.9m for 350kW of solar...."). A price
+     per watt of solar with the battery inside charged for a battery that
+     was not on the drawing, so there is no system price: solar alone pays
+     for solar, storage alone for storage. NextNRG's own Topanga one-pager
+     ($1,780,063 installed for 315 kW DC + 300 kW / 1.8 MWh + controller)
+     is kept on the record as what they quoted a whole system at, never as
+     the rate. NextNRG's own per-piece prices, when they give them, go here
+     and nowhere else. */
+  perWdc: 1.98,
   storageOnlyPerW: 6.00,
-  label: 'NextNRG solar + storage system, installed',
-  includes: ['the solar array', 'the storage beside it', 'installation labor'],
-  basis: 'NextNRG\u2019s Topanga investor one-pager, Q3 2026: $1,780,063 installed for 315 kW DC of solar with a 300 kW / 1.8 MWh battery and the microgrid controller, $5.65 per W-DC of solar for the whole system (ClearSky, 2026-10-14)',
+  label: 'NextNRG solar, installed',
+  storageLabel: 'NextNRG storage, installed',
+  includes: ['the solar array', 'installation labor'],
+  storageIncludes: ['the storage', 'installation labor'],
+  basis: 'ClearSky, 2026-10-14: NextNRG solar at the DOE/NREL Q1 2025 commercial rate, $1.98 per W-DC installed; NextNRG storage at $6.00 per W of rated power installed (Tommy: "the battery at 1.5m which is probably accurate"); each its own line',
   quote: { installedUsd: 1780063, investmentSoughtUsd: 1786000, solarKwDc: 315, bessKw: 300, bessKwh: 1800, source: 'NextNRG \u2014 Topanga Solar + Storage investor one-pager, prepared 2026-08-19' },
   corroboration: 'NextNRG — Topanga Solar + Storage investor one-pager, Q3 2026: total installed cost $1,780,063 for 315 kW DC of solar with a 300 kW / 1.8 MWh BESS, $5.65/W DC',
   contingency: false
