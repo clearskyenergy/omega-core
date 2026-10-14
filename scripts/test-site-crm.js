@@ -668,7 +668,8 @@ function seed() {
        record, and the IRR is of the whole */
     assert.ok(lm.computeCapex > 900000 && lm.computeCapex < 1100000, 'the skid as recorded plus the model\u2019s own site costs: ' + lm.computeCapex);
     assert.equal(lm.host.capex, 918000, 'the host\u2019s system at the Site Map run\u2019s price'); assert.equal(lm.host.solarKwDc, 368); assert.equal(lm.host.bessKwh, 2000);
-    assert.ok(lm.totalProjectCost >= lm.computeCapex + 918000 && lm.totalProjectCost < (lm.computeCapex + 918000) * 1.05, 'the capital request is the whole (the capital, then the engine\u2019s own reserves): ' + lm.totalProjectCost);
+    /* the whole project carries the standard debt (2026-10-14), so the sources and uses add the financing fee and the debt service reserve to the capital */
+    assert.ok(lm.totalProjectCost >= lm.computeCapex + 918000 && lm.totalProjectCost < (lm.computeCapex + 918000) * 1.15, 'the capital request is the whole (the capital, then the engine\u2019s own reserves and the debt\u2019s fee and reserve): ' + lm.totalProjectCost);
     assert.equal(lm.host.revenuePerYear, 61000); assert.equal(lm.host.ppa, null); assert.equal(lm.host.noRevenue, false);
     /* a site with no PPA on record: the stored model carries no undefined anywhere (2026-10-14: Firestore refused `input.host.ppa` and every automatic run on such a site failed) */
     (function walk(v, path) { if (v === undefined) throw new Error('undefined stored at ' + path); if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { walk(v[k], path + '.' + k); }); })(db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId), 'model');
@@ -726,12 +727,16 @@ function seed() {
     var st3 = db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId);
     assert.deepEqual(st3.input.host.capexLines.map(function (l) { return [l.id, l.amount, l.asset]; }), [['nextnrg', 2208000, 'blended'], ['balance', 92000, 'blended']]);
     assert.equal(st3.result.proforma.inputs.revenue.ppa.rate1, 0.225); assert.ok(st3.result.proforma.rows[0].ppaRevenue > 100000, 'the PPA earns on the solar the engine generates: ' + st3.result.proforma.rows[0].ppaRevenue);
-    assert.ok(lm3.totalProjectCost >= lm3.computeCapex + 2300000 && lm3.totalProjectCost < (lm3.computeCapex + 2300000) * 1.05); assert.ok(lm3.irr > 0.02, 'the whole project\u2019s IRR with the PPA: ' + lm3.irr);
+    assert.ok(lm3.totalProjectCost >= lm3.computeCapex + 2300000 && lm3.totalProjectCost < (lm3.computeCapex + 2300000) * 1.15, "the whole with the standard debt's fee and reserve: " + lm3.totalProjectCost); assert.ok(lm3.irr > 0.02, 'the whole project\u2019s IRR with the PPA: ' + lm3.irr);
     assert.equal(require('../api/_lib/site-model').askOf(withPpa.site).amount, lm3.totalProjectCost, 'the capital request is the whole project');
     /* what the skid adds (2026-10-14): the host alone, the skid alone, the whole, from the same engine on the same facts */
     assert.ok(lm3.uplift && lm3.uplift.hostAlone && lm3.uplift.skidAlone && lm3.uplift.whole, 'the summary carries the three cases: ' + JSON.stringify(lm3.uplift));
     assert.ok(lm3.uplift.hostAlone.irr < lm3.uplift.whole.irr && lm3.uplift.whole.irr < lm3.uplift.skidAlone.irr, 'the whole sits between the host alone and the skid alone: ' + JSON.stringify(lm3.uplift));
     assert.equal(lm3.uplift.whole.irr, lm3.irr, 'the whole is the headline'); assert.ok(lm3.uplift.hostAlone.capital < lm3.totalProjectCost && lm3.uplift.skidAlone.capital < lm3.totalProjectCost);
+    /* the whole project is levered by the engine's standard debt (2026-10-14, "do what is standard"): the headline is the equity IRR, the unlevered twin beside it, the skid alone still 100% equity */
+    assert.equal(lm3.levered, true, 'the whole project carries the standard debt'); assert.ok(lm3.debt > 0 && lm3.equity < lm3.totalProjectCost, 'equity sought beside debt: ' + JSON.stringify([lm3.equity, lm3.debt]));
+    assert.deepEqual(lm3.debtTerms, { ltcPct: 45, ratePct: 7.5, tenorYears: 7, dscrMin: 1.35 }, 'the engine\u2019s own terms, the tenor capped at the compute lender\u2019s seven years');
+    assert.ok(lm3.uplift.unlevered && lm3.uplift.unlevered.irr < lm3.irr, 'the unlevered twin is lower and rides along: ' + JSON.stringify(lm3.uplift.unlevered));
     var regRow = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
     assert.equal(regRow.latestModel.totalProjectCost, lm3.totalProjectCost); assert.equal(regRow.latestModel.host.capex, 2300000);
     var n2 = audits('sitecrm-site-model').length; await call('GET', { site: made.id }, PM);

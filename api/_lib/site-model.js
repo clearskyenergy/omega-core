@@ -303,6 +303,14 @@ function skidInput(site, over, ctx, d) {
      project's ask, IRR and payback); a design with no host system runs the
      skid alone */
   var hostBlock = over.hostSystem === false ? null : hostOf(site, d);
+  /* THE WHOLE PROJECT IS LEVERED BY THE ENGINE'S OWN STANDARD DEBT
+     (2026-10-14, Tommy: "the investor is investing in all of the project
+     ... do what is standard"): the finance engine's debt block as it ships
+     (45% of cost at 7.5%, sculpted to a 1.35 minimum DSCR, the tenor the
+     compute model caps at seven years, a compute lender's), so the
+     headline is the after-tax EQUITY IRR; upliftOf keeps the unlevered
+     figure beside it. A skid alone stays 100% equity, as the pod case is. */
+  if (hostBlock && over.levered !== false) input.finance = Object.assign({}, input.finance || {}, { debt: Object.assign({}, (input.finance && input.finance.debt) || {}) });
   /* no key is ever undefined: the model's input is stored as written, and
      Firestore refuses an undefined value (2026-10-14: every automatic run
      on a site with no PPA on record failed on `input.host.ppa`, and the
@@ -359,9 +367,12 @@ function upliftOf(input, result) {
     catch (e) { return null; }
   }
   var whole = result.deals && result.deals.own ? { irr: result.deals.own.irr == null ? null : result.deals.own.irr, capital: result.deals.own.capital == null ? null : result.deals.own.capital } : null;
+  var levered = !!(input.finance && input.finance.debt);
   return { whole: whole,
            hostAlone: side(function (x) { x.compute.pods = 0; delete x.skid; }),
-           skidAlone: side(function (x) { delete x.host; }) };
+           skidAlone: side(function (x) { delete x.host; if (x.finance) delete x.finance.debt; }),
+           /* the same whole with no debt, so the levered headline is never read without its unlevered twin */
+           unlevered: levered ? side(function (x) { delete x.finance.debt; }) : null };
 }
 
 function summaryOf(result, input, meta) {
@@ -386,6 +397,7 @@ function summaryOf(result, input, meta) {
     levered: !!m.levered, dscrMin: m.dscrMin == null ? null : m.dscrMin,
     totalProjectCost: su.totalUses == null ? null : su.totalUses, capex: pf && pf.capex ? pf.capex.total : null,
     equity: su.equity == null ? null : su.equity, debt: su.debt == null ? null : su.debt,
+    debtTerms: input && input.finance && input.finance.debt && pf && pf.inputs && pf.inputs.debt ? { ltcPct: pf.inputs.debt.ltcPct, ratePct: pf.inputs.debt.ratePct, tenorYears: pf.inputs.debt.tenorYears, dscrMin: pf.inputs.debt.dscrMin } : null,
     year1: deals[who.key] ? deals[who.key].year1 : null, termYears: pf && pf.inputs ? pf.inputs.years : null,
     verdict: { label: v.label || null, act: v.act || null, tone: v.tone || null, gate: v.gate || null },
     confidence: result && result.confidence || null,
