@@ -26179,6 +26179,9 @@ async function saveProject(){
          leaves its result on the project. */
       autopilot: (typeof S!=='undefined' && S.autopilot) ? S.autopilot : null,
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      /* who saved, from which tab, so a drawing that comes back older can
+         be traced to the tab that wrote it (2026-10-14) */
+      savedBy: { email: String((_currentUser && _currentUser.email) || '').toLowerCase(), tab: _tabId(), ua: String(navigator.userAgent || '').slice(0, 120), at: Date.now() },
     };
 
     // Guarantee no `undefined` reaches Firestore (it rejects the whole write).
@@ -26471,6 +26474,35 @@ function _shedIfOversize(payload){
   return dropped;
 }
 
+/* this tab's id, for the save stamp and the live watch */
+function _tabId(){ try{ var t=sessionStorage.getItem('cs_tab'); if(!t){ t=Math.random().toString(36).slice(2,10); sessionStorage.setItem('cs_tab', t); } return t; }catch(e){ return 'tab'; } }
+/* THE RECORD, WATCHED LIVE (2026-10-14: a drawing saved at 6:05 PM was
+   back to an older one by 8:59 PM, twice — another editor tab of the same
+   project, opened from the Projects page or the Portfolio, autosaving the
+   old drawing over the new). Every change to the record that this tab did
+   not make is said at once, with who and which tab made it; the saved time
+   this tab compares against is NOT moved, so the next save here is refused
+   (saveProject's guard) instead of writing over it. */
+var _recordWatch = null;
+function _watchRecord(id){
+  try{ if(_recordWatch){ _recordWatch(); _recordWatch=null; } }catch(e){}
+  if(!_db || !id) return;
+  try{
+    _recordWatch = _db.collection('projects').doc(id).onSnapshot(function(snap){
+      if(!snap.exists || snap.metadata.hasPendingWrites) return;
+      var d=snap.data(), at=null;
+      try{ at = d.updatedAt && typeof d.updatedAt.toMillis==='function' ? d.updatedAt.toMillis() : (d.updatedAt ? +new Date(d.updatedAt) : null); }catch(e){}
+      if(at==null || window._loadedUpdatedAt==null || at <= window._loadedUpdatedAt + 1000) return;
+      var by = d.savedBy || {}; if(by.tab === _tabId()) { window._loadedUpdatedAt = at; return; }
+      var when = new Date(at).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' });
+      var who = (by.email ? by.email : 'another session') + (by.tab ? ' (tab ' + by.tab + ')' : '');
+      window._lastSaveError = 'This project was just saved from another tab or computer at ' + when + ' by ' + who + '. The drawing here is older than the record now. Reload to take the newer save, or press Save to overwrite it with this one.';
+      _setSaved('stale'); window._workDirty = true;
+      if(typeof showBanner==='function'){ try{ showBanner('save', '!! Another tab saved this project at ' + when + ' (' + who + '). Close that tab. Reload here to take its drawing, or press Save to keep THIS one.'); }catch(e){} }
+      console.warn('[omega] record saved elsewhere', at, by);
+    }, function(e){ console.warn('[omega] record watch', e && e.message); });
+  }catch(e){}
+}
 async function _loadProject(id){
   if(!_db){ console.warn('DB not ready'); return; }
   // Block all saves until doRender() has repopulated S.elements/S.shapes.
@@ -26754,6 +26786,7 @@ async function _loadProject(id){
       // Load fully rendered -- saves are now safe.
       _loadReady = true;
       _setSaved('saved');
+      _watchRecord(id);
     };
 
     // -- Restore frozen map from localStorage -----------------
