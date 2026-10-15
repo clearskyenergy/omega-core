@@ -303,14 +303,14 @@ function skidInput(site, over, ctx, d) {
      project's ask, IRR and payback); a design with no host system runs the
      skid alone */
   var hostBlock = over.hostSystem === false ? null : hostOf(site, d);
-  /* THE WHOLE PROJECT IS LEVERED BY THE ENGINE'S OWN STANDARD DEBT
-     (2026-10-14, Tommy: "the investor is investing in all of the project
-     ... do what is standard"): the finance engine's debt block as it ships
-     (45% of cost at 7.5%, sculpted to a 1.35 minimum DSCR, the tenor the
-     compute model caps at seven years, a compute lender's), so the
-     headline is the after-tax EQUITY IRR; upliftOf keeps the unlevered
-     figure beside it. A skid alone stays 100% equity, as the pod case is. */
-  if (hostBlock && over.levered !== false) input.finance = Object.assign({}, input.finance || {}, { debt: Object.assign({}, (input.finance && input.finance.debt) || {}) });
+  /* THE WHOLE PROJECT IS 100% EQUITY: THE PARTNER FUNDS ALL OF IT (Tommy,
+     2026-10-14, over a deck that asked for $1.97M of equity beside $1.40M
+     of debt: "arent we seeking 3.37m because thats the price of the full
+     project???? so this investor deck is incorrect"). The ask is the whole
+     project and the headline is the unlevered after-tax IRR; upliftOf
+     carries the engine's standard debt case beside it as a side figure
+     only. over.levered === true runs the levered case as the headline. */
+  if (hostBlock && over.levered === true) input.finance = Object.assign({}, input.finance || {}, { debt: Object.assign({}, (input.finance && input.finance.debt) || {}) });
   /* no key is ever undefined: the model's input is stored as written, and
      Firestore refuses an undefined value (2026-10-14: every automatic run
      on a site with no PPA on record failed on `input.host.ppa`, and the
@@ -371,8 +371,9 @@ function upliftOf(input, result) {
   return { whole: whole,
            hostAlone: side(function (x) { x.compute.pods = 0; delete x.skid; }),
            skidAlone: side(function (x) { delete x.host; if (x.finance) delete x.finance.debt; }),
-           /* the same whole with no debt, so the levered headline is never read without its unlevered twin */
-           unlevered: levered ? side(function (x) { delete x.finance.debt; }) : null };
+           /* the same whole the other way: the standard debt case beside an unlevered headline, or the unlevered twin beside a levered one */
+           unlevered: levered ? side(function (x) { delete x.finance.debt; }) : null,
+           levered: !levered && input.host ? side(function (x) { x.finance = Object.assign({}, x.finance || {}, { debt: {} }); }) : null };
 }
 
 function summaryOf(result, input, meta) {

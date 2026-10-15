@@ -734,9 +734,8 @@ function seed() {
     assert.ok(lm3.uplift.hostAlone.irr < lm3.uplift.whole.irr && lm3.uplift.whole.irr < lm3.uplift.skidAlone.irr, 'the whole sits between the host alone and the skid alone: ' + JSON.stringify(lm3.uplift));
     assert.equal(lm3.uplift.whole.irr, lm3.irr, 'the whole is the headline'); assert.ok(lm3.uplift.hostAlone.capital < lm3.totalProjectCost && lm3.uplift.skidAlone.capital < lm3.totalProjectCost);
     /* the whole project is levered by the engine's standard debt (2026-10-14, "do what is standard"): the headline is the equity IRR, the unlevered twin beside it, the skid alone still 100% equity */
-    assert.equal(lm3.levered, true, 'the whole project carries the standard debt'); assert.ok(lm3.debt > 0 && lm3.equity < lm3.totalProjectCost, 'equity sought beside debt: ' + JSON.stringify([lm3.equity, lm3.debt]));
-    assert.deepEqual(lm3.debtTerms, { ltcPct: 45, ratePct: 7.5, tenorYears: 7, dscrMin: 1.35 }, 'the engine\u2019s own terms, the tenor capped at the compute lender\u2019s seven years');
-    assert.ok(lm3.uplift.unlevered && lm3.uplift.unlevered.irr < lm3.irr, 'the unlevered twin is lower and rides along: ' + JSON.stringify(lm3.uplift.unlevered));
+    assert.equal(lm3.levered, false, 'the whole project is 100% equity: the partner funds all of it (2026-10-14)'); assert.ok(!(lm3.debt > 0) && Math.abs(lm3.equity - lm3.totalProjectCost) < 1, 'the ask is the whole project: ' + JSON.stringify([lm3.equity, lm3.totalProjectCost]));
+    assert.equal(lm3.debtTerms, null); assert.ok(lm3.uplift.levered && lm3.uplift.levered.irr > lm3.irr, 'the standard-debt case rides beside it as a side figure: ' + JSON.stringify(lm3.uplift.levered));
     var regRow = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
     assert.equal(regRow.latestModel.totalProjectCost, lm3.totalProjectCost); assert.equal(regRow.latestModel.host.capex, 2300000);
     var n2 = audits('sitecrm-site-model').length; await call('GET', { site: made.id }, PM);
