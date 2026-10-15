@@ -1079,7 +1079,7 @@
       storage = null;
       if (pos(b.escalatorPct)) items.push({ k: 'Escalator', v: fmt.percent(b.escalatorPct) + ' per year (utility rates)', p: 5 });
     }
-    if (t) items.push({ k: 'Term', v: t + ' years modeled', p: 6 });
+    if (t) items.push({ k: 'Term', v: t + ' years modeled' + (m.ppa && pos(m.ppa.termYears) && m.ppa.termYears > t ? '; the PPA runs ' + m.ppa.termYears + ' years, and the years past the term are a terminal value in year ' + t : ''), p: 6 });
     if (m.ppa && num(y1.ppa) !== null) items.push({ k: 'Year 1 PPA revenue', v: fmt.money(y1.ppa), p: 3 });
     if (storage) items.push(storage);
     if (m.bess && replaced && repMode !== 'none') {
@@ -1101,7 +1101,8 @@
         (pos(ev.perKwYear) ? ' (' + fmt.money(ev.perKwYear) + '/kW-yr on ' + kwWords(m.ev.kw) + ')' : '') + ', included in the base case', p: 4 });
     }
     if (other1) {
-      for (i = 0; i < other.length; i++) if (other[i] && clean(other[i].label)) names.push(clean(other[i].label));
+      /* only the lines that pay in year one are named here; a terminal value (year N only) has its own line in the term above */
+      for (i = 0; i < other.length; i++) if (other[i] && clean(other[i].label) && !(other[i].schedule && !(num(other[i].schedule[0]) > 0))) names.push(clean(other[i].label));
       items.push({ k: names.length === 1 ? names[0] : 'Other revenue',
         v: fmt.money(other1) + ' in Year 1' + (names.length > 1 ? ' (' + list(names) + ')' : ''), p: 6 });
     }

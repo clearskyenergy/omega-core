@@ -618,7 +618,9 @@ function readRevenue(e, v) {
       rate1: readNum(e, 'revenue.ppa.rate1', ppa.rate1, { req: true, gt: 0, max: 10, label: 'The year-1 PPA rate ($/kWh)' }),
       escalatorPct: readNum(e, 'revenue.ppa.escalatorPct', ppa.escalatorPct,
         { def: BLOCKS.ppa.escalatorPct, min: -10, max: 20, label: 'The PPA escalator (%/yr)' }),
-      basis: readEnum(e, 'revenue.ppa.basis', ppa.basis, BLOCKS.ppa.basis, ['gross', 'net'], 'The PPA energy basis')
+      basis: readEnum(e, 'revenue.ppa.basis', ppa.basis, BLOCKS.ppa.basis, ['gross', 'net'], 'The PPA energy basis'),
+      /* the contract's own term, for the words (a PPA past the analysis term is a terminal value); never changes the math */
+      termYears: readNum(e, 'revenue.ppa.termYears', ppa.termYears, { def: 0, min: 0, max: 40, label: 'The PPA term (years)' })
     } : null,
     bess: {
       mode: readEnum(e, 'revenue.bess.mode', bs.mode, D.bess.mode, BESS_MODES, 'The battery revenue model'),
