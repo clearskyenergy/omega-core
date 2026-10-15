@@ -149,6 +149,10 @@ console.log('\nthe editor wires it: Run captures, the payload carries it, a load
   chk('omegaRunDesign captures the totals after the recompute, before the rail draws', /updateCostEst[\s\S]*S\.lastRunAt = Date\.now\(\);\s*try\{ omegaRunRollup\(\); \}catch\(e\)\{\}\s*try\{ omegaRenderResults\(\); \}catch\(e\)\{\}/.test(run));
   chk('and saves once the results are current', /omegaSetStale\(false\); \}catch\(e\)\{\}\s*try\{ omegaRunSave\(\); \}catch\(e\)\{\}/.test(run));
   const save = bodyFrom(ED, 'async function saveProject(');
+  /* never write over a newer save (2026-10-14: an older tab autosaved over a drawing saved two hours later) */
+  chk('the save reads the record inside a transaction and refuses one saved after this tab loaded it, unless Save was pressed to overwrite', /_db\.runTransaction\(async function\(tx\)\{/.test(save) && /at > window\._loadedUpdatedAt \+ 1000/.test(save) && /err\.code='STALE'/.test(save) && /_force=!!window\._overwriteNewer/.test(save));
+  chk('a refused save is said, keeps the drawing dirty and writes nothing', /e\.code==='STALE'/.test(save) && /_setSaved\('stale'\)/.test(save) && /window\._workDirty = true/.test(save));
+  chk('the loader remembers the saved time it opened', /window\._loadedUpdatedAt = d\.updatedAt/.test(bodyFrom(ED, 'async function _loadProject(id){')));
   chk('saveProject asks omegaRollupFields for the record\'s fields before the payload literal', /const _rollup = \(typeof omegaRollupFields==='function'\) \? omegaRollupFields\(S\.costRollup\) : \{\};\s*const payload = \{/.test(save));
   ['capex', 'incentive', 'annualRevenue', 'bessKwh', 'bessKw', 'capexAt', 'capexSource', 'capexLines'].forEach(k => {
     chk(k + ' is in the save payload literal, from the rollup, never a spread', new RegExp('^\\s*' + k + ':\\s+_rollup\\.' + k + ',', 'm').test(save));

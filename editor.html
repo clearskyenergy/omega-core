@@ -25800,16 +25800,19 @@ function _setSaved(s){
   if(s==='unsaved'){ try{ window._workDirty=true; }catch(e){} }
   const el=document.getElementById('pn-saved');
   if(!el)return;
-el.textContent=s==='saved'?'Saved':s==='saving'?'Saving…':s==='unsaved'?'Unsaved changes':'Save failed';
+el.textContent=s==='saved'?'Saved':s==='saving'?'Saving…':s==='unsaved'?'Unsaved changes':s==='stale'?'Not saved — newer save elsewhere':'Save failed';
   el.setAttribute('role','status'); el.setAttribute('aria-live','polite');
   /* The banner explaining WHY disappears; this does not. Without it a person
      who looked away has a red word and nothing else, and the usual next move
      is to keep working on a project that is not being persisted. */
-  el.title = s==='err'
+  el.title = (s==='err' || s==='stale')
     ? (window._lastSaveError || 'The last save was refused. Your work is still in this tab. See the console for the error.')
     : (s==='saved' ? 'Saved to the project record.' : '');
-  el.style.cursor = s==='err' ? 'help' : '';
+  el.style.cursor = (s==='err' || s==='stale') ? 'help' : '';
 el.style.color=s==='saved'?'var(--green)':s==='saving'?'var(--sub)':s==='unsaved'?'#D8B96F':'var(--red)';
+  /* a click on the refused indicator is the decision: overwrite the newer save with this tab's drawing */
+  if(s==='stale'){ el.onclick=function(){ if(window.confirm('Overwrite the newer save with the drawing in this tab? The other tab\u2019s version will be lost.')){ window._overwriteNewer=true; saveProject(); } }; }
+  else el.onclick=null;
 }
 
 // --- STABILITY: Firestore rejects any `undefined` field and fails the ENTIRE
@@ -26211,7 +26214,24 @@ async function saveProject(){
          script's job, not something to guess at from the current session. */
       delete payload.orgId;
       _shedIfOversize(payload);
-      await _db.collection('projects').doc(_projectId).update(payload);
+      /* NEVER WRITE OVER A NEWER SAVE (Tommy, 2026-10-14: a drawing saved at
+         6:05 PM was back to an older one by 8:59 PM — an older tab of the
+         same project, still open, autosaved over it). The record's saved
+         time is read inside the transaction and compared with the one this
+         tab loaded; a newer one stops the save and says so, unless Save was
+         pressed again to overwrite on purpose (_overwriteNewer). Last write
+         no longer wins by accident. */
+      var _ref=_db.collection('projects').doc(_projectId), _force=!!window._overwriteNewer; window._overwriteNewer=false;
+      await _db.runTransaction(async function(tx){
+        var cur=await tx.get(_ref), cd=cur.exists?cur.data():null, at=null;
+        try{ at = cd && cd.updatedAt && typeof cd.updatedAt.toMillis==='function' ? cd.updatedAt.toMillis() : (cd && cd.updatedAt ? +new Date(cd.updatedAt) : null); }catch(e){}
+        if(!_force && at!=null && window._loadedUpdatedAt!=null && at > window._loadedUpdatedAt + 1000){
+          var err=new Error('A newer save is on this project'); err.code='STALE'; err.savedAt=at; throw err;
+        }
+        tx.update(_ref, payload);
+      });
+      /* the time of the save just made, for the next comparison */
+      try{ var _after=await _ref.get({source:'server'}); var _ad=_after.data(); window._loadedUpdatedAt = _ad && _ad.updatedAt && typeof _ad.updatedAt.toMillis==='function' ? _ad.updatedAt.toMillis() : Date.now(); }catch(e){ window._loadedUpdatedAt = Date.now(); }
     }
     const t=document.getElementById('pn-title');if(t)t.textContent=name;
     // Persist the company logo in localStorage (like the frozen map) so it
@@ -26226,6 +26246,20 @@ async function saveProject(){
     /* the portfolio site this project belongs to reads the design again */
     try{ if(typeof omegaSiteDesignPush==='function') omegaSiteDesignPush(); }catch(_e){}
   }catch(e){
+    if(e && e.code==='STALE'){
+      /* another tab or computer saved this project after this tab opened it:
+         nothing was written; the drawing here is kept; the person decides */
+      var _when = e.savedAt ? new Date(e.savedAt).toLocaleTimeString([], { hour:'numeric', minute:'2-digit' }) : 'later';
+      window._lastSaveError = 'Not saved: this project was saved from another tab or computer at ' + _when + ', after you opened it here. Your drawing is still in this tab. Reload to see the newer save, or press Save to overwrite it with this one.';
+      _setSaved('stale');
+      window._workDirty = true;
+      if(typeof showBanner==='function'){
+        try{ showBanner('save', '!! Not saved — this project was saved from another tab or computer at ' + _when + '. Close the other tab, then press Save here to keep THIS drawing (it overwrites the other), or reload to take the other one.'); }catch(_e){}
+      }
+      window._staleSaveAt = e.savedAt || Date.now();
+      console.warn('Save held: a newer save is on the record', e.savedAt);
+      return;
+    }
     /* Set BEFORE _setSaved, which reads it for the indicator's tooltip. */
     /* An over-size failure already wrote a message that names the size and
        the culprit; a generic one on top of it would bury the useful half. */
@@ -26455,6 +26489,9 @@ async function _loadProject(id){
       return;
     }
     const d=doc.data();
+    /* the saved time this tab loaded: saveProject() refuses to write over a
+       newer save from another tab or computer (2026-10-14) */
+    try{ window._loadedUpdatedAt = d.updatedAt && typeof d.updatedAt.toMillis==='function' ? d.updatedAt.toMillis() : (d.updatedAt ? +new Date(d.updatedAt) : null); }catch(e){ window._loadedUpdatedAt = null; }
 
     // -- Name + title ------------------------------------------
     const pname=document.getElementById('pname');
