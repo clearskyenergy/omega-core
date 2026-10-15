@@ -671,6 +671,13 @@ function seed() {
     /* the whole project carries the standard debt (2026-10-14), so the sources and uses add the financing fee and the debt service reserve to the capital */
     assert.ok(lm.totalProjectCost >= lm.computeCapex + 918000 && lm.totalProjectCost < (lm.computeCapex + 918000) * 1.15, 'the capital request is the whole (the capital, then the engine\u2019s own reserves and the debt\u2019s fee and reserve): ' + lm.totalProjectCost);
     assert.equal(lm.host.revenuePerYear, 61000); assert.equal(lm.host.ppa, null); assert.equal(lm.host.noRevenue, false);
+    /* THE HOST'S BATTERY EARNS on the dispatch (2026-10-15): the summary carries the year-one figure, its parts, the streams and the load it ran on; the stored input asked for it; the basis names it */
+    var hsR = lm.host.storage, mdoc = db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId);
+    assert.ok(hsR && hsR.year1 > 0 && hsR.fee === Math.round(hsR.billSavings * 0.8) && hsR.year1 === hsR.fee + hsR.grid, 'the battery\u2019s dispatch revenue is summarised: ' + JSON.stringify(hsR));
+    assert.ok(hsR.streams.some(function (x) { return x.id === 'bill.demand' && x.tier === 'computed'; }), 'the streams ride the summary with their tiers');
+    assert.equal(hsR.loadAssumed, true, 'no usage on record: the typical load, said so'); assert.equal(hsR.load.source, 'profile');
+    assert.deepEqual(mdoc.input.host.storage, { dispatch: true, annualKwh: 0 }, 'the stored input asked for the dispatch with no usage on record');
+    assert.match(mdoc.basis.hostStorage, /dispatched on the host\u2019s meter/); assert.match(mdoc.basis.hostStorage, /no usage on record/);
     /* a site with no PPA on record: the stored model carries no undefined anywhere (2026-10-14: Firestore refused `input.host.ppa` and every automatic run on such a site failed) */
     (function walk(v, path) { if (v === undefined) throw new Error('undefined stored at ' + path); if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { walk(v[k], path + '.' + k); }); })(db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId), 'model');
     assert.equal('ppa' in db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId).input.host, false, 'no PPA on record: the host block has no ppa key at all');
