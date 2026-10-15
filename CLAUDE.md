@@ -1635,6 +1635,17 @@ tenant. Treat it that way.
   and calls `done()`; the dashboard keeps its boot splash (`data-boot="no"`).
   Never a flash of another page or the sign-in card. `docs/LOADING-SCREEN.md`.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
+- **A drawing is written only by an editor that says who saved it**
+  (2026-10-15, the third "it reverted to an old map"): the editor's own
+  transaction and live watch (2026-10-14) hold a tab running THAT code; a
+  tab left open from before it shipped has neither and autosaves the old
+  map while reading "Saved". So `firestore.rules` `drawingWriteAllowed()`
+  refuses a `projects` update that touches the drawing keys without a fresh
+  `savedBy { tab, at }`, which every drawing write in `editor.html` carries;
+  a patch that leaves the drawing alone (Assign, a validation record, a
+  rollup) needs nothing. A refused save loses nothing: the drawing is still
+  in that tab, and the person reloads. Rules deploy by hand
+  (`firebase deploy --only firestore:rules`). `scripts/tests/tsaveguard.js`.
 - Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
   and state parcel services. The editor's View › Parcel Lines draws them on
   the map and `api/parcel.js` asks the same counties for a point; a county

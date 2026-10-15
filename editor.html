@@ -47597,6 +47597,9 @@ async function sendToPermitCreator() {
         bessList:  S.bessList  || [],
         siteMapImg: canvasImg || null,
         updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        /* a drawing write must say who saved it, or the rules refuse it
+           (firestore.rules drawingWriteAllowed, 2026-10-15) */
+        savedBy: { email: String((_currentUser && _currentUser.email) || '').toLowerCase(), tab: _tabId(), ua: String(navigator.userAgent || '').slice(0, 120), at: Date.now() },
       };
       await _db.collection('projects').doc(_projectId).update(payload);
       console.log('Project saved with bessList:', (S.bessList||[]).length, 'BESS units');

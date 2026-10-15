@@ -1644,6 +1644,36 @@ service cloud.firestore {
         return request.resource.data.get('orgsInvolved', []) == collabRoster()
             && request.resource.data.orgId == resource.data.orgId;
       }
+      /* ── A DRAWING IS WRITTEN ONLY BY AN EDITOR THAT SAYS WHO SAVED IT ──
+         (2026-10-15, Tommy, the third time: "it reverted to an old map
+         again".) The editor's own guard (saveProject's transaction and the
+         live watch, 2026-10-14) stops a stale tab from writing over a newer
+         save — but only a tab running THAT code. A tab left open from before
+         it shipped has no guard, no watch, and autosaves the drawing it
+         holds the moment it is touched; the record came back as the old
+         map while the tab read "Saved". The client cannot reach a tab that
+         is not running its code; the rules can. Every save the current
+         editor makes carries savedBy { email, tab, ua, at } (a string tab,
+         a numeric at). An update that touches the DRAWING without one is an
+         editor from before the guard, and is refused: nothing is lost (the
+         drawing is still in that tab), and the person reloads. A patch that
+         leaves the drawing alone — Assign's owner fields, a validation
+         record, the stage, a rollup — is not a drawing write and carries
+         nothing new. */
+      function drawingKeys() {
+        return ['elements', 'shapes', 'docTabs', 'geoShapes', 'geoElements', 'conduits', 'geoConduits', 'supplyLinks', 'trench', 'annotations'];
+      }
+      function touchesDrawing() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(drawingKeys().toSet());
+      }
+      function savedByCurrentEditor() {
+        return request.resource.data.get('savedBy', {}) is map
+            && request.resource.data.savedBy.get('tab', 0) is string
+            && request.resource.data.savedBy.tab != ''
+            && request.resource.data.savedBy.get('at', '') is number
+            && request.resource.data.get('savedBy', {}) != resource.data.get('savedBy', {});
+      }
+      function drawingWriteAllowed() { return !touchesDrawing() || savedByCurrentEditor(); }
 
       allow read: if request.auth != null
                   && (
@@ -1662,6 +1692,7 @@ service cloud.firestore {
                       || isOmegaStaff()
                     );
       allow update: if request.auth != null && packageWrite(userOrg(), 'editor')
+                    && drawingWriteAllowed()
                     && (
                       (
                         (
