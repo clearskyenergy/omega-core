@@ -1232,7 +1232,22 @@ site record — `ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears`, Topanga's
 executed PPA $0.2250/kWh, 2.5%, 28 years — else the Run's revenue, else a
 named warning with the cost still in the ask), so `totalProjectCost`,
 `computeCapex` and `host.capex` are read by the register, the panel and
-the hand-off. The pod pro forma runs by itself on the design too
+the hand-off. **The host's battery earns** (2026-10-15, Tommy, over a 12%
+whole project whose $1.5M battery had no revenue: "give the host's battery
+its revenue in the whole-project compute case through the platform's own
+dispatch (demand charges, VPP, grid services)"): `compute-site.js
+hostStorage()` runs the ONE dispatch (`vpp-sim.js`) on the host's meter —
+the usage on record (`annualUsageKwh`, else the typical load for the host
+type, said so as `HOST_LOAD_ASSUMED`), the host's solar, the tariff book
+for the ZIP, the grid programmes open there — and the project is paid
+`HOST_STORAGE.sharePct` (80%) of the bill savings as a storage service fee
+plus the published owner share of the grid earnings, one revenue line
+(`hoststorage`) rising with inflation and fading with the battery;
+`host.storage` on the result and the summary carries the figure, its
+parts, the streams with their tiers and the load it ran on; the panel, the
+record's headline and the deck's assumptions print it; `input.host
+.storage.dispatch: false` switches it off. A screening dispatch, never an
+operator's quote; the site's own bills make it the site's own figure. The pod pro forma runs by itself on the design too
 (`designProforma`, once per design) on the skid's recorded price, and each
 engine states its convention (the pod case 60 months pre-tax unlevered
 alone; the compute model after tax, the whole); the assumption set IS the

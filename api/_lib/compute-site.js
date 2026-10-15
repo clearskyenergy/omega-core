@@ -130,6 +130,37 @@ var EV_PATTERNS = {
 };
 var HOST_TYPES = { multifamily: 'Multifamily (house meter)', commercial: 'Office / workplace', retail: 'Retail', industrial: 'Industrial' };
 var HOST_WORDS = { multifamily: 'a multifamily residential property', commercial: 'an office building', retail: 'a retail property', industrial: 'an industrial facility' };
+/* The storage service fee on the host's battery: the share of the bill
+   savings the dispatch delivers that the host pays the project (a
+   shared-savings storage agreement; the host keeps the rest), beside the
+   owner's share of grid-service earnings (vpp-sim's published split). */
+var HOST_STORAGE = { sharePct: 80, ref: 'a shared-savings storage service agreement: 80% of the bill savings to the project, 20% kept by the host; grid-service earnings at the published owner share' };
+/* The host's battery through the ONE dispatch, on the host's meter. Null
+   when there is no host battery or dispatch is off; a dispatch that cannot
+   run is said (`error`), never a number. */
+function hostStorage(c, loc) {
+  var H = c.host; if (!H || !(H.bessKwh > 0) || !(H.bessKw > 0) || !H.storage.dispatch) return null;
+  var seg = c.site.hostType === 'industrial' ? 'industrial' : 'commercial';
+  var sim;
+  try {
+    sim = VS.simulate({ zip: loc.zip, market: loc.market, segment: seg, battery: { kw: H.bessKw, kwh: H.bessKwh },
+                        solarKw: H.solarKwDc > 0 ? H.solarKwDc : 0, load: H.storage.annualKwh > 0 ? { type: 'profile', annualKwh: H.storage.annualKwh } : {},
+                        controller: c.controller === true });
+  } catch (e) { sim = { ok: false, errors: [{ message: String(e && e.message || e) }] }; }
+  if (!sim || sim.ok === false) return { error: (sim && sim.errors || []).map(function (x) { return x.message; }).join(' ') || 'the dispatch could not run', year1: 0, streams: [] };
+  var tot = sim.totals || {}, split = sim.split || {}, share = H.storage.sharePct / 100, ownerShare = num(split.owner) || 0;
+  var fee = Math.round((tot.billSavings || 0) * share), grid = Math.round((tot.gridEarnings || 0) * ownerShare);
+  return {
+    year1: fee + grid, fee: fee, grid: grid, sharePct: H.storage.sharePct, ownerSharePct: Math.round(ownerShare * 100),
+    billSavings: tot.billSavings || 0, gridEarnings: tot.gridEarnings || 0, gross: tot.gross || 0,
+    streams: (sim.streams || []).filter(function (st) { return st.counted; }).map(function (st) { return { id: st.id, name: st.name, category: st.category, usd: st.usd, tier: st.tier, ref: st.ref || '' }; }),
+    load: sim.load ? { source: sim.load.source, label: sim.load.label, quality: sim.load.quality, annualKwh: sim.load.annualKwh, peakKw: sim.load.peakKw } : null,
+    tariff: sim.tariff ? { source: sim.tariff.source, label: sim.tariff.label } : null,
+    market: sim.site ? { key: sim.site.market, name: sim.site.marketName } : null,
+    cyclesPerYear: sim.battery ? sim.battery.cyclesPerYear : null, confidence: sim.confidence || null,
+    controller: sim.controller || null, basis: HOST_STORAGE.ref, version: sim.version
+  };
+}
 var STRUCTURES = {
   own: 'Own and operate the stack',
   infra: 'Own the power and pod layer for a revenue share',
@@ -354,7 +385,23 @@ function read(input) {
                                      termYears: rd(e, 'host.ppa.termYears', hp.termYears, { def: 0, min: 0, max: 40, int: true, label: 'The PPA term (years)' }) } : null,
       /* the host system's revenue when there is no PPA on record: the Site Map run's year-one figure, escalating with inflation */
       revenuePerYear: rd(e, 'host.revenuePerYear', ho.revenuePerYear, { def: 0, min: 0, max: 1e9, label: 'The host system\'s year-one revenue ($)' }),
-      revenueBasis: str(ho.revenueBasis, 200)
+      revenueBasis: str(ho.revenueBasis, 200),
+      /* THE HOST'S BATTERY EARNS (2026-10-15, Tommy, over a 12% whole
+         project whose $1.5M battery had no revenue: "give the host's
+         battery its revenue in the whole-project compute case through the
+         platform's own dispatch (demand charges, VPP, grid services)").
+         The ONE dispatch (vpp-sim.js) runs the host's battery against the
+         host's own meter — the host's load (its usage on record, else the
+         typical load for its type, said so), its solar under the PPA, the
+         tariff book for the ZIP — and the project is paid a storage
+         service fee of sharePct of the bill savings it delivers plus the
+         owner's published share of the grid-service programmes open at
+         that ZIP. Off by `dispatch: false`. */
+      storage: (function () {
+        var so = obj(ho.storage);
+        return { dispatch: so.dispatch !== false, sharePct: rd(e, 'host.storage.sharePct', so.sharePct, { def: HOST_STORAGE.sharePct, min: 0, max: 100, label: 'The share of the host\'s bill savings paid for the storage service (%)' }),
+                 annualKwh: rd(e, 'host.storage.annualKwh', so.annualKwh, { def: 0, min: 0, max: 1e9, label: 'The host\'s annual usage (kWh)' }) };
+      })()
     };
     if ((c.host.bessKw > 0) !== (c.host.bessKwh > 0)) e.push(err('host.bessKwh', 'The host\'s battery needs both its power (kW) and its energy (kWh).'));
     if (c.host.ppa && !(c.host.solarKwDc > 0)) e.push(err('host.ppa', 'A PPA sells solar energy, so the host needs solar.'));
@@ -799,7 +846,7 @@ function schedule(c, y1, y0, who) {
   var N = c.finance.years, k = c.compute, dcl = k.priceDeclinePct / 100, esc = c.finance.utilityEscPct / 100, inf = c.finance.inflationPct / 100;
   var events = refreshPlan(c, N), fade = c.battery.fadePct / 100, t;
   var lines = { off: [], edge: [], spot: [], ev: [], share: [], rent: [], billUp: [], billDown: [], platform: [], hostRent: [],
-                fiber: [], hwOm: [], podOm: [], evCost: [], batOm: [], ins: [], opRent: [], hostRev: [], hostOm: [] };
+                fiber: [], hwOm: [], podOm: [], evCost: [], batOm: [], ins: [], opRent: [], hostRev: [], hostStore: [], hostOm: [] };
   var H0 = who !== 'lease' ? c.host : null;
   var baseBill = y1.baseBill;
   var incWith = y1.bill.total - baseBill, incNo = y0 ? y0.bill.total - baseBill : incWith;
@@ -842,6 +889,8 @@ function schedule(c, y1, y0, who) {
     /* the host's system: its revenue when no PPA prices it (the engine
        prices a PPA itself, on the solar it generates), and its O&M */
     lines.hostRev.push(H0 && !H0.ppa && H0.revenuePerYear > 0 ? H0.revenuePerYear * g : 0);
+    /* the host's battery: the storage service fee and the grid-service share the dispatch found, rising with inflation, fading with the battery */
+    lines.hostStore.push(H0 && H0.storageRun && H0.storageRun.year1 > 0 ? H0.storageRun.year1 * g * Math.max(0, 1 - fade * (t - 1)) : 0);
     lines.hostOm.push(H0 ? (H0.bessKwh * c.battery.omPerKwhYear + H0.solarKwDc * c.solar.omPerKwYear) * g : 0);
   }
   var rev = [], opex = [];
@@ -854,6 +903,7 @@ function schedule(c, y1, y0, who) {
     R('EV charging', lines.ev);
     R('Building bill savings', lines.billDown);
     R('Host system revenue' + (H0 && H0.revenueBasis ? ' (' + H0.revenueBasis + ')' : ''), lines.hostRev);
+    if (max(lines.hostStore) > 0.5) rev.push({ id: 'hoststorage', label: 'Host battery: storage service fee and grid services (the dispatch)', schedule: lines.hostStore.map(r0) });
     O('power', 'Electricity: the incremental utility bill', lines.billUp);
     O('platform', 'Operator platform fee (' + k.platformFeePct + '% of gross compute)', lines.platform);
     O('host', 'Host rent', lines.hostRent);
@@ -1102,7 +1152,7 @@ function story(c, ctx, y1, who, res) {
   if (y1.battery.kwh > 0) flow.push(['bess', fmt(y1.battery.kw) + ' kW / ' + fmt(y1.battery.kwh) + ' kWh BESS', 'Holds the service limit and the peak']);
   if (c.solar.kwdc > 0) flow.unshift(['solar', fmt(c.solar.kwdc) + ' kW DC Solar', 'On the host site']);
   if (c.host && who !== 'lease') {
-    if (c.host.bessKwh > 0) flow.push(['bess', fmt(c.host.bessKw) + ' kW / ' + fmt(c.host.bessKwh) + ' kWh host BESS', 'The host\u2019s own storage' + (c.host.ppa ? ', under the PPA' : '')]);
+    if (c.host.bessKwh > 0) flow.push(['bess', fmt(c.host.bessKw) + ' kW / ' + fmt(c.host.bessKwh) + ' kWh host BESS', c.host.storageRun && c.host.storageRun.year1 > 0 ? 'Dispatched on the host\u2019s meter: demand charges, time-of-use' + (c.host.storageRun.grid > 0 ? ', grid services' : '') : 'The host\u2019s own storage' + (c.host.ppa ? ', under the PPA' : '')]);
     if (c.host.solarKwDc > 0) flow.unshift(['solar', fmt(c.host.solarKwDc) + ' kW DC host solar', c.host.ppa ? 'Sold to the host under the PPA' : 'The host\u2019s own array']);
   }
   flow.push(['host', c.site.host || 'Site host', HOST_TYPES[c.site.hostType] + (c.site.city ? ', ' + c.site.city : '')]);
@@ -1148,6 +1198,7 @@ function start(input) {
   var c = rd0.cfg, ctx = prepare(c);
   if (!ctx.ok) return { ok: false, errors: ctx.errors };
   ctx.baseBill = S.bill(Array.prototype.slice.call(ctx.building), ctx.t);
+  if (c.host) c.host.storageRun = hostStorage(c, ctx.loc);
   return { ok: true, c: c, ctx: ctx, cohorts: evCohorts(c), cache: {} };
 }
 function full(run, pods, kw, kwh) {
@@ -1253,11 +1304,18 @@ function model(input) {
     res.capexScale = main.schedule.capexScale;
     if (main.schedule.hostTerminal) res.assumptions.unshift('The host\u2019s solar and storage outlive the ' + c.finance.years + '-year term: the PPA\u2019s remaining ' + main.schedule.hostTerminal.yearsLeft +
       ' years of revenue less O&M, discounted at ' + main.schedule.hostTerminal.discountPct + '%, are a terminal value of ' + money(main.schedule.hostTerminal.amount) + ' taken as income in year ' + main.schedule.hostTerminal.year + '.');
-    if (c.host && !c.host.ppa && !(c.host.revenuePerYear > 0)) res.warnings.unshift({ code: 'HOST_NO_REVENUE', level: 'warn',
+    var hsr = c.host && c.host.storageRun;
+    if (c.host && !c.host.ppa && !(c.host.revenuePerYear > 0) && !(hsr && hsr.year1 > 0)) res.warnings.unshift({ code: 'HOST_NO_REVENUE', level: 'warn',
       message: 'The host\u2019s system (' + money(c.host.capexTotal) + ') is in the capital with no revenue on record: enter the PPA on the site, or the system\u2019s revenue, for the IRR of the whole project.' });
+    else if (c.host && c.host.solarKwDc > 0 && !c.host.ppa && !(c.host.revenuePerYear > 0)) res.warnings.unshift({ code: 'HOST_SOLAR_NO_REVENUE', level: 'warn',
+      message: 'The host\u2019s solar (' + fmt(c.host.solarKwDc) + ' kW-dc) is in the capital with no PPA on record: only the battery earns. Enter the PPA on the site for the IRR of the whole project.' });
+    if (hsr && hsr.error) res.warnings.push({ code: 'HOST_STORAGE_NOT_RUN', level: 'warn', message: 'The host\u2019s battery could not be dispatched: ' + hsr.error });
+    if (hsr && hsr.year1 > 0 && hsr.load && hsr.load.source === 'profile' && !(c.host.storage.annualKwh > 0)) res.warnings.push({ code: 'HOST_LOAD_ASSUMED', level: 'info',
+      message: 'The host\u2019s battery was dispatched against a typical ' + (c.site.hostType === 'industrial' ? 'industrial' : 'commercial') + ' load (' + fmt(hsr.load.annualKwh) + ' kWh a year, assumed): enter the site\u2019s annual usage, or its bills, for the battery\u2019s own figure.' });
   }
   out.host = c.host && who !== 'lease' ? { solarKwDc: c.host.solarKwDc, bessKw: c.host.bessKw, bessKwh: c.host.bessKwh, capex: main.schedule.hostCapex, basis: c.host.basis,
     ppa: c.host.ppa, revenuePerYear: c.host.ppa ? null : c.host.revenuePerYear, revenueBasis: c.host.ppa ? 'PPA' : c.host.revenueBasis, lines: main.schedule.capex.filter(function (l) { return l.host; }),
+    storage: c.host.storageRun || null,
     terminalValue: main.schedule.hostTerminal ? { amount: main.schedule.hostTerminal.amount, year: main.schedule.hostTerminal.year, yearsLeft: main.schedule.hostTerminal.yearsLeft } : null } : null;
   out.computeCapex = main.schedule.capexTotal - (main.schedule.hostCapex || 0);
   out.structure = { key: who, label: STRUCTURES[who] };
@@ -1372,6 +1430,14 @@ function siteAssumptions(c, ctx, y1, y0, who, sch) {
         c.host.revenuePerYear > 0 ? 'its revenue is ' + money(c.host.revenuePerYear) + ' a year' + (c.host.revenueBasis ? ' (' + c.host.revenueBasis + ')' : '') + ', rising with inflation' :
         'NO REVENUE is on record for it, so its cost is in the ask with nothing against it: enter the PPA on the site') +
       '; its O&M is $' + c.battery.omPerKwhYear + '/kWh-yr on the battery and $' + c.solar.omPerKwYear + '/kW-yr on the solar. It is not dispatched against the compute: it is the host\u2019s.');
+    var sr = c.host.storageRun;
+    if (sr && sr.year1 > 0) a.push('The host\u2019s battery earns on the host\u2019s meter: the platform\u2019s own dispatch runs it against ' + (sr.load ? sr.load.label.toLowerCase() : 'the host\u2019s load') +
+      ' and ' + (sr.tariff ? sr.tariff.label : 'the tariff book for the ZIP') + ', delivering ' + money(sr.billSavings) + ' a year of bill savings (' +
+      listWords(sr.streams.filter(function (x) { return x.category === 'bill' && x.usd > 0; }).map(function (x) { return x.name.toLowerCase() + ' ' + money(x.usd); })) + ')' +
+      (sr.gridEarnings > 0 ? ' and ' + money(sr.gridEarnings) + ' of grid-service earnings (' + listWords(sr.streams.filter(function (x) { return x.category !== 'bill' && x.usd > 0; }).map(function (x) { return x.name + ' ' + money(x.usd) + (x.tier !== 'computed' ? ', ' + x.tier : ''); })) + ')' : '') +
+      '; the project is paid ' + sr.sharePct + '% of the savings as a storage service fee (' + money(sr.fee) + ')' + (sr.grid > 0 ? ' and the ' + sr.ownerSharePct + '% owner share of the programmes (' + money(sr.grid) + ')' : '') +
+      ', ' + money(sr.year1) + ' in year one, rising with inflation and fading with the battery. ' + sr.basis + '. Confidence ' + (sr.confidence || 'low') + ': a screening dispatch, not an operator\u2019s quote.');
+    else if (sr && sr.error) a.push('The host\u2019s battery could not be dispatched (' + sr.error + '), so it earns nothing in this case.');
   }
   return a;
 }

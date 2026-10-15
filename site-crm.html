@@ -741,7 +741,10 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
      design run named as missing. Each with the way to enter it. */
   function needsFromYou(s) {
     var lm = s.latestModel, items = [];
-    if (lm && lm.host && lm.host.noRevenue) items.push('<b>The PPA.</b> The host\u2019s system (' + money(lm.host.capex) + ' of solar and storage) is in the capital with no income against it, so the IRR of the whole project is understated until the PPA\u2019s rate, escalator and term are on the record.' + (CANEDIT ? ' <button class="btn" type="button" data-need="ppa">Enter the PPA</button>' : ' Ask an administrator of this workspace to enter it.'));
+    if (lm && lm.host && (lm.host.noRevenue || lm.host.solarNoRevenue)) items.push('<b>The PPA.</b> The host\u2019s ' + (lm.host.noRevenue ? 'system (' + money(lm.host.capex) + ' of solar and storage) is in the capital with no income against it' : 'solar is in the capital with no PPA against it (only the battery earns)') + ', so the IRR of the whole project is understated until the PPA\u2019s rate, escalator and term are on the record.' + (CANEDIT ? ' <button class="btn" type="button" data-need="ppa">Enter the PPA</button>' : ' Ask an administrator of this workspace to enter it.'));
+    /* the battery's dispatch ran against a typical load (2026-10-15): the site's own usage makes it the site's own figure */
+    if (lm && lm.host && lm.host.storage && lm.host.storage.loadAssumed) items.push('<b>The site\u2019s usage.</b> The host\u2019s battery earns ' + money(lm.host.storage.year1) + ' a year on the dispatch, but against a typical load for the host type (' + esc(lm.host.storage.load && lm.host.storage.load.label || 'assumed') + '). Enter the site\u2019s annual usage, or upload its bills under Power &amp; bills, for the battery\u2019s own figure.' + (CANEDIT ? ' <button class="btn" type="button" data-need="usage">Enter the usage</button>' : ''));
+    if (lm && lm.host && lm.host.storage && lm.host.storage.error) items.push('<b>The battery\u2019s dispatch.</b> ' + esc(lm.host.storage.error));
     if (s.designModel && s.designModel.missing && s.designModel.missing.length) items.push('<b>For the model to run on the design:</b> ' + esc(s.designModel.missing.join('; ')) + '.' + (CANEDIT ? ' <button class="btn" type="button" data-need="facts">Edit site facts</button>' : ''));
     if (!items.length) return '';
     return '<div class="assume" id="needs-from-you" style="border-color:#B45309;margin-bottom:10px"><div style="font-weight:700;margin-bottom:4px">What this model still needs from you</div>' + items.map(function (t) { return '<div style="margin:4px 0">' + t + '</div>'; }).join('') + '</div>';
@@ -750,7 +753,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     Array.prototype.forEach.call(document.querySelectorAll('#needs-from-you [data-need]'), function (b) {
       b.addEventListener('click', function () {
         showTab('overview');
-        var f = document.getElementById(b.getAttribute('data-need') === 'ppa' ? 'ef-ppaRatePerKwh' : 'ef-name');
+        var need = b.getAttribute('data-need'), f = document.getElementById(need === 'ppa' ? 'ef-ppaRatePerKwh' : need === 'usage' ? 'ef-annualUsageKwh' : 'ef-name');
         if (f) { try { f.scrollIntoView({ block: 'center' }); } catch (e) {} f.focus(); }
       });
     });
@@ -766,6 +769,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       (lm.uplift && lm.uplift.hostAlone && lm.uplift.hostAlone.irr != null && lm.uplift.whole && lm.uplift.whole.irr != null
         ? kpi(irrPct(lm.uplift.hostAlone.irr) + ' \u2192 ' + irrPct(lm.uplift.whole.irr), 'what the skid adds<br>the host\u2019s system alone \u2192 with the skid' + (lm.uplift.skidAlone && lm.uplift.skidAlone.irr != null ? ' \u00b7 the skid alone ' + irrPct(lm.uplift.skidAlone.irr) : ''), lm.uplift.whole.irr > lm.uplift.hostAlone.irr ? 'good' : 'warn')
         : '') +
+      /* the host's battery on the dispatch (2026-10-15): what it earns in year one, and on what */
+      (lm.host && lm.host.storage && lm.host.storage.year1 > 0 ? kpi(money(lm.host.storage.year1) + ' / yr', 'the host\u2019s battery, dispatched<br>' + money(lm.host.storage.billSavings) + ' of bill savings (' + esc(lm.host.storage.sharePct) + '% to the project)' + (lm.host.storage.grid > 0 ? ' + ' + money(lm.host.storage.grid) + ' grid services' : '') + (lm.host.storage.loadAssumed ? ' \u00b7 typical load, enter the usage' : ''), 'good') : '') +
       kpi(money(lm.totalReturns), 'total investor returns<br>over the life of the project') + kpi(lm.paybackYears == null ? 'n/a' : '~' + Number(lm.paybackYears).toFixed(1) + ' yr', 'after-tax payback') + '</div>';
     h += '<div class="cap-state"><span class="pill ' + (v.tone === 'ok' ? 'pill-ok' : v.tone === 'warn' ? 'pill-warn' : 'pill-unk') + '">' + esc(v.label || 'No verdict') + '</span>' + (v.gate ? '<span class="li-meta">Next: ' + esc(v.gate) + '</span>' : '') + '</div>';
     var deals = lm.deals || {};
@@ -776,7 +781,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     return h;
   }
   /* what the run stood on, in the server's own words (the model record's basis): never worked out here */
-  var BASIS_KEYS = [['service', 'Service'], ['pods', 'Compute units'], ['zip', 'ZIP'], ['gpuClass', 'Compute'], ['capex', 'Capital cost'], ['battery', 'Battery'], ['solar', 'Solar'], ['chargers', 'Chargers'], ['load', 'Building load'], ['tariff', 'Electricity'], ['rent', 'Rent to the host'], ['host', 'The host\u2019s project'], ['plainPods', ''], ['skids', ''], ['structure', 'Structure'], ['design', 'Design']];
+  var BASIS_KEYS = [['service', 'Service'], ['pods', 'Compute units'], ['zip', 'ZIP'], ['gpuClass', 'Compute'], ['capex', 'Capital cost'], ['battery', 'Battery'], ['solar', 'Solar'], ['chargers', 'Chargers'], ['load', 'Building load'], ['tariff', 'Electricity'], ['rent', 'Rent to the host'], ['hostStorage', 'Host battery'], ['host', 'The host\u2019s project'], ['plainPods', ''], ['skids', ''], ['structure', 'Structure'], ['design', 'Design']];
   function drawBasis() {
     var el = document.getElementById('model-basis'), m = MODEL && MODEL.model, b = m && m.basis, sm = m && m.summary;
     if (!el || !b) return;
