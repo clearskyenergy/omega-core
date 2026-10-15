@@ -909,7 +909,7 @@ function engineInputs(c, ctx, y1, sch, who) {
     ev: c.ev.ports > 0 && (who !== 'lease' || c.deal.lease.hostKeepsCharging) ? { kw: r1(c.ev.ports * c.ev.kwPerPort) } : null,
     capex: { lines: sch.capex },
     revenue: { bess: { mode: hasBat || hostBat ? 'site' : 'bundled' }, other: sch.revenue,
-               ppa: hostSolar && HS.ppa ? { rate1: HS.ppa.ratePerKwh, escalatorPct: HS.ppa.escPct, basis: 'gross' } : undefined },
+               ppa: hostSolar && HS.ppa ? { rate1: HS.ppa.ratePerKwh, escalatorPct: HS.ppa.escPct, basis: 'gross', termYears: HS.ppa.termYears || 0 } : undefined },
     opex: { lines: sch.opex },
     refresh: { mode: c.finance.refreshFunding, events: who === 'own' ? sch.events.map(function (y) {
       return { label: 'GPU refresh', year: y, cost: Math.round(sch.gpuCost * c.compute.refreshCostPct / 100) };
