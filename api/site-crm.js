@@ -934,7 +934,10 @@ async function designModel(db, org, site, ctx, now) {
      skid's recorded price, so the two IRRs are judged on the same capital */
   var pf = await designProforma(db, org, site, ctx.by, now, d);
   var lm = site.data.latestModel, dm = site.data.designModel, factsAt = C.iso(site.data.updatedAt) || null;
-  if (lm && lm.designHash === d.hash) return pf ? { proforma: pf } : null;
+  /* a stored model built under a structure the rule no longer uses (levered
+     before 2026-10-14's 100%-equity ask) runs again on its own, so the page
+     never shows a stale ask beside a current design */
+  if (lm && lm.designHash === d.hash && !(lm.levered === true)) return pf ? { proforma: pf } : null;
   if (dm && dm.hash === d.hash && dm.factsAt === factsAt) return { skipped: dm.missing ? 'missing' : dm.error ? 'error' : 'done', missing: dm.missing || null, error: dm.error || null, repeat: true };
   try { await computeAccess(ctx.caller, org, ctx.root); } catch (e) { return { skipped: 'no-access' }; }
   var orgDoc = await ctx.root.get(), orgName = orgDoc.exists ? ((orgDoc.data() || {}).name || org) : org;
