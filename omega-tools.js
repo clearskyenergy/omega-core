@@ -84,6 +84,11 @@
       file:'/grid-atlas.html', badge:'new', tier:TIER.ALL,
       icon:'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15' },
 
+    { key:'omegaprime', name:'Omega Prime', category:'design',
+      desc:'One site, guided: grid, utility circuit, layout on satellite and the quote.',
+      file:'/omega-prime.html', badge:'new', tier:TIER.STANDARD,
+      icon:'M12 2l9 5v10l-9 5-9-5V7zM12 7v10M7 9.5l10 5M17 9.5l-10 5' },
+
     { key:'sandbox', name:'Open a Sandbox', category:'design',
       desc:'Full editor at any address — save when ready.',
       action:'new:sandbox', tier:TIER.STANDARD, savesData:true,
