@@ -144,6 +144,8 @@
     pricedecks: 'M4 6h16v13H4zM4 10h16M8 15h3',
     applyforfinancing: DOC + 'M12 10v9M10 12h3a1.5 1.5 0 0 1 0 3h-2a1.5 1.5 0 0 0 0 3h3',
     importbill: DOC + 'M12 10v7M9 14l3 3 3-3',
+    /* a sheet with its plan drawn on it, read through a lens */
+    readplans: 'M5 3h10l4 4v6M5 3v18h7M15 3v4h4M8 8h4M8 11h6M8 14h3M17 19a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.2 18.2L22 21',
     proposal: DOC + 'M9 13h6M9 17h6', specsheet: DOC + 'M9 12h6M9 15h6M9 18h4', summary: 'M6 3h12v18H6zM9 8h6M9 12h6M9 16h4',
     /* ── Output ── */
     blueprintpdf: 'M4 4h16v16H4zM8 8h8v8H8zM8 12h8M12 8v8',

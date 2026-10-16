@@ -291,6 +291,7 @@
   "functions": {
     "api/portfolio-screening.js": { "maxDuration": 30, "includeFiles": "omega-site-intel.js" },
     "api/portfolio-enrich.js": { "maxDuration": 60 },
+    "api/plan-read.js": { "maxDuration": 60 },
     "api/helios-intake.js": { "maxDuration": 30, "includeFiles": "{forms/helios-first-pass.pdf,vendor/pdf-lib/1.17.1/pdf-lib.min.js}" },
     "api/site-crm.js": { "maxDuration": 60, "includeFiles": "vendor/pdf-lib/1.17.1/pdf-lib.min.js" },
     "api/site-catalog.js": { "maxDuration": 60 },

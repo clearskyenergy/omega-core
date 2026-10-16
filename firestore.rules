@@ -2372,6 +2372,11 @@ service cloud.firestore {
     /* A site sent to a partner (Terra Energy's solar package; api/site-crm.js
        send-to-partner): the record of what went where, and the day's count. */
     match /omega_orgs/{orgId}/partner_requests/{requestId} { allow read, write: if false; }
+    /* Build › Read Plans (api/plan-read): the workspace's cache of sheets
+       already read and the per-day counters that cap what reading costs.
+       Admin SDK only; a browser never reads or writes either. */
+    match /omega_orgs/{orgId}/plan_reads/{readId} { allow read, write: if false; }
+    match /omega_orgs/{orgId}/plan_read_counters/{dayId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_imports/{batchId} { allow read, write: if false; }
     match /omega_orgs/{orgId}/custody_mappings/{mapId} { allow read, write: if false; }
     /* Freight quotes (api/_lib/freight.js, api/logic-logistics.js): what a

@@ -126,6 +126,14 @@ function openHeliosIntake(){
   if (window.OmegaHeliosIntake && typeof OmegaHeliosIntake.open === 'function') OmegaHeliosIntake.open();
   else alert('The Helios intake module did not load. Reload the page and try again.');
 }
+/* Read Plans: the customer's plan set, read sheet by sheet into equipment
+   and project facts with where each was read, reviewed, and the ticked
+   equipment placed (2026-10-16, Tommy). The dialog is omega-plan-read.js;
+   the reading and the cross-checks are api/plan-read. */
+function openPlanRead(){
+  if (window.OmegaPlanRead && typeof OmegaPlanRead.open === 'function') OmegaPlanRead.open();
+  else alert('The plan reader did not load. Reload the page and try again.');
+}
 /* Omega-Core: qualify this charging site for Omega-Core skids (Solela Edge
    Compute + CleanCell R60 on their own meter) from the Run, the drawing, the
    power, the location and fiber, and show the host's land lease and the
@@ -182,6 +190,10 @@ function openOmegaCore(){
      what this session knows and talks to api/helios-intake, which fills
      their own PDF and sends it. -->
 <script src="/omega-helios-intake.js"></script>
+<!-- Build › Read Plans: renders a plan set's sheets with pdf.js (fetched on
+     first use), sends each to api/plan-read and places what the person
+     ticks through the editor's own tools. -->
+<script src="/omega-plan-read.js"></script>
 <!-- Omega-Core from the Output tab: reads the Run and the drawing, fans out
      through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
      whether the site takes the skids and what the host is paid. -->
@@ -1871,6 +1883,11 @@ window.onerror = function(msg, src, line, col, err) {
           <span class="rb-ico" style="font-size:20px;height:22px;color:var(--green)">&#9638;</span>
           <span class="rb-lbl" style="font-weight:700;color:var(--text);white-space:nowrap">Site Setup</span>
         </button>
+        <!-- Read Plans: the customer's PDF plan set, read sheet by sheet into
+             equipment and project facts, each shown with where on the sheet
+             it was read; the person ticks what goes on the drawing
+             (omega-plan-read.js, api/plan-read; 2026-10-16). -->
+        <button class="rbtn" id="rb-plan-read" onclick="openPlanRead()" title="Read Plans &mdash; drop the customer&rsquo;s PDF plan set. Each sheet is read for its equipment, ratings and project facts, every read shown with the place on the sheet it came from and anything the sheets disagree on. Tick what is right and it is placed on the drawing."><span class="rb-ico" style="color:var(--green)">&#128196;</span><span class="rb-lbl">Read<br>Plans</span></button>
       </div>
       <div class="rpanel-cap">1 &middot; Site</div>
     </div>
@@ -26138,6 +26155,10 @@ async function saveProject(){
       /* OMEGA-CORE: the rep's answers and the last qualification's headline
          (Output › Omega-Core). Restored in _loadProject beside omegaSizing. */
       omegaCore:     S.omegaCore     || null,
+      /* PLAN READ: the customer's plan set as Build › Read Plans read it
+         (the file, the sheets, the facts, what disagreed, what was placed
+         and what was only listed). Restored in _loadProject beside it. */
+      planRead:      S.planRead      || null,
       /* The run's totals as the record's rollup fields — the ones the
          workspace's Pipeline capex, the dashboard's portfolio table and
          charts, and the asset book read (2026-09-29). Written only from a
@@ -26570,6 +26591,7 @@ async function _loadProject(id){
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
     S.omegaCore     = (d.omegaCore     && typeof d.omegaCore==='object')     ? d.omegaCore     : null;
+    S.planRead      = (d.planRead      && typeof d.planRead==='object')      ? d.planRead      : null;
     /* THE SITE THIS PROJECT BELONGS TO (the portfolio register's
        send-to-editor writes siteId/siteOrgId on the record). Read so a save
        can tell the site to read the design again (omegaSiteDesignPush);
