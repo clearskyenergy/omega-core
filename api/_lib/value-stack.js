@@ -29,7 +29,10 @@
     /* Duration class -> accredited fraction of nameplate. */
     elcc: [[4, 0.59], [6, 0.68], [8, 0.71], [10, 0.78]],
     elccRef: "PJM ELCC Class Ratings for the 2028/2029 Base Residual Auction: "
-           + "4-hr storage 59%, 6-hr 68%, 8-hr 71%, 10-hr 78%.",
+           + "4-hr storage 59%, 6-hr 68%, 8-hr 71%, 10-hr 78%. PJM has posted LOWER "
+           + "ratings for the 2029/2030 BRA (clears December 2026): 4-hr 57%, 6-hr "
+           + "66%, 8-hr 69%, 10-hr 76% (29-30-bra-elcc-class-ratings.pdf, posted "
+           + "August 2026) — they apply from that auction on.",
     elccUrl: "https://www.pjm.com/-/media/DotCom/planning/res-adeq/elcc/"
            + "28-29-bra-elcc-class-ratings.pdf"
   };
@@ -199,15 +202,25 @@
        + "DG-Rebate-Terms-and-Conditions--2026.pdf",
     conditions: "What decides whether this arrives: the storage must be "
        + "associated with a qualified DG facility (the DG itself need not take "
-       + "a rebate), and the customer must participate in ComEd's Scheduled "
+       + "a rebate); the customer must participate in ComEd's Scheduled "
        + "Dispatch Virtual Power Plant programme for the required term (Rider "
        + "SDVPP — approved by the ICC, tariff sheets effective 16 July 2026, a "
-       + "five-year programme term, service begins no later than 1 March 2027). "
-       + "For interconnection agreements signed after 1 June 2026, state law is "
-       + "reported to cap the rebate at 5 kWh per kW of participating power "
-       + "and 25,000 kWh in total (projects whose interconnection application "
-       + "was filed and paid before that date are reported to keep a 150,000 "
-       + "kWh ceiling) — confirm against the current tariff."
+       + "five-year programme term; the 2026 Terms and Conditions say the "
+       + "SDVPP programme is anticipated to go into effect 1 March 2027); and "
+       + "the storage facility must take supply under a Qualifying Utility "
+       + "Product for the life of the facility — customers supplied by an "
+       + "alternative retail electric supplier are expressly eligible, so "
+       + "retail choice does not disqualify a site. The rebate is CAPPED by "
+       + "the tariff (Rider DG REBATE, Ill. C.C. No. 10, 11th Revised Sheet "
+       + "No. 245, filed 4 September 2026 effective 19 October 2026, "
+       + "cancelling the 9th Revised sheet): no more than 25,000 kWh of "
+       + "nameplate energy capacity, and no more than 5 kWh of nameplate "
+       + "energy capacity for every one kW of participating power capacity. A "
+       + "facility over 25,000 kWh that demonstrates its interconnection "
+       + "application under 83 Ill. Adm. Code 466 or 467 was submitted and its "
+       + "application fees paid before 1 June 2026 is limited instead to "
+       + "150,000 kWh, still at 5 kWh per kW, for any single meter and for no "
+       + "more than 2 meters per entity."
   };
   V.COMED_REBATE = COMED_REBATE;
 
@@ -226,14 +239,14 @@
       id: "comed.dg.storage", utility: "ComEd", name: "ComEd storage rebate (DG Rebate)",
       state: "IL", comed: true,
       perKwh: COMED_REBATE.perKwh, resPerKwh: COMED_REBATE.resPerKwh,
-      tier: "published", asOf: "2026 Terms and Conditions; Rider SDVPP tariff effective 2026-07-16; read 2026-10-06",
+      tier: "published", asOf: "2026 Terms and Conditions and Rider DG REBATE 11th Revised Sheet No. 245 (effective 2026-10-19); Rider SDVPP tariff effective 2026-07-16; read 2026-10-14",
       ref: COMED_REBATE.ref, url: COMED_REBATE.url, conditions: COMED_REBATE.conditions
     },
     {
       id: "ameren.cgr.storage", utility: "Ameren Illinois", name: "Ameren Illinois storage rebate (Rider CGR)",
       state: "IL", comed: false,
       perKwh: 250, resPerKwh: 300,
-      tier: "published", asOf: "Ameren Rider CGR tariff (effective 2025-04-21) and Rider SD VPP (effective 2026-07-16); read 2026-10-06",
+      tier: "published", asOf: "Ameren Rider CGR tariff (effective 2025-04-21) and Rider SD VPP (effective 2026-07-16); read 2026-10-13",
       ref: "Illinois' DG rebate on Ameren Illinois' own tariff (Rider CGR — Customer "
          + "Generation & Storage Rebate, Ill. C.C. No. 1, 2nd Revised Sheet No. 59.003, "
          + "effective 21 April 2025): an additional $250 per kWh of nameplate storage "
@@ -251,25 +264,33 @@
       id: "ca.sgip.storage", utility: "PG&E / SCE / SoCalGas / SDG&E (SGIP)", name: "California SGIP, large-scale storage",
       state: "CA", nonresidential: true,
       perKwh: 250, perKwhItc: 180,
-      tier: "published", asOf: "Step 5, statewide, dashboard data of 2026-10-05; read 2026-10-06",
+      tier: "planning", asOf: "Step 5 rates; ratepayer budget closed to new applications 2025-12-30 (CPUC D.25-12-003); read 2026-10-14",
       ref: "CPUC Self-Generation Incentive Program, large-scale storage (over 10 kW), "
-         + "Step 5: $0.25/Wh, or $0.18/Wh for projects claiming the federal ITC. The "
-         + "open step's rate on selfgenca.com replaces this.",
+         + "Step 5: $0.25/Wh, or $0.18/Wh for projects claiming the federal ITC — the "
+         + "rates paying the already-submitted queue. The large-scale storage "
+         + "ratepayer budget CLOSED to new applications on 30 December 2025 under "
+         + "CPUC Decision 25-12-003; the programme's status on selfgenca.com "
+         + "replaces this.",
       url: "https://www.selfgenca.com/home/program_metrics/",
-      conditions: "Paid through the IOU programme administrators (PG&E, SCE, SoCalGas "
-         + "and SDG&E territories — confirm the serving utility); each step's budget "
-         + "subscribes and the next pays less. Step 5 funds left as of 2026-10-05: "
-         + "roughly $12M at PG&E but only about $2M each at SCE, SoCalGas and SDG&E, "
-         + "so a single large project can exhaust a territory. This screening assumes "
-         + "the ITC is claimed, so the ITC-adjusted rate is used. A resiliency adder "
-         + "of $0.15/Wh exists for critical facilities. Residential budgets differ "
-         + "and are not priced here."
+      conditions: "CLOSED TO NEW APPLICATIONS: SGIP's statewide announcement of 15 "
+         + "December 2025 closed the Large-Scale Storage ratepayer budget to new "
+         + "submissions (last day 30 December 2025; waitlisted applications without "
+         + "reserved funding were terminated), implemented by the programme "
+         + "administrators' joint advice letter of 5 January 2026 under CPUC "
+         + "Decision 25-12-003. Every administrator's large-scale step status "
+         + "still reads Closed, and the funds selfgenca.com lists ($12.06M at "
+         + "PG&E, $2.34M at SCE, $2.00M at SoCalGas and $1.84M at SDG&E as of "
+         + "2026-10-14) pay already-submitted applications only — a project in the queue is "
+         + "paid at its step's rate; a NEW project cannot claim this programme. "
+         + "Only the AB 209 residential equity budgets remain open (to 30 June "
+         + "2028) and are not priced here. This screening assumes the ITC is "
+         + "claimed, so the ITC-adjusted rate is used."
     },
     {
       id: "ny.nyserda.retail", utility: "NYSERDA", name: "NYSERDA Retail Energy Storage Incentive",
       state: "NY", nonresidential: true,
       perKwh: 175, perKwhNyc: 75, maxKwh: 20000,
-      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-10-06",
+      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-10-13",
       ref: "NYSERDA Retail Energy Storage Incentive (MWh-block design under the "
          + "2024–2030 implementation plan): the open blocks pay $175 per kWh upstate "
          + "(Block 5) and $75 per kWh in New York City (Block 10, opened 23 April "
@@ -288,7 +309,7 @@
       id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
       state: "MD", nonresidential: true,
       pctOfCost: 0.30, capUsd: 150000,
-      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-10-06",
+      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-10-14",
       ref: "Maryland Energy Administration Residential and Commercial Energy Storage "
          + "(RCES) grant: 30% of total installed cost, up to $150,000 for a commercial "
          + "system (FY27 figures as relayed from the FOA — confirm in the FOA itself "
@@ -296,11 +317,13 @@
          + "since the end of 2024.",
       url: "https://energy.maryland.gov/Pages/Energy-Storage-Grant-Program.aspx",
       conditions: "First-come grants from a small annual budget. The FY27 round is "
-         + "OPEN: up to $4M anticipated, 0% reserved as of 6 October 2026, applications "
-         + "due 31 May 2027 or until funds exhaust, and FY27 prioritises systems "
-         + "enrolling in utility VPP pilots. Held at planning-grade because the FY27 "
-         + "rates are relayed from the portal-gated FOA, not read from it — the FY26 "
-         + "round (also 30% / $150k) closed 5 June 2026 once funds ran out."
+         + "OPEN: up to $4M anticipated, 9.14% of the budget requested and 0.25% "
+         + "reserved as of MEA's 2026-10-05 posting (a budget table the page still "
+         + "heads FY26), applications due 3:00 pm Eastern on 31 May 2027 or "
+         + "until funds exhaust, and FY27 prioritises systems enrolling in utility "
+         + "VPP pilots. Held at planning-grade because the FY27 rates are relayed "
+         + "from the portal-gated FOA, not read from it — the FY26 round (also "
+         + "30% / $150k) closed 5 June 2026 once funds ran out."
     }
   ];
 
