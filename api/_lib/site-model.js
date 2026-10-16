@@ -295,6 +295,9 @@ function skidInput(site, over, ctx, d) {
   var structure = STRUCTURES.indexOf(over.structure) >= 0 ? over.structure : 'own';
   if (missing.length) return { ok: false, missing: missing };
   var I = CM.readInputs({ chipset: c.key }), cap = CM.capacity(c, I), price = r2(CM.gpuPrice(c, priceBasis));
+  /* A CONTRACTED COMPUTE RATE ON THE RECORD (2026-10-16, Tommy: Topanga "should get a combined IRR … close to 19%", which is the $3.50 a GPU-hour the NextNRG workbook carries, not spot): commercial.computePricePerGpuHour replaces the public reference and the basis says so */
+  var contracted = pos(cm.computePricePerGpuHour);
+  if (contracted) { price = r2(contracted); priceBasis = 'contracted'; }
   var ramp1 = 0; for (var m = 0; m < 12; m++) ramp1 += I.ramp[Math.min(m, I.ramp.length - 1)]; ramp1 = ramp1 / 12;
   var bessKw = pos(d.compute.omegaCoreBessKw) || P.battery.kw * units, bessKwh = pos(d.compute.omegaCoreBessKwh) || P.battery.kwh * units;
   /* THE HOST'S RENT IS kW × $/kW-MONTH × 12 (2026-10-15, Tommy): the rate
@@ -373,7 +376,7 @@ function skidInput(site, over, ctx, d) {
     chargers: 'none on the skid\u2019s meter' + (d.chargers && pos(d.chargers.installedKw) ? '; the host\u2019s ' + d.chargers.installedKw + ' kW of chargers are on the host\u2019s meter' : ''),
     load: 'no building load: the skid is on its own meter',
     tariff: sitePrice ? 'the site\u2019s power price as a flat rate' : 'the planning rate book for the ZIP',
-    gpuClass: cap.gpus + ' \u00d7 ' + c.name + ' (' + cap.nodes + ' nodes in ' + I.itLoadKw + ' kW at ' + Math.round(I.reservedOverhead * 100) + '% reserve) sold at the public ' + priceBasis + ' market reference, $' + price.toFixed(2) + ' a GPU-hour (CoreWeave North America, ' + CM.SOURCES.pricing.asOf + '), ' + Math.round(I.utilization * 100) + '% sold, ' + Math.round(I.uptime * 100) + '% up, pricing falling ' + Math.round(-I.priceChangePct * 100) + '% a year; ' + Math.round((I.networkStoragePct + I.otherVariablePct) * 100) + '% of revenue variable and ' + fmtUsd(I.fixedOpexMonthly) + ' a month fixed, the skid\u2019s own operating figures',
+    gpuClass: cap.gpus + ' \u00d7 ' + c.name + ' (' + cap.nodes + ' nodes in ' + I.itLoadKw + ' kW at ' + Math.round(I.reservedOverhead * 100) + '% reserve) sold at ' + (contracted ? 'the CONTRACTED rate on the site record, $' + price.toFixed(2) + ' a GPU-hour, ' : 'the public ' + priceBasis + ' market reference, $' + price.toFixed(2) + ' a GPU-hour (CoreWeave North America, ' + CM.SOURCES.pricing.asOf + '), ') + Math.round(I.utilization * 100) + '% sold, ' + Math.round(I.uptime * 100) + '% up, pricing falling ' + Math.round(-I.priceChangePct * 100) + '% a year; ' + Math.round((I.networkStoragePct + I.otherVariablePct) * 100) + '% of revenue variable and ' + fmtUsd(I.fixedOpexMonthly) + ' a month fixed, the skid\u2019s own operating figures',
     structure: structure,
     battery: 'the skid\u2019s own ' + P.battery.model + ' (' + P.battery.kw + ' kW / ' + P.battery.kwh + ' kWh a skid), inside the skid\u2019s price',
     solar: 'none on the skid\u2019s meter' + (d.solar && pos(d.solar.kwDc) ? '; the host\u2019s ' + d.solar.kwDc + ' kW-dc solar is the host\u2019s own project' : ''),

@@ -396,6 +396,17 @@ function seed() {
     assert.equal(rows.filter(function (r) { return r[0] === 'Capital recovered'; })[0][1], 'month 59');
     assert.equal(rows.filter(function (r) { return r[0] === 'Assumption set'; })[0][1], 'omega-compute-v1');
     assert.ok(sheet.conditions.some(function (c) { return /unresolved workbook statistic/.test(c); }));
+    /* THE HOST LEASE AND COMPUTE TERMS (2026-10-16): read off the record and the model, a blank is "To be agreed", never a figure */
+    var lease = bare.sections.filter(function (x) { return /Host lease and compute terms/.test(x.heading); })[0];
+    assert.ok(lease && lease.rows.filter(function (r) { return r[0] === 'Rent to the host'; })[0][1].indexOf('To be agreed') === 0, 'no rent on record reads To be agreed with the quoted band');
+    var withLease = G.compose({ site: { id: 's', name: 'Leased', commercial: { rentPerKwMonth: 225, rentEscalatorPct: 2.5, revenueShare: 0.1 }, ppaPriceSchedule: [0.225, 0.2295, 0.384], ppaTermYears: 28, latestModel: { termYears: 10, skid: { units: 1, gpus: 48, chipsetName: 'NVIDIA HGX H100', pricePerGpuHour: 3.5, priceBasis: 'spot' }, totalProjectCost: 2831898, irr: 0.204, irrExTerminal: 0.186 } }, scenario: null, org: ORG, workspaceName: 'EVCS', now: '2026-10-16T12:00:00Z' });
+    var lr = withLease.sections.filter(function (x) { return /Host lease and compute terms/.test(x.heading); })[0].rows, lrow = function (k) { return lr.filter(function (r) { return r[0] === k; })[0][1]; };
+    assert.equal(lrow('Rent to the host'), '$225 per kW of compute per month x 75 kW x 12 = $202,500 a year ($16,875 a month)');
+    assert.equal(lrow('Rent escalator'), '2.5% a year, compounding'); assert.equal(lrow('Revenue share to the host'), '10.0% of gross compute revenue, paid with the rent');
+    assert.match(lrow('Compute price basis'), /\$3\.50 per GPU-hour \(public spot reference; a contracted rate replaces it\), for 48 x NVIDIA HGX H100/); assert.match(lrow('Whole project on file'), /\$2,831,898 total project cost, after-tax IRR 20\.40% over 10 years \(18\.60% on the 10 years alone\)/);
+    assert.match(lrow('Microgrid PPA (host\u2019s solar + storage)'.replace('\u2019', "'")), /executed PPA.s own price table: \$0\.225\/kWh in year 1 to \$0\.384\/kWh in year 3/); assert.equal(lrow('Microgrid PPA term'), '28 years from commercial operation');
+    assert.ok(withLease.sections.filter(function (x) { return /Host lease/.test(x.heading); })[0].paras.some(function (p) { return /removes the skid/.test(p) && /fair market value/.test(p); }), 'the end-of-term terms are the skid\u2019s own');
+    assert.match(withLease.title, /Site SPV and Host Lease Term Sheet/);
     var r = res(); await call('GET', { site: SITE, agreement: '1' }, PM, r);
     assert.equal(r.headers['Content-Type'], 'application/pdf');
     assert.match(r.headers['Content-Disposition'], /SPV-term-sheet-The-Elysian-Apartments-/);
@@ -770,6 +781,11 @@ function seed() {
     assert.notEqual(lmR.modelId, lmEc.modelId, 'the rent is a changed fact');
     assert.equal(stR.input.deal.rentPerYear, 300 * OCc.computeKwPerSkid * 2 * 12, 'two skids × 75 kW × $300 × 12'); assert.equal(stR.input.deal.rentSharePct, 10); assert.match(stR.basis.rent, /\$300 per kW of compute a month/);
     assert.ok(lmR.irr < lmEc.irr, 'a dearer lease lowers the whole project: ' + lmR.irr + ' < ' + lmEc.irr);
+    /* a contracted compute rate on the record replaces the public spot reference (2026-10-16): the IRR Tommy expects at $3.50 */
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', computePricePerGpuHour: 3.5 }, PM);
+    var withPrice = await call('GET', { site: made.id }, PM), lmP = withPrice.site.latestModel, stP = db.data.get(O + '/sites/' + made.id + '/models/' + lmP.modelId);
+    assert.equal(stP.input.compute.tiers.spot.price, 3.5); assert.equal(lmP.skid.priceBasis, 'contracted'); assert.equal(lmP.skid.pricePerGpuHour, 3.5); assert.match(stP.basis.gpuClass, /CONTRACTED rate on the site record, \$3\.50/); assert.ok(lmP.irr > lmR.irr, 'the contracted rate lifts the IRR: ' + lmP.irr + ' > ' + lmR.irr);
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', computePricePerGpuHour: null }, PM);
     await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', rentPerKwMonth: null, revenueShare: null }, PM);
     var atFloor = db.data.get(O + '/sites/' + made.id + '/models/' + (await call('GET', { site: made.id }, PM)).site.latestModel.modelId);
     assert.equal(atFloor.input.deal.rentPerYear, OCc.perKwMonth.base * OCc.computeKwPerSkid * 2 * 12, 'with nothing on record the card\u2019s floor, $150/kW-month'); assert.match(atFloor.basis.rent, /floor/); assert.equal(atFloor.input.deal.rentSharePct, 0); assert.ok(lmEc.irr > lm3b.irr, 'the adder raises the IRR: ' + lmEc.irr + ' > ' + lm3b.irr); assert.match(stEc.basis.itc, /energy community/);

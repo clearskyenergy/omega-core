@@ -443,6 +443,25 @@ offer and no award: ask, cost basis, summary, `sourceModelId`,
 `capitalRequest.refreshedAt`; the run's answer says `dealRefreshed`. A deal
 with an offer, an award or a status the sponsor set is left alone.
 
+### The printable term sheet carries the host lease and the compute terms (2026-10-16)
+
+Tommy: "a contract term agreement that they can print out agreeing to that
+lease payment and those terms for the compute." The Site SPV term sheet
+(`api/_lib/site-agreement.js`, `GET …&agreement=1`, Export term sheet on the
+register and the site) now has a section *Host lease and compute terms*
+read off the record and the model on file: the compute installed (skids ×
+75 kW, its own meter), the term (the model's, 10 years; the skid's 5–15),
+the rent as kW × $/kW-month × 12 (the record's rate or monthly rent; with
+nothing on record it reads "To be agreed" with ClearSky's quoted band,
+never a figure), the escalator, the revenue share, the compute price basis
+(`commercial.computePricePerGpuHour`, a CONTRACTED rate that replaces the
+public spot reference in the skid's case; else the reference, named as
+such), the whole project on file (cost, IRR, the ten years alone), the
+microgrid PPA as recorded (table or rate, term, expected production), and
+the skid's own ownership, meter, removal, buyout and renewal terms
+(`omega-core.js TERMS`). DRAFT on every page; signature lines for sponsor,
+investor and host.
+
 ## The door — `api/omega-core.js`
 
 The verify-token flavour, no service account. A packaged workspace must hold

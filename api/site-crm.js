@@ -179,7 +179,9 @@ function optBool(v) {
    keys sent; undefined when none is. */
 function optCommercial(b) {
   var out = {}, any = false;
-  [['rentPerKwMonth', 'Rent per kW of compute a month ($)', 0, 5000], ['rentMonthly', 'Rent per month ($)', 0, 1e7], ['rentEscalatorPct', 'Rent escalator (%/yr)', -10, 20], ['revenueShare', 'Revenue share (fraction)', 0, 0.6]].forEach(function (k) {
+  [['rentPerKwMonth', 'Rent per kW of compute a month ($)', 0, 5000], ['rentMonthly', 'Rent per month ($)', 0, 1e7], ['rentEscalatorPct', 'Rent escalator (%/yr)', -10, 20], ['revenueShare', 'Revenue share (fraction)', 0, 0.6],
+   /* a CONTRACTED compute rate (2026-10-16): the $/GPU-hour a buyer signed for, which replaces the public spot reference in the skid's case */
+   ['computePricePerGpuHour', 'Contracted compute price ($ per GPU-hour)', 0, 100]].forEach(function (k) {
     var v = optNum(b[k[0]], k[1], k[2], k[3]);
     if (v !== undefined) { out[k[0]] = v; any = true; }
   });

@@ -239,7 +239,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '</div></div>' +
       '<div class="grid2">' + designCardHtml(s) + '</div>' +
       '<div class="grid2"><div class="card"><h3>Commercial</h3>' +
-      fact('Rent per kW of compute a month', cm.rentPerKwMonth, '$') + fact('Rent / month (a signed lease; wins over the rate)', cm.rentMonthly, '$') + fact('Rent escalator', cm.rentEscalatorPct != null ? cm.rentEscalatorPct + '% a year' : null) + fact('Revenue share of gross compute', cm.revenueShare != null ? pct(cm.revenueShare) : null) + fact('kWh share', cm.kwhShare != null ? pct(cm.kwhShare) : null) +
+      fact('Rent per kW of compute a month', cm.rentPerKwMonth, '$') + fact('Rent / month (a signed lease; wins over the rate)', cm.rentMonthly, '$') + fact('Rent escalator', cm.rentEscalatorPct != null ? cm.rentEscalatorPct + '% a year' : null) + fact('Revenue share of gross compute', cm.revenueShare != null ? pct(cm.revenueShare) : null) + fact('Contracted compute price', cm.computePricePerGpuHour != null ? '$' + cm.computePricePerGpuHour + ' per GPU-hour' : null) + fact('kWh share', cm.kwhShare != null ? pct(cm.kwhShare) : null) +
       '<div class="assume">The host lease: annual rent = kW of compute (75 a skid) \u00d7 $ per kW-month \u00d7 12, escalating; ClearSky quotes $150\u2013$450 per kW-month and the model opens at the $150 floor until a rate or a rent is entered here. A revenue share rides beside it.</div>' +
       fact('PPA rate, year one', s.ppaRatePerKwh != null ? '$' + s.ppaRatePerKwh + '/kWh' : null) + fact('PPA escalator', s.ppaEscalatorPct != null ? s.ppaEscalatorPct + '% a year' : null) + fact('PPA term', s.ppaTermYears != null ? s.ppaTermYears + ' years' : null) +
       fact('PPA price table', s.ppaPriceSchedule && s.ppaPriceSchedule.length ? s.ppaPriceSchedule.length + ' years, $' + s.ppaPriceSchedule[0] + ' to $' + s.ppaPriceSchedule[s.ppaPriceSchedule.length - 1] + '/kWh' : null) +
@@ -395,6 +395,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       numIn('ef-rentMonthly', 'Host rent per month ($, a signed lease; wins over the rate)', cm.rentMonthly) +
       numIn('ef-rentEscalatorPct', 'Rent escalator (% a year)', cm.rentEscalatorPct, '0.1') +
       numIn('ef-revenueSharePct', 'Revenue share of gross compute to the host (%)', cm.revenueShare != null ? Math.round(cm.revenueShare * 10000) / 100 : null, '0.1') +
+      numIn('ef-computePricePerGpuHour', 'Contracted compute price ($ per GPU-hour; blank = public spot reference)', cm.computePricePerGpuHour, '0.01') +
       '<label class="fl">ITC domestic content adder</label><select id="ef-itcDomesticContent" class="inline" style="width:100%">' +
       '<option value=""' + (s.itcDomesticContent == null ? ' selected' : '') + '>Unknown</option><option value="true"' + (s.itcDomesticContent === true ? ' selected' : '') + '>Claimed</option><option value="false"' + (s.itcDomesticContent === false ? ' selected' : '') + '>Not claimed</option></select>' +
       '</div><div>' +
@@ -430,7 +431,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         ppaPriceSchedule: str('ef-ppaPriceSchedule') || [], ppaYear1Kwh: num('ef-ppaYear1Kwh'),
         itcEnergyCommunity: sel('ef-itcEnergyCommunity'), itcDomesticContent: sel('ef-itcDomesticContent'),
         rentPerKwMonth: num('ef-rentPerKwMonth'), rentMonthly: num('ef-rentMonthly'), rentEscalatorPct: num('ef-rentEscalatorPct'),
-        revenueShare: num('ef-revenueSharePct') == null ? null : num('ef-revenueSharePct') / 100,
+        revenueShare: num('ef-revenueSharePct') == null ? null : num('ef-revenueSharePct') / 100, computePricePerGpuHour: num('ef-computePricePerGpuHour'),
         annualUsageKwh: num('ef-annualUsageKwh'), monthlyUsageKwh: str('ef-monthlyUsageKwh'),
         usageNotes: str('ef-usageNotes')
       }).then(function (j) { msg(esc(j.note), true); load(true); })
