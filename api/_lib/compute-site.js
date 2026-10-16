@@ -509,19 +509,38 @@ function prepare(c) {
 /* ── COMPUTE LOAD ────────────────────────────────────────────────────────── */
 /* Per GPU at the meter: its rating plus the server's share, times cooling,
    at the draw it runs at serving or idle. */
+/* The factor that scales the diurnal shape so the clipped mean over the
+   hours in the window equals the utilisation u: 1 when nothing clips, found
+   by bisection otherwise; 1 when u cannot be reached at all (u ≥ 1). */
+function shapeScale(u, start, end) {
+  if (!(u > 0) || u >= 1) return 1;
+  function mean(f) { var t = 0, n = 0; for (var hr = start; hr < end; hr++) { t += Math.min(1, u * DEMAND_SHAPE[hr] * f); n++; } return n ? t / n : 0; }
+  if (mean(1) >= u - 1e-9) return 1;
+  var lo = 1, hi = 1 / u;
+  if (mean(hi) < u - 1e-9) return hi;
+  for (var i = 0; i < 60; i++) { var mid = (lo + hi) / 2; if (mean(mid) < u) lo = mid; else hi = mid; }
+  return hi;
+}
 function computeLoad(c, ctx, pods) {
   var k = c.compute, gpus = pods * k.gpusPerPod, rated = k.kwPerGpu * (1 + k.overheadPct / 100) * k.pue;
   var serve = rated * k.servePct / 100, idle = rated * k.idlePct / 100, delta = Math.max(0, serve - idle);
   var g = { offtake: gpus * k.tiers.offtake.sharePct / 100, edge: gpus * k.tiers.edge.sharePct / 100, spot: gpus * k.tiers.spot.sharePct / 100 };
   var firm = zeros(H), spotCap = zeros(H), edgeUsed = zeros(H), uE = k.tiers.edge.utilPct / 100, uS = k.tiers.spot.utilPct / 100;
+  /* THE UTILISATION TYPED IS THE UTILISATION SOLD (2026-10-15, Tommy: "make
+     sure the engine and logic … calculate the correct numbers"): the diurnal
+     shape peaks above the daily mean, and clipping each hour at 100% used to
+     leave "85% sold" at 82.6% of GPU-hours. The shape is scaled so its
+     clipped daily mean IS the utilisation typed (a bank reads 85% as 85%);
+     the hours that cannot be served at the peak are served off-peak. */
+  var fE = shapeScale(uE, k.edgeStart, k.edgeEnd), fS = shapeScale(uS, 0, 24);
   for (var h = 0; h < H; h++) {
     var hr = h % 24, sh = DEMAND_SHAPE[hr];
     var inEdge = hr >= k.edgeStart && hr < k.edgeEnd;
-    var ue = inEdge ? Math.min(1, uE * sh) : 0;
+    var ue = inEdge ? Math.min(1, uE * sh * fE) : 0;
     edgeUsed[h] = g.edge * ue;
     firm[h] = g.offtake * serve + g.edge * (ue * serve + (1 - ue) * idle) + g.spot * idle;
     var spotOk = k.spotMode !== 'offpeak' || !ctx.onPeak[h];
-    spotCap[h] = spotOk ? g.spot * Math.min(1, uS * sh) : 0;
+    spotCap[h] = spotOk ? g.spot * Math.min(1, uS * sh * fS) : 0;
   }
   return { gpus: gpus, g: g, rated: rated, serve: serve, idle: idle, delta: delta, firm: firm, spotCap: spotCap, edgeUsed: edgeUsed,
            podKwRated: k.gpusPerPod * rated, podKwServe: k.gpusPerPod * serve };
@@ -1542,7 +1561,7 @@ function options() {
 module.exports = {
   VERSION: VERSION, GPU: GPU, EV_PATTERNS: EV_PATTERNS, STRUCTURES: STRUCTURES, REFS: REFS,
   read: read, screen: screen, model: model, optimize: optimize, options: options,
-  _internal: { prepare: prepare, computeLoad: computeLoad, evCohorts: evCohorts, planEv: planEv, dispatch: dispatch,
+  _internal: { shapeScale: shapeScale, prepare: prepare, computeLoad: computeLoad, evCohorts: evCohorts, planEv: planEv, dispatch: dispatch,
                runMonth: runMonth, refreshPlan: refreshPlan, ageOf: ageOf, schedule: schedule, capexLines: capexLines,
                batteryOf: batteryOf, start: start, full: full }
 };

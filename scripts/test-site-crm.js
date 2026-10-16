@@ -467,6 +467,17 @@ function seed() {
     assert.match(d.proformaSummary, /total project cost \$/); assert.match(d.proformaSummary, /after-tax IRR/);
     var reg = await call('GET', {}, PM), row = reg.sites.filter(function (s) { return s.id === SITE; })[0];
     assert.equal(row.capital.status, 'open'); assert.equal(row.capital.funded, false); assert.equal(row.capital.ask, cost); assert.equal(row.capital.request.source, 'compute-model');
+    /* THE DEAL FOLLOWS THE MODEL (2026-10-15): a run after the hand-off refreshes an open, unoffered deal's ask, basis and summary; the hand-off carries what a capital partner checks */
+    assert.ok(d.capitalRequest.termYears === 10 && 'irrExTerminal' in d.capitalRequest && 'ppa' in d.capitalRequest && 'rent' in d.capitalRequest && 'computeCapex' in d.capitalRequest, 'the request carries the bank-facing basis: ' + JSON.stringify(Object.keys(d.capitalRequest)));
+    var run3 = await call('POST', { site: SITE, action: 'site-model', pods: 3 }, PM), cost3 = run3.latestModel.totalProjectCost;
+    assert.notEqual(cost3, cost); assert.equal(run3.dealRefreshed, true, 'the run says the deal was refreshed');
+    var d3 = db.data.get('fin_projects/' + sent.deals[0].finProjectId);
+    assert.equal(d3.ask, cost3); assert.equal(d3.costBasis, cost3); assert.equal(d3.sourceModelId, run3.modelId); assert.equal(d3.capitalRequest.amount, cost3); assert.equal(d3.capitalRequest.sentAt, d.capitalRequest.sentAt); assert.ok(d3.capitalRequest.refreshedAt); assert.ok(d3.proformaSummary.indexOf('$' + Math.round(cost3).toLocaleString('en-US')) >= 0, 'the summary a partner reads carries the new cost: ' + d3.proformaSummary);
+    db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d3, { offerCount: 1 }));
+    var run4 = await call('POST', { site: SITE, action: 'site-model', pods: 2 }, PM);
+    assert.equal(run4.dealRefreshed, false, 'a deal with an offer is left alone'); assert.equal(db.data.get('fin_projects/' + sent.deals[0].finProjectId).ask, cost3);
+    db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d3, { offerCount: 0 }));
+    cost = run4.latestModel.totalProjectCost; d = db.data.get('fin_projects/' + sent.deals[0].finProjectId); db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d, { ask: cost, costBasis: cost }));
     db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d, { status: 'awarded', awardedTo: 'partner-uid', awardedToOrg: 'Ridgeline Capital', offerCount: 2, awardedAt: '2026-10-12T00:00:00Z' }));
     var reg2 = await call('GET', {}, PM), row2 = reg2.sites.filter(function (s) { return s.id === SITE; })[0];
     assert.equal(row2.capital.funded, true); assert.equal(row2.capital.awardedToOrg, 'Ridgeline Capital'); assert.equal(row2.capital.offerCount, 2);
@@ -700,7 +711,7 @@ function seed() {
     assert.match(stored.basis.hostRevenue, /year-one revenue/); assert.match(stored.basis.host, /IN this case as money/);
     assert.ok(stored.result.proforma.assumptions.some(function (a) { return /host\u2019s own system beside the compute/.test(a) && /\$918,000/.test(a); }));
     assert.equal(inp.deal.rentPerYear, OC.RATE_CARD.monthlyPerSkid.base * 12); assert.equal(inp.deal.rentEscPct, OC.RATE_CARD.escalatorPct.base);
-    assert.match(stored.basis.host, /500 kW \/ 2000 kWh battery/); assert.match(stored.basis.host, /368 kW-dc solar/); assert.match(stored.basis.host, /\$918,000/); assert.match(stored.basis.rent, /market reference/); assert.match(stored.basis.zip, /read from the site’s address/);
+    assert.match(stored.basis.host, /500 kW \/ 2000 kWh battery/); assert.match(stored.basis.host, /368 kW-dc solar/); assert.match(stored.basis.host, /\$918,000/); assert.match(stored.basis.rent, /rate card.s floor/); assert.match(stored.basis.zip, /read from the site’s address/);
     assert.match(stored.basis.capex, /\$639,000 a skid, plus the NextNRG Microgrid Controller built into it, \$125,000/); assert.match(stored.basis.gpuClass, /48 × NVIDIA HGX H100 .* public spot market reference, \$2\.46 a GPU-hour/);
     assert.ok(!/iQGen|IQGEN|CMDC/i.test(JSON.stringify([stored.basis, stored.summary, page.skid, stored.result.story, stored.result.proforma.assumptions])), 'nothing a tenant reads names the source workbook or the cost reference');
     assert.ok(!stored.result.proforma.warnings.some(function (w) { return w.code === 'LOAD_ASSUMED'; }), 'no building is assumed behind a skid on its own meter');
@@ -750,7 +761,18 @@ function seed() {
     var withEc = await call('GET', { site: made.id }, PM), lmEc = withEc.site.latestModel, stEc = db.data.get(O + '/sites/' + made.id + '/models/' + lmEc.modelId);
     assert.equal(withEc.site.itcEnergyCommunity, true); assert.notEqual(lmEc.modelId, lm3b.modelId, 'an adder is a changed fact');
     assert.equal(withEc.site.ppaPriceSchedule.length, 28, 'a save that does not send the table leaves it as stored (2026-10-15: a partial save once wiped it)'); assert.equal(withEc.site.ppaYear1Kwh, 540000); assert.equal(withEc.site.ppaRatePerKwh, 0.225);
-    assert.equal(stEc.result.proforma.tax.itc.byAsset.blended.ratePct, 40); assert.ok(lmEc.irr > lm3b.irr, 'the adder raises the IRR: ' + lmEc.irr + ' > ' + lm3b.irr); assert.match(stEc.basis.itc, /energy community/);
+    assert.equal(stEc.result.proforma.tax.itc.byAsset.blended.ratePct, 40);
+    /* THE HOST LEASE IS kW × $/kW-MONTH × 12 (2026-10-15): the record's rate per kW, else the card's $150 floor; a monthly rent wins; the revenue share rides beside it */
+    var OCc = require('../api/_lib/omega-core').RATE_CARD;
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', rentMonthly: null, rentPerKwMonth: 300, revenueShare: 0.1 }, PM);
+    var withRent = await call('GET', { site: made.id }, PM), lmR = withRent.site.latestModel, stR = db.data.get(O + '/sites/' + made.id + '/models/' + lmR.modelId);
+    assert.deepEqual(withRent.site.commercial, { rentPerKwMonth: 300, rentMonthly: null, revenueShare: 0.1 }, 'the lease terms patch the commercial block: ' + JSON.stringify(withRent.site.commercial));
+    assert.notEqual(lmR.modelId, lmEc.modelId, 'the rent is a changed fact');
+    assert.equal(stR.input.deal.rentPerYear, 300 * OCc.computeKwPerSkid * 2 * 12, 'two skids × 75 kW × $300 × 12'); assert.equal(stR.input.deal.rentSharePct, 10); assert.match(stR.basis.rent, /\$300 per kW of compute a month/);
+    assert.ok(lmR.irr < lmEc.irr, 'a dearer lease lowers the whole project: ' + lmR.irr + ' < ' + lmEc.irr);
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', rentPerKwMonth: null, revenueShare: null }, PM);
+    var atFloor = db.data.get(O + '/sites/' + made.id + '/models/' + (await call('GET', { site: made.id }, PM)).site.latestModel.modelId);
+    assert.equal(atFloor.input.deal.rentPerYear, OCc.perKwMonth.base * OCc.computeKwPerSkid * 2 * 12, 'with nothing on record the card\u2019s floor, $150/kW-month'); assert.match(atFloor.basis.rent, /floor/); assert.equal(atFloor.input.deal.rentSharePct, 0); assert.ok(lmEc.irr > lm3b.irr, 'the adder raises the IRR: ' + lmEc.irr + ' > ' + lm3b.irr); assert.match(stEc.basis.itc, /energy community/);
     await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaPriceSchedule: [] }, PM);
     assert.equal((await call('GET', { site: made.id }, PM)).site.ppaPriceSchedule, null, 'an empty table clears it'); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000, 'the host\u2019s capex is the Run total less the skid\u2019s own line');
     var st3 = db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId);
@@ -766,7 +788,8 @@ function seed() {
     assert.equal(lm3.levered, false, 'the whole project is 100% equity: the partner funds all of it (2026-10-14)'); assert.ok(!(lm3.debt > 0) && Math.abs(lm3.equity - lm3.totalProjectCost) < 1, 'the ask is the whole project: ' + JSON.stringify([lm3.equity, lm3.totalProjectCost]));
     assert.equal(lm3.debtTerms, null); assert.ok(lm3.uplift.levered && lm3.uplift.levered.irr > lm3.irr, 'the standard-debt case rides beside it as a side figure: ' + JSON.stringify(lm3.uplift.levered));
     var regRow = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
-    assert.equal(regRow.latestModel.totalProjectCost, lm3.totalProjectCost); assert.equal(regRow.latestModel.host.capex, 2300000);
+    var lmNow = (await call('GET', { site: made.id }, PM)).site.latestModel;
+    assert.equal(regRow.latestModel.totalProjectCost, lmNow.totalProjectCost, 'the register row carries the site\u2019s latest model'); assert.equal(regRow.latestModel.host.capex, 2300000);
     var n2 = audits('sitecrm-site-model').length; await call('GET', { site: made.id }, PM);
     assert.equal(audits('sitecrm-site-model').length, n2, 'a hand run on the current design satisfies the automatic one');
     /* the pod pro forma on this design prices the skid as recorded */

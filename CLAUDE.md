@@ -1261,7 +1261,17 @@ PPA past year 10 is a terminal value in year 10, and `irrExTerminal` (the
 ten years alone, no terminal value) is on the deal, `latestModel`
 (`terminalValue` beside it), the site page, the register's drawer and CSV;
 a changed fact under the same design runs the automatic model again
-(`latestModel.inputHash`, carrying a chosen chipset, pods and structure). The pod pro forma runs by itself on the design too
+(`latestModel.inputHash`, carrying a chosen chipset, pods and structure). **The deal follows the model** (2026-10-15, Tommy: "push it to the
+finance portal and get someone to purchase and fund it"): `send-to-finance`
+sends `askOf()` whole — the ten years alone, the terminal value, the cost
+split, the contract the PPA is priced on, the lease, the compute price
+basis — as `capitalRequest`, and `runModel` refreshes an OPEN portfolio
+deal with no offer and no award (ask, cost basis, `proformaSummary`,
+`sourceModelId`; `dealRefreshed` on the answer); a deal with an offer, an
+award or a sponsor-set status is left alone. **The utilisation typed is
+the utilisation sold** (`compute-site.js shapeScale`): the diurnal shape is
+scaled so its clipped mean is the figure typed; 85% sold is 85% of
+GPU-hours, so gross compute is GPUs × price × 8,760 × sold × availability. The pod pro forma runs by itself on the design too
 (`designProforma`, once per design) on the skid's recorded price, and each
 engine states its convention (the pod case 60 months pre-tax unlevered
 alone; the compute model after tax, the whole); the assumption set IS the
@@ -1422,15 +1432,21 @@ service/transformer and the site point, fans out through
 `api/_lib/omega-core.js` — three gates (power for a new 480 V service; a
 charging site, zoned, located; fiber = compute-lease's `gateFiber`, the hard
 gate), skids priced on what the power carries, the lease, the host's payback
-before/after off the Run, and the FMV band — never in the browser. **No
-Omega-Core rent is set** (Tommy, 2026-10-03: "idk the lease amounts yet we
-will need to manually input that or go with a market standard"): the card
-(`omega-core-lease-v2`) is a MARKET REFERENCE read off cell-tower ground
-leases and parking-stall rent (`RATE_CARD.sources`, shown with it), never an
-offer whatever the verdict, until a rent is typed for the site (`rep.leaseMonthly`,
-`rep.leaseEscalatorPct`; out of range is set aside and said); the host's
-figures follow the typed rent. When ClearSky sets the rent, it goes on the
-card and the version moves. **The skid's own economics** (Tommy, 2026-10-05,
+before/after off the Run, and the FMV band — never in the browser. **The
+rent is per kW of compute per month** (2026-10-15, Tommy: "we pay $225/kW
+… 75 × 12 × $125"; "the lease is paying $150–450 per kW"): annual rent =
+kW × $/kW-month × 12; `RATE_CARD.perKwMonth` is $150 / $150 / $450 and
+`monthlyPerSkid` is DERIVED at `computeKwPerSkid` (75), read off the
+colocation wholesale band (CBRE ~$196/kW-month) over the cell-tower floor
+(`RATE_CARD.sources`, shown with it); the card opens at the floor and is
+never an offer until a rent is typed for the site (`rep.leaseMonthly`,
+`rep.leaseEscalatorPct`; out of range is set aside and said). A portfolio
+site prices `commercial.rentMonthly` (wins), else `commercial.rentPerKwMonth`
+× 75 kW × skids × 12, else the floor, escalated by `commercial.rentEscalatorPct`,
+plus `commercial.revenueShare` of gross compute (`site-model.js skidInput`;
+the site record's Facts tab). The lease and the compute price are one
+decision: above the floor the site wants a contracted GPU-hour rate, not
+spot. When ClearSky changes the band, the card and its version move. **The skid's own economics** (Tommy, 2026-10-05,
 the iQGen 75 kW cash-flow workbook, "white labeling it Omega Core Skid …
 customer facing version … show bankability"): `api/_lib/omega-compute-model.js`
 is that workbook, pure and server-side — chipset library with CoreWeave's

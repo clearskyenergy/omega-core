@@ -175,6 +175,16 @@ function optBool(v) {
   if (v === false || v === 'false' || v === 0 || v === '0') return false;
   throw C.fail(400, 'Meter ownership must be true, false, or left unknown');
 }
+/* The lease terms the body sends, as a patch on site.commercial: only the
+   keys sent; undefined when none is. */
+function optCommercial(b) {
+  var out = {}, any = false;
+  [['rentPerKwMonth', 'Rent per kW of compute a month ($)', 0, 5000], ['rentMonthly', 'Rent per month ($)', 0, 1e7], ['rentEscalatorPct', 'Rent escalator (%/yr)', -10, 20], ['revenueShare', 'Revenue share (fraction)', 0, 0.6]].forEach(function (k) {
+    var v = optNum(b[k[0]], k[1], k[2], k[3]);
+    if (v !== undefined) { out[k[0]] = v; any = true; }
+  });
+  return any ? out : undefined;
+}
 /* The PPA's price table: 1 to 40 $/kWh figures, one a contract year, as
    the executed contract prints them. Accepts an array or a string of
    numbers separated by commas, spaces or new lines (a pasted column; a
@@ -253,6 +263,12 @@ function siteInput(b) {
        percentage; unknown is null and the engine's base rate stands */
     itcEnergyCommunity: optBool(b.itcEnergyCommunity),
     itcDomesticContent: optBool(b.itcDomesticContent),
+    /* THE HOST LEASE (2026-10-15, Tommy: rent = kW of compute × $/kW-month ×
+       12, $150–$450): the rate per kW of compute a month, a whole monthly
+       rent (a signed lease; wins over the rate), the escalator and a
+       revenue share of gross compute (a fraction, 0.10 = 10%). Nested under
+       commercial beside what an import wrote; a key not sent is unchanged. */
+    commercial: optCommercial(b),
     annualUsageKwh: optNum(b.annualUsageKwh, 'Annual usage (kWh)', 0, 1e15),
     monthlyUsageKwh: optMonthlyUsage(b.monthlyUsageKwh),
     usageNotes: C.text(b.usageNotes, 2000, 'Usage notes', { multiline: true }),
@@ -295,6 +311,7 @@ function siteView(id, s) {
     ppaPriceSchedule: Array.isArray(s.ppaPriceSchedule) && s.ppaPriceSchedule.length ? s.ppaPriceSchedule.map(Number) : null,
     ppaYear1Kwh: s.ppaYear1Kwh == null ? null : Number(s.ppaYear1Kwh),
     itcEnergyCommunity: s.itcEnergyCommunity == null ? null : s.itcEnergyCommunity === true,
+    commercial: s.commercial && typeof s.commercial === 'object' ? s.commercial : null,
     itcDomesticContent: s.itcDomesticContent == null ? null : s.itcDomesticContent === true,
     annualUsageKwh: s.annualUsageKwh == null ? null : Number(s.annualUsageKwh),
     monthlyUsageKwh: Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh : null,
@@ -506,6 +523,8 @@ var handler = A.handler(async function (req, res) {
       var doc;
       if (id) {
         var curD = cur.data() || {}, patchD = Object.assign({}, input, { updatedAt: now, updatedBy: by });
+        /* the lease terms patch the commercial block, never replace it */
+        if (input.commercial) patchD.commercial = Object.assign({}, curD.commercial && typeof curD.commercial === 'object' ? curD.commercial : {}, input.commercial);
         if (curD.address && typeof curD.address === 'object') patchD.address = Object.assign({}, curD.address, { street: input.address || null, city: input.city || curD.address.city || null, state: input.state || curD.address.state || null, zip: input.zip || curD.address.zip || null });
         doc = Object.assign({}, curD, patchD); tx.update(cref, patchD);
       }
@@ -856,9 +875,9 @@ var handler = A.handler(async function (req, res) {
     await computeAccess(caller, org, root);
     var orgDoc1 = await root.get(), orgName1 = orgDoc1.exists ? ((orgDoc1.data() || {}).name || org) : org;
     var ranOne = await runModel(db, org, site, b, by, now, orgName1);
-    return { ok: true, modelId: ranOne.modelId, latestModel: ranOne.summary, result: ranOne.result, basis: ranOne.basis,
+    return { ok: true, modelId: ranOne.modelId, latestModel: ranOne.summary, result: ranOne.result, basis: ranOne.basis, dealRefreshed: ranOne.dealRefreshed === true,
       brand: DECK.brandOf(orgDoc1.exists ? orgDoc1.data() : null, org, PLATFORM),
-      note: 'Compute model saved: ' + (ranOne.summary.title || ranOne.summary.pods + ' pod(s)') + '.' };
+      note: 'Compute model saved: ' + (ranOne.summary.title || ranOne.summary.pods + ' pod(s)') + '.' + (ranOne.dealRefreshed ? ' The finance deal\u2019s ask was refreshed to the new total project cost.' : '') };
   }
 
   if (action === 'proforma-run') {
@@ -1086,6 +1105,7 @@ async function runModel(db, org, site, b, by, now, orgName) {
   if (over.hostType && SM.HOST_TYPES.indexOf(over.hostType) >= 0) facts.hostType = over.hostType;
   /* the register's versioned result (site_results, kind finance, scenario sc_compute): what a finance package snapshots and what a later bill, map, agreement or power change marks stale */
   var resRef = db.collection('omega_orgs').doc(org).collection('site_results').doc('res_compute_' + site.id), prevRes = await resRef.get();
+  var dealRef = site.data && site.data.finProjectId ? db.collection('fin_projects').doc(site.data.finProjectId) : null, dealSnap = dealRef ? await dealRef.get() : null, dealRefreshed = false;
   var resRec = { id: resRef.id, siteId: site.id, kind: 'finance', scenarioId: 'sc_compute', modelId: mref.id, version: prevRes.exists ? ((prevRes.data() || {}).version || 1) + 1 : 1, status: 'current', model: 'Compute Site Pro Forma (' + (result.version || '') + ')', engineVersion: summary.financeVersion || null,
     projectIrr: summary.preTaxIrr == null ? null : { status: 'ok', annualized: summary.preTaxIrr }, investorIrr: summary.irr == null ? { status: 'not-defined', reason: 'No capital invested under this structure' } : { status: 'ok', annualized: summary.irr }, paybackMonths: summary.paybackYears == null ? null : Math.round(summary.paybackYears * 12),
     capital: summary.totalProjectCost, inputHash: require('crypto').createHash('sha256').update(JSON.stringify([mapped.input, site.data && site.data.revision])).digest('hex'), at: now, by: by };
@@ -1095,18 +1115,37 @@ async function runModel(db, org, site, b, by, now, orgName) {
     tx.create(mref, JSON.parse(JSON.stringify({ orgId: org, siteId: site.id, input: mapped.input, basis: mapped.basis, result: result, summary: summary, label: label, createdAt: now, createdBy: by })));
     tx.set(resRef, resRec);
     tx.update(site.ref, facts);
+    /* THE DEAL FOLLOWS THE MODEL (2026-10-15, Tommy: "when we put in a site and
+       run it … it should be producing the correct numbers so we can push it to
+       the finance portal and get someone to purchase and fund it"): a deal
+       already sent for this site, still OPEN with no offer and no award, takes
+       the new ask, cost basis, summary and model id, so a partner never reads
+       a figure the register has moved past. A deal with an offer, an award,
+       or a status the sponsor set is left alone. */
+    if (dealRef && dealSnap && dealSnap.exists) {
+      var dl = dealSnap.data() || {};
+      if (dl.status === 'open' && !(dl.offerCount > 0) && !dl.awardedTo && dl.source === 'portfolio') {
+        var askNow = SM.askOf(Object.assign({}, site.data, { latestModel: summary }));
+        if (askNow) { tx.update(dealRef, { ask: askNow.amount, costBasis: askNow.amount, capitalRequest: Object.assign({ sentAt: dl.capitalRequest && dl.capitalRequest.sentAt || now, sentBy: dl.capitalRequest && dl.capitalRequest.sentBy || by, refreshedAt: now }, askNow), proformaSummary: modelLine(summary), sourceModelId: mref.id, updatedAt: A.FieldValue().serverTimestamp() }); dealRefreshed = true; }
+      }
+    }
     audit(tx, db, 'sitecrm-site-model', org, site.id, by, now, { modelId: mref.id, pods: summary.pods, structure: summary.structure, irr: summary.irr, totalProjectCost: summary.totalProjectCost, auto: b.auto === true, designHash: summary.designHash });
   });
   /* the record in hand follows the write, so a page answered in the same request sees the run */
   if (site.data) Object.keys(facts).forEach(function (k) { site.data[k] = facts[k]; });
-  return { modelId: mref.id, summary: summary, result: result, basis: mapped.basis };
+  return { modelId: mref.id, summary: summary, result: result, basis: mapped.basis, dealRefreshed: dealRefreshed };
 }
 function modelLine(lm) {
   var irr = lm.irr == null ? 'n/a (no capital invested)' : (lm.irr * 100).toFixed(2) + '%';
   function usd(n) { return '$' + Math.round(n || 0).toLocaleString('en-US'); }
+  var hp = lm.host && lm.host.ppa;
   return (lm.title || lm.pods + ' pod(s)') + ': ' + (lm.structureLabel || lm.structure) + ', total project cost ' + usd(lm.totalProjectCost) +
-    ' (equity ' + usd(lm.equity) + (lm.debt > 0 ? ', debt ' + usd(lm.debt) : '') + '), after-tax IRR ' + irr +
-    ' over ' + (lm.termYears || 10) + ' years' + (lm.verdict && lm.verdict.label ? '; ' + lm.verdict.label : '') + ' (Compute Site Pro Forma, screening, not a return promise).';
+    ' (equity ' + usd(lm.equity) + (lm.debt > 0 ? ', debt ' + usd(lm.debt) : '') + (lm.computeCapex != null && lm.host && lm.host.capex != null ? '; ' + usd(lm.computeCapex) + ' compute + ' + usd(lm.host.capex) + ' host system' : '') + '), after-tax IRR ' + irr +
+    ' over ' + (lm.termYears || 10) + ' years' + (lm.irrExTerminal != null ? ' (' + (lm.irrExTerminal * 100).toFixed(2) + '% on the ten years alone, no terminal value)' : '') +
+    (hp ? '; the host\u2019s solar sold under the PPA ' + (hp.schedule ? 'at the contract\u2019s own ' + hp.schedule.length + '-year price table' : 'at $' + hp.ratePerKwh + '/kWh escalating ' + hp.escPct + '%') + (hp.year1Kwh > 0 ? ' on ' + Math.round(hp.year1Kwh).toLocaleString('en-US') + ' kWh expected in year one' : '') : '') +
+    (lm.rent && lm.rent.perYear > 0 ? '; host lease ' + usd(lm.rent.perYear) + ' a year' + (lm.rent.sharePct > 0 ? ' + ' + lm.rent.sharePct + '% of gross compute' : '') : '') +
+    (lm.skid ? '; compute at $' + lm.skid.pricePerGpuHour + '/GPU-hour (' + lm.skid.priceBasis + ')' : '') +
+    (lm.verdict && lm.verdict.label ? '; ' + lm.verdict.label : '') + ' (Compute Site Pro Forma, screening, not a return promise).';
 }
 /* What the finance marketplace says of each site's capital request, read
    LIVE off its deal: sent, open with offers, or funded (awarded). The

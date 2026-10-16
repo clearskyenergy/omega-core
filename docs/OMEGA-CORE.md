@@ -142,31 +142,48 @@ need to manually input that or go with a market standard if there is such a
 thing"). There is no published standard for an edge-compute skid on a charging
 site, so:
 
-- **Rent per skid per month** and **Rent escalator** are fields in the dialog.
-  A rent typed there ($1–$10,000; anything else is set aside and the result
-  says so) prices the lease as one figure, escalating at the typed rate or
-  2.5%, and the host's payback, revenue uplift and ClearSky's outlay follow it.
-  It is saved with the project's answers. A typed rent never qualifies a site:
-  on an open site it is still headed *indicative until the site qualifies*.
-- **Left blank, the lease is the market reference** (`omega-core-lease-v2`):
-  **$750 / $1,000 / $1,500 per skid per month**, escalating 2.0 / 2.5 / 3.0% a
-  year, over the term (5-year minimum, up to 15). It is headed *market
-  reference, not an offer* **whatever the verdict**, and shown with what it is
-  read off:
+- **The rent is per kW of compute per month** (`omega-core-lease-v3`,
+  2026-10-15, Tommy: "we pay $225/kW and the site has either 75 or 150 kW of
+  compute … 75 × 12 × $125"; "a 75 kW unit, the lease is paying $150–450 per
+  kW"): annual rent = kW of compute × $/kW-month × 12, escalating.
+  `RATE_CARD.perKwMonth` is **$150 / $150 / $450** (low / base / high);
+  `monthlyPerSkid` is DERIVED from it at `computeKwPerSkid` (75), so a skid
+  reads $11,250 a month, $135,000 a year, at the floor, and $33,750 a month
+  at the top. ClearSky quotes the band and opens at its floor until a rent
+  is agreed. A revenue share of gross compute may ride beside the rent
+  (`sharePct`; a site's `commercial.revenueShare`).
+- **Rent per skid per month** and **Rent escalator** are fields in the
+  qualification dialog. A rent typed there ($1–$100,000; anything else is
+  set aside and the result says so) prices the lease as one figure,
+  escalating at the typed rate or 2.5%, and the host's payback, revenue
+  uplift and ClearSky's outlay follow it. It is saved with the project's
+  answers. A typed rent never qualifies a site.
+- **On a portfolio site** (`site-model.js skidInput`) the rent is the
+  record's `commercial.rentMonthly` (a signed lease; wins), else
+  `commercial.rentPerKwMonth` × 75 kW × skids × 12, else the card's floor;
+  `commercial.rentEscalatorPct` escalates it and `commercial.revenueShare`
+  (a fraction) is the host's share of gross compute (`deal.rentSharePct`).
+  The site record's Facts tab carries all four.
+- **The band is read off what a compute tenant pays a landlord**, shown
+  with its sources to every entitled caller (the build-up is staff-only):
 
   | Comparable | Figure | Source |
   |---|---|---|
-  | Cell-tower ground leases, new in 2026 — a carrier's equipment on its own meter, paying rent (the nearest model) | most new proposals $500–$1,250 a month; suburban/commercial $800–$1,500; urban $1,200–$2,500+; average $1,300; escalators 2–3% | [Steel in the Air](https://www.steelintheair.com/cell-tower-lease-rates/) |
-  | Surface parking — the ground the skid and its clearances take, about three stalls | $100–$300 a stall a month, ~$155 average → ~$300–$900 a month | [MyCurbSpot](https://www.mycurbspot.com/tools/parking-spot-value) |
+  | Colocation wholesale — a compute tenant's rent per kW of IT load a month (space and power delivery; the tenant buys the electricity) | ~$196/kW-month, 250–500 kW, primary North American markets, H2 2025; ~$250 all-in | [Encor Advisors / CBRE](https://encoradvisors.com/data-center-pricing/) |
+  | Cell-tower ground leases, new in 2026 — the floor a bare site is worth | most new proposals $500–$1,250 a month; suburban/commercial $800–$1,500; escalators 2–3% | [Steel in the Air](https://www.steelintheair.com/cell-tower-lease-rates/) |
+  | Surface parking — about three stalls | ~$300–$900 a month | [MyCurbSpot](https://www.mycurbspot.com/tools/parking-spot-value) |
 
-  Low sits under the suburban/commercial tower band and over three stalls at
-  the average (and is compute-lease's floor); base is inside that band and the
-  2026 new-proposal range; high is its top, for a site that clears every gate on
-  evidence. Every entitled caller sees the range and its sources; the build-up
-  is staff-only.
+  The host here supplies ground, the service and the fiber path, not a
+  building, so the band opens at the colocation floor. **The lease and the
+  compute price are one decision**: at the public spot rate ($2.46 a
+  GPU-hour, $837k gross on 75 kW) $150/kW-month takes a quarter of the
+  skid's margin and still works, $300 takes half, $450 is more than the
+  skid earns; at a contracted $3.50 ($1.19M gross) $150–$300 is a real
+  lease. A rent above the floor wants a contracted GPU-hour rate on the
+  site record, not spot.
 
-When ClearSky sets a standard rent, it replaces `RATE_CARD.monthlyPerSkid`
-and the version moves; the typed rent per site stays.
+When ClearSky changes the band, it changes `RATE_CARD.perKwMonth` and the
+version moves; the typed rent per site stays.
 
 **What it does to the charging site** — read off the Run: net cost, year-1
 revenue, payback before and after the lease, the uplift on year-1 revenue, the
@@ -410,6 +427,21 @@ production figure, the usage, the rent, the ZIP, an ITC adder) runs the
 automatic model again (`latestModel.inputHash`, `api/site-crm.js
 inputHashOf`), carrying a chosen chipset, pod count and structure; a model
 stored before the hash existed runs once more to gain one.
+
+### The deal follows the model (2026-10-15)
+
+Tommy: "when we put in a site and run it … it should be producing the
+correct numbers so we can push it to the finance portal and get someone to
+purchase and fund it." `send-to-finance` writes `askOf()` whole onto the
+deal as `capitalRequest` — the total project cost as the ask, the headline
+IRR and the ten years alone, the terminal value, compute and host capex,
+the PPA basis (table or rate, term, expected year-one production), the
+lease and the compute price basis — and `proformaSummary` says the same in
+words, which the finance portal prints to a partner. A later run on the
+site (by hand or automatic) refreshes an OPEN portfolio deal that has no
+offer and no award: ask, cost basis, summary, `sourceModelId`,
+`capitalRequest.refreshedAt`; the run's answer says `dealRefreshed`. A deal
+with an offer, an award or a status the sponsor set is left alone.
 
 ## The door — `api/omega-core.js`
 

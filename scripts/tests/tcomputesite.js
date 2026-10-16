@@ -75,6 +75,9 @@ ok('the service reads as the compute\u2019s own meter, not a shared building ser
 ok('a battery priced inside another line ($0/kWh) has no $0 line of its own, and the GPU and pod lines carry the skid\u2019s price', own.ok && !own.schedule.capex.some(function (l) { return l.id === 'bess'; }) && own.schedule.capex.filter(function (l) { return l.id === 'gpu'; })[0].amount === Math.round(639000 * 1.08) && own.schedule.capex.filter(function (l) { return l.id === 'pods'; })[0].amount === Math.round(125000 * 1.08), own.ok && own.schedule.capex);
 ok('the meter balances: the skid\u2019s compute and battery never exceed its own 135 kW', own.ok && own.balance.limitKw === 135 && own.balance.overloadHours === 0 && own.balance.peakKw > 0 && own.balance.peakKw <= 135, own.ok && own.balance);
 ok('a shared service still reads shared', CS.model(BASE).story.flow.some(function (f) { return f[0] === 'grid' && f[1] === 'Existing service'; }));
+/* THE UTILISATION TYPED IS THE UTILISATION SOLD (2026-10-15): the diurnal shape's peaks are clipped at 100%, so the shape is scaled until the clipped mean is the figure typed; 85% sold means 85% of GPU-hours */
+ok('85% sold is 85% of the GPU-hours, and the gross is GPUs × price × 8,760 × sold × availability', own.ok && Math.abs(own.compute.gpuHours.spot / (48 * 8760) - 0.85) < 1e-4 && Math.abs(own.compute.revenue.gross - 48 * 2.46 * 8760 * 0.85 * 0.98) < 2, own.ok && [own.compute.gpuHours, own.compute.revenue]);
+ok('the scale is 1 where nothing clips and never pushes an hour past 100%', X.shapeScale(0.4, 0, 24) === 1 && X.shapeScale(0.85, 0, 24) > 1 && X.shapeScale(1, 0, 24) === 1 && X.shapeScale(0.95, 0, 24) >= 1);
 
 /* THE HOST'S SYSTEM BESIDE THE COMPUTE (2026-10-14, Tommy: "the compute IRR
    reflects the total ask of the project … the build of the system existing

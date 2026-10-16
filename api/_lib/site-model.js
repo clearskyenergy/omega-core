@@ -273,7 +273,7 @@ function skidFacts() {
   return { name: P.name, skidPriceUsd: P.skidPriceUsd, systemCostUsd: P.systemCostUsd, breakdown: P.systemCostBreakdown.map(function (b) { return { key: b.key, label: b.label, usd: b.usd }; }),
            computeKw: P.compute.kw, meter: { firmKw: P.meter.firmKw, peakKw: P.meter.peakKw, volts: P.meter.volts, phases: P.meter.phases },
            battery: { model: P.battery.model, kw: P.battery.kw, kwh: P.battery.kwh }, chipsets: skidChipsets(),
-           lease: { monthlyPerSkid: OC.RATE_CARD.monthlyPerSkid.base, escalatorPct: OC.RATE_CARD.escalatorPct.base, basis: 'market reference, not an offer' },
+           lease: { perKwMonth: OC.RATE_CARD.perKwMonth, computeKwPerSkid: OC.RATE_CARD.computeKwPerSkid, monthlyPerSkid: OC.RATE_CARD.monthlyPerSkid.base, escalatorPct: OC.RATE_CARD.escalatorPct.base, basis: 'kW of compute \u00d7 $/kW-month \u00d7 12; the card\u2019s floor until a rent is agreed, not an offer' },
            pricingAsOf: CM.SOURCES.pricing.asOf };
 }
 function fmtUsd(n) { return '$' + Math.round(n).toLocaleString('en-US'); }
@@ -297,11 +297,23 @@ function skidInput(site, over, ctx, d) {
   var I = CM.readInputs({ chipset: c.key }), cap = CM.capacity(c, I), price = r2(CM.gpuPrice(c, priceBasis));
   var ramp1 = 0; for (var m = 0; m < 12; m++) ramp1 += I.ramp[Math.min(m, I.ramp.length - 1)]; ramp1 = ramp1 / 12;
   var bessKw = pos(d.compute.omegaCoreBessKw) || P.battery.kw * units, bessKwh = pos(d.compute.omegaCoreBessKwh) || P.battery.kwh * units;
-  var rentOnRecord = pos(cm.rentMonthly);
+  /* THE HOST'S RENT IS kW × $/kW-MONTH × 12 (2026-10-15, Tommy): the rate
+     on the site record (commercial.rentPerKwMonth), else the rate card's
+     floor ($150/kW-month); a whole monthly rent typed on the record
+     (commercial.rentMonthly) wins over both, as a signed lease would; the
+     escalator on record, else the card's. A revenue share of gross compute
+     (commercial.revenueShare, a fraction) rides beside it when the record
+     carries one. The compute kW is the skid's (75 a skid). */
+  var rentOnRecord = pos(cm.rentMonthly), rateOnRecord = pos(cm.rentPerKwMonth), computeKw = OC.RATE_CARD.computeKwPerSkid * units;
+  var rentEsc = num(cm.rentEscalatorPct) != null ? num(cm.rentEscalatorPct) : OC.RATE_CARD.escalatorPct.base;
+  var share = num(cm.revenueShare) != null && num(cm.revenueShare) > 0 ? Math.min(60, r2(num(cm.revenueShare) <= 1 ? num(cm.revenueShare) * 100 : num(cm.revenueShare))) : 0;
   var rent = rentOnRecord
-    ? { perYear: rentOnRecord * 12, escPct: OC.RATE_CARD.escalatorPct.base, basis: 'the rent on record, ' + fmtUsd(rentOnRecord) + ' a month' }
-    : { perYear: OC.RATE_CARD.monthlyPerSkid.base * 12 * units, escPct: OC.RATE_CARD.escalatorPct.base,
-        basis: 'the Omega-Core market reference, ' + fmtUsd(OC.RATE_CARD.monthlyPerSkid.base) + ' a skid a month escalating ' + OC.RATE_CARD.escalatorPct.base + '% a year: not an offer; enter Rent / month on the site to replace it' };
+    ? { perYear: rentOnRecord * 12, perKwMonth: r2(rentOnRecord / computeKw), escPct: rentEsc, basis: 'the rent on record, ' + fmtUsd(rentOnRecord) + ' a month (' + fmtUsd(rentOnRecord / computeKw) + ' per kW of compute a month on ' + computeKw + ' kW)' }
+    : rateOnRecord
+    ? { perYear: rateOnRecord * computeKw * 12, perKwMonth: rateOnRecord, escPct: rentEsc, basis: 'the rate on record, ' + fmtUsd(rateOnRecord) + ' per kW of compute a month \u00d7 ' + computeKw + ' kW \u00d7 12 = ' + fmtUsd(rateOnRecord * computeKw * 12) + ' a year' }
+    : { perYear: OC.RATE_CARD.perKwMonth.base * computeKw * 12, perKwMonth: OC.RATE_CARD.perKwMonth.base, escPct: rentEsc,
+        basis: 'the Omega-Core rate card\u2019s floor, ' + fmtUsd(OC.RATE_CARD.perKwMonth.base) + ' per kW of compute a month (ClearSky quotes ' + fmtUsd(OC.RATE_CARD.perKwMonth.low) + '\u2013' + fmtUsd(OC.RATE_CARD.perKwMonth.high) + ') \u00d7 ' + computeKw + ' kW \u00d7 12 = ' + fmtUsd(OC.RATE_CARD.perKwMonth.base * computeKw * 12) + ' a year, escalating ' + rentEsc + '% a year: not an agreed rent; enter the rate per kW or the rent per month on the site to replace it' };
+  if (share) rent.basis += '; plus ' + share + '% of gross compute revenue to the host (the revenue share on record)';
   var sitePrice = pos(site.powerPricePerKwh), shortName = c.name.replace(/^NVIDIA\s+(HGX\s+)?/, '');
   var input = {
     site: { name: str(site.name, 120) || 'Site', host: str(site.name, 160), hostType: hostType, city: str(site.city, 80), zip: zip,
@@ -317,7 +329,7 @@ function skidInput(site, over, ctx, d) {
                capexPerGpu: Math.round(P.skidPriceUsd / cap.gpus * 100) / 100, podInfraPerPod: P.systemCostUsd - P.skidPriceUsd,
                platformFeePct: Math.round((I.networkStoragePct + I.otherVariablePct) * 1000) / 10, podOmPerYear: I.fixedOpexMonthly * 12 },
     battery: { kw: bessKw, kwh: bessKwh, capexPerKwh: 0 },
-    deal: { structure: structure, rentPerYear: rent.perYear, rentEscPct: rent.escPct },
+    deal: { structure: structure, rentPerYear: rent.perYear, rentEscPct: rent.escPct, rentSharePct: share },
     skid: { units: units, chipset: c.key, chipsetName: c.name, pricePerGpuHour: price, priceBasis: priceBasis, skidPriceUsd: P.skidPriceUsd, systemCostUsd: P.systemCostUsd, gpus: cap.gpus }
   };
   if (sitePrice) input.tariff = { onPeakRate: sitePrice, offPeakRate: sitePrice };
@@ -453,6 +465,8 @@ function summaryOf(result, input, meta) {
                                     noRevenue: !result.host.ppa && !(result.host.revenuePerYear > 0) && !(result.host.storage && result.host.storage.year1 > 0),
                                     solarNoRevenue: result.host.solarKwDc > 0 && !result.host.ppa && !(result.host.revenuePerYear > 0) } : null,
     computeCapex: result && result.computeCapex != null ? result.computeCapex : null,
+    /* the host lease the case carries (kW × $/kW-month × 12, plus a share of gross compute) */
+    rent: input && input.deal ? { perYear: input.deal.rentPerYear || 0, escPct: input.deal.rentEscPct == null ? null : input.deal.rentEscPct, sharePct: input.deal.rentSharePct || 0 } : null,
     /* the host alone, the skid alone, the whole: what the compute adds */
     uplift: meta.uplift || null,
     designHash: meta.designHash || null, auto: meta.auto === true,
@@ -467,7 +481,13 @@ function summaryOf(result, input, meta) {
 function askOf(site) {
   site = site || {};
   var lm = site.latestModel, lp = site.latestProforma;
-  if (lm && pos(lm.totalProjectCost)) return { amount: lm.totalProjectCost, source: 'compute-model', equity: lm.equity, debt: lm.debt, irr: lm.irr, structure: lm.structure, structureLabel: lm.structureLabel, termYears: lm.termYears, pods: lm.pods, modelId: lm.modelId, at: lm.at };
+  if (lm && pos(lm.totalProjectCost)) return { amount: lm.totalProjectCost, source: 'compute-model', equity: lm.equity, debt: lm.debt, irr: lm.irr, structure: lm.structure, structureLabel: lm.structureLabel, termYears: lm.termYears, pods: lm.pods, modelId: lm.modelId, at: lm.at,
+    /* WHAT A CAPITAL PARTNER CHECKS (2026-10-15, Tommy: "push it to the finance portal and get someone to purchase and fund it"): the ten years alone beside the headline, the terminal value, the cost split, the contract the PPA is priced on, the lease and the compute price basis — the facts a lender's own model is built from, never a second figure */
+    irrExTerminal: lm.irrExTerminal == null ? null : lm.irrExTerminal, terminalValue: lm.terminalValue || null,
+    computeCapex: lm.computeCapex == null ? null : lm.computeCapex, hostCapex: lm.host && lm.host.capex != null ? lm.host.capex : null,
+    ppa: lm.host && lm.host.ppa ? { ratePerKwh: lm.host.ppa.ratePerKwh, table: !!lm.host.ppa.schedule, tableYears: lm.host.ppa.schedule ? lm.host.ppa.schedule.length : 0, escPct: lm.host.ppa.escPct == null ? null : lm.host.ppa.escPct, termYears: lm.host.ppa.termYears || 0, year1Kwh: lm.host.ppa.year1Kwh || 0 } : null,
+    rent: lm.rent || null, skid: lm.skid ? { units: lm.skid.units, chipset: lm.skid.chipsetName || lm.skid.chipset, pricePerGpuHour: lm.skid.pricePerGpuHour, priceBasis: lm.skid.priceBasis } : null,
+    paybackYears: lm.paybackYears == null ? null : lm.paybackYears, auto: lm.auto === true };
   if (lp && pos(lp.investorCapital)) return { amount: lp.investorCapital, source: 'pod-proforma', equity: lp.investorCapital, debt: 0, irr: lp.investorIrrDefined ? lp.investorIrrAnnual : null, structure: null, structureLabel: 'Investor capital, pods (60-month case)', termYears: 5, pods: lp.pods, scenarioId: lp.scenarioId, at: lp.at };
   return null;
 }
