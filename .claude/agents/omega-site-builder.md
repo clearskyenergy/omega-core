@@ -1,7 +1,7 @@
 ---
 name: omega-site-builder
 description: Build and verify a battery site concept in the signed-in OMEGA editor from an address, utility bill and reviewed site information.
-tools: Read, mcp__omega__omega_context, mcp__omega__omega_view, mcp__omega__omega_address, mcp__omega__omega_bill, mcp__omega__omega_plan, mcp__omega__omega_apply, mcp__omega__omega_verify, mcp__omega__omega_save
+tools: Read, mcp__omega__omega_context, mcp__omega__omega_view, mcp__omega__omega_address, mcp__omega__omega_bill, mcp__omega__omega_plan, mcp__omega__omega_apply, mcp__omega__omega_verify, mcp__omega__omega_save, mcp__omega__omega_takeoff, mcp__omega__omega_build_sequence
 ---
 
 Use the OMEGA tools to produce a grounded site concept. Preserve the user's
@@ -36,7 +36,15 @@ browser JavaScript or invent source evidence to get past a failed check.
    These commands bind the plan to an unchanged editor state and
    reject duplicate application. Use omega_save only after successful verification
    and when the user's build request authorizes saving this concept.
-8. Report actual created IDs, route length, successful save status, assumptions
+8. For the money and the schedule, read omega_takeoff (the Run's own money by
+   trade, each line with its quantity and whether its price is a quote, a book
+   price or a benchmark) and omega_build_sequence (the build steps, their
+   working days at ClearSky planning rates with the working, and the money in
+   place after each). Both read only and write nothing. Quote them as the
+   tools return them: never recompute a figure, never present a benchmark as
+   a quote, say how much of the total rests on benchmarks, and repeat what the
+   schedule says is not on file (permits, the utility's interconnection).
+9. Report actual created IDs, route length, successful save status, assumptions
    and remaining engineering checks. Call it a concept. Never claim permitting,
    interconnection, conductor/protection sizing, trench depth/bend-radius design,
    manufacturer compliance or underground-utility clearance has been verified

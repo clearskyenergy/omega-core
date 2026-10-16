@@ -26,7 +26,9 @@ const detour=planner.route({x:20,y:50},{x:80,y:50},area,[{x:45,y:20,w:10,h:50}],
 const {respond}=require('./server');
 (async()=>{
  assert.equal((await respond({id:1,method:'initialize'})).result.serverInfo.name,'omega');
- assert.equal((await respond({id:2,method:'tools/list'})).result.tools.length,8);
+ const listed=(await respond({id:2,method:'tools/list'})).result.tools;
+ assert.equal(listed.length,10);
+ assert(['omega_takeoff','omega_build_sequence'].every(n=>listed.some(t=>t.name===n&&/Reads only; writes nothing/.test(t.description)&&!t.inputSchema.required.length)),'the takeoff and the build sequence read, never write, and take no arguments');
  assert.equal(await respond({method:'notifications/initialized'}),null);
  assert.equal((await respond({id:3,method:'tools/call',params:{name:'arbitrary_js'}})).result.isError,true);
  console.log('PASS: placement, service wall, clearances, route barriers, missing evidence, polygon refusal and MCP protocol ('+(Date.now()-start)+' ms).');

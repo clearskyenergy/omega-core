@@ -64,6 +64,27 @@ async function command(arg){
       return {status:'applied_unsaved',runId:arg.id,batteryId:battery.id,switchgearId:gear.id,conduitId:conduit.id,trenchId:run.id,revision:await revision()};
     }catch(e){_restoreCanvas(backup);S.history=history;throw Error('Placement rolled back: '+e.message);}
   }
+  /* Read-only: the editor's own Cost › Trades and Build player answers for
+     the drawing as it stands (POST /api/takeoff, /api/build-sequence). They
+     price through the server and write nothing; drawing ids stay in the page. */
+  if(arg.op==='takeoff'){
+    if(!window.OmegaTakeoff||typeof OmegaTakeoff.refresh!=='function')throw Error('Cost \u203a Trades is unavailable in this editor.');
+    var ans=await OmegaTakeoff.refresh(true);
+    if(!ans)throw Error(OmegaTakeoff._state().err||'The takeoff service did not answer.');
+    var q=function(x){return x?x.text:null;};
+    return {total:ans.total,contracted:ans.contracted,sources:ans.sources||[],notes:ans.notes||[],
+      trades:ans.trades.map(function(t){return {trade:t.label,division:t.div,amount:t.amount,share:t.pct,quantity:q(t.qty),
+        lines:t.lines.map(function(l){return {line:l.label,quantity:q(l.qty),amount:l.amount,contingency:!!l.contingency,source:l.source||null,
+          rows:(l.rows||[]).map(function(r){return {item:r.label,quantity:q(r.qty),amount:r.amount,source:r.source||null};})};}),
+        alsoOnTheDrawing:(t.info||[]).map(function(i){return {item:i.label,quantity:q(i.qty),note:i.note};})};})};
+  }
+  if(arg.op==='build-sequence'){
+    if(!window.OmegaBuildSequence||typeof OmegaBuildSequence.fetch!=='function')throw Error('The build sequence is unavailable in this editor.');
+    var seq=await OmegaBuildSequence.fetch();
+    return {total:seq.total,schedule:seq.schedule,notes:seq.notes||[],
+      steps:seq.phases.map(function(p){return {step:p.label,workingDays:p.days,start:p.start,finish:p.finish,crews:p.crews||null,amount:p.amount,inPlace:p.inPlace,
+        lines:p.lines.map(function(l){return {line:l.label,amount:l.amount};}),working:p.basis,notes:p.notes};})};
+  }
   if(arg.op==='save'){
     if(await revision()!==arg.revision)throw Error('Canvas changed since verification. Verify again before saving.');
     await saveProject();var label=document.getElementById('pn-saved');

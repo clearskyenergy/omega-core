@@ -12,7 +12,9 @@ const tools=[
  ['omega_plan','Generate a constrained concept. Site uses local feet (+x east/+y north). Read example-site.json for schema. All physical constraints and service location require supplied evidence.',{site:{type:'object'}}],
  ['omega_apply','Apply a stored concept to its unchanged canvas using editor equipment, conduit and trench renderers. Remains unsaved.',{planId:{type:'string'}}],
  ['omega_verify','Read back equipment and routes for the applied plan.',{planId:{type:'string'}}],
- ['omega_save','Save a successfully verified, unchanged concept using the editor Save Project tool.',{planId:{type:'string'}}]
+ ['omega_save','Save a successfully verified, unchanged concept using the editor Save Project tool.',{planId:{type:'string'}}],
+ ['omega_takeoff','Read the drawing\'s takeoff by trade (Cost \u203a Trades): the Run\'s own money by trade, each line with its quantity and where its price comes from (quote, book or benchmark), adding up to the Run total. Reads only; writes nothing.',{}],
+ ['omega_build_sequence','Read the drawing\'s build sequence (the 3D visualizer\'s Build player): the steps of the job, their working days at ClearSky planning rates with the working, and the Run\'s money in place after each. Reads only; writes nothing.',{}]
 ].map(([name,description,properties])=>({name,description,inputSchema:{type:'object',properties,required:Object.keys(properties),additionalProperties:false}}));
 async function page(){
  const target=process.env.OMEGA_EDITOR_URL;if(!target)throw Error('Set OMEGA_EDITOR_URL to the exact trusted editor URL.');
@@ -29,6 +31,8 @@ async function call(name,args){
  if(name==='omega_context')return invoke('context');
  if(name==='omega_view'){await invoke('context');const canvas=tab.locator('#sc');return {image:(await canvas.screenshot({type:'png',timeout:10000})).toString('base64')};}
  if(name==='omega_bill')return invoke('bill',{text:args.text});
+ if(name==='omega_takeoff')return invoke('takeoff');
+ if(name==='omega_build_sequence')return invoke('build-sequence');
  if(name==='omega_address'){
   if(typeof args.address!=='string'||args.address.length<5||args.address.length>500)throw Error('Provide an address.');
   await invoke('address',{address:args.address});

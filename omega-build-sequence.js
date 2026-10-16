@@ -142,15 +142,19 @@
   if (doc.body) watch(); else doc.addEventListener('DOMContentLoaded', watch);
 
   /* ── what the 3D model draws, sent beside the Run's quantities ────── */
+  /* The open model's own pieces; with the view closed (fetch(), for Jarvis),
+     the visualizer's own reading of the drawing (OmegaSiteVis.read), which
+     is what it would draw, so the steps are the same either way. */
   function extras() {
-    var V = vis(), items = {}, ft = 0;
-    if (V && V.site && V.site.items) V.site.items.forEach(function (it) {
+    var d = el('ovis'), open = !!(d && d.classList.contains('on')), V = open ? vis() : null, site = V && V.site && V.site.items ? V.site : null, items = {}, ft = 0;
+    if (!site) { try { site = root.OmegaSiteVis && root.OmegaSiteVis.read ? root.OmegaSiteVis.read() : null; } catch (e) { site = null; } }
+    if (site && site.items) site.items.forEach(function (it) {
       if (!it || it.hidden || !it.arch || it.arch === 'ignore') return;
       items[it.arch] = (items[it.arch] || 0) + 1;
     });
     try { ft = typeof root._trenchDugFtAll === 'function' ? +root._trenchDugFtAll() || 0 : 0; } catch (e) {}
     var cond = V && V.layers && V.layers.conduit;
-    return { trenchFt: Math.round(ft), items: items, conduit: !!(cond && cond.children && cond.children.length) };
+    return { trenchFt: Math.round(ft), items: items, conduit: cond ? !!(cond.children && cond.children.length) : !!(site && site.conduits && site.conduits.length) };
   }
 
   function request() {
@@ -496,6 +500,9 @@
   root.OmegaBuildSequence = {
     open: open, close: close, play: play, pause: pause, next: next, prev: prev, go: go, speed: setSpeed, explode: explode,
     schedule: toggleSchedule, csv: csv,
+    /* the server's steps for the drawing as it stands, without the player
+       (the site agent's omega_build_sequence reads them) */
+    fetch: request,
     state: function () {
       if (!st || !st.seq) return st ? { open: true, seq: null } : null;
       return { open: true, done: st.done, playing: st.playing, animating: !!st.anim, held: !!(st.anim && st.anim.held), progress: st.anim ? st.anim.p : null, speed: speed, explode: !!st.explodeGoal,

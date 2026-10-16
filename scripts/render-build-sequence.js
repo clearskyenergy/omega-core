@@ -88,6 +88,12 @@ async function boot(browser, base, view, mode) {
   var run = await page.evaluate(function () { return { total: window._COST_TOTAL, q: JSON.parse(JSON.stringify(omegaCostQuantities())) }; });
   ok(run.total > 0, mode.name + ': the Run priced the site ($' + Math.round(run.total).toLocaleString('en-US') + ')');
 
+  /* the steps with the view closed (OmegaBuildSequence.fetch, what the site
+     agent's omega_build_sequence reads), before the visualizer ever opens */
+  var closed = await page.evaluate(function () { return OmegaBuildSequence.fetch().then(function (s) { return { cents: s.cents, keys: s.phases.map(function (p) { return p.key; }), days: s.phases.map(function (p) { return p.days; }) }; }); });
+  var closedBody = posted.shift();
+  ok(closed.cents === Math.round(run.total * 100) && !posted.length, mode.name + ': with the view closed, the steps come to the Run total');
+
   /* the visualizer, with Build on its bar */
   await page.evaluate(function () { OmegaSiteVis.open(); });
   await page.waitForFunction(function () { var V = OmegaSiteVis._V(); return V && V.site && V.layers && document.getElementById('ov-build') && document.getElementById('ov-load').style.display === 'none'; }, null, { timeout: 30000 });
@@ -97,7 +103,7 @@ async function boot(browser, base, view, mode) {
   await page.mouse.move(cv.x + cv.width / 2, cv.y + cv.height / 2);
   for (var z = 0; z < 2; z++) { await page.mouse.wheel(0, -120); await page.waitForTimeout(60); }
   await page.waitForTimeout(300);
-  return { context: context, page: page, errors: errors, bootErrors: bootErrors, posted: posted, unanswered: unanswered, run: run };
+  return { context: context, page: page, errors: errors, bootErrors: bootErrors, posted: posted, unanswered: unanswered, run: run, closed: closed, closedBody: closedBody };
 }
 
 async function run() {
@@ -130,11 +136,13 @@ async function run() {
       eq(sent.q, mine, mode.name + ': the body carries exactly the Run’s quantities (omegaCostQuantities)');
       ok(!('total' in sent) && !('cents' in sent) && !/"(price|amount|total)"\s*:/.test(JSON.stringify(sent.build)), mode.name + ': no price or total travels from the page');
       ok(sent.build.items.charger === archs.charger && sent.build.items.pad === archs.pad && sent.build.conduit === true, mode.name + ': what the model draws went with it');
+      eq(b0.closedBody.build, sent.build, mode.name + ': with the view closed, the same reading of the drawing went (the visualizer\u2019s own, OmegaSiteVis.read)');
 
       var st = await page.evaluate(function () { var s = OmegaBuildSequence.state(); return { steps: s.steps, cents: s.cents, keys: s.seq.phases.map(function (p) { return p.key; }), pieces: s.pieces, conduit: s.conduit, playing: s.playing }; });
       ok(st.playing, mode.name + ': it starts playing');
       eq(st.keys, ['design', 'survey', 'trench', 'pads', 'equipment', 'solar', 'ev', 'wiring', 'finish', 'utility', 'commission', 'energize'], mode.name + ': the steps of this site, in build order');
       ok(st.cents === Math.round(run.total * 100), mode.name + ': the sequence’s total is the Run total (' + st.cents + ' vs ' + Math.round(run.total * 100) + ')');
+      eq([b0.closed.keys, b0.closed.days], [st.keys, await page.evaluate(function () { return OmegaBuildSequence.state().seq.phases.map(function (p) { return p.days; }); })], mode.name + ': and the same steps and days as the player');
       await page.click('#ov-bs .bs-speed button[data-x="4"]');
 
       var eqIdx = st.keys.indexOf('equipment');

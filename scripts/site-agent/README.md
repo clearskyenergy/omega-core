@@ -112,6 +112,26 @@ successful apply is initially unsaved. Read-back must verify the expected object
 counts, endpoint bonds and unchanged revision before the save tool will run.
 Actual persistence is reported only if the editor reports a successful save.
 
+## The money and the schedule (read only)
+
+Two tools read the editor's own answers for the drawing as it stands, and
+write nothing (Blueprint to Build, Phase 5: "Jarvis does the whole thing"):
+
+- `omega_takeoff` is Cost › Trades (`POST /api/takeoff`). It returns the Run's
+  money by trade. Each line has its quantity and says whether its price is a
+  quote for this job, a book price on file, or a benchmark. The trades add up
+  to the Run total, and `sources` gives the share of each kind.
+- `omega_build_sequence` is the 3D visualizer's Build player
+  (`POST /api/build-sequence`, through `OmegaBuildSequence.fetch`, so the
+  steps are the player's own with the view closed). It returns the steps,
+  their working days at ClearSky planning rates with the working, and the
+  money in place after each. Engineering, permits and the utility's
+  interconnection say "not on file".
+
+Both need the workspace's plan (Omega Estimate for the takeoff; the 3D
+visualizer's module for the build), as the editor does, and they return
+what the server answered. Drawing ids and model archetypes stay in the page.
+
 ## Tests and acceptance gaps
 
 `node scripts/tests/tsite-agent.js` passes:
@@ -122,7 +142,12 @@ Actual persistence is reported only if the editor reports a successful save.
 - missing evidence and invalid polygon refusal;
 - MCP initialize/tools-list/unknown-tool behavior;
 - adapter equipment dimensions, conduit bonds and trench schema;
-- changed-state rejection, dirty state and rollback on renderer failure.
+- changed-state rejection, dirty state and rollback on renderer failure;
+- the read-only takeoff and build sequence: what they return, that no drawing
+  id leaves the page, and that a refusal is named.
+
+It runs in `npm test` (it needs no install: Playwright is loaded only when a
+tool reaches a live browser).
 
 A separate real stdio subprocess check passed initialize + tools/list and clean
 shutdown. These are offline tests. They do not prove live Google Maps geocoding,

@@ -1490,7 +1490,11 @@ of source and never a rate, and `sources` adds the money up by kind to the
 Run total, so the pane's head shows how much rests on benchmarks. The CSV
 carries every line, row, quantity and source to the cent; *Copy scope of
 work* gives a trade's quantities for a bid, never a price. Nothing is
-written or stored. Who: as the Cost tab opens (a package's Omega Estimate; a
+written or stored. Jarvis reads it through the site agent's `omega_takeoff`
+(`scripts/site-agent`, read only: the trades, quantities and sources, never
+a drawing id), as it reads the Build player's steps through
+`omega_build_sequence` (`OmegaBuildSequence.fetch`, the player's own request
+with the view closed, the visualizer's own reading of the drawing). Who: as the Cost tab opens (a package's Omega Estimate; a
 legacy plan's Site Map; an active workspace and member, viewers included;
 staff). Not built: sending a trade's scope through the RFQ (`api/rfq.js`
 routes equipment lines to vendors by SKU; it has no trade or subcontractor),

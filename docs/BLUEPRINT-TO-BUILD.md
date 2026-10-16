@@ -262,9 +262,16 @@ re-runs on save, debounced, using the existing auto-save of priced runs
 > QUOTE, BOOK or BENCH. The head of the pane shows how much of the total
 > rests on each, and the CSV carries the source of every line. The marks
 > are read from what the Run already knows about each price, and name the
-> kind of source, never a rate. *Plan set in → plan set out*,
-> *drawing → financed project in one session* and *Jarvis does the whole
-> thing* are next.
+> kind of source, never a rate.
+>
+> **Jarvis reads the money and the schedule.** The site agent's MCP server
+> (`scripts/site-agent`, Jarvis's `omega` tools) has two read-only tools.
+> `omega_takeoff` returns the trades, quantities and price sources.
+> `omega_build_sequence` returns the Build player's steps, days and money in
+> place, the same with the 3D view closed. The agent quotes them as returned
+> and never presents a benchmark as a quote. Reading a plan set from Jarvis
+> (Read Plans is driven through its own dialog today), *plan set in → plan
+> set out* and *drawing → financed project in one session* are next.
 
 - **Plan set in → plan set out.** Read the customer's drawings (Phase 1) and
   issue our own permit/interconnect plan set from the reviewed model, with a
