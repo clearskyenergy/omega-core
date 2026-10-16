@@ -118,6 +118,15 @@ function openFinancingApply(){
            || new URLSearchParams(location.search).get('project'); } catch (e) {}
   location.href = '/financing.html' + (id ? ('?project=' + encodeURIComponent(id)) : '');
 }
+/* Finance It: the drawing to a deal someone can fund, in order: saved,
+   priced by the Run, its returns, the compute case, checked against the
+   customer's plans, then the hand-offs beside it (2026-10-16; Blueprint to
+   Build, Phase 5). The panel is omega-finance-path.js; each step is the
+   ribbon's own command. */
+function openFinancePath(){
+  if (window.OmegaFinancePath && typeof OmegaFinancePath.open === 'function') OmegaFinancePath.open();
+  else alert('The Finance It panel did not load. Reload the page and try again.');
+}
 /* Helios Intake: Helios Energy Advisors' first-pass checklist, filled from
    this project, finished by the person, previewed and sent to Helios from
    the editor (2026-09-30, Tommy). The dialog is omega-helios-intake.js; the
@@ -125,6 +134,14 @@ function openFinancingApply(){
 function openHeliosIntake(){
   if (window.OmegaHeliosIntake && typeof OmegaHeliosIntake.open === 'function') OmegaHeliosIntake.open();
   else alert('The Helios intake module did not load. Reload the page and try again.');
+}
+/* Read Plans: the customer's plan set, read sheet by sheet into equipment
+   and project facts with where each was read, reviewed, and the ticked
+   equipment placed (2026-10-16, Tommy). The dialog is omega-plan-read.js;
+   the reading and the cross-checks are api/plan-read. */
+function openPlanRead(){
+  if (window.OmegaPlanRead && typeof OmegaPlanRead.open === 'function') OmegaPlanRead.open();
+  else alert('The plan reader did not load. Reload the page and try again.');
 }
 /* Omega-Core: qualify this charging site for Omega-Core skids (Solela Edge
    Compute + CleanCell R60 on their own meter) from the Run, the drawing, the
@@ -183,6 +200,19 @@ function openOmegaCore(){
      what this session knows and talks to api/helios-intake, which fills
      their own PDF and sends it. -->
 <script src="/omega-helios-intake.js"></script>
+<!-- Build › Read Plans: renders a plan set's sheets with pdf.js (fetched on
+     first use), sends each to api/plan-read and places what the person
+     ticks through the editor's own tools. -->
+<script src="/omega-plan-read.js"></script>
+<!-- Output › Financing › Finance It: the drawing to a fundable deal, in
+     order, each step the ribbon's own command (no server of its own). -->
+<script src="/omega-finance-path.js"></script>
+<!-- The 3D Site Visualizer's Build player: the model assembled step by step,
+     each step's share of the Run's money and its days from api/build-sequence
+     (the browser only shows and hides the model). -->
+<script src="/omega-build-sequence.js"></script>
+<script src="/omega-takeoff.js"></script>
+<script src="/omega-run-summary.js"></script>
 <!-- Omega-Core from the Output tab: reads the Run and the drawing, fans out
      through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
      whether the site takes the skids and what the host is paid. -->
@@ -1826,6 +1856,8 @@ window.onerror = function(msg, src, line, col, err) {
   </div>
   <!-- Patch 1: explicit recompute. Green when stale, muted when current. -->
   <div id="rr-run" onclick="omegaRunDesign()" title="Recompute results from the current drawing"><span id="rr-run-ico">&#9654;</span><span id="rr-run-lbl">Run</span></div>
+  <!-- the Run, pinned beside its button: the live total and the rail's own figures (omega-run-summary.js) -->
+  <div id="rr-sum" role="status" aria-live="polite"></div>
   <div id="ribbon-collapse-btn" onclick="toggleRibbon()" title="Collapse the toolbar to enlarge the map (tabs stay). Tap again to reopen.">▲</div>
   <!-- Mobile/touch dropdown listing every ribbon tab (populated to mirror the row above) -->
   <div id="ribbon-tab-menu" style="display:none;position:absolute;top:100%;left:6px;background:var(--navy);border:1px solid var(--border);border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;min-width:180px;overflow:hidden">
@@ -1884,6 +1916,11 @@ window.onerror = function(msg, src, line, col, err) {
           <span class="rb-ico" style="font-size:20px;height:22px;color:var(--green)">&#9638;</span>
           <span class="rb-lbl" style="font-weight:700;color:var(--text);white-space:nowrap">Site Setup</span>
         </button>
+        <!-- Read Plans: the customer's PDF plan set, read sheet by sheet into
+             equipment and project facts, each shown with where on the sheet
+             it was read; the person ticks what goes on the drawing
+             (omega-plan-read.js, api/plan-read; 2026-10-16). -->
+        <button class="rbtn" id="rb-plan-read" onclick="openPlanRead()" title="Read Plans &mdash; drop the customer&rsquo;s PDF plan set. Each sheet is read for its equipment, ratings and project facts, every read shown with the place on the sheet it came from and anything the sheets disagree on. Tick what is right and it is placed on the drawing."><span class="rb-ico" style="color:var(--green)">&#128196;</span><span class="rb-lbl">Read<br>Plans</span></button>
       </div>
       <div class="rpanel-cap">1 &middot; Site</div>
     </div>
@@ -2319,6 +2356,11 @@ window.onerror = function(msg, src, line, col, err) {
     </div>
     <div class="rpanel">
       <div class="rpanel-body">
+        <!-- Finance It first: the reviewed model, in order, to a deal someone
+             can fund (omega-finance-path.js). Saved, priced, its returns, the
+             compute case and the plans check, then the hand-offs beside it,
+             each the ribbon's own command. Same cap as its neighbours. -->
+        <button class="rbtn" id="rb-finance-path" onclick="rbRun(openFinancePath)" data-cap="export" title="Finance it — take this drawing from priced to a deal someone can fund: save, price, returns, the compute case and the plans check, then Helios, the marketplace or a lender, in order."><span class="rb-ico" style="color:var(--green)">&#10148;</span><span class="rb-lbl">Finance<br>It</span></button>
         <!-- Next to the marketplace on purpose: both take a finished design
              outward. The marketplace lists a deal for capital to find; this
              one asks a named lender for a price. -->
@@ -3746,7 +3788,11 @@ if(document.readyState==='loading'){
     <button onclick="setCostTab('roi')" id="ct-roi" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">📊 ROI</button>
     <button onclick="setCostTab('grid')" id="ct-grid" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">🗺️ Grid</button>
     <button onclick="setCostTab('freqreg')" id="ct-freqreg" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">⚡ FR Sys</button>
+    <button onclick="setCostTab('takeoff')" id="ct-takeoff" class="cost-sub-tab" title="The Run's money by trade, each line with its quantity; click a line to mark it on the map" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">🧱 Trades</button>
   </div>
+
+  <!-- TRADES TAB: the takeoff by trade (omega-takeoff.js draws it from POST /api/takeoff) -->
+  <div id="cst-takeoff" style="padding:10px;flex:1;overflow-y:auto;display:none"></div>
 
   <!-- COSTS TAB -->
   <div id="cst-costs" style="padding:10px;flex:1;overflow-y:auto">
@@ -11466,7 +11512,16 @@ function _ppCollectFleet(){
                physical unit was printed twice under two different names.
                Publishing the ids lets any later pass skip what this one
                already counted. Additive: every existing consumer ignores it. */
-            elIds:[] };
+            elIds:[],
+            /* The ids each model counts (elements and shapes), so the
+               takeoff by trade can mark a battery row's units on the map
+               (omega-takeoff.js). Additive, like elIds. */
+            idsByModel:{},
+            /* Each counted piece's own rating as this pass read it (both
+               field names, the unit multiplier), so "What changed since the
+               plans" compares a placed battery by the fleet's reading, not
+               a second one (omega-plan-read.js). Additive, like idsByModel. */
+            ratingById:{} };
 
   /* Patch 25: the guided BESS build does not create an assembly/bespad
      SHAPE. placeBgbAt() commits an ELEMENT via _evAdd('bess', ...) and
@@ -11511,7 +11566,7 @@ function _ppCollectFleet(){
       var _u=+el.bessUnits||1;
       gkw*=_u; gkwh*=_u;
       out.units++;
-      if(el.id!=null) out.elIds.push(el.id);
+      if(el.id!=null){ out.elIds.push(el.id); out.ratingById[el.id]={ kw:gkw, kwh:gkwh }; }
       out.totalKw+=gkw; out.totalKwh+=gkwh;
       /* A guided element carries no unit cost. Flag it rather than let the
          cost sheet quietly under-total. */
@@ -11523,6 +11578,7 @@ function _ppCollectFleet(){
       }
       var G=out.byModel[gkey];
       G.qty++;
+      if(el.id!=null) (out.idsByModel[gkey]=out.idsByModel[gkey]||[]).push(el.id);
       G.groupKwh+=gkwh; G.groupKw+=gkw;
       if(G.kwh!==gkwh || G.kw!==gkw) G.mixed=true;
     });
@@ -11571,6 +11627,7 @@ function _ppCollectFleet(){
     if(!B.catalogKey && cKey) B.catalogKey=cKey;
     if(!B.mfr && cMfr) B.mfr=cMfr;
     B.qty++;
+    if(s.id!=null){ (out.idsByModel[key]=out.idsByModel[key]||[]).push(s.id); out.ratingById[s.id]={ kw:kw, kwh:kwh }; }
     B.groupKwh += kwh; B.groupKw += kw;
     if(cost!=null) B.groupCost += cost;
     if(kwh!==B.kwh || kw!==B.kw) B.mixed=true;
@@ -26168,6 +26225,10 @@ async function saveProject(){
       /* OMEGA-CORE: the rep's answers and the last qualification's headline
          (Output › Omega-Core). Restored in _loadProject beside omegaSizing. */
       omegaCore:     S.omegaCore     || null,
+      /* PLAN READ: the customer's plan set as Build › Read Plans read it
+         (the file, the sheets, the facts, what disagreed, what was placed
+         and what was only listed). Restored in _loadProject beside it. */
+      planRead:      S.planRead      || null,
       /* THE GRID ANSWER for this site (Analyze \u203a Grid Atlas and the Grid
          panel): the Grid Atlas service's measurement, and the panel's
          grid.substation {name, kv, miles}, grid.circuit {utility, id,
@@ -26611,6 +26672,7 @@ async function _loadProject(id){
     S.omegaSizing   = (d.omegaSizing   && typeof d.omegaSizing==='object')   ? d.omegaSizing   : null;
     S.omegaSizingAt = d.omegaSizingAt || null;
     S.omegaCore     = (d.omegaCore     && typeof d.omegaCore==='object')     ? d.omegaCore     : null;
+    S.planRead      = (d.planRead      && typeof d.planRead==='object')      ? d.planRead      : null;
     /* the grid answer (saved beside omegaCore); reset when the project has
        none so one site's circuit never follows another project */
     S.grid          = (d.grid          && typeof d.grid==='object')          ? d.grid          : null;
@@ -29449,8 +29511,8 @@ function _debounceROI() {
 
 // -- COST SUB-TAB SWITCHER -------------------------------------
 function setCostTab(tab) {
-  ['costs','incentives','revenue','roi','grid','freqreg'].forEach(t => {
-    const btn = document.getElementById('ct-'+t);
+  ['costs','incentives','revenue','roi','grid','freqreg','takeoff'].forEach(t => {
+    const btn = document.getElementById('ct-'+({ incentives:'inc', revenue:'rev' }[t] || t));
     const pnl = document.getElementById('cst-'+t);
     const isActive = t === tab;
     if(btn) { btn.style.color = isActive ? 'var(--accent)' : 'var(--sub)'; btn.style.borderBottomColor = isActive ? 'var(--accent)' : 'transparent'; }
@@ -29460,6 +29522,7 @@ function setCostTab(tab) {
   if(tab === 'revenue') renderRevenuePanel();
   if(tab === 'roi') updateROI();
   if(tab === 'freqreg') renderFreqReg();
+  if(window.OmegaTakeoff) { if(tab === 'takeoff') OmegaTakeoff.show(); else OmegaTakeoff.hide(); }
 }
 
 // -- MAIN COST CALCULATOR --------------------------------------
@@ -29512,31 +29575,42 @@ function _costSheetValues(){
     bmsMat:$v('ce-bms-mat'), bmsLabor:$v('ce-bms-labor'), emsRate:$v('ems-rate'), emsSetup:$v('ems-setup'), eng:$v('ce-eng'), perm:$v('ce-perm'),
     comm:$v('ce-comm'), contPct:$v('ce-cont'), actualTotal:$v('ce-actual-total'), pvWdc:$v('ce-pv-wdc'), bessKwh:$v('ce-bess-kwh'), bessKw:$v('ce-bess-kw') };
 }
-/* The chargers on the map, as quantities: the price book is the server's. */
-function _evQuantities(){
+/* The chargers on the map, as quantities: the price book is the server's.
+   `rec` is omegaCostQuantities' (below): each item's id by its place in
+   items, and the future ones. */
+function _evQuantities(rec){
   var out={ items:[], futureUnits:0, futureMakeReady:0 };
   if(typeof S==='undefined') return out;
   function _fut(o){ try{ return !!(window.OmegaEVFuture && window.OmegaEVFuture.isFuture(o)); }catch(e){ return false; } }
+  function _rec(k, id){ if(rec && id!=null) (rec[k]=rec[k]||[]).push(id); }
   var i,s;
   for(i=0;S.shapes&&i<S.shapes.length;i++){
     s=S.shapes[i]; if(!s) continue;
     if(s.kind!=='evpost' && s.kind!=='evunit' && s.kind!=='evl2' && s.kind!=='evcab') continue;
-    if(_fut(s)){ out.futureUnits++; continue; }
+    if(_fut(s)){ out.futureUnits++; _rec('ev:future', s.id); continue; }
     out.items.push({ key:(s.model||s.evId||s.kind), kind:s.kind, evId:s.evId||null, kw:+s.kw||0, mfr:s.mfr||'', qty:1,
       eqOverride:(s.eqCostOverride!=null?+s.eqCostOverride:null), installOverride:(s.installCostOverride!=null?+s.installCostOverride:null) });
+    _rec('ev#'+(out.items.length-1), s.id);
   }
   for(i=0;S.elements&&i<S.elements.length;i++){
     var e=S.elements[i]; if(!e || e.type!=='evgear' || e.evKind!=='charger') continue;
-    if(_fut(e)){ out.futureUnits++; continue; }
+    if(_fut(e)){ out.futureUnits++; _rec('ev:future', e.id); continue; }
     out.items.push({ key:(e.evModel||e.evId||'DCFC'), kind:'evunit', evId:e.evId||null, kw:+e.kw||0, mfr:e.mfr||'', qty:(e.units>1?e.units:1) });
+    _rec('ev#'+(out.items.length-1), e.id);
   }
   try{ if(window.OmegaEVFuture && out.futureUnits>0){ out.futureMakeReady=+(window.OmegaEVFuture.cost().total)||0; } }catch(e){}
   return out;
 }
-/* Everything the server prices: what is on the drawing and what the sheet says. */
-function omegaCostQuantities(){
+/* Everything the server prices: what is on the drawing and what the sheet says.
+   `rec`, when given (the takeoff by trade, omega-takeoff.js), is filled
+   with the ids of what each quantity counts, by the same tests that count
+   it, under the keys api/_lib/takeoff.js names its lines' parts by. q is
+   the same either way. */
+function omegaCostQuantities(rec){
   var q={};
+  function _rec(k, id){ if(rec && id!=null) (rec[k]=rec[k]||[]).push(id); }
   var fleet=(typeof _ppCollectFleet==='function')?_ppCollectFleet():{units:0,byModel:{}};
+  if(rec) Object.keys(fleet.idsByModel||{}).forEach(function(k){ fleet.idsByModel[k].forEach(function(id){ _rec('bess:'+k, id); _rec('bess', id); }); });
   q.fleet={ units:fleet.units||0, byModel:{} };
   Object.keys(fleet.byModel||{}).forEach(function(k){ var b=fleet.byModel[k];
     var ck=b.catalogKey||k, ce=(typeof BESS_CATALOG!=='undefined') ? (BESS_CATALOG[ck]||BESS_CATALOG[k]||null) : null;
@@ -29559,43 +29633,50 @@ function omegaCostQuantities(){
   q.configured=_uniq.map(function(b){ return { id:b.id, name:b.name, kwh:+b.kwh||0, kw:+b.kw||0, mfr:b.mfr||'', eqcost:+b.eqcost||0, installcost:+b.installcost||0, qty:b._qty||1, catalogKey:b.catalogKey||'' }; });
   var fr={kwh:0,kw:0}; try{ if(typeof omegaBessFleet==='function') fr=omegaBessFleet(); }catch(e){}
   q.fleetRating={ kwh:+fr.kwh||0, kw:+fr.kw||0 };
-  var _n=function(id){ return (S.elements||[]).filter(function(e){ return e && e.eqId===id; }).length; };
-  q.counts={ pad:_n('pad'), disco:_n('disco'), meter:_n('meter'), bollard:_n('bollard')+((typeof _padBollardCount==='function')?_padBollardCount():0), jbox:_n('jbox'), panel:_n('panel'),
-    hasXfmr: !!((S.elements||[]).some(function(e){ return e&&(e.eqId==='transformer'||e.eqId==='xfmr'); }) || (S.bessList||[]).some(function(b){ return b.xfmr && b.xfmr!=='N/A'; })) };
+  var _n=function(id){ return (S.elements||[]).filter(function(e){ var hit=!!(e && e.eqId===id); if(hit) _rec(id, e.id); return hit; }).length; };
+  var _bollardShapes=rec?[]:null;
+  var _xfmrEls=(S.elements||[]).filter(function(e){ return e&&(e.eqId==='transformer'||e.eqId==='xfmr'); });
+  q.counts={ pad:_n('pad'), disco:_n('disco'), meter:_n('meter'), bollard:_n('bollard')+((typeof _padBollardCount==='function')?_padBollardCount(_bollardShapes):0), jbox:_n('jbox'), panel:_n('panel'),
+    hasXfmr: !!(_xfmrEls.length>0 || (S.bessList||[]).some(function(b){ return b.xfmr && b.xfmr!=='N/A'; })) };
+  if(rec){ (_bollardShapes||[]).forEach(function(id){ _rec('bollard', id); }); _xfmrEls.forEach(function(e){ _rec('xfmr', e.id); }); }
   /* the NextNRG Microgrid Controller placed for the HOST (Draw › Utility);
      the one inside an Omega-Core skid is ClearSky's and never counted here */
-  q.counts.mgc=(S.shapes||[]).filter(function(sh){ return sh && sh.kind==='utility' && sh.utype==='mgc'; }).length;
+  q.counts.mgc=(S.shapes||[]).filter(function(sh){ var hit=!!(sh && sh.kind==='utility' && sh.utype==='mgc'); if(hit) _rec('mgc', sh.id); return hit; }).length;
   q.conduitFt={}; q.conduitRuns={};
   (S.conduits||[]).forEach(function(c){
     var ft = (c.condType==='PVC-UG') ? (c.ftLen||0) : (c.ftLen || (S.pxPerFt ? c.pxLen/S.pxPerFt : 0));
     q.conduitFt[c.condType]=(q.conduitFt[c.condType]||0)+ft; q.conduitRuns[c.condType]=(q.conduitRuns[c.condType]||0)+1;
+    _rec('conduit:'+c.condType, c.id);
   });
   q.firstBessKw=(S.bessList&&S.bessList[0])?(+(S.bessList[0].kw||380)):380;
   q.emsOn = document.getElementById('ems-toggle')?.checked === true;
   q.configuredKwh=(S.bessList||[]).reduce(function(s,b){ return s+(+(b.kwh||0))*(+(b.qty||1)); },0);
   q.configuredKw =(S.bessList||[]).reduce(function(s,b){ return s+(+(b.kw ||0))*(+(b.qty||1)); },0);
   q.sheet=_costSheetValues();
-  q.ev=_evQuantities(); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
+  q.ev=_evQuantities(rec); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
   q.solarKwDc=(typeof omegaSolarKwDc==='function')?(+omegaSolarKwDc()||0):0;
   q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null,   /* a canopy is priced as a canopy */
             nextnrgKwDc:(typeof omegaSolarNextnrgKwDc==='function')?(+omegaSolarNextnrgKwDc()||0):0 };   /* NextNRG's arrays, priced as its system */
+  if(rec && typeof omegaSolarMountOf==='function') (S.shapes||[]).forEach(function(s){ var m=omegaSolarMountOf(s); if(!m) return; _rec('solar:'+m, s.id); if(m!=='nextnrg') _rec('solar', s.id); });
   q.placedKw=0; try{ var _d=(typeof omegaDer==='function')?omegaDer():null; if(_d) q.placedKw=(+_d.solarKwDc||0)+(+_d.windKw||0)+(+_d.altKw||0); }catch(e){}
-  q.bnzCapex=0; try{ if(typeof bnzAll==='function') q.bnzCapex=+bnzAll().capex||0; }catch(e){}
+  q.bnzCapex=0; try{ if(typeof bnzAll==='function'){ var _bz=bnzAll(); q.bnzCapex=+_bz.capex||0; (_bz.items||[]).forEach(function(b){ _rec('envelope', b.id); }); } }catch(e){}
   q.compute={ podsN:0, podKw:0, shellPerPod:0, itPerPod:0, excludeIt:false };
   try{ if(window.OmegaComputeCost){ var _p=window.OmegaComputeCost.pods(), _c=window.OmegaComputeCost.config();
-    q.compute={ podsN:_p.n, podKw:_p.kw, shellPerPod:+_c.shellPerPod||0, itPerPod:+_c.itPerPod||0, excludeIt:!!_c.excludeIt }; } }catch(e){}
+    q.compute={ podsN:_p.n, podKw:_p.kw, shellPerPod:+_c.shellPerPod||0, itPerPod:+_c.itPerPod||0, excludeIt:!!_c.excludeIt };
+    (_p.ids||[]).forEach(function(id){ _rec('compute', id); }); } }catch(e){}
   q.gen=[]; (S.shapes||[]).forEach(function(sh){ if(!sh||(sh.kind!=='deralt'&&sh.kind!=='derwind')) return;
-    q.gen.push({ kind:sh.kind, altId:sh.altId||null, genId:sh.genId||null, model:sh.model||null, label:sh.label||null, kw:+sh.kw||0, fuel:sh.fuel||null }); });
+    q.gen.push({ kind:sh.kind, altId:sh.altId||null, genId:sh.genId||null, model:sh.model||null, label:sh.label||null, kw:+sh.kw||0, fuel:sh.fuel||null });
+    _rec('gen#'+(q.gen.length-1), sh.id); });
   q.genOverrides=(S.costOverrides&&S.costOverrides.genPerKw)||{};
   q.dc={};
   var dcEl=(S.elements||[]).filter(function(e){ return e && (e.loadKind==='datacenter') && (+e.loadKw>0 || +e.loadItKw>0); })[0];
-  if(dcEl){ q.dc.element={ itKw:+dcEl.loadItKw||0, pue:+dcEl.loadPue||0, kw:+dcEl.loadKw||0 }; }
-  else { var _pods=0,_podKw=0; (S.shapes||[]).forEach(function(sh){ if(sh&&sh.kind==='derdc'&&!sh.omegaCore){ _pods++; _podKw+=+sh.kw||0; } });
+  if(dcEl){ q.dc.element={ itKw:+dcEl.loadItKw||0, pue:+dcEl.loadPue||0, kw:+dcEl.loadKw||0 }; _rec('dc', dcEl.id); }
+  else { var _pods=0,_podKw=0; (S.shapes||[]).forEach(function(sh){ if(sh&&sh.kind==='derdc'&&!sh.omegaCore){ _pods++; _podKw+=+sh.kw||0; _rec('dc', sh.id); } });
     q.dc.pods=_pods; q.dc.podKw=_podKw; try{ q.dc.pue=(S.omegaSizing&&+S.omegaSizing.pue)||0; }catch(e){} }
   /* the Omega-Core skids on the drawing: in the Run total at the recorded
      system price (the skid + the controller built into it), the server's
      one record (2026-10-14) */
-  q.omegaCore={ skids:(S.shapes||[]).filter(function(sh){ return sh && sh.kind==='derdc' && sh.omegaCore; }).length };
+  q.omegaCore={ skids:(S.shapes||[]).filter(function(sh){ var hit=!!(sh && sh.kind==='derdc' && sh.omegaCore); if(hit) _rec('omegaCore', sh.id); return hit; }).length };
   return q;
 }
 window.omegaCostQuantities=omegaCostQuantities;
@@ -32661,6 +32742,9 @@ function _ppSigns(){
    argument some renderers take. */
 var D4_SHEETS = [
   { no:'E0',   name:'Cover Sheet',          fn:'_ppRenderE0' },
+  /* the project's read of the customer's plans against this drawing
+     (omega-plan-read.js; api/plan-read changes): only with a read */
+  { no:'E0.1', name:'Changes from the Customer\u2019s Plans', fn:'_ppRenderPlanChanges', planRead:true },
   { no:'E1.0', name:'Plot Plan',            fn:'_ppRenderPlot', mode:'wide' },
   { no:'E1.1', name:'Enlarged Plot Plan',   fn:'_ppRenderPlot', mode:'tight' },
   { no:'E1.2', name:'Demolition Plan',      fn:'_ppRenderDemo' },
@@ -32688,12 +32772,12 @@ function d4BuildRows(){
 
   /* --- Drawings ------------------------------------------------------ */
   D4_SHEETS.forEach(function(s){
-    var ok=_d4Have(s.fn);
+    var ok=_d4Have(s.fn), read=!s.planRead || !!(typeof S!=='undefined' && S.planRead && S.planRead.id);
     rows.push({
       id:'sheet:'+s.no, grp:'Drawings',
       name:s.no+' \u2014 '+s.name,
       formats:['SVG','PDF'], fmt:'PDF', on:false,
-      ok:ok, why: ok?'':'renderer '+s.fn+' not loaded',
+      ok:ok && read, why: !ok?'renderer '+s.fn+' not loaded':(!read?'read the customer\u2019s plan set first (Build \u203a Read Plans)':''),
       kind:'sheet', sheet:s
     });
   });
@@ -33063,6 +33147,14 @@ async function d4Download(){
       return r.kind==='sheet' && r.sheet && r.sheet.fn==='_ppRenderPlot'; });
     var _needOl = rows.some(function(r){
       return r.kind==='sheet' && r.sheet && r.sheet.ol; });
+    /* E0.1 draws the server's comparison of the customer's plans with this
+       drawing (api/plan-read changes); asked for here, as the map and the
+       canvas capture are prepared here, so the sheet renders from it. */
+    if(rows.some(function(r){ return r.kind==='sheet' && r.sheet && r.sheet.planRead; })){
+      _d4Prog('Comparing with the customer\u2019s plans\u2026', 4);
+      try{ await OmegaPlanRead.changes(); }
+      catch(e){ notes.push('E0.1: '+((e&&e.message)||'the comparison with the plans could not be made')+'; the sheet is left out.'); }
+    }
 
     if(_needPlot || _needOl){
       _d4Prog('Preparing map\u2026', 5);
@@ -36657,17 +36749,25 @@ function omegaSolarNextnrgKwDc(){
   return kw;
 }
 window.omegaSolarNextnrgKwDc=omegaSolarNextnrgKwDc;
+/* How the cost engine prices one array: 'nextnrg' (NextNRG's system, its
+   own line), 'canopy', 'roof', 'ground', or 'unspecified' (a traced custom
+   area claims no mount: the server prices what it cannot place by mount as
+   plain PV at the size band); null for what is not a priced array. The
+   sum below and the takeoff's map marks (omega-takeoff.js) both read it. */
+function omegaSolarMountOf(s){
+  if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return null;
+  if(!((+s.kw||0)>0)) return null;
+  if(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg(s)) return 'nextnrg';   /* NextNRG's system, priced as such */
+  if(s.mount==='custom' && !s.canopy) return 'unspecified';
+  return (s.canopy || s.mount==='adjacent') ? 'canopy' : (s.mount==='roof' ? 'roof' : 'ground');
+}
+window.omegaSolarMountOf=omegaSolarMountOf;
 function omegaSolarByMount(){
   var t={ ground:0, roof:0, canopy:0 };
   try{
     (S.shapes||[]).forEach(function(s){
-      if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return;
-      var kw=+s.kw||0; if(!(kw>0)) return;
-      if(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg(s)) return;   /* NextNRG's system, priced as such */
-      /* a traced custom area claims no mount: the server prices what it
-         cannot place by mount as plain PV at the size band */
-      if(s.mount==='custom' && !s.canopy) return;
-      t[(s.canopy || s.mount==='adjacent') ? 'canopy' : (s.mount==='roof' ? 'roof' : 'ground')]+=kw;
+      var m=omegaSolarMountOf(s);
+      if(m==='ground' || m==='roof' || m==='canopy') t[m]+=(+s.kw||0);
     });
   }catch(e){}
   return t;
@@ -37196,6 +37296,9 @@ function omegaRenderResults(){
         + 'meteo source above.</div>';
   }
   _omSet('rr-b-fin', fi);
+  /* the figures this rail just printed, for the summary pinned to the map
+     (omega-run-summary.js), which shows them and never works them out */
+  window._RR_FIN = { gross: gross, net: net, perW: perW, perKw: perKw || null, payback: payback, irr: irr, npv: npv, fullCost: _fullCost, at: S.lastRunAt || null };
 }
 
 /* ---- stale lifecycle ----------------------------------------------- */
@@ -37407,13 +37510,22 @@ window.omegaRollupFields = omegaRollupFields;
    is left alone: the totals stay in S and ride the next save that is
    allowed. Never a second writer of the record — saveProject() is the
    one write. */
-function omegaRunSave(){
-  if(!S.costRollup) return false;
+/* Whether a priced Run may be written now: signed in, a project open, the
+   load finished, and a plan whose producing controls run (not read-only,
+   not unchecked). omegaRunSave and the Run summary's re-run after a save
+   (omega-run-summary.js) both ask it, so they wait on the same plans. */
+function omegaRunMayWrite(){
   if(!(window._currentUser && window._projectId && window._loadReady)) return false;
   try{
     var pk = (window.OmegaCaps && typeof OmegaCaps.packageAccess==='function') ? OmegaCaps.packageAccess() : null;
     if(pk && (pk.readOnly || pk.unverified)) return false;
   }catch(e){}
+  return true;
+}
+window.omegaRunMayWrite = omegaRunMayWrite;
+function omegaRunSave(){
+  if(!S.costRollup) return false;
+  if(!omegaRunMayWrite()) return false;
   if(typeof _setSaved==='function') _setSaved('unsaved');
   if(typeof saveProject!=='function') return false;
   saveProject();
@@ -40392,11 +40504,11 @@ function _geoApplyShape(sh, toPx, ppf){
    drift apart again. It reads the quantity the renderer computes from the
    geometry, never the number of dots it painted — those thin out with zoom
    and vanish with the layer toggle. */
-function _padBollardCount(){
+function _padBollardCount(ids){
   var n = 0;
   try {
     (S.shapes||[]).forEach(function(sh){
-      if (sh && isFinite(+sh.bollardCount) && +sh.bollardCount > 0) n += +sh.bollardCount;
+      if (sh && isFinite(+sh.bollardCount) && +sh.bollardCount > 0) { n += +sh.bollardCount; if (ids) ids.push(sh.id); }
     });
   } catch(e){}
   return n;
@@ -41706,6 +41818,15 @@ function openPlotPlanExport(){
   var modal=document.getElementById('pp-modal');
   if(!modal){ modal=_ppBuildModal(); }
   modal.style.display='flex';
+  /* E0.1 is offered, and ticked the first time, only on a project that
+     carries a read of the customer's plans (Build › Read Plans) */
+  (function(){
+    var row=document.getElementById('pp-e01-row'), cb=document.getElementById('pp-e01'), has=!!(S && S.planRead && S.planRead.id);
+    if(!row || !cb) return;
+    if(has && row.style.display==='none') cb.checked=true;
+    if(!has) cb.checked=false;
+    row.style.display=has?'flex':'none';
+  })();
   /* autofill E0 cover fields (only when empty so edits persist) */
   function def(id,v){ var el=document.getElementById(id); if(el && !el.value && v) el.value=v; }
   var pname=(document.getElementById('pname')||{}).value||'';
@@ -41802,6 +41923,7 @@ function _ppBuildModal(){
     '<h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text)">Plot Plan Export</h3>'+
     '<div style="margin-bottom:10px"><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:4px">SHEETS</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e0" checked> E0 \u2014 Cover Sheet (auto-generated details)</label>'+
+    '<label id="pp-e01-row" style="display:none;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e01"> E0.1 \u2014 Changes from the Customer\u2019s Plans (Read Plans)</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e10" checked> E1.0 \u2014 Plot Plan (whole site / wide view)</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e1" checked> E1.1 \u2014 Enlarged Plot Plan (equipment)</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e12"> E1.2 \u2014 Demolition Plan</label>'+
@@ -44461,6 +44583,13 @@ async function _ppExport(){
     _setBtn('Writing AI notes\u2026');
     try{ await _ppGenerateAINotes(); }catch(e){}
   }
+  /* E0.1: the server's comparison of the customer's plans with this
+     drawing, asked for before the sheets render (api/plan-read changes) */
+  var wantE01=_cbChecked('pp-e01') && !!(S.planRead && S.planRead.id), _e01Err='';
+  if(wantE01){
+    _setBtn('Comparing with the plans\u2026');
+    try{ await OmegaPlanRead.changes(); }catch(e){ _e01Err=(e&&e.message)||'the comparison could not be made'; }
+  }
   _setBtn('Generating sheets\u2026');
   var wantE12=_cbChecked('pp-e12'), wantE20=_cbChecked('pp-e20'), wantE30=_cbChecked('pp-e30'), wantE40=_cbChecked('pp-e40');
   var wantS11=_cbChecked('pp-s11'), wantS12=_cbChecked('pp-s12'), wantS20=_cbChecked('pp-s20'), wantS30=_cbChecked('pp-s30');
@@ -44472,6 +44601,11 @@ async function _ppExport(){
   var sheets=[];
   try {
     if(wantE0) sheets.push({ no:'E0', svg:_ppRenderE0(sizeKey, street) });
+    if(wantE01){
+      var _e01=(!_e01Err && typeof _ppRenderPlanChanges==='function')?_ppRenderPlanChanges(sizeKey, street):null;
+      if(_e01) sheets.push({ no:'E0.1', svg:_e01 });
+      else if(window.console) console.warn('[plot plan] E0.1 left out: '+(_e01Err||'no comparison with the plans'));
+    }
     if(wantE10) sheets.push({ no:'E1.0', svg:_ppRenderPlot(sizeKey, street, 'wide') });
     if(wantE1) sheets.push({ no:'E1.1', svg:_ppRenderPlot(sizeKey, street, 'tight') });
     if(wantE12) sheets.push({ no:'E1.2', svg:_ppRenderDemo(sizeKey, street) });
@@ -58087,8 +58221,11 @@ function _trenchRunIsIndoor(t){
 }
 /* Feet of a drawn run that actually get dug. */
 function _trenchRunDugFt(t){ return _trenchRunIsIndoor(t) ? 0 : _trenchRunFt(t); }
+/* Feet dug across every drawn run: the Build player's trenching and the
+   takeoff's trench (omega-build-sequence.js, omega-takeoff.js) read it. */
+function _trenchDugFtAll(){ var ft=0; try{ ((typeof S!=='undefined' && S._trenches)||[]).forEach(function(t){ ft+=+_trenchRunDugFt(t)||0; }); }catch(e){} return ft; }
 try{ window._groundPolyFt=_groundPolyFt; window._viewOwnsScale=_viewOwnsScale; window._viewPxPerFt=_viewPxPerFt; window._trenchRunFt=_trenchRunFt;
-     window._condIsIndoor=_condIsIndoor; window._trenchRunIsIndoor=_trenchRunIsIndoor; window._trenchRunDugFt=_trenchRunDugFt; }catch(e){}
+     window._condIsIndoor=_condIsIndoor; window._trenchRunIsIndoor=_trenchRunIsIndoor; window._trenchRunDugFt=_trenchRunDugFt; window._trenchDugFtAll=_trenchDugFtAll; }catch(e){}
 
 /* Shared trench SPINE: units in a row drop to a common aisle trench below the
    row; the trench (3 color-coded conductors) runs horizontally to the EMS.
@@ -146033,12 +146170,20 @@ function buildParking(it){
   return g;
 }
 
+/* A drawn fence: an enclosure when the rectangle is one (not one long
+   panel through its centre), else a run along its long side. buildFence
+   draws it so, and the takeoff measures it so (OmegaSiteVis.fenceFt). */
+function fenceForm(it){
+  var w = Math.max(2, it.wf), d = Math.max(0.2, it.lf);
+  var enclosure = d >= 4 && w >= 4 && Math.min(w,d)/Math.max(w,d) >= 0.15;
+  return { w:w, d:d, enclosure:enclosure, ft: enclosure ? 2*(w+d) : Math.max(w,d) };
+}
 function buildFence(it, arch){
   var g = new THREE.Group();
-  var w = Math.max(2, it.wf), d = Math.max(0.2, it.lf), h = arch.h;
+  var f = fenceForm(it), w = f.w, d = f.d, h = arch.h;
   /* A drawn rectangle is an enclosure, not one long panel through its
      centre. Keep genuinely thin fence runs as runs. */
-  if(d >= 4 && w >= 4 && Math.min(w,d)/Math.max(w,d) >= 0.15){
+  if(f.enclosure){
     var hw=w/2, hd=d/2;
     fenceRun(g,-hw,-hd, hw,-hd,h,60);
     fenceRun(g, hw,-hd, hw, hd,h,60);
@@ -147452,7 +147597,12 @@ var CSS = ''
 +   'flex-direction:column;font-family:"IBM Plex Sans",sans-serif;color:#E0E0E0}'
 + '#ovis.on{display:flex}'
 + '#ovis .ov-bar{height:44px;flex-shrink:0;background:var(--bg);border-bottom:1px solid #30404F;'
-+   'display:flex;align-items:center;gap:10px;padding:0 12px}'
++   'display:flex;align-items:center;gap:10px;padding:0 12px;'
+    /* a phone is narrower than the bar: it scrolls sideways and Close stays
+       pinned on screen (it sat past the edge at 390 px, with no way out of
+       the view but Escape) */
++   'overflow-x:auto;overflow-y:hidden;scrollbar-width:none}'
++ '#ovis .ov-bar::-webkit-scrollbar{display:none}'
 + '#ovis .ov-ttl{font-size:13px;font-weight:700;letter-spacing:.3px}'
 + '#ovis .ov-ttl span{color:#4A8FD8}'
 + '#ovis .ov-sub{font-size:10.5px;color:#9A9A9A;font-family:"IBM Plex Mono",monospace}'
@@ -147466,7 +147616,7 @@ var CSS = ''
 + '#ovis .ov-b:hover{background:#2A3A49;border-color:#4d4d4d}'
 + '#ovis .ov-b.on{background:#4A8FD8;border-color:#4A8FD8;color:#0d0d0d;font-weight:600}'
 + '#ovis .ov-b.pri{background:#4A8FD8;border-color:#4A8FD8;color:#0d0d0d;font-weight:600}'
-+ '#ovis .ov-x{font-size:17px;line-height:1;padding:4px 11px}'
++ '#ovis .ov-x{font-size:17px;line-height:1;padding:4px 11px;position:sticky;right:0;z-index:1;box-shadow:-10px 0 10px var(--bg)}'
 + '#ovis .ov-body{flex:1;display:flex;min-height:0}'
 + '#ovis .ov-stage{flex:1;position:relative;min-width:0;background:#0f1013}'
 + '#ovis canvas{width:100%;height:100%;display:block;outline:none;touch-action:none}'
@@ -148535,6 +148685,8 @@ window.OmegaSiteVis = {
   refresh: reload,
   snapshot: snapshot,
   read: readSite,
+  /* Feet of fence one drawn fence item is, as buildFence draws it. */
+  fenceFt: function(it){ return it ? fenceForm(it).ft : 0; },
   modelAudit: modelAudit,
   applyModelEdit: applyModelEdit,
   elementBox: elementBox,
@@ -173271,15 +173423,15 @@ if (root.console && console.info) {
   /* Counted off the drawing, like everything else that has to agree
      with the plan. */
   function pods() {
-    var n = 0, kw = 0;
+    var n = 0, kw = 0, ids = [];
     try {
       (root.S.shapes || []).forEach(function (sh) {
         /* Omega-Core is ClearSky's, on its own meter: never the host's capex */
         if (!sh || sh.kind !== 'derdc' || sh.omegaCore) return;
-        n++; kw += (+sh.kw || 0);
+        n++; kw += (+sh.kw || 0); ids.push(sh.id);
       });
     } catch (e) {}
-    return { n: n, kw: kw };
+    return { n: n, kw: kw, ids: ids };
   }
 
   function figures() {

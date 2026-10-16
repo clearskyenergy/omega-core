@@ -486,7 +486,7 @@ function editorChecks() {
    ['the proposal type', 'function _proposalTypeFromDrawing(', /sh\.kind==='derdc' && !sh\.omegaCore/],
    ['the Results rail (its own row)', 'function omegaRenderResults(', /'Omega-Core'\+unitSfx/]
   ].forEach(function (c) { var b = ''; try { b = bodyFrom(ED, c[1]); } catch (e) {} ok(c[2].test(b), c[0] + ' keeps the skid off the host', c[1]); });
-  var pods = ED.slice(ED.indexOf('  function pods() {\n    var n = 0, kw = 0;'), ED.indexOf('  function pods() {\n    var n = 0, kw = 0;') + 400);
+  var pods = ED.slice(ED.indexOf('  function pods() {\n    var n = 0, kw = 0, ids = [];'), ED.indexOf('  function pods() {\n    var n = 0, kw = 0, ids = [];') + 400);
   ok(/sh\.omegaCore\) return;/.test(pods), 'OmegaComputeCost.pods: a skid is never priced as a $30k/kW pod');
   ok(/if \(!sh \|\| sh\.kind !== 'derdc' \|\| sh\.omegaCore\) return;   \/\* not the host's compute \*\//.test(ED), 'OmegaRecord.podsOnDrawing skips it');
   ok(/if \(k === 'derdc' && sh\.omegaCore\) return null;/.test(ED), 'the supply links do not treat it as a load');

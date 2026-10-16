@@ -139,6 +139,14 @@ function evEst(kind, kw) {
   var eqDc = Math.max(20000, r0(kw * 300)); return { eq: eqDc, install: r0(eqDc * 0.55) };
 }
 
+/* How many priced items a body carries: a drawing is a few thousand, never
+   more (the cost and build-sequence doors refuse a bigger body). */
+var MAX_ITEMS = 5000;
+function size(q) {
+  q = q || {};
+  return Object.keys((q.fleet && q.fleet.byModel) || {}).length + ((q.configured || []).length) + ((q.ev && q.ev.items) || []).length + ((q.gen || []).length);
+}
+
 /* ── the roll-up ──────────────────────────────────────────────────── */
 function rollup(q) {
   q = q || {};
@@ -369,5 +377,5 @@ function rollup(q) {
   return out;
 }
 
-module.exports = { rollup: rollup, pvRate: pvRate, NN_RATE: NN_RATE, SOLAR_MOUNTS: SOLAR_MOUNTS, bessAuto: bessAuto, genClass: genClass, evBook: evBook, evEst: evEst, catalogPrice: catalogPrice,
+module.exports = { rollup: rollup, size: size, MAX_ITEMS: MAX_ITEMS, pvRate: pvRate, NN_RATE: NN_RATE, SOLAR_MOUNTS: SOLAR_MOUNTS, bessAuto: bessAuto, genClass: genClass, evBook: evBook, evEst: evEst, catalogPrice: catalogPrice,
   _tables: { BENCH: BENCH, BESS_EQ_PER_KWH: BESS_EQ_PER_KWH, BESS_INSTALL_RATIO: BESS_INSTALL_RATIO, SHEET: SHEET, DC_ROM: DC_ROM, AUTEL: AUTEL, EV_OTHER: EV_OTHER } };

@@ -75,7 +75,7 @@ var ed = read('editor.html');
   assert.ok(ed.indexOf(t) < 0, 'a cost table or rule is still in the page: ' + t); count++;
 });
 assert.match(ed, /fetch\('\/api\/cost-rollup',\{method:'POST'/); count++;
-assert.match(ed, /function omegaCostQuantities\(\)\{/); assert.match(ed, /function _renderCostEst\(ans, stale\)/); count += 2;
+assert.match(ed, /function omegaCostQuantities\(rec\)\{/); assert.match(ed, /function _renderCostEst\(ans, stale\)/); count += 2;
 assert.match(ed, /if\(window\._COST_PENDING && window\._COST_PROMISE && typeof window\._COST_PROMISE\.then==='function'\) window\._COST_PROMISE\.then\(finish, finish\);/, 'Run waits for the answer'); count++;
 assert.match(ed, /function getBessCostAuto\(kwh, override\) \{\n  if\(override > 0\) return override;\n  if\(!kwh \|\| kwh<=0\) return 0;\n  var a = window\._COST_SERVER/); count++;
 assert.match(ed, /var _src  = _evBook\(_mk\[_e\]\);/); assert.match(ed, /var bk = _evBook\(k\);/); count += 2;
@@ -152,7 +152,7 @@ function collect(shapes) {
     _ppCollectFleet: function () { return { units: 0, byModel: {} }; }, _vendorOverrides: function () { return {}; }, omegaBessFleet: function () { return { kwh: 0, kw: 0 }; },
     omegaSolarKwDc: function () { return 500; }, omegaDer: function () { return { solarKwDc: 500, windKw: 0, altKw: 0 }; }, bnzAll: function () { return { capex: 0 }; }, OMEGA_PRICE_BASIS: 'cost' };
   vm.createContext(c2);
-  vm.runInContext(cut('_costSheetValues') + cut('_evQuantities') + cut('omegaSolarByMount') + cut('omegaCostQuantities') + '\nthis.q = omegaCostQuantities();', c2);
+  vm.runInContext(cut('_costSheetValues') + cut('_evQuantities') + cut('omegaSolarMountOf') + cut('omegaSolarByMount') + cut('omegaCostQuantities') + '\nthis.q = omegaCostQuantities();', c2);
   return c2.q;
 }
 var arrays = [{ kind: 'dersolar', kw: 176, mount: 'adjacent', canopy: true, autoLayout: true }, { kind: 'dersolar', kw: 324, mount: 'ground' }];
@@ -194,7 +194,7 @@ function collectFleet(byModel, catalog) {
     _ppCollectFleet: function () { return { units: Object.keys(byModel).length, byModel: byModel }; }, _vendorOverrides: function () { return {}; }, omegaBessFleet: function () { return { kwh: 1000, kw: 250 }; },
     omegaSolarKwDc: function () { return 0; }, omegaDer: function () { return { solarKwDc: 0, windKw: 0, altKw: 0 }; }, bnzAll: function () { return { capex: 0 }; }, OMEGA_PRICE_BASIS: 'cost' };
   vm.createContext(c3);
-  vm.runInContext(cut('_costSheetValues') + cut('_evQuantities') + cut('omegaSolarByMount') + cut('omegaCostQuantities') + '\nthis.q = omegaCostQuantities();', c3);
+  vm.runInContext(cut('_costSheetValues') + cut('_evQuantities') + cut('omegaSolarMountOf') + cut('omegaSolarByMount') + cut('omegaCostQuantities') + '\nthis.q = omegaCostQuantities();', c3);
   return c3.q;
 }
 var CAT = { 'NEXTNRG-SAFT-IFLEX-3400': { mfr: 'NextNRG', nextnrg: true, kwh: 3400 }, 'GOTION-EDGE-760': { mfr: 'Gotion', kwh: 760 } };

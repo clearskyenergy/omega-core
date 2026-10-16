@@ -1376,6 +1376,274 @@ dialog says so and nothing is mailed. `scripts/tests/thelios.js` pins the
 form's field names and the door. Design and the not-built list:
 `docs/HELIOS-INTAKE.md`.
 
+## Read Plans — the plan-set reader (2026-10-16)
+
+**A customer's plan set read into Site Map, every figure with the words it
+was read from** ("let's build it", after a Perplexity ad that "reads
+blueprints, prices jobs, and maps out builds"; `docs/BLUEPRINT-TO-BUILD.md`
+Phase 1). Build › 1 · Site › *Read Plans* (`omega-plan-read.js`, ES5, owned
+by Omega Design) renders each PDF sheet with pdf.js (the BESS sizer's cdnjs
+build, fetched on first use) at 2,400 px with its own text layer, and
+`POST /api/plan-read` is the ONE door: `read` sends one sheet to the model
+(`OMEGA_PLAN_MODEL`, else Claude Opus 5.5, never a model from the body; the
+workspace's `AI_KEY_<ORG>`, else `ANTHROPIC_API_KEY`) with
+`api/_lib/plan-read.js`'s prompt and closed structured-output schema and
+returns it normalised — read, never invent: every item and fact carries its
+`quote` and a box on the sheet, no quote is low confidence, an impossible
+number is null (never clamped), an unknown kind is dropped and counted.
+`check` merges the sheets (one unit on the site plan and the single-line is
+one unit; quantities are never summed) and lists what disagrees, comparing
+the sheets' own figures only, never an engineering verdict. Who: a
+workspace whose plan opens Site Map (a package's Omega Design, a legacy
+plan's editor), not a viewer or a disabled member, not pending, suspended
+or cancelled, a verified email or `admin.clientAdmin`. Cost: 80 sheets a
+workspace and 50 a person a day (staff 300) on
+`omega_orgs/{org}/plan_read_counters/{day}`, reserved in a transaction
+before the call and given back on a failure; a sheet read again is answered
+free from `omega_orgs/{org}/plan_reads/{sha256}`; the rules close both.
+What a read becomes is the library's `place`, so the page keeps no rule:
+Insert-tab equipment (`addEl`, counted by the Run as if placed by hand), a
+charger as the EV tools' Level 2 (`evl2`) or DC fast (`evunit`) shape by its
+PRINTED kW or words (neither printed: listed, not placed, because the two
+price an order of magnitude apart), and nothing for solar arrays, runs and
+trenches (listed with their figures: the Run prices an array from its
+geometry). A battery is created WITH its rating under both field names (the
+legend's fleet read stamps an unrated one with the guided build's 1,000 kW
+default) and becomes a configured system on `S.bessList` as the guided
+build's placeholder does (a list configured by hand is never touched). One
+Place is one undo step; Undo parks that configuration with its battery and
+Redo brings it back (the redo module's marker is kept, so it never wraps
+Undo twice). The read rides on the project as `S.planRead` (saveProject,
+_loadProject). *Trace over this sheet* hands a sheet to the Site Overlay's
+own upload. Held by `scripts/tests/tplanread.js` (in `npm test`) and `npm
+run check:planread` (`scripts/render-plan-read.js`: the real editor, the
+made-up sample set in `scripts/_lib/plan-fixture.js`, then the Run and every
+export downstream). Per-sheet billed metering is a pricing decision not yet
+made; the daily caps stand in.
+
+**What changed since the plans, and the plan set's sheet E0.1** (Phase 5,
+"plan set in → plan set out": our plan set carries a diff sheet against the
+customer's). From v2, `S.planRead.items` keeps every placeable item with the
+figures the plans print and how many of it Place put down. `POST
+/api/plan-read` `changes` (authenticate only, pure, like `check`) runs
+`api/_lib/plan-read.js changes(read, now)`: the stated totals (battery kW
+and kWh, solar kW-DC, the charger count, exact) against the drawing's; each
+placed item against the pieces still carrying its provenance (as read,
+changed, fewer, more, removed, not placed; ratings within 2%, a model by
+its letters and digits); the listed solar, conduit and trench summed (figure
+× quantity) against the drawing's totals, folded under a stated total when
+there is one, never compared on a drawing not set to scale; and what stands
+on the drawing beyond the plans as added, by count key (`countKey`: the
+fleet's batteries, the Run's chargers, Insert's equipment by id). The page
+says only what the drawing holds, through the editor's own readers
+(`_ppCollectFleet().ratingById`, `_evQuantities`, the Run's `_n` test,
+`omegaCostQuantities`, `_trenchDugFtAll`); a v1 read is compared on its
+totals and says why not item by item. Read Plans shows it (*What changed*
+after Place and on the review, and on the start screen of a project that
+carries a read), as a CSV, and as sheet E0.1, *Changes from the Customer's
+Plans* (`_ppRenderPlanChanges` in `omega-plan-read.js`, the plan set's own
+frame and title block, Δ on every row that differs, the font stepping down
+before rows are left to the CSV), which the plot plan export offers, ticked,
+and the deliverables bundle lists (`planRead: true` in `D4_SHEETS`) only on
+a project with a read; both ask the server for the comparison just before
+they draw. Never an engineering judgement; it says what it could not
+compare.
+
+**Jarvis reads a plan set through the same dialog** (Phase 5, "Jarvis does
+the whole thing"). Three site-agent tools (`scripts/site-agent`) cover it:
+- `omega_read_plans {path}` checks the file before the browser is touched:
+  a PDF or a sheet's photo, at most 80 MB, inside `OMEGA_PLANS_DIR` when
+  that is set. It sets the file on Read Plans' own input with Playwright.
+  Every sheet goes through the one door and its daily allowance. It
+  returns the review (each item and fact with its words, sheet and
+  confidence, what can be placed and what starts ticked, what the sheets
+  disagree on), never a sheet image or a box, and places nothing.
+- `omega_place_plans {items?}` places only the indexes the person approved,
+  as one undo step, unsaved, and a read once.
+- `omega_plans_changed` reads *What changed*.
+
+The agent (`.claude/agents/omega-site-builder.md`) shows the person the
+review before anything is placed. Held by the site agent's tests (in `npm
+test`) and `npm run check:agentplans` (`scripts/render-agent-plans.js`):
+the MCP server driving the real editor over the DevTools protocol on the
+sample plan set, with only the model stood in for.
+
+## Build sequence — the 3D Site Visualizer's Build player (2026-10-16)
+
+**The site goes up step by step while "In place $X" counts to the Run total**
+("And then do phase 2"; `docs/BLUEPRINT-TO-BUILD.md` Phase 2). *Build* on the
+visualizer's bar (`omega-build-sequence.js`, ES5, `#ov-build`, owned by Omega
+Plans with the visualizer) posts `omegaCostQuantities()` (exactly what the Run
+sends) and what the 3D model draws (feet of trench dug, how many of each
+archetype, whether it draws conduit) to `POST /api/build-sequence`, the ONE
+door: it runs the Run's own roll-up (`editor-cost.js rollup`, priced as the
+CALLER's workspace, never a body's `vendorOrg`) and `api/_lib/build-sequence.js`
+splits it into the steps of the job (design & permits, survey, trenching,
+pads, equipment set, solar, EV chargers, building upgrades, terminations,
+fence & bollards, utility, commissioning, energize; a step the drawing has
+nothing for is left out). Every roll-up line goes to exactly one step with the
+Run's contingency where the Run applies it (NextNRG's installed prices and the
+Omega-Core skid carry none); `lines()` throws when the lines miss the
+roll-up's subtotal, so a new cost line fails the tests instead of vanishing;
+cents are apportioned by largest remainder, so in place after the last step IS
+the Run total to the cent. A contracted cost is spread by the estimate's
+shares (or carried whole on energize when nothing is priced) and says so;
+conduit stays the BOM estimate the Run keeps out of its total. Days are
+ClearSky planning rates (`RATES`: crew-days a unit, one crew a step, crews
+added to hold a step near 20 days, up to six), each with its working;
+engineering and permits (the jurisdiction's clock), the interconnection (the
+utility's) and building upgrades read "not on file" with no number, and
+energize waits on the utility. Which step puts each archetype in place is the
+server's `reveal` (held to the visualizer's ARCH table); the page only shows,
+hides and animates the visualizer's own wrappers (`userData.itemId`) and its
+conduit layer, Pause holds mid-step, Explode lifts the gear 8 ft, *Schedule &
+money* draws the Gantt with each step's lines and working and downloads a CSV,
+and closing (or closing the visualizer) puts every piece back as drawn; a
+Refresh under it is noticed (`V.site`), never animated. Nothing is written or
+stored: the sequence is derived from the drawing each time. Who: as the
+visualizer opens (a package's Omega Plans, produce; a legacy plan's Site Map;
+an active workspace and member, viewers included; staff). The visualizer's
+bar scrolls sideways on a phone with Close pinned (it sat off a 390 px
+screen); a person who asks for less motion gets the build finished, with
+steps that appear rather than fly in. Held by `scripts/tests/tbuildseq.js`
+(in `npm test`: a sample site, 400 random drawings through the real roll-up,
+the door on the Firestore double) and `npm run check:buildseq`, also in
+`check:pages` (`scripts/render-build-sequence.js`: the real editor and
+visualizer, three.js from `assets/vendor`, a site placed with the editor's
+own tools, played to the end on a desktop, a 390 px phone and a tablet asking
+for less motion).
+
+## Takeoff by trade — Cost › Trades (2026-10-16)
+
+**The Run's money by trade, each line with its quantity, and what it counts
+marked on the map and in the 3D model** ("Push it and continue with the
+builds"; `docs/BLUEPRINT-TO-BUILD.md` Phase 3). Cost › *Trades*
+(`omega-takeoff.js`, ES5, `#ct-takeoff` / `#cst-takeoff` inside the Cost tab,
+so Omega Estimate's) posts `omegaCostQuantities(rec)` (exactly what the Run
+sends) and what the drawing measures that the Run does not price (feet of
+trench dug, `_trenchDugFtAll`, the Build player's figure; feet of fence,
+`OmegaSiteVis.fenceFt`, as the 3D model draws it; the pads' area off the
+visualizer's own reading, only on a calibrated map and only when it is the
+area of the very pads the Run counts) to `POST /api/takeoff`, the ONE door:
+it runs the Run's own roll-up (priced as the CALLER's workspace) and
+`api/_lib/takeoff.js` puts the build sequence's lines (`BS.money`: the Run's
+contingency where the Run applies it, a contracted total spread by the
+estimate's shares, cents by largest remainder) into trades in estimate order:
+Sitework & civil (31–32), Concrete (03), Electrical (26), Energy storage (26),
+Solar PV (48), EV charging (26), On-site generation (26 / 48), Compute,
+Building envelope (07–08), Utility interconnect (33), Soft costs (01), the
+divisions as the editor's own Takeoff & Budget book classes the same things.
+Every line is in exactly ONE trade (`LINE`; a line with no trade throws); a
+line's rows (battery model, solar mount, charger model, generator, the skid
+and its controller, the ROM's items) split its cents by the roll-up's own
+figures, so trades, lines and rows add up to the Run total to the cent.
+Quantities are what the drawing and the roll-up counted (EA, kWh, kW, kW-DC,
+LF, SF, LS), never cubic yards or tons worked up from nothing; what the Run
+keeps out of its total is shown and never added (each conduit type with its
+BOM figure, the trench, the fence, the utility's own charges). A line's
+`parts` are keys (`pad`, `bess:<model>`, `ev#<i>`, `gen#<i>`,
+`solar:<mount>`, `conduit:<type>`…) that `omegaCostQuantities(rec)` fills
+with drawing ids by the SAME tests that count the quantities (`rec` absent,
+q is unchanged; `_ppCollectFleet().idsByModel`, `omegaSolarMountOf`, the
+one classifier `omegaSolarByMount` sums by, `_padBollardCount(ids)`,
+`OmegaComputeCost.pods().ids`, `bnzAll().items`), so a clicked line marks
+exactly what the Run counted (`.tk-hl`, put back when the editor redraws a
+piece), a selected piece names its line (polled while the pane shows: the
+editor has no selection event), and in the 3D Site Visualizer the line's
+pieces are boxed with a card, and a piece picked in the model shows its own
+line. **Every line and row says where its price comes from** (Phase 5,
+"real prices, not model guesses"): a QUOTE entered for this job (a vendor's
+price on a battery, an override on a charger, a cost-sheet figure changed
+from its default, a $/W or $/kW typed, a pod price entered, a contracted
+total), a BOOK on file for the product (the catalog, the Autel price book,
+NextNRG's installed prices, the skid's recorded price, ClearSky's controller
+price, the cost sheet's own unit prices) or a BENCHMARK (DOE/NREL, NREL
+storage, EIA, the operator band, the container rate, the charger estimator,
+the budgetary ROM). It is read off the roll-up's own flags and the
+quantities it ran on (`lineSource`, `bessSource`, `evSource`), names a kind
+of source and never a rate, and `sources` adds the money up by kind to the
+Run total, so the pane's head shows how much rests on benchmarks. The CSV
+carries every line, row, quantity and source to the cent; *Copy scope of
+work* gives a trade's quantities for a bid, never a price. Nothing is
+written or stored. Jarvis reads it through the site agent's `omega_takeoff`
+(`scripts/site-agent`, read only: the trades, quantities and sources, never
+a drawing id), as it reads the Build player's steps through
+`omega_build_sequence` (`OmegaBuildSequence.fetch`, the player's own request
+with the view closed, the visualizer's own reading of the drawing). Who: as the Cost tab opens (a package's Omega Estimate; a
+legacy plan's Site Map; an active workspace and member, viewers included;
+staff). Not built: sending a trade's scope through the RFQ (`api/rfq.js`
+routes equipment lines to vendors by SKU; it has no trade or subcontractor),
+and a takeoff page in the proposal export. Held by
+`scripts/tests/ttakeoff.js` (in `npm test`: a sample site, 400 random
+drawings through the real roll-up, every line's trade, the charger and
+generator rows' items, the door on the Firestore double) and `npm run
+check:takeoff`, also in `check:pages` (`scripts/render-takeoff.js`: the real
+editor and visualizer, the render checks' sample site in
+`scripts/_lib/editor-sample-site.js`, on a desktop and a 390 px phone).
+
+## The Run, pinned — the money while you draw (2026-10-16)
+
+**The Run total stays on screen beside the Run button, and catches up by
+itself after a save** (`docs/BLUEPRINT-TO-BUILD.md` Phase 4).
+`omega-run-summary.js` (ES5, `#rr-sum` right after `#rr-run` in `#tb`,
+the header row every screen shows) reads the Run total as the server
+prices the drawing (`window._COST_TOTAL`, which `updateCostEst` keeps
+current as pieces go down, "…" while a newer drawing is being priced)
+and, only while the results are current, the Results rail's own $/W and
+10-year IRR (`window._RR_FIN`, which `omegaRenderResults` publishes after
+printing them; the IRR shows once revenue is modelled, the rail's rule).
+It works nothing out. A changed drawing shows the new total at once and
+says why the rest waits ("updates when saved", "updating…", "press Run"),
+never the last Run's $/W or IRR beside it. After the save of a drawing
+whose results went from current to stale in this tab, the Run re-runs
+itself once the drawing has sat saved for `DEBOUNCE_MS`: the same
+`omegaRunDesign` the button presses, ending in `omegaRunSave`, whose gate
+is now ONE function, `omegaRunMayWrite` (signed in, a project open, the
+load finished, not read-only, not unchecked): a plan that waits keeps
+waiting for the button, as before. Never while the drawing is unsaved
+again, under a held pointer, beside a Run already going; never on a
+project only opened or a new drawing never Run; its own save never
+re-arms it. The rules are `decide()`, pure. A click runs a stale drawing,
+or opens the rail's financial figures. The status bar is untouched (it
+already overflows below desktop widths). Held by
+`scripts/tests/trunsummary.js` (in `npm test`: the rules tick by tick,
+what it says, the one gate cut from the editor) and `npm run
+check:runsummary`, also in `check:pages` (`scripts/render-run-summary.js`:
+the real editor and the sample site on a desktop, a 390 px phone and a
+read-only plan; a save stand-in, since the fixture refuses writes).
+
+## Finance It — the drawing to a fundable deal (2026-10-16)
+
+**One panel takes the reviewed model, in order, from priced to a deal someone
+can fund** (`docs/BLUEPRINT-TO-BUILD.md` Phase 5, "drawing → financed project
+in one session"). Output › Financing › *Finance It* (`omega-finance-path.js`,
+ES5, `#rb-finance-path`, owned by Omega Capital beside the hand-offs; a
+package moves the group to the Finance tab) lists the steps:
+- saved;
+- priced by the Run;
+- its returns;
+- the compute case, only with compute on the drawing;
+- checked against the customer's plans, only with a read;
+- then Helios's intake, the marketplace and a lender.
+
+Each step's state is read from what the editor already holds: the Run's
+total and freshness (`S.lastRunAt`, `S.resultsStale`, `_COST_TOTAL`), the
+Results rail's own `_RR_FIN`, `S.omegaCore`'s verdict in the qualifier's
+own words, and the server's comparison with the plans (`OmegaPlanRead.changes`,
+asked each time the panel opens). Each button is the ribbon's own command,
+clicked (`#rb-valuestack`, the Omega-Core, Helios, marketplace and financing
+buttons), after `OmegaCaps.allowedElement` says the plan opens it; a command
+it does not open reads "Not on this workspace's plan". The hand-offs stay
+shut until the project is saved and the Run has priced the drawing as it
+stands, so what goes out is the reviewed model, never a stale one, and
+`run()` holds that order for any caller. The hand-offs stay on the ribbon as
+they were. The panel works nothing out and writes nothing; `steps(state)` is
+the one rule. Held by `scripts/tests/tfinancepath.js` (in `npm test`) and `npm
+run check:financepath`, also in `check:pages` (`scripts/render-finance-path.js`:
+the sample site and an Omega-Core skid placed with the editor's own tools, the
+panel's own Run and a save stand-in, the hand-offs opening their own dialogs,
+a 390 px phone, a package without Omega Capital).
+
 ## Grid panel — Grid Atlas inside Site Map (2026-10-16)
 
 **The FENECON demo flow is how the product works** (Tommy: "that's how the
