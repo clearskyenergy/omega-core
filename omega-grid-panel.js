@@ -16,7 +16,8 @@
         through omega-comed-layers.js probePoint (the module the Site Finder
         and the ComEd map draw from), stated NET of the queued DER first;
      4. the verdict — Fits / Fits only smaller / Needs a study — from
-        POST /api/grid-verdict: eligibility logic stays on the server;
+        POST /api/grid-verdict through omega-grid-verdict.js, the one client
+        Omega Prime uses too: eligibility logic stays on the server;
      5. grid.substation, grid.circuit and grid.verdict written onto S.grid,
         which saveProject() carries in its allowlist with savedBy.
 
@@ -25,7 +26,8 @@
    stay for prospecting many sites at once.
 
    ES5 only. Depends on the editor's globals (S, omegaGeo, BESS_CATALOG,
-   saveProject, _setSaved) through typeof guards, OmegaGridPrescreen, and
+   saveProject, _setSaved) through typeof guards, OmegaGridPrescreen,
+   OmegaGridVerdict, and
    OmegaComEdLayers (no Leaflet needed: probePoint draws nothing).
    ========================================================================== */
 (function (root) {
@@ -106,46 +108,17 @@
       cb(r);
     });
   }
-  function circuitBody(r, i) {
-    var row = r && r.rows ? r.rows[i || 0] : null;
-    if (!row) return null;
-    return { utility: r.utility, id: row.feeder || '', substation: row.sub || '',
-             publishedKw: row.bess, queuedKw: row.queue || 0,
-             addressResolved: !!r.addressResolved, grain: r.grain || '' };
-  }
-
-  /* ── the verdict: on the server ─────────────────────────────────── */
-  function token() {
-    try { var u = root.firebase && firebase.auth && firebase.auth().currentUser; if (u) return u.getIdToken(); } catch (e) {}
-    return Promise.reject(new Error('Sign in to check the grid.'));
-  }
-  function verdict(body) {
-    return token().then(function (t) {
-      return fetch('/api/grid-verdict', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t }, body: JSON.stringify(body) });
-    }).then(function (res) {
-      return res.json().catch(function () { return {}; }).then(function (j) {
-        if (!res.ok) throw new Error(j.error || ('The grid verdict returned ' + res.status));
-        return j;
-      });
-    });
-  }
+  /* ── the verdict: on the server, through the ONE client ─────────── */
+  function V() { return root.OmegaGridVerdict; }
 
   /* ── onto the project (saveProject's allowlist carries S.grid) ──── */
   function stamp() { return new Date().toISOString(); }
   function record(a) {
-    var st = S0(); if (!st || !a) return;
-    var at = stamp(), s = ST.site;
+    var st = S0(); if (!st || !a || !V()) return;
+    var s = ST.site, f = V().fields(a, ST.probe && ST.probe.rows ? ST.probe : null, ST.pick);
     st.grid = st.grid && samePoint(st.grid, s) ? st.grid : { lat: s.lat, lng: s.lng };
     if (st.grid.lat == null) { st.grid.lat = s.lat; st.grid.lng = s.lng; }
-    st.grid.substation = a.substation ? { name: a.substation.name, kv: a.substation.kv, miles: a.substation.miles, km: a.substation.km,
-      chip: a.substation.chip, state: a.substation.state, source: 'grid-atlas-service' } : null;
-    var c = a.circuit || {}, r = ST.probe && ST.probe.rows ? ST.probe : null;
-    st.grid.circuit = c.publishedKw != null || c.id ? { utility: c.utility || '', id: c.id || '', substation: c.substation || '',
-      publishedKw: c.publishedKw, queuedKw: c.queuedKw, netKw: c.netKw, headroomKw: c.headroomKw,
-      addressResolved: !!c.addressResolved, grain: c.grain || '', at: at,
-      source: r ? ('comed-hosting-capacity layer ' + r.layerId + (r.rows[ST.pick] && r.rows[ST.pick].refreshed ? ' · queue ' + r.rows[ST.pick].refreshed : '')) : '' } : null;
-    st.grid.verdict = { key: a.verdict.key, label: a.verdict.label, say: a.verdict.say, unitKw: a.unit && a.unit.kw, unitName: a.unit && a.unit.name,
-      version: a.version, at: at };
+    st.grid.substation = f.substation; st.grid.circuit = f.circuit; st.grid.verdict = f.verdict;
     try { if (typeof root._setSaved === 'function') root._setSaved('unsaved'); else if (typeof _setSaved === 'function') _setSaved('unsaved'); } catch (e) {}
   }
 
@@ -262,9 +235,10 @@
 
   function judge() {
     var body = { unit: ST.unit ? { kw: ST.unit.kw, kwh: ST.unit.kwh, name: ST.unit.name } : null,
-                 substation: ST.sub, circuit: ST.probe && ST.probe.rows ? circuitBody(ST.probe, ST.pick) : null };
+                 substation: ST.sub, circuit: ST.probe && ST.probe.rows ? V().circuitBody(ST.probe, ST.pick) : null };
+    if (!V()) { ST.err = 'The grid verdict client did not load. Reload the page.'; paint(); return Promise.resolve(); }
     ST.busy = true; paint();
-    return verdict(body).then(function (a) {
+    return V().ask(body).then(function (a) {
       ST.busy = false; ST.answer = a; ST.err = '';
       record(a);
       paint();
@@ -307,7 +281,7 @@
   }
 
   root.OmegaGridPanel = { open: open, close: close, run: run, site: site, unit: unit, last: function () { return ST.answer; },
-                          _t: { circuitBody: circuitBody, record: record, ST: ST } };
+                          _t: { record: record, ST: ST } };
   if (typeof document === 'undefined') return;
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', boot); else boot();
   if (root.console && console.info) console.info(TAG + ' ready — Analyze › Grid Check, or OmegaGridPanel.open()');

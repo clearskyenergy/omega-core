@@ -164,6 +164,42 @@ Updated 2026-10-16, when the Grid panel landed (Analyze › **Grid Check**,
    card (carrying the site, circuit and verdict onto a project) is not
    built; the editor panel answers for a project already open.
 
+## Omega Prime sets up the project (2026-10-16)
+
+Tommy: "it does the set up and system like the artifact sandbox."
+`omega-prime.html` now runs Site → Grid Atlas → Circuit → **Load** →
+Site Map → Quote → Omega Logic and ends in a real project:
+
+- **Unit:** the tenant's own product list first (`omega-bess-products.js`,
+  the ONE list), then the shipped FENECON Industrial XXL; specs only. A
+  product with no footprint on file is marked as a point and says so.
+- **Circuit verdict:** the server's (`/api/grid-verdict`), asked through
+  `omega-grid-verdict.js`, the client Site Map's Grid panel uses too. The
+  page's own thresholds are gone.
+- **Load:** the utility's planning rates for the address's ZIP
+  (`/api/utility-rates`) and the twelve monthly peaks off the bill, typed
+  or pasted; skippable, never filled in.
+- **The project:** moving into design CREATES `projects/{id}`
+  (`omega-prime-project.js projectDoc`: the tenant's `orgId` as the rules
+  home the caller, `type: 'bess'`, the unit as the editor's battery entry
+  by catalog key, `mapState` on the site point, `grid.*`, `load`); the
+  sketch, the service, the conduit and the Run update it as `prime.layout`
+  and `prime.run`. No drawing key is written: placing is the BESS Guided
+  Build's job.
+- **Open in Site Map** is `/editor.html?id=<project>&from=prime`;
+  `omega-prime-handoff.js` fills the unit in from the editor's own catalog
+  entry and opens the Guided Build once.
+
+Held by `scripts/tests/tomegaprime.js` and `scripts/render-omega-prime.js`
+(in `check:pages`: site to quote on the Firebase double, the real verdict
+engine and rate book).
+
+Still open for Prime: EV, Solar and Compute are "next"; the bill's peaks
+are typed, not read from the bill file (Site Map's bill import is the
+reader); Prime's Run is `/api/price-site`, so the project's capex rollup
+waits for Site Map's own Run; the editor does not yet draw Prime's BESS
+area as a guide for the Guided Build.
+
 ## Demo
 
 `/grid-atlas.html?demo=fenecon-il&q=<address>&at=<lat>,<lng>` starts

@@ -1,5 +1,21 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Omega Prime sets up the real project (2026-10-16)
+
+Tommy: "it does the set up and system like the artifact sandbox". Omega
+Prime (`omega-prime.html`, from #327) screened a site and drew a sketch that
+was lost at "Open in Site Map" (`/editor?addr=` only), judged the circuit
+in the page with its own thresholds, and named one unit. Now: the unit list
+is the tenant's own products then the XXL; the verdict is `/api/grid-verdict`
+through the new shared client `omega-grid-verdict.js` (the Grid panel moved
+onto it, so the two never answer twice); a Load step reads the rate book for
+the ZIP and the bill's peaks; moving into design creates the project
+(`omega-prime-project.js`) and the sketch and Run update it as `prime.*`,
+never a drawing key; Site Map opens it with `?from=prime`
+(`omega-prime-handoff.js`: the unit filled from the editor's own catalog,
+the Guided Build opened, no forged elements). Held by
+`scripts/tests/tomegaprime.js` and `scripts/render-omega-prime.js`.
+
 ## Grid Atlas built into Site Map: the Grid panel (2026-10-16)
 
 Tommy, of the FENECON demo flow: "that's how the Grid Atlas should work, and
