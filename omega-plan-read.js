@@ -461,7 +461,7 @@
     if (typeof root.addEl !== 'function') { alert('This editor build cannot place equipment from here. Use Insert to place the items listed.'); return; }
     var picked = R.items.filter(function (it) { return it.selected && it.place; });
     if (!picked.length) return;
-    var readId = 'pr' + Date.now().toString(36), c = center(), placed = [], total = 0, shapes = 0;
+    var readId = 'pr' + Date.now().toString(36), c = center(), placed = [], total = 0, shapes = 0, bessEls = [];
     var batch = typeof root.omegaHistBatch === 'function' ? root.omegaHistBatch : function (fn) { var r = fn(); if (typeof root.pushHist === 'function') root.pushHist(); return r; };
     batch(function () {
       var slot = 0, cols = 6, stepX = 140, stepY = 130;
@@ -477,26 +477,41 @@
             if (el) { placed.push(el.id); shapes++; }
             slot++; total++; continue;
           } else {
-            var w = typeof root._eqDropW === 'function' ? root._eqDropW(it.place.id) : 60;
-            el = root.addEl({ type: 'eq', eqId: it.place.id, label: label, x: x - w / 2, y: y - w / 2, w: w, rot: 0, spec: spec });
-            if (el && it.place.id === 'bess') { if (it.kw != null) { el.bessKw = it.kw; el.bgbKw = it.kw; } if (it.kwh != null) { el.bessKwh = it.kwh; el.bgbKwh = it.kwh; } if (it.model) el.bessModel = it.model; }
+            var w = typeof root._eqDropW === 'function' ? root._eqDropW(it.place.id) : 60, opts = { type: 'eq', eqId: it.place.id, label: label, x: x - w / 2, y: y - w / 2, w: w, rot: 0, spec: spec };
+            /* A battery is created WITH its rating: addEl redraws the legend,
+               which reads the fleet, which stamps a battery it finds unrated
+               with the guided build's default size. Both field names, as the
+               guided build writes them: the fleet reads bgbKw first, and the
+               one-line, the spec sheet and the plot-plan schedule each read
+               one of the two. */
+            if (it.place.id === 'bess') {
+              if (it.kw != null) { opts.bessKw = it.kw; opts.bgbKw = it.kw; }
+              if (it.kwh != null) { opts.bessKwh = it.kwh; opts.bgbKwh = it.kwh; }
+              if (it.model) opts.bessModel = it.model;
+            }
+            el = root.addEl(opts);
+            if (el && it.place.id === 'bess') bessEls.push({ el: el, it: it, n: n, prov: prov });
           }
           if (el) { el.planRead = prov; placed.push(el.id); try { if (typeof root.renderEl === 'function') root.renderEl(el); } catch (e) {} }
           slot++; total++;
         }
       });
     });
+    var configured = configure(bessEls);
+    if (configured) watchUndo();
     S.planRead = {
       v: 1, id: readId, fileName: st.fileName, readAt: new Date().toISOString(),
       sheets: R.sheets.map(function (s) { return { page: s.page, number: s.number, title: s.title, discipline: s.discipline }; }),
       facts: R.facts.map(function (f) { return { key: f.key, label: f.label, number: f.number, text: f.text, unit: f.unit, page: f.page, sheet: sheetName(f.page), agree: f.agree, confidence: f.confidence }; }),
       issues: R.issues.filter(function (i) { return i.level === 'warn'; }).map(function (i) { return i.text; }),
-      placed: placed.length, listed: R.items.filter(function (it) { return !it.place; }).map(function (it) { return { kind: it.kind, tag: it.tag, kw: it.kw, lengthFt: it.lengthFt, quantity: it.quantity, sheet: sheetName(it.pages[0]) }; })
+      placed: placed.length, configured: configured, listed: R.items.filter(function (it) { return !it.place; }).map(function (it) { return { kind: it.kind, tag: it.tag, kw: it.kw, lengthFt: it.lengthFt, quantity: it.quantity, sheet: sheetName(it.pages[0]) }; })
     };
     try { if (typeof root.updCount === 'function') root.updCount(); } catch (e) {}
     try { if (shapes && typeof root.updShapeCount === 'function') root.updShapeCount(); } catch (e) {}
     try { if (typeof root.renderLegend === 'function') root.renderLegend(); } catch (e) {}
     try { root._workDirty = true; if (typeof root._setSaved === 'function') root._setSaved('unsaved'); } catch (e) {}
+    try { if (configured && typeof root.renderBessList === 'function') root.renderBessList(); } catch (e) {}
+    try { if (configured && typeof root.updateSummaryPanel === 'function') root.updateSummaryPanel(); } catch (e) {}
     try { if (typeof root.updateCostEst === 'function') root.updateCostEst(); } catch (e) {}
     var b = $('pr-body');
     if (b) b.insertAdjacentHTML('afterbegin', '<div class="pr-issue pr-info" role="status" style="border-color:rgba(34,197,94,.5)"><b>Placed ' + placed.length + (placed.length === 1 ? ' unit' : ' units') + '</b> in a row at the centre of the view. Drag each into place; one Undo (Ctrl+Z) takes them all back. Save the project to keep the read with it.</div>');
@@ -504,6 +519,70 @@
     var foot = $('pr-foot'); if (foot && !$('pr-done')) foot.insertAdjacentHTML('beforeend', '<button type="button" class="pr-btn" id="pr-done" onclick="OmegaPlanRead.close()">Done</button>');
     if (b) b.scrollTop = 0;
     return placed.length;
+  }
+
+  /* A battery read off the plan becomes a CONFIGURED system too, as the
+     guided build makes one: the Results panel, the BOM, the estimate and the
+     plot plan read S.bessList, so a placed unit with no entry there prints as
+     no storage (editor.html, "REGISTER THE GENERIC UNIT AS A REAL
+     CONFIGURATION"). The entry has the shape the BESS config writes, with the
+     schedule's make, model and rating; each placed unit points at it
+     (bessCfgId). A project whose designer already configured storage keeps
+     its own list: the plan read never overwrites a choice made by hand. */
+  function configure(list) {
+    var S = S_(); if (!S || !list.length) return 0;
+    S.bessList = S.bessList || [];
+    if (S.bessList.length) return 0;
+    var made = 0;
+    list.forEach(function (x, i) {
+      var it = x.it; if (it.kw == null && it.kwh == null) return;
+      var cfg = x.cfg = list.cfgByItem && list.cfgByItem[it.id];
+      if (!cfg) {
+        var kw = it.kw != null ? it.kw : 0, kwh = it.kwh != null ? it.kwh : 0, v = /(\d{3,4})\s*V/i.exec(it.voltage || '');
+        cfg = { id: typeof root.uid === 'function' ? root.uid() : 'pr-bess-' + i, name: it.tag || 'BESS-0' + (made + 1),
+          mfr: it.manufacturer || '', model: it.model || 'Make/model not on the plan set', chem: '', placeholder: !it.model,
+          kwh: kwh ? String(kwh) : '', usable: '', kw: kw ? String(kw) : '', dur: kw > 0 && kwh > 0 ? String(Math.round(kwh / kw * 100) / 100) : '',
+          dcv: 'TBD', acv: v ? v[1] : '480', inv: '', ikva: kw ? String(kw) : '', xfmr: 'TBD', disco: 'TBD', eqcost: null,
+          notes: 'From the plan set (' + x.prov.sheet + '): \u201c' + String(x.prov.quote || '').slice(0, 120) + '\u201d. Read by Build \u203a Read Plans; confirm against the schedule.',
+          qty: String(x.n), catalogKey: '', _greenfield: false, _gridForming: false, _gridConnectV: '', _controller: '',
+          _incPCS: true, _incDisco: false, _incXfmr: false, planRead: x.prov.read };
+        S.bessList.push(cfg); made++;
+        list.cfgByItem = list.cfgByItem || {}; list.cfgByItem[it.id] = cfg;
+      }
+      x.el.bessCfgId = cfg.id;
+    });
+    return made;
+  }
+
+  /* Undo and Redo restore the drawing, not S.bessList, so a battery placed
+     from the plan and undone would leave its configuration behind (the BOM
+     would print a system nothing on the drawing is). After every Undo (Redo
+     replays through it), a plan-read configuration whose battery is gone is
+     parked, and comes back when its battery does. Configurations made by
+     hand are never touched. The wrapper keeps the redo module's marker so
+     that module never wraps Undo a second time. */
+  var parked = {};
+  function syncConfigured() {
+    var S = S_(); if (!S || !Array.isArray(S.bessList)) return;
+    var used = {}, changed = false;
+    (S.elements || []).forEach(function (el) { if (el && el.bessCfgId) used[el.bessCfgId] = true; });
+    for (var i = S.bessList.length - 1; i >= 0; i--) {
+      var b = S.bessList[i];
+      if (b && b.planRead && !used[b.id]) { parked[b.id] = b; S.bessList.splice(i, 1); changed = true; }
+    }
+    Object.keys(parked).forEach(function (id) { if (used[id]) { S.bessList.push(parked[id]); delete parked[id]; changed = true; } });
+    if (!changed) return;
+    try { if (typeof root.renderBessList === 'function') root.renderBessList(); } catch (e) {}
+    try { if (typeof root.updateSummaryPanel === 'function') root.updateSummaryPanel(); } catch (e) {}
+    try { if (typeof root.renderLegend === 'function') root.renderLegend(); } catch (e) {}
+  }
+  function watchUndo() {
+    var undo = root.undoLast;
+    if (typeof undo !== 'function' || undo.__planRead) return;
+    var wrapped = function () { var r = undo.apply(this, arguments); try { syncConfigured(); } catch (e) {} return r; };
+    wrapped.__planRead = true;
+    if (undo.__omeWrapped) wrapped.__omeWrapped = true;
+    root.undoLast = wrapped;
   }
 
   /* A charger as the EV tools draw one: the Level 2 or DC fast shape the
@@ -516,7 +595,7 @@
       style: S.shapeStyle || '', color: typeof root.SHAPE_STROKE !== 'undefined' ? root.SHAPE_STROKE : '#000',
       lf: l2 ? 1.1 : 2.9, wf: l2 ? 0.8 : 3.1, model: it.model || (l2 ? 'Level 2 charger' : 'DC fast charger'), mfr: it.manufacturer || '',
       kw: it.kw != null ? it.kw : 0, ports: 1, tag: label, label: label, planRead: prov,
-      scaled: typeof root._evScaled === 'function' ? root._evScaled() : false };
+      scaled: !!(S.pxPerFt && S.pxPerFt > 0) };   /* the EV tools' own _evScaled(): true scale once the map is calibrated */
     S.shapes = S.shapes || []; S.shapes.push(sh);
     try { root.renderShape(sh); } catch (e) {}
     return sh;

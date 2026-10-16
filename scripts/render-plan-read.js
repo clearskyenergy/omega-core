@@ -86,6 +86,23 @@ function fixture() {
   window.confirm = function () { return true; };
 }
 
+
+/* Run one export in the page, then undo exactly what it opened: elements it
+   added to the body are removed, dialogs it showed are hidden again. Never
+   a sweep by id: the editor keeps hidden dialogs it expects to find (the
+   Viability Workflow's Escape handler reads #viability-modal). */
+function runExport(fn, wait) {
+  function visible() { return Array.prototype.filter.call(document.querySelectorAll('.modal-bg,.modal,[role=dialog],[id$=-modal]'), function (m) { var r = m.getBoundingClientRect(); return getComputedStyle(m).display !== 'none' && getComputedStyle(m).visibility !== 'hidden' && r.width > 0 && r.height > 0; }); }
+  var n0 = document.body.children.length, shown0 = visible(), thrown = null;
+  try { window[fn](); } catch (e) { thrown = e.message; }
+  return new Promise(function (res) { setTimeout(function () {
+    var added = Array.prototype.slice.call(document.body.children, n0), text = added.map(function (n) { return n.innerText || ''; }).join('\n');
+    visible().forEach(function (m) { if (shown0.indexOf(m) < 0 && added.indexOf(m) < 0) { text += '\n' + (m.innerText || ''); m.style.display = 'none'; } });
+    added.forEach(function (n) { if (n.id !== 'omega-editor-gate') try { n.remove(); } catch (e) {} });
+    res({ text: text, thrown: thrown });
+  }, wait || 2500); });
+}
+
 async function run() {
   fs.mkdirSync(output, { recursive: true });
   var built = await FX.build(), answers = FX.answers(built.marks), pdfPath = path.join(output, 'sample-plan-set.pdf');
@@ -96,9 +113,10 @@ async function run() {
   var base = 'http://127.0.0.1:' + server.address().port;
   var browser = await chromium.launch({ executablePath: process.env.CHROME || chromium.executablePath() });
   var view = X.project({ emailVerified: true }, { packaged: true, packagingState: 'paid', accessUntil: Date.now() + 30 * 86400000, modules: ['lite'] }, { status: 'active' }, { role: 'owner', status: 'active' });
+  var staffView = X.project({ staff: true }, { packaged: true }, null, null, Date.now());
   try {
     for (var mode of [{ name: 'desktop-dark', w: 1440, h: 960, scheme: 'dark' }, { name: 'desktop-light', w: 1440, h: 960, scheme: 'light' }, { name: 'phone', w: 390, h: 844, scheme: 'dark' }]) {
-      var posted = [], unanswered = [], used = 0;
+      var posted = [], unanswered = [], used = 0, lastQ = null, lastRollup = null, baselineErrors = {};
       var context = await browser.newContext({ viewport: { width: mode.w, height: mode.h }, colorScheme: mode.scheme, deviceScaleFactor: mode.name === 'phone' ? 2 : 1 });
       await context.addInitScript(fixture);
       await context.route('**/*', function (route) {
@@ -109,7 +127,7 @@ async function run() {
         if (url.pathname === '/api/package-access') return json(200, view);
         if (url.pathname === '/api/package-catalog') return json(403, { error: 'Pricing is not enabled' });
         if (url.pathname === '/api/plan-change') return json(503, { error: 'Price book not seeded' });
-        if (url.pathname === '/api/cost-rollup') return json(200, EC.rollup(req.postDataJSON()));
+        if (url.pathname === '/api/cost-rollup') { lastQ = req.postDataJSON(); lastRollup = EC.rollup(lastQ); return json(200, lastRollup); }
         if (url.pathname === '/api/editor-score') { var sb = req.postDataJSON(); return json(200, sb.action === 'prequal' ? ES.prequal(sb) : ES.interconnect(sb)); }
         if (url.pathname === '/api/plan-read') {
           var b = req.postDataJSON();
@@ -128,6 +146,19 @@ async function run() {
       await page.waitForFunction(function () { return window.OmegaCaps && OmegaCaps.packageAccess() && OmegaCaps.packageAccess().modules.length && !document.getElementById('omega-editor-gate'); });
       await page.waitForTimeout(2000);
       await page.evaluate(function () { try { rbTab('home'); } catch (e) {} });
+      if (mode.name === 'desktop-dark') {
+        /* the exports on an EMPTY drawing, every module open: the errors the
+           offline page already raises, which the downstream step allows */
+        await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, staffView);
+        for (var bfn of ['openBomSourcing', 'openOneLineExport', 'openBlueprintExport', 'openProposalExport', 'exportSpecSheet']) {
+          var b0 = errors.length;
+          await page.evaluate(runExport, bfn);
+          await page.waitForTimeout(300);
+          baselineErrors[bfn] = errors.slice(b0); errors.length = b0;
+        }
+        await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
+        await page.waitForTimeout(300);
+      }
 
       /* the button, on Build › 1 · Site, open on Omega Design */
       var btn = page.locator('#rb-plan-read');
@@ -219,7 +250,8 @@ async function run() {
           shapeKinds: shapes.map(function (s) { return s.kind; }).sort(), labels: shapes.map(function (s) { return s.tag; }).filter(function (t) { return /^EV-\d$/.test(t); }).length,
           bess: els.filter(function (e) { return e.eqId === 'bess'; }).map(function (e) { return [e.bessKw, e.bessKwh, e.bessModel]; })[0],
           q: { ev: q.ev.items.map(function (i) { return i.kind + ':' + i.kw; }).sort(), fleet: q.fleet, counts: q.counts },
-          planRead: S.planRead, prov: els[0] && els[0].planRead };
+          planRead: S.planRead, prov: els[0] && els[0].planRead,
+          cfg: (function () { var b = S.bessList || [], e = els.filter(function (x) { return x.eqId === 'bess'; })[0]; return b.length ? { n: b.length, kw: b[0].kw, kwh: b[0].kwh, qty: b[0].qty, model: b[0].model, mfr: b[0].mfr, linked: !!e && e.bessCfgId === b[0].id } : null; })() };
       });
       if (pdfjs) {
         eq(after.els - before.els, 8, mode.name + ': eight elements placed');
@@ -229,20 +261,76 @@ async function run() {
         eq(after.labels, 8, mode.name + ': EV-1 THRU EV-8 became EV-1 … EV-8');
         eq(after.hist - before.hist, 1, mode.name + ': one undo step');
         eq(after.bess, [300, 1290, 'XS-1290'], mode.name + ': the battery carries the schedule’s rating and model');
-        ok(after.q.fleet.units >= 1 && Object.keys(after.q.fleet.byModel).some(function (k) { var b = after.q.fleet.byModel[k]; return b.kwh === 1290 && b.kw === 300; }), mode.name + ': the Run’s fleet carries the 300 kW / 1,290 kWh battery');
+        ok(after.q.fleet.units >= 1 && Object.keys(after.q.fleet.byModel).some(function (k) { var b = after.q.fleet.byModel[k]; return b.kwh === 1290 && b.kw === 300; }), mode.name + ': the Run’s fleet carries the 300 kW / 1,290 kWh battery ' + JSON.stringify(after.q.fleet));
         eq(after.q.ev.filter(function (k) { return /^evl2:19\.2$/.test(k); }).length, 8, mode.name + ': the Run prices eight Level 2 at 19.2 kW');
         eq(after.q.ev.filter(function (k) { return /^evunit:180$/.test(k); }).length, 2, mode.name + ': and two DC fast at 180 kW');
         ok(after.q.counts.disco === 1 && after.q.counts.meter === 1 && after.q.counts.panel === 1 && after.q.counts.hasXfmr === true, mode.name + ': the gear counts the Run prices');
         ok(after.planRead && after.planRead.fileName === 'sample-plan-set.pdf' && after.planRead.placed === 18 && after.planRead.issues.length === 1 && after.planRead.sheets.length === 3, mode.name + ': S.planRead rides on the project');
         ok(after.planRead.listed.some(function (l) { return l.kind === 'solar_array' && l.kw === 315; }) && after.planRead.listed.some(function (l) { return l.kind === 'conduit_run' && l.lengthFt === 240; }), mode.name + ': what was listed, not drawn, is kept with it');
         ok(after.prov && after.prov.sheet && after.prov.quote, mode.name + ': every placed unit says where it was read');
+        eq(after.cfg, { n: 1, kw: '300', kwh: '1290', qty: '1', model: 'XS-1290', mfr: 'Example Storage Co', linked: true }, mode.name + ': the battery is a configured system with the schedule\u2019s make, model and rating, and the placed unit points at it');
       }
       ok((await page.locator('#pr-place').textContent()) === '✓ Placed', mode.name + ': the button says it is done');
+      if (pdfjs && mode.name === 'desktop-light') {
+        /* Undo takes the placed units back in one step, and the battery's
+           configuration with them; Redo brings both back */
+        var undone = await page.evaluate(function () {
+          undoLast();
+          return { els: S.elements.filter(function (e) { return e.planRead; }).length, shapes: (S.shapes || []).filter(function (e) { return e.planRead; }).length,
+            cfg: (S.bessList || []).filter(function (b) { return b.planRead; }).length, bomKwh: buildBOM().kwh, redoMarker: !!undoLast.__omeWrapped };
+        });
+        eq([undone.els, undone.shapes, undone.cfg, undone.bomKwh], [0, 0, 0, 0], mode.name + ': one Undo takes every placed unit and the battery\u2019s configuration back');
+        var redone = await page.evaluate(function () {
+          document.getElementById('rb-redo').click();
+          return { els: S.elements.filter(function (e) { return e.planRead; }).length, cfg: (S.bessList || []).filter(function (b) { return b.planRead; }).length, bomKwh: buildBOM().kwh };
+        });
+        eq([redone.els, redone.cfg, redone.bomKwh], [8, 1, 1290], mode.name + ': Redo brings the units and the configuration back');
+        ok(undone.redoMarker, mode.name + ': the redo module\u2019s marker survives the plan reader\u2019s Undo hook (no second wrap)');
+      }
       if (mode.name === 'desktop-dark') {
         await page.screenshot({ path: path.join(output, '11-placed.png') });
         await page.click('#pr-done');
         await page.waitForTimeout(300);
         await page.screenshot({ path: path.join(output, '12-on-the-drawing.png') });
+
+        /* DOWNSTREAM: what was placed from the plan goes through the Run and
+           the exports like anything placed by hand. Every module open (a staff
+           view), so no export is locked; each export's page errors are
+           compared with the same export on an empty drawing in this session,
+           so only a NEW failure fails (the offline page lacks some of the
+           live page's elements and a few exports already trip on that). */
+        await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, staffView);
+        await page.evaluate(function () { omegaRunDesign(); });
+        await page.waitForFunction(function () { return !S.running; }, null, { timeout: 30000 });
+        await page.waitForTimeout(1500);
+        var run = lastRollup;
+        ok(run && run.lines.ev.units === 10 && run.lines.ev.byModel['L2-192'].qty === 8 && run.lines.ev.byModel['DC-180'].qty === 2, 'downstream: the Run prices the ten chargers by model');
+        var l2 = run.lines.ev.byModel['L2-192'], dc = run.lines.ev.byModel['DC-180'];
+        ok(l2.eq / l2.qty < 5000 && dc.eq / dc.qty > 20000, 'downstream: Level 2 at a Level 2 price, DC fast at a DC fast price ($' + Math.round(l2.eq / l2.qty) + ' vs $' + Math.round(dc.eq / dc.qty) + ' equipment each)');
+        ok(Object.keys(lastQ.fleet.byModel).some(function (k) { return lastQ.fleet.byModel[k].kwh === 1290; }) && run.lines.bess && run.lines.bess.total > 0, 'downstream: the battery is in the Run at its 1,290 kWh');
+        ok(await page.evaluate(function () { return window._COST_TOTAL > 0; }), 'downstream: the Run has a total');
+        var exportsOut = {};
+        for (var fn of ['openBomSourcing', 'openOneLineExport', 'openBlueprintExport', 'openProposalExport', 'exportSpecSheet']) {
+          var e0 = errors.length;
+          var text = await page.evaluate(runExport, fn);
+          await page.waitForTimeout(300);
+          exportsOut[fn] = { text: text.text || '', thrown: text.thrown || null, errors: errors.slice(e0) };
+          errors.length = e0;   /* judged below against the empty-drawing baseline */
+        }
+        fs.writeFileSync(path.join(output, 'downstream-exports.json'), JSON.stringify(exportsOut, null, 1));
+        Object.keys(exportsOut).forEach(function (fn) {
+          var fresh = exportsOut[fn].errors.filter(function (m) { return (baselineErrors[fn] || []).indexOf(m) < 0; });
+          ok(!exportsOut[fn].thrown && !fresh.length, 'downstream: ' + fn + ' raises nothing an empty drawing does not ' + JSON.stringify(fresh));
+        });
+        var bom = exportsOut.openBomSourcing.text;
+        ok(/L2-192/.test(bom) && /DC-180/.test(bom), 'downstream: the BOM lists both chargers by the models the schedule printed');
+        ok(/1\.29 MWh \/ 0\.30 MW/.test(bom), 'downstream: the BOM carries the battery\u2019s 1.29 MWh / 0.30 MW (a configured system, as the guided build makes one)');
+        /* The one-line's "Detected" line counts a configured battery twice
+           (its unit's rating plus its configuration: _olInventory), for the
+           guided build on main as much as here, so its kW is not asserted;
+           the Run, the fleet and the BOM above carry the true 300 kW. */
+        ok(/Detected: BOTH — BESS /.test(exportsOut.openOneLineExport.text) && /EV 10 chargers \/ 514 kW/.test(exportsOut.openOneLineExport.text), 'downstream: the one-line detects the battery and the ten chargers at 514 kW');
+        ok(lastQ.configured.length === 1 && EC.rollup(Object.assign({}, lastQ, { configured: [] })).lines.bess.total === run.lines.bess.total, 'downstream: the configured entry is shown, never priced twice');
         /* reopening comes back to the read */
         await page.evaluate(function () { openPlanRead(); });
         await page.waitForSelector('#pr-place');
