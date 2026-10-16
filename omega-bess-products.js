@@ -189,7 +189,7 @@
   function load() {
     if (_cache) return Promise.resolve(_cache);
     var org = catalogOrg();
-    var empty = { orgId: org, brand: '', entries: {}, keys: [], count: 0 };
+    var empty = { orgId: org, brand: '', entries: {}, keys: [], count: 0, ownOnly: false, owner: [] };
     if (!org) return Promise.resolve(empty);
 
     var fb = global.firebase;
@@ -211,8 +211,9 @@
       var brand = str(og.bessBrand) || str(wl.shortName) || str(og.name) || org;
 
       var list = Array.isArray(sf.products) ? sf.products : [];
-      var out = { orgId: org, brand: brand, entries: {}, keys: [], count: 0 };
       var slug = String(og.slug || org.split('.')[0] || 'org');
+      var out = { orgId: org, brand: brand, entries: {}, keys: [], count: 0,
+        ownOnly: ownOnlyOf(og), owner: [norm(brand), norm(slug), norm(wl.shortName), norm(og.name)].filter(Boolean) };
 
       for (var i = 0; i < list.length; i++) {
         var made = toCatalogEntry(slug, list[i]);
@@ -225,6 +226,62 @@
       _cache = out;
       return out;
     }, function () { return empty; });
+  }
+
+  /* ── OWN PRODUCTS ONLY ───────────────────────────────────────────────────
+     A manufacturer's own workspace designs with its own batteries
+     (2026-10-16, Tommy, of Clean Cell: "the only bess products in the
+     cleancell catalog are their products"). The record decides:
+     `bessCatalog: 'own'` or `'all'`; absent, a manufacturer (vertical 'oem')
+     selling under its own white label is own-only. Nothing is removed from
+     BESS_CATALOG — a saved drawing still resolves its key — a picker only
+     stops OFFERING another maker's unit, and only once at least one of the
+     workspace's own is there to offer, so nobody is left with an empty list. */
+  function norm(v) { return String(v || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+  function ownOnlyOf(og) {
+    if (og.bessCatalog === 'own') return true;
+    if (og.bessCatalog === 'all') return false;
+    return og.vertical === 'oem' && !!(og.whiteLabel && og.whiteLabel.enabled === true);
+  }
+  function isOwn(entry, t) {
+    if (!entry) return false;
+    if (entry._tenant === true || entry.org === true) return true;
+    var m = norm(entry.mfr), owner = (t && t.owner) || [];
+    if (!m) return false;
+    for (var i = 0; i < owner.length; i++) if (owner[i] && m.indexOf(owner[i]) === 0) return true;
+    return false;
+  }
+  function catalogNow() {
+    try { if (global.BESS_CATALOG) return global.BESS_CATALOG; } catch (e) {}
+    return null;
+  }
+  /* true while own-only is on and the catalogue holds at least one own unit */
+  function ownOnlyActive(catalog) {
+    var t = _cache; if (!t || !t.ownOnly) return false;
+    var c = catalog || catalogNow(); if (!c) return false;
+    for (var k in c) if (Object.prototype.hasOwnProperty.call(c, k) && isOwn(c[k], t)) return true;
+    return false;
+  }
+  /* Is this catalogue entry one a picker should leave out here? */
+  function offCatalog(key, entry, catalog) {
+    var c = catalog || catalogNow();
+    var e = entry || (c && c[key]);
+    if (!e || !ownOnlyActive(c)) return false;
+    return !isOwn(e, _cache);
+  }
+  /* Takes another maker's options out of a <select> of catalogue keys,
+     keeping the one already chosen (a saved design) and Custom. */
+  function prune(sel, catalog) {
+    if (!sel || !ownOnlyActive(catalog)) return 0;
+    var c = catalog || catalogNow(), n = 0, opts = sel.querySelectorAll('option');
+    for (var i = 0; i < opts.length; i++) {
+      var o = opts[i], v = o.value;
+      if (!v || v === 'CUSTOM' || v === sel.value || !c[v]) continue;
+      if (!isOwn(c[v], _cache)) { o.parentNode.removeChild(o); n++; }
+    }
+    var groups = sel.querySelectorAll('optgroup');
+    for (var j = 0; j < groups.length; j++) if (!groups[j].querySelector('option')) groups[j].parentNode.removeChild(groups[j]);
+    return n;
   }
 
   /* Merge the tenant's products INTO a catalogue object and report the brand.
@@ -245,7 +302,8 @@
 
   global.OmegaBessProducts = {
     orgId: orgId, orgOf: orgOf, catalogOrg: catalogOrg, load: load, mergeInto: mergeInto,
-    toCatalogEntry: toCatalogEntry,
+    toCatalogEntry: toCatalogEntry, isOwn: isOwn, ownOnlyOf: ownOnlyOf, ownOnlyActive: ownOnlyActive,
+    offCatalog: offCatalog, prune: prune,
     _reset: function () { _cache = null; }   /* tests */
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = global.OmegaBessProducts;
