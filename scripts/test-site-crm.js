@@ -404,7 +404,7 @@ function seed() {
     assert.equal(lrow('Rent to the host'), '$225 per kW of compute per month x 75 kW x 12 = $202,500 a year ($16,875 a month)');
     assert.equal(lrow('Rent escalator'), '2.5% a year, compounding'); assert.equal(lrow('Revenue share to the host'), '10.0% of gross compute revenue, paid with the rent');
     assert.match(lrow('Compute price basis'), /\$3\.50 per GPU-hour \(public spot reference; a contracted rate replaces it\), for 48 x NVIDIA HGX H100/); assert.match(lrow('Whole project on file'), /\$2,831,898 total project cost, after-tax IRR 20\.40% over 10 years \(18\.60% on the 10 years alone\)/);
-    assert.match(lrow('Microgrid PPA (host\u2019s solar + storage)'.replace('\u2019', "'")), /executed PPA.s own price table: \$0\.225\/kWh in year 1 to \$0\.384\/kWh in year 3/); assert.equal(lrow('Microgrid PPA term'), '28 years from commercial operation');
+    assert.match(lrow('Microgrid PPA (solar + storage)'), /executed PPA.s own price table: \$0\.225\/kWh in year 1 to \$0\.384\/kWh in year 3/); assert.equal(lrow('Microgrid PPA term'), '28 years from commercial operation');
     assert.ok(withLease.sections.filter(function (x) { return /Host lease/.test(x.heading); })[0].paras.some(function (p) { return /removes the skid/.test(p) && /fair market value/.test(p); }), 'the end-of-term terms are the skid\u2019s own');
     assert.match(withLease.title, /Site SPV and Host Lease Term Sheet/);
     var r = res(); await call('GET', { site: SITE, agreement: '1' }, PM, r);

@@ -139,10 +139,10 @@ function compose(input) {
   var ppaRows = [];
   if (has(site.ppaRatePerKwh) || (Array.isArray(site.ppaPriceSchedule) && site.ppaPriceSchedule.length)) {
     var S = Array.isArray(site.ppaPriceSchedule) ? site.ppaPriceSchedule : [];
-    ppaRows.push(['Microgrid PPA (host\'s solar + storage)', S.length ? 'The executed PPA\'s own price table: $' + S[0] + '/kWh in year 1 to $' + S[S.length - 1] + '/kWh in year ' + S.length : '$' + site.ppaRatePerKwh + '/kWh in year 1' + (has(site.ppaEscalatorPct) ? ', escalating ' + site.ppaEscalatorPct + '% a year' : ', escalator not on record')]);
+    ppaRows.push(['Microgrid PPA (solar + storage)', S.length ? 'The executed PPA\'s own price table: $' + S[0] + '/kWh in year 1 to $' + S[S.length - 1] + '/kWh in year ' + S.length : '$' + site.ppaRatePerKwh + '/kWh in year 1' + (has(site.ppaEscalatorPct) ? ', escalating ' + site.ppaEscalatorPct + '% a year' : ', escalator not on record')]);
     ppaRows.push(['Microgrid PPA term', has(site.ppaTermYears) ? site.ppaTermYears + ' years from commercial operation' : (S.length ? S.length + ' years (the table)' : NOT_PROVIDED)]);
     if (has(site.ppaYear1Kwh)) ppaRows.push(['Expected first-year production', Number(site.ppaYear1Kwh).toLocaleString('en-US') + ' kWh (the contract)']);
-  } else ppaRows.push(['Microgrid PPA (host\'s solar + storage)', 'None on the record']);
+  } else ppaRows.push(['Microgrid PPA (solar + storage)', 'None on the record']);
   var computeRows = [
     ['Compute installed', computeKw ? skids + ' Omega-Core skid' + (skids === 1 ? '' : 's') + ', ' + computeKw + ' kW of compute (' + RC.computeKwPerSkid + ' kW a skid), on its own utility service and meter' : NOT_PROVIDED],
     ['Term', termYears + ' years from the skid\'s commercial operation (minimum ' + TM.minTermYears + ', maximum ' + TM.maxTermYears + ')'],
