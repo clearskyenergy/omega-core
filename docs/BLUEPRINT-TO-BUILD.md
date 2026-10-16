@@ -156,6 +156,26 @@ client could pick the most expensive one on the platform's key).
 
 ### Phase 2: Build sequence ("maps out builds"), the one that demos
 
+> **Status, 2026-10-16: Phase 2 is built.** *Build* on the 3D Site
+> Visualizer's bar; `CLAUDE.md`, *Build sequence*, says how it works. Where it
+> differs from the plan below:
+> - The step for each of the Run's lines is one table in
+>   `api/_lib/build-sequence.js`, not a `phase` key on each `editor-cost.js`
+>   line. It throws if the roll-up ever adds a line the table doesn't cover,
+>   so money can't be dropped without a failing test.
+> - Durations are ClearSky planning rates (crew-days a unit, one crew a step,
+>   crews added on big jobs), each printed with its working. Nothing on file
+>   gives a utility's interconnection lead time (Grid Atlas carries none), so
+>   that step, and engineering and permits, read *not on file* with no number.
+> - The schedule is in the player (*Schedule & money*, with a CSV download).
+>   Not yet: a schedule page in the proposal export, or seeding the project's
+>   task board. The board (`project_tasks`) is written whole by `index.html`'s
+>   task flow, so a second writer needs a merge rule first.
+> - Explode is built. Cutaway isn't: the visualizer draws conduit at grade,
+>   so there is nothing underground to cut away to yet.
+> - Conduit stays a BOM estimate outside the Run total, as it is today, so
+>   the trenching and wiring steps carry no money of their own and say why.
+
 **What it does:** a **Build** player on the 3D Site Visualizer. Play, a
 0.5×–4× speed control, and a phase strip for *our* work: Survey & layout →
 Trenching & underground → Pads & foundations → Equipment set (BESS, skid,

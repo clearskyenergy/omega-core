@@ -1393,6 +1393,51 @@ made-up sample set in `scripts/_lib/plan-fixture.js`, then the Run and every
 export downstream). Per-sheet billed metering is a pricing decision not yet
 made; the daily caps stand in.
 
+## Build sequence — the 3D Site Visualizer's Build player (2026-10-16)
+
+**The site goes up step by step while "In place $X" counts to the Run total**
+("And then do phase 2"; `docs/BLUEPRINT-TO-BUILD.md` Phase 2). *Build* on the
+visualizer's bar (`omega-build-sequence.js`, ES5, `#ov-build`, owned by Omega
+Plans with the visualizer) posts `omegaCostQuantities()` (exactly what the Run
+sends) and what the 3D model draws (feet of trench dug, how many of each
+archetype, whether it draws conduit) to `POST /api/build-sequence`, the ONE
+door: it runs the Run's own roll-up (`editor-cost.js rollup`, priced as the
+CALLER's workspace, never a body's `vendorOrg`) and `api/_lib/build-sequence.js`
+splits it into the steps of the job (design & permits, survey, trenching,
+pads, equipment set, solar, EV chargers, building upgrades, terminations,
+fence & bollards, utility, commissioning, energize; a step the drawing has
+nothing for is left out). Every roll-up line goes to exactly one step with the
+Run's contingency where the Run applies it (NextNRG's installed prices and the
+Omega-Core skid carry none); `lines()` throws when the lines miss the
+roll-up's subtotal, so a new cost line fails the tests instead of vanishing;
+cents are apportioned by largest remainder, so in place after the last step IS
+the Run total to the cent. A contracted cost is spread by the estimate's
+shares (or carried whole on energize when nothing is priced) and says so;
+conduit stays the BOM estimate the Run keeps out of its total. Days are
+ClearSky planning rates (`RATES`: crew-days a unit, one crew a step, crews
+added to hold a step near 20 days, up to six), each with its working;
+engineering and permits (the jurisdiction's clock), the interconnection (the
+utility's) and building upgrades read "not on file" with no number, and
+energize waits on the utility. Which step puts each archetype in place is the
+server's `reveal` (held to the visualizer's ARCH table); the page only shows,
+hides and animates the visualizer's own wrappers (`userData.itemId`) and its
+conduit layer, Pause holds mid-step, Explode lifts the gear 8 ft, *Schedule &
+money* draws the Gantt with each step's lines and working and downloads a CSV,
+and closing (or closing the visualizer) puts every piece back as drawn; a
+Refresh under it is noticed (`V.site`), never animated. Nothing is written or
+stored: the sequence is derived from the drawing each time. Who: as the
+visualizer opens (a package's Omega Plans, produce; a legacy plan's Site Map;
+an active workspace and member, viewers included; staff). The visualizer's
+bar scrolls sideways on a phone with Close pinned (it sat off a 390 px
+screen); a person who asks for less motion gets the build finished, with
+steps that appear rather than fly in. Held by `scripts/tests/tbuildseq.js`
+(in `npm test`: a sample site, 400 random drawings through the real roll-up,
+the door on the Firestore double) and `npm run check:buildseq`, also in
+`check:pages` (`scripts/render-build-sequence.js`: the real editor and
+visualizer, three.js from `assets/vendor`, a site placed with the editor's
+own tools, played to the end on a desktop, a 390 px phone and a tablet asking
+for less motion).
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
