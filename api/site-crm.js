@@ -13,7 +13,10 @@
      site-save       { id?, name, city, state, address, installedKw,
                        reportedPeakKw, meterOwned, termYearsRemaining,
                        availablePowerMw, serviceCapacityKw, existingPeakKw,
-                       powerPricePerKwh, annualUsageKwh, monthlyUsageKwh[12],
+                       powerPricePerKwh, ppaRatePerKwh, ppaEscalatorPct,
+                       ppaTermYears, ppaPriceSchedule[], ppaYear1Kwh,
+                       itcEnergyCommunity, itcDomesticContent,
+                       annualUsageKwh, monthlyUsageKwh[12],
                        usageNotes, externalSiteIds, status, tags, notes }
      site-import     { rows: [ site-save-shaped, … ] }  bulk register,
                        at most 500 rows; all-or-nothing validation
@@ -153,22 +156,52 @@ function audit(tx, db, action, org, siteId, by, at, extra) {
    Unknown stays unknown: meterOwned is true|false|null and a missing peak
    or term is null, never 0. installedKw is charger nameplate, never
    approved service capacity. */
+/* A field the caller did not send (undefined) stays as stored; one sent
+   blank (null or '') is cleared. Before 2026-10-15 an absent number came
+   back null and a partial save (an import row, a form from before a field
+   existed, a test's one-field save) wiped the PPA, the service and the
+   usage off the record; sentFields() strips only undefined. */
 function optNum(v, label, min, max) {
-  if (v === undefined || v === null || v === '') return null;
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
   var n = Number(v);
   if (!isFinite(n) || n < min || n > max) throw C.fail(400, label + ' must be a number between ' + min + ' and ' + max);
   return n;
 }
 function optBool(v) {
-  if (v === undefined || v === null || v === '') return null;
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
   if (v === true || v === 'true' || v === 1 || v === '1') return true;
   if (v === false || v === 'false' || v === 0 || v === '0') return false;
   throw C.fail(400, 'Meter ownership must be true, false, or left unknown');
 }
+/* The PPA's price table: 1 to 40 $/kWh figures, one a contract year, as
+   the executed contract prints them. Accepts an array or a string of
+   numbers separated by commas, spaces or new lines (a pasted column; a
+   leading year number on a row, "12 0.311", is dropped). Empty is null. */
+function optPriceSchedule(v) {
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
+  var arr = Array.isArray(v) ? v.map(function (x) { return x == null ? '' : String(x); })
+          : String(v).split(/[\n;,]+/).map(function (row) {
+              var t = row.trim().split(/\s+/).filter(Boolean);
+              return t.length >= 2 && /^\d{1,2}$/.test(t[0]) ? t[1] : t.join('');
+            });
+  arr = arr.map(function (x) { return String(x).replace(/[$\s]/g, ''); }).filter(Boolean);
+  if (!arr.length) return null;
+  if (arr.length > 40) throw C.fail(400, 'A PPA price table is at most 40 years');
+  var out = arr.map(function (x) {
+    var p = Number(x);
+    if (!isFinite(p) || p <= 0 || p > 5) throw C.fail(400, 'PPA prices must be $/kWh figures above 0 and at most 5 (got ' + x + ')');
+    return p;
+  });
+  return out;
+}
 /* Twelve monthly kWh figures (Jan..Dec), blanks stay null. Accepts an array
    or a comma-separated string. All-blank collapses to null (unknown). */
 function optMonthlyUsage(v) {
-  if (v === undefined || v === null || v === '') return null;
+  if (v === undefined) return undefined;
+  if (v === null || v === '') return null;
   var arr = Array.isArray(v) ? v : String(v).split(',');
   if (arr.length !== 12) throw C.fail(400, 'Monthly usage must be 12 comma-separated kWh values, Jan through Dec');
   var out = arr.map(function (x, i) {
@@ -209,6 +242,17 @@ function siteInput(b) {
     ppaRatePerKwh: optNum(b.ppaRatePerKwh, 'PPA rate ($/kWh)', 0, 5),
     ppaEscalatorPct: optNum(b.ppaEscalatorPct, 'PPA escalator (%/yr)', -10, 20),
     ppaTermYears: optNum(b.ppaTermYears, 'PPA term (years)', 0, 40),
+    /* the contract as written (2026-10-15, the bank's check): the executed
+       PPA's price table, one $/kWh a contract year, and its expected
+       first-year production; the model prices each year off the table */
+    ppaPriceSchedule: optPriceSchedule(b.ppaPriceSchedule),
+    ppaYear1Kwh: optNum(b.ppaYear1Kwh, 'PPA expected first-year production (kWh)', 0, 1e10),
+    /* the §48E adders the sponsor claims for the host's system (the
+       one-pagers: Sunnyside and Topanga in an energy community): the ONE
+       finance engine builds the statutory rate from them, never a typed
+       percentage; unknown is null and the engine's base rate stands */
+    itcEnergyCommunity: optBool(b.itcEnergyCommunity),
+    itcDomesticContent: optBool(b.itcDomesticContent),
     annualUsageKwh: optNum(b.annualUsageKwh, 'Annual usage (kWh)', 0, 1e15),
     monthlyUsageKwh: optMonthlyUsage(b.monthlyUsageKwh),
     usageNotes: C.text(b.usageNotes, 2000, 'Usage notes', { multiline: true }),
@@ -248,6 +292,10 @@ function siteView(id, s) {
     ppaRatePerKwh: s.ppaRatePerKwh == null ? null : Number(s.ppaRatePerKwh),
     ppaEscalatorPct: s.ppaEscalatorPct == null ? null : Number(s.ppaEscalatorPct),
     ppaTermYears: s.ppaTermYears == null ? null : Number(s.ppaTermYears),
+    ppaPriceSchedule: Array.isArray(s.ppaPriceSchedule) && s.ppaPriceSchedule.length ? s.ppaPriceSchedule.map(Number) : null,
+    ppaYear1Kwh: s.ppaYear1Kwh == null ? null : Number(s.ppaYear1Kwh),
+    itcEnergyCommunity: s.itcEnergyCommunity == null ? null : s.itcEnergyCommunity === true,
+    itcDomesticContent: s.itcDomesticContent == null ? null : s.itcDomesticContent === true,
     annualUsageKwh: s.annualUsageKwh == null ? null : Number(s.annualUsageKwh),
     monthlyUsageKwh: Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh : null,
     usageNotes: s.usageNotes || null,
@@ -937,7 +985,17 @@ async function designModel(db, org, site, ctx, now) {
   /* a stored model built under a structure the rule no longer uses (levered
      before 2026-10-14's 100%-equity ask) runs again on its own, so the page
      never shows a stale ask beside a current design */
-  if (lm && lm.designHash === d.hash && !(lm.levered === true)) return pf ? { proforma: pf } : null;
+  if (lm && lm.designHash === d.hash && !(lm.levered === true)) {
+    /* THE FACTS CHANGED UNDER THE SAME DESIGN (2026-10-15, Tommy: "very
+       accurate"): a PPA table, a production figure, the usage, the rent
+       or the ZIP entered after the model ran are what the model runs ON,
+       so a stored model whose input no longer matches the record's runs
+       again, carrying a chosen chipset, pod count and structure. A model
+       with no input hash (stored before this) runs once more to gain one. */
+    var cur = SM.inputFor(site.data || {}, lm.auto === false ? modelChoices(lm) : {}, { orgName: '' });
+    if (!cur.ok || (lm.inputHash && inputHashOf(cur.input) === lm.inputHash)) return pf ? { proforma: pf } : null;
+    if (dm && dm.hash === d.hash && dm.factsAt === factsAt && dm.modelId === lm.modelId) return pf ? { proforma: pf } : null;
+  }
   if (dm && dm.hash === d.hash && dm.factsAt === factsAt) return { skipped: dm.missing ? 'missing' : dm.error ? 'error' : 'done', missing: dm.missing || null, error: dm.error || null, repeat: true };
   try { await computeAccess(ctx.caller, org, ctx.root); } catch (e) { return { skipped: 'no-access' }; }
   var orgDoc = await ctx.root.get(), orgName = orgDoc.exists ? ((orgDoc.data() || {}).name || org) : org;
@@ -948,7 +1006,8 @@ async function designModel(db, org, site, ctx, now) {
     return { skipped: 'missing', missing: mapped.missing };
   }
   try {
-    var ran = await runModel(db, org, site, { label: 'Site Map design', auto: true }, ctx.by, now, orgName);
+    var keep = lm && lm.designHash === d.hash && lm.auto === false ? modelChoices(lm) : {};
+    var ran = await runModel(db, org, site, Object.assign({ label: lm && lm.designHash === d.hash ? 'Site facts changed' : 'Site Map design', auto: true }, keep), ctx.by, now, orgName);
     rec = { hash: d.hash, factsAt: factsAt, at: now, modelId: ran.modelId };
     await site.ref.update({ designModel: rec }); site.data.designModel = rec;
     return { ran: ran, proforma: pf };
@@ -987,6 +1046,23 @@ async function computeAccess(caller, org, root) {
   var why = projection.packaged ? null : CP._gate.refusal(billing || {}, member);
   if (why) throw A.httpError(403, why);
 }
+/* The choices a person made on a run, to carry into a run the changed facts
+   start: the pods (skids), the chipset and the structure. */
+function modelChoices(lm) {
+  var o = {};
+  if (lm.pods > 0) o.pods = lm.pods;
+  if (lm.skid && lm.skid.chipset) o.gpuClass = lm.skid.chipset; else if (lm.gpuClass) o.gpuClass = lm.gpuClass;
+  if (lm.structure) o.structure = lm.structure;
+  return o;
+}
+/* The ONE hash of a model's input, less the sponsor's name (the workspace
+   name is not a fact of the site), so a stored model knows whether the
+   record it ran on has since changed. */
+function inputHashOf(input) {
+  var x = JSON.parse(JSON.stringify(input || {}));
+  if (x.site) delete x.site.sponsor;
+  return require('crypto').createHash('sha256').update(JSON.stringify(x)).digest('hex');
+}
 /* One compute model on one site: the record mapped to the model's input
    (api/_lib/site-model.js), the ONE finance engine's answer stored whole
    under models/{id} and summarised onto the site as latestModel. A ZIP or
@@ -1002,7 +1078,7 @@ async function runModel(db, org, site, b, by, now, orgName) {
   /* the design this run stands on (its hash), so the automatic run knows a
      design it has already modelled; auto marks the system's own run */
   var dsnM = over.useDesign !== false && site.data && site.data.latestDesign && mapped.basis && mapped.basis.design ? site.data.latestDesign : null;
-  var summary = SM.summaryOf(result, mapped.input, { modelId: mref.id, at: now, by: by, label: label, designHash: dsnM ? dsnM.hash : null, auto: b.auto === true, uplift: SM.upliftOf(mapped.input, result) });
+  var summary = SM.summaryOf(result, mapped.input, { modelId: mref.id, at: now, by: by, label: label, designHash: dsnM ? dsnM.hash : null, auto: b.auto === true, uplift: SM.upliftOf(mapped.input, result), inputHash: inputHashOf(mapped.input) });
   var facts = { latestModel: summary, updatedAt: now, updatedBy: by };
   if (over.zip && optZip(over.zip)) facts.zip = optZip(over.zip);
   /* a ZIP the run read off the address is kept as the site's, so nobody types what the address already said */

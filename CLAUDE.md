@@ -1229,10 +1229,39 @@ host's own solar and storage beside the skid are in the case as MONEY,
 never dispatch (`site-model.hostOf` → `compute-site input.host`: the Run's
 lines on their asset classes, unscaled; the solar sold under the PPA on the
 site record — `ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears`, Topanga's
-executed PPA $0.2250/kWh, 2.5%, 28 years — else the Run's revenue, else a
-named warning with the cost still in the ask), so `totalProjectCost`,
+executed PPA $0.2250/kWh, 2.5%, 28 years; since 2026-10-15 the contract AS
+WRITTEN wins: `ppaPriceSchedule[]`, the executed PPA's price per contract
+year (NextNRG's tables compound 2.0% a year, not the one-pagers' 2.5%), and
+`ppaYear1Kwh`, its expected first-year production, read by the ONE reader
+`proforma-engine.js ppaPrice()`; `itcEnergyCommunity` / `itcDomesticContent`
+build the §48E rate in the engine, never a typed percentage; an assumed
+escalator, a missing table or a yield in place of the contract's
+production is a named warning — else the Run's revenue, else a named
+warning with the cost still in the ask), so `totalProjectCost`,
 `computeCapex` and `host.capex` are read by the register, the panel and
-the hand-off. The pod pro forma runs by itself on the design too
+the hand-off. **The host's battery earns** (2026-10-15, Tommy, over a 12%
+whole project whose $1.5M battery had no revenue: "give the host's battery
+its revenue in the whole-project compute case through the platform's own
+dispatch (demand charges, VPP, grid services)"): `compute-site.js
+hostStorage()` runs the ONE dispatch (`vpp-sim.js`) on the host's meter —
+the usage on record (`annualUsageKwh`, else the typical load for the host
+type, said so as `HOST_LOAD_ASSUMED`), the host's solar, the tariff book
+for the ZIP, the grid programmes open there — and the project is paid
+`HOST_STORAGE.sharePct` (80%) of the bill savings as a storage service fee
+plus the published owner share of the grid earnings, one revenue line
+(`hoststorage`) rising with inflation and fading with the battery;
+`host.storage` on the result and the summary carries the figure, its
+parts, the streams with their tiers and the load it ran on; the panel, the
+record's headline and the deck's assumptions print it; `input.host
+.storage.dispatch: false` switches it off. A screening dispatch, never an
+operator's quote; the site's own bills make it the site's own figure. **The
+term is ten years and its own figure rides beside the headline**
+(2026-10-15, Tommy: "over a ten year span … verified by the bank"): a host
+PPA past year 10 is a terminal value in year 10, and `irrExTerminal` (the
+ten years alone, no terminal value) is on the deal, `latestModel`
+(`terminalValue` beside it), the site page, the register's drawer and CSV;
+a changed fact under the same design runs the automatic model again
+(`latestModel.inputHash`, carrying a chosen chipset, pods and structure). The pod pro forma runs by itself on the design too
 (`designProforma`, once per design) on the skid's recorded price, and each
 engine states its convention (the pod case 60 months pre-tax unlevered
 alone; the compute model after tax, the whole); the assumption set IS the

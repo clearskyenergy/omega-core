@@ -671,6 +671,13 @@ function seed() {
     /* the whole project carries the standard debt (2026-10-14), so the sources and uses add the financing fee and the debt service reserve to the capital */
     assert.ok(lm.totalProjectCost >= lm.computeCapex + 918000 && lm.totalProjectCost < (lm.computeCapex + 918000) * 1.15, 'the capital request is the whole (the capital, then the engine\u2019s own reserves and the debt\u2019s fee and reserve): ' + lm.totalProjectCost);
     assert.equal(lm.host.revenuePerYear, 61000); assert.equal(lm.host.ppa, null); assert.equal(lm.host.noRevenue, false);
+    /* THE HOST'S BATTERY EARNS on the dispatch (2026-10-15): the summary carries the year-one figure, its parts, the streams and the load it ran on; the stored input asked for it; the basis names it */
+    var hsR = lm.host.storage, mdoc = db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId);
+    assert.ok(hsR && hsR.year1 > 0 && hsR.fee === Math.round(hsR.billSavings * 0.8) && hsR.year1 === hsR.fee + hsR.grid, 'the battery\u2019s dispatch revenue is summarised: ' + JSON.stringify(hsR));
+    assert.ok(hsR.streams.some(function (x) { return x.id === 'bill.demand' && x.tier === 'computed'; }), 'the streams ride the summary with their tiers');
+    assert.equal(hsR.loadAssumed, true, 'no usage on record: the typical load, said so'); assert.equal(hsR.load.source, 'profile');
+    assert.deepEqual(mdoc.input.host.storage, { dispatch: true, annualKwh: 0 }, 'the stored input asked for the dispatch with no usage on record');
+    assert.match(mdoc.basis.hostStorage, /dispatched on the host\u2019s meter/); assert.match(mdoc.basis.hostStorage, /no usage on record/);
     /* a site with no PPA on record: the stored model carries no undefined anywhere (2026-10-14: Firestore refused `input.host.ppa` and every automatic run on such a site failed) */
     (function walk(v, path) { if (v === undefined) throw new Error('undefined stored at ' + path); if (v && typeof v === 'object') Object.keys(v).forEach(function (k) { walk(v[k], path + '.' + k); }); })(db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId), 'model');
     assert.equal('ppa' in db.data.get(O + '/sites/' + made.id + '/models/' + lm.modelId).input.host, false, 'no PPA on record: the host block has no ppa key at all');
@@ -723,7 +730,29 @@ function seed() {
     await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaRatePerKwh: 0.225, ppaEscalatorPct: 2.5, ppaTermYears: 28 }, PM);
     var withPpa = await call('GET', { site: made.id }, PM), lm3 = withPpa.site.latestModel;
     assert.equal(withPpa.site.ppaRatePerKwh, 0.225); assert.equal(withPpa.site.ppaTermYears, 28);
-    assert.notEqual(lm3.modelId, lm2.modelId, 'a changed design and changed facts run the model again'); assert.deepEqual(lm3.host.ppa, { ratePerKwh: 0.225, escPct: 2.5, termYears: 28 }); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000, 'the host\u2019s capex is the Run total less the skid\u2019s own line');
+    assert.notEqual(lm3.modelId, lm2.modelId, 'a changed design and changed facts run the model again'); assert.deepEqual(lm3.host.ppa, { ratePerKwh: 0.225, schedule: null, escPct: 2.5, escAssumed: false, termYears: 28, year1Kwh: 0 });
+    assert.ok(lm3.irrExTerminal != null && lm3.irrExTerminal < lm3.irr && lm3.terminalValue && lm3.terminalValue.year === 10 && lm3.terminalValue.yearsLeft === 18, 'the term\u2019s own IRR rides beside the headline: ' + JSON.stringify([lm3.irr, lm3.irrExTerminal, lm3.terminalValue]));
+    assert.ok(db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId).result.proforma.warnings.some(function (w) { return w.code === 'PPA_TABLE_MISSING'; }), 'a rate without the contract\u2019s table is told so');
+    /* THE CONTRACT AS WRITTEN (2026-10-15, Tommy: "very accurate … able to be verified by the bank"): the executed Topanga PPA's own 28-row price table (it compounds 2.0% a year, not the one-pager's 2.5%) and its expected first-year production, pasted as the contract prints them, price each year as written */
+    var tbl = []; for (var ty = 0; ty < 28; ty++) tbl.push((0.225 * Math.pow(1.02, ty)).toFixed(4));
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaPriceSchedule: tbl.map(function (p, i) { return (i + 1) + ' ' + p; }).join('\n'), ppaYear1Kwh: 540000 }, PM);
+    var withTbl = await call('GET', { site: made.id }, PM), lm3b = withTbl.site.latestModel;
+    assert.equal(withTbl.site.ppaPriceSchedule.length, 28); assert.equal(withTbl.site.ppaPriceSchedule[0], 0.225); assert.equal(withTbl.site.ppaPriceSchedule[27], 0.384); assert.equal(withTbl.site.ppaYear1Kwh, 540000);
+    assert.notEqual(lm3b.modelId, lm3.modelId, 'the table is a changed fact: the model runs again');
+    assert.equal(lm3b.host.ppa.schedule.length, 28); assert.equal(lm3b.host.ppa.year1Kwh, 540000); assert.ok(lm3b.irr < lm3.irr, 'the 2.0% table returns less than the 2.5% rate: ' + lm3b.irr + ' < ' + lm3.irr);
+    var st3b = db.data.get(O + '/sites/' + made.id + '/models/' + lm3b.modelId);
+    assert.equal(st3b.result.proforma.inputs.solar.kwh1, 540000, 'the contract\u2019s expected production is what the solar generates'); assert.equal(st3b.result.proforma.inputs.revenue.ppa.schedule.length, 28);
+    assert.ok(!st3b.result.proforma.warnings.some(function (w) { return w.code === 'PPA_TABLE_MISSING' || w.code === 'PPA_PRODUCTION_ASSUMED'; }), 'nothing assumed about the contract');
+    await rejects(call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaPriceSchedule: '0.2, 7' }, PM), 400, /PPA prices/);
+    /* the §48E adders on record build the statutory rate in the ONE finance engine (the one-pagers claim an energy community): 30 + 10 points, never a typed percentage */
+    assert.equal(st3b.result.proforma.tax.itc.byAsset.blended.ratePct, 30, 'the base rate with no adder on record');
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', itcEnergyCommunity: true }, PM);
+    var withEc = await call('GET', { site: made.id }, PM), lmEc = withEc.site.latestModel, stEc = db.data.get(O + '/sites/' + made.id + '/models/' + lmEc.modelId);
+    assert.equal(withEc.site.itcEnergyCommunity, true); assert.notEqual(lmEc.modelId, lm3b.modelId, 'an adder is a changed fact');
+    assert.equal(withEc.site.ppaPriceSchedule.length, 28, 'a save that does not send the table leaves it as stored (2026-10-15: a partial save once wiped it)'); assert.equal(withEc.site.ppaYear1Kwh, 540000); assert.equal(withEc.site.ppaRatePerKwh, 0.225);
+    assert.equal(stEc.result.proforma.tax.itc.byAsset.blended.ratePct, 40); assert.ok(lmEc.irr > lm3b.irr, 'the adder raises the IRR: ' + lmEc.irr + ' > ' + lm3b.irr); assert.match(stEc.basis.itc, /energy community/);
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaPriceSchedule: [] }, PM);
+    assert.equal((await call('GET', { site: made.id }, PM)).site.ppaPriceSchedule, null, 'an empty table clears it'); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000, 'the host\u2019s capex is the Run total less the skid\u2019s own line');
     var st3 = db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId);
     assert.deepEqual(st3.input.host.capexLines.map(function (l) { return [l.id, l.amount, l.asset]; }), [['nextnrg', 2208000, 'blended'], ['balance', 92000, 'blended']]);
     assert.equal(st3.result.proforma.inputs.revenue.ppa.rate1, 0.225); assert.ok(st3.result.proforma.rows[0].ppaRevenue > 100000, 'the PPA earns on the solar the engine generates: ' + st3.result.proforma.rows[0].ppaRevenue);

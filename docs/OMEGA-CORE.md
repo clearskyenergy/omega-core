@@ -355,9 +355,21 @@ cost of the nextnrg bess and the next nrg solar is $6.00 per watt".
   storage, chargers and the controller as themselves; pods, the electrical
   package, generation and a shell never energy property), unscaled, with no
   soft cost added twice; the host's solar sold under **the PPA on the site
-  record** (`ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears` — Topanga's
-  executed PPA: $0.2250/kWh, 2.5% a year, 28 years — through the ONE finance
-  engine's own PPA on the solar it generates), else the Run's year-one
+  record** (`ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears`, and since
+  2026-10-15 the contract AS WRITTEN: `ppaPriceSchedule[]`, the executed
+  PPA's own price per contract year, and `ppaYear1Kwh`, its expected
+  first-year production — Topanga's executed PPA: $0.2250/kWh in year one
+  to $0.3840 in year 28, a table that compounds 2.0% a year although the
+  one-pager says 2.5%; Sunnyside's $0.250 → $0.427, 2.0% too, on 627,140
+  kWh — through the ONE finance engine's own PPA on the solar it
+  generates: `proforma-engine.js ppaPrice()` is the one reader of a PPA
+  price, the table winning over the rate and the escalator, which carry
+  only the years past its end; the terminal value is priced off the same
+  reading; an escalator the model had to assume, a rate with no table and a
+  yield in place of the contract's production are each said as a warning,
+  never silent; the §48E adders the sponsor claims, `itcEnergyCommunity`
+  and `itcDomesticContent`, build the statutory rate in the engine, never
+  a typed percentage), else the Run's year-one
   revenue rising with inflation, else NO revenue, said as a warning
   (`HOST_NO_REVENUE`) with the cost still in the ask; its O&M $6/kWh-yr on
   the battery and $20/kW-yr on the solar. The skid still runs on its own
@@ -380,6 +392,24 @@ Not built: the host's service size and usage still come from the record
 (the editor keeps the BESS Config service on the page, not on the project),
 so a plain-pod design on a site with no service on record is named, not
 modelled; a mixed design (host pods and skids) gives one case, the host's.
+
+### The term is ten years, and its own figure rides beside the headline (2026-10-15)
+
+Tommy: "we should be looking at this over a ten year span … very accurate …
+able to be verified by the bank." The compute model runs `finance.years` =
+10. A host PPA that outlives it is a terminal value in year 10 (its
+remaining years less O&M, priced off the same reading of the contract,
+discounted at the model's rate, taken as income and taxed), and
+`irrExTerminal` — the after-tax IRR of the ten years' cash flows alone, no
+terminal value — is kept on the deal (`deals.own.irrExTerminal`), the host
+block (`host.terminalValue.irrExTerminal`), `latestModel` (with
+`terminalValue` beside it), the site page's headline, the register's drawer
+and its CSV, so a lender's own ten-year model has the figure to check line
+by line. A changed fact under the same design (the price table, the
+production figure, the usage, the rent, the ZIP, an ITC adder) runs the
+automatic model again (`latestModel.inputHash`, `api/site-crm.js
+inputHashOf`), carrying a chosen chipset, pod count and structure; a model
+stored before the hash existed runs once more to gain one.
 
 ## The door — `api/omega-core.js`
 

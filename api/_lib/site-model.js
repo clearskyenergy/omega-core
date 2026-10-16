@@ -180,9 +180,20 @@ function inputFor(site, over, ctx) {
    term NextNRG's executed PPA carries (Topanga: $0.2250/kWh in year one,
    2.5% a year, 28 years). Nothing is invented: no rate, no PPA. */
 function ppaOf(site) {
-  var rate = pos(site.ppaRatePerKwh); if (!rate) return null;
-  var esc = num(site.ppaEscalatorPct), term = pos(site.ppaTermYears);
-  return { ratePerKwh: rate, escPct: esc == null ? 2.5 : esc, termYears: term ? Math.floor(term) : 0 };
+  /* THE CONTRACT AS WRITTEN (2026-10-15): the executed PPA's price table
+     (`ppaPriceSchedule`, $/kWh a contract year — NextNRG's tables compound
+     2.0% a year, not the 2.5% the one-pagers say) and its expected
+     first-year production (`ppaYear1Kwh`) ride with the rate, so each year
+     is priced as the contract reads. An escalator not on record is left
+     for the model to say it assumed, never filled in here. */
+  var S = Array.isArray(site.ppaPriceSchedule) ? site.ppaPriceSchedule.map(pos).filter(Boolean) : [];
+  var rate = S.length ? S[0] : pos(site.ppaRatePerKwh); if (!rate) return null;
+  var esc = num(site.ppaEscalatorPct), term = pos(site.ppaTermYears), kwh1 = pos(site.ppaYear1Kwh);
+  var out = { ratePerKwh: rate, termYears: term ? Math.floor(term) : S.length };
+  if (esc != null) out.escPct = esc;
+  if (S.length) out.schedule = S;
+  if (kwh1) out.year1Kwh = kwh1;
+  return out;
 }
 /* The host's system beside the skid, as the compute model's `host` block:
    the design's solar and storage with the Run's lines on their asset
@@ -219,19 +230,30 @@ function hostOf(site, d) {
   } else if (capex > 0) {
     add('run', 'The host\u2019s system, as the Site Map cost run priced it', capex, energy ? 'blended' : 'other');
   }
-  var ppa = ppaOf(site), rev = !ppa && pos(d.annualRevenue) ? d.annualRevenue : 0;
+  var ppa = ppaOf(site), rev = !ppa && pos(d.annualRevenue) ? d.annualRevenue : 0, usage = annualKwhOf(site);
   return {
     solarKwDc: solarKw, bessKw: bess ? bess.kw || 0 : 0, bessKwh: bess ? bess.kwh : 0,
+    /* the host's battery earns on the host's meter through the ONE dispatch
+       (2026-10-15): against the usage on record when there is one */
+    storage: bess ? { dispatch: true, annualKwh: usage || 0 } : null,
     capexLines: lines, basis: capex > 0 ? 'Site Map cost run' + (d.capexAt ? ' of ' + String(d.capexAt).slice(0, 10) : '') : 'no cost run yet',
     ppa: ppa && solarKw > 0 ? ppa : null,
     revenuePerYear: rev, revenueBasis: rev ? 'the Site Map run\u2019s year-one revenue' : '',
     words: (solarKw ? fmtNum(solarKw) + ' kW-dc solar' : '') + (solarKw && bess ? ' and a ' : bess ? 'a ' : '') + (bess ? fmtNum(bess.kw) + ' kW / ' + fmtNum(bess.kwh) + ' kWh battery' : '') +
            (capex > 0 ? ' costed at ' + fmtUsd(capex) + ' by the Site Map run' + (d.capexAt ? ' of ' + String(d.capexAt).slice(0, 10) : '') : ' with no cost run yet') +
-           (ppa && solarKw > 0 ? ', sold under the PPA on record ($' + ppa.ratePerKwh + '/kWh, ' + ppa.escPct + '% a year' + (ppa.termYears ? ', ' + ppa.termYears + ' years' : '') + ')' :
-            rev ? ', earning the run\u2019s ' + fmtUsd(rev) + ' a year' : ', with NO revenue on record (enter the PPA on the site)')
+           (ppa && solarKw > 0 ? ', sold under the PPA on record (' + (ppa.schedule ? 'the contract\u2019s price table, $' + ppa.schedule[0] + '/kWh in year one to $' + ppa.schedule[ppa.schedule.length - 1] + ' in year ' + ppa.schedule.length : '$' + ppa.ratePerKwh + '/kWh, ' + (ppa.escPct != null ? ppa.escPct + '% a year' : 'no escalator on record')) + (ppa.termYears ? ', ' + ppa.termYears + ' years' : '') + (ppa.year1Kwh ? ', ' + fmtNum(ppa.year1Kwh) + ' kWh expected in year one' : '') + ')' :
+            rev ? ', earning the run\u2019s ' + fmtUsd(rev) + ' a year' : ', with NO revenue on record (enter the PPA on the site)') +
+           (bess ? '; the battery dispatched on the host\u2019s meter against ' + (usage ? 'the usage on record, ' + fmtNum(usage) + ' kWh a year' : 'a typical load for the host type (no usage on record)') : '')
   };
 }
 function fmtNum(n) { return Math.round(n).toLocaleString('en-US'); }
+/* The ITC adders the site record claims for the host's system, as the
+   engine's own flags; null when none is claimed, so the base rate stands. */
+function itcOf(site) {
+  var ec = site.itcEnergyCommunity === true, dc = site.itcDomesticContent === true;
+  if (!ec && !dc) return null;
+  return { energyCommunity: ec, domesticContent: dc };
+}
 
 /* The Omega-Core skid's chipsets, as a page may offer them: the skid's own
    library, each with its public $/GPU-hour on the basis the skid's cash
@@ -317,7 +339,12 @@ function skidInput(site, over, ctx, d) {
      register kept showing the skid-only model) */
   if (hostBlock) {
     input.host = { solarKwDc: hostBlock.solarKwDc, bessKw: hostBlock.bessKw, bessKwh: hostBlock.bessKwh, capexLines: hostBlock.capexLines, basis: hostBlock.basis };
+    /* the §48E adders on record (energy community, domestic content) go to
+       the ONE finance engine, which builds the statutory rate from them */
+    var adders = itcOf(site);
+    if (adders) input.finance = Object.assign({}, input.finance || {}, { tax: { itc: { solar: adders, storage: adders } } });
     if (hostBlock.ppa) input.host.ppa = hostBlock.ppa;
+    if (hostBlock.storage) input.host.storage = hostBlock.storage;
     if (hostBlock.revenuePerYear) { input.host.revenuePerYear = hostBlock.revenuePerYear; input.host.revenueBasis = hostBlock.revenueBasis || ''; }
   }
   var host = [];
@@ -343,6 +370,10 @@ function skidInput(site, over, ctx, d) {
     host: hostBlock ? 'the host\u2019s own system beside the skid, on the host\u2019s meter, IN this case as money (its cost on its own asset classes, its revenue, its O&M), never dispatched against the skid: ' + hostBlock.words + (host.length ? ' (' + host.join(' \u00b7 ') + ')' : '')
         : host.length ? 'the host\u2019s own project beside the skid, on the host\u2019s meter and not in this case: ' + host.join(' \u00b7 ') : null,
     hostRevenue: hostBlock ? (hostBlock.ppa ? 'the PPA on record' : hostBlock.revenuePerYear ? hostBlock.revenueBasis : 'none on record') : null,
+    itc: hostBlock ? (itcOf(site) ? 'the \u00a748E rate built by the finance engine from the adders on record: ' + [itcOf(site).energyCommunity ? 'energy community' : '', itcOf(site).domesticContent ? 'domestic content' : ''].filter(Boolean).join(' and ') : 'the base \u00a748E rate (no adder on record: mark the energy community or domestic content on the site if the sponsor claims it)') : null,
+    hostStorage: hostBlock && hostBlock.storage ? 'the host\u2019s ' + fmtNum(hostBlock.bessKw) + ' kW / ' + fmtNum(hostBlock.bessKwh) + ' kWh battery dispatched on the host\u2019s meter by the platform\u2019s own dispatch (demand charges, time-of-use, the grid programmes open at the ZIP) against ' +
+                 (hostBlock.storage.annualKwh > 0 ? 'the usage on record, ' + fmtNum(hostBlock.storage.annualKwh) + ' kWh a year' : 'a typical load for the host type (no usage on record: enter the site\u2019s annual usage for the battery\u2019s own figure)') +
+                 '; the project is paid a storage service fee of 80% of the bill savings and the published owner share of the grid earnings' : null,
     plainPods: plain ? plain + ' compute unit' + (plain === 1 ? '' : 's') + ' on the design that are not Omega-Core skids are not in this case' : null,
     design: d.at ? 'Site Map design of ' + String(d.at).slice(0, 10) : 'Site Map design'
   };
@@ -396,6 +427,9 @@ function summaryOf(result, input, meta) {
     npv: m.npv == null ? null : m.npv, paybackYears: m.paybackYears == null ? null : m.paybackYears,
     totalReturns: m.totalReturns == null ? null : m.totalReturns, moic: m.moic == null ? null : m.moic,
     levered: !!m.levered, dscrMin: m.dscrMin == null ? null : m.dscrMin,
+    /* the term's own IRR with no terminal value for the host's PPA after it (2026-10-15): the figure a bank checks the ten years against; null when nothing outlives the term */
+    irrExTerminal: result && result.host && result.host.terminalValue && result.host.terminalValue.irrExTerminal != null ? result.host.terminalValue.irrExTerminal : null,
+    terminalValue: result && result.host && result.host.terminalValue ? { amount: result.host.terminalValue.amount, year: result.host.terminalValue.year, yearsLeft: result.host.terminalValue.yearsLeft } : null,
     totalProjectCost: su.totalUses == null ? null : su.totalUses, capex: pf && pf.capex ? pf.capex.total : null,
     equity: su.equity == null ? null : su.equity, debt: su.debt == null ? null : su.debt,
     debtTerms: input && input.finance && input.finance.debt && pf && pf.inputs && pf.inputs.debt ? { ltcPct: pf.inputs.debt.ltcPct, ratePct: pf.inputs.debt.ratePct, tenorYears: pf.inputs.debt.tenorYears, dscrMin: pf.inputs.debt.dscrMin } : null,
@@ -408,11 +442,22 @@ function summaryOf(result, input, meta) {
     skid: input && input.skid ? { units: input.skid.units, chipset: input.skid.chipset, chipsetName: input.skid.chipsetName, pricePerGpuHour: input.skid.pricePerGpuHour, priceBasis: input.skid.priceBasis, systemCostUsd: input.skid.systemCostUsd, gpus: input.skid.gpus } : null,
     /* the host's system in the case beside the compute: what it cost, what it earns; and the compute's own capital apart */
     host: result && result.host ? { solarKwDc: result.host.solarKwDc, bessKw: result.host.bessKw, bessKwh: result.host.bessKwh, capex: result.host.capex, basis: result.host.basis || null,
-                                    ppa: result.host.ppa || null, revenuePerYear: result.host.revenuePerYear || null, revenueBasis: result.host.revenueBasis || null, noRevenue: !result.host.ppa && !(result.host.revenuePerYear > 0) } : null,
+                                    ppa: result.host.ppa || null, revenuePerYear: result.host.revenuePerYear || null, revenueBasis: result.host.revenueBasis || null,
+                                    /* the battery's own earnings on the dispatch: the year-one figure, its parts, the load it ran on */
+                                    storage: result.host.storage && !result.host.storage.error ? { year1: result.host.storage.year1, fee: result.host.storage.fee, grid: result.host.storage.grid, sharePct: result.host.storage.sharePct, ownerSharePct: result.host.storage.ownerSharePct,
+                                      billSavings: result.host.storage.billSavings, gridEarnings: result.host.storage.gridEarnings, confidence: result.host.storage.confidence || null,
+                                      streams: (result.host.storage.streams || []).map(function (x) { return { id: x.id, name: x.name, usd: x.usd, tier: x.tier }; }),
+                                      load: result.host.storage.load ? { source: result.host.storage.load.source, label: result.host.storage.load.label, annualKwh: result.host.storage.load.annualKwh } : null,
+                                      loadAssumed: !!(result.host.storage.load && result.host.storage.load.source === 'profile' && !(input && input.host && input.host.storage && input.host.storage.annualKwh > 0)) }
+                                      : result.host.storage && result.host.storage.error ? { error: result.host.storage.error } : null,
+                                    noRevenue: !result.host.ppa && !(result.host.revenuePerYear > 0) && !(result.host.storage && result.host.storage.year1 > 0),
+                                    solarNoRevenue: result.host.solarKwDc > 0 && !result.host.ppa && !(result.host.revenuePerYear > 0) } : null,
     computeCapex: result && result.computeCapex != null ? result.computeCapex : null,
     /* the host alone, the skid alone, the whole: what the compute adds */
     uplift: meta.uplift || null,
-    designHash: meta.designHash || null, auto: meta.auto === true
+    designHash: meta.designHash || null, auto: meta.auto === true,
+    /* the hash of the input this run stood on (api/site-crm.js inputHashOf), so changed facts run it again */
+    inputHash: meta.inputHash || null
   };
 }
 
@@ -428,5 +473,5 @@ function askOf(site) {
 }
 
 module.exports = { inputFor: inputFor, summaryOf: summaryOf, askOf: askOf, podsOf: podsOf, serviceOf: serviceOf, evOf: evOf, zipOf: zipOf,
-  skidInput: skidInput, skidFacts: skidFacts, skidChipsets: skidChipsets, hostOf: hostOf, ppaOf: ppaOf, upliftOf: upliftOf,
+  skidInput: skidInput, skidFacts: skidFacts, skidChipsets: skidChipsets, hostOf: hostOf, ppaOf: ppaOf, itcOf: itcOf, upliftOf: upliftOf,
   GPU_CLASSES: GPU_CLASSES, STRUCTURES: STRUCTURES, HOST_TYPES: HOST_TYPES };

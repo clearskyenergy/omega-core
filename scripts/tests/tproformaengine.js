@@ -586,6 +586,19 @@ near('but the levelized PPA price stays a price', lossy.metrics.lppaCents, gross
 ok('while LCOE per kWh sold rises', lossy.metrics.lcoeCents > gross.metrics.lcoeCents);
 var flat = E.run(site({ solar: { degradationPct: 0 }, revenue: { ppa: { escalatorPct: 0 } } }));
 near('a flat price with flat output levelizes to itself', flat.metrics.lppaCents, 20, 1e-9);
+/* THE CONTRACT'S OWN PRICE TABLE (2026-10-15, Tommy: the IRR has to be
+   "verified by the bank"): a schedule prices each year as written */
+var tbl25 = [], tbl20 = [], y;
+for (y = 0; y < 28; y++) { tbl25.push(0.225 * Math.pow(1.025, y)); tbl20.push(Math.round(0.225 * Math.pow(1.02, y) * 10000) / 10000); }
+var byRate = E.run(TOPANGA), byTable = E.run(merge(TOPANGA, { revenue: { ppa: { schedule: tbl25 } } })), byTable20 = E.run(merge(TOPANGA, { revenue: { ppa: { schedule: tbl20, rate1: 0.999 } } }));
+ok('a table equal to the rate at the escalator gives the same IRR, revenue and levelized price', byTable.ok && Math.abs(byTable.metrics.afterTaxIrr - byRate.metrics.afterTaxIrr) < 1e-9 && Math.abs(byTable.rows[27].ppaRevenue - byRate.rows[27].ppaRevenue) < 1e-6 && Math.abs(byTable.metrics.lppaCents - byRate.metrics.lppaCents) < 1e-9, [byTable.errors, byTable.metrics.afterTaxIrr, byRate.metrics.afterTaxIrr]);
+ok('the table wins over rate1 (its first row is the year-one rate) and prices each year as written', byTable20.ok && byTable20.inputs.revenue.ppa.rate1 === 0.225 && byTable20.revenue.ppaRate1 === 0.225 && Math.abs(byTable20.rows[27].ppaRevenue / byTable20.rows[27].solarNetKwh - 0.384) < 1e-9, [byTable20.errors, byTable20.inputs.revenue.ppa]);
+ok('Topanga\u2019s executed table (2.0% a year) returns less than the one-pager\u2019s 2.5%, and the words say what the table compounds at', byTable20.metrics.afterTaxIrr < byRate.metrics.afterTaxIrr - 0.002 && Math.abs(byTable20.revenue.ppaImpliedEscalatorPct - 2) < 0.02 && byTable20.assumptions.some(function (t) { return /contract's own price table/.test(t) && /\$0\.225\/kWh in year one to \$0\.384\/kWh in year 28/.test(t) && /compounding 2% a year/.test(t); }), [byTable20.metrics.afterTaxIrr, byRate.metrics.afterTaxIrr, byTable20.revenue.ppaImpliedEscalatorPct, byTable20.assumptions.filter(function (t) { return /PPA/.test(t); })]);
+var past = E.run(merge(TOPANGA, { years: 30, revenue: { ppa: { schedule: tbl20.slice(0, 10), escalatorPct: 3 } } }));
+ok('a year past the table carries its last price on at the escalator', past.ok && Math.abs(past.rows[10].ppaRevenue / past.rows[10].solarNetKwh - tbl20[9] * 1.03) < 1e-9 && Math.abs(past.rows[29].ppaRevenue / past.rows[29].solarNetKwh - tbl20[9] * Math.pow(1.03, 20)) < 1e-9 && /years past the table carry its last price escalating 3% a year/.test(past.assumptions.join(' ')), past.errors);
+ok('E.ppaPrice is the one reader', Math.abs(E.ppaPrice({ schedule: tbl20, escalatorPct: 3 }, 28) - 0.384) < 1e-12 && Math.abs(E.ppaPrice({ rate1: 0.2, escalatorPct: 2.5 }, 3) - 0.2 * 1.025 * 1.025) < 1e-12);
+refused('a table with a bad price', merge(TOPANGA, { revenue: { ppa: { schedule: [0.2, 'x'] } } }), 'revenue.ppa.schedule[1]');
+refused('a table that is not a list', merge(TOPANGA, { revenue: { ppa: { schedule: 0.2 } } }), 'revenue.ppa.schedule');
 
 section('warnings');
 var cliffRun = E.run(site({ project: { bocMonth: '2026-09', pisMonth: '2028-02' } }));

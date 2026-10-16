@@ -47,6 +47,33 @@ assert.match(ed, /if\(rate===undefined\) continue;\s+\/\* being priced: leave th
 assert.match(ed, /if\(rate===undefined\)\{ _evpPendingStd=true; continue; \}/); count++;
 assert.match(ed, /function ngPriceBook\(Q\)\{\n  var R = _evpRequest\('ng', \{ q:Q \}\);/); count++;
 assert.match(ed, /var B=\(NG_LAST&&NG_LAST\.band\)\|\|/); count++;
+/* The page LOADS. The move left `window.STANDARD_ITEMS=STANDARD_ITEMS;` behind
+   after the table it published was deleted: a ReferenceError at load that killed
+   the one script block holding boot, the message listener and the ready ping,
+   so the editor's EV Cost Workbook button opened an empty shell and nothing was
+   ever handed over (Concord, 2026-10-14). The wrappers above are cut out and run
+   on their own, which is how that slipped past. Every inline block runs here in
+   a stub browser; a top-level throw of any kind fails. */
+(function () {
+  var re = /<script(?![^>]*\bsrc=)[^>]*>([\s\S]*?)<\/script>/gi, m, n = 0;
+  function el() { var e = { style: {}, value: '', textContent: '', innerHTML: '', dataset: {}, classList: { add: function () {}, remove: function () {}, toggle: function () {}, contains: function () { return false; } } }; ['addEventListener', 'setAttribute', 'appendChild', 'removeChild', 'remove', 'focus', 'click'].forEach(function (k) { e[k] = function () {}; }); e.getAttribute = function () { return null; }; e.querySelector = function () { return null; }; e.querySelectorAll = function () { return []; }; return e; }
+  var w = { document: { getElementById: el, querySelector: el, querySelectorAll: function () { return []; }, createElement: el, body: el(), documentElement: el(), head: el(), addEventListener: function () {}, readyState: 'loading', title: '' },
+    navigator: { userAgent: 'node' }, location: { hostname: 'concordenergyusa.clearskyomega.com', origin: 'https://concordenergyusa.clearskyomega.com', search: '', href: '', pathname: '/' },
+    localStorage: { getItem: function () { return null; }, setItem: function () {}, removeItem: function () {} }, console: console,
+    setTimeout: function () { return 0; }, clearTimeout: function () {}, setInterval: function () { return 0; }, clearInterval: function () {}, requestAnimationFrame: function () { return 0; },
+    fetch: function () { return new Promise(function () {}); }, addEventListener: function () {}, removeEventListener: function () {}, alert: function () {}, matchMedia: function () { return { matches: false, addEventListener: function () {}, addListener: function () {} }; },
+    innerWidth: 1200, innerHeight: 800, history: { replaceState: function () {}, pushState: function () {} }, performance: { now: function () { return 0; } }, opener: null,
+    URL: { createObjectURL: function () { return ''; }, revokeObjectURL: function () {} }, Blob: function () {}, FileReader: function () {}, Image: function () {}, MutationObserver: function () { return { observe: function () {}, disconnect: function () {} }; } };
+  w.sessionStorage = w.localStorage; w.window = w; w.self = w; w.top = w; w.parent = w;
+  vm.createContext(w);
+  while ((m = re.exec(ed))) {
+    n++;
+    var at = ed.slice(0, m.index).split('\n').length;
+    try { vm.runInContext(m[1], w, { filename: 'ev-cost-workbook.html block ' + n }); }
+    catch (e) { throw new Error('ev-cost-workbook.html: the inline script block at line ' + at + ' throws at load (' + e.name + ': ' + e.message + '), which kills boot and the handoff listener'); }
+  }
+  assert.ok(n >= 2, 'both inline blocks ran'); assert.equal(typeof w.__omegaBoot, 'function', 'boot is wired after load'); count += 2;
+})();
 /* the wrappers under a fake sign-in and fetch */
 function cut(name) { var s = ed.indexOf('function ' + name + '('), k = ed.indexOf('{', s), d = 0; for (; ; k++) { if (ed[k] === '{') d++; else if (ed[k] === '}') { d--; if (!d) break; } } return ed.slice(s, k + 1); }
 var calls = [], ctx = { DATA: JOBS.ma10.data, FORM: { designFlat: 0, short: 'NG MA', writer: 'nationalgrid' }, EDITOR_FLEET: [], LINES: [], _nid: 1, RATE_OVERRIDES: {}, PERMIT_PCT: 0.03,
