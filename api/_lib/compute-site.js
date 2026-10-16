@@ -380,9 +380,22 @@ function read(input) {
       bessKw: rd(e, 'host.bessKw', ho.bessKw, { def: 0, min: 0, max: 50000, label: 'The host\'s battery power (kW)' }),
       bessKwh: rd(e, 'host.bessKwh', ho.bessKwh, { def: 0, min: 0, max: 200000, label: 'The host\'s battery energy (kWh)' }),
       capexLines: hl, capexTotal: hSum, basis: str(ho.basis, 200),
-      ppa: num(hp.ratePerKwh) > 0 ? { ratePerKwh: rd(e, 'host.ppa.ratePerKwh', hp.ratePerKwh, { min: 0.001, max: 5, label: 'The PPA rate ($/kWh)' }),
-                                     escPct: rd(e, 'host.ppa.escPct', hp.escPct, { def: 2.5, min: -10, max: 20, label: 'The PPA escalator (%/yr)' }),
-                                     termYears: rd(e, 'host.ppa.termYears', hp.termYears, { def: 0, min: 0, max: 40, int: true, label: 'The PPA term (years)' }) } : null,
+      /* THE CONTRACT AS WRITTEN (2026-10-15, Tommy: "very accurate … able to
+         be verified by the bank"): the executed PPA's own price table
+         (`schedule`, $/kWh a contract year; it wins over the rate and the
+         escalator, which then carry only the years past its end) and its
+         expected first-year production (`year1Kwh`, the contract's figure
+         for the solar it generates, which wins over the ZIP's yield). */
+      ppa: num(hp.ratePerKwh) > 0 || (Array.isArray(hp.schedule) && hp.schedule.length) ? (function () {
+        var S = Array.isArray(hp.schedule) ? hp.schedule.slice(0, 60).map(function (p, i) { return rd(e, 'host.ppa.schedule[' + i + ']', p, { min: 0.001, max: 5, label: 'The year-' + (i + 1) + ' PPA price ($/kWh)' }); }) : [];
+        S = S.filter(function (p) { return p > 0; });
+        return { ratePerKwh: S.length ? S[0] : rd(e, 'host.ppa.ratePerKwh', hp.ratePerKwh, { min: 0.001, max: 5, label: 'The PPA rate ($/kWh)' }),
+                 schedule: S.length ? S : null,
+                 escPct: rd(e, 'host.ppa.escPct', hp.escPct, { def: 2.5, min: -10, max: 20, label: 'The PPA escalator (%/yr)' }),
+                 escAssumed: hp.escPct == null || hp.escPct === '',
+                 termYears: rd(e, 'host.ppa.termYears', hp.termYears, { def: S.length || 0, min: 0, max: 40, int: true, label: 'The PPA term (years)' }),
+                 year1Kwh: rd(e, 'host.ppa.year1Kwh', hp.year1Kwh, { def: 0, min: 0, max: 1e10, label: 'The PPA\'s expected first-year production (kWh)' }) };
+      })() : null,
       /* the host system's revenue when there is no PPA on record: the Site Map run's year-one figure, escalating with inflation */
       revenuePerYear: rd(e, 'host.revenuePerYear', ho.revenuePerYear, { def: 0, min: 0, max: 1e9, label: 'The host system\'s year-one revenue ($)' }),
       revenueBasis: str(ho.revenueBasis, 200),
@@ -496,19 +509,38 @@ function prepare(c) {
 /* ── COMPUTE LOAD ────────────────────────────────────────────────────────── */
 /* Per GPU at the meter: its rating plus the server's share, times cooling,
    at the draw it runs at serving or idle. */
+/* The factor that scales the diurnal shape so the clipped mean over the
+   hours in the window equals the utilisation u: 1 when nothing clips, found
+   by bisection otherwise; 1 when u cannot be reached at all (u ≥ 1). */
+function shapeScale(u, start, end) {
+  if (!(u > 0) || u >= 1) return 1;
+  function mean(f) { var t = 0, n = 0; for (var hr = start; hr < end; hr++) { t += Math.min(1, u * DEMAND_SHAPE[hr] * f); n++; } return n ? t / n : 0; }
+  if (mean(1) >= u - 1e-9) return 1;
+  var lo = 1, hi = 1 / u;
+  if (mean(hi) < u - 1e-9) return hi;
+  for (var i = 0; i < 60; i++) { var mid = (lo + hi) / 2; if (mean(mid) < u) lo = mid; else hi = mid; }
+  return hi;
+}
 function computeLoad(c, ctx, pods) {
   var k = c.compute, gpus = pods * k.gpusPerPod, rated = k.kwPerGpu * (1 + k.overheadPct / 100) * k.pue;
   var serve = rated * k.servePct / 100, idle = rated * k.idlePct / 100, delta = Math.max(0, serve - idle);
   var g = { offtake: gpus * k.tiers.offtake.sharePct / 100, edge: gpus * k.tiers.edge.sharePct / 100, spot: gpus * k.tiers.spot.sharePct / 100 };
   var firm = zeros(H), spotCap = zeros(H), edgeUsed = zeros(H), uE = k.tiers.edge.utilPct / 100, uS = k.tiers.spot.utilPct / 100;
+  /* THE UTILISATION TYPED IS THE UTILISATION SOLD (2026-10-15, Tommy: "make
+     sure the engine and logic … calculate the correct numbers"): the diurnal
+     shape peaks above the daily mean, and clipping each hour at 100% used to
+     leave "85% sold" at 82.6% of GPU-hours. The shape is scaled so its
+     clipped daily mean IS the utilisation typed (a bank reads 85% as 85%);
+     the hours that cannot be served at the peak are served off-peak. */
+  var fE = shapeScale(uE, k.edgeStart, k.edgeEnd), fS = shapeScale(uS, 0, 24);
   for (var h = 0; h < H; h++) {
     var hr = h % 24, sh = DEMAND_SHAPE[hr];
     var inEdge = hr >= k.edgeStart && hr < k.edgeEnd;
-    var ue = inEdge ? Math.min(1, uE * sh) : 0;
+    var ue = inEdge ? Math.min(1, uE * sh * fE) : 0;
     edgeUsed[h] = g.edge * ue;
     firm[h] = g.offtake * serve + g.edge * (ue * serve + (1 - ue) * idle) + g.spot * idle;
     var spotOk = k.spotMode !== 'offpeak' || !ctx.onPeak[h];
-    spotCap[h] = spotOk ? g.spot * Math.min(1, uS * sh) : 0;
+    spotCap[h] = spotOk ? g.spot * Math.min(1, uS * sh * fS) : 0;
   }
   return { gpus: gpus, g: g, rated: rated, serve: serve, idle: idle, delta: delta, firm: firm, spotCap: spotCap, edgeUsed: edgeUsed,
            podKwRated: k.gpusPerPod * rated, podKwServe: k.gpusPerPod * serve };
@@ -949,7 +981,8 @@ function engineInputs(c, ctx, y1, sch, who) {
                preparedDate: /^\d{4}-\d{2}-\d{2}$/.test(s.preparedDate) ? s.preparedDate : '',
                bocMonth: /^\d{4}-\d{2}$/.test(s.bocMonth) ? s.bocMonth : '', pisMonth: /^\d{4}-\d{2}$/.test(s.pisMonth) ? s.pisMonth : '' },
     solar: who !== 'lease' && c.solar.kwdc > 0 ? { kwDc: c.solar.kwdc, kwh1: Math.round(c.solar.kwdc * ctx.loc.solarYield) }
-         : hostSolar ? { kwDc: HS.solarKwDc, kwh1: Math.round(HS.solarKwDc * ctx.loc.solarYield) } : null,
+         /* the host's solar generates what its PPA expects in year one when the contract says, else the ZIP's yield */
+         : hostSolar ? { kwDc: HS.solarKwDc, kwh1: HS.ppa && HS.ppa.year1Kwh > 0 ? Math.round(HS.ppa.year1Kwh) : Math.round(HS.solarKwDc * ctx.loc.solarYield) } : null,
     /* the storage asset the engine describes: the host's battery when one
        stands beside the compute (it carries the storage cost line), else
        the compute's own */
@@ -959,7 +992,7 @@ function engineInputs(c, ctx, y1, sch, who) {
     ev: c.ev.ports > 0 && (who !== 'lease' || c.deal.lease.hostKeepsCharging) ? { kw: r1(c.ev.ports * c.ev.kwPerPort) } : null,
     capex: { lines: sch.capex },
     revenue: { bess: { mode: hasBat || hostBat ? 'site' : 'bundled' }, other: sch.revenue,
-               ppa: hostSolar && HS.ppa ? { rate1: HS.ppa.ratePerKwh, escalatorPct: HS.ppa.escPct, basis: 'gross', termYears: HS.ppa.termYears || 0 } : undefined },
+               ppa: hostSolar && HS.ppa ? { rate1: HS.ppa.ratePerKwh, escalatorPct: HS.ppa.escPct, basis: 'gross', termYears: HS.ppa.termYears || 0, schedule: HS.ppa.schedule || undefined } : undefined },
     opex: { lines: sch.opex },
     refresh: { mode: c.finance.refreshFunding, events: who === 'own' ? sch.events.map(function (y) {
       return { label: 'GPU refresh', year: y, cost: Math.round(sch.gpuCost * c.compute.refreshCostPct / 100) };
@@ -988,12 +1021,16 @@ function hostTerminalValue(c, who, inp, res, sch) {
   if (!H || !H.ppa || !(H.ppa.termYears > N) || !res || !res.rows || !res.rows[0]) return null;
   var ppa1 = +res.rows[0].ppaRevenue || 0; if (!(ppa1 > 0)) return null;
   var deg = (inp.solar && inp.solar.degradationPct != null ? +inp.solar.degradationPct : 0.5) / 100;
-  var esc = H.ppa.escPct / 100, inf = c.finance.inflationPct / 100, d = c.finance.discountPct / 100;
+  var inf = c.finance.inflationPct / 100, d = c.finance.discountPct / 100;
   var omLine = sch.opex.filter(function (l) { return l.id === 'hostom'; })[0], omN = omLine ? +omLine.schedule[N - 1] || 0 : 0;
   var M = Math.floor(H.ppa.termYears) - N, pv = 0;
+  /* the price each remaining year is the engine's own reading of the
+     contract (its table, else the rate at the escalator), so the terminal
+     value and the term agree; ppa1 is year one's revenue at year one's price */
+  var pp = inp.revenue.ppa, p1 = PF.ppaPrice(pp, 1);
   for (var k = 1; k <= M; k++) {
     var t = N + k, f = Math.max(0, 1 - deg * (t - 1));
-    var rev = ppa1 * f * Math.pow(1 + esc, t - 1), om = omN * Math.pow(1 + inf, k);
+    var rev = ppa1 * f * (p1 > 0 ? PF.ppaPrice(pp, t) / p1 : 0), om = omN * Math.pow(1 + inf, k);
     pv += (rev - om) / Math.pow(1 + d, k);
   }
   if (!(pv > 0)) return null;
@@ -1028,13 +1065,19 @@ function finance(c, ctx, y1, y0, who, full) {
      degradation and escalator it ran, less the host's O&M, discounted at
      the model's rate; taken as income in year N, so it is taxed. The
      engine runs once more with the line in. */
-  var tv = hostTerminalValue(c, who, inp, res, sch);
+  var tv = hostTerminalValue(c, who, inp, res, sch), irrEx = null;
   if (tv) {
+    /* THE TERM'S OWN FIGURE (2026-10-15, Tommy: "over a ten year span …
+       able to be verified by the bank"): the IRR of the term's cash flows
+       alone, with no terminal value, is kept beside the headline, so a
+       reader checking the ten years against a bank's own model has the
+       figure that needs no valuation of the years after. */
+    irrEx = res.metrics.afterTaxIrr; tv.irrExTerminal = irrEx;
     sch.revenue.push(tv.line); sch.hostTerminal = tv;
     inp = engineInputs(c, ctx, y1, sch, who); res = PF.run(inp);
     if (!res.ok) return { who: who, error: true, errors: res.errors, schedule: sch, inputs: inp };
   }
-  return { who: who, capital: sch.capexTotal, equity: res.sourcesUses.equity, irr: res.metrics.afterTaxIrr, npv: res.metrics.npv,
+  return { who: who, capital: sch.capexTotal, equity: res.sourcesUses.equity, irr: res.metrics.afterTaxIrr, irrExTerminal: irrEx, npv: res.metrics.npv,
            payback: res.metrics.paybackYears, noi1: res.rows[0].ebitda, schedule: sch, inputs: inp, result: full ? res : null };
 }
 
@@ -1290,7 +1333,7 @@ function model(input) {
   Object.keys(STRUCTURES).forEach(function (k) {
     var d = k === who ? main : finance(c, ctx, y1, y0, k, false);
     deals[k] = { key: k, label: STRUCTURES[k], capital: r0(d.capital || 0), equity: d.equity != null ? r0(d.equity) : null,
-                 irr: d.irr != null ? d.irr : null, npv: d.npv != null ? r0(d.npv) : null,
+                 irr: d.irr != null ? d.irr : null, irrExTerminal: d.irrExTerminal != null ? d.irrExTerminal : null, npv: d.npv != null ? r0(d.npv) : null,
                  payback: d.payback != null ? r2(d.payback) : null, year1: r0(d.noi1 || 0),
                  valueUplift: d.valueUplift != null ? r0(d.valueUplift) : null, error: d.error ? true : false };
   });
@@ -1310,13 +1353,22 @@ function model(input) {
     else if (c.host && c.host.solarKwDc > 0 && !c.host.ppa && !(c.host.revenuePerYear > 0)) res.warnings.unshift({ code: 'HOST_SOLAR_NO_REVENUE', level: 'warn',
       message: 'The host\u2019s solar (' + fmt(c.host.solarKwDc) + ' kW-dc) is in the capital with no PPA on record: only the battery earns. Enter the PPA on the site for the IRR of the whole project.' });
     if (hsr && hsr.error) res.warnings.push({ code: 'HOST_STORAGE_NOT_RUN', level: 'warn', message: 'The host\u2019s battery could not be dispatched: ' + hsr.error });
+    /* a contract term the model had to assume is said, never silent (2026-10-15: the bank's check) */
+    if (c.host && c.host.ppa && !c.host.ppa.schedule && c.host.ppa.escAssumed) res.warnings.push({ code: 'PPA_ESCALATOR_ASSUMED', level: 'warn',
+      message: 'The PPA on record has no escalator: 2.5% a year is assumed. Enter the contract\u2019s escalator, or its price table, for the IRR of the whole project as the contract reads.' });
+    if (c.host && c.host.ppa && !c.host.ppa.schedule) res.warnings.push({ code: 'PPA_TABLE_MISSING', level: 'info',
+      message: 'The PPA is priced at $' + c.host.ppa.ratePerKwh + '/kWh escalating ' + c.host.ppa.escPct + '% a year. An executed PPA carries a price table (NextNRG\u2019s compounds 2.0% a year): enter it on the site record so each year is priced as the contract reads.' });
+    if (c.host && c.host.ppa && c.host.solarKwDc > 0 && !(c.host.ppa.year1Kwh > 0)) res.warnings.push({ code: 'PPA_PRODUCTION_ASSUMED', level: 'info',
+      message: 'The host\u2019s solar is generated from the ZIP\u2019s yield (' + fmt(res.inputs.solar ? res.inputs.solar.kwh1 : 0) + ' kWh in year one). Enter the PPA\u2019s expected first-year production for the contract\u2019s own figure.' });
     if (hsr && hsr.year1 > 0 && hsr.load && hsr.load.source === 'profile' && !(c.host.storage.annualKwh > 0)) res.warnings.push({ code: 'HOST_LOAD_ASSUMED', level: 'info',
       message: 'The host\u2019s battery was dispatched against a typical ' + (c.site.hostType === 'industrial' ? 'industrial' : 'commercial') + ' load (' + fmt(hsr.load.annualKwh) + ' kWh a year, assumed): enter the site\u2019s annual usage, or its bills, for the battery\u2019s own figure.' });
   }
   out.host = c.host && who !== 'lease' ? { solarKwDc: c.host.solarKwDc, bessKw: c.host.bessKw, bessKwh: c.host.bessKwh, capex: main.schedule.hostCapex, basis: c.host.basis,
     ppa: c.host.ppa, revenuePerYear: c.host.ppa ? null : c.host.revenuePerYear, revenueBasis: c.host.ppa ? 'PPA' : c.host.revenueBasis, lines: main.schedule.capex.filter(function (l) { return l.host; }),
     storage: c.host.storageRun || null,
-    terminalValue: main.schedule.hostTerminal ? { amount: main.schedule.hostTerminal.amount, year: main.schedule.hostTerminal.year, yearsLeft: main.schedule.hostTerminal.yearsLeft } : null } : null;
+    terminalValue: main.schedule.hostTerminal ? { amount: main.schedule.hostTerminal.amount, year: main.schedule.hostTerminal.year, yearsLeft: main.schedule.hostTerminal.yearsLeft,
+                                                  /* the term's own IRR with no terminal value: the bank's figure */
+                                                  irrExTerminal: main.schedule.hostTerminal.irrExTerminal == null ? null : main.schedule.hostTerminal.irrExTerminal } : null } : null;
   out.computeCapex = main.schedule.capexTotal - (main.schedule.hostCapex || 0);
   out.structure = { key: who, label: STRUCTURES[who] };
   out.deals = deals;
@@ -1426,7 +1478,11 @@ function siteAssumptions(c, ctx, y1, y0, who, sch) {
     if (c.host.bessKwh > 0) hs.push('a ' + fmt(c.host.bessKw) + ' kW / ' + fmt(c.host.bessKwh) + ' kWh battery');
     a.push('The host\u2019s own system beside the compute (' + (hs.length ? listWords(hs) : 'its installation') + ') is in the project\u2019s capital at ' + money(c.host.capexTotal) +
       (c.host.basis ? ' (' + c.host.basis + ')' : '') + ', on its own asset classes, with no soft cost added twice; ' +
-      (c.host.ppa ? 'it sells its solar under the PPA at $' + c.host.ppa.ratePerKwh + '/kWh in year one escalating ' + c.host.ppa.escPct + '% a year' + (c.host.ppa.termYears ? ' (' + c.host.ppa.termYears + '-year term)' : '') :
+      (c.host.ppa && c.host.ppa.schedule ? 'it sells its solar under the PPA at the contract’s own price table, $' + c.host.ppa.schedule[0] + '/kWh in year one to $' + c.host.ppa.schedule[c.host.ppa.schedule.length - 1] + '/kWh in year ' + c.host.ppa.schedule.length +
+          (PF.impliedEscalatorPct(c.host.ppa.schedule) != null ? ' (compounding ' + (Math.round(PF.impliedEscalatorPct(c.host.ppa.schedule) * 100) / 100) + '% a year)' : '') + (c.host.ppa.termYears ? ', ' + c.host.ppa.termYears + '-year term' : '') +
+          (c.host.ppa.year1Kwh > 0 ? ', on the contract’s expected first-year production of ' + fmt(c.host.ppa.year1Kwh) + ' kWh' : '') :
+       c.host.ppa ? 'it sells its solar under the PPA at $' + c.host.ppa.ratePerKwh + '/kWh in year one escalating ' + c.host.ppa.escPct + '% a year' + (c.host.ppa.escAssumed ? ' (no escalator on record: 2.5% assumed)' : '') + (c.host.ppa.termYears ? ' (' + c.host.ppa.termYears + '-year term)' : '') +
+          (c.host.ppa.year1Kwh > 0 ? ', on the contract’s expected first-year production of ' + fmt(c.host.ppa.year1Kwh) + ' kWh' : '') :
         c.host.revenuePerYear > 0 ? 'its revenue is ' + money(c.host.revenuePerYear) + ' a year' + (c.host.revenueBasis ? ' (' + c.host.revenueBasis + ')' : '') + ', rising with inflation' :
         'NO REVENUE is on record for it, so its cost is in the ask with nothing against it: enter the PPA on the site') +
       '; its O&M is $' + c.battery.omPerKwhYear + '/kWh-yr on the battery and $' + c.solar.omPerKwYear + '/kW-yr on the solar. It is not dispatched against the compute: it is the host\u2019s.');
@@ -1505,7 +1561,7 @@ function options() {
 module.exports = {
   VERSION: VERSION, GPU: GPU, EV_PATTERNS: EV_PATTERNS, STRUCTURES: STRUCTURES, REFS: REFS,
   read: read, screen: screen, model: model, optimize: optimize, options: options,
-  _internal: { prepare: prepare, computeLoad: computeLoad, evCohorts: evCohorts, planEv: planEv, dispatch: dispatch,
+  _internal: { shapeScale: shapeScale, prepare: prepare, computeLoad: computeLoad, evCohorts: evCohorts, planEv: planEv, dispatch: dispatch,
                runMonth: runMonth, refreshPlan: refreshPlan, ageOf: ageOf, schedule: schedule, capexLines: capexLines,
                batteryOf: batteryOf, start: start, full: full }
 };

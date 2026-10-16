@@ -171,22 +171,39 @@ var TERMS = {
    Escalators 2.0 / 2.5 / 3.0%: 3% was the tower standard, carriers now push
    2%. Open at base. Hold at low. Go to high only on evidence. */
 var RATE_CARD = {
-  version: 'omega-core-lease-v2',
-  asOf: '2026-10-03',
+  version: 'omega-core-lease-v3',
+  asOf: '2026-10-15',
   basis: 'market-reference',
-  monthlyPerSkid: { low: 750, base: 1000, high: 1500 },
+  /* THE RENT IS PER kW OF COMPUTE PER MONTH (2026-10-15, Tommy: "we pay
+     $225/kW and the site has either 75 or 150 kW of compute … 75 × 12 ×
+     $125"; "a 75 kW unit, the lease is paying $150–450 per kW"; "$938 a
+     month — who cares"): annual rent = kW × $/kW-month × 12, read off the
+     colocation band a compute tenant pays a landlord (CBRE H2 2025:
+     ~$196/kW-month wholesale in primary markets, ~$250 all-in; the host
+     here supplies ground, the service and the fiber path, not a building,
+     so the band opens at its floor). monthlyPerSkid is DERIVED from it at
+     the skid's compute kW so every reader (the qualification, the
+     portfolio, the site record) prices one rule. A revenue share of gross
+     compute may ride beside it (sharePct; off until a site says so). */
+  computeKwPerSkid: 75,
+  perKwMonth: { low: 150, base: 150, high: 450 },
+  monthlyPerSkid: { low: 150 * 75, base: 150 * 75, high: 450 * 75 },
+  sharePct: { low: 0, base: 0, high: 15 },
   escalatorPct: { low: 2.0, base: 2.5, high: 3.0 },
   buildUp: {
-    low: 'under the suburban/commercial tower ground-lease band ($800–$1,500/mo); over ~3 parking stalls at the '
-       + 'average (~$465/mo); compute-lease floorMonthly ($750/mo)',
-    base: 'inside the suburban/commercial tower ground-lease band and the 2026 new-proposal range ($500–$1,250/mo)',
-    high: 'the top of the suburban/commercial band: a site that clears power, location and fiber on evidence'
+    low: 'the floor of the colocation band for a site that supplies ground, service and fiber only: $150/kW-month × 75 kW',
+    base: 'the same floor; ClearSky quotes $150–$450 per kW-month and opens at the floor until a rent is agreed',
+    high: 'the top of ClearSky\u2019s quoted band, $450/kW-month: above the all-in colocation wholesale rate, for a site that clears power, location and fiber on evidence and a contracted GPU-hour rate'
   },
   /* The comparables the reference is read off. Public figures, shown to every
      entitled caller beside a market-reference lease so the range is never
      presented without where it came from. */
   sources: [
-    { what: 'Cell-tower ground leases, new in 2026 — a carrier\'s equipment on its own meter, paying rent',
+    { what: 'Colocation wholesale rate — what a compute tenant pays a data-center landlord per kW of IT load a month (space and power delivery; the tenant buys the electricity)',
+      figure: '~$196/kW-month for 250–500 kW deployments in primary North American markets, H2 2025 (CBRE), about $250/kW-month all-in with cross-connects and ancillaries. '
+            + 'On 75 kW: $14,700–$18,750 a month.',
+      url: 'https://encoradvisors.com/data-center-pricing/' },
+    { what: 'Cell-tower ground leases, new in 2026 — a carrier\'s equipment on its own meter, paying rent (the floor a bare site is worth)',
       figure: '$500–$1,250 a month for most new proposals; suburban/commercial $800–$1,500; urban $1,200–$2,500+; '
             + 'average $1,300. Escalators 2–3% a year (3% was standard; carriers now push 2%).',
       url: 'https://www.steelintheair.com/cell-tower-lease-rates/' },
@@ -196,7 +213,7 @@ var RATE_CARD = {
   ],
   /* What the screen takes as a typed rent: anything else is set aside, said,
      and the reference shown instead. */
-  entered: { minMonthly: 1, maxMonthly: 10000, maxEscalatorPct: 10 },
+  entered: { minMonthly: 1, maxMonthly: 100000, maxEscalatorPct: 10 },
   /* FAIR MARKET VALUE — indicative only. The contract says FMV by
      independent appraisal; this band only lets a host see the order of
      magnitude. Share of the system cost left at year 5, declining
