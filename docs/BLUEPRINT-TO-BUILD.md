@@ -257,6 +257,15 @@ re-runs on save, debounced, using the existing auto-save of priced runs
 
 ### Phase 5: Go past them (what a generalist can't do)
 
+> **Status, 2026-10-16: "Real prices, not model guesses" is built** (on the
+> takeoff, Cost › Trades). Every line and row of the takeoff is marked
+> QUOTE, BOOK or BENCH. The head of the pane shows how much of the total
+> rests on each, and the CSV carries the source of every line. The marks
+> are read from what the Run already knows about each price, and name the
+> kind of source, never a rate. *Plan set in → plan set out*,
+> *drawing → financed project in one session* and *Jarvis does the whole
+> thing* are next.
+
 - **Plan set in → plan set out.** Read the customer's drawings (Phase 1) and
   issue our own permit/interconnect plan set from the reviewed model, with a
   **diff sheet** of what changed between their drawing and ours.

@@ -32,6 +32,20 @@
      carry (no cubic yards without a thickness on file, no tons of steel
      from a kW figure). A lump-sum line says LS.
 
+   WHERE EACH PRICE COMES FROM (Phase 5, "real prices, not model
+   guesses"): every line and row says whether the Run priced it from a
+   QUOTE (a price entered for this job: a vendor's price typed on the
+   cost sheet, an override on a charger, a figure changed from the sheet's
+   default, a contracted total), a BOOK (a price on file for that product:
+   the catalog, the Autel price book, NextNRG's installed rates, the
+   Omega-Core skid's recorded price, ClearSky's controller price, the cost
+   sheet's own unit prices) or a BENCHMARK (a screening figure: DOE/NREL,
+   NREL storage, EIA, the operator band, the container rate, the charger
+   estimator, a budgetary ROM). It is read off the roll-up's own flags and
+   the quantities it ran on, never guessed, and it names the kind of
+   source, never a rate. `sources` adds the money up by kind, so a
+   reviewer sees how much of the total still rests on benchmarks.
+
    The divisions are CSI MasterFormat's, as the editor's own Takeoff &
    Budget book classes the same things (storage, chargers and gensets in
    26, solar in 48, pads in 03); a trade that spans divisions names both. */
@@ -39,7 +53,7 @@
 
 var BS = require('./build-sequence'), EC = require('./editor-cost');
 
-var VERSION = 'takeoff-1';
+var VERSION = 'takeoff-2';
 
 /* The trades, in the order an estimate runs. */
 var TRADES = [
@@ -93,6 +107,58 @@ function evName(k) {
 }
 function genName(g) { return (g.model && g.model !== g.cls) ? String(g.model) : (GEN_CLASS[g.cls] || words(g.cls)); }
 
+/* Where a price comes from: the three kinds, in the order a reviewer
+   trusts them. */
+var KINDS = ['quote', 'book', 'benchmark'];
+var SHEET = EC._tables.SHEET, BENCH = EC._tables.BENCH, EV_OTHER = EC._tables.EV_OTHER;
+function src(kind, basis) { return { kind: kind, basis: basis }; }
+/* a cost-sheet figure someone changed from the sheet's own default */
+function typed(q, k, dflt) { var v = q.sheet && q.sheet[k], x = Number(v); return v !== '' && v != null && isFinite(x) && x !== dflt; }
+var SHEET_KEY = { 'site.pad': 'pad', 'site.disco': 'disco', 'site.meter': 'meter', 'site.jbox': 'jbox', 'site.panel': 'panel', 'site.bollards': 'bollards',
+  'site.misc': 'misc', 'site.xfmr': 'xfmr', 'indirect.eng': 'eng', 'indirect.perm': 'perm', 'indirect.comm': 'comm', 'indirect.emsSetup': 'emsSetup' };
+/* the price of a line with no rows, from the roll-up's flags */
+function lineSource(key, out, q) {
+  var L = out.lines || {}, comp = L.compute || {}, bess = L.bess || {};
+  if (SHEET_KEY[key]) {
+    var k = SHEET_KEY[key];
+    return typed(q, k, SHEET[k]) ? src('quote', 'Typed on the cost sheet') : src('book', /^site\./.test(key) ? 'The cost sheet’s unit price' : 'The cost sheet’s default');
+  }
+  switch (key) {
+    case 'controller': return src('book', 'ClearSky’s price for the controller');
+    case 'omegaCore': return src('book', 'The skid’s recorded price');
+    case 'nextnrg.solar': case 'nextnrg.storage': return src('book', 'NextNRG’s installed price');
+    case 'dc': return src('benchmark', 'A budgetary ROM (Eaton, April 2026): re-quote before use');
+    case 'compute': return comp.entered ? src('quote', 'Entered in Compute Cost') : src('benchmark', 'The operator band per MW');
+    case 'bnz': return src('benchmark', 'A screening estimate of the building measures');
+    case 'bess':
+      if (typed(q, 'bessKwh', BENCH.bessKwh) || typed(q, 'bessKw', BENCH.bessKw)) return src('quote', 'A $/kWh or $/kW typed on the cost sheet');
+      return src('benchmark', 'The NREL storage benchmark: no model on the drawing carries a price');
+    case 'contracted': return src('quote', 'The contracted cost');
+    default: return src('benchmark', 'Not on file');
+  }
+}
+/* a battery model's row: an override, the product's own price, the
+   catalog, NextNRG's rate, else the container rate */
+function bessSource(r, q) {
+  var bm = (q.fleet && q.fleet.byModel && q.fleet.byModel[r.key]) || {}, ov = q.overrides && q.overrides[r.key];
+  if (ov != null) return src('quote', 'A vendor’s price entered for this model');
+  if (r.nextnrgRate) return src('book', 'NextNRG’s installed price');
+  if (bm.mixed && bm.groupCost > 0) return src('book', 'The placed products’ own prices');
+  if (bm.cost != null) return src('book', 'The placed product’s own price');
+  if (r.catalog) return src('book', 'The catalog price');
+  return src('benchmark', 'The container rate per kWh: enter the vendor’s price');
+}
+/* a charger model's row: an override on any of its chargers, the Autel
+   price book, else an estimate */
+function evSource(k, idx, out, q) {
+  var items = (q.ev && q.ev.items) || [], book = (out.lines && out.lines.ev && out.lines.ev.book) || {}, over = false, other = false;
+  idx.forEach(function (p) { var it = items[+String(p).slice(3)] || {}; if (it.eqOverride != null || it.installOverride != null) over = true; if (it.evId && EV_OTHER[it.evId]) other = true; });
+  if (over) return src('quote', 'A price entered on the charger');
+  if (book[k]) return src('book', 'The Autel price book');
+  if (other) return src('benchmark', 'A prior estimate: no price book for this charger');
+  return src('benchmark', 'Estimated from the charger’s kW');
+}
+
 /* The conduit the BOM carries, by run type, as the Run's schedule names it. */
 var CONDUIT = { 'RMC-DC': 'DC power conduit', 'RMC-AC': 'AC power conduit', 'EMT-BMS': 'BMS / data conduit', 'PVC-UG': 'Underground conduit' };
 
@@ -117,7 +183,7 @@ function detail(key, out, q, x) {
   var L = out.lines || {}, site = L.site || {}, c = site.counts || {}, d = { rows: [], parts: [] };
   var bess = L.bess || {}, ev = L.ev || {}, sol = L.solar || {}, nn = L.nextnrg || {}, gen = L.gen || {}, dc = L.dc || {};
   var oc = L.omegaCore || {}, comp = L.compute || {}, ctl = L.controller || {};
-  function row(label, qty, weight, parts) { d.rows.push({ label: label, qty: qty, weight: num(weight), parts: parts || [] }); }
+  function row(label, qty, weight, parts, source) { d.rows.push({ label: label, qty: qty, weight: num(weight), parts: parts || [], source: source || null }); }
   switch (key) {
     case 'site.pad':
       d.qty = q1(cnt(c.pad), 'EA'); d.parts = ['pad'];
@@ -135,7 +201,7 @@ function detail(key, out, q, x) {
       (bess.rows || []).forEach(function (r) {
         if (r.nextnrgRate) return;
         kwh += num(r.kwh) * num(r.qty); units += num(r.qty);
-        row(String(r.key) + (r.kwh ? ', ' + fmt(r.kwh) + ' kWh each' : ''), q1(num(r.qty), 'EA'), r.total, ['bess:' + r.key]);
+        row(String(r.key) + (r.kwh ? ', ' + fmt(r.kwh) + ' kWh each' : ''), q1(num(r.qty), 'EA'), r.total, ['bess:' + r.key], bessSource(r, q));
       });
       if (!d.rows.length && bess.isBenchmark) {
         var fr = q.fleetRating || {};
@@ -150,14 +216,17 @@ function detail(key, out, q, x) {
       var st = nn.storage || {};
       (bess.rows || []).forEach(function (r) {
         if (!r.nextnrgRate) return;
-        row(String(r.key) + (r.kwh ? ', ' + fmt(r.kwh) + ' kWh each' : ''), q1(num(r.qty), 'EA'), r.total, ['bess:' + r.key]);
+        row(String(r.key) + (r.kwh ? ', ' + fmt(r.kwh) + ' kWh each' : ''), q1(num(r.qty), 'EA'), r.total, ['bess:' + r.key], src('book', 'NextNRG’s installed price'));
       });
       d.qty = q1(num(st.kwh), 'kWh'); if (d.qty && num(st.kw) > 0) d.qty.text += ' · ' + fmt(st.kw) + ' kW';
       d.parts = ['bess'];
       break;
     }
     case 'solar':
-      (sol.rows || []).forEach(function (r) { row(r.label, q1(num(r.kwDc), 'kW-DC'), r.total, ['solar:' + r.mount]); });
+      (sol.rows || []).forEach(function (r) {
+        row(r.label, q1(num(r.kwDc), 'kW-DC'), r.total, ['solar:' + r.mount],
+          r.isBenchmark ? src('benchmark', r.mount === 'canopy' ? 'The canopy structure rate' : 'The DOE/NREL Q1 2025 PV benchmark') : src('quote', 'A $/W typed on the cost sheet'));
+      });
       d.qty = q1(num(sol.kwDc), 'kW-DC'); d.parts = ['solar'];
       break;
     case 'nextnrg.solar': d.qty = q1(num(nn.solarKwDc), 'kW-DC'); d.parts = ['solar:nextnrg']; break;
@@ -168,9 +237,9 @@ function detail(key, out, q, x) {
       ((q.ev && q.ev.items) || []).forEach(function (it, i) { it = it || {}; var k = it.key || it.evId || it.kind; (at[k] = at[k] || []).push('ev#' + i); });
       Object.keys(by).forEach(function (k) {
         var m = by[k] || {}, name = evName(k);
-        row(name + (num(m.kw) > 0 && !/\d\s*kW/.test(name) ? ', ' + fmt(m.kw) + ' kW' : ''), q1(num(m.qty), 'EA'), num(m.eq) + num(m.install), at[k] || []);
+        row(name + (num(m.kw) > 0 && !/\d\s*kW/.test(name) ? ', ' + fmt(m.kw) + ' kW' : ''), q1(num(m.qty), 'EA'), num(m.eq) + num(m.install), at[k] || [], evSource(k, at[k] || [], out, q));
       });
-      if (num(ev.futureMakeReady) > 0) row('Make-ready for future chargers', q1(num(ev.futureUnits), 'EA'), ev.futureMakeReady, ['ev:future']);
+      if (num(ev.futureMakeReady) > 0) row('Make-ready for future chargers', q1(num(ev.futureUnits), 'EA'), ev.futureMakeReady, ['ev:future'], src('benchmark', 'The make-ready estimate for future chargers'));
       d.qty = q1(num(ev.units), 'EA'); d.parts = ['ev'];
       break;
     }
@@ -180,18 +249,19 @@ function detail(key, out, q, x) {
       var gat = {};
       (q.gen || []).forEach(function (sh, i) { sh = sh || {}; var cls = EC.genClass(sh), k = cls + '|' + (sh.model || sh.label || cls); (gat[k] = gat[k] || []).push('gen#' + i); });
       (gen.lines || []).forEach(function (g) {
-        row(genName(g) + (g.units > 1 ? ' × ' + g.units : ''), q1(num(g.kw), 'kW'), g.cost, gat[g.cls + '|' + g.model] || []);
+        row(genName(g) + (g.units > 1 ? ' × ' + g.units : ''), q1(num(g.kw), 'kW'), g.cost, gat[g.cls + '|' + g.model] || [],
+          g.overridden ? src('quote', 'A $/kW entered for this class') : src('benchmark', 'The EIA AEO2025 class benchmark'));
       });
       d.qty = q1(num(gen.kw), 'kW'); d.parts = ['gen'];
       break;
     }
     case 'dc':
-      (dc.lines || []).forEach(function (l) { row(String(l.desc), q1(num(l.qty), 'EA'), l.amount, []); });
+      (dc.lines || []).forEach(function (l) { row(String(l.desc), q1(num(l.qty), 'EA'), l.amount, [], src('benchmark', 'A budgetary ROM (Eaton, April 2026): re-quote before use')); });
       d.qty = q1(num(dc.facilityKw), 'kW'); if (d.qty) d.qty.text += ' facility';
       d.parts = ['dc'];
       break;
     case 'omegaCore':
-      (oc.breakdown || []).forEach(function (b) { row(String(b.label), q1(num(oc.skids), 'EA'), b.total, []); });
+      (oc.breakdown || []).forEach(function (b) { row(String(b.label), q1(num(oc.skids), 'EA'), b.total, [], src('book', 'The skid’s recorded price')); });
       d.qty = q1(num(oc.skids), 'EA'); d.parts = ['omegaCore'];
       break;
     case 'compute':
@@ -247,20 +317,26 @@ function headline(key, lines, info) {
    quantities it ran on, `extra` what the drawing measures (cleaned here). */
 function takeoff(out, q, extra) {
   out = out || {}; q = q || {};
-  var x = clean(extra), mo = BS.money(out), info = outside(out, q, x), byTrade = {};
+  var x = clean(extra), mo = BS.money(out), info = outside(out, q, x), byTrade = {}, byKind = {};
   mo.lines.forEach(function (l) {
     var t = LINE[l.key] && LINE[l.key][0];
     if (!t) throw new Error('takeoff: the Run’s line ' + l.key + ' has no trade');
     var d = detail(l.key, out, q, x), rows = [];
     var weights = d.rows.map(function (r) { return Math.max(0, r.weight); }), wsum = weights.reduce(function (s, w) { return s + w; }, 0);
+    var contracted = mo.spread === 'contracted', cs = src('quote', 'The contracted total, split by the estimate’s shares');
     if (d.rows.length && wsum > 0) {
       var rc = BS.apportion(weights.map(function (w) { return w / wsum * l.cents; }), l.cents);
-      rows = d.rows.map(function (r, i) { return { label: r.label, qty: r.qty, cents: rc[i], amount: rc[i] / 100, parts: r.parts }; });
+      rows = d.rows.map(function (r, i) { return { label: r.label, qty: r.qty, cents: rc[i], amount: rc[i] / 100, parts: r.parts, source: contracted ? cs : (r.source || lineSource(l.key, out, q)) }; });
     }
+    var kinds = rows.map(function (r) { return r.source.kind; }).filter(function (k, i, a) { return a.indexOf(k) === i; });
+    var bases = rows.map(function (r) { return r.source.basis; }).filter(function (k, i, a) { return a.indexOf(k) === i; });
+    var source = contracted ? cs : !rows.length ? lineSource(l.key, out, q)
+      : kinds.length > 1 ? src('mixed', 'See each row') : bases.length > 1 ? src(kinds[0], 'See each row') : rows[0].source;
+    (rows.length ? rows : [{ cents: l.cents, source: source }]).forEach(function (r) { byKind[r.source.kind] = (byKind[r.source.kind] || 0) + r.cents; });
     var parts = [];
     d.rows.forEach(function (r) { r.parts.forEach(function (p) { if (parts.indexOf(p) < 0) parts.push(p); }); });
     var item = { key: l.key, label: LINE[l.key][1], qty: d.qty || null, cents: l.cents, amount: l.cents / 100, contingency: !!(l.contingent && mo.contPct > 0),
-      parts: parts.length ? parts : d.parts, rows: rows };
+      parts: parts.length ? parts : d.parts, rows: rows, source: source };
     if (d.note) item.note = d.note;
     (byTrade[t] = byTrade[t] || []).push(item);
   });
@@ -279,8 +355,11 @@ function takeoff(out, q, extra) {
   var notes = mo.spread === 'contracted' ? ['The contracted cost is spread over the trades by the estimate’s shares.']
     : mo.spread === 'contracted-whole' ? ['The contracted cost is not split: nothing on the drawing is priced to split it by.']
     : !mo.cents ? ['Nothing priceable is placed yet.'] : [];
+  var sources = KINDS.filter(function (k) { return byKind[k] > 0; }).map(function (k) {
+    return { kind: k, cents: byKind[k], amount: byKind[k] / 100, pct: mo.cents > 0 ? Math.round(byKind[k] / mo.cents * 1000) / 10 : 0 };
+  });
   return { ok: true, version: VERSION, total: mo.total, cents: mo.cents, contPct: mo.contPct, contracted: mo.contracted, spread: mo.spread,
-    notes: notes, trades: trades };
+    notes: notes, trades: trades, sources: sources };
 }
 
-module.exports = { VERSION: VERSION, TRADES: TRADES, TRADE_KEYS: TRADE_KEYS, LINE: LINE, CONDUIT: CONDUIT, clean: clean, takeoff: takeoff };
+module.exports = { VERSION: VERSION, TRADES: TRADES, TRADE_KEYS: TRADE_KEYS, LINE: LINE, CONDUIT: CONDUIT, KINDS: KINDS, clean: clean, takeoff: takeoff };

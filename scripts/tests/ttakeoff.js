@@ -14,7 +14,10 @@
    keeps out of its total (the conduit on the BOM, a trench, a fence, the
    utility's charges) is shown and never added; a charger or a generator
    row points at exactly the items the roll-up grouped into it; what the
-   page sends is cleaned and never priced.
+   page sends is cleaned and never priced; every line and row says where
+   its price comes from (a quote for this job, a book on file, a
+   benchmark), read off the roll-up's own flags, naming a kind of source
+   and never a rate, and the money by kind adds up to the Run total.
 
    The door (api/takeoff.js) on the Firestore double: the money is the
    roll-up's on the body's quantities with the CALLER's workspace (a body
@@ -145,6 +148,14 @@ for (var f = 0; f < 400; f++) {
     });
     (x.info || []).forEach(function (i) { assert.ok(!i.cents, 'drawing ' + f + ': ' + i.key + ' carries no money of the Run’s'); });
   });
+  /* every line and row says where its price comes from, and the kinds add up */
+  t.trades.forEach(function (x) { x.lines.forEach(function (l) {
+    assert.ok(l.source && (TK.KINDS.indexOf(l.source.kind) >= 0 || l.source.kind === 'mixed') && typeof l.source.basis === 'string' && !/\$\s*\d|\d\s*\/\s*(W|kW|kWh)\b/.test(l.source.basis), 'drawing ' + f + ': ' + l.key + ' says where its price comes from, never a rate');
+    l.rows.forEach(function (r2) { assert.ok(r2.source && TK.KINDS.indexOf(r2.source.kind) >= 0, 'drawing ' + f + ': a row of ' + l.key + ' has a kind'); });
+    if (l.source.kind === 'mixed') assert.ok(l.rows.length > 1, 'drawing ' + f + ': only a line of rows is mixed');
+  }); });
+  assert.equal(sum(t.sources, 'cents'), cents, 'drawing ' + f + ': the money by kind adds up to the Run total');
+  assert.ok(!t.contracted || (t.sources.length === 1 && t.sources[0].kind === 'quote') || !cents, 'drawing ' + f + ': a contracted total is all quote');
   /* the line keys are the build sequence's, one for one */
   var seq = BS.money(out).lines.map(function (l) { return l.key + ':' + l.cents; }).sort();
   var tk = []; t.trades.forEach(function (x) { x.lines.forEach(function (l) { tk.push(l.key + ':' + l.cents); }); });
@@ -192,6 +203,34 @@ ok(t6.cents === 0 && /Nothing priceable/.test(t6.notes.join(' ')) && t6.trades.l
 var q6b = { conduitFt: { 'PVC-UG': 120 }, conduitRuns: { 'PVC-UG': 1 } }, t6b = TK.takeoff(EC.rollup(q6b), q6b, { fenceFt: 200 });
 ok(t6b.cents === 0 && trade(t6b, 'electrical').qty.text === '120 LF of conduit' && info(t6b, 'fence').qty.text === '200 LF' && !trade(t6b, 'utility'), 'conduit and a fence with nothing priced: their quantities, no money, no utility to carve out');
 ok(/not priced in the Run/.test(trade(t6b, 'civil').notes[0]), 'and a trade with nothing priced says so');
+
+/* ── 6b. where each price comes from ── */
+function srcOf(t, k, row) { var l = line(t, k); return row == null ? l.source : l.rows[row].source; }
+var qs = { fleet: { units: 3, byModel: { 'GOTION-EDGE-760': { qty: 2, kwh: 261, kw: 125, catalogKey: 'GOTION-EDGE-760' }, 'CUSTOM-X': { qty: 1, kwh: 500, kw: 250 }, 'Brand Y': { qty: 1, kwh: 400, kw: 200, cost: 150000 } } },
+  overrides: { 'Brand Y': 170000 }, counts: { pad: 2, disco: 1, meter: 1, mgc: 1 }, sheet: { pad: 4800, disco: 9999, eng: 12000 },
+  ev: { items: [{ kind: 'evl2', kw: 11.5, qty: 1 }, { kind: 'evunit', evId: 'autel_dc_compact', key: 'autel_dc_compact', kw: 40, qty: 1 }, { kind: 'evunit', evId: 'autel_fast_disp', key: 'Lot A', kw: 240, qty: 1, eqOverride: 50000 }, { kind: 'evunit', evId: 'tesla_v4_post', key: 'tesla_v4_post', kw: 250, qty: 1 }] },
+  solarKwDc: 350, solar: { byMount: { ground: 200, roof: 0, canopy: 150 } }, gen: [{ kind: 'deralt', altId: 'gen_ng', kw: 500 }], genOverrides: {}, omegaCore: { skids: 1 }, compute: { podsN: 1, podKw: 1000 } };
+var os = EC.rollup(qs), ts = TK.takeoff(os, qs, {});
+eq(line(ts, 'bess').rows.map(function (r) { return [r.label.split(',')[0], r.source.kind]; }), [['GOTION-EDGE-760', 'book'], ['CUSTOM-X', 'benchmark'], ['Brand Y', 'quote']], 'batteries: the catalog is book, the container rate a benchmark, a vendor’s price entered a quote');
+ok(/catalog/.test(srcOf(ts, 'bess', 0).basis) && /container rate/.test(srcOf(ts, 'bess', 1).basis) && /enter the vendor/.test(srcOf(ts, 'bess', 1).basis) && srcOf(ts, 'bess').kind === 'mixed', 'each says which, the benchmark says what to do, and the line is mixed');
+var qs2 = JSON.parse(JSON.stringify(qs)); delete qs2.overrides['Brand Y'];
+eq(srcOf(TK.takeoff(EC.rollup(qs2), qs2, {}), 'bess', 2).kind, 'book', 'a product carrying its own price on the drawing is book');
+eq(line(ts, 'ev').rows.map(function (r) { return r.source.kind; }), ['benchmark', 'book', 'quote', 'benchmark'], 'chargers: the kW estimator, the Autel book, a price entered, a prior estimate');
+ok(/prior estimate/.test(srcOf(ts, 'ev', 3).basis) && /kW/.test(srcOf(ts, 'ev', 0).basis), 'and they say which estimate');
+eq([srcOf(ts, 'site.pad').kind, srcOf(ts, 'site.disco').kind, srcOf(ts, 'site.meter').kind, srcOf(ts, 'indirect.eng').kind], ['book', 'quote', 'book', 'quote'], 'the cost sheet: its own price is book, a figure changed from it a quote');
+eq([srcOf(ts, 'controller').kind, srcOf(ts, 'omegaCore').kind, srcOf(ts, 'gen').kind, srcOf(ts, 'compute').kind], ['book', 'book', 'benchmark', 'benchmark'], 'the controller and the skid are book; EIA and the operator band are benchmarks');
+eq([srcOf(ts, 'solar', 0).basis, srcOf(ts, 'solar', 1).basis, srcOf(ts, 'solar').kind, srcOf(ts, 'solar').basis], ['The DOE/NREL Q1 2025 PV benchmark', 'The canopy structure rate', 'benchmark', 'See each row'], 'solar: the benchmark by mount, one kind, the rows say which');
+var qs3 = JSON.parse(JSON.stringify(qs)); qs3.sheet.pvWdc = 2.1; qs3.genOverrides = { gen_ng: 1500 }; qs3.compute.shellPerPod = 5000000;
+var ts3 = TK.takeoff(EC.rollup(qs3), qs3, {});
+eq([srcOf(ts3, 'solar').kind, srcOf(ts3, 'gen').kind, srcOf(ts3, 'compute').kind], ['quote', 'quote', 'quote'], 'a $/W typed, a $/kW entered for a class, a pod price entered: quotes');
+var qn = site(); qn.solar.nextnrgKwDc = 100; qn.solarKwDc = 450; qn.fleet.byModel['NextNRG Saft'] = { qty: 1, kwh: 1000, kw: 500, nextnrg: true }; qn.fleet.units = 3;
+var tn = TK.takeoff(EC.rollup(qn), qn, {});
+ok(srcOf(tn, 'nextnrg.solar').kind === 'book' && srcOf(tn, 'nextnrg.storage').kind === 'book' && /NextNRG/.test(srcOf(tn, 'nextnrg.storage').basis), 'NextNRG’s installed prices are book');
+eq(sum(ts.sources, 'cents'), ts.cents, 'the money by kind adds up to the Run total');
+eq(ts.sources.map(function (k) { return k.kind; }), ['quote', 'book', 'benchmark'], 'quote, book, benchmark, in the order a reviewer trusts them');
+var t5s = TK.takeoff(o5, q5, {});
+ok(t5s.sources.length === 1 && t5s.sources[0].kind === 'quote' && t5s.trades.every(function (x) { return x.lines.every(function (l) { return l.source.kind === 'quote' && /contracted/.test(l.source.basis); }); }), 'a contracted total is a quote, every line of it');
+ok(!JSON.stringify(ts.sources).match(/basis/) && JSON.stringify(ts).indexOf('241') < 0 && JSON.stringify(ts).indexOf('"85"') < 0, 'no rate behind a benchmark reaches the page');
 
 /* ── 7. drift: never quietly leave money out ── */
 var bad = JSON.parse(JSON.stringify(o1)); bad.lines.newThing = { total: 9999 }; bad.totals.sub += 9999; bad.totals.total += 9999 * (1 + cont);

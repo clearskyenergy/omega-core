@@ -10,7 +10,9 @@
    draws that answer, marks a line's parts on the map and in the 3D Site
    Visualizer, finds the line of whatever is selected, and writes the CSV and
    each trade's scope of work. No price, rate or grouping is worked out here
-   (CLAUDE.md, IP protection).
+   (CLAUDE.md, IP protection). Each line and row also says where its price
+   comes from, as the server read it (a quote for this job, a book on file,
+   a benchmark), and the head shows how much of the total rests on each.
 
    A line's parts are keys (pad, bess:<model>, ev#3, solar:roof, conduit:
    PVC-UG…) that omegaCostQuantities(rec) fills with drawing ids by the SAME
@@ -89,6 +91,18 @@
   + '#cst-takeoff .tk-c{color:var(--sub);font-weight:400}'
   + '#cst-takeoff .tk-scope{margin:4px 8px 2px 20px}'
   + '#cst-takeoff .tk-foot{font-size:9px;color:var(--sub);line-height:1.5;margin-top:8px}'
+  /* where a price comes from */
+  + '#cst-takeoff .tk-src{display:inline-block;font:700 7.5px "IBM Plex Mono",monospace;letter-spacing:.4px;padding:1px 4px;border-radius:3px;margin-right:5px;vertical-align:1px;border:1px solid}'
+  + '#cst-takeoff .tk-src.quote{color:#1DB954;border-color:rgba(29,185,84,.5);background:rgba(29,185,84,.10)}'
+  + '#cst-takeoff .tk-src.book{color:#4A8FD8;border-color:rgba(74,143,216,.5);background:rgba(74,143,216,.10)}'
+  + '#cst-takeoff .tk-src.benchmark{color:#D8A23E;border-color:rgba(216,162,62,.55);background:rgba(216,162,62,.10)}'
+  + '#cst-takeoff .tk-src.mixed{color:var(--sub);border-color:var(--border)}'
+  + '#cst-takeoff .tk-kinds{margin:0 0 8px}'
+  + '#cst-takeoff .tk-kbar{display:flex;height:6px;border-radius:3px;overflow:hidden;background:var(--hairline)}'
+  + '#cst-takeoff .tk-kbar i{display:block;height:6px}'
+  + '#cst-takeoff .tk-kbar i.quote{background:#1DB954}#cst-takeoff .tk-kbar i.book{background:#4A8FD8}#cst-takeoff .tk-kbar i.benchmark{background:#D8A23E}'
+  + '#cst-takeoff .tk-klegend{display:flex;flex-wrap:wrap;gap:4px 10px;font-size:9.5px;color:var(--sub);margin-top:4px}'
+  + '#cst-takeoff .tk-klegend b{color:var(--text);font-weight:600}'
   /* the map marks: what a line counts */
   + '#els .cel.tk-hl{outline:2px solid ' + HL + '!important;outline-offset:3px}'
   + '#csvg g.tk-hl{filter:drop-shadow(0 0 3px ' + HL + ') drop-shadow(0 0 1px ' + HL + ')}'
@@ -269,16 +283,30 @@
 
   /* ── the pane ─────────────────────────────────────────────────────── */
   function qtyText(q) { return q ? esc(q.text) : ''; }
+  var KIND = { quote: 'QUOTE', book: 'BOOK', benchmark: 'BENCH', mixed: 'MIXED' };
+  var KIND_WORD = { quote: 'Quote', book: 'Book', benchmark: 'Benchmark' };
+  function tag(sv) { return sv && KIND[sv.kind] ? '<span class="tk-src ' + esc(sv.kind) + '" data-src="' + esc(sv.kind) + '" title="' + esc(sv.basis || '') + '">' + KIND[sv.kind] + '</span>' : ''; }
+  /* how much of the total rests on each kind of price */
+  function kindsHtml(a) {
+    var ks = a.sources || []; if (!ks.length) return '';
+    var h = '<div class="tk-kinds" id="tk-kinds"><div class="tk-kbar">';
+    ks.forEach(function (k) { h += '<i class="' + esc(k.kind) + '" style="width:' + Math.max(0, Math.min(100, +k.pct || 0)) + '%"></i>'; });
+    h += '</div><div class="tk-klegend">';
+    ks.forEach(function (k) { h += '<span data-kind="' + esc(k.kind) + '">' + KIND_WORD[k.kind] + ' <b>' + (+k.pct || 0) + '%</b></span>'; });
+    var bench = ks.filter(function (k) { return k.kind === 'benchmark'; })[0];
+    if (bench && bench.pct >= 50) h += '<span>· Most of this total rests on benchmarks: get quotes before it goes to a customer.</span>';
+    return h + '</div></div>';
+  }
   function lineHtml(t, l) {
     var k = 'L:' + l.key, click = l.parts && l.parts.length;
     var h = '<div class="tk-line' + (st.active === k ? ' on' : '') + (st.sel === k ? ' from-sel' : '') + '"' + (click ? ' data-k="' + esc(k) + '" title="Mark on the map"' : '') + '>'
-      + '<span>' + esc(l.label) + (l.contingency ? '<span class="tk-c"> *</span>' : '') + '</span><span class="q">' + qtyText(l.qty) + '</span><span class="a">' + usd(l.cents) + '</span>'
+      + '<span>' + tag(l.source) + esc(l.label) + (l.contingency ? '<span class="tk-c"> *</span>' : '') + '</span><span class="q">' + qtyText(l.qty) + '</span><span class="a">' + usd(l.cents) + '</span>'
       + (l.note ? '<span class="n">' + esc(l.note) + '</span>' : '') + '</div>';
     (l.rows || []).forEach(function (r, i) {
       var rk = 'R:' + l.key + ':' + i, rc = r.parts && r.parts.length;
       if (l.rows.length === 1 && !rc) return;
       h += '<div class="tk-line sub' + (st.active === rk ? ' on' : '') + (st.sel === rk ? ' from-sel' : '') + '"' + (rc ? ' data-k="' + esc(rk) + '" title="Mark on the map"' : '') + '>'
-        + '<span>' + esc(r.label) + '</span><span class="q">' + qtyText(r.qty) + '</span><span class="a">' + usd(r.cents) + '</span></div>';
+        + '<span>' + (l.source && l.source.kind !== r.source.kind || (l.source && l.source.basis === 'See each row') ? tag(r.source) : '') + esc(r.label) + '</span><span class="q">' + qtyText(r.qty) + '</span><span class="a">' + usd(r.cents) + '</span></div>';
     });
     return h;
   }
@@ -299,6 +327,7 @@
     if (st.busy) h += '<div class="tk-msg">Reading the drawing…</div>';
     if (st.err) h += '<div class="tk-msg warn">' + esc(st.err) + ' <a data-tk="refresh" style="color:var(--accent);cursor:pointer">Try again</a></div>';
     if (a) {
+      h += kindsHtml(a);
       (a.notes || []).forEach(function (n) { h += '<div class="tk-msg warn">' + esc(n) + '</div>'; });
       var e = st.active ? entry(st.active) : null;
       if (e) {
@@ -327,6 +356,7 @@
       if (!a.trades.length && !(a.notes || []).length) h += '<div class="tk-msg">Nothing is placed yet.</div>';
       h += '<div class="tk-foot">' + (a.contPct > 0 ? '* Carries the Run’s ' + Math.round(a.contPct * 1000) / 10 + '% contingency. ' : '')
         + 'The trades add up to the Run total. Quantities are what the drawing counts; feet and areas need a calibrated map. '
+        + 'QUOTE is a price entered for this job, BOOK a price on file for the product, BENCH a screening benchmark: hover a tag for its source. '
         + 'Marked parts show in the 3D Site Visualizer too. The CSV carries the cents; a scope of work carries quantities, never prices.</div>';
     } else if (!st.busy && !st.err) h += '<div class="tk-msg">Reading the drawing…</div>';
     p.innerHTML = h;
@@ -339,18 +369,19 @@
   function each(cents, q) { return q && PER[q.unit] && q.qty > 0 && cents != null ? (cents / 100 / q.qty).toFixed(2) : ''; }
   function csv() {
     var a = st.ans; if (!a) return '';
-    var rows = [['Trade', 'CSI division', 'Line', 'Item', 'Quantity', 'Unit', 'Amount (USD)', 'All-in per unit (USD)', 'In the Run total', 'Note']];
+    var rows = [['Trade', 'CSI division', 'Line', 'Item', 'Quantity', 'Unit', 'Amount (USD)', 'All-in per unit (USD)', 'In the Run total', 'Price source', 'Source basis', 'Note']];
+    function sk(sv) { return sv ? (KIND_WORD[sv.kind] || 'Mixed') : ''; }
     a.trades.forEach(function (t) {
       t.lines.forEach(function (l) {
-        rows.push([t.label, t.div || '', l.label, '', l.qty ? l.qty.qty : '', l.qty ? l.qty.unit : '', money(l.cents), each(l.cents, l.qty), l.contingency ? 'yes, with contingency' : 'yes', l.note || '']);
-        (l.rows || []).forEach(function (r) { rows.push([t.label, t.div || '', l.label, r.label, r.qty ? r.qty.qty : '', r.qty ? r.qty.unit : '', money(r.cents), each(r.cents, r.qty), 'in the line above', '']); });
+        rows.push([t.label, t.div || '', l.label, '', l.qty ? l.qty.qty : '', l.qty ? l.qty.unit : '', money(l.cents), each(l.cents, l.qty), l.contingency ? 'yes, with contingency' : 'yes', sk(l.source), l.source ? l.source.basis : '', l.note || '']);
+        (l.rows || []).forEach(function (r) { rows.push([t.label, t.div || '', l.label, r.label, r.qty ? r.qty.qty : '', r.qty ? r.qty.unit : '', money(r.cents), each(r.cents, r.qty), 'in the line above', sk(r.source), r.source ? r.source.basis : '', '']); });
       });
       (t.info || []).forEach(function (i) {
-        rows.push([t.label, t.div || '', i.label, '', i.qty ? i.qty.qty : '', i.qty ? i.qty.unit : '', '', '', 'no',
+        rows.push([t.label, t.div || '', i.label, '', i.qty ? i.qty.qty : '', i.qty ? i.qty.unit : '', '', '', 'no', '', '',
           (i.bomCents != null ? 'On the BOM at $' + money(i.bomCents) + '. ' : '') + (i.note || '')]);
       });
     });
-    rows.push(['Total', '', '', '', '', '', money(a.cents), '', '', (a.notes || []).join(' ')]);
+    rows.push(['Total', '', '', '', '', '', money(a.cents), '', '', (a.sources || []).map(function (k) { return KIND_WORD[k.kind] + ' ' + k.pct + '%'; }).join(', '), '', (a.notes || []).join(' ')]);
     var text = rows.map(function (r) { return r.map(cell).join(','); }).join('\n');
     var pr = project(), name = (pr.name ? pr.name.replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) + '-' : '') + 'takeoff-by-trade';
     try {

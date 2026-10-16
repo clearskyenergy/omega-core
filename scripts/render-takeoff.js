@@ -20,8 +20,10 @@
  * and a piece no line counts says so; in the 3D Site Visualizer a marked
  * line is boxed in the model with a card, a piece picked in the model shows
  * its own line, and closing the card or the visualizer takes it all away;
- * the CSV carries every line to the cent; a scope of work carries the
- * quantities and never a price; a package without Omega Estimate shows no
+ * the CSV carries every line to the cent; every line wears where its price
+ * comes from and the head shows how much of the total rests on each kind,
+ * as the server read them; a scope of work carries the quantities and
+ * never a price; a package without Omega Estimate shows no
  * Trades; the pane fits a phone. Fails on a page error after boot, or an
  * /api/ call nobody answers.
  *   node scripts/render-takeoff.js [--shots DIR]
@@ -142,6 +144,19 @@ async function run() {
       ok(pane.trades.every(function (t, i) { return t.amt === (ans.trades[i].cents || !(ans.trades[i].info || []).length ? '$' + Math.round(ans.trades[i].cents / 100).toLocaleString('en-US') : '—'); }), M + ': each trade reads its own amount');
       var util = ans.trades.filter(function (t) { return t.key === 'utility'; })[0];
       ok(util.cents === 0 && /not in the Run/.test(util.info[0].note), M + ': the utility’s charges are named, not priced');
+      /* where each price comes from: the server's kinds, on every line, and the share of each */
+      var kinds = await page.evaluate(function () {
+        var a = OmegaTakeoff._state().ans, p = document.getElementById('cst-takeoff');
+        document.querySelectorAll('.tk-trade').forEach(function (t) { t.classList.add('open'); });
+        var lines = [];
+        a.trades.forEach(function (t) { t.lines.forEach(function (l) { var n = p.querySelector('.tk-line[data-k="L:' + l.key + '"] .tk-src') || p.querySelector('.tk-trade[data-trade="' + t.key + '"] .tk-line:not(.sub):not(.info) .tk-src'); lines.push([l.key, l.source.kind, n ? n.getAttribute('data-src') : null, n ? n.title : null]); }); });
+        var legend = Array.prototype.map.call(p.querySelectorAll('#tk-kinds [data-kind]'), function (n) { return n.getAttribute('data-kind') + ':' + n.querySelector('b').textContent; });
+        document.querySelectorAll('.tk-trade').forEach(function (t) { t.classList.remove('open'); });
+        return { lines: lines, legend: legend, sources: a.sources };
+      });
+      ok(kinds.lines.length > 0 && kinds.lines.every(function (l) { return l[2] === l[1] && l[3]; }), M + ': every line wears where its price comes from, with its basis ' + JSON.stringify(kinds.lines));
+      eq(kinds.legend, kinds.sources.map(function (k) { return k.kind + ':' + k.pct + '%'; }), M + ': the head shows the share of each kind, as the server added it');
+      ok(kinds.sources.reduce(function (t, k) { return t + k.cents; }, 0) === cents, M + ': and the kinds add up to the Run total');
       if (M === 'desktop') await page.locator('#rp').screenshot({ path: path.join(output, '01-trades.png') });
 
       /* a line marks exactly what the Run counted */
@@ -219,6 +234,7 @@ async function run() {
       ans.trades.forEach(function (t) { t.lines.forEach(function (l) { nLines++; sumLines += l.cents; nRows += (l.rows || []).length; }); nInfo += (t.info || []).length; });
       ok(rows.length === 1 + nLines + nRows + nInfo + 1 && /^Total,/.test(total) && total.indexOf((cents / 100).toFixed(2)) > 0 && sumLines === cents, M + ': the CSV has every line, row and quantity, and the total to the cent');
       ok(!!download && /takeoff-by-trade\.csv$/.test(download.suggestedFilename()), M + ': CSV saves a file');
+      ok(/,Price source,Source basis,/.test(rows[0]) && /^Total,/.test(total) && /(Quote|Book|Benchmark) \d/.test(total), M + ': the CSV says where each price comes from, and the shares on its total row');
 
       /* a trade's scope of work: quantities, never a price */
       await page.click('.tk-trade[data-trade="electrical"] [data-tk="scope"]');

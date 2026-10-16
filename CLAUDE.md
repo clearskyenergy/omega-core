@@ -1476,8 +1476,20 @@ exactly what the Run counted (`.tk-hl`, put back when the editor redraws a
 piece), a selected piece names its line (polled while the pane shows: the
 editor has no selection event), and in the 3D Site Visualizer the line's
 pieces are boxed with a card, and a piece picked in the model shows its own
-line. The CSV carries every line, row and quantity to the cent; *Copy scope
-of work* gives a trade's quantities for a bid, never a price. Nothing is
+line. **Every line and row says where its price comes from** (Phase 5,
+"real prices, not model guesses"): a QUOTE entered for this job (a vendor's
+price on a battery, an override on a charger, a cost-sheet figure changed
+from its default, a $/W or $/kW typed, a pod price entered, a contracted
+total), a BOOK on file for the product (the catalog, the Autel price book,
+NextNRG's installed prices, the skid's recorded price, ClearSky's controller
+price, the cost sheet's own unit prices) or a BENCHMARK (DOE/NREL, NREL
+storage, EIA, the operator band, the container rate, the charger estimator,
+the budgetary ROM). It is read off the roll-up's own flags and the
+quantities it ran on (`lineSource`, `bessSource`, `evSource`), names a kind
+of source and never a rate, and `sources` adds the money up by kind to the
+Run total, so the pane's head shows how much rests on benchmarks. The CSV
+carries every line, row, quantity and source to the cent; *Copy scope of
+work* gives a trade's quantities for a bid, never a price. Nothing is
 written or stored. Who: as the Cost tab opens (a package's Omega Estimate; a
 legacy plan's Site Map; an active workspace and member, viewers included;
 staff). Not built: sending a trade's scope through the RFQ (`api/rfq.js`
