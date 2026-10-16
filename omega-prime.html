@@ -1,0 +1,706 @@
+<!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<!--
+  omega-prime.html — Omega Prime: one site, one guided path.
+
+  Tommy, 2026-10-16: "we have a spot, and it's called Omega Prime, it lives
+  in the Design hex and it takes us through this environment … we put in a
+  site address and the type of project and it runs us through the grid
+  atlas and everything … using a real map … we add a BESS area and place the
+  unit there." The design is the FENECON sandbox; docs/GUIDED-SITE-FLOW.md
+  is the target it follows.
+
+  Nothing on this page is sample data:
+    • the address is geocoded (Census, then OpenStreetMap);
+    • substations and transmission come from the same public services Grid
+      Atlas reads (EIA/HIFLD/FEMA mirrors, first that answers);
+    • the circuit is ComEd's own answer at the point, through
+      omega-comed-layers.js probePoint — the Site Finder's module, not a copy;
+    • the layout is drawn on satellite imagery at true footprint;
+    • the price is /api/price-site (the cost model, server side, gated).
+  The unit's SPECS are the editor's catalog entry for FENECON-IND-XXL; no
+  price for it lives here (quote required). Anything this page cannot read
+  says so instead of guessing. ES5, no build step.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Omega Prime · ClearSky-OMEGA</title>
+<script src="/omega-splash.js?v=1"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+:root{
+  --rail:#0B2A3D; --rail-ink:#C9D6E2; --rail-dim:#7F97AA; --rail-on:#1264A3;
+  --page:#F5F4F0; --paper:#FFFFFF; --ink:#14171A; --ink2:#556B82; --ink3:#86A0A9; --line:#E4E8EC;
+  --brand:#2B5FA8; --brand-soft:#E7EEF9; --teal:#3FAFC6; --teal-soft:#E2F4F8;
+  --green:#2E7D5B; --green-soft:#E3F2EA; --amber:#B8791B; --amber-soft:#FFF6E5; --red:#C2453A; --coral:#EE5A4F; --fen:#E2701B;
+  --ga-panel:#102030; --ga-panel2:#162b3c; --ga-line:#36516a; --ga-ink:#ecf5fb; --ga-muted:#a9bfd0; --ga-accent:#4ed4d0;
+  --sans:"IBM Plex Sans",system-ui,-apple-system,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--page);color:var(--ink);font-family:var(--sans);font-size:14px;overflow:hidden}
+button{font:inherit;color:inherit}
+#app{height:100%;display:flex;flex-direction:column}
+#top{background:var(--rail);color:var(--rail-ink);display:flex;align-items:center;gap:14px;padding:8px max(14px,env(safe-area-inset-right,0px)) 8px max(14px,env(safe-area-inset-left,0px));flex-wrap:wrap}
+.mark{display:flex;align-items:center;gap:8px;font-weight:700;letter-spacing:.14em;color:#fff;font-size:13px;text-decoration:none}
+.mark img{height:22px}
+.ws{font-size:12px;color:var(--rail-dim);border-left:1px solid #1d4058;padding-left:12px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46ch}
+.ws b{color:#fff;font-weight:600}
+.prime{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;background:var(--fen);color:#fff;padding:3px 7px;border-radius:3px}
+#path{display:flex;gap:2px;flex-wrap:wrap;margin-left:auto}
+#path button{all:unset;cursor:pointer;font-size:12px;padding:5px 10px;border-radius:4px;color:var(--rail-dim);display:flex;gap:6px;align-items:center}
+#path button .d{width:7px;height:7px;border-radius:50%;background:#24485f}
+#path button.seen{color:var(--rail-ink)}#path button.seen .d{background:var(--teal)}
+#path button.on{background:var(--rail-on);color:#fff}#path button.on .d{background:#fff}
+#path button.lock{cursor:not-allowed;opacity:.55}
+#path button:focus-visible{outline:2px solid var(--teal)}
+#top a.out{color:var(--rail-dim);font-size:12px;text-decoration:none}#top a.out:hover{color:#fff}
+#stage{flex:1;min-height:0;position:relative}
+.screen{position:absolute;inset:0;display:none}.screen.on{display:flex}
+#toast{position:absolute;left:50%;top:14px;transform:translateX(-50%);background:var(--rail);color:#fff;padding:8px 14px;border-radius:5px;font-size:13px;z-index:1200;opacity:0;transition:opacity .2s;pointer-events:none;max-width:90%}
+#toast.on{opacity:1}
+/* guide */
+#guide{position:absolute;right:max(16px,env(safe-area-inset-right,0px));bottom:16px;width:340px;max-width:calc(100% - 32px);background:var(--paper);border:1px solid var(--line);border-radius:8px;box-shadow:0 10px 30px rgba(11,42,61,.22);z-index:1100;overflow:hidden}
+#guide .gh{background:var(--rail);color:#fff;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
+#guide .gh span{font-family:var(--mono);color:var(--teal);letter-spacing:.06em}
+#guide .gh button{all:unset;cursor:pointer;color:var(--rail-dim);font-size:12px}
+#guide .gb{padding:12px 14px 14px}
+#guide h4{margin:0 0 6px;font-size:15px}
+#guide p{margin:0 0 8px;color:var(--ink2);line-height:1.5}
+#guide .act{display:flex;gap:8px;align-items:center;margin-top:6px;font-size:12px;color:var(--brand);font-weight:600}
+#guide .act:before{content:"";width:8px;height:8px;border-radius:50%;background:var(--fen);flex:none;animation:ping 1.4s infinite}
+#guide.min .gb{display:none}
+.bar{height:3px;background:var(--line)}.bar i{display:block;height:100%;background:var(--fen);transition:width .3s}
+.pulse{outline:2px solid var(--fen)!important;outline-offset:2px;animation:glow 1.4s infinite}
+@keyframes ping{0%{box-shadow:0 0 0 0 rgba(226,112,27,.6)}70%{box-shadow:0 0 0 8px rgba(226,112,27,0)}100%{box-shadow:0 0 0 0 rgba(226,112,27,0)}}
+@keyframes glow{50%{outline-color:rgba(226,112,27,.25)}}
+@media (prefers-reduced-motion:reduce){.pulse,#guide .act:before{animation:none}}
+/* start */
+#s-start{overflow:auto;justify-content:center;align-items:flex-start;padding:48px max(16px,env(safe-area-inset-right,0px)) 32px max(16px,env(safe-area-inset-left,0px))}
+.startcard{background:var(--paper);border:1px solid var(--line);border-radius:10px;max-width:640px;width:100%;padding:28px}
+.startcard h1{margin:0 0 4px;font-size:24px}
+.startcard .lead{margin:0 0 20px;color:var(--ink2)}
+.fld{display:flex;flex-direction:column;gap:6px;margin-bottom:16px}
+.fld label{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink2)}
+.fld input{font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
+.types{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+@media (max-width:560px){.types{grid-template-columns:repeat(2,1fr)}}
+.types button{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:10px;text-align:center;font-size:13px;background:#fff}
+.types button b{display:block;font-size:14px}.types button small{color:var(--ink3);font-size:11px}
+.types button.on{border-color:var(--brand);background:var(--brand-soft)}
+.types button[disabled]{opacity:.45;cursor:not-allowed}
+.unitcard{border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px;background:#FFF8F1}
+.unitcard b{display:block}
+.primary{all:unset;cursor:pointer;display:inline-block;background:var(--brand);color:#fff;font-weight:600;font-size:13px;padding:9px 16px;border-radius:5px}
+.primary:hover{background:#244f8d}.primary[aria-disabled="true"]{opacity:.5;cursor:default}
+.primary:focus-visible{outline:2px solid var(--fen);outline-offset:2px}
+.note{font-size:12px;color:var(--ink2);margin-top:10px;line-height:1.5}
+.err{color:var(--red);font-size:13px;margin-top:8px}
+/* grid atlas */
+#s-atlas{background:#0d1b2a;color:var(--ga-ink)}
+.drawer{width:290px;flex:none;background:var(--ga-panel);border-right:1px solid var(--ga-line);display:flex;flex-direction:column;overflow:auto}
+.drawer .hd{padding:12px 14px;border-bottom:1px solid var(--ga-line)}
+.drawer .hd b{display:block;font-size:14px}.drawer .hd small{color:var(--ga-muted);font-size:12px}
+.srch{margin:10px 14px;background:var(--ga-panel2);border:1px solid var(--ga-line);border-radius:4px;padding:7px 9px;font-size:12px}
+.rail-h{display:flex;justify-content:space-between;padding:8px 14px 4px;font-family:var(--mono);font-size:11px;color:var(--ga-muted);text-transform:uppercase;letter-spacing:.06em}
+.lyr{display:flex;align-items:center;gap:10px;padding:7px 14px;cursor:pointer;font-size:13px;border:0;background:none;width:100%;text-align:left;color:var(--ga-ink)}
+.lyr:hover{background:var(--ga-panel2)}
+.lyr .sw{width:28px;height:15px;border-radius:9px;background:#29435a;position:relative;flex:none}
+.lyr .sw:after{content:"";position:absolute;width:11px;height:11px;border-radius:50%;background:#cfe0ec;top:2px;left:2px;transition:left .15s}
+.lyr.on .sw{background:var(--ga-accent)}.lyr.on .sw:after{left:15px;background:#fff}
+.lyr .k{width:10px;height:10px;border-radius:2px;flex:none}
+.lyr .ct{margin-left:auto;font-family:var(--mono);font-size:11px;color:#718aa0}
+.bms{display:flex;gap:4px;padding:6px 14px 12px}
+.bms button{all:unset;cursor:pointer;font-size:12px;padding:4px 8px;border:1px solid var(--ga-line);border-radius:3px;color:var(--ga-muted)}
+.bms button.on{background:var(--ga-accent);color:#062a2a;border-color:var(--ga-accent)}
+.stat{padding:8px 14px;font-size:12px;color:var(--ga-muted)}
+.mapwrap{flex:1;min-width:0;position:relative}
+.map{position:absolute;inset:0}
+.insp{position:absolute;top:14px;right:14px;width:300px;max-width:calc(100% - 28px);background:var(--ga-panel);border:1px solid var(--ga-line);border-radius:6px;padding:12px 14px;font-size:13px;display:none;z-index:500;color:var(--ga-ink)}
+.insp.on{display:block}
+.insp h5{margin:0 0 2px;font-size:14px}.insp .sub{color:var(--ga-muted);font-size:12px;margin-bottom:8px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;font-variant-numeric:tabular-nums;margin:0}
+.kv dt{color:var(--ga-muted);font-size:12px}.kv dd{margin:0;text-align:right;font-family:var(--mono);font-size:12px}
+.chip{display:inline-block;font-size:11px;font-family:var(--mono);padding:2px 7px;border-radius:3px;margin-top:8px;background:rgba(46,160,67,.18);color:#5cd07a}
+.nextbtn{all:unset;cursor:pointer;display:inline-block;margin-top:10px;background:var(--ga-accent);color:#062a2a;font-weight:600;font-size:12px;padding:7px 12px;border-radius:4px}
+.subicon{width:18px;height:18px;border-radius:3px;background:#c98a2b;border:2px solid #fff;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.subicon.near{background:#f6c36a}
+/* site finder */
+#s-circuit{background:#f5f6f8;color:#1a2733}
+.sfbar{position:absolute;top:0;left:0;right:0;height:46px;background:#fff;border-bottom:1px solid #dfe3e8;display:flex;align-items:center;gap:12px;padding:0 14px;z-index:600;font-size:13px}
+.sfbar .pill{font-family:var(--mono);font-size:11px;background:#e8f1fb;color:#0a6ed1;padding:2px 8px;border-radius:3px}
+.sfbar .sp{flex:1}
+.sfbar button{all:unset;cursor:pointer;font-size:12px;border:1px solid #dfe3e8;border-radius:4px;padding:5px 10px;background:#fff}
+#s-circuit .mapwrap{margin-top:46px}
+.sfres{position:absolute;right:14px;top:60px;width:340px;max-width:calc(100% - 28px);background:#fff;border:1px solid #dfe3e8;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.08);font-size:13px;z-index:600;max-height:calc(100% - 80px);overflow:auto}
+.sfres .hd{padding:12px 14px;border-bottom:1px solid #dfe3e8}.sfres .hd h5{margin:0;font-size:15px}.sfres .hd small{color:#5b6b7b}
+.sfres .bd{padding:12px 14px}
+.big{display:flex;gap:16px;margin-bottom:10px}.big div{flex:1}
+.big b{display:block;font-size:22px;font-variant-numeric:tabular-nums;font-weight:600}
+.big span{font-size:11px;color:#5b6b7b;font-family:var(--mono);text-transform:uppercase;letter-spacing:.05em}
+.lkv{display:grid;grid-template-columns:1fr auto;gap:5px 10px;font-variant-numeric:tabular-nums;font-size:12px;margin:0}
+.lkv dt{color:#5b6b7b}.lkv dd{margin:0;font-family:var(--mono)}
+.lkv .tot{font-weight:600;border-top:1px solid #dfe3e8;padding-top:5px}
+.verdict{margin-top:10px;padding:9px 10px;border-radius:4px;font-size:12px;line-height:1.45}
+.verdict.ok{background:var(--green-soft);color:#1d5a3f}.verdict.warn{background:var(--amber-soft);color:#7a5210}.verdict.bad{background:#fbe9e7;color:#8a2a20}
+.prov{font-size:11px;color:#5b6b7b;margin-top:8px;line-height:1.45}
+.log{font-family:var(--mono);font-size:11px;background:#f5f6f8;border:1px solid var(--line);border-radius:4px;overflow-x:auto;margin-top:8px;max-height:140px}
+.log div{padding:5px 8px;border-top:1px solid var(--line);white-space:nowrap}.log div:first-child{border-top:0}
+/* site map */
+#s-map{flex-direction:column;background:#EEF1F3}
+.rbtabs{display:flex;gap:2px;background:#fff;border-bottom:1px solid #DCE2E8;padding:0 10px;align-items:flex-end;overflow-x:auto}
+.rbtabs .proj{font-weight:600;font-size:13px;padding:9px 12px 9px 2px;white-space:nowrap}
+.rbtabs span.t{padding:9px 14px;font-size:13px;color:#2B5FA8;border-bottom:2px solid #2B5FA8;font-weight:600}
+.ribbon{display:flex;gap:6px;background:#fff;border-bottom:1px solid #DCE2E8;padding:8px 10px;overflow-x:auto;align-items:stretch}
+.grp{display:flex;flex-direction:column;border-right:1px solid #DCE2E8;padding-right:8px;margin-right:2px}
+.grp .gi{display:flex;gap:4px;flex:1;align-items:center}
+.grp label{font-size:10px;color:#86A0A9;text-align:center;margin-top:4px;font-family:var(--mono);letter-spacing:.05em;text-transform:uppercase}
+.rb{all:unset;cursor:pointer;background:#F3F5F7;border:1px solid #DCE2E8;border-radius:4px;padding:6px 10px;font-size:12px;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:62px;text-align:center;white-space:nowrap;color:#16202B}
+.rb:hover{background:#E6EEF9}.rb.done{background:var(--green-soft);border-color:#b9dcc9}.rb.armed{background:#FFF3E8;border-color:var(--fen)}
+.rb svg{width:20px;height:20px;stroke:#2C3E50;fill:none;stroke-width:1.6}
+.rb.run{background:#2B5FA8;color:#fff;border-color:#2B5FA8}.rb.run svg{stroke:#fff}
+.rb.dis{opacity:.45;cursor:not-allowed}
+.unitsel{font-size:12px;padding:6px 8px;border:1px solid #DCE2E8;border-radius:4px;background:#fff;max-width:290px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.edbody{flex:1;min-height:0;display:flex}
+.edmap{flex:1;min-width:0;position:relative}
+.edside{width:330px;flex:none;background:#fff;border-left:1px solid #DCE2E8;overflow:auto;font-size:13px}
+.edside .sec{padding:12px 14px;border-bottom:1px solid #EEF1F3}
+.edside h6{margin:0 0 8px;font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#4A5B6C;font-weight:500}
+.spec{width:100%;border-collapse:collapse;font-size:12px;font-variant-numeric:tabular-nums}
+.spec td{padding:4px 0;border-bottom:1px solid #EEF1F3;vertical-align:top}
+.spec td:first-child{color:#4A5B6C;padding-right:8px}.spec td:last-child{text-align:right}
+.empty{color:#86A0A9;font-size:12px}
+.flag{font-size:11px;color:#7a5210;background:var(--amber-soft);border-radius:3px;padding:6px 8px;margin-top:8px;line-height:1.4}
+.leaflet-tooltip.eqlbl,.leaflet-tooltip.lbl{background:rgba(11,42,61,.88);border:0;box-shadow:none;color:#fff;font:600 11px var(--mono);padding:2px 6px;border-radius:3px;white-space:nowrap}
+.leaflet-tooltip.eqlbl:before,.leaflet-tooltip.lbl:before{display:none}
+.poi{width:16px;height:16px;border-radius:50%;background:#C2453A;border:2px solid #fff;box-shadow:0 1px 4px rgba(0,0,0,.5)}
+@media (max-width:860px){.edside{display:none}.drawer{width:220px}}
+@media (max-width:620px){.drawer{display:none}#path{margin-left:0}}
+/* quote + logic */
+#s-quote,#s-logic{overflow:auto;justify-content:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+.doc{background:#fff;border:1px solid var(--line);border-radius:8px;max-width:920px;width:100%;align-self:flex-start}
+.doc .hd{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.doc .hd h2{margin:0;font-size:18px}.doc .hd small{color:var(--ink2)}
+.doc .bd{padding:16px 20px}
+.tbl{overflow-x:auto}
+table.bom{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums;min-width:560px}
+table.bom th{text-align:left;font-family:var(--mono);font-size:11px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink2);font-weight:500;padding:6px 8px;border-bottom:1px solid var(--line)}
+table.bom td{padding:8px;border-bottom:1px solid var(--line)}
+table.bom td.n{text-align:right;font-family:var(--mono)}
+table.bom tr.fen td{background:#FFF3E8}
+.tag{font-family:var(--mono);font-size:10px;padding:2px 6px;border-radius:3px;background:var(--brand-soft);color:var(--brand)}
+.tag.f{background:#FCE3CF;color:#9B4A0E}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-top:14px}
+.card{border:1px solid var(--line);border-radius:6px;padding:14px;text-decoration:none;color:var(--ink);display:block}
+.card:hover{border-color:var(--brand)}
+.card b{display:block;margin-bottom:4px}.card span{font-size:12px;color:var(--ink2)}
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="top">
+    <a class="mark" href="/workspace"><img src="/omega-logo.png" alt="" onerror="this.style.display='none'">OMEGA</a>
+    <div class="ws" id="wsLine">Omega Prime</div>
+    <span class="prime">Omega Prime</span>
+    <nav id="path" aria-label="Omega Prime path"></nav>
+    <a class="out" href="/workspace">Exit</a>
+  </div>
+  <div id="stage">
+    <div id="toast" role="status"></div>
+
+    <!-- START -->
+    <section class="screen" id="s-start">
+      <div class="startcard">
+        <h1>Omega Prime</h1>
+        <p class="lead">One site, start to finish: the grid around it, the utility circuit under it, the system on it, and the quote.</p>
+        <div class="fld"><label for="addr">Site address</label><input id="addr" autocomplete="off" placeholder="Street, city, state ZIP"></div>
+        <div class="fld"><label>Project type</label>
+          <div class="types" id="types">
+            <button data-t="bess" class="on"><b>Battery</b><small>BESS</small></button>
+            <button data-t="ev" disabled><b>EV charging</b><small>next</small></button>
+            <button data-t="solar" disabled><b>Solar</b><small>next</small></button>
+            <button data-t="compute" disabled><b>Compute</b><small>next</small></button>
+          </div>
+        </div>
+        <div class="fld"><label>Unit</label>
+          <div class="unitcard"><b>FENECON Industrial XXL</b>2.508 MW / 5.015 MWh · 20 ft liquid-cooled container · quote required</div>
+        </div>
+        <button class="primary" id="go">Start</button>
+        <div class="err" id="startErr" hidden></div>
+        <p class="note">Every figure on the way is read live: the address from the Census geocoder, the grid from public substation and transmission data, the circuit from ComEd's own hosting-capacity service, and the price from the OMEGA cost model.</p>
+      </div>
+    </section>
+
+    <!-- GRID ATLAS -->
+    <section class="screen" id="s-atlas">
+      <aside class="drawer">
+        <div class="hd"><b>Grid Atlas</b><small>Public grid data at the site</small></div>
+        <div class="srch" id="gaAddr">—</div>
+        <div class="rail-h"><span>Selected layers</span><span>Screen for BESS</span></div>
+        <button class="lyr" id="ly-sub"><span class="sw"></span><span class="k" style="background:#c98a2b"></span>Substations<span class="ct" id="cSub">—</span></button>
+        <button class="lyr" id="ly-tx"><span class="sw"></span><span class="k" style="background:#e0533d"></span>Transmission lines<span class="ct" id="cTx">—</span></button>
+        <div class="rail-h"><span>Basemap</span></div>
+        <div class="bms"><button data-bm="dark" class="on">Dark</button><button data-bm="sat" id="bm-sat">Satellite</button></div>
+        <div class="stat" id="gaStat"></div>
+      </aside>
+      <div class="mapwrap"><div class="map" id="gaMap"></div>
+        <div class="insp" id="gaInsp"></div></div>
+    </section>
+
+    <!-- CIRCUIT -->
+    <section class="screen" id="s-circuit">
+      <div class="sfbar"><b>Site Finder</b><span class="pill" id="utilPill">ComEd · hosting capacity</span><span class="sp"></span><button id="sf-log">Request log</button></div>
+      <div class="mapwrap"><div class="map" id="sfMap"></div></div>
+      <div class="sfres" id="sfRes"><div class="hd"><h5>Resolving the circuit…</h5><small>Asking ComEd at the parcel</small></div></div>
+    </section>
+
+    <!-- SITE MAP -->
+    <section class="screen" id="s-map">
+      <div class="rbtabs"><span class="proj" id="edTitle">Site Map</span><span class="t">Draw</span></div>
+      <div class="ribbon">
+        <div class="grp"><div class="gi">
+          <button class="rb" id="ed-area"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" stroke-dasharray="3 2"/></svg>BESS area</button>
+          <span class="unitsel" title="FENECON Industrial XXL">FENECON Industrial XXL — 2.508 MW / 5.015 MWh</span>
+          <button class="rb dis" id="ed-place"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8"/><path d="M7 8v8M11 8v8M15 8v8"/></svg>Place unit</button></div><label>Battery</label></div>
+        <div class="grp"><div class="gi">
+          <button class="rb dis" id="ed-poi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5"/></svg>Service / POI</button>
+          <button class="rb dis" id="ed-conduit"><svg viewBox="0 0 24 24"><path d="M3 18c5 0 5-12 9-12s4 12 9 12" stroke-dasharray="3 2"/></svg>Conduit run</button></div><label>Electrical</label></div>
+        <div class="grp" style="border:0"><div class="gi">
+          <button class="rb run dis" id="ed-run"><svg viewBox="0 0 24 24"><path d="M7 5l12 7-12 7z"/></svg>Run</button>
+          <button class="rb dis" id="ed-quote"><svg viewBox="0 0 24 24"><path d="M4 4h16v12H8l-4 4z"/></svg>Quote</button></div><label>Results</label></div>
+      </div>
+      <div class="edbody"><div class="edmap"><div class="map" id="edMap"></div></div><aside class="edside" id="edSide"></aside></div>
+    </section>
+
+    <!-- QUOTE -->
+    <section class="screen" id="s-quote">
+      <div class="doc">
+        <div class="hd"><div><h2>Request for Quote</h2><small id="qSub"></small></div><span class="tag">Draft</span></div>
+        <div class="bd">
+          <div class="tbl"><table class="bom"><thead><tr><th>Line</th><th>Item</th><th>Qty</th><th>Routed to</th><th style="text-align:right">Installed</th></tr></thead><tbody id="bomBody"></tbody></table></div>
+          <p class="note" id="qNote"></p>
+          <a class="primary" id="q-editor" href="#">Open in Site Map to file the RFQ</a>
+          <p class="note">Filing goes through Site Map's Bill of Materials, so the RFQ carries the full drawing; FENECON receives the whole BOM and sees the site, not the client, until a quote is accepted.</p>
+          <button class="primary" id="q-logic" style="margin-top:6px;background:#0B2A3D">Next: Omega Logic →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOGIC -->
+    <section class="screen" id="s-logic">
+      <div class="doc">
+        <div class="hd"><div><h2>When the client says yes</h2><small>The order runs in Omega Logic</small></div></div>
+        <div class="bd">
+          <p style="margin-top:0">FENECON prices the unit on the Quote Desk; the accepted order moves through pricing, the plant, freight and the customer's own app.</p>
+          <div class="cards">
+            <a class="card" href="/rfq.html#received"><b>Quote Desk</b><span>RFQs received: open the BOM and send FENECON's quote.</span></a>
+            <a class="card" href="/omega-logic"><b>Omega Logic</b><span>Today, Sales, Plant, Deliver, Money: the order from price to ship.</span></a>
+            <a class="card" href="/logic-custody.html"><b>Custody</b><span>Every serial bound to its site, and the warranty with it.</span></a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div id="guide" aria-live="polite">
+      <div class="gh"><span id="gStep">OMEGA PRIME</span><button id="gMin">Hide</button></div>
+      <div class="bar"><i id="gBar"></i></div>
+      <div class="gb"><h4 id="gT"></h4><p id="gP"></p><div class="act" id="gA"></div></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-tools.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/omega-comed-layers.js"></script>
+<script>
+(function () {
+  'use strict';
+  var $ = function (s) { return document.querySelector(s); };
+  var fmt = function (n) { return Math.round(n).toLocaleString('en-US'); };
+  var money = function (n) { return '$' + fmt(n); };
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function toast(m) { var t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(function () { t.classList.remove('on'); }, 2600); }
+
+  /* The unit. Specs only, from editor.html's catalog entry FENECON-IND-XXL
+     (FENECON's sheet); price is FENECON's quote, never a figure here. */
+  var UNIT = { key: 'FENECON-IND-XXL', name: 'FENECON Industrial XXL', kw: 2508, kwh: 5015, usable: 4750, hours: 2,
+    lFt: 20, wFt: 8, hFt: 9.5, wt: '~95,000 lb', ac: '480 V 3-ph, UL 1741 SA', xfmr: '3,000 kVA 480/480 V', disco: '4,000 A 480 V',
+    chem: 'LFP, liquid-cooled', ems: 'FEMS, open API, VPP-ready' };
+
+  /* ── state + path ─────────────────────────────────────────────────── */
+  var S = { addr: '', lat: null, lng: null, type: 'bess', sub: null, circuit: null, area: null, placed: false, poi: null, conduitFt: null, run: null };
+  var SCREENS = [['start', 'Site'], ['atlas', 'Grid Atlas'], ['circuit', 'Circuit'], ['map', 'Site Map'], ['quote', 'Quote'], ['logic', 'Omega Logic']];
+  var seen = { start: 1 }, cur = 'start';
+  function drawPath() {
+    var n = $('#path'); n.innerHTML = '';
+    SCREENS.forEach(function (s) {
+      var b = document.createElement('button'); b.innerHTML = '<span class="d"></span>' + s[1];
+      if (seen[s[0]]) b.className = 'seen'; if (cur === s[0]) b.className += ' on'; if (!seen[s[0]]) b.className += ' lock';
+      b.onclick = function () { if (!seen[s[0]]) { toast('Follow the path to reach ' + s[1] + '.'); return; } show(s[0]); };
+      n.appendChild(b);
+    });
+  }
+  function show(id) {
+    cur = id; seen[id] = 1;
+    [].forEach.call(document.querySelectorAll('.screen'), function (s) { s.classList.toggle('on', s.id === 's-' + id); });
+    drawPath(); guide();
+    setTimeout(function () { [gaMap, sfMap, edMap].forEach(function (m) { if (m) m.invalidateSize(); }); }, 30);
+  }
+
+  /* ── guide: the next action, worked out from the state ────────────── */
+  function step() {
+    if (cur === 'start') return { t: 'Start with the site', p: 'Type the site address. Battery is the guided project today.', a: 'Enter the address and press Start', tg: S.addr ? '#go' : '#addr' };
+    if (cur === 'atlas') {
+      if (!S.layersOn) return { t: 'Is the grid here right?', p: 'Turn on substations and transmission around the site.', a: 'Turn on Substations', tg: '#ly-sub' };
+      if (!S.subOpened) return { t: 'The nearest substation', p: 'The highlighted substation is the closest one to the site. Open it.', a: 'Click the highlighted substation', tg: null };
+      if (!S.satSeen) return { t: 'Look at the ground', p: 'Switch to Satellite: the yard, the roads, delivery access for a 95,000 lb container.', a: 'Choose Satellite', tg: '#bm-sat' };
+      return { t: 'Near is not the same as available', p: 'The grid is close. Next: does the circuit under the parcel have room?', a: 'Press Check the circuit', tg: '#ga-go' };
+    }
+    if (cur === 'circuit') {
+      if (!S.circuit) return { t: 'The utility circuit', p: 'Asking the utility which circuit serves this exact point.', a: 'Wait for the answer', tg: null };
+      return { t: 'Room for the XXL?', p: 'Published hosting, minus what is already queued on the feeder, against the unit\'s 2,508 kW.', a: 'Press Design it in Site Map', tg: '#sf-tomap' };
+    }
+    if (cur === 'map') {
+      if (!S.area) return { t: 'Mark the BESS area', p: 'Draw the area the battery may use on the satellite image.', a: 'Press BESS area, then drag on the map', tg: '#ed-area' };
+      if (!S.placed) return { t: 'Place the unit', p: 'The XXL drops into the area at its true 20 × 8 ft footprint, with its transformer and disconnect.', a: 'Press Place unit, then click inside the area', tg: '#ed-place' };
+      if (!S.poi) return { t: 'The utility service', p: 'Mark where the site\'s utility service is: the point of interconnection.', a: 'Press Service / POI, then click it on the map', tg: '#ed-poi' };
+      if (!S.conduitFt) return { t: 'Run conduit', p: 'The run from the disconnect to the service, measured on the map.', a: 'Press Conduit run', tg: '#ed-conduit' };
+      if (!S.run) return { t: 'Run', p: 'The OMEGA cost model prices the installation on the server, from what is drawn.', a: 'Press Run', tg: '#ed-run' };
+      return { t: 'Quote it', p: 'The installation is priced. FENECON prices the unit.', a: 'Press Quote', tg: '#ed-quote' };
+    }
+    if (cur === 'quote') return { t: 'The RFQ', p: 'Everything drawn and priced, with the unit routed to FENECON.', a: 'Open it in Site Map to file, or go on to Omega Logic', tg: '#q-logic' };
+    return { t: 'The full loop', p: 'From the grid to the circuit to a placed, priced FENECON unit, and into the order.', a: '', tg: null };
+  }
+  function guide() {
+    [].forEach.call(document.querySelectorAll('.pulse'), function (e) { e.classList.remove('pulse'); });
+    var g = step(), k = SCREENS.map(function (s) { return s[0]; }).indexOf(cur);
+    $('#gStep').textContent = 'OMEGA PRIME · ' + (k + 1) + ' / ' + SCREENS.length;
+    $('#gBar').style.width = (k / (SCREENS.length - 1) * 100) + '%';
+    $('#gT').textContent = g.t; $('#gP').textContent = g.p; $('#gA').textContent = g.a; $('#gA').hidden = !g.a;
+    if (g.tg) { var t = $(g.tg); if (t) t.classList.add('pulse'); }
+  }
+  $('#gMin').onclick = function () { var g = $('#guide'); g.classList.toggle('min'); this.textContent = g.classList.contains('min') ? 'Show' : 'Hide'; };
+
+  /* ── geo helpers ──────────────────────────────────────────────────── */
+  function miles(a, b) {
+    var R = 3958.8, t = Math.PI / 180, dLat = (b[0] - a[0]) * t, dLng = (b[1] - a[1]) * t;
+    var h = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(a[0] * t) * Math.cos(b[0] * t) * Math.sin(dLng / 2) * Math.sin(dLng / 2);
+    return 2 * R * Math.asin(Math.sqrt(h));
+  }
+  function ftToDeg(lat, ft) { var m = ft * 0.3048; return { dLat: m / 111320, dLng: m / (111320 * Math.cos(lat * Math.PI / 180)) }; }
+  function getJSON(url, cb) {
+    var x = new XMLHttpRequest();
+    try { x.open('GET', url, true); } catch (e) { cb(e); return; }
+    x.timeout = 20000;
+    x.onreadystatechange = function () { if (x.readyState !== 4) return; var j = null; try { j = JSON.parse(x.responseText); } catch (e) {} cb(j ? null : new Error('HTTP ' + x.status), j); };
+    x.send();
+  }
+  function geocode(q, cb) {
+    getJSON('https://geocoding.geo.census.gov/geocoder/locations/onelineaddress?address=' + encodeURIComponent(q) + '&benchmark=Public_AR_Current&format=json', function (e, j) {
+      var m = j && j.result && j.result.addressMatches && j.result.addressMatches[0];
+      if (m && m.coordinates) { cb({ lat: m.coordinates.y, lng: m.coordinates.x, label: m.matchedAddress, src: 'U.S. Census geocoder' }); return; }
+      getJSON('https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=us&q=' + encodeURIComponent(q), function (e2, a) {
+        if (a && a[0]) cb({ lat: +a[0].lat, lng: +a[0].lon, label: a[0].display_name, src: 'OpenStreetMap' }); else cb(null);
+      });
+    });
+  }
+  function esriImagery() { return L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxZoom: 21, maxNativeZoom: 19, attribution: 'Imagery © Esri' }); }
+  function esriDark() { return L.layerGroup([L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16, attribution: '© Esri' }), L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Reference/MapServer/tile/{z}/{y}/{x}', { maxZoom: 16 })]); }
+  function siteIcon() { return L.divIcon({ className: '', html: '<div style="width:16px;height:16px;border-radius:50%;background:#4ed4d0;border:3px solid #fff;box-shadow:0 0 0 6px rgba(78,212,208,.35)"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }); }
+
+  /* ── START ────────────────────────────────────────────────────────── */
+  (function () {
+    var q = (location.search.match(/[?&](?:q|addr|address)=([^&#]*)/) || [])[1];
+    if (q) { try { $('#addr').value = decodeURIComponent(q.replace(/\+/g, ' ')); } catch (e) {} }
+  })();
+  $('#addr').oninput = function () { S.addr = this.value.trim(); guide(); };
+  $('#addr').onkeydown = function (e) { if (e.key === 'Enter') $('#go').click(); };
+  $('#go').onclick = function () {
+    var q = $('#addr').value.trim(), b = this, er = $('#startErr');
+    if (!q) { er.hidden = false; er.textContent = 'Type the site address first.'; return; }
+    er.hidden = true; b.textContent = 'Finding the site…'; b.setAttribute('aria-disabled', 'true');
+    geocode(q, function (hit) {
+      b.textContent = 'Start'; b.removeAttribute('aria-disabled');
+      if (!hit) { er.hidden = false; er.textContent = 'That address did not resolve. Add the city, state and ZIP and try again.'; return; }
+      S.addr = q; S.lat = hit.lat; S.lng = hit.lng; S.geoSrc = hit.src;
+      $('#wsLine').innerHTML = 'Omega Prime · <b>' + esc(q) + '</b>';
+      $('#gaAddr').textContent = hit.label || q; $('#edTitle').textContent = 'Site Map · ' + q;
+      show('atlas'); openAtlas();
+    });
+  };
+
+  /* ── GRID ATLAS: the public services Grid Atlas itself reads ──────── */
+  var SUB_URLS = [
+    'https://services5.arcgis.com/HDRa0B57OVrv2E1q/ArcGIS/rest/services/Electric_Substations/FeatureServer/0',
+    'https://services.arcgis.com/G4S1dGvn7PIgYd6Y/ArcGIS/rest/services/HIFLD_electric_power_substations/FeatureServer/0'];
+  var TX_URL = 'https://services2.arcgis.com/FiaPA4ga0iQKduv3/arcgis/rest/services/US_Electric_Power_Transmission_Lines/FeatureServer/0';
+  var gaMap = null, gaBase = {}, gaSubs = L.layerGroup(), gaTx = L.layerGroup(), subRows = [], txRows = [];
+  function envelope(d) { return encodeURIComponent(JSON.stringify({ xmin: S.lng - d, ymin: S.lat - d * 0.75, xmax: S.lng + d, ymax: S.lat + d * 0.75, spatialReference: { wkid: 4326 } })); }
+  function query(url, d, cb) {
+    getJSON(url + '/query?f=json&where=1%3D1&outFields=*&returnGeometry=true&outSR=4326&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects&resultRecordCount=400&geometry=' + envelope(d), cb);
+  }
+  function openAtlas() {
+    if (!gaMap) {
+      gaMap = L.map('gaMap', { zoomControl: true }).setView([S.lat, S.lng], 14);
+      gaBase.dark = esriDark().addTo(gaMap); gaBase.sat = esriImagery();
+    } else gaMap.setView([S.lat, S.lng], 14);
+    L.marker([S.lat, S.lng], { icon: siteIcon() }).addTo(gaMap).bindTooltip('Site', { permanent: true, direction: 'top', className: 'lbl', offset: [0, -10] });
+    $('#gaStat').textContent = 'Loading substations and transmission…';
+    var i = 0;
+    (function nextSub() {
+      if (i >= SUB_URLS.length) { subRows = []; done(); return; }
+      query(SUB_URLS[i++], 0.12, function (e, j) {
+        if (e || !j || !j.features || j.error) { nextSub(); return; }
+        subRows = j.features.filter(function (f) { return f.geometry && f.geometry.y != null; }).map(function (f) {
+          var a = f.attributes || {};
+          return { name: a.NAME || a.name || 'Substation', kv: a.MAX_VOLT || a.VOLTAGE || a.max_volt || null, minkv: a.MIN_VOLT || null, lines: a.LINES || null, status: a.STATUS || '', owner: a.OWNER || a.UTILITY || '', lat: f.geometry.y, lng: f.geometry.x, src: SUB_URLS[i - 1] };
+        });
+        done();
+      });
+    })();
+    query(TX_URL, 0.12, function (e, j) {
+      txRows = (j && j.features) || [];
+      $('#cTx').textContent = txRows.length;
+    });
+    function done() {
+      subRows.forEach(function (s) { s.mi = miles([S.lat, S.lng], [s.lat, s.lng]); });
+      subRows.sort(function (a, b) { return a.mi - b.mi; });
+      S.sub = subRows[0] || null;
+      $('#cSub').textContent = subRows.length;
+      $('#gaStat').textContent = subRows.length ? subRows.length + ' substations within ~8 miles. Source: the public EIA/HIFLD substation and transmission services Grid Atlas reads.' : 'The public substation services did not answer. Try again in a minute.';
+      guide();
+    }
+  }
+  function drawSubs() {
+    gaSubs.clearLayers();
+    subRows.forEach(function (s, k) {
+      var m = L.marker([s.lat, s.lng], { icon: L.divIcon({ className: '', html: '<div class="subicon' + (k === 0 ? ' near pulse' : '') + '"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) });
+      m.bindTooltip(esc(s.name), { permanent: k < 3, direction: 'right', className: 'lbl', offset: [10, 0] });
+      m.on('click', function () { openSub(s, k === 0); });
+      gaSubs.addLayer(m);
+    });
+  }
+  function drawTx() {
+    gaTx.clearLayers();
+    txRows.forEach(function (f) {
+      var g = f.geometry; if (!g || !g.paths) return;
+      g.paths.forEach(function (p) { gaTx.addLayer(L.polyline(p.map(function (c) { return [c[1], c[0]]; }), { color: '#e0533d', weight: 2.5, opacity: .9 })); });
+    });
+  }
+  function openSub(s, nearest) {
+    S.subOpened = true;
+    var line = L.polyline([[S.lat, S.lng], [s.lat, s.lng]], { color: '#f6c36a', weight: 1.5, dashArray: '4 4' }).addTo(gaMap);
+    if (openSub.line) gaMap.removeLayer(openSub.line); openSub.line = line;
+    var kv = s.kv && s.kv > 0 ? s.kv + (s.minkv && s.minkv > 0 && s.minkv !== s.kv ? ' / ' + s.minkv : '') + ' kV' : 'not published';
+    $('#gaInsp').innerHTML = '<h5>' + esc(s.name) + '</h5><div class="sub">Substation' + (s.owner ? ' · ' + esc(s.owner) : '') + (nearest ? ' · nearest to the site' : '') + '</div>' +
+      '<dl class="kv"><dt>Voltage</dt><dd>' + esc(kv) + '</dd><dt>Distance to site</dt><dd>' + s.mi.toFixed(2) + ' mi</dd><dt>Lines in</dt><dd>' + (s.lines || '—') + '</dd><dt>Status</dt><dd>' + esc(s.status || '—') + '</dd></dl>' +
+      '<span class="chip">' + s.mi.toFixed(1) + ' mi · ' + esc(kv) + '</span><br>' +
+      '<button class="nextbtn" id="ga-go">Check the circuit →</button>';
+    $('#gaInsp').classList.add('on');
+    $('#ga-go').onclick = function () { show('circuit'); openCircuit(); };
+    guide();
+  }
+  $('#ly-sub').onclick = function () {
+    var on = !this.classList.contains('on'); this.classList.toggle('on', on);
+    if (on) { drawSubs(); gaSubs.addTo(gaMap); S.layersOn = true; if (!$('#ly-tx').classList.contains('on')) $('#ly-tx').click(); if (S.sub) gaMap.fitBounds(L.latLngBounds([[S.lat, S.lng], [S.sub.lat, S.sub.lng]]).pad(0.6)); }
+    else gaMap.removeLayer(gaSubs);
+    guide();
+  };
+  $('#ly-tx').onclick = function () { var on = !this.classList.contains('on'); this.classList.toggle('on', on); if (on) { drawTx(); gaTx.addTo(gaMap); } else gaMap.removeLayer(gaTx); };
+  [].forEach.call(document.querySelectorAll('.bms button'), function (b) {
+    b.onclick = function () {
+      [].forEach.call(document.querySelectorAll('.bms button'), function (x) { x.classList.toggle('on', x === b); });
+      gaMap.removeLayer(gaBase.dark); gaMap.removeLayer(gaBase.sat);
+      gaBase[b.getAttribute('data-bm')].addTo(gaMap);
+      if (b.getAttribute('data-bm') === 'sat') { S.satSeen = true; gaMap.setView([S.lat, S.lng], 17); }
+      guide();
+    };
+  });
+
+  /* ── CIRCUIT: ComEd's own answer, through the Site Finder's module ── */
+  var sfMap = null, LAY = window.OmegaComEdLayers || null, reqLog = [];
+  function inComEd() { var t = LAY && LAY.TERRITORIES && LAY.TERRITORIES[0]; return t ? (S.lat >= t.s && S.lat <= t.n && S.lng >= t.w && S.lng <= t.e) : false; }
+  function openCircuit() {
+    if (!sfMap) { sfMap = L.map('sfMap').setView([S.lat, S.lng], 17); esriImagery().addTo(sfMap); }
+    else sfMap.setView([S.lat, S.lng], 17);
+    L.marker([S.lat, S.lng], { icon: siteIcon() }).addTo(sfMap);
+    if (S.circuit) { renderCircuit(); return; }
+    if (!LAY || !LAY.probePoint) { circuitFail('The utility module did not load. Reload the page.'); return; }
+    if (!inComEd()) { circuitFail('This site is outside ComEd\'s territory. Hosting capacity is mapped for ComEd today; other utilities are next.'); return; }
+    var t0 = Date.now();
+    LAY.probePoint(S.lat, S.lng, function (err, res) {
+      reqLog.push((err ? 'ERR ' : 'OK  ') + 'probePoint(' + S.lat.toFixed(5) + ', ' + S.lng.toFixed(5) + ') · ' + (Date.now() - t0) + ' ms' + (res && res.layerId != null ? ' · layer ' + res.layerId : ''));
+      if (err || !res || !res.rows || !res.rows.length) { circuitFail(err ? 'ComEd did not answer (' + esc(err.message || err) + '). Try again in a minute.' : 'ComEd publishes no hosting-capacity circuit at this point.'); return; }
+      var r = res.rows[0];
+      S.circuit = { feeder: r.feeder || '(unnamed)', sub: r.sub || '', bess: r.bess, queue: r.queue || 0, refreshed: r.refreshed, layer: res.layerId };
+      renderCircuit();
+    });
+  }
+  function circuitFail(msg) {
+    $('#sfRes').innerHTML = '<div class="hd"><h5>No circuit answer</h5><small>' + esc(S.addr) + '</small></div><div class="bd"><div class="verdict warn">' + msg + '</div>' +
+      '<button class="primary" id="sf-tomap">Design it in Site Map anyway →</button></div>';
+    $('#sf-tomap').onclick = toMap; S.circuit = S.circuit || null; guide();
+  }
+  function renderCircuit() {
+    var c = S.circuit, pub = c.bess, net = pub == null ? null : Math.max(0, pub - c.queue), v;
+    if (net == null) v = '<div class="verdict warn"><b>No battery figure published</b> for this circuit. ComEd confirms in its review.</div>';
+    else if (net >= UNIT.kw) v = '<div class="verdict ok"><b>Fits.</b> ' + fmt(net) + ' kW left after the queue covers the XXL\'s ' + fmt(UNIT.kw) + ' kW with ' + fmt(net - UNIT.kw) + ' kW to spare. ComEd confirms in its review.</div>';
+    else if (net > 0) v = '<div class="verdict warn"><b>Fits only smaller.</b> ' + fmt(net) + ' kW left after the queue is under the XXL\'s ' + fmt(UNIT.kw) + ' kW: export-limit it, run it behind the meter, or plan on a study.</div>';
+    else v = '<div class="verdict bad"><b>Needs a study.</b> The queue already takes the published capacity on this circuit.</div>';
+    $('#sfRes').innerHTML = '<div class="hd"><h5>Circuit ' + esc(c.feeder) + '</h5><small>' + (c.sub ? 'Substation ' + esc(c.sub) + ' · ' : '') + 'resolved at the parcel</small></div><div class="bd">' +
+      '<div class="big"><div><span>Net hosting</span><b style="color:' + (net != null && net >= UNIT.kw ? '#2E7D5B' : '#B8791B') + '">' + (net == null ? '—' : fmt(net) + ' kW') + '</b></div><div><span>FENECON XXL</span><b>' + fmt(UNIT.kw) + ' kW</b></div></div>' +
+      '<dl class="lkv"><dt>ComEd published (battery)</dt><dd>' + (pub == null ? '—' : fmt(pub) + ' kW') + '</dd><dt>Queued DER on the feeder</dt><dd>− ' + fmt(c.queue) + ' kW</dd><dt class="tot">Room left</dt><dd class="tot">' + (net == null ? '—' : fmt(net) + ' kW') + '</dd>' +
+      (net != null ? '<dt>Headroom after the XXL</dt><dd>' + (net - UNIT.kw >= 0 ? '' : '− ') + fmt(Math.abs(net - UNIT.kw)) + ' kW</dd>' : '') + '</dl>' + v +
+      '<div class="prov">Source: ComEd hosting-capacity service, resolved at the point' + (c.layer != null ? ' (layer ' + esc(c.layer) + ')' : '') + '; the battery figure is ComEd\'s BESS_HC and the queue its Feeder_Q, which ComEd does not subtract' + (c.refreshed ? '. Queue refreshed ' + esc(c.refreshed) : '') + '.</div>' +
+      '<button class="primary" id="sf-tomap">Design it in Site Map →</button></div>';
+    $('#sf-tomap').onclick = toMap; guide();
+  }
+  $('#sf-log').onclick = function () { toast(reqLog.length ? reqLog[reqLog.length - 1] : 'No request made yet.'); if (LAY && LAY.diag) try { console.log(LAY.diag()); } catch (e) {} };
+  function toMap() { show('map'); openMap(); }
+
+  /* ── SITE MAP: area, unit, service, conduit on satellite ─────────── */
+  var edMap = null, mode = null, L_area = null, L_unit = L.layerGroup(), L_poi = null, L_cond = null, drag = null, eq = null;
+  function openMap() {
+    if (!edMap) {
+      edMap = L.map('edMap', { maxZoom: 21 }).setView([S.lat, S.lng], 19);
+      esriImagery().addTo(edMap); L_unit.addTo(edMap);
+      L.control.scale({ imperial: true, metric: false }).addTo(edMap);
+      edMap.on('mousedown', onDown); edMap.on('mousemove', onMove); edMap.on('mouseup', onUp); edMap.on('click', onClick);
+    }
+    side(); guide();
+  }
+  function arm(m, btn) {
+    mode = m;
+    [].forEach.call(document.querySelectorAll('.rb.armed'), function (b) { b.classList.remove('armed'); });
+    if (btn) btn.classList.add('armed');
+    edMap.getContainer().style.cursor = m ? 'crosshair' : '';
+    if (m === 'area') edMap.dragging.disable(); else edMap.dragging.enable();
+  }
+  function onDown(e) { if (mode !== 'area') return; drag = e.latlng; L_unit.clearLayers(); S.placed = false; S.run = null; if (L_area) edMap.removeLayer(L_area); L_area = L.rectangle([drag, drag], { color: '#ffd23f', weight: 2.5, dashArray: '8 5', fillOpacity: .12 }).addTo(edMap); }
+  function onMove(e) { if (mode === 'area' && drag) L_area.setBounds([drag, e.latlng]); }
+  function onUp(e) {
+    if (mode !== 'area' || !drag) return;
+    var b = L.latLngBounds(drag, e.latlng); drag = null;
+    var w = miles([b.getSouth(), b.getWest()], [b.getSouth(), b.getEast()]) * 5280, h = miles([b.getSouth(), b.getWest()], [b.getNorth(), b.getWest()]) * 5280;
+    if (w < UNIT.lFt + 20 || h < UNIT.wFt + 12) { toast('Too small for the XXL and its transformer: drag at least ~40 × 20 ft.'); edMap.removeLayer(L_area); L_area = null; return; }
+    S.area = { b: b, wFt: w, hFt: h, sqft: w * h };
+    L.tooltip({ permanent: true, direction: 'top', className: 'eqlbl', offset: [0, -4] }).setLatLng([b.getNorth(), b.getCenter().lng]).setContent('BESS area · ' + fmt(w) + ' × ' + fmt(h) + ' ft').addTo(L_unit);
+    edMap.fitBounds(b.pad(0.25), { maxZoom: 21 });
+    arm(null); $('#ed-area').classList.add('done'); $('#ed-place').classList.remove('dis'); side(); guide();
+  }
+  function box(lat, lng, wFt, hFt) { var d = ftToDeg(lat, 1); return [[lat - hFt / 2 * d.dLat, lng - wFt / 2 * d.dLng], [lat + hFt / 2 * d.dLat, lng + wFt / 2 * d.dLng]]; }
+  function onClick(e) {
+    if (mode === 'place') {
+      if (!S.area.b.contains(e.latlng)) { toast('Click inside the BESS area.'); return; }
+      L_unit.eachLayer(function (l) { if (!(l instanceof L.Tooltip)) L_unit.removeLayer(l); });
+      var c = e.latlng, d = ftToDeg(c.lat, 1);
+      var unit = box(c.lat, c.lng, UNIT.lFt, UNIT.wFt);
+      L.rectangle(unit, { color: '#E2701B', weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95 }).addTo(L_unit).bindTooltip('FENECON XXL · 20×8 ft', { permanent: true, direction: 'bottom', className: 'eqlbl' });
+      for (var k = 1; k < 5; k++) { var x = c.lng - UNIT.lFt / 2 * d.dLng + k * UNIT.lFt / 5 * d.dLng; L.polyline([[unit[0][0], x], [unit[1][0], x]], { color: '#c9c9c4', weight: 1 }).addTo(L_unit); }
+      var xLng = c.lng + (UNIT.lFt / 2 + 9) * d.dLng, dLng2 = c.lng + (UNIT.lFt / 2 + 18) * d.dLng;
+      L.rectangle(box(c.lat, xLng, 8, 8), { color: '#2B5FA8', weight: 2, fillColor: '#c9ccd0', fillOpacity: .95 }).addTo(L_unit).bindTooltip('XFMR', { permanent: true, direction: 'top', className: 'eqlbl' });
+      L.rectangle(box(c.lat, dLng2, 3, 4), { color: '#2B5FA8', weight: 2, fillColor: '#e8e8e8', fillOpacity: .95 }).addTo(L_unit).bindTooltip('DISC', { permanent: true, direction: 'bottom', className: 'eqlbl' });
+      L.polyline([[c.lat, c.lng + UNIT.lFt / 2 * d.dLng], [c.lat, xLng - 4 * d.dLng]], { color: '#ffd23f', weight: 2 }).addTo(L_unit);
+      L.polyline([[c.lat, xLng + 4 * d.dLng], [c.lat, dLng2 - 1.5 * d.dLng]], { color: '#ffd23f', weight: 2 }).addTo(L_unit);
+      eq = { disco: L.latLng(c.lat, dLng2) };
+      S.placed = true; arm(null); $('#ed-place').classList.add('done'); $('#ed-poi').classList.remove('dis'); side(); guide();
+      if (L_cond) { edMap.removeLayer(L_cond); L_cond = null; S.conduitFt = null; S.run = null; }
+      return;
+    }
+    if (mode === 'poi') {
+      if (L_poi) edMap.removeLayer(L_poi);
+      L_poi = L.marker(e.latlng, { icon: L.divIcon({ className: '', html: '<div class="poi"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }) }).addTo(edMap)
+        .bindTooltip('Utility service · POI', { permanent: true, direction: 'left', className: 'eqlbl', offset: [-10, 0] });
+      S.poi = e.latlng; arm(null); $('#ed-poi').classList.add('done'); $('#ed-conduit').classList.remove('dis');
+      if (L_cond) { edMap.removeLayer(L_cond); L_cond = null; S.conduitFt = null; S.run = null; }
+      side(); guide();
+    }
+  }
+  $('#ed-area').onclick = function () { arm('area', this); toast('Drag a rectangle over the area the battery may use.'); };
+  $('#ed-place').onclick = function () { if (this.classList.contains('dis')) return; arm('place', this); toast('Click inside the BESS area to place the XXL.'); };
+  $('#ed-poi').onclick = function () { if (this.classList.contains('dis')) return; arm('poi', this); toast('Click the utility service on the map.'); };
+  $('#ed-conduit').onclick = function () {
+    if (this.classList.contains('dis')) return;
+    var a = eq.disco, b = S.poi, mid = L.latLng(a.lat, b.lng);
+    var ft = (miles([a.lat, a.lng], [mid.lat, mid.lng]) + miles([mid.lat, mid.lng], [b.lat, b.lng])) * 5280;
+    if (L_cond) edMap.removeLayer(L_cond);
+    L_cond = L.polyline([a, mid, b], { color: '#ffd23f', weight: 3, dashArray: '9 5' }).addTo(edMap)
+      .bindTooltip('Conduit · ' + fmt(ft) + ' ft', { permanent: true, className: 'eqlbl' });
+    S.conduitFt = ft; S.run = null; this.classList.add('done'); $('#ed-run').classList.remove('dis'); side(); guide();
+  };
+
+  /* Run: /api/price-site, the cost model on the server. The page sends what
+     is drawn (kW, hours, conduit feet, pad area) and draws what comes back. */
+  function token() { try { var u = firebase.auth().currentUser; return u ? u.getIdToken() : Promise.resolve(null); } catch (e) { return Promise.resolve(null); } }
+  $('#ed-run').onclick = function () {
+    if (this.classList.contains('dis')) return;
+    var b = this; b.lastChild.nodeValue = 'Running…';
+    token().then(function (t) {
+      if (!t) throw new Error('Sign in to run the price: the cost model is for a signed-in workspace.');
+      return fetch('/api/price-site', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+        body: JSON.stringify({ kw: UNIT.kw, hours: UNIT.hours, poiFt: Math.round(S.conduitFt), padArea: Math.round(S.area.sqft) }) })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j && (j.error || j.message) || ('Pricing answered ' + r.status)); return j; }); });
+    }).then(function (j) {
+      S.run = j; b.classList.add('done'); $('#ed-quote').classList.remove('dis'); side(); guide();
+      $('#edSide').scrollTop = 9999; toast('Run complete: installation priced by the OMEGA cost model.');
+    }, function (e) { toast(e.message); S.runErr = e.message; side(); }).then(function () { b.lastChild.nodeValue = 'Run'; });
+  };
+  $('#ed-quote').onclick = function () { if (this.classList.contains('dis')) return; show('quote'); drawQuote(); };
+
+  function side() {
+    var h = '<div class="sec"><h6>Site</h6><table class="spec"><tr><td>Address</td><td>' + esc(S.addr) + '</td></tr>' +
+      (S.circuit ? '<tr><td>ComEd circuit</td><td>' + esc(S.circuit.feeder) + '</td></tr><tr><td>Net hosting</td><td>' + (S.circuit.bess == null ? '—' : fmt(Math.max(0, S.circuit.bess - S.circuit.queue)) + ' kW') + '</td></tr>' : '') +
+      (S.sub ? '<tr><td>Nearest substation</td><td>' + esc(S.sub.name) + ' · ' + S.sub.mi.toFixed(1) + ' mi</td></tr>' : '') +
+      (S.area ? '<tr><td>BESS area</td><td>' + fmt(S.area.wFt) + ' × ' + fmt(S.area.hFt) + ' ft · ' + fmt(S.area.sqft) + ' sq ft</td></tr>' : '') +
+      (S.conduitFt ? '<tr><td>Conduit</td><td>' + fmt(S.conduitFt) + ' ft</td></tr>' : '') + '</table></div>';
+    h += '<div class="sec"><h6>Battery</h6><table class="spec"><tr><td>Unit</td><td>' + UNIT.name + '</td></tr><tr><td>Power / energy</td><td>' + fmt(UNIT.kw) + ' kW / ' + fmt(UNIT.kwh) + ' kWh</td></tr><tr><td>Usable</td><td>~' + fmt(UNIT.usable) + ' kWh</td></tr><tr><td>Chemistry</td><td>' + UNIT.chem + '</td></tr><tr><td>AC</td><td>' + UNIT.ac + '</td></tr><tr><td>Transformer</td><td>' + UNIT.xfmr + '</td></tr><tr><td>Disconnect</td><td>' + UNIT.disco + '</td></tr><tr><td>Footprint</td><td>20 × 8 × 9.5 ft · ' + UNIT.wt + '</td></tr><tr><td>EMS</td><td>' + UNIT.ems + '</td></tr><tr><td>Price</td><td>Quote from FENECON</td></tr></table></div>';
+    if (S.run) {
+      var r = S.run, rows = (r.divisions || []).filter(function (d) { return d.base > 0; }).map(function (d) { return '<tr><td>' + esc(d.name) + '</td><td>' + money(d.base) + '</td></tr>'; }).join('');
+      h += '<div class="sec"><h6>Run · installed cost</h6><table class="spec">' + rows +
+        '<tr><td><b>Total</b></td><td><b>' + money(r.total.base) + '</b></td></tr><tr><td>Range</td><td>' + money(r.total.lo) + ' – ' + money(r.total.hi) + '</td></tr></table>' +
+        '<div class="flag">' + esc(r.estimateClassPlain || r.estimateClass || '') + ' The model prices the battery at its planning rate; FENECON\'s quote replaces that line.</div></div>';
+      var f = r.financial;
+      if (f && f.stack) h += '<div class="sec"><h6>Value · year one</h6><table class="spec"><tr><td>Value stack</td><td>' + money(f.stack.perYear || 0) + ' / yr</td></tr>' +
+        (f.incentives ? '<tr><td>Incentives</td><td>' + money(f.incentives.total || 0) + '</td></tr>' : '') +
+        '<tr><td>Net cost</td><td>' + money(f.netCostUsd || 0) + '</td></tr>' + (f.paybackYears ? '<tr><td>Payback</td><td>' + f.paybackYears.toFixed(1) + ' yrs</td></tr>' : '') + '</table><div class="flag">' + esc(f.basis || '') + '</div></div>';
+    } else if (S.runErr) h += '<div class="sec"><div class="flag">' + esc(S.runErr) + '</div></div>';
+    $('#edSide').innerHTML = h;
+  }
+
+  /* ── QUOTE ────────────────────────────────────────────────────────── */
+  function drawQuote() {
+    var r = S.run;
+    $('#qSub').textContent = S.addr + ' · drawn in Omega Prime';
+    var rows = '<tr class="fen"><td>1</td><td>' + UNIT.name + ' · 2.508 MW / 5.015 MWh, 20 ft liquid-cooled</td><td>1</td><td><span class="tag f">FENECON</span></td><td class="n">Quote required</td></tr>';
+    (r.divisions || []).filter(function (d) { return d.base > 0; }).forEach(function (d, i) { rows += '<tr><td>' + (i + 2) + '</td><td>' + esc(d.name) + '</td><td>1</td><td><span class="tag">FENECON (full BOM)</span></td><td class="n">' + money(d.base) + '</td></tr>'; });
+    rows += '<tr><td></td><td><b>Installed total (cost model)</b></td><td></td><td></td><td class="n"><b>' + money(r.total.base) + '</b></td></tr>';
+    $('#bomBody').innerHTML = rows;
+    $('#qNote').textContent = 'Conduit ' + fmt(S.conduitFt) + ' ft · BESS area ' + fmt(S.area.sqft) + ' sq ft' + (S.circuit ? ' · ComEd circuit ' + S.circuit.feeder : '') + '. Priced by ' + (r.pricedBy || 'api/price-site') + '.';
+    $('#q-editor').href = '/editor?addr=' + encodeURIComponent(S.addr);
+    guide();
+  }
+  $('#q-logic').onclick = function () { show('logic'); };
+
+  /* ── sign-in, the way the other tool pages start it ──────────────── */
+  (function () {
+    var cfg = window.CLEARSKY_CONFIG || {};
+    try { if (window.firebase && firebase.initializeApp && !firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg); } catch (e) {}
+    try { firebase.auth().onAuthStateChanged(function () { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }); } catch (e) { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }
+  })();
+
+  show('start');
+})();
+</script>
+</body>
+</html>
