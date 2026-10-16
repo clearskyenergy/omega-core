@@ -18,7 +18,11 @@ var CATALOG = [
   record('lite', 'Omega Design', 'floor', 'editor sandbox sales intake opportunity financing signal vppsim',
     'design view export.blueprint',
     'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea omegaNextnrgSolarCustom openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle pcToggle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
-  record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
+  /* Omega Prime (omega-prime.html, the guided one-site flow: grid, the
+     utility circuit, layout, price, quote) is Omega Grid's, beside Site Map's
+     Grid Check: the grid answer for one site is what the module sells
+     (2026-10-16, docs/GUIDED-SITE-FLOW.md). */
+  record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap omegaprime', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
   record('storage', 'Omega Storage', 'standard', 'batterysizer proforma valuestack isocalc bessscreening', 'storage',
     'openBessSizer openSolarBessSizer openBillImport openNonExportCalc openEnergyBalance openValueStack openBillAnalysis', 'models'),
