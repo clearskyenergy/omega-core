@@ -285,9 +285,19 @@ re-runs on save, debounced, using the existing auto-save of priced runs
 > with Δ on every row that differs. The plot plan export and the
 > deliverables bundle offer that sheet only on a project with a read. Our
 > sheets were already drawn from the model; the new piece is the comparison
-> with theirs. Still to come: reading a plan set from Jarvis (Read Plans is
-> driven through its own dialog today) and *drawing → financed project in
-> one session*.
+> with theirs.
+>
+> **Jarvis reads the plan set.** The site agent's `omega_read_plans` hands
+> a PDF on the person's computer to Read Plans' own dialog. The read runs
+> through the same door, allowance and review, and Jarvis gets back every
+> figure with the words it was read from and what the sheets disagree on.
+> Nothing is placed until the person approves; then `omega_place_plans`
+> puts down exactly those items, once, as one undo step. After the drawing
+> is worked on, `omega_plans_changed` says what differs from the plans.
+> Together with `omega_address`, `omega_bill`, the planner, the takeoff and
+> the build sequence, Jarvis can now run the ad's whole loop: read the plan
+> set, price the job and map out the build. *Drawing → financed project in
+> one session* is next.
 
 - **Plan set in → plan set out.** Read the customer's drawings (Phase 1) and
   issue our own permit/interconnect plan set from the reviewed model, with a

@@ -1445,6 +1445,25 @@ a project with a read; both ask the server for the comparison just before
 they draw. Never an engineering judgement; it says what it could not
 compare.
 
+**Jarvis reads a plan set through the same dialog** (Phase 5, "Jarvis does
+the whole thing"). Three site-agent tools (`scripts/site-agent`) cover it:
+- `omega_read_plans {path}` checks the file before the browser is touched:
+  a PDF or a sheet's photo, at most 80 MB, inside `OMEGA_PLANS_DIR` when
+  that is set. It sets the file on Read Plans' own input with Playwright.
+  Every sheet goes through the one door and its daily allowance. It
+  returns the review (each item and fact with its words, sheet and
+  confidence, what can be placed and what starts ticked, what the sheets
+  disagree on), never a sheet image or a box, and places nothing.
+- `omega_place_plans {items?}` places only the indexes the person approved,
+  as one undo step, unsaved, and a read once.
+- `omega_plans_changed` reads *What changed*.
+
+The agent (`.claude/agents/omega-site-builder.md`) shows the person the
+review before anything is placed. Held by the site agent's tests (in `npm
+test`) and `npm run check:agentplans` (`scripts/render-agent-plans.js`):
+the MCP server driving the real editor over the DevTools protocol on the
+sample plan set, with only the model stood in for.
+
 ## Build sequence — the 3D Site Visualizer's Build player (2026-10-16)
 
 **The site goes up step by step while "In place $X" counts to the Run total**

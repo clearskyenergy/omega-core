@@ -132,6 +132,33 @@ Both need the workspace's plan (Omega Estimate for the takeoff; the 3D
 visualizer's module for the build), as the editor does, and they return
 what the server answered. Drawing ids and model archetypes stay in the page.
 
+## Reading the customer's plan set
+
+Three tools drive Build › Read Plans through its own dialog (Blueprint to
+Build, Phase 5: "Jarvis does the whole thing"):
+
+- `omega_read_plans {path}` takes a PDF (up to 40 sheets) or a JPEG/PNG
+  photo of one sheet, by its path on this computer. The path must be inside
+  `OMEGA_PLANS_DIR` when that is set, and the file at most 80 MB; both are
+  checked before the browser is touched. The server sets the file on the
+  dialog's own input with Playwright. Each sheet is read by
+  `POST /api/plan-read`, counted against the workspace's daily allowance (a
+  sheet read before is free), and the sheets are checked together. It
+  returns the review: every item and fact with the words it was read from,
+  its sheet and confidence, which items can be placed and which start
+  ticked, and what the sheets disagree on. Sheet images and boxes stay in
+  the page. Nothing is placed.
+- `omega_place_plans {items?}` places the approved items (the review's
+  indexes; omitted keeps the review's own ticks) with the editor's own tools,
+  as one undo step, unsaved. A read is placed once.
+- `omega_plans_changed` reads Read Plans' *What changed*: the project's read
+  against the drawing as it stands (sheet E0.1 of the plan set). It writes
+  nothing.
+
+`npm run check:agentplans` (`scripts/render-agent-plans.js`) runs the three
+through this server against the real editor over the DevTools protocol. It
+uses the made-up sample plan set, and only the model is stood in for.
+
 ## Tests and acceptance gaps
 
 `node scripts/tests/tsite-agent.js` passes:
@@ -144,7 +171,10 @@ what the server answered. Drawing ids and model archetypes stay in the page.
 - adapter equipment dimensions, conduit bonds and trench schema;
 - changed-state rejection, dirty state and rollback on renderer failure;
 - the read-only takeoff and build sequence: what they return, that no drawing
-  id leaves the page, and that a refusal is named.
+  id leaves the page, and that a refusal is named;
+- reading a plan set: the file checks before the browser, the review's words
+  without sheet images or boxes, placing exactly the approved items once,
+  and what changed.
 
 It runs in `npm test` (it needs no install: Playwright is loaded only when a
 tool reaches a live browser).

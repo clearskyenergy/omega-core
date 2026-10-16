@@ -44,6 +44,7 @@
     "test:takeoff": "node scripts/tests/ttakeoff.js",
     "test:runsummary": "node scripts/tests/trunsummary.js",
     "check:planread": "node scripts/render-plan-read.js",
+    "check:agentplans": "node scripts/render-agent-plans.js",
     "check:buildseq": "node scripts/render-build-sequence.js",
     "check:takeoff": "node scripts/render-takeoff.js",
     "check:runsummary": "node scripts/render-run-summary.js",

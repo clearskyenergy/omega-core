@@ -51,5 +51,41 @@ function harness(){
  assert.equal(bs.steps.length,2);assert.equal(bs.steps[0].workingDays,2);assert.equal(bs.steps[1].inPlace,500);assert.equal(bs.total,500);
  assert(/not on file/.test(bs.schedule.plus)&&!/reveal/.test(JSON.stringify(bs)),'the schedule says what is not on file; the model\u2019s archetypes stay in the page');
  assert.equal(t.S.elements.length+t.S.shapes.length+t.S.conduits.length,0,'reading writes nothing');
- console.log('PASS: browser bridge placement schema, dimensions, conduit bonds, dirty state, stale plan rejection and failure rollback; the read-only takeoff and build sequence (editor doubles).');
+ /* Read Plans through its own dialog: what a read returns is the review's words and figures, never the sheet images or boxes */
+ const p=harness();let opened=0,restarted=0,reads=0,reviews=0;
+ const R={summary:{sheets:2,items:3,placeable:2,selected:1,facts:1,warnings:1},sheets:[{page:1,number:'E-001'},{page:2,number:'E-101'}],
+  items:[{kindLabel:'Battery storage',tag:'ESS-1',description:'Battery energy storage',model:'XS-1290',kw:300,kwh:1290,quantity:1,pages:[2],confidence:'high',reads:[{quote:'ESS-1 300 kW / 1,290 kWh',box:{x:.1,y:.1,w:.1,h:.1}}],place:{via:'eq',id:'bess'},selected:true,conflicts:[]},
+   {kindLabel:'Junction box',quantity:1,pages:[2],confidence:'low',reads:[{quote:'JB',box:{x:0,y:0,w:.1,h:.1}}],place:{via:'eq',id:'jbox'},selected:false,conflicts:[]},
+   {kindLabel:'Solar array',tag:'PV',kw:315,quantity:1,pages:[1],confidence:'high',reads:[{quote:'PV ARRAY 315 kW-DC'}],place:null,selected:false,conflicts:[],note:'Draw the array (Draw \u203a Solar) to price it.'}],
+  facts:[{label:'Battery energy',unit:'kWh',number:1200,quote:'1,200 kWh',page:1,confidence:'high',agree:false,values:[{number:1200,pages:[1]},{number:1290,pages:[2]}]}],
+  issues:[{level:'warn',text:'Battery energy differs between sheets: 1,200 kWh on E-001; 1,290 kWh on E-101.'}]};
+ const pst={fileName:'set.pdf',cut:0,today:{used:2,of:80},result:R,pages:[{page:1,status:'done',selected:true,cached:true,image:'data:image/jpeg;base64,AAAA',thumb:{},result:{sheet:{number:'E-001',title:'Cover'},items:[],facts:[{}]}},
+  {page:2,status:'done',selected:true,image:'data:image/jpeg;base64,BBBB',result:{sheet:{number:'E-101',title:'Electrical site plan'},items:[{},{},{}],facts:[]}}]};
+ p.c.document={getElementById:id=>id==='pr-file'?{}:id==='rb-plan-read'?{id}:null,querySelector:()=>null};
+ p.c.OmegaPlanRead={_state:()=>pst,open:()=>opened++,restart:()=>restarted++,read:()=>reads++,review:()=>reviews++,
+  place:()=>{const n=R.items.filter(i=>i.selected&&i.place).length;pst.placedId='prX';p.S.planRead={id:'prX',configured:1,items:[{tag:'ESS-1',kind:'bess',placed:1,quantity:1},{tag:null,kind:'junction_box',placed:0,quantity:1}]};return n;},
+  changes:async()=>({read:{fileName:'set.pdf',readAt:'2026-10-16T10:00:00Z',sheets:['E-001','E-101']},differ:1,summary:{changed:1},notes:[],basis:'Not an engineering judgement.',
+   rows:[{section:'placed',sectionLabel:'Placed from the plans',label:'ESS-1',sheet:'E-101',plans:'1 \u00d7 XS-1290 \u00b7 300 kW / 1,290 kWh',drawing:'1 \u00d7 XS-1290 \u00b7 300 kW / 1,500 kWh',status:'changed',statusLabel:'Changed',note:'The kWh on 1 unit differs from the plans.'}]})};
+ assert.deepEqual(await p.command({op:'plans-open'}),{status:'open'});assert.equal(opened+restarted,2,'the dialog is opened fresh');
+ p.c.OmegaCaps={allowedElement:()=>false};await assert.rejects(()=>p.command({op:'plans-open'}),/Omega Design/);delete p.c.OmegaCaps;
+ pst.pages[1].status='reading';await assert.rejects(()=>p.command({op:'plans-open'}),/still being read/);pst.pages[1].status='done';
+ assert.deepEqual(await p.command({op:'plans-read'}),{status:'reading',sheets:0});assert.equal(reads,1);
+ const rv=await p.command({op:'plans-state'});
+ assert.equal(rv.file,'set.pdf');assert.deepEqual(rv.sheets.map(s=>[s.number,s.status,s.items]),[['E-001','done',0],['E-101','done',3]]);
+ assert.deepEqual(rv.review.items[0],{index:0,tag:'ESS-1',kind:'Battery storage',description:'Battery energy storage',manufacturer:null,model:'XS-1290',rating:{kw:300,kwh:1290},quantity:1,sheets:['E-101'],confidence:'high',words:'ESS-1 300 kW / 1,290 kWh',placeable:true,ticked:true,readDifferently:null,note:null});
+ assert.deepEqual([rv.review.items[1].ticked,rv.review.items[2].placeable],[false,false],'the low-confidence box starts unticked; solar is listed, not placed');
+ assert.deepEqual(rv.review.facts[0].alsoReadAs,[{value:1290,sheets:['E-101']}],'a figure the sheets disagree on carries every sheet\u2019s value');
+ assert(/differs between sheets/.test(rv.review.toCheck[0].text)&&!/data:image|"box"|thumb/.test(JSON.stringify(rv)),'what to check is named; the sheet images and boxes stay in the page');
+ await assert.rejects(()=>p.command({op:'plans-place',items:[2]}),/Not items that can be placed: 2/);
+ await assert.rejects(()=>p.command({op:'plans-place',items:[9]}),/Not items that can be placed: 9/);
+ await assert.rejects(()=>p.command({op:'plans-place',items:[]}),/Nothing is ticked/);
+ const pl=await p.command({op:'plans-place',items:[0,1]});
+ assert.deepEqual([pl.status,pl.placed,R.items.map(i=>i.selected)],['placed_unsaved',2,[true,true,false]],'exactly the items the person approved are ticked and placed');
+ assert.deepEqual(pl.items,[{tag:'ESS-1',kind:'bess',placed:1,ofPrinted:1}]);
+ await assert.rejects(()=>p.command({op:'plans-place'}),/already on the drawing/,'a read is placed once');
+ const ch=await p.command({op:'plans-changed'});
+ assert.deepEqual(ch.rows[0],{section:'Placed from the plans',item:'ESS-1',sheet:'E-101',plans:'1 \u00d7 XS-1290 \u00b7 300 kW / 1,290 kWh',drawing:'1 \u00d7 XS-1290 \u00b7 300 kW / 1,500 kWh',status:'Changed',note:'The kWh on 1 unit differs from the plans.'});
+ assert(ch.differ===1&&/not an engineering judgement/i.test(ch.basis),'what changed is the server\u2019s comparison, with its basis');
+ delete p.c.OmegaPlanRead;await assert.rejects(()=>p.command({op:'plans-state'}),/Read Plans is unavailable/);
+ console.log('PASS: browser bridge placement schema, dimensions, conduit bonds, dirty state, stale plan rejection and failure rollback; the read-only takeoff and build sequence; Read Plans read, place and what changed (editor doubles).');
 })().catch(e=>{console.error(e);process.exitCode=1;});
