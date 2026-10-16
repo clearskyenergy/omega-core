@@ -26,6 +26,7 @@
     "check:production": "node scripts/check-production.js",
     "check:sales": "node scripts/render-mission-sales.js",
     "guides": "node scripts/guides/shots.js && node scripts/guides/build.js",
+    "guide:sales": "node scripts/sales-guide/build.js",
     "build:sandbox": "node scripts/build-app-sandbox.js",
     "test:sizer": "node scripts/test-bess-sizer.js",
     "test:design": "node scripts/test-bess-design.js",
