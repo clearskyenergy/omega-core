@@ -899,7 +899,11 @@ is not built.
   never stored); the customer's side of the same documents is
   `api/my-files.js`; the customer's design subscription is
   `api/customer-subscribe.js` (metadata `org`, never `orgId`, so it cannot
-  reach the tenant's billing); a tenant-billed invoice's pay link has ONE
+  reach the tenant's billing), or the supplier INCLUDES Editor Lite for
+  every customer at no charge (`billing/current.editorLite.customersIncluded`,
+  ClearSky's owner only through `logic-onboard` `customer-editor-included`;
+  `buyer-design.entitlement` reads it as `included`, no expiry, checkout
+  refused; 2026-10-16, Tommy, of FENECON; `docs/CUSTOMER-PORTAL.md`); a tenant-billed invoice's pay link has ONE
   check, `api/_lib/portal.js tenantPayLink`. All Admin SDK; the rules deny
   browsers. The sample tenant in `scripts/_lib/logic-fixtures.js` answers
   every one of these routes, so `check:pages` and the sandboxes exercise
@@ -1639,6 +1643,26 @@ run check:financepath`, also in `check:pages` (`scripts/render-finance-path.js`:
 the sample site and an Omega-Core skid placed with the editor's own tools, the
 panel's own Run and a save stand-in, the hand-offs opening their own dialogs,
 a 390 px phone, a package without Omega Capital).
+
+## Grid panel — Grid Atlas inside Site Map (2026-10-16)
+
+**The FENECON demo flow is how the product works** (Tommy: "that's how the
+Grid Atlas should work, and we should have the Grid Atlas built into the
+editor"; `docs/GUIDED-SITE-FLOW.md`). Analyze › Grid Check
+(`rb-grid-panel`, Omega Grid's, beside Grid Atlas) is `omega-grid-panel.js`:
+the project's site point and the BESS Guided Build's unit (never typed),
+the nearest substation from the Grid Atlas service the pre-screen already
+calls (`OmegaGridPrescreen`, `/api/grid-atlas`), the circuit at the parcel
+from `omega-comed-layers.js` `probePoint` (the ONE ComEd module, loaded by
+the editor; never pasted), NET of the feeder's queued DER first, and the
+verdict — Fits / Fits only smaller / Needs a study, and the substation's
+chip — from `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated as
+`/api/grid-atlas` is; every threshold is server-side). `S.grid` carries the
+service's measurement plus `substation`, `circuit` and `verdict`, rides
+`saveProject()`'s allowlist (with `savedBy`), is restored on load, and the
+pre-screen keeps the panel's answer when it re-measures the same point.
+`scripts/tests/tgridverdict.js`. The standalone Grid Atlas and Site Finder
+stay for prospecting many sites.
 
 ## VPP Earnings Simulator (2026-09-29)
 

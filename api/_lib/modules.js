@@ -15,7 +15,7 @@ function record(key, name, shelf, tools, caps, ribbon, meter, requires) {
     requires: requires || (key === 'lite' ? [] : ['lite']) };
 }
 var CATALOG = [
-  record('lite', 'Omega Design', 'floor', 'editor sandbox sales intake opportunity financing signal vppsim',
+  record('lite', 'Omega Design', 'floor', 'editor omegaprime sandbox sales intake opportunity financing signal vppsim',
     'design view export.blueprint',
     'openSiteQuickBuild openPlanRead openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea omegaNextnrgSolarCustom openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle pcToggle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
@@ -69,7 +69,7 @@ BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cos
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
   lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key',
-  gridatlas: 'rb-gridatlas', storage: 'omega-btn-bill-analysis rb-valuestack',
+  gridatlas: 'rb-gridatlas rb-grid-panel', storage: 'omega-btn-bill-analysis rb-valuestack',
   estimate: 'rb-takeoff-budget', evrebates: 'rb-ev-future',
   plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks ov-build',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',

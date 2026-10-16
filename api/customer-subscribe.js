@@ -81,8 +81,10 @@ function configured() { return !!process.env.STRIPE_SECRET_KEY; }
 function price(v) { var n = Number(v); return v != null && Number.isSafeInteger(n) && n >= 100 ? n : null; }
 function offer(ctx) {
   var o = ctx.billing.customerEditorLite || {}, m = price(o.monthlyPriceCents), y = price(o.yearlyPriceCents);
-  var on = (ctx.billing.editorLite || {}).enabled === true;
-  return { enabled: on, monthlyPriceCents: m, yearlyPriceCents: y, available: on && configured() && !!(m || y) };
+  var lite = ctx.billing.editorLite || {}, on = lite.enabled === true;
+  /* Included by the supplier (api/_lib/buyer-design.js entitlement): nothing to sell. */
+  var included = on && lite.customersIncluded === true;
+  return { enabled: on, included: included, monthlyPriceCents: m, yearlyPriceCents: y, available: on && !included && configured() && !!(m || y) };
 }
 function iso(sec) { var n = Number(sec); return isFinite(n) && n > 0 ? new Date(n * 1000).toISOString() : null; }
 function cusId(v) { var s = typeof v === 'string' ? v : v && typeof v.id === 'string' ? v.id : ''; return /^cus_[A-Za-z0-9]{1,64}$/.test(s) ? s : ''; }
@@ -107,7 +109,7 @@ function returnUrls(org, from) {
 function view(ctx, acct, address) {
   var o = offer(ctx), grant = acct.data.editorLite || {}, ent = D.entitlement(ctx, acct.data, null);
   var provider = grant.source === 'provider';
-  return { available: o.available, monthlyPriceCents: o.monthlyPriceCents, yearlyPriceCents: o.yearlyPriceCents, currency: 'USD',
+  return { available: o.available, included: o.included, monthlyPriceCents: o.monthlyPriceCents, yearlyPriceCents: o.yearlyPriceCents, currency: 'USD',
     /* A paid subscription says what Stripe says (active / past_due /
        inactive) so a customer with a failed card can reach Manage; a trial
        or nothing says what the entitlement says. */
@@ -142,6 +144,7 @@ module.exports = A.handler(function (req, res) {
     if (b.action !== undefined && b.action !== 'subscribe') throw A.httpError(400, 'Unknown subscription action');
     if (PLANS.indexOf(b.plan) < 0) throw A.httpError(400, 'Choose monthly or yearly.');
     var o = offer(ctx), amount = b.plan === 'year' ? o.yearlyPriceCents : o.monthlyPriceCents;
+    if (o.included) throw A.httpError(409, 'Editor Lite is included with your customer account by your supplier. There is nothing to subscribe to.');
     if (!o.available || !amount) throw A.httpError(409, 'Your supplier does not offer ' + (b.plan === 'year' ? 'a yearly' : 'a monthly') + ' Editor Lite subscription here yet. Ask your account rep for a trial.');
     if (grant.source === 'provider' && PAID.indexOf(grant.status) >= 0) throw A.httpError(409, 'This account already has an Editor Lite subscription. Use Manage subscription to change it.');
 

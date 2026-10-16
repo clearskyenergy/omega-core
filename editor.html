@@ -154,6 +154,7 @@ function openOmegaCore(){
 }
 </script>
 <script src="/omega-brand.js"></script>
+<script src="/omega-demo.js" defer></script>
 <script src="/omega-editor-gate.js"></script>
 <script src="/omega-whitelabel.js"></script>
 <!-- Which PRODUCT of the editor this tenant bought. Loads directly after
@@ -216,6 +217,13 @@ function openOmegaCore(){
      through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
      whether the site takes the skids and what the host is paid. -->
 <script src="/omega-core-qualify.js"></script>
+<!-- Grid Atlas built into Site Map (docs/GUIDED-SITE-FLOW.md, 2026-10-16):
+     the Grid panel reads the site point and the Guided Build's unit, takes
+     the nearest substation from the Grid Atlas service, the circuit from the
+     utility's own hosting map through the ONE ComEd layer module (the Site
+     Finder's), and the verdict from api/grid-verdict. Nothing pasted here. -->
+<script src="/omega-comed-layers.js"></script>
+<script src="/omega-grid-panel.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
      This is the button that gives it a way in, plus the honest labelling: the
@@ -26199,6 +26207,17 @@ async function saveProject(){
          (the file, the sheets, the facts, what disagreed, what was placed
          and what was only listed). Restored in _loadProject beside it. */
       planRead:      S.planRead      || null,
+      /* THE GRID ANSWER for this site (Analyze \u203a Grid Atlas and the Grid
+         panel): the Grid Atlas service's measurement, and the panel's
+         grid.substation {name, kv, miles}, grid.circuit {utility, id,
+         publishedKw, queuedKw, netKw, at, source} and grid.verdict, which the
+         Run, the RFQ and the Helios intake read instead of asking again.
+         Undefined when this session has none, so a save never blanks it.
+         The service's lists are cut to the nearest ten: a metro answers
+         hundreds of substations inside 25 km. */
+      grid:          (S.grid && typeof S.grid==='object')
+                       ? ['substations','lines','plants'].reduce(function(g,k){ if(Array.isArray(g[k])) g[k]=g[k].slice(0,10); return g; }, Object.assign({}, S.grid))
+                       : undefined,
       /* The run's totals as the record's rollup fields — the ones the
          workspace's Pipeline capex, the dashboard's portfolio table and
          charts, and the asset book read (2026-09-29). Written only from a
@@ -26632,6 +26651,9 @@ async function _loadProject(id){
     S.omegaSizingAt = d.omegaSizingAt || null;
     S.omegaCore     = (d.omegaCore     && typeof d.omegaCore==='object')     ? d.omegaCore     : null;
     S.planRead      = (d.planRead      && typeof d.planRead==='object')      ? d.planRead      : null;
+    /* the grid answer (saved beside omegaCore); reset when the project has
+       none so one site's circuit never follows another project */
+    S.grid          = (d.grid          && typeof d.grid==='object')          ? d.grid          : null;
     /* THE SITE THIS PROJECT BELONGS TO (the portfolio register's
        send-to-editor writes siteId/siteOrgId on the record). Read so a save
        can tell the site to read the design again (omegaSiteDesignPush);
@@ -155991,6 +156013,13 @@ function prescreenFor(g){
 function saveToProject(g){
   try {
     if (typeof S === 'undefined') return;
+    /* The Grid panel's answer (substation card, circuit, verdict) is for a
+       point; a re-measure of the SAME point keeps it, a new point drops it. */
+    var keep = {};
+    if (S.grid && S.grid.lat != null && g.lat != null &&
+        Math.abs(+S.grid.lat - +g.lat) < 1e-5 && Math.abs(+S.grid.lng - +g.lng) < 1e-5) {
+      ['substation', 'circuit', 'verdict'].forEach(function (k) { if (S.grid[k] !== undefined) keep[k] = S.grid[k]; });
+    }
     S.grid = {
       score: g.score, summary: g.summary || '',
       substations: g.substations || [], lines: g.lines || [], plants: g.plants || [],
@@ -155998,6 +156027,7 @@ function saveToProject(g){
       lat: g.lat, lng: g.lng, model: g.model, build: g.build,
       ranAt: stamp(), source: 'grid-atlas-service'
     };
+    Object.keys(keep).forEach(function (k) { S.grid[k] = keep[k]; });
     var pre = prescreenFor(g);
     /* Rule 3: a hand-entered verdict is not ours to replace. */
     if (pre && (!S.prescreen || S.prescreen.source === 'grid-atlas')) S.prescreen = pre;
