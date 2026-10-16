@@ -12,7 +12,13 @@
    disagreement with both sheets, leaves the low-confidence read unticked,
    and lists solar and runs without placing them; every check fires on its
    own crafted case and none fires on agreeing figures; revive() re-applies
-   every rule to what a browser sends back.
+   every rule to what a browser sends back. What changed since the plans:
+   each status on its own case (a re-rated battery, a deleted charger, a
+   copy, a removed transformer, the box never placed, a meter added by
+   hand), the 2% tolerance, an exact count, the plans' own disagreement
+   named, listed figures summed and folded under a stated total, no lengths
+   on a drawing not set to scale, a v1 read compared on its totals only,
+   junk sanitised, section by section with what differs first.
 
    The door (api/plan-read.js) on the Firestore double with Claude stubbed:
    the model and the key are the server's (a body naming a model changes
@@ -158,6 +164,119 @@ function eq(a, b, m) { assert.deepEqual(a, b, m); pass++; }
   eq(P.parse('```json\n{"a":1}\n```'), { a: 1 }, 'a fenced answer parses');
   eq(P.parse('no'), null, 'prose is not an answer');
 
+  /* ── what changed since the plans (Blueprint to Build, Phase 5) ── */
+  var READ = { v: 2, id: 'prx1', fileName: 'Sunrise plans.pdf', readAt: '2026-10-16T10:00:00Z', sheets: [{ page: 1, number: 'E-101' }, { page: 2, number: 'PV-1' }],
+    facts: [{ key: 'bess_kw', number: 1000, sheet: 'E-101', agree: true }, { key: 'bess_kwh', number: 2000, sheet: 'E-101', agree: true }, { key: 'ev_charger_count', number: 8, sheet: 'E-101', agree: true }],
+    listed: [{ kind: 'solar_array', tag: 'PV-1', kw: 200, quantity: 1, sheet: 'PV-1' }, { kind: 'solar_array', tag: 'PV-2', kw: 115, quantity: 1, sheet: 'PV-1' },
+      { kind: 'conduit_run', tag: 'C-1', lengthFt: 120, quantity: 1, sheet: 'E-101' }, { kind: 'building', quantity: 1, sheet: 'A-1' }],
+    items: [
+      { id: 'b', kind: 'bess', tag: 'BESS-1', model: 'MP-2', kw: 500, kwh: 1000, quantity: 2, placed: 2, sheet: 'E-101' },
+      { id: 'c', kind: 'ev_charger', tag: 'EV-1 THRU EV-8', kw: 7.2, quantity: 8, placed: 8, sheet: 'E-101' },
+      { id: 't', kind: 'transformer', tag: 'T-1', kva: 1000, quantity: 1, placed: 1, sheet: 'E-101' },
+      { id: 's', kind: 'switchgear', tag: 'SWG-1', amps: 2000, quantity: 1, placed: 1, sheet: 'E-101' },
+      { id: 'p', kind: 'panelboard', tag: 'LP-1', amps: 225, quantity: 1, placed: 1, sheet: 'E-101' },
+      { id: 'd', kind: 'disconnect', tag: 'DS-1', quantity: 1, placed: 0, sheet: 'E-101' }
+    ] };
+  /* the drawing exactly as Place left it */
+  function asDrawn(over) {
+    var now = { fromRead: [{ item: 'b', kw: 500, kwh: 1000, model: 'MP-2' }, { item: 'b', kw: 500, kwh: 1000, model: 'MP-2' }, { item: 't' }, { item: 's' }, { item: 'p' }],
+      counts: { bess: 2, charger: 8, 'eq:xfmr': 1, 'eq:panel': 2 }, labels: {}, totals: { bessKw: 1000, bessKwh: 2000, solarKwDc: 315, chargers: 8, conduitFt: 120, trenchFt: 0 }, scaled: true };
+    for (var i = 0; i < 8; i++) now.fromRead.push({ item: 'c', kw: 7.2, model: 'Level 2 charger' });
+    return Object.assign(now, over || {});
+  }
+  function totals(o) { return Object.assign({}, asDrawn().totals, o); }
+  function rowOf(res, label, section) { return res.rows.filter(function (r) { return r.label === label && (!section || r.section === section); })[0]; }
+  function statuses(res) { var o = {}; res.rows.forEach(function (r) { o[r.section + ':' + r.label] = r.status; }); return o; }
+  var same = P.changes(READ, asDrawn());
+  eq(statuses(same), { 'stated:Battery power': 'as-read', 'stated:Battery energy': 'as-read', 'stated:EV chargers': 'as-read',
+    'placed:DS-1': 'not-placed', 'placed:BESS-1': 'as-read', 'placed:EV-1 THRU EV-8': 'as-read', 'placed:T-1': 'as-read', 'placed:SWG-1': 'as-read', 'placed:LP-1': 'as-read',
+    'listed:Solar array (PV-1, PV-2)': 'as-read', 'listed:Conduit / cable run (C-1)': 'as-read', 'listed:Building': 'listed' }, 'the drawing as Place left it reads as read, item by item; the unticked disconnect is not placed');
+  eq([same.differ, same.summary['not-placed'], same.compared], [1, 1, true], 'one row differs: the item never placed');
+  eq([rowOf(same, 'BESS-1').plans, rowOf(same, 'BESS-1').drawing], ['2 × MP-2 · 500 kW / 1,000 kWh', '2 × MP-2 · 500 kW / 1,000 kWh'], 'the plans’ figures beside the drawing’s, unit by unit');
+  eq([rowOf(same, 'T-1').plans, rowOf(same, 'T-1').drawing], ['1 × Transformer · 1,000 kVA', '1 × Transformer'], 'a rating the drawing does not carry is shown, never compared');
+  eq(rowOf(same, 'EV-1 THRU EV-8').plans, '8 × EV charger · 7.2 kW', 'no model printed: the kind names it');
+  var fence = JSON.parse(JSON.stringify(READ)); fence.items.push({ id: 'f', kind: 'fence', lengthFt: 160, quantity: 1, placed: 1, sheet: 'C-1' });
+  eq(rowOf(P.changes(fence, asDrawn({ fromRead: asDrawn().fromRead.concat([{ item: 'f' }]) })), 'Fence').plans, '1 × Fence · 160 ft', 'a printed length rides with the item');
+  eq(rowOf(same, 'Solar array (PV-1, PV-2)').plans, '315 kW-DC', 'listed arrays are summed and set against the drawing’s solar');
+  ok(/E-101/.test(rowOf(same, 'BESS-1').sheet) && same.read.fileName === 'Sunrise plans.pdf' && same.read.sheets.join() === 'E-101,PV-1', 'each row keeps its sheet, and the answer names the read');
+
+  var mv = asDrawn(); mv.fromRead[0] = { item: 'b', kw: 500, kwh: 1100, model: 'MP-2' };
+  var mr = rowOf(P.changes(READ, mv), 'BESS-1');
+  ok(mr.status === 'changed' && /kWh on 1 unit differs/.test(mr.note), 'a re-rated battery is changed, and the note names the figure');
+  eq(mr.drawing, '1 × MP-2 · 500 kW / 1,100 kWh; 1 × MP-2 · 500 kW / 1,000 kWh', 'the drawing column groups the units by what they carry');
+  mv.fromRead[0] = { item: 'b', kw: 509, kwh: 1015, model: 'MP-2' };
+  eq(rowOf(P.changes(READ, mv), 'BESS-1').status, 'as-read', 'within 2% is as read');
+  mv.fromRead[0] = { item: 'b', kw: 500, kwh: 1030, model: 'MP-2' };
+  eq(rowOf(P.changes(READ, mv), 'BESS-1').status, 'changed', 'and 3% is not');
+  mv.fromRead[0] = { item: 'b', kw: 500, kwh: 1000, model: 'mp 2' };
+  eq(rowOf(P.changes(READ, mv), 'BESS-1').status, 'as-read', 'a model differing only in case and punctuation is the same model');
+  mv.fromRead[0] = { item: 'b', kw: 600, kwh: 1000, model: 'Megapack 2 XL' };
+  ok(/kW and model on 1 unit differ/.test(rowOf(P.changes(READ, mv), 'BESS-1').note), 'another model and another rating, both named');
+
+  var fw = asDrawn({ counts: { bess: 2, charger: 6, 'eq:xfmr': 1, 'eq:panel': 2 }, totals: totals({ chargers: 6 }) });
+  fw.fromRead = fw.fromRead.slice(0, 11);
+  var fr = P.changes(READ, fw);
+  eq([rowOf(fr, 'EV-1 THRU EV-8').status, rowOf(fr, 'EV-1 THRU EV-8').drawing], ['fewer', '6 × Level 2 charger · 7.2 kW'], 'two chargers taken off: fewer');
+  ok(/The plans show 8; 6 are on the drawing/.test(rowOf(fr, 'EV-1 THRU EV-8').note), 'and how many');
+  eq([rowOf(fr, 'EV chargers', 'stated').status, rowOf(fr, 'EV chargers', 'stated').drawing], ['differs', '6 chargers'], 'the plans’ stated charger count differs too');
+  var more = asDrawn({ counts: { bess: 2, charger: 9, 'eq:xfmr': 1, 'eq:panel': 2 }, totals: totals({ chargers: 9 }) });
+  more.fromRead.push({ item: 'c', kw: 7.2, model: 'Level 2 charger' });
+  var mo = P.changes(READ, more);
+  ok(rowOf(mo, 'EV-1 THRU EV-8').status === 'more' && !mo.rows.some(function (r) { return r.section === 'added'; }), 'a copy of a placed charger carries the read: more, not added');
+  var gone = asDrawn({ counts: { bess: 2, charger: 8, 'eq:panel': 2 } });
+  gone.fromRead = gone.fromRead.filter(function (p) { return p.item !== 't'; });
+  ok(rowOf(P.changes(READ, gone), 'T-1').status === 'removed' && /none is on the drawing/.test(rowOf(P.changes(READ, gone), 'T-1').note), 'a placed transformer deleted: removed');
+  var cut = JSON.parse(JSON.stringify(READ)); cut.items[1].quantity = 60; cut.items[1].placed = 40;
+  var cr = asDrawn({ counts: { bess: 2, charger: 40, 'eq:xfmr': 1, 'eq:panel': 2 }, totals: totals({ chargers: 40 }) });
+  for (var ci = 8; ci < 40; ci++) cr.fromRead.push({ item: 'c', kw: 7.2, model: 'Level 2 charger' });
+  ok(rowOf(P.changes(cut, cr), 'EV-1 THRU EV-8').status === 'fewer' && /40 placed from them/.test(rowOf(P.changes(cut, cr), 'EV-1 THRU EV-8').note), 'the plans’ 60 against the 40 one Place puts down: fewer than the plans, and why');
+
+  var add = asDrawn({ counts: { bess: 2, charger: 10, 'eq:xfmr': 1, 'eq:panel': 3, 'eq:meter': 2 }, labels: { 'eq:meter': 'Meter', 'eq:panel': 'Bogus' }, totals: totals({ chargers: 10, trenchFt: 140 }) });
+  var ad = P.changes(READ, add);
+  eq(ad.rows.filter(function (r) { return r.section === 'added'; }).map(function (r) { return [r.label, r.drawing]; }),
+    [['EV chargers', '2 on the drawing'], ['Switchgear / Panelboard', '1 on the drawing'], ['Meter', '2 on the drawing'], ['Trench', '140 ft']],
+    'what the plans did not carry is added: the extra chargers, a panel, a meter, the trench; a known kind keeps the server’s name');
+  eq(P.changes(READ, asDrawn({ counts: { bess: 3, charger: 8, 'eq:xfmr': 1, 'eq:panel': 2 } })).rows.filter(function (r) { return r.section === 'added'; }).map(function (r) { return r.label; }),
+    ['Battery storage'], 'a third battery, drawn by hand, is added');
+  eq(['bess', 'ev_charger', 'switchgear', 'panelboard', 'transformer', 'solar_array'].map(P.countKey), ['bess', 'charger', 'eq:panel', 'eq:panel', 'eq:xfmr', null], 'a battery is the fleet, a charger the Run’s, equipment its Insert id');
+
+  var st1 = rowOf(P.changes(READ, asDrawn({ totals: totals({ bessKwh: 2236 }) })), 'Battery energy');
+  eq([st1.status, st1.plans, st1.drawing], ['differs', '2,000 kWh', '2,236 kWh'], 'a stated total the drawing no longer carries differs');
+  eq(rowOf(P.changes(READ, asDrawn({ totals: totals({ bessKw: 0, bessKwh: 0 }) })), 'Battery power').status, 'not-drawn', 'a stated battery with none drawn: not drawn');
+  var exact = JSON.parse(JSON.stringify(READ)); exact.facts[2].number = 50;
+  eq(rowOf(P.changes(exact, asDrawn({ totals: totals({ chargers: 51 }) })), 'EV chargers', 'stated').status, 'differs', 'a count is exact: 51 chargers are not the plans’ 50');
+  var split = JSON.parse(JSON.stringify(READ)); split.facts[1].agree = false;
+  ok(/sheets disagree/.test(rowOf(P.changes(split, asDrawn()), 'Battery energy').note), 'a figure the plans’ own sheets disagree on says so');
+
+  var dc = JSON.parse(JSON.stringify(READ)); dc.facts.push({ key: 'pv_kw_dc', number: 315, sheet: 'PV-1', agree: true });
+  var dcr = P.changes(dc, asDrawn());
+  ok(rowOf(dcr, 'Solar (DC)').status === 'as-read' && rowOf(dcr, 'Solar array (PV-1, PV-2)').status === 'listed' && /Compared above/.test(rowOf(dcr, 'Solar array (PV-1, PV-2)').note), 'a stated solar total is compared once; the arrays point to it');
+  var runs = JSON.parse(JSON.stringify(READ)); runs.listed[2] = { kind: 'conduit_run', tag: 'C-1', quantity: 1, sheet: 'E-101' };
+  var rr = rowOf(P.changes(runs, asDrawn()), 'Conduit / cable run (C-1)');
+  ok(rr.status === 'listed' && /No length printed/.test(rr.note) && rr.drawing === '120 ft', 'a run with no length is not compared, and the drawing’s figure is still shown');
+  var far = rowOf(P.changes(READ, asDrawn({ totals: totals({ conduitFt: 270 }) })), 'Conduit / cable run (C-1)');
+  ok(far.status === 'differs' && /270 ft of conduit in all/.test(far.note), 'a conduit total that differs');
+  var two = JSON.parse(JSON.stringify(READ)); two.listed[0].quantity = 2;
+  eq(rowOf(P.changes(two, asDrawn()), 'Solar array (PV-1, PV-2)').plans, '515 kW-DC', 'a listed figure counts its quantity');
+  var flat = P.changes(READ, asDrawn({ scaled: false, totals: totals({ conduitFt: 999, trenchFt: 140 }) }));
+  ok(rowOf(flat, 'Conduit / cable run (C-1)').drawing === 'not to scale' && rowOf(flat, 'Conduit / cable run (C-1)').status === 'listed' && !rowOf(flat, 'Trench'), 'a drawing not set to scale has no lengths: not compared, never zero, and no trench added');
+
+  var v1 = JSON.parse(JSON.stringify(READ)); v1.v = 1; delete v1.items;
+  var o1 = P.changes(v1, asDrawn({ totals: totals({ trenchFt: 50 }) }));
+  ok(!o1.compared && /saved before/.test(o1.notes[0]), 'a read saved before v2 says it cannot compare item by item');
+  ok(!o1.rows.some(function (r) { return r.section === 'placed' || (r.section === 'added' && r.key === 'charger'); }) && rowOf(o1, 'Battery energy').status === 'as-read' && rowOf(o1, 'Trench'),
+    'and invents neither placed rows nor added units, while the stated totals and the drawn trench still compare');
+
+  var junk = P.changes({ id: 'x', items: [{ id: 'q', kind: 'nuke', kw: 'lots', quantity: -4, placed: 'all' }, null, 7], facts: [{ key: 'bess_kw', number: '9e99' }, { key: 'evil', number: 3 }], listed: 'no', sheets: {} },
+    { fromRead: 'x', counts: { 'eq:pad': -3, 'eq:meter': 'many', x: 1e9 }, totals: { bessKw: 'NaN' } });
+  eq(junk.rows.map(function (r) { return [r.section, r.kind, r.plans, r.status]; }), [['placed', 'other', '1 × Other', 'not-placed']], 'junk in: an unknown kind is other, a bad quantity is one, impossible figures and counts are dropped');
+  eq(P.changes(null, null).rows, [], 'nothing in, nothing out');
+  var secs = ad.rows.map(function (r) { return r.section; }).filter(function (v, i, a) { return a.indexOf(v) === i; });
+  eq(secs, ['stated', 'placed', 'listed', 'added'], 'section by section');
+  var placedSt = P.changes(READ, gone).rows.filter(function (r) { return r.section === 'placed'; }).map(function (r) { return P.CHANGE_ORDER.indexOf(r.status); });
+  eq(placedSt, placedSt.slice().sort(function (a, b) { return a - b; }), 'and within a section, what differs first');
+  ok(/not an engineering judgement/.test(same.basis) && same.rows.every(function (r) { return r.statusLabel && r.sectionLabel; }), 'every row carries its words, and the basis says what it is not');
+
   /* ── 6. the door ── */
   var DB, AUTH, CLIENT_ADMIN, CALLS, REPLY;
   var ME = { uid: 'u1', email: 'dana@sunrise.example', orgId: 'sunrise.example', staff: false, claims: { email_verified: true } };
@@ -275,6 +394,14 @@ function eq(a, b, m) { assert.deepEqual(a, b, m); pass++; }
   ok(ck.ok && ck.result.summary.warnings === 1 && ck.result.issues.some(function (i) { return i.code === 'dropped'; }), 'check runs every rule again on what came back, and says what it dropped');
   eq(CALLS.length, 0, 'check calls nothing');
   await refused({ action: 'check', sheets: [] }, 400, 'nothing to check');
+
+  /* changes: pure, sanitised, needs a read and a sign-in */
+  reset();
+  var chg = await call({ action: 'changes', read: READ, now: asDrawn() });
+  eq([chg.ok, chg.result.rows, CALLS.length], [true, same.rows, 0], 'changes is the library’s answer, and calls nothing');
+  await refused({ action: 'changes', now: asDrawn() }, 400, 'no read on the project');
+  AUTH = function () { return Promise.reject(httpError(401, 'Sign in')); };
+  await refused({ action: 'changes', read: READ, now: asDrawn() }, 401, 'signed out');
 
   console.log('tplanread: ' + pass + ' passed');
 })().catch(function (e) { console.error(e); process.exit(1); });

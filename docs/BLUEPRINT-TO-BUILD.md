@@ -269,9 +269,25 @@ re-runs on save, debounced, using the existing auto-save of priced runs
 > `omega_takeoff` returns the trades, quantities and price sources.
 > `omega_build_sequence` returns the Build player's steps, days and money in
 > place, the same with the 3D view closed. The agent quotes them as returned
-> and never presents a benchmark as a quote. Reading a plan set from Jarvis
-> (Read Plans is driven through its own dialog today), *plan set in → plan
-> set out* and *drawing → financed project in one session* are next.
+> and never presents a benchmark as a quote.
+>
+> **Plan set in → plan set out: the diff sheet is built.** The project's
+> read of the customer's plans (`S.planRead`, which from v2 keeps every
+> placeable item with its printed figures and how many were placed) is
+> compared with the drawing as the Run counts it, by
+> `POST /api/plan-read` `changes`. Each row is one of:
+> - as read, changed, fewer, more, removed or not placed, for each item;
+> - differs or not drawn, for a stated total or a listed run;
+> - added, for what is on the drawing that the plans don't carry.
+>
+> Read Plans shows it under *What changed*, and it downloads as a CSV. The
+> plan set prints it as sheet **E0.1, Changes from the Customer's Plans**,
+> with Δ on every row that differs. The plot plan export and the
+> deliverables bundle offer that sheet only on a project with a read. Our
+> sheets were already drawn from the model; the new piece is the comparison
+> with theirs. Still to come: reading a plan set from Jarvis (Read Plans is
+> driven through its own dialog today) and *drawing → financed project in
+> one session*.
 
 - **Plan set in → plan set out.** Read the customer's drawings (Phase 1) and
   issue our own permit/interconnect plan set from the reviewed model, with a

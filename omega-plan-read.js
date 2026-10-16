@@ -20,10 +20,15 @@
    Run prices an array from its traced geometry. Trace over a sheet puts a
    sheet on the canvas as the backdrop (the Site Overlay's own upload).
 
+   What changed since the plans (Phase 5): the project's read against the
+   drawing as it stands, row by row, from api/plan-read `changes`, shown
+   here, as a CSV and as sheet E0.1 of the plan set (_ppRenderPlanChanges).
+
    The BROWSER only collects and shows. What a thing on a sheet is, how it
-   is placed, the prompt, the schema and the checks are api/_lib/plan-read.js
-   (CLAUDE.md, IP protection). Nothing here writes to Firestore; what was
-   read rides on the project as S.planRead through saveProject.
+   is placed, the prompt, the schema, the checks and the comparison are
+   api/_lib/plan-read.js (CLAUDE.md, IP protection). Nothing here writes to
+   Firestore; what was read rides on the project as S.planRead through
+   saveProject.
 
    ES5 on purpose (CLAUDE.md): var, function, promises. Every editor global
    it touches is behind a guard. */
@@ -33,7 +38,7 @@
   var HOST_ID = 'plan-read-modal';
   var PDFJS_SRC = root.PDFJS_SRC || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
   var PDFJS_WORKER = root.PDFJS_WORKER || 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-  var MAX_PAGES = 40, LONG_EDGE = 2400, MAX_JPEG = 3400000, THUMB_W = 150, PER_ITEM = 40, PER_PLACE = 150;
+  var MAX_PAGES = 40, LONG_EDGE = 2400, MAX_JPEG = 3400000, THUMB_W = 150, PER_ITEM = 40, PER_PLACE = 150, MAX_KEEP = 400;
 
   /* the session's read: kept while the editor is open, so closing the
      dialog and opening it again comes back to the review */
@@ -171,11 +176,17 @@
     + '#plan-read-modal .pr-q{font-size:10px;color:var(--sub);font-family:ui-monospace,Menlo,Consolas,monospace;margin-top:2px;word-break:break-word}'
     + '#plan-read-modal .pr-sum{display:flex;flex-wrap:wrap;gap:14px;margin:0 0 4px}'
     + '#plan-read-modal .pr-sum b{font-size:18px;display:block}'
+    + '#plan-read-modal .pr-add{background:rgba(56,189,248,.16);color:#0284C7}#plan-read-modal .pr-list{background:rgba(148,163,184,.16);color:var(--sub)}'
+    + '#plan-read-modal .pr-sum .pr-chip{margin-top:2px}#plan-read-modal table.pr-ch{table-layout:fixed}#plan-read-modal table.pr-ch td{overflow-wrap:anywhere}'
+    + '#plan-read-modal col.pr-c1{width:44%}#plan-read-modal col.pr-c2{width:21%}#plan-read-modal col.pr-c3{width:14%}'
+    + '#plan-read-modal .pr-nw{white-space:nowrap}'
+    + '@media (max-width:640px){#plan-read-modal col.pr-c1{width:34%}#plan-read-modal col.pr-c2{width:22%}#plan-read-modal col.pr-c3{width:22%}#plan-read-modal table.pr-ch .pr-chip{white-space:normal}}'
+    + '#plan-read-modal tr.pr-same td{opacity:.72}'
     + '#pr-zoom{position:fixed;inset:0;z-index:10001;background:rgba(6,12,22,.9);display:flex;align-items:center;justify-content:center;padding:24px;cursor:zoom-out}'
     + '#pr-zoom canvas{max-width:100%;max-height:100%;background:#fff;border-radius:6px}'
     + '@media (max-width:640px){#plan-read-modal{padding:0!important}#plan-read-modal .pr-card{max-height:100vh;border-radius:0}#plan-read-modal .pr-hide-phone{display:none}#plan-read-modal .pr-crop{width:110px}}';
-  function shell(sub, body, foot) {
-    return '<style>' + CSS + '</style><div class="pr-card"><div class="pr-head"><div><div style="font-size:16px;font-weight:800">Read a plan set</div>'
+  function shell(sub, body, foot, title) {
+    return '<style>' + CSS + '</style><div class="pr-card"><div class="pr-head"><div><div style="font-size:16px;font-weight:800">' + (title || 'Read a plan set') + '</div>'
       + '<div class="pr-sub" style="margin-top:2px">' + sub + '</div></div>'
       + '<button type="button" aria-label="Close" onclick="OmegaPlanRead.close()" style="background:none;border:none;color:var(--sub);font-size:22px;cursor:pointer;line-height:1">×</button></div>'
       + '<div class="pr-body" id="pr-body">' + body + '</div>' + (foot ? '<div class="pr-foot" id="pr-foot">' + foot + '</div>' : '') + '</div>';
@@ -184,6 +195,11 @@
   /* step 1: the file */
   function startView() {
     var again = st && st.result ? '<div class="pr-issue pr-info" style="margin-bottom:12px">You read <b>' + esc(st.fileName) + '</b> earlier in this session. <button type="button" class="pr-btn" onclick="OmegaPlanRead.review()">Back to that read</button></div>' : '';
+    /* a project that carries a read (this session's or a saved one) can be
+       compared with the drawing as it stands */
+    var pr = (S_() || {}).planRead;
+    if (pr && pr.id) again += '<div class="pr-issue pr-info" style="margin-bottom:12px">This project was read from <b>' + esc(pr.fileName || 'a plan set') + '</b>' + (readWhen(pr) ? ' on ' + esc(readWhen(pr)) : '')
+      + '. <button type="button" class="pr-btn" id="pr-changes-start" onclick="OmegaPlanRead.whatChanged()">What changed since the plans</button></div>';
     host().innerHTML = shell('Drop the customer’s drawings. Each sheet is read for its equipment, ratings and project facts, with the place on the sheet each came from.',
       again + '<label class="pr-drop" id="pr-drop" for="pr-file"><div style="font-size:28px;line-height:1">&#128196;</div>'
       + '<div style="font-size:14px;font-weight:700;margin-top:8px">Drop a PDF plan set here, or choose a file</div>'
@@ -377,6 +393,7 @@
       + (canTrace && traceable.length ? '<select id="pr-trace" class="pr-btn pr-hide-phone" aria-label="Sheet to trace over">' + traceable.map(function (p) { return '<option value="' + p.page + '">' + esc(sheetName(p.page)) + '</option>'; }).join('') + '</select>'
         + '<button type="button" class="pr-btn pr-hide-phone" onclick="OmegaPlanRead.trace()">Trace over this sheet</button>' : '')
       + '<button type="button" class="pr-btn" onclick="OmegaPlanRead.sheets()">Sheets</button>'
+      + ((S_() || {}).planRead && S_().planRead.id ? '<button type="button" class="pr-btn" id="pr-changes-btn" onclick="OmegaPlanRead.whatChanged()">What changed</button>' : '')
       + '<button type="button" class="pr-btn pr-primary" id="pr-place" onclick="OmegaPlanRead.place()">Place on the drawing</button>');
     var body = $('pr-body');
     body.addEventListener('change', function (e) { if (e.target && e.target.hasAttribute('data-item')) { items[+e.target.getAttribute('data-item')].selected = e.target.checked; count(); } });
@@ -388,8 +405,9 @@
   }
   function count() {
     var n = units(), el = $('pr-count'), b = $('pr-place');
-    if (el) el.textContent = n ? n + (n === 1 ? ' unit' : ' units') + ' will be placed' : 'Nothing ticked';
-    if (b && st.result.items.some(function (it) { return it.place; })) { b.disabled = !n; b.textContent = n ? 'Place ' + n + ' on the drawing' : 'Place on the drawing'; }
+    var again = !!(st.placedId && (S_() || {}).planRead && S_().planRead.id === st.placedId);
+    if (el) el.textContent = n ? n + (n === 1 ? ' unit' : ' units') + ' will be placed' + (again ? ' again: this read is already on the drawing' : '') : 'Nothing ticked';
+    if (b && st.result.items.some(function (it) { return it.place; })) { b.disabled = !n; b.textContent = n ? 'Place ' + n + (again ? ' again' : ' on the drawing') : 'Place on the drawing'; }
   }
   /* the crops: the sheet's own pixels around the box, so every read can be
      checked against the drawing at a glance */
@@ -461,7 +479,7 @@
     if (typeof root.addEl !== 'function') { alert('This editor build cannot place equipment from here. Use Insert to place the items listed.'); return; }
     var picked = R.items.filter(function (it) { return it.selected && it.place; });
     if (!picked.length) return;
-    var readId = 'pr' + Date.now().toString(36), c = center(), placed = [], total = 0, shapes = 0, bessEls = [];
+    var readId = 'pr' + Date.now().toString(36), c = center(), placed = [], total = 0, shapes = 0, bessEls = [], placedBy = {};
     var batch = typeof root.omegaHistBatch === 'function' ? root.omegaHistBatch : function (fn) { var r = fn(); if (typeof root.pushHist === 'function') root.pushHist(); return r; };
     batch(function () {
       var slot = 0, cols = 6, stepX = 140, stepY = 130;
@@ -474,7 +492,7 @@
           var el = null;
           if (it.place.via === 'shape') {
             el = charger(it, x, y, label, prov);
-            if (el) { placed.push(el.id); shapes++; }
+            if (el) { placed.push(el.id); shapes++; placedBy[it.id] = (placedBy[it.id] || 0) + 1; }
             slot++; total++; continue;
           } else {
             var w = typeof root._eqDropW === 'function' ? root._eqDropW(it.place.id) : 60, opts = { type: 'eq', eqId: it.place.id, label: label, x: x - w / 2, y: y - w / 2, w: w, rot: 0, spec: spec };
@@ -492,20 +510,30 @@
             el = root.addEl(opts);
             if (el && it.place.id === 'bess') bessEls.push({ el: el, it: it, n: n, prov: prov });
           }
-          if (el) { el.planRead = prov; placed.push(el.id); try { if (typeof root.renderEl === 'function') root.renderEl(el); } catch (e) {} }
+          if (el) { el.planRead = prov; placed.push(el.id); placedBy[it.id] = (placedBy[it.id] || 0) + 1; try { if (typeof root.renderEl === 'function') root.renderEl(el); } catch (e) {} }
           slot++; total++;
         }
       });
     });
     var configured = configure(bessEls);
+    st.placedId = readId;
     if (configured) watchUndo();
+    /* v2 keeps every placeable item with the figures the plans print and
+       how many of it were put down, so "What changed since the plans" can
+       compare each one with the drawing later (api/plan-read changes). */
     S.planRead = {
-      v: 1, id: readId, fileName: st.fileName, readAt: new Date().toISOString(),
+      v: 2, id: readId, fileName: st.fileName, readAt: new Date().toISOString(),
       sheets: R.sheets.map(function (s) { return { page: s.page, number: s.number, title: s.title, discipline: s.discipline }; }),
       facts: R.facts.map(function (f) { return { key: f.key, label: f.label, number: f.number, text: f.text, unit: f.unit, page: f.page, sheet: sheetName(f.page), agree: f.agree, confidence: f.confidence }; }),
       issues: R.issues.filter(function (i) { return i.level === 'warn'; }).map(function (i) { return i.text; }),
-      placed: placed.length, configured: configured, listed: R.items.filter(function (it) { return !it.place; }).map(function (it) { return { kind: it.kind, tag: it.tag, kw: it.kw, lengthFt: it.lengthFt, quantity: it.quantity, sheet: sheetName(it.pages[0]) }; })
+      placed: placed.length, configured: configured,
+      items: R.items.filter(function (it) { return !!it.place; }).slice(0, MAX_KEEP).map(function (it) {
+        return { id: it.id, kind: it.kind, tag: it.tag, manufacturer: it.manufacturer, model: it.model, kw: it.kw, kwh: it.kwh, kva: it.kva, amps: it.amps, lengthFt: it.lengthFt,
+          quantity: it.quantity, placed: placedBy[it.id] || 0, sheet: sheetName(it.pages[0]), confidence: it.confidence };
+      }),
+      listed: R.items.filter(function (it) { return !it.place; }).slice(0, MAX_KEEP).map(function (it) { return { kind: it.kind, tag: it.tag, kw: it.kw, lengthFt: it.lengthFt, quantity: it.quantity, sheet: sheetName(it.pages[0]) }; })
     };
+    lastChanges = null;
     try { if (typeof root.updCount === 'function') root.updCount(); } catch (e) {}
     try { if (shapes && typeof root.updShapeCount === 'function') root.updShapeCount(); } catch (e) {}
     try { if (typeof root.renderLegend === 'function') root.renderLegend(); } catch (e) {}
@@ -516,7 +544,9 @@
     var b = $('pr-body');
     if (b) b.insertAdjacentHTML('afterbegin', '<div class="pr-issue pr-info" role="status" style="border-color:rgba(34,197,94,.5)"><b>Placed ' + placed.length + (placed.length === 1 ? ' unit' : ' units') + '</b> in a row at the centre of the view. Drag each into place; one Undo (Ctrl+Z) takes them all back. Save the project to keep the read with it.</div>');
     var pb = $('pr-place'); if (pb) { pb.disabled = true; pb.textContent = '✓ Placed'; }
-    var foot = $('pr-foot'); if (foot && !$('pr-done')) foot.insertAdjacentHTML('beforeend', '<button type="button" class="pr-btn" id="pr-done" onclick="OmegaPlanRead.close()">Done</button>');
+    var foot = $('pr-foot');
+    if (foot && !$('pr-changes-btn')) foot.insertAdjacentHTML('beforeend', '<button type="button" class="pr-btn" id="pr-changes-btn" onclick="OmegaPlanRead.whatChanged()">What changed</button>');
+    if (foot && !$('pr-done')) foot.insertAdjacentHTML('beforeend', '<button type="button" class="pr-btn" id="pr-done" onclick="OmegaPlanRead.close()">Done</button>');
     if (b) b.scrollTop = 0;
     return placed.length;
   }
@@ -616,6 +646,235 @@
     } catch (e) { alert('This browser could not hand the sheet to the overlay. Save the sheet image and use Site Overlay › Upload Image.'); }
   }
 
+  /* ── what changed since the plans (Blueprint to Build, Phase 5: "plan set
+     in → plan set out") ──────────────────────────────────────────────────
+     The project's saved read (S.planRead) against the drawing as it stands,
+     compared by POST /api/plan-read `changes` (api/_lib/plan-read.js), so
+     the page keeps no rule of its own. The drawing is read through the
+     editor's own readers, never a second copy of them: the battery fleet
+     and each piece's rating (_ppCollectFleet), the chargers the Run prices
+     (_evQuantities), Insert's equipment by id as the Run counts it, the
+     Run's solar kW-DC and conduit feet (omegaCostQuantities) and the trench
+     the takeoff digs (_trenchDugFtAll). The answer is shown here, as a CSV,
+     and as sheet E0.1 of the plan set (_ppRenderPlanChanges below). */
+  var lastChanges = null;
+  function eqLabel(id) {
+    try { var e = (typeof EQ !== 'undefined' && EQ ? EQ : []).filter(function (x) { return x && x.id === id; })[0]; if (e && e.label) return e.label; } catch (err) {}
+    return id;
+  }
+  function drawingNow(readId) {
+    var S = S_(), out = { fromRead: [], counts: {}, labels: {}, totals: {}, scaled: true };
+    if (!S) return out;
+    var fleet = null, rec = {}, ev = null, q = null, evById = {}, eq = {};
+    try { fleet = typeof root._ppCollectFleet === 'function' ? root._ppCollectFleet() : null; } catch (e) {}
+    try { ev = typeof root._evQuantities === 'function' ? root._evQuantities(rec) : null; } catch (e) {}
+    try { q = typeof root.omegaCostQuantities === 'function' ? root.omegaCostQuantities() : null; } catch (e) {}
+    var rating = (fleet && fleet.ratingById) || {};
+    if (ev && ev.items) ev.items.forEach(function (it, i) { (rec['ev#' + i] || []).forEach(function (id) { evById[id] = it; }); });
+    (S.elements || []).forEach(function (el) {
+      if (!el) return;
+      if (el.planRead && el.planRead.read === readId) {
+        var r = rating[el.id];
+        out.fromRead.push({ item: el.planRead.item, kw: r && r.kw ? r.kw : null, kwh: r && r.kwh ? r.kwh : null, model: el.bessModel || null });
+      }
+      var id = el.eqId; if (!id || id === 'bess') return;   /* batteries are the fleet's */
+      if (id === 'transformer') id = 'xfmr';                 /* the Run's two names for one */
+      eq[id] = (eq[id] || 0) + 1;
+    });
+    (S.shapes || []).forEach(function (sh) {
+      if (!sh || !sh.planRead || sh.planRead.read !== readId) return;
+      var it = evById[sh.id];
+      out.fromRead.push({ item: sh.planRead.item, kw: (it ? it.kw : +sh.kw) || null, kwh: null, model: sh.model || null });
+    });
+    if (q && q.counts && q.counts.bollard != null) eq.bollard = +q.counts.bollard || 0;   /* the Run's: Insert's and a pad's own */
+    out.counts.bess = fleet ? +fleet.units || 0 : 0;
+    out.counts.charger = ev && ev.items ? ev.items.reduce(function (t, it) { return t + (+it.qty || 1); }, 0) : 0;
+    Object.keys(eq).forEach(function (id) { if (eq[id] > 0) { out.counts['eq:' + id] = eq[id]; out.labels['eq:' + id] = eqLabel(id); } });
+    out.scaled = !!(S.pxPerFt && S.pxPerFt > 0);
+    out.totals = {
+      bessKw: fleet ? +fleet.totalKw || 0 : 0, bessKwh: fleet ? +fleet.totalKwh || 0 : 0,
+      solarKwDc: q ? +q.solarKwDc || 0 : 0, chargers: out.counts.charger,
+      conduitFt: q && q.conduitFt ? Object.keys(q.conduitFt).reduce(function (t, k) { return t + (+q.conduitFt[k] || 0); }, 0) : 0,
+      trenchFt: 0
+    };
+    try { out.totals.trenchFt = typeof root._trenchDugFtAll === 'function' ? +root._trenchDugFtAll() || 0 : 0; } catch (e) {}
+    return out;
+  }
+  /* the server's comparison for the drawing as it stands; kept for the
+     plan set's sheet, which renders from it like every sheet renders from
+     prepared state */
+  function changes() {
+    var S = S_(), read = S && S.planRead;
+    if (!read || !read.id) return Promise.reject(new Error('No plan set has been read into this project. Read one with Build › Read Plans.'));
+    var keep = { v: read.v, id: read.id, fileName: read.fileName, readAt: read.readAt, sheets: read.sheets, facts: read.facts, listed: read.listed, items: read.items };
+    return post({ action: 'changes', read: keep, now: drawingNow(read.id) }).then(function (r) {
+      lastChanges = { result: r.result, readId: read.id, at: Date.now() };
+      return r.result;
+    });
+  }
+  var STATUS_CHIP = { 'as-read': 'pr-high', changed: 'pr-medium', fewer: 'pr-medium', more: 'pr-medium', differs: 'pr-medium', removed: 'pr-low', 'not-placed': 'pr-low', 'not-drawn': 'pr-low', added: 'pr-add', listed: 'pr-list' };
+  function readWhen(read) {
+    var d = read && read.readAt ? new Date(read.readAt) : null;
+    return d && isFinite(d.getTime()) ? d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '';
+  }
+  function whatChanged() {
+    var S = S_(), read = S && S.planRead;
+    host().innerHTML = shell(esc((read && read.fileName) || 'The customer’s plans'), '<div class="pr-sub">Comparing the drawing with the plans…</div>', '', 'What changed since the plans');
+    if (!read || !read.id) { startView(); fail('No plan set has been read into this project yet.'); return Promise.resolve(null); }
+    return changes().then(function (res) { changesView(res); return res; }).catch(function (e) {
+      host().innerHTML = shell(esc((read && read.fileName) || 'The customer’s plans'), '', '<button type="button" class="pr-btn" onclick="OmegaPlanRead.back()">Back</button>', 'What changed since the plans');
+      fail(e.message || String(e)); return null;
+    });
+  }
+  function changesView(res) {
+    var read = (S_() || {}).planRead || {}, when = readWhen(read);
+    var sum = '<div class="pr-sum">' + res.order.filter(function (k) { return res.summary[k]; }).map(function (k) {
+      return '<div><b>' + res.summary[k] + '</b><span class="pr-chip ' + (STATUS_CHIP[k] || '') + '">' + esc(res.labels[k]) + '</span></div>';
+    }).join('') + '</div>';
+    var head = '<div class="pr-issue ' + (res.differ ? 'pr-warn' : 'pr-info') + '" role="status">' + (res.differ
+      ? '<b>' + res.differ + (res.differ === 1 ? ' row differs' : ' rows differ') + '</b> between the customer’s plans and the drawing.'
+      : '<b>The drawing matches the plans</b> on everything compared.') + '</div>';
+    var body = head + sum + (res.notes || []).map(function (n) { return '<div class="pr-issue pr-info">' + esc(n) + '</div>'; }).join('');
+    res.sectionOrder.forEach(function (sec) {
+      var rows = res.rows.filter(function (r) { return r.section === sec; }); if (!rows.length) return;
+      body += '<div class="pr-sec">' + esc(res.sections[sec]) + '</div><table class="pr-ch"><colgroup><col class="pr-c1"><col class="pr-c2"><col class="pr-c2"><col class="pr-c3"></colgroup>'
+        + '<thead><tr><th>Item</th><th>Customer’s plans</th><th>Drawing now</th><th>Status</th></tr></thead><tbody>'
+        + rows.map(function (r) {
+          return '<tr' + (r.status === 'as-read' || r.status === 'listed' ? ' class="pr-same"' : '') + ' data-status="' + esc(r.status) + '"><td><b>' + esc(r.label) + '</b>' + (r.sheet ? ' <span class="pr-sub pr-nw">' + esc(r.sheet) + '</span>' : '')
+            + (r.note ? '<div class="pr-sub">' + esc(r.note) + '</div>' : '') + '</td><td>' + esc(r.plans) + '</td><td>' + esc(r.drawing) + '</td>'
+            + '<td><span class="pr-chip ' + (STATUS_CHIP[r.status] || '') + '">' + esc(r.statusLabel) + '</span></td></tr>';
+        }).join('') + '</tbody></table>';
+    });
+    if (!res.rows.length) body += '<div class="pr-sub" style="margin-top:10px">Nothing to compare: the read placed nothing, stated no totals and listed nothing, and nothing stands on the drawing.</div>';
+    body += '<div class="pr-sub" style="margin-top:12px">' + esc(res.basis) + ' This comparison is sheet E0.1 of the plan set (Output › Plot Plan, and the deliverables bundle).</div>';
+    var canSheet = typeof root._ppRenderPlanChanges === 'function' && typeof root._ppTitleBlock === 'function';
+    host().innerHTML = shell(esc(read.fileName || 'The customer’s plans') + (when ? ' · read ' + esc(when) : '') + ' · against the drawing as it stands', body,
+      '<button type="button" class="pr-btn" onclick="OmegaPlanRead.back()" style="margin-right:auto">Back</button>'
+      + '<button type="button" class="pr-btn" onclick="OmegaPlanRead.changesCsv()">Download CSV</button>'
+      + (canSheet ? '<button type="button" class="pr-btn" onclick="OmegaPlanRead.previewSheet()">Preview sheet E0.1</button>' : '')
+      + '<button type="button" class="pr-btn pr-primary" onclick="OmegaPlanRead.close()">Done</button>', 'What changed since the plans');
+  }
+  function back() { if (st && st.result) reviewView(); else startView(); }
+  function changesCsv() {
+    var c = lastChanges && lastChanges.result, read = (S_() || {}).planRead || {};
+    if (!c) return '';
+    function cell(v) { if (typeof root._csvCell === 'function') return root._csvCell(v); v = v == null ? '' : String(v); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    var rows = [['Section', 'Item', 'Sheet', 'Customer’s plans', 'Drawing now', 'Status', 'Note']];
+    c.rows.forEach(function (r) { rows.push([r.sectionLabel, r.label, r.sheet || '', r.plans, r.drawing, r.statusLabel, r.note || '']); });
+    (c.notes || []).forEach(function (n) { rows.push(['Note', '', '', '', '', '', n]); });
+    rows.push(['Basis', '', '', '', '', '', c.basis]);
+    var text = rows.map(function (r) { return r.map(cell).join(','); }).join('\n');
+    var base = String(read.fileName || 'plans').replace(/\.pdf$/i, '').replace(/[^\w\- ]+/g, '').trim().replace(/\s+/g, '-').slice(0, 60) || 'plans';
+    try {
+      var url = root.URL.createObjectURL(new root.Blob([text], { type: 'text/csv' })), a = document.createElement('a');
+      a.href = url; a.download = base + '-what-changed.csv'; document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function () { root.URL.revokeObjectURL(url); }, 2000);
+    } catch (e) {}
+    if (st) st.lastCsv = text;
+    lastChanges.csv = text;
+    return text;
+  }
+  function previewSheet() {
+    var svg = null; try { svg = root._ppRenderPlanChanges('B', ''); } catch (e) {}
+    if (!svg) return;
+    var z = document.createElement('div'); z.id = 'pr-zoom'; z.title = 'Click to close';
+    z.innerHTML = '<div style="background:#fff;border-radius:6px;max-width:100%;max-height:100%;overflow:auto">' + svg.replace('<svg ', '<svg style="display:block;width:min(1400px,92vw);height:auto" ') + '</div>';
+    z.onclick = function () { z.remove(); };
+    document.body.appendChild(z);
+  }
+
+  /* Sheet E0.1 of the plan set: the comparison as a drawing sheet, in the
+     plan set's own frame, tables and title block (editor.html _pp*). It
+     draws the server's last answer for this project's read, which the
+     plot-plan export and the deliverables bundle ask for just before they
+     render (OmegaPlanRead.changes); without one it is not drawn. */
+  var SHEET_COLS = [['ITEM', 0.19], ['SHEET', 0.07], ['CUSTOMER’S PLANS', 0.2], ['THIS PLAN SET', 0.2], ['STATUS', 0.09], ['NOTE', 0.25]];
+  function wrapText(t, max) {
+    var words = String(t == null ? '' : t).split(/\s+/), lines = [], line = '';
+    words.forEach(function (w) {
+      if (!w) return;
+      while (w.length > max) { if (line) { lines.push(line); line = ''; } lines.push(w.slice(0, max - 1) + '‐'); w = w.slice(max - 1); }
+      var test = line ? line + ' ' + w : w;
+      if (test.length > max && line) { lines.push(line); line = w; } else line = test;
+    });
+    if (line) lines.push(line);
+    return lines.length ? lines : [''];
+  }
+  root._ppRenderPlanChanges = function (sizeKey, street) {
+    var S = S_(), c = lastChanges && lastChanges.result;
+    if (!S || !S.planRead || !c || lastChanges.readId !== S.planRead.id) return null;
+    if (typeof root._ppTitleBlock !== 'function' || typeof root._ppEsc !== 'function' || !root.PP_SHEETS) return null;
+    var E = root._ppEsc, sheet = root.PP_SHEETS[sizeKey] || root.PP_SHEETS.B, dpi = root.PP_DPI || 96, W = sheet.w * dpi, H = sheet.h * dpi;
+    var read = S.planRead, pname = (document.getElementById('pname') || {}).value || 'Project', when = readWhen(read);
+    var tbW = 250, tbH = 140, lx = 54, ly = 80, availW = W - tbW - lx - 70, bottom = H - 40 - 150;
+    var s = '<svg xmlns="http://www.w3.org/2000/svg" width="' + W + '" height="' + H + '" viewBox="0 0 ' + W + ' ' + H + '" font-family="Arial, sans-serif">'
+      + '<rect x="0" y="0" width="' + W + '" height="' + H + '" fill="#ffffff"/>'
+      + '<rect x="14" y="14" width="' + (W - 28) + '" height="' + (H - 28) + '" fill="none" stroke="#1a1a1a" stroke-width="1.5"/>';
+    function text(x, y, t, fs, opts) {
+      var max = Math.floor(availW / (fs * (opts && opts.bold ? 0.58 : 0.52)));
+      t = String(t == null ? '' : t); if (t.length > max) t = t.slice(0, max - 1) + '\u2026';
+      s += '<text x="' + x + '" y="' + y + '" font-size="' + fs + '" fill="' + ((opts && opts.fill) || '#1a1a1a') + '"' + (opts && opts.bold ? ' font-weight="700"' : '') + '>' + E(t) + '</text>';
+    }
+    text(lx, ly, 'CHANGES FROM THE CUSTOMER’S PLANS', 18, { bold: true }); ly += 16;
+    text(lx, ly, 'Compared with ' + (read.fileName || 'the customer’s plan set') + (c.read.sheets && c.read.sheets.length ? ' (' + c.read.sheets.slice(0, 12).join(', ') + (c.read.sheets.length > 12 ? ', …' : '') + ')' : '')
+      + (when ? ', read ' + when : '') + ', against the drawing of this plan set.', 10, { fill: '#555' }); ly += 18;
+    var counts = c.order.filter(function (k) { return c.summary[k]; }).map(function (k) { return c.labels[k] + ' ' + c.summary[k]; }).join('  ·  ');
+    text(lx, ly, (c.differ ? 'Δ ' + c.differ + (c.differ === 1 ? ' row differs' : ' rows differ') : 'No differences found') + (counts ? '   —   ' + counts : ''), 11, { bold: true }); ly += 14;
+    /* rows: section headings, then each row wrapped to its columns; the
+       font steps down to fit, and only then are rows left to the CSV */
+    var fs = 9, plan;
+    function layout(f) {
+      var cw = SHEET_COLS.map(function (col) { return col[1] * availW; }), max = cw.map(function (w) { return Math.max(6, Math.floor((w - 10) / (f * 0.52))); }), out = [];
+      c.sectionOrder.forEach(function (sec) {
+        var rows = c.rows.filter(function (r) { return r.section === sec; }); if (!rows.length) return;
+        out.push({ head: c.sections[sec].toUpperCase(), h: f + 16 });
+        rows.forEach(function (r) {
+          var differs = r.status !== 'as-read' && r.status !== 'listed';
+          var cells = [r.label, r.sheet || '—', r.plans, r.drawing, (differs ? 'Δ ' : '') + String(r.statusLabel || '').toUpperCase(), r.note || ''].map(function (v, i) { return wrapText(v, max[i]); });
+          var n = Math.max.apply(null, cells.map(function (x) { return x.length; }));
+          out.push({ cells: cells, n: n, h: n * (f + 2) + 8, bold: differs });
+        });
+      });
+      return { cw: cw, rows: out, h: out.reduce(function (t, r) { return t + r.h; }, 0) + f + 12 };
+    }
+    plan = layout(fs);
+    while (ly + plan.h > bottom && fs > 6.5) { fs -= 0.5; plan = layout(fs); }
+    var shown = plan.rows, cut = 0;
+    if (ly + plan.h > bottom) {
+      /* in order: once a row does not fit, it and every row after it are
+         left to the CSV, and the sheet says how many */
+      var room = bottom - ly - (fs + 12) - (fs + 14), used = 0;
+      shown = [];
+      plan.rows.forEach(function (r) { if (!cut && used + r.h <= room) { shown.push(r); used += r.h; } else if (!r.head) cut++; });
+      while (shown.length && shown[shown.length - 1].head) shown.pop();
+    }
+    var x0 = lx, y = ly + 6;
+    /* the header row */
+    s += '<rect x="' + x0 + '" y="' + y + '" width="' + availW + '" height="' + (fs + 10) + '" fill="#e8e8e8" stroke="#1a1a1a" stroke-width="1"/>';
+    var cx = x0; SHEET_COLS.forEach(function (col, i) { text(cx + 5, y + fs + 4, col[0], fs, { bold: true }); cx += plan.cw[i]; });
+    y += fs + 10;
+    shown.forEach(function (r) {
+      if (r.head) { text(x0, y + fs + 9, r.head, fs + 0.5, { bold: true }); y += r.h; return; }
+      s += '<rect x="' + x0 + '" y="' + y + '" width="' + availW + '" height="' + r.h + '" fill="none" stroke="#1a1a1a" stroke-width="0.6"/>';
+      var cx2 = x0;
+      r.cells.forEach(function (lines2, i) {
+        lines2.forEach(function (ln, k) { s += '<text x="' + (cx2 + 5) + '" y="' + (y + 4 + (k + 1) * (fs + 2) - 1) + '" font-size="' + fs + '" fill="#1a1a1a"' + (r.bold && (i === 0 || i === 4) ? ' font-weight="700"' : '') + '>' + E(ln) + '</text>'; });
+        if (i < r.cells.length - 1) s += '<line x1="' + (cx2 + plan.cw[i]) + '" y1="' + y + '" x2="' + (cx2 + plan.cw[i]) + '" y2="' + (y + r.h) + '" stroke="#1a1a1a" stroke-width="0.6"/>';
+        cx2 += plan.cw[i];
+      });
+      y += r.h;
+    });
+    if (cut) { y += fs + 6; text(x0, y, '→ ' + cut + (cut === 1 ? ' more row' : ' more rows') + ' in the full comparison: Build › Read Plans › What changed (CSV).', fs, { bold: true, fill: '#B45309' }); }
+    if (!c.rows.length) { y += 20; text(x0, y, 'Nothing to compare: the read placed nothing, stated no totals and listed nothing.', 10); }
+    /* the notes, under the table */
+    var ny = y + 28, notes = ['1. ' + c.basis, '2. Δ marks a row where the drawing differs from the customer’s plans. Quantities, ratings and lengths are as printed on their sheets and as drawn here; this sheet does not verify either against the site, the equipment or the code.']
+      .concat((c.notes || []).map(function (n, i) { return (i + 3) + '. ' + n; }));
+    text(lx, ny, 'SHEET NOTES', 10, { bold: true }); ny += 14;
+    if (typeof root._ppWrapList === 'function') root._ppWrapList(function (seg) { s += seg; }, notes, lx, ny, availW, 9, 12);
+    s += root._ppTitleBlock(W, H, tbW, tbH, 'E0.1', 'CHANGES FROM CUSTOMER PLANS', street || pname, 0);
+    return s + '</svg>';
+  };
+
   function open() {
     if (st) st.cancelled = false;
     if (st && st.result) { reviewView(); return; }
@@ -627,7 +886,10 @@
     open: open, close: close, read: read, retry: retry, pick: pick, review: review, place: place, trace: trace, zoom: zoom,
     sheets: function () { if (st) { st.cancelled = false; pagesView(); } },
     restart: function () { if (busyReading()) return; st = null; startView(); },
+    /* what changed since the plans: the server's comparison (also asked by
+       the plan set's exports before they draw sheet E0.1), its view, its CSV */
+    changes: changes, whatChanged: whatChanged, changesCsv: changesCsv, previewSheet: previewSheet, back: back,
     /* for the render check: the read as the page holds it */
-    _state: function () { return st; }, _tagsFor: tagsFor, _textOf: textOf
+    _state: function () { return st; }, _tagsFor: tagsFor, _textOf: textOf, _drawingNow: drawingNow, _lastChanges: function () { return lastChanges; }
   };
 })(typeof window !== 'undefined' ? window : this);

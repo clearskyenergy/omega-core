@@ -1393,6 +1393,34 @@ made-up sample set in `scripts/_lib/plan-fixture.js`, then the Run and every
 export downstream). Per-sheet billed metering is a pricing decision not yet
 made; the daily caps stand in.
 
+**What changed since the plans, and the plan set's sheet E0.1** (Phase 5,
+"plan set in → plan set out": our plan set carries a diff sheet against the
+customer's). From v2, `S.planRead.items` keeps every placeable item with the
+figures the plans print and how many of it Place put down. `POST
+/api/plan-read` `changes` (authenticate only, pure, like `check`) runs
+`api/_lib/plan-read.js changes(read, now)`: the stated totals (battery kW
+and kWh, solar kW-DC, the charger count, exact) against the drawing's; each
+placed item against the pieces still carrying its provenance (as read,
+changed, fewer, more, removed, not placed; ratings within 2%, a model by
+its letters and digits); the listed solar, conduit and trench summed (figure
+× quantity) against the drawing's totals, folded under a stated total when
+there is one, never compared on a drawing not set to scale; and what stands
+on the drawing beyond the plans as added, by count key (`countKey`: the
+fleet's batteries, the Run's chargers, Insert's equipment by id). The page
+says only what the drawing holds, through the editor's own readers
+(`_ppCollectFleet().ratingById`, `_evQuantities`, the Run's `_n` test,
+`omegaCostQuantities`, `_trenchDugFtAll`); a v1 read is compared on its
+totals and says why not item by item. Read Plans shows it (*What changed*
+after Place and on the review, and on the start screen of a project that
+carries a read), as a CSV, and as sheet E0.1, *Changes from the Customer's
+Plans* (`_ppRenderPlanChanges` in `omega-plan-read.js`, the plan set's own
+frame and title block, Δ on every row that differs, the font stepping down
+before rows are left to the CSV), which the plot plan export offers, ticked,
+and the deliverables bundle lists (`planRead: true` in `D4_SHEETS`) only on
+a project with a read; both ask the server for the comparison just before
+they draw. Never an engineering judgement; it says what it could not
+compare.
+
 ## Build sequence — the 3D Site Visualizer's Build player (2026-10-16)
 
 **The site goes up step by step while "In place $X" counts to the Run total**

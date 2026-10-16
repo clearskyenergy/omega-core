@@ -1,8 +1,9 @@
 /* POST /api/plan-read — read a customer's plan set, one sheet at a time.
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   Body: { action: 'read',  fileName, sheet: { page, of, text, image } }
-         { action: 'check', sheets: [ the 'read' answers ] }
+   Body: { action: 'read',    fileName, sheet: { page, of, text, image } }
+         { action: 'check',   sheets: [ the 'read' answers ] }
+         { action: 'changes', read: S.planRead, now: the drawing's figures }
 
    ── TWO STEPS, ONE DOOR ──
    read   one sheet: the browser renders the PDF page to a JPEG and pulls
@@ -15,6 +16,10 @@
    check  the sheets together: the same unit on the site plan and the
           single-line merged into one, and every place two sheets disagree
           (api/_lib/plan-read.js check). Pure; nothing is called or stored.
+   changes  what changed since the plans: the project's saved read against
+          the drawing as the Run counts it, row by row (api/_lib/plan-read.js
+          changes), for Read Plans' own view and the plan set's sheet E0.1.
+          Pure; nothing is called or stored.
 
    Nothing here touches the drawing. The editor places what a person ticks,
    through its own tools.
@@ -156,13 +161,17 @@ module.exports = A.handler(async function (req) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   var b = (req.body && typeof req.body === 'object') ? req.body : {};
   var action = str(b.action || 'read', 8);
-  if (['read', 'check'].indexOf(action) < 0) throw A.httpError(400, 'action must be read or check');
+  if (['read', 'check', 'changes'].indexOf(action) < 0) throw A.httpError(400, 'action must be read, check or changes');
   var caller = await A.authenticate(req);
 
   if (action === 'check') {
     var list = Array.isArray(b.sheets) ? b.sheets.slice(0, MAX_SHEETS) : [];
     if (!list.length) throw A.httpError(400, 'No sheets to check.');
     return { ok: true, result: P.check(list.map(P.revive)) };
+  }
+  if (action === 'changes') {
+    if (!b.read || typeof b.read !== 'object' || !b.read.id) throw A.httpError(400, 'No plan set has been read into this project.');
+    return { ok: true, result: P.changes(b.read, b.now) };
   }
 
   var ent = await entitle(caller);

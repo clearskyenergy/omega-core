@@ -11486,7 +11486,12 @@ function _ppCollectFleet(){
             /* The ids each model counts (elements and shapes), so the
                takeoff by trade can mark a battery row's units on the map
                (omega-takeoff.js). Additive, like elIds. */
-            idsByModel:{} };
+            idsByModel:{},
+            /* Each counted piece's own rating as this pass read it (both
+               field names, the unit multiplier), so "What changed since the
+               plans" compares a placed battery by the fleet's reading, not
+               a second one (omega-plan-read.js). Additive, like idsByModel. */
+            ratingById:{} };
 
   /* Patch 25: the guided BESS build does not create an assembly/bespad
      SHAPE. placeBgbAt() commits an ELEMENT via _evAdd('bess', ...) and
@@ -11531,7 +11536,7 @@ function _ppCollectFleet(){
       var _u=+el.bessUnits||1;
       gkw*=_u; gkwh*=_u;
       out.units++;
-      if(el.id!=null) out.elIds.push(el.id);
+      if(el.id!=null){ out.elIds.push(el.id); out.ratingById[el.id]={ kw:gkw, kwh:gkwh }; }
       out.totalKw+=gkw; out.totalKwh+=gkwh;
       /* A guided element carries no unit cost. Flag it rather than let the
          cost sheet quietly under-total. */
@@ -11592,7 +11597,7 @@ function _ppCollectFleet(){
     if(!B.catalogKey && cKey) B.catalogKey=cKey;
     if(!B.mfr && cMfr) B.mfr=cMfr;
     B.qty++;
-    if(s.id!=null) (out.idsByModel[key]=out.idsByModel[key]||[]).push(s.id);
+    if(s.id!=null){ (out.idsByModel[key]=out.idsByModel[key]||[]).push(s.id); out.ratingById[s.id]={ kw:kw, kwh:kwh }; }
     B.groupKwh += kwh; B.groupKw += kw;
     if(cost!=null) B.groupCost += cost;
     if(kwh!==B.kwh || kw!==B.kw) B.mixed=true;
@@ -32676,6 +32681,9 @@ function _ppSigns(){
    argument some renderers take. */
 var D4_SHEETS = [
   { no:'E0',   name:'Cover Sheet',          fn:'_ppRenderE0' },
+  /* the project's read of the customer's plans against this drawing
+     (omega-plan-read.js; api/plan-read changes): only with a read */
+  { no:'E0.1', name:'Changes from the Customer\u2019s Plans', fn:'_ppRenderPlanChanges', planRead:true },
   { no:'E1.0', name:'Plot Plan',            fn:'_ppRenderPlot', mode:'wide' },
   { no:'E1.1', name:'Enlarged Plot Plan',   fn:'_ppRenderPlot', mode:'tight' },
   { no:'E1.2', name:'Demolition Plan',      fn:'_ppRenderDemo' },
@@ -32703,12 +32711,12 @@ function d4BuildRows(){
 
   /* --- Drawings ------------------------------------------------------ */
   D4_SHEETS.forEach(function(s){
-    var ok=_d4Have(s.fn);
+    var ok=_d4Have(s.fn), read=!s.planRead || !!(typeof S!=='undefined' && S.planRead && S.planRead.id);
     rows.push({
       id:'sheet:'+s.no, grp:'Drawings',
       name:s.no+' \u2014 '+s.name,
       formats:['SVG','PDF'], fmt:'PDF', on:false,
-      ok:ok, why: ok?'':'renderer '+s.fn+' not loaded',
+      ok:ok && read, why: !ok?'renderer '+s.fn+' not loaded':(!read?'read the customer\u2019s plan set first (Build \u203a Read Plans)':''),
       kind:'sheet', sheet:s
     });
   });
@@ -33078,6 +33086,14 @@ async function d4Download(){
       return r.kind==='sheet' && r.sheet && r.sheet.fn==='_ppRenderPlot'; });
     var _needOl = rows.some(function(r){
       return r.kind==='sheet' && r.sheet && r.sheet.ol; });
+    /* E0.1 draws the server's comparison of the customer's plans with this
+       drawing (api/plan-read changes); asked for here, as the map and the
+       canvas capture are prepared here, so the sheet renders from it. */
+    if(rows.some(function(r){ return r.kind==='sheet' && r.sheet && r.sheet.planRead; })){
+      _d4Prog('Comparing with the customer\u2019s plans\u2026', 4);
+      try{ await OmegaPlanRead.changes(); }
+      catch(e){ notes.push('E0.1: '+((e&&e.message)||'the comparison with the plans could not be made')+'; the sheet is left out.'); }
+    }
 
     if(_needPlot || _needOl){
       _d4Prog('Preparing map\u2026', 5);
@@ -41740,6 +41756,15 @@ function openPlotPlanExport(){
   var modal=document.getElementById('pp-modal');
   if(!modal){ modal=_ppBuildModal(); }
   modal.style.display='flex';
+  /* E0.1 is offered, and ticked the first time, only on a project that
+     carries a read of the customer's plans (Build › Read Plans) */
+  (function(){
+    var row=document.getElementById('pp-e01-row'), cb=document.getElementById('pp-e01'), has=!!(S && S.planRead && S.planRead.id);
+    if(!row || !cb) return;
+    if(has && row.style.display==='none') cb.checked=true;
+    if(!has) cb.checked=false;
+    row.style.display=has?'flex':'none';
+  })();
   /* autofill E0 cover fields (only when empty so edits persist) */
   function def(id,v){ var el=document.getElementById(id); if(el && !el.value && v) el.value=v; }
   var pname=(document.getElementById('pname')||{}).value||'';
@@ -41836,6 +41861,7 @@ function _ppBuildModal(){
     '<h3 style="font-size:14px;font-weight:700;margin-bottom:12px;color:var(--text)">Plot Plan Export</h3>'+
     '<div style="margin-bottom:10px"><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:4px">SHEETS</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e0" checked> E0 \u2014 Cover Sheet (auto-generated details)</label>'+
+    '<label id="pp-e01-row" style="display:none;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e01"> E0.1 \u2014 Changes from the Customer\u2019s Plans (Read Plans)</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e10" checked> E1.0 \u2014 Plot Plan (whole site / wide view)</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e1" checked> E1.1 \u2014 Enlarged Plot Plan (equipment)</label>'+
     '<label style="display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text);margin-bottom:5px"><input type="checkbox" id="pp-e12"> E1.2 \u2014 Demolition Plan</label>'+
@@ -44495,6 +44521,13 @@ async function _ppExport(){
     _setBtn('Writing AI notes\u2026');
     try{ await _ppGenerateAINotes(); }catch(e){}
   }
+  /* E0.1: the server's comparison of the customer's plans with this
+     drawing, asked for before the sheets render (api/plan-read changes) */
+  var wantE01=_cbChecked('pp-e01') && !!(S.planRead && S.planRead.id), _e01Err='';
+  if(wantE01){
+    _setBtn('Comparing with the plans\u2026');
+    try{ await OmegaPlanRead.changes(); }catch(e){ _e01Err=(e&&e.message)||'the comparison could not be made'; }
+  }
   _setBtn('Generating sheets\u2026');
   var wantE12=_cbChecked('pp-e12'), wantE20=_cbChecked('pp-e20'), wantE30=_cbChecked('pp-e30'), wantE40=_cbChecked('pp-e40');
   var wantS11=_cbChecked('pp-s11'), wantS12=_cbChecked('pp-s12'), wantS20=_cbChecked('pp-s20'), wantS30=_cbChecked('pp-s30');
@@ -44506,6 +44539,11 @@ async function _ppExport(){
   var sheets=[];
   try {
     if(wantE0) sheets.push({ no:'E0', svg:_ppRenderE0(sizeKey, street) });
+    if(wantE01){
+      var _e01=(!_e01Err && typeof _ppRenderPlanChanges==='function')?_ppRenderPlanChanges(sizeKey, street):null;
+      if(_e01) sheets.push({ no:'E0.1', svg:_e01 });
+      else if(window.console) console.warn('[plot plan] E0.1 left out: '+(_e01Err||'no comparison with the plans'));
+    }
     if(wantE10) sheets.push({ no:'E1.0', svg:_ppRenderPlot(sizeKey, street, 'wide') });
     if(wantE1) sheets.push({ no:'E1.1', svg:_ppRenderPlot(sizeKey, street, 'tight') });
     if(wantE12) sheets.push({ no:'E1.2', svg:_ppRenderDemo(sizeKey, street) });

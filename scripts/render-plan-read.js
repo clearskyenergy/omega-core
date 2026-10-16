@@ -17,7 +17,11 @@
  * puts exactly the ticked units on the drawing as ONE undo step (eight
  * elements, eight Level 2 and two DC fast charger shapes), the Run's own
  * quantities then carry them (the battery's rating, the chargers by kind,
- * the gear counts), and S.planRead rides on the project. Fails on a page
+ * the gear counts), and S.planRead rides on the project. What changed since
+ * the plans: as placed, every item reads as read; after a battery is
+ * re-rated, a charger deleted and a meter dropped by hand, those three
+ * rows (and the stated charger count) differ, in the dialog, the CSV, sheet E0.1 and the plot plan export
+ * (which offers E0.1 only once a read is on the project). Fails on a page
  * error, a modal wider than the phone, or an /api/ call nobody answers.
  *
  * pdf.js is the editor's own cdnjs build, fetched once into a cache (curl);
@@ -116,7 +120,7 @@ async function run() {
   var staffView = X.project({ staff: true }, { packaged: true }, null, null, Date.now());
   try {
     for (var mode of [{ name: 'desktop-dark', w: 1440, h: 960, scheme: 'dark' }, { name: 'desktop-light', w: 1440, h: 960, scheme: 'light' }, { name: 'phone', w: 390, h: 844, scheme: 'dark' }]) {
-      var posted = [], unanswered = [], used = 0, lastQ = null, lastRollup = null, baselineErrors = {};
+      var posted = [], unanswered = [], used = 0, lastQ = null, lastRollup = null, baselineErrors = {}, changesPosts = [];
       var context = await browser.newContext({ viewport: { width: mode.w, height: mode.h }, colorScheme: mode.scheme, deviceScaleFactor: mode.name === 'phone' ? 2 : 1 });
       await context.addInitScript(fixture);
       await context.route('**/*', function (route) {
@@ -132,6 +136,7 @@ async function run() {
         if (url.pathname === '/api/plan-read') {
           var b = req.postDataJSON();
           if (b.action === 'check') return json(200, { ok: true, result: P.check(b.sheets.map(P.revive)) });
+          if (b.action === 'changes') { changesPosts.push(b); return json(200, { ok: true, result: P.changes(b.read, b.now) }); }
           posted.push({ page: b.sheet.page, of: b.sheet.of, text: b.sheet.text, imageBytes: Buffer.from(b.sheet.image.split(',')[1], 'base64'), fileName: b.fileName });
           var page = ((b.sheet.page - 1) % 3) + 1;
           return new Promise(function (r) { setTimeout(r, 450); }).then(function () { used++; return json(200, { ok: true, cached: false, sheet: P.normalize(answers[page], { page: b.sheet.page }), today: { used: used, of: 80 } }); });
@@ -156,6 +161,16 @@ async function run() {
           await page.waitForTimeout(300);
           baselineErrors[bfn] = errors.slice(b0); errors.length = b0;
         }
+        /* no read on the project yet: the plot plan export and the bundle
+           offer no E0.1 */
+        var noRead = await page.evaluate(async function () {
+          S.resultsStale = false;   /* an empty drawing: nothing to run before an export */
+          await openPlotPlanExport();   /* the map capture runs first; the dialog opens after it */
+          var row = document.getElementById('pp-e01-row'), cb = document.getElementById('pp-e01'), d4 = d4BuildRows().filter(function (r) { return r.id === 'sheet:E0.1'; })[0];
+          var out = { row: getComputedStyle(row).display, checked: cb.checked, d4: d4 && { ok: d4.ok, why: d4.why } };
+          _ppClose(); return out;
+        });
+        eq(noRead, { row: 'none', checked: false, d4: { ok: false, why: 'read the customer\u2019s plan set first (Build \u203a Read Plans)' } }, 'no read yet: no E0.1 in the plot plan export, and the bundle says why');
         await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, view);
         await page.waitForTimeout(300);
       }
@@ -336,6 +351,7 @@ async function run() {
         await page.waitForSelector('#pr-place');
         ok(true, 'reopening returns to the review');
       }
+      if (pdfjs) await whatChanged(page, mode, changesPosts);
       ok(!errors.length, mode.name + ': no page errors ' + JSON.stringify(errors));
       ok(!unanswered.filter(function (p) { return /plan-read/.test(p); }).length, mode.name + ': every plan-read call was answered');
       await context.close();
@@ -344,4 +360,102 @@ async function run() {
   console.log('render-plan-read: ' + count + ' checks passed; shots in ' + output);
 }
 function eq(a, b, m) { assert.deepEqual(a, b, m); count++; }
+
+/* WHAT CHANGED SINCE THE PLANS (Blueprint to Build, Phase 5): the read
+   against the drawing as Place left it, then after a designer's edits, as
+   the dialog, the CSV, sheet E0.1 and the plot plan export show it. The
+   comparison is the REAL library (api/_lib/plan-read.js changes); the page
+   only says what the drawing holds. */
+async function whatChanged(page, mode, changesPosts) {
+  var M = mode.name;
+  var pr = await page.evaluate(function () { return S.planRead; });
+  ok(pr.v === 2 && pr.items.length === 10 && pr.items.reduce(function (t, it) { return t + it.placed; }, 0) === 18 && pr.items.filter(function (it) { return !it.placed; }).map(function (it) { return it.kind; }).join() === 'junction_box',
+    M + ': the read keeps every placeable item with how many were placed (18; the unticked box none)');
+  changesPosts.length = 0;
+  await page.locator('#pr-changes-btn').click();
+  await page.waitForSelector('#plan-read-modal table.pr-ch');
+  function grab() {
+    return page.evaluate(function () {
+      var c = OmegaPlanRead._lastChanges().result, card = document.querySelector('#plan-read-modal .pr-card');
+      return { rows: c.rows.map(function (r) { return [r.section, r.label, r.status, r.plans, r.drawing]; }), differ: c.differ, text: document.getElementById('pr-body').textContent,
+        wide: card.getBoundingClientRect().width, vw: innerWidth, chips: document.querySelectorAll('#plan-read-modal table.pr-ch .pr-chip').length };
+    });
+  }
+  function st(ch, label, section) { var r = ch.rows.filter(function (x) { return x[1] === label && (!section || x[0] === section); })[0]; return r && r[2]; }
+  var ch = await grab(), sent = changesPosts[0];
+  ok(sent && sent.now.fromRead.length === 18 && sent.now.counts.charger === 10 && sent.now.counts.bess === 1 && sent.now.counts['eq:pcs'] === 2 && sent.now.totals.bessKwh === 1290,
+    M + ': the page sent the drawing as the Run counts it: 18 pieces carrying the read, ten chargers, one battery at 1,290 kWh, two inverters ' + JSON.stringify(sent && sent.now.counts));
+  ok(!('issues' in sent.read) && sent.read.items.length === 10 && sent.read.id === pr.id, M + ': and the read, trimmed to what the comparison uses');
+  eq(['ESS-1', 'EV-1 THRU EV-8', 'DC-1, DC-2', 'INV-1, INV-2', 'T-1', 'MSB', 'DISC-1', 'M-1', 'Fence'].map(function (l) { return st(ch, l, 'placed'); }),
+    ['as-read', 'as-read', 'as-read', 'as-read', 'as-read', 'as-read', 'as-read', 'as-read', 'as-read'], M + ': everything placed reads as read');
+  eq(st(ch, 'Junction box', 'placed'), 'not-placed', M + ': the low-confidence box left unticked is not placed');
+  ok(ch.rows.some(function (r) { return r[1] === 'Fence' && r[3] === '1 × Fence · 160 ft' && r[4] === '1 × Fence'; }), M + ': a length the plans print for a placed item is shown beside it');
+  eq([st(ch, 'Battery power'), st(ch, 'Battery energy'), st(ch, 'Solar (DC)'), st(ch, 'EV chargers', 'stated')], ['as-read', 'differs', 'not-drawn', 'as-read'],
+    M + ': the stated totals: the cover’s 1,200 kWh differs from the 1,290 kWh drawn, no solar is drawn');
+  ok(/disagree/.test(ch.text) && /not to scale/.test(ch.text), M + ': the plans’ own disagreement is named, and an uncalibrated drawing’s lengths are not compared');
+  eq(ch.rows.filter(function (r) { return r[0] === 'added'; }), [], M + ': nothing on the drawing beyond the plans');
+  ok(ch.wide <= ch.vw + 0.5 && ch.chips === ch.rows.length, M + ': every row has its status, and the view fits the screen');
+  if (M === 'desktop-dark') await page.screenshot({ path: path.join(output, '13-what-changed.png') });
+  if (M === 'phone') await page.screenshot({ path: path.join(output, '16-what-changed-phone.png') });
+
+  /* a designer's edits: the battery re-rated, a charger deleted, a meter
+     dropped from Insert by hand */
+  await page.evaluate(function () {
+    var b = S.elements.filter(function (e) { return e.planRead && e.eqId === 'bess'; })[0];
+    b.bessKwh = 1500; b.bgbKwh = 1500;
+    var c = S.shapes.filter(function (s) { return s.planRead && s.kind === 'evl2'; })[0];
+    S.shapes.splice(S.shapes.indexOf(c), 1);
+    addEl({ type: 'eq', eqId: 'meter', label: 'M-2', x: 120, y: 120, w: 40, rot: 0 });
+    return OmegaPlanRead.whatChanged();
+  });
+  await page.waitForSelector('#plan-read-modal table.pr-ch');
+  var ch2 = await grab();
+  eq([st(ch2, 'ESS-1', 'placed'), st(ch2, 'EV-1 THRU EV-8', 'placed'), st(ch2, 'EV chargers', 'stated'), st(ch2, 'Battery energy')], ['changed', 'fewer', 'differs', 'differs'], M + ': re-rated, one fewer, and the stated totals follow');
+  ok(ch2.rows.some(function (r) { return r[0] === 'placed' && r[1] === 'ESS-1' && r[4] === '1 × XS-1290 · 300 kW / 1,500 kWh'; }), M + ': the battery’s row shows what the drawing carries now');
+  ok(ch2.rows.some(function (r) { return r[0] === 'added' && r[1] === 'Meter' && r[4] === '1 on the drawing'; }), M + ': the meter dropped by hand is on the drawing, not from the plans');
+  ok(ch2.differ === ch.differ + 4, M + ': four more rows differ: the battery, the chargers, the stated charger count, the meter (' + ch.differ + ' → ' + ch2.differ + ')');
+  var csv = await page.evaluate(function () { return OmegaPlanRead.changesCsv(); });
+  ok(/^Section,Item,Sheet,Customer\u2019s plans,Drawing now,Status,Note\n/.test(csv) && csv.split('\n').length === ch2.rows.length + 2 && /Placed from the plans,ESS-1,/.test(csv), M + ': the CSV carries every row and the basis');
+  if (M === 'desktop-dark') {
+    await page.screenshot({ path: path.join(output, '14-what-changed-edited.png') });
+    await page.locator('#pr-foot button', { hasText: 'Preview sheet E0.1' }).click();
+    await page.waitForSelector('#pr-zoom svg');
+    await page.waitForTimeout(200);
+    await page.screenshot({ path: path.join(output, '15-sheet-e01.png') });
+    var sheet = await page.evaluate(function () { return document.querySelector('#pr-zoom svg').textContent; });
+    ok(/CHANGES FROM THE CUSTOMER/.test(sheet) && /E0\.1/.test(sheet) && /\u0394 CHANGED/.test(sheet) && /ESS-1/.test(sheet) && /SHEET NOTES/.test(sheet) && !/more rows? in the full comparison/.test(sheet),
+      M + ': sheet E0.1 carries every row, the changes marked, in the plan set’s frame');
+    await page.keyboard.press('Escape');
+    ok(!(await page.locator('#pr-zoom').count()) && (await page.locator('#plan-read-modal').count()) === 1, M + ': Escape closes the sheet, not the dialog');
+
+    /* plan set out: the plot plan export offers E0.1, ticked, and draws it
+       from the comparison it asks for */
+    changesPosts.length = 0;
+    await page.evaluate(function () { OmegaPlanRead.close(); });
+    var pp = await page.evaluate(async function () {
+      await omegaRunAndWait();   /* an export waits on a Run of the edited drawing, as a person's would */
+      await openPlotPlanExport();
+      await new Promise(function (r) { setTimeout(r, 400); });   /* the project type ticks its own sheets 60 ms after the dialog opens */
+      var row = document.getElementById('pp-e01-row'), cb = document.getElementById('pp-e01'), shown = { row: getComputedStyle(row).display, checked: cb.checked };
+      /* E0.1 alone, so the export is quick and shows it is there by itself */
+      Array.prototype.forEach.call(document.querySelectorAll('#pp-modal input[type=checkbox]'), function (c) { if (/^pp-[es]\d/.test(c.id) && c.id !== 'pp-e01') c.checked = false; });
+      var radios = document.getElementsByName('pp-fmt'); for (var i = 0; i < radios.length; i++) radios[i].checked = radios[i].value === 'pdf';
+      var got = null, orig = window._ppExportPDF, warned = [], w0 = console.warn, a0 = window.alert;
+      window._ppExportPDF = function (sheets) { got = sheets.map(function (x) { return { no: x.no, svg: x.svg }; }); };
+      console.warn = function () { warned.push(Array.prototype.join.call(arguments, ' ')); }; window.alert = function (m) { warned.push('alert: ' + m); };
+      try { await _ppExport(); } finally { window._ppExportPDF = orig; console.warn = w0; window.alert = a0; }
+      var d4 = d4BuildRows().filter(function (r) { return r.id === 'sheet:E0.1'; })[0];
+      return { shown: shown, sheets: got && got.map(function (g) { return g.no; }), svg: got && got[0] && got[0].svg, d4: d4 && { ok: d4.ok, why: d4.why }, warned: warned };
+    });
+    eq(pp.shown, { row: 'flex', checked: true }, M + ': the plot plan export offers E0.1, ticked, on a project with a read');
+    eq(pp.sheets, ['E0.1'], M + ': and exports it ' + JSON.stringify(pp.sheets) + ' ' + JSON.stringify(pp.warned));
+    ok(/CHANGES FROM THE CUSTOMER/.test(pp.svg) && /M-2|Meter/.test(pp.svg) && changesPosts.length === 1, M + ': drawn from the comparison the export asked the server for, edits included');
+    eq(pp.d4, { ok: true, why: '' }, M + ': the deliverables bundle offers E0.1 too');
+    /* a project reopened later starts from its saved read */
+    await page.evaluate(function () { OmegaPlanRead.restart(); });
+    await page.waitForSelector('#pr-changes-start');
+    ok(/sample-plan-set\.pdf/.test(await page.locator('#pr-body').textContent()), M + ': the start screen offers what changed since the saved read');
+    await page.evaluate(function () { OmegaPlanRead.close(); });
+  }
+}
 run().catch(function (e) { console.error(e); server.close(); process.exit(1); });

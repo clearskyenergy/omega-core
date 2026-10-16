@@ -401,6 +401,195 @@ function check(sheetList) {
   };
 }
 
+/* ── what changed since the plans (Blueprint to Build, Phase 5: "plan set
+   in → plan set out") ─────────────────────────────────────────────────────
+   `read` is the project's saved read (S.planRead: what the customer's plans
+   stated, and, from v2, every placeable item with its read figures and how
+   many of it Place put down). `now` is what the drawing holds, as the Run
+   counts it: the pieces that still carry this read's provenance with their
+   current ratings, how many pieces of each kind stand on the drawing, and
+   its totals. Every figure the plans gave is AS READ, CHANGED, FEWER, MORE,
+   REMOVED or NOT PLACED; a stated total or a listed run DIFFERS or is NOT
+   DRAWN; what stands on the drawing beyond the plans is ADDED. It compares
+   figures the plans printed with figures the drawing carries. It is never an
+   engineering judgement, and it says what it could not compare. The editor's
+   plan set prints it as sheet E0.1. */
+var CHANGE_ORDER = ['changed', 'fewer', 'more', 'removed', 'not-placed', 'differs', 'not-drawn', 'added', 'as-read', 'listed'];
+var CHANGE_LABEL = { changed: 'Changed', fewer: 'Fewer', more: 'More', removed: 'Removed', 'not-placed': 'Not placed', differs: 'Differs',
+  'not-drawn': 'Not drawn', added: 'Added', 'as-read': 'As read', listed: 'Listed' };
+var SECTIONS = { stated: 'Stated in the plans', placed: 'Placed from the plans', listed: 'Listed in the plans', added: 'On the drawing, not from the plans' };
+var SECTION_ORDER = ['stated', 'placed', 'listed', 'added'];
+var SAME_TOL = 0.02;
+/* the stated facts a drawing carries a figure for, and which figure */
+var STATED = {
+  bess_kw:          { now: 'bessKw', unit: 'kW' },
+  bess_kwh:         { now: 'bessKwh', unit: 'kWh' },
+  pv_kw_dc:         { now: 'solarKwDc', unit: 'kW-DC' },
+  ev_charger_count: { now: 'chargers', unit: 'chargers', exact: true }
+};
+/* a listed kind's figure and the drawing's total it is compared with */
+var LISTED_TOTAL = {
+  solar_array: { field: 'kw', now: 'solarKwDc', unit: 'kW-DC', stated: 'pv_kw_dc', what: 'solar' },
+  conduit_run: { field: 'lengthFt', now: 'conduitFt', unit: 'ft', what: 'conduit' },
+  trench:      { field: 'lengthFt', now: 'trenchFt', unit: 'ft', what: 'trench' }
+};
+var ADDED_TOTAL = [['solarKwDc', 'Solar arrays', 'kW-DC', 'solar_array', 'pv_kw_dc'], ['conduitFt', 'Conduit', 'ft', 'conduit_run'], ['trenchFt', 'Trench', 'ft', 'trench']];
+/* The drawing's count a read kind lands under: a battery is any battery
+   (the fleet's units), a charger any charger the Run prices, equipment its
+   Insert id (switchgear and panelboards both place a panel). */
+function countKey(kind) {
+  if (kind === 'bess') return 'bess';
+  if (kind === 'ev_charger') return 'charger';
+  var k = KINDS[kind]; return k && k.place && k.place.via === 'eq' ? 'eq:' + k.place.id : null;
+}
+var COUNT_LABEL = { bess: 'Battery storage', charger: 'EV chargers' };
+KIND_KEYS.forEach(function (k) {
+  var key = countKey(k); if (!key || COUNT_LABEL[key]) return;
+  COUNT_LABEL[key] = KIND_KEYS.filter(function (o) { return countKey(o) === key; }).map(function (o) { return KINDS[o].label; }).join(' / ');
+});
+function rating(o) {
+  var r = [];
+  if (o.kw != null) r.push(fmt(o.kw, 'kW')); if (o.kwh != null) r.push(fmt(o.kwh, 'kWh'));
+  if (o.kva != null) r.push(fmt(o.kva, 'kVA')); if (o.amps != null) r.push(fmt(o.amps, 'A'));
+  if (o.lengthFt != null) r.push(fmt(o.lengthFt, 'ft'));
+  return r.join(' / ');
+}
+function plural(n, one, many) { return n + ' ' + (n === 1 ? one : many); }
+function cleanRead(read) {
+  read = read && typeof read === 'object' ? read : {};
+  var items = Array.isArray(read.items) ? read.items.slice(0, 400).map(function (it) {
+    it = it || {}; var kind = oneOf(it.kind, KIND_KEYS, 'other');
+    return { id: str(it.id, 60), kind: kind, tag: str(it.tag, 60), model: str(it.model, 120), manufacturer: str(it.manufacturer, 80),
+      kw: num(it.kw, 0, 2000000), kwh: num(it.kwh, 0, 10000000), kva: num(it.kva, 0, 500000), amps: num(it.amps, 0, 20000), lengthFt: num(it.lengthFt, 0, 10000000),
+      quantity: Math.max(1, Math.min(500, Math.floor(+it.quantity || 1))), placed: Math.max(0, Math.min(500, Math.floor(+it.placed || 0))), sheet: str(it.sheet, 40) };
+  }).filter(function (it) { return it.id; }) : null;
+  return {
+    v: Math.max(1, Math.floor(+read.v || 1)), id: str(read.id, 60), fileName: str(read.fileName, 160), readAt: str(read.readAt, 40),
+    sheets: (Array.isArray(read.sheets) ? read.sheets.slice(0, 80) : []).map(function (s) { s = s || {}; return { page: Math.floor(+s.page || 0), number: str(s.number, 24) }; }),
+    facts: (Array.isArray(read.facts) ? read.facts.slice(0, 80) : []).map(function (f) { f = f || {}; return { key: oneOf(f.key, FACT_KEYS, null), number: num(f.number, 0, 1e9), sheet: str(f.sheet, 40), agree: f.agree !== false }; })
+      .filter(function (f) { return f.key && f.number != null; }),
+    listed: (Array.isArray(read.listed) ? read.listed.slice(0, 400) : []).map(function (it) {
+      it = it || {}; return { kind: oneOf(it.kind, KIND_KEYS, 'other'), tag: str(it.tag, 60), kw: num(it.kw, 0, 2000000), lengthFt: num(it.lengthFt, 0, 10000000),
+        quantity: Math.max(1, Math.min(500, Math.floor(+it.quantity || 1))), sheet: str(it.sheet, 40) };
+    }),
+    items: items
+  };
+}
+function cleanNow(now) {
+  now = now && typeof now === 'object' ? now : {};
+  var from = (Array.isArray(now.fromRead) ? now.fromRead.slice(0, 5000) : []).map(function (p) {
+    p = p || {}; return { item: str(p.item, 60), kw: num(p.kw, 0, 2000000), kwh: num(p.kwh, 0, 10000000), model: str(p.model, 120) };
+  }).filter(function (p) { return p.item; });
+  var counts = {}, labels = {}, c = now.counts && typeof now.counts === 'object' ? now.counts : {}, l = now.labels && typeof now.labels === 'object' ? now.labels : {};
+  Object.keys(c).slice(0, 200).forEach(function (k) {
+    var key = str(k, 40), n = num(c[k], 0, 100000);
+    if (key && n != null) { counts[key] = Math.floor(n); labels[key] = COUNT_LABEL[key] || str(l[k], 80) || key; }
+  });
+  var t = now.totals && typeof now.totals === 'object' ? now.totals : {}, totals = {}, scaled = now.scaled !== false;
+  ['bessKw', 'bessKwh', 'solarKwDc', 'chargers', 'conduitFt', 'trenchFt'].forEach(function (k) { totals[k] = num(t[k], 0, 1e9) || 0; });
+  /* a drawing not set to scale has no lengths: unknown, never zero */
+  if (!scaled) { totals.conduitFt = null; totals.trenchFt = null; }
+  return { fromRead: from, counts: counts, labels: labels, totals: totals, scaled: scaled };
+}
+function changes(readIn, nowIn) {
+  var read = cleanRead(readIn), N = cleanNow(nowIn), rows = [], notes = [], onDrawing = {}, items = read.items;
+  var stated = {}, listedKinds = {};
+  read.facts.forEach(function (f) { if (!stated[f.key]) stated[f.key] = f; });
+  read.listed.forEach(function (it) { listedKinds[it.kind] = true; });
+  function row(r) { r.statusLabel = CHANGE_LABEL[r.status]; r.sectionLabel = SECTIONS[r.section]; rows.push(r); }
+
+  /* the totals the plans stated, against the drawing's own totals */
+  Object.keys(STATED).forEach(function (k) {
+    var f = stated[k], d = STATED[k]; if (!f) return;
+    var have = N.totals[d.now], status = !have ? 'not-drawn' : (d.exact ? Math.round(have) === Math.round(f.number) : close(have, f.number, SAME_TOL)) ? 'as-read' : 'differs';
+    var note = status === 'differs' ? 'The drawing carries ' + fmt(have, d.unit) + '; the plans state ' + fmt(f.number, d.unit) + '.' : status === 'not-drawn' ? 'Stated in the plans; none is on the drawing.' : '';
+    if (!f.agree) note = (note ? note + ' ' : '') + 'The plans’ own sheets disagree on this figure; the read kept ' + fmt(f.number, d.unit) + '.';
+    row({ section: 'stated', key: k, label: FACTS[k].label, sheet: f.sheet, plans: fmt(f.number, d.unit), drawing: have ? fmt(have, d.unit) : 'none', status: status, note: note });
+  });
+
+  /* each item placed from the plans, against the pieces still carrying it */
+  if (items) items.forEach(function (it) {
+    var key = countKey(it.kind), pieces = N.fromRead.filter(function (p) { return p.item === it.id; }), m = pieces.length;
+    if (key) onDrawing[key] = (onDrawing[key] || 0) + m;
+    /* what it is (the model printed, else the kind) and its figures, on both sides */
+    var printed = [it.model || KINDS[it.kind].label, rating(it)].filter(Boolean).join(' · ');
+    var fields = {}, moved = pieces.filter(function (p) {
+      var kw = it.kw != null && p.kw != null && !close(p.kw, it.kw, SAME_TOL), kwh = it.kwh != null && p.kwh != null && !close(p.kwh, it.kwh, SAME_TOL),
+        model = !!(it.model && p.model && norm(p.model) !== norm(it.model));
+      if (kw) fields.kW = 1; if (kwh) fields.kWh = 1; if (model) fields.model = 1;
+      return kw || kwh || model;
+    });
+    var groups = {}, order = [];
+    pieces.forEach(function (p) {
+      var t = [p.model || KINDS[it.kind].label, rating(p)].filter(Boolean).join(' · ');
+      if (groups[t] == null) { groups[t] = 0; order.push(t); } groups[t]++;
+    });
+    var drawn = m ? order.map(function (t) { return groups[t] + ' × ' + t; }).join('; ') : 'none';
+    var status = !m ? (it.placed ? 'removed' : 'not-placed') : moved.length ? 'changed' : m < it.quantity ? 'fewer' : m > it.quantity ? 'more' : 'as-read', note = [];
+    if (status === 'removed') note.push('Placed from the plans; none is on the drawing now.');
+    if (status === 'not-placed') note.push('In the plans; not placed when they were read.');
+    if (moved.length) note.push('The ' + Object.keys(fields).join(' and ') + ' on ' + plural(moved.length, 'unit', 'units') + ' differ' + (Object.keys(fields).length === 1 ? 's' : '') + ' from the plans.');
+    if (m && m !== it.quantity) note.push('The plans show ' + it.quantity + '; ' + m + (m === 1 ? ' is' : ' are') + ' on the drawing' + (it.placed < it.quantity ? ' (' + it.placed + ' placed from them)' : '') + '.');
+    row({ section: 'placed', key: key, kind: it.kind, label: it.tag || KINDS[it.kind].label, sheet: it.sheet, plans: it.quantity + ' × ' + printed, drawing: drawn, status: status, note: note.join(' ') });
+  });
+  else notes.push('This read was saved before Read Plans kept each item’s figures, so placed items are not compared one by one. Read the plans again to compare them.');
+
+  /* what the plans only listed: their figures summed, against the drawing's */
+  var byKind = {};
+  read.listed.forEach(function (it) { (byKind[it.kind] = byKind[it.kind] || []).push(it); });
+  Object.keys(byKind).forEach(function (kind) {
+    var list = byKind[kind], d = LISTED_TOTAL[kind], tags = list.map(function (it) { return it.tag; }).filter(Boolean);
+    var label = KINDS[kind].label + (tags.length ? ' (' + tags.slice(0, 4).join(', ') + (tags.length > 4 ? ', …' : '') + ')' : '');
+    var sheets = list.map(function (it) { return it.sheet; }).filter(function (s, i, a) { return s && a.indexOf(s) === i; }).join(', ');
+    var withFig = d ? list.filter(function (it) { return it[d.field] != null; }) : [];
+    var have = d ? N.totals[d.now] : 0;
+    if (d && have === null) {
+      row({ section: 'listed', key: kind, kind: kind, label: label, sheet: sheets, plans: withFig.length ? fmt(withFig.reduce(function (t, it) { return t + it[d.field] * it.quantity; }, 0), d.unit) : plural(list.length, 'item', 'items'),
+        drawing: 'not to scale', status: 'listed', note: 'The drawing is not set to scale, so its lengths are not compared. Calibrate the map to compare them.' });
+      return;
+    }
+    if (!d || !withFig.length) {
+      row({ section: 'listed', key: kind, kind: kind, label: label, sheet: sheets, plans: plural(list.length, 'item', 'items'), drawing: d ? (have ? fmt(have, d.unit) : 'none') : '—', status: 'listed',
+        note: d ? 'No ' + (d.field === 'kw' ? 'rating' : 'length') + ' printed for it, so it is not compared.' : 'Listed in the plans; Read Plans does not draw it.' });
+      return;
+    }
+    var sum = withFig.reduce(function (t, it) { return t + it[d.field] * it.quantity; }, 0);
+    if (d.stated && stated[d.stated]) {
+      row({ section: 'listed', key: kind, kind: kind, label: label, sheet: sheets, plans: fmt(sum, d.unit), drawing: '—', status: 'listed', note: 'Compared above with the plans’ stated ' + FACTS[d.stated].label + '.' });
+      return;
+    }
+    var status = !have ? 'not-drawn' : close(have, sum, SAME_TOL) ? 'as-read' : 'differs', note = [];
+    if (status === 'differs') note.push('The drawing carries ' + fmt(have, d.unit) + ' of ' + d.what + ' in all; the plans read ' + fmt(sum, d.unit) + '.');
+    if (status === 'not-drawn') note.push('Listed in the plans; none is drawn.');
+    if (withFig.length < list.length) note.push(plural(list.length - withFig.length, 'item has', 'items have') + ' no figure printed and ' + (list.length - withFig.length === 1 ? 'is' : 'are') + ' left out of the sum.');
+    row({ section: 'listed', key: kind, kind: kind, label: label, sheet: sheets, plans: fmt(sum, d.unit), drawing: have ? fmt(have, d.unit) : 'none', status: status, note: note.join(' ') });
+  });
+
+  /* what stands on the drawing beyond the plans */
+  if (items) Object.keys(N.counts).forEach(function (key) {
+    var extra = N.counts[key] - (onDrawing[key] || 0);
+    if (extra > 0) row({ section: 'added', key: key, label: N.labels[key], sheet: null, plans: '—', drawing: extra + ' on the drawing', status: 'added', note: 'On the drawing; not placed from the plans.' });
+  });
+  ADDED_TOTAL.forEach(function (a) {
+    var have = N.totals[a[0]];
+    if (have > 0 && !listedKinds[a[3]] && !(a[4] && stated[a[4]])) row({ section: 'added', key: a[0], label: a[1], sheet: null, plans: '—', drawing: fmt(have, a[2]), status: 'added', note: 'On the drawing; nothing was read for it from the plans.' });
+  });
+
+  /* section by section, and within one what differs first */
+  rows.forEach(function (r, i) { r._i = i; });
+  rows.sort(function (a, b) { return SECTION_ORDER.indexOf(a.section) - SECTION_ORDER.indexOf(b.section) || CHANGE_ORDER.indexOf(a.status) - CHANGE_ORDER.indexOf(b.status) || a._i - b._i; });
+  rows.forEach(function (r) { delete r._i; });
+  var summary = {};
+  rows.forEach(function (r) { summary[r.status] = (summary[r.status] || 0) + 1; });
+  var differ = rows.filter(function (r) { return ['as-read', 'listed'].indexOf(r.status) < 0; }).length;
+  return {
+    version: VERSION,
+    read: { id: read.id, fileName: read.fileName, readAt: read.readAt, v: read.v, sheets: read.sheets.map(function (s) { return s.number || 'p.' + s.page; }) },
+    rows: rows, summary: summary, differ: differ, notes: notes, compared: !!items, labels: CHANGE_LABEL, order: CHANGE_ORDER, sections: SECTIONS, sectionOrder: SECTION_ORDER,
+    basis: 'Figures as printed on the customer’s sheets (read by Read Plans, each with the words it was read from) against the drawing as the Run counts it. Ratings agree within 2%. A difference is listed for a person to review; it is not an engineering judgement.'
+  };
+}
+
 /* A sheet as read() returned it, back through the normaliser: `check`
    takes sheets from the browser, so it re-applies every rule above rather
    than trusting what came back. Same order in, same ids out. */
@@ -426,4 +615,5 @@ function parse(text) {
 }
 
 module.exports = { VERSION: VERSION, KINDS: KINDS, FACTS: FACTS, SCHEMA: SCHEMA, SYSTEM: SYSTEM, RANGE: RANGE,
-  request: request, normalize: normalize, revive: revive, check: check, parse: parse, serviceVolts: serviceVolts, _box: box };
+  request: request, normalize: normalize, revive: revive, check: check, parse: parse, serviceVolts: serviceVolts, _box: box,
+  changes: changes, countKey: countKey, CHANGE_ORDER: CHANGE_ORDER };
