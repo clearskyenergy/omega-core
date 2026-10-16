@@ -562,7 +562,7 @@ function editorChecks() {
   ok(!/data-auto-off/.test(ED), 'and the modal no longer second-guesses the box');
   ok(/'CC-R60':[^\n]*h:'6\\'-10\.75"'[^\n]*hf:6\.9 \}/.test(ED) && R && /82\.75 in overall/.test(R.verified) && /2200 H mm/.test(R.cabinet),
      'its height is the drawing\'s 82.75 in overall (Tommy, 2026-10-05), with the datasheet\'s cabinet kept as the cabinet');
-  ok((ED.match(/&& !p\.evSkid\)/g) || []).length === 2, 'the auto-sizer never recommends an EV skid');
+  ok((ED.match(/&& !p\.evSkid(?: && !_bessOff\(k\))?\)/g) || []).length === 2, 'the auto-sizer never recommends an EV skid');
 }
 
 /* ═══ 4 · the client's collect() ═══════════════════════════════════════ */
