@@ -10681,7 +10681,7 @@ function _bespadModels(){
       for(var k in GOTION_CATALOG_DIMS){
         if(!GOTION_CATALOG_DIMS.hasOwnProperty(k)) continue;
         var g=GOTION_CATALOG_DIMS[k];
-        if(g && g.lf && g.wf){
+        if(g && g.lf && g.wf && !(typeof _bessOff==='function' && _bessOff(k))){
           /* Prefer a friendly catalog name over the raw key so entries like
              CSI-KUBANK2-277 read as "Canadian Solar KuBank 2.0 ..." */
           var nm=k;
@@ -20560,7 +20560,7 @@ function fomApplySizing(targetKW, targetKWh) {
   // Exclude CATL quote-only entries with null kw/kwh
 
   const eligible = Object.entries(BESS_CATALOG)
-    .filter(([, p]) => p.kw != null && p.kwh != null && p.kw >= targetKW && !p.evSkid)
+    .filter(([k, p]) => p.kw != null && p.kwh != null && p.kw >= targetKW && !p.evSkid && !_bessOff(k))
     .sort((a, b) => {
       // Primary: closest kWh (least overshoot)
       const aDiff = Math.abs(a[1].kwh - targetKWh);
@@ -20577,7 +20577,7 @@ function fomApplySizing(targetKW, targetKWh) {
   } else {
     // No single unit meets kW requirement -- find best 2-unit config
     const twoUnit = Object.entries(BESS_CATALOG)
-      .filter(([, p]) => p.kw != null && p.kwh != null && p.kw * 2 >= targetKW && !p.evSkid)
+      .filter(([k, p]) => p.kw != null && p.kwh != null && p.kw * 2 >= targetKW && !p.evSkid && !_bessOff(k))
       .sort((a, b) => Math.abs(a[1].kwh*2 - targetKWh) - Math.abs(b[1].kwh*2 - targetKWh));
     if (twoUnit.length > 0) {
       [matchKey, matchProduct] = twoUnit[0];
@@ -21513,7 +21513,7 @@ function bmCompareAllModels() {
       if(gr.ok){ const gj=await gr.json(); if(gj&&gj[0]){ const g=gj[0]; geoData={lat:parseFloat(g.lat),lng:parseFloat(g.lon),state:g.address?.state,county:g.address?.county,city:g.address?.city||g.address?.town,osm_class:g.class,osm_type:g.type}; }}
     } catch(_) {}
 
-    const models = Object.entries(BESS_CATALOG).filter(([,m]) => m.kw);
+    const models = Object.entries(BESS_CATALOG).filter(([k,m]) => m.kw && !_bessOff(k));
     const colors = { green:'#22C55E', yellow:'#F59E0B', red:'#EF4444' };
 
     const rows = models.map(([key, m]) => {
@@ -21971,7 +21971,9 @@ try { window.BESS_CATALOG = BESS_CATALOG; } catch (e) {}
 (function () {
   var done = false;
   function apply(t) {
-    if (done || !t || !t.count) return;
+    if (done || !t) return;
+    if (typeof _bessOwnOnlyRefresh === 'function') _bessOwnOnlyRefresh();
+    if (!t.count) return;
     done = true;
     try {
       for (var i = 0; i < t.keys.length; i++) {
@@ -21995,6 +21997,7 @@ try { window.BESS_CATALOG = BESS_CATALOG; } catch (e) {}
         var first = sel.querySelector('optgroup');
         if (first) sel.insertBefore(grp, first); else sel.appendChild(grp);
       }
+      if (typeof _bessOwnOnlyRefresh === 'function') _bessOwnOnlyRefresh();
       var mfr = document.getElementById('bm-mfr');
       if (mfr && (!mfr.value || mfr.value === 'Gotion')) { mfr.value = t.brand; mfr.placeholder = t.brand; }
     } catch (e) { /* the shipped catalogue is a perfectly good answer */ }
@@ -22048,6 +22051,20 @@ try { window.BESS_CATALOG = BESS_CATALOG; } catch (e) {}
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', function () { watch(0); });
   else watch(0);
 })();
+
+/* A manufacturer's own workspace is offered its own batteries only
+   (omega-bess-products.js § OWN PRODUCTS ONLY). Every picker asks this;
+   BESS_CATALOG itself keeps every entry so a saved drawing resolves. */
+function _bessOff(k){
+  try{ return !!(window.OmegaBessProducts && OmegaBessProducts.offCatalog && OmegaBessProducts.offCatalog(k, BESS_CATALOG[k], BESS_CATALOG)); }catch(e){ return false; }
+}
+function _bessOwnOnlyRefresh(){
+  try{
+    if(!window.OmegaBessProducts || !OmegaBessProducts.prune) return;
+    OmegaBessProducts.prune(document.getElementById('bm-catalog'), BESS_CATALOG);
+    if(typeof _fillPadModels==='function') _fillPadModels();
+  }catch(e){}
+}
 
 function applyBMCatalog() {
   const key = document.getElementById('bm-catalog').value;
@@ -34532,6 +34549,7 @@ function e3PickerRender(){
      as candidate batteries. */
   var pool = all.filter(function(it){
     if(it.cat!=='bess') return false;
+    if(BESS_CATALOG[it.key] && _bessOff(it.key)) return false;
     return _e3Pk.step===1 ? (it.sub==='container')
       : (it.sub==='pcs' || it.sub==='skid' || it.type==='Integrated PCS');
   });
@@ -92592,6 +92610,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
         if (!Object.prototype.hasOwnProperty.call(BESS_CATALOG, k)) continue;
         var c = BESS_CATALOG[k];
         if (!c || !c.kwh || c.isSystem) continue;
+        if (typeof _bessOff === 'function' && _bessOff(k)) continue;
         out.push({
           key: k, kwh: +c.kwh, kw: +c.kw || 0,
           mfr: c.mfr || '', model: c.model || k,
