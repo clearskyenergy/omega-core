@@ -122,16 +122,47 @@ should be a **panel in Site Map**, not a separate page the rep leaves for.
 
 ## Gaps between today and the target
 
-1. Grid Atlas and the hosting check are separate pages; the target is a
-   Site Map panel.
-2. No verdict chip on the substation or the circuit — today the facts are
-   listed and the rep draws the conclusion.
-3. Net-of-queue shading is a setting, off by default.
-4. Min. hosting is typed, not read off the chosen unit.
-5. Nothing carries the circuit answer onto the project record, so the
-   RFQ and the Run cannot cite it.
-6. Hosting capacity is ComEd only; the target is every utility whose map
-   we read, through one interface like `omega-comed-layers.js`.
+Updated 2026-10-16, when the Grid panel landed (Analyze › **Grid Check**,
+`omega-grid-panel.js`, beside Grid Atlas; `scripts/tests/tgridverdict.js`).
+
+1. **Closed for one site.** The substation card, the circuit at the parcel
+   and the verdict are a Site Map panel: it reads the project's site point
+   and the battery from the BESS Guided Build (`S.bessList`, else the model
+   picked in `#bm-catalog`), takes the nearest substation from the Grid
+   Atlas service the Analyze pre-screen already calls (`/api/grid-atlas`,
+   the same mirrors as `LAYERS.substations`), and the circuit from
+   `OmegaComEdLayers.probePoint` (the one ComEd module, loaded by the
+   editor, nothing pasted). Still open: the panel draws nothing on the map —
+   Site Map's basemap is Google, and Grid Atlas's `LAYERS` and the ComEd
+   hosting polygons draw on Leaflet, so drawing them "under the drawing"
+   needs either a Google-Maps renderer for the same registry or `LAYERS`
+   lifted out of `grid-atlas.html` into a shared module. The standalone
+   pages stay for prospecting.
+2. **Closed.** Both the substation and the circuit carry a verdict chip,
+   from `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`: distance
+   bands, voltage class for the unit's size, Fits / Fits only smaller /
+   Needs a study). The browser sends figures and draws the answer. Grid
+   Atlas's own Project panel (`#pBody`) still lists facts with its 0–100
+   score and no unit verdict.
+3. **Closed in the panel** — the card leads with the net (published less
+   the feeder's queued DER) and the verdict sentence states the room
+   before the headline. In the Site Finder, net shading is still a setting.
+4. **Closed in the panel** — the unit's kW is read, never typed. The Site
+   Finder's "Min. hosting" filter is still typed.
+5. **Closed on the record.** `grid.substation {name, kv, miles, km, chip,
+   state}`, `grid.circuit {utility, id, substation, publishedKw, queuedKw,
+   netKw, headroomKw, addressResolved, grain, at, source}` and
+   `grid.verdict {key, label, say, unitKw, unitName, version, at}` ride
+   `saveProject()`'s allowlist (with `savedBy`), are restored on load, and
+   a re-measure of the same point keeps them. Still open: the Run, the RFQ
+   and the Helios intake do not yet READ `grid.circuit` / `grid.verdict`.
+6. Hosting capacity is still ComEd only. The panel asks
+   `OmegaComEdLayers.territoryAt` and says plainly when no utility map is
+   read for the location; a second utility means a second module with the
+   same `probePoint` answer.
+7. **New.** A "Send to Site Map" button on the standalone Site Finder's
+   card (carrying the site, circuit and verdict onto a project) is not
+   built; the editor panel answers for a project already open.
 
 ## Demo
 
