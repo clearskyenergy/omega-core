@@ -1348,6 +1348,26 @@ dialog says so and nothing is mailed. `scripts/tests/thelios.js` pins the
 form's field names and the door. Design and the not-built list:
 `docs/HELIOS-INTAKE.md`.
 
+## Grid panel — Grid Atlas inside Site Map (2026-10-16)
+
+**The FENECON demo flow is how the product works** (Tommy: "that's how the
+Grid Atlas should work, and we should have the Grid Atlas built into the
+editor"; `docs/GUIDED-SITE-FLOW.md`). Analyze › Grid Check
+(`rb-grid-panel`, Omega Grid's, beside Grid Atlas) is `omega-grid-panel.js`:
+the project's site point and the BESS Guided Build's unit (never typed),
+the nearest substation from the Grid Atlas service the pre-screen already
+calls (`OmegaGridPrescreen`, `/api/grid-atlas`), the circuit at the parcel
+from `omega-comed-layers.js` `probePoint` (the ONE ComEd module, loaded by
+the editor; never pasted), NET of the feeder's queued DER first, and the
+verdict — Fits / Fits only smaller / Needs a study, and the substation's
+chip — from `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated as
+`/api/grid-atlas` is; every threshold is server-side). `S.grid` carries the
+service's measurement plus `substation`, `circuit` and `verdict`, rides
+`saveProject()`'s allowlist (with `savedBy`), is restored on load, and the
+pre-screen keeps the panel's answer when it re-measures the same point.
+`scripts/tests/tgridverdict.js`. The standalone Grid Atlas and Site Finder
+stay for prospecting many sites.
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT

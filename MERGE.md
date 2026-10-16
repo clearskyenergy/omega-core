@@ -1,5 +1,24 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Grid Atlas built into Site Map: the Grid panel (2026-10-16)
+
+Tommy, of the FENECON demo flow: "that's how the Grid Atlas should work, and
+we should have the Grid Atlas built into the editor" (`docs/GUIDED-SITE-FLOW.md`).
+Analyze › **Grid Check** (`rb-grid-panel`, injected beside `rb-gridatlas`,
+Omega Grid's in `api/_lib/modules.js` IDS) opens `omega-grid-panel.js`: the
+site point and the Guided Build's battery, the nearest substation from the
+Grid Atlas SERVICE the pre-screen already calls (no second lookup), the
+circuit at the parcel from `omega-comed-layers.js` `probePoint` (the editor
+now loads that module; no copy pasted), and the verdict from the new
+`POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated like
+`/api/grid-atlas`): the eligibility rules are server-side from the first
+line. `S.grid` — set by the pre-screen and never persisted until now — is
+in `saveProject()`'s allowlist (lists cut to ten, undefined when absent so a
+save never blanks it) and restored on load; the pre-screen keeps the panel's
+`substation`/`circuit`/`verdict` when it re-measures the same point. Not
+done: drawing `LAYERS` on Site Map's Google basemap, and the Run / RFQ /
+Helios intake reading `grid.circuit`. Held by `scripts/tests/tgridverdict.js`.
+
 ## Trace Boundary and Fence & Tie are Compute's (2026-10-13)
 
 Tommy, of the Draw tab's Select group: "trace boundary and fence & tie is

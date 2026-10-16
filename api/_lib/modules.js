@@ -69,7 +69,7 @@ BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cos
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
   lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key',
-  gridatlas: 'rb-gridatlas', storage: 'omega-btn-bill-analysis rb-valuestack',
+  gridatlas: 'rb-gridatlas rb-grid-panel', storage: 'omega-btn-bill-analysis rb-valuestack',
   estimate: 'rb-takeoff-budget', evrebates: 'rb-ev-future',
   plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',
