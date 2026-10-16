@@ -47,12 +47,12 @@ assert.match(ep, /withCaller\(caller, MODULES/); assert.match(ep, /\['gridatlas'
 assert.match(read('api/grid-atlas.js'), /\['gridatlas', 'siteintel', 'sitefinder', 'compute'\]/); count++;
 
 /* ── the page holds no rule and no copy ─────────────────────────────── */
-var panel = read('omega-grid-panel.js'), ed = read('editor.html');
+var panel = read('omega-grid-panel.js') + read('omega-grid-verdict.js'), ed = read('editor.html');
 ['SMALLEST_OFFER_KW', 'THIN_SHARE', '34.5', 'maxKm', 'minKv', '>= 250', 'Moderate run', 'right voltage'].forEach(function (t) {
   assert.ok(panel.indexOf(t) < 0, 'a verdict rule is in the browser: ' + t); count++; });
 ['SMALLEST_OFFER_KW', 'THIN_SHARE', 'grid-verdict-v1'].forEach(function (t) { assert.ok(ed.indexOf(t) < 0, 'a verdict rule is in the editor: ' + t); count++; });
-assert.match(panel, /fetch\('\/api\/grid-verdict'/); count++;
-assert.match(ed, /<script src="\/omega-comed-layers\.js"><\/script>\s*<script src="\/omega-grid-panel\.js"><\/script>/); count++;
+assert.match(read('omega-grid-verdict.js'), /fetch\('\/api\/grid-verdict'/); assert.ok(read('omega-grid-panel.js').indexOf('fetch(') < 0, 'the panel asks through the one client'); count += 2;
+assert.match(ed, /<script src="\/omega-comed-layers\.js"><\/script>\s*<script src="\/omega-grid-verdict\.js"><\/script>\s*<script src="\/omega-grid-panel\.js"><\/script>/); count++;
 assert.ok(ed.indexOf('function interpret(') < 0 && ed.indexOf('BESS_HC') < 0, 'no pasted ComEd layer code in the editor'); count++;
 assert.match(read('api/_lib/modules.js'), /gridatlas: 'rb-gridatlas rb-grid-panel'/, 'the button is Omega Grid\'s'); count++;
 /* saved through the allowlist (savedBy rides the same payload), restored on load */
@@ -96,6 +96,7 @@ var ctx = {
 ctx.window = ctx;
 vm.createContext(ctx);
 vm.runInContext(read('omega-comed-layers.js'), ctx, { filename: 'omega-comed-layers.js' });
+vm.runInContext(read('omega-grid-verdict.js'), ctx, { filename: 'omega-grid-verdict.js' });
 vm.runInContext(read('omega-grid-panel.js'), ctx, { filename: 'omega-grid-panel.js' });
 ctx.OmegaComEdLayers.__setLayersForTest([{ id: 75 }]);
 ctx.OmegaGridPanel.open();

@@ -1390,7 +1390,21 @@ service's measurement plus `substation`, `circuit` and `verdict`, rides
 `saveProject()`'s allowlist (with `savedBy`), is restored on load, and the
 pre-screen keeps the panel's answer when it re-measures the same point.
 `scripts/tests/tgridverdict.js`. The standalone Grid Atlas and Site Finder
-stay for prospecting many sites.
+stay for prospecting many sites. Both the panel and Omega Prime ask through
+ONE client, `omega-grid-verdict.js` (request, `/api/grid-verdict`, and the
+`grid.*` record shape). **Omega Prime sets up the real project** (2026-10-16,
+Tommy: "it does the set up and system like the artifact sandbox"):
+`omega-prime.html` runs Site → Grid Atlas → Circuit → Load → Site Map → Quote
+on the tenant's own product list (`omega-bess-products.js`, XXL after), the
+server's verdict, the rate book for the ZIP and the bill's peaks, and moving
+into design CREATES `projects/{id}` through `omega-prime-project.js
+projectDoc` (orgId the claim then the email domain, the unit as a battery
+entry by catalog key, `mapState`, `grid`, `load`; later `prime.layout` /
+`prime.run`; never a drawing key). Open in Site Map is
+`/editor.html?id=…&from=prime`: `omega-prime-handoff.js` fills the unit from
+the editor's own catalog and opens the BESS Guided Build — no forged
+placement, as the storefront hand-off. `scripts/tests/tomegaprime.js`,
+`scripts/render-omega-prime.js` (in `check:pages`).
 
 ## VPP Earnings Simulator (2026-09-29)
 
