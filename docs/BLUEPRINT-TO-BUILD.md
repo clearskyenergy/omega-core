@@ -94,6 +94,24 @@ and has a test that fails without it.
 
 ### Phase 1: Plan-set reader ("drop your drawings in"), the one that sells
 
+> **Status, 2026-10-16: Phase 1 is built.** Build › 1 · Site › *Read Plans*;
+> `CLAUDE.md`, *Read Plans*, says how it works. Where it differs from the plan
+> below:
+> - Placed equipment lands in a row at the centre of the view, to be dragged
+>   into place. There is no two-point georeference yet: *Trace over this sheet*
+>   puts a sheet on the canvas through the Site Overlay's upload, and Calibrate
+>   Scale does the rest.
+> - Items are placed as the editor's own equipment carrying the schedule's
+>   model and rating. They are not matched to the catalogs by model number.
+> - Solar arrays, runs and trenches are listed with their figures, not drawn.
+> - A daily cap (80 sheets a workspace, 50 a person) stands in for per-sheet
+>   metering until a price is set.
+> - Not yet: reading dense sheets in tiles (each sheet goes as one 2,400 px
+>   image; a vector PDF also sends its own text), and a run against real
+>   customer plan sets with the live model. The tests use a made-up sample set
+>   and a canned read.
+
+
 **What it does:** the user drops a PDF plan set (site plan, single-line, civil,
 electrical sheets, or a utility will-serve) into Site Map. A minute later they
 see a **review panel**: every piece of equipment, rating, run, dimension and

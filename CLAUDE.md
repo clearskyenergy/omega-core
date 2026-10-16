@@ -1348,6 +1348,51 @@ dialog says so and nothing is mailed. `scripts/tests/thelios.js` pins the
 form's field names and the door. Design and the not-built list:
 `docs/HELIOS-INTAKE.md`.
 
+## Read Plans — the plan-set reader (2026-10-16)
+
+**A customer's plan set read into Site Map, every figure with the words it
+was read from** ("let's build it", after a Perplexity ad that "reads
+blueprints, prices jobs, and maps out builds"; `docs/BLUEPRINT-TO-BUILD.md`
+Phase 1). Build › 1 · Site › *Read Plans* (`omega-plan-read.js`, ES5, owned
+by Omega Design) renders each PDF sheet with pdf.js (the BESS sizer's cdnjs
+build, fetched on first use) at 2,400 px with its own text layer, and
+`POST /api/plan-read` is the ONE door: `read` sends one sheet to the model
+(`OMEGA_PLAN_MODEL`, else Claude Opus 5.5, never a model from the body; the
+workspace's `AI_KEY_<ORG>`, else `ANTHROPIC_API_KEY`) with
+`api/_lib/plan-read.js`'s prompt and closed structured-output schema and
+returns it normalised — read, never invent: every item and fact carries its
+`quote` and a box on the sheet, no quote is low confidence, an impossible
+number is null (never clamped), an unknown kind is dropped and counted.
+`check` merges the sheets (one unit on the site plan and the single-line is
+one unit; quantities are never summed) and lists what disagrees, comparing
+the sheets' own figures only, never an engineering verdict. Who: a
+workspace whose plan opens Site Map (a package's Omega Design, a legacy
+plan's editor), not a viewer or a disabled member, not pending, suspended
+or cancelled, a verified email or `admin.clientAdmin`. Cost: 80 sheets a
+workspace and 50 a person a day (staff 300) on
+`omega_orgs/{org}/plan_read_counters/{day}`, reserved in a transaction
+before the call and given back on a failure; a sheet read again is answered
+free from `omega_orgs/{org}/plan_reads/{sha256}`; the rules close both.
+What a read becomes is the library's `place`, so the page keeps no rule:
+Insert-tab equipment (`addEl`, counted by the Run as if placed by hand), a
+charger as the EV tools' Level 2 (`evl2`) or DC fast (`evunit`) shape by its
+PRINTED kW or words (neither printed: listed, not placed, because the two
+price an order of magnitude apart), and nothing for solar arrays, runs and
+trenches (listed with their figures: the Run prices an array from its
+geometry). A battery is created WITH its rating under both field names (the
+legend's fleet read stamps an unrated one with the guided build's 1,000 kW
+default) and becomes a configured system on `S.bessList` as the guided
+build's placeholder does (a list configured by hand is never touched). One
+Place is one undo step; Undo parks that configuration with its battery and
+Redo brings it back (the redo module's marker is kept, so it never wraps
+Undo twice). The read rides on the project as `S.planRead` (saveProject,
+_loadProject). *Trace over this sheet* hands a sheet to the Site Overlay's
+own upload. Held by `scripts/tests/tplanread.js` (in `npm test`) and `npm
+run check:planread` (`scripts/render-plan-read.js`: the real editor, the
+made-up sample set in `scripts/_lib/plan-fixture.js`, then the Run and every
+export downstream). Per-sheet billed metering is a pricing decision not yet
+made; the daily caps stand in.
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
