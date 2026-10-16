@@ -412,7 +412,8 @@ function upliftOf(input, result) {
   var whole = result.deals && result.deals.own ? { irr: result.deals.own.irr == null ? null : result.deals.own.irr, capital: result.deals.own.capital == null ? null : result.deals.own.capital } : null;
   var levered = !!(input.finance && input.finance.debt);
   return { whole: whole,
-           hostAlone: side(function (x) { x.compute.pods = 0; delete x.skid; }),
+           /* the host's system alone pays no lease: the rent is what the skid pays the host (2026-10-16: a $202,500 lease was sinking the host-alone case to −4.8%) */
+           hostAlone: side(function (x) { x.compute.pods = 0; delete x.skid; x.deal.rentPerYear = 0; x.deal.rentSharePct = 0; }),
            skidAlone: side(function (x) { delete x.host; if (x.finance) delete x.finance.debt; }),
            /* the same whole the other way: the standard debt case beside an unlevered headline, or the unlevered twin beside a levered one */
            unlevered: levered ? side(function (x) { delete x.finance.debt; }) : null,

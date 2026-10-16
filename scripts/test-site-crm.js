@@ -783,6 +783,10 @@ function seed() {
     /* what the skid adds (2026-10-14): the host alone, the skid alone, the whole, from the same engine on the same facts */
     assert.ok(lm3.uplift && lm3.uplift.hostAlone && lm3.uplift.skidAlone && lm3.uplift.whole, 'the summary carries the three cases: ' + JSON.stringify(lm3.uplift));
     assert.ok(lm3.uplift.hostAlone.irr < lm3.uplift.whole.irr && lm3.uplift.whole.irr < lm3.uplift.skidAlone.irr, 'the whole sits between the host alone and the skid alone: ' + JSON.stringify(lm3.uplift));
+    /* the host alone pays no lease (2026-10-16): the rent is the skid's, so the host-alone case runs without it */
+    (function () { var SMx = require('../api/_lib/site-model'), CSx = require('../api/_lib/compute-site'), inpX = JSON.parse(JSON.stringify(st3.input)); inpX.deal.rentPerYear = 500000;
+      var rX = CSx.model(inpX), up = SMx.upliftOf(inpX, rX), noRent = JSON.parse(JSON.stringify(inpX)); noRent.compute.pods = 0; delete noRent.skid; noRent.deal.rentPerYear = 0; noRent.deal.rentSharePct = 0;
+      var ref = CSx.model(noRent); assert.ok(Math.abs(up.hostAlone.irr - ref.proforma.metrics.afterTaxIrr) < 1e-9, 'host alone is the host system with no rent: ' + JSON.stringify([up.hostAlone.irr, ref.proforma.metrics.afterTaxIrr])); })();
     assert.equal(lm3.uplift.whole.irr, lm3.irr, 'the whole is the headline'); assert.ok(lm3.uplift.hostAlone.capital < lm3.totalProjectCost && lm3.uplift.skidAlone.capital < lm3.totalProjectCost);
     /* the whole project is levered by the engine's standard debt (2026-10-14, "do what is standard"): the headline is the equity IRR, the unlevered twin beside it, the skid alone still 100% equity */
     assert.equal(lm3.levered, false, 'the whole project is 100% equity: the partner funds all of it (2026-10-14)'); assert.ok(!(lm3.debt > 0) && Math.abs(lm3.equity - lm3.totalProjectCost) < 1, 'the ask is the whole project: ' + JSON.stringify([lm3.equity, lm3.totalProjectCost]));
