@@ -1608,6 +1608,38 @@ check:runsummary`, also in `check:pages` (`scripts/render-run-summary.js`:
 the real editor and the sample site on a desktop, a 390 px phone and a
 read-only plan; a save stand-in, since the fixture refuses writes).
 
+## Finance It — the drawing to a fundable deal (2026-10-16)
+
+**One panel takes the reviewed model, in order, from priced to a deal someone
+can fund** (`docs/BLUEPRINT-TO-BUILD.md` Phase 5, "drawing → financed project
+in one session"). Output › Financing › *Finance It* (`omega-finance-path.js`,
+ES5, `#rb-finance-path`, owned by Omega Capital beside the hand-offs; a
+package moves the group to the Finance tab) lists the steps:
+- saved;
+- priced by the Run;
+- its returns;
+- the compute case, only with compute on the drawing;
+- checked against the customer's plans, only with a read;
+- then Helios's intake, the marketplace and a lender.
+
+Each step's state is read from what the editor already holds: the Run's
+total and freshness (`S.lastRunAt`, `S.resultsStale`, `_COST_TOTAL`), the
+Results rail's own `_RR_FIN`, `S.omegaCore`'s verdict in the qualifier's
+own words, and the server's comparison with the plans (`OmegaPlanRead.changes`,
+asked each time the panel opens). Each button is the ribbon's own command,
+clicked (`#rb-valuestack`, the Omega-Core, Helios, marketplace and financing
+buttons), after `OmegaCaps.allowedElement` says the plan opens it; a command
+it does not open reads "Not on this workspace's plan". The hand-offs stay
+shut until the project is saved and the Run has priced the drawing as it
+stands, so what goes out is the reviewed model, never a stale one, and
+`run()` holds that order for any caller. The hand-offs stay on the ribbon as
+they were. The panel works nothing out and writes nothing; `steps(state)` is
+the one rule. Held by `scripts/tests/tfinancepath.js` (in `npm test`) and `npm
+run check:financepath`, also in `check:pages` (`scripts/render-finance-path.js`:
+the sample site and an Omega-Core skid placed with the editor's own tools, the
+panel's own Run and a save stand-in, the hand-offs opening their own dialogs,
+a 390 px phone, a package without Omega Capital).
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT

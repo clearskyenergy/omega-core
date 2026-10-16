@@ -296,8 +296,23 @@ re-runs on save, debounced, using the existing auto-save of priced runs
 > is worked on, `omega_plans_changed` says what differs from the plans.
 > Together with `omega_address`, `omega_bill`, the planner, the takeoff and
 > the build sequence, Jarvis can now run the ad's whole loop: read the plan
-> set, price the job and map out the build. *Drawing → financed project in
-> one session* is next.
+> set, price the job and map out the build.
+>
+> **Drawing → financed project in one session is built.** Output ›
+> Financing › *Finance It* takes the reviewed model through these steps, in
+> order:
+> 1. Saved.
+> 2. Priced by the Run.
+> 3. Its returns (the Results rail's own figures, or the Value Stack when
+>    no revenue is modelled).
+> 4. The compute case (Omega-Core), when there is compute on the drawing.
+> 5. Checked against the customer's plans, when they were read.
+> 6. The hand-offs: Helios's intake, the marketplace, a lender.
+>
+> Each step reads what the editor already holds, and each button is the
+> ribbon's own command, so every plan rule applies. The hand-offs wait
+> until the drawing is saved and priced as it stands. Phase 5 is done; what
+> is left is in each phase's *not built* list.
 
 - **Plan set in → plan set out.** Read the customer's drawings (Phase 1) and
   issue our own permit/interconnect plan set from the reviewed model, with a

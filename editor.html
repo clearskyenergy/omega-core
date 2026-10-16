@@ -118,6 +118,15 @@ function openFinancingApply(){
            || new URLSearchParams(location.search).get('project'); } catch (e) {}
   location.href = '/financing.html' + (id ? ('?project=' + encodeURIComponent(id)) : '');
 }
+/* Finance It: the drawing to a deal someone can fund, in order: saved,
+   priced by the Run, its returns, the compute case, checked against the
+   customer's plans, then the hand-offs beside it (2026-10-16; Blueprint to
+   Build, Phase 5). The panel is omega-finance-path.js; each step is the
+   ribbon's own command. */
+function openFinancePath(){
+  if (window.OmegaFinancePath && typeof OmegaFinancePath.open === 'function') OmegaFinancePath.open();
+  else alert('The Finance It panel did not load. Reload the page and try again.');
+}
 /* Helios Intake: Helios Energy Advisors' first-pass checklist, filled from
    this project, finished by the person, previewed and sent to Helios from
    the editor (2026-09-30, Tommy). The dialog is omega-helios-intake.js; the
@@ -194,6 +203,9 @@ function openOmegaCore(){
      first use), sends each to api/plan-read and places what the person
      ticks through the editor's own tools. -->
 <script src="/omega-plan-read.js"></script>
+<!-- Output › Financing › Finance It: the drawing to a fundable deal, in
+     order, each step the ribbon's own command (no server of its own). -->
+<script src="/omega-finance-path.js"></script>
 <!-- The 3D Site Visualizer's Build player: the model assembled step by step,
      each step's share of the Run's money and its days from api/build-sequence
      (the browser only shows and hides the model). -->
@@ -2331,6 +2343,11 @@ window.onerror = function(msg, src, line, col, err) {
     </div>
     <div class="rpanel">
       <div class="rpanel-body">
+        <!-- Finance It first: the reviewed model, in order, to a deal someone
+             can fund (omega-finance-path.js). Saved, priced, its returns, the
+             compute case and the plans check, then the hand-offs beside it,
+             each the ribbon's own command. Same cap as its neighbours. -->
+        <button class="rbtn" id="rb-finance-path" onclick="rbRun(openFinancePath)" data-cap="export" title="Finance it — take this drawing from priced to a deal someone can fund: save, price, returns, the compute case and the plans check, then Helios, the marketplace or a lender, in order."><span class="rb-ico" style="color:var(--green)">&#10148;</span><span class="rb-lbl">Finance<br>It</span></button>
         <!-- Next to the marketplace on purpose: both take a finished design
              outward. The marketplace lists a deal for capital to find; this
              one asks a named lender for a price. -->
