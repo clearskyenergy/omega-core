@@ -193,7 +193,12 @@ function openOmegaCore(){
      utility's own hosting map through the ONE ComEd layer module (the Site
      Finder's), and the verdict from api/grid-verdict. Nothing pasted here. -->
 <script src="/omega-comed-layers.js"></script>
+<script src="/omega-grid-verdict.js"></script>
 <script src="/omega-grid-panel.js"></script>
+<!-- Omega Prime's "Open in Site Map" (?from=prime): fills the configured
+     unit in from this page's own catalog entry and opens the BESS Guided
+     Build. Never places anything itself. -->
+<script src="/omega-prime-handoff.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
      This is the button that gives it a way in, plus the honest labelling: the

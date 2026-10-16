@@ -18,9 +18,15 @@
       omega-comed-layers.js probePoint — the Site Finder's module, not a copy;
     • the layout is drawn on satellite imagery at true footprint;
     • the price is /api/price-site (the cost model, server side, gated).
-  The unit's SPECS are the editor's catalog entry for FENECON-IND-XXL; no
-  price for it lives here (quote required). Anything this page cannot read
-  says so instead of guessing. ES5, no build step.
+  The unit is the tenant's own product list first (omega-bess-products.js),
+  then the editor's catalog entry for FENECON-IND-XXL; specs only, no price
+  (quote required). The circuit verdict is the server's (/api/grid-verdict
+  through omega-grid-verdict.js, the client Site Map's Grid panel uses), the
+  load is the utility's planning rates (/api/utility-rates) against the
+  bill's own peaks, and moving into design CREATES the real project
+  (omega-prime-project.js) that Site Map opens with the unit configured for
+  the BESS Guided Build (omega-prime-handoff.js). Anything this page cannot
+  read says so instead of guessing. ES5, no build step.
 -->
 <html lang="en">
 <head>
@@ -95,6 +101,7 @@ button{font:inherit;color:inherit}
 .types button[disabled]{opacity:.45;cursor:not-allowed}
 .unitcard{border:1px solid var(--line);border-radius:6px;padding:10px 12px;font-size:13px;background:#FFF8F1}
 .unitcard b{display:block}
+.unitpick{font:inherit;font-size:14px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:#fff;color:var(--ink)}
 .primary{all:unset;cursor:pointer;display:inline-block;background:var(--brand);color:#fff;font-weight:600;font-size:13px;padding:9px 16px;border-radius:5px}
 .primary:hover{background:#244f8d}.primary[aria-disabled="true"]{opacity:.5;cursor:default}
 .primary:focus-visible{outline:2px solid var(--fen);outline-offset:2px}
@@ -181,7 +188,7 @@ button{font:inherit;color:inherit}
 @media (max-width:860px){.edside{display:none}.drawer{width:220px}}
 @media (max-width:620px){.drawer{display:none}#path{margin-left:0}}
 /* quote + logic */
-#s-quote,#s-logic{overflow:auto;justify-content:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
+#s-quote,#s-logic,#s-load{overflow:auto;justify-content:center;padding:24px max(16px,env(safe-area-inset-right,0px)) 24px max(16px,env(safe-area-inset-left,0px))}
 .doc{background:#fff;border:1px solid var(--line);border-radius:8px;max-width:920px;width:100%;align-self:flex-start}
 .doc .hd{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap}
 .doc .hd h2{margin:0;font-size:18px}.doc .hd small{color:var(--ink2)}
@@ -226,8 +233,9 @@ table.bom tr.fen td{background:#FFF3E8}
             <button data-t="compute" disabled><b>Compute</b><small>next</small></button>
           </div>
         </div>
-        <div class="fld"><label>Unit</label>
-          <div class="unitcard"><b>FENECON Industrial XXL</b>2.508 MW / 5.015 MWh · 20 ft liquid-cooled container · quote required</div>
+        <div class="fld"><label for="unitSel">Unit</label>
+          <select id="unitSel" class="unitpick"></select>
+          <div class="unitcard" id="unitCard"></div>
         </div>
         <button class="primary" id="go">Start</button>
         <div class="err" id="startErr" hidden></div>
@@ -258,13 +266,28 @@ table.bom tr.fen td{background:#FFF3E8}
       <div class="sfres" id="sfRes"><div class="hd"><h5>Resolving the circuit…</h5><small>Asking ComEd at the parcel</small></div></div>
     </section>
 
+    <!-- LOAD -->
+    <section class="screen" id="s-load">
+      <div class="doc">
+        <div class="hd"><div><h2>The site\u2019s load</h2><small id="ldSub">What the site pays for demand, before the battery is sized against it</small></div><span class="tag" id="ldUtil">\u2014</span></div>
+        <div class="bd">
+          <div id="ldRates" class="note">Reading the utility\u2019s rates\u2026</div>
+          <div class="fld" style="margin-top:14px"><label for="ld-peaks">Monthly peak demand from the bill (kW, January to December)</label>
+            <textarea id="ld-peaks" rows="3" placeholder="e.g. 1,420  1,388  1,402  1,510  1,690  1,840  1,910  1,880  1,720  1,560  1,450  1,430" style="font:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--line);border-radius:6px"></textarea></div>
+          <div id="ldOut" class="note"></div>
+          <button class="primary" id="ld-tomap">Design it in Site Map \u2192</button>
+          <p class="note" id="ldSave"></p>
+        </div>
+      </div>
+    </section>
+
     <!-- SITE MAP -->
     <section class="screen" id="s-map">
       <div class="rbtabs"><span class="proj" id="edTitle">Site Map</span><span class="t">Draw</span></div>
       <div class="ribbon">
         <div class="grp"><div class="gi">
           <button class="rb" id="ed-area"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" stroke-dasharray="3 2"/></svg>BESS area</button>
-          <span class="unitsel" title="FENECON Industrial XXL">FENECON Industrial XXL — 2.508 MW / 5.015 MWh</span>
+          <span class="unitsel" id="unitSel2"></span>
           <button class="rb dis" id="ed-place"><svg viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="8"/><path d="M7 8v8M11 8v8M15 8v8"/></svg>Place unit</button></div><label>Battery</label></div>
         <div class="grp"><div class="gi">
           <button class="rb dis" id="ed-poi"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="5"/><path d="M12 2v5M12 17v5"/></svg>Service / POI</button>
@@ -284,7 +307,7 @@ table.bom tr.fen td{background:#FFF3E8}
           <div class="tbl"><table class="bom"><thead><tr><th>Line</th><th>Item</th><th>Qty</th><th>Routed to</th><th style="text-align:right">Installed</th></tr></thead><tbody id="bomBody"></tbody></table></div>
           <p class="note" id="qNote"></p>
           <a class="primary" id="q-editor" href="#">Open in Site Map to file the RFQ</a>
-          <p class="note">Filing goes through Site Map's Bill of Materials, so the RFQ carries the full drawing; FENECON receives the whole BOM and sees the site, not the client, until a quote is accepted.</p>
+          <p class="note">Filing goes through Site Map's Bill of Materials, so the RFQ carries the full drawing; the manufacturer receives the whole BOM and sees the site, not the client, until a quote is accepted.</p>
           <button class="primary" id="q-logic" style="margin-top:6px;background:#0B2A3D">Next: Omega Logic →</button>
         </div>
       </div>
@@ -295,9 +318,9 @@ table.bom tr.fen td{background:#FFF3E8}
       <div class="doc">
         <div class="hd"><div><h2>When the client says yes</h2><small>The order runs in Omega Logic</small></div></div>
         <div class="bd">
-          <p style="margin-top:0">FENECON prices the unit on the Quote Desk; the accepted order moves through pricing, the plant, freight and the customer's own app.</p>
+          <p style="margin-top:0">The manufacturer prices the unit on the Quote Desk; the accepted order moves through pricing, the plant, freight and the customer's own app.</p>
           <div class="cards">
-            <a class="card" href="/rfq.html#received"><b>Quote Desk</b><span>RFQs received: open the BOM and send FENECON's quote.</span></a>
+            <a class="card" href="/rfq.html#received"><b>Quote Desk</b><span>RFQs received: open the BOM and send the manufacturer's quote.</span></a>
             <a class="card" href="/omega-logic"><b>Omega Logic</b><span>Today, Sales, Plant, Deliver, Money: the order from price to ship.</span></a>
             <a class="card" href="/logic-custody.html"><b>Custody</b><span>Every serial bound to its site, and the warranty with it.</span></a>
           </div>
@@ -323,6 +346,9 @@ table.bom tr.fen td{background:#FFF3E8}
 <script src="/omega-tools.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="/omega-comed-layers.js"></script>
+<script src="/omega-bess-products.js"></script>
+<script src="/omega-grid-verdict.js"></script>
+<script src="/omega-prime-project.js"></script>
 <script>
 (function () {
   'use strict';
@@ -332,15 +358,28 @@ table.bom tr.fen td{background:#FFF3E8}
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function toast(m) { var t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(function () { t.classList.remove('on'); }, 2600); }
 
-  /* The unit. Specs only, from editor.html's catalog entry FENECON-IND-XXL
-     (FENECON's sheet); price is FENECON's quote, never a figure here. */
-  var UNIT = { key: 'FENECON-IND-XXL', name: 'FENECON Industrial XXL', kw: 2508, kwh: 5015, usable: 4750, hours: 2,
-    lFt: 20, wFt: 8, hFt: 9.5, wt: '~95,000 lb', ac: '480 V 3-ph, UL 1741 SA', xfmr: '3,000 kVA 480/480 V', disco: '4,000 A 480 V',
-    chem: 'LFP, liquid-cooled', ems: 'FEMS, open API, VPP-ready' };
+  /* The unit: the tenant's own product list first, then the shipped
+     FENECON Industrial XXL (OmegaPrimeProject.units). Specs only; the price
+     is the manufacturer's quote, never a figure here. */
+  var PP = window.OmegaPrimeProject, UNITS = [PP.XXL], UNIT = PP.XXL;
+  function drawUnits() {
+    var sel = $('#unitSel'); sel.innerHTML = '';
+    UNITS.forEach(function (u, i) { var o = document.createElement('option'); o.value = String(i); o.textContent = u.name + ' \u2014 ' + u.note; if (u === UNIT) o.selected = true; sel.appendChild(o); });
+    $('#unitCard').innerHTML = '<b>' + esc(UNIT.name) + '</b>' + esc(UNIT.note) + ' \u00b7 ' + (UNIT.tenant ? 'your product list' : 'quote required') +
+      (UNIT.lFt ? '' : ' \u00b7 footprint not on file: Site Map places it');
+    var us = $('#unitSel2'); if (us) us.textContent = UNIT.name + ' \u2014 ' + UNIT.note;
+  }
+  $('#unitSel').onchange = function () { UNIT = UNITS[+this.value] || PP.XXL; S.verdict = null; drawUnits(); };
+  function loadUnits() {
+    var B = window.OmegaBessProducts;
+    if (!B || !B.load) { drawUnits(); return; }
+    B.load().then(function (t) { UNITS = PP.units(t); UNIT = UNITS[0]; drawUnits(); }, function () { drawUnits(); });
+  }
+  drawUnits();
 
   /* ── state + path ─────────────────────────────────────────────────── */
   var S = { addr: '', lat: null, lng: null, type: 'bess', sub: null, circuit: null, area: null, placed: false, poi: null, conduitFt: null, run: null };
-  var SCREENS = [['start', 'Site'], ['atlas', 'Grid Atlas'], ['circuit', 'Circuit'], ['map', 'Site Map'], ['quote', 'Quote'], ['logic', 'Omega Logic']];
+  var SCREENS = [['start', 'Site'], ['atlas', 'Grid Atlas'], ['circuit', 'Circuit'], ['load', 'Load'], ['map', 'Site Map'], ['quote', 'Quote'], ['logic', 'Omega Logic']];
   var seen = { start: 1 }, cur = 'start';
   function drawPath() {
     var n = $('#path'); n.innerHTML = '';
@@ -360,7 +399,7 @@ table.bom tr.fen td{background:#FFF3E8}
 
   /* ── guide: the next action, worked out from the state ────────────── */
   function step() {
-    if (cur === 'start') return { t: 'Start with the site', p: 'Type the site address. Battery is the guided project today.', a: 'Enter the address and press Start', tg: S.addr ? '#go' : '#addr' };
+    if (cur === 'start') return { t: 'Start with the site', p: 'Type the site address and pick the unit. Battery is the guided project today.', a: 'Enter the address and press Start', tg: S.addr ? '#go' : '#addr' };
     if (cur === 'atlas') {
       if (!S.layersOn) return { t: 'Is the grid here right?', p: 'Turn on substations and transmission around the site.', a: 'Turn on Substations', tg: '#ly-sub' };
       if (!S.subOpened) return { t: 'The nearest substation', p: 'The highlighted substation is the closest one to the site. Open it.', a: 'Click the highlighted substation', tg: null };
@@ -368,19 +407,24 @@ table.bom tr.fen td{background:#FFF3E8}
       return { t: 'Near is not the same as available', p: 'The grid is close. Next: does the circuit under the parcel have room?', a: 'Press Check the circuit', tg: '#ga-go' };
     }
     if (cur === 'circuit') {
-      if (!S.circuit) return { t: 'The utility circuit', p: 'Asking the utility which circuit serves this exact point.', a: 'Wait for the answer', tg: null };
-      return { t: 'Room for the XXL?', p: 'Published hosting, minus what is already queued on the feeder, against the unit\'s 2,508 kW.', a: 'Press Design it in Site Map', tg: '#sf-tomap' };
+      if (S.circuit == null) return { t: 'The utility circuit', p: 'Asking the utility which circuit serves this exact point.', a: 'Wait for the answer', tg: null };
+      return { t: 'Room for the ' + UNIT.short + '?', p: 'Published hosting, minus what is already queued on the feeder, judged by OMEGA against the unit\'s ' + fmt(UNIT.kw) + ' kW.', a: 'Press Next: the site\u2019s load', tg: '#sf-tomap' };
+    }
+    if (cur === 'load') {
+      if (!S.rates && !S.ratesErr) return { t: 'What does the site pay for demand?', p: 'Reading the utility\'s planning rates for this ZIP.', a: 'Wait for the rates', tg: null };
+      if (!S.load || !S.load.peakKw) return { t: 'The bill\'s peaks', p: 'Type or paste the twelve monthly peak kW from the utility bill. Skip if you do not have it yet.', a: 'Enter the peaks, or press Design it in Site Map', tg: '#ld-peaks' };
+      return { t: 'Demand, priced', p: 'The demand charge the battery works against. Next the project is set up and the unit goes on the site.', a: 'Press Design it in Site Map', tg: '#ld-tomap' };
     }
     if (cur === 'map') {
       if (!S.area) return { t: 'Mark the BESS area', p: 'Draw the area the battery may use on the satellite image.', a: 'Press BESS area, then drag on the map', tg: '#ed-area' };
-      if (!S.placed) return { t: 'Place the unit', p: 'The XXL drops into the area at its true 20 × 8 ft footprint, with its transformer and disconnect.', a: 'Press Place unit, then click inside the area', tg: '#ed-place' };
+      if (!S.placed) return { t: 'Place the unit', p: UNIT.lFt ? 'The ' + UNIT.short + ' drops into the area at its true ' + UNIT.lFt + ' \u00d7 ' + UNIT.wFt + ' ft footprint, with its transformer and disconnect.' : 'This product\u2019s footprint is not on file, so it is marked as a point; Site Map places it at size.', a: 'Press Place unit, then click inside the area', tg: '#ed-place' };
       if (!S.poi) return { t: 'The utility service', p: 'Mark where the site\'s utility service is: the point of interconnection.', a: 'Press Service / POI, then click it on the map', tg: '#ed-poi' };
       if (!S.conduitFt) return { t: 'Run conduit', p: 'The run from the disconnect to the service, measured on the map.', a: 'Press Conduit run', tg: '#ed-conduit' };
       if (!S.run) return { t: 'Run', p: 'The OMEGA cost model prices the installation on the server, from what is drawn.', a: 'Press Run', tg: '#ed-run' };
-      return { t: 'Quote it', p: 'The installation is priced. FENECON prices the unit.', a: 'Press Quote', tg: '#ed-quote' };
+      return { t: 'Quote it', p: 'The installation is priced. ' + (UNIT.mfr || 'The manufacturer') + ' prices the unit.', a: 'Press Quote', tg: '#ed-quote' };
     }
-    if (cur === 'quote') return { t: 'The RFQ', p: 'Everything drawn and priced, with the unit routed to FENECON.', a: 'Open it in Site Map to file, or go on to Omega Logic', tg: '#q-logic' };
-    return { t: 'The full loop', p: 'From the grid to the circuit to a placed, priced FENECON unit, and into the order.', a: '', tg: null };
+    if (cur === 'quote') return { t: 'The RFQ', p: 'Everything drawn and priced, with the unit routed to ' + (UNIT.mfr || 'its manufacturer') + '. The project is saved: Site Map opens it with the unit ready for the Guided Build.', a: 'Open it in Site Map, or go on to Omega Logic', tg: '#q-editor' };
+    return { t: 'The full loop', p: 'From the grid to the circuit to a placed, priced unit, and into the order.', a: '', tg: null };
   }
   function guide() {
     [].forEach.call(document.querySelectorAll('.pulse'), function (e) { e.classList.remove('pulse'); });
@@ -433,7 +477,8 @@ table.bom tr.fen td{background:#FFF3E8}
     geocode(q, function (hit) {
       b.textContent = 'Start'; b.removeAttribute('aria-disabled');
       if (!hit) { er.hidden = false; er.textContent = 'That address did not resolve. Add the city, state and ZIP and try again.'; return; }
-      S.addr = q; S.lat = hit.lat; S.lng = hit.lng; S.geoSrc = hit.src;
+      S.addr = q; S.lat = hit.lat; S.lng = hit.lng; S.geoSrc = hit.src; S.geoLabel = hit.label || q;
+      $('#unitSel').disabled = true;
       $('#wsLine').innerHTML = 'Omega Prime · <b>' + esc(q) + '</b>';
       $('#gaAddr').textContent = hit.label || q; $('#edTitle').textContent = 'Site Map · ' + q;
       show('atlas'); openAtlas();
@@ -529,45 +574,169 @@ table.bom tr.fen td{background:#FFF3E8}
   });
 
   /* ── CIRCUIT: ComEd's own answer, through the Site Finder's module ── */
-  var sfMap = null, LAY = window.OmegaComEdLayers || null, reqLog = [];
-  function inComEd() { var t = LAY && LAY.TERRITORIES && LAY.TERRITORIES[0]; return t ? (S.lat >= t.s && S.lat <= t.n && S.lng >= t.w && S.lng <= t.e) : false; }
+  var sfMap = null, LAY = window.OmegaComEdLayers || null, GV = window.OmegaGridVerdict || null, reqLog = [];
+  function territory() { try { return LAY && LAY.territoryAt ? LAY.territoryAt(S.lat, S.lng) : null; } catch (e) { return null; } }
   function openCircuit() {
     if (!sfMap) { sfMap = L.map('sfMap').setView([S.lat, S.lng], 17); esriImagery().addTo(sfMap); }
     else sfMap.setView([S.lat, S.lng], 17);
     L.marker([S.lat, S.lng], { icon: siteIcon() }).addTo(sfMap);
-    if (S.circuit) { renderCircuit(); return; }
+    if (S.circuit === false) { circuitFail(S.circuitMsg); return; }
+    if (S.verdict) { renderCircuit(); return; }
     if (!LAY || !LAY.probePoint) { circuitFail('The utility module did not load. Reload the page.'); return; }
-    if (!inComEd()) { circuitFail('This site is outside ComEd\'s territory. Hosting capacity is mapped for ComEd today; other utilities are next.'); return; }
+    var t = territory();
+    if (!t || !t.hasMap) { circuitFail('This site is outside ComEd\'s territory. Hosting capacity is mapped for ComEd today; other utilities are next.'); return; }
     var t0 = Date.now();
     LAY.probePoint(S.lat, S.lng, function (err, res) {
       reqLog.push((err ? 'ERR ' : 'OK  ') + 'probePoint(' + S.lat.toFixed(5) + ', ' + S.lng.toFixed(5) + ') · ' + (Date.now() - t0) + ' ms' + (res && res.layerId != null ? ' · layer ' + res.layerId : ''));
       if (err || !res || !res.rows || !res.rows.length) { circuitFail(err ? 'ComEd did not answer (' + esc(err.message || err) + '). Try again in a minute.' : 'ComEd publishes no hosting-capacity circuit at this point.'); return; }
-      var r = res.rows[0];
-      S.circuit = { feeder: r.feeder || '(unnamed)', sub: r.sub || '', bess: r.bess, queue: r.queue || 0, refreshed: r.refreshed, layer: res.layerId };
-      renderCircuit();
+      S.probe = res; S.circuitUtility = t.name || 'ComEd';
+      judge();
     });
   }
-  function circuitFail(msg) {
-    $('#sfRes').innerHTML = '<div class="hd"><h5>No circuit answer</h5><small>' + esc(S.addr) + '</small></div><div class="bd"><div class="verdict warn">' + msg + '</div>' +
-      '<button class="primary" id="sf-tomap">Design it in Site Map anyway →</button></div>';
-    $('#sf-tomap').onclick = toMap; S.circuit = S.circuit || null; guide();
+  /* The verdict is the server's (api/_lib/grid-verdict.js), asked through
+     the one client Site Map's Grid panel uses; this page draws the answer. */
+  function judge() {
+    if (!GV) { circuitFail('The grid verdict client did not load. Reload the page.'); return; }
+    var body = { unit: { kw: UNIT.kw, kwh: UNIT.kwh, name: UNIT.name },
+                 substation: S.sub ? { name: S.sub.name, kv: S.sub.kv, km: S.sub.mi * 1.609344 } : null,
+                 circuit: GV.circuitBody(S.probe, 0, S.circuitUtility) };
+    $('#sfRes').innerHTML = '<div class="hd"><h5>Judging the circuit\u2026</h5><small>Room against the ' + esc(UNIT.short) + '\u2019s ' + fmt(UNIT.kw) + ' kW</small></div>';
+    GV.ask(body).then(function (a) {
+      S.verdict = a; S.grid = gridRecord(); renderCircuit(); saveSoon();
+    }, function (e) { circuitFail(esc(e.message || e)); });
   }
+  function gridRecord() {
+    var f = GV && S.verdict ? GV.fields(S.verdict, S.probe, 0) : null;
+    if (!f) return null;
+    return { lat: S.lat, lng: S.lng, substation: f.substation, circuit: f.circuit, verdict: f.verdict, source: 'omega-prime' };
+  }
+  function circuitFail(msg) {
+    S.circuit = false; S.circuitMsg = msg;
+    $('#sfRes').innerHTML = '<div class="hd"><h5>No circuit answer</h5><small>' + esc(S.addr) + '</small></div><div class="bd"><div class="verdict warn">' + msg + '</div>' +
+      '<button class="primary" id="sf-tomap">Next: the site\u2019s load \u2192</button></div>';
+    $('#sf-tomap').onclick = toLoad; guide();
+  }
+  var VCLASS = { fits: 'ok', smaller: 'warn', study: 'bad', unsized: 'warn' };
   function renderCircuit() {
-    var c = S.circuit, pub = c.bess, net = pub == null ? null : Math.max(0, pub - c.queue), v;
-    if (net == null) v = '<div class="verdict warn"><b>No battery figure published</b> for this circuit. ComEd confirms in its review.</div>';
-    else if (net >= UNIT.kw) v = '<div class="verdict ok"><b>Fits.</b> ' + fmt(net) + ' kW left after the queue covers the XXL\'s ' + fmt(UNIT.kw) + ' kW with ' + fmt(net - UNIT.kw) + ' kW to spare. ComEd confirms in its review.</div>';
-    else if (net > 0) v = '<div class="verdict warn"><b>Fits only smaller.</b> ' + fmt(net) + ' kW left after the queue is under the XXL\'s ' + fmt(UNIT.kw) + ' kW: export-limit it, run it behind the meter, or plan on a study.</div>';
-    else v = '<div class="verdict bad"><b>Needs a study.</b> The queue already takes the published capacity on this circuit.</div>';
-    $('#sfRes').innerHTML = '<div class="hd"><h5>Circuit ' + esc(c.feeder) + '</h5><small>' + (c.sub ? 'Substation ' + esc(c.sub) + ' · ' : '') + 'resolved at the parcel</small></div><div class="bd">' +
-      '<div class="big"><div><span>Net hosting</span><b style="color:' + (net != null && net >= UNIT.kw ? '#2E7D5B' : '#B8791B') + '">' + (net == null ? '—' : fmt(net) + ' kW') + '</b></div><div><span>FENECON XXL</span><b>' + fmt(UNIT.kw) + ' kW</b></div></div>' +
-      '<dl class="lkv"><dt>ComEd published (battery)</dt><dd>' + (pub == null ? '—' : fmt(pub) + ' kW') + '</dd><dt>Queued DER on the feeder</dt><dd>− ' + fmt(c.queue) + ' kW</dd><dt class="tot">Room left</dt><dd class="tot">' + (net == null ? '—' : fmt(net) + ' kW') + '</dd>' +
-      (net != null ? '<dt>Headroom after the XXL</dt><dd>' + (net - UNIT.kw >= 0 ? '' : '− ') + fmt(Math.abs(net - UNIT.kw)) + ' kW</dd>' : '') + '</dl>' + v +
-      '<div class="prov">Source: ComEd hosting-capacity service, resolved at the point' + (c.layer != null ? ' (layer ' + esc(c.layer) + ')' : '') + '; the battery figure is ComEd\'s BESS_HC and the queue its Feeder_Q, which ComEd does not subtract' + (c.refreshed ? '. Queue refreshed ' + esc(c.refreshed) : '') + '.</div>' +
-      '<button class="primary" id="sf-tomap">Design it in Site Map →</button></div>';
-    $('#sf-tomap').onclick = toMap; guide();
+    if (!S.verdict) { circuitFail('No answer yet.'); return; }
+    var a = S.verdict, c = a.circuit || {}, row = S.probe && S.probe.rows ? S.probe.rows[0] : {}, net = c.netKw;
+    S.circuit = { feeder: c.id || '(unnamed)', sub: c.substation || '', netKw: net };
+    $('#sfRes').innerHTML = '<div class="hd"><h5>Circuit ' + esc(c.id || '(unnamed)') + '</h5><small>' + (c.substation ? 'Substation ' + esc(c.substation) + ' · ' : '') + (c.addressResolved ? 'resolved at the parcel' : 'best circuit in the block') + '</small></div><div class="bd">' +
+      '<div class="big"><div><span>Net hosting</span><b style="color:' + (a.verdict.key === 'fits' ? '#2E7D5B' : '#B8791B') + '">' + (net == null ? '\u2014' : fmt(net) + ' kW') + '</b></div><div><span>' + esc(UNIT.short) + '</span><b>' + fmt(UNIT.kw) + ' kW</b></div></div>' +
+      '<dl class="lkv"><dt>ComEd published (battery)</dt><dd>' + (c.publishedKw == null ? '\u2014' : fmt(c.publishedKw) + ' kW') + '</dd><dt>Queued DER on the feeder</dt><dd>\u2212 ' + fmt(c.queuedKw || 0) + ' kW</dd><dt class="tot">Room left</dt><dd class="tot">' + (net == null ? '\u2014' : fmt(net) + ' kW') + '</dd>' +
+      (c.headroomKw != null ? '<dt>Headroom after the ' + esc(UNIT.short) + '</dt><dd>' + (c.headroomKw >= 0 ? '' : '\u2212 ') + fmt(Math.abs(c.headroomKw)) + ' kW</dd>' : '') + '</dl>' +
+      '<div class="verdict ' + (VCLASS[a.verdict.key] || 'warn') + '"><b>' + esc(a.verdict.label) + '.</b> ' + esc(a.verdict.say) + ' ComEd confirms in its review.</div>' +
+      (S.probe && S.probe.rows && S.probe.rows.length > 1 ? '<div class="prov">' + S.probe.rows.length + ' circuits answer at this point; the one with the most room is shown.</div>' : '') +
+      '<div class="prov">Source: ComEd hosting-capacity service, resolved at the point' + (S.probe && S.probe.layerId != null ? ' (layer ' + esc(S.probe.layerId) + ')' : '') + '; the battery figure is ComEd\'s BESS_HC and the queue its Feeder_Q, which ComEd does not subtract' + (row && row.refreshed ? '. Queue refreshed ' + esc(row.refreshed) : '') + '. Verdict: OMEGA grid verdict (' + esc(a.version || '') + ').</div>' +
+      '<button class="primary" id="sf-tomap">Next: the site\u2019s load \u2192</button></div>';
+    $('#sf-tomap').onclick = toLoad; guide();
   }
   $('#sf-log').onclick = function () { toast(reqLog.length ? reqLog[reqLog.length - 1] : 'No request made yet.'); if (LAY && LAY.diag) try { console.log(LAY.diag()); } catch (e) {} };
-  function toMap() { show('map'); openMap(); }
+  function toLoad() { show('load'); openLoad(); }
+
+  /* ── LOAD: the utility's planning rates for the ZIP, the bill's own peaks ── */
+  function openLoad() {
+    if (S.rates || S.ratesErr) { drawLoad(); return; }
+    var zip = PP.zipOf(S.geoLabel) || PP.zipOf(S.addr);
+    token().then(function (t) {
+      if (!t) throw new Error('Sign in to read the utility\u2019s rates.');
+      if (!zip) throw new Error('No ZIP code in the address, so the utility could not be read. Add the ZIP on the first step.');
+      return fetch('/api/utility-rates?zip=' + encodeURIComponent(zip), { headers: { Authorization: 'Bearer ' + t } })
+        .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j && j.error || ('Rates answered ' + r.status)); return j; }); });
+    }).then(function (j) { S.rates = j; S.zip = zip; drawLoad(); }, function (e) { S.ratesErr = e.message; drawLoad(); });
+  }
+  function drawLoad() {
+    var r = S.rates;
+    $('#ldUtil').textContent = r ? r.name : 'Utility not read';
+    $('#ldRates').innerHTML = r
+      ? '<table class="spec" style="max-width:520px"><tr><td>Utility</td><td>' + esc(r.name) + (S.zip ? ' \u00b7 ZIP ' + esc(S.zip) : '') + '</td></tr>' +
+        '<tr><td>Demand charge</td><td>$' + (+r.demandRate).toFixed(2) + ' per kW-month</td></tr>' +
+        '<tr><td>Energy</td><td>$' + (+r.energyRate).toFixed(4) + ' per kWh</td></tr>' +
+        (r.ratchet ? '<tr><td>Demand ratchet</td><td>' + Math.round(r.ratchet * 100) + '% of the yearly peak</td></tr>' : '') +
+        (r.tou ? '<tr><td>Time of use</td><td>' + esc(r.peakWindow || 'yes') + '</td></tr>' : '') + '</table>' +
+        '<div class="prov">Planning-grade rates from the OMEGA rate book, not a tariff quote. The bill decides.</div>'
+      : '<div class="verdict warn">' + esc(S.ratesErr || 'The utility\u2019s rates could not be read.') + '</div>';
+    peaksChanged();
+    guide();
+  }
+  function peaksChanged() {
+    var pk = PP.peaks($('#ld-peaks').value), r = S.rates, out = '';
+    if (!pk.length) { S.load = r ? loadRecord([]) : null; $('#ldOut').innerHTML = 'No peaks entered: the project is set up without the bill, and Site Map\u2019s bill import can add it later.'; saveSoon(); guide(); return; }
+    var peak = Math.max.apply(null, pk), sum = 0;
+    pk.forEach(function (k) { sum += k; });
+    S.load = loadRecord(pk);
+    out += '<b>' + pk.length + ' of 12 months</b> entered \u00b7 peak ' + fmt(peak) + ' kW';
+    if (r) out += ' \u00b7 demand charges on these months about <b>' + money(sum * r.demandRate) + '</b> at $' + (+r.demandRate).toFixed(2) + '/kW';
+    out += '.<br>The ' + esc(UNIT.short) + ' is ' + fmt(UNIT.kw) + ' kW, ' + Math.round(UNIT.kw / peak * 100) + '% of the site\u2019s peak.';
+    if (pk.length < 12) out += ' Enter all twelve months for the year.';
+    $('#ldOut').innerHTML = out;
+    saveSoon(); guide();
+  }
+  function loadRecord(pk) {
+    var r = S.rates || {}, peak = pk.length ? Math.max.apply(null, pk) : null, sum = 0;
+    pk.forEach(function (k) { sum += k; });
+    return { utility: r.name || '', utilityKey: r.key || '', zip: S.zip || '', demandRate: r.demandRate == null ? null : +r.demandRate,
+      energyRate: r.energyRate == null ? null : +r.energyRate, ratchet: r.ratchet == null ? null : +r.ratchet, tou: !!r.tou, peakWindow: r.peakWindow || '',
+      peaksKw: pk, months: pk.length, peakKw: peak, demandChargeUsd: pk.length && r.demandRate != null ? Math.round(sum * r.demandRate) : null,
+      source: 'omega-rate-book + bill peaks (Omega Prime)', at: new Date().toISOString() };
+  }
+  $('#ld-peaks').oninput = peaksChanged;
+  $('#ld-tomap').onclick = function () { toMap(); };
+
+  /* ── THE PROJECT: made when the site moves from screening to design ──
+     The record Site Map opens (omega-prime-project.js projectDoc): the site,
+     the unit configured, the grid answer and the load. Prime's own sketch
+     rides along as prime.layout; the drawing is the Guided Build's. */
+  function who() {
+    var u = null; try { u = firebase.auth().currentUser; } catch (e) {}
+    if (!u) return Promise.resolve(null);
+    return u.getIdTokenResult().then(function (r) {
+      var claim = r && r.claims && r.claims.orgId;
+      var B = window.OmegaBessProducts;
+      return { uid: u.uid, email: u.email || '', name: u.displayName || String(u.email || '').split('@')[0],
+               orgId: claim ? String(claim) : (B && B.orgOf ? B.orgOf(u.email) : '') };
+    });
+  }
+  function docState() {
+    var b = S.area && S.area.b;
+    return { addr: S.addr, lat: S.lat, lng: S.lng, geoSrc: S.geoSrc, unit: UNIT, grid: S.grid || null, load: S.load || null,
+      area: b ? { s: b.getSouth(), w: b.getWest(), n: b.getNorth(), e: b.getEast(), wFt: S.area.wFt, hFt: S.area.hFt, sqft: S.area.sqft } : null,
+      unitAt: S.unitAt || null, poi: S.poi || null, conduitFt: S.conduitFt || null };
+  }
+  var making = null;
+  function ensureProject() {
+    if (S.projectId) return Promise.resolve(S.projectId);
+    if (making) return making;
+    making = who().then(function (w) {
+      if (!w || !w.orgId) throw new Error('Sign in to save this site as a project.');
+      var db = firebase.firestore(), FV = firebase.firestore.FieldValue;
+      return db.collection('projects').add(PP.projectDoc(docState(), w, FV.serverTimestamp())).then(function (ref) {
+        S.projectId = ref.id; S.saveErr = '';
+        try { if (window.OmegaEvents) OmegaEvents.emit('project.created', { projectId: ref.id, vertical: 'bess', source: 'omega-prime' }); } catch (e) {}
+        return ref.id;
+      });
+    })['catch'](function (e) { making = null; S.saveErr = (e && e.message) || String(e); throw e; });
+    return making;
+  }
+  var saveTimer = null;
+  function saveSoon() {
+    if (!S.projectId) return;
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(function () {
+      var r = S.run, patch = { 'prime.layout': PP.layout(docState()), updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+      if (S.grid) patch.grid = S.grid;
+      if (S.load) patch.load = S.load;
+      if (r && r.total) patch['prime.run'] = { totalUsd: r.total.base, loUsd: r.total.lo, hiUsd: r.total.hi, pricedBy: r.pricedBy || 'api/price-site', at: new Date().toISOString() };
+      firebase.firestore().collection('projects').doc(S.projectId).update(patch).then(function () { S.saveErr = ''; side(); },
+        function (e) { S.saveErr = 'The project did not update: ' + ((e && e.message) || e); side(); });
+    }, 600);
+  }
+  function editorHref() { return S.projectId ? '/editor.html?id=' + encodeURIComponent(S.projectId) + '&from=prime' : '/editor?addr=' + encodeURIComponent(S.addr); }
+  function toMap() {
+    var b = $('#ld-tomap'); b.textContent = 'Setting up the project\u2026'; b.setAttribute('aria-disabled', 'true');
+    ensureProject().then(function () { $('#ldSave').textContent = ''; }, function (e) { $('#ldSave').textContent = e.message + ' The design below works; it is not kept.'; })
+      .then(function () { b.textContent = 'Design it in Site Map \u2192'; b.removeAttribute('aria-disabled'); show('map'); openMap(); });
+  }
 
   /* ── SITE MAP: area, unit, service, conduit on satellite ─────────── */
   var edMap = null, mode = null, L_area = null, L_unit = L.layerGroup(), L_poi = null, L_cond = null, drag = null, eq = null;
@@ -593,28 +762,34 @@ table.bom tr.fen td{background:#FFF3E8}
     if (mode !== 'area' || !drag) return;
     var b = L.latLngBounds(drag, e.latlng); drag = null;
     var w = miles([b.getSouth(), b.getWest()], [b.getSouth(), b.getEast()]) * 5280, h = miles([b.getSouth(), b.getWest()], [b.getNorth(), b.getWest()]) * 5280;
-    if (w < UNIT.lFt + 20 || h < UNIT.wFt + 12) { toast('Too small for the XXL and its transformer: drag at least ~40 × 20 ft.'); edMap.removeLayer(L_area); L_area = null; return; }
+    var needL = (UNIT.lFt || 20) + 20, needW = (UNIT.wFt || 8) + 12;
+    if (Math.max(w, h) < needL || Math.min(w, h) < needW) { toast('Too small for the ' + UNIT.short + ' and its transformer: drag at least ~' + needL + ' \u00d7 ' + needW + ' ft.'); edMap.removeLayer(L_area); L_area = null; return; }
     S.area = { b: b, wFt: w, hFt: h, sqft: w * h };
     L.tooltip({ permanent: true, direction: 'top', className: 'eqlbl', offset: [0, -4] }).setLatLng([b.getNorth(), b.getCenter().lng]).setContent('BESS area · ' + fmt(w) + ' × ' + fmt(h) + ' ft').addTo(L_unit);
     edMap.fitBounds(b.pad(0.25), { maxZoom: 21 });
-    arm(null); $('#ed-area').classList.add('done'); $('#ed-place').classList.remove('dis'); side(); guide();
+    arm(null); $('#ed-area').classList.add('done'); $('#ed-place').classList.remove('dis'); side(); guide(); saveSoon();
   }
   function box(lat, lng, wFt, hFt) { var d = ftToDeg(lat, 1); return [[lat - hFt / 2 * d.dLat, lng - wFt / 2 * d.dLng], [lat + hFt / 2 * d.dLat, lng + wFt / 2 * d.dLng]]; }
   function onClick(e) {
     if (mode === 'place') {
       if (!S.area.b.contains(e.latlng)) { toast('Click inside the BESS area.'); return; }
       L_unit.eachLayer(function (l) { if (!(l instanceof L.Tooltip)) L_unit.removeLayer(l); });
-      var c = e.latlng, d = ftToDeg(c.lat, 1);
-      var unit = box(c.lat, c.lng, UNIT.lFt, UNIT.wFt);
-      L.rectangle(unit, { color: '#E2701B', weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95 }).addTo(L_unit).bindTooltip('FENECON XXL · 20×8 ft', { permanent: true, direction: 'bottom', className: 'eqlbl' });
-      for (var k = 1; k < 5; k++) { var x = c.lng - UNIT.lFt / 2 * d.dLng + k * UNIT.lFt / 5 * d.dLng; L.polyline([[unit[0][0], x], [unit[1][0], x]], { color: '#c9c9c4', weight: 1 }).addTo(L_unit); }
-      var xLng = c.lng + (UNIT.lFt / 2 + 9) * d.dLng, dLng2 = c.lng + (UNIT.lFt / 2 + 18) * d.dLng;
+      var c = e.latlng, d = ftToDeg(c.lat, 1), lF = UNIT.lFt || 0, wF = UNIT.wFt || 0;
+      S.unitAt = { lat: c.lat, lng: c.lng };
+      if (lF) {
+        var unit = box(c.lat, c.lng, lF, wF);
+        L.rectangle(unit, { color: '#E2701B', weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95 }).addTo(L_unit).bindTooltip(esc(UNIT.short) + ' \u00b7 ' + lF + '\u00d7' + wF + ' ft', { permanent: true, direction: 'bottom', className: 'eqlbl' });
+        for (var k = 1; k < 5; k++) { var x = c.lng - lF / 2 * d.dLng + k * lF / 5 * d.dLng; L.polyline([[unit[0][0], x], [unit[1][0], x]], { color: '#c9c9c4', weight: 1 }).addTo(L_unit); }
+      } else {
+        L.circleMarker(c, { radius: 8, color: '#E2701B', weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95 }).addTo(L_unit).bindTooltip(esc(UNIT.short) + ' \u00b7 footprint not on file', { permanent: true, direction: 'bottom', className: 'eqlbl' });
+      }
+      var xLng = c.lng + (lF / 2 + 9) * d.dLng, dLng2 = c.lng + (lF / 2 + 18) * d.dLng;
       L.rectangle(box(c.lat, xLng, 8, 8), { color: '#2B5FA8', weight: 2, fillColor: '#c9ccd0', fillOpacity: .95 }).addTo(L_unit).bindTooltip('XFMR', { permanent: true, direction: 'top', className: 'eqlbl' });
       L.rectangle(box(c.lat, dLng2, 3, 4), { color: '#2B5FA8', weight: 2, fillColor: '#e8e8e8', fillOpacity: .95 }).addTo(L_unit).bindTooltip('DISC', { permanent: true, direction: 'bottom', className: 'eqlbl' });
-      L.polyline([[c.lat, c.lng + UNIT.lFt / 2 * d.dLng], [c.lat, xLng - 4 * d.dLng]], { color: '#ffd23f', weight: 2 }).addTo(L_unit);
+      L.polyline([[c.lat, c.lng + lF / 2 * d.dLng], [c.lat, xLng - 4 * d.dLng]], { color: '#ffd23f', weight: 2 }).addTo(L_unit);
       L.polyline([[c.lat, xLng + 4 * d.dLng], [c.lat, dLng2 - 1.5 * d.dLng]], { color: '#ffd23f', weight: 2 }).addTo(L_unit);
       eq = { disco: L.latLng(c.lat, dLng2) };
-      S.placed = true; arm(null); $('#ed-place').classList.add('done'); $('#ed-poi').classList.remove('dis'); side(); guide();
+      S.placed = true; arm(null); $('#ed-place').classList.add('done'); $('#ed-poi').classList.remove('dis'); side(); guide(); saveSoon();
       if (L_cond) { edMap.removeLayer(L_cond); L_cond = null; S.conduitFt = null; S.run = null; }
       return;
     }
@@ -624,11 +799,11 @@ table.bom tr.fen td{background:#FFF3E8}
         .bindTooltip('Utility service · POI', { permanent: true, direction: 'left', className: 'eqlbl', offset: [-10, 0] });
       S.poi = e.latlng; arm(null); $('#ed-poi').classList.add('done'); $('#ed-conduit').classList.remove('dis');
       if (L_cond) { edMap.removeLayer(L_cond); L_cond = null; S.conduitFt = null; S.run = null; }
-      side(); guide();
+      side(); guide(); saveSoon();
     }
   }
   $('#ed-area').onclick = function () { arm('area', this); toast('Drag a rectangle over the area the battery may use.'); };
-  $('#ed-place').onclick = function () { if (this.classList.contains('dis')) return; arm('place', this); toast('Click inside the BESS area to place the XXL.'); };
+  $('#ed-place').onclick = function () { if (this.classList.contains('dis')) return; arm('place', this); toast('Click inside the BESS area to place the ' + UNIT.short + '.'); };
   $('#ed-poi').onclick = function () { if (this.classList.contains('dis')) return; arm('poi', this); toast('Click the utility service on the map.'); };
   $('#ed-conduit').onclick = function () {
     if (this.classList.contains('dis')) return;
@@ -637,7 +812,7 @@ table.bom tr.fen td{background:#FFF3E8}
     if (L_cond) edMap.removeLayer(L_cond);
     L_cond = L.polyline([a, mid, b], { color: '#ffd23f', weight: 3, dashArray: '9 5' }).addTo(edMap)
       .bindTooltip('Conduit · ' + fmt(ft) + ' ft', { permanent: true, className: 'eqlbl' });
-    S.conduitFt = ft; S.run = null; this.classList.add('done'); $('#ed-run').classList.remove('dis'); side(); guide();
+    S.conduitFt = ft; S.run = null; this.classList.add('done'); $('#ed-run').classList.remove('dis'); side(); guide(); saveSoon();
   };
 
   /* Run: /api/price-site, the cost model on the server. The page sends what
@@ -649,10 +824,10 @@ table.bom tr.fen td{background:#FFF3E8}
     token().then(function (t) {
       if (!t) throw new Error('Sign in to run the price: the cost model is for a signed-in workspace.');
       return fetch('/api/price-site', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
-        body: JSON.stringify({ kw: UNIT.kw, hours: UNIT.hours, poiFt: Math.round(S.conduitFt), padArea: Math.round(S.area.sqft) }) })
+        body: JSON.stringify({ kw: UNIT.kw, hours: UNIT.hours || +(UNIT.kwh / UNIT.kw).toFixed(2), poiFt: Math.round(S.conduitFt), padArea: Math.round(S.area.sqft) }) })
         .then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error(j && (j.error || j.message) || ('Pricing answered ' + r.status)); return j; }); });
     }).then(function (j) {
-      S.run = j; b.classList.add('done'); $('#ed-quote').classList.remove('dis'); side(); guide();
+      S.run = j; b.classList.add('done'); $('#ed-quote').classList.remove('dis'); side(); guide(); saveSoon();
       $('#edSide').scrollTop = 9999; toast('Run complete: installation priced by the OMEGA cost model.');
     }, function (e) { toast(e.message); S.runErr = e.message; side(); }).then(function () { b.lastChild.nodeValue = 'Run'; });
   };
@@ -660,16 +835,25 @@ table.bom tr.fen td{background:#FFF3E8}
 
   function side() {
     var h = '<div class="sec"><h6>Site</h6><table class="spec"><tr><td>Address</td><td>' + esc(S.addr) + '</td></tr>' +
-      (S.circuit ? '<tr><td>ComEd circuit</td><td>' + esc(S.circuit.feeder) + '</td></tr><tr><td>Net hosting</td><td>' + (S.circuit.bess == null ? '—' : fmt(Math.max(0, S.circuit.bess - S.circuit.queue)) + ' kW') + '</td></tr>' : '') +
+      (S.circuit ? '<tr><td>ComEd circuit</td><td>' + esc(S.circuit.feeder) + '</td></tr><tr><td>Net hosting</td><td>' + (S.circuit.netKw == null ? '\u2014' : fmt(S.circuit.netKw) + ' kW') + '</td></tr>' : '') +
+      (S.verdict ? '<tr><td>Grid verdict</td><td>' + esc(S.verdict.verdict.label) + '</td></tr>' : '') +
+      (S.load && S.load.demandRate != null ? '<tr><td>Demand rate</td><td>$' + S.load.demandRate.toFixed(2) + ' / kW-mo</td></tr>' : '') +
+      (S.load && S.load.peakKw ? '<tr><td>Peak demand</td><td>' + fmt(S.load.peakKw) + ' kW</td></tr>' : '') +
       (S.sub ? '<tr><td>Nearest substation</td><td>' + esc(S.sub.name) + ' · ' + S.sub.mi.toFixed(1) + ' mi</td></tr>' : '') +
       (S.area ? '<tr><td>BESS area</td><td>' + fmt(S.area.wFt) + ' × ' + fmt(S.area.hFt) + ' ft · ' + fmt(S.area.sqft) + ' sq ft</td></tr>' : '') +
       (S.conduitFt ? '<tr><td>Conduit</td><td>' + fmt(S.conduitFt) + ' ft</td></tr>' : '') + '</table></div>';
-    h += '<div class="sec"><h6>Battery</h6><table class="spec"><tr><td>Unit</td><td>' + UNIT.name + '</td></tr><tr><td>Power / energy</td><td>' + fmt(UNIT.kw) + ' kW / ' + fmt(UNIT.kwh) + ' kWh</td></tr><tr><td>Usable</td><td>~' + fmt(UNIT.usable) + ' kWh</td></tr><tr><td>Chemistry</td><td>' + UNIT.chem + '</td></tr><tr><td>AC</td><td>' + UNIT.ac + '</td></tr><tr><td>Transformer</td><td>' + UNIT.xfmr + '</td></tr><tr><td>Disconnect</td><td>' + UNIT.disco + '</td></tr><tr><td>Footprint</td><td>20 × 8 × 9.5 ft · ' + UNIT.wt + '</td></tr><tr><td>EMS</td><td>' + UNIT.ems + '</td></tr><tr><td>Price</td><td>Quote from FENECON</td></tr></table></div>';
+    function spec(k, v) { return '<tr><td>' + k + '</td><td>' + (v ? esc(v) : '<span class="empty">not on file</span>') + '</td></tr>'; }
+    h = (S.projectId ? '<div class="sec"><h6>Project</h6><a class="primary" href="' + editorHref() + '">Open the project in Site Map</a><div class="empty" style="margin-top:6px">Saved as you go. Site Map opens it with the unit ready for the BESS Guided Build.</div></div>'
+          : (S.saveErr ? '<div class="sec"><div class="flag">' + esc(S.saveErr) + '</div></div>' : '')) + h;
+    h += '<div class="sec"><h6>Battery</h6><table class="spec">' + spec('Unit', UNIT.name) + spec('Power / energy', fmt(UNIT.kw) + ' kW / ' + fmt(UNIT.kwh) + ' kWh') +
+      spec('Usable', UNIT.usable ? '~' + fmt(UNIT.usable) + ' kWh' : '') + spec('Chemistry', UNIT.chem) + spec('AC', UNIT.ac) + spec('Transformer', UNIT.xfmr) + spec('Disconnect', UNIT.disco) +
+      spec('Footprint', UNIT.lFt ? UNIT.lFt + ' \u00d7 ' + UNIT.wFt + (UNIT.hFt ? ' \u00d7 ' + UNIT.hFt : '') + ' ft' + (UNIT.wt ? ' \u00b7 ' + UNIT.wt : '') : '') + spec('EMS', UNIT.ems) +
+      '<tr><td>Price</td><td>Quote from ' + esc(UNIT.mfr || 'the manufacturer') + '</td></tr></table></div>';
     if (S.run) {
       var r = S.run, rows = (r.divisions || []).filter(function (d) { return d.base > 0; }).map(function (d) { return '<tr><td>' + esc(d.name) + '</td><td>' + money(d.base) + '</td></tr>'; }).join('');
       h += '<div class="sec"><h6>Run · installed cost</h6><table class="spec">' + rows +
         '<tr><td><b>Total</b></td><td><b>' + money(r.total.base) + '</b></td></tr><tr><td>Range</td><td>' + money(r.total.lo) + ' – ' + money(r.total.hi) + '</td></tr></table>' +
-        '<div class="flag">' + esc(r.estimateClassPlain || r.estimateClass || '') + ' The model prices the battery at its planning rate; FENECON\'s quote replaces that line.</div></div>';
+        '<div class="flag">' + esc(r.estimateClassPlain || r.estimateClass || '') + ' The model prices the battery at its planning rate; ' + esc(UNIT.mfr || 'the manufacturer') + '\'s quote replaces that line.</div></div>';
       var f = r.financial;
       if (f && f.stack) h += '<div class="sec"><h6>Value · year one</h6><table class="spec"><tr><td>Value stack</td><td>' + money(f.stack.perYear || 0) + ' / yr</td></tr>' +
         (f.incentives ? '<tr><td>Incentives</td><td>' + money(f.incentives.total || 0) + '</td></tr>' : '') +
@@ -682,12 +866,14 @@ table.bom tr.fen td{background:#FFF3E8}
   function drawQuote() {
     var r = S.run;
     $('#qSub').textContent = S.addr + ' · drawn in Omega Prime';
-    var rows = '<tr class="fen"><td>1</td><td>' + UNIT.name + ' · 2.508 MW / 5.015 MWh, 20 ft liquid-cooled</td><td>1</td><td><span class="tag f">FENECON</span></td><td class="n">Quote required</td></tr>';
-    (r.divisions || []).filter(function (d) { return d.base > 0; }).forEach(function (d, i) { rows += '<tr><td>' + (i + 2) + '</td><td>' + esc(d.name) + '</td><td>1</td><td><span class="tag">FENECON (full BOM)</span></td><td class="n">' + money(d.base) + '</td></tr>'; });
+    var mfr = esc(UNIT.mfr || 'Manufacturer');
+    var rows = '<tr class="fen"><td>1</td><td>' + esc(UNIT.name) + ' \u00b7 ' + esc(UNIT.note) + '</td><td>1</td><td><span class="tag f">' + mfr + '</span></td><td class="n">Quote required</td></tr>';
+    (r.divisions || []).filter(function (d) { return d.base > 0; }).forEach(function (d, i) { rows += '<tr><td>' + (i + 2) + '</td><td>' + esc(d.name) + '</td><td>1</td><td><span class="tag">' + mfr + ' (full BOM)</span></td><td class="n">' + money(d.base) + '</td></tr>'; });
     rows += '<tr><td></td><td><b>Installed total (cost model)</b></td><td></td><td></td><td class="n"><b>' + money(r.total.base) + '</b></td></tr>';
     $('#bomBody').innerHTML = rows;
     $('#qNote').textContent = 'Conduit ' + fmt(S.conduitFt) + ' ft · BESS area ' + fmt(S.area.sqft) + ' sq ft' + (S.circuit ? ' · ComEd circuit ' + S.circuit.feeder : '') + '. Priced by ' + (r.pricedBy || 'api/price-site') + '.';
-    $('#q-editor').href = '/editor?addr=' + encodeURIComponent(S.addr);
+    $('#q-editor').href = editorHref();
+    $('#q-editor').textContent = S.projectId ? 'Open the project in Site Map' : 'Open in Site Map to file the RFQ';
     guide();
   }
   $('#q-logic').onclick = function () { show('logic'); };
@@ -696,7 +882,7 @@ table.bom tr.fen td{background:#FFF3E8}
   (function () {
     var cfg = window.CLEARSKY_CONFIG || {};
     try { if (window.firebase && firebase.initializeApp && !firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg); } catch (e) {}
-    try { firebase.auth().onAuthStateChanged(function () { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }); } catch (e) { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }
+    try { firebase.auth().onAuthStateChanged(function (u) { if (u && !S.addr) loadUnits(); if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }); } catch (e) { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }
   })();
 
   show('start');
