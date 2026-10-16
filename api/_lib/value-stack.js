@@ -251,19 +251,22 @@
       id: "ca.sgip.storage", utility: "PG&E / SCE / SoCalGas / SDG&E (SGIP)", name: "California SGIP, large-scale storage",
       state: "CA", nonresidential: true,
       perKwh: 250, perKwhItc: 180,
-      tier: "published", asOf: "Step 5, statewide, dashboard data of 2026-10-05; read 2026-10-06",
+      tier: "planning", asOf: "Step 5 rates; selfgenca dashboard of 2026-10-06 reads the step CLOSED; read 2026-10-06",
       ref: "CPUC Self-Generation Incentive Program, large-scale storage (over 10 kW), "
          + "Step 5: $0.25/Wh, or $0.18/Wh for projects claiming the federal ITC. The "
-         + "open step's rate on selfgenca.com replaces this.",
+         + "open step's rate and status on selfgenca.com replace this.",
       url: "https://www.selfgenca.com/home/program_metrics/",
-      conditions: "Paid through the IOU programme administrators (PG&E, SCE, SoCalGas "
-         + "and SDG&E territories — confirm the serving utility); each step's budget "
-         + "subscribes and the next pays less. Step 5 funds left as of 2026-10-05: "
-         + "roughly $12M at PG&E but only about $2M each at SCE, SoCalGas and SDG&E, "
-         + "so a single large project can exhaust a territory. This screening assumes "
-         + "the ITC is claimed, so the ITC-adjusted rate is used. A resiliency adder "
-         + "of $0.15/Wh exists for critical facilities. Residential budgets differ "
-         + "and are not priced here."
+      conditions: "Held at planning-grade 2026-10-06: selfgenca.com's own metrics page "
+         + "lists Large-Scale Storage Step 5's STATUS AS CLOSED in all four territories "
+         + "while still listing funds (roughly $12M at PG&E, about $2M each at SCE, "
+         + "SoCalGas and SDG&E) and no large-scale waitlist — confirm with the "
+         + "programme administrator whether new applications are accepted before "
+         + "counting this. Paid through the IOU programme administrators (PG&E, SCE, "
+         + "SoCalGas and SDG&E territories — confirm the serving utility); each step's "
+         + "budget subscribes and the next pays less. This screening assumes the ITC "
+         + "is claimed, so the ITC-adjusted rate is used. A resiliency adder of "
+         + "$0.15/Wh exists for critical facilities. Residential budgets differ and "
+         + "are not priced here."
     },
     {
       id: "ny.nyserda.retail", utility: "NYSERDA", name: "NYSERDA Retail Energy Storage Incentive",
