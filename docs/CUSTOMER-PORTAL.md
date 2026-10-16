@@ -672,6 +672,22 @@ the obvious version. Since then, what landed:
   workspace. Tests: `scripts/test-crm.js`, `scripts/test-customer-subscribe.js`;
   `npm run check:pages` renders `index.html`, `app.html` and `admin.html`.
 
+- Editor Lite included by the supplier (2026-10-16, Tommy, of FENECON:
+  "Fenecon's customers should get the map included at no charge"):
+  `billing/current.editorLite.customersIncluded`, set only by ClearSky's
+  owner (`api/logic-onboard.js` `customer-editor-included`, the Customer
+  Editor Lite card on `logic-admin.html`; billing history and `omega_audit`
+  rows; refused until Editor Lite is on; the bundle keeps it while enrolled
+  and drops it when Editor Lite goes off). `api/_lib/buyer-design.js`
+  `entitlement()` stays the ONE rule: an account's own live subscription or
+  trial says itself, otherwise every account the person may act on
+  (`B.active`: not pending, not disabled, a verified email) is `included`,
+  with no expiry and the supplier's modules. Checkout offers nothing and
+  refuses a plan while it is on; an existing paid subscription is not
+  cancelled by it (Stripe's own Manage does that). Anyone who opens a free
+  customer account on that supplier's portal gets the map, so it is a
+  commercial term per supplier, never a default. `scripts/test-editor-lite-included.js`.
+
 - The 2026-09-24 review pass (2026-09-25): the installed app's sign-in
   (above, §3); the PO sheet read straight from Excel or Google Sheets
   (tabs, a header row, quoted cells; a PO number with two addresses is
