@@ -198,6 +198,7 @@ function openOmegaCore(){
      each step's share of the Run's money and its days from api/build-sequence
      (the browser only shows and hides the model). -->
 <script src="/omega-build-sequence.js"></script>
+<script src="/omega-takeoff.js"></script>
 <!-- Omega-Core from the Output tab: reads the Run and the drawing, fans out
      through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
      whether the site takes the skids and what the host is paid. -->
@@ -3754,7 +3755,11 @@ if(document.readyState==='loading'){
     <button onclick="setCostTab('roi')" id="ct-roi" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">📊 ROI</button>
     <button onclick="setCostTab('grid')" id="ct-grid" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">🗺️ Grid</button>
     <button onclick="setCostTab('freqreg')" id="ct-freqreg" class="cost-sub-tab" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">⚡ FR Sys</button>
+    <button onclick="setCostTab('takeoff')" id="ct-takeoff" class="cost-sub-tab" title="The Run's money by trade, each line with its quantity; click a line to mark it on the map" style="flex:1;padding:8px 4px;font-size:10px;font-weight:700;background:none;border:none;color:var(--sub);cursor:pointer;border-bottom:2px solid transparent">🧱 Trades</button>
   </div>
+
+  <!-- TRADES TAB: the takeoff by trade (omega-takeoff.js draws it from POST /api/takeoff) -->
+  <div id="cst-takeoff" style="padding:10px;flex:1;overflow-y:auto;display:none"></div>
 
   <!-- COSTS TAB -->
   <div id="cst-costs" style="padding:10px;flex:1;overflow-y:auto">
@@ -11474,7 +11479,11 @@ function _ppCollectFleet(){
                physical unit was printed twice under two different names.
                Publishing the ids lets any later pass skip what this one
                already counted. Additive: every existing consumer ignores it. */
-            elIds:[] };
+            elIds:[],
+            /* The ids each model counts (elements and shapes), so the
+               takeoff by trade can mark a battery row's units on the map
+               (omega-takeoff.js). Additive, like elIds. */
+            idsByModel:{} };
 
   /* Patch 25: the guided BESS build does not create an assembly/bespad
      SHAPE. placeBgbAt() commits an ELEMENT via _evAdd('bess', ...) and
@@ -11531,6 +11540,7 @@ function _ppCollectFleet(){
       }
       var G=out.byModel[gkey];
       G.qty++;
+      if(el.id!=null) (out.idsByModel[gkey]=out.idsByModel[gkey]||[]).push(el.id);
       G.groupKwh+=gkwh; G.groupKw+=gkw;
       if(G.kwh!==gkwh || G.kw!==gkw) G.mixed=true;
     });
@@ -11579,6 +11589,7 @@ function _ppCollectFleet(){
     if(!B.catalogKey && cKey) B.catalogKey=cKey;
     if(!B.mfr && cMfr) B.mfr=cMfr;
     B.qty++;
+    if(s.id!=null) (out.idsByModel[key]=out.idsByModel[key]||[]).push(s.id);
     B.groupKwh += kwh; B.groupKw += kw;
     if(cost!=null) B.groupCost += cost;
     if(kwh!==B.kwh || kw!==B.kw) B.mixed=true;
@@ -29431,7 +29442,7 @@ function _debounceROI() {
 
 // -- COST SUB-TAB SWITCHER -------------------------------------
 function setCostTab(tab) {
-  ['costs','incentives','revenue','roi','grid','freqreg'].forEach(t => {
+  ['costs','incentives','revenue','roi','grid','freqreg','takeoff'].forEach(t => {
     const btn = document.getElementById('ct-'+t);
     const pnl = document.getElementById('cst-'+t);
     const isActive = t === tab;
@@ -29442,6 +29453,7 @@ function setCostTab(tab) {
   if(tab === 'revenue') renderRevenuePanel();
   if(tab === 'roi') updateROI();
   if(tab === 'freqreg') renderFreqReg();
+  if(window.OmegaTakeoff) { if(tab === 'takeoff') OmegaTakeoff.show(); else OmegaTakeoff.hide(); }
 }
 
 // -- MAIN COST CALCULATOR --------------------------------------
@@ -29494,31 +29506,42 @@ function _costSheetValues(){
     bmsMat:$v('ce-bms-mat'), bmsLabor:$v('ce-bms-labor'), emsRate:$v('ems-rate'), emsSetup:$v('ems-setup'), eng:$v('ce-eng'), perm:$v('ce-perm'),
     comm:$v('ce-comm'), contPct:$v('ce-cont'), actualTotal:$v('ce-actual-total'), pvWdc:$v('ce-pv-wdc'), bessKwh:$v('ce-bess-kwh'), bessKw:$v('ce-bess-kw') };
 }
-/* The chargers on the map, as quantities: the price book is the server's. */
-function _evQuantities(){
+/* The chargers on the map, as quantities: the price book is the server's.
+   `rec` is omegaCostQuantities' (below): each item's id by its place in
+   items, and the future ones. */
+function _evQuantities(rec){
   var out={ items:[], futureUnits:0, futureMakeReady:0 };
   if(typeof S==='undefined') return out;
   function _fut(o){ try{ return !!(window.OmegaEVFuture && window.OmegaEVFuture.isFuture(o)); }catch(e){ return false; } }
+  function _rec(k, id){ if(rec && id!=null) (rec[k]=rec[k]||[]).push(id); }
   var i,s;
   for(i=0;S.shapes&&i<S.shapes.length;i++){
     s=S.shapes[i]; if(!s) continue;
     if(s.kind!=='evpost' && s.kind!=='evunit' && s.kind!=='evl2' && s.kind!=='evcab') continue;
-    if(_fut(s)){ out.futureUnits++; continue; }
+    if(_fut(s)){ out.futureUnits++; _rec('ev:future', s.id); continue; }
     out.items.push({ key:(s.model||s.evId||s.kind), kind:s.kind, evId:s.evId||null, kw:+s.kw||0, mfr:s.mfr||'', qty:1,
       eqOverride:(s.eqCostOverride!=null?+s.eqCostOverride:null), installOverride:(s.installCostOverride!=null?+s.installCostOverride:null) });
+    _rec('ev#'+(out.items.length-1), s.id);
   }
   for(i=0;S.elements&&i<S.elements.length;i++){
     var e=S.elements[i]; if(!e || e.type!=='evgear' || e.evKind!=='charger') continue;
-    if(_fut(e)){ out.futureUnits++; continue; }
+    if(_fut(e)){ out.futureUnits++; _rec('ev:future', e.id); continue; }
     out.items.push({ key:(e.evModel||e.evId||'DCFC'), kind:'evunit', evId:e.evId||null, kw:+e.kw||0, mfr:e.mfr||'', qty:(e.units>1?e.units:1) });
+    _rec('ev#'+(out.items.length-1), e.id);
   }
   try{ if(window.OmegaEVFuture && out.futureUnits>0){ out.futureMakeReady=+(window.OmegaEVFuture.cost().total)||0; } }catch(e){}
   return out;
 }
-/* Everything the server prices: what is on the drawing and what the sheet says. */
-function omegaCostQuantities(){
+/* Everything the server prices: what is on the drawing and what the sheet says.
+   `rec`, when given (the takeoff by trade, omega-takeoff.js), is filled
+   with the ids of what each quantity counts, by the same tests that count
+   it, under the keys api/_lib/takeoff.js names its lines' parts by. q is
+   the same either way. */
+function omegaCostQuantities(rec){
   var q={};
+  function _rec(k, id){ if(rec && id!=null) (rec[k]=rec[k]||[]).push(id); }
   var fleet=(typeof _ppCollectFleet==='function')?_ppCollectFleet():{units:0,byModel:{}};
+  if(rec) Object.keys(fleet.idsByModel||{}).forEach(function(k){ fleet.idsByModel[k].forEach(function(id){ _rec('bess:'+k, id); _rec('bess', id); }); });
   q.fleet={ units:fleet.units||0, byModel:{} };
   Object.keys(fleet.byModel||{}).forEach(function(k){ var b=fleet.byModel[k];
     var ck=b.catalogKey||k, ce=(typeof BESS_CATALOG!=='undefined') ? (BESS_CATALOG[ck]||BESS_CATALOG[k]||null) : null;
@@ -29541,43 +29564,50 @@ function omegaCostQuantities(){
   q.configured=_uniq.map(function(b){ return { id:b.id, name:b.name, kwh:+b.kwh||0, kw:+b.kw||0, mfr:b.mfr||'', eqcost:+b.eqcost||0, installcost:+b.installcost||0, qty:b._qty||1, catalogKey:b.catalogKey||'' }; });
   var fr={kwh:0,kw:0}; try{ if(typeof omegaBessFleet==='function') fr=omegaBessFleet(); }catch(e){}
   q.fleetRating={ kwh:+fr.kwh||0, kw:+fr.kw||0 };
-  var _n=function(id){ return (S.elements||[]).filter(function(e){ return e && e.eqId===id; }).length; };
-  q.counts={ pad:_n('pad'), disco:_n('disco'), meter:_n('meter'), bollard:_n('bollard')+((typeof _padBollardCount==='function')?_padBollardCount():0), jbox:_n('jbox'), panel:_n('panel'),
-    hasXfmr: !!((S.elements||[]).some(function(e){ return e&&(e.eqId==='transformer'||e.eqId==='xfmr'); }) || (S.bessList||[]).some(function(b){ return b.xfmr && b.xfmr!=='N/A'; })) };
+  var _n=function(id){ return (S.elements||[]).filter(function(e){ var hit=!!(e && e.eqId===id); if(hit) _rec(id, e.id); return hit; }).length; };
+  var _bollardShapes=rec?[]:null;
+  var _xfmrEls=(S.elements||[]).filter(function(e){ return e&&(e.eqId==='transformer'||e.eqId==='xfmr'); });
+  q.counts={ pad:_n('pad'), disco:_n('disco'), meter:_n('meter'), bollard:_n('bollard')+((typeof _padBollardCount==='function')?_padBollardCount(_bollardShapes):0), jbox:_n('jbox'), panel:_n('panel'),
+    hasXfmr: !!(_xfmrEls.length>0 || (S.bessList||[]).some(function(b){ return b.xfmr && b.xfmr!=='N/A'; })) };
+  if(rec){ (_bollardShapes||[]).forEach(function(id){ _rec('bollard', id); }); _xfmrEls.forEach(function(e){ _rec('xfmr', e.id); }); }
   /* the NextNRG Microgrid Controller placed for the HOST (Draw › Utility);
      the one inside an Omega-Core skid is ClearSky's and never counted here */
-  q.counts.mgc=(S.shapes||[]).filter(function(sh){ return sh && sh.kind==='utility' && sh.utype==='mgc'; }).length;
+  q.counts.mgc=(S.shapes||[]).filter(function(sh){ var hit=!!(sh && sh.kind==='utility' && sh.utype==='mgc'); if(hit) _rec('mgc', sh.id); return hit; }).length;
   q.conduitFt={}; q.conduitRuns={};
   (S.conduits||[]).forEach(function(c){
     var ft = (c.condType==='PVC-UG') ? (c.ftLen||0) : (c.ftLen || (S.pxPerFt ? c.pxLen/S.pxPerFt : 0));
     q.conduitFt[c.condType]=(q.conduitFt[c.condType]||0)+ft; q.conduitRuns[c.condType]=(q.conduitRuns[c.condType]||0)+1;
+    _rec('conduit:'+c.condType, c.id);
   });
   q.firstBessKw=(S.bessList&&S.bessList[0])?(+(S.bessList[0].kw||380)):380;
   q.emsOn = document.getElementById('ems-toggle')?.checked === true;
   q.configuredKwh=(S.bessList||[]).reduce(function(s,b){ return s+(+(b.kwh||0))*(+(b.qty||1)); },0);
   q.configuredKw =(S.bessList||[]).reduce(function(s,b){ return s+(+(b.kw ||0))*(+(b.qty||1)); },0);
   q.sheet=_costSheetValues();
-  q.ev=_evQuantities(); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
+  q.ev=_evQuantities(rec); q.priceBasis=(typeof OMEGA_PRICE_BASIS!=='undefined')?OMEGA_PRICE_BASIS:'cost';
   q.solarKwDc=(typeof omegaSolarKwDc==='function')?(+omegaSolarKwDc()||0):0;
   q.solar={ byMount:(typeof omegaSolarByMount==='function')?omegaSolarByMount():null,   /* a canopy is priced as a canopy */
             nextnrgKwDc:(typeof omegaSolarNextnrgKwDc==='function')?(+omegaSolarNextnrgKwDc()||0):0 };   /* NextNRG's arrays, priced as its system */
+  if(rec && typeof omegaSolarMountOf==='function') (S.shapes||[]).forEach(function(s){ var m=omegaSolarMountOf(s); if(!m) return; _rec('solar:'+m, s.id); if(m!=='nextnrg') _rec('solar', s.id); });
   q.placedKw=0; try{ var _d=(typeof omegaDer==='function')?omegaDer():null; if(_d) q.placedKw=(+_d.solarKwDc||0)+(+_d.windKw||0)+(+_d.altKw||0); }catch(e){}
-  q.bnzCapex=0; try{ if(typeof bnzAll==='function') q.bnzCapex=+bnzAll().capex||0; }catch(e){}
+  q.bnzCapex=0; try{ if(typeof bnzAll==='function'){ var _bz=bnzAll(); q.bnzCapex=+_bz.capex||0; (_bz.items||[]).forEach(function(b){ _rec('envelope', b.id); }); } }catch(e){}
   q.compute={ podsN:0, podKw:0, shellPerPod:0, itPerPod:0, excludeIt:false };
   try{ if(window.OmegaComputeCost){ var _p=window.OmegaComputeCost.pods(), _c=window.OmegaComputeCost.config();
-    q.compute={ podsN:_p.n, podKw:_p.kw, shellPerPod:+_c.shellPerPod||0, itPerPod:+_c.itPerPod||0, excludeIt:!!_c.excludeIt }; } }catch(e){}
+    q.compute={ podsN:_p.n, podKw:_p.kw, shellPerPod:+_c.shellPerPod||0, itPerPod:+_c.itPerPod||0, excludeIt:!!_c.excludeIt };
+    (_p.ids||[]).forEach(function(id){ _rec('compute', id); }); } }catch(e){}
   q.gen=[]; (S.shapes||[]).forEach(function(sh){ if(!sh||(sh.kind!=='deralt'&&sh.kind!=='derwind')) return;
-    q.gen.push({ kind:sh.kind, altId:sh.altId||null, genId:sh.genId||null, model:sh.model||null, label:sh.label||null, kw:+sh.kw||0, fuel:sh.fuel||null }); });
+    q.gen.push({ kind:sh.kind, altId:sh.altId||null, genId:sh.genId||null, model:sh.model||null, label:sh.label||null, kw:+sh.kw||0, fuel:sh.fuel||null });
+    _rec('gen#'+(q.gen.length-1), sh.id); });
   q.genOverrides=(S.costOverrides&&S.costOverrides.genPerKw)||{};
   q.dc={};
   var dcEl=(S.elements||[]).filter(function(e){ return e && (e.loadKind==='datacenter') && (+e.loadKw>0 || +e.loadItKw>0); })[0];
-  if(dcEl){ q.dc.element={ itKw:+dcEl.loadItKw||0, pue:+dcEl.loadPue||0, kw:+dcEl.loadKw||0 }; }
-  else { var _pods=0,_podKw=0; (S.shapes||[]).forEach(function(sh){ if(sh&&sh.kind==='derdc'&&!sh.omegaCore){ _pods++; _podKw+=+sh.kw||0; } });
+  if(dcEl){ q.dc.element={ itKw:+dcEl.loadItKw||0, pue:+dcEl.loadPue||0, kw:+dcEl.loadKw||0 }; _rec('dc', dcEl.id); }
+  else { var _pods=0,_podKw=0; (S.shapes||[]).forEach(function(sh){ if(sh&&sh.kind==='derdc'&&!sh.omegaCore){ _pods++; _podKw+=+sh.kw||0; _rec('dc', sh.id); } });
     q.dc.pods=_pods; q.dc.podKw=_podKw; try{ q.dc.pue=(S.omegaSizing&&+S.omegaSizing.pue)||0; }catch(e){} }
   /* the Omega-Core skids on the drawing: in the Run total at the recorded
      system price (the skid + the controller built into it), the server's
      one record (2026-10-14) */
-  q.omegaCore={ skids:(S.shapes||[]).filter(function(sh){ return sh && sh.kind==='derdc' && sh.omegaCore; }).length };
+  q.omegaCore={ skids:(S.shapes||[]).filter(function(sh){ var hit=!!(sh && sh.kind==='derdc' && sh.omegaCore); if(hit) _rec('omegaCore', sh.id); return hit; }).length };
   return q;
 }
 window.omegaCostQuantities=omegaCostQuantities;
@@ -36638,17 +36668,25 @@ function omegaSolarNextnrgKwDc(){
   return kw;
 }
 window.omegaSolarNextnrgKwDc=omegaSolarNextnrgKwDc;
+/* How the cost engine prices one array: 'nextnrg' (NextNRG's system, its
+   own line), 'canopy', 'roof', 'ground', or 'unspecified' (a traced custom
+   area claims no mount: the server prices what it cannot place by mount as
+   plain PV at the size band); null for what is not a priced array. The
+   sum below and the takeoff's map marks (omega-takeoff.js) both read it. */
+function omegaSolarMountOf(s){
+  if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return null;
+  if(!((+s.kw||0)>0)) return null;
+  if(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg(s)) return 'nextnrg';   /* NextNRG's system, priced as such */
+  if(s.mount==='custom' && !s.canopy) return 'unspecified';
+  return (s.canopy || s.mount==='adjacent') ? 'canopy' : (s.mount==='roof' ? 'roof' : 'ground');
+}
+window.omegaSolarMountOf=omegaSolarMountOf;
 function omegaSolarByMount(){
   var t={ ground:0, roof:0, canopy:0 };
   try{
     (S.shapes||[]).forEach(function(s){
-      if(!s || (s.kind!=='dersolar' && s.kind!=='solar')) return;
-      var kw=+s.kw||0; if(!(kw>0)) return;
-      if(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg(s)) return;   /* NextNRG's system, priced as such */
-      /* a traced custom area claims no mount: the server prices what it
-         cannot place by mount as plain PV at the size band */
-      if(s.mount==='custom' && !s.canopy) return;
-      t[(s.canopy || s.mount==='adjacent') ? 'canopy' : (s.mount==='roof' ? 'roof' : 'ground')]+=kw;
+      var m=omegaSolarMountOf(s);
+      if(m==='ground' || m==='roof' || m==='canopy') t[m]+=(+s.kw||0);
     });
   }catch(e){}
   return t;
@@ -40373,11 +40411,11 @@ function _geoApplyShape(sh, toPx, ppf){
    drift apart again. It reads the quantity the renderer computes from the
    geometry, never the number of dots it painted — those thin out with zoom
    and vanish with the layer toggle. */
-function _padBollardCount(){
+function _padBollardCount(ids){
   var n = 0;
   try {
     (S.shapes||[]).forEach(function(sh){
-      if (sh && isFinite(+sh.bollardCount) && +sh.bollardCount > 0) n += +sh.bollardCount;
+      if (sh && isFinite(+sh.bollardCount) && +sh.bollardCount > 0) { n += +sh.bollardCount; if (ids) ids.push(sh.id); }
     });
   } catch(e){}
   return n;
@@ -58068,8 +58106,11 @@ function _trenchRunIsIndoor(t){
 }
 /* Feet of a drawn run that actually get dug. */
 function _trenchRunDugFt(t){ return _trenchRunIsIndoor(t) ? 0 : _trenchRunFt(t); }
+/* Feet dug across every drawn run: the Build player's trenching and the
+   takeoff's trench (omega-build-sequence.js, omega-takeoff.js) read it. */
+function _trenchDugFtAll(){ var ft=0; try{ ((typeof S!=='undefined' && S._trenches)||[]).forEach(function(t){ ft+=+_trenchRunDugFt(t)||0; }); }catch(e){} return ft; }
 try{ window._groundPolyFt=_groundPolyFt; window._viewOwnsScale=_viewOwnsScale; window._viewPxPerFt=_viewPxPerFt; window._trenchRunFt=_trenchRunFt;
-     window._condIsIndoor=_condIsIndoor; window._trenchRunIsIndoor=_trenchRunIsIndoor; window._trenchRunDugFt=_trenchRunDugFt; }catch(e){}
+     window._condIsIndoor=_condIsIndoor; window._trenchRunIsIndoor=_trenchRunIsIndoor; window._trenchRunDugFt=_trenchRunDugFt; window._trenchDugFtAll=_trenchDugFtAll; }catch(e){}
 
 /* Shared trench SPINE: units in a row drop to a common aisle trench below the
    row; the trench (3 color-coded conductors) runs horizontally to the EMS.
@@ -146013,12 +146054,20 @@ function buildParking(it){
   return g;
 }
 
+/* A drawn fence: an enclosure when the rectangle is one (not one long
+   panel through its centre), else a run along its long side. buildFence
+   draws it so, and the takeoff measures it so (OmegaSiteVis.fenceFt). */
+function fenceForm(it){
+  var w = Math.max(2, it.wf), d = Math.max(0.2, it.lf);
+  var enclosure = d >= 4 && w >= 4 && Math.min(w,d)/Math.max(w,d) >= 0.15;
+  return { w:w, d:d, enclosure:enclosure, ft: enclosure ? 2*(w+d) : Math.max(w,d) };
+}
 function buildFence(it, arch){
   var g = new THREE.Group();
-  var w = Math.max(2, it.wf), d = Math.max(0.2, it.lf), h = arch.h;
+  var f = fenceForm(it), w = f.w, d = f.d, h = arch.h;
   /* A drawn rectangle is an enclosure, not one long panel through its
      centre. Keep genuinely thin fence runs as runs. */
-  if(d >= 4 && w >= 4 && Math.min(w,d)/Math.max(w,d) >= 0.15){
+  if(f.enclosure){
     var hw=w/2, hd=d/2;
     fenceRun(g,-hw,-hd, hw,-hd,h,60);
     fenceRun(g, hw,-hd, hw, hd,h,60);
@@ -148520,6 +148569,8 @@ window.OmegaSiteVis = {
   refresh: reload,
   snapshot: snapshot,
   read: readSite,
+  /* Feet of fence one drawn fence item is, as buildFence draws it. */
+  fenceFt: function(it){ return it ? fenceForm(it).ft : 0; },
   modelAudit: modelAudit,
   applyModelEdit: applyModelEdit,
   elementBox: elementBox,
@@ -173248,15 +173299,15 @@ if (root.console && console.info) {
   /* Counted off the drawing, like everything else that has to agree
      with the plan. */
   function pods() {
-    var n = 0, kw = 0;
+    var n = 0, kw = 0, ids = [];
     try {
       (root.S.shapes || []).forEach(function (sh) {
         /* Omega-Core is ClearSky's, on its own meter: never the host's capex */
         if (!sh || sh.kind !== 'derdc' || sh.omegaCore) return;
-        n++; kw += (+sh.kw || 0);
+        n++; kw += (+sh.kw || 0); ids.push(sh.id);
       });
     } catch (e) {}
-    return { n: n, kw: kw };
+    return { n: n, kw: kw, ids: ids };
   }
 
   function figures() {

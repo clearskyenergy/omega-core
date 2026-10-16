@@ -148,10 +148,7 @@
       if (!it || it.hidden || !it.arch || it.arch === 'ignore') return;
       items[it.arch] = (items[it.arch] || 0) + 1;
     });
-    try {
-      var runs = (root.S && root.S._trenches) || [];
-      for (var i = 0; i < runs.length; i++) ft += +(typeof root._trenchRunDugFt === 'function' ? root._trenchRunDugFt(runs[i]) : 0) || 0;
-    } catch (e) {}
+    try { ft = typeof root._trenchDugFtAll === 'function' ? +root._trenchDugFtAll() || 0 : 0; } catch (e) {}
     var cond = V && V.layers && V.layers.conduit;
     return { trenchFt: Math.round(ft), items: items, conduit: !!(cond && cond.children && cond.children.length) };
   }

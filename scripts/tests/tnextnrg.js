@@ -88,7 +88,7 @@ var typed = EC.rollup({ vendorOrg: 'nextnrg.com', solarKwDc: 100, solar: { byMou
 ok(typed.lines.bess.rows[0].total === Math.round(90000 * 1.55) && !typed.lines.bess.rows[0].nextnrgRate, 'a battery whose price was typed keeps it');
 ok(/q\.vendorOrg = caller\.orgId \|\| null;/.test(fs.readFileSync(path.join(ROOT, 'api/cost-rollup.js'), 'utf8')), 'the endpoint stamps whose workspace is pricing; the body never says');
 ok(/nextnrgKwDc:\(typeof omegaSolarNextnrgKwDc==='function'\)/.test(ED) && /nextnrg: !!\(\(ce && \(ce\.nextnrg===true \|\| String\(ce\.mfr\|\|''\)\.toLowerCase\(\)==='nextnrg'\)\) \|\| String\(b\.mfr\|\|''\)\.toLowerCase\(\)==='nextnrg' \|\| \/\^nextnrg\\b\/i\.test\(String\(k\)\) \|\| \/nextnrg\/i\.test\(String\(ck\|\|''\)\)\)/.test(ED), 'the page sends which arrays and batteries are NextNRG\'s, as facts');
-ok(/function omegaSolarIsNextnrg\(s\)/.test(ED) && /if\(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg\(s\)\) return;/.test(bodyFrom(ED, 'function omegaSolarByMount(')), 'a NextNRG array is kept out of the mount bands');
+ok(/function omegaSolarIsNextnrg\(s\)/.test(ED) && /if\(typeof omegaSolarIsNextnrg==='function' && omegaSolarIsNextnrg\(s\)\) return 'nextnrg';/.test(bodyFrom(ED, 'function omegaSolarMountOf(')) && /if\(m==='ground' \|\| m==='roof' \|\| m==='canopy'\) t\[m\]\+=/.test(bodyFrom(ED, 'function omegaSolarByMount(')), 'a NextNRG array is kept out of the mount bands');
 ok(/NNL\.label\+' \\u2014 '\+Math\.round\(NNL\.solarKwDc\)/.test(ED) && /window\._NEXTNRG_SYSTEM_TOTAL = T\.nextnrg \|\| 0;/.test(ED), 'the cost sheet draws the system line and publishes its total');
 ok(!/6\.00|perWdc/.test(bodyFrom(ED, 'function omegaCostQuantities(')), 'no rate in the page\'s request');
 eq(NN.UPLIFT.pct, 0.07, 'the uplift is 7% (the brochure\'s 6 to 8%, carried as the platform\'s 7%)');
@@ -222,8 +222,8 @@ ok(/MOD_W_FT=_m3\.widthMm\/304\.8; MOD_H_FT=_m3\.heightMm\/304\.8;/.test(ED), 't
 ok(/\(_pvm&&_pvm\.sku\)\|\|'', \(_pvm&&_pvm\.mfr\)\|\|''\);/.test(bodyFrom(ED, 'function buildBOM(')), 'the BOM\'s solar line carries the module\'s key and brand');
 
 /* the host's count, the Run's row, the BOM line, the Value Stack flag */
-var cq = bodyFrom(ED, 'function omegaCostQuantities(){');
-ok(/q\.counts\.mgc=\(S\.shapes\|\|\[\]\)\.filter\(function\(sh\)\{ return sh && sh\.kind==='utility' && sh\.utype==='mgc'; \}\)\.length;/.test(cq), 'the quantities count the controllers placed for the host — utility shapes only, never the skid\'s');
+var cq = bodyFrom(ED, 'function omegaCostQuantities(rec){');
+ok(/q\.counts\.mgc=\(S\.shapes\|\|\[\]\)\.filter\(function\(sh\)\{ var hit=!!\(sh && sh\.kind==='utility' && sh\.utype==='mgc'\); if\(hit\) _rec\('mgc', sh\.id\); return hit; \}\)\.length;/.test(cq), 'the quantities count the controllers placed for the host — utility shapes only, never the skid\'s');
 ok(/T\.controller > 0 \? row\('  NextNRG Microgrid Controller \\u00d7' \+ T\.controllerUnits, T\.controller/.test(ED), 'the Run shows the row');
 ok(/window\._MGC_TOTAL = T\.controller \|\| 0;/.test(ED) && /'_MGC_TOTAL','_NEXTNRG_SYSTEM_TOTAL','_COST_PER_KW'/.test(ED), 'published and reset with the other totals');
 var bom = bodyFrom(ED, 'function buildBOM(');
@@ -323,7 +323,7 @@ ok(/org\.brands = t\.brands\.map/.test(fs.readFileSync(path.join(ROOT, 'scripts'
   ok(/window\._alCustom=!!\(boundaryPts && boundaryPts\.length>=3\);/.test(oal) && /window\._alMount=window\._alCustom \? \(\(typeof _derSolarMount!=='undefined'/.test(oal) && /<select id="al-mount" onchange="alMountChanged\(this\.value\)"/.test(oal), 'a traced outline opens the layout as a custom area with a mount (the ribbon\'s Solar choice, changeable on the modal); the ribbon\'s Auto Layout stays ground (2026-10-14: a traced roof filled with the ground preset read far less kW than the roof rectangle)');
   ok(/mount:\(window\._alMount==='roof'\|\|window\._alMount==='adjacent'\)\?window\._alMount:'ground',/.test(bodyFrom(ED, 'function applyGroundLayout(boundary, layout, exclusions){')) && /mount:window\._alMount\|\|'ground' \}\);/.test(bodyFrom(ED, 'function alPreview(){')), 'the layout fills with that mount\'s preset and the array carries it');
   var bm = vm.createContext({ S: { shapes: [{ kind: 'dersolar', mount: 'custom', kw: 368 }, { kind: 'dersolar', mount: 'roof', kw: 120 }, { kind: 'dersolar', mount: 'ground', kw: 50 }, { kind: 'dersolar', mount: 'custom', canopy: true, kw: 7 }] } });
-  vm.runInContext(bodyFrom(ED, 'function omegaSolarByMount(){'), bm);
+  vm.runInContext(bodyFrom(ED, 'function omegaSolarMountOf(s){') + bodyFrom(ED, 'function omegaSolarByMount(){'), bm);
   eq(JSON.stringify(vm.runInContext('omegaSolarByMount()', bm)), JSON.stringify({ ground: 50, roof: 120, canopy: 7 }), 'the Run\'s by-mount kW leaves a custom area out, so the server prices it as plain PV at the size band — never as ground');
   ok(/sh\.mount==='custom'\?'CUSTOM AREA'/.test(bodyFrom(ED, 'function _derRenderSolar(g, sh){')), 'the drawing says CUSTOM AREA');
   ok(/function mountSelect\(sh\)/.test(ED) && /<select id="osz-mount"/.test(ED) && /\['custom', 'Not chosen/.test(ED), 'the array editor offers the mount: not chosen, ground, rooftop, canopy');

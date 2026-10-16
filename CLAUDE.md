@@ -1438,6 +1438,58 @@ visualizer, three.js from `assets/vendor`, a site placed with the editor's
 own tools, played to the end on a desktop, a 390 px phone and a tablet asking
 for less motion).
 
+## Takeoff by trade — Cost › Trades (2026-10-16)
+
+**The Run's money by trade, each line with its quantity, and what it counts
+marked on the map and in the 3D model** ("Push it and continue with the
+builds"; `docs/BLUEPRINT-TO-BUILD.md` Phase 3). Cost › *Trades*
+(`omega-takeoff.js`, ES5, `#ct-takeoff` / `#cst-takeoff` inside the Cost tab,
+so Omega Estimate's) posts `omegaCostQuantities(rec)` (exactly what the Run
+sends) and what the drawing measures that the Run does not price (feet of
+trench dug, `_trenchDugFtAll`, the Build player's figure; feet of fence,
+`OmegaSiteVis.fenceFt`, as the 3D model draws it; the pads' area off the
+visualizer's own reading, only on a calibrated map and only when it is the
+area of the very pads the Run counts) to `POST /api/takeoff`, the ONE door:
+it runs the Run's own roll-up (priced as the CALLER's workspace) and
+`api/_lib/takeoff.js` puts the build sequence's lines (`BS.money`: the Run's
+contingency where the Run applies it, a contracted total spread by the
+estimate's shares, cents by largest remainder) into trades in estimate order:
+Sitework & civil (31–32), Concrete (03), Electrical (26), Energy storage (26),
+Solar PV (48), EV charging (26), On-site generation (26 / 48), Compute,
+Building envelope (07–08), Utility interconnect (33), Soft costs (01), the
+divisions as the editor's own Takeoff & Budget book classes the same things.
+Every line is in exactly ONE trade (`LINE`; a line with no trade throws); a
+line's rows (battery model, solar mount, charger model, generator, the skid
+and its controller, the ROM's items) split its cents by the roll-up's own
+figures, so trades, lines and rows add up to the Run total to the cent.
+Quantities are what the drawing and the roll-up counted (EA, kWh, kW, kW-DC,
+LF, SF, LS), never cubic yards or tons worked up from nothing; what the Run
+keeps out of its total is shown and never added (each conduit type with its
+BOM figure, the trench, the fence, the utility's own charges). A line's
+`parts` are keys (`pad`, `bess:<model>`, `ev#<i>`, `gen#<i>`,
+`solar:<mount>`, `conduit:<type>`…) that `omegaCostQuantities(rec)` fills
+with drawing ids by the SAME tests that count the quantities (`rec` absent,
+q is unchanged; `_ppCollectFleet().idsByModel`, `omegaSolarMountOf`, the
+one classifier `omegaSolarByMount` sums by, `_padBollardCount(ids)`,
+`OmegaComputeCost.pods().ids`, `bnzAll().items`), so a clicked line marks
+exactly what the Run counted (`.tk-hl`, put back when the editor redraws a
+piece), a selected piece names its line (polled while the pane shows: the
+editor has no selection event), and in the 3D Site Visualizer the line's
+pieces are boxed with a card, and a piece picked in the model shows its own
+line. The CSV carries every line, row and quantity to the cent; *Copy scope
+of work* gives a trade's quantities for a bid, never a price. Nothing is
+written or stored. Who: as the Cost tab opens (a package's Omega Estimate; a
+legacy plan's Site Map; an active workspace and member, viewers included;
+staff). Not built: sending a trade's scope through the RFQ (`api/rfq.js`
+routes equipment lines to vendors by SKU; it has no trade or subcontractor),
+and a takeoff page in the proposal export. Held by
+`scripts/tests/ttakeoff.js` (in `npm test`: a sample site, 400 random
+drawings through the real roll-up, every line's trade, the charger and
+generator rows' items, the door on the Firestore double) and `npm run
+check:takeoff`, also in `check:pages` (`scripts/render-takeoff.js`: the real
+editor and visualizer, the render checks' sample site in
+`scripts/_lib/editor-sample-site.js`, on a desktop and a 390 px phone).
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT

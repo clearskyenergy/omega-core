@@ -201,6 +201,28 @@ assembles and **"In place $X"** adds up from the Run's own lines.
 
 ### Phase 3: Takeoff by trade (the right rail)
 
+> **Status, 2026-10-16: Phase 3 is built.** Cost › *Trades* in the right
+> panel; `CLAUDE.md`, *Takeoff by trade*, says how it works. Where it differs
+> from the plan below:
+> - The trades are the Run's own lines regrouped on the server
+>   (`api/_lib/takeoff.js`), using the build sequence's split of the money, so
+>   the takeoff, the Build player and the Run total always agree to the cent.
+>   The divisions are the ones the editor's Takeoff & Budget book already
+>   uses.
+> - There is no "Structural / Racking" trade of its own. The Run prices solar
+>   installed per watt (modules, racking and labour together), so racking
+>   can't be split out without inventing a number. Batteries, chargers and
+>   generation are their own trades rather than one "Equipment" bucket.
+> - No cubic yards. The drawing knows a pad's footprint (shown in SF on a
+>   calibrated map) but not its thickness, so a volume would be a guess.
+> - Not on the RFQ yet. `api/rfq.js` sends equipment lines to vendors by SKU
+>   and has no idea of a trade or a subcontractor. Instead, each trade has
+>   *Copy scope of work*: its quantities, ready to send for a bid, with no
+>   prices. Sending trade scopes to subcontractors needs a decision on who
+>   receives them.
+> - The trench, the fence and the conduit are shown with their quantities.
+>   They are never added to the money, because the Run doesn't price them.
+
 Group the Run's existing lines by trade (CSI division or the EPC's own):
 Sitework / Civil · Concrete · Electrical (DC, AC, MV) · Structural / Racking ·
 Equipment · Utility · Soft costs. Each line shows its key quantity with units
