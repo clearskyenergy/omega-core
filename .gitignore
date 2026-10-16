@@ -26,6 +26,15 @@ scripts/sandbox/index.html
 scripts/sandbox/look-*.png
 scripts/sandbox/ph-*.png
 
+# The office desks' scratch and deliverables. Each scheduled run is told to
+# "write deliverable files in this checkout's work/ directory", so this folder
+# fills with triage notes, test logs and whole stale copies of the tree — and
+# those name customers, past-due amounts and prospects. None of it is product.
+# It is ignored here so it cannot be committed, and in .vercelignore so that a
+# mistaken commit is still not a public URL (Vercel serves the repo root).
+# scripts/tests/tdiscreet.js skips it for the same reason.
+work/
+
 # Portfolio: the real customer workbooks are PRIVATE QA fixtures. Never
 # commit them; scripts/tests/tportfolioassets-real.js reads them from
 # EVCS_WB1_PATH / EVCS_WB2_PATH outside the repository.

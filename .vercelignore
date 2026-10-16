@@ -50,6 +50,12 @@ firestore.indexes.json
 firebase.json
 admin/seed-plan.json
 tests/
+# The office desks' scratch and deliverables (gitignored, so normally absent
+# from a deployment checkout). Every scheduled desk run is told to write its
+# deliverables here, and they name customers, past-due amounts and prospects.
+# Belt and braces: if one is ever committed by mistake it must still not be a
+# URL. scripts/tests/tdiscreet.js skips it for the same reason.
+work/
 .fiber-cache/
 private-fiber/
 *.fiber-backup
