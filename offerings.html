@@ -39,21 +39,21 @@ h1{font-size:30px;line-height:1.2;margin:8px 0 6px}h2{font-size:20px;margin:34px
   <header class="top"><b>ClearSky-OMEGA</b><nav><a href="/login">Sign in</a></nav></header>
   <span class="pill" id="floor">Loading the price list…</span>
   <h1>Plans and pricing</h1>
-  <p class="lede">A menu of modules, one price each, on a Lite base. Pick a plan that bundles the ones you need, or build your own. Pay your first invoice by card and your workspace opens right away; add a module later from your plan, and it is on the moment it is paid.</p>
+  <p class="lede">Pick the modules your work needs, or a plan that bundles them, on the Omega Design base. Pay by card and your workspace opens right away. Add a module later and it is on the moment it is paid.</p>
   <p id="status" role="status"></p>
 
   <h2>Plans</h2>
   <div class="grid" id="plans"></div>
 
   <h2>Starter packages by what you do</h2>
-  <p class="lede">What a company like yours usually starts with. Each is a set of modules at their listed prices; nothing is bundled at a discount that a plan does not already give.</p>
+  <p class="lede">What a company like yours usually starts with, at the listed prices. Every set is a starting point you can change.</p>
   <div class="starters" id="starters"></div>
 
   <h2>Every module</h2>
-  <p class="lede">Every module needs Lite. Prices are per month; pay for the year and you pay for ten months of twelve, two months free. Where a module has a usage allowance it is listed; more can be bought as a pack when you run out.</p>
+  <p class="lede">Every module stands on Omega Design. Prices are per month; pay for the year and you pay for ten months of twelve. Where a module has a usage allowance it is listed; buy a pack when you need more.</p>
   <div class="grid" id="modules"></div>
 
-  <h2>Trial, logins and the service fee</h2>
+  <h2>Trial, logins and fees</h2>
   <div class="note" id="terms"></div>
   <footer>Prices are the platform's current price list and are confirmed on your invoice. Enterprise is an annual contract; <a href="/login" style="color:var(--brand)">talk to us</a>.</footer>
 </div>
@@ -65,19 +65,21 @@ h1{font-size:30px;line-height:1.2;margin:8px 0 6px}h2{font-size:20px;margin:34px
   function esc(v) { return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
   function el(tag, cls, html) { var e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
   function start(q) { return (O.signup && O.signup.start ? O.signup.start : '/start.html') + q; }
+  /* the plan's cap, in a customer's words: the server's figure, never a second number */
+  function cap(p) { var m = /up to (\$[\d,]+)/.exec(p.capDisplay || ''); return m ? 'Omega Design plus your pick of modules, up to ' + m[1] + '/month of them.' : String(p.capDisplay || ''); }
   var O = null;
   function draw(o) {
     O = o;
-    $('floor').textContent = 'From ' + o.floorDisplay + ' · nothing is free';
+    $('floor').textContent = 'From ' + o.floorDisplay;
     var plans = $('plans'); plans.textContent = '';
     var lite = el('div', 'card'); lite.appendChild(el('h3', null, esc(o.lite.name)));
     lite.appendChild(el('div', 'price', esc(o.lite.monthlyDisplay.replace('/month', '')) + '<small>/month</small>'));
-    lite.appendChild(el('div', 'muted', 'The base every package needs: Site Map, the sandbox, sales and intake, financing, Export to Monday. Service fee ' + esc(o.lite.serviceFeeDisplay) + '.'));
+    lite.appendChild(el('div', 'muted', 'Omega Design, the base every package needs: site drawing on live satellite, guided builds, blueprints and customer proposals. ' + (o.lite.serviceFeeDisplay ? 'Service fee ' + esc(o.lite.serviceFeeDisplay) + '.' : 'No service fee: a ' + esc(o.lite.monthlyDisplay) + ' minimum.')));
     lite.appendChild(el('a', 'btn ghost', 'Start with Lite')); lite.lastChild.href = start('?modules=lite'); plans.appendChild(lite);
     o.plans.forEach(function (p) {
       var c = el('div', 'card plan'); c.appendChild(el('h3', null, esc(p.name)));
       c.appendChild(el('div', 'price', esc(p.monthlyDisplay.replace('/month', '')) + '<small>/month</small>'));
-      c.appendChild(el('div', 'muted', esc(p.capDisplay) + '. Service fee ' + esc(p.serviceFeeDisplay) + '.'));
+      c.appendChild(el('div', 'muted', esc(cap(p)) + (p.serviceFeeDisplay ? ' Service fee ' + esc(p.serviceFeeDisplay) + '.' : '')));
       c.appendChild(el('a', 'btn accent', 'Choose ' + esc(p.name))); c.lastChild.href = start('?plan=' + encodeURIComponent(p.key)); plans.appendChild(c);
     });
     /* Enterprise is a contract: the list says "Contact for pricing" and names no figure */
@@ -101,8 +103,8 @@ h1{font-size:30px;line-height:1.2;margin:8px 0 6px}h2{font-size:20px;margin:34px
       if (m.key !== 'lite') { c.appendChild(el('a', 'btn ghost', 'Start with Lite + ' + esc(m.name))); c.lastChild.href = start('?modules=' + encodeURIComponent(['lite'].concat(m.requires.filter(function (r) { return r !== 'lite'; }), [m.key]).join(','))); }
       mods.appendChild(c);
     });
-    $('terms').innerHTML = '<b>Trial.</b> ' + esc(o.trial.note) + '<br><b>Logins.</b> ' + esc(o.logins.builders) + ' builders and ' + esc(o.logins.viewers) + ' viewers included; an extra builder is ' + esc(o.logins.builderDisplay) + ' and an extra viewer ' + esc(o.logins.viewerDisplay) + '.<br><b>Annual.</b> ' + esc(o.annual.note) + '<br><b>Service fee.</b> Charged once a year with the first invoice; ClearSky can waive it for the first year on a contract.';
-    $('status').textContent = o.source === 'seeded' ? '' : 'Proposed price list; final prices are confirmed on your invoice.';
+    $('terms').innerHTML = '<b>Trial.</b> ' + esc(o.trial.note) + '<br><b>Logins.</b> ' + esc(o.logins.builders) + ' builders and ' + esc(o.logins.viewers) + ' viewers included; an extra builder is ' + esc(o.logins.builderDisplay) + ' and an extra viewer ' + esc(o.logins.viewerDisplay) + '.<br><b>Annual.</b> ' + esc(o.annual.note) + '<br><b>Service fee.</b> Field and Pro carry a yearly service fee, charged with the first invoice each year. Lite has none: a ' + esc(o.lite.monthlyDisplay) + ' minimum.';
+    $('status').textContent = o.source === 'seeded' ? '' : 'Prices are confirmed on your invoice.';
   }
   var x = new XMLHttpRequest(); x.open('GET', '/api/offerings'); x.onload = function () {
     try { if (x.status !== 200) throw new Error('HTTP ' + x.status); draw(JSON.parse(x.responseText)); }

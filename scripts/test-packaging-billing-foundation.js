@@ -45,7 +45,9 @@ async function run() {
   var recurring = Object.assign({}, approved, { firstInvoiceOn: first.date, nextInvoiceOn: first.nextInvoiceOn, serviceFeeNextOn: first.serviceFeeNextOn });
   equal(Policy.invoice(recurring, proposed, '2026-02-01').subtotalCents, 50000);
   recurring.nextInvoiceOn = '2027-02-01';
-  equal(Policy.invoice(recurring, proposed, '2027-02-01').subtotalCents, 200000); // first-year waiver ends
+  equal(Policy.invoice(recurring, proposed, '2027-02-01').subtotalCents, 50000); // the first-year waiver ends, and Omega Design alone carries no service fee (2026-09-29)
+  var ev = require('../api/_lib/modules').starters().ev, fieldRec = Object.assign({}, recurring, { modules: ev, subscription: { modules: ev, plan: 'field' }, plan: 'field', nextInvoiceOn: '2027-02-01' });
+  equal(Policy.invoice(fieldRec, proposed, '2027-02-01').lines.some(function (l) { return l.itemKey === 'service-fee' && l.amountCents === 340000; }), true, 'Field bills its plan fee once the waiver ends');
   var annual = Object.assign({}, recurring, { interval: 'annual', nextInvoiceOn: '2026-02-01' });
   equal(Policy.invoice(annual, proposed, '2026-02-01').subtotalCents, 500000); /* ten months of twelve (2026-09-26) */
   equal(Policy.invoice(annual, proposed, '2026-02-01').nextInvoiceOn, '2027-02-01');

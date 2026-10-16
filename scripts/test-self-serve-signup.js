@@ -73,7 +73,7 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     assert.equal(bill.packaged, true); assert.equal(bill.packagingState, 'awaiting_payment'); assert.equal(bill.qboCustomerId, 'C-newco.example'); assert.equal(bill.qboEnv, 'sandbox');
     assert.deepEqual(bill.subscription.modules, ['lite', 'gridatlas'], 'what they bought'); assert.deepEqual(bill.modules, ['lite'], 'switched on: Lite until the invoice is paid');
     assert.equal(bill.paymentLink, r.paymentLink); assert.ok(bill.amountDue > 0);
-    assert.equal(qbo.invoices.length, 1); assert.ok(qbo.invoices[0].lines.some(function (l) { return l.itemKey === 'service-fee'; }), 'the first invoice carries the first year\'s service fee');
+    assert.equal(qbo.invoices.length, 1); assert.ok(!qbo.invoices[0].lines.some(function (l) { return l.itemKey === 'service-fee'; }), 'Omega Design alone carries no service fee (2026-09-29): an à la carte first invoice has no fee line');
     var inv = db.data.get('omega_orgs/newco.example/billing/current/invoices/' + qbo.invoices[0].date); assert.equal(inv.state, 'unpaid'); assert.equal(inv.qboInvoiceId, 'INV-1');
     var hist = Array.from(db.data.keys()).filter(function (k) { return /billing\/current\/history\//.test(k); }).map(function (k) { return db.data.get(k); });
     assert.equal(hist.length, 1); assert.equal(hist[0].action, 'package-activate'); assert.equal(hist[0].selfServe, true); assert.equal(hist[0].by, 'kim@newco.example');

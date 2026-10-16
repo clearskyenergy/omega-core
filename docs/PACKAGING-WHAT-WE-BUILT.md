@@ -30,6 +30,11 @@ deployed, no tenant is packaged. The order to change that is in
   2026-09-26; it was `2026-10-proposed` until then),
   frozen once used, disabled until you sign the values off. Annual prepay is
   ten months, two months free; there is no transformation credit.
+  **Omega Design alone (Lite + modules) carries no service fee** (Tommy,
+  2026-09-29: "a $500 minimum base"): the rule is
+  `subscription-pricing.fee()`'s, so the seeded `2026-10` book's old Lite
+  figure is not read and no version is renamed; Field and Pro keep theirs.
+  `/api/offerings` sends `serviceFeeDisplay: null` where there is none.
 - **Trials: 14 days at most, once per organization, starting at approval.**
   The billing day is the signup day; the first invoice is issued at trial
   end; unpaid, the workspace drops to read-only with a ribbon; paid, it

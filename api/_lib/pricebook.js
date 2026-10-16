@@ -23,7 +23,10 @@ function proposed() {
     logicBundle: { name: 'Omega Logic — all five', priceCents: 250000 },
     enterprise: { floorAnnualCents: 15000000, setupCents: 2500000, devHoursMonthly: 7 },
     credit: { pct: 40, days: 90 }, annualPaidMonths: 10, /* pay for the year: ten months of twelve, two months free (Tommy, 2026-09-26) */
-    serviceFees: { lite: 150000, field: 340000, pro: 340000, enterprise: 1000000, waiverScope: 'first-year' },
+    /* lite: 0 — Omega Design alone carries no service fee (Tommy, 2026-09-29).
+       subscription-pricing.fee() pins the same rule, so the seeded 2026-10
+       book (lite 150000, immutable once used) prices the same as this. */
+    serviceFees: { lite: 0, field: 340000, pro: 340000, enterprise: 1000000, waiverScope: 'first-year' },
     policy: { trialDays: 14, guidedBuildsInLite: true, failedPaymentGraceBusinessDays: 10,
       memberModuleEntry: true, billingProvider: 'quickbooks', savedCardEnabled: false,
       packExpiry: 'cycle-end', autoTopup: false, permittingBeta: true, removalsAtReview: true, reviewDays: 90,
