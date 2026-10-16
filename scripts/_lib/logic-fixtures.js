@@ -162,11 +162,13 @@ var DAY_MS = 86400000;
    (billing/current.customerEditorLite) and the supplier's Editor Lite. */
 var EDITOR_LITE = { enabled: true, modules: ['bess'] }, CUSTOMER_PRICES = { monthlyPriceCents: 79900, yearlyPriceCents: 799000 };
 /* api/_lib/buyer-design.js entitlement(), for the account's grant: a paid
-   subscription, or a trial the supplier's owner granted, unexpired. */
+   subscription, or a trial the supplier's owner granted, unexpired; else
+   included by the supplier (EDITOR_LITE.customersIncluded), with no expiry. */
 function entitlement(grant) {
   grant = grant || {}; var expiry = Date.parse(grant.expiresAt || '');
-  var active = EDITOR_LITE.enabled && ['active', 'trial'].indexOf(grant.status) >= 0 && isFinite(expiry) && expiry > Date.now() && (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial'));
-  return { active: active, status: active ? grant.status : 'inactive', expiresAt: grant.expiresAt || null, modules: EDITOR_LITE.modules.slice() };
+  var own = EDITOR_LITE.enabled && ['active', 'trial'].indexOf(grant.status) >= 0 && isFinite(expiry) && expiry > Date.now() && (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial'));
+  var included = !own && EDITOR_LITE.enabled && EDITOR_LITE.customersIncluded === true;
+  return { active: own || included, status: own ? grant.status : included ? 'included' : 'inactive', expiresAt: included ? null : grant.expiresAt || null, modules: EDITOR_LITE.modules.slice() };
 }
 /* A document as the sample can judge it without Node: base64 that fits in
    2 MB and a name of an accepted kind. The product decides by the BYTES

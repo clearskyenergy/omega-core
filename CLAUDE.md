@@ -899,7 +899,11 @@ is not built.
   never stored); the customer's side of the same documents is
   `api/my-files.js`; the customer's design subscription is
   `api/customer-subscribe.js` (metadata `org`, never `orgId`, so it cannot
-  reach the tenant's billing); a tenant-billed invoice's pay link has ONE
+  reach the tenant's billing), or the supplier INCLUDES Editor Lite for
+  every customer at no charge (`billing/current.editorLite.customersIncluded`,
+  ClearSky's owner only through `logic-onboard` `customer-editor-included`;
+  `buyer-design.entitlement` reads it as `included`, no expiry, checkout
+  refused; 2026-10-16, Tommy, of FENECON; `docs/CUSTOMER-PORTAL.md`); a tenant-billed invoice's pay link has ONE
   check, `api/_lib/portal.js tenantPayLink`. All Admin SDK; the rules deny
   browsers. The sample tenant in `scripts/_lib/logic-fixtures.js` answers
   every one of these routes, so `check:pages` and the sandboxes exercise

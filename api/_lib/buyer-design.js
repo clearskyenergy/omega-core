@@ -7,10 +7,17 @@ function entitlement(ctx, account, caller) {
   // Only the authenticated, verified ClearSky owner gets support access. This
   // does not create a subscription or widen the supplier's enabled modules.
   var ownerAccess = !!(caller && caller.claims && X.owner(caller)) && lite.enabled === true;
-  var active = ownerAccess || (lite.enabled === true && ['active', 'trial'].indexOf(grant.status) >= 0 &&
+  var own = lite.enabled === true && ['active', 'trial'].indexOf(grant.status) >= 0 &&
     isFinite(expiry) && expiry > Date.now() &&
-    (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial')));
-  return { active: active, status: ownerAccess ? 'owner-access' : active ? grant.status : 'inactive', expiresAt: ownerAccess ? null : grant.expiresAt || null,
+    (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial'));
+  // The supplier includes Editor Lite for its customers (ClearSky's owner
+  // writes it through api/logic-onboard.js; a tenant cannot). Every account
+  // the caller may act on (B.active) is entitled, with no expiry; the
+  // account's own subscription or trial still says itself when it is live.
+  var included = !own && lite.enabled === true && lite.customersIncluded === true;
+  var active = ownerAccess || own || included;
+  return { active: active, status: ownerAccess ? 'owner-access' : own ? grant.status : included ? 'included' : 'inactive',
+    expiresAt: ownerAccess || included ? null : grant.expiresAt || null,
     modules: MODULES.filter(function (m) { return Array.isArray(lite.modules) && lite.modules.indexOf(m) >= 0; }) };
 }
 async function access(caller, org) {
