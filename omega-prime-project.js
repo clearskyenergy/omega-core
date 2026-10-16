@@ -50,7 +50,10 @@
   }
 
   /* The tenant's list first (their own products lead, as they do in the
-     Guided Build), then the shipped XXL unless the list already carries it. */
+     Guided Build), then the shipped XXL unless the list already carries it
+     — or the workspace is OWN-ONLY (omega-bess-products.js ownOnlyOf: a
+     white-labelled manufacturer offers its own batteries only, 2026-10-16)
+     and has at least one of its own to offer, so nobody gets an empty list. */
   function units(tenant) {
     var out = [], keys = (tenant && tenant.keys) || [], i, u, hasXxl = false;
     for (i = 0; i < keys.length; i++) {
@@ -59,7 +62,7 @@
       if (/industrial\s*xxl/i.test(u.name)) hasXxl = true;
       out.push(u);
     }
-    if (!hasXxl) out.push(XXL);
+    if (!hasXxl && !(tenant && tenant.ownOnly && out.length)) out.push(XXL);
     return out;
   }
 

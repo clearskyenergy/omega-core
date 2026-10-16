@@ -31,6 +31,9 @@ var us = PP.units(tenant);
 assert.deepEqual(us.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT', 'FENECON-IND-XXL'], 'the tenant\'s own products lead, the XXL after'); count++;
 assert.equal(us[0].name, 'Clean Cell CC-2000'); assert.equal(us[0].lFt, 20); assert.equal(us[0].wFt, 8); assert.equal(us[0].tenant, true); count += 4;
 assert.equal(us[1].lFt, null, 'a footprint not on file stays unknown, never assumed'); assert.equal(us[1].hours, 1.02); count += 2;
+var own = PP.units({ ownOnly: true, keys: tenant.keys, entries: tenant.entries });
+assert.deepEqual(own.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT'], 'an own-only manufacturer is offered its own batteries only'); count++;
+assert.equal(PP.units({ ownOnly: true, keys: ['CLEANCELL-MOD-1'], entries: tenant.entries })[0].key, 'FENECON-IND-XXL', 'own-only with nothing placeable of its own still gets a unit'); count++;
 assert.equal(PP.units({ keys: ['FEN-XXL'], entries: { 'FEN-XXL': { mfr: 'FENECON', model: 'Industrial XXL', kw: 2508, kwh: 5015 } } }).length, 1, 'no second XXL when the list carries it'); count++;
 ['price', 'eqcost', 'cost'].forEach(function (k) { assert.ok(!(k in PP.XXL) && !(k in us[0]), 'no price on a unit: ' + k); count++; });
 
