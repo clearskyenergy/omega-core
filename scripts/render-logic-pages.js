@@ -364,12 +364,16 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var ed = await p.evaluate(function () { return { open: !document.getElementById('dlg-edit').hidden, number: document.getElementById('ed-number').value, issued: document.getElementById('ed-issued').value, due: document.getElementById('ed-due').value, hint: document.getElementById('ed-due-hint').textContent }; });
     ok('  the edit dialog opens on the invoice as issued, the due date following the terms', ed.open && ed.number === 'SS-1042' && ed.issued === '2026-08-20' && ed.due === '' && /2026-08-20/.test(ed.hint), ed);
     var EREASON = 'Customer agreed net 30 on the PO';
-    await p.fill('#ed-due', '2026-10-15'); await p.fill('#ed-reason', EREASON); await p.waitForTimeout(50); await p.click('#ed-go'); await p.waitForTimeout(700);
+    /* a month after the run, never a fixed date: the office app judges
+       overdue against the real clock, so a literal date in the past turned
+       this deposit overdue the day after it (2026-10-16) */
+    var EDUE = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    await p.fill('#ed-due', EDUE); await p.fill('#ed-reason', EREASON); await p.waitForTimeout(50); await p.click('#ed-go'); await p.waitForTimeout(700);
     var epost = OFFICE_POSTS[OFFICE_POSTS.length - 1];
-    ok('  only what changed is posted', same(epost, { action: 'invoice-edit', org: 'cleancell.us', orderId: 'o2', stage: 'deposit', dueAt: '2026-10-15', reason: EREASON }), epost);
+    ok('  only what changed is posted', same(epost, { action: 'invoice-edit', org: 'cleancell.us', orderId: 'o2', stage: 'deposit', dueAt: EDUE, reason: EREASON }), epost);
     var ed2 = await p.evaluate(function () { var tr = document.querySelector('#ledger tr[data-row="o2:deposit"]'), d = document.getElementById('drawer'); return { due: tr.querySelector('td[data-k="due"]').textContent.trim(), overdue: tr.querySelectorAll('.tag.overdue').length, history: (d.querySelector('.edits') || {}).textContent || '' }; });
     var t2 = await tiles('#totals');
-    ok('  the new due date takes it out of overdue, and the change is in the invoice\'s history', ed2.due === '2026-10-15' && ed2.overdue === 0 && t2.overdue === '$0.00' && /due terms → 2026-10-15/.test(ed2.history) && /net 30/.test(ed2.history), [ed2, t2.overdue]);
+    ok('  the new due date takes it out of overdue, and the change is in the invoice\'s history', ed2.due === EDUE && ed2.overdue === 0 && t2.overdue === '$0.00' && new RegExp('due terms → ' + EDUE).test(ed2.history) && /net 30/.test(ed2.history), [ed2, t2.overdue]);
     await p.click('#drawer [data-act="push"]'); await p.waitForTimeout(600);
     var apost = ACC_POSTS[ACC_POSTS.length - 1];
     ok('  push to Stripe goes to the ledger sync, naming the invoice', same(apost, { action: 'sync-push', org: 'cleancell.us', orderId: 'o2', stage: 'deposit' }), apost);
@@ -529,8 +533,8 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('[data-tab="menu"]'); await p.waitForTimeout(300); await p.click('.freq [data-go="money"]'); await p.waitForTimeout(300);
     var groups = await texts(p, '#view h2'), links = await p.$$eval('#view a[href^="https://"]', function (r) { return r.map(function (x) { return x.getAttribute('href'); }); });
     /* two open: the balance with the supplier's pay link, and the deposit
-       the accounting check voided and moved to 2026-10-15 (the render checks
-       share one sample) with its Stripe page */
+       the accounting check voided and moved a month past the run (the render
+       checks share one sample) with its Stripe page */
     ok('  Money groups the invoices: one to issue (tenant-billed, not on the supplier\'s paper yet), none overdue, two open with their pay links', groups.join('|') === 'To issue · 1|Overdue · 0|Open · 2' && links.indexOf('https://pay.example.com/cleancell/CC-INV-1058') >= 0, [groups, links]);
     await p.click('#view .inv [data-order="o4"]'); await p.waitForTimeout(300);
     await p.fill('[data-inv-no="deposit"]', 'CC-INV-1070'); await p.fill('[data-inv-pay="deposit"]', 'javascript:alert(1)'); await p.click('[data-issue="deposit"]'); await p.waitForTimeout(300);
