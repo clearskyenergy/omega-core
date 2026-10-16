@@ -8,18 +8,12 @@
    is a few thousand quantities, never more. */
 'use strict';
 var A = require('./_lib/admin'), EC = require('./_lib/editor-cost');
-var MAX_ITEMS = 5000;
-function count(q) {
-  var c = 0;
-  c += Object.keys((q.fleet && q.fleet.byModel) || {}).length + ((q.configured || []).length) + ((q.ev && q.ev.items) || []).length + ((q.gen || []).length);
-  return c;
-}
 module.exports = A.handler(function (req, res) {
   if (req.method !== 'POST') throw A.httpError(405, 'POST only');
   return A.authenticate(req).then(function (caller) {
     if (!caller || !(caller.orgId || caller.staff)) throw A.httpError(403, 'A workspace sign-in is required');
     var q = req.body && typeof req.body === 'object' ? req.body : {};
-    if (count(q) > MAX_ITEMS) throw A.httpError(413, 'Too many items for one estimate');
+    if (EC.size(q) > EC.MAX_ITEMS) throw A.httpError(413, 'Too many items for one estimate');
     /* whose workspace is pricing: a vendor's own workspace prices its own
        products at its rate (NextNRG, api/_lib/nextnrg.js SYSTEM_RATE); the
        body never says who */

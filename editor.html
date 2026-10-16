@@ -194,6 +194,10 @@ function openOmegaCore(){
      first use), sends each to api/plan-read and places what the person
      ticks through the editor's own tools. -->
 <script src="/omega-plan-read.js"></script>
+<!-- The 3D Site Visualizer's Build player: the model assembled step by step,
+     each step's share of the Run's money and its days from api/build-sequence
+     (the browser only shows and hides the model). -->
+<script src="/omega-build-sequence.js"></script>
 <!-- Omega-Core from the Output tab: reads the Run and the drawing, fans out
      through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
      whether the site takes the skids and what the host is paid. -->
@@ -147428,7 +147432,12 @@ var CSS = ''
 +   'flex-direction:column;font-family:"IBM Plex Sans",sans-serif;color:#E0E0E0}'
 + '#ovis.on{display:flex}'
 + '#ovis .ov-bar{height:44px;flex-shrink:0;background:var(--bg);border-bottom:1px solid #30404F;'
-+   'display:flex;align-items:center;gap:10px;padding:0 12px}'
++   'display:flex;align-items:center;gap:10px;padding:0 12px;'
+    /* a phone is narrower than the bar: it scrolls sideways and Close stays
+       pinned on screen (it sat past the edge at 390 px, with no way out of
+       the view but Escape) */
++   'overflow-x:auto;overflow-y:hidden;scrollbar-width:none}'
++ '#ovis .ov-bar::-webkit-scrollbar{display:none}'
 + '#ovis .ov-ttl{font-size:13px;font-weight:700;letter-spacing:.3px}'
 + '#ovis .ov-ttl span{color:#4A8FD8}'
 + '#ovis .ov-sub{font-size:10.5px;color:#9A9A9A;font-family:"IBM Plex Mono",monospace}'
@@ -147442,7 +147451,7 @@ var CSS = ''
 + '#ovis .ov-b:hover{background:#2A3A49;border-color:#4d4d4d}'
 + '#ovis .ov-b.on{background:#4A8FD8;border-color:#4A8FD8;color:#0d0d0d;font-weight:600}'
 + '#ovis .ov-b.pri{background:#4A8FD8;border-color:#4A8FD8;color:#0d0d0d;font-weight:600}'
-+ '#ovis .ov-x{font-size:17px;line-height:1;padding:4px 11px}'
++ '#ovis .ov-x{font-size:17px;line-height:1;padding:4px 11px;position:sticky;right:0;z-index:1;box-shadow:-10px 0 10px var(--bg)}'
 + '#ovis .ov-body{flex:1;display:flex;min-height:0}'
 + '#ovis .ov-stage{flex:1;position:relative;min-width:0;background:#0f1013}'
 + '#ovis canvas{width:100%;height:100%;display:block;outline:none;touch-action:none}'

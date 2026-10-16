@@ -37,11 +37,11 @@ while ((match = re.exec(markup))) {
 check(staticCount >= 177, 'static scanner must not silently lose the ribbon');
 /* Independent source inventory: literal IDs assigned to injected buttons and
  * helper-created ribbon commands. Future unclassified commands fail this test. */
-var files = ['editor.html', 'omega-design-ai.js', 'omega-terrain-pack-v2.js'];
+var files = ['editor.html', 'omega-design-ai.js', 'omega-terrain-pack-v2.js', 'omega-build-sequence.js'];
 var ids = {};
 files.forEach(function (file) {
   var source = fs.readFileSync(file, 'utf8');
-  var rx = /(?:\b\w+\.id\s*=\s*|\b(?:btn|add|inject|ribbonButton)\([^\n]{0,45})['"]((?:rb-|omega-btn-|ov-ribbon-|ov-model-|omega-terr-btn)[^'"]*)['"]/g, m;
+  var rx = /(?:\b\w+\.id\s*=\s*|\b(?:btn|add|inject|ribbonButton)\([^\n]{0,45})['"]((?:rb-|omega-btn-|ov-ribbon-|ov-model-|ov-build|omega-terr-btn)[^'"]*)['"]/g, m;
   while ((m = rx.exec(source))) ids[m[1]] = true;
 });
 Object.keys(ids).forEach(function (id) { check(M.owners(id, '').length === 1, 'injected command: ' + id); });

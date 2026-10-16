@@ -71,7 +71,7 @@ var IDS = {
   lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key',
   gridatlas: 'rb-gridatlas', storage: 'omega-btn-bill-analysis rb-valuestack',
   estimate: 'rb-takeoff-budget', evrebates: 'rb-ev-future',
-  plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks',
+  plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks ov-build',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',
   engineering: 'rb-optimizer rb-optimise rb-elec rb-circuit omega-terr-btn',
   /* Trace Boundary and Fence & Tie are Compute's (Tommy, 2026-10-13: "made for the compute"): the site area Design Site fills, and the fence, controller and duct banks after it. They sit on the Compute tab on every plan. */
