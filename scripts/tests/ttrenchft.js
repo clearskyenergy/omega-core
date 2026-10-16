@@ -360,7 +360,7 @@ console.log('\none trench, one line');
 console.log('\nwiring in editor.html');
 {
   const uses = (SRC.match(/_trenchRunFt\(/g) || []).length;
-  chk('the drawn-run consumers measure DUG feet: right panel, BOM civil, BOM summary, permit sheet (4 + the helper)', (SRC.match(/_trenchRunDugFt\(/g) || []).length === 5, String((SRC.match(/_trenchRunDugFt\(/g) || []).length));
+  chk('the drawn-run consumers measure DUG feet: right panel, BOM civil, BOM summary, permit sheet, and _trenchDugFtAll, the one sum the Build player and the takeoff read (5 + the helper)', (SRC.match(/_trenchRunDugFt\(/g) || []).length === 6, String((SRC.match(/_trenchRunDugFt\(/g) || []).length));
   chk('_trenchRunFt itself is reached only through that helper', uses === 2, String(uses));
   chk('no consumer divides a run\'s pixels by the cache any more', SRC.indexOf('_trFt+=_polyLen(t.pts)/S.pxPerFt') < 0 && SRC.indexOf('var _tft=(S.pxPerFt ? _tpx/S.pxPerFt : 0);') < 0);
   chk('a leg along a run asks the view for its scale', SRC.indexOf("var _ppfLeg=(typeof _viewPxPerFt==='function') ? _viewPxPerFt() : 0;") > 0);
