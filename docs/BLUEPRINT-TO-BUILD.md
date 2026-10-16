@@ -232,6 +232,24 @@ to CSV and onto the RFQ as each trade's scope.
 
 ### Phase 4: Show the money while you draw
 
+> **Status, 2026-10-16: Phase 4 is built.** A readout beside the Run button;
+> `CLAUDE.md`, *The Run, pinned*, says how it works. Where it differs from the
+> plan below:
+> - It sits beside the Run button, not on the map or in the status bar. The
+>   status bar already overflows on anything narrower than a desktop: at
+>   390 px every item on its right is off-screen. The Run button's row shows
+>   on every screen, and nothing on the drawing is covered.
+> - The total follows the drawing as it is priced (the cost engine already
+>   prices every change). The $/W and the IRR are the Results rail's own,
+>   shown only while the results are current, and never worked out a second
+>   time.
+> - $/W, not $/kWh: the rail has no $/kWh, and the summary only repeats
+>   what the rail prints.
+> - It re-runs after the save of a drawing changed in this tab, once the
+>   drawing has sat saved for a moment. A project only opened, or a new
+>   drawing never Run, waits for its first Run by hand, so opening a project
+>   never writes to it.
+
 Their screen feels alive because the total is always visible. Pin a slim
 **Run summary** to Site Map (total, $/W or $/kWh, IRR once modelled) that
 re-runs on save, debounced, using the existing auto-save of priced runs

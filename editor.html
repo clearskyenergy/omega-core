@@ -199,6 +199,7 @@ function openOmegaCore(){
      (the browser only shows and hides the model). -->
 <script src="/omega-build-sequence.js"></script>
 <script src="/omega-takeoff.js"></script>
+<script src="/omega-run-summary.js"></script>
 <!-- Omega-Core from the Output tab: reads the Run and the drawing, fans out
      through OmegaComputeLease.evidence (loaded above) and asks api/omega-core
      whether the site takes the skids and what the host is paid. -->
@@ -1830,6 +1831,8 @@ window.onerror = function(msg, src, line, col, err) {
   </div>
   <!-- Patch 1: explicit recompute. Green when stale, muted when current. -->
   <div id="rr-run" onclick="omegaRunDesign()" title="Recompute results from the current drawing"><span id="rr-run-ico">&#9654;</span><span id="rr-run-lbl">Run</span></div>
+  <!-- the Run, pinned beside its button: the live total and the rail's own figures (omega-run-summary.js) -->
+  <div id="rr-sum" role="status" aria-live="polite"></div>
   <div id="ribbon-collapse-btn" onclick="toggleRibbon()" title="Collapse the toolbar to enlarge the map (tabs stay). Tap again to reopen.">▲</div>
   <!-- Mobile/touch dropdown listing every ribbon tab (populated to mirror the row above) -->
   <div id="ribbon-tab-menu" style="display:none;position:absolute;top:100%;left:6px;background:var(--navy);border:1px solid var(--border);border-radius:0 0 8px 8px;box-shadow:0 8px 24px rgba(0,0,0,.4);z-index:500;min-width:180px;overflow:hidden">
@@ -29443,7 +29446,7 @@ function _debounceROI() {
 // -- COST SUB-TAB SWITCHER -------------------------------------
 function setCostTab(tab) {
   ['costs','incentives','revenue','roi','grid','freqreg','takeoff'].forEach(t => {
-    const btn = document.getElementById('ct-'+t);
+    const btn = document.getElementById('ct-'+({ incentives:'inc', revenue:'rev' }[t] || t));
     const pnl = document.getElementById('cst-'+t);
     const isActive = t === tab;
     if(btn) { btn.style.color = isActive ? 'var(--accent)' : 'var(--sub)'; btn.style.borderBottomColor = isActive ? 'var(--accent)' : 'transparent'; }
@@ -37215,6 +37218,9 @@ function omegaRenderResults(){
         + 'meteo source above.</div>';
   }
   _omSet('rr-b-fin', fi);
+  /* the figures this rail just printed, for the summary pinned to the map
+     (omega-run-summary.js), which shows them and never works them out */
+  window._RR_FIN = { gross: gross, net: net, perW: perW, perKw: perKw || null, payback: payback, irr: irr, npv: npv, fullCost: _fullCost, at: S.lastRunAt || null };
 }
 
 /* ---- stale lifecycle ----------------------------------------------- */
@@ -37426,13 +37432,22 @@ window.omegaRollupFields = omegaRollupFields;
    is left alone: the totals stay in S and ride the next save that is
    allowed. Never a second writer of the record — saveProject() is the
    one write. */
-function omegaRunSave(){
-  if(!S.costRollup) return false;
+/* Whether a priced Run may be written now: signed in, a project open, the
+   load finished, and a plan whose producing controls run (not read-only,
+   not unchecked). omegaRunSave and the Run summary's re-run after a save
+   (omega-run-summary.js) both ask it, so they wait on the same plans. */
+function omegaRunMayWrite(){
   if(!(window._currentUser && window._projectId && window._loadReady)) return false;
   try{
     var pk = (window.OmegaCaps && typeof OmegaCaps.packageAccess==='function') ? OmegaCaps.packageAccess() : null;
     if(pk && (pk.readOnly || pk.unverified)) return false;
   }catch(e){}
+  return true;
+}
+window.omegaRunMayWrite = omegaRunMayWrite;
+function omegaRunSave(){
+  if(!S.costRollup) return false;
+  if(!omegaRunMayWrite()) return false;
   if(typeof _setSaved==='function') _setSaved('unsaved');
   if(typeof saveProject!=='function') return false;
   saveProject();

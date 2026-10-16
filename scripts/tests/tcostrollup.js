@@ -41,6 +41,7 @@ global.window = global;
 global.S = { lastRunAt: null, costRollup: null };
 (0, eval)(bodyFrom(ED, 'function omegaRunRollup('));
 (0, eval)(bodyFrom(ED, 'function omegaRollupFields('));
+(0, eval)(bodyFrom(ED, 'function omegaRunMayWrite('));   /* the one gate omegaRunSave asks (and the Run summary's re-run) */
 (0, eval)(bodyFrom(ED, 'function omegaRunSave('));
 
 const AT = Date.UTC(2026, 8, 28, 20, 1, 0);

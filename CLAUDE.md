@@ -1490,6 +1490,37 @@ check:takeoff`, also in `check:pages` (`scripts/render-takeoff.js`: the real
 editor and visualizer, the render checks' sample site in
 `scripts/_lib/editor-sample-site.js`, on a desktop and a 390 px phone).
 
+## The Run, pinned — the money while you draw (2026-10-16)
+
+**The Run total stays on screen beside the Run button, and catches up by
+itself after a save** (`docs/BLUEPRINT-TO-BUILD.md` Phase 4).
+`omega-run-summary.js` (ES5, `#rr-sum` right after `#rr-run` in `#tb`,
+the header row every screen shows) reads the Run total as the server
+prices the drawing (`window._COST_TOTAL`, which `updateCostEst` keeps
+current as pieces go down, "…" while a newer drawing is being priced)
+and, only while the results are current, the Results rail's own $/W and
+10-year IRR (`window._RR_FIN`, which `omegaRenderResults` publishes after
+printing them; the IRR shows once revenue is modelled, the rail's rule).
+It works nothing out. A changed drawing shows the new total at once and
+says why the rest waits ("updates when saved", "updating…", "press Run"),
+never the last Run's $/W or IRR beside it. After the save of a drawing
+whose results went from current to stale in this tab, the Run re-runs
+itself once the drawing has sat saved for `DEBOUNCE_MS`: the same
+`omegaRunDesign` the button presses, ending in `omegaRunSave`, whose gate
+is now ONE function, `omegaRunMayWrite` (signed in, a project open, the
+load finished, not read-only, not unchecked): a plan that waits keeps
+waiting for the button, as before. Never while the drawing is unsaved
+again, under a held pointer, beside a Run already going; never on a
+project only opened or a new drawing never Run; its own save never
+re-arms it. The rules are `decide()`, pure. A click runs a stale drawing,
+or opens the rail's financial figures. The status bar is untouched (it
+already overflows below desktop widths). Held by
+`scripts/tests/trunsummary.js` (in `npm test`: the rules tick by tick,
+what it says, the one gate cut from the editor) and `npm run
+check:runsummary`, also in `check:pages` (`scripts/render-run-summary.js`:
+the real editor and the sample site on a desktop, a 390 px phone and a
+read-only plan; a save stand-in, since the fixture refuses writes).
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
