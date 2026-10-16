@@ -396,6 +396,17 @@ function seed() {
     assert.equal(rows.filter(function (r) { return r[0] === 'Capital recovered'; })[0][1], 'month 59');
     assert.equal(rows.filter(function (r) { return r[0] === 'Assumption set'; })[0][1], 'omega-compute-v1');
     assert.ok(sheet.conditions.some(function (c) { return /unresolved workbook statistic/.test(c); }));
+    /* THE HOST LEASE AND COMPUTE TERMS (2026-10-16): read off the record and the model, a blank is "To be agreed", never a figure */
+    var lease = bare.sections.filter(function (x) { return /Host lease and compute terms/.test(x.heading); })[0];
+    assert.ok(lease && lease.rows.filter(function (r) { return r[0] === 'Rent to the host'; })[0][1].indexOf('To be agreed') === 0, 'no rent on record reads To be agreed with the quoted band');
+    var withLease = G.compose({ site: { id: 's', name: 'Leased', commercial: { rentPerKwMonth: 225, rentEscalatorPct: 2.5, revenueShare: 0.1 }, ppaPriceSchedule: [0.225, 0.2295, 0.384], ppaTermYears: 28, latestModel: { termYears: 10, skid: { units: 1, gpus: 48, chipsetName: 'NVIDIA HGX H100', pricePerGpuHour: 3.5, priceBasis: 'spot' }, totalProjectCost: 2831898, irr: 0.204, irrExTerminal: 0.186 } }, scenario: null, org: ORG, workspaceName: 'EVCS', now: '2026-10-16T12:00:00Z' });
+    var lr = withLease.sections.filter(function (x) { return /Host lease and compute terms/.test(x.heading); })[0].rows, lrow = function (k) { return lr.filter(function (r) { return r[0] === k; })[0][1]; };
+    assert.equal(lrow('Rent to the host'), '$225 per kW of compute per month x 75 kW x 12 = $202,500 a year ($16,875 a month)');
+    assert.equal(lrow('Rent escalator'), '2.5% a year, compounding'); assert.equal(lrow('Revenue share to the host'), '10.0% of gross compute revenue, paid with the rent');
+    assert.match(lrow('Compute price basis'), /\$3\.50 per GPU-hour \(public spot reference; a contracted rate replaces it\), for 48 x NVIDIA HGX H100/); assert.match(lrow('Whole project on file'), /\$2,831,898 total project cost, after-tax IRR 20\.40% over 10 years \(18\.60% on the 10 years alone\)/);
+    assert.match(lrow('Microgrid PPA (solar + storage)'), /executed PPA.s own price table: \$0\.225\/kWh in year 1 to \$0\.384\/kWh in year 3/); assert.equal(lrow('Microgrid PPA term'), '28 years from commercial operation');
+    assert.ok(withLease.sections.filter(function (x) { return /Host lease/.test(x.heading); })[0].paras.some(function (p) { return /removes the skid/.test(p) && /fair market value/.test(p); }), 'the end-of-term terms are the skid\u2019s own');
+    assert.match(withLease.title, /Site SPV and Host Lease Term Sheet/);
     var r = res(); await call('GET', { site: SITE, agreement: '1' }, PM, r);
     assert.equal(r.headers['Content-Type'], 'application/pdf');
     assert.match(r.headers['Content-Disposition'], /SPV-term-sheet-The-Elysian-Apartments-/);
@@ -467,6 +478,17 @@ function seed() {
     assert.match(d.proformaSummary, /total project cost \$/); assert.match(d.proformaSummary, /after-tax IRR/);
     var reg = await call('GET', {}, PM), row = reg.sites.filter(function (s) { return s.id === SITE; })[0];
     assert.equal(row.capital.status, 'open'); assert.equal(row.capital.funded, false); assert.equal(row.capital.ask, cost); assert.equal(row.capital.request.source, 'compute-model');
+    /* THE DEAL FOLLOWS THE MODEL (2026-10-15): a run after the hand-off refreshes an open, unoffered deal's ask, basis and summary; the hand-off carries what a capital partner checks */
+    assert.ok(d.capitalRequest.termYears === 10 && 'irrExTerminal' in d.capitalRequest && 'ppa' in d.capitalRequest && 'rent' in d.capitalRequest && 'computeCapex' in d.capitalRequest, 'the request carries the bank-facing basis: ' + JSON.stringify(Object.keys(d.capitalRequest)));
+    var run3 = await call('POST', { site: SITE, action: 'site-model', pods: 3 }, PM), cost3 = run3.latestModel.totalProjectCost;
+    assert.notEqual(cost3, cost); assert.equal(run3.dealRefreshed, true, 'the run says the deal was refreshed');
+    var d3 = db.data.get('fin_projects/' + sent.deals[0].finProjectId);
+    assert.equal(d3.ask, cost3); assert.equal(d3.costBasis, cost3); assert.equal(d3.sourceModelId, run3.modelId); assert.equal(d3.capitalRequest.amount, cost3); assert.equal(d3.capitalRequest.sentAt, d.capitalRequest.sentAt); assert.ok(d3.capitalRequest.refreshedAt); assert.ok(d3.proformaSummary.indexOf('$' + Math.round(cost3).toLocaleString('en-US')) >= 0, 'the summary a partner reads carries the new cost: ' + d3.proformaSummary);
+    db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d3, { offerCount: 1 }));
+    var run4 = await call('POST', { site: SITE, action: 'site-model', pods: 2 }, PM);
+    assert.equal(run4.dealRefreshed, false, 'a deal with an offer is left alone'); assert.equal(db.data.get('fin_projects/' + sent.deals[0].finProjectId).ask, cost3);
+    db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d3, { offerCount: 0 }));
+    cost = run4.latestModel.totalProjectCost; d = db.data.get('fin_projects/' + sent.deals[0].finProjectId); db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d, { ask: cost, costBasis: cost }));
     db.data.set('fin_projects/' + sent.deals[0].finProjectId, Object.assign({}, d, { status: 'awarded', awardedTo: 'partner-uid', awardedToOrg: 'Ridgeline Capital', offerCount: 2, awardedAt: '2026-10-12T00:00:00Z' }));
     var reg2 = await call('GET', {}, PM), row2 = reg2.sites.filter(function (s) { return s.id === SITE; })[0];
     assert.equal(row2.capital.funded, true); assert.equal(row2.capital.awardedToOrg, 'Ridgeline Capital'); assert.equal(row2.capital.offerCount, 2);
@@ -700,7 +722,7 @@ function seed() {
     assert.match(stored.basis.hostRevenue, /year-one revenue/); assert.match(stored.basis.host, /IN this case as money/);
     assert.ok(stored.result.proforma.assumptions.some(function (a) { return /host\u2019s own system beside the compute/.test(a) && /\$918,000/.test(a); }));
     assert.equal(inp.deal.rentPerYear, OC.RATE_CARD.monthlyPerSkid.base * 12); assert.equal(inp.deal.rentEscPct, OC.RATE_CARD.escalatorPct.base);
-    assert.match(stored.basis.host, /500 kW \/ 2000 kWh battery/); assert.match(stored.basis.host, /368 kW-dc solar/); assert.match(stored.basis.host, /\$918,000/); assert.match(stored.basis.rent, /market reference/); assert.match(stored.basis.zip, /read from the site’s address/);
+    assert.match(stored.basis.host, /500 kW \/ 2000 kWh battery/); assert.match(stored.basis.host, /368 kW-dc solar/); assert.match(stored.basis.host, /\$918,000/); assert.match(stored.basis.rent, /rate card.s floor/); assert.match(stored.basis.zip, /read from the site’s address/);
     assert.match(stored.basis.capex, /\$639,000 a skid, plus the NextNRG Microgrid Controller built into it, \$125,000/); assert.match(stored.basis.gpuClass, /48 × NVIDIA HGX H100 .* public spot market reference, \$2\.46 a GPU-hour/);
     assert.ok(!/iQGen|IQGEN|CMDC/i.test(JSON.stringify([stored.basis, stored.summary, page.skid, stored.result.story, stored.result.proforma.assumptions])), 'nothing a tenant reads names the source workbook or the cost reference');
     assert.ok(!stored.result.proforma.warnings.some(function (w) { return w.code === 'LOAD_ASSUMED'; }), 'no building is assumed behind a skid on its own meter');
@@ -730,7 +752,45 @@ function seed() {
     await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaRatePerKwh: 0.225, ppaEscalatorPct: 2.5, ppaTermYears: 28 }, PM);
     var withPpa = await call('GET', { site: made.id }, PM), lm3 = withPpa.site.latestModel;
     assert.equal(withPpa.site.ppaRatePerKwh, 0.225); assert.equal(withPpa.site.ppaTermYears, 28);
-    assert.notEqual(lm3.modelId, lm2.modelId, 'a changed design and changed facts run the model again'); assert.deepEqual(lm3.host.ppa, { ratePerKwh: 0.225, escPct: 2.5, termYears: 28 }); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000, 'the host\u2019s capex is the Run total less the skid\u2019s own line');
+    assert.notEqual(lm3.modelId, lm2.modelId, 'a changed design and changed facts run the model again'); assert.deepEqual(lm3.host.ppa, { ratePerKwh: 0.225, schedule: null, escPct: 2.5, escAssumed: false, termYears: 28, year1Kwh: 0 });
+    assert.ok(lm3.irrExTerminal != null && lm3.irrExTerminal < lm3.irr && lm3.terminalValue && lm3.terminalValue.year === 10 && lm3.terminalValue.yearsLeft === 18, 'the term\u2019s own IRR rides beside the headline: ' + JSON.stringify([lm3.irr, lm3.irrExTerminal, lm3.terminalValue]));
+    assert.ok(db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId).result.proforma.warnings.some(function (w) { return w.code === 'PPA_TABLE_MISSING'; }), 'a rate without the contract\u2019s table is told so');
+    /* THE CONTRACT AS WRITTEN (2026-10-15, Tommy: "very accurate … able to be verified by the bank"): the executed Topanga PPA's own 28-row price table (it compounds 2.0% a year, not the one-pager's 2.5%) and its expected first-year production, pasted as the contract prints them, price each year as written */
+    var tbl = []; for (var ty = 0; ty < 28; ty++) tbl.push((0.225 * Math.pow(1.02, ty)).toFixed(4));
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaPriceSchedule: tbl.map(function (p, i) { return (i + 1) + ' ' + p; }).join('\n'), ppaYear1Kwh: 540000 }, PM);
+    var withTbl = await call('GET', { site: made.id }, PM), lm3b = withTbl.site.latestModel;
+    assert.equal(withTbl.site.ppaPriceSchedule.length, 28); assert.equal(withTbl.site.ppaPriceSchedule[0], 0.225); assert.equal(withTbl.site.ppaPriceSchedule[27], 0.384); assert.equal(withTbl.site.ppaYear1Kwh, 540000);
+    assert.notEqual(lm3b.modelId, lm3.modelId, 'the table is a changed fact: the model runs again');
+    assert.equal(lm3b.host.ppa.schedule.length, 28); assert.equal(lm3b.host.ppa.year1Kwh, 540000); assert.ok(lm3b.irr < lm3.irr, 'the 2.0% table returns less than the 2.5% rate: ' + lm3b.irr + ' < ' + lm3.irr);
+    var st3b = db.data.get(O + '/sites/' + made.id + '/models/' + lm3b.modelId);
+    assert.equal(st3b.result.proforma.inputs.solar.kwh1, 540000, 'the contract\u2019s expected production is what the solar generates'); assert.equal(st3b.result.proforma.inputs.revenue.ppa.schedule.length, 28);
+    assert.ok(!st3b.result.proforma.warnings.some(function (w) { return w.code === 'PPA_TABLE_MISSING' || w.code === 'PPA_PRODUCTION_ASSUMED'; }), 'nothing assumed about the contract');
+    await rejects(call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaPriceSchedule: '0.2, 7' }, PM), 400, /PPA prices/);
+    /* the §48E adders on record build the statutory rate in the ONE finance engine (the one-pagers claim an energy community): 30 + 10 points, never a typed percentage */
+    assert.equal(st3b.result.proforma.tax.itc.byAsset.blended.ratePct, 30, 'the base rate with no adder on record');
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', itcEnergyCommunity: true }, PM);
+    var withEc = await call('GET', { site: made.id }, PM), lmEc = withEc.site.latestModel, stEc = db.data.get(O + '/sites/' + made.id + '/models/' + lmEc.modelId);
+    assert.equal(withEc.site.itcEnergyCommunity, true); assert.notEqual(lmEc.modelId, lm3b.modelId, 'an adder is a changed fact');
+    assert.equal(withEc.site.ppaPriceSchedule.length, 28, 'a save that does not send the table leaves it as stored (2026-10-15: a partial save once wiped it)'); assert.equal(withEc.site.ppaYear1Kwh, 540000); assert.equal(withEc.site.ppaRatePerKwh, 0.225);
+    assert.equal(stEc.result.proforma.tax.itc.byAsset.blended.ratePct, 40);
+    /* THE HOST LEASE IS kW × $/kW-MONTH × 12 (2026-10-15): the record's rate per kW, else the card's $150 floor; a monthly rent wins; the revenue share rides beside it */
+    var OCc = require('../api/_lib/omega-core').RATE_CARD;
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', rentMonthly: null, rentPerKwMonth: 300, revenueShare: 0.1 }, PM);
+    var withRent = await call('GET', { site: made.id }, PM), lmR = withRent.site.latestModel, stR = db.data.get(O + '/sites/' + made.id + '/models/' + lmR.modelId);
+    assert.deepEqual(withRent.site.commercial, { rentPerKwMonth: 300, rentMonthly: null, revenueShare: 0.1 }, 'the lease terms patch the commercial block: ' + JSON.stringify(withRent.site.commercial));
+    assert.notEqual(lmR.modelId, lmEc.modelId, 'the rent is a changed fact');
+    assert.equal(stR.input.deal.rentPerYear, 300 * OCc.computeKwPerSkid * 2 * 12, 'two skids × 75 kW × $300 × 12'); assert.equal(stR.input.deal.rentSharePct, 10); assert.match(stR.basis.rent, /\$300 per kW of compute a month/);
+    assert.ok(lmR.irr < lmEc.irr, 'a dearer lease lowers the whole project: ' + lmR.irr + ' < ' + lmEc.irr);
+    /* a contracted compute rate on the record replaces the public spot reference (2026-10-16): the IRR Tommy expects at $3.50 */
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', computePricePerGpuHour: 3.5 }, PM);
+    var withPrice = await call('GET', { site: made.id }, PM), lmP = withPrice.site.latestModel, stP = db.data.get(O + '/sites/' + made.id + '/models/' + lmP.modelId);
+    assert.equal(stP.input.compute.tiers.spot.price, 3.5); assert.equal(lmP.skid.priceBasis, 'contracted'); assert.equal(lmP.skid.pricePerGpuHour, 3.5); assert.match(stP.basis.gpuClass, /CONTRACTED rate on the site record, \$3\.50/); assert.ok(lmP.irr > lmR.irr, 'the contracted rate lifts the IRR: ' + lmP.irr + ' > ' + lmR.irr);
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', computePricePerGpuHour: null }, PM);
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', rentPerKwMonth: null, revenueShare: null }, PM);
+    var atFloor = db.data.get(O + '/sites/' + made.id + '/models/' + (await call('GET', { site: made.id }, PM)).site.latestModel.modelId);
+    assert.equal(atFloor.input.deal.rentPerYear, OCc.perKwMonth.base * OCc.computeKwPerSkid * 2 * 12, 'with nothing on record the card\u2019s floor, $150/kW-month'); assert.match(atFloor.basis.rent, /floor/); assert.equal(atFloor.input.deal.rentSharePct, 0); assert.ok(lmEc.irr > lm3b.irr, 'the adder raises the IRR: ' + lmEc.irr + ' > ' + lm3b.irr); assert.match(stEc.basis.itc, /energy community/);
+    await call('POST', { action: 'site-save', id: made.id, name: 'Topanga Terrace', ppaPriceSchedule: [] }, PM);
+    assert.equal((await call('GET', { site: made.id }, PM)).site.ppaPriceSchedule, null, 'an empty table clears it'); assert.equal(lm3.host.revenueBasis, 'PPA'); assert.equal(lm3.host.capex, 2300000, 'the host\u2019s capex is the Run total less the skid\u2019s own line');
     var st3 = db.data.get(O + '/sites/' + made.id + '/models/' + lm3.modelId);
     assert.deepEqual(st3.input.host.capexLines.map(function (l) { return [l.id, l.amount, l.asset]; }), [['nextnrg', 2208000, 'blended'], ['balance', 92000, 'blended']]);
     assert.equal(st3.result.proforma.inputs.revenue.ppa.rate1, 0.225); assert.ok(st3.result.proforma.rows[0].ppaRevenue > 100000, 'the PPA earns on the solar the engine generates: ' + st3.result.proforma.rows[0].ppaRevenue);
@@ -739,12 +799,17 @@ function seed() {
     /* what the skid adds (2026-10-14): the host alone, the skid alone, the whole, from the same engine on the same facts */
     assert.ok(lm3.uplift && lm3.uplift.hostAlone && lm3.uplift.skidAlone && lm3.uplift.whole, 'the summary carries the three cases: ' + JSON.stringify(lm3.uplift));
     assert.ok(lm3.uplift.hostAlone.irr < lm3.uplift.whole.irr && lm3.uplift.whole.irr < lm3.uplift.skidAlone.irr, 'the whole sits between the host alone and the skid alone: ' + JSON.stringify(lm3.uplift));
+    /* the host alone pays no lease (2026-10-16): the rent is the skid's, so the host-alone case runs without it */
+    (function () { var SMx = require('../api/_lib/site-model'), CSx = require('../api/_lib/compute-site'), inpX = JSON.parse(JSON.stringify(st3.input)); inpX.deal.rentPerYear = 500000;
+      var rX = CSx.model(inpX), up = SMx.upliftOf(inpX, rX), noRent = JSON.parse(JSON.stringify(inpX)); noRent.compute.pods = 0; delete noRent.skid; noRent.deal.rentPerYear = 0; noRent.deal.rentSharePct = 0;
+      var ref = CSx.model(noRent); assert.ok(Math.abs(up.hostAlone.irr - ref.proforma.metrics.afterTaxIrr) < 1e-9, 'host alone is the host system with no rent: ' + JSON.stringify([up.hostAlone.irr, ref.proforma.metrics.afterTaxIrr])); })();
     assert.equal(lm3.uplift.whole.irr, lm3.irr, 'the whole is the headline'); assert.ok(lm3.uplift.hostAlone.capital < lm3.totalProjectCost && lm3.uplift.skidAlone.capital < lm3.totalProjectCost);
     /* the whole project is levered by the engine's standard debt (2026-10-14, "do what is standard"): the headline is the equity IRR, the unlevered twin beside it, the skid alone still 100% equity */
     assert.equal(lm3.levered, false, 'the whole project is 100% equity: the partner funds all of it (2026-10-14)'); assert.ok(!(lm3.debt > 0) && Math.abs(lm3.equity - lm3.totalProjectCost) < 1, 'the ask is the whole project: ' + JSON.stringify([lm3.equity, lm3.totalProjectCost]));
     assert.equal(lm3.debtTerms, null); assert.ok(lm3.uplift.levered && lm3.uplift.levered.irr > lm3.irr, 'the standard-debt case rides beside it as a side figure: ' + JSON.stringify(lm3.uplift.levered));
     var regRow = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
-    assert.equal(regRow.latestModel.totalProjectCost, lm3.totalProjectCost); assert.equal(regRow.latestModel.host.capex, 2300000);
+    var lmNow = (await call('GET', { site: made.id }, PM)).site.latestModel;
+    assert.equal(regRow.latestModel.totalProjectCost, lmNow.totalProjectCost, 'the register row carries the site\u2019s latest model'); assert.equal(regRow.latestModel.host.capex, 2300000);
     var n2 = audits('sitecrm-site-model').length; await call('GET', { site: made.id }, PM);
     assert.equal(audits('sitecrm-site-model').length, n2, 'a hand run on the current design satisfies the automatic one');
     /* the pod pro forma on this design prices the skid as recorded */

@@ -239,9 +239,13 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '</div></div>' +
       '<div class="grid2">' + designCardHtml(s) + '</div>' +
       '<div class="grid2"><div class="card"><h3>Commercial</h3>' +
-      fact('Rent / month', cm.rentMonthly, '$') + fact('Revenue share', cm.revenueShare != null ? pct(cm.revenueShare) : null) + fact('kWh share', cm.kwhShare != null ? pct(cm.kwhShare) : null) +
+      fact('Rent per kW of compute a month', cm.rentPerKwMonth, '$') + fact('Rent / month (a signed lease; wins over the rate)', cm.rentMonthly, '$') + fact('Rent escalator', cm.rentEscalatorPct != null ? cm.rentEscalatorPct + '% a year' : null) + fact('Revenue share of gross compute', cm.revenueShare != null ? pct(cm.revenueShare) : null) + fact('Contracted compute price', cm.computePricePerGpuHour != null ? '$' + cm.computePricePerGpuHour + ' per GPU-hour' : null) + fact('kWh share', cm.kwhShare != null ? pct(cm.kwhShare) : null) +
+      '<div class="assume">The host lease: annual rent = kW of compute (75 a skid) \u00d7 $ per kW-month \u00d7 12, escalating; ClearSky quotes $150\u2013$450 per kW-month and the model opens at the $150 floor until a rate or a rent is entered here. A revenue share rides beside it.</div>' +
       fact('PPA rate, year one', s.ppaRatePerKwh != null ? '$' + s.ppaRatePerKwh + '/kWh' : null) + fact('PPA escalator', s.ppaEscalatorPct != null ? s.ppaEscalatorPct + '% a year' : null) + fact('PPA term', s.ppaTermYears != null ? s.ppaTermYears + ' years' : null) +
-      '<div class="assume">The PPA the host\u2019s solar + storage is sold under: the compute model prices the host\u2019s system on it, so the IRR and the capital request are the whole project\u2019s. No PPA on record means the host\u2019s system earns the Site Map run\u2019s revenue, or nothing, and the model says so.</div>' +
+      fact('PPA price table', s.ppaPriceSchedule && s.ppaPriceSchedule.length ? s.ppaPriceSchedule.length + ' years, $' + s.ppaPriceSchedule[0] + ' to $' + s.ppaPriceSchedule[s.ppaPriceSchedule.length - 1] + '/kWh' : null) +
+      fact('PPA expected year-one production', s.ppaYear1Kwh != null ? Math.round(s.ppaYear1Kwh).toLocaleString('en-US') + ' kWh' : null) +
+      fact('ITC adders claimed', s.itcEnergyCommunity || s.itcDomesticContent ? [s.itcEnergyCommunity ? 'energy community' : '', s.itcDomesticContent ? 'domestic content' : ''].filter(Boolean).join(' + ') : (s.itcEnergyCommunity === false ? 'none' : null)) +
+      '<div class="assume">The PPA the host\u2019s solar + storage is sold under: the compute model prices the host\u2019s system on it, so the IRR and the capital request are the whole project\u2019s. Enter the contract\u2019s own price table and its expected first-year production, and each year is priced as the contract reads (a bank can check it line by line); a rate and an escalator stand in without them. No PPA on record means the host\u2019s system earns the Site Map run\u2019s revenue, or nothing, and the model says so.</div>' +
       '</div><div class="card"><h3>Attention</h3>' +
       '<div class="li-body">' + (open ? '<span class="pill pill-warn">' + open + ' open follow-up' + (open > 1 ? 's' : '') + '</span>' : 'No open follow-ups.') + '</div>' +
       ((s.flags && s.flags.peakExceedsInstalled) ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
@@ -357,6 +361,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       return '<label class="fl">' + label + '</label><input type="text" id="' + id + '" value="' + esc(val(v)) + '" style="width:100%">';
     }
     var mu = Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh.map(function (x) { return x == null ? '' : x; }).join(', ') : '';
+    var cm = s.commercial || {};
     return '<div class="grid2"><div>' +
       txtIn('ef-name', 'Site name *', s.name) + txtIn('ef-city', 'City', s.city) + txtIn('ef-state', 'State', s.state) +
       txtIn('ef-address', 'Address', s.address) + txtIn('ef-zip', 'ZIP code (the compute model reads the tariff book and climate from it)', s.zip) +
@@ -380,7 +385,20 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') +
       numIn('ef-ppaRatePerKwh', 'PPA rate, year one ($/kWh; the host\u2019s solar + storage is sold under it)', s.ppaRatePerKwh, '0.0001') +
       numIn('ef-ppaEscalatorPct', 'PPA escalator (% a year)', s.ppaEscalatorPct, '0.1') +
-      numIn('ef-ppaTermYears', 'PPA term (years)', s.ppaTermYears) + '</div><div>' +
+      numIn('ef-ppaTermYears', 'PPA term (years)', s.ppaTermYears) +
+      numIn('ef-ppaYear1Kwh', 'PPA expected first-year production (kWh, from the contract)', s.ppaYear1Kwh) +
+      '<label class="fl">PPA price table ($/kWh, one a contract year: paste the contract\u2019s column; wins over the rate and escalator)</label>' +
+      '<textarea id="ef-ppaPriceSchedule" style="min-height:52px" placeholder="0.2250, 0.2295, 0.2341, \u2026">' + esc(Array.isArray(s.ppaPriceSchedule) ? s.ppaPriceSchedule.join(', ') : '') + '</textarea>' +
+      '<label class="fl">ITC energy community adder (the finance engine builds the \u00a748E rate; never type a percentage)</label><select id="ef-itcEnergyCommunity" class="inline" style="width:100%">' +
+      '<option value=""' + (s.itcEnergyCommunity == null ? ' selected' : '') + '>Unknown</option><option value="true"' + (s.itcEnergyCommunity === true ? ' selected' : '') + '>Claimed</option><option value="false"' + (s.itcEnergyCommunity === false ? ' selected' : '') + '>Not claimed</option></select>' +
+      numIn('ef-rentPerKwMonth', 'Host rent per kW of compute a month ($; ClearSky quotes 150\u2013450)', cm.rentPerKwMonth) +
+      numIn('ef-rentMonthly', 'Host rent per month ($, a signed lease; wins over the rate)', cm.rentMonthly) +
+      numIn('ef-rentEscalatorPct', 'Rent escalator (% a year)', cm.rentEscalatorPct, '0.1') +
+      numIn('ef-revenueSharePct', 'Revenue share of gross compute to the host (%)', cm.revenueShare != null ? Math.round(cm.revenueShare * 10000) / 100 : null, '0.1') +
+      numIn('ef-computePricePerGpuHour', 'Contracted compute price ($ per GPU-hour; blank = public spot reference)', cm.computePricePerGpuHour, '0.01') +
+      '<label class="fl">ITC domestic content adder</label><select id="ef-itcDomesticContent" class="inline" style="width:100%">' +
+      '<option value=""' + (s.itcDomesticContent == null ? ' selected' : '') + '>Unknown</option><option value="true"' + (s.itcDomesticContent === true ? ' selected' : '') + '>Claimed</option><option value="false"' + (s.itcDomesticContent === false ? ' selected' : '') + '>Not claimed</option></select>' +
+      '</div><div>' +
       numIn('ef-annualUsageKwh', 'Annual usage (kWh)', s.annualUsageKwh) +
       '<label class="fl">Monthly usage kWh (Jan..Dec, comma-separated)</label>' +
       '<input type="text" id="ef-monthlyUsageKwh" value="' + esc(mu) + '" style="width:100%" placeholder="e.g. 12000, 11500, ...">' +
@@ -395,6 +413,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     btn.addEventListener('click', function () {
       function num(id) { var v = document.getElementById(id).value.trim(); return v === '' ? null : Number(v); }
       function str(id) { var v = document.getElementById(id).value.trim(); return v === '' ? null : v; }
+      function sel(id) { var v = document.getElementById(id).value; return v === '' ? null : v === 'true'; }
       var mv = document.getElementById('ef-meterOwned').value;
       var tg = str('ef-tags');
       msg('Saving\u2026', true);
@@ -409,6 +428,10 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'),
         existingPeakKw: num('ef-existingPeakKw'), powerPricePerKwh: num('ef-powerPricePerKwh'),
         ppaRatePerKwh: num('ef-ppaRatePerKwh'), ppaEscalatorPct: num('ef-ppaEscalatorPct'), ppaTermYears: num('ef-ppaTermYears'),
+        ppaPriceSchedule: str('ef-ppaPriceSchedule') || [], ppaYear1Kwh: num('ef-ppaYear1Kwh'),
+        itcEnergyCommunity: sel('ef-itcEnergyCommunity'), itcDomesticContent: sel('ef-itcDomesticContent'),
+        rentPerKwMonth: num('ef-rentPerKwMonth'), rentMonthly: num('ef-rentMonthly'), rentEscalatorPct: num('ef-rentEscalatorPct'),
+        revenueShare: num('ef-revenueSharePct') == null ? null : num('ef-revenueSharePct') / 100, computePricePerGpuHour: num('ef-computePricePerGpuHour'),
         annualUsageKwh: num('ef-annualUsageKwh'), monthlyUsageKwh: str('ef-monthlyUsageKwh'),
         usageNotes: str('ef-usageNotes')
       }).then(function (j) { msg(esc(j.note), true); load(true); })
@@ -763,7 +786,9 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     var v = lm.verdict || {}, h = '<div class="card" id="results-card"><h3>Headline returns <span class="li-meta">' + esc(lm.structureLabel || '') + ' · ' + (lm.levered ? 'levered' : '100% equity, unlevered') + '</span></h3>' + needsFromYou(s);
     if (lm.irr == null) h += '<div class="li-body">No capital is invested under this structure, so there is no IRR. Choose Own or the pod layer above for the full pro forma.</div>';
     else h += '<div class="kpis">' + kpi(money(lm.equity), lm.levered ? 'equity sought<br>beside ' + money(lm.debt) + ' of debt' : 'total investment sought<br>100% equity') +
-      kpi(irrPct(lm.irr), 'after-tax ' + (lm.levered ? 'equity' : 'unlevered') + ' IRR<br>over the ' + esc(lm.termYears || 10) + '-year term', lm.irr > 0.1 ? 'good' : lm.irr < 0 ? 'warn' : '') +
+      kpi(irrPct(lm.irr), 'after-tax ' + (lm.levered ? 'equity' : 'unlevered') + ' IRR<br>over the ' + esc(lm.termYears || 10) + '-year term' + (lm.terminalValue ? ', with the PPA\u2019s remaining ' + esc(lm.terminalValue.yearsLeft) + ' years as a terminal value of ' + money(lm.terminalValue.amount) + ' in year ' + esc(lm.terminalValue.year) : ''), lm.irr > 0.1 ? 'good' : lm.irr < 0 ? 'warn' : '') +
+      /* the term's own figure, no terminal value (2026-10-15): what a bank checks the ten years against */
+      (lm.irrExTerminal != null ? kpi(irrPct(lm.irrExTerminal), esc(lm.termYears || 10) + '-year cash flows alone<br>no terminal value: the figure to check against a lender\u2019s own ' + esc(lm.termYears || 10) + '-year model', lm.irrExTerminal > 0.1 ? 'good' : lm.irrExTerminal < 0 ? 'warn' : '') : '') +
       (lm.levered && lm.uplift && lm.uplift.unlevered && lm.uplift.unlevered.irr != null ? kpi(irrPct(lm.uplift.unlevered.irr), 'unlevered, 100% equity<br>the same project with no debt' + (lm.debtTerms ? '; the headline carries ' + esc(lm.debtTerms.ltcPct) + '% debt at ' + esc(lm.debtTerms.ratePct) + '% over ' + esc(lm.debtTerms.tenorYears) + ' years' : '')) : '') +
       (!lm.levered && lm.uplift && lm.uplift.levered && lm.uplift.levered.irr != null ? kpi(irrPct(lm.uplift.levered.irr), 'if 45% were borrowed<br>equity IRR with the engine\u2019s standard debt, 7.5% over 7 years; the ask above is the whole project, 100% equity') : '') +
       (lm.uplift && lm.uplift.hostAlone && lm.uplift.hostAlone.irr != null && lm.uplift.whole && lm.uplift.whole.irr != null

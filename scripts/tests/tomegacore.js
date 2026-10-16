@@ -77,13 +77,16 @@ eq(r.gates.power.status, 'pass', 'power passes on the utility\'s confirmed figur
 eq(r.gates.location.status, 'pass', 'location passes: chargers drawn, commercial zoning, located');
 eq(r.gates.fiber.status, 'pass', 'fiber passes on 1 Gbps symmetric on site');
 eq(r.units.proposed, 1, 'one skid proposed');
-eq(r.offer.monthlyPerSkid.base, 1000, 'the lease opens at $1,000 a skid a month');
-eq(r.offer.annual.base, 12000, '$12,000 a year');
-eq(r.offer.termTotal.base, Math.round(CL.escalatedTotal(12000, 0.025, 5)), 'the term total escalates 2.5% over 5 years');
+/* THE RENT IS PER kW OF COMPUTE PER MONTH (2026-10-15, Tommy: "$150–450 per kW" on a 75 kW unit): the card's floor, $150 × 75 kW = $11,250 a skid a month, $135,000 a year */
+eq(OC.RATE_CARD.perKwMonth.base * OC.RATE_CARD.computeKwPerSkid, OC.RATE_CARD.monthlyPerSkid.base, 'the per-skid figure is derived from the per-kW rate');
+eq(JSON.stringify(OC.RATE_CARD.perKwMonth), JSON.stringify({ low: 150, base: 150, high: 450 }), 'ClearSky quotes $150–$450 per kW-month, opening at the floor');
+eq(r.offer.monthlyPerSkid.base, 11250, 'the lease opens at $11,250 a skid a month ($150/kW-month × 75 kW)');
+eq(r.offer.annual.base, 135000, '$135,000 a year');
+eq(r.offer.termTotal.base, Math.round(CL.escalatedTotal(135000, 0.025, 5)), 'the term total escalates 2.5% over 5 years');
 eq(r.host.run.netCost, 1100000, 'the Run\'s capex less its incentives');
 eq(r.host.paybackYearsBefore, 5, 'payback before: 1.1M / 220k');
-eq(r.host.paybackYearsAfter, Math.round(1100000 / 232000 * 10) / 10, 'payback after: the lease added to the Run\'s revenue');
-eq(r.host.revenueUpliftPct, Math.round(12000 / 220000 * 1000) / 10, 'the lease as a share of year-one revenue');
+eq(r.host.paybackYearsAfter, Math.round(1100000 / 355000 * 10) / 10, 'payback after: the lease added to the Run\'s revenue');
+eq(r.host.revenueUpliftPct, Math.round(135000 / 220000 * 1000) / 10, 'the lease as a share of year-one revenue');
 eq(r.program.systemCost, 764000, 'ClearSky\'s system cost for one skid, controller included');
 ok(r.program.systemCostBreakdown && r.program.systemCostBreakdown[0].usd === 639000 && r.program.systemCostBreakdown[1].usd === 125000, 'the answer carries the breakdown (skid + controller)');
 eq(JSON.stringify(r.program.fmvAtEndPerSkid), JSON.stringify({ low: 153000, base: 229000, high: 306000 }), 'fair market value at year 5: 20 / 30 / 40% of $764k to the nearest $1,000, indicative');
@@ -110,7 +113,7 @@ ok(r.host.notes.some(function (n) { return /market reference.s base/.test(n); })
 ok(/has not set an Omega-Core rent/.test(r.disclaimer), 'and so does the disclaimer');
 eq(r.rateCard.basis, 'market-reference', 'a tenant sees what the card is');
 ok(!r.rateCard.monthlyPerSkid && !r.rateCard.sources, 'but not the card itself');
-eq(OC.RATE_CARD.version, 'omega-core-lease-v2', 'the card is versioned past the seed');
+eq(OC.RATE_CARD.version, 'omega-core-lease-v3', 'the card is versioned past the seed');
 var rent = clone(GOOD); rent.rep.leaseMonthly = 1200;
 var rr = OC.evaluate(rent, {});
 eq(rr.offer.source, 'entered', 'a rent typed for the site replaces the reference');
@@ -127,12 +130,12 @@ rent.rep.leaseEscalatorPct = 3;
 eq(OC.evaluate(rent, {}).offer.termTotal.base, Math.round(CL.escalatedTotal(14400, 0.03, 5)), 'a typed escalator is used');
 rent.rep.leaseMonthly = '1500';
 eq(OC.evaluate(rent, {}).offer.monthlyPerSkid.base, 1500, 'a numeric string is a rent');
-[0, -100, 25000, '', '1,200', true, [900]].forEach(function (bad) {
+[0, -100, 250000, '', '1,200', true, [900]].forEach(function (bad) {
   var b = clone(GOOD); b.rep.leaseMonthly = bad;
   eq(OC.evaluate(b, {}).offer.source, 'market', 'a rent of ' + JSON.stringify(bad) + ' is not a rent');
 });
-var big = clone(GOOD); big.rep.leaseMonthly = 25000;
-ok(OC.evaluate(big, {}).findings.some(function (f) { return /\$25,000 per skid per month was entered/.test(f.text); }), 'a rent set aside is said, never clamped');
+var big = clone(GOOD); big.rep.leaseMonthly = 250000;
+ok(OC.evaluate(big, {}).findings.some(function (f) { return /\$250,000 per skid per month was entered/.test(f.text); }), 'a rent set aside is said, never clamped');
 var escOnly = clone(GOOD); escOnly.rep.leaseEscalatorPct = 3;
 ok(OC.evaluate(escOnly, {}).findings.some(function (f) { return /escalator was entered without a rent/.test(f.text); }), 'an escalator alone waits for a rent');
 var escBad = clone(GOOD); escBad.rep.leaseMonthly = 1000; escBad.rep.leaseEscalatorPct = 40;
@@ -248,7 +251,7 @@ ok(BAD.notes.some(function (t) { return /not in the library/.test(t); }) && BAD.
 ok(CM.evaluate({ chipset: 'gb300' }, {}).notes.some(function (t) { return /no public spot price/.test(t); }), 'a chipset with no price on the basis says so instead of pricing');
 /* through the Omega-Core door */
 eq(r.compute && r.compute.units, 1, 'the Omega-Core answer carries the compute model on the skids proposed');
-eq(r.compute.cashFlow.lease.monthly, 1000, 'with the offer\'s base rent as a cost');
+eq(r.compute.cashFlow.lease.monthly, 11250, 'with the offer\'s base rent as a cost');
 eq(OC.evaluate(rent, {}).compute.cashFlow.lease.monthly, 1500, 'or the rent typed');
 var many4 = clone(GOOD); many4.rep.units = 6; many4.rep.availableKw = 300;
 eq(OC.evaluate(many4, {}).compute.units, 4, 'on the skids the power carries');
@@ -317,7 +320,7 @@ var many = clone(GOOD); many.rep.units = 6; many.rep.availableKw = 300;
 var mr = OC.evaluate(many, {});
 eq(mr.units.supported, 4, '300 kW carries 4 skids at the compute load');
 eq(mr.units.proposed, 4, 'the lease is priced on the 4 the power carries, never the 6 asked');
-eq(mr.offer.monthly.base, 4000, '4 skids at base');
+eq(mr.offer.monthly.base, 45000, '4 skids at base');
 ok(mr.findings.some(function (f) { return /supports 4 of the 6/.test(f.text); }), 'and says so');
 var nothing = OC.evaluate({ rep: {} }, {});
 eq(nothing.gates.power.status, 'unconfirmed', 'nothing known: power unconfirmed');
@@ -374,8 +377,8 @@ eq(OC.evaluate(noRev, {}).host.revenueUpliftPct, null, 'a Run with no revenue: n
 var nrv = OC.evaluate(noRev, {}).host;
 eq(nrv.paybackYearsAfter, null, 'the lease alone does not repay $1.1M inside 5 years, and no number pretends it does');
 ok(nrv.notes.some(function (n) { return /inside the 5-year term/.test(n); }), 'and it says so');
-var slow = clone(GOOD); slow.run.annualRevenue = 100000;
-eq(OC.evaluate(slow, {}).host.paybackYearsAfter, Math.round((10 + (1100000 - 100000 * 10 - OC.evaluate(slow, {}).offer.termTotal.base) / 100000) * 10) / 10,
+var slow = clone(GOOD); slow.run.annualRevenue = 20000;
+eq(OC.evaluate(slow, {}).host.paybackYearsAfter, Math.round((10 + (1100000 - 20000 * 10 - OC.evaluate(slow, {}).offer.termTotal.base) / 20000) * 10) / 10,
    'past the term the lease stops: payback counts only the rent contracted');
 
 /* ═══ 2 · the door ═════════════════════════════════════════════════════ */

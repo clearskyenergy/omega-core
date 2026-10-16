@@ -142,31 +142,48 @@ need to manually input that or go with a market standard if there is such a
 thing"). There is no published standard for an edge-compute skid on a charging
 site, so:
 
-- **Rent per skid per month** and **Rent escalator** are fields in the dialog.
-  A rent typed there ($1–$10,000; anything else is set aside and the result
-  says so) prices the lease as one figure, escalating at the typed rate or
-  2.5%, and the host's payback, revenue uplift and ClearSky's outlay follow it.
-  It is saved with the project's answers. A typed rent never qualifies a site:
-  on an open site it is still headed *indicative until the site qualifies*.
-- **Left blank, the lease is the market reference** (`omega-core-lease-v2`):
-  **$750 / $1,000 / $1,500 per skid per month**, escalating 2.0 / 2.5 / 3.0% a
-  year, over the term (5-year minimum, up to 15). It is headed *market
-  reference, not an offer* **whatever the verdict**, and shown with what it is
-  read off:
+- **The rent is per kW of compute per month** (`omega-core-lease-v3`,
+  2026-10-15, Tommy: "we pay $225/kW and the site has either 75 or 150 kW of
+  compute … 75 × 12 × $125"; "a 75 kW unit, the lease is paying $150–450 per
+  kW"): annual rent = kW of compute × $/kW-month × 12, escalating.
+  `RATE_CARD.perKwMonth` is **$150 / $150 / $450** (low / base / high);
+  `monthlyPerSkid` is DERIVED from it at `computeKwPerSkid` (75), so a skid
+  reads $11,250 a month, $135,000 a year, at the floor, and $33,750 a month
+  at the top. ClearSky quotes the band and opens at its floor until a rent
+  is agreed. A revenue share of gross compute may ride beside the rent
+  (`sharePct`; a site's `commercial.revenueShare`).
+- **Rent per skid per month** and **Rent escalator** are fields in the
+  qualification dialog. A rent typed there ($1–$100,000; anything else is
+  set aside and the result says so) prices the lease as one figure,
+  escalating at the typed rate or 2.5%, and the host's payback, revenue
+  uplift and ClearSky's outlay follow it. It is saved with the project's
+  answers. A typed rent never qualifies a site.
+- **On a portfolio site** (`site-model.js skidInput`) the rent is the
+  record's `commercial.rentMonthly` (a signed lease; wins), else
+  `commercial.rentPerKwMonth` × 75 kW × skids × 12, else the card's floor;
+  `commercial.rentEscalatorPct` escalates it and `commercial.revenueShare`
+  (a fraction) is the host's share of gross compute (`deal.rentSharePct`).
+  The site record's Facts tab carries all four.
+- **The band is read off what a compute tenant pays a landlord**, shown
+  with its sources to every entitled caller (the build-up is staff-only):
 
   | Comparable | Figure | Source |
   |---|---|---|
-  | Cell-tower ground leases, new in 2026 — a carrier's equipment on its own meter, paying rent (the nearest model) | most new proposals $500–$1,250 a month; suburban/commercial $800–$1,500; urban $1,200–$2,500+; average $1,300; escalators 2–3% | [Steel in the Air](https://www.steelintheair.com/cell-tower-lease-rates/) |
-  | Surface parking — the ground the skid and its clearances take, about three stalls | $100–$300 a stall a month, ~$155 average → ~$300–$900 a month | [MyCurbSpot](https://www.mycurbspot.com/tools/parking-spot-value) |
+  | Colocation wholesale — a compute tenant's rent per kW of IT load a month (space and power delivery; the tenant buys the electricity) | ~$196/kW-month, 250–500 kW, primary North American markets, H2 2025; ~$250 all-in | [Encor Advisors / CBRE](https://encoradvisors.com/data-center-pricing/) |
+  | Cell-tower ground leases, new in 2026 — the floor a bare site is worth | most new proposals $500–$1,250 a month; suburban/commercial $800–$1,500; escalators 2–3% | [Steel in the Air](https://www.steelintheair.com/cell-tower-lease-rates/) |
+  | Surface parking — about three stalls | ~$300–$900 a month | [MyCurbSpot](https://www.mycurbspot.com/tools/parking-spot-value) |
 
-  Low sits under the suburban/commercial tower band and over three stalls at
-  the average (and is compute-lease's floor); base is inside that band and the
-  2026 new-proposal range; high is its top, for a site that clears every gate on
-  evidence. Every entitled caller sees the range and its sources; the build-up
-  is staff-only.
+  The host here supplies ground, the service and the fiber path, not a
+  building, so the band opens at the colocation floor. **The lease and the
+  compute price are one decision**: at the public spot rate ($2.46 a
+  GPU-hour, $837k gross on 75 kW) $150/kW-month takes a quarter of the
+  skid's margin and still works, $300 takes half, $450 is more than the
+  skid earns; at a contracted $3.50 ($1.19M gross) $150–$300 is a real
+  lease. A rent above the floor wants a contracted GPU-hour rate on the
+  site record, not spot.
 
-When ClearSky sets a standard rent, it replaces `RATE_CARD.monthlyPerSkid`
-and the version moves; the typed rent per site stays.
+When ClearSky changes the band, it changes `RATE_CARD.perKwMonth` and the
+version moves; the typed rent per site stays.
 
 **What it does to the charging site** — read off the Run: net cost, year-1
 revenue, payback before and after the lease, the uplift on year-1 revenue, the
@@ -355,9 +372,21 @@ cost of the nextnrg bess and the next nrg solar is $6.00 per watt".
   storage, chargers and the controller as themselves; pods, the electrical
   package, generation and a shell never energy property), unscaled, with no
   soft cost added twice; the host's solar sold under **the PPA on the site
-  record** (`ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears` — Topanga's
-  executed PPA: $0.2250/kWh, 2.5% a year, 28 years — through the ONE finance
-  engine's own PPA on the solar it generates), else the Run's year-one
+  record** (`ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears`, and since
+  2026-10-15 the contract AS WRITTEN: `ppaPriceSchedule[]`, the executed
+  PPA's own price per contract year, and `ppaYear1Kwh`, its expected
+  first-year production — Topanga's executed PPA: $0.2250/kWh in year one
+  to $0.3840 in year 28, a table that compounds 2.0% a year although the
+  one-pager says 2.5%; Sunnyside's $0.250 → $0.427, 2.0% too, on 627,140
+  kWh — through the ONE finance engine's own PPA on the solar it
+  generates: `proforma-engine.js ppaPrice()` is the one reader of a PPA
+  price, the table winning over the rate and the escalator, which carry
+  only the years past its end; the terminal value is priced off the same
+  reading; an escalator the model had to assume, a rate with no table and a
+  yield in place of the contract's production are each said as a warning,
+  never silent; the §48E adders the sponsor claims, `itcEnergyCommunity`
+  and `itcDomesticContent`, build the statutory rate in the engine, never
+  a typed percentage), else the Run's year-one
   revenue rising with inflation, else NO revenue, said as a warning
   (`HOST_NO_REVENUE`) with the cost still in the ask; its O&M $6/kWh-yr on
   the battery and $20/kW-yr on the solar. The skid still runs on its own
@@ -380,6 +409,58 @@ Not built: the host's service size and usage still come from the record
 (the editor keeps the BESS Config service on the page, not on the project),
 so a plain-pod design on a site with no service on record is named, not
 modelled; a mixed design (host pods and skids) gives one case, the host's.
+
+### The term is ten years, and its own figure rides beside the headline (2026-10-15)
+
+Tommy: "we should be looking at this over a ten year span … very accurate …
+able to be verified by the bank." The compute model runs `finance.years` =
+10. A host PPA that outlives it is a terminal value in year 10 (its
+remaining years less O&M, priced off the same reading of the contract,
+discounted at the model's rate, taken as income and taxed), and
+`irrExTerminal` — the after-tax IRR of the ten years' cash flows alone, no
+terminal value — is kept on the deal (`deals.own.irrExTerminal`), the host
+block (`host.terminalValue.irrExTerminal`), `latestModel` (with
+`terminalValue` beside it), the site page's headline, the register's drawer
+and its CSV, so a lender's own ten-year model has the figure to check line
+by line. A changed fact under the same design (the price table, the
+production figure, the usage, the rent, the ZIP, an ITC adder) runs the
+automatic model again (`latestModel.inputHash`, `api/site-crm.js
+inputHashOf`), carrying a chosen chipset, pod count and structure; a model
+stored before the hash existed runs once more to gain one.
+
+### The deal follows the model (2026-10-15)
+
+Tommy: "when we put in a site and run it … it should be producing the
+correct numbers so we can push it to the finance portal and get someone to
+purchase and fund it." `send-to-finance` writes `askOf()` whole onto the
+deal as `capitalRequest` — the total project cost as the ask, the headline
+IRR and the ten years alone, the terminal value, compute and host capex,
+the PPA basis (table or rate, term, expected year-one production), the
+lease and the compute price basis — and `proformaSummary` says the same in
+words, which the finance portal prints to a partner. A later run on the
+site (by hand or automatic) refreshes an OPEN portfolio deal that has no
+offer and no award: ask, cost basis, summary, `sourceModelId`,
+`capitalRequest.refreshedAt`; the run's answer says `dealRefreshed`. A deal
+with an offer, an award or a status the sponsor set is left alone.
+
+### The printable term sheet carries the host lease and the compute terms (2026-10-16)
+
+Tommy: "a contract term agreement that they can print out agreeing to that
+lease payment and those terms for the compute." The Site SPV term sheet
+(`api/_lib/site-agreement.js`, `GET …&agreement=1`, Export term sheet on the
+register and the site) now has a section *Host lease and compute terms*
+read off the record and the model on file: the compute installed (skids ×
+75 kW, its own meter), the term (the model's, 10 years; the skid's 5–15),
+the rent as kW × $/kW-month × 12 (the record's rate or monthly rent; with
+nothing on record it reads "To be agreed" with ClearSky's quoted band,
+never a figure), the escalator, the revenue share, the compute price basis
+(`commercial.computePricePerGpuHour`, a CONTRACTED rate that replaces the
+public spot reference in the skid's case; else the reference, named as
+such), the whole project on file (cost, IRR, the ten years alone), the
+microgrid PPA as recorded (table or rate, term, expected production), and
+the skid's own ownership, meter, removal, buyout and renewal terms
+(`omega-core.js TERMS`). DRAFT on every page; signature lines for sponsor,
+investor and host.
 
 ## The door — `api/omega-core.js`
 

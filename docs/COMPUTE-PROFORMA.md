@@ -92,6 +92,13 @@ upgrade. Load is placed in contract priority:
    periods), battery wear and lost firm revenue. The battery charges in the
    day's cheapest hours with room, or when later hours that day need it, and
    arbitrages a time-of-use spread that clears its losses and wear.
+**The utilisation typed is the utilisation sold** (2026-10-15). On-demand
+   and edge GPU-hours follow a diurnal inference shape whose peaks sit above
+   the daily mean; each hour is clipped at 100% of the GPUs, so an unscaled
+   shape left "85% sold" at 82.6% of GPU-hours. `shapeScale()` scales the
+   shape until its clipped mean over the tier's hours is the figure typed,
+   so gross compute revenue is GPUs × price × 8,760 × sold × availability,
+   which is what a lender checks it against.
 5. **Firm protection.** The battery holds the energy that firm overloads in
    the next 24 hours will need. When it holds less, it charges under the hard
    limit and curtails on-demand GPUs to make room. Firm load above the limit
