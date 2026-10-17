@@ -20,8 +20,10 @@ var CATALOG = [
     'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea omegaNextnrgSolarCustom openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle pcToggle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
+  /* Generation (OmegaYield) is the Energy group's own button since the ribbon
+     cleanup; it is the yield model the storage energy commands sit beside. */
   record('storage', 'Omega Storage', 'standard', 'batterysizer proforma valuestack isocalc bessscreening', 'storage',
-    'openBessSizer openSolarBessSizer openBillImport openNonExportCalc openEnergyBalance openValueStack openBillAnalysis', 'models'),
+    'openBessSizer openSolarBessSizer openBillImport openNonExportCalc openEnergyBalance openValueStack openBillAnalysis OmegaYield.open', 'models'),
   record('estimate', 'Omega Estimate', 'standard', 'costestimator', 'estimate',
     'openBomSourcing openElectricalEstimate openTakeoffBudget exportBudgetCSV exportTrenchCSV exportEstimateCSV', 'boms'),
   record('evrebates', 'Omega EV', 'standard', 'evcostwb evcloseout', 'evrebates',
@@ -68,10 +70,10 @@ BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cos
   "openRpPanel('summary','estimate')");
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
-  lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key',
-  gridatlas: 'rb-gridatlas rb-grid-panel', storage: 'omega-btn-bill-analysis rb-valuestack',
+  lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key rb-features',
+  gridatlas: 'rb-gridatlas rb-grid-panel', storage: 'omega-btn-bill-analysis rb-valuestack oy-ribbon-btn',
   estimate: 'rb-takeoff-budget', evrebates: 'rb-ev-future',
-  plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks',
+  plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks rb-check',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',
   engineering: 'rb-optimizer rb-optimise rb-elec rb-circuit omega-terr-btn',
   /* Trace Boundary and Fence & Tie are Compute's (Tommy, 2026-10-13: "made for the compute"): the site area Design Site fills, and the fence, controller and duct banks after it. They sit on the Compute tab on every plan. */
@@ -80,7 +82,7 @@ var IDS = {
   permitting: 'omega-btn-permit-matrix'
 };
 NOT_SOLD[5].ribbon.push('#rb-screen', 'sendToPermitCreator');
-BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(words('shapeArc shapeEllipse shapePolygon shapeHatchBox ovLock setPlot clearPlot'));
+BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(words('shapeArc shapeEllipse shapePolygon shapeHatchBox ovLock setPlot clearPlot o2SetRender OmegaEditorFeatures.open'));
 Object.keys(IDS).forEach(function (k) { words(IDS[k]).forEach(function (id) { BY_KEY[k].ribbon.push('#' + id); }); });
 /* Shared drawing/analysis controls must not be stranded in the paid Compute tab. */
 BY_KEY.lite.editorPage = 'draw';
