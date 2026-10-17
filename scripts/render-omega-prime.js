@@ -3,7 +3,8 @@
  * Omega Prime, run end to end in Chromium on the Firebase double
  * (scripts/_lib/firebase-double.js), signed in as a manufacturer's rep:
  *   Site      the address, and the unit list led by the tenant's OWN product
- *             (omega_orgs/{org}/storefront/config.products) before the XXL
+ *             (omega_orgs/{org}/storefront/config.products), then the
+ *             CleanCell catalog, then the XXL
  *   Atlas     substations from the public service, the nearest opened
  *   Circuit   ComEd's answer through omega-comed-layers.js probePoint, the
  *             verdict from the REAL engine behind /api/grid-verdict
@@ -104,8 +105,8 @@ var srv = http.createServer(function (req, res) {
     await p.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
 
     /* Site: the tenant's own product leads the list */
-    var listed = await p.waitForFunction(function () { var s = document.getElementById('unitSel'); return s && s.options.length > 1 ? [].map.call(s.options, function (o) { return o.textContent; }) : null; }, null, { timeout: 10000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
-    ok('the tenant\'s own product leads the unit list, the XXL after, a component never', listed && /^Clean Cell CC-2000/.test(listed[0]) && /FENECON Industrial XXL/.test(listed[listed.length - 1]) && listed.length === 2, listed);
+    var listed = await p.waitForFunction(function () { var s = document.getElementById('unitSel'); if (!s || !s.options.length) return null; var names = [].map.call(s.options, function (o) { return o.textContent; }); return /^Clean Cell CC-2000/.test(names[0]) ? names : null; }, null, { timeout: 10000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
+    ok('the tenant\'s own product leads, the CleanCell catalog is on the list, the XXL is last', listed && /^Clean Cell CC-2000/.test(listed[0]) && listed.some(function (t) { return /CleanCell R60/.test(t); }) && listed.some(function (t) { return /CC290\/125/.test(t); }) && listed.some(function (t) { return /LG JP-2/.test(t); }) && listed.some(function (t) { return /Smart Module/.test(t); }) && /FENECON Industrial XXL/.test(listed[listed.length - 1]), listed);
     await p.fill('#addr', '3400 S Federal St, Chicago, IL 60616');
     await p.click('#go');
     await p.waitForSelector('#s-atlas.on');
@@ -147,6 +148,18 @@ var srv = http.createServer(function (req, res) {
     /* Map: area, unit, service, conduit, Run */
     var box = await p.$eval('#edMap', function (e) { var r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
     var cx = box.x + box.w / 2, cy = box.y + box.h / 2;
+    await p.click('#ed-area');
+    await p.evaluate(function (pt) {
+      var el = document.getElementById('edMap');
+      function fire(type) {
+        el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: pt.x, clientY: pt.y, pointerId: 7, pointerType: 'touch', isPrimary: true, button: 0, buttons: type === 'pointerup' ? 0 : 1 }));
+      }
+      fire('pointerdown'); fire('pointerup');
+    }, { x: cx, y: cy });
+    var tapped = await p.evaluate(function () {
+      return { done: document.getElementById('ed-area').classList.contains('done'), place: !document.getElementById('ed-place').classList.contains('dis'), side: document.getElementById('edSide').textContent.indexOf('BESS area') >= 0 };
+    });
+    ok('a finger tap drops a pad instead of rejecting the draw', tapped.done && tapped.place && tapped.side, tapped);
     await p.click('#ed-area');
     await p.mouse.move(cx - 160, cy - 90); await p.mouse.down(); await p.mouse.move(cx + 40, cy - 10, { steps: 6 }); await p.mouse.move(cx + 160, cy + 90, { steps: 6 }); await p.mouse.up();
     await p.click('#ed-place'); await p.mouse.click(cx - 40, cy);
