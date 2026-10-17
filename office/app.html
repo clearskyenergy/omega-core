@@ -114,7 +114,7 @@
   .kv{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:10px 0}.kv div{padding:10px 12px;background:var(--sunk);border-radius:10px;min-width:0}.kv small{display:block;color:var(--ink2);font-size:12px}.kv b{font-size:20px;overflow-wrap:anywhere}.kv div.bad b{color:#B42318}
   .unit{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:12px 0;border-top:1px solid var(--line);width:100%;text-align:left;background:none;border-left:0;border-right:0;border-bottom:0;font:inherit;color:inherit;min-width:0}
   .unit>div{min-width:0}.unit small{display:block;color:var(--ink2);font-size:12px;overflow-wrap:anywhere}.unit .mono{font-family:'IBM Plex Mono',monospace;font-size:14px}
-  .big{display:block;width:100%;padding:16px;border-radius:14px;border:0;background:var(--brand);color:white;font:700 17px 'Poppins',system-ui,sans-serif;margin:12px 0;text-align:center;text-decoration:none}
+  .big{display:block;width:100%;padding:16px;border-radius:14px;border:0;background:var(--brand-fill,var(--brand));color:white;font:700 17px 'Poppins',system-ui,sans-serif;margin:12px 0;text-align:center;text-decoration:none}
   .big.ghost{background:white;color:var(--brand-d);border:1px solid var(--brand)}
   .big:disabled{opacity:.5}
   input,textarea,select{width:100%;font:inherit;padding:12px;border:1px solid var(--line);border-radius:10px;margin:6px 0}
@@ -196,6 +196,14 @@
   .rows .sub{padding:10px 16px 4px;font:600 11px 'IBM Plex Mono',monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ink2);border-top:1px solid var(--line);background:var(--sunk)}
   .fu{display:flex;gap:8px;align-items:center;border-top:1px solid var(--line);min-width:0}.fu>button.unit{border-top:0;flex:1}
   .inv{border-top:1px solid var(--line);padding:4px 0}.inv .unit{border-top:0}
+  /* the path (2026-10-17): Start here, waiting on others, the order's next step */
+  .unit.first,.fu.first{background:var(--sunk);border:1px solid var(--brand);border-radius:12px;padding:12px;margin:6px 0}.fu.first>button.unit{background:none;border:0;padding:0}
+  .eyebrow.start{display:block;font:600 10.5px/1.4 'IBM Plex Mono',monospace;letter-spacing:.1em;color:var(--brand-d);text-transform:uppercase;margin-bottom:2px}
+  h3.others{margin:16px 0 2px;font-size:14px;color:var(--ink2)}
+  .card .m.mine{color:var(--brand-d);font-weight:600}
+  #order-next:empty{display:none}
+  .hp-head{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap;padding:12px 16px}.hp-head small{color:var(--ink2);flex:1}.hp-head .act{margin-left:auto}
+  #hub-open .hp-head button.act{display:inline-flex;width:auto;flex:none;padding:6px 14px;min-height:36px;border:1px solid var(--line);border-radius:999px;background:white;font-size:13px;justify-content:center}#view .lg-path{margin:8px 0 12px}
 </style>
 </head>
 <body class="logic-theme">
@@ -234,11 +242,17 @@
   var ORG = '', q = '';
   function setOrg(org) { ORG = String(org || '').trim().toLowerCase(); q = '?org=' + encodeURIComponent(ORG); store('omega_office_app_org', ORG || null); }
   var HINT = String(params.get('org') || '').trim().toLowerCase();
-  ORG = load('omega_office_app_org', '') || HINT; q = '?org=' + encodeURIComponent(ORG);
-  if (HINT) {
-    if (!load('omega_office_app_org', '')) store('omega_office_app_org', HINT);
-    /* the hint is used once; the address goes back to having no company */
-    params['delete']('org'); try { history.replaceState(null, '', location.pathname + (String(params) ? '?' + params : '') + location.hash); } catch (e) {}
+  /* A link that names an ORDER (?org=&order=: Omega Prime's Omega Logic
+     button, a desktop link) opens that order once its company is loaded,
+     and the company it names wins over the one remembered here, because the
+     link is about that company's order. The server still decides whether
+     this login may open it. */
+  var ORDER_HINT = String(params.get('order') || '').trim();
+  ORG = (ORDER_HINT && HINT) || load('omega_office_app_org', '') || HINT; q = '?org=' + encodeURIComponent(ORG);
+  if (HINT || ORDER_HINT) {
+    if (HINT && (!load('omega_office_app_org', '') || ORDER_HINT)) store('omega_office_app_org', HINT);
+    /* the hints are used once; the address goes back to having no company */
+    params['delete']('org'); params['delete']('order'); try { history.replaceState(null, '', location.pathname + (String(params) ? '?' + params : '') + location.hash); } catch (e) {}
   }
   /* WS: /api/logic-workspaces' answer for this person; REFUSED: companies
      that turned this login away just now; UID: who the page was drawn for */
@@ -328,6 +342,8 @@
          workspace you are in shown under it, as QuickBooks shows the company */
       paintWho((DATA.brand && DATA.brand.workspace) || DATA.name || ORG);
       status(''); draw(); showSwitch();
+      /* the order a link named, once: straight to it on the Orders tab */
+      if (ORDER_HINT) { var oh = ORDER_HINT; ORDER_HINT = ''; if ((DATA.orders || []).some(function (o) { return o.id === oh; })) { TAB = 'orders'; PICK = oh; draw(); window.scrollTo(0, 0); } else status('That order is not among the newest 100 here. Open it on the desktop.'); }
     })['catch'](function (e) {
       if (ORG !== tried) return;
       if ([400, 403, 404].indexOf(e.status) >= 0) { REFUSED[ORG] = true; setOrg(''); WS = null; DATA = null; return front(); }
@@ -421,13 +437,13 @@
     /* a panel's `part`, or a row's fifth field, names the Omega Logic part
        whose endpoint serves it (Phase 8): not held, not drawn */
     var panels = [
-      { key: 'sales', icon: '▤', name: 'Sales', rows: [['go', 'orders', 'Orders', 'Every order, its stage, money and requests'], ['go', 'pos', 'PO loads', 'Key in a stack of customer purchase orders'], ['href', '/po-inbox' + d + '&office=1', 'Company POs', 'Uploaded POs to review and map']].concat(mayPrice() ? [['href', '/omega-logic' + d + '#orders', 'Price & accept', a.prices === 'all' ? 'Approve a price, accept, record shipment' : 'Approve the price and accept the orders your company bills']] : []) },
+      { key: 'sales', icon: '▤', name: 'Sales', rows: [['go', 'orders', 'Orders', 'Every order, its stage, money and requests'], ['go', 'pos', 'Enter POs', 'Key in a stack of customer purchase orders'], ['href', '/po-inbox' + d + '&office=1', 'Customer POs', 'Uploaded POs to review and map']].concat(mayPrice() ? [['href', '/omega-logic' + d + '#orders', 'Price & accept on the desktop', a.prices === 'all' ? 'Approve a price, accept, record shipment' : 'Approve the price and accept the orders your company bills']] : []) },
       { key: 'customers', icon: '◉', name: 'Customers', rows: [['go', 'customers', 'Customers', 'Accounts: people, calls and notes, documents, orders, sites'], ['href', '/portals/customer/admin.html' + d, 'Customer hub on the desktop', 'The same accounts with more room'], ['href', '/portals/customer/app' + d, 'Customer app', 'What your customers see and use', 'customer'], ['href', '/portals/customer/' + d, 'Customer portal', 'The same account on a desktop', 'customer']] },
       { key: 'plant', part: 'plant', icon: '⚙', name: 'Plant', rows: [['href', '/plant/app' + d, 'Plant app', 'Work orders, units, quality'], ['href', '/plant/station.html', 'Bench scan station', 'Scan a unit in, issue parts, finish steps'], ['href', '/plant/work-orders.html' + d, 'Work orders', 'Progress, holds, what is short'], ['href', '/plant/manager.html' + d, 'Plant board', 'The line, dwell times, the bottleneck']] },
-      { key: 'deliver', part: 'logistics', icon: '◎', name: 'Deliver', rows: [['go', 'sites', 'Sites & custody', 'What the customer says, receive a load, passports'], ['href', '/logic-register.html' + d, 'Fleet register', 'Every unit on one sheet'], ['href', '/logic-logistics.html' + d, 'Shipping & receiving', 'Loads, carriers, BOLs, receipts'], ['href', '/logic-custody.html' + d, 'Sites & imports', 'Sites, spreadsheet import, coverage templates']] },
+      { key: 'deliver', part: 'logistics', icon: '◎', name: 'Deliver', rows: [['go', 'sites', 'Sites & custody', 'What the customer says, receive a load, passports'], ['href', '/logic-register.html' + d, 'Fleet register', 'Every unit on one sheet'], ['href', '/logic-logistics.html' + d, 'Shipping & receiving', 'Loads, carriers, BOLs, receipts'], ['href', '/logic-custody.html' + d, 'Sites & custody on the desktop', 'Many sites at once, imports, coverage']] },
       /* finished units (the Stock screen, Inventory) are the plant's; the plan and the POs are Materials & Purchasing's */
-      { key: 'stock', icon: '▦', name: 'Stock', rows: [['go', 'stock', 'Stock', 'Finished units, parts short, open POs', 'plant'], ['href', '/logic-materials.html' + d, 'Materials plan', 'What to buy and when', 'materials'], ['href', '/logic-materials.html' + d + '#po', 'Purchase orders', 'Supplier orders and receipts', 'materials'], ['href', '/logic-inventory.html' + d, 'Inventory', 'Units on the shelf, assign to orders', 'plant']] },
-      { key: 'money', icon: '$', name: 'Money', rows: [['go', 'money', 'Invoices', 'To issue, overdue and open, with the pay link'], ['go', 'orders', 'Orders', 'Record an invoice issued or a payment received on the order'], ['href', '/omega-logic' + d + '#cash', 'Cash flow', 'Invoiced, received, outstanding']] },
+      { key: 'stock', icon: '▦', name: 'Stock', rows: [['go', 'stock', 'Stock', 'Finished units, parts short, open POs', 'plant'], ['href', '/logic-materials.html' + d, 'Materials plan', 'What to buy and when', 'materials'], ['href', '/logic-materials.html' + d + '#po', 'Supplier orders', 'What you ordered from suppliers, and receipts', 'materials'], ['href', '/logic-inventory.html' + d, 'Inventory', 'Units on the shelf, assign to orders', 'plant']] },
+      { key: 'money', icon: '$', name: 'Money', rows: [['go', 'money', 'Money', 'To issue, overdue and open; each opens its order'], ['href', '/omega-logic' + d + '#cash', 'Cash flow on the desktop', 'Invoiced, received, outstanding'], ['href', '/logic-accounting.html' + d, 'Accounting on the desktop', 'Every invoice, aging, corrections']] },
       { key: 'setup', icon: '✎', name: 'Setup', rows: [['href', '/logic-catalog.html' + d, 'Products & bills', 'Catalog, bills of materials, coverage']].concat(a.team ? [['href', '/logic-team.html' + d, 'Team', 'Add and turn off your office and plant staff']] : [], [['href', '/logic-settings.html' + d, 'Settings', 'Terms, billing mode, workspace']]).concat(DATA && DATA.owner || (WS && WS.workspaces.length > 1) ? [['go', 'workspace', 'Switch company', DATA && DATA.owner ? 'ClearSky owner: open another Omega Logic workspace' : 'Open another company you work with']] : []) },
       { key: 'help', icon: '?', name: 'Help & guides', rows: [['href', '/guides/Omega-Logic-Office-App.pdf', 'Omega Logic app guide', 'Install and use, PDF'], ['href', '/guides/Omega-Logic-Customer-App.pdf', 'Customer app guide', 'Send it to a customer, PDF', 'customer'], ['href', '/guides/Omega-Logic-Plant-App.pdf', 'Plant app guide', 'For the builders, PDF', 'plant']] }
     ];
@@ -511,7 +527,7 @@
       if (s.withReq.length) { sub('Customer requests · ' + s.withReq.length); s.withReq.slice(0, 5).forEach(function (o) { out.push(li(liText(o.orderNo, orderWho(o) + ' · ' + plural(openReq(o).length, 'request') + ' open', 'answer', true), 'data-order="' + esc(o.id) + '"')); }); out.push(more(s.withReq.length, 5)); }
       /* D1: only what this person may price or accept; the rest is listed as waiting, and on whom */
       if (s.toPrice.length) { sub('To price · ' + s.toPrice.length); s.toPrice.slice(0, 5).forEach(function (o) { out.push(li(liText(o.orderNo, orderWho(o) + ' · ' + (o.stage ? o.stage.next : ''), o.can && !o.can.price ? 'accept' : 'price', true), 'data-order="' + esc(o.id) + '"')); }); out.push(more(s.toPrice.length, 5)); }
-      if (s.review) { sub('Company POs · ' + s.review); OmegaLogicTheme.reviewLinks(ORG, s).forEach(function (r) { out.push(liLink(liText(r.title, r.sub, 'review', true), r.href)); }); }
+      if (s.review) { sub('Customer POs · ' + s.review); OmegaLogicTheme.reviewLinks(ORG, s).forEach(function (r) { out.push(liLink(liText(r.title, r.sub, 'review', true), r.href)); }); }
       if (s.waiting.length) { sub('Waiting on someone else · ' + s.waiting.length); s.waiting.slice(0, 5).forEach(function (o) { out.push(li(liText(o.orderNo, orderWho(o) + ' · ' + waitingLine(o), 'waiting'), 'data-order="' + esc(o.id) + '"')); }); out.push(more(s.waiting.length, 5)); }
       if (!out.length) out.push(li(liText('Nothing waiting', plural(s.orders.length, 'order') + ' in the workspace; every one priced and answered')));
     }
@@ -550,7 +566,7 @@
       var rt = DATA.receivables;
       out.push(li(liText(rt ? dollars(rt.outstandingCents) + ' outstanding' : plural(s.inv.length, 'unpaid invoice'), rt ? dollars(rt.invoicedCents) + ' invoiced · ' + dollars(rt.receivedCents) + ' received' + (rt.toIssueCents ? ' · ' + dollars(rt.toIssueCents) + ' to issue' : '') : 'Totals are on Accounting on the desktop'), 'data-go="money"'));
       var hot2 = s.inv.filter(function (x) { return x.state !== 'open'; });
-      if (hot2.length) { sub('Needs a person · ' + hot2.length); hot2.slice(0, 6).forEach(function (x) { out.push(li(liText(x.o.orderNo + ' · ' + x.k, orderWho(x.o) + ' · ' + dollars(x.open) + (x.due ? ' · due ' + x.due : ''), x.state === 'issue' ? 'to issue' : 'overdue', true), 'data-order="' + esc(x.o.id) + '"')); }); out.push(more(hot2.length, 6)); }
+      if (hot2.length) { sub('Needs you · ' + hot2.length); hot2.slice(0, 6).forEach(function (x) { out.push(li(liText(x.o.orderNo + ' · ' + x.k, orderWho(x.o) + ' · ' + dollars(x.open) + (x.due ? ' · due ' + x.due : ''), x.state === 'issue' ? 'to issue' : 'overdue', true), 'data-order="' + esc(x.o.id) + '"')); }); out.push(more(hot2.length, 6)); }
     }
     return out.join('');
   }
@@ -558,14 +574,13 @@
     var el = $('hub-panels'); if (!el || !DATA) return; s = s || summary();
     var items = hubItems(s).slice(1), panels = menuPanels(), rowsOf = {};
     panels.forEach(function (p) { rowsOf[p.key] = p.rows; });
-    var html = '<div class="panels">';
-    items.forEach(function (it, i) {
-      html += '<button type="button" class="panel' + (HUB_OPEN === it.key ? ' open' : '') + '" data-hpanel="' + esc(it.key) + '" aria-expanded="' + (HUB_OPEN === it.key) + '"><i>' + esc(it.icon) + '</i><div><b>' + esc(it.label) + '</b><small>' + esc(it.hint || ' ') + '</small></div>' + (it.badge ? '<span class="bdg">' + esc(it.badge) + '</span>' : '') + '</button>';
-      var rowEnd = i % 2 === 1 || i === items.length - 1, openHere = items.slice(i - (i % 2), i + 1).filter(function (x) { return x.key === HUB_OPEN; })[0];
-      if (rowEnd && openHere) html += '<div class="rows" id="hub-open">' + hubLive(openHere.key, s) + '<div class="sub">Work it</div>' + (rowsOf[openHere.key] || []).map(rowHtml).join('') + '</div>';
-    });
-    el.innerHTML = html + '</div>';
-    Array.prototype.forEach.call(el.querySelectorAll('[data-hpanel]'), function (b) { b.onclick = function () { var k = b.getAttribute('data-hpanel'); HUB_OPEN = HUB_OPEN === k ? null : k; store('omega_office_app_hub', HUB_OPEN); paintPanels(); var p = $('hub-open'); if (p && p.scrollIntoView) p.scrollIntoView({ block: 'nearest' }); }; });
+    /* one place per hub (2026-10-17): the hex hub's own cell opens its panel
+       here (pickHub), with what is in that hub now and where to open it; the
+       six tiles that repeated the hub's cells are gone */
+    var it = items.filter(function (x) { return x.key === HUB_OPEN; })[0];
+    el.innerHTML = it ? '<div class="rows" id="hub-open"><div class="hp-head"><b>' + esc(it.icon) + ' ' + esc(it.label) + '</b><small>' + esc(it.hint || '') + '</small><button type="button" class="act" data-hpanel="' + esc(it.key) + '" aria-expanded="true">Close</button></div>'
+      + hubLive(it.key, s) + '<div class="sub">Open</div>' + (rowsOf[it.key] || []).map(rowHtml).join('') + '</div>' : '';
+    Array.prototype.forEach.call(el.querySelectorAll('[data-hpanel]'), function (b) { b.onclick = function () { HUB_OPEN = null; store('omega_office_app_hub', null); paintPanels(); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-order]'), function (b) { b.onclick = function () { PICK = b.getAttribute('data-order'); draw(); window.scrollTo(0, 0); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-go]'), function (b) { b.onclick = function () { TAB = b.getAttribute('data-go'); PICK = null; CUST = null; SERIAL = null; draw(); window.scrollTo(0, 0); }; });
     Array.prototype.forEach.call(el.querySelectorAll('[data-fu-cust]'), function (b) { b.onclick = function () { openCustomer(b.getAttribute('data-fu-cust'), 'activity'); }; });
@@ -575,7 +590,7 @@
   function rowHtml(r) { var inner = '<div><b>' + esc(r[2]) + '</b><small>' + esc(r[3]) + '</small></div><span class="go">›</span>'; return r[0] === 'go' ? '<button type="button" data-go="' + esc(r[1]) + '">' + inner + '</button>' : '<a href="' + esc(r[1]) + '">' + inner + '</a>'; }
   function drawMenu(filter) {
     var panels = menuPanels(), f = String(filter || '').toLowerCase().trim();
-    var freq = [['go', 'orders', '▤', 'Orders'], ['go', 'pos', '▥', 'PO loads'], ['go', 'customers', '◉', 'Customers'], ['go', 'sites', '◎', 'Sites', 'logistics'], ['go', 'stock', '▦', 'Stock', 'plant'], ['go', 'money', '$', 'Invoices'], ['href', '/logic-register.html?org=' + encodeURIComponent(ORG), '▦', 'Register', 'logistics'], ['href', '/plant/app?org=' + encodeURIComponent(ORG), '⚙', 'Plant', 'plant']].filter(function (x) { return has(x[4]); });
+    var freq = [['go', 'orders', '▤', 'Orders'], ['go', 'pos', '▥', 'Enter POs'], ['go', 'customers', '◉', 'Customers'], ['go', 'sites', '◎', 'Sites', 'logistics'], ['go', 'stock', '▦', 'Stock', 'plant'], ['go', 'money', '$', 'Money'], ['href', '/logic-register.html?org=' + encodeURIComponent(ORG), '▦', 'Register', 'logistics'], ['href', '/plant/app?org=' + encodeURIComponent(ORG), '⚙', 'Plant', 'plant']].filter(function (x) { return has(x[4]); });
     var html = '<h1>Menu</h1><input class="qsearch" id="qsearch" placeholder="Search menu items" value="' + esc(filter || '') + '" autocomplete="off">';
     if (f) {
       var hits = []; panels.forEach(function (p) { p.rows.forEach(function (r) { if ((r[2] + ' ' + r[3] + ' ' + p.name).toLowerCase().indexOf(f) >= 0) hits.push(r); }); });
@@ -596,10 +611,13 @@
     Array.prototype.forEach.call(document.querySelectorAll('[data-go]'), function (b) { b.onclick = function () { TAB = b.dataset.go; PICK = null; CUST = null; SERIAL = null; draw(); window.scrollTo(0, 0); }; });
   }
   function orderCard(o) {
-    var reqs = openReq(o).length, b = boardFor(o), key = stageKey(o), money = invoiceSums(o);
-    return '<button class="card' + (key === 'exception' || reqs ? ' urgent' : '') + '" data-order="' + esc(o.id) + '"><div class="h"><b>' + esc(o.orderNo) + '</b><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : '') + '">' + esc(stageLabel(o)) + '</span></div>'
+    var reqs = openReq(o).length, b = boardFor(o), key = stageKey(o), money = invoiceSums(o), p = o.path;
+    /* the step it stands on (the server's path), red when it needs attention */
+    var pillCls = p ? (p.state === 'attention' ? ' bad' : p.state === 'complete' ? ' ok' : '') : (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : ''), pillTxt = p ? (p.state === 'complete' ? 'Complete' : p.state === 'cancelled' ? 'Cancelled' : p.label + (p.state === 'attention' ? ' · attention' : o.stage && o.stage.credit ? ' · on PO' : '')) : stageLabel(o);
+    return '<button class="card' + (key === 'exception' || reqs || (p && p.state === 'attention') ? ' urgent' : '') + '" data-order="' + esc(o.id) + '"><div class="h"><b>' + esc(o.orderNo) + '</b><span class="pill' + pillCls + '">' + esc(pillTxt) + '</span></div>'
       + '<div class="m">' + esc(o.customer.company || o.customer.name || o.customer.email) + ' · ' + esc((o.items || []).map(function (i) { return i.qty + ' × ' + (i.name || i.sku); }).join(', ')) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + '</div>'
-      + (o.logic && o.logic.commercial ? '<div class="m">' + dollars(o.logic.commercial.totalCents) + (money.balance > 0 ? ' · <b>' + dollars(money.balance) + ' outstanding</b>' : ' · paid in full') + '</div>' : '<div class="m">' + esc(nextLine(o)) + '</div>')
+      + (o.logic && o.logic.commercial ? '<div class="m">' + dollars(o.logic.commercial.totalCents) + (money.balance > 0 ? ' · <b>' + dollars(money.balance) + ' outstanding</b>' : ' · paid in full') + '</div>' : '')
+      + (p && p.next ? '<div class="m' + (p.next.who === 'you' ? ' mine' : '') + '">' + esc(OmegaLogicTheme.nextLine(p.next)) + '</div>' : (o.logic && o.logic.commercial ? '' : '<div class="m">' + esc(nextLine(o)) + '</div>'))
       + (b ? '<div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="m">' + (b.progress.units ? b.progress.percent + '% built · ' + b.progress.readyRoots + ' of ' + b.progress.expectedRoots + ' ready' : 'awaiting serials') + (b.late ? ' · <b style="color:#B42318">late</b>' : '') + '</div>' : '')
       + (reqs ? '<div class="m"><span class="pill bad">' + reqs + ' customer request' + (reqs === 1 ? '' : 's') + ' waiting</span></div>' : '') + '</button>';
   }
@@ -607,22 +625,17 @@
 
   function drawToday() {
     var s = summary(), rows = s.rows, late = s.late, held = s.held;
+    /* HOME (2026-10-17): the hub, the bar of the path with how many orders
+       stand on each step (the server's office-stage pipeline; a step opens
+       Orders on it), and what needs you. The money tiles are on Money, the
+       floor on the Plant hub, the apps on Menu: one screen, one question. */
     $('view').innerHTML = '<div id="hubs"></div><div id="hub-panels"></div>'
       + '<h2>Today</h2><p class="note">' + esc(new Date().toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })) + ' · ' + esc(DATA.name) + (DATA.limited ? ' · newest 100 orders' : '') + '</p>'
       + (!DATA.active ? '<div class="warn">Omega Logic is not active on this workspace yet. Orders can be read; pricing and acceptance wait for setup on the desktop.</div>' : '')
-      /* the server's stage counts, the same six the desktop strip shows (OmegaLogicTheme.stageTiles) */
-      + '<div class="kv" id="today-kv">' + OmegaLogicTheme.stageTiles((DATA.totals || {}).byStage).map(function (t) { return '<div data-k="' + esc(t.k) + '"' + (t.bad ? ' class="bad"' : '') + '><small>' + esc(t.label) + '</small><b>' + t.n + '</b></div>'; }).join('') + '</div>'
-      + '<div id="today-needs"></div>'
-      /* the receivables ledger's totals, the figures Accounting and the desktop print (OFF-02) */
-      + '<h2>Money</h2><div class="kv" id="money-kv">' + OmegaLogicTheme.moneyTiles(DATA.receivables).map(OmegaLogicTheme.tileHtml).join('') + (s.exceptions ? '<div class="bad"><small>Payment exceptions</small><b>' + s.exceptions + '</b></div>' : '') + (has('materials') ? '<div id="kv-buy"><small>Purchase list value</small><b>…</b></div>' : '') + '</div>'
-      + (!has('plant') ? '' : '<h2>Plant</h2>' + (rows ? '<div class="kv"><div><small>Open work orders</small><b>' + rows.length + '</b></div><div class="' + (late.length ? 'bad' : '') + '"><small>Late</small><b>' + late.length + '</b></div><div class="' + (held.length ? 'bad' : '') + '"><small>With holds</small><b>' + held.length + '</b></div><div><small>Ready to ship</small><b>' + rows.filter(function (r) { return r.stage === 'ready'; }).length + '</b></div></div>' + (late.concat(held.filter(function (r) { return !r.late; })).slice(0, 4).map(function (r) { return '<div class="unit"><div><b>' + esc(r.orderNo) + '</b><small>' + esc(r.stageLabel) + (r.late ? ' · late · due ' + esc(r.due) : '') + (r.progress.held ? ' · ' + r.progress.held + ' on hold' : '') + '</small></div><span class="pill bad">' + (r.late ? 'late' : 'hold') + '</span></div>'; }).join('')) : '<p class="note">Plant board unavailable.</p>'))
-      + '<h2>' + esc((DATA.brand && DATA.brand.workspace) || DATA.name || 'Your') + ' apps</h2><p class="note">One account, one record. The plant builds it, the office runs it, the customer places it: each app shows the same unit.</p><div class="kv">'
-      + (has('plant') ? '<a href="/plant/app' + q + '" style="text-decoration:none;color:inherit"><small>Plant</small><b style="font-size:15px">Work orders &amp; benches</b></a><a href="/plant/station.html" style="text-decoration:none;color:inherit"><small>Bench</small><b style="font-size:15px">Scan station</b></a>' : '')
-      + (has('logistics') ? '<a href="#" id="to-sites" style="text-decoration:none;color:inherit"><small>Sites</small><b style="font-size:15px">What the customer says</b></a>' : '')
-      + (has('customer') ? '<a href="/portals/customer/app' + q + '" style="text-decoration:none;color:inherit"><small>Customer</small><b style="font-size:15px">What they see</b></a>' : '')
-      + '<a href="/office/app' + q + '" style="text-decoration:none;color:inherit"><small>Office</small><b style="font-size:15px">This app</b></a></div>';
+      + '<div id="today-path">' + (DATA.path && DATA.pipeline ? OmegaLogicTheme.pathBar(DATA.path, { counts: DATA.pipeline }) + '<p class="note">Every order walks these steps, left to right. Tap one to see its orders.</p>' : '') + '</div>'
+      + '<div id="today-needs"></div>';
     paintHub(s); paintPanels(s); paintNeeds(s);
-    if ($('to-sites')) $('to-sites').onclick = function (e) { e.preventDefault(); TAB = 'sites'; draw(); window.scrollTo(0, 0); };
+    Array.prototype.forEach.call(document.querySelectorAll('#today-path [data-step]'), function (b) { b.onclick = function () { ORDER_FILTER = b.getAttribute('data-step'); store('omega_office_app_filter', ORDER_FILTER); TAB = 'orders'; PICK = null; draw(); window.scrollTo(0, 0); }; });
     /* What the hub's badges and the follow-ups need, each once per load.
        Whatever arrives repaints the hub; nothing waits on the slowest. */
     function again() { if (TAB === 'today' && !PICK && $('hubs')) { var t = summary(); paintHub(t); paintPanels(t); paintNeeds(t); } }
@@ -633,25 +646,38 @@
        a member who may not read it simply sees no badge */
     if (!BUYERS && !HUB_TRIED.buyers) { HUB_TRIED.buyers = true; loadBuyers().then(again)['catch'](function () {}); }
   }
-  /* "Needs a person": customer requests, orders to fix or price, company
+  /* "What needs you": customer requests, orders to fix or price, company
      POs to review, and the CRM follow-ups that are due (api/crm.js). A
      follow-up opens its account on Activity, where it is marked done. */
   function paintNeeds(s) {
     var el = $('today-needs'); if (!el || !DATA) return; s = s || summary();
     var now = todayIso();
-    el.innerHTML = '<h2>Needs a person · ' + s.count + '</h2>'
+    /* WHAT NEEDS YOU (2026-10-17): every next step that is this person's,
+       ranked as the desktop ranks it (OmegaLogicTheme.hub over the server's
+       office-stage.path), the first one marked Start here; company POs to
+       review and follow-ups that are due beside them; steps that are
+       somebody else's under Waiting on others, never counted. */
+    var first = true, shown = {};
+    function start() { var f = first; first = false; return f ? '<span class="eyebrow start">Start here</span>' : ''; }
+    function others() {
+      var rows = [], seen = {};
+      s.waiting.forEach(function (o) { if (shown[o.id] || seen[o.id]) return; seen[o.id] = 1; rows.push({ o: o, why: waitingLine(o) }); });
+      (s.others || []).forEach(function (o) { if (shown[o.id] || seen[o.id]) return; seen[o.id] = 1; rows.push({ o: o, why: OmegaLogicTheme.nextLine(o.path.next) }); });
+      return rows.length ? '<h3 class="others">Waiting on others</h3>' + rows.slice(0, 5).map(function (r) { return '<button class="unit" data-order="' + esc(r.o.id) + '"><div><b>' + esc(r.o.orderNo) + '</b><small>' + esc(orderWho(r.o)) + ' · ' + esc(r.why) + '</small></div><span class="pill">waiting</span></button>'; }).join('') : '';
+    }
+    el.innerHTML = '<h2>What needs you · ' + s.count + '</h2>'
+      + s.needs.slice(0, 8).map(function (n) { shown[n.o.id] = 1; var st = start(); return '<button class="unit' + (st ? ' first' : '') + '" data-order="' + esc(n.o.id) + '"><div>' + st + '<b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.company || n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join('')
+      + (s.needs.length > 8 ? '<p class="note">and ' + (s.needs.length - 8) + ' more on Orders (Needs you).</p>' : '')
       /* whose PO waits (OFF-03): a row per company; a company with one PO opens its review (a desktop page) */
-      + OmegaLogicTheme.reviewLinks(ORG, s).map(function (r) { return '<a class="unit" href="' + esc(r.href) + '" style="text-decoration:none;color:inherit"><div><b>' + esc(r.title) + '</b><small>' + esc(r.sub) + ' · on the desktop</small></div><span class="pill bad">review</span></a>'; }).join('')
+      + OmegaLogicTheme.reviewLinks(ORG, s).map(function (r) { var st = start(); return '<a class="unit' + (st ? ' first' : '') + '" href="' + esc(r.href) + '" style="text-decoration:none;color:inherit"><div>' + st + '<b>' + esc(r.title) + '</b><small>' + esc(r.sub) + ' · on the desktop</small></div><span class="pill bad">review</span></a>'; }).join('')
       + s.follow.map(function (f) {
-          var due = day(toIso(f.followUpAt)), late = !!due && due < now, who = f.company || f.customerName || customerName(f.customerId) || 'A customer';
-          var inner = '<div><b>' + esc(f.subject || typeLabel(f.type)) + '</b><small>' + esc(who) + ' · ' + esc(typeLabel(f.type)) + (f.contactName ? ' · ' + esc(f.contactName) : '') + ' · ' + (!due ? 'no date' : (late ? 'was due ' : 'due ') + esc(due)) + '</small></div><span class="pill bad">' + (late ? 'overdue' : f.type === 'task' ? 'task' : 'follow up') + '</span>';
+          var due = day(toIso(f.followUpAt)), late = !!due && due < now, who = f.company || f.customerName || customerName(f.customerId) || 'A customer', st = start();
+          var inner = '<div>' + st + '<b>' + esc(f.subject || typeLabel(f.type)) + '</b><small>' + esc(who) + ' · ' + esc(typeLabel(f.type)) + (f.contactName ? ' · ' + esc(f.contactName) : '') + ' · ' + (!due ? 'no date' : (late ? 'was due ' : 'due ') + esc(due)) + '</small></div><span class="pill bad">' + (late ? 'overdue' : f.type === 'task' ? 'task' : 'follow up') + '</span>';
           /* open the account on Activity, or mark it done right here */
-          return f.customerId ? '<div class="fu"><button class="unit" data-fu-cust="' + esc(f.customerId) + '">' + inner + '</button><button type="button" class="act" data-fu-today="' + esc(f.id) + '" data-fu-of="' + esc(f.customerId) + '">Done</button></div>' : '<div class="unit">' + inner + '</div>';
+          return f.customerId ? '<div class="fu' + (st ? ' first' : '') + '"><button class="unit" data-fu-cust="' + esc(f.customerId) + '">' + inner + '</button><button type="button" class="act" data-fu-today="' + esc(f.id) + '" data-fu-of="' + esc(f.customerId) + '">Done</button></div>' : '<div class="unit">' + inner + '</div>';
         }).join('')
-      + (s.needs.slice(0, 8).map(function (n) { return '<button class="unit" data-order="' + esc(n.o.id) + '"><div><b>' + esc(n.o.orderNo) + '</b><small>' + esc(n.o.customer.company || n.o.customer.name || n.o.customer.email) + ' · ' + esc(n.why) + '</small></div><span class="pill bad">' + esc(n.pill) + '</span></button>'; }).join(''))
-      /* D1: a price or acceptance that is somebody else's step — shown, named, never counted as the office's */
-      + s.waiting.slice(0, 5).map(function (o) { return '<button class="unit" data-order="' + esc(o.id) + '"><div><b>' + esc(o.orderNo) + '</b><small>' + esc(orderWho(o)) + ' · ' + esc(waitingLine(o)) + '</small></div><span class="pill">waiting</span></button>'; }).join('')
-      + (s.count ? '' : '<p class="note">' + (s.waiting.length ? 'Nothing else is waiting on you.' : 'Nothing waiting on the office. Every order is priced, every request answered' + (FOLLOW && !FOLLOW_ERR ? ', every follow-up done' : '') + '.') + '</p>')
+      + (s.count ? '' : '<p class="note">' + (s.waiting.length || (s.others || []).length ? 'Nothing else is waiting on you.' : 'Nothing waiting on the office. Every order is on its way, every request answered' + (FOLLOW && !FOLLOW_ERR ? ', every follow-up done' : '') + '.') + '</p>')
+      + others()
       + (s.followLater > 0 ? '<p class="note">' + plural(s.followLater, 'more follow-up') + ' scheduled for later; each shows here on its day.</p>' : '')
       + (FOLLOW_ERR ? '<p class="note">CRM follow-ups could not load: ' + esc(FOLLOW_ERR) + '</p>' : '');
     bindOrders();
@@ -668,15 +694,56 @@
   }
   function customerName(id) { var c = BUYERS && (BUYERS.customers || []).filter(function (x) { return x.id === id; })[0]; return c ? c.company || '' : ''; }
 
+  /* ORDERS: the bar of the path (the server's pipeline) picks the step; the
+     chips are every order, the ones that need you, and the ones a customer
+     asked about. An older server with no path shows every order. */
   function drawOrders() {
-    var orders = DATA.orders || [];
-    function match(f, o) { var def = FILTERS.filter(function (x) { return x[0] === f; })[0]; if (!def) return true; if (f === 'requests') return openReq(o).length > 0; if (!def[2]) return true; return def[2].indexOf(stageKey(o)) >= 0; }
-    var list = orders.filter(function (o) { return match(ORDER_FILTER, o); });
-    $('view').innerHTML = '<h1>Orders</h1><div class="tabs">' + FILTERS.map(function (f) { var n = orders.filter(function (o) { return match(f[0], o); }).length; return '<button type="button" data-filter="' + f[0] + '" aria-pressed="' + (ORDER_FILTER === f[0]) + '">' + esc(f[1]) + (n ? ' ' + n : '') + '</button>'; }).join('') + '</div>'
-      + '<p class="note">' + list.length + ' order' + (list.length === 1 ? '' : 's') + (DATA.limited ? ' · newest 100' : '') + '. Company POs that are still under review are under POs.</p>'
-      + (list.map(orderCard).join('') || '<p class="note">Nothing here.</p>');
+    var orders = DATA.orders || [], steps = (DATA.path || []).map(function (x) { return x.key; });
+    function match(f, o) {
+      if (f === 'requests') return openReq(o).length > 0;
+      if (f === 'mine') return openReq(o).length > 0 || !!(o.path && o.path.next && o.path.next.who === 'you');
+      var p = o.path; if (!p) return f === 'all';
+      if (f === 'attention') return p.state === 'attention';
+      if (f === 'complete') return p.state === 'complete';
+      if (steps.indexOf(f) >= 0) return p.step === f && p.state !== 'complete' && p.state !== 'cancelled';
+      return true;
+    }
+    if (['all', 'mine', 'requests', 'attention', 'complete'].concat(steps).indexOf(ORDER_FILTER) < 0) ORDER_FILTER = 'all';
+    var list = orders.filter(function (o) { return match(ORDER_FILTER, o); }), st = (DATA.path || []).filter(function (x) { return x.key === ORDER_FILTER; })[0];
+    $('view').innerHTML = '<h1>Orders</h1>' + (DATA.path && DATA.pipeline ? OmegaLogicTheme.pathBar(DATA.path, { counts: DATA.pipeline, current: ORDER_FILTER }) : '')
+      + '<div class="tabs">' + [['all', 'All'], ['mine', 'Needs you'], ['requests', 'Customer requests']].map(function (f) { var n = orders.filter(function (o) { return match(f[0], o); }).length; return '<button type="button" data-filter="' + f[0] + '" aria-pressed="' + (ORDER_FILTER === f[0]) + '">' + esc(f[1]) + (n ? ' ' + n : '') + '</button>'; }).join('') + '</div>'
+      + '<p class="note">' + (st ? esc(st.label) + ': ' + esc(st.ask) + ' ' : ORDER_FILTER === 'attention' ? 'Needs attention. ' : ORDER_FILTER === 'complete' ? 'Complete. ' : '') + list.length + ' order' + (list.length === 1 ? '' : 's') + (DATA.limited ? ' · newest 100' : '') + '. Customer POs still under review are on Menu › Sales.</p>'
+      + (list.map(orderCard).join('') || '<p class="note">No order stands here.</p>');
     Array.prototype.forEach.call(document.querySelectorAll('[data-filter]'), function (b) { b.onclick = function () { ORDER_FILTER = b.dataset.filter; store('omega_office_app_filter', ORDER_FILTER); drawOrders(); }; });
+    Array.prototype.forEach.call(document.querySelectorAll('#view .lg-path [data-step]'), function (b) { b.onclick = function () { var k = b.getAttribute('data-step'); ORDER_FILTER = ORDER_FILTER === k ? 'all' : k; store('omega_office_app_filter', ORDER_FILTER); drawOrders(); }; });
     bindOrders();
+  }
+  /* THE ORDER, GUIDED: the ONE control for the next step where the app has
+     it. Price, accept and the shipment stay on the desktop (the apps add no
+     endpoint of their own), so those steps open the desktop on this order;
+     an invoice to issue or a payment to record is the invoice's own fields,
+     below. The server's path says which step and whose it is. */
+  var APP_LABEL = { price: 'Price it on the desktop', accept: 'Accept it on the desktop', ship: 'Record the shipment on the desktop', fix: 'Resolve it on the desktop', 'issue-deposit': 'Record invoice', 'issue-balance': 'Record invoice',
+    'record-deposit': 'Record payment', 'record-balance': 'Record payment', freight: 'Plan the freight on the desktop', confirm: 'Open Sites', site: 'Open Sites', 'work-order': 'Open the plant app' };
+  function appNext(o) {
+    var n = o.path && o.path.next, c = n && n.control, mine = !!n && n.who === 'you', oq = q + '&order=' + encodeURIComponent(o.id);
+    if (!n || openReq(o).length) return '';
+    if (mine && APP_LABEL[c] && /desktop$/.test(APP_LABEL[c]) && c !== 'freight') return '<a class="big" id="next-desktop" href="' + esc('/omega-logic' + oq + '#orders') + '">' + esc(APP_LABEL[c]) + '</a>';
+    if (mine && c === 'freight') return '<a class="big" id="next-go" href="' + esc('/logic-logistics.html' + oq + '#freight') + '">' + esc(APP_LABEL.freight) + '</a>';
+    if (c === 'deliver' && o.delivery) return '<a class="big' + (mine ? '' : ' ghost') + '" id="next-go" href="' + esc('/logic-logistics.html' + oq) + '">Open its loads on the desktop</a>';
+    if ((c === 'deliver' || c === 'confirm' || c === 'site') && has('logistics')) return '<button type="button" class="big' + (mine ? '' : ' ghost') + '" id="next-sites">' + (c === 'deliver' ? 'Receive it on Sites' : 'Open Sites') + '</button>';
+    if (c === 'work-order' && has('plant')) return '<a class="big ghost" id="next-go" href="/plant/app' + q + '">Open the plant app</a>';
+    return '';
+  }
+  function appTarget(c) { var m = /^(issue|record)-(deposit|balance)$/.exec(c || ''); if (m) return m[1] === 'issue' ? '[data-inv-no="' + m[2] + '"]' : '[data-pay-amt="' + m[2] + '"]'; return $('next-desktop') ? '#next-desktop' : $('next-go') ? '#next-go' : $('next-sites') ? '#next-sites' : null; }
+  function orderGuide(o) {
+    var el = $('order-guide'), T = OmegaLogicTheme; if (!el || !o.path || !T.guide) return;
+    var rq = openReq(o)[0];
+    if (rq) { T.guide({ inline: el, eyebrow: 'OMEGA LOGIC · ' + (o.path.at != null && o.path.state !== 'complete' ? (o.path.at + 1) + ' / ' + o.path.of + ' · ' + String(o.path.label).toUpperCase() : esc(o.orderNo)), title: 'Answer the customer’s request', say: 'A ' + T.words(rq.kind) + ' request is open on this order. Make the change through its own control first, then answer it below; the customer sees the answer.', act: 'Write the answer, then press Answer & close', target: '#answer-' + rq.id }); return; }
+    var g = T.guideFor(DATA.path || [], o.path, APP_LABEL); g.inline = el;
+    g.target = g.mine ? appTarget(g.control) : null; if (!g.target) g.act = '';
+    if (g.mine && /^(issue|record)-/.test(g.control || '') && ADMIN === false) { g.title = 'An administrator records this'; g.act = ''; g.target = null; }
+    T.guide(g);
   }
   function drawOrder() {
     var o = (DATA.orders || []).filter(function (x) { return x.id === PICK; })[0];
@@ -684,7 +751,9 @@
     var l = o.logic, c = l && l.commercial, b = boardFor(o), money = invoiceSums(o), key = stageKey(o);
     var reqs = (o.requests || []).slice().reverse();
     $('view').innerHTML = '<button class="back" id="back">‹ Back</button><h1>' + esc(o.orderNo) + '</h1><p class="note">' + (o.customer.company ? '<b>' + esc(o.customer.company) + '</b> · ' : '') + esc(o.customer.name || '') + ' · ' + esc(o.customer.email) + (o.rep ? ' · rep ' + esc(o.rep.name) : '') + (o.createdAt ? ' · ' + esc(OmegaLogicTheme.day(o.createdAt)) : '') + '</p>' + (o.customerId ? '<button class="back" id="open-acct" style="margin:0 0 8px">Open the ' + esc(o.customer.company || 'customer') + ' account ›</button>' : '')
-      + '<p><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : (key === 'exception' ? ' bad' : '')) + '">' + esc(stageLabel(o)) + '</span> <span class="note">' + esc(nextLine(o)) + '</span></p>'
+      /* the order's bar of steps, the guide (its one next action) and the control for it */
+      + (o.path && DATA.path ? OmegaLogicTheme.pathBar(DATA.path, { p: o.path, compact: true }) + '<div id="order-guide"></div><div id="order-next">' + appNext(o) + '</div>'
+        : '<p><span class="pill' + (STAGE_PILL[key] ? ' ' + STAGE_PILL[key] : (key === 'exception' ? ' bad' : '')) + '">' + esc(stageLabel(o)) + '</span> <span class="note">' + esc(nextLine(o)) + '</span></p>')
       + (o.cancelRequested ? '<div class="warn">Cancellation requested. Refund and stock disposition need review on the desktop.</div>' : '')
       + (l && (l.lastError || l.paymentException) ? '<div class="warn">' + esc(l.paymentException || l.lastError) + '</div>' : '')
       + '<h2>Lines</h2>' + (o.items || []).map(function (i) { return '<div class="unit"><div>' + esc(i.name || i.sku) + '<small>' + esc(i.sku) + '</small></div><b>' + esc(i.qty) + '</b></div>'; }).join('')
@@ -692,27 +761,29 @@
           /* D1: who approved the price and accepted the order, and when */
           + (l.pricedBy || l.acceptedBy ? '<p class="note">' + (l.pricedBy ? 'Price approved by ' + esc(l.pricedBy) + (l.pricedAt ? ' on ' + esc(OmegaLogicTheme.day(l.pricedAt)) : '') : '') + (l.pricedBy && l.acceptedBy ? ' · ' : '') + (l.acceptedBy ? 'Accepted by ' + esc(l.acceptedBy) + (l.acceptedAt ? ' on ' + esc(OmegaLogicTheme.day(l.acceptedAt)) : '') : '') + '</p>' : '')
           /* UX-8: priced, not yet accepted — where the acceptance happens, or whom it waits on */
-          + (key === 'priced' ? '<p class="note" id="accept-note">' + ((o.can ? o.can.accept : DATA.owner) ? 'Priced, not yet accepted. Accept the order on the desktop (Work it on the desktop, below).' : esc(waitingLine(o).replace(/^waiting/, 'Waiting')) + '.') + '</p>' : '')
+          + (key === 'priced' ? '<p class="note" id="accept-note">' + ((o.can ? o.can.accept : DATA.owner) ? 'Priced, not yet accepted. Accept the order on the desktop (Open on the desktop, below).' : esc(waitingLine(o).replace(/^waiting/, 'Waiting')) + '.') + '</p>' : '')
           + Object.keys(l.invoices || {}).map(function (k) {
               var i = l.invoices[k], pay = safeUrl(i.payUrl), tb = tenantBilled(l), owing = i.amountCents && i.status !== 'paid' && i.satisfied !== true;
               return '<div class="unit"><div><b>' + esc(k) + ' invoice' + (i.id && tb ? ' · ' + esc(i.id) : '') + '</b><small>' + dollars(i.amountCents) + ' · ' + esc(OmegaLogicTheme.words(i.status)) + ' · recorded ' + dollars(i.paidCents || 0) + (i.issuedAt ? ' · issued ' + esc(OmegaLogicTheme.day(i.issuedAt)) : '') + '</small></div>' + (pay ? '<a class="act" target="_blank" rel="noopener noreferrer" href="' + esc(pay) + '">Pay link</a>' : '') + '</div>'
                 + (tb && owing && ADMIN !== false ? (!i.id
-                    ? '<div class="row"><input data-inv-no="' + esc(k) + '" placeholder="Invoice number" maxlength="80"><input data-inv-date="' + esc(k) + '" type="date" value="' + todayIso() + '"></div><div class="row"><input data-inv-pay="' + esc(k) + '" type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="Pay link (https, optional)"><button data-issue="' + esc(k) + '">Issued</button></div><p class="note">The pay link is your own payment page for this invoice; the customer\'s Pay hub opens it.</p>'
+                    ? '<div class="row"><input data-inv-no="' + esc(k) + '" placeholder="Invoice number" maxlength="80"><input data-inv-date="' + esc(k) + '" type="date" value="' + todayIso() + '"></div><div class="row"><input data-inv-pay="' + esc(k) + '" type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="Pay link (https, optional)"><button data-issue="' + esc(k) + '">Record invoice</button></div><p class="note">The pay link is your own payment page for this invoice; the customer\'s Pay hub opens it.</p>'
                     : '<label class="lbl" for="pl-' + esc(k) + '">Pay link for invoice ' + esc(i.id) + ' — the customer\'s Pay hub opens it</label><div class="row"><input id="pl-' + esc(k) + '" data-link-url="' + esc(k) + '" type="url" inputmode="url" autocapitalize="off" spellcheck="false" placeholder="https://… (your payment page)" value="' + esc(i.payUrl || '') + '"><button data-link-save="' + esc(k) + '">' + (i.payUrl ? 'Change' : 'Add') + '</button></div>'
-                      + '<div class="row"><input data-pay-amt="' + esc(k) + '" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="USD received"><input data-pay-date="' + esc(k) + '" type="date" value="' + todayIso() + '"></div><div class="row"><input data-pay-ref="' + esc(k) + '" placeholder="Bank ref"><button data-paid="' + esc(k) + '">Received</button></div>') : '');
+                      + '<div class="row"><input data-pay-amt="' + esc(k) + '" type="number" min="0.01" step="0.01" inputmode="decimal" placeholder="USD received"><input data-pay-date="' + esc(k) + '" type="date" value="' + todayIso() + '"></div><div class="row"><input data-pay-ref="' + esc(k) + '" placeholder="Bank ref"><button data-paid="' + esc(k) + '">Record payment</button></div>') : '');
             }).join('')
         /* D1: who approves the price — the server says (o.can, o.waitingOn) */
-        : '<h2>Money</h2><p class="note">Not priced yet. ' + ((o.can ? o.can.price : DATA.owner) ? 'Approve the customer price on the desktop (Work it on the desktop, below).' : esc(waitingLine(o).replace(/^waiting/, 'Waiting')) + '.') + '</p>')
+        : '<h2>Money</h2><p class="note">Not priced yet. ' + ((o.can ? o.can.price : DATA.owner) ? 'Approve the customer price on the desktop (Open on the desktop, below).' : esc(waitingLine(o).replace(/^waiting/, 'Waiting')) + '.') + '</p>')
       + (b ? '<h2>Build</h2><div class="bar"><i style="width:' + b.progress.percent + '%' + (b.progress.held ? ';background:#B42318' : '') + '"></i></div><div class="kv"><div><small>Built</small><b>' + b.progress.percent + '%</b><small>' + b.progress.done + ' of ' + b.progress.total + ' steps</small></div><div><small>Ready to ship</small><b>' + b.progress.readyRoots + ' / ' + b.progress.expectedRoots + '</b></div><div class="' + (b.progress.held ? 'bad' : '') + '"><small>On hold</small><b>' + b.progress.held + '</b></div><div><small>' + (b.late ? 'Late · due' : 'Target') + '</small><b style="font-size:15px">' + esc(b.due || '—') + '</b></div></div>' + (l && l.allocatedSerials && l.allocatedSerials.length ? '<p class="note">' + l.allocatedSerials.length + ' unit' + (l.allocatedSerials.length === 1 ? '' : 's') + ' assigned from finished stock: ' + esc(l.allocatedSerials.join(', ')) + '</p>' : '') : (l && l.releasedAt ? '<h2>Build</h2><p class="note">Released to the plant ' + esc(OmegaLogicTheme.day(l.releasedAt)) + '.</p>' : ''))
       + (o.shipment ? '<h2>Shipment</h2><p>' + esc(o.shipment.carrier) + ' · ' + esc(o.shipment.tracking) + (o.shipment.shippedAt ? ' · ' + esc(OmegaLogicTheme.day(o.shipment.shippedAt)) : '') + '</p>' : '')
       + '<h2>Customer requests · ' + openReq(o).length + ' open</h2>'
       + (reqs.length ? reqs.map(function (r) { return '<div class="rq"><b>' + esc(OmegaLogicTheme.words(r.kind)) + '</b> <span class="note">' + esc(OmegaLogicTheme.when(r.at)) + ' · ' + esc(r.by) + ' · ' + esc(r.status === 'open' ? 'open' : 'answered') + '</span><p>' + esc(r.message) + '</p>' + (r.address ? '<p class="note">Requested address: ' + esc([r.address.line1, r.address.city, r.address.state, r.address.zip].filter(Boolean).join(', ')) + '</p>' : '') + (r.status === 'open' && ADMIN === false ? '<p class="note">Open. A workspace administrator answers it.</p>' : r.status === 'open' ? '<textarea id="answer-' + esc(r.id) + '" maxlength="2000" placeholder="Answer to the customer" style="min-height:70px;font-family:inherit"></textarea><button class="big ghost" data-resolve="' + esc(r.id) + '">Answer &amp; close</button><p class="note">Make the change through its own control first (Shipping for an address, pricing for a change); this records the answer the customer sees.</p>' : '<div class="ans"><b>Answered:</b> ' + esc(r.answer) + ' <span class="note">' + esc(OmegaLogicTheme.day(r.answeredAt)) + ' · ' + esc(r.answeredBy || '') + '</span></div>') + '</div>'; }).join('') : '<p class="note">No requests on this order.</p>')
       + (c && tenantBilled(l) && ADMIN === false && Object.keys(l.invoices || {}).length ? '<p class="note">Invoices and payments are recorded by a workspace administrator.</p>' : '')
-      + ((key === 'balance' || key === 'production') && ADMIN !== false ? '<button class="big ghost" id="act-ready">Verify ready · invoice the balance</button>' : '')
+      + ((key === 'balance' || key === 'production') && ADMIN !== false ? '<button class="big ghost" id="act-ready">Check it\u2019s ready · bill the balance</button>' : '')
       /* the order's freight plan (sites grouped into lanes, the sheet a logistics partner prices from, prices and Accept) is a desktop screen; an administrator's, like api/logic-logistics.js */
       + (ADMIN !== false ? '<a class="big ghost" id="order-freight" href="' + esc('/logic-logistics.html' + q + '&order=' + encodeURIComponent(o.id) + '#freight') + '">Freight plan on the desktop</a>' : '')
-      + '<a class="big ghost" href="/omega-logic' + q + '&order=' + encodeURIComponent(o.id) + '">Work it on the desktop</a>';
+      + '<a class="big ghost" href="/omega-logic' + q + '&order=' + encodeURIComponent(o.id) + '">Open on the desktop</a>';
     $('back').onclick = function () { PICK = null; draw(); };
+    if ($('next-sites')) $('next-sites').onclick = function () { PICK = null; TAB = 'sites'; draw(); window.scrollTo(0, 0); };
+    orderGuide(o);
     if ($('open-acct')) $('open-acct').onclick = function () { PICK = null; openCustomer(o.customerId); };
     Array.prototype.forEach.call(document.querySelectorAll('[data-resolve]'), function (btn) {
       btn.onclick = function () {
@@ -748,7 +819,7 @@
     });
     Array.prototype.forEach.call(document.querySelectorAll('[data-paid]'), function (btn) { btn.onclick = function () { var k = btn.getAttribute('data-paid'); btn.disabled = true; status('Recording…'); api('/api/logic-office', { action: 'payment-received', orderId: o.id, stage: k, amount: document.querySelector('[data-pay-amt="' + k + '"]').value, date: document.querySelector('[data-pay-date="' + k + '"]').value, bankReference: document.querySelector('[data-pay-ref="' + k + '"]').value }).then(function (r) { status(r.invoice && r.invoice.status === 'paid' ? 'Paid in full' + (r.workflow && r.workflow.ok ? ' · released to the plant.' : '.') : 'Payment recorded.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; }); }; });
     if ($('act-ready')) $('act-ready').onclick = function () {
-      if (!confirm('Verify every unit passed and invoice the balance for ' + o.orderNo + '?')) return;
+      if (!confirm('Check every unit passed and bill the balance for ' + o.orderNo + '?')) return;
       var btn = this; btn.disabled = true; status('Checking…');
       api('/api/logic-office', { action: 'ready', orderId: o.id }).then(function (r) { status(r.note || 'Done.'); return loadAll(); })['catch'](function (e) { fail(e); btn.disabled = false; });
     };
@@ -781,7 +852,7 @@
   /* ── POs: a stack keyed in from the customer's email ─────────────────── */
   function drawPos() {
     var from = PO_FROM;
-    $('view').innerHTML = (from ? '<button class="back" id="back">‹ ' + esc(from.company || 'The account') + '</button>' : '') + '<h1>Purchase orders</h1><p class="note">A fleet customer sends twenty to fifty at a time. Choose the company, paste the lines, and each becomes an order awaiting pricing — nothing is accepted or charged.</p><div id="pos-body"><p class="note">Loading companies…</p></div>';
+    $('view').innerHTML = (from ? '<button class="back" id="back">‹ ' + esc(from.company || 'The account') + '</button>' : '') + '<h1>Enter POs</h1><p class="note">A fleet customer sends twenty to fifty at a time. Choose the company, paste the lines, and each becomes an order awaiting pricing — nothing is accepted or charged.</p><div id="pos-body"><p class="note">Loading companies…</p></div>';
     if ($('back')) $('back').onclick = function () { PO_FROM = null; openCustomer(from.id, 'orders'); };
     loadCompanies().then(function (c) {
       var el = $('pos-body'); if (!el) return;
@@ -812,7 +883,7 @@
         + '<p id="bulk-preview" class="note">Paste or type lines above.</p><p class="note" id="bulk-several" hidden>A PO number here goes to more than one address. Give each address its own PO number (one line group per site), or ask the customer to send it from their app with “One PO to several sites”: it then arrives under review below.</p><button class="big" id="bulk-go">Enter these purchase orders</button><div id="bulk-result"></div>'
         + '<h2>Under review · ' + queue.length + '</h2>' + (queue.map(function (p) { return '<div class="unit"><div><b>' + esc(p.poNumber) + '</b><small>' + esc(OmegaLogicTheme.words(p.status)) + ' · ' + esc(OmegaLogicTheme.source(p.source)) + ' · ' + esc(OmegaLogicTheme.day(p.createdAt)) + (p.reviewNote ? ' · ' + esc(p.reviewNote) : '') + '</small></div><a class="pill" href="/customer-po' + q + '&office=1&customerId=' + encodeURIComponent(COMPANY_ID) + '&intake=' + encodeURIComponent(p.id) + '">review</a></div>'; }).join('') || '<p class="note">Nothing uploaded by this company is waiting for review.</p>')
         + '<h2>Orders · ' + (c.orders || []).length + '</h2>' + ((c.orders || []).slice(0, 20).map(function (o) { return '<div class="unit"><div><b>' + esc(o.orderNo) + '</b>' + (o.poNumber ? ' <span class="note">PO ' + esc(o.poNumber) + '</span>' : '') + '<small>' + esc(o.items.map(function (i) { return i.qty + ' × ' + i.name; }).join('; ')) + (o.legs && o.legs.length ? ' · ' + o.legs.length + ' load' + (o.legs.length === 1 ? '' : 's') : '') + '</small></div><span class="pill">' + esc(o.milestone && o.milestone.label ? o.milestone.label : OmegaLogicTheme.words(o.status)) + '</span></div>'; }).join('') || '<p class="note">No orders yet.</p>')
-        + '<a class="big ghost" href="/po-inbox?office=1&org=' + encodeURIComponent(ORG) + '">Company POs on the desktop</a>';
+        + '<a class="big ghost" href="/po-inbox?office=1&org=' + encodeURIComponent(ORG) + '">Customer POs on the desktop</a>';
       function preview(r) { $('bulk-preview').textContent = OmegaPoBulk.summary(r); $('bulk-several').hidden = !(OmegaPoBulk.several && OmegaPoBulk.several(r)); }
       $('bulk-text').oninput = function () { preview(OmegaPoBulk.parse(this.value)); };
       $('bulk-go').onclick = function () {
@@ -852,7 +923,7 @@
               + (b.limited ? plural(open, 'order') + (c.rep && c.rep.name ? ' · rep ' + esc(c.rep.name) : '')
                 : users.length + ' ' + (users.length === 1 ? 'person' : 'people') + (owner ? ' · ' + esc(owner.name || owner.email) : ' · nobody on it yet') + (c.terms ? ' · ' + esc(c.terms.depositPct) + '% deposit' : '') + (c.pending ? ' · <b>' + c.pending + ' asking to join</b>' : ''))
               + '</div></button>';
-          }).join('') || '<p class="note">' + (f ? 'No customer matches.' : 'No customer accounts yet. Add a company under Menu → PO loads, or a customer signs in to the customer app.') + '</p>')
+          }).join('') || '<p class="note">' + (f ? 'No customer matches.' : 'No customer accounts yet. Add a company under Menu → Enter POs, or a customer signs in to the customer app.') + '</p>')
           + (b.next ? '<button class="big ghost" id="c-more">Load more customers</button>' : '');
         Array.prototype.forEach.call(el.querySelectorAll('[data-cust]'), function (x) { x.onclick = function () { openCustomer(x.dataset.cust); }; });
         if ($('c-more')) $('c-more').onclick = function () {
