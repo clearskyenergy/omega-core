@@ -194,6 +194,13 @@ Held by `scripts/tests/tomegaprime.js` and `scripts/render-omega-prime.js`
 (in `check:pages`: site to quote on the Firebase double, the real verdict
 engine and rate book).
 
+**On a phone** (2026-10-17): Omega Prime is an installable web app. The
+download link is `/omega-prime/install` (iPhone: Safari → Share → Add to
+Home Screen; Android: Install). The manifest, icons and service worker are
+the wrapper around `omega-prime.html`; the installed icon opens
+`/omega-prime`. The worker caches the shell only and does not cache
+`/api/` or Firebase auth. Phone layout is `omega-prime-mobile.css`.
+
 Still open for Prime: EV, Solar and Compute are "next"; the bill's peaks
 are typed, not read from the bill file (Site Map's bill import is the
 reader); Prime's Run is `/api/price-site`, so the project's capex rollup
