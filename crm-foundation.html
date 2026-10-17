@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.">
+<title>Customers — CRM foundation preview</title>
+<link rel="license" href="/terms.html">
+<style>
+  :root {
+    --page:#F5F4F0; --paper:#fff; --ink:#14171A; --ink2:#556B82; --ink3:#86A0A9;
+    --line:#E4E8EC; --rail:#0B2A3D; --rail-ink:#C9D6E2; --rail-dim:#7F97AA; --rail-on:#1264A3;
+    --brand:#2B5FA8; --teal:#2A8CA3; --teal-soft:#E2F4F8; --green:#2E7D5B; --green-soft:#E3F2EA;
+    --amber:#B8791B; --amber-soft:#FFF6E5; --coral:#EE5A4F; --coral-soft:#FDECEA;
+    --shadow:0 1px 2px rgba(20,23,26,.05), 0 8px 24px rgba(20,23,26,.06);
+  }
+  * { box-sizing:border-box; }
+  html, body { margin:0; height:100%; }
+  body {
+    color:var(--ink); background-color:var(--page);
+    background-image:linear-gradient(rgba(43,95,168,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(43,95,168,.08) 1px, transparent 1px);
+    background-size:24px 24px; background-attachment:fixed;
+    font:14px/1.45 "Segoe UI", system-ui, sans-serif;
+  }
+  button, input, select { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+  :focus-visible { outline:2px solid var(--teal); outline-offset:2px; }
+  .app { display:grid; grid-template-columns:224px minmax(0,1fr); min-height:100vh; }
+  .rail {
+    background:var(--rail); color:var(--rail-ink); padding:18px 12px 16px;
+    display:flex; flex-direction:column; gap:4px; position:sticky; top:0; height:100vh;
+  }
+  .brand { display:flex; gap:10px; align-items:center; color:#fff; padding:4px 8px 14px; }
+  .mark {
+    width:34px; height:34px; border-radius:9px; display:grid; place-items:center; flex:none;
+    background:#071018; color:#2FE3C8; font-weight:700; box-shadow:inset 0 0 0 1px rgba(53,198,244,.35);
+  }
+  .brand b { display:block; font-size:15px; }
+  .brand small, .me small { color:var(--rail-dim); font-size:11px; }
+  .kicker { margin:12px 8px 4px; font:11px/1 ui-monospace, monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--rail-dim); }
+  .navbtn, .custbtn {
+    display:flex; align-items:center; gap:8px; width:100%; text-align:left;
+    background:transparent; border:0; color:var(--rail-ink); border-radius:9px; padding:8px 10px;
+  }
+  .navbtn.active, .custbtn.active { background:var(--rail-on); color:#fff; }
+  .navbtn:hover, .custbtn:hover { background:rgba(255,255,255,.06); }
+  .custbtn span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--rail-dim); flex:none; }
+  .dot.conflict { background:var(--coral); }
+  .dot.synced { background:#3DDC97; }
+  .spacer { flex:1; }
+  .me { display:flex; gap:8px; align-items:center; padding:10px 8px 0; border-top:1px solid rgba(255,255,255,.08); margin-top:8px; }
+  .av { width:28px; height:28px; border-radius:50%; background:var(--teal); color:#fff; display:grid; place-items:center; font-size:12px; font-weight:700; flex:none; }
+  .main { min-width:0; display:flex; flex-direction:column; }
+  .banner {
+    background:var(--amber-soft); color:#6d4a10; border-bottom:1px solid #f0e0c2;
+    padding:10px 22px; font-size:13px;
+  }
+  .banner b { font-weight:650; }
+  .view { padding:22px 22px 64px; max-width:1080px; }
+  .toprow { display:flex; justify-content:space-between; gap:16px; align-items:flex-end; margin-bottom:16px; }
+  h1 { font-size:26px; line-height:1.15; margin:0 0 4px; letter-spacing:-.02em; }
+  .sub { color:var(--ink2); margin:0; }
+  .search {
+    background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:8px 12px; min-width:220px;
+  }
+  .filters { display:flex; gap:8px; margin:0 0 14px; flex-wrap:wrap; }
+  .chip, .tab, .btn, .ghost {
+    border-radius:999px; border:1px solid var(--line); background:var(--paper); padding:6px 12px;
+  }
+  .chip.on, .tab.on { background:var(--rail); color:#fff; border-color:var(--rail); }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; }
+  .card, .panel {
+    background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);
+  }
+  .card { padding:16px; text-align:left; width:100%; }
+  .card:hover { border-color:#c5d4ea; }
+  .card h2, .work h2 { margin:0; font-size:16px; }
+  .meta { color:var(--ink2); font-size:13px; margin-top:4px; }
+  .stats { display:flex; gap:14px; margin-top:12px; color:var(--ink2); font-size:12px; }
+  .stats b { display:block; color:var(--ink); font-size:16px; }
+  .pills { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
+  .pill { font-size:12px; padding:3px 8px; border-radius:999px; background:#F1F4F8; color:var(--ink2); }
+  .pill.live { background:var(--green-soft); color:var(--green); }
+  .pill.warn { background:var(--amber-soft); color:var(--amber); }
+  .pill.bad { background:var(--coral-soft); color:#9d2c24; }
+  .pill.info { background:var(--teal-soft); color:var(--teal); }
+  .back { background:none; border:0; color:var(--brand); padding:0 0 8px; }
+  .head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; }
+  .work { padding:14px 16px; }
+  .work + .work { margin-top:10px; }
+  .workhead { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
+  .parties { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
+  .party { font-size:12px; background:var(--page); border-radius:8px; padding:4px 8px; }
+  .party b { font-weight:600; }
+  .btn.primary { background:var(--brand); color:#fff; border-color:var(--brand); }
+  .person, .event, .doc { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); }
+  .person:last-child, .event:last-child, .doc:last-child { border-bottom:0; }
+  .panel { padding:6px 16px; }
+  table { width:100%; border-collapse:collapse; font-size:13px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--ink3); font-weight:600; font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+  .drawer-back {
+    position:fixed; inset:0; background:rgba(11,42,61,.35); display:flex; justify-content:flex-end; z-index:20;
+  }
+  .drawer {
+    width:min(440px, 100%); background:var(--paper); height:100%; overflow:auto; padding:22px;
+    box-shadow:-12px 0 40px rgba(11,42,61,.18);
+  }
+  label { display:block; font-size:12px; color:var(--ink2); margin:12px 0 4px; }
+  select, .field {
+    width:100%; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:#fff;
+  }
+  pre {
+    background:#0B2A3D; color:#d7e6f5; border-radius:10px; padding:12px; overflow:auto; font-size:12px; line-height:1.4;
+  }
+  .note { background:var(--teal-soft); border-radius:10px; padding:10px 12px; color:#14586a; margin-top:12px; }
+  .err { background:var(--coral-soft); color:#9d2c24; border-radius:10px; padding:10px 12px; margin-top:12px; }
+  .empty { padding:28px; text-align:center; color:var(--ink2); }
+  .resolve { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  @media (max-width: 860px) {
+    .app { grid-template-columns:1fr; }
+    .rail { position:relative; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; }
+    .brand { padding-bottom:0; }
+    .kicker, .spacer, .me { display:none; }
+    .navbtn, .custbtn { width:auto; }
+    .view { padding:16px 14px 48px; }
+    .toprow, .head { flex-direction:column; align-items:stretch; }
+    .search { width:100%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail" id="rail"></aside>
+  <div class="main">
+    <div class="banner" id="banner"></div>
+    <div class="view" id="view"></div>
+  </div>
+</div>
+<div id="drawer"></div>
+<script src="/omega-crm-foundation.js"></script>
+<script>
+/* Preview only. Sample data from OmegaCrmFoundation.sample(). No Firebase, no /api call. */
+(function () {
+  'use strict';
+  var F = window.OmegaCrmFoundation;
+  var model = F.sample();
+  var state = { q: '', party: 'customers', tab: 'work', assign: null, notice: '', error: '', pick: '', links: model.links.slice() };
+
+  function esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+  function pill(status) {
+    if (status === 'conflict') return '<span class="pill bad">Needs a decision</span>';
+    if (status === 'synced') return '<span class="pill live">Synced</span>';
+    if (status === 'kept') return '<span class="pill info">Kept from Omega</span>';
+    if (status === 'taken') return '<span class="pill warn">Taken from CRM</span>';
+    if (status === 'same') return '<span class="pill">In agreement</span>';
+    return '<span class="pill">Not connected</span>';
+  }
+  function accountIdFromHash() {
+    var m = /^#\/account\/([A-Za-z0-9_-]+)/.exec(location.hash || '');
+    return m ? m[1] : '';
+  }
+  function tabFromHash() {
+    var m = /^#\/account\/[A-Za-z0-9_-]+\/([a-z]+)/.exec(location.hash || '');
+    return m ? m[1] : 'work';
+  }
+  function go(hash) { location.hash = hash; }
+  function rows() { return F.portfolioRows(model, state.links); }
+  function findAccount(id) {
+    for (var i = 0; i < model.accounts.length; i++) if (model.accounts[i].id === id) return model.accounts[i];
+    return null;
+  }
+
+  function renderRail() {
+    var id = accountIdFromHash();
+    var list = rows();
+    var html = '<div class="brand"><div class="mark">Ω</div><div><b>Customers</b><small>' + esc(model.org.name) + '</small></div></div>';
+    html += '<button class="navbtn' + (id ? '' : ' active') + '" data-act="portfolio">Portfolio</button>';
+    html += '<div class="kicker">This preview</div>';
+    for (var i = 0; i < list.length; i++) {
+      var a = list[i].account;
+      html += '<button class="custbtn' + (a.id === id ? ' active' : '') + '" data-act="open" data-id="' + esc(a.id) + '"><i class="dot ' + esc(list[i].sync) + '"></i><span>' + esc(a.name) + '</span></button>';
+    }
+    html += '<div class="spacer"></div><div class="me"><div class="av">AC</div><div><b>' + esc(model.viewer.name) + '</b><small>Preview only</small></div></div>';
+    document.getElementById('rail').innerHTML = html;
+  }
+
+  function renderBanner() {
+    document.getElementById('banner').innerHTML = '<b>CRM foundation preview.</b> Sample installer, ' + esc(model.org.name) + '. This route is not in the product navigation. It does not sign in, and nothing you change here is saved.';
+  }
+
+  function renderPortfolio() {
+    var q = state.q.toLowerCase();
+    var list = rows().filter(function (r) {
+      if (state.party === 'conflict' && r.sync !== 'conflict') return false;
+      if (!q) return true;
+      return (r.account.name + ' ' + r.account.city).toLowerCase().indexOf(q) >= 0;
+    });
+    var html = '<div class="toprow"><div><h1>Customer portfolio</h1><p class="sub">Each customer keeps the projects, sites, analyses, proposals, and orders already created for them.</p></div>';
+    html += '<input class="search" id="q" type="search" placeholder="Search customers" value="' + esc(state.q) + '" aria-label="Search customers"></div>';
+    html += '<div class="filters">';
+    html += '<button class="chip' + (state.party === 'customers' ? ' on' : '') + '" data-act="filter" data-filter="customers">Customers</button>';
+    html += '<button class="chip' + (state.party === 'conflict' ? ' on' : '') + '" data-act="filter" data-filter="conflict">Sync needs a decision</button>';
+    html += '</div>';
+    if (!list.length) {
+      html += '<div class="card empty">No customer matches that view.</div>';
+    } else {
+      html += '<div class="grid">';
+      for (var i = 0; i < list.length; i++) {
+        var r = list[i], a = r.account;
+        html += '<button class="card" data-act="open" data-id="' + esc(a.id) + '">';
+        html += '<h2>' + esc(a.name) + '</h2><div class="meta">' + esc(a.city) + (a.domain ? ' · ' + esc(a.domain) : '') + '</div>';
+        html += '<div class="stats"><div><b>' + r.projects + '</b>projects</div><div><b>' + r.orders + '</b>orders</div><div><b>' + r.analyses + '</b>analyses</div><div><b>' + r.open + '</b>open</div></div>';
+        html += '<div class="pills">' + pill(r.sync) + '<span class="pill">' + esc(a.status) + '</span></div></button>';
+      }
+      html += '</div>';
+    }
+    document.getElementById('view').innerHTML = html;
+  }
+
+  function workCards(profile) {
+    var html = '';
+    var any = false;
+    for (var i = 0; i < profile.work.length; i++) {
+      var item = profile.work[i];
+      if (!item.object || item.object.kind === 'document') continue;
+      any = true;
+      var o = item.object;
+      html += '<article class="card work"><div class="workhead"><div><h2>' + esc(o.name) + '</h2>';
+      html += '<div class="meta">' + esc(F.sourceLabel(o.source)) + (o.address ? ' · ' + esc(o.address) : '') + '</div></div>';
+      html += '<button class="btn" data-act="assign" data-id="' + esc(o.id) + '">Assign</button></div>';
+      html += '<div class="pills"><span class="pill info">' + esc(o.kind) + '</span><span class="pill">' + esc(o.stage) + '</span>';
+      if (o.kw) html += '<span class="pill">' + esc(o.kw) + ' kW</span>';
+      if (o.kwh) html += '<span class="pill">' + esc(o.kwh) + ' kWh</span>';
+      if (o.capex) html += '<span class="pill">' + esc(o.capex) + '</span>';
+      html += '</div><div class="parties">';
+      for (var p = 0; p < item.parties.length; p++) {
+        var party = item.parties[p];
+        var who = party.account ? party.account.name : 'Unknown account';
+        if (party.contact) who += ' · ' + party.contact.name;
+        html += '<span class="party"><b>' + esc(F.roleLabel(party.role)) + '.</b> ' + esc(who) + '</span>';
+      }
+      html += '</div></article>';
+    }
+    if (!any) html = '<div class="card empty">Nothing is attached to this customer yet.</div>';
+    return html;
+  }
+
+  function renderProfile(id) {
+    var profile = F.profileOf(model, state.links, id);
+    if (!profile) {
+      document.getElementById('view').innerHTML = '<div class="card empty">That customer is not in the sample.</div>';
+      return;
+    }
+    var a = profile.account;
+    var tabs = [['work', 'Work'], ['people', 'People'], ['timeline', 'Timeline'], ['documents', 'Documents'], ['sync', 'CRM sync']];
+    var html = '<button class="back" data-act="portfolio">← All customers</button>';
+    html += '<div class="head"><div><h1>' + esc(a.name) + '</h1><p class="sub">' + esc(a.city) + (a.domain ? ' · ' + esc(a.domain) : '') + (a.owner ? ' · Owner ' + esc(a.owner) : '') + '</p></div>';
+    html += '<div class="pills">' + pill(profile.sync.status) + '<span class="pill live">' + esc(a.status) + '</span></div></div>';
+    html += '<div class="tabs">';
+    for (var t = 0; t < tabs.length; t++) {
+      html += '<button class="tab' + (state.tab === tabs[t][0] ? ' on' : '') + '" data-act="tab" data-tab="' + tabs[t][0] + '">' + tabs[t][1] + '</button>';
+    }
+    html += '</div>';
+    if (state.tab === 'work') html += workCards(profile);
+    else if (state.tab === 'people') html += renderPeople(profile);
+    else if (state.tab === 'timeline') html += renderTimeline(profile);
+    else if (state.tab === 'documents') html += renderDocs(profile);
+    else html += renderSync(profile);
+    document.getElementById('view').innerHTML = html;
+  }
+
+  function renderPeople(profile) {
+    if (!profile.contacts.length) return '<div class="card empty">No people on this account.</div>';
+    var html = '<div class="panel">';
+    for (var i = 0; i < profile.contacts.length; i++) {
+      var c = profile.contacts[i];
+      html += '<div class="person"><div><b>' + esc(c.name) + '</b><div class="meta">' + esc(c.title) + ' · ' + esc(c.email) + '</div></div>';
+      html += '<div>' + (c.signsIn ? '<span class="pill live">Signs in to the portal</span>' : '<span class="pill">Contact only</span>') + '</div></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderTimeline(profile) {
+    if (!profile.activity.length) return '<div class="card empty">No activity in the sample.</div>';
+    var html = '<div class="panel">';
+    for (var i = 0; i < profile.activity.length; i++) {
+      var ev = profile.activity[i];
+      html += '<div class="event"><div><b>' + esc(ev.subject) + '</b><div class="meta">' + esc(ev.type) + ' · ' + esc(ev.at) + ' · ' + esc(ev.by) + '</div></div>';
+      html += ev.open ? '<span class="pill warn">Open</span>' : '<span class="pill">Done</span>';
+      html += '</div>';
+    }
+    html += '</div><p class="meta">The live timeline is derived from orders, documents, and activity. This preview shows the sample only.</p>';
+    return html;
+  }
+
+  function renderDocs(profile) {
+    if (!profile.documents.length) return '<div class="card empty">No documents on this account.</div>';
+    var html = '<div class="panel">';
+    for (var i = 0; i < profile.documents.length; i++) {
+      var d = profile.documents[i];
+      html += '<div class="doc"><div><b>' + esc(d.name) + '</b><div class="meta">' + esc(d.stage) + '</div></div><span class="pill">Not downloaded</span></div>';
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function renderSync(profile) {
+    var bundles = profile.sync.bundles;
+    if (!bundles.length) return '<div class="card empty">No CRM is connected for this customer. Connecting one is a later milestone; this preview does not start an OAuth flow.</div>';
+    var html = '';
+    for (var i = 0; i < bundles.length; i++) {
+      var b = bundles[i];
+      var provider = null;
+      for (var p = 0; p < F.PROVIDERS.length; p++) if (F.PROVIDERS[p].key === b.provider) provider = F.PROVIDERS[p];
+      html += '<section class="card work"><div class="workhead"><div><h2>' + esc(provider ? provider.label : b.provider) + '</h2>';
+      html += '<div class="meta">' + esc(b.remoteType || 'record') + ' ' + esc(b.remoteId || '') + '</div></div>' + pill(b.status) + '</div>';
+      if (b.rows && b.rows.length) {
+        html += '<table><thead><tr><th>Field</th><th>Omega</th><th>CRM</th><th>Result</th></tr></thead><tbody>';
+        for (var r = 0; r < b.rows.length; r++) {
+          var row = b.rows[r];
+          html += '<tr><td>' + esc(row.label) + '</td><td>' + esc(row.omega) + '</td><td>' + esc(row.remote) + '</td><td>' + pill(row.status) + '</td></tr>';
+        }
+        html += '</tbody></table>';
+        if (b.status === 'conflict') {
+          html += '<div class="resolve"><span class="meta">Stage was edited on both sides since the last sync.</span>';
+          html += '<button class="btn" data-act="resolve" data-choice="omega">Keep Omega’s stage</button>';
+          html += '<button class="btn" data-act="resolve" data-choice="remote">Use the CRM’s stage</button></div>';
+          if (state.pick) html += '<div class="note">You chose ' + (state.pick === 'omega' ? 'Omega' : 'the CRM') + '. A later milestone stores that choice. This preview does not write it.</div>';
+        }
+      }
+      html += '</section>';
+    }
+    return html;
+  }
+
+  function renderDrawer() {
+    var host = document.getElementById('drawer');
+    if (!state.assign) { host.innerHTML = ''; return; }
+    var object = null;
+    for (var i = 0; i < model.objects.length; i++) if (model.objects[i].id === state.assign) object = model.objects[i];
+    if (!object) { host.innerHTML = ''; return; }
+    var customer = F.primaryAccount(state.links, object.kind, object.id);
+    var html = '<div class="drawer-back" data-act="close"><form class="drawer" data-act="sheet">';
+    html += '<h2>Assign people</h2><p class="sub">' + esc(object.name) + ' · ' + esc(F.sourceLabel(object.source)) + '</p>';
+    html += '<label for="role">Role</label><select id="role">';
+    for (var r = 0; r < F.ROLES.length; r++) {
+      var role = F.ROLES[r];
+      var disabled = role.singular && customer && role.key === 'customer' ? ' disabled' : '';
+      html += '<option value="' + esc(role.key) + '"' + disabled + '>' + esc(role.label) + (disabled ? ' (already set)' : '') + '</option>';
+    }
+    html += '</select><label for="account">Account</label><select id="account">';
+    for (var a = 0; a < model.accounts.length; a++) {
+      html += '<option value="' + esc(model.accounts[a].id) + '">' + esc(model.accounts[a].name) + '</option>';
+    }
+    html += '</select><label for="contact">Contact</label><select id="contact"><option value="">None</option>';
+    for (var c = 0; c < model.contacts.length; c++) {
+      html += '<option value="' + esc(model.contacts[c].id) + '" data-account="' + esc(model.contacts[c].accountId) + '">' + esc(model.contacts[c].name) + '</option>';
+    }
+    html += '</select><label for="title">Note</label><input class="field" id="title" maxlength="120" placeholder="Optional">';
+    html += '<div style="display:flex;gap:8px;margin-top:16px"><button class="btn primary" type="submit">Hold this assignment</button><button class="btn ghost" type="button" data-act="close">Close</button></div>';
+    if (state.error) html += '<div class="err">' + esc(state.error) + '</div>';
+    if (state.notice) html += '<div class="note">' + esc(state.notice) + '</div>';
+    html += '</form></div>';
+    host.innerHTML = html;
+    var role = document.getElementById('role');
+    if (role) {
+      var prefer = 'customer';
+      for (var i = 0; i < role.options.length; i++) if (role.options[i].value === 'customer' && role.options[i].disabled) prefer = 'stakeholder';
+      for (var j = 0; j < role.options.length; j++) if (role.options[j].value === prefer) role.selectedIndex = j;
+    }
+    filterContacts();
+    var account = document.getElementById('account');
+    if (account) account.addEventListener('change', filterContacts);
+  }
+
+  function filterContacts() {
+    var account = document.getElementById('account');
+    var contact = document.getElementById('contact');
+    if (!account || !contact) return;
+    for (var i = 0; i < contact.options.length; i++) {
+      var opt = contact.options[i];
+      var ok = !opt.getAttribute('data-account') || opt.getAttribute('data-account') === account.value;
+      opt.hidden = !ok;
+      opt.disabled = !ok;
+    }
+    if (contact.selectedOptions.length && contact.selectedOptions[0].disabled) contact.value = '';
+  }
+
+  function render() {
+    if (location.hash.indexOf('#/account/') === 0) state.tab = tabFromHash();
+    renderBanner();
+    renderRail();
+    var id = accountIdFromHash();
+    if (id) renderProfile(id);
+    else renderPortfolio();
+    renderDrawer();
+    var q = document.getElementById('q');
+    if (q) q.addEventListener('input', function () { state.q = q.value; render(); var again = document.getElementById('q'); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } });
+  }
+
+  document.body.addEventListener('click', function (e) {
+    var node = e.target;
+    var act = null;
+    while (node && node !== document.body) {
+      if (node.getAttribute && node.getAttribute('data-act')) { act = node; break; }
+      node = node.parentNode;
+    }
+    if (!act) return;
+    var name = act.getAttribute('data-act');
+    if (name === 'sheet') return;
+    if (name === 'close') {
+      if (e.target !== act && act.className !== 'drawer-back') return;
+      state.assign = null; state.error = ''; state.notice = ''; render(); return;
+    }
+    e.preventDefault();
+    if (name === 'portfolio') { state.pick = ''; go('#/'); return; }
+    if (name === 'open') { state.pick = ''; go('#/account/' + act.getAttribute('data-id') + '/work'); return; }
+    if (name === 'filter') { state.party = act.getAttribute('data-filter'); render(); return; }
+    if (name === 'tab') {
+      var id = accountIdFromHash();
+      state.pick = '';
+      go('#/account/' + id + '/' + act.getAttribute('data-tab'));
+      return;
+    }
+    if (name === 'assign') {
+      state.assign = act.getAttribute('data-id');
+      state.error = ''; state.notice = '';
+      render();
+      return;
+    }
+    if (name === 'resolve') { state.pick = act.getAttribute('data-choice'); render(); }
+  });
+
+  document.body.addEventListener('submit', function (e) {
+    var form = e.target;
+    if (!form.getAttribute || form.getAttribute('data-act') !== 'sheet') return;
+    e.preventDefault();
+    var object = null;
+    for (var i = 0; i < model.objects.length; i++) if (model.objects[i].id === state.assign) object = model.objects[i];
+    try {
+      var applied = F.applyLink(state.links, {
+        kind: object.kind,
+        objectId: object.id,
+        role: document.getElementById('role').value,
+        accountId: document.getElementById('account').value,
+        contactId: document.getElementById('contact').value,
+        title: document.getElementById('title').value
+      });
+      state.links = applied.links;
+      state.error = '';
+      state.notice = (applied.created ? 'Held in this browser: ' : 'Updated in this browser: ') + applied.link.role + ' → ' + applied.link.accountId + '. Reloading restores the sample. Nothing was written.';
+    } catch (err) {
+      state.error = err && err.message ? err.message : 'That assignment was refused.';
+    }
+    render();
+  });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && state.assign) { state.assign = null; state.error = ''; state.notice = ''; render(); }
+  });
+  window.addEventListener('hashchange', render);
+  if (!location.hash) location.hash = '#/';
+  render();
+})();
+</script>
+</body>
+</html>
