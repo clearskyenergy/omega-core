@@ -21,6 +21,13 @@
    So these tests build throwaway repositories and run the real checker
    over them. No mocking of git — the parsing IS what broke.
 
+   2026-10-17, the same shape of hole with the opposite bad fix. Cursor's
+   cloud agents commit as cursoragent@cursor.com, which is not a ClearSky
+   address, so a ClearSky-opened pull request (#334, #336) was scoped to
+   tenants/osa/. Adding that address to CLEARSKY_GIT_EMAILS would also
+   exempt a partner's agent. The address is neutral: the opener decides,
+   and a Co-authored-by this file does not know still scopes the range.
+
    node scripts/test-partner-scope.js */
 'use strict';
 const cp = require('child_process');
@@ -59,7 +66,14 @@ function repo() {
       fs.writeFileSync(p, files[f]);
     });
     git('add -A');
-    git('commit -q --allow-empty -m "' + (msg || 'change') + '"', {
+    /* One -m per line, so a Co-authored-by trailer is its own paragraph.
+       git joins multiple -m with a blank line, which is where a trailer
+       has to sit. */
+    var cmd = 'commit -q --allow-empty';
+    String(msg || 'change').split('\n').forEach(line => {
+      cmd += ' -m ' + JSON.stringify(line);
+    });
+    git(cmd, {
       GIT_AUTHOR_NAME: 'A', GIT_AUTHOR_EMAIL: (who && who.author) || 'tom@clearsky-usa.com',
       GIT_COMMITTER_NAME: 'C', GIT_COMMITTER_EMAIL: (who && who.committer) || 'tom@clearsky-usa.com'
     });
@@ -177,6 +191,169 @@ function gate(r, author, base, head) {
   }
   ok('noreply@github.com was NOT also added to CLEARSKY_GIT_EMAILS',
      !/CLEARSKY_GIT_EMAILS = \[[^\]]*noreply@github\.com/.test(src));
+}
+
+/* The array literal, comments and all, up to its closing bracket. */
+function arrayEntries(src, name) {
+  const m = src.match(new RegExp('var ' + name + ' = \\[([\\s\\S]*?)\\]'));
+  if (!m) return null;
+  return m[1].split(',').map(s => s.replace(/\/\*[\s\S]*?\*\//g, '').trim()
+    .replace(/^['"]|['"]$/g, '')).filter(Boolean);
+}
+
+/* A cloud-agent commit, author and committer both the bot. `trailer` is
+   the text after `Co-authored-by: `, or omitted. */
+function agentCommit(r, files, trailer, msg) {
+  var body = msg || 'agent change';
+  if (trailer) body += '\nCo-authored-by: ' + trailer;
+  return r.commit(files, {
+    author: 'cursoragent@cursor.com',
+    committer: 'cursoragent@cursor.com'
+  }, body);
+}
+
+const OUTSIDE = { 'api/orders.js': 'x\n' };
+const CS_TRAILER = 'clearskyenergy <clearskyenergy@users.noreply.github.com>';
+const PARTNER_TRAILER = 'tjw2021 <tjw2021@users.noreply.github.com>';
+
+/* ── 7a · ClearSky opened it; the bot wrote it; the file is outside ─────
+   This is #334 and #336. The bot address must not have to be ClearSky
+   for the pull request to be unrestricted. */
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  const head = agentCommit(r, OUTSIDE, null, 'agent, no trailer');
+  const g = gate(r, 'clearskyenergy', base, head);
+  ok('(a) a ClearSky PR of cursoragent commits outside tenants/ is unrestricted',
+     g.code === 0 && /unrestricted/.test(g.out), g.out.trim().split('\n').slice(0, 6));
+  r.rm();
+}
+
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  const head = agentCommit(r, OUTSIDE, CS_TRAILER, 'agent, ClearSky co-author');
+  const g = gate(r, 'clearskyenergy', base, head);
+  ok('(a) the same, with the Co-authored-by Cursor actually writes',
+     g.code === 0 && /unrestricted/.test(g.out), g.out.trim().split('\n').slice(0, 6));
+  r.rm();
+}
+
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  const head = agentCommit(r, OUTSIDE,
+    'clearskyenergy <206951365+clearskyenergy@users.noreply.github.com>',
+    'agent, id-form noreply');
+  const g = gate(r, 'clearskyenergy', base, head);
+  ok('(a) the id+login GitHub noreply of a ClearSky handle is that handle',
+     g.code === 0 && /unrestricted/.test(g.out), g.out.trim().split('\n').slice(0, 6));
+  r.rm();
+}
+
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  /* The GitHub App's noreply, committed by GitHub's UI identity. The id
+     is not special — a different id of the same login is the same bot. */
+  const head = r.commit(OUTSIDE, {
+    author: '999+cursor[bot]@users.noreply.github.com',
+    committer: 'noreply@github.com'
+  }, 'app squash');
+  const g = gate(r, 'clearskyenergy', base, head);
+  ok('(a) cursor[bot] noreply is the same kind of neutral identity',
+     g.code === 0 && /unrestricted/.test(g.out), g.out.trim().split('\n').slice(0, 6));
+  r.rm();
+}
+
+/* ── 7b · the partner opened it. The bot does not widen their folder. ── */
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  const head = agentCommit(r, OUTSIDE, null, 'partner agent, no trailer');
+  const g = gate(r, 'tjw2021', base, head);
+  ok('(b) a partner PR of cursoragent commits outside their folder fails',
+     g.code !== 0 && /outside the scoped folder/.test(g.out) && !/unrestricted/.test(g.out),
+     g.out.trim().split('\n').slice(0, 10));
+  r.rm();
+}
+
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  /* The tempting shape: bot author, ClearSky co-author trailer, partner
+     opener. The trailer must not outrank the opener. */
+  const head = agentCommit(r, OUTSIDE, CS_TRAILER, 'forged clearsky trailer');
+  const g = gate(r, 'tjw2021', base, head);
+  ok('(b) a partner opener stays scoped even with a ClearSky co-author trailer',
+     g.code !== 0 && /outside the scoped folder/.test(g.out) && !/unrestricted/.test(g.out),
+     g.out.trim().split('\n').slice(0, 10));
+  r.rm();
+}
+
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  const head = agentCommit(r, { 'tenants/osa/note.txt': 'ok\n' }, null, 'in folder');
+  const g = gate(r, 'tjw2021', base, head);
+  ok('(b) a partner PR of cursoragent commits inside tenants/osa/ passes',
+     g.code === 0 && /PASS/.test(g.out), g.out.trim().split('\n').slice(0, 8));
+  r.rm();
+}
+
+/* ── 7c · an unknown person is still unknown, bot commit beside them ──── */
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  agentCommit(r, { 'api/one.js': 'a\n' }, CS_TRAILER, 'bot first');
+  const head = r.commit({ 'api/two.js': 'b\n' }, { author: 'someone@elsewhere.example' }, 'stranger');
+  const g = gate(r, 'clearskyenergy', base, head);
+  ok('(c) an unknown identity on a ClearSky PR still scopes it',
+     g.code !== 0 && /someone@elsewhere\.example/.test(g.out) && !/unrestricted/.test(g.out),
+     g.out.trim().split('\n').slice(0, 8));
+  ok('  …and the bot commit did not launder that identity',
+     /\(author\)/.test(g.out), g.out.trim().split('\n').slice(0, 8));
+  r.rm();
+}
+
+/* ── 7d · the hole whitelisting the bot would open ───────────────────────
+   ClearSky opened the pull request. The commit is the bot's, which is
+   what a partner's agent also produces, and the trailer names the partner.
+   Treating cursoragent@cursor.com as a ClearSky email and not reading the
+   trailer would call this unrestricted. */
+{
+  const r = repo();
+  const base = r.commit({ 'README.md': 'a\n' }, null, 'base');
+  r.git('checkout -q -b feature');
+  const head = agentCommit(r, OUTSIDE, PARTNER_TRAILER, 'partner agent on a clearsky branch');
+  const g = gate(r, 'clearskyenergy', base, head);
+  ok('(d) a partner co-author on a bot commit scopes a ClearSky-opened PR',
+     g.code !== 0 && !/unrestricted/.test(g.out)
+       && /tjw2021@users\.noreply\.github\.com\s+\(co-author\)/.test(g.out),
+     g.out.trim().split('\n').slice(0, 10));
+  r.rm();
+}
+
+/* ── 8 · the bot is neutral on purpose, not a ClearSky email ──────────── */
+{
+  const src = fs.readFileSync(CHECKER, 'utf8');
+  const clearsky = arrayEntries(src, 'CLEARSKY_GIT_EMAILS');
+  const committerOnly = arrayEntries(src, 'COMMITTER_ONLY_EMAILS');
+  const neutral = arrayEntries(src, 'NEUTRAL_BOT_EMAILS');
+  ok('NEUTRAL_BOT_EMAILS lists cursoragent@cursor.com',
+     neutral && neutral.indexOf('cursoragent@cursor.com') >= 0, neutral);
+  ok('cursoragent@cursor.com was NOT added to CLEARSKY_GIT_EMAILS',
+     clearsky && clearsky.indexOf('cursoragent@cursor.com') < 0, clearsky);
+  ok('and NOT to COMMITTER_ONLY_EMAILS, which would exempt it as a committer only',
+     committerOnly && committerOnly.indexOf('cursoragent@cursor.com') < 0, committerOnly);
 }
 
 console.log('');
