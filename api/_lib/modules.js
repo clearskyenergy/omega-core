@@ -153,9 +153,13 @@ CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.
 /* What a LEGACY plan (a tier, no package) opens of each module inside the
  * editor: the legacy caps its commands sit behind (data-cap on the command
  * or on its tab: Analyze and Estimate need `engineering`, Compute needs
- * `compute`), '' for commands nothing gates, and a chain ("engineering+
- * parcelscreen") where a command with its own cap sits on a gated tab and
- * needs both. The store, the Modules page and
+ * `compute`), '' for commands nothing gates, and a chain ("tabcap+commandcap")
+ * where a command with its own cap sits on a gated tab and needs both.
+ * Building Net-Zero on Analyze is Omega Capital's, so that module also lists
+ * `engineering`. Omega-Core fit sits on Analyze with the compute cap, so
+ * Omega Compute carries `engineering+compute`. A command turned off in
+ * Settings (Parcel Screen, the permitting matrix) still counts: the plan
+ * opens it. The store, the Modules page and
  * the master console judge a legacy workspace by these AND its standalone
  * tools (OmegaWorkspaceHub.moduleState), so "On your plan" is what the plan
  * really opens. Read off the real editor by scripts/render-legacy-gates.js,
@@ -165,7 +169,7 @@ var LEGACY_GATES = {
   lite: ['', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
   estimate: ['', 'engineering'], evrebates: [''], plansets: ['', 'export.oneline', 'export.plotplan'],
   siteintel: ['', 'compute', 'engineering', 'engineering+parcelscreen'], engineering: ['', 'compute', 'engineering'],
-  finance: ['', 'export'], compute: ['', 'compute'], ops: ['engineering'], permitting: ['']
+  finance: ['', 'engineering', 'export'], compute: ['', 'compute', 'engineering+compute'], ops: ['engineering'], permitting: ['']
 };
 CATALOG.forEach(function (m) { m.legacyGates = LEGACY_GATES[m.key] || []; });
 /* Viewing/navigation survives an expired trial; producing commands do not. */

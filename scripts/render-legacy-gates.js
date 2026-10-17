@@ -90,7 +90,10 @@ function survey(catalogIds) {
   function take(el) {
     if (!el || seen.indexOf(el) >= 0) return; seen.push(el);
     if (el.hasAttribute('data-packaging-retired') || el.hasAttribute('data-omega-retired') || el.hasAttribute('data-shelf-dupe') ||
-        el.classList.contains('omega-gated-hidden') || el.classList.contains('omega-soon')) return;
+        el.classList.contains('omega-soon')) return;
+    /* A feature turned off in Settings is still a command the plan opens.
+       A duplicate parked off the ribbon is not. */
+    if (el.classList.contains('omega-gated-hidden') && !el.hasAttribute('data-omega-feature')) return;
     /* every data-cap from the outermost container in to the command: a
        command on the Analyze page that also carries its own cap needs both */
     var chain = [], n = el, page = el.closest('.ribbon-page');
@@ -448,7 +451,8 @@ async function run() {
     ok(bought.rows.ran['rb-site-screen'] === true && ss.inSize && ss.opened && ss.form && /^\/compute-proforma\.html\?/.test(ss.link),
        BOUGHT + ': the Edge Site Screen sits in Compute \u203a Size, runs by name, opens its form and links to the pro forma: ' + JSON.stringify(ss));
     ok(!bought.rows.byName.leaked.length, BOUGHT + ': Search tools lists nothing that stays shut: ' + bought.rows.byName.leaked.join('; '));
-    ok(bought.rows.optin.tabs.map(function (t) { return t.page; }).sort().join() === 'analyze,estimate', BOUGHT + ': Analyze and Estimate are still Opt in, Compute is not: ' + JSON.stringify(bought.rows.optin.tabs.map(function (t) { return t.page; })));
+    ok(bought.rows.some(function (r) { return r.id === 'rb-omega-core' && r.page === 'analyze' && r.open && !r.addonHidden; }), BOUGHT + ': Omega-Core fit on Analyze opens with the Compute add-on');
+    ok(bought.rows.optin.tabs.map(function (t) { return t.page; }).sort().join() === 'estimate', BOUGHT + ': Estimate stays Opt in; Analyze opens for Omega-Core fit, and Compute is on: ' + JSON.stringify(bought.rows.optin.tabs.map(function (t) { return t.page; })));
     /* the phone: Compute from the tab menu says Opt in, and Opt in is the purchase */
     ok(!onPhone.errors.length, 'no editor errors on a phone: ' + onPhone.errors.join('; '));
     ok(onPhone.menu.shown && /^compute\b/.test(onPhone.menu.optin || '') && onPhone.menu.says === '"Opt in"', 'phone: the tab menu lists Compute as an Opt in: ' + JSON.stringify(onPhone.menu));

@@ -214,6 +214,10 @@ ok(ed.indexOf("b2.id = 'rb-omega-mode'") < 0, 'the ribbon no longer creates a se
 ok(ed.indexOf("c.id = 'rb-compute-site-setup'") < 0, 'Compute no longer clones Site Setup');
 ok(ed.indexOf('id="omega-merged-park"') > 0, 'duplicates are parked, not deleted');
 ok(/<button class="rbtn" id="rb-parcels"[^>]*>[\s\S]*?Parcel<br>Lines/.test(ed), 'Parcel Lines stays on View');
+var viewRibbon = ed.slice(ed.indexOf('ribbon-page" data-page="view"'), ed.indexOf('ribbon-page" data-page="output"'));
+var estimateRibbon = ed.slice(ed.indexOf('ribbon-page" data-page="estimate"'), ed.indexOf('ribbon-page" data-page="finance"'));
+ok(viewRibbon.indexOf('id="rb-site"') > 0 && /Live<br>takeoff/.test(viewRibbon), 'Live takeoff stays on View, which every plan opens');
+ok(estimateRibbon.indexOf('id="rb-site"') < 0, 'Live takeoff is not left on Estimate');
 ok(ed.indexOf('rpanel-cap">Reports<') > 0, 'Output keeps the Reports caption the grafts look for');
 
 console.log('teditorfeatures: ' + n + ' checks');

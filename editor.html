@@ -2354,7 +2354,6 @@ window.onerror = function(msg, src, line, col, err) {
     </div>
     <div class="rpanel" data-omega-slot="takeoff">
       <div class="rpanel-body">
-        <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:var(--accent)">▦</span><span class="rb-lbl">Live<br>takeoff</span></button>
         <button class="rbtn" onclick="rbRun(openBomSourcing)" title="Bill of materials for marketplace sourcing (Rexel / City Electric Supply)"><span class="rb-ico">⛃</span><span class="rb-lbl">BOM /<br>Sourcing</span></button>
         <button class="rbtn" onclick="rbRun(openElectricalEstimate)" title="Electrical estimate — NECA-style labor units + material, priced bid build-up"><span class="rb-ico" style="color:var(--amber)">⚡</span><span class="rb-lbl">Electrical<br>Estimate</span></button>
       </div>
@@ -2410,6 +2409,8 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-body">
         <button class="rbtn" onclick="toggleLayersPanel()" title="Layers — list, select, hide, reorder, delete all elements"><span class="rb-ico">▧</span><span class="rb-lbl">Layers</span></button>
         <button class="rbtn" id="rb-labels" onclick="if(window.OmegaLabels)OmegaLabels.toggle()" title="Show or hide every label on the map — equipment names and specs, conduit callouts, stencil text. One click off, one click back on. The legend, schedule and takeoff are unaffected."><span class="rb-ico">ᵀ</span><span class="rb-lbl">Labels</span></button>
+        <!-- Omega Design's own command. View opens on every plan; Estimate is a paid tab, and a Design command left there stays allowed under Lite. -->
+        <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:var(--accent)">▦</span><span class="rb-lbl">Live<br>takeoff</span></button>
         <button class="rbtn" id="rb-parcels" aria-pressed="false" onclick="rbRun(pcToggle)" title="Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey."><span class="rb-ico" style="color:#FFD60A">▱</span><span class="rb-lbl">Parcel<br>Lines</span></button>
         <button class="rbtn" id="btn-3d" onclick="toggle3D()" title="3D site review — inspect equipment massing, roof context and sightlines. Editing pauses while tilted; press 2D or Esc to return."><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>Review</span></button>
       </div>

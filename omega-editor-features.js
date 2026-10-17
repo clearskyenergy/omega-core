@@ -67,7 +67,7 @@
     { id: 'rb-ladder-toggle', slot: 'panels', role: 'menu' },
     { id: 'rb-fom', slot: 'ownership', role: 'primary', label: 'Fleet<br>O&amp;M' },
     { id: 'rb-omlife', slot: 'ownership', role: 'menu', label: 'Battery lifecycle' },
-    { id: 'rb-site', slot: 'takeoff', role: 'bar', label: 'Live<br>takeoff' },
+    { id: 'rb-site', slot: 'show', role: 'bar', label: 'Live<br>takeoff', before: 'rb-parcels' },
     { id: 'rb-cluster', page: 'draw', cap: 'Arrange', label: 'Cluster<br>Tools' },
     { id: 'rb-cad-schem', fly: 'fly-cond', label: 'Schematic editor' }
   ];
