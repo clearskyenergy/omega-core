@@ -58,6 +58,8 @@ ok('finance: once the deposit is recorded a credit release adds nothing', fpaid.
 /* ── the path (2026-10-17): one bar of seven steps, the verdict and the ONE
    next action with whose it is; the desktop, the app and Today read it ── */
 console.log('\nthe path');
+/* custody.js loads admin.js (firebase-admin), which the unit job does not install: a stub stands in, as the other pure tests do */
+require.cache[require.resolve('../api/_lib/admin')] = { id: 'admin', filename: 'admin', loaded: true, exports: { httpError: function (st, m) { var e = new Error(m); e.status = st; return e; } } };
 var C = require('../api/_lib/custody');
 var admin = S.access(false, { role: 'admin', status: 'active' }, true), member = S.access(false, { role: 'member', status: 'active' }, true), clearsky = S.access(true, null, true);
 function P(o, who, billing, units) { return S.path(o, who || admin, billing || 'tenant', units); }
