@@ -24,6 +24,7 @@
     "check:dashboard": "node scripts/render-dashboard.js",
     "check:workspace": "node scripts/render-workspace.js",
     "check:production": "node scripts/check-production.js",
+    "validate:data": "node scripts/validate-analysis-data.js",
     "check:sales": "node scripts/render-mission-sales.js",
     "guides": "node scripts/guides/shots.js && node scripts/guides/build.js",
     "build:sandbox": "node scripts/build-app-sandbox.js",

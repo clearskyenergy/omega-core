@@ -199,6 +199,10 @@ function openOmegaCore(){
      unit in from this page's own catalog entry and opens the BESS Guided
      Build. Never places anything itself. -->
 <script src="/omega-prime-handoff.js"></script>
+<!-- Facility demand screen: the 12-month shave is the only demand credit.
+     A ratchet is not added a second time. omega-demand-screen.js is the
+     formula; the page only paints it. -->
+<script src="/omega-demand-screen.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
      This is the button that gives it a way in, plus the honest labelling: the
@@ -20221,16 +20225,18 @@ const FACILITY_PROFILES = {
 /* Self-contained ZIP->state (3-digit prefix ranges) so utility resolution
    never depends on an IIFE-local helper defined later in the file. */
 const _FOM_ZIP3_STATE = [
+  [5,5,'NY'],
   [995,999,'AK'],[350,369,'AL'],[716,729,'AR'],[850,865,'AZ'],[900,961,'CA'],
-  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[197,199,'DE'],[320,349,'FL'],
-  [300,319,'GA'],[967,968,'HI'],[500,528,'IA'],[832,838,'ID'],[600,629,'IL'],
-  [460,479,'IN'],[660,679,'KS'],[400,427,'KY'],[700,714,'LA'],[10,27,'MA'],
-  [206,219,'MD'],[39,49,'ME'],[480,499,'MI'],[550,567,'MN'],[630,658,'MO'],
-  [386,397,'MS'],[590,599,'MT'],[270,289,'NC'],[580,588,'ND'],[680,693,'NE'],
-  [30,38,'NH'],[70,89,'NJ'],[870,884,'NM'],[889,898,'NV'],[100,149,'NY'],
-  [430,459,'OH'],[730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],
-  [290,299,'SC'],[570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],
-  [220,246,'VA'],[50,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
+  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[569,569,'DC'],[197,199,'DE'],
+  [320,349,'FL'],[300,319,'GA'],[398,399,'GA'],[967,968,'HI'],[500,528,'IA'],
+  [832,838,'ID'],[600,629,'IL'],[460,479,'IN'],[660,679,'KS'],[400,427,'KY'],
+  [700,714,'LA'],[10,27,'MA'],[55,55,'MA'],[206,219,'MD'],[39,49,'ME'],
+  [480,499,'MI'],[550,567,'MN'],[630,658,'MO'],[386,397,'MS'],[590,599,'MT'],
+  [270,289,'NC'],[580,588,'ND'],[680,693,'NE'],[30,38,'NH'],[70,89,'NJ'],
+  [870,884,'NM'],[885,885,'TX'],[889,898,'NV'],[100,149,'NY'],[430,459,'OH'],
+  [730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],[290,299,'SC'],
+  [570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],[220,246,'VA'],
+  [50,54,'VT'],[56,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
   [820,831,'WY']
 ];
 function _fomStateForZip(zip){
@@ -20314,16 +20320,16 @@ function fomRunDemandAnalysis() {
   const profile = FACILITY_PROFILES[facType];
 
   // -- Core sizing math ----------------------------------------------------
-  // 1. Estimate demand charges portion of bill
-  const annualDemandCharges = bill * profile.demandBillPct;
-  const monthlyDemandCharges = annualDemandCharges / 12;
-
-  // 2. Back-calculate current peak demand from demand charges
-  const currentPeakKW = Math.round(monthlyDemandCharges / util.demandRate);
-
-  // 3. Estimate average load from total bill
-  const annualEnergy = Math.round((bill * (1 - profile.demandBillPct)) / util.energyRate);
-  const avgLoadKW    = Math.round(annualEnergy / 8760);
+  // Peak kW is the demand portion of the bill divided by the demand rate.
+  // omega-demand-screen.js is the only copy of that division.
+  const basis = OmegaDemandScreen.basis({
+    annualBill: bill, demandRate: util.demandRate, energyRate: util.energyRate,
+    demandBillPct: profile.demandBillPct
+  });
+  const annualDemandCharges = basis.annualDemandCharges;
+  const currentPeakKW = basis.peakKw;
+  const annualEnergy = basis.annualEnergyKwh;
+  const avgLoadKW    = basis.avgLoadKw;
 
   // 4. Battery sizing -- target 20% peak reduction (conservative, avoids over-cycling)
   // Target shave = % of peak to cut; more aggressive = bigger battery, faster payback
@@ -20332,20 +20338,17 @@ function fomRunDemandAnalysis() {
   const shavePct_aggressive   = 0.40; // 40% -- max ROI, needs larger system
 
   const calc = (shavePct) => {
-    const shaveKW  = Math.round(currentPeakKW * shavePct);
-    const battKW   = shaveKW;                                    // discharge kW = shave target
-    const battKWh  = Math.round(battKW * peakHrs);              // kWh = kW x peak hours
-    const annualSavingsDemand  = Math.round(shaveKW * util.demandRate * 12);
-    // Ratchet savings: if we reset the 12-mo peak, ratchet clause saves even more
-    const ratchetSavings = Math.round(shaveKW * util.demandRate * 12 * (util.ratchet - 0.5));
-    const totalAnnualSavings = annualSavingsDemand + Math.max(0, ratchetSavings);
-    // Battery cost estimate: $250-$350/kWh installed (C&I range)
-    const installCostLow  = Math.round(battKWh * 280);
-    const installCostHigh = Math.round(battKWh * 380);
-    const paybackLow  = installCostLow  / totalAnnualSavings;
-    const paybackHigh = installCostHigh / totalAnnualSavings;
-    const newPeak = currentPeakKW - shaveKW;
-    return { shavePct, shaveKW, battKW, battKWh, annualSavingsDemand, ratchetSavings, totalAnnualSavings, installCostLow, installCostHigh, paybackLow, paybackHigh, newPeak };
+    const s = OmegaDemandScreen.savings({
+      peakKw: currentPeakKW, shavePct: shavePct, demandRate: util.demandRate,
+      peakHours: peakHrs, ratchet: util.ratchet
+    });
+    const installCostLow  = Math.round(s.battKWh * 280);
+    const installCostHigh = Math.round(s.battKWh * 380);
+    return Object.assign(s, {
+      installCostLow: installCostLow, installCostHigh: installCostHigh,
+      paybackLow: installCostLow / s.totalAnnualSavings,
+      paybackHigh: installCostHigh / s.totalAnnualSavings
+    });
   };
 
   const conservative = calc(shavePct_conservative);
@@ -20527,7 +20530,7 @@ function _fomRenderResult(d) {
         <div><span style="color:var(--sub)">Peak shave target:</span> <span style="color:var(--text);font-weight:700">${fmt(t.shaveKW)} kW (${Math.round(t.shavePct*100)}%)</span></div>
         <div><span style="color:var(--sub)">New peak after shave:</span> <span style="color:var(--green);font-weight:700">${fmt(t.newPeak)} kW</span></div>
         <div><span style="color:var(--sub)">Demand savings:</span> <span style="color:var(--green);font-weight:700">$${fmt(t.annualSavingsDemand)}/yr</span></div>
-        <div><span style="color:var(--sub)">Ratchet benefit:</span> <span style="color:var(--green);font-weight:700">$${fmt(Math.max(0,t.ratchetSavings))}/yr</span></div>
+        <div><span style="color:var(--sub)">Ratchet:</span> <span style="color:var(--text)">in the 12-month demand saving — not a second credit</span></div>
         <div><span style="color:var(--sub)">Total annual savings:</span> <span style="color:var(--green);font-weight:800">$${fmt(t.totalAnnualSavings)}</span></div>
         <div><span style="color:var(--sub)">Simple payback:</span> <span style="color:var(--text);font-weight:700">${fmtD(t.paybackLow)}-${fmtD(t.paybackHigh)} years</span></div>
         <div><span style="color:var(--sub)">Install estimate:</span> <span style="color:var(--text);font-weight:700">$${fmt(t.installCostLow)}-$${fmt(t.installCostHigh)}</span></div>
@@ -20716,7 +20719,7 @@ Return ONLY a JSON object (no markdown, no explanation) with these fields:
         demandPct:   ai.demandBillPct || d.util.demandPct,
         tou:         ai.tou ?? d.util.tou,
         peakWindow:  ai.peakWindow || d.util.peakWindow,
-        ratchet:     ai.ratchet   || d.util.ratchet,
+        ratchet:     (ai.ratchet === 0 || ai.ratchet) ? ai.ratchet : d.util.ratchet,
         rateName:    ai.rateName,
         aiNotes:     ai.notes,
         ai_enhanced: true,
@@ -20724,24 +20727,27 @@ Return ONLY a JSON object (no markdown, no explanation) with these fields:
       // Re-run with updated rates
       const bill2   = d.bill;
       const profile = d.profile;
-      d.annualDemandCharges = bill2 * (ai.demandBillPct || profile.demandBillPct);
-      const monthlyDemandCharges = d.annualDemandCharges / 12;
-      d.currentPeakKW = Math.round(monthlyDemandCharges / d.util.demandRate);
-      d.annualEnergy  = Math.round((bill2 * (1 - (ai.demandBillPct||profile.demandBillPct))) / d.util.energyRate);
-      d.avgLoadKW     = Math.round(d.annualEnergy / 8760);
+      var basis2 = OmegaDemandScreen.basis({
+        annualBill: bill2, demandRate: d.util.demandRate, energyRate: d.util.energyRate,
+        demandBillPct: ai.demandBillPct || profile.demandBillPct
+      });
+      d.annualDemandCharges = basis2.annualDemandCharges;
+      d.currentPeakKW = basis2.peakKw;
+      d.annualEnergy  = basis2.annualEnergyKwh;
+      d.avgLoadKW     = basis2.avgLoadKw;
 
       const calc = (shavePct) => {
-        const shaveKW = Math.round(d.currentPeakKW * shavePct);
-        const battKW  = shaveKW;
-        const battKWh = Math.round(battKW * d.peakHrs);
-        const annualSavingsDemand = Math.round(shaveKW * d.util.demandRate * 12);
-        const ratchetSavings = Math.round(shaveKW * d.util.demandRate * 12 * (d.util.ratchet - 0.5));
-        const totalAnnualSavings = annualSavingsDemand + Math.max(0, ratchetSavings);
-        const installCostLow  = Math.round(battKWh * 280);
-        const installCostHigh = Math.round(battKWh * 380);
-        return { shavePct, shaveKW, battKW, battKWh, annualSavingsDemand, ratchetSavings, totalAnnualSavings,
-          installCostLow, installCostHigh, paybackLow: installCostLow/totalAnnualSavings, paybackHigh: installCostHigh/totalAnnualSavings,
-          newPeak: d.currentPeakKW - shaveKW };
+        const s = OmegaDemandScreen.savings({
+          peakKw: d.currentPeakKW, shavePct: shavePct, demandRate: d.util.demandRate,
+          peakHours: d.peakHrs, ratchet: d.util.ratchet
+        });
+        const installCostLow  = Math.round(s.battKWh * 280);
+        const installCostHigh = Math.round(s.battKWh * 380);
+        return Object.assign(s, {
+          installCostLow: installCostLow, installCostHigh: installCostHigh,
+          paybackLow: installCostLow / s.totalAnnualSavings,
+          paybackHigh: installCostHigh / s.totalAnnualSavings
+        });
       };
       d.conservative = calc(0.15);
       d.target       = calc(0.25);
