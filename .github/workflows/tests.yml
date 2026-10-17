@@ -82,6 +82,9 @@ jobs:
             exit 1
           fi
 
+      - name: analysis data validation report
+        run: npm run validate:data -- --out /tmp/analysis-validation.json
+
   # The only check that catches a page drawing NOTHING — a list that reads an
   # endpoint the fixture forgot, a column scrolled off at phone width. The
   # unit suites cannot see that. Chromium is the one dependency, so this job

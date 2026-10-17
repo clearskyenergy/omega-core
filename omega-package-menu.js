@@ -576,6 +576,9 @@
   function showMe(key) {
     var hit = where(key); if (!hit) return false;
     close();
+    /* one highlight: a previous Show me must not keep pointing */
+    var prior = document.querySelectorAll('[data-opm-spot]');
+    for (var p = 0; p < prior.length; p++) prior[p].removeAttribute('data-opm-spot');
     /* Under a package nothing but the package hides a tool (no Designer
        mode, no project filter), so the tab is always there to open. */
     if (typeof global.rbTab === 'function') global.rbTab(hit.page);

@@ -234,7 +234,10 @@ function estimate(body) {
     if (cost.capexUsd > 0) {
       var itcRate = clamp(num(fin.itcRate, 0.30), 0, 0.5);
       var rebatePerKwh = num(fin.rebatePerKwh, null);
-      var incIn = { capexUsd: cost.capexUsd, kwh: kwh, itcRate: itcRate };
+      var incIn = { capexUsd: cost.capexUsd, kwh: kwh, kw: kw, itcRate: itcRate };
+      if (typeof fin.systemDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(fin.systemDate)) {
+        incIn.systemDate = fin.systemDate.slice(0, 10);
+      }
       if (rebatePerKwh != null && rebatePerKwh >= 0) {
         /* the caller's own rebate replaces the book; 0 turns every book row off */
         if (rebatePerKwh > 0) {
@@ -246,7 +249,7 @@ function estimate(body) {
         /* the utility- and market-specific book: which programmes stand at
            THIS site, each priced by its own terms (SGIP's ITC-adjusted rate,
            NYSERDA's regional block and 20,000 kWh ceiling, Illinois' class
-           rates), with its asOf, source and conditions on the row */
+           rates and the 5 kWh/kW cap from 2026-06-01), with its asOf, source and conditions on the row */
         incIn.rebates = V.rebatesFor(loc, sim.site.segment, { itcClaimed: itcRate > 0 });
       }
       incentives = V.incentives(incIn);

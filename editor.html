@@ -200,6 +200,10 @@ function openOmegaCore(){
      unit in from this page's own catalog entry and opens the BESS Guided
      Build. Never places anything itself. -->
 <script src="/omega-prime-handoff.js"></script>
+<!-- Facility demand screen: the 12-month shave is the only demand credit.
+     A ratchet is not added a second time. omega-demand-screen.js is the
+     formula; the page only paints it. -->
+<script src="/omega-demand-screen.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
      This is the button that gives it a way in, plus the honest labelling: the
@@ -2924,12 +2928,16 @@ window.SNAP_FT = 5;
    Scale-aware: converts px→ft, rounds to SNAP_FT, converts back. */
 function _derSnapPt(p){
   try{
-    if(!p) return p;
+    /* A non-finite coordinate must not become the next anchor. One NaN
+       snapped onto a conduit poisons every length that follows it. */
+    if(!p || !isFinite(p.x) || !isFinite(p.y)) return p;
     if(!window.SNAP) return p;
     var ppf=(typeof _derScale==='function')?_derScale():6;
     var step=(window.SNAP_FT||5)*ppf;
-    if(!(step>0)) return p;
-    return { x: Math.round(p.x/step)*step, y: Math.round(p.y/step)*step };
+    if(!(step>0) || !isFinite(step)) return p;
+    var x=Math.round(p.x/step)*step, y=Math.round(p.y/step)*step;
+    if(!isFinite(x) || !isFinite(y)) return p;
+    return { x:x, y:y };
   }catch(e){ return p; }
 }
 /* Constrain a drag to the dominant axis when ORTHO is on (square-ish draws
@@ -3039,8 +3047,10 @@ function _sbCoords(e){
   var xEl=document.getElementById('sb-x'), yEl=document.getElementById('sb-y');
   if(xEl) xEl.textContent=(Math.round(fx*10)/10).toFixed(1);
   if(yEl) yEl.textContent=(Math.round(fy*10)/10).toFixed(1);
-  var cu=document.getElementById('sb-coords');
-  if(cu){ var b=cu.getElementsByTagName('b'); /* unit label is the trailing text node; leave as-is */ }
+  /* The label used to stay "ft" while the numbers were still pixels, which
+     is a scale error a person will design to. */
+  var unit=document.getElementById('sb-unit');
+  if(unit) unit.textContent=u;
 }
 
 function _sbInit(){
@@ -3635,7 +3645,7 @@ if(document.readyState==='loading'){
   <div id="statusbar">
     <div class="sb-tab active omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbLayout('model')">Model</div>
     <div class="sb-tab omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbLayout('sld')">SLD</div>
-    <div id="sb-coords">X&nbsp;<b id="sb-x">0.0</b>&nbsp;&nbsp;Y&nbsp;<b id="sb-y">0.0</b>&nbsp;ft</div>
+    <div id="sb-coords">X&nbsp;<b id="sb-x">0.0</b>&nbsp;&nbsp;Y&nbsp;<b id="sb-y">0.0</b>&nbsp;<span id="sb-unit">ft</span></div>
     <div class="sb-toggle on" id="sbt-snap" onclick="rbToggle('snap',this)"><span class="sb-dot"></span>SNAP</div>
     <div class="sb-toggle on" id="sbt-grid" onclick="rbToggle('grid',this)"><span class="sb-dot"></span>GRID</div>
     <div class="sb-toggle" id="sbt-ortho" onclick="rbToggle('ortho',this)"><span class="sb-dot"></span>ORTHO</div>
@@ -20316,16 +20326,18 @@ const FACILITY_PROFILES = {
 /* Self-contained ZIP->state (3-digit prefix ranges) so utility resolution
    never depends on an IIFE-local helper defined later in the file. */
 const _FOM_ZIP3_STATE = [
+  [5,5,'NY'],
   [995,999,'AK'],[350,369,'AL'],[716,729,'AR'],[850,865,'AZ'],[900,961,'CA'],
-  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[197,199,'DE'],[320,349,'FL'],
-  [300,319,'GA'],[967,968,'HI'],[500,528,'IA'],[832,838,'ID'],[600,629,'IL'],
-  [460,479,'IN'],[660,679,'KS'],[400,427,'KY'],[700,714,'LA'],[10,27,'MA'],
-  [206,219,'MD'],[39,49,'ME'],[480,499,'MI'],[550,567,'MN'],[630,658,'MO'],
-  [386,397,'MS'],[590,599,'MT'],[270,289,'NC'],[580,588,'ND'],[680,693,'NE'],
-  [30,38,'NH'],[70,89,'NJ'],[870,884,'NM'],[889,898,'NV'],[100,149,'NY'],
-  [430,459,'OH'],[730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],
-  [290,299,'SC'],[570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],
-  [220,246,'VA'],[50,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
+  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[569,569,'DC'],[197,199,'DE'],
+  [320,349,'FL'],[300,319,'GA'],[398,399,'GA'],[967,968,'HI'],[500,528,'IA'],
+  [832,838,'ID'],[600,629,'IL'],[460,479,'IN'],[660,679,'KS'],[400,427,'KY'],
+  [700,714,'LA'],[10,27,'MA'],[55,55,'MA'],[206,219,'MD'],[39,49,'ME'],
+  [480,499,'MI'],[550,567,'MN'],[630,658,'MO'],[386,397,'MS'],[590,599,'MT'],
+  [270,289,'NC'],[580,588,'ND'],[680,693,'NE'],[30,38,'NH'],[70,89,'NJ'],
+  [870,884,'NM'],[885,885,'TX'],[889,898,'NV'],[100,149,'NY'],[430,459,'OH'],
+  [730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],[290,299,'SC'],
+  [570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],[220,246,'VA'],
+  [50,54,'VT'],[56,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
   [820,831,'WY']
 ];
 function _fomStateForZip(zip){
@@ -20409,16 +20421,16 @@ function fomRunDemandAnalysis() {
   const profile = FACILITY_PROFILES[facType];
 
   // -- Core sizing math ----------------------------------------------------
-  // 1. Estimate demand charges portion of bill
-  const annualDemandCharges = bill * profile.demandBillPct;
-  const monthlyDemandCharges = annualDemandCharges / 12;
-
-  // 2. Back-calculate current peak demand from demand charges
-  const currentPeakKW = Math.round(monthlyDemandCharges / util.demandRate);
-
-  // 3. Estimate average load from total bill
-  const annualEnergy = Math.round((bill * (1 - profile.demandBillPct)) / util.energyRate);
-  const avgLoadKW    = Math.round(annualEnergy / 8760);
+  // Peak kW is the demand portion of the bill divided by the demand rate.
+  // omega-demand-screen.js is the only copy of that division.
+  const basis = OmegaDemandScreen.basis({
+    annualBill: bill, demandRate: util.demandRate, energyRate: util.energyRate,
+    demandBillPct: profile.demandBillPct
+  });
+  const annualDemandCharges = basis.annualDemandCharges;
+  const currentPeakKW = basis.peakKw;
+  const annualEnergy = basis.annualEnergyKwh;
+  const avgLoadKW    = basis.avgLoadKw;
 
   // 4. Battery sizing -- target 20% peak reduction (conservative, avoids over-cycling)
   // Target shave = % of peak to cut; more aggressive = bigger battery, faster payback
@@ -20427,20 +20439,17 @@ function fomRunDemandAnalysis() {
   const shavePct_aggressive   = 0.40; // 40% -- max ROI, needs larger system
 
   const calc = (shavePct) => {
-    const shaveKW  = Math.round(currentPeakKW * shavePct);
-    const battKW   = shaveKW;                                    // discharge kW = shave target
-    const battKWh  = Math.round(battKW * peakHrs);              // kWh = kW x peak hours
-    const annualSavingsDemand  = Math.round(shaveKW * util.demandRate * 12);
-    // Ratchet savings: if we reset the 12-mo peak, ratchet clause saves even more
-    const ratchetSavings = Math.round(shaveKW * util.demandRate * 12 * (util.ratchet - 0.5));
-    const totalAnnualSavings = annualSavingsDemand + Math.max(0, ratchetSavings);
-    // Battery cost estimate: $250-$350/kWh installed (C&I range)
-    const installCostLow  = Math.round(battKWh * 280);
-    const installCostHigh = Math.round(battKWh * 380);
-    const paybackLow  = installCostLow  / totalAnnualSavings;
-    const paybackHigh = installCostHigh / totalAnnualSavings;
-    const newPeak = currentPeakKW - shaveKW;
-    return { shavePct, shaveKW, battKW, battKWh, annualSavingsDemand, ratchetSavings, totalAnnualSavings, installCostLow, installCostHigh, paybackLow, paybackHigh, newPeak };
+    const s = OmegaDemandScreen.savings({
+      peakKw: currentPeakKW, shavePct: shavePct, demandRate: util.demandRate,
+      peakHours: peakHrs, ratchet: util.ratchet
+    });
+    const installCostLow  = Math.round(s.battKWh * 280);
+    const installCostHigh = Math.round(s.battKWh * 380);
+    return Object.assign(s, {
+      installCostLow: installCostLow, installCostHigh: installCostHigh,
+      paybackLow: installCostLow / s.totalAnnualSavings,
+      paybackHigh: installCostHigh / s.totalAnnualSavings
+    });
   };
 
   const conservative = calc(shavePct_conservative);
@@ -20622,7 +20631,7 @@ function _fomRenderResult(d) {
         <div><span style="color:var(--sub)">Peak shave target:</span> <span style="color:var(--text);font-weight:700">${fmt(t.shaveKW)} kW (${Math.round(t.shavePct*100)}%)</span></div>
         <div><span style="color:var(--sub)">New peak after shave:</span> <span style="color:var(--green);font-weight:700">${fmt(t.newPeak)} kW</span></div>
         <div><span style="color:var(--sub)">Demand savings:</span> <span style="color:var(--green);font-weight:700">$${fmt(t.annualSavingsDemand)}/yr</span></div>
-        <div><span style="color:var(--sub)">Ratchet benefit:</span> <span style="color:var(--green);font-weight:700">$${fmt(Math.max(0,t.ratchetSavings))}/yr</span></div>
+        <div><span style="color:var(--sub)">Ratchet:</span> <span style="color:var(--text)">in the 12-month demand saving — not a second credit</span></div>
         <div><span style="color:var(--sub)">Total annual savings:</span> <span style="color:var(--green);font-weight:800">$${fmt(t.totalAnnualSavings)}</span></div>
         <div><span style="color:var(--sub)">Simple payback:</span> <span style="color:var(--text);font-weight:700">${fmtD(t.paybackLow)}-${fmtD(t.paybackHigh)} years</span></div>
         <div><span style="color:var(--sub)">Install estimate:</span> <span style="color:var(--text);font-weight:700">$${fmt(t.installCostLow)}-$${fmt(t.installCostHigh)}</span></div>
@@ -20811,7 +20820,7 @@ Return ONLY a JSON object (no markdown, no explanation) with these fields:
         demandPct:   ai.demandBillPct || d.util.demandPct,
         tou:         ai.tou ?? d.util.tou,
         peakWindow:  ai.peakWindow || d.util.peakWindow,
-        ratchet:     ai.ratchet   || d.util.ratchet,
+        ratchet:     (ai.ratchet === 0 || ai.ratchet) ? ai.ratchet : d.util.ratchet,
         rateName:    ai.rateName,
         aiNotes:     ai.notes,
         ai_enhanced: true,
@@ -20819,24 +20828,27 @@ Return ONLY a JSON object (no markdown, no explanation) with these fields:
       // Re-run with updated rates
       const bill2   = d.bill;
       const profile = d.profile;
-      d.annualDemandCharges = bill2 * (ai.demandBillPct || profile.demandBillPct);
-      const monthlyDemandCharges = d.annualDemandCharges / 12;
-      d.currentPeakKW = Math.round(monthlyDemandCharges / d.util.demandRate);
-      d.annualEnergy  = Math.round((bill2 * (1 - (ai.demandBillPct||profile.demandBillPct))) / d.util.energyRate);
-      d.avgLoadKW     = Math.round(d.annualEnergy / 8760);
+      var basis2 = OmegaDemandScreen.basis({
+        annualBill: bill2, demandRate: d.util.demandRate, energyRate: d.util.energyRate,
+        demandBillPct: ai.demandBillPct || profile.demandBillPct
+      });
+      d.annualDemandCharges = basis2.annualDemandCharges;
+      d.currentPeakKW = basis2.peakKw;
+      d.annualEnergy  = basis2.annualEnergyKwh;
+      d.avgLoadKW     = basis2.avgLoadKw;
 
       const calc = (shavePct) => {
-        const shaveKW = Math.round(d.currentPeakKW * shavePct);
-        const battKW  = shaveKW;
-        const battKWh = Math.round(battKW * d.peakHrs);
-        const annualSavingsDemand = Math.round(shaveKW * d.util.demandRate * 12);
-        const ratchetSavings = Math.round(shaveKW * d.util.demandRate * 12 * (d.util.ratchet - 0.5));
-        const totalAnnualSavings = annualSavingsDemand + Math.max(0, ratchetSavings);
-        const installCostLow  = Math.round(battKWh * 280);
-        const installCostHigh = Math.round(battKWh * 380);
-        return { shavePct, shaveKW, battKW, battKWh, annualSavingsDemand, ratchetSavings, totalAnnualSavings,
-          installCostLow, installCostHigh, paybackLow: installCostLow/totalAnnualSavings, paybackHigh: installCostHigh/totalAnnualSavings,
-          newPeak: d.currentPeakKW - shaveKW };
+        const s = OmegaDemandScreen.savings({
+          peakKw: d.currentPeakKW, shavePct: shavePct, demandRate: d.util.demandRate,
+          peakHours: d.peakHrs, ratchet: d.util.ratchet
+        });
+        const installCostLow  = Math.round(s.battKWh * 280);
+        const installCostHigh = Math.round(s.battKWh * 380);
+        return Object.assign(s, {
+          installCostLow: installCostLow, installCostHigh: installCostHigh,
+          paybackLow: installCostLow / s.totalAnnualSavings,
+          paybackHigh: installCostHigh / s.totalAnnualSavings
+        });
       };
       d.conservative = calc(0.15);
       d.target       = calc(0.25);
@@ -75252,16 +75264,30 @@ window._crmToastModal=_crmToastModal;
    UNSAVED-WORK GUARD                                       (customer safety)
    Warn before the tab closes / navigates away if there are edits that
    haven't been persisted yet. Uses the dirty flag set by pushHist() and
-   cleared on a successful saveProject(). Only fires when actually dirty AND
-   signed in with a project (so it never nags on a read-only/empty view).
+   cleared on a successful saveProject(). A drawing with no account yet is
+   the easiest work to lose, so the prompt does not require a sign-in.
+   An empty canvas that nobody has edited does not set the condition.
    ===================================================================== */
 (function(){
+  function _editorUnsavedWork(){
+    try{
+      if(window._saveInFlight) return true;
+      if(!window._workDirty) return false;
+      var S = window.S;
+      if(!S) return !!window._workDirty;
+      /* The boot snapshot is one history entry on an empty sheet. That is
+         not work. A second entry, or anything actually drawn, is. */
+      var drawn = (S.elements && S.elements.length) || (S.conduits && S.conduits.length)
+        || (S.shapes && S.shapes.length) || (S._trenches && S._trenches.length) || S._trench;
+      var edited = S.history && S.history.length > 1;
+      return !!(drawn || edited);
+    }catch(e){ return !!window._workDirty; }
+  }
+  window._editorUnsavedWork = _editorUnsavedWork;
   window.addEventListener('beforeunload', function(e){
     try{
-      var dirty = !!window._workDirty;
-      var saving = !!window._saveInFlight;
-      if((dirty || saving) && window._currentUser && window._projectId){
-        // Standard browser confirm prompt (text is browser-controlled now).
+      if(_editorUnsavedWork()){
+        /* Standard browser confirm prompt (text is browser-controlled now). */
         e.preventDefault();
         e.returnValue = '';
         return '';
@@ -97142,11 +97168,18 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   function reseedHistory(why) {
     try {
       if (typeof S === 'undefined' || !S) return;
+      /* An edit that landed while the project was still loading is real
+         work. Clearing the dirty flag unconditionally made the close
+         prompt and the local draft both drop it. A history longer than
+         the boot snapshot means the sheet already changed. */
+      var edited = !!(window._workDirty && S.history && S.history.length > 1);
       S.history = [];
       if (typeof pushHist === 'function') pushHist();
-      /* pushHist marks the doc dirty + results stale; a load is neither. */
-      window._workDirty = false;
-      try { if (typeof omegaSetStale === 'function') omegaSetStale(false); } catch (e) {}
+      /* pushHist marks the doc dirty + results stale; a plain load is neither. */
+      if (!edited) {
+        window._workDirty = false;
+        try { if (typeof omegaSetStale === 'function') omegaSetStale(false); } catch (e) {}
+      }
       log('history baseline re-seeded (' + why + ') --',
           (S.elements || []).length, 'el,',
           (S.shapes || []).length, 'shapes,',
@@ -120110,6 +120143,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
       return {
         els: clone(S.elements || []), conds: clone(S.conduits || []),
         shps: clone(S.shapes || []), trench: clone(S._trench || null),
+        /* Drawn trench runs travel with the legs. Omitting them here made
+           Redo put the equipment back and leave the runs in the undone
+           state, so the legs and the trench no longer agreed. */
+        trenches: clone(S._trenches || []),
         pxPerFt: S.pxPerFt, unitLabel: S.unitLabel
       };
     } catch (e) { return null; }
@@ -179335,5 +179372,6 @@ root.OmegaEvRelay={ relayAll:relayAll, relayOne:relayOne };
   else boot();
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
+<script src="/omega-editor-recovery.js"></script>
 </body>
 </html>
