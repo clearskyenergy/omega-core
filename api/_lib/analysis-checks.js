@@ -115,6 +115,31 @@ function run(opts) {
     detail: { usd: rebateUsd && rebateUsd.usd }
   });
 
+  /* 1 MW. 4 h stays on nameplate (4,000 kWh is under 5 kWh/kW). 8 h pays
+     5,000 kWh. 10 MW × 4 h (40,000 kWh) hits the 25,000 kWh total, because
+     5 kWh/kW would still allow 50,000. A date before 2026-06-01 pays nameplate. */
+  function ilUsd(comed, kwh, kw, systemDate) {
+    var id = comed ? 'comed.dg.storage' : 'ameren.cgr.storage';
+    var inc = V.incentives({
+      capexUsd: 50000000, kwh: kwh, kw: kw, systemDate: systemDate,
+      rebates: V.rebatesFor({ state: 'IL', comed: comed }, 'commercial', {})
+    });
+    var row = inc.items.filter(function (x) { return x.id === id; })[0];
+    return row ? row.usd : null;
+  }
+  var cap4 = ilUsd(true, 4000, 1000, '2026-06-01');
+  var cap8 = ilUsd(true, 8000, 1000, '2026-06-01');
+  var capTotal = ilUsd(true, 40000, 10000, '2026-06-01');
+  var capBefore = ilUsd(true, 8000, 1000, '2026-05-31');
+  var capAmeren = ilUsd(false, 8000, 1000, '2026-06-01');
+  add({
+    id: 'ref.il.rebate.cap',
+    ok: cap4 === 1000000 && cap8 === 1250000 && capTotal === 6250000 &&
+      capBefore === 2000000 && capAmeren === 1250000,
+    message: 'From 2026-06-01, ComEd and Ameren pay the lesser of nameplate, 5 kWh per kW, and 25,000 kWh. A 1 MW / 4 h battery stays $1,000,000. A 1 MW / 8 h battery is $1,250,000 (it was $2,000,000). A 10 MW / 4 h battery is $6,250,000.',
+    detail: { mw4h: cap4, mw8h: cap8, mw10at4h: capTotal, before: capBefore, ameren8h: capAmeren }
+  });
+
   /* ── territory ── */
   var places = [
     ['60601', 'comed', 'IL', 'PJM', true],

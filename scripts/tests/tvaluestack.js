@@ -160,6 +160,36 @@ ok('Illinois pays by customer class: $250 large C&I, $300 residential', function
   assert.strictEqual(V.rebatesFor({ state: 'IL', comed: true }, 'residential', {})[0].perKwh, 300);
 });
 
+/* 1 MW nameplate. 4 h is 4,000 kWh, under 5 kWh/kW, so the cap does not
+   move it. 8 h is 8,000 kWh and pays 5,000. 10 MW × 4 h is 40,000 kWh
+   and the 25,000 kWh total is what binds (5 kWh/kW would still allow 50,000). */
+function ilRebate(comed, kwh, kw, systemDate) {
+  const rows = V.rebatesFor({ state: 'IL', comed: comed }, 'commercial', {});
+  const inc = V.incentives({ capexUsd: 50000000, kwh: kwh, kw: kw, systemDate: systemDate, rebates: rows });
+  return inc.items.filter(x => x.id === (comed ? 'comed.dg.storage' : 'ameren.cgr.storage'))[0];
+}
+ok('Illinois storage dated on or after 2026-06-01 takes the 5 kWh/kW and 25,000 kWh caps', function(){
+  const four = ilRebate(true, 4000, 1000, '2026-06-01');
+  assert.strictEqual(four.usd, 250 * 4000, 'a 4-hour battery is inside 5 kWh per kW');
+  const eight = ilRebate(true, 8000, 1000, '2026-06-01');
+  assert.strictEqual(eight.usd, 250 * 5000, 'an 8-hour battery pays 5 kWh per kW, not nameplate');
+  assert(/5 kWh per kW/.test(eight.how), 'the working does not name the kWh-per-kW cap');
+  const ameren = ilRebate(false, 8000, 1000, '2026-10-17');
+  assert.strictEqual(ameren.usd, 250 * 5000, 'Ameren does not share the ComEd cap');
+  const total = ilRebate(true, 40000, 10000, '2026-06-01T12:00:00Z');
+  assert.strictEqual(total.usd, 250 * 25000, 'the 25,000 kWh total did not bind');
+  assert(/25,000 kWh total/.test(total.how));
+  const before = ilRebate(true, 8000, 1000, '2026-05-31');
+  assert.strictEqual(before.usd, 250 * 8000, 'a system dated before 1 June 2026 was capped');
+  const undated = ilRebate(true, 8000, 1000, null);
+  assert.strictEqual(undated.usd, 250 * 5000, 'a screening with no date skipped the cap');
+});
+ok('a caller-supplied rebate rate is not the Illinois energy cap', function(){
+  const inc = V.incentives({ capexUsd: 50000000, kwh: 8000, kw: 1000, rebatePerKwh: 250 });
+  const reb = inc.items.filter(x => x.id === 'rebate')[0];
+  assert.strictEqual(reb.usd, 250 * 8000);
+});
+
 ok('SGIP prices at the ITC-adjusted rate when the ITC is claimed', function(){
   assert.strictEqual(V.rebatesFor({ state: 'CA' }, 'commercial', { itcClaimed: true })[0].perKwh, 180);
   assert.strictEqual(V.rebatesFor({ state: 'CA' }, 'commercial', { itcClaimed: false })[0].perKwh, 250);

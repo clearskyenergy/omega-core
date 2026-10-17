@@ -78,9 +78,18 @@ points on the 30% base and 2 on the 6% base. Solar that begins
 construction after July 2026 and is in service after 2027 is zero.
 Storage begun in 2034 is 75% of the built rate.
 
-ComEd large C&I rebate, as coded: `$250 × kWh`. Residential and small
-C&I: `$300 × kWh`. The 5 kWh-per-kW cap described in the row's
-conditions is not applied. See below.
+ComEd and Ameren large C&I rebate: `$250 ×` the kilowatt-hours the
+programme pays. Residential and small C&I: `$300 ×` the same
+kilowatt-hours. For a system dated on or after 2026-06-01, paid
+kilowatt-hours are the lesser of nameplate, 5 kWh per kW, and 25,000
+kWh. A 1 MW / 4 h battery (4,000 kWh) stays `$1,000,000`. A 1 MW / 8 h
+battery falls from `$2,000,000` to `$1,250,000`. The source is the
+sentence already on the ComEd 2026 DG Rebate Terms and Conditions row
+(state law, as those terms describe it); Ameren's row carries the same
+cap. Thomas decided on 2026-10-17 to apply it. A missing `systemDate`
+is treated as on or after that date. The 150,000 kWh ceiling the same
+sentence describes for an application filed and paid before 1 June 2026
+is not applied: a `systemDate` before 2026-06-01 is paid on nameplate.
 
 ## Bugs fixed
 
@@ -93,12 +102,12 @@ conditions is not applied. See below.
 | Medium | ZIP 028–029 (Providence and the rest of Rhode Island) were labelled National Grid (Massachusetts) | They fall through to Rhode Island Energy. National Grid MA shares 010–027 with Eversource, so it has no ZIP3 of its own |
 | Medium | ZIP 065 (New Haven) and 066 (Bridgeport) were labelled Eversource because that row was tested before United Illuminating, which listed the same prefixes | 065 and 066 are United Illuminating. 064 stays Eversource; it is mixed |
 | Medium | ComEd-in-PJM was a second ZIP range (`600–611`) beside the rate book, so the two could drift | `vpp-sim.js` `locate()` uses `utility-rates.isComedZip`. A ComEd ZIP is PJM unless the caller overrides the market |
+| High | ComEd and Ameren paid `$250 ×` nameplate kWh with no energy cap. A 1 MW / 8 h battery was `$2,000,000`. The 2026 terms cap interconnection on or after 1 June 2026 at 5 kWh per kW and 25,000 kWh | `incentives()` applies that cap when `systemDate` is on or after 2026-06-01, or when no date is given. The 1 MW / 8 h rebate is `$1,250,000`. The 1 MW / 4 h rebate stays `$1,000,000`. The pre-June 150,000 kWh ceiling is not applied |
 
 ## Needs a decision
 
 | Severity | Item | Why it was not changed |
 |---|---|---|
-| High | The ComEd and Ameren rebate rows say interconnection agreements after 1 June 2026 are capped at 5 kWh per kW and 25,000 kWh total. `incentives()` does not apply either cap. An 8-hour battery is priced at the full $250/kWh. The row itself says the cap is "reported" and should be confirmed against the tariff | Applying a cap the comment treats as unconfirmed would change customer quotes. The arithmetic should follow the tariff once someone confirms the current sheets |
 | Medium | Every Indiana ZIP3 is labelled AEP Indiana Michigan Power, including Indianapolis (AES Indiana), northwest Indiana (NIPSCO) and Evansville (CenterPoint). The state primary row says Duke Energy Indiana. The comment in the rate book now says this | There is no per-prefix rate for those utilities in the book. Reassigning Indianapolis from I&M's $14.90/kW to Duke's $14.90/kW would not even change the number, and NIPSCO would be a guess |
 | Medium | Massachusetts 010–027 are all Eversource. National Grid MA (Worcester and others) is not separated at ZIP3 | The prefixes overlap. The National Grid feeder service in `api/_lib/hosting-capacity.js` is the right next source, not a guessed split of the rate |
 | Medium | ZIP 613 is mixed (Ottawa is ComEd, LaSalle is Ameren). It is not on the ComEd list, so the rate book uses the Illinois state primary, which is still ComEd, while `locate().comed` is false and the ComEd rebate is not offered | A ZIP3 cannot settle it. A territory polygon should |
