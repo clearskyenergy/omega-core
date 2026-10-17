@@ -46,10 +46,12 @@ ok('install prompt is not swallowed on the app page', /getElementById\('installB
 
 var html = read('omega-prime.html');
 var head = html.slice(html.indexOf('</style>'), html.indexOf('</head>'));
-['omega-prime-mobile.css', 'omega-prime.webmanifest', 'omega-prime-180.png', 'omega-prime-192.png', 'apple-mobile-web-app-capable', 'apple-mobile-web-app-status-bar-style', 'apple-mobile-web-app-title', 'theme-color', 'omega-prime-pwa.js'].forEach(function (bit) {
-  ok('head carries ' + bit, head.indexOf(bit) > 0);
+ok('omega-prime.html adds only the stylesheet and the script', head === '</style>\n<link rel="stylesheet" href="/omega-prime-mobile.css">\n<script src="/omega-prime-pwa.js"></script>\n', head);
+var pwa = read('omega-prime-pwa.js');
+var written = pwa.slice(pwa.indexOf('document.readyState'), pwa.indexOf('var SCOPE'));
+['omega-prime.webmanifest', 'omega-prime-180.png', 'omega-prime-192.png', 'apple-mobile-web-app-capable', 'apple-mobile-web-app-status-bar-style', 'apple-mobile-web-app-title', 'theme-color', "readyState === 'loading'", 'link[rel="manifest"]'].forEach(function (bit) {
+  ok('the script writes ' + bit + ' while parsing', written.indexOf(bit) > 0);
 });
-ok('the head block is the wrapper after the page style', head.indexOf('Phone install') > 0 && head.indexOf('<body') < 0);
 var bodyScripts = html.slice(html.indexOf('<body'));
 ok('the page body does not gain a second copy of the worker', bodyScripts.indexOf('omega-prime-sw.js') < 0 && bodyScripts.indexOf('omega-prime-pwa.js') < 0);
 

@@ -5,6 +5,22 @@
    the whole origin. The worker script is /omega-prime-sw.js, whose own
    directory allows that scope. ES5. */
 (function () {
+  /* Written while the page is still parsing, so they sit in the head the
+     same way a static tag would. Skipped when the page already named a
+     manifest (the install page) and after the parser has closed, where
+     document.write would erase the page. */
+  if (document.readyState === 'loading' && !document.querySelector('link[rel="manifest"]')) {
+    document.write(
+      '<link rel="manifest" href="/omega-prime.webmanifest">' +
+      '<link rel="icon" href="/icons/omega-prime-192.png" sizes="192x192" type="image/png">' +
+      '<link rel="apple-touch-icon" href="/icons/omega-prime-180.png" sizes="180x180">' +
+      '<meta name="theme-color" content="#0B2A3D">' +
+      '<meta name="mobile-web-app-capable" content="yes">' +
+      '<meta name="apple-mobile-web-app-capable" content="yes">' +
+      '<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">' +
+      '<meta name="apple-mobile-web-app-title" content="Omega Prime">'
+    );
+  }
   var SCOPE = '/omega-prime';
   var secure = location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1';
   if (secure && 'serviceWorker' in navigator) {

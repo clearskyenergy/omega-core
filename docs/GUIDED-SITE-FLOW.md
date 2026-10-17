@@ -197,9 +197,12 @@ engine and rate book).
 **On a phone** (2026-10-17): Omega Prime is an installable web app. The
 download link is `/omega-prime/install` (iPhone: Safari → Share → Add to
 Home Screen; Android: Install). The manifest, icons and service worker are
-the wrapper around `omega-prime.html`; the installed icon opens
-`/omega-prime`. The worker caches the shell only and does not cache
-`/api/` or Firebase auth. Phone layout is `omega-prime-mobile.css`.
+the wrapper around `omega-prime.html`. That file gains two lines after
+its own style, the phone stylesheet and `omega-prime-pwa.js`; the script
+writes the manifest link, the icons and the iOS tags while the page is
+still parsing. The installed icon opens `/omega-prime`. The worker caches
+the shell only and does not cache `/api/` or Firebase auth. Phone layout
+is `omega-prime-mobile.css`.
 
 Still open for Prime: EV, Solar and Compute are "next"; the bill's peaks
 are typed, not read from the bill file (Site Map's bill import is the
