@@ -105,7 +105,9 @@ var srv = http.createServer(function (req, res) {
 
     /* Site: the tenant's own product leads the list */
     var listed = await p.waitForFunction(function () { var s = document.getElementById('unitSel'); return s && s.options.length > 1 ? [].map.call(s.options, function (o) { return o.textContent; }) : null; }, null, { timeout: 10000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
-    ok('the tenant\'s own product leads the unit list, the XXL after, a component never', listed && /^Clean Cell CC-2000/.test(listed[0]) && /FENECON Industrial XXL/.test(listed[listed.length - 1]) && listed.length === 2, listed);
+    ok('the tenant\'s own product leads the unit list, CleanCell\'s reference units after, the XXL last, a component never',
+      listed && /^Clean Cell CC-2000/.test(listed[0]) && /FENECON Industrial XXL/.test(listed[listed.length - 1])
+        && listed.filter(function (t) { return /^CleanCell /.test(t); }).length === 3 && listed.length === 5, listed);
     await p.fill('#addr', '3400 S Federal St, Chicago, IL 60616');
     await p.click('#go');
     await p.waitForSelector('#s-atlas.on');
