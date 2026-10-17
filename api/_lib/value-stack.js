@@ -186,7 +186,14 @@
 
      A flag still fires when a rebate exceeds 60% of the project, not to
      dispute the rate but to make sure somebody has confirmed the row's own
-     conditions before a number that large goes in front of a customer. */
+     conditions before a number that large goes in front of a customer.
+
+     THE ENERGY CAP is the 2026 terms' own limit, applied by decision on
+     2026-10-17. A system dated on or after 2026-06-01 is paid on the lesser
+     of nameplate kWh, 5 kWh per kW, and 25,000 kWh. ComEd and Ameren share
+     this one object. The 150,000 kWh ceiling the same sentence describes
+     for an application filed and paid before that date is not applied. */
+  var IL_REBATE_CAP = { from: "2026-06-01", kwhPerKw: 5, maxKwh: 25000 };
   var COMED_REBATE = {
     perKwh: 250,
     resPerKwh: 300,
@@ -203,12 +210,13 @@
        + "Dispatch Virtual Power Plant programme for the required term (Rider "
        + "SDVPP — approved by the ICC, tariff sheets effective 16 July 2026, a "
        + "five-year programme term, service begins no later than 1 March 2027). "
-       + "For interconnection agreements signed after 1 June 2026, state law is "
-       + "reported to cap the rebate at 5 kWh per kW of participating power "
-       + "and 25,000 kWh in total (projects whose interconnection application "
-       + "was filed and paid before that date are reported to keep a 150,000 "
-       + "kWh ceiling) — confirm against the current tariff."
+       + "A system dated on or after 1 June 2026 is capped at 5 kWh per kW of "
+       + "participating power and 25,000 kWh in total; that cap is applied. "
+       + "The 2026 terms describe a 150,000 kWh ceiling for an interconnection "
+       + "application filed and paid before that date, and that earlier ceiling "
+       + "is not applied."
   };
+  V.IL_REBATE_CAP = IL_REBATE_CAP;
   V.COMED_REBATE = COMED_REBATE;
 
   /* ── THE ONE-TIME INCENTIVE BOOK, utility and market specific ────────
@@ -226,6 +234,7 @@
       id: "comed.dg.storage", utility: "ComEd", name: "ComEd storage rebate (DG Rebate)",
       state: "IL", comed: true,
       perKwh: COMED_REBATE.perKwh, resPerKwh: COMED_REBATE.resPerKwh,
+      energyCap: IL_REBATE_CAP,
       tier: "published", asOf: "2026 Terms and Conditions; Rider SDVPP tariff effective 2026-07-16; read 2026-10-06",
       ref: COMED_REBATE.ref, url: COMED_REBATE.url, conditions: COMED_REBATE.conditions
     },
@@ -233,6 +242,7 @@
       id: "ameren.cgr.storage", utility: "Ameren Illinois", name: "Ameren Illinois storage rebate (Rider CGR)",
       state: "IL", comed: false,
       perKwh: 250, resPerKwh: 300,
+      energyCap: IL_REBATE_CAP,
       tier: "published", asOf: "Ameren Rider CGR tariff (effective 2025-04-21) and Rider SD VPP (effective 2026-07-16); read 2026-10-06",
       ref: "Illinois' DG rebate on Ameren Illinois' own tariff (Rider CGR — Customer "
          + "Generation & Storage Rebate, Ill. C.C. No. 1, 2nd Revised Sheet No. 59.003, "
@@ -243,7 +253,9 @@
       conditions: "The same Illinois rebate as ComEd's, on Ameren's tariff: DG-paired "
          + "storage, and a storage rebate received on or after 1 June 2026 requires "
          + "taking service under Ameren's Rider SD VPP once operational, no later than "
-         + "1 March 2027 ($10 per kW of performance per programme year). The ZIP places "
+         + "1 March 2027 ($10 per kW of performance per programme year). A system dated "
+         + "on or after 1 June 2026 takes the same 5 kWh per kW and 25,000 kWh cap as "
+         + "ComEd, and that cap is applied. The ZIP places "
          + "this site outside ComEd, so Ameren Illinois is assumed — municipal utilities "
          + "and co-ops are not covered; confirm the serving utility."
     },
@@ -326,6 +338,7 @@
       out.push({
         id: b.id, name: b.name, utility: b.utility,
         perKwh: perKwh, pctOfCost: b.pctOfCost, capUsd: b.capUsd, maxKwh: b.maxKwh,
+        energyCap: b.energyCap || null,
         tier: b.tier, asOf: b.asOf, ref: b.ref, url: b.url, conditions: b.conditions
       });
     }
@@ -340,13 +353,35 @@
       (row.conditions || "the programme's own terms decide.");
   }
 
-  /* incentives({ capexUsd, kwh, itcRate, rebates: [rows] }) — or the
-     legacy single-rebate fields (rebatePerKwh, rebateName, rebateCapUsd,
-     rebateRef, rebateConditions, rebateUrl), which api/price-site.js still
-     sends; both run through the ONE arithmetic below. */
+  /* A YYYY-MM-DD prefix, or null. Comparison is lexicographic, which
+     holds for this zero-padded form. */
+  function isoDay(v) {
+    var m = /^(\d{4}-\d{2}-\d{2})/.exec(v == null ? "" : String(v));
+    if (!m) return null;
+    var p = m[1].split("-"), mo = +p[1], da = +p[2];
+    if (mo < 1 || mo > 12 || da < 1 || da > 31) return null;
+    return m[1];
+  }
+
+  /* Missing or unreadable date: a screening with no interconnection date
+     is a system being quoted now, which is on or after the effective date. */
+  function energyCapOn(cap, systemDate) {
+    if (!cap || !cap.from) return false;
+    var day = isoDay(systemDate);
+    if (!day) return true;
+    return day >= cap.from;
+  }
+
+  /* incentives({ capexUsd, kwh, kw, systemDate, itcRate, rebates: [rows] })
+     — or the legacy single-rebate fields (rebatePerKwh, rebateName,
+     rebateCapUsd, rebateRef, rebateConditions, rebateUrl), which
+     api/price-site.js still sends. Both run through the ONE arithmetic
+     below. kw is the participating power the Illinois 5 kWh-per-kW cap
+     needs. systemDate on or after 2026-06-01 turns that cap on for a row
+     that carries energyCap; an earlier date leaves nameplate kWh. */
   V.incentives = function (input) {
     input = input || {};
-    var capex = +input.capexUsd, kwh = +input.kwh;
+    var capex = +input.capexUsd, kwh = +input.kwh, kw = +input.kw;
     var out = [], flags = [];
 
     var itcRate = (typeof input.itcRate === "number") ? input.itcRate : null;
@@ -365,6 +400,8 @@
     var rebates = Array.isArray(input.rebates) ? input.rebates.slice() : [];
     var reb = +input.rebatePerKwh;
     if (isFinite(reb) && reb > 0) {
+      /* A caller-supplied rate is not the Illinois book, so it does not
+         inherit the 5 kWh/kW cap. price-site.js sends the book row. */
       rebates.push({ id: "rebate", name: input.rebateName || "Utility rebate",
                      perKwh: reb, capUsd: input.rebateCapUsd,
                      tier: "published",
@@ -380,11 +417,34 @@
       var cap = +row.capUsd;
       if (isFinite(+row.perKwh) && +row.perKwh > 0 && isFinite(kwh)) {
         var maxKwh = +row.maxKwh;
-        var paidKwh = (isFinite(maxKwh) && maxKwh > 0) ? Math.min(kwh, maxKwh) : kwh;
+        var paidKwh = kwh;
+        var notes = [];
+        if (isFinite(maxKwh) && maxKwh > 0 && paidKwh > maxKwh) {
+          paidKwh = maxKwh;
+          notes.push("the programme pays at most " + Math.round(maxKwh).toLocaleString() + " kWh");
+        }
+        if (row.energyCap && energyCapOn(row.energyCap, input.systemDate)) {
+          var ratio = +row.energyCap.kwhPerKw;
+          var ceiling = +row.energyCap.maxKwh;
+          var limits = [];
+          if (isFinite(ratio) && ratio > 0 && isFinite(kw) && kw > 0) {
+            var byKw = ratio * kw;
+            if (paidKwh > byKw) paidKwh = byKw;
+            limits.push(ratio + " kWh per kW");
+          }
+          if (isFinite(ceiling) && ceiling > 0) {
+            if (paidKwh > ceiling) paidKwh = ceiling;
+            limits.push(Math.round(ceiling).toLocaleString() + " kWh total");
+          }
+          if (paidKwh < kwh && limits.length) {
+            notes.push("a system dated on or after " + row.energyCap.from +
+              " is paid on the lesser of " + limits.join(" and "));
+          }
+        }
         var raw = +row.perKwh * paidKwh;
         usd = (isFinite(cap) && cap > 0) ? Math.min(raw, cap) : raw;
         how = "$" + row.perKwh + " / kWh on " + Math.round(paidKwh).toLocaleString() + " kWh" +
-              (paidKwh < kwh ? " (the programme pays at most " + Math.round(maxKwh).toLocaleString() + " kWh)" : "") +
+              (notes.length ? " (" + notes.join("; ") + ")" : "") +
               (usd < raw ? ", capped at $" + Math.round(cap).toLocaleString() : "");
       } else if (isFinite(+row.pctOfCost) && +row.pctOfCost > 0 && isFinite(capex)) {
         var rawP = capex * +row.pctOfCost;
