@@ -1,0 +1,21 @@
+<!-- © 20252026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     Omega Prime home-screen icon. Navy tile (the OMEGA rail), a teal site
+     hex, a white omega, an orange prime. The mark sits inside the center
+     80% so Android's mask and iOS's rounded corners keep it.
+     Render the PNGs with: node scripts/make-omega-prime-icons.js -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512" role="img" aria-label="Omega Prime">
+  <defs>
+    <radialGradient id="tile" cx="50%" cy="42%" r="72%">
+      <stop offset="0" stop-color="#16384F"/>
+      <stop offset="1" stop-color="#0B2A3D"/>
+    </radialGradient>
+  </defs>
+  <rect width="512" height="512" fill="url(#tile)"/>
+  <g fill="none" stroke-linejoin="round" stroke-linecap="round">
+    <polygon points="256,92 398,174 398,338 256,420 114,338 114,174" stroke="#3FAFC6" stroke-width="18"/>
+    <path d="M176 318c0-78 32-128 80-128s80 50 80 128" stroke="#ffffff" stroke-width="28"/>
+    <path d="M148 318h58M306 318h58" stroke="#ffffff" stroke-width="28"/>
+    <path d="M334 150l40-14" stroke="#E2701B" stroke-width="18"/>
+    <circle cx="256" cy="268" r="16" fill="#E2701B" stroke="none"/>
+  </g>
+</svg>
