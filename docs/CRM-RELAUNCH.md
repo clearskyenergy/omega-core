@@ -2,15 +2,66 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Written 2026-10-17. Thomas asked for the whole system to become CRM-based: every object a person creates attaches to a customer, a customer's projects live on a portfolio, and those records can sync with the CRM that company already runs.
+Written 2026-10-17. Thomas asked for the whole system to become CRM-based: every object a person creates attaches to a customer, a customer's projects live on a portfolio, and those records can sync with the CRM that company already runs. The bar on the plan is a customer journey: each person can see the next step from the first touch through an installed system that is being watched.
 
-This document is the map, the model, and the rollout. The code that lands with it is a foundation only:
+This document is the journey, the map, the model, and the rollout. The code that lands with it is a foundation only:
 
 - `omega-crm-foundation.js` — the attachment rules, pure, no database.
 - `crm-foundation.html` — a preview of the customer portfolio and the customer profile, on its own route, with sample data.
 - `scripts/tests/tcrmfoundation.js` — holds both.
 
-Nothing here is wired into Site Map, Omega Prime, orders, the workspace rail, Firestore rules, or a live tenant. Editor v2 and the analysis-tool audit can keep moving; they call this model later, they do not fork it.
+Nothing here is wired into Site Map, Omega Prime, orders, the workspace rail, Firestore rules, or a live tenant. Editor v2 and the analysis-tool audit can keep moving; they call this model later, they do not fork it. The workspace home is being cleaned up on its own route (`/workspace-v2`). This change does not edit that page, `workspace.html`, or `omega-workspace-shell.js`. The stage words match, so the two can be joined later without a second vocabulary.
+
+---
+
+## The journey comes first
+
+Four people walk the same project. The words are the ones the workspace home uses through Order, then the two steps after its track:
+
+First touch → Customer → Site → Design → Analyze → Propose → Order → Install → Monitor
+
+`progress` in `omega-crm-foundation.js` picks the first stage that is not done, so a sent proposal stays the open step even when a priced order already exists. `panel` is the one sentence and the one next action for whoever is looking. A finished step says what happened and points at the open step. A later step says what it is waiting on and points at the open step. The open step is a form this preview can complete in the browser, or a hand-off onto the person who actually does it. There is no disabled control and no note that leaves you nowhere.
+
+The sample is Concord Energy. Alex Chen is sales. Helen Cho is the capital partner at Helios. Riley Brooks is operations. Jordan Blake is the customer at Riverside Logistics. Harbor Market is a lead with a web form and nobody to call. Northline Grocers is a Prime project whose bill is in review and whose Pipedrive stage disagrees. Riverside is a Site Map project with a proposal out and an order priced.
+
+### Sales (Alex Chen)
+
+The portfolio is the book, conflict first, then the earliest open stage.
+
+1. **First touch.** Harbor's Saturday form is already on the account. That step is done.
+2. **Customer.** Save the person. A project is not opened with no one to call.
+3. **Site and Design.** Hold a project at an address. In the product this is Prime or Site Map. The preview keeps it in the browser, on the account.
+4. **Analyze.** Mark the bill reviewed. If the CRM stage was edited on both sides, settle that stage first. Kilowatts stay the figure Omega holds either way, and the button after the choice is the bill, not a dead note.
+5. **Propose.** Send the proposal, then log the follow-up. On Riverside, Jordan has a portal, so the next button opens the proposal they see. On Harbor, which has no portal sign-in in the sample, Alex records the acceptance on the same account.
+6. **Order.** After acceptance, operations confirms. Alex can open that step.
+7. **Install.** Operations names the week and marks the crew done. Alex sees the same words.
+8. **Monitor.** Log this week's check. The step stays open on purpose: a watched site is a repeating check-in, not a blank ending.
+
+### Partner (Helen Cho, Helios)
+
+Helen sees only accounts shared with `helios.example`. In the sample that is Riverside. She does not see Harbor, Northline, the CRM connection, or the project cost.
+
+Her open step is the capital request. Saying she is interested opens the proposal Jordan sees, which is the acceptance that unblocks the install week. Later steps name who acts (operations sets the week) and open that person's step. Other customers are not on her list; a link to one says so and sends her back.
+
+### Operations (Riley Brooks)
+
+The same book, read as a queue.
+
+Harbor and Northline are still sales's: the person, the site, the bill, and the CRM stage. Riley's button opens Alex's step. It does not pretend operations designs the site.
+
+Riverside's order is priced and the proposal is not accepted. Riley asks sales to follow up. Once that note is on the account, the next button opens the proposal Jordan sees. After Jordan accepts, Riley confirms the order, sets the install week, and marks the crew done. The watch is the same repeating check sales logs.
+
+### End customer (Jordan Blake)
+
+Jordan sees Riverside only, in plain words: Your proposal, Your order, Installation, Watching it run. No other accounts, no CRM screen, no project cost.
+
+The open step is the proposal. Accepting it opens the order, and the next button is operations confirming it. Jordan can ask a question about the install; that opens the step where the week is set. When the crew is marked done, Jordan asks for this week's check. The account stays on that step.
+
+### What the preview shows, and what the workspace home owns
+
+`/crm-foundation.html#/as/installer` is the sales book. The same page with `partner`, `ops`, or `customer` is the other three. Reloading restores the sample. Nothing is saved. The route is not in the product navigation.
+
+`/workspace-v2` owns the signed-in home. When that home offers a way to find a customer, it should open this portfolio (later, the real Customers page). Until that link exists the routes stay separate, on the same stage words through Order: Customer, Site, Design, Analyze, Propose, Order. Install and Monitor are the track that follows. This change does not edit the v2 files.
 
 ---
 
@@ -209,25 +260,28 @@ List screens cannot collection-group their way to "Riverside's projects" without
 
 `portfolio.html` stays the energy-site register. Renaming it would collide with the OSA host rewrite (`/portfolio.html` → `/tenants/osa/portfolio` on `osa.clearskyomega.com`) and with every rail link that already says Portfolio.
 
-The customer home is a new page, later. The preview of it is `/crm-foundation.html`, and it is not linked from the rail, the editor, Prime, or orders.
+The customer home is a new page, later. The preview of it is `/crm-foundation.html`, and it is not linked from the rail, the editor, Prime, orders, or the workspace home.
 
-Portfolio. One row per account that is the `customer` of at least one object. `portfolioRows` sorts a sync conflict first, then the name. A utility or a capital partner shows on the work, not as a portfolio of their own, unless they are themselves a customer of something. Search is the name and the city. The row counts projects, orders, analyses, and open follow-ups.
+The preview leads with the journey in the section above. Four switches — Sales, Partner, Operations, Customer — change who is looking. `visibleAccounts` is the list: sales and operations see the book, a partner sees accounts in `sharedWith` for their org, a customer sees their own account. `canSee` hides the CRM connection and the project cost from the partner and the customer.
 
-Profile. `profileOf` returns the account, its contacts, every object the account is on, the other parties on those objects, the sample activity, the documents, and the sync bundles judged by `judgeField`.
+Portfolio. One card per account on that list, including a lead marked `book: 'customer'` with no project yet. A utility or a capital partner (`book: 'party'`) shows on the work, not as a card of their own. `portfolioRows` sorts a sync conflict first, then the earliest open stage, then the name. Each card is the nine steps and one button, `nextAction`. The button is the only primary control.
 
-Tabs on the preview, which are the tabs the product page should keep:
+Profile. The same nine steps. The open step is a short form (save the contact, hold the project, mark the bill reviewed, send or accept the proposal, confirm the order, set the week, mark the crew done, log the check). Any other step explains itself and returns to the open one. Under that: the work, the people (not for a partner), the recent notes, and, for sales and operations, the CRM stage. `profileOf` still returns the account, its contacts, every object the account is on, the other parties, the activity, the documents, and the sync bundles judged by `judgeField`.
 
-| Tab | What it shows | Live source, when built |
+The product page should keep those as sections, fed by the live records:
+
+| Section | What it shows | Live source, when built |
 |---|---|---|
+| Journey | The open step and the nine-step track | `progress` and `panel`, from the records below |
 | Work | Projects, sites, designs, analyses, proposals, orders, with every party | party links joined to the existing records |
 | People | Contacts and portal users | `contacts` and `users` |
 | Timeline | Newest first | `api/_lib/crm.js` timeline, extended with project and analysis events |
 | Documents | Files linked to the account | `files`, still served by the endpoint |
-| CRM sync | One block per provider, field by field | `crm_objects` plus `judgeField` |
+| CRM sync | One block per provider, field by field, then back to the open step | `crm_objects` plus `judgeField` |
 
-Assign. A drawer on a piece of work. Role, account, optional contact, optional note. The preview holds the result in memory and says so. The product writes a party link through the endpoint.
+Assign. A drawer on a piece of work, for sales and operations. Role, account, optional contact, optional note. The preview holds the result in memory and says so. The product writes a party link through the endpoint.
 
-The preview's sample is Concord Energy, an installer, with Riverside Logistics (Site Map project, site, design, VPP run, proposal, order, HubSpot in agreement) and Northline Grocers (a Prime project whose stage conflicts with Pipedrive, and a bill analysis). PG&E is the utility on the garage. Helios is the capital partner, shared to `helios.example`.
+The preview's sample is Concord Energy. Riverside Logistics has the Site Map project, the site, the design, a finished VPP run, a sent proposal, a priced order, and a HubSpot deal in agreement. Northline Grocers has the Prime project whose stage conflicts with Pipedrive, and a bill still in review. Harbor Market is the lead. PG&E is the utility on the garage. Helios is the capital partner, shared to `helios.example`.
 
 ---
 
@@ -359,7 +413,7 @@ Each milestone is shippable on its own. Later ones are not started by this chang
 
 | Milestone | What a person can do when it is done | What it must not do |
 |---|---|---|
-| **M0. Foundation.** This change. | Open `/crm-foundation.html` and walk the sample portfolio, profile, assignment, and a conflict. Read this document. | No rules deploy, no nav entry, no write, no OAuth, no edit to the editor, Prime, or orders. |
+| **M0. Foundation.** This change. | Open `/crm-foundation.html` and walk all four journeys, the assignment drawer, and a stage conflict that returns to the bill. Read this document. | No rules deploy, no nav entry, no write, no OAuth, no edit to the editor, Prime, orders, or the workspace home. |
 | **M1. Read model.** `GET` of accounts and any links that exist. The dry-run report. | Staff can see, for one pilot tenant, which projects have no customer. | No backfill. No picker. |
 | **M2. Party links.** The collection, rules denied to browsers, an audited endpoint, the easy backfill for one pilot. | An order that already has an account shows on that account's list. | No Site Map change. Unassigned projects stay unassigned. |
 | **M3. Optional assignment.** A sibling control on Site Map save, on Prime's create, and on order create. Editor v2 calls the same endpoint. | A rep can attach a customer and a utility while saving. Skipping leaves today's save unchanged. | The drawing payload does not gain a required customer. A failed link call does not fail the save. |
@@ -377,7 +431,7 @@ M0's acceptance is the test file and the preview route. Each later milestone get
 
 The recommendation is the one the foundation is built to. A different answer changes a milestone, not the preview.
 
-1. **What the word portfolio means.** The site register is already Portfolio. Recommendation: leave `portfolio.html` as the sites. The new page is Customers, and each customer has their work on it. The preview is labeled Customer portfolio so the idea is visible without taking the name.
+1. **What the word portfolio means.** The site register is already Portfolio. Recommendation: leave `portfolio.html` as the sites. The new page is Customers, and each customer has their work on it. The preview is labeled Customer portfolio so the idea is visible without taking the name. The stage words through Order match `/workspace-v2` (Customer, Site, Design, Analyze, Propose, Order). Install and Monitor follow that track.
 
 2. **System of record.** Recommendation: Omega owns the company name, the address, the drawing, the capacity, and the cost. The CRM owns nothing until a tenant hands it a field. Stage is the only field both sides may edit, and a double edit waits for a person.
 
@@ -413,7 +467,7 @@ The recommendation is the one the foundation is built to. A different answer cha
 
 ## 10. What this change deliberately does not do
 
-- It does not edit `editor.html`, `omega-prime.html`, `orders.html`, `portfolio.html`, `workspace.html`, or the rail.
+- It does not edit `editor.html`, `omega-prime.html`, `orders.html`, `portfolio.html`, `workspace.html`, `omega-workspace-shell.js`, the rail, or the workspace-home route (`/workspace-v2`).
 - It does not edit `firestore.rules` or `storage.rules`. The collections in §2 are proposed. Adding the `allow read, write: if false` lines is M2, deployed with that endpoint.
 - It does not create a customer, a project, or a token anywhere live.
 - It does not add the preview to `omega-tools.js`. A catalogue entry would put it on every tenant's marketplace.

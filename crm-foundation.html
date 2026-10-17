@@ -8,27 +8,32 @@
 <link rel="license" href="/terms.html">
 <style>
   :root {
-    --page:#F5F4F0; --paper:#fff; --ink:#14171A; --ink2:#556B82; --ink3:#86A0A9;
-    --line:#E4E8EC; --rail:#0B2A3D; --rail-ink:#C9D6E2; --rail-dim:#7F97AA; --rail-on:#1264A3;
-    --brand:#2B5FA8; --teal:#2A8CA3; --teal-soft:#E2F4F8; --green:#2E7D5B; --green-soft:#E3F2EA;
-    --amber:#B8791B; --amber-soft:#FFF6E5; --coral:#EE5A4F; --coral-soft:#FDECEA;
-    --shadow:0 1px 2px rgba(20,23,26,.05), 0 8px 24px rgba(20,23,26,.06);
+    --ows-page:#F5F4F0; --ows-paper:#FFFFFF; --ows-ink:#14171A; --ows-ink2:#556B82; --ows-ink3:#86A0A9;
+    --ows-line:#E4E8EC; --ows-line2:#DCD9D2; --ows-sunk:#F1FAFC;
+    --ows-rail:#0B2A3D; --ows-rail-ink:#C9D6E2; --ows-rail-dim:#7F97AA; --ows-rail-on:#1264A3;
+    --ows-brand:#2B5FA8; --ows-brand-soft:#E7EEF9; --ows-brand-ink:#1E4A8C;
+    --ows-teal:#3FAFC6; --ows-teal-d:#2A8CA3; --ows-teal-soft:#E2F4F8;
+    --ows-coral:#EE5A4F; --ows-green:#2E7D5B; --ows-green-soft:#E3F2EA;
+    --ows-amber:#B8791B; --ows-amber-soft:#FFF6E5;
+    --ows-shadow:0 1px 2px rgba(20,23,26,.05), 0 6px 20px rgba(20,23,26,.06); --ows-r:14px;
   }
   * { box-sizing:border-box; }
-  html, body { margin:0; height:100%; }
+  html, body { margin:0; }
   body {
-    color:var(--ink); background-color:var(--page);
-    background-image:linear-gradient(rgba(43,95,168,.08) 1px, transparent 1px), linear-gradient(90deg, rgba(43,95,168,.08) 1px, transparent 1px);
-    background-size:24px 24px; background-attachment:fixed;
-    font:14px/1.45 "Segoe UI", system-ui, sans-serif;
+    color:var(--ows-ink); background-color:var(--ows-page);
+    background-image:linear-gradient(rgba(43,95,168,.09) 1px, transparent 1px), linear-gradient(90deg, rgba(43,95,168,.09) 1px, transparent 1px), linear-gradient(rgba(43,95,168,.04) 1px, transparent 1px), linear-gradient(90deg, rgba(43,95,168,.04) 1px, transparent 1px);
+    background-size:120px 120px, 120px 120px, 24px 24px, 24px 24px; background-attachment:fixed;
+    font:14px/1.45 "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   }
   button, input, select { font:inherit; color:inherit; }
   button { cursor:pointer; }
-  :focus-visible { outline:2px solid var(--teal); outline-offset:2px; }
-  .app { display:grid; grid-template-columns:224px minmax(0,1fr); min-height:100vh; }
+  :focus-visible { outline:2px solid var(--ows-teal); outline-offset:2px; }
+  .app { display:grid; grid-template-columns:232px minmax(0,1fr); min-height:100vh; }
   .rail {
-    background:var(--rail); color:var(--rail-ink); padding:18px 12px 16px;
+    background-color:var(--ows-rail); color:var(--ows-rail-ink); padding:18px 12px 16px;
     display:flex; flex-direction:column; gap:4px; position:sticky; top:0; height:100vh;
+    background-image:linear-gradient(rgba(255,255,255,.055) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.055) 1px, transparent 1px);
+    background-size:44px 44px;
   }
   .brand { display:flex; gap:10px; align-items:center; color:#fff; padding:4px 8px 14px; }
   .mark {
@@ -36,98 +41,91 @@
     background:#071018; color:#2FE3C8; font-weight:700; box-shadow:inset 0 0 0 1px rgba(53,198,244,.35);
   }
   .brand b { display:block; font-size:15px; }
-  .brand small, .me small { color:var(--rail-dim); font-size:11px; }
-  .kicker { margin:12px 8px 4px; font:11px/1 ui-monospace, monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--rail-dim); }
+  .brand small, .me small { color:var(--ows-rail-dim); font-size:11px; }
+  .kicker { margin:12px 8px 4px; font:11px/1 ui-monospace, monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--ows-rail-dim); }
   .navbtn, .custbtn {
     display:flex; align-items:center; gap:8px; width:100%; text-align:left;
-    background:transparent; border:0; color:var(--rail-ink); border-radius:9px; padding:8px 10px;
+    background:transparent; border:0; color:var(--ows-rail-ink); border-radius:9px; padding:8px 10px;
   }
-  .navbtn.active, .custbtn.active { background:var(--rail-on); color:#fff; }
+  .navbtn.active, .custbtn.active { background:var(--ows-rail-on); color:#fff; }
   .navbtn:hover, .custbtn:hover { background:rgba(255,255,255,.06); }
   .custbtn span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-  .dot { width:8px; height:8px; border-radius:50%; background:var(--rail-dim); flex:none; }
-  .dot.conflict { background:var(--coral); }
-  .dot.synced { background:#3DDC97; }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--ows-rail-dim); flex:none; }
+  .dot.now { background:var(--ows-teal); }
+  .dot.conflict { background:var(--ows-coral); }
   .spacer { flex:1; }
   .me { display:flex; gap:8px; align-items:center; padding:10px 8px 0; border-top:1px solid rgba(255,255,255,.08); margin-top:8px; }
-  .av { width:28px; height:28px; border-radius:50%; background:var(--teal); color:#fff; display:grid; place-items:center; font-size:12px; font-weight:700; flex:none; }
-  .main { min-width:0; display:flex; flex-direction:column; }
-  .banner {
-    background:var(--amber-soft); color:#6d4a10; border-bottom:1px solid #f0e0c2;
-    padding:10px 22px; font-size:13px;
-  }
-  .banner b { font-weight:650; }
-  .view { padding:22px 22px 64px; max-width:1080px; }
-  .toprow { display:flex; justify-content:space-between; gap:16px; align-items:flex-end; margin-bottom:16px; }
+  .av { width:28px; height:28px; border-radius:50%; background:var(--ows-teal-d); color:#fff; display:grid; place-items:center; font-size:12px; font-weight:700; flex:none; }
+  .main { min-width:0; }
+  .banner { background:var(--ows-amber-soft); color:#6d4a10; border-bottom:1px solid #f0e0c2; padding:10px 22px; font-size:13px; display:flex; gap:12px; justify-content:space-between; align-items:center; }
+  .banner p { margin:0; }
+  .switch { display:flex; gap:8px; flex-wrap:wrap; padding:14px 22px 0; }
+  .switch button { border-radius:999px; border:1px solid var(--ows-line2); background:var(--ows-paper); padding:6px 12px; }
+  .switch button.on { background:var(--ows-rail); color:#fff; border-color:var(--ows-rail); }
+  .switch button small { display:block; font-size:11px; font-weight:500; opacity:.8; }
+  .view { padding:18px 22px 72px; max-width:1080px; }
   h1 { font-size:26px; line-height:1.15; margin:0 0 4px; letter-spacing:-.02em; }
-  .sub { color:var(--ink2); margin:0; }
-  .search {
-    background:var(--paper); border:1px solid var(--line); border-radius:10px; padding:8px 12px; min-width:220px;
-  }
-  .filters { display:flex; gap:8px; margin:0 0 14px; flex-wrap:wrap; }
-  .chip, .tab, .btn, .ghost {
-    border-radius:999px; border:1px solid var(--line); background:var(--paper); padding:6px 12px;
-  }
-  .chip.on, .tab.on { background:var(--rail); color:#fff; border-color:var(--rail); }
+  h2 { margin:0; font-size:16px; }
+  .sub { color:var(--ows-ink2); margin:0; }
+  .toprow { display:flex; justify-content:space-between; gap:16px; align-items:flex-end; margin-bottom:14px; }
+  .search { background:var(--ows-paper); border:1px solid var(--ows-line); border-radius:10px; padding:8px 12px; min-width:220px; }
   .grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(300px, 1fr)); gap:14px; }
-  .card, .panel {
-    background:var(--paper); border:1px solid var(--line); border-radius:14px; box-shadow:var(--shadow);
-  }
-  .card { padding:16px; text-align:left; width:100%; }
-  .card:hover { border-color:#c5d4ea; }
-  .card h2, .work h2 { margin:0; font-size:16px; }
-  .meta { color:var(--ink2); font-size:13px; margin-top:4px; }
-  .stats { display:flex; gap:14px; margin-top:12px; color:var(--ink2); font-size:12px; }
-  .stats b { display:block; color:var(--ink); font-size:16px; }
-  .pills { display:flex; gap:6px; flex-wrap:wrap; margin-top:12px; }
-  .pill { font-size:12px; padding:3px 8px; border-radius:999px; background:#F1F4F8; color:var(--ink2); }
-  .pill.live { background:var(--green-soft); color:var(--green); }
-  .pill.warn { background:var(--amber-soft); color:var(--amber); }
-  .pill.bad { background:var(--coral-soft); color:#9d2c24; }
-  .pill.info { background:var(--teal-soft); color:var(--teal); }
-  .back { background:none; border:0; color:var(--brand); padding:0 0 8px; }
-  .head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
-  .tabs { display:flex; gap:8px; flex-wrap:wrap; margin:16px 0; }
-  .work { padding:14px 16px; }
-  .work + .work { margin-top:10px; }
-  .workhead { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; }
-  .parties { display:flex; gap:6px; flex-wrap:wrap; margin-top:10px; }
-  .party { font-size:12px; background:var(--page); border-radius:8px; padding:4px 8px; }
-  .party b { font-weight:600; }
-  .btn.primary { background:var(--brand); color:#fff; border-color:var(--brand); }
-  .person, .event, .doc { display:flex; justify-content:space-between; gap:12px; padding:12px 0; border-bottom:1px solid var(--line); }
-  .person:last-child, .event:last-child, .doc:last-child { border-bottom:0; }
-  .panel { padding:6px 16px; }
+  .card, .panel { background:var(--ows-paper); border:1px solid var(--ows-line); border-radius:var(--ows-r); box-shadow:var(--ows-shadow); }
+  .card { padding:16px; }
+  .linkish { background:none; border:0; padding:0; color:var(--ows-brand-ink); font-weight:650; font-size:16px; text-align:left; }
+  .meta { color:var(--ows-ink2); font-size:13px; margin-top:4px; }
+  .steps { display:flex; gap:0; list-style:none; padding:0; margin:14px 0 0; overflow-x:auto; }
+  .steps li { flex:1; min-width:68px; }
+  .steps button { width:100%; background:transparent; border:0; border-top:3px solid var(--ows-line); padding:8px 6px 2px; text-align:left; font-size:11px; font-weight:650; color:var(--ows-ink3); }
+  .steps li.done button { border-top-color:var(--ows-green); color:var(--ows-green); }
+  .steps li.now button { border-top-color:var(--ows-teal); color:var(--ows-teal-d); }
+  .steps li.on button { color:var(--ows-ink); }
+  .next { margin-top:12px; display:flex; justify-content:space-between; gap:10px; align-items:center; }
+  .next b { font-size:13px; }
+  .btn, .ghost { border-radius:999px; border:1px solid var(--ows-line); background:var(--ows-paper); padding:7px 12px; }
+  .btn.primary { background:var(--ows-brand); color:#fff; border-color:var(--ows-brand); }
+  .btn.slim { background:transparent; border:0; color:var(--ows-brand); padding:0; }
+  .back { background:none; border:0; color:var(--ows-brand); padding:0 0 10px; }
+  .journey { padding:18px; margin-bottom:14px; }
+  .eyebrow { font:600 11px ui-monospace, monospace; letter-spacing:.08em; text-transform:uppercase; color:var(--ows-teal-d); }
+  .journey h2 { font-size:20px; margin:6px 0; }
+  .journey p { margin:0 0 12px; color:var(--ows-ink2); }
+  .deed { display:flex; flex-direction:column; gap:8px; max-width:420px; }
+  label { font-size:12px; color:var(--ows-ink2); }
+  .field, select { width:100%; border:1px solid var(--ows-line); border-radius:10px; padding:8px 10px; background:#fff; }
+  .pills, .parties, .resolve { display:flex; gap:6px; flex-wrap:wrap; }
+  .pills { margin-top:10px; }
+  .pill { font-size:12px; padding:3px 8px; border-radius:999px; background:#F1F4F8; color:var(--ows-ink2); }
+  .pill.live { background:var(--ows-green-soft); color:var(--ows-green); }
+  .pill.warn { background:var(--ows-amber-soft); color:var(--ows-amber); }
+  .pill.bad { background:#FDECEA; color:#9d2c24; }
+  .pill.info { background:var(--ows-teal-soft); color:var(--ows-teal-d); }
+  .work { margin-top:10px; }
+  .workhead, .person, .event { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .party { font-size:12px; background:var(--ows-page); border-radius:8px; padding:4px 8px; }
+  .person, .event { padding:12px 0; border-bottom:1px solid var(--ows-line); }
+  .person:last-child, .event:last-child { border-bottom:0; }
+  .panel { padding:4px 16px; }
   table { width:100%; border-collapse:collapse; font-size:13px; }
-  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--line); vertical-align:top; }
-  th { color:var(--ink3); font-weight:600; font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
-  .drawer-back {
-    position:fixed; inset:0; background:rgba(11,42,61,.35); display:flex; justify-content:flex-end; z-index:20;
-  }
-  .drawer {
-    width:min(440px, 100%); background:var(--paper); height:100%; overflow:auto; padding:22px;
-    box-shadow:-12px 0 40px rgba(11,42,61,.18);
-  }
-  label { display:block; font-size:12px; color:var(--ink2); margin:12px 0 4px; }
-  select, .field {
-    width:100%; border:1px solid var(--line); border-radius:10px; padding:8px 10px; background:#fff;
-  }
-  pre {
-    background:#0B2A3D; color:#d7e6f5; border-radius:10px; padding:12px; overflow:auto; font-size:12px; line-height:1.4;
-  }
-  .note { background:var(--teal-soft); border-radius:10px; padding:10px 12px; color:#14586a; margin-top:12px; }
-  .err { background:var(--coral-soft); color:#9d2c24; border-radius:10px; padding:10px 12px; margin-top:12px; }
-  .empty { padding:28px; text-align:center; color:var(--ink2); }
-  .resolve { display:flex; gap:8px; flex-wrap:wrap; margin-top:6px; }
+  th, td { text-align:left; padding:8px 6px; border-bottom:1px solid var(--ows-line); vertical-align:top; }
+  th { color:var(--ows-ink3); font-weight:600; font-size:11px; letter-spacing:.04em; text-transform:uppercase; }
+  .note { background:var(--ows-teal-soft); border-radius:10px; padding:10px 12px; color:#14586a; margin:12px 0; }
+  .err { background:#FDECEA; color:#9d2c24; border-radius:10px; padding:10px 12px; margin-top:12px; }
+  .empty { padding:8px 0 12px; color:var(--ows-ink2); }
+  .section { margin-top:18px; }
+  .drawer-back { position:fixed; inset:0; background:rgba(11,42,61,.35); display:flex; justify-content:flex-end; z-index:20; }
+  .drawer { width:min(440px, 100%); background:var(--ows-paper); height:100%; overflow:auto; padding:22px; box-shadow:-12px 0 40px rgba(11,42,61,.18); }
   @media (max-width: 860px) {
     .app { grid-template-columns:1fr; }
     .rail { position:relative; height:auto; flex-direction:row; flex-wrap:wrap; align-items:center; }
     .brand { padding-bottom:0; }
     .kicker, .spacer, .me { display:none; }
     .navbtn, .custbtn { width:auto; }
-    .view { padding:16px 14px 48px; }
-    .toprow, .head { flex-direction:column; align-items:stretch; }
+    .banner, .view, .switch { padding-left:14px; padding-right:14px; }
+    .banner { flex-direction:column; align-items:stretch; }
+    .toprow { flex-direction:column; align-items:stretch; }
     .search { width:100%; }
+    .next { flex-direction:column; align-items:stretch; }
   }
 </style>
 </head>
@@ -136,95 +134,168 @@
   <aside class="rail" id="rail"></aside>
   <div class="main">
     <div class="banner" id="banner"></div>
+    <div class="switch" id="switch">
+      <button type="button" data-actor="installer" data-act="actor">Sales<small>Alex Chen</small></button>
+      <button type="button" data-actor="partner" data-act="actor">Partner<small>Helen Cho</small></button>
+      <button type="button" data-actor="ops" data-act="actor">Operations<small>Riley Brooks</small></button>
+      <button type="button" data-actor="customer" data-act="actor">Customer<small>Jordan Blake</small></button>
+    </div>
     <div class="view" id="view"></div>
   </div>
 </div>
 <div id="drawer"></div>
 <script src="/omega-crm-foundation.js"></script>
 <script>
-/* Preview only. Sample data from OmegaCrmFoundation.sample(). No Firebase, no /api call. */
+/* Preview only. Sample data from OmegaCrmFoundation.sample(). No sign-in and no network. */
 (function () {
   'use strict';
   var F = window.OmegaCrmFoundation;
   var model = F.sample();
-  var state = { q: '', party: 'customers', tab: 'work', assign: null, notice: '', error: '', pick: '', links: model.links.slice() };
+  var state = { links: model.links.slice(), q: '', notice: '', error: '', assign: null, pick: '' };
 
   function esc(v) {
     return String(v == null ? '' : v).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
   }
-  function pill(status) {
-    if (status === 'conflict') return '<span class="pill bad">Needs a decision</span>';
-    if (status === 'synced') return '<span class="pill live">Synced</span>';
-    if (status === 'kept') return '<span class="pill info">Kept from Omega</span>';
-    if (status === 'taken') return '<span class="pill warn">Taken from CRM</span>';
-    if (status === 'same') return '<span class="pill">In agreement</span>';
-    return '<span class="pill">Not connected</span>';
+  function actorMeta(key) {
+    for (var i = 0; i < F.ACTORS.length; i++) if (F.ACTORS[i].key === key) return F.ACTORS[i];
+    return F.ACTORS[0];
   }
-  function accountIdFromHash() {
-    var m = /^#\/account\/([A-Za-z0-9_-]+)/.exec(location.hash || '');
-    return m ? m[1] : '';
+  function initials(name) {
+    var p = String(name || '').split(' ');
+    return ((p[0] || ' ').charAt(0) + (p[1] || '').charAt(0)).toUpperCase();
   }
-  function tabFromHash() {
-    var m = /^#\/account\/[A-Za-z0-9_-]+\/([a-z]+)/.exec(location.hash || '');
-    return m ? m[1] : 'work';
+  function route() {
+    var m = /^#\/as\/(installer|partner|ops|customer)(?:\/account\/([A-Za-z0-9_-]+)(?:\/(stage|sync)(?:\/([a-z]+))?(?:\/(do))?)?)?$/.exec(location.hash || '');
+    if (!m) return { actor: 'installer', accountId: '', section: '', stage: '', doing: false };
+    return { actor: m[1], accountId: m[2] || '', section: m[3] || '', stage: m[4] || '', doing: m[5] === 'do' };
   }
-  function go(hash) { location.hash = hash; }
-  function rows() { return F.portfolioRows(model, state.links); }
-  function findAccount(id) {
-    for (var i = 0; i < model.accounts.length; i++) if (model.accounts[i].id === id) return model.accounts[i];
+  function go(hash) { if (location.hash !== hash) location.hash = hash; else render(); }
+  function visible(actor) { return F.visibleAccounts(model, state.links, actor); }
+  function allowed(actor, id) {
+    var rows = visible(actor);
+    for (var i = 0; i < rows.length; i++) if (rows[i].account.id === id) return rows[i];
     return null;
   }
+  function stageWord(stage, actor) { return actor === 'customer' ? stage.customerLabel : stage.label; }
+  function hashStage(actor, id, key) { return '#/as/' + actor + '/account/' + id + '/stage/' + key; }
 
-  function renderRail() {
-    var id = accountIdFromHash();
-    var list = rows();
-    var html = '<div class="brand"><div class="mark">Ω</div><div><b>Customers</b><small>' + esc(model.org.name) + '</small></div></div>';
-    html += '<button class="navbtn' + (id ? '' : ' active') + '" data-act="portfolio">Portfolio</button>';
-    html += '<div class="kicker">This preview</div>';
-    for (var i = 0; i < list.length; i++) {
-      var a = list[i].account;
-      html += '<button class="custbtn' + (a.id === id ? ' active' : '') + '" data-act="open" data-id="' + esc(a.id) + '"><i class="dot ' + esc(list[i].sync) + '"></i><span>' + esc(a.name) + '</span></button>';
-    }
-    html += '<div class="spacer"></div><div class="me"><div class="av">AC</div><div><b>' + esc(model.viewer.name) + '</b><small>Preview only</small></div></div>';
-    document.getElementById('rail').innerHTML = html;
+  function resetSample() {
+    model = F.sample();
+    state.links = model.links.slice();
+    state.notice = '';
+    state.error = '';
+    state.assign = null;
+    state.pick = '';
+    state.q = '';
   }
 
   function renderBanner() {
-    document.getElementById('banner').innerHTML = '<b>CRM foundation preview.</b> Sample installer, ' + esc(model.org.name) + '. This route is not in the product navigation. It does not sign in, and nothing you change here is saved.';
+    document.getElementById('banner').innerHTML = '<p><b>CRM foundation preview.</b> Sample journey only. This route is not in the product navigation. It does not sign in, and nothing you change here is saved. The workspace home is a separate page.</p><button class="btn" type="button" data-act="restore">Restore the sample</button>';
+  }
+  function renderSwitch(actor) {
+    var buttons = document.getElementById('switch').getElementsByTagName('button');
+    for (var i = 0; i < buttons.length; i++) {
+      buttons[i].className = buttons[i].getAttribute('data-actor') === actor ? 'on' : '';
+    }
+  }
+  function renderRail(actor, id) {
+    var who = actorMeta(actor);
+    var org = (model.actors[actor] && model.actors[actor].org) || model.org.name;
+    var rows = visible(actor);
+    var html = '<div class="brand"><div class="mark">Ω</div><div><b>Customers</b><small>' + esc(org) + '</small></div></div>';
+    html += '<button class="navbtn' + (id ? '' : ' active') + '" type="button" data-act="go" data-hash="#/as/' + actor + '">Portfolio</button>';
+    html += '<div class="kicker">' + esc(who.label) + '</div>';
+    for (var i = 0; i < rows.length; i++) {
+      var a = rows[i].account;
+      var dot = rows[i].sync === 'conflict' && F.canSee(actor, 'sync') ? 'conflict' : 'now';
+      html += '<button class="custbtn' + (a.id === id ? ' active' : '') + '" type="button" data-act="go" data-hash="#/as/' + actor + '/account/' + esc(a.id) + '"><i class="dot ' + dot + '"></i><span>' + esc(a.name) + '</span></button>';
+    }
+    html += '<div class="spacer"></div><div class="me"><div class="av">' + esc(initials(who.person)) + '</div><div><b>' + esc(who.person) + '</b><small>' + esc(who.label) + ' · preview</small></div></div>';
+    document.getElementById('rail').innerHTML = html;
   }
 
-  function renderPortfolio() {
+  function stepper(actor, id, active) {
+    var prog = F.progress(model, state.links, id);
+    var html = '<ol class="steps">';
+    for (var i = 0; i < F.STAGES.length; i++) {
+      var st = F.STAGES[i];
+      var cls = prog.done[st.key] === true ? 'done' : (prog.current === st.key ? 'now' : 'ahead');
+      if (st.key === active) cls += ' on';
+      html += '<li class="' + cls + '"><button type="button" data-act="go" data-hash="' + hashStage(actor, id, st.key) + '">' + esc(stageWord(st, actor)) + '</button></li>';
+    }
+    html += '</ol>';
+    return html;
+  }
+
+  function deedForm(view, account) {
+    var d = view.deed;
+    var html = '<form class="deed" data-act="deed" data-deed="' + esc(d) + '">';
+    if (d === 'contact') {
+      html += '<label for="person">Person</label><input class="field" id="person" value="Sam Rivera">';
+    } else if (d === 'project') {
+      html += '<label for="pname">Project</label><input class="field" id="pname" value="' + esc(account.name) + ' store">';
+      html += '<label for="addr">Address</label><input class="field" id="addr" value="88 Market St, San Jose, CA 95113">';
+    } else if (d === 'followup' || d === 'question' || d === 'check') {
+      var seed = d === 'question' ? 'Which day will the crew arrive?' : (d === 'check' ? 'Output is in the expected band.' : 'Walked the proposal with them.');
+      html += '<label for="note">Note</label><input class="field" id="note" value="' + esc(seed) + '">';
+    } else if (d === 'week') {
+      html += '<label for="week">Install week</label><input class="field" id="week" value="October 27">';
+    }
+    html += '<div><button class="btn primary" type="submit">' + esc(view.action) + '</button></div></form>';
+    return html;
+  }
+
+  function journeyCard(view, account, doing) {
+    var html = '<section class="card journey"><div class="eyebrow">' + (view.state === 'now' ? 'Open step' : (view.state === 'done' ? 'Already done' : 'Later')) + '</div>';
+    html += '<h2>' + esc(view.title) + '</h2><p>' + esc(view.body) + '</p>';
+    if (doing && view.deed) html += deedForm(view, account);
+    else html += '<button class="btn primary" type="button" data-act="go" data-hash="' + esc(view.hash) + '">' + esc(view.action) + '</button>';
+    html += '</section>';
+    return html;
+  }
+
+  function heads(actor) {
+    if (actor === 'partner') return ['Shared with you', 'Only the project a customer shared with Helios. Other accounts, the CRM connection, and the cost stay with Concord.'];
+    if (actor === 'ops') return ['What needs operations', 'A lead and a bill still belong to sales. A priced order is yours once the customer accepts.'];
+    if (actor === 'customer') return ['Your project', 'From the proposal Concord sent through the weeks the system is watched.'];
+    return ['Customer portfolio', 'From the first note to a system that is installed and watched. The button on each account is the open step.'];
+  }
+
+  function renderPortfolio(actor) {
+    var copy = heads(actor);
     var q = state.q.toLowerCase();
-    var list = rows().filter(function (r) {
-      if (state.party === 'conflict' && r.sync !== 'conflict') return false;
+    var rows = visible(actor).filter(function (r) {
       if (!q) return true;
       return (r.account.name + ' ' + r.account.city).toLowerCase().indexOf(q) >= 0;
     });
-    var html = '<div class="toprow"><div><h1>Customer portfolio</h1><p class="sub">Each customer keeps the projects, sites, analyses, proposals, and orders already created for them.</p></div>';
-    html += '<input class="search" id="q" type="search" placeholder="Search customers" value="' + esc(state.q) + '" aria-label="Search customers"></div>';
-    html += '<div class="filters">';
-    html += '<button class="chip' + (state.party === 'customers' ? ' on' : '') + '" data-act="filter" data-filter="customers">Customers</button>';
-    html += '<button class="chip' + (state.party === 'conflict' ? ' on' : '') + '" data-act="filter" data-filter="conflict">Sync needs a decision</button>';
+    var html = '<div class="toprow"><div><h1>' + esc(copy[0]) + '</h1><p class="sub">' + esc(copy[1]) + '</p></div>';
+    if (F.canSee(actor, 'book')) html += '<input class="search" id="q" type="search" placeholder="Search customers" value="' + esc(state.q) + '" aria-label="Search customers">';
     html += '</div>';
-    if (!list.length) {
-      html += '<div class="card empty">No customer matches that view.</div>';
-    } else {
+    if (!rows.length) html += '<div class="card empty">Nothing is on this list.</div>';
+    else {
       html += '<div class="grid">';
-      for (var i = 0; i < list.length; i++) {
-        var r = list[i], a = r.account;
-        html += '<button class="card" data-act="open" data-id="' + esc(a.id) + '">';
-        html += '<h2>' + esc(a.name) + '</h2><div class="meta">' + esc(a.city) + (a.domain ? ' · ' + esc(a.domain) : '') + '</div>';
-        html += '<div class="stats"><div><b>' + r.projects + '</b>projects</div><div><b>' + r.orders + '</b>orders</div><div><b>' + r.analyses + '</b>analyses</div><div><b>' + r.open + '</b>open</div></div>';
-        html += '<div class="pills">' + pill(r.sync) + '<span class="pill">' + esc(a.status) + '</span></div></button>';
-      }
+      for (var i = 0; i < rows.length; i++) html += accountCard(actor, rows[i]);
       html += '</div>';
     }
     document.getElementById('view').innerHTML = html;
   }
 
-  function workCards(profile) {
+  function accountCard(actor, row) {
+    var a = row.account;
+    var next = F.nextAction(model, state.links, a.id, actor);
+    var html = '<article class="card"><button class="linkish" type="button" data-act="go" data-hash="#/as/' + actor + '/account/' + esc(a.id) + '">' + esc(a.name) + '</button>';
+    html += '<div class="meta">' + esc(a.city || 'No city yet') + (a.status === 'lead' ? ' · Lead' : '') + '</div>';
+    html += stepper(actor, a.id, next.stage);
+    html += '<div class="next"><div><b>' + esc(next.currentLabel) + '</b><div class="meta">' + esc(next.title) + '</div></div>';
+    html += '<button class="btn primary" type="button" data-act="go" data-hash="' + esc(next.hash) + '">' + esc(next.action) + '</button></div>';
+    if (F.canSee(actor, 'sync') && row.sync === 'conflict') html += '<div class="pills"><span class="pill bad">CRM stage needs a decision</span></div>';
+    html += '</article>';
+    return html;
+  }
+
+  function workCards(actor, profile) {
     var html = '';
     var any = false;
     for (var i = 0; i < profile.work.length; i++) {
@@ -234,94 +305,99 @@
       var o = item.object;
       html += '<article class="card work"><div class="workhead"><div><h2>' + esc(o.name) + '</h2>';
       html += '<div class="meta">' + esc(F.sourceLabel(o.source)) + (o.address ? ' · ' + esc(o.address) : '') + '</div></div>';
-      html += '<button class="btn" data-act="assign" data-id="' + esc(o.id) + '">Assign</button></div>';
-      html += '<div class="pills"><span class="pill info">' + esc(o.kind) + '</span><span class="pill">' + esc(o.stage) + '</span>';
+      if (actor === 'installer' || actor === 'ops') html += '<button class="btn" type="button" data-act="assign" data-id="' + esc(o.id) + '">Add a party</button>';
+      html += '</div><div class="pills"><span class="pill info">' + esc(o.kind) + '</span><span class="pill">' + esc(o.stage) + '</span>';
       if (o.kw) html += '<span class="pill">' + esc(o.kw) + ' kW</span>';
       if (o.kwh) html += '<span class="pill">' + esc(o.kwh) + ' kWh</span>';
-      if (o.capex) html += '<span class="pill">' + esc(o.capex) + '</span>';
-      html += '</div><div class="parties">';
+      if (o.capex && F.canSee(actor, 'capex')) html += '<span class="pill">' + esc(o.capex) + '</span>';
+      html += '</div><div class="parties" style="margin-top:10px">';
       for (var p = 0; p < item.parties.length; p++) {
         var party = item.parties[p];
         var who = party.account ? party.account.name : 'Unknown account';
-        if (party.contact) who += ' · ' + party.contact.name;
         html += '<span class="party"><b>' + esc(F.roleLabel(party.role)) + '.</b> ' + esc(who) + '</span>';
       }
       html += '</div></article>';
     }
-    if (!any) html = '<div class="card empty">Nothing is attached to this customer yet.</div>';
+    if (!any) html = '<p class="empty">No project yet. The open step above is how one gets held.</p>';
     return html;
   }
 
-  function renderProfile(id) {
-    var profile = F.profileOf(model, state.links, id);
-    if (!profile) {
-      document.getElementById('view').innerHTML = '<div class="card empty">That customer is not in the sample.</div>';
-      return;
-    }
-    var a = profile.account;
-    var tabs = [['work', 'Work'], ['people', 'People'], ['timeline', 'Timeline'], ['documents', 'Documents'], ['sync', 'CRM sync']];
-    var html = '<button class="back" data-act="portfolio">← All customers</button>';
-    html += '<div class="head"><div><h1>' + esc(a.name) + '</h1><p class="sub">' + esc(a.city) + (a.domain ? ' · ' + esc(a.domain) : '') + (a.owner ? ' · Owner ' + esc(a.owner) : '') + '</p></div>';
-    html += '<div class="pills">' + pill(profile.sync.status) + '<span class="pill live">' + esc(a.status) + '</span></div></div>';
-    html += '<div class="tabs">';
-    for (var t = 0; t < tabs.length; t++) {
-      html += '<button class="tab' + (state.tab === tabs[t][0] ? ' on' : '') + '" data-act="tab" data-tab="' + tabs[t][0] + '">' + tabs[t][1] + '</button>';
-    }
-    html += '</div>';
-    if (state.tab === 'work') html += workCards(profile);
-    else if (state.tab === 'people') html += renderPeople(profile);
-    else if (state.tab === 'timeline') html += renderTimeline(profile);
-    else if (state.tab === 'documents') html += renderDocs(profile);
-    else html += renderSync(profile);
-    document.getElementById('view').innerHTML = html;
-  }
-
-  function renderPeople(profile) {
-    if (!profile.contacts.length) return '<div class="card empty">No people on this account.</div>';
+  function peopleBlock(profile) {
+    if (!profile.contacts.length) return '<p class="empty">No one on the account yet.</p>';
     var html = '<div class="panel">';
     for (var i = 0; i < profile.contacts.length; i++) {
       var c = profile.contacts[i];
-      html += '<div class="person"><div><b>' + esc(c.name) + '</b><div class="meta">' + esc(c.title) + ' · ' + esc(c.email) + '</div></div>';
-      html += '<div>' + (c.signsIn ? '<span class="pill live">Signs in to the portal</span>' : '<span class="pill">Contact only</span>') + '</div></div>';
+      html += '<div class="person"><div><b>' + esc(c.name) + '</b><div class="meta">' + esc(c.title || 'Contact') + (c.email ? ' · ' + esc(c.email) : '') + '</div></div></div>';
     }
-    html += '</div>';
-    return html;
+    return html + '</div>';
   }
 
-  function renderTimeline(profile) {
-    if (!profile.activity.length) return '<div class="card empty">No activity in the sample.</div>';
+  function activityBlock(profile) {
+    if (!profile.activity.length) return '';
     var html = '<div class="panel">';
-    for (var i = 0; i < profile.activity.length; i++) {
+    var n = Math.min(profile.activity.length, 4);
+    for (var i = 0; i < n; i++) {
       var ev = profile.activity[i];
-      html += '<div class="event"><div><b>' + esc(ev.subject) + '</b><div class="meta">' + esc(ev.type) + ' · ' + esc(ev.at) + ' · ' + esc(ev.by) + '</div></div>';
-      html += ev.open ? '<span class="pill warn">Open</span>' : '<span class="pill">Done</span>';
-      html += '</div>';
+      html += '<div class="event"><div><b>' + esc(ev.subject) + '</b><div class="meta">' + esc(ev.at) + ' · ' + esc(ev.by) + '</div></div></div>';
     }
-    html += '</div><p class="meta">The live timeline is derived from orders, documents, and activity. This preview shows the sample only.</p>';
-    return html;
+    return html + '</div>';
   }
 
-  function renderDocs(profile) {
-    if (!profile.documents.length) return '<div class="card empty">No documents on this account.</div>';
-    var html = '<div class="panel">';
-    for (var i = 0; i < profile.documents.length; i++) {
-      var d = profile.documents[i];
-      html += '<div class="doc"><div><b>' + esc(d.name) + '</b><div class="meta">' + esc(d.stage) + '</div></div><span class="pill">Not downloaded</span></div>';
+  function renderProfile(actor, id, section, stage, doing) {
+    var row = allowed(actor, id);
+    if (!row) {
+      document.getElementById('view').innerHTML = '<section class="card journey"><h2>This account is not on your list</h2><p>You only see the accounts this role is allowed to open.</p><button class="btn primary" type="button" data-act="go" data-hash="#/as/' + actor + '">Back to your list</button></section>';
+      return;
     }
-    html += '</div>';
-    return html;
+    if (section === 'sync') { renderSync(actor, id); return; }
+    var profile = F.profileOf(model, state.links, id);
+    var prog = F.progress(model, state.links, id);
+    var key = stage || prog.current;
+    var view = F.panel(model, state.links, id, actor, key);
+    var a = profile.account;
+    var html = '<button class="back" type="button" data-act="go" data-hash="#/as/' + actor + '">All customers</button>';
+    html += '<h1>' + esc(a.name) + '</h1><p class="sub">' + esc(a.city || '') + (a.owner && actor !== 'customer' ? ' · Owner ' + esc(a.owner) : '') + '</p>';
+    html += stepper(actor, id, key);
+    if (state.notice) html += '<div class="note">' + esc(state.notice) + '</div>';
+    html += journeyCard(view, a, doing);
+    if (F.canSee(actor, 'sync') && profile.sync.bundles.length) {
+      html += '<p class="meta"><button class="btn slim" type="button" data-act="go" data-hash="#/as/' + actor + '/account/' + id + '/sync">' + (profile.sync.status === 'conflict' ? 'Settle the CRM stage' : 'CRM stage, in agreement') + '</button></p>';
+    }
+    html += '<div class="section"><h2>Work</h2>' + workCards(actor, profile) + '</div>';
+    if (F.canSee(actor, 'people')) html += '<div class="section"><h2>People</h2>' + peopleBlock(profile) + '</div>';
+    html += '<div class="section"><h2>Recent</h2>' + activityBlock(profile) + '</div>';
+    document.getElementById('view').innerHTML = html;
   }
 
-  function renderSync(profile) {
+  function providerLabel(key) {
+    for (var i = 0; i < F.PROVIDERS.length; i++) if (F.PROVIDERS[i].key === key) return F.PROVIDERS[i].label;
+    return key;
+  }
+  function pill(status) {
+    if (status === 'conflict') return '<span class="pill bad">Needs a decision</span>';
+    if (status === 'kept') return '<span class="pill info">Kept from Omega</span>';
+    if (status === 'taken') return '<span class="pill warn">Taken from CRM</span>';
+    if (status === 'same') return '<span class="pill">In agreement</span>';
+    return '<span class="pill live">Synced</span>';
+  }
+  function renderSync(actor, id) {
+    if (!F.canSee(actor, 'sync')) {
+      document.getElementById('view').innerHTML = '<section class="card journey"><h2>The CRM connection stays with Concord</h2><p>You can keep moving on the project without it.</p><button class="btn primary" type="button" data-act="go" data-hash="#/as/' + actor + '/account/' + id + '">Back to the project</button></section>';
+      return;
+    }
+    var profile = F.profileOf(model, state.links, id);
+    var next = F.nextAction(model, state.links, id, actor);
+    var html = '<button class="back" type="button" data-act="go" data-hash="#/as/' + actor + '/account/' + id + '">Back to ' + esc(profile.account.name) + '</button>';
+    html += '<h1>CRM stage</h1><p class="sub">Capacity and cost stay with Omega. Only a pipeline stage can be chosen here.</p>';
+    if (state.notice) html += '<div class="note">' + esc(state.notice) + '</div>';
     var bundles = profile.sync.bundles;
-    if (!bundles.length) return '<div class="card empty">No CRM is connected for this customer. Connecting one is a later milestone; this preview does not start an OAuth flow.</div>';
-    var html = '';
+    if (!bundles.length) {
+      html += '<div class="card"><p class="empty">No CRM is connected for this customer. Connecting one is a later milestone.</p>';
+      html += '<button class="btn primary" type="button" data-act="go" data-hash="' + esc(next.hash) + '">' + esc(next.action) + '</button></div>';
+    }
     for (var i = 0; i < bundles.length; i++) {
       var b = bundles[i];
-      var provider = null;
-      for (var p = 0; p < F.PROVIDERS.length; p++) if (F.PROVIDERS[p].key === b.provider) provider = F.PROVIDERS[p];
-      html += '<section class="card work"><div class="workhead"><div><h2>' + esc(provider ? provider.label : b.provider) + '</h2>';
-      html += '<div class="meta">' + esc(b.remoteType || 'record') + ' ' + esc(b.remoteId || '') + '</div></div>' + pill(b.status) + '</div>';
+      html += '<section class="card work"><div class="workhead"><div><h2>' + esc(providerLabel(b.provider)) + '</h2><div class="meta">' + esc(b.remoteType || 'record') + ' ' + esc(b.remoteId || '') + '</div></div>' + pill(b.status) + '</div>';
       if (b.rows && b.rows.length) {
         html += '<table><thead><tr><th>Field</th><th>Omega</th><th>CRM</th><th>Result</th></tr></thead><tbody>';
         for (var r = 0; r < b.rows.length; r++) {
@@ -329,16 +405,15 @@
           html += '<tr><td>' + esc(row.label) + '</td><td>' + esc(row.omega) + '</td><td>' + esc(row.remote) + '</td><td>' + pill(row.status) + '</td></tr>';
         }
         html += '</tbody></table>';
-        if (b.status === 'conflict') {
-          html += '<div class="resolve"><span class="meta">Stage was edited on both sides since the last sync.</span>';
-          html += '<button class="btn" data-act="resolve" data-choice="omega">Keep Omega’s stage</button>';
-          html += '<button class="btn" data-act="resolve" data-choice="remote">Use the CRM’s stage</button></div>';
-          if (state.pick) html += '<div class="note">You chose ' + (state.pick === 'omega' ? 'Omega' : 'the CRM') + '. A later milestone stores that choice. This preview does not write it.</div>';
-        }
       }
+      if (b.status === 'conflict') {
+        html += '<div class="resolve" style="margin-top:12px"><button class="btn primary" type="button" data-act="settle" data-choice="omega" data-object="' + esc(b.objectId) + '">Keep Omega’s stage</button>';
+        html += '<button class="btn" type="button" data-act="settle" data-choice="remote" data-object="' + esc(b.objectId) + '">Use the CRM’s stage</button></div>';
+      }
+      if (next.hash.indexOf('/sync') < 0) html += '<div style="margin-top:14px"><button class="btn primary" type="button" data-act="go" data-hash="' + esc(next.hash) + '">' + esc(next.action) + '</button></div>';
       html += '</section>';
     }
-    return html;
+    document.getElementById('view').innerHTML = html;
   }
 
   function renderDrawer() {
@@ -349,7 +424,7 @@
     if (!object) { host.innerHTML = ''; return; }
     var customer = F.primaryAccount(state.links, object.kind, object.id);
     var html = '<div class="drawer-back" data-act="close"><form class="drawer" data-act="sheet">';
-    html += '<h2>Assign people</h2><p class="sub">' + esc(object.name) + ' · ' + esc(F.sourceLabel(object.source)) + '</p>';
+    html += '<h2>Add a party</h2><p class="sub">' + esc(object.name) + '</p>';
     html += '<label for="role">Role</label><select id="role">';
     for (var r = 0; r < F.ROLES.length; r++) {
       var role = F.ROLES[r];
@@ -357,30 +432,25 @@
       html += '<option value="' + esc(role.key) + '"' + disabled + '>' + esc(role.label) + (disabled ? ' (already set)' : '') + '</option>';
     }
     html += '</select><label for="account">Account</label><select id="account">';
-    for (var a = 0; a < model.accounts.length; a++) {
-      html += '<option value="' + esc(model.accounts[a].id) + '">' + esc(model.accounts[a].name) + '</option>';
-    }
+    for (var a = 0; a < model.accounts.length; a++) html += '<option value="' + esc(model.accounts[a].id) + '">' + esc(model.accounts[a].name) + '</option>';
     html += '</select><label for="contact">Contact</label><select id="contact"><option value="">None</option>';
-    for (var c = 0; c < model.contacts.length; c++) {
-      html += '<option value="' + esc(model.contacts[c].id) + '" data-account="' + esc(model.contacts[c].accountId) + '">' + esc(model.contacts[c].name) + '</option>';
-    }
+    for (var c = 0; c < model.contacts.length; c++) html += '<option value="' + esc(model.contacts[c].id) + '" data-account="' + esc(model.contacts[c].accountId) + '">' + esc(model.contacts[c].name) + '</option>';
     html += '</select><label for="title">Note</label><input class="field" id="title" maxlength="120" placeholder="Optional">';
-    html += '<div style="display:flex;gap:8px;margin-top:16px"><button class="btn primary" type="submit">Hold this assignment</button><button class="btn ghost" type="button" data-act="close">Close</button></div>';
+    html += '<div style="display:flex;gap:8px;margin-top:16px"><button class="btn primary" type="submit">Hold this assignment</button><button class="btn" type="button" data-act="close">Close</button></div>';
     if (state.error) html += '<div class="err">' + esc(state.error) + '</div>';
     if (state.notice) html += '<div class="note">' + esc(state.notice) + '</div>';
     html += '</form></div>';
     host.innerHTML = html;
-    var role = document.getElementById('role');
-    if (role) {
-      var prefer = 'customer';
-      for (var i = 0; i < role.options.length; i++) if (role.options[i].value === 'customer' && role.options[i].disabled) prefer = 'stakeholder';
-      for (var j = 0; j < role.options.length; j++) if (role.options[j].value === prefer) role.selectedIndex = j;
+    var roleEl = document.getElementById('role');
+    if (roleEl) {
+      var prefer = 'stakeholder';
+      for (var j = 0; j < roleEl.options.length; j++) if (roleEl.options[j].value === 'epc' && !roleEl.options[j].disabled) prefer = 'epc';
+      for (var k = 0; k < roleEl.options.length; k++) if (roleEl.options[k].value === prefer) roleEl.selectedIndex = k;
     }
     filterContacts();
     var account = document.getElementById('account');
     if (account) account.addEventListener('change', filterContacts);
   }
-
   function filterContacts() {
     var account = document.getElementById('account');
     var contact = document.getElementById('contact');
@@ -394,16 +464,57 @@
     if (contact.selectedOptions.length && contact.selectedOptions[0].disabled) contact.value = '';
   }
 
+  function applyDeed(actor, id, deed) {
+    var who = actorMeta(actor).person;
+    var prog = F.progress(model, state.links, id);
+    function put(obj) {
+      var added = F.addObject(model, state.links, id, obj);
+      model = added.model;
+      state.links = added.links;
+    }
+    if (deed === 'contact') model = F.addContact(model, id, document.getElementById('person').value);
+    else if (deed === 'project') put({ id: 'p_new' + model.objects.length, kind: 'project', source: 'prime', name: document.getElementById('pname').value, address: document.getElementById('addr').value, stage: 'Candidate', kw: '', kwh: '', capex: '' });
+    else if (deed === 'review') {
+      var bill = null;
+      for (var i = 0; i < prog.objects.length; i++) if (prog.objects[i].kind === 'analysis' && prog.objects[i].stage === 'In review') bill = prog.objects[i];
+      if (bill) model = F.withStage(model, bill.id, 'Complete');
+      else put({ id: 'a_new' + model.objects.length, kind: 'analysis', source: 'bill', name: 'Bill review', address: '', stage: 'Complete' });
+    } else if (deed === 'send') put({ id: 'r_new' + model.objects.length, kind: 'proposal', source: 'sales', name: 'Proposal', address: '', stage: 'Sent' });
+    else if (deed === 'accept') {
+      if (prog.proposal) model = F.withStage(model, prog.proposal.id, 'Accepted');
+      else put({ id: 'r_new' + model.objects.length, kind: 'proposal', source: 'sales', name: 'Proposal', address: '', stage: 'Accepted' });
+    } else if (deed === 'interest') model = F.addActivity(model, id, 'Interested in the capital request', who);
+    else if (deed === 'followup') model = F.addActivity(model, id, 'Follow up: ' + (document.getElementById('note').value || 'Walk the proposal'), who);
+    else if (deed === 'confirm') {
+      if (prog.order) model = F.withStage(model, prog.order.id, 'Accepted');
+      else put({ id: 'o_new' + model.objects.length, kind: 'order', source: 'orders', name: 'Order', address: '', stage: 'Accepted' });
+    } else if (deed === 'week') {
+      model = F.addActivity(model, id, 'Install week of ' + (document.getElementById('week').value || 'October 27'), who);
+      if (prog.order) model = F.withStage(model, prog.order.id, 'Scheduled');
+    } else if (deed === 'installed') {
+      if (prog.order) model = F.withStage(model, prog.order.id, 'Installed');
+    } else if (deed === 'question') model = F.addActivity(model, id, 'Question: ' + (document.getElementById('note').value || 'Which day will the crew arrive?'), who);
+    else if (deed === 'check') model = F.addActivity(model, id, 'This week’s check: ' + (document.getElementById('note').value || 'Output is in the expected band.'), who);
+    state.notice = 'Held in this browser. Reloading restores the sample. Nothing was written.';
+    state.error = '';
+    go(F.nextAction(model, state.links, id, actor).hash);
+  }
+
   function render() {
-    if (location.hash.indexOf('#/account/') === 0) state.tab = tabFromHash();
+    var r = route();
     renderBanner();
-    renderRail();
-    var id = accountIdFromHash();
-    if (id) renderProfile(id);
-    else renderPortfolio();
+    renderSwitch(r.actor);
+    renderRail(r.actor, r.accountId);
+    if (!r.accountId) renderPortfolio(r.actor);
+    else renderProfile(r.actor, r.accountId, r.section, r.stage, r.doing);
     renderDrawer();
     var q = document.getElementById('q');
-    if (q) q.addEventListener('input', function () { state.q = q.value; render(); var again = document.getElementById('q'); if (again) { again.focus(); again.setSelectionRange(again.value.length, again.value.length); } });
+    if (q) q.addEventListener('input', function () {
+      state.q = q.value;
+      render();
+      var again = document.getElementById('q');
+      if (again) { again.focus(); var n = again.value.length; again.setSelectionRange(n, n); }
+    });
   }
 
   document.body.addEventListener('click', function (e) {
@@ -415,40 +526,48 @@
     }
     if (!act) return;
     var name = act.getAttribute('data-act');
-    if (name === 'sheet') return;
+    if (name === 'sheet' || name === 'deed') return;
     if (name === 'close') {
       if (e.target !== act && act.className !== 'drawer-back') return;
-      state.assign = null; state.error = ''; state.notice = ''; render(); return;
+      state.assign = null; state.error = ''; render(); return;
     }
     e.preventDefault();
-    if (name === 'portfolio') { state.pick = ''; go('#/'); return; }
-    if (name === 'open') { state.pick = ''; go('#/account/' + act.getAttribute('data-id') + '/work'); return; }
-    if (name === 'filter') { state.party = act.getAttribute('data-filter'); render(); return; }
-    if (name === 'tab') {
-      var id = accountIdFromHash();
-      state.pick = '';
-      go('#/account/' + id + '/' + act.getAttribute('data-tab'));
+    if (name === 'actor') { state.notice = ''; state.pick = ''; go('#/as/' + act.getAttribute('data-actor')); return; }
+    if (name === 'go') { go(act.getAttribute('data-hash')); return; }
+    if (name === 'restore') {
+      var actor = route().actor;
+      resetSample();
+      go('#/as/' + actor);
       return;
     }
-    if (name === 'assign') {
-      state.assign = act.getAttribute('data-id');
-      state.error = ''; state.notice = '';
+    if (name === 'assign') { state.assign = act.getAttribute('data-id'); state.error = ''; state.notice = ''; render(); return; }
+    if (name === 'settle') {
+      model = F.settleStage(model, act.getAttribute('data-object'), act.getAttribute('data-choice'));
+      state.pick = act.getAttribute('data-choice');
+      state.notice = state.pick === 'omega'
+        ? 'Held in this browser: Omega’s stage. Capacity stays the figure Omega holds. Continue with the bill.'
+        : 'Held in this browser: the CRM’s stage. Capacity stays the figure Omega holds. Continue with the bill.';
       render();
-      return;
     }
-    if (name === 'resolve') { state.pick = act.getAttribute('data-choice'); render(); }
   });
 
   document.body.addEventListener('submit', function (e) {
     var form = e.target;
-    if (!form.getAttribute || form.getAttribute('data-act') !== 'sheet') return;
+    if (!form.getAttribute) return;
+    var kind = form.getAttribute('data-act');
+    if (kind !== 'sheet' && kind !== 'deed') return;
     e.preventDefault();
+    var r = route();
+    if (kind === 'deed') {
+      try { applyDeed(r.actor, r.accountId, form.getAttribute('data-deed')); }
+      catch (err) { state.error = err && err.message ? err.message : 'That step was refused.'; render(); }
+      return;
+    }
     var object = null;
     for (var i = 0; i < model.objects.length; i++) if (model.objects[i].id === state.assign) object = model.objects[i];
     try {
       var applied = F.applyLink(state.links, {
-        kind: object.kind,
-        objectId: object.id,
+        kind: object.kind, objectId: object.id,
         role: document.getElementById('role').value,
         accountId: document.getElementById('account').value,
         contactId: document.getElementById('contact').value,
@@ -456,19 +575,20 @@
       });
       state.links = applied.links;
       state.error = '';
-      state.notice = (applied.created ? 'Held in this browser: ' : 'Updated in this browser: ') + applied.link.role + ' → ' + applied.link.accountId + '. Reloading restores the sample. Nothing was written.';
-    } catch (err) {
-      state.error = err && err.message ? err.message : 'That assignment was refused.';
+      state.notice = 'Held in this browser: ' + applied.link.role + ' → ' + applied.link.accountId + '. Nothing was written.';
+      state.assign = null;
+    } catch (err2) {
+      state.error = err2 && err2.message ? err2.message : 'That assignment was refused.';
     }
     render();
   });
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape' && state.assign) { state.assign = null; state.error = ''; state.notice = ''; render(); }
+    if (e.key === 'Escape' && state.assign) { state.assign = null; state.error = ''; render(); }
   });
-  window.addEventListener('hashchange', render);
-  if (!location.hash) location.hash = '#/';
-  render();
+  window.addEventListener('hashchange', function () { state.q = state.q; render(); });
+  if (!/^#\/as\/(installer|partner|ops|customer)/.test(location.hash || '')) location.hash = '#/as/installer';
+  else render();
 })();
 </script>
 </body>
