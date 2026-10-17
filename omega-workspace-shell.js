@@ -197,13 +197,17 @@
   var state = { current: 'home', opts: {}, ws: null, user: null, list: [] };
 
   function headHtml(cls) { return '<div class="sn-head' + (cls ? ' ' + cls : '') + '"><span class="sn-mark">Ω</span><div><b id="ows-product">' + esc(productName()) + '</b><small id="ows-by">' + (productName() === PRODUCT ? 'by ClearSky' : 'Powered by ClearSky OMEGA') + '</small></div></div>'; }
+  /* opts.nav replaces NAV for this mount only. The live workspace, the
+     projects page and the marketplace do not pass one, so their rail stays
+     the list above. A preview page (workspace-v2) passes its own. */
   function railHtml(opts) {
     var h = opts.head === false ? '' : headHtml('');
-    NAV.forEach(function (n) {
+    var list = opts.nav || NAV;
+    list.forEach(function (n) {
       if (n.section) { h += '<div class="sn-section-label">' + esc(n.section) + '</div>'; return; }
       if (n.divider) { h += '<div class="sn-divider" id="' + n.divider + '"' + (n.hidden ? ' style="display:none"' : '') + '></div><div class="sn-section-label" id="' + n.labelId + '"' + (n.hidden ? ' style="display:none"' : '') + '>' + esc(n.label) + '</div>'; return; }
       if (n.mount) { h += '<div id="' + n.mount + '"></div>'; return; }
-      h += '<a class="sn-item' + (n.key === opts.current ? ' active' : '') + '" data-sn="' + n.sn + '" data-key="' + n.key + '"' + (n.id ? ' id="' + n.id + '"' : '') + ' href="' + esc(n.href) + '"' + (n.hidden ? ' style="display:none"' : '') + '>' + ICON[n.icon] + '<span' + (n.labelSpan ? ' id="' + n.labelSpan + '"' : '') + '>' + esc(n.label) + '</span><span class="sn-count" id="' + (n.count || 'ows-count-' + n.key) + '"></span></a>';
+      h += '<a class="sn-item' + (n.key === opts.current ? ' active' : '') + '" data-sn="' + n.sn + '" data-key="' + n.key + '"' + (n.id ? ' id="' + n.id + '"' : '') + (n.title ? ' title="' + esc(n.title) + '"' : '') + ' href="' + esc(n.href) + '"' + (n.hidden ? ' style="display:none"' : '') + '>' + ICON[n.icon] + '<span' + (n.labelSpan ? ' id="' + n.labelSpan + '"' : '') + '>' + esc(n.label) + '</span><span class="sn-count" id="' + (n.count || 'ows-count-' + n.key) + '"></span></a>';
     });
     if (opts.me === false) return h;
     h += '<div class="sn-spacer"></div><div class="sn-me" id="ows-me"><span class="sn-av" id="ows-me-av">?</span><div><b id="ows-me-name">…</b><small id="ows-me-mail"></small></div><button class="sn-out" id="ows-signout" type="button">Sign out</button></div>';
@@ -212,11 +216,12 @@
   function topHtml(opts) {
     return '<button class="ows-burger" id="ows-burger" type="button" aria-label="Menu" aria-expanded="false">' + ICON.burger + '</button>'
       + '<div class="ows-switch" id="ows-switch"><button type="button" id="ows-switch-btn" aria-haspopup="true" aria-expanded="false"><span class="co" id="ows-co">…</span><span class="t"><b id="ows-co-name">Loading…</b><small id="ows-co-sub"></small></span><span class="caret">▾</span></button></div>'
-      + (opts.search === false ? '' : '<label class="ows-search"><span>⌕</span><input id="ows-q" type="search" placeholder="Search projects, tools, people…" aria-label="Search"></label>')
+      + (opts.search === false ? '' : '<label class="ows-search"><span>⌕</span><input id="ows-q" type="search" placeholder="' + esc(opts.searchPlaceholder || 'Search projects, tools, people…') + '" aria-label="Search"></label>')
       + '<div class="right" id="ows-top-right"><span class="tb-av" id="tb-avatar-wrap"><span class="tb-av-txt" id="tb-avatar">?</span></span></div>';
   }
   function tabsHtml(opts) {
-    return TABS.map(function (t) { return '<a href="' + t[3] + '" data-tab="' + t[0] + '" class="' + (t[0] === opts.current ? 'active' : '') + '">' + ICON[t[2]] + t[1] + '<span class="sn-count" id="ows-tab-' + t[0] + '"></span></a>'; }).join('');
+    var tabs = opts.tabsItems || TABS;
+    return tabs.map(function (t) { return '<a href="' + t[3] + '" data-tab="' + t[0] + '" class="' + (t[0] === opts.current ? 'active' : '') + '">' + ICON[t[2]] + t[1] + '<span class="sn-count" id="ows-tab-' + t[0] + '"></span></a>'; }).join('');
   }
   /* Build the skeleton: the page provides #side-nav, #topbar and #main
      (or just #main, and the shell wraps it). */

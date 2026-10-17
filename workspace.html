@@ -44,6 +44,13 @@
      its own boot splash below), so a click to Projects or a tool never
      flashes the next page. -->
 <script src="/omega-splash.js?v=1" data-boot="no"></script>
+<script>
+/* The journey home is a separate route. This flag only redirects; the live
+   page below is what everyone else still gets. */
+(function () {
+  try { if (/[?&]ui=v2(?:&|$)/.test(location.search)) location.replace('/workspace-v2' + (location.hash || '')); } catch (e) {}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="author" content="ClearSky Energy Solutions LLC">
 <meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
