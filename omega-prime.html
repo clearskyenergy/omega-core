@@ -751,7 +751,12 @@ table.bom tr.fen td{background:#FFF3E8}
       edMap = L.map('edMap', { maxZoom: 21 }).setView([S.lat, S.lng], 19);
       esriImagery().addTo(edMap); L_unit.addTo(edMap);
       L.control.scale({ imperial: true, metric: false }).addTo(edMap);
-      edMap.on('mousedown', onDown); edMap.on('mousemove', onMove); edMap.on('mouseup', onUp); edMap.on('click', onClick);
+      var el = edMap.getContainer();
+      el.addEventListener('pointerdown', onPtrDown);
+      el.addEventListener('pointermove', onPtrMove);
+      el.addEventListener('pointerup', onPtrUp);
+      el.addEventListener('pointercancel', onPtrUp);
+      edMap.on('click', onClick);
     }
     side(); guide();
   }
@@ -760,16 +765,53 @@ table.bom tr.fen td{background:#FFF3E8}
     [].forEach.call(document.querySelectorAll('.rb.armed'), function (b) { b.classList.remove('armed'); });
     if (btn) btn.classList.add('armed');
     edMap.getContainer().style.cursor = m ? 'crosshair' : '';
-    if (m === 'area') edMap.dragging.disable(); else edMap.dragging.enable();
+    if (m === 'area') { edMap.dragging.disable(); edMap.getContainer().style.touchAction = 'none'; }
+    else { edMap.dragging.enable(); edMap.getContainer().style.touchAction = ''; }
   }
-  function onDown(e) { if (mode !== 'area') return; drag = e.latlng; L_unit.clearLayers(); S.placed = false; S.run = null; if (L_area) edMap.removeLayer(L_area); L_area = L.rectangle([drag, drag], { color: '#ffd23f', weight: 2.5, dashArray: '8 5', fillOpacity: .12 }).addTo(edMap); }
-  function onMove(e) { if (mode === 'area' && drag) L_area.setBounds([drag, e.latlng]); }
-  function onUp(e) {
-    if (mode !== 'area' || !drag) return;
-    var b = L.latLngBounds(drag, e.latlng); drag = null;
-    var w = miles([b.getSouth(), b.getWest()], [b.getSouth(), b.getEast()]) * 5280, h = miles([b.getSouth(), b.getWest()], [b.getNorth(), b.getWest()]) * 5280;
+  var dragId = null, dragTouch = false;
+  function ptrLatLng(ev) { return edMap.mouseEventToLatLng(ev); }
+  function onPtrDown(ev) {
+    if (mode !== 'area' || ev.button > 0) return;
+    if (ev.target.closest && ev.target.closest('.leaflet-control')) return;
+    ev.preventDefault();
+    dragId = ev.pointerId; dragTouch = ev.pointerType === 'touch';
+    try { ev.currentTarget.setPointerCapture(ev.pointerId); } catch (e) {}
+    drag = ptrLatLng(ev);
+    L_unit.clearLayers(); S.placed = false; S.run = null;
+    if (L_area) edMap.removeLayer(L_area);
+    L_area = L.rectangle([drag, drag], { color: '#ffd23f', weight: 2.5, dashArray: '8 5', fillOpacity: .12 }).addTo(edMap);
+  }
+  function onPtrMove(ev) {
+    if (mode !== 'area' || !drag || ev.pointerId !== dragId) return;
+    ev.preventDefault();
+    L_area.setBounds([drag, ptrLatLng(ev)]);
+  }
+  function spanFt(b) {
+    return {
+      w: miles([b.getSouth(), b.getWest()], [b.getSouth(), b.getEast()]) * 5280,
+      h: miles([b.getSouth(), b.getWest()], [b.getNorth(), b.getWest()]) * 5280
+    };
+  }
+  /* A finger that only taps still gets a pad the unit fits in. A mouse
+     drag that is too small is left for the person to draw again. */
+  function padForUnit(c, needL, needW, longEast) {
+    var d = ftToDeg(c.lat, 1);
+    var halfE = (longEast ? needL : needW) / 2 * d.dLng, halfN = (longEast ? needW : needL) / 2 * d.dLat;
+    return L.latLngBounds([c.lat - halfN, c.lng - halfE], [c.lat + halfN, c.lng + halfE]);
+  }
+  function onPtrUp(ev) {
+    if (mode !== 'area' || !drag || ev.pointerId !== dragId) return;
+    var finger = dragTouch;
+    var b = L.latLngBounds(drag, ptrLatLng(ev)); drag = null; dragId = null; dragTouch = false;
+    var sp = spanFt(b);
     var needL = (UNIT.lFt || 20) + 20, needW = (UNIT.wFt || 8) + 12;
-    if (Math.max(w, h) < needL || Math.min(w, h) < needW) { toast('Too small for the ' + UNIT.short + ' and its transformer: drag at least ~' + needL + ' \u00d7 ' + needW + ' ft.'); edMap.removeLayer(L_area); L_area = null; return; }
+    if (Math.max(sp.w, sp.h) < needL || Math.min(sp.w, sp.h) < needW) {
+      if (!finger) { toast('Too small for the ' + UNIT.short + ' and its transformer: drag at least ~' + needL + ' \u00d7 ' + needW + ' ft.'); edMap.removeLayer(L_area); L_area = null; return; }
+      b = padForUnit(b.getCenter(), needL, needW, sp.w >= sp.h);
+      L_area.setBounds(b);
+      toast('Pad set for the ' + UNIT.short + ': ' + needL + ' \u00d7 ' + needW + ' ft. Drag a larger area any time.');
+    }
+    var w = spanFt(b).w, h = spanFt(b).h;
     S.area = { b: b, wFt: w, hFt: h, sqft: w * h };
     L.tooltip({ permanent: true, direction: 'top', className: 'eqlbl', offset: [0, -4] }).setLatLng([b.getNorth(), b.getCenter().lng]).setContent('BESS area · ' + fmt(w) + ' × ' + fmt(h) + ' ft').addTo(L_unit);
     edMap.fitBounds(b.pad(0.25), { maxZoom: 21 });
@@ -808,7 +850,11 @@ table.bom tr.fen td{background:#FFF3E8}
       side(); guide(); saveSoon();
     }
   }
-  $('#ed-area').onclick = function () { arm('area', this); toast('Drag a rectangle over the area the battery may use.'); };
+  $('#ed-area').onclick = function () {
+    arm('area', this);
+    var coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    toast(coarse ? 'Drag the battery area on the map. A short press drops a pad sized for the ' + UNIT.short + '.' : 'Drag a rectangle over the area the battery may use.');
+  };
   $('#ed-place').onclick = function () { if (this.classList.contains('dis')) return; arm('place', this); toast('Click inside the BESS area to place the ' + UNIT.short + '.'); };
   $('#ed-poi').onclick = function () { if (this.classList.contains('dis')) return; arm('poi', this); toast('Click the utility service on the map.'); };
   $('#ed-conduit').onclick = function () {

@@ -175,7 +175,9 @@ Site Map → Quote → Omega Logic and ends in a real project:
   units from `omega-cleancell-catalog.js`), then the shipped FENECON
   Industrial XXL; specs only. A product with no footprint on file is marked
   as a point and says so. An own-only manufacturer that is not Clean Cell
-  is offered its own batteries only.
+  is offered its own batteries only. Drawing the area follows the finger
+  (pointer events). On a phone a short press drops a pad large enough for
+  the unit; a mouse drag that is too small is still refused.
 - **Circuit verdict:** the server's (`/api/grid-verdict`), asked through
   `omega-grid-verdict.js`, the client Site Map's Grid panel uses too. The
   page's own thresholds are gone.

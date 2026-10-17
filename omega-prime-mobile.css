@@ -136,9 +136,14 @@
     overflow: auto;
     border-radius: 0;
   }
-  .rbtabs, .ribbon { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; flex: none; }
-  .rb, .rbtabs .proj, .grp { flex: none; }
+  .rbtabs { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; flex: none; }
+  .ribbon { max-width: 100%; overflow: visible; flex: none; flex-wrap: wrap; row-gap: 6px; }
+  .rb, .rbtabs .proj { flex: none; }
+  .grp { flex: 1 1 auto; border-right: 0; }
+  .grp .gi { flex-wrap: wrap; }
+  .unitsel { flex: 1 1 100%; max-width: 100%; min-width: 0; }
   .edbody { flex-direction: column; flex: 1 1 auto; min-height: 0; min-width: 0; }
+  .edmap { min-height: 240px; }
   .edside {
     display: block;
     order: 2;

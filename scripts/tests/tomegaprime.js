@@ -84,6 +84,9 @@ var order = ['/omega-comed-layers.js', '/omega-bess-products.js', '/omega-grid-v
 assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k - 1]); }), 'the shared modules load in order'); count++;
 assert.match(pg, /B\.load\(\)\.then\(function \(t\) \{ UNITS = PP\.units\(t, primeCatalog\(\)\);/); count++;
 assert.match(pg, /UNITS = PP\.units\(null, primeCatalog\(\)\)/); count++;
+assert.match(pg, /addEventListener\('pointerdown', onPtrDown\)/); count++;
+assert.ok(pg.indexOf("edMap.on('mousedown'") < 0, 'area drawing is not mouse-only'); count++;
+assert.match(pg, /pointerType === 'touch'/); count++;
 assert.match(pg, /fetch\('\/api\/utility-rates\?zip=' \+ encodeURIComponent\(zip\)/); count++;
 assert.match(pg, /var claim = r && r\.claims && r\.claims\.orgId;/); assert.match(pg, /orgId: claim \? String\(claim\) : \(B && B\.orgOf \? B\.orgOf\(u\.email\) : ''\)/, 'homed as userOrg() is: the claim, then the email domain'); count += 2;
 assert.match(pg, /db\.collection\('projects'\)\.add\(PP\.projectDoc\(docState\(\), w, FV\.serverTimestamp\(\)\)\)/); count++;
