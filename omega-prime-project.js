@@ -10,7 +10,11 @@
 
      units()       the battery list: the tenant's own products (the ONE
                    product list, omega-bess-products.js) first, then the
-                   shipped FENECON Industrial XXL; specs only, never a price
+                   CleanCell catalog (the R60 and, when the caller passes
+                   omega-cleancell-catalog.js, the Rev H units), then the
+                   shipped FENECON Industrial XXL. Specs only, never a price.
+                   An own-only manufacturer that is not Clean Cell is offered
+                   its own batteries only.
      projectDoc()  the record a new project is created with, in the shapes
                    editor.html's _loadProject reads back (bessList, mapState,
                    grid, address, type) — the drawing arrays empty, because
@@ -35,6 +39,13 @@
     ac: '480 V 3-ph, UL 1741 SA', xfmr: '3,000 kVA 480/480 V', disco: '4,000 A 480 V',
     chem: 'LFP, liquid-cooled', ems: 'FEMS, open API, VPP-ready', note: '2.508 MW / 5.015 MWh · 20 ft liquid-cooled container' };
 
+  /* editor.html BESS_CATALOG['CC-R60'] and its pad row. Specs only: the
+     price lives in api/_lib/editor-cost.js and is not copied here. */
+  var R60 = { key: 'CC-R60', mfr: 'Clean Cell', model: 'CleanCell R60', name: 'CleanCell R60', short: 'R60',
+    kw: 60, kwh: 61.44, usable: null, hours: 1.02, lFt: 28, wFt: 7.25, hFt: 6.9, wt: '',
+    ac: '277/480 VAC', xfmr: '', disco: 'Project-engineered',
+    chem: 'LFP', ems: '', note: '60 kW / 61.44 kWh · 28 ft skid' };
+
   function num(v) { var n = Number(v); return isFinite(n) && n > 0 ? n : null; }
 
   /* A BESS_CATALOG-shaped entry (what OmegaBessProducts.load() returns) → a unit. */
@@ -49,18 +60,63 @@
       note: num(e.kw).toLocaleString('en-US') + ' kW / ' + num(e.kwh).toLocaleString('en-US') + ' kWh', tenant: true };
   }
 
+  /* A Rev H reference row (omega-cleancell-catalog.js entries()) → a unit.
+     The model is the short catalog name. Footprints stay whatever the
+     brochure published: a cabinet size is the cabinet, and a missing one
+     stays missing. */
+  function fromCatalog(key, e) {
+    var model = e.sku === 'CC290-125' ? 'CC290/125' : (e.sku === 'CC-LGJP2-1000' ? 'LG JP-2' : (e.sku === 'CC-SM-1000' ? 'Smart Module' : (e.model || key)));
+    var u = fromEntry(key, {
+      mfr: e.mfr || 'CleanCell US', model: model, kw: e.kw, kwh: e.kwh, usable: e.usable, dur: e.dur,
+      widthFt: e.widthFt, depthFt: e.depthFt, chem: e.chem || 'LFP'
+    });
+    if (!u) return null;
+    u.tenant = false;
+    if (e.acVoltage) u.ac = e.acVoltage + ' V 3-ph';
+    return u;
+  }
+
+  function hasKey(out, key) {
+    for (var i = 0; i < out.length; i++) if (out[i].key === key) return true;
+    return false;
+  }
+
+  /* Clean Cell's own workspace still gets this catalog. Any other own-only
+     manufacturer does not: their picker is their batteries. */
+  function showCleanCell(tenant) {
+    if (!tenant || !tenant.ownOnly) return true;
+    var owner = tenant.owner || [], i, s;
+    for (i = 0; i < owner.length; i++) {
+      s = String(owner[i] || '');
+      if (s.indexOf('cleancell') === 0) return true;
+    }
+    return /cleancell/i.test(String(tenant.orgId || '') + ' ' + String(tenant.brand || ''));
+  }
+
   /* The tenant's list first (their own products lead, as they do in the
-     Guided Build), then the shipped XXL unless the list already carries it
-     — or the workspace is OWN-ONLY (omega-bess-products.js ownOnlyOf: a
-     white-labelled manufacturer offers its own batteries only, 2026-10-16)
-     and has at least one of its own to offer, so nobody gets an empty list. */
-  function units(tenant) {
-    var out = [], keys = (tenant && tenant.keys) || [], i, u, hasXxl = false;
+     Guided Build), then the CleanCell catalog, then the shipped XXL unless
+     the list already carries it — or the workspace is OWN-ONLY
+     (omega-bess-products.js ownOnlyOf: a white-labelled manufacturer offers
+     its own batteries only, 2026-10-16) and has at least one of its own to
+     offer, so nobody gets an empty list. */
+  function units(tenant, catalog) {
+    var out = [], keys = (tenant && tenant.keys) || [], i, u, hasXxl = false, refs, rk;
     for (i = 0; i < keys.length; i++) {
       u = fromEntry(keys[i], tenant.entries[keys[i]]);
       if (!u) continue;
-      if (/industrial\s*xxl/i.test(u.name)) hasXxl = true;
+      if (/industrial\s*xxl/i.test(u.name) || u.key === XXL.key) hasXxl = true;
       out.push(u);
+    }
+    if (showCleanCell(tenant)) {
+      if (!hasKey(out, R60.key)) out.push(R60);
+      refs = catalog && typeof catalog.entries === 'function' ? catalog.entries() : null;
+      if (refs) {
+        rk = Object.keys(refs);
+        for (i = 0; i < rk.length; i++) {
+          u = fromCatalog(rk[i], refs[rk[i]]);
+          if (u && !hasKey(out, u.key)) out.push(u);
+        }
+      }
     }
     if (!hasXxl && !(tenant && tenant.ownOnly && out.length)) out.push(XXL);
     return out;
@@ -119,7 +175,7 @@
     return d;
   }
 
-  var P = { XXL: XXL, fromEntry: fromEntry, units: units, bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
+  var P = { XXL: XXL, R60: R60, fromEntry: fromEntry, units: units, bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
             layout: layout, projectDoc: projectDoc };
   root.OmegaPrimeProject = P;
   if (typeof module !== 'undefined' && module.exports) module.exports = P;

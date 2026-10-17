@@ -19,6 +19,7 @@
     • the layout is drawn on satellite imagery at true footprint;
     • the price is /api/price-site (the cost model, server side, gated).
   The unit is the tenant's own product list first (omega-bess-products.js),
+  then the CleanCell catalog (CC-R60 and omega-cleancell-catalog.js),
   then the editor's catalog entry for FENECON-IND-XXL; specs only, no price
   (quote required). The circuit verdict is the server's (/api/grid-verdict
   through omega-grid-verdict.js, the client Site Map's Grid panel uses), the
@@ -350,6 +351,7 @@ table.bom tr.fen td{background:#FFF3E8}
 <script src="/omega-comed-layers.js"></script>
 <script src="/omega-bess-products.js"></script>
 <script src="/omega-grid-verdict.js"></script>
+<script src="/omega-cleancell-catalog.js"></script>
 <script src="/omega-prime-project.js"></script>
 <script>
 (function () {
@@ -360,10 +362,12 @@ table.bom tr.fen td{background:#FFF3E8}
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function toast(m) { var t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(function () { t.classList.remove('on'); }, 2600); }
 
-  /* The unit: the tenant's own product list first, then the shipped
-     FENECON Industrial XXL (OmegaPrimeProject.units). Specs only; the price
-     is the manufacturer's quote, never a figure here. */
-  var PP = window.OmegaPrimeProject, UNITS = [PP.XXL], UNIT = PP.XXL;
+  /* The unit: the tenant's own product list first, then the CleanCell
+     catalog, then the shipped FENECON Industrial XXL (OmegaPrimeProject.units).
+     Specs only; the price is the manufacturer's quote, never a figure here. */
+  var PP = window.OmegaPrimeProject;
+  function primeCatalog() { return window.OmegaCleanCellCatalog || null; }
+  var UNITS = PP.units(null, primeCatalog()), UNIT = UNITS[0];
   function drawUnits() {
     var sel = $('#unitSel'); sel.innerHTML = '';
     UNITS.forEach(function (u, i) { var o = document.createElement('option'); o.value = String(i); o.textContent = u.name + ' \u2014 ' + u.note; if (u === UNIT) o.selected = true; sel.appendChild(o); });
@@ -375,7 +379,7 @@ table.bom tr.fen td{background:#FFF3E8}
   function loadUnits() {
     var B = window.OmegaBessProducts;
     if (!B || !B.load) { drawUnits(); return; }
-    B.load().then(function (t) { UNITS = PP.units(t); UNIT = UNITS[0]; drawUnits(); }, function () { drawUnits(); });
+    B.load().then(function (t) { UNITS = PP.units(t, primeCatalog()); UNIT = UNITS[0]; drawUnits(); }, function () { drawUnits(); });
   }
   drawUnits();
 

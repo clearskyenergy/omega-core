@@ -3,7 +3,8 @@
  * Omega Prime sets up the real project (2026-10-16, Tommy: "it does the set
  * up and system like the artifact sandbox"). Holds:
  *   - omega-prime-project.js: the unit list (the tenant's own products first,
- *     the shipped XXL after), the battery entry, the ZIP and peaks readers,
+ *     the CleanCell catalog, the shipped XXL after), the battery entry, the
+ *     ZIP and peaks readers,
  *     and the project record in the shapes editor.html's _loadProject reads;
  *   - the record touches no drawing key beyond the empty arrays a new project
  *     is created with, and Prime's updates touch none (drawingWriteAllowed);
@@ -22,20 +23,30 @@ var PP = require(path.join(ROOT, 'omega-prime-project.js'));
 
 /* ── the unit list ──────────────────────────────────────────────────── */
 var none = PP.units(null);
-assert.equal(none.length, 1); assert.equal(none[0].key, 'FENECON-IND-XXL'); assert.equal(none[0].kw, 2508); count += 3;
+assert.deepEqual(none.map(function (u) { return u.key; }), ['CC-R60', 'FENECON-IND-XXL'], 'R60 is on the list even before the Rev H file is passed'); count++;
+assert.equal(none[0].kw, 60); assert.equal(none[0].kwh, 61.44); assert.equal(none[0].lFt, 28); assert.equal(none[1].kw, 2508); count += 4;
+var Cat = require(path.join(ROOT, 'omega-cleancell-catalog.js'));
+var catalogued = PP.units(null, Cat);
+assert.deepEqual(catalogued.map(function (u) { return u.key; }), ['CC-R60', 'CLEANCELL-CC290-125-REV-H', 'CLEANCELL-LGJP2-1000-REV-H', 'CLEANCELL-SM-1000-REV-H', 'FENECON-IND-XXL'], 'the CleanCell catalog, then the XXL'); count++;
+assert.equal(catalogued[1].name, 'CleanCell US CC290/125'); assert.equal(catalogued[1].kw, 125); assert.equal(catalogued[2].kwh, 2294); assert.equal(catalogued[3].lFt, null, 'a Rev H unit with no footprint stays unknown'); count += 4;
 var tenant = { keys: ['CLEANCELL-CC-2000', 'CLEANCELL-MOD-1', 'CLEANCELL-NOFOOT'], entries: {
   'CLEANCELL-CC-2000': { mfr: 'Clean Cell', model: 'CC-2000', kw: 1000, kwh: 2000, usable: 1900, dur: 2, widthFt: 8, depthFt: 20, xfmr: '1500 kVA' },
   'CLEANCELL-MOD-1': { mfr: 'Clean Cell', model: 'Module', kwh: 5 },                       /* no kW: not placeable */
   'CLEANCELL-NOFOOT': { mfr: 'Clean Cell', model: 'R60', kw: 60, kwh: 61.44 } } };
-var us = PP.units(tenant);
-assert.deepEqual(us.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT', 'FENECON-IND-XXL'], 'the tenant\'s own products lead, the XXL after'); count++;
+var us = PP.units(tenant, Cat);
+assert.deepEqual(us.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT', 'CC-R60', 'CLEANCELL-CC290-125-REV-H', 'CLEANCELL-LGJP2-1000-REV-H', 'CLEANCELL-SM-1000-REV-H', 'FENECON-IND-XXL'], 'the tenant\'s own products lead, the CleanCell catalog, the XXL after'); count++;
 assert.equal(us[0].name, 'Clean Cell CC-2000'); assert.equal(us[0].lFt, 20); assert.equal(us[0].wFt, 8); assert.equal(us[0].tenant, true); count += 4;
 assert.equal(us[1].lFt, null, 'a footprint not on file stays unknown, never assumed'); assert.equal(us[1].hours, 1.02); count += 2;
-var own = PP.units({ ownOnly: true, keys: tenant.keys, entries: tenant.entries });
+var own = PP.units({ ownOnly: true, owner: ['otheroem'], keys: tenant.keys, entries: tenant.entries }, Cat);
 assert.deepEqual(own.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT'], 'an own-only manufacturer is offered its own batteries only'); count++;
-assert.equal(PP.units({ ownOnly: true, keys: ['CLEANCELL-MOD-1'], entries: tenant.entries })[0].key, 'FENECON-IND-XXL', 'own-only with nothing placeable of its own still gets a unit'); count++;
-assert.equal(PP.units({ keys: ['FEN-XXL'], entries: { 'FEN-XXL': { mfr: 'FENECON', model: 'Industrial XXL', kw: 2508, kwh: 5015 } } }).length, 1, 'no second XXL when the list carries it'); count++;
-['price', 'eqcost', 'cost'].forEach(function (k) { assert.ok(!(k in PP.XXL) && !(k in us[0]), 'no price on a unit: ' + k); count++; });
+var cell = PP.units({ ownOnly: true, owner: ['cleancell'], orgId: 'cleancell.us', keys: tenant.keys, entries: tenant.entries }, Cat);
+assert.ok(cell.some(function (u) { return u.key === 'CC-R60'; }) && cell.some(function (u) { return u.key === 'CLEANCELL-CC290-125-REV-H'; }) && !cell.some(function (u) { return u.key === 'FENECON-IND-XXL'; }), 'Clean Cell\'s own workspace keeps the CleanCell catalog and not the XXL'); count++;
+assert.equal(PP.units({ ownOnly: true, owner: ['otheroem'], keys: ['CLEANCELL-MOD-1'], entries: tenant.entries }, Cat)[0].key, 'FENECON-IND-XXL', 'own-only with nothing placeable of its own still gets a unit'); count++;
+var fen = PP.units({ keys: ['FEN-XXL'], entries: { 'FEN-XXL': { mfr: 'FENECON', model: 'Industrial XXL', kw: 2508, kwh: 5015 } } }, Cat);
+assert.equal(fen.filter(function (u) { return /industrial\s*xxl/i.test(u.name); }).length, 1, 'no second XXL when the list carries it'); count++;
+['price', 'eqcost', 'cost'].forEach(function (k) {
+  assert.ok(!(k in PP.XXL) && !(k in PP.R60) && !(k in us[0]) && !(k in catalogued[1]), 'no price on a unit: ' + k); count++;
+});
 
 /* ── readers ────────────────────────────────────────────────────────── */
 assert.equal(PP.zipOf('3400 S Federal St, Chicago, IL, 60616'), '60616'); assert.equal(PP.zipOf('12 Main St, Joliet IL 60435-1234'), '60435'); assert.equal(PP.zipOf('no zip here'), ''); count += 3;
@@ -69,9 +80,10 @@ var rules = read('firestore.rules'), keys = JSON.parse(rules.match(/function dra
 var pg = read('omega-prime.html');
 ['net >= UNIT.kw', 'else if (net > 0)', 'SMALLEST_OFFER_KW', "'<b>Fits.</b>"].forEach(function (t) { assert.ok(pg.indexOf(t) < 0, 'a verdict rule is in Omega Prime: ' + t); count++; });
 assert.match(pg, /GV\.ask\(body\)/); assert.match(pg, /GV\.circuitBody\(S\.probe, 0, S\.circuitUtility\)/); assert.match(pg, /GV\.fields\(S\.verdict, S\.probe, 0\)/); count += 3;
-var order = ['/omega-comed-layers.js', '/omega-bess-products.js', '/omega-grid-verdict.js', '/omega-prime-project.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
+var order = ['/omega-comed-layers.js', '/omega-bess-products.js', '/omega-grid-verdict.js', '/omega-cleancell-catalog.js', '/omega-prime-project.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
 assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k - 1]); }), 'the shared modules load in order'); count++;
-assert.match(pg, /B\.load\(\)\.then\(function \(t\) \{ UNITS = PP\.units\(t\);/); count++;
+assert.match(pg, /B\.load\(\)\.then\(function \(t\) \{ UNITS = PP\.units\(t, primeCatalog\(\)\);/); count++;
+assert.match(pg, /UNITS = PP\.units\(null, primeCatalog\(\)\)/); count++;
 assert.match(pg, /fetch\('\/api\/utility-rates\?zip=' \+ encodeURIComponent\(zip\)/); count++;
 assert.match(pg, /var claim = r && r\.claims && r\.claims\.orgId;/); assert.match(pg, /orgId: claim \? String\(claim\) : \(B && B\.orgOf \? B\.orgOf\(u\.email\) : ''\)/, 'homed as userOrg() is: the claim, then the email domain'); count += 2;
 assert.match(pg, /db\.collection\('projects'\)\.add\(PP\.projectDoc\(docState\(\), w, FV\.serverTimestamp\(\)\)\)/); count++;

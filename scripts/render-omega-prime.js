@@ -3,7 +3,8 @@
  * Omega Prime, run end to end in Chromium on the Firebase double
  * (scripts/_lib/firebase-double.js), signed in as a manufacturer's rep:
  *   Site      the address, and the unit list led by the tenant's OWN product
- *             (omega_orgs/{org}/storefront/config.products) before the XXL
+ *             (omega_orgs/{org}/storefront/config.products), then the
+ *             CleanCell catalog, then the XXL
  *   Atlas     substations from the public service, the nearest opened
  *   Circuit   ComEd's answer through omega-comed-layers.js probePoint, the
  *             verdict from the REAL engine behind /api/grid-verdict
@@ -104,8 +105,8 @@ var srv = http.createServer(function (req, res) {
     await p.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
 
     /* Site: the tenant's own product leads the list */
-    var listed = await p.waitForFunction(function () { var s = document.getElementById('unitSel'); return s && s.options.length > 1 ? [].map.call(s.options, function (o) { return o.textContent; }) : null; }, null, { timeout: 10000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
-    ok('the tenant\'s own product leads the unit list, the XXL after, a component never', listed && /^Clean Cell CC-2000/.test(listed[0]) && /FENECON Industrial XXL/.test(listed[listed.length - 1]) && listed.length === 2, listed);
+    var listed = await p.waitForFunction(function () { var s = document.getElementById('unitSel'); if (!s || !s.options.length) return null; var names = [].map.call(s.options, function (o) { return o.textContent; }); return /^Clean Cell CC-2000/.test(names[0]) ? names : null; }, null, { timeout: 10000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
+    ok('the tenant\'s own product leads, the CleanCell catalog is on the list, the XXL is last', listed && /^Clean Cell CC-2000/.test(listed[0]) && listed.some(function (t) { return /CleanCell R60/.test(t); }) && listed.some(function (t) { return /CC290\/125/.test(t); }) && listed.some(function (t) { return /LG JP-2/.test(t); }) && listed.some(function (t) { return /Smart Module/.test(t); }) && /FENECON Industrial XXL/.test(listed[listed.length - 1]), listed);
     await p.fill('#addr', '3400 S Federal St, Chicago, IL 60616');
     await p.click('#go');
     await p.waitForSelector('#s-atlas.on');

@@ -171,8 +171,11 @@ Tommy: "it does the set up and system like the artifact sandbox."
 Site Map → Quote → Omega Logic and ends in a real project:
 
 - **Unit:** the tenant's own product list first (`omega-bess-products.js`,
-  the ONE list), then the shipped FENECON Industrial XXL; specs only. A
-  product with no footprint on file is marked as a point and says so.
+  the ONE list), then the CleanCell catalog (CleanCell R60 and the Rev H
+  units from `omega-cleancell-catalog.js`), then the shipped FENECON
+  Industrial XXL; specs only. A product with no footprint on file is marked
+  as a point and says so. An own-only manufacturer that is not Clean Cell
+  is offered its own batteries only.
 - **Circuit verdict:** the server's (`/api/grid-verdict`), asked through
   `omega-grid-verdict.js`, the client Site Map's Grid panel uses too. The
   page's own thresholds are gone.
