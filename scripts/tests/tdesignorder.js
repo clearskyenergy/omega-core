@@ -147,7 +147,11 @@ function seedOwn() {
   assert.equal(saved.items[0].qty, 2);
   assert.equal(saved.design.lines[1].onOrder, false);
   assert.equal(saved.createdAt, 'TS');
-  assert.equal(saved.customer.company, 'Clean Cell');
+  assert.equal(saved.customer.company, '');
+  assert.equal(saved.customer.email, '');
+  assert.equal(saved.customerId, undefined);
+  assert.equal(Array.from(db.data.keys()).filter(function (k) { return k.indexOf('/customers/') >= 0; }).length, 0);
+  await assert.rejects(rfq({ method: 'POST', headers: {}, body: Object.assign({}, body, { address: AUSTIN }) }), /site address matches/);
   var again = await rfq({ method: 'POST', headers: {}, body: body });
   assert.equal(again.orders[0].id, id);
   var n = 0;
@@ -173,7 +177,7 @@ function seedOwn() {
   var fenDoc = (await db.collection('orders').doc(fen.orders[0].id).get()).data();
   assert.equal(fenDoc.design.estimateCents, 45000000);
   assert.equal(fenDoc.customer.address.state, 'TX');
-  assert.equal(fenDoc.customer.company, 'Concord Energy');
+  assert.equal(fenDoc.customer.company, '');
   ok('a line for another OEM opens in their workspace, with no link into it');
 
   console.log(pass + ' passed');

@@ -213,11 +213,9 @@ function draft(spec) {
   };
 }
 function documentOf(opts) {
-  var one = opts.order, acct = opts.customer || {}, addr = one.destination.address;
-  var user = acct.user || {}, data = acct.data || {};
+  var one = opts.order, addr = one.destination.address;
   return {
     orgId: one.orgId,
-    customerId: acct.id,
     orderNo: one.orderNo,
     status: 'new',
     source: 'design',
@@ -226,10 +224,10 @@ function documentOf(opts) {
     items: one.items,
     system: {},
     customer: {
-      email: opts.email,
-      name: user.name || opts.email,
-      company: data.name || '',
-      phone: user.phone || '',
+      email: '',
+      name: '',
+      company: '',
+      phone: '',
       address: addr,
       notes: ''
     },

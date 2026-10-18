@@ -41,10 +41,10 @@ function designSpec(db, caller, project, b, sourceOrgId, sourceOrgName, lines, r
     project: {
       id: String(b.projectId),
       name: project.name || project.title || '',
-      address: String(b.address || project.address || '').trim(),
+      address: String(project.address || '').trim(),
       state: project.state || (project.site && project.site.state) || '',
       city: project.city || (project.site && project.site.city) || '',
-      zip: String(b.zip || project.zip || '').replace(/\D/g, '').slice(0, 5)
+      zip: String(project.zip || '').replace(/\D/g, '').slice(0, 5)
     },
     estimateCents: D.estimateFrom(project, b)
   };
@@ -73,6 +73,12 @@ module.exports = A.handler(function (req) {
       var project = ps.data(), sourceOrgId = project.orgId;
       return A.canActInOrg(caller, sourceOrgId).then(function (ok) {
         if (!ok) throw A.httpError(403, 'not your project');
+        var savedAddress = String(project.address || '').trim();
+        var normalAddress = function (value) { return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase(); };
+        if (!savedAddress) throw A.httpError(409, 'Save the project site address before sending the drawing.');
+        if (b.address && normalAddress(b.address) !== normalAddress(savedAddress)) {
+          throw A.httpError(409, 'Save the project so the site address matches, then send it again.');
+        }
         /* 1 · resolve vendors for lines that don't name one */
         var lines = b.bom.map(function (l, i) { return { idx: i, sku: String(l.sku || ''), description: l.description || '', qty: Number(l.qty) || 1, unit: l.unit || 'ea', category: l.category || null, manufacturer: String(l.manufacturer || '') || null, vendorOrgId: l.vendorOrgId || null }; });
         var lookups = lines.filter(function (l) { return !l.vendorOrgId && l.sku; }).map(function (l) {
@@ -188,8 +194,8 @@ module.exports = A.handler(function (req) {
              quotable order. A distributor prices against a branch and an
              account; without them they can only guess, and the quote comes
              back wrong or slow. */
-          var ship = { zip: String(b.zip || '').trim() || null,
-                       address: String(b.address || project.address || '').trim() || null,
+          var ship = { zip: require('./_lib/design-order').parseAddress(savedAddress, { zip: project.zip }).zip || null,
+                       address: savedAddress,
                        state: anon.state || null };
           batch.set(ref, { sourceOrgId: sourceOrgId, projectId: String(b.projectId), projectName: project.name || project.title || null,
             bom: lines, note: b.note || null, status: 'open', recipientOrgIds: ids, requestedBy: caller.email,
