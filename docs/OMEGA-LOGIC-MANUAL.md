@@ -254,7 +254,9 @@ Logic nor ClearSky; `Omega-Logic-Phone-Apps.pdf` is the three back to back.
   section; the dashboard's Today links there. Terms set here win for that
   customer's future orders. Nothing is deleted: a contact or a document is
   archived (an administrator's action).
-- **Shipping & receiving.** Destinations, shipment legs with carrier and
+- **Shipping & receiving.** Destinations with the full site address and
+  the order's lines (quantity, product name and SKU), the project the
+  order was designed from when it has one, shipment legs with carrier and
   tracking, serials on each load, pickup, delivery and receiving condition.
   An order with more than one destination is shipped leg by leg.
 - **Freight plan** (*Shipping & receiving*, under the ledger; an

@@ -232,13 +232,13 @@
     }
   },
   "desktop-freight.png": {
-    "sha256": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-    "takenAt": "2026-10-17T22:56:23.170Z",
+    "sha256": "5929bbe7a90b17827af9f3fa514f8e29caccedef6767698f8b5fe353de8edcac",
+    "takenAt": "2026-10-18T01:57:14.149Z",
     "tree": ".",
-    "commit": "4be8af7e",
+    "commit": "ee04905",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
-      "logic-logistics.html": "e03b8c2c1578f0e72e67ef5af12fe1288578e83e19904837885df65800a7836d",
+      "logic-logistics.html": "97c9276d0655bcabd72a2eb688b3b2529448de75494edb324c7e002d05b63f1a",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",

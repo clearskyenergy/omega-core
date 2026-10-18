@@ -1323,6 +1323,17 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var seen = await p.evaluate(function () { var r = document.getElementById('freight').getBoundingClientRect(); return window.scrollY > 0 && r.top < innerHeight && r.bottom > 0; });
     var head = await text(p, '#fr-summary > p'), tiles = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); });
     var weightMiss = await text(p, '#fr-summary .logic-kv > div.w');
+    var ledgerHead = await text(p, '#order-head'), destCard = await text(p, '#detail .dest');
+    ok('  the ledger keeps the order, the purchase order, the full site address and both BOM lines', /CC-26-4431/.test(ledgerHead) && /SG-PO-3300/.test(ledgerHead) && /Summit Grid Co\. · per site list/.test(destCard) && /1 Example Plaza, Chicago, IL 60601/.test(destCard) && /40 × CC-C215/.test(destCard) && /16 × CC-C418/.test(destCard), [ledgerHead, destCard]);
+    await p.selectOption('#order', 'o1');
+    await p.waitForFunction(function () { var a = document.querySelector('#detail .addr'); return a && a.textContent.indexOf('Bakersfield') >= 0; });
+    var yard = await text(p, '#detail .addr'), yardBom = await text(p, '#detail .bom');
+    ok('  a destination with no street shows the city and state, and the BOM line stays', yard === 'Bakersfield, CA' && /5 × CC-C215/.test(yardBom), [yard, yardBom]);
+    await p.selectOption('#order', 'o7');
+    await p.waitForFunction(function () {
+      var a = document.querySelector('#detail .addr'), st = document.getElementById('fr-status'), main = document.getElementById('fr-main');
+      return a && /60601/.test(a.textContent) && st && st.textContent === '' && main && !main.hidden && document.querySelector('#fr-lanes tr[data-lane="NORTHEAST"]');
+    });
     ok('freight plan: opened from a link (?order=o7#freight) the order is chosen and the page is at the plan; the summary counts every unit, the two with no site in red, and the weight on file naming the SKU that has none', chosen === 'o7' && nav === 1 && seen && /^CC-26-4431 · PO SG-PO-3300 · Summit Grid Co\./.test(head)
       && tiles.join('|') === 'Units:56|Sites:16|Lanes:7|Need freight:54|Booked on a load:0|Shipped:0|No site yet:2|Cannot ship:0|Ready at the plant:30|Est. weight to ship:214,500 lb' && /not on file: CC-C418/.test(weightMiss)
       && await p.$$eval('#fr-summary .logic-kv > div.bad', function (r) { return r.map(function (x) { return x.querySelector('small').textContent; }).join(); }) === 'No site yet', [chosen, nav, seen, head, tiles, weightMiss]);
