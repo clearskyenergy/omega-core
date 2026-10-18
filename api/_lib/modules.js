@@ -35,7 +35,7 @@ var CATALOG = [
   record('engineering', 'Omega Engineer', 'premium', 'conductorsizing powerflow siteoptimizer', 'engineering',
     'openDerAnalysis openValidationExport openValidationStatus _valSubmit e3MeteoOpen'),
   record('finance', 'Omega Capital', 'premium', 'investment dcfc fleet apartment degradation', 'finance',
-    'openMarketplacePush openFinancingApply openHeliosIntake openBuildingPanel'),
+    'openMarketplacePush openFinancingApply openHeliosIntake openBuildingPanel omegaPushPrime omegaPushLogic'),
   record('compute', 'Omega Compute', 'premium', 'datacenter computepower computelease computeproforma', 'compute',
     'openDcClusterDialog derSetDc openOmegaCore'),
   record('ops', 'Omega Operate', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', 'OmegaOM.open OmegaFleetOM.open'),

@@ -468,7 +468,18 @@ table.bom tr.fen td{background:#FFF3E8}
   /* ── START ────────────────────────────────────────────────────────── */
   (function () {
     var q = (location.search.match(/[?&](?:q|addr|address)=([^&#]*)/) || [])[1];
-    if (q) { try { $('#addr').value = decodeURIComponent(q.replace(/\+/g, ' ')); } catch (e) {} }
+    if (q) {
+      try { $('#addr').value = decodeURIComponent(q.replace(/\+/g, ' ')); } catch (e) {}
+      S.addr = ($('#addr').value || '').trim();
+    }
+    /* Site Map's Push to Prime / Push to Logic. addr is the field above.
+       project is the editor's id, kept for the handoff and not used by a
+       step. step opens a screen that already exists; it does not change
+       how a step is judged. */
+    var pid = (location.search.match(/[?&]project=([^&#]*)/) || [])[1];
+    if (pid) { try { S.editorProjectId = decodeURIComponent(pid.replace(/\+/g, ' ')); } catch (e2) {} }
+    var stepName = (location.search.match(/[?&]step=(quote|logic)(?:&|$)/) || [])[1];
+    if (stepName) show(stepName);
   })();
   $('#addr').oninput = function () { S.addr = this.value.trim(); guide(); };
   $('#addr').onkeydown = function (e) { if (e.key === 'Enter') $('#go').click(); };
@@ -887,7 +898,9 @@ table.bom tr.fen td{background:#FFF3E8}
     try { firebase.auth().onAuthStateChanged(function (u) { if (u && !S.addr) loadUnits(); if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }); } catch (e) { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }
   })();
 
-  show('start');
+  /* A link that already opened Quote or Logic (Push to Logic) keeps that
+     screen. Every other visit still starts on the address, as before. */
+  if (cur === 'start') show('start');
 })();
 </script>
 </body>
