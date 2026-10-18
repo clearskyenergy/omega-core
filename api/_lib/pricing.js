@@ -74,6 +74,7 @@ function lineFrom(it, extra) {
     method: it.method || '',
     fill: it.fill || '',
     index: it.index || null,
+    table: it.table || null,
     inTotal: it.inTotal && amount != null,
     note: extra.note || it.note
   };
@@ -196,16 +197,23 @@ function evLines(ev) {
   return rows;
 }
 
-function electricalLines(spec) {
+function electricalLines(spec, state) {
   var t = El.takeoff(spec || {});
   var rows = [];
   var ft = t.trenchFt || 0;
+  var conduitRow = null;
   if (t.applies && t.sets > 0) {
     var conductorFt = ft > 0 ? ft * t.sets * 3 : null;
     rows.push(blankLine('el.conductor.ft', 'Feeder conductors, ' + t.sets + ' set' + (t.sets === 1 ? '' : 's') + ' of 3× ' + t.conductor + ' Cu, 75°C', conductorFt, 'conductor-ft',
       'Sized for ' + t.designA + ' A design (' + t.currentA + ' A × 1.25) on a ' + t.ocpdA + ' A overcurrent device. ' + t.notes.join(' ')));
-    rows.push(blankLine('el.conduit.ft', 'Conduit for the feeder', ft > 0 ? ft * t.sets : null, 'ft',
-      'Trade size is not selected. NEC Chapter 9 fill areas were not loaded, so a conduit size would be a guess.'));
+    conduitRow = blankLine('el.conduit.ft', 'Conduit for the feeder', ft > 0 ? ft * t.sets : null, 'ft',
+      'Trade size is not selected. NEC Chapter 9 fill areas were not loaded, so a conduit size would be a guess.');
+    if (state !== 'TX') {
+      conduitRow.price = null;
+      conduitRow.status = 'partial';
+      conduitRow.note = 'The cited unit is the Texas statewide Item 618 average and is not this state\'s price. ' + conduitRow.note;
+    }
+    rows.push(conduitRow);
     if (t.ground) {
       rows.push(blankLine('el.conductor.ft', 'Equipment grounding conductor, ' + t.ground + ' Cu', ft > 0 ? ft : null, 'ft',
         'NEC 250.122 for a ' + t.ocpdA + ' A device. Same missing $/ft as the phase conductors.', 'el.ground.ft'));
@@ -215,7 +223,7 @@ function electricalLines(spec) {
   }
   rows.push(blankLine('el.trench.ft', 'Trench, duct bank, and restoration', ft || null, 'ft'));
   rows.push(blankLine('el.transformer.kva', 'Transformer', t.transformerKva, 'kVA',
-    t.transformerKva ? ('Screening nameplate ' + t.transformerKva + ' kVA at ' + t.pf + ' pf. Dollars are needs source.') : 'No power to size a transformer.'));
+    t.transformerKva ? ('Screening nameplate ' + t.transformerKva + ' kVA at ' + t.pf + ' pf. The book stores utility package prices and does not charge a bare $/kVA.') : 'No power to size a transformer.'));
   rows.push(blankLine('el.switchgear', 'Switchgear', t.kw > 0 ? 1 : null, 'lineup'));
   rows.push(blankLine('el.interconnection', 'Interconnection, ISO-queue study range, not added', t.kw > 0 ? t.kw : null, 'kW'));
   rows.push(blankLine('el.protection', 'Protective relaying and metering', t.kw > 0 ? 1 : null, 'project'));
@@ -379,7 +387,7 @@ function quote(input) {
   if (spec.bess) lines = lines.concat(bessLines(spec.bess));
   if (spec.pv) lines = lines.concat(pvLines(spec.pv));
   if (spec.ev) lines = lines.concat(evLines(spec.ev));
-  var elec = electricalLines(spec.electrical);
+  var elec = electricalLines(spec.electrical, spec.state);
   lines = lines.concat(elec.lines);
 
   var region = Lib.laborFactor(spec.state, spec.zip);
@@ -406,7 +414,7 @@ function quote(input) {
     region: region,
     lines: lines,
     electrical: elec.takeoff,
-    totals: { usd: total > 0 ? total : (needs.length && total === 0 ? null : total), perKwh: perKwh, perWdc: perW },
+    totals: { usd: total > 0 ? total : null, perKwh: perKwh, perWdc: perW },
     needsSource: needs,
     live: wantLive ? { siteMap: liveSiteMap(spec), prime: spec.surface === 'prime' || spec.bess ? livePrime(spec) : null } : null
   };

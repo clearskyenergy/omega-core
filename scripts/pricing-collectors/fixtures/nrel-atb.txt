@@ -1,0 +1,5 @@
+technology,techdetail,techdetail2,metric,parameter,parameterdetail,value,units,$year,scenario,year,atb_year
+Utility Scale Battery Storage,60MW 240MWh,,Cost,Capital Cost,Total energy storage system cost,1372.0,$/kW,2023,Base,2024.0,2025.0
+Utility Scale Battery Storage,60MW 240MWh,,Cost,Capital Cost,Total energy storage system cost,343.0,$/kWh,2023,Base,2024.0,2025.0
+Commercial Scale Battery Storage,1800 kW 7200 kWh,,Cost,Capital Cost,Total energy storage system cost,1612.0,$/kW,2023,Base,2024.0,2025.0
+Commercial Scale Battery Storage,1800 kW 7200 kWh,,Cost,Capital Cost,Total energy storage system cost,403.0,$/kWh,2023,Base,2024.0,2025.0

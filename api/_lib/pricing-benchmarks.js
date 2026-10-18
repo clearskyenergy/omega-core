@@ -233,15 +233,15 @@ function checks(opts) {
     'bess.small.adder': 'partial',
     'el.interconnection': 'partial',
     'el.conductor.ft': 'partial',
-    'el.conduit.ft': 'partial',
+    'el.conduit.ft': 'free',
     'el.transformer.kva': 'partial',
     'el.switchgear': 'partial',
     'ev.dcfc.150.point': 'partial',
     'pv.canopy': 'paid',
-    'ev.l2.equipment': 'paid',
-    'el.trench.ft': 'paid',
-    'el.protection': 'paid',
-    'lazard.capex': 'paid'
+    'ev.l2.equipment': 'partial',
+    'el.trench.ft': 'partial',
+    'el.protection': 'partial',
+    'lazard.capex': 'free'
   };
   var fillBad = [];
   Object.keys(fillExpect).forEach(function (id) {

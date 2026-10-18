@@ -1,0 +1,38 @@
+{
+  "source": "bls-ppi",
+  "url": "https://api.bls.gov/publicAPI/v2/timeseries/data/",
+  "read": "2026-10-18",
+  "threshold": 0.05,
+  "ok": true,
+  "records": [
+    {
+      "series": "WPU10260314",
+      "label": "Copper wire and cable",
+      "bookLine": "el.conductor.ft",
+      "period": "2026-09",
+      "value": 607.705
+    },
+    {
+      "series": "WPU11710216",
+      "label": "Noncurrent-carrying electrical conduit and conduit fittings, including plastic conduit",
+      "bookLine": "el.conduit.ft",
+      "period": "2026-09",
+      "value": 221.225
+    },
+    {
+      "series": "WPU1174",
+      "label": "Transformers and power regulators",
+      "bookLine": "el.transformer.kva",
+      "period": "2026-09",
+      "value": 434.493
+    },
+    {
+      "series": "WPU1175",
+      "label": "Switchgear, switchboard, and industrial controls",
+      "bookLine": "el.switchgear",
+      "period": "2026-09",
+      "value": 433.602
+    }
+  ],
+  "note": "Index only. escalate() is not applied: no commodity base dollar and base-period index were both read."
+}

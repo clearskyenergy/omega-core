@@ -1,0 +1,104 @@
+{
+  "source": "eia-aeo",
+  "url": "https://www.eia.gov/outlooks/aeo/assumptions/pdf/EMM_Assumptions.pdf",
+  "published": "2025-04",
+  "dollarYear": 2024,
+  "read": "2026-10-18",
+  "threshold": 0.01,
+  "ok": true,
+  "records": [
+    {
+      "id": "cc.single",
+      "label": "Combined-cycle, single-shaft",
+      "mw": 627,
+      "basePerKw": 875,
+      "totalPerKw": 875,
+      "vomPerMwh": 3.39,
+      "fomPerKwYr": 15.75
+    },
+    {
+      "id": "cc.multi",
+      "label": "Combined-cycle, multi-shaft",
+      "mw": 1227,
+      "basePerKw": 824,
+      "totalPerKw": 824,
+      "vomPerMwh": 3.46,
+      "fomPerKwYr": 12.31
+    },
+    {
+      "id": "cc.ccs95",
+      "label": "Combined-cycle with 95% CCS",
+      "mw": 543,
+      "basePerKw": 2245,
+      "totalPerKw": 2469,
+      "vomPerMwh": 5.13,
+      "fomPerKwYr": 25.17
+    },
+    {
+      "id": "ct.aero",
+      "label": "Combustion turbine, aeroderivative",
+      "mw": 211,
+      "basePerKw": 1522,
+      "totalPerKw": 1522,
+      "vomPerMwh": 5.79,
+      "fomPerKwYr": 9.7
+    },
+    {
+      "id": "ct.frame",
+      "label": "Combustion turbine, industrial frame",
+      "mw": 419,
+      "basePerKw": 791,
+      "totalPerKw": 791,
+      "vomPerMwh": 4.05,
+      "fomPerKwYr": 6.97
+    },
+    {
+      "id": "fuelcell",
+      "label": "Fuel cells",
+      "mw": 10,
+      "basePerKw": 7447,
+      "totalPerKw": 7896,
+      "vomPerMwh": 0.7,
+      "fomPerKwYr": 36.67
+    },
+    {
+      "id": "hydrogen",
+      "label": "Hydrogen turbine",
+      "mw": 237,
+      "basePerKw": 823,
+      "totalPerKw": 823,
+      "vomPerMwh": 5.36,
+      "fomPerKwYr": 8.34
+    },
+    {
+      "id": "dg.base",
+      "label": "Distributed generation, base",
+      "mw": 2,
+      "basePerKw": 1743,
+      "totalPerKw": 1743,
+      "vomPerMwh": 10.25,
+      "fomPerKwYr": 23.06
+    },
+    {
+      "id": "dg.peak",
+      "label": "Distributed generation, peak",
+      "mw": 1,
+      "basePerKw": 2093,
+      "totalPerKw": 2093,
+      "vomPerMwh": 10.25,
+      "fomPerKwYr": 23.06
+    },
+    {
+      "id": "battery.4h",
+      "label": "Battery storage, four-hour lithium-ion",
+      "mw": 150,
+      "basePerKw": 1580,
+      "totalPerKw": 1580,
+      "vomPerMwh": 0,
+      "fomPerKwYr": 40.62,
+      "charged": false
+    }
+  ],
+  "api": "Table 3 is not an Open Data route. The assumptions PDF is the source. The accepted rows are the pipe transcription of that table.",
+  "note": "Base overnight cost, 2024$/kW. The 150 MW battery row is context and is not the charged capital cost."
+}

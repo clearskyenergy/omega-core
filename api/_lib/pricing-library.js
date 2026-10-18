@@ -7,6 +7,18 @@
 
 var Labor = require('./pricing-labor');
 
+/* Reviewed collector output. A later collect writes proposed/ and
+   review.json. It does not replace these files. */
+var SNAP = {
+  ppi: require('../../data/pricing-snapshots/bls-ppi/accepted.json'),
+  eia: require('../../data/pricing-snapshots/eia-aeo/accepted.json'),
+  atb: require('../../data/pricing-snapshots/nrel-atb/accepted.json'),
+  lbnl: require('../../data/pricing-snapshots/lbnl-interconnection/accepted.json'),
+  dot: require('../../data/pricing-snapshots/state-dot/accepted.json'),
+  utility: require('../../data/pricing-snapshots/utility-unit-cost/accepted.json'),
+  lazard: require('../../data/pricing-snapshots/lazard/accepted.json')
+};
+
 var VERSION = '2026.10';
 var READ = '2026-10-18';
 
@@ -81,34 +93,79 @@ var SRC = {
   }
 };
 
-/* BLS PPI, September 2026 observation, read from the public API on
-   2026-10-18. An index is not a dollar. No base-year unit price was
-   read, so these series do not set $/ft or $/kVA. */
-var PPI_URL = 'https://api.bls.gov/publicAPI/v2/timeseries/data/';
+/* BLS PPI from the accepted collector snapshot. An index is not a
+   dollar. No base-period index and commodity base were both read, so
+   these series do not set $/ft or $/kVA. */
+var PPI_URL = SNAP.ppi.url;
+function ppiIndex(series) {
+  var rows = SNAP.ppi.records || [];
+  var i, row;
+  for (i = 0; i < rows.length; i++) {
+    row = rows[i];
+    if (row.series === series) return { series: row.series, label: row.label, period: row.period, value: row.value };
+  }
+  return null;
+}
 var PPI = {
-  conductor: { series: 'WPU10260314', label: 'Copper wire and cable', period: '2026-09', value: 607.705 },
-  conduit: { series: 'WPU11710216', label: 'Noncurrent-carrying electrical conduit and conduit fittings, including plastic conduit', period: '2026-09', value: 221.225 },
-  transformer: { series: 'WPU1174', label: 'Transformers and power regulators', period: '2026-09', value: 434.493 },
-  switchgear: { series: 'WPU1175', label: 'Switchgear, switchboard, and industrial controls', period: '2026-09', value: 433.602 }
+  conductor: ppiIndex('WPU10260314'),
+  conduit: ppiIndex('WPU11710216'),
+  transformer: ppiIndex('WPU1174'),
+  switchgear: ppiIndex('WPU1175')
 };
 
-/* EIA AEO 2025 Electricity Market Module, Table 3. Base overnight cost
-   is 2024$/kW, contingency included, regional multipliers excluded
-   except where the table's own notes say otherwise for wind and solar.
-   Sargent & Lundy, January 2024, as cited by EIA, April 2025. */
-var EIA_URL = 'https://www.eia.gov/outlooks/aeo/assumptions/pdf/EMM_Assumptions.pdf';
-var EIA_GEN = [
-  { id: 'cc.single', label: 'Combined-cycle, single-shaft', mw: 627, basePerKw: 875, totalPerKw: 875, vomPerMwh: 3.39, fomPerKwYr: 15.75 },
-  { id: 'cc.multi', label: 'Combined-cycle, multi-shaft', mw: 1227, basePerKw: 824, totalPerKw: 824, vomPerMwh: 3.46, fomPerKwYr: 12.31 },
-  { id: 'cc.ccs95', label: 'Combined-cycle with 95% CCS', mw: 543, basePerKw: 2245, totalPerKw: 2469, vomPerMwh: 5.13, fomPerKwYr: 25.17 },
-  { id: 'ct.aero', label: 'Combustion turbine, aeroderivative', mw: 211, basePerKw: 1522, totalPerKw: 1522, vomPerMwh: 5.79, fomPerKwYr: 9.70 },
-  { id: 'ct.frame', label: 'Combustion turbine, industrial frame', mw: 419, basePerKw: 791, totalPerKw: 791, vomPerMwh: 4.05, fomPerKwYr: 6.97 },
-  { id: 'fuelcell', label: 'Fuel cells', mw: 10, basePerKw: 7447, totalPerKw: 7896, vomPerMwh: 0.70, fomPerKwYr: 36.67 },
-  { id: 'hydrogen', label: 'Hydrogen turbine', mw: 237, basePerKw: 823, totalPerKw: 823, vomPerMwh: 5.36, fomPerKwYr: 8.34 },
-  { id: 'dg.base', label: 'Distributed generation, base', mw: 2, basePerKw: 1743, totalPerKw: 1743, vomPerMwh: 10.25, fomPerKwYr: 23.06 },
-  { id: 'dg.peak', label: 'Distributed generation, peak', mw: 1, basePerKw: 2093, totalPerKw: 2093, vomPerMwh: 10.25, fomPerKwYr: 23.06 },
-  { id: 'battery.4h', label: 'Battery storage, four-hour lithium-ion', mw: 150, basePerKw: 1580, totalPerKw: 1580, vomPerMwh: 0, fomPerKwYr: 40.62, charged: false }
-];
+/* EIA AEO 2025 Electricity Market Module, Table 3, from the accepted
+   snapshot. Base overnight cost is 2024$/kW. */
+var EIA_URL = SNAP.eia.url;
+var EIA_GEN = SNAP.eia.records;
+
+var WOOD = {
+  title: 'Wood, Borlaug, Moniot, Lee, Ge, Yang, and Liu, The 2030 National Charging Network, National Renewable Energy Laboratory, Table 5, EVSE Capital Cost Assumptions.',
+  url: 'https://docs.nlr.gov/docs/fy23osti/85654.pdf',
+  published: '2023'
+};
+
+function atbValue(id, units) {
+  var rows = SNAP.atb.records || [];
+  var i;
+  for (i = 0; i < rows.length; i++) {
+    if (rows[i].id === id && rows[i].units === units) return rows[i].value;
+  }
+  return null;
+}
+
+function txConduit() {
+  var rows = (SNAP.dot.records && SNAP.dot.records.txdot) || [];
+  var i;
+  for (i = 0; i < rows.length; i++) if (rows[i].code === '618-7030') return rows[i];
+  return null;
+}
+
+function utilityRows(bookLine) {
+  var rows = SNAP.utility.records || [];
+  var out = [];
+  var i;
+  for (i = 0; i < rows.length; i++) if (rows[i].bookLine === bookLine) out.push(rows[i]);
+  return out;
+}
+
+function utilityFeet() {
+  var rows = SNAP.utility.records || [];
+  var out = [];
+  var i;
+  for (i = 0; i < rows.length; i++) if (rows[i].bookLine == null) out.push(rows[i]);
+  return out;
+}
+
+function isoBand() {
+  var rows = SNAP.lbnl.records || [];
+  var low = null, high = null, i, v;
+  for (i = 0; i < rows.length; i++) {
+    v = rows[i].usdPerKw;
+    if (low == null || v < low) low = v;
+    if (high == null || v > high) high = v;
+  }
+  return { low: low, high: high };
+}
 
 function item(partial) {
   return {
@@ -137,6 +194,8 @@ function item(partial) {
 
 function book() {
   var pvNote = 'National overnight installed price. Equipment is not regionalized. The install-labor share is not separated in Table 2, so the state labor factor is not applied to this line.';
+  var tx = txConduit();
+  var iso = isoBand();
   return [
     item({ id: PV.utility.id, label: 'Utility-scale PV, installed, modeled market price', price: PV.utility.usdPerWdc, unit: '$/Wdc', low: PV.utility.low, high: PV.utility.high, source: SRC.pv.title, url: SRC.pv.url, published: SRC.pv.published, dollarYear: 2024, confidence: 'high', status: 'sourced', inTotal: true, note: pvNote + ' ' + PV.utility.size + '.' }),
     item({ id: PV.commercial.id, label: 'Commercial rooftop PV, installed, modeled market price', price: PV.commercial.usdPerWdc, unit: '$/Wdc', low: PV.commercial.low, high: PV.commercial.high, source: SRC.pv.title, url: SRC.pv.url, published: SRC.pv.published, dollarYear: 2024, confidence: 'high', status: 'sourced', inTotal: true, note: pvNote + ' ' + PV.commercial.size + '.' }),
@@ -153,25 +212,25 @@ function book() {
     item({ id: 'bess.utility.power', label: 'Utility-scale battery, power component of overnight cost', price: BESS.powerPerKw, unit: '$/kW', source: SRC.bess.title, url: SRC.bess.url, published: SRC.bess.published, dollarYear: 2024, confidence: 'high', status: 'sourced', inTotal: true, note: 'Final power cost after the paper\'s $7/kW adjustment. The unadjusted fit was $379/kW, which is what the live Site Map book still uses.' }),
     item({ id: 'bess.utility.4h', label: 'Utility-scale 4-hour battery, overnight capital cost', price: BESS.pointPerKwh, unit: '$/kWh', low: BESS.lowPerKwh, high: BESS.highPerKwh, source: SRC.bess.title, url: SRC.bess.url, published: SRC.bess.published, dollarYear: 2024, confidence: 'high', status: 'sourced', inTotal: false, note: '2024 point is $334/kWh. The band is Table 2 for 2025 (low $295, high $350 per kWh), the same report. Contingency, tax, labor, and profit are already inside the point. Not added a second time.' }),
     item({ id: 'bess.utility.fom', label: 'Utility-scale battery fixed O&M', price: 53.44, unit: '$/kW-yr', source: 'Cole, Ramasamy, et al. 2025, and the 2025 Electricity ATB: fixed O&M is 4% of capital cost in $/kW, including augmentation, and variable O&M is zero. Applied to this book\'s cited 4-hour capital of $1,336/kW.', url: 'https://atb.nlr.gov/electricity/2025/utility-scale_battery_storage', published: '2025', dollarYear: 2024, confidence: 'medium', status: 'sourced', method: 'derived', fill: 'free', inTotal: false, note: '4% of $1,336/kW is $53.44/kW-yr. The workbook stores the same 4% rule (Fixed O&M = 0.04 × overnight $/kW) and does not store a separate dollar. EIA AEO 2025 Electricity Market Module Table 3 states $40.62/kW-yr directly for a 150 MW four-hour battery (2024$, Sargent & Lundy, January 2024). The two figures are not averaged. Neither is added to overnight capital. Lifetime 15 years and round-trip efficiency 85% are in the NREL report and are not prices.' }),
-    item({ id: 'bess.small.adder', label: 'Balance-of-plant adder below utility scale', price: null, unit: '$/kWh', source: 'National Laboratory of the Rockies, 2025 Electricity Annual Technology Baseline workbook (2025_v1, OEDI submission 8759) and model-parameters file.', url: 'https://data.openei.org/submissions/8759', published: '2025', dollarYear: 2023, confidence: 'medium', status: 'partial', method: 'direct', fill: 'partial', inTotal: false, note: 'The commercial Battery Capital Cost Constant is $0 in every scenario and year of the 2025 workbook. The model-parameters file\'s 2024 base case (2023$) is $343/kWh ($1,372/kW) for a 60 MW / 240 MWh battery and $403/kWh ($1,612/kW) for a 1,800 kW / 7,200 kWh battery. That gap is two representative systems, not an adder stacked on the $334/kWh (2024$) utility point. No 1 MW adder is charged.' }),
+    item({ id: 'bess.small.adder', label: 'Balance-of-plant adder below utility scale', price: null, unit: '$/kWh', source: 'National Laboratory of the Rockies, 2025 Electricity Annual Technology Baseline workbook (2025_v1, OEDI submission 8759) and model-parameters file.', url: SNAP.atb.page, published: '2025', dollarYear: 2023, confidence: 'medium', status: 'partial', method: 'direct', fill: 'partial', table: SNAP.atb.records, inTotal: false, note: 'The commercial Battery Capital Cost Constant is $0 in every scenario and year of the 2025 workbook. The model-parameters file\'s 2024 base case (2023$) is $' + atbValue('utility-60mw', '$/kWh') + '/kWh ($' + atbValue('utility-60mw', '$/kW') + '/kW) for a 60 MW / 240 MWh battery and $' + atbValue('commercial-1800kw', '$/kWh') + '/kWh ($' + atbValue('commercial-1800kw', '$/kW') + '/kW) for a 1,800 kW / 7,200 kWh battery. That gap is two representative systems, not an adder stacked on the $334/kWh (2024$) utility point. No 1 MW adder is charged.' }),
 
-    item({ id: 'ev.install.l2', label: 'Level 2 charger installation', price: null, unit: '$/port', low: 500, high: 6000, source: SRC.ev.title, url: SRC.ev.url, published: '2024', dollarYear: null, region: 'labor', confidence: 'medium', status: 'range', inTotal: false, note: 'Installation only, as stated. Equipment is a separate needs-source line.' }),
+    item({ id: 'ev.install.l2', label: 'Level 2 charger installation', price: null, unit: '$/port', low: 500, high: 6000, source: SRC.ev.title, url: SRC.ev.url, published: '2024', dollarYear: null, region: 'labor', confidence: 'medium', status: 'range', inTotal: false, note: 'Installation only, as stated. Equipment is a separate line and is not added here.' }),
     item({ id: 'ev.install.dcfc', label: 'DC fast charger installation', price: null, unit: '$/port', low: 45800, high: 117900, source: SRC.ev.title, url: SRC.ev.url, published: '2024', dollarYear: null, region: 'labor', confidence: 'medium', status: 'range', inTotal: false, note: 'Installation only, all DCFC power levels in the sentence. Not added on top of a hardware price that was not read.' }),
     item({ id: 'ev.rmi.dcfc.150', label: '150 kW DC fast charger, RMI cost range', price: null, unit: '$/charger', low: 75600, high: 100000, source: 'Nelder and Rogers, Reducing EV Charging Infrastructure Costs, Rocky Mountain Institute, 2019, as cited by the DOE/NREL fueling-infrastructure assessment.', url: 'https://rmi.org/insight/reducing-ev-charging-infrastructure-costs/', published: '2019', dollarYear: 2019, confidence: 'medium', status: 'range', inTotal: false, note: 'The citing sentence does not split hardware from installation. No inflation adjustment was applied. Not used as the preview price.' }),
-    item({ id: 'ev.dcfc.150.point', label: '150 kW DC fast charger, installed point price', price: null, unit: '$/port', source: 'Borlaug, Wood, et al., Economics of electric vehicle corridor fast charging in the United States. Table 1 model inputs, aligned with Wood et al.', url: 'https://www.osti.gov/pages/servlets/purl/3014957', published: '2025', dollarYear: null, confidence: 'low', status: 'partial', method: 'direct', fill: 'partial', inTotal: false, note: 'That paper\'s Table 1 states 150 kW equipment at $84,300 per port and installation at $69,900 per port as its own model inputs. The original Wood table and the dollar year of those inputs were not read here, so they are not summed and not charged. The RMI 2019 band and the installation range stay ranges. An installed point still needs a vendor quote or a primary table whose dollar year was read.' }),
-    item({ id: 'ev.l2.equipment', label: 'Networked Level 2 charger equipment', price: null, unit: '$/port', source: '', published: '', dollarYear: null, confidence: 'none', status: 'needs source', method: 'direct', fill: 'paid', inTotal: false, note: 'No public Level 2 equipment point was read. AFDC and the DOE installation sentence give an installation range, already on ev.install.l2, not an equipment price. Live Autel dealer costs stay on the live book. This line still needs a vendor quote.' }),
+    item({ id: 'ev.dcfc.150.point', label: '150 kW DC fast charger, installed point price', price: null, unit: '$/port', source: WOOD.title, url: WOOD.url, published: WOOD.published, dollarYear: null, confidence: 'low', status: 'partial', method: 'direct', fill: 'partial', table: { hardwareLow: 66400, hardwareHigh: 102200, installLow: 45800, installHigh: 94000, unit: '$/port', dollarYear: null }, inTotal: false, note: 'Table 5 states DC 150 kW hardware at $66,400–$102,200 per port and installation at $45,800–$94,000 per port. The report does not state a dollar year. The footnote calls the ends optimistic and pessimistic, and the installation scope was not fully verified. The corridor paper\'s $84,300 and $69,900 are the midpoints of those ranges and are not charged. An installed point still needs a vendor quote.' }),
+    item({ id: 'ev.l2.equipment', label: 'Level 2 charger equipment', price: null, unit: '$/port', low: 2200, high: 4600, source: WOOD.title, url: WOOD.url, published: WOOD.published, dollarYear: null, confidence: 'low', status: 'range', method: 'direct', fill: 'partial', inTotal: false, note: 'Table 5 commercial Level 2 hardware, per port. It is not a networked charger and it is not charged. No dollar year is stated. A networked point still needs a vendor quote. Installation stays on ev.install.l2. Live Autel dealer costs stay on the live book.' }),
 
-    item({ id: 'el.conductor.ft', label: 'Copper feeder conductor', price: null, unit: '$/ft', source: 'U.S. Bureau of Labor Statistics, Producer Price Index series WPU10260314, copper wire and cable. September 2026 index ' + PPI.conductor.value + '.', url: PPI_URL, published: '2026-09', dollarYear: null, confidence: 'low', status: 'partial', method: 'indexed', fill: 'partial', index: PPI.conductor, inTotal: false, note: 'The index can escalate a base $/ft once one is read. No base $/ft was read. An LME copper settlement was not read, and no conductor weight was applied. PVSCM\'s per-kW conductor input was not evaluated. A 500 kcmil feeder price still needs a DOT bid item or a vendor quote. RSMeans was not copied.' }),
-    item({ id: 'el.conduit.ft', label: 'Conduit', price: null, unit: '$/ft', source: 'U.S. Bureau of Labor Statistics, Producer Price Index series WPU11710216, noncurrent-carrying electrical conduit and conduit fittings, including plastic conduit. September 2026 index ' + PPI.conduit.value + '.', url: PPI_URL, published: '2026-09', dollarYear: null, confidence: 'low', status: 'partial', method: 'indexed', fill: 'partial', index: PPI.conduit, inTotal: false, note: 'Index only. No public conduit price per foot was read from a state DOT bid tab, a USACE schedule, or a GSA schedule. RSMeans was not copied.' }),
-    item({ id: 'el.trench.ft', label: 'Trenching, duct bank, and restoration', price: null, unit: '$/ft', source: '', published: '', dollarYear: null, region: 'labor', confidence: 'none', status: 'needs source', method: 'direct', fill: 'paid', inTotal: false, note: 'No official DOT unit-price table for trench, duct bank, or restoration was read. A third-party bid aggregator was not used. The live cost model\'s $58/ft was not brought forward. This line still needs RSMeans or a DOT item that is read from the agency\'s own table.' }),
-    item({ id: 'el.transformer.kva', label: 'Pad-mount transformer', price: null, unit: '$/kVA', source: 'U.S. Bureau of Labor Statistics, Producer Price Index series WPU1174, transformers and power regulators. September 2026 index ' + PPI.transformer.value + '.', url: PPI_URL, published: '2026-09', dollarYear: null, confidence: 'low', status: 'partial', method: 'indexed', fill: 'partial', index: PPI.transformer, inTotal: false, note: 'Index only. No $/kVA was read. PVSCM\'s 2.8 MVA transformer is a $/kWac model input, not a catalog price. The Eaton ROM stays on the live book. A pad-mount price still needs a vendor quote.' }),
-    item({ id: 'el.switchgear', label: 'Switchgear', price: null, unit: '$/lineup', source: 'U.S. Bureau of Labor Statistics, Producer Price Index series WPU1175, switchgear, switchboard, and industrial controls. September 2026 index ' + PPI.switchgear.value + '.', url: PPI_URL, published: '2026-09', dollarYear: null, confidence: 'low', status: 'partial', method: 'indexed', fill: 'partial', index: PPI.switchgear, inTotal: false, note: 'Index only. No lineup price was read. Included inside the PV and 4-hour battery benchmarks when those totals are used. A lineup price still needs a vendor quote.' }),
-    item({ id: 'el.interconnection', label: 'Interconnection, ISO-queue study costs', price: null, unit: '$/kW', low: 57, high: 102, source: 'Lawrence Berkeley National Laboratory interconnection cost analyses. Completed-project means, real 2022 dollars: SPP 2020–2022 $57/kW (Seel et al., April 2023 briefing); PJM 2020–2022 mean $84/kW, median $30/kW (Seel et al., January 2023); MISO 2019–2021 mean $102/kW (Seel et al., 2022).', url: 'https://eta-publications.lbl.gov/sites/default/files/berkeley_lab_2023.04.20-_spp_interconnection_costs.pdf', published: '2023-04', dollarYear: 2022, confidence: 'low', status: 'range', method: 'direct', fill: 'partial', inTotal: false, note: 'These are transmission-queue study costs. Network upgrades are most of the recent increase. They are not a behind-the-meter ComEd or distribution facility cost, and they are not added to the $334/kWh battery point, which already includes permitting and interconnection and excludes network upgrades. Seel et al., June 2023, state that CAISO does not disclose project-level costs and that ERCOT uses connect-and-manage. No ERCOT or CAISO dollar was read. NYISO and ISO-NE means were not transcribed. A distribution interconnection dollar still needs the utility\'s own guide or a facility study.' }),
-    item({ id: 'el.protection', label: 'Protective relaying and metering', price: null, unit: '$/project', source: '', published: '', dollarYear: null, confidence: 'none', status: 'needs source', method: 'direct', fill: 'paid', inTotal: false, note: 'No public unit price for relaying or metering was read in the LBNL interconnection briefs, the NREL distribution-cost pages consulted, or an EPRI public report in this pass. This line still needs RSMeans or a vendor quote.' }),
+    item({ id: 'el.conductor.ft', label: 'Copper feeder conductor', price: null, unit: '$/ft', source: 'U.S. Bureau of Labor Statistics, Producer Price Index series WPU10260314, copper wire and cable. September 2026 index ' + PPI.conductor.value + '.', url: PPI_URL, published: '2026-09', dollarYear: null, confidence: 'low', status: 'partial', method: 'indexed', fill: 'partial', index: PPI.conductor, inTotal: false, note: 'The index can escalate a base $/ft once one is read. No 500 kcmil base was read. PG&E\'s unit-cost guide does not separate cable size. TxDOT item 620-7008 is #8 AWG and was not used. The PPI is not applied.' }),
+    item({ id: 'el.conduit.ft', label: 'Conduit', price: tx.price, unit: '$/ft', source: 'Texas Department of Transportation bid tabulations, item ' + tx.code + ' ' + tx.description + '. Quantity-weighted mean of ' + tx.n + ' rank-1 bids, ' + tx.quantity + ' LF, let ' + tx.firstLet + ' through ' + tx.lastLet + '. Unrounded mean $' + tx.weightedAverage + '/LF, shown as $' + tx.price + '/ft. The September 2026 conduit PPI is ' + PPI.conduit.value + ' and is not applied.', url: SNAP.dot.url, published: tx.lastLet.slice(0, 7), dollarYear: null, region: 'TX', confidence: 'medium', status: 'sourced', method: 'derived', fill: 'free', index: PPI.conduit, inTotal: false, note: 'Item 618 pays installed conduit, including excavation and backfill. It is not escalated and it is not also a trench line. A quote shows this price only when the state is TX. IDOT awarded prices are an email subscription and were not fetched. Caltrans did not return an electrical-conduit weighted average. The 3-inch and 4-inch means stay on the snapshot.' }),
+    item({ id: 'el.trench.ft', label: 'Trenching, duct bank, and restoration', price: null, unit: '$/ft', source: 'Texas Department of Transportation item 618 includes excavation, so it was not split into a trench rate. PG&E Unit Cost Guide, March 2026, and ComEd DER Interconnection Guidelines, effective 2024-11-30, state extension rates that were read and not used as a national separable trench.', url: SNAP.utility.url, published: SNAP.utility.pgePublished, dollarYear: null, region: 'labor', confidence: 'low', status: 'partial', method: 'direct', fill: 'partial', table: utilityFeet(), inTotal: false, note: 'PG&E $880/ft is San Francisco trench-and-install of an underground line. ComEd $275/ft is a 12 kV underground extension. Neither is a national duct-bank and restoration rate, and neither is escalated. A separable trench rate still needs RSMeans. The live cost model\'s $58/ft was not brought forward.' }),
+    item({ id: 'el.transformer.kva', label: 'Pad-mount transformer', price: null, unit: '$/kVA', source: 'PG&E Unit Cost Guide, March 2026, category 1 (transformer and 100 ft of secondary cable), and ComEd DER Interconnection Guidelines, effective 2024-11-30. PPI WPU1174, September 2026 index ' + PPI.transformer.value + ', is stored and not applied.', url: SNAP.utility.url, published: SNAP.utility.pgePublished, dollarYear: null, confidence: 'low', status: 'partial', method: 'direct', fill: 'partial', index: PPI.transformer, table: utilityRows('el.transformer.kva'), inTotal: false, note: 'The guide prices a package, not a bare $/kVA. ComEd\'s behind-the-meter figure above 500 kW is a transformer upgrade allowance, not a catalog price. No row was escalated. A bare pad-mount price still needs a vendor quote.' }),
+    item({ id: 'el.switchgear', label: 'Switchgear', price: null, unit: '$/lineup', source: 'PG&E Unit Cost Guide, March 2026. PPI WPU1175, September 2026 index ' + PPI.switchgear.value + ', is stored and not applied.', url: SNAP.utility.url, published: SNAP.utility.pgePublished, dollarYear: null, confidence: 'low', status: 'partial', method: 'direct', fill: 'partial', index: PPI.switchgear, table: utilityRows('el.switchgear'), inTotal: false, note: 'The guide prices a PME-5 padmount switch and a padmounted visible switch at the point of common coupling. Neither is a switchgear lineup. No row was escalated. A lineup price still needs a vendor quote.' }),
+    item({ id: 'el.interconnection', label: 'Interconnection, ISO-queue study costs', price: null, unit: '$/kW', low: iso.low, high: iso.high, source: 'Lawrence Berkeley National Laboratory interconnection cost analyses. Completed-project means, real 2022 dollars: SPP 2020–2022 $57/kW (Seel et al., April 2023 briefing); PJM 2020–2022 mean $84/kW, median $30/kW (Seel et al., January 2023); MISO 2019–2021 mean $102/kW (Seel et al., 2022).', url: SNAP.lbnl.url, published: '2023-04', dollarYear: 2022, confidence: 'low', status: 'range', method: 'direct', fill: 'partial', table: SNAP.lbnl.records, inTotal: false, note: 'These are transmission-queue study costs. Network upgrades are most of the recent increase. They are not a behind-the-meter ComEd or distribution facility cost, and they are not added to the $334/kWh battery point, which already includes permitting and interconnection and excludes network upgrades. Seel et al., June 2023, state that CAISO does not disclose project-level costs and that ERCOT uses connect-and-manage. No ERCOT or CAISO dollar was read. NYISO and ISO-NE means were not transcribed. The three means are not averaged.' }),
+    item({ id: 'el.protection', label: 'Protective relaying and metering', price: null, unit: '$/project', source: 'PG&E Unit Cost Guide, March 2026, and ComEd DER Interconnection Guidelines, effective 2024-11-30.', url: SNAP.utility.url, published: SNAP.utility.pgePublished, dollarYear: null, confidence: 'low', status: 'partial', method: 'direct', fill: 'partial', table: utilityRows('el.protection'), inTotal: false, note: 'The figures are a new IPAC relay cabinet, direct transfer trip, and a ComEd substation relay estimate. The two $150,000 figures are different scopes and are not one price. None is a behind-the-meter relaying package, and none is charged. A general protection package still needs RSMeans or a vendor quote.' }),
 
     item({ id: 'labor.index', label: 'State and metro construction-wage index', price: null, unit: 'factor', source: Labor.SOURCE, url: Labor.URL, published: Labor.PUBLISHED, dollarYear: 2025, region: 'labor', confidence: 'high', status: 'sourced', method: 'indexed', fill: 'free', inTotal: false, note: 'National composite is the employment-weighted mean of the three May 2025 mean hourly wages. A state or metro factor divides that geography\'s composite by the national composite. Electrician-only is stored beside it and is not the factor applied. Equipment stays at 1. ZIP3 is loaded only for 100 (New York), 606 (Chicago), 770 (Houston), 900 (Los Angeles), and 941 (San Francisco). Any other ZIP uses the state. Davis-Bacon county determinations were not read and are not blended. An ECEC benefit-load percent was not confirmed and would cancel in a national ratio. RSMeans city indexes were not copied.' }),
     item({ id: 'gen.eia', label: 'On-site generation capital cost', price: null, unit: '$/kW', source: 'U.S. Energy Information Administration, Assumptions to the Annual Energy Outlook 2025: Electricity Market Module, Table 3, April 2025. Costs from Sargent & Lundy, January 2024.', url: EIA_URL, published: '2025-04', dollarYear: 2024, confidence: 'high', status: 'sourced', method: 'direct', fill: 'free', table: EIA_GEN, inTotal: false, note: 'Each technology keeps its own base overnight cost. There is no single generation price, and none of these rows is added to a battery or PV total. The 150 MW battery row ($1,580/kW, fixed O&M $40.62/kW-yr) is context for the O&M note. The preview battery capital stays the Cole 2025 point. The live book\'s rounded rates were not copied. Table 3 excludes regional multipliers except as its notes describe for wind and solar, which are not in this table.' }),
-    item({ id: 'lazard.capex', label: 'Lazard capital cost', price: null, unit: '$/kW', source: 'Lazard Levelized Cost of Energy+ Version 17.0, June 2024, as cited by the NREL 2025 storage update.', url: 'https://www.lazard.com/media/xemfey0k/lazards-lcoeplus-june-2024-_vf.pdf', published: '2024-06', dollarYear: null, confidence: 'none', status: 'needs source', method: 'direct', fill: 'paid', inTotal: false, note: 'The Lazard capex tables were not read into this book. NREL already used that edition in the storage survey. No second capex was taken from it. A paid data service is not required for this line. The free PDF still has to be transcribed.' })
+    item({ id: 'lazard.capex', label: 'Lazard capital cost', price: null, unit: '$/kW', source: 'Lazard Levelized Cost of Energy+ Version 18.0, June 2025, and Version 17.0, June 2024. Capital-cost ranges as printed. No midpoint is taken.', url: SNAP.lazard.url, published: SNAP.lazard.published, dollarYear: null, confidence: 'medium', status: 'sourced', method: 'direct', fill: 'free', table: SNAP.lazard.records, inTotal: false, note: 'No dollar year is printed on the assumption pages. The illustrative $153/kWh on the sample low-case page is not a published range and is not stored. Operating plants at zero capital are not new-build capex. Hybrid storage is stored beside generation and is not added to the Cole point. The PDF is not stored.' })
   ];
 }
 
