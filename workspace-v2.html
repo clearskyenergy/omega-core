@@ -376,7 +376,7 @@ function settingsDrawer() {
     rows: [
       { key: 'billing', name: 'Plan & billing', sub: planName(), href: '/workspace#billing', cta: 'Open' },
       { key: 'team', name: 'Team', sub: 'Who is in this workspace', href: '/workspace#team', cta: 'Open' },
-      { key: 'classic', name: 'Current home', sub: 'The home everyone still uses', href: '/workspace', cta: 'Open' },
+      { key: 'classic', name: 'Classic home', sub: 'Open the previous workspace layout', href: '/workspace?ui=v1', cta: 'Open' },
       { key: 'signout', name: 'Sign out', sub: ME, cta: 'Sign out', onClick: S.signOut }
     ]
   });

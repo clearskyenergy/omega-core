@@ -4,9 +4,10 @@
 
    apply(brand)  paints the tenant's colours and name.
    chrome(opts)  paints the same header (name · who · Sign out) and the same
-                 left navigation on every office page, in the order the
-                 business runs: sell → build → stock → deliver → money →
-                 setup. Website, installation and the URL generator are
+                 left navigation on every office page: eight places named
+                 as the hex hub names them (Today, Sales, Customers, Plant,
+                 Deliver, Stock, Money, Setup), the one you are in open.
+                 Website, installation and the URL generator are
                  ClearSky's to maintain and appear only for a ClearSky owner.
                  After the page's first render it lands on the section the
                  address names (#hash, or #detail for ?order=) — land().
@@ -16,6 +17,10 @@
    hub(input)    the office's hex-hub counts and captions, ONE computation
                  for the desktop dashboard and the Omega Logic app, so the
                  two surfaces count the same things.
+   pathBar / guideFor / guide
+                 the order's path as Omega Prime draws a site's: the bar of
+                 seven steps, and the guide that names the one next action
+                 and pulses its control (the server's office-stage.path()).
    moneyTiles(t) the money tiles from the receivables ledger's own totals
                  (the server's receivables.totals(), what Accounting prints).
    words / when / day / count / plainError
@@ -112,51 +117,58 @@
   /* is this part shown: not said (null) shows everything */
   function holds(parts, part) { return !part || !Array.isArray(parts) || parts.indexOf(part) >= 0; }
 
-  /* opts.team: show Team under Setup (an owner or administrator, or ClearSky)
+  /* THE MENU IS THE HUB (2026-10-17, Tommy: "really clean up omega logic and
+     make it less complicated all streamlined"): eight places, named as the
+     hex hub names them, in the order an order walks: Today, Sales,
+     Customers, Plant, Deliver, Stock, Money, then Setup. A place's own pages
+     open under it while you are in it; every page is still one click away.
+     opts.team: Team under Setup (an owner or administrator, or ClearSky)
      opts.parts: the Omega Logic parts held (an array), or null for all. A
-     link's fourth field names the part whose endpoint serves it; a group
+     link's fourth field names the part whose endpoint serves it; a place
      with nothing left is not drawn. */
   function groups(org, owner, opts) {
     opts = opts || {};
     var q = '?org=' + encodeURIComponent(org), e = encodeURIComponent(org), parts = owner ? null : opts.parts;
     var g = [
-      ['Run the business', [
-        ['dashboard', 'Dashboard', '/omega-logic' + q],
+      ['Today', [
+        ['dashboard', 'Today', '/omega-logic' + q]]],
+      ['Sales', [
         ['orders', 'Orders', '/omega-logic' + q + '#orders'],
-        ['pos', 'Company POs', '/po-inbox?office=1&org=' + e],
-        ['customers', 'Customers', '/portals/customer/admin.html' + q],
-        ['officeapp', 'Office app', '/office/app' + q]]],
-      ['Build', [
-        ['woboard', 'Work order board', '/plant/work-orders.html' + q, 'plant'],
-        ['works', 'Work orders & registration', '/plant/' + q, 'plant'],
+        ['pos', 'Customer POs', '/po-inbox?office=1&org=' + e]]],
+      ['Customers', [
+        ['customers', 'Customers', '/portals/customer/admin.html' + q]]],
+      ['Plant', [
+        ['woboard', 'Work orders', '/plant/work-orders.html' + q, 'plant'],
+        ['works', 'Serials & registration', '/plant/' + q, 'plant'],
         ['board', 'Plant board', '/plant/manager.html' + q, 'plant'],
         ['stations', 'Stations & tablets', '/plant/manager.html' + q + '#stations', 'plant'],
-        ['app', 'Plant app', '/plant/app' + q, 'plant']]],
-      ['Stock & supply', [
-        /* finished units on the shelf are the plant's (api/logic-plant page=stock) */
-        ['inventory', 'Inventory', '/logic-inventory.html' + q, 'plant'],
-        ['materials', 'Materials plan', '/logic-materials.html' + q, 'materials'],
-        ['purchasing', 'Purchase orders', '/logic-materials.html' + q + '#po', 'materials'],
-        ['vendors', 'Vendors & prices', '/logic-materials.html' + q + '#suppliers', 'materials']]],
+        /* the plant board's own Quality view: holds, failed tests and
+           routing exceptions (a serial's record is under Serials) */
+        ['quality', 'Quality & holds', '/plant/manager.html' + q + '#quality', 'plant']]],
       ['Deliver', [
         ['shipping', 'Shipping & receiving', '/logic-logistics.html' + q, 'logistics'],
         ['custody', 'Sites & custody', '/logic-custody.html' + q, 'logistics'],
-        ['register', 'Fleet register', '/logic-register.html' + q, 'logistics'],
-        /* the plant board's own Quality view: holds, failed tests and
-           routing exceptions (a serial's record is looked up from Work
-           orders & registration) */
-        ['quality', 'Quality & holds', '/plant/manager.html' + q + '#quality', 'plant']]],
+        ['register', 'Fleet register', '/logic-register.html' + q, 'logistics']]],
+      ['Stock', [
+        /* finished units on the shelf are the plant's (api/logic-plant page=stock) */
+        ['inventory', 'Inventory', '/logic-inventory.html' + q, 'plant'],
+        ['materials', 'Materials plan', '/logic-materials.html' + q, 'materials'],
+        ['purchasing', 'Supplier orders', '/logic-materials.html' + q + '#po', 'materials'],
+        ['vendors', 'Suppliers & prices', '/logic-materials.html' + q + '#suppliers', 'materials']]],
       ['Money', [
         ['cash', 'Cash flow', '/omega-logic' + q + '#cash'],
         ['accounting', 'Accounting', '/logic-accounting.html' + q]]],
       ['Setup', [
         ['products', 'Products & bills', '/logic-catalog.html' + q]].concat(opts.team ? [
         ['team', 'Team', '/logic-team.html' + q]] : [], [
-        ['settings', 'Settings', '/logic-settings.html' + q]])]
+        ['settings', 'Settings', '/logic-settings.html' + q],
+        ['officeapp', 'Office app', '/office/app' + q],
+        ['app', 'Plant app', '/plant/app' + q, 'plant']])]
     ];
     if (owner) g.push(['ClearSky', [
       ['accounts', 'All OEM accounts', '/omega-logic'],
       ['admin', 'Subscribers & commissioning', '/logic-admin.html' + (org ? q : '')],
+      ['clearsky', 'This workspace (ClearSky)', '/omega-logic' + q + '#clearsky'],
       ['website', 'Website & installation', '/whitelabel-setup.html' + q],
       ['experience', 'Customer experience', '/customer-start.html' + q],
       ['urls', 'URL generator', '/logic-urls.html' + q],
@@ -311,16 +323,27 @@
     }
     if (!nav && shell) { nav = document.createElement('nav'); nav.className = 'logic-nav'; nav.setAttribute('aria-label', 'Office'); shell.insertBefore(nav, shell.firstChild); }
     if (nav) {
+      /* eight places; the one you are in opens its pages (the others are
+         drawn closed, a caret away, so nothing is ever more than one click) */
       var h = '';
       groups(org, owner, { team: team, parts: parts }).forEach(function (g) {
-        h += '<p class="eyebrow">' + esc(g[0]) + '</p>';
+        var key = g[0].toLowerCase().replace(/[^a-z]+/g, ''), here = g[1].some(function (l) { return l[0] === o.current; }), first = g[1][0];
+        if (g[1].length === 1) { h += '<a class="hub' + (here ? ' on' : '') + '" data-hub="' + esc(key) + '" href="' + esc(first[2]) + '"' + (here ? ' aria-current="page"' : '') + '>' + esc(g[0]) + '</a>'; return; }
+        h += '<div class="hub-row"><a class="hub' + (here ? ' on' : '') + '" data-hub="' + esc(key) + '" href="' + esc(first[2]) + '">' + esc(g[0]) + '</a>'
+          + '<button type="button" class="hub-x" data-hub-x="' + esc(key) + '" aria-expanded="' + (here ? 'true' : 'false') + '" aria-controls="lg-sub-' + esc(key) + '" aria-label="' + esc(g[0]) + ' pages">' + (here ? '\u25BE' : '\u25B8') + '</button></div>'
+          + '<div class="sub" id="lg-sub-' + esc(key) + '"' + (here ? '' : ' hidden') + '>';
         g[1].forEach(function (l) { h += '<a href="' + esc(l[2]) + '"' + (l[0] === o.current ? ' aria-current="page"' : '') + '>' + esc(l[1]) + '</a>'; });
+        h += '</div>';
       });
       if (o.local && o.local.length) {
         h += '<p class="eyebrow">On this page</p>';
         o.local.forEach(function (l) { h += '<a href="' + esc(l.href) + '" class="local"' + (l.id ? ' id="' + esc(l.id) + '"' : '') + (l.hidden ? ' hidden' : '') + '>' + esc(l.label) + '</a>'; });
       }
       nav.innerHTML = h;
+      /* a caret opens a place's pages in place, without leaving this one */
+      if (nav.querySelectorAll) Array.prototype.forEach.call(nav.querySelectorAll('[data-hub-x]'), function (b) {
+        b.onclick = function () { var sub = document.getElementById('lg-sub-' + b.getAttribute('data-hub-x')); if (!sub) return; sub.hidden = !sub.hidden; b.setAttribute('aria-expanded', sub.hidden ? 'false' : 'true'); b.textContent = sub.hidden ? '\u25B8' : '\u25BE'; };
+      });
     }
     land();
   }
@@ -460,6 +483,17 @@
     s.withReq.forEach(function (o) { s.needs.push({ o: o, why: count(openReq(o).length, 'customer request'), pill: 'answer' }); });
     s.attention.forEach(function (o) { if (!openReq(o).length) s.needs.push({ o: o, why: o.stage ? o.stage.next : 'needs attention', pill: 'fix' }); });
     s.toPrice.forEach(function (o) { if (!openReq(o).length) s.needs.push({ o: o, why: o.stage ? o.stage.next : 'price it', pill: canDo(o, 'price', owner) ? 'price' : 'accept' }); });
+    /* THE PATH (office-stage.path, 2026-10-17): every other step that is this
+       person's own — an invoice to issue, a hold to lift, the freight, a load
+       to inspect, a site to confirm — in the order the path walks them, said
+       in the server's words; an order listed above is not listed twice.
+       Somebody else's step (an admin's, ClearSky's, the customer's) is
+       listed under "waiting on others" and never counted. */
+    var listed = {}; s.needs.forEach(function (n) { listed[n.o.id] = true; });
+    orders.filter(function (o) { var n = o && o.path && o.path.next; return !!n && n.who === 'you' && !listed[o.id]; })
+      .sort(function (a, b) { return (a.path.at == null ? 99 : a.path.at) - (b.path.at == null ? 99 : b.path.at); })
+      .forEach(function (o) { listed[o.id] = true; s.needs.push({ o: o, why: o.path.next.text, pill: PILL[o.path.next.control] || 'open' }); });
+    s.others = orders.filter(function (o) { var n = o && o.path && o.path.next; return !!n && !listed[o.id] && ['admin', 'clearsky', 'customer'].indexOf(n.who) >= 0; });
     /* a follow-up is due on its day; a task with no day is owed now */
     var follow = Array.isArray(x.follow) ? x.follow : [];
     s.follow = follow.filter(function (f) { var d = isoDay(f && f.followUpAt); return d ? d <= today : !!f && f.type === 'task'; });
@@ -496,7 +530,7 @@
      that has a PO waiting, saying whose it is; a company with one PO
      waiting opens that PO's review itself, a company with several opens its
      own queue. Without the office's list (an older server): the one row to
-     the Company POs page, as before. */
+     the Customer POs page, as before. */
   function reviewLinks(org, s) {
     var e = encodeURIComponent(org || ''), inbox = '/po-inbox?office=1&org=' + e;
     if (!s || !s.review) return [];
@@ -510,7 +544,7 @@
         href: one ? '/customer-po?org=' + e + '&office=1&customerId=' + encodeURIComponent(g.customerId) + '&intake=' + encodeURIComponent(p.id)
           : g.customerId ? inbox + '&customerId=' + encodeURIComponent(g.customerId) : inbox };
     });
-    if (s.review > listed) out.push({ title: count(s.review - listed, 'more company PO') + ' to review', sub: 'on the Company POs page', href: inbox });
+    if (s.review > listed) out.push({ title: count(s.review - listed, 'more company PO') + ' to review', sub: 'on the Customer POs page', href: inbox });
     return out;
   }
 
@@ -535,22 +569,83 @@
   function tileHtml(tl) {
     return '<div data-k="' + esc(tl.k) + '"' + (tl.bad ? ' class="bad"' : '') + '><small>' + esc(tl.label) + '</small><b>' + (tl.cents == null ? '—' : dollars(tl.cents)) + '</b>' + (tl.note ? '<small>' + esc(tl.note) + '</small>' : '') + '</div>';
   }
-  /* The order stages, counted by the server's stage (api/_lib/office-stage.js
-     totals().byStage) the same way on the dashboard strip and the app. */
-  function stageTiles(byStage) {
-    var b = byStage || {};
-    function n() { var t = 0; for (var i = 0; i < arguments.length; i++) t += Number(b[arguments[i]]) || 0; return t; }
-    return [
-      { k: 'quote', label: 'Requests & quotes', n: n('quote', 'priced'), note: 'to price or accept' },
-      { k: 'deposit', label: 'Awaiting deposit', n: n('deposit'), note: 'accepted, deposit not paid' },
-      { k: 'build', label: 'In build', n: n('release', 'production', 'balance'), note: 'released to the plant' },
-      { k: 'ship', label: 'Ready to ship', n: n('ship'), note: 'paid in full' },
-      { k: 'shipped', label: 'Shipped', n: n('shipped', 'complete'), note: 'of the orders shown' },
-      { k: 'attention', label: 'Needs attention', n: n('exception'), bad: n('exception') > 0, note: 'an exception to fix' }
-    ];
+  /* ── THE PATH BAR AND THE GUIDE (2026-10-17) ─────────────────────────────
+     Omega Prime's shape for the office: a bar of the order's seven steps lit
+     to where it is, and a guide that says the ONE next thing and pulses the
+     control. The steps, the verdict and the next action are the server's
+     (api/_lib/office-stage.js path(): `steps` is its PATH, `p` an order's
+     path); this draws them and decides nothing. */
+  var PILL = { price: 'price', accept: 'accept', 'issue-deposit': 'invoice', 'issue-balance': 'invoice', 'record-deposit': 'record', 'record-balance': 'record',
+    freight: 'ship', ship: 'ship', deliver: 'receive', confirm: 'confirm', site: 'sites', fix: 'fix', 'work-order': 'open' };
+  var WHO = { admin: 'Waiting on an owner or administrator', clearsky: 'Waiting on ClearSky', customer: 'Waiting on the customer', plant: 'With the plant', carrier: 'On the road', auto: 'Omega Logic is on it' };
+  /* the next action as one line, said as somebody else's when it is */
+  function nextLine(n) { if (!n) return ''; return !n.who || n.who === 'you' ? n.text : (WHO[n.who] || 'Waiting') + ' \u00b7 ' + n.text; }
+  /* one order's bar (opts.p: its path), or the pipeline (opts.counts: the
+     server's pipeline(), each step a button that picks it) */
+  function pathBar(steps, opts) {
+    opts = opts || {}; steps = Array.isArray(steps) ? steps : [];
+    var p = opts.p || null, counts = opts.counts || null, h = '';
+    steps.forEach(function (st, i) {
+      var cls = '';
+      if (p) cls = p.at == null ? '' : i < p.at ? 'done' : i === p.at ? (p.state === 'attention' ? 'on bad' : 'on') : '';
+      if (counts) cls = (opts.current === st.key ? 'on' : '') + (Number(counts[st.key]) ? ' has' : '');
+      var n = counts ? '<b>' + (Number(counts[st.key]) || 0) + '</b>' : '';
+      h += counts ? '<button type="button" class="' + cls + '" data-step="' + esc(st.key) + '" title="' + esc(st.ask || '') + '"><i></i>' + esc(st.label) + n + '</button>'
+        : '<span class="' + cls + '" data-step="' + esc(st.key) + '"' + (p && i === p.at ? ' aria-current="step"' : '') + '><i></i>' + esc(st.label) + '</span>';
+    });
+    if (p) h += '<span class="end' + (p.state === 'complete' ? ' done on' : '') + '"><i></i>\u2713<em> Complete</em></span>';
+    if (counts) h += (Number(counts.attention) ? '<button type="button" class="bad' + (opts.current === 'attention' ? ' on' : '') + '" data-step="attention"><i></i>Needs attention<b>' + Number(counts.attention) + '</b></button>' : '')
+      + '<button type="button" class="end' + (opts.current === 'complete' ? ' on' : '') + '" data-step="complete"><i></i>\u2713 Complete<b>' + (Number(counts.complete) || 0) + '</b></button>';
+    return '<div class="lg-path' + (counts ? ' pipe' : '') + (opts.compact ? ' sm' : '') + '" role="list" aria-label="' + (counts ? 'Orders by step' : 'Where this order is') + '">' + h + '</div>';
+  }
+  /* What the guide says about one order: the step it is on, the question
+     that step answers, the verdict, and the one action (labels: the
+     page's own button words, by control). */
+  function guideFor(steps, p, labels) {
+    if (!p) return null;
+    var st = p.at != null && steps && steps[p.at] ? steps[p.at] : null, n = p.next, mine = !!n && n.who === 'you', lab = (labels || {})[n ? n.control : ''] || '';
+    return { eyebrow: 'OMEGA LOGIC \u00b7 ' + (p.state === 'complete' ? 'COMPLETE' : p.state === 'cancelled' ? 'CANCELLED' : (p.at + 1) + ' / ' + p.of + ' \u00b7 ' + String(p.label || '').toUpperCase()),
+      ask: st ? st.ask : '', title: mine ? n.text : p.state === 'attention' ? 'Needs attention' : p.state === 'complete' ? 'Complete' : n ? (WHO[n.who] || n.text) : (p.label || ''),
+      say: p.say + (n && !mine ? ' ' + n.text + '.' : ''), act: mine && lab ? 'Press ' + lab : '', control: n ? n.control : null, mine: mine, bad: p.state === 'attention' };
+  }
+  /* The guide card: Prime's corner card, or (opts.inline) a card in the
+     page's own flow, as the phone app draws it. opts: { eyebrow, title,
+     say, act, target (a selector or element to pulse), inline (element),
+     bad }. Hide/Show is remembered on this device. */
+  var GUIDE_MIN = 'omega_logic_guide_min';
+  function pulse(target) {
+    if (typeof document === 'undefined' || !document.querySelectorAll) return;
+    Array.prototype.forEach.call(document.querySelectorAll('.lg-pulse'), function (e) { e.classList.remove('lg-pulse'); });
+    var t = typeof target === 'string' ? document.querySelector(target) : target;
+    if (t && t.classList) t.classList.add('lg-pulse');
+  }
+  function guide(g) {
+    if (typeof document === 'undefined' || !document.createElement) return null;
+    var el;
+    if (!g) { el = document.getElementById('lg-guide'); if (el) el.hidden = true; pulse(null); return null; }
+    var body = '<div class="gh"><span>' + esc(g.eyebrow || 'OMEGA LOGIC') + '</span>' + (g.inline ? '' : '<button type="button" id="lg-guide-min">Hide</button>') + '</div>'
+      + '<div class="gb">' + (g.ask ? '<small class="ask">' + esc(g.ask) + '</small>' : '') + '<h4>' + esc(g.title || '') + '</h4>' + (g.say ? '<p>' + esc(g.say) + '</p>' : '') + (g.act ? (g.target ? '<button type="button" class="act" data-guide-go>' + esc(g.act) + '</button>' : '<div class="act">' + esc(g.act) + '</div>') : '') + '</div>';
+    if (g.inline) {
+      el = g.inline; el.className = 'lg-guide inline' + (g.bad ? ' bad' : ''); el.innerHTML = body; el.hidden = false;
+    } else {
+      el = document.getElementById('lg-guide');
+      if (!el) { el = document.createElement('aside'); el.id = 'lg-guide'; el.setAttribute('aria-live', 'polite'); document.body.appendChild(el); }
+      /* folded on a phone until it is opened (it would sit over the page); remembered either way */
+      var min = false, kept = null; try { kept = localStorage.getItem(GUIDE_MIN); } catch (e) {}
+      min = kept === '1' || (kept == null && typeof window !== 'undefined' && window.innerWidth > 0 && window.innerWidth <= 760);
+      el.className = 'lg-guide' + (g.bad ? ' bad' : '') + (min ? ' min' : ''); el.innerHTML = body; el.hidden = false;
+      var b = document.getElementById('lg-guide-min');
+      if (b) { b.textContent = min ? 'Show' : 'Hide'; b.onclick = function () { var m = !el.classList.contains('min'); el.classList.toggle('min', m); b.textContent = m ? 'Show' : 'Hide'; try { localStorage.setItem(GUIDE_MIN, m ? '1' : '0'); } catch (e) {} }; }
+    }
+    pulse(g.target || null);
+    /* the action line takes you to the control it names */
+    var go = el.querySelector ? el.querySelector('[data-guide-go]') : null;
+    if (go) go.onclick = function () { var t = typeof g.target === 'string' ? document.querySelector(g.target) : g.target; if (!t) return; if (t.scrollIntoView) t.scrollIntoView({ behavior: 'smooth', block: 'center' }); if (t.focus) try { t.focus({ preventScroll: true }); } catch (e) { t.focus(); } };
+    return el;
   }
 
   window.OmegaLogicTheme = { apply: apply, reset: reset, chrome: chrome, groups: groups, holds: holds, partsHeld: partsFlag, signInHref: signInHref, nextFor: nextFor, officeSubPage: officeSubPage,
     land: land, landTarget: landTarget, words: words, source: source, count: count, day: day, when: when, plainError: plainError, fillFor: fillFor,
-    hub: hub, invoices: invoices, reviewLinks: reviewLinks, moneyTiles: moneyTiles, tileHtml: tileHtml, stageTiles: stageTiles, company: company, safeUrl: safeUrl };
+    hub: hub, invoices: invoices, reviewLinks: reviewLinks, moneyTiles: moneyTiles, tileHtml: tileHtml, company: company, safeUrl: safeUrl,
+    pathBar: pathBar, guideFor: guideFor, guide: guide, pulse: pulse, nextLine: nextLine, pills: PILL };
 })();

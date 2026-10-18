@@ -125,7 +125,7 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     return out;
   }
 
-  var live = await open('before', '/workspace', noisy(HOST), false);
+  var live = await open('before', '/workspace?ui=v1', noisy(HOST), false);
   var before = await live.p.evaluate(function () {
     var t = document.body.innerText || '';
     return { hex: !!document.querySelector('.hexhub'), where: t.indexOf('Where to?') >= 0, burns: (t.match(/S\.J Burns LLC \(330 roberts\) has been in review/g) || []).length, addr: (t.match(/4846 S\. Michigan Ave, Chicago/g) || []).length };

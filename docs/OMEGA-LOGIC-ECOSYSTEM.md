@@ -34,12 +34,28 @@ ClearSky                      makes Omega Logic (like Intuit makes QuickBooks)
 Both apps open on the HEX HUB (`omega-hexhub.js`): seven cells in a
 honeycomb, the way the Ω in the app icon holds seven lit cells. One in the
 middle, six around it. A cell is a hub of the business; a badge is what
-needs a person. Below the hub, QuickBooks-style panels list what is in each
-hub. The desktops show the same hub at the top of their home page.
+needs a person. A tapped cell opens its panel under the hub: what is in that
+hub now, then where to open it. The desktops show the same hub at the top of
+their home page, and the office's left menu is the same map: Today, Sales,
+Customers, Plant, Deliver, Stock, Money, then Setup (2026-10-17).
+
+**The path** (2026-10-17, Omega Prime's shape for the office). Every order
+walks Price → Deposit → Build → Final payment → Ship → Deliver → On site →
+Complete. `api/_lib/office-stage.js path()` is the ONE rule. Per order and
+for the person looking, it gives the step, a verdict, and the one next
+action with whose it is (`you`, `admin`, `clearsky`, `customer`, `plant`,
+`carrier`, `auto`). `api/logic-office.js` sends it on every order. For
+orders past Ship it reads the units' custody: On site means every shipping
+unit is bound to a site. It also sends `path` (the steps) and `pipeline`
+(the counts). `OmegaLogicTheme.pathBar` draws the bar and
+`OmegaLogicTheme.guide` the guide card: Prime's corner card on the
+desktop, inline on the app's order. Today (`OmegaLogicTheme.hub`) counts
+every next step that is the viewer's and lists somebody else's apart.
+Nothing here is a gate: each button is still refused by its own endpoint.
 
 | | Omega Logic app (the supplier) | Customer app (the supplier's customer) |
 |---|---|---|
-| centre | **Today** — what needs a person | **Fleet** — their units, sites, where each is |
+| centre | **Today** — what needs you, Start here first | **Fleet** — their units, sites, where each is |
 | ring | Sales · Customers (CRM) · Plant · Deliver · Stock · Money | Size · Design · POs · Pay · Shipping · Warranty |
 | tabs | Home · Orders · Customers · Sites · Menu | Home · Orders · POs · Fleet · Account |
 
@@ -87,8 +103,9 @@ customer hub does:
 
 ## Desktop
 
-The same hubs and the same data on a computer: the office dashboard
-(`omega-logic.html`) and the CRM page (`portals/customer/admin.html`) for the
+The same hubs and the same data on a computer: the office home
+(`omega-logic.html`: Today, Orders `#orders` and Numbers `#cash`, under the
+path's bar) and the CRM page (`portals/customer/admin.html`) for the
 supplier; the customer portal (`portals/customer/`) for their customer.
 Nothing on the desktop is different in kind — it has more room.
 

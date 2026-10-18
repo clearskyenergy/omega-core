@@ -68,7 +68,18 @@ var live = fs.readFileSync(path.join(__dirname, '../../workspace.html'), 'utf8')
 ok('the live rail text is untouched', /label: 'All tools'/.test(shell) && /label: 'Quote Desk'/.test(shell));
 ok('a page can pass its own rail without changing the default', /opts\.nav \|\| NAV/.test(shell) && /opts\.tabsItems \|\| TABS/.test(shell));
 ok('the live home still draws the hex hub', /omega-hexhub\.js/.test(live) && /Where to\?/.test(live));
-ok('?ui=v2 only redirects', /ui=v2/.test(live) && /\/workspace-v2/.test(live));
+var routeScript = live.match(/<script>\s*(\/\* The journey[\s\S]*?)<\/script>/)[1];
+function routed(search, hash) {
+  var dest = null;
+  require('vm').runInNewContext(routeScript, { location: { search: search, hash: hash, replace: function (url) { dest = url; } } });
+  return dest;
+}
+ok('the default home opens the journey and preserves workspace query context', routed('?org=northstar', '') === '/workspace-v2?org=northstar');
+ok('classic home remains available', routed('?ui=v1', '') === null);
+['#tools', '#modules', '#plans', '#billing', '#module-grid', '#team', '#feed', '#flight'].forEach(function (hash) {
+  ok('existing deep link stays reachable: ' + hash, routed('', hash) === null);
+});
+ok('journey settings links survive', routed('', '#settings') === '/workspace-v2#settings');
 var v2 = fs.readFileSync(path.join(__dirname, '../../workspace-v2.html'), 'utf8');
 ok('the preview does not load the hex hub', v2.indexOf('omega-hexhub.js') < 0 && v2.indexOf('Where to?') < 0);
 var hidden = V.home({ projects: [{ id: 'a' }, { id: 'b' }], needsSize: 72, needs: [{ key: 'trial', t: 'Your trial ends in 2 days', s: 'Keep what you use.', cta: 'See plans', href: '/workspace#plans' }], cards: [] });

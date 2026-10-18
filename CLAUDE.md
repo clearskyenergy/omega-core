@@ -657,7 +657,12 @@ is not built.
   may go — judged by
   the SAME `logic-access.authorize` every office endpoint runs (their email
   domain's workspace, an `org_members` grant; the ClearSky owner sees all).
-  One company: straight in; several: pick; none: said plainly. The phone
+  One company: straight in; several: pick; none: said plainly. A person
+  whose own workspace is open but holds no Omega Logic is told it is not on
+  the plan (`reason: 'notOnPlan'`). An owner or administrator gets *Add Omega
+  Logic to your plan*, which opens the Modules card `/workspace#module-logic-office`
+  (the one Opt-in). Anyone else is told to ask them. A closed or lapsed
+  workspace still says to contact ClearSky (2026-10-17). The phone
   remembers the choice and forgets it on sign-out; `?org=` in an old link
   only preselects. `/office/app.webmanifest` is the one office manifest.
   An app installed on an iPhone home screen signs in THROUGH ITS OWN HOST
@@ -674,12 +679,31 @@ is not built.
   with more than one company, a round ↻ and a Sign out pill — it fits a
   360px phone (`check:pages` office-app-header).
 - **One chrome.** `OmegaLogicTheme.chrome()` in `omega-logic-theme.js` paints
-  the header (name · who · Sign out) and the left menu on EVERY office page,
-  in the order the business runs. A page never builds its own menu; it calls
+  the header (name · who · Sign out) and the left menu on EVERY office page.
+  The menu is the hub: eight places named as the hex hub names them (Today,
+  Sales, Customers, Plant, Deliver, Stock, Money, Setup). The place you are
+  in shows its pages, and a caret opens any other. A page never builds its own menu; it calls
   `chrome({org, current, owner, brand, who, local})` after its API response.
   Website, installation and the URL generator are ClearSky's and show only
   for a ClearSky owner (`ownerFlag` remembers the answer for pages whose
   endpoint does not say; showing a link is never access).
+- **One path for every order** (2026-10-17, Tommy: "really clean up omega
+  logic and make it less complicated all streamlined just like we did with"
+  Omega Prime). Price → Deposit → Build → Final payment → Ship → Deliver →
+  On site → Complete is `api/_lib/office-stage.js path()`, the ONE rule. It
+  gives the step, the verdict and the one next action with whose it is,
+  built on `stageOf`/`actions` (D1 unchanged), the invoices, the delivery
+  legs and the units' custody (On site = every shipping unit bound to a
+  site). `api/logic-office.js` sends it on every order with `path` and
+  `pipeline`. The desktop home (`omega-logic.html`) is three views under the
+  bar: Today (`What needs you`, Start here first), Orders (`#orders`, the
+  guided order: bar, verdict, the one control, More about this order) and
+  Numbers (`#cash`); ClearSky's forms are `#clearsky`. The office app draws
+  the same bar and an inline guide, and opens `?org=&order=` links (Omega
+  Prime's Omega Logic button). The guide (`OmegaLogicTheme.guide`) never
+  offers a button the server refuses: someone else's step says whose.
+  Price, accept and ship stay on the desktop. `scripts/test-office-stage.js`
+  holds the rule.
 - **Stations do the work.** A BOM line may carry `station` (routing key) and
   `step`; the routing may carry `checks[]` per operation. `api/_lib/plant-work.js`
   (pure) turns those into the steps a bench shows for a unit, `judgeScan`

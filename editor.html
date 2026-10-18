@@ -195,10 +195,15 @@ function openOmegaCore(){
 <script src="/omega-comed-layers.js"></script>
 <script src="/omega-grid-verdict.js"></script>
 <script src="/omega-grid-panel.js"></script>
+<script src="/omega-editor-features.js"></script>
 <!-- Omega Prime's "Open in Site Map" (?from=prime): fills the configured
      unit in from this page's own catalog entry and opens the BESS Guided
      Build. Never places anything itself. -->
 <script src="/omega-prime-handoff.js"></script>
+<!-- Facility demand screen: the 12-month shave is the only demand credit.
+     A ratchet is not added a second time. omega-demand-screen.js is the
+     formula; the page only paints it. -->
+<script src="/omega-demand-screen.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
      This is the button that gives it a way in, plus the honest labelling: the
@@ -1859,14 +1864,14 @@ window.onerror = function(msg, src, line, col, err) {
     <button class="menu-item" onclick="rbRun(openProjectsModal)"><span class="mi-ico">▤</span> Open Projects…</button>
     <button class="menu-item" onclick="rbRun(saveProject)"><span class="mi-ico">▽</span> Save<span class="mi-key">⌘S</span></button>
     <div class="menu-sep"></div>
-    <button class="menu-item" onclick="rbRun(omegaPrint)"><span class="mi-ico">⎙</span> Print / PDF</button>
-    <button class="menu-item" onclick="rbRun(openProposalExport)"><span class="mi-ico">▦</span> Proposal</button>
+    <button class="menu-item omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(omegaPrint)"><span class="mi-ico">⎙</span> Print / PDF</button>
+    <button class="menu-item omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(openProposalExport)"><span class="mi-ico">▦</span> Proposal</button>
     <button class="menu-item" onclick="rbRun(d4Open)"><span class="mi-ico">&#128462;</span> Documentation&hellip;</button>
     <button class="menu-item" onclick="rbRun(e3BrowserOpen)"><span class="mi-ico">&#9636;</span> Equipment Library</button>
     <button class="menu-item" onclick="rbRun(e3MeteoOpen)"><span class="mi-ico">&#9728;</span> Meteo Data</button>
     <button class="menu-item" onclick="rbRun(e5Open)"><span class="mi-ico">&#9968;</span> Topography</button>
-    <button class="menu-item" onclick="rbRun(openBomSourcing)"><span class="mi-ico">⛃</span> Bill of Materials</button>
-        <button class="menu-item" onclick="rbRun(openElectricalEstimate)"><span class="mi-ico">⚡</span> Electrical Estimate</button>
+    <button class="menu-item omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(openBomSourcing)"><span class="mi-ico">⛃</span> Bill of Materials</button>
+        <button class="menu-item omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(openElectricalEstimate)"><span class="mi-ico">⚡</span> Electrical Estimate</button>
     <div class="menu-sep"></div>
     <button class="menu-item" onclick="rbNav('/')"><span class="mi-ico">←</span> Back to Portal</button>
   </div>
@@ -1886,6 +1891,16 @@ window.onerror = function(msg, src, line, col, err) {
         </button>
       </div>
       <div class="rpanel-cap">1 &middot; Site</div>
+    </div>
+    <div class="rpanel" data-shelf="1" data-omega-slot="ground">
+      <div class="rpanel-body">
+        <button class="rbtn" onclick="rbRun(ovUpload)" title="Upload a site plan / survey / aerial image to trace over"><span class="rb-ico" style="color:var(--accent-2)">⬆</span><span class="rb-lbl">Upload<br>Image</span></button>
+        <button class="rbtn" id="rb-ov-stencil" onclick="rbRun(ovStencil)" title="Convert the uploaded image to a clean black &amp; white engineering stencil to trace over"><span class="rb-ico" style="color:var(--text)">◨</span><span class="rb-lbl">Stencil<br>B&amp;W</span></button>
+        <button class="rbtn" id="rb-gps" onclick="openGpsPlacement()" title="GPS Placement — drop equipment by latitude/longitude on a live Google Map. Markers lock perfectly to their coordinates at any zoom (no drift), then apply to the canvas."><span class="rb-ico" style="color:#4285F4">📍</span><span class="rb-lbl">GPS<br>Place</span></button>
+        <button class="rbtn" id="rb-recenter" onclick="recenterOnEquipment()" title="Recenter the view on your placed equipment — brings any off-screen equipment back into the window"><span class="rb-ico" style="color:#34A853">⊕</span><span class="rb-lbl">Recenter</span></button>
+        <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
+      </div>
+      <div class="rpanel-cap">Ground</div>
     </div>
     <!-- Build flows, ordered by project type. One button per destination. -->
     <div class="rpanel">
@@ -1908,7 +1923,7 @@ window.onerror = function(msg, src, line, col, err) {
      deleting the button would be fine but deleting the tool would not.
      It was already marked LEAVING SOON and the BESS Sizer beside it does
      the same job; the ribbon slot is worth more than the second door. -->
-        <button class="rbtn" id="rb-bess-config" hidden aria-hidden="true" onclick="openBessModal(null)" title="BESS Config &mdash; size the battery, set chemistry, run the value stack. Being retired; the BESS Sizer replaces it." style="display:none;position:relative"><span class="rb-ico" style="color:var(--accent)">&#9881;</span><span class="rb-lbl">BESS<br>Config</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(239,68,68,.9);color:#FFF1F1;padding:1px 3px;border-radius:3px;line-height:1.2">LEAVING SOON</span></button>
+        <button class="rbtn" id="rb-bess-config" data-omega-feature="bess-config" data-omega-home="home|3 · Size &amp; Configure" hidden aria-hidden="true" onclick="openBessModal(null)" title="BESS Config &mdash; size the battery, set chemistry, run the value stack. Being retired; the BESS Sizer replaces it." style="display:none;position:relative"><span class="rb-ico" style="color:var(--accent)">&#9881;</span><span class="rb-lbl">BESS<br>Config</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(239,68,68,.9);color:#FFF1F1;padding:1px 3px;border-radius:3px;line-height:1.2">LEAVING SOON</span></button>
         <button class="rbtn" onclick="openBessSizer()" title="BESS Sizer &mdash; size, screen and qualify a site from the utility bill and site details. Analysis only, nothing is placed." style="position:relative"><span class="rb-ico" style="color:var(--accent)">&#9878;</span><span class="rb-lbl">BESS<br>Sizer</span></button>
         <button class="rbtn" onclick="openSolarBessSizer()" title="Solar &rarr; BESS Sizer &mdash; size storage from the solar drawn on the sitemap"><span class="rb-ico" style="color:var(--amber)">&#9788;</span><span class="rb-lbl">Solar BESS<br>Sizer</span></button>
         <button class="rbtn" onclick="homeStartWizard('BTM')" title="Behind-the-meter guided flow &mdash; coming soon" style="display:none;position:relative;opacity:.72"><span class="rb-ico">&#9644;</span><span class="rb-lbl">BESS<br>BTM</span><span style="position:absolute;top:2px;right:3px;font-size:6.5px;font-weight:800;letter-spacing:.3px;background:rgba(245,158,11,.9);color:#1A1206;padding:1px 3px;border-radius:3px;line-height:1.2">SOON</span></button>
@@ -2095,10 +2110,10 @@ window.onerror = function(msg, src, line, col, err) {
             <div class="rb-fly-head">Alpitronic</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-ev',function(){evSetPost('alpitronic_hyc400')})"><span class="fi-ico">▦</span> Alpitronic HYC400 <span class="fi-sub">400 kW</span></button>
             <div class="rb-fly-head">Vector (schematic)</div>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-ev',function(){evSetUnit('autel_dh480')})"><span class="fi-ico">▭</span> DCFC Unit <span class="fi-sub">vector</span></button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-ev',function(){evSetL2('autel_ac_pro')})"><span class="fi-ico">⍒</span> Level 2 <span class="fi-sub">vector</span></button>
+            <button class="rb-fly-item omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbFlyDo('fly-ev',function(){evSetUnit('autel_dh480')})"><span class="fi-ico">▭</span> DCFC Unit <span class="fi-sub">vector</span></button>
+            <button class="rb-fly-item omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbFlyDo('fly-ev',function(){evSetL2('autel_ac_pro')})"><span class="fi-ico">⍒</span> Level 2 <span class="fi-sub">vector</span></button>
             <div class="menu-sep"></div>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-ev',openEvChargerDialog)"><span class="fi-ico">⚡</span> Full Catalog…</button>
+            <button class="rb-fly-item omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbFlyDo('fly-ev',openEvChargerDialog)"><span class="fi-ico">⚡</span> Full Catalog…</button>
           </div>
         </div>
       </div>
@@ -2163,7 +2178,7 @@ window.onerror = function(msg, src, line, col, err) {
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',function(){openArrayProps()})" title="Tilt, ground clearance and the row pitch they imply"><span class="fi-ico">≡</span> Array Geometry — Tilt / Height</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',omegaCanopyCustom)" title="Trace the canopy outline - panels fit that exact shape, no rotating"><span class="fi-ico">⬡</span> Canopy — Custom Shape</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',omegaSolarCustomArea)" title="Trace any shape - the panels fill it at any angle, no rotating"><span class="fi-ico">▱</span> Solar — Custom Area</button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-der',omegaNextnrgSolarCustom)" title="Trace any shape - NextNRG's module (JinkoSolar EAGLE G7B 640 W, 23.69%) fills it, and the array is NextNRG's product on the drawing, the legend and the BOM"><span class="fi-ico">▱</span> NextNRG Solar — Custom</button>
+            <button class="rb-fly-item omega-gated-hidden" data-omega-feature="nextnrg" data-omega-home="fly:fly-der" hidden onclick="rbFlyDo('fly-der',omegaNextnrgSolarCustom)" title="Trace any shape - NextNRG's module (JinkoSolar EAGLE G7B 640 W, 23.69%) fills it, and the array is NextNRG's product on the drawing, the legend and the BOM"><span class="fi-ico">▱</span> NextNRG Solar — Custom</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',function(){derSetSolar('adjacent')})"><span class="fi-ico">☀</span> Solar Canopy</button>
             <div class="rb-fly-head">Other Generation</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-der',function(){derSetWind('wind_100')})"><span class="fi-ico">✲</span> Wind Turbine <span class="fi-sub">100 kW</span></button>
@@ -2191,7 +2206,7 @@ window.onerror = function(msg, src, line, col, err) {
             <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',openConduitMenu)"><span class="fi-ico">⌥</span> Conduit Type &amp; Trenching…</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',_bessRunPanel)" title="Checklist of the standard BESS run designations (DC CABLE RUN 1, AC CABLE RUN 1-9...) — shows what's drawn vs pending and arms the tool for the next one"><span class="fi-ico">📋</span> BESS Cable Run Schedule…</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',_cdOpenTab)"><span class="fi-ico">Σ</span> LF Estimate</button>
-            <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',_geoRepairAndReport)" title="Checks every conduit, trench, shape and equipment item against the map and re-anchors any whose stored ground position no longer matches where it is drawn — so nothing drifts or snaps back on the next pan or zoom"><span class="fi-ico">⚓</span> Re-anchor Drawing to Map</button>
+            <button class="rb-fly-item omega-gated-hidden" data-omega-feature="reanchor" data-omega-home="fly:fly-cond" hidden onclick="rbFlyDo('fly-cond',_geoRepairAndReport)" title="Checks every conduit, trench, shape and equipment item against the map and re-anchors any whose stored ground position no longer matches where it is drawn — so nothing drifts or snaps back on the next pan or zoom"><span class="fi-ico">⚓</span> Re-anchor Drawing to Map</button>
             <div class="rb-fly-head">Auto-Route</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',function(){wireAllBessToHub()})" title="Home-run every BESS pad to the EMS/hub — one run per service, edge to edge"><span class="fi-ico">⇉</span> Wire All BESS &rarr; Hub</button>
             <div class="rb-fly-head">Drawing Style</div>
@@ -2219,7 +2234,7 @@ window.onerror = function(msg, src, line, col, err) {
     <div class="rpanel">
       <div class="rpanel-body">
         <button class="rbtn" id="rb-ev-zone" onclick="rbMode('zonebox')" title="Resizable zone box with fill, opacity, border style and label"><span class="rb-ico">▣</span><span class="rb-lbl">Zone<br>Box</span></button>
-        <button class="rbtn" onclick="openBuildingPanel()" title="Building / Net-Zero — assign substrate, wall, glazing and roof assemblies to the selected shape. Returns areas, R-value, windows per side and priced envelope scope."><span class="rb-ico" style="color:var(--purple)">▤</span><span class="rb-lbl">Building<br>Net-Zero</span></button>
+        <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="openBuildingPanel()" title="Building / Net-Zero — assign substrate, wall, glazing and roof assemblies to the selected shape. Returns areas, R-value, windows per side and priced envelope scope."><span class="rb-ico" style="color:var(--purple)">▤</span><span class="rb-lbl">Building<br>Net-Zero</span></button>
       </div>
       <div class="rpanel-cap">Zones</div>
     </div>
@@ -2256,32 +2271,78 @@ window.onerror = function(msg, src, line, col, err) {
 
   <!-- ANALYZE -->
   <div class="ribbon-page" data-page="analyze" data-cap="engineering">
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="screen">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openViabilityWorkflow)"><span class="rb-ico">◪</span><span class="rb-lbl">Viability<br>Workflow</span></button>
-        <button class="rbtn" onclick="rbRun(openComedPreQual)"><span class="rb-ico">⌇</span><span class="rb-lbl">Grid Pre-<br>Qualify</span></button>
-        <button class="rbtn" onclick="rbRun(function(){if(window.OmegaSubstation)OmegaSubstation.open();})" title="Find Substation &mdash; nearest substation to this address and a screening estimate of available MW. Places it on the site so it feeds the DER rollup and sets the ceiling for the Compute Build. Not a substitute for the utility interconnection study."><span class="rb-ico" style="color:var(--warn)">⌖</span><span class="rb-lbl">Find<br>Substation</span></button>
-        <button class="rbtn" onclick="openBillImport()" title="Import Utility Bill — paste bill text to autofill demand, usage, rate and demand charge for any utility"><span class="rb-ico" style="color:var(--green)">&#9781;</span><span class="rb-lbl">Import<br>Bill</span></button>
-        <button class="rbtn" onclick="openSitePreQual()" title="Site Pre-Qualification — Phase 0 property viability score (open area, parking, title, zoning) run before utility engagement. ComEd bands as a benchmark; works for any utility."><span class="rb-ico" style="color:var(--accent)">&#9672;</span><span class="rb-lbl">Site<br>Pre-Qual</span></button>
-        <button class="rbtn" onclick="openScorePanel()" title="Interconnection-Ease site score — utility, capacity, permitting, queue, land"><span class="rb-ico">◎</span><span class="rb-lbl">Site<br>Score</span></button>
-        <button class="rbtn" onclick="rbRun(openDerAnalysis)" title="DER generation + revenue waterfall (solar/wind/gen → data center → PJM value stack)"><span class="rb-ico">⚡</span><span class="rb-lbl">DER<br>Generation</span></button>
-        <button class="rbtn" onclick="rbRun(openNonExportCalc)" title="How much additional solar fits under a never-export ceiling for a given BESS size, simulated hour-by-hour against your 8760 load"><span class="rb-ico" style="color:var(--green)">☀</span><span class="rb-lbl">Non-Export<br>Headroom</span></button>
-        <button class="rbtn" onclick="rbRun(openPriceDecks)" title="Price Decks &mdash; import nodal DA/RT energy and ancillary (RegUp/RegDn/RRS/ECRS/Non-Spin) price series, bound to a settlement point. Reusable across scenarios."><span class="rb-ico" style="color:var(--accent-2)">&#9783;</span><span class="rb-lbl">Price<br>Decks</span></button>
-        <button class="rbtn" onclick="rbRun(openEnergyBalance)" title="Site energy balance: generation vs. consumption vs. grid reliance across all placed systems"><span class="rb-ico">⚖</span><span class="rb-lbl">Energy<br>Balance</span></button>
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="rb-analyze-screen" onclick="rbRun(openComedPreQual)" title="Grid Pre-Qualify — interconnection screening for this site"><span class="rb-ico">⌇</span><span class="rb-lbl">Site<br>Screen</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-site-screen')" title="Site Screen menu">▼</span>
+          <div class="rb-flyout" id="fly-site-screen">
+            <button class="rbtn" onclick="openScorePanel()" title="Interconnection-Ease site score — utility, capacity, permitting, queue, land"><span class="rb-ico">◎</span><span class="rb-lbl">Site Score</span></button>
+          </div>
+        </div>
+        <button class="rbtn omega-gated-hidden" hidden data-omega-feature="viability" data-omega-home="analyze|Screen" onclick="rbRun(openViabilityWorkflow)" title="Viability Workflow — phase-by-phase go / no-go"><span class="rb-ico">◪</span><span class="rb-lbl">Viability<br>Workflow</span></button>
+        <button class="rbtn omega-gated-hidden" hidden data-omega-feature="prequal" data-omega-home="analyze|Screen" onclick="openSitePreQual()" title="Site Pre-Qualification — Phase 0 property viability score (open area, parking, title, zoning) run before utility engagement. ComEd bands as a benchmark; works for any utility."><span class="rb-ico" style="color:var(--accent)">&#9672;</span><span class="rb-lbl">Site<br>Pre-Qual</span></button>
       </div>
-      <div class="rpanel-cap">Assessment</div>
+      <div class="rpanel-cap">Screen</div>
     </div>
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="grid">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openNetworkProximity)" title="Network Proximity — nearest carrier hotels and interconnection facilities, route distance and estimated fibre RTT (PeeringDB)"><span class="rb-ico" style="color:var(--accent-2)">⌘</span><span class="rb-lbl">Network<br>Proximity</span></button>
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="rb-grid-panel" onclick="OmegaGridPanel.open()" title="Grid — the nearest substation and the circuit at the parcel, stated against the unit chosen in the BESS Guided Build: Fits, Fits only smaller or Needs a study"><span class="rb-ico">⚡</span><span class="rb-lbl">Grid<br>Check</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-grid')" title="Grid Check menu">▼</span>
+          <div class="rb-flyout" id="fly-grid">
+            <button class="rbtn" id="rb-gridatlas" onclick="OmegaGridPrescreen.open()" title="Grid Atlas interconnection pre-screen — nearest substations, transmission and generation, scored 0-100. Same service the portfolio console runs at screening, called with this site’s coordinates so nothing has to be geocoded."><span class="rb-ico">⚡</span><span class="rb-lbl">Grid Atlas score</span></button>
+            <button class="rbtn" onclick="rbRun(function(){if(window.OmegaSubstation)OmegaSubstation.open();})" title="Find Substation — nearest substation to this address and a screening estimate of available MW. Places it on the site so it feeds the DER rollup and sets the ceiling for the Compute Build. Not a substitute for the utility interconnection study."><span class="rb-ico" style="color:var(--warn)">⌖</span><span class="rb-lbl">Place nearest substation</span></button>
+            <button class="rbtn" onclick="rbRun(openNetworkProximity)" title="Network Proximity — nearest carrier hotels and interconnection facilities, route distance and estimated fibre RTT (PeeringDB). A different dataset from Grid Atlas, so it stays in this menu."><span class="rb-ico" style="color:var(--accent-2)">⌘</span><span class="rb-lbl">Fiber &amp; network</span></button>
+          </div>
+        </div>
       </div>
-      <div class="rpanel-cap">Connectivity</div>
+      <div class="rpanel-cap">Grid</div>
     </div>
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="load">
       <div class="rpanel-body">
-        <button class="rbtn" id="btn-dtwin" onclick="omegaDigitalTwinSoon()" title="Digital Twin — in development. The one-line handoff is built and callable now: omegaOneLineExport() / omegaTwinPush(siteId)." style="position:relative;opacity:.55"><span class="rb-ico" style="color:var(--accent-2)">◈</span><span class="rb-lbl">Digital<br>Twin</span><span id="btn-dtwin-soon" style="position:absolute;top:2px;right:2px;background:var(--warn);color:var(--ink);font-size:7px;font-weight:800;letter-spacing:.4px;line-height:1;padding:2px 3px;border-radius:2px;pointer-events:none">SOON</span></button>
+        <div class="rbtn-wrap">
+          <button class="rbtn" onclick="openBillImport()" title="Import Utility Bill — paste bill text to autofill demand, usage, rate and demand charge for any utility"><span class="rb-ico" style="color:var(--green)">&#9781;</span><span class="rb-lbl">Import<br>Bill</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-load')" title="Import Bill menu">▼</span>
+          <div class="rb-flyout" id="fly-load"></div>
+        </div>
       </div>
-      <div class="rpanel-cap">Operations</div>
+      <div class="rpanel-cap">Load</div>
+    </div>
+    <div class="rpanel" data-omega-slot="energy">
+      <div class="rpanel-body">
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="oy-ribbon-btn" onclick="OmegaYield.open()" title="Model generation hour by hour from latitude, tilt and azimuth — 24-hour profile, annual energy, and what a battery takes off the peak. Exports a presentation."><span class="rb-ico">☀</span><span class="rb-lbl">Generation</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-energy')" title="Generation menu">▼</span>
+          <div class="rb-flyout" id="fly-energy">
+            <button class="rbtn" onclick="rbRun(openEnergyBalance)" title="Site energy balance: generation vs. consumption vs. grid reliance across all placed systems"><span class="rb-ico">⚖</span><span class="rb-lbl">Energy Balance</span></button>
+            <button class="rbtn" onclick="rbRun(openNonExportCalc)" title="How much additional solar fits under a never-export ceiling for a given BESS size, simulated hour-by-hour against your 8760 load"><span class="rb-ico" style="color:var(--green)">☀</span><span class="rb-lbl">Non-Export Headroom</span></button>
+            <button class="rbtn" onclick="openBuildingPanel()" title="Building / Net-Zero — assign substrate, wall, glazing and roof assemblies to the selected shape. Returns areas, R-value, windows per side and priced envelope scope."><span class="rb-ico" style="color:var(--purple)">▤</span><span class="rb-lbl">Building Net-Zero</span></button>
+            <button class="rbtn" onclick="rbRun(e3MeteoOpen)" title="Weather data for this site. File › Meteo Data opens the same library."><span class="rb-ico">&#9728;</span><span class="rb-lbl">Weather data</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="rpanel-cap">Energy</div>
+    </div>
+    <div class="rpanel" data-omega-slot="value">
+      <div class="rpanel-body">
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="rb-valuestack" onclick="if(window.OmegaValue)OmegaValue.open()" title="Server-priced annual value stack and IRR for the battery on the site map"><span class="rb-ico" style="color:var(--green)">∑</span><span class="rb-lbl">Value<br>Stack</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-value')" title="Value Stack menu">▼</span>
+          <div class="rb-flyout" id="fly-value">
+            <button class="rbtn" onclick="rbRun(openDerAnalysis)" title="DER generation + revenue waterfall (solar/wind/gen → data center → PJM value stack)"><span class="rb-ico">⚡</span><span class="rb-lbl">Revenue waterfall</span></button>
+          </div>
+        </div>
+        <button class="rbtn omega-gated-hidden" hidden data-omega-feature="decks" data-omega-home="analyze|Value" onclick="rbRun(openPriceDecks)" title="Price Decks — import nodal DA/RT energy and ancillary price series, bound to a settlement point."><span class="rb-ico" style="color:var(--accent-2)">&#9783;</span><span class="rb-lbl">Price<br>Decks</span></button>
+      </div>
+      <div class="rpanel-cap">Value</div>
+    </div>
+    <div class="rpanel" data-omega-slot="decide">
+      <div class="rpanel-body">
+        <button class="rbtn" onclick="openProjectIntelligence()" title="Project Intelligence — pursue / hold decision, readiness, economics and scenarios"><span class="rb-ico" style="color:var(--accent-2)">◆</span><span class="rb-lbl">Project<br>Intelligence</span></button>
+        <button class="rbtn" id="rb-omega-core" onclick="rbRun(openOmegaCore)" data-cap="compute" title="Omega-Core — qualify this charging site for Omega-Core skids (75 kW edge compute + CleanCell R60 60 kW / 61.44 kWh battery on their own meter) from the Run, the available power, the location and fiber, and show the host's land lease, the 5-year minimum and the removal or fair-market-value buyout."><span class="rb-ico" style="color:#22D3EE">&#9670;</span><span class="rb-lbl">Omega-Core<br>fit</span></button>
+      </div>
+      <div class="rpanel-cap">Decide</div>
     </div>
   </div>
 
@@ -2291,16 +2352,28 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-body">
         <button class="rbtn" id="rb-est-summary" onclick="openRpPanel('summary','estimate')" title="Site map summary — BESS, conduit, equipment, DER (also in View › Panels, which every plan opens)"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
         <button class="rbtn" onclick="openRpPanel('cost')" title="Construction cost estimator — equipment, install, incentives, revenue, ROI"><span class="rb-ico">$</span><span class="rb-lbl">Construction<br>Cost</span></button>
-        <button class="rbtn" onclick="rbRun(openSolarBessSizer)" title="Estimate the BESS needed for the solar drawn on the sitemap — input / throughput / output"><span class="rb-ico" style="color:var(--amber)">☀</span><span class="rb-lbl">Solar →<br>BESS</span></button>
+        <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(openSolarBessSizer)" title="Estimate the BESS needed for the solar drawn on the sitemap — input / throughput / output"><span class="rb-ico" style="color:var(--amber)">☀</span><span class="rb-lbl">Solar →<br>BESS</span></button>
       </div>
       <div class="rpanel-cap">Cost &amp; ROI</div>
     </div>
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="takeoff">
       <div class="rpanel-body">
         <button class="rbtn" onclick="rbRun(openBomSourcing)" title="Bill of materials for marketplace sourcing (Rexel / City Electric Supply)"><span class="rb-ico">⛃</span><span class="rb-lbl">BOM /<br>Sourcing</span></button>
         <button class="rbtn" onclick="rbRun(openElectricalEstimate)" title="Electrical estimate — NECA-style labor units + material, priced bid build-up"><span class="rb-ico" style="color:var(--amber)">⚡</span><span class="rb-lbl">Electrical<br>Estimate</span></button>
       </div>
       <div class="rpanel-cap">Takeoff &amp; Sourcing</div>
+    </div>
+    <div class="rpanel" data-omega-slot="ownership" data-shelf="1">
+      <div class="rpanel-body">
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="rb-fom" onclick="OmegaFleetOM.open()" title="Fleet O&amp;M — whole-site cost of ownership across battery, solar, wind, fuel cell, EV and data-centre load"><span class="rb-ico" style="color:var(--green)">⚒</span><span class="rb-lbl">Fleet<br>O&amp;M</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-fleet')" title="Fleet O&amp;M menu">▼</span>
+          <div class="rb-flyout" id="fly-fleet">
+            <button class="rbtn" id="rb-omlife" onclick="OmegaOM.open()" title="Ten-year cost of ownership from counted cycles and modelled degradation"><span class="rb-ico" style="color:var(--green)">⚙</span><span class="rb-lbl">Battery lifecycle</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="rpanel-cap">Ownership</div>
     </div>
   </div>
 
@@ -2334,55 +2407,57 @@ window.onerror = function(msg, src, line, col, err) {
     </div>
   </div>
 
-  <!-- VIEW (pop-out panels — Controls / Summary / BOM / Construction / Guided Build) -->
+  <!-- VIEW -->
   <div class="ribbon-page" data-page="view">
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="show">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(ovUpload)" title="Upload a site plan / survey / aerial image to trace over"><span class="rb-ico" style="color:var(--accent-2)">⬆</span><span class="rb-lbl">Upload<br>Image</span></button>
-        <button class="rbtn" id="rb-ov-stencil" onclick="rbRun(ovStencil)" title="Convert the uploaded image to a clean black &amp; white engineering stencil to trace over"><span class="rb-ico" style="color:var(--text)">◨</span><span class="rb-lbl">Stencil<br>B&amp;W</span></button>
-        <!-- Lock Map retired: its only job was letting #cov receive draw clicks,
-     which the map-as-input model makes unnecessary. Restore by
-     re-instating this button:
-     <button class="rbtn" id="rb-ov-lock" onclick="rbRun(ovLock)" title="Lock the background (satellite map or uploaded image) in place so it can't pan, zoom, or move while you place elements &amp; layers"><span class="rb-ico">🔓</span><span class="rb-lbl">Lock<br>Map</span></button> -->
-        <button class="rbtn" onclick="rbRun(startCal)" title="Set the real-world scale: trace a known length (parking stall = 18ft, door = 3ft) so equipment drops at the correct size"><span class="rb-ico">📏</span><span class="rb-lbl">Calibrate<br>Scale</span></button>
-      </div>
-      <div class="rpanel-cap">Site Overlay</div>
-    </div>
-    <div class="rpanel">
-      <div class="rpanel-body">
-        <!-- Set Plot retired: plots froze the map into a raster, which disabled
-     anchoring entirely. Restore by re-instating this button:
-     <button class="rbtn" id="rb-setplot" onclick="setPlot()" title="Capture &amp; lock the current satellite view as a fixed, calibrated plot layer — nothing moves and +/- zooms the plot and your drawings together"><span class="rb-ico" style="color:var(--accent)">📌</span><span class="rb-lbl">Set<br>Plot</span></button> -->
-        <button class="rbtn" id="rb-gps" onclick="openGpsPlacement()" title="GPS Placement — drop equipment by latitude/longitude on a live Google Map. Markers lock perfectly to their coordinates at any zoom (no drift), then apply to the canvas."><span class="rb-ico" style="color:#4285F4">📍</span><span class="rb-lbl">GPS<br>Place</span></button>
-        <!-- Clear Plot retired: plots froze the map into a raster, which disabled
-     anchoring entirely. Restore by re-instating this button:
-     <button class="rbtn" id="rb-clearplot" onclick="clearPlot()" title="Clear the committed plot and return to the live interactive map"><span class="rb-ico">✕</span><span class="rb-lbl">Clear<br>Plot</span></button> -->
-        <button class="rbtn" id="rb-recenter" onclick="recenterOnEquipment()" title="Recenter the view on your placed equipment — brings any off-screen equipment back into the window"><span class="rb-ico" style="color:#34A853">⊕</span><span class="rb-lbl">Recenter</span></button>
-        <button class="rbtn" id="btn-pv-view" onclick="omegaPvViewCycle()" title="Solar view — cycle individual modules → row bands → outline only. A view setting: it is not saved with the drawing and never changes a number."><span class="rb-ico" style="color:var(--accent-2)">☷</span><span class="rb-lbl">Solar<br>Panels</span></button>
-        <button class="rbtn" id="btn-3d" onclick="toggle3D()" title="3D site review &mdash; inspect equipment massing, roof context and sightlines. Editing pauses while tilted; press 2D or Esc to return." style="position:relative"><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>Review</span></button>
-        <button class="rbtn" id="rb-crosshair" onclick="nnToggleCrosshair()" title="Toggle the AutoCAD-style crosshair cursor in draw/placement modes"><span class="rb-ico">✛</span><span class="rb-lbl">Crosshair</span></button>
-      </div>
-      <div class="rpanel-cap">Canvas</div>
-    </div>
-    <div class="rpanel">
-      <div class="rpanel-body">
-        
-        <button class="rbtn" onclick="openProjectIntelligence()" title="Project Intelligence — pursue / hold decision, readiness, economics and scenarios"><span class="rb-ico" style="color:var(--accent-2)">◆</span><span class="rb-lbl">Project<br>Intelligence</span></button>
-        <button class="rbtn" onclick="openRpPanel('summary')" title="Site map summary — BESS, conduit, equipment, DER"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
-        <button class="rbtn" id="rb-meters" aria-pressed="false" onclick="rbRun(toggleMeterPanel)" title="Group equipment by service meter — connected kW, storage and conduit per meter"><span class="rb-ico" style="color:var(--warn)">Ⓜ</span><span class="rb-lbl">Meters</span></button>
-        <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:var(--accent)">▦</span><span class="rb-lbl">Site<br>Map</span></button>
-        <button class="rbtn" id="rb-native" aria-pressed="false" onclick="rbRun(toggleNativeLayer)" title="Draw everything as native Google Maps objects — locked to the ground, to scale, no reprojection"><span class="rb-ico" style="color:var(--accent)">◈</span><span class="rb-lbl">Native<br>Layer</span></button>
-        <button class="rbtn" id="rb-dock-left" aria-pressed="false" onclick="rbRun(toggleDockLeft)" title="Dock the tool panel to the left of the screen as a vertical column"><span class="rb-ico">◧</span><span class="rb-lbl">Dock Left</span></button>
-        <button class="rbtn" onclick="rbRun(toggleDiagPanel)" title="Anchor diagnostics — why equipment is or is not locked to the ground"><span class="rb-ico">⚠</span><span class="rb-lbl">Diagnose</span></button>
-        <button class="rbtn" onclick="rbRun(toggleCompassPanel)" title="Compass — pan the view north / south / east / west, and frame the drawing"><span class="rb-ico">⊕</span><span class="rb-lbl">Compass</span></button>
         <button class="rbtn" onclick="toggleLayersPanel()" title="Layers — list, select, hide, reorder, delete all elements"><span class="rb-ico">▧</span><span class="rb-lbl">Layers</span></button>
-        <button class="rbtn" id="rb-op-o2-coords" aria-pressed="true" onclick="rbRun(opToggleCoords)" title="Coordinate readout &mdash; active area, UTM zone, X and Y"><span class="rb-ico">&#8982;</span><span class="rb-lbl">Coordinates</span></button>
-        <button class="rbtn" id="rb-op-tl-key" aria-pressed="true" onclick="rbRun(opToggleTerrainKey)" title="Terrain key &mdash; contour interval or colour ramp for the terrain layer"><span class="rb-ico">&#9968;</span><span class="rb-lbl">Terrain Key</span></button>
-        <button class="rbtn" onclick="rbRun(tlCycle)" title="Sampled terrain layer &mdash; cycle off / contours / elevation / slope / cut-fill"><span class="rb-ico">&#9776;</span><span class="rb-lbl">Terrain Layer</span></button>
-        <button class="rbtn" onclick="rbRun(ttCycle)" title="USGS 3DEP terrain tiles &mdash; real LiDAR relief, slope, aspect and contours drawn straight onto the map. US only."><span class="rb-ico">&#9968;</span><span class="rb-lbl">3DEP Tiles</span></button>
+        <button class="rbtn" id="rb-labels" onclick="if(window.OmegaLabels)OmegaLabels.toggle()" title="Show or hide every label on the map — equipment names and specs, conduit callouts, stencil text. One click off, one click back on. The legend, schedule and takeoff are unaffected."><span class="rb-ico">ᵀ</span><span class="rb-lbl">Labels</span></button>
+        <!-- Omega Design's own command. View opens on every plan; Estimate is a paid tab, and a Design command left there stays allowed under Lite. -->
+        <button class="rbtn" id="rb-site" aria-pressed="false" onclick="rbRun(toggleSitePanel)" title="Live takeoff measured from the geometry, plus the ground-vs-pixel scale proof"><span class="rb-ico" style="color:var(--accent)">▦</span><span class="rb-lbl">Live<br>takeoff</span></button>
         <button class="rbtn" id="rb-parcels" aria-pressed="false" onclick="rbRun(pcToggle)" title="Parcel lines — property lines from county and state parcel records, and the parcel at the map centre. A view setting; reference only, not a survey."><span class="rb-ico" style="color:#FFD60A">▱</span><span class="rb-lbl">Parcel<br>Lines</span></button>
-        <button class="rbtn" onclick="rbRun(engSchedToggleVisible)" title="Conduit schedule — show or hide the run schedule panel"><span class="rb-ico">≔</span><span class="rb-lbl">Conduit<br>Schedule</span></button>
-        <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
+        <button class="rbtn" id="btn-3d" onclick="toggle3D()" title="3D site review — inspect equipment massing, roof context and sightlines. Editing pauses while tilted; press 2D or Esc to return."><span class="rb-ico" style="display:inline-flex;align-items:center;justify-content:center"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 2.8 21 7.6 12 12.4 3 7.6z"/><path d="M3 7.6v8.8L12 21.2V12.4"/><path d="M21 7.6v8.8L12 21.2"/></svg></span><span class="rb-lbl">3D<br>Review</span></button>
+      </div>
+      <div class="rpanel-cap">Show</div>
+    </div>
+    <div class="rpanel" data-omega-slot="terrain">
+      <div class="rpanel-body">
+        <div class="rbtn-wrap">
+          <button class="rbtn" onclick="rbRun(tlCycle)" title="Sampled terrain layer — cycle off / contours / elevation / slope / cut-fill"><span class="rb-ico">&#9776;</span><span class="rb-lbl">Terrain</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-terrain')" title="Terrain menu">▼</span>
+          <div class="rb-flyout" id="fly-terrain">
+            <button class="rbtn" onclick="rbRun(ttCycle)" title="USGS 3DEP terrain tiles — real LiDAR relief, slope, aspect and contours drawn straight onto the map. US only."><span class="rb-ico">&#9968;</span><span class="rb-lbl">USGS 3DEP relief</span></button>
+            <button class="rbtn" id="rb-op-tl-key" aria-pressed="true" onclick="rbRun(opToggleTerrainKey)" title="Terrain key — contour interval or colour ramp for the terrain layer"><span class="rb-ico">&#9968;</span><span class="rb-lbl">Terrain key</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="rpanel-cap">Terrain</div>
+    </div>
+    <div class="rpanel" data-omega-slot="display">
+      <div class="rpanel-body">
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="btn-pv-view" onclick="omegaPvViewCycle()" title="Display — cycle how solar panels are drawn: individual modules, row bands, or outline only. A view setting: it is not saved with the drawing and never changes a number."><span class="rb-ico" style="color:var(--accent-2)">☷</span><span class="rb-lbl">Display</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-display')" title="Display menu">▼</span>
+          <div class="rb-flyout" id="fly-display">
+            <button class="rbtn" id="rb-evselbl" onclick="toggleEvsePads();var off=(window.OMEGA_EV_PAD===false);this.style.background=off?'rgba(0,212,255,.18)':'';this.style.borderColor=off?'var(--accent)':'';" title="The orange hatched island under each charger is presentational. Hide it when a long run of stalls gets unreadable — labels, bollards and the cost sheet are unaffected."><span class="rb-ico">▢</span><span class="rb-lbl">Charger pads</span></button>
+            <button class="rbtn" id="rb-crosshair" onclick="nnToggleCrosshair()" title="Toggle the AutoCAD-style crosshair cursor in draw/placement modes"><span class="rb-ico">✛</span><span class="rb-lbl">Crosshair</span></button>
+            <button class="rbtn" onclick="o2SetRender('preview')" title="Preview — array envelopes only. Faster on large sites."><span class="rb-ico">▢</span><span class="rb-lbl">Preview</span></button>
+            <button class="rbtn" onclick="o2SetRender('overview')" title="Overview — every table drawn."><span class="rb-ico">▦</span><span class="rb-lbl">Overview</span></button>
+          </div>
+        </div>
+      </div>
+      <div class="rpanel-cap">Display</div>
+    </div>
+    <div class="rpanel" data-omega-slot="panels">
+      <div class="rpanel-body">
+        <div class="rbtn-wrap">
+          <button class="rbtn" onclick="rbRun(toggleCompassPanel)" title="Panels — compass, coordinates, meters and the load bar"><span class="rb-ico">⊕</span><span class="rb-lbl">Panels</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-panels')" title="Panels menu">▼</span>
+          <div class="rb-flyout" id="fly-panels">
+            <button class="rbtn" id="rb-op-o2-coords" aria-pressed="true" onclick="rbRun(opToggleCoords)" title="Coordinate readout — active area, UTM zone, X and Y"><span class="rb-ico">&#8982;</span><span class="rb-lbl">Coordinates</span></button>
+            <button class="rbtn" id="rb-meters" aria-pressed="false" onclick="rbRun(toggleMeterPanel)" title="Group equipment by service meter — connected kW, storage and conduit per meter"><span class="rb-ico" style="color:var(--warn)">Ⓜ</span><span class="rb-lbl">Meters</span></button>
+          </div>
+        </div>
       </div>
       <div class="rpanel-cap">Panels</div>
     </div>
@@ -2390,53 +2465,61 @@ window.onerror = function(msg, src, line, col, err) {
 
   <!-- OUTPUT -->
   <div class="ribbon-page" data-page="output">
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="sheets">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openPlotPlanExport)" data-cap="export.plotplan" title="Plot plan cover + site sheets (E0 / E1.1)"><span class="rb-ico">▤</span><span class="rb-lbl">Plot Plan<br>E0 / E1.1</span></button>
-        <button class="rbtn" onclick="rbRun(openOneLineExport)" data-cap="export.oneline" title="Single-line diagram (E2.0)"><span class="rb-ico">⚡</span><span class="rb-lbl">One-Line<br>E2.0</span></button>
-        <!-- Core's ONLY export. It was ungated, which meant a trial could
-             print one and Core had nothing the trial did not — the tier had
-             no export to sell. Gated at export.blueprint, granted at
-             standard, inherited upward. -->
-        <button class="rbtn" data-cap="export.blueprint" onclick="rbRun(openBlueprintExport)" title="Full blueprint / Print to PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Blueprint<br>/ PDF</span></button>
-        <button class="rbtn omega-beta" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span><span class="omega-new-tag">NEW</span></button>
-        <!-- Original call preserved; re-enable by restoring this onclick:
-             <button class="rbtn" onclick="rbRun(sendToPermitCreator)" data-cap="permitting" title="Assemble the full permit set"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span></button> -->
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="rb-plot-plan" onclick="rbRun(openPlotPlanExport)" data-cap="export.plotplan" title="Plot plan cover + site sheets (E0 / E1.1)"><span class="rb-ico">▤</span><span class="rb-lbl">Plan<br>Set</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-planset')" title="Plan Set menu">▼</span>
+          <div class="rb-flyout" id="fly-planset">
+            <button class="rbtn" onclick="rbRun(openOneLineExport)" data-cap="export.oneline" title="Single-line diagram (E2.0)"><span class="rb-ico">⚡</span><span class="rb-lbl">One-Line E2.0</span></button>
+            <button class="rbtn" data-cap="export.blueprint" onclick="rbRun(openBlueprintExport)" title="Full blueprint / Print to PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Print full set</span></button>
+            <button class="rbtn" onclick="rbRun(omegaPrint)" title="Print / PDF"><span class="rb-ico">⎙</span><span class="rb-lbl">Print / PDF</span></button>
+          </div>
+        </div>
+        <button class="rbtn omega-beta omega-gated-hidden" hidden data-omega-feature="permit" data-omega-home="output|Sheets" onclick="rbRun(omegaPermitBeta)" title="Permit Creator — access is granted by your administrator"><span class="rb-ico">📋</span><span class="rb-lbl">Permit<br>Creator</span></button>
       </div>
-      <div class="rpanel-cap">Permit Documents</div>
+      <div class="rpanel-cap">Sheets</div>
     </div>
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="review">
+      <div class="rpanel-body">
+        <div class="rbtn-wrap">
+          <button class="rbtn" id="rb-check" onclick="rbRun(function(){var b=document.getElementById('omega-btn-sldcheck');if(b)b.click();})" title="One-line rule check. The drawing review lives in this menu."><span class="rb-ico">✓</span><span class="rb-lbl">Check</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-check')" title="Check menu">▼</span>
+          <div class="rb-flyout" id="fly-check"></div>
+        </div>
+      </div>
+      <div class="rpanel-cap">Review</div>
+    </div>
+    <div class="rpanel" data-omega-slot="reports">
       <div class="rpanel-body">
         <button class="rbtn" onclick="rbRun(openProposalExport)" title="Generate a client proposal"><span class="rb-ico">▦</span><span class="rb-lbl">Proposal</span></button>
         <button class="rbtn" onclick="openReport('location')" title="Interactive shareable report — Location score, Design, Cost"><span class="rb-ico">◈</span><span class="rb-lbl">Interactive<br>Report</span></button>
-        <button class="rbtn" onclick="rbRun(exportSpecSheet)" title="Export component spec sheet"><span class="rb-ico">▤</span><span class="rb-lbl">Spec<br>Sheet</span></button>
       </div>
       <div class="rpanel-cap">Reports</div>
     </div>
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="export">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(exportSpecsForCADTool)" title="Export specs for a CAD tool"><span class="rb-ico">△</span><span class="rb-lbl">Export<br>for CAD</span></button>
-        <button class="rbtn" onclick="exportToMonday()" title="Export project tasks as a Monday.com board CSV"><span class="rb-ico">▦</span><span class="rb-lbl">Export to<br>Monday</span></button>
+        <div class="rbtn-wrap">
+          <button class="rbtn" onclick="rbRun(exportSpecSheet)" title="Export component spec sheet"><span class="rb-ico">▤</span><span class="rb-lbl">Export</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-export')" title="Export menu">▼</span>
+          <div class="rb-flyout" id="fly-export">
+            <button class="rbtn" onclick="rbRun(exportSpecsForCADTool)" title="Export specs for a CAD tool"><span class="rb-ico">△</span><span class="rb-lbl">Export for CAD</span></button>
+          </div>
+        </div>
       </div>
-      <div class="rpanel-cap">Handoff</div>
+      <div class="rpanel-cap">Export</div>
     </div>
-    <!-- Omega-Core: ClearSky's skid (Solela Edge Compute + CleanCell R60) on
-         its own meter at a charging site, paying the host a land lease. Takes
-         the Run and the drawing, screens power, location and fiber, and shows
-         the lease and the 5-year terms. Omega Compute owns it, as it owns the
-         skid's placement (derSetDc). -->
-    <div class="rpanel">
+    <div class="rpanel" data-omega-slot="stamp">
       <div class="rpanel-body">
-        <button class="rbtn" id="rb-omega-core" onclick="rbRun(openOmegaCore)" data-cap="compute" title="Omega-Core — qualify this charging site for Omega-Core skids (75 kW edge compute + CleanCell R60 60 kW / 61.44 kWh battery on their own meter) from the Run, the available power, the location and fiber, and show the host's land lease, the 5-year minimum and the removal or fair-market-value buyout."><span class="rb-ico" style="color:#22D3EE">&#9670;</span><span class="rb-lbl">Omega-Core</span></button>
+        <div class="rbtn-wrap">
+          <button class="rbtn" onclick="rbRun(openValidationExport)" title="Send this permit set for independent engineering validation and PE stamp approval"><span class="rb-ico">✒</span><span class="rb-lbl">Send for<br>PE stamp</span></button>
+          <span class="rbtn-caret" onclick="rbFly(event,'fly-stamp')" title="PE stamp menu">▼</span>
+          <div class="rb-flyout" id="fly-stamp">
+            <button class="rbtn" onclick="rbRun(openValidationStatus)" title="View validation status / mark received"><span class="rb-ico">◷</span><span class="rb-lbl">Validation status</span></button>
+          </div>
+        </div>
       </div>
-      <div class="rpanel-cap">Omega-Core</div>
-    </div>
-    <div class="rpanel">
-      <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openValidationExport)" title="Send this permit set for independent engineering validation and PE stamp approval"><span class="rb-ico">✒</span><span class="rb-lbl">Export for<br>Validation</span></button>
-        <button class="rbtn" onclick="rbRun(openValidationStatus)" title="View validation status / mark received"><span class="rb-ico">◷</span><span class="rb-lbl">Validation<br>Status</span></button>
-      </div>
-      <div class="rpanel-cap">Engineering Stamp</div>
+      <div class="rpanel-cap">Stamp</div>
     </div>
   </div>
 
@@ -2444,8 +2527,8 @@ window.onerror = function(msg, src, line, col, err) {
   <div class="ribbon-page" data-page="validation" style="display:none">
     <div class="rpanel">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openValidationExport)" title="Send this permit set for independent engineering validation and PE stamp approval"><span class="rb-ico">✒</span><span class="rb-lbl">Export for<br>Validation</span></button>
-        <button class="rbtn" onclick="rbRun(openValidationStatus)" title="View validation status / mark received"><span class="rb-ico">◷</span><span class="rb-lbl">Validation<br>Status</span></button>
+        <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(openValidationExport)" title="Send this permit set for independent engineering validation and PE stamp approval"><span class="rb-ico">✒</span><span class="rb-lbl">Export for<br>Validation</span></button>
+        <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(openValidationStatus)" title="View validation status / mark received"><span class="rb-ico">◷</span><span class="rb-lbl">Validation<br>Status</span></button>
       </div>
       <div class="rpanel-cap">Engineering Stamp</div>
     </div>
@@ -2463,6 +2546,7 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-body">
         <button class="rbtn" onclick="rbRun(openCrmSettings)" title="Connect a CRM (Monday, Salesforce, HubSpot, Zoho) and map how OMEGA project data flows into it"><span class="rb-ico" style="color:var(--accent)">⇄</span><span class="rb-lbl">CRM<br>Integration</span></button>
         <button class="rbtn" onclick="rbRun(openCrmSync)" title="Push the current project into your connected CRM"><span class="rb-ico" style="color:var(--green)">⟳</span><span class="rb-lbl">Sync to<br>CRM</span></button>
+        <button class="rbtn omega-gated-hidden" hidden data-omega-feature="monday" data-omega-home="settings|Integrations" onclick="exportToMonday()" title="Export project tasks as a Monday.com board CSV"><span class="rb-ico">▦</span><span class="rb-lbl">Export to<br>Monday</span></button>
       </div>
       <div class="rpanel-cap">Integrations</div>
     </div>
@@ -2480,7 +2564,22 @@ window.onerror = function(msg, src, line, col, err) {
       </div>
       <div class="rpanel-cap">Appearance</div>
     </div>
+    <div class="rpanel" data-omega-slot="workspace" data-shelf="1">
+      <div class="rpanel-body">
+        <button class="rbtn" id="rb-features" type="button" onclick="OmegaEditorFeatures.open()" title="Features taken off the ribbon. Turn one on and it returns to its tab."><span class="rb-ico">⚙</span><span class="rb-lbl">Features</span></button>
+        <button class="rbtn omega-gated-hidden" hidden id="rb-native" aria-pressed="false" data-omega-feature="rb-native" data-omega-home="settings|Workspace" onclick="rbRun(toggleNativeLayer)" title="Draw everything as native Google Maps objects — locked to the ground, to scale, no reprojection"><span class="rb-ico" style="color:var(--accent)">◈</span><span class="rb-lbl">Native<br>Layer</span></button>
+        <button class="rbtn omega-gated-hidden" hidden id="rb-dock-left" aria-pressed="false" data-omega-feature="rb-dock-left" data-omega-home="settings|Workspace" onclick="rbRun(toggleDockLeft)" title="Dock the tool panel to the left of the screen as a vertical column"><span class="rb-ico">◧</span><span class="rb-lbl">Dock Left</span></button>
+        <button class="rbtn omega-gated-hidden" hidden data-omega-feature="diagnose" data-omega-home="settings|Workspace" onclick="rbRun(toggleDiagPanel)" title="Anchor diagnostics — why equipment is or is not locked to the ground"><span class="rb-ico">⚠</span><span class="rb-lbl">Diagnose</span></button>
+      </div>
+      <div class="rpanel-cap">Workspace</div>
+    </div>
   </div>
+</div>
+<div id="omega-merged-park" hidden>
+  <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="openRpPanel('summary')" title="Site map summary — kept on Estimate"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
+  <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(startCal)" title="Calibrate scale — kept on Build › Ground"><span class="rb-ico">📏</span><span class="rb-lbl">Calibrate<br>Scale</span></button>
+  <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbRun(engSchedToggleVisible)" title="Conduit schedule — kept on Draw"><span class="rb-ico">≔</span><span class="rb-lbl">Conduit<br>Schedule</span></button>
+  <button class="rbtn omega-gated-hidden" hidden id="btn-dtwin" data-omega-feature="btn-dtwin" data-omega-home="analyze|Operations" onclick="omegaDigitalTwinSoon()" title="Digital Twin — in development."><span class="rb-ico">◈</span><span class="rb-lbl">Digital<br>Twin</span></button>
 </div>
 <script>
 /* Appearance (Settings tab, 2026-09-27): Light / Dark / Auto. OmegaUI.theme()
@@ -2829,12 +2928,16 @@ window.SNAP_FT = 5;
    Scale-aware: converts px→ft, rounds to SNAP_FT, converts back. */
 function _derSnapPt(p){
   try{
-    if(!p) return p;
+    /* A non-finite coordinate must not become the next anchor. One NaN
+       snapped onto a conduit poisons every length that follows it. */
+    if(!p || !isFinite(p.x) || !isFinite(p.y)) return p;
     if(!window.SNAP) return p;
     var ppf=(typeof _derScale==='function')?_derScale():6;
     var step=(window.SNAP_FT||5)*ppf;
-    if(!(step>0)) return p;
-    return { x: Math.round(p.x/step)*step, y: Math.round(p.y/step)*step };
+    if(!(step>0) || !isFinite(step)) return p;
+    var x=Math.round(p.x/step)*step, y=Math.round(p.y/step)*step;
+    if(!isFinite(x) || !isFinite(y)) return p;
+    return { x:x, y:y };
   }catch(e){ return p; }
 }
 /* Constrain a drag to the dominant axis when ORTHO is on (square-ish draws
@@ -2944,8 +3047,10 @@ function _sbCoords(e){
   var xEl=document.getElementById('sb-x'), yEl=document.getElementById('sb-y');
   if(xEl) xEl.textContent=(Math.round(fx*10)/10).toFixed(1);
   if(yEl) yEl.textContent=(Math.round(fy*10)/10).toFixed(1);
-  var cu=document.getElementById('sb-coords');
-  if(cu){ var b=cu.getElementsByTagName('b'); /* unit label is the trailing text node; leave as-is */ }
+  /* The label used to stay "ft" while the numbers were still pixels, which
+     is a scale error a person will design to. */
+  var unit=document.getElementById('sb-unit');
+  if(unit) unit.textContent=u;
 }
 
 function _sbInit(){
@@ -3538,9 +3643,9 @@ if(document.readyState==='loading'){
 
   <!-- ============ STATUS BAR (AutoCAD-style, bottom of canvas) ============ -->
   <div id="statusbar">
-    <div class="sb-tab active" onclick="rbLayout('model')">Model</div>
-    <div class="sb-tab" onclick="rbLayout('sld')">SLD</div>
-    <div id="sb-coords">X&nbsp;<b id="sb-x">0.0</b>&nbsp;&nbsp;Y&nbsp;<b id="sb-y">0.0</b>&nbsp;ft</div>
+    <div class="sb-tab active omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbLayout('model')">Model</div>
+    <div class="sb-tab omega-gated-hidden" data-omega-dupe="1" hidden onclick="rbLayout('sld')">SLD</div>
+    <div id="sb-coords">X&nbsp;<b id="sb-x">0.0</b>&nbsp;&nbsp;Y&nbsp;<b id="sb-y">0.0</b>&nbsp;<span id="sb-unit">ft</span></div>
     <div class="sb-toggle on" id="sbt-snap" onclick="rbToggle('snap',this)"><span class="sb-dot"></span>SNAP</div>
     <div class="sb-toggle on" id="sbt-grid" onclick="rbToggle('grid',this)"><span class="sb-dot"></span>GRID</div>
     <div class="sb-toggle" id="sbt-ortho" onclick="rbToggle('ortho',this)"><span class="sb-dot"></span>ORTHO</div>
@@ -20221,16 +20326,18 @@ const FACILITY_PROFILES = {
 /* Self-contained ZIP->state (3-digit prefix ranges) so utility resolution
    never depends on an IIFE-local helper defined later in the file. */
 const _FOM_ZIP3_STATE = [
+  [5,5,'NY'],
   [995,999,'AK'],[350,369,'AL'],[716,729,'AR'],[850,865,'AZ'],[900,961,'CA'],
-  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[197,199,'DE'],[320,349,'FL'],
-  [300,319,'GA'],[967,968,'HI'],[500,528,'IA'],[832,838,'ID'],[600,629,'IL'],
-  [460,479,'IN'],[660,679,'KS'],[400,427,'KY'],[700,714,'LA'],[10,27,'MA'],
-  [206,219,'MD'],[39,49,'ME'],[480,499,'MI'],[550,567,'MN'],[630,658,'MO'],
-  [386,397,'MS'],[590,599,'MT'],[270,289,'NC'],[580,588,'ND'],[680,693,'NE'],
-  [30,38,'NH'],[70,89,'NJ'],[870,884,'NM'],[889,898,'NV'],[100,149,'NY'],
-  [430,459,'OH'],[730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],
-  [290,299,'SC'],[570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],
-  [220,246,'VA'],[50,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
+  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[569,569,'DC'],[197,199,'DE'],
+  [320,349,'FL'],[300,319,'GA'],[398,399,'GA'],[967,968,'HI'],[500,528,'IA'],
+  [832,838,'ID'],[600,629,'IL'],[460,479,'IN'],[660,679,'KS'],[400,427,'KY'],
+  [700,714,'LA'],[10,27,'MA'],[55,55,'MA'],[206,219,'MD'],[39,49,'ME'],
+  [480,499,'MI'],[550,567,'MN'],[630,658,'MO'],[386,397,'MS'],[590,599,'MT'],
+  [270,289,'NC'],[580,588,'ND'],[680,693,'NE'],[30,38,'NH'],[70,89,'NJ'],
+  [870,884,'NM'],[885,885,'TX'],[889,898,'NV'],[100,149,'NY'],[430,459,'OH'],
+  [730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],[290,299,'SC'],
+  [570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],[220,246,'VA'],
+  [50,54,'VT'],[56,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
   [820,831,'WY']
 ];
 function _fomStateForZip(zip){
@@ -20314,16 +20421,16 @@ function fomRunDemandAnalysis() {
   const profile = FACILITY_PROFILES[facType];
 
   // -- Core sizing math ----------------------------------------------------
-  // 1. Estimate demand charges portion of bill
-  const annualDemandCharges = bill * profile.demandBillPct;
-  const monthlyDemandCharges = annualDemandCharges / 12;
-
-  // 2. Back-calculate current peak demand from demand charges
-  const currentPeakKW = Math.round(monthlyDemandCharges / util.demandRate);
-
-  // 3. Estimate average load from total bill
-  const annualEnergy = Math.round((bill * (1 - profile.demandBillPct)) / util.energyRate);
-  const avgLoadKW    = Math.round(annualEnergy / 8760);
+  // Peak kW is the demand portion of the bill divided by the demand rate.
+  // omega-demand-screen.js is the only copy of that division.
+  const basis = OmegaDemandScreen.basis({
+    annualBill: bill, demandRate: util.demandRate, energyRate: util.energyRate,
+    demandBillPct: profile.demandBillPct
+  });
+  const annualDemandCharges = basis.annualDemandCharges;
+  const currentPeakKW = basis.peakKw;
+  const annualEnergy = basis.annualEnergyKwh;
+  const avgLoadKW    = basis.avgLoadKw;
 
   // 4. Battery sizing -- target 20% peak reduction (conservative, avoids over-cycling)
   // Target shave = % of peak to cut; more aggressive = bigger battery, faster payback
@@ -20332,20 +20439,17 @@ function fomRunDemandAnalysis() {
   const shavePct_aggressive   = 0.40; // 40% -- max ROI, needs larger system
 
   const calc = (shavePct) => {
-    const shaveKW  = Math.round(currentPeakKW * shavePct);
-    const battKW   = shaveKW;                                    // discharge kW = shave target
-    const battKWh  = Math.round(battKW * peakHrs);              // kWh = kW x peak hours
-    const annualSavingsDemand  = Math.round(shaveKW * util.demandRate * 12);
-    // Ratchet savings: if we reset the 12-mo peak, ratchet clause saves even more
-    const ratchetSavings = Math.round(shaveKW * util.demandRate * 12 * (util.ratchet - 0.5));
-    const totalAnnualSavings = annualSavingsDemand + Math.max(0, ratchetSavings);
-    // Battery cost estimate: $250-$350/kWh installed (C&I range)
-    const installCostLow  = Math.round(battKWh * 280);
-    const installCostHigh = Math.round(battKWh * 380);
-    const paybackLow  = installCostLow  / totalAnnualSavings;
-    const paybackHigh = installCostHigh / totalAnnualSavings;
-    const newPeak = currentPeakKW - shaveKW;
-    return { shavePct, shaveKW, battKW, battKWh, annualSavingsDemand, ratchetSavings, totalAnnualSavings, installCostLow, installCostHigh, paybackLow, paybackHigh, newPeak };
+    const s = OmegaDemandScreen.savings({
+      peakKw: currentPeakKW, shavePct: shavePct, demandRate: util.demandRate,
+      peakHours: peakHrs, ratchet: util.ratchet
+    });
+    const installCostLow  = Math.round(s.battKWh * 280);
+    const installCostHigh = Math.round(s.battKWh * 380);
+    return Object.assign(s, {
+      installCostLow: installCostLow, installCostHigh: installCostHigh,
+      paybackLow: installCostLow / s.totalAnnualSavings,
+      paybackHigh: installCostHigh / s.totalAnnualSavings
+    });
   };
 
   const conservative = calc(shavePct_conservative);
@@ -20527,7 +20631,7 @@ function _fomRenderResult(d) {
         <div><span style="color:var(--sub)">Peak shave target:</span> <span style="color:var(--text);font-weight:700">${fmt(t.shaveKW)} kW (${Math.round(t.shavePct*100)}%)</span></div>
         <div><span style="color:var(--sub)">New peak after shave:</span> <span style="color:var(--green);font-weight:700">${fmt(t.newPeak)} kW</span></div>
         <div><span style="color:var(--sub)">Demand savings:</span> <span style="color:var(--green);font-weight:700">$${fmt(t.annualSavingsDemand)}/yr</span></div>
-        <div><span style="color:var(--sub)">Ratchet benefit:</span> <span style="color:var(--green);font-weight:700">$${fmt(Math.max(0,t.ratchetSavings))}/yr</span></div>
+        <div><span style="color:var(--sub)">Ratchet:</span> <span style="color:var(--text)">in the 12-month demand saving — not a second credit</span></div>
         <div><span style="color:var(--sub)">Total annual savings:</span> <span style="color:var(--green);font-weight:800">$${fmt(t.totalAnnualSavings)}</span></div>
         <div><span style="color:var(--sub)">Simple payback:</span> <span style="color:var(--text);font-weight:700">${fmtD(t.paybackLow)}-${fmtD(t.paybackHigh)} years</span></div>
         <div><span style="color:var(--sub)">Install estimate:</span> <span style="color:var(--text);font-weight:700">$${fmt(t.installCostLow)}-$${fmt(t.installCostHigh)}</span></div>
@@ -20716,7 +20820,7 @@ Return ONLY a JSON object (no markdown, no explanation) with these fields:
         demandPct:   ai.demandBillPct || d.util.demandPct,
         tou:         ai.tou ?? d.util.tou,
         peakWindow:  ai.peakWindow || d.util.peakWindow,
-        ratchet:     ai.ratchet   || d.util.ratchet,
+        ratchet:     (ai.ratchet === 0 || ai.ratchet) ? ai.ratchet : d.util.ratchet,
         rateName:    ai.rateName,
         aiNotes:     ai.notes,
         ai_enhanced: true,
@@ -20724,24 +20828,27 @@ Return ONLY a JSON object (no markdown, no explanation) with these fields:
       // Re-run with updated rates
       const bill2   = d.bill;
       const profile = d.profile;
-      d.annualDemandCharges = bill2 * (ai.demandBillPct || profile.demandBillPct);
-      const monthlyDemandCharges = d.annualDemandCharges / 12;
-      d.currentPeakKW = Math.round(monthlyDemandCharges / d.util.demandRate);
-      d.annualEnergy  = Math.round((bill2 * (1 - (ai.demandBillPct||profile.demandBillPct))) / d.util.energyRate);
-      d.avgLoadKW     = Math.round(d.annualEnergy / 8760);
+      var basis2 = OmegaDemandScreen.basis({
+        annualBill: bill2, demandRate: d.util.demandRate, energyRate: d.util.energyRate,
+        demandBillPct: ai.demandBillPct || profile.demandBillPct
+      });
+      d.annualDemandCharges = basis2.annualDemandCharges;
+      d.currentPeakKW = basis2.peakKw;
+      d.annualEnergy  = basis2.annualEnergyKwh;
+      d.avgLoadKW     = basis2.avgLoadKw;
 
       const calc = (shavePct) => {
-        const shaveKW = Math.round(d.currentPeakKW * shavePct);
-        const battKW  = shaveKW;
-        const battKWh = Math.round(battKW * d.peakHrs);
-        const annualSavingsDemand = Math.round(shaveKW * d.util.demandRate * 12);
-        const ratchetSavings = Math.round(shaveKW * d.util.demandRate * 12 * (d.util.ratchet - 0.5));
-        const totalAnnualSavings = annualSavingsDemand + Math.max(0, ratchetSavings);
-        const installCostLow  = Math.round(battKWh * 280);
-        const installCostHigh = Math.round(battKWh * 380);
-        return { shavePct, shaveKW, battKW, battKWh, annualSavingsDemand, ratchetSavings, totalAnnualSavings,
-          installCostLow, installCostHigh, paybackLow: installCostLow/totalAnnualSavings, paybackHigh: installCostHigh/totalAnnualSavings,
-          newPeak: d.currentPeakKW - shaveKW };
+        const s = OmegaDemandScreen.savings({
+          peakKw: d.currentPeakKW, shavePct: shavePct, demandRate: d.util.demandRate,
+          peakHours: d.peakHrs, ratchet: d.util.ratchet
+        });
+        const installCostLow  = Math.round(s.battKWh * 280);
+        const installCostHigh = Math.round(s.battKWh * 380);
+        return Object.assign(s, {
+          installCostLow: installCostLow, installCostHigh: installCostHigh,
+          paybackLow: installCostLow / s.totalAnnualSavings,
+          paybackHigh: installCostHigh / s.totalAnnualSavings
+        });
       };
       d.conservative = calc(0.15);
       d.target       = calc(0.25);
@@ -75157,16 +75264,30 @@ window._crmToastModal=_crmToastModal;
    UNSAVED-WORK GUARD                                       (customer safety)
    Warn before the tab closes / navigates away if there are edits that
    haven't been persisted yet. Uses the dirty flag set by pushHist() and
-   cleared on a successful saveProject(). Only fires when actually dirty AND
-   signed in with a project (so it never nags on a read-only/empty view).
+   cleared on a successful saveProject(). A drawing with no account yet is
+   the easiest work to lose, so the prompt does not require a sign-in.
+   An empty canvas that nobody has edited does not set the condition.
    ===================================================================== */
 (function(){
+  function _editorUnsavedWork(){
+    try{
+      if(window._saveInFlight) return true;
+      if(!window._workDirty) return false;
+      var S = window.S;
+      if(!S) return !!window._workDirty;
+      /* The boot snapshot is one history entry on an empty sheet. That is
+         not work. A second entry, or anything actually drawn, is. */
+      var drawn = (S.elements && S.elements.length) || (S.conduits && S.conduits.length)
+        || (S.shapes && S.shapes.length) || (S._trenches && S._trenches.length) || S._trench;
+      var edited = S.history && S.history.length > 1;
+      return !!(drawn || edited);
+    }catch(e){ return !!window._workDirty; }
+  }
+  window._editorUnsavedWork = _editorUnsavedWork;
   window.addEventListener('beforeunload', function(e){
     try{
-      var dirty = !!window._workDirty;
-      var saving = !!window._saveInFlight;
-      if((dirty || saving) && window._currentUser && window._projectId){
-        // Standard browser confirm prompt (text is browser-controlled now).
+      if(_editorUnsavedWork()){
+        /* Standard browser confirm prompt (text is browser-controlled now). */
         e.preventDefault();
         e.returnValue = '';
         return '';
@@ -97047,11 +97168,18 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
   function reseedHistory(why) {
     try {
       if (typeof S === 'undefined' || !S) return;
+      /* An edit that landed while the project was still loading is real
+         work. Clearing the dirty flag unconditionally made the close
+         prompt and the local draft both drop it. A history longer than
+         the boot snapshot means the sheet already changed. */
+      var edited = !!(window._workDirty && S.history && S.history.length > 1);
       S.history = [];
       if (typeof pushHist === 'function') pushHist();
-      /* pushHist marks the doc dirty + results stale; a load is neither. */
-      window._workDirty = false;
-      try { if (typeof omegaSetStale === 'function') omegaSetStale(false); } catch (e) {}
+      /* pushHist marks the doc dirty + results stale; a plain load is neither. */
+      if (!edited) {
+        window._workDirty = false;
+        try { if (typeof omegaSetStale === 'function') omegaSetStale(false); } catch (e) {}
+      }
       log('history baseline re-seeded (' + why + ') --',
           (S.elements || []).length, 'el,',
           (S.shapes || []).length, 'shapes,',
@@ -109566,22 +109694,13 @@ button[style*="linear-gradient"][aria-disabled="true"]{
       });
       right.insertBefore(d, right.firstChild);
     }
-    /* and a button in View › Canvas, which is where it was asked for */
-    if (!document.getElementById('rb-omega-mode')) {
-      var host = null, all = document.querySelectorAll('#ribbon .ribbon-page[data-page="view"] .rbtn');
-      for (var i = 0; i < all.length; i++) {
-        if (/recenterOnEquipment|setPlot/.test(all[i].getAttribute('onclick') || '')) {
-          host = all[i]; break;
-        }
-      }
-      if (host && host.parentNode) {
-        var b2 = document.createElement('button');
-        b2.className = 'rbtn';
-        b2.id = 'rb-omega-mode';
-        b2.innerHTML = '<span class="rb-ico">\u25D1</span><span class="rb-lbl">Designer<br>Mode</span>';
-        b2.onclick = function () { set(mode === 'designer' ? 'pro' : 'designer'); };
-        host.parentNode.insertBefore(b2, host.nextSibling);
-      }
+    /* The ribbon Designer button was the same switch as #omg-switch.
+       The title bar keeps it. A node left by an older build stays hidden. */
+    var leftover = document.getElementById('rb-omega-mode');
+    if (leftover) {
+      leftover.classList.add('omega-gated-hidden');
+      leftover.setAttribute('data-omega-dupe', '1');
+      leftover.hidden = true;
     }
     paintSwitch();
   }
@@ -120024,6 +120143,10 @@ window.OmegaBessSizerEngine={MONTHS:['Jan','Feb','Mar','Apr','May','Jun','Jul','
       return {
         els: clone(S.elements || []), conds: clone(S.conduits || []),
         shps: clone(S.shapes || []), trench: clone(S._trench || null),
+        /* Drawn trench runs travel with the legs. Omitting them here made
+           Redo put the equipment back and leave the runs in the undone
+           state, so the legs and the trench no longer agreed. */
+        trenches: clone(S._trenches || []),
         pxPerFt: S.pxPerFt, unitLabel: S.unitLabel
       };
     } catch (e) { return null; }
@@ -153927,6 +154050,34 @@ function matches(btn, entry){
   return entry.match.test(oc);
 }
 
+function featureReleased(btn){
+  try {
+    return !!(root.OmegaEditorFeatures && root.OmegaEditorFeatures.released
+      && root.OmegaEditorFeatures.released(btn));
+  } catch (e) { return false; }
+}
+/* A feature turned back on from Settings › Features. Dupes and the
+   stand-in left behind an adopted button stay hidden. */
+function ungate(btn){
+  if (!btn) return false;
+  if (btn.getAttribute && (btn.getAttribute('data-omega-dupe') || btn.getAttribute('data-omega-fallback'))) return false;
+  var changed = false;
+  if (btn.classList.contains('omega-gated-hidden')) {
+    btn.classList.remove('omega-gated-hidden');
+    changed = true;
+  }
+  if (btn.hidden) { btn.hidden = false; changed = true; }
+  if (btn.__omegaSoon) {
+    btn.classList.remove('omega-soon');
+    if (btn.__omegaSoonOnclick) { btn.setAttribute('onclick', btn.__omegaSoonOnclick); btn.onclick = null; }
+    else if (btn.__omegaSoonFn) { btn.onclick = btn.__omegaSoonFn; }
+    btn.__omegaSoon = false;
+    btn.removeAttribute('aria-disabled');
+    var tag = btn.querySelector('.omega-soon-tag'); if (tag) tag.remove();
+    changed = true;
+  }
+  return changed;
+}
 function apply(){
   var n = 0, i, j;
   try {
@@ -153934,23 +154085,30 @@ function apply(){
     var all = document.querySelectorAll('#ribbon .rbtn, #ribbon .rsbtn, .rtm-item');
     for (i = 0; i < all.length; i++) {
       var b = all[i], done = false;
+      /* Settings › Features owns the HIDE and SOON lists. On puts the
+         tool back; off, and every SOON tool, leaves the bar. */
+      if (featureReleased(b)) { if (ungate(b)) n++; continue; }
       for (j = 0; j < HIDE.length && !done; j++) {
         if (matches(b, HIDE[j])) { if (hide(b)) n++; done = true; }
       }
       for (j = 0; j < SOON.length && !done; j++) {
-        if (matches(b, SOON[j])) { if (gate(b, SOON[j])) n++; done = true; }
+        if (matches(b, SOON[j])) { if (hide(b)) n++; done = true; }
       }
     }
     /* id-addressed entries, including buttons injected after load. */
     for (j = 0; j < SOON.length; j++) {
       if (!SOON[j].id) continue;
       var el = document.getElementById(SOON[j].id);
-      if (el && gate(el, SOON[j])) n++;
+      if (!el) continue;
+      if (featureReleased(el)) { if (ungate(el)) n++; }
+      else if (hide(el)) n++;
     }
     for (j = 0; j < HIDE.length; j++) {
       if (!HIDE[j].id) continue;
       var eh = document.getElementById(HIDE[j].id);
-      if (eh && hide(eh)) n++;
+      if (!eh) continue;
+      if (featureReleased(eh)) { if (ungate(eh)) n++; }
+      else if (hide(eh)) n++;
     }
     for (j = 0; j < REBADGE.length; j++) {
       var rb = document.getElementById(REBADGE[j].id);
@@ -168484,6 +168642,14 @@ if (root.console && console.info) {
     buttons().forEach(function (b) {
       var command = b.getAttribute('onclick') || '';
       if (b.id === 'rb-bess-config' || /openViabilityWorkflow/.test(command)) {
+        var broughtBack = false;
+        try { broughtBack = !!(root.OmegaEditorFeatures && root.OmegaEditorFeatures.released(b)); } catch (e) {}
+        if (broughtBack) {
+          b.removeAttribute('data-packaging-retired');
+          b.hidden = false;
+          b.removeAttribute('aria-hidden');
+          return;
+        }
         b.setAttribute('data-packaging-retired', '1');
         b.hidden = true;
         b.setAttribute('aria-hidden', 'true');
@@ -168737,9 +168903,9 @@ if (root.console && console.info) {
   /* label -> group caption, in the order the video lays them out. */
   var TOOLS = [
     { label: 'site setup',         group: 'Assessment' },
-    { label: 'find substation',    group: 'Assessment' },
+    { label: 'place nearest substation', group: 'Assessment' },
     { label: 'compute build',      group: 'Build' },
-    { label: 'network proximity',  group: 'Connectivity' },
+    { label: 'fiber &amp; network', group: 'Connectivity' },
     { label: 'energy balance',     group: 'Output' },
     { label: 'interactive report', group: 'Output' },
     { label: 'load screen',        group: 'Output' }   /* patch 56 */
@@ -174693,6 +174859,19 @@ if (root.console && console.info) {
     }
     el.textContent = txt;
     el.style.color = inv.missing.length ? '#F59E0B' : '#4ADE80';
+    var showStamp = false;
+    try {
+      showStamp = !!(root.OmegaEditorFeatures && root.OmegaEditorFeatures.isOn
+        && root.OmegaEditorFeatures.isOn('build-stamp'));
+    } catch (e) {}
+    el.setAttribute('data-omega-feature', 'build-stamp');
+    if (!showStamp) {
+      el.classList.add('omega-gated-hidden');
+      el.style.display = 'none';
+    } else {
+      el.classList.remove('omega-gated-hidden');
+      el.style.display = '';
+    }
     return inv;
   }
 
@@ -174833,8 +175012,7 @@ if (root.console && console.info) {
  *  each inserting itself next to whichever earlier button it found. The
  *  Compute page is static HTML with four empty panels; this watches the
  *  ribbon and moves each tool, by id, into the panel it belongs in, in a
- *  fixed order. Nothing is cloned except Site Setup, which every project
- *  type starts with and stays on Build too.
+ *  fixed order. Nothing is cloned. Site Setup stays on Build.
  * ══════════════════════════════════════════════════════════════════════ */
 (function (root) {
   'use strict';
@@ -174852,7 +175030,7 @@ if (root.console && console.info) {
      left here is what has no other home: the compute-campus site work,
      the design tools and the sizing and cost tools. */
   var PLAN = {
-    site:   ['@site-setup', 'rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
+    site:   ['rb-trace-boundary', 'rb-trace-exclusion', 'rb-intercon', 'rb-place-sub', 'rb-gas-tie', 'rb-max-fit'],
     design: ['rb-design-site', 'rb-site-build', 'rb-sub-envelope', 'rb-buildable', 'rb-fence-tie', 'rb-supply-link', 'rb-move-system', 'rb-feas-csv'],
     size:   ['rb-elec', 'rb-max-load', 'rb-load-screen', 'rb-site-screen', 'rb-optimise', 'rb-compute-cost', 'rb-compute-lease']
   };
@@ -174881,14 +175059,9 @@ if (root.console && console.info) {
     return document.querySelector('#ribbon .ribbon-page[data-page="compute"] .rpanel[data-ct="' + key + '"] .rpanel-body');
   }
   function find(id) {
-    if (id === '@site-setup') {
-      var ex = document.getElementById('rb-compute-site-setup');
-      if (ex) return ex;
-      var hero = document.querySelector('#ribbon .ribbon-page[data-page="home"] .rbtn.home-hero');
-      if (!hero) return null;
-      var c = hero.cloneNode(true); c.id = 'rb-compute-site-setup'; c.classList.remove('home-hero');
-      return c;
-    }
+    /* Site Setup stays on Build. Cloning it onto Compute made two buttons
+       with the same handler. */
+    if (id === '@site-setup') return null;
     var el = document.getElementById(id);
     return el ? (el.closest('.rbtn-wrap') || el) : null;
   }
@@ -179199,5 +179372,6 @@ root.OmegaEvRelay={ relayAll:relayAll, relayOne:relayOne };
   else boot();
 })(typeof window !== 'undefined' ? window : globalThis);
 </script>
+<script src="/omega-editor-recovery.js"></script>
 </body>
 </html>

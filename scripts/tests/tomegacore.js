@@ -509,9 +509,9 @@ function editorChecks() {
   var picked = vm.runInContext("_o2WithFences([{kind:'shape',id:'skid'}])", o2);
   eq(picked.map(function (x) { return x.id; }).join(','), 'skid', 'selecting the skid brings no host compute fence with it');
 
-  /* the Output button, its owner, its icon, its module */
-  ok(/<button class="rbtn" id="rb-omega-core" onclick="rbRun\(openOmegaCore\)" data-cap="compute"/.test(ED), 'Output › Omega-Core, on the compute cap');
-  ok(/<span class="rb-lbl">Omega-Core<\/span>/.test(ED), 'labelled Omega-Core');
+  /* the Analyze button, its owner, its icon, its module */
+  ok(/<button class="rbtn" id="rb-omega-core" onclick="rbRun\(openOmegaCore\)" data-cap="compute"/.test(ED), 'Analyze › Omega-Core fit, on the compute cap');
+  ok(/<span class="rb-lbl">Omega-Core<br>fit<\/span>/.test(ED), 'labelled Omega-Core fit');
   ok(/function openOmegaCore\(\)\{\s*if \(window\.OmegaCoreQualify/.test(ED), 'the opener is a plain global (guardLaunchers wraps it)');
   var iCL = ED.indexOf('<script src="/omega-compute-lease.js"></script>'), iOC = ED.indexOf('<script src="/omega-core-qualify.js"></script>');
   ok(iCL > 0 && iOC > iCL, 'the module loads after the lookup client it uses');
@@ -519,7 +519,7 @@ function editorChecks() {
   eq(M.owners('rb-omega-core', 'rbRun(openOmegaCore)').join(','), 'compute', 'Omega Compute owns the button, as it owns derSetDc');
   ok((M.get('compute').legacyGates || []).indexOf('compute') >= 0, 'and its legacy gate already carries the compute cap');
   var icons = require('../../omega-ribbon-icons.js');
-  ok(icons.pathFor('Omega-Core', 'Omega-Core') !== icons.FALLBACK, 'the button has its own icon');
+  ok(icons.pathFor('Omega-Core fit', 'Omega-Core fit') !== icons.FALLBACK, 'the button has its own icon');
   var mod = fs.readFileSync(path.join(ROOT, 'omega-core-qualify.js'), 'utf8');
   ok(!/=>|\bconst\b|\blet\b|`/.test(mod), 'the module is ES5');
   ok(/© 2025–2026 ClearSky Energy Solutions LLC/.test(mod), 'and carries the header');

@@ -641,3 +641,7 @@ pins the words.
   quarters is Tommy's call.
 - **The plan chip in Editor Lite.** Editor Lite hides `#portal-nav`, so
   the chip is on Site Map only.
+
+### Production rollout — 2026-10-17
+
+The default `/workspace` home now opens `/workspace-v2`, preserving query context. Existing tools, modules, billing and other section hashes stay on their established page. `?ui=v1` explicitly opens the classic home. The journey groups repeated review titles and in-flight names without modifying records. No Firestore or billing changes are part of this rollout.

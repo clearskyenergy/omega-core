@@ -45,10 +45,16 @@
      flashes the next page. -->
 <script src="/omega-splash.js?v=1" data-boot="no"></script>
 <script>
-/* The journey home is a separate route. This flag only redirects; the live
-   page below is what everyone else still gets. */
+/* The journey is the default home. Keep existing library/billing deep links
+   on this page, and ?ui=v1 as the explicit classic-home fallback. */
 (function () {
-  try { if (/[?&]ui=v2(?:&|$)/.test(location.search)) location.replace('/workspace-v2' + (location.hash || '')); } catch (e) {}
+  try {
+    var hash = location.hash || '';
+    var classic = /[?&]ui=v1(?:&|$)/.test(location.search);
+    if (!classic && (!hash || /^#(?:home|track|settings)$/.test(hash))) {
+      location.replace('/workspace-v2' + location.search + (hash === '#home' ? '' : hash));
+    }
+  } catch (e) {}
 })();
 </script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
