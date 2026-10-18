@@ -88,6 +88,7 @@
     "seed:evcs-portfolio:dry": "node scripts/seed-evcs-portfolio.js",
     "test:experience": "node scripts/tests/texperience.js",
     "test:editor-v2": "node scripts/tests/teditorv2.js && node scripts/tests/tguidedbuild.js && node scripts/tests/tdesignmodel.js && node scripts/tests/tgridlayer.js && node scripts/tests/teditorv2auth.js",
-    "test:editor-v2-3d": "node scripts/tests/teditorv23d.js"
+    "test:editor-v2-3d": "node scripts/tests/teditorv23d.js && node scripts/tests/teditorv2cost.js",
+    "check:editor-v2": "node scripts/render-editor-v2.js"
   }
 }

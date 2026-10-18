@@ -3755,3 +3755,21 @@ mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
 rate beside the project's blended $/W. Held by
 `scripts/tests/teditorcost.js` (solar by mount; the page collector with
 and without the skid).
+
+## 2026-10-17 — CAD and 3D Site Plan integration preview
+
+`codex/editor-v2-integration` combines the current #339 CAD branch with
+#351's 3D view and main. The CAD branch's newer Firebase sign-in and guided
+build handling are retained. The original Site Map remains separate.
+3D component pricing moved from `omega-editor-v2-3d.js` to
+`api/_lib/editor-v2-component-cost.js`, using the existing editor cost book.
+`api/editor-v2-component-cost.js` authenticates and checks the estimate
+entitlement through package-access before returning a figure. The card
+shows an unavailable/sign-in message instead of silently pricing locally.
+`test:editor-v2`, `test:editor-v2-3d`, and `check:editor-v2` cover the combined
+branch. This remains a review preview: saves are browser-local; permit/SLD
+hooks need their separate workstream, and browser screening thresholds still
+need the broader server-side screening integration before production.
+Browser verification also fixed the obstruction hatch path (Canvas restore
+restores clipping, not the current path), marked missing terrain as flat,
+and pinned 3D beside Outputs/Run so it stays visible without ribbon scrolling.

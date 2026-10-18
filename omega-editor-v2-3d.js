@@ -25,8 +25,7 @@
  * CIVIL. civilOf() is the screening the Run CIVIL section reads: level-pad
  * cut and fill about the mean, and trench length over the terrain. It is
  * a screen, not a grading plan. Dollars on a component card use the same
- * published benchmarks as the cost engine (solar band, storage split) and
- * are labelled screening.
+ * server cost engine (solar band, storage split) and are labelled screening.
  *
  * If WebGL or the elevation service is missing, the same scene draws as
  * hillshade and extruded models. Nothing here invents an elevation.
@@ -36,20 +35,6 @@
 
   var G, D;
   var FT_PER_M = 3.280839895;
-
-  /* Published screening rates. The cost engine owns the book
-     (api/_lib/editor-cost.js BENCH, DOE/NREL Q1 2025 and the NREL storage
-     split). These are the same figures, for a share of the ROM, not a quote. */
-  var RATES = {
-    pvResidential: 2.95,
-    pvCommercial: 1.98,
-    pvUtility: 1.12,
-    pvCanopy: 2.75,
-    bessKwh: 241,
-    bessKw: 379,
-    pvSource: 'DOE/NREL Solar Photovoltaic System Cost Benchmarks, Q1 2025',
-    bessSource: 'NREL utility-scale storage, 2025 update: energy plus power'
-  };
 
   /* Screening slope limits, percent. Same idea as the Site Map grading
      check: a poured pad is tighter than a tracker row. Not a manufacturer limit. */
@@ -107,13 +92,6 @@
   function triNormal(a, b, c) { return norm3(cross(sub3(b, a), sub3(c, a))); }
   function dot3(a, b) { return a[0] * b[0] + a[1] * b[1] + a[2] * b[2]; }
 
-  function pvRate(kw, mount) {
-    if (mount === 'carport') return RATES.pvCanopy;
-    var k = +kw || 0;
-    if (k < 25) return RATES.pvResidential;
-    if (k < 20000) return RATES.pvCommercial;
-    return RATES.pvUtility;
-  }
   function cfOf(mount) {
     if (!libs() || !G.PRESETS) return 0.18;
     var p = G.PRESETS[mount] || G.PRESETS['fixed-ground'];
@@ -556,17 +534,11 @@
       o = scene.objects[i];
       if (o.kind === 'array') solarMwh += (o.kw || 0) * 8.76 * (o.cf || 0.18);
     }
-    var rate = pvRate(solarKw || myKw, object.mount);
     var cost = null, costNote = 'Priced on Run.';
     var energy = null, energyShare = null;
     if (object.kind === 'array' && myKw > 0) {
-      cost = myKw * 1000 * rate;
-      costNote = 'Screening, ' + rate.toFixed(2) + ' $/W-DC. ' + RATES.pvSource + '. Not a quote.';
       energy = myKw * 8.76 * (object.cf || cfOf(object.mount));
       energyShare = solarMwh > 0 ? energy / solarMwh : null;
-    } else if (object.key === 'bess' && (myKwh > 0 || myKw > 0)) {
-      cost = myKwh * RATES.bessKwh + myKw * RATES.bessKw;
-      costNote = 'Screening, $' + RATES.bessKwh + '/kWh plus $' + RATES.bessKw + '/kW. ' + RATES.bessSource + '. Not a quote.';
     }
     var pad = null;
     if (civil && civil.pads) {
@@ -1646,7 +1618,8 @@
   function paintCredit() {
     if (!view || !view.credit) return;
     var mult = view.exag == null ? 1 : view.exag;
-    view.credit.textContent = 'USGS 3DEP · Esri World Imagery · ' + (mult === 1 ? '1× true scale' : (mult + '× relief'));
+    var elevation = view.perf.elevation === 'usgs-3dep' ? 'USGS 3DEP' : (view.perf.elevation === 'pending' ? 'Elevation loading' : 'Elevation unavailable · flat ground');
+    view.credit.textContent = elevation + (view.perf.imagery ? ' · Esri World Imagery' : '') + ' · ' + (mult === 1 ? '1× scale' : (mult + '× relief'));
   }
   function buildUi() {
     var back = el('button', 'v3d-back', '2D');
@@ -1744,7 +1717,21 @@
     if (card.kwh) row(host, 'kWh', String(Math.round(card.kwh)));
     if (card.kwShare != null) row(host, 'Share of solar', pct(card.kwShare));
     if (card.kwhShare != null) row(host, 'Share of storage', pct(card.kwhShare));
-    if (card.cost) row(host, 'Screening cost', money(card.cost));
+    if (object.kind === 'array' || object.key === 'bess') {
+      var price = el('p', 'v3d-note', 'Loading screening cost…');
+      host.appendChild(price);
+      var auth = root.OmegaEditorV2Auth;
+      (auth ? auth.idToken() : Promise.resolve('')).then(function (token) {
+        if (!token) throw new Error('Sign in to see screening cost.');
+        return fetch('/api/editor-v2-component-cost', {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
+          body: JSON.stringify({ kind: object.kind, key: object.key, kw: card.kw, kwh: card.kwh,
+            solarKw: view.summary.solarKwDc, mount: object.mount })
+        }).then(function (r) { if (!r.ok) throw new Error('Screening cost is unavailable.'); return r.json(); });
+      }).then(function (answer) {
+        price.textContent = answer.cost == null ? 'Not priced.' : 'Screening cost: ' + money(answer.cost) + '. ' + answer.note;
+      }).catch(function (e) { price.textContent = e.message || 'Screening cost is unavailable.'; });
+    }
     if (card.energyMwh) row(host, 'Energy share', Math.round(card.energyMwh) + ' MWh/yr' + (card.energyShare != null ? ' · ' + pct(card.energyShare) : ''));
     if (card.pad) row(host, 'Slope', card.pad.slopePct.toFixed(1) + '% · limit ' + card.pad.limitPct + '%');
     if (object.kind === 'conduit' && view.civil) row(host, 'Over terrain', Math.round(view.civil.trenchTerrainFt) + ' ft');
@@ -2054,10 +2041,13 @@
         if (view.hint) view.hint.textContent = 'Elevation did not load. The ground is flat, not a survey.';
       }
       rebuild();
+      paintCredit();
       updateRing();
     }, function () {
       if (!view) return;
       view.perf.elevation = 'unavailable';
+      if (view.hint) view.hint.textContent = 'Elevation did not load. The ground is flat, not a survey.';
+      paintCredit();
       view.civil = civilOf(view.scene, { source: 'unavailable' });
       updateRing();
     });
@@ -2237,7 +2227,7 @@
         added++;
       }
       view.perf.buildings = added;
-      if (added && view.credit) view.credit.textContent = 'USGS 3DEP · Esri World Imagery · OpenStreetMap';
+      if (added) paintCredit();
       rebuild();
     }, function () {});
   }
@@ -2526,7 +2516,6 @@
 
   var api = {
     VERSION: 'editor-v2-3d/1',
-    RATES: RATES,
     SLOPE_LIMIT: SLOPE_LIMIT,
     MODEL: MODEL,
     sceneOf: sceneOf,
@@ -2545,7 +2534,6 @@
     analyze: analyze,
     tiltDeg: tiltDeg,
     trackerTilt: trackerTilt,
-    pvRate: pvRate,
     providerPlan: providerPlan,
     projectPoint: projectPoint,
     mvpOf: mvpOf,

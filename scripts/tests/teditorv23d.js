@@ -127,12 +127,10 @@ check(gradeStep && gradeStep.state === 'fail' && civil.overLimit > 0, 'a pad ove
 
 var summary = D.summary(doc);
 var card = V.analyze(arr, scene, summary, civil, { sub: { name: 'SINNOTT', kv: 69, mi: 1.2 } });
-near(card.cost, arr.kw * 1000 * 1.98, 1e-6, 'commercial solar uses 1.98 $/W');
-check(card.costNote.indexOf('Screening') >= 0 && card.costNote.indexOf('1.98') >= 0 && card.costNote.indexOf('Not a quote') >= 0, 'the cost is labelled a screening');
+check(card.cost === null, 'browser does not price solar');
 check(card.connections.join(' ').indexOf('SINNOTT') >= 0, 'the card names the feeding substation');
 var bessCard = V.analyze(bess, scene, summary, civil, null);
-near(bessCard.cost, 1000 * V.RATES.bessKwh + 500 * V.RATES.bessKw, 1e-6, 'storage uses the energy plus power split');
-check(bessCard.costNote.indexOf('Not a quote') >= 0, 'storage dollars are a screening too');
+check(bessCard.cost === null, 'browser does not price storage');
 
 var plan = V.providerPlan({});
 check(plan.active === 'free' && plan.elevation === 'usgs-3dep' && plan.ionTerrain === false && plan.photorealisticAvailable === false, 'the free path needs no key');

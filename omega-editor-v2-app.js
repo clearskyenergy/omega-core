@@ -1020,6 +1020,8 @@
       ctx.save(); ctx.clip();
       ctx.globalAlpha = 0.18; ctx.fill();
       ctx.globalAlpha = 0.45; hatch(ctx); ctx.restore();
+      /* Canvas paths are not saved/restored: hatch replaced the polygon. */
+      poly(ctx, e.pts, true);
       ctx.setLineDash([5, 4]); ctx.stroke();
     } else if (e.type === 'setback') {
       poly(ctx, e.pts, true); ctx.setLineDash([8, 5]); ctx.stroke();
