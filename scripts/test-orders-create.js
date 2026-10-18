@@ -34,6 +34,14 @@ var A = {
   authenticate: async function (req) { return req.caller; },
   handler: function (fn) { return fn; },
   canActInOrg: async function (c, org) { return c.orgId === org; },
+  /* the same shape api/_lib/admin.js safeOrg enforces */
+  safeOrg: function (v) {
+    var s = String(v == null ? '' : v).trim().toLowerCase();
+    if (!s || s.length > 253) return '';
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)) return '';
+    if (s === 'fenecon.de' || s === 'fenecon.us') return 'fenecon.com';
+    return s;
+  },
   FieldValue: function () { return { serverTimestamp: function () { return 123; }, arrayUnion: function () { return { union: Array.from(arguments) }; } }; }
 };
 var mailed = [];
@@ -108,6 +116,76 @@ async function post(b) { return orders({ method: 'POST', body: b, caller: rep },
   reset();
   var slash = await post({ action: 'create', customer: { name: 'West', email: 'ops/west@acme.com' }, items: [] });
   ok("an address with '/' is written without an account, not a 500", slash.ok && created() && !created().customerId);
+
+  console.log('\norders design — the drawing becomes one Logic order');
+  function orderDocs() { var n = []; for (var e of db.rows) if (e[0].indexOf('orders/') === 0) n.push([e[0], e[1]]); return n; }
+  function seedProject(extra) {
+    db.seed('projects/proj-1', Object.assign({
+      orgId: 'cleancell.us', address: '3400 S Federal St, Chicago, IL 60616',
+      mapState: { lat: 41.83, lng: -87.62, address: '3400 S Federal St, Chicago, IL 60616' }
+    }, extra || {}));
+  }
+  async function rejected(b) {
+    try { await post(b); return null; } catch (e) { return e; }
+  }
+  reset();
+  db.seed('omega_orgs/cleancell.us/storefront/config', { fulfilledBy: 'clearsky', products: [
+    { sku: 'CC-C418', name: '418 kWh cabinet', kw: 200, kwh: 418, priceMode: 'list', listPrice: 240000 },
+    { sku: 'CELL-1', name: 'A cell', kind: 'component' }
+  ] });
+  seedProject();
+  var d1 = await post({ action: 'design', projectId: 'proj-1', orgId: 'evil.com',
+    address: '3400 s federal st chicago il 60616',
+    pricing: { total: 999999 }, approvedQuote: { totalCents: 999999 },
+    items: [
+      { name: 'Cabinet as drawn', sku: 'CC-C418', qty: 2, unit: 'ea', category: 'Equipment', listPrice: 999999, unitCost: 999999, base: 900000 },
+      { description: 'Trench', qty: 40, unit: 'LF', category: 'Civil', note: 'equip $12,400 + install $800' }
+    ] });
+  var od = created();
+  ok('a design files one new order and returns the Logic address', d1.ok && d1.status === 'new' && d1.logic === '/omega-logic?org=cleancell.us&order=' + d1.orderId && !d1.duplicate, JSON.stringify(d1));
+  ok('the org is the project\'s, not the body', od.orgId === 'cleancell.us' && od.source === 'design' && od.sourceProjectId === 'proj-1');
+  ok('the address and the point come off the project', od.site && od.site.address === '3400 S Federal St, Chicago, IL 60616' && od.site.projectId === 'proj-1' && od.site.lat === 41.83 && od.customer.address.line1 === od.site.address);
+  ok('no customer is invented', od.customer.email === '' && od.customer.name === '' && !od.customerId);
+  ok('lines keep the names and quantities, and a catalog sku is recognized', od.items.length === 2 && od.items[0].name === 'Cabinet as drawn' && od.items[0].qty === 2 && od.items[0].published === true && od.items[0].kw === 200 && od.items[1].name === 'Trench' && od.items[1].qty === 40 && od.items[1].unit === 'LF');
+  ok('no price, list price, or approved quote is stored', od.pricing === null && od.approvedQuote == null && od.items[0].listPrice === null && JSON.stringify(od).indexOf('999999') < 0 && JSON.stringify(od).indexOf('240000') < 0 && JSON.stringify(od).indexOf('900000') < 0 && JSON.stringify(od).indexOf('$') < 0, JSON.stringify(od.items));
+  ok('a dollar in the note is not copied', od.items[1].note.indexOf('12,400') < 0 && /equip/.test(od.items[1].note) && /install/.test(od.items[1].note));
+  ok('the project points at that one order', db.rows.get('projects/proj-1').designOrderId === d1.orderId);
+  ok('ClearSky is told once', mailed.length === 1 && /Design order/.test(mailed[0]));
+
+  var d2 = await post({ action: 'design', projectId: 'proj-1', items: [{ name: 'Cabinet as drawn', sku: 'CC-C418', qty: 3, unit: 'ea' }] });
+  ok('a second send updates the same open order', d2.duplicate === true && d2.locked === false && d2.orderId === d1.orderId && orderDocs().length === 1 && created().items[0].qty === 3 && created().history.length === 3);
+  ok('the update does not mail again', mailed.length === 1);
+
+  created().status = 'quoted'; created().logic = { pricedAt: '2026-10-18' }; created().pricing = { total: 1 };
+  var kept = created().items[0].qty;
+  var d3 = await post({ action: 'design', projectId: 'proj-1', items: [{ name: 'Should not replace', qty: 9 }] });
+  ok('a priced order is returned and not overwritten', d3.locked === true && d3.orderId === d1.orderId && created().items[0].qty === kept && created().items[0].name === 'Cabinet as drawn');
+
+  var clash = await rejected({ action: 'design', projectId: 'proj-1', address: '1 Other Street', items: [{ name: 'X', qty: 1 }] });
+  ok('an address that disagrees with the project is refused', clash && clash.status === 409 && /address/.test(clash.message));
+
+  reset();
+  db.seed('omega_orgs/cleancell.us/storefront/config', { fulfilledBy: 'clearsky', products: [] });
+  seedProject({ address: '', mapState: { address: '' } });
+  var bare = await rejected({ action: 'design', projectId: 'proj-1', items: [{ name: 'X', qty: 1 }] });
+  ok('a project with no site address is refused', bare && bare.status === 409 && orderDocs().length === 0);
+
+  reset();
+  db.seed('omega_orgs/cleancell.us/storefront/config', { fulfilledBy: 'clearsky', products: [{ sku: 'CELL-1', name: 'A cell', kind: 'component' }] });
+  seedProject();
+  var comp = await rejected({ action: 'design', projectId: 'proj-1', items: [{ name: 'Cell', sku: 'CELL-1', qty: 1 }] });
+  ok('a component sku is refused', comp && comp.status === 400 && orderDocs().length === 0);
+
+  reset(); seedProject({ orgId: 'other.example' });
+  var foreign = await rejected({ action: 'design', projectId: 'proj-1', items: [{ name: 'X', qty: 1 }] });
+  ok('another workspace\'s project is refused', foreign && foreign.status === 403);
+
+  reset();
+  db.seed('omega_orgs/cleancell.us/storefront/config', { fulfilledBy: 'clearsky', products: [] });
+  seedProject();
+  account('jordan@acmefleet.com', { status: 'active', role: 'owner' });
+  var named = await post({ action: 'design', projectId: 'proj-1', customer: { name: 'Jordan Blake', email: 'jordan@acmefleet.com' }, items: [{ name: 'Cabinet', qty: 1 }] });
+  ok('a named customer is stamped only when that account admitted them', named.ok && created().customer.email === 'jordan@acmefleet.com' && created().customerId === 'amp1' && created().pricing === null);
 
   console.log('\n  ' + pass + ' passed, ' + fail + ' failed\n');
   process.exit(fail ? 1 : 0);

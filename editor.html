@@ -38783,7 +38783,9 @@ function openBomSourcing() {
     +   '</label>'
     +   '<div style="display:flex;gap:8px">'
     +     '<button onclick="exportBomCSV()" style="flex:1;padding:10px;background:linear-gradient(135deg,#1DB95A,#00D4FF);color:#16202B;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">⬇ Export Sourcing CSV</button>'
+    +     '<button type="button" id="bom-to-logic" onclick="omegaSendBomToLogic()" style="flex:1;padding:10px;background:#0B2A3D;color:#fff;font-weight:700;font-size:12px;border:none;border-radius:7px;cursor:pointer;font-family:inherit">Send to Omega Logic</button>'
     +   '</div>'
+    +   '<div id="bom-logic-msg" style="font-size:11px;color:var(--text);margin-top:8px;line-height:1.45"></div>'
     +   '<div id="bom-rfq" style="margin-top:12px"></div>'
     +   '<div style="font-size:8.5px;color:#6B8299;margin-top:9px;line-height:1.5">Takeoffs are generated from the drawing. Distributor SKUs &amp; live pricing are resolved in the marketplace sourcing portal (Rexel Energy Solutions / City Electric Supply) at order time. Container-internal wiring is excluded — only field runs to the facility connection point are listed.</div>'
     + '</div></div>';
@@ -77371,6 +77373,57 @@ function omegaPushPrime(step){
   window.open('/omega-prime'+(q?('?'+q):''), '_blank', 'noopener');
 }
 function omegaPushLogic(){ omegaPushPrime('logic'); }
+
+/* The bill of materials becomes one Omega Logic order for this project.
+   Prices on a line (an EV unit cost, a dollar in the note) are not sent.
+   The address is whatever save just wrote on the project. */
+function omegaDesignLines(items) {
+  return (items || []).map(function (it) {
+    return {
+      name: it.description || it.name || '',
+      qty: it.qty,
+      unit: it.unit || 'ea',
+      sku: it.sku || '',
+      category: it.category || '',
+      size: it.size || '',
+      note: it.note || '',
+      manufacturer: it.manufacturer || ''
+    };
+  }).filter(function (it) { return it.name; });
+}
+function omegaSendBomToLogic() {
+  var msg = document.getElementById('bom-logic-msg');
+  function say(t) { if (msg) msg.textContent = t; }
+  var bom = window._BOM_CACHE;
+  if (!bom || !bom.items || !bom.items.length) { say('The bill of materials is empty. Draw the equipment first.'); return; }
+  if (typeof _projectId !== 'string' || !_projectId) { say('Save the project first. The order keeps that project.'); return; }
+  var ribbon = document.getElementById('omega-addr-in');
+  var box = document.getElementById('addr-in');
+  if (box && ribbon && !String(box.value || '').trim() && String(ribbon.value || '').trim()) box.value = String(ribbon.value).trim();
+  say('Saving the site, then filing the order…');
+  var saving = (typeof saveProject === 'function') ? Promise.resolve(saveProject()) : Promise.resolve();
+  saving.then(function () {
+    if (window._lastSaveError) throw new Error(window._lastSaveError);
+    var u = (window.firebase && firebase.auth && firebase.auth().currentUser) || null;
+    if (!u) throw new Error('Sign in to file this order.');
+    return u.getIdToken();
+  }).then(function (t) {
+    return fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+      body: JSON.stringify({ action: 'design', projectId: _projectId, items: omegaDesignLines(bom.items) })
+    }).then(function (r) {
+      return r.json().then(function (j) {
+        if (!r.ok) throw new Error((j && (j.error || j.message)) || 'Could not file the order');
+        return j;
+      });
+    });
+  }).then(function (j) {
+    say(j.locked ? 'This project already has an order in Omega Logic. Opened that one.'
+      : (j.duplicate ? 'Updated the open order ' + (j.orderNo || '') + '.' : 'Filed in Omega Logic as ' + (j.orderNo || 'an order') + '.'));
+    if (j.logic) window.open(j.logic, '_blank', 'noopener');
+  }).catch(function (e) { say((e && e.message) || String(e)); });
+}
 
 (function(){
   function el(id){ return document.getElementById(id); }

@@ -43,10 +43,18 @@ each button; the desktop, the app and Today only draw it. Underneath, the
 same record runs through the same places as before:
 
 ```
-customer's website / PO  →  Orders (price, accept, deposit)  →  Work order
+customer's website / PO, or a Site Map BOM, or an Omega Prime quote
+      →  Orders (price, accept, deposit)  →  Work order
       →  Materials plan (buy)  →  Benches (build, scan, issue parts)
       →  Ready  →  Shipping & receiving  →  Sites & custody (on site, warranty)
 ```
+
+A bill of materials or a Prime quote files one order for that project
+(`POST /api/orders`, `action: design`). The address is the one saved on
+the project. The lines are the names and quantities on the drawing. No
+price is copied, and no customer is invented. The same person who already
+prices an order approves the selling price. Sending it again updates that
+order while it is still new.
 
 Three places to be:
 

@@ -175,6 +175,7 @@ assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k 
 assert.match(pg, /B\.load\(\)\.then\(function \(t\) \{ tenantList = t; showType\(S\.type, true\);/); count++;
 assert.match(pg, /type: S\.type/); assert.match(pg, /S\.projectId = pid/); assert.match(pg, /function paintLogic/); assert.match(pg, /PP\.orgId\(qparam\('org'\)\)/); count += 4;
 assert.match(pg, /var id = PP\.orgId\(w\.orgId\)/); assert.ok(pg.indexOf('PP.orgId(w.orgId) || w.orgId') < 0, 'a link org is the safe id, never the raw claim'); count += 2;
+assert.match(pg, /action: 'design'/); assert.match(pg, /function quoteLines/); assert.ok(pg.indexOf('base: d.base') < 0 && pg.indexOf('total: r.total') < 0, 'the Logic handoff does not send the cost-model dollars'); count += 3;
 assert.match(pg, /fetch\('\/api\/utility-rates\?zip=' \+ encodeURIComponent\(zip\)/); count++;
 assert.match(pg, /var claim = r && r\.claims && r\.claims\.orgId;/); assert.match(pg, /orgId: claim \? String\(claim\) : \(B && B\.orgOf \? B\.orgOf\(u\.email\) : ''\)/, 'homed as userOrg() is: the claim, then the email domain'); count += 2;
 assert.match(pg, /db\.collection\('projects'\)\.add\(PP\.projectDoc\(docState\(\), w, FV\.serverTimestamp\(\)\)\)/); count++;
