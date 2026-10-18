@@ -1753,6 +1753,17 @@ tenant. Treat it that way.
   rollup) needs nothing. A refused save loses nothing: the drawing is still
   in that tab, and the person reloads. Rules deploy by hand
   (`firebase deploy --only firestore:rules`). `scripts/tests/tsaveguard.js`.
+- **Equipment is drawn from its footprint in feet, by ONE pass** (2026-10-17,
+  found by the Prime transfer: the rescale had never run). The anchor
+  engine's `run()` (UNIFIED ANCHORING) calls `omegaRescaleElementsOnce` once
+  per frame, about each centre, on the floor the unit was placed with
+  (`minW/minH`, else Insert's `OmegaInsert.floorPx`); OmegaGeo leaves
+  anything `omegaElementFootprint` claims.
+  `standDown()` replaces `window._geoReprojectAll` at boot and every wrapper
+  hung on it before then goes with it (that is how the rescale was lost): a
+  pass that must follow the map belongs in `run()`. `npm run
+  check:element-zoom` zooms the real editor on `scripts/_lib/gmaps-double.js`;
+  `scripts/tests/telementzoom.js`.
 - Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
   and state parcel services. The editor's View › Parcel Lines draws them on
   the map and `api/parcel.js` asks the same counties for a point; a county

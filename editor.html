@@ -9788,6 +9788,14 @@ function uP(k,v){
         el._geoWFt = el.w/S.pxPerFt;
         if(el.h>0) el._geoHFt = el.h/S.pxPerFt;
         el._domW = el.w;
+        /* and the footprint in FEET the zoom rescale draws equipment at
+           (omegaRescaleElements), as the drag-resize path writes it, or the
+           next pass puts the old size back */
+        if(el.type==='eq' || el.type==='evgear' || el.type==='bess-asm'){
+          var _uh = el.type==='evgear' ? Math.round(el.w*(el.aspect||0.72))
+                  : el.type==='bess-asm' ? Math.round(el.w*0.55) : ((+el.h>0) ? +el.h : el.w);
+          el.lf = el.w/S.pxPerFt; el.wf = _uh/S.pxPerFt; el._ppfAtPlace = S.pxPerFt;
+        }
       }
     }catch(e){}
     const bd=dom.querySelector('.elbody');if(bd){bd.style.width=v+'px';bd.style.minWidth=v+'px';}
@@ -66017,7 +66025,7 @@ window.OmegaBuild = {
     autelPriceBook: function(){ return typeof _evBook==='function'; },   /* the book is the server's; the reader is here */
     solarInEstimate:function(){ return typeof omegaSolarCost==='function'; },
     elRenderCenter: function(){ return typeof _elRenderSize==='function'; },
-    elementZoomScale:function(){ return typeof omegaRescaleElements==='function'; },
+    elementZoomScale:function(){ return typeof omegaRescaleElements==='function' && typeof omegaRescaleElementsOnce==='function'; },
     ghostSweep:function(){ return typeof omegaSweepGhosts==='function'; },
     conduitDrag:function(){ return typeof _cdDragStart==='function'; },
     pvDetailView:function(){ return typeof _pvDrawModules==='function'; },
@@ -66081,8 +66089,11 @@ try{ console.info('[omega/build] '+OMEGA_BUILD.id+' \u00b7 built '+OMEGA_BUILD.b
  *  the map pulled back. Position was anchored, size was not.
  *
  *  This rebuilds pixel size from the stored footprint in feet, about the
- *  element's CENTRE so nothing walks across the drawing, and runs from
- *  the same reprojection the anchor engine drives.
+ *  element's CENTRE so nothing walks across the drawing, and runs inside
+ *  the anchor engine's pass (UNIFIED ANCHORING, run()), once per frame.
+ *  It used to be a wrapper on window._geoReprojectAll, and the anchor
+ *  engine's standDown() replaces that whole chain, so from boot onward it
+ *  never ran: every guided-build unit kept the pixels it was placed at.
  * ═══════════════════════════════════════════════════════════════════ */
 function _elFootprintFt(el){
   if(!el) return null;
@@ -66111,6 +66122,8 @@ function _elFootprintFt(el){
 function omegaRescaleElements(){
   var ppf = +(S && S.pxPerFt) || 0;
   if(!(ppf>0)) return 0;
+  /* Insert records no floor on what it drops: OmegaInsert.floorPx is it */
+  var insFloor = (window.OmegaInsert && window.OmegaInsert.floorPx) || null;
   var n=0;
   (S.elements||[]).forEach(function(el){
     if(!el) return;
@@ -66122,10 +66135,14 @@ function omegaRescaleElements(){
        still derive one later. */
     if(!(el._ppfAtPlace>0)) el._ppfAtPlace = ppf;
 
-    /* The element's own floor (set by _evAdd, same as at placement) so a
-       symbol never drops below legible or balloons past its footprint. */
-    var wantW = Math.max((+el.minW>0)?+el.minW:10, Math.round(f.lf*ppf));
-    var wantH = Math.max((+el.minH>0)?+el.minH:8,  Math.round(f.wf*ppf));
+    /* The floor it was PLACED with, so it reads at every zoom as it did when
+       it was drawn: el.minW / el.minH where the placer recorded them
+       (_evAdd's, a catalog unit's, Omega Prime's 4 px), else the floor Insert
+       drops an Insert item at, else 10 x 8. A symbol never drops below
+       legible or balloons past its footprint. */
+    var fl = (el.type==='eq' && insFloor) ? insFloor : { w:10, h:8 };
+    var wantW = Math.max((+el.minW>0)?+el.minW:fl.w, Math.round(f.lf*ppf));
+    var wantH = Math.max((+el.minH>0)?+el.minH:fl.h, Math.round(f.wf*ppf));
     if(Math.abs((el.w||0)-wantW) <= 1 && Math.abs((el.h||0)-wantH) <= 1) return;
 
     /* Grow about the centre. The geo anchor is the centre too, so this
@@ -66137,30 +66154,45 @@ function omegaRescaleElements(){
     el.x=c.x-wantW/2; el.y=c.y-wantH/2;
     n++;
     try{ if(typeof renderEl==='function') renderEl(el); }catch(e){}
+    /* renderEl draws a fresh node and the outline is selEl()'s: a selected
+       unit keeps its handles through a zoom */
+    try{ if(S.sel===el.id){ var _n=document.querySelector('.cel[data-elid="'+el.id+'"]'); if(_n) _n.classList.add('sel'); } }catch(e){}
   });
   return n;
 }
 window.omegaRescaleElements = omegaRescaleElements;
 
-/* Run it as part of reprojection. Wrapping rather than editing the engine
-   keeps this independent of which anchoring generation is live. */
-(function(){
-  var tries=0;
-  var iv=setInterval(function(){
-    if(++tries>200){ clearInterval(iv); return; }
-    var f=window._geoReprojectAll;
-    if(typeof f!=='function' || f.__omegaElScale) return;
-    clearInterval(iv);
-    var wrapped=function(){
-      var r=f.apply(this, arguments);
-      try{ omegaRescaleElements(); }catch(e){}
-      return r;
-    };
-    wrapped.__omegaElScale=true;
-    window._geoReprojectAll=wrapped;
-    try{ console.info('[omega/elscale] element footprints now rescale with zoom'); }catch(e){}
-  }, 60);
-})();
+/* What omegaRescaleElements sizes, by its own test above (equipment of
+   those three types whose footprint in FEET is known), for OmegaGeo (EAGER
+   GEO-ANCHORING) to leave alone, so no element has two scalers. OmegaGeo
+   sizes everything else from the pixels it was drawn at.
+   scripts/tests/telementzoom.js holds the two tests to one answer. */
+function omegaElementFootprint(el){
+  if(!el || (el.type!=='eq' && el.type!=='evgear' && el.type!=='bess-asm')) return null;
+  return _elFootprintFt(el);
+}
+window.omegaElementFootprint = omegaElementFootprint;
+
+/* ONCE PER FRAME. The anchor engine's run() is the one caller, and it fires
+   on four map events, its own timer and every request to reproject, so an
+   idle alone lands three passes in one frame. The first sizes everything;
+   the rest of that frame would find nothing to change, so they skip.
+   A document that is not painting (no animation frames) runs it at most
+   every 250 ms instead of never again. */
+var _elScaleFrame = { ran:false, at:0, armed:false };
+function omegaRescaleElementsOnce(){
+  var now = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+  if(_elScaleFrame.ran && now-_elScaleFrame.at < 250) return 0;
+  _elScaleFrame.ran = true; _elScaleFrame.at = now;
+  if(!_elScaleFrame.armed){
+    _elScaleFrame.armed = true;
+    (window.requestAnimationFrame || function(f){ return setTimeout(f, 16); })(function(){
+      _elScaleFrame.armed = false; _elScaleFrame.ran = false;
+    });
+  }
+  return window.omegaRescaleElements();
+}
+window.omegaRescaleElementsOnce = omegaRescaleElementsOnce;
 
 /* ═══════════════════════════════════════════════════════════════════
  *  ORPHAN SWEEP
@@ -76268,8 +76300,21 @@ window._crmToastModal=_crmToastModal;
 
      Deliberately below that 28: a symbol is one glyph, whereas a row of
      chargers held to 28 would start overlapping its neighbours at the
-     spacing a real parking bay gives them. */
+     spacing a real parking bay gives them.
+
+     ONLY FOR WHAT HAS NO FOOTPRINT. Equipment whose footprint in feet is
+     known (every guided-build unit, an Insert item, Omega Prime's units) is
+     sized from it by omegaRescaleElements, with the floor it was placed
+     with. This scaler records a ground size from PIXELS: a unit held at its
+     28 px floor read back as a 10 ft transformer, and when the first map
+     move after placing was a zoom it divided the old zoom's pixels by the
+     new zoom's scale, a BESS twice its size from then on. Two scalers on
+     one element also fight every pass. So stampSizes(), rescale() and
+     syncDom() leave those elements to the footprint (owned()). */
   var TICK=200, MIN_PX=22, scaling=false, wrapped=false, orig=null;
+  function owned(el){
+    try{ return (typeof window.omegaElementFootprint==='function') ? window.omegaElementFootprint(el) : null; }catch(e){ return null; }
+  }
 
   function live(){ try{ return typeof _liveMapState==='function' ? _liveMapState() : null; }catch(e){ return null; } }
   /* S is declared `const S={...}` and _gmap is `let _gmap=null`. Top-level
@@ -76354,6 +76399,10 @@ window._crmToastModal=_crmToastModal;
     if(!live()) return;
     (s.elements||[]).forEach(function(el){
       if(el._geoLat==null) return;
+      /* its footprint IS its ground size (the takeoff and the GeoJSON
+         export read these), never pixels over a scale */
+      var fp=owned(el);
+      if(fp){ el._geoWFt=fp.lf; el._geoHFt=fp.wf; return; }
       if(el._geoWFt==null && el.w>0){
         var wf = el.w/p;
         if(wf >= 0.5 && wf <= 200) el._geoWFt = wf;
@@ -76367,6 +76416,7 @@ window._crmToastModal=_crmToastModal;
   function rescale(){
     var s=S_(), p=ppf(); if(!s||!p) return;
     (s.elements||[]).forEach(function(el){
+      if(owned(el)) return;            /* sized from its footprint, in the anchor pass */
       /* MIN_PX keeps a far zoom-out from reducing equipment to a sub-pixel
          speck: below a few pixels an icon carries no information, and a
          marker you can still see and click beats a mathematically correct
@@ -76379,6 +76429,7 @@ window._crmToastModal=_crmToastModal;
     var s=S_(); if(!s) return;
     (s.elements||[]).forEach(function(el){
       if(el._geoWFt==null && el._geoHFt==null) return;
+      if(owned(el)) return;            /* omegaRescaleElements redraws it */
       var d=document.querySelector('[data-elid="'+el.id+'"]');
       if(!d) return;
       /* Setting the wrapper's width is not enough. An 'eq' icon is an SVG
@@ -81257,6 +81308,11 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
       }
       if((s._trenches||[]).length && typeof _dcfcRenderTrenches==='function'
          && (trMoved || !document.getElementById('dcfc-trenches'))){ try{ _dcfcRenderTrenches(); }catch(e){} }
+      /* And the SIZE, now each element sits on its anchor: equipment with
+         a footprint in feet is redrawn at it (ELEMENT ZOOM SCALING), about
+         each centre, once per frame. It was a wrapper on the chain that
+         standDown() replaces, so until this pass called it, it never ran. */
+      try{ if(typeof window.omegaRescaleElementsOnce==='function') window.omegaRescaleElementsOnce(); }catch(e){}
       dedupeElements();
     } finally { busy=false; }
     return changed;
@@ -81295,7 +81351,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     if(stoodDown) return;
     stoodDown=true;
     /* _geoReprojectAll moved pts on its own schedule. With one owner it
-       must not also run, or the two disagree by a frame. */
+       must not also run, or the two disagree by a frame. Whatever had
+       wrapped it by now goes with it: that is how the element rescale was
+       lost, and why run() sizes equipment itself (see the end of run()). */
     if(typeof window._geoReprojectAll==='function' && !window._geoReprojectAll.__omegaOff){
       var orig=window._geoReprojectAll;
       window._geoReprojectAll=function(){ return run(); };
@@ -91446,6 +91504,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
   var TAG = '[omega/insert]';
 
+  /* The floor an Insert item drops at, in px: width, then the height the
+     anchor centres on. True to scale above it. The zoom rescale holds an
+     Insert item at the same floor (omegaRescaleElements, OmegaInsert.floorPx),
+     so tiny kit stays the size it was dropped at. */
+  var MIN_W = 22, MIN_H = 10;
+
   /* lf = length along the front, wf = depth, in FEET.
      Sourced from UTILITY_CATALOG where it exists, otherwise from typical
      cut sheets. Every one is a real object you can check. */
@@ -91501,7 +91565,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
          2 px — correct, and impossible to see or click. CAD symbols carry a
          minimum display size for exactly this reason; large equipment stays
          true, small equipment clamps so it stays usable. */
-      if (p) return Math.max(22, Math.round(f.lf * p));
+      if (p) return Math.max(MIN_W, Math.round(f.lf * p));
       /* Uncalibrated: still scale RELATIVE sizes off the real footprint so
          a transformer is visibly bigger than a junction box. */
       return Math.max(18, Math.round(14 + f.lf * 3.2));
@@ -91526,7 +91590,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
             if (el.lf == null) el.lf = f.lf;
             if (el.wf == null) el.wf = f.wf;
             var p = ppf();
-            if (p && el.h == null) el.h = Math.max(10, Math.round(f.wf * p));
+            if (p && el.h == null) el.h = Math.max(MIN_H, Math.round(f.wf * p));
           }
         }
       } catch (e) {}
@@ -91547,12 +91611,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       var f = footprintOf(el.eqId); if (!f) return;
       if (el.lf == null) el.lf = f.lf;
       if (el.wf == null) el.wf = f.wf;
-      var want = p ? Math.max(22, Math.round(f.lf * p)) : Math.max(18, Math.round(14 + f.lf * 3.2));
+      var want = p ? Math.max(MIN_W, Math.round(f.lf * p)) : Math.max(18, Math.round(14 + f.lf * 3.2));
       if (Math.abs((el.w || 0) - want) > 1) {
         /* grow about the centre so nothing jumps across the drawing */
         var cx = el.x + (el.w || 60) / 2, cy = el.y + (el.h || el.w || 60) / 2;
         el.w = want;
-        el.h = p ? Math.max(10, Math.round(f.wf * p)) : Math.max(12, Math.round(10 + f.wf * 3.2));
+        el.h = p ? Math.max(MIN_H, Math.round(f.wf * p)) : Math.max(12, Math.round(10 + f.wf * 3.2));
         el.x = cx - el.w / 2; el.y = cy - el.h / 2;
         n++;
         try { if (typeof renderEl === 'function') renderEl(el); } catch (e) {}
@@ -91577,6 +91641,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
   window.OmegaInsert = {
     footprint: footprintOf,
+    floorPx: { w: MIN_W, h: MIN_H },
     rescaleExisting: rescaleExisting,
 
     list: function () {
