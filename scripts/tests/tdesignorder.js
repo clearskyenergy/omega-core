@@ -44,8 +44,7 @@ assert.equal(editor.orders[0].design.address, CHICAGO);
 assert.equal(editor.orders[0].design.estimateCents, 125000000);
 assert.equal(editor.unmatched.length, 1);
 assert.equal(editor.unmatched[0].reason, 'no-sku');
-assert.equal(editor.orders[0].design.lines.length, 2);
-assert.equal(editor.orders[0].design.lines[1].onOrder, false);
+assert.equal(editor.orders[0].design.lines.length, 1, 'an external OEM sees only its own slice');
 assert.equal(editor.orders[0].poIntake, undefined);
 assert.equal(editor.orders[0].approvedQuote, undefined);
 ok('the editor line and the Prime unit key are the same order, and conduit stays on the drawing');
@@ -60,6 +59,11 @@ var stolen = D.draft({
 });
 assert.equal(stolen.orders.length, 0, 'another OEM\'s unpublished line is not taken into the designer catalog');
 ok('nothing published means no order');
+var split = D.draft({lines:[editorLine,{sku:'OTHER-UNIT',description:'Other supplier equipment',qty:1,vendorOrgId:'other.example'}],catalogs:Object.assign({},fenCat,{'other.example':[published('OTHER-UNIT')]}),designerOrgId:'concordenergyusa.com',project:project});
+assert.equal(split.orders.length,2);
+split.orders.forEach(function(o){assert.equal(o.design.lines.length,1);assert.equal(o.design.lines[0].sku,o.items[0].sku);});
+ok('each external OEM receives only its own BOM slice');
+
 var excessive = D.draft({ lines: [Object.assign({}, editorLine, { qty: 6000 }), Object.assign({}, editorLine, { qty: 6000 })], catalogs: fenCat, designerOrgId: 'concordenergyusa.com', project: project });
 assert.equal(excessive.orders.length, 0);
 assert.equal(excessive.unmatched.length, 2);

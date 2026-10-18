@@ -195,7 +195,11 @@ function draft(spec) {
       map[l.sku].qty += l.wholeQty;
     });
     var items = Object.keys(map).sort().map(function (k) { return map[k]; }).filter(function (it) { return it.qty >= 1 && it.qty <= 10000; });
-    var drawn = annotated.map(function (l) { return lineView(l, org); });
+    /* A supplier sees its slice, as on the RFQ. Only the designer's own
+       workspace may retain the whole drawing, including other suppliers. */
+    var drawn = annotated.filter(function (l) {
+      return org === designer || l.orgId === org || l.vendorOrgId === org;
+    }).map(function (l) { return lineView(l, org); });
     return {
       orgId: org,
       orgName: names[org] || org,
