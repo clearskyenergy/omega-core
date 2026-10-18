@@ -251,17 +251,41 @@ test('OFF-02: the money tiles are receivables.totals() itself, To issue its own 
   assert.ok(T.moneyTiles(null).every(function (x) { return x.cents === null; }), 'no totals from the server: no figures');
   assert.match(T.tileHtml(T.moneyTiles(null)[0]), /<b>—<\/b><small>see Accounting<\/small>/);
 });
-test('OFF-14 / PLANT-09: the stage strip and the app\'s tiles are the server\'s stage counts, the same six on both', function () {
+test('THE PATH (2026-10-17): the bar on the desktop and in the app is the server\'s path and its counts, the same seven steps on both', function () {
   stubAdmin();
-  var S = require('../api/_lib/office-stage'), T = page().T;
+  var S = require('../api/_lib/office-stage'), T = page().T, who = S.access(false, { role: 'admin', status: 'active' }, true);
   var orders = [{ status: 'new' }, { status: 'accepted', logic: { acceptedAt: 'x', invoices: { deposit: { amountCents: 1 } } } },
     { status: 'in_fulfilment', logic: { acceptedAt: 'x', releasedAt: 'y', invoices: { deposit: { amountCents: 1, satisfied: true }, balance: { amountCents: 1, satisfied: true } } } },
-    { status: 'shipped', logic: { acceptedAt: 'x', releasedAt: 'y', payout: { status: 'wire_recorded' } } }, { status: 'new', cancelRequested: true }];
-  var tiles = T.stageTiles(S.totals(orders).byStage), by = {}; tiles.forEach(function (x) { by[x.k] = x.n; });
-  assert.deepEqual(plain(by), { quote: 1, deposit: 1, build: 0, ship: 1, shipped: 1, attention: 1 }, 'a paid-in-full hardware order is Ready to ship (it was always 0 counted by status)');
+    { status: 'new', cancelRequested: true }].map(function (o) { return Object.assign({}, o, { path: S.path(o, who, 'tenant') }); });
+  var bar = T.pathBar(S.PATH, { counts: S.pipeline(orders) }), steps = [], re = /data-step="([^"]*)"[^>]*><i><\/i>([^<]*)<b>(\d+)<\/b>/g, m;
+  while ((m = re.exec(bar))) steps.push(m[1] + ':' + m[3]);
+  assert.deepEqual(steps, ['price:2', 'deposit:1', 'build:0', 'final:0', 'ship:1', 'deliver:0', 'site:0', 'attention:1', 'complete:0'], 'a paid-in-full hardware order stands on Ship; the cancellation request is red and stays on its step');
+  var one = T.pathBar(S.PATH, { p: orders[1].path });
+  assert.match(one, /class="done" data-step="price"/); assert.match(one, /class="on" data-step="deposit" aria-current="step"/); assert.match(one, /\u2713<em> Complete<\/em>/);
+  var g = T.guideFor(S.PATH, orders[0].path, { price: 'Approve price & accept order' });
+  assert.equal(g.eyebrow, 'OMEGA LOGIC \u00b7 1 / 7 \u00b7 PRICE'); assert.equal(g.ask, 'What will the customer pay?'); assert.equal(g.title, 'Approve the customer price'); assert.equal(g.act, 'Press Approve price & accept order'); assert.equal(g.mine, true);
+  var m2 = T.guideFor(S.PATH, S.path({ status: 'new' }, S.access(false, { role: 'member', status: 'active' }, true), 'tenant'), {});
+  assert.equal(m2.mine, false); assert.equal(m2.title, 'Waiting on an owner or administrator'); assert.equal(m2.act, '', 'a member is never told to press a button the server refuses');
+  assert.equal(T.nextLine({ text: 'Record the deposit when it arrives', who: 'customer' }), 'Waiting on the customer \u00b7 Record the deposit when it arrives');
   var desk = fs.readFileSync(path.join(__dirname, '..', 'omega-logic.html'), 'utf8'), app = fs.readFileSync(path.join(__dirname, '..', 'office', 'app.html'), 'utf8');
-  assert.match(desk, /OmegaLogicTheme\.stageTiles\(d\.totals&&d\.totals\.byStage\)/); assert.match(app, /OmegaLogicTheme\.stageTiles\(\(DATA\.totals \|\| \{\}\)\.byStage\)/);
+  assert.match(desk, /OmegaLogicTheme\.pathBar\(d\.path,\{counts:d\.pipeline/); assert.match(app, /OmegaLogicTheme\.pathBar\(DATA\.path, \{ counts: DATA\.pipeline/);
+  assert.match(desk, /OmegaLogicTheme\.pathBar\(DATA\.path,\{p:o\.path/); assert.match(app, /OmegaLogicTheme\.pathBar\(DATA\.path, \{ p: o\.path/);
   assert.match(desk, /OmegaLogicTheme\.moneyTiles\(d\.receivables\)/); assert.match(app, /OmegaLogicTheme\.moneyTiles\(DATA\.receivables\)/);
+});
+test('THE PATH: Today counts every next step that is this person\'s, in the path\'s order; somebody else\'s is listed apart and never counted', function () {
+  stubAdmin();
+  var S = require('../api/_lib/office-stage'), T = page().T, who = S.access(false, { role: 'admin', status: 'active' }, true);
+  var raw = [{ id: 'a', status: 'in_fulfilment', logic: { accounting: 'tenant', acceptedAt: 1, releasedAt: 1, invoices: { deposit: { satisfied: true, amountCents: 1 }, balance: { amountCents: 500, status: 'to_issue' } } } },
+    { id: 'b', status: 'accepted', logic: { accounting: 'tenant', acceptedAt: 1, invoices: { deposit: { amountCents: 300, status: 'to_issue' } } } },
+    { id: 'c', status: 'accepted', logic: { accounting: 'tenant', acceptedAt: 1, invoices: { deposit: { id: 'INV-1', amountCents: 300 } } } },
+    { id: 'd', status: 'in_fulfilment', logic: { acceptedAt: 1, releasedAt: 1, invoices: { deposit: { satisfied: true, amountCents: 1 } } } }];
+  var orders = raw.map(function (o) { var a = S.actions(o, who, 'tenant'); return Object.assign({}, o, { stage: a.stage, can: a.can, waitingOn: a.waitingOn, path: S.path(o, who, 'tenant') }); });
+  var s = T.hub({ orders: orders, owner: false, follow: [], today: '2026-10-17' });
+  assert.deepEqual(plain(s.needs.map(function (n) { return n.o.id + ':' + n.pill; })), ['b:invoice', 'a:invoice'], 'the deposit (step 2) before the final invoice (step 4)');
+  assert.deepEqual(plain(s.others.map(function (o) { return o.id; })), ['c'], 'a payment the customer owes is waiting on others; the plant\'s build is nobody\'s list');
+  assert.equal(s.count, 2);
+  var none = T.hub({ orders: raw, owner: false, follow: [], today: '2026-10-17' });
+  assert.equal(none.needs.length, 0, 'an order with no path (an older server) adds nothing new');
 });
 
 console.log('the theme stays a shared runtime file');
