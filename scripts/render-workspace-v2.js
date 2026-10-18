@@ -136,7 +136,7 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   ok('before: no uncaught errors', !live.errs.length, live.errs);
   await live.ctx.close();
 
-  var desk = await open('after', '/workspace-v2', noisy(HOST), false);
+  var desk = await open('after', '/workspace', noisy(HOST), false);
   var after = await desk.p.evaluate(function () {
     var needs = (document.getElementById('needs') || {}).innerText || '';
     var account = (document.getElementById('account') || {}).innerText || '';
