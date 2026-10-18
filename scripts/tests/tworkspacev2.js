@@ -80,6 +80,14 @@ ok('classic home remains available', routed('?ui=v1', '') === null);
   ok('existing deep link stays reachable: ' + hash, routed('', hash) === null);
 });
 ok('journey settings links survive', routed('', '#settings') === '/workspace-v2#settings');
+var returnScript = live.slice(live.indexOf('function returnHome() {'), live.indexOf('function route() {'));
+function homeReturn(search) {
+  var dest = null;
+  require('vm').runInNewContext(returnScript + '; returnHome();', { location: { search: search, assign: function (url) { dest = url; } }, go: function (key) { dest = key; } });
+  return dest;
+}
+ok('returning from a section opens the journey with query context', homeReturn('?org=northstar') === '/workspace-v2?org=northstar');
+ok('explicit classic-home navigation stays classic', homeReturn('?ui=v1') === 'home');
 var v2 = fs.readFileSync(path.join(__dirname, '../../workspace-v2.html'), 'utf8');
 ok('the preview does not load the hex hub', v2.indexOf('omega-hexhub.js') < 0 && v2.indexOf('Where to?') < 0);
 var hidden = V.home({ projects: [{ id: 'a' }, { id: 'b' }], needsSize: 72, needs: [{ key: 'trial', t: 'Your trial ends in 2 days', s: 'Keep what you use.', cta: 'See plans', href: '/workspace#plans' }], cards: [] });

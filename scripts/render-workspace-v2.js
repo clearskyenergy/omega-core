@@ -173,6 +173,12 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     ok('after: no horizontal scroll at ' + widths[wi], !hs);
   }
   await desk.p.setViewportSize({ width: 1366, height: 900 });
+  await desk.p.goto(base + '/workspace?home=workspace#billing', { waitUntil: 'domcontentloaded' });
+  await desk.p.waitForSelector('#billing-body .bh-state');
+  await desk.p.click('[data-key="home"]');
+  await desk.p.waitForURL('**/workspace-v2?home=workspace');
+  await desk.p.waitForSelector('#journey a');
+  ok('billing returns to the journey home', /workspace-v2/.test(desk.p.url()));
   await shot(desk.p, 'workspace-v2-after.png');
   ok('after: no uncaught errors', !desk.errs.length, desk.errs);
   await desk.ctx.close();
