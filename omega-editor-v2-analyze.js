@@ -233,6 +233,22 @@
     }
     decision.appendChild(list);
     decision.appendChild(el('p', null, 'Source: the drawing, plus a site screen and a cost only when the project has them.'));
+
+    var R = root.OmegaEditorV2Reports;
+    var reports = fold(host, 'Reports', false);
+    reports.appendChild(el('p', null, 'Each report is built from the drawing as it is now. A figure that is not on the drawing is left blank. The permit set and the one-line are in the Outputs menu.'));
+    if (R && R.list) {
+      var kinds = R.list(), ri, rbtn;
+      for (ri = 0; ri < kinds.length; ri++) {
+        rbtn = document.createElement('button');
+        rbtn.type = 'button';
+        rbtn.className = 'btn';
+        rbtn.textContent = kinds[ri].title;
+        rbtn.setAttribute('data-report', kinds[ri].id);
+        rbtn.addEventListener('click', function () { download(state, this.getAttribute('data-report')); });
+        reports.appendChild(rbtn);
+      }
+    }
   }
 
   function readBill(state, done) {

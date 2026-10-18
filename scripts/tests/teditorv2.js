@@ -231,8 +231,9 @@ check(R.read(store) === null, 'a save drops the draft');
 
 /* The current editor is not this page. */
 var page = fs.readFileSync(path.join(__dirname, '../../editor-v2.html'), 'utf8');
-check(page.indexOf('omega-editor-v2-app.js') >= 0 && page.indexOf('cad-kernel.js') >= 0 && page.indexOf('omega-editor-v2-recovery.js') >= 0, 'page boots the preview');
+check(page.indexOf('omega-editor-v2-app.js') >= 0 && page.indexOf('cad-kernel.js') >= 0 && page.indexOf('omega-editor-v2-recovery.js') >= 0 && page.indexOf('omega-editor-v2-guided.js') >= 0 && page.indexOf('omega-editor-v2-sheets.js') >= 0, 'page boots the preview, including the drawings');
 var appSrc = fs.readFileSync(path.join(__dirname, '../../omega-editor-v2-app.js'), 'utf8');
+check(appSrc.indexOf('applyGuidedBuild') >= 0, 'a guided build is applied on the document, then the drawings follow');
 var resizeFn = appSrc.slice(appSrc.indexOf('function resize()'), appSrc.indexOf('function screenToWorld'));
 check(resizeFn.indexOf('cv.width') >= 0 && resizeFn.indexOf('requestDraw()') > resizeFn.indexOf('cv.width'), 'resizing the canvas schedules a redraw');
 var runFn = appSrc.slice(appSrc.indexOf('function runNumbers()'), appSrc.indexOf('function invokeHook'));

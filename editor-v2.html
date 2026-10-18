@@ -208,6 +208,21 @@
   #status.is-err { color: #F0B4B4; }
   #coords { font-family: var(--mono); font-size: 12px; color: #B7C3D1; }
   dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; box-shadow: var(--shadow); width: min(480px, calc(100% - 24px)); color: var(--ink); }
+  #dlg-outputs { width: min(880px, calc(100% - 24px)); }
+  .out-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--hair); }
+  .out-row h3 { margin: 0 0 2px; font-size: 15px; }
+  .out-note { margin: 0; color: var(--muted); font-size: 13px; }
+  .out-status { margin: 0 0 8px; font-size: 14px; }
+  .out-status.is-ok { color: var(--ok); }
+  .out-status.is-no { color: var(--danger); }
+  .out-actions, .out-bar, .out-size { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .out-size { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
+  .out-size select { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--white); }
+  .out-bar { margin-bottom: 10px; }
+  .out-bar strong { flex: 1; min-width: 0; }
+  .out-preview { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; max-height: min(68vh, 720px); overflow: auto; }
+  .out-preview svg { display: block; width: 100%; height: auto; background: white; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
   dialog::backdrop { background: rgba(22, 32, 43, .45); }
   dialog form, .sheet { padding: 18px; }
   dialog h2 { margin: 0 0 6px; font-size: 18px; }
@@ -342,14 +357,7 @@
   <div id="outputs-menu" hidden role="menu" aria-label="Outputs">
     <button type="button" role="menuitem" data-output="permit" data-hook="permit" id="btn-permit">Permit set + plot plan</button>
     <button type="button" role="menuitem" data-output="sld" data-hook="sld" id="btn-sld">One-line</button>
-    <button type="button" role="menuitem" data-output="bom">BOM &amp; cost estimate</button>
-    <button type="button" role="menuitem" data-output="rom">ROM report</button>
-    <button type="button" role="menuitem" data-output="valuestack">Value stack report</button>
-    <button type="button" role="menuitem" data-output="proforma">IRR pro forma</button>
-    <button type="button" role="menuitem" data-output="schedule">Schedule</button>
-    <button type="button" role="menuitem" data-output="memo">Investment memo</button>
     <button type="button" role="menuitem" data-output="drawing">PNG / PDF / DXF</button>
-    <button type="button" role="menuitem" data-output="funding">Push to Funding Marketplace</button>
     <button type="button" role="menuitem" data-act="json">Project file</button>
     <button type="button" role="menuitem" data-act="import">Import a drawing</button>
   </div>
@@ -472,6 +480,7 @@
       <li><b>Ctrl+Z / Ctrl+Y</b> undo / redo</li>
       <li><b>Ctrl+C / Ctrl+V</b> copy / paste</li>
       <li><b>Ctrl+G</b> group &nbsp; <b>Delete</b> erase</li>
+      <li><b>Outputs</b> permit set and single-line</li>
       <li>Drag left→right encloses. Right→left crosses.</li>
       <li>Wheel zooms at the cursor. Space pans.</li>
       <li><b>Build</b> on the left &nbsp; <b>Run</b> and <b>Outputs</b> on the right</li>
@@ -503,6 +512,10 @@
       <button type="button" class="btn primary" id="recover-restore">Restore</button>
     </div>
   </div>
+</dialog>
+
+<dialog id="dlg-outputs" aria-labelledby="out-title">
+  <div class="sheet" id="out-body"></div>
 </dialog>
 
 <input id="file-import" type="file" accept=".json,.dxf,application/json" hidden>
@@ -557,6 +570,12 @@
 <script src="omega-comed-layers.js"></script>
 <script src="omega-editor-v2-grid.js"></script>
 <script src="omega-editor-v2-3d.js"></script>
+<script src="omega-editor-v2-electrical.js"></script>
+<script src="omega-editor-v2-sld.js"></script>
+<script src="omega-editor-v2-sheets.js"></script>
+<script src="omega-editor-v2-guided.js"></script>
+<script src="omega-editor-v2-aerial.js"></script>
+<script src="omega-editor-v2-outputs.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>
 </body>

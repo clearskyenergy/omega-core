@@ -200,7 +200,10 @@ check(builds.join() === 'data-build="der",data-build="autolayout",data-build="be
 check(ribbon.indexOf('id="build-group"') < ribbon.indexOf('<h2>Edit</h2>'), 'Build is the group before Edit');
 check(page.indexOf('Start with a guided build') >= 0, 'a blank site says to start with a guided build');
 check(page.indexOf('id="btn-run"') > page.indexOf('id="btn-outputs"') && page.indexOf('id="ribbon-end"') > page.indexOf('<h2>View</h2>'), 'Run sits at the right end, beside Outputs');
-check(page.indexOf('id="outputs-menu"') >= 0 && page.indexOf('Permit set') >= 0 && page.indexOf('Push to Funding Marketplace') >= 0, 'Outputs is one menu');
+var menu = page.slice(page.indexOf('id="outputs-menu"'), page.indexOf('id="workspace"'));
+check(menu.indexOf('Permit set') >= 0 && menu.indexOf('One-line') >= 0 && menu.indexOf('PNG / PDF / DXF') >= 0, 'the Outputs menu is the drawings');
+check(menu.indexOf('BOM') < 0 && menu.indexOf('ROM report') < 0 && menu.indexOf('Value stack') < 0 && menu.indexOf('IRR') < 0 && menu.indexOf('Investment memo') < 0 && menu.indexOf('Funding') < 0, 'reports stay out of the Outputs menu');
+check(fs.readFileSync(path.join(ROOT, 'omega-editor-v2-analyze.js'), 'utf8').indexOf('Reports') >= 0, 'reports are listed from the Analyze panel');
 check(page.indexOf('id="analyze-close"') >= 0, 'Analyze can close back to the drawing');
 check((page.match(/data-act="png"/g) || []).length === 0, 'PNG, PDF, and DXF are not their own ribbon buttons');
 check(page.indexOf('id="btn-3d"') >= 0 && page.indexOf('id="btn-permit"') >= 0 && page.indexOf('id="btn-sld"') >= 0, '3D, permit set, and single-line have a button');

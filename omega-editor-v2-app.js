@@ -75,6 +75,18 @@
     fit(false);
     refresh();
     var recovering = offerRecovery(null, null);
+    if (root.OmegaEditorV2Hooks) {
+      root.OmegaEditorV2Hooks.register('permit', function (ctx) {
+        if (ctx && ctx.reason === 'build') return true;
+        openOutputs('permit');
+        return true;
+      });
+      root.OmegaEditorV2Hooks.register('sld', function (ctx) {
+        if (ctx && ctx.reason === 'build') return true;
+        openOutputs('sld');
+        return true;
+      });
+    }
     if (!recovering) setStatus('Sample site loaded.');
     var Bld = root.OmegaEditorV2Build;
     if (Bld && Bld.resume) {
@@ -1272,6 +1284,7 @@
     refresh();
     scheduleRecovery();
     if (root.OmegaEditorV2Design) root.OmegaEditorV2Design.publish(root.OmegaEditorV2Design.fromDoc(state.doc));
+    if (root.OmegaEditorV2Outputs) OmegaEditorV2Outputs.sync(state.doc);
     if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
     if (section === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
     if (view3dOpen() && root.OmegaEditorV2View3D.sync) root.OmegaEditorV2View3D.sync(state.doc, D.summary(state.doc));
@@ -1679,7 +1692,13 @@
   }
 
   function download(name, mime, data) {
-    var blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+    var blob, bytes, i;
+    if (data instanceof Blob) blob = data;
+    else if (typeof data === 'string' && /[\u0080-\u00ff]/.test(data)) {
+      bytes = new Uint8Array(data.length);
+      for (i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 255;
+      blob = new Blob([bytes], { type: mime });
+    } else blob = new Blob([data], { type: mime });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -1971,12 +1990,9 @@
     }
     addBtn('Close', false, function () { dlg.close(); });
     if (kind === 'permit' || kind === 'sld') {
-      title.textContent = kind === 'permit' ? 'Permit set + plot plan' : 'One-line';
-      body.textContent = designPreview(model, kind);
-      addBtn(kind === 'permit' ? 'Open the permit set' : 'Open the one-line', true, function () {
-        dlg.close();
-        invokeHook(kind);
-      });
+      if (dlg.open) dlg.close();
+      openOutputs(kind);
+      return;
     } else if (kind === 'drawing') {
       title.textContent = 'PNG / PDF / DXF';
       body.textContent = 'The drawing as it is now, in feet.\n\nPNG is the canvas. PDF and DXF are the same entities.';
@@ -2052,5 +2068,33 @@
     }
   }
 
-  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/3' };
+  /* A guided build writes the design model. The permit set and the
+     single-line are rebuilt from that document. */
+  function applyGuidedBuild(build) {
+    if (!root.OmegaEditorV2Guided) { setStatus('Guided build did not load.', true); return null; }
+    var next = root.OmegaEditorV2Guided.apply(state.doc, build);
+    D.commit(state, next, []);
+    afterChange();
+    setStatus('Drawings follow the guided build.');
+    return next;
+  }
+  function openOutputs(which) {
+    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
+    toggleOutputs(false);
+    OmegaEditorV2Outputs.open({
+      doc: state.doc,
+      which: which === 'sld' ? 'sld' : (which === 'permit' ? 'set' : 'list'),
+      download: download,
+      fileBase: fileBase,
+      drawing: {
+        png: exportPng,
+        pdf: exportPdf,
+        dxf: exportDxf,
+        json: exportJson,
+        importFile: function () { $('file-import').click(); }
+      }
+    });
+  }
+
+  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, VERSION: 'editor-v2-app/3' };
 })(typeof window !== 'undefined' ? window : global);
