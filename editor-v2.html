@@ -26,7 +26,7 @@
     --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     --header: 52px;
     --banner: 40px;
-    --ribbon: 58px;
+    --ribbon: 78px;
     --foot: 40px;
     --rail: 76px;
     --side: 312px;
@@ -36,7 +36,7 @@
   button, input, select { font: inherit; color: inherit; }
   button { cursor: pointer; }
   button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
-  #app { height: 100%; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+  #app { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
   header {
     height: var(--header); display: flex; align-items: center; gap: 12px; min-width: 0;
     padding: 0 12px; background: var(--white); border-bottom: 1px solid var(--line); flex: none;
@@ -94,8 +94,12 @@
   #build-error { color: var(--danger); min-height: 1.2em; }
   #side-site .row-actions, #side-draw .row-actions { justify-content: flex-start; }
   #ribbon {
-    display: flex; gap: 2px; align-items: stretch; padding: 4px 8px; background: var(--panel);
-    border-bottom: 1px solid var(--line); overflow-x: auto; flex: none; min-height: var(--ribbon); min-width: 0;
+    display: flex; align-items: stretch; background: var(--panel);
+    border-bottom: 1px solid var(--line); flex: none; min-height: var(--ribbon); min-width: 0;
+  }
+  #ribbon-main {
+    display: flex; gap: 2px; align-items: stretch; padding: 4px 8px; overflow-x: auto;
+    flex: 1; min-width: 0;
   }
   .group { display: flex; flex-direction: column; justify-content: space-between; padding: 0 6px; border-right: 1px solid var(--hair); }
   .group:last-child { border-right: 0; }
@@ -104,7 +108,52 @@
   .ribbon button, .tool {
     min-height: 32px; padding: 4px 8px; font-size: 12px; font-weight: 600; white-space: nowrap;
   }
+  .ribbon button.build {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    min-width: 58px; min-height: 52px; padding: 3px 5px; font-size: 10px; font-weight: 700;
+    line-height: 1.05; white-space: normal; text-align: center;
+  }
+  .ribbon button.build svg { display: block; }
+  #ribbon-end {
+    flex: none; border-left: 1px solid var(--hair); background: var(--panel);
+    padding: 4px 8px; z-index: 2;
+  }
+  #btn-run {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    min-width: 72px; min-height: 40px; font-size: 14px; font-weight: 800; letter-spacing: .04em;
+  }
+  #btn-outputs { min-height: 40px; font-weight: 800; }
   .ribbon button[aria-pressed="true"], .tool[aria-pressed="true"] { background: var(--accent-soft); border-color: #B7C9E2; color: var(--accent); }
+  #btn-run[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  #build-prompt {
+    position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+    margin: 0; pointer-events: none; color: var(--muted); font-size: 15px; font-weight: 650;
+    letter-spacing: .01em; text-align: center;
+  }
+  #outputs-menu {
+    position: absolute; z-index: 8; right: 12px;
+    top: calc(var(--header) + var(--banner) + var(--ribbon) - 6px);
+    display: flex; flex-direction: column; gap: 2px; min-width: 260px; padding: 6px;
+    background: var(--white); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+  }
+  #outputs-menu[hidden] { display: none; }
+  #outputs-menu button {
+    text-align: left; border: 0; background: transparent; border-radius: 6px;
+    padding: 8px 10px; font-weight: 650; font-size: 13px;
+  }
+  #outputs-menu button:hover { background: var(--accent-soft); }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+  .panel-head h2 { margin: 0; }
+  .fold { border: 1px solid var(--hair); border-radius: 8px; margin: 0 0 8px; background: var(--white); }
+  .fold summary { cursor: pointer; font-weight: 700; font-size: 13px; padding: 8px 10px; }
+  .fold-body { padding: 0 10px 8px; }
+  .fold-body p, .fold-body h4 { margin: 0 0 6px; }
+  .fold h4 { margin-top: 8px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  #preview-body {
+    max-height: 50vh; overflow: auto; white-space: pre-wrap; margin: 0;
+    background: var(--panel); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.45;
+  }
+  #takeoff-build { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
   #workspace { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: var(--rail) 1fr var(--side); }
   #tools {
     background: var(--white); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; padding: 8px;
@@ -214,13 +263,21 @@
     <button type="button" class="btn primary" id="next-action">Does this site work?</button>
   </div>
   <div id="ribbon" class="ribbon" role="toolbar" aria-label="Commands">
+  <div id="ribbon-main">
+    <div class="group" data-stage="always" id="build-group"><div class="row">
+      <button type="button" class="build" data-build="der" title="Solar, wind, or gas blocks and a collector."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 17h7l-3.5-7z"/><path d="M15 19V7"/><path d="M15 10l5 2.2L15 14.4"/></svg><span>DER<br>Build</span></button>
+      <button type="button" class="build" data-build="autolayout" title="Fill the parcel with solar tables."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5" stroke-dasharray="2.4 2"/><path d="M6 8.5h12M6 12h12M6 15.5h8"/></svg><span>Auto<br>Layout</span></button>
+      <button type="button" class="build" data-build="bess" title="Behind the meter, in front of the meter, or with solar."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="7" width="16" height="10" rx="1.4"/><path d="M10 7v10M5 10.5h3M5 13.5h3M12.5 10.5h3M12.5 13.5h3"/><rect x="18.5" y="10" width="3" height="4" rx=".6" fill="currentColor" stroke="none"/></svg><span>BESS<br>Build</span></button>
+      <button type="button" class="build" data-build="topology" title="From the point of connection out to the utility."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="4" r="1.6" fill="currentColor" stroke="none"/><path d="M12 5.6V8M5 8h14M5 8v3M12 8v3M19 8v3"/><rect x="3" y="11" width="4" height="4" rx=".6"/><rect x="10" y="11" width="4" height="4" rx=".6"/><rect x="17" y="11" width="4" height="4" rx=".6"/><path d="M12 15v3.5M9 18.5h6"/></svg><span>Full<br>Topology</span></button>
+      <button type="button" class="build" data-build="l2" title="A row of Level 2 stalls and the panel that feeds them."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="3" width="9" height="16" rx="1.6"/><path d="M8 7h4M8 13h5M8 15.5h3"/><path d="M14 12c2.4 0 3.6 1.2 3.6 3.2V17"/><circle cx="17.6" cy="18.4" r="1.5" fill="currentColor" stroke="none"/></svg><span>Level<br>2</span></button>
+      <button type="button" class="build" data-build="dcfc" title="Fast chargers, a transformer, and the service."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="8" y="2.5" width="8" height="14" rx="1.6"/><path d="M10.5 6h3M10.5 11h3"/><path d="M8 11C5.5 11 4 12.4 4 15v1.2"/><circle cx="4" cy="17.8" r="1.4" fill="currentColor" stroke="none"/><path d="M16 11c2.5 0 4 1.4 4 4v1.2"/><circle cx="20" cy="17.8" r="1.4" fill="currentColor" stroke="none"/></svg><span>DCFC<br>Build</span></button>
+      <button type="button" class="build" data-build="compute" title="A data-center power chain. Radial unless you change it."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="10" height="5" rx="1"/><rect x="3" y="10" width="10" height="5" rx="1"/><circle cx="5.5" cy="5.5" r=".7" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12.5" r=".7" fill="currentColor" stroke="none"/><path d="M7.5 5.5h4M7.5 12.5h4"/><rect x="16" y="6" width="5" height="8" rx="1"/></svg><span>Compute<br>Build</span></button>
+      <button type="button" class="build" data-build="engineering" title="Interconnection, gear, battery, and the EMS."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1.4"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Engineering<br>Build</span></button>
+    </div><h2>Build</h2></div>
     <div class="group" data-stage="always"><div class="row">
       <button type="button" data-act="undo" title="Undo (Ctrl+Z)">Undo</button>
       <button type="button" data-act="redo" title="Redo (Ctrl+Y)">Redo</button>
     </div><h2>Edit</h2></div>
-    <div class="group" data-stage="design"><div class="row">
-      <button type="button" data-act="build">Build</button>
-    </div><h2>Build</h2></div>
     <div class="group" data-stage="design"><div class="row">
       <button type="button" data-tool="line">Line</button>
       <button type="button" data-tool="polyline">Polyline</button>
@@ -264,21 +321,25 @@
       <button type="button" data-act="zoom-ext">Fit</button>
       <button type="button" data-hook="view3d" id="btn-3d">3D</button>
     </div><h2>View</h2></div>
-    <div class="group" data-stage="analyze"><div class="row">
-      <button type="button" data-act="run">Run</button>
-    </div><h2>Analyze</h2></div>
-    <div class="group" data-stage="outputs"><div class="row">
-      <button type="button" data-act="png">PNG</button>
-      <button type="button" data-act="pdf">PDF</button>
-      <button type="button" data-act="dxf">DXF</button>
-      <button type="button" data-act="json">Project</button>
-      <button type="button" data-act="import">Import</button>
-      <button type="button" data-hook="permit" id="btn-permit">Permit set</button>
-      <button type="button" data-hook="sld" id="btn-sld">Single-line</button>
-    </div><h2>Output</h2></div>
-    <div class="group" data-stage="funding"><div class="row">
-      <button type="button" data-act="quote">Quote</button>
-    </div><h2>Funding</h2></div>
+  </div>
+    <div class="group" data-stage="always" id="ribbon-end"><div class="row">
+      <button type="button" id="btn-outputs" data-act="outputs" aria-expanded="false" aria-controls="outputs-menu">Outputs</button>
+      <button type="button" id="btn-run" data-act="run">Run</button>
+    </div><h2>Results</h2></div>
+  </div>
+  <div id="outputs-menu" hidden role="menu" aria-label="Outputs">
+    <button type="button" role="menuitem" data-output="permit" data-hook="permit" id="btn-permit">Permit set + plot plan</button>
+    <button type="button" role="menuitem" data-output="sld" data-hook="sld" id="btn-sld">One-line</button>
+    <button type="button" role="menuitem" data-output="bom">BOM &amp; cost estimate</button>
+    <button type="button" role="menuitem" data-output="rom">ROM report</button>
+    <button type="button" role="menuitem" data-output="valuestack">Value stack report</button>
+    <button type="button" role="menuitem" data-output="proforma">IRR pro forma</button>
+    <button type="button" role="menuitem" data-output="schedule">Schedule</button>
+    <button type="button" role="menuitem" data-output="memo">Investment memo</button>
+    <button type="button" role="menuitem" data-output="drawing">PNG / PDF / DXF</button>
+    <button type="button" role="menuitem" data-output="funding">Push to Funding Marketplace</button>
+    <button type="button" role="menuitem" data-act="json">Project file</button>
+    <button type="button" role="menuitem" data-act="import">Import a drawing</button>
   </div>
   <div id="workspace">
     <nav id="tools" aria-label="Tools">
@@ -296,6 +357,7 @@
     <div id="stage">
       <div id="map" aria-hidden="true"></div>
       <canvas id="cv" aria-label="Site drawing. Use the command line to draw by typing."></canvas>
+      <p id="build-prompt" hidden>Start with a guided build</p>
     </div>
     <aside id="side" aria-label="Properties">
       <div id="side-draw">
@@ -303,6 +365,7 @@
         <div id="takeoff">
           <div class="figure" id="kw-dc">0<span>kW-DC</span></div>
           <div class="kv" id="takeoff-kv"></div>
+          <p id="takeoff-build" hidden></p>
         </div>
         <h2>Properties</h2>
         <div id="props"></div>
@@ -325,7 +388,10 @@
         </div>
       </div>
       <div id="side-analyze" hidden>
-        <h2>Analyze</h2>
+        <div class="panel-head">
+          <h2>Analyze</h2>
+          <button type="button" class="btn quiet" id="analyze-close">Close</button>
+        </div>
         <div id="analyze-body"></div>
       </div>
       <div id="side-outputs" hidden>
@@ -386,7 +452,7 @@
       <li><b>Ctrl+G</b> group &nbsp; <b>Delete</b> erase</li>
       <li>Drag left→right encloses. Right→left crosses.</li>
       <li>Wheel zooms at the cursor. Space pans.</li>
-      <li><b>BUILD</b> guided build &nbsp; <b>RUN</b> the drawing</li>
+      <li><b>Build</b> on the left &nbsp; <b>Run</b> and <b>Outputs</b> on the right</li>
       <li>This page does not write a workspace. Site Map at /editor.html is unchanged.</li>
     </ul>
     <div class="row-actions"><button type="button" class="btn" id="help-close">Close</button></div>
@@ -418,6 +484,14 @@
 
 <input id="file-import" type="file" accept=".json,.dxf,application/json" hidden>
 
+<dialog id="dlg-preview" aria-labelledby="preview-title">
+  <div class="sheet">
+    <h2 id="preview-title">Preview</h2>
+    <pre id="preview-body"></pre>
+    <div class="row-actions" id="preview-actions"></div>
+  </div>
+</dialog>
+
 <dialog id="dlg-build" aria-labelledby="build-title">
   <form id="build-form">
     <h2 id="build-title">Guided build</h2>
@@ -445,6 +519,7 @@
 <script src="omega-editor-v2-hooks.js"></script>
 <script src="omega-editor-v2-reports.js"></script>
 <script src="omega-editor-v2-build.js"></script>
+<script src="omega-editor-v2-design.js"></script>
 <script src="omega-editor-v2-analyze.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>

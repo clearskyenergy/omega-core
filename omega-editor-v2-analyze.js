@@ -67,6 +67,57 @@
     return b;
   }
 
+  function fold(host, title, open) {
+    var d = document.createElement('details');
+    d.className = 'fold';
+    if (open) d.open = true;
+    var s = document.createElement('summary');
+    s.textContent = title;
+    d.appendChild(s);
+    var body = el('div', 'fold-body');
+    d.appendChild(body);
+    host.appendChild(d);
+    return body;
+  }
+  function heading(host, text) { host.appendChild(el('h4', null, text)); }
+  function verdictText(v) {
+    if (!v) return '';
+    if (typeof v === 'string') return v;
+    if (v.label) return String(v.label);
+    if (v.say) return String(v.say);
+    return '';
+  }
+  function raceways(doc) {
+    var seen = {}, out = [], i, e, s, list = (doc && doc.entities) || [];
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if (e.type !== 'conduit' || !e.spec || seen[e.spec]) continue;
+      seen[e.spec] = 1;
+      s = String(e.spec);
+      out.push(s);
+    }
+    return out;
+  }
+  function conduitFeet(doc) {
+    var n = 0, i, j, e, pts, dx, dy, list = (doc && doc.entities) || [];
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if (e.type !== 'conduit' || !e.pts) continue;
+      pts = e.pts;
+      for (j = 1; j < pts.length; j++) {
+        dx = +pts[j].x - +pts[j - 1].x;
+        dy = +pts[j].y - +pts[j - 1].y;
+        n += Math.sqrt(dx * dx + dy * dy);
+      }
+    }
+    return Math.round(n);
+  }
+  function countType(doc, type) {
+    var n = 0, i, list = (doc && doc.entities) || [];
+    for (i = 0; i < list.length; i++) if (list[i].type === type) n++;
+    return n;
+  }
+
   function show(state) {
     if (typeof document === 'undefined') return;
     var host = document.getElementById('analyze-body');
@@ -75,28 +126,33 @@
     var facts = factsFrom(state.doc, D.summary(state.doc));
     var x = (PI || root.OmegaProjectIntelligence).assess(facts);
     host.innerHTML = '';
+    host.appendChild(el('p', null, 'Read from the drawing. A price, a tariff, and an IRR stay blank until one is stored.'));
 
-    var decision = block(host, 'Project intelligence');
-    var score = el('div', 'score-num', x.decision);
-    decision.appendChild(score);
-    decision.appendChild(el('p', null, x.score + ' / 100. Readiness 45%, site quality 35%, economics 20%.'));
-    if (!facts.site) decision.appendChild(el('p', null, 'Site quality is waiting on the site screen, so those 35 points are not in this score.'));
-    else if (!facts.site.anyReal) decision.appendChild(el('p', null, 'The site screen is on file and it is still an estimate. Nothing in it is backed by project data yet.'));
-    var list = el('div', null, '');
-    var i, c, row;
-    for (i = 0; i < x.checks.length; i++) {
-      c = x.checks[i];
-      row = el('p', null, (c.ok ? 'Yes — ' : 'Not yet — ') + c.n + '. ' + c.d);
-      list.appendChild(row);
-    }
-    decision.appendChild(list);
-    decision.appendChild(el('p', null, 'Source: the drawing, plus a site screen and a cost only when the project has them.'));
+    var rom = fold(host, 'ROM', true);
+    heading(rom, 'Power');
+    rom.appendChild(el('p', null, 'Solar ' + (facts.solarKw || 0) + ' kW-DC. Storage ' + facts.bessKw + ' kW / ' + facts.bessKwh + ' kWh. Chargers ' + facts.chargerCount + (facts.chargerKw ? (' · ' + facts.chargerKw + ' kW') : '') + '.'));
+    if (facts.derKw > 0) rom.appendChild(el('p', null, 'DER nameplate ' + facts.derKw + ' kW, from the blocks on the drawing.'));
+    rom.appendChild(el('p', null, 'Source: nameplates and arrays on the drawing.'));
+    heading(rom, 'Power flow');
+    var specs = raceways(state.doc);
+    rom.appendChild(el('p', null, facts.conduitCount + ' conduit' + (facts.conduitCount === 1 ? '' : 's') + (specs.length ? (', ' + specs.join(', ')) : '') + '.'));
+    rom.appendChild(el('p', null, 'Conductor size and voltage are not on the drawing.'));
+    heading(rom, 'Civil');
+    rom.appendChild(el('p', null, countType(state.doc, 'obstruction') + ' obstruction' + (countType(state.doc, 'obstruction') === 1 ? '' : 's') + ', ' + countType(state.doc, 'setback') + ' setback' + (countType(state.doc, 'setback') === 1 ? '' : 's') + ', ' + countType(state.doc, 'fence') + ' fence. Conduit length ' + conduitFeet(state.doc) + ' ft, measured on the drawing.'));
+    heading(rom, 'Energy');
+    rom.appendChild(el('p', null, (facts.solarKw || 0) + ' kW-DC on the drawing. Annual kWh is not estimated from the nameplate.'));
+    if (facts.billKwh != null) rom.appendChild(el('p', null, 'Bill annual use ' + Math.round(facts.billKwh).toLocaleString() + ' kWh, as entered.'));
+    heading(rom, 'Financials');
+    if (facts.cost > 0) rom.appendChild(el('p', null, 'Installed estimate $' + Math.round(facts.cost).toLocaleString() + ', stored on the project.'));
+    else rom.appendChild(el('p', null, 'No installed estimate is stored.'));
+    if (facts.revenue > 0) rom.appendChild(el('p', null, 'Year-one value $' + Math.round(facts.revenue).toLocaleString() + ', stored on the project.'));
+    else rom.appendChild(el('p', null, 'No year-one value is stored.'));
 
-    var vs = block(host, 'Value stack');
+    var vs = fold(host, 'Value stack', false);
     if (facts.bessKw <= 0) vs.appendChild(el('p', null, 'Place a battery to size a value stack. There is not one on the drawing.'));
     else vs.appendChild(el('p', null, facts.bessKw + ' kW / ' + facts.bessKwh + ' kWh on the drawing.'));
     if (facts.valueStack && facts.valueStack.streams && facts.valueStack.streams.length) {
-      var max = 0, s;
+      var max = 0, s, i;
       for (i = 0; i < facts.valueStack.streams.length; i++) if (+facts.valueStack.streams[i].usd > max) max = +facts.valueStack.streams[i].usd;
       for (i = 0; i < facts.valueStack.streams.length; i++) {
         s = facts.valueStack.streams[i];
@@ -109,15 +165,17 @@
       vs.appendChild(el('p', null, 'Source: ' + (facts.valueStack.source || 'the value-stack run stored on this project') + '.'));
     } else vs.appendChild(el('p', null, 'No dispatch is stored. Revenue streams are computed on the server and then kept on the project.'));
 
-    var grid = block(host, 'Grid check');
+    var grid = fold(host, 'Grid check', false);
     var designKw = facts.bessKw + facts.chargerKw;
     grid.appendChild(el('p', null, 'Equipment on the drawing asks for ' + Math.round(designKw) + ' kW.'));
-    if (facts.grid && facts.grid.verdict) {
-      grid.appendChild(el('p', null, String(facts.grid.verdict)));
-      grid.appendChild(el('p', null, 'Source: the grid verdict stored on this project.'));
-    } else grid.appendChild(el('p', null, 'No circuit verdict is stored. Grid check runs on the server from the site point and this equipment.'));
+    var said = facts.grid && verdictText(facts.grid.verdict);
+    if (said) {
+      grid.appendChild(el('p', null, said));
+      if (facts.grid.sourceLine) grid.appendChild(el('p', null, String(facts.grid.sourceLine)));
+      grid.appendChild(el('p', null, 'Source: the grid verdict stored on this project. Grid Atlas is the feeder, the substation, and the hosting capacity on the map.'));
+    } else grid.appendChild(el('p', null, 'No circuit verdict is stored. Grid check runs on the server from the site point and this equipment. Grid Atlas is the feeder, the substation, and the hosting capacity on the map.'));
 
-    var bill = block(host, 'Bill');
+    var bill = fold(host, 'Bill import', false);
     if (facts.billName) bill.appendChild(el('p', null, 'File noted: ' + facts.billName + '.'));
     if (facts.billKwh != null) bill.appendChild(el('p', null, 'Annual use entered from the bill: ' + Math.round(facts.billKwh).toLocaleString() + ' kWh.'));
     else bill.appendChild(el('p', null, 'No usage figure from a bill yet.'));
@@ -138,12 +196,37 @@
     bill.appendChild(fileLabel);
     bill.appendChild(el('p', null, 'The file name is kept on the project. The tariff is read on the server, not in this panel.'));
 
-    var gen = block(host, 'Generation');
+    var gen = fold(host, 'Generation', false);
     gen.appendChild(el('p', null, (facts.solarKw || 0) + ' kW-DC on the drawing' + (facts.solarKwAc ? (', about ' + facts.solarKwAc + ' kW-AC.') : '.')));
     gen.appendChild(el('p', null, 'Source: the arrays on the drawing. An annual kWh figure needs a weather run, and none is stored here.'));
     if (facts.billKwh != null && facts.solarKw > 0) {
       gen.appendChild(el('p', null, 'The bill\'s annual use is ' + Math.round(facts.billKwh).toLocaleString() + ' kWh. Solar kWh is not estimated from the nameplate.'));
     }
+
+    var irr = fold(host, 'IRR', false);
+    if (facts.valueStack && facts.valueStack.irr != null && isFinite(+facts.valueStack.irr)) {
+      irr.appendChild(el('p', null, 'Stored IRR ' + facts.valueStack.irr + '.'));
+      irr.appendChild(el('p', null, 'Source: ' + (facts.valueStack.source || 'the value-stack run stored on this project') + '.'));
+    } else irr.appendChild(el('p', null, 'No IRR is stored. This panel does not calculate one.'));
+    if (facts.cost > 0 && facts.revenue > 0 && x.scenarios && x.scenarios[1]) {
+      var pay = x.scenarios[1];
+      irr.appendChild(el('p', null, 'Simple payback ' + (pay.paybackYears != null ? (pay.paybackYears.toFixed(1) + ' years') : '—') + '. That is net cost divided by the year-one value. It is not an IRR.'));
+    }
+
+    var decision = fold(host, 'Project Intelligence', true);
+    decision.appendChild(el('div', 'score-num', x.decision));
+    decision.appendChild(el('p', null, x.score + ' / 100. Readiness 45%, site quality 35%, economics 20%.'));
+    if (!facts.site) decision.appendChild(el('p', null, 'Site quality is waiting on the site screen, so those 35 points are not in this score.'));
+    else if (!facts.site.anyReal) decision.appendChild(el('p', null, 'The site screen is on file and it is still an estimate. Nothing in it is backed by project data yet.'));
+    var list = el('div', null, '');
+    var c, row, k;
+    for (k = 0; k < x.checks.length; k++) {
+      c = x.checks[k];
+      row = el('p', null, (c.ok ? 'Yes — ' : 'Not yet — ') + c.n + '. ' + c.d);
+      list.appendChild(row);
+    }
+    decision.appendChild(list);
+    decision.appendChild(el('p', null, 'Source: the drawing, plus a site screen and a cost only when the project has them.'));
   }
 
   function readBill(state, done) {
@@ -229,7 +312,7 @@
     showFunding: showFunding,
     readBill: readBill,
     download: download,
-    VERSION: 'editor-v2-analyze/1'
+    VERSION: 'editor-v2-analyze/2'
   };
   root.OmegaEditorV2Analyze = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

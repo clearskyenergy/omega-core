@@ -300,7 +300,7 @@
 
   function summary(doc) {
     var solarKw = 0, solarAc = 0, tables = 0, modules = 0, arrays = 0;
-    var bessKw = 0, bessKwh = 0, bessN = 0, chargers = 0, chargerKw = 0;
+    var bessKw = 0, bessKwh = 0, bessN = 0, chargers = 0, chargerKw = 0, derKw = 0, one;
     var i, e, lay;
     for (i = 0; i < doc.entities.length; i++) {
       e = doc.entities[i];
@@ -320,6 +320,10 @@
       } else if (e.type === 'equip' && e.key === 'charger') {
         chargers++;
         chargerKw += +e.kw || 0;
+      } else if ((e.type === 'equip' || e.type === 'rect') && (e.key === 'pv' || e.key === 'wind' || e.key === 'genset')) {
+        one = +e.kw || +e.derKw || 0;
+        derKw += one;
+        if (e.key === 'pv') solarKw += one;
       }
     }
     return {
@@ -333,6 +337,7 @@
       bessCount: bessN,
       chargerCount: chargers,
       chargerKw: chargerKw,
+      derKw: derKw,
       entityCount: doc.entities.length
     };
   }

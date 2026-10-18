@@ -190,6 +190,11 @@
       choices.appendChild(label);
     }
     paintFields(prefer);
+    var pinned = !!(ctx && ctx.preferred);
+    choices.hidden = pinned;
+    var named = null;
+    for (i = 0; i < list.length; i++) if (list[i].id === prefer) named = list[i];
+    document.getElementById('build-title').textContent = pinned && named ? named.label : 'Guided build';
     var placeBtn = document.getElementById('build-place');
     placeBtn.onclick = function (ev) {
       ev.preventDefault();

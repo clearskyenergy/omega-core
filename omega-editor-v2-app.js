@@ -152,8 +152,19 @@
     $('cust-cancel').addEventListener('click', function () { $('dlg-customer').close(); });
     $('cust-form').addEventListener('submit', saveCustomer);
     $('file-import').addEventListener('change', onImport);
-    var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook]');
+    var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook],[data-build],[data-output]');
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
+    $('analyze-close').addEventListener('click', function () { setSection('design'); });
+    document.addEventListener('click', function (ev) {
+      var menu = $('outputs-menu');
+      if (!menu || menu.hidden) return;
+      var node = ev.target;
+      while (node) {
+        if (node.id === 'outputs-menu' || node.id === 'btn-outputs') return;
+        node = node.parentNode;
+      }
+      toggleOutputs(false);
+    });
     var cv = $('cv');
     cv.addEventListener('pointerdown', onDown);
     cv.addEventListener('pointermove', onMove);
@@ -195,10 +206,17 @@
     var eq = b.getAttribute('data-equip');
     var tl = b.getAttribute('data-tool');
     var hook = b.getAttribute('data-hook');
+    var buildId = b.getAttribute('data-build');
+    var output = b.getAttribute('data-output');
+    if (output) { previewOutput(output); return; }
+    if (buildId) { openBuild(buildId); return; }
     if (hook) { invokeHook(hook); return; }
     if (tl) setTool(tl);
     else if (eq) setEquip(eq);
-    else if (act) runAct(act);
+    else if (act) {
+      if (act !== 'outputs') toggleOutputs(false);
+      runAct(act);
+    }
   }
 
   function setTool(name) {
@@ -252,7 +270,7 @@
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
     else if (act === 'paste') paste();
-    else if (act === 'build') openBuild();
+    else if (act === 'outputs') toggleOutputs();
     else if (act === 'run') runNumbers();
     else if (act === 'quote') setSection('funding');
   }
@@ -344,6 +362,7 @@
   }
 
   function cancel() {
+    if ($('outputs-menu') && !$('outputs-menu').hidden) { toggleOutputs(false); return; }
     draft = null;
     box = null;
     drag = null;
@@ -1098,12 +1117,14 @@
     }
     requestDraw();
     layoutMap();
+    paintBuildPrompt();
   }
   function afterChange() {
     editSeq++;
     dirty = true;
     refresh();
     scheduleRecovery();
+    if (root.OmegaEditorV2Design) root.OmegaEditorV2Design.publish(root.OmegaEditorV2Design.fromDoc(state.doc));
     if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
     if (section === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
   }
@@ -1120,7 +1141,14 @@
     row(kv, 'Tables', s.tableCount);
     row(kv, 'Modules', s.moduleCount);
     row(kv, 'Storage', s.bessKw + ' kW / ' + s.bessKwh + ' kWh');
-    row(kv, 'Chargers', s.chargerCount);
+    row(kv, 'Chargers', s.chargerKw > 0 ? (s.chargerCount + ' · ' + s.chargerKw + ' kW') : String(s.chargerCount));
+    if (s.derKw > 0) row(kv, 'Generation', Math.round(s.derKw) + ' kW');
+    var built = $('takeoff-build');
+    if (built) {
+      var line = state.doc.build && state.doc.build.summary && state.doc.build.summary.line;
+      built.hidden = !line;
+      built.textContent = line || '';
+    }
     $('cv').setAttribute('aria-label', 'Site drawing. ' + s.solarKwDc + ' kilowatts DC, ' + s.tableCount + ' tables, ' + s.bessKw + ' kilowatts of storage.');
   }
   function row(host, k, v) {
@@ -1609,6 +1637,7 @@
   }
 
   function setSection(name) {
+    if (name === 'outputs') { toggleOutputs(true); return; }
     var allowed = { site: 1, design: 1, analyze: 1, outputs: 1, funding: 1 };
     if (!allowed[name]) return;
     section = name;
@@ -1666,18 +1695,126 @@
     afterChange();
     setStatus('Recorded. The site stays as it is.');
   }
-  function openBuild() {
+  function canvasBlank() {
+    var list = state.doc.entities || [], i, e;
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if (e.type === 'equip' || e.type === 'array' || e.type === 'conduit' || (e.type === 'rect' && e.key)) return false;
+    }
+    return true;
+  }
+  function paintBuildPrompt() {
+    var el = $('build-prompt');
+    if (el) el.hidden = !canvasBlank();
+  }
+  function openBuild(preferred) {
     var Bld = root.OmegaEditorV2Build;
     if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
     setSection('design');
+    toggleOutputs(false);
     Bld.open(state, {
       pxPerFt: view.pxPerFt,
+      preferred: typeof preferred === 'string' ? preferred : '',
       onPlaced: function (res) {
         afterChange();
         fit(true);
         setStatus((res.summary && res.summary.line) || 'Build placed.');
+        notifyDrawn();
       }
     });
+  }
+  function notifyDrawn() {
+    var H = root.OmegaEditorV2Hooks;
+    if (!H || !H.listeners) return;
+    var names = ['view3d', 'permit', 'sld'], i;
+    for (i = 0; i < names.length; i++) {
+      if (H.listeners(names[i])) invokeHook(names[i], { reason: 'build' });
+    }
+  }
+  function toggleOutputs(force) {
+    var menu = $('outputs-menu');
+    if (!menu) return;
+    var open = force === true ? true : force === false ? false : menu.hidden;
+    menu.hidden = !open;
+    var btn = $('btn-outputs');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function previewOutput(kind) {
+    toggleOutputs(false);
+    var An = root.OmegaEditorV2Analyze;
+    var R = root.OmegaEditorV2Reports;
+    var Design = root.OmegaEditorV2Design;
+    var dlg = $('dlg-preview');
+    var title = $('preview-title');
+    var body = $('preview-body');
+    var actions = $('preview-actions');
+    if (!dlg || !An || !R) { setStatus('Outputs are not loaded.', true); return; }
+    var facts = An.factsFrom(state.doc, D.summary(state.doc));
+    var model = Design ? Design.fromDoc(state.doc) : null;
+    actions.innerHTML = '';
+    function addBtn(label, primary, fn) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = primary ? 'btn primary' : 'btn';
+      b.textContent = label;
+      b.addEventListener('click', fn);
+      actions.appendChild(b);
+    }
+    function linesOf(built) {
+      if (!built) return '';
+      return built.lines.map(function (l) { return l.text || ''; }).join('\n');
+    }
+    function saveReport(id) {
+      return function () { An.download(state, id); };
+    }
+    addBtn('Close', false, function () { dlg.close(); });
+    if (kind === 'permit' || kind === 'sld') {
+      title.textContent = kind === 'permit' ? 'Permit set + plot plan' : 'One-line';
+      body.textContent = designPreview(model, kind);
+      addBtn(kind === 'permit' ? 'Open the permit set' : 'Open the one-line', true, function () {
+        dlg.close();
+        invokeHook(kind);
+      });
+    } else if (kind === 'drawing') {
+      title.textContent = 'PNG / PDF / DXF';
+      body.textContent = 'The drawing as it is now, in feet.\n\nPNG is the canvas. PDF and DXF are the same entities.';
+      addBtn('Download PNG', true, function () { exportPng(); });
+      addBtn('Download PDF', false, function () { exportPdf(); });
+      addBtn('Download DXF', false, function () { exportDxf(); });
+    } else if (kind === 'funding') {
+      var gate = root.OmegaProjectIntelligence.fundingReadiness(facts);
+      title.textContent = 'Push to Funding Marketplace';
+      body.textContent = gate.decision + '\n' + gate.score + ' / 100 from the drawing.\n\n' + (gate.ready ? 'The score clears the pursue line.' : 'The score is not at the pursue line yet.') + '\n\nPush hands this drawing to the marketplace submission. Nothing is priced here.';
+      addBtn('Push to Funding Marketplace', true, function () {
+        dlg.close();
+        invokeHook('funding');
+        setSection('funding');
+      });
+    } else if (kind === 'bom') {
+      title.textContent = 'BOM & cost estimate';
+      body.textContent = linesOf(R.build('bom', facts, state.doc)) + '\n\n' + linesOf(R.build('cost', facts, state.doc));
+      addBtn('Download bill of materials', true, saveReport('bom'));
+      addBtn('Download cost estimate', false, saveReport('cost'));
+    } else {
+      var built = R.build(kind, facts, state.doc);
+      title.textContent = built ? built.title : 'Report';
+      body.textContent = linesOf(built) || 'Nothing on the drawing fills this report.';
+      if (built) addBtn('Download PDF', true, saveReport(kind));
+    }
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+  }
+  function designPreview(model, kind) {
+    if (!model) return 'The drawing is the source. The design model is not loaded.';
+    var gear = model.equipment.length, wires = model.conduits.length;
+    var gaps = (model.gaps || []).join(', ');
+    var head = kind === 'permit'
+      ? 'Permit set and plot plan, from the drawing.'
+      : 'One-line, from the placed chain.';
+    return head + '\n\n' + gear + ' pieces of equipment. ' + wires + ' conduits.\n' +
+      (model.build && model.build.summary && model.build.summary.line ? (model.build.summary.line + '\n') : '') +
+      '\nOn the drawing: footprints, the chain, and the raceway family.\n' +
+      'Not on the drawing: ' + (gaps || 'nothing listed') + '.\n\n' +
+      'Open builds the sheet from this reading. A missing detail stays blank.';
   }
   function runNumbers() {
     var An = root.OmegaEditorV2Analyze;
@@ -1691,9 +1828,11 @@
     setSection('analyze');
     setStatus(pi.decision + ' · ' + pi.score + ' / 100, from the drawing.');
   }
-  function invokeHook(name) {
+  function invokeHook(name, extra) {
     var H = root.OmegaEditorV2Hooks;
-    var ctx = { doc: state.doc, summary: D.summary(state.doc) };
+    var ctx = { doc: state.doc, summary: D.summary(state.doc), model: null };
+    if (root.OmegaEditorV2Design) ctx.model = root.OmegaEditorV2Design.fromDoc(state.doc);
+    if (extra && extra.reason) ctx.reason = extra.reason;
     if (H && H.invoke(name, ctx)) return;
     var note = {
       view3d: '3D site view is the next view of this drawing. Nothing is attached to this button yet.',
@@ -1715,5 +1854,5 @@
     }
   }
 
-  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/2' };
+  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/3' };
 })(typeof window !== 'undefined' ? window : global);
