@@ -151,8 +151,13 @@ async function logicHome(browser, base, user, expectOrg, name, staff) {
     if (staff) {
       ok('staff still have the ClearSky link to every OEM account', snap.admin === '/omega-logic' && /All OEM customers/.test(snap.eye), snap);
       await p.click('a[href="/omega-logic"]');
+      /* The click replaces the document. The first poll can land while body
+         is still null; a throw there ends the wait, so a missing body is
+         "not yet". */
       var dir = await p.waitForFunction(function () {
-        return /Every white-label customer/.test(document.body.innerText) ? document.body.innerText.replace(/\s+/g, ' ').slice(0, 500) : null;
+        var body = document.body;
+        if (!body) return null;
+        return /Every white-label customer/.test(body.innerText) ? body.innerText.replace(/\s+/g, ' ').slice(0, 500) : null;
       }, null, { timeout: 10000 }).then(function (h) { return h.jsonValue(); }, function () { return '' });
       ok('that link opens the directory and does not enter Clean Cell',
         /Every white-label customer/.test(dir) && !/[?&]org=/.test(p.url()) && /Clean Cell/.test(dir), { url: p.url(), dir: dir, errs: pageErrs.slice(0, 4) });

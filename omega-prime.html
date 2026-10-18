@@ -311,7 +311,9 @@ table.bom tr.fen td{background:#FFF3E8}
           <div class="tbl"><table class="bom"><thead><tr><th>Line</th><th>Item</th><th>Qty</th><th>Routed to</th><th style="text-align:right">Installed</th></tr></thead><tbody id="bomBody"></tbody></table></div>
           <p class="note" id="qNote"></p>
           <a class="primary" id="q-editor" href="#">Open in Site Map to file the RFQ</a>
-          <p class="note">Filing goes through Site Map's Bill of Materials, so the RFQ carries the full drawing; the manufacturer receives the whole BOM and sees the site, not the client, until a quote is accepted.</p>
+          <button class="primary" id="q-oem" type="button" style="margin-top:6px">Send to the OEM</button>
+          <p class="note" id="qOemMsg"></p>
+          <p class="note">Filing goes through Site Map's Bill of Materials, so the RFQ carries the full drawing; the manufacturer receives the whole BOM and sees the site, not the client, until a quote is accepted. Send to the OEM opens the purchase order in that workspace with this address, these lines and this estimate.</p>
           <button class="primary" id="q-logic" style="margin-top:6px;background:#0B2A3D">Next: Omega Logic →</button>
         </div>
       </div>
@@ -979,6 +981,44 @@ table.bom tr.fen td{background:#FFF3E8}
     if (custody) custody.setAttribute('href', href('/logic-custody.html'));
   }
   paintLogic();
+  /* One step from this quote to a purchase order. The same POST the Site
+     Map BOM sends. The unit is the order line; cost-model divisions ride
+     along and stay off the order until a catalog publishes them. */
+  function sendToOem() {
+    var box = $('#qOemMsg');
+    function say(t) { if (box) box.textContent = t; }
+    var u = null; try { u = firebase.auth().currentUser; } catch (e) {}
+    if (!u) { say('Sign in first. The purchase order has to carry who it is from.'); return; }
+    var btn = $('#q-oem');
+    if (btn) { btn.setAttribute('aria-disabled', 'true'); btn.textContent = 'Sending\u2026'; }
+    ensureProject().then(function (id) {
+      var divisions = (S.run && S.run.divisions) || [];
+      var bom = [{ sku: UNIT.key || '', description: UNIT.name || '', qty: 1, unit: 'ea', manufacturer: UNIT.mfr || '' }];
+      divisions.forEach(function (d) {
+        if (!d || !(d.base > 0)) return;
+        bom.push({ sku: '', description: d.name || '', qty: 1, unit: 'lot', manufacturer: '' });
+      });
+      var body = {
+        projectId: id, address: S.addr || '', zip: (PP.zipOf && (PP.zipOf(S.addr) || PP.zipOf(S.geoLabel))) || '',
+        toOrgIds: [], bom: bom, estimateUsd: S.run && S.run.total ? S.run.total.base : null
+      };
+      return u.getIdToken().then(function (tok) {
+        return fetch('/api/rfq', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(body) });
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j }; }, function () { return { ok: false, j: {} }; }); })
+        .then(function (res) {
+          var orders = (res.j && res.j.orders) || [];
+          if (!res.ok) { say((res.j && (res.j.detail || res.j.error)) || 'Could not open the purchase order.'); return; }
+          if (!orders.length) { say('Nothing on this quote is a published product yet, so no purchase order was opened. ' + ((res.j && res.j.skipped) || '')); return; }
+          if (box) box.innerHTML = orders.map(function (o) {
+            var label = esc(o.orderNo);
+            if (o.sameWorkspace && o.href) return '<a href="' + esc(o.href) + '">' + label + '</a> is open in your workspace.';
+            return label + ' opened in ' + esc(o.orgName || 'the OEM') + '\u2019s workspace.';
+          }).join(' ');
+        });
+    }, function (e) { say((e && e.message) || 'Save the project first, then send it.'); })
+      .then(function () { if (btn) { btn.removeAttribute('aria-disabled'); btn.textContent = 'Send to the OEM'; } });
+  }
+  $('#q-oem').onclick = function () { sendToOem(); };
 
   /* ── sign-in, the way the other tool pages start it ──────────────── */
   (function () {

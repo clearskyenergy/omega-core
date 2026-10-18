@@ -496,6 +496,42 @@ async function main() {
     var ampLine = all.split('\r\n').filter(function (l) { return l.indexOf('CC-26-0926,') === 0; })[0].split(',');
     assert.match(ampLine[11], /awaiting/); assert(ampLine[14], 'the Released on PO column is filled for an order on PO credit');
   });
+  await test('accounting GET attaches a safe project id for the page link and leaves the CSV columns alone', async function () {
+    seed(); await priced(); await issued();
+    /* example labels only: the order's own id wins over the design snapshot */
+    var amp = order('amp');
+    amp.projectId = 'example-yard';
+    amp.design = { projectId: 'other-drawing', projectName: 'Example yard drawing\u0000' };
+    db.seed('orders/amp', amp);
+    db.seed('orders/bad', { orgId: ORG, orderNo: 'CC-EX-1', status: 'new', createdAt: '2026-09-24T09:00:00Z', customer: { name: 'Example Buyer', email: 'buyer@example.test' }, items: [{ sku: 'R60', qty: 1 }] });
+    await priced('bad');
+    var bad = order('bad');
+    bad.design = { projectId: '../not a project', projectName: 'Example should not link' };
+    db.seed('orders/bad', bad);
+    db.seed('orders/script', { orgId: ORG, orderNo: 'CC-EX-3', status: 'new', createdAt: '2026-09-24T10:00:00Z', customer: { name: 'Example Buyer', email: 'buyer@example.test' }, items: [{ sku: 'R60', qty: 1 }] });
+    await priced('script');
+    var script = order('script');
+    script.design = { projectId: 'javascript:alert(1)', projectName: 'Example ignored' };
+    db.seed('orders/script', script);
+    db.seed('orders/des', { orgId: ORG, orderNo: 'CC-EX-2', status: 'new', createdAt: '2026-09-24T11:00:00Z', customer: { name: 'Example Buyer', email: 'buyer@example.test' }, items: [{ sku: 'R60', qty: 1 }] });
+    await priced('des'); await issued('des', 'deposit', 'EX-2', '2026-09-24');
+    var des = order('des');
+    des.design = { projectId: 'example-design', projectName: '  Example design\u0007 name  ' };
+    db.seed('orders/des', des);
+    var acc = await call(accounting, 'GET', {}, ADMIN);
+    function row(key) { return acc.rows.filter(function (r) { return r.key === key; })[0]; }
+    assert.equal(row('amp:deposit').projectId, 'example-yard', 'the order field wins');
+    assert.equal(row('amp:deposit').projectName, 'Example yard drawing');
+    assert.equal(row('bad:deposit').projectId, null);
+    assert.equal(row('bad:deposit').projectName, null);
+    assert.equal(row('script:deposit').projectId, null);
+    assert.equal(row('des:deposit').projectId, 'example-design');
+    assert.equal(row('des:deposit').projectName, 'Example design name');
+    var csv = (await call(accounting, 'GET', { format: 'csv' }, ADMIN)).csv;
+    assert.equal(csv.split('\r\n')[0], 'Order,PO,Customer,Customer key,Stage,Invoice,Issued,Due,Amount USD,Received USD,Balance USD,Status,Days overdue,Aging,Released on PO,Payments');
+    assert.equal(csv.indexOf('example-yard'), -1);
+    assert.equal(csv.indexOf('example-design'), -1);
+  });
   await test('every accounting write leaves an order event and an omega_audit row', async function () {
     seed(); await priced();
     var steps = [

@@ -3800,3 +3800,11 @@ BOM quote requests use `/api/rfq`, with vendor routing and Logic order creation
 on the server. Only published catalog matches become orders; unmatched lines
 are reported. Trial feedback is stored on the existing project, not a new
 collection. The workspace and marketplace test doubles never write live data.
+## 2026-10-17 — OMEGA journey integration preview
+
+Design-to-order routing remains in `api/_lib/design-order.js` and
+`api/_lib/design-place.js`. No pricing, dispatch or eligibility math moved into
+the browser. Plant and Accounting render the existing server-computed
+`office-stage.path()` through `OmegaLogicTheme.pathBar`. Plant receives only
+step/state/label/position, without financial amounts or action permissions.
+See `docs/OMEGA-JOURNEY-QA.md` for fixture scope and verification limits.
