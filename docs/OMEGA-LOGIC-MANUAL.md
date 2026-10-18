@@ -778,6 +778,23 @@ station.
 A **roaming phone** shows a bench picker top right: choose the bench you are
 at, then scan. Every scan records the phone and the bench it named.
 
+### The work-order card (`/plant/work-orders`)
+
+The board is the office menu and one status row: Late, On hold, In
+progress, Ready to ship. Line, stage, priority, target date, and which
+operation the units are at sit behind More filters. Register serials is
+the one action on the bar. Print, Export, and Refresh sit in the overflow.
+The card opens as a drawer and leads with the journey: which customer and
+project, what is being built, where it ships, how far along it is, and
+what is blocking it. Operation steps stay on the card, collapsed. Those
+facts are read from the order when the card opens, so a corrected address
+or line is what the floor sees. Prices and email stay on the order. A
+project id is not the name of the job. A fact the purchase order does not
+carry is said so, and nothing is filled in. Holds and failed tests on the
+loaded units are listed, each linking to the serial record. Parts still
+to register stay in their own table. Materials shows what the bill is
+short of against stock, the same plan the plant board uses.
+
 ### Registering serials
 
 Work orders page → *Register serials* (each work order has its own):

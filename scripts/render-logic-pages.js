@@ -234,6 +234,46 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('component fields include safety stock', comp);
     return { items: items, bomRows: bomRows, comp: comp };
   });
+  await check('work-orders', '/plant/work-orders.html?org=cleancell.us', async function (p) {
+    await p.waitForSelector('#chips button', { timeout: 8000 });
+    var chips = await p.$$eval('#chips button .lbl', function (b) { return b.map(function (x) { return x.textContent; }); });
+    var chrome = await p.evaluate(function () {
+      return {
+        tree: !!document.querySelector('.tree'),
+        more: (document.querySelector('#more-filters > summary') || {}).textContent,
+        primary: (document.getElementById('new') || {}).textContent,
+        overflow: ['print', 'csv', 'refresh'].map(function (id) { return !!document.getElementById(id); }).join(','),
+        toolbar: document.querySelectorAll('.toolbar > button, .toolbar > a.btn').length
+      };
+    });
+    await p.click('[data-id="wo_1"]');
+    await p.waitForFunction(function () { var m = document.getElementById('mats'); return m && /Checking stock/.test(m.textContent) === false; }, { timeout: 8000 });
+    var po = await p.$eval('#journey', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var stepsOpen = await p.$eval('#steps', function (e) { return e.open; });
+    var quality = await p.$eval('#quality', function (e) { return e.textContent.replace(/\s+/g, ' ').trim().slice(0, 180); });
+    var mats = await p.$eval('#mats', function (e) { return e.textContent.replace(/\s+/g, ' ').trim().slice(0, 160); });
+    var drawer = await p.$eval('#detail', function (e) { var s = getComputedStyle(e); return s.position + ':' + Math.round(e.getBoundingClientRect().width); });
+    var gridW = await p.$eval('#grid', function (e) { return Math.round(e.getBoundingClientRect().width); });
+    await p.evaluate(function () {
+      var img = document.createElement('img');
+      img.id = 'mascot-probe';
+      img.alt = '';
+      img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      img.setAttribute('style', 'position:fixed;top:140px;right:48px;width:72px;height:72px;z-index:2000');
+      document.body.appendChild(img);
+    });
+    await p.waitForFunction(function () { var e = document.getElementById('mascot-probe'); return e && getComputedStyle(e).display === 'none'; }, { timeout: 2000 }).catch(function () {});
+    var mascot = await p.$eval('#mascot-probe', function (e) { return getComputedStyle(e).display; });
+    ok('the filter is Late, On hold, In progress, and Ready to ship', chips.join('|') === 'Late|On hold|In progress|Ready to ship', chips);
+    ok('one primary action, with the rest behind More filters and the overflow', !chrome.tree && chrome.more === 'More filters' && chrome.primary === 'Register serials' && chrome.overflow === 'true,true,true' && chrome.toolbar === 1, chrome);
+    ok('the card names the purchase order gap without inventing a project', /Purchase order/.test(po) && /not on the purchase order/.test(po) && po.indexOf('prj_') < 0, po);
+    ok('operation steps stay on the card, collapsed', stepsOpen === false);
+    ok('quality lists the held serial', /NCR-26-89/.test(quality) && /CC418-26-44194/.test(quality), quality);
+    ok('materials shortfalls render on the card', /Materials/.test(mats) && /Short of/.test(mats), mats);
+    ok('the card is a drawer and the grid keeps its width', drawer.indexOf('fixed:') === 0 && gridW > 600, [drawer, gridW]);
+    ok('a floating figure over the drawer is hidden', mascot === 'none', mascot);
+    return { chips: chips, drawer: drawer, gridW: gridW };
+  });
   await check('manager', '/plant/manager.html?org=cleancell.us#works', async function (p) {
     await p.waitForTimeout(400);
     await p.click('[data-id="wo_1"]'); await p.waitForTimeout(500);
