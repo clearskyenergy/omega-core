@@ -1,0 +1,540 @@
+<!DOCTYPE html>
+<!--
+  ═══════════════════════════════════════════════════════════════════════════════
+  ClearSky-OMEGA · Omega Workspace — journey home (preview)
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+
+  /workspace-v2  — the release switch is omega-experience.js (docs/V2-LAUNCH.md)
+
+  The live home is workspace.html and is not this page. Same sign-in, same
+  records, same doors. The difference is the presentation: one path from
+  arriving to tracking, account notices kept apart from the work, and each
+  site named once.
+
+  omega-workspace-v2.js decides the words. This file paints them and reads
+  what the rules already allow, the same collections the live home reads.
+  ═══════════════════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<script src="/omega-splash.js?v=1" data-boot="no"></script>
+<script src="/omega-experience.js"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="author" content="ClearSky Energy Solutions LLC">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
+<title>Omega Workspace</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Poppins:wght@500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0}
+.skip{position:absolute;left:-999px;top:8px;z-index:100;background:#fff;color:#14171A;padding:8px 12px;border-radius:8px}
+.skip:focus{left:8px}
+#boot{position:fixed;inset:0;z-index:80;display:flex;align-items:center;justify-content:center;flex-direction:column;gap:14px;background:#F5F4F0;color:#556B82;font:500 13px "DM Sans",system-ui,sans-serif}
+#boot .m{width:46px;height:46px;border-radius:12px;background:radial-gradient(circle at 30% 30%,#17293A,#050A11);display:grid;place-items:center;font:700 26px Poppins,sans-serif;color:#2FE3C8;box-shadow:inset 0 0 0 1px rgba(53,198,244,.35)}
+body.ready #boot{display:none}
+#refused{display:none;max-width:520px;margin:48px auto;padding:24px;background:#fff;border:1px solid #E4E8EC;border-radius:14px;color:#14171A;line-height:1.5}
+body.refused #refused{display:block}body.refused #content{display:none}
+#content{display:none}
+body.ready:not(.refused) #content{display:flex;flex-direction:column;gap:22px}
+body.ws-v2 :focus-visible{outline:3px solid #2B5FA8;outline-offset:2px}
+body.ws-v2 .ows-search{position:relative}
+#find{display:none;position:absolute;left:0;right:0;top:calc(100% + 6px);background:#fff;border:1px solid #E4E8EC;border-radius:12px;box-shadow:0 8px 28px rgba(20,23,26,.12);z-index:40;max-height:320px;overflow:auto;padding:6px}
+#find.on{display:block}
+#find a,#find button{display:block;width:100%;text-align:left;padding:10px 12px;border:0;border-radius:8px;background:transparent;color:#14171A;font:inherit;text-decoration:none;cursor:pointer}
+#find a small,#find button small{display:block;color:#556B82;font-size:12px}
+#find a:hover,#find button:hover,#find a[aria-selected="true"],#find button[aria-selected="true"]{background:#F1FAFC}
+
+.lead{display:flex;justify-content:space-between;gap:18px;align-items:flex-end;flex-wrap:wrap}
+.lead h1{margin:0;font:600 30px/1.15 Poppins,"DM Sans",sans-serif;letter-spacing:-.4px;text-wrap:balance}
+.lead .status{margin:6px 0 0;color:#556B82;font-size:14px}
+.lead .status a{color:#1E4A8C;font-weight:600}
+.band{display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:14px 16px;border-radius:14px;background:#FFF6E5;border:1px solid #F0D7A4;color:#14171A}
+.band.hot{background:#FDECEA;border-color:#F3C2BC}
+.band b{display:block;font-size:14px}
+.band span{display:block;color:#556B82;font-size:13px;line-height:1.4}
+.band .tx{flex:1;min-width:200px}
+.band .ows-pill{margin-left:auto}
+
+.journey{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:8px}
+.step{display:flex;flex-direction:column;gap:8px;min-height:92px;padding:12px;border-radius:14px;background:#fff;border:1px solid #E4E8EC;color:#14171A;text-decoration:none;box-shadow:0 1px 2px rgba(20,23,26,.04)}
+.step:hover{border-color:#2B5FA8}
+.step .n{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;font:600 11px "DM Mono",ui-monospace,monospace;background:#F1FAFC;color:#1E4A8C}
+.step b{display:block;font-size:13.5px;font-weight:600}
+.step small{display:block;color:#556B82;font-size:12px;line-height:1.35;margin-top:2px}
+.step.now{background:#E7EEF9;border-color:#2B5FA8}
+.step.now .n{background:#2B5FA8;color:#fff}
+.step.done .n{background:#E3F2EA;color:#2E7D5B}
+
+.next{background:#fff;border:1px solid #E4E8EC;border-radius:16px;padding:20px 22px;box-shadow:0 1px 2px rgba(20,23,26,.05),0 8px 24px rgba(20,23,26,.05);display:flex;flex-direction:column;gap:8px}
+.next .eyebrow{font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:#86A0A9}
+.next h2{margin:0;font:600 22px/1.25 Poppins,"DM Sans",sans-serif;letter-spacing:-.3px;text-wrap:balance}
+.next p{margin:0;color:#556B82;max-width:62ch;line-height:1.5}
+.next .actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.next .links{display:flex;flex-wrap:wrap;gap:14px;margin-top:4px}
+.next .links a{color:#1E4A8C;font-weight:600;font-size:13px}
+
+.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.kpi{background:#fff;border:1px solid #E4E8EC;border-radius:14px;padding:14px 14px 12px;text-decoration:none;color:inherit;min-width:0}
+.kpi .v{font:600 22px/1 "DM Mono",ui-monospace,monospace;letter-spacing:-.3px}
+.kpi .l{margin-top:6px;font-size:12.5px;color:#556B82}
+.kpi .d{margin-top:4px;font-size:12px;color:#86A0A9}
+.kpi .d.warn{color:#B8791B}.kpi .d.up{color:#2E7D5B}
+
+.block h2{margin:0 0 4px;font:600 18px/1.3 Poppins,"DM Sans",sans-serif}
+.block .sub{color:#556B82;font-size:13px;margin:0 0 12px}
+.group{margin-top:14px}
+.group h3{margin:0 0 8px;font:600 12px/1 "DM Mono",ui-monospace,monospace;letter-spacing:.08em;text-transform:uppercase;color:#86A0A9;font-weight:500}
+.group ul{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:8px}
+.item{display:grid;grid-template-columns:4px minmax(0,1fr) auto;gap:12px;align-items:center;width:100%;text-align:left;padding:12px 14px;border-radius:12px;border:1px solid #E4E8EC;background:#fff;color:#14171A;text-decoration:none;font:inherit;cursor:pointer}
+.item .mark{width:4px;height:100%;min-height:28px;border-radius:4px;background:#D7DFE6}
+.item.hot .mark{background:#EE5A4F}.item.warn .mark{background:#E0A100}.item.good .mark{background:#2E7D5B}
+.item b{display:block;font-size:14px;font-weight:600;text-wrap:balance}
+.item small{display:block;color:#556B82;font-size:12.5px;line-height:1.4;margin-top:2px}
+.item .go{font-size:12.5px;font-weight:700;color:#1E4A8C}
+.empty{padding:16px;border:1px dashed #D7DFE6;border-radius:12px;color:#556B82;background:#fff}
+
+.cards{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.card{display:flex;flex-direction:column;gap:6px;padding:14px 16px;border-radius:14px;border:1px solid #E4E8EC;background:#fff;text-decoration:none;color:#14171A;min-width:0}
+.card:hover{border-color:#2B5FA8}
+.card .stage{font:500 11px "DM Mono",ui-monospace,monospace;letter-spacing:.06em;text-transform:uppercase;color:#86A0A9}
+.card b{font-size:15px;text-wrap:balance}
+.card .why{color:#556B82;font-size:13px;line-height:1.4}
+.more{margin-top:10px;font-size:13px}
+.more a{color:#1E4A8C;font-weight:600}
+
+@media (max-width:1040px){
+  .journey{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width:700px){
+  .lead h1{font-size:26px}
+  .journey{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .step{min-height:0}
+  .cards{grid-template-columns:1fr}
+  .item{grid-template-columns:4px minmax(0,1fr)}
+  .item .go{grid-column:2}
+}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+</style>
+</head>
+<body class="ows ws-v2">
+<a class="skip" href="#main">Skip to content</a>
+<div id="boot"><span class="m">Ω</span><span>Opening your workspace…</span></div>
+<div class="ows-app">
+  <nav id="side-nav" aria-label="Workspace"></nav>
+  <div class="ows-main">
+    <header id="topbar"></header>
+    <main id="main" class="ows-content">
+      <div id="refused"></div>
+      <div id="content"></div>
+    </main>
+  </div>
+</div>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-auth-errors.js?v=1"></script>
+<script src="/omega-jd-nav.js?v=1"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-terms.js"></script>
+<script src="/omega-tools.js?v=9"></script>
+<script src="/omega-newproject.js"></script>
+<script src="/omega-workspaces.js"></script>
+<script src="/omega-workspace-hub.js"></script>
+<script src="/omega-workspace-today.js"></script>
+<script src="/omega-workspace-shell.js"></script>
+<script src="/omega-workspace-v2.js"></script>
+<script>
+(function () {
+'use strict';
+var CFG = window.CLEARSKY_CONFIG || {};
+try { firebase.initializeApp(CFG.firebase); } catch (e) { if (!/already exists/.test(String(e && e.message))) throw e; }
+var auth = firebase.auth(), db = firebase.firestore();
+var WORKSPACES = CFG.workspaces || {};
+var S = window.OmegaWorkspaceShell, HUB = window.OmegaWorkspaceHub, T = window.OMEGATools, TODAY = window.OmegaWorkspaceToday, V2 = window.OmegaWorkspaceV2;
+var esc = S.esc;
+var WS = null, USER = null, ME = '', PROFILE = null, VIEW = null;
+var DATA = { projects: [], todos: [], members: [], rfqsSent: [], rfqsReceived: [], referrals: [], finance: [], capital: null };
+var ACTS = [], settingsShown = false;
+
+S.mount({
+  current: 'home',
+  tabs: true,
+  nav: V2.nav({}),
+  tabsItems: V2.tabs({}),
+  searchPlaceholder: 'Search projects and tools',
+  search: onSearch,
+  onNav: function (key) {
+    if (key === 'home') { window.scrollTo(0, 0); if (location.hash) history.replaceState(null, '', location.pathname + location.search); return true; }
+    if (key === 'settings') { settingsDrawer(); return true; }
+    return false;
+  }
+});
+
+function byId(id) { return document.getElementById(id); }
+function ms(t) { if (!t) return 0; if (t.toDate) return t.toDate().getTime(); if (t.seconds) return t.seconds * 1000; var d = new Date(t); return isNaN(d.getTime()) ? 0 : d.getTime(); }
+function who() { return (PROFILE && PROFILE.name) || (USER && USER.displayName) || (ME ? ME.split('@')[0] : ''); }
+function first() { return String(who() || '').split(' ')[0]; }
+function planName() {
+  var pa = WS && WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {};
+  if (pa && pa.packaged) return b.plan || 'Packaged';
+  if (!WS) return '';
+  return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Pro' : WS.tierLevel === 1 ? 'Field' : 'Plan');
+}
+function trialEnd() {
+  if (WS && WS.trial && WS.trial.endsAt) return ms(WS.trial.endsAt);
+  try { var t = OmegaBrand.trial(WS); if (t && t.endsAt) return t.endsAt.getTime(); } catch (e) {}
+  return 0;
+}
+function pastDue() { try { return window.OmegaTenant && OmegaTenant.pastDue ? OmegaTenant.pastDue((window.OmegaTenant && OmegaTenant.billing) || (WS && WS.billing) || null, Date.now()) : null; } catch (e) { return null; } }
+function can(key) { var t = T.byKey(key); return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, WS); }
+function holds(part) { return !!WS && HUB.holdsLogic({ modules: WS.modules, addons: WS.addons, addOns: WS.addOns }, part); }
+function projectHref(id) {
+  var slug = WS && WS.allowedDomain ? String(WS.allowedDomain).split('.')[0] : '';
+  var base = (window.OmegaExperience && OmegaExperience.href('editor', 'v2')) || '/editor.html';
+  return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
+}
+function classicHomeHref() {
+  if (window.OmegaExperience) return OmegaExperience.classicHref(location.pathname, location.search, '');
+  return '/workspace?ui=classic';
+}
+function hrefs() {
+  var o = {};
+  ['gridatlas', 'vppsim', 'computeproforma', 'sales', 'proforma', 'omegaprime', 'sitefinder'].forEach(function (k) {
+    var t = T.byKey(k), h = t && T.hrefFor(t, WS);
+    if (h) o[k] = h;
+  });
+  return o;
+}
+function num(v) { var x = Number(v); return isFinite(x) ? x : 0; }
+function candidate(p) { return !p.stage || p.stage === 'candidate'; }
+function counts() {
+  var size = 0, design = 0, past = 0;
+  DATA.projects.forEach(function (p) {
+    if (p.stage && p.stage !== 'candidate' && p.stage !== 'online') past++;
+    if (!candidate(p)) return;
+    var sized = num(p.bessKwh) || num(p.capex);
+    if (TODAY.wantsBattery(p)) { if (!sized && can('batterysizer')) size++; }
+    else if (!TODAY.progress(p).designed) design++;
+  });
+  return { size: size, design: design, past: past };
+}
+function focusProject() {
+  var best = null, bestAt = Infinity;
+  DATA.projects.forEach(function (p) {
+    if (!candidate(p)) return;
+    var sized = num(p.bessKwh) || num(p.capex);
+    var hit = TODAY.wantsBattery(p) ? !sized : !TODAY.progress(p).designed;
+    if (!hit) return;
+    var t = ms(p.updatedAt) || ms(p.createdAt) || Infinity;
+    if (t < bestAt) { bestAt = t; best = p; }
+  });
+  if (!best) return null;
+  return { id: best.id, name: best.name || best.title || '', address: best.address || '' };
+}
+function reviewCount() {
+  var names = {}, now = Date.now();
+  (DATA.finance || []).forEach(function (f) {
+    if (f.status !== 'review') return;
+    var upd = ms(f.updatedAt);
+    if (!(upd && now - upd >= 7 * 86400000)) return;
+    names[V2.norm(f.name || f.title || f.id)] = 1;
+  });
+  return Object.keys(names).length;
+}
+function quotesWaiting() {
+  var n = 0;
+  (DATA.rfqsReceived || []).forEach(function (r) { if (r.status === 'sent' || (!r.status && !r.quote)) n++; });
+  (DATA.referrals || []).forEach(function (r) { if (!r.status || r.status === 'new') n++; });
+  (DATA.rfqsSent || []).forEach(function (f) {
+    if ((f.recipients || []).some(function (r) { return r.status === 'quoted' || (r.quote && r.status !== 'accepted' && r.status !== 'rejected'); })) n++;
+  });
+  return n;
+}
+function today() {
+  var pa = WS.packageAccess;
+  return TODAY.build({
+    now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval,
+    readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null,
+    trialEndsAt: trialEnd(), pastDue: pastDue(),
+    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived,
+    referrals: DATA.referrals, finance: DATA.finance, capital: DATA.capital,
+    canOpen: function (k) { return can(k); }
+  });
+}
+function model() {
+  var td = today(), c = counts(), f = focusProject();
+  return V2.home({
+    now: Date.now(), first: first(), company: (WS.clientName || WS.orgId || ''), plan: planName(),
+    pendingApproval: !!WS.pendingApproval, readOnly: !!(WS.packageAccess && WS.packageAccess.readOnly),
+    pastDue: pastDue(), trialEndsAt: trialEnd(), logicOffice: holds('logic-office'),
+    projects: DATA.projects, needsSize: c.size, needsDesign: c.design, pastCandidate: c.past,
+    reviews: reviewCount(), quotesWaiting: quotesWaiting(), rfqsSent: (DATA.rfqsSent || []).length,
+    focus: f, canOpen: function (k) { return can(k); }, hrefs: hrefs(), projectHref: projectHref,
+    needs: td.needs, finance: DATA.finance, more: td.more, kpis: td.kpis,
+    cards: TODAY.board({ now: Date.now(), projects: DATA.projects, finance: DATA.finance, capital: DATA.capital, max: Math.max(24, DATA.projects.length + DATA.finance.length + (DATA.capital && DATA.capital.deals ? DATA.capital.deals.length : 0) + 8) })
+  });
+}
+
+function rowHtml(r, i) {
+  var inner = '<i class="mark" aria-hidden="true"></i><span class="tx"><b>' + esc(r.title) + '</b>' + (r.detail ? '<small>' + esc(r.detail) + '</small>' : '') + '</span><span class="go">' + esc(r.cta || 'Open') + '</span>';
+  var cls = 'item' + (r.cls ? ' ' + esc(r.cls) : '');
+  if (r.href) {
+    var ext = /^https?:/.test(r.href);
+    return '<a class="' + cls + '" href="' + esc(r.href) + '"' + (ext ? ' target="_blank" rel="noopener"' : '') + '>' + inner + '</a>';
+  }
+  ACTS.push(r);
+  return '<button class="' + cls + '" type="button" data-act="' + (ACTS.length - 1) + '">' + inner + '</button>';
+}
+function goAct(r) {
+  if (!r) return;
+  if (r.href) { if (/^https?:/.test(r.href)) window.open(r.href, '_blank', 'noopener'); else if (r.href.charAt(0) === '#') { var el = document.querySelector(r.href); if (el) el.scrollIntoView({ block: 'start' }); } else window.location.href = r.href; return; }
+  if (!r.act) return;
+  if (r.act.kind === 'new') { if (window.OmegaNewProject) OmegaNewProject.open('bess'); return; }
+  if (r.act.kind === 'project' && r.act.id) { window.location.href = projectHref(r.act.id); return; }
+  if (r.act.kind === 'tool') { var t = T.byKey(r.act.id); if (t && can(r.act.id)) { if (t.action) OmegaNewProject.open(String(t.action).split(':')[1] || 'bess'); else if (T.hrefFor(t, WS)) window.location.href = T.hrefFor(t, WS); } else window.location.href = '/workspace#modules'; return; }
+  if (r.act.kind === 'billing') window.location.href = '/workspace#billing';
+  else if (r.act.kind === 'team') window.location.href = '/workspace#team';
+}
+function stageWord(c) {
+  if (c.kind === 'capital' || c.kind === 'finance') return 'Finance';
+  return (TODAY.STAGE_LABEL && TODAY.STAGE_LABEL[c.stage]) || (c.stage === 'candidate' ? 'Candidate' : (c.stage || 'Project'));
+}
+function cardHref(c) {
+  if (c.href) return c.href;
+  if (c.kind === 'finance' && c.finance && c.finance.id) return TODAY.dealHref(c.finance.id);
+  if (c.kind === 'project' && c.id) return projectHref(c.id);
+  return '/projects.html';
+}
+
+function render() {
+  if (!WS) return;
+  VIEW = model();
+  ACTS = [];
+  var v = VIEW, h = '';
+  h += '<header class="lead"><div><h1 id="greet">' + esc(v.greet) + '</h1><p class="status">' + esc(v.status) + ' · <a href="/workspace#billing">Plan &amp; billing</a></p></div><button class="ows-pill primary" type="button" id="new-project">New project</button></header>';
+  if (v.account.length) {
+    var a = v.account[0], hot = v.account.some(function (x) { return x.cls === 'hot'; });
+    h += '<div class="band' + (hot ? ' hot' : '') + '" id="account" role="status"><div class="tx"><b>' + esc(a.title) + '</b><span>' + esc(a.detail || '') + '</span></div>';
+    if (a.href) h += '<a class="ows-pill primary" href="' + esc(a.href) + '"' + (/^https?:/.test(a.href) ? ' target="_blank" rel="noopener"' : '') + '>' + esc(a.cta || 'Open') + '</a>';
+    else { ACTS.push(a); h += '<button class="ows-pill primary" type="button" data-act="' + (ACTS.length - 1) + '">' + esc(a.cta || 'Open') + '</button>'; }
+    h += '</div>';
+  } else h += '<div id="account" hidden></div>';
+
+  var step = null; v.journey.steps.forEach(function (s) { if (s.now) step = s; });
+  h += '<ol class="journey" id="journey" aria-label="How a project moves">' + v.journey.steps.map(function (s) {
+    return '<li><a class="step' + (s.now ? ' now' : '') + (s.done ? ' done' : '') + '" data-step="' + esc(s.key) + '" href="' + esc(s.href) + '"' + (s.now ? ' aria-current="step"' : '') + '><span class="n">' + (s.done ? '✓' : esc(s.n)) + '</span><span><b>' + esc(s.label) + '</b><small>' + esc(s.blurb) + '</small></span></a></li>';
+  }).join('') + '</ol>';
+
+  if (step) {
+    h += '<section class="next" id="next" aria-labelledby="next-h"><div class="eyebrow">' + (v.fresh ? 'Start here' : 'Next') + '</div><h2 id="next-h">' + esc(step.title) + '</h2><p>' + esc(step.detail) + '</p><div class="actions">';
+    if (step.act && step.act.kind === 'new') h += '<button class="ows-pill primary" type="button" id="new-project-card">New project</button>';
+    else h += '<a class="ows-pill primary" href="' + esc(step.href) + '">' + esc(step.cta) + '</a>';
+    (step.links || []).forEach(function (l) { if (l.href !== step.href) h += '<a class="ows-pill" href="' + esc(l.href) + '">' + esc(l.label) + '</a>'; });
+    h += '</div></section>';
+  }
+
+  h += '<div class="kpis" id="kpis">' + (v.kpis || []).map(function (k) {
+    var tag = k.href ? 'a' : 'div';
+    return '<' + tag + ' class="kpi"' + (k.href ? ' href="' + esc(k.href) + '"' : '') + '><div class="v">' + esc(k.value) + '</div><div class="l">' + esc(k.label) + '</div>' + (k.delta ? '<div class="d ' + esc(k.tone || '') + '">' + esc(k.delta) + '</div>' : '') + '</' + tag + '>';
+  }).join('') + '</div>';
+
+  h += '<section class="block" id="needs" aria-labelledby="needs-h"><h2 id="needs-h">Needs you</h2><p class="sub">Work only. Account notices sit above.</p>';
+  if (!v.groups.length) h += '<div class="empty">Nothing is waiting on you. Find a customer, or open a project and draw it.</div>';
+  v.groups.forEach(function (g) {
+    h += '<div class="group"><h3 id="g-' + esc(g.key) + '">' + esc(g.label) + '</h3><ul aria-labelledby="g-' + esc(g.key) + '">';
+    g.rows.forEach(function (r) { h += '<li>' + rowHtml(r, 0) + '</li>'; });
+    h += '</ul></div>';
+  });
+  if (v.more) h += '<p class="more"><a href="/projects.html">' + v.more + ' more on Projects and Team</a></p>';
+  h += '</section>';
+
+  h += '<section class="block" id="track" aria-labelledby="track-h"><h2 id="track-h">In motion</h2><p class="sub">Each site once. The full list is Projects. Portfolio is where the site book, and later the projects, are held.</p>';
+  if (!v.track.length) h += '<div class="empty">No open projects yet. A new one shows up here with its stage.</div>';
+  else {
+    h += '<div class="cards">' + v.track.map(function (c) {
+      return '<a class="card" href="' + esc(cardHref(c)) + '"><span class="stage">' + esc(stageWord(c)) + '</span><b>' + esc(c.name || 'Untitled') + '</b>' + (c.why ? '<span class="why">' + esc(c.why) + '</span>' : '') + '</a>';
+    }).join('') + '</div>';
+    h += '<p class="more"><a href="/projects.html">All projects</a> · <a href="/portfolio.html">Portfolio</a>' + (v.trackMore ? ' · ' + v.trackMore + ' more in motion' : '') + '</p>';
+  }
+  h += '</section>';
+
+  byId('content').innerHTML = h;
+  var work = 0; v.groups.forEach(function (g) { work += g.rows.length; });
+  S.badge('home', work);
+  Array.prototype.forEach.call(document.querySelectorAll('[data-act]'), function (b) {
+    b.addEventListener('click', function () { goAct(ACTS[Number(b.getAttribute('data-act'))]); });
+  });
+  if (byId('new-project')) byId('new-project').addEventListener('click', function () { OmegaNewProject.open('bess'); });
+  if (byId('new-project-card')) byId('new-project-card').addEventListener('click', function () { OmegaNewProject.open('bess'); });
+  if (location.hash === '#track') { var tr = byId('track'); if (tr && !tr.getAttribute('data-seen')) { tr.setAttribute('data-seen', '1'); tr.scrollIntoView({ block: 'start' }); } }
+  if (location.hash === '#settings' && !settingsShown) { settingsShown = true; settingsDrawer(); }
+}
+
+function settingsDrawer() {
+  S.drawer({
+    eyebrow: 'Account', title: 'Settings', sub: WS ? (WS.clientName || WS.orgId) : '',
+    rows: [
+      { key: 'billing', name: 'Plan & billing', sub: planName(), href: '/workspace#billing', cta: 'Open' },
+      { key: 'team', name: 'Team', sub: 'Who is in this workspace', href: '/workspace#team', cta: 'Open' },
+      { key: 'classic', name: 'Switch to classic', sub: 'The current home, on this browser', href: classicHomeHref(), cta: 'Open' },
+      { key: 'signout', name: 'Sign out', sub: ME, cta: 'Sign out', onClick: S.signOut }
+    ]
+  });
+}
+
+var FIND = null;
+function onSearch(q) {
+  q = String(q || '').replace(/\s+/g, ' ').trim().toLowerCase();
+  if (!FIND) {
+    FIND = document.createElement('div'); FIND.id = 'find'; FIND.setAttribute('role', 'listbox'); FIND.setAttribute('aria-label', 'Search results');
+    var host = document.querySelector('.ows-search'); if (host) host.appendChild(FIND);
+  }
+  if (q.length < 2) { FIND.className = ''; FIND.innerHTML = ''; return; }
+  var rows = [];
+  DATA.projects.forEach(function (p) {
+    var name = p.name || p.title || 'Untitled', blob = (name + ' ' + (p.address || '')).toLowerCase();
+    if (blob.indexOf(q) < 0) return;
+    if (rows.some(function (r) { return V2.norm(r.name) === V2.norm(name); })) return;
+    rows.push({ name: name, sub: p.address && p.address !== name ? p.address : (TODAY.STAGE_LABEL[p.stage] || 'Project'), href: projectHref(p.id) });
+  });
+  if (rows.length < 6 && T.catalog) {
+    T.catalog().forEach(function (t) {
+      if (rows.length >= 8 || !t || t.soon) return;
+      if (String(t.name || '').toLowerCase().indexOf(q) < 0) return;
+      if (!can(t.key)) return;
+      var h = T.hrefFor(t, WS);
+      rows.push({ name: t.name, sub: 'Tool', href: h, act: t.action ? t.key : '' });
+    });
+  }
+  rows = rows.slice(0, 8);
+  FIND.className = rows.length ? 'on' : '';
+  FIND.innerHTML = rows.length ? rows.map(function (r, i) {
+    if (r.act) return '<button type="button" role="option" data-tool="' + esc(r.act) + '">' + esc(r.name) + '<small>' + esc(r.sub) + '</small></button>';
+    return '<a role="option" href="' + esc(r.href) + '">' + esc(r.name) + '<small>' + esc(r.sub) + '</small></a>';
+  }).join('') : '';
+  Array.prototype.forEach.call(FIND.querySelectorAll('[data-tool]'), function (b) {
+    b.addEventListener('click', function () { var t = T.byKey(b.getAttribute('data-tool')); if (t && t.action) OmegaNewProject.open(String(t.action).split(':')[1] || 'bess'); });
+  });
+}
+
+var logicDone = false;
+function logicSection() {
+  if (logicDone || !holds('logic-office')) return;
+  logicDone = true;
+  var items = [{ key: 'orders', label: 'Orders', icon: 'quotes', href: '/omega-logic#orders' }, { key: 'customers', label: 'Customer accounts', icon: 'me', href: '/portals/customer/admin.html' }];
+  if (holds('logic-plant')) items.push({ key: 'plant', label: 'Plant', icon: 'settings', href: '/plant/manager.html' });
+  if (holds('logic-logistics')) items.push({ key: 'deliver', label: 'Deliver', icon: 'projects', href: '/logic-logistics.html' });
+  S.section('Omega Logic', items);
+  var a = document.querySelector('#side-nav [data-key="customers"]'); if (a) { a.setAttribute('href', '/portals/customer/admin.html'); a.setAttribute('title', 'Customer accounts'); }
+  var tab = document.querySelector('.ows-tabs [data-tab="customers"]'); if (tab) tab.setAttribute('href', '/portals/customer/admin.html');
+}
+function revealStaff(user) {
+  var d = String(user.email || '').toLowerCase().split('@')[1] || '';
+  if (d !== 'clearsky-usa.com' || user.emailVerified !== true) return;
+  ['sn-adm-divider', 'sn-adm-label', 'sn-admin', 'sn-ops'].forEach(function (id) { var el = byId(id); if (el) el.style.display = ''; });
+}
+
+var signInTimer = null;
+auth.onAuthStateChanged(function (user) {
+  clearTimeout(signInTimer);
+  if (!user) {
+    var had = !!(window.OmegaTenant && OmegaTenant.hadSession && OmegaTenant.hadSession());
+    signInTimer = setTimeout(function () { if (!auth.currentUser) window.location.replace('/login.html'); }, had ? 8000 : 1600);
+    return;
+  }
+  bind(user, 0, 0);
+});
+function bind(user, n, t) {
+  t = t || 0;
+  if (window.OmegaTerms && !(window.showApp && window.showApp.__ot) && t < 40) { setTimeout(function () { bind(user, n, t + 1); }, 50); return; }
+  var ws = OmegaBrand.resolve(user.email || '', WORKSPACES);
+  if (!ws) {
+    if (n < 8) { setTimeout(function () { bind(user, n + 1, t); }, 250); return; }
+    document.body.classList.add('ready', 'refused');
+    byId('refused').innerHTML = '<b>' + esc(OmegaBrand.accessMessage(user.email, WORKSPACES)) + '</b>';
+    return;
+  }
+  WS = ws; window.OMEGA_WORKSPACE = ws; USER = user; ME = String(user.email || '').toLowerCase();
+  window.showApp(user);
+}
+window.showApp = function (user) {
+  document.body.classList.add('ready');
+  S.paint({ ws: WS, user: user, displayName: who(), plan: planName() });
+  try { OmegaJdNav.reveal(user.email); } catch (e) {}
+  revealStaff(user);
+  OmegaNewProject.configure({ db: db, auth: auth, orgId: function () { return WS.orgId; }, ownerName: function () { return who(); }, afterCreate: function (id) { window.location.href = projectHref(id); } });
+  render();
+  load();
+  OmegaTenant.onEntitlements(function (ws) {
+    if (ws) { WS = ws; window.OMEGA_WORKSPACE = ws; }
+    S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() });
+    render(); logicSection();
+  });
+  window.addEventListener('omega:entitlements', function (e) {
+    if (e.detail) { WS = e.detail; window.OMEGA_WORKSPACE = WS; render(); logicSection(); }
+  });
+};
+try { if (window.OmegaTerms && OmegaTerms.wire) OmegaTerms.wire(); } catch (e) {}
+
+function load() {
+  var org = WS.orgId; if (!org) return;
+  function q(coll) { return db.collection(coll).where('orgId', '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
+  function q2(coll, field) { return db.collection(coll).where(field, '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }); }
+  var touch = ME ? db.collection('team_members').doc(org + '__' + ME).set({ orgId: org, email: ME, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {}) : Promise.resolve();
+  Promise.all([
+    q('projects'),
+    db.collection('projects').where('orgsInvolved', 'array-contains', org).get().then(function (s) { var out = []; s.forEach(function (d) { var x = d.data() || {}; x.id = d.id; out.push(x); }); return out; })['catch'](function () { return []; }),
+    q('team_todos'),
+    touch.then(function () { return q('team_members'); }),
+    db.collection('team_members').doc(org + '__' + ME).get().then(function (d) { return d.exists ? d.data() : null; })['catch'](function () { return null; }),
+    db.collection('rfqs').where('sourceOrgId', '==', org).get().then(function (s) {
+      var out = [], jobs = [];
+      s.forEach(function (d) { var f = d.data() || {}; f.id = d.id; f.recipients = []; out.push(f); jobs.push(d.ref.collection('recipients').get().then(function (rs) { rs.forEach(function (x) { var w = x.data() || {}; w.id = x.id; f.recipients.push(w); }); })['catch'](function () {})); });
+      return Promise.all(jobs).then(function () { return out; });
+    })['catch'](function () { return []; }),
+    new Promise(function (res) { try { db.collectionGroup('recipients').where('vendorOrgId', '==', org).get().then(function (s) { var out = []; s.forEach(function (d) { var w = d.data() || {}; w.id = d.id; out.push(w); }); res(out); }, function () { res([]); }); } catch (e) { res([]); } }),
+    q2('referrals', 'toOrgId'),
+    USER ? db.collection('fin_projects').where('developerUid', '==', USER.uid).get().then(function (s) {
+      var out = [], jobs = [];
+      s.forEach(function (d) { var f = d.data() || {}; f.id = d.id; f.offers = []; out.push(f); jobs.push(d.ref.collection('offers').get().then(function (os) { os.forEach(function (x) { var o = x.data() || {}; o.id = x.id; f.offers.push(o); }); })['catch'](function () {})); });
+      return Promise.all(jobs).then(function () { return out; });
+    })['catch'](function () { return []; }) : Promise.resolve([])
+  ]).then(function (r) { return loadCapital().then(function (cap) { DATA.capital = cap; return r; }); }).then(function (r) {
+    var seen = {}; DATA.projects = [];
+    r[0].concat(r[1]).forEach(function (p) { if (p && p.id && !seen[p.id]) { seen[p.id] = 1; DATA.projects.push(p); } });
+    DATA.projects.sort(function (a, b) { return ms(b.updatedAt || b.createdAt) - ms(a.updatedAt || a.createdAt); });
+    DATA.todos = r[2]; DATA.members = r[3]; PROFILE = r[4]; DATA.rfqsSent = r[5]; DATA.rfqsReceived = r[6]; DATA.referrals = r[7]; DATA.finance = r[8] || [];
+    S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() });
+    render();
+  });
+}
+function loadCapital() {
+  if (!USER || !USER.uid) return Promise.resolve(null);
+  var uid = USER.uid, col = db.collection('fin_projects');
+  return db.collection('fin_profiles').doc(uid).get().then(function (d) {
+    var pr = d && d.exists ? d.data() || {} : null;
+    if (!pr || pr.role !== 'partner' || pr.suspended === true || pr.approved === false) return null;
+    var orgId = String(pr.orgId || '');
+    function rows(query) { return query.get().then(function (sn) { var out = []; sn.forEach(function (x) { var f = x.data() || {}; f.id = x.id; out.push(f); }); return out; })['catch'](function () { return []; }); }
+    return Promise.all([
+      rows(col.where('status', '==', 'open')),
+      rows(col.where('firstLookUids', 'array-contains', uid)),
+      rows(col.where('awardedTo', '==', uid)),
+      orgId ? rows(col.where('room.forOrgId', '==', orgId)) : Promise.resolve([])
+    ]).then(function (r) {
+      var by = {}, deals = [];
+      r.forEach(function (list) { list.forEach(function (f) { if (!by[f.id]) { by[f.id] = 1; deals.push(f); } }); });
+      return { uid: uid, orgId: orgId || WS.orgId, deals: deals, offers: {} };
+    });
+  })['catch'](function () { return null; });
+}
+})();
+</script>
+</body>
+</html>

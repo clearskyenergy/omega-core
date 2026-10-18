@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <script src="/omega-splash.js?v=1"></script>
+<script src="/omega-experience.js"></script>
 <script>
 /* EARLY SAFETY STUBS - must load before anything that can fire a callback.
 
@@ -199,6 +200,7 @@ function openOmegaCore(){
 <!-- Omega Prime's "Open in Site Map" (?from=prime): fills the configured
      unit in from this page's own catalog entry and opens the BESS Guided
      Build. Never places anything itself. -->
+<script src="/omega-prime-project.js"></script>
 <script src="/omega-prime-handoff.js"></script>
 <!-- Facility demand screen: the 12-month shave is the only demand credit.
      A ratchet is not added a second time. omega-demand-screen.js is the
@@ -1898,7 +1900,6 @@ window.onerror = function(msg, src, line, col, err) {
         <button class="rbtn" id="rb-ov-stencil" onclick="rbRun(ovStencil)" title="Convert the uploaded image to a clean black &amp; white engineering stencil to trace over"><span class="rb-ico" style="color:var(--text)">◨</span><span class="rb-lbl">Stencil<br>B&amp;W</span></button>
         <button class="rbtn" id="rb-gps" onclick="openGpsPlacement()" title="GPS Placement — drop equipment by latitude/longitude on a live Google Map. Markers lock perfectly to their coordinates at any zoom (no drift), then apply to the canvas."><span class="rb-ico" style="color:#4285F4">📍</span><span class="rb-lbl">GPS<br>Place</span></button>
         <button class="rbtn" id="rb-recenter" onclick="recenterOnEquipment()" title="Recenter the view on your placed equipment — brings any off-screen equipment back into the window"><span class="rb-ico" style="color:#34A853">⊕</span><span class="rb-lbl">Recenter</span></button>
-        <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
       </div>
       <div class="rpanel-cap">Ground</div>
     </div>
@@ -2386,24 +2387,16 @@ window.onerror = function(msg, src, line, col, err) {
   <div class="ribbon-page" data-page="finance" data-module="finance">
     <div class="rpanel">
       <div class="rpanel-body">
-        <button class="rbtn" onclick="rbRun(openMarketplacePush)" title="Push to Marketplace — file this project into the finance platform as an open deal, attributed to your account and scoped to your organisation."><span class="rb-ico" style="color:var(--green)">↗</span><span class="rb-lbl">Push to<br>Marketplace</span></button>
-      </div>
-      <div class="rpanel-cap">Marketplace</div>
-    </div>
-    <div class="rpanel">
-      <div class="rpanel-body">
-        <!-- Next to the marketplace on purpose: both take a finished design
-             outward. The marketplace lists a deal for capital to find; this
-             one asks a named lender for a price. -->
+        <!-- Apply and Helios ask a named party for a price. Marketplace
+             lists the project for capital to find. Prime and Logic open
+             the customer-quote path on this site. -->
         <button class="rbtn" onclick="rbRun(openFinancingApply)" data-cap="export" title="Apply for financing — DLL pricing request. Carries the project across and collects the credit package."><span class="rb-ico" style="color:#F0A030">$</span><span class="rb-lbl">Apply for<br>Financing</span></button>
-        <!-- The checklist Helios Energy Advisors asks for before it looks at
-             a large land deal. Filled from this project where OMEGA knows
-             the answer, finished by the person, previewed as Helios's own
-             PDF and sent to them from here, with the sender in copy. Same
-             cap as Apply for Financing: it is the same kind of outward step. -->
         <button class="rbtn" onclick="rbRun(openHeliosIntake)" data-cap="export" title="Helios Intake — fill Helios Energy Advisors' first-pass checklist from this project, finish the rest, preview the PDF and send it to Helios."><span class="rb-ico" style="color:#F4C542">&#9728;</span><span class="rb-lbl">Helios<br>Intake</span></button>
+        <button class="rbtn" id="rb-marketplace" onclick="rbRun(openMarketplacePush)" title="Push to Marketplace — file this project into the finance platform as an open deal, attributed to your account and scoped to your organisation."><span class="rb-ico" style="color:var(--green)">↗</span><span class="rb-lbl">Push to<br>Marketplace</span></button>
+        <button class="rbtn" id="rb-push-prime" onclick="rbRun(omegaPushPrime)" title="Push to Prime — open Omega Prime on this site address so the quote can be built there."><span class="rb-ico" style="color:#4ed4d0">→</span><span class="rb-lbl">Push to<br>Prime</span></button>
+        <button class="rbtn" id="rb-push-logic" onclick="rbRun(omegaPushLogic)" title="Push to Logic — open Omega Prime on the Omega Logic step for this site."><span class="rb-ico" style="color:#7eb6ff">→</span><span class="rb-lbl">Push to<br>Logic</span></button>
       </div>
-      <div class="rpanel-cap">Financing</div>
+      <div class="rpanel-cap">Quotes &amp; financing</div>
     </div>
   </div>
 
@@ -2574,6 +2567,7 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-cap">Workspace</div>
     </div>
   </div>
+  <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
 </div>
 <div id="omega-merged-park" hidden>
   <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="openRpPanel('summary')" title="Site map summary — kept on Estimate"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
@@ -26338,6 +26332,7 @@ async function saveProject(){
     if(!_projectId){
       payload.uid = _currentUser.uid;
       payload.orgId = ((typeof _projOrgId==='function') ? _projOrgId() : null) || 'clearsky.com';
+      try{ window._projectOrgId = payload.orgId; }catch(e){}
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await _db.collection('projects').add(payload);
       _projectId = ref.id;
@@ -26669,6 +26664,7 @@ async function _loadProject(id){
       return;
     }
     const d=doc.data();
+    try{ window._projectOrgId = d.orgId || ''; }catch(e){}
     /* the saved time this tab loaded: saveProject() refuses to write over a
        newer save from another tab or computer (2026-10-14) */
     try{ window._loadedUpdatedAt = d.updatedAt && typeof d.updatedAt.toMillis==='function' ? d.updatedAt.toMillis() : (d.updatedAt ? +new Date(d.updatedAt) : null); }catch(e){ window._loadedUpdatedAt = null; }
@@ -28709,8 +28705,8 @@ function calcProposalCosts() {
 
 function openProposalExport() {
   // Pre-fill fields from editor
-  const addr = document.getElementById('addr-in')?.value || '';
-  const proj = document.getElementById('pname')?.value || 'BESS Installation';
+  const addr = document.getElementById('omega-addr-in')?.value || document.getElementById('addr-in')?.value || '';
+  const proj = document.getElementById('pname')?.value || 'Site project';
   /* Patch 103: the project type drove the whole cover and defaulted to
      BESS whatever was drawn, so a compute campus went out as a "Battery
      Energy Storage System Installation Proposal". Set it from the
@@ -28733,15 +28729,15 @@ function openProposalExport() {
     (c.genCost > 0 ? row(`  On-site generation \u00d7${c.genUnits} (${Math.round(c.genKw).toLocaleString()} kW, benchmark)`, c.genCost, '#F472B6') : ''),
     (c.dcCost > 0 ? row('  Data-centre electrical (ROM)', c.dcCost, '#38BDF8') : ''),
     (c.solarCost > 0 ? row(`  Solar PV (${Math.round(c.solarKwDc).toLocaleString()} kW-DC)`, c.solarCost, '#FBBF24') : ''),
-    row(`  BESS Equipment (${Math.round(c.totalKwh)}kWh)`, c.bessEqCost, '#60A5FA'),
-    row('   BESS Installation Labor', c.bessInstall),
+    (c.bessEqCost > 0 ? row('  ' + (_proposalType().equipLabel || 'Equipment') + (c.totalKwh > 0 ? ' (' + Math.round(c.totalKwh) + ' kWh)' : ''), c.bessEqCost, '#60A5FA') : ''),
+    (c.bessInstall > 0 ? row('   Installation labor', c.bessInstall) : ''),
     c.siteEq > 0 ? row('  Site Equipment', c.siteEq) : '',
     c.condCost > 0 ? row(' Conduit & Wiring (mat+labor)', c.condCost, '#F87171') : '',
     c.indirect > 0 ? row('  Engineering / Permitting / Commissioning', c.indirect) : '',
     c.emsOn && c.emsCost > 0 ? row('  EMS Software (setup)', c.emsCost, '#A78BFA') : '',
     c.evCost > 0 ? row('  EV charging', c.evCost, '#22D3EE') : '',
     c.bnzCost > 0 ? row('  Building envelope', c.bnzCost, '#A78BFA') : '',
-    row(`  Contingency (${c.contPct}%)`, c.cont),
+    (c.cont > 0 ? row('  Contingency (' + c.contPct + '%)', c.cont) : ''),
     `<div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:4px;border-top:2px solid rgba(255,255,255,.2)">
       <span style="font-weight:700;color:#fff">ESTIMATED TOTAL</span>
       <span style="font-weight:700;color:var(--green);font-family:'IBM Plex Mono',monospace;font-size:15px">${c.fmt(c.total)}</span>
@@ -28789,10 +28785,10 @@ async function generateAndExportProposal() {
     await new Promise(r => setTimeout(r, 30));
 
     // 2. Gather data
-    const proj    = document.getElementById('prop-project').value || 'BESS Installation';
-    const addr    = document.getElementById('prop-address').value || '[Site Address]';
-    const client  = document.getElementById('prop-client').value || '[Client]';
-    const utility = document.getElementById('prop-utility').value || '[Utility]';
+    const proj    = document.getElementById('prop-project').value || 'Site project';
+    const addr    = document.getElementById('prop-address').value || '';
+    const client  = document.getElementById('prop-client').value || '';
+    const utility = document.getElementById('prop-utility').value || '';
     const rep     = document.getElementById('prop-rep').value || ((typeof brandName==='function')?brandName():'Your Company');
     const propNum = document.getElementById('prop-num').value || 'NX-2025-001';
     const today   = new Date().toLocaleDateString('en-US',{year:'numeric',month:'long',day:'numeric'});
@@ -28812,7 +28808,7 @@ async function generateAndExportProposal() {
           : (bm.cost!=null ? bm.cost : getBessCostAuto(+(bm.kwh||0),0));
         var name = String(k).replace('GOTION-','');
         var usable = Math.round((bm.kwh||0)*0.92);
-        return `<tr><td>${name}<br><span style="font-size:10px;color:#6B8CA0">${bm.kwh||0}kWh . ${usable}kWh usable . ${bm.kw||0}kW . LFP</span></td><td style="text-align:right">${bm.qty}</td><td style="text-align:right">${c.fmt(perUnit)}</td><td style="text-align:right">${c.fmt(perUnit*bm.qty)}</td></tr>`;
+        return `<tr><td>${name}<br><span style="font-size:10px;color:#6B8CA0">${bm.kwh||0} kWh nameplate · ${usable} kWh usable · ${bm.kw||0} kW</span></td><td style="text-align:right">${bm.qty}</td><td style="text-align:right">${c.fmt(perUnit)}</td><td style="text-align:right">${c.fmt(perUnit*bm.qty)}</td></tr>`;
       }).join('');
     } else {
       // No BESS placed. If EV chargers ARE placed, show those as the equipment
@@ -28828,7 +28824,7 @@ async function generateAndExportProposal() {
         }).join('');
       } else if (S.bessList && S.bessList.length > 0) {
         bessRows = S.bessList
-          .map(b => `<tr><td>${b.name} -- ${b.model||b.name}<br><span style="font-size:10px;color:#6B8CA0">${b.kwh||760}kWh . ${b.usable||Math.round((b.kwh||760)*0.92)}kWh usable . ${b.kw||380}kW . ${b.chem||'LFP'}</span></td><td style="text-align:right">${b.qty||1}</td><td style="text-align:right">${c.fmt(getBESSCost(b.kwh,b.eqcost))}</td><td style="text-align:right">${c.fmt(getBESSCost(b.kwh,b.eqcost)*(b.qty||1))}</td></tr>`).join('');
+          .map(b => `<tr><td>${b.name}${b.model ? ' — ' + b.model : ''}<br><span style="font-size:10px;color:#6B8CA0">${b.kwh ? b.kwh + ' kWh' : ''}${b.kw ? ' · ' + b.kw + ' kW' : ''}${b.chem ? ' · ' + b.chem : ''}</span></td><td style="text-align:right">${b.qty||1}</td><td style="text-align:right">${c.fmt(getBESSCost(b.kwh,b.eqcost))}</td><td style="text-align:right">${c.fmt(getBESSCost(b.kwh,b.eqcost)*(b.qty||1))}</td></tr>`).join('');
       } else {
         bessRows = '<tr><td colspan="4" style="text-align:center;color:#8BA0B4">No equipment placed on the site map yet</td></tr>';
       }
@@ -28844,7 +28840,7 @@ async function generateAndExportProposal() {
           return `<tr><td>${r.label}</td><td style="text-align:right">${Math.round(r.ft)} LF</td><td style="text-align:right">${c.fmt(r.matRate)}/LF</td><td style="text-align:right">${c.fmt(r.laborRate)}/LF</td><td style="text-align:right">${c.fmt(total)}</td></tr>`;
         }).join('') +
         `<tr class="sub"><td>Material / Labor split</td><td></td><td style="text-align:right">${c.fmt(window._CONDUIT_MAT_TOTAL||0)}</td><td style="text-align:right">${c.fmt(window._CONDUIT_LABOR_TOTAL||0)}</td><td style="text-align:right">${c.fmt((window._CONDUIT_MAT_TOTAL||0)+(window._CONDUIT_LABOR_TOTAL||0))}</td></tr>`
-      : '<tr><td colspan="5" style="text-align:center;color:#8BA0B4">No conduit runs specified</td></tr>';
+      : '';
 
     // 3. Build proposal HTML
     const proposalHTML = buildProposalHTML({proj,addr,client,utility,rep,propNum,today,c,bessRows,condRows,sitemapDataUrl});
@@ -28870,6 +28866,8 @@ async function generateAndExportProposal() {
 /* Project-type presets that adapt the proposal wording. Combos stack the
    equipment framing (e.g. BESS + EV). Selected in the proposal export dialog. */
 var PROPOSAL_TYPES = {
+  project: { badge:'PROJECT PROPOSAL', title:'Energy Project<br>Proposal', spec:'Project Configuration', specNoun:'project', equipLabel:'Equipment',
+             intro:'This proposal covers the design, equipment, installation, commissioning, and interconnection for this project.' },
   bess:    { badge:'BESS PROPOSAL', title:'Battery Energy<br>Storage System<br>Installation Proposal', spec:'BESS Configuration', specNoun:'battery energy storage system', equipLabel:'BESS Equipment',
              intro:'This proposal outlines a comprehensive BESS installation including design, engineering, equipment supply, installation labor, commissioning, and utility interconnection services.' },
   ev:      { badge:'EV CHARGING PROPOSAL', title:'EV Charging<br>Infrastructure<br>Installation Proposal', spec:'EV Charging Configuration', specNoun:'EV charging infrastructure', equipLabel:'EV Charging Equipment',
@@ -28895,7 +28893,9 @@ var PROPOSAL_TYPES = {
   campus:  { badge:'COMPUTE CAMPUS PROPOSAL', title:'Compute Campus<br>&amp; On-Site Power<br>Development Proposal', spec:'Campus &amp; Power Configuration', specNoun:'compute campus with on-site generation', equipLabel:'Campus Equipment',
              intro:'This proposal outlines a compute campus with on-site power: load-first sizing against the utility ceiling, firm on-site generation to close the gap, ride-through storage, and the interconnection, civil and permitting work required to build it.' },
   gen:     { badge:'ON-SITE GENERATION PROPOSAL', title:'On-Site<br>Generation<br>Installation Proposal', spec:'Generation Configuration', specNoun:'on-site generation plant', equipLabel:'Generation Equipment',
-             intro:'This proposal outlines an on-site generation installation including prime mover supply, fuel and electrical balance of plant, installation labor, commissioning, and utility interconnection services.' }
+             intro:'This proposal outlines an on-site generation installation including prime mover supply, fuel and electrical balance of plant, installation labor, commissioning, and utility interconnection services.' },
+  wind:    { badge:'WIND PROPOSAL', title:'Wind<br>System<br>Installation Proposal', spec:'Wind Configuration', specNoun:'wind system', equipLabel:'Wind Equipment',
+             intro:'This proposal outlines a wind installation including site design, electrical engineering, turbine supply, installation labor, commissioning, and utility interconnection.' }
 };
 
 /* What the drawing says this project is. The dropdown still wins if
@@ -28903,11 +28903,12 @@ var PROPOSAL_TYPES = {
    default that contradicts the drawing is the one nobody notices. */
 function _proposalTypeFromDrawing(){
   try{
-    var c={pods:0,gen:0,bess:0,pv:0,ev:0};
+    var c={pods:0,gen:0,wind:0,bess:0,pv:0,ev:0};
     (S.shapes||[]).forEach(function(sh){
       if(!sh || sh.omegaFence || sh.omegaCampus) return;
       if(sh.kind==='derdc' && !sh.omegaCore) c.pods++;
-      else if(sh.kind==='deralt'||sh.kind==='derwind') c.gen++;
+      else if(sh.kind==='derwind') c.wind++;
+      else if(sh.kind==='deralt') c.gen++;
       else if(sh.kind==='bespad'||sh.kind==='assembly') c.bess++;
       else if(sh.kind==='dersolar') c.pv++;
       else if(/^ev(post|cab|unit|l2)$/.test(sh.kind||'')) c.ev++;
@@ -28920,6 +28921,7 @@ function _proposalTypeFromDrawing(){
     if(c.pods && (c.gen||c.bess)) return 'campus';
     if(c.pods && c.bess) return 'bess_data';
     if(c.pods) return 'data';
+    if(c.wind && !c.gen && !c.pv && !c.bess && !c.pods && !c.ev) return 'wind';
     if(c.gen && !c.pv && !c.bess) return 'gen';
     if(c.pv && c.bess) return 'solar_bess';
     if(c.pv) return 'solar';
@@ -28931,8 +28933,8 @@ function _proposalTypeFromDrawing(){
 }
 function _proposalType(){
   var sel=document.getElementById('prop-type');
-  var k=(sel&&sel.value)||'bess';
-  return PROPOSAL_TYPES[k]||PROPOSAL_TYPES.bess;
+  var k=(sel&&sel.value)||'project';
+  return PROPOSAL_TYPES[k]||PROPOSAL_TYPES.project;
 }
 
 /* Set the dropdown from the drawing the first time the dialog is opened
@@ -28961,19 +28963,12 @@ function _proposalTypeAutoselect(){
 
 function buildProposalHTML({proj,addr,client,utility,rep,propNum,today,c,bessRows,condRows,sitemapDataUrl}) {
   var _pt=_proposalType();
-  const GREEN='#1DB95A', DARK='#16202B', NAVY='#0F2040', ACCENT='#00D4FF';
-  /* The two figures below were a rough estimate and a literal string.
-     yr1Rev = total x 0.18 makes payback total/(total x 0.18) = 1/0.18 —
-     5.6 years on every proposal ever generated, whatever the project cost.
-     And IRR was the text "14-18", presented to a customer as a projection.
-
-     Use the value-stack estimate when one exists; otherwise show a dash.
-     A proposal with an honest gap is worth more than one with an invented
-     return, because the invented one is the number a lender checks. */
+  const GREEN='#1DB95A', DARK='#16202B';
+  /* Payback and IRR come only from a value-stack run. A proposal with a
+     gap is worth more than one with a return that was typed in. */
   var _vs = null;
   try { _vs = window._VS_ESTIMATE || null; } catch(e){}
   var _yr1 = _vs ? (+_vs.total || 0) : 0;
-  const yr1Rev = _yr1;
   const payback = (_yr1 > 0 && c.total > 0) ? (c.total / _yr1).toFixed(1) : null;
   var _irrNum = null;
   if (_yr1 > 0 && c.total > 0) {
@@ -28987,305 +28982,296 @@ function buildProposalHTML({proj,addr,client,utility,rep,propNum,today,c,bessRow
     } catch(e){}
   }
   const irr = _irrNum;
-  // -- Company branding (white-label) --
   const _bn = (typeof brandName==='function') ? brandName() : 'Your Company';
   const _bl = (typeof brandLogo==='function') ? brandLogo() : '';
-  const _btag = (typeof _BRAND!=='undefined' && _BRAND.tagline) ? _BRAND.tagline : 'Battery Energy Storage';
-  const _bcontact = (typeof _BRAND!=='undefined' && _BRAND.contact) ? _BRAND.contact : '';
-  // Cover logo: uploaded image if present, else a clean initial mark.
-  const _coverLogo = _bl
-    ? `<img src="${_bl}" style="max-height:44px;max-width:200px;object-fit:contain">`
-    : `<svg viewBox="0 0 80 50" xmlns="http://www.w3.org/2000/svg" style="width:52px;height:32px"><ellipse cx="25" cy="32" rx="18" ry="14" fill="#2A3B4D" opacity=".85"/><ellipse cx="40" cy="26" rx="20" ry="16" fill="#1DB95A" opacity=".9"/><ellipse cx="57" cy="30" rx="16" ry="13" fill="#3A5068" opacity=".85"/></svg>`;
-  // Header brand: small logo if present, else the company name text.
-  const _phBrand = _bl
-    ? `<img src="${_bl}" style="max-height:26px;max-width:150px;object-fit:contain">`
-    : `${_bn}`;
+  const _btag = (typeof _BRAND!=='undefined' && _BRAND && _BRAND.tagline) ? String(_BRAND.tagline) : '';
+  const _bcontact = (typeof _BRAND!=='undefined' && _BRAND && _BRAND.contact) ? String(_BRAND.contact) : '';
+  function esc(s){
+    return String(s==null?'':s).replace(/[&<>"']/g, function(ch){
+      return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch];
+    });
+  }
+  function filled(s){
+    s = String(s==null?'':s).replace(/^\s+|\s+$/g,'');
+    if(!s || s.charAt(0)==='[') return '';
+    return s;
+  }
+  function moneyRow(label, val){
+    if(!(+val > 0)) return '';
+    return '<tr><td>'+label+'</td><td style="text-align:right">'+c.fmt(val)+'</td></tr>';
+  }
+  var footLeft = esc(_bn) + (_btag ? ' · ' + esc(_btag) : '');
+  function footer(pg){
+    return '<div class="pg">'+pg+'</div><div class="footer"><span>'+footLeft+'</span><span>'+esc(propNum)+' · Confidential</span></div>';
+  }
+  function head(docTitle){
+    var brand = _bl
+      ? '<img src="'+_bl+'" alt="" style="max-height:26px;max-width:150px;object-fit:contain">'
+      : esc(_bn);
+    return '<div class="ph"><div class="ph-brand">'+brand+'</div><div class="ph-doc"><strong>'+docTitle+'</strong>'+esc(proj)+' · '+esc(propNum)+'</div></div>';
+  }
+
+  var addrF = filled(addr), clientF = filled(client), utilityF = filled(utility);
+  var repF = filled(rep) || _bn;
+  var tagHtml = _btag ? '<div class="cover-tag">'+esc(_btag)+'</div>' : '';
+  var logoInner = _bl
+    ? '<img src="'+_bl+'" alt="" style="max-height:44px;max-width:200px;object-fit:contain">'
+    : '';
+  var brandBlock = logoInner
+    ? '<div class="cover-brand">'+logoInner+'<div><div class="cover-name">'+esc(_bn)+'</div>'+tagHtml+'</div></div>'
+    : '<div class="cover-brand"><div><div class="cover-name">'+esc(_bn)+'</div>'+tagHtml+'</div></div>';
+  var coverMeta = '';
+  if(clientF) coverMeta += '<div><label>Prepared for</label><p>'+esc(clientF)+'</p></div>';
+  if(utilityF) coverMeta += '<div><label>Utility</label><p>'+esc(utilityF)+'</p></div>';
+  coverMeta += '<div><label>Prepared by</label><p>'+esc(repF)+'<br><span class="meta-sub">'+esc(_bn)+'</span></p></div>';
+  coverMeta += '<div><label>Proposal</label><p>'+esc(propNum)+'<br><span class="meta-sub">'+esc(today)+'</span></p></div>';
+  if(filled(_bcontact)) coverMeta += '<div><label>Contact</label><p>'+esc(_bcontact)+'</p></div>';
+  var addrLine = addrF ? '<p class="cover-addr">'+esc(addrF)+'</p>' : '';
+
+  var equipEmpty = !bessRows || String(bessRows).indexOf('No equipment placed') >= 0;
+  var condEmpty = !condRows || String(condRows).indexOf('No conduit runs') >= 0;
+  var equipTable = '';
+  if(!equipEmpty){
+    var sub = (+c.bessTotal > 0)
+      ? '<tfoot><tr class="sub"><td colspan="3"><strong>'+esc(_pt.equipLabel||'Equipment')+' subtotal</strong></td><td style="text-align:right">'+c.fmt(c.bessTotal)+'</td></tr></tfoot>'
+      : '';
+    equipTable = '<p class="body">Placed on the site map for this '+(_pt.specNoun||'project')+'.</p>'
+      + '<table class="tbl"><thead><tr><th>Item</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit cost</th><th style="text-align:right">Extended</th></tr></thead>'
+      + '<tbody>'+bessRows+'</tbody>'+sub+'</table>';
+  }
+  var condTable = '';
+  if(!condEmpty){
+    condTable = '<h3 class="sub">Conduit and cable</h3><table class="tbl"><thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Material</th><th style="text-align:right">Labor</th><th style="text-align:right">Extended</th></tr></thead><tbody>'
+      + condRows + '</tbody>'
+      + ((+c.condCost > 0) ? '<tfoot><tr class="sub"><td colspan="4"><strong>Conduit subtotal</strong></td><td style="text-align:right">'+c.fmt(c.condCost)+'</td></tr></tfoot>' : '')
+      + '</table>';
+  }
+  var pods = +c.computePods || 0;
+  var costRows = [
+    c.computeCost > 0 ? '<tr><td>Compute · '+pods+' pod'+(pods===1?'':'s')+' · '+(+c.computeMw||0).toFixed(1)+' MW IT'+(c.computeExclIt ? ' (enclosures only)' : '')+(c.computeBench ? ' (benchmark)' : '')+'</td><td style="text-align:right">'+c.fmt(c.computeCost)+'</td></tr>' : '',
+    c.genCost > 0 ? '<tr><td>On-site generation · '+(+c.genUnits||0)+' · '+Math.round(+c.genKw||0).toLocaleString()+' kW (benchmark)</td><td style="text-align:right">'+c.fmt(c.genCost)+'</td></tr>' : '',
+    c.dcCost > 0 ? '<tr><td>Data-centre electrical (rough order)</td><td style="text-align:right">'+c.fmt(c.dcCost)+'</td></tr>' : '',
+    c.solarCost > 0 ? '<tr><td>Solar PV · '+Math.round(+c.solarKwDc||0).toLocaleString()+' kW-DC</td><td style="text-align:right">'+c.fmt(c.solarCost)+'</td></tr>' : '',
+    moneyRow(esc(_pt.equipLabel||'Equipment'), c.bessEqCost),
+    moneyRow('Installation labor', c.labor),
+    moneyRow('Conduit and trenching', c.condCost),
+    moneyRow('Site equipment', c.siteEq),
+    moneyRow('EV charging', c.evCost),
+    moneyRow('Building envelope', c.bnzCost),
+    moneyRow('Engineering, permitting and commissioning', c.indirect),
+    (c.emsOn && +c.emsCost > 0) ? moneyRow('Controls software, first year', c.emsCost) : '',
+    (+c.cont > 0) ? moneyRow('Contingency ('+c.contPct+'%)', c.cont) : ''
+  ].filter(Boolean).join('');
+  var notes = '';
+  if(c.computeBench && c.totalHigh > c.totalLow){
+    notes += '<tr><td colspan="2" class="note">Range '+c.fmt(c.totalLow)+' – '+c.fmt(c.totalHigh)+'. Compute uses the operator benchmark until a vendor quote replaces it.</td></tr>';
+  }
+  if(c.itcBasis > 0 && c.itcBasis < c.total){
+    notes += '<tr><td colspan="2" class="note">Federal energy-property basis: '+c.fmt(c.itcBasis)+'. Compute, gas generation, data-centre electrical and buildings are outside that basis.</td></tr>';
+  }
+
+  var incHtml = '';
+  var incTotal = 0;
+  try {
+    if(typeof _syncComedToIncentives === 'function') {
+      var comedEl = document.getElementById('comed-toggle');
+      _syncComedToIncentives(!!(comedEl && comedEl.checked));
+    }
+    var list = (typeof _incentives !== 'undefined' && _incentives) ? _incentives.filter(function(i){ return i && i.enabled; }) : [];
+    var kwhCalc = (typeof omegaIncentiveKwh==='function') ? (+omegaIncentiveKwh() || 0) : 0;
+    var gross = ((typeof omegaItcBasis==='function') ? (+omegaItcBasis() || 0) : 0) || c.total || 0;
+    if(list.length){
+      var irows = list.map(function(inc){
+        var val = 0;
+        if(inc.type==='pct-project') val = gross * (+inc.rate||0)/100;
+        else if(inc.type==='per-kwh') val = kwhCalc * (+inc.rate||0);
+        else val = +inc.customValue || 0;
+        incTotal += val;
+        var valStr = (inc.type==='fixed' && !val) ? 'Value not entered' : c.fmt(val);
+        var note = filled(inc.notes) || filled(inc.desc) || '';
+        return '<tr><td class="strong">'+esc(inc.name||'Incentive')+'</td><td>'+esc(inc.tag||'')+'</td><td class="note">'+esc(note)+'</td><td class="money">'+valStr+'</td></tr>';
+      }).join('');
+      incHtml = '<h3 class="sub">Incentives on this project</h3><table class="tbl"><thead><tr><th>Program</th><th>Kind</th><th>Notes</th><th style="text-align:right">Estimated value</th></tr></thead><tbody>'
+        + irows
+        + (incTotal > 0
+          ? '<tr class="sub"><td colspan="3">Incentives</td><td style="text-align:right">'+c.fmt(incTotal)+'</td></tr><tr class="total"><td colspan="3">Net of incentives</td><td style="text-align:right">'+c.fmt(gross - incTotal)+'</td></tr>'
+          : '')
+        + '</tbody></table>';
+    }
+  } catch(eInc){}
+
+  var showEcon = !!(payback || irr || incHtml);
+  var econNote = (payback || irr)
+    ? '<p class="body">Payback and return use the value-stack estimate already run for this project. They are a screening, not a lender quote.</p>'
+    : (incHtml ? '<p class="body">Incentive figures use the programs turned on for this project.</p>' : '');
+
+  var page = 1;
+  var coverPg = page++;
+  var costPg = page++;
+  var mapPg = sitemapDataUrl ? page++ : 0;
+  var econPg = showEcon ? page++ : 0;
+  var loaPg = page;
+  var sec = 1;
+  var costSec = sec++;
+  var mapSec = mapPg ? sec++ : 0;
+  var econSec = econPg ? sec++ : 0;
+  var noun = _pt.specNoun || 'project';
+  var where = addrF ? esc(addrF) : 'the site in this proposal';
 
   return `<!DOCTYPE html><html><head><meta charset="UTF-8">
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'DM Sans',sans-serif;background:#d8e0e8;color:#16202B}
 .page{width:816px;min-width:816px;background:#fff;margin:0 auto 20px;box-shadow:0 4px 24px rgba(0,0,0,.15);page-break-after:always;position:relative;overflow:hidden}
 .page-inner{padding:52px 64px}
-.cover-page{background:#ffffff;color:#16202B}
 .cover-page .page-inner{padding:72px 64px;min-height:1056px;display:flex;flex-direction:column}
-.cover-title{font-size:42px;font-weight:700;color:#16202B;line-height:1.15;margin-bottom:16px;font-family:'DM Sans',sans-serif}
-.cover-sub{font-size:16px;color:#5A7088;margin-bottom:40px;font-weight:300}
-.cover-divider{width:60px;height:3px;background:${GREEN};border-radius:2px;margin:30px 0}
-.cover-badge{display:inline-flex;align-items:center;gap:6px;background:rgba(29,185,90,.12);border:1px solid rgba(29,185,90,.3);border-radius:20px;padding:6px 14px;font-size:11px;color:${GREEN};font-weight:600;margin-bottom:30px}
-.cover-meta{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:30px}
-.cover-meta label{font-size:9px;text-transform:uppercase;letter-spacing:1.5px;color:#5A7088;display:block;margin-bottom:4px}
-.cover-meta p{font-size:13px;color:#16202B;font-weight:500}
-.ph{display:flex;align-items:center;justify-content:space-between;padding-bottom:18px;margin-bottom:28px;border-bottom:2px solid #EBF0F5}
+.cover-brand{display:flex;align-items:center;gap:12px;margin-bottom:56px}
+.cover-name{font-size:22px;font-weight:700;line-height:1.1;color:#16202B}
+.cover-tag{font-size:12px;color:#5A7088;margin-top:4px}
+.cover-badge{display:inline-block;background:rgba(29,185,90,.12);border:1px solid rgba(29,185,90,.35);border-radius:20px;padding:6px 14px;font-size:11px;font-weight:700;letter-spacing:.04em;color:${GREEN};margin-bottom:28px}
+.cover-rule{width:56px;height:3px;background:${GREEN};border-radius:2px;margin:0 0 28px}
+.cover-title{font-size:40px;font-weight:700;line-height:1.15;color:#16202B;margin-bottom:14px}
+.cover-sub{font-size:18px;font-weight:600;color:#16202B;margin-bottom:8px}
+.cover-addr{font-family:'DM Mono',monospace;font-size:13px;color:#5A7088;margin-bottom:16px}
+.cover-intro{font-size:13px;line-height:1.65;color:#3A5068;max-width:480px;margin-bottom:28px}
+.cover-meta{margin-top:auto;display:grid;grid-template-columns:1fr 1fr;gap:22px 32px}
+.cover-meta label{display:block;font-size:10px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:#5A7088;margin-bottom:4px}
+.cover-meta p{font-size:14px;font-weight:600;color:#16202B;line-height:1.45}
+.meta-sub{font-size:12px;font-weight:500;color:#5A7088}
+.ph{display:flex;align-items:center;justify-content:space-between;padding-bottom:16px;margin-bottom:26px;border-bottom:2px solid #E6EEF4}
 .ph-brand{font-size:18px;font-weight:700;color:${DARK}}
-.ph-brand span{color:${GREEN}}
-.ph-doc{font-size:10px;color:#8BA0B4;text-align:right;line-height:1.5}
-.ph-doc strong{color:${DARK};display:block;font-size:11px}
-.section-label{font-size:9px;font-weight:600;text-transform:uppercase;letter-spacing:1.5px;color:${GREEN};margin-bottom:14px;display:block}
-.section-title{font-size:22px;font-weight:700;color:${DARK};margin-bottom:6px}
-h3.sub{font-size:14px;font-weight:600;color:${DARK};margin:24px 0 10px;display:flex;align-items:center;gap:8px}
-h3.sub::before{content:'';width:3px;height:16px;background:${GREEN};border-radius:2px;display:block}
-p.body{font-size:12px;color:#3A5068;line-height:1.7;margin-bottom:12px}
-.tbl{width:100%;border-collapse:collapse;margin-bottom:20px;font-size:12px}
-.tbl th{background:#F0F5FA;text-align:left;padding:9px 12px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#4A6080;border-bottom:2px solid #D8E5EF}
-.tbl td{padding:9px 12px;border-bottom:1px solid #EBF0F5;color:#1A2E40;vertical-align:top}
-.tbl .total td{background:${DARK};color:#fff;font-weight:700;font-size:13px}
-.tbl .sub td{background:#EBF5F0;font-weight:600;color:#0A3020}
-.spec-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:20px}
-.spec-card{background:#F7FAFB;border:1px solid #E0EAF2;border-radius:8px;padding:14px}
-.spec-card h4{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:#4A6080;margin-bottom:10px}
-.spec-row{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px;font-size:11px}
-.spec-row .sk{color:#4A6080}.spec-row .sv{font-weight:600;color:#16202B;font-family:'DM Mono',monospace}
-.fin-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:20px}
-.fin-card{border-radius:10px;padding:18px;text-align:center}
-.fin-green{background:linear-gradient(135deg,#0A3020,#0F4A2F);color:#fff}
-.fin-blue{background:linear-gradient(135deg,#0A1E40,#0F2A5A);color:#fff}
-.fin-amber{background:linear-gradient(135deg,#3A2000,#5A3200);color:#fff}
-.fin-val{font-size:26px;font-weight:700}.fin-lbl{font-size:10px;opacity:.7;margin-top:4px}
+.ph-doc{font-size:11px;color:#5A7088;text-align:right;line-height:1.45}
+.ph-doc strong{display:block;color:${DARK};font-size:12px}
+.section-label{display:block;font-size:11px;font-weight:700;letter-spacing:.12em;text-transform:uppercase;color:${GREEN};margin-bottom:8px}
+.section-title{font-size:26px;font-weight:700;color:${DARK};margin-bottom:12px}
+h3.sub{font-size:15px;font-weight:700;color:${DARK};margin:22px 0 10px;padding-left:10px;border-left:3px solid ${GREEN}}
+p.body{font-size:13px;color:#3A5068;line-height:1.65;margin-bottom:14px}
+.tbl{width:100%;border-collapse:collapse;margin:0 0 8px;font-size:13px}
+.tbl th{background:#F4F7FA;text-align:left;padding:8px 12px;font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:#4A6080;border-bottom:2px solid #D5E2EC}
+.tbl td{padding:8px 12px;border-bottom:1px solid #E8EEF3;color:#1A2E40;vertical-align:top}
+.tbl .total td{background:${DARK};color:#fff;font-weight:700;font-size:14px}
+.tbl .sub td{background:#E8F6EE;font-weight:700;color:#0A3020}
+.tbl .note{font-size:11px;line-height:1.5;color:#4A6080}
+.tbl .strong{font-weight:700}
+.tbl .money{text-align:right;font-weight:700;color:#166534}
+.fin-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin:8px 0 16px}
+.fin-card{border-radius:10px;padding:16px 12px;text-align:center;color:#fff}
+.fin-green{background:#0E3B28}
+.fin-blue{background:#102848}
+.fin-amber{background:#3A2808}
+.fin-val{font-size:26px;font-weight:700;line-height:1.1}
+.fin-lbl{font-size:11px;margin-top:6px;opacity:.85}
 .loa-page{background:#FFFEF8;border-top:8px solid ${GREEN}}
-.pg{position:absolute;bottom:20px;right:30px;font-size:9px;color:#8BA0B4;font-family:'DM Mono',monospace}
-.footer{display:flex;justify-content:space-between;align-items:center;padding-top:20px;margin-top:30px;border-top:1px solid #EBF0F5;font-size:9px;color:#8BA0B4}
+.loa-box{background:#F4FAF7;border:1px solid #C5DDD2;border-radius:10px;padding:22px;margin:8px 0 28px}
+.loa-box h3{font-size:15px;font-weight:700;color:#0A3020;margin-bottom:8px}
+.loa-box p{font-size:13px;color:#2A4A38;line-height:1.65}
+.signs{display:grid;grid-template-columns:1fr 1fr;gap:36px;margin-top:28px}
+.sign-line{height:48px;border-bottom:1px solid #16202B;margin-bottom:8px}
+.sign-name{font-size:14px;font-weight:700;color:#16202B}
+.sign-role{font-size:11px;color:#4A6080;margin-top:2px}
+.sign-date{font-size:11px;color:#4A6080;margin-top:10px}
+.map-frame{border:1px solid #E6EEF4;border-radius:8px;overflow:hidden;background:#16202B}
+.map-frame img{max-width:100%;height:auto;display:block}
+.pg{position:absolute;bottom:18px;right:28px;font-size:10px;color:#8BA0B4;font-family:'DM Mono',monospace}
+.footer{display:flex;justify-content:space-between;align-items:center;padding-top:18px;margin-top:28px;border-top:1px solid #E6EEF4;font-size:10px;color:#8BA0B4}
 @media print{body{background:#fff}.page{margin:0;box-shadow:none;page-break-after:always}*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important}}
 </style></head><body>
 
-<!-- PAGE 1: COVER -->
 <div class="page cover-page">
-  <svg style="position:absolute;right:0;top:0;bottom:0;width:340px;pointer-events:none;overflow:hidden;opacity:.06" viewBox="0 0 340 1050" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMaxYMid slice">
-    <circle cx="300" cy="200" r="220" fill="none" stroke="#1DB95A" stroke-width="1"/>
-    <circle cx="300" cy="200" r="320" fill="none" stroke="#1DB95A" stroke-width=".5"/>
-    <circle cx="300" cy="600" r="180" fill="none" stroke="#1DB95A" stroke-width=".5"/>
-  </svg>
   <div class="page-inner">
-    <div style="display:flex;align-items:center;gap:12px;margin-bottom:60px">
-      ${_coverLogo}
-      <div>
-        <div style="font-family:'DM Sans',sans-serif;font-size:22px;color:#16202B;font-weight:700;line-height:1">${_bn}</div>
-        <div style="font-size:11px;color:#5A7088;font-weight:500;letter-spacing:.5px;display:block;margin-top:2px">${_btag}</div>
-      </div>
-    </div>
-    <div class="cover-badge">${_pt.badge} -- CONFIDENTIAL</div>
-    <div class="cover-divider"></div>
+    ${brandBlock}
+    <div class="cover-badge">${esc(_pt.badge)} · Confidential</div>
+    <div class="cover-rule"></div>
     <div class="cover-title">${_pt.title}</div>
-    <div class="cover-sub">${proj}</div>
-    <p style="font-size:13px;color:#5A7088;margin-bottom:10px;font-family:'DM Mono',monospace">${addr}</p>
-    <p style="font-size:12px;color:#4A6080;max-width:480px;line-height:1.6;margin-bottom:30px">${_pt.intro}</p>
-    <div class="cover-meta">
-      <div><label>Prepared For</label><p>${client}</p></div>
-      <div><label>Utility Provider</label><p>${utility||'See Proposal'}</p></div>
-      <div><label>Prepared By</label><p>${rep}<br><span style="font-size:11px;color:#5A7088">${_bn}</span></p></div>
-      <div><label>Proposal #</label><p>${propNum}<br><span style="font-size:11px;color:#5A7088">${today}</span></p></div>
-    </div>
+    <div class="cover-sub">${esc(proj)}</div>
+    ${addrLine}
+    <p class="cover-intro">${esc(_pt.intro)}</p>
+    <div class="cover-meta">${coverMeta}</div>
+    ${footer(coverPg)}
   </div>
 </div>
 
-<!-- PAGE 2: SYSTEM SPECS & COST -->
 <div class="page">
   <div class="page-inner">
-    <div class="ph">
-      <div class="ph-brand">${_phBrand}</div>
-      <div class="ph-doc"><strong>Technical & Pricing Proposal</strong>${proj} . ${propNum}</div>
-    </div>
-    <span class="section-label">Section 1 -- Equipment Specification</span>
+    ${head('Equipment and cost')}
+    <span class="section-label">Section ${costSec}</span>
     <h2 class="section-title">${_pt.spec}</h2>
-    <p class="body">The following ${_pt.specNoun||'system'} configuration has been designed for your site based on load analysis, utility requirements, and project economics.</p>
-
-    <table class="tbl">
-      <thead><tr><th>Unit</th><th style="text-align:right">Qty</th><th style="text-align:right">Unit Cost</th><th style="text-align:right">Extended</th></tr></thead>
-      <tbody>${bessRows}</tbody>
-      <tfoot><tr class="sub"><td colspan="3"><strong>${_pt.equipLabel||'Equipment'} Subtotal</strong></td><td style="text-align:right">${c.fmt(c.bessTotal)}</td></tr></tfoot>  <!-- includes equipment + install -->
-    </table>
-
-    <h3 class="sub">Conduit & Cable Runs</h3>
-    <table class="tbl">
-      <thead><tr><th>Description</th><th style="text-align:right">Qty</th><th style="text-align:right">Mat/ft</th><th style="text-align:right">Labor/ft</th><th style="text-align:right">Extended</th></tr></thead>
-      <tbody>${condRows}</tbody>
-      <tfoot><tr class="sub"><td colspan="4"><strong>Conduit Subtotal</strong></td><td style="text-align:right">${c.fmt(c.condCost)}</td></tr></tfoot>
-    </table>
-
-    <h3 class="sub">Project Cost Summary</h3>
+    ${equipTable}
+    ${condTable}
+    <h3 class="sub">Cost summary</h3>
     <table class="tbl">
       <tbody>
-        ${c.computeCost > 0 ? `<tr><td>Compute pods \u00d7${c.computePods} \u2014 ${c.computeMw.toFixed(1)} MW IT${c.computeExclIt ? ' (enclosures only)' : ', all-in'}${c.computeBench ? ' <em>(benchmark)</em>' : ''}</td><td style="text-align:right">${c.fmt(c.computeCost)}</td></tr>` : ''}
-        ${c.genCost > 0 ? `<tr><td>On-site generation \u00d7${c.genUnits} \u2014 ${Math.round(c.genKw).toLocaleString()} kW <em>(benchmark)</em></td><td style="text-align:right">${c.fmt(c.genCost)}</td></tr>` : ''}
-        ${c.dcCost > 0 ? `<tr><td>Data-centre electrical package (ROM)</td><td style="text-align:right">${c.fmt(c.dcCost)}</td></tr>` : ''}
-        ${c.solarCost > 0 ? `<tr><td>Solar PV \u2014 ${Math.round(c.solarKwDc).toLocaleString()} kW-DC</td><td style="text-align:right">${c.fmt(c.solarCost)}</td></tr>` : ''}
-        <tr><td>Equipment (${_pt.equipLabel||'Equipment'})</td><td style="text-align:right">${c.fmt(c.bessEqCost)}</td></tr>
-        <tr><td>Conduit & Trenching</td><td style="text-align:right">${c.fmt(c.condCost)}</td></tr>
-        <tr><td>Installation Labor</td><td style="text-align:right">${c.fmt(c.labor)}</td></tr>
-        ${c.siteEq > 0 ? `<tr><td>Site Equipment</td><td style="text-align:right">${c.fmt(c.siteEq)}</td></tr>` : ''}
-        ${c.evCost > 0 ? `<tr><td>EV Charging</td><td style="text-align:right">${c.fmt(c.evCost)}</td></tr>` : ''}
-        ${c.bnzCost > 0 ? `<tr><td>Building Envelope</td><td style="text-align:right">${c.fmt(c.bnzCost)}</td></tr>` : ''}
-        <tr><td>Engineering & Inspection</td><td style="text-align:right">${c.fmt(c.indirect)}</td></tr>
-        <tr><td>EMS Software (yr1)${c.emsOn ? '' : ' -- OFF'}</td><td style="text-align:right">${c.emsOn ? c.fmt(c.emsCost) : '$--'}</td></tr>
-        <tr><td>Contingency (${c.contPct}%)</td><td style="text-align:right">${c.fmt(c.cont)}</td></tr>
-        <tr class="total"><td><strong>TOTAL PROJECT COST</strong></td><td style="text-align:right"><strong>${c.fmt(c.total)}</strong></td></tr>
-        ${c.computeBench && c.totalHigh > c.totalLow ? `<tr><td colspan="2" style="font-size:10px;color:#92400E">Range ${c.fmt(c.totalLow)} \u2013 ${c.fmt(c.totalHigh)}. Compute pods carry the operator benchmark of $20\u201340M per MW (all-in) until a vendor quote replaces it. On-site generation is at the EIA class benchmark; balance of plant excluded.</td></tr>` : ''}
-        ${c.itcBasis > 0 && c.itcBasis < c.total ? `<tr><td colspan="2" style="font-size:10px;color:#475569">Federal ITC basis (energy property only): ${c.fmt(c.itcBasis)}. Compute, gas generation, DC electrical and buildings are not eligible.</td></tr>` : ''}
+        ${costRows}
+        <tr class="total"><td>Total project cost</td><td style="text-align:right">${c.fmt(c.total)}</td></tr>
+        ${notes}
       </tbody>
     </table>
-    <div class="pg">2</div>
-    <div class="footer"><span>${brandName()} . Battery Energy Storage</span><span>${propNum} . Confidential</span></div>
+    ${footer(costPg)}
   </div>
 </div>
 
 ${sitemapDataUrl ? `
-<!-- PAGE 3: SITEMAP -->
 <div class="page">
   <div class="page-inner">
-    <div class="ph">
-      <div class="ph-brand">${_phBrand}</div>
-      <div class="ph-doc"><strong>Site Map</strong>${proj} . ${propNum}</div>
-    </div>
-    <span class="section-label">Section 2 -- Site Layout</span>
-    <h2 class="section-title">Site Map</h2>
-    <p class="body" style="margin-bottom:16px">The site map below shows the proposed BESS installation layout including equipment placement, conduit routing, and site infrastructure.</p>
-    <div style="border:1px solid #EBF0F5;border-radius:8px;overflow:hidden;background:#16202B;text-align:center;padding:4px">
-      <img src="${sitemapDataUrl}" style="max-width:100%;height:auto;display:block;border-radius:4px" alt="Site Map">
-    </div>
-    <div style="margin-top:12px;display:flex;gap:16px;flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#4A6080"><span style="width:20px;height:3px;background:#DC2626;display:inline-block;border-radius:1px"></span>DC Power Conduit</div>
-      <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#4A6080"><span style="width:20px;height:3px;background:#F59E0B;display:inline-block;border-radius:1px"></span>AC Power Conduit</div>
-      <div style="display:flex;align-items:center;gap:5px;font-size:10px;color:#4A6080"><span style="width:20px;height:3px;background:#2563EB;display:inline-block;border-radius:1px"></span>BMS / Control</div>
-    </div>
-    <div class="pg">3</div>
-    <div class="footer"><span>${brandName()} . Battery Energy Storage</span><span>${propNum} . Confidential</span></div>
+    ${head('Site map')}
+    <span class="section-label">Section ${mapSec}</span>
+    <h2 class="section-title">Site map</h2>
+    <p class="body">The drawing below is the ${noun} as laid out on the site, including the equipment and runs on the map.</p>
+    <div class="map-frame"><img src="${sitemapDataUrl}" alt="Site map"></div>
+    ${footer(mapPg)}
   </div>
 </div>
 ` : ''}
 
-<!-- PAGE ${sitemapDataUrl?4:3}: FINANCIAL SUMMARY -->
+${showEcon ? `
 <div class="page">
   <div class="page-inner">
-    <div class="ph">
-      <div class="ph-brand">${_phBrand}</div>
-      <div class="ph-doc"><strong>Financial Summary</strong>${proj} . ${propNum}</div>
-    </div>
-    <span class="section-label">Section ${sitemapDataUrl?3:2} -- Financial Analysis</span>
-    <h2 class="section-title">Project Economics</h2>
+    ${head('Project economics')}
+    <span class="section-label">Section ${econSec}</span>
+    <h2 class="section-title">Project economics</h2>
     <div class="fin-grid">
-      <div class="fin-card fin-green"><div class="fin-val">${c.fmt(c.total)}</div><div class="fin-lbl">Gross Investment</div></div>
-      <div class="fin-card fin-blue"><div class="fin-val">${payback ? payback+' yrs' : '&mdash;'}</div><div class="fin-lbl">${payback ? 'Est. Simple Payback' : 'Payback &mdash; run the Value Stack'}</div></div>
-      <div class="fin-card fin-amber"><div class="fin-val">${irr ? irr+'%' : '&mdash;'}</div><div class="fin-lbl">${irr ? 'Projected IRR (20 yr)' : 'IRR &mdash; run the Value Stack'}</div></div>
-      ${(()=>{
-        const kwh_kpi = omegaIncentiveKwh();
-        let inc = 0;
-        (_incentives||[]).filter(i=>i.enabled).forEach(i=>{
-          if(i.type==='pct-project') inc+=omegaItcBasis()*i.rate/100;
-          else if(i.type==='per-kwh') inc+=kwh_kpi*i.rate;
-          else inc+=i.customValue||0;
-        });
-        return inc > 0
-          ? `<div class="fin-card" style="background:#EFF6FF;border:1px solid #BFDBFE"><div class="fin-val" style="color:#1D4ED8">${c.fmt(c.total-inc)}</div><div class="fin-lbl" style="color:#3B82F6">Net After Incentives</div></div>`
-          : '';
-      })()}
+      <div class="fin-card fin-green"><div class="fin-val">${c.fmt(c.total)}</div><div class="fin-lbl">Project cost</div></div>
+      <div class="fin-card fin-blue"><div class="fin-val">${payback ? payback+' yrs' : '—'}</div><div class="fin-lbl">${payback ? 'Simple payback' : 'Payback needs a value stack'}</div></div>
+      <div class="fin-card fin-amber"><div class="fin-val">${irr ? irr+'%' : '—'}</div><div class="fin-lbl">${irr ? '20-year IRR' : 'IRR needs a value stack'}</div></div>
     </div>
-    <p class="body">Battery energy storage systems generate revenue through multiple streams including demand charge management, capacity payments, ancillary services, and participation in virtual power plant programs.</p>
-    <h3 class="sub">Incentives & Rebates Applied</h3>
-    <p class="body">The following incentives are included in the project financial analysis based on your selections:</p>
-    <table class="tbl">
-      <thead><tr><th>Program</th><th>Type</th><th>Notes</th><th style="text-align:right">Estimated Value</th></tr></thead>
-      <tbody>
-        ${(()=>{
-          // Sync comed state one final time before building
-          if(typeof _syncComedToIncentives === 'function') {
-            _syncComedToIncentives(document.getElementById('comed-toggle')?.checked ?? false);
-          }
-          // Seed _incentives if empty
-          if(!_incentives || _incentives.length === 0) {
-            const comedOn   = document.getElementById('comed-toggle')?.checked ?? false;
-            const comedRate = +(document.getElementById('comed-rate')?.value || 250);
-            _incentives = INC_CATALOG.map(cat => ({
-              ...cat,
-              enabled: cat.id === 'comed' ? comedOn : ['itc'].includes(cat.id),
-              rate: cat.id === 'comed' ? comedRate : cat.rate,
-              customValue: 0, notes: ''
-            }));
-          }
-          const kwh_calc = omegaIncentiveKwh();
-          const grossCost_calc = omegaItcBasis() || c.total || 0;
-          const enabled = _incentives.filter(i => i.enabled);
-          if (!enabled.length) return `<tr><td colspan="4" style="text-align:center;color:#8BA0B4;padding:14px">No incentives selected -- enable incentives in the Cost Estimator tab</td></tr>`;
-          return enabled.map(inc => {
-            let val = 0;
-            if(inc.type==='pct-project') val = grossCost_calc * inc.rate/100;
-            else if(inc.type==='per-kwh') val = kwh_calc * inc.rate;
-            else val = inc.customValue || 0;
-            const valStr = inc.type==='fixed' && val===0 ? 'Value TBD' : c.fmt(val);
-            const tagColors = {tax:'#A78BFA',rebate:'#1DB95A',revenue:'#F59E0B',custom:'#00D4FF'};
-            const tagColor = tagColors[inc.tag] || '#8BA0B4';
-            return `<tr>
-              <td style="font-weight:600">${inc.name}</td>
-              <td><span style="background:rgba(0,0,0,.06);border-radius:4px;padding:2px 8px;font-size:10px;color:${tagColor};font-weight:700;text-transform:uppercase">${inc.tag}</span></td>
-              <td style="color:#6B8CA0;font-size:10px">${inc.notes||inc.desc||'--'}</td>
-              <td style="text-align:right;font-weight:700;color:#1DB95A">${valStr}</td>
-            </tr>`;
-          }).join('');
-        })()}
-        ${(()=>{
-          // Total row
-          const kwh_calc = omegaIncentiveKwh();
-          const grossCost_calc = omegaItcBasis() || c.total || 0;
-          let incTotal = 0;
-          (_incentives||[]).filter(i=>i.enabled).forEach(inc=>{
-            if(inc.type==='pct-project') incTotal += grossCost_calc*inc.rate/100;
-            else if(inc.type==='per-kwh') incTotal += kwh_calc*inc.rate;
-            else incTotal += inc.customValue||0;
-          });
-          const net = grossCost_calc - incTotal;
-          return incTotal > 0 ? `
-            <tr style="background:#F0FFF4;border-top:2px solid #1DB95A">
-              <td colspan="3" style="font-weight:800;color:#166534">Total Incentives & Rebates</td>
-              <td style="text-align:right;font-weight:800;color:#166534">  ${c.fmt(incTotal)}</td>
-            </tr>
-            <tr style="background:#EFF6FF;border-top:1px solid #BFDBFE">
-              <td colspan="3" style="font-weight:900;color:#1D4ED8;font-size:13px">Net to Owner</td>
-              <td style="text-align:right;font-weight:900;color:#1D4ED8;font-size:13px">${c.fmt(net)}</td>
-            </tr>` : '';
-        })()}
-      </tbody>
-    </table>
-    <div class="pg">${sitemapDataUrl?4:3}</div>
-    <div class="footer"><span>${brandName()} . Battery Energy Storage</span><span>${propNum} . Confidential</span></div>
+    ${econNote}
+    ${incHtml}
+    ${footer(econPg)}
   </div>
 </div>
+` : ''}
 
-<!-- PAGE ${sitemapDataUrl?5:4}: LOA -->
 <div class="page loa-page">
   <div class="page-inner">
-    <div class="ph">
-      <div class="ph-brand">${_phBrand}</div>
-      <div class="ph-doc"><strong>Letter of Authorization</strong>${proj} . ${propNum}</div>
-    </div>
+    ${head('Authorization')}
     <span class="section-label">Authorization</span>
-    <h2 class="section-title">Letter of Authorization</h2>
-    <p class="body">This Letter of Authorization authorizes ${brandName()} to act as the authorized representative for the above-referenced project in connection with utility interconnection applications, grant programs, and related permitting activities.</p>
-    <div style="background:#F4FAF7;border:1.5px solid #B8D4C8;border-radius:10px;padding:24px;margin-bottom:24px">
-      <h3 style="font-size:14px;font-weight:700;color:#0A3020;margin-bottom:8px">Project Authorization</h3>
-      <p style="font-size:11px;color:#2A4A38;line-height:1.7">I/We, the undersigned, hereby authorize ${brandName()} to represent our interests in connection with the proposed Battery Energy Storage System installation at <strong>${addr}</strong>. This authorization includes but is not limited to: utility interconnection applications, SGIP/incentive program applications, permit applications, and related activities required for project completion.</p>
+    <h2 class="section-title">Letter of authorization</h2>
+    <p class="body">${esc(_bn)} may act for the customer on utility interconnection, incentive applications, and permits for this project.</p>
+    <div class="loa-box">
+      <h3>Project authorization</h3>
+      <p>The undersigned authorizes ${esc(_bn)} to represent this ${noun} at ${where}. The authorization covers utility interconnection applications, incentive applications, permits, and the related filings needed to build the project.</p>
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:32px">
+    <div class="signs">
       <div>
-        <div style="height:50px;border-bottom:1px solid #16202B;margin-bottom:8px"></div>
-        <div style="font-size:13px;font-weight:700;color:#16202B">${client}</div>
-        <div style="font-size:10px;color:#4A6080;margin-top:2px">Site Owner / Authorized Representative</div>
-        <div style="font-size:10px;color:#4A6080;margin-top:8px;display:flex;justify-content:space-between"><span>Date:</span><span style="flex:1;border-bottom:1px solid #8BA0B4;margin-left:8px"></span></div>
+        <div class="sign-line"></div>
+        <div class="sign-name">${clientF ? esc(clientF) : 'Customer'}</div>
+        <div class="sign-role">Site owner or authorized representative</div>
+        <div class="sign-date">Date</div>
       </div>
       <div>
-        <div style="height:50px;border-bottom:1px solid #16202B;margin-bottom:8px"></div>
-        <div style="font-size:13px;font-weight:700;color:#16202B">${rep}</div>
-        <div style="font-size:10px;color:#4A6080;margin-top:2px">${brandName()} Representative</div>
-        <div style="font-size:10px;color:#4A6080;margin-top:8px;display:flex;justify-content:space-between"><span>Date:</span><span style="flex:1;border-bottom:1px solid #8BA0B4;margin-left:8px"></span></div>
+        <div class="sign-line"></div>
+        <div class="sign-name">${esc(repF)}</div>
+        <div class="sign-role">${esc(_bn)}</div>
+        <div class="sign-date">Date</div>
       </div>
     </div>
-    <div class="pg">${sitemapDataUrl?5:4}</div>
-    <div class="footer"><span>${brandName()} . Battery Energy Storage</span><span>${propNum} . Confidential</span></div>
+    ${footer(loaPg)}
   </div>
 </div>
 
 </body></html>`;
 }
-
 async function renderProposalPDF(html, proj, propNum) {
   // Use iframe + html2canvas approach
   return new Promise((resolve, reject) => {
@@ -50304,7 +50290,7 @@ async function exportPermitPDF() {
         <div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:1.2px;color:var(--sub);margin-bottom:10px;display:flex;align-items:center;gap:6px"><span style="width:3px;height:12px;background:#1DB95A;border-radius:2px;display:inline-block"></span>Project Information</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Project / Site Name</label>
-            <input id="prop-project" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="BESS Installation Site"></div>
+            <input id="prop-project" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Project name"></div>
           <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Site Address</label>
             <input id="prop-address" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="Auto-filled from editor"></div>
           <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Client / Site Owner</label>
@@ -50317,16 +50303,18 @@ async function exportPermitPDF() {
             <input id="prop-num" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit" placeholder="NX-2025-001"></div>
           <div><label style="font-size:10px;color:var(--sub);display:block;margin-bottom:3px">Project Type</label>
             <select id="prop-type" style="width:100%;background:var(--hover);border:1px solid var(--border);color:var(--text);border-radius:6px;padding:6px 10px;font-size:12px;font-family:inherit">
-              <option value="bess">BESS (Battery Storage)</option>
+              <option value="project" selected>Project</option>
               <option value="solar">Solar PV</option>
+              <option value="wind">Wind</option>
               <option value="solar_bess">Solar + Storage</option>
               <option value="ev">EV Charging</option>
+              <option value="bess">Battery storage</option>
               <option value="data">Data / Compute</option>
-              <option value="campus">Compute Campus + On-Site Power</option>
-              <option value="gen">On-Site Generation</option>
-              <option value="ppa">PPA (Power Purchase Agreement)</option>
-              <option value="bess_ev">BESS + EV Charging</option>
-              <option value="bess_data">BESS + Data / Compute</option>
+              <option value="campus">Compute campus + on-site power</option>
+              <option value="gen">On-site generation</option>
+              <option value="ppa">Power purchase agreement</option>
+              <option value="bess_ev">Storage + EV charging</option>
+              <option value="bess_data">Storage + compute</option>
             </select></div>
         </div>
       </div>
@@ -77057,6 +77045,7 @@ window._crmToastModal=_crmToastModal;
   body.omega-dock-left #portal-nav{ grid-area:portal; }
   body.omega-dock-left #tb        { grid-area:tb; }
   body.omega-dock-left #ribbon    { grid-area:ribbon;  height:auto!important;
+                                    display:flex;
                                     flex-direction:column; align-items:stretch;
                                     overflow-y:auto; overflow-x:hidden;
                                     border-right:1px solid var(--border);
@@ -77284,8 +77273,105 @@ window._crmToastModal=_crmToastModal;
     margin:4px 6px; min-width:0; width:calc(100% - 12px); flex-wrap:wrap;
   }
   body.omega-dock-left #omega-addr-in{ font-size:11.5px; }
+
+  /* The address sits on the right of the ribbon on every tab. The tool
+     page scrolls beside it, so a wide Build tab does not push Load off
+     the screen. Dock Left stacks it at the top of the column. */
+  #ribbon{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    grid-template-rows:minmax(0,1fr);
+    align-items:stretch;
+  }
+  #ribbon > .ribbon-page{ grid-column:1; grid-row:1; min-width:0; }
+  #ribbon > .ribbon-page.active{ overflow-x:auto; overflow-y:hidden; }
+  #ribbon > .omega-addr{
+    grid-column:2; grid-row:1;
+    align-self:stretch; justify-content:center;
+    margin:0; border-radius:0; min-width:220px;
+    border-left:1px solid var(--border);
+    background:var(--bg); z-index:4;
+  }
+  body.omega-dock-left #ribbon > .omega-addr{
+    order:-1; position:static; grid-column:auto; grid-row:auto;
+    width:calc(100% - 12px); min-width:0; margin:4px 6px;
+    border-left:none; border-radius:5px; align-self:stretch;
+  }
+  body.omega-dock-left #ribbon > .ribbon-page.active{ overflow:visible; }
 </style>
 <script>
+
+function omegaAddrOk(v){
+  var t=String(v||'').replace(/^\s+|\s+$/g,'');
+  if(t.length<4) return false;
+  return /^\s*\d/.test(t)
+    || /\b(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ln|lane|way|ct|court|pkwy|parkway|hwy|highway|pl|place)\b/i.test(t)
+    || /\b[A-Z]{2}\s*\d{5}(-\d{4})?\b/.test(t)
+    || /,/.test(t);
+}
+/* The address the map was loaded with, then lat/lng, the project id and the
+   project type. The ribbon field wins. A loaded map keeps the address on
+   _lastAddr even when the field is empty, and the geocoded point on
+   _lastCenter / the live map. */
+function omegaSiteFacts(){
+  var addr='', lat=null, lng=null, type='', i, el, v, c, ids;
+  el=document.getElementById('omega-addr-in');
+  v=el&&String(el.value||'').replace(/^\s+|\s+$/g,'');
+  if(v) addr=v;
+  if(!addr){
+    ids=['addr-in','prop-address','bp-address','ps-site-addr','pp-street','np-addr','gps-addr-in'];
+    for(i=0;i<ids.length;i++){
+      el=document.getElementById(ids[i]);
+      v=el&&String(el.value||'').replace(/^\s+|\s+$/g,'');
+      if(v && omegaAddrOk(v)){ addr=v; break; }
+    }
+  }
+  if(!addr){ try{ v=String(window._lastAddr||'').replace(/^\s+|\s+$/g,''); if(omegaAddrOk(v)) addr=v; }catch(e){} }
+  if(!addr){
+    try{
+      if(typeof S!=='undefined' && S){
+        v=String(S.siteAddr||S.address||(S.mapState&&S.mapState.address)||'').replace(/^\s+|\s+$/g,'');
+        if(omegaAddrOk(v)) addr=v;
+      }
+    }catch(e2){}
+  }
+  try{
+    if(window._gmap && _gmap.getCenter){ c=_gmap.getCenter(); if(c && isFinite(c.lat()) && isFinite(c.lng())){ lat=c.lat(); lng=c.lng(); } }
+  }catch(e3){}
+  if(lat==null){ try{ if(window._lastCenter && isFinite(+window._lastCenter.lat) && isFinite(+window._lastCenter.lng)){ lat=+window._lastCenter.lat; lng=+window._lastCenter.lng; } }catch(e4){} }
+  if(lat==null){
+    try{ if(typeof S!=='undefined' && S && isFinite(+S.siteLat) && isFinite(+S.siteLng)){ lat=+S.siteLat; lng=+S.siteLng; } }catch(e5){}
+  }
+  if(lat==null){
+    try{ if(window._savedMapState && isFinite(+window._savedMapState.lat) && isFinite(+window._savedMapState.lng)){ lat=+window._savedMapState.lat; lng=+window._savedMapState.lng; } }catch(e6){}
+  }
+  try{
+    /* The editor publishes the type as OmegaProjectTypes.get (current is
+       not a method). A handoff must not invent one when that reader is
+       missing. */
+    if(window.OmegaProjectTypes && typeof OmegaProjectTypes.get==='function') type=OmegaProjectTypes.get();
+    else if(window.OmegaProjectTypes && typeof OmegaProjectTypes.current==='function') type=OmegaProjectTypes.current();
+    else if(typeof S!=='undefined' && S && S.projectType) type=S.projectType;
+  }catch(e7){}
+  /* The open project's org, else the signed-in workspace. Never a staff
+     directory and never an OEM picked because it is first in a list. */
+  var org='';
+  try{
+    if(window._projectOrgId) org=String(window._projectOrgId);
+    else if(typeof _projOrgId==='function') org=_projOrgId();
+  }catch(e8){}
+  return { addr:addr, lat:lat, lng:lng, type:type, org:org,
+    projectId:(typeof _projectId==='string' && _projectId) ? _projectId : '' };
+}
+/* Site Map to Omega Prime. Push to Logic is the same handoff on the Logic step. */
+function omegaPushPrime(step){
+  var f=omegaSiteFacts(), q='';
+  f.step=step;
+  if(window.OmegaPrimeProject && typeof OmegaPrimeProject.linkQuery==='function') q=OmegaPrimeProject.linkQuery(f);
+  window.open('/omega-prime'+(q?('?'+q):''), '_blank', 'noopener');
+}
+function omegaPushLogic(){ omegaPushPrime('logic'); }
+
 (function(){
   function el(id){ return document.getElementById(id); }
 
@@ -77294,6 +77380,7 @@ window._crmToastModal=_crmToastModal;
     if(!input) return;
     var addr=(input.value||'').trim();
     if(!addr){ input.focus(); return; }
+    try{ window._lastAddr=addr; }catch(e){}
 
     var go=el('omega-addr-go');
     if(go){ go.disabled=true; go.textContent='\u2026'; }
@@ -79556,10 +79643,22 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
   :root{ --ribbon-h: 92px; }
   #ribbon{
     height:auto; min-height:92px;
-    overflow-x:auto; overflow-y:hidden;
-    -webkit-overflow-scrolling:touch; scrollbar-width:none;
-    -webkit-mask-image:linear-gradient(to right,#000 0,#000 calc(100% - 22px),transparent 100%);
-            mask-image:linear-gradient(to right,#000 0,#000 calc(100% - 22px),transparent 100%);
+    overflow:hidden;
+    display:grid;
+    grid-template-columns:minmax(0,1fr);
+    grid-template-rows:auto minmax(92px,auto);
+    -webkit-mask-image:none;
+            mask-image:none;
+  }
+  #ribbon > .omega-addr{
+    grid-column:1; grid-row:1; width:auto; min-width:0; margin:4px 8px 0;
+    align-self:stretch;
+  }
+  #ribbon > .ribbon-page{ grid-row:2; }
+  #ribbon > .ribbon-page.active{
+    -webkit-overflow-scrolling:touch;
+    -webkit-mask-image:linear-gradient(to right,#000 0,#000 calc(100% - 18px),transparent 100%);
+            mask-image:linear-gradient(to right,#000 0,#000 calc(100% - 18px),transparent 100%);
   }
   #ribbon::-webkit-scrollbar{ display:none; }
   #ribbon-tabs{ overflow-x:auto; -webkit-overflow-scrolling:touch; scrollbar-width:none; }

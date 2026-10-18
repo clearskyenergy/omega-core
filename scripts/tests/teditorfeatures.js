@@ -220,4 +220,24 @@ ok(viewRibbon.indexOf('id="rb-site"') > 0 && /Live<br>takeoff/.test(viewRibbon),
 ok(estimateRibbon.indexOf('id="rb-site"') < 0, 'Live takeoff is not left on Estimate');
 ok(ed.indexOf('rpanel-cap">Reports<') > 0, 'Output keeps the Reports caption the grafts look for');
 
+var ground = ed.slice(ed.indexOf('data-omega-slot="ground"'), ed.indexOf('rpanel-cap">Ground'));
+ok(ground.indexOf('omega-addr') < 0, 'the address is not in Build › Ground');
+var ribbonEnd = ed.slice(ed.indexOf('data-page="settings"'), ed.indexOf('id="omega-merged-park"'));
+ok(ribbonEnd.indexOf('id="omega-addr-in"') > 0 && ribbonEnd.indexOf('omegaLoadMap()') > 0, 'the address sits at the right of the ribbon');
+ok(ed.indexOf('id="omega-addr-in"') === ed.lastIndexOf('id="omega-addr-in"'), 'one address field');
+ok(F.featureFor({ id: '', getAttribute: function (k) { return k === 'onclick' ? 'rbRun(openMarketplacePush)' : ''; } }) == null, 'Push to Marketplace is not hidden by Features');
+
+var financeRibbon = ed.slice(ed.indexOf('ribbon-page" data-page="finance"'), ed.indexOf('ribbon-page" data-page="view"'));
+ok(financeRibbon.indexOf('rbRun(openFinancingApply)') > 0 && financeRibbon.indexOf('rbRun(openHeliosIntake)') > 0 && financeRibbon.indexOf('rbRun(openMarketplacePush)') > 0, 'Finance keeps Apply, Helios and Marketplace');
+ok(financeRibbon.indexOf('openFinancingApply') < financeRibbon.indexOf('openHeliosIntake') && financeRibbon.indexOf('openHeliosIntake') < financeRibbon.indexOf('openMarketplacePush'), 'Marketplace sits with Apply and Helios');
+ok(financeRibbon.indexOf('id="rb-push-prime"') > 0 && financeRibbon.indexOf('rbRun(omegaPushPrime)') > 0, 'Finance has Push to Prime');
+ok(financeRibbon.indexOf('id="rb-push-logic"') > 0 && financeRibbon.indexOf('rbRun(omegaPushLogic)') > 0, 'Finance has Push to Logic');
+
+var built = ed.slice(ed.indexOf('function buildProposalHTML'), ed.indexOf('async function renderProposalPDF'));
+ok(built.indexOf('Battery Energy Storage') < 0, 'the proposal does not stamp a battery footer');
+ok(built.indexOf('$--') < 0, 'the proposal does not print a blank dollar figure');
+ok(ed.indexOf("||'project'") > 0 && ed.indexOf('value="project"') > 0, 'the proposal defaults to a project');
+ok(ed.indexOf("badge:'WIND PROPOSAL'") > 0, 'wind is a proposal type');
+ok(ed.indexOf('No conduit runs specified') < 0, 'an empty conduit table is not written into the proposal');
+
 console.log('teditorfeatures: ' + n + ' checks');

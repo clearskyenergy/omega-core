@@ -181,14 +181,14 @@ function seed() {
     assert.deepEqual((await get('tom@clearsky-usa.com', 'acme.example')).access, { role: 'clearsky', prices: 'all', team: true, parts: ['plant', 'materials'] });
     await refused(get('ops@nooffice.example', 'nooffice.example'), 403, /subscription is not active/, 'inactive');
   });
-  await test('the front door lists each workspace with its parts, and a package without Office reads "not active"', async function () {
+  await test('the front door lists each workspace with its parts, and a package without Office reads "not on your plan" with the way to add it', async function () {
     seed();
     function get(email) { return workspaces({ method: 'GET', query: {}, caller: who(email) }, { setHeader: function () {} }); }
     var d = await get('ops@acme.example');
     assert.deepEqual(d.workspaces.map(function (w) { return [w.orgId, w.role, w.parts]; }), [['acme.example', 'admin', ['plant', 'materials']]]);
     assert.deepEqual((await get('ops@oldco.example')).workspaces[0].parts, ['plant', 'materials', 'logistics', 'customer']);
     var closed = await get('ops@nooffice.example');
-    assert.equal(closed.workspaces.length, 0); assert.equal(closed.reason, 'inactive'); assert.match(closed.note, /subscription is not active/);
+    assert.equal(closed.workspaces.length, 0); assert.equal(closed.reason, 'notOnPlan'); assert.match(closed.note, /Omega Logic is not on your company’s plan yet/); assert.equal(closed.home.module, 'logic-office');
     var tom = await get('tom@clearsky-usa.com');
     assert.equal(tom.owner, true); assert.ok(tom.workspaces.every(function (w) { return w.parts === undefined; }), 'the owner\'s directory is names only; the chrome shows ClearSky everything');
   });
@@ -210,28 +210,29 @@ function seed() {
     vm.runInNewContext(SRC, ctx);
     return { T: win.OmegaLogicTheme, nav: nav, store: store };
   }
-  function eyebrows(nav) { var out = [], re = /<p class="eyebrow">([^<]*)<\/p>/g, m; while ((m = re.exec(nav._html))) out.push(m[1].replace(/&amp;/g, '&')); return out; }
+  /* the eight places of the menu (2026-10-17: the menu is the hub) */
+  function eyebrows(nav) { var out = [], re = /<a class="hub[^"]*" data-hub="[^"]*" href="[^"]*"[^>]*>([^<]*)<\/a>/g, m; while ((m = re.exec(nav._html))) out.push(m[1].replace(/&amp;/g, '&')); return out; }
   function links(nav) { var out = [], re = /<a href="([^"]*)"[^>]*>([^<]*)<\/a>/g, m; while ((m = re.exec(nav._html))) out.push(m[2].replace(/&amp;/g, '&')); return out; }
   function plain(v) { return JSON.parse(JSON.stringify(v)); }
   await test('groups(): a link names the part whose endpoint serves it; a group with nothing left is not drawn; not said shows all', async function () {
     var T = page().T;
     function names(parts) { return plain(T.groups('acme.example', false, { parts: parts }).map(function (g) { return g[0] + ': ' + g[1].map(function (l) { return l[1]; }).join(', '); })); }
-    assert.deepEqual(names(null), ['Run the business: Dashboard, Orders, Company POs, Customers, Office app', 'Build: Work order board, Work orders & registration, Plant board, Stations & tablets, Plant app',
-      'Stock & supply: Inventory, Materials plan, Purchase orders, Vendors & prices', 'Deliver: Shipping & receiving, Sites & custody, Fleet register, Quality & holds', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings']);
-    assert.deepEqual(names(['plant']), ['Run the business: Dashboard, Orders, Company POs, Customers, Office app', 'Build: Work order board, Work orders & registration, Plant board, Stations & tablets, Plant app',
-      'Stock & supply: Inventory', 'Deliver: Quality & holds', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings'], 'Plant alone: the shelf (finished units) and Quality are the plant\'s; the plan, the POs and shipping are not');
-    assert.deepEqual(names(['materials', 'logistics']), ['Run the business: Dashboard, Orders, Company POs, Customers, Office app', 'Stock & supply: Materials plan, Purchase orders, Vendors & prices',
-      'Deliver: Shipping & receiving, Sites & custody, Fleet register', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings']);
-    assert.deepEqual(names([]), ['Run the business: Dashboard, Orders, Company POs, Customers, Office app', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings'], 'Office alone runs the business, the money and the setup');
+    assert.deepEqual(names(null), ['Today: Today', 'Sales: Orders, Customer POs', 'Customers: Customers', 'Plant: Work orders, Serials & registration, Plant board, Stations & tablets, Quality & holds',
+      'Deliver: Shipping & receiving, Sites & custody, Fleet register', 'Stock: Inventory, Materials plan, Supplier orders, Suppliers & prices', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings, Office app, Plant app']);
+    assert.deepEqual(names(['plant']), ['Today: Today', 'Sales: Orders, Customer POs', 'Customers: Customers', 'Plant: Work orders, Serials & registration, Plant board, Stations & tablets, Quality & holds',
+      'Stock: Inventory', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings, Office app, Plant app'], 'Plant alone: the shelf (finished units) and Quality are the plant\'s, Quality under Plant where its page is; the plan, the POs and shipping are not');
+    assert.deepEqual(names(['materials', 'logistics']), ['Today: Today', 'Sales: Orders, Customer POs', 'Customers: Customers', 'Deliver: Shipping & receiving, Sites & custody, Fleet register',
+      'Stock: Materials plan, Supplier orders, Suppliers & prices', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings, Office app']);
+    assert.deepEqual(names([]), ['Today: Today', 'Sales: Orders, Customer POs', 'Customers: Customers', 'Money: Cash flow, Accounting', 'Setup: Products & bills, Settings, Office app'], 'Office alone: today, sales, customers, the money and the setup');
     assert.deepEqual(names(['customer']), names([]), 'the Customer App part adds nothing to the office menu: it is the customer\'s surface');
-    assert.equal(T.groups('acme.example', true, { parts: [] }).length, 7, 'ClearSky sees every group, the ClearSky group included, whatever the workspace holds');
-    var team = plain(T.groups('acme.example', false, { parts: [], team: true })); assert.match(team[2][1].map(function (l) { return l[1]; }).join(','), /Team/);
+    assert.equal(T.groups('acme.example', true, { parts: [] }).length, 9, 'ClearSky sees every place, the ClearSky one included, whatever the workspace holds');
+    var team = plain(T.groups('acme.example', false, { parts: [], team: true })).filter(function (g) { return g[0] === 'Setup'; })[0]; assert.match(team[1].map(function (l) { return l[1]; }).join(','), /Team/);
     assert.equal(T.holds(null, 'plant'), true); assert.equal(T.holds([], 'plant'), false); assert.equal(T.holds(['plant'], 'plant'), true); assert.equal(T.holds([], undefined), true, 'a link with no part is everyone\'s');
   });
   await test('chrome(): the office endpoint says the parts; other office pages remember them for THAT workspace only; a member and ClearSky differ', async function () {
     var p = page();
     p.T.chrome({ org: 'acme.example', current: 'dashboard', parts: ['plant', 'materials'], who: 'ops@acme.example' });
-    assert.deepEqual(plain(eyebrows(p.nav)), ['Run the business', 'Build', 'Stock & supply', 'Deliver', 'Money', 'Setup']);
+    assert.deepEqual(plain(eyebrows(p.nav)), ['Today', 'Sales', 'Customers', 'Plant', 'Stock', 'Money', 'Setup']);
     assert.ok(links(p.nav).indexOf('Materials plan') >= 0 && links(p.nav).indexOf('Shipping & receiving') < 0 && links(p.nav).indexOf('Quality & holds') >= 0);
     p.T.chrome({ org: 'acme.example', current: 'materials' });
     assert.ok(links(p.nav).indexOf('Shipping & receiving') < 0, 'a page that did not say: remembered for this workspace');
@@ -239,16 +240,16 @@ function seed() {
     p.T.chrome({ org: 'other.example', current: 'materials' });
     assert.ok(links(p.nav).indexOf('Shipping & receiving') >= 0, 'another workspace: nothing remembered, everything shown');
     p.T.chrome({ org: 'acme.example', current: 'dashboard', parts: [] });
-    assert.deepEqual(plain(eyebrows(p.nav)), ['Run the business', 'Money', 'Setup'], 'the endpoint said Office alone');
+    assert.deepEqual(plain(eyebrows(p.nav)), ['Today', 'Sales', 'Customers', 'Money', 'Setup'], 'the endpoint said Office alone');
     assert.equal(p.store.omega_logic_parts, 'acme.example|', 'an empty list is remembered as empty, not forgotten');
     p.T.chrome({ org: 'acme.example', current: 'inventory' });
-    assert.deepEqual(plain(eyebrows(p.nav)), ['Run the business', 'Money', 'Setup']);
+    assert.deepEqual(plain(eyebrows(p.nav)), ['Today', 'Sales', 'Customers', 'Money', 'Setup']);
     p.T.chrome({ org: 'acme.example', current: 'dashboard', parts: ['plant', 'bench', 'materials'] });
     assert.equal(p.store.omega_logic_parts, 'acme.example|plant,materials', 'a part the chrome does not know is dropped, never stored');
     var cs = page(); cs.T.chrome({ org: 'acme.example', current: 'dashboard', owner: true, parts: [] });
-    assert.deepEqual(plain(eyebrows(cs.nav)), ['Run the business', 'Build', 'Stock & supply', 'Deliver', 'Money', 'Setup', 'ClearSky'], 'ClearSky sees everything on any workspace');
+    assert.deepEqual(plain(eyebrows(cs.nav)), ['Today', 'Sales', 'Customers', 'Plant', 'Deliver', 'Stock', 'Money', 'Setup', 'ClearSky'], 'ClearSky sees everything on any workspace');
     var legacy = page(); legacy.T.chrome({ org: 'oldco.example', current: 'dashboard', team: true });
-    assert.deepEqual(plain(eyebrows(legacy.nav)), ['Run the business', 'Build', 'Stock & supply', 'Deliver', 'Money', 'Setup'], 'a server from before the field, or a legacy subscription: as before');
+    assert.deepEqual(plain(eyebrows(legacy.nav)), ['Today', 'Sales', 'Customers', 'Plant', 'Deliver', 'Stock', 'Money', 'Setup'], 'a server from before the field, or a legacy subscription: as before');
   });
   await test('hub(): a ring cell whose part is not held is not drawn (Plant · plant, Deliver · logistics, Stock · materials); the counts are otherwise the same', async function () {
     var T = page().T, x = { orders: [], follow: [], pending: 1, plantRows: [{ stage: 'production', late: true, progress: { held: 2 } }], toConfirm: 2, inTransit: 4, short: 3, outstandingCents: 100, today: '2026-09-26' };
@@ -288,19 +289,20 @@ function seed() {
     assert.deepEqual(plant.help, ['Omega Logic app guide', 'Plant app guide']);
     var mat = menu(Object.assign({ access: { role: 'admin', prices: 'workspace', team: true, parts: ['materials', 'customer'] } }, admin));
     assert.deepEqual(Object.keys(mat), ['sales', 'customers', 'stock', 'money', 'setup', 'help']);
-    assert.deepEqual(mat.stock, ['Materials plan', 'Purchase orders']); assert.deepEqual(mat.customers, ['Customers', 'Customer hub on the desktop', 'Customer app', 'Customer portal']);
+    assert.deepEqual(mat.stock, ['Materials plan', 'Supplier orders']); assert.deepEqual(mat.customers, ['Customers', 'Customer hub on the desktop', 'Customer app', 'Customer portal']);
     var none = menu(Object.assign({ access: { role: 'member', prices: 'none', team: false, parts: [] } }, admin));
     assert.deepEqual(Object.keys(none), ['sales', 'customers', 'money', 'setup', 'help']); assert.deepEqual(none.help, ['Omega Logic app guide']);
   });
-  await test('the app: the Sites tab, the shortcuts, the Today blocks and the loaders follow the parts; an endpoint of a part not held is never called', async function () {
+  await test('the app: the Sites tab, the shortcuts, Home and the loaders follow the parts; an endpoint of a part not held is never called', async function () {
     assert.match(APP, /<button data-tab="sites" data-part="logistics">/); assert.match(APP, /function layoutTabs\(\) \{[^}]*b\.hidden = !has\(b\.getAttribute\('data-part'\)\)/);
     assert.match(APP, /\$\('nav'\)\.hidden = false; layoutTabs\(\);/);
     assert.match(APP, /has\('plant'\) \? api\('\/api\/logic-plant' \+ q \+ '&page=board'\)/, 'the plant board is fetched only with the Plant part');
     assert.match(APP, /if \(has\('materials'\)\) loadMaterials\(\)/); assert.match(APP, /if \(has\('logistics'\) && !CUSTODY && !HUB_TRIED\.custody\)/);
     assert.match(APP, /parts: access\(\)\.parts, accounting:/, 'the hub is fed the parts');
     assert.match(APP, /\['go', 'sites', '◎', 'Sites', 'logistics'\], \['go', 'stock', '▦', 'Stock', 'plant'\]/); assert.match(APP, /'Register', 'logistics'\], \[[^\]]*'Plant', 'plant'\]\]\.filter\(function \(x\) \{ return has\(x\[4\]\); \}\)/);
-    assert.match(APP, /\(has\('materials'\) \? '<div id="kv-buy">/); assert.match(APP, /\(!has\('plant'\) \? '' : '<h2>Plant<\/h2>'/);
-    assert.match(APP, /\(has\('plant'\) \? '<a href="\/plant\/app'/); assert.match(APP, /\(has\('logistics'\) \? '<a href="#" id="to-sites"/); assert.match(APP, /\(has\('customer'\) \? '<a href="\/portals\/customer\/app'/);
+    /* Home is the hub, the path's bar and what needs you (2026-10-17): the money tiles are on Money, the floor on the Plant hub, the apps on Menu, each behind its part */
+    assert.match(APP, /'<div id="today-path">' \+ \(DATA\.path && DATA\.pipeline \? OmegaLogicTheme\.pathBar\(DATA\.path, \{ counts: DATA\.pipeline \}\)/);
+    assert.ok(!/id="kv-buy"|id="to-sites"|<h2>Plant<\/h2>/.test(APP), 'Home no longer repeats the money, the floor and the apps');
   });
   await test('the desktop dashboard: the menu, the hub and the floor, performance and deliveries panels follow the parts; nothing of a part not held is fetched', async function () {
     assert.match(DESK, /OmegaLogicTheme\.chrome\(\{org:ORG,[^}]*parts:d\.access&&d\.access\.parts/);

@@ -154,6 +154,8 @@
     interactivereport: DOC + 'M9 17v-3M12 17v-6M15 17v-4',
     exportforcad: EXPORT, exportforvalidation: EXPORT + 'M17 9l2 2 3-3', geoexport: EXPORT, exporttomonday: EXPORT,
     pushtomarketplace: 'M3 10l2-5h14l2 5H3zM5 10v10h14V10M12 13v5M10 16l2 2 2-2',
+    pushtoprime: 'M4 5h7M4 19h7M4 12h11M12 8l4 4-4 4',
+    pushtologic: 'M4 5h9v14H4zM14 9h6M17 6v6M13 15h7',
     /* Helios: a sun over a document line — the checklist their name is on */
     heliosintake: 'M12 4v2M12 18v2M4 12h2M18 12h2M6.3 6.3l1.4 1.4M16.3 16.3l1.4 1.4M6.3 17.7l1.4-1.4M16.3 7.7l1.4-1.4M12 8.5a3.5 3.5 0 1 0 0 7 3.5 3.5 0 1 0 0-7',
     /* Omega-Core: two cabinets on a skid — compute rack lights beside a

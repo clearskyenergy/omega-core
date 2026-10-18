@@ -222,9 +222,13 @@
     var list = data.workspaces || [], email = esc(data.email || '');
     if (!list.length && !data.owner) {
       var dom = String(data.email || '').split('@')[1] || '';
-      el.innerHTML = '<div class="ols">' + MARK + '<h1>' + (data.reason === 'verify' ? 'Confirm your email first' : dom ? 'No workspace at ' + esc(dom) : 'Nowhere to go yet') + '</h1><p class="ols-lede">' + esc(data.note || 'This email is not on an Omega Logic workspace yet.') + '</p>'
+      el.innerHTML = '<div class="ols">' + MARK + '<h1>' + (data.reason === 'verify' ? 'Confirm your email first' : data.reason === 'notOnPlan' && data.home ? 'Omega Logic is not on ' + esc(data.home.name) + '\u2019s plan' : dom ? 'No workspace at ' + esc(dom) : 'Nowhere to go yet') + '</h1><p class="ols-lede">' + esc(data.note || 'This email is not on an Omega Logic workspace yet.') + '</p>'
         + '<p class="ols-lede" style="margin-top:-8px">Signed in as <b>' + email + '</b></p>'
         + (data.reason === 'verify' && auth && auth.currentUser && auth.currentUser.sendEmailVerification ? '<button type="button" class="ols-submit" id="ols-verify">Send the link again</button><div style="height:10px"></div>' : '')
+        /* the workspace is open but has no Omega Logic: an owner or administrator
+           opts in on Modules (the one purchase door, priced there); anyone else
+           is told whom to ask. A link is never access: the module turns on when paid. */
+        + (data.reason === 'notOnPlan' && data.home && data.home.canAdd ? '<a class="ols-submit" id="ols-add" style="display:block;text-align:center;text-decoration:none" href="/workspace#module-' + esc(data.home.module || 'logic-office') + '">Add Omega Logic to your plan</a><div style="height:10px"></div>' : '')
         + '<button type="button" class="ols-google" id="ols-out">Sign in with another account</button><p class="ols-msg" id="ols-msg" role="status"></p></div>';
       el.querySelector('#ols-out').onclick = onSignOut;
       var v = el.querySelector('#ols-verify');

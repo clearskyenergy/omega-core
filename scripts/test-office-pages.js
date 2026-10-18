@@ -8,7 +8,7 @@
    Omega Logic app shows are lifted out of office/app.html and run against
    sample data; the rest is what the files say.
 
-   · D1   the app's Menu shows "Price & accept" only to someone who may
+   · D1   the app's Menu shows "Price & accept on the desktop" only to someone who may
           price (ClearSky, or an owner or administrator on what the
           workspace bills itself); D2 Team only to an owner or administrator
    · the app's status line starts clean on every tab (an old message never
@@ -56,15 +56,15 @@ function menu(data, ws) {
   var rows = {}; plain(ctx.OUT).forEach(function (p) { p.rows.forEach(function (r) { rows[r[2]] = r; }); });
   return rows;
 }
-test('D1: "Price & accept" is in the Menu only for someone who may price, and says what they may do', function () {
+test('D1: "Price & accept on the desktop" is in the Menu only for someone who may price, and says what they may do', function () {
   var cs = menu({ owner: true, access: { role: 'clearsky', prices: 'all', team: true }, billing: 'quickbooks', config: {} });
-  assert.ok(cs['Price & accept']); assert.equal(cs['Price & accept'][3], 'Approve a price, accept, record shipment'); assert.equal(cs['Price & accept'][1], '/omega-logic?org=cleancell.us#orders');
+  assert.ok(cs['Price & accept on the desktop']); assert.equal(cs['Price & accept on the desktop'][3], 'Approve a price, accept, record shipment'); assert.equal(cs['Price & accept on the desktop'][1], '/omega-logic?org=cleancell.us#orders');
   var admin = menu({ owner: false, access: { role: 'admin', prices: 'workspace', team: true }, billing: 'tenant', config: { accounting: 'tenant' } });
-  assert.ok(admin['Price & accept']); assert.equal(admin['Price & accept'][3], 'Approve the price and accept the orders your company bills');
-  assert.ok(!menu({ owner: false, access: { role: 'admin', prices: 'workspace', team: true }, billing: 'quickbooks', config: { accounting: 'quickbooks' } })['Price & accept'], 'an admin of a workspace ClearSky bills: nothing to price');
-  assert.ok(!menu({ owner: false, access: { role: 'member', prices: 'none', team: false }, billing: 'tenant', config: { accounting: 'tenant' } })['Price & accept'], 'a member: no row');
-  assert.ok(!menu({ owner: false, config: { accounting: 'tenant' } })['Price & accept'], 'a server from before D1: ClearSky only');
-  assert.ok(menu({ owner: true, config: {} })['Price & accept']);
+  assert.ok(admin['Price & accept on the desktop']); assert.equal(admin['Price & accept on the desktop'][3], 'Approve the price and accept the orders your company bills');
+  assert.ok(!menu({ owner: false, access: { role: 'admin', prices: 'workspace', team: true }, billing: 'quickbooks', config: { accounting: 'quickbooks' } })['Price & accept on the desktop'], 'an admin of a workspace ClearSky bills: nothing to price');
+  assert.ok(!menu({ owner: false, access: { role: 'member', prices: 'none', team: false }, billing: 'tenant', config: { accounting: 'tenant' } })['Price & accept on the desktop'], 'a member: no row');
+  assert.ok(!menu({ owner: false, config: { accounting: 'tenant' } })['Price & accept on the desktop'], 'a server from before D1: ClearSky only');
+  assert.ok(menu({ owner: true, config: {} })['Price & accept on the desktop']);
 });
 test('D2: Team is in the Menu for an owner or administrator (and ClearSky), not for a member', function () {
   assert.deepEqual(menu({ owner: false, access: { role: 'owner', prices: 'workspace', team: true }, billing: 'tenant', config: {} }).Team, ['href', '/logic-team.html?org=cleancell.us', 'Team', 'Add and turn off your office and plant staff']);
