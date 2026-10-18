@@ -69,7 +69,14 @@ var live = fs.readFileSync(path.join(__dirname, '../../workspace.html'), 'utf8')
 ok('the live rail text is untouched', /label: 'All tools'/.test(shell) && /label: 'Quote Desk'/.test(shell));
 ok('a page can pass its own rail without changing the default', /opts\.nav \|\| NAV/.test(shell) && /opts\.tabsItems \|\| TABS/.test(shell));
 ok('the live home still draws the hex hub', /omega-hexhub\.js/.test(live) && /Where to\?/.test(live));
-ok('the live home loads the shared switch and does not redirect on its own', /omega-experience\.js/.test(live) && live.indexOf("location.replace('/workspace-v2'") < 0);
+ok('the live home loads the shared switch and does not send anyone to the journey on its own', /omega-experience\.js/.test(live) && live.indexOf("location.replace('/workspace-v2'") < 0 && live.indexOf("location.assign('/workspace-v2'") < 0);
+var returnScript = live.slice(live.indexOf('function returnHome() {'), live.indexOf('function route() {'));
+function homeReturn(search) {
+  var dest = null;
+  require('vm').runInNewContext(returnScript + '; returnHome();', { location: { search: search, assign: function (url) { dest = url; } }, go: function (key) { dest = key; } });
+  return dest;
+}
+ok('Home from a section stays on the classic workspace', homeReturn('') === 'home' && homeReturn('?org=northstar') === 'home' && homeReturn('?ui=v1') === 'home' && homeReturn('?ui=classic') === 'home' && homeReturn('?ui=v2') === 'home');
 var v2 = fs.readFileSync(path.join(__dirname, '../../workspace-v2.html'), 'utf8');
 ok('the preview does not load the hex hub', v2.indexOf('omega-hexhub.js') < 0 && v2.indexOf('Where to?') < 0);
 var hidden = V.home({ projects: [{ id: 'a' }, { id: 'b' }], needsSize: 72, needs: [{ key: 'trial', t: 'Your trial ends in 2 days', s: 'Keep what you use.', cta: 'See plans', href: '/workspace#plans' }], cards: [] });

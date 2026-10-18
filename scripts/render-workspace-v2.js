@@ -129,9 +129,9 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   var live = await open('before', '/workspace', noisy(HOST), false);
   var before = await live.p.evaluate(function () {
     var t = document.body.innerText || '';
-    return { hex: !!document.querySelector('.hexhub'), where: t.indexOf('Where to?') >= 0, burns: (t.match(/S\.J Burns LLC \(330 roberts\) has been in review/g) || []).length, addr: (t.match(/4846 S\. Michigan Ave, Chicago/g) || []).length };
+    return { path: location.pathname, hex: !!document.querySelector('.hexhub'), where: t.indexOf('Where to?') >= 0, burns: (t.match(/S\.J Burns LLC \(330 roberts\) has been in review/g) || []).length, addr: (t.match(/4846 S\. Michigan Ave, Chicago/g) || []).length };
   });
-  ok('before: the live home still has the hex launcher', before.hex && before.where, before);
+  ok('before: the live home still has the hex launcher', before.hex && before.where && before.path.indexOf('workspace-v2') < 0, before);
   ok('before: the same review is listed more than once', before.burns >= 2, before);
   await shot(live.p, 'workspace-v1-before.png');
   ok('before: no uncaught errors', !live.errs.length, live.errs);
@@ -183,6 +183,14 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     ok('after: no horizontal scroll at ' + widths[wi], !hs);
   }
   await desk.p.setViewportSize({ width: 1366, height: 900 });
+  await desk.p.goto(base + '/workspace?home=workspace#billing', { waitUntil: 'domcontentloaded' });
+  await desk.p.waitForSelector('#billing-body .bh-state');
+  await desk.p.click('[data-key="home"]');
+  await wait(400);
+  var backHome = await desk.p.evaluate(function () {
+    return { path: location.pathname, hash: location.hash, hex: !!document.querySelector('.hexhub'), where: (document.body.innerText || '').indexOf('Where to?') >= 0 };
+  });
+  ok('billing Home stays on the classic hex hub', backHome.hex && backHome.where && backHome.path.indexOf('workspace-v2') < 0 && backHome.hash !== '#billing', backHome);
   await shot(desk.p, 'workspace-v2-after.png');
   ok('after: no uncaught errors', !desk.errs.length, desk.errs);
   await desk.ctx.close();
@@ -226,6 +234,12 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     if (userExp) fx.docs['omega_orgs/' + fx.org + '/members/' + fx.user.uid].experience = userExp;
     return fx;
   }
+  var asked = await open('switch query v2', '/workspace?ui=v2', FX.northstar(HOST), false);
+  var askedTo = await asked.p.waitForFunction(function () { return location.pathname.indexOf('workspace-v2') >= 0; }, null, { timeout: 8000 }).then(function () { return asked.p.url(); }, function () { return asked.p.url(); });
+  ok('?ui=v2 opens the journey and a plain /workspace does not', askedTo.indexOf('/workspace-v2') >= 0, askedTo);
+  ok('query v2: no uncaught errors', !asked.errs.length, asked.errs);
+  await asked.ctx.close();
+
   var sent = await open('switch org v2', '/workspace', flagged('v2'), false);
   var sentTo = await sent.p.waitForFunction(function () { return location.pathname.indexOf('workspace-v2') >= 0; }, null, { timeout: 8000 }).then(function () { return sent.p.url(); }, function () { return sent.p.url(); });
   var routed = await sent.p.evaluate(function () { return sessionStorage.getItem('omega-experience-routed'); });
