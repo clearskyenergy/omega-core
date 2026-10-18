@@ -269,6 +269,10 @@
       "destination": "/portals/finance/dealroom"
     },
     {
+      "source": "/funding-v2",
+      "destination": "/funding-v2.html"
+    },
+    {
       "source": "/finance",
       "destination": "/portals/finance"
     },

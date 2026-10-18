@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<!--
+  ClearSky-OMEGA · Funding marketplace v2 (preview)
+  © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+  The live marketplace at /finance is a different page and is not changed.
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.">
+<title>Funding marketplace · preview</title>
+<link rel="license" href="/terms.html">
+<style>
+:root{
+  --bg:#F4F7FA; --card:#fff; --ink:#0E1A24; --muted:#5A6B7B; --line:rgba(14,26,36,.12);
+  --blue:#0089BD; --navy:#0E1A24; --green:#12805C; --amber:#8A5A00; --red:#9C2F2F;
+  --green-bg:#E7F6EF; --amber-bg:#FFF6E6; --red-bg:#FDECEC;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--blue);outline-offset:2px}
+a{color:var(--blue)}
+.top{background:var(--navy);color:#fff;padding:18px 22px 16px}
+.banner{display:flex;gap:10px;align-items:baseline;flex-wrap:wrap;font-size:12px;letter-spacing:.04em;text-transform:uppercase;color:#9FD4EA}
+.banner a{color:#fff}
+h1{font-size:26px;line-height:1.15;margin:8px 0 4px;font-weight:700}
+.lede{margin:0;max-width:62ch;color:rgba(255,255,255,.78);font-size:14px}
+.switch{display:flex;gap:8px;margin-top:14px}
+.switch button,.btn{border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;border-radius:999px;padding:7px 14px}
+.switch button[aria-pressed="true"]{background:#fff;color:var(--navy);border-color:#fff}
+.wrap{max-width:1100px;margin:0 auto;padding:18px 16px 48px}
+.panel{display:none}
+.panel.on{display:block}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:0 0 14px}
+.row button,.btn-ink{border:1px solid var(--line);background:var(--card);border-radius:999px;padding:7px 12px}
+.row button[aria-pressed="true"]{border-color:var(--navy);background:var(--navy);color:#fff}
+.layout{display:grid;grid-template-columns:minmax(260px,340px) 1fr;gap:16px;align-items:start}
+@media(max-width:800px){.layout{grid-template-columns:1fr}}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px 14px 12px}
+.deal{width:100%;text-align:left;border:1px solid var(--line);background:var(--card);border-radius:12px;padding:12px;margin:0 0 8px}
+.deal[aria-pressed="true"]{border-color:var(--blue);box-shadow:inset 3px 0 0 var(--blue)}
+.deal b{display:block;font-size:15px}
+.deal span{color:var(--muted);font-size:13px}
+.meta{display:flex;justify-content:space-between;gap:8px;margin-top:6px;font-variant-numeric:tabular-nums}
+.filters{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-bottom:12px}
+@media(max-width:700px){.filters{grid-template-columns:1fr 1fr}}
+label{display:flex;flex-direction:column;gap:4px;font-size:12px;color:var(--muted)}
+input,select,textarea{border:1px solid var(--line);border-radius:8px;padding:8px;background:#fff;width:100%}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.actions button,.primary{background:var(--navy);color:#fff;border:0;border-radius:999px;padding:8px 14px}
+.actions button.ghost{background:#fff;color:var(--ink);border:1px solid var(--line)}
+.note{font-size:13px;color:var(--muted);margin:8px 0 0}
+.err{background:var(--red-bg);color:var(--red);border-radius:10px;padding:10px 12px}
+.ok{background:var(--green-bg);color:var(--green);border-radius:10px;padding:10px 12px}
+.bk-ring{width:112px;height:112px;border-radius:50%;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--amber-bg);color:var(--amber);border:6px solid #E6C98A}
+.bk-ring.is-on{background:var(--green-bg);color:var(--green);border-color:#9DDCBE}
+.bk-num{font-size:32px;font-weight:700;line-height:1}
+.bk-of,.bk-flag{font-size:11px;letter-spacing:.04em;text-transform:uppercase}
+.head{display:flex;gap:16px;align-items:center;margin-bottom:12px}
+.bk-items{list-style:none;margin:0;padding:0}
+.bk-items li{padding:8px 0;border-top:1px solid var(--line)}
+.bk-row{display:flex;justify-content:space-between;gap:8px;font-size:14px}
+.bk-bar{height:6px;background:#E6EDF2;border-radius:99px;margin-top:6px;overflow:hidden}
+.bk-bar i{display:block;height:100%;background:var(--amber);border-radius:99px}
+.bk-full .bk-bar i{background:var(--green)}
+.bk-gap .bk-bar i{background:var(--red)}
+.bk-items p,.bk-check,.bk-risks{margin:4px 0 0;color:var(--muted);font-size:13px}
+.bk-check,.bk-risks,.bk-streams{padding-left:18px}
+.bk-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px 16px}
+@media(max-width:520px){.bk-facts{grid-template-columns:1fr}}
+.bk-kv{display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line);padding:4px 0}
+.bk-kv span{color:var(--muted)}
+.bk-sum header{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.bk-sum h2{margin:0 0 8px;font-size:22px}
+.bk-sum h3{margin:16px 0 6px;font-size:14px;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)}
+.bk-pill{font-size:11px;border:1px solid var(--line);border-radius:99px;padding:2px 8px;color:var(--muted)}
+.bk-streams li{margin:0 0 8px}
+.bk-streams span{display:block;color:var(--muted);font-size:13px}
+.bk-src{font-size:12px}
+.bk-compare{width:100%;border-collapse:collapse;font-size:14px}
+.bk-compare th,.bk-compare td{text-align:left;padding:8px;border-bottom:1px solid var(--line);vertical-align:top}
+.bk-compare thead th{font-size:13px}
+.bk-muted,.bk-clear{color:var(--muted)}
+.foot{margin-top:22px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="banner">Preview · not the live marketplace · <a href="/finance">Live marketplace</a></div>
+  <h1>Funding review</h1>
+  <p class="lede">Build the package, see what is still missing, and only then put it where a financier can read it. This page does not replace /finance.</p>
+  <div class="switch" role="tablist">
+    <button type="button" id="tab-dev" role="tab" aria-pressed="true" aria-controls="view-dev">Submitting</button>
+    <button type="button" id="tab-fin" role="tab" aria-pressed="false" aria-controls="view-fin">Reviewing</button>
+  </div>
+</header>
+<main class="wrap">
+  <p id="status" class="note">Loading the preview.</p>
+  <section id="view-dev" class="panel on" role="tabpanel">
+    <div class="row" id="pkg-switch"></div>
+    <div class="layout">
+      <div class="card" id="dev-score"></div>
+      <div class="card" id="dev-list"></div>
+    </div>
+  </section>
+  <section id="view-fin" class="panel" role="tabpanel" hidden>
+    <form id="criteria" class="filters">
+      <label>Min MW<input id="minMw" inputmode="decimal" placeholder="Any"></label>
+      <label>Min IRR %<input id="minIrr" inputmode="decimal" placeholder="Any"></label>
+      <label>Min score<input id="minScore" inputmode="decimal" placeholder="Any"></label>
+      <label>Technology<select id="technology"><option value="">Any</option></select></label>
+      <label>State<input id="state" maxlength="2" placeholder="Any"></label>
+      <label>Minimum stage<select id="minStage"><option value="">Any</option></select></label>
+    </form>
+    <div class="layout">
+      <div>
+        <div id="deal-list"></div>
+        <p class="note" id="held-note"></p>
+      </div>
+      <div>
+        <div class="card" id="summary"></div>
+        <div class="actions">
+          <button type="button" id="interest" class="primary">Express interest</button>
+          <button type="button" id="compare-go" class="ghost">Compare selected</button>
+        </div>
+        <form id="ask" class="card" style="margin-top:12px">
+          <label>Request information<textarea id="ask-note" rows="3" placeholder="What do you need from the sponsor?"></textarea></label>
+          <div class="actions"><button type="submit" class="primary">Request info</button></div>
+        </form>
+        <div id="compare" style="margin-top:12px"></div>
+        <p id="action-note" class="note"></p>
+      </div>
+    </div>
+  </section>
+  <p class="foot">© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. Illustrative packages are not deals and are not market data.</p>
+</main>
+<script src="/config.js"></script>
+<script src="/omega-bankability.js"></script>
+<script>
+(function () {
+  var B = window.OmegaBankability;
+  var state = { tab: 'dev', packages: [], selected: null, compare: {}, token: null, model: null };
+  var $ = function (id) { return document.getElementById(id); };
+
+  function localPreview() {
+    return location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+  }
+  function setStatus(msg, kind) {
+    var el = $('status');
+    el.className = kind || 'note';
+    el.textContent = msg || '';
+  }
+  function showTab(which) {
+    state.tab = which;
+    $('tab-dev').setAttribute('aria-pressed', which === 'dev' ? 'true' : 'false');
+    $('tab-fin').setAttribute('aria-pressed', which === 'fin' ? 'true' : 'false');
+    $('view-dev').className = 'panel' + (which === 'dev' ? ' on' : '');
+    $('view-fin').className = 'panel' + (which === 'fin' ? ' on' : '');
+    $('view-dev').hidden = which !== 'dev';
+    $('view-fin').hidden = which !== 'fin';
+  }
+  function criteriaBody() {
+    function num(id) { var v = $(id).value.replace(/^\s+|\s+$/g, ''); return v === '' ? null : Number(v); }
+    return {
+      minMw: num('minMw'), minIrr: num('minIrr'), minScore: num('minScore'),
+      technology: $('technology').value, state: $('state').value, minStage: $('minStage').value
+    };
+  }
+  function authHeaders() {
+    var h = { 'Content-Type': 'application/json' };
+    if (state.token) h.Authorization = 'Bearer ' + state.token;
+    return h;
+  }
+  function post(body) {
+    return fetch('/api/funding-v2', { method: 'POST', headers: authHeaders(), body: JSON.stringify(body) })
+      .then(function (res) {
+        return res.json().catch(function () { return { error: 'The preview did not answer.' }; }).then(function (j) {
+          if (!res.ok) throw new Error(j.error || ('Request failed (' + res.status + ')'));
+          return j;
+        });
+      });
+  }
+  function fillModel(model) {
+    state.model = model;
+    var tech = $('technology'), stage = $('minStage');
+    (model.technologies || []).forEach(function (t) {
+      var o = document.createElement('option');
+      o.value = t.id; o.textContent = t.label; tech.appendChild(o);
+    });
+    (model.stages || []).forEach(function (s) {
+      var o = document.createElement('option');
+      o.value = s; o.textContent = s; stage.appendChild(o);
+    });
+  }
+  function paintDev() {
+    var box = $('pkg-switch');
+    box.innerHTML = '';
+    state.packages.forEach(function (p) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.textContent = p.name.replace(/^Preview · /, '');
+      b.setAttribute('aria-pressed', p.id === state.selected ? 'true' : 'false');
+      b.addEventListener('click', function () { state.selected = p.id; paintDev(); });
+      box.appendChild(b);
+    });
+    var cur = null;
+    state.packages.forEach(function (p) { if (p.id === state.selected) cur = p; });
+    if (!cur) { $('dev-score').innerHTML = ''; $('dev-list').innerHTML = ''; return; }
+    $('dev-score').innerHTML = '<div class="head">' + B.ring(cur) + '<div><b>' + B.esc(cur.name) + '</b><p class="note">'
+      + B.esc(cur.gatesPassed) + ' of ' + B.esc(cur.gates) + ' gates passed. Line to be listed: ' + B.esc(cur.threshold) + '.</p></div></div>'
+      + B.checklist(cur.checklist);
+    $('dev-list').innerHTML = '<h2 style="margin:0 0 8px;font-size:16px">What the score is made of</h2>' + B.items(cur.items);
+  }
+  function paintFin() {
+    var list = $('deal-list');
+    list.innerHTML = '';
+    var deals = state.deals || [];
+    if (!deals.length) list.innerHTML = '<p class="note">No package on this preview clears your minimums.</p>';
+    deals.forEach(function (d) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'deal';
+      b.setAttribute('aria-pressed', d.id === state.selected ? 'true' : 'false');
+      b.innerHTML = '<b>' + B.esc(d.name) + '</b><span>' + B.esc(d.place || '') + ' · ' + B.esc(d.techLabel || '') + '</span>'
+        + '<div class="meta"><span>' + B.esc(d.askText || '—') + '</span><span>IRR ' + B.esc(d.irrText || '—') + '</span><span>' + B.esc(d.score) + '</span></div>';
+      b.addEventListener('click', function () { state.selected = d.id; paintFin(); });
+      var lab = document.createElement('label');
+      lab.style.margin = '0 0 8px';
+      var cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = !!state.compare[d.id];
+      cb.addEventListener('click', function (ev) { ev.stopPropagation(); state.compare[d.id] = cb.checked; });
+      lab.appendChild(cb);
+      lab.appendChild(document.createTextNode(' Compare'));
+      var wrap = document.createElement('div');
+      wrap.appendChild(b);
+      wrap.appendChild(lab);
+      list.appendChild(wrap);
+    });
+    var held = state.held || [];
+    $('held-note').textContent = held.length
+      ? (held.length + ' package' + (held.length === 1 ? '' : 's') + ' stayed off this list.')
+      : '';
+    var cur = null;
+    deals.forEach(function (d) { if (d.id === state.selected) cur = d; });
+    if (!cur && deals.length) { state.selected = deals[0].id; cur = deals[0]; }
+    $('summary').innerHTML = cur ? B.summary(cur) : '<p class="note">Select a package.</p>';
+  }
+  function load() {
+    setStatus('Scoring the illustrative packages.', 'note');
+    return post({ action: 'model' }).then(function (model) {
+      if (!state.model) fillModel(model);
+      return post({ action: 'board', examples: true, criteria: criteriaBody() });
+    }).then(function (board) {
+      var all = (board.deals || []).concat(board.held || []);
+      state.packages = all;
+      state.deals = board.deals || [];
+      state.held = board.held || [];
+      if (!state.selected && all.length) state.selected = all[0].id;
+      if (state.tab === 'fin' && state.deals.length && !state.deals.some(function (d) { return d.id === state.selected; })) {
+        state.selected = state.deals[0].id;
+      }
+      paintDev();
+      paintFin();
+      setStatus(board.note || '', 'note');
+    }).catch(function (err) {
+      setStatus(err.message + ' Sign in on this site, then reload.', 'err');
+    });
+  }
+  function loadScript(src) {
+    return new Promise(function (resolve) {
+      var s = document.createElement('script');
+      s.src = src;
+      s.onload = function () { resolve(true); };
+      s.onerror = function () { resolve(false); };
+      document.head.appendChild(s);
+    });
+  }
+  function session() {
+    return new Promise(function (resolve) {
+      if (localPreview()) { resolve(null); return; }
+      var done = false;
+      function finish(t) { if (!done) { done = true; resolve(t || null); } }
+      setTimeout(function () { finish(null); }, 2500);
+      loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js').then(function (okApp) {
+        if (!okApp) { finish(null); return null; }
+        return loadScript('https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js');
+      }).then(function (okAuth) {
+        if (done || !okAuth) { finish(null); return; }
+        try {
+          if (!window.firebase || !firebase.auth || !window.CLEARSKY_CONFIG) { finish(null); return; }
+          if (!firebase.apps.length) firebase.initializeApp(window.CLEARSKY_CONFIG.firebase);
+          firebase.auth().onAuthStateChanged(function (u) {
+            if (!u) { finish(null); return; }
+            u.getIdToken().then(finish, function () { finish(null); });
+          });
+        } catch (e) { finish(null); }
+      });
+    });
+  }
+  $('tab-dev').addEventListener('click', function () { showTab('dev'); });
+  $('tab-fin').addEventListener('click', function () { showTab('fin'); });
+  $('criteria').addEventListener('change', function () { load(); });
+  $('interest').addEventListener('click', function () {
+    if (!state.selected) return;
+    post({ action: 'interest', packageId: state.selected }).then(function (r) {
+      $('action-note').textContent = r.note || 'Interest recorded.';
+    }).catch(function (e) { $('action-note').textContent = e.message; });
+  });
+  $('ask').addEventListener('submit', function (ev) {
+    ev.preventDefault();
+    if (!state.selected) return;
+    post({ action: 'request-info', packageId: state.selected, note: $('ask-note').value }).then(function (r) {
+      $('action-note').textContent = r.note || 'Request recorded.';
+      $('ask-note').value = '';
+    }).catch(function (e) { $('action-note').textContent = e.message; });
+  });
+  $('compare-go').addEventListener('click', function () {
+    var ids = [];
+    Object.keys(state.compare).forEach(function (id) { if (state.compare[id]) ids.push(id); });
+    post({ action: 'board', examples: true, criteria: criteriaBody(), compare: ids }).then(function (board) {
+      $('compare').innerHTML = board.compare ? B.compare(board.compare) : '';
+      if (!board.compare) $('action-note').textContent = 'Select two or three listed packages.';
+    }).catch(function (e) { $('action-note').textContent = e.message; $('compare').innerHTML = ''; });
+  });
+  session().then(function (token) { state.token = token; return load(); });
+})();
+</script>
+</body>
+</html>

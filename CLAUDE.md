@@ -1597,6 +1597,22 @@ agent is `.claude/agents/sales-agent.md` + `/sales`; it drafts in Gmail and
 never sends, posts or approves. JARVIS runs the same agent and draws the
 same data (mission.html › Sales, `npm run check:sales`).
 
+## Funding marketplace v2 (preview, 2026-10-18)
+
+A separate route, `/funding-v2`, so the live marketplace at `/finance`
+(`portals/finance/index.html`, `fin_projects`) is unchanged until Thomas
+approves a cutover. The readiness score is `api/_lib/bankability.js` (pure,
+server-side): 0–100, hard gates, default line 80. Editor-v2 draws it with
+`omega-bankability.js`, which does not score. Financiers get a filtered
+list, a one-page summary, compare, interest, and a request for information.
+Data rooms go through `api/_lib/vdr.js` (Google Drive, Box, and SharePoint
+implemented; Datasite, Intralinks, Ansarada, and DealRoom catalogued and
+not called). Credentials stay in the deployment environment.
+`FUNDING_V2_PUBLISH` must be the literal `true` before anything is written,
+and then only to `funding_v2_packages`, never `fin_projects`. Journeys, the
+threshold table, the VDR research, and the decisions for Thomas are in
+`docs/FUNDING-MARKETPLACE-V2.md`. `scripts/tests/tfundingv2.js`.
+
 ## Silmarillion 2.0 — joint development
 
 The OMEGA operating system is named **Silmarillion 2.0**. Today it is an
