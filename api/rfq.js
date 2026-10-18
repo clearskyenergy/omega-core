@@ -23,6 +23,32 @@ var A = require('./_lib/admin');
 /* Phase 7: an RFQ is where a bill of materials leaves the product, so a
    packaged tenant's BOM activity is counted here (review only, never gated,
    never a reason to fail the RFQ). */
+/* A placement error never fails the quote request. The fake used by the
+   routing tests has no order transaction; an empty result is the same
+   answer a drawing with nothing published gets. */
+function placeSafe(spec) {
+  try {
+    return require('./_lib/design-place').place(spec).then(function (r) {
+      return r || { orders: [], unmatched: [] };
+    }, function () { return { orders: [], unmatched: [] }; });
+  } catch (e) { return Promise.resolve({ orders: [], unmatched: [] }); }
+}
+function designSpec(db, caller, project, b, sourceOrgId, sourceOrgName, lines, rfqId, FV) {
+  var D = require('./_lib/design-order');
+  return {
+    db: db, lines: lines, FieldValue: FV, rfqId: rfqId, caller: caller,
+    designer: { orgId: sourceOrgId, name: sourceOrgName || sourceOrgId, email: caller.email || '' },
+    project: {
+      id: String(b.projectId),
+      name: project.name || project.title || '',
+      address: String(b.address || project.address || '').trim(),
+      state: project.state || (project.site && project.site.state) || '',
+      city: project.city || (project.site && project.site.city) || '',
+      zip: String(b.zip || project.zip || '').replace(/\D/g, '').slice(0, 5)
+    },
+    estimateCents: D.estimateFrom(project, b)
+  };
+}
 function countBom(db, caller, view, rfqId) {
   if (!view || view.packaged !== true) return Promise.resolve();
   var PB = require('./_lib/pricebook'), U = require('./_lib/usage');
@@ -143,7 +169,15 @@ module.exports = A.handler(function (req) {
             (recipients[l.vendorOrgId] = recipients[l.vendorOrgId] || { scope: 'line-items', lines: [] }).lines.push(l);
           });
           var ids = Object.keys(recipients);
-          if (!ids.length) return { ok: true, rfqId: null, recipients: [], skipped: 'no routable vendors on this BOM' };
+          var specFor = function (rfqId) {
+            return designSpec(db, caller, project, b, sourceOrgId, sourceOrgName, lines, rfqId, FV);
+          };
+          /* Nobody to quote can still be the designer's own catalog: the
+             OEM who drew the job is never an RFQ recipient, and the order
+             still opens in their workspace. */
+          if (!ids.length) return placeSafe(specFor(null)).then(function (placed) {
+            return { ok: true, rfqId: null, recipients: [], skipped: 'no routable vendors on this BOM', orders: placed.orders || [], unmatched: placed.unmatched || [] };
+          });
 
           /* 3 · write parent + one recipient doc each, atomically */
           var ref = db.collection('rfqs').doc();
@@ -183,7 +217,11 @@ module.exports = A.handler(function (req) {
               status: 'sent', quote: null, revealed: named, createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp() });
             batch.set(db.collection('omega_orgs').doc(v).collection('notifications').doc(), { text: 'New RFQ (' + recipients[v].lines.length + ' line' + (recipients[v].lines.length === 1 ? '' : 's') + ', ' + recipients[v].scope + ')', kind: 'rfq', rfqId: ref.id, read: false, createdAt: FV.serverTimestamp() });
           });
-          return batch.commit().then(function () { return countBom(db, caller, packageView, ref.id); }).then(function () { return { ok: true, rfqId: ref.id, recipients: ids }; });
+          return batch.commit().then(function () { return countBom(db, caller, packageView, ref.id); }).then(function () {
+            return placeSafe(specFor(ref.id));
+          }).then(function (placed) {
+            return { ok: true, rfqId: ref.id, recipients: ids, orders: (placed && placed.orders) || [], unmatched: (placed && placed.unmatched) || [] };
+          });
         });
       });
     });

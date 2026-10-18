@@ -232,10 +232,10 @@
     }
   },
   "desktop-freight.png": {
-    "sha256": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-    "takenAt": "2026-10-17T22:56:23.170Z",
+    "sha256": "471624c9e7dc885654f07e7c9c6285d7faf095956185669cb4c450b2691f450f",
+    "takenAt": "2026-10-18T01:30:12.964Z",
     "tree": ".",
-    "commit": "4be8af7e",
+    "commit": "b8dda86",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
       "logic-logistics.html": "e03b8c2c1578f0e72e67ef5af12fe1288578e83e19904837885df65800a7836d",
@@ -244,15 +244,15 @@
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
-      "omega-logic.html": "34158266304b67919834a7fbf067a8a09ce228e51a96a429bb18aa045bbdd4e9",
+      "omega-logic.html": "91b4bc336e9343af5950bb3f1ac4023236e2a5580a6d660509b5a13c09cc679e",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f"
     }
   },
   "desktop-office.png": {
-    "sha256": "38a4f47cb22988fa0a4af47f0242b45435463ad47eb0f5ab692e42435348eb41",
-    "takenAt": "2026-10-17T22:56:07.477Z",
+    "sha256": "43a0e8c8e528c09ee88b6a298523728c485f16df32c8b3d8ff1a66da07047aeb",
+    "takenAt": "2026-10-18T01:30:07.706Z",
     "tree": ".",
-    "commit": "4be8af7e",
+    "commit": "b8dda86",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
@@ -260,15 +260,15 @@
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
-      "omega-logic.html": "34158266304b67919834a7fbf067a8a09ce228e51a96a429bb18aa045bbdd4e9",
+      "omega-logic.html": "91b4bc336e9343af5950bb3f1ac4023236e2a5580a6d660509b5a13c09cc679e",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f"
     }
   },
   "desktop-price.png": {
-    "sha256": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
-    "takenAt": "2026-10-17T22:56:11.342Z",
+    "sha256": "781f103409820c3c8bfd4819dfff333446ddd5e469077bd8d00621fee8799e39",
+    "takenAt": "2026-10-18T01:30:09.939Z",
     "tree": ".",
-    "commit": "4be8af7e",
+    "commit": "b8dda86",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
@@ -276,7 +276,7 @@
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
-      "omega-logic.html": "34158266304b67919834a7fbf067a8a09ce228e51a96a429bb18aa045bbdd4e9",
+      "omega-logic.html": "91b4bc336e9343af5950bb3f1ac4023236e2a5580a6d660509b5a13c09cc679e",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f"
     }
   },

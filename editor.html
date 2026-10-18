@@ -39004,7 +39004,7 @@ function openRfqFile() {
     + '<div style="display:flex;align-items:center;gap:10px;padding:16px 20px 12px;'
     +   'border-bottom:1px solid rgba(255,255,255,.08)">'
     +   '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">File Request for Quote</div>'
-    +     '<div style="font-size:10px;color:var(--sub);margin-top:2px">Confirm where it ships and who prices it.</div></div>'
+    +     '<div style="font-size:10px;color:var(--sub);margin-top:2px">The address, lines and estimate go with it. Nothing is retyped in Omega Logic.</div></div>'
     +   '<button onclick="document.getElementById(\'rfq-file-modal\').remove()" style="background:var(--hover-strong);'
     +     'border:1px solid var(--hairline);color:#8BA3C4;border-radius:6px;padding:4px 10px;'
     +     'cursor:pointer;font-family:inherit;font-size:13px">✕</button>'
@@ -39046,7 +39046,7 @@ function openRfqFile() {
     +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Cancel</button>'
     +     '<button id="rfq-send-btn" onclick="submitRfqFile()" style="flex:1;padding:10px;'
     +       'background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;color:#fff;font-weight:700;'
-    +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Send RFQ</button>'
+    +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Send to the OEM</button>'
     +   '</div>'
     + '</div></div>';
 
@@ -39234,7 +39234,7 @@ function submitRfqFile() {
     })
   };
 
-  function done() { if (btn) { btn.disabled = false; btn.textContent = 'Send RFQ'; } }
+  function done() { if (btn) { btn.disabled = false; btn.textContent = 'Send to the OEM'; } }
 
   u.getIdToken().then(function (tok) {
     return fetch('/api/rfq', {
@@ -39248,16 +39248,27 @@ function submitRfqFile() {
       done();
       if (r.ok) {
         var n = (j && j.recipients && j.recipients.length) || 0;
-        if (!n) return say('Nothing was routed — ' + ((j && j.skipped) || 'no eligible recipient')
+        var orders = (j && j.orders) || [];
+        var orderHtml = orders.map(function (o) {
+          var count = (o.lines || 0) + ' line' + (o.lines === 1 ? '' : 's');
+          if (o.sameWorkspace && o.href) return '<a href="' + _esc(o.href) + '">' + _esc(o.orderNo) + '</a> (' + count + ') in your workspace';
+          return _esc(o.orderNo) + ' (' + count + ') opened in ' + _esc(o.orgName || 'the OEM') + '\u2019s workspace';
+        }).join('; ');
+        var orderPlain = orders.map(function (o) {
+          return o.sameWorkspace ? (o.orderNo + ' is open in your workspace') : (o.orderNo + ' opened in ' + (o.orgName || 'the OEM') + '\u2019s workspace');
+        }).join('. ');
+        if (!n && !orders.length) return say('Nothing was routed — ' + ((j && j.skipped) || 'no eligible recipient')
           + '. The BOM is unchanged.', true);
         var m = document.getElementById('bom-rfq-msg');
-        if (m) m.innerHTML = '<span style="color:var(--green)">RFQ filed with ' + n + ' partner'
-          + (n === 1 ? '' : 's') + '. Track it under RFQs on the project.</span>';
+        var filed = orderHtml
+          ? ('Purchase order ' + orderHtml + (n ? '. Also asked ' + n + ' partner' + (n === 1 ? '' : 's') + '.' : '.'))
+          : ('RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's') + '. Track it under RFQs on the project.');
+        if (m) m.innerHTML = '<span style="color:var(--green)">' + filed + '</span>';
         var host = document.getElementById('rfq-file-modal');
         if (host) host.remove();
         if (typeof showBanner === 'function') {
-          showBanner('cal', 'RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's')
-            + ' — replies land on this project.');
+          showBanner('cal', orderPlain || ('RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's')
+            + ' — replies land on this project.'));
         }
         return;
       }
