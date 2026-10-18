@@ -5,14 +5,15 @@
  * Drawing state lives in omega-editor-v2-doc.js. This file is the page:
  * the canvas, the command line, save-on-this-computer, and the customer
  * dialog. Sections are Site, Design, Analyze, Outputs, and Funding.
- * It does not open Firebase and it does not write a workspace.
+ * Sign-in is omega-editor-v2-auth.js: the same Firebase project and
+ * persisted session as Site Map. This file does not write a workspace.
  */
 (function (root) {
   'use strict';
 
   var G, D, A, B, X, R;
   var state, tool = 'select', equipKey = null, mapOn = true, dirty = false, savedOnce = false, saving = false;
-  var editSeq = 0;
+  var editSeq = 0, runEdit = -1;
   var snaps = { grid: true, endpoint: true, midpoint: true, edge: true, angle: false };
   var view = { cx: 200, cy: 140, pxPerFt: 1.5 };
   var gridView = null, gridFit = false;
@@ -73,8 +74,16 @@
     resize();
     fit(false);
     refresh();
-    if (!offerRecovery(null, null)) {
-      setStatus('Sample site loaded.');
+    var recovering = offerRecovery(null, null);
+    if (!recovering) setStatus('Sample site loaded.');
+    var Bld = root.OmegaEditorV2Build;
+    if (Bld && Bld.resume) {
+      if (recovering) {
+        $('dlg-recover').addEventListener('close', function once() {
+          $('dlg-recover').removeEventListener('close', once);
+          Bld.resume(state, placedCtx());
+        });
+      } else Bld.resume(state, placedCtx());
     }
     $('cmd').focus();
     if (root.OmegaEditorV2Hooks && root.OmegaEditorV2View3D) {
@@ -150,7 +159,10 @@
     $('site-yes').addEventListener('click', siteYes);
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
-    $('build-cancel').addEventListener('click', function () { $('dlg-build').close(); });
+    $('build-cancel').addEventListener('click', function () {
+      if (root.OmegaEditorV2Build && root.OmegaEditorV2Build.clearDraft) root.OmegaEditorV2Build.clearDraft();
+      $('dlg-build').close();
+    });
     $('side').addEventListener('change', onSideChange);
     $('btn-side').addEventListener('click', function () {
       var side = $('side'), open = side.classList.toggle('open');
@@ -665,6 +677,7 @@
     cv.width = Math.round(cssW * dpr);
     cv.height = Math.round(cssH * dpr);
     layoutMap();
+    requestDraw();
   }
   function screenToWorld(sx, sy) {
     return {
@@ -1856,7 +1869,7 @@
     if (!doc.screen) return { id: 'site', label: 'Does this site work?', run: function () { setSection('site'); } };
     if (doc.screen.go === false) return { id: 'revise', label: 'Revise the site', run: function () { setSection('site'); } };
     if (!drawnCount()) return { id: 'build', label: 'Place a build', run: function () { openBuild(); } };
-    if (!doc.runAt) return { id: 'run', label: 'Run', run: runNumbers };
+    if (runEdit !== editSeq) return { id: 'run', label: 'Run', run: runNumbers };
     return { id: 'quote', label: 'Quote', run: function () { setSection('funding'); } };
   }
   function paintNext() {
@@ -1890,21 +1903,25 @@
     var el = $('build-prompt');
     if (el) el.hidden = !canvasBlank();
   }
-  function openBuild(preferred) {
-    var Bld = root.OmegaEditorV2Build;
-    if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
-    setSection('design');
-    toggleOutputs(false);
-    Bld.open(state, {
+  function placedCtx() {
+    return {
       pxPerFt: view.pxPerFt,
-      preferred: typeof preferred === 'string' ? preferred : '',
       onPlaced: function (res) {
         afterChange();
         fit(true);
         setStatus((res.summary && res.summary.line) || 'Build placed.');
         notifyDrawn();
       }
-    });
+    };
+  }
+  function openBuild(preferred) {
+    var Bld = root.OmegaEditorV2Build;
+    if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
+    setSection('design');
+    toggleOutputs(false);
+    var ctx = placedCtx();
+    if (typeof preferred === 'string' && preferred) ctx.preferred = preferred;
+    Bld.open(state, ctx);
   }
   function notifyDrawn() {
     var H = root.OmegaEditorV2Hooks;
@@ -2003,11 +2020,7 @@
     var An = root.OmegaEditorV2Analyze;
     if (!An) { setStatus('Analyze is not loaded.', true); return; }
     var pi = An.assess(state);
-    D.setMeta(state, {
-      runAt: new Date().toISOString(),
-      intelligence: { score: pi.score, decision: pi.decision, source: pi.source || '' }
-    });
-    afterChange();
+    runEdit = editSeq;
     setSection('analyze');
     setStatus(pi.decision + ' · ' + pi.score + ' / 100, from the drawing.');
   }

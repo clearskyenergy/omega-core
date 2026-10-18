@@ -130,24 +130,49 @@
     for (i = 0; i < list.length; i++) if (list[i].id === id) b = list[i];
     document.getElementById('build-lead').textContent = b ? b.blurb : '';
     document.getElementById('build-error').textContent = '';
+    hideNeedSignIn();
+  }
+
+  var DRAFT_KEY = 'omega.editorV2.buildDraft';
+  var RETURN_KEY = 'omega.editorV2.buildReturn';
+
+  function idToken() {
+    var A = root.OmegaEditorV2Auth;
+    if (A && typeof A.idToken === 'function') return A.idToken();
+    return Promise.resolve('');
+  }
+
+  function bearerText(body) {
+    return String((body && (body.reason || body.error)) || '');
   }
 
   function ask(builder, input) {
-    var headers = { 'Content-Type': 'application/json' };
-    var user = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
-    var tokenP = user ? user.getIdToken() : Promise.resolve('');
-    return tokenP.then(function (token) {
-      if (token) headers.Authorization = 'Bearer ' + token;
+    return idToken().then(function (token) {
+      if (!token) return { ok: false, needSignIn: true };
       return fetch('/api/guided-build', {
-        method: 'POST', headers: headers,
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token },
         body: JSON.stringify({ builder: builder, input: input })
+      }).then(function (res) {
+        return res.json().then(function (body) {
+          var text = bearerText(body);
+          if (res.status === 401 || res.status === 403 || /bearer/i.test(text)) return { ok: false, needSignIn: true };
+          if (!res.ok) return { ok: false, reason: text || 'The build did not run.' };
+          return body;
+        }, function () {
+          if (res.status === 401 || res.status === 403) return { ok: false, needSignIn: true };
+          return { ok: false, reason: 'The build did not run.' };
+        });
+      }, function () {
+        return { ok: false, reason: 'The build service is not reachable. Try again in a moment.' };
       });
-    }).then(function (res) {
-      return res.json().then(function (body) {
-        if (!res.ok) return { ok: false, reason: (body && (body.reason || body.error)) || 'The build did not run.' };
-        return body;
-      }, function () { return { ok: false, reason: 'The build did not run.' }; });
-    }, function () { return { ok: false, reason: 'The build service is not reachable. Sign in on the workspace and try again.' }; });
+    });
+  }
+
+  function solarAcOf(summary) {
+    var n = summary && +summary.solarKwAc;
+    if (n > 0) return String(Math.round(n));
+    return '';
   }
 
   var drawing = null;
@@ -157,16 +182,96 @@
     var s = D.summary(drawing);
     var kw = document.querySelector('#dlg-build [data-field="kw"]');
     var hours = document.querySelector('#dlg-build [data-field="hours"]');
+    var solar = document.querySelector('#dlg-build [data-field="solarKw"]');
     if (kw && s.bessKw > 0) kw.value = String(s.bessKw);
     if (hours && s.bessKw > 0 && s.bessKwh > 0) {
       var h = Math.round((s.bessKwh / s.bessKw) * 10) / 10;
       if (h >= 0.5 && h <= 8) hours.value = String(h);
+    }
+    if (solar) solar.value = solarAcOf(s);
+  }
+
+  function showNeedSignIn() {
+    var err = document.getElementById('build-error');
+    var box = document.getElementById('build-signin');
+    var note = document.getElementById('build-signin-note');
+    if (err) err.textContent = '';
+    if (note) note.textContent = 'Sign in to place guided builds.';
+    if (box) box.hidden = false;
+  }
+  function hideNeedSignIn() {
+    var box = document.getElementById('build-signin');
+    if (box) box.hidden = true;
+  }
+
+  function readStash() {
+    try {
+      var raw = sessionStorage.getItem(DRAFT_KEY);
+      return raw ? JSON.parse(raw) : null;
+    } catch (e) { return null; }
+  }
+  function clearDraft() {
+    try {
+      sessionStorage.removeItem(DRAFT_KEY);
+      sessionStorage.removeItem(RETURN_KEY);
+    } catch (e) {}
+  }
+  function stash() {
+    try {
+      var details = document.getElementById('build-advanced-wrap');
+      var choices = document.getElementById('build-choices');
+      sessionStorage.setItem(DRAFT_KEY, JSON.stringify({
+        builder: selectedBuilder(),
+        fields: readFields(document.getElementById('dlg-build')),
+        advanced: !!(details && details.open),
+        pinned: !!(choices && choices.hidden)
+      }));
+      sessionStorage.setItem(RETURN_KEY, '1');
+    } catch (e) {}
+  }
+  function applyFields(fields) {
+    if (!fields) return;
+    var k, el;
+    for (k in fields) {
+      if (!Object.prototype.hasOwnProperty.call(fields, k)) continue;
+      el = document.querySelector('#dlg-build [data-field="' + k + '"]');
+      if (!el) continue;
+      if (el.type === 'checkbox') el.checked = !!fields[k];
+      else el.value = fields[k] == null ? '' : String(fields[k]);
     }
   }
 
   function selectedBuilder() {
     var on = document.querySelector('#build-choices input:checked');
     return on ? on.value : 'bess';
+  }
+
+  function bindSignIn() {
+    var btn = document.getElementById('build-signin-btn');
+    if (!btn) return;
+    btn.onclick = function (ev) {
+      ev.preventDefault();
+      var A = root.OmegaEditorV2Auth;
+      var note = document.getElementById('build-signin-note');
+      if (!A || typeof A.signIn !== 'function') {
+        if (note) note.textContent = 'Sign-in is unavailable. Check the connection and refresh.';
+        return;
+      }
+      stash();
+      btn.disabled = true;
+      A.signIn().then(function () {
+        btn.disabled = false;
+        clearDraft();
+        hideNeedSignIn();
+        var err = document.getElementById('build-error');
+        if (err) err.textContent = '';
+      }, function (err) {
+        btn.disabled = false;
+        var msg = (err && err.message) || 'Sign-in did not finish.';
+        if (/bearer/i.test(msg)) msg = 'Sign-in did not finish.';
+        if (note) note.textContent = msg;
+      });
+    };
   }
 
   function open(state, ctx) {
@@ -176,7 +281,8 @@
     var dlg = document.getElementById('dlg-build');
     var choices = document.getElementById('build-choices');
     choices.innerHTML = '';
-    var list = Form.builders(), i, label, radio, prefer = (ctx && ctx.preferred) || suggest(state.doc);
+    var list = Form.builders(), i, label, radio;
+    var prefer = (ctx && (ctx.preferred || ctx.builder)) || suggest(state.doc);
     for (i = 0; i < list.length; i++) {
       label = document.createElement('label');
       radio = document.createElement('input');
@@ -190,6 +296,12 @@
       choices.appendChild(label);
     }
     paintFields(prefer);
+    if (ctx && ctx.draft && ctx.draft.fields) {
+      applyFields(ctx.draft.fields);
+      var adv = document.getElementById('build-advanced-wrap');
+      if (adv && ctx.draft.advanced) adv.open = true;
+    }
+    bindSignIn();
     var pinned = !!(ctx && ctx.preferred);
     choices.hidden = pinned;
     var named = null;
@@ -210,12 +322,20 @@
       }
       placeBtn.disabled = true;
       document.getElementById('build-error').textContent = '';
+      hideNeedSignIn();
       ask(id, input).then(function (plan) {
         placeBtn.disabled = false;
-        if (!plan || !plan.ok) {
-          document.getElementById('build-error').textContent = (plan && plan.reason) || 'The build did not run.';
+        if (plan && plan.needSignIn) {
+          showNeedSignIn();
           return;
         }
+        if (!plan || !plan.ok) {
+          var reason = (plan && plan.reason) || 'The build did not run.';
+          if (/bearer/i.test(reason)) { showNeedSignIn(); return; }
+          document.getElementById('build-error').textContent = reason;
+          return;
+        }
+        clearDraft();
         var placed = place(state, plan);
         if (!placed.ok) {
           document.getElementById('build-error').textContent = placed.reason;
@@ -235,7 +355,29 @@
     return 'bess';
   }
 
-  var api = { place: place, contextOf: contextOf, open: open, suggest: suggest, VERSION: 'editor-v2-build/1' };
+  function resume(state, ctx) {
+    if (typeof document === 'undefined' || typeof sessionStorage === 'undefined') return;
+    if (sessionStorage.getItem(RETURN_KEY) !== '1') return;
+    var draft = readStash();
+    sessionStorage.removeItem(RETURN_KEY);
+    var next = {
+      pxPerFt: ctx && ctx.pxPerFt,
+      onPlaced: ctx && ctx.onPlaced,
+      draft: draft,
+      builder: draft && draft.builder
+    };
+    if (draft && draft.pinned && draft.builder) next.preferred = draft.builder;
+    idToken().then(function (token) {
+      open(state, next);
+      if (!token) showNeedSignIn();
+    });
+  }
+
+  var api = {
+    place: place, contextOf: contextOf, open: open, suggest: suggest,
+    ask: ask, solarAcOf: solarAcOf, clearDraft: clearDraft, resume: resume,
+    VERSION: 'editor-v2-build/2'
+  };
   root.OmegaEditorV2Build = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
 })(typeof window !== 'undefined' ? window : global);
