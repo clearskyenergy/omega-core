@@ -259,10 +259,21 @@
     return b;
   }
 
+  /* A workspace id safe to put on a link. The office still authorizes it;
+     this only refuses a value that is not an org id. The same fenecon fold
+     _projOrgId uses. */
+  function orgId(v) {
+    var s = String(v == null ? '' : v).trim().toLowerCase();
+    if (!s || s.length > 253) return '';
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)) return '';
+    if (s === 'fenecon.de' || s === 'fenecon.us') return 'fenecon.com';
+    return s;
+  }
+
   /* What Site Map puts on /omega-prime. Blank fields are left off. */
   function linkQuery(f) {
     f = f || {};
-    var q = [], addr = String(f.addr || '').replace(/^\s+|\s+$/g, ''), lat = +f.lat, lng = +f.lng, t;
+    var q = [], addr = String(f.addr || '').replace(/^\s+|\s+$/g, ''), lat = +f.lat, lng = +f.lng, t, org;
     if (addr) q.push('addr=' + encodeURIComponent(addr));
     if (isFinite(lat) && isFinite(lng)) {
       q.push('lat=' + encodeURIComponent(String(lat)));
@@ -271,6 +282,8 @@
     if (f.projectId) q.push('project=' + encodeURIComponent(String(f.projectId)));
     t = primeType(f.type);
     if (t) q.push('type=' + t);
+    org = orgId(f.org);
+    if (org) q.push('org=' + encodeURIComponent(org));
     if (f.step === 'logic' || f.step === 'quote') q.push('step=' + f.step);
     return q.join('&');
   }
@@ -296,7 +309,7 @@
   }
 
   var P = { XXL: XXL, fromEntry: fromEntry, refs: refs, units: units, forType: forType, screenable: screenable,
-            primeType: primeType, linkQuery: linkQuery, bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
+            primeType: primeType, linkQuery: linkQuery, orgId: orgId, bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
             layout: layout, projectDoc: projectDoc };
   root.OmegaPrimeProject = P;
   if (typeof module !== 'undefined' && module.exports) module.exports = P;

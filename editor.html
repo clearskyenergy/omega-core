@@ -26332,6 +26332,7 @@ async function saveProject(){
     if(!_projectId){
       payload.uid = _currentUser.uid;
       payload.orgId = ((typeof _projOrgId==='function') ? _projOrgId() : null) || 'clearsky.com';
+      try{ window._projectOrgId = payload.orgId; }catch(e){}
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await _db.collection('projects').add(payload);
       _projectId = ref.id;
@@ -26663,6 +26664,7 @@ async function _loadProject(id){
       return;
     }
     const d=doc.data();
+    try{ window._projectOrgId = d.orgId || ''; }catch(e){}
     /* the saved time this tab loaded: saveProject() refuses to write over a
        newer save from another tab or computer (2026-10-14) */
     try{ window._loadedUpdatedAt = d.updatedAt && typeof d.updatedAt.toMillis==='function' ? d.updatedAt.toMillis() : (d.updatedAt ? +new Date(d.updatedAt) : null); }catch(e){ window._loadedUpdatedAt = null; }
@@ -77351,7 +77353,14 @@ function omegaSiteFacts(){
     else if(window.OmegaProjectTypes && typeof OmegaProjectTypes.current==='function') type=OmegaProjectTypes.current();
     else if(typeof S!=='undefined' && S && S.projectType) type=S.projectType;
   }catch(e7){}
-  return { addr:addr, lat:lat, lng:lng, type:type,
+  /* The open project's org, else the signed-in workspace. Never a staff
+     directory and never an OEM picked because it is first in a list. */
+  var org='';
+  try{
+    if(window._projectOrgId) org=String(window._projectOrgId);
+    else if(typeof _projOrgId==='function') org=_projOrgId();
+  }catch(e8){}
+  return { addr:addr, lat:lat, lng:lng, type:type, org:org,
     projectId:(typeof _projectId==='string' && _projectId) ? _projectId : '' };
 }
 /* Site Map to Omega Prime. Push to Logic is the same handoff on the Logic step. */

@@ -77,6 +77,9 @@ assert.equal(PP.primeType('evl2'), 'ev'); assert.equal(PP.primeType('datacenter'
 assert.equal(PP.linkQuery({ addr: '3400 S Federal St, Chicago, IL 60616', lat: 41.8, lng: -87.6, projectId: 'p1', type: 'evl2', step: 'logic' }),
   'addr=' + encodeURIComponent('3400 S Federal St, Chicago, IL 60616') + '&lat=41.8&lng=-87.6&project=p1&type=ev&step=logic'); count++;
 assert.equal(PP.linkQuery({ step: 'quote' }), 'step=quote'); count++;
+assert.equal(PP.linkQuery({ org: 'ClearSky-USA.com', projectId: 'p' }), 'project=p&org=clearsky-usa.com'); count++;
+assert.equal(PP.linkQuery({ org: 'fenecon.de' }), 'org=fenecon.com'); count++;
+assert.equal(PP.orgId('not an org'), ''); assert.equal(PP.linkQuery({ org: '../omega_orgs' }), ''); count += 2;
 var CAT = require(path.join(ROOT, 'omega-site-catalogs.js'));
 var edSrc = read('editor.html');
 function sliceObj(name) {
@@ -147,8 +150,13 @@ vm.runInContext('omegaPushPrime("logic");', fx);
 assert.ok(/step=logic$/.test(fx.opened), fx.opened); count++;
 assert.match(edSrc, /<script src="\/omega-prime-project\.js"><\/script>/); assert.match(edSrc, /window\._lastAddr=addr/); assert.match(factsFn, /OmegaProjectTypes\.get/); count += 3;
 fx.OmegaProjectTypes = { get: function () { return 'ev'; }, current: function () { return 'bess'; } };
+fx._projectOrgId = 'nextnrg.com';
+fx._projOrgId = function () { return 'clearsky-usa.com'; };
 vm.runInContext('omegaPushPrime();', fx);
-assert.ok(/type=ev(?:&|$)/.test(fx.opened), fx.opened); count++;
+assert.ok(/type=ev(?:&|$)/.test(fx.opened) && /(?:^|&)org=nextnrg\.com(?:&|$)/.test(fx.opened.split('?')[1] || ''), fx.opened); count++;
+fx._projectOrgId = '';
+vm.runInContext('omegaPushPrime();', fx);
+assert.ok(/(?:^|&)org=clearsky-usa\.com(?:&|$)/.test(fx.opened.split('?')[1] || ''), fx.opened); count++;
 
 /* Site Map reads every field the record is made with */
 var ed = read('editor.html');
@@ -165,7 +173,8 @@ assert.match(pg, /GV\.ask\(body\)/); assert.match(pg, /GV\.circuitBody\(S\.probe
 var order = ['/omega-comed-layers.js', '/omega-bess-products.js', '/omega-cleancell-catalog.js?v=20261010-revh2', '/omega-site-catalogs.js', '/omega-grid-verdict.js', '/omega-prime-project.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
 assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k - 1]); }), 'the shared modules load in order'); count++;
 assert.match(pg, /B\.load\(\)\.then\(function \(t\) \{ tenantList = t; showType\(S\.type, true\);/); count++;
-assert.match(pg, /type: S\.type/); assert.match(pg, /S\.projectId = pid/); count += 2;
+assert.match(pg, /type: S\.type/); assert.match(pg, /S\.projectId = pid/); assert.match(pg, /function paintLogic/); assert.match(pg, /PP\.orgId\(qparam\('org'\)\)/); count += 4;
+assert.match(pg, /var id = PP\.orgId\(w\.orgId\)/); assert.ok(pg.indexOf('PP.orgId(w.orgId) || w.orgId') < 0, 'a link org is the safe id, never the raw claim'); count += 2;
 assert.match(pg, /fetch\('\/api\/utility-rates\?zip=' \+ encodeURIComponent\(zip\)/); count++;
 assert.match(pg, /var claim = r && r\.claims && r\.claims\.orgId;/); assert.match(pg, /orgId: claim \? String\(claim\) : \(B && B\.orgOf \? B\.orgOf\(u\.email\) : ''\)/, 'homed as userOrg() is: the claim, then the email domain'); count += 2;
 assert.match(pg, /db\.collection\('projects'\)\.add\(PP\.projectDoc\(docState\(\), w, FV\.serverTimestamp\(\)\)\)/); count++;

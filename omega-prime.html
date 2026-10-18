@@ -509,6 +509,11 @@ table.bom tr.fen td{background:#FFF3E8}
     if (isFinite(latQ) && isFinite(lngQ)) { S.lat = latQ; S.lng = lngQ; S.handed = true; }
     var pid = qparam('project');
     if (pid) { S.editorProjectId = pid; S.projectId = pid; }
+    /* The project's org, or the signed-in workspace. Omega Logic opens that
+       company. A bare /omega-logic is the staff directory, and this step
+       does not send anyone there. */
+    var orgQ = PP.orgId(qparam('org'));
+    if (orgQ) S.org = orgQ;
     var typeQ = PP.primeType(qparam('type'));
     if (typeQ) showType(typeQ);
     /* step opens a screen that already exists; it does not change how a
@@ -959,12 +964,35 @@ table.bom tr.fen td{background:#FFF3E8}
     guide();
   }
   $('#q-logic').onclick = function () { show('logic'); };
+  /* Omega Logic and Custody open the company this site belongs to. The
+     ClearSky directory stays a link inside that office, opened on purpose. */
+  function paintLogic() {
+    var org = S.org || '';
+    function href(path) { return org ? path + '?org=' + encodeURIComponent(org) : path; }
+    var logic = document.querySelector('#s-logic a[href^="/omega-logic"]');
+    var custody = document.querySelector('#s-logic a[href^="/logic-custody"]');
+    if (logic) logic.setAttribute('href', href('/omega-logic'));
+    if (custody) custody.setAttribute('href', href('/logic-custody.html'));
+  }
+  paintLogic();
 
   /* ── sign-in, the way the other tool pages start it ──────────────── */
   (function () {
     var cfg = window.CLEARSKY_CONFIG || {};
     try { if (window.firebase && firebase.initializeApp && !firebase.apps.length) firebase.initializeApp(cfg.firebase || cfg); } catch (e) {}
-    try { firebase.auth().onAuthStateChanged(function (u) { if (u) loadUnits(); if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }); } catch (e) { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }
+    try { firebase.auth().onAuthStateChanged(function (u) {
+      if (u) {
+        loadUnits();
+        if (!S.org) who().then(function (w) {
+          if (!w || S.org) return;
+          var id = PP.orgId(w.orgId);
+          if (!id) return;
+          S.org = id;
+          paintLogic();
+        });
+      }
+      if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done();
+    }); } catch (e) { if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }
   })();
 
   /* A link that already opened Quote or Logic (Push to Logic) keeps that
