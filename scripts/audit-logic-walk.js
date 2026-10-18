@@ -63,7 +63,12 @@ var PAGES = [
   { id: 'kit', persona: 'staff', path: '/logic-kit.html?org=cleancell.us', file: 'logic-kit.html', area: 'Setup' },
   { id: 'urls', persona: 'staff', path: '/logic-urls.html?org=cleancell.us', file: 'logic-urls.html', area: 'Setup' },
   { id: 'whitelabel', persona: 'staff', path: '/whitelabel-setup.html?org=cleancell.us', file: 'whitelabel-setup.html', area: 'Setup' },
-  { id: 'sandbox-office', persona: 'tenant', path: '/app-sandbox/office', file: 'app-sandbox/office.html', area: 'Sales', phone: true }
+  { id: 'sandbox-office', persona: 'tenant', path: '/app-sandbox/office', file: 'app-sandbox/office.html', area: 'Sales', phone: true },
+  /* The design-to-order journey. Prime's Quote and Omega Logic screens are
+     static: they do not file a PO. Walked here so the handoff is a page a
+     person sees, not only a function. omega-prime.html itself is not edited. */
+  { id: 'prime-quote', persona: 'tenant', path: '/omega-prime.html?step=quote&project=sample-project&addr=100%20Main%20St', file: 'omega-prime.html', area: 'Sales' },
+  { id: 'prime-logic', persona: 'tenant', path: '/omega-prime.html?step=logic&project=sample-project&addr=100%20Main%20St', file: 'omega-prime.html', area: 'Sales' }
 ];
 
 /* Firestore paths Omega Logic reads or writes. Root names are matched in
@@ -274,7 +279,10 @@ async function walk() {
     report.push(row);
     console.log(JSON.stringify({ id: row.id, persona: row.persona, http: row.http, h1: row.h1, status: row.status, errors: row.errors.length, flags: row.flags.slice(0, 3) }));
   }
-  for (var i = 0; i < PAGES.length; i++) await one(PAGES[i]);
+  var onlyAt = process.argv.indexOf('--only');
+  var only = onlyAt >= 0 ? String(process.argv[onlyAt + 1] || '').split(',') : null;
+  var list = only ? PAGES.filter(function (p) { return only.indexOf(p.id) >= 0; }) : PAGES;
+  for (var i = 0; i < list.length; i++) await one(list[i]);
   await browser.close();
   srv.close();
   if (shots) fs.writeFileSync(path.join(shots, 'report.json'), JSON.stringify(report, null, 2));

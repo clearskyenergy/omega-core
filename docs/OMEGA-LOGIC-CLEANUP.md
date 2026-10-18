@@ -6,6 +6,15 @@ Phase 1 only. This document maps Omega Logic and records what a person
 actually sees. It does not change a page, a rule, or a tenant. Later
 workstreams are separate pull requests. Nothing here is a merge.
 
+The spine, from Thomas: a project is designed in Site Map (`/editor`) or
+in Omega Prime (`/omega-prime`). That project's quote and bill of materials
+become a purchase order in the OEM's workspace (Clean Cell is the example).
+The OEM then fulfills it — allocate stock, or build it on a work order —
+then ships, delivers, puts it on site, and closes custody and the serials,
+with the deposit, the final payment, and the invoices on that same order.
+That journey is what has to be one smooth step. The per-area findings below
+are what the OEM sees after the order exists.
+
 Walked 18 October 2026 against the sample Clean Cell workspace in
 `scripts/_lib/logic-fixtures.js`, served only on `127.0.0.1`. Signed in as
 a workspace administrator (`demo@cleancell.us`), a member
@@ -29,6 +38,94 @@ Out of scope for every workstream in this plan:
   handoff must not open for a tenant.
 - Widening Firestore rules or tenant access. One later pull request may
   only add an explicit deny.
+- Editing `omega-prime.html`. The journey pull request below is the
+  function both doors call. The call from Prime waits until that file is
+  free. The card that opens `/omega-logic` with no company is the other
+  agent's fix, and this plan does not take it.
+
+## The journey, and where it breaks
+
+Traced in the code the buttons call, then opened in Chromium on the sample
+host. No production project was read. One design does not become one order.
+
+```
+Site Map or Omega Prime
+        │  projects/{id}          address, unit, drawing, Run
+        ▼
+   Bill of materials / quote screen
+        │  rfqs/{id}              only if someone files from Site Map
+        │                         Prime's quote is a table on the page
+        ▼
+   Quote Desk accept
+        │  recipients/{oem}.contact    name and email, nothing else
+        ▼
+   (nothing writes orders/{id})
+        │
+        ▼
+   Someone retypes a PO in the OEM office
+        orders/{id}               no project id, no drawing, no Run
+        ▼
+   Price → Deposit → allocate or build → Ship → Deliver → On site → Complete
+```
+
+### What each handoff keeps
+
+| Handoff | Record | What carries | What is lost or typed again | Dead end |
+|---|---|---|---|---|
+| Design in Site Map | `projects/{id}`: address string, equipment, BOM, Run totals (`capex`, `capexSource: 'site-map'`) | The drawing | — | Push to Logic does not send it on |
+| Design in Prime | `omega-prime-project.js` `projectDoc`: address, `bessList` catalog key, `mapState`, `grid`, `load`, `prime.layout`, `prime.run` | A project the editor can open with `?from=prime` | `type` and `siteScopes` are written as battery. The Run total is Prime's cost model, stored as `prime.run`, and Site Map's capex rollup does not read it | Open in Site Map is the only way out of the quote |
+| Push to Logic, from the editor | `omegaPushLogic` opens `/omega-prime?addr=&project=&step=logic` | The address string and the project id, on the query | The project id is saved as `S.editorProjectId` and never read. The unit, the BOM, the quantities, and the price do not travel | The screen below |
+| Prime, Quote | A table drawn in the page. The unit row says "Quote required". Cost-model divisions are extra rows with a dollar figure | Nothing is posted | No `rfqs` document, no `orders` document. Opening Quote from a link leaves the table empty and the Site Map button pointing at `#` | "Open in Site Map to file the RFQ", then the person files it by hand |
+| Prime, Omega Logic | Three cards | None of the project | `/rfq.html#received`, `/omega-logic` with no company, `/logic-custody.html` with no company and no serial | A ClearSky owner lands on the all-OEM directory. A tenant lands on Logic with no order to open |
+| File the BOM from Site Map | `POST /api/rfq`. Lines are `{ sku, description, qty, unit, category, manufacturer }`. Parent stores `projectId`, `projectName`, `ship.address`, `ship.zip`, `bom` | Project id, a ZIP the person types again, the address string, the line quantities | Line prices are not sent. The Run total is not sent. The address is one string, not a street, city, state, and ZIP | "Nothing was routed" when no manufacturer matches, and the request is not saved |
+| Manufacturer's own drawing | `api/rfq.js` skips the designer's own org | — | A Clean Cell rep who designed the job never receives it as Clean Cell. The rule is "the customer's own org is never a recipient" | The OEM of a job they drew has no order and no RFQ |
+| Quote Desk answer | `respond` writes `quote.fileUrl`, `totalUsd`, `leadTimeDays` on `rfqs/{id}/recipients/{vendorOrgId}` | A link and one total | No line prices, no catalog sku check | The file lives wherever the vendor already kept it |
+| Customer accepts | `reveal` sets `status: 'accepted'` and `contact: { orgId, orgName, email, projectId, projectName }` | Who the customer is, and the project id, on the RFQ | No `orders` document. No PO number. No destination. No sku lines copied | Quote Desk has no Omega Logic link. Accept does not open an order |
+| PO typed in the OEM office | `api/po-intake.js` → `orders/{id}` via `order-lifecycle.js` `po()` | Only what was typed: published `sku`, integer `qty`, a street address in five fields, a PO number, a company account | Project id, RFQ id, drawing, Run, the editor's line descriptions. An install line (conduit, pad, a cost division) is refused: it is not a published product | `/customer-po` alone says "Open a PO from the company inbox first" |
+| Price and deposit | `logic.pricedBy`, deposit invoice on the order | The typed lines | The designer's estimate stays on the project. It is not the price and it is not on the order | Two words for the same moment: the bar says Price or Deposit, the chip says Awaiting price or Awaiting deposit |
+| Release | `plant_works_orders/wo_{orderId}`, or finished serials allocated by sku | Order id, sku, qty | The editor BOM is not the work-order bill. The bench explodes `storefront` `product.bom`. A product with no bill still releases | The work order does not know the project |
+| Ship, deliver, on site | `delivery.legs`, then `plant_units.custody.siteId` | Serials that were registered against the order | The project address is not the destination. Sites are created again on the custody page. No packing list is generated | The shipping page says carrier booking and tracking are not connected |
+| Complete, and the money | Deposit and balance invoices, `receivables.js` | The order's own invoices | Nothing posts back to the project. A recorded payment is not bank clearance | Cash flow and Accounting show the same totals |
+
+The ids that should be one chain, and where they stop:
+
+| Id | Written | Read by the next step |
+|---|---|---|
+| `projects/{id}` | Editor save, Prime `projectDoc` | The RFQ's `projectId`. Prime's push stores it and does not open the project |
+| `rfqs/{id}` | `POST /api/rfq` | Quote Desk. Not Logic |
+| `rfqs/{id}/recipients/{vendorOrgId}` | The fan-out | Accept writes `contact`. Not an order |
+| `orders/{id}` | PO intake, or the storefront | Has no `projectId` and no `rfqId` |
+| `orders/{id}.worksOrderId` = `plant_works_orders/wo_{orderId}` | Release | Plant, stock, ship |
+| `plant_units.orderId` | Allocation or the bench | Custody and the load. No project id on the serial |
+
+### The editor BOM and the Prime quote are not the same PO
+
+They are not a PO at all. They are not the same document either.
+
+| | Editor, filed | Prime, on the quote screen | OEM order, once someone types it |
+|---|---|---|---|
+| Where it lives | `rfqs/{id}.bom[]` | The browser only | `orders/{id}.items[]` |
+| A line | `sku`, `description`, `qty`, `unit`, `category`, `manufacturer` | The unit name and "Quote required", then one row per cost-model division with a dollar amount | `sku`, `name`, `kind`, integer `qty`, and the sku must be a published product |
+| Quantity | The takeoff | 1 on every row | Whole units, 1 to 10,000, allocated to destinations that sum to the order |
+| Address | One string, plus a ZIP typed in the dialog | One string on the project | `name`, `line1`, `city`, `state`, `zip`, `country` |
+| Price | Not on the line. The Run total stays on the project | On the division rows, from `/api/price-site`. The unit is unpriced | Typed later, at Price. The design estimate is not copied |
+| Project | `projectId` on the RFQ | `projects/{id}` if Prime saved it. A Quote link that only has `?project=` does not load it | Absent |
+
+A Clean Cell sku that appears in both places would still not meet. The editor sends the catalog key as `sku` with a manufacturer name. Prime shows the unit name and does not post. The office accepts that sku only after a person picks it from the published list and types a destination. Install lines that belong to the site (conduit, pad, a division of the cost model) are a different list from the OEM's bill of materials, and the plant's bench uses a third list, the catalog `bom`.
+
+![Prime's Omega Logic step: three links, no order](logic-cleanup/prime-logic.jpg)
+
+Opened as `/omega-prime?step=logic&project=sample-project`. The visible screen is "When the client says yes". The three links are `/rfq.html#received`, `/omega-logic`, and `/logic-custody.html`. The sample project id is on the query and on `S.editorProjectId`, and none of the links carry it.
+
+![Prime's quote, opened from a link, with nothing filed](logic-cleanup/prime-quote.jpg)
+
+Opened as `/omega-prime?step=quote&project=sample-project`. The table is empty. "Open in Site Map to file the RFQ" points at `#`. "Next: Omega Logic" shows the three links above. Filing still means opening Site Map, opening the bill of materials, typing the ZIP, and sending.
+
+### What the first pull request makes true
+
+Design, then the quote or the BOM, then a purchase order in the OEM's workspace, as one step. The order arrives at Price. The OEM allocates or builds from there, on the path that already exists. The details are W0 below. It does not allocate stock, generate a bill of lading, or take a card payment. Those stay in the later streams.
+
+The same step has to work for a battery, a solar scope, EV equipment, compute, wind, and a microgrid. The match is a published sku. Prime's project type today is a battery button with EV, solar, and compute marked "next", and the record is written `type: 'bess'`. That limit lives in `omega-prime.html` and `projectDoc`, which this plan does not edit. The order function must not copy it.
 
 ## How an order is supposed to move
 
@@ -144,7 +241,10 @@ a named collection above drops out of `firestore.rules`.
 
 ## What the walk showed
 
-42 pages returned HTTP 200. The white-label setup page painted its four
+42 office, plant, customer, and staff pages returned HTTP 200. Prime's
+Quote and Omega Logic screens were opened the same way (`--only
+prime-quote,prime-logic`); both returned HTTP 200 and are the handoff
+figures above. The white-label setup page painted its four
 steps; the sample server has no Firestore, so that page's save path was
 not exercised. The bench opened on **Pair this bench** until a station
 token exists. That is the real first screen of an unpaired tablet.
@@ -157,8 +257,10 @@ dashboards.
 
 ## Sales
 
-**Severity: high.** The path bar and the status chips describe one order
-in two languages.
+**Severity: high.** Inside the OEM office, the path bar and the status
+chips describe one order in two languages. That order exists because
+someone typed a PO. How a design fails to become that PO is the journey
+above.
 
 ![Orders: the bar says Build, the chip says In production](logic-cleanup/office-orders.jpg)
 
@@ -440,16 +542,78 @@ products are batteries still shows those product names from the catalog.
 
 ## Parallel workstreams
 
-Each pull request owns the files listed and no others. Shared files are
-named once so two agents do not edit them. Do not edit `package.json`
-except the Features pull request, which may add its test to `test:logic`.
+W0 is first. It is the design-to-PO step. The others clean one area of the
+office and can run beside it, because they do not share its files. Each
+pull request owns the files listed and no others. Do not edit `package.json`
+except W0, which may append `scripts/tests/tdesignorder.js` to `test:logic`.
 Other tests run as `node scripts/tests/<file>.js`. Do not edit
-`omega-prime.html`, editor v2, or this audit's screenshots.
+`omega-prime.html`, editor v2, or this audit's screenshots. Do not change
+the Prime card that opens `/omega-logic` with no company.
 
-Leave the menu alone in every pull request except **W0**. A page can lose
-a dead button without the menu knowing. W0 hides the menu row.
+Leave the menu alone in every pull request except **W1**. A page can lose
+a dead button without the menu knowing. W1 hides the menu row.
 
-### W0 — Settings › Features
+### W0 — Design, then the OEM's purchase order
+
+This is the first pull request. Filing the bill of materials creates the
+order in the OEM's workspace, waiting at Price.
+
+Owns `api/_lib/design-order.js` (new), `api/rfq.js` (after the RFQ is
+written, one order per OEM whose catalog matched), `rfq.html` (the received
+row links to that order), `scripts/tests/tdesignorder.js`. The editor's
+send button already posts `/api/rfq`. Change the success sentence only if
+the API's order id has to be named there, and only that sentence. Do not
+own `omega-prime.html`. Do not own `po-inbox.html` (W3). Do not own
+`api/_lib/buyer-accounts.js`; create the customer through a new helper in
+`design-order.js` that calls the account writer already there, and if that
+call cannot be made without editing the account file, stop and leave the
+customer as the contact the RFQ already stores, named on the order.
+
+`design-order.js` is pure. It takes the project id, the project name, the
+address string, the designer's org and email, the BOM lines in the editor
+shape `{ sku, description, qty, unit, category, manufacturer }`, and the
+OEM's published products. It returns the body `order-lifecycle.js` `po()`
+already accepts: published sku, name, kind, whole-unit qty, one destination.
+It also returns `projectId`, `rfqId`, and `source: 'design'`. A line that
+is not a published product is listed on `unmatched` with the words from the
+drawing. It is not dropped quietly and it is not written as an item.
+
+The address string is kept whole on the destination when it cannot be split
+into street, city, state, and ZIP. The OEM confirms it. Nothing is invented.
+The designer's Run total may be stored beside the order as
+`design.estimate`. It is not the price. Price still types the price.
+
+The order's `orgId` is the OEM the RFQ already resolved, never the staff
+directory. A distributor who was ticked still gets the RFQ they get today.
+They get a Logic order only when one of their published skus is on the
+line. When the designer is the OEM — a Clean Cell rep who drew the job —
+the order is written in that same workspace. Today the RFQ refuses to send
+a manufacturer their own drawing; this step still files the PO there.
+
+The same function accepts Prime's record as a second input: `prime.unitKey`
+or the catalog key on `bessList`, quantity 1, the address, the project id.
+A test feeds that shape and an editor BOM that names the same published sku
+and asserts one item list, one destination, and the same `projectId`. The
+call from `omega-prime.html` is a later change of that file, once it is
+free. Until then, Site Map's File RFQ is the step that creates the PO,
+which is the door Prime already points at.
+
+Acceptance, in `scripts/tests/tdesignorder.js`:
+
+- An editor BOM with one published sku and one install line creates one
+  order in the OEM org. Items are the sku and the qty. The install line is
+  `unmatched`. `projectId` is on the order. No price is written. Status is
+  the office's waiting-for-price state.
+- Prime's unit key for that same sku produces the same items, destination,
+  and project id.
+- A BOM whose lines match no published product creates no order and names
+  every line.
+- The designer's org and the OEM's org differ: the order is in the OEM's.
+  They are the same org: the order is still created.
+- A solar sku and a battery sku through the same function produce the same
+  shape. No branch on project type.
+
+### W1 — Settings › Features
 
 Owns `omega-logic-features.js` (new), `logic-settings.html`,
 `omega-logic-theme.js` (`groups()` only), `office/app.html` (the menu
@@ -466,34 +630,34 @@ on puts that one link back. A viewer cannot write the workspace default.
 `node scripts/tests/tlogicfeatures.js` covers the default, the override,
 and the locked row.
 
-### W1 — One order language
+### W2 — One order language
 
 Owns `api/_lib/office-stage.js` (labels only; do not change who may press
 a button), `omega-logic.html`, `scripts/tests/tlogicpath.js` (extend
 `scripts/test-office-stage.js` if that stays the home of the rule — then
-W1 is the only editor of that test).
+W2 is the only editor of that test).
 
 The order list, the order panel, and Today print the path step. Internal
-keys can stay. Cash flow and the floor blocks on this page stay until W0
-hides their menu entries; W1 does not delete those sections if W0 has not
-landed. If both are in flight, W1 only changes the words in the orders
+keys can stay. Cash flow and the floor blocks on this page stay until W1
+hides their menu entries; W2 does not delete those sections if W1 has not
+landed. If both are in flight, W2 only changes the words in the orders
 panel.
 
 Acceptance: the sample orders render one step name in the bar, the chip,
 and the guide. A member still cannot price. Existing
 `scripts/test-office-stage.js` stays green.
 
-### W2 — One PO door
+### W3 — One PO door
 
 Owns `po-inbox.html`, `customer-po.html`, `omega-po-bulk.js` if the paste
-parser must change. Does not own `office/app.html` (W0 removes the extra
-menu row).
+parser must change. Does not own `office/app.html` (W1 removes the extra
+menu row). Does not own `api/rfq.js` or `api/_lib/design-order.js` (W0).
 
 Acceptance: a stack of POs is entered from Customer POs. `/customer-po`
 opened with no PO explains that and links to the inbox. Nothing is priced
 or charged from this page.
 
-### W3 — Customers
+### W4 — Customers
 
 Owns `portals/customer/admin.html`, `portals/customer/index.html`,
 `portals/customer/app.html`, `customer-start.html`, `api/buyers.js` only
@@ -507,9 +671,9 @@ Owns no billing and no `api/customer-subscribe.js` price change.
 Acceptance: member and administrator see the same sections; the member's
 write buttons are absent. A fixture customer with a solar product name
 does not see the words "battery" or "BESS" on the walkthrough or the URL
-list. Add the URL strings only if W8 has not taken `logic-urls.html`.
+list. Add the URL strings only if W9 has not taken `logic-urls.html`.
 
-### W4 — Plant
+### W5 — Plant
 
 Owns `plant/work-orders.html`, `plant/manager.html`, `plant/index.html`,
 `plant/app.html`, `plant/station.html`, `api/logic-plant.js`,
@@ -522,9 +686,9 @@ no bill is named on the work order.
 
 Acceptance: `scripts/render-logic-pages.js` plant checks still pass.
 A product with an empty bill is visible as "no bill" on the sample work
-order. Menu labels are W0's job.
+order. Menu labels are W1's job.
 
-### W5 — Stock
+### W6 — Stock
 
 Owns `logic-inventory.html`, `logic-materials.html`, `logic-catalog.html`,
 `api/logic-materials.js`, `api/logic-catalog.js`, `api/_lib/materials.js`
@@ -537,7 +701,7 @@ catalog page no longer says BESS. An issue that would drive on-hand
 negative is refused with the sku named. Prices stay out of the public
 catalog projection.
 
-### W6 — Deliver
+### W7 — Deliver
 
 Owns `logic-logistics.html`, `logic-custody.html`, `logic-register.html`,
 `api/logic-logistics.js` (notice text only), `api/logic-custody.js` only
@@ -547,7 +711,7 @@ Acceptance: the shipping page shows the manual-ledger sentence from the
 API, not a sandbox slogan. Fleet register, when opened, is the same units
 as Sites. No new document type in this pull request.
 
-### W7 — Money
+### W8 — Money
 
 Owns `logic-accounting.html`, `api/logic-accounting.js`,
 `api/_lib/receivables.js` only for display strings.
@@ -561,7 +725,7 @@ Choosing an invoice enables Void, Edit, and Record payment for an
 administrator and leaves them absent for a member. Totals still come from
 `receivables.js`.
 
-### W8 — Staff copy
+### W9 — Staff copy
 
 Owns `logic-urls.html`, `logic-admin.html`, `logic-kit.html`,
 `api/logic-urls.js`.
@@ -569,7 +733,7 @@ Owns `logic-urls.html`, `logic-admin.html`, `logic-kit.html`,
 "Battery sizer" becomes "Product sizer" (the public sizing page). No
 change to who may open these pages (`requireOwner` stays).
 
-### W9 — Name the audit collection
+### W10 — Name the audit collection
 
 Owns `firestore.rules` only, adding:
 
@@ -587,15 +751,19 @@ Finer roles, stock reservations as a data model, a generated bill of
 lading, in-app card payment, carrier APIs, warranty claims, and merging
 two customer accounts. They are real gaps. Each one is larger than a
 single area pull request and would touch shared order code. They wait
-until W0–W7 have landed.
+until W0 and W1–W8 have landed.
 
-The Prime → Logic link is not a workstream here.
+The card on Prime that opens `/omega-logic` with no company is not a
+workstream here. Another agent is pointing it at the person's own
+workspace. W0 creates the order; that card should open the order once
+both have landed, and neither pull request edits the other's file.
 
 ## Walking it again
 
 ```
 node scripts/tests/tlogiccleanup.js
 node scripts/audit-logic-walk.js --out /tmp/logic-walk
+node scripts/audit-logic-walk.js --out /tmp/logic-walk --only prime-quote,prime-logic
 ```
 
 The walk needs Playwright or `playwright-core` and Chrome (`$CHROME` or
