@@ -3755,3 +3755,15 @@ mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
 rate beside the project's blended $/W. Held by
 `scripts/tests/teditorcost.js` (solar by mount; the page collector with
 and without the skid).
+
+## 2026-10-17 — Logic journey integration preview
+
+Combined #350/#355/#353/#352 on `codex/omega-journey-review`; no production
+merge. Design-to-OEM routing remains in `api/_lib/design-order.js` and
+`api/_lib/design-place.js`. Price, payment and dispatch rules remain on the
+server. Plant and Accounting now consume `office-stage.path()`; the browser
+only renders it. No additional pricing/scoring/modeling logic moved into
+browser code. Shipping accepts the canonical design `projectId`; plant
+reads the saved project name. Related-order links preserve org and order,
+and Accounting scopes linked orders at the authenticated API boundary.
+See `docs/OMEGA-JOURNEY-QA.md` for test coverage and remaining roadmap.

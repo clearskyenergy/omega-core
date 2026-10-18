@@ -2,7 +2,7 @@
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
 var R = require('./_lib/plant-release'), Plant = require('./_lib/plant'), S = require('./_lib/plant-station');
-var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work'),Stats=require('./_lib/plant-stats'),Board=require('./_lib/plant-board'),Ops=require('./_lib/plant-ops'),Attention=require('./_lib/plant-attention');
+var Flow=require('./_lib/plant-flow'),W=require('./_lib/plant-work'),Stats=require('./_lib/plant-stats'),Board=require('./_lib/plant-board'),Ops=require('./_lib/plant-ops'),Attention=require('./_lib/plant-attention'),Source=require('./_lib/plant-source');
 var UNIT_FIELDS=['woId','serial','sku','unitType','shipUnit','at','done','arrivedAt','hold','holdAt','holdBy','holdReleasedAt','holdReleasedBy','holdDisposition','ncr','test'];
 /* The CMMS-style board: newest 100 works orders with progress derived from
    their units. Units are read in works-order chunks with a field projection;
@@ -114,7 +114,23 @@ module.exports = A.handler(async function (req, res) {
       var wo=ws.data();
       var detailUnits=members.docs.slice(0,400).map(function(d){var u=d.data();if(u.at){var st=(wo.routing||[]).filter(function(s){return s&&s.key===u.at;})[0];var steps=W.stepsFor(by[u.sku]||null,u.at,by,st&&st.checks);if(steps.length){var w=W.statusOf(u,u.at,steps);u.progress={station:u.at,done:w.steps.length-w.open.length,total:w.steps.length,open:w.open.slice(0,6),complete:w.complete};}}return u;});
       var detailWo=Object.assign({id:ws.id},wo);
-      return {workOrder:detailWo,units:detailUnits,limited:members.size>400,board:Board.row(detailWo,detailUnits),activity:Board.activity(detailUnits,detailWo,60),canControl:await controls(db,caller,org,ctx),lines:flow.lines};
+      /* The purchase order is read here, not copied onto the works order at
+         release, so a corrected project, address or line is what the card
+         shows. Another tenant's order is skipped. A bad id leaves source
+         null rather than failing the whole card. */
+      var source=null,orderPath=null;
+      if(wo.orderId){
+        var orderId=null;
+        try{orderId=P.id(wo.orderId);}catch(e){if(!e||e.status!==400)throw e;}
+        if(orderId){
+          var orderSnap=await db.collection('orders').doc(orderId).get();
+          if(orderSnap.exists){
+            var orderDoc=orderSnap.data()||{};
+            if(String(orderDoc.orgId||'').toLowerCase()===String(org).toLowerCase()){source=Source.sourceOf(orderDoc);orderPath=require('./_lib/office-stage').path(orderDoc,X.access(caller,ctx),(ctx.config||{}).accounting,null);delete orderPath.say;delete orderPath.next;}
+          }
+        }
+      }
+      return {workOrder:detailWo,units:detailUnits,limited:members.size>400,board:Board.row(detailWo,detailUnits),activity:Board.activity(detailUnits,detailWo,60),canControl:await controls(db,caller,org,ctx),lines:flow.lines,source:source,path:orderPath,steps:require('./_lib/office-stage').PATH};
     }
     if (req.query.serial) {
       var serial = Plant.serialFrom(req.query.serial);

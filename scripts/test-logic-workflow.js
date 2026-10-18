@@ -76,6 +76,45 @@ function newOrder(id){db.seed('orders/'+id,{orgId:'cleancell.us',orderNo:'CC-'+i
 function unit(serial,extra){return Object.assign({orgId:'cleancell.us',woId:'stock_1',serial:serial,sku:'CAB',unitType:'cabinet',parentSerial:null,shipUnit:true,rootSerial:serial,orderId:null,inventoryStatus:'available',at:'ready',test:{result:'pass'},hold:null,ncr:null,trace:{lot:'L001'},createdAt:1},extra);}
 function post(api,b,c){return api({method:'POST',body:Object.assign({org:'cleancell.us'},b),caller:c||owner},{setHeader:function(){}});}
 async function main(){
+await check('design journey preserves the saved project, destination and lines through price, plant, shipping and accounting',async function(){
+  setup();
+  db.seed('omega_orgs/cleancell.us/fulfillment/config',{enabled:true,accounting:'tenant',terms:{depositPct:30,dueDays:0}});
+  db.seed('omega_orgs/cleancell.us/storefront/config',{products:[{sku:'CAB',name:'Example equipment',kind:'product',active:true}]});
+  var spec={db:db,FieldValue:A.FieldValue(),caller:admin,designer:{orgId:admin.orgId},project:{id:'journey-example',name:'Example project',address:'1 Example St, Chicago, IL 60601'},lines:[{sku:'CAB',description:'Example equipment',qty:1}],estimateCents:100000};
+  var place=require('../api/_lib/design-place').place,created=await place(spec),id=created.orders[0].id;
+  assert.equal((await place(spec)).orders[0].id,id);
+  var original=clone(db.data.get('orders/'+id));
+  assert.equal(original.customer.email,'');assert.equal(original.customerId,undefined);assert.equal(original.logic,undefined);
+  assert.equal(original.design.estimateCents,100000);
+  // A ready stock unit is seeded; production scan/quality gates have their own suite.
+  db.seed('plant_units/cleancell.us__JOURNEY-001',unit('JOURNEY-001'));
+  await post(office,{action:'price',orderId:id,total:1000,accept:true},admin);
+  await post(office,{action:'invoice-issued',orderId:id,stage:'deposit',number:'EXAMPLE-DEP',date:'2026-10-17'},admin);
+  await post(office,{action:'payment-received',orderId:id,stage:'deposit',amount:300,date:'2026-10-17',bankReference:'EXAMPLE-DEPOSIT-001'},admin);
+  var order=db.data.get('orders/'+id),res={setHeader:function(){}},query={org:admin.orgId};
+  var plantView=await factory({method:'GET',query:Object.assign({workOrder:order.worksOrderId},query),caller:admin},res);
+  assert.equal(plantView.source.projectId,spec.project.id);assert.equal(plantView.source.projectName,spec.project.name);
+  assert.equal(plantView.source.address.line1,'1 Example St');assert.deepEqual(plantView.source.items,original.items.map(function(x){return {sku:x.sku,name:x.name,qty:x.qty};}));assert(plantView.path);assert.equal(plantView.path.say,undefined,'plant path never exposes payment amounts');assert.equal(plantView.path.next,undefined);
+  await post(office,{action:'ready',orderId:id},admin);
+  await post(office,{action:'invoice-issued',orderId:id,stage:'balance',number:'EXAMPLE-FINAL',date:'2026-10-17'},admin);
+  await post(office,{action:'payment-received',orderId:id,stage:'balance',amount:700,date:'2026-10-17',bankReference:'EXAMPLE-FINAL-001'},admin);
+  var logistics=require('../api/logic-logistics'),accounting=require('../api/logic-accounting');
+  await post(logistics,{action:'plan',orderId:id,legId:'example-load',revision:0,destinationId:'site',serials:['JOURNEY-001'],carrier:'Example carrier',tracking:'EXAMPLE-BOL',evidence:'Example pickup booking'},admin);
+  await post(logistics,{action:'pickup',orderId:id,legId:'example-load',revision:1,evidence:'Example signed pickup',location:'Example factory'},admin);
+  await post(logistics,{action:'delivered',orderId:id,legId:'example-load',revision:2,evidence:'Example signed delivery',location:spec.project.address},admin);
+  await post(logistics,{action:'inspect',orderId:id,legId:'example-load',revision:3,evidence:'Example receipt inspected',receipts:[{serial:'JOURNEY-001',condition:'accepted'}]},admin);
+  var shipView=await logistics({method:'GET',query:query,caller:admin},res),ship=shipView.orders.filter(function(x){return x.id===id;})[0];
+  assert.equal(ship.projectId,spec.project.id);assert.equal(ship.destinations[0].address.line1,'1 Example St');assert.equal(ship.items[0].sku,'CAB');assert.equal(ship.items[0].qty,1);assert.equal(ship.legs[0].status,'accepted');
+  var ledger=await accounting({method:'GET',query:query,caller:admin},res),rows=ledger.rows.filter(function(x){return x.orderId===id;});
+  assert.equal(rows.length,2);rows.forEach(function(row){assert.equal(row.projectId,spec.project.id);assert.equal(row.projectName,spec.project.name);assert.equal(row.balanceCents,0);assert(row.path);});
+  var oneLedger=await accounting({method:'GET',query:{org:admin.orgId,order:id},caller:admin},res);assert.equal(oneLedger.rows.length,2);
+  db.seed('orders/foreign-example',{orgId:'unrelated.example'});await assert.rejects(accounting({method:'GET',query:{org:admin.orgId,order:'foreign-example'},caller:admin},res),/not found/);
+  order=db.data.get('orders/'+id);assert.equal(order.projectId,original.projectId);assert.deepEqual(order.items,original.items);assert.deepEqual(order.delivery.destinations,original.delivery.destinations);
+  var outsider=Object.assign({},admin,{orgId:'unrelated.example',uid:'outside'});
+  for(var api of [office,factory,logistics,accounting])await assert.rejects(api({method:'GET',query:query,caller:outsider},res),/workspace/);
+  var snapshot=JSON.stringify(order);await place(spec);assert.equal(JSON.stringify(db.data.get('orders/'+id)),snapshot,'resend never changes an accepted order');
+});
+
 await check('tenant colors persist through the existing branding boundary and drive shared theme tokens',async function(){
   setup();var branding=require('../api/tenant-branding'),brand=require('../api/_lib/logic-brand');
   await db.doc('omega_orgs/cleancell.us').update({domains:['design.cleancell.us'],logoUrl:'/tenants/cleancell/logo.png',whiteLabel:{platformName:'CleanCell Studio'}});
@@ -450,4 +489,5 @@ await check('a tenant-billed order needs no QuickBooks: the office records its o
 });
 console.log('\n'+count+' Omega Logic workflow tests passed. No network calls.');
 }
-main().catch(function(e){console.error(e);process.exitCode=1;});
+if(require.main===module)main().catch(function(e){console.error(e);process.exitCode=1;});
+module.exports={setup:setup,db:function(){return db;},admin:admin,post:post,office:office,factory:factory,fieldValue:A.FieldValue};

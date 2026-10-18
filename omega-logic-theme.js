@@ -582,6 +582,17 @@
   function nextLine(n) { if (!n) return ''; return !n.who || n.who === 'you' ? n.text : (WHO[n.who] || 'Waiting') + ' \u00b7 ' + n.text; }
   /* one order's bar (opts.p: its path), or the pipeline (opts.counts: the
      server's pipeline(), each step a button that picks it) */
+  function orderLinks(org, id, workOrder, current, canManage) {
+    if (!org || !id) return '';
+    var q = '?org=' + encodeURIComponent(org), oq = q + '&order=' + encodeURIComponent(id);
+    var links = [['order', 'Order', '/omega-logic' + oq + '#orders'],
+      ['shipping', 'Shipping', '/logic-logistics.html' + oq],
+      ['accounting', 'Invoices', '/logic-accounting.html' + oq]];
+    if (workOrder) links.splice(1, 0, ['plant', 'Work order', '/plant/work-orders.html' + q + '&wo=' + encodeURIComponent(workOrder)]);
+    return '<p class="lg-order-links">' + links.filter(function (l) { return l[0] !== current && (canManage !== false || l[0] === 'order' || l[0] === 'plant'); }).map(function (l) {
+      return '<a href="' + esc(l[2]) + '">' + esc(l[1]) + '</a>';
+    }).join(' · ') + '</p>';
+  }
   function pathBar(steps, opts) {
     opts = opts || {}; steps = Array.isArray(steps) ? steps : [];
     var p = opts.p || null, counts = opts.counts || null, h = '';
@@ -647,5 +658,5 @@
   window.OmegaLogicTheme = { apply: apply, reset: reset, chrome: chrome, groups: groups, holds: holds, partsHeld: partsFlag, signInHref: signInHref, nextFor: nextFor, officeSubPage: officeSubPage,
     land: land, landTarget: landTarget, words: words, source: source, count: count, day: day, when: when, plainError: plainError, fillFor: fillFor,
     hub: hub, invoices: invoices, reviewLinks: reviewLinks, moneyTiles: moneyTiles, tileHtml: tileHtml, company: company, safeUrl: safeUrl,
-    pathBar: pathBar, guideFor: guideFor, guide: guide, pulse: pulse, nextLine: nextLine, pills: PILL };
+    orderLinks: orderLinks, pathBar: pathBar, guideFor: guideFor, guide: guide, pulse: pulse, nextLine: nextLine, pills: PILL };
 })();
