@@ -44,6 +44,19 @@
      its own boot splash below), so a click to Projects or a tool never
      flashes the next page. -->
 <script src="/omega-splash.js?v=1" data-boot="no"></script>
+<script>
+/* The journey is the default home. Keep existing library/billing deep links
+   on this page, and ?ui=v1 as the explicit classic-home fallback. */
+(function () {
+  try {
+    var hash = location.hash || '';
+    var classic = /[?&]ui=v1(?:&|$)/.test(location.search);
+    if (!classic && (!hash || /^#(?:home|track|settings)$/.test(hash))) {
+      location.replace('/workspace-v2' + location.search + (hash === '#home' ? '' : hash));
+    }
+  } catch (e) {}
+})();
+</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="author" content="ClearSky Energy Solutions LLC">
 <meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">

@@ -562,7 +562,42 @@ Render check: `npm run check:workspace` (four tenants on the Firebase
 double, desktop and phone). Run it, and `check:dashboard`, after any change
 to the page, the shell or the runtime they load.
 
+## Journey home (preview)
+
+`/workspace-v2` (and `/workspace?ui=v2`, which only redirects) is a second
+home. The live page is `workspace.html` and still draws the hex hub.
+`omega-workspace-v2.js` is the presentation: it does not re-rank Today.
+
+The eight steps are the job, each a door that already exists. Arrive
+(Plan & billing), Customer (the Omega Logic customer accounts when that
+module is on, otherwise Site Finder, with Portfolio beside it), Project
+(New project, and the projects list), Design (the oldest unfinished site
+in Site Map, or Omega Prime), Analyze (Grid Atlas at the site's address,
+VPP earnings, the compute pro forma), Propose (the sales proposal, the
+Quote Desk, the pro forma), Order (Omega Logic orders when the office is
+on, otherwise the Quote Desk), Track (the short list on the page,
+Projects, Portfolio, the finance marketplace).
+
+Account notices sit in their own band. A review title is one row however
+many records share it, including a copy that fell off Today's six-row
+list: the page passes the finance records it already loaded and
+`heldReviews` adds only those. A design queue is a count, and the address
+list stays on Projects. In motion lists each site once, and a name saved
+more than once leads that short list. The rail is Work, Library, Desk,
+then Account. The shell's own rail is unchanged unless a page passes
+`nav`.
+
+`npm run check:workspace-v2` renders it. `scripts/tests/tworkspacev2.js`
+pins the words.
+
 ## Not built (honest list)
+
+- **Making the journey home the live home.** `/workspace` stays the hex
+  hub until that is chosen. Projects, Portfolio and the marketplace still
+  wear the current rail.
+- **A customer on every project.** The preview treats `customerId`,
+  `customerName`, `accountId` or `customer.id` as attached, and does not
+  create the profile. Portfolio remains the site book.
 
 - **Project-scoped tools from the hub.** The Cost Estimator (and the pro
   formas) open standalone as they do today; a `?project=` they preload from,
@@ -606,3 +641,7 @@ to the page, the shell or the runtime they load.
   quarters is Tommy's call.
 - **The plan chip in Editor Lite.** Editor Lite hides `#portal-nav`, so
   the chip is on Site Map only.
+
+### Production rollout — 2026-10-17
+
+The default `/workspace` home now opens `/workspace-v2`, preserving query context. Existing tools, modules, billing and other section hashes stay on their established page. `?ui=v1` explicitly opens the classic home. The journey groups repeated review titles and in-flight names without modifying records. No Firestore or billing changes are part of this rollout.
