@@ -382,17 +382,19 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var PLACEHOLDER = 'REPLACE WITH THE BANK REFERENCE, or delete this payment if not yet received';
     function tiles(sel) { return p.$$eval(sel + ' [data-k]', function (r) { var o = {}; r.forEach(function (x) { o[x.getAttribute('data-k')] = x.querySelector('b').textContent.trim(); }); return o; }); }
     function rowCount() { return p.$$eval('#ledger tbody tr[data-row]', function (r) { return r.length; }); }
-    var head = await p.evaluate(function () { var c = document.querySelector('.logic-nav a[aria-current="page"]'); return { rows: document.querySelectorAll('#ledger tbody tr[data-row]').length, product: document.querySelector('[data-product-name]').textContent.trim(), current: c ? c.textContent.trim() : null, sync: document.getElementById('sync').textContent, banner: !document.getElementById('banner').hidden }; });
+    var head = await p.evaluate(function () { var c = document.querySelector('.logic-nav a[aria-current="page"]'); return { rows: document.querySelectorAll('#ledger tbody tr[data-row]').length, product: document.querySelector('[data-product-name]').textContent.trim(), current: c ? c.textContent.trim() : null, sync: document.getElementById('sync').textContent, banner: !document.getElementById('banner').hidden, acts: document.querySelectorAll('#content [data-act]').length, po: (function () { var a = document.querySelector('#ledger tr[data-row="o1:deposit"] a.sublink'); return a ? { href: a.getAttribute('href'), text: a.textContent } : null; })(), stage: (document.querySelector('#ledger tr[data-row="o1:balance"] td[data-k="stage"]') || {}).textContent || '' }; });
     var t0 = await tiles('#totals'), a0 = await tiles('#aging');
     ok('accounting is an office page: Omega Logic chrome, Accounting current under Money, one row per invoice', head.rows === 4 && head.product === 'Omega Logic' && head.current === 'Accounting' && !head.banner, head);
     ok('  the totals and aging are the server\'s: invoiced, received, outstanding, overdue, on PO credit', t0.invoiced === '$591,475.00' && t0.received === '$240,600.00' && t0.outstanding === '$350,875.00' && t0.overdue === '$0.00' && t0.credit === '$0.00' && t0.toIssue === '$90,225.00' && a0['1-30'] === '$0.00' && a0.current === '$350,875.00', [t0, a0]);
-    ok('  the sync card names what the deployment is missing and the connected Stripe account, never a secret', /QBO_CLIENT_ID/.test(head.sync) && /acct_1DEMOCLEANCELL/.test(head.sync) && /test mode/.test(head.sync), head.sync.slice(0, 300));
+    ok('  Connect is offered only for a provider this deployment can use: Stripe is named, QuickBooks is not a disabled button and no secret name is shown', /acct_1DEMOCLEANCELL/.test(head.sync) && /test mode/.test(head.sync) && !/Connect QuickBooks/.test(head.sync) && !/QBO_CLIENT_ID/.test(head.sync) && head.acts === 0, head.sync.slice(0, 400));
+    ok('  the PO on a row opens the order, and the final payment is named as such', head.po && head.po.href.indexOf('/omega-logic?org=cleancell.us&order=o1#orders') >= 0 && head.po.text === 'PO RCC-2200' && /Final payment/.test(head.stage), head);
     await p.click('[data-open="o2:deposit"]'); await p.waitForTimeout(200);
     var dr = await p.evaluate(function () { var d = document.getElementById('drawer'); return { open: !d.hidden, pay: d.querySelectorAll('a.paylink[href^="https://invoice.stripe.com/"]').length, voids: d.querySelectorAll('.pays [data-act="void"]').length, state: (d.querySelector('#paystate') || {}).textContent || '', push: d.querySelectorAll('[data-act="push"]').length, text: d.textContent.replace(/\s+/g, ' ') }; });
-    ok('  an invoice opens in the drawer with its payment page, its payments and a push to Stripe', dr.open && dr.pay === 1 && dr.voids === 1 && dr.push === 1 && dr.text.indexOf(PLACEHOLDER) >= 0, [dr.open, dr.pay, dr.voids, dr.push, dr.text.slice(0, 240)]);
-    /* void the placeholder: the order is in the plant on it, so the office must choose */
-    ok('  the invoice says at the top whether the money is in, with the one tap that changes it', /Payment\s*Received/.test(dr.state) && /Mark as not received/.test(dr.state), dr.state);
-    await p.click('#paystate [data-act="void"]'); await p.waitForTimeout(150);
+    ok('  an invoice opens in the page with its payment page, its payments and a send to Stripe, none of them covering the list', dr.open && dr.pay === 1 && dr.voids === 1 && dr.push === 1 && dr.text.indexOf(PLACEHOLDER) >= 0, [dr.open, dr.pay, dr.voids, dr.push, dr.text.slice(0, 240)]);
+    /* the one next step is on the invoice. A payment that never arrived is under Invoice details. */
+    ok('  the invoice leads with the next step, and one action', /Deposit received/.test(dr.state) && /Open the order/.test(dr.state) && !/Mark as not received/.test(dr.state), dr.state);
+    await p.click('#invoice-more > summary'); await p.waitForTimeout(100);
+    await p.click('#invoice-more .pays [data-act="void"]'); await p.waitForTimeout(150);
     var dv = await p.evaluate(function () { return { open: !document.getElementById('dlg-void').hidden, choice: !document.getElementById('void-choice').hidden, radios: document.querySelectorAll('#dlg-void input[name="after"]').length, go: document.getElementById('void-go').disabled, focus: document.activeElement && document.activeElement.id, summary: document.getElementById('void-summary').textContent }; });
     ok('  voiding a payment the order was released on asks: keep building on the PO, or hold', dv.open && dv.choice && dv.radios === 2 && dv.go === true && dv.focus === 'void-reason' && /USD 90,225\.00 · 2026-08-22 · REPLACE WITH/.test(dv.summary), dv);
     var REASON = 'Recorded from the intake template; the money has not arrived';
@@ -413,9 +415,10 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('#paystate [data-act="record"]'); await p.waitForTimeout(150);
     var pd = await p.evaluate(function () { return { open: !document.getElementById('dlg-pay').hidden, amount: document.getElementById('pay-amount').value }; });
     await p.click('#dlg-pay [data-cancel]'); await p.waitForTimeout(100);
-    ok('  after the void the top says not received, building on the PO, and "Mark as received" opens the payment with the balance filled in', /Not received yet/.test(ps) && /keeps building on its PO/.test(ps) && /Mark as received/.test(ps) && pd.open && pd.amount === '90225.00', [ps, pd]);
-    ok('  the voided payment stays on the invoice, struck through, and cannot be voided twice; the credit release says who and why', dr2.struck.indexOf('REPLACE WITH THE BANK REFERENCE') >= 0 && dr2.voids === 0 && /Released on PO SS-PO-5521 by demo@cleancell\.us/.test(dr2.warn) && /not yet received/.test(dr2.warn) && dr2.release === 0, dr2);
+    ok('  after the void the next step is the deposit, and Record the payment opens with the balance filled in', /Deposit overdue/.test(ps) && /has not arrived/.test(ps) && /Record the payment/.test(ps) && pd.open && pd.amount === '90225.00', [ps, pd]);
+    ok('  the voided payment stays on the invoice, struck through, and cannot be voided twice; the credit release says who and why', dr2.struck.indexOf('REPLACE WITH THE BANK REFERENCE') >= 0 && dr2.voids === 0 && /Building before the deposit, PO SS-PO-5521, noted by demo@cleancell\.us/.test(dr2.warn) && /not yet received/.test(dr2.warn) && dr2.release === 0, dr2);
     /* the customer agreed net 30 on the PO: move the due date, with a reason */
+    await p.click('#invoice-more > summary'); await p.waitForTimeout(100);
     await p.click('#drawer [data-act="edit"]'); await p.waitForTimeout(150);
     var ed = await p.evaluate(function () { return { open: !document.getElementById('dlg-edit').hidden, number: document.getElementById('ed-number').value, issued: document.getElementById('ed-issued').value, due: document.getElementById('ed-due').value, hint: document.getElementById('ed-due-hint').textContent }; });
     ok('  the edit dialog opens on the invoice as issued, the due date following the terms', ed.open && ed.number === 'SS-1042' && ed.issued === '2026-08-20' && ed.due === '' && /2026-08-20/.test(ed.hint), ed);
@@ -428,10 +431,22 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var ed2 = await p.evaluate(function () { var tr = document.querySelector('#ledger tr[data-row="o2:deposit"]'), d = document.getElementById('drawer'); return { due: tr.querySelector('td[data-k="due"]').textContent.trim(), overdue: tr.querySelectorAll('.tag.overdue').length, history: (d.querySelector('.edits') || {}).textContent || '' }; });
     var t2 = await tiles('#totals');
     ok('  the new due date takes it out of overdue, and the change is in the invoice\'s history', ed2.due === NEW_DUE && ed2.overdue === 0 && t2.overdue === '$0.00' && new RegExp('due terms → ' + NEW_DUE).test(ed2.history) && /net 30/.test(ed2.history), [ed2, t2.overdue]);
+    await p.click('#invoice-more > summary'); await p.waitForTimeout(100);
     await p.click('#drawer [data-act="push"]'); await p.waitForTimeout(600);
     var apost = ACC_POSTS[ACC_POSTS.length - 1];
     ok('  push to Stripe goes to the ledger sync, naming the invoice', same(apost, { action: 'sync-push', org: 'cleancell.us', orderId: 'o2', stage: 'deposit' }), apost);
     await p.click('#drawer-close'); await p.waitForTimeout(100);
+    await p.click('[data-open="o1:balance"]'); await p.waitForTimeout(200);
+    var links = await p.evaluate(function () {
+      var d = document.getElementById('drawer');
+      var a = Array.prototype.map.call(d.querySelectorAll('.links a'), function (x) { return { href: x.getAttribute('href'), text: x.textContent }; });
+      return { open: !d.hidden, links: a, steps: d.querySelectorAll('.bill li').length, text: d.textContent.replace(/\s+/g, ' '), actions: (d.querySelector('#invoice-actions') || {}).textContent || '' };
+    });
+    ok('  the open invoice leads with the final payment, links the order and the PO, and shows the deposit beside it', links.open && links.steps === 2 && links.links.some(function (a) { return a.href.indexOf('/omega-logic?org=cleancell.us&order=o1#orders') >= 0 && /Open order/.test(a.text); }) && links.links.some(function (a) { return /PO RCC-2200/.test(a.text); }) && /Final payment due/.test(links.text) && /Record the payment/.test(links.text), links);
+    var covered = await p.evaluate(function () { var d = document.getElementById('drawer'), row = document.querySelector('#ledger tr[data-row="o1:balance"]'); if (!d || !row || d.hidden) return false; var dd = d.getBoundingClientRect(), rr = row.getBoundingClientRect(); return !(dd.bottom <= rr.top || dd.top >= rr.bottom); });
+    ok('  the open invoice does not cover the row it came from', covered === false, covered);
+    await p.click('#drawer-close'); await p.waitForTimeout(100);
+    await p.click('#filters-more > summary'); await p.waitForTimeout(100);
     await p.selectOption('#f-customer', 'email:buy@sierra.example'); await p.waitForTimeout(500);
     var one = await rowCount(), custOpts = await p.$$eval('#f-customer option', function (r) { return r.map(function (x) { return x.value; }); });
     await p.selectOption('#f-customer', ''); await p.waitForTimeout(500);
