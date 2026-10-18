@@ -3773,3 +3773,6 @@ need the broader server-side screening integration before production.
 Browser verification also fixed the obstruction hatch path (Canvas restore
 restores clipping, not the current path), marked missing terrain as flat,
 and pinned 3D beside Outputs/Run so it stays visible without ribbon scrolling.
+The experience registry marks editor-v2 present but previewOnly: direct review
+URLs work while saved-project links keep the canonical editor. Presence alone
+must not redirect a saved Firestore project into a browser-only draft editor.
