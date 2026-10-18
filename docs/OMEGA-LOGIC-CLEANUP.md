@@ -10,10 +10,12 @@ touched so the two do not edit the same screen.
 ## Shipping, delivery, on site
 
 - Shipping & receiving ledger (`logic-logistics.html`, `api/logic-logistics.js`
-  GET): the destination cards show the full site address and the order's
-  lines (quantity, product name, SKU). A project id is shown when the order
-  carries `sourceProjectId`. Each load shows its destination, pickup and
-  delivery dates, and the receiving condition. The customer projection
-  (`buyerOrder`) does not gain the project id.
+  GET): one office nav, and one next step for the order. The bar is
+  `office-stage` `path()`, drawn with `OmegaLogicTheme.pathBar`, in the
+  page flow. The destination cards keep the full site address, the
+  deliver-by date, and the order's lines. The project id, shipment
+  reference, and serials are under a disclosure. The freight plan stays
+  on the page and opens from `#freight`. The customer projection
+  (`buyerOrder`) does not gain the project id or the path.
 - Not touched: the shared order bar, `omega-logic.html`, `office/app.html`,
   `editor-v2`, `omega-prime.html`.
