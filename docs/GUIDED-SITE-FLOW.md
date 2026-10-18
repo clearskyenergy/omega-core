@@ -204,6 +204,13 @@ still parsing. The installed icon opens `/omega-prime`. The worker caches
 the shell only and does not cache `/api/` or Firebase auth. Phone layout
 is `omega-prime-mobile.css`.
 
+**Prime v2** (2026-10-18) is a second route, `/omega-prime-v2`
+(`omega-prime-v2.html`). Live Prime, the install page, the service worker
+and `config.js` are unchanged. The comparison, the click-through, and the
+decisions still open are in `docs/OMEGA-PRIME-V2.md`. Held by
+`scripts/tests/tprimev2.js` (in `npm test`) and
+`scripts/render-omega-prime-v2.js`.
+
 Still open for Prime: EV, Solar and Compute are "next"; the bill's peaks
 are typed, not read from the bill file (Site Map's bill import is the
 reader); Prime's Run is `/api/price-site`, so the project's capex rollup
