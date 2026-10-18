@@ -25,6 +25,7 @@
     --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
     --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
     --header: 52px;
+    --banner: 40px;
     --ribbon: 58px;
     --foot: 40px;
     --rail: 76px;
@@ -63,10 +64,35 @@
   #save-state.is-ok { color: var(--ok); }
   #save-state.is-err { color: var(--danger); }
   #banner {
-    display: flex; gap: 12px; align-items: center; justify-content: space-between;
-    padding: 6px 12px; background: #F3F7FC; border-bottom: 1px solid var(--line); font-size: 13px; flex: none;
+    display: flex; gap: 8px; align-items: center; height: var(--banner); padding: 0 12px;
+    background: #F3F7FC; border-bottom: 1px solid var(--line); flex: none; min-width: 0; overflow-x: auto;
   }
-  #banner a { color: var(--accent-2); }
+  #stages { display: flex; gap: 2px; align-items: center; min-width: 0; }
+  #stages button {
+    border: 1px solid transparent; background: transparent; border-radius: 6px;
+    padding: 4px 10px; font-weight: 700; font-size: 13px; min-height: 28px;
+  }
+  #stages button[aria-pressed="true"] { background: var(--white); border-color: var(--line); color: var(--accent); }
+  #next-action { margin-left: auto; flex: none; min-height: 28px; padding: 4px 12px; }
+  .group[data-stage] { display: none; }
+  .group[data-stage~="always"] { display: flex; }
+  #app[data-section="site"] .group[data-stage~="site"],
+  #app[data-section="design"] .group[data-stage~="design"],
+  #app[data-section="analyze"] .group[data-stage~="analyze"],
+  #app[data-section="outputs"] .group[data-stage~="outputs"],
+  #app[data-section="funding"] .group[data-stage~="funding"] { display: flex; }
+  .quiet-block { border: 1px solid var(--hair); border-radius: 8px; padding: 10px; margin: 0 0 10px; background: var(--panel); }
+  .quiet-block h3 { margin: 0 0 6px; font-size: 13px; }
+  .quiet-block p, #outputs-body > p, #funding-body p { margin: 0 0 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .score-num { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
+  .stream { font-size: 12px; margin: 0 0 6px; }
+  .stream-fill { display: block; height: 4px; background: var(--accent); border-radius: 2px; margin-top: 2px; }
+  #outputs-body { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  #outputs-body .btn { text-align: left; }
+  #build-choices { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; }
+  #build-choices label { font-size: 13px; color: var(--ink); }
+  #build-error { color: var(--danger); min-height: 1.2em; }
+  #side-site .row-actions, #side-draw .row-actions { justify-content: flex-start; }
   #ribbon {
     display: flex; gap: 2px; align-items: stretch; padding: 4px 8px; background: var(--panel);
     border-bottom: 1px solid var(--line); overflow-x: auto; flex: none; min-height: var(--ribbon); min-width: 0;
@@ -96,7 +122,8 @@
     background: var(--white); border-left: 1px solid var(--line); overflow: auto; padding: 12px 12px 24px;
   }
   #side h2 { margin: 14px 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
-  #side h2:first-child { margin-top: 0; }
+  #side h2:first-child, #side-draw > h2:first-child, #side-site > h2:first-child,
+  #side-analyze > h2:first-child, #side-outputs > h2:first-child, #side-funding > h2:first-child { margin-top: 0; }
   .field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; font-size: 12px; color: var(--muted); }
   .field input, .field select {
     border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--white); color: var(--ink);
@@ -143,7 +170,7 @@
     #workspace { grid-template-columns: 56px 1fr; }
     footer { grid-template-columns: minmax(0, 1fr) auto; }
     #coords { display: none; }
-    #side { position: fixed; z-index: 5; top: calc(var(--header) + 34px); right: 0; bottom: var(--foot); width: min(320px, 100%); box-shadow: var(--shadow); transform: translateX(100%); }
+    #side { position: fixed; z-index: 5; top: calc(var(--header) + var(--banner)); right: 0; bottom: var(--foot); width: min(320px, 100%); box-shadow: var(--shadow); transform: translateX(100%); }
     #side.open { transform: none; }
     .side-toggle { display: inline-flex; }
     #help-list { columns: 1; }
@@ -155,7 +182,7 @@
 </style>
 </head>
 <body>
-<div id="app">
+<div id="app" data-section="design">
   <header>
     <div class="brand">
       <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path fill="#1F4E79" d="M16 2 28 9v14L16 30 4 23V9z"/><path fill="#fff" d="M16 8 22 11.5v7L16 22l-6-3.5v-7z"/></svg>
@@ -177,27 +204,36 @@
     </div>
   </header>
   <div id="banner">
-    <span>Preview of the next Site Plan. The current Site Map at <a href="/editor.html">/editor.html</a> is unchanged. Nothing on this page is written to a workspace until you choose to.</span>
-    <button type="button" class="btn quiet" id="btn-dismiss">Hide</button>
+    <nav id="stages" aria-label="Sections">
+      <button type="button" data-stage="site" aria-pressed="false">Site</button>
+      <button type="button" data-stage="design" aria-pressed="true">Design</button>
+      <button type="button" data-stage="analyze" aria-pressed="false">Analyze</button>
+      <button type="button" data-stage="outputs" aria-pressed="false">Outputs</button>
+      <button type="button" data-stage="funding" aria-pressed="false">Funding</button>
+    </nav>
+    <button type="button" class="btn primary" id="next-action">Does this site work?</button>
   </div>
   <div id="ribbon" class="ribbon" role="toolbar" aria-label="Commands">
-    <div class="group"><div class="row">
+    <div class="group" data-stage="always"><div class="row">
       <button type="button" data-act="undo" title="Undo (Ctrl+Z)">Undo</button>
       <button type="button" data-act="redo" title="Redo (Ctrl+Y)">Redo</button>
     </div><h2>Edit</h2></div>
-    <div class="group"><div class="row">
+    <div class="group" data-stage="design"><div class="row">
+      <button type="button" data-act="build">Build</button>
+    </div><h2>Build</h2></div>
+    <div class="group" data-stage="design"><div class="row">
       <button type="button" data-tool="line">Line</button>
       <button type="button" data-tool="polyline">Polyline</button>
       <button type="button" data-tool="rect">Rectangle</button>
       <button type="button" data-tool="circle">Circle</button>
     </div><h2>Draw</h2></div>
-    <div class="group"><div class="row">
+    <div class="group" data-stage="site design"><div class="row">
       <button type="button" data-tool="offset">Setback</button>
       <button type="button" data-tool="obstruction">Obstruction</button>
       <button type="button" data-tool="fence">Fence</button>
       <button type="button" data-act="array">Fill array</button>
     </div><h2>Site</h2></div>
-    <div class="group"><div class="row">
+    <div class="group" data-stage="design"><div class="row">
       <button type="button" data-equip="bess">BESS</button>
       <button type="button" data-equip="pcs">PCS</button>
       <button type="button" data-equip="transformer">Transformer</button>
@@ -206,13 +242,13 @@
       <button type="button" data-equip="charger">Charger</button>
       <button type="button" data-tool="conduit">Conduit</button>
     </div><h2>Equipment</h2></div>
-    <div class="group"><div class="row">
+    <div class="group" data-stage="design"><div class="row">
       <button type="button" data-tool="dim">Dimension</button>
       <button type="button" data-tool="dist">Measure</button>
       <button type="button" data-tool="text">Text</button>
       <button type="button" data-tool="callout">Callout</button>
     </div><h2>Annotate</h2></div>
-    <div class="group"><div class="row">
+    <div class="group" data-stage="design"><div class="row">
       <button type="button" data-act="align-left" title="Align left">Left</button>
       <button type="button" data-act="align-right">Right</button>
       <button type="button" data-act="align-top">Top</button>
@@ -220,20 +256,29 @@
       <button type="button" data-act="dist-x">Distribute</button>
       <button type="button" data-act="group">Group</button>
     </div><h2>Arrange</h2></div>
-    <div class="group"><div class="row">
+    <div class="group" data-stage="always"><div class="row">
       <button type="button" data-act="map" aria-pressed="true">Map</button>
       <button type="button" data-act="snap-grid" aria-pressed="true">Grid</button>
       <button type="button" data-act="snap-end" aria-pressed="true">Endpoint</button>
       <button type="button" data-act="ortho" aria-pressed="false">Ortho</button>
       <button type="button" data-act="zoom-ext">Fit</button>
+      <button type="button" data-hook="view3d" id="btn-3d">3D</button>
     </div><h2>View</h2></div>
-    <div class="group"><div class="row">
+    <div class="group" data-stage="analyze"><div class="row">
+      <button type="button" data-act="run">Run</button>
+    </div><h2>Analyze</h2></div>
+    <div class="group" data-stage="outputs"><div class="row">
       <button type="button" data-act="png">PNG</button>
       <button type="button" data-act="pdf">PDF</button>
       <button type="button" data-act="dxf">DXF</button>
       <button type="button" data-act="json">Project</button>
       <button type="button" data-act="import">Import</button>
+      <button type="button" data-hook="permit" id="btn-permit">Permit set</button>
+      <button type="button" data-hook="sld" id="btn-sld">Single-line</button>
     </div><h2>Output</h2></div>
+    <div class="group" data-stage="funding"><div class="row">
+      <button type="button" data-act="quote">Quote</button>
+    </div><h2>Funding</h2></div>
   </div>
   <div id="workspace">
     <nav id="tools" aria-label="Tools">
@@ -253,15 +298,44 @@
       <canvas id="cv" aria-label="Site drawing. Use the command line to draw by typing."></canvas>
     </div>
     <aside id="side" aria-label="Properties">
-      <h2>Takeoff</h2>
-      <div id="takeoff">
-        <div class="figure" id="kw-dc">0<span>kW-DC</span></div>
-        <div class="kv" id="takeoff-kv"></div>
+      <div id="side-draw">
+        <h2>Takeoff</h2>
+        <div id="takeoff">
+          <div class="figure" id="kw-dc">0<span>kW-DC</span></div>
+          <div class="kv" id="takeoff-kv"></div>
+        </div>
+        <h2>Properties</h2>
+        <div id="props"></div>
+        <h2>Layers</h2>
+        <div id="layers"></div>
       </div>
-      <h2>Properties</h2>
-      <div id="props"></div>
-      <h2>Layers</h2>
-      <div id="layers"></div>
+      <div id="side-site" hidden>
+        <h2>Site</h2>
+        <div class="quiet-block">
+          <h3>Does this site work?</h3>
+          <p>Yes opens a guided build. No keeps the drawing and records why.</p>
+          <div class="row-actions">
+            <button type="button" class="btn primary" id="site-yes">Yes, build it</button>
+            <button type="button" class="btn" id="site-no">No</button>
+          </div>
+          <div id="site-no-box" hidden>
+            <label class="field">What is in the way? <input id="site-reason" maxlength="200"></label>
+            <button type="button" class="btn" id="site-reason-save">Save the reason</button>
+          </div>
+        </div>
+      </div>
+      <div id="side-analyze" hidden>
+        <h2>Analyze</h2>
+        <div id="analyze-body"></div>
+      </div>
+      <div id="side-outputs" hidden>
+        <h2>Outputs</h2>
+        <div id="outputs-body"></div>
+      </div>
+      <div id="side-funding" hidden>
+        <h2>Funding</h2>
+        <div id="funding-body"></div>
+      </div>
     </aside>
   </div>
   <footer>
@@ -312,6 +386,8 @@
       <li><b>Ctrl+G</b> group &nbsp; <b>Delete</b> erase</li>
       <li>Drag left→right encloses. Right→left crosses.</li>
       <li>Wheel zooms at the cursor. Space pans.</li>
+      <li><b>BUILD</b> guided build &nbsp; <b>RUN</b> the drawing</li>
+      <li>This page does not write a workspace. Site Map at /editor.html is unchanged.</li>
     </ul>
     <div class="row-actions"><button type="button" class="btn" id="help-close">Close</button></div>
   </div>
@@ -342,6 +418,21 @@
 
 <input id="file-import" type="file" accept=".json,.dxf,application/json" hidden>
 
+<dialog id="dlg-build" aria-labelledby="build-title">
+  <form id="build-form">
+    <h2 id="build-title">Guided build</h2>
+    <p id="build-lead"></p>
+    <div id="build-choices"></div>
+    <div id="build-fields"></div>
+    <details id="build-advanced-wrap"><summary>Advanced</summary><div id="build-advanced"></div></details>
+    <p id="build-error" role="alert"></p>
+    <div class="row-actions">
+      <button type="button" class="btn" id="build-cancel">Cancel</button>
+      <button type="button" class="btn primary" id="build-place">Place on the site</button>
+    </div>
+  </form>
+</dialog>
+
 <script src="cad-kernel.js"></script>
 <script src="omega-editor-v2-geom.js"></script>
 <script src="omega-editor-v2-assign.js"></script>
@@ -349,6 +440,12 @@
 <script src="omega-editor-v2-bridge.js"></script>
 <script src="omega-editor-v2-export.js"></script>
 <script src="omega-editor-v2-recovery.js"></script>
+<script src="omega-project-intelligence.js"></script>
+<script src="omega-guided-build-form.js"></script>
+<script src="omega-editor-v2-hooks.js"></script>
+<script src="omega-editor-v2-reports.js"></script>
+<script src="omega-editor-v2-build.js"></script>
+<script src="omega-editor-v2-analyze.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>
 </body>

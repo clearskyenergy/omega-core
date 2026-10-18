@@ -4,7 +4,8 @@
  *
  * Drawing state lives in omega-editor-v2-doc.js. This file is the page:
  * the canvas, the command line, save-on-this-computer, and the customer
- * dialog. It does not open Firebase and it does not write a workspace.
+ * dialog. Sections are Site, Design, Analyze, Outputs, and Funding.
+ * It does not open Firebase and it does not write a workspace.
  */
 (function (root) {
   'use strict';
@@ -17,7 +18,7 @@
   var draft = null, drag = null, box = null, pan = null, space = false;
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
-  var tiles = {}, mapNote = '', recoverTimer = 0;
+  var tiles = {}, mapNote = '', recoverTimer = 0, section = 'design';
   var PROJECTS = 'omega.editorV2.projects';
 
   var POINT_TOOL = {
@@ -71,7 +72,7 @@
     fit(false);
     refresh();
     if (!offerRecovery(null, null)) {
-      setStatus('Sample site loaded. New starts a blank project. Help lists the commands.');
+      setStatus('Sample site loaded.');
     }
     $('cmd').focus();
   }
@@ -134,7 +135,14 @@
     $('btn-help').addEventListener('click', function () { $('dlg-help').showModal(); });
     $('help-close').addEventListener('click', function () { $('dlg-help').close(); });
     $('open-close').addEventListener('click', function () { $('dlg-open').close(); });
-    $('btn-dismiss').addEventListener('click', function () { $('banner').style.display = 'none'; resize(); });
+    var stages = document.querySelectorAll('#stages button');
+    for (var s = 0; s < stages.length; s++) stages[s].addEventListener('click', function () { setSection(this.getAttribute('data-stage')); });
+    $('next-action').addEventListener('click', function () { nextStep().run(); });
+    $('site-yes').addEventListener('click', siteYes);
+    $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
+    $('site-reason-save').addEventListener('click', siteNoSave);
+    $('build-cancel').addEventListener('click', function () { $('dlg-build').close(); });
+    $('side').addEventListener('change', onSideChange);
     $('btn-side').addEventListener('click', function () {
       var side = $('side'), open = side.classList.toggle('open');
       this.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -144,7 +152,7 @@
     $('cust-cancel').addEventListener('click', function () { $('dlg-customer').close(); });
     $('cust-form').addEventListener('submit', saveCustomer);
     $('file-import').addEventListener('change', onImport);
-    var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip]');
+    var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook]');
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
     var cv = $('cv');
     cv.addEventListener('pointerdown', onDown);
@@ -186,6 +194,8 @@
     var act = b.getAttribute('data-act');
     var eq = b.getAttribute('data-equip');
     var tl = b.getAttribute('data-tool');
+    var hook = b.getAttribute('data-hook');
+    if (hook) { invokeHook(hook); return; }
     if (tl) setTool(tl);
     else if (eq) setEquip(eq);
     else if (act) runAct(act);
@@ -242,6 +252,9 @@
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
     else if (act === 'paste') paste();
+    else if (act === 'build') openBuild();
+    else if (act === 'run') runNumbers();
+    else if (act === 'quote') setSection('funding');
   }
   function pressed(act, on) {
     var nodes = document.querySelectorAll('[data-act="' + act + '"]');
@@ -323,6 +336,9 @@
     if (map[word] === 'undo' || map[word] === 'redo' || map[word] === 'erase' || map[word] === 'array' || map[word] === 'zoom-ext') runAct(map[word] === 'zoom-ext' ? 'zoom-ext' : map[word]);
     else if (map[word] === 'help') $('dlg-help').showModal();
     else if (map[word] === 'new') confirmDirty(blank);
+    else if (word === 'BUILD') openBuild();
+    else if (word === 'RUN') runNumbers();
+    else if (word === 'SITE') setSection('site');
     else if (map[word]) setTool(map[word]);
     else setStatus('Unknown command “' + s + '”. Type HELP for the list.', true);
   }
@@ -1075,6 +1091,7 @@
     refreshProps(false);
     saveLabel();
     $('project-name').value = state.doc.name || '';
+    paintNext();
     if (!cursor) {
       var scaled = view.pxPerFt > 0 && isFinite(view.pxPerFt);
       $('coords').textContent = 'E — ' + (scaled ? 'ft' : 'px') + '   N — ' + (scaled ? 'ft' : 'px');
@@ -1087,6 +1104,8 @@
     dirty = true;
     refresh();
     scheduleRecovery();
+    if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
+    if (section === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
   }
   function refreshTakeoff() {
     var s = D.summary(state.doc);
@@ -1589,5 +1608,112 @@
     }
   }
 
-  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/1' };
+  function setSection(name) {
+    var allowed = { site: 1, design: 1, analyze: 1, outputs: 1, funding: 1 };
+    if (!allowed[name]) return;
+    section = name;
+    $('app').setAttribute('data-section', name);
+    var buttons = document.querySelectorAll('#stages button'), i;
+    for (i = 0; i < buttons.length; i++) {
+      buttons[i].setAttribute('aria-pressed', buttons[i].getAttribute('data-stage') === name ? 'true' : 'false');
+    }
+    $('side-draw').hidden = name !== 'design';
+    $('side-site').hidden = name !== 'site';
+    $('side-analyze').hidden = name !== 'analyze';
+    $('side-outputs').hidden = name !== 'outputs';
+    $('side-funding').hidden = name !== 'funding';
+    if (name !== 'design') {
+      var narrow = window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+      if (narrow) {
+        $('side').classList.add('open');
+        $('btn-side').setAttribute('aria-expanded', 'true');
+      }
+    }
+    if (name === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
+    if (name === 'outputs' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showOutputs(state);
+    if (name === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
+    paintNext();
+    resize();
+  }
+  function drawnCount() {
+    var s = D.summary(state.doc);
+    return (s.bessCount || 0) + (s.arrayCount || 0) + (s.chargerCount || 0);
+  }
+  function nextStep() {
+    var doc = state.doc;
+    if (!doc.screen) return { id: 'site', label: 'Does this site work?', run: function () { setSection('site'); } };
+    if (doc.screen.go === false) return { id: 'revise', label: 'Revise the site', run: function () { setSection('site'); } };
+    if (!drawnCount()) return { id: 'build', label: 'Place a build', run: function () { openBuild(); } };
+    if (!doc.runAt) return { id: 'run', label: 'Run', run: runNumbers };
+    return { id: 'quote', label: 'Quote', run: function () { setSection('funding'); } };
+  }
+  function paintNext() {
+    var step = nextStep();
+    var btn = $('next-action');
+    if (!btn) return;
+    btn.textContent = step.label;
+    btn.setAttribute('data-next', step.id);
+  }
+  function siteYes() {
+    D.setMeta(state, { screen: { go: true, at: new Date().toISOString() } });
+    afterChange();
+    openBuild();
+  }
+  function siteNoSave() {
+    var reason = $('site-reason').value.trim();
+    if (reason.length < 3) { setStatus('Say what is in the way, in a few words.', true); return; }
+    D.setMeta(state, { screen: { go: false, reason: reason, at: new Date().toISOString() } });
+    afterChange();
+    setStatus('Recorded. The site stays as it is.');
+  }
+  function openBuild() {
+    var Bld = root.OmegaEditorV2Build;
+    if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
+    setSection('design');
+    Bld.open(state, {
+      pxPerFt: view.pxPerFt,
+      onPlaced: function (res) {
+        afterChange();
+        fit(true);
+        setStatus((res.summary && res.summary.line) || 'Build placed.');
+      }
+    });
+  }
+  function runNumbers() {
+    var An = root.OmegaEditorV2Analyze;
+    if (!An) { setStatus('Analyze is not loaded.', true); return; }
+    var pi = An.assess(state);
+    D.setMeta(state, {
+      runAt: new Date().toISOString(),
+      intelligence: { score: pi.score, decision: pi.decision, source: pi.source || '' }
+    });
+    afterChange();
+    setSection('analyze');
+    setStatus(pi.decision + ' · ' + pi.score + ' / 100, from the drawing.');
+  }
+  function invokeHook(name) {
+    var H = root.OmegaEditorV2Hooks;
+    var ctx = { doc: state.doc, summary: D.summary(state.doc) };
+    if (H && H.invoke(name, ctx)) return;
+    var note = {
+      view3d: '3D site view is the next view of this drawing. Nothing is attached to this button yet.',
+      permit: 'The permit plan set is built from this drawing. Nothing is attached to this button yet.',
+      sld: 'The single-line is built from this drawing. Nothing is attached to this button yet.',
+      funding: 'Funding uses the marketplace submission. Nothing is attached to this button yet.'
+    };
+    setStatus(note[name] || 'Nothing is attached to this yet.');
+  }
+  function onSideChange(ev) {
+    var t = ev.target;
+    if (!t || !t.id) return;
+    if (t.id === 'bill-kwh') {
+      D.setMeta(state, { billKwh: t.value === '' ? null : +t.value });
+      afterChange();
+    } else if (t.id === 'bill-file' && t.files && t.files[0]) {
+      D.setMeta(state, { billName: t.files[0].name });
+      afterChange();
+    }
+  }
+
+  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/2' };
 })(typeof window !== 'undefined' ? window : global);
