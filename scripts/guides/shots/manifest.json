@@ -206,26 +206,26 @@
     }
   },
   "desktop-accounting-void.png": {
-    "sha256": "8f0d41a8f802908e7381b25648a7f78b207b47a01871c717220cf45d12e32eb2",
-    "takenAt": "2026-10-17T22:56:14.316Z",
+    "sha256": "6f52fa71b5cd3a92a85ae966aa95cf209545dab370f40095319f44e8d680bcc7",
+    "takenAt": "2026-10-18T01:56:06.975Z",
     "tree": ".",
-    "commit": "4be8af7e",
+    "commit": "ee04905",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
-      "logic-accounting.html": "571cf5d793c6436c8cb9646efa66d2e9f6689abe1886c7ee9b337b2f11369d80",
+      "logic-accounting.html": "01ba611ac31eb79569ebb254b461197fe029f2b1d15f3c0728b69e1cd234d163",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f"
     }
   },
   "desktop-accounting.png": {
-    "sha256": "6ca53ac2585b605180aeafac7a7bbe3e1868b06fe0e60841b8e7747b1ed7c96e",
-    "takenAt": "2026-10-17T22:56:12.774Z",
+    "sha256": "b80d70d046e9e8729d155f61a1ee940e4888554d1034c103925011c51fd41b96",
+    "takenAt": "2026-10-18T01:56:05.350Z",
     "tree": ".",
-    "commit": "4be8af7e",
+    "commit": "ee04905",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
-      "logic-accounting.html": "571cf5d793c6436c8cb9646efa66d2e9f6689abe1886c7ee9b337b2f11369d80",
+      "logic-accounting.html": "01ba611ac31eb79569ebb254b461197fe029f2b1d15f3c0728b69e1cd234d163",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f"

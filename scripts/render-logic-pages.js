@@ -342,11 +342,12 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var PLACEHOLDER = 'REPLACE WITH THE BANK REFERENCE, or delete this payment if not yet received';
     function tiles(sel) { return p.$$eval(sel + ' [data-k]', function (r) { var o = {}; r.forEach(function (x) { o[x.getAttribute('data-k')] = x.querySelector('b').textContent.trim(); }); return o; }); }
     function rowCount() { return p.$$eval('#ledger tbody tr[data-row]', function (r) { return r.length; }); }
-    var head = await p.evaluate(function () { var c = document.querySelector('.logic-nav a[aria-current="page"]'); return { rows: document.querySelectorAll('#ledger tbody tr[data-row]').length, product: document.querySelector('[data-product-name]').textContent.trim(), current: c ? c.textContent.trim() : null, sync: document.getElementById('sync').textContent, banner: !document.getElementById('banner').hidden }; });
+    var head = await p.evaluate(function () { var c = document.querySelector('.logic-nav a[aria-current="page"]'); return { rows: document.querySelectorAll('#ledger tbody tr[data-row]').length, product: document.querySelector('[data-product-name]').textContent.trim(), current: c ? c.textContent.trim() : null, sync: document.getElementById('sync').textContent, banner: !document.getElementById('banner').hidden, acts: document.querySelectorAll('#content [data-act]').length, po: (function () { var a = document.querySelector('#ledger tr[data-row="o1:deposit"] a.sublink'); return a ? { href: a.getAttribute('href'), text: a.textContent } : null; })(), stage: (document.querySelector('#ledger tr[data-row="o1:balance"] td[data-k="stage"]') || {}).textContent || '' }; });
     var t0 = await tiles('#totals'), a0 = await tiles('#aging');
     ok('accounting is an office page: Omega Logic chrome, Accounting current under Money, one row per invoice', head.rows === 4 && head.product === 'Omega Logic' && head.current === 'Accounting' && !head.banner, head);
     ok('  the totals and aging are the server\'s: invoiced, received, outstanding, overdue, on PO credit', t0.invoiced === '$591,475.00' && t0.received === '$240,600.00' && t0.outstanding === '$350,875.00' && t0.overdue === '$0.00' && t0.credit === '$0.00' && t0.toIssue === '$90,225.00' && a0['1-30'] === '$0.00' && a0.current === '$350,875.00', [t0, a0]);
-    ok('  the sync card names what the deployment is missing and the connected Stripe account, never a secret', /QBO_CLIENT_ID/.test(head.sync) && /acct_1DEMOCLEANCELL/.test(head.sync) && /test mode/.test(head.sync), head.sync.slice(0, 300));
+    ok('  Connect is offered only for a provider this deployment can use: Stripe is named, QuickBooks is not a disabled button and no secret name is shown', /acct_1DEMOCLEANCELL/.test(head.sync) && /test mode/.test(head.sync) && !/Connect QuickBooks/.test(head.sync) && !/QBO_CLIENT_ID/.test(head.sync) && head.acts === 0, head.sync.slice(0, 400));
+    ok('  the PO on a row opens the order, and the final payment is named as such', head.po && head.po.href.indexOf('/omega-logic?org=cleancell.us&order=o1#orders') >= 0 && head.po.text === 'PO RCC-2200' && /Final payment/.test(head.stage), head);
     await p.click('[data-open="o2:deposit"]'); await p.waitForTimeout(200);
     var dr = await p.evaluate(function () { var d = document.getElementById('drawer'); return { open: !d.hidden, pay: d.querySelectorAll('a.paylink[href^="https://invoice.stripe.com/"]').length, voids: d.querySelectorAll('.pays [data-act="void"]').length, state: (d.querySelector('#paystate') || {}).textContent || '', push: d.querySelectorAll('[data-act="push"]').length, text: d.textContent.replace(/\s+/g, ' ') }; });
     ok('  an invoice opens in the drawer with its payment page, its payments and a push to Stripe', dr.open && dr.pay === 1 && dr.voids === 1 && dr.push === 1 && dr.text.indexOf(PLACEHOLDER) >= 0, [dr.open, dr.pay, dr.voids, dr.push, dr.text.slice(0, 240)]);
@@ -391,6 +392,14 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('#drawer [data-act="push"]'); await p.waitForTimeout(600);
     var apost = ACC_POSTS[ACC_POSTS.length - 1];
     ok('  push to Stripe goes to the ledger sync, naming the invoice', same(apost, { action: 'sync-push', org: 'cleancell.us', orderId: 'o2', stage: 'deposit' }), apost);
+    await p.click('#drawer-close'); await p.waitForTimeout(100);
+    await p.click('[data-open="o1:balance"]'); await p.waitForTimeout(200);
+    var links = await p.evaluate(function () {
+      var d = document.getElementById('drawer');
+      var a = Array.prototype.map.call(d.querySelectorAll('.links a'), function (x) { return { href: x.getAttribute('href'), text: x.textContent }; });
+      return { open: !d.hidden, links: a, steps: d.querySelectorAll('.bill li').length, text: d.textContent.replace(/\s+/g, ' '), actions: (d.querySelector('#invoice-actions') || {}).textContent || '' };
+    });
+    ok('  the open invoice links back to the order and its PO, and shows the deposit beside the final payment', links.open && links.steps === 2 && links.links.some(function (a) { return a.href.indexOf('/omega-logic?org=cleancell.us&order=o1#orders') >= 0 && /Open order/.test(a.text); }) && links.links.some(function (a) { return /PO RCC-2200/.test(a.text); }) && /Final payment/.test(links.text) && /On this invoice/.test(links.text) && /Record payment/.test(links.actions), links);
     await p.click('#drawer-close'); await p.waitForTimeout(100);
     await p.selectOption('#f-customer', 'email:buy@sierra.example'); await p.waitForTimeout(500);
     var one = await rowCount(), custOpts = await p.$$eval('#f-customer option', function (r) { return r.map(function (x) { return x.value; }); });
