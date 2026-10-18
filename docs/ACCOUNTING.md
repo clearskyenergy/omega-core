@@ -235,12 +235,14 @@ order change and its order event: `ledger-invoice-issued`,
 - **Deposits expected** on the dashboard (`S.finance`) includes a deposit
   still open on an order released on PO, whatever stage the order has moved
   to, so the Cash flow panel agrees with itself and with "On PO credit".
-- **What an action says is shown where the person is looking**: inside the
-  open drawer (it covers the page on a phone), and a failed push or sync
-  redraws the row so the error kept on the invoice is on screen. A void the
-  server answers with "choose keep building on the PO, or hold" (the order
-  reached the plant after the page loaded) now offers that choice in the
-  dialog. Release on PO says whether the plant has actually started.
+- **The invoice opens in the page, under the totals, and does not cover
+  the list.** It leads with where the order is and the one next step
+  (deposit due, final payment due, or the payment recorded). The invoice
+  number, the books, and a correction sit under Invoice details. A failed
+  push or sync redraws the row so the error kept on the invoice is on
+  screen. A void the server answers with "choose keep building on the PO,
+  or hold" (the order reached the plant after the page loaded) offers that
+  choice in the dialog.
 - **"Connected"** means usable: a QuickBooks company whose refresh token has
   expired, or that was connected in the other Intuit environment, shows as
   not connected, with the reason, and the page offers Connect again.

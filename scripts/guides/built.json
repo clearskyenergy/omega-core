@@ -15,8 +15,8 @@
       "office-passport.png": "285b5e817c0a348764966f22def7ddeaf723c5bf5c9637f7830a55513a7ad5a9",
       "desktop-sites-list.png": "01383c8700f37424c05dfaf14125ea39fca476e4fe8fbf7dc2bdd0119300fbee",
       "desktop-sites-send.png": "6439be0c2df6bf255484d1264e71eadcdfefbd62f49d911290162ce892ca1b89",
-      "desktop-accounting.png": "b80d70d046e9e8729d155f61a1ee940e4888554d1034c103925011c51fd41b96",
-      "desktop-accounting-void.png": "6f52fa71b5cd3a92a85ae966aa95cf209545dab370f40095319f44e8d680bcc7",
+      "desktop-accounting.png": "3abd0f00e7b4f0beb589549046a3ee1939f9b9312a708016c40e6be254bb5d05",
+      "desktop-accounting-void.png": "c5f9ebb8f92a968e018700e0c53d4d5248826c6c7c83acbdcb16c794da54dc47",
       "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
       "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
       "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
@@ -26,7 +26,7 @@
       "office.html": "7eb8a3919a67499803b949a0640a1169e1328a1e890bf9b4ce8987bb2e92083b"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "558d33aad782466aa45b049efa07e4ba0eec9cb80a4b3dfac63f2adfc4483582"
+    "sha256": "798d9c4f0fa1a6298623a6e2f45a470720a3cca8f94647d04321cc0925af15af"
   },
   "Omega-Logic-Customer-App.pdf": {
     "shots": {
@@ -61,8 +61,8 @@
       "office-passport.png": "285b5e817c0a348764966f22def7ddeaf723c5bf5c9637f7830a55513a7ad5a9",
       "desktop-sites-list.png": "01383c8700f37424c05dfaf14125ea39fca476e4fe8fbf7dc2bdd0119300fbee",
       "desktop-sites-send.png": "6439be0c2df6bf255484d1264e71eadcdfefbd62f49d911290162ce892ca1b89",
-      "desktop-accounting.png": "b80d70d046e9e8729d155f61a1ee940e4888554d1034c103925011c51fd41b96",
-      "desktop-accounting-void.png": "6f52fa71b5cd3a92a85ae966aa95cf209545dab370f40095319f44e8d680bcc7",
+      "desktop-accounting.png": "3abd0f00e7b4f0beb589549046a3ee1939f9b9312a708016c40e6be254bb5d05",
+      "desktop-accounting-void.png": "c5f9ebb8f92a968e018700e0c53d4d5248826c6c7c83acbdcb16c794da54dc47",
       "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
       "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
       "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
@@ -72,7 +72,7 @@
       "office.html": "7eb8a3919a67499803b949a0640a1169e1328a1e890bf9b4ce8987bb2e92083b"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "558d33aad782466aa45b049efa07e4ba0eec9cb80a4b3dfac63f2adfc4483582"
+    "sha256": "798d9c4f0fa1a6298623a6e2f45a470720a3cca8f94647d04321cc0925af15af"
   },
   "Omega-Logic-Phone-Apps.pdf": {
     "shots": {
@@ -90,8 +90,8 @@
       "office-passport.png": "285b5e817c0a348764966f22def7ddeaf723c5bf5c9637f7830a55513a7ad5a9",
       "desktop-sites-list.png": "01383c8700f37424c05dfaf14125ea39fca476e4fe8fbf7dc2bdd0119300fbee",
       "desktop-sites-send.png": "6439be0c2df6bf255484d1264e71eadcdfefbd62f49d911290162ce892ca1b89",
-      "desktop-accounting.png": "b80d70d046e9e8729d155f61a1ee940e4888554d1034c103925011c51fd41b96",
-      "desktop-accounting-void.png": "6f52fa71b5cd3a92a85ae966aa95cf209545dab370f40095319f44e8d680bcc7",
+      "desktop-accounting.png": "3abd0f00e7b4f0beb589549046a3ee1939f9b9312a708016c40e6be254bb5d05",
+      "desktop-accounting-void.png": "c5f9ebb8f92a968e018700e0c53d4d5248826c6c7c83acbdcb16c794da54dc47",
       "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
       "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
       "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
@@ -117,7 +117,7 @@
       "customer.html": "e871a3be2b299bffbfcb50e2dfa841f2f7cedaca8a949461013d3a2b955c68c1"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "2ee184371168da80330a674d02b667ae4225b208df72780c58cd4d9d4bfcfb94"
+    "sha256": "df420255faabe4dfcbb4f7ee7cf47a5fd069d2262be6b260e4328a6f6549ce72"
   },
   "Omega-Logic-Plant-App.pdf": {
     "shots": {
