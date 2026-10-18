@@ -218,6 +218,7 @@
   }
 
   function runAct(act) {
+    if (act === 'outputs') { openOutputs(); return; }
     if (act === 'undo') { if (D.undo(state)) afterChange(); else setStatus('Nothing to undo.'); }
     else if (act === 'redo') { if (D.redo(state)) afterChange(); else setStatus('Nothing to redo.'); }
     else if (act === 'erase') erase();
@@ -1087,6 +1088,22 @@
     dirty = true;
     refresh();
     scheduleRecovery();
+    if (root.OmegaEditorV2Outputs) OmegaEditorV2Outputs.sync(state.doc);
+  }
+  function openOutputs() {
+    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
+    OmegaEditorV2Outputs.open({
+      doc: state.doc,
+      download: download,
+      fileBase: fileBase,
+      drawing: {
+        png: exportPng,
+        pdf: exportPdf,
+        dxf: exportDxf,
+        json: exportJson,
+        importFile: function () { $('file-import').click(); }
+      }
+    });
   }
   function refreshTakeoff() {
     var s = D.summary(state.doc);
@@ -1589,5 +1606,17 @@
     }
   }
 
-  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/1' };
+  /* A guided build is data. It replaces only the entities that build
+     stamped, then the permit set and the single-line are rebuilt from
+     the document. There is no second ribbon for it. */
+  function applyGuidedBuild(build) {
+    if (!root.OmegaEditorV2Guided) { setStatus('Guided build did not load.', true); return null; }
+    var next = root.OmegaEditorV2Guided.apply(state.doc, build);
+    D.commit(state, next, []);
+    afterChange();
+    setStatus('Drawings follow the guided build.');
+    return next;
+  }
+
+  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, VERSION: 'editor-v2-app/1' };
 })(typeof window !== 'undefined' ? window : global);

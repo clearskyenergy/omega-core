@@ -61,7 +61,7 @@
 
   function create(seed) {
     seed = seed || {};
-    return {
+    var doc = {
       schema: SCHEMA,
       projectId: seed.projectId || uid('p'),
       remoteProjectId: seed.remoteProjectId || null,
@@ -75,6 +75,13 @@
       entities: seed.entities || [],
       assignment: A.normalize(seed.assignment || A.empty())
     };
+    /* A guided build's electrical record, title-block facts and kind
+       travel with the document. Dropping them on restore would make the
+       next permit set forget what the build just wrote. */
+    if (seed.electrical) doc.electrical = clone(seed.electrical);
+    if (seed.drawing) doc.drawing = clone(seed.drawing);
+    if (seed.guided) doc.guided = clone(seed.guided);
+    return doc;
   }
 
   function createState(doc) {

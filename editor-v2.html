@@ -120,6 +120,21 @@
   #status.is-err { color: #F0B4B4; }
   #coords { font-family: var(--mono); font-size: 12px; color: #B7C3D1; }
   dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; box-shadow: var(--shadow); width: min(480px, calc(100% - 24px)); color: var(--ink); }
+  #dlg-outputs { width: min(880px, calc(100% - 24px)); }
+  .out-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--hair); }
+  .out-row h3 { margin: 0 0 2px; font-size: 15px; }
+  .out-note { margin: 0; color: var(--muted); font-size: 13px; }
+  .out-status { margin: 0 0 8px; font-size: 14px; }
+  .out-status.is-ok { color: var(--ok); }
+  .out-status.is-no { color: var(--danger); }
+  .out-actions, .out-bar, .out-size { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .out-size { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
+  .out-size select { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--white); }
+  .out-bar { margin-bottom: 10px; }
+  .out-bar strong { flex: 1; min-width: 0; }
+  .out-preview { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; max-height: min(68vh, 720px); overflow: auto; }
+  .out-preview svg { display: block; width: 100%; height: auto; background: white; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
   dialog::backdrop { background: rgba(22, 32, 43, .45); }
   dialog form, .sheet { padding: 18px; }
   dialog h2 { margin: 0 0 6px; font-size: 18px; }
@@ -228,11 +243,7 @@
       <button type="button" data-act="zoom-ext">Fit</button>
     </div><h2>View</h2></div>
     <div class="group"><div class="row">
-      <button type="button" data-act="png">PNG</button>
-      <button type="button" data-act="pdf">PDF</button>
-      <button type="button" data-act="dxf">DXF</button>
-      <button type="button" data-act="json">Project</button>
-      <button type="button" data-act="import">Import</button>
+      <button type="button" data-act="outputs">Outputs</button>
     </div><h2>Output</h2></div>
   </div>
   <div id="workspace">
@@ -310,6 +321,7 @@
       <li><b>Ctrl+Z / Ctrl+Y</b> undo / redo</li>
       <li><b>Ctrl+C / Ctrl+V</b> copy / paste</li>
       <li><b>Ctrl+G</b> group &nbsp; <b>Delete</b> erase</li>
+      <li><b>Outputs</b> permit set and single-line</li>
       <li>Drag left→right encloses. Right→left crosses.</li>
       <li>Wheel zooms at the cursor. Space pans.</li>
     </ul>
@@ -340,6 +352,10 @@
   </div>
 </dialog>
 
+<dialog id="dlg-outputs" aria-labelledby="out-title">
+  <div class="sheet" id="out-body"></div>
+</dialog>
+
 <input id="file-import" type="file" accept=".json,.dxf,application/json" hidden>
 
 <script src="cad-kernel.js"></script>
@@ -349,6 +365,11 @@
 <script src="omega-editor-v2-bridge.js"></script>
 <script src="omega-editor-v2-export.js"></script>
 <script src="omega-editor-v2-recovery.js"></script>
+<script src="omega-editor-v2-electrical.js"></script>
+<script src="omega-editor-v2-sld.js"></script>
+<script src="omega-editor-v2-sheets.js"></script>
+<script src="omega-editor-v2-guided.js"></script>
+<script src="omega-editor-v2-outputs.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>
 </body>

@@ -84,6 +84,8 @@
     "test:packaging:rules": "node scripts/test-packaging-rules.js",
     "test:portfolio": "node scripts/test-site-crm.js && node scripts/tests/tportfolioassets.js && node scripts/tests/tportfolio-phases.js && node scripts/tests/tportfolioassets-real.js && node scripts/tests/tportfolio-economics-real.js",
     "seed:evcs-portfolio:dry": "node scripts/seed-evcs-portfolio.js",
-    "test:editor-v2": "node scripts/tests/teditorv2.js"
+    "test:editor-v2": "node scripts/tests/teditorv2.js",
+    "test:editor-v2-outputs": "node scripts/tests/teditorv2outputs.js",
+    "test:editor-v2-guided": "node scripts/tests/teditorv2guided.js"
   }
 }

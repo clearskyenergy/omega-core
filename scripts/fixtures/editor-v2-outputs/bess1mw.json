@@ -1,0 +1,96 @@
+{
+  "ready": true,
+  "score": 86,
+  "sourceKw": 1000,
+  "loadKw": 0,
+  "sourceA": 1266.1,
+  "interconnect": {
+    "method": "supply",
+    "ok": true,
+    "cite": "NEC 2023 705.11",
+    "sumA": null
+  },
+  "transformer": {
+    "requiredKva": 1053,
+    "nameplateKva": 1500,
+    "zPct": 5.75
+  },
+  "circuits": [
+    {
+      "id": "src-ess-1",
+      "role": "ess",
+      "kw": 1000,
+      "volts": 480,
+      "phases": 3,
+      "currentA": 1266.1,
+      "designA": 1582.6,
+      "ocpdA": 1600,
+      "spec": "3 sets of 1000 kcmil Cu",
+      "egc": "4/0",
+      "lengthFt": 150,
+      "dropPct": 0.3,
+      "cite": "NEC 2023 706.30(A), 706.31",
+      "error": ""
+    }
+  ],
+  "checks": [
+    {
+      "id": "content",
+      "ok": true,
+      "severity": "info",
+      "cite": ""
+    },
+    {
+      "id": "vd-src-ess-1",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 210.19(A)(1) Informational Note No. 4; 215.2(A)(1) Informational Note No. 2"
+    },
+    {
+      "id": "nec705",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 705.11(B)"
+    },
+    {
+      "id": "bess-line",
+      "ok": true,
+      "severity": "info",
+      "cite": "NFPA 855 (2023) 9.5.2.6.1; IFC 1207.8.3"
+    },
+    {
+      "id": "xfmr-z",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 450.3"
+    },
+    {
+      "id": "gate",
+      "ok": true,
+      "severity": "info",
+      "cite": ""
+    },
+    {
+      "id": "fire-access",
+      "ok": false,
+      "severity": "review",
+      "cite": "IFC 503"
+    },
+    {
+      "id": "seal",
+      "ok": false,
+      "severity": "info",
+      "cite": ""
+    }
+  ],
+  "spacing": {
+    "minUnitFt": null,
+    "minLineFt": 70,
+    "minBuildingFt": null
+  },
+  "placardCites": [
+    "NEC 2023 705.10",
+    "NEC 2023 706.15",
+    "NEC 2023 110.16; NFPA 70E"
+  ]
+}

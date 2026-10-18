@@ -231,7 +231,8 @@ check(R.read(store) === null, 'a save drops the draft');
 
 /* The current editor is not this page. */
 var page = fs.readFileSync(path.join(__dirname, '../../editor-v2.html'), 'utf8');
-check(page.indexOf('omega-editor-v2-app.js') >= 0 && page.indexOf('cad-kernel.js') >= 0 && page.indexOf('omega-editor-v2-recovery.js') >= 0, 'page boots the preview');
+check(page.indexOf('omega-editor-v2-app.js') >= 0 && page.indexOf('cad-kernel.js') >= 0 && page.indexOf('omega-editor-v2-recovery.js') >= 0 && page.indexOf('omega-editor-v2-guided.js') >= 0, 'page boots the preview, including the guided-build door');
+check(fs.readFileSync(path.join(__dirname, '../../omega-editor-v2-app.js'), 'utf8').indexOf('applyGuidedBuild') >= 0, 'a guided build is applied on the document, then the drawings follow');
 check(page.indexOf('id="editor"') < 0, 'preview does not reuse the Site Map root');
 check(fs.readFileSync(path.join(__dirname, '../../editor.html'), 'utf8').indexOf('omega-editor-v2') < 0, 'Site Map does not load the preview');
 
