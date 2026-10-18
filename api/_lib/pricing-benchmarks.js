@@ -102,15 +102,31 @@ function evaluate(p) {
     if (usd != null) { drift = true; why.push('a point price was charged and none was cited'); }
     var point = null, i;
     for (i = 0; i < q.lines.length; i++) if (q.lines[i].id === 'ev.dcfc.150.point') point = q.lines[i];
-    if (!point || point.status !== 'needs source' || point.price != null || point.amount != null) {
-      drift = true; why.push('the 150 kW charger point is not marked needs source');
+    if (!point || (point.status !== 'partial' && point.status !== 'needs source') || point.price != null || point.amount != null) {
+      drift = true; why.push('the 150 kW charger point is charged or unmarked');
     }
   } else {
     if (usd !== p.pointUsd) { drift = true; why.push('total ' + usd + ' is not the cited point ' + p.pointUsd); }
     if (!inside(usd, p.lowUsd, p.highUsd)) { drift = true; why.push('total is outside ' + p.lowUsd + '–' + p.highUsd); }
   }
   if (!takeoffOk(q.electrical, p.expect)) { drift = true; why.push('electrical takeoff does not match the screening expectation'); }
-  if (q.region.factor != null) { drift = true; why.push('a labor factor was applied and no wage table is loaded'); }
+  var expectFactor = { 'bess-1mw-4h': 1.3358, 'pv-commercial-500': 1.4797, 'bess-10mw-4h': 0.8382, 'dcfc-150': 1.3358 };
+  if (q.region.factor !== expectFactor[p.id]) { drift = true; why.push('labor factor ' + q.region.factor + ' is not the May 2025 OEWS factor ' + expectFactor[p.id]); }
+  if (q.region.equipmentFactor !== 1) { drift = true; why.push('equipment was regionalized'); }
+  if (q.region.geography !== 'metro') { drift = true; why.push('ZIP3 did not select the metro wage'); }
+  var fom = null, adder = null, ix = null, trench = null, capital = null, i2;
+  for (i2 = 0; i2 < q.lines.length; i2++) {
+    if (q.lines[i2].id === 'bess.utility.fom') fom = q.lines[i2];
+    if (q.lines[i2].id === 'bess.small.adder') adder = q.lines[i2];
+    if (q.lines[i2].id === 'el.interconnection') ix = q.lines[i2];
+    if (q.lines[i2].id === 'el.trench.ft') trench = q.lines[i2];
+    if (q.lines[i2].inTotal && q.lines[i2].regionFactor !== 1) capital = q.lines[i2];
+  }
+  if (p.kwh && (!fom || fom.price !== 53.44 || fom.inTotal || fom.amount != null)) { drift = true; why.push('fixed O&M is not the uncharged $53.44/kW-yr'); }
+  if (p.kwh && p.kw < 60000 && (!adder || adder.price != null || adder.status !== 'partial' || adder.inTotal)) { drift = true; why.push('the small-project adder was charged'); }
+  if (!ix || ix.price != null || ix.inTotal || ix.low !== 57 || ix.high !== 102) { drift = true; why.push('interconnection range was charged or dropped'); }
+  if (!trench || trench.price != null || trench.regionFactor !== q.region.factor) { drift = true; why.push('trench labor factor does not match the wage index'); }
+  if (capital) { drift = true; why.push('a capital line was scaled by the labor factor'); }
   return {
     id: p.id,
     label: p.label,
@@ -199,6 +215,7 @@ function checks(opts) {
   });
   var bare = Lib.items().filter(function (it) {
     if (it.status === 'needs source') return it.price != null;
+    if (it.status === 'partial') return it.price != null || !(it.source && it.url && it.published && it.read);
     if (it.status === 'range') return it.price != null || it.low == null || it.high == null;
     return it.status === 'sourced' && !(it.source && it.url && it.published && it.read && (it.price != null || it.inTotal === false));
   });
@@ -208,6 +225,49 @@ function checks(opts) {
     ok: bare.length === 0,
     message: bare.length ? 'A preview line is missing its citation or is charging an unsourced price: ' + bare.map(function (it) { return it.id; }).join(', ') : 'Every sourced line names its source, URL, publication, and read date',
     detail: { ids: bare.map(function (it) { return it.id; }) }
+  });
+  var fillExpect = {
+    'labor.index': 'free',
+    'bess.utility.fom': 'free',
+    'gen.eia': 'free',
+    'bess.small.adder': 'partial',
+    'el.interconnection': 'partial',
+    'el.conductor.ft': 'partial',
+    'el.conduit.ft': 'partial',
+    'el.transformer.kva': 'partial',
+    'el.switchgear': 'partial',
+    'ev.dcfc.150.point': 'partial',
+    'pv.canopy': 'paid',
+    'ev.l2.equipment': 'paid',
+    'el.trench.ft': 'paid',
+    'el.protection': 'paid',
+    'lazard.capex': 'paid'
+  };
+  var fillBad = [];
+  Object.keys(fillExpect).forEach(function (id) {
+    var it = Lib.byId(id);
+    if (!it || it.fill !== fillExpect[id]) fillBad.push(id);
+    if (it && it.fill !== 'free' && it.price != null && it.inTotal) fillBad.push(id + ' charged');
+  });
+  var gen = Lib.byId('gen.eia');
+  var frame = null, gi;
+  if (gen && gen.table) {
+    for (gi = 0; gi < gen.table.length; gi++) if (gen.table[gi].id === 'ct.frame') frame = gen.table[gi];
+  }
+  if (!frame || frame.basePerKw !== 791) fillBad.push('gen.eia ct.frame');
+  var batt = null;
+  if (gen && gen.table) {
+    for (gi = 0; gi < gen.table.length; gi++) if (gen.table[gi].id === 'battery.4h') batt = gen.table[gi];
+  }
+  if (!batt || batt.fomPerKwYr !== 40.62 || batt.basePerKw !== 1580) fillBad.push('gen.eia battery');
+  out.push({
+    id: 'pricing.public-fill',
+    severity: 'error',
+    ok: fillBad.length === 0,
+    message: fillBad.length
+      ? 'A needs-source line changed fill without a cited figure: ' + fillBad.join(', ')
+      : 'The fifteen open lines are classified free, partial, or still unpaid',
+    detail: fillExpect
   });
   return out;
 }

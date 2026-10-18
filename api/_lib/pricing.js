@@ -71,6 +71,9 @@ function lineFrom(it, extra) {
     region: it.region,
     confidence: it.confidence,
     status: it.status,
+    method: it.method || '',
+    fill: it.fill || '',
+    index: it.index || null,
     inTotal: it.inTotal && amount != null,
     note: extra.note || it.note
   };
@@ -84,6 +87,7 @@ function blankLine(id, label, qty, qtyUnit, note, lineId) {
     status: 'needs source', inTotal: false, note: note || ''
   }, { qty: qty, qtyUnit: qtyUnit, label: label, note: note });
   if (lineId) row.id = lineId;
+  if (note && it && it.note) row.note = note + ' ' + it.note;
   row.inTotal = false;
   row.amount = null;
   return row;
@@ -213,7 +217,7 @@ function electricalLines(spec) {
   rows.push(blankLine('el.transformer.kva', 'Transformer', t.transformerKva, 'kVA',
     t.transformerKva ? ('Screening nameplate ' + t.transformerKva + ' kVA at ' + t.pf + ' pf. Dollars are needs source.') : 'No power to size a transformer.'));
   rows.push(blankLine('el.switchgear', 'Switchgear', t.kw > 0 ? 1 : null, 'lineup'));
-  rows.push(blankLine('el.interconnection', 'Interconnection and point of interconnection', t.kw > 0 ? 1 : null, 'project'));
+  rows.push(blankLine('el.interconnection', 'Interconnection, ISO-queue study range, not added', t.kw > 0 ? t.kw : null, 'kW'));
   rows.push(blankLine('el.protection', 'Protective relaying and metering', t.kw > 0 ? 1 : null, 'project'));
   return { takeoff: t, lines: rows };
 }
