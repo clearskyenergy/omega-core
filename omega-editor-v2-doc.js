@@ -66,6 +66,7 @@
       projectId: seed.projectId || uid('p'),
       remoteProjectId: seed.remoteProjectId || null,
       orgId: seed.orgId || null,
+      workspaceRevision: seed.workspaceRevision || 0,
       name: seed.name || 'Untitled site',
       address: seed.address || '',
       anchor: seed.anchor || { lat: 41.8781, lng: -87.6298 },
@@ -78,6 +79,9 @@
     /* A guided build's electrical record, title-block facts and kind
        travel with the document. Dropping them on restore would make the
        next permit set forget what the build just wrote. */
+    ['billKwh','billName','costTotal','revenueYear1','netCost','siteScreen','designVerified','valueStack','grid','milestones','costLines','state','city','zip'].forEach(function (key) {
+      if (seed[key] !== undefined) doc[key] = clone(seed[key]);
+    });
     if (seed.electrical) doc.electrical = clone(seed.electrical);
     if (seed.drawing) doc.drawing = clone(seed.drawing);
     if (seed.guided) doc.guided = clone(seed.guided);

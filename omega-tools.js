@@ -74,6 +74,10 @@
        savesData  true => tool persists state via the toolData contract.
      ══════════════════════════════════════════════════════════════════ */
   var SEED_TOOLS = [
+    { key:'siteplantrial', name:'Site Plan · customer trial', category:'design',
+      desc:'Try the new CAD and 3D tool. Save projects, review outputs and send feedback. Site Map remains available.',
+      file:'/editor-v2', badge:'trial', tier:TIER.STANDARD,
+      icon:'M3 3h18v18H3zM3 9h18M9 9v12' },
     { key:'editor', name:'Site Map', category:'design',
       desc:'Wizard, conduit routing & equipment on live satellite.',
       action:'new:bess', tier:TIER.STANDARD, custom:true, savesData:true,
@@ -762,7 +766,7 @@
           /* Screening ships with the code; an older published catalog must
              not hide its routes. Existing documents and access rules win. */
           SEED_TOOLS.forEach(function (seed) {
-            if (seed.subject === 'screening' && !list.some(function (t) { return t.key === seed.key; })) list.push(seed);
+            if ((seed.subject === 'screening' || seed.key === 'siteplantrial') && !list.some(function (t) { return t.key === seed.key; })) list.push(seed);
           });
           self._tools = list;
         }

@@ -87,7 +87,7 @@
     "test:portfolio": "node scripts/test-site-crm.js && node scripts/tests/tportfolioassets.js && node scripts/tests/tportfolio-phases.js && node scripts/tests/tportfolioassets-real.js && node scripts/tests/tportfolio-economics-real.js",
     "seed:evcs-portfolio:dry": "node scripts/seed-evcs-portfolio.js",
     "test:experience": "node scripts/tests/texperience.js",
-    "test:editor-v2": "node scripts/tests/teditorv2.js && node scripts/tests/tguidedbuild.js && node scripts/tests/tdesignmodel.js && node scripts/tests/tgridlayer.js && node scripts/tests/teditorv2auth.js",
+    "test:editor-v2": "node scripts/tests/teditorv2.js && node scripts/tests/tguidedbuild.js && node scripts/tests/tdesignmodel.js && node scripts/tests/tgridlayer.js && node scripts/tests/teditorv2auth.js && node scripts/tests/teditorv2workspace.js",
     "test:editor-v2-3d": "node scripts/tests/teditorv23d.js && node scripts/tests/teditorv2cost.js",
     "check:editor-v2": "node scripts/render-editor-v2.js",
     "test:editor-v2-outputs": "node scripts/tests/teditorv2outputs.js",

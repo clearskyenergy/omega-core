@@ -3776,3 +3776,27 @@ and pinned 3D beside Outputs/Run so it stays visible without ribbon scrolling.
 The experience registry marks editor-v2 present but previewOnly: direct review
 URLs work while saved-project links keep the canonical editor. Presence alone
 must not redirect a saved Firestore project into a browser-only draft editor.
+
+## 2026-10-17 — Separate Site Plan customer trial
+
+Site Plan is a separate `siteplantrial` tool at `/editor-v2`. It does not
+replace Site Map, and the experience router remains previewOnly. The projects
+list sends only `editor: 'v2'` records to it; the original editor remains the
+route for all existing drawings. No old editor files or projects are retired.
+
+Workspace saves use the signed-in Firebase token and the existing `projects`
+rules. New records use a create precondition (never overwrite an existing ID);
+updates use a transaction and `savedBy.at` revision, preserve ownership/JDA
+rosters and lifecycle fields, and refuse non-v2 drawings. Local saves remain
+available. The separate permit/SLD branch (#359) supplies review sheets and
+PDF/DXF outputs from the same document.
+
+Prime receives the saved ID, address, coordinates, org and editor version; its
+return link preserves the trial editor. Marketplace submission uses the
+existing fin_profiles/fin_projects rules and a deterministic listing ID. A
+repeat updates descriptive fields only, preserving awards, offers and status.
+The UI requires a deliberate marketplace submission; a save is not a listing.
+BOM quote requests use `/api/rfq`, with vendor routing and Logic order creation
+on the server. Only published catalog matches become orders; unmatched lines
+are reported. Trial feedback is stored on the existing project, not a new
+collection. The workspace and marketplace test doubles never write live data.

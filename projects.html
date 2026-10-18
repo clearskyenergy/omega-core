@@ -1060,7 +1060,7 @@ function ownerCell(p) {
   return `<div class="pt-owner">${chip}${link}</div>`;
 }
 
-function openProject(id) { window.location.href = '/editor.html?id='+id; }
+function openProject(id) { const p = allProjects.find(p => p.id === id); window.location.href = (p && p.editor === 'v2' ? '/editor-v2?id=' : '/editor.html?id=') + encodeURIComponent(id); }
 
 async function deleteProject(id, name) {
   if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;

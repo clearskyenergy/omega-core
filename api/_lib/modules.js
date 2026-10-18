@@ -60,6 +60,7 @@ var NOT_SOLD = [
 var BY_KEY = {};
 CATALOG.forEach(function (m) { BY_KEY[m.key] = m; });
 /* Argument-sensitive launchers must never grant Compute from the Lite build family. */
+BY_KEY.lite.tools.push('siteplantrial');
 BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(["_guidedPick('der')", "_guidedPick('standard')", "_guidedPick('deluxe')", "_guidedPick('l2')", "_guidedPick('ev')", "homeStartWizard('FOM')", "openRpPanel('summary')", "rpTab('summary')"]);
 BY_KEY.compute.ribbon.push("_guidedPick('compute')");
 BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cost', '#rp-cost',

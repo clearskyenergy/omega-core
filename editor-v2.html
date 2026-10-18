@@ -2,7 +2,7 @@
 <!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
 <html lang="en">
 <head>
-<meta charset="utf-8">
+<meta charset="utf-8"><script src="/omega-splash.js?v=1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OMEGA Site Plan</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%231F4E79' d='M16 2 28 9v14L16 30 4 23V9z'/%3E%3C/svg%3E">
@@ -264,7 +264,7 @@
       <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path fill="#1F4E79" d="M16 2 28 9v14L16 30 4 23V9z"/><path fill="#fff" d="M16 8 22 11.5v7L16 22l-6-3.5v-7z"/></svg>
       <div><strong>OMEGA</strong><span>Site Plan</span></div>
     </div>
-    <span class="pill">Preview</span>
+    <span class="pill">Customer trial</span>
     <input id="project-name" aria-label="Project name" value="Untitled site" maxlength="120">
     <div class="head-actions">
       <button type="button" id="customer-btn" aria-haspopup="dialog">
@@ -274,7 +274,8 @@
       <span id="save-state">Not saved</span>
       <button type="button" class="btn" id="btn-new">New</button>
       <button type="button" class="btn" id="btn-open">Open</button>
-      <button type="button" class="btn primary" id="btn-save">Save</button>
+      <button type="button" class="btn primary" id="btn-save">Save to workspace</button>
+      <button type="button" class="btn" id="btn-local-save">Save here</button>
       <button type="button" class="btn quiet" id="btn-help">Help</button>
       <button type="button" class="btn quiet side-toggle" id="btn-side" aria-expanded="false">Details</button>
     </div>
@@ -355,6 +356,11 @@
     </div><h2>Results</h2></div>
   </div>
   <div id="outputs-menu" hidden role="menu" aria-label="Outputs">
+    <button type="button" role="menuitem" id="btn-prime">Open in OMEGA Prime</button>
+    <button type="button" role="menuitem" id="btn-quote">Request a quote in Logic</button>
+    <button type="button" role="menuitem" id="btn-feedback">Send trial feedback</button>
+    <button type="button" role="menuitem" id="btn-logic">Open in Logic</button>
+    <button type="button" role="menuitem" id="btn-marketplace">Submit to marketplace</button>
     <button type="button" role="menuitem" data-output="permit" data-hook="permit" id="btn-permit">Permit set + plot plan</button>
     <button type="button" role="menuitem" data-output="sld" data-hook="sld" id="btn-sld">One-line</button>
     <button type="button" role="menuitem" data-output="drawing">PNG / PDF / DXF</button>
@@ -549,7 +555,10 @@
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" onerror="void 0"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" onerror="void 0"></script>
 <script src="config.js"></script>
+<script src="omega-brand.js"></script>
+<script src="omega-tenant.js"></script>
 <script src="omega-editor-v2-auth.js"></script>
 <script src="cad-kernel.js"></script>
 <script src="omega-editor-v2-geom.js"></script>
@@ -576,6 +585,7 @@
 <script src="omega-editor-v2-guided.js"></script>
 <script src="omega-editor-v2-aerial.js"></script>
 <script src="omega-editor-v2-outputs.js"></script>
+<script src="omega-editor-v2-workspace.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>
 </body>

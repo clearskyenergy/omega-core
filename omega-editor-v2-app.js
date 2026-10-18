@@ -12,7 +12,7 @@
   'use strict';
 
   var G, D, A, B, X, R;
-  var state, tool = 'select', equipKey = null, mapOn = true, dirty = false, savedOnce = false, saving = false;
+  var state, tool = 'select', equipKey = null, mapOn = true, dirty = false, savedOnce = false, saving = false, lastSaveLocation = 'local';
   var editSeq = 0, runEdit = -1;
   var snaps = { grid: true, endpoint: true, midpoint: true, edge: true, angle: false };
   var view = { cx: 200, cy: 140, pxPerFt: 1.5 };
@@ -88,6 +88,9 @@
       });
     }
     if (!recovering) setStatus('Sample site loaded.');
+    var projectParam = /[?&]id=([A-Za-z0-9_-]+)/.exec(location.search);
+    if (projectParam && !recovering) loadWorkspace(projectParam[1]);
+    if (root.OmegaEditorV2Hooks) root.OmegaEditorV2Hooks.register('funding', function () { pushMarketplace(); return true; });
     var Bld = root.OmegaEditorV2Build;
     if (Bld && Bld.resume) {
       if (recovering) {
@@ -159,7 +162,13 @@
       D.setMeta(state, { name: this.value.trim() || 'Untitled site' });
       afterChange();
     });
-    $('btn-save').addEventListener('click', saveLocal);
+    $('btn-save').addEventListener('click', saveWorkspace);
+    $('btn-local-save').addEventListener('click', saveLocal);
+    $('btn-prime').addEventListener('click', function () { handoff('prime'); });
+    $('btn-logic').addEventListener('click', function () { handoff('logic'); });
+    $('btn-marketplace').addEventListener('click', pushMarketplace);
+    $('btn-quote').addEventListener('click', quoteDialog);
+    $('btn-feedback').addEventListener('click', sendFeedback);
     $('btn-open').addEventListener('click', openDialog);
     $('btn-new').addEventListener('click', function () { confirmDirty(blank); });
     $('btn-help').addEventListener('click', function () { $('dlg-help').showModal(); });
@@ -259,7 +268,7 @@
     var v = $('dlg-confirm').returnValue, next = confirmNext;
     confirmNext = null;
     if (!next) return;
-    if (v === 'save') { saveLocal(); next(); }
+    if (v === 'save') { saveWorkspace().then(function (ok) { if (ok) next(); }); }
     else if (v === 'discard') { R.drop(localStorage); next(); }
   }
 
@@ -397,7 +406,7 @@
       ev.preventDefault(); runAct('undo');
     } else if (meta && (ev.key === 'y' || ev.key === 'Y' || (ev.shiftKey && (ev.key === 'z' || ev.key === 'Z')))) {
       ev.preventDefault(); runAct('redo');
-    } else if (meta && (ev.key === 's' || ev.key === 'S')) { ev.preventDefault(); saveLocal(); }
+    } else if (meta && (ev.key === 's' || ev.key === 'S')) { ev.preventDefault(); saveWorkspace(); }
     else if (meta && (ev.key === 'c' || ev.key === 'C') && ev.target.id !== 'cmd') { copySel(); }
     else if (meta && (ev.key === 'v' || ev.key === 'V') && ev.target.id !== 'cmd') { ev.preventDefault(); paste(); }
     else if (meta && (ev.key === 'd' || ev.key === 'D')) { ev.preventDefault(); D.duplicate(state, state.selection, 10, 10); afterChange(); }
@@ -1556,7 +1565,7 @@
   }
   function saveLabel() {
     var el = $('save-state');
-    el.textContent = dirty ? 'Unsaved' : (savedOnce ? 'Saved here' : 'Not saved');
+    el.textContent = dirty ? 'Unsaved' : (savedOnce ? (lastSaveLocation === 'workspace' ? 'Saved to workspace' : 'Saved here') : 'Not saved');
     el.className = !dirty && savedOnce ? 'is-ok' : '';
   }
 
@@ -1572,6 +1581,79 @@
       setStatus('This drawing is too large to keep a recovery copy. Save a project file before you close the tab.', true);
     }
   }
+  function sendFeedback() {
+    var message=window.prompt('What worked, or what should we improve in Site Plan?');
+    if(!message || !message.trim()) return;
+    saveWorkspace().then(function(ok){if(ok)return root.OmegaEditorV2Workspace.feedback(state.doc,message).then(function(){setStatus('Feedback saved with your project. Thank you.');});})
+      .catch(function(e){setStatus(e.message,true);});
+  }
+  function quoteDialog() {
+    toggleOutputs(false);
+    var dlg=document.createElement('dialog'), form=document.createElement('form'), title=document.createElement('h2');
+    title.textContent='Review the bill of materials';form.appendChild(title);
+    var info=document.createElement('p');info.textContent='Enter the published SKU for each item you want quoted. Only checked lines are sent. Pricing and supplier routing happen in OMEGA.';form.appendChild(info);
+    var rows=[];
+    state.doc.entities.forEach(function(e){
+      if(e.type!=='equip' && e.type!=='array')return;
+      var row=document.createElement('p'), use=document.createElement('input'), sku=document.createElement('input'), qty=document.createElement('input');
+      use.type='checkbox';use.checked=!!e.sku;sku.placeholder='Published SKU';sku.value=e.sku||'';sku.maxLength=120;
+      qty.type='number';qty.min='1';qty.step='1';qty.value=e.type==='array'?D.arrayLayout(state.doc,e).moduleCount||1:1;qty.style.width='75px';
+      row.appendChild(use);row.appendChild(document.createTextNode(' '+(e.label||e.key||'Solar modules')+' '));row.appendChild(sku);row.appendChild(qty);form.appendChild(row);
+      rows.push({e:e,use:use,sku:sku,qty:qty});
+    });
+    var status=document.createElement('p'), send=document.createElement('button'), cancel=document.createElement('button');
+    send.type='submit';send.textContent='Send quote request';cancel.type='button';cancel.textContent='Close';cancel.onclick=function(){dlg.close();};
+    form.appendChild(status);form.appendChild(send);form.appendChild(cancel);dlg.appendChild(form);document.body.appendChild(dlg);
+    dlg.addEventListener('close',function(){dlg.remove();});
+    form.onsubmit=function(ev){ev.preventDefault();var bom=[];
+      rows.forEach(function(r){if(r.use.checked)bom.push({sku:r.sku.value.trim(),description:r.e.label||r.e.key||'Solar modules',qty:+r.qty.value,unit:'ea',manufacturer:r.e.mfr||'',category:r.e.key||'solar'});});
+      if(!bom.length || bom.some(function(r){return !r.sku || !(r.qty>0) || r.qty%1;})){status.textContent='Select at least one item with a SKU and whole quantity.';return;}
+      send.disabled=true;
+      saveWorkspace().then(function(ok){if(!ok)throw new Error('Save the project before sending the quote request.');return root.OmegaEditorV2Workspace.quote(state.doc,bom);})
+        .then(function(j){
+          status.textContent=(j.rfqId?'Quote request '+j.rfqId+' sent. ':'')+(j.orders&&j.orders.length?j.orders.length+' linked Logic order(s). ':'')+(j.unmatched&&j.unmatched.length?j.unmatched.length+' line(s) need catalog matching.':'');
+          if(!j.rfqId && !(j.orders&&j.orders.length))status.textContent='No supplier or published catalog product matched. Check the SKUs before retrying.';
+          (j.orders||[]).forEach(function(o){if(o.href){var a=document.createElement('a');a.href=o.href;a.textContent='Open order in Logic';form.appendChild(a);}});
+        }).catch(function(e){status.textContent=e.message;send.disabled=false;});
+    };dlg.showModal();
+  }
+  function saveWorkspace() {
+    if (saving) return Promise.resolve(false);
+    var doc = state.doc, seq = editSeq;
+    saving = true; setStatus('Saving to your workspace…');
+    return root.OmegaEditorV2Workspace.save(doc).then(function (result) {
+      if (state.doc !== doc) return false;
+      doc.remoteProjectId = result.id; doc.orgId = result.orgId; doc.workspaceRevision = result.revision;
+      dirty = editSeq !== seq; savedOnce = true; lastSaveLocation = 'workspace';
+      if (!dirty) R.drop(localStorage);
+      saveLabel();
+      history.replaceState(null, '', '/editor-v2?id=' + encodeURIComponent(result.id));
+      setStatus(dirty ? 'Saved. Your newer edits still need saving.' : 'Saved to your workspace.');
+      return !dirty;
+    }).catch(function (e) { setStatus(e.message || 'Save failed. Your drawing is still here.', true); return false; })
+      .then(function (ok) { saving = false; return ok; });
+  }
+  function loadWorkspace(id) {
+    var seq = editSeq;
+    setStatus('Opening workspace project…');
+    return root.OmegaEditorV2Workspace.open(id).then(function (record) {
+      if (seq !== editSeq) { setStatus('The project arrived after you edited. Save your draft, then open it again.', true); return; }
+      openRecord(record, record.updatedAt);
+    }).catch(function (e) { setStatus(e.message || 'Project could not be opened.', true); });
+  }
+  function handoff(target) {
+    saveWorkspace().then(function (ok) { if (ok) location.href = root.OmegaEditorV2Workspace.href(state.doc, target); });
+  }
+  function pushMarketplace() {
+    if (!window.confirm('Submit this project to the financing marketplace? Approved marketplace partners can browse the listing.')) return;
+    saveWorkspace().then(function (ok) {
+      if (!ok) return;
+      setStatus('Submitting to marketplace…');
+      return root.OmegaEditorV2Workspace.marketplace(state.doc).then(function (id) {
+        setStatus('Submitted to marketplace: ' + id + '.');
+      });
+    }).catch(function (e) { setStatus(e.message || 'Marketplace submission failed.', true); });
+  }
   function saveLocal() {
     var record, savedAt;
     try { record = B.project(state.doc); }
@@ -1584,7 +1666,7 @@
       localStorage.setItem(PROJECTS, JSON.stringify(all));
       R.drop(localStorage);
       dirty = false;
-      savedOnce = true;
+      savedOnce = true; lastSaveLocation = 'local';
       saveLabel();
       setStatus('Saved on this computer as project ' + state.doc.projectId + '.');
     } catch (err) {
@@ -1617,6 +1699,18 @@
       li.appendChild(btn);
       list.appendChild(li);
     }
+    var cloud = document.createElement('button'); cloud.type='button'; cloud.textContent='Open from workspace';
+    cloud.addEventListener('click', function () {
+      cloud.disabled=true; cloud.textContent='Loading workspace…';
+      root.OmegaEditorV2Workspace.list().then(function (items) {
+        cloud.textContent=items.length ? 'Workspace projects' : 'No Site Plan projects in this workspace yet.';
+        items.forEach(function (item) {
+          var li=document.createElement('li'), b=document.createElement('button'); b.type='button'; b.textContent=item.name||item.id;
+          b.onclick=function(){ $('dlg-open').close(); confirmDirty(function(){loadWorkspace(item.id);}); }; li.appendChild(b); list.prepend(li);
+        });
+      }).catch(function(e){cloud.disabled=false;cloud.textContent=e.message;});
+    });
+    list.prepend(cloud);
     $('dlg-open').showModal();
   }
   function openRecord(record, savedAt) {
@@ -1627,7 +1721,7 @@
       /* An edit that landed while this open was in flight stays unsaved.
          The open itself, with no such edit, is the saved copy. */
       dirty = R.loadKeepsDirty(editSeq !== seq);
-      savedOnce = !dirty;
+      savedOnce = !dirty; lastSaveLocation = doc.remoteProjectId ? 'workspace' : 'local';
       draft = null;
       fit(false);
       refresh();

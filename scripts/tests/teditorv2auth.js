@@ -53,7 +53,7 @@ var iCfg = page.indexOf('src="config.js"');
 var iMod = page.indexOf('src="omega-editor-v2-auth.js"');
 var iBoot = page.indexOf('OmegaEditorV2App.boot()');
 check(iApp > 0 && iApp < iAuthSdk && iAuthSdk < iCfg && iCfg < iMod && iMod < iBoot, 'Firebase, config, and the sign-in module load before boot');
-check(page.indexOf('firebase-firestore') < 0 && page.indexOf('omega-tenant.js') < 0, 'Site Plan does not open Firestore or the hostname lock');
+check(page.indexOf('firebase-firestore') > 0 && /omega-brand\.js.*<\/script>\s*<script src="omega-tenant\.js"/m.test(page), 'workspace saves use Firestore and the shared tenant runtime follows branding');
 check(page.indexOf('Sign in to place guided builds.') >= 0 && page.indexOf('id="build-signin-btn"') >= 0, 'the dialog has the sign-in sentence and a button');
 check(page.indexOf('missing bearer token') < 0, 'the page does not print the raw token error');
 check(page.indexOf('api/_lib/guided-build') < 0, 'the page does not ship the planner');
