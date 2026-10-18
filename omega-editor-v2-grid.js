@@ -287,6 +287,13 @@
   }
 
   function token() {
+    var Auth = root.OmegaEditorV2Auth;
+    if (Auth && typeof Auth.idToken === 'function') {
+      return Auth.idToken().then(function (t) {
+        if (t) return t;
+        return Promise.reject(new Error('Sign in to check the grid.'));
+      });
+    }
     try {
       var u = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
       if (u) return u.getIdToken();

@@ -92,6 +92,8 @@
   #build-choices { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; }
   #build-choices label { font-size: 13px; color: var(--ink); }
   #build-error { color: var(--danger); min-height: 1.2em; }
+  #build-signin { margin: 8px 0 4px; }
+  #build-signin-note { color: var(--ink); font-size: 14px; margin: 0 0 8px; line-height: 1.4; }
   #side-site .row-actions, #side-draw .row-actions { justify-content: flex-start; }
   #ribbon {
     display: flex; align-items: stretch; background: var(--panel);
@@ -520,6 +522,10 @@
     <div id="build-fields"></div>
     <details id="build-advanced-wrap"><summary>Advanced</summary><div id="build-advanced"></div></details>
     <p id="build-error" role="alert"></p>
+    <div id="build-signin" hidden>
+      <p id="build-signin-note">Sign in to place guided builds.</p>
+      <button type="button" class="btn primary" id="build-signin-btn">Sign in</button>
+    </div>
     <div class="row-actions">
       <button type="button" class="btn" id="build-cancel">Cancel</button>
       <button type="button" class="btn primary" id="build-place">Place on the site</button>
@@ -527,6 +533,10 @@
   </form>
 </dialog>
 
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" onerror="void 0"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
+<script src="config.js"></script>
+<script src="omega-editor-v2-auth.js"></script>
 <script src="cad-kernel.js"></script>
 <script src="omega-editor-v2-geom.js"></script>
 <script src="omega-editor-v2-assign.js"></script>
