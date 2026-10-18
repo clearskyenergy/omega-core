@@ -1359,13 +1359,24 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   await check('freight', '/logic-logistics.html?org=cleancell.us&order=o7#freight', async function (p) {
     var dialogs = []; p.on('dialog', function (d) { dialogs.push(d.message()); d.dismiss(); });
     await p.waitForSelector('#fr-lanes tr[data-lane]'); await p.waitForTimeout(400);
-    var chosen = await p.$eval('#order', function (e) { return e.value; }), nav = await p.$$eval('.logic-nav a[href="#freight"]', function (r) { return r.length; });
+    var chosen = await p.$eval('#order', function (e) { return e.value; }), freightOpen = await p.$eval('#freight', function (e) { return !!e.open; });
     var seen = await p.evaluate(function () { var r = document.getElementById('freight').getBoundingClientRect(); return window.scrollY > 0 && r.top < innerHeight && r.bottom > 0; });
     var head = await text(p, '#fr-summary > p'), tiles = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); });
     var weightMiss = await text(p, '#fr-summary .logic-kv > div.w');
-    ok('freight plan: opened from a link (?order=o7#freight) the order is chosen and the page is at the plan; the summary counts every unit, the two with no site in red, and the weight on file naming the SKU that has none', chosen === 'o7' && nav === 1 && seen && /^CC-26-4431 · PO SG-PO-3300 · Summit Grid Co\./.test(head)
+    var ledgerHead = await text(p, '#order-head'), destCard = await text(p, '#detail .dest');
+    ok('  the ledger keeps the order, the purchase order, the full site address and both BOM lines', /CC-26-4431/.test(ledgerHead) && /SG-PO-3300/.test(ledgerHead) && /Summit Grid Co\. · per site list/.test(destCard) && /1 Example Plaza, Chicago, IL 60601/.test(destCard) && /40 × CC-C215/.test(destCard) && /16 × CC-C418/.test(destCard), [ledgerHead, destCard]);
+    await p.selectOption('#order', 'o1');
+    await p.waitForFunction(function () { var a = document.querySelector('#detail .addr'); return a && a.textContent.indexOf('Bakersfield') >= 0; });
+    var yard = await text(p, '#detail .addr'), yardBom = await text(p, '#detail .bom');
+    ok('  a destination with no street shows the city and state, and the BOM line stays', yard === 'Bakersfield, CA' && /5 × CC-C215/.test(yardBom), [yard, yardBom]);
+    await p.selectOption('#order', 'o7');
+    await p.waitForFunction(function () {
+      var a = document.querySelector('#detail .addr'), st = document.getElementById('fr-status'), main = document.getElementById('fr-main');
+      return a && /60601/.test(a.textContent) && st && st.textContent === '' && main && !main.hidden && document.querySelector('#fr-lanes tr[data-lane="NORTHEAST"]');
+    });
+    ok('freight plan: opened from a link (?order=o7#freight) the order is chosen and the page is at the plan; the summary counts every unit, the two with no site in red, and the weight on file naming the SKU that has none', chosen === 'o7' && freightOpen && seen && /^CC-26-4431 · PO SG-PO-3300 · Summit Grid Co\./.test(head)
       && tiles.join('|') === 'Units:56|Sites:16|Lanes:7|Need freight:54|Booked on a load:0|Shipped:0|No site yet:2|Cannot ship:0|Ready at the plant:30|Est. weight to ship:214,500 lb' && /not on file: CC-C418/.test(weightMiss)
-      && await p.$$eval('#fr-summary .logic-kv > div.bad', function (r) { return r.map(function (x) { return x.querySelector('small').textContent; }).join(); }) === 'No site yet', [chosen, nav, seen, head, tiles, weightMiss]);
+      && await p.$$eval('#fr-summary .logic-kv > div.bad', function (r) { return r.map(function (x) { return x.querySelector('small').textContent; }).join(); }) === 'No site yet', [chosen, freightOpen, seen, head, tiles, weightMiss]);
     var origin = await text(p, '#fr-origin-view');
     ok('  the ship-from is the plant, on the map, so stops run nearest-first from it', /^Main plant · Building A\s*2400 Sample Industrial Pkwy, Fort Worth, TX 76106/.test(origin) && /Shipping office · \(817\) 555-0100 · Mon–Fri 7:00–15:00/.test(origin) && /On the map: stops run nearest-first/.test(origin) && await text(p, '#fr-origin-edit') === 'Change the ship-from', origin);
     /* the lanes: one row each, in the fixed region order, as the library has them */
@@ -1422,7 +1433,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var legIds = o7.legs.map(function (l) { return l.id; }), unitsOn = STATE.freight.units.filter(function (u) { return u.logisticsLegId; });
     var planned = await p.$$eval('details[data-lane="NORTHEAST"] [data-quote="' + q2.id + '"] a[data-load]', function (r) { return r.map(function (a) { return a.getAttribute('href'); }); });
     var loads = await p.$$eval('details[data-lane="NORTHEAST"] > .fr-loads a[data-load]', function (r) { return r.map(function (a) { var t = document.getElementById(a.getAttribute('href').slice(1)); return a.getAttribute('data-load') + '|' + a.getAttribute('href') + '|' + (t && t.closest('#detail') ? 'on the ledger' : 'missing'); }); });
-    var ledger = await p.$$eval('#detail p[id^="load-FRT-"]', function (r) { return r.map(function (x) { return x.querySelector('b').textContent; }); });
+    var ledger = await p.$$eval('#detail .load[id^="load-FRT-"]', function (r) { return r.map(function (x) { return x.querySelector('[data-load-ref]').textContent; }); });
     var after = await p.$$eval('#fr-lanes tr[data-lane="NORTHEAST"] td', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
     var tiles2 = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); }), msg2 = await text(p, '[data-lane-msg="NORTHEAST"]');
     ok('  Plan 3 loads: the ledger has one planned leg per stop with the carrier and booking reference, the quote id and never its amount; the ten units are on them; the other price is replaced; each lane link lands on its load', legIds.join() === 'FRT-CC-26-4431-NORTHEAST-1-S1,FRT-CC-26-4431-NORTHEAST-1-S2,FRT-CC-26-4431-NORTHEAST-1-S3' && o7.revision === 1
