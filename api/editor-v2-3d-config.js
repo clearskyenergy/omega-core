@@ -14,18 +14,15 @@ function publicStatus(env) {
   };
 }
 
-module.exports = function (req, res) {
-  if (req.method !== 'GET') {
-    res.statusCode = 405;
-    res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.end('GET only');
-    return;
-  }
-  var body = publicStatus(process.env);
-  res.statusCode = 200;
-  res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Cache-Control', 'private, no-store');
-  res.end(JSON.stringify(body));
-};
+var A = require('./_lib/admin'), X = require('./_lib/package-access');
+module.exports = A.handler(function (req, res) {
+  if (req.method !== 'GET') throw A.httpError(405, 'GET only');
+  return A.authenticate(req).then(function(caller){
+    if (!caller || !(caller.orgId || caller.staff)) throw A.httpError(403,'Workspace sign-in required');
+    return X.withCaller(caller,'lite',{produce:false}).then(function(){
+      res.setHeader('Cache-Control','private, no-store');return publicStatus(process.env);
+    });
+  });
+});
 
 module.exports.publicStatus = publicStatus;

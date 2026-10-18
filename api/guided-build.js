@@ -22,6 +22,8 @@ module.exports = A.handler(function (req, res) {
     try { size = JSON.stringify(b).length; } catch (e) { size = 0; }
     if (size > 400000) throw A.httpError(413, 'This site is too large to build in one request.');
     res.setHeader('Cache-Control', 'no-store');
-    return GB.plan(String(b.builder || ''), b.input || {});
+    return require('./_lib/package-access').withCaller(caller, b.builder === 'compute' ? 'compute' : 'lite').then(function () {
+      return GB.plan(String(b.builder || ''), b.input || {});
+    });
   });
 });

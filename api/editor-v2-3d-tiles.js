@@ -18,7 +18,7 @@ function fail(res, code, text) {
   res.end(text);
 }
 
-module.exports = function (req, res) {
+function serve(req, res) {
   if (req.method !== 'GET') { fail(res, 405, 'GET only'); return; }
   var key = process.env.GOOGLE_MAP_TILES_API_KEY;
   key = key && String(key).trim();
@@ -68,6 +68,14 @@ module.exports = function (req, res) {
     fail(res, 502, 'The tile service did not answer.');
   });
   upstream.end();
+};
+
+module.exports = function(req,res) {
+  var A=require('./_lib/admin');
+  return A.authenticate(req).then(function(caller){
+    if(!caller || !(caller.orgId || caller.staff)) throw A.httpError(403,'Workspace sign-in required');
+    return require('./_lib/package-access').withCaller(caller,'lite',{produce:false});
+  }).then(function(){serve(req,res);},function(e){fail(res,e.status||403,'Workspace access is required.');});
 };
 
 module.exports.lib = T;

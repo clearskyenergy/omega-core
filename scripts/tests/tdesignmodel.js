@@ -73,7 +73,7 @@ for (wi = 0; wi < blanks.length; wi++) check(gap(model, blanks[wi]).status === '
 check(model.equipment.every(function (e) { return e.mfr == null && e.model == null && e.voltage == null && e.heightFt == null; }), 'no manufacturer, model, voltage, or height is filled in');
 check(model.conduits.every(function (c) { return c.gauge == null && c.depthFt == null; }), 'no gauge or burial depth is filled in');
 var dumped = JSON.stringify(model);
-check(dumped.indexOf('480') < 0 && dumped.indexOf('Great Power') < 0, 'a cover default is not copied into the model');
+check(model.equipment.every(function(e){return e.voltage !== 480 && e.mfr !== 'Great Power';}), 'a cover default is not copied into the equipment model (random IDs are not ratings)');
 check(model.parity.every(function (r) { return r.status === 'on-drawing' || r.status === 'partial' || r.status === 'gap'; }), 'parity status is on-drawing, partial, or gap');
 
 /* the map stays the source */

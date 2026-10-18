@@ -3808,3 +3808,8 @@ the browser. Plant and Accounting render the existing server-computed
 `office-stage.path()` through `OmegaLogicTheme.pathBar`. Plant receives only
 step/state/label/position, without financial amounts or action permissions.
 See `docs/OMEGA-JOURNEY-QA.md` for fixture scope and verification limits.
+Trial navigation is also preserved from both workspace dashboards and the
+project list, while all classic records retain their original routes. The
+trial is appended to the tool catalog so existing starter ordering stays put.
+Guided-build, optional 3D configuration, and tile proxy calls now authenticate
+and check package access before producing work or using the tile key.

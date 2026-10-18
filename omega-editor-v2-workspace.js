@@ -97,7 +97,8 @@
         var ref=s.db.collection('fin_projects').doc(id);
         var record={name:doc.name,address:doc.address,sourceProjectId:doc.remoteProjectId,projectId:doc.remoteProjectId,
           sourceOrgId:doc.orgId,sourceTool:'editor-v2',tech:q.solarKwDc>0?(q.bessKw>0?'solar_bess':'solar'):(q.bessKw>0?'storage':'ev'),
-          mw:((q.solarKwDc||0)+(q.bessKw||0))/1000,mwh:(q.bessKwh||0)/1000,
+          mw:(q.solarKwDc||q.bessKw||q.chargerKw||0)/1000,mwh:(q.bessKwh||0)/1000,
+          assetSpec:{solarKwDc:q.solarKwDc||0,bessKw:q.bessKw||0,bessKwh:q.bessKwh||0,chargerKw:q.chargerKw||0},
           sizePending:!(q.solarKwDc>0||q.bessKw>0||q.chargerKw>0),
           links:[{label:'OMEGA Site Plan trial',url:location.origin+'/editor-v2?id='+encodeURIComponent(doc.remoteProjectId)}],updatedAt:Date.now()};
         var create=clean(record);

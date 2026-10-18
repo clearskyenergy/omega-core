@@ -2440,7 +2440,12 @@
   }
 
   function loadConfig() {
-    fetch('/api/editor-v2-3d-config').then(function (r) {
+    var auth=root.OmegaEditorV2Auth;
+    if(!auth) return;
+    auth.idToken().then(function(token){
+      if(!token) throw new Error('Sign in');
+      return fetch('/api/editor-v2-3d-config',{headers:{Authorization:'Bearer '+token}});
+    }).then(function (r) {
       if (!r.ok) return null;
       return r.json();
     }).then(function (cfg) {
@@ -2452,7 +2457,8 @@
   function startPhotorealistic() {
     if (!view || !view.cfg || !view.cfg.photorealistic) return;
     loadCss(CESIUM_CSS);
-    loadScript(CESIUM_JS).then(function () {
+    loadScript(CESIUM_JS).then(function(){return root.OmegaEditorV2Auth.idToken();}).then(function (token) {
+      if(!token) throw new Error('Sign in');
       if (!view || !root.Cesium) throw new Error('Cesium did not load');
       var box = el('div', 'v3d-cesium');
       view.overlay.insertBefore(box, view.canvas);
@@ -2465,7 +2471,7 @@
       });
       view.cesium = viewer;
       var rootUrl = '/api/editor-v2-3d-tiles?u=' + encodeURIComponent('https://tile.googleapis.com/v1/3dtiles/root.json');
-      var tilesetPromise = root.Cesium.Cesium3DTileset.fromUrl ? root.Cesium.Cesium3DTileset.fromUrl(rootUrl) : null;
+      var tilesetPromise = root.Cesium.Cesium3DTileset.fromUrl ? root.Cesium.Cesium3DTileset.fromUrl(new root.Cesium.Resource({url:rootUrl,headers:{Authorization:'Bearer '+token}})) : null;
       if (!tilesetPromise) throw new Error('This Cesium build has no tileset loader');
       return tilesetPromise.then(function (tileset) {
         viewer.scene.primitives.add(tileset);
@@ -2474,7 +2480,7 @@
         addCesiumDesign(viewer);
         if (view.credit) view.credit.textContent = 'Google Photorealistic 3D Tiles · the key stays on the server';
       });
-    }, function (err) {
+    }).catch(function (err) {
       if (view && view.hint) view.hint.textContent = 'Photorealistic tiles did not load. The aerial terrain view is unchanged.';
       if (view && view.canvas) view.canvas.style.display = 'block';
     });
