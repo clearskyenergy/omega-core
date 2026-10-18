@@ -20,6 +20,12 @@ function addressOf(a) {
   if (!name && !line1 && !city) return null;
   return { name: name || null, line1: line1 || null, city: city || null, state: state || null, zip: zip || null };
 }
+/* A name a person reads. An email address is never one. */
+function plainName(v) {
+  var s = text(v, 160);
+  if (!s || BAD[s] || s.indexOf('@') >= 0) return '';
+  return s;
+}
 function linesOf(items) {
   var out = [];
   (Array.isArray(items) ? items : []).forEach(function (it) {
@@ -44,11 +50,14 @@ function sourceOf(order) {
     if (!address && !lines.length) return;
     sites.push({ id: text(d.id, 80) || null, address: address, lines: lines });
   });
-  var customer = order.customer && order.customer.address;
+  var cust = order.customer && typeof order.customer === 'object' ? order.customer : null;
+  var poDoc = order.purchaseOrder && typeof order.purchaseOrder === 'object' ? order.purchaseOrder : null;
   return {
     poNumber: text(po || intake || order.poNumber, 80) || null,
     projectId: text(order.sourceProjectId || order.projectId, 120) || null,
-    address: (sites[0] && sites[0].address) || addressOf(customer),
+    projectName: plainName(order.projectName) || plainName(order.sourceProjectName) || plainName(poDoc && poDoc.projectName) || null,
+    customerName: (cust && (plainName(cust.company) || plainName(cust.name))) || null,
+    address: (sites[0] && sites[0].address) || addressOf(cust && cust.address),
     items: linesOf(order.items),
     sites: sites
   };

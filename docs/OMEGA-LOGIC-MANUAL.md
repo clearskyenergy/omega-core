@@ -780,17 +780,20 @@ at, then scan. Every scan records the phone and the bench it named.
 
 ### The work-order card (`/plant/work-orders`)
 
-The card opens as a drawer beside the grid. It shows the purchase order
-the work was released from: the PO number, the project id, the ship-to,
-and the named line items. Those are read from the order when the card
-opens, so a corrected address or line is what the floor sees, and prices
-and email stay on the order. A fact the purchase order does not carry is
-said so, and nothing is filled in. Above the grid, the build schedule
-counts late work, this week, the next 30 days, later, and no target.
-Holds and failed tests on the loaded units are listed, each linking to
-the serial record. Parts still to register stay in their own table.
-Materials shows what the bill is short of against stock, the same plan
-the plant board uses.
+The board is the office menu and one status row: Late, On hold, In
+progress, Ready to ship. Line, stage, priority, target date, and which
+operation the units are at sit behind More filters. Register serials is
+the one action on the bar. Print, Export, and Refresh sit in the overflow.
+The card opens as a drawer and leads with the journey: which customer and
+project, what is being built, where it ships, how far along it is, and
+what is blocking it. Operation steps stay on the card, collapsed. Those
+facts are read from the order when the card opens, so a corrected address
+or line is what the floor sees. Prices and email stay on the order. A
+project id is not the name of the job. A fact the purchase order does not
+carry is said so, and nothing is filled in. Holds and failed tests on the
+loaded units are listed, each linking to the serial record. Parts still
+to register stay in their own table. Materials shows what the bill is
+short of against stock, the same plan the plant board uses.
 
 ### Registering serials
 
