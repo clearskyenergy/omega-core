@@ -3755,3 +3755,12 @@ mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
 rate beside the project's blended $/W. Held by
 `scripts/tests/teditorcost.js` (solar by mount; the page collector with
 and without the skid).
+
+## 2026-10-17 — OMEGA journey integration preview
+
+Design-to-order routing remains in `api/_lib/design-order.js` and
+`api/_lib/design-place.js`. No pricing, dispatch or eligibility math moved into
+the browser. Plant and Accounting render the existing server-computed
+`office-stage.path()` through `OmegaLogicTheme.pathBar`. Plant receives only
+step/state/label/position, without financial amounts or action permissions.
+See `docs/OMEGA-JOURNEY-QA.md` for fixture scope and verification limits.

@@ -24,7 +24,7 @@
    those) and freight{ quoteId, laneKey, loadId, stop, stops }, never an
    amount. */
 'use strict';
-var A=require('./_lib/admin'),X=require('./_lib/logic-access'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle'),C=require('./_lib/custody');
+var A=require('./_lib/admin'),X=require('./_lib/logic-access'),P=require('./_lib/logic-policy'),L=require('./_lib/order-lifecycle'),C=require('./_lib/custody'),S=require('./_lib/office-stage');
 var F=require('./_lib/freight'),SG=require('./_lib/site-geo');
 
 /* ── the freight plan ─────────────────────────────────────────────────── */
@@ -177,6 +177,17 @@ async function freightPost(db,org,ctx,c,b){
     return {ok:true,revision:d.revision+1,loadId:loadId,legs:added,quote:F.quoteView(Object.assign({},q,acc),preLane||null,today),notOnQuote:chk.notOnQuote,superseded:others.map(function(x){return x.id;})};
   });
 }
+/* the office ledger. buyerOrder is also what a customer is shown, so the
+   project the order was designed from stays off that projection and is
+   added here only. The journey is office-stage path(), the same bar the
+   office draws; this page does not invent a second one. Address and BOM
+   lines are already on buyerOrder. */
+function ledgerOrder(o,id,who,billing){
+  var v=L.buyerOrder(o,id),pid=o?String(o.projectId||o.sourceProjectId||(o.design&&o.design.projectId)||'').slice(0,120):'';
+  if(pid)v.projectId=pid;
+  v.path=S.path(o,who||{},billing,null);
+  return v;
+}
 
 module.exports=A.handler(async function(req,res){
   res.setHeader('Cache-Control','no-store');
@@ -187,8 +198,9 @@ module.exports=A.handler(async function(req,res){
   if(req.method==='GET'&&req.query.freight)return freightGet(db,org,ctx,c,req.query.freight);
   if(req.method==='GET'){
     var q=db.collection('orders').where('orgId','==',org).orderBy('createdAt','desc').limit(100),rows=await q.get();
+    var who=X.access(c,ctx),billing=(ctx.config||{}).accounting;
     // Unconverted PO intake (including declined) has no destination plan and is not an order yet; api/po-intake.js applies the same rule.
-    return {brand:require('./_lib/logic-brand')(ctx.org),orders:rows.docs.filter(function(s){var d=s.data();return !d.poIntake||d.poIntake.convertedAt;}).map(function(s){return L.buyerOrder(s.data(),s.id);}),limited:rows.size===100,
+    return {brand:require('./_lib/logic-brand')(ctx.org),steps:S.PATH.map(function(s){return {key:s.key,label:s.label,ask:s.ask};}),orders:rows.docs.filter(function(s){var d=s.data();return !d.poIntake||d.poIntake.convertedAt;}).map(function(s){return ledgerOrder(s.data(),s.id,who,billing);}),limited:rows.size===100,
       notice:'Manual shipment evidence ledger. Carrier booking, live tracking and commissioning approval are not connected.'};
   }
   if(FREIGHT_ACTIONS.indexOf(b.action)>=0)return freightPost(db,org,ctx,c,b);

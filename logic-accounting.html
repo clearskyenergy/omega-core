@@ -22,8 +22,9 @@
 
      The ledger sync card chooses where a tenant-billed workspace keeps its
      OWN books (its QuickBooks or its Stripe) and talks only to
-     api/logic-accounting.js; no token or key ever reaches this page, and a
-     deployment without the credentials says which variables are missing.
+     api/logic-accounting.js; no token or key ever reaches this page. Connect
+     is drawn only when that provider is configured on the deployment. A
+     missing one is not a disabled button.
      ES5, no build step, like every office page. -->
 <html lang="en"><head><meta charset="utf-8"><script src="/omega-splash.js?v=1"></script>
 <meta name="viewport" content="width=device-width,initial-scale=1"><title>Accounting</title><link rel="stylesheet" href="/omega-logic-theme.css"><style>
@@ -47,6 +48,13 @@ body{margin:0}header{padding:22px 4%;display:flex;justify-content:space-between;
 .tag.overdue,.tag.hold{background:#FDEBE9;color:#B42318}.tag.onpo{background:#FFF4DE;color:#7A4B00}.tag.voided{background:#EEF1F4;color:#3F5D68}
 .logic-main button.open{background:none;border:0;padding:0;color:var(--brand-d);font-weight:600;text-align:left;border-radius:4px}
 .logic-main button.open:hover{text-decoration:underline}
+a.sublink{display:block;margin-top:2px;font-size:12px;font-weight:600;color:var(--brand-d);text-decoration:none}
+a.sublink:hover{text-decoration:underline}
+.links{margin:0 0 8px;font-size:14px}.links a{font-weight:600}
+.bill{list-style:none;display:flex;gap:8px;padding:0;margin:12px 0}
+.bill li{flex:1;min-width:0;border:1px solid var(--line);border-radius:10px;padding:8px 10px}
+.bill li.on{border-color:var(--brand);background:#F1FAFC}
+.bill .sub{margin-top:2px}
 tr.sel td{background:#F0F7FB}
 .warn{background:#FFF5DE;color:#735312;padding:12px 16px;border-radius:10px;margin:10px 0}
 .alert{color:#A32D2D;background:#FFF0EF;padding:12px 16px;border-radius:10px;margin:10px 0}
@@ -57,8 +65,14 @@ tr.sel td{background:#F0F7FB}
 fieldset{border:1px solid var(--line);border-radius:12px;padding:12px 16px;margin:14px 0}legend{font-weight:600;padding:0 6px}
 fieldset .chk{margin:6px 16px 6px 0!important}
 /* the drawer: one invoice, its payments, its history and what may be done */
-#drawer{position:fixed;top:0;right:0;bottom:0;width:560px;max-width:100%;background:white;border-left:1px solid var(--line);box-shadow:-12px 0 32px rgba(11,39,51,.14);overflow-y:auto;padding:20px 24px 32px;z-index:40}
+/* the open invoice sits in the page, under the totals. It does not cover the list. */
+#drawer{position:static;width:auto;max-width:none;margin:0 0 16px;padding:16px 18px 20px;background:#fff;border:1px solid var(--line);border-radius:12px;box-shadow:none}
+#drawer[hidden]{display:none}
 #drawer-close{float:right;padding:8px 14px}
+a.btnlink{display:inline-block;padding:9px 14px;border-radius:8px;background:var(--brand-fill);color:#fff;font-weight:600;text-decoration:none}
+details.fold{margin:14px 0;border:1px solid var(--line);border-radius:12px;padding:4px 16px 8px;background:#fff}
+details.fold>summary{cursor:pointer;font-weight:600;padding:10px 0}
+details.fold[open]>summary{margin-bottom:6px}
 #drawer h2{font-size:22px;margin:4px 0 8px}#drawer h3{font-size:16px;margin:20px 0 6px}
 .facts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:14px 0}
 .facts div{padding:9px 12px;background:var(--sunk);border-radius:8px;font-size:14px;min-width:0;overflow-wrap:anywhere}.facts small{display:block;font-size:11px;color:var(--ink2);text-transform:uppercase;letter-spacing:.06em}
@@ -80,27 +94,27 @@ s.voided{color:var(--ink3)}
 @media(max-width:700px){#drawer{padding:16px}.facts{grid-template-columns:minmax(0,1fr)}}
 </style></head><body class="logic-theme"><header><b data-product-name>Accounting</b></header><div class="logic-shell"><nav class="logic-nav" aria-label="Office"></nav><main class="logic-main">
 <h1>Accounting</h1>
-<p class="intro">Every invoice on every order: what was invoiced, what has really been received, what is late and by how much, per customer account. Correct a payment that never arrived, release an order on its PO, or fix an invoice’s number or dates — every change is kept with who made it and why.</p>
+<p class="intro">Quote, then the purchase order, then build, ship, deliver, on site, and paid. Each invoice says where that order is, and the one next step: the deposit, or the final payment.</p>
 <p id="status" class="logic-status" role="status" aria-live="polite">Checking access…</p>
 <div id="content" hidden>
   <p id="banner" class="warn" hidden>This workspace is billed through ClearSky QuickBooks; payments reconcile there. This page is read-only.</p>
   <div id="totals" class="logic-kv"></div>
-  <h2>Aging</h2>
-  <div id="aging" class="logic-kv"></div>
-  <p class="hint">Outstanding on issued invoices by days past the due date. The due date is the invoice’s own when one was set, otherwise the invoice date plus the order’s terms.</p>
+  <aside id="drawer" aria-labelledby="drawer-h" hidden><button type="button" id="drawer-close">Close</button><div id="drawer-body"></div></aside>
+  <section id="ledger" class="panel"><h2>Invoices <span id="count" class="hint"></span></h2><div class="logic-scroll"><table class="logic-table"><thead><tr><th>Order</th><th>Customer</th><th>Next</th><th>Due</th><th class="num">Still open</th></tr></thead><tbody></tbody></table></div></section>
+  <details class="fold" id="filters-more"><summary>Filter and export</summary>
   <div id="filters" class="bar">
     <label for="f-status" class="chk">Status</label><select id="f-status"><option value="all">All</option><option value="open">Open</option><option value="to_issue">To issue</option><option value="paid">Paid</option></select>
     <label for="f-customer" class="chk">Customer</label><select id="f-customer"><option value="">All customers</option></select>
     <label class="chk"><input type="checkbox" id="f-overdue"> Overdue only</label>
     <button type="button" id="csv">Export CSV</button>
-    <span id="count" class="hint"></span>
-  </div>
-  <section id="ledger" class="panel"><h2>Receivables</h2><div class="logic-scroll"><table class="logic-table"><thead><tr><th>Order</th><th>Customer</th><th>Stage</th><th>Invoice</th><th>Issued</th><th>Due</th><th class="num">Amount</th><th class="num">Received</th><th class="num">Balance</th><th>Status</th></tr></thead><tbody></tbody></table></div></section>
-  <section id="customers" class="panel"><h2>By customer account</h2><div id="cust-body"></div></section>
-  <section id="sync" class="panel"></section>
+  </div></details>
+  <details class="fold"><summary>How late</summary>
+  <div id="aging" class="logic-kv"></div>
+  <p class="hint">Open invoices by days past the due date. The due date is the invoice’s own when one was set, otherwise the invoice date plus the order’s terms.</p>
+  </details>
+  <details class="fold" id="customers"><summary>By customer</summary><div id="cust-body"></div></details>
+  <details class="fold" id="books-fold"><summary>Where invoices are sent</summary><section id="sync" class="panel"></section></details>
 </div>
-
-<aside id="drawer" aria-labelledby="drawer-h" hidden><button type="button" id="drawer-close">Close</button><div id="drawer-body"></div></aside>
 
 <div id="dlg-void" class="logic-dialog" role="dialog" aria-modal="true" aria-labelledby="dlg-void-h" hidden><div class="box">
   <h2 id="dlg-void-h">Void a payment</h2>
@@ -189,6 +203,11 @@ s.voided{color:var(--ink3)}
   function day(s) { return s ? String(s).slice(0, 10) : ''; }
   function words(s) { return String(s || '').replace(/_/g, ' '); }
   function cap(s) { s = String(s || ''); return s.charAt(0).toUpperCase() + s.slice(1); }
+  /* the order path says Deposit and Final payment; the ledger's key stays balance */
+  function stageWord(s) { return s === 'balance' ? 'Final payment' : s === 'deposit' ? 'Deposit' : cap(s); }
+  function safeId(id) { return /^[A-Za-z0-9_-]{1,128}$/.test(String(id || '')) ? String(id) : ''; }
+  function orderHref(id) { return '/omega-logic?org=' + encodeURIComponent(org) + '&order=' + encodeURIComponent(id) + '#orders'; }
+  function projectHref(id) { return '/editor.html?id=' + encodeURIComponent(id); }
   function prov(p) { return PROV[p] || p || ''; }
   function days(a, b) { var x = Date.parse(a + 'T00:00:00Z'), y = Date.parse(b + 'T00:00:00Z'); return isNaN(x) || isNaN(y) ? null : Math.round((y - x) / 86400000); }
   function status(t, bad) { var s = $('status'); s.textContent = t || ''; s.className = 'logic-status' + (bad ? ' error' : ''); }
@@ -225,7 +244,8 @@ s.voided{color:var(--ink3)}
     return api('/api/logic-accounting?' + qs()).then(function (d) {
       D = d; D.rows = D.rows || [];
       if (!CHROMED) {
-        OmegaLogicTheme.chrome({ org: org, current: 'accounting', owner: d.owner, brand: d.brand, who: USER && USER.email, local: [{ href: '#ledger', label: 'Receivables' }, { href: '#aging', label: 'Aging' }, { href: '#customers', label: 'By customer' }, { href: '#sync', label: 'QuickBooks / Stripe' }] });
+        /* one office menu. Aging, customers and the books stay on the page, folded. */
+        OmegaLogicTheme.chrome({ org: org, current: 'accounting', owner: d.owner, brand: d.brand, who: USER && USER.email });
         CHROMED = true;
       }
       draw();
@@ -237,24 +257,39 @@ s.voided{color:var(--ink3)}
   function tags(r) {
     var h = '', n = voided(r).length;
     if (r.overdue) h += '<span class="tag overdue">Overdue ' + esc(r.daysOverdue) + ' d</span>';
-    if (r.releasedOnPo) h += '<span class="tag onpo">Released on PO</span>';
+    if (r.releasedOnPo) h += '<span class="tag onpo">Building before the deposit</span>';
     if (r.hold) h += '<span class="tag hold">On hold</span>';
     if (n) h += '<span class="tag voided">' + n + ' voided</span>';
     return h;
   }
+  /* the one next step on this invoice, in the words the order path uses */
+  function moneyNext(r) {
+    var bal = r.stage === 'balance', open = (Number(r.balanceCents) || 0) > 0, got = (Number(r.receivedCents) || 0) > 0;
+    if (!r.number && !r.issuedAt) return bal ? 'Final payment to issue' : 'Deposit to issue';
+    if (!open && got) return bal ? 'Paid in full' : 'Deposit received';
+    if (got) return bal ? 'Final payment partly received' : 'Deposit partly received';
+    if (r.overdue) return bal ? 'Final payment overdue' : 'Deposit overdue';
+    return bal ? 'Final payment due' : 'Deposit due';
+  }
+  /* where the order is, when that is more than this invoice's next step */
+  function journeyLine(r) {
+    var s = r.orderStage && r.orderStage.label;
+    if (!s) return '';
+    var n = moneyNext(r).toLowerCase();
+    if (s.toLowerCase().indexOf('deposit') >= 0 && n.indexOf('deposit') >= 0) return '';
+    if (s.toLowerCase().indexOf('final') >= 0 && n.indexOf('final') >= 0) return '';
+    return s;
+  }
   function rowHtml(r) {
-    var t = tags(r);
+    var t = tags(r), pid = safeId(r.projectId), links = '', where = journeyLine(r);
+    if (r.poNumber) links += '<a class="sublink" href="' + esc(orderHref(r.orderId)) + '">PO ' + esc(r.poNumber) + '</a>';
+    if (pid) links += '<a class="sublink" href="' + esc(projectHref(pid)) + '">Project ' + esc(r.projectName || pid) + '</a>';
     return '<tr data-row="' + esc(r.key) + '"' + (r.key === ROW ? ' class="sel"' : '') + '>'
-      + '<td data-k="order"><button type="button" class="open" data-open="' + esc(r.key) + '">' + esc(r.orderNo) + '</button>' + (r.poNumber ? '<span class="sub">PO ' + esc(r.poNumber) + '</span>' : '') + '</td>'
+      + '<td data-k="order"><button type="button" class="open" data-open="' + esc(r.key) + '">' + esc(r.orderNo) + '</button>' + links + '</td>'
       + '<td data-k="customer">' + esc(r.customer && r.customer.name) + '</td>'
-      + '<td data-k="stage">' + esc(cap(r.stage)) + (r.billing === 'quickbooks' ? '<span class="sub">ClearSky QuickBooks</span>' : '') + '</td>'
-      + '<td data-k="number">' + esc(r.number || '—') + '</td>'
-      + '<td data-k="issued">' + esc(r.issuedAt || '—') + '</td>'
-      + '<td data-k="due">' + (r.dueAt ? esc(r.dueAt) + (r.dueAtSet ? '' : '<span class="sub hint">terms</span>') : '—') + '</td>'
-      + '<td class="num" data-k="amount">' + dollars(r.amountCents) + '</td>'
-      + '<td class="num" data-k="received">' + dollars(r.receivedCents) + '</td>'
-      + '<td class="num" data-k="balance">' + dollars(r.balanceCents) + '</td>'
-      + '<td data-k="status"><span class="st">' + esc(words(r.status)) + '</span>' + (t ? '<br>' + t : '') + '</td></tr>';
+      + '<td data-k="stage"><b>' + esc(moneyNext(r)) + '</b>' + (where ? '<span class="sub">' + esc(where) + '</span>' : '') + '<span class="st" hidden>' + esc(words(r.status)) + '</span>' + (t ? '<br>' + t : '') + '</td>'
+      + '<td data-k="due">' + (r.dueAt ? esc(r.dueAt) + (r.dueAtSet ? '' : '<span class="sub hint">from terms</span>') : '—') + '</td>'
+      + '<td class="num" data-k="balance">' + dollars(r.balanceCents) + '</td></tr>';
   }
   function draw() {
     var d = D, t = d.totals || {}, ag = t.aging || {};
@@ -268,7 +303,7 @@ s.voided{color:var(--ink3)}
     var sel = $('f-customer'), cur = sel.value;
     sel.innerHTML = '<option value="">All customers</option>' + (d.customers || []).map(function (c) { return '<option value="' + esc(c.key) + '"' + (c.key === cur ? ' selected' : '') + '>' + esc(c.name) + '</option>'; }).join('');
     $('count').textContent = (d.filtered ? d.rows.length + ' of ' + d.allCount : d.rows.length) + ' invoice' + ((d.filtered ? d.allCount : d.rows.length) === 1 ? '' : 's') + (d.limited ? ' · newest 500 orders' : '') + ' · as of ' + (d.today || '');
-    $('ledger').querySelector('tbody').innerHTML = d.rows.length ? d.rows.map(rowHtml).join('') : '<tr><td colspan="10" class="muted">No invoices match.</td></tr>';
+    $('ledger').querySelector('tbody').innerHTML = d.rows.length ? d.rows.map(rowHtml).join('') : '<tr><td colspan="5" class="muted">No invoices match.</td></tr>';
     var by = t.byCustomer || [];
     $('cust-body').innerHTML = by.length ? '<div class="logic-scroll"><table class="logic-table"><thead><tr><th>Customer</th><th class="num">Invoices</th><th class="num">Invoiced</th><th class="num">Received</th><th class="num">Outstanding</th><th class="num">Overdue</th></tr></thead><tbody>'
       + by.map(function (c) { return '<tr><td><button type="button" class="open" data-cust="' + esc(c.key) + '">' + esc(c.name) + '</button></td><td class="num">' + esc(c.count) + '</td><td class="num">' + dollars(c.invoicedCents) + '</td><td class="num">' + dollars(c.receivedCents) + '</td><td class="num"><b>' + dollars(c.outstandingCents) + '</b></td><td class="num">' + dollars(c.overdueCents) + '</td></tr>'; }).join('')
@@ -288,7 +323,7 @@ s.voided{color:var(--ink3)}
     var line = usd(p.amountCents) + ' · ' + esc(p.date) + ' · ' + esc(p.bankReference);
     if (p.voided) return '<li class="pay"><s class="voided">' + line + '</s> <span class="muted">voided ' + esc(day(p.voidedAt)) + ' by ' + esc(p.voidedBy) + ' — ' + esc(p.voidReason) + '</span></li>';
     return '<li class="pay">' + line + '<span class="hint">' + esc(src) + ' · recorded by ' + esc(p.by) + (p.reinstates != null ? ' · recorded again after a void' : '') + '</span>'
-      + (r.actions && r.actions['void'] ? '<button type="button" data-act="void" data-ref="' + esc(p.bankReference) + '">Void</button>' : '') + '</li>';
+      + (r.actions && r.actions['void'] ? '<button type="button" data-act="void" data-ref="' + esc(p.bankReference) + '">This payment did not arrive</button>' : '') + '</li>';
   }
   function editHtml(e) {
     var parts = [], w = e.was || {}, n = e.now || {};
@@ -306,54 +341,73 @@ s.voided{color:var(--ink3)}
     if (r.syncError) h += '<p class="alert">Ledger sync: ' + esc(r.syncError) + '</p>';
     return h;
   }
-  /* whether the money is in, said at the top, with the one tap that changes
-     it: "not received" voids the payment (kept, struck through, with the
-     reason; the release on PO is offered there), "received" records one */
+  /* one button: the next step forward. A void, an edit and the books stay under Invoice details. */
+  function primaryHtml(r) {
+    var a = r.actions || {};
+    if (a.issue) return '<button type="button" class="primary" data-act="issue">Record the invoice</button>';
+    if (Number(r.balanceCents) > 0 && a.record) return '<button type="button" class="primary" data-act="record" data-fill="balance">Record the payment</button>';
+    var other = (D.rows || []).filter(function (x) { return x.orderId === r.orderId && x.key !== r.key && Number(x.balanceCents) > 0; })[0];
+    if (other) return '<button type="button" class="primary" data-open="' + esc(other.key) + '">' + esc(moneyNext(other)) + '</button>';
+    return '<a class="btnlink" href="' + esc(orderHref(r.orderId)) + '">Open the order</a>';
+  }
   function stateHtml(r) {
-    if (!r.number && !r.issuedAt) return '';
-    var live = active(r), a = r.actions || {}, got = Number(r.receivedCents) || 0, full = got > 0 && Number(r.balanceCents) <= 0, last = live[live.length - 1];
-    var label = full ? 'Received' : got > 0 ? 'Part received: ' + usd(got) + ' of ' + usd(r.amountCents) : 'Not received yet';
-    var sub = full && last ? usd(last.amountCents) + ' on ' + last.date + ' · ' + last.bankReference : got > 0 ? usd(r.balanceCents) + ' still to come' : (r.releasedOnPo ? 'The order keeps building on its PO while this is collected' : 'Nothing recorded as received');
-    var btn = '';
-    if (last && a['void']) btn += '<button type="button" data-act="void" data-ref="' + esc(last.bankReference) + '">' + (live.length > 1 ? 'Last payment not received' : 'Mark as not received') + '</button>';
-    if (Number(r.balanceCents) > 0 && a.record) btn += '<button type="button" class="primary" data-act="record" data-fill="balance">Mark as received</button>';
-    return '<div class="paystate' + (full ? ' ok' : '') + '" id="paystate"><div><small>Payment</small><b>' + esc(label) + '</b><span class="sub">' + esc(sub) + '</span></div>' + (btn ? '<div class="pbtn">' + btn + '</div>' : '') + '</div>';
+    var open = (Number(r.balanceCents) || 0) > 0, where = journeyLine(r);
+    var sub = r.releasedOnPo && open ? 'The plant is building. This deposit has not arrived.' : (where || (open ? dollars(r.balanceCents) + ' still open' : 'Nothing more to record on this invoice'));
+    return '<div class="paystate' + (open ? '' : ' ok') + '" id="paystate"><div><small>Next</small><b>' + esc(moneyNext(r)) + '</b><span class="sub">' + esc(sub) + '</span></div><div class="pbtn">' + primaryHtml(r) + '</div></div>';
+  }
+  /* deposit and final payment on the same order, so one invoice is not a dead end */
+  function progressHtml(r) {
+    var list = (D.rows || []).filter(function (x) { return x.orderId === r.orderId; });
+    if (list.length < 2) return '';
+    return '<ol class="bill">' + list.map(function (x) {
+      return '<li' + (x.key === r.key ? ' class="on"' : '') + '><button type="button" class="open" data-open="' + esc(x.key) + '">' + esc(moneyNext(x)) + '</button><span class="sub">' + dollars(x.balanceCents) + ' open</span></li>';
+    }).join('') + '</ol>';
+  }
+  function linksHtml(r) {
+    var pid = safeId(r.projectId), bits = ['<a href="' + esc(orderHref(r.orderId)) + '">Open order ' + esc(r.orderNo) + '</a>'];
+    if (r.poNumber) bits.push('<a href="' + esc(orderHref(r.orderId)) + '">PO ' + esc(r.poNumber) + '</a>');
+    if (pid) bits.push('<a href="' + esc(projectHref(pid)) + '">Project ' + esc(r.projectName || pid) + '</a>');
+    return '<p class="links">' + bits.join(' · ') + '</p>';
   }
   function drawerHtml(r) {
-    var a = r.actions || {}, P = prov(D.sync && D.sync.provider), cr = r.creditRelease, h = '';
-    h += '<div class="eyebrow">' + esc(r.orderNo) + (r.poNumber ? ' · PO ' + esc(r.poNumber) : '') + '</div>';
-    h += '<h2 id="drawer-h">' + esc(cap(r.stage)) + ' invoice' + (r.number ? ' ' + esc(r.number) : '') + '</h2>';
+    var a = r.actions || {}, P = prov(D.sync && D.sync.provider), cr = r.creditRelease, h = '', where = journeyLine(r);
+    if (r.path && D.steps) h += OmegaLogicTheme.pathBar(D.steps, { p: r.path });
+    if (where) h += '<div class="eyebrow">' + esc(where) + '</div>';
+    h += '<h2 id="drawer-h">' + esc(moneyNext(r)) + '</h2>';
     var who = [r.customer.contact !== r.customer.name ? r.customer.contact : '', r.customer.email].filter(Boolean).join(' · ');
     h += '<p>' + esc(r.customer.name) + (who ? '<span class="sub">' + esc(who) + '</span>' : '') + '</p>';
-    if (r.orderStage) h += '<p><span class="tag' + (r.orderStage.credit ? ' onpo' : '') + '">' + esc(r.orderStage.label) + '</span> <span class="hint">' + esc(r.orderStage.next) + '</span></p>';
-    if (r.billing === 'quickbooks') h += '<p class="hint">Billed through ClearSky QuickBooks; payments reconcile there.</p>';
+    h += linksHtml(r);
+    h += progressHtml(r);
+    if (r.billing === 'quickbooks') h += '<p class="hint">Billed through ClearSky QuickBooks. Payments are recorded there.</p>';
     h += stateHtml(r);
-    h += '<div class="facts"><div><small>Invoice</small>' + esc(r.number || 'not issued yet') + '</div><div><small>Status</small>' + esc(words(r.status)) + (r.overdue ? ' · ' + esc(r.daysOverdue) + ' day' + (r.daysOverdue === 1 ? '' : 's') + ' overdue' : '') + '</div>'
-      + '<div><small>Issued</small>' + esc(r.issuedAt || '—') + '</div><div><small>Due</small>' + esc(r.dueAt || '—') + (dueNote(r) ? '<span class="sub">' + esc(dueNote(r)) + '</span>' : '') + '</div>'
-      + '<div><small>Amount</small>' + dollars(r.amountCents) + '</div><div><small>Received</small>' + dollars(r.receivedCents) + '</div><div><small>Balance</small><b>' + dollars(r.balanceCents) + '</b></div></div>';
-    if (/^https:\/\//.test(r.payUrl || '')) h += '<p><a class="paylink" href="' + esc(r.payUrl) + '" target="_blank" rel="noopener">Open payment page ↗</a></p>';
-    h += ledgerHtml(r);
-    if (cr) h += '<p class="warn">Released on PO ' + esc(cr.poNumber || '(no PO number)') + ' by ' + esc(cr.by) + ' on ' + esc(day(cr.at)) + ': ' + esc(cr.reason) + '.' + (r.releasedOnPo ? ' Deposit ' + dollars(r.balanceCents) + ' not yet received.' : '') + '</p>';
-    if (r.hold) h += '<p class="alert">' + esc(r.hold.message) + '</p>';
-    else if (r.exception) h += '<p class="alert">' + esc(r.exception) + '</p>';
-    h += '<h3>Payments</h3>' + ((r.payments || []).length ? '<ul class="pays">' + r.payments.map(function (p) { return payHtml(p, r); }).join('') + '</ul>' : '<p class="muted">No payment recorded.</p>');
-    if ((r.edits || []).length) h += '<h3>Changes to this invoice</h3><ul class="edits">' + r.edits.map(editHtml).join('') + '</ul>';
-    var b = '';
-    if (a.issue) b += '<button type="button" class="primary" data-act="issue">Record invoice issued</button>';
-    if (a.record) b += '<button type="button" class="primary" data-act="record">Record payment</button>';
-    if (a.edit) b += '<button type="button" data-act="edit">Edit invoice</button>';
-    if (a.releaseOnPo) b += '<button type="button" data-act="release">Release on PO</button>';
-    if (a.push) b += '<button type="button" data-act="push">Push to ' + esc(P) + '</button>';
-    if (a.link) b += '<button type="button" data-act="link">Link existing ' + esc(P) + ' invoice</button>';
-    if (a.pull) b += '<button type="button" data-act="pull">Sync payments now</button>';
     h += '<p id="drawer-status" class="logic-status" role="status" aria-live="polite"></p>';
-    h += b ? '<div class="dacts">' + b + '</div>' : (r.billing === 'tenant' ? '' : '<p class="hint">Nothing to record here: this invoice lives in ClearSky’s QuickBooks.</p>');
+    var more = '';
+    more += '<div class="facts"><div><small>Invoice</small>' + esc(r.number || 'not issued yet') + '</div><div><small>Status</small>' + esc(words(r.status)) + (r.overdue ? ' · ' + esc(r.daysOverdue) + ' day' + (r.daysOverdue === 1 ? '' : 's') + ' overdue' : '') + '</div>'
+      + '<div><small>Issued</small>' + esc(r.issuedAt || '—') + '</div><div><small>Due</small>' + esc(r.dueAt || '—') + (dueNote(r) ? '<span class="sub">' + esc(dueNote(r)) + '</span>' : '') + '</div>'
+      + '<div><small>Amount</small>' + dollars(r.amountCents) + '</div><div><small>Received</small>' + dollars(r.receivedCents) + '</div><div><small>Still open</small><b>' + dollars(r.balanceCents) + '</b></div></div>';
+    if (/^https:\/\//.test(r.payUrl || '')) more += '<p><a class="paylink" href="' + esc(r.payUrl) + '" target="_blank" rel="noopener">Customer payment page</a></p>';
+    more += ledgerHtml(r);
+    if (cr) more += '<p class="warn">Building before the deposit, PO ' + esc(cr.poNumber || '(no PO number)') + ', noted by ' + esc(cr.by) + ' on ' + esc(day(cr.at)) + ': ' + esc(cr.reason) + '.' + (r.releasedOnPo ? ' Deposit ' + dollars(r.balanceCents) + ' not yet received.' : '') + '</p>';
+    if (r.hold) more += '<p class="alert">' + esc(r.hold.message) + '</p>';
+    else if (r.exception) more += '<p class="alert">' + esc(r.exception) + '</p>';
+    more += '<h3>Payments</h3>' + ((r.payments || []).length ? '<ul class="pays">' + r.payments.map(function (p) { return payHtml(p, r); }).join('') + '</ul>' : '<p class="muted">No payment recorded.</p>');
+    if ((r.edits || []).length) more += '<h3>Changes</h3><ul class="edits">' + r.edits.map(editHtml).join('') + '</ul>';
+    var b = '';
+    if (a.edit) b += '<button type="button" data-act="edit">Correct the invoice</button>';
+    if (a.releaseOnPo) b += '<button type="button" data-act="release">Let the plant start</button>';
+    if (a.push) b += '<button type="button" data-act="push">Send to ' + esc(P) + '</button>';
+    if (a.link) b += '<button type="button" data-act="link">Link an invoice already in ' + esc(P) + '</button>';
+    if (a.pull) b += '<button type="button" data-act="pull">Read payments now</button>';
+    if (b) more += '<div class="dacts" id="invoice-actions">' + b + '</div>';
+    else if (r.billing !== 'tenant') more += '<p class="hint">Nothing to record here. This invoice lives in ClearSky’s QuickBooks.</p>';
+    h += '<details class="fold" id="invoice-more"><summary>Invoice details</summary>' + more + '</details>';
     return h;
   }
   function openDrawer(key) {
     var r = rowBy(key);
     if (!r) { closeDrawer(); return; }
     ROW = key; $('drawer-body').innerHTML = drawerHtml(r); $('drawer').hidden = false;
+    if ($('drawer').scrollIntoView) $('drawer').scrollIntoView({ block: 'start' });
     Array.prototype.forEach.call(document.querySelectorAll('#ledger tr[data-row]'), function (tr) { tr.className = tr.getAttribute('data-row') === key ? 'sel' : ''; });
   }
   function closeDrawer() { ROW = null; $('drawer').hidden = true; Array.prototype.forEach.call(document.querySelectorAll('#ledger tr.sel'), function (tr) { tr.className = ''; }); }
@@ -514,6 +568,7 @@ s.voided{color:var(--ink3)}
   $('ledger').addEventListener('click', function (e) { var b = e.target.closest('[data-open]'); if (b) openDrawer(b.getAttribute('data-open')); });
   $('customers').addEventListener('click', function (e) { var b = e.target.closest('[data-cust]'); if (!b) return; $('f-customer').value = b.getAttribute('data-cust'); refilter(); });
   $('drawer').addEventListener('click', function (e) {
+    var jump = e.target.closest('[data-open]'); if (jump) { openDrawer(jump.getAttribute('data-open')); return; }
     var b = e.target.closest('[data-act]'); if (!b || BUSY) return;
     var r = rowBy(ROW), a = b.getAttribute('data-act'); if (!r) return;
     if (a === 'void') openVoid(r, b.getAttribute('data-ref'), b);
@@ -538,32 +593,40 @@ s.voided{color:var(--ink3)}
 
   /* ── where this workspace keeps its own books ───────────────────────── */
   function when(s) { return s ? ' since ' + day(s) : ''; }
-  function missingHtml(p) { return p.configured ? '' : '<p class="missing">Not available on this deployment yet — ClearSky must set: ' + (p.missing || []).map(function (n) { return '<code>' + esc(n) + '</code>'; }).join(' ') + '</p>'; }
+  /* a provider that this deployment cannot connect is not drawn as a button */
+  function onBooks(p) { return !!(p && (p.configured || p.connected)); }
   function hostNote(p) { return p.connectHost && p.connectHost !== location.host ? '<p class="hint">Connect from ' + esc(p.connectHost) + ' — open this page there.</p>' : ''; }
   function buttons(k, p) {
-    var off = !p.configured || (p.connectHost && p.connectHost !== location.host);
+    if (!p || !p.configured) return '';
+    var off = !!(p.connectHost && p.connectHost !== location.host);
     return '<div class="actions">' + (p.connected ? '<button type="button" data-sync="disconnect" data-provider="' + k + '">Disconnect ' + esc(prov(k)) + '</button>' : '<button type="button" data-sync="connect" data-provider="' + k + '"' + (off ? ' disabled' : '') + '>Connect ' + esc(prov(k)) + '</button>') + '</div>';
   }
   function syncCard(s) {
     var el = $('sync');
-    if (!s || !s.eligible) { el.innerHTML = '<h2>QuickBooks / Stripe</h2><p class="muted">Ledger sync is for workspaces that invoice on their own paper. This workspace is billed through ClearSky QuickBooks.</p>'; return; }
-    if (!s.available) { el.innerHTML = '<h2>QuickBooks / Stripe</h2><p class="muted">Ledger sync is not installed on this deployment.</p>'; return; }
+    if (!s || !s.eligible) { el.innerHTML = '<h2>Your books</h2><p class="muted">This workspace is billed through ClearSky QuickBooks. Payments reconcile there, so this page does not connect a second set of books.</p>'; return; }
+    if (!s.available) { el.innerHTML = '<h2>Your books</h2><p class="muted">Connecting QuickBooks or Stripe is not installed on this deployment. Invoices on this page stay the record.</p>'; return; }
     var qb = s.quickbooks || {}, st = s.stripe || {}, pm = st.paymentMethods || ['card', 'us_bank_account'], chosen = s.provider || 'none';
-    var pullable = chosen !== 'none' && (chosen === 'quickbooks' ? qb.connected : st.connected);
-    el.innerHTML = '<h2>Keep your own books in step</h2><p>Choose where this workspace’s invoices live. Omega Logic creates each invoice there when you record it as issued, reads the payments back, and records them here.</p>'
-      + '<fieldset><legend>Where the invoices live</legend>' + [['none', 'Off'], ['quickbooks', 'Your QuickBooks'], ['stripe', 'Your Stripe']].map(function (o) { return '<label class="chk"><input type="radio" name="provider" id="sp-' + o[0] + '" value="' + o[0] + '"' + (chosen === o[0] ? ' checked' : '') + '> ' + esc(o[1]) + '</label>'; }).join('') + '</fieldset>'
-      + (s.chosenBy ? '<p class="hint">Chosen by ' + esc(s.chosenBy) + (s.chosenAt ? ' on ' + esc(day(s.chosenAt)) : '') + '. Only invoices recorded as issued after that are created there automatically; one issued earlier is pushed or linked from its row, so nothing is entered twice.</p>' : '')
-      + '<div class="provs"><div id="sync-qb" class="prov"><h3>QuickBooks</h3><p>' + (qb.connected ? 'Connected to <b>' + esc(qb.companyName || qb.realmId) + '</b>' + esc(when(qb.connectedAt)) + (qb.env === 'sandbox' ? ' · sandbox' : '') : 'Not connected') + '</p>' + missingHtml(qb)
+    var qbOn = onBooks(qb), stOn = onBooks(st), choices = [['none', 'Off']], cards = '';
+    if (qbOn || chosen === 'quickbooks') choices.push(['quickbooks', 'Your QuickBooks']);
+    if (stOn || chosen === 'stripe') choices.push(['stripe', 'Your Stripe']);
+    if (qbOn) cards += '<div id="sync-qb" class="prov"><h3>QuickBooks</h3><p>' + (qb.connected ? 'Connected to <b>' + esc(qb.companyName || qb.realmId) + '</b>' + esc(when(qb.connectedAt)) + (qb.env === 'sandbox' ? ' · sandbox' : '') : 'Not connected') + '</p>'
       + '<label for="qb-item">QuickBooks item for installment invoices (item id)</label><input id="qb-item" inputmode="numeric" maxlength="20" value="' + esc(qb.itemRef || '') + '">'
       + '<label for="qb-tax">Tax code</label><input id="qb-tax" maxlength="20" value="' + esc(qb.taxCodeRef || 'NON') + '">'
       + '<p><label class="chk"><input type="checkbox" id="qb-approved"' + (qb.approved ? ' checked' : '') + '> Our accountant approves this item and tax treatment</label></p>'
-      + (qb.lastError ? '<p class="alert">' + esc(qb.lastError) + '</p>' : '') + buttons('quickbooks', qb) + hostNote(qb) + '</div>'
-      + '<div id="sync-stripe" class="prov"><h3>Stripe</h3><p>' + (st.connected ? 'Connected to <b>' + esc(st.accountId) + '</b> (' + (st.livemode ? 'live' : 'test mode') + ')' + esc(when(st.connectedAt)) : 'Not connected') + '</p>' + missingHtml(st)
+      + (qb.lastError ? '<p class="alert">' + esc(qb.lastError) + '</p>' : '') + buttons('quickbooks', qb) + hostNote(qb) + '</div>';
+    else if (chosen === 'quickbooks') cards += '<div id="sync-qb" class="prov"><h3>QuickBooks</h3><p class="muted">QuickBooks is selected, and this deployment is not set up to connect it. Choose Off or another set of books.</p></div>';
+    if (stOn) cards += '<div id="sync-stripe" class="prov"><h3>Stripe</h3><p>' + (st.connected ? 'Connected to <b>' + esc(st.accountId) + '</b> (' + (st.livemode ? 'live' : 'test mode') + ')' + esc(when(st.connectedAt)) : 'Not connected') + '</p>'
       + '<p class="hint">The customer pays on Stripe’s invoice page, by card or US bank account; that page becomes the invoice’s payment link.</p>'
       + '<p><label class="chk"><input type="checkbox" id="st-card"' + (pm.indexOf('card') >= 0 ? ' checked' : '') + '> Card</label> &nbsp; <label class="chk"><input type="checkbox" id="st-ach"' + (pm.indexOf('us_bank_account') >= 0 ? ' checked' : '') + '> US bank account (ACH)</label></p>'
       + '<p><label class="chk"><input type="checkbox" id="st-email"' + (st.sendEmail ? ' checked' : '') + '> Stripe emails the invoice to the customer</label></p>'
       + (st.configured && !st.webhook ? '<p class="hint">Stripe’s payment notices are not set up on this deployment; payments are read back when the office syncs.</p>' : '')
-      + (st.lastError ? '<p class="alert">' + esc(st.lastError) + '</p>' : '') + buttons('stripe', st) + hostNote(st) + '</div></div>'
+      + (st.lastError ? '<p class="alert">' + esc(st.lastError) + '</p>' : '') + buttons('stripe', st) + hostNote(st) + '</div>';
+    var pullable = chosen !== 'none' && (chosen === 'quickbooks' ? qb.connected : st.connected);
+    el.innerHTML = '<h2>Your books</h2><p>Where this workspace’s invoices live. Omega Logic creates each invoice there when you record it as issued, reads the payments back, and records them here.</p>'
+      + (!qbOn && !stOn ? '<p class="muted">Connecting QuickBooks or Stripe is not set up on this deployment. Invoices on this page stay the record.</p>' : '')
+      + '<fieldset><legend>Where the invoices live</legend>' + choices.map(function (o) { return '<label class="chk"><input type="radio" name="provider" id="sp-' + o[0] + '" value="' + o[0] + '"' + (chosen === o[0] ? ' checked' : '') + '> ' + esc(o[1]) + '</label>'; }).join('') + '</fieldset>'
+      + (s.chosenBy ? '<p class="hint">Chosen by ' + esc(s.chosenBy) + (s.chosenAt ? ' on ' + esc(day(s.chosenAt)) : '') + '. Only invoices recorded as issued after that are created there automatically; one issued earlier is pushed or linked from its row, so nothing is entered twice.</p>' : '')
+      + (cards ? '<div class="provs">' + cards + '</div>' : '')
       + '<div class="actions"><button type="button" id="sync-save" class="primary">Save choice</button>' + (pullable ? '<button type="button" id="sync-pull-all">Sync all now</button>' : '') + '</div>';
   }
   $('sync').addEventListener('click', function (e) {
@@ -571,8 +634,8 @@ s.voided{color:var(--ink3)}
     var k = b.getAttribute('data-provider');
     if (b.id === 'sync-save') {
       var picked = document.querySelector('input[name="provider"]:checked'), p = picked ? picked.value : 'none', body = { action: 'sync-choose', org: org, provider: p };
-      if (p === 'quickbooks') body.quickbooks = { itemRef: $('qb-item').value.trim(), taxCodeRef: $('qb-tax').value.trim() || 'NON', approved: $('qb-approved').checked };
-      if (p === 'stripe') { var m = []; if ($('st-card').checked) m.push('card'); if ($('st-ach').checked) m.push('us_bank_account'); body.stripe = { paymentMethods: m, sendEmail: $('st-email').checked }; }
+      if (p === 'quickbooks') { if (!$('qb-item')) { say('QuickBooks is not available on this deployment.', true); return; } body.quickbooks = { itemRef: $('qb-item').value.trim(), taxCodeRef: $('qb-tax').value.trim() || 'NON', approved: $('qb-approved').checked }; }
+      if (p === 'stripe') { if (!$('st-card')) { say('Stripe is not available on this deployment.', true); return; } var m = []; if ($('st-card').checked) m.push('card'); if ($('st-ach').checked) m.push('us_bank_account'); body.stripe = { paymentMethods: m, sendEmail: $('st-email').checked }; }
       run('/api/logic-accounting', body, p === 'none' ? 'Ledger sync is off.' : 'Saved: invoices go to your ' + prov(p) + '.', b);
     } else if (b.id === 'sync-pull-all') run('/api/logic-accounting', { action: 'sync-pull', org: org }, pullSay, b);
     else if (b.getAttribute('data-sync') === 'connect') {
