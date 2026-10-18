@@ -200,6 +200,7 @@ function openOmegaCore(){
 <!-- Omega Prime's "Open in Site Map" (?from=prime): fills the configured
      unit in from this page's own catalog entry and opens the BESS Guided
      Build. Never places anything itself. -->
+<script src="/omega-prime-project.js"></script>
 <script src="/omega-prime-handoff.js"></script>
 <!-- Facility demand screen: the 12-month shave is the only demand credit.
      A ratchet is not added a second time. omega-demand-screen.js is the
@@ -26331,6 +26332,7 @@ async function saveProject(){
     if(!_projectId){
       payload.uid = _currentUser.uid;
       payload.orgId = ((typeof _projOrgId==='function') ? _projOrgId() : null) || 'clearsky.com';
+      try{ window._projectOrgId = payload.orgId; }catch(e){}
       payload.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       const ref = await _db.collection('projects').add(payload);
       _projectId = ref.id;
@@ -26662,6 +26664,7 @@ async function _loadProject(id){
       return;
     }
     const d=doc.data();
+    try{ window._projectOrgId = d.orgId || ''; }catch(e){}
     /* the saved time this tab loaded: saveProject() refuses to write over a
        newer save from another tab or computer (2026-10-14) */
     try{ window._loadedUpdatedAt = d.updatedAt && typeof d.updatedAt.toMillis==='function' ? d.updatedAt.toMillis() : (d.updatedAt ? +new Date(d.updatedAt) : null); }catch(e){ window._loadedUpdatedAt = null; }
@@ -77298,23 +77301,74 @@ window._crmToastModal=_crmToastModal;
 </style>
 <script>
 
-function omegaSiteAddr(){
-  var ids=['omega-addr-in','addr-in','prop-address','np-addr'], i, el, v;
-  for(i=0;i<ids.length;i++){
-    el=document.getElementById(ids[i]);
-    v=el&&String(el.value||'').replace(/^\s+|\s+$/g,'');
-    if(v) return v;
-  }
-  return '';
+function omegaAddrOk(v){
+  var t=String(v||'').replace(/^\s+|\s+$/g,'');
+  if(t.length<4) return false;
+  return /^\s*\d/.test(t)
+    || /\b(st|street|ave|avenue|rd|road|dr|drive|blvd|boulevard|ln|lane|way|ct|court|pkwy|parkway|hwy|highway|pl|place)\b/i.test(t)
+    || /\b[A-Z]{2}\s*\d{5}(-\d{4})?\b/.test(t)
+    || /,/.test(t);
 }
-/* Site Map to Omega Prime. addr and project are read by the page's existing
-   start. step=logic opens the Omega Logic screen; Prime itself is unchanged. */
+/* The address the map was loaded with, then lat/lng, the project id and the
+   project type. The ribbon field wins. A loaded map keeps the address on
+   _lastAddr even when the field is empty, and the geocoded point on
+   _lastCenter / the live map. */
+function omegaSiteFacts(){
+  var addr='', lat=null, lng=null, type='', i, el, v, c, ids;
+  el=document.getElementById('omega-addr-in');
+  v=el&&String(el.value||'').replace(/^\s+|\s+$/g,'');
+  if(v) addr=v;
+  if(!addr){
+    ids=['addr-in','prop-address','bp-address','ps-site-addr','pp-street','np-addr','gps-addr-in'];
+    for(i=0;i<ids.length;i++){
+      el=document.getElementById(ids[i]);
+      v=el&&String(el.value||'').replace(/^\s+|\s+$/g,'');
+      if(v && omegaAddrOk(v)){ addr=v; break; }
+    }
+  }
+  if(!addr){ try{ v=String(window._lastAddr||'').replace(/^\s+|\s+$/g,''); if(omegaAddrOk(v)) addr=v; }catch(e){} }
+  if(!addr){
+    try{
+      if(typeof S!=='undefined' && S){
+        v=String(S.siteAddr||S.address||(S.mapState&&S.mapState.address)||'').replace(/^\s+|\s+$/g,'');
+        if(omegaAddrOk(v)) addr=v;
+      }
+    }catch(e2){}
+  }
+  try{
+    if(window._gmap && _gmap.getCenter){ c=_gmap.getCenter(); if(c && isFinite(c.lat()) && isFinite(c.lng())){ lat=c.lat(); lng=c.lng(); } }
+  }catch(e3){}
+  if(lat==null){ try{ if(window._lastCenter && isFinite(+window._lastCenter.lat) && isFinite(+window._lastCenter.lng)){ lat=+window._lastCenter.lat; lng=+window._lastCenter.lng; } }catch(e4){} }
+  if(lat==null){
+    try{ if(typeof S!=='undefined' && S && isFinite(+S.siteLat) && isFinite(+S.siteLng)){ lat=+S.siteLat; lng=+S.siteLng; } }catch(e5){}
+  }
+  if(lat==null){
+    try{ if(window._savedMapState && isFinite(+window._savedMapState.lat) && isFinite(+window._savedMapState.lng)){ lat=+window._savedMapState.lat; lng=+window._savedMapState.lng; } }catch(e6){}
+  }
+  try{
+    /* The editor publishes the type as OmegaProjectTypes.get (current is
+       not a method). A handoff must not invent one when that reader is
+       missing. */
+    if(window.OmegaProjectTypes && typeof OmegaProjectTypes.get==='function') type=OmegaProjectTypes.get();
+    else if(window.OmegaProjectTypes && typeof OmegaProjectTypes.current==='function') type=OmegaProjectTypes.current();
+    else if(typeof S!=='undefined' && S && S.projectType) type=S.projectType;
+  }catch(e7){}
+  /* The open project's org, else the signed-in workspace. Never a staff
+     directory and never an OEM picked because it is first in a list. */
+  var org='';
+  try{
+    if(window._projectOrgId) org=String(window._projectOrgId);
+    else if(typeof _projOrgId==='function') org=_projOrgId();
+  }catch(e8){}
+  return { addr:addr, lat:lat, lng:lng, type:type, org:org,
+    projectId:(typeof _projectId==='string' && _projectId) ? _projectId : '' };
+}
+/* Site Map to Omega Prime. Push to Logic is the same handoff on the Logic step. */
 function omegaPushPrime(step){
-  var q=[], addr=omegaSiteAddr();
-  if(addr) q.push('addr='+encodeURIComponent(addr));
-  if(typeof _projectId==='string' && _projectId) q.push('project='+encodeURIComponent(_projectId));
-  if(step==='logic' || step==='quote') q.push('step='+step);
-  window.open('/omega-prime'+(q.length?('?'+q.join('&')):''), '_blank', 'noopener');
+  var f=omegaSiteFacts(), q='';
+  f.step=step;
+  if(window.OmegaPrimeProject && typeof OmegaPrimeProject.linkQuery==='function') q=OmegaPrimeProject.linkQuery(f);
+  window.open('/omega-prime'+(q?('?'+q):''), '_blank', 'noopener');
 }
 function omegaPushLogic(){ omegaPushPrime('logic'); }
 
@@ -77326,6 +77380,7 @@ function omegaPushLogic(){ omegaPushPrime('logic'); }
     if(!input) return;
     var addr=(input.value||'').trim();
     if(!addr){ input.focus(); return; }
+    try{ window._lastAddr=addr; }catch(e){}
 
     var go=el('omega-addr-go');
     if(go){ go.disabled=true; go.textContent='\u2026'; }
