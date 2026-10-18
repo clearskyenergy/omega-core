@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<!--
+  omega-prime-v2.html — Omega Prime, the next pass, on its own route.
+
+  Live Prime (omega-prime.html, /omega-prime) is not this page and is not
+  changed. The installed app and its service worker stay on /omega-prime.
+  This route is /omega-prime-v2 on purpose: a scope of /omega-prime does not
+  control a sibling path.
+
+  Release hook. When the shared switch lands, OmegaExperience.route('prime')
+  returns /omega-prime-v2 or /omega-prime. experienceRoute() in
+  omega-prime-v2.js is the only call. Until that helper exists, this page
+  is a preview and does not take the live route.
+
+  The drawing language matches the Site Plan preview (editor-v2): paper,
+  the blue accent, a quiet header. The map is still Grid Atlas, dark or
+  satellite, because that is the picture a rep decides from.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OMEGA Prime</title>
+<script src="/omega-splash.js?v=1"></script>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%231F4E79' d='M16 2 28 9v14L16 30 4 23V9z'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --ink: #16202B; --muted: #526273; --line: #D5DDE6; --hair: #E6ECF2;
+    --paper: #E4E1D8; --panel: #F6F5F2; --white: #FFFFFF;
+    --accent: #1F4E79; --accent-2: #2B5FA8; --accent-soft: #E6EEF7;
+    --danger: #9F2D2D; --ok: #1F6B45; --warn: #8A5A00;
+    --shadow: 0 10px 28px rgba(22, 32, 43, .12);
+    --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --header: 52px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 14px; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  button:disabled { cursor: default; }
+  #app { height: 100%; display: flex; flex-direction: column; min-height: 0; }
+  header { min-height: var(--header); display: flex; align-items: center; gap: 10px; padding: 6px 12px; background: var(--white); border-bottom: 1px solid var(--line); flex: none; }
+  .brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .brand strong { font-size: 15px; }
+  .brand span { display: block; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .pill { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 3px 8px; }
+  #project-name { flex: 1; min-width: 0; border: 1px solid transparent; background: transparent; font-size: 15px; font-weight: 650; padding: 6px 8px; border-radius: 6px; }
+  .head-actions { display: flex; align-items: center; gap: 8px; }
+  .btn, #customer-btn, #ready-btn { border: 1px solid var(--line); background: var(--white); border-radius: 6px; padding: 6px 10px; }
+  .btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn.quiet { background: transparent; }
+  .btn:disabled, .rb:disabled { opacity: .45; }
+  #customer-btn, #ready-btn { text-align: left; min-width: 120px; }
+  #customer-btn small, #ready-btn small { display: block; color: var(--muted); font-size: 11px; }
+  #customer-btn strong, #ready-btn strong { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 180px; }
+  #save-state { font-size: 12px; color: var(--muted); min-width: 64px; text-align: right; }
+  #save-state.is-ok { color: var(--ok); }
+  #save-state.is-err { color: var(--danger); }
+  #banner { display: flex; gap: 12px; align-items: center; padding: 8px 12px; background: var(--accent-soft); color: var(--ink); font-size: 13px; }
+  #banner a { color: var(--accent); }
+  #steps { display: flex; gap: 4px; padding: 8px 12px; background: var(--white); border-bottom: 1px solid var(--line); overflow-x: auto; flex: none; }
+  #steps button { border: 1px solid var(--line); background: var(--white); border-radius: 99px; padding: 4px 10px; font-size: 12px; color: var(--muted); white-space: nowrap; }
+  #steps button.on { background: var(--accent); color: white; border-color: var(--accent); }
+  #steps button.seen { color: var(--ink); }
+  #steps button.lock { opacity: .55; }
+  #stage { flex: 1; min-height: 0; position: relative; }
+  .screen { position: absolute; inset: 0; display: none; }
+  .screen.on { display: flex; }
+  #toast { position: absolute; left: 50%; top: 12px; transform: translateX(-50%); background: var(--ink); color: white; padding: 8px 12px; border-radius: 6px; font-size: 13px; z-index: 30; opacity: 0; pointer-events: none; max-width: 90%; }
+  #toast.on { opacity: 1; }
+  footer { min-height: 52px; display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: var(--ink); color: #E7EEF6; flex: none; }
+  #step-count { font-size: 12px; color: #B7C3D1; min-width: 88px; }
+  #s-site, #s-load, #s-quote, #s-logic { overflow: auto; justify-content: center; padding: 28px 16px; }
+  .card { background: var(--white); border: 1px solid var(--line); border-radius: 12px; max-width: 640px; width: 100%; padding: 22px; align-self: flex-start; }
+  .card h1, .card h2 { margin: 0 0 6px; font-size: 22px; }
+  .lead, .src { color: var(--muted); font-size: 13px; line-height: 1.45; }
+  .src { margin: 8px 0 0; }
+  .fld { display: flex; flex-direction: column; gap: 4px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+  .fld input, .fld select, .fld textarea { border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; background: var(--white); color: var(--ink); font-size: 15px; }
+  .types { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+  .types button { border: 1px solid var(--line); border-radius: 6px; padding: 8px; background: var(--white); }
+  .types button.on { border-color: var(--accent); background: var(--accent-soft); }
+  .types button[disabled] { opacity: .45; cursor: default; }
+  .types b { display: block; } .types small { color: var(--muted); }
+  .flag { font-size: 12px; color: var(--warn); background: #FBF3E4; border-radius: 6px; padding: 8px; margin-top: 8px; }
+  .err { color: var(--danger); font-size: 13px; }
+  #s-atlas { background: #0d1b2a; }
+  .drawer { width: 280px; background: var(--white); border-right: 1px solid var(--line); padding: 12px; overflow: auto; z-index: 2; }
+  .drawer h2 { margin: 0 0 4px; font-size: 16px; }
+  .lyr, .bms button { border: 1px solid var(--line); background: var(--white); border-radius: 6px; padding: 6px 8px; }
+  .lyr { display: flex; width: 100%; justify-content: space-between; margin: 6px 0; }
+  .lyr.on { border-color: var(--accent); background: var(--accent-soft); }
+  .bms { display: flex; gap: 6px; margin: 8px 0; }
+  .bms button.on { background: var(--accent); color: white; border-color: var(--accent); }
+  .mapwrap { flex: 1; min-width: 0; position: relative; }
+  .map { position: absolute; inset: 0; }
+  .insp, .sfres { position: absolute; top: 12px; right: 12px; width: min(440px, calc(100% - 24px)); background: var(--white); border: 1px solid var(--line); border-radius: 12px; box-shadow: var(--shadow); padding: 12px; z-index: 5; display: none; }
+  .insp.on, .sfres { display: block; }
+  .sfres { display: block; max-height: calc(100% - 24px); overflow: auto; }
+  .insp h5, .sfres h5 { margin: 0; font-size: 16px; }
+  .kv, .lkv { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 13px; }
+  .kv dt, .lkv dt { color: var(--muted); }
+  .kv dd, .lkv dd { margin: 0; font-variant-numeric: tabular-nums; }
+  .chip { display: inline-block; margin-top: 8px; background: var(--accent-soft); color: var(--accent); border-radius: 99px; padding: 3px 8px; font-size: 12px; font-weight: 700; }
+  .site-dot { width: 16px; height: 16px; border-radius: 50%; background: #4ed4d0; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(78,212,208,.35); }
+  .subicon { width: 18px; height: 18px; border-radius: 3px; background: #c98a2b; border: 2px solid #fff; }
+  .subicon.near { background: #f6c36a; }
+  .sfbar { position: absolute; top: 0; left: 0; right: 0; height: 44px; background: var(--white); border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 10px; padding: 0 12px; z-index: 6; }
+  #s-circuit .mapwrap { position: absolute; inset: 44px 0 0 0; }
+  .big { display: flex; gap: 16px; } .big b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+  .big span { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+  .verdict { margin-top: 10px; padding: 8px 10px; border-radius: 6px; font-size: 13px; }
+  .verdict.ok { background: #E5F3EC; color: var(--ok); }
+  .verdict.warn { background: #FBF3E4; color: var(--warn); }
+  .verdict.bad { background: #F8E8E8; color: var(--danger); }
+  .lkv .tot { font-weight: 700; border-top: 1px solid var(--hair); padding-top: 4px; }
+  #s-map { flex-direction: column; }
+  .ribbon { display: flex; gap: 8px; padding: 8px; background: var(--white); border-bottom: 1px solid var(--line); overflow-x: auto; }
+  .rb { border: 1px solid var(--line); background: var(--panel); border-radius: 6px; padding: 6px 8px; font-size: 12px; min-width: 72px; }
+  .rb.done { background: #E5F3EC; border-color: #b7d7c6; }
+  .rb.armed { background: #FBF3E4; border-color: var(--warn); }
+  .rb.run { background: var(--accent); color: white; border-color: var(--accent); }
+  .edbody { flex: 1; min-height: 0; display: flex; }
+  .edmap { flex: 1; position: relative; min-width: 0; }
+  #edSide { width: 300px; background: var(--white); border-left: 1px solid var(--line); overflow: auto; padding: 12px; }
+  #edSide h6 { margin: 12px 0 6px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .spec { width: 100%; border-collapse: collapse; font-size: 13px; }
+  .spec td { padding: 4px 0; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  .spec td:last-child { text-align: right; }
+  .figure { font-size: 22px; font-weight: 700; margin: 0; }
+  table.bom { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.bom th { text-align: left; font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); padding: 6px; border-bottom: 1px solid var(--line); }
+  table.bom td { padding: 8px 6px; border-bottom: 1px solid var(--hair); }
+  table.bom td.n { text-align: right; font-variant-numeric: tabular-nums; }
+  .tag { font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 99px; padding: 2px 6px; }
+  .cards { display: grid; gap: 10px; }
+  a.cardlink { display: block; border: 1px solid var(--line); border-radius: 8px; padding: 12px; text-decoration: none; color: inherit; background: var(--white); }
+  a.cardlink b { display: block; }
+  .poi { width: 14px; height: 14px; border-radius: 50%; background: var(--danger); border: 2px solid #fff; }
+  .leaflet-tooltip.lbl { background: rgba(22,32,43,.9); color: #fff; border: 0; border-radius: 4px; font-size: 11px; }
+  .leaflet-tooltip.lbl:before { display: none; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; width: min(440px, calc(100% - 24px)); color: var(--ink); }
+  dialog::backdrop { background: rgba(22, 32, 43, .45); }
+  dialog form, .sheet { padding: 18px; }
+  dialog h2 { margin: 0 0 6px; }
+  #ready-list { list-style: none; padding: 0; margin: 8px 0; }
+  #ready-list li { display: flex; gap: 8px; padding: 4px 0; color: var(--muted); }
+  #ready-list li.on { color: var(--ok); }
+  .row-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .side-toggle { display: none; }
+  @media (max-width: 900px) {
+    .brand span, #save-state, .pill { display: none; }
+    #customer-btn, #ready-btn { min-width: 0; max-width: 120px; }
+    .types { grid-template-columns: 1fr 1fr; }
+    .drawer { width: 200px; }
+    #edSide { position: fixed; z-index: 7; top: 120px; right: 0; bottom: 52px; width: min(320px, 100%); box-shadow: var(--shadow); transform: translateX(100%); }
+    #edSide.open { transform: none; }
+    .side-toggle { display: inline-flex; }
+  }
+  @media (max-width: 640px) {
+    header { flex-wrap: wrap; }
+    #project-name { order: 3; flex: 1 0 100%; }
+    #s-atlas { flex-direction: column; }
+    #s-atlas .drawer { display: block; width: auto; max-height: 46%; border-right: 0; border-bottom: 1px solid var(--line); }
+    .insp, .sfres { left: 8px; right: 8px; width: auto; top: auto; bottom: 8px; max-height: 46%; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app" data-experience="prime" data-experience-hook="OmegaExperience.route">
+  <header>
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path fill="#1F4E79" d="M16 2 28 9v14L16 30 4 23V9z"/><path fill="#fff" d="M16 8 22 11.5v7L16 22l-6-3.5v-7z"/></svg>
+      <div><strong>OMEGA</strong><span>Prime</span></div>
+    </div>
+    <span class="pill">Preview</span>
+    <input id="project-name" aria-label="Site" value="Untitled site" readonly>
+    <div class="head-actions">
+      <button type="button" id="customer-btn" aria-haspopup="dialog"><small>Customer</small><strong id="customer-label">No customer yet</strong></button>
+      <button type="button" id="ready-btn" aria-haspopup="dialog" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><small>Readiness</small><strong id="ready-score">0</strong></button>
+      <span id="save-state">Not saved</span>
+      <a class="btn quiet" href="/omega-prime">Live Prime</a>
+      <button type="button" class="btn quiet side-toggle" id="btn-side" aria-expanded="false">Details</button>
+    </div>
+  </header>
+  <div id="banner"><span id="banner-note">Preview.</span></div>
+  <nav id="steps" aria-label="Omega Prime path"></nav>
+  <div id="stage">
+    <div id="toast" role="status"></div>
+    <section class="screen on" id="s-site">
+      <div class="card">
+        <h1>One site</h1>
+        <p class="lead">Look at the grid, decide, then design and price. Every figure keeps its source and its date.</p>
+        <label class="fld">Site address<input id="addr" autocomplete="off" placeholder="Street, city, state ZIP"></label>
+        <label class="fld">Customer<input id="customer" autocomplete="organization" placeholder="Who this project is for"></label>
+        <div class="fld"><span>Project type</span>
+          <div class="types">
+            <button type="button" class="on" data-t="bess"><b>Battery</b><small>BESS</small></button>
+            <button type="button" disabled data-t="ev"><b>EV charging</b><small>next</small></button>
+            <button type="button" disabled data-t="solar"><b>Solar</b><small>next</small></button>
+            <button type="button" disabled data-t="compute"><b>Compute</b><small>next</small></button>
+          </div>
+        </div>
+        <label class="fld">Unit<select id="unitSel"></select></label>
+        <div id="unitCard" class="lead"></div>
+        <button type="button" class="btn primary" id="go">Look at the grid</button>
+        <div class="err" id="startErr" hidden></div>
+        <p class="src">The address is the Census geocoder, then OpenStreetMap. The circuit is the utility’s own map. The price is the OMEGA cost model. Nothing on this page is a sample.</p>
+      </div>
+    </section>
+    <section class="screen" id="s-atlas">
+      <aside class="drawer">
+        <h2>Grid Atlas</h2>
+        <p class="src" id="gaAddr"></p>
+        <button type="button" class="lyr on" id="ly-sub" aria-pressed="true">Substations <span id="cSub">—</span></button>
+        <button type="button" class="lyr on" id="ly-tx" aria-pressed="true">Transmission <span id="cTx">—</span></button>
+        <div class="bms"><button type="button" data-bm="dark" class="on">Dark</button><button type="button" data-bm="satellite" id="bm-sat">Satellite</button></div>
+        <p class="src" id="gaStat"></p>
+        <button type="button" class="btn quiet" id="atlas-retry">Try the layers again</button>
+      </aside>
+      <div class="mapwrap"><div class="map" id="gaMap"></div><div class="insp" id="gaInsp"></div></div>
+    </section>
+    <section class="screen" id="s-circuit">
+      <div class="sfbar"><b>Circuit</b><span class="pill" id="utilPill">Hosting capacity</span><span style="flex:1"></span><button type="button" class="btn" id="sf-log">Request log</button></div>
+      <div class="mapwrap"><div class="map" id="sfMap"></div></div>
+      <div class="sfres" id="sfRes"><div class="hd"><h5>Resolving the circuit…</h5></div></div>
+    </section>
+    <section class="screen" id="s-load">
+      <div class="card">
+        <h2>The site’s load</h2>
+        <p class="lead" id="ldSub">What the site pays for demand, before the battery is judged against it.</p>
+        <span class="pill" id="ldUtil">—</span>
+        <div id="ldRates"></div>
+        <label class="fld">Monthly peak demand from the bill, January to December<textarea id="ld-peaks" rows="3" placeholder="1420  1388  1402  1510"></textarea></label>
+        <div id="ldOut" class="lead"></div>
+        <button type="button" class="btn primary" id="ld-go">Design it</button>
+        <p class="src" id="ldSave"></p>
+      </div>
+    </section>
+    <section class="screen" id="s-map">
+      <div class="ribbon">
+        <button type="button" class="rb" id="ed-area">BESS area</button>
+        <span class="pill" id="unitSel2"></span>
+        <button type="button" class="rb dis" id="ed-place" disabled>Place unit</button>
+        <button type="button" class="rb dis" id="ed-poi" disabled>Service</button>
+        <button type="button" class="rb dis" id="ed-conduit" disabled>Conduit</button>
+        <button type="button" class="rb run dis" id="ed-run" disabled>Run</button>
+        <button type="button" class="rb dis" id="ed-quote" disabled>Quote</button>
+      </div>
+      <div class="edbody"><div class="edmap"><div class="map" id="edMap"></div></div><aside id="edSide"></aside></div>
+    </section>
+    <section class="screen" id="s-quote">
+      <div class="card" style="max-width:920px">
+        <h2>Request for quote</h2>
+        <p class="lead" id="qSub"></p>
+        <div style="overflow-x:auto"><table class="bom"><thead><tr><th>Line</th><th>Item</th><th>Qty</th><th>Routed to</th><th>Installed</th></tr></thead><tbody id="bomBody"></tbody></table></div>
+        <p class="src" id="qNote"></p>
+        <p><a class="btn primary" id="q-editor" href="/editor.html">Open the project in Site Map</a></p>
+        <p class="src">Filing goes through Site Map’s bill of materials, so the request carries the drawing. The manufacturer sees the site, not the client, until a quote is accepted.</p>
+        <button type="button" class="btn" id="q-logic">Next: Omega Logic</button>
+      </div>
+    </section>
+    <section class="screen" id="s-logic">
+      <div class="card">
+        <h2>When the client says yes</h2>
+        <p class="lead">The order runs in Omega Logic. Price, plant, freight, and the customer’s own app.</p>
+        <div class="cards">
+          <a class="cardlink" href="/rfq.html#received"><b>Quote Desk</b><span>Open the bill and send the manufacturer’s quote.</span></a>
+          <a class="cardlink" href="/omega-logic"><b>Omega Logic</b><span>Today, Sales, Plant, Deliver, Money.</span></a>
+          <a class="cardlink" href="/logic-custody.html"><b>Custody</b><span>Each serial bound to its site, and the warranty with it.</span></a>
+        </div>
+      </div>
+    </section>
+  </div>
+  <footer>
+    <span id="step-count">Step 1 of 7</span>
+    <button type="button" class="btn primary" id="next">Look at the grid</button>
+  </footer>
+</div>
+<dialog id="cust-dialog">
+  <form method="dialog" class="sheet">
+    <h2>Customer</h2>
+    <p class="lead">Every project is saved against a customer. A local id is used until the CRM has minted the account. This does not write the customer list.</p>
+    <label class="fld">Company<input id="cust-name" maxlength="160"></label>
+    <label class="fld">Contact email, optional<input id="cust-email" type="email" maxlength="254"></label>
+    <div class="err" id="cust-error"></div>
+    <div class="row-actions">
+      <button type="button" class="btn quiet" id="cust-cancel">Cancel</button>
+      <button type="button" class="btn primary" id="cust-save">Save customer</button>
+    </div>
+  </form>
+</dialog>
+<dialog id="ready-dialog">
+  <div class="sheet">
+    <h2>Readiness</h2>
+    <p class="lead" id="ready-sum"></p>
+    <ul id="ready-list"></ul>
+    <div class="row-actions"><button type="button" class="btn" id="ready-close">Close</button></div>
+  </div>
+</dialog>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="/config.js"></script>
+<script src="/omega-brand.js"></script>
+<script src="/omega-tenant.js"></script>
+<script src="/omega-whitelabel.js"></script>
+<script src="/omega-tools.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/omega-comed-layers.js"></script>
+<script src="/omega-bess-products.js"></script>
+<script src="/omega-grid-verdict.js"></script>
+<script src="/omega-grid-layers.js"></script>
+<script src="/omega-grid-atlas-client.js"></script>
+<script src="/omega-prime-project.js"></script>
+<script src="/omega-editor-v2-assign.js"></script>
+<script src="/omega-crm-foundation.js"></script>
+<script src="/omega-prime-v2.js"></script>
+<script src="/omega-prime-v2-page.js"></script>
+</body>
+</html>

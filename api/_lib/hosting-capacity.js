@@ -74,6 +74,19 @@ function byId(id) {
   return null;
 }
 
+/* The first registry row whose states include this code. ComEd is not in
+   the registry (comed-service.js owns that door), so Illinois returns null
+   and the caller keeps the parcel probe. */
+function sourceForState(state) {
+  var st = String(state || '').trim().toUpperCase();
+  var i;
+  if (!/^[A-Z]{2}$/.test(st)) return null;
+  for (i = 0; i < SOURCES.length; i++) {
+    if (SOURCES[i].states.indexOf(st) >= 0) return SOURCES[i];
+  }
+  return null;
+}
+
 function sourceOf(source) {
   var s = typeof source === 'string' ? byId(source) : source;
   if (!s || !s.service) throw new Error('unknown hosting source');
@@ -171,6 +184,7 @@ function normalize(source, feature) {
 }
 
 module.exports = {
-  SOURCES: SOURCES, byId: byId, queryUrl: queryUrl, metadataUrl: metadataUrl,
+  SOURCES: SOURCES, byId: byId, sourceForState: sourceForState,
+  queryUrl: queryUrl, metadataUrl: metadataUrl,
   normalize: normalize, kwFrom: kwFrom
 };
