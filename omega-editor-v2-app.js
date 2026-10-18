@@ -67,6 +67,14 @@
       return;
     }
     state = D.createState(sample());
+    if (root.OmegaEditorV2Solar && root.OmegaEditorV2Solar.attach) {
+      root.OmegaEditorV2Solar.attach({
+        menu: $('outputs-menu'),
+        getDoc: function () { return state.doc; },
+        setMeta: function (meta) { D.setMeta(state, meta); afterChange(); },
+        setStatus: setStatus
+      });
+    }
     bind();
     resize();
     fit(false);
@@ -1854,5 +1862,5 @@
     }
   }
 
-  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/3' };
+  root.OmegaEditorV2App = { boot: boot, VERSION: 'editor-v2-app/4' };
 })(typeof window !== 'undefined' ? window : global);
