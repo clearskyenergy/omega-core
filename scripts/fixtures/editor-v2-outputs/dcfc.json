@@ -1,0 +1,149 @@
+{
+  "ready": true,
+  "score": 88,
+  "sourceKw": 0,
+  "loadKw": 600,
+  "sourceA": 0,
+  "interconnect": {
+    "method": "none",
+    "ok": true,
+    "cite": "",
+    "sumA": null
+  },
+  "transformer": {
+    "requiredKva": 600,
+    "nameplateKva": 750,
+    "zPct": 5.5
+  },
+  "circuits": [
+    {
+      "id": "ld-ev-1",
+      "role": "ev",
+      "kw": 150,
+      "volts": 480,
+      "phases": 3,
+      "currentA": 180.4,
+      "designA": 225.5,
+      "ocpdA": 250,
+      "spec": "4/0 AWG Cu",
+      "egc": "4",
+      "lengthFt": 150,
+      "dropPct": 0.6,
+      "cite": "NEC 2023 625.41",
+      "error": ""
+    },
+    {
+      "id": "ld-ev-2",
+      "role": "ev",
+      "kw": 150,
+      "volts": 480,
+      "phases": 3,
+      "currentA": 180.4,
+      "designA": 225.5,
+      "ocpdA": 250,
+      "spec": "4/0 AWG Cu",
+      "egc": "4",
+      "lengthFt": 150,
+      "dropPct": 0.6,
+      "cite": "NEC 2023 625.41",
+      "error": ""
+    },
+    {
+      "id": "ld-ev-3",
+      "role": "ev",
+      "kw": 150,
+      "volts": 480,
+      "phases": 3,
+      "currentA": 180.4,
+      "designA": 225.5,
+      "ocpdA": 250,
+      "spec": "4/0 AWG Cu",
+      "egc": "4",
+      "lengthFt": 150,
+      "dropPct": 0.6,
+      "cite": "NEC 2023 625.41",
+      "error": ""
+    },
+    {
+      "id": "ld-ev-4",
+      "role": "ev",
+      "kw": 150,
+      "volts": 480,
+      "phases": 3,
+      "currentA": 180.4,
+      "designA": 225.5,
+      "ocpdA": 250,
+      "spec": "4/0 AWG Cu",
+      "egc": "4",
+      "lengthFt": 150,
+      "dropPct": 0.6,
+      "cite": "NEC 2023 625.41",
+      "error": ""
+    }
+  ],
+  "checks": [
+    {
+      "id": "content",
+      "ok": true,
+      "severity": "info",
+      "cite": ""
+    },
+    {
+      "id": "vd-ld-ev-1",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 210.19(A)(1) Informational Note No. 4; 215.2(A)(1) Informational Note No. 2"
+    },
+    {
+      "id": "vd-ld-ev-2",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 210.19(A)(1) Informational Note No. 4; 215.2(A)(1) Informational Note No. 2"
+    },
+    {
+      "id": "vd-ld-ev-3",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 210.19(A)(1) Informational Note No. 4; 215.2(A)(1) Informational Note No. 2"
+    },
+    {
+      "id": "vd-ld-ev-4",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 210.19(A)(1) Informational Note No. 4; 215.2(A)(1) Informational Note No. 2"
+    },
+    {
+      "id": "nec705",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 705.12"
+    },
+    {
+      "id": "xfmr-z",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 450.3"
+    },
+    {
+      "id": "fire-access",
+      "ok": false,
+      "severity": "review",
+      "cite": "IFC 503"
+    },
+    {
+      "id": "seal",
+      "ok": false,
+      "severity": "info",
+      "cite": ""
+    }
+  ],
+  "spacing": {
+    "minUnitFt": null,
+    "minLineFt": null,
+    "minBuildingFt": null
+  },
+  "placardCites": [
+    "NEC 2023 110.16; NFPA 70E",
+    "NEC 2023 110.21(B)"
+  ]
+}

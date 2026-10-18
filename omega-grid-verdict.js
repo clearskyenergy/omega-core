@@ -26,6 +26,13 @@
   }
 
   function token() {
+    var Auth = root.OmegaEditorV2Auth;
+    if (Auth && typeof Auth.idToken === 'function') {
+      return Auth.idToken().then(function (t) {
+        if (t) return t;
+        return Promise.reject(new Error('Sign in to check the grid.'));
+      });
+    }
     try {
       var u = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
       if (u) return u.getIdToken();
@@ -65,5 +72,33 @@
     };
   }
 
-  root.OmegaGridVerdict = { circuitBody: circuitBody, ask: ask, fields: fields };
+  /* The sentences Prime v2 prints under the circuit (omega-prime-v2.js
+     circuitSourceLine and hostingSourceLine). One wording, both pages. */
+  function circuitSourceLine(verdict, probe) {
+    var row = probe && probe.rows ? probe.rows[0] : null;
+    var a = verdict || {};
+    var v = a.verdict || {};
+    var line = 'Source: ComEd hosting-capacity service, resolved at the point';
+    if (probe && probe.layerId != null) line += ' (layer ' + probe.layerId + ')';
+    line += '; the battery figure is ComEd\'s BESS_HC and the queue its Feeder_Q, which ComEd does not subtract';
+    if (row && row.refreshed) line += '. Queue refreshed ' + row.refreshed;
+    line += '. Verdict: OMEGA grid verdict (' + (a.version || '') + ')';
+    if (v.at) line += '. Asked ' + v.at;
+    return line + '.';
+  }
+
+  function hostingSourceLine(screen, verdict) {
+    var s = screen || {};
+    var kind = s.publishedKind === 'generation' ? 'generation capacity' : (s.publishedKind === 'pv' ? 'PV hosting capacity, which is not a battery figure' : 'no published kilowatts');
+    var when = s.asOf ? 'as of ' + s.asOf : 'the layer did not stamp a date';
+    var asked = verdict && verdict.verdict && verdict.verdict.at ? ' Asked ' + verdict.verdict.at + '.' : '';
+    return 'Source: ' + (s.utility || 'Utility') + ' (' + (s.sourceId || '') + ', ' + (s.grain || 'feeder') + '), ' + kind + ', ' + when
+      + '. Registry verified ' + (s.verified || 'not recorded') + '. Not resolved at the parcel.'
+      + ' Verdict: OMEGA grid verdict (' + ((verdict && verdict.version) || '') + ').' + asked;
+  }
+
+  root.OmegaGridVerdict = {
+    circuitBody: circuitBody, ask: ask, fields: fields,
+    circuitSourceLine: circuitSourceLine, hostingSourceLine: hostingSourceLine
+  };
 })(typeof window !== 'undefined' ? window : this);

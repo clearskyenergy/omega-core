@@ -511,6 +511,7 @@ table.bom tr.fen td{background:#FFF3E8}
     if (isFinite(latQ) && isFinite(lngQ)) { S.lat = latQ; S.lng = lngQ; S.handed = true; }
     var pid = qparam('project');
     if (pid) { S.editorProjectId = pid; S.projectId = pid; }
+    S.editorVersion = qparam('editor') === 'v2' ? 'v2' : 'classic';
     /* The project's org, or the signed-in workspace. Omega Logic opens that
        company. A bare /omega-logic is the staff directory, and this step
        does not send anyone there. */
@@ -799,7 +800,10 @@ table.bom tr.fen td{background:#FFF3E8}
         function (e) { S.saveErr = 'The project did not update: ' + ((e && e.message) || e); side(); });
     }, 600);
   }
-  function editorHref() { return S.projectId ? '/editor.html?id=' + encodeURIComponent(S.projectId) + '&from=prime' : '/editor?addr=' + encodeURIComponent(S.addr); }
+  function editorHref() {
+    if (S.projectId && S.editorVersion === 'v2') return '/editor-v2?id=' + encodeURIComponent(S.projectId) + '&from=prime';
+    return S.projectId ? '/editor.html?id=' + encodeURIComponent(S.projectId) + '&from=prime' : '/editor?addr=' + encodeURIComponent(S.addr);
+  }
   function toMap() {
     var b = $('#ld-tomap'); b.textContent = 'Setting up the project\u2026'; b.setAttribute('aria-disabled', 'true');
     ensureProject().then(function () { $('#ldSave').textContent = ''; }, function (e) { $('#ldSave').textContent = e.message + ' The design below works; it is not kept.'; })

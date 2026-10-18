@@ -80,7 +80,10 @@ module.exports = A.handler(function (req) {
           throw A.httpError(409, 'Save the project so the site address matches, then send it again.');
         }
         /* 1 · resolve vendors for lines that don't name one */
-        var lines = b.bom.map(function (l, i) { return { idx: i, sku: String(l.sku || ''), description: l.description || '', qty: Number(l.qty) || 1, unit: l.unit || 'ea', category: l.category || null, manufacturer: String(l.manufacturer || '') || null, vendorOrgId: l.vendorOrgId || null }; });
+        b.bom.forEach(function (l) {
+          if (!l || !isFinite(Number(l.qty)) || Number(l.qty) <= 0) throw A.httpError(400, 'Every BOM line needs a positive quantity.');
+        });
+        var lines = b.bom.map(function (l, i) { return { idx: i, sku: String(l.sku || ''), description: l.description || '', qty: Number(l.qty), unit: l.unit || 'ea', category: l.category || null, manufacturer: String(l.manufacturer || '') || null, vendorOrgId: l.vendorOrgId || null }; });
         var lookups = lines.filter(function (l) { return !l.vendorOrgId && l.sku; }).map(function (l) {
           return db.collection('equipment').where('key', '==', l.sku).limit(1).get().then(function (q) { if (!q.empty) { var e = q.docs[0].data(); l.vendorOrgId = e.vendorOrgId || null; l.category = l.category || e.category || null; } });
         });

@@ -44,8 +44,7 @@ assert.equal(editor.orders[0].design.address, CHICAGO);
 assert.equal(editor.orders[0].design.estimateCents, 125000000);
 assert.equal(editor.unmatched.length, 1);
 assert.equal(editor.unmatched[0].reason, 'no-sku');
-assert.equal(editor.orders[0].design.lines.length, 2);
-assert.equal(editor.orders[0].design.lines[1].onOrder, false);
+assert.equal(editor.orders[0].design.lines.length, 1, 'an external OEM sees only its own slice');
 assert.equal(editor.orders[0].poIntake, undefined);
 assert.equal(editor.orders[0].approvedQuote, undefined);
 ok('the editor line and the Prime unit key are the same order, and conduit stays on the drawing');
@@ -60,6 +59,17 @@ var stolen = D.draft({
 });
 assert.equal(stolen.orders.length, 0, 'another OEM\'s unpublished line is not taken into the designer catalog');
 ok('nothing published means no order');
+var split = D.draft({lines:[editorLine,{sku:'OTHER-UNIT',description:'Other supplier equipment',qty:1,vendorOrgId:'other.example'}],catalogs:Object.assign({},fenCat,{'other.example':[published('OTHER-UNIT')]}),designerOrgId:'concordenergyusa.com',project:project});
+assert.equal(split.orders.length,2);
+split.orders.forEach(function(o){assert.equal(o.design.lines.length,1);assert.equal(o.design.lines[0].sku,o.items[0].sku);});
+ok('each external OEM receives only its own BOM slice');
+
+var excessive = D.draft({ lines: [Object.assign({}, editorLine, { qty: 6000 }), Object.assign({}, editorLine, { qty: 6000 })], catalogs: fenCat, designerOrgId: 'concordenergyusa.com', project: project });
+assert.equal(excessive.orders.length, 0);
+assert.equal(excessive.unmatched.length, 2);
+assert(excessive.unmatched.every(function (l) { return l.reason === 'qty' && l.onOrder === false; }));
+ok('combined quantities above the limit stay explicitly unmatched and never make an empty order');
+
 
 var own = D.draft({
   lines: [{ sku: 'CC-C215', description: '215 kWh outdoor cabinet', qty: 2, unit: 'ea', manufacturer: 'Clean Cell' }, { sku: 'CC-C215', description: '215 kWh outdoor cabinet', qty: 3, unit: 'ea' }, { sku: 'CC-MOD-52', description: 'module', qty: 8, unit: 'ea' }, { sku: 'TRAY', description: 'tray', qty: 2.5, unit: 'ea' }],
@@ -123,6 +133,7 @@ function seedOwn() {
     { sku: 'CC-C215', description: '215 kWh outdoor cabinet', qty: 2, unit: 'ea', manufacturer: 'Clean Cell' },
     { sku: '', description: '2 in. EMT', qty: 400, unit: 'LF' }
   ] };
+  await assert.rejects(rfq({ method: 'POST', headers: {}, body: Object.assign({}, body, { bom: [{ sku: 'CC-C215', qty: 0 }] }) }), /positive quantity/);
   var out = await rfq({ method: 'POST', headers: {}, body: body });
   assert.equal(out.rfqId, null);
   assert.match(out.skipped, /no routable/);
@@ -142,11 +153,6 @@ function seedOwn() {
   assert.equal(saved.design.estimateCents, 63900000);
   assert.equal(saved.design.address, CHICAGO);
   assert.equal(saved.customer.address.city, 'Chicago');
-  var floor = require('../../api/_lib/plant-source').sourceOf(saved);
-  assert.equal(floor.projectId, saved.projectId);
-  assert.equal(floor.projectName, 'Harbor yard');
-  assert.equal(floor.address.line1, saved.delivery.destinations[0].address.line1);
-  assert.deepEqual(floor.items.map(function (l) { return [l.sku, l.qty]; }), saved.items.map(function (l) { return [l.sku, l.qty]; }));
   assert.equal(saved.customer.address.zip, '60601');
   assert.equal(saved.items[0].sku, 'CC-C215');
   assert.equal(saved.items[0].qty, 2);

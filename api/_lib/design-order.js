@@ -165,6 +165,19 @@ function draft(spec) {
   var project = spec.project || {};
   var addr = parseAddress(project.address || '', { zip: project.zip, state: project.state, city: project.city, name: project.name });
   var annotated = lines.map(function (l) { return annotate(l, catalogs, designer); });
+  /* Validate the combined quantity before deciding which lines are on an
+     order. Otherwise two individually valid lines can disappear after merge. */
+  var totals = {};
+  annotated.forEach(function (l) {
+    if (!l.onOrder) return;
+    var key = JSON.stringify([l.orgId, l.sku]);
+    totals[key] = (totals[key] || 0) + l.wholeQty;
+  });
+  annotated.forEach(function (l) {
+    if (l.onOrder && totals[JSON.stringify([l.orgId, l.sku])] > 10000) {
+      l.onOrder = false; l.reason = 'qty';
+    }
+  });
   var byOrg = {};
   annotated.forEach(function (l) {
     if (!l.onOrder || !l.orgId) return;
@@ -182,7 +195,11 @@ function draft(spec) {
       map[l.sku].qty += l.wholeQty;
     });
     var items = Object.keys(map).sort().map(function (k) { return map[k]; }).filter(function (it) { return it.qty >= 1 && it.qty <= 10000; });
-    var drawn = annotated.map(function (l) { return lineView(l, org); });
+    /* A supplier sees its slice, as on the RFQ. Only the designer's own
+       workspace may retain the whole drawing, including other suppliers. */
+    var drawn = annotated.filter(function (l) {
+      return org === designer || l.orgId === org || l.vendorOrgId === org;
+    }).map(function (l) { return lineView(l, org); });
     return {
       orgId: org,
       orgName: names[org] || org,
