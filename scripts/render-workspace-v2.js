@@ -78,7 +78,7 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   var base = 'http://' + HOST + ':' + srv.address().port;
   var browser = await chromium.launch({ executablePath: CHROME });
 
-  async function open(name, pagePath, fx, phone) {
+  async function open(name, pagePath, fx, phone, prime) {
     var errs = [], ctx = await browser.newContext({ viewport: phone ? { width: 390, height: 844 } : { width: 1366, height: 900 }, hasTouch: !!phone, isMobile: !!phone });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
       var url = r.request().url();
@@ -88,6 +88,7 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     });
     await ctx.addInitScript(DOUBLE_SRC);
     await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: fx.user, docs: fx.docs, latency: 8, authDomain: HOST });
+    if (prime) await prime(ctx);
     var p = await ctx.newPage();
     p.on('pageerror', function (e) { if (!/duplicate-app/.test(e.message)) errs.push(e.stack || e.message); });
     p.on('console', function (m) { var t = m.text(); if (m.type() === 'error' && !/^Failed to load resource|duplicate-app/.test(t)) errs.push(t.slice(0, 240)); });
@@ -125,18 +126,18 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     return out;
   }
 
-  var live = await open('before', '/workspace?ui=v1', noisy(HOST), false);
+  var live = await open('before', '/workspace', noisy(HOST), false);
   var before = await live.p.evaluate(function () {
     var t = document.body.innerText || '';
-    return { hex: !!document.querySelector('.hexhub'), where: t.indexOf('Where to?') >= 0, burns: (t.match(/S\.J Burns LLC \(330 roberts\) has been in review/g) || []).length, addr: (t.match(/4846 S\. Michigan Ave, Chicago/g) || []).length };
+    return { path: location.pathname, hex: !!document.querySelector('.hexhub'), where: t.indexOf('Where to?') >= 0, burns: (t.match(/S\.J Burns LLC \(330 roberts\) has been in review/g) || []).length, addr: (t.match(/4846 S\. Michigan Ave, Chicago/g) || []).length };
   });
-  ok('before: the live home still has the hex launcher', before.hex && before.where, before);
+  ok('before: the live home still has the hex launcher', before.hex && before.where && before.path.indexOf('workspace-v2') < 0, before);
   ok('before: the same review is listed more than once', before.burns >= 2, before);
   await shot(live.p, 'workspace-v1-before.png');
   ok('before: no uncaught errors', !live.errs.length, live.errs);
   await live.ctx.close();
 
-  var desk = await open('after', '/workspace', noisy(HOST), false);
+  var desk = await open('after', '/workspace-v2', noisy(HOST), false);
   var after = await desk.p.evaluate(function () {
     var needs = (document.getElementById('needs') || {}).innerText || '';
     var account = (document.getElementById('account') || {}).innerText || '';
@@ -158,6 +159,15 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   ok('after: the repeated address is one card', after.addrTrack === 1 && after.saved, after);
   ok('after: the trial sits in the account band, not in the work list', /trial/i.test(after.account) && !after.trialInNeeds, after);
   ok('after: the rail is Work, Library, Desk, Account', after.sections.join('|') === 'Work|Library|Desk|Account', after.sections);
+  ok('after: a direct v2 address stays while the default is classic', desk.p.url().indexOf('/workspace-v2') >= 0, desk.p.url());
+  var switched = await desk.p.evaluate(function () {
+    var href = '';
+    Array.prototype.forEach.call(document.querySelectorAll('#side-nav a'), function (a) {
+      if ((a.textContent || '').indexOf('Switch to classic') >= 0) href = a.getAttribute('href') || '';
+    });
+    return href;
+  });
+  ok('after: Switch to classic is in the rail', /\/workspace\?/.test(switched) && /ui=classic/.test(switched), switched);
   var hrefs = await linksOk(desk.p);
   ok('after: visible links point at pages the site serves', !missing(hrefs).length, missing(hrefs));
   await desk.p.click('#new-project');
@@ -176,9 +186,11 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   await desk.p.goto(base + '/workspace?home=workspace#billing', { waitUntil: 'domcontentloaded' });
   await desk.p.waitForSelector('#billing-body .bh-state');
   await desk.p.click('[data-key="home"]');
-  await desk.p.waitForURL('**/workspace-v2?home=workspace');
-  await desk.p.waitForSelector('#journey a');
-  ok('billing returns to the journey home', /workspace-v2/.test(desk.p.url()));
+  await wait(400);
+  var backHome = await desk.p.evaluate(function () {
+    return { path: location.pathname, hash: location.hash, hex: !!document.querySelector('.hexhub'), where: (document.body.innerText || '').indexOf('Where to?') >= 0 };
+  });
+  ok('billing Home stays on the classic hex hub', backHome.hex && backHome.where && backHome.path.indexOf('workspace-v2') < 0 && backHome.hash !== '#billing', backHome);
   await shot(desk.p, 'workspace-v2-after.png');
   ok('after: no uncaught errors', !desk.errs.length, desk.errs);
   await desk.ctx.close();
@@ -215,6 +227,54 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   await shot(pend.p, 'workspace-v2-pending.png');
   ok('pending: no uncaught errors', !pend.errs.length, pend.errs);
   await pend.ctx.close();
+
+  function flagged(orgExp, userExp) {
+    var fx = FX.northstar(HOST);
+    if (orgExp) fx.docs['omega_orgs/' + fx.org].experience = orgExp;
+    if (userExp) fx.docs['omega_orgs/' + fx.org + '/members/' + fx.user.uid].experience = userExp;
+    return fx;
+  }
+  var asked = await open('switch query v2', '/workspace?ui=v2', FX.northstar(HOST), false);
+  var askedTo = await asked.p.waitForFunction(function () { return location.pathname.indexOf('workspace-v2') >= 0; }, null, { timeout: 8000 }).then(function () { return asked.p.url(); }, function () { return asked.p.url(); });
+  ok('?ui=v2 opens the journey and a plain /workspace does not', askedTo.indexOf('/workspace-v2') >= 0, askedTo);
+  ok('query v2: no uncaught errors', !asked.errs.length, asked.errs);
+  await asked.ctx.close();
+
+  var sent = await open('switch org v2', '/workspace', flagged('v2'), false);
+  var sentTo = await sent.p.waitForFunction(function () { return location.pathname.indexOf('workspace-v2') >= 0; }, null, { timeout: 8000 }).then(function () { return sent.p.url(); }, function () { return sent.p.url(); });
+  var routed = await sent.p.evaluate(function () { return sessionStorage.getItem('omega-experience-routed'); });
+  ok('an org on v2 is sent to workspace v2', sentTo.indexOf('/workspace-v2') >= 0, sentTo);
+  ok('a tab the router sent is marked so a flip can bring it back', routed === '1', routed);
+  ok('org v2: no uncaught errors', !sent.errs.length, sent.errs);
+  await sent.ctx.close();
+
+  var held = await open('switch classic override', '/workspace?ui=classic', flagged('v2'), false);
+  await wait(1200);
+  ok('?ui=classic stays on the classic home while the org is v2', held.p.url().indexOf('/workspace-v2') < 0 && /\/workspace/.test(held.p.url()), held.p.url());
+  var remembered = await held.p.evaluate(function () { return localStorage.getItem('omega-experience'); });
+  ok('?ui=classic is remembered on this browser', remembered === 'classic', remembered);
+  ok('classic override: no uncaught errors', !held.errs.length, held.errs);
+  await held.ctx.close();
+
+  var v1 = await open('switch v1 alias', '/workspace?ui=v1', flagged('v2'), false);
+  await wait(1200);
+  ok('?ui=v1 stays on the classic home', v1.p.url().indexOf('/workspace-v2') < 0, v1.p.url());
+  ok('v1 alias: no uncaught errors', !v1.errs.length, v1.errs);
+  await v1.ctx.close();
+
+  var person = await open('switch member classic', '/workspace', flagged('v2', 'classic'), false);
+  await wait(1200);
+  ok('a person set to classic is not sent, even when the org is v2', person.p.url().indexOf('/workspace-v2') < 0, person.p.url());
+  ok('member classic: no uncaught errors', !person.errs.length, person.errs);
+  await person.ctx.close();
+
+  var back = await open('switch rollback', '/workspace-v2', flagged(''), false, function (ctx) {
+    return ctx.addInitScript(function () { sessionStorage.setItem('omega-experience-routed', '1'); });
+  });
+  var backTo = await back.p.waitForFunction(function () { return location.pathname === '/workspace' || /\/workspace\.html$/.test(location.pathname); }, null, { timeout: 8000 }).then(function () { return back.p.url(); }, function () { return back.p.url(); });
+  ok('a routed tab returns to classic when the org flag is unset', backTo.indexOf('/workspace-v2') < 0 && /\/workspace/.test(backTo), backTo);
+  ok('rollback: no uncaught errors', !back.errs.length, back.errs);
+  await back.ctx.close();
 
   await browser.close();
   srv.close();

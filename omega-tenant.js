@@ -27,9 +27,9 @@
 
    2. POST-AUTH — entitlements.
       Once Firebase reports a user, reads
-        omega_orgs/{orgId}                 status, vertical, shell
+        omega_orgs/{orgId}                 status, vertical, shell, experience
         omega_orgs/{orgId}/billing/current tier, addons, toolOverrides
-        omega_orgs/{orgId}/members/{uid}   role, toolAccess
+        omega_orgs/{orgId}/members/{uid}   role, toolAccess, experience
       and merges tier/unlock data INTO the resolved workspace object, which
       is the object index.html's applyToolLocks() and omega-tools.js read.
       Then re-runs applyToolLocks() and OmegaBrand.paint() if present.
@@ -486,6 +486,11 @@
     if (T.org && T.org.logoUrl && !ws.logo) ws.logo = T.org.logoUrl;
     ws.vertical = ws.vertical || (T.org && T.org.vertical) || null;
     ws.shell = ws.shell || (T.org && T.org.shell) || 'default';
+    /* The release switch (omega-experience.js). Copied only when the
+       record says classic or v2. Absent stays absent, and absent means
+       classic. A member value wins over the org in that file, not here. */
+    if (T.org && (T.org.experience === 'v2' || T.org.experience === 'classic')) ws.experience = T.org.experience;
+    if (T.member && (T.member.experience === 'v2' || T.member.experience === 'classic')) ws.experienceUser = T.member.experience;
     /* Some tenants have no business in the marketplace — a design partner is
        here to draw what they are handed, not to shop. A flag on the org record
        rather than a list of domains in three navs. */

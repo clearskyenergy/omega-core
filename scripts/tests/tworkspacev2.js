@@ -56,7 +56,8 @@ ok('every step has a real door', home.journey.steps.every(function (s) { return 
 ok('eight steps, in order', home.journey.steps.map(function (s) { return s.label; }).join(' · ') === 'Arrive · Customer · Project · Design · Analyze · Propose · Order · Track');
 
 var labels = V.nav({}).filter(function (n) { return n.label && !n.hidden && !n.section; }).map(function (n) { return n.label; });
-ok('the preview rail groups the work and does not repeat the old chip labels', labels.join('|') === 'Home|Customers|Projects|Portfolio|Tools|Modules|Marketplace|Quotes|Team|Feed|Plan & billing|Settings' && labels.indexOf('All tools') < 0 && labels.indexOf('Quote Desk') < 0, labels);
+ok('the preview rail groups the work and does not repeat the old chip labels', labels.join('|') === 'Home|Customers|Projects|Portfolio|Tools|Modules|Marketplace|Quotes|Team|Feed|Plan & billing|Settings|Switch to classic' && labels.indexOf('All tools') < 0 && labels.indexOf('Quote Desk') < 0, labels);
+ok('Switch to classic remembers the choice', V.nav({}).some(function (n) { return n.label === 'Switch to classic' && n.href === '/workspace?ui=classic'; }));
 ok('joint development and admin ids stay, hidden, for the same reveal', V.nav({}).some(function (n) { return n.id === 'sn-jda' && n.hidden; }) && V.nav({}).some(function (n) { return n.id === 'sn-admin' && n.hidden; }));
 ok('the phone bar is five doors', V.tabs({}).length === 5 && V.tabs({ logicOffice: true })[1][3] === '/portals/customer/admin.html');
 
@@ -68,26 +69,14 @@ var live = fs.readFileSync(path.join(__dirname, '../../workspace.html'), 'utf8')
 ok('the live rail text is untouched', /label: 'All tools'/.test(shell) && /label: 'Quote Desk'/.test(shell));
 ok('a page can pass its own rail without changing the default', /opts\.nav \|\| NAV/.test(shell) && /opts\.tabsItems \|\| TABS/.test(shell));
 ok('the live home still draws the hex hub', /omega-hexhub\.js/.test(live) && /Where to\?/.test(live));
-var routeScript = live.match(/<script>\s*(\/\* The journey[\s\S]*?)<\/script>/)[1];
-function routed(search, hash) {
-  var dest = null;
-  require('vm').runInNewContext(routeScript, { location: { search: search, hash: hash, replace: function (url) { dest = url; } } });
-  return dest;
-}
-ok('the default home opens the journey and preserves workspace query context', routed('?org=northstar', '') === '/workspace-v2?org=northstar');
-ok('classic home remains available', routed('?ui=v1', '') === null);
-['#tools', '#modules', '#plans', '#billing', '#module-grid', '#team', '#feed', '#flight'].forEach(function (hash) {
-  ok('existing deep link stays reachable: ' + hash, routed('', hash) === null);
-});
-ok('journey settings links survive', routed('', '#settings') === '/workspace-v2#settings');
+ok('the live home loads the shared switch and does not send anyone to the journey on its own', /omega-experience\.js/.test(live) && live.indexOf("location.replace('/workspace-v2'") < 0 && live.indexOf("location.assign('/workspace-v2'") < 0);
 var returnScript = live.slice(live.indexOf('function returnHome() {'), live.indexOf('function route() {'));
 function homeReturn(search) {
   var dest = null;
   require('vm').runInNewContext(returnScript + '; returnHome();', { location: { search: search, assign: function (url) { dest = url; } }, go: function (key) { dest = key; } });
   return dest;
 }
-ok('returning from a section opens the journey with query context', homeReturn('?org=northstar') === '/workspace-v2?org=northstar');
-ok('explicit classic-home navigation stays classic', homeReturn('?ui=v1') === 'home');
+ok('Home from a section stays on the classic workspace', homeReturn('') === 'home' && homeReturn('?org=northstar') === 'home' && homeReturn('?ui=v1') === 'home' && homeReturn('?ui=classic') === 'home' && homeReturn('?ui=v2') === 'home');
 var v2 = fs.readFileSync(path.join(__dirname, '../../workspace-v2.html'), 'utf8');
 ok('the preview does not load the hex hub', v2.indexOf('omega-hexhub.js') < 0 && v2.indexOf('Where to?') < 0);
 var hidden = V.home({ projects: [{ id: 'a' }, { id: 'b' }], needsSize: 72, needs: [{ key: 'trial', t: 'Your trial ends in 2 days', s: 'Keep what you use.', cta: 'See plans', href: '/workspace#plans' }], cards: [] });
