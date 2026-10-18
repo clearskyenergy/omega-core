@@ -38875,7 +38875,7 @@ function _bomRenderRfq(bom, byVendor, unknown, total) {
   window._BOM_RFQ = { byVendor: byVendor, bom: bom, unknown: unknown, total: total };
 
   var head = '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">'
-    + '✉ Request for Quote</div>';
+    + 'Send to the OEM</div>';
 
   var rows = vendors.map(function (v) {
     var g = byVendor[v];
@@ -38903,15 +38903,15 @@ function _bomRenderRfq(bom, byVendor, unknown, total) {
         + 'partner catalogue; a distributor prices those.' : '')
       + '</div>'
     : '<div style="font-size:9.5px;color:#6B8299;line-height:1.5">'
-      +   'No line on this BOM belongs to a partner manufacturer, so nothing routes to a factory. '
-      +   'A distribution partner can price the whole package — which is how most takeoffs get '
-      +   'quoted anyway.</div>';
+      +   'Published products on this drawing open a purchase order in the OEM workspace. '
+      +   'Lines that are not a published product stay on the drawing. A distribution partner, '
+      +   'if you pick one, is asked for the rest.</div>';
 
   host.innerHTML = head
     + '<div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.25);border-radius:7px;padding:10px 12px">'
     +   lead
     +   '<button onclick="openRfqFile()" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;color:#fff;border-radius:7px;padding:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700">'
-    +     'File RFQ →</button>'
+    +     'Send to the OEM</button>'
     +   '<div id="bom-rfq-msg" style="font-size:9.5px;margin-top:7px;line-height:1.5"></div>'
     + '</div>';
 }
@@ -39003,7 +39003,7 @@ function openRfqFile() {
     + 'box-shadow:0 24px 60px rgba(0,0,0,.55)">'
     + '<div style="display:flex;align-items:center;gap:10px;padding:16px 20px 12px;'
     +   'border-bottom:1px solid rgba(255,255,255,.08)">'
-    +   '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">File Request for Quote</div>'
+    +   '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">Send to the OEM</div>'
     +     '<div style="font-size:10px;color:var(--sub);margin-top:2px">The address, lines and estimate go with it. Nothing is retyped in Omega Logic.</div></div>'
     +   '<button onclick="document.getElementById(\'rfq-file-modal\').remove()" style="background:var(--hover-strong);'
     +     'border:1px solid var(--hairline);color:#8BA3C4;border-radius:6px;padding:4px 10px;'
@@ -39201,11 +39201,10 @@ function submitRfqFile() {
     if (a) accounts[d.orgId] = a;
   });
 
-  var mfrCount = Object.keys((st.byVendor) || {}).length;
-  if (!toOrgIds.length && !mfrCount) {
-    return say('Pick at least one distribution partner — no line on this BOM routes to a manufacturer, '
-      + 'so there is nobody else to ask.', true);
-  }
+  /* A distributor is optional. Published products open the purchase order
+     in the OEM workspace even when nobody else is asked. */
+  var sendLines = ((st.bom && st.bom.items) || []).filter(function (it) { return !it.notHostScope; });
+  if (!sendLines.length) return say('This bill of materials has no lines to send.', true);
 
   var u = null;
   try { u = firebase.auth().currentUser; } catch (e) {}
@@ -39224,6 +39223,7 @@ function submitRfqFile() {
     toOrgIds: toOrgIds,
     accounts: accounts,
     note: String((document.getElementById('rfq-note') || {}).value || '').trim(),
+    estimateUsd: (window._COST_TOTAL > 0 ? window._COST_TOTAL : null),
     bom: (st.bom.items || []).filter(function (it) { return !it.notHostScope; }).map(function (it) {
       /* manufacturer travels with the line so the server can route a
          catalogue item to its factory even when no /equipment row exists

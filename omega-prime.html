@@ -1005,9 +1005,11 @@ table.bom tr.fen td{background:#FFF3E8}
           var orders = (res.j && res.j.orders) || [];
           if (!res.ok) { say((res.j && (res.j.detail || res.j.error)) || 'Could not open the purchase order.'); return; }
           if (!orders.length) { say('Nothing on this quote is a published product yet, so no purchase order was opened. ' + ((res.j && res.j.skipped) || '')); return; }
-          say(orders.map(function (o) {
-            return o.sameWorkspace ? (o.orderNo + ' is open in your workspace.') : (o.orderNo + ' opened in ' + (o.orgName || 'the OEM') + '\u2019s workspace.');
-          }).join(' '));
+          if (box) box.innerHTML = orders.map(function (o) {
+            var label = esc(o.orderNo);
+            if (o.sameWorkspace && o.href) return '<a href="' + esc(o.href) + '">' + label + '</a> is open in your workspace.';
+            return label + ' opened in ' + esc(o.orgName || 'the OEM') + '\u2019s workspace.';
+          }).join(' ');
         });
     }, function (e) { say((e && e.message) || 'Save the project first, then send it.'); })
       .then(function () { if (btn) { btn.removeAttribute('aria-disabled'); btn.textContent = 'Send to the OEM'; } });
