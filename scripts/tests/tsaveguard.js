@@ -40,11 +40,17 @@ var txRe = /tx\.update\(_ref, (\w+)\)/g;
 while ((m = txRe.exec(editor))) writes.push({ at: m.index, name: m[1], tx: true });
 ok(writes.length >= 2, 'found the editor’s named-payload project writes (' + writes.length + ')');
 writes.forEach(function (w) {
-  var back = editor.slice(Math.max(0, w.at - 9000), w.at);
+  /* The transaction save reads back to the start of saveProject itself: a
+     fixed window stopped reaching its `const payload = {` once saveProject
+     grew past it (2026-10-17), and the test then read "not held" for the
+     one write that matters most. */
+  var fnAt = w.tx ? editor.lastIndexOf('async function saveProject(', w.at) : -1;
+  var back = editor.slice(fnAt >= 0 ? fnAt : Math.max(0, w.at - 9000), w.at);
   var decl = back.lastIndexOf('const ' + w.name + ' = {'); if (decl < 0) decl = back.lastIndexOf('const ' + w.name + '={');
   if (decl < 0) decl = back.lastIndexOf('var ' + w.name + ' = {');
   var body = decl >= 0 ? back.slice(decl) : back;
   var drawing = /\b(elements|shapes|docTabs|conduits):/.test(body);
+  if (w.tx) ok(drawing, 'the transaction save (' + w.name + ') is found and carries the drawing');
   if (!drawing) { console.log('  ok  ' + w.name + ' (no drawing keys, not held)'); return; }
   ok(/savedBy: \{ email: [^}]*tab: _tabId\(\)[^}]*at: Date\.now\(\) \}/.test(body), w.name + ' carries savedBy { email, tab, ua, at }' + (w.tx ? ' (the transaction save)' : ''));
 });

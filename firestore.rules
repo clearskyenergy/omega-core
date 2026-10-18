@@ -552,6 +552,25 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Customer quotes (Omega Prime, 2026-10-17): a seller's proposal to its
+    // own customer — the link key's sha256, the cost and margin behind the
+    // price, the history. Admin SDK only, through /api/customer-quote: the
+    // customer reads it through the key-checked door, the seller through its
+    // projection. events/ and sends/ fall to the default deny (no {path=**}
+    // wildcard names them; never name one private, recipients, offers or
+    // fin_views).
+    match /customer_quotes/{quoteId} {
+      allow read, write: if false;
+    }
+
+    // Hosting-capacity cache (api/hosting-capacity.js): a utility's published
+    // figures per ~11 m cell, the territory answer and resolved service
+    // names. Admin SDK only; a browser that could write it could put a
+    // circuit's room on any site.
+    match /hosting_cache/{id} {
+      allow read, write: if false;
+    }
+
     match /tools/{toolId} {
       allow read:  if signedIn();
       allow write: if isAdmin();
@@ -2396,6 +2415,11 @@ service cloud.firestore {
        by the endpoints in a transaction. A browser that could write it would
        reset its own allowance. Stated, like the lines above. */
     match /omega_orgs/{orgId}/geocode_usage/{usageId} { allow read, write: if false; }
+    /* A workspace's customer-quote sends and Omega Logic hand-offs per day
+       (api/customer-quote.js, api/_lib/prime-order.js), counted in a
+       transaction. A browser that could write it would reset its own limit.
+       Stated, like the lines above. */
+    match /omega_orgs/{orgId}/quote_counters/{counterId} { allow read, write: if false; }
     /* Packaged usage counters (Phase 7): one document per billing cycle,
        counted by the producing endpoints in a transaction and idempotent by
        client id (the events subcollection). A browser that could write it

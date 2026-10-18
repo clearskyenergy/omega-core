@@ -4,7 +4,11 @@
  * GET /api/utility-rates) and never in editor.html again (2026-10-12: a
  * customer's engineer proposed building their own editor; the curated tables
  * were the thing to copy). Holds the library's answers, the endpoint's gate,
- * and that the page carries a cache and not the book. */
+ * and that the page carries a cache and not the book. 2026-10-17: the four
+ * ZIP shadows (RI under National Grid MA, UI under Eversource CT, MidAmerican
+ * and downstate Ameren under ComEd) are fixed deliberately, one assertion
+ * each, and the serving utility's EIA id (from POST /api/hosting-capacity)
+ * now names the record before the ZIP does. */
 'use strict';
 var assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
 var ROOT = path.join(__dirname, '../..'), count = 0;
@@ -27,11 +31,56 @@ assert.equal(U.stateForZip('606'), 'IL'); assert.equal(U.stateForZip('abc'), nul
 ['name', 'demandRate', 'energyRate', 'demandPct', 'tou', 'peakWindow', 'ratchet'].forEach(function (k) { assert.ok(k in ia, k); count++; });
 assert.equal(U.lookup('06103').ratchet, 0.0, 'a stated zero ratchet stays zero'); count++;
 
+/* 2026-10-17 (DESIGN C6, r12 A7): the ZIP book was shadowed in four places.
+   These change deliberately, each for the reason named. */
+assert.deepEqual(U._overlaps(), [], 'one ZIP3 index: a prefix belongs to one record'); count++;
+assert.equal(U.lookup('02903').name, 'Rhode Island Energy', '028/029 are Rhode Island ZIPs, not National Grid MA'); assert.equal(U.lookup('02903').key, 'state:RI'); count += 2;
+assert.equal(U.lookup('06510').key, 'ui_ct', 'New Haven (065) is UI, not Eversource'); assert.equal(U.lookup('06604').key, 'ui_ct', 'Bridgeport (066) is UI'); count += 2;
+assert.equal(U.lookup('06450').key, 'eversource_ct', '064 is mixed (Meriden is Eversource) and stays with Eversource'); count++;
+assert.equal(U.lookup('01608').key, 'ngrid_ma', 'Worcester (016) is National Grid'); assert.equal(U.lookup('02108').key, 'eversource_ma'); count += 2;
+assert.equal(U.lookup('61201').key, 'midamerican', 'Rock Island (612) is MidAmerican, not ComEd'); count++;
+['62201', '62301', '62401', '61401'].forEach(function (z) { assert.equal(U.lookup(z).key, 'ameren', z + ' is downstate Ameren, not ComEd'); count++; });
+assert.equal(U.lookup('60901').key, 'comed', 'Kankakee (609) is ComEd'); assert.equal(U.lookup('61101').key, 'comed', 'Rockford (611)'); count += 2;
+/* by the serving utility's EIA id (the Load step passes the territory's) */
+assert.equal(U.byEia('4110').key, 'comed'); assert.equal(U.byEia('4110').eiaId, '4110'); assert.equal(U.byEia('19497').key, 'ui_ct'); count += 3;
+assert.equal(U.byEia('13214').name, 'Rhode Island Energy'); assert.equal(U.byEia('7801').name, 'Florida Power & Light (FPL)', 'Gulf Power is FPL'); count += 2;
+var ace = U.byEia('963', { display: 'Atlantic City Electric', state: 'NJ' });
+assert.equal(ace.name, 'Atlantic City Electric', 'the utility at the point, by its own name'); assert.equal(ace.ratesFrom, 'PSE&G'); assert.equal(ace._stateResolved, true); count += 3;
+assert.match(ace._rateNote, /No rate book for Atlantic City Electric yet; these are NJ planning rates \(PSE&G\)/); assert.ok(!('zips' in ace)); count += 2;
+assert.equal(U.byEia('963', { state: 'NJ' }), null, 'no name, no record: never another utility\'s name over its rates'); assert.equal(U.byEia(''), null); count += 2;
+assert.equal(U.byEia('963', { display: 'Atlantic City Electric', zip: '08401' })._state, 'NJ', 'the state from the ZIP when not given'); count++;
+
 /* the endpoint: GET, a workspace sign-in, one record */
 var ep = read('api/utility-rates.js');
 assert.match(ep, /req\.method !== 'GET'/); assert.match(ep, /A\.authenticate\(req\)/); count += 2;
 assert.match(ep, /caller\.orgId \|\| caller\.staff/); assert.match(ep, /httpError\(403/); count += 2;
 assert.match(ep, /U\.lookup\(zip\)/); assert.ok(ep.indexOf('IL_UTILITY_RATES') < 0, 'the endpoint never hands out the table'); count += 2;
+assert.match(ep, /U\.byEia\(eia, \{ display: display, state: st, zip: zip \}\)/); assert.match(ep, /HS\.byKey\(key\) : HS\.byEia\(eia\)/, 'the name comes from the one hosting registry'); count += 2;
+/* the endpoint, run: ?eia= wins, a ZIP is the fallback */
+var endpointRun = (function () {
+  var A = require(path.join(ROOT, 'api/_lib/admin'));
+  var real = A.authenticate; A.authenticate = function () { return Promise.resolve({ uid: 'u', orgId: 'clearsky-usa.com' }); };
+  var h = require(path.join(ROOT, 'api/utility-rates.js'));
+  function call(q) {
+    return new Promise(function (ok) {
+      var res = { h: {}, setHeader: function (k, v) { this.h[k] = v; }, status: function (s) { this.s = s; return this; }, json: function (j) { ok({ s: this.s, j: j }); }, end: function () { ok({ s: this.s }); }, headersSent: false };
+      h({ method: 'GET', headers: {}, query: q }, res);
+    });
+  }
+  return call({ eia: '963', zip: '08401' }).then(function (r) {
+    assert.equal(r.s, 200); assert.equal(r.j.name, 'Atlantic City Electric'); count += 2;
+    return call({ utility: 'ui', zip: '06450' });
+  }).then(function (r) {
+    assert.equal(r.j.key, 'ui_ct', 'a registry key resolves through its EIA id'); count++;
+    return call({ eia: '99999', zip: '02903' });
+  }).then(function (r) {
+    assert.equal(r.j.name, 'Rhode Island Energy', 'an id nobody can name falls back to the ZIP'); count++;
+    return call({ eia: '17040', name: 'Shelby Electric Coop', zip: '62565' });
+  }).then(function (r) {
+    assert.equal(r.j.name, 'Shelby Electric Coop', 'a co-op the registry knows only as a group keeps the territory\'s name'); assert.match(r.j._rateNote, /IL planning rates/); count += 2;
+    A.authenticate = real;
+  });
+})();
 
 /* the page: a cache, not the book */
 var ed = read('editor.html');
@@ -88,6 +137,6 @@ first._promise.then(function (rec) {
   var bad = ctx._g('99501');
   return bad._promise.then(function () { throw new Error('should refuse'); }, function (e) {
     assert.equal(e.message, 'nope'); assert.equal(ctx._c['zip:995'], undefined, 'a refused fetch caches nothing'); count += 2;
-    console.log('tutilityrates: ' + count + ' assertions passed');
+    return endpointRun.then(function () { console.log('tutilityrates: ' + count + ' assertions passed'); });
   });
 }).catch(function (e) { console.error(e); process.exit(1); });

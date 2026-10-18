@@ -21,6 +21,12 @@
      rfqsSent[]      rfqs where sourceOrgId is this org, each with its
                      recipients[] (vendorOrgId, status sent|quoted|accepted|rejected)
      rfqsReceived[]  recipients where vendorOrgId is this org (status, projectName)
+     customerQuotes[] the proposals this workspace sent its own customers, as
+                     GET /api/customer-quote?list=1 rows (id, quoteNo, status
+                     draft|sent|viewed|approved|declined|expired|withdrawn,
+                     customer{name,company}, sentAt, viewedAt, viewCount,
+                     decidedAt, validUntil, stage{key,label}: the server's
+                     Teleios ladder, derived there)
      referrals[]     referrals where toOrgId is this org (status new|reviewing|…)
      finance[]       fin_projects this person sent to the finance marketplace
                      (status draft|review|open|exclusive|awarded|closed,
@@ -36,6 +42,13 @@
    A row is { key, cls (hot|warn|good|''), score, t, s, cta, href?, act? }.
    act is what the page does when there is no address: { kind: 'billing' |
    'team' | 'project' | 'tool', id }. The rules and their ranks:
+
+      79 a customer approved my quote and it waits in Omega Logic
+      71 a customer opened my quote 3+ days ago and has not decided (follow up)
+      48 a quote of mine expires within 3 days
+      41 a quote of mine sent 5+ days ago that nobody has opened
+     (customer quotes, all to /rfq.html#customer; three or more of a kind
+     are ONE row, as the unsized candidates are)
 
      100 read-only (unpaid)        95 more than fifteen days past due
       90 awaiting approval
@@ -104,6 +117,14 @@
   function plural(k, one, many) { return k + ' ' + (k === 1 ? one : many); }
   function days(ms, now) { return Math.round((now - ms) / DAY); }
   function dateOf(ms) { return new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }); }
+  /* A date-only value (YYYY-MM-DD) is a calendar day, never an instant:
+     parsed as one it is UTC midnight, the evening before west of UTC, so it
+     is read from its parts. A quote's valid-until is the server's UTC day
+     and lasts to its end (an instant given for it is taken as it is); a
+     to-do's due date is the person's own day, due to the end of it. */
+  function ymd(v) { var m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; }
+  function until(v) { var p = ymd(v); return p ? Date.UTC(p.y, p.m, p.d) + DAY - 1 : at(v); }
+  function dueAt(v) { var p = ymd(v); return p ? new Date(p.y, p.m, p.d, 23, 59, 59, 999).getTime() : at(v); }
   function inFlight(p) { var i = STAGES.indexOf(p.stage); return i >= 1 && i < 7; }
   function name(p) { return p.name || p.title || 'Untitled'; }
   /* ── what kind of work a project is, and how far its design has come ── */
@@ -242,6 +263,56 @@
     return 'In your deal room';
   }
 
+  /* ── customer quotes (Omega Prime → the Quote Desk's Customer tab): the
+     rows come from GET /api/customer-quote?list=1, whose stage is the
+     server's Teleios ladder; this only says which ones need the seller ── */
+  var QUOTES = '/rfq.html#customer';
+  function quoteWho(q) { var c = q.customer || {}; return c.company || c.name || 'Your customer'; }
+  function quoteNo(q) { return q.quoteNo || 'your quote'; }
+  /* approved and not yet priced in Omega Logic: no order yet (approved), an
+     order waiting for its price (ordered), or one Omega Logic flagged
+     (exception, off the ladder) */
+  var LOGIC_WAIT = { approved: 1, ordered: 1, exception: 1 };
+  /* a valid-until DATE (the list's YYYY-MM-DD) lasts to the end of that UTC
+     day, as the server holds it: until(), above */
+  function quoteRow(q, now) {
+    var st = q.status, valid = until(q.validUntil), sent = at(q.sentAt), viewed = at(q.viewedAt), stage = q.stage || null, id = q.id || q.quoteNo;
+    var open = (st === 'sent' || st === 'viewed') && !(valid && valid < now), left = valid ? Math.ceil((valid - now) / DAY) : null;
+    if (st === 'approved') {
+      if (stage && stage.key && !LOGIC_WAIT[stage.key]) return null;
+      return { key: 'cqapproved:' + id, kind: 'approved', cls: 'good', score: 79, when: at(q.decidedAt) || sent, q: q,
+        t: quoteWho(q) + ' approved ' + quoteNo(q), s: stage && (stage.key === 'ordered' || stage.key === 'exception') ? (stage.label || 'In Omega Logic, waiting for its price') + '.' : 'Approved' + (at(q.decidedAt) ? ' ' + dateOf(at(q.decidedAt)) : '') + '. The order has not reached Omega Logic yet: retry the hand-off on the Quote Desk.', cta: 'Track', href: QUOTES };
+    }
+    if (!open) return null;
+    var exp = left != null && left <= 3 ? (left <= 1 ? 'expires within a day' : 'expires in ' + plural(left, 'day', 'days')) : '';
+    if (viewed && now - viewed >= 3 * DAY) return { key: 'cqfollow:' + id, kind: 'follow', cls: 'warn', score: 71, when: viewed, q: q,
+      t: quoteWho(q) + ' opened ' + quoteNo(q) + ' ' + plural(days(viewed, now), 'day', 'days') + ' ago and has not decided', s: 'Viewed ' + plural(Math.max(1, n(q.viewCount)), 'time', 'times') + (exp ? '; it ' + exp : '') + '. Follow up.', cta: 'Follow up', href: QUOTES };
+    if (exp) return { key: 'cqexpiring:' + id, kind: 'expiring', cls: 'warn', score: 48, when: valid, q: q,
+      t: quoteNo(q) + ' for ' + quoteWho(q) + ' ' + exp, s: (viewed ? 'Opened, no decision yet.' : 'Not opened yet.') + ' Resend it for a fresh link, or let it lapse.', cta: 'Open', href: QUOTES };
+    if (!viewed && sent && now - sent >= 5 * DAY) return { key: 'cqunopened:' + id, kind: 'unopened', cls: '', score: 41, when: sent, q: q,
+      t: quoteWho(q) + ' has not opened ' + quoteNo(q), s: 'Sent ' + plural(days(sent, now), 'day', 'days') + ' ago. Check the address, or resend it.', cta: 'Open', href: QUOTES };
+    return null;
+  }
+  /* three or more of a kind are one row (never fewer, so these are plurals) */
+  var QUOTE_MANY = {
+    approved: function (k) { return k + ' approved quotes wait in Omega Logic'; },
+    follow: function (k) { return k + ' customers opened your quotes and have not decided'; },
+    expiring: function (k) { return k + ' of your quotes expire within 3 days'; },
+    unopened: function (k) { return k + ' quotes sent 5 or more days ago have not been opened'; }
+  };
+  function quoteRows(list, now) {
+    var by = { approved: [], follow: [], expiring: [], unopened: [] }, out = [];
+    (list || []).forEach(function (q) { var r = q ? quoteRow(q, now) : null; if (r) by[r.kind].push(r); });
+    Object.keys(by).forEach(function (k) {
+      var rows = by[k];
+      if (rows.length < 3) { out = out.concat(rows); return; }
+      var oldest = rows.reduce(function (m, r) { return r.when && (!m || r.when < m) ? r.when : m; }, 0);
+      out.push({ key: 'cq' + k, kind: k, cls: rows[0].cls, score: rows[0].score, when: oldest, t: QUOTE_MANY[k](rows.length),
+        s: rows.slice(0, 3).map(function (r) { return quoteWho(r.q); }).join(', ') + (rows.length > 3 ? ' and ' + (rows.length - 3) + ' more' : '') + '.', cta: 'Quote Desk', href: QUOTES });
+    });
+    return out.map(function (r) { var x = {}; Object.keys(r).forEach(function (k) { if (k !== 'q' && k !== 'kind') x[k] = r[k]; }); return x; });
+  }
+
   /* the one-line state of a deal, for a card */
   function financeNote(f, now) {
     var st = f.status || 'draft', open = openOffers(f);
@@ -279,7 +350,7 @@
     /* my to-dos */
     var mine = todos.filter(function (x) { return !x.done && low(x.assignee) === me; }), overdue = 0, soon = 0;
     mine.forEach(function (x) {
-      var due = at(x.due), late = due && due < now, near = due && !late && due - now <= 3 * DAY;
+      var due = dueAt(x.due), late = due && due < now, near = due && !late && due - now <= 3 * DAY;
       if (late) overdue++; else if (near) soon++;
       push({ key: 'todo:' + (x.id || x.text), cls: late ? 'hot' : near ? 'warn' : '', score: late ? 85 : near ? 70 : 60, when: due || at(x.createdAt), t: x.text || 'To-do', s: (due ? (late ? 'Was due ' : 'Due ') + dateOf(due) : 'No date') + (x.createdBy && low(x.createdBy) !== me ? ' · from ' + String(x.createdBy).split('@')[0] : ''), cta: 'Team', act: { kind: 'team' } });
     });
@@ -299,6 +370,9 @@
       if (answered.length) push({ key: 'quotes:' + (f.id || pn), cls: 'good', score: 72, when: made, t: plural(answered.length, 'vendor', 'vendors') + ' answered your ' + pn + ' request', s: 'Compare and accept one to reveal who they are.', cta: 'Compare', href: '/rfq.html' });
       else if (rec.length && !decided.length && made && now - made >= 5 * DAY) push({ key: 'silent:' + (f.id || pn), cls: '', score: 40, when: made, t: 'No vendor has answered ' + pn + ' yet', s: 'Sent ' + plural(days(made, now), 'day', 'days') + ' ago to ' + plural(rec.length, 'vendor', 'vendors') + '.', cta: 'Open', href: '/rfq.html' });
     });
+    /* the proposals this workspace sent its own customers */
+    var cq = (input.customerQuotes || []).filter(Boolean);
+    quoteRows(cq, now).forEach(push);
     var newRefs = referrals.filter(function (r) { return r.status === 'new' || !r.status; }), openRefs = referrals.filter(function (r) { return ['new', 'reviewing', 'quoting', 'quoted'].indexOf(r.status || 'new') >= 0; });
     if (newRefs.length) {
       var oldestRef = newRefs.reduce(function (m, r) { var a = at(r.createdAt); return a && (!m || a < m) ? a : m; }, 0);
@@ -353,13 +427,18 @@
     var fresh = projects.filter(function (p) { var c = at(p.createdAt); return c && now - c <= 7 * DAY; }).length;
     var online = projects.filter(function (p) { return p.stage === 'online'; }), pipeline = active.reduce(function (s, p) { return s + n(p.capex); }, 0), onlineCapex = online.reduce(function (s, p) { return s + n(p.capex); }, 0);
     var unpriced = active.filter(function (p) { return !(n(p.capex) > 0); }).length;
-    var review = overdue + soon + rows.filter(function (r) { return r.key === 'price' || r.key === 'referrals' || /^quotes:/.test(r.key); }).length;
+    var review = overdue + soon + rows.filter(function (r) { return r.key === 'price' || r.key === 'referrals' || /^quotes:/.test(r.key) || /^cqfollow/.test(r.key); }).length;
     var kpis = [
       { key: 'flight', value: String(flight), label: 'Projects in flight', delta: fresh ? '+' + fresh + ' this week' : flight ? (developing ? developing + ' past candidate' : 'all candidates') : (online.length ? plural(online.length, 'online', 'online') : ''), tone: fresh ? 'up' : '' },
       { key: 'review', value: String(review), label: 'Awaiting your review', delta: overdue ? plural(overdue, 'overdue', 'overdue') : '', tone: overdue ? 'warn' : '' },
       { key: 'capex', value: pipeline > 0 || !flight ? money(pipeline) : '—', label: 'Pipeline capex', delta: unpriced ? plural(unpriced, 'project not priced yet', 'projects not priced yet') : online.length ? money(onlineCapex) + ' online' : '', tone: '' }
     ];
     if (capSide && (capSide.room.length || capSide.market.length)) { var owe = capSide.room.filter(function (x) { return !x.offer && !x.awarded; }).length; kpis.push({ key: 'dealroom', value: String(capSide.room.length), label: 'In your deal room', delta: (owe ? owe + ' need an offer · ' : '') + capSide.market.length + ' on the market', tone: owe ? 'up' : '', href: dealHref(null, capSide.room.length ? 'room' : 'market') }); }
+    else if (cq.length) {
+      /* Quotes out: sent or viewed and still open; beside it what was approved and what was opened */
+      var cqOut = cq.filter(function (q) { var v = until(q.validUntil); return (q.status === 'sent' || q.status === 'viewed') && !(v && v < now); }), won = cq.filter(function (q) { return q.status === 'approved'; }).length, seen = cqOut.filter(function (q) { return q.status === 'viewed' || at(q.viewedAt); }).length;
+      kpis.push({ key: 'customerquotes', value: String(cqOut.length), label: 'Quotes out', delta: [won ? won + ' approved' : '', seen ? seen + ' opened' : ''].filter(Boolean).join(' · '), tone: won ? 'up' : '', href: QUOTES });
+    }
     else if (sent.length) kpis.push({ key: 'quotes', value: String(quotedBack), label: 'Quotes back', delta: 'of ' + totalRecipients + ' sent', tone: quotedBack ? 'up' : '' });
     else if (received.length) kpis.push({ key: 'price', value: String(toPrice.length), label: 'Requests to price', delta: (received.length - toPrice.length) + ' quoted', tone: toPrice.length ? 'warn' : '' });
     else if (referrals.length) kpis.push({ key: 'inbox', value: String(newRefs.length), label: 'New quote requests', delta: openRefs.length + ' open', tone: newRefs.length ? 'warn' : '' });

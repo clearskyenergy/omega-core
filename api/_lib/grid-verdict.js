@@ -14,7 +14,17 @@
    What it never does: invent a figure. A circuit with no published hosting
    is a study, never a fit; a substation with no voltage on record says so;
    the queue is SUBTRACTED, because the utility publishes hosting gross of
-   the DER already waiting on the feeder. */
+   the DER already waiting on the feeder.
+
+   National sources (api/hosting-capacity.js, 2026-10-17) add four honest
+   variations, all optional, none changing the ComEd sentence above:
+     queuedKw null    the queue is not published with this figure: nothing
+                      is subtracted and the sentence says so (never a 0);
+     queueNetted      the utility's figure is already net of its queue: it
+                      is shown, not subtracted twice;
+     band             a published range is judged at its low end;
+     basis 'gen'|'load' for a battery: judged, but the sentence says which
+                      side was published and that it is not a storage figure. */
 'use strict';
 
 var VERSION = 'grid-verdict-v1';
@@ -90,6 +100,20 @@ function substation(s, unit) {
   return out;
 }
 
+/* A published range (JCP&L's "Less than 100 kW AC", LADWP's kVA bins) is
+   judged at its LOW end; the high end is never read as room. */
+function bandOf(b) {
+  if (!b || typeof b !== 'object') return null;
+  var lo = num(b.minKw), hi = num(b.maxKw);
+  if (lo == null || lo < 0) return null;
+  return { minKw: round(lo), maxKw: hi == null || hi < lo ? null : round(hi), text: String(b.text || '').slice(0, 40) };
+}
+function bandWords(b) {
+  return b.maxKw == null ? kwFull(b.minKw) + ' or more' : Math.round(b.minKw).toLocaleString('en-US') + '–' + kwFull(b.maxKw);
+}
+var BASES = ['storage', 'gen', 'load'];
+var MODES = ['storage', 'export', 'load'];
+
 function circuit(c, unit) {
   var base = { state: 'study', label: 'Needs a study' };
   if (!c || typeof c !== 'object') {
@@ -97,28 +121,54 @@ function circuit(c, unit) {
     base.reason = 'no-circuit';
     return base;
   }
+  /* A queue the utility does not publish is UNKNOWN, never zero: null (or
+     absent) says so in the sentence and subtracts nothing. A queue the
+     utility has already netted out of its figure (queueNetted) is shown and
+     not subtracted twice. */
   var published = num(c.publishedKw), queued = num(c.queuedKw);
-  if (queued == null || queued < 0) queued = 0;
+  var queueKnown = queued != null;
+  if (queueKnown && queued < 0) queued = 0;
+  var netted = queueKnown && c.queueNetted === true;
+  var band = bandOf(c.band);
+  var basis = BASES.indexOf(c.basis) >= 0 ? c.basis : null;
+  var mode = MODES.indexOf(c.mode) >= 0 ? c.mode : null;
+  if (published == null && band) published = band.minKw;
   var out = { utility: String(c.utility || '').slice(0, 60), id: String(c.id || c.feeder || '').slice(0, 40),
               substation: String(c.substation || c.sub || '').slice(0, 80),
-              publishedKw: round(published), queuedKw: round(queued),
-              addressResolved: c.addressResolved === true, grain: String(c.grain || '').slice(0, 80) };
+              publishedKw: round(published), queuedKw: queueKnown ? round(queued) : null,
+              addressResolved: c.addressResolved === true, grain: String(c.grain || '').slice(0, 80),
+              queueNetted: netted, basis: basis, band: band, source: String(c.source || '').slice(0, 80) };
   if (published == null) {
     out.state = 'study'; out.label = 'Needs a study'; out.reason = 'no-published-figure';
     out.netKw = null; out.headroomKw = null;
     out.say = 'The utility publishes no hosting figure for this circuit; it needs a study.';
     return out;
   }
-  var net = Math.max(0, published - queued);
+  var net = netted || !queueKnown ? published : Math.max(0, published - queued);
   out.netKw = round(net);
   out.headroomKw = unit.kw != null ? round(net - unit.kw) : null;
   var circ = out.id ? 'Circuit ' + out.id : 'The circuit';
   /* the room first, the headline after: a rep never reads the oversold number first */
-  var room = circ + ' has about ' + kwFull(net) + ' of room: ' + kwFull(published) + ' published, less ' + kwFull(queued) + ' already queued.';
+  var pub = band ? 'published as a band of ' + bandWords(band) + ', judged at its low end' : kwFull(published) + ' published';
+  var room = netted ? circ + ' has about ' + kwFull(net) + ' of room: ' + pub + ', net of the queue as published' + (queued > 0 ? ' (' + kwFull(queued) + ' queued)' : '') + '.'
+    : (!queueKnown ? circ + ' has about ' + kwFull(net) + ' of room: ' + pub + '; no queue is published with this figure, so nothing was subtracted.'
+    : circ + ' has about ' + kwFull(net) + ' of room: ' + pub + ', less ' + kwFull(queued) + ' already queued.');
+  /* A one-direction figure for a battery is judged, but never read as a
+     storage figure: it says which side the utility published. */
+  var storageAsk = !mode || mode === 'storage';
+  /* sideUnanswered: the other side IS published but its layer did not answer
+     this time (api/hosting-capacity.js partial reading) — said so, never
+     "not published" */
+  var missed = c.sideUnanswered === true;
+  var direction = basis === 'gen' && storageAsk ? (missed ? ' Only the generation (export) side answered for this circuit; the charging side did not this time, so this is not a storage figure yet.'
+      : ' Published for generation (export) only; the charging side is not published for this circuit, so this is not a storage figure.')
+    : (basis === 'load' && storageAsk ? (missed ? ' Only the load (charging) side answered for this circuit; the export side did not this time, so this is not a storage figure yet.'
+      : ' Published for load (charging) only; the export side is not published for this circuit, so this is not a storage figure.') : '');
+  if (direction) out.direction = basis === 'gen' ? 'gen-only' : 'load-only';
   if (unit.kw == null) {
     out.state = net >= SMALLEST_OFFER_KW ? 'unsized' : 'study';
     out.label = out.state === 'study' ? 'Needs a study' : 'Choose a unit';
-    out.say = room + (out.state === 'study' ? ' That is too little to offer a unit without a study.' : ' Choose a unit in the BESS Guided Build to judge it.');
+    out.say = room + (out.state === 'study' ? ' That is too little to offer a unit without a study.' : ' Choose a unit in the BESS Guided Build to judge it.') + direction;
     out.reason = out.state === 'study' ? 'too-little-room' : 'no-unit';
     return out;
   }
@@ -134,6 +184,7 @@ function circuit(c, unit) {
     out.state = 'study'; out.label = 'Needs a study'; out.reason = 'too-little-room';
     out.say = room + ' That is too little for the ' + kwWords(unit.kw) + ' unit; it needs a study or a service upgrade.';
   }
+  out.say += direction;
   if (!out.addressResolved) out.say += ' This is the best circuit in the surrounding block, not confirmed for this parcel.';
   return out;
 }

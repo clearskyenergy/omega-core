@@ -195,9 +195,11 @@ function openOmegaCore(){
 <script src="/omega-comed-layers.js"></script>
 <script src="/omega-grid-verdict.js"></script>
 <script src="/omega-grid-panel.js"></script>
-<!-- Omega Prime's "Open in Site Map" (?from=prime): fills the configured
-     unit in from this page's own catalog entry and opens the BESS Guided
-     Build. Never places anything itself. -->
+<!-- Omega Prime → Site Map (2026-10-17): a Prime project's layout (area,
+     unit, transformer, disconnect, service, conduit) built with this page's
+     own functions once it renders; the Guided Build only when Prime placed
+     no unit. omega-prime-project.js is its pure half. -->
+<script src="/omega-prime-project.js"></script>
 <script src="/omega-prime-handoff.js"></script>
 <!-- The autopilot below runs only when the page is opened with ?address= and
      ?auto=, which mission.html does and a person sitting in the editor cannot.
@@ -1794,6 +1796,10 @@ window.onerror = function(msg, src, line, col, err) {
   <span class="pn-saved" id="pn-saved"></span>
   <!-- omega-editor-plan.js paints the plan chip here once the plan is known -->
   <span id="omega-plan" hidden></span>
+  <!-- OMEGA PRIME (2026-10-17): omega-prime-handoff.js paints a project made in
+       Prime's link here (back to Omega Prime, the proposal's status, and
+       Rebuild from Omega Prime when it can do something); hidden otherwise -->
+  <span id="omega-prime-nav" hidden></span>
   <!-- Auth is handled by the host platform; sign-in UI hidden. Elements kept
        (display:none) so existing auth/save JS references resolve safely. -->
   <div style="display:none">
@@ -11517,11 +11523,19 @@ function _ppCollectFleet(){
          cost sheet quietly under-total. */
       out.anyMissingCost=true;
       var gkey=el.bessModel || el.label || 'BESS Assembly (guided)';
+      /* OMEGA PRIME (2026-10-17): the catalog key and make a unit built from
+         Prime carries, so the Run prices a catalog unit by its key (the R60 at
+         its catalog price, not $85/kWh). A Guided Build element has neither
+         and keeps its old keying (null / ''). */
+      var gCk=el.catalogKey||null;
+      var gMfr=el.bessMfr || (gCk && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[gCk] && BESS_CATALOG[gCk].mfr) || '';
       if(!out.byModel[gkey]){
         out.byModel[gkey]={ qty:0, kwh:gkwh, kw:gkw, cost:null,
-                            groupKwh:0, groupKw:0, groupCost:0, mixed:false };
+                            groupKwh:0, groupKw:0, groupCost:0, mixed:false, catalogKey:gCk, mfr:gMfr };
       }
       var G=out.byModel[gkey];
+      if(!G.catalogKey && gCk) G.catalogKey=gCk;
+      if(!G.mfr && gMfr) G.mfr=gMfr;
       G.qty++;
       G.groupKwh+=gkwh; G.groupKw+=gkw;
       if(G.kwh!==gkwh || G.kw!==gkw) G.mixed=true;
@@ -26257,6 +26271,10 @@ async function saveProject(){
          the OWNER. never moves." A legacy doc with no orgId is the backfill
          script's job, not something to guess at from the current session. */
       delete payload.orgId;
+      /* OMEGA PRIME (2026-10-17): a drawing built from Prime's layout says so
+         on the same write (omega-prime-handoff.js sets S.primeBuild). These two
+         fields only, never the rest of prime.*; cleared once the save lands. */
+      var _primeBuild=(S.primeBuild&&S.primeBuild.at)?S.primeBuild:null; if(_primeBuild){ payload['prime.builtAt']=_primeBuild.at; payload['prime.builtHash']=String(_primeBuild.hash||''); }
       _shedIfOversize(payload);
       /* NEVER WRITE OVER A NEWER SAVE (Tommy, 2026-10-14: a drawing saved at
          6:05 PM was back to an older one by 8:59 PM — an older tab of the
@@ -26286,6 +26304,8 @@ async function saveProject(){
     }catch(e){}
     try { window._lastSaveError = null; } catch(_e){}
     _setSaved('saved');
+    /* OMEGA PRIME (2026-10-17): the build marks landed with this save */
+    if(_primeBuild && S.primeBuild===_primeBuild) S.primeBuild=null;
     window._workDirty = false;   // successfully persisted
     /* the portfolio site this project belongs to reads the design again */
     try{ if(typeof omegaSiteDesignPush==='function') omegaSiteDesignPush(); }catch(_e){}
@@ -26614,6 +26634,13 @@ async function _loadProject(id){
     /* the grid answer (saved beside omegaCore); reset when the project has
        none so one site's circuit never follows another project */
     S.grid          = (d.grid          && typeof d.grid==='object')          ? d.grid          : null;
+    /* OMEGA PRIME (2026-10-17): what Prime set up, READ ONLY, for
+       omega-prime-handoff.js to build prime.layout into this drawing. Never
+       saved back; a save carries only prime.builtAt/builtHash (S.primeBuild).
+       Both reset on every load, so one project's Prime record never follows
+       another. */
+    S.prime         = (d.prime         && typeof d.prime==='object')         ? d.prime         : null;
+    S.primeBuild    = null;
     /* THE SITE THIS PROJECT BELONGS TO (the portfolio register's
        send-to-editor writes siteId/siteOrgId on the record). Read so a save
        can tell the site to read the design again (omegaSiteDesignPush);
@@ -26831,6 +26858,10 @@ async function _loadProject(id){
       _loadReady = true;
       _setSaved('saved');
       _watchRecord(id);
+      /* OMEGA PRIME (2026-10-17): the drawing is on the canvas and saves are
+         safe; omega-prime-handoff.js builds a Prime project's layout on this,
+         never earlier (the top of doRender clears S). */
+      try{ document.dispatchEvent(new CustomEvent('omega:project-rendered',{detail:{id:id, doc:d}})); }catch(e){}
     };
 
     // -- Restore frozen map from localStorage -----------------
@@ -65994,6 +66025,11 @@ function _elFootprintFt(el){
   /* Set by the insert layer; fall back to the catalog, then to whatever
      the element was drawn at, so an old drawing still scales. */
   var lf = +el.lf || 0, wf = +el.wf || 0;
+  /* OMEGA PRIME (2026-10-17): a unit whose maker released no footprint
+     (primeFootprint 'none', built by omega-prime-handoff.js) is a MARKER of
+     its own size in feet, so it rescales with the map inside the 5 ft gap
+     Prime left; it carries no lf/wf for a reader to take as a footprint. */
+  if(!(lf>0) && el.primeFootprint==='none' && +el.primeMarkFt>0){ lf=+el.primeMarkFt; wf=+el.primeMarkFt; }
   /* A guided-build unit placed before footprints were recorded on the
      element still names its catalog entry; take the footprint and the
      symbol floor from there rather than from the pixels it was drawn at. */

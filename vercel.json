@@ -295,6 +295,8 @@
     "api/site-crm.js": { "maxDuration": 60, "includeFiles": "vendor/pdf-lib/1.17.1/pdf-lib.min.js" },
     "api/site-catalog.js": { "maxDuration": 60 },
     "api/comed-proxy.js": { "maxDuration": 30 },
+    "api/hosting-capacity.js": { "maxDuration": 30 },
+    "api/customer-quote.js": { "maxDuration": 30, "includeFiles": "{omega-prime-project.js,omega-cleancell-catalog.js,omega-bess-products.js}" },
     "api/logic-worker.js": { "maxDuration": 60 },
     "api/billing-run.js": { "maxDuration": 60 },
     "api/logic-office.js": { "maxDuration": 60 },
