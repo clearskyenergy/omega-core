@@ -125,9 +125,9 @@ async function benchToBms(p) {
 var SHOTS = [
   /* the Omega Logic app — guides/Omega-Logic-App.pdf */
   { name: 'office-hub', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#hubs .hexhub [data-hub="sales"]', what: 'Home: the hex hub with its badges, top of the page',
-    steps: async function (p, h) { await h.wait('#today-kv'); } },
-  { name: 'office-hub-panels', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#hub-open', what: 'Home scrolled to the panels under the hub, Sales open',
-    steps: async function (p, h) { await h.wait('#today-kv'); await h.click('#hub-panels [data-hpanel="sales"]'); await h.wait('#hub-open'); await h.settle(); await h.scrollTo('#hub-panels'); } },
+    steps: async function (p, h) { await h.wait('#today-path'); } },
+  { name: 'office-hub-panels', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#hub-open', what: 'Home scrolled to the panel under the hub, Sales open from its hexagon',
+    steps: async function (p, h) { await h.wait('#today-path'); await h.click('#hubs .hexhub [data-hub="sales"]'); await h.wait('#hub-open'); await h.settle(); await h.scrollTo('#hub-panels'); } },
   { name: 'office-customers', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#cust-body [data-cust]', what: 'the Customers tab: the account list',
     steps: async function (p, h) { await h.click('#nav [data-tab="customers"]'); } },
   { name: 'office-account', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#cust-seg [data-sec="overview"]', what: 'one customer account, Overview',
@@ -153,7 +153,7 @@ var SHOTS = [
     steps: async function (p, h) { await h.click('#nav [data-tab="sites"]'); await h.wait('#rc-scan'); await h.settle(); await h.scrollTo('#view h2', /^Receive a load/); } },
   { name: 'office-passport', page: '/app-sandbox/office', who: 'company', signIn: 'staff', ready: '#su-body h2', what: 'the unit passport opened from Sites: custody, site, coverage, the moves that apply, history',
     steps: async function (p, h) { await h.click('#nav [data-tab="sites"]'); await h.wait('#su-serial'); await p.fill('#su-serial', 'EX418-26-44192'); await h.click('#su-go'); await h.wait('#su-body h2'); await h.settle(); await p.evaluate(function () { window.scrollTo(0, 0); }); } },
-  { name: 'desktop-office', page: '/omega-logic?org=' + WHO.company.domain, who: 'company', signIn: 'desktop', view: DESKTOP, ready: '#hub [data-hub], .logic-flow a', what: 'the desktop office (omega-logic.html) in a 1280×800 window, hub at the top',
+  { name: 'desktop-office', page: '/omega-logic?org=' + WHO.company.domain, who: 'company', signIn: 'desktop', view: DESKTOP, ready: '#hub [data-hub], #pipe .lg-path', what: 'the desktop office (omega-logic.html) in a 1280×800 window: the path\'s bar, the hub and What needs you',
     steps: async function (p, h) { if (await p.evaluate(function () { return !!window.OmegaHexHub; })) await h.wait('#hub .hexhub [data-hub]'); } },
   { name: 'customer-app', page: '/app-sandbox/customer', who: 'company', signIn: 'customer', ready: '#hub .hexhub [data-hub]', what: 'the supplier\'s customer app, home (its hub), as the office sees it' },
   /* the desktop pages the app sends a person to, in a 1280×800 window, signed

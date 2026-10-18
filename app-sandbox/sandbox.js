@@ -2822,7 +2822,173 @@ function finance(orders, owner) {
   return f;
 }
 
-module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, billingOf: billingOf, officeAdmin: officeAdmin, access: access, actions: actions, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars };
+/* ── THE PATH (2026-10-17, Tommy: "make it less complicated all streamlined
+   just like we did with" Omega Prime) ─────────────────────────────────────
+   One bar of seven steps an order walks in one direction, the way Prime
+   walks a site: Price → Deposit → Build → Final payment → Ship → Deliver →
+   On site, then Complete. path() says, per order and for the person
+   looking, which step it is on, the verdict in one sentence, and the ONE
+   next action with whose it is. The desktop office, the Omega Logic app
+   and Today all read it; none of them works it out again.
+
+   It is built on the rules above and on nothing new: stageOf()/actions()
+   (D1: who prices and accepts), billingOf() (who issues an invoice), the
+   order's invoices (issue versus collect), its delivery legs, and the
+   custody of its units (custodyCounts below). It decides nothing a gate
+   decides: every button it names is still refused by its own endpoint when
+   the caller may not press it. `who` is said from the viewer's side:
+     you       the person looking may do it now (Today counts it)
+     admin     the workspace's owner or an administrator
+     clearsky  ClearSky (an order billed through its QuickBooks, a
+               single shipment, an exception only ClearSky reviews)
+     customer  the customer (a payment, the site of a unit)
+     plant     the plant floor
+     carrier   the load is on the road
+     auto      Omega Logic does it by itself (a queued invoice, a release)
+   `control` names the thing to press, which each screen maps to its own
+   button: price, accept, issue-deposit, record-deposit, issue-balance,
+   record-balance, work-order, freight, ship, deliver, confirm, site, fix.
+   "On site" is every shipping unit bound to a site (custody.siteId): the
+   coverage binds there, and it is what Omega Prime's last stage reads as
+   delivered and on its site. Confirming what a customer declared is the
+   office's check and never holds the order back from Complete. */
+var PATH = [
+  { key: 'price', label: 'Price', ask: 'What will the customer pay?' },
+  { key: 'deposit', label: 'Deposit', ask: 'Has the deposit arrived?' },
+  { key: 'build', label: 'Build', ask: 'Is every unit built and tested?' },
+  { key: 'final', label: 'Final payment', ask: 'Is it paid in full?' },
+  { key: 'ship', label: 'Ship', ask: 'Is it on a truck?' },
+  { key: 'deliver', label: 'Deliver', ask: 'Did it arrive whole?' },
+  { key: 'site', label: 'On site', ask: 'Is every unit on its site?' }
+];
+var STEP_AT = {}; PATH.forEach(function (p, i) { STEP_AT[p.key] = i; });
+/* custody statuses (api/_lib/custody.js STATUSES) past the road, and past
+   the receiving inspection; scripts/test-office-stage.js holds them to it */
+var ARRIVED = ['delivered', 'received', 'assigned', 'installed', 'commissioned', 'in_service', 'rma_open', 'returned', 'replaced', 'decommissioned'];
+var RECEIVED = ARRIVED.slice(1);
+/* What the custody of one order's units says, for path(): `units` are the
+   order's plant_units records (only shipping units count). */
+function custodyCounts(units) {
+  var c = { units: 0, left: 0, arrived: 0, received: 0, bound: 0, declared: 0 };
+  (Array.isArray(units) ? units : []).forEach(function (u) {
+    if (!u || !u.shipUnit) return;
+    var cu = (u.custody && typeof u.custody === 'object') ? u.custody : {}, st = text(cu.status, 40);
+    c.units++;
+    if (st) c.left++;
+    if (ARRIVED.indexOf(st) >= 0) c.arrived++;
+    if (RECEIVED.indexOf(st) >= 0) c.received++;
+    /* declared: on a site nobody at the office has confirmed (custody.confirmation) */
+    if (cu.siteId) { c.bound++; if (!cu.confirmedAt) c.declared++; }
+  });
+  return c;
+}
+function invState(inv, mode) {
+  inv = inv || {};
+  var amount = Number(inv.amountCents) || 0, paid = Number(inv.paidCents) || 0;
+  var done = !amount || inv.satisfied === true || inv.status === 'not_required' || inv.status === 'paid';
+  return { amount: amount, paid: paid, done: done, toIssue: !done && mode === 'tenant' && !inv.id };
+}
+function sentence(v) { v = text(v, 240); return !v || /[.!?]$/.test(v) ? v : v + '.'; }
+function path(o, acc, billing, units) {
+  o = o || {}; acc = acc || {};
+  var act = actions(o, acc, billing), st = act.stage, l = o.logic || null, inv = (l && l.invoices) || {}, mode = billingOf(o, billing);
+  var status = text(o.status, 40), office = acc.clearsky === true || acc.admin === true;
+  var mine = office ? 'you' : 'admin', cs = acc.clearsky === true ? 'you' : 'clearsky';
+  var legs = o.delivery && Array.isArray(o.delivery.legs) ? o.delivery.legs : [];
+  var moving = legs.filter(function (g) { return g && ['in_transit', 'delivered', 'accepted', 'exception'].indexOf(g.status) >= 0; });
+  /* no shipping unit found for the order (none read, or older units that do
+     not carry its id) is "not known", never "nothing to deliver" */
+  var u = units && typeof units === 'object' && Number(units.units) > 0 ? units : null;
+  function out(step, state, say, next) {
+    var at = step === 'complete' ? PATH.length : (STEP_AT[step] == null ? null : STEP_AT[step]);
+    return { step: step, at: at, of: PATH.length, label: step === 'complete' ? 'Complete' : (at == null ? '' : PATH[at].label), state: state, say: say,
+      next: next ? { text: next[0], who: next[1] || null, control: next[2] || null } : null };
+  }
+  /* where it stands with nothing in the way: the step under an exception */
+  function under() {
+    if (status === 'complete') return 'complete';
+    if (status === 'shipped' || moving.length) return 'deliver';
+    if (!l || !l.acceptedAt) return 'price';
+    if (!l.releasedAt) return (inv.deposit && invState(inv.deposit, mode).done) || l.creditRelease ? 'build' : 'deposit';
+    if (!inv.balance) return 'build';
+    return invState(inv.balance, mode).done ? 'ship' : 'final';
+  }
+  if (status === 'cancelled') return out(null, 'cancelled', 'Cancelled. ' + sentence(st.next), st.owner ? ['Review the refund and the stock', cs, 'fix'] : null);
+  if (st.key === 'exception') {
+    /* a payment hold the workspace put on its own self-billed order is lifted
+       by recording the payment again (receivables.recordPlan); every other
+       exception is ClearSky's to review, as the stage says */
+    var hold = l && l.paymentHold && mode === 'tenant';
+    return out(under(), 'attention', sentence(st.next.indexOf(st.label) === 0 ? st.next : st.label + ': ' + st.next),
+      hold ? ['Record the ' + (l.paymentHold.stage === 'balance' ? 'final payment' : 'deposit') + ' again, or release it on its PO', mine, 'record-' + (l.paymentHold.stage === 'balance' ? 'balance' : 'deposit')] : ['Review and resolve it', cs, 'fix']);
+  }
+  if (status === 'complete') return out('complete', 'complete', 'Complete.', null);
+  var total = l && l.commercial ? l.commercial.totalCents : null;
+  if (st.key === 'quote') {
+    var pw = act.can.price ? 'you' : act.waitingOn === 'admin' ? 'admin' : 'clearsky';
+    return out('price', 'ok', 'Not priced yet.', ['Approve the customer price', pw, 'price']);
+  }
+  if (st.key === 'priced') {
+    var aw = act.can.accept ? 'you' : act.waitingOn === 'admin' ? 'admin' : 'clearsky';
+    return out('price', 'ok', 'Priced' + (total != null ? ' at ' + dollars(total) : '') + ', not accepted yet.', ['Accept the order', aw, 'accept']);
+  }
+  var dep = invState(inv.deposit, mode), open = creditOpen(o);
+  function collect(which, s) {
+    var name = which === 'deposit' ? 'deposit' : 'final payment';
+    if (s.toIssue) return [which === 'deposit' ? 'Issue the deposit invoice' : 'Issue the final invoice', mine, 'issue-' + which];
+    return mode === 'tenant' ? ['Record the ' + name + ' when it arrives', 'customer', 'record-' + which] : ['ClearSky’s QuickBooks records the ' + name + ' when it is paid', 'customer', null];
+  }
+  if (st.key === 'deposit') {
+    if (!inv.deposit) return out('deposit', 'ok', 'Accepted. The deposit invoice is being made.', ['The deposit invoice is being made', 'auto', null]);
+    if (dep.toIssue) return out('deposit', 'ok', 'The deposit, ' + dollars(dep.amount) + ', is not invoiced yet.', collect('deposit', dep));
+    return out('deposit', 'ok', 'Awaiting the deposit: ' + dollars(dep.paid) + ' of ' + dollars(dep.amount) + ' received.', collect('deposit', dep));
+  }
+  if (st.key === 'release') return out('build', 'ok', sentence(st.next), ['Releasing to the plant', 'auto', null]);
+  if (st.key === 'production') {
+    if (open) return out('build', 'ok', 'In production. ' + sentence(st.next), collect('deposit', dep));
+    return out('build', 'ok', 'In production.', ['Building and testing every unit', 'plant', 'work-order']);
+  }
+  var bal = invState(inv.balance, mode);
+  if (st.key === 'balance' && !bal.done) {
+    if (bal.toIssue) return out('final', 'ok', 'Every unit passed. The final invoice, ' + dollars(bal.amount) + ', is not issued yet.', collect('balance', bal));
+    return out('final', 'ok', 'Awaiting the final payment: ' + dollars(bal.paid) + ' of ' + dollars(bal.amount) + ' received.', collect('balance', bal));
+  }
+  if (open) return out('final', 'ok', sentence(st.next), collect('deposit', dep));
+  /* paid in full (a $0 balance is paid): ship, then the road, then the site */
+  if (status !== 'shipped' && !moving.length) {
+    if (o.delivery) return out('ship', 'ok', 'Paid in full. Ready to ship.', ['Plan the freight and record the pickup', mine, 'freight']);
+    return out('ship', 'ok', 'Paid in full. Ready to ship.', ['Record the shipment', cs, 'ship']);
+  }
+  if (legs.some(function (g) { return g && g.status === 'exception'; })) return out('deliver', 'attention', 'The receiving inspection found a problem on a load.', ['Open the load and settle what was short or damaged', mine, 'deliver']);
+  if (!u) return out('deliver', 'ok', 'Shipped' + (o.shipment && o.shipment.carrier ? ' with ' + text(o.shipment.carrier, 80) : '') + '.', ['Follow its units in Sites & custody', null, 'site']);
+  /* part of the order is still at the plant: the rest of it ships first */
+  if (u.left < u.units) return out('deliver', 'ok', u.left + ' of ' + u.units + ' units shipped' + (u.arrived ? ', ' + u.arrived + ' delivered' : '') + '.',
+    o.delivery ? ['Record the pickup for the ' + (u.units - u.left) + ' still at the plant', mine, 'freight'] : ['Record the shipment', cs, 'ship']);
+  if (u.received < u.units) {
+    if (u.arrived > u.received) return out('deliver', 'ok', u.arrived + ' of ' + u.units + ' units delivered, ' + u.received + ' received.', ['Record the receiving inspection', mine, 'deliver']);
+    return out('deliver', 'ok', (u.units - u.arrived) + ' of ' + u.units + ' units on the way.', ['Record the delivery when it arrives', 'carrier', 'deliver']);
+  }
+  var confirm = u.declared ? ['Confirm the site' + (u.declared === 1 ? '' : 's') + ' the customer named', mine, 'confirm'] : null;
+  if (u.bound < u.units) return out('site', 'ok', u.bound + ' of ' + u.units + ' units on a site.', confirm || ['Waiting on the customer to name each unit’s site', 'customer', 'site']);
+  return out('complete', 'complete', 'Complete. Every unit is on its site.', confirm);
+}
+/* the bar's counts: how many of the shown orders stand on each step (an
+   order that needs attention counts on its step AND under attention) */
+function pipeline(orders) {
+  var p = { attention: 0, complete: 0, cancelled: 0 };
+  PATH.forEach(function (s) { p[s.key] = 0; });
+  (Array.isArray(orders) ? orders : []).forEach(function (o) {
+    var x = o && o.path; if (!x) return;
+    if (x.state === 'cancelled') { p.cancelled++; return; }
+    if (x.state === 'complete') { p.complete++; return; }
+    if (x.step && p[x.step] != null) p[x.step]++;
+    if (x.state === 'attention') p.attention++;
+  });
+  return p;
+}
+
+module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, billingOf: billingOf, officeAdmin: officeAdmin, access: access, actions: actions, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars,
+  PATH: PATH, path: path, custodyCounts: custodyCounts, pipeline: pipeline };
 
   };
   defs['api/_lib/plant-release.js'] = function (module, exports, require) {
@@ -5553,7 +5719,10 @@ function views(state) {
   function officeJson(opts) {
     opts = opts || {};
     var billing = opts.billing === 'quickbooks' ? 'quickbooks' : 'tenant', who = S.access(false, { role: opts.role || 'admin', status: 'active' }, true);
+    /* the path (office-stage.path), with the custody of its units for an order past Ship, as api/logic-office.js reads them */
+    var far = function (o) { var k = S.stageOf(o, { billing: billing }).key; return k === 'ship' || k === 'shipped' || (o.delivery && (o.delivery.legs || []).some(function (g) { return g && g.status && g.status !== 'planned'; })); };
     var orders = state.orders.map(function (o) { var a = S.actions(o, who, billing); return Object.assign({}, o, { stage: a.stage, can: a.can, waitingOn: a.waitingOn, billing: S.billingOf(o, billing), poNumber: R.poOf(o),
+      path: S.path(o, who, billing, far(o) ? S.custodyCounts(state.units.filter(function (u) { return u.orderId === o.id; })) : null),
       logic: o.logic ? Object.assign({}, o.logic, { pricedAt: o.logic.pricedAt || o.logic.createdAt || null, pricedBy: o.logic.pricedBy || null, acceptedBy: o.logic.acceptedBy || null }) : null }); });
     var rt = R.totals(R.rows(ledgerEntries().map(function (e) { return { id: e.id, order: e.order, account: null }; }), NOW, { provider: 'stripe' })); delete rt.byCustomer;
     var open = state.intake.filter(function (p) { return !p.convertedAt && p.status !== 'po_declined'; });
@@ -5561,7 +5730,7 @@ function views(state) {
     return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 }, accounting: billing },
       access: { role: who.role, prices: who.admin ? 'workspace' : 'none', team: who.admin }, billing: billing, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
       links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
-      orders: orders, totals: S.totals(orders), receivables: rt,
+      orders: orders, totals: S.totals(orders), receivables: rt, path: S.PATH, pipeline: S.pipeline(orders),
       intake: { review: open.filter(function (p) { return p.status !== 'po_needs_information'; }).length, needsInfo: open.filter(function (p) { return p.status === 'po_needs_information'; }).length, declined: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_declined'; }).length,
         waiting: open.slice(0, 20).map(function (p) { return { id: p.id, customerId: p.customerId || null, company: company(p.customerId), poNumber: p.poNumber || '', status: p.status, createdAt: p.createdAt || null }; }) },
       limited: false };

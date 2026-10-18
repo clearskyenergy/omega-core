@@ -50,6 +50,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Omega Prime · ClearSky-OMEGA</title>
 <script src="/omega-splash.js?v=1"></script>
+<script src="/omega-experience.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
@@ -293,6 +294,8 @@ button{font:inherit;color:inherit}
 .qrow .qa .ghost{padding:5px 10px;font-size:11.5px}
 .pq-rep .qrow{padding:8px 10px}
 </style>
+<link rel="stylesheet" href="/omega-prime-mobile.css">
+<script src="/omega-prime-pwa.js"></script>
 </head>
 <body>
 <div id="app">
@@ -662,7 +665,14 @@ button{font:inherit;color:inherit}
   function siteIcon() { return L.divIcon({ className: '', html: '<div style="width:16px;height:16px;border-radius:50%;background:#4ed4d0;border:3px solid #fff;box-shadow:0 0 0 6px rgba(78,212,208,.35)"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }); }
 
   /* ── START ────────────────────────────────────────────────────────── */
-  (function () { var q = qp('q') || qp('addr') || qp('address'); if (q) $('#addr').value = q; })();
+  (function () {
+    var q = qp('q') || qp('addr') || qp('address'); if (q) $('#addr').value = q;
+    /* Site Map's Push to Prime / Push to Logic (main, #342): addr is the
+       site, project the editor's own id. A project Prime made resumes as
+       itself (boot → resumePushed); any other starts Prime on its address,
+       as a new Prime project. step=logic is Track here. */
+    var pid = qp('project'); if (pid && /^[A-Za-z0-9_-]{1,64}$/.test(pid)) S.editorProjectId = pid;
+  })();
   $('#addr').oninput = function () { S.pending = this.value.trim(); guide(); };
   $('#addr').onkeydown = function (e) { if (e.key === 'Enter') $('#go').click(); };
   function siteLines() {
@@ -1110,6 +1120,22 @@ button{font:inherit;color:inherit}
   }
 
   /* /omega-prime?id=: the whole session back from the record */
+  /* Push to Prime / Push to Logic from Site Map: the project was made in
+     Prime → it resumes as itself (?id=, the step kept); otherwise Prime
+     starts on its address and says so, never attaching to a drawing it did
+     not make. */
+  function resumePushed(pid, w) {
+    return firebase.firestore().collection('projects').doc(pid).get().then(function (snap) {
+      var d = snap.exists ? (snap.data() || {}) : null;
+      if (d && d.prime && typeof d.prime === 'object') {
+        try { history.replaceState(null, '', '/omega-prime?id=' + encodeURIComponent(pid) + (qp('step') ? '&step=' + encodeURIComponent(qp('step') === 'logic' ? 'track' : qp('step')) : '')); } catch (e) {}
+        return resume(pid);
+      }
+      var er = $('#startErr'); er.hidden = false; er.style.color = 'var(--ink2)';
+      er.textContent = (qp('step') === 'logic' ? 'This site has no Omega Prime proposal yet, so there is nothing in Omega Logic to follow. ' : '') + 'Its Site Map project was not started in Omega Prime: press Start to screen this address here.';
+      if (w && w.orgId) listSites(w.orgId);
+    }, function () { if (w && w.orgId) listSites(w.orgId); });
+  }
   function resume(id) {
     var er = $('#startErr');
     er.hidden = false; er.style.color = 'var(--ink2)'; er.textContent = 'Opening the site…';
@@ -1148,7 +1174,7 @@ button{font:inherit;color:inherit}
       /* a link names a step (&step=) and a proposal (&quote=, Track's unless
          a step is named): that step when the record has reached it, else
          the furthest it has; the proposal is the one the screens open on */
-      var ask = qp('step'), wq = qp('quote');
+      var ask = qp('step') === 'logic' ? 'track' : qp('step'), wq = qp('quote');
       if (wq && /^[A-Za-z0-9_-]{4,64}$/.test(wq)) { QS.want = wq; if (!ask) ask = 'track'; }
       if (KEYS.indexOf(ask) > 0) to = seen[ask] ? ask : furthest();
       if (ask || wq) { try { history.replaceState(null, '', '/omega-prime?id=' + encodeURIComponent(id)); } catch (e) {} }
@@ -1896,6 +1922,7 @@ button{font:inherit;color:inherit}
     loadUnits().then(who).then(function (w) {
       S.who = w;
       if (id) return resume(id);
+      if (S.editorProjectId) return resumePushed(S.editorProjectId, w);
       if (w && w.orgId) listSites(w.orgId);
     });
   }
@@ -1906,7 +1933,9 @@ button{font:inherit;color:inherit}
     catch (e) { boot(null); if (window.OmegaSplash && OmegaSplash.done) OmegaSplash.done(); }
   })();
 
-  show('start');
+  /* A link that already opened Quote or Logic (Push to Logic) keeps that
+     screen. Every other visit still starts on the address, as before. */
+  if (cur === 'start') show('start');
 })();
 </script>
 </body>

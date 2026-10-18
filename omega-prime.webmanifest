@@ -1,0 +1,31 @@
+{
+  "name": "Omega Prime",
+  "short_name": "Omega Prime",
+  "description": "One site, start to finish: the grid around it, the circuit under it, the system on it, and the quote.",
+  "id": "/omega-prime",
+  "start_url": "/omega-prime",
+  "scope": "/omega-prime",
+  "display": "standalone",
+  "background_color": "#F5F4F0",
+  "theme_color": "#0B2A3D",
+  "icons": [
+    {
+      "src": "/icons/omega-prime-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/omega-prime-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icons/omega-prime-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}

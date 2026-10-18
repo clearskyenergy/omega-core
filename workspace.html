@@ -44,6 +44,10 @@
      its own boot splash below), so a click to Projects or a tool never
      flashes the next page. -->
 <script src="/omega-splash.js?v=1" data-boot="no"></script>
+<!-- The release switch. This page stays the classic home until an org, a
+     person or ?ui=v2 says otherwise. ?ui=v1 and ?ui=classic stay here.
+     See docs/V2-LAUNCH.md. -->
+<script src="/omega-experience.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="author" content="ClearSky Energy Solutions LLC">
 <meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
@@ -372,7 +376,7 @@ function applyViewAs(ws) {
 }
 /* ── the chrome, before anyone is known ─────────────────────────────────── */
 S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
-  if (key === 'home') { go('home'); return true; }
+  if (key === 'home') { returnHome(); return true; }
   if (key === 'tools' || key === 'modules' || key === 'team' || key === 'feed') { go(key); return true; }
   if (key === 'billing') { openBilling(); return true; }
   if (key === 'settings') { settingsDrawer(); return true; }
@@ -1907,9 +1911,15 @@ function search(qs) {
   Array.prototype.forEach.call(document.querySelectorAll('#flight-body .pc'), function (t) { t.style.display = !qs || t.textContent.toLowerCase().indexOf(qs) >= 0 ? '' : 'none'; });
   if (qs) go('tools');
 }
+function returnHome() {
+  /* The journey is not the home. /workspace-v2 opens from its own address
+     or from ?ui=v2 (omega-experience.js). Home, including back from a
+     section, stays on this page. */
+  go('home');
+}
 function route() {
   var h = (window.location.hash || '').slice(1);
-  if (!h) { go('home'); return; }
+  if (!h || h === 'home') { returnHome(); return; }
   if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
   else if (h.indexOf('module-') === 0) focusModule(h.slice(7));
@@ -1949,7 +1959,7 @@ function markFocus() {
   if (!MOD_FOCUS_DONE && view() === 'modules') { MOD_FOCUS_DONE = true; c.scrollIntoView({ block: 'center', behavior: 'auto' }); }
 }
 window.addEventListener('hashchange', function () { if (WS) route(); });
-Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); go('home'); }); });
+Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); returnHome(); }); });
 byId('customize').addEventListener('click', customizeDrawer);
 byId('new-project').addEventListener('click', function () { if (WS && WS.pendingApproval) { S.toast('Projects open once your workspace is approved'); return; } OmegaNewProject.open('bess'); });
 window.WORKSPACE_PAGE = { render: render, needs: needs, data: DATA };

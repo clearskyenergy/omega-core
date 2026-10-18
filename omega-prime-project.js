@@ -177,6 +177,12 @@
     var mfr = str(e.mfr || e.brand), model = str(e.model || e.name || key);
     var short = shortOf(model, mfr);
     var w = num(e.widthFt), d = num(e.depthFt), h = num(e.heightFt);
+    /* A footprint the maker has not RELEASED is not a footprint (main, #337):
+       the CC290/125's figures are its cabinet alone, with the PCS beside it to
+       be confirmed, and the other two are pending release. It is left unknown,
+       so the rep types the submittal's L × W or it is placed as a marked
+       point; never a pad the system does not fit on. */
+    if (e.dimensionsStatus && e.dimensionsStatus !== 'released') { w = null; d = null; }
     var wkg = num(e.weightKg), wlb = num(e.weightLb);
     var weightLb = wlb ? Math.round(wlb) : (wkg ? Math.round(wkg * 2.20462) : null);
     var ac = str(e.ac);

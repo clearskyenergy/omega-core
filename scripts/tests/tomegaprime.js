@@ -72,7 +72,12 @@ assert.equal(LG.kw, 1000); assert.equal(LG.kwh, 2294); assert.equal(LG.usable, n
 assert.match(LG.caveat, /modeled usable ONLY/); assert.match(LG.caveat, /^Planning specification, verify before release\./); count += 2;
 assert.equal(SM.kwhApprox, true, 'the Smart Module\'s ~2 MWh keeps its "~"'); assert.match(SM.note, /~2,000 kWh/); assert.equal(LG.kwhApprox, false); count += 3;
 assert.equal(LG.footprint, 'none'); assert.equal(LG.lFt, null); assert.equal(LG.wFt, null); assert.equal(SM.footprint, 'none'); count += 4;
-assert.equal(C290.footprint, 'catalog'); assert.equal(C290.lFt, 4.36, 'long axis first, 2 dp'); assert.equal(C290.wFt, 3.94); assert.equal(C290.hFt, 7.71); count += 4;
+/* a footprint the maker has not RELEASED is not one (main, #337): the
+   CC290/125's figures are its cabinet alone, its PCS beside it to be
+   confirmed, so it is unknown until the rep types the submittal's */
+assert.equal(C290.footprint, 'none'); assert.equal(C290.lFt, null); assert.equal(C290.wFt, null); assert.equal(C290.hFt, 7.71, 'the cabinet height is still the brochure\'s'); count += 4;
+var REL = PP.fromEntry('X-REL', { mfr: 'CleanCell US', model: 'Released', kw: 100, kwh: 200, widthFt: 3.94, depthFt: 4.36, dimensionsStatus: 'released' });
+assert.equal(REL.footprint, 'catalog'); assert.equal(REL.lFt, 4.36, 'a released footprint: long axis first, 2 dp'); assert.equal(REL.wFt, 3.94); count += 3;
 assert.equal(C290.weightLb, Math.round(2900 * 2.20462)); assert.equal(C290.weightBasis, 'reference'); assert.equal(LG.weightLb, null); assert.equal(LG.weightBasis, ''); count += 4;
 assert.equal(C290.ac, '480 V 3-ph 60 Hz'); assert.equal(LG.ac, '480 V 3-ph 60 Hz'); count += 2;
 assert.equal(LG.incPcs, true); assert.equal(SM.incPcs, false); assert.equal(C290.incPcs, false); count += 3;
@@ -132,7 +137,7 @@ near(offFt(C, gLG.xfmr.c), 0 + 5 + 4, 0.05, 'transformer: 5 ft clear of a 0 ft u
 near(offFt(C, gLG.disco.c), 5 + 8 + 5 + 1.5, 0.05, 'disconnect: 5 ft clear of the transformer');
 assert.deepEqual([gLG.xfmr.lFt, gLG.xfmr.wFt, gLG.xfmr.rotDeg, gLG.disco.lFt, gLG.disco.wFt, gLG.disco.rotDeg], [8, 8, 0, 3, 4, 0]); count++;
 var g290 = PP.arrange(C290, C);
-near(offFt(C, g290.xfmr.c), 4.36 / 2 + 5 + 4, 0.05, 'CC290/125: the transformer clears the cabinet by 5 ft');
+near(offFt(C, g290.xfmr.c), 0 + 5 + 4, 0.05, 'CC290/125 (footprint not released): the transformer sits 5 ft clear of the marked point');
 near(offFt(g290.xfmr.c, g290.disco.c) - 4 - 1.5, 5, 0.05, 'and the disconnect clears the transformer by 5 ft');
 var g60 = PP.arrange(R6, C);
 assert.equal(g60.xfmr, null, 'the R60 integrates its transformer: none is drawn'); assert.ok(g60.disco, 'its site disconnect is'); count += 2;

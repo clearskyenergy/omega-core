@@ -29,7 +29,11 @@ var IL_UTILITY_RATES = {
     tou: true,
     peakWindow: '2PM-7PM weekdays (Jun-Sep), 6AM-10PM (Oct-May)',
     ratchet: 0.70,
-    zips: ['600','601','602','603','604','605','606','607','608','609','610','611','613']
+    /* 600–611 is northern Illinois, including Kankakee (609). Rock Island
+       (612) is MidAmerican; Galesburg (614) and the Metro East / Quincy /
+       Effingham prefixes are Ameren. 613 is mixed (Ottawa is ComEd, LaSalle
+       is Ameren) and is not claimed here. */
+    zips: ['600','601','602','603','604','605','606','607','608','609','610','611']
   },
   // Ameren Illinois (Central/Southern IL) -- incl. Galesburg/Macomb (614), Alton/Belleville/East St Louis (620, 622), Quincy (623), Effingham (624)
   ameren: {
@@ -62,6 +66,8 @@ var IL_UTILITY_RATES = {
     tou: false,
     peakWindow: 'On-peak: 8AM-8PM weekdays (Rate 30/35)',
     ratchet: 0.0,             // CT does not have a standard demand ratchet
+    /* 065 New Haven and 066 Bridgeport are United Illuminating, listed below.
+       064 is mixed and stays here. */
     zips: ['060','061','062','063','064','067','068','069']
   },
   // Eversource MA -- zip prefixes 010-027 except Worcester (016, National Grid)
@@ -86,7 +92,10 @@ var IL_UTILITY_RATES = {
     ratchet: 0.0,
     zips: ['016']
   },
-  // AEP Indiana Michigan Power (I&M) -- Northern IN incl. South Bend; settles in PJM AEP zone
+  /* Prefixes are every Indiana ZIP3. I&M serves the north and east
+     (South Bend, Fort Wayne); Indianapolis is AES Indiana, the northwest
+     is NIPSCO, Evansville is CenterPoint. One planning row until a
+     prefix map exists — see docs/ANALYSIS-AUDIT.md. */
   aep_in: {
     name: 'AEP Indiana Michigan Power (I&M) -- PJM/AEP zone',
     demandRate: 14.90,
@@ -164,17 +173,24 @@ var STATE_PRIMARY_UTILITY = {
   WY:{name:'Rocky Mountain Power (PacifiCorp)',demandRate:11.8,energyRate:0.062,demandPct:0.32,tou:false,ratchet:0.50}
 };
 
+/* First match wins, so an exception (055 Andover is Massachusetts, not
+   Vermont; 398–399 are Georgia; 569 is the State Department in DC; 885 is
+   El Paso, Texas; 005 is Holtsville, New York) sits where the broad range
+   would otherwise swallow it. The editor keeps the same tuples in
+   _FOM_ZIP3_STATE; scripts/tests/tanalysisvalidate.js fails if they drift. */
 var ZIP3_STATE = [
+  [5,5,'NY'],
   [995,999,'AK'],[350,369,'AL'],[716,729,'AR'],[850,865,'AZ'],[900,961,'CA'],
-  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[197,199,'DE'],[320,349,'FL'],
-  [300,319,'GA'],[967,968,'HI'],[500,528,'IA'],[832,838,'ID'],[600,629,'IL'],
-  [460,479,'IN'],[660,679,'KS'],[400,427,'KY'],[700,714,'LA'],[10,27,'MA'],
-  [206,219,'MD'],[39,49,'ME'],[480,499,'MI'],[550,567,'MN'],[630,658,'MO'],
-  [386,397,'MS'],[590,599,'MT'],[270,289,'NC'],[580,588,'ND'],[680,693,'NE'],
-  [30,38,'NH'],[70,89,'NJ'],[870,884,'NM'],[889,898,'NV'],[100,149,'NY'],
-  [430,459,'OH'],[730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],
-  [290,299,'SC'],[570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],
-  [220,246,'VA'],[50,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
+  [800,816,'CO'],[60,69,'CT'],[200,205,'DC'],[569,569,'DC'],[197,199,'DE'],
+  [320,349,'FL'],[300,319,'GA'],[398,399,'GA'],[967,968,'HI'],[500,528,'IA'],
+  [832,838,'ID'],[600,629,'IL'],[460,479,'IN'],[660,679,'KS'],[400,427,'KY'],
+  [700,714,'LA'],[10,27,'MA'],[55,55,'MA'],[206,219,'MD'],[39,49,'ME'],
+  [480,499,'MI'],[550,567,'MN'],[630,658,'MO'],[386,397,'MS'],[590,599,'MT'],
+  [270,289,'NC'],[580,588,'ND'],[680,693,'NE'],[30,38,'NH'],[70,89,'NJ'],
+  [870,884,'NM'],[885,885,'TX'],[889,898,'NV'],[100,149,'NY'],[430,459,'OH'],
+  [730,749,'OK'],[970,979,'OR'],[150,196,'PA'],[28,29,'RI'],[290,299,'SC'],
+  [570,577,'SD'],[370,385,'TN'],[750,799,'TX'],[840,847,'UT'],[220,246,'VA'],
+  [50,54,'VT'],[56,59,'VT'],[980,994,'WA'],[530,549,'WI'],[247,268,'WV'],
   [820,831,'WY']
 ];
 
@@ -214,6 +230,11 @@ var ZIP3 = {}, OVERLAPS = [];
     }
   }
 })();
+function isComedZip(zip) {
+  var z = String(zip || '').replace(/\D/g, '');
+  if (z.length < 3) return false;
+  return IL_UTILITY_RATES.comed.zips.indexOf(z.slice(0, 3)) >= 0;
+}
 function lookup(zip) {
   var z = String(zip || '').replace(/\D/g, '');
   if (z.length < 3) return record('comed', IL_UTILITY_RATES.comed, { _default: true });
@@ -250,6 +271,7 @@ function byEia(eia, opts) {
   return record('eia:' + id, base, { name: display, eiaId: id, _source: 'state', _state: st, _stateResolved: true, ratesFrom: base.name,
     _rateNote: 'No rate book for ' + display + ' yet; these are ' + st + ' planning rates (' + base.name + ').' });
 }
-module.exports = { lookup: lookup, byEia: byEia, fromState: fromState, stateForZip: stateForZip,
+module.exports = { lookup: lookup, byEia: byEia, fromState: fromState, stateForZip: stateForZip, isComedZip: isComedZip,
   _overlaps: function () { return OVERLAPS.slice(); },
-  _count: { detailed: Object.keys(IL_UTILITY_RATES).length, states: Object.keys(STATE_PRIMARY_UTILITY).length } };
+  _count: { detailed: Object.keys(IL_UTILITY_RATES).length, states: Object.keys(STATE_PRIMARY_UTILITY).length },
+  _tables: { detailed: IL_UTILITY_RATES, states: STATE_PRIMARY_UTILITY, zip3: ZIP3_STATE } };

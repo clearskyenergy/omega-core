@@ -204,8 +204,12 @@ function primeDoc(unit, st) {
   return JSON.parse(JSON.stringify(PP.projectDoc(s, WHO, null)));
 }
 var CCK = 'CLEANCELL-CC290-125-REV-H';
-var CC290 = PP.units(null, CC.entries()).filter(function (u) { return u.key === CCK; })[0];
-ok(CC290 && CC290.footprint === 'catalog' && CC290.incXfmr === false && CC290.incDisco === false, 'the CC290 has a released footprint and needs a transformer and a disconnect');
+var CC290_REF = PP.units(null, CC.entries()).filter(function (u) { return u.key === CCK; })[0];
+/* its brochure footprint is the cabinet alone, not RELEASED (main, #337), so
+   the rep types the submittal's L × W: the same unit, drawn at that size */
+ok(CC290_REF && CC290_REF.footprint === 'none' && CC290_REF.incXfmr === false && CC290_REF.incDisco === false, 'the CC290 has no released footprint and needs a transformer and a disconnect');
+var CC290 = PP.repFootprint(CC290_REF, 4.36, 3.94);
+ok(CC290.footprint === 'rep' && CC290.lFt === 4.36 && CC290.wFt === 3.94, 'the rep\'s submittal footprint');
 var R60 = PP.snapshot(PP.R60);
 
 /* ═══ 1 · a v2 layout, built exactly ════════════════════════════════ */

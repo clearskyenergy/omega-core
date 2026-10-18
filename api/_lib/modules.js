@@ -20,8 +20,10 @@ var CATALOG = [
     'openSiteQuickBuild openAutoLayout rbInsert rbMode stampEV stampADA stampADAAisle openEvChargerDialog openSourceDialog setUtilityType derSetSolar derSetWind derSetAlt derCustomKw openArrayProps omegaCanopyCustom omegaSolarCustomArea omegaNextnrgSolarCustom openClusterDialog _openPadConfig evSetPost evSetUnit evSetL2 setSubstationMode openMvCableDialog openConduitMenu _bessRunPanel _cdOpenTab _geoRepairAndReport wireAllBessToHub toggleEngMode toggleConduitLabels engSchedToggleVisible addTextBox ctxDuplicate deleteSelectedConduit deleteSelectedShape clearConduitSel clearSchematic undoLast delSel startCal clearScale clearAll ovUpload ovStencil openGpsPlacement recenterOnEquipment omegaPvViewCycle pcToggle toggle3D nnToggleCrosshair toggleMeterPanel toggleSitePanel toggleNativeLayer toggleDockLeft toggleDiagPanel toggleCompassPanel toggleLayersPanel opToggleCoords openBlueprintExport openProposalExport openReport exportSpecSheet exportToMonday openMapsKey openCrmSettings openCrmSync openAiKeys omegaThemePick newProject openProjectsModal saveProject omegaPrint e3BrowserOpen rbNav omegaLoadMap setMode'),
   record('gridatlas', 'Omega Grid', 'addon', 'gridatlas interconnect comedcap', 'gridatlas',
     'openComedPreQual OmegaSubstation.open'),
+  /* Generation (OmegaYield) is the Energy group's own button since the ribbon
+     cleanup; it is the yield model the storage energy commands sit beside. */
   record('storage', 'Omega Storage', 'standard', 'batterysizer proforma valuestack isocalc bessscreening', 'storage',
-    'openBessSizer openSolarBessSizer openBillImport openNonExportCalc openEnergyBalance openValueStack openBillAnalysis', 'models'),
+    'openBessSizer openSolarBessSizer openBillImport openNonExportCalc openEnergyBalance openValueStack openBillAnalysis OmegaYield.open', 'models'),
   record('estimate', 'Omega Estimate', 'standard', 'costestimator', 'estimate',
     'openBomSourcing openElectricalEstimate openTakeoffBudget exportBudgetCSV exportTrenchCSV exportEstimateCSV', 'boms'),
   record('evrebates', 'Omega EV', 'standard', 'evcostwb evcloseout', 'evrebates',
@@ -33,7 +35,7 @@ var CATALOG = [
   record('engineering', 'Omega Engineer', 'premium', 'conductorsizing powerflow siteoptimizer', 'engineering',
     'openDerAnalysis openValidationExport openValidationStatus _valSubmit e3MeteoOpen'),
   record('finance', 'Omega Capital', 'premium', 'investment dcfc fleet apartment degradation', 'finance',
-    'openMarketplacePush openFinancingApply openHeliosIntake openBuildingPanel'),
+    'openMarketplacePush openFinancingApply openHeliosIntake openBuildingPanel omegaPushPrime omegaPushLogic'),
   record('compute', 'Omega Compute', 'premium', 'datacenter computepower computelease computeproforma', 'compute',
     'openDcClusterDialog derSetDc openOmegaCore'),
   record('ops', 'Omega Operate', 'premium', 'sitelifecycle omconsole slaintel fieldservice ownerreport fleetcommand', 'ops', 'OmegaOM.open OmegaFleetOM.open'),
@@ -68,10 +70,10 @@ BY_KEY.estimate.ribbon.push("openRpPanel('cost')", "rpTab('cost')", '#rp-tab-cos
   "openRpPanel('summary','estimate')");
 NOT_SOLD[5].ribbon.push("homeStartWizard('BTM')");
 var IDS = {
-  lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key',
-  gridatlas: 'rb-gridatlas rb-grid-panel', storage: 'omega-btn-bill-analysis rb-valuestack',
+  lite: 'rb-color rb-move-system rb-cluster rb-labels rb-evselbl rb-engbuild rb-omega-mode rb-redo rb-design-ai rb-nrel-key rb-features',
+  gridatlas: 'rb-gridatlas rb-grid-panel', storage: 'omega-btn-bill-analysis rb-valuestack oy-ribbon-btn',
   estimate: 'rb-takeoff-budget', evrebates: 'rb-ev-future',
-  plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks',
+  plansets: 'ov-airender omega-btn-riser omega-btn-sldcheck omega-btn-drc rb-bldg-designer rb-cad-schem rb-permit-sheet rb-sheet-mgr rb-siteplan rb-geo-export rb-arch-cad ov-ribbon-btn ov-model-checks rb-check',
   siteintel: 'rb-noise-model rb-buildable rb-trace-exclusion rb-gis-layers rb-parcel-screen',
   engineering: 'rb-optimizer rb-optimise rb-elec rb-circuit omega-terr-btn',
   /* Trace Boundary and Fence & Tie are Compute's (Tommy, 2026-10-13: "made for the compute"): the site area Design Site fills, and the fence, controller and duct banks after it. They sit on the Compute tab on every plan. */
@@ -80,7 +82,7 @@ var IDS = {
   permitting: 'omega-btn-permit-matrix'
 };
 NOT_SOLD[5].ribbon.push('#rb-screen', 'sendToPermitCreator');
-BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(words('shapeArc shapeEllipse shapePolygon shapeHatchBox ovLock setPlot clearPlot'));
+BY_KEY.lite.ribbon = BY_KEY.lite.ribbon.concat(words('shapeArc shapeEllipse shapePolygon shapeHatchBox ovLock setPlot clearPlot o2SetRender OmegaEditorFeatures.open'));
 Object.keys(IDS).forEach(function (k) { words(IDS[k]).forEach(function (id) { BY_KEY[k].ribbon.push('#' + id); }); });
 /* Shared drawing/analysis controls must not be stranded in the paid Compute tab. */
 BY_KEY.lite.editorPage = 'draw';
@@ -151,9 +153,13 @@ CATALOG.forEach(function (m) { m.features = FEATURES[m.key]; m.blurb = BLURBS[m.
 /* What a LEGACY plan (a tier, no package) opens of each module inside the
  * editor: the legacy caps its commands sit behind (data-cap on the command
  * or on its tab: Analyze and Estimate need `engineering`, Compute needs
- * `compute`), '' for commands nothing gates, and a chain ("engineering+
- * parcelscreen") where a command with its own cap sits on a gated tab and
- * needs both. The store, the Modules page and
+ * `compute`), '' for commands nothing gates, and a chain ("tabcap+commandcap")
+ * where a command with its own cap sits on a gated tab and needs both.
+ * Building Net-Zero on Analyze is Omega Capital's, so that module also lists
+ * `engineering`. Omega-Core fit sits on Analyze with the compute cap, so
+ * Omega Compute carries `engineering+compute`. A command turned off in
+ * Settings (Parcel Screen, the permitting matrix) still counts: the plan
+ * opens it. The store, the Modules page and
  * the master console judge a legacy workspace by these AND its standalone
  * tools (OmegaWorkspaceHub.moduleState), so "On your plan" is what the plan
  * really opens. Read off the real editor by scripts/render-legacy-gates.js,
@@ -163,7 +169,7 @@ var LEGACY_GATES = {
   lite: ['', 'export.blueprint'], gridatlas: ['engineering'], storage: ['', 'engineering'],
   estimate: ['', 'engineering'], evrebates: [''], plansets: ['', 'export.oneline', 'export.plotplan'],
   siteintel: ['', 'compute', 'engineering', 'engineering+parcelscreen'], engineering: ['', 'compute', 'engineering'],
-  finance: ['', 'export'], compute: ['', 'compute'], ops: ['engineering'], permitting: ['']
+  finance: ['', 'engineering', 'export'], compute: ['', 'compute', 'engineering+compute'], ops: ['engineering'], permitting: ['']
 };
 CATALOG.forEach(function (m) { m.legacyGates = LEGACY_GATES[m.key] || []; });
 /* Viewing/navigation survives an expired trial; producing commands do not. */
