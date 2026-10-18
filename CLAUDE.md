@@ -1436,7 +1436,11 @@ Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
   biggest first (LG JP-2, Smart Module, CC290/125, through
   `omega-cleancell-catalog.js entries()`), then the CleanCell R60 (`PP.R60`,
   pinned figure by figure to editor.html and `api/_lib/omega-core.js`).
-  FENECON's Industrial XXL only in FENECON's own workspace, first. A unit with
+  FENECON's Industrial XXL only in FENECON's own workspace, first. EV
+  charging, Solar, Compute and Microgrid (main #348) list the editor's own
+  catalogs through `PP.forType`; a unit that is not a battery
+  (`PP.screenable`) is quote required, sized in Site Map: named utility,
+  nothing judged, priced or built as a battery. A unit with
   no released footprint asks the rep for the submittal's L × W, else it is a
   marked point; never a generic container.
 - **The record.** The project is CREATED at Start (`projectDoc`) and the

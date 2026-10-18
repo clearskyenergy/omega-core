@@ -280,6 +280,16 @@ async function run() {
   await refused(function () { return post(Object.assign(saveBody(), { projectId: 'p9' })); }, 409, /Place the battery/, 'a project with no Prime layout cannot be quoted');
   DB.seed('projects/p8', projectDoc(PP.XXL));
   await refused(function () { return post(Object.assign(saveBody(), { projectId: 'p8' })); }, 409, /not in your workspace/, 'a battery the workspace’s list no longer offers (the XXL outside FENECON) is refused');
+  /* a charger, an array or a compute unit Prime set up (main #348) is not a
+     battery: quote required, sized in Site Map — never priced as one */
+  var CAT = require(path.join(ROOT, 'omega-site-catalogs.js'));
+  [PP.forType('ev', null, CAT)[0], PP.forType('solar', null, CAT)[0], PP.forType('compute', null, CAT)[0]].forEach(function (u, k) {
+    DB.seed('projects/px' + k, projectDoc(u));
+  });
+  for (var pk = 0; pk < 3; pk++) {
+    await refused(function () { return post(Object.assign(saveBody(), { projectId: 'px' + pk })); }, 409, /^Quote required: the .+ is sized in Site Map/, 'a unit that is not a battery is quote required (' + pk + ')');
+    await refused(function () { return post(Object.assign({ action: 'preview', projectId: 'px' + pk }, BODY)); }, 409, /Quote required/, 'previewed neither (' + pk + ')');
+  }
   tick();
   var staffSave = await post(saveBody({ id: id }), STAFF);
   ok(staffSave.quote.rev === 3 && staffSave.quote.seller.rep.email === STAFF.email, 'ClearSky staff may work a tenant’s quote');

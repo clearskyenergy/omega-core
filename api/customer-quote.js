@@ -178,6 +178,10 @@ async function priced(db, caller, P, now) {
      list's entry by key, a footprint the rep typed kept), and only one the
      workspace's list still offers: its maker and SKU route the order */
   var rs = PP.restore(P.project, list), unit = rs.unit, layout2 = rs.layout || layout;
+  /* a charger, an array, a compute unit or a generator (main #348) is not a
+     battery: the cost model prices a battery installation, so it is quoted
+     from Site Map, never priced here as one */
+  if (unit && unit.kind && unit.kind !== 'bess') fail(409, 'Quote required: the ' + (str(unit.name, 120) || 'unit') + ' is sized in Site Map. An Omega Prime proposal prices a battery installation.');
   var listed = !!unit && list.some(function (u) { return u && u.key === unit.key; });
   var key = str(prime.unitKey || (prime.unit && prime.unit.key) || layout.unitKey, 120);
   /* the same product under another key: a maker that has since published

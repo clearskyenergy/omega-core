@@ -639,6 +639,26 @@ function v1Doc(entry, key) {
   E4.flush(); eq(E4.calls.guided, 0);
 })();
 
+/* ═══ 5b · a unit that is not a battery (main #348): nothing built ════
+   A charger Prime placed is sized here in Site Map: none of the battery
+   layout is drawn, no BESS Guided Build opens, and no Rebuild is offered. */
+(function () {
+  var EVU = PP.forType('ev', null, require(path.join(ROOT, 'omega-site-catalogs.js')))[0];
+  var E = editor(), d = primeDoc(EVU);
+  ok(d.type === 'ev' && d.bessList.length === 0 && d.prime.layout && d.prime.layout.unit && !d.prime.layout.xfmr, 'an EV record with a placed charger and no battery gear');
+  E.load(d);
+  eq(E.H.onRendered({ detail: { id: 'p1', doc: d } }), 'not-battery', 'a charger is sized in Site Map, never built as a battery');
+  E.flush();
+  eq(E.S.elements.length + E.S.shapes.length + E.S.conduits.length, 0, 'nothing drawn'); eq(E.calls.guided, 0, 'no BESS Guided Build'); eq(E.calls.save, 0);
+  ok(/not a battery/.test(E.calls.banner.join(' ')), 'and said, opened from Prime');
+  eq(E.sb.location.search, '?id=p1', 'from=prime dropped');
+  var E2 = editor({ from: false }); E2.load(d); E2.render('p1'); E2.flush();
+  eq(E2.S.elements.length, 0, 'opened from the Projects list: nothing either');
+  eq(E2.H.nav().prime, true); eq(E2.H.nav().why, 'not-battery'); eq(E2.H.nav().rebuild, null, 'no Rebuild for it');
+  ok(/Omega Prime/.test(E2.nav.innerHTML) && !/data-prime="rebuild"/.test(E2.nav.innerHTML), 'the way back to Prime, never Rebuild');
+  eq(E2.H.rebuild(), 'not-battery'); eq(E2.S.elements.length, 0);
+})();
+
 /* ═══ 6 · Rebuild from Omega Prime ══════════════════════════════════
    rebuild() draws Prime's layout again where nothing the rep drew is on the
    canvas: an emptied drawing, Prime's own build with a piece gone, or Prime's

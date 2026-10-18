@@ -199,8 +199,10 @@ warranty live):
   or pasted; skippable, never filled in.
 - **The project:** moving into design CREATES `projects/{id}`
   (`omega-prime-project.js projectDoc`: the tenant's `orgId` as the rules
-  home the caller, `type: 'bess'`, the unit as the editor's battery entry
-  by catalog key, `mapState` on the site point, `grid.*`, `load`); the
+  home the caller, the project type — `bess`, `ev`, `solar`, `compute` or
+  `microgrid` (main #348) — on `type` and `prime.type`, a battery as the
+  editor's battery entry by catalog key, `mapState` on the site point,
+  `grid.*`, `load`); the
   sketch, the service, the conduit and the Run update it as `prime.layout`
   and `prime.run`. No drawing key is written by Prime.
 - **Open in Site Map** builds exactly what Prime drew in the editor (the
@@ -248,7 +250,22 @@ still parsing. The installed icon opens `/omega-prime`. The worker caches
 the shell only and does not cache `/api/` or Firebase auth. Phone layout
 is `omega-prime-mobile.css`.
 
-Still open for Prime: EV, Solar and Compute are "next"; the bill's peaks
+**Every project type** (main #348): EV charging, Solar, Compute and
+Microgrid list the editor's own catalogs (`omega-site-catalogs.js`, held
+to `editor.html` by `tomegaprime.js`) through `PP.forType`; a microgrid is
+the battery list with the solar and generator rows. A unit that is not a
+battery (`PP.screenable`) is carried through as **quote required, sized in
+Site Map**: the Circuit step names the serving utility and judges nothing,
+the Site Map step draws it alone (no battery gear) and has no Run, the
+Proposal step prices nothing (`/api/customer-quote` refuses it the same
+way), and Site Map's hand-off builds none of it (`not-battery`). Push to
+Prime carries the loaded address, its point (used when that address does
+not geocode), the project type and the project's org; Omega Logic opens on
+the project's org, else the link's, else the person's own
+(`/omega-logic?org=`), never the bare directory.
+
+Still open for Prime: a charger, array or compute unit is quoted from Site
+Map, not from a Prime proposal; the bill's peaks
 are typed, not read from the bill file (Site Map's bill import is the
 reader); Prime's Run is `/api/price-site` and Site Map's Run is
 `editor-cost`, two engines, so the project's capex rollup waits for Site

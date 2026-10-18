@@ -233,6 +233,11 @@
     return { unit: R.unit, layout: R.layout };
   }
   function placed(L) { return !!(L && L.unit && ll(L.unit.c)); }
+  /* a charger, an array, a compute unit or a generator (main #348) is not a
+     battery: Prime's layout here is a battery's, so none of it is drawn and
+     the unit is sized in Site Map with its own tools */
+  function battery(u) { return !u || !u.kind || u.kind === 'bess'; }
+  var NOT_BATTERY = 'Omega Prime set this site up for a unit that is not a battery, so it is sized here in Site Map (quote required): place it with Site Map’s own tools.';
 
   /* ── the decision ─────────────────────────────────────────────────── */
   function maybeBuild(id, d, opts) {
@@ -256,6 +261,11 @@
       return 'drawing';
     }
     var R = resolve(E, d);
+    if (!battery(R.unit)) {
+      if (from) call(E.banner, 'wiz', NOT_BATTERY);
+      dropParam(E);
+      return 'not-battery';
+    }
     if (!placed(R.layout)) {
       if (from && !mem.fallback && b) { mem.fallback = true; guided(E, b); return 'guided'; }
       dropParam(E);
@@ -311,6 +321,7 @@
     /* the unit again, now that this page's catalog has merged: a v1 sketch
        is replayed with exactly the unit Prime's list gives it */
     R = resolve(E, d);
+    if (!battery(R.unit)) { dropParam(E); return done('not-battery'); }
     if (!placed(R.layout)) { dropParam(E); return done('no-unit'); }
     var M = build(E, R, id, clear);
     if (!M) { dropParam(E); return done('no-projection'); }
@@ -504,6 +515,7 @@
     var pk = call(E.planAccess);
     if (pk && pk.readOnly) return 'read-only';
     var R = resolve(E, { prime: p, bessList: st.bessList });
+    if (!battery(R.unit)) return 'not-battery';
     if (!placed(R.layout)) return 'no-unit';
     if (!drawingOn(st)) return 'empty';
     var want = pieces(R.layout);
@@ -529,6 +541,7 @@
       else if (why === 'current') call(E.banner, 'wiz', 'Omega Prime’s layout is already drawn here, as Prime has it.');
       else if (why === 'read-only') call(E.banner, 'wiz', 'This workspace is read-only, so Omega Prime’s layout was not drawn into Site Map.');
       else if (why === 'no-unit') call(E.banner, 'wiz', 'Omega Prime placed no unit on this site, so there is nothing to draw; place it in Prime first.');
+      else if (why === 'not-battery') call(E.banner, 'wiz', NOT_BATTERY);
       return why;
     }
     if (st.prime && typeof st.prime === 'object') st.prime.builtAt = null;

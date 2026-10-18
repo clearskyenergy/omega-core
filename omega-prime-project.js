@@ -33,6 +33,20 @@
      runInput()     what /api/price-site is sent, computed ONE way for the
                     page and the server's quote
      zipOf(), peaks()   reading an address and a bill's monthly peaks
+     primeType()    an editor project-type word folded onto Prime's five
+                    (bess, ev, solar, compute, microgrid), main #348
+     forType()      the unit list for a project type: the battery list
+                    above, or the chargers, compute units, solar modules and
+                    array layouts of the editor's own catalogs
+                    (omega-site-catalogs.js), and for a microgrid the
+                    battery list with the solar and the generator /
+                    fuel-cell rows. Specs only, never a price.
+     screenable()   a battery the circuit check and the cost model can
+                    judge and price; every other unit is carried through as
+                    "quote required", sized in Site Map
+     linkQuery(), orgId()
+                    the address, lat/lng, project id, type and org Site Map
+                    puts on /omega-prime, and the one safe org id on a link
 
    ES5. Exports for Node.
    ========================================================================== */
@@ -53,7 +67,7 @@
 
   /* The unit fields, in order (contract C1). snapshot() keeps exactly these,
      so a unit stored on the record can never carry anything else. */
-  var UNIT_KEYS = ['key', 'sku', 'mfr', 'model', 'name', 'short', 'kw', 'kwh', 'kwhApprox', 'usable', 'hours',
+  var UNIT_KEYS = ['key', 'kind', 'sku', 'mfr', 'model', 'name', 'short', 'kw', 'kwh', 'kwhApprox', 'usable', 'hours',
     'lFt', 'wFt', 'hFt', 'footprint', 'weightLb', 'weightBasis', 'ac', 'chem', 'inv', 'incPcs', 'incXfmr', 'incDisco',
     'xfmr', 'disco', 'ems', 'note', 'source', 'sourceDoc', 'sourcePages', 'catalogStatus', 'caveat', 'vendorOrgId'];
 
@@ -70,7 +84,7 @@
      one skid (its PCS is integrated and its output native 277/480 V, so no
      step-up transformer is drawn; a site AC disconnect still is). Usable
      kWh, weight and the charger rating are unpublished and stay so. */
-  var R60 = { key: 'CC-R60', sku: 'CC-R60', mfr: 'Clean Cell',
+  var R60 = { key: 'CC-R60', kind: 'bess', sku: 'CC-R60', mfr: 'Clean Cell',
     model: 'CleanCell R60 — 60 kW / 61.44 kWh skid (BESS + 2 Autel DCFC)', name: 'Clean Cell R60', short: 'R60',
     kw: 60, kwh: 61.44, kwhApprox: false, usable: null, hours: 1.02,
     lFt: 28, wFt: 7.25, hFt: 6.9, footprint: 'catalog', weightLb: null, weightBasis: '',
@@ -88,7 +102,7 @@
   /* FENECON's Industrial XXL, offered only where FENECON is the workspace
      (OmegaBessProducts.isOwn({ mfr: 'FENECON' }, tenant)). Its central PCS
      rides in the container; transformer and disconnect are site gear. */
-  var XXL = { key: 'FENECON-IND-XXL', sku: 'FENECON-IND-XXL', mfr: 'FENECON', model: 'Industrial XXL',
+  var XXL = { key: 'FENECON-IND-XXL', kind: 'bess', sku: 'FENECON-IND-XXL', mfr: 'FENECON', model: 'Industrial XXL',
     name: 'FENECON Industrial XXL', short: 'XXL',
     kw: 2508, kwh: 5015, kwhApprox: false, usable: 4750, hours: 2,
     lFt: 20, wFt: 8, hFt: 9.5, footprint: 'catalog', weightLb: 95000, weightBasis: 'reference',
@@ -156,6 +170,7 @@
     for (i = 0; i < UNIT_KEYS.length; i++) {
       k = UNIT_KEYS[i]; v = u[k];
       if (k === 'sourcePages') v = Array.isArray(v) ? v.slice() : [];
+      else if (k === 'kind') v = v ? str(v) : 'bess';
       else if (k === 'kwhApprox' || k === 'incPcs' || k === 'incXfmr' || k === 'incDisco') v = v === true;
       else if (v === undefined) v = (k === 'usable' || k === 'lFt' || k === 'wFt' || k === 'hFt' || k === 'weightLb' || k === 'vendorOrgId') ? null : '';
       o[k] = v;
@@ -199,7 +214,7 @@
         e.dimensionsStatus && e.dims ? str(e.dims) + '.' : ''].join(' ').replace(/\s+/g, ' ').replace(/^\s+|\s+$/g, '');
     }
     return {
-      key: key, sku: str(e.sku) || key, mfr: mfr, model: model, name: nameOf(mfr, short), short: short,
+      key: key, kind: 'bess', sku: str(e.sku) || key, mfr: mfr, model: model, name: nameOf(mfr, short), short: short,
       kw: kw, kwh: kwh, kwhApprox: approx, usable: num(e.usable), hours: num(e.dur) || r2(kwh / kw),
       lFt: w && d ? r2(Math.max(w, d)) : null, wFt: w && d ? r2(Math.min(w, d)) : null, hFt: h ? r2(h) : null,
       footprint: w && d ? 'catalog' : 'none',
@@ -336,6 +351,163 @@
     return out;
   }
 
+  /* ── PROJECT TYPES (main #348) ────────────────────────────────────────
+     Editor project-type words folded onto Prime's five. Unknown stays blank
+     so a handoff does not invent a battery project. */
+  function primeType(key) {
+    var k = String(key || '').toLowerCase().replace(/[\s_]+/g, '');
+    var map = { bess: 'bess', storage: 'bess', battery: 'bess',
+      ev: 'ev', evl2: 'ev', dcfc: 'ev', l2: 'ev', level2: 'ev', 'level-2': 'ev', 'ev-dcfc': 'ev', evdcfc: 'ev',
+      solar: 'solar', pv: 'solar', solarpv: 'solar',
+      datacenter: 'compute', compute: 'compute', 'data-center': 'compute', datacentre: 'compute',
+      der: 'microgrid', microgrid: 'microgrid', solarbess: 'microgrid', 'solar+bess': 'microgrid', 'solar-bess': 'microgrid' };
+    return HAS.call(map, k) ? map[k] : '';
+  }
+
+  /* The editor's placement catalogs (omega-site-catalogs.js) and Clean
+     Cell's reference entries, found on the page or, in Node, beside this
+     file. */
+  function catOf(src) {
+    if (src) return src;
+    if (root && root.OmegaSiteCatalogs) return root.OmegaSiteCatalogs;
+    if (typeof require === 'function') { try { return require('./omega-site-catalogs.js'); } catch (e) {} }
+    return null;
+  }
+  function ccRefs() {
+    var C = root && root.OmegaCleanCellCatalog;
+    if (!C && typeof require === 'function') { try { C = require('./omega-cleancell-catalog.js'); } catch (e) { C = null; } }
+    try { return C && typeof C.entries === 'function' ? C.entries() : {}; } catch (e2) { return {}; }
+  }
+  /* A unit that is not a battery: its catalog figures, its footprint when
+     the catalog has one, and "quote required" — sized in Site Map. */
+  function other(kind, k, e, o) {
+    var lf = num(e.lf), wf = num(e.wf);
+    var u = { key: k, kind: kind, mfr: str(o.mfr != null ? o.mfr : (e.mfr || e.make)), model: str(o.model || e.model || e.label || k),
+      name: str(o.name || e.label || e.model || k), short: str(o.short || e.label || k),
+      kw: o.kw === undefined ? num(e.kw) : o.kw, kwh: null, hours: null,
+      lFt: lf, wFt: wf, footprint: lf && wf ? 'catalog' : 'none', note: str(o.note), quote: true };
+    if (o.group) u.group = o.group;
+    if (o.watts) u.watts = o.watts;
+    return u;
+  }
+  function gear(group, table, prefix) {
+    var out = [], k, e;
+    if (!table) return out;
+    for (k in table) {
+      if (!HAS.call(table, k)) continue;
+      e = table[k];
+      if (!e || !num(e.kw)) continue;
+      out.push(other('ev', k, e, { group: group, model: e.model || e.label || k,
+        name: (prefix ? prefix + ' · ' : '') + (e.label || e.model || k), short: e.label || k,
+        note: fmtN(num(e.kw)) + ' kW · quote required' }));
+    }
+    return out;
+  }
+  function evUnits(cat) {
+    var ev = cat && cat.ev;
+    if (!ev) return [];
+    return gear('post', ev.post, 'DCFC').concat(gear('unit', ev.unit, 'DCFC'), gear('l2', ev.l2, 'Level 2'), gear('cab', ev.cab, 'Power cabinet'));
+  }
+  function dcUnits(cat) {
+    var dc = cat && cat.dc, out = [], k, e;
+    if (!dc) return out;
+    for (k in dc) {
+      if (!HAS.call(dc, k)) continue;
+      e = dc[k];
+      if (!e || !num(e.kw)) continue;
+      out.push(other('compute', k, e, { mfr: '', note: fmtN(num(e.kw)) + ' kW · quote required' }));
+    }
+    return out;
+  }
+  function solarUnits(cat) {
+    var out = [], mods = cat && cat.solarModules, arr = cat && cat.solarArrays, k, e;
+    if (mods) {
+      for (k in mods) {
+        if (!HAS.call(mods, k)) continue;
+        e = mods[k];
+        if (!e || !num(e.watts)) continue;
+        /* a module's watts are not a system's kW: the array is sized in Site Map */
+        out.push(other('solar', k, { mfr: e.mfr || e.make }, { group: 'module', model: e.label || k, name: e.label || k,
+          short: e.line || e.label || k, kw: null, watts: num(e.watts),
+          note: fmtN(num(e.watts)) + ' W module · sized in Site Map · quote required' }));
+      }
+    }
+    if (arr) {
+      for (k in arr) {
+        if (!HAS.call(arr, k)) continue;
+        e = arr[k];
+        if (!e || !e.label) continue;
+        out.push(other('solar', 'array:' + k, {}, { group: 'array', model: e.label, name: e.label, short: e.label, kw: null,
+          note: 'array layout · sized in Site Map · quote required' }));
+      }
+    }
+    return out;
+  }
+  function altUnits(cat) {
+    var alt = cat && cat.alt, out = [], k, e;
+    if (!alt) return out;
+    for (k in alt) {
+      if (!HAS.call(alt, k)) continue;
+      e = alt[k];
+      if (!e || !num(e.kw)) continue;
+      out.push(other('gen', k, e, { mfr: '', note: fmtN(num(e.kw)) + ' kW' + (e.fuel ? ' · ' + e.fuel : '') + ' · quote required' }));
+    }
+    return out;
+  }
+  /* A battery the circuit check and the cost model can judge and price.
+     Anything else is carried through as quote required / sized in Site Map. */
+  function screenable(u) { return !!(u && (u.kind === 'bess' || !u.kind) && num(u.kw) && num(u.kwh)); }
+  /* The unit list for a project type. A battery or microgrid list is
+     units()'s, with Clean Cell's catalog unless the caller hands its own. */
+  function forType(type, tenant, cat, refs, opts) {
+    var t = primeType(type) || 'bess', c = catOf(cat);
+    if (t === 'ev') return evUnits(c);
+    if (t === 'solar') return solarUnits(c);
+    if (t === 'compute') return dcUnits(c);
+    var b = units(tenant, refs == null ? ccRefs() : refs, opts);
+    return t === 'microgrid' ? b.concat(solarUnits(c), altUnits(c)) : b;
+  }
+  /* The type a record (or a state) is: what it says, else its unit's kind,
+     else a battery — every Prime record before #348 was one. */
+  function typeOf(st) {
+    st = st || {};
+    var p = st.prime && typeof st.prime === 'object' ? st.prime : null;
+    var t = primeType(p ? p.type : st.type) || (p ? primeType(st.type) : '');
+    if (t) return t;
+    var u = st.unit || (p && p.unit) || null;
+    if (u && u.kind && u.kind !== 'bess') return u.kind === 'gen' ? 'microgrid' : (primeType(u.kind) || 'bess');
+    return 'bess';
+  }
+
+  /* A workspace id safe to put on a link. The office still authorizes it;
+     this only refuses a value that is not an org id. The same fenecon fold
+     _projOrgId uses. */
+  function orgId(v) {
+    var s = String(v == null ? '' : v).replace(/^\s+|\s+$/g, '').toLowerCase();
+    if (!s || s.length > 253) return '';
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/.test(s)) return '';
+    if (s === 'fenecon.de' || s === 'fenecon.us') return 'fenecon.com';
+    return s;
+  }
+
+  /* What Site Map puts on /omega-prime. Blank fields are left off. */
+  function linkQuery(f) {
+    f = f || {};
+    var q = [], addr = String(f.addr || '').replace(/^\s+|\s+$/g, ''), lat = fin(f.lat), lng = fin(f.lng), t, org;
+    if (addr) q.push('addr=' + encodeURIComponent(addr));
+    if (lat != null && lng != null) {
+      q.push('lat=' + encodeURIComponent(String(lat)));
+      q.push('lng=' + encodeURIComponent(String(lng)));
+    }
+    if (f.projectId) q.push('project=' + encodeURIComponent(String(f.projectId)));
+    t = primeType(f.type);
+    if (t) q.push('type=' + t);
+    org = orgId(f.org);
+    if (org) q.push('org=' + encodeURIComponent(org));
+    if (f.step === 'logic' || f.step === 'quote') q.push('step=' + f.step);
+    return q.join('&');
+  }
+
   /* ── C2 · GEOMETRY ────────────────────────────────────────────────── */
 
   /* Feet → degrees at a latitude, on the same sphere pathFt measures. */
@@ -363,7 +535,9 @@
   /* The unit at c, long axis east–west; its transformer and disconnect in a
      row EAST of it, 5 ft clear between bodies. A transformer the unit
      integrates (incXfmr) is not drawn, nor a disconnect it integrates
-     (incDisco). A unit with no footprint takes 0 ft for its own extent. */
+     (incDisco). A unit with no footprint takes 0 ft for its own extent. A
+     unit that is not a battery (a charger, an array, a compute unit, #348)
+     is drawn alone: its service gear is sized in Site Map. */
   function arrange(unit, c) {
     var at = ll(c);
     if (!at) return null;
@@ -373,12 +547,12 @@
     var lF = fp !== 'none' ? num(unit.lFt) : null, wF = fp !== 'none' ? num(unit.wFt) : null;
     if (!lF || !wF) { lF = null; wF = null; fp = 'none'; }
     var G = { unit: { c: at, lFt: lF, wFt: wF, rotDeg: 0, footprint: fp }, xfmr: null, disco: null };
-    var edge = (lF || 0) / 2;
-    if (unit.incXfmr !== true) {
+    var edge = (lF || 0) / 2, bat = !unit.kind || unit.kind === 'bess';
+    if (bat && unit.incXfmr !== true) {
       G.xfmr = { c: east(at, edge + GAP_FT + XFMR_FT.lFt / 2), lFt: XFMR_FT.lFt, wFt: XFMR_FT.wFt, rotDeg: 0 };
       edge += GAP_FT + XFMR_FT.lFt;
     }
-    if (unit.incDisco !== true) {
+    if (bat && unit.incDisco !== true) {
       G.disco = { c: east(at, edge + GAP_FT + DISCO_FT.lFt / 2), lFt: DISCO_FT.lFt, wFt: DISCO_FT.wFt, rotDeg: 0 };
     }
     return G;
@@ -526,8 +700,8 @@
      and Prime never writes one afterwards: placing is Site Map's. */
   function projectDoc(st, who, stamp) {
     st = st || {}; who = who || {};
-    var u = st.unit, L = hasLayout(st) ? layout(st) : null;
-    var prime = { v: 2, step: stepOf(st.step), savedAt: stamp || null,
+    var u = st.unit, L = hasLayout(st) ? layout(st) : null, type = typeOf(st);
+    var prime = { v: 2, type: type, step: stepOf(st.step), savedAt: stamp || null,
       by: { uid: str(who.uid), email: str(who.email).toLowerCase() },
       site: siteOf(st), unitKey: u.key, unit: snapshot(u),
       sub: subOf(st.sub), hosting: st.hosting ? clean(st.hosting) : null };
@@ -536,9 +710,11 @@
     if (run) prime.run = run;
     var d = {
       uid: who.uid, orgId: who.orgId, ownerEmail: str(who.email).toLowerCase(), ownerName: who.name || '',
-      name: st.addr, address: st.addr, type: 'bess', siteScopes: ['bess'], stage: 'candidate',
+      name: st.addr, address: st.addr, type: type,
+      siteScopes: type === 'microgrid' ? ['bess', 'solar', 'der'] : [type], stage: 'candidate',
       elements: [], conduits: [], annotations: [],
-      bessList: [bessEntry(u)],
+      /* a battery list only for a battery: Site Map's BESS tools read it */
+      bessList: screenable(u) ? [bessEntry(u)] : [],
       mapState: { lat: +st.lat, lng: +st.lng, zoom: 19 },
       prime: prime
     };
@@ -560,6 +736,7 @@
     st = st || {}; who = who || {}; opts = opts || {};
     var u = st.unit, L = hasLayout(st) ? layout(st) : null, p = {}, k;
     p['prime.v'] = 2;
+    p['prime.type'] = typeOf(st);
     p['prime.step'] = stepOf(st.step);
     p['prime.savedAt'] = stamp || null;
     p['prime.by'] = { uid: str(who.uid), email: str(who.email).toLowerCase() };
@@ -572,7 +749,7 @@
     if (opts.grid && typeof opts.grid === 'object') for (k in opts.grid) if (HAS.call(opts.grid, k) && /^[A-Za-z][A-Za-z0-9_]*$/.test(k)) p['grid.' + k] = clean(opts.grid[k]);
     if (st.load) p.load = clean(st.load);
     if (!opts.editedInSiteMap) {
-      if (opts.unitChanged && u) p.bessList = [bessEntry(u)];
+      if (opts.unitChanged && u) p.bessList = screenable(u) ? [bessEntry(u)] : [];
       if (stamp) p.updatedAt = stamp;
     }
     return p;
@@ -606,7 +783,9 @@
        the list's own entry by key   the catalog may have been corrected
                                      since; a footprint the rep typed
                                      survives the swap
-       else the snapshot Prime kept  (v2 records; v1 kept none)
+       else the snapshot Prime kept  (v2 records; v1 kept none) — a
+                                     charger, array or compute unit (#348)
+                                     is its snapshot, never a battery
        else a SHIPPED unit by key    the R60 and the XXL are this file's own
                                      constants, whoever's list it is
        else the battery entry        footprint unknown
@@ -627,7 +806,7 @@
       else if (o.footprint === 'none' && p.layout && p.layout.unit && p.layout.unit.footprint === 'rep') o = repFootprint(o, p.layout.unit.lFt, p.layout.unit.wFt);
       return o;
     }
-    if (snap && num(snap.kw) && num(snap.kwh)) return snap;
+    if (snap && ((num(snap.kw) && num(snap.kwh)) || snap.kind !== 'bess')) return snap;
     if (key && HAS.call(SHIPPED, key)) return snapshot(SHIPPED[key]);
     return fromBessEntry(b0);
   }
@@ -654,7 +833,7 @@
       isPrime: !!p, v: p ? (P.v || 1) : 0,
       addr: addr, lat: at ? at.lat : null, lng: at ? at.lng : null,
       geoSrc: str(site.src || P.geocode), geoLabel: label, zip: str(site.zip) || zipOf(label) || zipOf(addr),
-      unit: unit, sub: sub, hosting: P.hosting || null, grid: g, load: doc.load || null,
+      type: typeOf(doc), unit: unit, sub: sub, hosting: P.hosting || null, grid: g, load: doc.load || null,
       layout: L, run: run,
       runFresh: !!(run && run.input && L && unit && sameInput(run.input, runInput(unit, L))),
       step: step, quote: P.quote || null, order: P.order || null,
@@ -665,6 +844,7 @@
   var P = { HERO: HERO, STEPS: STEPS, UNIT_KEYS: UNIT_KEYS, R60: R60, XXL: XXL,
     fromEntry: fromEntry, units: units, snapshot: snapshot, repFootprint: repFootprint, isPlaceholder: isPlaceholder,
     bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
+    primeType: primeType, forType: forType, screenable: screenable, typeOf: typeOf, orgId: orgId, linkQuery: linkQuery,
     ftToDeg: ftToDeg, pathFt: pathFt, arrange: arrange, feed: feed, conduitPath: conduitPath, area: area,
     hash: hash, fnv1a: fnv1a, layout: layout, upgrade: upgrade,
     runInput: runInput, runRecord: runRecord, sub: subOf, projectDoc: projectDoc, patch: patch, unitFor: unitFor, restore: restore };

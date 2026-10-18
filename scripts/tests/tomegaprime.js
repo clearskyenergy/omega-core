@@ -239,6 +239,112 @@ assert.ok(!('updatedAt' in pe), 'once Site Map has saved, updatedAt is the edito
 assert.equal(PP.patch({ unit: LG, area: AREA, unitAt: C }, who, 'TS')['prime.run'], null, 'a drawing with no Run clears a stale one'); count++;
 assert.ok(Object.keys(pt).concat(Object.keys(pe)).every(function (k) { return k !== 'prime.quote' && k !== 'prime.order' && k.indexOf('prime.quote.') !== 0 && k.indexOf('prime.order.') !== 0; }), 'Prime never writes the quote or the order'); count++;
 
+/* ── project types, from the editor's catalogs ─────────────────────── */
+assert.equal(PP.primeType('evl2'), 'ev'); assert.equal(PP.primeType('datacenter'), 'compute'); assert.equal(PP.primeType('microgrid'), 'microgrid'); assert.equal(PP.primeType('solar+bess'), 'microgrid'); assert.equal(PP.primeType(''), ''); count += 5;
+assert.equal(PP.linkQuery({ addr: '3400 S Federal St, Chicago, IL 60616', lat: 41.8, lng: -87.6, projectId: 'p1', type: 'evl2', step: 'logic' }),
+  'addr=' + encodeURIComponent('3400 S Federal St, Chicago, IL 60616') + '&lat=41.8&lng=-87.6&project=p1&type=ev&step=logic'); count++;
+assert.equal(PP.linkQuery({ step: 'quote' }), 'step=quote'); count++;
+assert.equal(PP.linkQuery({ org: 'ClearSky-USA.com', projectId: 'p' }), 'project=p&org=clearsky-usa.com'); count++;
+assert.equal(PP.linkQuery({ org: 'fenecon.de' }), 'org=fenecon.com'); count++;
+assert.equal(PP.orgId('not an org'), ''); assert.equal(PP.linkQuery({ org: '../omega_orgs' }), ''); count += 2;
+var CAT = require(path.join(ROOT, 'omega-site-catalogs.js'));
+var edSrc = read('editor.html');
+function sliceObj(name) {
+  var token = 'var ' + name + ' = {', start = edSrc.indexOf(token), i = edSrc.indexOf('{', start), depth = 0, inStr = false, q = '', esc = false;
+  if (start < 0) throw new Error(name);
+  for (; i < edSrc.length; i++) {
+    var c = edSrc[i];
+    if (inStr) { if (esc) { esc = false; continue; } if (c === '\\') { esc = true; continue; } if (c === q) inStr = false; continue; }
+    if (c === '"' || c === "'") { inStr = true; q = c; continue; }
+    if (c === '/' && edSrc[i + 1] === '/') { while (i < edSrc.length && edSrc[i] !== '\n') i++; continue; }
+    if (c === '/' && edSrc[i + 1] === '*') { i += 2; while (i < edSrc.length && !(edSrc[i] === '*' && edSrc[i + 1] === '/')) i++; i++; continue; }
+    if (c === '{') depth++; else if (c === '}') { depth--; if (depth === 0) return edSrc.slice(start, i + 1); }
+  }
+  throw new Error('unclosed ' + name);
+}
+var catSrc = [sliceObj('EVC_POST'), sliceObj('EVC_UNIT'), sliceObj('EVC_L2'), sliceObj('EVC_CAB'), sliceObj('DC_CATALOG'), sliceObj('DER_PV_MODULES'), sliceObj('DERC_ALT')].join(';\n')
+  + ';\nthis.EVC_POST=EVC_POST;this.EVC_UNIT=EVC_UNIT;this.EVC_L2=EVC_L2;this.EVC_CAB=EVC_CAB;this.DC=DC_CATALOG;this.MOD=DER_PV_MODULES;this.ALT=DERC_ALT;';
+var live = {};
+vm.runInNewContext(catSrc.replace(/img:EVIMG_[A-Z0-9_]+,?/g, ''), live);
+function sameNums(got, src, fields, label) {
+  fields.forEach(function (f) {
+    var a = got[f] == null ? null : got[f], b = src[f] == null ? null : src[f];
+    assert.equal(a, b, label + ' ' + f);
+    count++;
+  });
+}
+var ev = PP.forType('ev', null, CAT);
+assert.ok(ev.some(function (u) { return u.key === 'tesla_v4_post'; }) && ev.some(function (u) { return u.key === 'autel_dh480'; }) && ev.some(function (u) { return u.key === 'autel_ac_pro'; }), 'EV chargers from the editor catalog'); count++;
+ev.forEach(function (u) {
+  var src = live.EVC_POST[u.key] || live.EVC_UNIT[u.key] || live.EVC_L2[u.key] || live.EVC_CAB[u.key];
+  assert.ok(src, 'ev unit is in the editor catalog: ' + u.key); count++;
+  sameNums(u, src, ['kw'], u.key);
+  assert.equal(u.lFt, src.lf || null); assert.equal(u.wFt, src.wf || null); count += 2;
+  ['price', 'eqcost', 'cost', 'listPrice'].forEach(function (f) { assert.ok(!(f in u), 'no price on ' + u.key); count++; });
+});
+var comp = PP.forType('compute', null, CAT);
+Object.keys(live.DC).forEach(function (k) {
+  var u = comp.filter(function (x) { return x.key === k; })[0];
+  assert.ok(u, 'compute catalog unit ' + k); count++;
+  assert.equal(u.kw, live.DC[k].kw); assert.equal(u.lFt, live.DC[k].lf); assert.equal(u.wFt, live.DC[k].wf); count += 3;
+});
+var sol = PP.forType('solar', null, CAT);
+assert.equal(sol.filter(function (u) { return u.key === 'nextnrg-eagle-g7b'; })[0].watts, live.MOD['nextnrg-eagle-g7b'].watts); count++;
+assert.equal(sol.filter(function (u) { return u.key === 'generic-550'; })[0].watts, live.MOD['generic-550'].watts); count++;
+assert.ok(sol.some(function (u) { return u.key === 'array:rooftop'; }) && sol.some(function (u) { return u.key === 'array:fixed-ground'; }), 'array layouts from DER_SOLAR_PRESETS'); count++;
+assert.ok(sol.every(function (u) { return u.kw == null; }), 'a module wattage is not invented into a system kW'); count++;
+var mg = PP.forType('microgrid', null, CAT).map(function (u) { return u.key; });
+HERO.concat(['nextnrg-eagle-g7b', 'array:rooftop', 'fuelcell', 'gen_diesel', 'gen_ng', 'microturbine']).forEach(function (k) {
+  assert.ok(mg.indexOf(k) >= 0, 'microgrid includes ' + k); count++;
+});
+assert.ok(mg.indexOf('FENECON-IND-XXL') < 0, 'a microgrid offers FENECON\'s XXL only where FENECON is the workspace, as the battery list does'); count++;
+assert.deepEqual(keysOf(PP.forType('bess', null)), HERO, 'a battery list is units(), Clean Cell\'s catalog found by itself'); assert.deepEqual(keysOf(PP.forType('bess', null, CAT, {})), ['CC-R60'], 'or the catalog the caller hands'); count += 2;
+assert.deepEqual(keysOf(PP.forType('', null, CAT)), HERO, 'an unknown type is a battery'); count++;
+assert.equal(PP.forType('microgrid', null, CAT).filter(function (u) { return u.key === 'fuelcell'; })[0].kw, live.ALT.fuelcell.kw); count++;
+var evDoc = PP.projectDoc({ addr: base.addr, lat: base.lat, lng: base.lng, unit: ev[0], type: 'ev' }, who);
+assert.equal(evDoc.type, 'ev'); assert.deepEqual(evDoc.bessList, []); assert.equal(evDoc.prime.type, 'ev'); count += 3;
+assert.deepEqual(evDoc.siteScopes, ['ev']); assert.equal(evDoc.prime.unit.kind, 'ev'); assert.deepEqual(Object.keys(evDoc.prime.unit), PP.UNIT_KEYS, 'a charger is kept in the one unit shape'); count += 3;
+assert.equal(d.prime.type, 'bess', 'a battery record says so'); assert.equal(PP.projectDoc({ addr: 'x', lat: 1, lng: 2, unit: LG, type: 'microgrid' }, who).siteScopes.join(','), 'bess,solar,der'); count += 2;
+/* the unit rule: a battery, or not */
+assert.ok(PP.screenable(LG) && PP.screenable(R6) && !PP.screenable(ev[0]) && !PP.screenable(sol[0]) && !PP.screenable(comp[0]) && !PP.screenable(null), 'screenable: a battery with power and energy'); count++;
+assert.equal(LG.kind, 'bess'); assert.equal(PP.UNIT_KEYS[1], 'kind'); count += 2;
+var gEv = PP.arrange(ev[0], C);
+assert.equal(gEv.xfmr, null); assert.equal(gEv.disco, null); assert.equal(gEv.unit.footprint, 'catalog', 'a charger at its catalog footprint, with no battery gear beside it'); count += 3;
+var LEv = PP.layout({ unit: ev[0], area: AREA, unitAt: C, poi: st.poi, conduit: true });
+assert.deepEqual(LEv.conduit.pts[0], LEv.unit.c, 'its service run leaves the unit itself'); count++;
+var evStored = JSON.parse(JSON.stringify(PP.projectDoc({ addr: base.addr, lat: C.lat, lng: C.lng, unit: ev[0], type: 'ev', step: 'map', area: AREA, unitAt: C, poi: st.poi, conduit: true }, who, 'TS')));
+assert.equal(PP.typeOf(evStored), 'ev'); assert.equal(PP.typeOf({ type: 'bess', prime: { v: 2 } }), 'bess', 'a record before #348 is a battery'); assert.equal(PP.typeOf({ prime: { unit: { kind: 'gen' } } }), 'microgrid'); assert.equal(PP.typeOf({ type: 'evl2' }), 'ev'); count += 4;
+var rEv = PP.restore(evStored, PP.forType('ev', null, CAT));
+assert.equal(rEv.type, 'ev'); assert.equal(rEv.unit.key, ev[0].key); assert.equal(rEv.unit.kind, 'ev'); assert.deepEqual(rEv.layout, evStored.prime.layout); count += 4;
+var rEvB = PP.restore(evStored, noTenant);
+assert.equal(rEvB.unit.kind, 'ev', 'against a battery list it is still the charger it was, never a battery'); assert.ok(!PP.screenable(rEvB.unit)); count += 2;
+assert.deepEqual(PP.patch({ unit: ev[0], type: 'ev' }, who, 'TS', { unitChanged: true }).bessList, [], 'a charger never writes a battery list'); assert.equal(PP.patch({ unit: ev[0], type: 'ev' }, who, 'TS')['prime.type'], 'ev'); count += 2;
+assert.equal(PP.linkQuery({ lat: null, lng: null, step: 'quote' }), 'step=quote', 'no point is never lat=0'); count++;
+assert.equal(PP.projectDoc({ addr: 'x', lat: 1, lng: 2, unit: PP.XXL, type: 'microgrid' }, who).type, 'microgrid'); count++;
+var pgSrc = read('omega-prime.html');
+assert.ok(pgSrc.indexOf('data-t="microgrid"') > 0 && pgSrc.indexOf('<small>next</small>') < 0 && !/data-t="ev"[^>]*disabled/.test(pgSrc), 'EV, Solar, Compute and Microgrid are selectable'); count++;
+assert.match(pgSrc, /qp\('lat'\)/); assert.match(pgSrc, /PP\.primeType\(qp\('type'\)\)/); assert.match(pgSrc, /Sized in Site Map/); count += 3;
+
+/* Site Map's push builds the same query */
+var factsFn = edSrc.slice(edSrc.indexOf('function omegaAddrOk'), edSrc.indexOf('function omegaPushLogic'));
+var fx = { document: { getElementById: function (id) { return id === 'addr-in' ? { value: '' } : (id === 'omega-addr-in' ? { value: '' } : null); } },
+  _lastAddr: '3400 S Federal St, Chicago, IL 60616', _lastCenter: { lat: 41.81522, lng: -87.62261 }, _projectId: 'proj-9',
+  OmegaProjectTypes: { current: function () { return 'datacenter'; } }, OmegaPrimeProject: PP, opened: '' };
+fx.window = fx; fx.window.open = function (url) { fx.opened = url; };
+vm.createContext(fx); vm.runInContext(factsFn + '\nomegaPushPrime();', fx);
+assert.equal(fx.opened, '/omega-prime?' + PP.linkQuery({ addr: '3400 S Federal St, Chicago, IL 60616', lat: 41.81522, lng: -87.62261, projectId: 'proj-9', type: 'datacenter' })); count++;
+vm.runInContext('omegaPushPrime("logic");', fx);
+assert.ok(/step=logic$/.test(fx.opened), fx.opened); count++;
+assert.match(edSrc, /<script src="\/omega-prime-project\.js"><\/script>/); assert.match(edSrc, /window\._lastAddr=addr/); assert.match(factsFn, /OmegaProjectTypes\.get/); count += 3;
+fx.OmegaProjectTypes = { get: function () { return 'ev'; }, current: function () { return 'bess'; } };
+fx._projectOrgId = 'nextnrg.com';
+fx._projOrgId = function () { return 'clearsky-usa.com'; };
+vm.runInContext('omegaPushPrime();', fx);
+assert.ok(/type=ev(?:&|$)/.test(fx.opened) && /(?:^|&)org=nextnrg\.com(?:&|$)/.test(fx.opened.split('?')[1] || ''), fx.opened); count++;
+fx._projectOrgId = '';
+vm.runInContext('omegaPushPrime();', fx);
+assert.ok(/(?:^|&)org=clearsky-usa\.com(?:&|$)/.test(fx.opened.split('?')[1] || ''), fx.opened); count++;
+
 /* Site Map reads every field the record is made with */
 assert.match(ed, /if\(d\.bessList\)S\.bessList=d\.bessList;/); assert.match(ed, /const ms = d\.mapState \|\| \{\};/); assert.match(ed, /S\.grid\s+= \(d\.grid\s+&& typeof d\.grid==='object'\)/);
 assert.match(ed, /const savedAddr = d\.address/); assert.match(ed, /OmegaWorkspaces\.setProject\(d\.type, d\.siteScopes, true\)/); count += 5;
@@ -341,11 +447,14 @@ assert.match(js, /S\.hostingSum = GV\.hostingSummary\(res\)/, 'prime.hosting is 
 assert.ok(js.indexOf('GV.ask(') < 0 && js.indexOf('GV.circuitBody(') < 0 && js.indexOf('probePoint') < 0 && js.indexOf('OmegaComEdLayers') < 0, 'the one-utility probe is gone'); count++;
 assert.ok(pg.indexOf('omega-comed-layers.js') < 0, 'omega-comed-layers.js is not loaded'); count++;
 /* the shared modules, in order: the products, Clean Cell's catalog, the grid client, Prime's pure half, the deck */
-var order = ['/omega-bess-products.js', '/omega-cleancell-catalog.js?v=20261010-revh2', '/omega-grid-verdict.js', '/omega-prime-project.js', '/omega-quote-deck.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
+var order = ['/omega-bess-products.js', '/omega-cleancell-catalog.js?v=20261010-revh2', '/omega-site-catalogs.js', '/omega-grid-verdict.js', '/omega-prime-project.js', '/omega-quote-deck.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
 assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k - 1]); }), 'the shared modules load in order: ' + order.join(',')); count++;
-/* the units: the workspace's list and Clean Cell's catalog, through PP.units; no XXL default */
-assert.match(js, /B\.load\(\)\.then\(function \(t\) \{\s*UNITS = CCOK \? PP\.units\(t, OmegaCleanCellCatalog\.entries\(\)\) : PP\.units\(t, \{\}\);/); count++;
-assert.match(js, /PP\.units\(null, OmegaCleanCellCatalog\.entries\(\)\)/); count++;
+/* the units: the project type's list (main #348) — a battery's is the
+   workspace's list and Clean Cell's catalog through PP.forType → units; no
+   XXL default */
+assert.match(js, /var l = PP\.forType\(t, tenantList, window\.OmegaSiteCatalogs, CCOK \? OmegaCleanCellCatalog\.entries\(\) : \{\}\);/); count++;
+assert.match(js, /var UNITS = listFor\('bess'\);/); count++;
+assert.match(js, /B\.load\(\)\.then\(function \(t\) \{\s*tenantList = t;\s*if \(!S\.addr\) \{ showType\(S\.type, true\); return; \}/, 'the workspace\'s list redraws the type, a pick kept'); count++;
 assert.ok(js.indexOf('PP.XXL') < 0, 'no FENECON default unit on the page'); count++;
 assert.ok(!/fenecon/i.test(pg) && !/--fen\b/.test(pg), 'no FENECON name or colour on the page'); count++;
 /* the customer's Email field and the Email-it button are two ids: one id
@@ -364,7 +473,8 @@ assert.match(js, /\.doc\(S\.projectId\)\.update\(p\)/); count++;
 assert.equal((js.match(/\.update\(/g) || []).length, 1, 'one write path after the create: the patch'); count++;
 assert.ok(!/\.set\(|updatedAt:/.test(js), 'no whole-document write and no updatedAt of its own (PP.patch decides it)'); count++;
 keys.forEach(function (k) { assert.ok(!new RegExp("['\"]" + k + "['\"]\\s*:|\\." + k + "\\s*=").test(js), 'the page writes no drawing key: ' + k); count++; });
-assert.match(js, /, R = PP\.restore\(d, UNITS\);/, 'resume restores through PP.restore'); count++;
+assert.match(js, /var d = snap\.data\(\) \|\| \{\}, T = PP\.typeOf\(d\), list = listFor\(T\);\s*var R = PP\.restore\(d, list\);/, 'resume restores through PP.restore, against the record\'s own type'); count++;
+assert.match(js, /if \(!R\.isPrime\) \{[^\n]*return; \}\s*S\.type = T; UNITS = list; paintTypes\(\);/, 'and takes the type only for a Prime record'); count++;
 /* the geometry is Prime's pure half: arrange, the conduit from the feed, its ground length, layout v2 */
 assert.match(js, /PP\.arrange\(UNIT, S\.unitAt\)/); assert.match(js, /PP\.conduitPath\(PP\.feed\(G\)\.c, S\.poi\), ft = PP\.pathFt\(pts\)/); assert.match(js, /PP\.layout\(\{ unit: UNIT, area: S\.area, unitAt: S\.unitAt, poi: S\.poi, conduit: S\.conduit \}\)/); count += 3;
 assert.ok(js.indexOf('function miles(a, b) { var R = ') < 0 && js.indexOf('111320') < 0, 'no second geometry on the page'); count++;
@@ -380,7 +490,7 @@ assert.match(js, /Check it on ' \+ esc\(res\.verify\.label/, 'the utility\'s own
 /* homed as userOrg() is: the claim, then the email domain */
 assert.match(js, /var claim = r && r\.claims && r\.claims\.orgId;/); assert.match(js, /orgId: claim \? String\(claim\) : \(B && B\.orgOf \? B\.orgOf\(u\.email\) : ''\)/); count += 2;
 /* Site Map: the saved project, the Guided Build only when Prime placed no unit, the pending save written first */
-assert.match(js, /'\/editor\.html\?id=' \+ encodeURIComponent\(S\.projectId\) \+ \(S\.unitAt \? '' : '&from=prime'\)/); count++;
+assert.match(js, /'\/editor\.html\?id=' \+ encodeURIComponent\(S\.projectId\) \+ \(S\.unitAt && bat\(\) \? '' : '&from=prime'\)/); count++;
 assert.match(js, /flushSave\(\)\.then\(function \(\) \{\s*if \(SV\.state === 'error'\)[\s\S]{0,200}location\.href = href;/, 'the editor link waits for the save'); count++;
 /* the proposal: the door, the deck, the seller's company through tenant-branding */
 assert.match(js, /fetch\('\/api\/customer-quote' \+ \(query \? '\?' \+ query : ''\), o\)/); count++;
@@ -395,6 +505,22 @@ assert.match(js, /var ws = wsOrg\(\)/); assert.match(js, /function wsOrg\(\) \{ 
 assert.match(js, /\/rfq\.html#customer-' \+ encodeURIComponent\(q\.id\)/); assert.match(js, /\/logic-custody\.html\?org=' \+ encodeURIComponent\(custodyOrg\)/); assert.match(js, /action: 'handoff', id: q\.id/); count += 3;
 assert.match(pg, /\['start', 'Site'\], \['atlas', 'Grid Atlas'\], \['circuit', 'Circuit'\], \['load', 'Load'\], \['map', 'Site Map'\], \['quote', 'Proposal'\], \['track', 'Track'\]/, 'the path bar'); count++;
 assert.ok(!/=>|`|\bconst\s|\blet\s|\basync\s/.test(js), 'the page script is ES5'); count++;
+/* main #348 on this page: every project type, Site Map's link read, a
+   unit that is not a battery carried through as quote required, Omega
+   Logic opened on the project's org or the person's own — never the bare
+   directory, and a link org is the safe id */
+assert.ok(pg.indexOf('data-t="microgrid"') > 0 && pg.indexOf('<small>next</small>') < 0 && !/data-t="(ev|solar|compute|microgrid)"[^>]*disabled/.test(pg), 'EV, Solar, Compute and Microgrid are selectable'); count++;
+assert.match(js, /type: S\.type, unit: UNIT,/, 'the record is made with the type'); count++;
+assert.match(js, /var lat = parseFloat\(qp\('lat'\)\), lng = parseFloat\(qp\('lng'\)\);/); assert.match(js, /var t = PP\.primeType\(qp\('type'\)\); if \(t\) showType\(t\);/); assert.match(js, /var org = PP\.orgId\(qp\('org'\)\); if \(org\) S\.linkOrg = org;/); count += 3;
+assert.match(js, /if \(!hit && S\.handed && S\.handed\.addr === q\) hit = \{ lat: S\.handed\.lat, lng: S\.handed\.lng, label: q, src: 'Site Map' \};/, 'Site Map\'s point stands in for its own, unedited address'); count++;
+assert.ok(js.indexOf('S.projectId = pid') < 0 && /S\.editorProjectId = pid/.test(js), 'Site Map\'s project id is never taken as Prime\'s own: resumePushed decides'); count++;
+assert.match(js, /function logicOrg\(\) \{ return PP\.orgId\(S\.orgId\) \|\| S\.linkOrg \|\| PP\.orgId\(S\.who && S\.who\.orgId\) \|\| ''; \}/, 'Omega Logic\'s org: the project, the link, the person — each the safe id'); count++;
+assert.match(js, /href="\/omega-logic\?org=' \+ encodeURIComponent\(org\)/); assert.match(js, /href="\/logic-custody\.html\?org=' \+ encodeURIComponent\(org\)/); count += 2;
+assert.ok(!/href="\/omega-logic"/.test(pg), 'never the bare /omega-logic directory'); count++;
+assert.match(js, /if \(!bat\(\)\) \{ otherQuote\(\); return; \}/); assert.match(js, /if \(!bat\(\)\) \{ otherCircuit\(null, msg\); return; \}/); assert.match(js, /if \(!bat\(\)\) \{ otherCircuit\(res, ''\); return; \}/); count += 3;
+assert.match(js, /unit: asked \? \{ kw: UNIT\.kw, kwh: UNIT\.kwh, name: UNIT\.name \} : null/, 'a unit that is not a battery is never judged at the door'); assert.match(js, /var g = asked \? gridRecord\(\) : null;/, 'nor written to the grid record'); count += 2;
+assert.match(js, /st\('#ed-run', S\.conduit && bat\(\), !!S\.run\);/); assert.match(js, /st\('#ed-quote', !!S\.run \|\| !bat\(\), false\);/); count += 2;
+assert.ok((pg.match(/Sized in Site Map/g) || []).length >= 3 && (pg.match(/Quote required/g) || []).length >= 3, 'the words a non-battery step says'); count++;
 assert.match(ed, /<script src="\/omega-grid-panel\.js"><\/script>[\s\S]{0,400}<script src="\/omega-prime-handoff\.js"><\/script>/); count++;
 
 /* The Site Map hand-off's VM checks moved to scripts/tests/tprimetransfer.js (2026-10-17). */
