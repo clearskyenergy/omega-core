@@ -65,15 +65,25 @@ function limits(mod, inv, temps) {
   };
 }
 
-function chooseCount(nMin, nMax, perRow) {
+/* Longest string that uses the most modules. A tie goes to a length that
+   divides the longest row (HelioScope's along-the-racking pass), then to
+   the longer string. A remainder below nMin is left unstrung. */
+function chooseCount(nMin, nMax, perRow, total) {
   if (nMin > nMax) return { ok: false, n: 0, reason: 'No string length satisfies both the cold Voc limit and the hot power-point limit. Pick a different inverter or module.' };
-  var n = nMax, d;
-  if (perRow > nMin) {
-    for (d = nMax; d >= nMin; d--) {
-      if (perRow % d === 0) { n = d; break; }
+  var best = null, d, full, rem, strung, divides, better;
+  for (d = nMax; d >= nMin; d--) {
+    if (total > 0) {
+      full = Math.floor(total / d);
+      rem = total - full * d;
+      strung = (rem === 0 || rem >= nMin) ? total : total - rem;
+    } else {
+      strung = d;
     }
+    divides = (perRow > nMin && perRow % d === 0) ? 1 : 0;
+    better = !best || strung > best.strung || (strung === best.strung && (divides > best.divides || (divides === best.divides && d > best.n)));
+    if (better) best = { n: d, strung: strung, divides: divides };
   }
-  return { ok: true, n: n };
+  return { ok: true, n: best.n };
 }
 
 function sizeConductor(amps, volts, lengthFt, dropLimit) {
@@ -101,11 +111,23 @@ function design(opts) {
   var lim = limits(mod, inv, temps);
   var longest = 0, r;
   for (r = 0; r < (lay.rows || []).length; r++) if (lay.rows[r].count > longest) longest = lay.rows[r].count;
-  var pick = chooseCount(lim.nMin, lim.nMax, longest || lim.nMax);
+  var pick = chooseCount(lim.nMin, lim.nMax, longest || lim.nMax, lay.modules);
   if (!pick.ok) return { ok: false, reason: pick.reason, limits: lim };
   var n = pick.n;
-  var modules = lay.modules;
-  var strings = Math.ceil(modules / n);
+  var placed = lay.modules;
+  /* A remainder shorter than the hot-voltage minimum is not a string.
+     HelioScope will warn and still place one. This design leaves it out. */
+  var full = Math.floor(placed / n);
+  var rem = placed - full * n;
+  var shortN = 0;
+  var unstrung = 0;
+  if (rem > 0) {
+    if (rem >= lim.nMin) shortN = rem;
+    else unstrung = rem;
+  }
+  var modules = placed - unstrung;
+  var strings = full + (shortN ? 1 : 0);
+  if (!strings) return { ok: false, reason: 'Not enough modules for one string inside ' + lim.nMin + '–' + lim.nMax + '.', limits: lim };
   var dcAc = opts.dcAc > 0 ? opts.dcAc : 1.25;
   var targetAc = (modules * mod.watts) / dcAc;
   var nInv = Math.max(1, Math.ceil(targetAc / inv.paco));
@@ -133,9 +155,12 @@ function design(opts) {
   var wiringLoss = (stringDrop + homeDrop) / 100;
   if (wiringLoss < 0) wiringLoss = 0;
   if (wiringLoss > 0.1) wiringLoss = 0.1;
+  var stringWord = full + ' strings of ' + n;
+  if (shortN) stringWord += ' and 1 string of ' + shortN;
+  if (unstrung) stringWord += ', ' + unstrung + ' module' + (unstrung === 1 ? '' : 's') + ' left unstrung';
   var oneLine = [
     modules + ' × ' + mod.manufacturer + ' ' + mod.name + ' (' + mod.watts + ' W)',
-    strings + ' strings of ' + n,
+    stringWord,
     combiners + ' combiner' + (combiners === 1 ? '' : 's') + ' (' + poles + ' poles)',
     'home run ' + (homeWire.awg || '—') + ' Cu, ' + Math.round(homeFt) + ' ft',
     nInv + ' × ' + inv.name + ' (' + inv.kwAc + ' kW)',
@@ -144,11 +169,16 @@ function design(opts) {
   return {
     ok: true,
     modulesPerString: n,
+    shortString: shortN,
+    placed: placed,
+    strung: modules,
+    unstrung: unstrung,
     strings: strings,
     inverters: nInv,
     combiners: combiners,
     poles: poles,
     stringsPerCombiner: stringsOn,
+    watts: pdc,
     kwDc: Math.round(pdc / 100) / 10,
     kwAc: Math.round(pac / 100) / 10,
     dcAc: Math.round(actual * 100) / 100,
@@ -169,5 +199,5 @@ module.exports = {
   chooseCount: chooseCount,
   sizeConductor: sizeConductor,
   design: design,
-  VERSION: 'solar-string/1'
+  VERSION: 'solar-string/2'
 };

@@ -160,8 +160,10 @@ function layout(opts) {
   var across = portrait ? mod.widthFt : mod.lengthFt;
   var spacing = null;
   var gcr;
-  if (opts.gcr > 0) {
+  var explicit = opts.gcr > 0;
+  if (explicit) {
     gcr = num(opts.gcr, 0.4);
+    spacing = { gcr: gcr, note: 'Row pitch uses the ground-coverage ratio the design asked for.' };
   } else if (mountKey === 'tracker-1ax') {
     spacing = trackerGcr(lat);
     gcr = spacing.gcr;
@@ -172,8 +174,9 @@ function layout(opts) {
     spacing = solsticeGcr(lat, tilt, azimuth, {});
     gcr = spacing.gcr;
   }
-  if (gcr > preset.gcrCap) gcr = preset.gcrCap;
-  if (preset.gcrFloor && gcr < preset.gcrFloor) gcr = preset.gcrFloor;
+  if (!explicit && gcr > preset.gcrCap) gcr = preset.gcrCap;
+  if (gcr > 0.98) gcr = 0.98;
+  if (!explicit && preset.gcrFloor && gcr < preset.gcrFloor) gcr = preset.gcrFloor;
   var pitch = chord / gcr;
   var inset = G.offsetPolygon(ring, setback);
   if (!inset.ok) return inset;
@@ -304,5 +307,5 @@ module.exports = {
   trackerGcr: trackerGcr,
   layout: layout,
   optimize: optimize,
-  VERSION: 'solar-layout/1'
+  VERSION: 'solar-layout/2'
 };

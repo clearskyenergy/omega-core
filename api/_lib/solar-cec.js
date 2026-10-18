@@ -84,7 +84,10 @@ var INVERTERS = [
   inv({ key: 'sungrow-125', name: 'Sungrow SG125HV', manufacturer: 'Sungrow', vac: 600, paco: 125000, pdco: 127418, vdco: 945, pso: 97.9892, pnt: 5.59, c0: -8.60718e-8, c1: 1.83602e-5, c2: 0.00417508, c3: 0.0024596, vdcmax: 1200, idcmax: 134.834, mpptLow: 860, mpptHigh: 1200 }),
   inv({ key: 'solaredge-110', name: 'SolarEdge SE110KUS', manufacturer: 'SolarEdge', vac: 480, paco: 109988, pdco: 111889, vdco: 850, pso: 300.458, pnt: 7.3, c0: -8.42229e-8, c1: 2.12272e-5, c2: 0.00406884, c3: 0.00442437, vdcmax: 950, idcmax: 131.635, mpptLow: 795, mpptHigh: 950 }),
   inv({ key: 'huawei-100', name: 'Huawei SUN2000-100KTL-USH0', manufacturer: 'Huawei', vac: 800, paco: 100000, pdco: 101448, vdco: 1120, pso: 180.746, pnt: 2.61, c0: -8.38884e-8, c1: -1.08228e-5, c2: 9.35388e-7, c3: 0.00157648, vdcmax: 1200, idcmax: 90.5781, mpptLow: 880, mpptHigh: 1200 }),
-  inv({ key: 'solectria-100', name: 'Solectria PVI-100TL-480', manufacturer: 'Yaskawa Solectria', vac: 480, paco: 100000, pdco: 101978, vdco: 720, pso: 195.947, pnt: 21.54, c0: -9.02014e-8, c1: -2.42851e-5, c2: -0.00113853, c3: -0.000624912, vdcmax: 850, idcmax: 141.636, mpptLow: 340, mpptHigh: 850 })
+  inv({ key: 'solectria-100', name: 'Solectria PVI-100TL-480', manufacturer: 'Yaskawa Solectria', vac: 480, paco: 100000, pdco: 101978, vdco: 720, pso: 195.947, pnt: 21.54, c0: -9.02014e-8, c1: -2.42851e-5, c2: -0.00113853, c3: -0.000624912, vdcmax: 850, idcmax: 141.636, mpptLow: 340, mpptHigh: 850 }),
+  /* 60 kW class, 1,300 V. The 125 kW units are too big for this block.
+     CEC measured Paco is 66 kW. Read 2026-10-18. */
+  inv({ key: 'sungrow-60', name: 'Sungrow SC60HV', manufacturer: 'Sungrow', vac: 480, paco: 66000, pdco: 67413.2, vdco: 850, pso: 164.592, pnt: 0.26, c0: -1.66958e-7, c1: 1.40636e-5, c2: 0.00190885, c3: 0.000305414, vdcmax: 1300, idcmax: 79.3096, mpptLow: 700, mpptHigh: 1300 })
 ];
 
 function byKey(list, key) {

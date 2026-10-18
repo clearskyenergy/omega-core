@@ -14,7 +14,7 @@ var Weather = require('./solar-weather');
 var Price = require('./solar-price');
 var Report = require('./solar-report');
 
-var VERSION = 'solar-design/1';
+var VERSION = 'solar-design/2';
 
 function num(v, d) { var n = +v; return isFinite(n) ? n : d; }
 
@@ -113,7 +113,7 @@ function design(input) {
       rows: lay.rows, hours: met.hours,
       tilt: lay.tilt, azimuth: lay.azimuth, pitchFt: lay.pitchFt, chordFt: lay.chordFt,
       mount: lay.mount, orientation: lay.orientation, heightFt: lay.heightFt,
-      obstructions: input.exclusions || [],
+      obstructions: (input.exclusions || []).concat(input.obstructions || []),
       horizon: input.horizon || [],
       backtrack: input.backtrack !== false
     });
@@ -124,8 +124,9 @@ function design(input) {
   var sys = {
     lat: lat, lon: lon, tz: met.tz,
     tilt: lay.tilt, azimuth: lay.azimuth, mount: lay.mount, gcr: lay.gcr,
-    pdcW: lay.watts,
+    pdcW: wires.watts,
     pacW: wires.kwAc * 1000,
+    inverterCount: wires.inverters,
     gamma: mod.gammaPmp,
     losses: L,
     tempCoeff: Energy.tempCoeff(lay.mount),
@@ -172,7 +173,7 @@ function design(input) {
   if (priced.region && priced.region.factor) priceSummary += ' Labor factor ' + priced.region.factor + ' (' + (priced.region.name || priced.region.geography) + ') applies to labor lines only.';
 
   var bom = [
-    { item: mod.manufacturer + ' ' + mod.name, qty: lay.modules, unit: 'module', note: mod.watts + ' W, CEC' },
+    { item: mod.manufacturer + ' ' + mod.name, qty: wires.strung, unit: 'module', note: mod.watts + ' W, CEC' + (wires.unstrung ? ('; ' + wires.unstrung + ' placed module' + (wires.unstrung === 1 ? '' : 's') + ' left unstrung') : '') },
     { item: inv.name, qty: wires.inverters, unit: 'inverter', note: inv.kwAc + ' kW AC, CEC' },
     { item: 'DC combiner, ' + wires.poles + '-pole', qty: wires.combiners, unit: 'combiner', note: '' },
     { item: 'String conductor ' + wires.string.conductor.awg + ' Cu', qty: wires.strings, unit: 'string', note: wires.string.ft + ' ft each' },
@@ -202,7 +203,9 @@ function design(input) {
     kwDc: wires.kwDc,
     kwAc: wires.kwAc,
     dcAc: wires.dcAc,
-    modules: lay.modules,
+    modules: wires.strung,
+    placed: wires.placed,
+    unstrung: wires.unstrung,
     moduleName: mod.manufacturer + ' ' + mod.name,
     moduleKey: mod.key,
     inverters: wires.inverters,

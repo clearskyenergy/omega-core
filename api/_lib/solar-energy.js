@@ -91,8 +91,18 @@ function pvwattsAc(pdc, pac0, etaNom) {
   return pac;
 }
 
-/* Sandia grid-tie inverter at the CEC reference DC voltage. */
-function sandiaAc(pdc, inv) {
+/* Sandia grid-tie inverter at the CEC reference DC voltage.
+   count is how many of that inverter share the array. Each one sees
+   an equal share of the DC. Clipping one unit's nameplate against the
+   whole array would throw away every inverter after the first. */
+function sandiaAc(pdc, inv, count) {
+  var n = count > 1 ? count : 1;
+  if (!(pdc > inv.pso * n)) return 0;
+  var pac = sandiaUnit(pdc / n, inv, true) * n;
+  return pac > 0 ? pac : 0;
+}
+
+function sandiaUnit(pdc, inv, clip) {
   if (!(pdc > inv.pso)) return 0;
   var A = inv.pdco;
   var B = inv.pso;
@@ -100,7 +110,7 @@ function sandiaAc(pdc, inv) {
   var denom = A - B;
   if (!(Math.abs(denom) > 1e-6)) return 0;
   var pac = ((inv.paco / denom) - C * denom) * (pdc - B) + C * (pdc - B) * (pdc - B);
-  if (pac > inv.paco) pac = inv.paco;
+  if (clip && pac > inv.paco) pac = inv.paco;
   if (pac < 0) pac = 0;
   return pac;
 }
@@ -180,7 +190,7 @@ function oneHour(sys, w, shadeBeam) {
   var pdc = pdcTemp * derate;
   if (pdc < 0) pdc = 0;
   var pacRaw;
-  if (sys.inverter && sys.inverter.paco) pacRaw = sandiaAc(pdc, sys.inverter);
+  if (sys.inverter && sys.inverter.paco) pacRaw = sandiaAc(pdc, sys.inverter, sys.inverterCount);
   else pacRaw = pvwattsAc(pdc, sys.pacW, sys.etaNom);
   var pac = pacRaw * (1 - (L.availability || 0));
   return {
@@ -271,13 +281,8 @@ function simulate(sys, weather, shadeAt) {
 function unclippedAc(pdc, sys) {
   if (!(pdc > 0)) return 0;
   if (sys.inverter && sys.inverter.paco) {
-    var inv = sys.inverter;
-    if (!(pdc > inv.pso)) return 0;
-    var A = inv.pdco, B = inv.pso, C = inv.c0;
-    var denom = A - B;
-    if (!(Math.abs(denom) > 1e-6)) return 0;
-    var pac = ((inv.paco / denom) - C * denom) * (pdc - B) + C * (pdc - B) * (pdc - B);
-    return pac > 0 ? pac : 0;
+    var n = sys.inverterCount > 1 ? sys.inverterCount : 1;
+    return sandiaUnit(pdc / n, sys.inverter, false) * n;
   }
   var etaNom = sys.etaNom || 0.96;
   var pac0 = sys.pacW;
@@ -336,5 +341,5 @@ module.exports = {
   simulate: simulate,
   exceedance: exceedance,
   sigmaOf: sigmaOf,
-  VERSION: 'solar-energy/1'
+  VERSION: 'solar-energy/2'
 };

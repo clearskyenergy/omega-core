@@ -135,6 +135,12 @@ var inv = CEC.inverterByKey('cps-125');
 var temps = Weather.extremes(Weather.year(33.45, -112.07).hours);
 var wires = Stringing.design({ module: mod, inverter: inv, layout: lay, temps: { tMin: temps.tMin, tCellHot: temps.tMax + 25 } });
 check(wires.ok && wires.modulesPerString >= wires.limits.nMin && wires.modulesPerString <= wires.limits.nMax, 'string length ' + wires.modulesPerString + ' is inside ' + wires.limits.nMin + '–' + wires.limits.nMax + ' at ' + temps.tMin + '°C');
+var packed = Stringing.chooseCount(19, 23, 31, 124);
+check(packed.ok && packed.n === 21, '124 modules string at 21, which uses every module, rather than 23, which leaves 9 out (' + packed.n + ')');
+var sg = CEC.inverterByKey('sungrow-60');
+var oneInv = Energy.sandiaAc(120000, sg, 1);
+var twoInv = Energy.sandiaAc(120000, sg, 2);
+check(oneInv === sg.paco && twoInv > oneInv && twoInv < sg.paco * 2, 'two inverters share the DC (' + Math.round(twoInv) + ' W) instead of clipping the array to one nameplate');
 var refused = Stringing.design({ module: mod, inverter: inv, layout: lay, temps: { tMin: -10, tCellHot: 70 } });
 check(refused.ok === false && refused.reason.indexOf('string length') >= 0, 'an extreme cold and hot pair refuses a string that would break 690.7');
 check(wires.string.conductor.ok && wires.string.conductor.dropPct <= 2, 'string drop ' + wires.string.conductor.dropPct + '% is within 2%');
@@ -189,11 +195,17 @@ var rep = Design.design({
   lat: 33.45, lon: -112.07,
   mount: 'fixed-ground',
   tilt: 25, azimuth: 180,
-  boundary: [{ x: 0, y: 0 }, { x: 80, y: 0 }, { x: 80, y: 50 }, { x: 0, y: 50 }],
+  boundary: [{ x: 0, y: 0 }, { x: 90, y: 0 }, { x: 90, y: 55 }, { x: 0, y: 55 }],
   exclusions: [{ pts: [{ x: 30, y: 10 }, { x: 50, y: 10 }, { x: 50, y: 25 }, { x: 30, y: 25 }], heightFt: 20 }],
   state: 'AZ'
 });
 check(rep.ok === true, 'a drawn field returns a design');
+var tooSmall = Design.design({
+  lat: 33.45, lon: -112.07, mount: 'fixed-ground', tilt: 25, azimuth: 180,
+  boundary: [{ x: 0, y: 0 }, { x: 80, y: 0 }, { x: 80, y: 50 }, { x: 0, y: 50 }],
+  exclusions: [{ pts: [{ x: 30, y: 10 }, { x: 50, y: 10 }, { x: 50, y: 25 }, { x: 30, y: 25 }], heightFt: 20 }]
+});
+check(tooSmall.ok === false && tooSmall.reason.indexOf('Not enough modules') >= 0, 'a field that cannot fill one string is refused');
 check(rep.text.indexOf('Solar design report') >= 0 && rep.text.indexOf('Loss tree') >= 0 && rep.text.indexOf('Monthly') >= 0 && rep.text.indexOf('Shading') >= 0 && rep.text.indexOf('Bill of materials') >= 0 && rep.text.indexOf('Wiring') >= 0, 'the report has the HelioScope sections');
 check(rep.summary.p90 < rep.summary.p50 && rep.wiring.modulesPerString > 0 && rep.pricing.perWdc > 0, 'P90, strings, and a price are on the report');
 check(!rep.hours && !(rep.layout && rep.layout.modules && rep.layout.corners), 'the answer does not ship the 8,760 or module corners');

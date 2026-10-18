@@ -170,7 +170,7 @@ The compare table also lists, on the higher tiers as marked: a 50,000-component 
 | Shade | A 40 ft object south of a row on 21 December noon takes that row's beam from 0% to 100% in that hour. | — |
 | Price | 500 kW roof → $1.98/Wdc. Carport → no price, sent to `quote()` as canopy. | DOE Table 2 |
 
-A 9 kW fixed-tilt example with a 20 ft keepout on the same Phoenix year returned 1,460 kWh/kW, 17.3% beam shade, and $2.95/W because it is under 25 kW (the residential line).
+A 12.8 kW fixed-tilt example with a 20 ft keepout on the same Phoenix year returned 1,538.6 kWh/kW, 14.5% beam shade, and $2.95/W because it is under 25 kW (the residential line). The field places 22 modules. A string on the CPS 125 kW inverter is exactly 20 at that year's cold hour, so 2 modules are left unstrung. A smaller field that cannot fill one string is refused.
 
 ## Decisions for Thomas
 
@@ -191,3 +191,38 @@ A 9 kW fixed-tilt example with a 20 ft keepout on the same Phoenix year returned
 8. **HelioScope Basic is $159 / $1,620 on the official page.** Pro's dollar amount did not render in the text retrieved on 2026-10-18. A review dated 21 September 2026 reads that page as $259 / $2,640. Confirm the Pro price in a browser before anyone repeats it.
 
 9. **Do not claim we are within 1% of PVsyst.** The equation checks against PVWatts V5 hold. The annual number is a synthetic desert year at 1,758 kWh/kW for a 1 kW open-rack array. Wiring an NSRDB year is the next measurement, not a wording change.
+
+10. **29 W Main is a validation site, not a traced roof.** The city footprint layer has nothing on the parcel. The roof in the run is the published 7,000 sq ft retail plate. A canopy on the whole lot is the design a person would trace from today's imagery. Neighbor heights are assumptions. The kWh is the clear-sky year. See the section below.
+
+## 29 West Main Street, Mesa
+
+Parcel 138-41-024, 29 W Main St, Mesa, AZ 85201. Maricopa assessor, read 2026-10-18: owner DT MESA HOLDCO LLC, land 20,367 sq ft. The ring used here is that parcel in local feet, about 131 ft east-west by 156 ft north-south, origin at the southwest corner (33.414488°N, 111.832772°W). The City of Mesa building-footprint layer (BaseMap_Public, layer 22) has no footprint on the parcel and publishes no heights. The bank that stood here was demolished. East Valley Tribune, 26 July 2023, described about 7,000 sq ft of ground-floor retail and 21 parking spaces for a project that was not built. That plate, on the Main Street frontage, is the roof in this run. It is not a roof traced from a photograph.
+
+Neighbors that can throw a shadow, from the same city layer, as bounding boxes: 21 W Main (east, on the property line), 37 W Main (about 22 ft west), Heritage Academy at 32 S Center (southeast, not due south), and 30 W Main across the street (the right-of-way is about 131 ft). Storefronts are taken as 18 ft. Heritage is run at 24 ft and again at 40 ft, because that height is not published. The roof array is 16 ft to the top of the module. The canopy is 14 ft.
+
+The comparison is HelioScope's published commercial recipe on this geometry, not a file from their application. No HelioScope login was used. Their guide draws a low-tilt fixed roof with a 4 or 6 ft setback and row spacing that is unshaded from 10:00 to 14:00 on the winter solstice, a carport as its own racking, a DC/AC target near 1.25, and voltage drop held under 2%. Shade removes beam and leaves diffuse. A TMY is their P50. Pro adds a multi-year P90. This run uses the same layout rules and this engine's clear-sky desert year.
+
+| | Roof, the 7,000 sq ft plate | Parking canopy, south of a 24 ft drive | Canopy on the whole open lot |
+| --- | --- | --- | --- |
+| Racking | Fixed tilt, open-rack temperature, 10° south, 4 ft setback | Carport, 7° south, 5 ft setback, 14 ft clear | Same carport on the assessor ring |
+| Modules | 124 × Jinko JKM640N, all strung | 180 × Jinko JKM640N, all strung | 420 modules, 268.8 kW DC |
+| kW | 79.4 DC / 66 AC, DC/AC 1.20 | 115.2 DC / 132 AC, DC/AC 0.87 | — |
+| Spacing | GCR 0.778, pitch 10.0 ft. That is 21 December, 10:00–14:00. The ground-mount cap of 0.55 is tighter than this and was not used. | GCR 0.831, pitch 9.4 ft, under the 0.9 carport cap | Same spacing |
+| Strings | 5 of 21 and 1 of 19. Window 19–23 on the Sungrow SC60HV at this year's cold hour. | 7 of 23 and 1 of 19. Two inverters. | — |
+| Beam shade, neighbors on | 8.7%. Front row 0.4%. The three rows behind it 11.5%. | 9.5%. Front row 0.1%. The back row 11.8%. | 10.8% |
+| Neighbors off | 8.6%, 126,331 kWh | 9.3%, 171,719 kWh | — |
+| Year-1 AC | 126,148 kWh, 1,590 kWh/kW. P90 117,905 kWh. | 171,519 kWh, 1,489 kWh/kW. P90 160,311 kWh. | 395,107 kWh, 1,470 kWh/kW |
+| Price | $1.98/Wdc, commercial | No published carport price | No published carport price |
+
+Roof plus canopy is 194.6 kW DC and 297,667 kWh, 1,530 kWh/kW.
+
+What matches HelioScope's recipe: the tilt, the azimuth (180 is south, as they define it), the 4 ft roof setback, the solstice window, the carport as its own rack, and beam-off / diffuse-on shade. The front row is essentially open. The shade on the rows behind it is the array shading itself.
+
+What does not match a HelioScope download:
+
+- **Neighbors barely touch the year.** They add 0.1 point of beam shade on the roof (183 kWh) and 0.2 point on the canopy (200 kWh). Raising Heritage Academy from 24 ft to 40 ft adds another 0.2 point and 285 kWh on the canopy. The school sits southeast of the lot, the stores sit east and west, and the building across Main Street is a street-width away. A HelioScope model with LIDAR heights would move these by feet, not by a different answer. The shade that matters is the row pitch.
+- **The canopy DC/AC is 0.87, not 1.25.** One Sungrow SC60HV (CEC measured 66 kW, MPPT 700–1,300 V) on 115 kW would be 1.75. The sizer adds a second unit so the ratio stays at or under 1.25, and lands at 0.87. The roof, at 1.20, is the one that lands near the target. HelioScope would pick an inverter closer to 92 kW out of the full CEC list. The 50 kW class unit checked for this site does not open a string window on the Jinko 640 at Mesa's cold hour.
+- **Energy is not their TMY.** 1,590 and 1,489 kWh/kW are this clear-sky desert year. HelioScope's P50 would be a Mesa TMY, and a Pro P90 would be multi-year weather, not the 5.1% Gaussian used here (P90 is about 6.5% under P50). Do not quote these kWh as HelioScope's.
+- **There is no roof on the imagery.** The 7,000 sq ft plate is the published retail plan. The whole-lot canopy is what a designer can trace today: 268.8 kW, 1,470 kWh/kW, 10.8% beam shade, 395,107 kWh. It is larger because it covers the drive and the retail footprint.
+
+`node scripts/tests/tmesamain.js` locks these figures. A change in the weather year or the spacing rule has to update this section with it.
