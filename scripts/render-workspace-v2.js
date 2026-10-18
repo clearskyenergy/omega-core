@@ -146,15 +146,18 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     var sections = [];
     Array.prototype.forEach.call(document.querySelectorAll('#side-nav .sn-section-label'), function (s) { if (getComputedStyle(s).display !== 'none') sections.push(s.textContent); });
     return {
-      hex: !!document.querySelector('.hexhub'), where: (document.body.innerText || '').indexOf('Where to?') >= 0,
+      hex: !!document.querySelector('#hub .hexhub'), where: (document.body.innerText || '').indexOf('Where to?') >= 0,
+      cells: Array.prototype.map.call(document.querySelectorAll('#hub [data-hub]'), function (g) { return g.getAttribute('data-hub'); }),
+      next: !!document.getElementById('next'),
       steps: steps, now: (document.querySelector('#journey [aria-current="step"]') || {}).getAttribute ? document.querySelector('#journey [aria-current="step"]').getAttribute('data-step') : '',
       burns: (needs.match(/Burns/g) || []).length, addrNeeds: (needs.match(/4846/g) || []).length, addrTrack: (track.match(/4846/g) || []).length,
       account: account, trialInNeeds: /trial/i.test(needs), sections: sections, greet: (document.getElementById('greet') || {}).textContent || '',
       saved: /Saved \d+ times/.test(track), queue: /need a battery size/.test(needs)
     };
   });
-  ok('after: no hex launcher and no Where to?', !after.hex && !after.where, after);
+  ok('after: the hex sits with the journey and the Next card', after.hex && after.where && after.next && after.cells.join(',') === 'design,customers,projects,prime,quotes,market,orders', after);
   ok('after: eight steps and Design is current for the unsized queue', after.steps.join(',') === 'arrive,customer,project,design,analyze,propose,order,track' && after.now === 'design', after);
+  await shot(desk.p, 'workspace-v2-home.png');
   ok('after: each review title once, and the address dump is gone from Needs you', after.burns === 1 && after.addrNeeds === 0 && after.queue, after);
   ok('after: the repeated address is one card', after.addrTrack === 1 && after.saved, after);
   ok('after: the trial sits in the account band, not in the work list', /trial/i.test(after.account) && !after.trialInNeeds, after);
@@ -203,7 +206,19 @@ function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
     return { tabs: !!(tabs && getComputedStyle(tabs).display !== 'none'), steps: document.querySelectorAll('#journey .step').length, journeyRight: Math.round(jr.right), wide: document.documentElement.scrollWidth > document.documentElement.clientWidth + 1 };
   });
   ok('phone: the journey fits and the tab bar is there', ph.steps === 8 && ph.tabs && !ph.wide && ph.journeyRight <= 390, ph);
+  var phHex = await phone.p.evaluate(function () {
+    var hub = document.getElementById('hub'), svg = hub ? hub.querySelector('svg') : null;
+    var r = svg ? svg.getBoundingClientRect() : { width: 0, right: 0, bottom: 0 };
+    var hb = hub ? hub.getBoundingClientRect() : { bottom: 0 };
+    var orders = hub ? hub.querySelector('[data-hub="orders"]') : null;
+    var ob = orders ? orders.getBoundingClientRect() : { bottom: 0, right: 0 };
+    return { cells: hub ? hub.querySelectorAll('[data-hub]').length : 0, width: Math.round(r.width), right: Math.round(r.right), where: !!hub && /Where to\?/.test(hub.textContent || ''), ordersBottom: Math.round(ob.bottom), hubBottom: Math.round(hb.bottom), ordersRight: Math.round(ob.right) };
+  });
+  ok('phone: the hex is on the page and inside the screen', phHex.cells === 7 && phHex.where && phHex.width > 200 && phHex.right <= 390 && phHex.ordersRight <= 390 && phHex.ordersBottom <= phHex.hubBottom + 1, phHex);
   await shot(phone.p, 'workspace-v2-phone.png');
+  await phone.p.click('#hub [data-hub="market"]');
+  var market = await phone.p.waitForFunction(function () { return location.pathname.indexOf('marketplace') >= 0 ? location.pathname : null; }, null, { timeout: 8000 }).then(function (h) { return h.jsonValue(); }, function () { return phone.p.url(); });
+  ok('phone: the Marketplace cell opens the catalogue', String(market).indexOf('marketplace') >= 0, market);
   ok('phone: no uncaught errors', !phone.errs.length, phone.errs);
   await phone.ctx.close();
 

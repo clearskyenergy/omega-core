@@ -74,6 +74,14 @@ body.ws-v2 .ows-search{position:relative}
 .next .links{display:flex;flex-wrap:wrap;gap:14px;margin-top:4px}
 .next .links a{color:#1E4A8C;font-weight:600;font-size:13px}
 
+.where{display:grid;grid-template-columns:minmax(280px,440px) minmax(0,1fr);gap:14px;align-items:stretch}
+.where .next{min-width:0;height:100%;box-sizing:border-box}
+#hub{min-width:0}
+#hub .hexhub{margin:0;height:100%;box-sizing:border-box;display:flex;flex-direction:column}
+#hub .hexhub h2{text-align:left;margin:0 8px 2px;font-size:20px}
+#hub .hexhub .hh-cap{text-align:left;margin:0 8px 4px}
+#hub .hexhub svg{margin-top:auto;margin-bottom:auto}
+
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .kpi{background:#fff;border:1px solid #E4E8EC;border-radius:14px;padding:14px 14px 12px;text-decoration:none;color:inherit;min-width:0}
 .kpi .v{font:600 22px/1 "DM Mono",ui-monospace,monospace;letter-spacing:-.3px}
@@ -105,6 +113,7 @@ body.ws-v2 .ows-search{position:relative}
 
 @media (max-width:1040px){
   .journey{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .where{grid-template-columns:minmax(0,1fr)}
   .kpis{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media (max-width:700px){
@@ -148,6 +157,7 @@ body.ws-v2 .ows-search{position:relative}
 <script src="/omega-workspace-hub.js"></script>
 <script src="/omega-workspace-today.js"></script>
 <script src="/omega-workspace-shell.js"></script>
+<script src="/omega-hexhub.js"></script>
 <script src="/omega-workspace-v2.js"></script>
 <script>
 (function () {
@@ -312,6 +322,31 @@ function cardHref(c) {
   return '/projects.html';
 }
 
+function pickHub(key) {
+  var item = null;
+  (VIEW && VIEW.hub || []).forEach(function (it) { if (it.key === key) item = it; });
+  if (!item || !item.href) return;
+  if (item.href.charAt(0) === '#') {
+    var el = document.querySelector(item.href);
+    if (el && el.scrollIntoView) el.scrollIntoView({ block: 'start' });
+    try { history.replaceState(null, '', location.pathname + location.search + item.href); } catch (e) {}
+    return;
+  }
+  window.location.href = item.href;
+}
+function paintHub(v) {
+  var el = byId('hub');
+  if (!el) return;
+  var items = (v && v.hub) || [];
+  var caption = (WS && (WS.clientName || WS.orgId)) || '';
+  if (window.OmegaHexHub && typeof OmegaHexHub.render === 'function') {
+    OmegaHexHub.render(el, { items: items, title: 'Where to?', caption: caption, onPick: pickHub });
+    return;
+  }
+  el.innerHTML = '<section class="next"><h2>Where to?</h2>' + items.map(function (it) {
+    return '<a class="ows-pill" data-hub="' + esc(it.key) + '" href="' + esc(it.href) + '">' + esc(it.label) + (it.badge ? ' · ' + esc(it.badge) : '') + '</a>';
+  }).join(' ') + '</section>';
+}
 function render() {
   if (!WS) return;
   VIEW = model();
@@ -331,6 +366,8 @@ function render() {
     return '<li><a class="step' + (s.now ? ' now' : '') + (s.done ? ' done' : '') + '" data-step="' + esc(s.key) + '" href="' + esc(s.href) + '"' + (s.now ? ' aria-current="step"' : '') + '><span class="n">' + (s.done ? '✓' : esc(s.n)) + '</span><span><b>' + esc(s.label) + '</b><small>' + esc(s.blurb) + '</small></span></a></li>';
   }).join('') + '</ol>';
 
+  h += '<div class="where">';
+  h += '<div id="hub"></div>';
   if (step) {
     h += '<section class="next" id="next" aria-labelledby="next-h"><div class="eyebrow">' + (v.fresh ? 'Start here' : 'Next') + '</div><h2 id="next-h">' + esc(step.title) + '</h2><p>' + esc(step.detail) + '</p><div class="actions">';
     if (step.act && step.act.kind === 'new') h += '<button class="ows-pill primary" type="button" id="new-project-card">New project</button>';
@@ -338,6 +375,7 @@ function render() {
     (step.links || []).forEach(function (l) { if (l.href !== step.href) h += '<a class="ows-pill" href="' + esc(l.href) + '">' + esc(l.label) + '</a>'; });
     h += '</div></section>';
   }
+  h += '</div>';
 
   h += '<div class="kpis" id="kpis">' + (v.kpis || []).map(function (k) {
     var tag = k.href ? 'a' : 'div';
@@ -365,6 +403,7 @@ function render() {
   h += '</section>';
 
   byId('content').innerHTML = h;
+  paintHub(v);
   var work = 0; v.groups.forEach(function (g) { work += g.rows.length; });
   S.badge('home', work);
   Array.prototype.forEach.call(document.querySelectorAll('[data-act]'), function (b) {

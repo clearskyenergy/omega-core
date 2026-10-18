@@ -78,7 +78,13 @@ function homeReturn(search) {
 }
 ok('Home from a section stays on the classic workspace', homeReturn('') === 'home' && homeReturn('?org=northstar') === 'home' && homeReturn('?ui=v1') === 'home' && homeReturn('?ui=classic') === 'home' && homeReturn('?ui=v2') === 'home');
 var v2 = fs.readFileSync(path.join(__dirname, '../../workspace-v2.html'), 'utf8');
-ok('the preview does not load the hex hub', v2.indexOf('omega-hexhub.js') < 0 && v2.indexOf('Where to?') < 0);
+ok('the journey home draws Logic\'s hex hub', v2.indexOf('omega-hexhub.js') >= 0 && v2.indexOf('Where to?') >= 0 && v2.indexOf('OmegaHexHub.render') >= 0);
+var doors = home.hub.map(function (it) { return it.key + ':' + it.label; });
+ok('the hex is seven cells and Design is the centre', doors.join('|') === 'design:Design|customers:Customers|projects:Projects|prime:Prime|quotes:Quotes|market:Market|orders:Orders', doors);
+ok('live counts are the queue, the projects and the quotes already on the page', home.hub[0].badge === '72' && home.hub[2].badge === String(projects.length) && home.hub[4].badge === '' && home.hub[0].hint === 'Site Map', home.hub.map(function (it) { return it.key + '=' + it.badge; }));
+ok('Design opens the unfinished site and Orders stays the quote desk until Logic is on', /editor/.test(home.hub[0].href) && /m71/.test(home.hub[0].href) && home.hub[6].href === '/rfq.html' && home.hub[5].href === '/marketplace.html', home.hub.map(function (it) { return it.href; }));
+var withQuotes = V.hub({ projects: [{ id: 'p' }], quotesWaiting: 4, logicOffice: true, needsSize: 0, needsDesign: 2, canOpen: function () { return true; } });
+ok('a Logic workspace counts quotes and opens Orders in the office', withQuotes[4].badge === '4' && withQuotes[6].href === '/omega-logic#orders' && withQuotes[6].hint === 'Logic' && withQuotes[0].badge === '2', withQuotes.map(function (it) { return it.key + '=' + it.badge + '@' + it.href; }));
 var hidden = V.home({ projects: [{ id: 'a' }, { id: 'b' }], needsSize: 72, needs: [{ key: 'trial', t: 'Your trial ends in 2 days', s: 'Keep what you use.', cta: 'See plans', href: '/workspace#plans' }], cards: [] });
 ok('a design queue that did not fit in Today is still one count, with no addresses', hidden.groups.some(function (g) { return g.key === 'queue' && g.rows[0].title === '72 candidates need a battery size' && g.rows[0].detail.indexOf('4846') < 0; }) && hidden.account.length === 1);
 var partial = built.needs.filter(function (r) { return r.key !== 'review:b2' && r.key !== 'review:c2'; });
