@@ -10,7 +10,9 @@
 
      units()       the battery list: the tenant's own products (the ONE
                    product list, omega-bess-products.js) first, then the
-                   shipped FENECON Industrial XXL; specs only, never a price
+                   shipped reference units — CleanCell US's brochure Rev H
+                   (omega-cleancell-catalog.js) and the FENECON Industrial
+                   XXL; specs only, never a price
      projectDoc()  the record a new project is created with, in the shapes
                    editor.html's _loadProject reads back (bessList, mapState,
                    grid, address, type) — the drawing arrays empty, because
@@ -49,20 +51,74 @@
       note: num(e.kw).toLocaleString('en-US') + ' kW / ' + num(e.kwh).toLocaleString('en-US') + ' kWh', tenant: true };
   }
 
+  /* ── THE SHIPPED REFERENCE UNITS ──────────────────────────────────────
+     CleanCell US's brochure Rev H, read from omega-cleancell-catalog.js —
+     the SAME entries the editor's battery picker features, never a second
+     copy of the specs (2026-10-17, Tommy: "I need the cleancell batteries
+     in the omega prime"). The editor loads that file off the picker
+     (omega-bess-products.js), which Prime has no element of, so Prime loads
+     it itself. Planning specifications: every one is a quote, and a
+     footprint the brochure does not release stays unknown rather than being
+     drawn as a generic container — drawUnits says Site Map places it. */
+  var CC_NAME = { 'CLEANCELL-CC290-125-REV-H': 'CleanCell CC290/125',
+                  'CLEANCELL-LGJP2-1000-REV-H': 'CleanCell LG JP-2',
+                  'CLEANCELL-SM-1000-REV-H': 'CleanCell Smart Module' };
+
+  function ccCatalog() {
+    if (root.OmegaCleanCellCatalog) return root.OmegaCleanCellCatalog;
+    if (typeof require === 'function') { try { return require('./omega-cleancell-catalog.js'); } catch (e) {} }
+    return null;
+  }
+
+  function refs() {
+    var C = ccCatalog(), out = [], e, k, u;
+    if (!C || typeof C.entries !== 'function') return out;
+    try { e = C.entries(); } catch (err) { return out; }
+    for (k in e) {
+      if (!Object.prototype.hasOwnProperty.call(e, k)) continue;
+      u = fromEntry(k, e[k]);
+      if (!u) continue;
+      u.tenant = false; u.ref = true;
+      /* A footprint the brochure has not RELEASED is not a footprint: the
+         CC290/125's cabinet figures are the cabinet alone, with the PCS
+         beside it to be confirmed, and the other two are pending release.
+         Prime leaves all three unknown rather than laying out a pad that
+         the system does not fit on; Site Map places it. */
+      if (e[k].dimensionsStatus && e[k].dimensionsStatus !== 'released') { u.lFt = null; u.wFt = null; }
+      if (CC_NAME[k]) { u.name = CC_NAME[k]; u.short = CC_NAME[k].replace(/^CleanCell /, ''); }
+      u.note = u.note + ' DC \u00b7 ' + (e[k]._incPCS === true ? 'integrated container, PCS inside' : 'battery enclosure, separate PCS');
+      out.push(u);
+    }
+    return out;
+  }
+
   /* The tenant's list first (their own products lead, as they do in the
-     Guided Build), then the shipped XXL unless the list already carries it
-     — or the workspace is OWN-ONLY (omega-bess-products.js ownOnlyOf: a
+     Guided Build), then the shipped reference units — the CleanCell US
+     brochure Rev H, then the FENECON Industrial XXL — each unless the
+     tenant's own list already carries it.
+
+     An OWN-ONLY workspace (omega-bess-products.js ownOnlyOf: a
      white-labelled manufacturer offers its own batteries only, 2026-10-16)
-     and has at least one of its own to offer, so nobody gets an empty list. */
+     is offered no reference unit at all: a maker's own platform must never
+     lay out a competitor's container. It falls back to the XXL alone, and
+     only when it has nothing placeable of its own, so nobody gets an empty
+     list. */
   function units(tenant) {
-    var out = [], keys = (tenant && tenant.keys) || [], i, u, hasXxl = false;
+    var out = [], keys = (tenant && tenant.keys) || [], i, u, have = {}, ref, hasXxl = false;
     for (i = 0; i < keys.length; i++) {
       u = fromEntry(keys[i], tenant.entries[keys[i]]);
       if (!u) continue;
       if (/industrial\s*xxl/i.test(u.name)) hasXxl = true;
+      have[u.key] = true;
       out.push(u);
     }
-    if (!hasXxl && !(tenant && tenant.ownOnly && out.length)) out.push(XXL);
+    if (tenant && tenant.ownOnly) {
+      if (!out.length) out.push(XXL);
+      return out;
+    }
+    ref = refs();
+    for (i = 0; i < ref.length; i++) if (!have[ref[i].key]) out.push(ref[i]);
+    if (!hasXxl && !have[XXL.key]) out.push(XXL);
     return out;
   }
 
@@ -119,7 +175,7 @@
     return d;
   }
 
-  var P = { XXL: XXL, fromEntry: fromEntry, units: units, bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
+  var P = { XXL: XXL, fromEntry: fromEntry, refs: refs, units: units, bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
             layout: layout, projectDoc: projectDoc };
   root.OmegaPrimeProject = P;
   if (typeof module !== 'undefined' && module.exports) module.exports = P;

@@ -21,20 +21,35 @@ function read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
 var PP = require(path.join(ROOT, 'omega-prime-project.js'));
 
 /* ── the unit list ──────────────────────────────────────────────────── */
+var CC = ['CLEANCELL-CC290-125-REV-H', 'CLEANCELL-LGJP2-1000-REV-H', 'CLEANCELL-SM-1000-REV-H'];
 var none = PP.units(null);
-assert.equal(none.length, 1); assert.equal(none[0].key, 'FENECON-IND-XXL'); assert.equal(none[0].kw, 2508); count += 3;
+assert.deepEqual(none.map(function (u) { return u.key; }), CC.concat(['FENECON-IND-XXL']), 'the shipped reference units: CleanCell Rev H, the XXL after'); count++;
+assert.equal(none[none.length - 1].kw, 2508); count++;
+/* the CleanCell specs are read from omega-cleancell-catalog.js, never copied */
+var REF = require(path.join(ROOT, 'omega-cleancell-catalog.js')).entries();
+CC.forEach(function (k, i) {
+  assert.equal(none[i].kw, REF[k].kw); assert.equal(none[i].kwh, REF[k].kwh); count += 2;
+  assert.equal(none[i].lFt, null, 'a footprint the brochure has not released is never drawn: ' + k); count++;
+  assert.equal(none[i].ref, true); assert.ok(!none[i].tenant); count += 2;
+  ['price', 'eqcost', 'cost', 'listPrice'].forEach(function (f) { assert.ok(!(f in none[i]), 'no price on a reference unit: ' + f); count++; });
+});
+assert.match(none[0].name, /^CleanCell /); count++;
+assert.ok(!/omega-cleancell-catalog/.test(read('omega-prime-project.js').replace(/\/\*[\s\S]*?\*\//g, '').replace(/require\('\.\/omega-cleancell-catalog\.js'\)/, '')), 'one require, no second copy of the specs'); count++;
 var tenant = { keys: ['CLEANCELL-CC-2000', 'CLEANCELL-MOD-1', 'CLEANCELL-NOFOOT'], entries: {
   'CLEANCELL-CC-2000': { mfr: 'Clean Cell', model: 'CC-2000', kw: 1000, kwh: 2000, usable: 1900, dur: 2, widthFt: 8, depthFt: 20, xfmr: '1500 kVA' },
   'CLEANCELL-MOD-1': { mfr: 'Clean Cell', model: 'Module', kwh: 5 },                       /* no kW: not placeable */
   'CLEANCELL-NOFOOT': { mfr: 'Clean Cell', model: 'R60', kw: 60, kwh: 61.44 } } };
 var us = PP.units(tenant);
-assert.deepEqual(us.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT', 'FENECON-IND-XXL'], 'the tenant\'s own products lead, the XXL after'); count++;
+assert.deepEqual(us.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT'].concat(CC, ['FENECON-IND-XXL']), 'the tenant\'s own products lead, the reference units after, the XXL last'); count++;
 assert.equal(us[0].name, 'Clean Cell CC-2000'); assert.equal(us[0].lFt, 20); assert.equal(us[0].wFt, 8); assert.equal(us[0].tenant, true); count += 4;
 assert.equal(us[1].lFt, null, 'a footprint not on file stays unknown, never assumed'); assert.equal(us[1].hours, 1.02); count += 2;
 var own = PP.units({ ownOnly: true, keys: tenant.keys, entries: tenant.entries });
 assert.deepEqual(own.map(function (u) { return u.key; }), ['CLEANCELL-CC-2000', 'CLEANCELL-NOFOOT'], 'an own-only manufacturer is offered its own batteries only'); count++;
+assert.deepEqual(PP.units({ ownOnly: true, keys: ['FEN-OWN'], entries: { 'FEN-OWN': { mfr: 'FENECON', model: 'Industrial M', kw: 100, kwh: 200 } } }).map(function (u) { return u.key; }), ['FEN-OWN'], 'a maker\'s own platform is never offered another maker\'s reference unit'); count++;
 assert.equal(PP.units({ ownOnly: true, keys: ['CLEANCELL-MOD-1'], entries: tenant.entries })[0].key, 'FENECON-IND-XXL', 'own-only with nothing placeable of its own still gets a unit'); count++;
-assert.equal(PP.units({ keys: ['FEN-XXL'], entries: { 'FEN-XXL': { mfr: 'FENECON', model: 'Industrial XXL', kw: 2508, kwh: 5015 } } }).length, 1, 'no second XXL when the list carries it'); count++;
+assert.deepEqual(PP.units({ keys: ['FEN-XXL'], entries: { 'FEN-XXL': { mfr: 'FENECON', model: 'Industrial XXL', kw: 2508, kwh: 5015 } } }).map(function (u) { return u.key; }), ['FEN-XXL'].concat(CC), 'no second XXL when the list carries it'); count++;
+assert.equal(PP.units({ keys: [CC[0]], entries: (function () { var o = {}; o[CC[0]] = { mfr: 'CleanCell US', model: 'CC290/125', kw: 125, kwh: 289.3 }; return o; })() })
+  .filter(function (u) { return u.key === CC[0]; }).length, 1, 'a reference unit the tenant already lists is never offered twice'); count++;
 ['price', 'eqcost', 'cost'].forEach(function (k) { assert.ok(!(k in PP.XXL) && !(k in us[0]), 'no price on a unit: ' + k); count++; });
 
 /* ── readers ────────────────────────────────────────────────────────── */
@@ -69,7 +84,7 @@ var rules = read('firestore.rules'), keys = JSON.parse(rules.match(/function dra
 var pg = read('omega-prime.html');
 ['net >= UNIT.kw', 'else if (net > 0)', 'SMALLEST_OFFER_KW', "'<b>Fits.</b>"].forEach(function (t) { assert.ok(pg.indexOf(t) < 0, 'a verdict rule is in Omega Prime: ' + t); count++; });
 assert.match(pg, /GV\.ask\(body\)/); assert.match(pg, /GV\.circuitBody\(S\.probe, 0, S\.circuitUtility\)/); assert.match(pg, /GV\.fields\(S\.verdict, S\.probe, 0\)/); count += 3;
-var order = ['/omega-comed-layers.js', '/omega-bess-products.js', '/omega-grid-verdict.js', '/omega-prime-project.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
+var order = ['/omega-comed-layers.js', '/omega-bess-products.js', '/omega-cleancell-catalog.js?v=20261010-revh2', '/omega-grid-verdict.js', '/omega-prime-project.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
 assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k - 1]); }), 'the shared modules load in order'); count++;
 assert.match(pg, /B\.load\(\)\.then\(function \(t\) \{ UNITS = PP\.units\(t\);/); count++;
 assert.match(pg, /fetch\('\/api\/utility-rates\?zip=' \+ encodeURIComponent\(zip\)/); count++;

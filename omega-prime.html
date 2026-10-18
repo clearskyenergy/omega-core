@@ -349,6 +349,7 @@ table.bom tr.fen td{background:#FFF3E8}
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script src="/omega-comed-layers.js"></script>
 <script src="/omega-bess-products.js"></script>
+<script src="/omega-cleancell-catalog.js?v=20261010-revh2"></script>
 <script src="/omega-grid-verdict.js"></script>
 <script src="/omega-prime-project.js"></script>
 <script>
@@ -361,13 +362,15 @@ table.bom tr.fen td{background:#FFF3E8}
   function toast(m) { var t = $('#toast'); t.textContent = m; t.classList.add('on'); clearTimeout(toast.h); toast.h = setTimeout(function () { t.classList.remove('on'); }, 2600); }
 
   /* The unit: the tenant's own product list first, then the shipped
-     FENECON Industrial XXL (OmegaPrimeProject.units). Specs only; the price
-     is the manufacturer's quote, never a figure here. */
+     reference units — CleanCell US's brochure Rev H, then the FENECON
+     Industrial XXL (OmegaPrimeProject.units). Specs only; the price is the
+     manufacturer's quote, never a figure here. */
   var PP = window.OmegaPrimeProject, UNITS = [PP.XXL], UNIT = PP.XXL;
   function drawUnits() {
     var sel = $('#unitSel'); sel.innerHTML = '';
     UNITS.forEach(function (u, i) { var o = document.createElement('option'); o.value = String(i); o.textContent = u.name + ' \u2014 ' + u.note; if (u === UNIT) o.selected = true; sel.appendChild(o); });
     $('#unitCard').innerHTML = '<b>' + esc(UNIT.name) + '</b>' + esc(UNIT.note) + ' \u00b7 ' + (UNIT.tenant ? 'your product list' : 'quote required') +
+      (UNIT.ref ? ' \u00b7 planning specification, verify before release' : '') +
       (UNIT.lFt ? '' : ' \u00b7 footprint not on file: Site Map places it');
     var us = $('#unitSel2'); if (us) us.textContent = UNIT.name + ' \u2014 ' + UNIT.note;
   }
