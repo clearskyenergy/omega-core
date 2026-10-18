@@ -190,10 +190,10 @@ function openOmegaCore(){
 <script src="/omega-core-qualify.js"></script>
 <!-- Grid Atlas built into Site Map (docs/GUIDED-SITE-FLOW.md, 2026-10-16):
      the Grid panel reads the site point and the Guided Build's unit, takes
-     the nearest substation from the Grid Atlas service, the circuit from the
-     utility's own hosting map through the ONE ComEd layer module (the Site
-     Finder's), and the verdict from api/grid-verdict. Nothing pasted here. -->
-<script src="/omega-comed-layers.js"></script>
+     the nearest substation from the Grid Atlas service, and asks the
+     national door (api/hosting-capacity, 2026-10-17) Omega Prime asks for
+     the serving utility, its published hosting capacity and the verdict.
+     Nothing pasted here; the ComEd layer module is the Site Finder's. -->
 <script src="/omega-grid-verdict.js"></script>
 <script src="/omega-grid-panel.js"></script>
 <script src="/omega-editor-features.js"></script>

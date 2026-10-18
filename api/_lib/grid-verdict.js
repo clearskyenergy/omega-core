@@ -1,15 +1,17 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
    The grid verdict for ONE site against ONE unit (docs/GUIDED-SITE-FLOW.md,
    2026-10-16, Tommy: "that's how the Grid Atlas should work, and we should
-   have the Grid Atlas built into the editor"). Site Map's Grid panel sends
-   the nearest substation (from the Grid Atlas service), the circuit at the
-   parcel (from the utility's own hosting map, read through
-   omega-comed-layers.js probePoint) and the unit chosen in the BESS Guided
-   Build; this answers the substation's chip and the circuit's verdict —
-   Fits / Fits only smaller / Needs a study — in words a rep can say to a
-   client. Pure, ES5, no I/O. Eligibility logic, so it lives here and never
-   in the page (CLAUDE.md, IP protection): the distances, voltage classes and
-   the smallest unit worth offering do not leave this side.
+   have the Grid Atlas built into the editor"). Site Map's Grid panel and
+   Omega Prime send the nearest substation (from the Grid Atlas service) and
+   the unit chosen in the BESS Guided Build to the national door
+   (api/hosting-capacity.js), which reads the circuit at the parcel off the
+   serving utility's own published map and judges it here, in-process;
+   POST /api/grid-verdict is the same engine for a caller that already
+   holds a circuit. This answers the substation's chip and the circuit's
+   verdict — Fits / Fits only smaller / Needs a study — in words a rep can
+   say to a client. Pure, ES5, no I/O. Eligibility logic, so it lives here
+   and never in the page (CLAUDE.md, IP protection): the distances, voltage
+   classes and the smallest unit worth offering do not leave this side.
 
    What it never does: invent a figure. A circuit with no published hosting
    is a study, never a fit; a substation with no voltage on record says so;

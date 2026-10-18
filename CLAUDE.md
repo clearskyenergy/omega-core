@@ -1410,19 +1410,33 @@ editor"; `docs/GUIDED-SITE-FLOW.md`). Analyze › Grid Check
 (`rb-grid-panel`, Omega Grid's, beside Grid Atlas) is `omega-grid-panel.js`:
 the project's site point and the BESS Guided Build's unit (never typed),
 the nearest substation from the Grid Atlas service the pre-screen already
-calls (`OmegaGridPrescreen`, `/api/grid-atlas`), the circuit at the parcel
-from `omega-comed-layers.js` `probePoint` (the ONE ComEd module, loaded by
-the editor; never pasted), NET of the feeder's queued DER first, and the
+calls (`OmegaGridPrescreen`, `/api/grid-atlas`), then the serving utility
+and the circuit at the parcel from the national door Omega Prime asks
+(2026-10-17: `GV.hosting` → `POST /api/hosting-capacity` with the point,
+the unit and that substation; National hosting capacity, below), NET of the
+queue where the utility publishes one beside a gross figure, and the
 verdict — Fits / Fits only smaller / Needs a study, and the substation's
-chip — from `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated as
-`/api/grid-atlas` is; every threshold is server-side). `S.grid` carries the
-service's measurement plus `substation`, `circuit` and `verdict`, rides
-`saveProject()`'s allowlist (with `savedBy`), is restored on load, and the
-pre-screen keeps the panel's answer when it re-measures the same point.
-`scripts/tests/tgridverdict.js`. The standalone Grid Atlas and Site Finder
-stay for prospecting many sites. Both the panel and Omega Prime ask through
-ONE client, `omega-grid-verdict.js` (request, `/api/grid-verdict`, and the
-`grid.*` record shape). **Omega Prime sets up the real project** (2026-10-16,
+chip — in the same answer from `api/_lib/grid-verdict.js` (gated as
+`/api/grid-atlas` is; every threshold is server-side). Every coverage case
+is drawn as Prime draws it (the utility's name, every candidate when the
+territory is not confident, where the power comes from, the provenance and
+the door's request log, the utility's own map), the queue and side words
+follow the answer (`queueNetted`, `basis`, a null `queuedKw` is "not
+published", never 0), the panel names no utility of its own, and the
+editor no longer loads `omega-comed-layers.js` (the Site Finder's). A door
+that does not answer is said and records nothing. `S.grid` carries the
+service's measurement plus `substation`, `circuit` and `verdict`
+(`GV.fromHosting`, the record Prime writes), rides `saveProject()`'s
+allowlist (with `savedBy`), is restored on load, and the pre-screen keeps
+the panel's answer when it re-measures the same point.
+`scripts/tests/tgridverdict.js` (the real door on a fake network: ComEd's
+sentence byte for byte, Mesa AZ) and `scripts/render-grid-panel.js` (in
+`check:pages`: the real editor's Grid Check at ComEd and Mesa, and on a
+390 px phone). The standalone Grid Atlas and Site Finder stay for
+prospecting many sites. Both the panel and Omega Prime ask through ONE
+client, `omega-grid-verdict.js` (the national door, `/api/grid-verdict`,
+the coverage words `COVERAGE`, and the `grid.*` record shape). **Omega
+Prime sets up the real project** (2026-10-16,
 Tommy: "it does the set up and system like the artifact sandbox"), and
 **carries it all the way to Omega Teleios** (2026-10-17, Tommy: "print a
 quote … cleancell's bess specs … remove fenecon … when we open in site map
