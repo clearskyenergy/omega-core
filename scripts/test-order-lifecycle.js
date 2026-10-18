@@ -40,6 +40,21 @@ function seed(){db=new DB();db.seed('omega_orgs/cleancell.us',{status:'active',n
 async function orderReady(){seed();var out=await call(po,input()),path='orders/'+out.orderId,o=db.rows.get(path);o.logic={releasedAt:'today',acceptedAt:'today',invoices:{deposit:{amountCents:10,satisfied:true},balance:{amountCents:90,satisfied:true}}};db.seed(path,o);['S1','S2'].forEach(function(s){db.seed('plant_units/cleancell.us__'+s,{serial:s,rootSerial:s,orgId:'cleancell.us',orderId:out.orderId,sku:'CAB',shipUnit:true,at:'ready',test:{result:'pass'}});});return out.orderId;}
 function plan(id){return {action:'plan',orderId:id,revision:0,legId:'load1',destinationId:'a',serials:['S1','S2'],carrier:'Example broker',tracking:'TEST-BOL',evidence:'Test booking reference only'};}
 async function main(){
+await test('design order keeps its saved project and BOM on the shipping ledger', async function () {
+  seed();
+  var D = require('../api/_lib/design-order');
+  var draft = D.draft({ designerOrgId: 'cleancell.us', project: { id: 'example-site', name: 'Example site', address: '100 Main St, Chicago, IL 60601' }, lines: [{ sku: 'CAB', qty: 2 }], catalogs: { 'cleancell.us': [{ sku: 'CAB', name: 'Cabinet', kind: 'product', active: true }] } });
+  var doc = D.documentOf({ order: draft.orders[0], email: staff.email, now: '2026-10-17T12:00:00Z', createdAt: 123 });
+  db.seed('orders/design-example', doc);
+  var out = await logistics({ method: 'GET', query: { org: 'cleancell.us' }, caller: staff }, res);
+  var order = out.orders.filter(function (o) { return o.id === 'design-example'; })[0];
+  assert.equal(order.projectId, 'example-site');
+  assert.equal(order.destinations[0].address.line1, '100 Main St');
+  assert.equal(order.items[0].sku, 'CAB');
+  assert.equal(order.items[0].qty, 2);
+  await assert.rejects(logistics({ method: 'GET', query: { org: 'cleancell.us' }, caller: { uid: 'outside', email: 'x@other.example', orgId: 'other.example' } }, res));
+});
+
 await test('56-unit PO preserves account terms, destinations and ignores client pricing',async function(){seed();var b=input();b.price=1;b.status='paid';b.customer={email:'victim@example.com'};var r=await call(po,b),o=db.rows.get('orders/'+r.orderId);assert.equal(o.status,'new');assert.equal(o.customer.email,buyer.email);assert.equal(o.items[0].qty,56);assert.equal(o.requestedTerms.depositPct,20);assert.equal(o.logic,undefined);assert.equal(o.pricing,undefined);assert.equal(o.delivery.destinations.length,2);});
 await test('concurrent identical PO retries create only one order',async function(){seed();var r=await Promise.all([call(po,input()),call(po,input())]);assert.equal(r[0].orderId,r[1].orderId);assert.equal(r[1].duplicate,true);assert.equal(Array.from(db.rows.keys()).filter(function(k){return /^orders\/[^/]+$/.test(k);}).length,1);});
 await test('same PO number with changed allocation is rejected',async function(){seed();await call(po,input());var b=input();b.destinations[0].items[0].qty=29;b.destinations[1].items[0].qty=27;await assert.rejects(call(po,b),/different details/);});

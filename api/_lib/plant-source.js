@@ -55,7 +55,7 @@ function sourceOf(order) {
   return {
     poNumber: text(po || intake || order.poNumber, 80) || null,
     projectId: text(order.sourceProjectId || order.projectId, 120) || null,
-    projectName: plainName(order.projectName) || plainName(order.sourceProjectName) || plainName(poDoc && poDoc.projectName) || null,
+    projectName: plainName(order.projectName) || plainName(order.sourceProjectName) || plainName(poDoc && poDoc.projectName) || plainName(order.design && order.design.projectName) || null,
     customerName: (cust && (plainName(cust.company) || plainName(cust.name))) || null,
     address: (sites[0] && sites[0].address) || addressOf(cust && cust.address),
     items: linesOf(order.items),

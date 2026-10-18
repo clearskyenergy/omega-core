@@ -118,7 +118,7 @@ module.exports = A.handler(async function (req, res) {
          release, so a corrected project, address or line is what the card
          shows. Another tenant's order is skipped. A bad id leaves source
          null rather than failing the whole card. */
-      var source=null;
+      var source=null,journey=null;
       if(wo.orderId){
         var orderId=null;
         try{orderId=P.id(wo.orderId);}catch(e){if(!e||e.status!==400)throw e;}
@@ -126,11 +126,11 @@ module.exports = A.handler(async function (req, res) {
           var orderSnap=await db.collection('orders').doc(orderId).get();
           if(orderSnap.exists){
             var orderDoc=orderSnap.data()||{};
-            if(String(orderDoc.orgId||'').toLowerCase()===String(org).toLowerCase())source=Source.sourceOf(orderDoc);
+            if(String(orderDoc.orgId||'').toLowerCase()===String(org).toLowerCase()){source=Source.sourceOf(orderDoc);var stage=require('./_lib/office-stage'),path=stage.path(orderDoc,{},ctx.config&&ctx.config.accounting,null);journey={at:path.at,state:path.state,step:path.step,label:path.label};}
           }
         }
       }
-      return {workOrder:detailWo,units:detailUnits,limited:members.size>400,board:Board.row(detailWo,detailUnits),activity:Board.activity(detailUnits,detailWo,60),canControl:await controls(db,caller,org,ctx),lines:flow.lines,source:source};
+      return {workOrder:detailWo,units:detailUnits,limited:members.size>400,board:Board.row(detailWo,detailUnits),activity:Board.activity(detailUnits,detailWo,60),canControl:await controls(db,caller,org,ctx),lines:flow.lines,source:source,path:journey,steps:require('./_lib/office-stage').PATH};
     }
     if (req.query.serial) {
       var serial = Plant.serialFrom(req.query.serial);

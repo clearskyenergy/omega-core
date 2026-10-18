@@ -142,6 +142,11 @@ function seedOwn() {
   assert.equal(saved.design.estimateCents, 63900000);
   assert.equal(saved.design.address, CHICAGO);
   assert.equal(saved.customer.address.city, 'Chicago');
+  var floor = require('../../api/_lib/plant-source').sourceOf(saved);
+  assert.equal(floor.projectId, saved.projectId);
+  assert.equal(floor.projectName, 'Harbor yard');
+  assert.equal(floor.address.line1, saved.delivery.destinations[0].address.line1);
+  assert.deepEqual(floor.items.map(function (l) { return [l.sku, l.qty]; }), saved.items.map(function (l) { return [l.sku, l.qty]; }));
   assert.equal(saved.customer.address.zip, '60601');
   assert.equal(saved.items[0].sku, 'CC-C215');
   assert.equal(saved.items[0].qty, 2);

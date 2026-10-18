@@ -184,6 +184,7 @@ function drawDetail(){var d=detail,r=d.board,p=r.progress,units=d.units||[];
  var factory=(data.links&&data.links.factory)||'',office=(data.links&&data.links.office)||'';
  var record='';if(d.source&&(d.source.poNumber||d.source.projectId))record='<details class="fold" id="record"><summary>Purchase order record</summary><div class="in">'+(d.source.poNumber?'<p>PO '+esc(d.source.poNumber)+'</p>':'')+(d.source.projectId?'<p class="note">Project record '+esc(d.source.projectId)+'</p>':'')+'</div></details>';
  $('detail').innerHTML='<button type="button" id="back">← Back to board</button><button type="button" id="close" aria-label="Close">✕</button><p class="eyebrow">Work order</p><h2>'+esc(r.orderNo)+'</h2><p><span class="badge '+STAGE_CLASS[r.stage]+'">'+esc(r.stageLabel)+'</span> '+(r.late?'<span class="badge bad">Late</span> ':'')+(r.priority==='urgent'?'<span class="badge warn">Urgent</span> ':'')+'<span class="note">'+esc(lineName(r.lineId))+'</span></p>'
+ +(d.path&&d.steps?OmegaLogicTheme.pathBar(d.steps,{p:d.path}):'')
  +journeyBlock(d.source,r.orderId,r,units)
  +'<details class="fold" id="steps"><summary>Operation steps'+(here?' · '+esc(here):'')+'</summary><div class="in steps">'+steps+'</div></details>'
  +qualityBlock(units)

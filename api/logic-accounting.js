@@ -103,12 +103,12 @@ function projectOf(o) {
   var name = String(d.projectName == null ? '' : d.projectName).replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 200);
   return { projectId: id, projectName: name || null };
 }
-function attachProjects(led, docs) {
+function attachProjects(led, docs, config) {
   var byId = {};
-  (docs || []).forEach(function (s) { byId[s.id] = projectOf(s.data()); });
+  (docs || []).forEach(function (s) { byId[s.id] = projectOf(s.data()); byId[s.id].path = require('./_lib/office-stage').path(s.data(), {}, config.accounting, null); });
   (led.rows || []).forEach(function (r) {
     var p = byId[r.orderId] || { projectId: null, projectName: null };
-    r.projectId = p.projectId; r.projectName = p.projectName;
+    r.projectId = p.projectId; r.projectName = p.projectName; r.path = p.path || null;
   });
   return led;
 }
@@ -158,10 +158,10 @@ module.exports = A.handler(async function (req, res) {
     var today = new Date().toISOString().slice(0, 10), provider = chosen(config);
     var filters = { status: ['all', 'open', 'to_issue', 'paid'].indexOf(q.status) >= 0 ? q.status : 'all',
       customer: String(q.customer || '').slice(0, 200), overdue: q.overdue === '1' || q.overdue === 'true' };
-    var led = attachProjects(R.ledger(await entriesOf(db, org, docs), today, filters, { provider: provider }), docs);
+    var led = attachProjects(R.ledger(await entriesOf(db, org, docs), today, filters, { provider: provider }), docs, config);
     if (q.format === 'csv') return { filename: 'receivables-' + org + '-' + today + '.csv', csv: R.csv(led.rows) };
     return Object.assign({ owner: X.owner(caller), org: org, name: ctx.org.name || org, brand: require('./_lib/logic-brand')(ctx.org),
-      today: today, accounting: config.accounting === 'tenant' ? 'tenant' : 'quickbooks' }, led,
+      steps: require('./_lib/office-stage').PATH, today: today, accounting: config.accounting === 'tenant' ? 'tenant' : 'quickbooks' }, led,
       { sync: await syncStatus(config, org), limited: snap.size === 500 });
   }
 

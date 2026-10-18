@@ -371,6 +371,7 @@ s.voided{color:var(--ink3)}
   }
   function drawerHtml(r) {
     var a = r.actions || {}, P = prov(D.sync && D.sync.provider), cr = r.creditRelease, h = '', where = journeyLine(r);
+    if (r.path && D.steps) h += OmegaLogicTheme.pathBar(D.steps, { p: r.path });
     if (where) h += '<div class="eyebrow">' + esc(where) + '</div>';
     h += '<h2 id="drawer-h">' + esc(moneyNext(r)) + '</h2>';
     var who = [r.customer.contact !== r.customer.name ? r.customer.contact : '', r.customer.email].filter(Boolean).join(' · ');

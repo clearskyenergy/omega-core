@@ -39,7 +39,19 @@ require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin
    libraries the endpoints use, and one state object carries the bench from
    the tablet check into the roaming-phone check. */
 var F = require('./_lib/logic-fixtures');
-var STATE = F.initialState(), V = F.views(STATE), TENANT = require('../tenants/cleancell/tenant.json'), KIT_SENDS = [];
+var STATE = F.initialState(), V = journeyViews(STATE), TENANT = require('../tenants/cleancell/tenant.json'), KIT_SENDS = [];
+/* Server projections added by the journey work. Kept in this test runner:
+   design-order includes server-only routing and must never enter the public sandbox. */
+function journeyViews(state) {
+  var v = F.views(state), S = require('../api/_lib/office-stage'), D = require('../api/_lib/design-order');
+  var office = v.officeJson, plant = v.plantJson, accounting = v.accountingJson, shipping = v.logisticsJson;
+  function order(id) { return state.orders.filter(function (o) { return o.id === id; })[0] || {}; }
+  v.officeJson = function (opts) { var out = office(opts); out.orders.forEach(function (r) { r.design = D.view(order(r.id)); r.shipTo = D.shipTo(order(r.id)); }); return out; };
+  v.plantJson = function (q, who) { var out = plant(q, who); if (out.workOrder) { var o = order(out.workOrder.orderId || 'o1'); out.path = S.path(o, {}, 'tenant', null); out.steps = S.PATH; if (o.design) out.source = require('../api/_lib/plant-source').sourceOf(o); } return out; };
+  v.accountingJson = function (q) { var out = accounting(q); out.steps = S.PATH; out.rows.forEach(function (r) { var o = order(r.orderId); r.projectId = o.projectId || null; r.projectName = o.design && o.design.projectName || null; r.path = S.path(o, {}, 'tenant', null); }); return out; };
+  v.logisticsJson = function () { var out = shipping(); out.steps = S.PATH; out.orders.forEach(function (r) { var o = order(r.id); r.projectId = o.projectId || null; r.path = S.path(o, {}, 'tenant', null); }); return out; };
+  return v;
+}
 /* what the accounting page posted, in order: the office corrections go to
    /api/logic-office (the one writer's door), the ledger sync to
    /api/logic-accounting */
@@ -121,7 +133,7 @@ var srv = http.createServer(function (req, res) {
   if (!fs.existsSync(f) && fs.existsSync(f + '.html')) f = f + '.html';   /* Vercel clean URLs */
   if (fs.existsSync(f) && fs.statSync(f).isDirectory() && fs.existsSync(path.join(f, 'index.html'))) f = path.join(f, 'index.html');
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
-  res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); res.end(fs.readFileSync(f));
+  res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); res.end(process.argv.indexOf('--capture-before') >= 0 && ['omega-logic.html', 'plant/work-orders.html', 'logic-logistics.html', 'logic-accounting.html'].indexOf(path.relative(ROOT, f)) >= 0 ? require('child_process').execFileSync('git', ['show', 'origin/main:' + path.relative(ROOT, f)], { cwd: ROOT }) : fs.readFileSync(f));
 });
 var fails = 0;
 /* key order does not matter to a request body */
@@ -151,7 +163,11 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     p.on('response', function (r) { var x = r.url(); if (x.indexOf(base + '/api/') === 0 && r.status() === 404 && !/json/.test(r.headers()['content-type'] || '')) missing.push(name + ': ' + x.slice(base.length).split('?')[0]); });
     if (opts.phone) await p.setViewportSize({ width: 390, height: 844 });
     await p.goto(base + url, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(400);
+    var clicks = 0, originalClick = p.click.bind(p);
+    p.click = async function () { clicks++; return originalClick.apply(null, arguments); };
     var out = await steps(p);
+    if (out && name.indexOf('journey-') === 0) out.clicks = clicks;
+    await p.locator('#omega-splash').waitFor({ state: 'hidden', timeout: 15000 }).catch(function () {});
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '.png'), fullPage: true });
     var widths = opts.phone ? [390, 1280] : [390];
     for (var wi = 0; wi < widths.length; wi++) {
@@ -167,6 +183,54 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   /* the text of every match, whitespace folded */
   function texts(p, sel, n) { return p.$$eval(sel, function (r, max) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, max); }); }, n || 120); }
   function text(p, sel) { return p.$eval(sel, function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }); }
+  if (process.argv.indexOf('--capture-before') >= 0) {
+    await check('before-office', '/omega-logic?org=cleancell.us&order=o1#orders', async function (p) { await p.waitForSelector('#detail'); });
+    await check('before-plant', '/plant/work-orders.html?org=cleancell.us', async function (p) { await p.click('[data-id="wo_1"]'); });
+    await check('before-shipping', '/logic-logistics.html?org=cleancell.us&order=o1', async function (p) { await p.waitForFunction(function () { return document.getElementById('detail').textContent.length > 30; }); });
+    await check('before-accounting', '/logic-accounting.html?org=cleancell.us', async function (p) { await p.click('[data-open="o1:balance"]'); });
+    await b.close(); srv.close(); process.exit(fails ? 1 : 0);
+  }
+  /* One saved design is seeded through all four office projections. Financial
+     and production state is explicit example data; no external services run. */
+  var journeyState = JSON.parse(JSON.stringify(STATE));
+  var JD = require('../api/_lib/design-order');
+  var jd = JD.draft({ project: { id: 'qa-example-site', name: 'Example solar and storage site', address: '100 Main St, Chicago, IL 60601' }, designerOrgId: 'cleancell.us', lines: [{ sku: 'CC-C215', qty: 5 }], catalogs: { 'cleancell.us': [{ sku: 'CC-C215', name: 'Example unit', active: true, kind: 'product' }] } }).orders[0];
+  var jo = JD.documentOf({ order: jd, email: 'designer@example.invalid', now: '2026-10-17T12:00:00Z', createdAt: '2026-10-17T12:00:00Z' });
+  Object.assign(STATE.orders[0], { projectId: jo.projectId, design: jo.design, delivery: jo.delivery });
+  STATE.companyOrders.filter(function (o) { return o.id === 'o1'; })[0].destinations = jo.delivery.destinations;
+  V = journeyViews(STATE);
+  await check('journey-office', '/omega-logic?org=cleancell.us&order=o1#orders', async function (p) {
+    await p.waitForSelector('#detail .lg-path');
+    ok('the order shows the saved design address and project', /100 Main St/.test(await text(p, '#detail')) && /Example solar and storage site/.test(await text(p, '#detail')));
+    var shipping = p.locator('#detail a[href*="logic-logistics"]').first();
+    ok('the order links forward to its shipment', /order=o1/.test(await shipping.getAttribute('href')));
+    return { project: jo.projectId, clicks: 0 };
+  });
+  await check('journey-plant', '/plant/work-orders.html?org=cleancell.us', async function (p) {
+    await p.click('[data-id="wo_1"]');
+    await p.waitForSelector('#detail .lg-path');
+    ok('the plant retains the project name, address and order link', /Example solar and storage site/.test(await text(p, '#journey')) && /100 Main St/.test(await text(p, '#journey')) && await p.locator('#detail a[href*="order=o1"]').count() > 0);
+    return { project: jo.projectId, clicks: 1 };
+  });
+  await check('journey-shipping', '/logic-logistics.html?org=cleancell.us&order=o1', async function (p) {
+    await p.waitForSelector('#order-head .lg-path');
+    ok('shipping retains the saved address and five BOM units', /100 Main St/.test(await text(p, '#detail')) && /5 × CC-C215/.test(await text(p, '#detail')));
+    return { project: jo.projectId, clicks: 0 };
+  });
+  await check('journey-accounting', '/logic-accounting.html?org=cleancell.us', async function (p) {
+    await p.click('[data-open="o1:balance"]');
+    await p.waitForSelector('#drawer .lg-path');
+    ok('the invoice links back to the same order and drawing', await p.locator('#drawer a[href*="order=o1"]').count() > 0 && await p.locator('#drawer a[href*="qa-example-site"]').count() > 0);
+    return { project: jo.projectId, clicks: 1 };
+  });
+  STATE = journeyState; V = journeyViews(STATE);
+  if (process.argv.indexOf('--journey-only') >= 0) {
+    ok('no journey JavaScript errors', errs.length === 0, errs);
+    ok('all journey endpoints answered', missing.length === 0, missing);
+    await b.close(); srv.close();
+    console.log(fails ? 'Journey checks FAILED' : 'Journey checks passed');
+    process.exit(fails ? 1 : 0);
+  }
   /* WCAG contrast of an element's text against the first opaque background behind it (UX-5) */
   function contrastIn(p, sel) {
     return p.evaluate(function (sel) {
@@ -1158,7 +1222,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ['CC418-26-44192', 'Fairview store', '410 Example Ave', 'Fairview', 'NJ', '="07022"', 'CC-26-4419', 'going to'],
     ['CC418-26-44193', 'Springfield, IL', '77 Sample Plaza Suite 12', 'Springfield', 'IL', '62704', 'CC-26-4419', 'going to'],
     ['CC418-26-44195', 'Springfield, IL', '77 Sample Plaza Suite 12', 'Springfield', 'IL', '62704', 'CC-26-4419', 'going to']];
-  function freshSample() { STATE = F.initialState(); V = F.views(STATE); }
+  function freshSample() { STATE = F.initialState(); V = journeyViews(STATE); }
   function riversideSites(state) { return state.sites.filter(function (s) { return s.customerId === 'company_riverside'; }).map(function (s) { return s.name; }); }
   function plannedOf(state) { var o = {}; state.units.filter(function (u) { return u.orderId === 'o1'; }).forEach(function (u) { if (u.custody && u.custody.plannedSiteName) o[u.serial] = u.custody.plannedSiteName; }); return o; }
   function destEvents(state) { var n = 0; Object.keys(state.custodyEvents).forEach(function (k) { state.custodyEvents[k].forEach(function (e) { if (e.via === 'site-list') n++; }); }); return n; }
