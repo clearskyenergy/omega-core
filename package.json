@@ -19,7 +19,7 @@
     "osa:invite": "node scripts/provision-osa-member.js",
     "osa:invite:apply": "node scripts/provision-osa-member.js --apply",
     "rules:check": "node scripts/check-rules.js",
-    "check:pages": "node scripts/render-logic-pages.js && node scripts/render-compute-proforma.js && node scripts/render-packaging-phase-0.js && node scripts/render-packaging-phase-a.js && node scripts/render-packaging-catalog.js && node scripts/render-packaging-access.js && node scripts/render-packaging-workspaces.js && node scripts/render-legacy-gates.js && node scripts/render-packaging-billing.js && node scripts/render-subscription-proposal.js && node scripts/render-editor-theme.js && node scripts/render-signup.js && node scripts/render-admin-account.js && node scripts/render-editor-plan.js && node scripts/render-omega-prime.js && node scripts/render-prime-handoff.js",
+    "check:pages": "node scripts/render-logic-pages.js && node scripts/render-compute-proforma.js && node scripts/render-packaging-phase-0.js && node scripts/render-packaging-phase-a.js && node scripts/render-packaging-catalog.js && node scripts/render-packaging-access.js && node scripts/render-packaging-workspaces.js && node scripts/render-legacy-gates.js && node scripts/render-packaging-billing.js && node scripts/render-subscription-proposal.js && node scripts/render-editor-theme.js && node scripts/render-signup.js && node scripts/render-admin-account.js && node scripts/render-editor-plan.js && node scripts/render-omega-prime.js && node scripts/render-prime-handoff.js && node scripts/render-journey.js",
     "check:compute": "node scripts/render-compute-proforma.js",
     "check:dashboard": "node scripts/render-dashboard.js",
     "check:workspace": "node scripts/render-workspace.js",
@@ -86,6 +86,7 @@
     "test:packaging:rules": "node scripts/test-packaging-rules.js",
     "test:portfolio": "node scripts/test-site-crm.js && node scripts/tests/tportfolioassets.js && node scripts/tests/tportfolio-phases.js && node scripts/tests/tportfolioassets-real.js && node scripts/tests/tportfolio-economics-real.js",
     "seed:evcs-portfolio:dry": "node scripts/seed-evcs-portfolio.js",
-    "test:experience": "node scripts/tests/texperience.js"
+    "test:experience": "node scripts/tests/texperience.js",
+    "check:journey": "node scripts/render-journey.js"
   }
 }

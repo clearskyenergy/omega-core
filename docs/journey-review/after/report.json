@@ -1,0 +1,12 @@
+{
+  "fixture": "Example data only; real API handlers, mocked auth/database/providers",
+  "clicks": {
+    "order-to-plant": 1,
+    "plant-to-order": 1,
+    "order-to-shipping": 1,
+    "shipping-to-invoices": 1,
+    "invoices-to-order": 1
+  },
+  "tenantIsolation": "four APIs reject unrelated tenant",
+  "result": "passed"
+}

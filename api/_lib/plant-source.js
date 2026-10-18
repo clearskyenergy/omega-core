@@ -54,8 +54,8 @@ function sourceOf(order) {
   var poDoc = order.purchaseOrder && typeof order.purchaseOrder === 'object' ? order.purchaseOrder : null;
   return {
     poNumber: text(po || intake || order.poNumber, 80) || null,
-    projectId: text(order.sourceProjectId || order.projectId, 120) || null,
-    projectName: plainName(order.projectName) || plainName(order.sourceProjectName) || plainName(poDoc && poDoc.projectName) || null,
+    projectId: text(order.sourceProjectId || order.projectId || (order.design && order.design.projectId), 120) || null,
+    projectName: plainName(order.design && order.design.projectName) || plainName(order.projectName) || plainName(order.sourceProjectName) || plainName(poDoc && poDoc.projectName) || null,
     customerName: (cust && (plainName(cust.company) || plainName(cust.name))) || null,
     address: (sites[0] && sites[0].address) || addressOf(cust && cust.address),
     items: linesOf(order.items),

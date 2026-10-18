@@ -144,15 +144,15 @@ function blockBits(units,p,mats){var bits=[];(units||[]).forEach(function(u){if(
 function paintBlock(){var el=$('block');if(!el||!detail)return;var bits=blockBits(detail.units,detail.board.progress,materials);
  el.innerHTML=bits.length?'<span class="badge bad">Blocked</span> '+esc(bits.join(' · ')):'<span class="badge ok">Nothing is blocking it</span>';}
 function journeyBlock(s,orderId,r,units){var p=r.progress,gap='<p>Purchase order: the customer, what is being built, and the ship-to are not on the purchase order.</p>';
- var who='',built='',ship='',po='';
- if(orderId&&s){who=s.customerName||s.projectName||(s.address&&s.address.name)||'';
+ var who='',built='',ship='',po='',whoLabel='Customer';
+ if(orderId&&s){who=s.customerName||s.projectName||'';if(!s.customerName&&s.projectName)whoLabel='Project';
   if(s.projectName&&s.projectName!==who)who=(who?who+' · ':'')+s.projectName;
   var items=s.items||[];built=items.length?items.map(builtLine).join(', '):'';
   var sites=s.sites||[];
   if(sites.length>1)ship=sites.map(function(site){return placeText(site.address)||'Ship-to is not on the purchase order';}).join('; ');
   else ship=s.address?placeText(s.address):'';
   po=s.poNumber?'PO '+s.poNumber:'';}
- var head=(!orderId||!s)?gap:'<p class="k">Customer</p><p class="big" style="font-size:18px">'+(who?esc(who):'<span class="note">Customer is not on the purchase order.</span>')+'</p>'+(po?'<p>'+esc(po)+'</p>':'')+'<p class="k">Building</p><p>'+(built?esc(built):'<span class="note">What is being built is not on the purchase order.</span>')+'</p><p class="k">Ships to</p><p>'+(ship?esc(ship):'<span class="note">Ship-to is not on the purchase order.</span>')+'</p>';
+ var head=(!orderId||!s)?gap:'<p class="k">'+whoLabel+'</p><p class="big" style="font-size:18px">'+(who?esc(who):'<span class="note">Customer is not on the purchase order.</span>')+'</p>'+(po?'<p>'+esc(po)+'</p>':'')+'<p class="k">Building</p><p>'+(built?esc(built):'<span class="note">What is being built is not on the purchase order.</span>')+'</p><p class="k">Ships to</p><p>'+(ship?esc(ship):'<span class="note">Ship-to is not on the purchase order.</span>')+'</p>';
  return '<section class="journey" id="journey"><h3>This order</h3>'+head+'<p class="k">Progress</p><div class="big">'+(p.units?p.percent+'% complete':'Awaiting serials')+'</div><div class="bar '+(p.held?'bad':p.percent===100?'ok':'')+'" style="margin:8px 0"><i style="width:'+p.percent+'%"></i></div><p id="block"></p></section>';}
 function qualityBlock(units){var holds=[],fails=[];(units||[]).forEach(function(u){if(u.hold)holds.push(u);if(u.test&&u.test.result==='fail')fails.push(u);});var factory=(data.links&&data.links.factory)||'';
  function link(u){return '<a href="'+esc(factory)+'&serial='+encodeURIComponent(u.serial)+'">'+esc(u.serial)+'</a>';}
@@ -182,9 +182,10 @@ function drawDetail(){var d=detail,r=d.board,p=r.progress,units=d.units||[];
  var svc=r.services.required.length?'<section><h3>Services</h3>'+r.services.required.map(function(s){return '<p>'+s.qty+' × '+esc(s.name||s.sku)+'</p>';}).join('')+(r.services.completion?'<p class="note">Completed by '+esc(r.services.completion.by)+' · '+esc(r.services.completion.at)+'<br>'+esc(r.services.completion.evidence)+'</p>':''+(data.canControl===false?'<p class="note">The workspace owner or an administrator records the services as completed.</p>':'<label>Completion evidence<textarea id="svc-evidence" placeholder="Work performed, acceptance record or document reference"></textarea></label><button type="button" id="svc-done">Record services completed</button>')+'')+'</section>':'';
  var lines=(data.flow&&data.flow.lines||[]).map(function(l){return '<option value="'+esc(l.id)+'"'+(l.id===r.lineId?' selected':'')+'>'+esc(l.name)+'</option>';}).join('');
  var factory=(data.links&&data.links.factory)||'',office=(data.links&&data.links.office)||'';
- var record='';if(d.source&&(d.source.poNumber||d.source.projectId))record='<details class="fold" id="record"><summary>Purchase order record</summary><div class="in">'+(d.source.poNumber?'<p>PO '+esc(d.source.poNumber)+'</p>':'')+(d.source.projectId?'<p class="note">Project record '+esc(d.source.projectId)+'</p>':'')+'</div></details>';
+ var record='';if(d.source&&(d.source.poNumber||d.source.projectId))record='<details class="fold" id="record"><summary>Purchase order record</summary><div class="in">'+(d.source.poNumber?'<p>PO '+esc(d.source.poNumber)+'</p>':'')+(d.source.projectId?'<p><a href="/editor?project='+encodeURIComponent(d.source.projectId)+'">'+esc(d.source.projectName||'Open project')+'</a></p>':'')+'</div></details>';
  $('detail').innerHTML='<button type="button" id="back">← Back to board</button><button type="button" id="close" aria-label="Close">✕</button><p class="eyebrow">Work order</p><h2>'+esc(r.orderNo)+'</h2><p><span class="badge '+STAGE_CLASS[r.stage]+'">'+esc(r.stageLabel)+'</span> '+(r.late?'<span class="badge bad">Late</span> ':'')+(r.priority==='urgent'?'<span class="badge warn">Urgent</span> ':'')+'<span class="note">'+esc(lineName(r.lineId))+'</span></p>'
- +journeyBlock(d.source,r.orderId,r,units)
+ +(d.path&&d.steps?OmegaLogicTheme.pathBar(d.steps,{p:d.path}):'')
+ +OmegaLogicTheme.orderLinks(org,r.orderId,r.id,'plant',d.canControl===true)+journeyBlock(d.source,r.orderId,r,units)
  +'<details class="fold" id="steps"><summary>Operation steps'+(here?' · '+esc(here):'')+'</summary><div class="in steps">'+steps+'</div></details>'
  +qualityBlock(units)
  +'<section><h3>Action taken</h3><div class="feed">'+feed+'</div></section>'

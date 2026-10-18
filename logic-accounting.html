@@ -237,6 +237,7 @@ s.voided{color:var(--ink3)}
     if (st && st !== 'all') p.push('status=' + encodeURIComponent(st));
     if (cu) p.push('customer=' + encodeURIComponent(cu));
     if ($('f-overdue').checked) p.push('overdue=1');
+    if (params.get('order')) p.push('order=' + encodeURIComponent(params.get('order')));
     if (extra) p.push(extra);
     return p.join('&');
   }
@@ -249,6 +250,7 @@ s.voided{color:var(--ink3)}
         CHROMED = true;
       }
       draw();
+      if (params.get('order') && !ROW && D.rows.length) openDrawer(D.rows[D.rows.length - 1].key);
     });
   }
 
@@ -372,9 +374,11 @@ s.voided{color:var(--ink3)}
   function drawerHtml(r) {
     var a = r.actions || {}, P = prov(D.sync && D.sync.provider), cr = r.creditRelease, h = '', where = journeyLine(r);
     if (where) h += '<div class="eyebrow">' + esc(where) + '</div>';
+    if (r.path && D.steps) h += OmegaLogicTheme.pathBar(D.steps, { p: r.path, compact: true });
     h += '<h2 id="drawer-h">' + esc(moneyNext(r)) + '</h2>';
     var who = [r.customer.contact !== r.customer.name ? r.customer.contact : '', r.customer.email].filter(Boolean).join(' · ');
     h += '<p>' + esc(r.customer.name) + (who ? '<span class="sub">' + esc(who) + '</span>' : '') + '</p>';
+    h += OmegaLogicTheme.orderLinks(org, r.orderId, r.worksOrderId, 'accounting');
     h += linksHtml(r);
     h += progressHtml(r);
     if (r.billing === 'quickbooks') h += '<p class="hint">Billed through ClearSky QuickBooks. Payments are recorded there.</p>';

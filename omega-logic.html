@@ -304,7 +304,7 @@ function designBlock(o){var d=o.design;if(!d)return '';
 function detail(){var o=DATA.orders.filter(function(x){return x.id===PICK;})[0], el=$('detail');if(!o){el.innerHTML='<div class="eyebrow">Order</div><h2 style="margin-top:14px">One path, one next step.</h2><p class="muted">Pick an order. Its bar shows where it is between the price and the site, the verdict says what that means, and the guide names the one thing to press.</p>';return;}
 var l=o.logic,c=l&&l.commercial,lines=o.items.map(function(i){return esc(i.qty)+' × '+esc(i.name||i.sku);}).join('<br>'),nk=nextInvoice(o),nc=o.path&&o.path.next?o.path.next.control:'',shipHere=nc==='ship'&&DATA.owner&&!!l;
 el.innerHTML='<div class="eyebrow">'+esc(o.orderNo)+'</div><h2>'+esc(OmegaLogicTheme.company(o))+'</h2>'+(o.customer.company&&o.customer.name&&o.customer.name!==o.customer.company?'<p class="muted">Billed to '+esc(o.customer.name)+(o.customer.email?' · '+esc(o.customer.email):'')+'</p>':'')+
-(o.path&&DATA.path?OmegaLogicTheme.pathBar(DATA.path,{p:o.path,compact:true}):'')+designBlock(o)+verdictHtml(o)+
+(o.path&&DATA.path?OmegaLogicTheme.pathBar(DATA.path,{p:o.path,compact:true}):'')+OmegaLogicTheme.orderLinks(ORG,o.id,o.worksOrderId,'order',!!(DATA.access&&DATA.access.team))+designBlock(o)+verdictHtml(o)+
 '<div id="next-step">'+nextBlock(o)+'</div>'+requestsHtml(o)+
 '<details class="more" id="more"><summary>More about this order</summary>'+
 (o.rep?'<p class="muted">Opportunity brought by <b>'+esc(o.rep.name)+'</b>'+(o.rep.email?' · '+esc(o.rep.email):'')+'</p>':'')+'<p>'+lines+'</p>'+(o.cancelRequested?'<p class="alert">Cancellation requested. Refund and stock disposition require review.</p>':'')+

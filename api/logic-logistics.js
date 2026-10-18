@@ -183,8 +183,9 @@ async function freightPost(db,org,ctx,c,b){
    office draws; this page does not invent a second one. Address and BOM
    lines are already on buyerOrder. */
 function ledgerOrder(o,id,who,billing){
-  var v=L.buyerOrder(o,id),pid=o&&o.sourceProjectId?String(o.sourceProjectId).slice(0,120):'';
+  var v=L.buyerOrder(o,id),pid=o?String(o.projectId||o.sourceProjectId||(o.design&&o.design.projectId)||'').slice(0,120):'';
   if(pid)v.projectId=pid;
+  if(o&&o.worksOrderId)v.worksOrderId=o.worksOrderId;
   v.path=S.path(o,who||{},billing,null);
   return v;
 }

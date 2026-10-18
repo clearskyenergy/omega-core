@@ -123,6 +123,7 @@ function seedOwn() {
     { sku: 'CC-C215', description: '215 kWh outdoor cabinet', qty: 2, unit: 'ea', manufacturer: 'Clean Cell' },
     { sku: '', description: '2 in. EMT', qty: 400, unit: 'LF' }
   ] };
+  await assert.rejects(rfq({ method: 'POST', headers: {}, body: Object.assign({}, body, { bom: [{ sku: 'CC-C215', qty: 0 }] }) }), /positive quantity/);
   var out = await rfq({ method: 'POST', headers: {}, body: body });
   assert.equal(out.rfqId, null);
   assert.match(out.skipped, /no routable/);
