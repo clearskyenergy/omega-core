@@ -265,7 +265,7 @@ var app = fs.readFileSync(path.join(__dirname, '../../omega-editor-v2-app.js'), 
 var editor = fs.readFileSync(path.join(__dirname, '../../editor.html'), 'utf8');
 eq((page.match(/data-act="outputs"/g) || []).length, 1, 'one Outputs button');
 check(page.indexOf('data-act="png"') < 0 && page.indexOf('data-act="pdf"') < 0, 'PNG and PDF are not extra ribbon buttons');
-check(page.indexOf('omega-editor-v2-electrical.js') >= 0 && page.indexOf('omega-editor-v2-sld.js') >= 0 && page.indexOf('omega-editor-v2-sheets.js') >= 0 && page.indexOf('omega-editor-v2-outputs.js') >= 0, 'the four modules load');
+check(page.indexOf('omega-editor-v2-electrical.js') >= 0 && page.indexOf('omega-editor-v2-sld.js') >= 0 && page.indexOf('omega-editor-v2-sheets.js') >= 0 && page.indexOf('omega-editor-v2-outputs.js') >= 0 && page.indexOf('omega-editor-v2-aerial.js') >= 0, 'the drawing modules load');
 check(page.indexOf('id="dlg-outputs"') >= 0, 'one dialog');
 check(app.indexOf('OmegaEditorV2Outputs.sync(state.doc)') >= 0, 'a drawing change refreshes Outputs');
 check(editor.indexOf('omega-editor-v2') < 0, 'Site Map does not load this preview');
@@ -360,5 +360,91 @@ eq(findClass('out-status').textContent, 'Not ready. Nothing to document yet', 'a
 eq(findText('Export').disabled, true, 'the export follows the new drawing');
 Out.close();
 eq(Out.isOpen(), false, 'Close leaves the dialog');
+
+/* ── Chapter 9 fill, placard color, aerial registration ─────────────── */
+var threeOfSix = E.conduitFill({ awg: '6', sets: 1, phases: 3, egc: '10', spec: 'PVC', trade: '' });
+eq(threeOfSix.trade, '3/4', 'three 6 AWG plus a 10 AWG EGC selects 3/4 in PVC');
+eq(threeOfSix.limitPct, 40, 'more than two conductors use the 40 percent column');
+eq(threeOfSix.selected, true, 'a blank trade size is a selection');
+check(threeOfSix.note.indexOf('not a field measurement') >= 0, 'the selection is flagged');
+var twoWire = E.conduitFill({ awg: '6', sets: 1, phases: 1, egc: '', spec: 'RMC', trade: '' });
+eq(twoWire.limitPct, 31, 'two conductors use the 31 percent column');
+eq(twoWire.trade, '3/4', 'two 6 AWG conductors do not fit the 1/2 in RMC at 31 percent');
+var lone = E.conduitFill({ awg: '14', sets: 1, phases: 1, egc: '', spec: 'RMC', trade: '1/2' });
+check(lone.fromDrawing === true && lone.limitPct === 31, 'a named trade is kept and judged at the conductor count');
+var over = E.conduitFill({ awg: '600', sets: 1, phases: 3, egc: '3', spec: 'RMC', trade: '1/2' });
+eq(over.over, true, 'a 1/2 in raceway named on the drawing is over Table 1 for 600 kcmil');
+eq(over.trade, '1/2', 'an overfilled trade size on the drawing is not replaced');
+var assumed = E.conduitFill({ awg: '6', sets: 1, phases: 3, egc: '10', spec: 'EMT', trade: '' });
+eq(assumed.raceway, 'RMC', 'a raceway that is not PVC or RMC is sized as RMC');
+eq(assumed.racewayAssumed, true, 'that assumption is flagged');
+
+var sampleModel = E.analyze(E.fixtures.sample());
+check(sampleModel.circuits[0].fill && sampleModel.circuits[0].fill.selected, 'the sample feeder gets a selected trade size');
+check(sampleModel.circuits[0].fill.trade, 'the selected trade is a Chapter 9 size');
+var sampleText = allText(Sheets.build(E.fixtures.sample(), { size: 'ansi-d', date: '2026-10-18' }));
+check(sampleText.indexOf('not a field measurement') >= 0, 'E-004 says the trade size was selected');
+check(sampleText.indexOf('Conduit fill (Chapter 9, Tables 1 and 4) is not calculated') < 0, 'the schedule no longer says fill is skipped');
+check(sampleText.indexOf('THHN/THWN-2') >= 0, 'the insulation is named');
+
+var pvPages = Sheets.build(E.fixtures.commercialPv(), { size: 'ansi-d', date: '2026-10-18' }).pages;
+var pvSign = pvPages.filter(function (p) { return String(p.number).indexOf('E-007') === 0; });
+var pvSignText = pvSign.map(function (p) { return Sheets.pageText(p); }).join('\n');
+check(pvSignText.indexOf('RAPID SHUTDOWN SWITCH FOR SOLAR PV SYSTEM') >= 0, 'the switch label uses the 690.12(D)(2) words');
+check(pvSignText.indexOf('SOLAR PV SYSTEM IS EQUIPPED WITH RAPID SHUTDOWN') >= 0, 'the building label uses the 690.12(D) words');
+check(pvSignText.indexOf('does not name a color') >= 0, 'a plaque whose section names no color says so');
+var pvPdf = Sheets.toPdf({ pages: pvSign });
+check(pvPdf.indexOf('0.750 0.050 0.080 rg') >= 0, 'the switch face is white on red');
+var pvSvg = pvSign.map(Sheets.toSvg).join('\n');
+check(pvSvg.indexOf('rgb(191,13,20)') >= 0, 'the preview draws the red switch face');
+
+var bessPages = Sheets.build(E.fixtures.bess1mw(), { size: 'ansi-d', date: '2026-10-18' }).pages;
+var bessSign = bessPages.filter(function (p) { return String(p.number).indexOf('E-007') === 0; });
+var bessSignText = bessSign.map(function (p) { return Sheets.pageText(p); }).join('\n');
+check(bessSignText.indexOf('ENERGY STORAGE SYSTEM DISCONNECT') >= 0, 'the ESS plaque is drawn');
+check(bessSignText.indexOf('706.15 requires the plaque') >= 0, 'the ESS plaque cites 706.15');
+check(bessSignText.indexOf('RAPID SHUTDOWN SWITCH FOR SOLAR PV SYSTEM') < 0, 'a battery with no array does not get the PV switch label');
+check(Sheets.toPdf({ pages: bessSign }).indexOf('0.750 0.050 0.080 rg') < 0, 'the ESS plaque is not drawn red');
+
+var TINY = '/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////wgALCAABAAEBAREA/8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPxA=';
+var aerialDoc = D.create({ name: 'Photo site', address: '1 Photo Road', anchor: { lat: 33.4, lng: -111.8 } });
+aerialDoc.entities.push({ id: 'p', type: 'polygon', layer: 'site', closed: true, pts: [{ x: 0, y: 0 }, { x: 40, y: 0 }, { x: 40, y: 30 }, { x: 0, y: 30 }] });
+var withPhoto = Sheets.build(aerialDoc, { size: 'ansi-d', date: '2026-10-18', underlay: { jpeg: TINY, width: 1, height: 1, attribution: 'U.S. Geological Survey, The National Map' } });
+var photoSheet = withPhoto.pages.filter(function (p) { return p.number === 'C-001'; })[0];
+check(Sheets.pageText(photoSheet).indexOf('U.S. Geological Survey, The National Map') >= 0, 'the plot plan names the imagery');
+var photoPdf = Sheets.toPdf(withPhoto);
+check(photoPdf.indexOf('/DCTDecode') >= 0 && photoPdf.indexOf('/Subtype /Image') >= 0, 'the PDF embeds the JPEG');
+check(Sheets.toSvg(photoSheet).indexOf('data:image/jpeg;base64,') >= 0, 'the preview shows the photo');
+aerialDoc.drawing = { aerial: false };
+var off = Sheets.build(aerialDoc, { size: 'ansi-d', date: '2026-10-18' });
+check(allText(off).indexOf('Aerial photo is turned off.') >= 0, 'the toggle is printed when the photo is off');
+check(Sheets.toPdf(off).indexOf('/DCTDecode') < 0, 'a turned-off photo is not embedded');
+
+var Aerial = require('../../omega-editor-v2-aerial.js');
+var box = Aerial.bbox(aerialDoc);
+check(box && box.west < box.east && box.south < box.north, 'the photo box is a real extent');
+var url = Aerial.exportUrl(box, 800, 600);
+check(url.indexOf('basemap.nationalmap.gov') >= 0 && url.indexOf('USGSImageryOnly') >= 0 && url.indexOf('format=jpg') >= 0, 'the photo is the USGS ImageryOnly service');
+eq(Aerial.ATTRIBUTION, 'U.S. Geological Survey, The National Map', 'the credit is the Survey');
+aerialDoc.drawing.aerial = true;
+eq(Aerial.wanted(aerialDoc), true, 'a site point asks for the photo');
+aerialDoc.drawing.aerial = false;
+eq(Aerial.wanted(aerialDoc), false, 'the drawing can turn the photo off');
+
+Out.close();
+Out.open({
+  doc: E.fixtures.sample(),
+  which: 'sld',
+  download: function () {},
+  fileBase: function () { return 'sample-site'; },
+  drawing: {}
+});
+check(findText('Back'), 'the one-line menu opens the sheet, not a second chooser');
+check(findText('E-002') || (function () {
+  var hit = false;
+  walk(ids['out-body'], function (node) { if (node.textContent && String(node.textContent).indexOf('E-002') >= 0) hit = true; });
+  return hit;
+})(), 'the opened sheet is the single-line');
+Out.close();
 
 console.log('teditorv2outputs: ' + n + ' checks passed');

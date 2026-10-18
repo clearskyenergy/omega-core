@@ -32,14 +32,57 @@
   }
 
   function buildSet() {
-    return Sheets.build(session.doc, { size: session.size, date: today(), catalog: session.api.catalog || {} });
+    return Sheets.build(session.doc, {
+      size: session.size,
+      date: today(),
+      catalog: session.api.catalog || {},
+      underlay: session.underlay || null,
+      aerialUnavailable: !!session.aerialUnavailable
+    });
+  }
+
+  function aerialOn() {
+    return !(session.doc.drawing && session.doc.drawing.aerial === false);
+  }
+
+  function setAerial(on) {
+    session.doc.drawing = session.doc.drawing || {};
+    session.doc.drawing.aerial = !!on;
+    session.underlay = null;
+    session.aerialUnavailable = false;
+    if (on) loadAerial();
+    else render();
+  }
+
+  function loadAerial() {
+    var A = root.OmegaEditorV2Aerial;
+    if (!session || !A || !A.wanted(session.doc)) return;
+    var token = {};
+    session.aerialToken = token;
+    A.fetchImage(session.doc, function (err, img) {
+      if (!session || session.aerialToken !== token) return;
+      if (err || !img) session.aerialUnavailable = true;
+      else session.underlay = img;
+      render();
+    });
   }
 
   function open(api) {
-    session = { api: api, doc: api.doc, mode: 'list', page: 0, which: 'set', size: 'ansi-d' };
+    var which = api.which === 'sld' ? 'sld' : (api.which === 'set' ? 'set' : 'list');
+    session = {
+      api: api,
+      doc: api.doc,
+      mode: which === 'list' ? 'list' : 'preview',
+      page: 0,
+      which: which === 'sld' ? 'sld' : 'set',
+      size: 'ansi-d',
+      underlay: null,
+      aerialUnavailable: false
+    };
     render();
     var dlg = $('dlg-outputs');
     if (dlg && !dlg.open) dlg.showModal();
+    if (aerialOn()) loadAerial();
   }
 
   function sync(doc) {
@@ -76,6 +119,7 @@
     select.addEventListener('change', function () { session.size = select.value; });
     sizeRow.appendChild(select);
     body.appendChild(sizeRow);
+    body.appendChild(aerialToggle());
 
     body.appendChild(row('Permit plan set', 'The cover, the site plan, the single-line, the schedules and the checks.', ready, function () {
       session.which = 'set'; session.page = 0; session.mode = 'preview'; render();
@@ -127,6 +171,26 @@
     return line;
   }
 
+  function aerialToggle() {
+    var A = root.OmegaEditorV2Aerial;
+    var row = el('div', { className: 'out-size' });
+    var hasAnchor = session.doc.anchor && isFinite(+session.doc.anchor.lat);
+    if (!hasAnchor) {
+      row.appendChild(el('p', { className: 'out-note' }, 'No site point is on the project, so the plot plan has no aerial photo.'));
+      return row;
+    }
+    var box = el('input', { type: 'checkbox', id: 'out-aerial', 'aria-label': 'Aerial photo on the site plan' });
+    box.checked = aerialOn();
+    box.addEventListener('change', function () { setAerial(box.checked); });
+    row.appendChild(box);
+    row.appendChild(el('span', null, 'Aerial photo on the site plan'));
+    var note = session.underlay
+      ? ('Imagery: ' + (A && A.ATTRIBUTION ? A.ATTRIBUTION : 'U.S. Geological Survey') + '.')
+      : (session.aerialUnavailable ? 'Aerial imagery was not available.' : (box.checked ? 'The photo is loading.' : 'The photo is off. The plan stays linework.'));
+    row.appendChild(el('p', { className: 'out-note' }, note));
+    return row;
+  }
+
   function fileButton(label, fn) {
     return button(label, 'btn', function () { if (fn) fn(); });
   }
@@ -163,6 +227,7 @@
     bar.appendChild(prev);
     bar.appendChild(next);
     body.appendChild(bar);
+    if (session.which !== 'sld') body.appendChild(aerialToggle());
     var frame = el('div', { className: 'out-preview' });
     frame.innerHTML = Sheets.toSvg(page);
     body.appendChild(frame);

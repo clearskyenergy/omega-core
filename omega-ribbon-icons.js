@@ -181,7 +181,26 @@
     dark: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
     auto: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM12 3v18M12 7h4M12 11h6M12 15h5',
     aikeys: 'M8 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8zM11 11l9 9M17 17l2-2M14 20l2-2', nrelkey: 'M8 14a4 4 0 1 1 0-8 4 4 0 0 1 0 8zM11 11l9 9M17 17l2-2', mapskey: MAP + 'M13 11l4 4M16 12l2 2',
-    fleetom: 'M3 6h11v9H3zM14 9h4l3 3v3h-7M6 18a1.5 1.5 0 1 0 0 .01M17 18a1.5 1.5 0 1 0 0 .01', omlifecycle: 'M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4'
+    fleetom: 'M3 6h11v9H3zM14 9h4l3 3v3h-7M6 18a1.5 1.5 0 1 0 0 .01M17 18a1.5 1.5 0 1 0 0 .01', omlifecycle: 'M20 12a8 8 0 0 1-14 5M4 12a8 8 0 0 1 14-5M18 3v4h-4M6 21v-4h4',
+    /* captions the ribbon cleanup gave a button (2026-10-17). Same tool keeps
+       its picture; a grouped parent gets one of its own. */
+    gridcheck: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18M15 15l2 2 4-4',
+    gridatlasscore: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18',
+    placenearestsubstation: 'M10 4a6 6 0 1 0 0 12 6 6 0 0 0 0-12zM14.5 14.5L20 20M8 8h4v4H8z',
+    fibernetwork: 'M5 12a2 2 0 1 0 0 .01M19 12a2 2 0 1 0 0 .01M7 12h10M12 9v6',
+    weatherdata: 'M15 7a3 3 0 1 0-2.5-4.5M6 18h11a4 4 0 0 0 0-8 5 5 0 0 0-9.4-1.6A3.5 3.5 0 0 0 6 18z',
+    revenuewaterfall: 'M3 5h5v4H3zM8 9h5v4H8zM13 13h5v4h-5zM3 21h18',
+    usgs3deprelief: 'M3 5h18v14H3zM9 5v14M15 5v14M3 12h18',
+    display: 'M3 5h18v3H3zM3 10h18M7 10v4M12 10v4M17 10v4M3 16h18v3H3z',
+    preview: 'M5 6h14v12H5z',
+    overview: 'M4 4h16v16H4zM4 9h16M4 14h16M9 4v16',
+    panels: 'M4 4h16v16H4zM4 9h16M4 14h16M8 6h.01M8 11h6M8 16h4',
+    check: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18zM8 12l2.5 2.5L16 9',
+    planset: 'M4 4h16v16H4zM4 9h16M9 9v11M14 12h4M14 15h4',
+    sendforpestamp: 'M12 21a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM8 12l3 3 5-5',
+    omegacorefit: 'M2 18h20M4 18v2M20 18v2M4 6h7v12H4zM6 9h3M6 12h3M6 15h3M13 8h7v10h-7zM17 10l-2 3h2.5l-2 3',
+    livetakeoff: RULER,
+    features: GEAR
   };
   /* dynamic labels: the interconnection button names its mode; the load bar its figure */
   var PREFIXES = [['intercon', SERVICE], ['loadbar', GAUGE]];

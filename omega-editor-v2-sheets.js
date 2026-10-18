@@ -76,6 +76,13 @@
   Paper.prototype.text = function (x, y, size, text, anchor, rgb) {
     this.ops.push({ t: 'tx', x: x, y: y, size: size, text: latin(text), anchor: anchor || 'start', rgb: rgb || INK });
   };
+  Paper.prototype.image = function (x, y, w, h, img) {
+    if (!img || !img.jpeg) return;
+    this.ops.push({
+      t: 'img', x: x, y: y, w: w, h: h,
+      b64: img.jpeg, pxW: img.width || 1, pxH: img.height || 1
+    });
+  };
 
   function frame(paper, meta) {
     var m = 0.38;
@@ -118,9 +125,10 @@
       lines = wrap(item.text, width, pt);
       return lines.length * lineH(pt) + 0.06;
     }
-    if (item.type === 'gap') return item.h || 0.12;
+    if (item.type === 'gap') return item.h == null ? 0.12 : item.h;
     if (item.type === 'vicinity') return 2.35;
     if (item.type === 'table') return 0.28 + Math.max(1, item.rows.length) * 0.22 + 0.08;
+    if (item.type === 'faces') return 0.22 + Math.max(1, (item.faces || []).length) * 1.85;
     return 0.2;
   }
 
@@ -182,7 +190,7 @@
         paper.text(box.x, y + 0.14, 11, item.text, 'start', NAVY);
         y += lineH(11) + 0.04;
       } else if (item.type === 'gap') {
-        y += item.h || 0.12;
+        y += item.h == null ? 0.12 : item.h;
       } else if (item.type === 'p' || item.type === 'note') {
         var pt = item.type === 'note' ? 7.5 : 8;
         part = drawParagraph(paper, box.x, y, box.w, item.text, pt, item.type === 'note' ? MUTED : INK, bottom - y);
@@ -200,6 +208,15 @@
         var left = drawTable(paper, box.x, y, box.w, budget, item);
         y = left.y;
         if (left.rest) return [left.rest].concat(items.slice(i + 1));
+      } else if (item.type === 'faces') {
+        var faceH = 1.85;
+        var room = bottom - y;
+        if (room < faceH && drew) return items.slice(i);
+        var fit = Math.max(1, Math.floor(room / faceH));
+        var batch = (item.faces || []).slice(0, fit);
+        var restFaces = (item.faces || []).slice(fit);
+        y = drawFaces(paper, box.x, y, box.w, batch);
+        if (restFaces.length) return [{ type: 'faces', faces: restFaces }].concat(items.slice(i + 1));
       }
       drew = true;
       if (y > bottom) return items.slice(i + 1);
@@ -385,6 +402,7 @@
       { type: 'h', text: 'Site information' },
       { type: 'p', text: 'APN: ' + (a.apn || 'not on the project') + '. Serving utility: ' + (a.utility || 'not on the project') + '. System voltage: ' + a.voltage + ' V, ' + (a.phases === 1 ? 'single-phase' : 'three-phase') + (a.voltageAssumed ? ' (assumed)' : '') + '.' },
       { type: 'p', text: 'Lat / Long: ' + ((doc.anchor && isFinite(doc.anchor.lat)) ? (doc.anchor.lat + ', ' + doc.anchor.lng) : 'not on the project') + '. Zoning district: ' + (a.zoning || 'not on the project') + '. Flood zone: ' + (a.flood || 'not on the project') + '.' },
+      a.locationNote ? { type: 'p', text: a.locationNote } : { type: 'gap', h: 0 },
       { type: 'p', text: 'JOB NO.: ' + (a.jobNo || 'not on the project') + '. DESIGNED BY: ' + (a.designedBy || 'not on the project') + '. CHECKED BY: ' + (a.checkedBy || 'not on the project') + '.' },
       { type: 'h', text: 'General notes' },
       { type: 'p', text: 'All construction shall comply with the codes adopted by the AHJ, including the current electrical, fire and building codes. Before work starts, the contractor tells the engineer of record about any discrepancy in the existing conditions. The contractor is responsible for safety on the site, for installing equipment to the manufacturer\'s instructions, and for reading the drawings and the equipment manuals before energizing. Work started before the AHJ approves the set is at the contractor\'s risk.' },
@@ -440,7 +458,130 @@
     return scale;
   }
 
-  function drawSite(paper, box, doc, model) {
+  function underlayCaption(doc, opts) {
+    var drawing = (doc && doc.drawing) || {};
+    var anchor = doc && doc.anchor && isFinite(+doc.anchor.lat) && isFinite(+doc.anchor.lng);
+    if (opts.underlay && opts.underlay.jpeg) {
+      var credit = opts.underlay.attribution || 'U.S. Geological Survey, The National Map';
+      return 'Imagery: ' + credit + '. Public domain. The photo is registered to the site point. It is not a survey.';
+    }
+    if (drawing.aerial === false) return 'Aerial photo is turned off.';
+    if (!anchor) return 'No site point is on the project, so no aerial photo is registered.';
+    if (opts.aerialUnavailable) return 'Aerial imagery was not available.';
+    return 'Aerial imagery was not attached to this sheet.';
+  }
+
+  function drawUnderlay(paper, doc, opts, x, y, w, h) {
+    if (!opts.underlay || !opts.underlay.jpeg || !(w > 0) || !(h > 0)) return;
+    paper.image(x, y, w, h, opts.underlay);
+  }
+
+  function drawFace(paper, x, y, w, face) {
+    var h = 1.15;
+    paper.rect(x, y, Math.min(w, 8.8), h, 1.1, face.border || INK, face.fill || [1, 1, 1]);
+    var ink = face.ink || INK;
+    var size = face.min ? 27 : 9;
+    paper.text(x + 0.12, y + (face.min ? 0.55 : 0.28), size, face.title, 'start', ink);
+    var ly = y + (face.min ? 0.95 : 0.48);
+    var i;
+    if (!face.min) {
+      for (i = 0; i < (face.lines || []).length && i < 2; i++) {
+        paper.text(x + 0.12, ly, 7.5, face.lines[i], 'start', ink);
+        ly += 0.16;
+      }
+    }
+    drawParagraph(paper, x, y + h + 0.02, w, face.cite + '. ' + face.note, 6.5, MUTED, 0.55);
+    return y + 1.85;
+  }
+
+  function drawFaces(paper, x, y, w, faces) {
+    var i;
+    for (i = 0; i < faces.length; i++) y = drawFace(paper, x, y, w, faces[i]);
+    return y;
+  }
+
+  function placardArt(model) {
+    var faces = [];
+    var pv = model.arrays.length > 0;
+    var ess = false, i;
+    for (i = 0; i < model.equipment.length; i++) if (model.equipment[i].key === 'bess') ess = true;
+    if (pv) {
+      faces.push({
+        title: 'SOLAR PV SYSTEM IS EQUIPPED WITH RAPID SHUTDOWN.',
+        lines: ['TURN RAPID SHUTDOWN SWITCH TO THE OFF POSITION TO SHUT DOWN PV SYSTEM AND REDUCE SHOCK HAZARD IN ARRAY.'],
+        fill: [1, 1, 1], ink: [0.08, 0.08, 0.08], border: [0.08, 0.08, 0.08],
+        cite: 'NEC 2023 690.12(D)',
+        note: 'Title capitals, at least 3/8 in. All text must contrast with the background. The Code does not name a color. The label also requires a simple building diagram, which this sheet does not invent. 690.12 applies to a PV system on or in a building. This drawing does not decide that.'
+      });
+      faces.push({
+        min: true,
+        title: 'RAPID SHUTDOWN SWITCH FOR SOLAR PV SYSTEM',
+        lines: [],
+        fill: [0.75, 0.05, 0.08], ink: [1, 1, 1], border: [0.45, 0.02, 0.04],
+        cite: 'NEC 2023 690.12(D)(2)',
+        note: 'White on red, reflective, capitals, at least 3/8 in, on or within 3 ft of the switch. The drawing does not locate the switch.'
+      });
+      faces.push({
+        title: 'PHOTOVOLTAIC POWER SOURCE',
+        lines: ['or SOLAR PV DC CIRCUIT'],
+        fill: [1, 1, 1], ink: [0.08, 0.08, 0.08], border: [0.08, 0.08, 0.08],
+        cite: 'NEC 2023 690.31(D)(2)',
+        note: 'Either wording, on exposed DC raceways on or in a building. This section does not name a color, so the face is not drawn red.'
+      });
+    }
+    if (model.sources && model.sources.length) {
+      faces.push({
+        title: 'POWER SOURCE DIRECTORY',
+        lines: ['A permanent directory of every power source on the premises.'],
+        fill: [1, 1, 1], ink: [0.08, 0.12, 0.2], border: [0.12, 0.31, 0.47],
+        cite: 'NEC 2023 705.10',
+        note: '705.10 requires the directory. It does not name a color.'
+      });
+    }
+    if (model.interconnect && model.interconnect.method === '120' && model.interconnect.ok) {
+      faces.push({
+        title: 'DO NOT RELOCATE THIS OVERCURRENT DEVICE',
+        lines: ['Keep this source device at the opposite end of the bus from the primary source.'],
+        fill: [1, 1, 1], ink: [0.08, 0.08, 0.08], border: [0.08, 0.08, 0.08],
+        cite: 'NEC 2023 705.12',
+        note: 'The do-not-relocate warning. The Code does not name a color for this plaque.'
+      });
+    }
+    if (ess) {
+      faces.push({
+        title: 'ENERGY STORAGE SYSTEM DISCONNECT',
+        lines: ['Plaque or directory at the ESS disconnecting means.'],
+        fill: [1, 1, 1], ink: [0.08, 0.08, 0.08], border: [0.08, 0.08, 0.08],
+        cite: 'NEC 2023 706.15',
+        note: '706.15 requires the plaque. The section does not name a color, so this face is not drawn red. The drawing does not locate the disconnect.'
+      });
+    }
+    return faces;
+  }
+
+  function fillRows(model) {
+    var rows = [], i, c, f;
+    for (i = 0; i < model.circuits.length; i++) {
+      c = model.circuits[i];
+      f = c.fill;
+      if (!f) {
+        rows.push([c.label, '', '', '', '', 'Not sized, so fill is not selected.']);
+        continue;
+      }
+      rows.push([
+        c.label,
+        f.trade ? (f.trade + ' in') : '',
+        f.raceway + (f.racewayAssumed ? ' (assumed)' : ''),
+        String(f.conductors || ''),
+        f.fillPct == null ? '' : (f.fillPct + '% of ' + f.limitPct + '%'),
+        f.selected ? 'selected, not a field measurement' : (f.over ? 'over Table 1' : (f.fromDrawing ? 'on the drawing' : f.note))
+      ]);
+    }
+    if (!rows.length) rows.push(['—', '', '', '', '', 'No sized circuit']);
+    return rows;
+  }
+
+  function drawSite(paper, box, doc, model, opts) {
     var b = boundsOfDoc(doc);
     paper.text(box.x, box.y + 0.14, 8, 'North is up. Dimensions are feet.', 'start', MUTED);
     if (!isFinite(b.minX)) {
@@ -457,6 +598,7 @@
     function X(px) { return ox + (px - b.minX) / scale; }
     function Y(py) { return oy + dh - (py - b.minY) / scale; }
     paper.rect(area.x, area.y, area.w, area.h, 0.4, HAIR);
+    drawUnderlay(paper, doc, opts || {}, ox, oy, dw, dh);
     strokeDoc(paper, doc, X, Y);
     var seen = {}, i;
     for (i = 0; i < (doc.entities || []).length; i++) {
@@ -508,6 +650,7 @@
     paper.line(barX, barY - 0.06, barX, barY + 0.06, 0.8, INK);
     paper.line(barX + 2, barY - 0.06, barX + 2, barY + 0.06, 0.8, INK);
     paper.text(barX + 1, barY - 0.14, 7, barFt + ' ft', 'middle', INK);
+    drawParagraph(paper, area.x + 0.12, barY - 0.55, Math.max(2.2, area.w - 2.4), underlayCaption(doc, opts || {}), 6.5, INK, 0.42);
     paper.text(box.x + box.w - 1.6, box.y + 0.28, 7.5, 'SCALE', 'start', NAVY);
     paper.text(box.x + box.w - 1.6, box.y + 0.46, 8, '1 in = ' + scale + ' ft', 'start', INK);
     paper.text(box.x + box.w - 1.6, box.y + 0.7, 6.5, 'Property line, equipment,', 'start', MUTED);
@@ -631,7 +774,7 @@
     var base = metaOf(doc, model, date, size);
     var pages = [];
     addFlow(pages, size, base, 'G-001', 'Cover / title', coverItems(doc, model));
-    pages.push(dedicated(size, base, 'C-001', 'Site plan', function (p, box) { drawSite(p, box, doc, model); }));
+    pages.push(dedicated(size, base, 'C-001', 'Site plan', function (p, box) { drawSite(p, box, doc, model, opts); }));
     var demos = (doc.entities || []).filter(function (e) { return e && (e.type === 'demo' || e.demo); });
     if (demos.length) {
       pages.push(dedicated(size, base, 'C-002', 'Demolition', function (p, box) {
@@ -667,7 +810,11 @@
       { type: 'p', text: 'Field-verify all routing and lengths before ordering.' },
       { type: 'note', text: 'Add vertical risers, equipment stub-ups, pull-box slack and terminations before ordering. Conduit and conductor sizes are the design basis; the engineer of record confirms ampacity, voltage drop and fill. Trench corridors shared by multiple services are counted once. Trench footage is not the sum of the conduit lengths it carries. Underground routing is diagrammatic. All runs to be installed per NEC Article 300 and the conduit type on this schedule.' },
       { type: 'p', text: trenchLine(model) },
-      { type: 'note', text: 'Conduit fill (Chapter 9, Tables 1 and 4) is not calculated. The drawing does not carry a raceway trade size and a conductor insulation area together. NEC 310.10(G) parallel sets, where used, are 1/0 AWG or larger.' }
+      { type: 'table', title: 'Raceway fill, each circuit in its own raceway', columns: [
+        { label: 'Circuit', w: 1.3 }, { label: 'Trade', w: 0.8 }, { label: 'Type', w: 1.3 },
+        { label: 'Wires', w: 0.6 }, { label: 'Fill', w: 1.1 }, { label: 'Flag', w: 2.2 }
+      ], rows: fillRows(model) },
+      { type: 'p', text: 'Each sized circuit is its own raceway unless the drawing names the run that carries it. The trade size is the smallest Chapter 9 Table 4 size whose Table 1 fill holds the phase conductors and the equipment grounding conductor. Insulation is THHN/THWN-2, Table 5. One wire is 53 percent, two wires are 31 percent, and more than two are 40 percent. Nipple fill is not used. A trade size written on the run is kept, and a fill over Table 1 is flagged. PVC Schedule 40 is used when the run says PVC. Otherwise the area is rigid metal conduit. A selected size is not a field measurement. NEC 310.10(G) parallel sets, where used, are 1/0 AWG or larger. 310.15(C) bundling is not applied.' }
     ]);
 
     addFlow(pages, size, base, 'E-005', 'Equipment schedule', [
@@ -696,16 +843,19 @@
     }
     addFlow(pages, size, base, 'E-006', 'Strings and inverters', stringItems);
 
-    addFlow(pages, size, base, 'E-007', 'Labels and placards', [
+    var placardItems = [
       { type: 'p', text: 'Wording below is the requirement in ordinary language. The sealed placard has to match the adopted edition\'s exact legend. This sheet does not letter a placard the code does not specify word for word.' },
       { type: 'table', title: 'Placards', columns: [
         { label: 'Section', w: 1.6 }, { label: 'Where', w: 2 }, { label: 'What it has to say', w: 4 }
       ], rows: model.placards.map(function (p) { return [p.cite, p.where, p.text]; }) },
-      { type: 'p', text: 'Sign faces below are the legends the previous permit set drew as colored rectangles. The words and the section are what get sealed. A colored sign layout is not redrawn here.' },
-      { type: 'table', title: 'Sign faces', columns: [
-        { label: 'Face', w: 1.8 }, { label: 'Section', w: 2.2 }, { label: 'Legend', w: 4 }
-      ], rows: signFaces(doc, model) }
-    ]);
+      { type: 'p', text: 'The faces below are drawn to the minimum the cited section names. A color is used only where that section names one. Where the Code requires contrast and does not name a color, the face is a bordered plaque and the note says so.' }
+    ];
+    var art = placardArt(model);
+    if (art.length) placardItems.push({ type: 'faces', faces: art });
+    placardItems.push({ type: 'table', title: 'Sign index', columns: [
+      { label: 'Face', w: 1.8 }, { label: 'Section', w: 2.2 }, { label: 'Legend', w: 4 }
+    ], rows: signFaces(doc, model) });
+    addFlow(pages, size, base, 'E-007', 'Labels and placards', placardItems);
 
     addFlow(pages, size, base, 'E-008', 'Grounding and bonding', [
       { type: 'p', text: 'Equipment grounding conductors are sized from NEC 2023 Table 250.122 for the overcurrent device ahead of the equipment. The grounding electrode system is required by 250.50. A PV system also follows 690.47. Electrode resistance, ground-rod count and the bonding jumper length are not on the drawing, so they are not designed here.' },
@@ -781,6 +931,8 @@
           (cx - r).toFixed(2) + ' ' + (cy - k * r).toFixed(2) + ' ' + (cx - k * r).toFixed(2) + ' ' + (cy - r).toFixed(2) + ' ' + cx.toFixed(2) + ' ' + (cy - r).toFixed(2) + ' c',
           (cx + k * r).toFixed(2) + ' ' + (cy - r).toFixed(2) + ' ' + (cx + r).toFixed(2) + ' ' + (cy - k * r).toFixed(2) + ' ' + (cx + r).toFixed(2) + ' ' + cy.toFixed(2) + ' c S'
         ].join('\n'));
+      } else if (o.t === 'img' && o.name) {
+        cmd.push('q ' + (o.w * 72).toFixed(2) + ' 0 0 ' + (o.h * 72).toFixed(2) + ' ' + (o.x * 72).toFixed(2) + ' ' + ((pageH - o.y - o.h) * 72).toFixed(2) + ' cm /' + o.name + ' Do Q');
       } else if (o.t === 'tx') {
         rgb(o.rgb, false);
         var tw = String(o.text).length * (o.size * 0.52);
@@ -798,16 +950,59 @@
     return assemblePdf(built.pages);
   }
 
+  function b64ToBinary(b64) {
+    var clean = String(b64 || '').replace(/\s/g, '');
+    if (typeof Buffer !== 'undefined') return Buffer.from(clean, 'base64').toString('latin1');
+    var bin = atob(clean), i, out = '';
+    for (i = 0; i < bin.length; i++) out += bin.charAt(i);
+    return out;
+  }
+
+  function collectImages(pages) {
+    var list = [], seen = {}, i, k, o, name;
+    for (i = 0; i < pages.length; i++) {
+      for (k = 0; k < pages[i].ops.length; k++) {
+        o = pages[i].ops[k];
+        if (o.t !== 'img' || !o.b64) continue;
+        name = seen[o.b64];
+        if (!name) {
+          name = 'Im' + list.length;
+          seen[o.b64] = name;
+          list.push(o);
+        }
+        o.name = name;
+      }
+    }
+    return list;
+  }
+
   function assemblePdf(pages) {
     var fontObj = 3;
-    var contents = [], pageObjs = [], i, stream;
+    var contents = [], pageObjs = [], imageObjs = [], i, k, stream, o, xo, bytes;
+    var images = collectImages(pages);
     var next = 4;
+    for (i = 0; i < images.length; i++) {
+      bytes = b64ToBinary(images[i].b64);
+      images[i].objId = next;
+      imageObjs.push({
+        id: next,
+        body: '<< /Type /XObject /Subtype /Image /Width ' + (images[i].pxW || 1) + ' /Height ' + (images[i].pxH || 1) +
+          ' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ' + bytes.length + ' >>\nstream\n' + bytes + '\nendstream'
+      });
+      next++;
+    }
     for (i = 0; i < pages.length; i++) {
       stream = opsStream(pages[i].ops, pages[i].h);
+      xo = '';
+      for (k = 0; k < pages[i].ops.length; k++) {
+        o = pages[i].ops[k];
+        if (o.t === 'img' && o.name && o.objId) xo += '/' + o.name + ' ' + o.objId + ' 0 R ';
+      }
       contents.push({ id: next, body: '<< /Length ' + stream.length + ' >>\nstream\n' + stream + '\nendstream' });
       pageObjs.push({
         id: next + 1,
-        body: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + (pages[i].w * 72).toFixed(0) + ' ' + (pages[i].h * 72).toFixed(0) + '] /Contents ' + next + ' 0 R /Resources << /Font << /F1 ' + fontObj + ' 0 R >> >> >>'
+        body: '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ' + (pages[i].w * 72).toFixed(0) + ' ' + (pages[i].h * 72).toFixed(0) + '] /Contents ' + next + ' 0 R /Resources << /Font << /F1 ' + fontObj + ' 0 R >>' +
+          (xo ? ' /XObject << ' + xo + '>>' : '') + ' >> >>'
       });
       next += 2;
     }
@@ -816,6 +1011,7 @@
     all.push({ id: 1, body: '<< /Type /Catalog /Pages 2 0 R >>' });
     all.push({ id: 2, body: '<< /Type /Pages /Count ' + pages.length + ' /Kids [' + kids + '] >>' });
     all.push({ id: 3, body: '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>' });
+    for (i = 0; i < imageObjs.length; i++) all.push(imageObjs[i]);
     for (i = 0; i < contents.length; i++) {
       all.push(contents[i]);
       all.push(pageObjs[i]);
@@ -852,6 +1048,8 @@
         if (o.rgb) parts.push('<rect x="' + o.x.toFixed(3) + '" y="' + o.y.toFixed(3) + '" width="' + o.w.toFixed(3) + '" height="' + o.h.toFixed(3) + '" fill="none" stroke="' + col(o.rgb) + '" stroke-width="' + ((o.sw || 0.6) / 72).toFixed(4) + '"/>');
       } else if (o.t === 'c') {
         parts.push('<circle cx="' + o.x.toFixed(3) + '" cy="' + o.y.toFixed(3) + '" r="' + o.r.toFixed(3) + '" fill="none" stroke="' + col(o.rgb) + '" stroke-width="' + ((o.sw || 0.6) / 72).toFixed(4) + '"/>');
+      } else if (o.t === 'img' && o.b64) {
+        parts.push('<image href="data:image/jpeg;base64,' + String(o.b64).replace(/\s/g, '') + '" x="' + o.x.toFixed(3) + '" y="' + o.y.toFixed(3) + '" width="' + o.w.toFixed(3) + '" height="' + o.h.toFixed(3) + '" preserveAspectRatio="none"/>');
       } else if (o.t === 'tx') {
         var anchor = o.anchor === 'middle' ? 'middle' : (o.anchor === 'end' ? 'end' : 'start');
         parts.push('<text x="' + o.x.toFixed(3) + '" y="' + o.y.toFixed(3) + '" font-family="Helvetica, Arial, sans-serif" font-size="' + (o.size / 72).toFixed(4) + '" text-anchor="' + anchor + '" fill="' + col(o.rgb) + '">' + xmlEscape(o.text) + '</text>');

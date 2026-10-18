@@ -38,7 +38,7 @@ jobs:
       # No install step. These tests are pure functions extracted straight out
       # of the HTML — there is no build, no bundler and no dependency to fetch,
       # which is the whole reason they are fast enough to run on every push.
-      - name: capacity, sizer, site intel, agent sites
+      - name: capacity, sizer, site intel, agent sites, partner scope
         run: |
           node scripts/test-caps.js
           node scripts/test-tenant-signup.js
@@ -46,6 +46,7 @@ jobs:
           node scripts/test-bess-sizer.js
           node scripts/test-site-intel.js
           node scripts/test-agent-sites.js
+          node scripts/test-partner-scope.js
 
       - name: packaging catalog, pricing and sandbox boundaries
         run: npm run test:packaging

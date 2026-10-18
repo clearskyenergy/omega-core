@@ -68,14 +68,14 @@ async function run() {
       ok(estimateTab.shown && (plan === 'paid' ? estimateTab.optin === null && estimateTab.open && estimateTab.commands > 0 : estimateTab.optin === 'estimate' && !estimateTab.open && estimateTab.commands === 0),
          'Estimate tab follows module, not legacy Engineering cap: ' + JSON.stringify(estimateTab));
       var names = await page.evaluate(function () { return OmegaCommands.list().filter(function (x) { return x.action !== 'view-module'; }).map(function (x) { return x.name; }).join('|'); });
-      ok(/Plot Plan/.test(names) === (plan === 'paid'), 'palette/Jarvis list');
+      ok(/Plan Set/.test(names) === (plan === 'paid'), 'palette/Jarvis list');
       await page.evaluate(function () { openPlotPlanExport(); d4Open(); openRpPanel('cost'); rpTab('cost'); OmegaAIRender.open(); _guidedPick('compute'); });
       var calls = await page.evaluate(function () { return window.calls; });
       ok(plan === 'lite' ? calls.length === 0 : calls.indexOf('render') >= 0 && calls.indexOf('cost') >= 0, 'direct launchers');
       await page.evaluate(function () { var b = document.createElement('button'); b.id = 'ov-airender'; b.className = 'rbtn'; b.setAttribute('onclick', 'OmegaAIRender.open()'); b.innerHTML = '<span class="rb-lbl">AI Render</span>'; document.querySelector('.ribbon-page[data-page="output"]').appendChild(b); });
       await page.waitForFunction(function () { var b = document.getElementById('ov-airender'); return b.hasAttribute('data-package-hidden') === (OmegaCaps.packageAccess().modules.length === 1); });
       ok(await page.locator('#ov-airender').isVisible() === (plan === 'paid'), 'late injected AI Render');
-      await page.evaluate(function () { document.getElementById('ov-airender').click(); OmegaCommands.run('Plot Plan E0 / E1.1'); });
+      await page.evaluate(function () { document.getElementById('ov-airender').click(); OmegaCommands.run('Plan Set'); });
       ok(await page.evaluate(function () { return OmegaCaps.packageAccess().modules.length > 1 || window.calls.indexOf('plot') < 0 && window.calls.indexOf('render') < 0; }), 'programmatic hidden click');
       await page.screenshot({ path: path.join(output, plan + '-' + theme + '-output.png') });
       await page.evaluate(function () { document.getElementById('app-menu').classList.add('open'); document.getElementById('app-menu').style.display = 'block'; });

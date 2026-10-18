@@ -55,13 +55,10 @@
   ];
 
   var GAPS = [
-    { id: 'satellite', detail: 'The old plot plan could lay a satellite photo or a frozen map under E1.0. This set has no image to register, so the plan is linework at a stated scale.' },
-    { id: 'sign-artwork', detail: 'The old signage sheets drew colored rectangles. This set prints the legend and the section. It does not redraw the colored face.' },
     { id: 'structural-pad', detail: 'S1.1 and S1.2 were structural pad and gear-pad details. Footprints are printed. A foundation section is not designed.' },
     { id: 'racking-section', detail: 'S1.3, S1.4 and S1.5 were racking sections. The array sheet states the mount, the module and the table count. It is not a structural section.' },
     { id: 'fence-section', detail: 'S3.0 was a fencing detail. A drawn fence is noted. Post, fabric and foundation are not designed.' },
     { id: 'electrode', detail: 'The grounding electrode (rod count, resistance, bonding jumper) is not designed. Table 250.122 equipment grounding conductors are.' },
-    { id: 'conduit-fill', detail: 'Chapter 9 fill is not calculated. The old schedule also left fill to the engineer when the raceway trade size was unknown. Trade size stays blank until the run carries one.' },
     { id: 'flood-default', detail: 'The old cover defaulted the flood zone to X. This set prints the zone only when the project names it, and otherwise says it is not on the project.' },
     { id: 'manufacturer-default', detail: 'The old cover once prefilled a battery manufacturer. A maker or model is printed only when the build or the equipment carries it.' },
     { id: 'listing-claim', detail: 'The old cover printed UL 9540 / UL 1741 as the certification cell even when the unit was not identified. This set does not claim a listing the equipment record does not state.' },
@@ -215,7 +212,38 @@
         conduits: [{ spec: 'RMC', from: 'POI', to: 'M', pts: [{ x: 16, y: 16 }, { x: 16, y: 60 }] }]
       };
     }
-    return { bess: bess, dcfc: dcfc, l2: l2, pv: pv };
+    function mesa() {
+      return {
+        kind: 'bess',
+        name: '29 W Main St',
+        address: '29 W Main St, Mesa, AZ 85201',
+        customer: 'Downtown reference',
+        anchor: { lat: 33.41541, lng: -111.83264 },
+        electrical: {
+          voltage: 480, phases: 3, pf: 0.95, method: 'supply',
+          ahj: 'City of Mesa', jurisdiction: 'City of Mesa, Arizona',
+          utility: 'City of Mesa Electric', necEdition: '2023'
+        },
+        drawing: {
+          jobNo: 'MESA-29', designedBy: 'Guided build', rev: '0',
+          locationNote: 'The latitude and longitude are interpolated between published points for 12 W Main St and 54 W Main St. They are not a survey. City of Mesa Electric serves about 5.5 square miles centered on downtown Mesa. Salt River Project serves most of the rest of the city. This address is in the downtown system. Confirm the serving utility before sealing.'
+        },
+        parcel: [{ x: 0, y: 0 }, { x: 80, y: 0 }, { x: 80, y: 120 }, { x: 0, y: 120 }],
+        equipment: [
+          { key: 'poi', label: 'POI', x: 12, y: 16, w: 3, h: 3 },
+          { key: 'meter', label: 'Meter', x: 22, y: 16, w: 2, h: 2 },
+          { key: 'transformer', label: 'Transformer', x: 36, y: 28, w: 6, h: 5, zPct: 5.75, config: 'Dyn11' },
+          { key: 'pcs', label: 'PCS', x: 50, y: 50, w: 4, h: 3, kw: 100 },
+          { key: 'bess', label: 'BESS', x: 58, y: 72, w: 12, h: 4, kw: 100, kwh: 200 }
+        ],
+        conduits: [{ spec: 'PVC', from: 'BESS-1', to: 'XFMR-1', pts: [{ x: 12, y: 16 }, { x: 58, y: 16 }, { x: 58, y: 72 }] }],
+        trench: { pts: [{ x: 12, y: 14 }, { x: 58, y: 14 }, { x: 58, y: 70 }] },
+        fence: { pts: [{ x: 4, y: 4 }, { x: 76, y: 4 }, { x: 76, y: 112 }, { x: 4, y: 112 }] },
+        notes: [{ text: 'Gate', x: 8, y: 8 }, { text: 'Fire access along the alley', x: 8, y: 14 }],
+        demo: [{ label: 'Existing canopy' }]
+      };
+    }
+    return { bess: bess, dcfc: dcfc, l2: l2, pv: pv, mesa: mesa };
   }
 
   function applies(kind, item) {

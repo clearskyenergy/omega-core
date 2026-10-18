@@ -4,20 +4,23 @@
  *
  * Drawing state lives in omega-editor-v2-doc.js. This file is the page:
  * the canvas, the command line, save-on-this-computer, and the customer
- * dialog. It does not open Firebase and it does not write a workspace.
+ * dialog. Sections are Site, Design, Analyze, Outputs, and Funding.
+ * Sign-in is omega-editor-v2-auth.js: the same Firebase project and
+ * persisted session as Site Map. This file does not write a workspace.
  */
 (function (root) {
   'use strict';
 
   var G, D, A, B, X, R;
   var state, tool = 'select', equipKey = null, mapOn = true, dirty = false, savedOnce = false, saving = false;
-  var editSeq = 0;
+  var editSeq = 0, runEdit = -1;
   var snaps = { grid: true, endpoint: true, midpoint: true, edge: true, angle: false };
   var view = { cx: 200, cy: 140, pxPerFt: 1.5 };
+  var gridView = null, gridFit = false;
   var draft = null, drag = null, box = null, pan = null, space = false;
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
-  var tiles = {}, mapNote = '', recoverTimer = 0;
+  var tiles = {}, mapNote = '', recoverTimer = 0, section = 'design';
   var PROJECTS = 'omega.editorV2.projects';
 
   var POINT_TOOL = {
@@ -70,8 +73,28 @@
     resize();
     fit(false);
     refresh();
-    if (!offerRecovery(null, null)) {
-      setStatus('Sample site loaded. New starts a blank project. Help lists the commands.');
+    var recovering = offerRecovery(null, null);
+    if (root.OmegaEditorV2Hooks) {
+      root.OmegaEditorV2Hooks.register('permit', function (ctx) {
+        if (ctx && ctx.reason === 'build') return true;
+        openOutputs('permit');
+        return true;
+      });
+      root.OmegaEditorV2Hooks.register('sld', function (ctx) {
+        if (ctx && ctx.reason === 'build') return true;
+        openOutputs('sld');
+        return true;
+      });
+    }
+    if (!recovering) setStatus('Sample site loaded.');
+    var Bld = root.OmegaEditorV2Build;
+    if (Bld && Bld.resume) {
+      if (recovering) {
+        $('dlg-recover').addEventListener('close', function once() {
+          $('dlg-recover').removeEventListener('close', once);
+          Bld.resume(state, placedCtx());
+        });
+      } else Bld.resume(state, placedCtx());
     }
     $('cmd').focus();
   }
@@ -134,7 +157,17 @@
     $('btn-help').addEventListener('click', function () { $('dlg-help').showModal(); });
     $('help-close').addEventListener('click', function () { $('dlg-help').close(); });
     $('open-close').addEventListener('click', function () { $('dlg-open').close(); });
-    $('btn-dismiss').addEventListener('click', function () { $('banner').style.display = 'none'; resize(); });
+    var stages = document.querySelectorAll('#stages button');
+    for (var s = 0; s < stages.length; s++) stages[s].addEventListener('click', function () { setSection(this.getAttribute('data-stage')); });
+    $('next-action').addEventListener('click', function () { nextStep().run(); });
+    $('site-yes').addEventListener('click', siteYes);
+    $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
+    $('site-reason-save').addEventListener('click', siteNoSave);
+    $('build-cancel').addEventListener('click', function () {
+      if (root.OmegaEditorV2Build && root.OmegaEditorV2Build.clearDraft) root.OmegaEditorV2Build.clearDraft();
+      $('dlg-build').close();
+    });
+    $('side').addEventListener('change', onSideChange);
     $('btn-side').addEventListener('click', function () {
       var side = $('side'), open = side.classList.toggle('open');
       this.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -144,8 +177,49 @@
     $('cust-cancel').addEventListener('click', function () { $('dlg-customer').close(); });
     $('cust-form').addEventListener('submit', saveCustomer);
     $('file-import').addEventListener('change', onImport);
-    var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip]');
+    var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook],[data-build],[data-output]');
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
+    $('analyze-close').addEventListener('click', function () { setSection('design'); });
+    if ($('grid-detail-close') && root.OmegaEditorV2Grid) {
+      $('grid-detail-close').addEventListener('click', function () { root.OmegaEditorV2Grid.hideCard(); paintGridCard(); });
+    }
+    if ($('grid-detail-back') && root.OmegaEditorV2Grid) {
+      $('grid-detail-back').addEventListener('click', function () { root.OmegaEditorV2Grid.clearPick(); paintGridCard(); });
+    }
+    if (root.OmegaEditorV2Grid) {
+      root.OmegaEditorV2Grid.onChange(function () {
+        var Grid = root.OmegaEditorV2Grid;
+        if (Grid.enabled()) {
+          var focus = Grid.focus();
+          if (focus && !gridFit) {
+            if (!gridView) gridView = { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt };
+            gridFit = true;
+            fitGridFocus(focus);
+          }
+        } else if (gridView) {
+          view.cx = gridView.cx;
+          view.cy = gridView.cy;
+          view.pxPerFt = gridView.pxPerFt;
+          gridView = null;
+          gridFit = false;
+          layoutMap();
+        }
+        refreshLayers();
+        paintGridCard();
+        requestDraw();
+        if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
+      });
+    }
+    document.addEventListener('click', function (ev) {
+      var menu = $('outputs-menu');
+      if (!menu || menu.hidden) return;
+      var node = ev.target;
+      while (node) {
+        if (node.id === 'outputs-menu' || node.id === 'btn-outputs') return;
+        node = node.parentNode;
+      }
+      toggleOutputs(false);
+    });
     var cv = $('cv');
     cv.addEventListener('pointerdown', onDown);
     cv.addEventListener('pointermove', onMove);
@@ -186,9 +260,18 @@
     var act = b.getAttribute('data-act');
     var eq = b.getAttribute('data-equip');
     var tl = b.getAttribute('data-tool');
+    var hook = b.getAttribute('data-hook');
+    var buildId = b.getAttribute('data-build');
+    var output = b.getAttribute('data-output');
+    if (output) { previewOutput(output); return; }
+    if (buildId) { openBuild(buildId); return; }
+    if (hook) { invokeHook(hook); return; }
     if (tl) setTool(tl);
     else if (eq) setEquip(eq);
-    else if (act) runAct(act);
+    else if (act) {
+      if (act !== 'outputs') toggleOutputs(false);
+      runAct(act);
+    }
   }
 
   function setTool(name) {
@@ -218,7 +301,6 @@
   }
 
   function runAct(act) {
-    if (act === 'outputs') { openOutputs(); return; }
     if (act === 'undo') { if (D.undo(state)) afterChange(); else setStatus('Nothing to undo.'); }
     else if (act === 'redo') { if (D.redo(state)) afterChange(); else setStatus('Nothing to redo.'); }
     else if (act === 'erase') erase();
@@ -243,6 +325,9 @@
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
     else if (act === 'paste') paste();
+    else if (act === 'outputs') toggleOutputs();
+    else if (act === 'run') runNumbers();
+    else if (act === 'quote') setSection('funding');
   }
   function pressed(act, on) {
     var nodes = document.querySelectorAll('[data-act="' + act + '"]');
@@ -324,11 +409,20 @@
     if (map[word] === 'undo' || map[word] === 'redo' || map[word] === 'erase' || map[word] === 'array' || map[word] === 'zoom-ext') runAct(map[word] === 'zoom-ext' ? 'zoom-ext' : map[word]);
     else if (map[word] === 'help') $('dlg-help').showModal();
     else if (map[word] === 'new') confirmDirty(blank);
+    else if (word === 'BUILD') openBuild();
+    else if (word === 'RUN') runNumbers();
+    else if (word === 'SITE') setSection('site');
     else if (map[word]) setTool(map[word]);
     else setStatus('Unknown command “' + s + '”. Type HELP for the list.', true);
   }
 
   function cancel() {
+    if ($('outputs-menu') && !$('outputs-menu').hidden) { toggleOutputs(false); return; }
+    if ($('grid-detail') && !$('grid-detail').hidden && root.OmegaEditorV2Grid) {
+      root.OmegaEditorV2Grid.hideCard();
+      paintGridCard();
+      return;
+    }
     draft = null;
     box = null;
     drag = null;
@@ -532,6 +626,7 @@
     cv.width = Math.round(cssW * dpr);
     cv.height = Math.round(cssH * dpr);
     layoutMap();
+    requestDraw();
   }
   function screenToWorld(sx, sy) {
     return {
@@ -593,6 +688,8 @@
     $('cv').setPointerCapture(ev.pointerId);
     if (tool === 'select' && !ev.altKey) {
       var hit = hitAt(p);
+      var ghit = !hit && root.OmegaEditorV2Grid ? root.OmegaEditorV2Grid.hitAt(p, 12 / (view.pxPerFt || 1)) : null;
+      if (ghit) { root.OmegaEditorV2Grid.pick(ghit); return; }
       if (hit) {
         var ids = ev.shiftKey ? toggleSel(hit.id) : (state.selection.indexOf(hit.id) >= 0 ? state.selection.slice() : D.groupIds(state.doc, [hit.id]));
         if (!ev.shiftKey && state.selection.indexOf(hit.id) < 0) state.selection = ids;
@@ -714,6 +811,35 @@
     layoutMap();
     requestDraw();
   }
+  function boundsOfDrawing() {
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b, any = false;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      b = G.boundsOf(state.doc.entities[i]);
+      if (!isFinite(b.minX)) continue;
+      any = true;
+      if (b.minX < minX) minX = b.minX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.maxY > maxY) maxY = b.maxY;
+    }
+    if (!any) { minX = -20; minY = -20; maxX = 200; maxY = 120; }
+    return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
+  }
+  function fitGridFocus(p) {
+    var b = boundsOfDrawing();
+    if (p.x < b.minX) b.minX = p.x;
+    if (p.y < b.minY) b.minY = p.y;
+    if (p.x > b.maxX) b.maxX = p.x;
+    if (p.y > b.maxY) b.maxY = p.y;
+    var padX = (b.maxX - b.minX) * 0.08 + 40;
+    var padY = (b.maxY - b.minY) * 0.08 + 40;
+    b.minX -= padX; b.minY -= padY; b.maxX += padX; b.maxY += padY;
+    view.cx = (b.minX + b.maxX) / 2;
+    view.cy = (b.minY + b.maxY) / 2;
+    view.pxPerFt = Math.max(0.02, Math.min(cssW / (b.maxX - b.minX || 1), cssH / (b.maxY - b.minY || 1)));
+    layoutMap();
+    requestDraw();
+  }
   function fit(announce) {
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b, any = false;
     for (i = 0; i < state.doc.entities.length; i++) {
@@ -747,6 +873,7 @@
     ctx.clearRect(0, 0, cssW, cssH);
     if (!mapOn) { ctx.fillStyle = '#E4E1D8'; ctx.fillRect(0, 0, cssW, cssH); }
     drawGrid(ctx);
+    if (root.OmegaEditorV2Grid) root.OmegaEditorV2Grid.draw(ctx, worldToScreen);
     drawEntities(ctx, false);
     drawDraft(ctx);
     drawSelection(ctx);
@@ -1074,36 +1201,27 @@
     refreshCustomer();
     refreshLayers();
     refreshProps(false);
+    paintGridCard();
     saveLabel();
     $('project-name').value = state.doc.name || '';
+    paintNext();
     if (!cursor) {
       var scaled = view.pxPerFt > 0 && isFinite(view.pxPerFt);
       $('coords').textContent = 'E — ' + (scaled ? 'ft' : 'px') + '   N — ' + (scaled ? 'ft' : 'px');
     }
     requestDraw();
     layoutMap();
+    paintBuildPrompt();
   }
   function afterChange() {
     editSeq++;
     dirty = true;
     refresh();
     scheduleRecovery();
+    if (root.OmegaEditorV2Design) root.OmegaEditorV2Design.publish(root.OmegaEditorV2Design.fromDoc(state.doc));
     if (root.OmegaEditorV2Outputs) OmegaEditorV2Outputs.sync(state.doc);
-  }
-  function openOutputs() {
-    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
-    OmegaEditorV2Outputs.open({
-      doc: state.doc,
-      download: download,
-      fileBase: fileBase,
-      drawing: {
-        png: exportPng,
-        pdf: exportPdf,
-        dxf: exportDxf,
-        json: exportJson,
-        importFile: function () { $('file-import').click(); }
-      }
-    });
+    if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
+    if (section === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
   }
   function refreshTakeoff() {
     var s = D.summary(state.doc);
@@ -1118,7 +1236,14 @@
     row(kv, 'Tables', s.tableCount);
     row(kv, 'Modules', s.moduleCount);
     row(kv, 'Storage', s.bessKw + ' kW / ' + s.bessKwh + ' kWh');
-    row(kv, 'Chargers', s.chargerCount);
+    row(kv, 'Chargers', s.chargerKw > 0 ? (s.chargerCount + ' · ' + s.chargerKw + ' kW') : String(s.chargerCount));
+    if (s.derKw > 0) row(kv, 'Generation', Math.round(s.derKw) + ' kW');
+    var built = $('takeoff-build');
+    if (built) {
+      var line = state.doc.build && state.doc.build.summary && state.doc.build.summary.line;
+      built.hidden = !line;
+      built.textContent = line || '';
+    }
     $('cv').setAttribute('aria-label', 'Site drawing. ' + s.solarKwDc + ' kilowatts DC, ' + s.tableCount + ' tables, ' + s.bessKw + ' kilowatts of storage.');
   }
   function row(host, k, v) {
@@ -1160,6 +1285,52 @@
       lock.addEventListener('click', onLayerLock);
       line.appendChild(mark); line.appendChild(name); line.appendChild(eye); line.appendChild(lock);
       host.appendChild(line);
+    }
+    appendGridLayer(host);
+  }
+  function appendGridLayer(host) {
+    var Grid = root.OmegaEditorV2Grid;
+    if (!Grid) return;
+    var line = document.createElement('div');
+    line.className = 'layer';
+    line.id = 'layer-grid-atlas';
+    var mark = document.createElement('i');
+    mark.className = 'swatch';
+    mark.style.background = Grid.COLORS.substation;
+    var name = document.createElement('span');
+    name.textContent = 'Grid Atlas';
+    var eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'btn quiet';
+    eye.id = 'layer-grid-atlas-toggle';
+    eye.textContent = Grid.enabled() ? 'Hide' : 'Show';
+    eye.setAttribute('aria-pressed', Grid.enabled() ? 'true' : 'false');
+    eye.addEventListener('click', function () {
+      Grid.setEnabled(!Grid.enabled(), state.doc, D.summary(state.doc));
+    });
+    line.appendChild(mark); line.appendChild(name); line.appendChild(eye);
+    if (host.firstChild) host.insertBefore(line, host.firstChild);
+    else host.appendChild(line);
+  }
+  function paintGridCard() {
+    var el = $('grid-detail');
+    var Grid = root.OmegaEditorV2Grid;
+    if (!el || !Grid) return;
+    var card = Grid.card();
+    el.hidden = !card.visible;
+    var back = $('grid-detail-back');
+    if (back) back.hidden = !card.back;
+    if (!card.visible) return;
+    $('grid-detail-title').textContent = card.title || 'Grid Atlas';
+    var body = $('grid-detail-body');
+    body.innerHTML = '';
+    var i, p, row;
+    for (i = 0; i < card.lines.length; i++) {
+      row = card.lines[i];
+      p = document.createElement('p');
+      if (row.source) p.className = 'src';
+      p.textContent = row.text;
+      body.appendChild(p);
     }
   }
   function onLayerVis(ev) { toggleLayer(ev.currentTarget.getAttribute('data-layer'), 'visible'); }
@@ -1298,6 +1469,10 @@
     }
     D.setMeta(state, { anchor: { lat: lat, lng: lng }, address: address || state.doc.address });
     afterChange();
+    if (root.OmegaEditorV2Grid && root.OmegaEditorV2Grid.enabled()) {
+      gridFit = false;
+      root.OmegaEditorV2Grid.reload(state.doc, D.summary(state.doc));
+    }
     setStatus('Anchor set. The aerial photo is scaled to this latitude.');
   }
 
@@ -1451,7 +1626,13 @@
   }
 
   function download(name, mime, data) {
-    var blob = data instanceof Blob ? data : new Blob([data], { type: mime });
+    var blob, bytes, i;
+    if (data instanceof Blob) blob = data;
+    else if (typeof data === 'string' && /[\u0080-\u00ff]/.test(data)) {
+      bytes = new Uint8Array(data.length);
+      for (i = 0; i < data.length; i++) bytes[i] = data.charCodeAt(i) & 255;
+      blob = new Blob([bytes], { type: mime });
+    } else blob = new Blob([data], { type: mime });
     var a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = name;
@@ -1606,9 +1787,223 @@
     }
   }
 
-  /* A guided build is data. It replaces only the entities that build
-     stamped, then the permit set and the single-line are rebuilt from
-     the document. There is no second ribbon for it. */
+  function setSection(name) {
+    if (name === 'outputs') { toggleOutputs(true); return; }
+    var allowed = { site: 1, design: 1, analyze: 1, outputs: 1, funding: 1 };
+    if (!allowed[name]) return;
+    section = name;
+    $('app').setAttribute('data-section', name);
+    var buttons = document.querySelectorAll('#stages button'), i;
+    for (i = 0; i < buttons.length; i++) {
+      buttons[i].setAttribute('aria-pressed', buttons[i].getAttribute('data-stage') === name ? 'true' : 'false');
+    }
+    $('side-draw').hidden = name !== 'design';
+    $('side-site').hidden = name !== 'site';
+    $('side-analyze').hidden = name !== 'analyze';
+    $('side-outputs').hidden = name !== 'outputs';
+    $('side-funding').hidden = name !== 'funding';
+    if (name !== 'design') {
+      var narrow = window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+      if (narrow) {
+        $('side').classList.add('open');
+        $('btn-side').setAttribute('aria-expanded', 'true');
+      }
+    }
+    if (name === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
+    if (name === 'outputs' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showOutputs(state);
+    if (name === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
+    paintNext();
+    resize();
+  }
+  function drawnCount() {
+    var s = D.summary(state.doc);
+    return (s.bessCount || 0) + (s.arrayCount || 0) + (s.chargerCount || 0);
+  }
+  function nextStep() {
+    var doc = state.doc;
+    if (!doc.screen) return { id: 'site', label: 'Does this site work?', run: function () { setSection('site'); } };
+    if (doc.screen.go === false) return { id: 'revise', label: 'Revise the site', run: function () { setSection('site'); } };
+    if (!drawnCount()) return { id: 'build', label: 'Place a build', run: function () { openBuild(); } };
+    if (runEdit !== editSeq) return { id: 'run', label: 'Run', run: runNumbers };
+    return { id: 'quote', label: 'Quote', run: function () { setSection('funding'); } };
+  }
+  function paintNext() {
+    var step = nextStep();
+    var btn = $('next-action');
+    if (!btn) return;
+    btn.textContent = step.label;
+    btn.setAttribute('data-next', step.id);
+  }
+  function siteYes() {
+    D.setMeta(state, { screen: { go: true, at: new Date().toISOString() } });
+    afterChange();
+    openBuild();
+  }
+  function siteNoSave() {
+    var reason = $('site-reason').value.trim();
+    if (reason.length < 3) { setStatus('Say what is in the way, in a few words.', true); return; }
+    D.setMeta(state, { screen: { go: false, reason: reason, at: new Date().toISOString() } });
+    afterChange();
+    setStatus('Recorded. The site stays as it is.');
+  }
+  function canvasBlank() {
+    var list = state.doc.entities || [], i, e;
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if (e.type === 'equip' || e.type === 'array' || e.type === 'conduit' || (e.type === 'rect' && e.key)) return false;
+    }
+    return true;
+  }
+  function paintBuildPrompt() {
+    var el = $('build-prompt');
+    if (el) el.hidden = !canvasBlank();
+  }
+  function placedCtx() {
+    return {
+      pxPerFt: view.pxPerFt,
+      onPlaced: function (res) {
+        afterChange();
+        fit(true);
+        setStatus((res.summary && res.summary.line) || 'Build placed.');
+        notifyDrawn();
+      }
+    };
+  }
+  function openBuild(preferred) {
+    var Bld = root.OmegaEditorV2Build;
+    if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
+    setSection('design');
+    toggleOutputs(false);
+    var ctx = placedCtx();
+    if (typeof preferred === 'string' && preferred) ctx.preferred = preferred;
+    Bld.open(state, ctx);
+  }
+  function notifyDrawn() {
+    var H = root.OmegaEditorV2Hooks;
+    if (!H || !H.listeners) return;
+    var names = ['view3d', 'permit', 'sld'], i;
+    for (i = 0; i < names.length; i++) {
+      if (H.listeners(names[i])) invokeHook(names[i], { reason: 'build' });
+    }
+  }
+  function toggleOutputs(force) {
+    var menu = $('outputs-menu');
+    if (!menu) return;
+    var open = force === true ? true : force === false ? false : menu.hidden;
+    menu.hidden = !open;
+    var btn = $('btn-outputs');
+    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  function previewOutput(kind) {
+    toggleOutputs(false);
+    var An = root.OmegaEditorV2Analyze;
+    var R = root.OmegaEditorV2Reports;
+    var Design = root.OmegaEditorV2Design;
+    var dlg = $('dlg-preview');
+    var title = $('preview-title');
+    var body = $('preview-body');
+    var actions = $('preview-actions');
+    if (!dlg || !An || !R) { setStatus('Outputs are not loaded.', true); return; }
+    var facts = An.factsFrom(state.doc, D.summary(state.doc));
+    var model = Design ? Design.fromDoc(state.doc) : null;
+    actions.innerHTML = '';
+    function addBtn(label, primary, fn) {
+      var b = document.createElement('button');
+      b.type = 'button';
+      b.className = primary ? 'btn primary' : 'btn';
+      b.textContent = label;
+      b.addEventListener('click', fn);
+      actions.appendChild(b);
+    }
+    function linesOf(built) {
+      if (!built) return '';
+      return built.lines.map(function (l) { return l.text || ''; }).join('\n');
+    }
+    function saveReport(id) {
+      return function () { An.download(state, id); };
+    }
+    addBtn('Close', false, function () { dlg.close(); });
+    if (kind === 'permit' || kind === 'sld') {
+      if (dlg.open) dlg.close();
+      openOutputs(kind);
+      return;
+    } else if (kind === 'drawing') {
+      title.textContent = 'PNG / PDF / DXF';
+      body.textContent = 'The drawing as it is now, in feet.\n\nPNG is the canvas. PDF and DXF are the same entities.';
+      addBtn('Download PNG', true, function () { exportPng(); });
+      addBtn('Download PDF', false, function () { exportPdf(); });
+      addBtn('Download DXF', false, function () { exportDxf(); });
+    } else if (kind === 'funding') {
+      var gate = root.OmegaProjectIntelligence.fundingReadiness(facts);
+      title.textContent = 'Push to Funding Marketplace';
+      body.textContent = gate.decision + '\n' + gate.score + ' / 100 from the drawing.\n\n' + (gate.ready ? 'The score clears the pursue line.' : 'The score is not at the pursue line yet.') + '\n\nPush hands this drawing to the marketplace submission. Nothing is priced here.';
+      addBtn('Push to Funding Marketplace', true, function () {
+        dlg.close();
+        invokeHook('funding');
+        setSection('funding');
+      });
+    } else if (kind === 'bom') {
+      title.textContent = 'BOM & cost estimate';
+      body.textContent = linesOf(R.build('bom', facts, state.doc)) + '\n\n' + linesOf(R.build('cost', facts, state.doc));
+      addBtn('Download bill of materials', true, saveReport('bom'));
+      addBtn('Download cost estimate', false, saveReport('cost'));
+    } else {
+      var built = R.build(kind, facts, state.doc);
+      title.textContent = built ? built.title : 'Report';
+      body.textContent = linesOf(built) || 'Nothing on the drawing fills this report.';
+      if (built) addBtn('Download PDF', true, saveReport(kind));
+    }
+    if (typeof dlg.showModal === 'function') dlg.showModal();
+  }
+  function designPreview(model, kind) {
+    if (!model) return 'The drawing is the source. The design model is not loaded.';
+    var gear = model.equipment.length, wires = model.conduits.length;
+    var gaps = (model.gaps || []).join(', ');
+    var head = kind === 'permit'
+      ? 'Permit set and plot plan, from the drawing.'
+      : 'One-line, from the placed chain.';
+    return head + '\n\n' + gear + ' pieces of equipment. ' + wires + ' conduits.\n' +
+      (model.build && model.build.summary && model.build.summary.line ? (model.build.summary.line + '\n') : '') +
+      '\nOn the drawing: footprints, the chain, and the raceway family.\n' +
+      'Not on the drawing: ' + (gaps || 'nothing listed') + '.\n\n' +
+      'Open builds the sheet from this reading. A missing detail stays blank.';
+  }
+  function runNumbers() {
+    var An = root.OmegaEditorV2Analyze;
+    if (!An) { setStatus('Analyze is not loaded.', true); return; }
+    var pi = An.assess(state);
+    runEdit = editSeq;
+    setSection('analyze');
+    setStatus(pi.decision + ' · ' + pi.score + ' / 100, from the drawing.');
+  }
+  function invokeHook(name, extra) {
+    var H = root.OmegaEditorV2Hooks;
+    var ctx = { doc: state.doc, summary: D.summary(state.doc), model: null };
+    if (root.OmegaEditorV2Design) ctx.model = root.OmegaEditorV2Design.fromDoc(state.doc);
+    if (extra && extra.reason) ctx.reason = extra.reason;
+    if (H && H.invoke(name, ctx)) return;
+    var note = {
+      view3d: '3D site view is the next view of this drawing. Nothing is attached to this button yet.',
+      permit: 'The permit plan set is built from this drawing. Nothing is attached to this button yet.',
+      sld: 'The single-line is built from this drawing. Nothing is attached to this button yet.',
+      funding: 'Funding uses the marketplace submission. Nothing is attached to this button yet.'
+    };
+    setStatus(note[name] || 'Nothing is attached to this yet.');
+  }
+  function onSideChange(ev) {
+    var t = ev.target;
+    if (!t || !t.id) return;
+    if (t.id === 'bill-kwh') {
+      D.setMeta(state, { billKwh: t.value === '' ? null : +t.value });
+      afterChange();
+    } else if (t.id === 'bill-file' && t.files && t.files[0]) {
+      D.setMeta(state, { billName: t.files[0].name });
+      afterChange();
+    }
+  }
+
+  /* A guided build writes the design model. The permit set and the
+     single-line are rebuilt from that document. */
   function applyGuidedBuild(build) {
     if (!root.OmegaEditorV2Guided) { setStatus('Guided build did not load.', true); return null; }
     var next = root.OmegaEditorV2Guided.apply(state.doc, build);
@@ -1617,6 +2012,23 @@
     setStatus('Drawings follow the guided build.');
     return next;
   }
+  function openOutputs(which) {
+    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
+    toggleOutputs(false);
+    OmegaEditorV2Outputs.open({
+      doc: state.doc,
+      which: which === 'sld' ? 'sld' : (which === 'permit' ? 'set' : 'list'),
+      download: download,
+      fileBase: fileBase,
+      drawing: {
+        png: exportPng,
+        pdf: exportPdf,
+        dxf: exportDxf,
+        json: exportJson,
+        importFile: function () { $('file-import').click(); }
+      }
+    });
+  }
 
-  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, VERSION: 'editor-v2-app/1' };
+  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, VERSION: 'editor-v2-app/3' };
 })(typeof window !== 'undefined' ? window : global);

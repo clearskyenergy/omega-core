@@ -2,7 +2,7 @@
 
 `editor-v2.html` builds a permit plan set and a single-line diagram from the drawing. Site Map (`editor.html`) is unchanged. This preview does not replace it.
 
-Outputs is one button. The dialog says ready or not ready in one sentence. Preview and Export are one click each. The code sections, the schedules, and the open items are on the sheets.
+Outputs is the ribbon menu. It lists the drawings: the permit set and plot plan, the one-line, PNG / PDF / DXF, the project file, and import. Reports (the bill of materials, the cost estimate, the value stack, the schedule, the memo) are in the Analyze panel. The dialog says ready or not ready in one sentence. Choosing a drawing opens it. Preview and Export are one click each. The code sections, the schedules, and the open items are on the sheets.
 
 ## What Site Map already does
 
@@ -27,12 +27,12 @@ Site Map's plot-plan dialog (`openPlotPlanExport`) and its one-line (`sldFromSit
 
 | Old sheet | What it carried | Where it is now |
 |---|---|---|
-| E0 cover | Banner, general notes (codes, discrepancies, OSHA, manufacturer instructions, manuals, lifecycle, work before approval, barricades, job-site conditions), optional model-written notes, electrical notes (690.17, 690/706 marking, 690.45/690.47/706 grounding, color code, circuit ID, flex, optional standby, a named battery called pre-engineered), site aerial or a placeholder, site table (project, address, APN, lat/long, zoning, flood, utility, code/AHJ, system voltage), equipment schedule, scope of work, sheet index, BESS fleet summary | G-001. General notes, electrical notes, scope, site information, job number, designed by, checked by, and the sheet index are printed from the document. The aerial is a gap. Model-written notes are a gap. |
+| E0 cover | Banner, general notes (codes, discrepancies, OSHA, manufacturer instructions, manuals, lifecycle, work before approval, barricades, job-site conditions), optional model-written notes, electrical notes (690.17, 690/706 marking, 690.45/690.47/706 grounding, color code, circuit ID, flex, optional standby, a named battery called pre-engineered), site aerial or a placeholder, site table (project, address, APN, lat/long, zoning, flood, utility, code/AHJ, system voltage), equipment schedule, scope of work, sheet index, BESS fleet summary | G-001. General notes, electrical notes, scope, site information, job number, designed by, checked by, and the sheet index are printed from the document. The aerial is on C-001. Model-written notes are a gap. |
 | Title block | Company, address, phone, license, project, site address, APN, scale `1" = N'`, date, revision table (REV / description / date; first row defaulted to "A" and "30% DESIGN"), designed by, checked by, job no., sheet number and name | Every sheet: project, address, customer, sheet number, `Rev ` plus the drawing's revision (Rev 0 when the project does not set one), date, "Issued for review", blank seal and signature. Scale is on C-001 as `1 in = N ft`. Job number, designed by, and checked by are on the cover. Company letterhead beyond the project record is not invented. |
-| E1.0 / E1.1 | Wide and enlarged plot, north, scale bar, property, setbacks, equipment, NFPA 855 clearances, transformer clearances, fire access, fences and gates, conduit and trench with lengths, POI and meter, map underlay, conduit overlay | C-001, one scale chosen from the stated list so the site fits, north up, TRUE NORTH, scale bar, property, setbacks, equipment tags, 10 ft dashed exposure around each battery, conduit lengths, fence note. Enlarged and underlay are gaps. |
+| E1.0 / E1.1 | Wide and enlarged plot, north, scale bar, property, setbacks, equipment, NFPA 855 clearances, transformer clearances, fire access, fences and gates, conduit and trench with lengths, POI and meter, map underlay, conduit overlay | C-001, one scale chosen from the stated list so the site fits, north up, TRUE NORTH, scale bar, property, setbacks, equipment tags, 10 ft dashed exposure around each battery, conduit lengths, fence note. The underlay is the USGS National Map ImageryOnly service, registered to the site point, with the Survey named on the sheet. An enlarged plan is not a second sheet. |
 | E1.2 demolition | Optional existing-conditions / removal sheet | C-002 when an entity is `type: 'demo'` or `demo: true`. Only the marked items. |
 | E2.0 one-line | Utility, meter, collector bus, transformer, inverter or PCS, PV, BESS, building loads; modes auto / BESS / EV / both / solar / DER / compute; block-level MV when many containers; a manual editor after generation | E-002 from the document: utility, meter, main, transformer when one is placed, bus, one branch per circuit (device, disconnect, PCS or inverter, end equipment), ground. Orthogonal. No manual editor. MV relay only when the project carries it. |
-| E3.0 / E4.0 signage | Colored sign faces from `PP_SIGN_SETS`: BESS (690.17/706.16, 110.27/706.16, 706.16(A), 706.15/IFC 1207.6, IFC 1207.11), EV (MUTCD, ADA 502/208, 625.43/110.27, 625.15, 625.42, 625.50), solar (690.13, 690.56(C), dual source, 690.53, 705.12, HV DC), DER (705.10, 705.20, directory, nameplate, shutoff, HV), data center (110.16/70E, 705.10/708.10, COPS 708, nameplate, 645.10/708.24, 110.27) | E-007 prints the legend and the section (ESS emergency shutoff, ESS nameplate, no smoking, PV system disconnect, PV DC nameplate, EVSE nameplate, EV disconnect, arc flash when a compute load is drawn). The colored face is a gap. An accessible stall and an EPO button location are not invented. |
+| E3.0 / E4.0 signage | Colored sign faces from `PP_SIGN_SETS`: BESS (690.17/706.16, 110.27/706.16, 706.16(A), 706.15/IFC 1207.6, IFC 1207.11), EV (MUTCD, ADA 502/208, 625.43/110.27, 625.15, 625.42, 625.50), solar (690.13, 690.56(C), dual source, 690.53, 705.12, HV DC), DER (705.10, 705.20, directory, nameplate, shutoff, HV), data center (110.16/70E, 705.10/708.10, COPS 708, nameplate, 645.10/708.24, 110.27) | E-007 draws the faces NEC 2023 actually specifies: 690.12(D) and 690.12(D)(2), 690.31(D)(2), 705.10, 705.12, and 706.15. White on red is used only for the rapid-shutdown switch. The other faces are bordered plaques, because those sections do not name a color. The sign index still lists the older legends. An accessible stall and an EPO button location are not invented. |
 | E5.0 schedule | TAG, service/run, type, conduit, from, to, length; total; continuation; unscaled warning; trench counted once; equipment MARK, equipment, size, rating, runs; notes on risers, engineer confirmation, trench once, diagrammatic routing, NEC Article 300 | E-004 circuits plus conduit columns Run, Length, Spec, From, To, Trade size. The same notes, including field-verify, risers, trench counted once, and Article 300. E-005 is the equipment schedule: tag, name, kW, kWh, plan size, nameplate. |
 | S1.1 / S1.2 pads | Structural pad and gear-pad sections | E-001 prints the plan size and says a structural pad section is not designed. |
 | S1.3–S1.5 racking | Solar racking sections, issued when that mount exists | E-006 states the mount, the module, and the table count. It is not a structural section. |
@@ -52,19 +52,18 @@ Most people draw with a guided build. The drawings have to follow that result.
 
 The phrases in `omega-editor-v2-guided.js` are the old facts a set has to keep printing. `npm run test:editor-v2-guided` builds the BESS, DCFC, Level 2, and commercial PV examples and fails if any phrase for that kind is missing. It also fails if a 1 MW build, reduced to 250 kW, still shows the 1600 A / three-set callout, and if a hand-drawn mark disappears.
 
+`examples.mesa()` is 29 W Main St, Mesa, AZ 85201, a 100 kW battery on a downtown lot. The site point, 33.41541, -111.83264, is interpolated between published points for 12 W Main and 54 W Main. It is not a survey, and the cover says so. The serving utility on the sheet is City of Mesa Electric. The city's own electric system is about 5.5 square miles centered on downtown. Salt River Project serves most of the rest of Mesa, and the cover says that so the address is not assumed to be SRP. Confirm it with the utility before sealing.
+
 ## What this set does not do
 
 These are gaps. They are listed in `OmegaEditorV2Guided.gaps` and locked by the same test, so one cannot disappear without the test saying so.
 
 | Gap | Why it is not in the set |
 |---|---|
-| Satellite underlay | The old plot plan could lay a photo under E1.0. This set has no image to register. The plan is linework at a stated scale. |
-| Colored sign faces | The old signage sheets drew colored rectangles. This set prints the legend and the section. |
 | Structural pad and gear pad | S1.1 and S1.2 were foundation sections. Footprints are printed. A foundation is not designed. |
 | Racking sections | S1.3–S1.5. The array sheet states the mount, the module, and the table count. |
 | Fence section | S3.0. A drawn fence is noted. Post, fabric, and foundation are not designed. |
 | Grounding electrode | Rod count, resistance, and the bonding jumper are not designed. Table 250.122 equipment grounding conductors are. |
-| Conduit fill | Chapter 9 fill needs a trade size and an insulation area. Trade size stays blank until the run carries one. The old schedule also left fill to the engineer when the trade size was unknown. |
 | Flood zone defaulted to X | The old cover did. This set prints the zone only when the project names it. |
 | Manufacturer filled in | The old cover once prefilled a battery maker. A maker or model prints only when the build carries it. |
 | UL 9540 / UL 1741 cell | The old cover printed those as the certification even when the unit was not identified. This set does not claim a listing the record does not state. |
@@ -84,14 +83,14 @@ Every sheet has the project, the address, the customer, the sheet number, Rev 0,
 | Sheet | What it shows |
 |---|---|
 | G-001 | Title, sheet index, the code editions used, a vicinity note. |
-| C-001 | Site plan to a stated scale, north up, property line, setbacks, equipment tags, a 10 ft dashed box around each battery, conduit, scale bar. |
+| C-001 | Site plan to a stated scale, north up, property line, setbacks, equipment tags, a 10 ft dashed box around each battery, conduit, scale bar. When the project has a site point, a U.S. Geological Survey ortho photo can sit under the linework. The sheet names the Survey. The photo can be turned off, and that choice is kept on the drawing. |
 | E-001 | Plan-view sizes of the placed equipment. These are not surveyed elevations. |
 | E-002 | Single-line. The same diagram is the single-line export. |
 | E-003 | Service three-line. Branch circuits stay on the single-line. A single-phase service says so and does not invent a three-line. |
 | E-004 | Conductor and conduit schedule, with the section on each row. |
 | E-005 | Equipment schedule and the transformer nameplate. |
 | E-006 | Modules and strings. String length is blank unless Voc and Isc are on the array. |
-| E-007 | Placards, each with its section. |
+| E-007 | Placards, each with its section, and the faces the cited section actually requires. A color is drawn only where that section names one. |
 | E-008 | Equipment grounding conductor from Table 250.122. The grounding electrode is not designed. |
 | E-009 | Every check: passed, review, or blocking. |
 | A-001 | Datasheet name when the equipment or the catalog map has one. Otherwise "Datasheet not on file." |
@@ -124,7 +123,7 @@ Service defaults, used only when `doc.electrical` does not say, and labeled as a
 
 - 480 V, three-phase, power factor 0.95.
 - Interconnection method `auto`: the 100% rule when it passes, otherwise the 120% rule when the bus and the main are both entered, otherwise "not checked". A main rating is never invented so that 705.12 can be run.
-- Ambient correction (Table 310.15(B)(1)) runs only when `electrical.ambientC` is set. Bundling is not applied. Conduit fill is not calculated.
+- Ambient correction (Table 310.15(B)(1)) runs only when `electrical.ambientC` is set. Bundling (310.15(C)) is not applied. Conduit fill is Chapter 9, Tables 1, 4, and 5, for THHN/THWN-2. Each sized circuit is its own raceway unless the drawing names the run. The smallest trade size that meets Table 1 is selected and marked as a selection, not a field measurement. PVC Schedule 40 is used when the run says PVC. Otherwise the area is rigid metal conduit, and the sheet says so when the run named neither. A trade size written on the run is kept. A fill over Table 1 is flagged and the size is not changed. Nipple fill is not used.
 
 Continuous current is nameplate current × 1.25.
 
@@ -147,7 +146,7 @@ Transformer kVA is the larger of source kW and load kW, divided by the power fac
 
 Outdoor battery separation uses NFPA 855 (2023) 9.5.2.6.1 and IFC 1207.8.3: 10 ft from lot lines, public ways, buildings, stored combustibles, hazardous materials, high-piled stock, and other exposures. A fire barrier, and a remote installation more than 100 ft from those exposures, are classifications this drawing cannot make, so a shortfall is a review. Unit separation of 3 ft follows IFC 1207.5.3 and NFPA 855 Table 9.5.2 / 9.4.2 where that table requires it. A remote outdoor installation is not always in that table. Under 3 ft is a review. Fire apparatus access (IFC 503) is a review until a note on the drawing says "fire access" or "apparatus". A fence with no "gate" note is a review. Widths are not invented.
 
-Placards name the section and, where the drawing cannot decide, say so. Rapid shutdown (690.56(C)) is printed as applying only where 690.12 applies; a ground array does not settle that. Arc-flash incident energy is not calculated. NFPA 70E is the work-practice standard.
+Placards name the section and, where the drawing cannot decide, say so. The 2023 building rapid-shutdown label is 690.12(D): the required words, title capitals at least 3/8 in, and contrast. The Code does not name a color for that label, and it applies to a system on or in a building, which a ground array does not decide. The switch label in 690.12(D)(2) is drawn white on red, reflective, capitals, at least 3/8 in. The drawing does not locate the switch. 690.31(D)(2), 705.10, 705.12, and 706.15 are drawn as bordered plaques. Those sections do not name a color, so the faces are not drawn red. Arc-flash incident energy is not calculated. NFPA 70E is the work-practice standard.
 
 ## What Thomas still has to decide
 
@@ -163,8 +162,7 @@ These are jurisdiction and nameplate facts. The set leaves them blank or marks t
 - Soil resistivity and the grounding electrode (250.50, and 690.47 where there is PV). The electrode is not designed.
 - Structural wind and seismic, and flood.
 - Module Voc, Vmp, and Isc, until a datasheet is on the equipment. String length stays blank until then.
-- Raceway trade size, so Chapter 9 fill can be run.
-- Ambient temperature, if the 30°C table should be corrected.
+- Ambient temperature, if the 30°C table should be corrected. A raceway trade size is selected when the drawing does not carry one. A size the drawing does carry is kept.
 - Whether 690.12 rapid shutdown applies (array on or in a building).
 
 Also still only on Site Map, and not part of this set: the AI blueprint, Monday export, the PE validation send, the proposal, the interactive report, and Omega-Core qualify.

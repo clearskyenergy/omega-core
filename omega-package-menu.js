@@ -545,6 +545,10 @@
   function usable(el) {
     return !el.hasAttribute('data-packaging-retired') && !el.hasAttribute('data-omega-retired') && !el.hasAttribute('data-shelf-dupe') && !el.classList.contains('omega-gated-hidden');
   }
+  function inClosedMenu(el) {
+    var fly = el.closest && el.closest('.rb-flyout');
+    return !!(fly && !fly.classList.contains('open'));
+  }
   function places() {
     /* a package, or a legacy plan whose catalog came with its add-ons */
     var caps = global.OmegaCaps, out = {}; if (!caps || !(caps.packageAccess() || (caps.legacyView && caps.legacyView())) || !document.getElementById('ribbon')) return out;
@@ -557,11 +561,13 @@
       own.forEach(function (key) {
         /* the module's own page wins: its editorPage, else the tab that
            carries its name (data-module: Compute's commands are on Compute,
-           though Compute Build sits on Build) */
+           though Compute Build sits on Build). A row inside a closed
+           dropdown loses to a button on that same page the person can see. */
         var grant = caps.MODULE_GRANTS[key] || {}, held = out[key], named = document.querySelector('#ribbon .ribbon-page[data-module="' + key + '"]');
         var home = grant.editorPage || (named ? named.getAttribute('data-page') : null);
-        if (held && (held.page === home || page !== home)) return;
-        out[key] = { el: el, page: page, tab: tab.textContent.replace(/\s+/g, ' ').trim() };
+        var score = (page === home ? 4 : 0) + (inClosedMenu(el) ? 0 : 2);
+        if (held && score <= held.score) return;
+        out[key] = { el: el, page: page, tab: tab.textContent.replace(/\s+/g, ' ').trim(), score: score };
       });
     }
     return out;
@@ -570,6 +576,9 @@
   function showMe(key) {
     var hit = where(key); if (!hit) return false;
     close();
+    /* one highlight: a previous Show me must not keep pointing */
+    var prior = document.querySelectorAll('[data-opm-spot]');
+    for (var p = 0; p < prior.length; p++) prior[p].removeAttribute('data-opm-spot');
     /* Under a package nothing but the package hides a tool (no Designer
        mode, no project filter), so the tab is always there to open. */
     if (typeof global.rbTab === 'function') global.rbTab(hit.page);

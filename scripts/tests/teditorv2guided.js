@@ -41,8 +41,8 @@ function requireCoverage(kind, text) {
 }
 
 var GAP_IDS = [
-  'satellite', 'sign-artwork', 'structural-pad', 'racking-section', 'fence-section',
-  'electrode', 'conduit-fill', 'flood-default', 'manufacturer-default', 'listing-claim',
+  'structural-pad', 'racking-section', 'fence-section',
+  'electrode', 'flood-default', 'manufacturer-default', 'listing-claim',
   'pptx', 'ai-notes', 'manual-sld', 'mv-relay', 'ada-stall', 'existing-survey'
 ];
 
@@ -143,5 +143,20 @@ var page = fs.readFileSync(path.join(__dirname, '../../editor-v2.html'), 'utf8')
 check(page.indexOf('omega-editor-v2-guided.js') >= 0, 'the preview loads the guided-build module');
 check(fs.readFileSync(path.join(__dirname, '../../omega-editor-v2-app.js'), 'utf8').indexOf('function applyGuidedBuild') >= 0, 'the editor applies a build onto the open document');
 check(fs.readFileSync(path.join(__dirname, '../../editor.html'), 'utf8').indexOf('omega-editor-v2') < 0, 'Site Map is not this preview');
+
+var mesaDoc = Guided.apply(null, Guided.examples.mesa());
+var mesa = sheetText(mesaDoc);
+requireCoverage('bess', mesa.text);
+check(mesa.text.indexOf('Serving utility: City of Mesa Electric') >= 0, '29 W Main is City of Mesa Electric');
+check(mesa.text.indexOf('Serving utility: SRP') < 0 && mesa.text.indexOf('Serving utility: Salt River') < 0, 'SRP is not printed as the serving utility');
+check(mesa.text.indexOf('29 W Main St, Mesa, AZ 85201') >= 0, 'the reference address is the one on the build');
+check(mesa.text.indexOf('33.41541') >= 0 && mesa.text.indexOf('-111.83264') >= 0, 'the site point is the interpolated downtown point');
+check(mesa.text.indexOf('not a survey') >= 0, 'the coordinates are labeled as not a survey');
+check(mesa.text.indexOf('not a field measurement') >= 0, 'the Mesa raceway size is selected and flagged');
+check(mesa.text.indexOf('ENERGY STORAGE SYSTEM DISCONNECT') >= 0, 'the Mesa set draws the ESS plaque');
+check(mesa.built.model.ready === true, 'the Mesa guided build is ready to review');
+var mesaSld = mesa.built.pages.filter(function (p) { return p.number === 'E-002'; })[0];
+check(!!mesaSld && mesaSld._sld, 'the Mesa single-line is on E-002');
+eq(SLD.labelHits(mesaSld._sld).length, 0, 'the Mesa single-line labels do not overlap');
 
 console.log('teditorv2guided: ' + n + ' checks passed');

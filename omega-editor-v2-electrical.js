@@ -176,6 +176,165 @@
     };
   }
 
+  /* NEC Chapter 9. Table 1 fill, Table 4 internal area (sq in), Table 5
+     THHN/THWN-2 area (sq in). Nipple fill (60%) is not used. */
+  var TRADE = ['1/2', '3/4', '1', '1-1/4', '1-1/2', '2', '2-1/2', '3', '3-1/2', '4', '5', '6'];
+  var RACEWAY = {
+    RMC: { '1/2': 0.314, '3/4': 0.549, '1': 0.887, '1-1/4': 1.526, '1-1/2': 2.071, '2': 3.408, '2-1/2': 4.866, '3': 7.499, '3-1/2': 10.010, '4': 12.882, '5': 20.212, '6': 29.158 },
+    PVC: { '1/2': 0.285, '3/4': 0.508, '1': 0.832, '1-1/4': 1.453, '1-1/2': 1.986, '2': 3.291, '2-1/2': 4.695, '3': 7.268, '3-1/2': 9.737, '4': 12.554, '5': 19.761, '6': 28.567 }
+  };
+  var THHN = {
+    '14': 0.0097, '12': 0.0133, '10': 0.0211, '8': 0.0366, '6': 0.0507,
+    '4': 0.0824, '3': 0.0973, '2': 0.1158, '1': 0.1562,
+    '1/0': 0.1855, '2/0': 0.2223, '3/0': 0.2679, '4/0': 0.3237,
+    '250': 0.3970, '300': 0.4608, '350': 0.5242, '400': 0.5863,
+    '500': 0.7073, '600': 0.8676, '700': 0.9887, '750': 1.0496,
+    '800': 1.1085, '900': 1.2311, '1000': 1.3478
+  };
+
+  function fillLimit(n) {
+    if (n <= 1) return 0.53;
+    if (n === 2) return 0.31;
+    return 0.40;
+  }
+
+  function racewayKind(spec) {
+    var s = String(spec || '').toUpperCase();
+    if (s.indexOf('PVC') >= 0) return { id: 'PVC', label: 'PVC Sch 40', assumed: false };
+    if (s.indexOf('RMC') >= 0 || s.indexOf('RIGID') >= 0) return { id: 'RMC', label: 'RMC', assumed: false };
+    return { id: 'RMC', label: 'RMC', assumed: true };
+  }
+
+  function normalizeTrade(s) {
+    var t = String(s || '').toLowerCase().replace(/inches|inch|in\b|"|'/g, '').replace(/\s+/g, '');
+    var map = {
+      '0.5': '1/2', '1/2': '1/2', '.5': '1/2',
+      '0.75': '3/4', '3/4': '3/4', '.75': '3/4',
+      '1': '1', '1.0': '1',
+      '1.25': '1-1/4', '1-1/4': '1-1/4', '11/4': '1-1/4',
+      '1.5': '1-1/2', '1-1/2': '1-1/2', '11/2': '1-1/2',
+      '2': '2', '2.0': '2',
+      '2.5': '2-1/2', '2-1/2': '2-1/2', '21/2': '2-1/2',
+      '3': '3', '3.0': '3',
+      '3.5': '3-1/2', '3-1/2': '3-1/2', '31/2': '3-1/2',
+      '4': '4', '5': '5', '6': '6'
+    };
+    return map[t] || '';
+  }
+
+  /**
+   * Smallest trade size for one circuit in its own raceway.
+   * phases 1 counts two current-carrying conductors; otherwise three.
+   * The equipment grounding conductor is added once per set.
+   * A trade size on the drawing is used as given. Over Table 1 is a flag, not a new size.
+   */
+  function conduitFill(opts) {
+    opts = opts || {};
+    var sets = opts.sets > 0 ? opts.sets : 1;
+    var phases = opts.phases === 1 ? 1 : 3;
+    var phaseN = phases === 1 ? 2 : 3;
+    var phaseA = THHN[String(opts.awg)];
+    var egc = opts.egc ? String(opts.egc) : '';
+    var egcA = egc ? THHN[egc] : 0;
+    var kind = racewayKind(opts.spec);
+    if (phaseA == null || (egc && egcA == null)) {
+      return {
+        ok: false, over: false, trade: '', fromDrawing: false, selected: false,
+        raceway: kind.label, racewayAssumed: kind.assumed, insulation: 'THHN/THWN-2',
+        conductors: 0, areaIn2: null, limitPct: null, fillPct: null,
+        note: 'Chapter 9 Table 5 has no THHN/THWN-2 area for this conductor, so a trade size is not selected.'
+      };
+    }
+    var count = phaseN * sets + (egc ? sets : 0);
+    var area = phaseA * phaseN * sets + (egc ? egcA * sets : 0);
+    var limit = fillLimit(count);
+    var table = RACEWAY[kind.id];
+    var named = normalizeTrade(opts.trade);
+    var chosen = '', fromDrawing = false, i;
+    if (opts.trade) {
+      fromDrawing = true;
+      chosen = named;
+      if (!chosen || table[chosen] == null) {
+        return {
+          ok: false, over: false, trade: String(opts.trade), fromDrawing: true, selected: false,
+          raceway: kind.label, racewayAssumed: kind.assumed, insulation: 'THHN/THWN-2',
+          conductors: count, areaIn2: Math.round(area * 10000) / 10000,
+          limitPct: Math.round(limit * 100), fillPct: null,
+          note: 'The trade size on the drawing is not a Chapter 9 Table 4 size for ' + kind.label + '.'
+        };
+      }
+    } else {
+      for (i = 0; i < TRADE.length; i++) {
+        if (area <= table[TRADE[i]] * limit + 1e-9) { chosen = TRADE[i]; break; }
+      }
+      if (!chosen) {
+        return {
+          ok: false, over: true, trade: '', fromDrawing: false, selected: false,
+          raceway: kind.label, racewayAssumed: kind.assumed, insulation: 'THHN/THWN-2',
+          conductors: count, areaIn2: Math.round(area * 10000) / 10000,
+          internalIn2: null, limitPct: Math.round(limit * 100), fillPct: null,
+          note: 'No listed trade size holds these conductors at Chapter 9 Table 1. The sets would be split across raceways. A trade size is not selected.'
+        };
+      }
+    }
+    var internal = table[chosen];
+    var pct = area / internal;
+    var over = pct > limit + 1e-9;
+    var note = fromDrawing
+      ? (over
+        ? 'The trade size on the drawing is over Chapter 9 Table 1. It is flagged for review. The size was not changed.'
+        : 'Trade size is the one on the drawing. Fill is Chapter 9 Tables 1, 4 and 5, THHN/THWN-2.')
+      : 'Trade size is selected from Chapter 9 Tables 1, 4 and 5. It is not a field measurement. Insulation is THHN/THWN-2.';
+    if (kind.assumed) note += ' RMC is used because the drawing does not name PVC or RMC.';
+    return {
+      ok: !over,
+      over: over,
+      trade: chosen,
+      fromDrawing: fromDrawing,
+      selected: !fromDrawing,
+      raceway: kind.label,
+      racewayAssumed: kind.assumed,
+      insulation: 'THHN/THWN-2',
+      conductors: count,
+      areaIn2: Math.round(area * 10000) / 10000,
+      internalIn2: internal,
+      limitPct: Math.round(limit * 100),
+      fillPct: Math.round(pct * 1000) / 10,
+      note: note
+    };
+  }
+
+  function conduitMentions(conduit, circuit) {
+    var blob = ((conduit.from || '') + ' ' + (conduit.to || '')).toUpperCase();
+    if (!String(blob).replace(/\s/g, '')) return false;
+    var keys = [circuit.tag, circuit.endTag, circuit.label], i;
+    for (i = 0; i < keys.length; i++) {
+      if (keys[i] && blob.indexOf(String(keys[i]).toUpperCase()) >= 0) return true;
+    }
+    return false;
+  }
+
+  function applyFill(circuits, conduits) {
+    var sized = [], i, c, hits, assigned, spec, trade, only;
+    for (i = 0; i < circuits.length; i++) if (circuits[i].awg) sized.push(circuits[i]);
+    only = (conduits.length === 1 && sized.length === 1) ? conduits[0] : null;
+    for (i = 0; i < circuits.length; i++) {
+      c = circuits[i];
+      if (!c.awg) { c.fill = null; continue; }
+      hits = [];
+      var k;
+      for (k = 0; k < conduits.length; k++) if (conduitMentions(conduits[k], c)) hits.push(conduits[k]);
+      assigned = hits.length === 1 ? hits[0] : (hits.length === 0 ? only : null);
+      spec = assigned && assigned.spec ? assigned.spec : (conduits.length === 1 ? (conduits[0].spec || '') : '');
+      trade = '';
+      if (assigned && assigned.trade) trade = assigned.trade;
+      else if (only && only.trade) trade = only.trade;
+      c.fill = conduitFill({
+        awg: c.awg, sets: c.sets || 1, phases: c.phases, egc: c.egc, spec: spec, trade: trade
+      });
+    }
+  }
+
   function voltageDrop(currentA, lengthFt, cm, volts, phases) {
     if (!(currentA > 0) || !(lengthFt > 0) || !(cm > 0) || !(volts > 0)) return null;
     var factor = phases === 1 ? 2 : SQRT3;
@@ -232,6 +391,7 @@
       designedBy: textOf(drawingOf(doc).designedBy || e.designedBy),
       checkedBy: textOf(drawingOf(doc).checkedBy || e.checkedBy),
       revNote: textOf(drawingOf(doc).rev || e.rev) || '0',
+      locationNote: textOf(drawingOf(doc).locationNote),
       kind: (doc && doc.guided && doc.guided.kind) ? String(doc.guided.kind) : ''
     };
   }
@@ -443,6 +603,7 @@
         if (drop) { circuits[i].dropPct = drop.pct; circuits[i].dropV = drop.volts; }
       }
     }
+    applyFill(circuits, conduits);
 
     var sourceKw = 0, loadKw = 0, sourceA = 0;
     for (i = 0; i < circuits.length; i++) {
@@ -1034,6 +1195,7 @@
     sizeContinuous: sizeContinuous,
     voltageDrop: voltageDrop,
     egcOf: egcOf,
+    conduitFill: conduitFill,
     analyze: analyze,
     readiness: readiness,
     golden: golden,
