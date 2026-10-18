@@ -60,6 +60,12 @@ var stolen = D.draft({
 });
 assert.equal(stolen.orders.length, 0, 'another OEM\'s unpublished line is not taken into the designer catalog');
 ok('nothing published means no order');
+var excessive = D.draft({ lines: [Object.assign({}, editorLine, { qty: 6000 }), Object.assign({}, editorLine, { qty: 6000 })], catalogs: fenCat, designerOrgId: 'concordenergyusa.com', project: project });
+assert.equal(excessive.orders.length, 0);
+assert.equal(excessive.unmatched.length, 2);
+assert(excessive.unmatched.every(function (l) { return l.reason === 'qty' && l.onOrder === false; }));
+ok('combined quantities above the limit stay explicitly unmatched and never make an empty order');
+
 
 var own = D.draft({
   lines: [{ sku: 'CC-C215', description: '215 kWh outdoor cabinet', qty: 2, unit: 'ea', manufacturer: 'Clean Cell' }, { sku: 'CC-C215', description: '215 kWh outdoor cabinet', qty: 3, unit: 'ea' }, { sku: 'CC-MOD-52', description: 'module', qty: 8, unit: 'ea' }, { sku: 'TRAY', description: 'tray', qty: 2.5, unit: 'ea' }],
