@@ -12,6 +12,12 @@
 
   function num(v) { var n = +v; return isFinite(n) ? n : 0; }
 
+  function liveGrid() {
+    var G = root.OmegaEditorV2Grid;
+    if (!G || !G.record) return null;
+    return G.record();
+  }
+
   function factsFrom(doc, summary) {
     doc = doc || {};
     summary = summary || {};
@@ -43,7 +49,7 @@
       billKwh: doc.billKwh != null && doc.billKwh !== '' ? num(doc.billKwh) : null,
       billName: doc.billName || '',
       valueStack: doc.valueStack || null,
-      grid: doc.grid || null,
+      grid: liveGrid() || doc.grid || null,
       milestones: doc.milestones || null,
       costLines: doc.costLines || null
     };
@@ -172,8 +178,8 @@
     if (said) {
       grid.appendChild(el('p', null, said));
       if (facts.grid.sourceLine) grid.appendChild(el('p', null, String(facts.grid.sourceLine)));
-      grid.appendChild(el('p', null, 'Source: the grid verdict stored on this project. Grid Atlas is the feeder, the substation, and the hosting capacity on the map.'));
-    } else grid.appendChild(el('p', null, 'No circuit verdict is stored. Grid check runs on the server from the site point and this equipment. Grid Atlas is the feeder, the substation, and the hosting capacity on the map.'));
+      grid.appendChild(el('p', null, 'Source: the grid verdict for this site. Grid Atlas draws the feeder, the substation, and the hosting capacity on the map.'));
+    } else grid.appendChild(el('p', null, 'No circuit verdict yet. Switch on Grid Atlas to read the feeder, the substation, and the hosting capacity on the map. The verdict is the server\'s.'));
 
     var bill = fold(host, 'Bill import', false);
     if (facts.billName) bill.appendChild(el('p', null, 'File noted: ' + facts.billName + '.'));

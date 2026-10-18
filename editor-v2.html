@@ -130,6 +130,16 @@
     margin: 0; pointer-events: none; color: var(--muted); font-size: 15px; font-weight: 650;
     letter-spacing: .01em; text-align: center;
   }
+  #grid-detail {
+    position: absolute; z-index: 4; left: 12px; top: 12px; width: 300px; max-width: calc(100% - 24px);
+    max-height: calc(100% - 56px); overflow: auto; background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 10px 12px;
+  }
+  #grid-detail[hidden] { display: none; }
+  #grid-detail h2 { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+  #grid-detail p { margin: 6px 0 0; font-size: 13px; line-height: 1.35; }
+  #grid-detail .src { color: var(--muted); font-size: 12px; }
+  #grid-detail .panel-head { margin-bottom: 4px; }
   #outputs-menu {
     position: absolute; z-index: 8; right: 12px;
     top: calc(var(--header) + var(--banner) + var(--ribbon) - 6px);
@@ -358,6 +368,16 @@
       <div id="map" aria-hidden="true"></div>
       <canvas id="cv" aria-label="Site drawing. Use the command line to draw by typing."></canvas>
       <p id="build-prompt" hidden>Start with a guided build</p>
+      <div id="grid-detail" hidden>
+        <div class="panel-head">
+          <h2 id="grid-detail-title">Grid Atlas</h2>
+          <span>
+            <button type="button" class="btn quiet" id="grid-detail-back" hidden>Site</button>
+            <button type="button" class="btn quiet" id="grid-detail-close">Close</button>
+          </span>
+        </div>
+        <div id="grid-detail-body"></div>
+      </div>
     </div>
     <aside id="side" aria-label="Properties">
       <div id="side-draw">
@@ -521,6 +541,10 @@
 <script src="omega-editor-v2-build.js"></script>
 <script src="omega-editor-v2-design.js"></script>
 <script src="omega-editor-v2-analyze.js"></script>
+<script src="omega-grid-layers.js"></script>
+<script src="omega-grid-verdict.js"></script>
+<script src="omega-comed-layers.js"></script>
+<script src="omega-editor-v2-grid.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>
 </body>

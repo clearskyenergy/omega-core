@@ -247,7 +247,8 @@
       row('placards', 'E4', 'POI placards', 'gap', 'No placards are drawn.'),
       row('structural-pad', 'S1.1', 'Structural pad and piers', 'gap', 'The equipment footprint is not a pad section or a pier schedule.'),
       row('grounding', 'S2', 'Grounding', 'gap', 'No grounding is drawn.'),
-      row('fence', 'S3', 'Fence', site.fences.length ? 'on-drawing' : 'gap', site.fences.length ? 'A fence is on the drawing.' : 'No fence is drawn.')
+      row('fence', 'S3', 'Fence', site.fences.length ? 'on-drawing' : 'gap', site.fences.length ? 'A fence is on the drawing.' : 'No fence is drawn.'),
+      row('grid-atlas', 'Grid', 'Grid Atlas', 'gap', 'Grid Atlas is a map layer, off until it is switched on. The feeder, the substation, and the hosting figure are not copied onto the drawing. The verdict is the server\'s.')
     ];
   }
 

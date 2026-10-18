@@ -185,7 +185,7 @@
       kv: voltage,
       kind: lineKind(voltage),
       owner: a.OWNER || a.SUB_1 || '',
-      name: a.OWNER || a.SUB_1 || (lineKind(voltage) === 'distribution' ? 'Distribution line' : 'Transmission line'),
+      name: a.OWNER || a.SUB_1 || (lineKind(voltage) === 'distribution' ? 'Distribution line' : (lineKind(voltage) === 'transmission' ? 'Transmission line' : 'Line')),
       id: id == null || id === '' ? '' : String(id),
       source: TRANSMISSION.label,
       sourceId: TRANSMISSION.id,

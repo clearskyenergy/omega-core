@@ -15,6 +15,7 @@
   var editSeq = 0;
   var snaps = { grid: true, endpoint: true, midpoint: true, edge: true, angle: false };
   var view = { cx: 200, cy: 140, pxPerFt: 1.5 };
+  var gridView = null, gridFit = false;
   var draft = null, drag = null, box = null, pan = null, space = false;
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
@@ -155,6 +156,36 @@
     var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook],[data-build],[data-output]');
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
     $('analyze-close').addEventListener('click', function () { setSection('design'); });
+    if ($('grid-detail-close') && root.OmegaEditorV2Grid) {
+      $('grid-detail-close').addEventListener('click', function () { root.OmegaEditorV2Grid.hideCard(); paintGridCard(); });
+    }
+    if ($('grid-detail-back') && root.OmegaEditorV2Grid) {
+      $('grid-detail-back').addEventListener('click', function () { root.OmegaEditorV2Grid.clearPick(); paintGridCard(); });
+    }
+    if (root.OmegaEditorV2Grid) {
+      root.OmegaEditorV2Grid.onChange(function () {
+        var Grid = root.OmegaEditorV2Grid;
+        if (Grid.enabled()) {
+          var focus = Grid.focus();
+          if (focus && !gridFit) {
+            if (!gridView) gridView = { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt };
+            gridFit = true;
+            fitGridFocus(focus);
+          }
+        } else if (gridView) {
+          view.cx = gridView.cx;
+          view.cy = gridView.cy;
+          view.pxPerFt = gridView.pxPerFt;
+          gridView = null;
+          gridFit = false;
+          layoutMap();
+        }
+        refreshLayers();
+        paintGridCard();
+        requestDraw();
+        if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
+      });
+    }
     document.addEventListener('click', function (ev) {
       var menu = $('outputs-menu');
       if (!menu || menu.hidden) return;
@@ -363,6 +394,11 @@
 
   function cancel() {
     if ($('outputs-menu') && !$('outputs-menu').hidden) { toggleOutputs(false); return; }
+    if ($('grid-detail') && !$('grid-detail').hidden && root.OmegaEditorV2Grid) {
+      root.OmegaEditorV2Grid.hideCard();
+      paintGridCard();
+      return;
+    }
     draft = null;
     box = null;
     drag = null;
@@ -627,6 +663,8 @@
     $('cv').setPointerCapture(ev.pointerId);
     if (tool === 'select' && !ev.altKey) {
       var hit = hitAt(p);
+      var ghit = !hit && root.OmegaEditorV2Grid ? root.OmegaEditorV2Grid.hitAt(p, 12 / (view.pxPerFt || 1)) : null;
+      if (ghit) { root.OmegaEditorV2Grid.pick(ghit); return; }
       if (hit) {
         var ids = ev.shiftKey ? toggleSel(hit.id) : (state.selection.indexOf(hit.id) >= 0 ? state.selection.slice() : D.groupIds(state.doc, [hit.id]));
         if (!ev.shiftKey && state.selection.indexOf(hit.id) < 0) state.selection = ids;
@@ -748,6 +786,35 @@
     layoutMap();
     requestDraw();
   }
+  function boundsOfDrawing() {
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b, any = false;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      b = G.boundsOf(state.doc.entities[i]);
+      if (!isFinite(b.minX)) continue;
+      any = true;
+      if (b.minX < minX) minX = b.minX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.maxY > maxY) maxY = b.maxY;
+    }
+    if (!any) { minX = -20; minY = -20; maxX = 200; maxY = 120; }
+    return { minX: minX, minY: minY, maxX: maxX, maxY: maxY };
+  }
+  function fitGridFocus(p) {
+    var b = boundsOfDrawing();
+    if (p.x < b.minX) b.minX = p.x;
+    if (p.y < b.minY) b.minY = p.y;
+    if (p.x > b.maxX) b.maxX = p.x;
+    if (p.y > b.maxY) b.maxY = p.y;
+    var padX = (b.maxX - b.minX) * 0.08 + 40;
+    var padY = (b.maxY - b.minY) * 0.08 + 40;
+    b.minX -= padX; b.minY -= padY; b.maxX += padX; b.maxY += padY;
+    view.cx = (b.minX + b.maxX) / 2;
+    view.cy = (b.minY + b.maxY) / 2;
+    view.pxPerFt = Math.max(0.02, Math.min(cssW / (b.maxX - b.minX || 1), cssH / (b.maxY - b.minY || 1)));
+    layoutMap();
+    requestDraw();
+  }
   function fit(announce) {
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b, any = false;
     for (i = 0; i < state.doc.entities.length; i++) {
@@ -781,6 +848,7 @@
     ctx.clearRect(0, 0, cssW, cssH);
     if (!mapOn) { ctx.fillStyle = '#E4E1D8'; ctx.fillRect(0, 0, cssW, cssH); }
     drawGrid(ctx);
+    if (root.OmegaEditorV2Grid) root.OmegaEditorV2Grid.draw(ctx, worldToScreen);
     drawEntities(ctx, false);
     drawDraft(ctx);
     drawSelection(ctx);
@@ -1108,6 +1176,7 @@
     refreshCustomer();
     refreshLayers();
     refreshProps(false);
+    paintGridCard();
     saveLabel();
     $('project-name').value = state.doc.name || '';
     paintNext();
@@ -1190,6 +1259,52 @@
       lock.addEventListener('click', onLayerLock);
       line.appendChild(mark); line.appendChild(name); line.appendChild(eye); line.appendChild(lock);
       host.appendChild(line);
+    }
+    appendGridLayer(host);
+  }
+  function appendGridLayer(host) {
+    var Grid = root.OmegaEditorV2Grid;
+    if (!Grid) return;
+    var line = document.createElement('div');
+    line.className = 'layer';
+    line.id = 'layer-grid-atlas';
+    var mark = document.createElement('i');
+    mark.className = 'swatch';
+    mark.style.background = Grid.COLORS.substation;
+    var name = document.createElement('span');
+    name.textContent = 'Grid Atlas';
+    var eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'btn quiet';
+    eye.id = 'layer-grid-atlas-toggle';
+    eye.textContent = Grid.enabled() ? 'Hide' : 'Show';
+    eye.setAttribute('aria-pressed', Grid.enabled() ? 'true' : 'false');
+    eye.addEventListener('click', function () {
+      Grid.setEnabled(!Grid.enabled(), state.doc, D.summary(state.doc));
+    });
+    line.appendChild(mark); line.appendChild(name); line.appendChild(eye);
+    if (host.firstChild) host.insertBefore(line, host.firstChild);
+    else host.appendChild(line);
+  }
+  function paintGridCard() {
+    var el = $('grid-detail');
+    var Grid = root.OmegaEditorV2Grid;
+    if (!el || !Grid) return;
+    var card = Grid.card();
+    el.hidden = !card.visible;
+    var back = $('grid-detail-back');
+    if (back) back.hidden = !card.back;
+    if (!card.visible) return;
+    $('grid-detail-title').textContent = card.title || 'Grid Atlas';
+    var body = $('grid-detail-body');
+    body.innerHTML = '';
+    var i, p, row;
+    for (i = 0; i < card.lines.length; i++) {
+      row = card.lines[i];
+      p = document.createElement('p');
+      if (row.source) p.className = 'src';
+      p.textContent = row.text;
+      body.appendChild(p);
     }
   }
   function onLayerVis(ev) { toggleLayer(ev.currentTarget.getAttribute('data-layer'), 'visible'); }
@@ -1328,6 +1443,10 @@
     }
     D.setMeta(state, { anchor: { lat: lat, lng: lng }, address: address || state.doc.address });
     afterChange();
+    if (root.OmegaEditorV2Grid && root.OmegaEditorV2Grid.enabled()) {
+      gridFit = false;
+      root.OmegaEditorV2Grid.reload(state.doc, D.summary(state.doc));
+    }
     setStatus('Anchor set. The aerial photo is scaled to this latitude.');
   }
 
