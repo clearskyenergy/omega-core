@@ -127,7 +127,7 @@ shows as "Your Company", so no public guide names a tenant). The office's
 guide is `/guides/Omega-Logic-App.pdf`, the Omega Logic app guide: getting
 the app on a phone or a computer, signing in, the hub, customers, orders,
 sites, scanning a label with the camera, a customer's list of sites,
-Accounting's Payment box, price & accept, Team, and the customers' own app.
+Accounting's next step, price & accept, Team, and the customers' own app.
 The build also writes it as the old `Omega-Logic-Office-App.pdf`, which the
 app's Help menu and links already sent still open.
 `Omega-Logic-Plant-App.pdf` is the builders' (the bench, typing or scanning
@@ -650,42 +650,48 @@ order, the sites once addresses arrive — as a dry run first (nothing
 written; every refusal named), then `--apply`. `docs/order-intake-template.json`
 is the shape; the filled-in file stays out of the repo.
 
-### Accounting — is the money in?
+### Accounting — the next step
 
-*Money → Accounting* (`/logic-accounting.html`), or *Correct or void in
-Accounting →* on a tenant-billed order: every invoice on every order, what
-was invoiced, what has really been received, what is late and by how much
-(the aging), per customer ACCOUNT, with Status / Customer / Overdue filters
-and *Export CSV*. Every figure is the server's (`api/logic-accounting.js`
-over `api/_lib/receivables.js`); the page never sums money. The workspace's
-owner or an administrator makes the changes, on the orders it bills itself;
-an order billed through ClearSky's QuickBooks is shown read-only (payments
-reconcile there). Tap an order and its invoice opens with the **Payment**
-box on top:
+*Money → Accounting* (`/logic-accounting.html`): one list. Each row is an
+order and the one next step — deposit to issue, deposit due, deposit
+overdue, final payment due, deposit received, or paid in full — with the
+order's stage under it when that says more (in production, awaiting final
+payment). The purchase order is a link to the order. The invoice number,
+the books, and a correction stay under **Invoice details**. Filters, how
+late, by customer, and where invoices are sent stay folded. Every figure
+is the server's (`api/logic-accounting.js` over `api/_lib/receivables.js`);
+the page never sums money. The workspace's owner or an administrator makes
+the changes, on the orders it bills itself; an order billed through
+ClearSky's QuickBooks is shown read-only (payments reconcile there). Tap
+an order and its invoice opens in the page, under the totals. It does not
+cover the list. One button:
 
-- **Received** (green) or **Not received yet** / **Part received**, with the
-  last payment's amount, date and bank reference or what is still to come.
-- **Mark as received** opens *Record payment received* with the balance
-  filled in: the amount, the day it landed and the bank's own reference
-  (at least 4 characters). More than the invoice is refused. A recorded
-  payment is what accounting has seen, not bank clearance.
-- **Mark as not received** (with several payments: *Last payment not
-  received*, or *Void* on any one in the list) voids a payment: why, in at
-  least 5 characters. **Voiding keeps it** — the payment stays on the
-  invoice, struck through, with who voided it, when and why, and the invoice
-  goes back to what has really been received. When the order is already in
-  the plant on that payment the office must choose: **Keep building on the
-  PO** (records a release on the customer's PO: the plant carries on, the
-  deposit shows as open) or **Hold the order** (the plant's scans refuse it
-  until the payment is recorded or it is released on the PO). Either way,
-  shipment still needs the money recorded. A voided reference is recorded
-  again only with *This money has really landed* ticked and a reason.
-- **Record invoice issued** (number, date, an optional due date), **Edit
-  invoice** (number, invoice date, due date — blank follows the order's
-  terms — with a reason; amounts come from the approved price and are never
-  edited here), **Release on PO** (start the plant before the deposit, with
-  the PO number and a reason) and, where the workspace keeps its own books
-  in QuickBooks or Stripe, push, link and sync.
+- **Record the payment** when money is still open. It opens *Record payment
+  received* with the balance filled in: the amount, the day it landed and
+  the bank's own reference (at least 4 characters). More than the invoice
+  is refused. A recorded payment is what accounting has seen, not bank
+  clearance. The row then reads **Deposit received** or **Paid in full**.
+- **Record the invoice** when that half has not been issued (number, date,
+  an optional due date; blank follows the order's terms).
+- **Open the order** when nothing more is open on this invoice. If the
+  other half of the same order is still open, the button names that step.
+- **This payment did not arrive**, under Invoice details, on a recorded
+  payment. Why, in at least 5 characters, then **Void payment**. **Voiding
+  keeps it** — the payment stays on the invoice, struck through, with who
+  voided it, when and why, and the invoice goes back to what has really
+  been received. When the order is already in the plant on that payment
+  the office must choose: **Keep building on the PO** (records a release
+  on the customer's PO: the plant carries on, the deposit shows as open)
+  or **Hold the order** (the plant's scans refuse it until the payment is
+  recorded or it is released on the PO). Either way, shipment still needs
+  the money recorded. A voided reference is recorded again only with
+  *This money has really landed* ticked and a reason.
+- **Correct the invoice** (number, invoice date, due date — blank follows
+  the order's terms — with a reason; amounts come from the approved price
+  and are never edited here) and **Let the plant start** (start the plant
+  before the deposit, with the PO number and a reason) sit under Invoice
+  details, with send, link and read-payments where the workspace keeps
+  its own books.
 
 Every change goes through the one writer of order money
 (`api/_lib/logic-workflow.js`, by way of `api/logic-office.js`) and is kept
