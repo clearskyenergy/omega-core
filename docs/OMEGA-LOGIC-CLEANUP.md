@@ -2,9 +2,61 @@
 
 © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-Phase 1 only. This document maps Omega Logic and records what a person
-actually sees. It does not change a page, a rule, or a tenant. Later
-workstreams are separate pull requests. Nothing here is a merge.
+## Who may edit what (18 October 2026)
+
+This is the coordination list. One owner per file. If a change needs a
+file you do not own, stop. Use the helper that owner already published.
+Do not copy it. Do not merge your own pull request.
+
+The order path is one model, `api/_lib/office-stage.js` `path()`. The
+steps are Price, Deposit, Build, Final payment, Ship, Deliver, On site,
+Complete. Draw that bar only with `OmegaLogicTheme.pathBar`. Say a status
+only with `OmegaLogicUi.chipForPath` (and `OmegaLogicTheme.words` for a
+code). A page header is `OmegaLogicUi.pageHead`. An empty screen is
+`OmegaLogicUi.empty` and names the next thing to do. Unit custody is a
+different machine (`api/_lib/custody.js`) and stays with Ship.
+
+| Area | Agent | Owns these files and no others |
+|---|---|---|
+| Design → quote/BOM → PO, the shared layout, the order bar, and the status model | [bc-7fa39176](https://cursor.com/agents/bc-7fa39176-c69b-5492-b436-c193ac1503de) · [PR #350](https://github.com/clearskyenergy/omega-core/pull/350) `cursor/design-to-po-03de` · layout on `cursor/logic-layout-03de` | `api/_lib/design-order.js`, `api/_lib/design-place.js`, `api/rfq.js`, `api/logic-office.js` (the `design` and `shipTo` fields on an order), `api/_lib/office-stage.js`, `omega-logic-theme.js`, `omega-logic-theme.css`, `omega-logic-ui.js`, `omega-logic.html` (header, path bar, order list, order detail), `editor.html` only inside the bill-of-materials send dialog, `omega-prime.html` only `#q-oem` and `sendToOem()`, `scripts/tests/tdesignorder.js`, `scripts/tests/trfq.js`, `scripts/tests/tlogiclayout.js`, `package.json` only to register those tests, `docs/OMEGA-LOGIC-CLEANUP.md`, `docs/design-order/` |
+| Plant & Production | [bc-001d2c36](https://cursor.com/agents/bc-001d2c36-160a-50e7-a00a-b7f5458ee533) | `plant/work-orders.html`, `plant/manager.html`, `plant/index.html`, `plant/app.html`, `plant/station.html`, `api/logic-plant.js`, `api/_lib/plant-work.js`, `api/_lib/plant-stats.js`, and a test that agent adds under `scripts/tests/` or `scripts/test-plant*` |
+| Ship, Deliver & On-site | [bc-0d2f546f](https://cursor.com/agents/bc-0d2f546f-1b86-5c42-8569-652a3567c313) | `logic-logistics.html`, `logic-custody.html`, `logic-register.html`, `api/logic-logistics.js`, `api/logic-custody.js`, `api/_lib/custody.js`, `api/_lib/freight.js`, and a test that agent adds for those files |
+| Money & Back Office | [bc-37748e3d](https://cursor.com/agents/bc-37748e3d-f01a-5bdc-9183-38f66ab3b774) | `logic-accounting.html`, `api/logic-accounting.js`, `api/_lib/receivables.js`, and a test that agent adds for those files |
+
+Nobody else edits the files in that table. The cash panel on
+`omega-logic.html` stays with the layout agent. Money's page is Accounting.
+
+Frozen until a later request, so they are not a fourth copy of the same
+work: Stock (`logic-inventory.html`, `logic-materials.html`,
+`logic-catalog.html`, `api/logic-materials.js`, `api/logic-catalog.js`,
+`api/_lib/materials.js`), Customers (`portals/customer/`,
+`customer-start.html`, `api/buyers.js`), Settings › Features
+(`logic-settings.html`, `office/app.html` menu), the extra PO door
+(`po-inbox.html`, `customer-po.html`, `omega-po-bulk.js`), staff copy
+(`logic-urls.html`, `logic-admin.html`, `logic-kit.html`), and
+`firestore.rules`.
+
+Also left alone by every Logic agent:
+
+- `omega-prime.html` `step()`, `show()`, and `SCREENS`. Project types on
+  that page landed in #348. The Send to the OEM button is the only edit
+  the handoff agent makes there.
+- The three cards on Prime's Logic screen. The card that opens
+  `/omega-logic` with no company belongs to the ribbon agent
+  [bc-e19c4d84](https://cursor.com/agents/bc-e19c4d84-0a02-505d-a64b-305714dac3f0)
+  on `cursor/editor-ribbon-features-c3f0`.
+- Editor v2, and the editor ribbon / `omega-editor-features.js` (same
+  ribbon agent). The handoff agent touches `editor.html` only in the
+  bill-of-materials send dialog, and rebases onto that ribbon branch
+  before editing it again.
+- Tenant access and Firestore rules. Do not loosen them.
+
+Each pull request stays open for review, with a Vercel preview and before
+and after screenshots. Nothing is merged until Thomas says so.
+
+Phase 1 recorded what a person actually sees. It does not, by itself,
+change a page, a rule, or a tenant. The pull requests above are the
+implementation. Nothing here is a merge.
 
 The spine, from Thomas: a project is designed in Site Map (`/editor`) or
 in Omega Prime (`/omega-prime`). That project's quote and bill of materials
