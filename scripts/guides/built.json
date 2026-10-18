@@ -23,10 +23,10 @@
       "customer-app.png": "5474595e0721186d9b9348432d8bd7f76ea115136f6e0f21866568327098e62a"
     },
     "guides": {
-      "office.html": "7eb8a3919a67499803b949a0640a1169e1328a1e890bf9b4ce8987bb2e92083b"
+      "office.html": "d6cea74d65b7ab92178df0d1717f4f9c2de272af81934057d2c87a84dc36bf37"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "798d9c4f0fa1a6298623a6e2f45a470720a3cca8f94647d04321cc0925af15af"
+    "sha256": "f7a0e4b036bd3dfd50ffa3617b9ac779488985a85bff231339d03b0b94d8edc6"
   },
   "Omega-Logic-Customer-App.pdf": {
     "shots": {
@@ -69,10 +69,10 @@
       "customer-app.png": "5474595e0721186d9b9348432d8bd7f76ea115136f6e0f21866568327098e62a"
     },
     "guides": {
-      "office.html": "7eb8a3919a67499803b949a0640a1169e1328a1e890bf9b4ce8987bb2e92083b"
+      "office.html": "d6cea74d65b7ab92178df0d1717f4f9c2de272af81934057d2c87a84dc36bf37"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "798d9c4f0fa1a6298623a6e2f45a470720a3cca8f94647d04321cc0925af15af"
+    "sha256": "f7a0e4b036bd3dfd50ffa3617b9ac779488985a85bff231339d03b0b94d8edc6"
   },
   "Omega-Logic-Phone-Apps.pdf": {
     "shots": {
@@ -112,12 +112,12 @@
       "customer-orders.png": "4ef9b23425629537ff6192e461fcfbd040f0ba4d3fdfc7195945dee257fde48c"
     },
     "guides": {
-      "office.html": "7eb8a3919a67499803b949a0640a1169e1328a1e890bf9b4ce8987bb2e92083b",
+      "office.html": "d6cea74d65b7ab92178df0d1717f4f9c2de272af81934057d2c87a84dc36bf37",
       "plant.html": "adb9090aedd193e1cacb3577f473e064a4db77a256696e13941b85d3d1063a84",
       "customer.html": "e871a3be2b299bffbfcb50e2dfa841f2f7cedaca8a949461013d3a2b955c68c1"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "df420255faabe4dfcbb4f7ee7cf47a5fd069d2262be6b260e4328a6f6549ce72"
+    "sha256": "41dda85fa68bd979bc77b89701a03c721571f672001ea2ef49fe33f3b05c2b17"
   },
   "Omega-Logic-Plant-App.pdf": {
     "shots": {

@@ -207,12 +207,12 @@
   },
   "desktop-accounting-void.png": {
     "sha256": "c5f9ebb8f92a968e018700e0c53d4d5248826c6c7c83acbdcb16c794da54dc47",
-    "takenAt": "2026-10-18T02:38:04.237Z",
+    "takenAt": "2026-10-18T02:49:58.298Z",
     "tree": ".",
-    "commit": "9b2fe32",
+    "commit": "a06d012",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
-      "logic-accounting.html": "2dfa08aad9dc6d5967fd5cac335a6d01ba23640c72043d434f5976b90cb49fd6",
+      "logic-accounting.html": "5030322dfb7825abde0b608235c4547e5f99803575dc4e1646866240039a2a0c",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f"
@@ -220,12 +220,12 @@
   },
   "desktop-accounting.png": {
     "sha256": "3abd0f00e7b4f0beb589549046a3ee1939f9b9312a708016c40e6be254bb5d05",
-    "takenAt": "2026-10-18T02:38:02.617Z",
+    "takenAt": "2026-10-18T02:49:56.652Z",
     "tree": ".",
-    "commit": "9b2fe32",
+    "commit": "a06d012",
     "sources": {
       "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
-      "logic-accounting.html": "2dfa08aad9dc6d5967fd5cac335a6d01ba23640c72043d434f5976b90cb49fd6",
+      "logic-accounting.html": "5030322dfb7825abde0b608235c4547e5f99803575dc4e1646866240039a2a0c",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f"
