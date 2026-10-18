@@ -44,7 +44,7 @@
     { id: 'reanchor', match: /_geoRepairAndReport/, label: 'Re-anchor Drawing to Map', blurb: 'Repair geo anchoring', group: 'Workspace', returns: 'Returns to Draw', chip: 'NOT NEEDED HERE', home: 'fly:fly-cond' },
     { id: 'btn-dtwin', label: 'Digital Twin', blurb: 'Banner only', group: 'Other', returns: 'Returns to Analyze', chip: 'SOON', locked: true, home: 'analyze|Operations' },
     { id: 'bess-config', match: /openBessModal/, label: 'BESS Config (old)', blurb: 'Replaced by BESS Guided Build / Sizer', group: 'Other', returns: 'Returns to Build', chip: 'LEAVING SOON', locked: true, home: 'home|3 · Size & Configure' },
-    { id: 'design-pack', ids: ['rb-bldg-designer', 'rb-gis-layers', 'rb-siteplan', 'rb-takeoff-budget'], match: /openMarketplacePush/, label: 'Building Designer · Site Plan Styles · GIS Layers · Takeoff & Budget · Push to Marketplace', blurb: 'Newer tools not yet confirmed working end to end', group: 'Other', returns: 'Returns to Build / Draw / Estimate / Finance', chip: 'NEW · UNVERIFIED' },
+    { id: 'design-pack', ids: ['rb-bldg-designer', 'rb-gis-layers', 'rb-siteplan', 'rb-takeoff-budget'], label: 'Building Designer · Site Plan Styles · GIS Layers · Takeoff & Budget', blurb: 'Newer tools not yet confirmed working end to end', group: 'Other', returns: 'Returns to Build / Draw / Estimate', chip: 'NEW · UNVERIFIED' },
     { id: 'nextnrg', match: /omegaNextnrgSolarCustom/, label: 'NextNRG Solar — Custom', blurb: 'One tenant’s tool', group: 'Other', returns: 'Returns to Draw', chip: 'TENANT-SPECIFIC', home: 'fly:fly-der' },
     { id: 'build-stamp', label: 'Build tag', blurb: 'Patch count in the title bar (debug)', group: 'Other', returns: 'Returns to the title bar', chip: 'DEBUG' }
   ];
