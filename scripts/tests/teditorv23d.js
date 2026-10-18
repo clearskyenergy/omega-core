@@ -9,6 +9,11 @@ var fs = require('fs');
 var path = require('path');
 var D = require('../../omega-editor-v2-doc.js');
 var V = require('../../omega-editor-v2-3d.js');
+/* Config status is pure; authentication is covered by teditorv2gates. */
+var adminId = require.resolve('../../api/_lib/admin');
+require.cache[adminId] = { id: adminId, filename: adminId, loaded: true, exports: { handler: function (fn) { return fn; } } };
+var accessId = require.resolve('../../api/_lib/package-access');
+require.cache[accessId] = { id: accessId, filename: accessId, loaded: true, exports: {} };
 var cfg = require('../../api/editor-v2-3d-config.js');
 var tiles = require('../../api/_lib/editor-v2-3d-tiles.js');
 

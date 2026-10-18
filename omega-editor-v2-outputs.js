@@ -46,8 +46,10 @@
   }
 
   function setAerial(on) {
-    session.doc.drawing = session.doc.drawing || {};
-    session.doc.drawing.aerial = !!on;
+    var drawing = JSON.parse(JSON.stringify(session.doc.drawing || {}));
+    drawing.aerial = !!on;
+    if (session.api.updateMeta) session.api.updateMeta({drawing:drawing});
+    else session.doc.drawing = drawing;
     session.underlay = null;
     session.aerialUnavailable = false;
     if (on) loadAerial();
@@ -106,6 +108,7 @@
     body.appendChild(el('h2', { id: 'out-title' }, 'Outputs'));
     var status = el('p', { className: 'out-status ' + (ready.ready ? 'is-ok' : 'is-no') }, ready.summary);
     body.appendChild(status);
+    if (session.api.updateMeta) body.appendChild(detailsForm());
 
     var sizeRow = el('div', { className: 'out-size' });
     sizeRow.appendChild(el('label', { for: 'out-size' }, 'Sheet size'));
@@ -147,6 +150,41 @@
     var foot = el('div', { className: 'row-actions' });
     foot.appendChild(button('Close', 'btn', function () { close(); }));
     body.appendChild(foot);
+  }
+
+  function detailsForm() {
+    var details = el('details', { className: 'out-details' });
+    details.appendChild(el('summary', null, 'Electrical and sheet details'));
+    details.appendChild(el('p', { className: 'out-note' }, 'Enter verified project facts. Blank values remain unspecified; any calculation assumptions are identified on the sheets. Save the project to keep these details in your workspace.'));
+    var form = el('form'), grid = el('div', { className: 'out-fields' }), fields = [];
+    var specs = [
+      ['electrical','voltage','Service voltage (V)',1], ['electrical','phases','Phases (1 or 3)',1,3],
+      ['electrical','pf','Power factor',0.01,1], ['electrical','busA','Bus rating (A)',1],
+      ['electrical','mainA','Main breaker (A)',1], ['electrical','ambientC','Ambient temperature (°C)',-50,100],
+      ['electrical','ahj','Authority having jurisdiction'], ['electrical','utility','Utility'],
+      ['electrical','apn','Parcel number'], ['electrical','necEdition','Adopted NEC edition'],
+      ['drawing','jobNo','Job number'], ['drawing','designedBy','Designed by'],
+      ['drawing','checkedBy','Checked by'], ['drawing','rev','Revision']
+    ];
+    specs.forEach(function (spec) {
+      var label = el('label', null, spec[2]), input = el('input', { type: spec.length > 3 ? 'number' : 'text', 'aria-label': spec[2] });
+      input.value = (session.doc[spec[0]] || {})[spec[1]] == null ? '' : (session.doc[spec[0]] || {})[spec[1]];
+      if (spec.length > 3) { input.min = spec[3]; input.step = spec[1] === 'phases' ? '2' : 'any'; if (spec[4] != null) input.max = spec[4]; }
+      else input.maxLength = 200;
+      label.appendChild(input); grid.appendChild(label); fields.push({ spec: spec, input: input });
+    });
+    var methodLabel = el('label', null, 'Interconnection method'), method = el('select', { 'aria-label': 'Interconnection method' });
+    [['auto','Determine from ratings'],['120','Load-side 120%'],['100','Load-side 100%'],['supply','Supply-side']].forEach(function (pair) { var opt = el('option', {value:pair[0]},pair[1]); method.appendChild(opt); });
+    method.value = (session.doc.electrical || {}).method || 'auto'; methodLabel.appendChild(method); grid.appendChild(methodLabel);
+    form.appendChild(grid); var save = el('button', {type:'submit',className:'btn'}, 'Apply details'); form.appendChild(save);
+    form.addEventListener('submit', function (event) {
+      event.preventDefault();
+      var patch = {electrical:JSON.parse(JSON.stringify(session.doc.electrical || {})),drawing:JSON.parse(JSON.stringify(session.doc.drawing || {}))};
+      fields.forEach(function (field) { var value = field.input.value.trim(); if (value === '') delete patch[field.spec[0]][field.spec[1]]; else patch[field.spec[0]][field.spec[1]] = field.spec.length > 3 ? Number(value) : value; });
+      patch.electrical.method = method.value;
+      session.api.updateMeta(patch);
+    });
+    details.appendChild(form); return details;
   }
 
   function row(title, note, ready, onPreview, onExport) {
@@ -260,7 +298,7 @@
   function bind() {
     var dlg = $('dlg-outputs');
     if (!dlg) return;
-    dlg.addEventListener('close', function () { session = null; });
+    dlg.addEventListener('close', function () { if (!dlg.open) session = null; });
   }
   if (typeof document !== 'undefined') {
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', bind);

@@ -217,6 +217,10 @@
   .out-status.is-no { color: var(--danger); }
   .out-actions, .out-bar, .out-size { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
   .out-size { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
+  .out-details { margin: 12px 0; }
+  .out-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; margin: 12px 0; }
+  .out-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .out-fields input, .out-fields select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
   .out-size select { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--white); }
   .out-bar { margin-bottom: 10px; }
   .out-bar strong { flex: 1; min-width: 0; }

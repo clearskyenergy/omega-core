@@ -2179,6 +2179,7 @@
       doc: state.doc,
       which: which === 'sld' ? 'sld' : (which === 'permit' ? 'set' : 'list'),
       download: download,
+      updateMeta: function (patch) { D.setMeta(state, patch); afterChange(); },
       fileBase: fileBase,
       drawing: {
         png: exportPng,

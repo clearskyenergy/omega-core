@@ -127,7 +127,9 @@ check(again.text.indexOf('600 kcmil Cu') >= 0, 'the new conductor callout comes 
 eq(E.golden(next).circuits[0].ocpdA, 400, '250 kW on the same build is a 400 A device');
 check(again.text.indexOf('Existing shed') >= 0, 'the new build still lists the demolition it carries');
 
+next.screen = {go: true, reason: 'Reviewed', at: 123};
 var round = D.restore(D.serialize(next));
+eq(round.screen.reason, 'Reviewed', 'restore keeps the site qualification decision');
 eq(round.electrical.utility, 'Reference Electric', 'restore keeps the utility the build wrote');
 eq(round.electrical.apn, '123-45-678', 'restore keeps the APN');
 eq(round.drawing.jobNo, 'G-100', 'restore keeps the job number');

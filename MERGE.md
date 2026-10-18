@@ -3813,3 +3813,9 @@ project list, while all classic records retain their original routes. The
 trial is appended to the tool catalog so existing starter ordering stays put.
 Guided-build, optional 3D configuration, and tile proxy calls now authenticate
 and check package access before producing work or using the tile key.
+The trial output panel now accepts verified electrical and sheet details,
+marks those changes dirty, and retains them in the saved document. Closing
+and immediately reopening Outputs no longer loses its export session. A
+Chromium check exercises workspace save/reopen, these inputs, and downloads
+a real permit PDF using isolated fixtures. Site qualification decisions also
+survive project restore. No classic editor source was changed.

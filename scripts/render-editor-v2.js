@@ -70,6 +70,16 @@ var server = http.createServer(function(req,res) {
     await page.click('#btn-outputs');await page.click('#btn-permit');
     await page.waitForFunction(function(){return document.getElementById('dlg-outputs').open;});
     await page.screenshot({path:path.join(out,'outputs.png')});
+    await page.evaluate(function(){OmegaEditorV2Outputs.close();OmegaEditorV2App.applyGuidedBuild(OmegaEditorV2Guided.examples.bess());OmegaEditorV2App.openOutputs();});
+    await page.getByText('Electrical and sheet details',{exact:true}).click();
+    await page.getByLabel('Utility',{exact:true}).fill('Customer trial test utility');
+    await page.getByRole('button',{name:'Apply details',exact:true}).click();
+    await page.getByText('Electrical and sheet details',{exact:true}).click();
+    assert.strictEqual(await page.getByLabel('Utility',{exact:true}).inputValue(),'Customer trial test utility');
+    var downloaded=page.waitForEvent('download');
+    await page.getByRole('button',{name:'Export',exact:true}).first().click();
+    var pdf=await downloaded; var pdfPath=await pdf.path();
+    assert(fs.readFileSync(pdfPath).subarray(0,4).toString()==='%PDF','permit output is a real PDF');
     await page.evaluate(function(){OmegaEditorV2Outputs.close();});
     assert.deepStrictEqual(errors,[]);
     console.log(JSON.stringify({passed:true,mode:first.mode,triangles:first.triangles,shots:out,externalServices:'offline: fallback verified'}));
