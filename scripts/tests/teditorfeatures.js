@@ -232,6 +232,8 @@ ok(financeRibbon.indexOf('rbRun(openFinancingApply)') > 0 && financeRibbon.index
 ok(financeRibbon.indexOf('openFinancingApply') < financeRibbon.indexOf('openHeliosIntake') && financeRibbon.indexOf('openHeliosIntake') < financeRibbon.indexOf('openMarketplacePush'), 'Marketplace sits with Apply and Helios');
 ok(financeRibbon.indexOf('id="rb-push-prime"') > 0 && financeRibbon.indexOf('rbRun(omegaPushPrime)') > 0, 'Finance has Push to Prime');
 ok(financeRibbon.indexOf('id="rb-push-logic"') > 0 && financeRibbon.indexOf('rbRun(omegaPushLogic)') > 0, 'Finance has Push to Logic');
+ok(ed.indexOf('id="bom-to-logic"') > 0 && ed.indexOf('function omegaSendBomToLogic()') > 0 && ed.indexOf("action: 'design'") > 0, 'the bill of materials files one Logic order');
+ok(ed.indexOf('unitCost') < 0 || ed.slice(ed.indexOf('function omegaDesignLines'), ed.indexOf('function omegaSendBomToLogic')).indexOf('unitCost') < 0, 'the Logic lines do not carry a unit cost');
 
 var built = ed.slice(ed.indexOf('function buildProposalHTML'), ed.indexOf('async function renderProposalPDF'));
 ok(built.indexOf('Battery Energy Storage') < 0, 'the proposal does not stamp a battery footer');

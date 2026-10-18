@@ -115,7 +115,10 @@ should be a **panel in Site Map**, not a separate page the rep leaves for.
   market.
 - **Quote:** the RFQ carries the BOM, the drawing, the load and the
   circuit verdict; the OEM sees the site, not the client's name, until
-  acceptance.
+  acceptance. Prime's Next, and Site Map's Send to Omega Logic, also file
+  one unpriced order (`POST /api/orders` `action:'design'`) with this
+  project's id, the address on the project, and those lines. The office
+  prices it.
 - **Order:** price → quote sent → PO accepted → build & test → ship →
   bound to the site, in Omega Logic, and the client sees it in the
   customer app.
@@ -204,11 +207,16 @@ still parsing. The installed icon opens `/omega-prime`. The worker caches
 the shell only and does not cache `/api/` or Firebase auth. Phone layout
 is `omega-prime-mobile.css`.
 
-Still open for Prime: EV, Solar and Compute are "next"; the bill's peaks
-are typed, not read from the bill file (Site Map's bill import is the
-reader); Prime's Run is `/api/price-site`, so the project's capex rollup
-waits for Site Map's own Run; the editor does not yet draw Prime's BESS
-area as a guide for the Guided Build.
+Still open for Prime: a non-battery unit (EV, solar, compute, a microgrid
+generator) is listed from the editor's catalog and says it is sized in
+Site Map — the circuit, the load and the quote are that note, not a hosting
+study or a cost model. A battery, including every CleanCell unit, still
+uses the circuit judge and `/api/price-site`. The bill's peaks are typed,
+not read from the bill file (Site Map's bill import is the reader);
+Prime's Run is `/api/price-site`, so the project's capex rollup waits for
+Site Map's own Run; the editor does not yet draw Prime's BESS area as a
+guide for the Guided Build. The Logic order is unpriced on purpose: the
+cost-model dollars are not the selling price.
 
 ## Demo
 

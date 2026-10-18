@@ -311,7 +311,7 @@ table.bom tr.fen td{background:#FFF3E8}
           <div class="tbl"><table class="bom"><thead><tr><th>Line</th><th>Item</th><th>Qty</th><th>Routed to</th><th style="text-align:right">Installed</th></tr></thead><tbody id="bomBody"></tbody></table></div>
           <p class="note" id="qNote"></p>
           <a class="primary" id="q-editor" href="#">Open in Site Map to file the RFQ</a>
-          <p class="note">Filing goes through Site Map's Bill of Materials, so the RFQ carries the full drawing; the manufacturer receives the whole BOM and sees the site, not the client, until a quote is accepted.</p>
+          <p class="note">Next files this quote in Omega Logic as one order for this project: the site address on the project, and these lines. No price is copied. The office prices the order.</p>
           <button class="primary" id="q-logic" style="margin-top:6px;background:#0B2A3D">Next: Omega Logic →</button>
         </div>
       </div>
@@ -963,16 +963,66 @@ table.bom tr.fen td{background:#FFF3E8}
     $('#q-editor').textContent = S.projectId ? 'Open the project in Site Map' : 'Open in Site Map to file the RFQ';
     guide();
   }
-  $('#q-logic').onclick = function () { show('logic'); };
-  /* Omega Logic and Custody open the company this site belongs to. The
-     ClearSky directory stays a link inside that office, opened on purpose. */
+  /* The lines on the quote, without a dollar. A cost-model division is
+     named so the office sees the same rows; its amount stays here. */
+  function quoteLines() {
+    var lines = [{ name: UNIT.name, qty: 1, sku: UNIT.sku || UNIT.key || '', unit: 'ea', category: 'Equipment', note: UNIT.note || '', manufacturer: UNIT.mfr || '' }];
+    if (S.run && S.run.divisions) {
+      S.run.divisions.forEach(function (d) {
+        if (!d || !d.name || !(d.base > 0)) return;
+        lines.push({ name: d.name, qty: 1, unit: 'lot', category: 'Screening', note: 'Named by the cost model. Not a price.' });
+      });
+    }
+    return lines;
+  }
+  $('#q-logic').onclick = function () {
+    var b = this;
+    if (b.disabled) return;
+    b.disabled = true;
+    var label = b.textContent;
+    b.textContent = 'Filing the order…';
+    ensureProject().then(function (id) {
+      if (!S.addr) throw new Error('Load the site address first.');
+      return firebase.firestore().collection('projects').doc(id).update({
+        address: S.addr, name: S.addr, updatedAt: firebase.firestore.FieldValue.serverTimestamp()
+      }).then(function () { return id; });
+    }).then(function (id) {
+      return token().then(function (t) {
+        if (!t) throw new Error('Sign in to file this order.');
+        return fetch('/api/orders', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + t },
+          body: JSON.stringify({ action: 'design', projectId: id, address: S.addr, items: quoteLines() })
+        }).then(function (r) { return r.json().then(function (j) { if (!r.ok) throw new Error((j && (j.error || j.message)) || 'Could not file the order'); return j; }); });
+      });
+    }).then(function (j) {
+      var org = PP.orgId(j.orgId);
+      if (org) S.org = org;
+      S.logicOrderId = j.orderId || '';
+      paintLogic();
+      show('logic');
+      if (j.logic) window.open(j.logic, '_blank', 'noopener');
+      toast(j.locked ? 'This project already has an order in Omega Logic. Opened that one.' : (j.duplicate ? 'Updated the open order ' + (j.orderNo || '') + '.' : 'Filed in Omega Logic as ' + (j.orderNo || 'an order') + '.'));
+    }, function (e) { toast(e.message || String(e)); }).then(function () { b.disabled = false; b.textContent = label; });
+  };
+  /* Omega Logic and Custody open the company this site belongs to. A filed
+     order opens that order. The ClearSky directory stays a link inside the
+     office, opened on purpose. */
   function paintLogic() {
     var org = S.org || '';
-    function href(path) { return org ? path + '?org=' + encodeURIComponent(org) : path; }
+    var order = S.logicOrderId || '';
+    function href(path, withOrder) {
+      var q = [];
+      if (org) q.push('org=' + encodeURIComponent(org));
+      if (withOrder && order) q.push('order=' + encodeURIComponent(order));
+      return q.length ? path + '?' + q.join('&') : path;
+    }
     var logic = document.querySelector('#s-logic a[href^="/omega-logic"]');
     var custody = document.querySelector('#s-logic a[href^="/logic-custody"]');
-    if (logic) logic.setAttribute('href', href('/omega-logic'));
-    if (custody) custody.setAttribute('href', href('/logic-custody.html'));
+    if (logic) {
+      logic.setAttribute('href', href('/omega-logic', true));
+      var span = logic.querySelector('span');
+      if (span && order) span.textContent = 'This order is open in your workspace, ready for a price.';
+    }
+    if (custody) custody.setAttribute('href', href('/logic-custody.html', false));
   }
   paintLogic();
 

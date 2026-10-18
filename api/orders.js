@@ -17,6 +17,14 @@
                       thread, the same place action:'note' puts one, and
                       never in customer.notes — that field is the
                       customer's own words and nothing else.
+     action:'design'  { projectId, items:[{name,qty,sku?,unit?,category?}],
+                        address? }
+                      One open order per project, filed from Site Map's
+                      bill of materials or Omega Prime's quote. The address
+                      is read off the project. Lines keep the names and
+                      quantities sent; prices, an approved quote and a
+                      made-up customer are refused. A second send updates
+                      the same order while it is still new and unpriced.
      action:'price'   { orderId, pricing:{ subtotal, freight, tax, total,
                                            currency, validUntil, terms } }
      action:'status'  { orderId, status, note? }
@@ -69,6 +77,9 @@ module.exports = A.handler(function (req) {
   /* 'create' is the only action with no orderId — it is making one. */
   if (b.action === 'create') {
     return A.authenticate(req).then(function (caller) { return create(caller, b); });
+  }
+  if (b.action === 'design') {
+    return A.authenticate(req).then(function (caller) { return design(caller, b); });
   }
 
   var orderId = clean(b.orderId, 120);
@@ -339,5 +350,220 @@ function create(caller, b) {
         return { ok: true, orderId: ref.id, orderNo: no, status: 'new' };
       });
     });
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+   action:'design' — Site Map's BOM, or Prime's quote, becomes ONE order
+   ═══════════════════════════════════════════════════════════════════════════
+   The office prices it. This door does not. A dollar on the request, a
+   cost-model total, or an approvedQuote is not copied: the line keeps its
+   name, quantity, unit and category, and pricing stays null.
+
+   The address is the project's, not the browser's. A client address that
+   disagrees is a 409, so a stale tab cannot file a different site under
+   this project. There is no invented buyer: a customer is recorded only
+   when the caller names one with a real email.
+
+   One open order per project. The project's designOrderId points at it.
+   While that order is still new, unpriced and not yet in the office
+   workflow, a second send replaces the lines. Once somebody has priced it,
+   the same call returns that order and does not touch it. */
+function normAddr(s) { return String(s || '').toLowerCase().replace(/[\s,]+/g, ' ').trim(); }
+function stripMoney(s) {
+  return clean(s, 500).replace(/\$\s*\d[\d,]*(?:\.\d+)?/g, '').replace(/[ \t]{2,}/g, ' ').trim();
+}
+function projectAddress(p) {
+  p = p || {};
+  var a = p.address;
+  if (typeof a === 'string' && a.trim()) return clean(a, 300);
+  if (a && typeof a === 'object') {
+    var parts = [a.line1, a.city, a.state, a.zip].map(function (x) { return clean(x, 120); }).filter(Boolean);
+    if (parts.length) return clean(parts.join(', '), 300);
+  }
+  var m = p.mapState && p.mapState.address;
+  if (typeof m === 'string' && m.trim()) return clean(m, 300);
+  if (typeof p.siteAddr === 'string' && p.siteAddr.trim()) return clean(p.siteAddr, 300);
+  return '';
+}
+function projectPoint(p) {
+  p = p || {};
+  var m = p.mapState || {};
+  var lat = num(m.lat); if (lat == null) lat = num(p.siteLat);
+  var lng = num(m.lng); if (lng == null) lng = num(p.siteLng);
+  if (lat == null || lng == null || Math.abs(lat) > 90 || Math.abs(lng) > 180) return {};
+  return { lat: lat, lng: lng };
+}
+function designItems(raw, sf) {
+  var published = (Array.isArray(sf.products) ? sf.products : []).filter(function (p) { return p && p.kind !== 'component'; });
+  var components = (Array.isArray(sf.products) ? sf.products : []).filter(function (p) { return p && p.kind === 'component'; });
+  function bySku(sku) {
+    for (var i = 0; i < published.length; i++) if (String(published[i].sku) === sku) return published[i];
+    return null;
+  }
+  var items = [];
+  (Array.isArray(raw) ? raw : []).slice(0, 120).forEach(function (it) {
+    if (!it || typeof it !== 'object') return;
+    var sku = clean(it.sku, 64);
+    if (sku && components.some(function (c) { return String(c.sku) === sku; })) throw A.httpError(400, sku + ' is a component, not a product');
+    var p = sku ? bySku(sku) : null;
+    var name = clean(it.name || it.description || (p && p.name) || sku, 200);
+    if (!name) return;
+    var qty = Math.round(num(it.qty) || 1);
+    if (!isFinite(qty) || qty < 1) qty = 1;
+    if (qty > 1000000) qty = 1000000;
+    items.push({
+      sku: sku,
+      name: name,
+      qty: qty,
+      unit: clean(it.unit, 24) || 'ea',
+      category: clean(it.category, 80),
+      size: clean(it.size, 80),
+      note: stripMoney(it.note),
+      manufacturer: clean(it.manufacturer, 80),
+      kw: p ? num(p.kw) : null,
+      kwh: p ? num(p.kwh) : null,
+      /* Never the request, and never the catalogue either. A design order
+         is unpriced until the office approves a selling price. */
+      listPrice: null,
+      published: !!p
+    });
+  });
+  return items;
+}
+function design(caller, b) {
+  var db = A.db(), FV = A.FieldValue();
+  var projectId = clean(b.projectId, 120);
+  if (!projectId || /[\/\\]|\.\./.test(projectId)) throw A.httpError(400, 'projectId required');
+
+  return db.collection('projects').doc(projectId).get().then(function (ps) {
+    if (!ps.exists) throw A.httpError(404, 'project not found');
+    var project = ps.data() || {};
+    var orgId = A.safeOrg(project.orgId);
+    if (!orgId) throw A.httpError(403, 'that project belongs to another workspace');
+    return A.canActInOrg(caller, orgId).then(function (ok) {
+      if (!ok) throw A.httpError(403, 'not your workspace');
+      var address = projectAddress(project);
+      if (!address) throw A.httpError(409, 'This project has no site address on file. Save the site, then send it again.');
+      if (b.address != null && String(b.address).trim() && normAddr(b.address) !== normAddr(address)) {
+        throw A.httpError(409, 'Save the project so the site address matches, then send it again.');
+      }
+      return Promise.all([
+        db.collection('omega_orgs').doc(orgId).get(),
+        db.collection('omega_orgs').doc(orgId).collection('storefront').doc('config').get()
+      ]).then(function (r) {
+        if (!r[0].exists) throw A.httpError(404, 'workspace not found');
+        var org = r[0].data() || {};
+        var sf = r[1].exists ? (r[1].data() || {}) : {};
+        var items = designItems(b.items, sf);
+        if (!items.length) throw A.httpError(400, 'Name the lines on this order.');
+        var named = b.customer || {};
+        var custName = clean(named.name, 120);
+        var custEmail = clean(named.email, 160).toLowerCase();
+        if (custEmail || custName) {
+          if (!custName) throw A.httpError(400, 'customer.name is required');
+          if (!/^[^@\s]+@[^@\s.]+\.[^@\s]+$/.test(custEmail)) throw A.httpError(400, 'a valid customer.email is required');
+        }
+        return fileDesign(db, FV, caller, orgId, org, sf, projectId, address, items, custName, custEmail);
+      });
+    });
+  });
+}
+function blankCustomer(address) {
+  return {
+    name: '', company: '', email: '', phone: '', notes: '',
+    address: { line1: address, city: '', state: '', zip: '' }
+  };
+}
+function fileDesign(db, FV, caller, orgId, org, sf, projectId, address, items, custName, custEmail) {
+  var pref = db.collection('projects').doc(projectId);
+  return db.runTransaction(function (tx) {
+    return tx.get(pref).then(function (ps) {
+      if (!ps.exists) throw A.httpError(404, 'project not found');
+      var project = ps.data() || {};
+      if (A.safeOrg(project.orgId) !== orgId) throw A.httpError(403, 'that project belongs to another workspace');
+      var freshAddress = projectAddress(project);
+      if (!freshAddress || normAddr(freshAddress) !== normAddr(address)) {
+        throw A.httpError(409, 'Save the project so the site address matches, then send it again.');
+      }
+      var point = projectPoint(project);
+      var site = { address: freshAddress, projectId: projectId };
+      if (point.lat != null) { site.lat = point.lat; site.lng = point.lng; }
+      var existingId = clean(project.designOrderId, 120);
+      function make() {
+        var ref = db.collection('orders').doc();
+        var d = new Date();
+        var slug = orgId.replace(/\..*$/, '').replace(/[^a-z0-9]/gi, '').slice(0, 4).toUpperCase() || 'ORD';
+        var day = d.getUTCFullYear() + ('0' + (d.getUTCMonth() + 1)).slice(-2) + ('0' + d.getUTCDate()).slice(-2);
+        var no = slug + '-' + day + '-' + ref.id.slice(-5).toUpperCase();
+        var customer = custEmail ? {
+          name: custName, company: '', email: custEmail, phone: '', notes: '',
+          address: { line1: freshAddress, city: '', state: '', zip: '' }
+        } : blankCustomer(freshAddress);
+        var doc = {
+          orderNo: no, orgId: orgId, orgName: clean(org.name, 120) || orgId,
+          fulfilledBy: String((sf && sf.fulfilledBy) || 'clearsky'), status: 'new', source: 'design',
+          placedBy: caller.email, sourceProjectId: projectId, configId: null,
+          customer: customer,
+          site: site,
+          system: { kw: null, kwh: null, durationH: null, basis: 'designed-in-editor' },
+          items: items,
+          pricing: null,
+          provenance: { placedBy: caller.email, via: 'api/orders design' },
+          history: [
+            { at: new Date().toISOString(), by: caller.email, what: 'created' },
+            { at: new Date().toISOString(), by: caller.email, what: 'filed from the site design · ' + items.length + ' lines · ' + freshAddress }
+          ],
+          createdAt: FV.serverTimestamp(), updatedAt: FV.serverTimestamp()
+        };
+        function write(cid) {
+          if (cid) doc.customerId = String(cid);
+          tx.set(ref, doc);
+          if (cid) tx.update(db.collection('omega_orgs').doc(orgId).collection('customers').doc(String(cid)), { hasOrders: true });
+          tx.update(pref, { designOrderId: ref.id });
+          return { ref: ref, doc: doc, duplicate: false, locked: false, mailed: true };
+        }
+        if (!custEmail) return Promise.resolve(write(null));
+        return B.stampableAccount(db, orgId, custEmail, tx).then(write);
+      }
+      if (!existingId || /[\/\\]/.test(existingId)) return make();
+      var oref = db.collection('orders').doc(existingId);
+      return tx.get(oref).then(function (os) {
+        if (!os.exists) return make();
+        var o = os.data() || {};
+        if (o.orgId !== orgId || o.source !== 'design' || o.sourceProjectId !== projectId) return make();
+        var open = o.status === 'new' && !o.pricing && !o.logic && !o.approvedQuote;
+        if (!open) return { ref: oref, doc: o, duplicate: true, locked: true, mailed: false };
+        var customer = o.customer || blankCustomer(freshAddress);
+        if (!customer.email) customer = blankCustomer(freshAddress);
+        else customer = Object.assign({}, customer, { address: Object.assign({}, customer.address || {}, { line1: freshAddress }) });
+        var history = (Array.isArray(o.history) ? o.history : []).concat([
+          { at: new Date().toISOString(), by: caller.email, what: 'lines updated from the design · ' + items.length + ' lines · ' + freshAddress }
+        ]);
+        var patch = { items: items, site: site, customer: customer, pricing: null, history: history, updatedAt: FV.serverTimestamp() };
+        tx.update(oref, patch);
+        return { ref: oref, doc: Object.assign({}, o, patch), duplicate: true, locked: false, mailed: false };
+      });
+    });
+  }).then(function (r) {
+    if (r.mailed) {
+      try {
+        var to = process.env.ORDER_NOTIFY || process.env.MAIL_NOTIFY || 'dev@clearsky-usa.com';
+        M.send(to, '[OMEGA] Design order ' + r.doc.orderNo + ' — ' + (r.doc.orgName || orgId),
+          M.layout('Order ' + r.doc.orderNo, '<table style="font-size:14px;border-collapse:collapse">'
+            + M.row('Workspace', (r.doc.orgName || orgId) + ' (' + orgId + ')')
+            + M.row('Placed by', caller.email)
+            + M.row('Site', address)
+            + M.row('Project', projectId)
+            + M.row('Items', items.map(function (i) { return i.qty + '× ' + i.name; }).join(', '))
+            + '</table>'
+            + M.button('https://silmarillion.clearskyomega.com/omega-logic?org=' + encodeURIComponent(orgId) + '&order=' + encodeURIComponent(r.ref.id), 'Open in Omega Logic')));
+      } catch (e) {}
+    }
+    return {
+      ok: true, orderId: r.ref.id, orderNo: r.doc.orderNo, status: r.doc.status || 'new',
+      duplicate: !!r.duplicate, locked: !!r.locked, orgId: orgId,
+      logic: '/omega-logic?org=' + encodeURIComponent(orgId) + '&order=' + encodeURIComponent(r.ref.id)
+    };
   });
 }

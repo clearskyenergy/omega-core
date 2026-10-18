@@ -66,7 +66,7 @@ var srv = http.createServer(function (req, res) {
 
 (async function () {
   await new Promise(function (r) { srv.listen(0, HOST, r); });
-  var base = 'http://' + HOST + ':' + srv.address().port, external = [], calls = { verdict: [], rates: [], price: [] };
+  var base = 'http://' + HOST + ':' + srv.address().port, external = [], calls = { verdict: [], rates: [], price: [], orders: [] };
   var browser = await chromium.launch({ executablePath: process.env.CHROME || chromium.executablePath() });
   var errs = [];
   try {
@@ -94,6 +94,11 @@ var srv = http.createServer(function (req, res) {
       if (u.pathname === '/api/grid-verdict') { var b = req.postDataJSON(); calls.verdict.push(b); return json(200, GV.judge(b)); }
       if (u.pathname === '/api/utility-rates') { calls.rates.push(u.searchParams.get('zip')); return json(200, UR.lookup(u.searchParams.get('zip'))); }
       if (u.pathname === '/api/price-site') { calls.price.push(req.postDataJSON()); return json(200, RUN); }
+      if (u.pathname === '/api/orders') {
+        var ob = req.postDataJSON(); calls.orders.push(ob);
+        return json(200, { ok: true, orderId: 'ord-design-1', orderNo: 'CLEA-TEST-1', status: 'new', duplicate: false, locked: false,
+          orgId: ORG, logic: '/omega-logic?org=' + encodeURIComponent(ORG) + '&order=ord-design-1' });
+      }
       return json(503, { error: 'offline' });
     });
     await ctx.addInitScript(FD.source());
@@ -172,6 +177,26 @@ var srv = http.createServer(function (req, res) {
     var q = await p.evaluate(function () { return { href: document.getElementById('q-editor').getAttribute('href'), text: document.getElementById('q-editor').textContent, body: document.getElementById('bomBody').textContent }; });
     ok('the quote opens the project in Site Map with the hand-off', /^\/editor\.html\?id=[^&]+&from=prime$/.test(q.href) && /Open the project in Site Map/.test(q.text), q);
     ok('the unit routes to its own maker', /Clean Cell CC-2000/.test(q.body) && /Clean Cell \(full BOM\)/.test(q.body) && !/FENECON/.test(q.body), q.body.slice(0, 300));
+
+    /* Quote → one Logic order: same project, the project's address, the lines, no dollars. */
+    await p.evaluate(function () {
+      window.__logicOpen = '';
+      window.open = function (u) { window.__logicOpen = String(u || ''); return null; };
+    });
+    await p.click('#q-logic');
+    var logicOpen = await p.waitForFunction(function () { return window.__logicOpen || null; }, null, { timeout: 8000 }).then(function (h) { return h.jsonValue(); }, function () { return ''; });
+    var body = calls.orders[0] || {};
+    var pid = made[0] && String(made[0].path || '').split('/')[1];
+    var dumped = JSON.stringify(body);
+    ok('Next files one design order for this project', calls.orders.length === 1 && body.action === 'design' && body.projectId === pid && body.address === doc.address, { n: calls.orders.length, projectId: body.projectId, pid: pid, address: body.address });
+    ok('the order carries the unit and the cost-model rows, and no price',
+      Array.isArray(body.items) && body.items.some(function (i) { return /CC-2000/.test(i.name || ''); }) && body.items.some(function (i) { return i.name === 'Electrical' && i.category === 'Screening'; })
+      && dumped.indexOf('1140000') < 0 && dumped.indexOf('900000') < 0 && dumped.indexOf('listPrice') < 0 && dumped.indexOf('approvedQuote') < 0 && !body.pricing, dumped.slice(0, 500));
+    var card = await p.$eval('#s-logic a[href^="/omega-logic"]', function (a) { return { href: a.getAttribute('href'), text: a.textContent }; });
+    ok('Omega Logic opens that order in this workspace', logicOpen === '/omega-logic?org=' + ORG + '&order=ord-design-1' && card.href === logicOpen && /ready for a price/.test(card.text), { open: logicOpen, card: card });
+    try { fs.mkdirSync('/opt/cursor/artifacts/screenshots', { recursive: true }); } catch (eShot) {}
+    await p.screenshot({ path: '/opt/cursor/artifacts/screenshots/prime-logic-order.png' });
+
     if (process.env.PRIME_SHOTS) {
       fs.mkdirSync(process.env.PRIME_SHOTS, { recursive: true });
       await p.screenshot({ path: path.join(process.env.PRIME_SHOTS, 'prime-quote.png') });

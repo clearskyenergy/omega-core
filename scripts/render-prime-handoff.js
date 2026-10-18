@@ -324,6 +324,34 @@ async function logicHome(browser, base, user, expectOrg, name, staff) {
     ok('the quote step names the charger and says quote required', /Tesla V4/.test(quote) && /Quote required/.test(quote) && /Sized in Site Map/.test(quote), quote.slice(0, 400));
     await prime.screenshot({ path: path.join(shotDir, 'prime-handoff-quote.png') });
 
+    /* The editor's bill of materials posts the same design order: project id,
+       the lines, and no unit cost. The address stays on the saved project. */
+    var bomPosted = [];
+    await ctx.route('**/api/orders', function (r) {
+      var b = r.request().postDataJSON();
+      bomPosted.push(b);
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({
+        ok: true, orderId: 'ord-bom', orderNo: 'NEXT-1', status: 'new', duplicate: false, locked: false,
+        logic: '/omega-logic?org=nextnrg.com&order=ord-bom'
+      }) });
+    });
+    var bomResult = await ed.evaluate(function () {
+      window._projectId = 'proj-handoff';
+      window._lastSaveError = null;
+      window._BOM_CACHE = { items: [{ description: 'CleanCell cabinet', qty: 2, unit: 'ea', sku: 'CC-2000', category: 'Equipment', note: 'equip $80,000', unitCost: 80000, manufacturer: 'CleanCell' }] };
+      window.saveProject = function () { return Promise.resolve(); };
+      window.firebase = { auth: function () { return { currentUser: { getIdToken: function () { return Promise.resolve('t'); } } }; } };
+      window.__bomOpen = '';
+      window.open = function (u) { window.__bomOpen = String(u || ''); return null; };
+      if (typeof omegaSendBomToLogic !== 'function') return { missing: true };
+      omegaSendBomToLogic();
+      return { missing: false };
+    });
+    var bomOpen = await ed.waitForFunction(function () { return window.__bomOpen || null; }, null, { timeout: 8000 }).then(function (h) { return h.jsonValue(); }, function () { return ''; });
+    var bomBody = bomPosted[0] || {};
+    ok('the bill of materials files a design order for this project', bomResult && !bomResult.missing && bomPosted.length === 1 && bomBody.action === 'design' && bomBody.projectId === 'proj-handoff' && bomBody.items && bomBody.items[0].name === 'CleanCell cabinet' && bomBody.items[0].qty === 2 && !bomBody.address, bomBody);
+    ok('that post carries no unit cost and opens the order', JSON.stringify(bomBody).indexOf('80000') < 0 && JSON.stringify(bomBody).indexOf('unitCost') < 0 && bomOpen === '/omega-logic?org=nextnrg.com&order=ord-bom', { open: bomOpen, body: bomBody });
+
     await logicHome(browser, base, { uid: 'tom', email: 'tom@clearsky-usa.com', displayName: 'Thomas', emailVerified: true, claims: { orgId: 'clearsky-usa.com', email_verified: true } }, 'clearsky-usa.com', 'ClearSky Energy', true);
     await logicHome(browser, base, { uid: 'ops', email: 'ops@concord.example', displayName: 'Concord Ops', emailVerified: true, claims: {} }, 'concord.example', 'Concord Energy', false);
   } catch (e) {

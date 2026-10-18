@@ -72,7 +72,14 @@ module.exports = A.handler(async function (req, res) {
       return { id: s.id, orderNo: o.orderNo, poNumber: R.poOf(o), stage: act.stage, can: act.can, waitingOn: act.waitingOn, billing: S.billingOf(o, billing),
         path: S.path(o, who, billing, far.indexOf(s.id) >= 0 ? S.custodyCounts(unitsOf[s.id] || []) : null), delivery: o.delivery ? { legs: (o.delivery.legs || []).length } : null,
         /* the proposal the customer approved in Omega Prime (source 'prime'): the price box starts from it, and pricing anything else is confirmed first */
-        approvedQuote: o.approvedQuote && Number(o.approvedQuote.totalCents) > 0 ? { quoteNo: String(o.approvedQuote.quoteNo || '').slice(0, 40), rev: o.approvedQuote.rev == null ? null : Number(o.approvedQuote.rev) || null, totalCents: Math.round(Number(o.approvedQuote.totalCents)) } : null, rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
+        approvedQuote: o.approvedQuote && Number(o.approvedQuote.totalCents) > 0 ? { quoteNo: String(o.approvedQuote.quoteNo || '').slice(0, 40), rev: o.approvedQuote.rev == null ? null : Number(o.approvedQuote.rev) || null, totalCents: Math.round(Number(o.approvedQuote.totalCents)) } : null,
+        /* the site the design was filed from (action:'design'); a project id
+           with no address is still the same project */
+        site: (o.site && (o.site.address || o.site.projectId)) || o.sourceProjectId ? {
+          address: String((o.site && o.site.address) || '').slice(0, 300),
+          projectId: String((o.site && o.site.projectId) || o.sourceProjectId || '').slice(0, 120)
+        } : null,
+        rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
         createdAt: o.createdAt && typeof o.createdAt.toDate === 'function' ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null), customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '', company: (o.customer || {}).company || '' }, customerId: o.customerId || null,
         items: o.items || [], status: o.status, cancelRequested: !!o.cancelRequested, worksOrderId: o.worksOrderId || null,
         logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt, accounting: o.logic.accounting || null,
