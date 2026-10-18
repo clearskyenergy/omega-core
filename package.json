@@ -84,6 +84,7 @@
     "test:packaging": "node scripts/test-packaging-catalog.js && node scripts/test-subscription-pricing.js && node scripts/test-qbo-items.js && node scripts/test-package-catalog-api.js && node scripts/test-package-access.js && node scripts/test-package-producers.js && node scripts/test-package-admin-producers.js && node scripts/test-packaging-workspaces.js && node scripts/test-package-preview.js && node scripts/test-packaging-billing-foundation.js && node scripts/test-package-activation.js && node scripts/test-package-billing-api.js && node scripts/test-pricebook-admin.js && node scripts/test-plan-change.js && node scripts/test-addons.js && node scripts/test-stripe-billing.js && node scripts/test-stripe-customer.js && node scripts/test-subscription-proposal.js && node scripts/test-usage.js",
     "test:packaging:rules": "node scripts/test-packaging-rules.js",
     "test:portfolio": "node scripts/test-site-crm.js && node scripts/tests/tportfolioassets.js && node scripts/tests/tportfolio-phases.js && node scripts/tests/tportfolioassets-real.js && node scripts/tests/tportfolio-economics-real.js",
-    "seed:evcs-portfolio:dry": "node scripts/seed-evcs-portfolio.js"
+    "seed:evcs-portfolio:dry": "node scripts/seed-evcs-portfolio.js",
+    "test:editor-v2-3d": "node scripts/tests/teditorv23d.js"
   }
 }

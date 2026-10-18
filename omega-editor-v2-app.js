@@ -33,7 +33,8 @@
     OFFSET: 'offset', FENCE: 'fence', CONDUIT: 'conduit', PAN: 'pan',
     SELECT: 'select', V: 'select', MOVE: 'move', M: 'move',
     ERASE: 'erase', E: 'erase', U: 'undo', UNDO: 'undo', REDO: 'redo',
-    ARRAY: 'array', FIT: 'zoom-ext', Z: 'zoom-ext', HELP: 'help', NEW: 'new'
+    ARRAY: 'array', FIT: 'zoom-ext', Z: 'zoom-ext', HELP: 'help', NEW: 'new',
+    '3D': 'view3d', VIEW3D: 'view3d', '2D': 'view2d', PLAN: 'view2d'
   };
 
   var PROMPT = {
@@ -76,6 +77,13 @@
       setStatus('Sample site loaded.');
     }
     $('cmd').focus();
+    if (root.OmegaEditorV2Hooks && root.OmegaEditorV2View3D) {
+      root.OmegaEditorV2Hooks.register('view3d', function (ctx) {
+        if (ctx && ctx.reason === 'build') return true;
+        open3d();
+        return true;
+      });
+    }
   }
 
   function sample() {
@@ -304,6 +312,43 @@
     else if (act === 'outputs') toggleOutputs();
     else if (act === 'run') runNumbers();
     else if (act === 'quote') setSection('funding');
+    else if (act === 'view3d') open3d();
+    else if (act === 'view2d' && view3dOpen()) root.OmegaEditorV2View3D.close();
+  }
+  function view3dOpen() {
+    var V = root.OmegaEditorV2View3D;
+    return !!(V && V.isOpen && V.isOpen());
+  }
+  function mark3d(on) {
+    var b = $('btn-3d');
+    if (b) b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    pressed('view3d', on);
+  }
+  function open3d() {
+    var V = root.OmegaEditorV2View3D;
+    if (!V) { setStatus('The 3D view did not load.', true); return; }
+    if (V.isOpen()) { V.close(); return; }
+    var opened = V.open({
+      doc: state.doc,
+      selection: state.selection.slice(),
+      summary: D.summary(state.doc),
+      host: $('workspace'),
+      onSelection: function (ids) { state.selection = (ids || []).slice(); },
+      onClose: function (ids, civil) {
+        mark3d(false);
+        if (ids) state.selection = ids.slice();
+        if (civil && civil.source === 'usgs-3dep') state.doc.civil3d = civil;
+        refresh();
+        setStatus('Back on the plan.');
+      }
+    });
+    if (!opened || opened.ok === false) {
+      mark3d(false);
+      setStatus('The 3D view did not open.', true);
+      return;
+    }
+    mark3d(true);
+    setStatus('3D. Drag to look around the site. Type 2D to return to the plan.');
   }
   function pressed(act, on) {
     var nodes = document.querySelectorAll('[data-act="' + act + '"]');
@@ -339,8 +384,11 @@
       ev.preventDefault();
       state.selection = state.doc.entities.map(function (e) { return e.id; });
       refresh();
-    } else if (ev.key === 'Escape') cancel();
-    else if ((ev.key === 'Delete' || ev.key === 'Backspace') && ev.target.id !== 'cmd' && !fieldTyping(ev)) {
+    } else if (ev.key === 'Escape') {
+      if (view3dOpen() || (ev.target && ev.target.id === 'cmd')) return;
+      cancel();
+    } else if ((ev.key === 'Delete' || ev.key === 'Backspace') && ev.target.id !== 'cmd' && !fieldTyping(ev)) {
+      if (view3dOpen()) return;
       ev.preventDefault(); erase();
     } else if (ev.key === 'F3') { ev.preventDefault(); toggleOsnap(); }
     else if (ev.key === 'F7') { ev.preventDefault(); runAct('snap-grid'); }
@@ -355,10 +403,23 @@
   }
   function onCommandKey(ev) {
     if (ev.key === 'Enter') { ev.preventDefault(); submit($('cmd').value); $('cmd').value = ''; }
-    else if (ev.key === 'Escape') { ev.preventDefault(); cancel(); }
+    else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      if (view3dOpen()) { root.OmegaEditorV2View3D.close(); return; }
+      cancel();
+    }
   }
   function submit(raw) {
     var s = String(raw || '').trim();
+    if (view3dOpen()) {
+      var back = s.toUpperCase();
+      if (back === '2D' || back === 'PLAN' || back === 'CLOSE') { root.OmegaEditorV2View3D.close(); return; }
+      if (back === '3D' || back === 'VIEW3D') return;
+      if (back === 'HELP') { $('dlg-help').showModal(); return; }
+      if (!s) return;
+      setStatus('Type 2D to return to the plan.', true);
+      return;
+    }
     if (draft && draft.wait === 'text') { commitText(s); return; }
     if ((tool === 'offset' || (draft && draft.mode === 'offset')) && isFinite(parseFloat(s)) && s.indexOf(',') < 0 && s.indexOf('<') < 0) {
       doOffset(parseFloat(s));
@@ -382,6 +443,8 @@
     if (!s) { finishChain(false); return; }
     var word = s.toUpperCase();
     var map = COMMAND;
+    if (map[word] === 'view3d') { open3d(); return; }
+    if (map[word] === 'view2d') return;
     if (map[word] === 'undo' || map[word] === 'redo' || map[word] === 'erase' || map[word] === 'array' || map[word] === 'zoom-ext') runAct(map[word] === 'zoom-ext' ? 'zoom-ext' : map[word]);
     else if (map[word] === 'help') $('dlg-help').showModal();
     else if (map[word] === 'new') confirmDirty(blank);
@@ -1196,6 +1259,7 @@
     if (root.OmegaEditorV2Design) root.OmegaEditorV2Design.publish(root.OmegaEditorV2Design.fromDoc(state.doc));
     if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
     if (section === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
+    if (view3dOpen() && root.OmegaEditorV2View3D.sync) root.OmegaEditorV2View3D.sync(state.doc, D.summary(state.doc));
   }
   function refreshTakeoff() {
     var s = D.summary(state.doc);
