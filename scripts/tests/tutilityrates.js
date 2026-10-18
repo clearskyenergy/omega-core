@@ -13,6 +13,16 @@
 var assert = require('node:assert/strict'), fs = require('fs'), path = require('path');
 var ROOT = path.join(__dirname, '../..'), count = 0;
 function read(f) { return fs.readFileSync(path.join(ROOT, f), 'utf8'); }
+/* firebase-admin is intercepted at load, as tclientadmin.js and thomeclaim.js
+   do: CI runs this with no npm install (tests.yml), and api/_lib/admin.js
+   requires it at load. Nothing here reaches Firestore or Auth; the stand-in
+   only lets the modules load, the same in CI as on a laptop with
+   node_modules. */
+var Module = require('module'), _load = Module._load;
+function noFirebase() { throw new Error('firebase-admin is a stand-in in this test'); }
+var FAKE_ADMIN = { apps: [], initializeApp: function () { FAKE_ADMIN.apps.push({}); }, credential: { cert: function (k) { return k; } }, firestore: noFirebase, auth: noFirebase };
+Module._load = function (request) { return request === 'firebase-admin' ? FAKE_ADMIN : _load.apply(this, arguments); };
+try { require(path.join(ROOT, 'api/_lib/admin.js')); } finally { Module._load = _load; }
 var U = require(path.join(ROOT, 'api/_lib/utility-rates'));
 
 /* the library */
