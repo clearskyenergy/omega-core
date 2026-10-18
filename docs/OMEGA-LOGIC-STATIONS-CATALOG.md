@@ -13,11 +13,15 @@ by the URL. Office navigation links the catalog, URL Generator and plant manager
   credentials are included. Allow the actual website origin in Website installation.
 - `/plant/work-orders`: the work-order board — a filterable grid (line, stage,
   priority, target date, progress, ready units, holds, next operation, assignee)
-  with a location/stage tree, column filters, CSV/print, and a per-order detail
-  card: step progress, operations checklist, activity feed derived from the
-  units' scan/test/hold evidence, audited manager edits (line, priority, target
-  date, assignee, notes), parts required vs registered, services and units.
-  Progress is computed in `api/_lib/plant-board.js`, never in the browser.
+  with a location/stage tree, a build-schedule strip (late, this week, the
+  next 30 days, later, no target), column filters, CSV/print, and a per-order
+  detail card that opens as a drawer so the grid stays readable. The card
+  shows the purchase order it was released from — PO number, project id,
+  ship-to and named line items, read live by `api/_lib/plant-source.js` —
+  plus step progress, holds and failed tests, the activity feed, audited
+  manager edits, parts required vs registered, components issued from stock,
+  what the bill is short of, services and units. Progress is computed in
+  `api/_lib/plant-board.js`, never in the browser.
 - `/plant/manager`: the plant board — Today, Needs a person (stuck, held,
   quiet benches, exceptions from `api/_lib/plant-attention.js`), the station
   map, board-style work orders with audited edits, quality, stations & devices

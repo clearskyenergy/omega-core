@@ -778,6 +778,20 @@ station.
 A **roaming phone** shows a bench picker top right: choose the bench you are
 at, then scan. Every scan records the phone and the bench it named.
 
+### The work-order card (`/plant/work-orders`)
+
+The card opens as a drawer beside the grid. It shows the purchase order
+the work was released from: the PO number, the project id, the ship-to,
+and the named line items. Those are read from the order when the card
+opens, so a corrected address or line is what the floor sees, and prices
+and email stay on the order. A fact the purchase order does not carry is
+said so, and nothing is filled in. Above the grid, the build schedule
+counts late work, this week, the next 30 days, later, and no target.
+Holds and failed tests on the loaded units are listed, each linking to
+the serial record. Parts still to register stay in their own table.
+Materials shows what the bill is short of against stock, the same plan
+the plant board uses.
+
 ### Registering serials
 
 Work orders page → *Register serials* (each work order has its own):
