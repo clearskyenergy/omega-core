@@ -45,6 +45,31 @@
   };
   var ACCOUNT = { readonly: 1, billing: 1, pastdue: 1, approval: 1, trial: 1 };
 
+  /* The v2 page links a twin that has landed. Until the file exists,
+     OmegaExperience.href returns the classic path, so a door never 404s. */
+  function experienceApi() {
+    if (typeof window !== 'undefined' && window.OmegaExperience) return window.OmegaExperience;
+    if (typeof global !== 'undefined' && global.OmegaExperience) return global.OmegaExperience;
+    return null;
+  }
+  function upgradeHref(href) {
+    var E = experienceApi();
+    if (!href || !E || !E.upgrade) return href;
+    return E.upgrade(href, 'v2');
+  }
+  function classicHome() {
+    var E = experienceApi();
+    var path = '/workspace-v2', search = '';
+    try {
+      if (typeof location !== 'undefined' && location && location.pathname) {
+        path = location.pathname;
+        search = location.search || '';
+      }
+    } catch (e) {}
+    if (E && E.classicHref) return E.classicHref(path, search, '');
+    return '/workspace?ui=classic';
+  }
+
   function norm(s) {
     return String(s || '').toLowerCase().replace(/[’']/g, '').replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
@@ -76,7 +101,7 @@
   function base(r) {
     return {
       key: r.key, cls: r.cls || '', title: String(r.t || '').replace(/\s+/g, ' ').trim(),
-      detail: tidy(r.s), cta: r.cta || 'Open', href: r.href || null, act: r.act || null, count: 1
+      detail: tidy(r.s), cta: r.cta || 'Open', href: upgradeHref(r.href) || null, act: r.act || null, count: 1
     };
   }
   function queueRow(r) {
@@ -106,7 +131,7 @@
     first.detail = rows.length + ' records, in review for ' + rev.wait + '. Follow up once.';
     first.cta = 'Follow up';
     first.count = rows.length;
-    first.href = rows[0].href || null;
+    first.href = upgradeHref(rows[0].href) || null;
     first.act = null;
     return first;
   }
@@ -181,6 +206,7 @@
       var copy = {};
       Object.keys(c).forEach(function (p) { copy[p] = c[p]; });
       copy.copies = 1;
+      if (copy.href) copy.href = upgradeHref(copy.href);
       if (copy.why && String(copy.why).length > 140) copy.why = String(copy.why).slice(0, 137) + '…';
       seen[k] = copy;
       out.push(copy);
@@ -229,12 +255,13 @@
     var attached = projects.some(function (p) { return !!customerOf(p); });
     var designed = projects.some(function (p) { return Number(p.capex) > 0 || p.capexSource === 'site-map' || p.capexAt; });
     var projectHref = focus && ctx.projectHref ? ctx.projectHref(focus.id) : (focus ? '/editor.html?id=' + encodeURIComponent(focus.id) : null);
+    projectHref = upgradeHref(projectHref);
     var grid = openTool(ctx, 'gridatlas');
     if (grid && focus && (focus.address || focus.name) && !/[?&]q=/.test(grid)) {
       grid += (grid.indexOf('?') >= 0 ? '&' : '?') + 'q=' + encodeURIComponent(String(focus.address || focus.name).slice(0, 180));
     }
     var sales = openTool(ctx, 'sales');
-    var prime = openTool(ctx, 'omegaprime');
+    var prime = upgradeHref(openTool(ctx, 'omegaprime'));
     var proposeHref = sales || FILES.quotes;
     var steps = [
       { key: 'arrive', n: '1', label: 'Arrive', blurb: 'Sign in', title: ctx.pendingApproval ? 'Your workspace is being set up' : 'You are in',
@@ -244,7 +271,7 @@
       { key: 'customer', n: '2', label: 'Customer', blurb: 'Who it is for', title: 'Find the customer',
         detail: office ? 'Open the customer account. A project should attach to it. Portfolio holds the sites.' : 'Find a site, then keep the record in Portfolio. Attaching every project to a customer profile is the next release.',
         href: customersHref(ctx), cta: office ? 'Customers' : 'Find a site',
-        links: [{ href: FILES.portfolio, label: 'Portfolio' }],
+        links: [{ href: upgradeHref(FILES.portfolio), label: 'Portfolio' }],
         done: attached },
       { key: 'project', n: '3', label: 'Project', blurb: 'Open a site', title: projects.length ? 'Open a project' : 'Create the first project',
         detail: projects.length ? projects.length + ' open. Start another, or open the list.' : 'Name the site. It opens in Site Map.',
@@ -273,7 +300,7 @@
       { key: 'track', n: '8', label: 'Track', blurb: 'Follow through', title: 'Follow the work',
         detail: 'Projects, Portfolio and the finance marketplace. Each site is listed once below.',
         href: '#track', cta: 'In motion',
-        links: [{ href: FILES.projects, label: 'Projects' }, { href: FILES.portfolio, label: 'Portfolio' }, { href: FILES.finance, label: 'Finance' }],
+        links: [{ href: FILES.projects, label: 'Projects' }, { href: upgradeHref(FILES.portfolio), label: 'Portfolio' }, { href: upgradeHref(FILES.finance), label: 'Finance' }],
         done: false }
     ];
     var nowAt = 0;
@@ -307,7 +334,7 @@
       { key: 'home', label: 'Home', icon: 'home', href: '/workspace-v2', sn: 'dashboard' },
       { key: 'customers', label: 'Customers', icon: 'me', href: door, sn: 'customers', title: ctx.logicOffice ? 'Customer accounts' : 'Find a site. The site book is Portfolio.' },
       { key: 'projects', label: 'Projects', icon: 'projects', href: FILES.projects, sn: 'projects' },
-      { key: 'portfolio', label: 'Portfolio', icon: 'portfolio', href: FILES.portfolio, sn: 'portfolio' },
+      { key: 'portfolio', label: 'Portfolio', icon: 'portfolio', href: upgradeHref(FILES.portfolio), sn: 'portfolio' },
       { section: 'Library' },
       { key: 'tools', label: 'Tools', icon: 'tools', href: FILES.tools, sn: 'apps' },
       { key: 'modules', label: 'Modules', icon: 'modules', href: FILES.modules, sn: 'modules' },
@@ -319,7 +346,8 @@
     ].concat(hiddenNav()).concat([
       { section: 'Account' },
       { key: 'billing', label: 'Plan & billing', icon: 'billing', href: FILES.billing, sn: 'billing' },
-      { key: 'settings', label: 'Settings', icon: 'settings', href: '/workspace-v2#settings', sn: 'settings' }
+      { key: 'settings', label: 'Settings', icon: 'settings', href: '/workspace-v2#settings', sn: 'settings' },
+      { key: 'classic', label: 'Switch to classic', icon: 'home', href: classicHome(), sn: 'classic', title: 'Use the current pages on this browser' }
     ]);
   }
   function tabs(ctx) {
@@ -328,7 +356,7 @@
       ['home', 'Home', 'home', '/workspace-v2'],
       ['customers', 'Customers', 'me', customersHref(ctx)],
       ['projects', 'Projects', 'projects', FILES.projects],
-      ['portfolio', 'Portfolio', 'portfolio', FILES.portfolio],
+      ['portfolio', 'Portfolio', 'portfolio', upgradeHref(FILES.portfolio)],
       ['me', 'Account', 'billing', FILES.billing]
     ];
   }

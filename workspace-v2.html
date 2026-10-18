@@ -4,7 +4,7 @@
   ClearSky-OMEGA · Omega Workspace — journey home (preview)
   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-  /workspace-v2  and  /workspace?ui=v2
+  /workspace-v2  — the release switch is omega-experience.js (docs/V2-LAUNCH.md)
 
   The live home is workspace.html and is not this page. Same sign-in, same
   records, same doors. The difference is the presentation: one path from
@@ -19,6 +19,7 @@
 <head>
 <meta charset="UTF-8">
 <script src="/omega-splash.js?v=1" data-boot="no"></script>
+<script src="/omega-experience.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="author" content="ClearSky Energy Solutions LLC">
 <meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
@@ -195,7 +196,12 @@ function can(key) { var t = T.byKey(key); return !!t && !(WS && WS.pendingApprov
 function holds(part) { return !!WS && HUB.holdsLogic({ modules: WS.modules, addons: WS.addons, addOns: WS.addOns }, part); }
 function projectHref(id) {
   var slug = WS && WS.allowedDomain ? String(WS.allowedDomain).split('.')[0] : '';
-  return '/editor.html?id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
+  var base = (window.OmegaExperience && OmegaExperience.href('editor', 'v2')) || '/editor.html';
+  return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
+}
+function classicHomeHref() {
+  if (window.OmegaExperience) return OmegaExperience.classicHref(location.pathname, location.search, '');
+  return '/workspace?ui=classic';
 }
 function hrefs() {
   var o = {};
@@ -376,7 +382,7 @@ function settingsDrawer() {
     rows: [
       { key: 'billing', name: 'Plan & billing', sub: planName(), href: '/workspace#billing', cta: 'Open' },
       { key: 'team', name: 'Team', sub: 'Who is in this workspace', href: '/workspace#team', cta: 'Open' },
-      { key: 'classic', name: 'Classic home', sub: 'Open the previous workspace layout', href: '/workspace?ui=v1', cta: 'Open' },
+      { key: 'classic', name: 'Switch to classic', sub: 'The current home, on this browser', href: classicHomeHref(), cta: 'Open' },
       { key: 'signout', name: 'Sign out', sub: ME, cta: 'Sign out', onClick: S.signOut }
     ]
   });

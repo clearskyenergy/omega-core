@@ -564,9 +564,11 @@ to the page, the shell or the runtime they load.
 
 ## Journey home (preview)
 
-`/workspace-v2` (and `/workspace?ui=v2`, which only redirects) is a second
-home. The live page is `workspace.html` and still draws the hex hub.
-`omega-workspace-v2.js` is the presentation: it does not re-rank Today.
+`/workspace-v2` is a second home. The live page is `workspace.html` and
+still draws the hex hub. Who is sent there is the release switch in
+`docs/V2-LAUNCH.md` (`omega-experience.js`): classic unless an org, a
+person or `?ui=v2` says otherwise. `omega-workspace-v2.js` is the
+presentation: it does not re-rank Today.
 
 The eight steps are the job, each a door that already exists. Arrive
 (Plan & billing), Customer (the Omega Logic customer accounts when that
@@ -592,9 +594,10 @@ pins the words.
 
 ## Not built (honest list)
 
-- **Making the journey home the live home.** `/workspace` stays the hex
-  hub until that is chosen. Projects, Portfolio and the marketplace still
-  wear the current rail.
+- **Making the journey home the default.** The switch defaults to
+  classic (`docs/V2-LAUNCH.md`). `/workspace` stays the hex hub until
+  an org is set to `v2`, and later until the fallback itself changes.
+  Projects, Portfolio and the marketplace still wear the current rail.
 - **A customer on every project.** The preview treats `customerId`,
   `customerName`, `accountId` or `customer.id` as attached, and does not
   create the profile. Portfolio remains the site book.
@@ -644,4 +647,9 @@ pins the words.
 
 ### Production rollout — 2026-10-17
 
-The default `/workspace` home now opens `/workspace-v2`, preserving query context. Existing tools, modules, billing and other section hashes stay on their established page. `?ui=v1` explicitly opens the classic home. The journey groups repeated review titles and in-flight names without modifying records. No Firestore or billing changes are part of this rollout.
+The journey home shipped as a hardcoded redirect, then moved under the
+release switch (`docs/V2-LAUNCH.md`). `/workspace` is the classic home
+until an org, a person or `?ui=v2` says otherwise. `?ui=v1` and
+`?ui=classic` stay on the classic home. Tools, modules, billing and the
+other section hashes stay on the classic workspace. The journey groups
+repeated review titles and in-flight names without modifying records.
