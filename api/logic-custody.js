@@ -3,7 +3,8 @@
    GET  /api/logic-custody?org=            sites, counts by status, exceptions,
                                             coverage templates
         &serial=<serial>                    the unit passport: custody, coverage,
-                                            every custody event and plant scan
+                                            every custody event and plant scan;
+                                            boughtIn when its order buys it in
         &site=<siteId>                      one site and the units bound to it
         &view=exceptions                    the gaps that lose warranty claims
         &view=register                      one flat row per unit: parties,
@@ -26,6 +27,11 @@
         state         damaged · lost · quarantined · scrapped · clear
         replace       an RMA'd unit is replaced; coverage transfers its
                       remaining term to the new serial
+        maker-warranty  a BOUGHT-IN unit's maker's warranty (C.makerWarranty):
+                      the maker's terms and its document or confirmation, on
+                      this unit or (scope 'order') every unit of its SKU on
+                      its order; clear: true with a reason takes it off.
+                      An owner or administrator only.
         receive-load  the customer's load arrived: expected (the leg) vs
                       scanned, shorts and overages named
         import        a spreadsheet of site assignments, mapped, dry run
@@ -45,7 +51,9 @@
 
    Any active member of the workspace may record custody (the builders
    receive, the commissioning engineer commissions); coverage templates are
-   catalog fields and change through the catalog endpoint. */
+   catalog fields and change through the catalog endpoint. A unit bought in
+   from its maker is in no catalog: its maker's warranty is recorded here,
+   by the people who may change the catalog's (an owner or administrator). */
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy'), C = require('./_lib/custody'), Plant = require('./_lib/plant'), B = require('./_lib/buyer-accounts');
 var SG = require('./_lib/site-geo');
@@ -119,7 +127,13 @@ module.exports = A.handler(async function (req, res) {
       var scans = await db.collection('plant_scans').where('orgId', '==', org).where('serial', '==', serial).orderBy('createdAt', 'desc').limit(50).get();
       var site = C.custodyOf(u).siteId ? await root(db, org).collection('sites').doc(C.custodyOf(u).siteId).get() : null;
       var replaced = C.custodyOf(u).replacedBy ? await unitRef(db, org, C.custodyOf(u).replacedBy).get() : null, replaces = C.custodyOf(u).replaces ? await unitRef(db, org, C.custodyOf(u).replaces).get() : null;
+      /* bought in from its maker (its order says so, or the order of the
+         unit it replaced: C.boughtInUnit): the passport offers the maker's
+         warranty, which an owner or administrator records */
+      var uord = u.orderId ? await db.collection('orders').doc(P.id(u.orderId)).get() : null, uo = uord && uord.exists && uord.data().orgId === org ? uord.data() : null, bin = C.boughtIn(uo, u.sku);
+      if (!bin && replaces && replaces.exists && replaces.data().orderId) { var rord = await db.collection('orders').doc(P.id(replaces.data().orderId)).get(); if (rord.exists && rord.data().orgId === org && (bin = C.boughtInUnit(u, uo, rord.data()))) { uord = rord; uo = rord.data(); } }
       return { brand: brand, unit: view(u, byP, now), product: byP[u.sku] ? { sku: u.sku, name: byP[u.sku].name, coverage: C.templatesOf(byP[u.sku]) } : null,
+        boughtIn: bin ? Object.assign({ orderId: uord.id, orderNo: uo.orderNo || u.orderNo || null }, bin) : null, canRecordWarranty: X.owner(caller) || X.officeAdmin(ctx.member),
         site: site && site.exists ? Object.assign({ id: site.id }, site.data()) : null,
         events: ev.docs.map(function (d) { return d.data(); }), scans: scans.docs.map(function (d) { var x = d.data(); return { at: x.createdAt || x.at, station: x.station, ok: x.ok, kind: x.kind || 'scan', say: x.verdict && x.verdict.say || '' }; }),
         replacedBy: replaced && replaced.exists ? view(replaced.data(), byP, now) : null, replaces: replaces && replaces.exists ? view(replaces.data(), byP, now) : null, moves: C.MOVES, states: C.STATES };
@@ -271,6 +285,44 @@ module.exports = A.handler(async function (req, res) {
       return { ok: true, action: 'detail', serial: tserial, changed: tr.event.fields, custody: C.custodyOf(tafter) };
     });
   }
+  /* ── the maker's warranty on a bought-in unit (C.makerWarranty) ────────
+     What the maker warrants, with its document or confirmation, recorded
+     by an owner or administrator on the unit asked about — and, scope
+     'order', on every unit of its SKU on its order, in one transaction (a
+     unit registered later is recorded by pressing again: the ones already
+     carrying the same terms are left as they are). Every unit written gets
+     an event; one audit row says what it was and what it is now. */
+  if (action === 'maker-warranty') {
+    if (!X.owner(caller) && !X.officeAdmin(ctx.member)) throw A.httpError(403, 'The workspace owner or an administrator records a maker’s warranty');
+    var wserial = C.serial(b.serial), wref = unitRef(db, org, wserial), every = b.scope === 'order';
+    return db.runTransaction(async function (tx) {
+      var ws = await tx.get(wref); if (!ws.exists || ws.data().orgId !== org) throw A.httpError(404, 'Serial is not registered');
+      var wu = ws.data(), wo = null, ro = null;
+      if (wu.orderId) { var wos = await tx.get(db.collection('orders').doc(P.id(wu.orderId))); wo = wos.exists && wos.data().orgId === org ? wos.data() : null; }
+      /* a replacement off another order is bought in through the unit it replaced */
+      var wrep = !C.boughtIn(wo, wu.sku) && C.custodyOf(wu).replaces ? await tx.get(unitRef(db, org, C.serial(C.custodyOf(wu).replaces))) : null, wr = wrep && wrep.exists && wrep.data().orgId === org ? wrep.data() : null;
+      if (wr && wr.orderId) { var ros = await tx.get(db.collection('orders').doc(P.id(wr.orderId))); ro = ros.exists && ros.data().orgId === org ? ros.data() : null; }
+      var wbi = C.boughtInUnit(wu, wo, ro), first = C.makerWarranty(wu, b, by, now, wbi), targets = [{ ref: wref, unit: wu, r: first }], skipped = [];
+      /* every unit of its SKU on ITS order: a replacement off another order is only itself */
+      if (every && wbi && C.boughtIn(wo, wu.sku)) {
+        var all = await tx.get(db.collection('plant_units').where('orgId', '==', org).where('orderId', '==', wu.orderId).limit(MAX_UNITS));
+        var same = all.docs.filter(function (d) { var x = d.data(); return d.id !== wref.id && x.shipUnit && x.sku === wu.sku && x.inventoryStatus !== 'void'; });
+        if (same.length + 1 > C.MAX_PLAN_UNITS) throw A.httpError(409, 'More than ' + C.MAX_PLAN_UNITS + ' units of ' + wu.sku + ' are on this order: record the maker’s warranty a unit at a time');
+        same.forEach(function (d) { var x = d.data(); try { targets.push({ ref: d.ref, unit: x, r: C.makerWarranty(x, b, by, now, wbi) }); } catch (e) { skipped.push({ serial: x.serial, why: e.message }); } });
+      }
+      var applied = [], unchanged = [], was = [], now2 = null;
+      targets.forEach(function (t) {
+        if (t.r.duplicate) { unchanged.push(t.unit.serial); return; }
+        tx.update(t.ref, t.r.patch); tx.create(eventDoc(t.ref), Object.assign({ orgId: org, serial: t.unit.serial }, t.r.event));
+        applied.push(t.unit.serial); was.push({ serial: t.unit.serial, before: t.r.before || null }); now2 = t.r.after || null;
+      });
+      var off = b.clear === true;
+      /* what each unit written had, and the record it has now (the same terms on every one) */
+      if (applied.length) audit(tx, off ? 'maker-warranty-removed' : 'maker-warranty', { serial: wserial, units: was, after: now2, orderId: wu.orderId || null, sku: wu.sku || null, reason: off ? String(b.reason || '').slice(0, 500) : null });
+      return { ok: true, action: 'maker-warranty', serial: wserial, applied: applied, unchanged: unchanged, skipped: skipped, say: C.makerSay(applied, unchanged, skipped, off),
+        makerWarranty: first.duplicate ? (C.custodyOf(wu).makerWarranty || null) : (first.patch['custody.makerWarranty'] || null) };
+    });
+  }
   if (action === 'confirm' || action === 'destination') {
     var cserial = C.serial(b.serial), cref = unitRef(db, org, cserial);
     return db.runTransaction(async function (tx) {
@@ -310,6 +362,9 @@ module.exports = A.handler(async function (req, res) {
         var ap = C.apply(u, 'replace', body, by, now, method); tx.update(ref, ap.patch); tx.create(eventDoc(ref), Object.assign({ orgId: org, serial: serial }, ap.event));
         var rpatch = { 'custody.status': c0.status === 'rma_open' && c0.siteId ? 'assigned' : 'received', 'custody.custodian': c0.siteId ? 'site' : 'customer', 'custody.siteId': c0.siteId || null, 'custody.siteName': c0.siteName || null, 'custody.position': c0.position || '', 'custody.endCustomer': c0.endCustomer || null, 'custody.customerId': c0.customerId || u.customerId || null,
           'custody.replaces': serial, 'custody.receivedAt': rc.receivedAt || String(now).slice(0, 10), 'custody.assignedAt': c0.siteId ? String(now).slice(0, 10) : null, 'custody.inheritedCoverage': prod && prod.coverage && prod.coverage.some(function (t) { return t.restartOnReplace; }) ? [] : C.inherited(oldCov), 'custody.updatedAt': now, 'custody.updatedBy': by };
+        /* a bought-in unit's maker's warranty goes with it, so the inherited
+           remaining term has its template on the replacement */
+        if (c0.makerWarranty && !rc.makerWarranty) rpatch['custody.makerWarranty'] = c0.makerWarranty;
         tx.update(rref, rpatch); tx.create(eventDoc(rref), { orgId: org, serial: rep, type: 'replacement-of', from: rc.status, to: rpatch['custody.status'], replaces: serial, siteId: c0.siteId || null, by: by, at: now, method: method, note: C.serial(serial) + ' → ' + rep });
         audit(tx, 'replace', { serial: serial, replacementSerial: rep, siteId: c0.siteId || null });
         return { ok: true, serial: serial, replacementSerial: rep, siteId: c0.siteId || null, inherited: rpatch['custody.inheritedCoverage'] };

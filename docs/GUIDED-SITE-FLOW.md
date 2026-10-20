@@ -65,8 +65,8 @@ The sandbox's Site Finder step, which is how every utility should read:
 3. **Net shading is the default** for a screen against a unit. The
    headline oversells; a rep should never see the oversold number first.
 4. **Filter to the unit.** "Min. hosting" is pre-set from the chosen
-   product's kW (2,508 kW for the FENECON Industrial XXL), so only
-   circuits that can take it stay lit.
+   product's kW (1,000 kW for Clean Cell's LG JP-2, Prime's hero unit),
+   so only circuits that can take it stay lit.
 5. **Provenance on the card.** Source layer, queue source, and the
    request log one click away (today: Settings → diagnostics, `#setDiag`).
 6. **One button onward:** "Send to Site Map", carrying the site, the
@@ -88,10 +88,12 @@ should be a **panel in Site Map**, not a separate page the rep leaves for.
   `grid.circuit {utility, id, publishedKw, queuedKw, netKw, at, source}`,
   `grid.verdict`. The Run, the RFQ and the Helios intake read these
   instead of asking again.
-- **One layer registry.** Grid Atlas's `LAYERS` and the ComEd layers
-  (`omega-comed-layers.js`) are loaded by the panel as they are by the
-  pages; never a second copy pasted into `editor.html`
+- **One registry, server-side.** The panel asks the national door Omega
+  Prime asks (`POST /api/hosting-capacity` on `api/_lib/hosting-sources.js`
+  and `api/_lib/utility-territory.js`), so no utility's map, URL or field
+  is in the browser and nothing is pasted into `editor.html`
   (`docs/EDITOR-IP-AUDIT-2026-10-12.md` already counts what lives there).
+  Grid Atlas's `LAYERS` stay the pages' own.
 - **The verdict is server-side.** "Fits / smaller / study" is
   eligibility logic and belongs in `/api/` per the IP rule; the browser
   sends the circuit figures and the unit, and renders the answer.
@@ -123,16 +125,17 @@ should be a **panel in Site Map**, not a separate page the rep leaves for.
 ## Gaps between today and the target
 
 Updated 2026-10-16, when the Grid panel landed (Analyze › **Grid Check**,
-`omega-grid-panel.js`, beside Grid Atlas; `scripts/tests/tgridverdict.js`).
+`omega-grid-panel.js`, beside Grid Atlas; `scripts/tests/tgridverdict.js`),
+and 2026-10-17, when it moved onto the national door (gap 6).
 
 1. **Closed for one site.** The substation card, the circuit at the parcel
    and the verdict are a Site Map panel: it reads the project's site point
    and the battery from the BESS Guided Build (`S.bessList`, else the model
    picked in `#bm-catalog`), takes the nearest substation from the Grid
    Atlas service the Analyze pre-screen already calls (`/api/grid-atlas`,
-   the same mirrors as `LAYERS.substations`), and the circuit from
-   `OmegaComEdLayers.probePoint` (the one ComEd module, loaded by the
-   editor, nothing pasted). Still open: the panel draws nothing on the map —
+   the same mirrors as `LAYERS.substations`), and the serving utility and
+   the circuit from the national door (gap 6), nothing pasted. Still open:
+   the panel draws nothing on the map —
    Site Map's basemap is Google, and Grid Atlas's `LAYERS` and the ComEd
    hosting polygons draw on Leaflet, so drawing them "under the drawing"
    needs either a Google-Maps renderer for the same registry or `LAYERS`
@@ -151,15 +154,27 @@ Updated 2026-10-16, when the Grid panel landed (Analyze › **Grid Check**,
    Finder's "Min. hosting" filter is still typed.
 5. **Closed on the record.** `grid.substation {name, kv, miles, km, chip,
    state}`, `grid.circuit {utility, id, substation, publishedKw, queuedKw,
-   netKw, headroomKw, addressResolved, grain, at, source}` and
+   netKw, headroomKw, addressResolved, grain, at, source, basis,
+   queueNetted, band, utilityKey, eiaId, coverage, ledgerId}` (a null
+   `queuedKw` is a queue not published, never 0; `GV.fromHosting`) and
    `grid.verdict {key, label, say, unitKw, unitName, version, at}` ride
    `saveProject()`'s allowlist (with `savedBy`), are restored on load, and
    a re-measure of the same point keeps them. Still open: the Run, the RFQ
    and the Helios intake do not yet READ `grid.circuit` / `grid.verdict`.
-6. Hosting capacity is still ComEd only. The panel asks
-   `OmegaComEdLayers.territoryAt` and says plainly when no utility map is
-   read for the location; a second utility means a second module with the
-   same `probePoint` answer.
+6. **Closed in Omega Prime and in the panel** (2026-10-17). Hosting
+   capacity is national: `POST /api/hosting-capacity` names the serving
+   utility at the point (state layers, the EIA-861 national layer, Census
+   places), reads its published map where one exists (15 sources across
+   IL, NJ, CA, CT, MA and RI), says plainly where none is published (all of
+   Florida and Arizona, Georgia Power behind an account), links the
+   utility's own map or interconnection page to check it, and judges with
+   the same verdict engine. Omega Prime, the Site Map Grid panel and Site
+   Plan's Grid Atlas layer all ask it through `omega-grid-verdict.js` and
+   draw every case the same way:
+   the utility's name, every candidate when the territory is not confident,
+   where the power comes from, the provenance and the utility's own map,
+   with the queue words following the answer (subtracted, already netted,
+   or not published). The editor no longer loads the ComEd module.
 7. **New.** A "Send to Site Map" button on the standalone Site Finder's
    card (carrying the site, circuit and verdict onto a project) is not
    built; the editor panel answers for a project already open.
@@ -168,31 +183,85 @@ Updated 2026-10-16, when the Grid panel landed (Analyze › **Grid Check**,
 
 Tommy: "it does the set up and system like the artifact sandbox."
 `omega-prime.html` now runs Site → Grid Atlas → Circuit → **Load** →
-Site Map → Quote → Omega Logic and ends in a real project:
+Site Map → **Proposal** → **Track** and ends in a real project, a
+proposal the customer approves online, and the order in the workspace's
+own Omega Logic, followed to **Omega Teleios** (complete: on site, every
+warranty live):
 
-- **Unit:** the tenant's own product list first (`omega-bess-products.js`,
-  the ONE list), then the shipped FENECON Industrial XXL; specs only. A
-  product with no footprint on file is marked as a point and says so.
-- **Circuit verdict:** the server's (`/api/grid-verdict`), asked through
-  `omega-grid-verdict.js`, the client Site Map's Grid panel uses too. The
-  page's own thresholds are gone.
+- **Unit:** Clean Cell's units are Prime's battery list (2026-10-17,
+  Tommy): the workspace's own product list first (`omega-bess-products.js`,
+  the ONE list; a `PLACEHOLDER SPEC` row is dropped), then Clean Cell's
+  Rev H reference units biggest first, LG JP-2 (the hero), Smart Module,
+  CC290/125 (`omega-cleancell-catalog.js` `entries()`), then the CleanCell
+  R60, a 60 kW BESS + 2 DCFC skid. A white-labelled manufacturer's own
+  workspace sees only its own units (Clean Cell's counts the Rev H units
+  and the R60), and falls back to the reference list when it has none, so
+  nobody gets an empty list. FENECON's Industrial XXL is offered only to
+  FENECON's own workspace, first, as its own product. Specs only, never a
+  price. A unit whose maker has not released its footprint is drawn at its
+  REFERENCE size (`footprint: 'reference'`, 2026-10-20): the CC290/125's
+  reference cabinet (4.36 × 3.94 ft), and a 20 × 8 ft container for the LG
+  JP-2 and the Smart Module, whose brochure names one. Prime, the proposal
+  and Site Map all say to confirm it on the submittal; the rep's typed
+  submittal L × W (`'rep'`) replaces it. A unit with no figure at all is
+  `'none'`, a marked point.
+- **Circuit verdict:** the server's (`/api/hosting-capacity`, judged by
+  the `/api/grid-verdict` engine), asked through `omega-grid-verdict.js`,
+  the client Site Map's Grid panel uses too. The page's own thresholds are
+  gone.
 - **Load:** the utility's planning rates for the address's ZIP
   (`/api/utility-rates`) and the twelve monthly peaks off the bill, typed
   or pasted; skippable, never filled in.
 - **The project:** moving into design CREATES `projects/{id}`
   (`omega-prime-project.js projectDoc`: the tenant's `orgId` as the rules
-  home the caller, `type: 'bess'`, the unit as the editor's battery entry
-  by catalog key, `mapState` on the site point, `grid.*`, `load`); the
+  home the caller, the project type — `bess`, `ev`, `solar`, `compute` or
+  `microgrid` (main #348) — on `type` and `prime.type`, a battery as the
+  editor's battery entry by catalog key, `mapState` on the site point,
+  `grid.*`, `load`); the
   sketch, the service, the conduit and the Run update it as `prime.layout`
-  and `prime.run`. No drawing key is written: placing is the BESS Guided
-  Build's job.
-- **Open in Site Map** is `/editor.html?id=<project>&from=prime`;
-  `omega-prime-handoff.js` fills the unit in from the editor's own catalog
-  entry and opens the Guided Build once.
+  and `prime.run`. No drawing key is written by Prime.
+- **Open in Site Map** builds exactly what Prime drew in the editor (the
+  BESS area, the unit at its true footprint, its transformer and
+  disconnect, the service point and the trenched conduit) with the
+  editor's own functions, once, into an empty drawing, and saves it as the
+  editor's own save. The Guided Build opens only when Prime placed no unit.
+- **Proposal:** the customer's details, a margin on the Run's cost (or a
+  total), terms; previewed, printed (with the site plan on satellite
+  imagery) and sent by email or link from the seller's own letterhead
+  (`api/customer-quote.js`, `omega-quote-deck.js`, the public `quote.html`).
+  The Quote Desk's Customer quotes tab tracks every one. On the rep's side
+  of the step (never on the deck), main's **Send to the OEM** opens the
+  maker's purchase order through `POST /api/rfq`, as Site Map's BOM does:
+  this address, the unit by its maker's SKU, the Run's lines and its
+  estimate, no customer.
+- **Track:** the ladder from saved to Omega Teleios
+  (`api/_lib/teleios.js`), with the Quote Desk, the workspace's own Omega
+  Logic (the order) and the custody record one press away. A battery the
+  workspace buys in from its maker reaches Omega Teleios once the office
+  records the maker's warranty on its unit passport; until then Track says
+  so and its Omega Teleios card opens that passport
+  (`docs/LOGISTICS-CUSTODY.md`, *The maker's warranty on a bought-in unit*).
+
+**The record, v2 (2026-10-17).** `omega-prime-project.js` is the pure
+half every reader shares: `units()` (above), `arrange()` (the unit long
+axis east–west, its transformer then its disconnect in a row east of it,
+5 ft clear between bodies; a transformer or disconnect the unit integrates
+is not drawn, so the R60 has no transformer and the LG JP-2 has both),
+`conduitPath()` (L-shaped from the disconnect, else the transformer, else
+the unit, to the POI) and `pathFt()` (editor.html `_groundPolyFt`'s own
+formula). `layout()` is `prime.layout` v2: area, unit, transformer,
+disconnect, POI and conduit as lat/lng with an FNV-1a hash of the
+geometry; `upgrade()` replays a v1 sketch through `arrange()`.
+`projectDoc()` writes prime v2 at creation (step, site, unit snapshot),
+`patch()` the dotted update after it (`prime.*`, `grid.<part>`, `load`;
+`updatedAt` and the battery entry only until Site Map has saved),
+`restore()` turns a saved record into the state `/omega-prime?id=`
+resumes from, and `runInput()` is what `/api/price-site` is sent, for the
+page and the server's quote alike. None of it is a drawing key.
 
 Held by `scripts/tests/tomegaprime.js` and `scripts/render-omega-prime.js`
-(in `check:pages`: site to quote on the Firebase double, the real verdict
-engine and rate book).
+(in `check:pages`: site to proposal to Track on the Firebase double and the
+real doors, resumed, on a phone, and at Mesa AZ).
 
 **On a phone** (2026-10-17): Omega Prime is an installable web app. The
 download link is `/omega-prime/install` (iPhone: Safari → Share → Add to
@@ -204,11 +273,29 @@ still parsing. The installed icon opens `/omega-prime`. The worker caches
 the shell only and does not cache `/api/` or Firebase auth. Phone layout
 is `omega-prime-mobile.css`.
 
-Still open for Prime: EV, Solar and Compute are "next"; the bill's peaks
+**Every project type** (main #348): EV charging, Solar, Compute and
+Microgrid list the editor's own catalogs (`omega-site-catalogs.js`, held
+to `editor.html` by `tomegaprime.js`) through `PP.forType`; a microgrid is
+the battery list with the solar and generator rows. A unit that is not a
+battery (`PP.screenable`) is carried through as **quote required, sized in
+Site Map**: the Circuit step names the serving utility and judges nothing,
+the Site Map step draws it alone (no battery gear) and has no Run, the
+Proposal step prices nothing (`/api/customer-quote` refuses it the same
+way), and Site Map's hand-off builds none of it (`not-battery`). Push to
+Prime carries the loaded address, its point (used when that address does
+not geocode), the project type and the project's org; Omega Logic opens on
+the project's org, else the link's, else the person's own
+(`/omega-logic?org=`), never the bare directory.
+
+Still open for Prime: a charger, array or compute unit is quoted from Site
+Map, not from a Prime proposal; the bill's peaks
 are typed, not read from the bill file (Site Map's bill import is the
-reader); Prime's Run is `/api/price-site`, so the project's capex rollup
-waits for Site Map's own Run; the editor does not yet draw Prime's BESS
-area as a guide for the Guided Build.
+reader); Prime's Run is `/api/price-site` and Site Map's Run is
+`editor-cost`, two engines, so the project's capex rollup waits for Site
+Map's own Run and the proposal is priced from Prime's layout; the value
+stack is ComEd/PJM only, so elsewhere it reads "not modelled for <utility>
+yet"; no server PDF is attached to the email (the link opens the proposal,
+which prints).
 
 ## Demo
 
