@@ -190,6 +190,11 @@
     for (var s = 0; s < stages.length; s++) stages[s].addEventListener('click', function () { setSection(this.getAttribute('data-stage')); });
     $('next-action').addEventListener('click', function () { nextStep().run(); });
     $('site-yes').addEventListener('click', siteYes);
+    /* the site address, the first thing on the Site tab: Enter or the button
+       (kept from taking the field's focus, so its first click lands) */
+    $('site-address-go').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); locate(this.value); } });
+    $('site-address-find').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    $('site-address-find').addEventListener('click', function () { locate($('site-address-go').value); });
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
     $('build-cancel').addEventListener('click', function () {
@@ -688,7 +693,10 @@
     tool = 'select';
     fit(false);
     refresh();
-    setStatus('New project. Nothing is saved until you press Save.');
+    /* a new project starts where a site starts: its address */
+    setSection('site');
+    if ($('site-address-go')) $('site-address-go').focus();
+    setStatus('New project. Type the site address, then Find on the map. Nothing is saved until you press Save.');
   }
 
   /* ── pointer ───────────────────────────────────────────────────────── */
@@ -1311,6 +1319,8 @@
   /* ── panels ────────────────────────────────────────────────────────── */
   function refresh() {
     followParcelAnchor();
+    var siteAddr = $('site-address-go');
+    if (siteAddr && document.activeElement !== siteAddr) siteAddr.value = /^sample parcel$/i.test(state.doc.address || '') ? '' : (state.doc.address || '');
     refreshTakeoff();
     refreshCustomer();
     refreshLayers();

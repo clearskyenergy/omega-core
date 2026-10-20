@@ -134,6 +134,15 @@ var server = http.createServer(function(req,res) {
     await page.press('#site-address','Enter');
     await page.waitForFunction(function(){return document.getElementById('site-address').value==='33.30600, -112.07400'&&/Anchor set/.test(document.getElementById('status').textContent);},null,{timeout:5000});
     assert.strictEqual(await page.evaluate(function(){return document.title;}),'Omega Maximus','the page is Omega Maximus');
+    /* the address is the first thing on the Site tab, Enter or one click */
+    await page.click('#stages [data-stage="site"]');
+    await page.fill('#site-address-go','33.41541, -111.83264');
+    await page.click('#site-address-find');
+    await page.waitForFunction(function(){return /Anchor set/.test(document.getElementById('status').textContent)&&document.getElementById('site-address').value==='33.41541, -111.83264';},null,{timeout:5000});
+    await page.fill('#site-address-go','33.30600, -112.07400');
+    await page.press('#site-address-go','Enter');
+    await page.waitForFunction(function(){return document.getElementById('site-address').value==='33.30600, -112.07400';},null,{timeout:5000});
+    await page.click('#stages [data-stage="design"]');
     /* Parcel lines: the layer comes on over the photo, the parcel under the
        site point is looked up once, and Use as site boundary makes it the
        drawing's lot line. */

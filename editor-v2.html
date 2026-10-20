@@ -450,6 +450,14 @@
       </div>
       <div id="side-site" hidden>
         <h2>Site</h2>
+        <div class="quiet-block" id="site-address-block">
+          <h3>Site address</h3>
+          <p>Type the street address, or latitude, longitude. The map and the drawing move there.</p>
+          <label class="field">Address <input id="site-address-go" autocomplete="street-address" placeholder="Street, city, state ZIP — or latitude, longitude"></label>
+          <div class="row-actions">
+            <button type="button" class="btn primary" id="site-address-find">Find on the map</button>
+          </div>
+        </div>
         <div class="quiet-block">
           <h3>Does this site work?</h3>
           <p>Yes opens a guided build. No keeps the drawing and records why.</p>
