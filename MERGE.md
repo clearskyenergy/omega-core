@@ -1,5 +1,35 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Arizona, utility by utility, and the City of Mesa's own map (2026-10-20)
+
+Tommy's 29 W Main St, Mesa read "outside ComEd's territory" on production
+(the ComEd-only Circuit step #354 replaced). The national door named the
+City of Mesa beside SRP and APS and could never be sure. Now:
+
+- Arizona is checked utility by utility from primary sources
+  (`docs/HOSTING-ARIZONA.md`). No Arizona utility publishes distribution
+  hosting capacity, so nothing new is read as a figure. Each registry entry
+  says so plainly, names the `route` its utility offers instead (an ACC
+  Pre-Application Report under R14-2-2616, SRP's own Screen A, Mesa's
+  interconnection application) and links its own pages and, where it has
+  one, its own address lookup (`check`).
+- `utility-territory.js` `SERVICE_AREAS` asks a utility's OWN service-area
+  map where its terms allow a point lookup. Today that is the City of
+  Mesa's, from the city's GIS, asked with its polygon. 40 m or more inside
+  names the City of Mesa with confidence; on the edge it is a candidate;
+  outside, its stand-in is weak and SRP's caution names APS's islands
+  alone. SRP's and APS's own boundary layers are licensed to their own apps
+  and are never asked.
+- The door's candidates each carry what their utility publishes
+  (`HS.publication`). Prime's Circuit step lists them, "Who serves this
+  point", wherever no figure is read, and folds the polygons that are not
+  the point's utility away with the reason. Its panel now ends above the
+  floating guide, so Next is never under it.
+
+Site Map's Grid panel and Site Plan's layer draw the same door: downtown
+Mesa now reads the City of Mesa with confidence there too. Their tests keep
+a "city's map down" case for the many-utilities rendering.
+
 ## Site Map's Grid panel on the national door (2026-10-17)
 
 Tommy: "it should not just run comed information if its outside of comed it

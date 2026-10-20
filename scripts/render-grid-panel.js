@@ -11,9 +11,11 @@
  *           the ComEd sentence byte for byte, the other circuit counted,
  *           ComEd's own map to check, and the answer on S.grid in the record
  *           Omega Prime writes (GV.fromHosting)
- *   Mesa    29 W Main St, Mesa AZ: the City of Mesa beside Salt River
- *           Project and APS, "publishes no hosting capacity", the server's
- *           caution, Needs a study, no ComEd word and no map invented
+ *   Mesa    29 W Main St, Mesa AZ: the city's own electric service area map
+ *           (2026-10-20) puts the point inside it, so the City of Mesa is
+ *           named with confidence over Salt River Project and APS, "publishes
+ *           no hosting capacity" in the server's words, Needs a study, the
+ *           city's own page to check, no ComEd word and no map invented
  *   phone   390 px: the panel inside the screen, nothing scrolled sideways
  *   Site Plan  editor-v2.html's Grid Atlas layer on the same door: the
  *           sample parcel in Phoenix names Arizona Public Service, says
@@ -30,7 +32,7 @@ var FD = require('./_lib/firebase-double'), F = require('./_lib/firestore-double
    is a stand-in, as render-omega-prime.js has it: no firebase-admin needed */
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; },
   db: function () { return null; }, isDegraded: function () { return true; } });
-var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service');
+var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service'), HS = require('../api/_lib/hosting-sources');
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium;
 var ROOT = path.join(__dirname, '..'), HOST = '127.0.0.1', fails = 0, checks = 0;
 var SHOTS = process.env.SHOT_DIR || path.join(os.tmpdir(), 'omega-grid-panel');
@@ -62,10 +64,13 @@ function netFor(lng) {
       ? Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10], ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])
       : Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL', 4130749, 6.1e10]]));
     if (/tigerweb/.test(url)) return Promise.resolve({ features: [{ attributes: { NAME: (mesa ? 'Mesa' : 'Chicago') + ' city', BASENAME: mesa ? 'Mesa' : 'Chicago' } }] });
+    /* the City of Mesa's own electric service area: 1.5 km around downtown */
+    if (mesa && /GCX_ExploreMesa\/MapServer\/13\/query/.test(url)) return Promise.resolve({ features: [{ attributes: { FACILITYID: 'ELSA2' }, geometry: square(MESA.lat, MESA.lng, 1500) }] });
     if (url.indexOf(CS.SERVICE) === 0) return Promise.resolve(JSON.parse(JSON.stringify(COMED)));
     return Promise.resolve({ features: [] });
   };
 }
+function square(lat, lng, m) { var a = m / 111320, b = m / (111320 * Math.cos(lat * Math.PI / 180)); return { rings: [[[lng - b, lat - a], [lng + b, lat - a], [lng + b, lat + a], [lng - b, lat + a], [lng - b, lat - a]]] }; }
 /* the Grid Atlas service's measurement at the point (the pre-screen's) */
 function atlasFor(b) {
   var mesa = +b.lng < -100;
@@ -273,16 +278,15 @@ async function shot(p, name) {
     ok('Mesa: one more question to the door, at the new point, with the Mesa substation',
       calls.hosting.length === 2 && Math.abs(h2.body.lat - MESA.lat) < 1e-9 && h2.body.substation && h2.body.substation.name === 'Mesa Downtown', h2.body);
     var v2 = await p.evaluate(function () {
-      var el = document.getElementById('omega-grid-panel'), g = S.grid || {};
+      var el = document.getElementById('omega-grid-panel'), g = S.grid || {}, a = el.querySelector('a[data-gp="verify"]');
       return { text: el.textContent, html: el.innerHTML, items: [].map.call(el.querySelectorAll('li'), function (li) { return li.textContent; }),
-        verify: !!el.querySelector('a[data-gp="verify"]'), grid: JSON.parse(JSON.stringify({ circuit: g.circuit, verdict: g.verdict, lat: g.lat })) };
+        verify: a ? a.getAttribute('href') : null, grid: JSON.parse(JSON.stringify({ circuit: g.circuit, verdict: g.verdict, lat: g.lat })) };
     });
     ok('Mesa: the City of Mesa is the serving utility, and it publishes no hosting capacity', /Serving utility\s*City of Mesa\s*publishes no hosting capacity/.test(v2.text), v2.text.slice(0, 500));
-    ok('Mesa: every utility on the map named, the bill decides', /More than one utility is mapped at this point\./.test(v2.text) && v2.items[0] === 'City of Mesa — the one read here' &&
-      v2.items.indexOf('Salt River Project') >= 0 && v2.items.indexOf('Arizona Public Service') >= 0 && /Confirm the utility with the customer’s bill\./.test(v2.text), v2.items);
-    ok('Mesa: the server\'s caution, in its words', /encloses Arizona Public Service and City of Mesa islands/.test(v2.text));
+    ok('Mesa: the city\'s own service-area map settles it: no list, no SRP caution', !/More than one utility is mapped/.test(v2.text) && !/islands/.test(v2.text), v2.items);
+    ok('Mesa: in the server\'s words', /City of Mesa publishes no hosting capacity/.test(v2.text), v2.text.slice(0, 600));
     ok('Mesa: nothing judged as if it were published', /Needs a study/.test(v2.text) && v2.grid.circuit === null && v2.grid.verdict && v2.grid.verdict.key === 'study' && Math.abs(v2.grid.lat - MESA.lat) < 1e-9, v2.grid);
-    ok('Mesa: no ComEd word, no map invented', !/comed|feeder_q/i.test(v2.text) && !v2.verify, (v2.text.match(/.{0,50}comed.{0,50}/i) || [])[0]);
+    ok('Mesa: no ComEd word; the link is the city\'s own page, no map invented', !/comed|feeder_q/i.test(v2.text) && v2.verify === HS.byKey('mesa').viewerUrl, { verify: v2.verify, comed: (v2.text.match(/.{0,50}comed.{0,50}/i) || [])[0] });
     ok('Mesa: the substation is the Mesa measurement', /Mesa Downtown/.test(v2.text));
     shots.push(await shot(p, 'grid-panel-mesa'));
     await e.ctx.close();

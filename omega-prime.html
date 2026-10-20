@@ -23,8 +23,11 @@
     • the serving utility, its PUBLISHED hosting capacity and the verdict
       are the server's (POST /api/hosting-capacity through
       omega-grid-verdict.js GV.hosting): the utility is named from the
-      territory layers, and where it publishes nothing the page says so and
-      links the utility's own map;
+      territory layers (and a utility's own service-area map where it has a
+      public one: the City of Mesa's, 2026-10-20), and where it publishes
+      nothing the page says so, lists every utility the point may have with
+      what each publishes and the route it offers instead, and links the
+      utility's own pages (docs/HOSTING-ARIZONA.md);
     • the layout is drawn on satellite imagery at true footprint, arranged
       and measured by omega-prime-project.js (arrange, conduitPath, pathFt,
       layout v2), the ONE geometry Site Map rebuilds;
@@ -183,7 +186,7 @@ button{font:inherit;color:inherit}
 .sfbar .sp{flex:1}
 .sfbar button{all:unset;cursor:pointer;font-size:12px;border:1px solid #dfe3e8;border-radius:4px;padding:5px 10px;background:#fff;white-space:nowrap}
 #s-circuit .mapwrap{margin-top:46px}
-.sfres{position:absolute;right:14px;top:60px;width:360px;max-width:calc(100% - 28px);background:#fff;border:1px solid #dfe3e8;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.08);font-size:13px;z-index:600;max-height:calc(100% - 80px);overflow:auto}
+.sfres{position:absolute;right:14px;top:60px;width:360px;max-width:calc(100% - 28px);background:#fff;border:1px solid #dfe3e8;border-radius:6px;box-shadow:0 4px 14px rgba(0,0,0,.08);font-size:13px;z-index:600;max-height:calc(100% - 80px - var(--guide-h,0px));overflow:auto}
 .sfres .hd{padding:12px 14px;border-bottom:1px solid #dfe3e8}.sfres .hd h5{margin:0;font-size:15px}.sfres .hd small{color:#5b6b7b}
 .sfres .bd{padding:12px 14px}
 .sfres h6{margin:12px 0 6px;font-family:var(--mono);font-size:10.5px;letter-spacing:.06em;text-transform:uppercase;color:#4A5B6C;font-weight:500}
@@ -198,6 +201,8 @@ button{font:inherit;color:inherit}
 .prov{font-size:11px;color:#5b6b7b;margin-top:8px;line-height:1.45}
 .cands{margin-top:10px;font-size:12px;line-height:1.45;border:1px solid var(--line);border-radius:4px;padding:8px 10px;background:#fafbfc}
 .cands ul{margin:4px 0 4px 18px;padding:0}
+.cands li{margin:3px 0}.cands .why{color:#5b6b7b}.cands .pub{margin-top:1px}.cands .lnk a{font-weight:600;color:var(--brand);margin-right:10px;white-space:normal;overflow-wrap:anywhere}
+.cands details{margin-top:6px;color:#5b6b7b}.cands summary{cursor:pointer}
 .vlink{display:inline-block;margin-top:10px;font-size:12px;font-weight:600;color:var(--brand)}
 .log{font-family:var(--mono);font-size:11px;background:#f5f6f8;border:1px solid var(--line);border-radius:4px;overflow-x:auto;margin-top:8px;max-height:140px}
 .log div{padding:5px 8px;border-top:1px solid var(--line);white-space:nowrap}.log div:first-child{border-top:0}
@@ -657,6 +662,7 @@ button{font:inherit;color:inherit}
       if (!h && !S.hostingErr) return { t: 'The serving utility', p: 'Asking the territory layers which utility serves this exact point, then its own hosting capacity map.', a: 'Wait for the answer', tg: null };
       if (!h) return { t: 'No answer yet', p: 'The circuit check did not answer. The load and the design still go on.', a: 'Press Next: the site’s load', tg: '#sf-tomap' };
       if (h.coverage === 'read') return { t: 'Room for the ' + UNIT.short + '?', p: 'Published hosting, less what is already queued where the utility publishes a queue, judged by OMEGA against the unit\'s ' + fmt(UNIT.kw) + ' kW.', a: 'Press Next: the site’s load', tg: '#sf-tomap' };
+      if (h.coverage === 'no-public-map') return { t: utilOf(h) + ' publishes no hosting capacity', p: 'Nothing is guessed: the panel names the utility, what it publishes, and the route it offers instead. The design goes on with ' + utilOf(h) + '.', a: 'Press Next: the site’s load', tg: '#sf-tomap' };
       return { t: utilOf(h) + ' publishes no figure here', p: 'Nothing is guessed: check it on the utility’s own map or ask its interconnection team. The design goes on with ' + utilOf(h) + '.', a: 'Open the utility’s map, or press Next', tg: '#sf-tomap' };
     }
     if (cur === 'load') {
@@ -697,8 +703,14 @@ button{font:inherit;color:inherit}
     $('#gBar').style.width = (k / (SCREENS.length - 1) * 100) + '%';
     $('#gT').textContent = g.t; $('#gP').textContent = g.p; $('#gA').textContent = g.a; $('#gA').hidden = !g.a;
     if (g.tg) { var t = $(g.tg); if (t) t.classList.add('pulse'); }
+    guideRoom();
   }
-  $('#gMin').onclick = function () { var g = $('#guide'); g.classList.toggle('min'); this.textContent = g.classList.contains('min') ? 'Show' : 'Hide'; };
+  /* the circuit panel ends above the floating guide, however tall the
+     guide's words are, and scrolls inside: a long answer (the utilities a
+     point may have, each with what it publishes) never puts Next under it */
+  function guideRoom() { var g = $('#guide'); $('#stage').style.setProperty('--guide-h', (g && g.offsetHeight ? g.offsetHeight + 26 : 0) + 'px'); }
+  $('#gMin').onclick = function () { var g = $('#guide'); g.classList.toggle('min'); this.textContent = g.classList.contains('min') ? 'Show' : 'Hide'; guideRoom(); };
+  window.addEventListener('resize', guideRoom);
   function banner(text, ok) { var b = $('#banner'); b.hidden = !text; b.textContent = text || ''; b.className = ok ? 'ok' : ''; setTimeout(function () { [gaMap, sfMap, edMap].forEach(function (m) { if (m) m.invalidateSize(); }); }, 30); }
 
   /* ── geo helpers ──────────────────────────────────────────────────── */
@@ -997,14 +1009,40 @@ button{font:inherit;color:inherit}
     if (!S.sub) return '';
     return '<h6>Nearest substation (Grid Atlas)</h6><dl class="lkv"><dt>' + esc(S.sub.name) + '</dt><dd>' + (S.sub.kv ? esc(S.sub.kv) + ' kV · ' : '') + (S.sub.mi != null ? S.sub.mi.toFixed(1) + ' mi' : '') + '</dd></dl>';
   }
-  /* more than one utility on the territory maps: name them all, plainly */
+  /* Who may serve this point and what each publishes: the server's list
+     (the territory's candidates, each with the registry's words, the route
+     its utility offers instead of a map, and its own pages), drawn as it
+     comes; nothing is judged here. Shown wherever no figure was read and
+     wherever more than one utility is mapped; the utilities the maps name
+     that cannot be the point's fold away below, each with its reason. */
   function candidatesBlock(res) {
     var t = res.territory;
-    if (!t || t.confident || !t.candidates || t.candidates.length < 2) return '';
-    var chosen = res.utility && res.utility.eiaId;
-    return '<div class="cands"><b>More than one utility is mapped at this point.</b><ul>' + t.candidates.map(function (c) {
-      return '<li>' + esc(c.display || c.name) + (c.eiaId && c.eiaId === chosen ? ' — the one read here' : '') + (c.weak ? ' <span class="empty">(' + esc(c.why || 'a weak match') + ')</span>' : '') + '</li>';
-    }).join('') + '</ul>Confirm the utility with the customer’s bill.</div>';
+    if (!t || !t.candidates || !t.candidates.length) return '';
+    if (res.coverage === 'read' && (t.confident || t.candidates.length < 2)) return '';
+    var chosen = res.utility && res.utility.eiaId, strong = [], weak = [];
+    t.candidates.forEach(function (c) { (c.weak ? weak : strong).push(c); });
+    var shown = strong.length ? strong : weak, folded = strong.length ? weak : [];
+    var many = !t.confident && t.candidates.length > 1;
+    var mine = res.verify && res.verify.viewerUrl;
+    function item(c) {
+      var h = c.hosting || {}, links = [];
+      [h.link, h.check].forEach(function (l) {
+        var u = l && safeHref(l.url);
+        if (u && !(l === h.link && u === mine && c.eiaId === chosen)) links.push('<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(l.label) + ' ↗</a>');
+      });
+      var says = h.says ? h.says.charAt(0).toUpperCase() + h.says.slice(1) : '';
+      /* the utility read here already has its full note above: its route is not said twice */
+      var route = h.route && !(c.eiaId && c.eiaId === chosen && res.note) ? '. Instead: ' + esc(h.route) : '';
+      return '<li><b>' + esc(c.display || c.name) + '</b>' + (many && c.eiaId && c.eiaId === chosen ? ' — the one read here' : '') +
+        (c.why && !c.weak ? '<div class="why">' + esc(c.why) + '</div>' : '') +
+        (says ? '<div class="pub">' + esc(says) + route + '.</div>' : '') +
+        (links.length ? '<div class="lnk">' + links.join('') + '</div>' : '') + '</li>';
+    }
+    return '<div class="cands" id="sfWho">' + (many ? '<b>More than one utility is mapped at this point.</b>' : '<b>Who serves this point</b>') +
+      '<ul>' + shown.map(item).join('') + '</ul>' + (many ? 'Confirm the utility with the customer’s bill.' : '') +
+      (folded.length ? '<details><summary>Also on the territory maps, not this point (' + folded.length + ')</summary><ul>' + folded.map(function (c) {
+        return '<li>' + esc(c.display || c.name) + ' <span class="empty">(' + esc(c.why || 'a weak match') + ')</span></li>';
+      }).join('') + '</ul></details>' : '') + '</div>';
   }
   /* where the power comes from: the circuit, its substation and voltage, and
      what the utility publishes upstream of it */

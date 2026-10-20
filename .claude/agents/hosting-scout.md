@@ -26,7 +26,9 @@ name or a unit anywhere else (the browser never sees them):
    (the Cloudflare worker and `comed-capacity.html` keep copies that need a
    hand redeploy; say so in the PR).
 2. `api/_lib/utility-territory.js` — the territory layers (the EIA-861
-   national layer, the state layers, Census places), the stand-in list
+   national layer, the state layers, Census places), a utility's own
+   service-area map where its terms let a point be asked (`SERVICE_AREAS`:
+   the City of Mesa's electric service area, 2026-10-20), the stand-in list
    (`COARSE`) and the boundaries with islands (`ISLANDS`).
 
 ## The method
@@ -49,9 +51,11 @@ name or a unit anywhere else (the browser never sees them):
    a placeholder (a single-phase 50 kW) is never read as a figure.
 4. Look once a run for NEW publications in the served states: the DOE atlas
    of hosting-capacity maps, the interconnection page of each `none` and
-   `account` utility (SRP has said a hosting-capacity study is coming; Georgia
-   Power's tool is behind an account), and an ArcGIS Online search per
-   utility. A new public, queryable map becomes a `verified` entry with a test
+   `account` utility (SRP's Hosting Capacity Study on its OASIS is for
+   transmission-level generation, not a site's circuit; Georgia Power's tool
+   is behind an account; Arizona, utility by utility, is
+   `docs/HOSTING-ARIZONA.md`), and an ArcGIS Online search per utility. A
+   new public, queryable map becomes a `verified` entry with a test
    point, a bbox, the reader, the units, the queue rule and a recorded
    fixture in `scripts/tests/thostingsources.js` taken from the live answer.
 5. Change DATA and readers only: entries, URLs, layer ids, field maps,

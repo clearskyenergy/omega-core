@@ -1589,7 +1589,21 @@ utility's own process named. ComEd is read only through `comed-service.js`.
 EIA-861 national layer, Census places); the wire is the candidate whose
 published map answers at the point; overlaps are never answered with
 confidence (`ISLANDS`: SRP's boundary encloses APS and City of Mesa islands;
-a city's own utility stays a candidate when the point is inside the city).
+a city's own utility stays a candidate when the point is inside the city)
+unless the utility's OWN service-area map settles the point
+(`SERVICE_AREAS`, 2026-10-20, Tommy's 29 W Main St: the City of Mesa's
+electric service area off the city's GIS, asked with its polygon; 40 m or
+more inside names the City of Mesa with confidence, nearer the edge it is a
+candidate, outside its stand-in is weak and SRP's caution names APS's
+islands alone). SRP's and APS's own boundary layers are licensed to their
+own apps and are never asked; a person gets each utility's own lookup.
+Arizona is checked utility by utility in `docs/HOSTING-ARIZONA.md`: no
+Arizona utility publishes distribution hosting capacity; the ACC-regulated
+ones answer a Pre-Application Report (A.A.C. R14-2-2616), SRP screens
+inside its own review. Every candidate in the door's answer carries what its
+utility publishes (`HS.publication`: the words, the `route` it offers
+instead of a map, its own page and `check` lookup), and Prime's Circuit step
+lists them wherever no figure is read or more than one utility is mapped.
 `POST /api/hosting-capacity` judges with `grid-verdict` in-process (a null
 queue is "not published", a netted queue is not subtracted twice, a
 generation-only figure for a battery says so; a side that did not answer is

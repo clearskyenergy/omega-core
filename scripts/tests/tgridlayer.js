@@ -166,20 +166,32 @@ var asked = [];
 function network(routes) {
   return function (url) {
     asked.push(url);
-    for (var i = 0; i < routes.length; i++) if (routes[i][0].test(url)) return Promise.resolve(JSON.parse(JSON.stringify(routes[i][1])));
+    for (var i = 0; i < routes.length; i++) if (routes[i][0].test(url)) {
+      if (routes[i][1] instanceof Error) return Promise.reject(routes[i][1]);
+      return Promise.resolve(JSON.parse(JSON.stringify(routes[i][1])));
+    }
     return Promise.resolve({ features: [] });
   };
 }
+/* the City of Mesa's own electric service area (2026-10-20): a polygon
+   1.5 km around downtown, as the city's map answers at 29 W Main St */
+var MESA_AREA = /GCX_ExploreMesa\/MapServer\/13\/query/;
+function square(lat, lng, m) { var a = m / 111320, b = m / (111320 * Math.cos(lat * Math.PI / 180)); return { rings: [[[lng - b, lat - a], [lng + b, lat - a], [lng + b, lat + a], [lng - b, lat + a], [lng - b, lat - a]]] }; }
+var MESA_ROWS = [['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10],
+  ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]];
+var MESA_SUB = { attributes: { NAME: 'Mesa Downtown', MAX_VOLT: 69, OWNER: 'Salt River Project' }, geometry: { x: -111.8270, y: 33.4190 } };
 var COMED_AT = new RegExp('^' + CS.SERVICE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/' + CS.ATTRIB_LAYER + '/query\\?');
 var SITES = {
   chicago: { anchor: { lat: 41.81522, lng: -87.62261 }, address: '3400 S Federal St, Chicago, IL 60616',
     sub: { attributes: { NAME: 'Crawford', MAX_VOLT: 138, OWNER: 'Commonwealth Edison' }, geometry: { x: -87.6150, y: 41.8210 } },
     net: network([[/Electricity_Rates_H3_Res5/, Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL', 4130749, 6.1e10]])], [/tigerweb/, Places('Chicago')],
       [COMED_AT, { features: [{ attributes: { Feeder: 'F0297', SS_N: 'Crawford TSS 21', BESS_HC: 15620, PV_HC_kW: 15620, EV_HC_kW: 16100, Feeder_Q: 4895, Queue_RD: '09/30/2026' } }] }]]) },
-  mesa: { anchor: { lat: 33.4152, lng: -111.8329 }, address: '29 W Main St, Mesa, AZ 85201',
-    sub: { attributes: { NAME: 'Mesa Downtown', MAX_VOLT: 69, OWNER: 'Salt River Project' }, geometry: { x: -111.8270, y: 33.4190 } },
-    net: network([[/Electricity_Rates_H3_Res5/, Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10],
-      ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])], [/tigerweb/, Places('Mesa')]]) },
+  mesa: { anchor: { lat: 33.4152, lng: -111.8329 }, address: '29 W Main St, Mesa, AZ 85201', sub: MESA_SUB,
+    net: network([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places('Mesa')],
+      [MESA_AREA, { features: [{ attributes: { FACILITYID: 'ELSA2' }, geometry: square(33.4152, -111.8329, 1500) }] }]]) },
+  /* the city's map down: every utility on the national map, the bill decides */
+  mesaDown: { anchor: { lat: 33.4152, lng: -111.8329 }, address: '29 W Main St, Mesa, AZ 85201', sub: MESA_SUB,
+    net: network([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places('Mesa')], [MESA_AREA, new Error('the city\'s map is down')]]) },
   /* Illinois outside ComEd: the old layer never asked here */
   springfield: { anchor: { lat: 39.7817, lng: -89.6501 }, address: 'Springfield, IL 62701',
     sub: { attributes: { NAME: 'Dallman', MAX_VOLT: 138, OWNER: 'City of Springfield' }, geometry: { x: -89.6050, y: 39.7560 } },
@@ -240,10 +252,17 @@ wait(function () { return !!VG.record(); }).then(function () {
   check(m.body.body.lat === 33.4152 && m.body.body.substation.name === 'Mesa Downtown', 'Mesa: one question at the new point');
   check(m.rec.utility.display === 'City of Mesa' && m.rec.coverage === 'no-public-map' && m.rec.circuit === null && m.rec.verdict.key === 'study', 'Mesa: the City of Mesa, nothing published, a study');
   check(m.text.indexOf('Serving utility: City of Mesa · publishes no hosting capacity') >= 0, 'Mesa: named in Prime\'s words');
-  check(/More than one utility is mapped at this point: City of Mesa \(the one read here\), Salt River Project, Arizona Public Service\. Confirm the utility with the customer’s bill\./.test(m.text), 'Mesa: every utility on the map, the bill decides');
-  check(/encloses Arizona Public Service and City of Mesa islands/.test(m.text), 'Mesa: the server\'s caution');
+  check(m.text.indexOf('More than one utility') < 0 && m.text.indexOf('islands') < 0, 'Mesa: the city\'s own service-area map settles it; no list, no SRP caution');
+  check(/City of Mesa publishes no hosting capacity/.test(m.text), 'Mesa: in the server\'s words');
   check(!/comed|feeder_q/i.test(JSON.stringify(m.lines)), 'Mesa: no ComEd word anywhere');
-  check(!m.lines.some(function (r) { return r.href; }), 'Mesa: no map invented for a city that publishes none');
+  var mesaPage = require(path.join(ROOT, 'api/_lib/hosting-sources')).byKey('mesa').viewerUrl;
+  check(m.lines.filter(function (r) { return r.href; }).every(function (r) { return r.href === mesaPage; }) && m.lines.some(function (r) { return r.href === mesaPage; }), 'Mesa: the city\'s own page, never a hosting map that does not exist');
+  return at(SITES.mesaDown);
+}).then(function (md) {
+  /* the city's map down: every utility on the national map named, the bill decides */
+  check(md.rec.utility.display === 'City of Mesa' && md.rec.coverage === 'no-public-map', 'Mesa, the city\'s map down: the city still leads inside the city');
+  check(/More than one utility is mapped at this point: City of Mesa \(the one read here\), Salt River Project, Arizona Public Service\. Confirm the utility with the customer’s bill\./.test(md.text), 'Mesa, the city\'s map down: every utility on the map, the bill decides');
+  check(/encloses Arizona Public Service and City of Mesa islands/.test(md.text) && /The City of Mesa's own service-area map did not answer/.test(md.text), 'Mesa, the city\'s map down: the server\'s caution, and the map that did not answer');
   return at(SITES.springfield);
 }).then(function (sp) {
   /* Illinois outside ComEd: asked now, and named */
