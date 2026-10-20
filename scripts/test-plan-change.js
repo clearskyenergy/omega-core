@@ -76,7 +76,7 @@ async function run() {
   equal(q.cycle, { start: '2026-09-20', end: '2026-10-20', days: 30, remainingDays: 24 });
   ok(/\$760\.80 today \(24 of 30 days/.test(q.display.today), q.display.today);
   ok(/then \$2,250\/month on the 20th \(up from \$1,299\/month\)/.test(q.display.then), q.display.then);
-  ok(/\$1,500\/year/.test(q.serviceFeeNote), 'service fee change is disclosed');
+  ok(/service fee ends at renewal \(now \$3,400\/year\)/.test(q.serviceFeeNote), 'leaving Field for Omega Design alone ends the plan fee, and the quote says so: ' + q.serviceFeeNote);
   equal(q.canApply, true); equal(q.pending, []);
   var q2 = await quote(['siteintel'], owner, 'pro');
   equal(q2.plan, 'pro'); equal(q2.lines.map(function (l) { return l.itemKey + ':' + l.amountCents; }), ['plan:pro:96000']);

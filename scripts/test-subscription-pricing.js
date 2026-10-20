@@ -31,10 +31,14 @@ async function main() {
   rejects(function () { P.quote(['lite'], b, { credit: { pct: 40, startsAt: credit.startsAt, endsAt: '2027-01-01' }, now: Date.now() }); });
   rejects(function () { P.quote(['lite'], b, { credit: { pct: 100, startsAt: credit.startsAt, endsAt: credit.endsAt }, now: Date.now() }); });
   eq(P.quote(['lite'], b).annualPrepayBeforeCreditCents, 500000); /* ten months of twelve: two months free (2026-09-26) */
-  eq(P.quote(['lite'], b).serviceFee.amountCents, 150000);
+  /* Omega Design alone carries no service fee (Tommy, 2026-09-29): the rule is fee()'s own, so a seeded book's old Lite figure changes nothing; Field and Pro keep the plan fee */
+  eq(P.quote(['lite'], b).serviceFee.amountCents, 0); eq(P.quote(['lite'], b).serviceFee.display, 'None');
+  var seeded = JSON.parse(JSON.stringify(b)); seeded.serviceFees.lite = 150000;
+  eq(P.quote(['lite'], seeded).serviceFee.amountCents, 0, 'the seeded 2026-10 book prices Lite the same');
+  eq(P.quote(M.starters().ev, b).serviceFee.amountCents, 340000, 'Field carries the plan fee');
   var waiver = { mode: 'waived', reason: 'Launch partner' };
-  eq(P.quote(['lite'], b, { serviceFee: waiver }).serviceFee.amountCents, 0);
-  eq(P.quote(['lite'], b, { serviceFee: waiver, year: 2 }).serviceFee.amountCents, 150000);
+  eq(P.quote(M.starters().ev, b, { serviceFee: waiver }).serviceFee.amountCents, 0); eq(P.quote(M.starters().ev, b, { serviceFee: waiver }).serviceFee.display, 'Waived');
+  eq(P.quote(M.starters().ev, b, { serviceFee: waiver, year: 2 }).serviceFee.amountCents, 340000);
   eq(P.quote(['lite'], b, { serviceFee: { mode: 'custom', amountCents: 25000, reason: 'Agreement', appliesTo: 'every-year' }, year: 2 }).serviceFee.amountCents, 25000);
   rejects(function () { P.quote(['lite'], b, { serviceFee: { mode: 'waived' } }); });
   rejects(function () { P.quote(['lite'], b, { serviceFee: { mode: 'custom', amountCents: -1, reason: 'No' } }); });
