@@ -1044,10 +1044,14 @@
   }
   function drawEntities(ctx, exporting) {
     var i;
-    for (i = 0; i < state.doc.entities.length; i++) {
-      if (!visible(state.doc.entities[i])) continue;
-      drawOne(ctx, state.doc.entities[i], exporting);
-    }
+    names = { fixed: [], boxes: [] };
+    try {
+      for (i = 0; i < state.doc.entities.length; i++) {
+        if (!visible(state.doc.entities[i])) continue;
+        drawOne(ctx, state.doc.entities[i], exporting);
+      }
+      drawNames(ctx, names);
+    } finally { names = null; }
   }
   function poly(ctx, pts, close) {
     if (!pts || !pts.length) return;
@@ -1072,9 +1076,12 @@
       ctx.beginPath(); ctx.arc(c.x, c.y, e.r * view.pxPerFt, 0, Math.PI * 2); ctx.stroke();
     } else if (e.type === 'rect' || e.type === 'equip' || e.type === 'parking') {
       poly(ctx, G.rectCorners(e), true);
-      ctx.globalAlpha = e.type === 'equip' ? 0.14 : 0.04;
-      ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
-      if (e.label) label(ctx, { x: e.x, y: e.y }, e.label);
+      /* gear reads on the photo: a firmer fill and line than a lot or a stall */
+      ctx.globalAlpha = e.type === 'equip' ? 0.32 : 0.04;
+      ctx.fill(); ctx.globalAlpha = 1;
+      if (e.type === 'equip') ctx.lineWidth = 1.8;
+      ctx.stroke();
+      if (e.label) nameBox(ctx, e);
     } else if (e.type === 'text') label(ctx, { x: e.x, y: e.y }, e.text || '');
     else if (e.type === 'callout') {
       poly(ctx, [e.target, e.anchor], false); ctx.stroke();
@@ -1103,7 +1110,113 @@
     for (s = -cssH; s < cssW + cssH; s += 8) { ctx.moveTo(s, 0); ctx.lineTo(s - cssH, cssH); }
     ctx.stroke();
   }
+  /* ── names, painted after every shape and never on one another ──────
+     A guided build's gear stands a few feet apart, and each name used to
+     be painted on its own box in drawing order, so the next one covered
+     the last ("B Step-u AC Utility point…"; Tommy, 2026-10-20: "clean up
+     how you show the guided build"). Text, callouts, dimensions and array
+     notes stay where they belong; a box's name goes inside it when it
+     fits, else just above, below or beside it, in full or in short (XFMR,
+     SWGR, POI), clear of the other names and gear; else it is left off at
+     this zoom (zoom in, or select it: the Properties panel names it). The
+     selected and the biggest are named first. */
+  var names = null;
+  var SHORT_NAMES = {
+    'utility point of interconnection': 'POI', 'point of interconnection': 'POI', 'point of connection': 'POC',
+    'step-up transformer': 'XFMR', 'step-down transformer': 'XFMR', 'service transformer': 'XFMR', 'utility transformer': 'XFMR',
+    'utility service transformer': 'XFMR', 'transformer': 'XFMR', 'solid-state transformer': 'SST',
+    'switchgear': 'SWGR', 'main switchgear': 'SWGR', 'mv switchgear': 'MV SWGR', 'ac disconnect': 'DISC',
+    'static transfer switch': 'STS', 'standby generator': 'GEN', 'revenue meter': 'M', 'meter': 'M', 'panelboard': 'PNL',
+    'pcs / inverter skid': 'PCS', 'solar inverter': 'INV', 'pv inverter': 'INV', 'ems cabinet': 'EMS', 'bess container': 'BESS',
+    'bess ac block': 'BESS', 'battery': 'BESS', 'cooling plant': 'COOL', 'compute racks': 'RACKS', 'der collector': 'COLL', 'grid substation': 'SUB'
+  };
+  function shortName(text) {
+    var t = String(text || '').trim(), m = /^(.*?)\s+([A-Z]|\d+)$/.exec(t), base = m ? m[1] : t, tail = m ? m[2] : '';
+    var k = SHORT_NAMES[base.toLowerCase()];
+    if (k) return k + (tail ? ' ' + tail : '');
+    if (/^dcfc$/i.test(base) && tail) return 'D' + tail;
+    if (/^level 2$/i.test(base) && tail) return 'L' + tail;
+    return t.length > 10 ? t.slice(0, 8) + '\u2026' : '';
+  }
+  function nameBox(ctx, e) {
+    if (!names) { label(ctx, { x: e.x, y: e.y }, e.label); return; }
+    names.boxes.push(e);
+  }
+  function tagAt(ctx, cx, cy, text) {
+    var w = ctx.measureText(text).width + 8;
+    return { x0: cx - w / 2, y0: cy - 8, x1: cx + w / 2, y1: cy + 8, cx: cx, cy: cy, text: text };
+  }
+  function paintTag(ctx, r) {
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+    ctx.fillStyle = '#16202B';
+    ctx.fillText(r.text, r.cx, r.cy);
+  }
+  function overlaps(r, list, skip) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] === skip) continue;
+      if (r.x0 < list[i].x1 && r.x1 > list[i].x0 && r.y0 < list[i].y1 && r.y1 > list[i].y0) return true;
+    }
+    return false;
+  }
+  function drawNames(ctx, q) {
+    var taken = [], boxes = [], sel = {}, i, k, e, c, s, b, r;
+    for (i = 0; i < state.selection.length; i++) sel[state.selection[i]] = 1;
+    ctx.save();
+    ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (i = 0; i < q.fixed.length; i++) {
+      s = worldToScreen(q.fixed[i].p);
+      r = tagAt(ctx, s.x, s.y, q.fixed[i].text);
+      paintTag(ctx, r);
+      taken.push(r);
+    }
+    for (i = 0; i < q.boxes.length; i++) {
+      e = q.boxes[i];
+      c = G.rectCorners(e);
+      b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, e: e };
+      for (k = 0; k < c.length; k++) {
+        s = worldToScreen(c[k]);
+        if (s.x < b.x0) b.x0 = s.x; if (s.x > b.x1) b.x1 = s.x;
+        if (s.y < b.y0) b.y0 = s.y; if (s.y > b.y1) b.y1 = s.y;
+      }
+      if (b.x1 < -60 || b.x0 > cssW + 60 || b.y1 < -20 || b.y0 > cssH + 20) continue;
+      if (b.x1 - b.x0 < 3 && b.y1 - b.y0 < 3) continue;
+      b.pri = (sel[e.id] ? 1e9 : 0) + (b.x1 - b.x0) * (b.y1 - b.y0);
+      boxes.push(b);
+    }
+    boxes.sort(function (a, z) { return z.pri - a.pri; });
+    /* the gear the names keep off: small boxes, not a lot drawn as a rectangle */
+    var gear = boxes.filter(function (g) { return g.e.type === 'equip' && g.x1 - g.x0 < 240 && g.y1 - g.y0 < 240; });
+    for (i = 0; i < boxes.length; i++) placeName(ctx, boxes[i], taken, gear);
+    ctx.restore();
+  }
+  function placeName(ctx, b, taken, gear) {
+    var full = String(b.e.label).trim(), short = shortName(full), tries = [], i, j, w, spots, r;
+    var cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    tries.push([full, true]);
+    if (short && short !== full) tries.push([short, true]);
+    tries.push([full, false]);
+    if (short && short !== full) tries.push([short, false]);
+    for (i = 0; i < tries.length; i++) {
+      w = ctx.measureText(tries[i][0]).width + 8;
+      spots = [];
+      if (b.x1 - b.x0 >= w && b.y1 - b.y0 >= 16) spots.push([cx, cy, true]);
+      spots.push([cx, b.y0 - 11, false], [cx, b.y1 + 11, false], [b.x1 + 4 + w / 2, cy, false], [b.x0 - 4 - w / 2, cy, false]);
+      for (j = 0; j < spots.length; j++) {
+        r = tagAt(ctx, spots[j][0], spots[j][1], tries[i][0]);
+        if (overlaps(r, taken)) continue;
+        if (tries[i][1] && !spots[j][2] && overlaps(r, gear, b)) continue;
+        paintTag(ctx, r);
+        taken.push(r);
+        return true;
+      }
+    }
+    return false;
+  }
   function label(ctx, p, text) {
+    if (names) { if (text) names.fixed.push({ p: p, text: text }); return; }
     var s = worldToScreen(p);
     ctx.save();
     ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
@@ -1258,20 +1371,23 @@
     }
     return { need: need, count: count };
   }
-  /* The photo at the scale drawn. Zoomed out past what the screen holds in
-     tiles at their own size, it steps one level coarser at a time (each
-     level halves the tiles across), so a whole lot keeps its photo: it used
-     to go blank past 24 tiles, and a 12-acre lot read "Zoom in to load
-     aerial imagery". */
+  /* The photo at the scale drawn, at the screen's own pixels (a Retina
+     screen gets the next zoom level, so the photo is sharp). Zoomed out past
+     what the screen holds in tiles at their own size, it steps one level
+     coarser at a time (each level halves the tiles across), down to county
+     scale, so a whole lot keeps its photo: it used to go blank past 24
+     tiles, and a 12-acre lot read "Zoom in to load aerial imagery" (Tommy,
+     2026-10-20: "i cant see the map if im zoomed out"). */
+  var PHOTO_MIN_Z = 12, PHOTO_MAX_Z = 19;
   function layoutMap() {
     var host = $('map');
     if (!mapOn) { host.style.display = 'none'; mapNote = ''; mapAt = null; layoutParcels(null); return; }
     host.style.display = 'block';
-    var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt));
-    if (z < 14) z = 14;
-    if (z > 19) z = 19;
-    var most = (Math.ceil(cssW / 256) + 3) * (Math.ceil(cssH / 256) + 3), set = tilesFor(z);
-    while (set.count > most && z > 14) { z--; set = tilesFor(z); }
+    var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt * dpr));
+    if (z < PHOTO_MIN_Z) z = PHOTO_MIN_Z;
+    if (z > PHOTO_MAX_Z) z = PHOTO_MAX_Z;
+    var most = (Math.ceil(cssW * dpr / 256) + 3) * (Math.ceil(cssH * dpr / 256) + 3), set = tilesFor(z);
+    while (set.count > most && z > PHOTO_MIN_Z) { z--; set = tilesFor(z); }
     if (set.count > most) {
       mapNote = 'Zoom in to load aerial imagery.';
       mapAt = { z: z, tiles: 0 };
@@ -2546,8 +2662,10 @@
 
   /* What the checks read: the view and the photo's tiles. Read-only. */
   function debug() {
-    var a = state.doc.anchor || {};
-    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote } : null };
+    var a = state.doc.anchor || {}, sel = [], i, e;
+    for (i = 0; i < state.selection.length; i++) { e = D.find(state.doc, state.selection[i]); if (e && e.label) sel.push(String(e.label).trim()); }
+    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel,
+      map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote } : null };
   }
 
   root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, debug: debug, VERSION: 'editor-v2-app/5' };

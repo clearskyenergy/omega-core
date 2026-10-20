@@ -282,8 +282,11 @@ async function capture(browser) {
     assert(!st.open && !st.err && /It is selected: drag to move it\./.test(st.status), 'the BESS build is placed: ' + JSON.stringify(st));
     facts.bessStatus = st.status;
     var d = await view();
+    facts.bessParts = d.selected;
     assert(Math.abs(d.view.cx - YARD.x) < 160 && Math.abs(d.view.cy - YARD.y) < 120, 'it landed in the yard, where the view was: ' + JSON.stringify(d.view));
-    await zoomOutTo(2.1);
+    await zoomOutTo(3.4);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
     await snap('08-bess-placed', await canvasBox(840, 360));
   });
   /* 8. Fit, look at the front lot, and a second build from the ribbon: DCFC */
@@ -302,8 +305,11 @@ async function capture(browser) {
     assert(!st.open && !st.err && /It is selected: drag to move it\./.test(st.status), 'the DCFC build is placed: ' + JSON.stringify(st));
     facts.dcfcStatus = st.status;
     var d = await view();
+    facts.dcfcParts = d.selected;
     assert(Math.abs(d.view.cx - FRONT.x) < 160 && Math.abs(d.view.cy - FRONT.y) < 200, 'it landed on the front lot, where the view was: ' + JSON.stringify(d.view));
-    await zoomOutTo(2.1);
+    await zoomOutTo(3.4);
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(200);
     await snap('09-dcfc-placed', await canvasBox(840, 360));
   });
   /* 9. Fit: the whole site */
@@ -461,6 +467,14 @@ function readTakeoff(facts) {
   function n(v) { return Number(String(v).replace(/,/g, '')).toLocaleString('en-US'); }
   return { kw: s ? n(s[1]) : '', kwh: s ? n(s[2]) : '', chargers: c ? c[1] : '', chargerKw: c ? n(c[2]) : '' };
 }
+/* the names a build placed, once each, in the order it placed them: 'A, B and C' */
+function parts(list) {
+  var seen = {}, out = [];
+  (list || []).forEach(function (n) { var k = String(n).replace(/\s+\d+$/, function (m) { return ''; }); if (/^DCFC$|^Level 2$/.test(k)) k = k + ' chargers'; if (!seen[k]) { seen[k] = 1; out.push(k); } });
+  /* lower-case a word after the first, never an acronym (AC, DCFC, BESS) */
+  out = out.map(function (n, i) { return i && /^[A-Z][a-z]/.test(n) ? n.charAt(0).toLowerCase() + n.slice(1) : n; });
+  return out.length > 1 ? out.slice(0, -1).join(', ') + ' and ' + out[out.length - 1] : (out[0] || '');
+}
 function short(n) { n = +String(n).replace(/,/g, ''); return n >= 1e6 ? '$' + (n / 1e6).toFixed(2) + 'M' : '$' + Math.round(n / 1000) + 'k'; }
 
 /* ── the PDF ──────────────────────────────────────────────────────────── */
@@ -535,8 +549,9 @@ function guideHtml(img, f) {
   var p7 = page('Step 4 · Place it', '<h1>Place it where you are looking</h1>' +
     '<p><b>Place on the site</b> puts the build on clear ground inside the lot line, nearest the middle of your view, clear of the obstructions and of anything already placed. So look where you want it first: move the map until that spot is in the middle, then place the build. If the lot has no room, it goes just beside it, and the status bar says so.</p>' +
     '<p>When it lands, the view goes to it and it is selected: drag it to move it, and <b>Undo</b> takes it back.</p>' +
-    shot('08-bess-placed', 'The battery in the yard north of the warehouse. The status bar: <i>' + esc(f.bessStatus || '') + '</i>', 'wide') +
-    shot('09-dcfc-placed', 'The fast chargers on the lot along 51st Avenue, beside the warehouse (red). <i>' + esc(f.dcfcStatus || '') + '</i>', 'wide'));
+    shot('08-bess-placed', 'The BESS build in the yard north of the warehouse: ' + esc(parts(f.bessParts)) + ', with the conduit between them. The status bar said: <i>' + esc(f.bessStatus || '') + '</i>', 'wide') +
+    shot('09-dcfc-placed', 'The DCFC build on the lot along 51st Avenue, beside the warehouse (red): ' + esc(parts(f.dcfcParts)) + '. <i>' + esc(f.dcfcStatus || '') + '</i>', 'wide') +
+    '<p class="small">Each name sits inside its box when it fits, else just beside it, in short form (XFMR, SWGR, POI) when space is tight; no name is drawn over another. Zoom in, or select a piece, to see the rest.</p>');
 
   var linesHtml = run.lines.map(function (l) { return '<tr><td>' + esc(l.name) + '</td><td class="r">$' + esc(l.amount) + '</td></tr>'; }).join('');
   var streamsHtml = run.streams.map(function (s) { return '<tr><td>' + esc(s.name) + '</td><td class="r">$' + esc(s.amount) + ' / yr</td><td class="tier">' + esc(s.tier) + '</td></tr>'; }).join('');

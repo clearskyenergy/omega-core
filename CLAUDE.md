@@ -1720,9 +1720,23 @@ working; only what a person reads says Omega Maximus.
   (`SITE_VIEW_FT`, 700 ft; it opened on one roof) and a drawing that moved
   with it whole; the Site tab's own **Show parcel lines** is the same layer
   as Layers' switch; Use as site boundary zooms to the lot.
-- **The photo at any zoom**: past the tiles the screen holds at their own
-  size, `layoutMap` steps one zoom level coarser at a time instead of going
-  blank (it hid the photo past 24 tiles: a 12-acre lot read "Zoom in").
+- **The photo at any zoom** (Tommy, 2026-10-20: "i cant see the map if im
+  zoomed out"): tiles are picked at the screen's own pixels (a Retina screen
+  gets the next level, sharp), and past the tiles the screen holds at their
+  own size `layoutMap` steps one level coarser at a time, down to county
+  scale (`PHOTO_MIN_Z` 12), instead of going blank (it hid the photo past 24
+  tiles: a 12-acre lot read "Zoom in"). Esri's World Imagery has nothing
+  past level 19 here (`PHOTO_MAX_Z`; level 20 answers "Map data not yet
+  available"), so closer than about 0.3 m a pixel the photo is soft; Site
+  Map is sharper there because it is Google's satellite (the browser Maps
+  key, billed per load), a decision not yet taken for Maximus.
+- **Names never on one another** (Tommy: "clean up how you show the guided
+  build"): `drawNames` paints every name after the shapes: text, callouts,
+  dimensions and array notes where they belong; a box's name inside it when
+  it fits, else just above, below or beside it, in full or short (XFMR,
+  SWGR, POI, `SHORT_NAMES`), clear of the other names and gear, else left
+  off at that zoom; selected and biggest first. Gear is drawn firmer
+  (fill .32, line 1.8) so it reads on the photo.
 - **A build lands where you are looking**: `spotFor` takes the clear window
   nearest the middle of the view (`ctx.prefer` → `site.prefer`), else the
   first from the lot's south-west corner; inside the lot line, clear of the
