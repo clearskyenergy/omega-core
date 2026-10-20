@@ -36,6 +36,16 @@
  *   - a unit with no released footprint (primeFootprint 'none', primeMarkFt
  *     2 ft, from #354) is not a 2 ft marker at every zoom, where this editor
  *     reads one (it says so when it does not);
+ *   - what carries no footprint of its own, placed once OmegaGeo has armed
+ *     and first moved by a ZOOM, is not drawn from the pixels it was placed
+ *     at over the scale they were drawn at: a BESS assembly (400 px, drawn
+ *     0.55 deep and centred on that), its ground size and size at every
+ *     settled zoom; a charger and a 2 MWh battery saved before _evAdd
+ *     recorded footprints are not their kind's (2.9 x 3.1 ft, the rating's
+ *     20 x 8 ft) on _evAdd's floors; an Insert charger's own bollard is not
+ *     Insert's footprint, or a Level 2 bollard leaves its 14 px;
+ *   - a node left for an element the model no longer has is not swept after
+ *     the map moves;
  *   - the page throws.
  */
 'use strict';
@@ -225,7 +235,53 @@ function ok(value, label) { assert(value, label); count++; }
     await page.evaluate(function () { if (window.OmegaGeo) OmegaGeo.enableScaling(); });
     await page.waitForTimeout(1200);
 
+    /* E. what carries no footprint of its own, placed AFTER OmegaGeo has
+       armed (as everything placed in a session is), and the first map move
+       after it is a ZOOM: a BESS assembly (the BESS list's place on canvas,
+       400 px, drawn 0.55 deep) is OmegaGeo's, its ground size its pixels over
+       the scale they were drawn at; a guided-build charger and a 2 MWh battery
+       saved before _evAdd recorded footprints take their kind's; an Insert
+       charger's own bollard, pushed past Insert's hook, takes Insert's; a
+       Level 2 bollard keeps the 14 px it is placed on. And a node left for an
+       element the model no longer has, for the sweep. */
+    var freeEls = await page.evaluate(function (cfg) {
+      var ppf = S.pxPerFt, sz = _getCanvasSize(), out = [], ey = sz.h / 2 - 230;
+      function rec(el, group, ft, floor) { out.push({ id: el.id, group: group, kind: el.evKind || el.eqId || el.type, type: el.type, lf: ft.lf, wf: ft.wf, floorW: floor.w, floorH: floor.h }); return el; }
+      var asm = addEl({ type: 'bess-asm', bessId: null, label: 'BESS Assembly', spec: '', x: sz.w / 2 + 160, y: ey - 110, w: 400, rot: 0 });
+      out.push({ id: asm.id, group: 'free', kind: 'bess-asm', type: 'bess-asm', w0: 400, ppf0: ppf });
+      var oldC = _evAdd('charger', sz.w / 2 - 440, ey, 'DCFC (saved 2026-09)', '');
+      delete oldC.lf; delete oldC.wf; delete oldC.minW; delete oldC.minH;
+      rec(oldC, 'legacy', { lf: 2.9, wf: 3.1 }, { w: 14, h: 12 });
+      var oldB = _evAdd('bess', sz.w / 2 - 340, ey, 'BESS 2 MWh (saved 2026-09)', '');
+      delete oldB.lf; delete oldB.wf; delete oldB.minW; delete oldB.minH; oldB.bessKwh = 2000; oldB.bessKw = 1000;
+      rec(oldB, 'legacy', { lf: 20, wf: 8 }, { w: 28, h: 20 });
+      var dw = _eqDropW('charger');
+      var insC = addEl({ type: 'eq', eqId: 'charger', label: 'EV charger', x: sz.w / 2 - 220 - dw / 2, y: ey - dw / 2, w: dw, rot: 0, spec: '' });
+      rec(insC, 'insert', { lf: insC.lf, wf: insC.wf }, cfg.insertFloor);
+      var auto = S.elements.filter(function (e) { return e._autoFor === insC.id; })[0];
+      var bf = OmegaInsert.footprint('bollard');
+      if (auto) rec(auto, 'bollard', { lf: bf.lf, wf: bf.wf }, cfg.insertFloor);
+      var before = S.elements.length;
+      _l2Bollards(oldC, 1);
+      var l2 = S.elements.length > before ? S.elements[S.elements.length - 1] : null;
+      if (l2) rec(l2, 'bollard', { lf: l2.lf, wf: l2.wf }, { w: 14, h: 14 });
+      var orphan = document.createElement('div'); orphan.className = 'cel'; orphan.setAttribute('data-elid', 'gone-from-the-model');
+      document.getElementById('els').appendChild(orphan);
+      return { els: out, auto: !!auto, l2: !!l2 };
+    }, { insertFloor: INSERT_FLOOR });
+    ok(freeEls.auto, 'an Insert charger places its own bollard');
+    ok(freeEls.l2, 'the Level 2 build places a bollard');
+    freeEls.els.forEach(function (e) { placed.els.push(e); byId[e.id] = e; ids.push(e.id); });
+    /* one pass of the anchor engine's timer, and no map move: a saved unit
+       takes its kind's footprint, and nothing has stamped the assembly yet */
+    await page.waitForTimeout(700);
+    ok(await page.evaluate(function (id) { var e = S.elements.filter(function (x) { return x.id === id; })[0]; return e._geoWFt == null; }, freeEls.els[0].id), 'the BESS assembly has no ground size yet when the map first moves');
+
     function want(e, ppf) {
+      if (e.group === 'free') {                      /* OmegaGeo: the pixels it was drawn at, over that scale, on its 22 px */
+        var fw = Math.max(22, Math.round(e.w0 * ppf / e.ppf0));
+        return { w: fw, h: Math.round(fw * 0.55), free: true };
+      }
       return { w: Math.max(e.floorW, Math.round(e.lf * ppf)), h: Math.max(e.floorH, Math.round(e.wf * ppf)), trueW: Math.round(e.lf * ppf) >= e.floorW };
     }
     function measure() {
@@ -238,7 +294,7 @@ function ok(value, label) { assert(value, label); count++; }
           var box = n && (el.type === 'eq' ? n.querySelector('.elbody') : n);
           var r = box ? box.getBoundingClientRect() : null, nr = n ? n.getBoundingClientRect() : null;
           var a = _latLngToPx(el._geoLat, el._geoLng, ms, sz.w, sz.h);
-          return { id: id, w: el.w, h: el.h, x: el.x, y: el.y,
+          return { id: id, w: el.w, h: el.h, rh: _elRenderSize(el).h, x: el.x, y: el.y,
             domW: r ? r.width * k : null, domH: r ? r.height * k : null,
             left: nr ? (nr.left - sr.left) * k : null, top: nr ? (nr.top - sr.top) * k : null,
             ax: a.x, ay: a.y, nodes: document.querySelectorAll('[data-elid="' + id + '"]').length,
@@ -256,13 +312,19 @@ function ok(value, label) { assert(value, label); count++; }
       m.els.forEach(function (d) {
         var e = byId[d.id], w = want(e, m.ppf), name = tag + ' ' + e.group + ' ' + e.kind;
         ok(d.nodes === 1, name + ': one node (' + d.nodes + ')');
+        ok(Math.abs(d.x + d.w / 2 - d.ax) <= 1 && Math.abs(d.y + d.rh / 2 - d.ay) <= 1, name + ': centred on its ground anchor (' + (d.x + d.w / 2).toFixed(1) + ',' + (d.y + d.rh / 2).toFixed(1) + ' vs ' + d.ax.toFixed(1) + ',' + d.ay.toFixed(1) + ')');
+        ok(Math.abs(d.left - d.x) <= 1 && Math.abs(d.top - d.y) <= 1, name + ': drawn where the model says');
+        if (w.free) {
+          if (opts.early) return;                    /* OmegaGeo sizes on the map's idle, not on the zoom */
+          ok(Math.abs(d.w - w.w) <= 1 && Math.abs(d.domW - w.w) <= 1 && Math.abs(d.domH - w.h) <= 1,
+            name + ': ' + d.domW.toFixed(1) + ' x ' + d.domH.toFixed(1) + ' px on screen (model ' + d.w + '), the ' + e.w0 + ' px it was drawn at, at ' + e.ppf0.toFixed(3) + ' px/ft, is ' + w.w + ' x ' + w.h + ' here');
+          return;
+        }
         ok(Math.abs(d.w - w.w) <= 1 && Math.abs(d.domW - w.w) <= 1,
           name + ': ' + d.domW.toFixed(1) + ' px wide on screen (model ' + d.w + '), its ' + e.lf + ' ft at ' + m.ppf.toFixed(3) + ' px/ft is ' + Math.round(e.lf * m.ppf) + (w.trueW ? '' : ', held at the ' + e.floorW + ' px floor') + ' -> ' + w.w);
         if (e.type !== 'eq')                        /* an Insert icon draws its own aspect; its h is where the anchor centres */
           ok(Math.abs(d.h - w.h) <= 1 && Math.abs(d.domH - w.h) <= 1, name + ': ' + d.domH.toFixed(1) + ' px deep (model ' + d.h + '), want ' + w.h);
         else ok(Math.abs(d.h - w.h) <= 1, name + ': model depth ' + d.h + ', want ' + w.h);
-        ok(Math.abs(d.x + d.w / 2 - d.ax) <= 1 && Math.abs(d.y + d.h / 2 - d.ay) <= 1, name + ': centred on its ground anchor (' + (d.x + d.w / 2).toFixed(1) + ',' + (d.y + d.h / 2).toFixed(1) + ' vs ' + d.ax.toFixed(1) + ',' + d.ay.toFixed(1) + ')');
-        ok(Math.abs(d.left - d.x) <= 1 && Math.abs(d.top - d.y) <= 1, name + ': drawn where the model says');
         if (!opts.count) return;
         if (w.trueW) trueScale++; else held++;
       });
@@ -287,10 +349,11 @@ function ok(value, label) { assert(value, label); count++; }
       await frames(2);
       var early = await measure();
       ok(early.zoom === z, 'zoomed to ' + z);
-      check(early, 'zoom ' + z + ' (2 frames in)');
+      check(early, 'zoom ' + z + ' (2 frames in)', { early: true });
       await settled; await frames(2);
       var m = await measure();
       check(m, 'zoom ' + z, { count: true });
+      if (zi === 0) ok(await page.evaluate(function () { return !document.querySelector('[data-elid="gone-from-the-model"]'); }), 'zoom ' + z + ': a node left for an element the model no longer has is swept');
       /* nothing else changes it afterwards: the timers, OmegaGeo, the idle stamp */
       await page.waitForTimeout(900);
       var late = await measure();
@@ -327,6 +390,10 @@ function ok(value, label) { assert(value, label); count++; }
     var geo = await measure();
     geo.els.forEach(function (d) {
       var e = byId[d.id];
+      if (e.group === 'free') {
+        ok(Math.abs(d.geoW - e.w0 / e.ppf0) < 0.01, 'the BESS assembly\u2019s ground size is the ' + e.w0 + ' px it was drawn at over ' + e.ppf0.toFixed(3) + ' px/ft (' + (e.w0 / e.ppf0).toFixed(1) + ' ft), not over the zoom after (' + (d.geoW || 0).toFixed(1) + ')');
+        return;
+      }
       ok(Math.abs(d.geoW - e.lf) < 1e-6 && Math.abs(d.geoH - e.wf) < 1e-6, e.group + ' ' + e.kind + ': ground size ' + (d.geoW || 0).toFixed(2) + ' x ' + (d.geoH || 0).toFixed(2) + ' ft is its footprint ' + e.lf.toFixed(2) + ' x ' + e.wf.toFixed(2));
     });
 
@@ -338,7 +405,7 @@ function ok(value, label) { assert(value, label); count++; }
     ok(twice.length === 0, 'never twice in one frame' + (twice.length ? ': frames ' + twice.slice(0, 5).join(', ') : ''));
     assert.deepStrictEqual(placed.insertFloor, INSERT_FLOOR, 'Insert says what it drops at (OmegaInsert.floorPx), 22 x 10 px'); count++;
     ok(errors.length === 0, 'no page errors: ' + errors.slice(0, 3).join(' | '));
-    console.log('render-element-zoom: ' + count + ' checks passed. ' + placed.els.length + ' units (guided build, Omega Prime, Insert) through zooms '
+    console.log('render-element-zoom: ' + count + ' checks passed. ' + placed.els.length + ' units (guided build, Omega Prime, Insert, set by hand, saved before footprints, bollards, a BESS assembly with none) through zooms '
       + PLACED_AT + ' → ' + ZOOMS.join(' → ') + ': true to scale in ' + trueScale + ' element-zooms, at the placement floor in ' + held
       + '; the rescale ran ' + runs.length + ' times, never twice in a frame. Prime’s 2 ft marker (primeFootprint none, #354): '
       + (placed.marker ? 'held at every zoom.' : 'this editor reads none, not run.'));

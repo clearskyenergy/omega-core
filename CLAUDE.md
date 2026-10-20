@@ -1937,10 +1937,15 @@ tenant. Treat it that way.
   engine's `run()` (UNIFIED ANCHORING) calls `omegaRescaleElementsOnce` once
   per frame, about each centre, on the floor the unit was placed with
   (`minW/minH`, else Insert's `OmegaInsert.floorPx`); OmegaGeo leaves
-  anything `omegaElementFootprint` claims.
+  anything `omegaElementFootprint` claims. Code that sets a unit's size by
+  hand records it in feet (`lf/wf`) or the next pass undoes it. What has no
+  footprint stays OmegaGeo's, stamped at the scale it was DRAWN at (on
+  `zoom_changed`, before anything resizes; 2026-10-20), and the anchor engine
+  centres on `_elRenderSize`, as every stamper does.
   `standDown()` replaces `window._geoReprojectAll` at boot and every wrapper
-  hung on it before then goes with it (that is how the rescale was lost): a
-  pass that must follow the map belongs in `run()`. `npm run
+  hung on it before then goes with it (that is how the rescale, and the
+  orphan sweep, were lost): a pass that must follow the map belongs in
+  `run()`. `npm run
   check:element-zoom` zooms the real editor on `scripts/_lib/gmaps-double.js`;
   `scripts/tests/telementzoom.js`.
 - Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
