@@ -30,14 +30,14 @@ ok('that return waits until the record is known', E.destination({ path: '/worksp
 ok('a remembered v2 keeps a routed tab on v2', E.destination({ path: '/workspace-v2', remembered: 'v2', org: 'classic', routed: true, settled: true }) === '');
 ok('?ui=classic leaves the v2 page', E.destination({ path: '/workspace-v2', search: '?ui=classic', org: 'v2' }) === '/workspace');
 
-ok('editor does not upgrade until its page has landed', E.destination({ path: '/editor.html', search: '?id=abc', hash: '#x', org: 'v2' }) === '' && E.href('editor', 'v2') === '/editor.html');
+ok('preview editor does not take over saved projects', E.destination({ path: '/editor.html', search: '?id=abc', hash: '#x', org: 'v2' }) === '' && E.href('editor', 'v2') === '/editor.html');
 ok('portfolio, prime and finance stay on the classic route until they land', E.href('portfolio', 'v2') === '/portfolio.html' && E.href('prime', 'v2') === '/omega-prime.html' && E.href('finance', 'v2') === '/finance' && E.destination({ path: '/portfolio.html', org: 'v2' }) === '' && E.destination({ path: '/finance', org: 'v2' }) === '' && E.destination({ path: '/portals/finance/', org: 'v2' }) === '' && E.destination({ path: '/portals/finance/index.html', org: 'v2' }) === '');
-ok('the workspace twin is the one that has landed', E.href('workspace', 'v2') === '/workspace-v2' && E.href('workspace', 'classic') === '/workspace' && E.landed('workspace') === true && E.landed('editor') === false);
+ok('workspace routes to v2; editor is present for preview', E.href('workspace', 'v2') === '/workspace-v2' && E.href('workspace', 'classic') === '/workspace' && E.landed('workspace') === true && E.landed('editor') === true);
 
 ok('a v2 door keeps a deal hash and does not invent a page', E.upgrade('/finance#deal=abc&tab=room', 'v2') === '/finance#deal=abc&tab=room');
 ok('a v2 door keeps Plan & billing on the classic workspace', E.upgrade('/workspace#billing', 'v2') === '/workspace#billing');
 ok('a v2 door uses the workspace twin', E.upgrade('/workspace', 'v2') === '/workspace-v2');
-ok('an editor link stays classic while editor v2 has not landed', E.upgrade('/editor.html?id=p1&org=northstar', 'v2') === '/editor.html?id=p1&org=northstar');
+ok('a saved editor link stays classic while editor v2 is preview only', E.upgrade('/editor.html?id=p1&org=northstar', 'v2') === '/editor.html?id=p1&org=northstar');
 
 ok('Switch to classic carries the query and the override', E.classicHref('/workspace-v2', '?home=workspace', '') === '/workspace?home=workspace&ui=classic');
 ok('Switch to classic from the editor twin', E.classicHref('/editor-v2', '?id=1', '') === '/editor.html?id=1&ui=classic');

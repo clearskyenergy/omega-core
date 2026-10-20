@@ -521,6 +521,15 @@ assert.match(js, /if \(!bat\(\)\) \{ otherQuote\(\); return; \}/); assert.match(
 assert.match(js, /unit: asked \? \{ kw: UNIT\.kw, kwh: UNIT\.kwh, name: UNIT\.name \} : null/, 'a unit that is not a battery is never judged at the door'); assert.match(js, /var g = asked \? gridRecord\(\) : null;/, 'nor written to the grid record'); count += 2;
 assert.match(js, /st\('#ed-run', S\.conduit && bat\(\), !!S\.run\);/); assert.match(js, /st\('#ed-quote', !!S\.run \|\| !bat\(\), false\);/); count += 2;
 assert.ok((pg.match(/Sized in Site Map/g) || []).length >= 3 && (pg.match(/Quote required/g) || []).length >= 3, 'the words a non-battery step says'); count++;
+/* main (Editor v2 and the design order) on this page: a v2 project opens
+   in /editor-v2, and Send to the OEM opens the maker's purchase order
+   through /api/rfq, by the maker's SKU, on the rep's side of the Proposal
+   step — never on the customer's deck */
+assert.match(js, /S\.editorVersion = qp\('editor'\) === 'v2' \? 'v2' : 'classic';/); assert.match(js, /if \(d\.editor === 'v2'\) S\.editorVersion = 'v2';/); count += 2;
+assert.match(js, /if \(S\.projectId && S\.editorVersion === 'v2'\) return '\/editor-v2\?id=' \+ encodeURIComponent\(S\.projectId\) \+ '&from=prime';/); count++;
+assert.match(js, /fetch\('\/api\/rfq', \{ method: 'POST'/); assert.match(js, /sku: UNIT\.sku \|\| UNIT\.key \|\| ''/); assert.match(js, /estimateUsd: S\.run && S\.run\.totalUsd != null \? S\.run\.totalUsd : null/); count += 3;
+assert.ok(js.indexOf("+ oemBox() + listHtml('pq')") > 0 && js.indexOf('h += oemBox();') > 0 && /'<\/div>' \+ oemBox\(\);/.test(js), 'Send to the OEM sits on the rep\'s side, battery or not'); count++;
+assert.ok(!/q-oem|api\/rfq/.test(read('omega-quote-deck.js')), 'never on the customer\'s deck'); count++;
 assert.match(ed, /<script src="\/omega-grid-panel\.js"><\/script>[\s\S]{0,400}<script src="\/omega-prime-handoff\.js"><\/script>/); count++;
 
 /* The Site Map hand-off's VM checks moved to scripts/tests/tprimetransfer.js (2026-10-17). */

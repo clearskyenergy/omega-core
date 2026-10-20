@@ -38905,7 +38905,7 @@ function _bomRenderRfq(bom, byVendor, unknown, total) {
   window._BOM_RFQ = { byVendor: byVendor, bom: bom, unknown: unknown, total: total };
 
   var head = '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">'
-    + '✉ Request for Quote</div>';
+    + 'Send to the OEM</div>';
 
   var rows = vendors.map(function (v) {
     var g = byVendor[v];
@@ -38933,15 +38933,15 @@ function _bomRenderRfq(bom, byVendor, unknown, total) {
         + 'partner catalogue; a distributor prices those.' : '')
       + '</div>'
     : '<div style="font-size:9.5px;color:#6B8299;line-height:1.5">'
-      +   'No line on this BOM belongs to a partner manufacturer, so nothing routes to a factory. '
-      +   'A distribution partner can price the whole package — which is how most takeoffs get '
-      +   'quoted anyway.</div>';
+      +   'Published products on this drawing open a purchase order in the OEM workspace. '
+      +   'Lines that are not a published product stay on the drawing. A distribution partner, '
+      +   'if you pick one, is asked for the rest.</div>';
 
   host.innerHTML = head
     + '<div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.25);border-radius:7px;padding:10px 12px">'
     +   lead
     +   '<button onclick="openRfqFile()" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;color:#fff;border-radius:7px;padding:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700">'
-    +     'File RFQ →</button>'
+    +     'Send to the OEM</button>'
     +   '<div id="bom-rfq-msg" style="font-size:9.5px;margin-top:7px;line-height:1.5"></div>'
     + '</div>';
 }
@@ -39033,8 +39033,8 @@ function openRfqFile() {
     + 'box-shadow:0 24px 60px rgba(0,0,0,.55)">'
     + '<div style="display:flex;align-items:center;gap:10px;padding:16px 20px 12px;'
     +   'border-bottom:1px solid rgba(255,255,255,.08)">'
-    +   '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">File Request for Quote</div>'
-    +     '<div style="font-size:10px;color:var(--sub);margin-top:2px">Confirm where it ships and who prices it.</div></div>'
+    +   '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">Send to the OEM</div>'
+    +     '<div style="font-size:10px;color:var(--sub);margin-top:2px">The address, lines and estimate go with it. Nothing is retyped in Omega Logic.</div></div>'
     +   '<button onclick="document.getElementById(\'rfq-file-modal\').remove()" style="background:var(--hover-strong);'
     +     'border:1px solid var(--hairline);color:#8BA3C4;border-radius:6px;padding:4px 10px;'
     +     'cursor:pointer;font-family:inherit;font-size:13px">✕</button>'
@@ -39076,7 +39076,7 @@ function openRfqFile() {
     +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Cancel</button>'
     +     '<button id="rfq-send-btn" onclick="submitRfqFile()" style="flex:1;padding:10px;'
     +       'background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;color:#fff;font-weight:700;'
-    +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Send RFQ</button>'
+    +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Send to the OEM</button>'
     +   '</div>'
     + '</div></div>';
 
@@ -39231,11 +39231,10 @@ function submitRfqFile() {
     if (a) accounts[d.orgId] = a;
   });
 
-  var mfrCount = Object.keys((st.byVendor) || {}).length;
-  if (!toOrgIds.length && !mfrCount) {
-    return say('Pick at least one distribution partner — no line on this BOM routes to a manufacturer, '
-      + 'so there is nobody else to ask.', true);
-  }
+  /* A distributor is optional. Published products open the purchase order
+     in the OEM workspace even when nobody else is asked. */
+  var sendLines = ((st.bom && st.bom.items) || []).filter(function (it) { return !it.notHostScope; });
+  if (!sendLines.length) return say('This bill of materials has no lines to send.', true);
 
   var u = null;
   try { u = firebase.auth().currentUser; } catch (e) {}
@@ -39254,6 +39253,7 @@ function submitRfqFile() {
     toOrgIds: toOrgIds,
     accounts: accounts,
     note: String((document.getElementById('rfq-note') || {}).value || '').trim(),
+    estimateUsd: (window._COST_TOTAL > 0 ? window._COST_TOTAL : null),
     bom: (st.bom.items || []).filter(function (it) { return !it.notHostScope; }).map(function (it) {
       /* manufacturer travels with the line so the server can route a
          catalogue item to its factory even when no /equipment row exists
@@ -39264,7 +39264,7 @@ function submitRfqFile() {
     })
   };
 
-  function done() { if (btn) { btn.disabled = false; btn.textContent = 'Send RFQ'; } }
+  function done() { if (btn) { btn.disabled = false; btn.textContent = 'Send to the OEM'; } }
 
   u.getIdToken().then(function (tok) {
     return fetch('/api/rfq', {
@@ -39278,16 +39278,27 @@ function submitRfqFile() {
       done();
       if (r.ok) {
         var n = (j && j.recipients && j.recipients.length) || 0;
-        if (!n) return say('Nothing was routed — ' + ((j && j.skipped) || 'no eligible recipient')
+        var orders = (j && j.orders) || [];
+        var orderHtml = orders.map(function (o) {
+          var count = (o.lines || 0) + ' line' + (o.lines === 1 ? '' : 's');
+          if (o.sameWorkspace && o.href) return '<a href="' + _esc(o.href) + '">' + _esc(o.orderNo) + '</a> (' + count + ') in your workspace';
+          return _esc(o.orderNo) + ' (' + count + ') opened in ' + _esc(o.orgName || 'the OEM') + '\u2019s workspace';
+        }).join('; ');
+        var orderPlain = orders.map(function (o) {
+          return o.sameWorkspace ? (o.orderNo + ' is open in your workspace') : (o.orderNo + ' opened in ' + (o.orgName || 'the OEM') + '\u2019s workspace');
+        }).join('. ');
+        if (!n && !orders.length) return say('Nothing was routed — ' + ((j && j.skipped) || 'no eligible recipient')
           + '. The BOM is unchanged.', true);
         var m = document.getElementById('bom-rfq-msg');
-        if (m) m.innerHTML = '<span style="color:var(--green)">RFQ filed with ' + n + ' partner'
-          + (n === 1 ? '' : 's') + '. Track it under RFQs on the project.</span>';
+        var filed = orderHtml
+          ? ('Purchase order ' + orderHtml + (n ? '. Also asked ' + n + ' partner' + (n === 1 ? '' : 's') + '.' : '.'))
+          : ('RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's') + '. Track it under RFQs on the project.');
+        if (m) m.innerHTML = '<span style="color:var(--green)">' + filed + '</span>';
         var host = document.getElementById('rfq-file-modal');
         if (host) host.remove();
         if (typeof showBanner === 'function') {
-          showBanner('cal', 'RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's')
-            + ' — replies land on this project.');
+          showBanner('cal', orderPlain || ('RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's')
+            + ' — replies land on this project.'));
         }
         return;
       }

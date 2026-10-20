@@ -667,7 +667,8 @@ function primeRow(id, p) {
 }
 function openProject(id) {
   var slug = WS && WS.allowedDomain ? String(WS.allowedDomain).split('.')[0] : '';
-  window.location.href = '/editor.html?id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
+  var project = DATA.projects.filter(function(p){return p.id === id;})[0];
+  window.location.href = (project && project.editor === 'v2' ? '/editor-v2?id=' : '/editor.html?id=') + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
 }
 function toolIcon(t) { return t && t.icon ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="' + esc(t.icon) + '"/></svg>' : S.ICON.tools; }
 
