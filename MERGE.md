@@ -43,9 +43,14 @@ zoom 21 where its 8 ft is 44), every unit on a 22 px floor, so Prime's gear
   one rule) to the rescale, in `stampSizes` / `rescale` / `syncDom`, and
   stamps its footprint as its ground size (`_geoWFt`, read by the takeoff
   and the GeoJSON export); it still sizes what has no footprint;
-- a width typed in the properties panel (`uP('w')`) is recorded in feet as
-  the drag-resize path records it, or the reconnected rescale would put the
-  old size back; a selected unit keeps its outline when it is redrawn.
+- a size set by hand is recorded in feet, or the reconnected rescale would
+  put the old size back on the next pass: a width typed in the properties
+  panel (`uP('w')`, as the drag-resize path already did), a DCFC unit typed
+  in feet (`OmegaDCFC.setUnitFt`, which kept it only in `evFtL/evFtW`, now
+  also read first by `_elFootprintFt` for projects saved before), a unit
+  scaled in the 3D site view (`applyModelEdit`), and a battery the
+  multi-piece Solar + Storage build sizes to its rating (it kept `_evAdd`'s
+  unrated 10 x 5 ft); a selected unit keeps its outline when it is redrawn.
 Held by `scripts/render-element-zoom.js` (in `check:pages`; the real editor
 in Chromium on a new Maps double, `scripts/_lib/gmaps-double.js`: guided-
 build, Prime and Insert gear through zooms 17–22, every box its footprint x

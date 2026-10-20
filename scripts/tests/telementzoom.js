@@ -127,6 +127,15 @@ Sel.S.elements.push(evgear('x', 6, 4, 28, 20, 0, 0)); Sel.S.sel = 'x';
 Sel.run('omegaRescaleElements()');
 ok(Sel.nodes.x && Sel.nodes.x.classList.contains('sel'), 'the selected unit is redrawn with its outline (selEl’s class put back)');
 
+/* a size set by hand is the footprint: a DCFC unit typed in feet (evFtL /
+   evFtW, OmegaDCFC.setUnitFt) wins over what it was placed with, saved
+   before setUnitFt also wrote lf/wf or after */
+var T = editor({ ppf: 2.742 });
+T.S.elements.push({ id: 'typed', type: 'evgear', evKind: 'charger', x: 0, y: 0, w: 14, h: 12, lf: 2.9, wf: 3.1, minW: 14, minH: 12, evFtL: 7, evFtW: 5 });
+eq(JSON.stringify(T.run('_elFootprintFt(S.elements[0])')), JSON.stringify({ lf: 7, wf: 5 }), 'a unit typed at 7 x 5 ft is 7 x 5 ft, whatever _evAdd recorded');
+T.run('omegaRescaleElements()');
+eq(T.S.elements[0].w + 'x' + T.S.elements[0].h, '19x14', 'and is drawn so: 7 x 5 ft at 2.742 px/ft');
+
 /* ═══ 2 · only equipment with a footprint ════════════════════════════ */
 var O = editor();
 eq(O.run('omegaElementFootprint({ type:"text", w:100, lf:5 })'), null, 'a text note is not equipment');
@@ -197,6 +206,14 @@ var geo = ED.slice(geoAt, ED.indexOf('</script>', geoAt));
 ok(/window\.omegaElementFootprint\(el\)/.test(block(geo, '  function owned(el){')), 'by asking omegaElementFootprint, the one rule');
 var stamp = block(geo, '  function stampSizes(){');
 ok(/el\._geoWFt=fp\.lf; el\._geoHFt=fp\.wf;/.test(stamp), 'and stamps its footprint as its ground size (the takeoff and the GeoJSON export read it)');
+/* every other place a unit's size is set by hand records it in feet too,
+   or the rescale puts the old size back on the next pass */
+var setUnit = block(ED, 'function setUnitFt(el, lengthFt, widthFt){');
+ok(/el\.lf = L; el\.wf = W; el\.minW = 12; el\.minH = 10;/.test(setUnit), 'a DCFC unit typed in feet (setUnitFt) records it as its footprint, on the 12 x 10 px it draws');
+ok(/el\.lf=\+_fp\.lf; el\.wf=\+_fp\.wf;/.test(ED.slice(ED.indexOf("var _fp=_bessFootprint(BGB.kwh, BGB.kw), _d=_evPx('bess', _fp);"), ED.indexOf("var _fp=_bessFootprint(BGB.kwh, BGB.kw), _d=_evPx('bess', _fp);") + 900)),
+  'a battery the multi-piece build sizes to its rating records that footprint, not the unrated 10 x 5 ft');
+var model = block(ED, 'function applyModelEdit(id,change){');
+ok(/\['lf','wf','evFtL','evFtW'\]\.forEach/.test(model), 'a unit scaled in the 3D site view scales its feet with its pixels');
 var up = block(ED, 'function uP(k,v){');
 ok(/el\.lf = el\.w\/S\.pxPerFt; el\.wf = _uh\/S\.pxPerFt;/.test(up), 'a width typed in the properties panel is recorded in feet, as the drag-resize path records it');
 var insAt = ED.indexOf("  var TAG = '[omega/insert]';");

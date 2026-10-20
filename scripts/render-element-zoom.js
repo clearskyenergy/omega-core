@@ -26,7 +26,9 @@
  *     overlaps at any zoom where its 4 px floor leaves the gap;
  *   - the size waits for the map's idle instead of moving with the position
  *     (checked two frames after the zoom), or another pass changes it later;
- *   - a width typed in the properties panel does not hold through a zoom, or
+ *   - a size set by hand does not hold through a zoom: a width typed in the
+ *     properties panel, a DCFC unit typed in feet (OmegaDCFC.setUnitFt) or
+ *     saved before that recorded it, a unit scaled in the 3D site view; or
  *     the selected unit loses its outline when it is redrawn;
  *   - the rescale never runs, or runs twice in one animation frame;
  *   - the ground size the takeoff and the GeoJSON export read (_geoWFt) is
@@ -187,10 +189,27 @@ function ok(value, label) { assert(value, label); count++; }
         rec(el, 'insert', { lf: el.lf, wf: el.wf }, cfg.insertFloor);
         out[out.length - 1].dropW = dw;
       });
+      /* D. a size set by hand, which is the footprint from then on: a DCFC
+         unit typed in feet in its panel (OmegaDCFC.setUnitFt, on 12 x 10 px);
+         one saved before that recorded it (evFtL/evFtW only, its pixels as
+         the panel drew them); and a transformer scaled x2 in the 3D site view */
+      var dy = sz.h / 2 + 260;
+      var typed = _evAdd('charger', sz.w / 2 - 300, dy, 'DCFC typed', '');
+      OmegaDCFC.setUnitFt(typed, 8, 6);
+      rec(typed, 'typed', { lf: 8, wf: 6 }, { w: 12, h: 10 });
+      var saved = _evAdd('charger', sz.w / 2 - 180, dy, 'DCFC typed, saved', '');
+      var sc0 = { x: saved.x + saved.w / 2, y: saved.y + saved.h / 2 };
+      saved.evFtL = 7; saved.evFtW = 5; saved.w = Math.max(12, Math.round(7 * ppf)); saved.h = Math.max(10, Math.round(5 * ppf));
+      saved.x = sc0.x - saved.w / 2; saved.y = sc0.y - saved.h / 2;
+      _reRenderEl(saved.id);
+      rec(saved, 'typed', { lf: 7, wf: 5 }, { w: saved.minW, h: saved.minH });
+      var big = _evAdd('xfmr', sz.w / 2 - 40, dy, 'Transformer x2', '');
+      OmegaSiteVis.applyModelEdit(big.id, { scale: 2 });
+      rec(big, 'scaled', { lf: 12, wf: 8 }, { w: big.minW, h: big.minH });
       return { ppf: ppf, els: out, marker: marker, insertFloor: (window.OmegaInsert && OmegaInsert.floorPx) || null };
     }, { minPx: PRIME_MIN_PX, insertFloor: INSERT_FLOOR });
     var ppf0 = placed.ppf;
-    ok(placed.els.length >= 11, 'gear placed: ' + placed.els.length);
+    ok(placed.els.length >= 14, 'gear placed: ' + placed.els.length);
     placed.els.filter(function (e) { return e.group === 'insert'; }).forEach(function (e) {
       ok(e.lf > 0 && e.wf > 0, e.kind + ': Insert recorded its footprint (' + e.lf + ' x ' + e.wf + ' ft)');
       ok(Math.abs(e.dropW - Math.max(INSERT_FLOOR.w, Math.round(e.lf * ppf0))) <= 1, e.kind + ': dropped at ' + e.dropW + ' px, its footprint or the 22 px floor');

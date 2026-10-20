@@ -66107,6 +66107,10 @@ function _elFootprintFt(el){
     try{ var _cm=EVC_L2[el.catalogId]; lf=+_cm.lf||0; wf=+_cm.wf||0;
          if(!(el.minW>0) && _cm.minW) el.minW=_cm.minW; if(!(el.minH>0) && _cm.minH) el.minH=_cm.minH; }catch(e){}
   }
+  /* A unit size typed in feet (the DCFC panel's OmegaDCFC.setUnitFt) is the
+     footprint, over whatever the unit was placed with: one saved before
+     setUnitFt also wrote lf/wf carries it only here. */
+  if(+el.evFtL>0 && +el.evFtW>0){ lf=+el.evFtL; wf=+el.evFtW; }
   if(!(lf>0) && typeof footprintOf==='function' && el.eqId){
     try{ var f=footprintOf(el.eqId); if(f){ lf=+f.lf||0; wf=+f.wf||0; } }catch(e){}
   }
@@ -69605,7 +69609,11 @@ function placeBgbAt(p){
       /* Resize to the rating now that we know it. */
       try{
         var _fp=_bessFootprint(BGB.kwh, BGB.kw), _d=_evPx('bess', _fp);
-        if(_d && _d.w){ el.w=_d.w; el.h=_d.h; }
+        /* and record it as the footprint: the zoom rescale draws a unit at
+           lf/wf, which _evAdd set to the unrated 10 x 5 ft, so a rated
+           battery was put back to that on the next pass. (Every rating's
+           footprint is over 4 ft, so _evAdd's 28 x 20 floor still holds.) */
+        if(_d && _d.w){ el.w=_d.w; el.h=_d.h; el.aspect=_d.h/_d.w; el.lf=+_fp.lf; el.wf=+_fp.wf; }
       }catch(e){}
     }
     if(_isBessNode){
@@ -148724,6 +148732,14 @@ function applyModelEdit(id,change){
   var old=elementBox(ref), factor=change.scale==null?1:change.scale;
   ref.w=old.w*factor;
   if(ref.type==='evgear')ref.h=old.h*factor;
+  /* The footprint scales with it: the zoom rescale draws equipment from its
+     feet (omegaRescaleElements), so pixels scaled alone were put back on the
+     next pass. Whichever of the feet fields the unit carries. (A unit whose
+     maker released no footprint is a marker of no size of its own and keeps
+     it.) */
+  if(factor!==1){
+   ['lf','wf','evFtL','evFtW'].forEach(function(k){if(+ref[k]>0)ref[k]=+ref[k]*factor;});
+  }
   ref.x=old.x+dx+(old.w-ref.w)/2;
   ref.y=old.y+dy+(old.h-elementBox(ref).h)/2;
   // Catalog-based 3D dimensions scale from their original footprint.
@@ -156514,6 +156530,10 @@ function setUnitFt(el, lengthFt, widthFt){
   var W = Math.max(0.5, +widthFt || unitFt(el).w);
   /* Record the specified size first so it survives the drawing floor. */
   el.evFtL = L; el.evFtW = W;
+  /* It is the unit's footprint from now on: the zoom rescale draws equipment
+     at lf/wf on its own floor (omegaRescaleElements), so a size kept only in
+     evFtL/evFtW was put back to the catalogue's on the next pass. */
+  el.lf = L; el.wf = W; el.minW = 12; el.minH = 10;
   el.w = Math.max(12, Math.round(L * p));
   el.h = Math.max(10, Math.round(W * p));
   el.aspect = el.h / el.w;
