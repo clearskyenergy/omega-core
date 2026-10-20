@@ -392,7 +392,11 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     ok('the path is open to where it was left', ['start', 'atlas', 'circuit', 'load', 'map'].every(function (k) { return rs.seen.indexOf(k) >= 0; }), rs.seen);
     ok('resuming writes nothing', rs.writes === 0, rs.writes);
     var bn = await text(p, '#banner');
-    ok('a project Site Map has saved says so: edited in Site Map since, built in Site Map on', /^Edited in Site Map since Oct/.test(bn) && /Built in Site Map on Oct/.test(rs.side) && !/Changed in Prime/.test(rs.side), { banner: bn, side: rs.side.slice(0, 400) });
+    /* Site Map is the engineering editor, never "the design of record" over
+       Prime's own (2026-10-20, Tommy): no banner says so; the side panel says
+       the proposal is priced from the design here */
+    ok('a project Site Map has built says it went there for engineering, and that the proposal is priced from the design here', !/design of record/.test(bn) && !/Edited in Site Map/.test(bn) &&
+      /Sent to Site Map for engineering on Oct/.test(rs.side) && /The proposal is priced from the design here/.test(rs.side) && !/Changed here since/.test(rs.side), { banner: bn, side: rs.side.slice(0, 400) });
     await p.click('#path button[data-step="circuit"]');
     var circ2 = await until(p, function () { var t = document.getElementById('sfRes').textContent; return /Circuit F0297/.test(t) ? t : null; });
     ok('the circuit step shows the saved answer without asking again', !!circ2 && /As checked/.test(circ2) && /10,725 kW/.test(circ2) && calls.hosting.length === 1, { calls: calls.hosting.length, circ: circ2 && circ2.slice(0, 200) });
@@ -460,7 +464,7 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     await p.click('#ed-conduit'); await p.click('#ed-run');
     await until(p, function () { return document.getElementById('ed-run').classList.contains('done') ? true : null; });
     await p.click('#ed-quote');
-    ok('changed in Prime after Site Map built it: the side panel says so', /Changed in Prime since it went to Site Map/.test(await text(p, '#edSide')), (await text(p, '#edSide')).slice(0, 400));
+    ok('changed in Prime after Site Map built it: the side panel says so, and that the proposal follows this design', /Changed here since it went to Site Map\. The proposal follows this design/.test(await text(p, '#edSide')), (await text(p, '#edSide')).slice(0, 400));
     var staleTxt = await until(p, function () { var e = document.getElementById('pqStale'); return e ? e.textContent : null; });
     ok('a proposal priced before the design changed says so plainly and offers Save again', !!staleTxt && /design changed/.test(staleTxt), staleTxt);
     await p.click('#pq-resave');
@@ -573,9 +577,33 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     await p.setViewportSize({ width: 1440, height: 900 });
 
     /* ── the start screen lists the site to continue ── */
+    /* and a second, older site with no proposal, to delete (2026-10-20,
+       Tommy: "need to be able to delete these things as well") */
+    await p.evaluate(function (o) { window.__firebaseDouble.store.docs['projects/p-old-sketch'] = { orgId: o, uid: 'rep-1', name: '1 Test St, Mesa, AZ 85201', address: '1 Test St, Mesa, AZ 85201', type: 'bess', elements: [],
+      prime: { v: 2, step: 'map', savedAt: 1700000000000, site: { addr: '1 Test St, Mesa, AZ 85201' }, unit: { short: 'R60' } } }; }, ORG);
     await p.goto(base + '/omega-prime', { waitUntil: 'domcontentloaded' });
-    var cont = await until(p, function () { var c = document.getElementById('cont'); return c && !c.hidden ? [].map.call(document.querySelectorAll('#contList a'), function (a) { return a.getAttribute('href') + ' ' + a.textContent; }) : null; });
-    ok('"Continue a site" lists the workspace\'s Prime projects', cont && cont.length === 1 && cont[0].indexOf('/omega-prime?id=' + pid) === 0 && /3400 S Federal St/.test(cont[0]) && /approved/.test(cont[0]), cont);
+    var cont = await until(p, function () { var c = document.getElementById('cont'); return c && !c.hidden && document.querySelectorAll('#contList a').length === 2 ? [].map.call(document.querySelectorAll('#contList a'), function (a) { return a.getAttribute('href') + ' ' + a.textContent; }) : null; });
+    ok('"Continue a site" lists the workspace\'s Prime projects', cont && cont.length === 2 && cont[0].indexOf('/omega-prime?id=' + pid) === 0 && /3400 S Federal St/.test(cont[0]) && /approved/.test(cont[0]) && /1 Test St/.test(cont[1]), cont);
+    var rowsC = await p.$$eval('#contList .controw', function (rs) { return rs.map(function (r) { return { del: !!r.querySelector('.contdel'), kept: !!r.querySelector('.contkeep') }; }); });
+    ok('a site whose proposal went to the customer is kept; one with none can be deleted', rowsC.length === 2 && rowsC[0].kept && !rowsC[0].del && rowsC[1].del && !rowsC[1].kept, rowsC);
+    /* the page asks with window.confirm; answered yes here, the question kept */
+    await p.evaluate(function () { window.__asked = ''; window.confirm = function (m) { window.__asked = m; return true; }; });
+    await p.click('#contList .contdel');
+    var goneC = await until(p, function () { return document.querySelectorAll('#contList .controw').length === 1 && !window.__firebaseDouble.store.docs['projects/p-old-sketch'] ? true : null; });
+    var asked = await p.evaluate(function () { return window.__asked; });
+    ok('Delete asks first, then removes the project and its row', !!goneC && /Delete "1 Test St, Mesa, AZ 85201"\?/.test(asked) && /cannot be undone/.test(asked) && !!(await storeOf(p)).docs['projects/' + pid], asked);
+    /* the guide moves by its header, stays where it was put in this browser,
+       and a double-click puts it back (2026-10-20, Tommy: "this panel needs
+       to be able to be moved") */
+    var gh = await p.$eval('#guide .gh', function (e) { var r = e.getBoundingClientRect(), g = document.getElementById('guide').getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2, left: g.left, top: g.top }; });
+    await p.mouse.move(gh.x, gh.y); await p.mouse.down(); await p.mouse.move(gh.x - 300, gh.y - 200, { steps: 8 }); await p.mouse.up();
+    var movedG = await p.evaluate(function () { var g = document.getElementById('guide'), r = g.getBoundingClientRect(); return { moved: g.classList.contains('moved'), x: r.left, y: r.top, saved: localStorage.getItem('omega-prime:guide-at') }; });
+    ok('the guide moves by its header, and this browser keeps where it was put', movedG.moved && Math.abs(movedG.x - (gh.left - 300)) < 3 && Math.abs(movedG.y - (gh.top - 200)) < 3 && !!movedG.saved, { before: gh, after: movedG });
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    var backG = await until(p, function () { var g = document.getElementById('guide'); if (!g || !g.classList.contains('moved')) return null; var r = g.getBoundingClientRect(); return { x: r.left, y: r.top }; });
+    ok('a reload keeps it there', !!backG && Math.abs(backG.x - movedG.x) < 3 && Math.abs(backG.y - movedG.y) < 3, backG);
+    await p.dblclick('#guide .gh span');
+    ok('a double-click puts it back in its corner', await p.evaluate(function () { var g = document.getElementById('guide'); return !g.classList.contains('moved') && !g.style.left && !localStorage.getItem('omega-prime:guide-at'); }));
 
     /* ── a second proposal on the site: listed with the first, newest first;
        a total with cents survives a reload and a re-save; &step= and

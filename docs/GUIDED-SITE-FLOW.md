@@ -183,7 +183,9 @@ and 2026-10-17, when it moved onto the national door (gap 6).
 
 Tommy: "it does the set up and system like the artifact sandbox."
 `omega-prime.html` now runs Site → Grid Atlas → Circuit → **Load** →
-Site Map → **Proposal** → **Track** and ends in a real project, a
+**Design** (Prime's own drawing, which the proposal is priced from; Site
+Map is the detailed engineering editor it can be sent to) → **Proposal** →
+**Track** and ends in a real project, a
 proposal the customer approves online, and the order in the workspace's
 own Omega Logic, followed to **Omega Teleios** (complete: on site, every
 warranty live):

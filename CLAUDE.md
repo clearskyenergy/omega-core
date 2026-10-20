@@ -1468,7 +1468,13 @@ editor it needs to transfer over what we drew … save this process … send a
 simple proposal out that matches the tenant's details … track them … if it
 gets approved then it goes to omega logic to be fulfilled and when it is
 fulfilled … Omega Teleios (which means complete)"). `omega-prime.html` runs
-Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
+Site → Grid Atlas → Circuit → Load → Design → Proposal → Track. **Prime's
+own drawing (Design) is what the proposal is priced from**; Site Map is the
+detailed engineering editor a design is sent to, never its design of record
+(2026-10-20, Tommy: "this should come from the prime editor we used … the
+site map editor is for our detailed engineering drawings"). A site with no
+proposal out and no order can be deleted from *Continue a site*; the guide
+panel moves (kept per browser, docked on a phone):
 - **Units.** `omega-prime-project.js units()`: the workspace's own products
   (a `PLACEHOLDER SPEC` row dropped), then Clean Cell's Rev H reference units
   biggest first (LG JP-2, Smart Module, CC290/125, through
@@ -1946,6 +1952,22 @@ tenant. Treat it that way.
   rollup) needs nothing. A refused save loses nothing: the drawing is still
   in that tab, and the person reloads. Rules deploy by hand
   (`firebase deploy --only firestore:rules`). `scripts/tests/tsaveguard.js`.
+- **Equipment is drawn from its footprint in feet, by ONE pass** (2026-10-17,
+  found by the Prime transfer: the rescale had never run). The anchor
+  engine's `run()` (UNIFIED ANCHORING) calls `omegaRescaleElementsOnce` once
+  per frame, about each centre, on the floor the unit was placed with
+  (`minW/minH`, else Insert's `OmegaInsert.floorPx`); OmegaGeo leaves
+  anything `omegaElementFootprint` claims. Code that sets a unit's size by
+  hand records it in feet (`lf/wf`) or the next pass undoes it. What has no
+  footprint stays OmegaGeo's, stamped at the scale it was DRAWN at (on
+  `zoom_changed`, before anything resizes; 2026-10-20), and the anchor engine
+  centres on `_elRenderSize`, as every stamper does.
+  `standDown()` replaces `window._geoReprojectAll` at boot and every wrapper
+  hung on it before then goes with it (that is how the rescale, and the
+  orphan sweep, were lost): a pass that must follow the map belongs in
+  `run()`. `npm run
+  check:element-zoom` zooms the real editor on `scripts/_lib/gmaps-double.js`;
+  `scripts/tests/telementzoom.js`.
 - Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
   and state parcel services. The editor's View › Parcel Lines draws them on
   the map and `api/parcel.js` asks the same counties for a point; a county

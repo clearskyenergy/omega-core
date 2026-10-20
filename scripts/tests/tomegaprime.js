@@ -515,7 +515,7 @@ assert.ok(!/markupPct \* |\* \(1 \+|sellCents|marginCents/.test(js), 'the page d
 assert.match(js, /return '\/omega-logic\?org=' \+ encodeURIComponent\(ws\) \+ '&order=' \+ encodeURIComponent\(h\.orderId\) \+ '#orders';/); assert.match(js, /return '\/omega-logic\?org=' \+ encodeURIComponent\(ws\);/); count += 2;
 assert.match(js, /var ws = wsOrg\(\)/); assert.match(js, /function wsOrg\(\) \{ return S\.orgId \|\| \(S\.who && S\.who\.orgId\) \|\| ''; \}/); count += 2;
 assert.match(js, /\/rfq\.html#customer-' \+ encodeURIComponent\(q\.id\)/); assert.match(js, /\/logic-custody\.html\?org=' \+ encodeURIComponent\(custodyOrg\)/); assert.match(js, /action: 'handoff', id: q\.id/); count += 3;
-assert.match(pg, /\['start', 'Site'\], \['atlas', 'Grid Atlas'\], \['circuit', 'Circuit'\], \['load', 'Load'\], \['map', 'Site Map'\], \['quote', 'Proposal'\], \['track', 'Track'\]/, 'the path bar'); count++;
+assert.match(pg, /\['start', 'Site'\], \['atlas', 'Grid Atlas'\], \['circuit', 'Circuit'\], \['load', 'Load'\], \['map', 'Design'\], \['quote', 'Proposal'\], \['track', 'Track'\]/, 'the path bar'); count++;
 assert.ok(!/=>|`|\bconst\s|\blet\s|\basync\s/.test(js), 'the page script is ES5'); count++;
 /* main #348 on this page: every project type, Site Map's link read, a
    unit that is not a battery carried through as quote required, Omega
@@ -542,6 +542,33 @@ assert.match(js, /if \(S\.projectId && S\.editorVersion === 'v2'\) return '\/edi
 assert.match(js, /fetch\('\/api\/rfq', \{ method: 'POST'/); assert.match(js, /sku: UNIT\.sku \|\| UNIT\.key \|\| ''/); assert.match(js, /estimateUsd: S\.run && S\.run\.totalUsd != null \? S\.run\.totalUsd : null/); count += 3;
 assert.ok(js.indexOf("+ oemBox() + listHtml('pq')") > 0 && js.indexOf('h += oemBox();') > 0 && /'<\/div>' \+ oemBox\(\);/.test(js), 'Send to the OEM sits on the rep\'s side, battery or not'); count++;
 assert.ok(!/q-oem|api\/rfq/.test(read('omega-quote-deck.js')), 'never on the customer\'s deck'); count++;
+/* Prime's own drawing step is "Design", and the proposal is priced from it:
+   Site Map is the detailed engineering editor, never "the design of record"
+   over Prime's (2026-10-20, Tommy) */
+assert.ok(pg.indexOf('design of record') < 0 && pg.indexOf('Design it in Site Map') < 0 && pg.indexOf("from this site's map") < 0, 'the proposal is priced from the design here'); count++;
+assert.match(pg, /from the design you drew here in Prime/); assert.match(js, /\$\('#edTitle'\)\.textContent = 'Design · ' \+ S\.addr;/); count += 2;
+/* Delete on "Continue a site" (2026-10-20, Tommy: "need to be able to delete
+   these things as well"): the project itself, asked first, never a site a
+   customer has a proposal from or that has an order */
+assert.match(js, /function deletable\(p\) \{ var q = p && p\.quote && p\.quote\.status; return !!p && !p\.order && \['sent', 'viewed', 'approved'\]\.indexOf\(q\) < 0; \}/); count++;
+assert.match(js, /if \(!window\.confirm\('Delete "' \+ name \+ '"\?/); assert.match(js, /firebase\.firestore\(\)\.collection\('projects'\)\.doc\(id\)\.delete\(\)/); count += 2;
+assert.equal((js.match(/\.delete\(\)/g) || []).length, 1, 'one delete on the page: the site, asked first'); count++;
+/* the guide moves (2026-10-20, Tommy: "this panel needs to be able to be
+   moved"), kept in this browser, docked on a phone */
+assert.match(js, /KEY = 'omega-prime:guide-at'/); assert.match(js, /h\.addEventListener\('pointerdown'/); assert.match(js, /matchMedia\('\(max-width: 760px\)'\)/); assert.match(pg, /#guide\.moved\{right:auto;bottom:auto\}/); count += 4;
+/* a calendar day stays that day in every time zone: the ladder carries
+   custody's days as midnight UTC, and Track read "Shipped Sep 27" in
+   Chicago for a unit shipped on Sep 28 (2026-10-20). The page's own reader,
+   run under real time zones west and east of UTC. */
+var dayFns = pg.slice(pg.indexOf('function ymdOf('), pg.indexOf('/* a valid-until DATE'));
+function daysIn(tz) {
+  return JSON.parse(require('child_process').execFileSync(process.execPath, ['-e', dayFns + ';process.stdout.write(JSON.stringify([day("2026-09-28T00:00:00.000Z"), day("2026-09-28"), day("2026-09-28T15:00:00.000Z"), day("2026-10-06T00:00:00Z")]))'],
+    { env: Object.assign({}, process.env, { TZ: tz }) }).toString());
+}
+['America/Chicago', 'America/Phoenix', 'Pacific/Honolulu', 'UTC', 'Asia/Tokyo'].forEach(function (tz) {
+  /* a real instant (3 pm UTC) still reads in local time: past midnight in Tokyo */
+  assert.deepEqual(daysIn(tz), ['Sep 28, 2026', 'Sep 28, 2026', tz === 'Asia/Tokyo' ? 'Sep 29, 2026' : 'Sep 28, 2026', 'Oct 6, 2026'], 'a ladder day is its calendar day in ' + tz); count++;
+});
 assert.match(ed, /<script src="\/omega-grid-panel\.js"><\/script>[\s\S]{0,400}<script src="\/omega-prime-handoff\.js"><\/script>/); count++;
 
 /* The Site Map hand-off's VM checks moved to scripts/tests/tprimetransfer.js (2026-10-17). */
