@@ -325,6 +325,15 @@
     setTimeout(function () { doc.addEventListener('click', function h(e) { if (!host.contains(e.target)) { closeMenu(); doc.removeEventListener('click', h); } }); }, 0);
   }
 
+  /* the rail's own icon for a link to one of its pages, so a side panel's
+     Portfolio row wears the rail's Portfolio (Tommy, 2026-10-20: "icons
+     need to match"); a bare #view is the home's. Null when no rail item
+     opens it. */
+  function iconFor(href) {
+    var bare = function (h) { h = String(h || ''); if (h.charAt(0) === '#') h = '/workspace' + h; return h.replace(/\.html(?=$|[#?])/, ''); }, h = bare(href);
+    for (var i = 0; i < NAV.length; i++) if (NAV[i].key && NAV[i].icon && bare(NAV[i].href) === h) return ICON[NAV[i].icon] || null;
+    return null;
+  }
   /* the side panel: a quick look at an area, with the page a click further */
   function drawer(o) {
     o = o || {}; closeDrawer();
@@ -473,5 +482,5 @@
     both(); global.addEventListener('omega:entitlements', both); setTimeout(both, 1500);
   }
 
-  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, wear: wear, currentKey: currentKey, homeOf: homeOf, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, PRODUCT: PRODUCT, esc: esc, initials: initials };
+  global.OmegaWorkspaceShell = { mount: mount, adopt: adopt, wear: wear, currentKey: currentKey, homeOf: homeOf, paint: paint, badge: badge, section: section, workspaces: workspaces, drawer: drawer, closeDrawer: closeDrawer, toast: toast, signOut: signOut, theme: theme, homeHref: homeHref, wantsWorkspace: wantsWorkspace, closeRail: closeRail, ICON: ICON, iconFor: iconFor, PRODUCT: PRODUCT, esc: esc, initials: initials };
 })(window);

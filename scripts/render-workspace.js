@@ -743,8 +743,27 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     /* the side panel from a hub cell */
     await p.evaluate(function () { window.location.hash = ''; }); await wait(150);
     await p.click('#hub .hx[data-hub="design"]'); await wait(300);
-    var drawer = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, rows: e.querySelectorAll('.ows-row').length, locked: e.querySelectorAll('.ows-row.locked').length }; }).catch(function () { return null; });
-    ok('northstar: a hub cell opens the side panel with the area\'s tools, Deluxe ones locked', drawer && /Design/.test(drawer.title) && drawer.rows >= 4 && drawer.locked >= 1, drawer);
+    var drawer = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, rows: Array.prototype.map.call(e.querySelectorAll('.ows-row'), function (r) { return r.getAttribute('data-row') + (r.classList.contains('locked') ? ':locked' : ''); }) }; }).catch(function () { return null; });
+    /* Design's extras are hidden until the person shows them (Tommy, 2026-10-20: "hide these … in settings a panel that allows us to hide or show the extra tools in the hex") */
+    ok('northstar: the Design panel lists Site Map and the sandbox, its extras one row away', drawer && /Design/.test(drawer.title) && drawer.rows.join() === 'editor,sandbox,hub-hidden', drawer);
+    await p.click('.ows-drawer .ows-row[data-row="hub-hidden"]'); await wait(300);
+    var ht = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, first: (e.querySelector('.hub-group') || {}).getAttribute && e.querySelector('.hub-group').getAttribute('data-group'), off: Array.prototype.filter.call(e.querySelectorAll('.hub-group[data-group="design"] [data-tool]'), function (b) { return b.getAttribute('aria-checked') === 'false'; }).map(function (b) { return b.getAttribute('data-tool'); }) }; }).catch(function () { return null; });
+    ok('northstar: Show opens Tools in the hub on Design, its extras switched off', ht && ht.title === 'Tools in the hub' && ht.first === 'design' && ht.off.join() === 'siteoptimizer,powerflow,sitediscovery,conductorsizing', ht);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-tools-settings.png') });
+    await p.click('.ows-drawer .hub-group[data-group="design"] [data-tool="siteoptimizer"]'); await wait(900);
+    var hubSaved = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path) && w.data.workspace && w.data.workspace.hubTools; }).map(function (w) { return { path: w.path, hubTools: w.data.workspace.hubTools, feed: w.data.workspace.feed }; }); });
+    ok('northstar: a switch saves the person\'s hub tools on their own layout, and nothing of Customize\'s', hubSaved.length === 1 && hubSaved[0].path === 'dashboard_layouts/' + ns.org + '__' + ns.user.uid && hubSaved[0].hubTools.siteoptimizer === true && hubSaved[0].feed === undefined, hubSaved);
+    await p.keyboard.press('Escape'); await wait(200);
+    await p.click('#hub .hx[data-hub="design"]'); await wait(300);
+    var shownNow = await p.$$eval('.ows-drawer .ows-row', function (r) { return r.map(function (x) { return x.getAttribute('data-row') + (x.classList.contains('locked') ? ':locked' : ''); }); });
+    ok('northstar: the extra shown is listed, locked on Standard, the rest still behind the row', shownNow.join() === 'editor,sandbox,siteoptimizer:locked,hub-hidden', shownNow);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-design-panel.png') });
+    await p.keyboard.press('Escape'); await wait(200);
+    /* a page row wears the rail's own icon (Tommy, 2026-10-20: "icons need to match") */
+    await p.click('#hub .hx[data-hub="projects"]'); await wait(300);
+    var icons = await p.evaluate(function () { var ic = function (el) { var s = el && el.querySelector('svg'); return s ? s.innerHTML : ''; }; return { rail: ic(document.querySelector('#side-nav .sn-item[data-key="portfolio"]')), row: ic(document.querySelector('.ows-drawer .ows-row[data-row="p:/portfolio.html"] .ic')), railP: ic(document.querySelector('#side-nav .sn-item[data-key="projects"]')), rowP: ic(document.querySelector('.ows-drawer .ows-row[data-row="p:/projects.html"] .ic')) }; });
+    ok('northstar: the Projects panel\'s Portfolio and All projects wear the rail\'s icons', icons.rail && icons.rail === icons.row && icons.railP && icons.railP === icons.rowP, icons);
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-projects-panel.png') });
     await p.keyboard.press('Escape'); await wait(200);
     ok('northstar: Escape closes it', (await p.$('.ows-drawer')) === null);
     /* the Finance hex lists the VPP Earnings Simulator beside the Value Stack (2026-09-29, Tommy: "i want it in the finance tab") */

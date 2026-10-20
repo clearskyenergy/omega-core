@@ -932,7 +932,16 @@ toast, phone tab bar); a page never builds its own rail. The hub is
 six cells from `OMEGATools.isUnlocked()` — showing a cell is never access —
 and `scripts/tests/tworkspacehub.js` asserts every key it names against the
 real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
-a locked tile explains, never hides. Today is `omega-workspace-today.js`
+a locked tile explains, never hides. **A hex's side panel lists its core
+tools; an area's `extras` wait in Settings** (2026-10-20, Tommy, of
+Design's optimizer, power flow, discovery and conductor sizing: "hide
+these … in settings a panel that allows us to hide or show the extra
+tools in the hex"): `OmegaWorkspaceHub.items` / `hidden` / `choices` read
+the person's own `dashboard_layouts/{org}__{uid}.workspace.hubTools`
+over the area's default, the panel ends with "N more tools hidden" →
+Settings › Tools in the hub (`#hub-tools`). Presentation only: the ring
+is still the plan's and All tools still lists everything. A side panel's
+page row wears the rail's own icon (`OmegaWorkspaceShell.iconFor`). Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
 unsized. Never a second copy of those rules in a page. A legacy plan more
