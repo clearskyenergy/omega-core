@@ -26,7 +26,7 @@ var FILES = [
   '/omega-splash.js', '/config.js', '/omega-brand.js', '/omega-tenant.js',
   '/omega-whitelabel.js', '/omega-tools.js', '/omega-comed-layers.js',
   '/omega-bess-products.js', '/omega-cleancell-catalog.js', '/omega-site-catalogs.js',
-  '/omega-grid-verdict.js', '/omega-prime-project.js',
+  '/omega-grid-verdict.js', '/omega-prime-project.js', '/omega-quote-deck.js',
   '/omega-logo.png',
   '/icons/omega-prime-180.png', '/icons/omega-prime-192.png',
   '/icons/omega-prime-512.png', '/icons/omega-prime-maskable-512.png',

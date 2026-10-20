@@ -104,8 +104,8 @@ DOM['rfq-zip'].value = '60123';
 window._RFQ_DISTS = [];
 window._BOM_RFQ = { byVendor: {}, bom: bom };
 R.submitRfqFile();
-ok(/at least one distribution partner/.test(DOM['rfq-file-msg'].innerHTML),
-   'no manufacturer and no distributor ticked → refused');
+ok(/Sign in first/.test(DOM['rfq-file-msg'].innerHTML),
+   'no manufacturer and no distributor still sends: the drawing opens the purchase order');
 
 /* with a distributor ticked it gets as far as needing a signed-in user */
 window._RFQ_DISTS = [{ orgId: 'walterswholesale.com', name: 'Walters Wholesale' }];

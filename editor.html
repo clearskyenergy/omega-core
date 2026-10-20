@@ -190,16 +190,17 @@ function openOmegaCore(){
 <script src="/omega-core-qualify.js"></script>
 <!-- Grid Atlas built into Site Map (docs/GUIDED-SITE-FLOW.md, 2026-10-16):
      the Grid panel reads the site point and the Guided Build's unit, takes
-     the nearest substation from the Grid Atlas service, the circuit from the
-     utility's own hosting map through the ONE ComEd layer module (the Site
-     Finder's), and the verdict from api/grid-verdict. Nothing pasted here. -->
-<script src="/omega-comed-layers.js"></script>
+     the nearest substation from the Grid Atlas service, and asks the
+     national door (api/hosting-capacity, 2026-10-17) Omega Prime asks for
+     the serving utility, its published hosting capacity and the verdict.
+     Nothing pasted here; the ComEd layer module is the Site Finder's. -->
 <script src="/omega-grid-verdict.js"></script>
 <script src="/omega-grid-panel.js"></script>
 <script src="/omega-editor-features.js"></script>
-<!-- Omega Prime's "Open in Site Map" (?from=prime): fills the configured
-     unit in from this page's own catalog entry and opens the BESS Guided
-     Build. Never places anything itself. -->
+<!-- Omega Prime → Site Map (2026-10-17): a Prime project's layout (area,
+     unit, transformer, disconnect, service, conduit) built with this page's
+     own functions once it renders; the Guided Build only when Prime placed
+     no unit. omega-prime-project.js is its pure half. -->
 <script src="/omega-prime-project.js"></script>
 <script src="/omega-prime-handoff.js"></script>
 <!-- Facility demand screen: the 12-month shave is the only demand credit.
@@ -1801,6 +1802,10 @@ window.onerror = function(msg, src, line, col, err) {
   <span class="pn-saved" id="pn-saved"></span>
   <!-- omega-editor-plan.js paints the plan chip here once the plan is known -->
   <span id="omega-plan" hidden></span>
+  <!-- OMEGA PRIME (2026-10-17): omega-prime-handoff.js paints a project made in
+       Prime's link here (back to Omega Prime, the proposal's status, and
+       Rebuild from Omega Prime when it can do something); hidden otherwise -->
+  <span id="omega-prime-nav" hidden></span>
   <!-- Auth is handled by the host platform; sign-in UI hidden. Elements kept
        (display:none) so existing auth/save JS references resolve safely. -->
   <div style="display:none">
@@ -11624,11 +11629,19 @@ function _ppCollectFleet(){
          cost sheet quietly under-total. */
       out.anyMissingCost=true;
       var gkey=el.bessModel || el.label || 'BESS Assembly (guided)';
+      /* OMEGA PRIME (2026-10-17): the catalog key and make a unit built from
+         Prime carries, so the Run prices a catalog unit by its key (the R60 at
+         its catalog price, not $85/kWh). A Guided Build element has neither
+         and keeps its old keying (null / ''). */
+      var gCk=el.catalogKey||null;
+      var gMfr=el.bessMfr || (gCk && typeof BESS_CATALOG!=='undefined' && BESS_CATALOG[gCk] && BESS_CATALOG[gCk].mfr) || '';
       if(!out.byModel[gkey]){
         out.byModel[gkey]={ qty:0, kwh:gkwh, kw:gkw, cost:null,
-                            groupKwh:0, groupKw:0, groupCost:0, mixed:false };
+                            groupKwh:0, groupKw:0, groupCost:0, mixed:false, catalogKey:gCk, mfr:gMfr };
       }
       var G=out.byModel[gkey];
+      if(!G.catalogKey && gCk) G.catalogKey=gCk;
+      if(!G.mfr && gMfr) G.mfr=gMfr;
       G.qty++;
       G.groupKwh+=gkwh; G.groupKw+=gkw;
       if(G.kwh!==gkwh || G.kw!==gkw) G.mixed=true;
@@ -26367,6 +26380,10 @@ async function saveProject(){
          the OWNER. never moves." A legacy doc with no orgId is the backfill
          script's job, not something to guess at from the current session. */
       delete payload.orgId;
+      /* OMEGA PRIME (2026-10-17): a drawing built from Prime's layout says so
+         on the same write (omega-prime-handoff.js sets S.primeBuild). These two
+         fields only, never the rest of prime.*; cleared once the save lands. */
+      var _primeBuild=(S.primeBuild&&S.primeBuild.at)?S.primeBuild:null; if(_primeBuild){ payload['prime.builtAt']=_primeBuild.at; payload['prime.builtHash']=String(_primeBuild.hash||''); }
       _shedIfOversize(payload);
       /* NEVER WRITE OVER A NEWER SAVE (Tommy, 2026-10-14: a drawing saved at
          6:05 PM was back to an older one by 8:59 PM — an older tab of the
@@ -26396,6 +26413,8 @@ async function saveProject(){
     }catch(e){}
     try { window._lastSaveError = null; } catch(_e){}
     _setSaved('saved');
+    /* OMEGA PRIME (2026-10-17): the build marks landed with this save */
+    if(_primeBuild && S.primeBuild===_primeBuild) S.primeBuild=null;
     window._workDirty = false;   // successfully persisted
     /* the portfolio site this project belongs to reads the design again */
     try{ if(typeof omegaSiteDesignPush==='function') omegaSiteDesignPush(); }catch(_e){}
@@ -26725,6 +26744,13 @@ async function _loadProject(id){
     /* the grid answer (saved beside omegaCore); reset when the project has
        none so one site's circuit never follows another project */
     S.grid          = (d.grid          && typeof d.grid==='object')          ? d.grid          : null;
+    /* OMEGA PRIME (2026-10-17): what Prime set up, READ ONLY, for
+       omega-prime-handoff.js to build prime.layout into this drawing. Never
+       saved back; a save carries only prime.builtAt/builtHash (S.primeBuild).
+       Both reset on every load, so one project's Prime record never follows
+       another. */
+    S.prime         = (d.prime         && typeof d.prime==='object')         ? d.prime         : null;
+    S.primeBuild    = null;
     /* THE SITE THIS PROJECT BELONGS TO (the portfolio register's
        send-to-editor writes siteId/siteOrgId on the record). Read so a save
        can tell the site to read the design again (omegaSiteDesignPush);
@@ -26942,6 +26968,10 @@ async function _loadProject(id){
       _loadReady = true;
       _setSaved('saved');
       _watchRecord(id);
+      /* OMEGA PRIME (2026-10-17): the drawing is on the canvas and saves are
+         safe; omega-prime-handoff.js builds a Prime project's layout on this,
+         never earlier (the top of doRender clears S). */
+      try{ document.dispatchEvent(new CustomEvent('omega:project-rendered',{detail:{id:id, doc:d}})); }catch(e){}
     };
 
     // -- Restore frozen map from localStorage -----------------
@@ -38883,7 +38913,7 @@ function _bomRenderRfq(bom, byVendor, unknown, total) {
   window._BOM_RFQ = { byVendor: byVendor, bom: bom, unknown: unknown, total: total };
 
   var head = '<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:6px">'
-    + '✉ Request for Quote</div>';
+    + 'Send to the OEM</div>';
 
   var rows = vendors.map(function (v) {
     var g = byVendor[v];
@@ -38911,15 +38941,15 @@ function _bomRenderRfq(bom, byVendor, unknown, total) {
         + 'partner catalogue; a distributor prices those.' : '')
       + '</div>'
     : '<div style="font-size:9.5px;color:#6B8299;line-height:1.5">'
-      +   'No line on this BOM belongs to a partner manufacturer, so nothing routes to a factory. '
-      +   'A distribution partner can price the whole package — which is how most takeoffs get '
-      +   'quoted anyway.</div>';
+      +   'Published products on this drawing open a purchase order in the OEM workspace. '
+      +   'Lines that are not a published product stay on the drawing. A distribution partner, '
+      +   'if you pick one, is asked for the rest.</div>';
 
   host.innerHTML = head
     + '<div style="background:rgba(96,165,250,.07);border:1px solid rgba(96,165,250,.25);border-radius:7px;padding:10px 12px">'
     +   lead
     +   '<button onclick="openRfqFile()" style="margin-top:10px;width:100%;background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;color:#fff;border-radius:7px;padding:9px;cursor:pointer;font-family:inherit;font-size:11px;font-weight:700">'
-    +     'File RFQ →</button>'
+    +     'Send to the OEM</button>'
     +   '<div id="bom-rfq-msg" style="font-size:9.5px;margin-top:7px;line-height:1.5"></div>'
     + '</div>';
 }
@@ -39011,8 +39041,8 @@ function openRfqFile() {
     + 'box-shadow:0 24px 60px rgba(0,0,0,.55)">'
     + '<div style="display:flex;align-items:center;gap:10px;padding:16px 20px 12px;'
     +   'border-bottom:1px solid rgba(255,255,255,.08)">'
-    +   '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">File Request for Quote</div>'
-    +     '<div style="font-size:10px;color:var(--sub);margin-top:2px">Confirm where it ships and who prices it.</div></div>'
+    +   '<div style="flex:1"><div style="font-size:14px;font-weight:700;color:var(--text)">Send to the OEM</div>'
+    +     '<div style="font-size:10px;color:var(--sub);margin-top:2px">The address, lines and estimate go with it. Nothing is retyped in Omega Logic.</div></div>'
     +   '<button onclick="document.getElementById(\'rfq-file-modal\').remove()" style="background:var(--hover-strong);'
     +     'border:1px solid var(--hairline);color:#8BA3C4;border-radius:6px;padding:4px 10px;'
     +     'cursor:pointer;font-family:inherit;font-size:13px">✕</button>'
@@ -39054,7 +39084,7 @@ function openRfqFile() {
     +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Cancel</button>'
     +     '<button id="rfq-send-btn" onclick="submitRfqFile()" style="flex:1;padding:10px;'
     +       'background:linear-gradient(135deg,#2563EB,#1D4ED8);border:none;color:#fff;font-weight:700;'
-    +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Send RFQ</button>'
+    +       'border-radius:7px;cursor:pointer;font-family:inherit;font-size:12px">Send to the OEM</button>'
     +   '</div>'
     + '</div></div>';
 
@@ -39209,11 +39239,10 @@ function submitRfqFile() {
     if (a) accounts[d.orgId] = a;
   });
 
-  var mfrCount = Object.keys((st.byVendor) || {}).length;
-  if (!toOrgIds.length && !mfrCount) {
-    return say('Pick at least one distribution partner — no line on this BOM routes to a manufacturer, '
-      + 'so there is nobody else to ask.', true);
-  }
+  /* A distributor is optional. Published products open the purchase order
+     in the OEM workspace even when nobody else is asked. */
+  var sendLines = ((st.bom && st.bom.items) || []).filter(function (it) { return !it.notHostScope; });
+  if (!sendLines.length) return say('This bill of materials has no lines to send.', true);
 
   var u = null;
   try { u = firebase.auth().currentUser; } catch (e) {}
@@ -39232,6 +39261,7 @@ function submitRfqFile() {
     toOrgIds: toOrgIds,
     accounts: accounts,
     note: String((document.getElementById('rfq-note') || {}).value || '').trim(),
+    estimateUsd: (window._COST_TOTAL > 0 ? window._COST_TOTAL : null),
     bom: (st.bom.items || []).filter(function (it) { return !it.notHostScope; }).map(function (it) {
       /* manufacturer travels with the line so the server can route a
          catalogue item to its factory even when no /equipment row exists
@@ -39242,7 +39272,7 @@ function submitRfqFile() {
     })
   };
 
-  function done() { if (btn) { btn.disabled = false; btn.textContent = 'Send RFQ'; } }
+  function done() { if (btn) { btn.disabled = false; btn.textContent = 'Send to the OEM'; } }
 
   u.getIdToken().then(function (tok) {
     return fetch('/api/rfq', {
@@ -39256,16 +39286,27 @@ function submitRfqFile() {
       done();
       if (r.ok) {
         var n = (j && j.recipients && j.recipients.length) || 0;
-        if (!n) return say('Nothing was routed — ' + ((j && j.skipped) || 'no eligible recipient')
+        var orders = (j && j.orders) || [];
+        var orderHtml = orders.map(function (o) {
+          var count = (o.lines || 0) + ' line' + (o.lines === 1 ? '' : 's');
+          if (o.sameWorkspace && o.href) return '<a href="' + _esc(o.href) + '">' + _esc(o.orderNo) + '</a> (' + count + ') in your workspace';
+          return _esc(o.orderNo) + ' (' + count + ') opened in ' + _esc(o.orgName || 'the OEM') + '\u2019s workspace';
+        }).join('; ');
+        var orderPlain = orders.map(function (o) {
+          return o.sameWorkspace ? (o.orderNo + ' is open in your workspace') : (o.orderNo + ' opened in ' + (o.orgName || 'the OEM') + '\u2019s workspace');
+        }).join('. ');
+        if (!n && !orders.length) return say('Nothing was routed — ' + ((j && j.skipped) || 'no eligible recipient')
           + '. The BOM is unchanged.', true);
         var m = document.getElementById('bom-rfq-msg');
-        if (m) m.innerHTML = '<span style="color:var(--green)">RFQ filed with ' + n + ' partner'
-          + (n === 1 ? '' : 's') + '. Track it under RFQs on the project.</span>';
+        var filed = orderHtml
+          ? ('Purchase order ' + orderHtml + (n ? '. Also asked ' + n + ' partner' + (n === 1 ? '' : 's') + '.' : '.'))
+          : ('RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's') + '. Track it under RFQs on the project.');
+        if (m) m.innerHTML = '<span style="color:var(--green)">' + filed + '</span>';
         var host = document.getElementById('rfq-file-modal');
         if (host) host.remove();
         if (typeof showBanner === 'function') {
-          showBanner('cal', 'RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's')
-            + ' — replies land on this project.');
+          showBanner('cal', orderPlain || ('RFQ filed with ' + n + ' partner' + (n === 1 ? '' : 's')
+            + ' — replies land on this project.'));
         }
         return;
       }
@@ -66100,6 +66141,11 @@ function _elFootprintFt(el){
   /* Set by the insert layer; fall back to the catalog, then to whatever
      the element was drawn at, so an old drawing still scales. */
   var lf = +el.lf || 0, wf = +el.wf || 0;
+  /* OMEGA PRIME (2026-10-17): a unit whose maker released no footprint
+     (primeFootprint 'none', built by omega-prime-handoff.js) is a MARKER of
+     its own size in feet, so it rescales with the map inside the 5 ft gap
+     Prime left; it carries no lf/wf for a reader to take as a footprint. */
+  if(!(lf>0) && el.primeFootprint==='none' && +el.primeMarkFt>0){ lf=+el.primeMarkFt; wf=+el.primeMarkFt; }
   /* A guided-build unit placed before footprints were recorded on the
      element still names its catalog entry; take the footprint and the
      symbol floor from there rather than from the pixels it was drawn at. */

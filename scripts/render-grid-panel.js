@@ -1,0 +1,316 @@
+#!/usr/bin/env node
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+ * Site Map's Grid panel (Analyze › Grid Check) in the REAL editor.html, on
+ * the national door (2026-10-17, Tommy: "it should not just run comed
+ * information if its outside of comed it needs to look via api for the
+ * utility details"). Chromium, signed in on the Firebase double. The Grid
+ * Atlas service answers the nearest substation; /api/hosting-capacity is the
+ * REAL door's run() on a fake network, as render-omega-prime.js runs it (the
+ * territory layers and the utility's own map are the only things faked).
+ *   ComEd   3400 S Federal St: ComEd named, circuit F0297 at 10,725 kW net,
+ *           the ComEd sentence byte for byte, the other circuit counted,
+ *           ComEd's own map to check, and the answer on S.grid in the record
+ *           Omega Prime writes (GV.fromHosting)
+ *   Mesa    29 W Main St, Mesa AZ: the City of Mesa beside Salt River
+ *           Project and APS, "publishes no hosting capacity", the server's
+ *           caution, Needs a study, no ComEd word and no map invented
+ *   phone   390 px: the panel inside the screen, nothing scrolled sideways
+ *   Site Plan  editor-v2.html's Grid Atlas layer on the same door: the
+ *           sample parcel in Phoenix names Arizona Public Service, says
+ *           what it publishes in the server's words, links its own page,
+ *           and the page loads no ComEd module
+ * Fails on a page error, any browser request to the ComEd-only module, its
+ * proxy or ComEd's service, or a panel off the screen. SHOT_DIR keeps the
+ * screenshots (a temp folder by default).
+ */
+'use strict';
+var fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
+var FD = require('./_lib/firebase-double'), F = require('./_lib/firestore-double');
+/* the door's run() never reaches Firestore here (db is null), so admin.js
+   is a stand-in, as render-omega-prime.js has it: no firebase-admin needed */
+F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; },
+  db: function () { return null; }, isDegraded: function () { return true; } });
+var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service');
+var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium;
+var ROOT = path.join(__dirname, '..'), HOST = '127.0.0.1', fails = 0, checks = 0;
+var SHOTS = process.env.SHOT_DIR || path.join(os.tmpdir(), 'omega-grid-panel');
+function ok(name, cond, detail) {
+  checks++;
+  if (!cond) { fails++; console.log('FAIL ' + name + (detail !== undefined ? ' ' + JSON.stringify(detail).slice(0, 900) : '')); }
+  else console.log('ok   ' + name);
+}
+
+var CHICAGO = { lat: 41.81522, lng: -87.62261, addr: '3400 S Federal St, Chicago, IL 60616',
+  sub: { name: 'Crawford', voltageKv: 138, distanceKm: 1.2, owner: 'Commonwealth Edison' } };
+var MESA = { lat: 33.4152, lng: -111.8329, addr: '29 W Main St, Mesa, AZ 85201',
+  sub: { name: 'Mesa Downtown', voltageKv: 69, distanceKm: 0.62, owner: 'Salt River Project' } };
+var XXL = { mfr: 'FENECON', model: 'Industrial XXL', kw: '2508', kwh: '5015', qty: '1' };
+var COMED_SAY = 'Circuit F0297 has about 10,725 kW of room: 15,620 kW published, less 4,895 kW already queued. The 2.5 MW unit fits with 8,217 kW to spare.';
+
+function Esri(rows) { return { features: rows.map(function (r) { return { attributes: { NAME: r[1], Utility_ID: r[0], TYPE: r[2], STATE: r[3] || '', HOLDING_CO: r[1], Total_Customer_Count_2024: r[4] || null, Shape__Area: r[5] || null } }; }) }; }
+var COMED = { features: [
+  { attributes: { Feeder: 'F0297', SS_N: 'Crawford TSS 21', BESS_HC: 15620, PV_HC_kW: 15620, EV_HC_kW: 16100, Feeder_Q: 4895, Queue_RD: '09/30/2026' } },
+  { attributes: { Feeder: 'F0301', SS_N: 'Crawford TSS 21', BESS_HC: 900, PV_HC_kW: 900, EV_HC_kW: 2400, Feeder_Q: 100, Queue_RD: '09/30/2026' } }] };
+/* the territory layers and the utility's map, as the door asks them:
+   Chicago, Mesa, and Site Plan's sample parcel in Phoenix */
+function netFor(lng) {
+  var mesa = lng < -100, phoenix = lng < -112;
+  return function (url) {
+    if (phoenix && /Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(Esri([['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]]));
+    if (phoenix && /tigerweb/.test(url)) return Promise.resolve({ features: [{ attributes: { NAME: 'Phoenix city', BASENAME: 'Phoenix' } }] });
+    if (/Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(mesa
+      ? Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10], ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])
+      : Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL', 4130749, 6.1e10]]));
+    if (/tigerweb/.test(url)) return Promise.resolve({ features: [{ attributes: { NAME: (mesa ? 'Mesa' : 'Chicago') + ' city', BASENAME: mesa ? 'Mesa' : 'Chicago' } }] });
+    if (url.indexOf(CS.SERVICE) === 0) return Promise.resolve(JSON.parse(JSON.stringify(COMED)));
+    return Promise.resolve({ features: [] });
+  };
+}
+/* the Grid Atlas service's measurement at the point (the pre-screen's) */
+function atlasFor(b) {
+  var mesa = +b.lng < -100;
+  return { lat: b.lat, lng: b.lng, score: mesa ? 58 : 81, summary: 'render fixture', model: 'render', build: 'render',
+    substations: [mesa ? MESA.sub : CHICAGO.sub], lines: [], plants: [], findings: [], criteria: [] };
+}
+
+var srv = http.createServer(function (req, res) {
+  var u = new URL(req.url, 'http://x'), p = decodeURIComponent(u.pathname);
+  if (p === '/editor') p = '/editor.html';
+  var file = path.resolve(ROOT, '.' + p);
+  if (!file.startsWith(ROOT + path.sep) || !fs.existsSync(file) || fs.statSync(file).isDirectory()) { res.writeHead(404); return res.end(); }
+  var mime = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json' };
+  res.setHeader('Content-Type', mime[path.extname(file)] || 'application/octet-stream');
+  res.end(fs.readFileSync(file));
+});
+
+var USER = { uid: 'grid-rep', email: 'rep@clearsky-usa.com', displayName: 'Grid Rep', emailVerified: true };
+var DOCS = { 'omega_orgs/clearsky-usa.com': { name: 'ClearSky Energy', status: 'active' },
+  'omega_orgs/clearsky-usa.com/members/grid-rep': { role: 'owner', status: 'active', email: USER.email },
+  'termsAcceptances/grid-rep': { version: '2026-09-23' } };
+
+async function editor(browser, base, viewport, calls, errs) {
+  var ctx = await browser.newContext({ viewport: viewport });
+  await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) {
+    var url = r.request().url();
+    calls.external.push(url.slice(0, 160));
+    if (/gstatic\.com\/firebasejs|maps\.googleapis\.com|maps\.gstatic\.com/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' });
+    if (/fonts\.(googleapis|gstatic)\.com/.test(url)) return r.fulfill({ status: 200, contentType: 'text/css', body: '' });
+    if (/cdnjs\.cloudflare\.com\/ajax\/libs\/leaflet\//.test(url)) return r['continue']();
+    return r.abort();
+  });
+  await ctx.route(base + '/omega-tenant.js', function (r) { return r.fulfill({ status: 200, contentType: 'text/javascript', body: '/* stub */' }); });
+  await ctx.route(base + '/omega-brand.js', function (r) { return r.fulfill({ status: 200, contentType: 'text/javascript', body: '/* stub */' }); });
+  await ctx.route(base + '/omega-comed-layers.js', function (r) { calls.comedModule++; return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); });
+  await ctx.route(base + '/comed-proxy/**', function (r) { calls.comedProxy++; return r.abort(); });
+  await ctx.route(base + '/api/**', async function (r) {
+    var req = r.request(), u = new URL(req.url()), body = req.method() === 'POST' ? req.postDataJSON() : null;
+    function json(s, o) { return r.fulfill({ status: s, contentType: 'application/json', body: JSON.stringify(o) }); }
+    if (u.pathname === '/api/grid-atlas') { calls.atlas.push(body); return json(200, atlasFor(body || {})); }
+    if (u.pathname === '/api/hosting-capacity') {
+      calls.hosting.push({ body: body, auth: req.headers().authorization || '' });
+      var res = await H.run({ lat: body.lat, lng: body.lng, unit: body.unit, substation: body.substation, mode: body.mode },
+        { db: function () { return null; }, now: Date.now, fetchJson: netFor(body.lng), log: function () {} });
+      return json(200, JSON.parse(JSON.stringify(res)));
+    }
+    if (u.pathname === '/api/grid-verdict') { calls.verdict++; return json(503, { error: 'not asked by the panel' }); }
+    calls.other.push(u.pathname);
+    return json(503, { error: 'offline' });
+  });
+  await ctx.addInitScript(FD.source());
+  await ctx.addInitScript(function (cfg) { window.FirebaseDouble.install(window, cfg); }, { user: USER, docs: DOCS, latency: 5, authDomain: HOST });
+  var p = await ctx.newPage();
+  p.on('pageerror', function (e) { errs.push(e.message); });
+  await p.goto(base + '/editor.html', { waitUntil: 'domcontentloaded', timeout: 180000 });
+  await p.waitForFunction(function () { return window.OmegaGridPanel && window.OmegaGridVerdict && window.OmegaGridPrescreen && typeof S !== 'undefined' && document.getElementById('rb-grid-panel'); }, null, { timeout: 60000 });
+  return { ctx: ctx, page: p };
+}
+
+/* the project's site point (the centre a project keeps) and the unit the
+   Guided Build placed, then Analyze › Grid Check as a person presses it */
+async function at(p, site) {
+  await p.evaluate(function (s) {
+    window._savedMapState = { lat: s.lat, lng: s.lng, zoom: 18 };
+    S.siteAddr = s.addr;
+    S.bessList = [s.unit];
+    var g = document.getElementById('omega-editor-gate');
+    if (g && g.parentNode) g.parentNode.removeChild(g);
+  }, { lat: site.lat, lng: site.lng, addr: site.addr, unit: XXL });
+}
+async function pressGridCheck(p) {
+  var shown = await p.evaluate(function () {
+    if (typeof rbTab === 'function') rbTab('analyze');
+    var page = document.querySelector('#ribbon .ribbon-page[data-page="analyze"]');
+    var b = document.getElementById('rb-grid-panel');
+    if (!page || !b) return false;
+    /* the plan's caps are not under test here (tlegacygates.js holds them) */
+    page.classList.add('active'); page.style.setProperty('display', 'flex', 'important');
+    for (var n = b; n && n !== page; n = n.parentElement) { n.removeAttribute('data-package-hidden'); n.style.setProperty('display', n === b ? 'flex' : (getComputedStyle(n).display === 'none' ? 'flex' : getComputedStyle(n).display), 'important'); n.style.setProperty('visibility', 'visible', 'important'); }
+    var rib = document.getElementById('ribbon');
+    if (rib) { rib.style.setProperty('display', 'flex', 'important'); rib.style.setProperty('height', '92px', 'important'); }
+    b.scrollIntoView({ block: 'center', inline: 'center' });
+    var r = b.getBoundingClientRect();
+    return r.width > 8 && r.height > 8;
+  });
+  if (!shown) throw new Error('Analyze › Grid Check is not on the ribbon');
+  await p.click('#rb-grid-panel', { timeout: 15000 });
+}
+function answered(p, re, ms) {
+  return p.waitForFunction(function (src) {
+    var el = document.getElementById('omega-grid-panel');
+    if (!el || window.OmegaGridPanel._t.ST.busy) return null;
+    return new RegExp(src).test(el.textContent) ? el.textContent : null;
+  }, re.source, { timeout: ms || 20000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
+}
+/* Site Plan (editor-v2.html): its Grid Atlas layer asks the same door on
+   the Site Plan session; the public substation and transmission layers are
+   answered here, as the page asks them */
+async function sitePlan(browser, base, calls, errs) {
+  var ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  var p = await ctx.newPage(), mark = calls.hosting.length;
+  p.on('pageerror', function (e) { errs.push('site plan: ' + e.message); });
+  await p.route('**/*', async function (r) {
+    var url = r.request().url();
+    if (url.indexOf(base) === 0 && url.indexOf('/api/') < 0) {
+      if (/\/omega-comed-layers\.js/.test(url)) calls.comedModule++;
+      return r['continue']();
+    }
+    if (url.indexOf(base + '/api/hosting-capacity') === 0) {
+      var b = r.request().postDataJSON();
+      calls.hosting.push({ body: b, auth: r.request().headers().authorization || '' });
+      var res = await H.run({ lat: b.lat, lng: b.lng, unit: b.unit, substation: b.substation, mode: b.mode },
+        { db: function () { return null; }, now: Date.now, fetchJson: netFor(b.lng), log: function () {} });
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(res) });
+    }
+    if (/Substations\/FeatureServer\/0\/query/i.test(url)) return r.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ features: [{ attributes: { NAME: 'Ocotillo', MAX_VOLT: 69, OWNER: 'Arizona Public Service' }, geometry: { x: -112.068, y: 33.309 } }] }) });
+    if (/Transmission_Lines\/FeatureServer\/0\/query/i.test(url)) return r.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ features: [{ attributes: { VOLTAGE: 230, OWNER: 'Arizona Public Service', ID: 'T1' }, geometry: { paths: [[[-112.08, 33.30], [-112.06, 33.31]]] } }] }) });
+    if (url.indexOf(base + '/api/editor-v2-3d-config') === 0) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ photorealistic: false }) });
+    if (url.indexOf(base + '/api/editor-v2-component-cost') === 0) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(require('../api/_lib/editor-v2-component-cost')(r.request().postDataJSON())) });
+    calls.external.push(url.slice(0, 160));
+    return r.abort();
+  });
+  await p.goto(base + '/editor-v2.html', { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await p.waitForFunction(function () { return !!window.OmegaEditorV2Grid && !!window.OmegaEditorV2Auth && !!document.getElementById('layer-grid-atlas-toggle'); }, null, { timeout: 60000 });
+  /* the Site Plan session's token, as a signed-in visitor has it */
+  var noComEd = await p.evaluate(function () { window.OmegaEditorV2Auth.idToken = function () { return Promise.resolve('site-plan-token'); }; return typeof window.OmegaComEdLayers === 'undefined'; });
+  await p.click('#layer-grid-atlas-toggle');
+  var text = await p.waitForFunction(function () {
+    var d = document.getElementById('grid-detail'), b = document.getElementById('grid-detail-body');
+    return d && !d.hidden && b && /Serving utility/.test(b.textContent) ? b.innerText : null;
+  }, null, { timeout: 20000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
+  var links = await p.$$eval('#grid-detail-body a', function (as) { return as.map(function (a) { return { href: a.getAttribute('href'), target: a.target, rel: a.rel, text: a.textContent }; }); });
+  var h = calls.hosting[mark] || { body: {} };
+  ok('Site Plan: the Grid Atlas layer asks the national door once, on the Site Plan session', calls.hosting.length === mark + 1 && h.auth === 'Bearer site-plan-token', calls.hosting.slice(mark));
+  ok('Site Plan: at the drawing\'s point, with its battery and the feeding substation',
+    Math.abs(h.body.lat - 33.306) < 1e-9 && h.body.unit && h.body.unit.kw > 0 && h.body.substation && h.body.substation.name === 'Ocotillo' && h.body.mode === 'storage', h.body);
+  ok('Site Plan: the card names the utility and what it publishes, in the server\'s words', !!text && /Serving utility: Arizona Public Service · publishes no hosting capacity/.test(text) &&
+    /R14-2-2616/.test(text) && /Needs a study/.test(text), text);
+  ok('Site Plan: its own page is a link, https, in a new tab', links.length === 1 && links[0].href === 'https://www.aps.com/dg' && links[0].target === '_blank' && /noopener/.test(links[0].rel), links);
+  ok('Site Plan: no ComEd module and no ComEd word', noComEd && !/comed/i.test(text || ''), { noComEd: noComEd });
+  var f = await shot(p, 'site-plan-grid');
+  await ctx.close();
+  return f;
+}
+
+async function shot(p, name) {
+  /* the loading mark has faded, so the shot is of the page */
+  var gone = await p.waitForFunction(function () { return !document.getElementById('omega-splash'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
+  ok('the loading mark is gone before ' + name, gone);
+  fs.mkdirSync(SHOTS, { recursive: true });
+  var f = path.join(SHOTS, name + '.png');
+  await p.screenshot({ path: f });
+  return f;
+}
+
+(async function () {
+  await new Promise(function (r) { srv.listen(0, HOST, r); });
+  var base = 'http://' + HOST + ':' + srv.address().port;
+  var browser = await chromium.launch({ executablePath: process.env.CHROME || chromium.executablePath() });
+  var errs = [], calls = { atlas: [], hosting: [], verdict: 0, other: [], external: [], comedModule: 0, comedProxy: 0 }, shots = [];
+  try {
+    var e = await editor(browser, base, { width: 1440, height: 900 }, calls, errs), p = e.page;
+
+    /* ── ComEd: the door names ComEd and reads its map, server-side ── */
+    await at(p, CHICAGO);
+    await pressGridCheck(p);
+    var t1 = await answered(p, /ComEd circuit F0297/);
+    ok('Grid Check answers at a ComEd site', !!t1, { text: t1, errs: errs.slice(0, 4), other: calls.other.slice(0, 8) });
+    var h1 = calls.hosting[0] || { body: {} };
+    ok('one question, to the national door, with the point, the placed unit and the nearest substation',
+      calls.hosting.length === 1 && Math.abs(h1.body.lat - CHICAGO.lat) < 1e-9 && h1.body.unit && h1.body.unit.kw === 2508 && h1.body.mode === 'storage' &&
+      h1.body.substation && h1.body.substation.name === 'Crawford' && /^Bearer /.test(h1.auth), calls.hosting);
+    ok('the substation is the Grid Atlas service\'s, asked once', calls.atlas.length === 1, calls.atlas.length);
+    ok('nothing asks the ComEd-only module, its proxy or the old verdict door', calls.comedModule === 0 && calls.comedProxy === 0 && calls.verdict === 0,
+      { module: calls.comedModule, proxy: calls.comedProxy, verdict: calls.verdict });
+    ok('ComEd\'s service is never asked from the browser', !calls.external.some(function (u) { return u.indexOf('utility.arcgis.com') >= 0; }), calls.external.filter(function (u) { return /arcgis/.test(u); }));
+    var v1 = await p.evaluate(function () {
+      var el = document.getElementById('omega-grid-panel'), g = S.grid || {};
+      var util = el.querySelector('a[data-gp="verify"]');
+      return { text: el.textContent, verify: util ? { href: util.getAttribute('href'), text: util.textContent, target: util.target } : null,
+        grid: JSON.parse(JSON.stringify({ circuit: g.circuit, verdict: g.verdict, substation: g.substation, substations: (g.substations || []).length })) };
+    });
+    ok('ComEd is named as the serving utility, with what it publishes', /Serving utility\s*ComEd\s*hosting capacity/.test(v1.text), v1.text.slice(0, 400));
+    ok('the net is read first: 10,725 kW, room left after the queue', /10,725 kW\s*room left after the queue \(net\)/.test(v1.text) && v1.text.indexOf('10,725 kW') < v1.text.indexOf('15,620 kW'), v1.text.slice(0, 600));
+    ok('the queue is subtracted here, as ComEd publishes its figure gross', /− 4,895 kW/.test(v1.text) && /subtracted here; the utility does not/.test(v1.text) && /the utility’s headline, gross of the queue/.test(v1.text));
+    ok('the ComEd sentence, byte for byte', v1.text.indexOf(COMED_SAY) >= 0 && v1.grid.verdict && v1.grid.verdict.say === COMED_SAY, v1.grid.verdict);
+    ok('two circuits answer; the nearest with a published figure is judged', /2 circuits answer at this point; the nearest with a published figure is judged\./.test(v1.text));
+    ok('where the power comes from', /Where the power comes from/.test(v1.text) && /Crawford TSS 21/.test(v1.text));
+    ok('ComEd\'s own map, to check it', !!v1.verify && v1.verify.href === CS.REFERER && /Check it on ComEd's hosting capacity map/.test(v1.verify.text) && v1.verify.target === '_blank', v1.verify);
+    ok('the answer is on S.grid in the record Prime writes', v1.grid.circuit && v1.grid.circuit.utility === 'ComEd' && v1.grid.circuit.utilityKey === 'comed' && v1.grid.circuit.netKw === 10725 &&
+      v1.grid.circuit.coverage === 'read' && v1.grid.verdict.key === 'fits' && v1.grid.substation && v1.grid.substation.name === 'Crawford' && v1.grid.substations === 1, v1.grid);
+    var box1 = await p.evaluate(function () { var r = document.getElementById('omega-grid-panel').getBoundingClientRect(); return { l: r.left, r: r.right, t: r.top, w: innerWidth }; });
+    ok('the panel is inside the screen', box1.l >= 0 && box1.r <= box1.w, box1);
+    await p.evaluate(function () { var d = document.querySelector('#omega-grid-panel details'); if (d) d.open = true; });
+    shots.push(await shot(p, 'grid-panel-comed'));
+
+    /* ── Mesa, Arizona: the real utility, never one utility's words ── */
+    await at(p, MESA);
+    await p.click('#omega-grid-panel [data-gp="rerun"]');
+    var t2 = await answered(p, /City of Mesa/);
+    ok('Check again at Mesa answers', !!t2, { errs: errs.slice(0, 4) });
+    var h2 = calls.hosting[calls.hosting.length - 1] || { body: {} };
+    ok('Mesa: one more question to the door, at the new point, with the Mesa substation',
+      calls.hosting.length === 2 && Math.abs(h2.body.lat - MESA.lat) < 1e-9 && h2.body.substation && h2.body.substation.name === 'Mesa Downtown', h2.body);
+    var v2 = await p.evaluate(function () {
+      var el = document.getElementById('omega-grid-panel'), g = S.grid || {};
+      return { text: el.textContent, html: el.innerHTML, items: [].map.call(el.querySelectorAll('li'), function (li) { return li.textContent; }),
+        verify: !!el.querySelector('a[data-gp="verify"]'), grid: JSON.parse(JSON.stringify({ circuit: g.circuit, verdict: g.verdict, lat: g.lat })) };
+    });
+    ok('Mesa: the City of Mesa is the serving utility, and it publishes no hosting capacity', /Serving utility\s*City of Mesa\s*publishes no hosting capacity/.test(v2.text), v2.text.slice(0, 500));
+    ok('Mesa: every utility on the map named, the bill decides', /More than one utility is mapped at this point\./.test(v2.text) && v2.items[0] === 'City of Mesa — the one read here' &&
+      v2.items.indexOf('Salt River Project') >= 0 && v2.items.indexOf('Arizona Public Service') >= 0 && /Confirm the utility with the customer’s bill\./.test(v2.text), v2.items);
+    ok('Mesa: the server\'s caution, in its words', /encloses Arizona Public Service and City of Mesa islands/.test(v2.text));
+    ok('Mesa: nothing judged as if it were published', /Needs a study/.test(v2.text) && v2.grid.circuit === null && v2.grid.verdict && v2.grid.verdict.key === 'study' && Math.abs(v2.grid.lat - MESA.lat) < 1e-9, v2.grid);
+    ok('Mesa: no ComEd word, no map invented', !/comed|feeder_q/i.test(v2.text) && !v2.verify, (v2.text.match(/.{0,50}comed.{0,50}/i) || [])[0]);
+    ok('Mesa: the substation is the Mesa measurement', /Mesa Downtown/.test(v2.text));
+    shots.push(await shot(p, 'grid-panel-mesa'));
+    await e.ctx.close();
+
+    /* ── a 390 px phone: the panel fits the screen ── */
+    var e2 = await editor(browser, base, { width: 390, height: 844 }, calls, errs), q = e2.page;
+    await at(q, MESA);
+    await q.evaluate(function () { OmegaGridPanel.open(); });
+    var t3 = await answered(q, /City of Mesa/);
+    var box = await q.evaluate(function () {
+      var el = document.getElementById('omega-grid-panel'), r = el.getBoundingClientRect();
+      return { l: r.left, r: r.right, w: innerWidth, sw: el.scrollWidth, cw: el.clientWidth };
+    });
+    ok('phone: the panel answers and sits inside the screen, nothing sideways', !!t3 && box.l >= 0 && box.r <= box.w && box.sw <= box.cw + 1, box);
+    shots.push(await shot(q, 'grid-panel-phone'));
+    await e2.ctx.close();
+
+    /* ── Site Plan: the same door, on the Site Plan session ── */
+    shots.push(await sitePlan(browser, base, calls, errs));
+    ok('nothing in either editor loaded the ComEd-only module', calls.comedModule === 0, calls.comedModule);
+
+    ok('no page error', errs.length === 0, errs.slice(0, 6));
+  } catch (err) {
+    fails++; console.log('FAIL ' + (err && err.stack || err));
+  } finally {
+    await browser.close(); srv.close();
+  }
+  console.log('\nScreenshots: ' + shots.join(', '));
+  console.log('render-grid-panel: ' + (checks - fails) + '/' + checks + ' checks passed');
+  process.exit(fails ? 1 : 0);
+})();

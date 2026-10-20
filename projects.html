@@ -61,6 +61,21 @@ select.sort-sel{border:1.5px solid var(--cs-border);border-radius:9px;padding:9p
 .pt-name{font-size:14px;font-weight:600;color:var(--cs-navy)}
 .pt-addr{font-size:11px;color:var(--cs-sub);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .pt-type{font-size:11px;font-weight:600;padding:2px 8px;border-radius:8px;background:rgba(0,111,154,.1);color:var(--cs-blue);display:inline-block}
+/* Omega Prime (2026-10-17, Tommy: "when I open a project and it was made in
+   Prime, I should be able to access what I had made in Prime, and the quotes
+   I had sent out … track if the quote had been sent and accepted"): a row
+   Prime made carries the way back into Prime, where its proposal stands
+   (projects/{id}.prime.quote, the server's mirror) and its Omega Logic order. */
+.pt-prime{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.pt-chip{font-size:11px;font-weight:600;padding:2px 9px;border-radius:999px;text-decoration:none;white-space:nowrap;line-height:16px;display:inline-block}
+.pt-chip.prime{background:#0B2A3D;color:#fff}
+.pt-chip.q{background:#EEF1F4;color:var(--cs-sub)}
+.pt-chip.q.sent,.pt-chip.q.viewed{background:rgba(0,111,154,.1);color:var(--cs-blue)}
+.pt-chip.q.approved{background:rgba(46,125,91,.14);color:#1d5a3f}
+.pt-chip.q.declined,.pt-chip.q.expired,.pt-chip.q.withdrawn{background:rgba(194,69,58,.1);color:#8a2a20}
+.pt-chip.order{background:rgba(217,119,6,.12);color:#B45309}
+a.pt-chip:hover{filter:brightness(.94)}
+a.pt-chip:focus-visible{outline:2px solid var(--cs-blue);outline-offset:1px}
 .pt-date{font-size:12px;color:var(--cs-sub)}
 .pt-del{background:none;border:none;cursor:pointer;color:var(--cs-border);font-size:16px;padding:4px}
 .pt-del:hover{color:var(--cs-red)}
@@ -730,6 +745,7 @@ window._omegaReady = function(){
       <option value="created">Date Created</option>
       <option value="name">Name A–Z</option>
       <option value="mine">My projects only</option>
+      <option value="prime">Made in Omega Prime</option>
     </select>
   </div>
 
@@ -988,11 +1004,14 @@ function renderTable() {
   let filtered = allProjects.filter(p => {
     if (!q) return true;
     const owner = ((p.ownerName||'') + ' ' + ownerEmailOf(p)).toLowerCase();
+    const pq = primeOf(p) && primeOf(p).quote;
     return (p.name||'').toLowerCase().includes(q)
         || (p.address||'').toLowerCase().includes(q)
-        || owner.includes(q);
+        || owner.includes(q)
+        || !!(pq && String(pq.quoteNo||'').toLowerCase().includes(q));
   });
   if (sort === 'mine') filtered = filtered.filter(p => ownerEmailOf(p) === myEmail);
+  if (sort === 'prime') filtered = filtered.filter(p => !!primeOf(p));
 
   if (sort === 'name') filtered.sort((a,b)=>(a.name||'').localeCompare(b.name||''));
   else if (sort === 'created') filtered.sort((a,b)=>{
@@ -1012,7 +1031,7 @@ function renderTable() {
     ${filtered.map(p => {
       const date = p.updatedAt?.toDate ? p.updatedAt.toDate().toLocaleDateString() : '—';
       return `<div class="pt-row" onclick="openProject('${p.id}')">
-        <div><div class="pt-name">${esc(p.name||'Untitled')}</div><div class="pt-addr">${esc(p.address||'—')}</div></div>
+        <div><div class="pt-name">${esc(p.name||'Untitled')}</div><div class="pt-addr">${esc(p.address||'—')}</div>${primeCell(p)}</div>
         <div>${ownerCell(p)}</div>
         <div><span class="pt-type">${esc(typeLabel(p.type))}</span></div>
         <div class="pt-date">${date}</div>
@@ -1060,7 +1079,39 @@ function ownerCell(p) {
   return `<div class="pt-owner">${chip}${link}</div>`;
 }
 
-function openProject(id) { window.location.href = '/editor.html?id='+id; }
+/* A project Omega Prime made: the way back into Prime, the proposal's
+   standing (the server mirrors the latest quote onto prime.quote on every
+   change: saved, sent, viewed, approved, declined) and its order in this
+   workspace's Omega Logic. Every chip is a link of a fixed shape; the row
+   itself still opens Site Map. */
+const QUOTE_WORD = { draft:'Proposal draft', sent:'Proposal sent', viewed:'Proposal viewed', approved:'Proposal approved',
+  declined:'Proposal declined', expired:'Proposal expired', withdrawn:'Proposal withdrawn' };
+function primeOf(p) { return p && p.prime && typeof p.prime === 'object' ? p.prime : null; }
+function primeCell(p) {
+  const pr = primeOf(p);
+  if (!pr) return '';
+  const id = encodeURIComponent(p.id);
+  const out = [`<a class="pt-chip prime" href="/omega-prime?id=${id}" onclick="event.stopPropagation()" title="Reopen what was built in Omega Prime">Omega Prime</a>`];
+  const q = pr.quote && typeof pr.quote === 'object' && pr.quote.id ? pr.quote : null;
+  if (q) {
+    const st = String(q.status || '').replace(/[^a-z]/g, '');
+    const when = (st === 'approved' || st === 'declined') ? q.decidedAt : q.sentAt;
+    const d = when ? new Date(when) : null;
+    const day = d && !isNaN(d.getTime()) ? ' · ' + d.toLocaleDateString() : '';
+    const tip = [q.quoteNo, q.rev != null ? 'rev ' + q.rev : ''].filter(Boolean).join(' ') + ' · track it in Omega Prime';
+    out.push(`<a class="pt-chip q ${st}" href="/omega-prime?id=${id}&step=track&quote=${encodeURIComponent(q.id)}" onclick="event.stopPropagation()" title="${esc(tip)}">${esc((QUOTE_WORD[st] || 'Proposal') + day)}</a>`);
+  }
+  const o = pr.order && typeof pr.order === 'object' && pr.order.id ? pr.order : null;
+  if (o) {
+    const label = 'Omega Logic' + (o.orderNo ? ' · ' + o.orderNo : '');
+    out.push(String(o.org || '') === String(WS.orgId || '')
+      ? `<a class="pt-chip order" href="/omega-logic?org=${encodeURIComponent(o.org)}&order=${encodeURIComponent(o.id)}#orders" onclick="event.stopPropagation()" title="The order in this workspace's Omega Logic">${esc(label)}</a>`
+      : `<span class="pt-chip order">${esc(label)}</span>`);
+  }
+  return `<div class="pt-prime">${out.join('')}</div>`;
+}
+
+function openProject(id) { const p = allProjects.find(p => p.id === id); window.location.href = (p && p.editor === 'v2' ? '/editor-v2?id=' : '/editor.html?id=') + encodeURIComponent(id); }
 
 async function deleteProject(id, name) {
   if (!confirm(`Delete "${name}"? This cannot be undone.`)) return;

@@ -12,12 +12,20 @@
  * Push to Logic and the Logic step open the project's org, or the
  * signed-in workspace. A staff user lands in their own org. The all-OEM
  * directory stays the bare /omega-logic link inside that office.
+ *
+ * Omega Prime's last step is Track (prime/teleios, 2026-10-17): with no
+ * Prime proposal to follow, the Omega Logic and Omega Teleios links are on
+ * the first screen (#primeLogic); a Prime project opens Track itself. A
+ * battery list is Clean Cell's units and the R60, with FENECON's XXL only in
+ * FENECON's own workspace. SHOT_DIR keeps the screenshots (a temp folder by
+ * default).
  */
 'use strict';
-var fs = require('fs'), path = require('path'), http = require('http');
+var fs = require('fs'), path = require('path'), http = require('http'), os = require('os');
 var FD = require('./_lib/firebase-double');
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium;
 var ROOT = path.join(__dirname, '..'), HOST = '127.0.0.1', fails = 0, checks = 0;
+var SHOTS = process.env.SHOT_DIR || path.join(os.tmpdir(), 'omega-prime-handoff');
 function ok(name, cond, detail) {
   checks++;
   if (!cond) { fails++; console.log('FAIL ' + name + (detail !== undefined ? ' ' + JSON.stringify(detail).slice(0, 700) : '')); }
@@ -107,8 +115,8 @@ async function logicHome(browser, base, user, expectOrg, name, staff) {
     p.on('pageerror', function (e) { pageErrs.push(e.message); });
     await p.goto(base + '/omega-prime.html?step=logic', { waitUntil: 'domcontentloaded', timeout: 60000 });
     var hrefs = await p.waitForFunction(function (org) {
-      var a = document.querySelector('#s-logic a[href^="/omega-logic"]');
-      var c = document.querySelector('#s-logic a[href^="/logic-custody"]');
+      var a = document.querySelector('#primeLogic a[href^="/omega-logic"]');
+      var c = document.querySelector('#primeLogic a[href^="/logic-custody"]');
       if (!a || !c) return null;
       var ah = a.getAttribute('href'), ch = c.getAttribute('href');
       return ah === '/omega-logic?org=' + org && ch === '/logic-custody.html?org=' + org ? { logic: ah, custody: ch } : null;
@@ -120,8 +128,8 @@ async function logicHome(browser, base, user, expectOrg, name, staff) {
     await p.waitForFunction(function () { return window.__firebaseDouble && window.__firebaseDouble.auth && window.__firebaseDouble.auth.currentUser; }, null, { timeout: 8000 });
     await p.waitForTimeout(400);
     var kept = await p.evaluate(function () {
-      var a = document.querySelector('#s-logic a[href^="/omega-logic"]');
-      var c = document.querySelector('#s-logic a[href^="/logic-custody"]');
+      var a = document.querySelector('#primeLogic a[href^="/omega-logic"]');
+      var c = document.querySelector('#primeLogic a[href^="/logic-custody"]');
       return { logic: a && a.getAttribute('href'), custody: c && c.getAttribute('href') };
     });
     ok((staff ? 'staff' : 'tenant') + ' project org stays on the Logic link',
@@ -145,14 +153,19 @@ async function logicHome(browser, base, user, expectOrg, name, staff) {
     });
     ok((staff ? 'staff' : 'tenant') + ' opens their own Omega Logic workspace',
       h1 === name && snap.body.indexOf('Every white-label customer') < 0 && snap.body.indexOf('Clean Cell') < 0 && snap.sub.indexOf('Clean Cell') < 0 && snap.eye.toLowerCase().indexOf(expectOrg) >= 0, { h1: h1, snap: snap, errs: pageErrs.slice(0, 4) });
-    var shotDir = '/opt/cursor/artifacts/screenshots';
+    var shotDir = SHOTS;
     try { fs.mkdirSync(shotDir, { recursive: true }); } catch (eShot) {}
     await p.screenshot({ path: path.join(shotDir, staff ? 'logic-staff-own-org.png' : 'logic-tenant-own-org.png') });
     if (staff) {
       ok('staff still have the ClearSky link to every OEM account', snap.admin === '/omega-logic' && /All OEM customers/.test(snap.eye), snap);
       await p.click('a[href="/omega-logic"]');
+      /* The click replaces the document. The first poll can land while body
+         is still null; a throw there ends the wait, so a missing body is
+         "not yet". */
       var dir = await p.waitForFunction(function () {
-        return /Every white-label customer/.test(document.body.innerText) ? document.body.innerText.replace(/\s+/g, ' ').slice(0, 500) : null;
+        var body = document.body;
+        if (!body) return null;
+        return /Every white-label customer/.test(body.innerText) ? body.innerText.replace(/\s+/g, ' ').slice(0, 500) : null;
       }, null, { timeout: 10000 }).then(function (h) { return h.jsonValue(); }, function () { return '' });
       ok('that link opens the directory and does not enter Clean Cell',
         /Every white-label customer/.test(dir) && !/[?&]org=/.test(p.url()) && /Clean Cell/.test(dir), { url: p.url(), dir: dir, errs: pageErrs.slice(0, 4) });
@@ -271,8 +284,8 @@ async function logicHome(browser, base, user, expectOrg, name, staff) {
       return el && el.value === a ? el.value : null;
     }, ADDR, { timeout: 20000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
     var logicCards = await logic.evaluate(function () {
-      var a = document.querySelector('#s-logic a[href^="/omega-logic"]');
-      var c = document.querySelector('#s-logic a[href^="/logic-custody"]');
+      var a = document.querySelector('#primeLogic a[href^="/omega-logic"]');
+      var c = document.querySelector('#primeLogic a[href^="/logic-custody"]');
       return { logic: a && a.getAttribute('href'), custody: c && c.getAttribute('href') };
     });
     ok('Push to Logic carries the same address and the project org', logicAddr === ADDR && /[?&]step=logic(?:&|$)/.test(logic.url()) && /[?&]org=nextnrg\.com(?:&|$)/.test(logic.url()), logic.url());
@@ -290,11 +303,11 @@ async function logicHome(browser, base, user, expectOrg, name, staff) {
     ok('Solar lists the editor module and array catalog', solarUnits.some(function (t) { return /EAGLE G7B/.test(t); }) && solarUnits.some(function (t) { return /550 W/.test(t); }) && solarUnits.some(function (t) { return /Rooftop/.test(t); }), solarUnits);
     var mgUnits = await pick('microgrid');
     ok('Microgrid combines battery, solar and generator catalogs',
-      mgUnits.some(function (t) { return /CleanCell CC290\/125/.test(t); }) && mgUnits.some(function (t) { return /EAGLE G7B/.test(t); }) && mgUnits.some(function (t) { return /Fuel Cell/.test(t); }) && mgUnits.some(function (t) { return /Diesel Genset/.test(t); }) && mgUnits.some(function (t) { return /FENECON Industrial XXL/.test(t); }), mgUnits.filter(function (t) { return /CleanCell|EAGLE|Fuel|Diesel|XXL|Omega-Core/.test(t); }));
+      mgUnits.some(function (t) { return /CleanCell.* CC290\/125/.test(t); }) && mgUnits.some(function (t) { return /EAGLE G7B/.test(t); }) && mgUnits.some(function (t) { return /Fuel Cell/.test(t); }) && mgUnits.some(function (t) { return /Diesel Genset/.test(t); }) && !mgUnits.some(function (t) { return /FENECON|XXL/.test(t); }), mgUnits.filter(function (t) { return /CleanCell|EAGLE|Fuel|Diesel|XXL|Omega-Core/.test(t); }));
     var bat = await pick('bess');
-    ok('Battery lists every CleanCell unit and the XXL',
-      bat.some(function (t) { return /CleanCell CC290\/125/.test(t); }) && bat.some(function (t) { return /CleanCell LG JP-2/.test(t); }) && bat.some(function (t) { return /CleanCell Smart Module/.test(t); }) && /FENECON Industrial XXL/.test(bat[bat.length - 1]), bat);
-    var shotDir = '/opt/cursor/artifacts/screenshots';
+    ok('Battery lists every CleanCell unit and the R60, and no FENECON XXL outside FENECON',
+      bat.some(function (t) { return /CleanCell.* CC290\/125/.test(t); }) && bat.some(function (t) { return /CleanCell.* LG JP-2/.test(t); }) && bat.some(function (t) { return /CleanCell.* Smart Module/.test(t); }) && /R60/.test(bat[bat.length - 1]) && !bat.some(function (t) { return /FENECON|XXL/.test(t); }), bat);
+    var shotDir = SHOTS;
     try { fs.mkdirSync(shotDir, { recursive: true }); } catch (e) {}
     await pick('microgrid');
     await prime.screenshot({ path: path.join(shotDir, 'prime-microgrid-units.png') });
