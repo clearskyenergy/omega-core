@@ -11,6 +11,9 @@
  *   - arrange(), feed(), conduitPath(), pathFt() and layout v2 (C2): the
  *     gear row and its integration flags, the editor's own ground length,
  *     the hash, v1 → v2;
+ *   - subName(): HIFLD's unnamed substations and taps ('UNKNOWN307104',
+ *     'TAP302679') shown in words with their number, everywhere the page
+ *     names a substation, the record and the door keeping the raw name;
  *   - projectDoc(), patch(), restore(), runInput() (C3): the record a
  *     project is created and resumed with, touching no drawing key beyond
  *     the empty arrays a new project starts with; unitFor(), the ONE rule
@@ -124,6 +127,16 @@ assert.deepEqual(keysOf(PP.units({ orgId: 'fenecon.com', owner: ['fenecon'] }, R
 /* the readers */
 assert.equal(PP.zipOf('3400 S Federal St, Chicago, IL, 60616'), '60616'); assert.equal(PP.zipOf('12 Main St, Joliet IL 60435-1234'), '60435'); assert.equal(PP.zipOf('no zip here'), ''); count += 3;
 assert.deepEqual(PP.peaks('1,420  1,388\n1402, 1510 kW'), [1420, 1388, 1402, 1510]); assert.equal(PP.peaks('1 2 3 4 5 6 7 8 9 10 11 12 13 14').length, 12); assert.deepEqual(PP.peaks(''), []); count += 3;
+/* a substation's name as shown: HIFLD's unnamed records (the nearest to
+   29 W Main St, Mesa is UNKNOWN307104; the third, TAP302679) read as words
+   with HIFLD's number kept; a real name, even one that starts the same way,
+   is shown as it is; subOf keeps the raw name on the record */
+[['UNKNOWN307104', 'Unnamed substation (HIFLD 307104)'], ['unknown 12', 'Unnamed substation (HIFLD 12)'], ['UNKNOWN', 'Unnamed substation'], [' UNKNOWN307104 ', 'Unnamed substation (HIFLD 307104)'],
+ ['TAP302679', 'Unnamed tap (HIFLD 302679)'], ['TAP', 'Unnamed tap'],
+ ['LEWIS', 'LEWIS'], ['TAPIA 1102', 'TAPIA 1102'], ['UNKNOWN RIDGE', 'UNKNOWN RIDGE'], ['Crawford TSS 21', 'Crawford TSS 21'], ['', ''], [null, ''], [undefined, '']].forEach(function (c) {
+  assert.equal(PP.subName(c[0]), c[1], 'subName(' + JSON.stringify(c[0]) + ')'); count++;
+});
+assert.equal(PP.sub({ name: 'UNKNOWN307104', kv: -999999, mi: 0.49 }).name, 'UNKNOWN307104', 'the record keeps the name HIFLD gave'); count++;
 
 /* ── 2 · arrangement, ground length, layout v2 ──────────────────────── */
 var R = 6378137, RAD = Math.PI / 180, FTM = 3.280839895;
@@ -495,6 +508,14 @@ assert.match(js, /var f = GV && S\.hosting \? GV\.fromHosting\(S\.hosting\) : nu
 assert.match(js, /S\.hostingSum = GV\.hostingSummary\(res\)/, 'prime.hosting is the client\'s hostingSummary'); count++;
 assert.ok(js.indexOf('GV.ask(') < 0 && js.indexOf('GV.circuitBody(') < 0 && js.indexOf('probePoint') < 0 && js.indexOf('OmegaComEdLayers') < 0, 'the one-utility probe is gone'); count++;
 assert.ok(pg.indexOf('omega-comed-layers.js') < 0, 'omega-comed-layers.js is not loaded'); count++;
+/* every substation name the page draws goes through PP.subName (the map
+   labels, the inspector, the circuit panel, the Design side panel); the
+   door is asked with the raw name, and HIFLD's -999999 is never printed */
+assert.equal((js.match(/PP\.subName\(/g) || []).length, 6, 'six places draw a substation name, each through PP.subName'); count++;
+assert.ok(!/esc\((s|S\.sub)\.name\)|S\.sub\.name \+ '/.test(js), 'no substation name is drawn raw'); count++;
+assert.match(js, /substation: S\.sub \? \{ name: S\.sub\.name, kv: S\.sub\.kv,/, 'the door is asked with the name HIFLD gave'); count++;
+assert.match(js, /\(S\.sub\.kv > 0 \? esc\(S\.sub\.kv\) \+ ' kV · ' : ''\)/, 'a voltage HIFLD does not have (-999999) is not printed'); count++;
+assert.match(js, /<dt>Lines in<\/dt><dd>' \+ \(s\.lines > 0 \? s\.lines : '—'\)/, 'nor a line count it does not have'); count++;
 /* the shared modules, in order: the products, Clean Cell's catalog, the grid client, Prime's pure half, the deck */
 var order = ['/omega-bess-products.js', '/omega-cleancell-catalog.js?v=20261010-revh2', '/omega-site-catalogs.js', '/omega-grid-verdict.js', '/omega-prime-project.js', '/omega-quote-deck.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
 assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k - 1]); }), 'the shared modules load in order: ' + order.join(',')); count++;

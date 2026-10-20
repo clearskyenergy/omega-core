@@ -43,6 +43,16 @@
  *             the list says who serves the point and what it publishes
  *             (nothing), SRP and the rest fold away with the reason, the
  *             city's own pages are linked, and no ComEd wording appears
+ *   Mesa live (run before Mesa) downtown Mesa as the live services answered
+ *             on 2026-10-20: twelve utilities on the national layer and the
+ *             city's own map down, so the panel lists two and folds ten; at
+ *             1440 × 900, the fold open, a real mouse click on Next reaches
+ *             Next, never the floating guide; HIFLD's UNKNOWN307104 and
+ *             TAP302679 read as words on the map, in the inspector, the
+ *             circuit panel and the Design panel, its -999999 is never
+ *             printed, and the record and the door keep the raw name
+ *   Radios    (in Phone) the Proposal's Price radios and its checkbox are
+ *             drawn under 30 px, their words beside them, on a 44 px row
  * Every outside service is answered from a fixture; the one thing fetched
  * is Leaflet, from cdnjs as the page loads it (LEAFLET_DIR serves a local
  * copy, as scripts/test-sitefinder-ui.js does). PRIME_SHOTS=<dir> saves a
@@ -115,6 +125,10 @@ var COMED = { features: [
 function netFor(lat, lng) {
   var mesa = lng < -100;
   return function (url) {
+    if (mesa && MESA_LIVE) {
+      if (/Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(Esri(MESA_12));
+      if (/GCX_ExploreMesa\/MapServer\/13\/query/.test(url)) { var down = new Error('timeout'); down.name = 'AbortError'; return Promise.reject(down); }
+    }
     if (/Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(mesa
       ? Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1100000, 3e10], ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])
       : Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL']]));
@@ -132,6 +146,26 @@ var SUBS = { features: [
 var SUBS_MESA = { features: [
   { attributes: { NAME: 'Mesa Downtown', MAX_VOLT: 69, MIN_VOLT: 12, LINES: 4, STATUS: 'IN SERVICE', OWNER: 'Salt River Project' }, geometry: { x: -111.8270, y: 33.4190 } },
   { attributes: { NAME: 'Kyrene', MAX_VOLT: 230, STATUS: 'IN SERVICE', OWNER: 'Salt River Project' }, geometry: { x: -111.9300, y: 33.3600 } }] };
+/* downtown Mesa as the live services answered it on 2026-10-20 (MESA_LIVE):
+   the national layer's twelve polygons (the City of Mesa, Salt River
+   Project, then water and irrigation districts and county-sized
+   stand-ins), the city's own service-area map not answering, and HIFLD's
+   own records for the substations nearest: an unnamed substation, a named
+   one, an unnamed tap. The nearest one's voltage and lines are HIFLD's
+   not-available figure, -999999, as 12,667 of its unnamed substations
+   carry it (this one's live record says 69 kV). */
+var MESA_LIVE = false;
+var MESA_12 = [['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 9.1e9],
+  ['5729', 'ELECTRICAL DIST NO8 MARICOPA', 'POLITICAL SUBDIVISION', 'AZ', 695, 3.4e10], ['19016', 'TONOPAH IRRIGATION DISTRICT', 'NOT AVAILABLE', 'AZ', null, 3.4e10],
+  ['40355', 'MARICOPA COUNTY M W C DIST #1', 'NOT AVAILABLE', 'AZ', null, 3.4e10], ['2469', 'BUCKEYE WATER C&D DISTRICT', 'NOT AVAILABLE', 'AZ', null, 3.4e10],
+  ['8139', 'HARQUAHALA VALLEY PWR DISTRICT', 'NOT AVAILABLE', 'AZ', null, 3.4e10], ['13961', 'OCOTILLO WATER CONSERV. DIST.', 'NOT AVAILABLE', 'AZ', null, 3.4e10],
+  ['30518', 'ELECTRICAL DISTRICT NO 3 PINAL COUNTY', 'POLITICAL SUBDIVISION', 'AZ', 4060, 3.4e10], ['65261', 'GILA RIVER INDIAN UTILITY AUTHORITY (GRICUA)', 'COOPERATIVE', 'AZ', 3433, 5.4e10],
+  ['14543', "TOHONO O'ODHAM UTILITY AUTHORITY", 'NOT AVAILABLE', 'AZ', null, 8.7e10], ['19604', 'USBIA-SAN CARLOS PROJECT', 'FEDERAL', 'AZ', 13341, 1.2e11]];
+var SUBS_MESA_LIVE = { features: [
+  { attributes: { NAME: 'UNKNOWN307104', ID: '307104', MAX_VOLT: -999999, MIN_VOLT: -999999, LINES: -999999, STATUS: 'IN SERVICE', TYPE: 'SUBSTATION', OWNER: null }, geometry: { x: -111.83608561, y: 33.40917638 } },
+  { attributes: { NAME: 'LEWIS', ID: '302371', MAX_VOLT: 69, MIN_VOLT: 69, LINES: 2, STATUS: 'IN SERVICE', TYPE: 'SUBSTATION', OWNER: null }, geometry: { x: -111.82948849, y: 33.42270797 } },
+  { attributes: { NAME: 'TAP302679', ID: '302679', MAX_VOLT: 69, MIN_VOLT: 69, LINES: 3, STATUS: 'IN SERVICE', TYPE: 'TAP', OWNER: null }, geometry: { x: -111.848301, y: 33.422373 } },
+  { attributes: { NAME: 'UNKNOWN303782', ID: '303782', MAX_VOLT: 69, MIN_VOLT: 69, LINES: 2, STATUS: 'IN SERVICE', TYPE: 'SUBSTATION', OWNER: null }, geometry: { x: -111.84994066, y: 33.41104038 } }] };
 var TX = { features: [{ attributes: { VOLTAGE: 138 }, geometry: { paths: [[[-87.66, 41.80], [-87.60, 41.83]]] } }] };
 var TX_MESA = { features: [{ attributes: { VOLTAGE: 230 }, geometry: { paths: [[[-111.90, 33.40], [-111.80, 33.43]]] } }] };
 var PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
@@ -188,7 +222,7 @@ async function context(browser, base, calls, external, viewport) {
       if (/mesa/i.test(decodeURIComponent(url))) return json({ result: { addressMatches: [{ matchedAddress: '29 W MAIN ST, MESA, AZ, 85201', coordinates: { x: MESA.lng, y: MESA.lat } }] } });
       return json({ result: { addressMatches: [{ matchedAddress: '3400 S FEDERAL ST, CHICAGO, IL, 60616', coordinates: { x: SITE.lng, y: SITE.lat } }] } });
     }
-    if (/Substations\/FeatureServer\/0\/query|substations\/FeatureServer\/0\/query/i.test(url)) return json(geomMesa() ? SUBS_MESA : SUBS);
+    if (/Substations\/FeatureServer\/0\/query|substations\/FeatureServer\/0\/query/i.test(url)) return json(geomMesa() ? (MESA_LIVE ? SUBS_MESA_LIVE : SUBS_MESA) : SUBS);
     if (/Transmission_Lines\/FeatureServer\/0\/query/.test(url)) return json(geomMesa() ? TX_MESA : TX);
     if (/arcgisonline\.com/.test(url)) return r.fulfill({ status: 200, contentType: 'image/png', body: PNG });
     external.push(url.slice(0, 140)); return r.abort();
@@ -579,6 +613,19 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var form = await p.evaluate(function () { function v(id) { return document.getElementById(id).value; } return { name: v('pq-name'), company: v('pq-company'), markup: v('pq-markup'), pay: v('pq-pay'), deck: !!document.querySelector('#pqDeck .oqd'), no: document.getElementById('pqNo').textContent, doc: document.documentElement.scrollWidth, scr: document.getElementById('s-quote').scrollWidth }; });
     ok('reopened, the proposal screen loads the project\'s latest quote into the form', form.name === 'Dana Ruiz' && form.company === 'Riverside Cold Chain' && form.markup === '20' && /balance on energisation/.test(form.pay) && form.deck && /revision 2/.test(form.no), form);
     ok('and fits the phone', form.doc <= 390 && form.scr <= 390, form);
+    /* the Price radios and the checkbox keep a radio's size on a phone: the
+       phone's text-field rule once caught them, drew 44 px circles and
+       squeezed "Margin % on the Run's cost" into a column (2026-10-20) */
+    var rad = await p.evaluate(function () {
+      function box(e) { var r = e.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; }
+      function words(id) { var n = document.getElementById(id).nextSibling, g = document.createRange(); g.selectNodeContents(n); return box(g); }
+      return { markup: box(document.getElementById('pq-mode-markup')), total: box(document.getElementById('pq-mode-total')), show: box(document.getElementById('pq-show')),
+        markupWords: words('pq-mode-markup'), totalWords: words('pq-mode-total'), row: box(document.getElementById('pq-mode-markup').parentNode) };
+    });
+    ok('on a phone the Price radios and the checkbox are drawn at their own size, under 30 px, not a text field\'s',
+      [rad.markup, rad.total, rad.show].every(function (b) { return b.w > 0 && b.w < 30 && b.h < 30; }), rad);
+    ok('and their words get the row beside them, two lines at most (they had 57 px and four lines), on a row tall enough to tap',
+      rad.markupWords.w > 120 && rad.markupWords.h < 40 && rad.totalWords.w > 60 && rad.totalWords.h < 40 && rad.row.h >= 44, rad);
     await shot(p, 'prime-09-phone-proposal');
     await p.setViewportSize({ width: 1440, height: 900 });
 
@@ -694,6 +741,72 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var nh2 = await until(p, function () { var e = document.getElementById('trHandErr'); return e && /already has order/.test(e.textContent) ? e.textContent : null; });
     ok('sent again, the door answers with the reason in plain words (the first order is live)', !!nh2 && /Cancel or close that order in Omega Logic/.test(nh2), nh2);
     await p.close();
+
+    /* ── downtown Mesa as the live services answered it (2026-10-20):
+       twelve utilities on the national layer, the city's own map down, and
+       HIFLD's unnamed substations nearest. At 1440 × 900 the circuit
+       panel's list runs long, and the floating guide must never take the
+       click meant for Next (it did: a real click on Next landed on the
+       guide); HIFLD's numbers read as words wherever a substation is named,
+       and the record keeps the name HIFLD gave ── */
+    MESA_LIVE = true;
+    var lctx = await context(browser, base, calls, external);
+    var lv = await lctx.newPage(); watch(lv, errs);
+    await lv.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
+    await until(lv, function () { var s = document.getElementById('unitSel'); return s && s.options.length >= 5 ? true : null; });
+    await lv.fill('#addr', '29 W Main St, Mesa, AZ 85201');
+    await lv.click('#go');
+    await lv.waitForSelector('#s-atlas.on');
+    await until(lv, function () { return /substations within/.test(document.getElementById('gaStat').textContent); });
+    await lv.click('#ly-sub'); await lv.click('.subicon.near');
+    var insp = await until(lv, function () { var h = document.querySelector('#gaInsp h5'), d = document.querySelector('#gaInsp .kv'); return h && d ? { head: h.textContent, kv: d.textContent } : null; });
+    ok('Grid Atlas: HIFLD\'s unnamed substation is named in words with its number in the inspector, and its -999999 is "not published"',
+      insp.head === 'Unnamed substation (HIFLD 307104)' && /Voltagenot published/.test(insp.kv) && /Lines in—/.test(insp.kv) && !/999999/.test(insp.kv), insp);
+    var labels = await lv.$$eval('#gaMap .leaflet-tooltip', function (es) { return es.map(function (e) { return e.textContent; }); });
+    ok('and on the map: the three nearest labelled, the unnamed tap in words too, a real name as it is',
+      ['Unnamed substation (HIFLD 307104)', 'LEWIS', 'Unnamed tap (HIFLD 302679)'].every(function (t) { return labels.indexOf(t) >= 0; }) && !labels.some(function (t) { return /UNKNOWN|TAP\d/.test(t); }), labels);
+    await lv.click('#ga-go');
+    var lc = await until(lv, function () { var t = document.getElementById('sfRes').textContent; return /City of Mesa/.test(t) && /Next/.test(t) ? t : null; });
+    var lw = await lv.evaluate(function () {
+      var w = document.getElementById('sfWho');
+      return w ? { head: w.querySelector('b').textContent, shown: w.querySelectorAll(':scope > ul > li').length, folded: w.querySelectorAll('details li').length, fold: (w.querySelector('summary') || {}).textContent || '' } : null;
+    });
+    ok('twelve utilities: the two that may serve the point listed, the ten water districts and county-sized stand-ins folded under one line',
+      !!lw && /More than one utility is mapped/.test(lw.head) && lw.shown === 2 && lw.folded === 10 && /\(10\)$/.test(lw.fold), lw);
+    ok('the circuit panel names the nearest substation in words and prints no voltage HIFLD does not have',
+      /Nearest substation \(Grid Atlas\)Unnamed substation \(HIFLD 307104\)0\.5 mi/.test(lc) && !/999999|UNKNOWN307104/.test(lc), lc.slice(lc.indexOf('Nearest substation') - 20, lc.indexOf('Nearest substation') + 120));
+    /* the fold opened, as a rep checking every name would: the longest the
+       panel gets. Next is scrolled into the panel's view and clicked with
+       the mouse, where a person would click it. */
+    await lv.click('#sfWho summary');
+    var room = await lv.evaluate(function () {
+      var r = document.getElementById('sfRes'), g = document.getElementById('guide'), n = document.getElementById('sf-tomap');
+      n.scrollIntoView({ block: 'nearest' });
+      var rb = r.getBoundingClientRect(), gb = g.getBoundingClientRect(), nb = n.getBoundingClientRect();
+      var x = Math.round(nb.left + nb.width / 2), y = Math.round(nb.top + nb.height / 2), hit = document.elementFromPoint(x, y);
+      return { x: x, y: y, scrolls: r.scrollHeight > r.clientHeight + 1, panelBottom: Math.round(rb.bottom), guideTop: Math.round(gb.top), corner: !g.classList.contains('moved'),
+        onNext: !!hit && (hit === n || n.contains(hit)), hit: hit ? (hit.id || hit.className || hit.tagName) : null, inGuide: !!hit && g.contains(hit) };
+    });
+    ok('at 1440 × 900 the long panel scrolls inside itself and ends above the guide in its corner', room.scrolls && room.corner && room.panelBottom <= room.guideTop, room);
+    await shot(lv, 'prime-10a-mesa-live-circuit');
+    await lv.mouse.click(room.x, room.y);
+    var landed = await lv.waitForSelector('#s-load.on', { timeout: 4000 }).then(function () { return true; }, function () { return false; });
+    ok('a real mouse click on "Next: the site\'s load" reaches Next, never the guide, and the load step opens', landed && room.onNext && !room.inGuide, room);
+    if (!landed) await lv.$eval('#sf-tomap', function (b) { b.click(); });
+    await until(lv, function () { return /City of Mesa/.test(document.getElementById('ldRates').textContent) ? true : null; });
+    await lv.click('#ld-tomap');
+    await lv.waitForSelector('#s-map.on');
+    var sideSub = await until(lv, function () { var r = [].filter.call(document.querySelectorAll('#edSide .spec tr'), function (tr) { return /Nearest substation/.test(tr.textContent); })[0]; return r ? r.textContent : null; });
+    ok('the Design side panel names it the same way', sideSub === 'Nearest substationUnnamed substation (HIFLD 307104) · 0.5 mi', sideSub);
+    await lv.waitForTimeout(800);
+    var lst = await storeOf(lv), lrec = projectsIn(lst).map(function (k) { return lst.docs[k]; })[0] || {}, lask = calls.hosting[calls.hosting.length - 1] || {};
+    ok('the record and the door keep the name HIFLD gave', !!(lrec.prime && lrec.prime.sub && lrec.prime.sub.name === 'UNKNOWN307104' && lrec.grid && lrec.grid.substation && lrec.grid.substation.name === 'UNKNOWN307104' &&
+      lask.substation && lask.substation.name === 'UNKNOWN307104'), { sub: lrec.prime && lrec.prime.sub, grid: lrec.grid && lrec.grid.substation, asked: lask.substation });
+    var lall = await lv.evaluate(function () { return [].map.call(document.querySelectorAll('.screen, .leaflet-tooltip'), function (e) { return e.textContent; }).join(' '); });
+    ok('and no screen, shown or not, says UNKNOWN or TAP and a number', !/UNKNOWN\s*\d|TAP\d/.test(lall), (lall.match(/.{0,40}(UNKNOWN|TAP)\d.{0,40}/g) || []));
+    await shot(lv, 'prime-10a-mesa-live-design');
+    await lv.close();
+    MESA_LIVE = false;
 
     /* ── Mesa, Arizona: the utility named, never one utility's words ── */
     var mctx = await context(browser, base, calls, external);

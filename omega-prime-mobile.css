@@ -74,6 +74,13 @@
     width: 100%;
     max-width: 100%;
   }
+  /* ...but never a radio or a checkbox: sized like a text field it is
+     drawn as a 44 px circle and squeezes its words into a column (the
+     Proposal's Price radios, 2026-10-20). It keeps its own size, and the
+     row it sits in is the tap target. After the rule above, at the
+     specificity of `.fld input`, so it wins wherever that one reaches. */
+  input[type=radio], input[type=checkbox] { flex: none; width: 18px; height: 18px; min-height: 0; margin: 0; }
+  label:has(> input[type=radio]), label:has(> input[type=checkbox]) { min-height: 44px; }
   .primary, a.primary, .nextbtn, .types button, .lyr, .rb, .bms button, .sfbar button, #guide .gh button {
     min-height: 44px;
   }

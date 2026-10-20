@@ -76,6 +76,7 @@ F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: 
 var Q = require('../api/_lib/customer-quote'), DECK = require('../api/_lib/deck-brand'), MAIL = require('../api/_lib/mail'), T = require('../api/_lib/teleios');
 var PP = require('../omega-prime-project.js'), CC = require('../omega-cleancell-catalog.js'), BP = require('../omega-bess-products.js');
 var PRICE = require('../api/price-site')._helpers;
+var HS = require('../api/_lib/hosting-sources'), GVC = require('../omega-grid-verdict.js').OmegaGridVerdict;
 var api = require('../api/customer-quote'), branding = require('../api/tenant-branding');
 
 /* ── the workspaces ── */
@@ -265,7 +266,30 @@ async function run() {
   DB.seed('omega_orgs/' + SELLER, Object.assign(DB.data.get('omega_orgs/' + SELLER), { logoUrl: null }));
   tick();
   eq(pv.quote.seller.attribution, 'Prepared with ClearSky-OMEGA', 'no white label: the platform is named in the footer');
-  eq(pv.quote.site, { address: '1200 W Lake St, Chicago, IL 60607', utility: 'ComEd', circuit: 'Feeder 1234 · Lakeview TSS' }, 'the site, its utility and circuit from the project');
+  eq(pv.quote.site, { address: '1200 W Lake St, Chicago, IL 60607', utility: 'ComEd', circuit: 'F1234 (Feeder 1234) · substation Lakeview TSS' }, 'the site, its utility and circuit from the project');
+  /* the circuit line leads with the circuit's own id, as the Circuit step
+     does ("Circuit L5131 · substation S0711"). ComEd's map row carries the
+     feeder as the id and its queue-report number as the name
+     (hosting-sources readComEd); the proposal once led with the name and
+     read "queue report F1978 · S0711" (2026-10-20, live at a ComEd site). */
+  async function circuitOf(hostingCircuit, grid) {
+    var d = projectDoc(seedUnit());
+    if (hostingCircuit === null) delete d.prime.hosting.circuit; else d.prime.hosting.circuit = hostingCircuit;
+    if (grid) d.grid = grid;
+    DB.seed('projects/pc', d);
+    return (await post(Object.assign({ action: 'preview', projectId: 'pc' }, BODY))).quote.site.circuit;
+  }
+  /* the row as the door makes it (hosting-capacity probe → HS.normalize) */
+  var CE = HS.byKey('comed');
+  var COMED_ROW = HS.normalize(CE, CE, [{ layer: HS.layersFor(CE, 'storage')[0],
+    features: [{ attributes: { Feeder: 'L5131', Feeder_N: 'F1978', SS_N: 'S0711', BESS_HC: 4200, PV_HC_kW: 3900, EV_HC_kW: 5100, Feeder_Q: 650 } }] }], { lat: 41.8855, lng: -87.6536, mode: 'storage' })[0];
+  eq([COMED_ROW.id, COMED_ROW.name, COMED_ROW.substation], ['L5131', 'queue report F1978', 'S0711'], 'the fixture is ComEd’s own row shape: the feeder is the id, the queue-report number the name');
+  var comedLine = await circuitOf(GVC.hostingSummary({ utility: { key: 'comed', display: 'ComEd', eiaId: 4110 }, coverage: 'read', circuits: [COMED_ROW], best: 0 }).circuit);
+  eq(comedLine, 'L5131 (queue report F1978) · substation S0711', 'a ComEd circuit leads with its feeder, the queue-report number only beside it');
+  ok(comedLine.indexOf('queue report') > comedLine.indexOf('L5131') && !/^queue report/.test(comedLine), 'never the queue-report number first');
+  eq(await circuitOf({ id: '', name: 'nearest transformer point', substation: '' }), 'nearest transformer point', 'a source with no circuit id (JCP&L’s transformer points) leads with its name');
+  eq(await circuitOf({ id: 'L5131', name: 'L5131', substation: 'S0711' }), 'L5131 · substation S0711', 'a name that is the id is said once');
+  eq(await circuitOf(null, { circuit: { utility: 'ComEd', id: 'L5131', substation: 'S0711', netKw: 3550 } }), 'L5131 · substation S0711', 'no hosting summary: the grid record’s circuit, by the same rule');
   ok(pv.quote.system.unit.footprint === 'rep' && pv.quote.system.layout.v === 2 && pv.quote.system.layout.xfmr && pv.quote.system.layout.disco && pv.quote.system.conduitFt > 0, 'the system: the unit, the v2 plan with its gear and conduit');
   var sv = await post(saveBody()), id = sv.quote.id;
   ok(Q.validId(id) && sv.quote.status === 'draft' && sv.quote.rev === 1 && /^SUNWAV-Q-20261017-[A-F0-9]{5}$/.test(sv.quote.quoteNo), 'save: a draft with an id, rev 1 and a quote number: ' + sv.quote.quoteNo);
