@@ -198,9 +198,13 @@ warranty live):
   and the R60), and falls back to the reference list when it has none, so
   nobody gets an empty list. FENECON's Industrial XXL is offered only to
   FENECON's own workspace, first, as its own product. Specs only, never a
-  price. A unit with no released footprint is `footprint: 'none'`: marked
-  as a point until the rep types the submittal's L × W (`'rep'`), never a
-  generic container.
+  price. A unit whose maker has not released its footprint is drawn at its
+  REFERENCE size (`footprint: 'reference'`, 2026-10-20): the CC290/125's
+  reference cabinet (4.36 × 3.94 ft), and a 20 × 8 ft container for the LG
+  JP-2 and the Smart Module, whose brochure names one. Prime, the proposal
+  and Site Map all say to confirm it on the submittal; the rep's typed
+  submittal L × W (`'rep'`) replaces it. A unit with no figure at all is
+  `'none'`, a marked point.
 - **Circuit verdict:** the server's (`/api/hosting-capacity`, judged by
   the `/api/grid-verdict` engine), asked through `omega-grid-verdict.js`,
   the client Site Map's Grid panel uses too. The page's own thresholds are

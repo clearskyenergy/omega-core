@@ -549,18 +549,20 @@ button{font:inherit;color:inherit}
       return;
     }
     var pages = UNIT.sourcePages && UNIT.sourcePages.length ? ', p. ' + UNIT.sourcePages.join(', ') : '';
-    var fp = UNIT.footprint === 'catalog' ? ftText(UNIT) : (UNIT.footprint === 'rep' ? ftText(UNIT) + ' from the submittal' : 'footprint not released');
+    var fp = UNIT.footprint === 'catalog' ? ftText(UNIT) : (UNIT.footprint === 'rep' ? ftText(UNIT) + ' from the submittal'
+      : (UNIT.footprint === 'reference' ? ftText(UNIT) + ' reference size, confirm on the submittal' : 'footprint not released'));
     $('#unitCard').innerHTML = '<b>' + esc(UNIT.name) + '<span class="src">' + esc(SOURCE_WORDS[UNIT.source] || 'specification') + '</span></b>' +
       esc(fmt2(UNIT.kw) + ' kW / ' + kwhText(UNIT)) + (UNIT.hours ? ' · ' + esc(fmt2(UNIT.hours)) + ' h' : '') + ' · ' + esc(fp) +
       (UNIT.weightLb ? ' · ' + esc(fmt(UNIT.weightLb)) + ' lb' + (UNIT.weightBasis === 'reference' ? ' (reference)' : '') : '') +
       (UNIT.caveat ? '<div class="cav">' + esc(UNIT.caveat) + '</div>' : '') +
       (UNIT.sourceDoc ? '<div class="doc2">' + esc(UNIT.sourceDoc + pages) + (UNIT.catalogStatus === 'planning-verify' ? ' · planning specification' : '') + '</div>' : '') +
       '<div class="doc2">Price: quoted by ' + esc(UNIT.mfr || 'the manufacturer') + '</div>';
-    var none = BASE.footprint === 'none';
-    $('#fpBox').hidden = !none;
-    $('#fpNote').textContent = none ? (UNIT.footprint === 'rep' ? 'drawn at this size' : 'or leave blank: it is placed as a marked point') : '';
+    var open = BASE.footprint === 'none' || BASE.footprint === 'reference';
+    $('#fpBox').hidden = !open;
+    $('#fpNote').textContent = !open ? '' : UNIT.footprint === 'rep' ? 'drawn at this size'
+      : (BASE.footprint === 'reference' ? 'or leave blank: it is drawn at the reference size' : 'or leave blank: it is placed as a marked point');
   }
-  function unitNow() { return PP.screenable(BASE) && BASE.footprint === 'none' ? PP.repFootprint(BASE, $('#fpL').value, $('#fpW').value) : BASE; }
+  function unitNow() { return PP.screenable(BASE) && (BASE.footprint === 'none' || BASE.footprint === 'reference') ? PP.repFootprint(BASE, $('#fpL').value, $('#fpW').value) : BASE; }
   function footprintTyped() { UNIT = unitNow(); drawUnits(); guide(); }
   $('#unitSel').onchange = function () { picked = true; BASE = UNITS[+this.value] || UNITS[0]; $('#fpL').value = ''; $('#fpW').value = ''; UNIT = BASE; drawUnits(); guide(); };
   $('#fpL').oninput = footprintTyped; $('#fpW').oninput = footprintTyped;
@@ -665,7 +667,7 @@ button{font:inherit;color:inherit}
     if (cur === 'map') {
       if (!bat()) return { t: 'Sized in Site Map', p: 'The ' + UNIT.short + ' is not priced by the battery cost model. Quote required — Site Map sizes it. Sketch the site here if it helps.', a: 'Press Proposal, or keep sketching the site', tg: '#ed-quote' };
       if (!S.area) return { t: 'Mark the BESS area', p: 'Draw the area the battery may use on the satellite image.', a: 'Press BESS area, then drag on the map', tg: '#ed-area' };
-      if (!S.unitAt) return { t: 'Place the unit', p: UNIT.lFt ? 'The ' + UNIT.short + ' drops into the area at its ' + (UNIT.footprint === 'rep' ? 'submittal' : 'true') + ' ' + fmt2(UNIT.lFt) + ' × ' + fmt2(UNIT.wFt) + ' ft footprint, with ' + gearWords(UNIT) + '.' : UNIT.name + '’s footprint is not released, so it is marked as a point with ' + gearWords(UNIT) + '.', a: 'Press Place unit, then click inside the area', tg: '#ed-place' };
+      if (!S.unitAt) return { t: 'Place the unit', p: UNIT.lFt ? 'The ' + UNIT.short + ' drops into the area at its ' + (UNIT.footprint === 'rep' ? 'submittal' : (UNIT.footprint === 'reference' ? 'reference' : 'true')) + ' ' + fmt2(UNIT.lFt) + ' × ' + fmt2(UNIT.wFt) + ' ft footprint, with ' + gearWords(UNIT) + '.' : UNIT.name + '’s footprint is not released, so it is marked as a point with ' + gearWords(UNIT) + '.', a: 'Press Place unit, then click inside the area', tg: '#ed-place' };
       if (!S.poi) return { t: 'The utility service', p: 'Mark where the site\'s utility service is: the point of interconnection.', a: 'Press Service / POI, then click it on the map', tg: '#ed-poi' };
       if (!S.conduit) return { t: 'Run conduit', p: 'The run from ' + feedWords() + ' to the service, measured on the ground.', a: 'Press Conduit run', tg: '#ed-conduit' };
       if (!S.run) return { t: 'Run', p: 'The OMEGA cost model prices the installation on the server, from what is drawn.', a: 'Press Run', tg: '#ed-run' };
@@ -1337,7 +1339,7 @@ button{font:inherit;color:inherit}
       var u = G.unit;
       if (u.lFt) {
         var r = rectOf(u);
-        L.rectangle(r, { color: acc, weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95, className: 'pr-unit' }).addTo(L_lay).bindTooltip(esc(UNIT.short) + ' · ' + fmt2(u.lFt) + '×' + fmt2(u.wFt) + ' ft' + (u.footprint === 'rep' ? ' (submittal)' : ''), { permanent: true, direction: 'bottom', className: 'eqlbl' });
+        L.rectangle(r, { color: acc, weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95, className: 'pr-unit' }).addTo(L_lay).bindTooltip(esc(UNIT.short) + ' · ' + fmt2(u.lFt) + '×' + fmt2(u.wFt) + ' ft' + (u.footprint === 'rep' ? ' (submittal)' : (u.footprint === 'reference' ? ' (reference)' : '')), { permanent: true, direction: u.lFt < 12 ? 'left' : 'bottom', className: 'eqlbl' });
         for (var k = 1; k < 5; k++) { var x = r[0][1] + k * (r[1][1] - r[0][1]) / 5; L.polyline([[r[0][0], x], [r[1][0], x]], { color: '#c9c9c4', weight: 1 }).addTo(L_lay); }
       } else {
         L.circleMarker([u.c.lat, u.c.lng], { radius: 8, color: acc, weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95, className: 'pr-unit' }).addTo(L_lay).bindTooltip(esc(UNIT.short) + ' · ' + (bat() ? 'footprint not released' : 'sized in Site Map'), { permanent: true, direction: 'bottom', className: 'eqlbl' });
@@ -1470,7 +1472,7 @@ button{font:inherit;color:inherit}
     else h += '<div class="sec"><h6>Battery</h6><table class="spec">' + spec('Unit', UNIT.name) + spec('Power / energy', fmt2(UNIT.kw) + ' kW / ' + kwhText(UNIT)) +
       spec('Usable', UNIT.usable ? '~' + fmt(UNIT.usable) + ' kWh' : '') + spec('Chemistry', UNIT.chem) + spec('AC', UNIT.ac) +
       spec('Transformer', UNIT.incXfmr ? 'integrated' : UNIT.xfmr) + spec('Disconnect', UNIT.incDisco ? 'integrated' : UNIT.disco) +
-      spec('Footprint', UNIT.lFt ? ftText(UNIT) + (UNIT.footprint === 'rep' ? ' (submittal)' : '') : '') +
+      spec('Footprint', UNIT.lFt ? ftText(UNIT) + (UNIT.footprint === 'rep' ? ' (submittal)' : (UNIT.footprint === 'reference' ? ' (reference, confirm on the submittal)' : '')) : '') +
       spec('Weight', UNIT.weightLb ? fmt(UNIT.weightLb) + ' lb' + (UNIT.weightBasis === 'reference' ? ' (reference)' : '') : '') + spec('EMS', UNIT.ems) +
       '<tr><td>Price</td><td>Quoted by ' + esc(UNIT.mfr || 'the manufacturer') + '</td></tr></table>' +
       (UNIT.caveat ? '<div class="flag">' + esc(UNIT.caveat) + '</div>' : '') + '</div>';

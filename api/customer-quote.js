@@ -189,7 +189,7 @@ async function priced(db, caller, P, now) {
   var sku = str((prime.unit && prime.unit.sku) || '', 100), same = !listed && sku ? list.filter(function (u) { return u && u.sku === sku; })[0] : null;
   if (same) {
     var typed = prime.unit && prime.unit.footprint === 'rep' ? prime.unit : null;
-    unit = same.footprint === 'none' && typed ? PP.repFootprint(same, typed.lFt, typed.wFt) : PP.snapshot(same);
+    unit = (same.footprint === 'none' || same.footprint === 'reference') && typed ? PP.repFootprint(same, typed.lFt, typed.wFt) : PP.snapshot(same);
     layout2 = PP.upgrade(layout, unit) || layout2; listed = true;
   }
   if (!listed) fail(409, 'The battery on this project (' + (key || 'none') + ') is not in your workspace’s list any more; choose it again in Omega Prime, then quote.');

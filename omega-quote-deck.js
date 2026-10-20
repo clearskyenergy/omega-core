@@ -273,7 +273,8 @@
     var u = m.unit, lu = obj(m.layout.unit), f = u.footprint, basis = typeof f === 'string' ? f : text(obj(f).basis) || '';
     var l = fin(lu.lFt) || fin(u.lFt) || fin(obj(f).lFt), w = fin(lu.wFt) || fin(u.wFt) || fin(obj(f).wFt);
     if (basis === 'none' || !(l && w)) return { dims: '', words: 'Not yet released by the manufacturer; placed on the plan as a marked point' };
-    return { dims: num(l, 1) + ' ft × ' + num(w, 1) + ' ft', words: basis === 'rep' ? 'from the manufacturer’s submittal' : basis === 'catalog' ? 'manufacturer’s catalogue' : '' };
+    return { dims: num(l, 1) + ' ft × ' + num(w, 1) + ' ft', words: basis === 'rep' ? 'from the manufacturer’s submittal' : basis === 'catalog' ? 'manufacturer’s catalogue'
+      : basis === 'reference' ? 'manufacturer’s reference size, to be confirmed on the submittal' : '' };
   }
   function areaSqft(m) { return fin(m.sys.areaSqft) || fin(obj(m.layout.area).sqft); }
   function conduitFt(m) { var c = obj(m.layout.conduit); return fin(m.sys.conduitFt) || fin(m.layout.conduitFt) || fin(c.ft); }
