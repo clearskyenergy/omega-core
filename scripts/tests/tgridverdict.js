@@ -17,7 +17,14 @@
  * the ComEd-only probe, Mesa AZ names the City of Mesa beside Salt River
  * Project with no ComEd word, the queue and side words follow the answer,
  * every coverage case is drawn, and a door that does not answer records
- * nothing. */
+ * nothing.
+ * 2026-10-20: who may serve the point is ONE list (GV.whoServes) that Omega
+ * Prime's Circuit step, this panel and Site Plan's layer all draw. Downtown
+ * Mesa lists the City of Mesa by its own map, with the city's service-area
+ * map to check, and folds Salt River Project and APS away with the reason;
+ * the city's map down lists all three with their routes and pages. Every
+ * case is held to Prime's own candidatesBlock, run on the same answer: the
+ * same words, in the same order, with the same links. */
 'use strict';
 var assert = require('node:assert/strict'), fs = require('fs'), path = require('path'), vm = require('vm');
 var ROOT = path.join(__dirname, '../..'), count = 0;
@@ -120,6 +127,26 @@ while ((cm = coverRe.exec(door))) if (CASES.indexOf(cm[1]) < 0) CASES.push(cm[1]
 assert.deepEqual(CASES.slice().sort(), ['account-required', 'no-public-map', 'none-here', 'not-wired', 'outside', 'read', 'unreachable'], 'the door\'s coverage cases'); count++;
 var primeSrc = read('omega-prime.html'), primeCover = /var COVER = (\{[\s\S]*?\});/.exec(primeSrc);
 assert.ok(primeCover || /GV\.COVERAGE/.test(primeSrc), 'Omega Prime names its coverage words, or reads the client\'s'); count++;
+/* who may serve the point: ONE list in the one client, drawn by all three
+   pages, none of which carries a word of it (2026-10-20) */
+var layerSrc = read('omega-editor-v2-grid.js');
+assert.match(clientSrc, /function whoServes\(res\)/); assert.match(clientSrc, /whoServes: whoServes/); count += 2;
+assert.match(primeSrc, /GV\.whoServes\(res\)/, 'Omega Prime draws the one list'); assert.match(panelSrc, /G\.whoServes\(res\)/, 'the panel draws the one list');
+assert.match(layerSrc, /GV\.whoServes\(res\)/, 'Site Plan draws the one list'); count += 3;
+['Who serves this point', 'More than one utility is mapped', 'the one read here', 'Confirm the utility with the customer', 'Also on the territory maps', 'a weak match', 'Instead: '].forEach(function (t) {
+  [['omega-prime.html', primeSrc], ['omega-grid-panel.js', panelSrc], ['omega-editor-v2-grid.js', layerSrc]].forEach(function (f) {
+    assert.ok(f[1].indexOf(t) < 0, f[0] + ' carries its own copy of the list\'s words: ' + t); count++;
+  });
+});
+/* Prime's own candidatesBlock, cut out of the page with its esc and
+   safeHref: what the panel's list is held to, word for word */
+function cut(src, name) {
+  var i = src.indexOf('function ' + name + '('), j = src.indexOf('{', i), d = 0, k;
+  assert.ok(i >= 0, 'omega-prime.html has ' + name);
+  for (k = j; k < src.length; k++) { if (src[k] === '{') d++; else if (src[k] === '}' && !--d) break; }
+  return src.slice(i, k + 1);
+}
+var PRIME_LIST = cut(primeSrc, 'esc') + '\n' + cut(primeSrc, 'safeHref') + '\n' + cut(primeSrc, 'candidatesBlock');
 
 /* ── the whole path in a VM ─────────────────────────────────────────── */
 /* The real panel asks the real client, and the client's fetch runs the REAL
@@ -220,6 +247,63 @@ CASES.forEach(function (k) { assert.ok(COVER[k], 'words for ' + k); count++; });
 
 function esc(s) { return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 function plain(o) { return JSON.parse(JSON.stringify(o)); }
+/* Prime's list, run on the same client as the panel */
+var primeCtx = { GV: ctx.OmegaGridVerdict };
+vm.createContext(primeCtx);
+vm.runInContext(PRIME_LIST, primeCtx, { filename: 'omega-prime.html' });
+function primeList(res) { return primeCtx.candidatesBlock(JSON.parse(JSON.stringify(res))); }
+/* an element of the panel's HTML, from the tag that opens it to the one
+   that closes it; what a list says (its text, tags dropped) and its links */
+function block(html, open) {
+  var i = html.indexOf(open);
+  if (i < 0) return '';
+  var tag = /^<(\w+)/.exec(open)[1], re = new RegExp('<(/?)' + tag + '\\b', 'g'), d = 0, m;
+  re.lastIndex = i;
+  while ((m = re.exec(html))) { d += m[1] ? -1 : 1; if (!d) return html.slice(i, html.indexOf('>', m.index) + 1); }
+  return '';
+}
+function words(html) { return String(html).replace(/<[^>]*>/g, '').replace(/&#39;/g, '\'').replace(/&quot;/g, '"').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&'); }
+function hrefs(html) { var out = [], re = /<a href="([^"]*)"/g, m; while ((m = re.exec(html))) out.push(m[1]); return out; }
+/* the panel's list against Prime's for the same answer */
+function samePrime(h, res, what) {
+  var mine = block(h, '<div data-gp="who"'), theirs = primeList(res);
+  assert.equal(words(mine), words(theirs), what + ': the list in Omega Prime\'s words and order'); count++;
+  assert.deepEqual(hrefs(mine), hrefs(theirs), what + ': the same links, in the same order'); count++;
+  return mine;
+}
+
+/* ── the one list by itself: drawn as the door sends it, nothing judged ── */
+var WS = ctx.OmegaGridVerdict.whoServes, APS_E = HS.byKey('aps'), SRP_E = HS.byKey('srp');
+function cand(key, o) {
+  var e = HS.byKey(key), c = { eiaId: e.eiaIds[0], name: e.display.toUpperCase(), display: e.display, weak: false, hosting: HS.publication(e) };
+  Object.keys(o || {}).forEach(function (k) { c[k] = o[k]; });
+  return c;
+}
+function ans(o, t) {
+  var r = { coverage: 'read', note: 'The note.', utility: { key: 'aps', display: 'Arizona Public Service', eiaId: '803' }, verify: { viewerUrl: APS_E.viewerUrl } };
+  Object.keys(o || {}).forEach(function (k) { r[k] = o[k]; });
+  r.territory = t;
+  return r;
+}
+assert.equal(WS(ans({}, { confident: true, candidates: [cand('aps')] })), null, 'a figure read for the one utility: no list'); count++;
+assert.equal(WS(ans({}, { confident: false, candidates: [cand('aps')] })), null, 'a figure read, one utility on the maps: no list'); count++;
+assert.equal(WS(ans({ coverage: 'outside' }, { confident: false, candidates: [] })), null); assert.equal(WS(ans({}, null)), null); assert.equal(WS(null), null); count += 3;
+var two = plain(WS(ans({}, { confident: false, candidates: [cand('aps'), cand('srp')] })));
+assert.equal(two.head, 'More than one utility is mapped at this point.'); assert.equal(two.confirm, 'Confirm the utility with the customer’s bill.'); count += 2;
+assert.deepEqual(two.items.map(function (x) { return x.name + x.mark; }), ['Arizona Public Service — the one read here', 'Salt River Project'], 'a figure read but more than one utility mapped: all listed, the read one marked'); count++;
+assert.equal(two.items[0].says, 'Publishes no hosting capacity.', 'the read utility\'s route is the note\'s'); count++;
+assert.equal(two.items[1].says, 'Publishes no hosting capacity. Instead: ' + SRP_E.route + '.', 'another utility\'s route is said'); count++;
+assert.deepEqual(two.items[0].links.map(function (l) { return l.url; }), [APS_E.check.url], 'the read utility\'s page is the Check it on link'); count++;
+assert.deepEqual(two.items[1].links.map(function (l) { return l.url; }), [SRP_E.viewerUrl, SRP_E.check.url]); count++;
+var lone = plain(WS(ans({ coverage: 'no-public-map', note: '' }, { confident: true, candidates: [cand('aps')] })));
+assert.equal(lone.head, 'Who serves this point'); assert.equal(lone.items[0].mark, '', 'one utility: no mark'); assert.equal(lone.confirm, ''); count += 3;
+assert.equal(lone.items[0].says, 'Publishes no hosting capacity. Instead: ' + APS_E.route + '.', 'no note, so the route is said in the list'); count++;
+var weakOnly = plain(WS(ans({ coverage: 'no-public-map' }, { confident: false, candidates: [cand('srp', { weak: true, why: 'a county-sized stand-in polygon' })] })));
+assert.equal(weakOnly.items.length, 1); assert.equal(weakOnly.items[0].name, 'Salt River Project'); assert.equal(weakOnly.fold, null, 'nothing else mapped: the weak one is listed, not folded'); count += 3;
+var folded = plain(WS(ans({ coverage: 'no-public-map' }, { confident: true, candidates: [cand('aps'), cand('srp', { weak: true, why: '' })] })));
+assert.deepEqual(folded.fold, { title: 'Also on the territory maps, not this point (1)', items: [{ name: 'Salt River Project', why: 'a weak match' }] }, 'a weak one beside a strong one folds, with a reason'); count++;
+var hostile = plain(WS(ans({ coverage: 'no-public-map' }, { confident: true, candidates: [{ eiaId: '1', display: 'X', hosting: { says: 'publishes x', link: { url: 'javascript:alert(1)', label: 'a' }, check: { url: 'http://plain.example/map', label: 'b' } } }] })));
+assert.deepEqual(hostile.items[0].links, [], 'https only'); assert.equal(hostile.items[0].says, 'Publishes x.'); count += 2;
 function wait(cond, n) { return new Promise(function (res, rej) { (function tick(i) { if (cond()) return res(); if (i > (n || 400)) return rej(new Error('timed out')); setTimeout(function () { tick(i + 1); }, 5); })(0); }); }
 function idle() { return wait(function () { return !ST.busy; }); }
 var XXL_BODY = { kw: 2508, kwh: 5015, name: 'FENECON Industrial XXL' };
@@ -245,7 +329,7 @@ function readAnswer(c) {
 function coverAnswer(coverage, key, display, ctx2) {
   var e = key ? HS.byKey(key) : null, util = display ? { key: key, display: display, eiaId: e ? e.eiaIds[0] : null } : null;
   return { version: H.VERSION, point: { lat: HERE.lat, lng: HERE.lng }, mode: 'storage', coverage: coverage,
-    territory: { candidates: util ? [{ eiaId: util.eiaId, display: display, weak: false }] : [], confident: !!util, caution: null, source: util ? 'a test territory layer' : null },
+    territory: { candidates: util ? [{ eiaId: util.eiaId, display: display, weak: false, hosting: HS.publication(e) }] : [], confident: !!util, caution: null, source: util ? 'a test territory layer' : null },
     utility: util, source: null, circuits: [], best: null, body: null, verdict: judged(null),
     note: H.noteFor(coverage, e, util, ctx2 || {}),
     verify: e && e.viewerUrl ? { viewerUrl: e.viewerUrl, label: e.viewerLabel || display + '\'s map' } : (coverage === 'not-wired' && !e ? { viewerUrl: HS.DOE_ATLAS, label: 'the DOE atlas of utility hosting capacity maps' } : null),
@@ -289,6 +373,7 @@ idle().then(function () {
   assert.match(h, /Queue: the DER already queued on the feeder is subtracted here; the utility publishes its figure gross of it\./); count++;
   assert.match(h, /Verdict: OMEGA grid verdict \(grid-verdict-v1\)\./); assert.match(h, /comed · 0 ms · features 1/, 'the door\'s request log'); count += 2;
   assert.ok(h.indexOf('More than one utility') < 0, 'one utility, answered with confidence'); count++;
+  assert.ok(h.indexOf('data-gp="who"') < 0 && primeList(r) === '', 'a figure read for the one utility mapped: no list, here or in Prime'); count++;
   assert.ok(!/Feeder_Q|BESS_HC|usrsvcs/.test(h), 'no upstream field or URL reaches the page'); count++;
 
   /* ── Mesa, Arizona: the utility named, never one utility's words ── */
@@ -302,21 +387,44 @@ idle().then(function () {
     assert.equal(m.utility.display, 'City of Mesa'); assert.equal(m.coverage, 'no-public-map'); assert.equal(m.territory.confident, true, 'the city\'s own map settles downtown Mesa'); count += 3;
     var h2 = panelEl.innerHTML;
     assert.match(h2, /font-weight:700">City of Mesa<\/div><div style="font-size:11px;color:var\(--sub,#64748B\)">publishes no hosting capacity</, 'the city\'s own utility, and what it publishes'); count++;
-    assert.ok(h2.indexOf('More than one utility') < 0 && h2.indexOf('islands') < 0, 'one utility, answered with confidence: no list, no SRP caution'); count++;
+    assert.ok(h2.indexOf('More than one utility') < 0 && h2.indexOf('islands') < 0, 'one utility, answered with confidence: no SRP caution'); count++;
     assert.match(h2, /City of Mesa publishes no hosting capacity/, 'the server\'s note, in its words'); count++;
     assert.match(h2, /Needs a study/); assert.match(h2, /Mesa Downtown/); assert.match(h2, /29 W Main St, Mesa, AZ 85201/); count += 3;
     assert.ok(h2.indexOf('data-gp="verify" href="' + esc(HS.byKey('mesa').viewerUrl) + '"') >= 0, 'the link is the city\'s own page, never a hosting map that does not exist'); count++;
     assert.ok(!/comed|feeder_q/i.test(h2), 'no ComEd word anywhere in Arizona'); count++;
     assert.equal(S.grid.lat, 33.4152); assert.equal(S.grid.circuit, null, 'no circuit, none recorded'); assert.equal(S.grid.verdict.key, 'study'); count += 3;
     assert.equal(S.grid.substation.name, 'Mesa Downtown'); count++;
+    /* who serves the point: the City of Mesa by its own map, what it
+       publishes and the city's own service-area map to check; Salt River
+       Project and APS are on the national map but not this point, folded
+       away with the reason */
+    var MESA_E = HS.byKey('mesa'), INSIDE = 'the point is inside the City of Mesa&#39;s own electric service area (the city&#39;s map)';
+    var w2 = samePrime(h2, m, 'Mesa');
+    assert.ok(w2.indexOf('<b>Who serves this point</b><ul') > 0, 'one utility serves it'); count++;
+    assert.match(w2, /<ul[^>]*><li[^>]*><b>City of Mesa<\/b><div[^>]*>inside its own electric service area \(the city&#39;s map\)<\/div><div>Publishes no hosting capacity\.<\/div><div><a href="[^"]+" target="_blank" rel="noopener"[^>]*>the City of Mesa&#39;s electric service area <span style="white-space:nowrap">map ↗<\/span><\/a><\/div><\/li><\/ul>/,
+      'the City of Mesa, why, what it publishes, and the city\'s map'); count++;
+    assert.deepEqual(hrefs(w2), [MESA_E.check.url], 'the city\'s service-area map; the city\'s page is the Check it on link, never twice'); count++;
+    assert.ok(w2.indexOf('Instead:') < 0, 'the read utility\'s route is the note\'s, never said twice'); count++;
+    assert.ok(w2.indexOf('<details data-gp="who-fold" ') > 0 && !/<details[^>]*\sopen/.test(w2), 'the rest folded until opened'); count++;
+    assert.ok(w2.indexOf('<summary style="cursor:pointer">Also on the territory maps, not this point (2)</summary>') > 0, 'how many are folded'); count++;
+    assert.ok(w2.indexOf('<li>Salt River Project (' + INSIDE + ')</li><li>Arizona Public Service (' + INSIDE + ')</li>') > 0, 'Salt River Project, then APS, each with the reason'); count++;
     /* the city's map down: every utility on the national map named, the bill decides */
     HERE = MESA_DOWN; P.run(true);
     return idle();
   }).then(function () {
-    var m = P.hosting(), h3 = panelEl.innerHTML;
+    var m = P.hosting(), h3 = panelEl.innerHTML, MESA_E = HS.byKey('mesa');
     assert.equal(m.utility.display, 'City of Mesa'); assert.equal(m.territory.confident, false); count += 2;
-    assert.match(h3, /More than one utility is mapped at this point\./); assert.match(h3, /<li>City of Mesa — the one read here<\/li>/); count += 2;
-    assert.match(h3, /<li>Salt River Project<\/li>/); assert.match(h3, /<li>Arizona Public Service<\/li>/); assert.match(h3, /Confirm the utility with the customer’s bill\./); count += 3;
+    /* every utility on the national map, each with what it publishes, the
+       route it offers instead and its own pages; the bill decides */
+    var w3 = samePrime(h3, m, 'Mesa, the city\'s map down');
+    assert.ok(w3.indexOf('<b>More than one utility is mapped at this point.</b><ul') > 0); count++;
+    assert.match(w3, /<li[^>]*><b>City of Mesa<\/b> — the one read here<div[^>]*>the city&#39;s own utility; it serves part of the city, so confirm with the bill<\/div><div>Publishes no hosting capacity\.<\/div>/,
+      'the city first, the one read here, and why'); count++;
+    assert.ok(w3.indexOf('<li style="margin:3px 0"><b>Salt River Project</b><div>Publishes no hosting capacity. Instead: ' + esc(SRP_E.route) + '.</div>') > 0, 'SRP: what it publishes, and its route'); count++;
+    assert.ok(w3.indexOf('<li style="margin:3px 0"><b>Arizona Public Service</b><div>Publishes no hosting capacity. Instead: ' + esc(APS_E.route) + '.</div>') > 0, 'APS: what it publishes, and its route'); count++;
+    assert.ok(w3.indexOf('City of Mesa') < w3.indexOf('Salt River Project') && w3.indexOf('Salt River Project') < w3.indexOf('Arizona Public Service'), 'in the territory\'s order'); count++;
+    assert.deepEqual(hrefs(w3), [MESA_E.check.url, SRP_E.viewerUrl, SRP_E.check.url, APS_E.viewerUrl, APS_E.check.url], 'each utility\'s own pages; the city\'s page once, as the Check it on link'); count++;
+    assert.ok(/<\/ul>Confirm the utility with the customer’s bill\.<\/div>$/.test(w3) && w3.indexOf('<details') < 0, 'the bill decides; nothing folded'); count++;
     assert.match(h3, /encloses Arizona Public Service and City of Mesa islands/, 'the server\'s caution, in its words'); count++;
     assert.match(h3, /The City of Mesa’s own service-area map did not answer|The City of Mesa&#39;s own service-area map did not answer/, 'the city\'s map down, said'); count++;
   });
@@ -365,6 +473,11 @@ idle().then(function () {
       else { assert.ok(h.indexOf('data-gp="verify"') < 0, a.coverage + ': no map invented'); count++; }
       assert.equal(S.grid.circuit, null); assert.equal(S.grid.verdict.key, 'study'); assert.match(h, /data-gp="save"/); count += 3;
       assert.ok(!/ComEd/.test(h), a.coverage + ': no ComEd word'); count++;
+      /* no figure read: who serves the point, as Prime lists it */
+      if (a.coverage !== 'outside') {
+        var w = samePrime(h, a, a.coverage);
+        assert.ok(w.indexOf('<b>Who serves this point</b><ul') > 0 && w.indexOf('<b>' + esc(name) + '</b>') > 0, a.coverage + ': who serves the point, where no figure is read'); count++;
+      } else { assert.ok(h.indexOf('data-gp="who"') < 0 && primeList(a) === '', 'outside: no utility, no list'); count++; }
     });
   }, Promise.resolve());
 }).then(function () {

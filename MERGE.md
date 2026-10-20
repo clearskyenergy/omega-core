@@ -1,5 +1,31 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Who serves this point, on all three surfaces (2026-10-20)
+
+Prime's Circuit step lists who may serve a point and what each utility
+publishes (below). Site Map's Grid panel and Site Plan's Grid Atlas layer
+still listed names only, and only when the territory was not confident.
+The list's rule and its words moved out of `omega-prime.html` into the one
+client: `omega-grid-verdict.js` `whoServes(res)` returns:
+
+- the heading;
+- each strong candidate: its name (" — the one read here" when more than
+  one is mapped), why the maps name it, what its utility publishes and the
+  route it offers instead, and its own pages, https only. The read
+  utility's page and route are never given twice;
+- the bill line;
+- the candidates that cannot be the point's, in a fold with their reasons.
+
+Prime's `candidatesBlock`, the panel's `candidates()` and the layer's
+`whoLines()` each draw it in their own markup, so the words and the order
+are the same on all three. Prime's output is byte for byte what it was. No
+page carries a word of the list. Site Plan's card painter learned a bold
+name and a fold, and a link's last word stays beside its ↗. Held by
+`tgridverdict.js` and `tgridlayer.js` (downtown Mesa, the city's map down,
+Springfield, every coverage case, each against Prime's own
+`candidatesBlock` cut out of the page) and by `render-grid-panel.js`
+(both editors, on a desktop and a 390 px phone).
+
 ## Arizona, utility by utility, and the City of Mesa's own map (2026-10-20)
 
 Tommy's 29 W Main St, Mesa read "outside ComEd's territory" on production

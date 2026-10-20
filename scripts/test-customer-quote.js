@@ -4,7 +4,10 @@
  * Firestore double: the library (compose, markup and total, keys, the status
  * machine, expiry, the projections), the seller's company (deck-brand,
  * tenant-branding), and the door (/api/customer-quote): server pricing that
- * ignores a body total, the Helios send door's gates, the public view and
+ * ignores a body total, a battery the workspace's list no longer offers
+ * (FENECON's XXL on an older site) never priced but said on GET ?projectId=
+ * with the list to choose from and quoted once chosen, the drawing kept,
+ * the Helios send door's gates, the public view and
  * its counting, approve → exactly one Omega Logic order in the SELLER's own
  * workspace (the battery bought in as a reference line), a seller not yet
  * on Omega Logic told so and the hand-off retried once it is, the link into
@@ -91,6 +94,16 @@ function seedUnit() {
   var list = PP.units({ orgId: SELLER, brand: 'Sunwave Energy', entries: {}, keys: [], ownOnly: false, owner: ['sunwaveenergy', 'sunwave'] }, CC.entries(), { isOwn: BP.isOwn });
   var sm = list.filter(function (u) { return u.key === 'CLEANCELL-SM-1000-REV-H'; })[0];
   return PP.repFootprint(sm, 40, 10);
+}
+/* a dotted patch (what Prime writes with update()) applied to a record */
+function withPatch(doc, p) {
+  var d = JSON.parse(JSON.stringify(doc));
+  Object.keys(p).forEach(function (k) {
+    var parts = k.split('.'), o = d;
+    for (var i = 0; i < parts.length - 1; i++) { if (!o[parts[i]] || typeof o[parts[i]] !== 'object') o[parts[i]] = {}; o = o[parts[i]]; }
+    o[parts[parts.length - 1]] = JSON.parse(JSON.stringify(p[k]));
+  });
+  return d;
 }
 function projectDoc(unit, extra) {
   var c = { lat: 41.8855, lng: -87.6536 };
@@ -302,8 +315,85 @@ async function run() {
   DB.seed('omega_orgs/' + SELLER + '/billing/current', { tier: 'standard' });
   DB.seed('projects/p9', { orgId: SELLER, name: 'no prime' });
   await refused(function () { return post(Object.assign(saveBody(), { projectId: 'p9' })); }, 409, /Place the battery/, 'a project with no Prime layout cannot be quoted');
-  DB.seed('projects/p8', projectDoc(PP.XXL));
-  await refused(function () { return post(Object.assign(saveBody(), { projectId: 'p8' })); }, 409, /not in your workspace/, 'a battery the workspace’s list no longer offers (the XXL outside FENECON) is refused');
+  /* ── the battery a site keeps that the workspace's list no longer offers ──
+     2026-10-20, Tommy, from the ClearSky workspace, on a site Prime set up
+     before 2026-10-17 with FENECON's XXL (v1's unit for every workspace):
+     Preview answered "The battery on this project (FENECON-IND-XXL) is not
+     in your workspace’s list any more; choose it again in Omega Prime, then
+     quote", and once a site is started Prime has no unit picker. The door
+     still never prices it (Q.offered, the rule the order hand-off runs);
+     GET ?projectId= says so before anything is priced, with the list to
+     choose from; the rep's choice is Prime's ordinary patch, the drawing
+     kept, and the site is quoted. */
+  tick();
+  var LIST = Q.unitsFor(SELLER, DB.data.get('omega_orgs/' + SELLER), {});
+  ok(!LIST.some(function (u) { return u.key === PP.XXL.key; }), 'the fixture: the XXL is not on Sunwave’s list');
+  /* as Prime wrote it on 2026-10-16: v1, no unit snapshot, a battery entry with no SKU */
+  var c8 = { lat: 41.8855, lng: -87.6536 };
+  DB.seed('projects/p8', { orgId: SELLER, uid: 'u1', name: '1200 W Lake St, Chicago, IL 60607', address: '1200 W Lake St, Chicago, IL 60607', type: 'bess', siteScopes: ['bess'], stage: 'candidate',
+    elements: [], conduits: [], annotations: [], mapState: { lat: c8.lat, lng: c8.lng, zoom: 19 },
+    bessList: [{ id: 'prime-1', name: 'BESS-01', mfr: 'FENECON', model: 'Industrial XXL', chem: 'LFP, liquid-cooled', kwh: '5015', usable: '4750', kw: '2508', dur: '2', acv: '480', qty: '1', catalogKey: 'FENECON-IND-XXL', _fromPrime: true }],
+    prime: { v: 1, unitKey: 'FENECON-IND-XXL', geocode: 'U.S. Census geocoder', hosting: { utility: { key: 'comed', display: 'ComEd' }, coverage: 'read', circuit: { id: 'F1234', name: 'Feeder 1234', substation: 'Lakeview TSS' } },
+      layout: { area: { s: c8.lat - 0.0002, w: c8.lng - 0.0003, n: c8.lat + 0.0002, e: c8.lng + 0.0003 }, unit: { lat: c8.lat, lng: c8.lng }, poi: { lat: c8.lat + 0.0004, lng: c8.lng + 0.0006 }, conduitFt: 180 } } });
+  /* and as Prime v2 wrote it: the XXL snapshotted on the record */
+  DB.seed('projects/p8b', projectDoc(PP.XXL));
+  var XXL_WORDS = 'The FENECON Industrial XXL is not on Sunwave Energy’s battery list, so it cannot be quoted here. Choose the unit to quote on Omega Prime’s Proposal step; the drawing is kept.';
+  for (var x8 = 0; x8 < 2; x8++) {
+    var pid8 = x8 ? 'p8b' : 'p8';
+    var pv8x = await refused(function () { return post(Object.assign({ action: 'preview', projectId: pid8 }, BODY)); }, 409, null, pid8 + ': Preview of the XXL outside FENECON is refused');
+    eq(pv8x.message, XXL_WORDS, pid8 + ': in plain words, naming the unit, the workspace and where to choose');
+    eq((await refused(function () { return post(Object.assign(saveBody(), { projectId: pid8 })); }, 409, null, pid8 + ': and Save')).message, XXL_WORDS, pid8 + ': the same words');
+  }
+  ok(!Array.from(DB.data.keys()).some(function (k) { return /^customer_quotes\//.test(k) && /^p8/.test((DB.data.get(k) || {}).projectId || ''); }), 'nothing is priced or kept for it');
+  await refused(function () { return post(Object.assign({ action: 'preview', projectId: 'p8', unit: seedUnit() }, BODY)); }, 400, /Unsupported field/, 'a request body never names the battery');
+  var g8 = await get({ projectId: 'p8' });
+  ok(g8.unit && g8.unit.offered === false && g8.unit.key === 'FENECON-IND-XXL' && g8.unit.name === 'FENECON Industrial XXL' && g8.unit.workspace === 'Sunwave Energy', 'GET ?projectId= says the site’s battery is not on the list, before anything is priced: ' + JSON.stringify(g8.unit && { offered: g8.unit.offered, key: g8.unit.key, name: g8.unit.name }));
+  eq(g8.unit.choices.map(function (u) { return u.key; }), LIST.map(function (u) { return u.key; }), 'with the list to choose from: Sunwave’s own, no XXL');
+  ok(g8.unit.choices.every(function (u) { return JSON.stringify(Object.keys(u)) === JSON.stringify(PP.UNIT_KEYS); }) && !/"(price|eqcost|cost|unitCost)"|\$\s?\d/.test(JSON.stringify(g8.unit.choices)), 'each a unit as Prime holds one (contract C1): specs, never a price');
+  eq((await get({ projectId: 'p8b' })).unit.offered, false, 'the v2 record too');
+  var g1 = (await get({ projectId: 'p1' })).unit;
+  eq(g1, { offered: true, key: 'CLEANCELL-SM-1000-REV-H', name: 'CleanCell US Smart Module', workspace: 'Sunwave Energy' }, 'a battery the list offers: offered, and no list is sent');
+  /* the rep chooses the Smart Module on the Proposal step: the page's patch
+     (PP.patch, unitChanged), its state as PP.restore gave it — the area,
+     where the unit stands, the service point and the conduit kept */
+  var d8 = DB.data.get('projects/p8'), R8 = PP.restore(JSON.parse(JSON.stringify(d8)), LIST);
+  ok(R8.unit.key === PP.XXL.key && R8.layout.unit.lFt === 20, 'Prime resumes it on the XXL, at its size (the one unit rule)');
+  var pick8 = g8.unit.choices.filter(function (u) { return u.key === 'CLEANCELL-SM-1000-REV-H'; })[0];
+  var st8 = { addr: R8.addr, lat: R8.lat, lng: R8.lng, geoSrc: R8.geoSrc, geoLabel: R8.geoLabel, zip: R8.zip, step: 'quote', type: R8.type, unit: pick8, sub: R8.sub, hosting: R8.hosting, grid: R8.grid, load: R8.load,
+    area: R8.layout.area, unitAt: R8.layout.unit.c, poi: R8.layout.poi, conduit: !!R8.layout.conduit, run: null };
+  var pt8 = PP.patch(st8, { uid: 'u1', email: REP.email }, 2, { unitChanged: true });
+  ok(Object.keys(pt8).every(function (k) { return /^(prime\.[A-Za-z]+|grid\.[A-Za-z]+|load|bessList|updatedAt)$/.test(k); }), 'the choice is Prime’s ordinary patch: no drawing key');
+  DB.seed('projects/p8', withPatch(d8, pt8));
+  var L8 = DB.data.get('projects/p8').prime.layout;
+  ok(L8.v === 2 && L8.unitKey === 'CLEANCELL-SM-1000-REV-H' && JSON.stringify(L8.area) === JSON.stringify(R8.layout.area) && JSON.stringify(L8.unit.c) === JSON.stringify(R8.layout.unit.c) && JSON.stringify(L8.poi) === JSON.stringify(R8.layout.poi) && L8.conduit && L8.conduit.ft > 0,
+    'the drawing is kept: the area, where the unit stands, the service point, the conduit');
+  eq(DB.data.get('projects/p8').bessList[0].catalogKey, 'CLEANCELL-SM-1000-REV-H', 'Site Map’s battery entry follows it');
+  var pv8 = await post(Object.assign({ action: 'preview', projectId: 'p8' }, BODY));
+  var want8 = PRICE.finish(REP, SELLER, PP.runInput(pick8, L8), { rates: null, installer: null, supplier: null, note: 'x' });
+  eq(pv8.quote.internal.cost.total, Q.money(Math.round(want8.total.base * 100)), 'chosen, the site is priced on the server from the chosen unit and the drawing kept');
+  ok(pv8.quote.scope[0].amount === 'Quoted by CleanCell US' && /Smart Module/.test(pv8.quote.scope[0].name) && JSON.stringify(pv8).indexOf('FENECON') < 0, 'the proposal names the chosen unit, quoted by its maker; FENECON nowhere on it');
+  var sv8 = await post(Object.assign(saveBody(), { projectId: 'p8' })), r8 = quote(sv8.quote.id);
+  ok(r8.unit.key === 'CLEANCELL-SM-1000-REV-H' && r8.layoutHash === L8.hash + ':CLEANCELL-SM-1000-REV-H' && r8.projectId === 'p8', 'and saved: the quote names it, on the drawing kept');
+  eq((await get({ projectId: 'p8' })).unit.offered, true, 'the site’s battery is on the list now');
+  /* where the list DOES offer the XXL (FENECON's own workspace), it is quoted as it stands */
+  var FENREP = { uid: 'f1', email: 'rep@fenecon.com', orgId: 'fenecon.com', staff: false, claims: { email_verified: true } };
+  DB.seed('omega_orgs/fenecon.com', { name: 'FENECON', status: 'active', vertical: 'oem' });
+  DB.seed('omega_orgs/fenecon.com/billing/current', { tier: 'standard' });
+  DB.seed('omega_orgs/fenecon.com/members/f1', { role: 'admin', status: 'active', name: 'Fen Rep' });
+  DB.seed('projects/pf', projectDoc(PP.XXL, { orgId: 'fenecon.com', uid: 'f1' }));
+  eq((await get({ projectId: 'pf' }, FENREP)).unit.offered, true, 'FENECON’s own list offers its XXL');
+  var pvf = await post(Object.assign({ action: 'preview', projectId: 'pf' }, BODY), FENREP);
+  ok(pvf.quote.scope[0].amount === 'Quoted by FENECON' && /Industrial XXL/.test(pvf.quote.scope[0].name), 'and FENECON quotes it');
+  /* a proposal priced on the XXL before it left the list never goes out
+     again: its approval could make no order (the hand-off's own rule) */
+  var sx = await post(saveBody()), rx = quote(sx.quote.id);
+  DB.seed('customer_quotes/' + rx.id, Object.assign({}, rx, { unit: Q.unitOf(PP.XXL) }));
+  var sxe = await refused(function () { return post({ action: 'send', id: rx.id, sendId: sid(), deliver: 'link' }); }, 409, null, 'a proposal on the XXL is not sent');
+  eq(sxe.message, 'The FENECON Industrial XXL is not on Sunwave Energy’s battery list any more, so this proposal cannot go out on it. Choose the unit to quote on Omega Prime’s Proposal step, save the proposal, then send it.', 'in the words the hand-off uses');
+  ok(quote(rx.id).status === 'draft' && !quote(rx.id).acceptance, 'nothing went out and nothing changed');
+  var cqSrc = require('fs').readFileSync(path.join(ROOT, 'api/customer-quote.js'), 'utf8');
+  ok(/var hit = Q\.offered\(list, unit\);/.test(cqSrc) && /var hit = Q\.offered\(L\.list, unit\);/.test(cqSrc) && /if \(!Q\.offered\(\(await listOf\(db, org, orgRec\)\)\.list, r\.unit\)\)/.test(cqSrc) && !/\.some\(function \(u\) \{ return u && u\.key ===|u\.sku === sku/.test(cqSrc),
+    'the door prices, answers GET ?projectId= and sends by the one rule (Q.offered), with no lookup of its own');
   /* a charger, an array or a compute unit Prime set up (main #348) is not a
      battery: quote required, sized in Site Map — never priced as one */
   var CAT = require(path.join(ROOT, 'omega-site-catalogs.js'));

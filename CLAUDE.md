@@ -1445,9 +1445,10 @@ queue where the utility publishes one beside a gross figure, and the
 verdict — Fits / Fits only smaller / Needs a study, and the substation's
 chip — in the same answer from `api/_lib/grid-verdict.js` (gated as
 `/api/grid-atlas` is; every threshold is server-side). Every coverage case
-is drawn as Prime draws it (the utility's name, every candidate when the
-territory is not confident, where the power comes from, the provenance and
-the door's request log, the utility's own map), the queue and side words
+is drawn as Prime draws it (the utility's name, who may serve the point
+wherever no figure is read or more than one utility is mapped, where the
+power comes from, the provenance and the door's request log, the utility's
+own map), the queue and side words
 follow the answer (`queueNetted`, `basis`, a null `queuedKw` is "not
 published", never 0), the panel names no utility of its own, and the
 editor no longer loads `omega-comed-layers.js` (the Site Finder's). A door
@@ -1460,15 +1461,21 @@ the panel's answer when it re-measures the same point.
 sentence byte for byte, Mesa AZ). **Site Plan's Grid Atlas layer**
 (`omega-editor-v2-grid.js` in `editor-v2.html`) asks the same door the same
 way: no routing by state in the browser (Illinois outside ComEd is asked
-too, where it once was not), its card's lines drawn from the answer with
-the utility's own map as an https link, and `editor-v2.html` no longer loads
+too, where it once was not), its card's lines drawn from the answer (the
+same who-serves list, a line each, what cannot be the point's in a fold)
+with the utility's own map as an https link, and `editor-v2.html` no longer loads
 the ComEd module; `scripts/tests/tgridlayer.js` runs it on the real door.
 `scripts/render-grid-panel.js` (in `check:pages`) holds both in Chromium:
-Site Map's Grid Check at ComEd, Mesa and on a 390 px phone, and Site Plan's
-layer at its Phoenix sample. The standalone Grid Atlas and Site Finder stay for
+Site Map's Grid Check at ComEd, Mesa (and with the city's map down) and on
+a 390 px phone, and Site Plan's layer at its Phoenix sample and at Mesa, on
+a desktop and a 390 px phone. The standalone Grid Atlas and Site Finder stay for
 prospecting many sites. Both the panel and Omega Prime ask through ONE
 client, `omega-grid-verdict.js` (the national door, `/api/grid-verdict`,
-the coverage words `COVERAGE`, and the `grid.*` record shape). **Omega
+the coverage words `COVERAGE`, the `grid.*` record shape, and who may serve
+the point, `whoServes`: each utility with what it publishes, the route it
+offers instead and its own pages, the ones that cannot be the point's
+folded with their reason; 2026-10-20, held word for word to Prime's own
+`candidatesBlock` by `tgridverdict.js`, `tgridlayer.js` and the render check). **Omega
 Prime sets up the real project** (2026-10-16,
 Tommy: "it does the set up and system like the artifact sandbox"), and
 **carries it all the way to Omega Teleios** (2026-10-17, Tommy: "print a
@@ -1500,7 +1507,20 @@ panel moves (kept per browser, docked on a phone):
   the brochure names one (LG JP-2, Smart Module), `footprint: 'reference'`,
   said to be confirmed on the submittal everywhere it shows; the rep's
   typed submittal size replaces it; a unit with no figure at all stays a
-  marked point.
+  marked point. **A proposal quotes only a unit the list offers**
+  (2026-10-20, from the ClearSky workspace: Preview on a site set up on the
+  XXL before 2026-10-17 answered "not in your workspace’s list any more;
+  choose it again in Omega Prime", and a started site has no picker): a
+  site keeps the unit it was drawn with (`PP.unitFor`), but
+  `PP.offered(list, unit)` (the list's entry by key, else the same SKU, its
+  own figures) is the ONE rule the quote door's preview, save and send and
+  the order hand-off (`prime-order`) resolve it by. `GET
+  /api/customer-quote?projectId=` returns `unit {offered, choices}` and
+  Prime's Proposal step then asks for the unit to quote from that list,
+  Preview, Save and Send held, the drawing kept (area, unit point, service
+  point, conduit; the gear placed for the new unit, the circuit asked again
+  for it), patched with `unitChanged`; a proposal saved on the old unit then
+  reads as changed and is saved again before it goes out.
 - **The record.** The project is CREATED at Start (`projectDoc`) and the
   address becomes `/omega-prime?id=`; every change after is one debounced
   dotted `patch()` (`prime.*`, `grid.<part>`, `load`; never a drawing key;
@@ -1617,8 +1637,9 @@ Arizona utility publishes distribution hosting capacity; the ACC-regulated
 ones answer a Pre-Application Report (A.A.C. R14-2-2616), SRP screens
 inside its own review. Every candidate in the door's answer carries what its
 utility publishes (`HS.publication`: the words, the `route` it offers
-instead of a map, its own page and `check` lookup), and Prime's Circuit step
-lists them wherever no figure is read or more than one utility is mapped.
+instead of a map, its own page and `check` lookup), and Prime's Circuit step,
+Site Map's Grid panel and Site Plan's layer list them wherever no figure is
+read or more than one utility is mapped (`GV.whoServes`, the one list).
 `POST /api/hosting-capacity` judges with `grid-verdict` in-process (a null
 queue is "not published", a netted queue is not subtracted twice, a
 generation-only figure for a battery says so; a side that did not answer is
