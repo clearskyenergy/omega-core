@@ -1,0 +1,34 @@
+{
+  "source": "lbnl-interconnection",
+  "url": "https://eta-publications.lbl.gov/sites/default/files/berkeley_lab_2023.04.20-_spp_interconnection_costs.pdf",
+  "read": "2026-10-18",
+  "threshold": 0.01,
+  "ok": true,
+  "records": [
+    {
+      "id": "spp",
+      "iso": "SPP",
+      "usdPerKw": 57,
+      "url": "https://eta-publications.lbl.gov/sites/default/files/berkeley_lab_2023.04.20-_spp_interconnection_costs.pdf",
+      "published": "2023-04",
+      "dollarYear": 2022
+    },
+    {
+      "id": "pjm",
+      "iso": "PJM",
+      "usdPerKw": 84,
+      "url": "https://eta-publications.lbl.gov/sites/default/files/berkeley_lab_2023.1.12-_pjm_interconnection_costs.pdf",
+      "published": "2023-01",
+      "dollarYear": 2022
+    },
+    {
+      "id": "miso",
+      "iso": "MISO",
+      "usdPerKw": 102,
+      "url": "https://eta-publications.lbl.gov/sites/default/files/berkeley_lab_2022.10.06-_miso_interconnection_costs.pdf",
+      "published": "2022-10",
+      "dollarYear": 2022
+    }
+  ],
+  "note": "Completed-project means. Not a behind-the-meter unit cost and not averaged into one number."
+}

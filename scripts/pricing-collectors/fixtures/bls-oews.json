@@ -1,0 +1,10 @@
+{
+  "status": "REQUEST_SUCCEEDED",
+  "Results": {
+    "series": [
+      { "seriesID": "OEUN000000000000047211103", "data": [ { "year": "2025", "period": "A01", "value": "34.37" } ] },
+      { "seriesID": "OEUS170000000000047211103", "data": [ { "year": "2025", "period": "A01", "value": "44.34" } ] },
+      { "seriesID": "OEUM001698000000047211103", "data": [ { "year": "2025", "period": "A01", "value": "45.41" } ] }
+    ]
+  }
+}

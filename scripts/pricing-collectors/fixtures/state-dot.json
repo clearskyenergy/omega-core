@@ -1,0 +1,6 @@
+[
+  {"bid_code":"618-7030","bid_item_description":"CONDT (PVC) (SCH 40) (2\")","bid_item_unit_price_amount":"10","bid_item_quantity":"100","bid_rank_sequence_number":"1","measurement_unit":"LF","project_actual_let_date":"2025-06-01T00:00:00.000"},
+  {"bid_code":"618-7030","bid_item_description":"CONDT (PVC) (SCH 40) (2\")","bid_item_unit_price_amount":"20","bid_item_quantity":"300","bid_rank_sequence_number":"1","measurement_unit":"LF","project_actual_let_date":"2026-01-15T00:00:00.000"},
+  {"bid_code":"618-7030","bid_item_description":"CONDT (PVC) (SCH 40) (2\")","bid_item_unit_price_amount":"99","bid_item_quantity":"50","bid_rank_sequence_number":"2","measurement_unit":"LF","project_actual_let_date":"2026-01-15T00:00:00.000"},
+  {"bid_code":"618-7036","bid_item_description":"CONDT (PVC) (SCH 40) (3\")","bid_item_unit_price_amount":"16","bid_item_quantity":"40","bid_rank_sequence_number":"1","measurement_unit":"LF","project_actual_let_date":"2025-11-01T00:00:00.000"}
+]
