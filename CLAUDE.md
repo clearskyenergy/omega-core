@@ -1629,9 +1629,16 @@ working; only what a person reads says Omega Maximus.
   sells it (`EXPLICIT.maximus = 129900`); 2026-10 is used and never
   repriced, so a module carries `since` and a book covers at least the
   modules sold as of its version (`pricebook.soldIn`, `sells`); every
-  price read skips or refuses a module its book does not sell. **Seed
-  2026-11 (`scripts/seed-pricebook.js --live`) before deploying**, then let
-  QuickBooks gain `module:maximus` (`qbo-items`). On a legacy plan the tool
+  price read skips or refuses a module its book does not sell.
+  **Existing subscriptions keep their book** (Tommy, 2026-10-20): the
+  billing guard issues under the current book or the workspace's own pinned
+  book when that is enabled and a release version (`package-billing
+  issuable`, `scripts/tests/tbookpin.js`), so a workspace on 2026-10 renews
+  at its prices; staff move it onto 2026-11 by activating it there (until
+  then Maximus is not on its book). **Seed 2026-11
+  (`scripts/seed-pricebook.js --live --realm=…`, from this tree) and enable
+  it before deploying**; on QuickBooks, `module:maximus` via `qbo-items`.
+  On a legacy plan the tool
   is Enterprise-level (a trial tries it, Standard and Deluxe buy the add-on,
   which switches `toolOverrides.siteplantrial` on).
 - **One access rule** for its doors: `package-access.withModuleAnyPlan(caller,
