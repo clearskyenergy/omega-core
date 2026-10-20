@@ -3,10 +3,14 @@
  * omega-editor-v2-grid.js — Grid Atlas as one layer on the Site Plan map.
  *
  * The layer list and the line reading live in omega-grid-layers.js. The
- * circuit verdict is POST /api/grid-verdict, asked through
- * omega-grid-verdict.js. ComEd at the parcel is omega-comed-layers.js.
- * Any other state is POST /api/hosting-capacity. This file does not carry
- * a service URL, and it does not decide whether a unit fits.
+ * serving utility, its published hosting capacity and the circuit verdict
+ * are ONE question to the national door, POST /api/hosting-capacity, asked
+ * through omega-grid-verdict.js GV.hosting: the door Omega Prime and Site
+ * Map's Grid panel ask (2026-10-17, Tommy: "it should not just run comed
+ * information if its outside of comed it needs to look via api for the
+ * utility details"). The server decides whose wire it is, in every state,
+ * ComEd included; this file routes nothing by state. It does not carry a
+ * service URL, names no utility, and does not decide whether a unit fits.
  *
  * The layer is off until it is switched on. Nothing it reads is written
  * onto the drawing.
@@ -15,14 +19,6 @@
   'use strict';
 
   var COLORS = { distribution: '#1F4E79', transmission: '#e0533d', substation: '#c98a2b', line: '#5C6B7A' };
-  var STATES = {
-    AL: 1, AK: 1, AZ: 1, AR: 1, CA: 1, CO: 1, CT: 1, DE: 1, FL: 1, GA: 1,
-    HI: 1, ID: 1, IL: 1, IN: 1, IA: 1, KS: 1, KY: 1, LA: 1, ME: 1, MD: 1,
-    MA: 1, MI: 1, MN: 1, MS: 1, MO: 1, MT: 1, NE: 1, NV: 1, NH: 1, NJ: 1,
-    NM: 1, NY: 1, NC: 1, ND: 1, OH: 1, OK: 1, OR: 1, PA: 1, RI: 1, SC: 1,
-    SD: 1, TN: 1, TX: 1, UT: 1, VT: 1, VA: 1, WA: 1, WV: 1, WI: 1, WY: 1, DC: 1
-  };
-
   var enabled = false;
   var scene = null;
   var answer = null;
@@ -38,31 +34,6 @@
   function verdict() { return root.OmegaGridVerdict; }
 
   function num(v) { var n = +v; return isFinite(n) ? n : null; }
-
-  function stateOf(address) {
-    var s = String(address || '').toUpperCase();
-    var m = s.match(/\b([A-Z]{2})\s+\d{5}(?:-\d{4})?\b/);
-    if (m && STATES[m[1]]) return m[1];
-    m = s.match(/,\s*([A-Z]{2})\s*$/);
-    if (m && STATES[m[1]]) return m[1];
-    return null;
-  }
-
-  function comedAt(lat, lng) {
-    var C = root.OmegaComEdLayers;
-    var t = C && C.territoryAt ? C.territoryAt(lat, lng) : null;
-    return !!(t && t.hasMap && (t.key === 'comed' || /comed/i.test(String(t.name || ''))));
-  }
-
-  /* comed: the parcel probe. hosting: the other-state route.
-     none: no state on the address, or Illinois outside the ComEd map.
-     Illinois is not sent to the hosting route. */
-  function routeOf(lat, lng, address) {
-    if (comedAt(lat, lng)) return 'comed';
-    var st = stateOf(address);
-    if (!st || st === 'IL') return 'none';
-    return 'hosting';
-  }
 
   function unitOf(summary) {
     summary = summary || {};
@@ -187,41 +158,95 @@
     return COLORS[kind] || COLORS.line;
   }
 
-  function verdictBody(unit, sub, circuit) {
+  /* The door's request: the site point, the battery on the drawing (no
+     battery, no unit: the utility and its figures are still read) and the
+     feeding substation, so its chip is judged in the same answer. */
+  function hostingBody(anchor, unit, sub) {
     return {
-      unit: unit || { kw: null, kwh: null, name: '' },
+      lat: num(anchor && anchor.lat),
+      lng: num(anchor && anchor.lng),
+      unit: unit && unit.kw ? { kw: unit.kw, kwh: unit.kwh, name: unit.name } : null,
       substation: sub ? { name: sub.name, kv: sub.kv, km: sub.km } : null,
-      circuit: circuit || null
+      mode: 'storage'
     };
   }
 
-  function sourceLine(kind, server, probe, hosting) {
-    var GV = verdict();
-    if (kind === 'comed' && GV && GV.circuitSourceLine) return GV.circuitSourceLine(server, probe);
-    if (kind === 'hosting' && GV && GV.hostingSourceLine) return GV.hostingSourceLine(hosting, server);
-    var line = 'No hosting map answered at this parcel.';
-    if (server && server.version) line += ' Verdict: OMEGA grid verdict (' + server.version + ').';
-    return line;
+  /* Where the answer came from, in the answer's own words: the source the
+     server named, its layer and date, the territory layers that named the
+     utility, and the verdict's version. Never one utility's field names. */
+  function sourceLine(res, at) {
+    var src = res && res.source, v = res && res.verdict, parts = [];
+    if (src) {
+      parts.push('Source: ' + [src.label, src.layer, src.refreshed ? 'refreshed ' + src.refreshed : ''].filter(function (x) { return !!x; }).join(' · ') +
+        (src.addressResolved ? ', resolved at the parcel.' : ', the nearest published circuit, not resolved at the parcel.'));
+    } else parts.push('No hosting map answered at this parcel.');
+    if (res && res.territory && res.territory.source) parts.push('Utility named from ' + res.territory.source + '.');
+    if (v && v.version) parts.push('Verdict: OMEGA grid verdict (' + v.version + ').');
+    if (at) parts.push('Asked ' + at + '.');
+    return parts.join(' ');
   }
 
-  function applyAnswer(server, kind, probe, hosting) {
-    if (!server || !server.verdict) return null;
+  function safeHref(u) { return /^https:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : ''; }
+
+  /* The door's answer → the record: the grid record Site Map and Prime
+     write (GV.fromHosting: substation, circuit, verdict), plus what the card
+     says about the utility, the territory, the circuit's power and the
+     utility's own map. Read live; nothing here is written onto the drawing. */
+  function applyAnswer(res) {
     var GV = verdict();
+    if (!res || !res.verdict || !res.verdict.verdict || !GV || !GV.fromHosting) return null;
     var at = new Date().toISOString();
-    var fields = GV && GV.fields ? GV.fields(server, probe, 0, at) : null;
-    var rec = fields || {
-      substation: server.substation || null,
-      circuit: server.circuit || null,
-      verdict: {
-        key: server.verdict.key, label: server.verdict.label, say: server.verdict.say,
-        unitKw: server.unit && server.unit.kw, unitName: server.unit && server.unit.name,
-        version: server.version, at: at
-      }
-    };
-    if (rec.verdict && !rec.verdict.at) rec.verdict.at = at;
-    rec.sourceLine = sourceLine(kind, server, kind === 'comed' ? probe : null, kind === 'hosting' ? hosting : null);
-    rec.kind = kind || 'none';
+    var rec = GV.fromHosting(res, at);
+    if (!rec) return null;
+    var t = res.territory || {}, chosen = res.utility && res.utility.eiaId, href = res.verify && safeHref(res.verify.viewerUrl);
+    var best = res.circuits && res.best != null ? res.circuits[res.best] || null : null, up = (best && best.upstream) || {};
+    rec.kind = res.coverage || 'none';
+    rec.coverage = res.coverage || null;
+    rec.utility = res.utility ? { key: res.utility.key || null, display: res.utility.display || '', eiaId: res.utility.eiaId || null } : null;
+    rec.note = res.note || '';
+    rec.verify = href ? { viewerUrl: href, label: res.verify.label || '' } : null;
+    rec.candidates = !t.confident && t.candidates && t.candidates.length > 1 ? t.candidates.map(function (c) {
+      return { display: c.display || c.name || '', chosen: !!(c.eiaId && c.eiaId === chosen), weak: !!c.weak, why: c.why || '' };
+    }) : null;
+    rec.power = best ? { id: best.id || '', name: best.name || '', substation: best.substation || '', kv: best.kv == null ? null : best.kv,
+      transformerKw: up.transformerKw == null ? null : up.transformerKw, bankKw: up.bankKw == null ? null : up.bankKw,
+      substationKw: up.substationKw == null ? null : up.substationKw, pnode: up.pnode || null,
+      feederQueuedKw: up.feederQueuedKw == null ? null : up.feederQueuedKw, distanceM: best.distanceM == null ? null : best.distanceM } : null;
+    rec.circuitCount = res.circuits ? res.circuits.length : 0;
+    rec.sourceLine = sourceLine(res, at);
     return rec;
+  }
+
+  function kwText(n) { return Math.round(n).toLocaleString('en-US') + ' kW'; }
+  /* The queue and side words follow the answer, never one utility's habit:
+     a queue published beside a gross figure is subtracted; one the utility
+     already netted is shown, not subtracted twice; one not published is
+     said so, never read as 0. A one-sided figure says which side it is. */
+  function circuitText(c) {
+    var bits = [], side = c.basis === 'gen' ? ' (generation only)' : (c.basis === 'load' ? ' (load only)' : '');
+    if (c.id) bits.push('Circuit ' + c.id);
+    if (c.band && c.band.text) bits.push('published as ' + c.band.text + side + ', judged at its low end');
+    else if (c.publishedKw != null) bits.push(kwText(c.publishedKw) + ' published' + side);
+    if (c.publishedKw != null) {
+      if (c.queuedKw == null) bits.push('no queue published with this figure');
+      else if (c.queueNetted) bits.push(kwText(c.queuedKw) + ' queued, already in the figure');
+      else bits.push(kwText(c.queuedKw) + ' queued');
+    }
+    if (c.netKw != null) bits.push(kwText(c.netKw) + (c.queuedKw == null ? ' as published' : ' net of the queue'));
+    return bits.join(' · ');
+  }
+  function powerText(p) {
+    if (!p) return '';
+    var bits = [];
+    if (p.substation) bits.push('substation ' + p.substation);
+    if (p.kv != null) bits.push(p.kv + ' kV');
+    if (p.transformerKw != null) bits.push('upstream transformer ' + kwText(p.transformerKw));
+    if (p.bankKw != null) bits.push('upstream bank ' + kwText(p.bankKw));
+    if (p.substationKw != null) bits.push('substation room ' + kwText(p.substationKw));
+    if (p.pnode) bits.push('pricing node ' + p.pnode);
+    if (p.feederQueuedKw != null) bits.push(kwText(p.feederQueuedKw) + ' queued on the whole feeder');
+    if (p.distanceM != null) bits.push(Math.round(p.distanceM).toLocaleString('en-US') + ' m from the point');
+    return bits.length ? 'Where the power comes from: ' + bits.join(' · ') + '.' : '';
   }
 
   function summaryLines(view, rec, status) {
@@ -237,19 +262,30 @@
       if (sub.source) lines.push({ text: 'Source: ' + sub.source + (sub.registryVerified ? '. Layer list verified ' + sub.registryVerified + '.' : '.'), source: true });
     } else lines.push({ text: 'No substation came back from the public layer.' });
     if (view.lines) lines.push({ text: view.lines.length + ' lines from the public layer.' });
+    if (rec && (rec.utility || rec.coverage)) {
+      var GV = verdict(), words = (GV && GV.COVERAGE && GV.COVERAGE[rec.coverage]) || '';
+      if (!rec.utility && rec.coverage === 'outside') words = '';
+      lines.push({ text: 'Serving utility: ' + (rec.utility && rec.utility.display ? rec.utility.display : 'none on record') + (words ? ' · ' + words : '') });
+    }
+    if (rec && rec.candidates) {
+      lines.push({ text: 'More than one utility is mapped at this point: ' + rec.candidates.map(function (x) {
+        return x.display + (x.chosen ? ' (the one read here)' : '') + (x.weak && x.why ? ' (' + x.why + ')' : '');
+      }).join(', ') + '. Confirm the utility with the customer’s bill.' });
+    }
     var c = rec && rec.circuit;
     if (c && (c.id || c.netKw != null || c.publishedKw != null)) {
-      var bits = [];
-      if (c.id) bits.push('Circuit ' + c.id);
-      if (c.publishedKw != null) bits.push(c.publishedKw + ' kW published');
-      if (c.queuedKw != null) bits.push(c.queuedKw + ' kW queued');
-      if (c.netKw != null) bits.push(c.netKw + ' kW net of the queue');
-      if (bits.length) lines.push({ text: bits.join(' · ') });
+      var said = circuitText(c);
+      if (said) lines.push({ text: said });
+      if (rec.circuitCount > 1) lines.push({ text: rec.circuitCount + ' circuits answer at this point; the nearest with a published figure is judged.' });
     }
+    if (rec && rec.note && rec.coverage !== 'read') lines.push({ text: rec.note });
     if (rec && rec.verdict && rec.verdict.label) {
       lines.push({ text: rec.verdict.label + (rec.verdict.say ? '. ' + rec.verdict.say : '') });
     }
-    if (rec && rec.sourceLine) lines.push({ text: rec.sourceLine, source: true });
+    var power = rec && powerText(rec.power);
+    if (power) lines.push({ text: power });
+    if (rec && rec.verify) lines.push({ text: 'Check it on ' + (rec.verify.label || ((rec.utility && rec.utility.display) || 'the utility') + '’s map'), href: rec.verify.viewerUrl });
+    if (rec && rec.sourceLine) lines.push({ text: rec.sourceLine + (rec.coverage === 'read' && rec.note ? ' ' + rec.note : ''), source: true });
     else if (status) lines.push({ text: status, source: true });
     return lines;
   }
@@ -286,21 +322,6 @@
     return String(a.lat) + ',' + String(a.lng);
   }
 
-  function token() {
-    var Auth = root.OmegaEditorV2Auth;
-    if (Auth && typeof Auth.idToken === 'function') {
-      return Auth.idToken().then(function (t) {
-        if (t) return t;
-        return Promise.reject(new Error('Sign in to check the grid.'));
-      });
-    }
-    try {
-      var u = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
-      if (u) return u.getIdToken();
-    } catch (e) {}
-    return Promise.reject(new Error('Sign in to check the grid.'));
-  }
-
   function firstJson(urls, cb) {
     function next(i) {
       if (!urls || i >= urls.length) { cb(null); return; }
@@ -315,70 +336,30 @@
     next(0);
   }
 
-  function postHosting(lat, lng, st, cb) {
-    token().then(function (tok) {
-      return root.fetch('/api/hosting-capacity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
-        body: JSON.stringify({ lat: lat, lng: lng, state: st })
-      });
-    }).then(function (r) {
-      return r.json()['catch'](function () { return {}; }).then(function (j) {
-        if (!r.ok) throw new Error((j && j.error) || ('Hosting answered ' + r.status));
-        cb(null, j);
-      });
-    }, function (e) { cb(e); });
-  }
-
-  function readCircuit(doc, cb) {
-    var anchor = doc.anchor || {};
-    var lat = num(anchor.lat), lng = num(anchor.lng);
-    var route = routeOf(lat, lng, doc.address);
-    if (route === 'comed') {
-      var C = root.OmegaComEdLayers;
-      if (!C || !C.probePoint) { cb('comed', null, null, 'The ComEd map is not loaded.'); return; }
-      C.probePoint(lat, lng, function (err, res) {
-        if (err || !res || !res.rows || !res.rows.length) {
-          cb('comed', null, res || null, err ? (err.message || 'ComEd did not answer.') : 'ComEd publishes no hosting-capacity circuit at this point.');
-          return;
-        }
-        var GV = verdict();
-        cb('comed', GV && GV.circuitBody ? GV.circuitBody(res, 0, 'ComEd') : null, res, '');
-      });
-      return;
-    }
-    if (route === 'hosting') {
-      postHosting(lat, lng, stateOf(doc.address), function (err, j) {
-        if (err) { cb('hosting', null, null, err.message || 'The hosting service did not answer.'); return; }
-        if (!j || !j.covered || j.empty || !j.circuit) {
-          cb('hosting', null, j, (j && j.say) || 'No open hosting layer for this state.');
-          return;
-        }
-        cb('hosting', j.circuit, j, '');
-      });
-      return;
-    }
-    cb('none', null, null, '');
-  }
-
-  function askVerdict(ticket, doc, summary, kind, circuit, probe, status) {
-    var GV = verdict();
-    if (!GV || !GV.ask) {
-      if (ticket !== seq) return;
-      note = status || 'The grid verdict client did not load.';
+  /* One question to the door; the answer is the record. A door that does
+     not answer is said, and nothing is judged. */
+  function askDoor(ticket, doc, summary) {
+    var GV = verdict(), body = hostingBody(doc && doc.anchor, unitOf(summary), scene && scene.feeding);
+    if (body.lat == null || body.lng == null || (body.lat === 0 && body.lng === 0)) {
+      answer = null;
+      note = 'This drawing has no site point yet, so no circuit was asked.';
       notify();
       return;
     }
-    var body = verdictBody(unitOf(summary), scene && scene.feeding, circuit);
-    GV.ask(body).then(function (server) {
+    if (!GV || !GV.hosting) {
+      note = 'The grid verdict client did not load.';
+      notify();
+      return;
+    }
+    GV.hosting(body).then(function (res) {
       if (ticket !== seq) return;
-      answer = applyAnswer(server, kind, probe, kind === 'hosting' ? probe : null);
-      note = status || '';
+      answer = applyAnswer(res);
+      note = answer ? '' : 'The hosting capacity check returned no verdict.';
       notify();
     }, function (err) {
       if (ticket !== seq) return;
       answer = null;
-      note = (err && err.message) || status || 'The grid verdict did not answer.';
+      note = 'The hosting capacity check did not answer: ' + ((err && err.message) || 'no reply');
       notify();
     });
   }
@@ -405,10 +386,7 @@
       scene = sceneFrom(subsJson, linesJson, anchor);
       note = (scene.substations.length || scene.lines.length) ? '' : 'The public substation services did not answer. Try again in a minute.';
       notify();
-      readCircuit(doc, function (kind, circuit, probe, status) {
-        if (ticket !== seq) return;
-        askVerdict(ticket, doc, summary, kind, circuit, probe, status);
-      });
+      askDoor(ticket, doc, summary);
     }
     firstJson(GL.queryUrls('substations', anchor.lat, anchor.lng, 0.12), function (j) { subsJson = j; done(); });
     firstJson(GL.queryUrls('transmission', anchor.lat, anchor.lng, 0.12), function (j) { linesJson = j; done(); });
@@ -490,12 +468,10 @@
   var api = {
     COLORS: COLORS,
     colorOf: colorOf,
-    stateOf: stateOf,
-    routeOf: routeOf,
     unitOf: unitOf,
     sceneFrom: sceneFrom,
     hit: hit,
-    verdictBody: verdictBody,
+    hostingBody: hostingBody,
     applyAnswer: applyAnswer,
     summaryLines: summaryLines,
     featureLines: featureLines,
@@ -524,7 +500,7 @@
       cardOpen = false;
       loadedKey = '';
     },
-    VERSION: 'editor-v2-grid/1'
+    VERSION: 'editor-v2-grid/2'
   };
   root.OmegaEditorV2Grid = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

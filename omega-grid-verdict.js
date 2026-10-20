@@ -3,16 +3,19 @@
    omega-grid-verdict.js  ·  the ONE browser client of POST /api/grid-verdict
                              and POST /api/hosting-capacity
    --------------------------------------------------------------------------
-   Site Map's Grid panel (omega-grid-panel.js) and Omega Prime
-   (omega-prime.html) ask the same question — does the circuit under this
-   parcel have room for this unit? — and must never answer it two ways. Both
-   build the request here, send it here, and write the answer onto a project
-   here, in one shape: grid.substation, grid.circuit, grid.verdict
-   (docs/GUIDED-SITE-FLOW.md). The verdict itself is the server's
-   (api/_lib/grid-verdict.js); nothing in this file judges anything. The
-   national door (2026-10-17) answers utility, coverage and circuit
-   together; fromHosting() turns that answer into the same record, with the
-   source named from the answer rather than assumed to be ComEd's.
+   Site Map's Grid panel (omega-grid-panel.js), Site Plan's Grid Atlas layer
+   (omega-editor-v2-grid.js) and Omega Prime (omega-prime.html) ask the same
+   question — does the circuit under this parcel have room for this unit? —
+   and must never answer it two ways. All three ask the national door here
+   (hosting(), 2026-10-17), which names the
+   serving utility, its coverage and its circuit together, and write the
+   answer onto a project here in one shape — grid.substation, grid.circuit,
+   grid.verdict (docs/GUIDED-SITE-FLOW.md) — through fromHosting(), with the
+   source named from the answer rather than assumed to be ComEd's. The
+   verdict itself is the server's (api/_lib/grid-verdict.js); nothing in
+   this file judges anything. circuitBody(), ask(), fields() and the two
+   source lines below are the ComEd-probe path, kept for a page that still
+   reads ComEd's map itself (Prime v2, #346).
 
    ES5. No dependencies beyond fetch and, for ask(), the Firebase compat
    auth already on the page.
@@ -97,8 +100,15 @@
   function hosting(body) { return call('POST', '/api/hosting-capacity', body); }
   function coverage() { return call('GET', '/api/hosting-capacity?coverage=1', null); }
 
-  /* The door's answer → the same grid record fields() makes (substation,
-     circuit, verdict), with the source named from the answer, not assumed. */
+  /* The words a page shows beside the utility's name for each coverage case
+     (the answer's `note` is the full sentence, always the server's). Omega
+     Prime's words, so Site Map's Grid panel never names a case another way;
+     scripts/tests/tgridverdict.js holds Prime's copy to this one. */
+  var COVERAGE = { read: 'hosting capacity', 'none-here': 'no circuit mapped at this point', 'no-public-map': 'publishes no hosting capacity',
+    'account-required': 'map behind an account', 'not-wired': 'map not read by OMEGA yet', unreachable: 'map did not answer', outside: 'no utility on record' };
+
+  /* The door's answer → the project's grid record (substation, circuit,
+     verdict), with the source named from the answer, not assumed. */
   function fromHosting(res, at) {
     if (!res || !res.verdict || !res.verdict.verdict) return null;
     at = at || new Date().toISOString();
@@ -144,7 +154,9 @@
   }
 
   /* The sentences Prime v2 prints under the circuit (omega-prime-v2.js
-     circuitSourceLine and hostingSourceLine). One wording, both pages. */
+     circuitSourceLine and hostingSourceLine), for the ComEd-probe path.
+     Site Plan's layer moved onto the door and words its source from the
+     door's answer. */
   function circuitSourceLine(verdict, probe) {
     var row = probe && probe.rows ? probe.rows[0] : null;
     var a = verdict || {};
@@ -170,7 +182,7 @@
 
   root.OmegaGridVerdict = {
     circuitBody: circuitBody, ask: ask, fields: fields,
-    hosting: hosting, coverage: coverage, fromHosting: fromHosting, hostingSummary: hostingSummary,
+    hosting: hosting, coverage: coverage, fromHosting: fromHosting, hostingSummary: hostingSummary, COVERAGE: COVERAGE,
     circuitSourceLine: circuitSourceLine, hostingSourceLine: hostingSourceLine
   };
 })(typeof window !== 'undefined' ? window : this);
