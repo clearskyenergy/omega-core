@@ -489,8 +489,11 @@ button{font:inherit;color:inherit}
   /* a stored time (a Timestamp, millis, an ISO string) → "Oct 17, 2026". A
      date-only value (YYYY-MM-DD, a proposal's valid-until) is a calendar
      day, read from its parts: parsed as an instant it is UTC midnight, the
-     evening before west of UTC. */
-  function ymdOf(v) { var m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; }
+     evening before west of UTC. So is a day the Track ladder carries as
+     midnight UTC (custody's shipped, delivered, received and commissioned
+     days, api/_lib/teleios.js): 2026-10-20, "Shipped Sep 28" read Sep 27
+     in Chicago. */
+  function ymdOf(v) { var m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.0+)?Z)?$/.exec(v); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; }
   function day(v) {
     var t = null, p = ymdOf(v);
     if (p) t = new Date(p.y, p.m, p.d).getTime();

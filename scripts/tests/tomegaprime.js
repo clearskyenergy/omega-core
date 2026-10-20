@@ -542,6 +542,19 @@ assert.match(js, /if \(S\.projectId && S\.editorVersion === 'v2'\) return '\/edi
 assert.match(js, /fetch\('\/api\/rfq', \{ method: 'POST'/); assert.match(js, /sku: UNIT\.sku \|\| UNIT\.key \|\| ''/); assert.match(js, /estimateUsd: S\.run && S\.run\.totalUsd != null \? S\.run\.totalUsd : null/); count += 3;
 assert.ok(js.indexOf("+ oemBox() + listHtml('pq')") > 0 && js.indexOf('h += oemBox();') > 0 && /'<\/div>' \+ oemBox\(\);/.test(js), 'Send to the OEM sits on the rep\'s side, battery or not'); count++;
 assert.ok(!/q-oem|api\/rfq/.test(read('omega-quote-deck.js')), 'never on the customer\'s deck'); count++;
+/* a calendar day stays that day in every time zone: the ladder carries
+   custody's days as midnight UTC, and Track read "Shipped Sep 27" in
+   Chicago for a unit shipped on Sep 28 (2026-10-20). The page's own reader,
+   run under real time zones west and east of UTC. */
+var dayFns = pg.slice(pg.indexOf('function ymdOf('), pg.indexOf('/* a valid-until DATE'));
+function daysIn(tz) {
+  return JSON.parse(require('child_process').execFileSync(process.execPath, ['-e', dayFns + ';process.stdout.write(JSON.stringify([day("2026-09-28T00:00:00.000Z"), day("2026-09-28"), day("2026-09-28T15:00:00.000Z"), day("2026-10-06T00:00:00Z")]))'],
+    { env: Object.assign({}, process.env, { TZ: tz }) }).toString());
+}
+['America/Chicago', 'America/Phoenix', 'Pacific/Honolulu', 'UTC', 'Asia/Tokyo'].forEach(function (tz) {
+  /* a real instant (3 pm UTC) still reads in local time: past midnight in Tokyo */
+  assert.deepEqual(daysIn(tz), ['Sep 28, 2026', 'Sep 28, 2026', tz === 'Asia/Tokyo' ? 'Sep 29, 2026' : 'Sep 28, 2026', 'Oct 6, 2026'], 'a ladder day is its calendar day in ' + tz); count++;
+});
 assert.match(ed, /<script src="\/omega-grid-panel\.js"><\/script>[\s\S]{0,400}<script src="\/omega-prime-handoff\.js"><\/script>/); count++;
 
 /* The Site Map hand-off's VM checks moved to scripts/tests/tprimetransfer.js (2026-10-17). */
