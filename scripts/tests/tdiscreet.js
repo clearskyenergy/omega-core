@@ -191,7 +191,12 @@ function everyFile() {
   var out = [];
   (function walk(rel) {
     fs.readdirSync(path.join(ROOT, rel || '.')).forEach(function (name) {
-      if (name === '.git' || name === 'node_modules' || name === '.vercel' || name === '.claude') return;
+      /* work/ is the office desks' scratch, gitignored and never deployed
+         (.gitignore, .vercelignore). A desk run writes triage notes and even
+         whole stale copies of the tree there, so scanning it reports hits
+         that are not in the repo and not on the site — the walk is the
+         product's, not the workspace's. */
+      if (name === '.git' || name === 'node_modules' || name === '.vercel' || name === '.claude' || (!rel && name === 'work')) return;
       var r = rel ? rel + '/' + name : name, st = fs.statSync(path.join(ROOT, r));
       if (st.isDirectory()) { walk(r); return; }
       if ((TEXT.test(name) || /\.(rules|py|sh)$/.test(name)) && st.size < 20 * 1024 * 1024) out.push(r);
