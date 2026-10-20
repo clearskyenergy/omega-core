@@ -267,6 +267,10 @@ button{font:inherit;color:inherit}
 .pq .rad input[type=text]{width:110px;font:inherit;font-size:13px;padding:5px 8px;border:1px solid var(--line);border-radius:5px;margin-left:auto}
 .pq .chk{display:flex;gap:8px;align-items:flex-start;font-size:12px;color:var(--ink2);margin-top:4px}
 .pq-acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.pq-unit{margin-top:12px;border:1px solid #F1DDB4;background:var(--amber-soft);border-radius:6px;padding:10px 12px;font-size:13px;line-height:1.5}
+.pq-unit p{margin:4px 0 8px;color:#7a5210;font-size:12px}
+.pq-unit .unitpick{width:100%}
+.pq-unit .unitcard{margin-top:8px;background:#fff}
 .pq-tools{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:10px}
 .pq-tools b{font-size:13px}
 .pq-prints{display:flex;gap:6px;flex-wrap:wrap}
@@ -412,6 +416,13 @@ button{font:inherit;color:inherit}
         <div class="pq-col">
           <div class="pq-box">
             <h2>Proposal</h2><p class="lead" id="pqSub">For the customer at this site</p>
+            <div class="pq-unit" id="pqUnit" hidden>
+              <b>Choose the unit to quote</b>
+              <p id="pqUnitWhy"></p>
+              <select id="pq-unit-sel" class="unitpick" aria-label="The unit to quote"></select>
+              <div class="unitcard" id="pqUnitCard"></div>
+              <div class="pq-acts"><button class="primary" id="pq-unit-use" type="button">Quote this unit</button></div>
+            </div>
             <fieldset><legend>Customer</legend>
               <label class="f">Contact name<input id="pq-name" autocomplete="off"></label>
               <label class="f">Company<input id="pq-company" autocomplete="off"></label>
@@ -543,6 +554,18 @@ button{font:inherit;color:inherit}
     if (u.lFt) bits.push(fmt2(u.lFt) + ' × ' + fmt2(u.wFt) + ' ft');
     return 'the ' + u.short + (bits.length ? ' (' + bits.join('; ') + ')' : '');
   }
+  /* a battery's card: its figures, its footprint and how it is known, its source, and whose price */
+  function batteryCard(u) {
+    var pages = u.sourcePages && u.sourcePages.length ? ', p. ' + u.sourcePages.join(', ') : '';
+    var fp = u.footprint === 'catalog' ? ftText(u) : (u.footprint === 'rep' ? ftText(u) + ' from the submittal'
+      : (u.footprint === 'reference' ? ftText(u) + ' reference size, confirm on the submittal' : 'footprint not released'));
+    return '<b>' + esc(u.name) + '<span class="src">' + esc(SOURCE_WORDS[u.source] || 'specification') + '</span></b>' +
+      esc(fmt2(u.kw) + ' kW / ' + kwhText(u)) + (u.hours ? ' · ' + esc(fmt2(u.hours)) + ' h' : '') + ' · ' + esc(fp) +
+      (u.weightLb ? ' · ' + esc(fmt(u.weightLb)) + ' lb' + (u.weightBasis === 'reference' ? ' (reference)' : '') : '') +
+      (u.caveat ? '<div class="cav">' + esc(u.caveat) + '</div>' : '') +
+      (u.sourceDoc ? '<div class="doc2">' + esc(u.sourceDoc + pages) + (u.catalogStatus === 'planning-verify' ? ' · planning specification' : '') + '</div>' : '') +
+      '<div class="doc2">Price: quoted by ' + esc(u.mfr || 'the manufacturer') + '</div>';
+  }
   function drawUnits() {
     var sel = $('#unitSel'); sel.innerHTML = '';
     UNITS.forEach(function (u, i) { var o = document.createElement('option'); o.value = String(i); o.textContent = u.name + ' — ' + u.note; if (u.key === BASE.key) o.selected = true; sel.appendChild(o); });
@@ -557,15 +580,7 @@ button{font:inherit;color:inherit}
       $('#fpBox').hidden = true; $('#fpNote').textContent = '';
       return;
     }
-    var pages = UNIT.sourcePages && UNIT.sourcePages.length ? ', p. ' + UNIT.sourcePages.join(', ') : '';
-    var fp = UNIT.footprint === 'catalog' ? ftText(UNIT) : (UNIT.footprint === 'rep' ? ftText(UNIT) + ' from the submittal'
-      : (UNIT.footprint === 'reference' ? ftText(UNIT) + ' reference size, confirm on the submittal' : 'footprint not released'));
-    $('#unitCard').innerHTML = '<b>' + esc(UNIT.name) + '<span class="src">' + esc(SOURCE_WORDS[UNIT.source] || 'specification') + '</span></b>' +
-      esc(fmt2(UNIT.kw) + ' kW / ' + kwhText(UNIT)) + (UNIT.hours ? ' · ' + esc(fmt2(UNIT.hours)) + ' h' : '') + ' · ' + esc(fp) +
-      (UNIT.weightLb ? ' · ' + esc(fmt(UNIT.weightLb)) + ' lb' + (UNIT.weightBasis === 'reference' ? ' (reference)' : '') : '') +
-      (UNIT.caveat ? '<div class="cav">' + esc(UNIT.caveat) + '</div>' : '') +
-      (UNIT.sourceDoc ? '<div class="doc2">' + esc(UNIT.sourceDoc + pages) + (UNIT.catalogStatus === 'planning-verify' ? ' · planning specification' : '') + '</div>' : '') +
-      '<div class="doc2">Price: quoted by ' + esc(UNIT.mfr || 'the manufacturer') + '</div>';
+    $('#unitCard').innerHTML = batteryCard(UNIT);
     var open = BASE.footprint === 'none' || BASE.footprint === 'reference';
     $('#fpBox').hidden = !open;
     $('#fpNote').textContent = !open ? '' : UNIT.footprint === 'rep' ? 'drawn at this size'
@@ -688,6 +703,7 @@ button{font:inherit;color:inherit}
         ? { t: 'Save the site first', p: 'A proposal is kept with a saved site, and this one is not saved yet' + (S.saveErr ? ' (' + S.saveErr + ')' : '') + '.', a: 'Press Save this site', tg: '#pq-make' }
         : { t: 'Save the site first', p: 'A proposal is kept with a saved site. Sign in and start the site again to keep it.', a: '', tg: null };
       if (QS.loading) return { t: 'The proposal', p: 'Looking for the proposal already written for this site.', a: 'Wait a moment', tg: null };
+      if (QS.unit) return { t: 'Choose the unit to quote', p: 'The ' + (QS.unit.name || 'battery') + ' on this site is not on ' + (QS.unit.workspace || 'this workspace') + '’s battery list. Choose one from the list; the drawing is kept.', a: 'Choose a unit, then press Quote this unit', tg: '#pq-unit-use' };
       if (!QS.view) return { t: 'Who is it for?', p: 'Type the customer and your margin. Preview prices it on the server from the design you drew here.', a: 'Fill in the customer, then press Preview', tg: $('#pq-name').value || $('#pq-company').value ? '#pq-preview' : '#pq-name' };
       if (!QS.view.id) return { t: 'Save it', p: 'Saved, the proposal is kept with this site’s map and in the Quote Desk.', a: 'Press Save', tg: '#pq-save' };
       if (stale()) return { t: 'The design changed', p: 'The map or the battery changed since this proposal was priced. Save it again to re-price it before it goes out.', a: 'Press Save again', tg: '#pq-resave' };
@@ -1262,7 +1278,7 @@ button{font:inherit;color:inherit}
      refresh, a refused write — is made again: signed in, the site set,
      nothing being made. The debounce paces it; Save this site asks now. */
   function canMake() { return !S.projectId && !making && !!S.addr && S.lat != null && signedIn(); }
-  var SV = { timer: null, inflight: null, dirty: false, grid: {}, state: '', at: 0 };
+  var SV = { timer: null, inflight: null, dirty: false, grid: {}, unitChanged: false, state: '', at: 0 };
   function saveSoon() {
     SV.dirty = true;
     if (!S.projectId && !canMake()) return;
@@ -1282,14 +1298,17 @@ button{font:inherit;color:inherit}
     if (SV.inflight) return SV.inflight.then(flushSave);
     if (!SV.dirty) return Promise.resolve();
     SV.dirty = false;
-    var parts = SV.grid; SV.grid = {};
+    /* swapped: the unit was chosen again (the Proposal step), so the
+       battery entry Site Map reads follows it until Site Map has saved */
+    var parts = SV.grid, swapped = SV.unitChanged; SV.grid = {}; SV.unitChanged = false;
     var FV = firebase.firestore.FieldValue;
-    var p = PP.patch(docState(), S.who || {}, FV.serverTimestamp(), { grid: parts, editedInSiteMap: S.editedInSiteMap });
+    var p = PP.patch(docState(), S.who || {}, FV.serverTimestamp(), { grid: parts, editedInSiteMap: S.editedInSiteMap, unitChanged: swapped });
     SV.state = 'saving'; saveLine();
     SV.inflight = firebase.firestore().collection('projects').doc(S.projectId).update(p).then(function () {
       SV.inflight = null; S.saveErr = ''; SV.state = 'saved'; SV.at = Date.now(); saveLine();
     }, function (e) {
       SV.inflight = null;
+      if (swapped) SV.unitChanged = true;
       var k; for (k in parts) if (Object.prototype.hasOwnProperty.call(parts, k) && !Object.prototype.hasOwnProperty.call(SV.grid, k)) SV.grid[k] = parts[k];
       SV.dirty = true; SV.state = 'error'; S.saveErr = 'The project did not update: ' + ((e && e.message) || e); saveLine();
     });
@@ -1625,7 +1644,7 @@ button{font:inherit;color:inherit}
      tr: another one Track is drawing ({quote, ladder}), else null; want: a
      quote a link named (&quote=), taken when the list is read */
   var QS = { saved: null, view: null, ladder: null, loadedFor: '', loading: false, busy: false, sendId: null, sendKey: '', link: '', mail: '', isAdmin: null, coOpen: false, savedHash: '', err: '', oem: null,
-    list: [], tr: null, want: '', logic: null };
+    list: [], tr: null, want: '', logic: null, unit: null, unitPick: 0 };
   var D = window.OmegaQuoteDeck || null;
   function injectDeckCss() {
     if (window.__oqdCss || !D) return;
@@ -1693,7 +1712,7 @@ button{font:inherit;color:inherit}
     QS.loading = true; status('Looking for this site’s proposal…'); guide();
     var want = QS.want, missed = false; QS.want = '';
     return cq('GET', null, 'projectId=' + encodeURIComponent(S.projectId)).then(function (j) {
-      QS.list = sortRows(j.quotes);
+      QS.list = sortRows(j.quotes); askUnit(j.unit);
       var row = null;
       if (want) QS.list.forEach(function (r) { if (r.id === want) row = r; });
       missed = !!want && !row;
@@ -1710,8 +1729,8 @@ button{font:inherit;color:inherit}
   function loadList() {
     if (!S.projectId) return Promise.resolve(QS.list);
     return cq('GET', null, 'projectId=' + encodeURIComponent(S.projectId)).then(function (j) {
-      QS.list = sortRows(j.quotes);
-      if (cur === 'quote') drawRep(); else if (cur === 'track') drawTrackList();
+      QS.list = sortRows(j.quotes); askUnit(j.unit);
+      if (cur === 'quote') { drawRep(); guide(); } else if (cur === 'track') drawTrackList();
       return QS.list;
     }, function () { return QS.list; });
   }
@@ -1806,27 +1825,82 @@ button{font:inherit;color:inherit}
       if (cur === 'quote') drawRep();
     }, function () {});
   }
+  /* Preview and Save wait while the proposal is being priced or saved, and
+     while the unit to quote is still to be chosen */
+  function lockActs() { ['#pq-preview', '#pq-save'].forEach(function (s) { var b = $(s); if (QS.busy || QS.unit) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled'); }); }
   function busy(on, label) {
-    QS.busy = on;
-    ['#pq-preview', '#pq-save'].forEach(function (s) { var b = $(s); if (on) b.setAttribute('aria-disabled', 'true'); else b.removeAttribute('aria-disabled'); });
+    QS.busy = on; lockActs();
     if (on) status(label || 'Working…');
   }
+  /* refused as it stands (409): the server's word on the unit is read
+     again, so a battery the list no longer offers opens the chooser */
+  function refusedNow(e) { busy(false); status(e.message, true); if (e.status === 409) loadList(); }
   function preview() {
-    if (QS.busy) return;
+    if (QS.busy || QS.unit) return;
     busy(true, 'Pricing it on the server from this site’s map…');
-    cq('POST', formBody('preview')).then(function (j) { QS.view = j.quote; busy(false); status('Preview: priced now from the saved map. Save it to keep it.'); drawQuote(); },
-      function (e) { busy(false); status(e.message, true); });
+    cq('POST', formBody('preview')).then(function (j) { QS.view = j.quote; busy(false); status('Preview: priced now from the saved map. Save it to keep it.'); drawQuote(); }, refusedNow);
   }
   function save() {
-    if (QS.busy) return;
+    if (QS.busy || QS.unit) return;
     busy(true, 'Saving the proposal…');
     cq('POST', formBody('save')).then(function (j) {
       /* a new revision (or a new proposal) is a new send, and its own ladder */
       QS.saved = j.quote; QS.view = j.quote; QS.ladder = null; QS.tr = null; QS.link = ''; QS.sendId = null; QS.savedHash = sourceKey(); seen.track = 1; drawPath();
       busy(false); status('Saved: ' + j.quote.quoteNo + ' (revision ' + j.quote.rev + ') is kept with this site’s map and in the Quote Desk.');
       toast('Proposal saved.'); drawQuote(); loadList();
-    }, function (e) { busy(false); status(e.message, true); });
+    }, refusedNow);
   }
+  /* ── the unit to quote: the server's word (GET ?projectId= unit) ─────
+     A proposal offers its unit to the customer, so the door prices only a
+     unit the workspace's list offers (omega-prime-project.js offered(), the
+     rule the order hand-off runs too). A site that carries one the list
+     does not — a battery a record kept from before its maker's units left
+     this workspace's list — is quoted once the rep chooses a unit from the
+     list the server sends. The drawing is kept: the area, where the unit
+     stands, the service point and the conduit; its transformer and
+     disconnect are placed for the unit chosen (PP.layout, as for every
+     change), and the record is patched before anything is priced. */
+  function askUnit(u) {
+    QS.unit = u && u.offered === false && Array.isArray(u.choices) ? u : null;
+    if (!QS.unit) QS.unitPick = 0;
+    drawUnitAsk();
+  }
+  function drawUnitAsk() {
+    var u = QS.unit, box = $('#pqUnit');
+    box.hidden = !u; lockActs();
+    if (!u) return;
+    var cs = u.choices, ws = u.workspace || 'this workspace', sel = $('#pq-unit-sel');
+    if (QS.unitPick >= cs.length) QS.unitPick = 0;
+    $('#pqUnitWhy').textContent = 'The ' + (u.name || 'battery') + ' on this site is not on ' + ws + '’s battery list, so it cannot be quoted here. ' +
+      (cs.length ? 'Choose the unit to quote. The drawing is kept: the area, where the unit stands, the service point and the conduit; its transformer and disconnect are placed for the unit you choose.'
+        : 'The list holds no battery to quote; ask ClearSky to set up the workspace’s battery list.');
+    sel.innerHTML = '';
+    cs.forEach(function (c, i) { var o = document.createElement('option'); o.value = String(i); o.textContent = c.name + ' — ' + c.note; if (i === QS.unitPick) o.selected = true; sel.appendChild(o); });
+    sel.hidden = !cs.length; $('#pq-unit-use').hidden = !cs.length;
+    $('#pqUnitCard').innerHTML = cs.length ? batteryCard(cs[QS.unitPick]) : '';
+    $('#pqUnitCard').hidden = !cs.length;
+  }
+  function useUnit() {
+    var c = QS.unit && QS.unit.choices[QS.unitPick];
+    if (!c || QS.busy) return;
+    /* a proposal saved on the old unit was priced on it: from here it reads
+       as changed (stale()), and is saved again before it can go out */
+    if (QS.saved && QS.saved.id && !QS.savedHash) QS.savedHash = sourceKey();
+    BASE = c; UNIT = c; picked = true; $('#fpL').value = ''; $('#fpW').value = '';
+    UNITS = listFor(S.type);
+    if (!UNITS.some(function (x) { return x.key === c.key; })) UNITS = [c].concat(UNITS);
+    SV.unitChanged = true; QS.unit = null; QS.unitPick = 0;
+    drawUnits(); drawUnitAsk(); drawRep();
+    /* the drawing kept, the conduit with it; the last Run was for the old unit */
+    changed(true);
+    /* and so was the circuit verdict (it names the unit it judged): asked again for this one */
+    if (S.hosting || S.hostingSum) { S.hosting = null; askHosting()['catch'](function () {}); }
+    toast('The ' + c.name + ' is the unit on this site now, on the same drawing.');
+    if ($('#pq-name').value.trim() || $('#pq-company').value.trim()) preview();
+    else { flushSave(); status('The ' + c.name + ' is the unit to quote. Type the customer, then press Preview.'); }
+  }
+  $('#pq-unit-sel').onchange = function () { QS.unitPick = +this.value || 0; drawUnitAsk(); };
+  $('#pq-unit-use').onclick = function () { useUnit(); };
   function newSendId() { return 'snd_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
   function send(deliver) {
     var q = QS.saved;
@@ -1884,6 +1958,9 @@ button{font:inherit;color:inherit}
       /* said before Send: the site already has an order from an approved proposal */
       h += supersedesHtml(q.supersedes || (v && v.id === q.id ? v.supersedes : null));
       if (q.status === 'approved') h += '<div class="flag ok">Approved' + (q.decision && q.decision.approvedBy ? ' by ' + esc(q.decision.approvedBy.name) : '') + '. A change now is a new proposal.</div>';
+      /* priced on a battery the list no longer offers: it cannot go out
+         (the door refuses it too) until the unit is chosen and it is saved again */
+      else if (QS.unit) h += '<div class="flag" id="pqUnitHeld">This proposal is on the ' + esc(QS.unit.name || 'battery') + ', which is not on the list, so it cannot be sent. Choose the unit to quote, then save it again.</div>';
       else if (['draft', 'sent', 'viewed', 'expired'].indexOf(q.status) >= 0) {
         h += '<label class="sub" for="pq-msg" style="display:block;margin-top:10px">A note in the email (optional)</label><textarea id="pq-msg" rows="2"></textarea>' +
           '<div class="pq-acts" style="margin-top:0"><button class="primary" id="pq-send-email"' + (q.customer && q.customer.email ? '' : ' aria-disabled="true"') + '>Email it' + (q.customer && q.customer.email ? ' to ' + esc(q.customer.email) : '') + '</button><button class="ghost" id="pq-link">Copy a link</button></div>' +

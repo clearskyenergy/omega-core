@@ -206,7 +206,11 @@ warranty live):
   JP-2 and the Smart Module, whose brochure names one. Prime, the proposal
   and Site Map all say to confirm it on the submittal; the rep's typed
   submittal L × W (`'rep'`) replaces it. A unit with no figure at all is
-  `'none'`, a marked point.
+  `'none'`, a marked point. A site keeps the unit it was drawn with, but a
+  proposal quotes only one the workspace's list offers (`PP.offered`, the
+  rule the quote door and the order hand-off share, 2026-10-20): a site set
+  up on the XXL before it left every list but FENECON's opens the Proposal
+  step on a choice of unit from the list, with the drawing kept.
 - **Circuit verdict:** the server's (`/api/hosting-capacity`, judged by
   the `/api/grid-verdict` engine), asked through `omega-grid-verdict.js`,
   the client Site Map's Grid panel uses too. The page's own thresholds are

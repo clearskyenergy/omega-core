@@ -31,6 +31,11 @@
  *             once Omega Logic is on; the ladder and the three links
  *   Phone     390 px: the resumed Track and the reopened proposal, its form
  *             filled from the saved quote, no sideways scroll
+ *   Unit      a site saved on FENECON's XXL, opened in a workspace whose list
+ *             does not offer it: the Proposal step asks for the unit to
+ *             quote from that list (the server's word, GET ?projectId=),
+ *             Preview and Save held; the choice keeps the drawing, is
+ *             patched onto the record, then priced and saved
  *   Mesa      29 W Main St, Mesa AZ: the territory layers name Salt River
  *             Project, Arizona Public Service and the City of Mesa; downtown
  *             Mesa is inside the city, so City of Mesa leads, SRP is named
@@ -66,6 +71,7 @@ F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: 
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; } });
 var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service');
 var QUOTE = require('../api/customer-quote'), BRANDING = require('../api/tenant-branding'), RATES = require('../api/utility-rates'), PRICE = require('../api/price-site');
+var QL = require('../api/_lib/customer-quote');
 var PP = require('../omega-prime-project.js');
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium;
 
@@ -738,6 +744,103 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     await m.waitForTimeout(700);                     /* the zoom to the area settles, and the labels with it */
     await shot(m, 'prime-12-mesa-cc290-block');
     await m.close();
+
+    /* ── a site saved on a battery the workspace's list no longer offers
+       (2026-10-20, Tommy, from the ClearSky workspace: Preview answered "The
+       battery on this project (FENECON-IND-XXL) is not in your workspace’s
+       list any more; choose it again in Omega Prime, then quote", and a
+       started site has no unit picker). The Proposal step takes the
+       server's word (GET ?projectId= unit), asks for the unit to quote from
+       the workspace's own list with Preview and Save held, and the choice
+       keeps the drawing: the record names it, and it is priced ── */
+    var xctx = await context(browser, base, calls, external);
+    var xp = await xctx.newPage(); watch(xp, errs);
+    await xp.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
+    await until(xp, function () { var s = document.getElementById('unitSel'); return s && s.options.length >= 5 ? true : null; });
+    /* as Prime v2 kept it once an older site (v1: the XXL for every
+       workspace) was resumed after 2026-10-17: the XXL snapshotted on it */
+    var XC = { lat: SITE.lat + 0.002, lng: SITE.lng - 0.002 }, XID = 'p-legacy-xxl';
+    var XA = { s: XC.lat - 0.00025, w: XC.lng - 0.0004, n: XC.lat + 0.00025, e: XC.lng + 0.0004 }, XPOI = { lat: XC.lat + 0.0004, lng: XC.lng + 0.0007 };
+    var xdoc = PP.projectDoc({ addr: '3300 S Federal St, Chicago, IL 60616', lat: XC.lat, lng: XC.lng, geoSrc: 'U.S. Census geocoder', geoLabel: '3300 S FEDERAL ST, CHICAGO, IL, 60616', step: 'quote',
+      unit: PP.XXL, area: XA, unitAt: XC, poi: XPOI, conduit: true,
+      /* its circuit judged against the XXL's 2,508 kW */
+      hosting: { utility: { key: 'comed', display: 'ComEd', eiaId: 4110 }, coverage: 'read', circuit: { id: 'F0297', name: 'F0297', substation: 'Crawford TSS 21' } },
+      grid: { lat: XC.lat, lng: XC.lng, circuit: { utility: 'ComEd', id: 'F0297', netKw: 10725 }, verdict: { key: 'fits', label: 'Fits', unitKw: 2508, unitName: 'FENECON Industrial XXL' }, source: 'omega-prime' } },
+      { uid: 'rep-1', email: REP.email, name: 'Clean Cell Rep', orgId: ORG }, 1700000000000);
+    var XL0 = xdoc.prime.layout;
+    await xp.evaluate(function (a) { window.__firebaseDouble.store.docs['projects/' + a.id] = a.doc; }, { id: XID, doc: JSON.parse(JSON.stringify(xdoc)) });
+    var nPost = calls.quote.filter(function (c) { return c.body && c.body.projectId === XID; }).length;
+    await xp.goto(base + '/omega-prime?id=' + XID + '&step=quote', { waitUntil: 'domcontentloaded' });
+    await xp.waitForSelector('#s-quote.on', { timeout: 10000 });
+    var ask = await until(xp, function () {
+      var b = document.getElementById('pqUnit');
+      return b && !b.hidden ? { why: document.getElementById('pqUnitWhy').textContent, opts: [].map.call(document.getElementById('pq-unit-sel').options, function (o) { return o.textContent; }),
+        card: document.getElementById('pqUnitCard').textContent, pv: document.getElementById('pq-preview').getAttribute('aria-disabled'), sv: document.getElementById('pq-save').getAttribute('aria-disabled'),
+        guide: document.getElementById('gT').textContent, pulse: !!document.querySelector('#pq-unit-use.pulse') } : null;
+    });
+    ok('the Proposal step says the site\'s XXL is not on the workspace\'s list and asks for the unit to quote, the drawing kept', !!ask && /^The FENECON Industrial XXL on this site is not on Clean Cell’s battery list, so it cannot be quoted here\./.test(ask.why) && /The drawing is kept/.test(ask.why), ask);
+    ok('from the workspace\'s own list: its product, then Clean Cell\'s units and the R60, no XXL', !!ask && ask.opts.length === 5 && /^Clean Cell CC-2000/.test(ask.opts[0]) && /LG JP-2/.test(ask.opts[1]) && /R60/.test(ask.opts[4]) && !ask.opts.some(function (t) { return /xxl|fenecon/i.test(t); }) && /20 × 8 ft/.test(ask.card), ask && ask.opts);
+    ok('Preview and Save wait for it, and the guide points at it', !!ask && ask.pv === 'true' && ask.sv === 'true' && ask.guide === 'Choose the unit to quote' && ask.pulse, ask);
+    await shot(xp, 'prime-13-unit-ask');
+    await xp.setViewportSize({ width: 390, height: 844 });
+    var xw = await xp.evaluate(function () { return { doc: document.documentElement.scrollWidth, scr: document.getElementById('s-quote').scrollWidth, box: Math.round(document.getElementById('pqUnit').getBoundingClientRect().right) }; });
+    ok('the chooser fits a 390 px phone, no sideways scroll', xw.doc <= 390 && xw.scr <= 390 && xw.box <= 390, xw);
+    await xp.setViewportSize({ width: 1440, height: 900 });
+    /* pressed anyway (through the DOM: Playwright will not click a control marked disabled) */
+    await xp.$eval('#pq-preview', function (b) { b.click(); }); await xp.$eval('#pq-save', function (b) { b.click(); });
+    await xp.waitForTimeout(400);
+    ok('nothing is priced or kept before a unit is chosen', calls.quote.filter(function (c) { return c.body && c.body.projectId === XID; }).length === nPost);
+    await xp.fill('#pq-name', 'Dana Ruiz'); await xp.fill('#pq-company', 'Riverside Cold Chain');
+    await xp.selectOption('#pq-unit-sel', '0');
+    await xp.click('#pq-unit-use');
+    var xdeck = await until(xp, function () { var d = document.querySelector('#pqDeck .oqd'); return d ? d.textContent : null; });
+    var xpv = calls.quoteOut.filter(function (c) { return c.body && c.body.action === 'preview' && c.body.projectId === XID; });
+    var xst = await storeOf(xp), xd = xst.docs['projects/' + XID] || {}, XL = (xd.prime || {}).layout || {};
+    ok('the choice is on the record: the unit, its battery entry, the drawing kept (the area, where the unit stands, the service point, the conduit to it)',
+      xd.prime && xd.prime.unitKey === 'CLEANCELL-CC-2000' && xd.prime.unit && xd.prime.unit.key === 'CLEANCELL-CC-2000' && xd.bessList && xd.bessList[0].catalogKey === 'CLEANCELL-CC-2000' &&
+      JSON.stringify(XL.area) === JSON.stringify(XL0.area) && JSON.stringify(XL.unit && XL.unit.c) === JSON.stringify(XL0.unit.c) && JSON.stringify(XL.poi) === JSON.stringify(XL0.poi) &&
+      XL.unitKey === 'CLEANCELL-CC-2000' && XL.conduit && XL.conduit.pts[2].lat === XPOI.lat && XL.hash === PP.hash(XL), { prime: xd.prime && { unitKey: xd.prime.unitKey, layout: XL }, bess: xd.bessList });
+    ok('then it is priced on the server, from the chosen unit: one preview, after the patch landed', xpv.length === 1 && xpv[0].status === 200 && !!xdeck && /Quoted by Clean Cell/.test(xdeck) && /CC-2000/.test(xdeck) && !/fenecon|xxl/i.test(xdeck), { n: xpv.length, status: xpv[0] && xpv[0].status, deck: xdeck && xdeck.slice(0, 300) });
+    var after = await xp.evaluate(function () { return { hidden: document.getElementById('pqUnit').hidden, pv: document.getElementById('pq-preview').getAttribute('aria-disabled'), unit: document.getElementById('unitSel2').textContent }; });
+    ok('the chooser is gone, Preview and Save are back, and the design names the chosen unit', after.hidden && after.pv === null && /^Clean Cell CC-2000/.test(after.unit), after);
+    var rejudged = await until(xp, function (id) { var d = window.__firebaseDouble.store.docs['projects/' + id], v = d && d.grid && d.grid.verdict; return v && v.unitName === 'Clean Cell CC-2000' ? v : null; }, XID);
+    var hq = calls.hosting[calls.hosting.length - 1] || {};
+    ok('the circuit verdict, judged for the XXL, is asked again for the chosen unit and kept on the record', !!rejudged && rejudged.unitKw === 1000 && rejudged.key === 'fits' && hq.unit && hq.unit.kw === 1000 && hq.unit.name === 'Clean Cell CC-2000', { verdict: rejudged, asked: hq.unit });
+    await xp.click('#pq-save');
+    await until(xp, function () { return /· revision 1$/.test(document.getElementById('pqNo').textContent) ? true : null; });
+    var xq = ''; DB.data.forEach(function (v, k) { if (/^customer_quotes\/qt-[a-f0-9]{16}$/.test(k) && v.projectId === XID) xq = k; });
+    var xr = DB.data.get(xq) || {};
+    ok('and saved: the proposal names the chosen unit, on the drawing kept', !!xq && xr.unit && xr.unit.key === 'CLEANCELL-CC-2000' && xr.layoutHash === XL.hash + ':CLEANCELL-CC-2000', { q: xq, unit: xr.unit && xr.unit.key, hash: xr.layoutHash });
+    await shot(xp, 'prime-14-unit-chosen');
+    /* the same, with a proposal already saved on the XXL: it is held, never
+       offered to send, until the unit is chosen; then it reads as changed,
+       and Save again makes its next revision on the chosen unit */
+    var XID2 = 'p-legacy-xxl-q', XQ = 'qt-00000000000000a1', xdoc2 = JSON.parse(JSON.stringify(xdoc));
+    xdoc2.name = xdoc2.address = xdoc2.prime.site.addr = '3310 S Federal St, Chicago, IL 60616';
+    var xq0 = QL.compose({ id: XQ, orgId: ORG, projectId: XID2, quoteNo: 'CLEANC-Q-20261016-000A1', rev: 1, status: 'draft', customer: { name: 'Dana Ruiz', company: 'Riverside Cold Chain' },
+      pricing: { mode: 'markup', markupPct: 20 }, terms: {}, unit: PP.XXL, layout: XL0, site: { address: xdoc2.address },
+      cost: QL.costOf({ total: { lo: 1900000, base: 2000000, hi: 2100000 }, divisions: [{ id: 'eq', name: 'Equipment', base: 2000000 }] }, {}),
+      seller: { name: 'Clean Cell', rep: { name: 'Clean Cell Rep', email: REP.email } } }, 1700000000000);
+    DB.seed('customer_quotes/' + XQ, Object.assign(xq0, { createdAt: 1700000000000, createdBy: REP.email, updatedAt: 1700000000000, updatedBy: REP.email, acceptance: null, snapshot: null, mailState: null, handoff: null, history: [], questions: [], layoutHash: XL0.hash + ':' + PP.XXL.key }));
+    var xp2 = await xctx.newPage(); watch(xp2, errs);
+    await xp2.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
+    await xp2.evaluate(function (a) { window.__firebaseDouble.store.docs['projects/' + a.id] = a.doc; }, { id: XID2, doc: xdoc2 });
+    await xp2.goto(base + '/omega-prime?id=' + XID2 + '&step=quote', { waitUntil: 'domcontentloaded' });
+    await xp2.waitForSelector('#s-quote.on', { timeout: 10000 });
+    var held = await until(xp2, function () {
+      var f = document.getElementById('pqUnitHeld');
+      return f && !document.getElementById('pqUnit').hidden && /revision 1/.test(document.getElementById('pqNo').textContent) ? { text: f.textContent, send: !!(document.getElementById('pq-send-email') || document.getElementById('pq-link')), name: document.getElementById('pq-name').value } : null;
+    });
+    ok('a proposal already saved on the XXL is held: never offered to send until the unit is chosen', !!held && /on the FENECON Industrial XXL, which is not on the list, so it cannot be sent/.test(held.text) && !held.send && held.name === 'Dana Ruiz', held);
+    await xp2.selectOption('#pq-unit-sel', '0'); await xp2.click('#pq-unit-use');
+    var restale = await until(xp2, function () { var s = document.getElementById('pqStale'), d = document.querySelector('#pqDeck .oqd'); return s && d && /CC-2000/.test(d.textContent) ? { stale: s.textContent, guide: document.getElementById('gT').textContent } : null; });
+    ok('chosen, it is priced on the chosen unit and the saved proposal reads as changed, to be saved again', !!restale && /design changed/.test(restale.stale) && restale.guide === 'The design changed', restale);
+    await xp2.click('#pq-resave');
+    await until(xp2, function () { return /· revision 2$/.test(document.getElementById('pqNo').textContent) ? true : null; });
+    var xr2 = DB.data.get('customer_quotes/' + XQ) || {};
+    ok('saved again: its next revision, on the chosen unit and the drawing kept', xr2.rev === 2 && xr2.unit && xr2.unit.key === 'CLEANCELL-CC-2000' && xr2.layoutHash === (((await storeOf(xp2)).docs['projects/' + XID2] || {}).prime || {}).layout.hash + ':CLEANCELL-CC-2000', { rev: xr2.rev, unit: xr2.unit && xr2.unit.key });
+    await xp2.close();
+    await xp.close();
 
     /* ── a create that failed is made again: as the work goes on, and by
        Save this site; the record then holds everything done so far ── */
