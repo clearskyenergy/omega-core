@@ -12,8 +12,12 @@ require.cache[aPath]={id:aPath,filename:aPath,loaded:true,exports:{
  handler:function(fn){return fn;},authenticate:function(){return Promise.resolve(caller);},
  httpError:function(s,m){var e=new Error(m);e.status=s;return e;}
 }};
+var moduleChecks=0;
 require.cache[xPath]={id:xPath,filename:xPath,loaded:true,exports:{withCaller:function(c,key){
  assert.strictEqual(key,'estimate');checks++; return allowed?Promise.resolve():Promise.reject(Object.assign(new Error('Denied'),{status:403}));
+},withModuleAnyPlan:function(c,key){
+ /* Omega Maximus's own door: the module is asked before the estimate */
+ assert.strictEqual(key,'maximus');moduleChecks++; return allowed?Promise.resolve():Promise.reject(Object.assign(new Error('Denied'),{status:403}));
 }}};
 var api=require('../../api/editor-v2-component-cost'), res={setHeader:function(){}};
 (async function(){
@@ -21,5 +25,5 @@ var api=require('../../api/editor-v2-component-cost'), res={setHeader:function()
  caller={orgId:'example.com'}; allowed=false;
  await assert.rejects(api({method:'POST',body:{kw:100}},res),function(e){return e.status===403;});
  allowed=true; assert.strictEqual((await api({method:'POST',body:{kind:'array',kw:100}},res)).cost,198000);
- assert.strictEqual(checks,2); console.log('teditorv2cost: quantities, shared prices, authentication and billing gate passed');
+ assert.strictEqual(moduleChecks,2); assert.strictEqual(checks,1); console.log('teditorv2cost: quantities, shared prices, authentication and billing gate passed');
 })().catch(function(e){console.error(e);process.exitCode=1;});

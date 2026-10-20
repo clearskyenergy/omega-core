@@ -550,9 +550,13 @@
       orgs:['clearsky-usa.com','csebuilders.com'],
       icon:'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' }
   ];
-  SEED_TOOLS.push({ key:'siteplantrial', name:'Omega Maximus · customer trial', category:'design',
-      desc:'Try the new CAD and 3D tool. Save projects, review outputs and send feedback. Site Map remains available.',
-      file:'/editor-v2', badge:'trial', tier:TIER.STANDARD,
+  /* Omega Maximus, the editor maximum: the `maximus` module (api/_lib/modules.js,
+     $1,299/month from price book 2026-11). A package opens it by its modules;
+     a legacy tier opens it at Enterprise, or by the add-on (which switches
+     toolOverrides.siteplantrial on). The key stays, so saved links keep working. */
+  SEED_TOOLS.push({ key:'siteplantrial', name:'Omega Maximus', category:'design',
+      desc:'The editor maximum: CAD site design on the parcel and the photo, guided builds, Run (cost, value stack, IRR), permit set, one-line and 3D.',
+      file:'/editor-v2', badge:'new', tier:TIER.ENTERPRISE,
       icon:'M3 3h18v18H3zM3 9h18M9 9v12' });
 
 

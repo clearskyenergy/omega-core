@@ -100,6 +100,8 @@
       });
     }
     if (!recovering) setStatus('Sample site loaded.');
+    checkAccess();
+    if (root.OmegaEditorV2Auth && root.OmegaEditorV2Auth.onSignIn) root.OmegaEditorV2Auth.onSignIn(function () { checkAccess(); });
     /* Parcel lines are a view setting this browser remembers. */
     if (root.OmegaEditorV2Parcels && root.OmegaEditorV2Parcels.remembered()) setParcels(true);
     var projectParam = /[?&]id=([A-Za-z0-9_-]+)/.exec(location.search);
@@ -1411,6 +1413,31 @@
     if (grid && grid.parentNode === host) host.insertBefore(line, grid.nextSibling);
     else if (host.firstChild) host.insertBefore(line, host.firstChild);
     else host.appendChild(line);
+  }
+
+  /* ── Omega Maximus is a module ─────────────────────────────────────────
+     A signed-in workspace that has not bought it sees the price and Opt in
+     instead of the editor. Every Maximus door on the server refuses it
+     either way (package-access withModuleAnyPlan); this only says so up
+     front. Signed out, nothing is asked: the server features ask for a
+     sign-in themselves. */
+  function checkAccess() {
+    var Auth = root.OmegaEditorV2Auth;
+    if (!Auth || typeof Auth.idToken !== 'function' || typeof root.fetch !== 'function') return;
+    Auth.idToken().then(function (tok) {
+      if (!tok) return null;
+      return root.fetch('/api/maximus-access', { headers: { Authorization: 'Bearer ' + tok } }).then(function (r) {
+        return r.ok ? r.json() : null;
+      });
+    }).then(function (a) {
+      var el = $('maximus-lock');
+      if (!el || !a) return;
+      if (a.held !== false) { el.hidden = true; return; }
+      $('maximus-lock-copy').textContent = a.reason || 'Omega Maximus is not on this workspace\'s plan.';
+      $('maximus-lock-price').textContent = a.price ? 'Omega Maximus is ' + a.price + '.' : '';
+      if (a.optIn && /^\/[A-Za-z0-9#/_-]*$/.test(a.optIn)) $('maximus-lock-optin').setAttribute('href', a.optIn);
+      el.hidden = false;
+    }, function () {});
   }
 
   /* ── parcel lines (omega-editor-v2-parcels.js) ─────────────────────── */

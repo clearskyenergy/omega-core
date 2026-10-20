@@ -152,6 +152,16 @@
     border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 10px 12px;
   }
   #parcel-detail[hidden] { display: none; }
+  #maximus-lock { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, .55); }
+  #maximus-lock[hidden] { display: none; }
+  #maximus-lock .lock-card { width: min(460px, 100%); background: var(--white); color: var(--ink); border-radius: 12px; box-shadow: var(--shadow); padding: 22px 24px; }
+  #maximus-lock h2 { margin: 0 0 8px; font-size: 20px; }
+  #maximus-lock p { margin: 0 0 10px; line-height: 1.45; }
+  #maximus-lock #maximus-lock-price { font-weight: 700; font-size: 16px; }
+  #maximus-lock .lock-note { color: var(--muted); font-size: 13px; }
+  #maximus-lock .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  #maximus-lock a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+  #maximus-lock a.btn:not(.primary) { color: var(--ink); }
   #parcel-detail h2 { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); margin: 0; }
   #parcel-detail p { margin: 6px 0 0; font-size: 13px; line-height: 1.35; }
   #parcel-detail .src { color: var(--muted); font-size: 12px; }
@@ -469,6 +479,20 @@
     <div id="status" role="status" aria-live="polite">Select an object, or type LINE.</div>
     <div id="coords">E — ft &nbsp; N — ft</div>
   </footer>
+</div>
+
+<div id="maximus-lock" hidden role="dialog" aria-modal="true" aria-labelledby="maximus-lock-title">
+  <div class="lock-card">
+    <h2 id="maximus-lock-title">Omega Maximus</h2>
+    <p id="maximus-lock-copy">Omega Maximus is not on this workspace's plan.</p>
+    <p id="maximus-lock-price"></p>
+    <p class="lock-note">The editor maximum: CAD site design on the parcel and the photo, guided builds, Run (installed cost, value stack, IRR), the permit set, the one-line and 3D. Site Map stays on your plan.</p>
+    <div class="row-actions">
+      <a class="btn primary" id="maximus-lock-optin" href="/workspace#module-maximus">Opt in</a>
+      <a class="btn" href="/editor">Open Site Map</a>
+      <a class="btn quiet" href="/workspace">Workspace</a>
+    </div>
+  </div>
 </div>
 
 <dialog id="dlg-customer" aria-labelledby="cust-title">

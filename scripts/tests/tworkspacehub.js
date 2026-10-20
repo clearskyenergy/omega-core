@@ -192,7 +192,9 @@ function holds(ctx, want) { return M.catalog().filter(function (m) { return HUB.
 ok('Standard holds Omega Design, Omega EV and Omega Permits', holds(core, 'held') === 'lite,evrebates,permitting', holds(core, 'held'));
 ok('Standard is partly on nine modules', holds(core, 'part') === 'gridatlas,storage,estimate,plansets,siteintel,engineering,finance,compute,sitefinder', holds(core, 'part'));
 ok('Deluxe holds nine and is partly on four', holds(perf, 'held') === 'lite,gridatlas,storage,estimate,evrebates,plansets,ops,permitting,sitefinder' && holds(perf, 'part') === 'siteintel,engineering,finance,compute', [holds(perf, 'held'), holds(perf, 'part')]);
-ok('a trial holds Omega Design, Omega EV, Omega Permits and Omega Sites', holds(trial, 'held') === 'lite,evrebates,permitting,sitefinder', holds(trial, 'held'));
+/* a trial's tool level is Enterprise's, so it tries Omega Maximus (an Enterprise-level tool on a legacy plan) before buying it */
+ok('a trial holds Omega Design, Omega EV, Omega Maximus, Omega Permits and Omega Sites', holds(trial, 'held') === 'lite,evrebates,maximus,permitting,sitefinder', holds(trial, 'held'));
+ok('Standard and Deluxe buy Omega Maximus; Enterprise holds it', HUB.moduleState(MODS.maximus, core) === 'ask' && HUB.moduleState(MODS.maximus, perf) === 'ask' && HUB.moduleState(MODS.maximus, ent) === 'held', [HUB.moduleState(MODS.maximus, core), HUB.moduleState(MODS.maximus, perf), HUB.moduleState(MODS.maximus, ent)].join());
 
 /* 5b · editorCtx: the ONE mirror of OmegaCaps.read() every surface asks,
    pure (it asks canWith and never sets the library's own state) */

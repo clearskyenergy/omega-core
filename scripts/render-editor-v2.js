@@ -150,6 +150,34 @@ var server = http.createServer(function(req,res) {
     await page.click('#layer-parcels-toggle');
     assert(await page.evaluate(function(){return document.getElementById('parcel-detail').hidden&&getComputedStyle(document.getElementById('map-parcels')).display==='none';}),'off, the lines and the card go');
     assert.deepStrictEqual(errors,[]);
+    /* Omega Maximus is a module: a signed-in workspace that has not bought it
+       sees the price and Opt in; one that has sees the editor. The sign-in
+       is stood in for before the page's scripts run. */
+    async function lockPage(answer){
+      var p2=await browser.newPage({viewport:{width:1280,height:800}}), errs=[];
+      p2.on('pageerror',function(e){errs.push(e.message);});
+      await p2.addInitScript(function(){var held;Object.defineProperty(window,'OmegaEditorV2Auth',{configurable:true,get:function(){return held;},set:function(v){if(v)v.idToken=function(){return Promise.resolve('lock-test-token');};held=v;}});});
+      await p2.route('**/*',function(route){var url=route.request().url();
+        if(url.includes('/api/maximus-access')) return route.fulfill({json:answer});
+        if(url.startsWith(base)&&!url.includes('/api/')) return route.continue();
+        return route.abort();});
+      await p2.goto(base+'/editor-v2.html');
+      await p2.waitForFunction(function(){return !!window.OmegaEditorV2App;});
+      /* the splash holds the page until it is known (at most 4 s) */
+      await p2.waitForFunction(function(){return !document.documentElement.classList.contains('omega-loading');},null,{timeout:8000});
+      await p2.waitForTimeout(200);
+      return {page:p2,errs:errs};
+    }
+    var locked=await lockPage({held:false,reason:"Omega Maximus is not on this workspace's plan. Opt in on the Modules page.",price:'$1,299/month',optIn:'/workspace#module-maximus'});
+    await locked.page.waitForFunction(function(){return !document.getElementById('maximus-lock').hidden;},null,{timeout:5000});
+    var lockText=await locked.page.locator('#maximus-lock').innerText();
+    assert(/Omega Maximus is \$1,299\/month\./.test(lockText)&&/not on this workspace's plan/.test(lockText),'a workspace without it sees the price and why: '+lockText);
+    assert.strictEqual(await locked.page.getAttribute('#maximus-lock-optin','href'),'/workspace#module-maximus','Opt in goes to the module on the Modules page');
+    await locked.page.screenshot({path:path.join(out,'lock.png')});
+    assert.deepStrictEqual(locked.errs,[]); await locked.page.close();
+    var open=await lockPage({held:true});
+    assert(await open.page.evaluate(function(){return document.getElementById('maximus-lock').hidden;}),'a workspace that holds it sees the editor');
+    assert.deepStrictEqual(open.errs,[]); await open.page.close();
     console.log(JSON.stringify({passed:true,mode:first.mode,triangles:first.triangles,shots:out,externalServices:'offline: fallback verified'}));
   } finally {if(browser) await browser.close(); server.close();}
 })().catch(function(e){console.error(e);process.exitCode=1;});
