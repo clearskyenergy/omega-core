@@ -21,7 +21,7 @@ function noFirebase() { throw new Error('firebase-admin is a stand-in in this te
 var FAKE_ADMIN = { apps: [], initializeApp: function () { FAKE_ADMIN.apps.push({}); }, credential: { cert: function (k) { return k; } }, firestore: noFirebase, auth: noFirebase };
 Module._load = function (request) { return request === 'firebase-admin' ? FAKE_ADMIN : _load.apply(this, arguments); };
 try { require(path.join(ROOT, 'api/_lib/admin.js')); } finally { Module._load = _load; }
-var T = require(path.join(ROOT, 'api', '_lib', 'teleios.js'));
+var T = require(path.join(ROOT, 'api', '_lib', 'teleios.js')), C = require(path.join(ROOT, 'api', '_lib', 'custody.js'));
 var count = 0;
 function ok(c, m) { assert.ok(c, m); count++; }
 function eq(a, b, m) { assert.deepEqual(a, b, m); count++; }
@@ -183,8 +183,45 @@ var RUN = order({ status: 'in_fulfilment', logic: ready });
 });
 var BOUGHT = order({ status: 'in_fulfilment', logic: ready, items: [{ sku: 'CC-SM-1000', kind: 'product', qty: 1, reference: true, mfr: 'CleanCell US' }], procure: { mfr: 'CleanCell US', mfrOrgId: null, sku: 'CC-SM-1000', model: 'Smart Module' } });
 l = L({ quote: q('approved', APPROVED), order: BOUGHT, units: U(bound, bound), products: [] });
-ok(!l.complete && state(l, 'teleios').note === 'No warranty on file for CC-SM-1000: it is bought in from CleanCell US, and the maker’s warranty is not on file in this workspace', 'a bought-in reference battery: the maker’s warranty is not on file in this workspace, said so');
+ok(!l.complete && state(l, 'teleios').note === 'No warranty on file for CC-SM-1000: it is bought in from CleanCell US; record the maker’s warranty on its unit passport in Omega Logic', 'a bought-in reference battery: the maker’s warranty is not on file, and where to record it is said');
+eq(l.need, { kind: 'maker-warranty', serial: 'S1', sku: 'CC-SM-1000', mfr: 'CleanCell US' }, 'and the ladder names the unit whose passport Track opens');
 ok(L({ quote: q('approved', APPROVED), order: BOUGHT, units: U(bound, bound) }).complete, 'once the warranty is on file for that SKU, it is complete');
+ok(L({ quote: q('approved', APPROVED), order: RUN, units: U(bound, bound), products: [] }).need === null, 'a unit the seller makes, with no warranty: nothing to record as the maker’s (its catalog holds it)');
+
+/* ── the maker's warranty on a bought-in unit (custody.js makerWarranty),
+   2026-10-17: the office records what the maker confirmed, on the unit, and
+   the ONE coverage engine reads it — without publishing the product. The
+   record is made by the door's own function. ── */
+var BI = C.boughtIn(BOUGHT, 'CC-SM-1000');
+eq(BI, { sku: 'CC-SM-1000', mfr: 'CleanCell US', model: 'Smart Module' }, 'boughtIn: the order’s reference line and procure name the maker');
+eq(C.boughtIn(order({ procure: { mfr: 'CleanCell US', sku: 'CC-SM-1000' } }), 'CC-SM-1000').mfr, 'CleanCell US', 'procure alone names a bought-in SKU');
+ok(C.boughtIn(RUN, 'CC-SM-1000') === null && C.boughtIn(BOUGHT, 'CC-R60') === null && C.boughtIn(null, 'CC-SM-1000') === null, 'a line the seller makes, another SKU, or no order: not bought in');
+/* a maker selling its OWN unpublished unit (prime-order: a reference line, procure null) is not bought in: no maker's-warranty door is offered */
+var OWN_REF = order({ status: 'in_fulfilment', logic: ready, items: [{ sku: 'CC-SM-1000', kind: 'product', qty: 1, reference: true, mfr: 'CleanCell US' }], procure: null });
+l = L({ quote: q('approved', APPROVED, { orgId: 'cleancell.us' }), order: Object.assign({}, OWN_REF, { orgId: 'cleancell.us' }), units: U(bound, bound), products: [] });
+ok(!l.complete && state(l, 'teleios').note === 'No warranty on file for CC-SM-1000' && l.need === null, 'a maker’s own unpublished unit: no warranty on file, never called bought in');
+function withMaker(custody, terms) { var u = unit('X', 'ready', custody); return Object.assign({}, custody, { makerWarranty: C.makerWarranty(u, terms, 'pm@sunwave.energy', NOW, BI).after }); }
+var SHIP_TERMS = { termMonths: 120, trigger: 'ship', reference: 'CC-W-2291 (R. Bucher, 2027-02-18)' };
+var covered = withMaker(bound, SHIP_TERMS);
+l = L({ quote: q('approved', APPROVED), order: BOUGHT, units: U(covered, covered), products: [] });
+ok(l.complete && l.current === 'teleios' && l.need === null && state(l, 'teleios').at === '2027-02-20T00:00:00.000Z' && state(l, 'teleios').note === 'Delivered, on site and under warranty', 'the maker’s warranty on file on every unit: Omega Teleios, dated by its start, with no catalog product');
+ok(JSON.stringify(l).indexOf('CC-W-2291') < 0, 'the maker’s confirmation stays in the office: never printed on the ladder');
+l = L({ quote: q('approved', APPROVED), order: BOUGHT, units: U(covered, bound), products: [] });
+ok(!l.complete && l.need && l.need.serial === 'S2' && /^No warranty on file for CC-SM-1000: it is bought in/.test(state(l, 'teleios').note), 'on file for one unit only: held, and the other unit is the one named');
+l = L({ quote: q('approved', APPROVED), order: BOUGHT, units: U(withMaker(bound, { termMonths: 120, trigger: 'commissioning', docUrl: 'https://cleancell.example/warranty-rev-h.pdf' }), covered), products: [] });
+ok(!l.complete && l.need === null && state(l, 'teleios').note === 'On site; the warranty is waiting for commissioning', 'on file from commissioning: a warranty is on file, it waits on its own trigger');
+var catalogToo = L({ quote: q('approved', APPROVED), order: BOUGHT, units: U(covered, covered), products: COMM });
+ok(!catalogToo.complete && /waiting for commissioning/.test(state(catalogToo, 'teleios').note), 'a catalog warranty AND the maker’s: every one of them must be live');
+l = L({ quote: q('approved', APPROVED), order: Object.assign({}, BOUGHT, { status: 'cancelled' }), units: U(bound, bound), products: [] });
+ok(l.off && l.off.key === 'cancelled' && l.need === null, 'a cancelled order asks for nothing');
+/* replaced under RMA: the record goes with the unit (logic-custody replace), and the remaining term with it */
+var S1RMA = unit('S1', 'ready', Object.assign({}, covered, { status: 'rma_open', rma: { openedAt: '2027-02-27' } }));
+var S1M = unit('S1', 'ready', Object.assign({}, S1RMA.custody, { status: 'replaced', replacedBy: 'S9', replacedAt: '2027-02-28' }));
+var S9M = { serial: 'S9', sku: 'CC-SM-1000', shipUnit: true, orderId: 'stock', custody: { status: 'assigned', siteId: 'site_a', siteName: 'Lake St', replaces: 'S1', receivedAt: '2027-02-28', assignedAt: '2027-02-28', makerWarranty: covered.makerWarranty,
+  inheritedCoverage: C.inherited(C.coverageWithInheritance(null, S1RMA, NOW).map(function (cv) { return Object.assign({}, cv, { serial: 'S1' }); })) } };
+eq(S9M.custody.inheritedCoverage.map(function (h) { return [h.templateId, h.startDate, h.endDate]; }), [['maker', '2027-02-20', '2037-02-20']], 'the remaining term of the maker’s warranty, as replace hands it over');
+l = L({ quote: q('approved', APPROVED), order: Object.assign({}, BOUGHT, { status: 'complete' }), units: [S1M], replacements: [S9M], products: [] });
+ok(l.complete && state(l, 'teleios').at === '2027-02-20T00:00:00.000Z', 'a bought-in unit replaced under RMA: complete through the replacement, on the maker’s remaining term');
 var R60 = Object.assign(unit('S2', 'ready', bound), { sku: 'CC-R60' });
 l = L({ quote: q('approved', APPROVED), order: RUN, units: [unit('S1', 'ready', bound), R60] });
 ok(!l.complete && state(l, 'teleios').note === 'No warranty on file for CC-R60', 'one unit covered and the other not: not complete, the uncovered SKU named');

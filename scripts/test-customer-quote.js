@@ -752,8 +752,18 @@ async function run() {
   DB.seed('omega_orgs/' + SELLER + '/storefront/config', { products: [] });
   var noWarranty = await get({ id: siteA.id });
   ok(!noWarranty.ladder.complete && noWarranty.ladder.current === 'teleios', 'no warranty on file for the bought-in battery: not complete');
-  eq(noWarranty.ladder.steps[14].note, 'No warranty on file for CC-SM-1000: it is bought in from CleanCell US, and the maker’s warranty is not on file in this workspace', 'said in plain words');
+  eq(noWarranty.ladder.steps[14].note, 'No warranty on file for CC-SM-1000: it is bought in from CleanCell US; record the maker’s warranty on its unit passport in Omega Logic', 'said in plain words, with where to record it');
+  eq(noWarranty.ladder.need, { kind: 'maker-warranty', serial: 'SM-0001', sku: 'CC-SM-1000', mfr: 'CleanCell US' }, 'the ladder names the unit whose passport Track opens');
   eq(row((await get({ list: '1' })).quotes, siteA.id).stage, { key: 'onsite', label: 'On site' }, 'the Desk row reads On site, never Omega Teleios');
+  /* the office records the maker's warranty on the unit (custody.js
+     makerWarranty, the door's own function) — still no catalog product */
+  var Cu = require('../api/_lib/custody'), sm1 = { serial: 'SM-0001', sku: 'CC-SM-1000', shipUnit: true, orderId: oA.orderId, custody: COMMISSIONED };
+  var mw = Cu.makerWarranty(sm1, { termMonths: 120, trigger: 'commissioning', reference: 'CC-W-2291, R. Bucher by email' }, REP.email, '2027-08-01T15:00:00Z', Cu.boughtIn(DB.data.get('orders/' + oA.orderId), 'CC-SM-1000'));
+  plantUnit('SM-0001', oA.orderId, Object.assign({}, COMMISSIONED, { makerWarranty: mw.after }));
+  var onFile = await get({ id: siteA.id });
+  ok(onFile.ladder.complete && onFile.ladder.need === null && onFile.ladder.steps[14].at === '2027-07-20T00:00:00.000Z', 'the maker’s warranty on file: Omega Teleios, dated by commissioning, the product still unpublished');
+  ok(JSON.stringify(onFile).indexOf('CC-W-2291') < 0, 'the maker’s confirmation is not in the seller’s quote view');
+  eq(row((await get({ list: '1' })).quotes, siteA.id).stage, { key: 'teleios', label: 'Omega Teleios · complete' }, 'and the Desk row reads Omega Teleios');
 
   /* — the lead's standing() fixes, kept: a public mailbox domain and an
      unverified sign-up on the seller's domain reach nothing — */
