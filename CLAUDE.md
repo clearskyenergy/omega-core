@@ -1714,10 +1714,40 @@ working; only what a person reads says Omega Maximus.
 - Outputs is the right-hand panel; the canvas resizes only when its size
   changes (a tab change once blanked the drawing); panels rebuild only when
   what they show changed (a rebuild between press and release drops a click).
-- Tests: `npm run test:editor-v2` (incl. `teditorv2run`, `teditorv2parcels`),
-  `scripts/tests/tmaximusaccess.js`, `npm run check:editor-v2` (the drawing
-  through every tab, Outputs, Run on the real engines, Find address,
-  parcels, the lock). The launch branch is `siteplan/launch` (PR #366).
+- **A site starts at its address** (2026-10-20, Tommy: "where do i put the
+  site address?"): New opens the Site tab with the cursor in Site address;
+  Find on the map opens an empty drawing on the block around the point
+  (`SITE_VIEW_FT`, 700 ft; it opened on one roof) and a drawing that moved
+  with it whole; the Site tab's own **Show parcel lines** is the same layer
+  as Layers' switch; Use as site boundary zooms to the lot.
+- **The photo at any zoom**: past the tiles the screen holds at their own
+  size, `layoutMap` steps one zoom level coarser at a time instead of going
+  blank (it hid the photo past 24 tiles: a 12-acre lot read "Zoom in").
+- **A build lands where you are looking**: `spotFor` takes the clear window
+  nearest the middle of the view (`ctx.prefer` → `site.prefer`), else the
+  first from the lot's south-west corner; inside the lot line, clear of the
+  obstructions (by their extent) and of what is placed, beside the lot when
+  there is no room (`scripts/tests/teditorv2place.js` §6).
+- **Never a browser popup to confirm**: the Claude app's browser pane (and a
+  kiosk) answers `window.confirm` "no" without showing it, so a button that
+  asked that way did nothing (2026-10-20, the price book's Seed). Send to
+  funding asks in `#dlg-market`; `admin/pricebook.html` asks on the page
+  (`scripts/render-pricebook.js` fails on any dialog).
+- **The guide** is `guides/editor/Omega-Maximus.pdf` (served), built by
+  `scripts/guides/omega-maximus.js` from one real run of the editor (the
+  photo, the address search, the county parcel and the 3D ground are the
+  public services the page calls; the parcel, planner, cost, value-stack and
+  solar answers are the real server code; its figures come from the run).
+  It needs the network, so it is retaken by running it after an editor
+  change, like the Site Map guide; the cover mark is
+  `scripts/guides/assets/omega-glow.jpg`.
+- Tests: `npm run test:editor-v2` (incl. `teditorv2run`, `teditorv2parcels`,
+  `teditorv2place`), `scripts/tests/tmaximusaccess.js`, `npm run
+  check:editor-v2` (the drawing through every tab, Outputs, Run on the real
+  engines, Find address, parcels, the lock, the framing after Find and Use as
+  site boundary, the photo past the old tile cap, Send to funding's own
+  dialog), `scripts/render-pricebook.js` (in `check:pages`). The launch
+  branch was `siteplan/launch` (PR #366, merged 2026-10-20).
 
 ## VPP Earnings Simulator (2026-09-29)
 

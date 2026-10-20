@@ -89,6 +89,7 @@
   .fold-sub { margin: 4px 0 6px; font-size: 12px; }
   .fold-sub summary { cursor: pointer; color: var(--muted); }
   .quiet-block p, #outputs-body > p, #funding-body p { margin: 0 0 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .quiet-block p.hint { margin: 8px 0 0; }
   .score-num { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
   .stream { font-size: 12px; margin: 0 0 6px; }
   .stream-fill { display: block; height: 4px; background: var(--accent); border-radius: 2px; margin-top: 2px; }
@@ -456,7 +457,9 @@
           <label class="field">Address <input id="site-address-go" autocomplete="street-address" placeholder="Street, city, state ZIP — or latitude, longitude"></label>
           <div class="row-actions">
             <button type="button" class="btn primary" id="site-address-find">Find on the map</button>
+            <button type="button" class="btn" id="site-parcels" aria-pressed="false">Show parcel lines</button>
           </div>
+          <p class="hint">Parcel lines are the county's lot lines over the photo. Pick the lot, then Use as site boundary.</p>
         </div>
         <div class="quiet-block">
           <h3>Does this site work?</h3>
@@ -570,6 +573,17 @@
       <button type="submit" class="btn" value="cancel">Cancel</button>
       <button type="submit" class="btn" value="discard">Don't save</button>
       <button type="submit" class="btn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-market" aria-labelledby="market-title">
+  <form method="dialog" class="sheet">
+    <h2 id="market-title">Submit to the financing marketplace?</h2>
+    <p>Approved marketplace partners can browse the listing. The project is saved to the workspace first.</p>
+    <div class="row-actions">
+      <button type="submit" class="btn" value="cancel">Cancel</button>
+      <button type="submit" class="btn primary" value="submit">Submit</button>
     </div>
   </form>
 </dialog>

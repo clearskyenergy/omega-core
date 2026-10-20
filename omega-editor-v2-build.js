@@ -105,10 +105,21 @@
         sum[j * (nx + 1)] = 0;
         for (i = 1; i <= nx; i++) sum[j * (nx + 1) + i] = busy[(j - 1) * nx + (i - 1)] + sum[(j - 1) * (nx + 1) + i] + sum[j * (nx + 1) + i - 1] - sum[(j - 1) * (nx + 1) + i - 1];
       }
+      /* the clear window nearest the middle of the view (site.prefer), so a
+         build lands where the person is looking; with no view, the first
+         clear window from the lot's south-west corner */
+      var want = site.prefer && isFinite(site.prefer.x) && isFinite(site.prefer.y) ? site.prefer : null;
+      var best = null, bestD = Infinity, n, dx, dy, d;
       for (j = 0; j + ch <= ny; j++) for (i = 0; i + cw <= nx; i++) {
-        var n = sum[(j + ch) * (nx + 1) + (i + cw)] - sum[j * (nx + 1) + (i + cw)] - sum[(j + ch) * (nx + 1) + i] + sum[j * (nx + 1) + i];
-        if (!n) return { x: bb.minX + i * cell + CLEAR, y: bb.minY + j * cell + CLEAR, onLot: true };
+        n = sum[(j + ch) * (nx + 1) + (i + cw)] - sum[j * (nx + 1) + (i + cw)] - sum[(j + ch) * (nx + 1) + i] + sum[j * (nx + 1) + i];
+        if (n) continue;
+        if (!want) return { x: bb.minX + i * cell + CLEAR, y: bb.minY + j * cell + CLEAR, onLot: true };
+        dx = bb.minX + (i + cw / 2) * cell - want.x;
+        dy = bb.minY + (j + ch / 2) * cell - want.y;
+        d = dx * dx + dy * dy;
+        if (d < bestD) { bestD = d; best = { x: bb.minX + i * cell + CLEAR, y: bb.minY + j * cell + CLEAR, onLot: true }; }
       }
+      if (best) return best;
     }
     /* beside the lot, above anything already put there */
     var x = bb.maxX + 30, y = bb.minY, box, hit, tries;
@@ -424,6 +435,7 @@
       var id = selectedBuilder();
       var input = readFields(document.getElementById('dlg-build'));
       var site = contextOf(state.doc, ctx && ctx.pxPerFt);
+      if (ctx && typeof ctx.prefer === 'function') site.prefer = ctx.prefer();
       input.origin = site.origin;
       input.pxPerFt = site.pxPerFt;
       if (id === 'autolayout' || id === 'bess') {

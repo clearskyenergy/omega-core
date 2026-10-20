@@ -21,7 +21,7 @@
   var draft = null, drag = null, box = null, pan = null, space = false;
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
-  var tiles = {}, mapNote = '', recoverTimer = 0, section = 'design';
+  var tiles = {}, mapNote = '', mapAt = null, recoverTimer = 0, section = 'design';
   /* Parcel lines: their own tiles over the photo, the point the card is
      about (the site point, or the map centre when asked), the source the
      tiles were built from, and the anchor last looked up. */
@@ -195,6 +195,8 @@
     $('site-address-go').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); locate(this.value); } });
     $('site-address-find').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
     $('site-address-find').addEventListener('click', function () { locate($('site-address-go').value); });
+    $('site-parcels').addEventListener('click', function () { var P = root.OmegaEditorV2Parcels; if (P) setParcels(!P.enabled()); });
+    $('dlg-market').addEventListener('close', onMarketClose);
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
     $('build-cancel').addEventListener('click', function () {
@@ -930,8 +932,9 @@
     layoutMap();
     requestDraw();
   }
-  /* Zoom to some entities with room around them (a placed build). */
-  function fitTo(ids) {
+  /* Zoom to some entities with room around them: a placed build gets three
+     quarters of its size on each side, a lot line (padRatio) a little. */
+  function fitTo(ids, padRatio) {
     var want = {}, i, b, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
     for (i = 0; i < (ids || []).length; i++) want[ids[i]] = 1;
     for (i = 0; i < state.doc.entities.length; i++) {
@@ -945,7 +948,7 @@
       if (b.maxY > maxY) maxY = b.maxY;
     }
     if (!any) { fit(false); return; }
-    var pad = Math.max(40, Math.max(maxX - minX, maxY - minY) * 0.75);
+    var pad = Math.max(40, Math.max(maxX - minX, maxY - minY) * (padRatio == null ? 0.75 : padRatio));
     minX -= pad; minY -= pad; maxX += pad; maxY += pad;
     view.cx = (minX + maxX) / 2;
     view.cy = (minY + maxY) / 2;
@@ -1234,15 +1237,10 @@
   }
 
   /* ── map ───────────────────────────────────────────────────────────── */
-  function layoutMap() {
-    var host = $('map');
-    if (!mapOn) { host.style.display = 'none'; mapNote = ''; layoutParcels(null); return; }
-    host.style.display = 'block';
-    var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt));
-    if (z < 14) z = 14;
-    if (z > 19) z = 19;
+  /* The tiles a view needs at zoom z, with a tile's margin all round. */
+  function tilesFor(z) {
     var corners = [screenToWorld(0, 0), screenToWorld(cssW, 0), screenToWorld(0, cssH), screenToWorld(cssW, cssH)];
-    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, i, ll, t, key;
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, i, ll, t, x, y;
     for (i = 0; i < corners.length; i++) {
       ll = G.ftToLatLng(corners[i].x, corners[i].y, state.doc.anchor);
       t = latLngToTile(ll.lat, ll.lng, z);
@@ -1251,22 +1249,39 @@
       if (t.y < minY) minY = t.y;
       if (t.y > maxY) maxY = t.y;
     }
-    var need = {}, count = 0, x, y;
+    var need = {}, count = 0;
     for (x = minX - 1; x <= maxX + 1; x++) {
       for (y = minY - 1; y <= maxY + 1; y++) {
-        key = z + '/' + y + '/' + x;
-        need[key] = { z: z, x: x, y: y };
+        need[z + '/' + y + '/' + x] = { z: z, x: x, y: y };
         count++;
       }
     }
-    if (count > 24) {
+    return { need: need, count: count };
+  }
+  /* The photo at the scale drawn. Zoomed out past what the screen holds in
+     tiles at their own size, it steps one level coarser at a time (each
+     level halves the tiles across), so a whole lot keeps its photo: it used
+     to go blank past 24 tiles, and a 12-acre lot read "Zoom in to load
+     aerial imagery". */
+  function layoutMap() {
+    var host = $('map');
+    if (!mapOn) { host.style.display = 'none'; mapNote = ''; mapAt = null; layoutParcels(null); return; }
+    host.style.display = 'block';
+    var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt));
+    if (z < 14) z = 14;
+    if (z > 19) z = 19;
+    var most = (Math.ceil(cssW / 256) + 3) * (Math.ceil(cssH / 256) + 3), set = tilesFor(z);
+    while (set.count > most && z > 14) { z--; set = tilesFor(z); }
+    if (set.count > most) {
       mapNote = 'Zoom in to load aerial imagery.';
+      mapAt = { z: z, tiles: 0 };
       host.style.display = 'none';
       layoutParcels(null);
       return;
     }
     mapNote = '';
-    var k;
+    mapAt = { z: z, tiles: set.count };
+    var need = set.need, k;
     for (k in tiles) if (tiles.hasOwnProperty(k) && !need[k]) {
       if (tiles[k].img.parentNode) tiles[k].img.parentNode.removeChild(tiles[k].img);
       delete tiles[k];
@@ -1327,6 +1342,7 @@
     refreshProps(false);
     paintGridCard();
     paintParcelCard();
+    paintSiteParcels();
     saveLabel();
     $('project-name').value = state.doc.name || '';
     paintNext();
@@ -1485,7 +1501,18 @@
     refreshLayers();
     layoutMap();
     paintParcelCard();
+    paintSiteParcels();
     requestDraw();
+  }
+  /* The Site tab's own switch for the same layer, beside Find on the map. */
+  function paintSiteParcels() {
+    var b = $('site-parcels'), P = root.OmegaEditorV2Parcels;
+    if (!b) return;
+    b.hidden = !P;
+    if (!P) return;
+    var on = P.enabled();
+    b.textContent = on ? 'Hide parcel lines' : 'Show parcel lines';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
   }
   function anchorKey() {
     var a = state.doc.anchor || {};
@@ -1541,6 +1568,7 @@
     if (!ent) { setStatus('Look up a parcel first.', true); return; }
     D.add(state, ent);
     afterChange();
+    fitTo([ent.id], 0.08);
     paintParcelCard();
     setStatus('The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.');
   }
@@ -1800,11 +1828,25 @@
     }
     D.setMeta(state, { anchor: { lat: lat, lng: lng }, address: address || state.doc.address });
     afterChange();
+    /* show where it landed: an empty drawing opens on the block around the
+       point (it used to open on one roof, 280 ft across); a drawing that
+       moved with it is shown whole over its new photo */
+    if (!state.doc.entities.length) frameAround(0, 0, SITE_VIEW_FT);
+    else fit(false);
     if (root.OmegaEditorV2Grid && root.OmegaEditorV2Grid.enabled()) {
       gridFit = false;
       root.OmegaEditorV2Grid.reload(state.doc, D.summary(state.doc));
     }
     setStatus('Anchor set. The aerial photo is scaled to this latitude.');
+  }
+  /* A view about `ft` feet across, centred on a point of the drawing. */
+  var SITE_VIEW_FT = 700;
+  function frameAround(x, y, ft) {
+    view.cx = x;
+    view.cy = y;
+    view.pxPerFt = Math.max(0.02, Math.min(cssW / ft, cssH / (ft * 0.6)));
+    layoutMap();
+    requestDraw();
   }
 
   function writeCoords(p, kind) {
@@ -1899,8 +1941,18 @@
   function handoff(target) {
     saveWorkspace().then(function (ok) { if (ok) location.href = root.OmegaEditorV2Workspace.href(state.doc, target); });
   }
+  /* Asked on the page, never in a browser popup: an embedded browser (the
+     Claude app's pane, a kiosk) answers window.confirm "no" without showing
+     it, and the button did nothing. */
   function pushMarketplace() {
-    if (!window.confirm('Submit this project to the financing marketplace? Approved marketplace partners can browse the listing.')) return;
+    var dlg = $('dlg-market');
+    dlg.returnValue = '';
+    dlg.showModal();
+  }
+  function onMarketClose() {
+    if ($('dlg-market').returnValue === 'submit') submitMarketplace();
+  }
+  function submitMarketplace() {
     saveWorkspace().then(function (ok) {
       if (!ok) return;
       setStatus('Submitting to marketplace…');
@@ -2279,6 +2331,8 @@
   function placedCtx() {
     return {
       pxPerFt: view.pxPerFt,
+      /* a build lands on the clear ground nearest the middle of the view */
+      prefer: function () { return { x: view.cx, y: view.cy }; },
       onPlaced: function (res) {
         afterChange();
         /* the view goes to the build, which is selected, and says where it is */
@@ -2490,5 +2544,11 @@
     OmegaEditorV2Outputs.open(api);
   }
 
-  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, VERSION: 'editor-v2-app/4' };
+  /* What the checks read: the view and the photo's tiles. Read-only. */
+  function debug() {
+    var a = state.doc.anchor || {};
+    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote } : null };
+  }
+
+  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, debug: debug, VERSION: 'editor-v2-app/5' };
 })(typeof window !== 'undefined' ? window : global);

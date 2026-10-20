@@ -20,6 +20,7 @@ h1{font-size:22px;margin:0 0 4px}.muted{color:var(--ink2)}
 .ok{color:var(--ok)}.bad{color:var(--bad)}code{font:13px "DM Mono",monospace;word-break:break-all}
 button{background:var(--btn);color:#fff;border:0;border-radius:999px;padding:10px 18px;font:600 14px inherit;cursor:pointer;margin-top:12px}
 button[disabled]{opacity:.45;cursor:default}#msg{margin-top:12px;white-space:pre-wrap}
+button.quiet{background:transparent;color:var(--ink);border:1px solid var(--line)}#ask{color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px 14px}
 </style>
 </head>
 <body>
@@ -92,15 +93,27 @@ button[disabled]{opacity:.45;cursor:default}#msg{margin-top:12px;white-space:pre
     call('POST', body).then(function (r) { $('msg').innerHTML = '<span class="ok">' + esc(done) + '</span>'; return load(); },
       function (e) { $('msg').innerHTML = '<span class="bad">Refused: ' + esc(e.message) + '</span>'; btn.disabled = false; });
   }
+  /* Asked on the page, never in a browser popup: an embedded browser (the
+     Claude app's pane, a kiosk) answers window.confirm "no" without showing
+     it, and Seed did nothing and said nothing (2026-10-20). */
+  function ask(text, yes, go) {
+    $('msg').innerHTML = '<div id="ask"><div>' + esc(text) + '</div><button type="button" id="ask-yes">' + esc(yes) + '</button> <button type="button" id="ask-no" class="quiet">Cancel</button></div>';
+    $('ask-yes').addEventListener('click', go);
+    $('ask-no').addEventListener('click', function () { $('msg').textContent = 'Cancelled. Nothing was written.'; });
+  }
   $('seed').addEventListener('click', function () {
     var p = S && S.seed;
-    if (!p || !window.confirm('Seed price book ' + S.version + ' (switched off)? It adds: ' + ((p.added || []).join(', ') || 'nothing') + '.')) return;
-    run($('seed'), { action: 'seed', expectedHash: p.expectedHash }, 'Seeded. Now enable it.');
+    if (!p) return;
+    ask('Seed price book ' + S.version + ', switched off? It adds: ' + ((p.added || []).join(', ') || 'nothing') + '.', 'Seed it', function () {
+      run($('seed'), { action: 'seed', expectedHash: p.expectedHash }, 'Seeded. Now enable it.');
+    });
   });
   $('bind').addEventListener('click', function () { run($('bind'), { action: 'bind' }, 'Items bound.'); });
   $('enable').addEventListener('click', function () {
-    if (!S || !window.confirm('Turn on price book ' + S.version + '? Signup and billing will start charging from it.')) return;
-    run($('enable'), { action: 'enable', expectedHash: S.expectedHash }, 'Enabled.');
+    if (!S) return;
+    ask('Turn on price book ' + S.version + '? Signup and billing will start charging from it.', 'Turn it on', function () {
+      run($('enable'), { action: 'enable', expectedHash: S.expectedHash }, 'Enabled.');
+    });
   });
   firebase.auth().onAuthStateChanged(function (u) {
     if (!u) { $('who').textContent = 'Sign in at /login.html as a clearsky-usa.com address, then reopen this page.'; return; }

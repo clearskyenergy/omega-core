@@ -178,6 +178,43 @@ var server = http.createServer(function(req,res) {
       if (bid==='bess') await page.screenshot({path:path.join(out,'build-bess.png')});
     }
     assert.deepStrictEqual(buildPosts,builds,'each build asked the planner once: '+buildPosts.join());
+    /* Send to funding asks on the page (a browser popup is answered "no",
+       unseen, by an embedded browser); Cancel submits nothing. */
+    var dialogs=[]; page.on('dialog',function(d){dialogs.push(d.message());d.dismiss();});
+    await page.click('#stages [data-stage="funding"]');
+    await page.click('#btn-funding-send');
+    await page.waitForFunction(function(){return document.getElementById('dlg-market').open;},null,{timeout:5000});
+    await page.click('#dlg-market button[value="cancel"]');
+    await page.waitForFunction(function(){return !document.getElementById('dlg-market').open;});
+    assert(!/Submitting|Submitted/.test(await page.evaluate(function(){return document.getElementById('status').textContent;})),'Cancel submits nothing');
+    assert.deepStrictEqual(dialogs,[],'no browser popup is raised');
+    /* A new project: Find on the map opens on the block around the point
+       (it opened on one roof, 280 ft across), the photo is laid at that
+       scale (past 24 tiles it used to go blank), the Site tab's own switch
+       shows the parcel lines, and Use as site boundary zooms to the lot. */
+    await page.click('#btn-new');
+    await page.waitForFunction(function(){return document.getElementById('dlg-confirm').open||document.getElementById('app').getAttribute('data-section')==='site';});
+    if (await page.evaluate(function(){return document.getElementById('dlg-confirm').open;})) await page.click('#dlg-confirm button[value="discard"]');
+    await page.waitForFunction(function(){return document.getElementById('app').getAttribute('data-section')==='site'&&document.activeElement&&document.activeElement.id==='site-address-go';});
+    await page.fill('#site-address-go','33.45000, -112.07000');
+    await page.click('#site-address-find');
+    await page.waitForFunction(function(){return /Anchor set/.test(document.getElementById('status').textContent);},null,{timeout:5000});
+    var framed=await page.evaluate(function(){return OmegaEditorV2App.debug();});
+    var across=framed.view.w/framed.view.pxPerFt;
+    assert(across>=600&&across<=800&&Math.abs(framed.view.cx)<1&&Math.abs(framed.view.cy)<1,'Find opens about 700 ft across, centred on the point: '+JSON.stringify(framed.view));
+    assert(framed.map&&framed.map.tiles>24&&framed.map.z>=14&&framed.map.z<=19,'the photo is laid at that scale, past the old 24-tile cap: '+JSON.stringify(framed.map));
+    assert.strictEqual(await page.evaluate(function(){return getComputedStyle(document.getElementById('map')).display;}),'block','the photo layer is shown');
+    assert.strictEqual(await page.innerText('#site-parcels'),'Show parcel lines','the Site tab offers the parcel lines');
+    await page.click('#site-parcels');
+    await page.waitForFunction(function(){var c=document.getElementById('parcel-detail');return c&&!c.hidden&&/APN TEST-1/.test(c.innerText)&&!document.getElementById('parcel-use').hidden;},null,{timeout:10000});
+    assert.strictEqual(await page.innerText('#site-parcels'),'Hide parcel lines','the switch says what it will do next');
+    await page.click('#parcel-use');
+    await page.waitForFunction(function(){return /lot line now/.test(document.getElementById('status').textContent);},null,{timeout:5000});
+    var lot=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {view:d.view};});
+    var lotAcross=lot.view.w/lot.view.pxPerFt;
+    assert(lotAcross<400&&Math.abs(lot.view.cx)<20&&Math.abs(lot.view.cy)<20,'Use as site boundary zooms to the 100 ft lot: '+JSON.stringify(lot.view));
+    await page.click('#site-parcels');
+    assert.strictEqual(await page.innerText('#site-parcels'),'Show parcel lines','and the switch turns them off again');
     assert.deepStrictEqual(errors,[]);
     /* Omega Maximus is a module: a signed-in workspace that has not bought it
        sees the price and Opt in; one that has sees the editor. The sign-in

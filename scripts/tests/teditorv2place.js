@@ -100,4 +100,27 @@ var plan5 = { ok: true, builder: 'autolayout', equipment: [{ type: 'array', laye
 var w5 = Bld.situate(o.doc, plan5, Bld.contextOf(o.doc, 6));
 check(w5.moved === false && plan5.equipment[0].boundaryId === o.parcel.id && plan5.equipment[0].x === undefined, 'an Auto layout array stays bound to its boundary');
 
+/* 6. Where the person is looking: the clear ground nearest the middle of
+   the view (site.prefer), not always the lot's south-west corner. */
+function centreOf(doc, ids) {
+  var want = {}; ids.forEach(function (id) { want[id] = 1; });
+  var bs = doc.entities.filter(function (e) { return want[e.id] && e.type === 'equip'; }).map(function (e) { return G.boundsOf(e); });
+  var minX = Math.min.apply(null, bs.map(function (b) { return b.minX; })), maxX = Math.max.apply(null, bs.map(function (b) { return b.maxX; }));
+  var minY = Math.min.apply(null, bs.map(function (b) { return b.minY; })), maxY = Math.max.apply(null, bs.map(function (b) { return b.maxY; }));
+  return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, inside: bs.every(function (b) { return b.minX >= 0 && b.maxX <= 600 && b.minY >= 0 && b.maxY <= 400; }) };
+}
+function placeLooking(prefer) {
+  var l = lot(600, 400, 0), site = Bld.contextOf(l.doc, 6);
+  if (prefer) site.prefer = prefer;
+  var plan = GB.plan('bess', { mode: 'btm', kw: 1000, hours: 2, origin: site.origin, pxPerFt: 6 });
+  Bld.situate(l.doc, plan, site);
+  var st = D.createState(l.doc), placed = Bld.place(st, plan);
+  return centreOf(st.doc, placed.ids);
+}
+var plain = placeLooking(null), ne = placeLooking({ x: 520, y: 330 }), mid = placeLooking({ x: 300, y: 200 });
+function dist(a, b) { return Math.sqrt((a.x - b.x) * (a.x - b.x) + (a.y - b.y) * (a.y - b.y)); }
+check(plain.inside && ne.inside && mid.inside, 'every placement stays inside the lot line');
+check(dist(ne, { x: 520, y: 330 }) < dist(plain, { x: 520, y: 330 }) - 150, 'looking at the north-east corner puts it there: ' + JSON.stringify({ ne: ne, plain: plain }));
+check(dist(mid, { x: 300, y: 200 }) < 80, 'looking at the middle of the lot puts it in the middle: ' + JSON.stringify(mid));
+
 console.log('teditorv2place: ' + n + ' checks passed');
