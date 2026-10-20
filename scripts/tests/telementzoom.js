@@ -22,6 +22,13 @@
          wrapper on the reprojection chain carries it, OmegaGeo leaves owned
          equipment to it, and a width typed in the properties panel is
          recorded in feet as the drag-resize path records it
+     5 · gear with no footprint recorded on it: a guided-build unit saved
+         before _evAdd recorded one takes its kind's (a rated battery its
+         rating's) on _evAdd's floors, never Prime's marker; an Insert item
+         takes Insert's; OmegaGeo stamps what has none at the scale it was
+         drawn at, before a zoom resizes anything; the anchor engine centres
+         on the rendered size; the build bollards keep their floors
+     6 · the orphan sweep runs from the anchor pass, at most every 500 ms
 
    The same, in Chromium, through real zooms of the real editor:
    scripts/render-element-zoom.js (npm run check:element-zoom).
@@ -56,6 +63,7 @@ function block(src, needle, open, close) {
 }
 var CODE = [
   block(ED, 'function _elRenderSize(el){'), block(ED, 'function _elRenderCenter(el){'),
+  block(ED, 'var EV_FOOTPRINT = {') + ';', block(ED, 'function _bessFootprint(kwh, kw){'),
   block(ED, 'function _elFootprintFt(el){'), block(ED, 'function omegaRescaleElements(){'),
   block(ED, 'function omegaElementFootprint(el){'),
   'var _elScaleFrame = { ran:false, at:0, armed:false };', block(ED, 'function omegaRescaleElementsOnce(){')
@@ -70,7 +78,8 @@ function editor(opts) {
   var win = {
     performance: { now: function () { return clock.now; } },
     requestAnimationFrame: opts.noRaf ? undefined : function (f) { frames.push(f); return frames.length; },
-    OmegaInsert: opts.insert === false ? undefined : { floorPx: { w: 22, h: 10 } }
+    OmegaInsert: opts.insert === false ? undefined : { floorPx: { w: 22, h: 10 },
+      footprint: function (id) { return id === 'bollard' ? { lf: 0.75, wf: 0.75, src: 'cut sheet' } : null; } }
   };
   var doc = { querySelector: function (s) { var m = /data-elid="([^"]+)"/.exec(s); return m ? (nodes[m[1]] || null) : null; } };
   var ctx = vm.createContext({ window: win, document: doc, S: { pxPerFt: opts.ppf || 2.742, elements: [], sel: null }, Math: Math, JSON: JSON,
@@ -220,6 +229,54 @@ var insAt = ED.indexOf("  var TAG = '[omega/insert]';");
 var ins = ED.slice(insAt, ED.indexOf('})();', insAt));
 ok(/var MIN_W = 22, MIN_H = 10;/.test(ins) && /floorPx: \{ w: MIN_W, h: MIN_H \}/.test(ins), 'Insert says what it drops at: 22 x 10 px, OmegaInsert.floorPx');
 ok(/Math\.max\(MIN_W, Math\.round\(f\.lf \* p\)\)/.test(block(ins, '  function hookDropW() {')), 'and drops at it');
+
+/* ═══ 5 · gear with no footprint recorded on it ═════════════════════ */
+var L = editor({ ppf: 2.742 });
+function fp(el) { L.S.elements = [el]; return L.run('JSON.stringify(_elFootprintFt(S.elements[0]))'); }
+var oldC = { id: 'c', type: 'evgear', evKind: 'charger', x: 0, y: 0, w: 14, h: 12 };
+eq(fp(oldC), JSON.stringify({ lf: 2.9, wf: 3.1 }), 'a charger saved before _evAdd recorded its footprint takes its kind\u2019s, 2.9 x 3.1 ft');
+ok(oldC.minW === 14 && oldC.minH === 12, 'on _evAdd\u2019s small-kit floor, 14 x 12 (' + oldC.minW + ' x ' + oldC.minH + ')');
+var oldX = { id: 'x', type: 'evgear', evKind: 'xfmr', x: 0, y: 0, w: 28, h: 20 };
+eq(fp(oldX), JSON.stringify({ lf: 6, wf: 4 }), 'a transformer, 6 x 4 ft');
+ok(oldX.minW === 28 && oldX.minH === 20, 'on the 28 x 20 floor');
+var oldB = { id: 'b', type: 'evgear', evKind: 'bess', x: 0, y: 0, w: 28, h: 20, bessKwh: 2000, bessKw: 1000 };
+eq(fp(oldB), JSON.stringify({ lf: 20, wf: 8 }), 'a 2 MWh battery its rating\u2019s footprint, 20 x 8 ft (_bessFootprint)');
+eq(fp({ id: 'u', type: 'evgear', evKind: 'bess', x: 0, y: 0, w: 28, h: 20 }), JSON.stringify({ lf: 10, wf: 5 }), 'an unrated one EV_FOOTPRINT\u2019s 10 x 5 ft');
+var mk = fp({ id: 'm', type: 'evgear', evKind: 'bess', primeFootprint: 'none', x: 0, y: 0, w: 5, h: 5, minW: 4, minH: 4 });
+ok(mk === 'null' || JSON.parse(mk).lf !== 10, 'a unit whose maker released no footprint is never given the 10 x 5 ft battery (' + mk + ')');
+var keep = { id: 'k', type: 'evgear', evKind: 'charger', x: 0, y: 0, w: 22, h: 16, lf: 8, wf: 6, minW: 12, minH: 10 };
+eq(fp(keep), JSON.stringify({ lf: 8, wf: 6 }), 'a unit that recorded its footprint keeps it');
+ok(keep.minW === 12 && keep.minH === 10, 'and its floor');
+eq(fp({ id: 'i', type: 'eq', eqId: 'bollard', x: 0, y: 0, w: 8 }), JSON.stringify({ lf: 0.75, wf: 0.75 }), 'an Insert item placed past Insert\u2019s hook takes Insert\u2019s footprint (OmegaInsert.footprint)');
+eq(fp({ id: 'n', type: 'eq', eqId: 'nothing-known', x: 0, y: 0, w: 30 }), 'null', 'one Insert does not know stays without');
+L.S.elements = [{ id: 'old', type: 'evgear', evKind: 'charger', x: 0, y: 0, w: 14, h: 12 }];
+L.S.pxPerFt = 10.968; L.run('omegaRescaleElements()');
+eq(L.S.elements[0].w + 'x' + L.S.elements[0].h, '32x34', 'and the rescale draws a saved charger at its kind\u2019s footprint (2.9 x 3.1 ft at zoom 22)');
+var geoBlock = ED.slice(ED.indexOf('<!-- ================= EAGER GEO-ANCHORING ================='));
+geoBlock = geoBlock.slice(0, geoBlock.indexOf('</script>'));
+ok(/addListener\(_gmap,'zoom_changed',function\(\)\{\s*try\{ if\(live\(\)\) stampAt\(drawnP\); \}catch\(e\)\{\}\s*drawnP = ppf\(\);/.test(geoBlock), 'OmegaGeo stamps what has no ground size at the scale it was drawn at, on zoom_changed, before taking the new one');
+ok(/'idle',function\(\)\{\s*lastIdle = Date\.now\(\);\s*drawnP = ppf\(\);/.test(geoBlock), 'and takes the scale of every settled view');
+ok(/stampAt\(p\);\s*\}/.test(block(geoBlock, '  function stampSizes(){')), 'the settled-view stamp is the same stamp');
+var stampAtFn = block(geoBlock, '  function stampAt(p){');
+ok(/if\(el\._geoLat==null \|\| owned\(el\)\) return;/.test(stampAtFn), 'it stamps only anchored elements the footprint does not own');
+var anch = ED.slice(ED.indexOf('<!-- ================= UNIFIED ANCHORING ================='));
+anch = anch.slice(0, anch.indexOf('</script>'));
+ok(/_elRenderSize\(o\)/.test(block(anch, '  function _elSz(o){')) && /var z=_elSz\(o\);/.test(block(anch, '  function _elAnchorPt(o){')) && /var z=_elSz\(o\); o\.x=x-z\.w\/2; o\.y=y-z\.h\/2;/.test(block(anch, '  function setAnchor(o, x, y){')),
+  'the anchor engine centres an element on its rendered size (_elRenderSize), as every stamper does: a BESS assembly is 0.55 w deep');
+ok(/w:r, rot:0, minW:14, minH:14 \}\);/.test(block(ED, 'function _l2Bollards(el, idx){')), 'a Level 2 bollard keeps the 14 px it is placed on');
+ok(/w:10, rot:0, minW:10, minH:10 \}\);/.test(block(ED, 'function _dcfcBollards(el){')), 'a DCFC pad bollard its 10 px');
+
+/* ═══ 6 · the orphan sweep, from the anchor pass ═════════════════════ */
+ok(ED.indexOf('__omegaGhost') < 0, 'no wrapper on the reprojection chain carries the sweep (standDown discarded it too)');
+eq((run.match(/omegaSweepGhostsSoon\(\)/g) || []).length, 1, 'the anchor engine\u2019s run() sweeps, once');
+var G = vm.createContext({ window: { performance: { now: function () { return G.__now; } } }, __now: 1000, __swept: 0, Date: Date,
+  omegaSweepGhosts: function (o) { G.__swept++; G.__quiet = o && o.quiet; return {}; } });
+vm.runInContext('var _ghostSweptAt = 0;\n' + block(ED, 'function omegaSweepGhostsSoon(){'), G);
+vm.runInContext('omegaSweepGhostsSoon(); __now = 1300; omegaSweepGhostsSoon();', G);
+eq(G.__swept, 1, 'twice inside 500 ms is one sweep (it reads the whole document)');
+vm.runInContext('__now = 1600; omegaSweepGhostsSoon();', G);
+eq(G.__swept, 2, 'and the next comes after');
+ok(G.__quiet === true, 'quietly, as the reprojection hook ran it');
 
 console.log('telementzoom: ' + pass + ' passed, ' + fail + ' failed');
 if (fail) process.exit(1);

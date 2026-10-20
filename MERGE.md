@@ -61,6 +61,45 @@ a frame; Prime's 2 ft marker, `primeFootprint: 'none'`, once #354 is in) and
 (a unit saved before `_evAdd` recorded one, a BESS assembly, a text note)
 is still OmegaGeo's, whose stamp has the same stale-zoom fault.
 
+## Gear with no footprint recorded on it, through a zoom (2026-10-20)
+
+The follow-up #363 left. What carries no footprint of its own is drawn from
+the pixels it was placed at, and three things got that wrong:
+- **OmegaGeo stamped at the wrong scale.** Its ground size (`_geoWFt`) is
+  pixels over a scale, taken 750 ms after an idle, so when the first map
+  move after placing something was a zoom it divided the old zoom's pixels
+  by the new zoom's scale: a BESS assembly placed at zoom 20 and first moved
+  by a zoom-in was recorded at half its size and never grew. OmegaGeo now
+  keeps the scale the drawing was last drawn at (`drawnP`, from every idle)
+  and, on `zoom_changed`, before anything resizes, stamps what is still
+  unstamped at it (`stampAt`, which the settled-view stamp also uses).
+- **The anchor engine centred on the wrong height.** `_elAnchorPt` and
+  `setAnchor` took `(h||w)`, so a BESS assembly, which carries no `h` and
+  draws `0.55 w` deep, was pulled `0.225 w` off its ground point on every
+  pass (90 px at 400 px, more at every zoom-in). They use `_elRenderSize`,
+  the one definition every stamper uses.
+- **Gear that knows its kind but recorded no footprint.** A guided-build unit
+  saved before `_evAdd` recorded `lf/wf` (2026-09-16) takes its kind's
+  `EV_FOOTPRINT` (a rated battery its rating's, `_bessFootprint`) on `_evAdd`'s
+  floors, so it draws as one placed today; never a unit with
+  `primeFootprint: 'none'`. An Insert item placed past Insert's `addEl` hook
+  (a charger's own bollards) takes `OmegaInsert.footprint`: `_elFootprintFt`
+  asked for a global `footprintOf` that never existed. The Level 2 and DCFC
+  build bollards record the floor they are placed on (14 / 10 px), so the
+  rescale no longer holds them at Insert's 22.
+Also, the orphan sweep (`omegaSweepGhosts`) was a one-shot wrapper on
+`window._geoReprojectAll` that `standDown()` discarded too; the anchor
+engine's `run()` calls it again (`omegaSweepGhostsSoon`, at most every
+500 ms; it reads the whole document). Held by `scripts/render-element-zoom.js`
+(a BESS assembly placed once OmegaGeo has armed and first moved by a zoom,
+a charger and a 2 MWh battery saved without footprints, an Insert charger's
+bollard, a Level 2 bollard, an orphan node; 3739 checks; it fails on #363
+alone at the assembly's 90 px offset, and without the pre-zoom stamp at 400
+where 800 px is due) and `scripts/tests/telementzoom.js`. Not changed:
+OmegaGeo still sizes on the map's idle rather than the zoom, and still holds
+what it sizes at 22 px; the single-BESS guided build still places an unrated
+10 x 5 ft unit whatever the rating.
+
 ## Grid Atlas built into Site Map: the Grid panel (2026-10-16)
 
 Tommy, of the FENECON demo flow: "that's how the Grid Atlas should work, and

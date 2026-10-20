@@ -66122,8 +66122,31 @@ function _elFootprintFt(el){
      footprint, over whatever the unit was placed with: one saved before
      setUnitFt also wrote lf/wf carries it only here. */
   if(+el.evFtL>0 && +el.evFtW>0){ lf=+el.evFtL; wf=+el.evFtW; }
-  if(!(lf>0) && typeof footprintOf==='function' && el.eqId){
-    try{ var f=footprintOf(el.eqId); if(f){ lf=+f.lf||0; wf=+f.wf||0; } }catch(e){}
+  /* An Insert item records its footprint as it lands (OmegaInsert's addEl
+     hook); one placed past that hook (a charger's own bollards) or before it
+     existed names only its kind, and Insert's table answers for it. (This
+     asked for a global footprintOf, which never existed: that table lives
+     inside OmegaInsert.) */
+  if(!(lf>0) && el.type==='eq' && el.eqId && typeof window!=='undefined' && window.OmegaInsert && typeof window.OmegaInsert.footprint==='function'){
+    try{ var f=window.OmegaInsert.footprint(el.eqId); if(f){ lf=+f.lf||0; wf=+f.wf||0; } }catch(e){}
+  }
+  /* A guided-build unit placed before _evAdd recorded its footprint
+     (2026-09-16) names only its kind: it takes that kind's footprint, a rated
+     battery's from its own rating (EV_FOOTPRINT keeps 10 x 5 ft for an
+     unrated one), on the floors _evAdd records, so it draws as one placed
+     today does. Never a unit whose maker released no footprint
+     (primeFootprint 'none'): that is a marker, not a 10 x 5 ft battery. */
+  if(!(lf>0) && el.type==='evgear' && el.evKind && el.primeFootprint!=='none' && typeof EV_FOOTPRINT!=='undefined'){
+    try{
+      var _kwh=+el.bessKwh||+el.bgbKwh||0, _kw=+el.bessKw||+el.bgbKw||0;
+      var _kf=(el.evKind==='bess' && (_kwh>0 || _kw>0) && typeof _bessFootprint==='function') ? _bessFootprint(_kwh, _kw) : EV_FOOTPRINT[el.evKind];
+      if(_kf && +_kf.lf>0){
+        lf=+_kf.lf; wf=(+_kf.wf>0)?+_kf.wf:lf*0.72;
+        var _sm=(lf<=4 && wf<=4);           /* _evAdd's floors: small kit 14 x 12, else 28 x 20 */
+        if(!(el.minW>0)) el.minW=Math.max(_sm?14:28, +(_kf.minW||0));
+        if(!(el.minH>0)) el.minH=Math.max(_sm?12:20, +(_kf.minH||0));
+      }
+    }catch(e){}
   }
   if(!(lf>0) && el._ppfAtPlace>0 && el.w>0){
     lf = el.w/el._ppfAtPlace;
@@ -66269,24 +66292,19 @@ window.omegaSweepGhosts = omegaSweepGhosts;
 
 /* Run it after reprojection -- the pass most likely to have drawn late --
    and once more a beat after load, when the async render paths have
-   settled. Wrapping keeps this independent of which anchoring generation
-   is live. */
-(function(){
-  var tries=0;
-  var iv=setInterval(function(){
-    if(++tries>200){ clearInterval(iv); return; }
-    var f=window._geoReprojectAll;
-    if(typeof f!=='function' || f.__omegaGhost) return;
-    clearInterval(iv);
-    var wrapped=function(){
-      var r=f.apply(this, arguments);
-      try{ omegaSweepGhosts({quiet:true}); }catch(e){}
-      return r;
-    };
-    wrapped.__omegaGhost=true;
-    window._geoReprojectAll=wrapped;
-  }, 60);
-})();
+   settled (the load does that itself). The anchor engine's run() calls
+   this on every pass, as it does the element rescale: the wrapper this
+   used to be on window._geoReprojectAll went when standDown() replaced
+   that chain, so it had not run after a reprojection since. It reads the
+   whole document, so at most once every 500 ms. */
+var _ghostSweptAt = 0;
+function omegaSweepGhostsSoon(){
+  var now = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+  if(_ghostSweptAt && now-_ghostSweptAt < 500) return null;
+  _ghostSweptAt = now;
+  return omegaSweepGhosts({ quiet:true });
+}
+window.omegaSweepGhostsSoon = omegaSweepGhostsSoon;
 
 /* ── BNZ panel ─────────────────────────────────────────────────────
    Opens on the selected shape. Rect (zone box) is the fast path;
@@ -67491,8 +67509,10 @@ function _l2Bollards(el, idx){
      readable on the printed sheet without pretending the post is bigger
      than it is. The pad hatch behind it still carries the real footprint. */
   var r=Math.max(14, Math.round((window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6))*0.5));
+  /* minW/minH: the zoom rescale keeps a symbol on the floor it was placed
+     with, and an Insert item records none (it would take Insert's 22 px) */
   addEl({ type:'eq', eqId:'bollard', label:'', spec:'',
-          x:Math.round(b.cx+b.hw+10-r/2), y:Math.round(b.cy-r/2), w:r, rot:0 });
+          x:Math.round(b.cx+b.hw+10-r/2), y:Math.round(b.cy-r/2), w:r, rot:0, minW:14, minH:14 });
 }
 window._l2Bollards=_l2Bollards;
 
@@ -67501,7 +67521,7 @@ function _dcfcBollards(el){
   if(!el) return; var b=_elBox(el); if(!b) return;
   var off=b.hw+8; var pts=[[-off,-off],[off,-off],[off,off],[-off,off]];
   for(var i=0;i<pts.length;i++){
-    addEl({ type:'eq', eqId:'bollard', label:'', spec:'', x:Math.round(b.cx+pts[i][0]-5), y:Math.round(b.cy+pts[i][1]-5), w:10, rot:0 });
+    addEl({ type:'eq', eqId:'bollard', label:'', spec:'', x:Math.round(b.cx+pts[i][0]-5), y:Math.round(b.cy+pts[i][1]-5), w:10, rot:0, minW:10, minH:10 });
   }
 }
 function _dcfcFinish(){
@@ -76372,7 +76392,7 @@ window._crmToastModal=_crmToastModal;
 
      Two rules: never before the project has finished loading, and never
      until the view has been still for a moment. */
-  var lastIdle = 0;
+  var lastIdle = 0, drawnP = null;           /* drawnP: the scale the drawing was last drawn at (hook()) */
   function settled(){ return lastIdle && (Date.now() - lastIdle) > 700; }
 
   function anchor(force){
@@ -76421,16 +76441,28 @@ window._crmToastModal=_crmToastModal;
       /* its footprint IS its ground size (the takeoff and the GeoJSON
          export read these), never pixels over a scale */
       var fp=owned(el);
-      if(fp){ el._geoWFt=fp.lf; el._geoHFt=fp.wf; return; }
+      if(fp){ el._geoWFt=fp.lf; el._geoHFt=fp.wf; }
+    });
+    stampAt(p);
+  }
+  /* Record the ground size of every anchored element that has none yet and no
+     footprint, from its pixels over p, which must be the scale those pixels
+     were DRAWN at. */
+  function stampAt(p){
+    var s=S_(); if(!s || !(p>0)) return 0;
+    var n=0;
+    (s.elements||[]).forEach(function(el){
+      if(el._geoLat==null || owned(el)) return;
       if(el._geoWFt==null && el.w>0){
         var wf = el.w/p;
-        if(wf >= 0.5 && wf <= 200) el._geoWFt = wf;
+        if(wf >= 0.5 && wf <= 200){ el._geoWFt = wf; n++; }
       }
       if(el._geoHFt==null && el.h>0){
         var hf = el.h/p;
         if(hf >= 0.5 && hf <= 200) el._geoHFt = hf;
       }
     });
+    return n;
   }
   function rescale(){
     var s=S_(), p=ppf(); if(!s||!p) return;
@@ -76574,8 +76606,23 @@ window._crmToastModal=_crmToastModal;
       if(_gmap.__omegaAnchorHooked) return true;
       /* Anchor BEFORE the view moves, while pixels still mean something. */
       google.maps.event.addListener(_gmap,'dragstart',function(){ anchor(true); });
+      /* And size before a ZOOM moves it. stampSizes() runs 750 ms after an
+         idle and divides by the scale of that moment, so when the first map
+         move after placing something was a zoom it divided the old zoom's
+         pixels by the new zoom's scale: a BESS assembly placed at zoom 20 and
+         first stamped after a zoom-out to 19 recorded twice its size and drew
+         twice its size from then on. zoom_changed arrives with the map at
+         the new zoom already, so drawnP keeps the scale of the view the
+         drawing was last at, and what is still unstamped is stamped at it
+         before anything resizes. */
+      drawnP = ppf();
+      google.maps.event.addListener(_gmap,'zoom_changed',function(){
+        try{ if(live()) stampAt(drawnP); }catch(e){}
+        drawnP = ppf();
+      });
       google.maps.event.addListener(_gmap,'idle',function(){
         lastIdle = Date.now();
+        drawnP = ppf();
         /* Debounced: only stamp if the view is still still. */
         setTimeout(function(){ anchor(); }, 750);
       });
@@ -80838,9 +80885,19 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
      screen for as long as the button is held.
 
      Use the same centre convention as everyone else and the delta is zero
-     when nothing has moved, which is what it was always supposed to be. */
+     when nothing has moved, which is what it was always supposed to be.
+
+     And the same SIZE: _elRenderSize, the one definition every stamper
+     uses. (h||w) took a BESS assembly, which carries no h and draws 0.55 w
+     tall, as a square, so each pass pulled it 0.225 w off the point it was
+     stamped at (90 px for a 400 px assembly), further at every zoom-in. */
+  function _elSz(o){
+    try{ if(typeof _elRenderSize==='function') return _elRenderSize(o); }catch(e){}
+    return { w:(o.w||60), h:(o.h||o.w||60) };
+  }
   function _elAnchorPt(o){
-    return { x:o.x + ((o.w||60)/2), y:o.y + ((o.h||o.w||60)/2), __xy:true };
+    var z=_elSz(o);
+    return { x:o.x + z.w/2, y:o.y + z.h/2, __xy:true };
   }
   function anchorOf(o){
     /* Callout: the label (anchor) is the primary reference point for the
@@ -80857,7 +80914,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     if(o.pts && o.pts.length && o.pts[0]){ /* pts move with the bulk shift */ }
     if(o.cx!=null && o.cy!=null){ o.cx=x; o.cy=y; return; }
     if(typeof o.x==='number' && typeof o.y==='number' && !(o.pts&&o.pts.length)){
-      o.x=x-((o.w||60)/2); o.y=y-((o.h||o.w||60)/2);
+      var z=_elSz(o); o.x=x-z.w/2; o.y=y-z.h/2;
     }
   }
 
@@ -81332,6 +81389,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
          each centre, once per frame. It was a wrapper on the chain that
          standDown() replaces, so until this pass called it, it never ran. */
       try{ if(typeof window.omegaRescaleElementsOnce==='function') window.omegaRescaleElementsOnce(); }catch(e){}
+      /* and nothing stays drawn that the model no longer has (ORPHAN SWEEP),
+         whose hook on that chain went the same way; at most every 500 ms */
+      try{ if(typeof window.omegaSweepGhostsSoon==='function') window.omegaSweepGhostsSoon(); }catch(e){}
       dedupeElements();
     } finally { busy=false; }
     return changed;
