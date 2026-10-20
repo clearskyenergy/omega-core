@@ -25,12 +25,17 @@
    protection. Set it required, or delete this file.
 
    ── EDITING THE ROSTER ───────────────────────────────────────────────────
-   Two lists below, and they are the whole configuration. Add a partner's
-   GitHub handle to PARTNERS with the prefixes they may touch. Add a ClearSky
+   The lists below are the whole configuration. Add a partner's GitHub
+   handle to PARTNERS with the prefixes they may touch. Add a ClearSky
    handle to CLEARSKY and they are unrestricted. Anyone in neither list is
    treated as an outside contributor: they may propose changes to a partner
    folder but nothing else, which is the right default for a repository that
    is public and proprietary at the same time.
+
+   An address a tool stamps for every tenant — a cloud agent's commit
+   email — goes in NEUTRAL_BOT_EMAILS. It grants nothing. The pull request's
+   opener stays the decision. Putting that address in CLEARSKY_GIT_EMAILS
+   would let a partner's agent commits pass for ClearSky.
 
    ── RUNNING IT LOCALLY ───────────────────────────────────────────────────
    Before you push, from a partner branch:
@@ -52,7 +57,10 @@ var CLEARSKY = [
    ClearSky-authored PR carries only ClearSky commits — see unrestricted().
    Anything not listed here scopes the PR instead of exempting it, so a new
    teammate shows up as a failing check and one line of maintenance rather
-   than as a silent hole. */
+   than as a silent hole.
+
+   Do not add an address a tool stamps for every tenant. That is
+   NEUTRAL_BOT_EMAILS, and it does not grant ClearSky. */
 var CLEARSKY_GIT_EMAILS = [
   'tom@clearsky-usa.com',
   'noreply@anthropic.com'
@@ -77,6 +85,49 @@ var CLEARSKY_GIT_EMAILS = [
    that exposed it was a merge (`git log --no-merges | grep -c` returned 0). */
 var COMMITTER_ONLY_EMAILS = [
   'noreply@github.com'
+];
+
+/* ── Identities that are neither ClearSky nor a partner ───────────────────
+   2026-10-17. Cursor's cloud agents commit as cursoragent@cursor.com, and
+   GitHub records the Cursor app as <id>+cursor[bot]@users.noreply.github.com.
+   Those addresses are the same whoever launched the agent. PRs #334 and #336
+   were opened by clearskyenergy and failed this gate on cursoragent@cursor.com,
+   then were merged over the check.
+
+   Putting the address in CLEARSKY_GIT_EMAILS would clear that failure and
+   open the hole this file exists to close. Partners hold repo-wide write, so
+   they can push onto a ClearSky-opened branch. Their agent commits under the
+   same email. A known ClearSky email on that commit would make the push
+   unrestricted.
+
+   Neutral means the address is skipped when the range is searched for an
+   unrecognised identity, and it never counts as ClearSky on its own. The
+   opener — github.event.pull_request.user.login, which GitHub authenticated —
+   is the decision. A partner-opened pull request stays inside that partner's
+   folder however the bot signs the commits.
+
+   Co-authored-by is the human claim the bot writes on its own commit. Cursor
+   adds `Co-authored-by: <login> <<login>@users.noreply.github.com>`. On a
+   commit AUTHORED by a neutral bot, a trailer this file does not recognise
+   is an unrecognised identity and scopes the pull request, so a partner's
+   agent commit pushed onto a ClearSky branch is still caught. A trailer that
+   names a ClearSky git email, or the GitHub noreply of a CLEARSKY handle, is
+   that person. A bot commit with no trailer defers to the opener.
+
+   The trailer is self-asserted, same as a git email. Forging
+   `Co-authored-by: clearskyenergy <…>` is the same class of impersonation as
+   authoring as tom@clearsky-usa.com, and CODEOWNERS review is still the
+   backstop for that. */
+var NEUTRAL_BOT_EMAILS = [
+  'cursoragent@cursor.com'
+];
+
+/* The GitHub-noreply form of those same tools. The numeric id is not part
+   of the identity. A login here is neutral; it is not a ClearSky handle and
+   it must not grow to cover a person. */
+var NEUTRAL_BOT_LOGINS = [
+  'cursor[bot]',
+  'cursoragent'
 ];
 
 /* ── JV partners, and the only paths their PRs may change. ─────────────────
@@ -135,25 +186,81 @@ function isClearSky(author) {
   return CLEARSKY.map(lower).indexOf(lower(author)) >= 0;
 }
 
-/* Every git identity that wrote or committed something in this range.
-   Both %ae and %ce, because a partner can push somebody else's commits. */
+/* GitHub's noreply address for a login: `login@users.noreply.github.com`
+   or `<id>+login@users.noreply.github.com`. The id is not the identity. */
+function noreplyLogin(email) {
+  var m = lower(email).match(/^(?:\d+\+)?([^@]+)@users\.noreply\.github\.com$/);
+  return m ? m[1] : '';
+}
+
+function isNeutralBot(email) {
+  email = lower(email);
+  if (NEUTRAL_BOT_EMAILS.map(lower).indexOf(email) >= 0) return true;
+  var login = noreplyLogin(email);
+  return !!login && NEUTRAL_BOT_LOGINS.map(lower).indexOf(login) >= 0;
+}
+
+/* A ClearSky handle's own GitHub noreply, as Cursor writes it on
+   Co-authored-by. This is not a recognised AUTHOR email — anyone can set
+   GIT_AUTHOR_EMAIL to it — so unrestricted() consults it only as a trailer
+   on a commit a neutral bot already authored. */
+function isClearSkyNoreply(email) {
+  var login = noreplyLogin(email);
+  return !!login && isClearSky(login);
+}
+
+/* `Co-authored-by: Name <email>` lines, in order, deduped. */
+function coAuthorEmails(message) {
+  var found = [];
+  String(message || '').split(/\r?\n/).forEach(function (line) {
+    var m = line.match(/^\s*co-authored-by:\s+.*<([^>]+)>\s*$/i);
+    if (!m) return;
+    var email = lower(m[1].trim());
+    if (email && found.indexOf(email) < 0) found.push(email);
+  });
+  return found;
+}
+
+function dedupe(list) {
+  var seen = {}, out = [];
+  list.forEach(function (e) {
+    e = lower(String(e || '').trim());
+    if (e && !seen[e]) { seen[e] = 1; out.push(e); }
+  });
+  return out;
+}
+
 /* Authors and committers are collected SEPARATELY, because they are
    different claims. An author wrote the content; a committer only says who
    applied it, and on a merge made through GitHub's UI that is GitHub itself.
    Merging the two lists — which this did until 2026-09-20 — meant an
-   ordinary `git merge main` could fail the gate on a name nobody typed. */
+   ordinary `git merge main` could fail the gate on a name nobody typed.
+
+   The body rides along so a neutral bot's Co-authored-by can be read.
+   One log, not three: the body is what makes a second pass a different
+   parse. Records are separated by \x1e and fields by \x1f, neither of which
+   belongs in a commit message. */
 function rangeIdentities(base, head) {
   var range = head ? (base + '..' + head) : (base + '..HEAD');
-  function field(fmt) {
-    var out = cp.execSync('git log --format=' + fmt + ' ' + range, { encoding: 'utf8' });
-    var seen = {}, list = [];
-    out.split('\n').forEach(function (e) {
-      e = lower(e.trim());
-      if (e && !seen[e]) { seen[e] = 1; list.push(e); }
+  var out = cp.execSync('git log --format=%x1e%ae%x1f%ce%x1f%B%x1e ' + range, { encoding: 'utf8' });
+  var records = [];
+  out.split('\x1e').forEach(function (chunk) {
+    var parts = chunk.split('\x1f');
+    if (parts.length < 3) return;
+    var author = lower(parts[0].trim());
+    var committer = lower(parts[1].trim());
+    if (!author && !committer) return;
+    records.push({
+      author: author,
+      committer: committer,
+      body: parts.slice(2).join('\x1f')
     });
-    return list;
-  }
-  return { authors: field('%ae'), committers: field('%ce') };
+  });
+  return {
+    authors: dedupe(records.map(function (r) { return r.author; })),
+    committers: dedupe(records.map(function (r) { return r.committer; })),
+    records: records
+  };
 }
 
 /* Unrestricted requires BOTH that a ClearSky handle opened the pull request
@@ -165,6 +272,11 @@ function rangeIdentities(base, head) {
    person who pushed the commits after. Partners hold repo-wide write (that is
    the whole reason this file exists), so pushing onto a ClearSky-authored
    branch skipped the check without the diff ever being read.
+
+   A neutral bot is not an identity either way. It does not satisfy this
+   function by itself, and it does not fail it. The opener already did.
+   What can still fail it is a Co-authored-by on that bot's commit naming
+   somebody this file does not know — a partner's agent, pushed here.
 
    Fails safe: an identity not on the list is treated as untrusted, which
    scopes the PR rather than exempting it. A git identity is self-asserted, so
@@ -178,13 +290,39 @@ function unrestricted(author, base, head) {
   /* A committer may additionally be one of the identities that only ever
      applies somebody else's work — see COMMITTER_ONLY_EMAILS. An AUTHOR is
      held to the stricter list, so the exemption cannot be used to smuggle
-     content in under GitHub's name. */
+     content in under GitHub's name. A neutral bot is neither: see
+     NEUTRAL_BOT_EMAILS. */
   var knownCommitters = known.concat(COMMITTER_ONLY_EMAILS.map(lower));
 
-  var unknownAuthors = ids.authors.filter(function (e) { return known.indexOf(e) < 0; });
-  var unknownCommitters = ids.committers.filter(function (e) { return knownCommitters.indexOf(e) < 0; });
+  function recognisedAuthor(email) {
+    return isNeutralBot(email) || known.indexOf(email) >= 0;
+  }
+  function recognisedCommitter(email) {
+    return isNeutralBot(email) || knownCommitters.indexOf(email) >= 0;
+  }
+
+  var unknownAuthors = ids.authors.filter(function (e) { return !recognisedAuthor(e); });
+  var unknownCommitters = ids.committers.filter(function (e) { return !recognisedCommitter(e); });
+
+  /* Trailers are read only where a neutral bot AUTHORED the commit. A
+     ClearSky author who names a colleague in a trailer is the existing
+     rule: the author email is the claim. A bot has no claim of its own,
+     so the trailer is the claim. */
+  var trailerUnknown = [];
+  ids.records.forEach(function (r) {
+    if (!isNeutralBot(r.author)) return;
+    coAuthorEmails(r.body).forEach(function (e) {
+      if (isNeutralBot(e)) return;
+      if (known.indexOf(e) >= 0) return;
+      if (isClearSkyNoreply(e)) return;
+      if (trailerUnknown.indexOf(e) < 0) trailerUnknown.push(e);
+    });
+  });
+
   var unknown = unknownAuthors.concat(unknownCommitters.filter(function (e) {
     return unknownAuthors.indexOf(e) < 0;
+  })).concat(trailerUnknown.filter(function (e) {
+    return unknownAuthors.indexOf(e) < 0 && unknownCommitters.indexOf(e) < 0;
   }));
 
   if (!unknown.length) return true;
@@ -192,9 +330,12 @@ function unrestricted(author, base, head) {
   console.log('this file does not recognise, so the scope check applies:');
   unknownAuthors.forEach(function (e) { console.log('  ' + e + '  (author)'); });
   unknownCommitters.forEach(function (e) { console.log('  ' + e + '  (committer)'); });
+  trailerUnknown.forEach(function (e) { console.log('  ' + e + '  (co-author)'); });
   console.log('If these are ClearSky, add them to CLEARSKY_GIT_EMAILS — or, for');
-  console.log('an identity that only ever applies other people’s commits,');
-  console.log('COMMITTER_ONLY_EMAILS.');
+  console.log('an identity that only ever applies other people\'s commits,');
+  console.log('COMMITTER_ONLY_EMAILS. A tool address shared by every tenant');
+  console.log('goes in NEUTRAL_BOT_EMAILS, which does not grant ClearSky —');
+  console.log('the pull request\'s opener stays the decision.');
   console.log('');
   return false;
 }
@@ -235,7 +376,7 @@ function main() {
   }
 
   if (unrestricted(author, base, head)) {
-    console.log('ClearSky author (' + author + '), ClearSky commits — unrestricted.');
+    console.log('ClearSky author (' + author + '), no unrecognised identity — unrestricted.');
     process.exit(0);
   }
 

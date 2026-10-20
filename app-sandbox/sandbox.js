@@ -608,6 +608,9 @@ module.exports = { FIELDS: FIELDS, FREIGHT_CLASSES: FREIGHT_CLASSES, LIMITS: LIM
                                              interconnection details
      storefront/config.products[].coverage  templates per SKU; warrantyYears
                                              is the default template
+     plant_units/{…}.custody.makerWarranty  the maker's warranty the office
+                                             recorded on a BOUGHT-IN unit:
+                                             one more template, never public
    Pure: no Firestore, no clock except the `now` handed in. */
 'use strict';
 var A = require('api/_lib/admin.js');
@@ -798,13 +801,32 @@ function state(unit, value, body, by, now, method) {
    Templates come off the catalog product; the product's warrantyYears is
    the default template when it carries none. A unit's coverage is DERIVED
    from its custody dates every time it is read, never stored, so a
-   corrected commissioning date corrects the warranty with it. */
+   corrected commissioning date corrects the warranty with it.
+   A unit the workspace buys in from its maker has no catalog product (it
+   is not published); the maker's warranty the office recorded on the unit
+   (makerWarranty() below) is one more template here, after the catalog's,
+   so every reader that hands the unit in — the passport, the register,
+   exceptions, the customer's app, Omega Teleios — sees the same warranty. */
 var TRIGGERS = ['ship', 'delivery', 'commissioning', 'earliest_of'];
-function templatesOf(product) {
+var MAKER_ID = 'maker';
+function templatesOf(product, unit) {
   product = product || {};
   var list = Array.isArray(product.coverage) ? product.coverage.filter(function (t) { return t && t.id; }) : [];
   if (!list.length && Number(product.warrantyYears) > 0) list = [{ id: 'warranty', type: 'warranty', provider: 'oem', termMonths: Math.round(Number(product.warrantyYears) * 12), trigger: 'ship', capMonths: null, metrics: null, docUrl: '' }];
+  var mk = unit ? makerTemplate(unit) : null;
+  if (mk && !list.some(function (t) { return t.id === MAKER_ID; })) list = list.concat([mk]);
   return list;
+}
+/* the recorded maker's warranty as a template: read back through the same
+   limits template() wrote it under, so a record that does not hold them is
+   no warranty rather than a wrong date */
+function makerTemplate(unit) {
+  var m = custodyOf(unit).makerWarranty;
+  if (!m || typeof m !== 'object') return null;
+  var term = Number(m.termMonths), cap = m.capMonths == null ? null : Number(m.capMonths);
+  if (!Number.isInteger(term) || term < 1 || term > 600 || TRIGGERS.indexOf(m.trigger) < 0) return null;
+  if (m.trigger === 'earliest_of' && !(Number.isInteger(cap) && cap > 0)) return null;
+  return { id: MAKER_ID, type: 'warranty', provider: clean(m.provider, 80) || 'maker', termMonths: term, trigger: m.trigger, capMonths: m.trigger === 'earliest_of' ? cap : null, metrics: null, docUrl: clean(m.docUrl, 600) };
 }
 function template(t) {
   t = t || {};
@@ -830,7 +852,7 @@ function startOf(t, c, shippedFallback) {
 }
 function coverageOf(product, unit, now, shippedFallback) {
   var c = custodyOf(unit), today = String(now).slice(0, 10);
-  return templatesOf(product).map(function (t) {
+  return templatesOf(product, unit).map(function (t) {
     var start = c.status === 'replaced' ? null : startOf(t, c, shippedFallback), end = start ? addMonths(start, t.termMonths) : null, status;
     var why = null;
     if (c.status === 'replaced') status = 'transferred';
@@ -852,6 +874,75 @@ function coverageWithInheritance(product, unit, now, shippedFallback) {
   if (!inh.length) return own;
   var today = String(now).slice(0, 10);
   return own.map(function (cv) { var h = inh.filter(function (x) { return x.templateId === cv.templateId; })[0]; if (!h) return cv; return Object.assign({}, cv, { startDate: h.startDate, endDate: h.endDate, status: !c.siteId ? 'pending' : (today > h.endDate ? 'expired' : 'active'), why: !c.siteId ? 'no site assigned' : null, inheritedFrom: h.inheritedFrom }); });
+}
+
+/* ── the maker's warranty on a bought-in unit ──────────────────────────
+   A unit the workspace buys from its maker — its order's procure names the
+   SKU, as Omega Prime writes it (api/_lib/prime-order.js) — has no catalog
+   template, and publishing the product to give it one would put it on the
+   public storefront. The office records what the MAKER warrants instead,
+   on the unit, with where it came from: the maker's warranty document or
+   the maker's confirmation (Clean Cell, for one, confirms its warranty per
+   project), never a bare claim. Terms and provenance only: templatesOf()
+   reads them as one more template and coverageOf() derives the status.
+
+   boughtIn(order, sku) is the ONE test of "bought in" (api/_lib/teleios.js
+   asks it too), prime-order's own: procure names the SKU. A { reference:
+   true } line alone is a product the seller makes and has not published (a
+   maker's own unit), never bought in; its warranty belongs on its catalog. */
+function boughtIn(order, sku) {
+  var s = clean(sku, 100); if (!order || typeof order !== 'object' || !s) return null;
+  var pr = order.procure && typeof order.procure === 'object' && clean(order.procure.sku, 100) === s ? order.procure : null;
+  if (!pr) return null;
+  var line = (Array.isArray(order.items) ? order.items : []).filter(function (it) { return it && it.reference === true && clean(it.sku, 100) === s; })[0] || null;
+  return { sku: s, mfr: clean(pr.mfr, 80) || clean(line && line.mfr, 80), model: clean(pr.model, 200) };
+}
+/* a unit is bought in when its own order buys its SKU in, or — a
+   replacement under RMA, often stock off another order — when the order of
+   the unit it replaces (custody.replaces) does: what the passport and the
+   door ask, so the unit Omega Teleios names can always take the record */
+function boughtInUnit(unit, order, replacedOrder) {
+  var sku = unit && unit.sku;
+  return boughtIn(order, sku) || (custodyOf(unit).replaces ? boughtIn(replacedOrder, sku) : null);
+}
+var TRIGGER_WORDS = { ship: 'shipment', delivery: 'delivery', commissioning: 'commissioning', earliest_of: 'commissioning or shipment plus the cap, whichever is first' };
+var MAKER_KEYS = ['provider', 'termMonths', 'trigger', 'capMonths', 'docUrl', 'reference'];
+function makerWords(m) { return m.provider + ': ' + m.termMonths + ' months from ' + (TRIGGER_WORDS[m.trigger] || m.trigger) + (m.trigger === 'earliest_of' ? ' (' + m.capMonths + ' months)' : '') + (m.reference ? ' · ' + m.reference : '') + (m.docUrl ? ' · document on file' : ''); }
+/* record, correct or clear (body.clear + a reason) the maker's warranty on
+   one unit. `bought` is boughtIn() for the unit's order; a unit that already
+   carries a record (a replacement took its original's) may be corrected or
+   cleared without one. Returns { patch, event, before, after } or
+   { duplicate } when nothing would change. */
+function makerWarranty(unit, body, by, now, bought) {
+  var c = custodyOf(unit), b = body || {}, had = c.makerWarranty && typeof c.makerWarranty === 'object' ? c.makerWarranty : null;
+  if (!unit || !unit.shipUnit) throw fail(400, 'Only a shipping unit carries a warranty; a component travels with its assembly');
+  if (unit.inventoryStatus === 'void') throw fail(409, 'That serial was voided at registration (a typo the plant corrected); use the real serial');
+  if (!bought && !had) throw fail(409, 'A maker’s warranty is recorded only for a unit its order buys in from the maker. A product this workspace makes or publishes carries its warranty on the catalog product (Coverage templates).');
+  if (c.status === 'replaced') throw fail(409, 'This unit was replaced by ' + (c.replacedBy || 'another unit') + ' and its warranty went with it: record the maker’s warranty on ' + (c.replacedBy || 'the replacement'));
+  if (b.clear === true) {
+    if (!had) return { duplicate: true, patch: {}, event: null, before: null, after: null };
+    var why = clean(b.reason, 500); if (why.length < 5) throw fail(400, 'Say why the maker’s warranty comes off this unit (5 characters or more)');
+    return { patch: { 'custody.makerWarranty': null, 'custody.updatedAt': now, 'custody.updatedBy': by },
+      event: { type: 'maker-warranty-removed', from: c.status, to: c.status, by: by, at: now, method: 'manual', note: why }, before: had, after: null };
+  }
+  var provider = clean(bought && bought.mfr, 80) || clean(had && had.provider, 80) || clean(b.provider, 80);
+  if (!provider) throw fail(400, 'Name the maker that gives the warranty');
+  var t = template({ id: MAKER_ID, type: 'warranty', provider: provider, termMonths: Number(b.termMonths), trigger: b.trigger, capMonths: b.capMonths, docUrl: b.docUrl });
+  var reference = clean(b.reference, 300);
+  if (!t.docUrl && reference.length < 5) throw fail(400, 'Add the maker’s warranty document (an HTTPS link) or the maker’s confirmation (its number, or who confirmed it and when; 5 characters or more): a warranty goes on file from the maker’s word, never assumed');
+  var rec = { provider: provider, termMonths: t.termMonths, trigger: t.trigger, capMonths: t.trigger === 'earliest_of' ? t.capMonths : null, docUrl: t.docUrl, reference: reference,
+    recordedBy: by, recordedAt: now, orderId: (unit.orderId != null ? String(unit.orderId) : '') || (had && had.orderId) || null };
+  if (had && MAKER_KEYS.every(function (k) { return String(had[k] == null ? '' : had[k]) === String(rec[k] == null ? '' : rec[k]); })) return { duplicate: true, patch: {}, event: null, before: had, after: had };
+  return { patch: { 'custody.makerWarranty': rec, 'custody.updatedAt': now, 'custody.updatedBy': by },
+    event: { type: had ? 'maker-warranty-corrected' : 'maker-warranty', from: c.status, to: c.status, by: by, at: now, method: 'manual', note: makerWords(rec).slice(0, 500) }, before: had, after: rec };
+}
+/* what the office is told after a record or a removal over one or more units */
+function makerSay(applied, unchanged, skipped, off) {
+  var n = (applied || []).length, same = (unchanged || []).length, sk = skipped || [];
+  var say = n ? 'The maker’s warranty is ' + (off ? 'off ' : 'on file for ') + n + ' unit' + (n === 1 ? '' : 's') : (off ? 'No maker’s warranty was on file to take off' : 'Already on file with these terms');
+  if (n && same) say += '; ' + same + ' already ' + (off ? 'had none' : 'had it');
+  if (sk.length) say += '; ' + sk.length + ' left out (' + sk[0].serial + ': ' + sk[0].why + ')';
+  return say + '.';
 }
 
 /* ── exceptions: the gaps that lose warranty claims ────────────────────── */
@@ -1492,6 +1583,7 @@ function planResult(pl, applied, skipped) {
 module.exports = { STATUSES: STATUSES, STATES: STATES, MOVES: MOVES, LABELS: LABELS, TRIGGERS: TRIGGERS, COLUMNS: COLUMNS, TEMPLATE_HEADERS: TEMPLATE_HEADERS, MAX_ROWS: MAX_ROWS,
   custodyOf: custodyOf, label: label, serial: serial, day: day, judge: judge, apply: apply, state: state, destination: destination, confirm: confirm, confirmation: confirmation, detail: detail, DETAIL_FIELDS: DETAIL_FIELDS, REGISTER_COLUMNS: REGISTER_COLUMNS, registerRow: registerRow,
   templatesOf: templatesOf, template: template, coverageOf: coverageOf, coverageWithInheritance: coverageWithInheritance, inherited: inherited, addMonths: addMonths,
+  MAKER_ID: MAKER_ID, makerTemplate: makerTemplate, boughtIn: boughtIn, boughtInUnit: boughtInUnit, makerWarranty: makerWarranty, makerWords: makerWords, makerSay: makerSay,
   exceptions: exceptions, reconcile: reconcile, csvTemplate: csvTemplate, csvRows: csvRows, parseCsv: parseCsv, guessMapping: guessMapping, mapRow: mapRow, plan: plan, siteKey: siteKey, site: site, siteId: siteId,
   MAX_SITE_ROWS: MAX_SITE_ROWS, MAX_PLAN_UNITS: MAX_PLAN_UNITS, MAX_SITE_TEXT: MAX_SITE_TEXT, MAX_SITE_LINE: MAX_SITE_LINE, US_STATES: US_STATES, stateCode: stateCode, addressKey: addressKey, samePlace: samePlace, naturalCompare: naturalCompare, oneLine: oneLine, splitAddress: splitAddress, checkSiteRow: checkSiteRow,
   trimEnd: trimEnd, unitTail: unitTail, unText: unText, parseSiteList: parseSiteList, matchSites: matchSites, sitesPreview: sitesPreview, toLocate: toLocate, withGeo: withGeo, siteListInputs: siteListInputs, placeSites: placeSites,
@@ -2822,7 +2914,173 @@ function finance(orders, owner) {
   return f;
 }
 
-module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, billingOf: billingOf, officeAdmin: officeAdmin, access: access, actions: actions, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars };
+/* ── THE PATH (2026-10-17, Tommy: "make it less complicated all streamlined
+   just like we did with" Omega Prime) ─────────────────────────────────────
+   One bar of seven steps an order walks in one direction, the way Prime
+   walks a site: Price → Deposit → Build → Final payment → Ship → Deliver →
+   On site, then Complete. path() says, per order and for the person
+   looking, which step it is on, the verdict in one sentence, and the ONE
+   next action with whose it is. The desktop office, the Omega Logic app
+   and Today all read it; none of them works it out again.
+
+   It is built on the rules above and on nothing new: stageOf()/actions()
+   (D1: who prices and accepts), billingOf() (who issues an invoice), the
+   order's invoices (issue versus collect), its delivery legs, and the
+   custody of its units (custodyCounts below). It decides nothing a gate
+   decides: every button it names is still refused by its own endpoint when
+   the caller may not press it. `who` is said from the viewer's side:
+     you       the person looking may do it now (Today counts it)
+     admin     the workspace's owner or an administrator
+     clearsky  ClearSky (an order billed through its QuickBooks, a
+               single shipment, an exception only ClearSky reviews)
+     customer  the customer (a payment, the site of a unit)
+     plant     the plant floor
+     carrier   the load is on the road
+     auto      Omega Logic does it by itself (a queued invoice, a release)
+   `control` names the thing to press, which each screen maps to its own
+   button: price, accept, issue-deposit, record-deposit, issue-balance,
+   record-balance, work-order, freight, ship, deliver, confirm, site, fix.
+   "On site" is every shipping unit bound to a site (custody.siteId): the
+   coverage binds there, and it is what Omega Prime's last stage reads as
+   delivered and on its site. Confirming what a customer declared is the
+   office's check and never holds the order back from Complete. */
+var PATH = [
+  { key: 'price', label: 'Price', ask: 'What will the customer pay?' },
+  { key: 'deposit', label: 'Deposit', ask: 'Has the deposit arrived?' },
+  { key: 'build', label: 'Build', ask: 'Is every unit built and tested?' },
+  { key: 'final', label: 'Final payment', ask: 'Is it paid in full?' },
+  { key: 'ship', label: 'Ship', ask: 'Is it on a truck?' },
+  { key: 'deliver', label: 'Deliver', ask: 'Did it arrive whole?' },
+  { key: 'site', label: 'On site', ask: 'Is every unit on its site?' }
+];
+var STEP_AT = {}; PATH.forEach(function (p, i) { STEP_AT[p.key] = i; });
+/* custody statuses (api/_lib/custody.js STATUSES) past the road, and past
+   the receiving inspection; scripts/test-office-stage.js holds them to it */
+var ARRIVED = ['delivered', 'received', 'assigned', 'installed', 'commissioned', 'in_service', 'rma_open', 'returned', 'replaced', 'decommissioned'];
+var RECEIVED = ARRIVED.slice(1);
+/* What the custody of one order's units says, for path(): `units` are the
+   order's plant_units records (only shipping units count). */
+function custodyCounts(units) {
+  var c = { units: 0, left: 0, arrived: 0, received: 0, bound: 0, declared: 0 };
+  (Array.isArray(units) ? units : []).forEach(function (u) {
+    if (!u || !u.shipUnit) return;
+    var cu = (u.custody && typeof u.custody === 'object') ? u.custody : {}, st = text(cu.status, 40);
+    c.units++;
+    if (st) c.left++;
+    if (ARRIVED.indexOf(st) >= 0) c.arrived++;
+    if (RECEIVED.indexOf(st) >= 0) c.received++;
+    /* declared: on a site nobody at the office has confirmed (custody.confirmation) */
+    if (cu.siteId) { c.bound++; if (!cu.confirmedAt) c.declared++; }
+  });
+  return c;
+}
+function invState(inv, mode) {
+  inv = inv || {};
+  var amount = Number(inv.amountCents) || 0, paid = Number(inv.paidCents) || 0;
+  var done = !amount || inv.satisfied === true || inv.status === 'not_required' || inv.status === 'paid';
+  return { amount: amount, paid: paid, done: done, toIssue: !done && mode === 'tenant' && !inv.id };
+}
+function sentence(v) { v = text(v, 240); return !v || /[.!?]$/.test(v) ? v : v + '.'; }
+function path(o, acc, billing, units) {
+  o = o || {}; acc = acc || {};
+  var act = actions(o, acc, billing), st = act.stage, l = o.logic || null, inv = (l && l.invoices) || {}, mode = billingOf(o, billing);
+  var status = text(o.status, 40), office = acc.clearsky === true || acc.admin === true;
+  var mine = office ? 'you' : 'admin', cs = acc.clearsky === true ? 'you' : 'clearsky';
+  var legs = o.delivery && Array.isArray(o.delivery.legs) ? o.delivery.legs : [];
+  var moving = legs.filter(function (g) { return g && ['in_transit', 'delivered', 'accepted', 'exception'].indexOf(g.status) >= 0; });
+  /* no shipping unit found for the order (none read, or older units that do
+     not carry its id) is "not known", never "nothing to deliver" */
+  var u = units && typeof units === 'object' && Number(units.units) > 0 ? units : null;
+  function out(step, state, say, next) {
+    var at = step === 'complete' ? PATH.length : (STEP_AT[step] == null ? null : STEP_AT[step]);
+    return { step: step, at: at, of: PATH.length, label: step === 'complete' ? 'Complete' : (at == null ? '' : PATH[at].label), state: state, say: say,
+      next: next ? { text: next[0], who: next[1] || null, control: next[2] || null } : null };
+  }
+  /* where it stands with nothing in the way: the step under an exception */
+  function under() {
+    if (status === 'complete') return 'complete';
+    if (status === 'shipped' || moving.length) return 'deliver';
+    if (!l || !l.acceptedAt) return 'price';
+    if (!l.releasedAt) return (inv.deposit && invState(inv.deposit, mode).done) || l.creditRelease ? 'build' : 'deposit';
+    if (!inv.balance) return 'build';
+    return invState(inv.balance, mode).done ? 'ship' : 'final';
+  }
+  if (status === 'cancelled') return out(null, 'cancelled', 'Cancelled. ' + sentence(st.next), st.owner ? ['Review the refund and the stock', cs, 'fix'] : null);
+  if (st.key === 'exception') {
+    /* a payment hold the workspace put on its own self-billed order is lifted
+       by recording the payment again (receivables.recordPlan); every other
+       exception is ClearSky's to review, as the stage says */
+    var hold = l && l.paymentHold && mode === 'tenant';
+    return out(under(), 'attention', sentence(st.next.indexOf(st.label) === 0 ? st.next : st.label + ': ' + st.next),
+      hold ? ['Record the ' + (l.paymentHold.stage === 'balance' ? 'final payment' : 'deposit') + ' again, or release it on its PO', mine, 'record-' + (l.paymentHold.stage === 'balance' ? 'balance' : 'deposit')] : ['Review and resolve it', cs, 'fix']);
+  }
+  if (status === 'complete') return out('complete', 'complete', 'Complete.', null);
+  var total = l && l.commercial ? l.commercial.totalCents : null;
+  if (st.key === 'quote') {
+    var pw = act.can.price ? 'you' : act.waitingOn === 'admin' ? 'admin' : 'clearsky';
+    return out('price', 'ok', 'Not priced yet.', ['Approve the customer price', pw, 'price']);
+  }
+  if (st.key === 'priced') {
+    var aw = act.can.accept ? 'you' : act.waitingOn === 'admin' ? 'admin' : 'clearsky';
+    return out('price', 'ok', 'Priced' + (total != null ? ' at ' + dollars(total) : '') + ', not accepted yet.', ['Accept the order', aw, 'accept']);
+  }
+  var dep = invState(inv.deposit, mode), open = creditOpen(o);
+  function collect(which, s) {
+    var name = which === 'deposit' ? 'deposit' : 'final payment';
+    if (s.toIssue) return [which === 'deposit' ? 'Issue the deposit invoice' : 'Issue the final invoice', mine, 'issue-' + which];
+    return mode === 'tenant' ? ['Record the ' + name + ' when it arrives', 'customer', 'record-' + which] : ['ClearSky’s QuickBooks records the ' + name + ' when it is paid', 'customer', null];
+  }
+  if (st.key === 'deposit') {
+    if (!inv.deposit) return out('deposit', 'ok', 'Accepted. The deposit invoice is being made.', ['The deposit invoice is being made', 'auto', null]);
+    if (dep.toIssue) return out('deposit', 'ok', 'The deposit, ' + dollars(dep.amount) + ', is not invoiced yet.', collect('deposit', dep));
+    return out('deposit', 'ok', 'Awaiting the deposit: ' + dollars(dep.paid) + ' of ' + dollars(dep.amount) + ' received.', collect('deposit', dep));
+  }
+  if (st.key === 'release') return out('build', 'ok', sentence(st.next), ['Releasing to the plant', 'auto', null]);
+  if (st.key === 'production') {
+    if (open) return out('build', 'ok', 'In production. ' + sentence(st.next), collect('deposit', dep));
+    return out('build', 'ok', 'In production.', ['Building and testing every unit', 'plant', 'work-order']);
+  }
+  var bal = invState(inv.balance, mode);
+  if (st.key === 'balance' && !bal.done) {
+    if (bal.toIssue) return out('final', 'ok', 'Every unit passed. The final invoice, ' + dollars(bal.amount) + ', is not issued yet.', collect('balance', bal));
+    return out('final', 'ok', 'Awaiting the final payment: ' + dollars(bal.paid) + ' of ' + dollars(bal.amount) + ' received.', collect('balance', bal));
+  }
+  if (open) return out('final', 'ok', sentence(st.next), collect('deposit', dep));
+  /* paid in full (a $0 balance is paid): ship, then the road, then the site */
+  if (status !== 'shipped' && !moving.length) {
+    if (o.delivery) return out('ship', 'ok', 'Paid in full. Ready to ship.', ['Plan the freight and record the pickup', mine, 'freight']);
+    return out('ship', 'ok', 'Paid in full. Ready to ship.', ['Record the shipment', cs, 'ship']);
+  }
+  if (legs.some(function (g) { return g && g.status === 'exception'; })) return out('deliver', 'attention', 'The receiving inspection found a problem on a load.', ['Open the load and settle what was short or damaged', mine, 'deliver']);
+  if (!u) return out('deliver', 'ok', 'Shipped' + (o.shipment && o.shipment.carrier ? ' with ' + text(o.shipment.carrier, 80) : '') + '.', ['Follow its units in Sites & custody', null, 'site']);
+  /* part of the order is still at the plant: the rest of it ships first */
+  if (u.left < u.units) return out('deliver', 'ok', u.left + ' of ' + u.units + ' units shipped' + (u.arrived ? ', ' + u.arrived + ' delivered' : '') + '.',
+    o.delivery ? ['Record the pickup for the ' + (u.units - u.left) + ' still at the plant', mine, 'freight'] : ['Record the shipment', cs, 'ship']);
+  if (u.received < u.units) {
+    if (u.arrived > u.received) return out('deliver', 'ok', u.arrived + ' of ' + u.units + ' units delivered, ' + u.received + ' received.', ['Record the receiving inspection', mine, 'deliver']);
+    return out('deliver', 'ok', (u.units - u.arrived) + ' of ' + u.units + ' units on the way.', ['Record the delivery when it arrives', 'carrier', 'deliver']);
+  }
+  var confirm = u.declared ? ['Confirm the site' + (u.declared === 1 ? '' : 's') + ' the customer named', mine, 'confirm'] : null;
+  if (u.bound < u.units) return out('site', 'ok', u.bound + ' of ' + u.units + ' units on a site.', confirm || ['Waiting on the customer to name each unit’s site', 'customer', 'site']);
+  return out('complete', 'complete', 'Complete. Every unit is on its site.', confirm);
+}
+/* the bar's counts: how many of the shown orders stand on each step (an
+   order that needs attention counts on its step AND under attention) */
+function pipeline(orders) {
+  var p = { attention: 0, complete: 0, cancelled: 0 };
+  PATH.forEach(function (s) { p[s.key] = 0; });
+  (Array.isArray(orders) ? orders : []).forEach(function (o) {
+    var x = o && o.path; if (!x) return;
+    if (x.state === 'cancelled') { p.cancelled++; return; }
+    if (x.state === 'complete') { p.complete++; return; }
+    if (x.step && p[x.step] != null) p[x.step]++;
+    if (x.state === 'attention') p.attention++;
+  });
+  return p;
+}
+
+module.exports = { STAGES: STAGES, ORDER: ORDER, stageOf: stageOf, billingOf: billingOf, officeAdmin: officeAdmin, access: access, actions: actions, creditOpen: creditOpen, totals: totals, finance: finance, dollars: dollars,
+  PATH: PATH, path: path, custodyCounts: custodyCounts, pipeline: pipeline };
 
   };
   defs['api/_lib/plant-release.js'] = function (module, exports, require) {
@@ -5553,7 +5811,10 @@ function views(state) {
   function officeJson(opts) {
     opts = opts || {};
     var billing = opts.billing === 'quickbooks' ? 'quickbooks' : 'tenant', who = S.access(false, { role: opts.role || 'admin', status: 'active' }, true);
+    /* the path (office-stage.path), with the custody of its units for an order past Ship, as api/logic-office.js reads them */
+    var far = function (o) { var k = S.stageOf(o, { billing: billing }).key; return k === 'ship' || k === 'shipped' || (o.delivery && (o.delivery.legs || []).some(function (g) { return g && g.status && g.status !== 'planned'; })); };
     var orders = state.orders.map(function (o) { var a = S.actions(o, who, billing); return Object.assign({}, o, { stage: a.stage, can: a.can, waitingOn: a.waitingOn, billing: S.billingOf(o, billing), poNumber: R.poOf(o),
+      path: S.path(o, who, billing, far(o) ? S.custodyCounts(state.units.filter(function (u) { return u.orderId === o.id; })) : null),
       logic: o.logic ? Object.assign({}, o.logic, { pricedAt: o.logic.pricedAt || o.logic.createdAt || null, pricedBy: o.logic.pricedBy || null, acceptedBy: o.logic.acceptedBy || null }) : null }); });
     var rt = R.totals(R.rows(ledgerEntries().map(function (e) { return { id: e.id, order: e.order, account: null }; }), NOW, { provider: 'stripe' })); delete rt.byCustomer;
     var open = state.intake.filter(function (p) { return !p.convertedAt && p.status !== 'po_declined'; });
@@ -5561,7 +5822,7 @@ function views(state) {
     return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 }, accounting: billing },
       access: { role: who.role, prices: who.admin ? 'workspace' : 'none', team: who.admin }, billing: billing, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
       links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
-      orders: orders, totals: S.totals(orders), receivables: rt,
+      orders: orders, totals: S.totals(orders), receivables: rt, path: S.PATH, pipeline: S.pipeline(orders),
       intake: { review: open.filter(function (p) { return p.status !== 'po_needs_information'; }).length, needsInfo: open.filter(function (p) { return p.status === 'po_needs_information'; }).length, declined: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_declined'; }).length,
         waiting: open.slice(0, 20).map(function (p) { return { id: p.id, customerId: p.customerId || null, company: company(p.customerId), poNumber: p.poNumber || '', status: p.status, createdAt: p.createdAt || null }; }) },
       limited: false };
@@ -5651,7 +5912,10 @@ function views(state) {
     if (/serial=/.test(q)) {
       var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { status: 404, error: 'Serial not found' };
       var c = Cu.custodyOf(u), site = state.sites.filter(function (s) { return s.id === c.siteId; })[0], rb = units.filter(function (x) { return x.serial === c.replacedBy; })[0], rs = units.filter(function (x) { return x.serial === c.replaces; })[0];
-      return { brand: brand, unit: unitView(u, now), product: prodOf(u.sku) ? { sku: u.sku, name: prodOf(u.sku).name, coverage: Cu.templatesOf(prodOf(u.sku)) } : null, site: site || null, events: (state.custodyEvents[serial] || []).slice().reverse(), scans: [], replacedBy: rb ? unitView(rb, now) : null, replaces: rs ? unitView(rs, now) : null, moves: Cu.MOVES, states: Cu.STATES };
+      var uo = u.orderId ? state.orders.filter(function (x) { return x.id === u.orderId; })[0] || null : null, ro = rs && rs.orderId ? state.orders.filter(function (x) { return x.id === rs.orderId; })[0] || null : null;
+      var ubi = Cu.boughtInUnit(u, uo, ro), bo = Cu.boughtIn(uo, u.sku) ? uo : ro;   /* bought in on its own order, or through the unit it replaced */
+      return { brand: brand, unit: unitView(u, now), product: prodOf(u.sku) ? { sku: u.sku, name: prodOf(u.sku).name, coverage: Cu.templatesOf(prodOf(u.sku)) } : null, site: site || null,
+        boughtIn: ubi ? Object.assign({ orderId: bo.id, orderNo: bo.orderNo || u.orderNo || null }, ubi) : null, canRecordWarranty: ['owner', 'admin'].indexOf(teamActor()) >= 0, events: (state.custodyEvents[serial] || []).slice().reverse(), scans: [], replacedBy: rb ? unitView(rb, now) : null, replaces: rs ? unitView(rs, now) : null, moves: Cu.MOVES, states: Cu.STATES };
     }
     if (/site=/.test(q)) { var sid = decodeURIComponent((/site=([^&]*)/.exec(q) || [])[1] || ''), sd = state.sites.filter(function (s) { return s.id === sid; })[0]; if (!sd) return { status: 404, error: 'Site not found' }; var here = units.filter(function (u) { return Cu.custodyOf(u).siteId === sid; }); return { brand: brand, site: sd, units: here.map(function (u) { return unitView(u, now); }), exceptions: Cu.exceptions(here, cat, now), limited: false }; }
     if (/view=exceptions/.test(q)) return { brand: brand, exceptions: Cu.exceptions(units, cat, now), sampled: units.length, limited: false };
@@ -6202,6 +6466,17 @@ function post(state, path, query, b, who) {
       if (tr.duplicate) return { ok: true, action: 'duplicate', serial: tu.serial, custody: Cu.custodyOf(tu) };
       patchUnit(tu, tr.patch); logEvent(tu.serial, tr.event); return { ok: true, action: 'detail', serial: tu.serial, changed: tr.event.fields, custody: Cu.custodyOf(tu) };
     }
+    /* the maker's warranty on a bought-in unit, as api/logic-custody.js: an owner or administrator, this unit or every unit of its SKU on its order */
+    if (b.action === 'maker-warranty') {
+      if (['owner', 'admin'].indexOf(V.teamActor(who)) < 0) return err(403, 'The workspace owner or an administrator records a maker’s warranty');
+      var wu = unitBy(String(b.serial || '').trim()); if (!wu) return err(404, 'Serial is not registered');
+      var wo0 = wu.orderId ? order(wu.orderId) || null : null, wr0 = Cu.custodyOf(wu).replaces ? unitBy(Cu.custodyOf(wu).replaces) : null;
+      var wbi = Cu.boughtInUnit(wu, wo0, wr0 && wr0.orderId ? order(wr0.orderId) || null : null), wt = [], wskip = [], wdone = [], wsame = [];
+      try { wt.push({ u: wu, r: Cu.makerWarranty(wu, b, who, now, wbi) }); } catch (e) { return err(e.status || 400, e.message); }
+      if (b.scope === 'order' && wbi && Cu.boughtIn(wo0, wu.sku)) state.units.filter(function (x) { return x !== wu && x.shipUnit && x.orderId === wu.orderId && x.sku === wu.sku && x.inventoryStatus !== 'void'; }).forEach(function (x) { try { wt.push({ u: x, r: Cu.makerWarranty(x, b, who, now, wbi) }); } catch (e) { wskip.push({ serial: x.serial, why: e.message }); } });
+      wt.forEach(function (t) { if (t.r.duplicate) { wsame.push(t.u.serial); return; } patchUnit(t.u, t.r.patch); logEvent(t.u.serial, t.r.event); wdone.push(t.u.serial); });
+      return { ok: true, action: 'maker-warranty', serial: wu.serial, applied: wdone, unchanged: wsame, skipped: wskip, say: Cu.makerSay(wdone, wsame, wskip, b.clear === true), makerWarranty: Cu.custodyOf(wu).makerWarranty || null };
+    }
     if (b.action === 'confirm' || b.action === 'destination') {
       var xu = unitBy(String(b.serial || '').trim()); if (!xu) return err(404, 'Serial is not registered');
       var xs = b.siteId ? siteBy(b.siteId) : null; if (b.action === 'destination' && b.siteId && !xs) return err(404, 'Site not found');
@@ -6221,6 +6496,7 @@ function post(state, path, query, b, who) {
         var c0 = Cu.custodyOf(cu), rc = Cu.custodyOf(ru), old = Cu.coverageWithInheritance(V.CATALOG.filter(function (p) { return p.sku === cu.sku; })[0], cu, now).map(function (cv) { return Object.assign({}, cv, { serial: cu.serial }); });
         var apr = Cu.apply(cu, 'replace', cb, who, now, method); patchUnit(cu, apr.patch); logEvent(cu.serial, apr.event);
         var rp = { 'custody.status': c0.status === 'rma_open' && c0.siteId ? 'assigned' : 'received', 'custody.custodian': c0.siteId ? 'site' : 'customer', 'custody.siteId': c0.siteId || null, 'custody.siteName': c0.siteName || null, 'custody.position': c0.position || '', 'custody.customerId': c0.customerId || cu.customerId || null, 'custody.replaces': cu.serial, 'custody.receivedAt': rc.receivedAt || now.slice(0, 10), 'custody.assignedAt': c0.siteId ? now.slice(0, 10) : null, 'custody.inheritedCoverage': Cu.inherited(old), 'custody.updatedAt': now, 'custody.updatedBy': who };
+        if (c0.makerWarranty && !rc.makerWarranty) rp['custody.makerWarranty'] = c0.makerWarranty;   /* a bought-in unit's maker's warranty goes with it, as api/logic-custody.js */
         patchUnit(ru, rp); logEvent(ru.serial, { type: 'replacement-of', from: rc.status, to: rp['custody.status'], replaces: cu.serial, siteId: c0.siteId || null, by: who, at: now, method: method });
         return { ok: true, serial: cu.serial, replacementSerial: ru.serial, siteId: c0.siteId || null, inherited: rp['custody.inheritedCoverage'] };
       }

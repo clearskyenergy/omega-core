@@ -84,6 +84,11 @@
       file:'/grid-atlas.html', badge:'new', tier:TIER.ALL,
       icon:'M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15M15 6v15' },
 
+    { key:'omegaprime', name:'Omega Prime', category:'design',
+      desc:'One site, guided: grid, utility circuit, layout on satellite and the quote.',
+      file:'/omega-prime.html', badge:'new', tier:TIER.STANDARD,
+      icon:'M12 2l9 5v10l-9 5-9-5V7zM12 7v10M7 9.5l10 5M17 9.5l-10 5' },
+
     { key:'sandbox', name:'Open a Sandbox', category:'design',
       desc:'Full editor at any address — save when ready.',
       action:'new:sandbox', tier:TIER.STANDARD, savesData:true,
@@ -545,6 +550,11 @@
       orgs:['clearsky-usa.com','csebuilders.com'],
       icon:'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' }
   ];
+  SEED_TOOLS.push({ key:'siteplantrial', name:'Site Plan · customer trial', category:'design',
+      desc:'Try the new CAD and 3D tool. Save projects, review outputs and send feedback. Site Map remains available.',
+      file:'/editor-v2', badge:'trial', tier:TIER.STANDARD,
+      icon:'M3 3h18v18H3zM3 9h18M9 9v12' });
+
 
   /* ══════════════════════════════════════════════════════════════════
      REGISTRY OBJECT
@@ -757,7 +767,7 @@
           /* Screening ships with the code; an older published catalog must
              not hide its routes. Existing documents and access rules win. */
           SEED_TOOLS.forEach(function (seed) {
-            if (seed.subject === 'screening' && !list.some(function (t) { return t.key === seed.key; })) list.push(seed);
+            if ((seed.subject === 'screening' || seed.key === 'siteplantrial') && !list.some(function (t) { return t.key === seed.key; })) list.push(seed);
           });
           self._tools = list;
         }

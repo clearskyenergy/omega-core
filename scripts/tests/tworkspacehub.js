@@ -79,20 +79,22 @@ ok('an unknown area is empty', HUB.items('nope', ctxFor({})).length === 0);
    wins either way; Settings lists every tool of every cell in the ring */
 HUB.AREAS.forEach(function (a) { (a.extras || []).forEach(function (k) { ok('area ' + a.key + ' extra ' + k + ' is one of its own tools', (a.tools || []).indexOf(k) >= 0); }); });
 var EXTRAS = ['siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'];
+var DESIGN = HUB.AREAS.filter(function (a) { return a.key === 'design'; })[0], CORE = DESIGN.tools.filter(function (k) { return EXTRAS.indexOf(k) < 0; });
+ok('Design keeps Site Map and the sandbox among its core tools', CORE.indexOf('editor') >= 0 && CORE.indexOf('sandbox') >= 0, CORE);
 var pro = ctxFor({ orgId: 'x', tierLevel: 3 });
 var design = HUB.items('design', pro).map(function (r) { return r.key; });
-ok('Design lists Site Map and the sandbox, and none of its extras, by default', design.join() === 'editor,sandbox', design);
+ok('Design lists its core tools (Site Map, the sandbox) and none of its extras, by default', design.join() === CORE.join(), design);
 ok('the extras are what Design hides by default', HUB.hidden('design', pro).map(function (r) { return r.key; }).join() === EXTRAS.join(), HUB.hidden('design', pro));
 var shownOne = HUB.items('design', ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { powerflow: true } })).map(function (r) { return r.key; });
-ok('a person who shows an extra gets it in the panel', shownOne.join() === 'editor,sandbox,powerflow', shownOne);
+ok('a person who shows an extra gets it in the panel', shownOne.join() === CORE.concat('powerflow').join(), shownOne);
 var hidCore = HUB.items('design', ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { sandbox: false } })).map(function (r) { return r.key; });
-ok('a person may hide a tool that is not an extra', hidCore.join() === 'editor' && HUB.hidden('design', ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { sandbox: false } })).length === 5, hidCore);
+ok('a person may hide a tool that is not an extra', hidCore.join() === CORE.filter(function (k) { return k !== 'sandbox'; }).join() && HUB.hidden('design', ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { sandbox: false } })).length === EXTRAS.length + 1, hidCore);
 var stdShown = HUB.items('design', ctxFor({ orgId: 'x', tierLevel: 1 }, { hubTools: { siteoptimizer: true } }));
 ok('a shown extra the plan does not open is listed locked, last', stdShown[stdShown.length - 1].key === 'siteoptimizer' && stdShown[stdShown.length - 1].locked, stdShown);
 ok('hiding never changes the ring: the plan composes the hub', HUB.compose(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { editor: false, sandbox: false } })).ring.map(function (a) { return a.key; }).join() === ent.ring.map(function (a) { return a.key; }).join());
 var ch = HUB.choices(pro), chDesign = ch.filter(function (g) { return g.key === 'design'; })[0];
 ok('Settings lists the cells of the ring that list tools, in ring order', ch.map(function (g) { return g.key; }).join() === ent.ring.filter(function (a) { return HUB.items(a.key, pro).some(function (r) { return !r.page; }) || HUB.hidden(a.key, pro).length; }).map(function (a) { return a.key; }).join(), ch.map(function (g) { return g.key; }));
-ok('Settings lists every Design tool, the extras switched off', chDesign && chDesign.tools.map(function (t) { return t.key + (t.shown ? '' : ':off'); }).join() === 'editor,sandbox,siteoptimizer:off,powerflow:off,sitediscovery:off,conductorsizing:off', chDesign);
+ok('Settings lists every Design tool, the extras switched off', chDesign && chDesign.tools.map(function (t) { return t.key + (t.shown ? '' : ':off'); }).join() === DESIGN.tools.map(function (k) { return k + (EXTRAS.indexOf(k) >= 0 ? ':off' : ''); }).join(), chDesign);
 ok('Settings follows the person\'s choice', HUB.choices(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { powerflow: true } })).filter(function (g) { return g.key === 'design'; })[0].tools.filter(function (t) { return t.key === 'powerflow'; })[0].shown === true);
 ok('a subject\'s tools sit under the subject, never as their own switch', !HUB.choices(pro).some(function (g) { return g.key === 'sales' && g.tools.some(function (t) { return t.key === 'parcelscreening'; }); }));
 

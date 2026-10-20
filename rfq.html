@@ -8,8 +8,35 @@
 <!--
   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-  QUOTE DESK — both ends of a Request for Quote, on one page.
+  QUOTE DESK — the proposals you sent your own customers, and both ends of
+  a Request for Quote, on one page.
 
+  CUSTOMER   the customer quotes this workspace made in Omega Prime and sent
+             (customer_quotes, Admin SDK only): read through
+             GET /api/customer-quote?list=1, which resolves the workspace off
+             the caller's token — the claim, then the email domain — so a
+             personal workspace reads its own. Status, views, the decision,
+             and where an approved quote stands in Omega Logic (the server's
+             Teleios ladder, derived at read time). An approved quote's order
+             is in THIS workspace's own Omega Logic: Open in Omega Logic goes
+             to the server's handoff.logicUrl (/omega-logic?org=&order=
+             #orders), and only that address shape. Print draws the one deck
+             (omega-quote-deck.js); Send and Resend mint a fresh link through
+             the server's send door; a link is shown once, straight after the
+             send that made it, and never stored here (a repeated send is
+             answered with no link, and the page says so in the server's
+             words). An approved quote with no order in Omega Logic — the
+             hand-off failed, or never got recorded — offers Retry hand-off;
+             "save it again" is said only of a quote that can still be
+             saved (an approved one is never edited: a change is a new
+             proposal). A valid-until DATE is read from its parts, never a
+             day early west of UTC, and lasts to the end of that UTC day, as
+             the server holds it. Open in Prime opens Prime on that quote.
+             Omega Logic is as the door says on every read (logic {on,
+             canAdd, url}, the hand-off's own rule): on, an approved quote
+             opens its order, else the workspace's office; off, an owner or
+             administrator is offered Add Omega Logic (the Modules card) and
+             anyone else is told who to ask, never a purchase link.
   RECEIVED   what your organisation has been asked to price. This is the
              distributor's workspace: open the BOM, take the CSV into your
              own pricing system, send the quote back.
@@ -24,7 +51,8 @@
   the same table with the buttons swapped, kept in step by hand.
 
   Which tab opens is decided by what your org actually has, not by a flag on
-  your account: a tenant with quote requests waiting lands on Received.
+  your account: a workspace with customer quotes lands on them; otherwise a
+  tenant with quote requests waiting lands on Received.
 
   ── WHY THE WRITES GO THROUGH /api/rfq ───────────────────────────────────
   firestore.rules lets a vendor update their own recipient doc's status and
@@ -66,7 +94,7 @@ body{margin:0;background:var(--cs-bg);color:var(--cs-text);font:400 14px/1.5 'DM
 .rowhead{display:flex;align-items:flex-start;gap:12px;flex-wrap:wrap}
 .rowhead .t{font-size:14.5px;font-weight:700;margin:0}
 .meta{color:var(--cs-muted);font-size:12.5px;margin:3px 0 0}
-.acts{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap}
+.acts{margin-left:auto;display:flex;gap:7px;flex-wrap:wrap;align-items:center}
 table{width:100%;border-collapse:collapse;font-size:13px}
 th{text-align:left;color:var(--cs-muted);font-weight:600;font-size:11.5px;text-transform:uppercase;letter-spacing:.4px;padding:8px 10px;border-bottom:1px solid var(--cs-border)}
 td{padding:8px 10px;border-bottom:1px solid #EEF1F4;vertical-align:top}
@@ -77,6 +105,8 @@ td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
 button{background:var(--cs-blue);color:#fff;border:none;border-radius:8px;padding:7px 13px;font:600 12.5px inherit;cursor:pointer}
 button.ghost{background:#fff;color:var(--cs-text);border:1px solid var(--cs-border)}
 button.danger{background:#fff;color:#A32020;border:1px solid #F0CFCF}
+a.btn{display:inline-block;background:var(--cs-blue);color:#fff;border-radius:8px;padding:7px 13px;font:600 12.5px inherit;text-decoration:none}
+a.btn.ghost{background:#fff;color:var(--cs-text);border:1px solid var(--cs-border);padding:6px 12px}
 button:disabled{opacity:.5;cursor:not-allowed}
 input[type=text],input[type=number],input[type=date],textarea,select{
   padding:6px 9px;border:1px solid var(--cs-border);border-radius:7px;font:inherit;font-size:12.5px;
@@ -92,6 +122,17 @@ textarea{width:100%;resize:vertical}
 .quote{background:#F3F8FF;border:1px solid #D5E6FB;border-radius:9px;padding:12px;margin-top:10px}
 .quote b{font-size:15px;font-variant-numeric:tabular-nums}
 .hide{display:none}
+.chip.stale{background:#FFF4E5;color:#9A6300}
+.card.focus{border-color:var(--cs-blue);box-shadow:0 0 0 3px rgba(0,112,242,.15)}
+.stage{display:inline-block;margin-top:6px;font-size:12px;font-weight:600;color:#3A4654;background:#F1F4F8;border-radius:6px;padding:2px 8px}
+.stage.done{color:#1F7A45;background:#E6F7EE}
+.linkbox{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:8px}
+.linkbox input{flex:1;min-width:220px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}
+.ladder{display:flex;flex-wrap:wrap;gap:4px;margin:8px 0 2px;padding:0;list-style:none}
+.ladder li{font-size:11px;padding:2px 7px;border-radius:999px;background:#EEF1F4;color:var(--cs-muted)}
+.ladder li.done{background:#E6F7EE;color:#1F7A45}.ladder li.current{background:#EAF2FF;color:var(--cs-blue);font-weight:700}
+.kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px 14px;font-size:12.5px;margin-top:6px}
+.kv b{display:block;font-size:11px;color:var(--cs-muted);font-weight:600;text-transform:uppercase;letter-spacing:.3px}
 @media (max-width:900px){
   .wrap{padding:14px}.card{padding:14px}
   .card table{display:block;overflow-x:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
@@ -110,8 +151,15 @@ textarea{width:100%;resize:vertical}
 
 <div class="wrap">
   <div class="tabs">
+    <button class="tab" id="tab-customer" onclick="showTab('customer')">Customer quotes<span class="n" id="n-customer">0</span></button>
     <button class="tab on" id="tab-received" onclick="showTab('received')">Requests received<span class="n" id="n-received">0</span></button>
     <button class="tab" id="tab-sent" onclick="showTab('sent')">Requests sent<span class="n" id="n-sent">0</span></button>
+  </div>
+
+  <div id="v-customer" class="hide">
+    <p class="sub">Proposals your workspace prepared in Omega Prime for its own customers: who opened them, what they
+      decided, and where an approved one stands in Omega Logic. The customer sees the proposal, never your cost or margin.</p>
+    <div id="customer"><div class="empty">Loading…</div></div>
   </div>
 
   <div id="v-received">
@@ -133,21 +181,58 @@ textarea{width:100%;resize:vertical}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="/config.js"></script>
 <script src="/omega-brand.js"></script>
+<script src="/omega-demo.js" defer></script>
 <script src="/omega-tenant.js"></script>
 <script src="/omega-whitelabel.js"></script>
+<script src="/omega-quote-deck.js"></script>
 <script>
 'use strict';
 var cfg = (window.CLEARSKY_CONFIG || {});
 var app = firebase.apps.length ? firebase.app() : firebase.initializeApp(cfg.firebase || cfg);
 var auth = firebase.auth(), db = firebase.firestore(), storage = firebase.storage();
-var ME = null, MYORG = '', IN = [], OUT = [], TAB = 'received';
+var ME = null, MYORG = '', ORG_NAME = '', IN = [], OUT = [], CQ = [], CQ_FAILED = '', CQ_LOGIC = null, TAB = 'received';
 
 function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function orgOf(e){ var d=String(e||'').toLowerCase().split('@')[1]||''; return d==='fenecon.de'||d==='fenecon.us'?'fenecon.com':d; }
 function usd(n){ return (typeof n==='number'&&isFinite(n)) ? '$'+n.toLocaleString(undefined,{maximumFractionDigits:0}) : '—'; }
+function msOf(t){
+  if (!t) return 0;
+  if (t.toMillis) return t.toMillis();
+  if (typeof t==='number') return t;
+  if (typeof t==='string'){ var p=Date.parse(t); return isNaN(p)?0:p; }
+  if (t.seconds!=null) return t.seconds*1000;
+  if (t._seconds!=null) return t._seconds*1000;
+  return 0;
+}
+/* A date-only value (YYYY-MM-DD: a customer quote's valid-until) is a
+   calendar day, not an instant. Date.parse reads it as UTC midnight, which
+   is the evening before anywhere west of UTC, so it is read from its parts.
+   A valid-until is the server's UTC day: it lasts to the end of that day,
+   and an instant given for one is shown as its UTC date, as the proposal
+   (omega-quote-deck.js) prints it and the email sends it. */
+function ymd(t){ var m = typeof t==='string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(t); return m ? { y:+m[1], m:+m[2]-1, d:+m[3] } : null; }
+function dayText(y, mo, d){ return new Date(y, mo, d).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}); }
 function when(t){
-  var ms = t && t.toMillis ? t.toMillis() : (typeof t==='number'?t:0);
+  var p = ymd(t); if (p) return dayText(p.y, p.m, p.d);
+  var ms = msOf(t);
   return ms ? new Date(ms).toLocaleDateString(undefined,{month:'short',day:'numeric',year:'numeric'}) : '—';
+}
+function untilText(t){
+  var p = ymd(t); if (p) return dayText(p.y, p.m, p.d);
+  var ms = msOf(t); if (!ms) return '—';
+  var u = new Date(ms); return dayText(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate());
+}
+function untilMs(t){ var p = ymd(t); return p ? Date.UTC(p.y, p.m, p.d) + 86400000 - 1 : msOf(t); }
+function nowMs(){ return Date.now(); }
+/* Which workspace this person's own reads are for: the orgId claim the server
+   minted (a personal workspace is keyed by its slug, not by gmail.com), then
+   the email domain — the one order CLAUDE.md names for every reader. */
+function homeOrg(u){
+  if (!u) return Promise.resolve('');
+  if (typeof u.getIdTokenResult !== 'function') return Promise.resolve(orgOf(u.email));
+  return u.getIdTokenResult().then(function(r){
+    return String((r && r.claims && r.claims.orgId) || '').toLowerCase() || orgOf(u.email);
+  }, function(){ return orgOf(u.email); });
 }
 function setMsg(id, text, bad){
   var el=document.getElementById(id); if(!el) return;
@@ -163,11 +248,19 @@ var STATUS = {
   accepted: { label:'Accepted',        cls:'ok'   },
   inquiry:  { label:'Question raised', cls:''     },
   rejected: { label:'Declined',        cls:'bad'  },
-  declined: { label:'Declined',        cls:'bad'  }
+  declined: { label:'Declined',        cls:'bad'  },
+  draft:    { label:'Draft',           cls:'none' },
+  approved: { label:'Approved',        cls:'ok'   },
+  expired:  { label:'Expired',         cls:'none' },
+  withdrawn:{ label:'Withdrawn',       cls:'none' }
 };
-function statusChip(s){
+/* A customer quote reads the same map, except that "sent" there is the
+   seller's proposal waiting on the customer, not a vendor yet to price. */
+var CQ_LABEL = { sent:'Sent', viewed:'Viewed' };
+function statusChip(s, side){
   var m = STATUS[s] || { label: s||'—', cls:'none' };
-  return '<span class="chip '+m.cls+'">'+esc(m.label)+'</span>';
+  var label = side==='customer' && CQ_LABEL[s] ? CQ_LABEL[s] : m.label;
+  return '<span class="chip '+m.cls+'">'+esc(label)+'</span>';
 }
 
 /* A null on the first callback is the SDK still restoring, not a signed-out
@@ -186,9 +279,12 @@ auth.onAuthStateChanged(function(u){
     return;
   }
   _qdNull = 0;
-  ME=u; MYORG=orgOf(u.email);
-  document.getElementById('who').textContent = u.email + ' · ' + MYORG;
-  Promise.all([loadReceived(), loadSent(), loadRole()]).then(pickTab);
+  ME=u;
+  homeOrg(u).then(function(org){
+    MYORG=org;
+    document.getElementById('who').textContent = u.email + ' · ' + MYORG;
+    return Promise.all([loadReceived(), loadSent(), loadRole(), loadCustomer()]);
+  }).then(pickTab);
 });
 
 /* A plain customer never receives a quote request, and a tab that is
@@ -210,25 +306,317 @@ function loadRole(){
   return db.collection('omega_orgs').doc(MYORG).get().then(function(d){
     var v = (d.exists && d.data()) || {};
     IS_SUPPLIER = !!v.receivesFullBom || v.vertical === 'oem';
+    ORG_NAME = typeof v.name === 'string' ? v.name : '';
   }).catch(function(){ IS_SUPPLIER = false; });
 }
 
 /* Whichever side of the desk you actually work is the side that opens. A hash
    still wins, because a link somebody sent you names the tab it meant. */
+/* #customer-<quoteId> (the link in the seller's decision email) opens the
+   Customer tab on that quote */
+var FOCUS = '';
+function hashTab(){
+  var h = String(location.hash||'').replace('#','').toLowerCase(), m = /^customer-([a-z0-9_-]{1,64})$/.exec(h);
+  if (m) { FOCUS = m[1]; return 'customer'; }
+  return h;
+}
+function focusQuote(){
+  if (!FOCUS) return;
+  var k = cqIndex(FOCUS), card = k>=0 ? document.getElementById('cq-'+k) : null;
+  if (!card) return;
+  card.className = 'card focus';
+  if (card.scrollIntoView) card.scrollIntoView({ block:'start', behavior:'smooth' });
+  FOCUS = '';
+}
 function pickTab(){
   var show = IN.length > 0 || IS_SUPPLIER;
   document.getElementById('tab-received').classList.toggle('hide', !show);
-  var h = String(location.hash||'').replace('#','').toLowerCase();
+  var h = hashTab();
+  if (h==='customer') { showTab(h); return focusQuote(); }
   if ((h==='received' && show) || h==='sent') return showTab(h);
+  if (CQ.length) return showTab('customer');
   showTab(IN.length ? 'received' : (show && !OUT.length ? 'received' : 'sent'));
 }
 function showTab(t){
   TAB=t;
-  document.getElementById('tab-received').classList.toggle('on', t==='received');
-  document.getElementById('tab-sent').classList.toggle('on', t==='sent');
-  document.getElementById('v-received').classList.toggle('hide', t!=='received');
-  document.getElementById('v-sent').classList.toggle('hide', t!=='sent');
+  ['customer','received','sent'].forEach(function(k){
+    document.getElementById('tab-'+k).classList.toggle('on', t===k);
+    document.getElementById('v-'+k).classList.toggle('hide', t!==k);
+  });
   if (location.hash.replace('#','') !== t) history.replaceState(null,'','#'+t);
+}
+
+/* ══════════════════════════════════════════════════════════════════════
+   CUSTOMER  —  the proposals this workspace sent its own customers
+   ══════════════════════════════════════════════════════════════════════ */
+/* Every read and write goes through /api/customer-quote: the records are
+   closed to browsers (customer_quotes is Admin SDK only), the server resolves
+   the workspace off the token, and only the server prices, mints a link and
+   sends mail. The one secret this page ever holds is a fresh link, in memory,
+   straight after the send that made it: leave the page and it is gone, and a
+   new send makes a new one (the old link stops working). */
+var LINKS = {}, SEND_IDS = {};
+function cqApi(method, query, body){
+  if(!ME) return Promise.reject(new Error('Sign in first.'));
+  return ME.getIdToken().then(function(tok){
+    var opt = { method:method, cache:'no-store', headers:{ Authorization:'Bearer '+tok } };
+    if (body) { opt.headers['Content-Type']='application/json'; opt.body=JSON.stringify(body); }
+    return fetch('/api/customer-quote'+(query||''), opt);
+  }).then(function(r){
+    return r.text().then(function(t){
+      var j=null; try{ j=JSON.parse(t); }catch(e){}
+      if(r.ok) return j||{};
+      var e=new Error((j&&(j.detail||j.error))||(r.status===404&&!j?'Customer quotes are not available on this deployment yet.':'HTTP '+r.status));
+      e.status=r.status; throw e;
+    });
+  });
+}
+function loadCustomer(){
+  return cqApi('GET','?list=1').then(function(j){
+    CQ = (j && Array.isArray(j.quotes)) ? j.quotes : [];
+    CQ_LOGIC = j && j.logic && typeof j.logic==='object' && typeof j.logic.on==='boolean' ? j.logic : null;
+    CQ_FAILED = '';
+  }, function(e){ CQ = []; CQ_LOGIC = null; CQ_FAILED = (e&&e.message)||'Could not load customer quotes.'; })
+  .then(function(){
+    document.getElementById('n-customer').textContent = CQ.length;
+    renderCustomer();
+  });
+}
+function cqWho(q){ var c=q.customer||{}; return c.company||c.name||'Customer'; }
+function cqSite(q){ var s=q.site; if(!s) return ''; if(typeof s==='string') return s; return s.address||s.label||''; }
+function cqOpen(q){ return q.status==='sent'||q.status==='viewed'; }
+/* An approved quote's order is in THIS workspace's Omega Logic (the server
+   names it: handoff.logicUrl, /omega-logic?org=&order=#orders). Only that
+   one address shape is followed, never another the record might carry. */
+function cqLogic(h){ var u=h&&h.logicUrl; return typeof u==='string' && /^\/omega-logic\?org=[^"'<>\s]+&order=[^"'<>\s]+#orders$/.test(u) ? u : ''; }
+/* Omega Logic for this workspace, as the door says on every read (logic
+   {on, canAdd, url}: the rule the hand-off itself runs). On: open the order,
+   else the workspace's office. Off: the Modules card that adds it, for an
+   owner or administrator (canAdd); anyone else is told who to ask, with no
+   purchase link. Only these address shapes are followed; a door that says
+   nothing keeps the order link it always had. */
+function cqLogicDoor(L){ var u=L&&L.url; if(typeof u!=='string') return ''; return L.on ? (/^\/omega-logic\?org=[^"'<>\s&#]+$/.test(u)?u:'') : (/^\/workspace#module-[a-z0-9-]+$/.test(u)?u:''); }
+function cqOffer(L){
+  var add = L.canAdd && cqLogicDoor(L);
+  return { href: add || '', line: add ? 'Omega Logic isn\u2019t on '+(ORG_NAME||'your workspace')+'\u2019s plan yet. Add it to fulfil approved proposals in your own office.'
+    : 'Omega Logic isn\u2019t on your workspace\u2019s plan. Ask an owner or administrator to add it.' };
+}
+function cqIndex(id){ for(var i=0;i<CQ.length;i++) if(CQ[i].id===id) return i; return -1; }
+function cqMoney(v){ return typeof v==='string' ? v : usd(v); }
+function cqMail(m){ return { sent:'Emailed', manual:'Link only', skipped:'Not emailed (mail is off)', 'review-required':'Held for review' }[m] || '—'; }
+function renderCustomer(){
+  var host=document.getElementById('customer');
+  if(CQ_FAILED){ host.innerHTML='<div class="card"><div class="empty">'+esc(CQ_FAILED)+'</div></div>'; return; }
+  if(!CQ.length){
+    host.innerHTML='<div class="card"><div class="empty">No customer quotes yet. Screen a site in '
+      + '<a href="/omega-prime">Omega Prime</a>, price it and save the quote: it lands here, and you can '
+      + 'send, print and track it from either place.</div></div>';
+    return;
+  }
+  host.innerHTML = CQ.map(cqCard).join('');
+}
+function cqCard(q, i){
+  var st = q.status||'draft', stage = q.stage||null, c = q.customer||{}, meta = [], track = [], acts = [];
+  if (cqSite(q)) meta.push(esc(cqSite(q)));
+  if (q.sellTotal) meta.push('<b>'+esc(q.sellTotal)+'</b>');
+  if (c.company && c.name) meta.push(esc(c.name));
+  if (q.sentAt) track.push('Sent '+when(q.sentAt)); else if (st==='draft') track.push('Not sent yet');
+  if (+q.viewCount > 0) track.push('Viewed '+(+q.viewCount)+'×'+((q.lastViewedAt||q.viewedAt)?' · last '+when(q.lastViewedAt||q.viewedAt):''));
+  else if (cqOpen(q)) track.push('Not opened yet');
+  if (q.decidedAt && (st==='approved'||st==='declined')) track.push((st==='declined'?'Declined ':'Approved ')+when(q.decidedAt));
+  /* valid through the end of its (UTC) day; past it the customer can no longer approve */
+  if (q.validUntil && cqOpen(q)) { var vu = untilMs(q.validUntil); track.push((vu && vu < nowMs() ? 'Expired ' : 'Valid until ')+untilText(q.validUntil)); }
+  /* Prime opens on THIS quote: its Proposal step, or Track once it is approved */
+  if (q.projectId) acts.push('<a class="btn ghost" href="'+esc('/omega-prime?id='+encodeURIComponent(q.projectId)+(q.id?'&step='+(st==='approved'?'track':'quote')+'&quote='+encodeURIComponent(q.id):''))+'">Open in Prime</a>');
+  acts.push('<button class="ghost" onclick="cqPrint('+i+')">Print</button>');
+  acts.push('<button class="ghost" onclick="cqPrint('+i+',\'sitemap\')" title="The site map on its own page">Site map</button>');
+  var sendable = st==='draft'||cqOpen(q)||st==='expired';
+  if (sendable) acts.push('<button onclick="cqToggleSend('+i+')">'+(st==='draft'?'Send':'Resend')+'</button>');
+  if (st==='draft'||cqOpen(q)) acts.push('<button class="danger" onclick="cqWithdraw('+i+')">Withdraw</button>');
+  /* an approved quote whose order is not in Omega Logic — the hand-off failed,
+     or was never recorded (the approval landed, the order did not) — is
+     retried from here; the door makes the order once whatever happened */
+  var h = q.handoff || null, herr = h && h.error, logic = cqLogic(h);
+  var retry = st==='approved' && !(h && h.orderNo && !h.error);
+  var L = CQ_LOGIC, offer = st==='approved' && L && !L.on ? cqOffer(L) : null;
+  var openLogic = !L ? logic : st==='approved' && L.on ? (logic || cqLogicDoor(L)) : '';
+  if (openLogic) acts.push('<a class="btn ghost" href="'+esc(openLogic)+'">Open in Omega Logic</a>');
+  if (offer && offer.href) acts.push('<a class="btn" href="'+esc(offer.href)+'">Add Omega Logic</a>');
+  if (retry) acts.push('<button onclick="cqRetry('+i+')">Retry hand-off</button>');
+  /* "save it again" only where a save is still possible: an approved quote
+     is never edited (the door refuses), so a change there is a new proposal */
+  var stale = !!q.stale && st!=='approved', staleWon = !!q.stale && st==='approved';
+  acts.push('<button class="ghost" id="cqDetBtn'+i+'" onclick="cqDetails('+i+')">Details</button>');
+  return '<div class="card" id="cq-'+i+'">'
+    + '<div class="rowhead"><div>'
+    +   '<p class="t">'+esc(q.quoteNo||'Quote')+(q.rev!=null?' · rev '+esc(q.rev):'')+' — '+esc(cqWho(q))+'</p>'
+    +   (meta.length?'<p class="meta">'+meta.join(' · ')+'</p>':'')
+    +   '<p class="meta">'+track.join(' · ')+'</p>'
+    +   (stage&&stage.label?'<span class="stage'+(stage.key==='teleios'?' done':'')+'">'+esc(stage.label)+'</span>':'')
+    + '</div>'
+    + '<div class="acts">'+statusChip(st,'customer')
+    +   (stale?' <span class="chip stale" title="The design in Omega Prime changed after this quote was saved">Design changed</span>':'')
+    +   acts.join('')+'</div>'
+    + '</div>'
+    + (stale?'<p class="meta" style="margin-top:8px">The design in Omega Prime changed after this quote was saved. '
+      + 'Open it in Prime and save the quote again before you send it.</p>'
+      : staleWon?'<p class="meta" style="margin-top:8px">The design in Omega Prime changed after this quote was approved. '
+      + 'An approved quote stays as the customer approved it: a change is a new proposal, saved in Prime.</p>':'')
+    + (retry?'<div class="quote" style="background:#FFF8EC;border-color:#F3D9B1"><div class="meta">'
+      + (herr?'The order did not reach Omega Logic: '+esc(herr):'The order has not reached Omega Logic yet. Retry the hand-off to send it.')+'</div></div>':'')
+    + (offer?'<p class="meta cq-logic" style="margin-top:8px">'+esc(offer.line)+'</p>':'')
+    + cqLinkBlock(q, i)
+    + (sendable?'<div id="cqSend'+i+'" class="hide panel">'+cqSendForm(q, i)+'</div>':'')
+    + '<div id="cqDet'+i+'" class="hide panel"></div>'
+    + '<div class="msg" id="cqMsg'+i+'"></div>'
+    + '</div>';
+}
+function cqLinkBlock(q, i){
+  var url = LINKS[q.id];
+  if (!url) return '';
+  return '<div class="linkbox"><input type="text" readonly id="cqLink'+i+'" value="'+esc(url)+'">'
+    + '<button class="ghost" onclick="cqCopy('+i+')">Copy link</button></div>'
+    + '<p class="meta">Shown once, straight after the send that made it. Leave this page and it is gone; send again for a new link.</p>';
+}
+function cqSendForm(q, i){
+  var r = 'style="display:inline-flex;gap:6px;align-items:center;font-size:12.5px;font-weight:500;color:var(--cs-text);margin:0 16px 4px 0"';
+  return '<div class="fld" style="margin-bottom:8px"><label>How it goes</label>'
+    + '<label '+r+'><input type="radio" name="cqDel'+i+'" id="cqDelEmail'+i+'" value="email" checked> Email it to the customer</label>'
+    + '<label '+r+'><input type="radio" name="cqDel'+i+'" id="cqDelLink'+i+'" value="link"> Make a link I send myself</label></div>'
+    + '<div class="fld"><label>Message (optional)</label>'
+    +   '<textarea id="cqNote'+i+'" rows="2" placeholder="A line above the link in the email."></textarea></div>'
+    + '<p class="meta">Every send makes a new link and the old one stops working; the proposal is valid for its term from the day it is sent.</p>'
+    + '<div style="display:flex;gap:8px;margin-top:10px">'
+    +   '<button class="ghost" onclick="cqToggleSend('+i+')">Cancel</button>'
+    +   '<button id="cqSendBtn'+i+'" onclick="cqSend('+i+')">'+(q.status==='draft'?'Send':'Resend')+'</button>'
+    + '</div>';
+}
+function cqToggleSend(i){ document.getElementById('cqSend'+i).classList.toggle('hide'); }
+/* One send id per press of Send, kept only while that press has no answer:
+   a retry after a dropped connection is the same send (the server answers it
+   once), a definite answer — sent, refused, mail failed — clears it. */
+function newSendId(){
+  var abc='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789', out='snd_', a=null, k;
+  try { if (typeof crypto!=='undefined' && crypto.getRandomValues) { a=new Uint8Array(24); crypto.getRandomValues(a); } } catch(e) { a=null; }
+  for (k=0;k<24;k++) out += abc.charAt((a ? a[k] : Math.floor(Math.random()*256)) % abc.length);
+  return out;
+}
+function cqSend(i){
+  var q=CQ[i]; if(!q) return;
+  var btn=document.getElementById('cqSendBtn'+i);
+  var deliver=(document.getElementById('cqDelLink'+i)||{}).checked ? 'link' : 'email';
+  var message=String((document.getElementById('cqNote'+i)||{}).value||'').trim();
+  /* the press belongs to this revision: a revision saved since in Prime is
+     a new send, never the repeat of one made for the last */
+  var sk = q.id+':'+(q.rev==null?'':q.rev);
+  var sid = SEND_IDS[sk] || (SEND_IDS[sk] = newSendId());
+  var body = { action:'send', id:q.id, sendId:sid, deliver:deliver };
+  if (message) body.message = message;
+  if (btn) btn.disabled=true;
+  setMsg('cqMsg'+i,'Sending…');
+  return cqApi('POST','',body).then(function(j){
+    delete SEND_IDS[sk];
+    /* the link held here is the one THIS answer made, or none: a repeated
+       send id is answered without one (a link is shown only once), and any
+       link from an earlier send died with the send that replaced it */
+    if (j && j.url) LINKS[q.id] = j.url; else delete LINKS[q.id];
+    var m = j && j.mailState;
+    var words = (j && j.repeat) || (m!=='sent' && !(j && j.url))
+      ? ((j && j.note) || 'That send already went, and its link is shown only once. Send again for a new link.')
+      : m==='sent' ? 'Emailed to the customer'+(j.url?'. The link is below if you want to send it yourself too.':'.')
+      : m==='manual' ? 'Link ready. Copy it and send it yourself: it is shown only now.'
+      : m==='skipped' ? 'Mail is not set up here, so nothing was emailed. Copy the link and send it yourself: it is shown only now.'
+      : m==='review-required' ? 'Held for review before it goes out.' : 'Sent.';
+    if (j && j.warning) words += ' ' + j.warning;
+    return loadCustomer().then(function(){ var k=cqIndex(q.id); setMsg('cqMsg'+(k<0?i:k), words); });
+  }).catch(function(e){
+    if (e && e.status && e.status!==409) delete SEND_IDS[sk];
+    if (btn) btn.disabled=false;
+    setMsg('cqMsg'+i,(e&&e.message)||'Could not send.',true);
+  });
+}
+function cqCopy(i){
+  var q=CQ[i], url=q && LINKS[q.id]; if(!url) return;
+  function fallback(){
+    var el=document.getElementById('cqLink'+i);
+    try { el.select(); document.execCommand('copy'); setMsg('cqMsg'+i,'Link copied.'); }
+    catch(e){ setMsg('cqMsg'+i,'Select the link and copy it.',true); }
+  }
+  if (typeof navigator!=='undefined' && navigator.clipboard && navigator.clipboard.writeText){
+    navigator.clipboard.writeText(url).then(function(){ setMsg('cqMsg'+i,'Link copied.'); }, fallback);
+  } else fallback();
+}
+function cqPrint(i, part){
+  var q=CQ[i]; if(!q) return;
+  part = part==='sitemap'||part==='quote' ? part : 'proposal';
+  setMsg('cqMsg'+i, part==='sitemap' ? 'Preparing the site map…' : 'Preparing the proposal…');
+  return cqApi('GET','?id='+encodeURIComponent(q.id)).then(function(j){
+    if (!window.OmegaQuoteDeck) throw new Error('The proposal printer did not load. Reload the page.');
+    if (!j || !j.quote) throw new Error('The quote could not be read.');
+    var done = OmegaQuoteDeck.print(j.quote, { part: part });
+    setMsg('cqMsg'+i, done ? '' : 'The print window was blocked. Allow pop-ups for this site and try again.', !done);
+  }).catch(function(e){ setMsg('cqMsg'+i,(e&&e.message)||'Could not print.',true); });
+}
+function cqWithdraw(i){
+  var q=CQ[i]; if(!q) return;
+  if(!confirm('Withdraw '+(q.quoteNo||'this quote')+'?\n\nThe customer\'s link stops working. Nothing is deleted, and you can '
+      + 'open it in Prime, change it and send it again.')) return;
+  setMsg('cqMsg'+i,'Withdrawing…');
+  return cqApi('POST','',{ action:'withdraw', id:q.id }).then(function(){
+    delete LINKS[q.id];
+    return loadCustomer();
+  }).catch(function(e){ setMsg('cqMsg'+i,(e&&e.message)||'Could not withdraw.',true); });
+}
+function cqRetry(i){
+  var q=CQ[i]; if(!q) return;
+  setMsg('cqMsg'+i,'Handing the order to Omega Logic…');
+  return cqApi('POST','',{ action:'handoff', id:q.id }).then(function(j){
+    var h=(j&&j.handoff)||(j&&j.quote&&j.quote.handoff)||{};
+    return loadCustomer().then(function(){
+      var k=cqIndex(q.id); k=k<0?i:k;
+      if (h.error) setMsg('cqMsg'+k,'Still not handed off: '+h.error,true);
+      else setMsg('cqMsg'+k, h.orderNo ? 'Order '+h.orderNo+' is in Omega Logic.' : 'Handed off to Omega Logic.');
+    });
+  }).catch(function(e){ setMsg('cqMsg'+i,(e&&e.message)||'Could not hand it off.',true); });
+}
+/* The rep's own view of one quote: cost, markup and margin (never on the
+   customer's copy), who it went to, the hand-off, the ladder and the log. */
+function cqDetails(i){
+  var q=CQ[i]; if(!q) return;
+  var box=document.getElementById('cqDet'+i), b=document.getElementById('cqDetBtn'+i);
+  if (!box.classList.contains('hide')) { box.classList.add('hide'); if(b) b.textContent='Details'; return; }
+  box.classList.remove('hide'); if(b) b.textContent='Hide details';
+  box.innerHTML='<div class="meta">Loading…</div>';
+  return cqApi('GET','?id='+encodeURIComponent(q.id)).then(function(j){ box.innerHTML = cqDetailHtml(j||{}); })
+    .catch(function(e){ box.innerHTML='<div class="msg bad">'+esc((e&&e.message)||'Could not load the quote.')+'</div>'; });
+}
+function cqDetailHtml(j){
+  var t=j.quote||{}, inn=t.internal||{}, cost=inn.cost||{}, acc=t.acceptance||{}, h=t.handoff||null, lad=j.ladder||null;
+  var L = j.logic && typeof j.logic==='object' && typeof j.logic.on==='boolean' ? j.logic : null, offer = t.status==='approved' && L && !L.on ? cqOffer(L) : null;
+  var link = L && !L.on ? '' : cqLogic(h);
+  function kv(k,v){ return '<div><b>'+esc(k)+'</b>'+v+'</div>'; }
+  var pct = function(v){ return v==null||v==='' ? '—' : esc(typeof v==='number' ? v+'%' : v); };
+  var html = '<div class="kv">'
+    + kv('Customer price', esc((t.price&&t.price.total)||'—'))
+    + kv('Cost (the Run)', cost.total!=null ? esc(cqMoney(cost.total))+(cost.lo!=null&&cost.hi!=null?' <span class="meta">('+esc(cqMoney(cost.lo))+' – '+esc(cqMoney(cost.hi))+')</span>':'') : '—')
+    + kv('Markup', pct(inn.markupPct))
+    + kv('Margin', inn.margin!=null ? esc(cqMoney(inn.margin))+(inn.marginPct!=null?' · '+pct(inn.marginPct):'') : '—')
+    + kv('Sent to', esc(acc.sentTo||'—'))
+    + kv('Email', esc(cqMail(t.mailState)))
+    + kv('Omega Logic', (h ? (h.orderNo ? (link ? '<a href="'+esc(link)+'">Order '+esc(h.orderNo)+' · Open in Omega Logic</a>' : 'Order '+esc(h.orderNo))
+        + (h.procure && h.procure.mfr ? ' <span class="meta">(battery bought in from '+esc(h.procure.mfr)+')</span>' : '') : h.error ? 'Not handed off' : '—') : t.status==='approved' ? 'Not handed off yet' : '—')
+        + (offer ? '<div class="meta">'+(offer.href ? esc(offer.line.replace(/ Add it .*$/,''))+' <a href="'+esc(offer.href)+'">Add Omega Logic</a> to fulfil approved proposals in your own office.' : esc(offer.line))+'</div>' : ''))
+    + '</div>';
+  if (cost.estimateClassPlain) html += '<p class="meta" style="margin-top:6px">'+esc(cost.estimateClassPlain)+'</p>';
+  var div = Array.isArray(cost.divisions) ? cost.divisions : [];
+  if (div.length) html += '<table style="margin-top:8px"><tbody>'+div.map(function(d){ return '<tr><td>'+esc(d.name||'')+'</td><td class="num">'+esc(cqMoney(d.amount))+'</td></tr>'; }).join('')+'</tbody></table>';
+  if (lad && Array.isArray(lad.steps) && lad.steps.length) {
+    html += '<ul class="ladder">'+lad.steps.map(function(s){ return '<li class="'+(s.state==='done'||s.state==='current'?s.state:'')+'" title="'+esc(s.note||'')+'">'+esc(s.label||s.key)+'</li>'; }).join('')+'</ul>';
+    if (lad.off) html += '<p class="meta">'+esc(lad.off.label||'')+(lad.off.note?': '+esc(lad.off.note):'')+'</p>';
+  }
+  var ev = Array.isArray(t.events) ? t.events.slice(-20).reverse() : [];
+  if (ev.length) html += '<p class="meta" style="margin-top:8px">'+ev.map(function(e){ return when(e.at)+' · '+esc(e.what||''); }).join('<br>')+'</p>';
+  return html + '<p class="meta" style="margin-top:8px">Internal: your cost and margin are never shown to the customer.</p>';
 }
 
 /* ══════════════════════════════════════════════════════════════════════
@@ -615,8 +1003,9 @@ function post(body){
   });
 }
 window.addEventListener('hashchange', function(){
-  var h=String(location.hash||'').replace('#','').toLowerCase();
-  if(h==='received'||h==='sent') showTab(h);
+  var h=hashTab();
+  if(h==='customer'||h==='received'||h==='sent') showTab(h);
+  if(h==='customer') focusQuote();
 });
 </script>
 </body>

@@ -32,7 +32,7 @@
 'use strict';
 var fs = require('fs'), path = require('path'), os = require('os'), Guard = require('./guard'), Discreet = require('../_lib/discreet');
 var PW = (function () { try { return require.resolve('playwright'); } catch (e) { return '/opt/node22/lib/node_modules/playwright'; } })(), chromium = require(PW).chromium;
-var CHROME = fs.existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : chromium.executablePath();
+var CHROME = process.env.CHROME || (fs.existsSync('/opt/pw-browsers/chromium-1194/chrome-linux/chrome') ? '/opt/pw-browsers/chromium-1194/chrome-linux/chrome' : chromium.executablePath());
 var DRAFT = process.argv.indexOf('--draft') >= 0;
 var SERVED = path.resolve(__dirname, '..', '..', 'guides'), SHOTS = path.join(__dirname, 'shots');
 var oi = process.argv.indexOf('--out');

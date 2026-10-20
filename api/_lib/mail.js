@@ -113,8 +113,11 @@ function wlLayout(brand, title, bodyHtml) {
     + (foot ? '<div style="margin-top:28px;padding-top:16px;border-top:1px solid rgba(20,23,26,0.16);font-size:12px;color:#5B6672">' + foot + '</div>' : '')
     + '</div></div>';
 }
-function button(href, label) {
-  return '<p style="margin:24px 0"><a href="' + esc(href) + '" style="display:inline-block;background:linear-gradient(135deg,#006F9A,#00A9A4);color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:10px">' + esc(label) + '</a></p>';
+/* `accent` (optional, a hex colour) paints the button in a seller's own
+   colour for mail under their brand (wlLayout); without one it is ours. */
+function button(href, label, accent) {
+  var bg = /^#[0-9a-f]{3}([0-9a-f]{3})?$/i.test(String(accent || '')) ? accent : 'linear-gradient(135deg,#006F9A,#00A9A4)';
+  return '<p style="margin:24px 0"><a href="' + esc(href) + '" style="display:inline-block;background:' + bg + ';color:#fff;text-decoration:none;font-weight:700;padding:13px 22px;border-radius:10px">' + esc(label) + '</a></p>';
 }
 
 function send(to, subject, html, text, opts) {
@@ -277,6 +280,52 @@ var T = {
         + esc(o.planDisplay || '') + ' at ' + esc(o.monthlyDisplay || '') + '.</p>' + button(o.url, 'Open your proposal')
         + '<p>It is valid until <b>' + esc(o.validUntil || '') + '</b>. Accept it online, or reply to this email with questions.</p>' + (o.note ? '<p>' + esc(o.note) + '</p>' : '')),
       null, o.replyTo ? { replyTo: o.replyTo } : {});
+  },
+  /* A seller's customer quote (api/customer-quote.js send): to the
+     seller's CUSTOMER, in the seller's brand (wlLayout: none of our marks
+     unless the contract's attribution line is passed), the link carrying the
+     key that opens it. Reply-To and a copy go to the rep. `from` is passed
+     only for a white-labelled seller with its own verified sending address;
+     the door refuses email under a white label without one. */
+  customerQuote: function (o) {
+    var b = o.brand || {}, seller = b.name || 'Your supplier';
+    var body = '<p>' + (o.customerName ? 'Hello ' + esc(o.customerName) + '. ' : '') + esc(seller) + ' has prepared a proposal'
+      + (o.siteLine ? ' for <b>' + esc(o.siteLine) + '</b>' : '') + (o.totalDisplay ? ': <b>' + esc(o.totalDisplay) + '</b>' : '') + '.</p>'
+      + (o.message ? '<p style="white-space:pre-wrap;border-left:3px solid ' + esc(/^#[0-9a-f]{3,8}$/i.test(String(b.accent || '')) ? b.accent : '#2B5FA8') + ';padding-left:14px">' + esc(o.message) + '</p>' : '')
+      + button(o.url, 'Review and approve', b.accent)
+      /* the site map is a part of the same link (omega-quote-deck.js PARTS;
+         Tommy, 2026-10-17: "send a site map and a proposal") */
+      + (o.url ? '<p>The proposal, its quote and the <a href="' + esc(o.url + '#sitemap') + '">site map</a> open from that link; each prints on its own.</p>' : '')
+      + '<p>' + (o.validUntil ? 'It is valid until <b>' + esc(o.validUntil) + '</b>. ' : '') + 'Approve it online, or reply to this email with questions'
+      + (o.repName ? ' and ' + esc(o.repName) + ' will answer' : '') + '.</p>'
+      + (o.quoteNo ? '<p style="font-size:13px;color:#5B6672">Quote ' + esc(o.quoteNo) + '</p>' : '');
+    var opts = {}; if (o.replyTo) opts.replyTo = o.replyTo; if (o.cc) opts.cc = o.cc; if (o.from) opts.from = o.from;
+    return send(o.email, seller + ' proposal' + (o.quoteNo ? ' ' + o.quoteNo : '') + (o.siteLine ? ' — ' + o.siteLine : ''),
+      wlLayout(b, 'Your proposal is ready', body), null, opts);
+  },
+  /* The customer answered a quote (approved, declined, or asked a question):
+     to the rep who sent it, in the seller's brand, Reply-To the customer when
+     they gave an address. `url` opens the quote on the Quote Desk. */
+  quoteDecision: function (o) {
+    var b = o.brand || {}, who = o.customerName || 'Your customer', what, title;
+    if (o.decision === 'approved') {
+      title = 'Quote approved';
+      what = '<p><b>' + esc(who) + '</b>' + (o.company ? ' (' + esc(o.company) + ')' : '') + ' approved quote <b>' + esc(o.quoteNo || '') + '</b>'
+        + (o.approvedBy ? ', signed by ' + esc(o.approvedBy) : '') + '.</p>'
+        + (o.orderNo ? '<p>The order request ' + esc(o.orderNo) + ' is with ' + esc(o.manufacturer || 'the manufacturer') + ' to price; nothing was accepted or charged.</p>' : '')
+        + (o.handoffError ? '<p>The order request could not be created yet: ' + esc(o.handoffError) + ' Open the quote to retry.</p>' : '');
+    } else if (o.decision === 'declined') {
+      title = 'Quote declined';
+      what = '<p><b>' + esc(who) + '</b>' + (o.company ? ' (' + esc(o.company) + ')' : '') + ' declined quote <b>' + esc(o.quoteNo || '') + '</b>.</p>'
+        + (o.reason ? '<p style="white-space:pre-wrap">' + esc(o.reason) + '</p>' : '');
+    } else {
+      title = 'A question about your quote';
+      what = '<p><b>' + esc(who) + '</b>' + (o.company ? ' (' + esc(o.company) + ')' : '') + ' asked about quote <b>' + esc(o.quoteNo || '') + '</b>:</p>'
+        + '<p style="white-space:pre-wrap">' + esc(o.message || '') + '</p>';
+    }
+    var opts = {}; if (o.replyTo) opts.replyTo = o.replyTo; if (o.from) opts.from = o.from;
+    return send(o.email, title + ': ' + (o.quoteNo || '') + (o.company ? ' · ' + o.company : ''),
+      wlLayout(b, title, what + (o.url ? button(o.url, 'Open the quote', b.accent) : '')), null, opts);
   },
   rejected: function (o) {
     return send(o.email, 'About your ClearSky-OMEGA workspace request',

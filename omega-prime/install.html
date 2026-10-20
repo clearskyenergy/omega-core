@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+     omega-prime/install.html — the download link for Omega Prime.
+     Clean URL /omega-prime/install (vercel.json cleanUrls). Same manifest
+     and service worker as the app; Chrome's Install button uses them, and
+     iPhone uses Safari's Add to Home Screen. Opened from a home-screen
+     icon, this page steps straight into Omega Prime. No sign-in, no API. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0B2A3D">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Omega Prime">
+<title>Install Omega Prime</title>
+<link rel="manifest" href="/omega-prime.webmanifest">
+<link rel="icon" href="/icons/omega-prime-192.png" sizes="192x192" type="image/png">
+<link rel="apple-touch-icon" href="/icons/omega-prime-180.png" sizes="180x180">
+<script>
+if (window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone) location.replace('/omega-prime');
+</script>
+<style>
+:root{--rail:#0B2A3D;--page:#F5F4F0;--ink:#14171A;--ink2:#556B82;--line:#E4E8EC;--brand:#2B5FA8;--fen:#E2701B;--teal:#3FAFC6}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--page);color:var(--ink);font:16px/1.45 system-ui,-apple-system,"Segoe UI",sans-serif}
+body{min-height:100dvh}
+header{background:var(--rail);color:#fff;padding:calc(18px + env(safe-area-inset-top,0px)) 20px 18px;display:flex;align-items:center;gap:12px}
+header img.mark{width:44px;height:44px;border-radius:10px}
+header b{display:block;letter-spacing:.14em;font-size:13px}
+header span{color:#C9D6E2;font-size:13px}
+main{max-width:480px;margin:0 auto;padding:20px 16px calc(28px + env(safe-area-inset-bottom,0px))}
+h1{font-size:28px;line-height:1.15;margin:0 0 8px}
+.lead{margin:0 0 18px;color:var(--ink2)}
+.card{background:#fff;border:1px solid var(--line);border-radius:12px;padding:16px;margin:0 0 12px}
+.card h2{margin:0 0 8px;font-size:16px}
+ol{margin:0;padding-left:1.2em}
+li{margin:6px 0}
+.qr{display:flex;flex-direction:column;align-items:center;gap:8px;text-align:center}
+.qr svg{width:220px;height:220px;max-width:100%;background:#fff}
+.url{width:100%;font:14px/1.3 ui-monospace,Menlo,monospace;padding:10px 12px;border:1px solid var(--line);border-radius:8px;background:#fff;color:var(--ink)}
+button,a.btn{font:600 16px/1 system-ui,sans-serif;min-height:48px;border-radius:8px;display:flex;align-items:center;justify-content:center;width:100%;text-decoration:none;cursor:pointer}
+#installBtn{background:var(--brand);color:#fff;border:0;margin-top:10px}
+#installBtn:disabled{opacity:.6}
+a.btn{background:var(--rail);color:#fff;margin-top:8px}
+a.btn.ghost{background:#fff;color:var(--brand);border:1px solid var(--brand)}
+.note{color:var(--ink2);font-size:14px;margin:8px 0 0}
+.ok{background:#E3F2EA;color:#1d5a3f;border-radius:8px;padding:10px 12px;margin-top:10px}
+.fen{color:var(--fen);font-weight:700}
+</style>
+</head>
+<body>
+<header>
+  <img class="mark" src="/icons/omega-prime-192.png" alt="">
+  <div><b>OMEGA</b><span>Prime</span></div>
+</header>
+<main>
+  <h1>Install Omega Prime</h1>
+  <p class="lead">The guided site flow, on your home screen. One site: the grid, the circuit, the system, and the quote.</p>
+
+  <div class="card qr">
+    <div id="qr" role="img" aria-label="QR code linking to this install page"></div>
+    <p class="note">Scan with the phone's camera. It opens this page.</p>
+    <input class="url" id="url" readonly value="">
+  </div>
+
+  <div class="card" id="iphone">
+    <h2>iPhone <span class="fen">· Safari</span></h2>
+    <ol>
+      <li>Open this page in <b>Safari</b> (Chrome on iPhone cannot add it).</li>
+      <li>Tap the <b>Share</b> button (the square with the arrow).</li>
+      <li>Tap <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+    </ol>
+    <p class="note">The icon is Omega Prime. Opening it starts the guided flow.</p>
+  </div>
+
+  <div class="card" id="android">
+    <h2>Android <span class="fen">· Chrome</span></h2>
+    <p class="note" id="installNote">In Chrome, tap the menu (⋮) and choose <b>Install app</b> or <b>Add to Home screen</b>.</p>
+    <button type="button" id="installBtn" hidden>Install Omega Prime</button>
+    <p class="ok" id="installed" hidden>Omega Prime is installed. Open it from your home screen.</p>
+  </div>
+
+  <a class="btn" href="/omega-prime">Open Omega Prime</a>
+  <a class="btn ghost" href="/workspace">Back to the workspace</a>
+</main>
+<script src="/vendor/qrcode-generator/2.0.4/qrcode.js"></script>
+<script src="/omega-prime-pwa.js"></script>
+<script>
+(function () {
+  var page = location.origin + '/omega-prime/install';
+  var box = document.getElementById('url');
+  box.value = page;
+  try {
+    var qr = qrcode(0, 'M');
+    qr.addData(page);
+    qr.make();
+    document.getElementById('qr').innerHTML = qr.createSvgTag({ cellSize: 4, margin: 2, scalable: true, alt: 'QR code linking to this install page' });
+  } catch (e) {}
+})();
+</script>
+</body>
+</html>

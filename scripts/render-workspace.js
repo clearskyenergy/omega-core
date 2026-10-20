@@ -295,6 +295,9 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/') === 0) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/workspace-team') return json({ manage: true, assignable: ['member', 'viewer', 'admin'], people: [], limited: false });
+    /* Customer quotes (Today's rows, the Quote Desk tab): none on these
+       fixtures, so Today and its fourth KPI read as they did. */
+    if (u === '/api/customer-quote' && !post) return json({ quotes: [] });
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
     if (u === '/api/offerings' && !post) return json(OFFERINGS.view(BOOK.proposed(), 'proposed'));
@@ -745,7 +748,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('#hub .hx[data-hub="design"]'); await wait(300);
     var drawer = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, rows: Array.prototype.map.call(e.querySelectorAll('.ows-row'), function (r) { return r.getAttribute('data-row') + (r.classList.contains('locked') ? ':locked' : ''); }) }; }).catch(function () { return null; });
     /* Design's extras are hidden until the person shows them (Tommy, 2026-10-20: "hide these … in settings a panel that allows us to hide or show the extra tools in the hex") */
-    ok('northstar: the Design panel lists Site Map and the sandbox, its extras one row away', drawer && /Design/.test(drawer.title) && drawer.rows.join() === 'editor,sandbox,hub-hidden', drawer);
+    ok('northstar: the Design panel lists Site Map and the sandbox, its extras one row away', drawer && /Design/.test(drawer.title) && drawer.rows.indexOf('editor') >= 0 && drawer.rows.indexOf('sandbox') >= 0 && drawer.rows[drawer.rows.length - 1] === 'hub-hidden' && !drawer.rows.some(function (r) { return /^(siteoptimizer|powerflow|sitediscovery|conductorsizing)/.test(r); }), drawer);
     await p.click('.ows-drawer .ows-row[data-row="hub-hidden"]'); await wait(300);
     var ht = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, first: (e.querySelector('.hub-group') || {}).getAttribute && e.querySelector('.hub-group').getAttribute('data-group'), off: Array.prototype.filter.call(e.querySelectorAll('.hub-group[data-group="design"] [data-tool]'), function (b) { return b.getAttribute('aria-checked') === 'false'; }).map(function (b) { return b.getAttribute('data-tool'); }) }; }).catch(function () { return null; });
     ok('northstar: Show opens Tools in the hub on Design, its extras switched off', ht && ht.title === 'Tools in the hub' && ht.first === 'design' && ht.off.join() === 'siteoptimizer,powerflow,sitediscovery,conductorsizing', ht);
@@ -756,7 +759,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.keyboard.press('Escape'); await wait(200);
     await p.click('#hub .hx[data-hub="design"]'); await wait(300);
     var shownNow = await p.$$eval('.ows-drawer .ows-row', function (r) { return r.map(function (x) { return x.getAttribute('data-row') + (x.classList.contains('locked') ? ':locked' : ''); }); });
-    ok('northstar: the extra shown is listed, locked on Standard, the rest still behind the row', shownNow.join() === 'editor,sandbox,siteoptimizer:locked,hub-hidden', shownNow);
+    ok('northstar: the extra shown is listed, locked on Standard, the rest still behind the row', shownNow.join() === drawer.rows.slice(0, -1).concat('siteoptimizer:locked', 'hub-hidden').join(), shownNow);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-design-panel.png') });
     await p.keyboard.press('Escape'); await wait(200);
     /* a page row wears the rail's own icon (Tommy, 2026-10-20: "icons need to match") */
@@ -1451,6 +1454,17 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       await p.click('#mkt-filters button >> nth=0'); await wait(150);
       var all = await p.evaluate(function () { return { cards: document.querySelectorAll('#market-grid .mkt-card').length, want: +((document.querySelector('#mkt-filters button .cnt') || {}).textContent || -1) }; });
       ok(name + ': each category filter shows exactly its own tools, and All brings every card back', chips.length > 2 && filt.every(function (f) { return f.on && f.sections === 1 && f.cards === f.want; }) && all.cards === all.want, { filt: filt.filter(function (f) { return !(f.on && f.sections === 1 && f.cards === f.want); }), all: all });
+    }
+    /* a project Omega Prime made links back into Prime and to its proposal's
+       Track (projects/{id}.prime, 2026-10-17: "this is so vital") */
+    if (page === '/projects.html') {
+      var pr = await p.evaluate(function () {
+        var row = Array.prototype.filter.call(document.querySelectorAll('.pt-row'), function (r) { return /Quarry Road/.test(r.textContent); })[0];
+        var a = row ? row.querySelectorAll('.pt-prime a') : [];
+        return { prime: a[0] ? a[0].getAttribute('href') : null, quote: a[1] ? a[1].getAttribute('href') : null, words: a[1] ? a[1].textContent : '',
+          others: document.querySelectorAll('.pt-prime').length };
+      });
+      ok(name + ': the project Prime made links back into Prime and to Track on its proposal, and no other row does', pr.prime === '/omega-prime?id=p-quarry' && pr.quote === '/omega-prime?id=p-quarry&step=track&quote=qt-0a1b2c3d4e5f6a7b' && /^Proposal viewed · /.test(pr.words) && pr.others === 1, pr);
     }
     var r = await SWEEP.run(p, {
       views: [{ name: page.replace(/^\/|\.html$/g, ''), enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],

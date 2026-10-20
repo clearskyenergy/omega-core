@@ -1,7 +1,10 @@
 /* Today is derived, ranked and honest — every rule pinned.
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
-   node scripts/tests/tworkspacetoday.js */
+   node scripts/tests/tworkspacetoday.js
+   Run in a US time zone on purpose: a date-only value (YYYY-MM-DD) read as
+   an instant is a day early west of UTC, which a UTC machine never shows. */
 'use strict';
+process.env.TZ = 'America/Chicago';
 var T = require('../../omega-workspace-today.js');
 var pass = 0, fail = 0, DAY = 86400000, NOW = Date.UTC(2026, 8, 26, 15, 0, 0), ME = 'ann@northstar.example';
 function ok(m, c, got) { if (c) { pass++; return; } fail++; console.log('  FAIL ' + m + (got !== undefined ? '  got: ' + JSON.stringify(got) : '')); }
@@ -167,6 +170,68 @@ var capBoard = T.board({ now: NOW, capital: HELIOS });
 ok('In flight carries the room as cards into the room on each deal, the rival\'s hold and the closed deal left out', capBoard.map(function (c) { return c.kind + ':' + c.id; }).sort().join() === 'capital:d-bid,capital:d-held,capital:d-sent,capital:d-won' && capBoard.every(function (c) { return c.href === '/finance#deal=' + c.id + '&tab=room'; }), capBoard);
 ok('the card ranks by what it needs and says it: the ending first look first, my offer in last', capBoard[0].id === 'd-held' && capBoard[capBoard.length - 1].id === 'd-bid' && capBoard[capBoard.length - 1].finance.note === 'Your offer is in', capBoard.map(function (c) { return c.id + ':' + c.finance.note; }));
 ok('dealHref is the ONE address: a deal, a tab, or the portal', T.dealHref('a b') === '/finance#deal=a%20b' && T.dealHref('x', 'room') === '/finance#deal=x&tab=room' && T.dealHref(null, 'market') === '/finance#market' && T.dealHref() === '/finance');
+
+/* 12 · customer quotes: the proposals this workspace sent from Omega Prime (rows from GET /api/customer-quote?list=1) */
+function cqRow(id, extra) { var q = { id: id, quoteNo: 'NS-Q-' + id, customer: { name: 'Pat Kim', company: 'Co ' + id } }; Object.keys(extra).forEach(function (k) { q[k] = extra[k]; }); return q; }
+var CQ = [
+  cqRow('a1', { status: 'approved', sentAt: NOW - 9 * DAY, decidedAt: NOW - 2 * DAY, stage: { key: 'ordered', label: 'In Omega Logic · awaiting price' } }),
+  cqRow('a2', { status: 'approved', decidedAt: NOW - DAY, stage: { key: 'approved', label: 'Approved' } }),
+  cqRow('a3', { status: 'approved', decidedAt: NOW - 30 * DAY, stage: { key: 'building', label: 'In production' } }),
+  cqRow('v1', { status: 'viewed', sentAt: NOW - 6 * DAY, viewedAt: NOW - 4 * DAY, viewCount: 3, validUntil: NOW + 20 * DAY }),
+  cqRow('v2', { status: 'viewed', sentAt: NOW - 2 * DAY, viewedAt: NOW - DAY, viewCount: 1, validUntil: NOW + 28 * DAY }),
+  cqRow('x1', { status: 'sent', sentAt: NOW - 28 * DAY, validUntil: NOW + 2 * DAY }),
+  cqRow('u1', { status: 'sent', sentAt: NOW - 6 * DAY, validUntil: NOW + 24 * DAY }),
+  cqRow('u2', { status: 'sent', sentAt: NOW - 2 * DAY, validUntil: NOW + 28 * DAY }),
+  cqRow('d1', { status: 'draft' }), cqRow('w1', { status: 'withdrawn', sentAt: NOW - 9 * DAY }), cqRow('n1', { status: 'declined', decidedAt: NOW - DAY }),
+  cqRow('e1', { status: 'sent', sentAt: NOW - 40 * DAY, validUntil: NOW - 10 * DAY })
+];
+var cqb = b({ customerQuotes: CQ });
+ok('customer quotes: approved and waiting in Omega Logic first, then the follow-up, the one expiring, the one never opened; a fresh send, a draft, a declined, a withdrawn and a lapsed one are quiet',
+  cqb.needs.map(function (r) { return r.key; }).join() === 'cqapproved:a1,cqapproved:a2,cqfollow:v1,cqexpiring:x1,cqunopened:u1', cqb.needs.map(function (r) { return r.key + ' ' + r.score; }));
+ok('the ranks are 79, 71, 48 and 41', cqb.needs.map(function (r) { return r.score; }).join() === '79,79,71,48,41', cqb.needs.map(function (r) { return r.score; }));
+ok('an approved quote already past pricing in Omega Logic needs nothing from the seller here', !cqb.needs.some(function (r) { return /a3/.test(r.key); }));
+ok('every quote row opens the Customer quotes tab of the Quote Desk', cqb.needs.every(function (r) { return r.href === '/rfq.html#customer'; }), cqb.needs.map(function (r) { return r.href; }));
+ok('approved and ordered reads the ladder\'s own words', /Co a1 approved NS-Q-a1/.test(cqb.needs[0].t) && /In Omega Logic · awaiting price\./.test(cqb.needs[0].s) && cqb.needs[0].cls === 'good', cqb.needs[0]);
+ok('approved with no order yet says the order has not reached Omega Logic', /has not reached Omega Logic/.test(cqb.needs[1].s), cqb.needs[1]);
+ok('the follow-up names who opened it, when, and how often', /Co v1 opened NS-Q-v1 4 days ago and has not decided/.test(cqb.needs[2].t) && /Viewed 3 times\. Follow up\./.test(cqb.needs[2].s) && cqb.needs[2].cta === 'Follow up', cqb.needs[2]);
+ok('the expiring one counts the days and says what to do', /NS-Q-x1 for Co x1 expires in 2 days/.test(cqb.needs[3].t) && /Not opened yet\. Resend it for a fresh link/.test(cqb.needs[3].s), cqb.needs[3]);
+ok('the unopened one says how long ago it went', /Co u1 has not opened NS-Q-u1/.test(cqb.needs[4].t) && /Sent 6 days ago/.test(cqb.needs[4].s), cqb.needs[4]);
+ok('a follow-up counts as awaiting my review', cqb.kpis[1].value === '1', cqb.kpis[1]);
+ok('the fourth number is quotes out: still open, with what was approved and what was opened beside it', cqb.kpis[3].key === 'customerquotes' && cqb.kpis[3].label === 'Quotes out' && cqb.kpis[3].value === '5' && cqb.kpis[3].delta === '3 approved · 2 opened' && cqb.kpis[3].href === '/rfq.html#customer', cqb.kpis[3]);
+var fx = b({ customerQuotes: [cqRow('f1', { status: 'viewed', sentAt: NOW - 25 * DAY, viewedAt: NOW - 20 * DAY, viewCount: 2, validUntil: NOW + DAY / 2 })] });
+ok('a quote both stale and expiring is ONE row, the follow-up, saying it expires', fx.needs.length === 1 && fx.needs[0].key === 'cqfollow:f1' && /it expires within a day\. Follow up\./.test(fx.needs[0].s), fx.needs);
+var crowdQ = b({ customerQuotes: [1, 2, 3, 4].map(function (i) { return cqRow('m' + i, { status: 'sent', sentAt: NOW - (5 + i) * DAY, validUntil: NOW + 20 * DAY }); }) });
+ok('three or more of a kind are ONE row naming three and counting the rest', crowdQ.needs.length === 1 && crowdQ.needs[0].key === 'cqunopened' && /4 quotes sent 5 or more days ago have not been opened/.test(crowdQ.needs[0].t) && /Co m1, Co m2, Co m3 and 1 more\./.test(crowdQ.needs[0].s) && crowdQ.needs[0].href === '/rfq.html#customer' && crowdQ.needs[0].score === 41, crowdQ.needs);
+ok('a grouped row carries no record of its own', !('q' in crowdQ.needs[0]) && !('kind' in crowdQ.needs[0]));
+ok('an approval in Omega Logic outranks an RFQ waiting for my price, and a follow-up sits between a quote back and a due to-do',
+  b({ customerQuotes: [CQ[0], CQ[3]], rfqsReceived: [{ status: 'sent', projectName: 'Elm', createdAt: NOW - DAY }], rfqsSent: [{ id: 'f', projectName: 'R', createdAt: NOW - DAY, recipients: [{ status: 'quoted' }] }], todos: [{ id: 't', text: 'Soon', assignee: ME, due: NOW + DAY }] }).needs.map(function (r) { return r.key.split(':')[0]; }).join() === 'cqapproved,price,quotes,cqfollow,todo');
+ok('a workspace with only drafts still shows quotes out (zero) as its fourth number, never an invented delta', (function () { var k = b({ customerQuotes: [cqRow('d', { status: 'draft' })] }).kpis[3]; return k.key === 'customerquotes' && k.value === '0' && k.delta === ''; })());
+var ex = b({ customerQuotes: [cqRow('ex', { status: 'approved', decidedAt: NOW - 3 * DAY, stage: { key: 'exception', label: 'Needs attention in Omega Logic' } })] });
+ok('an approved quote Omega Logic flagged is on the list in the ladder\'s words', ex.needs.length === 1 && ex.needs[0].key === 'cqapproved:ex' && /Needs attention in Omega Logic\./.test(ex.needs[0].s), ex.needs);
+/* the list sends valid-until as a DATE (YYYY-MM-DD): it lasts to the end of that day */
+var dayOf = function (ms) { return new Date(ms).toISOString().slice(0, 10); };
+var lastDay = b({ customerQuotes: [cqRow('ld', { status: 'sent', sentAt: NOW - 2 * DAY, validUntil: dayOf(NOW) })] });
+ok('a quote valid until today is still open and expires within a day', lastDay.needs.length === 1 && lastDay.needs[0].key === 'cqexpiring:ld' && /expires within a day/.test(lastDay.needs[0].t) && lastDay.kpis[3].value === '1', [lastDay.needs, lastDay.kpis[3]]);
+var gone = b({ customerQuotes: [cqRow('gd', { status: 'sent', sentAt: NOW - 40 * DAY, validUntil: dayOf(NOW - DAY) })] });
+ok('valid until yesterday is lapsed: no row and not out', gone.needs.length === 0 && gone.kpis[3].value === '0', [gone.needs, gone.kpis[3]]);
+/* the end of that day is the server's UTC day (this runs in Chicago): late
+   on the 26th in UTC it is still open; half an hour into the 27th UTC — the
+   evening of the 26th in Chicago — it has lapsed, as the server refuses it */
+function atNow(now, list) { return T.build({ now: now, me: ME, orgId: 'northstar.example', customerQuotes: list }); }
+var edgeQ = [cqRow('eq', { status: 'sent', sentAt: NOW - 2 * DAY, validUntil: '2026-09-26' })];
+var lateUtc = atNow(Date.UTC(2026, 8, 26, 23, 30), edgeQ), afterUtc = atNow(Date.UTC(2026, 8, 27, 0, 30), edgeQ);
+ok('valid until the 26th: still open at 23:30 UTC on the 26th', lateUtc.needs.length === 1 && lateUtc.needs[0].key === 'cqexpiring:eq' && lateUtc.kpis[3].value === '1', [lateUtc.needs, lateUtc.kpis[3]]);
+ok('and lapsed at 00:30 UTC on the 27th, whatever the local clock says', afterUtc.needs.length === 0 && afterUtc.kpis[3].value === '0', [afterUtc.needs, afterUtc.kpis[3]]);
+ok('an instant given for a valid-until is taken as it is', atNow(NOW, [cqRow('ei', { status: 'sent', sentAt: NOW - 2 * DAY, validUntil: NOW + 2 * 3600000 })]).needs[0].key === 'cqexpiring:ei');
+/* a to-do due on a DATE is the person's own day: shown as itself, never the
+   day before, and due (not overdue) until that day ends */
+function todo(due) { return b({ todos: [{ id: 't', text: 'Call the utility', assignee: ME, due: due }] }).needs[0]; }
+var soonD = todo('2026-09-28'), todayD = todo('2026-09-26'), pastD = todo('2026-09-25');
+ok('a to-do due on the 28th reads the 28th in Chicago', /^Due Sep 28/.test(soonD.s) && soonD.cls === 'warn', soonD);
+ok('one due today is due, not overdue, until the day ends', /^Due Sep 26/.test(todayD.s) && todayD.cls === 'warn', todayD);
+ok('one due yesterday is overdue and says the day it was due', /^Was due Sep 25/.test(pastD.s) && pastD.cls === 'hot', pastD);
+ok('a null row in the list is ignored', b({ customerQuotes: [null, CQ[6]] }).needs.length === 1);
+ok('no customer quotes: the fourth number is what it always was', b({ customerQuotes: [] }).kpis[3].key === 'online' && b({ rfqsSent: [{ id: 'f', recipients: [] }] }).kpis[3].key === 'quotes');
 
 console.log('tworkspacetoday: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

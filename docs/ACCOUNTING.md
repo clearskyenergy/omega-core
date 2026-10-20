@@ -79,7 +79,8 @@ Now there is, and the placeholder cannot happen again.
 8. **Per-workspace sync uses the workspace's own books**, never ClearSky's
    company. Tokens and account ids live only under `integrations/**`, which
    `firestore.rules` closes to browsers. No token, key or code reaches a
-   browser; the page lists missing env var **names** only.
+   browser. Connect is offered on the accounting page only when that
+   provider is configured; missing variable names stay in this document.
 9. **Only invoices issued while a provider was chosen are pushed
    automatically** (`ledger.state === 'pending'`). An invoice issued before
    (Acme's deposit) is pushed or **linked** by an explicit action, so
@@ -234,19 +235,25 @@ order change and its order event: `ledger-invoice-issued`,
 - **Deposits expected** on the dashboard (`S.finance`) includes a deposit
   still open on an order released on PO, whatever stage the order has moved
   to, so the Cash flow panel agrees with itself and with "On PO credit".
-- **What an action says is shown where the person is looking**: inside the
-  open drawer (it covers the page on a phone), and a failed push or sync
-  redraws the row so the error kept on the invoice is on screen. A void the
-  server answers with "choose keep building on the PO, or hold" (the order
-  reached the plant after the page loaded) now offers that choice in the
-  dialog. Release on PO says whether the plant has actually started.
+- **The invoice opens in the page, under the totals, and does not cover
+  the list.** It leads with where the order is and the one next step
+  (deposit due, final payment due, or the payment recorded). The invoice
+  number, the books, and a correction sit under Invoice details. A failed
+  push or sync redraws the row so the error kept on the invoice is on
+  screen. A void the server answers with "choose keep building on the PO,
+  or hold" (the order reached the plant after the page loaded) offers that
+  choice in the dialog.
 - **"Connected"** means usable: a QuickBooks company whose refresh token has
   expired, or that was connected in the other Intuit environment, shows as
   not connected, with the reason, and the page offers Connect again.
 - **Stripe counts as configured only with `STRIPE_CONNECT_WEBHOOK_SECRET`
   set**, so a deployment never sends invoices it cannot hear about.
 
-## Deployment setup (not done yet — the page says exactly what is missing)
+## Deployment setup
+
+The accounting page offers Connect only when that provider is configured.
+It does not show a disabled Connect button, and it does not print the
+missing variable names.
 
 QuickBooks, the workspace's own company:
 - `QBO_CLIENT_ID`, `QBO_CLIENT_SECRET` (shared with ClearSky's connection),

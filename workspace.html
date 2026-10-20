@@ -44,6 +44,10 @@
      its own boot splash below), so a click to Projects or a tool never
      flashes the next page. -->
 <script src="/omega-splash.js?v=1" data-boot="no"></script>
+<!-- The release switch. This page stays the classic home until an org, a
+     person or ?ui=v2 says otherwise. ?ui=v1 and ?ui=classic stay here.
+     See docs/V2-LAUNCH.md. -->
+<script src="/omega-experience.js"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="author" content="ClearSky Energy Solutions LLC">
 <meta name="copyright" content="© 2025–2026 ClearSky Energy Solutions LLC. Proprietary.">
@@ -131,6 +135,9 @@ body.refused #refused{display:block}body.refused #content{display:none}
 .pc .who{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--ows-ink2);margin-top:auto;padding-top:8px;border-top:1px solid var(--ows-line)}.pc .who .av{width:20px;height:20px;font-size:9px}.pc .who .nm{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.pc .who .ows-pill{margin-left:auto;flex:none}
 /* the card's face is one button (open); Assign is its own control beneath, so the two never nest */
 .pc-main{display:flex;flex-direction:column;gap:6px;background:none;border:0;padding:0;text-align:left;color:inherit;width:100%;cursor:pointer;font:inherit}
+/* a project Omega Prime made: back into Prime, and where its proposal stands */
+.pc .prime-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12px}
+.pc .prime-q{font-weight:600;text-decoration:none;color:var(--ows-ink2)}.pc .prime-q.sent,.pc .prime-q.viewed{color:var(--ows-brand)}.pc .prime-q.approved{color:var(--ows-green)}.pc .prime-q.declined,.pc .prime-q.expired,.pc .prime-q.withdrawn{color:var(--ows-coral)}
 .pc .why{font-size:12px;color:var(--ows-ink2);line-height:1.35}.pc .why.good{color:var(--ows-green)}.pc .why.warn{color:var(--ows-amber)}.pc .why.hot{color:var(--ows-coral)}
 .pc .fin{font:500 11px "DM Mono",monospace;color:var(--ows-teal-d);background:var(--ows-teal-soft);border-radius:6px;padding:3px 7px;align-self:flex-start}
 .next .row{cursor:pointer;transition:box-shadow .12s}.next .row:hover{box-shadow:var(--ows-shadow)}
@@ -336,7 +343,7 @@ var WORKSPACES = CFG.workspaces || {};
 var S = window.OmegaWorkspaceShell, HUB = window.OmegaWorkspaceHub, T = window.OMEGATools, TODAY = window.OmegaWorkspaceToday;
 var esc = S.esc, byId = function (id) { return document.getElementById(id); };
 var WS = null, USER = null, ME = '', PROFILE = null;
-var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [], finance: [], capital: null };
+var DATA = { projects: [], todos: [], messages: [], members: [], pinned: [], prefs: null, rfqsSent: [], rfqsReceived: [], referrals: [], finance: [], capital: null, customerQuotes: [] };
 var PREFS_DEFAULT = { presence: true, feed: true, pulse: true, portfolio: true, partners: true, guides: false };
 var PORTFOLIO = null, PORTFOLIO_ASKED = false;
 var PULSE = null, PULSE_ASKED = false;
@@ -369,7 +376,7 @@ function applyViewAs(ws) {
 }
 /* ── the chrome, before anyone is known ─────────────────────────────────── */
 S.mount({ current: 'home', tabs: true, search: search, onNav: function (key) {
-  if (key === 'home') { go('home'); return true; }
+  if (key === 'home') { returnHome(); return true; }
   if (key === 'tools' || key === 'modules' || key === 'team' || key === 'feed') { go(key); return true; }
   if (key === 'billing') { openBilling(); return true; }
   if (key === 'settings') { settingsDrawer(); return true; }
@@ -544,14 +551,15 @@ function load() {
       var out = [], jobs = [];
       s.forEach(function (d) { var f = d.data() || {}; f.id = d.id; f.offers = []; out.push(f); jobs.push(d.ref.collection('offers').get().then(function (os) { os.forEach(function (x) { var o = x.data() || {}; o.id = x.id; f.offers.push(o); }); })['catch'](function () {})); });
       return Promise.all(jobs).then(function () { return out; });
-    })['catch'](function () { return []; }) : Promise.resolve([])
+    })['catch'](function () { return []; }) : Promise.resolve([]),
+    loadCustomerQuotes()
   ]).then(function (r) {
     return loadCapital().then(function (cap) { DATA.capital = cap; return r; });
   }).then(function (r) {
     var seen = {}; DATA.projects = [];
     r[0].concat(r[1]).forEach(function (p) { if (!seen[p.id]) { seen[p.id] = 1; DATA.projects.push(p); } });
     DATA.projects.sort(function (a, b) { return ms(b.updatedAt || b.createdAt) - ms(a.updatedAt || a.createdAt); });
-    DATA.todos = r[2]; DATA.messages = r[3]; DATA.members = r[4]; DATA.pinned = r[5] || []; DATA.prefs = r[6]; PROFILE = r[7]; DATA.rfqsSent = r[8]; DATA.rfqsReceived = r[9]; DATA.referrals = r[10]; DATA.finance = r[11] || [];
+    DATA.todos = r[2]; DATA.messages = r[3]; DATA.members = r[4]; DATA.pinned = r[5] || []; DATA.prefs = r[6]; PROFILE = r[7]; DATA.rfqsSent = r[8]; DATA.rfqsReceived = r[9]; DATA.referrals = r[10]; DATA.finance = r[11] || []; DATA.customerQuotes = r[12] || [];
     S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() });
     render();
     loadWorkspacePeople();
@@ -590,6 +598,19 @@ function loadCapital() {
       })).then(function () { return cap; });
     });
   })['catch'](function () { return null; });
+}
+/* the proposals this workspace sent its own customers from Omega Prime
+   (customer_quotes is closed to browsers): GET /api/customer-quote?list=1,
+   which resolves the workspace off the token, so it is read only on the
+   person's own home workspace (the door refuses a grant into another).
+   Today ranks them; any failure reads as no quotes, never an error here. */
+function loadCustomerQuotes() {
+  if (!USER || typeof USER.getIdToken !== 'function' || !window.fetch) return Promise.resolve([]);
+  var home = window.OmegaTenant && typeof OmegaTenant.homeOrg === 'function' ? OmegaTenant.homeOrg(USER) : WS.orgId;
+  if (home && home !== WS.orgId) return Promise.resolve([]);
+  return USER.getIdToken().then(function (tok) {
+    return fetch('/api/customer-quote?list=1', { cache: 'no-store', headers: { Authorization: 'Bearer ' + tok } });
+  }).then(function (res) { return res.ok ? res.json() : null; }).then(function (j) { return j && Array.isArray(j.quotes) ? j.quotes : []; })['catch'](function () { return []; });
 }
 function ms(t) { if (!t) return 0; if (t.toDate) return t.toDate().getTime(); if (t.seconds) return t.seconds * 1000; var d = new Date(t); return isNaN(d) ? 0 : d.getTime(); }
 function ago(t) { var m = (Date.now() - ms(t)) / 60000; if (m < 1) return 'now'; if (m < 60) return Math.round(m) + 'm'; if (m < 1440) return Math.round(m / 60) + 'h'; var d = Math.round(m / 1440); return d === 1 ? 'Yesterday' : d + 'd'; }
@@ -632,9 +653,27 @@ function launch(t) {
   if (t.action) { var seed = String(t.action).split(':')[1] || 'bess'; OmegaNewProject.open(seed); return; }
   var h = href(t); if (h) window.location.href = h;
 }
+/* A project Omega Prime made carries the way back into Prime and where its
+   proposal stands (projects/{id}.prime.quote, the server's mirror; Tommy,
+   2026-10-17: "when I do something in Prime I need to be able to re-access
+   that … and the quotes I had sent out … track if the quote had been sent
+   and accepted"). */
+var PRIME_QUOTE_WORD = { draft: 'Proposal draft', sent: 'Proposal sent', viewed: 'Proposal viewed', approved: 'Proposal approved',
+  declined: 'Proposal declined', expired: 'Proposal expired', withdrawn: 'Proposal withdrawn' };
+function primeRow(id, p) {
+  var pr = p && p.prime && typeof p.prime === 'object' ? p.prime : null;
+  if (!pr) return '';
+  var q = pr.quote && typeof pr.quote === 'object' && pr.quote.id ? pr.quote : null;
+  var st = q ? String(q.status || '').replace(/[^a-z]/g, '') : '';
+  var href = '/omega-prime?id=' + encodeURIComponent(id) + (q ? '&step=track&quote=' + encodeURIComponent(q.id) : '');
+  return '<div class="prime-row"><a class="ows-pill sm ghost" href="/omega-prime?id=' + esc(encodeURIComponent(id)) + '">Omega Prime</a>'
+    + (q ? '<a class="prime-q ' + st + '" href="' + esc(href) + '">' + esc(PRIME_QUOTE_WORD[st] || 'Proposal') + (q.quoteNo ? ' · ' + esc(q.quoteNo) : '') + '</a>' : '')
+    + '</div>';
+}
 function openProject(id) {
   var slug = WS && WS.allowedDomain ? String(WS.allowedDomain).split('.')[0] : '';
-  window.location.href = '/editor.html?id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
+  var project = DATA.projects.filter(function(p){return p.id === id;})[0];
+  window.location.href = (project && project.editor === 'v2' ? '/editor-v2?id=' : '/editor.html?id=') + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
 }
 function toolIcon(t) { return t && t.icon ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="' + esc(t.icon) + '"/></svg>' : S.ICON.tools; }
 
@@ -644,7 +683,7 @@ function today() {
   if (TODAY_CACHE) return TODAY_CACHE;
   var pa = WS.packageAccess;
   TODAY_CACHE = TODAY.build({ now: Date.now(), me: ME, orgId: WS.orgId, pendingApproval: !!WS.pendingApproval, readOnly: !!(pa && pa.packaged && pa.readOnly), billingNotice: pa && pa.billingNotice || null, trialEndsAt: trialEnd(), pastDue: pastDue(),
-    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, referrals: DATA.referrals, finance: DATA.finance, capital: DATA.capital, canOpen: function (k) { return open(tool(k)); } });
+    projects: DATA.projects, todos: DATA.todos, rfqsSent: DATA.rfqsSent, rfqsReceived: DATA.rfqsReceived, customerQuotes: DATA.customerQuotes, referrals: DATA.referrals, finance: DATA.finance, capital: DATA.capital, canOpen: function (k) { return open(tool(k)); } });
   return TODAY_CACHE;
 }
 function needs() { return today().needs; }
@@ -989,7 +1028,7 @@ function renderFlight() {
     var kind = TODAY.kindLabels(p).join(' · '), addr = String(p.address || p.utility || ''), where = addr && addr !== String(p.name || '') ? addr : '';
     var size = p.bessKwh ? (p.bessKwh >= 1000 ? (p.bessKwh / 1000).toFixed(1) + ' MWh' : p.bessKwh + ' kWh') : (kind ? kind + (where ? ' · ' + where : '') : addr);
     return '<article class="pc" data-proj="' + esc(c.id) + '"><button class="pc-main" type="button" data-open="' + esc(c.id) + '"><span class="stage">' + esc(STAGE_LABEL[p.stage] || 'Candidate') + '</span><b>' + esc(p.name || 'Untitled') + '</b><div class="meta"><span>' + esc(size) + '</span><span class="num">' + pct + '%</span></div><div class="bar"><i style="width:' + pct + '%"></i></div><div class="why ' + esc(c.whyCls) + '">' + esc(c.why) + '</div>' + (c.finance ? '<span class="fin">Finance marketplace · ' + esc(c.finance.note) + '</span>' : '') + '</button>'
-      + '<div class="who"><span class="av' + (mine ? ' me' : '') + '">' + esc(ini(owner || '?')) + '</span><span class="nm">' + (mine ? 'You' : esc(owner || 'Unassigned')) + '</span>' + (ours ? '<button class="ows-pill sm' + (owner ? ' ghost' : ' primary') + '" type="button" data-assign="' + esc(c.id) + '">' + (owner ? 'Reassign' : 'Assign') + '</button>' : '<span class="ows-chip">Partner\'s project</span>') + '</div></article>';
+      + '<div class="who"><span class="av' + (mine ? ' me' : '') + '">' + esc(ini(owner || '?')) + '</span><span class="nm">' + (mine ? 'You' : esc(owner || 'Unassigned')) + '</span>' + (ours ? '<button class="ows-pill sm' + (owner ? ' ghost' : ' primary') + '" type="button" data-assign="' + esc(c.id) + '">' + (owner ? 'Reassign' : 'Assign') + '</button>' : '<span class="ows-chip">Partner\'s project</span>') + '</div>' + primeRow(c.id, p) + '</article>';
   }).join('') + '</div>';
   Array.prototype.forEach.call(b.querySelectorAll('[data-open]'), function (x) { x.addEventListener('click', function () { openProject(x.getAttribute('data-open')); }); });
   Array.prototype.forEach.call(b.querySelectorAll('[data-assign]'), function (x) { x.addEventListener('click', function () { assignDrawer(x.getAttribute('data-assign')); }); });
@@ -1915,9 +1954,15 @@ function search(qs) {
   Array.prototype.forEach.call(document.querySelectorAll('#flight-body .pc'), function (t) { t.style.display = !qs || t.textContent.toLowerCase().indexOf(qs) >= 0 ? '' : 'none'; });
   if (qs) go('tools');
 }
+function returnHome() {
+  /* The journey is not the home. /workspace-v2 opens from its own address
+     or from ?ui=v2 (omega-experience.js). Home, including back from a
+     section, stays on this page. */
+  go('home');
+}
 function route() {
   var h = (window.location.hash || '').slice(1);
-  if (!h) { go('home'); return; }
+  if (!h || h === 'home') { returnHome(); return; }
   if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer(); else if (h === 'hub-tools') hubToolsDrawer();
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
   else if (h.indexOf('module-') === 0) focusModule(h.slice(7));
@@ -1957,7 +2002,7 @@ function markFocus() {
   if (!MOD_FOCUS_DONE && view() === 'modules') { MOD_FOCUS_DONE = true; c.scrollIntoView({ block: 'center', behavior: 'auto' }); }
 }
 window.addEventListener('hashchange', function () { if (WS) route(); });
-Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); go('home'); }); });
+Array.prototype.forEach.call(document.querySelectorAll('#content .sec .back'), function (a) { a.addEventListener('click', function (e) { e.preventDefault(); returnHome(); }); });
 byId('customize').addEventListener('click', customizeDrawer);
 byId('new-project').addEventListener('click', function () { if (WS && WS.pendingApproval) { S.toast('Projects open once your workspace is approved'); return; } OmegaNewProject.open('bess'); });
 window.WORKSPACE_PAGE = { render: render, needs: needs, data: DATA };

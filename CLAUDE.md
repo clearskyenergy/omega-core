@@ -101,6 +101,8 @@ omega_orgs/{orgId}/storefront/counters# the durable daily order limit
 embed_keys/{omega_pk_…}               # a publishable key = ONE installation
 embed_configs/{id}                    # a designer's published quote, snapshot
 orders/{id}                           # tenant sells, ClearSky fulfils
+customer_quotes/{qt-…}                # a seller's proposal to its own customer (Admin SDK only)
+hosting_cache/{id}                    # published hosting capacity per point (Admin SDK only)
 ```
 
 Already-existing role/identity collections — use, don't duplicate:
@@ -657,7 +659,12 @@ is not built.
   may go — judged by
   the SAME `logic-access.authorize` every office endpoint runs (their email
   domain's workspace, an `org_members` grant; the ClearSky owner sees all).
-  One company: straight in; several: pick; none: said plainly. The phone
+  One company: straight in; several: pick; none: said plainly. A person
+  whose own workspace is open but holds no Omega Logic is told it is not on
+  the plan (`reason: 'notOnPlan'`). An owner or administrator gets *Add Omega
+  Logic to your plan*, which opens the Modules card `/workspace#module-logic-office`
+  (the one Opt-in). Anyone else is told to ask them. A closed or lapsed
+  workspace still says to contact ClearSky (2026-10-17). The phone
   remembers the choice and forgets it on sign-out; `?org=` in an old link
   only preselects. `/office/app.webmanifest` is the one office manifest.
   An app installed on an iPhone home screen signs in THROUGH ITS OWN HOST
@@ -674,12 +681,31 @@ is not built.
   with more than one company, a round ↻ and a Sign out pill — it fits a
   360px phone (`check:pages` office-app-header).
 - **One chrome.** `OmegaLogicTheme.chrome()` in `omega-logic-theme.js` paints
-  the header (name · who · Sign out) and the left menu on EVERY office page,
-  in the order the business runs. A page never builds its own menu; it calls
+  the header (name · who · Sign out) and the left menu on EVERY office page.
+  The menu is the hub: eight places named as the hex hub names them (Today,
+  Sales, Customers, Plant, Deliver, Stock, Money, Setup). The place you are
+  in shows its pages, and a caret opens any other. A page never builds its own menu; it calls
   `chrome({org, current, owner, brand, who, local})` after its API response.
   Website, installation and the URL generator are ClearSky's and show only
   for a ClearSky owner (`ownerFlag` remembers the answer for pages whose
   endpoint does not say; showing a link is never access).
+- **One path for every order** (2026-10-17, Tommy: "really clean up omega
+  logic and make it less complicated all streamlined just like we did with"
+  Omega Prime). Price → Deposit → Build → Final payment → Ship → Deliver →
+  On site → Complete is `api/_lib/office-stage.js path()`, the ONE rule. It
+  gives the step, the verdict and the one next action with whose it is,
+  built on `stageOf`/`actions` (D1 unchanged), the invoices, the delivery
+  legs and the units' custody (On site = every shipping unit bound to a
+  site). `api/logic-office.js` sends it on every order with `path` and
+  `pipeline`. The desktop home (`omega-logic.html`) is three views under the
+  bar: Today (`What needs you`, Start here first), Orders (`#orders`, the
+  guided order: bar, verdict, the one control, More about this order) and
+  Numbers (`#cash`); ClearSky's forms are `#clearsky`. The office app draws
+  the same bar and an inline guide, and opens `?org=&order=` links (Omega
+  Prime's Omega Logic button). The guide (`OmegaLogicTheme.guide`) never
+  offers a button the server refuses: someone else's step says whose.
+  Price, accept and ship stay on the desktop. `scripts/test-office-stage.js`
+  holds the rule.
 - **Stations do the work.** A BOM line may carry `station` (routing key) and
   `step`; the routing may carry `checks[]` per operation. `api/_lib/plant-work.js`
   (pure) turns those into the steps a bench shows for a unit, `judgeScan`
@@ -770,6 +796,24 @@ is not built.
   library, and written only as sites plus one `destination()` per unit by
   the four list actions on `api/my-sites.js` and `api/logic-custody.js` —
   the server recomputes the plan, the preview is the confirmation.
+  **A bought-in unit's warranty is the maker's, recorded on the unit**
+  (2026-10-17, Tommy approved the design: owners and administrators only,
+  the maker's word required): a battery the workspace buys in and has not
+  published (Omega Prime's `procure`; `custody.boughtIn(order, sku)` is the
+  ONE test, prime-order's own, so a `{reference:true}` line alone is a
+  maker's own unpublished unit, never bought in; `boughtInUnit` lets an RMA
+  replacement off another order through the unit it replaced) has no
+  catalog template, and publishing it would put it on the public
+  storefront. The office's
+  owner or administrator records `custody.makerWarranty` (terms, the
+  maker's HTTPS document or confirmation, who and when; never a status) on
+  the passport through `api/logic-custody.js` `maker-warranty`
+  (`custody.makerWarranty`, one unit or `scope: 'order'`, a custody event
+  each, one audit row); `templatesOf(product, unit)` reads it as one more
+  template (id `maker`) after the catalog's, so every coverage reader, Omega
+  Teleios included, sees it with no reader of its own; `replace` carries it
+  to the replacement. The customer sees the warranty and its document,
+  never the maker's confirmation.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
 - **An order's freight plan is DERIVED, and Accept plans through the
   ledger's own planner.** `api/_lib/freight.js` (pure, ES5, bundled) reads
@@ -1385,6 +1429,205 @@ dialog says so and nothing is mailed. `scripts/tests/thelios.js` pins the
 form's field names and the door. Design and the not-built list:
 `docs/HELIOS-INTAKE.md`.
 
+## Grid panel — Grid Atlas inside Site Map (2026-10-16)
+
+**The FENECON demo flow is how the product works** (Tommy: "that's how the
+Grid Atlas should work, and we should have the Grid Atlas built into the
+editor"; `docs/GUIDED-SITE-FLOW.md`). Analyze › Grid Check
+(`rb-grid-panel`, Omega Grid's, beside Grid Atlas) is `omega-grid-panel.js`:
+the project's site point and the BESS Guided Build's unit (never typed),
+the nearest substation from the Grid Atlas service the pre-screen already
+calls (`OmegaGridPrescreen`, `/api/grid-atlas`), then the serving utility
+and the circuit at the parcel from the national door Omega Prime asks
+(2026-10-17: `GV.hosting` → `POST /api/hosting-capacity` with the point,
+the unit and that substation; National hosting capacity, below), NET of the
+queue where the utility publishes one beside a gross figure, and the
+verdict — Fits / Fits only smaller / Needs a study, and the substation's
+chip — in the same answer from `api/_lib/grid-verdict.js` (gated as
+`/api/grid-atlas` is; every threshold is server-side). Every coverage case
+is drawn as Prime draws it (the utility's name, every candidate when the
+territory is not confident, where the power comes from, the provenance and
+the door's request log, the utility's own map), the queue and side words
+follow the answer (`queueNetted`, `basis`, a null `queuedKw` is "not
+published", never 0), the panel names no utility of its own, and the
+editor no longer loads `omega-comed-layers.js` (the Site Finder's). A door
+that does not answer is said and records nothing. `S.grid` carries the
+service's measurement plus `substation`, `circuit` and `verdict`
+(`GV.fromHosting`, the record Prime writes), rides `saveProject()`'s
+allowlist (with `savedBy`), is restored on load, and the pre-screen keeps
+the panel's answer when it re-measures the same point.
+`scripts/tests/tgridverdict.js` (the real door on a fake network: ComEd's
+sentence byte for byte, Mesa AZ). **Site Plan's Grid Atlas layer**
+(`omega-editor-v2-grid.js` in `editor-v2.html`) asks the same door the same
+way: no routing by state in the browser (Illinois outside ComEd is asked
+too, where it once was not), its card's lines drawn from the answer with
+the utility's own map as an https link, and `editor-v2.html` no longer loads
+the ComEd module; `scripts/tests/tgridlayer.js` runs it on the real door.
+`scripts/render-grid-panel.js` (in `check:pages`) holds both in Chromium:
+Site Map's Grid Check at ComEd, Mesa and on a 390 px phone, and Site Plan's
+layer at its Phoenix sample. The standalone Grid Atlas and Site Finder stay for
+prospecting many sites. Both the panel and Omega Prime ask through ONE
+client, `omega-grid-verdict.js` (the national door, `/api/grid-verdict`,
+the coverage words `COVERAGE`, and the `grid.*` record shape). **Omega
+Prime sets up the real project** (2026-10-16,
+Tommy: "it does the set up and system like the artifact sandbox"), and
+**carries it all the way to Omega Teleios** (2026-10-17, Tommy: "print a
+quote … cleancell's bess specs … remove fenecon … when we open in site map
+editor it needs to transfer over what we drew … save this process … send a
+simple proposal out that matches the tenant's details … track them … if it
+gets approved then it goes to omega logic to be fulfilled and when it is
+fulfilled … Omega Teleios (which means complete)"). `omega-prime.html` runs
+Site → Grid Atlas → Circuit → Load → Design → Proposal → Track. **Prime's
+own drawing (Design) is what the proposal is priced from**; Site Map is the
+detailed engineering editor a design is sent to, never its design of record
+(2026-10-20, Tommy: "this should come from the prime editor we used … the
+site map editor is for our detailed engineering drawings"). A site with no
+proposal out and no order can be deleted from *Continue a site*; the guide
+panel moves (kept per browser, docked on a phone):
+- **Units.** `omega-prime-project.js units()`: the workspace's own products
+  (a `PLACEHOLDER SPEC` row dropped), then Clean Cell's Rev H reference units
+  biggest first (LG JP-2, Smart Module, CC290/125, through
+  `omega-cleancell-catalog.js entries()`), then the CleanCell R60 (`PP.R60`,
+  pinned figure by figure to editor.html and `api/_lib/omega-core.js`).
+  FENECON's Industrial XXL only in FENECON's own workspace, first. EV
+  charging, Solar, Compute and Microgrid (main #348) list the editor's own
+  catalogs through `PP.forType`; a unit that is not a battery
+  (`PP.screenable`) is quote required, sized in Site Map: named utility,
+  nothing judged, priced or built as a battery. A unit whose maker has
+  not released its footprint is drawn at its REFERENCE size (2026-10-20,
+  Tommy: "it does it for fenecon unit but not on cleancell get that
+  fixed"): the CC290/125's reference cabinet, a 20 × 8 ft container where
+  the brochure names one (LG JP-2, Smart Module), `footprint: 'reference'`,
+  said to be confirmed on the submittal everywhere it shows; the rep's
+  typed submittal size replaces it; a unit with no figure at all stays a
+  marked point.
+- **The record.** The project is CREATED at Start (`projectDoc`) and the
+  address becomes `/omega-prime?id=`; every change after is one debounced
+  dotted `patch()` (`prime.*`, `grid.<part>`, `load`; never a drawing key;
+  `updatedAt`/`bessList` only until Site Map has saved), flushed before Site
+  Map, the Run or the proposal door read it. `restore()` resumes the whole
+  session; Site Map's Push to Prime / Push to Logic
+  (`?addr=&project=&step=logic`) resumes a project Prime made as itself
+  (`step=logic` is Track) and otherwise starts Prime on its address, never
+  attaching to a drawing it did not make. A footprint the maker has not
+  RELEASED (`dimensionsStatus`) is unknown until the rep types it.
+  `prime.layout` is v2 (`arrange()`: the unit long axis east–west,
+  its transformer then disconnect in a row east of it, 5 ft clear, a gear the
+  unit integrates not drawn; `conduitPath()`/`pathFt()` = editor.html
+  `_groundPolyFt`; FNV-1a `hash`), `prime.run` keeps the Run's input
+  (`runInput()`, the ONE price-site input browser and server compute).
+- **Circuit.** `GV.hosting` → `POST /api/hosting-capacity` (national hosting
+  capacity, below); the page names no utility of its own. The Load step asks
+  `/api/utility-rates` with the territory's `eia` and `name`.
+- **Open in Site Map** builds Prime's drawing in the EDITOR, exactly as drawn
+  (`omega-prime-handoff.js` on `omega:project-rendered`, which `doRender`
+  dispatches last): a `zonebox` for the BESS area, `_evAdd` evgear
+  bess/xfmr/disco/service at Prime's centres and true footprints,
+  `autoWireConduit` pad legs and the service run PVC-UG trenched on Prime's
+  L, one `omegaHistBatch`, then `saveProject()` (so `savedBy` rides); the
+  save adds only `prime.builtAt`/`prime.builtHash`. Never twice, never over a
+  drawing, never without a live map; the Guided Build is only the fallback
+  (`from=prime`, nothing placed). `_ppCollectFleet` carries `catalogKey`, so
+  the Run prices the R60 by its key. `scripts/tests/tprimetransfer.js`.
+- **Proposal.** `customer_quotes/{qt-…}` (Admin SDK only) through
+  `api/customer-quote.js` on `api/_lib/customer-quote.js`: the price is re-run
+  on the server from the project's own `prime.layout` and unit through
+  price-site `_helpers`; the rep sets a margin % (default 20) or a total, never
+  a body total; the customer view is an allowlist (never cost, margin or
+  markup). The seller's letterhead is `deck-brand.brandOf` plus
+  `omega_orgs/{org}.company` (written through `/api/tenant-branding`,
+  `deck-brand.cleanCompany`; never in `tenant_public`; `billing/profile`
+  when absent). `omega-quote-deck.js` is the ONE renderer (Prime's Proposal,
+  the Quote Desk's Print, the public `quote.html`): no money arithmetic, the
+  site plan in Web Mercator on Esri World Imagery export layers with the
+  drawing on top ("Imagery © Esri"), proved aligned by `tquotedeck.js`.
+  THREE PARTS of one record (Tommy: "send a site map and a proposal"):
+  `opts.part` 'proposal' (all of it), 'quote' (the priced summary, no plan)
+  or 'sitemap' (the drawn plan on its own page with what is on it, no
+  money); Prime and the Desk print each, the customer's one link opens on a
+  Proposal · Quote · Site map bar (`#sitemap` from the email's second link),
+  `scripts/tests/tquotedeckparts.js`.
+  Send follows the Helios door (own workspace, verified or `clientAdmin`,
+  `sendId` claimed in a transaction, 5 a quote and 50 a workspace a day,
+  each send a new 48-hex key, only its sha256 stored); a white label without
+  a verified `mailFrom` sends a link only. `quote.html` is public like
+  `proposal.html` (no tenant runtime, no Firebase, no-referrer): view (counted
+  in the door, sent → viewed), approve (the snapshot the customer saw),
+  decline, ask. Editing a sent quote returns it to draft and kills the link.
+- **Approved → Omega Logic.** `api/_lib/prime-order.js` makes ONE order in the
+  SELLER's own workspace (the quote's orgId; Tommy: "take us to the logic
+  function of the tenant I'm in"): `prime_<key>`, status `new`, awaiting the
+  office's price — never priced or accepted automatically. The line is
+  checked by `order-lifecycle.po` against the seller's published products;
+  a battery the seller has not published rides as `{reference:true, mfr}`
+  with `procure {mfr, sku, model}` (bought in). A seller not on Omega Logic
+  gets `handoff.error` in plain words; POST `handoff` retries.
+- **Track.** `api/_lib/teleios.js ladder()` (derived at read time from
+  `office-stage`, `portal.milestoneOf`, custody/coverage; no price): Proposal
+  (saved, sent, viewed, approved) → Omega Logic → Delivery → **Omega
+  Teleios** (on site, every warranty live: at least one on file for every
+  unit). A bought-in battery with none is held and named in `need {serial,
+  sku, mfr}`; Track's Omega Teleios card opens that unit's passport
+  (`/logic-custody.html?org=&serial=#passport`), where the office records
+  the maker's warranty (custody, above). Its Omega Logic link is
+  `/omega-logic?org=<the workspace you are in>&order=<id>#orders`. The Quote
+  Desk's third tab, Customer quotes (`rfq.html#customer`,
+  `#customer-<id>`), lists them on `GET /api/customer-quote?list=1`; Today
+  ranks them (79 approved waiting, 71 viewed no decision, 48 expiring, 41
+  never opened; fourth KPI "Quotes out").
+- **Connected everywhere it is listed** (Tommy: "when I open a project and it
+  was made in Prime, I should be able to access what I had made in Prime, and
+  the quotes I had sent out … this is so vital"): a project with `prime`
+  carries an Omega Prime chip (`/omega-prime?id=`), its proposal's standing
+  from the server's mirror `prime.quote` (linking to
+  `/omega-prime?id=&step=track&quote=`) and its order in this workspace's
+  Omega Logic, on the Projects list (`projects.html primeCell`, with a "Made
+  in Omega Prime" filter) and the In flight cards (`workspace.html
+  primeRow`); Site Map shows the way back for a Prime-made project.
+  `scripts/tests/tprimelinks.js` and the Projects sweep.
+Held by `scripts/tests/tomegaprime.js`, `tprimetransfer.js`, `tquotedeck.js`,
+`tquotedesk.js`, `tteleios.js`, `scripts/test-customer-quote.js`,
+`test-prime-order.js` and `scripts/render-omega-prime.js` (in `check:pages`:
+the real doors on the doubles, resume, a 390 px phone, and Mesa AZ).
+
+**National hosting capacity** (2026-10-17, Tommy: "it should not just run
+comed information if its outside of comed it needs to look via api for the
+utility details"; IL FL GA NJ AZ CA CT MA RI). `api/_lib/hosting-sources.js`
+is the ONE registry (server-only; the browser gets the answer and
+`GET /api/hosting-capacity?coverage=1`, never a URL or field name): every IOU
+and large public system in the nine states, `verified` (ComEd, Ameren IL,
+PSE&G, JCP&L, ACE, Rockland, PG&E, SCE, SDG&E, LADWP, Eversource CT and MA
+through Envelio's JSON with the legacy maps as fallback, UI, National Grid
+MA, RI Energy), `account` (Georgia Power, Unitil) or `none` with the
+utility's own process named. ComEd is read only through `comed-service.js`.
+`api/_lib/utility-territory.js` names the candidates (state layers, the
+EIA-861 national layer, Census places); the wire is the candidate whose
+published map answers at the point; overlaps are never answered with
+confidence (`ISLANDS`: SRP's boundary encloses APS and City of Mesa islands;
+a city's own utility stays a candidate when the point is inside the city).
+`POST /api/hosting-capacity` judges with `grid-verdict` in-process (a null
+queue is "not published", a netted queue is not subtracted twice, a
+generation-only figure for a battery says so; a side that did not answer is
+said not to have answered, never "not published"). Only strong candidates
+are probed, and the answer is confident only when every other strong
+candidate's own map was asked and came back empty (a co-op or city with no
+map beside an IOU is never ruled out). Queue rules per source: `subtract`
+(ComEd, ACE — after which ACE's restriction cap applies), `netted` (PSE&G),
+`context` (a section figure beside a feeder queue: PG&E, SCE, SDG&E, National
+Grid, Eversource, RI, UI, JCP&L, Ameren, Rockland). `hosting_cache/` is Admin
+SDK only and keeps only WHOLE answers: 7 days a hit, 24 h an empty, 1 h a
+stand-in copy read after the primary failed; never an error, a timeout or a
+partial reading (a layer, join or season that did not answer); SDG&E is
+never cached.
+`scripts/tests/thostingsources.js`; `npm run check:hosting` is the live check.
+The **hosting scout** (`.claude/agents/hosting-scout.md`, Tommy: "if you need
+to you can build a bot to do this") re-verifies the registry and the
+territory layers against each utility's live maps, finds a moved or newly
+published map, and opens a DRAFT PR with dated corrections; it never touches
+the verdict engine and never merges.
+Terms: the reads are public services; legal sign-off on each `termsNote`
+before relying on them commercially.
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
@@ -1704,6 +1947,22 @@ tenant. Treat it that way.
   rollup) needs nothing. A refused save loses nothing: the drawing is still
   in that tab, and the person reloads. Rules deploy by hand
   (`firebase deploy --only firestore:rules`). `scripts/tests/tsaveguard.js`.
+- **Equipment is drawn from its footprint in feet, by ONE pass** (2026-10-17,
+  found by the Prime transfer: the rescale had never run). The anchor
+  engine's `run()` (UNIFIED ANCHORING) calls `omegaRescaleElementsOnce` once
+  per frame, about each centre, on the floor the unit was placed with
+  (`minW/minH`, else Insert's `OmegaInsert.floorPx`); OmegaGeo leaves
+  anything `omegaElementFootprint` claims. Code that sets a unit's size by
+  hand records it in feet (`lf/wf`) or the next pass undoes it. What has no
+  footprint stays OmegaGeo's, stamped at the scale it was DRAWN at (on
+  `zoom_changed`, before anything resizes; 2026-10-20), and the anchor engine
+  centres on `_elRenderSize`, as every stamper does.
+  `standDown()` replaces `window._geoReprojectAll` at boot and every wrapper
+  hung on it before then goes with it (that is how the rescale, and the
+  orphan sweep, were lost): a pass that must follow the map belongs in
+  `run()`. `npm run
+  check:element-zoom` zooms the real editor on `scripts/_lib/gmaps-double.js`;
+  `scripts/tests/telementzoom.js`.
 - Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
   and state parcel services. The editor's View › Parcel Lines draws them on
   the map and `api/parcel.js` asks the same counties for a point; a county

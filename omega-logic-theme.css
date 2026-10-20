@@ -48,3 +48,53 @@ body.logic-theme{--primary:var(--brand);--primary-soft:var(--brand-soft)}
 .logic-kv div.bad{border-left-color:#B42318}.logic-kv div.bad b{color:#B42318}
 /* an office page opened signed out: the way back to Omega Logic's front door (omega-logic-theme.js watchSignIn) */
 .logic-theme a.logic-signin{font-size:14px;font-weight:600;color:var(--brand-d);text-decoration:none;padding:8px 14px;border:1px solid var(--brand);border-radius:999px;white-space:nowrap;align-self:center}
+/* ── the menu is the hub (omega-logic-theme.js groups/chrome, 2026-10-17): eight places, the one you are in open ── */
+.logic-nav .hub-row{display:flex;align-items:center;gap:2px}
+.logic-nav a.hub{font-weight:600;color:var(--ink);flex:1}
+.logic-nav a.hub.on{color:var(--brand-d)}
+.logic-nav .hub-x{all:unset;cursor:pointer;width:30px;height:30px;display:grid;place-items:center;border-radius:8px;color:var(--ink3);font-size:12px;flex:none}
+.logic-nav .hub-x:hover{background:var(--line2);color:var(--ink)}
+.logic-nav .hub-x:focus-visible{outline:3px solid var(--brand-d);outline-offset:1px}
+.logic-nav .sub{margin:0 0 6px 10px;padding-left:8px;border-left:2px solid var(--line)}
+.logic-nav .sub a{padding:8px 12px;margin:2px 0;font-size:14px}
+@media(max-width:760px){.logic-nav .hub-row,.logic-nav .sub{display:contents}.logic-nav .hub-x{display:none}.logic-nav .sub[hidden]{display:none!important}.logic-nav .sub a{font-size:15px}}
+/* ── the order's path, as Omega Prime draws a site's (pathBar) ── */
+.lg-path{display:flex;flex-wrap:wrap;gap:2px;background:#0B2A3D;padding:5px;border-radius:10px;margin:0 0 14px}
+.lg-path>span,.logic-theme .lg-path>button{all:unset;box-sizing:border-box;font:500 13px/1.3 'Poppins',ui-sans-serif,system-ui,sans-serif;padding:7px 11px;border-radius:7px;color:#7F9AA5;display:flex;gap:7px;align-items:center;white-space:nowrap}
+.lg-path i{width:8px;height:8px;border-radius:50%;background:#24485f;flex:none}
+.lg-path b{font:600 11px 'IBM Plex Mono',monospace;color:#7F9AA5;margin-left:2px}
+.lg-path .done{color:#CFE3EA}.lg-path .done i{background:#3FAFC6}
+.lg-path .on{background:#163D52;color:#fff}.lg-path .on i{background:#fff}
+.lg-path .bad{color:#FFD9D4}.lg-path .bad i{background:#EE5A4F}.lg-path .on.bad{background:#4A1D19}
+.lg-path.pipe>button{cursor:pointer}.lg-path.pipe>button:hover{background:#12344A;color:#fff}
+.lg-path.pipe>button.has{color:#CFE3EA}.lg-path.pipe>button.has b{color:#7FD3E4}.lg-path.pipe>button.has i{background:#3FAFC6}
+.lg-path>button:focus-visible{outline:2px solid #7FD3E4}
+.lg-path .end{margin-left:auto}
+/* ── the guide: Prime's corner card (guide) ── */
+.lg-guide{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:max(16px,env(safe-area-inset-bottom,0px));width:340px;max-width:calc(100% - 32px);background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(11,42,61,.22);z-index:900;overflow:hidden;color:var(--ink)}
+.lg-guide .gh{background:#0B2A3D;color:#fff;padding:8px 14px;display:flex;justify-content:space-between;align-items:center;gap:10px;font:600 11px/1.4 'IBM Plex Mono',monospace;letter-spacing:.06em}
+.lg-guide .gh span{color:#3FAFC6}
+.logic-theme .lg-guide .gh button{all:unset;cursor:pointer;color:#A9C2CA;font:600 11px 'IBM Plex Mono',monospace}
+.lg-guide .gb{padding:11px 14px 13px}
+.lg-guide .ask{display:block;color:var(--ink3);font-size:12px;margin-bottom:2px}
+.lg-guide h4{margin:0 0 4px;font-size:15px;line-height:1.3}
+.lg-guide p{margin:0;color:var(--ink2);font-size:13px;line-height:1.5}
+.lg-guide .act{display:flex;gap:8px;align-items:center;margin-top:8px;font-size:12.5px;color:var(--brand-d);font-weight:600}
+.lg-guide .act:before{content:"";width:8px;height:8px;border-radius:50%;background:#EE5A4F;flex:none;animation:lg-ping 1.4s infinite}
+.lg-guide.bad .gh{background:#4A1D19}.lg-guide.bad .gh span{color:#FFB4AA}
+.lg-guide.min .gb{display:none}
+.lg-guide.inline{position:static;width:auto;max-width:none;box-shadow:none;margin:0 0 12px}
+.lg-pulse{outline:2px solid #EE5A4F!important;outline-offset:2px;animation:lg-glow 1.4s infinite}
+@keyframes lg-glow{50%{outline-color:transparent}}
+@keyframes lg-ping{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.lg-pulse,.lg-guide .act:before{animation:none}}
+@media(max-width:760px){.lg-guide:not(.inline){left:max(12px,env(safe-area-inset-left,0px));right:max(12px,env(safe-area-inset-right,0px));width:auto;max-width:none}.lg-guide:not(.inline):not(.min) .gb p{display:none}}
+.lg-path.sm{gap:1px;padding:4px}.lg-path.sm>span{padding:5px 7px;font-size:12px;gap:5px}.lg-path.sm i{width:7px;height:7px}
+body.logic-theme:has(#lg-guide:not([hidden])) main{padding-bottom:190px}
+.lg-path em{font-style:normal}.lg-path.sm .end em{display:none}.lg-path.sm .end{margin-left:0}
+.lg-path.sm{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.lg-path.sm .end:not(.on){display:none}
+@media(max-width:760px){.lg-path.pipe{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}.lg-path.pipe .end{margin-left:0}}
+.logic-theme .lg-guide button.act{all:unset;cursor:pointer;display:flex;gap:8px;align-items:center;margin-top:8px;font:600 12.5px/1.4 'Poppins',ui-sans-serif,system-ui,sans-serif;color:var(--brand-d)}
+.logic-theme .lg-guide button.act:before{content:"";width:8px;height:8px;border-radius:50%;background:#EE5A4F;flex:none;animation:lg-ping 1.4s infinite}
+.logic-theme .lg-guide button.act:hover{text-decoration:underline}.logic-theme .lg-guide button.act:focus-visible{outline:2px solid var(--brand-d);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){.logic-theme .lg-guide button.act:before{animation:none}}

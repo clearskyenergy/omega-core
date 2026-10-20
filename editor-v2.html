@@ -1,0 +1,595 @@
+<!DOCTYPE html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en">
+<head>
+<meta charset="utf-8"><script src="/omega-splash.js?v=1"></script>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OMEGA Site Plan</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%231F4E79' d='M16 2 28 9v14L16 30 4 23V9z'/%3E%3C/svg%3E">
+<style>
+  :root {
+    --ink: #16202B;
+    --muted: #526273;
+    --line: #D5DDE6;
+    --hair: #E6ECF2;
+    --paper: #E4E1D8;
+    --panel: #F6F5F2;
+    --white: #FFFFFF;
+    --accent: #1F4E79;
+    --accent-2: #2B5FA8;
+    --accent-soft: #E6EEF7;
+    --danger: #9F2D2D;
+    --ok: #1F6B45;
+    --warn: #8A5A00;
+    --shadow: 0 10px 28px rgba(22, 32, 43, .12);
+    --font: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+    --header: 52px;
+    --banner: 40px;
+    --ribbon: 78px;
+    --foot: 40px;
+    --rail: 76px;
+    --side: 312px;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--paper); color: var(--ink); font-family: var(--font); font-size: 14px; }
+  button, input, select { font: inherit; color: inherit; }
+  button { cursor: pointer; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent-2); outline-offset: 2px; }
+  #app { position: relative; height: 100%; display: flex; flex-direction: column; min-height: 0; min-width: 0; overflow: hidden; }
+  header {
+    height: var(--header); display: flex; align-items: center; gap: 12px; min-width: 0;
+    padding: 0 12px; background: var(--white); border-bottom: 1px solid var(--line); flex: none;
+  }
+  .brand { display: flex; align-items: center; gap: 8px; min-width: 180px; }
+  .brand svg { display: block; }
+  .brand strong { font-size: 15px; letter-spacing: .01em; }
+  .brand span { display: block; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: .04em; text-transform: uppercase; }
+  .pill { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--accent); background: var(--accent-soft); border-radius: 99px; padding: 3px 8px; }
+  #project-name {
+    flex: 1; min-width: 0; width: 0; border: 1px solid transparent; background: transparent;
+    font-size: 15px; font-weight: 650; padding: 6px 8px; border-radius: 6px;
+  }
+  #project-name:hover, #project-name:focus { border-color: var(--line); background: var(--white); }
+  .head-actions { display: flex; align-items: center; gap: 8px; min-width: 0; }
+  #customer-btn, .btn, .tool, .ribbon button {
+    border: 1px solid var(--line); background: var(--white); border-radius: 6px; padding: 6px 10px;
+  }
+  #customer-btn { text-align: left; min-width: 160px; max-width: 240px; }
+  #customer-btn small { display: block; color: var(--muted); font-size: 11px; }
+  #customer-btn strong { display: block; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .btn.primary { background: var(--accent); color: white; border-color: var(--accent); }
+  .btn.quiet { background: transparent; }
+  #save-state { font-size: 12px; color: var(--muted); min-width: 72px; text-align: right; }
+  #save-state.is-ok { color: var(--ok); }
+  #save-state.is-err { color: var(--danger); }
+  #banner {
+    display: flex; gap: 8px; align-items: center; height: var(--banner); padding: 0 12px;
+    background: #F3F7FC; border-bottom: 1px solid var(--line); flex: none; min-width: 0; overflow-x: auto;
+  }
+  #stages { display: flex; gap: 2px; align-items: center; min-width: 0; }
+  #stages button {
+    border: 1px solid transparent; background: transparent; border-radius: 6px;
+    padding: 4px 10px; font-weight: 700; font-size: 13px; min-height: 28px;
+  }
+  #stages button[aria-pressed="true"] { background: var(--white); border-color: var(--line); color: var(--accent); }
+  #next-action { margin-left: auto; flex: none; min-height: 28px; padding: 4px 12px; }
+  .group[data-stage] { display: none; }
+  .group[data-stage~="always"] { display: flex; }
+  #app[data-section="site"] .group[data-stage~="site"],
+  #app[data-section="design"] .group[data-stage~="design"],
+  #app[data-section="analyze"] .group[data-stage~="analyze"],
+  #app[data-section="outputs"] .group[data-stage~="outputs"],
+  #app[data-section="funding"] .group[data-stage~="funding"] { display: flex; }
+  .quiet-block { border: 1px solid var(--hair); border-radius: 8px; padding: 10px; margin: 0 0 10px; background: var(--panel); }
+  .quiet-block h3 { margin: 0 0 6px; font-size: 13px; }
+  .quiet-block p, #outputs-body > p, #funding-body p { margin: 0 0 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .score-num { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
+  .stream { font-size: 12px; margin: 0 0 6px; }
+  .stream-fill { display: block; height: 4px; background: var(--accent); border-radius: 2px; margin-top: 2px; }
+  #outputs-body { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
+  #outputs-body .btn { text-align: left; }
+  #build-choices { display: flex; flex-direction: column; gap: 4px; margin: 0 0 10px; }
+  #build-choices label { font-size: 13px; color: var(--ink); }
+  #build-error { color: var(--danger); min-height: 1.2em; }
+  #build-signin { margin: 8px 0 4px; }
+  #build-signin-note { color: var(--ink); font-size: 14px; margin: 0 0 8px; line-height: 1.4; }
+  #side-site .row-actions, #side-draw .row-actions { justify-content: flex-start; }
+  #ribbon {
+    display: flex; align-items: stretch; background: var(--panel);
+    border-bottom: 1px solid var(--line); flex: none; min-height: var(--ribbon); min-width: 0;
+  }
+  #ribbon-main {
+    display: flex; gap: 2px; align-items: stretch; padding: 4px 8px; overflow-x: auto;
+    flex: 1; min-width: 0;
+  }
+  .group { display: flex; flex-direction: column; justify-content: space-between; padding: 0 6px; border-right: 1px solid var(--hair); }
+  .group:last-child { border-right: 0; }
+  .group .row { display: flex; gap: 4px; }
+  .group h2 { margin: 2px 0 0; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); text-align: center; }
+  .ribbon button, .tool {
+    min-height: 32px; padding: 4px 8px; font-size: 12px; font-weight: 600; white-space: nowrap;
+  }
+  .ribbon button.build {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1px;
+    min-width: 58px; min-height: 52px; padding: 3px 5px; font-size: 10px; font-weight: 700;
+    line-height: 1.05; white-space: normal; text-align: center;
+  }
+  .ribbon button.build svg { display: block; }
+  #ribbon-end {
+    flex: none; border-left: 1px solid var(--hair); background: var(--panel);
+    padding: 4px 8px; z-index: 2;
+  }
+  #btn-run {
+    background: var(--accent); color: #fff; border-color: var(--accent);
+    min-width: 72px; min-height: 40px; font-size: 14px; font-weight: 800; letter-spacing: .04em;
+  }
+  #btn-outputs { min-height: 40px; font-weight: 800; }
+  .ribbon button[aria-pressed="true"], .tool[aria-pressed="true"] { background: var(--accent-soft); border-color: #B7C9E2; color: var(--accent); }
+  #btn-run[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  #build-prompt {
+    position: absolute; left: 50%; top: 42%; transform: translate(-50%, -50%);
+    margin: 0; pointer-events: none; color: var(--muted); font-size: 15px; font-weight: 650;
+    letter-spacing: .01em; text-align: center;
+  }
+  #grid-detail {
+    position: absolute; z-index: 4; left: 12px; top: 12px; width: 300px; max-width: calc(100% - 24px);
+    max-height: calc(100% - 56px); overflow: auto; background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 10px 12px;
+  }
+  #grid-detail[hidden] { display: none; }
+  #grid-detail h2 { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+  #grid-detail p { margin: 6px 0 0; font-size: 13px; line-height: 1.35; }
+  #grid-detail .src { color: var(--muted); font-size: 12px; }
+  #grid-detail .panel-head { margin-bottom: 4px; }
+  #outputs-menu {
+    position: absolute; z-index: 8; right: 12px;
+    top: calc(var(--header) + var(--banner) + var(--ribbon) - 6px);
+    display: flex; flex-direction: column; gap: 2px; min-width: 260px; padding: 6px;
+    background: var(--white); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
+  }
+  #outputs-menu[hidden] { display: none; }
+  #outputs-menu button {
+    text-align: left; border: 0; background: transparent; border-radius: 6px;
+    padding: 8px 10px; font-weight: 650; font-size: 13px;
+  }
+  #outputs-menu button:hover { background: var(--accent-soft); }
+  .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
+  .panel-head h2 { margin: 0; }
+  .fold { border: 1px solid var(--hair); border-radius: 8px; margin: 0 0 8px; background: var(--white); }
+  .fold summary { cursor: pointer; font-weight: 700; font-size: 13px; padding: 8px 10px; }
+  .fold-body { padding: 0 10px 8px; }
+  .fold-body p, .fold-body h4 { margin: 0 0 6px; }
+  .fold h4 { margin-top: 8px; font-size: 12px; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); }
+  #preview-body {
+    max-height: 50vh; overflow: auto; white-space: pre-wrap; margin: 0;
+    background: var(--panel); border-radius: 8px; padding: 12px; font-size: 13px; line-height: 1.45;
+  }
+  #takeoff-build { margin: 8px 0 0; font-size: 12px; color: var(--muted); }
+  #workspace { flex: 1; min-height: 0; min-width: 0; display: grid; grid-template-columns: var(--rail) 1fr var(--side); }
+  #tools {
+    background: var(--white); border-right: 1px solid var(--line); display: flex; flex-direction: column; gap: 4px; padding: 8px;
+    overflow: auto;
+  }
+  #tools .tool { width: 100%; text-align: left; padding: 7px 8px; }
+  #stage { position: relative; min-width: 0; min-height: 0; background: var(--paper); overflow: hidden; }
+  #map { position: absolute; inset: 0; pointer-events: none; }
+  #map img { position: absolute; display: block; }
+  #map::after { content: ""; position: absolute; inset: 0; background: rgba(255,255,255,.12); pointer-events: none; }
+  #cv { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: crosshair; }
+  #cv.tool-select { cursor: default; }
+  #cv.tool-pan, #cv.is-panning { cursor: grab; }
+  #side {
+    background: var(--white); border-left: 1px solid var(--line); overflow: auto; padding: 12px 12px 24px;
+  }
+  #side h2 { margin: 14px 0 8px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  #side h2:first-child, #side-draw > h2:first-child, #side-site > h2:first-child,
+  #side-analyze > h2:first-child, #side-outputs > h2:first-child, #side-funding > h2:first-child { margin-top: 0; }
+  .field { display: flex; flex-direction: column; gap: 4px; margin: 0 0 8px; font-size: 12px; color: var(--muted); }
+  .field input, .field select {
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--white); color: var(--ink);
+  }
+  .kv { display: grid; grid-template-columns: 1fr auto; gap: 4px 10px; font-size: 13px; }
+  .kv b { font-variant-numeric: tabular-nums; }
+  .layer { display: grid; grid-template-columns: 16px 1fr auto auto; gap: 6px; align-items: center; padding: 4px 0; font-size: 13px; }
+  .swatch { width: 12px; height: 12px; border-radius: 2px; }
+  #takeoff .figure { font-size: 22px; font-weight: 700; letter-spacing: -.02em; }
+  #takeoff .figure span { font-size: 12px; font-weight: 600; color: var(--muted); margin-left: 4px; }
+  footer {
+    height: var(--foot); display: grid; grid-template-columns: minmax(0, 1fr) auto auto; gap: 10px; align-items: center;
+    padding: 0 10px; background: var(--ink); color: #E7EEF6; flex: none; min-width: 0;
+  }
+  footer label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #B7C3D1; min-width: 0; }
+  #cmd {
+    flex: 1; background: #0F1620; color: white; border: 1px solid #314052; border-radius: 4px;
+    padding: 5px 8px; font-family: var(--mono); font-size: 13px;
+  }
+  #status { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+  #status.is-err { color: #F0B4B4; }
+  #coords { font-family: var(--mono); font-size: 12px; color: #B7C3D1; }
+  dialog { border: 1px solid var(--line); border-radius: 12px; padding: 0; box-shadow: var(--shadow); width: min(480px, calc(100% - 24px)); color: var(--ink); }
+  #dlg-outputs { width: min(880px, calc(100% - 24px)); }
+  .out-row { display: flex; gap: 16px; align-items: center; justify-content: space-between; padding: 14px 0; border-bottom: 1px solid var(--hair); }
+  .out-row h3 { margin: 0 0 2px; font-size: 15px; }
+  .out-note { margin: 0; color: var(--muted); font-size: 13px; }
+  .out-status { margin: 0 0 8px; font-size: 14px; }
+  .out-status.is-ok { color: var(--ok); }
+  .out-status.is-no { color: var(--danger); }
+  .out-actions, .out-bar, .out-size { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+  .out-size { margin: 0 0 4px; font-size: 13px; color: var(--muted); }
+  .out-details { margin: 12px 0; }
+  .out-fields { display: grid; grid-template-columns: repeat(auto-fit,minmax(200px,1fr)); gap: 10px; margin: 12px 0; }
+  .out-fields label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+  .out-fields input, .out-fields select { width: 100%; padding: 8px; border: 1px solid var(--line); border-radius: 6px; }
+  .out-size select { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; background: var(--white); }
+  .out-bar { margin-bottom: 10px; }
+  .out-bar strong { flex: 1; min-width: 0; }
+  .out-preview { background: var(--paper); border: 1px solid var(--line); border-radius: 8px; max-height: min(68vh, 720px); overflow: auto; }
+  .out-preview svg { display: block; width: 100%; height: auto; background: white; }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  dialog::backdrop { background: rgba(22, 32, 43, .45); }
+  dialog form, .sheet { padding: 18px; }
+  dialog h2 { margin: 0 0 6px; font-size: 18px; }
+  dialog p { margin: 0 0 12px; color: var(--muted); font-size: 13px; }
+  .row-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+  .party { display: grid; grid-template-columns: 128px minmax(0, 1fr) minmax(0, 1fr) 32px; gap: 6px; margin-bottom: 6px; }
+  .party input, .party select { border: 1px solid var(--line); border-radius: 6px; padding: 6px; width: 100%; min-width: 0; }
+  .party .email { grid-column: 1 / -1; }
+  #cust-error, #open-list .empty { color: var(--danger); font-size: 13px; min-height: 1.2em; }
+  #open-list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow: auto; }
+  #open-list button { width: 100%; text-align: left; border: 0; border-bottom: 1px solid var(--hair); background: transparent; padding: 8px 4px; border-radius: 0; }
+  #help-list { columns: 2; font-size: 13px; padding-left: 18px; margin: 0; }
+  #help-list li { break-inside: avoid; margin: 0 0 4px; }
+  .side-toggle { display: none; }
+  @media (max-width: 900px) {
+    .brand span, #save-state, .pill, #btn-help { display: none; }
+    .brand { min-width: 0; }
+    header { gap: 6px; padding: 0 8px; }
+    #customer-btn { min-width: 0; max-width: 132px; padding: 4px 8px; }
+    .head-actions { gap: 4px; }
+    #workspace { grid-template-columns: 56px 1fr; }
+    footer { grid-template-columns: minmax(0, 1fr) auto; }
+    #coords { display: none; }
+    #side { position: fixed; z-index: 5; top: calc(var(--header) + var(--banner)); right: 0; bottom: var(--foot); width: min(320px, 100%); box-shadow: var(--shadow); transform: translateX(100%); }
+    #side.open { transform: none; }
+    .side-toggle { display: inline-flex; }
+    #help-list { columns: 1; }
+    .party { grid-template-columns: 1fr 1fr; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    * { scroll-behavior: auto !important; transition: none !important; }
+  }
+</style>
+</head>
+<body>
+<div id="app" data-section="design">
+  <header>
+    <div class="brand">
+      <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path fill="#1F4E79" d="M16 2 28 9v14L16 30 4 23V9z"/><path fill="#fff" d="M16 8 22 11.5v7L16 22l-6-3.5v-7z"/></svg>
+      <div><strong>OMEGA</strong><span>Site Plan</span></div>
+    </div>
+    <span class="pill">Customer trial</span>
+    <input id="project-name" aria-label="Project name" value="Untitled site" maxlength="120">
+    <div class="head-actions">
+      <button type="button" id="customer-btn" aria-haspopup="dialog">
+        <small>Customer</small>
+        <strong id="customer-label">No customer yet</strong>
+      </button>
+      <span id="save-state">Not saved</span>
+      <button type="button" class="btn" id="btn-new">New</button>
+      <button type="button" class="btn" id="btn-open">Open</button>
+      <button type="button" class="btn primary" id="btn-save">Save to workspace</button>
+      <button type="button" class="btn" id="btn-local-save">Save here</button>
+      <button type="button" class="btn quiet" id="btn-help">Help</button>
+      <button type="button" class="btn quiet side-toggle" id="btn-side" aria-expanded="false">Details</button>
+    </div>
+  </header>
+  <div id="banner">
+    <nav id="stages" aria-label="Sections">
+      <button type="button" data-stage="site" aria-pressed="false">Site</button>
+      <button type="button" data-stage="design" aria-pressed="true">Design</button>
+      <button type="button" data-stage="analyze" aria-pressed="false">Analyze</button>
+      <button type="button" data-stage="outputs" aria-pressed="false">Outputs</button>
+      <button type="button" data-stage="funding" aria-pressed="false">Funding</button>
+    </nav>
+    <button type="button" class="btn primary" id="next-action">Does this site work?</button>
+  </div>
+  <div id="ribbon" class="ribbon" role="toolbar" aria-label="Commands">
+  <div id="ribbon-main">
+    <div class="group" data-stage="always" id="build-group"><div class="row">
+      <button type="button" class="build" data-build="der" title="Solar, wind, or gas blocks and a collector."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 17h7l-3.5-7z"/><path d="M15 19V7"/><path d="M15 10l5 2.2L15 14.4"/></svg><span>DER<br>Build</span></button>
+      <button type="button" class="build" data-build="autolayout" title="Fill the parcel with solar tables."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="1.5" stroke-dasharray="2.4 2"/><path d="M6 8.5h12M6 12h12M6 15.5h8"/></svg><span>Auto<br>Layout</span></button>
+      <button type="button" class="build" data-build="bess" title="Behind the meter, in front of the meter, or with solar."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="2" y="7" width="16" height="10" rx="1.4"/><path d="M10 7v10M5 10.5h3M5 13.5h3M12.5 10.5h3M12.5 13.5h3"/><rect x="18.5" y="10" width="3" height="4" rx=".6" fill="currentColor" stroke="none"/></svg><span>BESS<br>Build</span></button>
+      <button type="button" class="build" data-build="topology" title="From the point of connection out to the utility."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><circle cx="12" cy="4" r="1.6" fill="currentColor" stroke="none"/><path d="M12 5.6V8M5 8h14M5 8v3M12 8v3M19 8v3"/><rect x="3" y="11" width="4" height="4" rx=".6"/><rect x="10" y="11" width="4" height="4" rx=".6"/><rect x="17" y="11" width="4" height="4" rx=".6"/><path d="M12 15v3.5M9 18.5h6"/></svg><span>Full<br>Topology</span></button>
+      <button type="button" class="build" data-build="l2" title="A row of Level 2 stalls and the panel that feeds them."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="5" y="3" width="9" height="16" rx="1.6"/><path d="M8 7h4M8 13h5M8 15.5h3"/><path d="M14 12c2.4 0 3.6 1.2 3.6 3.2V17"/><circle cx="17.6" cy="18.4" r="1.5" fill="currentColor" stroke="none"/></svg><span>Level<br>2</span></button>
+      <button type="button" class="build" data-build="dcfc" title="Fast chargers, a transformer, and the service."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="8" y="2.5" width="8" height="14" rx="1.6"/><path d="M10.5 6h3M10.5 11h3"/><path d="M8 11C5.5 11 4 12.4 4 15v1.2"/><circle cx="4" cy="17.8" r="1.4" fill="currentColor" stroke="none"/><path d="M16 11c2.5 0 4 1.4 4 4v1.2"/><circle cx="20" cy="17.8" r="1.4" fill="currentColor" stroke="none"/></svg><span>DCFC<br>Build</span></button>
+      <button type="button" class="build" data-build="compute" title="A data-center power chain. Radial unless you change it."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="10" height="5" rx="1"/><rect x="3" y="10" width="10" height="5" rx="1"/><circle cx="5.5" cy="5.5" r=".7" fill="currentColor" stroke="none"/><circle cx="5.5" cy="12.5" r=".7" fill="currentColor" stroke="none"/><path d="M7.5 5.5h4M7.5 12.5h4"/><rect x="16" y="6" width="5" height="8" rx="1"/></svg><span>Compute<br>Build</span></button>
+      <button type="button" class="build" data-build="engineering" title="Interconnection, gear, battery, and the EMS."><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="1.4"/><path d="M8 8h8M8 12h8M8 16h5"/></svg><span>Engineering<br>Build</span></button>
+    </div><h2>Build</h2></div>
+    <div class="group" data-stage="always"><div class="row">
+      <button type="button" data-act="undo" title="Undo (Ctrl+Z)">Undo</button>
+      <button type="button" data-act="redo" title="Redo (Ctrl+Y)">Redo</button>
+    </div><h2>Edit</h2></div>
+    <div class="group" data-stage="design"><div class="row">
+      <button type="button" data-tool="line">Line</button>
+      <button type="button" data-tool="polyline">Polyline</button>
+      <button type="button" data-tool="rect">Rectangle</button>
+      <button type="button" data-tool="circle">Circle</button>
+    </div><h2>Draw</h2></div>
+    <div class="group" data-stage="site design"><div class="row">
+      <button type="button" data-tool="offset">Setback</button>
+      <button type="button" data-tool="obstruction">Obstruction</button>
+      <button type="button" data-tool="fence">Fence</button>
+      <button type="button" data-act="array">Fill array</button>
+    </div><h2>Site</h2></div>
+    <div class="group" data-stage="design"><div class="row">
+      <button type="button" data-equip="bess">BESS</button>
+      <button type="button" data-equip="pcs">PCS</button>
+      <button type="button" data-equip="transformer">Transformer</button>
+      <button type="button" data-equip="poi">POI</button>
+      <button type="button" data-equip="meter">Meter</button>
+      <button type="button" data-equip="charger">Charger</button>
+      <button type="button" data-tool="conduit">Conduit</button>
+    </div><h2>Equipment</h2></div>
+    <div class="group" data-stage="design"><div class="row">
+      <button type="button" data-tool="dim">Dimension</button>
+      <button type="button" data-tool="dist">Measure</button>
+      <button type="button" data-tool="text">Text</button>
+      <button type="button" data-tool="callout">Callout</button>
+    </div><h2>Annotate</h2></div>
+    <div class="group" data-stage="design"><div class="row">
+      <button type="button" data-act="align-left" title="Align left">Left</button>
+      <button type="button" data-act="align-right">Right</button>
+      <button type="button" data-act="align-top">Top</button>
+      <button type="button" data-act="align-bottom">Bottom</button>
+      <button type="button" data-act="dist-x">Distribute</button>
+      <button type="button" data-act="group">Group</button>
+    </div><h2>Arrange</h2></div>
+    <div class="group" data-stage="always"><div class="row">
+      <button type="button" data-act="map" aria-pressed="true">Map</button>
+      <button type="button" data-act="snap-grid" aria-pressed="true">Grid</button>
+      <button type="button" data-act="snap-end" aria-pressed="true">Endpoint</button>
+      <button type="button" data-act="ortho" aria-pressed="false">Ortho</button>
+      <button type="button" data-act="zoom-ext">Fit</button>
+    </div><h2>View</h2></div>
+  </div>
+    <div class="group" data-stage="always" id="ribbon-end"><div class="row">
+      <button type="button" data-hook="view3d" id="btn-3d">3D</button>
+      <button type="button" id="btn-outputs" data-act="outputs" aria-expanded="false" aria-controls="outputs-menu">Outputs</button>
+      <button type="button" id="btn-run" data-act="run">Run</button>
+    </div><h2>Results</h2></div>
+  </div>
+  <div id="outputs-menu" hidden role="menu" aria-label="Outputs">
+    <button type="button" role="menuitem" id="btn-prime">Open in OMEGA Prime</button>
+    <button type="button" role="menuitem" id="btn-quote">Request a quote in Logic</button>
+    <button type="button" role="menuitem" id="btn-feedback">Send trial feedback</button>
+    <button type="button" role="menuitem" id="btn-logic">Open in Logic</button>
+    <button type="button" role="menuitem" id="btn-marketplace">Submit to marketplace</button>
+    <button type="button" role="menuitem" data-output="permit" data-hook="permit" id="btn-permit">Permit set + plot plan</button>
+    <button type="button" role="menuitem" data-output="sld" data-hook="sld" id="btn-sld">One-line</button>
+    <button type="button" role="menuitem" data-output="drawing">PNG / PDF / DXF</button>
+    <button type="button" role="menuitem" data-act="json">Project file</button>
+    <button type="button" role="menuitem" data-act="import">Import a drawing</button>
+  </div>
+  <div id="workspace">
+    <nav id="tools" aria-label="Tools">
+      <button type="button" class="tool" data-tool="select" aria-pressed="true">Select</button>
+      <button type="button" class="tool" data-tool="pan">Pan</button>
+      <button type="button" class="tool" data-tool="line">Line</button>
+      <button type="button" class="tool" data-tool="polyline">Polyline</button>
+      <button type="button" class="tool" data-tool="rect">Rect</button>
+      <button type="button" class="tool" data-tool="circle">Circle</button>
+      <button type="button" class="tool" data-tool="dim">Dim</button>
+      <button type="button" class="tool" data-tool="offset">Setback</button>
+      <button type="button" class="tool" data-act="array">Array</button>
+      <button type="button" class="tool" data-act="erase">Erase</button>
+    </nav>
+    <div id="stage">
+      <div id="map" aria-hidden="true"></div>
+      <canvas id="cv" aria-label="Site drawing. Use the command line to draw by typing."></canvas>
+      <p id="build-prompt" hidden>Start with a guided build</p>
+      <div id="grid-detail" hidden>
+        <div class="panel-head">
+          <h2 id="grid-detail-title">Grid Atlas</h2>
+          <span>
+            <button type="button" class="btn quiet" id="grid-detail-back" hidden>Site</button>
+            <button type="button" class="btn quiet" id="grid-detail-close">Close</button>
+          </span>
+        </div>
+        <div id="grid-detail-body"></div>
+      </div>
+    </div>
+    <aside id="side" aria-label="Properties">
+      <div id="side-draw">
+        <h2>Takeoff</h2>
+        <div id="takeoff">
+          <div class="figure" id="kw-dc">0<span>kW-DC</span></div>
+          <div class="kv" id="takeoff-kv"></div>
+          <p id="takeoff-build" hidden></p>
+        </div>
+        <h2>Properties</h2>
+        <div id="props"></div>
+        <h2>Layers</h2>
+        <div id="layers"></div>
+      </div>
+      <div id="side-site" hidden>
+        <h2>Site</h2>
+        <div class="quiet-block">
+          <h3>Does this site work?</h3>
+          <p>Yes opens a guided build. No keeps the drawing and records why.</p>
+          <div class="row-actions">
+            <button type="button" class="btn primary" id="site-yes">Yes, build it</button>
+            <button type="button" class="btn" id="site-no">No</button>
+          </div>
+          <div id="site-no-box" hidden>
+            <label class="field">What is in the way? <input id="site-reason" maxlength="200"></label>
+            <button type="button" class="btn" id="site-reason-save">Save the reason</button>
+          </div>
+        </div>
+      </div>
+      <div id="side-analyze" hidden>
+        <div class="panel-head">
+          <h2>Analyze</h2>
+          <button type="button" class="btn quiet" id="analyze-close">Close</button>
+        </div>
+        <div id="analyze-body"></div>
+      </div>
+      <div id="side-outputs" hidden>
+        <h2>Outputs</h2>
+        <div id="outputs-body"></div>
+      </div>
+      <div id="side-funding" hidden>
+        <h2>Funding</h2>
+        <div id="funding-body"></div>
+      </div>
+    </aside>
+  </div>
+  <footer>
+    <label>Command <input id="cmd" autocomplete="off" spellcheck="false" aria-describedby="status" placeholder="Type a command or a point, then Enter"></label>
+    <div id="status" role="status" aria-live="polite">Select an object, or type LINE.</div>
+    <div id="coords">E — ft &nbsp; N — ft</div>
+  </footer>
+</div>
+
+<dialog id="dlg-customer" aria-labelledby="cust-title">
+  <form method="dialog" id="cust-form">
+    <h2 id="cust-title">Customer on this project</h2>
+    <p>Every design belongs to one project. The customer and the other parties are stored on that project. A customer id is the CRM account id when you have one; the name is what the project list shows today.</p>
+    <label class="field">Customer name <input id="cust-name" maxlength="160"></label>
+    <label class="field">Customer id <input id="cust-id" maxlength="120" placeholder="Leave blank until the CRM has one"></label>
+    <div id="party-list"></div>
+    <button type="button" class="btn" id="btn-add-party">Add a person or company</button>
+    <p id="cust-error" role="alert"></p>
+    <div class="row-actions">
+      <button type="button" class="btn" id="cust-cancel">Cancel</button>
+      <button type="submit" class="btn primary" value="save">Save on this project</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-open" aria-labelledby="open-title">
+  <div class="sheet">
+    <h2 id="open-title">Open a project</h2>
+    <p>Projects saved on this computer. Opening one does not change the workspace.</p>
+    <ul id="open-list"></ul>
+    <div class="row-actions"><button type="button" class="btn" id="open-close">Close</button></div>
+  </div>
+</dialog>
+
+<dialog id="dlg-help" aria-labelledby="help-title">
+  <div class="sheet">
+    <h2 id="help-title">Commands</h2>
+    <ul id="help-list">
+      <li><b>L</b> line &nbsp; <b>PL</b> polyline</li>
+      <li><b>REC</b> rectangle &nbsp; <b>C</b> circle</li>
+      <li><b>DIM</b> dimension &nbsp; <b>DIST</b> measure</li>
+      <li><b>OFFSET</b> setback &nbsp; <b>ARRAY</b> fill modules</li>
+      <li>Point: <b>10,20</b> &nbsp; <b>@5,0</b> &nbsp; <b>25&lt;45</b></li>
+      <li><b>Enter</b> finishes &nbsp; <b>Esc</b> cancels</li>
+      <li><b>F3</b> snaps &nbsp; <b>F7</b> grid &nbsp; <b>F8</b> ortho</li>
+      <li><b>Ctrl+Z / Ctrl+Y</b> undo / redo</li>
+      <li><b>Ctrl+C / Ctrl+V</b> copy / paste</li>
+      <li><b>Ctrl+G</b> group &nbsp; <b>Delete</b> erase</li>
+      <li><b>Outputs</b> permit set and single-line</li>
+      <li>Drag left→right encloses. Right→left crosses.</li>
+      <li>Wheel zooms at the cursor. Space pans.</li>
+      <li><b>Build</b> on the left &nbsp; <b>Run</b> and <b>Outputs</b> on the right</li>
+      <li><b>3D</b> the site in 3D &nbsp; <b>2D</b> back to the plan</li>
+      <li>This page does not write a workspace. Site Map at /editor.html is unchanged.</li>
+    </ul>
+    <div class="row-actions"><button type="button" class="btn" id="help-close">Close</button></div>
+  </div>
+</dialog>
+
+<dialog id="dlg-confirm" aria-labelledby="confirm-title">
+  <form method="dialog" class="sheet" id="confirm-form">
+    <h2 id="confirm-title">Save this project first?</h2>
+    <p id="confirm-copy"></p>
+    <div class="row-actions">
+      <button type="submit" class="btn" value="cancel">Cancel</button>
+      <button type="submit" class="btn" value="discard">Don't save</button>
+      <button type="submit" class="btn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-recover" aria-labelledby="recover-title">
+  <div class="sheet">
+    <h2 id="recover-title">Unsaved drawing on this computer</h2>
+    <p id="recover-copy"></p>
+    <div class="row-actions">
+      <button type="button" class="btn" id="recover-discard">Discard</button>
+      <button type="button" class="btn primary" id="recover-restore">Restore</button>
+    </div>
+  </div>
+</dialog>
+
+<dialog id="dlg-outputs" aria-labelledby="out-title">
+  <div class="sheet" id="out-body"></div>
+</dialog>
+
+<input id="file-import" type="file" accept=".json,.dxf,application/json" hidden>
+
+<dialog id="dlg-preview" aria-labelledby="preview-title">
+  <div class="sheet">
+    <h2 id="preview-title">Preview</h2>
+    <pre id="preview-body"></pre>
+    <div class="row-actions" id="preview-actions"></div>
+  </div>
+</dialog>
+
+<dialog id="dlg-build" aria-labelledby="build-title">
+  <form id="build-form">
+    <h2 id="build-title">Guided build</h2>
+    <p id="build-lead"></p>
+    <div id="build-choices"></div>
+    <div id="build-fields"></div>
+    <details id="build-advanced-wrap"><summary>Advanced</summary><div id="build-advanced"></div></details>
+    <p id="build-error" role="alert"></p>
+    <div id="build-signin" hidden>
+      <p id="build-signin-note">Sign in to place guided builds.</p>
+      <button type="button" class="btn primary" id="build-signin-btn">Sign in</button>
+    </div>
+    <div class="row-actions">
+      <button type="button" class="btn" id="build-cancel">Cancel</button>
+      <button type="button" class="btn primary" id="build-place">Place on the site</button>
+    </div>
+  </form>
+</dialog>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js" onerror="void 0"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js" onerror="void 0"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js" onerror="void 0"></script>
+<script src="config.js"></script>
+<script src="omega-brand.js"></script>
+<script src="omega-tenant.js"></script>
+<script src="omega-editor-v2-auth.js"></script>
+<script src="cad-kernel.js"></script>
+<script src="omega-editor-v2-geom.js"></script>
+<script src="omega-editor-v2-assign.js"></script>
+<script src="omega-editor-v2-doc.js"></script>
+<script src="omega-editor-v2-bridge.js"></script>
+<script src="omega-editor-v2-export.js"></script>
+<script src="omega-editor-v2-recovery.js"></script>
+<script src="omega-project-intelligence.js"></script>
+<script src="omega-guided-build-form.js"></script>
+<script src="omega-editor-v2-hooks.js"></script>
+<script src="omega-editor-v2-reports.js"></script>
+<script src="omega-editor-v2-build.js"></script>
+<script src="omega-editor-v2-design.js"></script>
+<script src="omega-editor-v2-analyze.js"></script>
+<script src="omega-grid-layers.js"></script>
+<script src="omega-grid-verdict.js"></script>
+<script src="omega-editor-v2-grid.js"></script>
+<script src="omega-editor-v2-3d.js"></script>
+<script src="omega-editor-v2-electrical.js"></script>
+<script src="omega-editor-v2-sld.js"></script>
+<script src="omega-editor-v2-sheets.js"></script>
+<script src="omega-editor-v2-guided.js"></script>
+<script src="omega-editor-v2-aerial.js"></script>
+<script src="omega-editor-v2-outputs.js"></script>
+<script src="omega-editor-v2-workspace.js"></script>
+<script src="omega-editor-v2-app.js"></script>
+<script>OmegaEditorV2App.boot();</script>
+</body>
+</html>

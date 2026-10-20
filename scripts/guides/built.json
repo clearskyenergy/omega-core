@@ -1,39 +1,39 @@
 {
   "Omega-Logic-App.pdf": {
     "shots": {
-      "desktop-office.png": "a4b3d88cb86829b01888c2bf4477b82a2ba99a6ebe3556657c977570d42bd8df",
-      "office-hub.png": "52348e44a6c86674bf4a52e08f069a0574736426af4806d4ae7f35cbb573a93b",
-      "office-hub-panels.png": "6c865c3e6e1cfd8b7183fc4c335752815f3b99fd5dac7220b9e505f2c0d8b5ea",
+      "desktop-office.png": "38a4f47cb22988fa0a4af47f0242b45435463ad47eb0f5ab692e42435348eb41",
+      "office-hub.png": "f6bbe303b32d332ec95b8ede0f0e5c0286f7433e70de04170b27905cdc26ef5f",
+      "office-hub-panels.png": "2b2aba30bdb1c39bc3c2dff6a61f6992bd86a596f10dd327724dbb28279fbe83",
       "office-customers.png": "47317f44a1c60c9f7234fcf73e389f34890c564b4613ef31040801c6168245a4",
       "office-account.png": "d6984f3bf0480b69c2ec0290a4e9941f40747c64862626162a1a397b2d47eb8b",
       "office-activity.png": "28f94344a7742dc1364d2a39c255a2ec931eb8694b2b5a50548863dc9243be87",
-      "office-documents.png": "41ed03d2d132f84378bdbb5233749ef12a1369480ed80018973510c6293790a9",
-      "office-order.png": "2e3b6c7b7456d3ccf5cc6ccae6f62a52c1987d58dc6c4fbd10a4c578e01f2b3d",
+      "office-documents.png": "d81ebd9cd4613ad6a2bd1862c7e14014b9dff58bc21a6adb641ce13433ce4323",
+      "office-order.png": "2bca4a45a8e19fb7a04f28c700f783f984bf00c7ce78096572f7e68d22ae96e2",
       "office-sites.png": "296ade2260bd433e288573e125a1f87913f9d22200e8b10c40b9641e0f09f760",
-      "office-menu.png": "3e4ba61b5b2f1adede4c4f9ba35e6e5e974fe0c7d3e763c4617134ad611257a1",
-      "office-scan.png": "b8d9c9035f392d481002c58ed4ae57abb7ea82a012ce1f04b32f91bc5a8dcf76",
+      "office-menu.png": "2c81e4199995e325741c7c6f347577a796e0a40e5ca42f2024afb517dcefb09d",
+      "office-scan.png": "d4373bc611d1b8e041754aac87c5a0287c31fd6a2fe223f01e9a47e17011fd2a",
       "office-passport.png": "285b5e817c0a348764966f22def7ddeaf723c5bf5c9637f7830a55513a7ad5a9",
-      "desktop-sites-list.png": "e87fbe17f1c2cac644ee58ea9ba894730682fa47fb2d50cd01b6f7687331bfd1",
+      "desktop-sites-list.png": "01383c8700f37424c05dfaf14125ea39fca476e4fe8fbf7dc2bdd0119300fbee",
       "desktop-sites-send.png": "6439be0c2df6bf255484d1264e71eadcdfefbd62f49d911290162ce892ca1b89",
-      "desktop-accounting.png": "87677a2bf1d01938cc13b2dec742503bd2b3c3378fc3335eb11d93f11fffb71a",
-      "desktop-accounting-void.png": "7521910bdd56c640b6bf8ebe042ee59aa962671b5f6b48af82bc35a8e96fb5da",
-      "desktop-price.png": "39656e3125b5ee2bf12b228329ea08d81f81046c0f32a0382e769e1d85323c47",
-      "desktop-team.png": "906b29b835d6ea6bf9a22134fc75d4fb111859ab4a6ac81f8e8c1a08641b6923",
-      "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-      "customer-app.png": "c571cc3dc1ad2fcac217d1537fb1c6d8bc2610ad1f27610752754116ce4061c2"
+      "desktop-accounting.png": "1daadaadc53016193325fbaab4fa21b33ec5e33629a543a2796a675eb48bc1cd",
+      "desktop-accounting-void.png": "9ab71d49dc1db512c9aa6c253eea471bb675fc1af289554d95e699bf8f139676",
+      "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
+      "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
+      "desktop-freight.png": "963a4f102d21e67db4389b9916a07664f5adaa07fff4fae213fb760b3e4d63b3",
+      "customer-app.png": "0fb5a1f36db81c4bd9fea3f72f4d278fef39832671e99691cb645d8f1a4a3a06"
     },
     "guides": {
-      "office.html": "8fbba4784b8587f8bea6e1b82240955a01bc2d6c83cb0eb18d67f6d532e15ed5"
+      "office.html": "d6cea74d65b7ab92178df0d1717f4f9c2de272af81934057d2c87a84dc36bf37"
     },
-    "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "3da38e13f476d710c400f50df0cb0f9dfc450b328271c5fb1cd264be2abe125d"
+    "build": "0d7d8729c34a630831af4fd0444dc5c8baefdc411b418f0b49e04a942d199949",
+    "sha256": "ab83020d54af97d3ed15ba181833712f6ccb06550725fe3a2ab651b6da74fa51"
   },
   "Omega-Logic-Customer-App.pdf": {
     "shots": {
       "customer-signin.png": "36af8fdec393b617461dfa7b25da83739467be1525984867e1b16c574d93bf9f",
       "customer-home.png": "6e3dfe95e3acc20d9870148fffe474186350ce75b67a6939c6aab1a0a28f5b61",
-      "customer-pos.png": "eb0db014c653421571d55cf071517826139f0bb8717dba13a9eacd7a87021514",
-      "customer-sites.png": "81712de00c4569ef02408241510f44a5798844c0ad5521ee62374e12f070f2ec",
+      "customer-pos.png": "cf53c89e59137f00ac87fd74116523c7f47e61d7eb9102cfed4e48e813eb0636",
+      "customer-sites.png": "7daae5f90132cf4458a398c8ff0464f36d16a6c795d12a2f1f09a59463f242d6",
       "customer-sites-2.png": "4109c46dd21fa2f9fb58d8a05f8afd976783ee00aadb3a0f76c3763243a8b3b8",
       "customer-sitelist.png": "89c0da6a59fa92f139ab0fa59e8e764b9e10ce3a9c757a6934178eb55e8eae8a",
       "customer-sitelist-send.png": "08e8d217bcc13c2cd7c77635b54da7f58e1da829e508aaa37c799a4364ea238d",
@@ -42,96 +42,96 @@
     "guides": {
       "customer.html": "e871a3be2b299bffbfcb50e2dfa841f2f7cedaca8a949461013d3a2b955c68c1"
     },
-    "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "a584e861b73dec5e08ae41cffb2c0606a4cb1182936c593962760c99eb9f2218"
+    "build": "0d7d8729c34a630831af4fd0444dc5c8baefdc411b418f0b49e04a942d199949",
+    "sha256": "12881325a338f8e04df546620d187ba01c139c337a408d1af15bc1ef8ebde3c3"
   },
   "Omega-Logic-Office-App.pdf": {
     "shots": {
-      "desktop-office.png": "a4b3d88cb86829b01888c2bf4477b82a2ba99a6ebe3556657c977570d42bd8df",
-      "office-hub.png": "52348e44a6c86674bf4a52e08f069a0574736426af4806d4ae7f35cbb573a93b",
-      "office-hub-panels.png": "6c865c3e6e1cfd8b7183fc4c335752815f3b99fd5dac7220b9e505f2c0d8b5ea",
+      "desktop-office.png": "38a4f47cb22988fa0a4af47f0242b45435463ad47eb0f5ab692e42435348eb41",
+      "office-hub.png": "f6bbe303b32d332ec95b8ede0f0e5c0286f7433e70de04170b27905cdc26ef5f",
+      "office-hub-panels.png": "2b2aba30bdb1c39bc3c2dff6a61f6992bd86a596f10dd327724dbb28279fbe83",
       "office-customers.png": "47317f44a1c60c9f7234fcf73e389f34890c564b4613ef31040801c6168245a4",
       "office-account.png": "d6984f3bf0480b69c2ec0290a4e9941f40747c64862626162a1a397b2d47eb8b",
       "office-activity.png": "28f94344a7742dc1364d2a39c255a2ec931eb8694b2b5a50548863dc9243be87",
-      "office-documents.png": "41ed03d2d132f84378bdbb5233749ef12a1369480ed80018973510c6293790a9",
-      "office-order.png": "2e3b6c7b7456d3ccf5cc6ccae6f62a52c1987d58dc6c4fbd10a4c578e01f2b3d",
+      "office-documents.png": "d81ebd9cd4613ad6a2bd1862c7e14014b9dff58bc21a6adb641ce13433ce4323",
+      "office-order.png": "2bca4a45a8e19fb7a04f28c700f783f984bf00c7ce78096572f7e68d22ae96e2",
       "office-sites.png": "296ade2260bd433e288573e125a1f87913f9d22200e8b10c40b9641e0f09f760",
-      "office-menu.png": "3e4ba61b5b2f1adede4c4f9ba35e6e5e974fe0c7d3e763c4617134ad611257a1",
-      "office-scan.png": "b8d9c9035f392d481002c58ed4ae57abb7ea82a012ce1f04b32f91bc5a8dcf76",
+      "office-menu.png": "2c81e4199995e325741c7c6f347577a796e0a40e5ca42f2024afb517dcefb09d",
+      "office-scan.png": "d4373bc611d1b8e041754aac87c5a0287c31fd6a2fe223f01e9a47e17011fd2a",
       "office-passport.png": "285b5e817c0a348764966f22def7ddeaf723c5bf5c9637f7830a55513a7ad5a9",
-      "desktop-sites-list.png": "e87fbe17f1c2cac644ee58ea9ba894730682fa47fb2d50cd01b6f7687331bfd1",
+      "desktop-sites-list.png": "01383c8700f37424c05dfaf14125ea39fca476e4fe8fbf7dc2bdd0119300fbee",
       "desktop-sites-send.png": "6439be0c2df6bf255484d1264e71eadcdfefbd62f49d911290162ce892ca1b89",
-      "desktop-accounting.png": "87677a2bf1d01938cc13b2dec742503bd2b3c3378fc3335eb11d93f11fffb71a",
-      "desktop-accounting-void.png": "7521910bdd56c640b6bf8ebe042ee59aa962671b5f6b48af82bc35a8e96fb5da",
-      "desktop-price.png": "39656e3125b5ee2bf12b228329ea08d81f81046c0f32a0382e769e1d85323c47",
-      "desktop-team.png": "906b29b835d6ea6bf9a22134fc75d4fb111859ab4a6ac81f8e8c1a08641b6923",
-      "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-      "customer-app.png": "c571cc3dc1ad2fcac217d1537fb1c6d8bc2610ad1f27610752754116ce4061c2"
+      "desktop-accounting.png": "1daadaadc53016193325fbaab4fa21b33ec5e33629a543a2796a675eb48bc1cd",
+      "desktop-accounting-void.png": "9ab71d49dc1db512c9aa6c253eea471bb675fc1af289554d95e699bf8f139676",
+      "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
+      "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
+      "desktop-freight.png": "963a4f102d21e67db4389b9916a07664f5adaa07fff4fae213fb760b3e4d63b3",
+      "customer-app.png": "0fb5a1f36db81c4bd9fea3f72f4d278fef39832671e99691cb645d8f1a4a3a06"
     },
     "guides": {
-      "office.html": "8fbba4784b8587f8bea6e1b82240955a01bc2d6c83cb0eb18d67f6d532e15ed5"
+      "office.html": "d6cea74d65b7ab92178df0d1717f4f9c2de272af81934057d2c87a84dc36bf37"
     },
-    "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "3da38e13f476d710c400f50df0cb0f9dfc450b328271c5fb1cd264be2abe125d"
+    "build": "0d7d8729c34a630831af4fd0444dc5c8baefdc411b418f0b49e04a942d199949",
+    "sha256": "ab83020d54af97d3ed15ba181833712f6ccb06550725fe3a2ab651b6da74fa51"
   },
   "Omega-Logic-Phone-Apps.pdf": {
     "shots": {
-      "desktop-office.png": "a4b3d88cb86829b01888c2bf4477b82a2ba99a6ebe3556657c977570d42bd8df",
-      "office-hub.png": "52348e44a6c86674bf4a52e08f069a0574736426af4806d4ae7f35cbb573a93b",
-      "office-hub-panels.png": "6c865c3e6e1cfd8b7183fc4c335752815f3b99fd5dac7220b9e505f2c0d8b5ea",
+      "desktop-office.png": "38a4f47cb22988fa0a4af47f0242b45435463ad47eb0f5ab692e42435348eb41",
+      "office-hub.png": "f6bbe303b32d332ec95b8ede0f0e5c0286f7433e70de04170b27905cdc26ef5f",
+      "office-hub-panels.png": "2b2aba30bdb1c39bc3c2dff6a61f6992bd86a596f10dd327724dbb28279fbe83",
       "office-customers.png": "47317f44a1c60c9f7234fcf73e389f34890c564b4613ef31040801c6168245a4",
       "office-account.png": "d6984f3bf0480b69c2ec0290a4e9941f40747c64862626162a1a397b2d47eb8b",
       "office-activity.png": "28f94344a7742dc1364d2a39c255a2ec931eb8694b2b5a50548863dc9243be87",
-      "office-documents.png": "41ed03d2d132f84378bdbb5233749ef12a1369480ed80018973510c6293790a9",
-      "office-order.png": "2e3b6c7b7456d3ccf5cc6ccae6f62a52c1987d58dc6c4fbd10a4c578e01f2b3d",
+      "office-documents.png": "d81ebd9cd4613ad6a2bd1862c7e14014b9dff58bc21a6adb641ce13433ce4323",
+      "office-order.png": "2bca4a45a8e19fb7a04f28c700f783f984bf00c7ce78096572f7e68d22ae96e2",
       "office-sites.png": "296ade2260bd433e288573e125a1f87913f9d22200e8b10c40b9641e0f09f760",
-      "office-menu.png": "3e4ba61b5b2f1adede4c4f9ba35e6e5e974fe0c7d3e763c4617134ad611257a1",
-      "office-scan.png": "b8d9c9035f392d481002c58ed4ae57abb7ea82a012ce1f04b32f91bc5a8dcf76",
+      "office-menu.png": "2c81e4199995e325741c7c6f347577a796e0a40e5ca42f2024afb517dcefb09d",
+      "office-scan.png": "d4373bc611d1b8e041754aac87c5a0287c31fd6a2fe223f01e9a47e17011fd2a",
       "office-passport.png": "285b5e817c0a348764966f22def7ddeaf723c5bf5c9637f7830a55513a7ad5a9",
-      "desktop-sites-list.png": "e87fbe17f1c2cac644ee58ea9ba894730682fa47fb2d50cd01b6f7687331bfd1",
+      "desktop-sites-list.png": "01383c8700f37424c05dfaf14125ea39fca476e4fe8fbf7dc2bdd0119300fbee",
       "desktop-sites-send.png": "6439be0c2df6bf255484d1264e71eadcdfefbd62f49d911290162ce892ca1b89",
-      "desktop-accounting.png": "87677a2bf1d01938cc13b2dec742503bd2b3c3378fc3335eb11d93f11fffb71a",
-      "desktop-accounting-void.png": "7521910bdd56c640b6bf8ebe042ee59aa962671b5f6b48af82bc35a8e96fb5da",
-      "desktop-price.png": "39656e3125b5ee2bf12b228329ea08d81f81046c0f32a0382e769e1d85323c47",
-      "desktop-team.png": "906b29b835d6ea6bf9a22134fc75d4fb111859ab4a6ac81f8e8c1a08641b6923",
-      "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-      "customer-app.png": "c571cc3dc1ad2fcac217d1537fb1c6d8bc2610ad1f27610752754116ce4061c2",
-      "plant-work.png": "e21f167afa03bb9f4959144f73f2bd26aa311685d28e074fbb73198d87b38b84",
+      "desktop-accounting.png": "1daadaadc53016193325fbaab4fa21b33ec5e33629a543a2796a675eb48bc1cd",
+      "desktop-accounting-void.png": "9ab71d49dc1db512c9aa6c253eea471bb675fc1af289554d95e699bf8f139676",
+      "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
+      "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
+      "desktop-freight.png": "963a4f102d21e67db4389b9916a07664f5adaa07fff4fae213fb760b3e4d63b3",
+      "customer-app.png": "0fb5a1f36db81c4bd9fea3f72f4d278fef39832671e99691cb645d8f1a4a3a06",
+      "plant-work.png": "4ca2dce7cb8a23a304e5411362904aa09ffb8956351c9b29e0e3f3aa7237d5f9",
       "bench-type.png": "85a6aa2cf31e5a27a197a12e5bbe7891f6ecb50223aab3e04731afe39284e1bd",
       "bench.png": "da303a7a6f49b1e7a52447f821b35f3bae5a7e04a07ffb2ee0c841b7c80b9277",
       "plant-test.png": "e089438d6d49f781fb7a854dcfecd1b03fca746d98dafef76f143cab94a3784a",
-      "plant-register.png": "7e943099fce5accb322dceacd6c0f316880e6ec09aa5c5f71589057c34f95ef2",
+      "plant-register.png": "dcee2b18dbb7a03ef3f53ccbcd911eac102b9f29e7147da33a3fb61d86cbbbd4",
       "plant-unit.png": "67ab7a59e05396f425ad13e9bd82166ae48d63d2499d044a9ae9331fe0a7ae26",
       "customer-signin.png": "36af8fdec393b617461dfa7b25da83739467be1525984867e1b16c574d93bf9f",
       "customer-home.png": "6e3dfe95e3acc20d9870148fffe474186350ce75b67a6939c6aab1a0a28f5b61",
-      "customer-pos.png": "eb0db014c653421571d55cf071517826139f0bb8717dba13a9eacd7a87021514",
-      "customer-sites.png": "81712de00c4569ef02408241510f44a5798844c0ad5521ee62374e12f070f2ec",
+      "customer-pos.png": "cf53c89e59137f00ac87fd74116523c7f47e61d7eb9102cfed4e48e813eb0636",
+      "customer-sites.png": "7daae5f90132cf4458a398c8ff0464f36d16a6c795d12a2f1f09a59463f242d6",
       "customer-sites-2.png": "4109c46dd21fa2f9fb58d8a05f8afd976783ee00aadb3a0f76c3763243a8b3b8",
       "customer-sitelist.png": "89c0da6a59fa92f139ab0fa59e8e764b9e10ce3a9c757a6934178eb55e8eae8a",
       "customer-sitelist-send.png": "08e8d217bcc13c2cd7c77635b54da7f58e1da829e508aaa37c799a4364ea238d",
       "customer-orders.png": "4ef9b23425629537ff6192e461fcfbd040f0ba4d3fdfc7195945dee257fde48c"
     },
     "guides": {
-      "office.html": "8fbba4784b8587f8bea6e1b82240955a01bc2d6c83cb0eb18d67f6d532e15ed5",
-      "plant.html": "3f1e691cece73c0020d2ffe4e41011bbd22e34ab5e6ebe1e7136859337eb21ad",
+      "office.html": "d6cea74d65b7ab92178df0d1717f4f9c2de272af81934057d2c87a84dc36bf37",
+      "plant.html": "adb9090aedd193e1cacb3577f473e064a4db77a256696e13941b85d3d1063a84",
       "customer.html": "e871a3be2b299bffbfcb50e2dfa841f2f7cedaca8a949461013d3a2b955c68c1"
     },
-    "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "7ea633b952f202682453ed9d9069bc32288d43156bc88ce5642eee302c093c6c"
+    "build": "0d7d8729c34a630831af4fd0444dc5c8baefdc411b418f0b49e04a942d199949",
+    "sha256": "814dc0c4181f7a5e4523876a75a1d98a940d99c341a8ae7ec032691721c75a06"
   },
   "Omega-Logic-Plant-App.pdf": {
     "shots": {
-      "plant-work.png": "e21f167afa03bb9f4959144f73f2bd26aa311685d28e074fbb73198d87b38b84",
+      "plant-work.png": "4ca2dce7cb8a23a304e5411362904aa09ffb8956351c9b29e0e3f3aa7237d5f9",
       "bench-type.png": "85a6aa2cf31e5a27a197a12e5bbe7891f6ecb50223aab3e04731afe39284e1bd",
       "bench.png": "da303a7a6f49b1e7a52447f821b35f3bae5a7e04a07ffb2ee0c841b7c80b9277",
       "plant-test.png": "e089438d6d49f781fb7a854dcfecd1b03fca746d98dafef76f143cab94a3784a",
-      "plant-register.png": "7e943099fce5accb322dceacd6c0f316880e6ec09aa5c5f71589057c34f95ef2",
+      "plant-register.png": "dcee2b18dbb7a03ef3f53ccbcd911eac102b9f29e7147da33a3fb61d86cbbbd4",
       "plant-unit.png": "67ab7a59e05396f425ad13e9bd82166ae48d63d2499d044a9ae9331fe0a7ae26"
     },
     "guides": {
-      "plant.html": "3f1e691cece73c0020d2ffe4e41011bbd22e34ab5e6ebe1e7136859337eb21ad"
+      "plant.html": "adb9090aedd193e1cacb3577f473e064a4db77a256696e13941b85d3d1063a84"
     },
-    "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "b5885c350495b6818282e36b9d7a83a326378215da01d2ee5e35cb4353913a2b"
+    "build": "0d7d8729c34a630831af4fd0444dc5c8baefdc411b418f0b49e04a942d199949",
+    "sha256": "58d414e3054e9f551ad34fc185ca51ce5349e2d9daef04af1fa1d6824e58693c"
   }
 }

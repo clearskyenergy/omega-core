@@ -46,7 +46,14 @@ function seed() {
     db.seed('omega_orgs/cleancell.us/billing/current', { addons: [], status: 'active' });
     var closed = await get(who('ops@cleancell.us'));
     assert.equal(closed.workspaces.length, 0, 'no Omega Logic subscription, not listed');
-    assert.equal(closed.reason, 'inactive'); assert.match(closed.note, /subscription is not active/, 'and it says so, not "not on a workspace"');
+    assert.equal(closed.reason, 'notOnPlan', 'an open workspace without Omega Logic: not on the plan, not "not on a workspace"');
+    assert.deepEqual(closed.home, { orgId: 'cleancell.us', name: 'Clean Cell', canAdd: true, module: 'logic-office' }); assert.match(closed.note, /Add it to Clean Cell’s plan from Modules/, 'an administrator is offered the opt-in');
+    db.seed('omega_orgs/cleancell.us/members/rep', { email: 'rep@cleancell.us', role: 'member', status: 'active' });
+    var asks = await get(who('rep@cleancell.us', 'rep'));
+    assert.equal(asks.reason, 'notOnPlan'); assert.equal(asks.home.canAdd, false); assert.match(asks.note, /Ask your workspace owner or an administrator to add it/, 'a member is told whom to ask');
+    db.seed('omega_orgs/cleancell.us/billing/current', { addons: [], status: 'suspended' });
+    var lapsed = await get(who('ops@cleancell.us'));
+    assert.equal(lapsed.reason, 'inactive'); assert.match(lapsed.note, /subscription is not active/, 'a suspended workspace still says contact ClearSky');
     assert.equal((await get(who('ops@gmail.com'))).workspaces.length, 0);
   });
   await test('an unverified email is asked to verify, and nothing is listed', async function () {
