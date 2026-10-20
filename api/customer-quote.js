@@ -23,7 +23,11 @@
    staff — a JDA collaborator or an org_members grant quotes nothing here;
    a viewer may read, never write; the pricing gate is /api/price-site's):
      GET  ?list=1                          the workspace's quotes (the Desk)
-     GET  ?projectId=                      the quotes on one project (Prime)
+     GET  ?projectId=                      the quotes on one project (Prime),
+                                          and unit: whether its battery is on
+                                          the workspace's list (Q.offered),
+                                          with the list to choose from when
+                                          it is not
      GET  ?id=                             one quote, seller's view + ladder
                                           (a row's stage is the SAME ladder, its
                                           units and coverage read: one plant_units
@@ -39,6 +43,9 @@
    prime.layout and the battery resolved from the workspace's list by
    prime.unitKey, turned into the Run's input by omega-prime-project.js
    runInput() — the browser's Run and this door compute the inputs one way.
+   A battery the list does not offer (Q.offered, the rule the order
+   hand-off runs) is never priced: Prime's Proposal step has the rep choose
+   one from the list, the drawing kept, and the record then names it.
    A total in a body is never read; the rep chooses a markup or types the
    customer's total, and api/_lib/customer-quote.js does the arithmetic.
 
@@ -167,33 +174,56 @@ async function sellerOf(db, org, orgRec, caller, member) {
     attribution: on ? b.attribution : 'Prepared with ' + b.platformName, platformName: b.platformName, whiteLabel: on,
     supportEmail: on ? Q.email(wl.supportEmail) : '' };
 }
+/* the workspace's record and its ONE battery list (Q.unitsFor); a record
+   already read is passed in and not read again */
+async function listOf(db, org, orgRec) {
+  var root = db.collection('omega_orgs').doc(org);
+  var got = await Promise.all([orgRec !== undefined ? null : root.get(), root.collection('storefront').doc('config').get()]);
+  var rec = orgRec !== undefined ? orgRec : data(got[0]), sf = data(got[1]) || {};
+  return { orgRec: rec, list: unitsFor(org, rec, sf) };
+}
+function notBattery(unit) { return !!(unit && unit.kind && unit.kind !== 'bess'); }
+/* Can this site's battery be quoted here? Q.offered, the rule priced() and
+   the order hand-off run, said BEFORE anything is priced so Prime's
+   Proposal step can put the rep straight into choosing a unit, the drawing
+   kept: { offered, key, name, workspace, choices (only when it is not) }.
+   null for a record with no Prime unit or a unit that is not a battery
+   (its Proposal step is quote required, sized in Site Map). */
+function unitStanding(project, L) {
+  var unit = project && project.prime && typeof project.prime === 'object' ? PP.unitFor(project, L.list) : null;
+  if (!unit || notBattery(unit)) return null;
+  var hit = Q.offered(L.list, unit);
+  var out = { offered: !!hit, key: str(unit.key, 120), name: str(unit.name, 200), workspace: str(L.orgRec && L.orgRec.name, 120) };
+  if (!hit) out.choices = Q.choicesOf(L.list);
+  return out;
+}
 /* project + workspace → the battery, the layout, the server's cost */
 async function priced(db, caller, P, now) {
   var prime = P.project.prime || {}, layout = prime.layout;
   if (!layout || !layout.unit) fail(409, 'Place the battery on the map in Omega Prime before quoting.');
-  var root = db.collection('omega_orgs').doc(P.org);
-  var got = await Promise.all([root.get(), root.collection('storefront').doc('config').get()]);
-  var orgRec = data(got[0]), sf = data(got[1]) || {}, list = unitsFor(P.org, orgRec, sf);
+  var L = await listOf(db, P.org), orgRec = L.orgRec, list = L.list;
   /* the unit the record resumes with, by Prime's own rule (restore(): the
-     list's entry by key, a footprint the rep typed kept), and only one the
-     workspace's list still offers: its maker and SKU route the order */
-  var rs = PP.restore(P.project, list), unit = rs.unit, layout2 = rs.layout || layout;
+     list's entry by key, a footprint the rep typed kept) */
+  var rs = PP.restore(P.project, list), unit = rs.unit;
+  layout = rs.layout || layout;
   /* a charger, an array, a compute unit or a generator (main #348) is not a
      battery: the cost model prices a battery installation, so it is quoted
      from Site Map, never priced here as one */
-  if (unit && unit.kind && unit.kind !== 'bess') fail(409, 'Quote required: the ' + (str(unit.name, 120) || 'unit') + ' is sized in Site Map. An Omega Prime proposal prices a battery installation.');
-  var listed = !!unit && list.some(function (u) { return u && u.key === unit.key; });
-  var key = str(prime.unitKey || (prime.unit && prime.unit.key) || layout.unitKey, 120);
-  /* the same product under another key: a maker that has since published
-     its reference unit as its own product (the list keeps one per SKU) */
-  var sku = str((prime.unit && prime.unit.sku) || '', 100), same = !listed && sku ? list.filter(function (u) { return u && u.sku === sku; })[0] : null;
-  if (same) {
-    var typed = prime.unit && prime.unit.footprint === 'rep' ? prime.unit : null;
-    unit = (same.footprint === 'none' || same.footprint === 'reference') && typed ? PP.repFootprint(same, typed.lFt, typed.wFt) : PP.snapshot(same);
-    layout2 = PP.upgrade(layout, unit) || layout2; listed = true;
+  if (notBattery(unit)) fail(409, 'Quote required: the ' + (str(unit.name, 120) || 'unit') + ' is sized in Site Map. An Omega Prime proposal prices a battery installation.');
+  /* and only a unit the workspace's list offers (Q.offered, the rule the
+     order hand-off runs): its maker and SKU route the order. One it does
+     not (the FENECON XXL a record carries outside FENECON's workspace) is
+     chosen again on the Proposal step, which GET ?projectId= tells. */
+  var hit = Q.offered(list, unit);
+  if (!hit) fail(409, Q.notListed(unit, orgRec && orgRec.name) + ', so it cannot be quoted here. Choose the unit to quote on Omega Prime’s Proposal step; the drawing is kept.');
+  if (hit.key !== unit.key) {
+    /* the same product under another key: a maker that has since published
+       its reference unit as its own product (the list keeps one per SKU);
+       the footprint the rep typed from the submittal kept */
+    var typed = unit.footprint === 'rep' ? unit : null;
+    unit = (hit.footprint === 'none' || hit.footprint === 'reference') && typed ? PP.repFootprint(hit, typed.lFt, typed.wFt) : PP.snapshot(hit);
+    layout = PP.upgrade(prime.layout, unit) || layout;
   }
-  if (!listed) fail(409, 'The battery on this project (' + (key || 'none') + ') is not in your workspace’s list any more; choose it again in Omega Prime, then quote.');
-  layout = layout2;
   var input = clean(runInputOf(unit, layout));
   PRICE.validateInput(input);
   var answer = PRICE.finish(caller, P.org, input, await PRICE.orgPricing(P.org, input));
@@ -282,6 +312,10 @@ async function send(db, caller, input, now) {
   if (deliver !== 'email' && deliver !== 'link') fail(400, 'deliver must be email or link');
   if (['draft', 'sent', 'viewed', 'expired'].indexOf(r.status) < 0) fail(409, 'A ' + r.status + ' quote cannot be sent' + (r.status === 'withdrawn' || r.status === 'declined' ? '; save it again to reopen it' : ''));
   if (await stale(db, r)) fail(409, 'The site changed in Omega Prime since this quote was priced; save the quote again to re-price it, then send it.');
+  /* a proposal priced on a battery the list has since stopped offering
+     never goes out: its approval could make no order (Q.offered, the rule
+     the hand-off runs) */
+  if (!Q.offered((await listOf(db, org, orgRec)).list, r.unit)) fail(409, Q.notListed(r.unit, orgRec && orgRec.name) + ' any more, so this proposal cannot go out on it. Choose the unit to quote on Omega Prime’s Proposal step, save the proposal, then send it.');
   var wl = orgRec && orgRec.whiteLabel, wlOn = WL.isOn(wl), mailFrom = wlOn ? Q.email(wl.embed && wl.embed.mailFrom) : '';
   if (deliver === 'email') {
     if (!r.customer || !r.customer.email) fail(400, 'Add the customer’s email address to the quote, or send it as a link.');
@@ -493,9 +527,9 @@ async function tenantGet(db, caller, q, now) {
   if (q.projectId) {
     var P = await ownProject(db, caller, q.projectId);
     var sp = await standing(db, caller, P.org, false);
-    var got = await coll(db).where('orgId', '==', P.org).where('projectId', '==', P.id).get();
-    var list = got.docs.map(function (d) { return d.data(); }).sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
-    return { quotes: await rows(db, list, now), logic: await logicStanding(caller, P.org, sp.member, now) };
+    var got = await Promise.all([coll(db).where('orgId', '==', P.org).where('projectId', '==', P.id).get(), listOf(db, P.org)]);
+    var list = got[0].docs.map(function (d) { return d.data(); }).sort(function (a, b) { return (b.updatedAt || 0) - (a.updatedAt || 0); });
+    return { quotes: await rows(db, list, now), logic: await logicStanding(caller, P.org, sp.member, now), unit: unitStanding(P.project, got[1]) };
   }
   if (q.list) {
     var org = caller.staff && q.org ? A.safeOrg(q.org) : caller.orgId;

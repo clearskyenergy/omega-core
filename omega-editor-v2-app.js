@@ -1399,19 +1399,45 @@
     $('grid-detail-title').textContent = card.title || 'Grid Atlas';
     var body = $('grid-detail-body');
     body.innerHTML = '';
-    var i, p, row;
+    var i, j, p, row, fold, sum;
     for (i = 0; i < card.lines.length; i++) {
       row = card.lines[i];
+      /* the utilities the territory maps name that cannot be the point's:
+         one fold, each with its reason (the grid layer's who-serves list) */
+      if (row.fold) {
+        fold = document.createElement('details');
+        fold.className = 'who-fold';
+        sum = document.createElement('summary');
+        sum.textContent = row.text;
+        fold.appendChild(sum);
+        for (j = 0; j < row.fold.length; j++) {
+          p = document.createElement('p');
+          p.textContent = row.fold[j].text;
+          fold.appendChild(p);
+        }
+        body.appendChild(fold);
+        continue;
+      }
       p = document.createElement('p');
       if (row.source) p.className = 'src';
+      else if (row.who) p.className = 'who-' + row.who;
       /* the utility's own map, from the hosting answer: https only, new tab */
       if (row.href && /^https:\/\/[^\s"'<>]+$/i.test(String(row.href))) {
-        var a = document.createElement('a');
+        var a = document.createElement('a'), words = String(row.text), cut = words.search(/\S+$/), tail = document.createElement('span');
         a.href = row.href;
         a.target = '_blank';
         a.rel = 'noopener';
-        a.textContent = row.text + ' ↗';
+        /* the last word stays beside the arrow, so a ↗ never starts a line */
+        tail.style.whiteSpace = 'nowrap';
+        tail.textContent = (cut < 0 ? '' : words.slice(cut)) + ' ↗';
+        a.appendChild(document.createTextNode(cut < 0 ? words : words.slice(0, cut)));
+        a.appendChild(tail);
         p.appendChild(a);
+      } else if (row.bold && String(row.text).indexOf(row.bold) === 0) {
+        var b = document.createElement('b');
+        b.textContent = row.bold;
+        p.appendChild(b);
+        p.appendChild(document.createTextNode(String(row.text).slice(row.bold.length)));
       } else p.textContent = row.text;
       body.appendChild(p);
     }

@@ -22,7 +22,8 @@
         where the utility publishes one beside a gross figure, and where
         nothing is published says so in its own words and hands back the
         utility's own map. Every coverage case is drawn the way Omega
-        Prime's circuit step draws it;
+        Prime's circuit step draws it, and so is its list of who may serve
+        the point and what each publishes (GV.whoServes, 2026-10-20);
      4. the verdict — Fits / Fits only smaller / Needs a study, and the
         substation's chip — in the same answer, from the one engine
         (api/_lib/grid-verdict.js, which /api/grid-verdict runs too);
@@ -182,17 +183,35 @@
     return card('Nearest substation', inner);
   }
 
-  /* The serving utility, named from the answer. More than one utility on
-     the territory maps: every one named, plainly, and the bill decides. */
+  /* a link's words, the last one kept beside the arrow so a ↗ never starts
+     a line on its own, in front of the next link */
+  function linkWords(label) {
+    var t = esc(label), i = t.search(/\S+$/);
+    return i < 0 ? t + ' ↗' : t.slice(0, i) + '<span style="white-space:nowrap">' + t.slice(i) + ' ↗</span>';
+  }
+  /* Who may serve this point and what each publishes, wherever no figure
+     was read and wherever more than one utility is mapped: the one list
+     (GV.whoServes) Omega Prime's Circuit step draws, in its words and its
+     order. Each utility with why the maps name it, what it publishes, the
+     route it offers instead, and its own pages; the ones the maps name that
+     cannot be the point's fold away, each with its reason. */
   function candidates(res) {
-    var t = res.territory;
-    if (!t || t.confident || !t.candidates || t.candidates.length < 2) return '';
-    var chosen = res.utility && res.utility.eiaId;
-    return '<div style="margin-top:8px;font-size:11.5px;line-height:1.5;border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:8px 10px">' +
-      '<b>More than one utility is mapped at this point.</b><ul style="margin:4px 0 4px 18px;padding:0">' + t.candidates.map(function (c) {
-        return '<li>' + esc(c.display || c.name) + (c.eiaId && c.eiaId === chosen ? ' — the one read here' : '') +
-          (c.weak ? ' <span style="color:var(--sub,#64748B)">(' + esc(c.why || 'a weak match') + ')</span>' : '') + '</li>';
-      }).join('') + '</ul>Confirm the utility with the customer’s bill.</div>';
+    var G = V(), w = G && G.whoServes ? G.whoServes(res) : null;
+    if (!w) return '';
+    function item(c) {
+      var links = c.links.map(function (l) {
+        var u = safeHref(l.url);
+        return u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener" style="font-weight:600;color:var(--amber,#B45309);margin-right:10px;overflow-wrap:anywhere">' + linkWords(l.label) + '</a>' : '';
+      }).join('');
+      return '<li style="margin:3px 0"><b>' + esc(c.name) + '</b>' + esc(c.mark) +
+        (c.why ? '<div style="color:var(--sub,#64748B)">' + esc(c.why) + '</div>' : '') +
+        (c.says ? '<div>' + esc(c.says) + '</div>' : '') +
+        (links ? '<div>' + links + '</div>' : '') + '</li>';
+    }
+    return '<div data-gp="who" style="margin-top:8px;font-size:11.5px;line-height:1.5;border:1px solid var(--border,#e5e7eb);border-radius:8px;padding:8px 10px;overflow-wrap:anywhere">' +
+      '<b>' + esc(w.head) + '</b><ul style="margin:4px 0 4px 18px;padding:0">' + w.items.map(item).join('') + '</ul>' + esc(w.confirm) +
+      (w.fold ? '<details data-gp="who-fold" style="margin-top:6px;color:var(--sub,#64748B)"><summary style="cursor:pointer">' + esc(w.fold.title) + '</summary>' +
+        '<ul style="margin:4px 0 4px 18px;padding:0">' + w.fold.items.map(function (c) { return '<li>' + esc(c.name) + ' (' + esc(c.why) + ')</li>'; }).join('') + '</ul></details>' : '') + '</div>';
   }
   function verifyLink(res) {
     var u = res.verify && safeHref(res.verify.viewerUrl);

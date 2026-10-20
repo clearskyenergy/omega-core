@@ -171,8 +171,9 @@ and 2026-10-17, when it moved onto the national door (gap 6).
    the same verdict engine. Omega Prime, the Site Map Grid panel and Site
    Plan's Grid Atlas layer all ask it through `omega-grid-verdict.js` and
    draw every case the same way:
-   the utility's name, every candidate when the territory is not confident,
-   where the power comes from, the provenance and the utility's own map,
+   the utility's name, who may serve the point and what each publishes
+   wherever no figure is read or more than one utility is mapped (one list,
+   `GV.whoServes`, since 2026-10-20), where the power comes from, the provenance and the utility's own map,
    with the queue words following the answer (subtracted, already netted,
    or not published). The editor no longer loads the ComEd module.
 7. **New.** A "Send to Site Map" button on the standalone Site Finder's
@@ -206,7 +207,11 @@ warranty live):
   JP-2 and the Smart Module, whose brochure names one. Prime, the proposal
   and Site Map all say to confirm it on the submittal; the rep's typed
   submittal L × W (`'rep'`) replaces it. A unit with no figure at all is
-  `'none'`, a marked point.
+  `'none'`, a marked point. A site keeps the unit it was drawn with, but a
+  proposal quotes only one the workspace's list offers (`PP.offered`, the
+  rule the quote door and the order hand-off share, 2026-10-20): a site set
+  up on the XXL before it left every list but FENECON's opens the Proposal
+  step on a choice of unit from the list, with the drawing kept.
 - **Circuit verdict:** the server's (`/api/hosting-capacity`, judged by
   the `/api/grid-verdict` engine), asked through `omega-grid-verdict.js`,
   the client Site Map's Grid panel uses too. The page's own thresholds are
