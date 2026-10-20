@@ -101,6 +101,8 @@ omega_orgs/{orgId}/storefront/counters# the durable daily order limit
 embed_keys/{omega_pk_…}               # a publishable key = ONE installation
 embed_configs/{id}                    # a designer's published quote, snapshot
 orders/{id}                           # tenant sells, ClearSky fulfils
+customer_quotes/{qt-…}                # a seller's proposal to its own customer (Admin SDK only)
+hosting_cache/{id}                    # published hosting capacity per point (Admin SDK only)
 ```
 
 Already-existing role/identity collections — use, don't duplicate:
@@ -128,6 +130,26 @@ fenecon.com. Clients that filter on orgId (omega-capacity-ledger.js,
 clearsky-sitefinder.html, omega-referrals.js) mirror it. Adding a tenant
 alias means editing all of them; core must expose ONE alias map that
 those clients import.
+
+**An individual on a personal address** (2026-10-14, Tommy: "it needs to be
+able to link tenants to a domain but if there is an individual that is just
+them they need to be able to do that"): a company stays keyed by its domain;
+a workspace for a person on a public provider (gmail.com…,
+`api/_lib/public-domains.js`) is keyed by its host SLUG (`personal: true`,
+`ownerEmail` on the record) because one keyed gmail.com would hold every
+Gmail user. The person is HOMED to it by the `orgId` custom claim that
+`api/set-role.js` mints through `logic-members.change()` (set for the
+tenant's own domain or a personal address, `A.isPersonalEmail`, never a
+staff or partner address). ONE order everywhere, the claim then the email
+domain: `userOrg()` in BOTH rules files, `admin.js authenticate()`,
+`verify-token.js`, `omega-tenant.js` `homeOrg` (read off the token before
+entitlements), the editor's `_projOrgId`, the editor gate, projects.html
+and `omega-tools.orgFromUrl`. The console's New tenant takes an ADDRESS in
+the domain field: `GET /api/set-role?email=` (staff) says whether it is
+personal, the three documents are written, then set-role makes the person
+the owner (the account is made if there is none). A workspace owner or
+admin may add a personal address on Team and set-role the same way.
+`scripts/tests/thomeclaim.js` holds all of it.
 
 ## Access rules (summary)
 
@@ -637,7 +659,12 @@ is not built.
   may go — judged by
   the SAME `logic-access.authorize` every office endpoint runs (their email
   domain's workspace, an `org_members` grant; the ClearSky owner sees all).
-  One company: straight in; several: pick; none: said plainly. The phone
+  One company: straight in; several: pick; none: said plainly. A person
+  whose own workspace is open but holds no Omega Logic is told it is not on
+  the plan (`reason: 'notOnPlan'`). An owner or administrator gets *Add Omega
+  Logic to your plan*, which opens the Modules card `/workspace#module-logic-office`
+  (the one Opt-in). Anyone else is told to ask them. A closed or lapsed
+  workspace still says to contact ClearSky (2026-10-17). The phone
   remembers the choice and forgets it on sign-out; `?org=` in an old link
   only preselects. `/office/app.webmanifest` is the one office manifest.
   An app installed on an iPhone home screen signs in THROUGH ITS OWN HOST
@@ -654,12 +681,31 @@ is not built.
   with more than one company, a round ↻ and a Sign out pill — it fits a
   360px phone (`check:pages` office-app-header).
 - **One chrome.** `OmegaLogicTheme.chrome()` in `omega-logic-theme.js` paints
-  the header (name · who · Sign out) and the left menu on EVERY office page,
-  in the order the business runs. A page never builds its own menu; it calls
+  the header (name · who · Sign out) and the left menu on EVERY office page.
+  The menu is the hub: eight places named as the hex hub names them (Today,
+  Sales, Customers, Plant, Deliver, Stock, Money, Setup). The place you are
+  in shows its pages, and a caret opens any other. A page never builds its own menu; it calls
   `chrome({org, current, owner, brand, who, local})` after its API response.
   Website, installation and the URL generator are ClearSky's and show only
   for a ClearSky owner (`ownerFlag` remembers the answer for pages whose
   endpoint does not say; showing a link is never access).
+- **One path for every order** (2026-10-17, Tommy: "really clean up omega
+  logic and make it less complicated all streamlined just like we did with"
+  Omega Prime). Price → Deposit → Build → Final payment → Ship → Deliver →
+  On site → Complete is `api/_lib/office-stage.js path()`, the ONE rule. It
+  gives the step, the verdict and the one next action with whose it is,
+  built on `stageOf`/`actions` (D1 unchanged), the invoices, the delivery
+  legs and the units' custody (On site = every shipping unit bound to a
+  site). `api/logic-office.js` sends it on every order with `path` and
+  `pipeline`. The desktop home (`omega-logic.html`) is three views under the
+  bar: Today (`What needs you`, Start here first), Orders (`#orders`, the
+  guided order: bar, verdict, the one control, More about this order) and
+  Numbers (`#cash`); ClearSky's forms are `#clearsky`. The office app draws
+  the same bar and an inline guide, and opens `?org=&order=` links (Omega
+  Prime's Omega Logic button). The guide (`OmegaLogicTheme.guide`) never
+  offers a button the server refuses: someone else's step says whose.
+  Price, accept and ship stay on the desktop. `scripts/test-office-stage.js`
+  holds the rule.
 - **Stations do the work.** A BOM line may carry `station` (routing key) and
   `step`; the routing may carry `checks[]` per operation. `api/_lib/plant-work.js`
   (pure) turns those into the steps a bench shows for a unit, `judgeScan`
@@ -879,7 +925,11 @@ is not built.
   never stored); the customer's side of the same documents is
   `api/my-files.js`; the customer's design subscription is
   `api/customer-subscribe.js` (metadata `org`, never `orgId`, so it cannot
-  reach the tenant's billing); a tenant-billed invoice's pay link has ONE
+  reach the tenant's billing), or the supplier INCLUDES Editor Lite for
+  every customer at no charge (`billing/current.editorLite.customersIncluded`,
+  ClearSky's owner only through `logic-onboard` `customer-editor-included`;
+  `buyer-design.entitlement` reads it as `included`, no expiry, checkout
+  refused; 2026-10-16, Tommy, of FENECON; `docs/CUSTOMER-PORTAL.md`); a tenant-billed invoice's pay link has ONE
   check, `api/_lib/portal.js tenantPayLink`. All Admin SDK; the rules deny
   browsers. The sample tenant in `scripts/_lib/logic-fixtures.js` answers
   every one of these routes, so `check:pages` and the sandboxes exercise
@@ -1184,7 +1234,98 @@ once it has run (the pod case until then). **The capital request is the
 total project cost** (`askOf`): `send-to-finance` sends it as the deal's
 `ask` with `capitalRequest{}` on the deal, and the register reads the deal
 LIVE (`capitalJoin` → `site.capital`): open with offers, or FUNDED once a
-partner's offer is accepted (`awarded`). Grid Atlas opens at the site's
+partner's offer is accepted (`awarded`). **The compute model runs by itself on the Site Map design**
+(2026-10-13, Tommy: "all the data based on the site zipcode, the map that we
+made, those details should auto input into the compute site pro forma … I
+don't want to have to open up the site and input the details … it's the
+Omega Core skid … as much as possible is done for the user from the drawing
+and our tools"): `api/site-crm.js designModel()` runs `site-model` whenever
+the design is read onto the site (a GET, the register's Sync Site Map, the
+editor's own save through `omegaSiteDesignPush` → `design-sync`) and the
+design or the facts changed, under the compute pro forma's gate (no Omega
+Compute: not modelled, no error), marked `auto` on `latestModel`, with what
+stopped it kept as `designModel`. The ZIP is read off the address
+(`site-bridge.zipFromAddress`, the ONE reader). A design whose compute is
+Omega-Core skids and nothing else is the SKID'S own case (`site-model
+.skidInput`): its own meter (`service.own`, `load.none` in
+`compute-site.js`), its R60 inside its price, 48 H100 at the public spot
+reference and the skid's operating figures off `omega-compute-model.js`,
+the skid as recorded ($639,000 + the $125,000 controller), rent from the
+record else the market reference; a mixed design runs the host's case.
+**The capital request is the WHOLE project** (2026-10-14, Tommy: "the
+compute IRR reflects the total ask of the project … the cost of that system
+now with the cost of the compute system and the payback on that"): the
+host's own solar and storage beside the skid are in the case as MONEY,
+never dispatch (`site-model.hostOf` → `compute-site input.host`: the Run's
+lines on their asset classes, unscaled; the solar sold under the PPA on the
+site record — `ppaRatePerKwh`, `ppaEscalatorPct`, `ppaTermYears`, Topanga's
+executed PPA $0.2250/kWh, 2.5%, 28 years; since 2026-10-15 the contract AS
+WRITTEN wins: `ppaPriceSchedule[]`, the executed PPA's price per contract
+year (NextNRG's tables compound 2.0% a year, not the one-pagers' 2.5%), and
+`ppaYear1Kwh`, its expected first-year production, read by the ONE reader
+`proforma-engine.js ppaPrice()`; `itcEnergyCommunity` / `itcDomesticContent`
+build the §48E rate in the engine, never a typed percentage; an assumed
+escalator, a missing table or a yield in place of the contract's
+production is a named warning — else the Run's revenue, else a named
+warning with the cost still in the ask), so `totalProjectCost`,
+`computeCapex` and `host.capex` are read by the register, the panel and
+the hand-off. **The host's battery earns** (2026-10-15, Tommy, over a 12%
+whole project whose $1.5M battery had no revenue: "give the host's battery
+its revenue in the whole-project compute case through the platform's own
+dispatch (demand charges, VPP, grid services)"): `compute-site.js
+hostStorage()` runs the ONE dispatch (`vpp-sim.js`) on the host's meter —
+the usage on record (`annualUsageKwh`, else the typical load for the host
+type, said so as `HOST_LOAD_ASSUMED`), the host's solar, the tariff book
+for the ZIP, the grid programmes open there — and the project is paid
+`HOST_STORAGE.sharePct` (80%) of the bill savings as a storage service fee
+plus the published owner share of the grid earnings, one revenue line
+(`hoststorage`) rising with inflation and fading with the battery;
+`host.storage` on the result and the summary carries the figure, its
+parts, the streams with their tiers and the load it ran on; the panel, the
+record's headline and the deck's assumptions print it; `input.host
+.storage.dispatch: false` switches it off. A screening dispatch, never an
+operator's quote; the site's own bills make it the site's own figure. **The
+term is ten years and its own figure rides beside the headline**
+(2026-10-15, Tommy: "over a ten year span … verified by the bank"): a host
+PPA past year 10 is a terminal value in year 10, and `irrExTerminal` (the
+ten years alone, no terminal value) is on the deal, `latestModel`
+(`terminalValue` beside it), the site page, the register's drawer and CSV;
+a changed fact under the same design runs the automatic model again
+(`latestModel.inputHash`, carrying a chosen chipset, pods and structure). **The deal follows the model** (2026-10-15, Tommy: "push it to the
+finance portal and get someone to purchase and fund it"): `send-to-finance`
+sends `askOf()` whole — the ten years alone, the terminal value, the cost
+split, the contract the PPA is priced on, the lease, the compute price
+basis — as `capitalRequest`, and `runModel` refreshes an OPEN portfolio
+deal with no offer and no award (ask, cost basis, `proformaSummary`,
+`sourceModelId`; `dealRefreshed` on the answer); a deal with an offer, an
+award or a sponsor-set status is left alone. **The utilisation typed is
+the utilisation sold** (`compute-site.js shapeScale`): the diurnal shape is
+scaled so its clipped mean is the figure typed; 85% sold is 85% of
+GPU-hours, so gross compute is GPUs × price × 8,760 × sold × availability. The pod pro forma runs by itself on the design too
+(`designProforma`, once per design) on the skid's recorded price, and each
+engine states its convention (the pod case 60 months pre-tax unlevered
+alone; the compute model after tax, the whole); the assumption set IS the
+iQGen / CoreWeave baseline. The pod pro forma prices a skid as recorded. **The Run
+total carries the skid** (2026-10-14, Tommy: "the compute pod is like 639k
+plus the nextnrg microcontroller is another 125k"): `editor-cost.js` lines
+`omegaCore` at `PRODUCT.systemCostUsd` a skid (no contingency, never ITC
+energy property), the record's `capexLines.omegaCore` names it and
+`site-model.hostOf` takes it back out of the host's case, so the whole
+project counts it once. **Solar is priced at the DOE/NREL Q1 2025 book**
+(`BENCH.pv*`, modeled market price: residential under 25 kW $2.95/Wdc,
+commercial to 20 MW $1.98, utility $1.12; a canopy $2.75), and a rectangle
+array is stamped with its module like a traced one, so an array built with
+NextNRG's EAGLE G7B (the default) is NextNRG's and priced at its $1.98/W
+solar rate (`omegaSolarIsNextnrg`: the stamp, else the project's module);
+the generic 550 W module in Solar Assumptions is the benchmark road. A
+traced area lays out with the preset of its MOUNT (a select on the modal,
+starting from the ribbon's Solar choice) so a traced roof and the roof
+rectangle agree; a roof's rows are 2-up landscape at 10° on a 12.5 ft pitch
+(`GM_TABLE.rooftop` 7.5 ft deep, the rooftop preset GCR 0.60; Tommy,
+2026-10-14: "it should be at 12.5 for roof mount"), and an array's kW-DC can be SET BY HAND on Array — Edit
+Size / Capacity (`kwOverride`, `kwAuto` kept beside it, Clear restores;
+`_derApplyKwOverride` runs at every recompute). Nothing a tenant reads names the source
+workbook; it is the Omega-Core skid. `docs/OMEGA-CORE.md`. Grid Atlas opens at the site's
 address (`/grid-atlas.html?q=`). The Site SPV term sheet is
 `api/_lib/site-agreement.js` (`compose` reads, never invents; `render`
 is pdf-lib, DRAFT on every page) behind `GET …&agreement=1`; it is never
@@ -1261,6 +1402,175 @@ dialog says so and nothing is mailed. `scripts/tests/thelios.js` pins the
 form's field names and the door. Design and the not-built list:
 `docs/HELIOS-INTAKE.md`.
 
+## Grid panel — Grid Atlas inside Site Map (2026-10-16)
+
+**The FENECON demo flow is how the product works** (Tommy: "that's how the
+Grid Atlas should work, and we should have the Grid Atlas built into the
+editor"; `docs/GUIDED-SITE-FLOW.md`). Analyze › Grid Check
+(`rb-grid-panel`, Omega Grid's, beside Grid Atlas) is `omega-grid-panel.js`:
+the project's site point and the BESS Guided Build's unit (never typed),
+the nearest substation from the Grid Atlas service the pre-screen already
+calls (`OmegaGridPrescreen`, `/api/grid-atlas`), the circuit at the parcel
+from `omega-comed-layers.js` `probePoint` (the ONE ComEd module, loaded by
+the editor; never pasted), NET of the feeder's queued DER first, and the
+verdict — Fits / Fits only smaller / Needs a study, and the substation's
+chip — from `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated as
+`/api/grid-atlas` is; every threshold is server-side). `S.grid` carries the
+service's measurement plus `substation`, `circuit` and `verdict`, rides
+`saveProject()`'s allowlist (with `savedBy`), is restored on load, and the
+pre-screen keeps the panel's answer when it re-measures the same point.
+`scripts/tests/tgridverdict.js`. The standalone Grid Atlas and Site Finder
+stay for prospecting many sites. Both the panel and Omega Prime ask through
+ONE client, `omega-grid-verdict.js` (request, `/api/grid-verdict`, and the
+`grid.*` record shape). **Omega Prime sets up the real project** (2026-10-16,
+Tommy: "it does the set up and system like the artifact sandbox"), and
+**carries it all the way to Omega Teleios** (2026-10-17, Tommy: "print a
+quote … cleancell's bess specs … remove fenecon … when we open in site map
+editor it needs to transfer over what we drew … save this process … send a
+simple proposal out that matches the tenant's details … track them … if it
+gets approved then it goes to omega logic to be fulfilled and when it is
+fulfilled … Omega Teleios (which means complete)"). `omega-prime.html` runs
+Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
+- **Units.** `omega-prime-project.js units()`: the workspace's own products
+  (a `PLACEHOLDER SPEC` row dropped), then Clean Cell's Rev H reference units
+  biggest first (LG JP-2, Smart Module, CC290/125, through
+  `omega-cleancell-catalog.js entries()`), then the CleanCell R60 (`PP.R60`,
+  pinned figure by figure to editor.html and `api/_lib/omega-core.js`).
+  FENECON's Industrial XXL only in FENECON's own workspace, first. EV
+  charging, Solar, Compute and Microgrid (main #348) list the editor's own
+  catalogs through `PP.forType`; a unit that is not a battery
+  (`PP.screenable`) is quote required, sized in Site Map: named utility,
+  nothing judged, priced or built as a battery. A unit whose maker has
+  not released its footprint is drawn at its REFERENCE size (2026-10-20,
+  Tommy: "it does it for fenecon unit but not on cleancell get that
+  fixed"): the CC290/125's reference cabinet, a 20 × 8 ft container where
+  the brochure names one (LG JP-2, Smart Module), `footprint: 'reference'`,
+  said to be confirmed on the submittal everywhere it shows; the rep's
+  typed submittal size replaces it; a unit with no figure at all stays a
+  marked point.
+- **The record.** The project is CREATED at Start (`projectDoc`) and the
+  address becomes `/omega-prime?id=`; every change after is one debounced
+  dotted `patch()` (`prime.*`, `grid.<part>`, `load`; never a drawing key;
+  `updatedAt`/`bessList` only until Site Map has saved), flushed before Site
+  Map, the Run or the proposal door read it. `restore()` resumes the whole
+  session; Site Map's Push to Prime / Push to Logic
+  (`?addr=&project=&step=logic`) resumes a project Prime made as itself
+  (`step=logic` is Track) and otherwise starts Prime on its address, never
+  attaching to a drawing it did not make. A footprint the maker has not
+  RELEASED (`dimensionsStatus`) is unknown until the rep types it.
+  `prime.layout` is v2 (`arrange()`: the unit long axis east–west,
+  its transformer then disconnect in a row east of it, 5 ft clear, a gear the
+  unit integrates not drawn; `conduitPath()`/`pathFt()` = editor.html
+  `_groundPolyFt`; FNV-1a `hash`), `prime.run` keeps the Run's input
+  (`runInput()`, the ONE price-site input browser and server compute).
+- **Circuit.** `GV.hosting` → `POST /api/hosting-capacity` (national hosting
+  capacity, below); the page names no utility of its own. The Load step asks
+  `/api/utility-rates` with the territory's `eia` and `name`.
+- **Open in Site Map** builds Prime's drawing in the EDITOR, exactly as drawn
+  (`omega-prime-handoff.js` on `omega:project-rendered`, which `doRender`
+  dispatches last): a `zonebox` for the BESS area, `_evAdd` evgear
+  bess/xfmr/disco/service at Prime's centres and true footprints,
+  `autoWireConduit` pad legs and the service run PVC-UG trenched on Prime's
+  L, one `omegaHistBatch`, then `saveProject()` (so `savedBy` rides); the
+  save adds only `prime.builtAt`/`prime.builtHash`. Never twice, never over a
+  drawing, never without a live map; the Guided Build is only the fallback
+  (`from=prime`, nothing placed). `_ppCollectFleet` carries `catalogKey`, so
+  the Run prices the R60 by its key. `scripts/tests/tprimetransfer.js`.
+- **Proposal.** `customer_quotes/{qt-…}` (Admin SDK only) through
+  `api/customer-quote.js` on `api/_lib/customer-quote.js`: the price is re-run
+  on the server from the project's own `prime.layout` and unit through
+  price-site `_helpers`; the rep sets a margin % (default 20) or a total, never
+  a body total; the customer view is an allowlist (never cost, margin or
+  markup). The seller's letterhead is `deck-brand.brandOf` plus
+  `omega_orgs/{org}.company` (written through `/api/tenant-branding`,
+  `deck-brand.cleanCompany`; never in `tenant_public`; `billing/profile`
+  when absent). `omega-quote-deck.js` is the ONE renderer (Prime's Proposal,
+  the Quote Desk's Print, the public `quote.html`): no money arithmetic, the
+  site plan in Web Mercator on Esri World Imagery export layers with the
+  drawing on top ("Imagery © Esri"), proved aligned by `tquotedeck.js`.
+  THREE PARTS of one record (Tommy: "send a site map and a proposal"):
+  `opts.part` 'proposal' (all of it), 'quote' (the priced summary, no plan)
+  or 'sitemap' (the drawn plan on its own page with what is on it, no
+  money); Prime and the Desk print each, the customer's one link opens on a
+  Proposal · Quote · Site map bar (`#sitemap` from the email's second link),
+  `scripts/tests/tquotedeckparts.js`.
+  Send follows the Helios door (own workspace, verified or `clientAdmin`,
+  `sendId` claimed in a transaction, 5 a quote and 50 a workspace a day,
+  each send a new 48-hex key, only its sha256 stored); a white label without
+  a verified `mailFrom` sends a link only. `quote.html` is public like
+  `proposal.html` (no tenant runtime, no Firebase, no-referrer): view (counted
+  in the door, sent → viewed), approve (the snapshot the customer saw),
+  decline, ask. Editing a sent quote returns it to draft and kills the link.
+- **Approved → Omega Logic.** `api/_lib/prime-order.js` makes ONE order in the
+  SELLER's own workspace (the quote's orgId; Tommy: "take us to the logic
+  function of the tenant I'm in"): `prime_<key>`, status `new`, awaiting the
+  office's price — never priced or accepted automatically. The line is
+  checked by `order-lifecycle.po` against the seller's published products;
+  a battery the seller has not published rides as `{reference:true, mfr}`
+  with `procure {mfr, sku, model}` (bought in). A seller not on Omega Logic
+  gets `handoff.error` in plain words; POST `handoff` retries.
+- **Track.** `api/_lib/teleios.js ladder()` (derived at read time from
+  `office-stage`, `portal.milestoneOf`, custody/coverage; no price): Proposal
+  (saved, sent, viewed, approved) → Omega Logic → Delivery → **Omega
+  Teleios** (on site, every warranty live). Its Omega Logic link is
+  `/omega-logic?org=<the workspace you are in>&order=<id>#orders`. The Quote
+  Desk's third tab, Customer quotes (`rfq.html#customer`,
+  `#customer-<id>`), lists them on `GET /api/customer-quote?list=1`; Today
+  ranks them (79 approved waiting, 71 viewed no decision, 48 expiring, 41
+  never opened; fourth KPI "Quotes out").
+- **Connected everywhere it is listed** (Tommy: "when I open a project and it
+  was made in Prime, I should be able to access what I had made in Prime, and
+  the quotes I had sent out … this is so vital"): a project with `prime`
+  carries an Omega Prime chip (`/omega-prime?id=`), its proposal's standing
+  from the server's mirror `prime.quote` (linking to
+  `/omega-prime?id=&step=track&quote=`) and its order in this workspace's
+  Omega Logic, on the Projects list (`projects.html primeCell`, with a "Made
+  in Omega Prime" filter) and the In flight cards (`workspace.html
+  primeRow`); Site Map shows the way back for a Prime-made project.
+  `scripts/tests/tprimelinks.js` and the Projects sweep.
+Held by `scripts/tests/tomegaprime.js`, `tprimetransfer.js`, `tquotedeck.js`,
+`tquotedesk.js`, `tteleios.js`, `scripts/test-customer-quote.js`,
+`test-prime-order.js` and `scripts/render-omega-prime.js` (in `check:pages`:
+the real doors on the doubles, resume, a 390 px phone, and Mesa AZ).
+
+**National hosting capacity** (2026-10-17, Tommy: "it should not just run
+comed information if its outside of comed it needs to look via api for the
+utility details"; IL FL GA NJ AZ CA CT MA RI). `api/_lib/hosting-sources.js`
+is the ONE registry (server-only; the browser gets the answer and
+`GET /api/hosting-capacity?coverage=1`, never a URL or field name): every IOU
+and large public system in the nine states, `verified` (ComEd, Ameren IL,
+PSE&G, JCP&L, ACE, Rockland, PG&E, SCE, SDG&E, LADWP, Eversource CT and MA
+through Envelio's JSON with the legacy maps as fallback, UI, National Grid
+MA, RI Energy), `account` (Georgia Power, Unitil) or `none` with the
+utility's own process named. ComEd is read only through `comed-service.js`.
+`api/_lib/utility-territory.js` names the candidates (state layers, the
+EIA-861 national layer, Census places); the wire is the candidate whose
+published map answers at the point; overlaps are never answered with
+confidence (`ISLANDS`: SRP's boundary encloses APS and City of Mesa islands;
+a city's own utility stays a candidate when the point is inside the city).
+`POST /api/hosting-capacity` judges with `grid-verdict` in-process (a null
+queue is "not published", a netted queue is not subtracted twice, a
+generation-only figure for a battery says so; a side that did not answer is
+said not to have answered, never "not published"). Only strong candidates
+are probed, and the answer is confident only when every other strong
+candidate's own map was asked and came back empty (a co-op or city with no
+map beside an IOU is never ruled out). Queue rules per source: `subtract`
+(ComEd, ACE — after which ACE's restriction cap applies), `netted` (PSE&G),
+`context` (a section figure beside a feeder queue: PG&E, SCE, SDG&E, National
+Grid, Eversource, RI, UI, JCP&L, Ameren, Rockland). `hosting_cache/` is Admin
+SDK only and keeps only WHOLE answers: 7 days a hit, 24 h an empty, 1 h a
+stand-in copy read after the primary failed; never an error, a timeout or a
+partial reading (a layer, join or season that did not answer); SDG&E is
+never cached.
+`scripts/tests/thostingsources.js`; `npm run check:hosting` is the live check.
+The **hosting scout** (`.claude/agents/hosting-scout.md`, Tommy: "if you need
+to you can build a bot to do this") re-verifies the registry and the
+territory layers against each utility's live maps, finds a moved or newly
+published map, and opens a DRAFT PR with dated corrections; it never touches
+the verdict engine and never merges.
+Terms: the reads are public services; legal sign-off on each `termsNote`
+before relying on them commercially.
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT
@@ -1321,15 +1631,21 @@ service/transformer and the site point, fans out through
 `api/_lib/omega-core.js` — three gates (power for a new 480 V service; a
 charging site, zoned, located; fiber = compute-lease's `gateFiber`, the hard
 gate), skids priced on what the power carries, the lease, the host's payback
-before/after off the Run, and the FMV band — never in the browser. **No
-Omega-Core rent is set** (Tommy, 2026-10-03: "idk the lease amounts yet we
-will need to manually input that or go with a market standard"): the card
-(`omega-core-lease-v2`) is a MARKET REFERENCE read off cell-tower ground
-leases and parking-stall rent (`RATE_CARD.sources`, shown with it), never an
-offer whatever the verdict, until a rent is typed for the site (`rep.leaseMonthly`,
-`rep.leaseEscalatorPct`; out of range is set aside and said); the host's
-figures follow the typed rent. When ClearSky sets the rent, it goes on the
-card and the version moves. **The skid's own economics** (Tommy, 2026-10-05,
+before/after off the Run, and the FMV band — never in the browser. **The
+rent is per kW of compute per month** (2026-10-15, Tommy: "we pay $225/kW
+… 75 × 12 × $125"; "the lease is paying $150–450 per kW"): annual rent =
+kW × $/kW-month × 12; `RATE_CARD.perKwMonth` is $150 / $150 / $450 and
+`monthlyPerSkid` is DERIVED at `computeKwPerSkid` (75), read off the
+colocation wholesale band (CBRE ~$196/kW-month) over the cell-tower floor
+(`RATE_CARD.sources`, shown with it); the card opens at the floor and is
+never an offer until a rent is typed for the site (`rep.leaseMonthly`,
+`rep.leaseEscalatorPct`; out of range is set aside and said). A portfolio
+site prices `commercial.rentMonthly` (wins), else `commercial.rentPerKwMonth`
+× 75 kW × skids × 12, else the floor, escalated by `commercial.rentEscalatorPct`,
+plus `commercial.revenueShare` of gross compute (`site-model.js skidInput`;
+the site record's Facts tab). The lease and the compute price are one
+decision: above the floor the site wants a contracted GPU-hour rate, not
+spot. When ClearSky changes the band, the card and its version move. **The skid's own economics** (Tommy, 2026-10-05,
 the iQGen 75 kW cash-flow workbook, "white labeling it Omega Core Skid …
 customer facing version … show bankability"): `api/_lib/omega-compute-model.js`
 is that workbook, pure and server-side — chipset library with CoreWeave's
@@ -1382,7 +1698,20 @@ streams only, each stream saying so, with the brochure's caveat on the
 `controller` summary; `/api/value-stack` passes the flag in and the summary
 out; the editor sends it when a controller is on the host's drawing. The RFQ
 routes a NextNRG line by brand: `tenants/nextnrg/tenant.json brands`, copied
-by the seed. `docs/NEXTNRG-MICROGRID.md`.
+by the seed. **NextNRG's solar is $1.98 per W-DC installed and NextNRG's storage is
+$6.00 per W of rated power installed, EACH ITS OWN LINE wherever it stands**
+(settled 2026-10-14 after four tries; `nextnrg.js SYSTEM_RATE`. Tommy:
+"make sure for solar that the pricing per kW dc is industry standard", so
+the solar is the DOE/NREL Q1 2025 commercial rate; "the battery at 1.5m
+which is probably accurate", so the storage is $6.00 a rated watt; a system
+rate per watt of solar with the battery inside charged 350 kW of solar
+alone $1.98M: "its showing 1.9m for 350kW of solar"). No contingency,
+energy property; NextNRG's Topanga one-pager ($1,780,063 for 315 kW DC +
+300 kW / 1.8 MWh + controller) stays on the record as what they quoted a
+whole system at, never as the rate. An array stamped NextNRG's, a battery of the catalog's
+NextNRG group, and in NextNRG's own workspace every array and battery
+(`vendorOrg`, stamped by `cost-rollup.js` off the caller). The Run's lines
+ride the record (`capexLines`). `docs/NEXTNRG-MICROGRID.md`.
 
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
@@ -1550,6 +1879,17 @@ tenant. Treat it that way.
   and calls `done()`; the dashboard keeps its boot splash (`data-boot="no"`).
   Never a flash of another page or the sign-in card. `docs/LOADING-SCREEN.md`.
 - Test as a tenant using `adminDomains` preview, not by editing their data.
+- **A drawing is written only by an editor that says who saved it**
+  (2026-10-15, the third "it reverted to an old map"): the editor's own
+  transaction and live watch (2026-10-14) hold a tab running THAT code; a
+  tab left open from before it shipped has neither and autosaves the old
+  map while reading "Saved". So `firestore.rules` `drawingWriteAllowed()`
+  refuses a `projects` update that touches the drawing keys without a fresh
+  `savedBy { tab, at }`, which every drawing write in `editor.html` carries;
+  a patch that leaves the drawing alone (Assign, a validation record, a
+  rollup) needs nothing. A refused save loses nothing: the drawing is still
+  in that tab, and the person reloads. Rules deploy by hand
+  (`firebase deploy --only firestore:rules`). `scripts/tests/tsaveguard.js`.
 - Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
   and state parcel services. The editor's View › Parcel Lines draws them on
   the map and `api/parcel.js` asks the same counties for a point; a county

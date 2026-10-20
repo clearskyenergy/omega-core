@@ -13,10 +13,39 @@ their own under `/guides/` (section 2).
 One order record runs from the customer's request to the serial number on
 their site. Everything else hangs off it.
 
+**The path** (2026-10-17, the shape Omega Prime gives a site): every order
+walks the same seven steps, in one direction, and every office screen draws
+them as one bar that lights up as it moves:
+
+```
+Price → Deposit → Build → Final payment → Ship → Deliver → On site → ✓ Complete
+```
+
+| Step | The question it answers | Who presses it |
+|---|---|---|
+| Price | What will the customer pay? | An owner or administrator on an order the workspace bills itself; ClearSky on one billed through its QuickBooks (D1, below) |
+| Deposit | Has the deposit arrived? | The office issues its own deposit invoice and records the payment; a QuickBooks-billed one reconciles by itself |
+| Build | Is every unit built and tested? | The plant; the office watches the work order |
+| Final payment | Is it paid in full? | As the deposit (a $0 balance goes straight on) |
+| Ship | Is it on a truck? | The office plans the freight and records the pickup on an order with a delivery plan; ClearSky records a single shipment |
+| Deliver | Did it arrive whole? | The office records the delivery and the receiving inspection |
+| On site | Is every unit on its site? | The customer names the site, or the office assigns it; the office confirms what the customer named |
+
+Complete is every shipping unit bound to a site (its coverage binds there).
+**The guide** — Omega Prime's corner card — always says the ONE next thing
+to do on the screen you are on, and pulses the control to press: on Today,
+the first thing that needs you; on an order, its step's control. When the
+step is somebody else's (an administrator's, ClearSky's, the customer's) it
+says whose and offers no button. "Needs attention" is not a step: it turns
+the current step red with the reason. One server rule decides all of it,
+`api/_lib/office-stage.js path()`, on top of the rules that already gate
+each button; the desktop, the app and Today only draw it. Underneath, the
+same record runs through the same places as before:
+
 ```
 customer's website / PO  →  Orders (price, accept, deposit)  →  Work order
       →  Materials plan (buy)  →  Benches (build, scan, issue parts)
-      →  Ready  →  Shipping & receiving  →  Customer portal (history, warranty)
+      →  Ready  →  Shipping & receiving  →  Sites & custody (on site, warranty)
 ```
 
 Three places to be:
@@ -65,17 +94,24 @@ dashboard and the customer's desktop portal show the same hub at the top of
 their home page. The map of who uses what, and the endpoints behind it:
 `docs/OMEGA-LOGIC-ECOSYSTEM.md`.
 
+Someone whose company has no Omega Logic yet is told so at the sign-in.
+An owner or administrator gets **Add Omega Logic to your plan**, which opens
+Omega Logic's card on the workspace's Modules page (Opt in, priced there,
+on when paid). Anyone else is told to ask them.
+
 Sign out is top right on every office page (it goes to the Omega Logic
-sign-in and comes back to the page). The left menu runs in the order the
-business runs: **Run the business** (Dashboard, Orders, Company POs,
-Customers, Office app) → **Build** (Work order board, Work orders &
-registration, Plant board, Stations & tablets, Plant app) → **Stock &
-supply** (Inventory, Materials plan, Purchase orders, Vendors & prices) →
-**Deliver** (Shipping & receiving, Sites & custody, Fleet register, Quality
-& holds) → **Money** (Cash flow, Accounting) → **Setup** (Products & bills,
-Team — for the owner and administrators — and Settings). Website,
-installation and the URL generator are ClearSky's to maintain and appear
-only for ClearSky.
+sign-in and comes back to the page). **The menu is the hub**: eight places,
+named as the hex hub names them, in the order an order walks — **Today** ·
+**Sales** (Orders, Customer POs) · **Customers** · **Plant** (Work orders,
+Serials & registration, Plant board, Stations & tablets, Quality & holds) ·
+**Deliver** (Shipping & receiving, Sites & custody, Fleet register) ·
+**Stock** (Inventory, Materials plan, Supplier orders, Suppliers & prices) ·
+**Money** (Cash flow, Accounting) · **Setup** (Products & bills, *Team* for
+the owner and administrators, Settings, Office app, Plant app). The place
+you are in shows its pages; the caret beside any other opens its pages
+without leaving, so nothing is more than one click away. A place whose part
+the workspace has not bought is not drawn. Website, installation and the
+URL generator are ClearSky's to maintain and appear only for ClearSky.
 
 ## 2. Setting up a tenant (ClearSky)
 
@@ -91,7 +127,7 @@ shows as "Your Company", so no public guide names a tenant). The office's
 guide is `/guides/Omega-Logic-App.pdf`, the Omega Logic app guide: getting
 the app on a phone or a computer, signing in, the hub, customers, orders,
 sites, scanning a label with the camera, a customer's list of sites,
-Accounting's Payment box, price & accept, Team, and the customers' own app.
+Accounting's next step, price & accept, Team, and the customers' own app.
 The build also writes it as the old `Omega-Logic-Office-App.pdf`, which the
 app's Help menu and links already sent still open.
 `Omega-Logic-Plant-App.pdf` is the builders' (the bench, typing or scanning
@@ -151,28 +187,41 @@ Logic nor ClearSky; `Omega-Logic-Phone-Apps.pdf` is the three back to back.
 
 ### Project manager — orders and customers
 
-- **Dashboard.** The hex hub (Today in the middle; Sales, Customers,
-  Plant, Deliver, Stock, Money around it) beside a **Today** list: company
-  POs to review, the CRM follow-ups that are due (*Open* goes to the
-  account's Activity, *Done* takes it off), customer requests, orders to
-  fix or price. Sales, Money and Today scroll to this page's own sections;
-  Customers, Plant, Deliver and Stock open their pages. A price or an
-  acceptance is counted only for someone who may take it; an order waiting
-  on ClearSky or on an administrator is listed and named, never counted.
-  Then the six stages with counts, from the server's stages (requests &
-  quotes → awaiting deposit → in build → ready to ship → shipped → needs
-  attention), cash flow (invoiced, received, outstanding, overdue and to
-  issue — Accounting's own totals — then purchase list value and payment
-  exceptions) and the floor (open work orders, units on the floor, on hold,
-  finished on the shelf). Every tile is a link, and a link with a section
-  (`#orders`, `#cash`, an order's `?order=`) lands on it.
-- **Orders.** Select an order to work it: lines, commercial summary,
-  invoices, plant release, shipment. **Customer requests** appear on the
-  order the moment the customer sends one from their portal (an address
-  change, a question, a change, a warranty claim): make the change through
-  its own control, then *Answer & close* — the answer appears on the
-  customer's portal.
-- **Company POs.** A fleet customer's purchase orders. One at a time with
+- **Today** (`/omega-logic?org=`). One page, three questions, each its own
+  view: **Today** — what needs me? **Orders** (`#orders`) — where is each
+  order and what is its next step? **Numbers** (`#cash`) — how is the
+  business doing? Above all three, the path's bar with how many orders stand
+  on each step; a step opens Orders on it. Today is the hex hub (Today in
+  the middle; Sales, Customers, Plant, Deliver, Stock, Money around it)
+  beside **What needs you**: one ranked list, the first row marked *Start
+  here* and pulsed by the guide — customer requests, orders that need
+  attention, every next step that is yours in the path's order (a price, an
+  acceptance, an invoice to issue, the freight, a load to inspect, a site to
+  confirm), company POs to review and the CRM follow-ups that are due
+  (*Open* goes to the account's Activity, *Done* takes it off). Every row
+  opens its order on its step. A step that is somebody else's — waiting on
+  ClearSky, an administrator or the customer — is listed under *Waiting on
+  others*, named, never counted. Numbers holds cash flow (invoiced, received,
+  outstanding, overdue and to issue — Accounting's own totals — then purchase
+  list value and orders needing attention), the floor, floor performance
+  and deliveries. ClearSky's own forms (the website button, the customer
+  colours, the apps and links, the bundle terms) are a fourth view,
+  `#clearsky`, ClearSky's only. Every old link with a section (`#orders`,
+  `#cash`, `#floor`, an order's `?order=`) lands on its view.
+- **The order.** Pick one (or follow a link that names it: `?order=`). Its
+  bar shows where it is; the step's question and a plain verdict say what
+  that means ("The deposit, $90,225.00, is not invoiced yet."); under it is
+  the ONE control for the next step — the price form, *Accept order*, the
+  deposit or final invoice to record as issued or paid, the freight plan,
+  the loads, Sites & custody — and the guide pulses it. Everything else is
+  under *More about this order*: lines, every invoice, the release on PO,
+  who priced and accepted, *Check it's ready · bill the balance*, the
+  factory and freight links, the shipment and wires (ClearSky's) and the
+  audit. **Customer requests** appear on the order the moment the customer
+  sends one from their portal (an address change, a question, a change, a
+  warranty claim) and come first: make the change through its own control,
+  then *Answer & close* — the answer appears on the customer's portal.
+- **Customer POs.** A fleet customer's purchase orders. One at a time with
   the PDF, or **Enter many POs at once**: paste one line per product per PO
   (`PO number, SKU, qty, ship-to name, address, city, state, ZIP, requested
   date, notes`); lines with the same PO number are one PO to one place (a
@@ -205,9 +254,15 @@ Logic nor ClearSky; `Omega-Logic-Phone-Apps.pdf` is the three back to back.
   section; the dashboard's Today links there. Terms set here win for that
   customer's future orders. Nothing is deleted: a contact or a document is
   archived (an administrator's action).
-- **Shipping & receiving.** Destinations, shipment legs with carrier and
-  tracking, serials on each load, pickup, delivery and receiving condition.
-  An order with more than one destination is shipped leg by leg.
+- **Shipping & receiving.** The order opens on where it is in the
+  journey and the one next step (plan the shipment, record the pickup,
+  record the delivery, or record receiving). Each destination shows the
+  full site address, the deliver-by date, and the order's lines
+  (quantity, product name and SKU). Carrier and tracking stay on the
+  shipment. The project id, the shipment reference and the serials sit
+  under a disclosure. The freight plan is on the same page, closed until
+  it is opened. An order with more than one destination is shipped one
+  shipment at a time.
 - **Freight plan** (*Shipping & receiving*, under the ledger; an
   administrator's): when one order goes to many sites and each needs a
   freight price. Open it from the order (*Freight plan →*), from the Omega
@@ -358,9 +413,9 @@ choose, and **Switch** on the company line of the header changes it. It is
 laid out the way QuickBooks lays out its app:
 five tabs — **Home, Orders, Customers, Sites, Menu** — and a Menu that holds
 everything else. The Menu has a search box, a row of *frequently used*
-circles (Orders, PO loads, Customers, Sites, Stock, Invoices, Register,
-Plant), and panels that open to their list: Sales (with *Price & accept*
-for someone who may), Customers, Plant, Deliver, Stock, Money, Setup
+circles (Orders, Enter POs, Customers, Sites, Stock, Money, Register,
+Plant), and panels that open to their list: Sales (with *Price & accept on
+the desktop* for someone who may), Customers, Plant, Deliver, Stock, Money, Setup
 (Products & bills, *Team* for the owner and administrators, Settings), Help
 & guides (the three PDF guides). A screen the app has opens in
 the app; the rest open their page. The screens:
@@ -372,40 +427,45 @@ the app; the rest open their page. The screens:
   ship, placements the customer declared that you have not confirmed),
   **Stock** (parts short) and **Money** (invoices to issue, overdue) around
   it. A badge is what needs a person; a hub whose data has not arrived shows
-  no badge rather than a zero. Under the hub, a tile per hub: tap a cell or
-  a tile and its panel opens under it — what is in that hub now (the orders,
-  the follow-ups, the people waiting, the work orders, the units, the parts,
-  the invoices), then *Work it*, the screens and pages that run it. Tapping
-  Today goes to **Needs a person**: company POs to review, the CRM
+  no badge rather than a zero. Tap a cell and its panel opens under the hub
+  — what is in that hub now (the orders, the follow-ups, the people
+  waiting, the work orders, the units, the parts, the invoices), then
+  *Open*, the screens and pages that run it; *Close* folds it. Under the
+  hub, the path's bar with how many orders stand on each step (a step opens
+  Orders on it) and **What needs you**: the first row marked *Start here*,
+  then every next step that is yours — orders with an open customer request,
+  orders that need attention, prices, acceptances, invoices to issue, loads
+  to inspect, sites to confirm — company POs to review and the CRM
   follow-ups due (a task with no date is here until done; *Done* right on
-  the row, or tap it for the account's Activity), orders with an open
-  customer request, orders that need attention, orders to price. Then the
-  stage counts, money (invoiced, received, outstanding, deposits awaiting,
-  invoices to issue and overdue, purchase list value) and the plant (open,
-  late, with holds, ready).
-- **Orders** — every order with **All / Needs attention / To price /
-  Awaiting deposit / In build / Ready · shipped / Customer requests**
-  filters; each card carries the customer, lines, total and balance, and the
-  work order's built % when it is on the floor. Tap one: lines, money and
-  invoices, build progress and the units assigned from stock, shipment, and
-  the customer's requests — **answer & close** a request here. On a
-  tenant-billed order: record an invoice **issued** (number, date, and your
-  own **pay link** if you have one — https only), add, change or remove the
-  pay link of an invoice already issued, and record a **payment received**.
-  *Verify ready · invoice the balance* is on an order in production.
-  Approving a price and accepting an order stay on the desktop (Menu →
-  Sales → *Price & accept*, shown only to someone who may; see *Pricing and
-  acceptance* below), and so do correcting money (Accounting) and recording
-  a shipment or a wire (ClearSky's). A priced order says to accept it on
-  the desktop, or who it is waiting on.
-- **Money** (Menu → Invoices) — every invoice with money owed on it, in
+  the row, or tap it for the account's Activity). A step that is somebody
+  else's is under *Waiting on others*. The money tiles are on **Money**,
+  the floor on the **Plant** panel, the other apps on **Menu**.
+- **Orders** — the path's bar picks a step; **All / Needs you / Customer
+  requests** are the rest. Each card carries its step, the customer, lines,
+  total and balance, the next step in words, and the work order's built %
+  when it is on the floor. Tap one: the bar, the guide (the step's question,
+  the verdict, the one next action, pulsed), the control for it, then lines,
+  money and invoices, build progress and the units assigned from stock,
+  shipment, and the customer's requests — **answer & close** a request
+  here (an open request comes first in the guide). On a tenant-billed
+  order: *Record invoice* (number, date, and your own **pay link** if you
+  have one — https only), add, change or remove the pay link of an invoice
+  already issued, and *Record payment*. *Check it's ready · bill the
+  balance* is on an order in production. Approving a price, accepting an
+  order and recording a shipment stay on the desktop: the guide says so and
+  its button opens the desktop on that order (Menu → Sales → *Price &
+  accept on the desktop* too, shown only to someone who may; see *Pricing
+  and acceptance* below), and so do correcting money (Accounting) and a
+  wire (ClearSky's). A link that names an order (`/office/app?org=&order=`,
+  as Omega Prime sends) opens it.
+- **Money** (Menu → Money) — the money tiles (Accounting's own totals), then every invoice with money owed on it, in
   three groups: **To issue** (billed on your paper and not issued yet),
   **Overdue** (past the order's terms from the day it was issued) and
   **Open**, each with its pay link or *Add pay link*, each opening its
   order. A payment to void, an invoice to edit or a release on PO is done in
   **Accounting** on the desktop.
-- **POs** — PO loads: choose the company (or add one), the billing contact,
-  paste the lines — same sheet as Company POs — and *Enter these purchase
+- **Enter POs** — choose the company (or add one), the billing contact,
+  paste the lines — same sheet as Customer POs — and *Enter these purchase
   orders*. The company's uploaded POs under review and its orders are
   listed beneath.
 - **Customers** — the CRM. A customer is a COMPANY ACCOUNT with its people
@@ -480,10 +540,10 @@ the app; the rest open their page. The screens:
   demand first; a started unit still needs the parts no bench has issued
   to it; a finished unit needs none. Buy at the preferred supplier price;
   the purchase list is totalled and grouped by supplier; download it as CSV.
-- **Vendors & prices.** Supplier records and up to six prices per part
+- **Suppliers & prices.** Supplier records and up to six prices per part
   (unit cost, MOQ, lead time, part number, preferred). Prices live only
   here — never in the product list, a spreadsheet, or anything public.
-- **Purchase orders.** Record what was sent to a supplier (adds to on
+- **Supplier orders.** Record what was sent to a supplier (adds to on
   order); **receive** with the supplier lot (moves to on hand; the lot
   travels onto every unit the part is issued into). Cancel what is still
   expected.
@@ -590,42 +650,48 @@ order, the sites once addresses arrive — as a dry run first (nothing
 written; every refusal named), then `--apply`. `docs/order-intake-template.json`
 is the shape; the filled-in file stays out of the repo.
 
-### Accounting — is the money in?
+### Accounting — the next step
 
-*Money → Accounting* (`/logic-accounting.html`), or *Correct or void in
-Accounting →* on a tenant-billed order: every invoice on every order, what
-was invoiced, what has really been received, what is late and by how much
-(the aging), per customer ACCOUNT, with Status / Customer / Overdue filters
-and *Export CSV*. Every figure is the server's (`api/logic-accounting.js`
-over `api/_lib/receivables.js`); the page never sums money. The workspace's
-owner or an administrator makes the changes, on the orders it bills itself;
-an order billed through ClearSky's QuickBooks is shown read-only (payments
-reconcile there). Tap an order and its invoice opens with the **Payment**
-box on top:
+*Money → Accounting* (`/logic-accounting.html`): one list. Each row is an
+order and the one next step — deposit to issue, deposit due, deposit
+overdue, final payment due, deposit received, or paid in full — with the
+order's stage under it when that says more (in production, awaiting final
+payment). The purchase order is a link to the order. The invoice number,
+the books, and a correction stay under **Invoice details**. Filters, how
+late, by customer, and where invoices are sent stay folded. Every figure
+is the server's (`api/logic-accounting.js` over `api/_lib/receivables.js`);
+the page never sums money. The workspace's owner or an administrator makes
+the changes, on the orders it bills itself; an order billed through
+ClearSky's QuickBooks is shown read-only (payments reconcile there). Tap
+an order and its invoice opens in the page, under the totals. It does not
+cover the list. One button:
 
-- **Received** (green) or **Not received yet** / **Part received**, with the
-  last payment's amount, date and bank reference or what is still to come.
-- **Mark as received** opens *Record payment received* with the balance
-  filled in: the amount, the day it landed and the bank's own reference
-  (at least 4 characters). More than the invoice is refused. A recorded
-  payment is what accounting has seen, not bank clearance.
-- **Mark as not received** (with several payments: *Last payment not
-  received*, or *Void* on any one in the list) voids a payment: why, in at
-  least 5 characters. **Voiding keeps it** — the payment stays on the
-  invoice, struck through, with who voided it, when and why, and the invoice
-  goes back to what has really been received. When the order is already in
-  the plant on that payment the office must choose: **Keep building on the
-  PO** (records a release on the customer's PO: the plant carries on, the
-  deposit shows as open) or **Hold the order** (the plant's scans refuse it
-  until the payment is recorded or it is released on the PO). Either way,
-  shipment still needs the money recorded. A voided reference is recorded
-  again only with *This money has really landed* ticked and a reason.
-- **Record invoice issued** (number, date, an optional due date), **Edit
-  invoice** (number, invoice date, due date — blank follows the order's
-  terms — with a reason; amounts come from the approved price and are never
-  edited here), **Release on PO** (start the plant before the deposit, with
-  the PO number and a reason) and, where the workspace keeps its own books
-  in QuickBooks or Stripe, push, link and sync.
+- **Record the payment** when money is still open. It opens *Record payment
+  received* with the balance filled in: the amount, the day it landed and
+  the bank's own reference (at least 4 characters). More than the invoice
+  is refused. A recorded payment is what accounting has seen, not bank
+  clearance. The row then reads **Deposit received** or **Paid in full**.
+- **Record the invoice** when that half has not been issued (number, date,
+  an optional due date; blank follows the order's terms).
+- **Open the order** when nothing more is open on this invoice. If the
+  other half of the same order is still open, the button names that step.
+- **This payment did not arrive**, under Invoice details, on a recorded
+  payment. Why, in at least 5 characters, then **Void payment**. **Voiding
+  keeps it** — the payment stays on the invoice, struck through, with who
+  voided it, when and why, and the invoice goes back to what has really
+  been received. When the order is already in the plant on that payment
+  the office must choose: **Keep building on the PO** (records a release
+  on the customer's PO: the plant carries on, the deposit shows as open)
+  or **Hold the order** (the plant's scans refuse it until the payment is
+  recorded or it is released on the PO). Either way, shipment still needs
+  the money recorded. A voided reference is recorded again only with
+  *This money has really landed* ticked and a reason.
+- **Correct the invoice** (number, invoice date, due date — blank follows
+  the order's terms — with a reason; amounts come from the approved price
+  and are never edited here) and **Let the plant start** (start the plant
+  before the deposit, with the PO number and a reason) sit under Invoice
+  details, with send, link and read-payments where the workspace keeps
+  its own books.
 
 Every change goes through the one writer of order money
 (`api/_lib/logic-workflow.js`, by way of `api/logic-office.js`) and is kept
@@ -723,6 +789,23 @@ station.
 
 A **roaming phone** shows a bench picker top right: choose the bench you are
 at, then scan. Every scan records the phone and the bench it named.
+
+### The work-order card (`/plant/work-orders`)
+
+The board is the office menu and one status row: Late, On hold, In
+progress, Ready to ship. Line, stage, priority, target date, and which
+operation the units are at sit behind More filters. Register serials is
+the one action on the bar. Print, Export, and Refresh sit in the overflow.
+The card opens as a drawer and leads with the journey: which customer and
+project, what is being built, where it ships, how far along it is, and
+what is blocking it. Operation steps stay on the card, collapsed. Those
+facts are read from the order when the card opens, so a corrected address
+or line is what the floor sees. Prices and email stay on the order. A
+project id is not the name of the job. A fact the purchase order does not
+carry is said so, and nothing is filled in. Holds and failed tests on the
+loaded units are listed, each linking to the serial record. Parts still
+to register stay in their own table. Materials shows what the bill is
+short of against stock, the same plan the plant board uses.
 
 ### Registering serials
 

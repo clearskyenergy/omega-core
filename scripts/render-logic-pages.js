@@ -39,7 +39,19 @@ require.cache[require.resolve(path.join(ROOT, 'api/_lib/admin'))] = { id: 'admin
    libraries the endpoints use, and one state object carries the bench from
    the tablet check into the roaming-phone check. */
 var F = require('./_lib/logic-fixtures');
-var STATE = F.initialState(), V = F.views(STATE), TENANT = require('../tenants/cleancell/tenant.json'), KIT_SENDS = [];
+var STATE = F.initialState(), V = journeyViews(STATE), TENANT = require('../tenants/cleancell/tenant.json'), KIT_SENDS = [];
+/* Server projections added by the journey work. Kept in this test runner:
+   design-order includes server-only routing and must never enter the public sandbox. */
+function journeyViews(state) {
+  var v = F.views(state), S = require('../api/_lib/office-stage'), D = require('../api/_lib/design-order');
+  var office = v.officeJson, plant = v.plantJson, accounting = v.accountingJson, shipping = v.logisticsJson;
+  function order(id) { return state.orders.filter(function (o) { return o.id === id; })[0] || {}; }
+  v.officeJson = function (opts) { var out = office(opts); out.orders.forEach(function (r) { r.design = D.view(order(r.id)); r.shipTo = D.shipTo(order(r.id)); }); return out; };
+  v.plantJson = function (q, who) { var out = plant(q, who); if (out.workOrder) { var o = order(out.workOrder.orderId || 'o1'); out.path = S.path(o, {}, 'tenant', null); out.steps = S.PATH; if (o.design) out.source = require('../api/_lib/plant-source').sourceOf(o); } return out; };
+  v.accountingJson = function (q) { var out = accounting(q); out.steps = S.PATH; out.rows.forEach(function (r) { var o = order(r.orderId); r.projectId = o.projectId || null; r.projectName = o.design && o.design.projectName || null; r.path = S.path(o, {}, 'tenant', null); }); return out; };
+  v.logisticsJson = function () { var out = shipping(); out.steps = S.PATH; out.orders.forEach(function (r) { var o = order(r.id); r.projectId = o.projectId || null; r.path = S.path(o, {}, 'tenant', null); }); return out; };
+  return v;
+}
 /* what the accounting page posted, in order: the office corrections go to
    /api/logic-office (the one writer's door), the ledger sync to
    /api/logic-accounting */
@@ -121,7 +133,7 @@ var srv = http.createServer(function (req, res) {
   if (!fs.existsSync(f) && fs.existsSync(f + '.html')) f = f + '.html';   /* Vercel clean URLs */
   if (fs.existsSync(f) && fs.statSync(f).isDirectory() && fs.existsSync(path.join(f, 'index.html'))) f = path.join(f, 'index.html');
   if (!fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end(); }
-  res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); res.end(fs.readFileSync(f));
+  res.writeHead(200, { 'Content-Type': TYPES[path.extname(f)] || 'application/octet-stream' }); res.end(process.argv.indexOf('--capture-before') >= 0 && ['omega-logic.html', 'plant/work-orders.html', 'logic-logistics.html', 'logic-accounting.html'].indexOf(path.relative(ROOT, f)) >= 0 ? require('child_process').execFileSync('git', ['show', 'origin/main:' + path.relative(ROOT, f)], { cwd: ROOT }) : fs.readFileSync(f));
 });
 var fails = 0;
 /* key order does not matter to a request body */
@@ -151,7 +163,11 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     p.on('response', function (r) { var x = r.url(); if (x.indexOf(base + '/api/') === 0 && r.status() === 404 && !/json/.test(r.headers()['content-type'] || '')) missing.push(name + ': ' + x.slice(base.length).split('?')[0]); });
     if (opts.phone) await p.setViewportSize({ width: 390, height: 844 });
     await p.goto(base + url, { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(400);
+    var clicks = 0, originalClick = p.click.bind(p);
+    p.click = async function () { clicks++; return originalClick.apply(null, arguments); };
     var out = await steps(p);
+    if (out && name.indexOf('journey-') === 0) out.clicks = clicks;
+    await p.locator('#omega-splash').waitFor({ state: 'hidden', timeout: 15000 }).catch(function () {});
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, name + '.png'), fullPage: true });
     var widths = opts.phone ? [390, 1280] : [390];
     for (var wi = 0; wi < widths.length; wi++) {
@@ -167,6 +183,54 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   /* the text of every match, whitespace folded */
   function texts(p, sel, n) { return p.$$eval(sel, function (r, max) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, max); }); }, n || 120); }
   function text(p, sel) { return p.$eval(sel, function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }); }
+  if (process.argv.indexOf('--capture-before') >= 0) {
+    await check('before-office', '/omega-logic?org=cleancell.us&order=o1#orders', async function (p) { await p.waitForSelector('#detail'); });
+    await check('before-plant', '/plant/work-orders.html?org=cleancell.us', async function (p) { await p.click('[data-id="wo_1"]'); });
+    await check('before-shipping', '/logic-logistics.html?org=cleancell.us&order=o1', async function (p) { await p.waitForFunction(function () { return document.getElementById('detail').textContent.length > 30; }); });
+    await check('before-accounting', '/logic-accounting.html?org=cleancell.us', async function (p) { await p.click('[data-open="o1:balance"]'); });
+    await b.close(); srv.close(); process.exit(fails ? 1 : 0);
+  }
+  /* One saved design is seeded through all four office projections. Financial
+     and production state is explicit example data; no external services run. */
+  var journeyState = JSON.parse(JSON.stringify(STATE));
+  var JD = require('../api/_lib/design-order');
+  var jd = JD.draft({ project: { id: 'qa-example-site', name: 'Example solar and storage site', address: '100 Main St, Chicago, IL 60601' }, designerOrgId: 'cleancell.us', lines: [{ sku: 'CC-C215', qty: 5 }], catalogs: { 'cleancell.us': [{ sku: 'CC-C215', name: 'Example unit', active: true, kind: 'product' }] } }).orders[0];
+  var jo = JD.documentOf({ order: jd, email: 'designer@example.invalid', now: '2026-10-17T12:00:00Z', createdAt: '2026-10-17T12:00:00Z' });
+  Object.assign(STATE.orders[0], { projectId: jo.projectId, design: jo.design, delivery: jo.delivery });
+  STATE.companyOrders.filter(function (o) { return o.id === 'o1'; })[0].destinations = jo.delivery.destinations;
+  V = journeyViews(STATE);
+  await check('journey-office', '/omega-logic?org=cleancell.us&order=o1#orders', async function (p) {
+    await p.waitForSelector('#detail .lg-path');
+    ok('the order shows the saved design address and project', /100 Main St/.test(await text(p, '#detail')) && /Example solar and storage site/.test(await text(p, '#detail')));
+    var shipping = p.locator('#detail a[href*="logic-logistics"]').first();
+    ok('the order links forward to its shipment', /order=o1/.test(await shipping.getAttribute('href')));
+    return { project: jo.projectId, clicks: 0 };
+  });
+  await check('journey-plant', '/plant/work-orders.html?org=cleancell.us', async function (p) {
+    await p.click('[data-id="wo_1"]');
+    await p.waitForSelector('#detail .lg-path');
+    ok('the plant retains the project name, address and order link', /Example solar and storage site/.test(await text(p, '#journey')) && /100 Main St/.test(await text(p, '#journey')) && await p.locator('#detail a[href*="order=o1"]').count() > 0);
+    return { project: jo.projectId, clicks: 1 };
+  });
+  await check('journey-shipping', '/logic-logistics.html?org=cleancell.us&order=o1', async function (p) {
+    await p.waitForSelector('#order-head .lg-path');
+    ok('shipping retains the saved address and five BOM units', /100 Main St/.test(await text(p, '#detail')) && /5 × CC-C215/.test(await text(p, '#detail')));
+    return { project: jo.projectId, clicks: 0 };
+  });
+  await check('journey-accounting', '/logic-accounting.html?org=cleancell.us', async function (p) {
+    await p.click('[data-open="o1:balance"]');
+    await p.waitForSelector('#drawer .lg-path');
+    ok('the invoice links back to the same order and drawing', await p.locator('#drawer a[href*="order=o1"]').count() > 0 && await p.locator('#drawer a[href*="qa-example-site"]').count() > 0);
+    return { project: jo.projectId, clicks: 1 };
+  });
+  STATE = journeyState; V = journeyViews(STATE);
+  if (process.argv.indexOf('--journey-only') >= 0) {
+    ok('no journey JavaScript errors', errs.length === 0, errs);
+    ok('all journey endpoints answered', missing.length === 0, missing);
+    await b.close(); srv.close();
+    console.log(fails ? 'Journey checks FAILED' : 'Journey checks passed');
+    process.exit(fails ? 1 : 0);
+  }
   /* WCAG contrast of an element's text against the first opaque background behind it (UX-5) */
   function contrastIn(p, sel) {
     return p.evaluate(function (sel) {
@@ -234,6 +298,46 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('component fields include safety stock', comp);
     return { items: items, bomRows: bomRows, comp: comp };
   });
+  await check('work-orders', '/plant/work-orders.html?org=cleancell.us', async function (p) {
+    await p.waitForSelector('#chips button', { timeout: 8000 });
+    var chips = await p.$$eval('#chips button .lbl', function (b) { return b.map(function (x) { return x.textContent; }); });
+    var chrome = await p.evaluate(function () {
+      return {
+        tree: !!document.querySelector('.tree'),
+        more: (document.querySelector('#more-filters > summary') || {}).textContent,
+        primary: (document.getElementById('new') || {}).textContent,
+        overflow: ['print', 'csv', 'refresh'].map(function (id) { return !!document.getElementById(id); }).join(','),
+        toolbar: document.querySelectorAll('.toolbar > button, .toolbar > a.btn').length
+      };
+    });
+    await p.click('[data-id="wo_1"]');
+    await p.waitForFunction(function () { var m = document.getElementById('mats'); return m && /Checking stock/.test(m.textContent) === false; }, { timeout: 8000 });
+    var po = await p.$eval('#journey', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var stepsOpen = await p.$eval('#steps', function (e) { return e.open; });
+    var quality = await p.$eval('#quality', function (e) { return e.textContent.replace(/\s+/g, ' ').trim().slice(0, 180); });
+    var mats = await p.$eval('#mats', function (e) { return e.textContent.replace(/\s+/g, ' ').trim().slice(0, 160); });
+    var drawer = await p.$eval('#detail', function (e) { var s = getComputedStyle(e); return s.position + ':' + Math.round(e.getBoundingClientRect().width); });
+    var gridW = await p.$eval('#grid', function (e) { return Math.round(e.getBoundingClientRect().width); });
+    await p.evaluate(function () {
+      var img = document.createElement('img');
+      img.id = 'mascot-probe';
+      img.alt = '';
+      img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+      img.setAttribute('style', 'position:fixed;top:140px;right:48px;width:72px;height:72px;z-index:2000');
+      document.body.appendChild(img);
+    });
+    await p.waitForFunction(function () { var e = document.getElementById('mascot-probe'); return e && getComputedStyle(e).display === 'none'; }, { timeout: 2000 }).catch(function () {});
+    var mascot = await p.$eval('#mascot-probe', function (e) { return getComputedStyle(e).display; });
+    ok('the filter is Late, On hold, In progress, and Ready to ship', chips.join('|') === 'Late|On hold|In progress|Ready to ship', chips);
+    ok('one primary action, with the rest behind More filters and the overflow', !chrome.tree && chrome.more === 'More filters' && chrome.primary === 'Register serials' && chrome.overflow === 'true,true,true' && chrome.toolbar === 1, chrome);
+    ok('the card names the purchase order gap without inventing a project', /Purchase order/.test(po) && /not on the purchase order/.test(po) && po.indexOf('prj_') < 0, po);
+    ok('operation steps stay on the card, collapsed', stepsOpen === false);
+    ok('quality lists the held serial', /NCR-26-89/.test(quality) && /CC418-26-44194/.test(quality), quality);
+    ok('materials shortfalls render on the card', /Materials/.test(mats) && /Short of/.test(mats), mats);
+    ok('the card is a drawer and the grid keeps its width', drawer.indexOf('fixed:') === 0 && gridW > 600, [drawer, gridW]);
+    ok('a floating figure over the drawer is hidden', mascot === 'none', mascot);
+    return { chips: chips, drawer: drawer, gridW: gridW };
+  });
   await check('manager', '/plant/manager.html?org=cleancell.us#works', async function (p) {
     await p.waitForTimeout(400);
     await p.click('[data-id="wo_1"]'); await p.waitForTimeout(500);
@@ -254,36 +358,52 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('stations carry their steps off the bills', stepsOpen >= 1, stepsOpen);
     return { nodes: nodes.length, bars: bars, bottleneck: kv.filter(function (t) { return /Bottleneck/.test(t); })[0] };
   });
+  /* THE PATH (2026-10-17): one page, three views — Today (what needs me?),
+     Orders (#orders: where is each order and what is its next step?) and
+     Numbers (#cash: how is the business doing?) — under the bar of the
+     path's seven steps, with the guide naming the one next action */
   await check('office', '/omega-logic?org=cleancell.us', async function (p) {
     await p.waitForTimeout(600);
-    var flowTiles = await p.$$eval('.logic-flow a', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 30); }); });
+    var pipe = await p.$$eval('#pipe .lg-path button[data-step]', function (r) { return r.map(function (x) { return x.getAttribute('data-step') + ':' + (x.querySelector('b') || {}).textContent; }); });
+    var navHubs = await p.$$eval('.logic-nav a.hub', function (r) { return r.map(function (x) { return x.textContent; }); });
+    var signout = await p.$eval('#signout', function (e) { return e.textContent; });
+    /* o3 to price, o4 its deposit invoice to issue, o2 in the plant, o1 awaiting its final payment */
+    ok('the bar is the path\'s seven steps with the server\'s counts, then Complete', pipe.join('|') === 'price:1|deposit:1|build:1|final:1|ship:0|deliver:0|site:0|complete:0', pipe);
+    ok('the menu is the hub: eight places, no website group for a tenant', navHubs.join('|') === 'Today|Sales|Customers|Plant|Deliver|Stock|Money|Setup', navHubs);
+    ok('sign out is in the header', signout === 'Sign out');
+    /* the same HEX HUB as the Omega Logic app, beside What needs you */
+    var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (x) { var b = x.querySelector('.bt'); return x.getAttribute('data-hub') + ':' + (b ? b.textContent : ''); }); });
+    var today = await texts(p, '#today-body .need', 200), first = await p.$eval('#today-body .need.first', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var guide = await p.$eval('#lg-guide', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); }), pulsed = await p.$$eval('.lg-pulse', function (r) { return r.map(function (x) { return x.id; }); });
+    var shown = await p.evaluate(function () { return ['today', 'orders', 'numbers'].map(function (v) { var el = document.querySelector('[data-view="' + v + '"]'); return v + ':' + (el && !el.hidden); }).join('|'); });
+    ok('Today: the hex hub (Today 6: a request, an order to price, a deposit invoice to issue, a PO to review, two follow-ups due) beside What needs you, the request first and marked Start here, the follow-ups to open or mark done',
+      hub.join('|') === 'today:6|sales:3|customers:3|plant:1|deliver:|stock:4|money:1' && /^Start here ?CC-26-4419.*customer request/.test(first)
+      && today.some(function (t) { return /CC-26-4422.*Issue the deposit invoice/.test(t); }) && today.some(function (t) { return /CC-26-4421.*Approve the customer price/.test(t); })
+      && today.some(function (t) { return /Bakersfield delivery window.*Riverside Cold Chain.*was due/.test(t) && /Open/.test(t) && /Done/.test(t); }) && today.some(function (t) { return /Ask Harbor for the site survey.*no date/.test(t); }), [hub, first, today]);
+    ok('the guide names the one next thing and pulses it; only Today is shown', /OMEGA LOGIC · TODAY/.test(guide) && /6 things need you/.test(guide) && /Start with CC-26-4419/.test(guide) && pulsed.join() === 'today-first' && shown === 'today:true|orders:false|numbers:false', [guide, pulsed, shown]);
+    /* Numbers: the receivables ledger's own totals (OFF-02), the same figures Accounting prints */
+    await p.evaluate(function () { location.hash = '#cash'; }); await p.waitForTimeout(400);
     var cash = await p.$$eval('#cash .logic-kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 44); }); });
     var floor = await p.$$eval('#floor-kv div', function (r) { return r.length; });
-    var navGroups = await p.$$eval('.logic-nav .eyebrow', function (r) { return r.map(function (x) { return x.textContent; }); });
-    var signout = await p.$eval('#signout', function (e) { return e.textContent; });
-    var rows = await p.$$eval('#orders button.row', function (r) { return r.length; });
-    var accLinks = await p.evaluate(function () { return { cash: document.querySelectorAll('#cash a[href^="/logic-accounting.html"]').length, nav: document.querySelectorAll('.logic-nav a[href^="/logic-accounting.html"]').length }; });
-    /* o2 is the live order's situation before the fix: a placeholder bank
-       reference recorded as its deposit released it to the plant; o4 is
-       accepted with its deposit invoice still the supplier's to issue */
-    ok('the flow strip has the six stages with counts, from the server\'s stages', flowTiles.length === 6 && /Requests & quotes1/.test(flowTiles[0]) && /Awaiting deposit1/.test(flowTiles[1]) && /In build2/.test(flowTiles[2]), flowTiles);
-    /* OFF-02: the receivables ledger's own totals — the same figures Accounting prints below */
-    ok('cash flow tiles: invoiced, received, outstanding, overdue, to issue (Accounting\'s figures), purchase list value', cash.length === 7 && /Invoiced\$591,475\.00/.test(cash[0]) && /Received\$240,600\.00/.test(cash[1]) && /Outstanding\$350,875\.00/.test(cash[2]) && /Overdue\$0\.00/.test(cash[3]) && /To issue\$90,225\.00/.test(cash[4]) && /Purchase list value\$/.test(cash[5]), cash);
-    ok('cash flow opens accounting, and the Money group lists it', accLinks.cash === 1 && accLinks.nav === 1, accLinks);
+    var accLinks = await p.evaluate(function () { return { cash: document.querySelectorAll('#cash a[href^="/logic-accounting.html"]').length, nav: document.querySelectorAll('.logic-nav a[href^="/logic-accounting.html"]').length, cur: (document.querySelector('.logic-nav [aria-current="page"]') || {}).textContent, numbers: !document.querySelector('[data-view="numbers"]').hidden }; });
+    ok('Numbers: cash flow tiles — invoiced, received, outstanding, overdue, to issue (Accounting\'s figures), purchase list value', cash.length === 7 && /Invoiced\$591,475\.00/.test(cash[0]) && /Received\$240,600\.00/.test(cash[1]) && /Outstanding\$350,875\.00/.test(cash[2]) && /Overdue\$0\.00/.test(cash[3]) && /To issue\$90,225\.00/.test(cash[4]) && /Purchase list value\$/.test(cash[5]), cash);
+    ok('cash flow opens accounting, the Money place lists it, and the menu marks Cash flow', accLinks.cash === 1 && accLinks.nav === 1 && accLinks.cur === 'Cash flow' && accLinks.numbers, accLinks);
     ok('the floor tiles filled from the plant', floor === 4, floor);
-    ok('the nav runs the business in order and has no website group for a tenant', navGroups.join('|') === 'Run the business|Build|Stock & supply|Deliver|Money|Setup', navGroups);
-    ok('sign out is in the header', signout === 'Sign out');
+    /* Orders: the list, then one order guided */
+    await p.evaluate(function () { location.hash = '#orders'; }); await p.waitForTimeout(300);
+    var rows = await p.$$eval('#orders button.row', function (r) { return r.length; });
     ok('orders are listed', rows === 4, rows);
-    /* the same HEX HUB as the Omega Logic app, beside a Today list */
-    var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (x) { var b = x.querySelector('.bt'); return x.getAttribute('data-hub') + ':' + (b ? b.textContent : ''); }); });
-    var today = await texts(p, '#today-body .need', 200);
-    ok('the office home has the hex hub (Today 5: a request, an order to price, a PO to review, two follow-ups due; Customers 2 follow-ups; Money 1 invoice to issue) and a Today list with the follow-ups to open or mark done', hub.join('|') === 'today:5|sales:3|customers:3|plant:1|deliver:|stock:4|money:1' && today.some(function (t) { return /Bakersfield delivery window.*Riverside Cold Chain.*was due/.test(t) && /Open/.test(t) && /Done/.test(t); }) && today.some(function (t) { return /Ask Harbor for the site survey.*no date/.test(t); }) && today.some(function (t) { return /CC-26-4421/.test(t); }), [hub, today]);
     await p.click('#orders [data-pick="o4"]'); await p.waitForTimeout(400);
-    var issueForm = await p.$$eval('#inv-no-deposit, #inv-date-deposit, #inv-pay-deposit, [data-action="invoice-issued"]', function (r) { return r.length; });
+    var o4 = await p.evaluate(function () { return { cur: (document.querySelector('#detail .lg-path [aria-current="step"]') || {}).textContent, verdict: document.querySelector('#verdict').textContent.replace(/\s+/g, ' ').trim(),
+      guide: document.querySelector('#lg-guide').textContent.replace(/\s+/g, ' ').trim(), pulsed: Array.prototype.map.call(document.querySelectorAll('.lg-pulse'), function (x) { return x.id; }).join(),
+      next: document.querySelectorAll('#next-step #inv-no-deposit, #next-step #inv-date-deposit, #next-step #inv-pay-deposit, #next-step [data-action="invoice-issued"]').length, url: location.search + location.hash }; });
+    ok('  an order: its bar on Deposit, the step\'s question and verdict, the deposit invoice to record as its one next step, pulsed by the guide', o4.cur === 'Deposit' && /^Has the deposit arrived\? ?The deposit, \$90,225\.00, is not invoiced yet\./.test(o4.verdict) && o4.next === 4 && o4.pulsed === 'inv-no-deposit'
+      && /2 \/ 7 · DEPOSIT/.test(o4.guide) && /Issue the deposit invoice/.test(o4.guide) && /Press Record invoice issued/.test(o4.guide) && o4.url === '?org=cleancell.us&order=o4#orders', o4);
     await p.click('#orders [data-pick="o1"]'); await p.waitForTimeout(400);
     var link = await p.$$eval('#inv-link-balance', function (r) { return r.map(function (x) { return x.value; }); });
-    ok('  a tenant-billed deposit is recorded as issued with an optional pay link; an issued invoice\'s pay link can be changed', issueForm === 4 && link[0] === 'https://pay.example.com/cleancell/CC-INV-1058', [issueForm, link]);
-    return { flowTiles: flowTiles, cash: cash, nav: navGroups.length, hub: hub.length };
+    var o1 = await p.evaluate(function () { return { guide: document.querySelector('#lg-guide').textContent.replace(/\s+/g, ' ').trim(), pulsed: Array.prototype.map.call(document.querySelectorAll('.lg-pulse'), function (x) { return x.id; }).join(), more: !!document.querySelector('#detail details.more') }; });
+    ok('  an issued invoice\'s pay link can be changed; an open customer request comes first in the guide; the rest is under More about this order', link[0] === 'https://pay.example.com/cleancell/CC-INV-1058' && /Answer the customer’s request/.test(o1.guide) && /^answer-/.test(o1.pulsed) && o1.more, [link, o1]);
+    return { pipe: pipe.length, cash: cash, nav: navHubs.length, hub: hub.length };
   });
   await check('settings', '/logic-settings.html?org=cleancell.us', async function (p) {
     await p.waitForTimeout(400);
@@ -326,17 +446,19 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var PLACEHOLDER = 'REPLACE WITH THE BANK REFERENCE, or delete this payment if not yet received';
     function tiles(sel) { return p.$$eval(sel + ' [data-k]', function (r) { var o = {}; r.forEach(function (x) { o[x.getAttribute('data-k')] = x.querySelector('b').textContent.trim(); }); return o; }); }
     function rowCount() { return p.$$eval('#ledger tbody tr[data-row]', function (r) { return r.length; }); }
-    var head = await p.evaluate(function () { var c = document.querySelector('.logic-nav a[aria-current="page"]'); return { rows: document.querySelectorAll('#ledger tbody tr[data-row]').length, product: document.querySelector('[data-product-name]').textContent.trim(), current: c ? c.textContent.trim() : null, sync: document.getElementById('sync').textContent, banner: !document.getElementById('banner').hidden }; });
+    var head = await p.evaluate(function () { var c = document.querySelector('.logic-nav a[aria-current="page"]'); return { rows: document.querySelectorAll('#ledger tbody tr[data-row]').length, product: document.querySelector('[data-product-name]').textContent.trim(), current: c ? c.textContent.trim() : null, sync: document.getElementById('sync').textContent, banner: !document.getElementById('banner').hidden, acts: document.querySelectorAll('#content [data-act]').length, po: (function () { var a = document.querySelector('#ledger tr[data-row="o1:deposit"] a.sublink'); return a ? { href: a.getAttribute('href'), text: a.textContent } : null; })(), stage: (document.querySelector('#ledger tr[data-row="o1:balance"] td[data-k="stage"]') || {}).textContent || '' }; });
     var t0 = await tiles('#totals'), a0 = await tiles('#aging');
     ok('accounting is an office page: Omega Logic chrome, Accounting current under Money, one row per invoice', head.rows === 4 && head.product === 'Omega Logic' && head.current === 'Accounting' && !head.banner, head);
     ok('  the totals and aging are the server\'s: invoiced, received, outstanding, overdue, on PO credit', t0.invoiced === '$591,475.00' && t0.received === '$240,600.00' && t0.outstanding === '$350,875.00' && t0.overdue === '$0.00' && t0.credit === '$0.00' && t0.toIssue === '$90,225.00' && a0['1-30'] === '$0.00' && a0.current === '$350,875.00', [t0, a0]);
-    ok('  the sync card names what the deployment is missing and the connected Stripe account, never a secret', /QBO_CLIENT_ID/.test(head.sync) && /acct_1DEMOCLEANCELL/.test(head.sync) && /test mode/.test(head.sync), head.sync.slice(0, 300));
+    ok('  Connect is offered only for a provider this deployment can use: Stripe is named, QuickBooks is not a disabled button and no secret name is shown', /acct_1DEMOCLEANCELL/.test(head.sync) && /test mode/.test(head.sync) && !/Connect QuickBooks/.test(head.sync) && !/QBO_CLIENT_ID/.test(head.sync) && head.acts === 0, head.sync.slice(0, 400));
+    ok('  the PO on a row opens the order, and the final payment is named as such', head.po && head.po.href.indexOf('/omega-logic?org=cleancell.us&order=o1#orders') >= 0 && head.po.text === 'PO RCC-2200' && /Final payment/.test(head.stage), head);
     await p.click('[data-open="o2:deposit"]'); await p.waitForTimeout(200);
     var dr = await p.evaluate(function () { var d = document.getElementById('drawer'); return { open: !d.hidden, pay: d.querySelectorAll('a.paylink[href^="https://invoice.stripe.com/"]').length, voids: d.querySelectorAll('.pays [data-act="void"]').length, state: (d.querySelector('#paystate') || {}).textContent || '', push: d.querySelectorAll('[data-act="push"]').length, text: d.textContent.replace(/\s+/g, ' ') }; });
-    ok('  an invoice opens in the drawer with its payment page, its payments and a push to Stripe', dr.open && dr.pay === 1 && dr.voids === 1 && dr.push === 1 && dr.text.indexOf(PLACEHOLDER) >= 0, [dr.open, dr.pay, dr.voids, dr.push, dr.text.slice(0, 240)]);
-    /* void the placeholder: the order is in the plant on it, so the office must choose */
-    ok('  the invoice says at the top whether the money is in, with the one tap that changes it', /Payment\s*Received/.test(dr.state) && /Mark as not received/.test(dr.state), dr.state);
-    await p.click('#paystate [data-act="void"]'); await p.waitForTimeout(150);
+    ok('  an invoice opens in the page with its payment page, its payments and a send to Stripe, none of them covering the list', dr.open && dr.pay === 1 && dr.voids === 1 && dr.push === 1 && dr.text.indexOf(PLACEHOLDER) >= 0, [dr.open, dr.pay, dr.voids, dr.push, dr.text.slice(0, 240)]);
+    /* the one next step is on the invoice. A payment that never arrived is under Invoice details. */
+    ok('  the invoice leads with the next step, and one action', /Deposit received/.test(dr.state) && /Open the order/.test(dr.state) && !/Mark as not received/.test(dr.state), dr.state);
+    await p.click('#invoice-more > summary'); await p.waitForTimeout(100);
+    await p.click('#invoice-more .pays [data-act="void"]'); await p.waitForTimeout(150);
     var dv = await p.evaluate(function () { return { open: !document.getElementById('dlg-void').hidden, choice: !document.getElementById('void-choice').hidden, radios: document.querySelectorAll('#dlg-void input[name="after"]').length, go: document.getElementById('void-go').disabled, focus: document.activeElement && document.activeElement.id, summary: document.getElementById('void-summary').textContent }; });
     ok('  voiding a payment the order was released on asks: keep building on the PO, or hold', dv.open && dv.choice && dv.radios === 2 && dv.go === true && dv.focus === 'void-reason' && /USD 90,225\.00 · 2026-08-22 · REPLACE WITH/.test(dv.summary), dv);
     var REASON = 'Recorded from the intake template; the money has not arrived';
@@ -357,23 +479,38 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('#paystate [data-act="record"]'); await p.waitForTimeout(150);
     var pd = await p.evaluate(function () { return { open: !document.getElementById('dlg-pay').hidden, amount: document.getElementById('pay-amount').value }; });
     await p.click('#dlg-pay [data-cancel]'); await p.waitForTimeout(100);
-    ok('  after the void the top says not received, building on the PO, and "Mark as received" opens the payment with the balance filled in', /Not received yet/.test(ps) && /keeps building on its PO/.test(ps) && /Mark as received/.test(ps) && pd.open && pd.amount === '90225.00', [ps, pd]);
-    ok('  the voided payment stays on the invoice, struck through, and cannot be voided twice; the credit release says who and why', dr2.struck.indexOf('REPLACE WITH THE BANK REFERENCE') >= 0 && dr2.voids === 0 && /Released on PO SS-PO-5521 by demo@cleancell\.us/.test(dr2.warn) && /not yet received/.test(dr2.warn) && dr2.release === 0, dr2);
+    ok('  after the void the next step is the deposit, and Record the payment opens with the balance filled in', /Deposit overdue/.test(ps) && /has not arrived/.test(ps) && /Record the payment/.test(ps) && pd.open && pd.amount === '90225.00', [ps, pd]);
+    ok('  the voided payment stays on the invoice, struck through, and cannot be voided twice; the credit release says who and why', dr2.struck.indexOf('REPLACE WITH THE BANK REFERENCE') >= 0 && dr2.voids === 0 && /Building before the deposit, PO SS-PO-5521, noted by demo@cleancell\.us/.test(dr2.warn) && /not yet received/.test(dr2.warn) && dr2.release === 0, dr2);
     /* the customer agreed net 30 on the PO: move the due date, with a reason */
+    await p.click('#invoice-more > summary'); await p.waitForTimeout(100);
     await p.click('#drawer [data-act="edit"]'); await p.waitForTimeout(150);
     var ed = await p.evaluate(function () { return { open: !document.getElementById('dlg-edit').hidden, number: document.getElementById('ed-number').value, issued: document.getElementById('ed-issued').value, due: document.getElementById('ed-due').value, hint: document.getElementById('ed-due-hint').textContent }; });
     ok('  the edit dialog opens on the invoice as issued, the due date following the terms', ed.open && ed.number === 'SS-1042' && ed.issued === '2026-08-20' && ed.due === '' && /2026-08-20/.test(ed.hint), ed);
     var EREASON = 'Customer agreed net 30 on the PO';
-    await p.fill('#ed-due', '2026-10-15'); await p.fill('#ed-reason', EREASON); await p.waitForTimeout(50); await p.click('#ed-go'); await p.waitForTimeout(700);
+    /* a due date thirty days out from the day the check runs, never a fixed day: a fixed 2026-10-15 fell into the past on 2026-10-16 and read as overdue (the Money check below shares this sample) */
+    var NEW_DUE = new Date(Date.now() + 30 * 86400000).toISOString().slice(0, 10);
+    await p.fill('#ed-due', NEW_DUE); await p.fill('#ed-reason', EREASON); await p.waitForTimeout(50); await p.click('#ed-go'); await p.waitForTimeout(700);
     var epost = OFFICE_POSTS[OFFICE_POSTS.length - 1];
-    ok('  only what changed is posted', same(epost, { action: 'invoice-edit', org: 'cleancell.us', orderId: 'o2', stage: 'deposit', dueAt: '2026-10-15', reason: EREASON }), epost);
+    ok('  only what changed is posted', same(epost, { action: 'invoice-edit', org: 'cleancell.us', orderId: 'o2', stage: 'deposit', dueAt: NEW_DUE, reason: EREASON }), epost);
     var ed2 = await p.evaluate(function () { var tr = document.querySelector('#ledger tr[data-row="o2:deposit"]'), d = document.getElementById('drawer'); return { due: tr.querySelector('td[data-k="due"]').textContent.trim(), overdue: tr.querySelectorAll('.tag.overdue').length, history: (d.querySelector('.edits') || {}).textContent || '' }; });
     var t2 = await tiles('#totals');
-    ok('  the new due date takes it out of overdue, and the change is in the invoice\'s history', ed2.due === '2026-10-15' && ed2.overdue === 0 && t2.overdue === '$0.00' && /due terms → 2026-10-15/.test(ed2.history) && /net 30/.test(ed2.history), [ed2, t2.overdue]);
+    ok('  the new due date takes it out of overdue, and the change is in the invoice\'s history', ed2.due === NEW_DUE && ed2.overdue === 0 && t2.overdue === '$0.00' && new RegExp('due terms → ' + NEW_DUE).test(ed2.history) && /net 30/.test(ed2.history), [ed2, t2.overdue]);
+    await p.click('#invoice-more > summary'); await p.waitForTimeout(100);
     await p.click('#drawer [data-act="push"]'); await p.waitForTimeout(600);
     var apost = ACC_POSTS[ACC_POSTS.length - 1];
     ok('  push to Stripe goes to the ledger sync, naming the invoice', same(apost, { action: 'sync-push', org: 'cleancell.us', orderId: 'o2', stage: 'deposit' }), apost);
     await p.click('#drawer-close'); await p.waitForTimeout(100);
+    await p.click('[data-open="o1:balance"]'); await p.waitForTimeout(200);
+    var links = await p.evaluate(function () {
+      var d = document.getElementById('drawer');
+      var a = Array.prototype.map.call(d.querySelectorAll('.links a'), function (x) { return { href: x.getAttribute('href'), text: x.textContent }; });
+      return { open: !d.hidden, links: a, steps: d.querySelectorAll('.bill li').length, text: d.textContent.replace(/\s+/g, ' '), actions: (d.querySelector('#invoice-actions') || {}).textContent || '' };
+    });
+    ok('  the open invoice leads with the final payment, links the order and the PO, and shows the deposit beside it', links.open && links.steps === 2 && links.links.some(function (a) { return a.href.indexOf('/omega-logic?org=cleancell.us&order=o1#orders') >= 0 && /Open order/.test(a.text); }) && links.links.some(function (a) { return /PO RCC-2200/.test(a.text); }) && /Final payment due/.test(links.text) && /Record the payment/.test(links.text), links);
+    var covered = await p.evaluate(function () { var d = document.getElementById('drawer'), row = document.querySelector('#ledger tr[data-row="o1:balance"]'); if (!d || !row || d.hidden) return false; var dd = d.getBoundingClientRect(), rr = row.getBoundingClientRect(); return !(dd.bottom <= rr.top || dd.top >= rr.bottom); });
+    ok('  the open invoice does not cover the row it came from', covered === false, covered);
+    await p.click('#drawer-close'); await p.waitForTimeout(100);
+    await p.click('#filters-more > summary'); await p.waitForTimeout(100);
     await p.selectOption('#f-customer', 'email:buy@sierra.example'); await p.waitForTimeout(500);
     var one = await rowCount(), custOpts = await p.$$eval('#f-customer option', function (r) { return r.map(function (x) { return x.value; }); });
     await p.selectOption('#f-customer', ''); await p.waitForTimeout(500);
@@ -390,9 +527,9 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     /* the dashboard reads the same recomputed invoices: the voided money is out of Received */
     await p.goto(base + '/omega-logic?org=cleancell.us', { waitUntil: 'domcontentloaded' }); await p.waitForTimeout(700);
     var cash = await p.$$eval('#cash .logic-kv div', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim().slice(0, 44); }); });
-    var tagsOnPo = await p.$$eval('#orders button.row .tag', function (r) { return r.map(function (x) { return x.textContent; }).filter(function (t) { return t === 'Released on PO'; }).length; });
-    var build = await p.$$eval('.logic-flow a', function (r) { return r[2] ? r[2].textContent.replace(/\s+/g, ' ').trim() : ''; });
-    ok('  the dashboard agrees: received excludes the voided payment, the order shows released on PO', /Received\$150,375\.00/.test(cash[1]) && /Outstanding\$441,100\.00/.test(cash[2]) && tagsOnPo === 1 && /1 on PO/.test(build), [cash, tagsOnPo, build]);
+    var tagsOnPo = await p.$$eval('#orders button.row .tag', function (r) { return r.map(function (x) { return x.textContent; }).filter(function (t) { return t === 'Build · on PO'; }).length; });
+    var build = await p.$$eval('#pipe button[data-step="build"]', function (r) { return r[0] ? r[0].textContent.replace(/\s+/g, ' ').trim() : ''; });
+    ok('  the dashboard agrees: received excludes the voided payment, the order shows released on PO', /Received\$150,375\.00/.test(cash[1]) && /Outstanding\$441,100\.00/.test(cash[2]) && tagsOnPo === 1 && /^Build ?1$/.test(build), [cash, tagsOnPo, build]);
     return { rows: head.rows, received: t1.received, credit: t1.credit, csv: dl.suggestedFilename(), build: build };
   });
   /* OFF-02: the dashboard's money tiles ARE Accounting's totals — read both
@@ -493,7 +630,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.waitForTimeout(1000);
     var manifest = await p.evaluate(function () { return { m: document.querySelector('link[rel="manifest"]').getAttribute('href'), i: document.querySelector('link[rel="apple-touch-icon"]').getAttribute('href') }; });
     var tabs = await p.$$eval('#nav button', function (r) { return r.map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
-    var kv = await texts(p, '#today-kv div');
+    var kv = await p.$$eval('#today-path button[data-step]', function (r) { return r.map(function (x) { return x.getAttribute('data-step') + ':' + (x.querySelector('b') || {}).textContent; }); });
     var needs = await texts(p, '#today-needs .unit', 160);
     var head = await p.evaluate(function () { return { b: document.querySelector('[data-product-name]').textContent, w: document.getElementById('who').textContent }; });
     ok('the office app is Omega Logic, ClearSky\'s: one manifest with no company in it, its icon, the workspace shown inside', manifest.m === '/office/app.webmanifest' && /icons\/omega-logic-180/.test(manifest.i) && head.b === 'Omega Logic' && /^Clean Cell/.test(head.w), [manifest, head]);
@@ -501,18 +638,18 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     /* the HEX HUB: Today in the middle, the six hubs of the business around
        it, a badge where a person is needed — counted from the sample */
     var hub = await p.$$eval('#hubs .hx', function (r) { return r.map(function (x) { var b = x.querySelector('.bt'); return x.getAttribute('data-hub') + ':' + x.querySelector('.lb').textContent + ':' + (b ? b.textContent : '') + (x.classList.contains('center') ? ':centre' : ''); }); });
-    var tiles = await p.$$eval('#hub-panels [data-hpanel]', function (r) { return r.map(function (x) { return x.getAttribute('data-hpanel'); }); });
-    ok('  Home is the hex hub: Today in the centre (5 need a person: a request, an order to price, a PO to review, two follow-ups due), Sales · Customers · Plant · Deliver · Stock · Money around it, a panel tile per hub under it', hub.length === 7 && hub[0] === 'today:Today:5:centre' && hub.slice(1).map(function (h) { return h.split(':')[1]; }).join('|') === 'Sales|Customers|Plant|Deliver|Stock|Money' && hub[2] === 'customers:Customers:3' && hub[6] === 'money:Money:1' && tiles.join('|') === 'sales|customers|plant|deliver|stock|money', [hub, tiles]);
-    ok('  today counts the stages and lists who needs a person: the follow-ups due (an overdue call, an undated task), the open request and the unpriced order', kv.length === 6 && /Requests & quotes\s*1/.test(kv[0]) && needs.some(function (t) { return /Bakersfield delivery window.*Riverside Cold Chain.*was due/.test(t); }) && needs.some(function (t) { return /Ask Harbor for the site survey.*no date/.test(t); }) && needs.some(function (t) { return /CC-26-4419.*1 customer request/.test(t); }) && needs.some(function (t) { return /CC-26-4421.*price/.test(t); }), [kv, needs]);
+    var tiles = await p.$$eval('#hub-panels button.panel[data-hpanel]', function (r) { return r.map(function (x) { return x.getAttribute('data-hpanel'); }); });
+    ok('  Home is the hex hub: Today in the centre (6 need you: a request, an order to price, a deposit invoice to issue, a PO to review, two follow-ups due), Sales · Customers · Plant · Deliver · Stock · Money around it; the hub\'s own cells open the panels (no tiles repeating them)', hub.length === 7 && hub[0] === 'today:Today:6:centre' && hub.slice(1).map(function (h) { return h.split(':')[1]; }).join('|') === 'Sales|Customers|Plant|Deliver|Stock|Money' && hub[2] === 'customers:Customers:3' && hub[6] === 'money:Money:1' && tiles.length === 0, [hub, tiles]);
+    ok('  Home has the path\'s bar with the server\'s counts and What needs you: the open request first, marked Start here, then the order to price, the deposit to invoice, the follow-ups due (an overdue call, an undated task)', kv.join('|') === 'price:1|deposit:1|build:1|final:1|ship:0|deliver:0|site:0|complete:0' && /^Start here ?CC-26-4419.*1 customer request/.test(needs[0]) && needs.some(function (t) { return /CC-26-4422.*Issue the deposit invoice/.test(t); }) && needs.some(function (t) { return /Bakersfield delivery window.*Riverside Cold Chain.*was due/.test(t); }) && needs.some(function (t) { return /Ask Harbor for the site survey.*no date/.test(t); }) && needs.some(function (t) { return /CC-26-4419.*1 customer request/.test(t); }) && needs.some(function (t) { return /CC-26-4421.*price/.test(t); }), [kv, needs]);
     await p.click('#hubs .hx[data-hub="plant"]'); await p.waitForTimeout(300);
     var plantOpen = await text(p, '#hub-open');
     await p.click('#hubs .hx[data-hub="money"]'); await p.waitForTimeout(300);
     var moneyOpen = await text(p, '#hub-open');
-    ok('  a hub opens its panel under the hub: what is in it now, then where to work it', /1 open work order/.test(plantOpen) && /Work it/.test(plantOpen) && /Plant app/.test(plantOpen) && /Bench scan station/.test(plantOpen) && /CC-26-4422 · deposit/.test(moneyOpen) && /to issue/.test(moneyOpen) && /Invoices/.test(moneyOpen), [plantOpen.slice(0, 200), moneyOpen.slice(0, 200)]);
+    ok('  a hub opens its panel under the hub: what is in it now, then where to open it', /1 open work order/.test(plantOpen) && /Open/.test(plantOpen) && /Plant app/.test(plantOpen) && /Bench scan station/.test(plantOpen) && /CC-26-4422 · deposit/.test(moneyOpen) && /to issue/.test(moneyOpen) && /Money/.test(moneyOpen) && /Close/.test(moneyOpen), [plantOpen.slice(0, 200), moneyOpen.slice(0, 200)]);
     await p.click('#today-needs [data-fu-today="ac_task"]'); await p.waitForTimeout(500);
     var doneSt = await text(p, '#status'), after = await p.$$eval('#today-needs [data-fu-today]', function (r) { return r.map(function (x) { return x.getAttribute('data-fu-today'); }); });
     var badge = await p.$eval('#hubs .hx[data-hub="today"] .bt', function (e) { return e.textContent; });
-    ok('  a follow-up is marked done on Today and leaves it', /off Today/.test(doneSt) && after.join('|') === 'ac_call' && badge === '4', [doneSt, after, badge]);
+    ok('  a follow-up is marked done on Today and leaves it', /off Today/.test(doneSt) && after.join('|') === 'ac_call' && badge === '5', [doneSt, after, badge]);
     await p.click('[data-tab="orders"]'); await p.waitForTimeout(300);
     var cards = await p.$$eval('#view .card', function (r) { return r.length; });
     await p.click('[data-order="o1"]'); await p.waitForTimeout(300);
@@ -529,7 +666,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.click('[data-tab="menu"]'); await p.waitForTimeout(300); await p.click('.freq [data-go="money"]'); await p.waitForTimeout(300);
     var groups = await texts(p, '#view h2'), links = await p.$$eval('#view a[href^="https://"]', function (r) { return r.map(function (x) { return x.getAttribute('href'); }); });
     /* two open: the balance with the supplier's pay link, and the deposit
-       the accounting check voided and moved to 2026-10-15 (the render checks
+       the accounting check voided and moved thirty days out (the render checks
        share one sample) with its Stripe page */
     ok('  Money groups the invoices: one to issue (tenant-billed, not on the supplier\'s paper yet), none overdue, two open with their pay links', groups.join('|') === 'To issue · 1|Overdue · 0|Open · 2' && links.indexOf('https://pay.example.com/cleancell/CC-INV-1058') >= 0, [groups, links]);
     await p.click('#view .inv [data-order="o4"]'); await p.waitForTimeout(300);
@@ -609,7 +746,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var rows = await p.$$eval('.rows b', function (r) { return r.map(function (x) { return x.textContent; }); });
     await p.fill('#qsearch', 'register'); await p.waitForTimeout(200);
     var hits = await p.$$eval('.rows b', function (r) { return r.map(function (x) { return x.textContent; }); });
-    ok('  Menu holds every function the QuickBooks way: frequently used, panels that open to their list, search', freq.join('|') === 'Orders|PO loads|Customers|Sites|Stock|Invoices|Register|Plant' && panels.join('|') === 'Sales|Customers|Plant|Deliver|Stock|Money|Setup|Help & guides' && rows.join('|') === 'Sites & custody|Fleet register|Shipping & receiving|Sites & imports' && hits.join('|') === 'Fleet register', [freq, panels, rows, hits]);
+    ok('  Menu holds every function the QuickBooks way: frequently used, panels that open to their list, search', freq.join('|') === 'Orders|Enter POs|Customers|Sites|Stock|Money|Register|Plant' && panels.join('|') === 'Sales|Customers|Plant|Deliver|Stock|Money|Setup|Help & guides' && rows.join('|') === 'Sites & custody|Fleet register|Shipping & receiving|Sites & custody on the desktop' && hits.join('|') === 'Fleet register', [freq, panels, rows, hits]);
     await p.click('[data-tab="sites"]'); await p.waitForTimeout(600);
     var h2s = await texts(p, '#sites-body h2');
     var loadOpts = await p.$$eval('#rc-load option', function (r) { return r.map(function (x) { return x.textContent; }); });
@@ -965,9 +1102,9 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var door = await p.evaluate(function () { var g = document.getElementById('gate'); return { shown: !g.hidden, h1: (g.querySelector('h1') || {}).textContent || '', google: !!g.querySelector('#signin'), link: (g.querySelector('.ols-submit') || {}).textContent || '', pw: (g.querySelector('#ols-mode') || {}).textContent || '', nav: document.getElementById('nav').hidden }; });
     ok('  signed out, the office app is "Sign in to Omega Logic": Google, or any work email with a sign-in link (a password one tap away)', door.shown && door.h1 === 'Sign in to Omega Logic' && door.google && door.link === 'Email me a sign-in link' && door.pw === 'Use a password instead' && door.nav, door);
     await p.click('#signin'); await p.waitForTimeout(700);
-    var kv = await p.$$eval('#today-kv div', function (r) { return r.length; });
+    var kv = await p.$$eval('#today-path button[data-step]', function (r) { return r.length; });
     var who = await p.$eval('#who', function (e) { return e.textContent; });
-    ok('the office sandbox wears the strip, starts signed out and signs in with a tap', stripLinks.length === 4 && /\/app-sandbox\/bench/.test(stripLinks[3]) && fb && /^Clean Cell · demo@cleancell\.us$/.test(who) && kv === 6, [stripLinks, fb, who, kv]);
+    ok('the office sandbox wears the strip, starts signed out and signs in with a tap', stripLinks.length === 4 && /\/app-sandbox\/bench/.test(stripLinks[3]) && fb && /^Clean Cell · demo@cleancell\.us$/.test(who) && kv === 8, [stripLinks, fb, who, kv]);
     await p.click('[data-tab="orders"]'); await p.waitForTimeout(300); await p.click('[data-order="o1"]'); await p.waitForTimeout(300);
     await p.fill('[id^="answer-"]', 'Done — re-routed to Bakersfield, same date.'); await p.click('[data-resolve]'); await p.waitForTimeout(700);
     var st = await p.$eval('#status', function (e) { return e.textContent; });
@@ -1085,7 +1222,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ['CC418-26-44192', 'Fairview store', '410 Example Ave', 'Fairview', 'NJ', '="07022"', 'CC-26-4419', 'going to'],
     ['CC418-26-44193', 'Springfield, IL', '77 Sample Plaza Suite 12', 'Springfield', 'IL', '62704', 'CC-26-4419', 'going to'],
     ['CC418-26-44195', 'Springfield, IL', '77 Sample Plaza Suite 12', 'Springfield', 'IL', '62704', 'CC-26-4419', 'going to']];
-  function freshSample() { STATE = F.initialState(); V = F.views(STATE); }
+  function freshSample() { STATE = F.initialState(); V = journeyViews(STATE); }
   function riversideSites(state) { return state.sites.filter(function (s) { return s.customerId === 'company_riverside'; }).map(function (s) { return s.name; }); }
   function plannedOf(state) { var o = {}; state.units.filter(function (u) { return u.orderId === 'o1'; }).forEach(function (u) { if (u.custody && u.custody.plannedSiteName) o[u.serial] = u.custody.plannedSiteName; }); return o; }
   function destEvents(state) { var n = 0; Object.keys(state.custodyEvents).forEach(function (k) { state.custodyEvents[k].forEach(function (e) { if (e.via === 'site-list') n++; }); }); return n; }
@@ -1301,13 +1438,24 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   await check('freight', '/logic-logistics.html?org=cleancell.us&order=o7#freight', async function (p) {
     var dialogs = []; p.on('dialog', function (d) { dialogs.push(d.message()); d.dismiss(); });
     await p.waitForSelector('#fr-lanes tr[data-lane]'); await p.waitForTimeout(400);
-    var chosen = await p.$eval('#order', function (e) { return e.value; }), nav = await p.$$eval('.logic-nav a[href="#freight"]', function (r) { return r.length; });
+    var chosen = await p.$eval('#order', function (e) { return e.value; }), freightOpen = await p.$eval('#freight', function (e) { return !!e.open; });
     var seen = await p.evaluate(function () { var r = document.getElementById('freight').getBoundingClientRect(); return window.scrollY > 0 && r.top < innerHeight && r.bottom > 0; });
     var head = await text(p, '#fr-summary > p'), tiles = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); });
     var weightMiss = await text(p, '#fr-summary .logic-kv > div.w');
-    ok('freight plan: opened from a link (?order=o7#freight) the order is chosen and the page is at the plan; the summary counts every unit, the two with no site in red, and the weight on file naming the SKU that has none', chosen === 'o7' && nav === 1 && seen && /^CC-26-4431 · PO SG-PO-3300 · Summit Grid Co\./.test(head)
+    var ledgerHead = await text(p, '#order-head'), destCard = await text(p, '#detail .dest');
+    ok('  the ledger keeps the order, the purchase order, the full site address and both BOM lines', /CC-26-4431/.test(ledgerHead) && /SG-PO-3300/.test(ledgerHead) && /Summit Grid Co\. · per site list/.test(destCard) && /1 Example Plaza, Chicago, IL 60601/.test(destCard) && /40 × CC-C215/.test(destCard) && /16 × CC-C418/.test(destCard), [ledgerHead, destCard]);
+    await p.selectOption('#order', 'o1');
+    await p.waitForFunction(function () { var a = document.querySelector('#detail .addr'); return a && a.textContent.indexOf('Bakersfield') >= 0; });
+    var yard = await text(p, '#detail .addr'), yardBom = await text(p, '#detail .bom');
+    ok('  a destination with no street shows the city and state, and the BOM line stays', yard === 'Bakersfield, CA' && /5 × CC-C215/.test(yardBom), [yard, yardBom]);
+    await p.selectOption('#order', 'o7');
+    await p.waitForFunction(function () {
+      var a = document.querySelector('#detail .addr'), st = document.getElementById('fr-status'), main = document.getElementById('fr-main');
+      return a && /60601/.test(a.textContent) && st && st.textContent === '' && main && !main.hidden && document.querySelector('#fr-lanes tr[data-lane="NORTHEAST"]');
+    });
+    ok('freight plan: opened from a link (?order=o7#freight) the order is chosen and the page is at the plan; the summary counts every unit, the two with no site in red, and the weight on file naming the SKU that has none', chosen === 'o7' && freightOpen && seen && /^CC-26-4431 · PO SG-PO-3300 · Summit Grid Co\./.test(head)
       && tiles.join('|') === 'Units:56|Sites:16|Lanes:7|Need freight:54|Booked on a load:0|Shipped:0|No site yet:2|Cannot ship:0|Ready at the plant:30|Est. weight to ship:214,500 lb' && /not on file: CC-C418/.test(weightMiss)
-      && await p.$$eval('#fr-summary .logic-kv > div.bad', function (r) { return r.map(function (x) { return x.querySelector('small').textContent; }).join(); }) === 'No site yet', [chosen, nav, seen, head, tiles, weightMiss]);
+      && await p.$$eval('#fr-summary .logic-kv > div.bad', function (r) { return r.map(function (x) { return x.querySelector('small').textContent; }).join(); }) === 'No site yet', [chosen, freightOpen, seen, head, tiles, weightMiss]);
     var origin = await text(p, '#fr-origin-view');
     ok('  the ship-from is the plant, on the map, so stops run nearest-first from it', /^Main plant · Building A\s*2400 Sample Industrial Pkwy, Fort Worth, TX 76106/.test(origin) && /Shipping office · \(817\) 555-0100 · Mon–Fri 7:00–15:00/.test(origin) && /On the map: stops run nearest-first/.test(origin) && await text(p, '#fr-origin-edit') === 'Change the ship-from', origin);
     /* the lanes: one row each, in the fixed region order, as the library has them */
@@ -1364,7 +1512,7 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     var legIds = o7.legs.map(function (l) { return l.id; }), unitsOn = STATE.freight.units.filter(function (u) { return u.logisticsLegId; });
     var planned = await p.$$eval('details[data-lane="NORTHEAST"] [data-quote="' + q2.id + '"] a[data-load]', function (r) { return r.map(function (a) { return a.getAttribute('href'); }); });
     var loads = await p.$$eval('details[data-lane="NORTHEAST"] > .fr-loads a[data-load]', function (r) { return r.map(function (a) { var t = document.getElementById(a.getAttribute('href').slice(1)); return a.getAttribute('data-load') + '|' + a.getAttribute('href') + '|' + (t && t.closest('#detail') ? 'on the ledger' : 'missing'); }); });
-    var ledger = await p.$$eval('#detail p[id^="load-FRT-"]', function (r) { return r.map(function (x) { return x.querySelector('b').textContent; }); });
+    var ledger = await p.$$eval('#detail .load[id^="load-FRT-"]', function (r) { return r.map(function (x) { return x.querySelector('[data-load-ref]').textContent; }); });
     var after = await p.$$eval('#fr-lanes tr[data-lane="NORTHEAST"] td', function (r) { return r.map(function (x) { return x.textContent.replace(/\s+/g, ' ').trim(); }); });
     var tiles2 = await p.$$eval('#fr-summary .logic-kv > div', function (r) { return r.map(function (x) { return x.querySelector('small').textContent + ':' + x.querySelector('b').textContent; }); }), msg2 = await text(p, '[data-lane-msg="NORTHEAST"]');
     ok('  Plan 3 loads: the ledger has one planned leg per stop with the carrier and booking reference, the quote id and never its amount; the ten units are on them; the other price is replaced; each lane link lands on its load', legIds.join() === 'FRT-CC-26-4431-NORTHEAST-1-S1,FRT-CC-26-4431-NORTHEAST-1-S2,FRT-CC-26-4431-NORTHEAST-1-S3' && o7.revision === 1
@@ -1411,8 +1559,10 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     return { lanes: lanes.length, master: mr.length - 1, quoteRows: qr.length - 1, quotes: qs.length, legs: legIds.length };
   });
   /* the desktop office's order: "Freight plan →" and "Export master list" */
-  await check('freight-office', '/omega-logic?org=cleancell.us', async function (p) {
+  await check('freight-office', '/omega-logic?org=cleancell.us#orders', async function (p) {
     await p.waitForTimeout(600); await p.click('#orders [data-pick="o1"]'); await p.waitForTimeout(400);
+    /* the freight plan sits under More about this order (o1's next step is its final payment) */
+    await p.click('#detail details.more > summary'); await p.waitForTimeout(200);
     var link = await p.$$eval('#detail a[data-freight-link]', function (r) { return r.map(function (x) { return x.getAttribute('href') + '|' + x.textContent.trim(); }); });
     var got = await download(p, '#detail button[data-freight-export]'), rows = got.csv.rows;
     ok('freight plan from the office\'s order: "Freight plan →" opens Shipping & receiving on the order, and "Export master list" saves the order\'s master list (the library\'s columns, one row per unit: o1 has three)', link.join() === '/logic-logistics.html?org=cleancell.us&order=o1#freight|Freight plan →' && /^freight-master-CC-26-4419-\d{4}-\d{2}-\d{2}\.csv$/.test(got.name || '') && got.csv.bom && JSON.stringify(rows[0]) === JSON.stringify(labels(Fr.MASTER_COLUMNS)) && rows.length === 4 && rows.slice(1).map(function (r) { return r[0]; }).sort().join() === 'CC418-26-44192,CC418-26-44193,CC418-26-44195', [link, got.name, rows.length, rows[0]]);
@@ -1586,11 +1736,11 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
   await check('package-parts', '/omega-logic?org=cleancell.us', async function (p) {
     var calls = []; p.on('request', function (r) { var x = r.url(); if (x.indexOf(base + '/api/') === 0) calls.push(x.slice(base.length).split('?')[0]); });
     await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1000);
-    var navGroups = await p.$$eval('.logic-nav .eyebrow', function (r) { return r.map(function (x) { return x.textContent; }); });
+    var navGroups = await p.$$eval('.logic-nav a.hub', function (r) { return r.map(function (x) { return x.textContent; }); });
     var navLinks = await p.$$eval('.logic-nav a', function (r) { return r.map(function (x) { return x.textContent; }); });
     var hub = await p.$$eval('#hub .hx', function (r) { return r.map(function (x) { return x.getAttribute('data-hub'); }); });
     var panels = await p.evaluate(function () { return ['floor', 'perf', 'deliver', 'kv-buy'].map(function (id) { var e = document.getElementById(id); return id + ':' + (e ? (e.hidden ? 'hidden' : 'shown') : 'none'); }); });
-    ok('Phase 8, the desktop: Office and Plant bought — Build, the plant\'s Inventory and Quality, no shipping or materials plan; the hub without Deliver or Stock; no deliveries panel, no purchase-list tile', navGroups.join('|') === 'Run the business|Build|Stock & supply|Deliver|Money|Setup' && navLinks.indexOf('Inventory') >= 0 && navLinks.indexOf('Quality & holds') >= 0 && navLinks.indexOf('Materials plan') < 0 && navLinks.indexOf('Shipping & receiving') < 0 && navLinks.indexOf('Sites & custody') < 0 && hub.join('|') === 'today|sales|customers|plant|money' && panels.join('|') === 'floor:shown|perf:shown|deliver:none|kv-buy:hidden', [navGroups, navLinks, hub, panels]);
+    ok('Phase 8, the desktop: Office and Plant bought — Plant (Quality there), the plant\'s Inventory under Stock, no Deliver, no materials plan; the hub without Deliver or Stock; no deliveries panel, no purchase-list tile', navGroups.join('|') === 'Today|Sales|Customers|Plant|Stock|Money|Setup' && navLinks.indexOf('Stock') >= 0 && navLinks.indexOf('Quality & holds') >= 0 && navLinks.indexOf('Materials plan') < 0 && navLinks.indexOf('Shipping & receiving') < 0 && navLinks.indexOf('Sites & custody') < 0 && hub.join('|') === 'today|sales|customers|plant|money' && panels.join('|') === 'floor:shown|perf:shown|deliver:none|kv-buy:hidden', [navGroups, navLinks, hub, panels]);
     ok('  and it called no endpoint of a part it does not hold', calls.indexOf('/api/logic-custody') < 0 && calls.indexOf('/api/logic-materials') < 0 && calls.indexOf('/api/logic-logistics') < 0 && calls.indexOf('/api/logic-plant') >= 0, calls);
     return { nav: navGroups.length, hub: hub.length };
   });
@@ -1599,12 +1749,12 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     await p.reload({ waitUntil: 'domcontentloaded' }); await p.waitForTimeout(1100);
     var tabs = await p.$$eval('#nav button', function (r) { return r.filter(function (x) { return !x.hidden; }).map(function (x) { return x.textContent.trim().replace(/^[^A-Za-z]+/, ''); }); });
     var hub = await p.$$eval('#hubs .hx', function (r) { return r.map(function (x) { return x.getAttribute('data-hub'); }); });
-    var tiles = await p.$$eval('#hub-panels [data-hpanel]', function (r) { return r.map(function (x) { return x.getAttribute('data-hpanel'); }); });
+    var tiles = await p.$$eval('#hub-panels button.panel[data-hpanel]', function (r) { return r.map(function (x) { return x.getAttribute('data-hpanel'); }); });
     var apps = await texts(p, '#view .kv a small'), blocks = await texts(p, '#view h2');
     await p.click('[data-tab="menu"]'); await p.waitForTimeout(300);
     var menuPanels = await p.$$eval('#view [data-panel]', function (r) { return r.map(function (x) { return x.getAttribute('data-panel'); }); });
     var freq = (await texts(p, '#view .freq a, #view .freq button')).map(function (t) { return t.replace(/^[^A-Za-z]+/, ''); });
-    ok('Phase 8, the app: four tabs (no Sites), the hub without Deliver or Stock, Today without a purchase-list tile, the apps strip without Sites or Customer, the Menu without Deliver, the shortcuts without Sites or Register', tabs.join('|') === 'Home|Orders|Customers|Menu' && hub.join('|') === 'today|sales|customers|plant|money' && tiles.join('|') === 'sales|customers|plant|money' && apps.join('|') === 'Plant|Bench|Office' && blocks.indexOf('Plant') >= 0 && menuPanels.join('|') === 'sales|customers|plant|stock|money|setup|help' && freq.join('|') === 'Orders|PO loads|Customers|Stock|Invoices|Plant', [tabs, hub, tiles, apps, blocks, menuPanels, freq]);
+    ok('Phase 8, the app: four tabs (no Sites), the hub without Deliver or Stock, Home without the money, floor and apps blocks (each on its own screen), the Menu without Deliver, the shortcuts without Sites or Register', tabs.join('|') === 'Home|Orders|Customers|Menu' && hub.join('|') === 'today|sales|customers|plant|money' && tiles.length === 0 && apps.length === 0 && blocks.indexOf('Plant') < 0 && menuPanels.join('|') === 'sales|customers|plant|stock|money|setup|help' && freq.join('|') === 'Orders|Enter POs|Customers|Stock|Money|Plant', [tabs, hub, tiles, apps, blocks, menuPanels, freq]);
     ok('  and it called no endpoint of a part it does not hold', calls.indexOf('/api/logic-custody') < 0 && calls.indexOf('/api/logic-materials') < 0 && calls.indexOf('/api/logic-plant') >= 0, calls);
     return { tabs: tabs.length, hub: hub.length };
   }, { phone: true });

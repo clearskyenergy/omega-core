@@ -1,6 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
+var Dsgn = require('./_lib/design-order');
 var W = require('./_lib/logic-workflow'), Q = require('./_lib/qbo'), S = require('./_lib/office-stage'), R = require('./_lib/receivables');
 function clean(v, n) { return String(v || '').trim().slice(0, n || 200); }
 function links(org, key) {
@@ -48,7 +49,7 @@ module.exports = A.handler(async function (req, res) {
        turned into each order's `can` and `waitingOn` by actions() — the
        rule logic-access.requirePricer enforces when the button is pressed). */
     var who = S.access(owner, ctx.member, X.enabled(ctx)), billing = (ctx.config || {}).accounting === 'tenant' ? 'tenant' : 'quickbooks';
-    var orders = rows[0].docs.filter(function (s) {
+    var kept = rows[0].docs.filter(function (s) {
       var o = s.data(); if (!o.poIntake || o.poIntake.convertedAt) return true;
       if (o.status === 'po_declined') intake.declined++; else if (o.status === 'po_needs_information') intake.needsInfo++; else intake.review++;
       /* the Review list names whose PO waits (OFF-03): a company with one
@@ -56,9 +57,23 @@ module.exports = A.handler(async function (req, res) {
       if (o.status !== 'po_declined' && intake.waiting.length < 20) intake.waiting.push({ id: s.id, customerId: o.customerId || null, company: (o.customer || {}).company || '',
         poNumber: (o.poIntake || {}).number || '', status: o.status || null, createdAt: (o.poIntake || {}).createdAt || null });
       return false;
-    }).map(function (s) {
+    });
+    /* THE PATH (office-stage.path): an order past Ship is placed on the bar by
+       the custody of its units, read once here for the newest 60 such orders
+       (ten ids a query); an order whose units were not read says so rather
+       than guessing how far it has gone. */
+    var far = kept.filter(function (s) { var o = s.data(), k = S.stageOf(o, { billing: billing }).key;
+      return k === 'ship' || k === 'shipped' || (o.delivery && (o.delivery.legs || []).some(function (g) { return g && g.status && g.status !== 'planned'; })); }).map(function (s) { return s.id; }).slice(0, 60);
+    var unitsOf = {}, batches = [];
+    for (var fi = 0; fi < far.length; fi += 10) batches.push(far.slice(fi, fi + 10));
+    (await Promise.all(batches.map(function (ids) { return db.collection('plant_units').where('orgId', '==', org).where('orderId', 'in', ids).limit(2000).get(); })))
+      .forEach(function (q) { q.docs.forEach(function (d) { var u = d.data(); (unitsOf[u.orderId] = unitsOf[u.orderId] || []).push(u); }); });
+    var orders = kept.map(function (s) {
       var o = s.data(), act = S.actions(o, who, billing);
-      return { id: s.id, orderNo: o.orderNo, poNumber: R.poOf(o), stage: act.stage, can: act.can, waitingOn: act.waitingOn, billing: S.billingOf(o, billing), rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
+      return { id: s.id, orderNo: o.orderNo, poNumber: R.poOf(o), stage: act.stage, can: act.can, waitingOn: act.waitingOn, billing: S.billingOf(o, billing),
+        path: S.path(o, who, billing, far.indexOf(s.id) >= 0 ? S.custodyCounts(unitsOf[s.id] || []) : null), delivery: o.delivery ? { legs: (o.delivery.legs || []).length } : null,
+        /* the proposal the customer approved in Omega Prime (source 'prime'): the price box starts from it, and pricing anything else is confirmed first */
+        approvedQuote: o.approvedQuote && Number(o.approvedQuote.totalCents) > 0 ? { quoteNo: String(o.approvedQuote.quoteNo || '').slice(0, 40), rev: o.approvedQuote.rev == null ? null : Number(o.approvedQuote.rev) || null, totalCents: Math.round(Number(o.approvedQuote.totalCents)) } : null, rep: o.rep || null, totalCents: o.logic && o.logic.commercial ? o.logic.commercial.totalCents : null,
         createdAt: o.createdAt && typeof o.createdAt.toDate === 'function' ? o.createdAt.toDate().toISOString() : (typeof o.createdAt === 'string' ? o.createdAt : null), customer: { name: (o.customer || {}).name || '', email: (o.customer || {}).email || '', company: (o.customer || {}).company || '' }, customerId: o.customerId || null,
         items: o.items || [], status: o.status, cancelRequested: !!o.cancelRequested, worksOrderId: o.worksOrderId || null,
         logic: o.logic ? { commercial: o.logic.commercial, invoices: o.logic.invoices, acceptedAt: o.logic.acceptedAt, accounting: o.logic.accounting || null,
@@ -67,7 +82,8 @@ module.exports = A.handler(async function (req, res) {
           lastError: o.logic.lastError || null, paymentException: o.logic.paymentException || null,
           creditRelease: o.logic.creditRelease || null, paymentHold: o.logic.paymentHold || null,
           payout: owner ? o.logic.payout : null } : null, shipment: o.shipment || null,
-        requests: Array.isArray(o.requests) ? o.requests.slice(-20) : [] };
+        requests: Array.isArray(o.requests) ? o.requests.slice(-20) : [],
+        design: Dsgn.view(o), shipTo: Dsgn.shipTo(o) };
     });
     /* OFF-02: the money tiles are the receivables ledger's own totals — the
        same rows() and totals() Accounting prints — never a sum the page
@@ -89,7 +105,8 @@ module.exports = A.handler(async function (req, res) {
       bundle: { name: 'Omega Logic', included: ['OEM order operations', 'White-label website sizer / platform lite', 'White-label sitemap editor resale'],
         subscriptionSeparate: true, subscriptionDue: ctx.billing.subscriptionDue || null },
       products: rows[2].exists ? (rows[2].data().products || []).length : 0,
-      links: links(org, key && key.id), orders: orders, limited: rows[0].size === 100, intake: intake, receivables: receivables, totals: S.totals(orders), finance: S.finance(orders, owner) };
+      links: links(org, key && key.id), orders: orders, limited: rows[0].size === 100, intake: intake, receivables: receivables, totals: S.totals(orders), finance: S.finance(orders, owner),
+      path: S.PATH, pipeline: S.pipeline(orders) };
   }
   if (req.method !== 'POST') throw A.httpError(405, 'GET or POST only');
   if (b.action === 'configure') {

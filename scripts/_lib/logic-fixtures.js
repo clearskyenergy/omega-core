@@ -162,11 +162,13 @@ var DAY_MS = 86400000;
    (billing/current.customerEditorLite) and the supplier's Editor Lite. */
 var EDITOR_LITE = { enabled: true, modules: ['bess'] }, CUSTOMER_PRICES = { monthlyPriceCents: 79900, yearlyPriceCents: 799000 };
 /* api/_lib/buyer-design.js entitlement(), for the account's grant: a paid
-   subscription, or a trial the supplier's owner granted, unexpired. */
+   subscription, or a trial the supplier's owner granted, unexpired; else
+   included by the supplier (EDITOR_LITE.customersIncluded), with no expiry. */
 function entitlement(grant) {
   grant = grant || {}; var expiry = Date.parse(grant.expiresAt || '');
-  var active = EDITOR_LITE.enabled && ['active', 'trial'].indexOf(grant.status) >= 0 && isFinite(expiry) && expiry > Date.now() && (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial'));
-  return { active: active, status: active ? grant.status : 'inactive', expiresAt: grant.expiresAt || null, modules: EDITOR_LITE.modules.slice() };
+  var own = EDITOR_LITE.enabled && ['active', 'trial'].indexOf(grant.status) >= 0 && isFinite(expiry) && expiry > Date.now() && (grant.source === 'provider' || (grant.status === 'trial' && grant.source === 'owner-trial'));
+  var included = !own && EDITOR_LITE.enabled && EDITOR_LITE.customersIncluded === true;
+  return { active: own || included, status: own ? grant.status : included ? 'included' : 'inactive', expiresAt: included ? null : grant.expiresAt || null, modules: EDITOR_LITE.modules.slice() };
 }
 /* A document as the sample can judge it without Node: base64 that fits in
    2 MB and a name of an accepted kind. The product decides by the BYTES
@@ -381,7 +383,10 @@ function views(state) {
   function officeJson(opts) {
     opts = opts || {};
     var billing = opts.billing === 'quickbooks' ? 'quickbooks' : 'tenant', who = S.access(false, { role: opts.role || 'admin', status: 'active' }, true);
+    /* the path (office-stage.path), with the custody of its units for an order past Ship, as api/logic-office.js reads them */
+    var far = function (o) { var k = S.stageOf(o, { billing: billing }).key; return k === 'ship' || k === 'shipped' || (o.delivery && (o.delivery.legs || []).some(function (g) { return g && g.status && g.status !== 'planned'; })); };
     var orders = state.orders.map(function (o) { var a = S.actions(o, who, billing); return Object.assign({}, o, { stage: a.stage, can: a.can, waitingOn: a.waitingOn, billing: S.billingOf(o, billing), poNumber: R.poOf(o),
+      path: S.path(o, who, billing, far(o) ? S.custodyCounts(state.units.filter(function (u) { return u.orderId === o.id; })) : null),
       logic: o.logic ? Object.assign({}, o.logic, { pricedAt: o.logic.pricedAt || o.logic.createdAt || null, pricedBy: o.logic.pricedBy || null, acceptedBy: o.logic.acceptedBy || null }) : null }); });
     var rt = R.totals(R.rows(ledgerEntries().map(function (e) { return { id: e.id, order: e.order, account: null }; }), NOW, { provider: 'stripe' })); delete rt.byCustomer;
     var open = state.intake.filter(function (p) { return !p.convertedAt && p.status !== 'po_declined'; });
@@ -389,7 +394,7 @@ function views(state) {
     return { owner: false, org: ORG, name: 'Clean Cell', brand: brand, active: true, config: { terms: { depositPct: 30, dueDays: 0 }, fee: { percent: 0.25, fixed: 0 }, accounting: billing },
       access: { role: who.role, prices: who.admin ? 'workspace' : 'none', team: who.admin }, billing: billing, products: 8, bundle: { included: ['OEM order operations'], subscriptionDue: null },
       links: { office: '/omega-logic?org=cleancell.us', factory: '/plant/?org=cleancell.us', customers: '/portals/customer/admin.html?org=cleancell.us', start: '/customer-start.html?org=cleancell.us', mission: '/mission', setup: '/whitelabel-setup.html', storefront: null, customer: '/portals/customer/', preview: '/editor-lite.html', editor: '/editor-lite.html' },
-      orders: orders, totals: S.totals(orders), receivables: rt,
+      orders: orders, totals: S.totals(orders), receivables: rt, path: S.PATH, pipeline: S.pipeline(orders),
       intake: { review: open.filter(function (p) { return p.status !== 'po_needs_information'; }).length, needsInfo: open.filter(function (p) { return p.status === 'po_needs_information'; }).length, declined: state.intake.filter(function (p) { return !p.convertedAt && p.status === 'po_declined'; }).length,
         waiting: open.slice(0, 20).map(function (p) { return { id: p.id, customerId: p.customerId || null, company: company(p.customerId), poNumber: p.poNumber || '', status: p.status, createdAt: p.createdAt || null }; }) },
       limited: false };

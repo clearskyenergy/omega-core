@@ -223,10 +223,17 @@
      already let a member read, so this needs no widening and no mirror. */
   function decide(user) {
     var email = String(user.email || '').toLowerCase();
-    var org = orgOf(email);
-    if (user.emailVerified === true && STAFF.indexOf(org) >= 0) return Promise.resolve(allow({ org: org, staff: true, reason: 'staff' }));
-    if (!org) { refuse('signed-out'); return Promise.resolve(); }
-
+    var mailOrg = orgOf(email);
+    if (user.emailVerified === true && STAFF.indexOf(mailOrg) >= 0) return Promise.resolve(allow({ org: mailOrg, staff: true, reason: 'staff' }));
+    if (!mailOrg) { refuse('signed-out'); return Promise.resolve(); }
+    /* the home is the orgId claim first (a person on a personal address is
+       homed to a slug-keyed workspace), as firestore.rules userOrg() reads it */
+    var claim = typeof user.getIdTokenResult === 'function'
+      ? user.getIdTokenResult().then(function (r) { return String((r && r.claims && r.claims.orgId) || '').toLowerCase(); }, function () { return ''; })
+      : Promise.resolve('');
+    return claim.then(function (home) { return decideFor(user, home || mailOrg); });
+  }
+  function decideFor(user, org) {
     var fb = global.firebase;
     if (!fb || !fb.firestore || !fb.apps || !fb.apps.length) {
       /* No Firestore on the page at all. Signed in is the requirement that
@@ -293,18 +300,12 @@
          is a plan that does not include it. */
       if (bill && Array.isArray(bill.toolAccess) && bill.toolAccess.indexOf('editor') < 0) return refuse('plan');
 
-      // Lite tenants land in the small shell even from an old full-editor link.
-      // The embedded engine is still the same file; no second editor is copied.
-      if (bill && bill.editorLite && bill.editorLite.enabled === true) {
-        var inLite = false;
-        try { inLite = global.parent !== global && /^\/editor-lite(?:\.html)?\/?$/.test(global.parent.location.pathname) && global.parent.location.origin === global.location.origin; } catch (e) {}
-        if (!inLite) {
-          var q = new URLSearchParams(global.location.search); q.set('org', org);
-          global.location.replace('/editor-lite.html?' + q.toString());
-          return;
-        }
-      }
-
+      /* billing.editorLite is what the workspace OFFERS ITS CUSTOMERS (the
+         Omega Logic bundle, logic-onboard), never a limit on the workspace
+         itself: its own people open the full editor (2026-10-16, Tommy, of
+         Clean Cell: "it takes me to the editor lite which is meant for their
+         customers ... it should open the full editor"). Editor Lite is
+         reached from the customer portal, not from a workspace link. */
       return allow({ org: org, tier: (bill && bill.tier) || null, reason: 'active' });
     }, function () {
       /* The read failed — offline, rules hiccup, no network. Signed in is

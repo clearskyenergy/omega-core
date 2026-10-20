@@ -613,12 +613,28 @@ function readRevenue(e, v) {
   var dr = readObj(e, 'revenue.dr', r.dr, 'The demand-response revenue') || {};
   var ev = readObj(e, 'revenue.ev', r.ev, 'The EV charging revenue') || {};
   var D = DEFAULTS.revenue;
+  /* THE CONTRACT'S OWN PRICE TABLE (2026-10-15, Tommy: the IRR has to be
+     "verified by the bank"). An executed PPA carries a price per contract
+     year (NextNRG's: 28 rows, rounded), which is not a rate and an
+     escalator: Topanga's table ($0.2250 → $0.3840) and Sunnyside's ($0.250
+     → $0.427) both compound 2.0% a year while the one-pagers say 2.5%. A
+     schedule given here is the price each year, as written; rate1 is then
+     its first row and escalatorPct carries only the years past its end. */
+  var sched = ppa ? readList(e, 'revenue.ppa.schedule', ppa.schedule, 60, 'PPA prices') : [];
+  var prices = [];
+  sched.forEach(function (p, i) {
+    var n = readNum(e, 'revenue.ppa.schedule[' + i + ']', p, { req: true, gt: 0, max: 10, label: 'The year-' + (i + 1) + ' PPA price ($/kWh)' });
+    if (n != null) prices.push(n);
+  });
   return {
     ppa: ppa ? {
-      rate1: readNum(e, 'revenue.ppa.rate1', ppa.rate1, { req: true, gt: 0, max: 10, label: 'The year-1 PPA rate ($/kWh)' }),
+      rate1: prices.length ? prices[0] : readNum(e, 'revenue.ppa.rate1', ppa.rate1, { req: true, gt: 0, max: 10, label: 'The year-1 PPA rate ($/kWh)' }),
+      schedule: prices.length ? prices : null,
       escalatorPct: readNum(e, 'revenue.ppa.escalatorPct', ppa.escalatorPct,
         { def: BLOCKS.ppa.escalatorPct, min: -10, max: 20, label: 'The PPA escalator (%/yr)' }),
-      basis: readEnum(e, 'revenue.ppa.basis', ppa.basis, BLOCKS.ppa.basis, ['gross', 'net'], 'The PPA energy basis')
+      basis: readEnum(e, 'revenue.ppa.basis', ppa.basis, BLOCKS.ppa.basis, ['gross', 'net'], 'The PPA energy basis'),
+      /* the contract's own term, for the words (a PPA past the analysis term is a terminal value); never changes the math */
+      termYears: readNum(e, 'revenue.ppa.termYears', ppa.termYears, { def: 0, min: 0, max: 40, label: 'The PPA term (years)' })
     } : null,
     bess: {
       mode: readEnum(e, 'revenue.bess.mode', bs.mode, D.bess.mode, BESS_MODES, 'The battery revenue model'),
@@ -1168,8 +1184,7 @@ function model(inp, adj) {
                     Math.max(0, 1 - s.netDriftPct / 100 * (t - 1));
       soldKwh[t] = solarKwh[t] * avail;
       if (rv.ppa) {
-        ppaRev[t] = (rv.ppa.basis === 'net' ? solarNet[t] : solarKwh[t]) * avail * rv.ppa.rate1 * adj.ppa *
-                    Math.pow(1 + rv.ppa.escalatorPct / 100, t - 1);
+        ppaRev[t] = (rv.ppa.basis === 'net' ? solarNet[t] : solarKwh[t]) * avail * ppaPrice(rv.ppa, t) * adj.ppa;
       }
     }
     /* The schedule is the host's bill savings in nominal dollars, already
@@ -1562,6 +1577,9 @@ function assemble(inp, c) {
       year1: { ppa: c.ppaRev[1], bess: c.bessRev[1], dr: c.drRev[1], ev: c.evRev[1], other: c.otherRev[1], total: c.revenue[1] },
       ppaRate1: inp.revenue.ppa ? inp.revenue.ppa.rate1 : null,
       escalatorPct: inp.revenue.ppa ? inp.revenue.ppa.escalatorPct : (inp.bess ? inp.revenue.bess.escalatorPct : null),
+      /* the contract's own price table when one priced the PPA, and the escalator it compounds at */
+      ppaSchedule: inp.revenue.ppa && inp.revenue.ppa.schedule ? inp.revenue.ppa.schedule.slice() : null,
+      ppaImpliedEscalatorPct: inp.revenue.ppa && inp.revenue.ppa.schedule ? impliedEscalatorPct(inp.revenue.ppa.schedule) : null,
       solarKwh1: s ? s.kwh1 : null,
       solarNetKwh1: s ? (s.netKwh1 == null ? s.kwh1 : s.netKwh1) : null,
       hostSavingsY1: inp.bess && inp.bess.sizing && inp.bess.sizing.schedule && inp.bess.sizing.schedule.length
@@ -1834,7 +1852,12 @@ function notes(inp, c, meta, sens) {
       (s.availabilityLossPct > 0 ? '; an availability loss of ' + fmtNum(s.availabilityLossPct, 4) + '% comes off the energy sold' : '') +
       (s.netDriftPct > 0 ? '; net energy falls a further ' + fmtNum(s.netDriftPct, 4) + '% of year one each year' : '') + '.');
   }
-  if (rv.ppa) {
+  if (rv.ppa && rv.ppa.schedule) {
+    var S = rv.ppa.schedule, ie = impliedEscalatorPct(S);
+    a.push('The PPA is priced on ' + rv.ppa.basis + ' kWh at the contract\'s own price table: $' + fmtNum(S[0], 4) + '/kWh in year one to $' +
+      fmtNum(S[S.length - 1], 4) + '/kWh in year ' + S.length + ' (' + S.length + ' rows' + (ie != null ? ', compounding ' + fmtNum(ie, 2) + '% a year' : '') + ')' +
+      (N > S.length ? '; the years past the table carry its last price ' + escText(rv.ppa.escalatorPct) : '') + '.');
+  } else if (rv.ppa) {
     a.push('The PPA is priced on ' + rv.ppa.basis + ' kWh at $' + fmtNum(rv.ppa.rate1, 4) + '/kWh in year one, ' +
       escText(rv.ppa.escalatorPct) + '.');
   }
@@ -1987,6 +2010,22 @@ function escText(pct) {
   return (pct > 0 ? 'escalating ' : 'falling ') + fmtNum(Math.abs(pct)) + '% a year';
 }
 
+/* The PPA price in contract year t ($/kWh): the contract's own table where
+   one is given (a year past its end carries the last row on at the
+   escalator), else the year-1 rate at the escalator. The ONE reader of a
+   PPA price: the cash flow, the terminal value and the words all ask it. */
+function ppaPrice(ppa, t) {
+  var S = ppa.schedule, esc = 1 + ppa.escalatorPct / 100;
+  if (S && S.length) return t <= S.length ? S[t - 1] : S[S.length - 1] * Math.pow(esc, t - S.length);
+  return ppa.rate1 * Math.pow(esc, t - 1);
+}
+/* The escalator a price table implies, as a percent a year (the compound
+   rate from its first row to its last), for the words. Null for one row. */
+function impliedEscalatorPct(S) {
+  if (!S || S.length < 2 || !(S[0] > 0)) return null;
+  return (Math.pow(S[S.length - 1] / S[0], 1 / (S.length - 1)) - 1) * 100;
+}
+
 /* ---------------------------------------------------------------------- *
  *  run
  * ---------------------------------------------------------------------- */
@@ -2024,6 +2063,8 @@ module.exports = {
   validate: validate,
   irr: irr,
   payback: payback,
+  ppaPrice: ppaPrice,
+  impliedEscalatorPct: impliedEscalatorPct,
   MACRS: deepFreeze(MACRS),
   STATE_TAX: deepFreeze(STATE_TAX),
   itcRate: itcRate,

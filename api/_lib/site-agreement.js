@@ -117,17 +117,55 @@ function compose(input) {
     'After recovery, distributable cash is shared ' + (sc && has(a.overrides && a.overrides.investorResidualShare) ? pct(a.overrides.investorResidualShare, 0) : '80%') + ' to the investor and the balance to the sponsor, for the remainder of the ' + (r && r.months || MONTHS) + '-month term.',
     'The sponsor\'s power spread (the margin between the SPV\'s power price and its utility cost) is the sponsor\'s and is never mixed into investor distributions.'
   ] });
-  sections.push({ heading: '5. Host terms', rows: [
-    ['Rent to the host', has(cm.rentMonthly) ? money(cm.rentMonthly) + ' per month' : NOT_PROVIDED],
-    ['Revenue share to the host', has(cm.revenueShare) ? pct(cm.revenueShare) : NOT_PROVIDED],
-    ['kWh share to the host', has(cm.kwhShare) ? pct(cm.kwhShare) : NOT_PROVIDED]
-  ], paras: ['A host term left blank is to be negotiated; nothing here is an offer to the host.'] });
+  /* THE HOST LEASE AND THE COMPUTE TERMS (2026-10-16, Tommy: "a contract
+     term agreement that they can print out agreeing to that lease payment
+     and those terms for the compute"). Read off the site record and the
+     compute model on file, never invented: the rent is kW of compute ×
+     $/kW-month × 12 (the record's rate or monthly rent; the rate card's
+     floor is named as the floor, never written as an agreed figure), the
+     escalator and the revenue share as recorded, the term the model ran,
+     the compute price basis the model priced, the PPA the host's solar is
+     sold under, and the skid's own end-of-term terms. */
+  var lm = site.latestModel || null, OC = require('./omega-core'), RC = OC.RATE_CARD, TM = OC.TERMS;
+  var skids = lm && lm.skid ? lm.skid.units : (site.latestDesign && site.latestDesign.compute ? num(site.latestDesign.compute.omegaCoreUnits) : null);
+  var computeKw = skids ? skids * RC.computeKwPerSkid : null;
+  var rate = num(cm.rentPerKwMonth), rentMo = num(cm.rentMonthly), esc = has(cm.rentEscalatorPct) ? num(cm.rentEscalatorPct) : null, share = num(cm.revenueShare);
+  var termYears = lm && lm.termYears ? lm.termYears : 10;
+  var rentRow, rentBasis;
+  if (rentMo != null && rentMo > 0) { rentRow = money(rentMo) + ' per month (' + money(rentMo * 12) + ' a year)' + (computeKw ? ', ' + money(rentMo / computeKw) + ' per kW of compute a month on ' + computeKw + ' kW' : ''); rentBasis = 'as recorded for the site'; }
+  else if (rate != null && rate > 0 && computeKw) { rentRow = money(rate) + ' per kW of compute per month x ' + computeKw + ' kW x 12 = ' + money(rate * computeKw * 12) + ' a year (' + money(rate * computeKw) + ' a month)'; rentBasis = 'the rate recorded for the site'; }
+  else if (rate != null && rate > 0) { rentRow = money(rate) + ' per kW of compute per month (kW to be set by the design)'; rentBasis = 'the rate recorded for the site'; }
+  else { rentRow = 'To be agreed: ClearSky quotes ' + money(RC.perKwMonth.low) + '-' + money(RC.perKwMonth.high) + ' per kW of compute per month' + (computeKw ? ' (' + money(RC.perKwMonth.low * computeKw * 12) + '-' + money(RC.perKwMonth.high * computeKw * 12) + ' a year on ' + computeKw + ' kW)' : ''); rentBasis = 'no rent on the record; the model opens at the floor and nothing here is agreed'; }
+  var ppaRows = [];
+  if (has(site.ppaRatePerKwh) || (Array.isArray(site.ppaPriceSchedule) && site.ppaPriceSchedule.length)) {
+    var S = Array.isArray(site.ppaPriceSchedule) ? site.ppaPriceSchedule : [];
+    ppaRows.push(['Microgrid PPA (solar + storage)', S.length ? 'The executed PPA\'s own price table: $' + S[0] + '/kWh in year 1 to $' + S[S.length - 1] + '/kWh in year ' + S.length : '$' + site.ppaRatePerKwh + '/kWh in year 1' + (has(site.ppaEscalatorPct) ? ', escalating ' + site.ppaEscalatorPct + '% a year' : ', escalator not on record')]);
+    ppaRows.push(['Microgrid PPA term', has(site.ppaTermYears) ? site.ppaTermYears + ' years from commercial operation' : (S.length ? S.length + ' years (the table)' : NOT_PROVIDED)]);
+    if (has(site.ppaYear1Kwh)) ppaRows.push(['Expected first-year production', Number(site.ppaYear1Kwh).toLocaleString('en-US') + ' kWh (the contract)']);
+  } else ppaRows.push(['Microgrid PPA (solar + storage)', 'None on the record']);
+  var computeRows = [
+    ['Compute installed', computeKw ? skids + ' Omega-Core skid' + (skids === 1 ? '' : 's') + ', ' + computeKw + ' kW of compute (' + RC.computeKwPerSkid + ' kW a skid), on its own utility service and meter' : NOT_PROVIDED],
+    ['Term', termYears + ' years from the skid\'s commercial operation (minimum ' + TM.minTermYears + ', maximum ' + TM.maxTermYears + ')'],
+    ['Rent to the host', rentRow],
+    ['Rent basis', rentBasis],
+    ['Rent escalator', esc != null ? esc + '% a year, compounding' : (rentMo != null || rate != null ? RC.escalatorPct.base + '% a year, compounding (the standard; none recorded)' : 'To be agreed')],
+    ['Revenue share to the host', share != null && share > 0 ? pct(share <= 1 ? share : share / 100, 1) + ' of gross compute revenue, paid with the rent' : 'None'],
+    ['Compute price basis', lm && lm.skid ? '$' + Number(lm.skid.pricePerGpuHour).toFixed(2) + ' per GPU-hour' + (lm.skid.priceBasis === 'contracted' ? ', the contracted rate on the record' : ' (public ' + lm.skid.priceBasis + ' reference; a contracted rate replaces it)') + ', for ' + lm.skid.gpus + ' x ' + (lm.skid.chipsetName || lm.skid.chipset) + ' a skid, as the model on file priced it' : NOT_PROVIDED],
+    ['Whole project on file', lm && lm.totalProjectCost != null ? money(lm.totalProjectCost) + ' total project cost, after-tax IRR ' + (lm.irr == null ? 'n/a' : pct(lm.irr)) + ' over ' + termYears + ' years' + (lm.irrExTerminal != null ? ' (' + pct(lm.irrExTerminal) + ' on the ' + termYears + ' years alone)' : '') : 'No compute model on file']
+  ].concat(ppaRows);
+  sections.push({ heading: '5. Host lease and compute terms', rows: computeRows, paras: [
+    TM.ownership + ' ' + TM.meter,
+    'Rent is paid monthly in advance from the skid\'s commercial operation date, escalating on each anniversary as stated. The host grants the pad, the utility service route and the fiber path for the term and keeps the premises accessible for operation and maintenance.',
+    TM.remove + ' ' + TM.buyout + ' ' + TM.renewal,
+    'The host\'s solar and storage are sold under the microgrid PPA as recorded above; nothing in this sheet changes that agreement.',
+    'A term marked "To be agreed" is open; a figure quoted as a band is ClearSky\'s quoted range and is not an offer until written in.'
+  ] });
   sections.push({ heading: '6. Conditions precedent', list: conditions });
   sections.push({ heading: '7. Status', paras: [
     'DRAFT for review. This term sheet is prepared from the workspace\'s records on ' + today + ' and is not an offer, a commitment to invest, or legal advice. Definitive agreements prepared by counsel govern; figures are screening results that change with the assumption set and the site\'s verified facts.'
   ], signatures: ['Sponsor', 'Investor', 'Host'] });
   return {
-    title: 'Site SPV Term Sheet — ' + (site.name || 'Site'),
+    title: 'Site SPV and Host Lease Term Sheet — ' + (site.name || 'Site'),
     subtitle: 'DRAFT for review · ' + org + ' · ' + today,
     fileName: 'SPV-term-sheet-' + fileSafe(site.name) + '-' + today + '.pdf',
     meta: { siteId: site.id || null, scenarioId: sc ? sc.scenarioId : null, assumptionVersion: sc ? sc.assumptionVersion : null, at: now, by: input.by || null, org: input.org || null },

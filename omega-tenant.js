@@ -27,9 +27,9 @@
 
    2. POST-AUTH — entitlements.
       Once Firebase reports a user, reads
-        omega_orgs/{orgId}                 status, vertical, shell
+        omega_orgs/{orgId}                 status, vertical, shell, experience
         omega_orgs/{orgId}/billing/current tier, addons, toolOverrides
-        omega_orgs/{orgId}/members/{uid}   role, toolAccess
+        omega_orgs/{orgId}/members/{uid}   role, toolAccess, experience
       and merges tier/unlock data INTO the resolved workspace object, which
       is the object index.html's applyToolLocks() and omega-tools.js read.
       Then re-runs applyToolLocks() and OmegaBrand.paint() if present.
@@ -364,12 +364,26 @@
   }
 
   /* ── Phase 2: entitlements after sign-in ─────────────────────────────────── */
+  /* The home workspace: the orgId custom claim when the token carries one
+     (api/set-role.js mints it; a person on a personal address such as
+     gmail.com has no domain to key a workspace on, so theirs is keyed by its
+     slug), else the email domain as before. The same order the rules'
+     userOrg() reads. Read off the token at sign-in, before entitlements. */
+  var HOME_KEY = 'omega:home-org';
+  function emailOrg(user) { return String(user && user.email || '').toLowerCase().split('@')[1] || ''; }
+  function homeOrgOf(user) { return T.claimOrg || emailOrg(user); }
+  function readHomeClaim(user) {
+    if (!user || typeof user.getIdTokenResult !== 'function') return Promise.resolve(homeOrgOf(user));
+    return user.getIdTokenResult().then(function (r) {
+      T.claimOrg = String((r && r.claims && r.claims.orgId) || '').toLowerCase();
+      return homeOrgOf(user);
+    }, function () { return homeOrgOf(user); });
+  }
   function orgIdFor(user) {
     var c = cfg();
     if (global.OMEGA_WORKSPACE && global.OMEGA_WORKSPACE.orgId) return global.OMEGA_WORKSPACE.orgId;
     if (c.tenant && c.tenant.orgId) return c.tenant.orgId;
-    var e = String(user && user.email || '').toLowerCase();
-    return e.split('@')[1] || '';
+    return homeOrgOf(user);
   }
   /* ── THE SHARED NAV CANNOT DEPEND ON EACH PAGE REMEMBERING A GLOBAL ────
      Everything phase 2 does — the tenant's real name in the sidebar head, the
@@ -472,6 +486,11 @@
     if (T.org && T.org.logoUrl && !ws.logo) ws.logo = T.org.logoUrl;
     ws.vertical = ws.vertical || (T.org && T.org.vertical) || null;
     ws.shell = ws.shell || (T.org && T.org.shell) || 'default';
+    /* The release switch (omega-experience.js). Copied only when the
+       record says classic or v2. Absent stays absent, and absent means
+       classic. A member value wins over the org in that file, not here. */
+    if (T.org && (T.org.experience === 'v2' || T.org.experience === 'classic')) ws.experience = T.org.experience;
+    if (T.member && (T.member.experience === 'v2' || T.member.experience === 'classic')) ws.experienceUser = T.member.experience;
     /* Some tenants have no business in the marketplace — a design partner is
        here to draw what they are handed, not to shop. A flag on the org record
        rather than a list of domains in three navs. */
@@ -736,7 +755,7 @@
     if (presenceDone || global.OMEGA_PRESENCE_BY_PAGE || !ws || !ws.orgId || ws.pendingApproval) return;
     if (!global.firebase || !firebase.auth || !firebase.firestore) return;
     var user = firebase.auth().currentUser; if (!user || !user.email) return;
-    var email = String(user.email).toLowerCase(); if (email.split('@')[1] !== ws.orgId) return;
+    var email = String(user.email).toLowerCase(); if (homeOrgOf(user) !== ws.orgId) return;
     presenceDone = true;
     firebase.firestore().collection('team_members').doc(ws.orgId + '__' + email)
       .set({ orgId: ws.orgId, email: email, lastSeen: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
@@ -759,7 +778,7 @@
   /* ── Hub routing: a signed-in person on the hub goes to their tenant ─── */
   function routeFromHub(user) {
     var d = db(); if (!d || !user) return;
-    var domain = String(user.email || '').toLowerCase().split('@')[1] || '';
+    var domain = homeOrgOf(user);
     if (!domain) return;
     d.collection('omega_orgs').doc(domain).get().then(function (s) {
       var onStart = /\/start(\.html)?$/.test(global.location.pathname);
@@ -1095,8 +1114,8 @@
         /* the loading screen (omega-splash.js) waits on this: signed out ends
            it, signed in waits for the entitlements */
         try { global.dispatchEvent(new CustomEvent('omega:auth', { detail: { user: !!user } })); } catch (e) {}
-        if (user) { markSession(); setTimeout(function () { loadEntitlements(user); }, 0); }
-        else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; packageBillingChrome(null); }
+        if (user) { markSession(); readHomeClaim(user).then(function () { loadEntitlements(user); }); }
+        else { T.billing = null; T.member = null; T.role = 'member'; T._ent = false; T.claimOrg = ''; try { global.sessionStorage.removeItem(HOME_KEY); } catch (e) {} packageBillingChrome(null); }
       });
     } catch (e) { T._watching = false; log('auth watch failed', e && e.message); }
   }
@@ -1132,6 +1151,9 @@
     effectiveTools: function (catalog) { return effectiveTools(catalog || (global.OMEGATools && OMEGATools.catalog ? OMEGATools.catalog() : [])); },
     canOpen: function (key) { return this.effectiveTools().indexOf(key) >= 0; },
     isAdmin: function () { return T.role === 'owner' || T.role === 'admin'; },
+    /* the signed-in person's home workspace: the orgId claim, else the
+       email domain (the ONE reader for pages that derive it themselves) */
+    homeOrg: function (user) { return homeOrgOf(user || (global.firebase && firebase.auth && firebase.auth().currentUser) || null); },
     ready: function (cb) { if (T._ready) { try { cb(T.tenant); } catch (e) {} } else T._readyCbs.push(cb); },
     onEntitlements: function (cb) { if (T._ent) { try { cb(T._ws); } catch (e) {} } else T._entCbs.push(cb); },
     /* For the account-settings page: refresh after a branding save. */

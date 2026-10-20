@@ -67,7 +67,7 @@ const rfq = require(path.join(__dirname, '..', '..', 'api', 'rfq.js'));
 function world() {
   return {
     'projects/p1': { orgId: 'concordenergyusa.com', name: 'Model Tobacco BESS',
-                     state: 'IL', sizeKw: 2508 },
+                     state: 'IL', address: '100 Main St, Chicago, IL 60601', sizeKw: 2508 },
     'omega_orgs/concordenergyusa.com': { name: 'Concord Energy' },
     'omega_orgs/walterswholesale.com': { name: 'Walters Wholesale', receivesFullBom: true, status: 'active' },
     'omega_orgs/cityelectricsupply.com': { name: 'City Electric Supply', receivesFullBom: true, status: 'active' },

@@ -22,6 +22,27 @@ module.exports = A.handler(async function (req, res) {
       return { ok: true, note: 'Customer Editor Lite offer updated. Existing subscriptions and OEM bundle pricing are unchanged.' };
     });
   }
+  /* The supplier includes Editor Lite for its customers at no charge
+     (api/_lib/buyer-design.js entitlement): every active customer account
+     opens the map with no subscription or trial, and checkout is not
+     offered. A commercial term, so ClearSky's owner sets it, never the tenant. */
+  if (b.action === 'customer-editor-included') {
+    if (typeof b.included !== 'boolean') throw A.httpError(400, 'included must be true or false');
+    return db.runTransaction(async function (tx) {
+      var ref = root.collection('billing').doc('current'), old = await tx.get(ref);
+      var lite = (old.exists ? old.data().editorLite : null) || {}, was = lite.customersIncluded === true;
+      if (b.included && lite.enabled !== true) throw A.httpError(409, 'Turn Editor Lite on for this subscriber (the Omega Logic bundle) first');
+      if (was === b.included) return { ok: true, included: was, unchanged: true };
+      var at = new Date().toISOString();
+      tx.set(ref, { editorLite: Object.assign({}, lite, { customersIncluded: b.included }), updatedBy: caller.email, updatedAt: A.FieldValue().serverTimestamp() }, { merge: true });
+      tx.create(ref.collection('history').doc(), { at: at, by: caller.email, action: 'customer-editor-included',
+        changed: { 'editorLite.customersIncluded': b.included }, was: { 'editorLite.customersIncluded': was } });
+      tx.create(db.collection('omega_audit').doc(), { action: 'customer-editor-included', orgId: org, by: caller.email, at: at, was: was, included: b.included });
+      return { ok: true, included: b.included, note: b.included
+        ? 'Editor Lite is included for every customer of this subscriber. No subscription or charge was created; existing paid subscriptions are unchanged.'
+        : 'Editor Lite is no longer included. Customers need a subscription or a trial again; saved projects are retained.' };
+    });
+  }
   if (b.action === 'bundle') {
     if (typeof b.enabled !== 'boolean' || !Array.isArray(b.modules) ||
         b.modules.some(function (m) { return MODULES.indexOf(m) < 0; })) throw A.httpError(400, 'Choose valid Editor Lite modules');
@@ -32,7 +53,9 @@ module.exports = A.handler(async function (req, res) {
       var before = rows[0].exists ? rows[0].data() : {}, account = rows[2].data();
       var addons = (before.addons || []).filter(function (a) { return a !== 'omega-logic'; });
       if (b.enabled) { addons.push('omega-logic'); if (addons.indexOf('whitelabel') < 0) addons.push('whitelabel'); }
-      var patch = { addons: addons, omegaLogic: b.enabled, editorLite: { enabled: b.enabled, modules: mods },
+      /* customersIncluded stays as it was while enrolled and goes with the bundle */
+      var patch = { addons: addons, omegaLogic: b.enabled, editorLite: { enabled: b.enabled, modules: mods,
+          customersIncluded: b.enabled && (before.editorLite || {}).customersIncluded === true },
         updatedBy: caller.email, updatedAt: A.FieldValue().serverTimestamp() };
       if (b.enabled) { patch.bundle = 'omega-logic'; patch.bundleIncludes = ['platform-lite', 'white-label-sitemap-resale']; }
       else if (before.bundle === 'omega-logic') { patch.bundle = null; patch.bundleIncludes = []; }

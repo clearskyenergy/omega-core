@@ -261,3 +261,31 @@ Scope decisions from Thomas supersede the spec where they differ: visible to eve
 - Financing-marketplace publication of a submitted package (deliberately disabled).
 - Agreement `reviewStatus` can be set by any editor; a reviewer-only check is a follow-up.
 - Value-stack scenarios beyond the compute model (the Value stack tool is reachable by handoff).
+
+---
+
+## 9. The compute model follows the Site Map design (2026-10-13)
+
+Tommy: "all the data based on the site zipcode, the map that we made, those
+details should auto input into the compute site pro forma and that should
+produce an accurate IRR; I don't want to have to open up the site and input
+the details … as much as actually possible is done for the user from the
+drawing and our tools so that they can just put in minimal information."
+
+| What | Where | Rule |
+|---|---|---|
+| The ZIP | `site-model.zipOf`, `site-bridge.zipFromAddress`, `design-read` (`zip`, `address`) | the run's, the record's, the site address's, the project's address; never a street number or a PO box; a ZIP the run read is kept on the site |
+| An Omega-Core skid design | `site-model.skidInput` | the skid's own case on its own meter and its own numbers (`docs/OMEGA-CORE.md`, *The skid on a portfolio site*); the host's project named, never blended; a mixed design runs the host's case |
+| The automatic run | `site-crm.js designModel()` | on every read of the design (open, Sync Site Map, the editor's save) when the design or the facts changed; the compute pro forma's gate; `designModel` on the site keeps what ran or what stopped it; `latestModel.auto`, `designHash` |
+| The editor's save | `editor.html omegaSiteDesignPush` | a project the register made (`siteId`, `siteOrgId`) posts `design-sync {source:'editor'}` four seconds after a save; fire and forget |
+| The pod pro forma on a skid | `site-crm.js runScenario` | the skid as recorded, $764,000 each; the cost run only for plain pods beside it |
+| The pages | `site-crm.html`, `portfolio.html` | *1 Omega-Core skid*; the design card's automatic-run words and what stopped it; the skid's chipsets; *What it ran on* (the model record's basis); the Pro forma tab's note; the register's button |
+
+Tests: `scripts/test-site-crm.js` (the skid design runs by itself on open,
+once per design and per change of facts, a viewer's open too, the register's
+sync from the editor, what stops it is kept and said, a workspace without
+Omega Compute is not modelled, nothing names the source workbook),
+`scripts/tests/tcomputesite.js` (a compute unit on its own meter).
+
+Not built: the host's service size and usage are not on the project record,
+so a plain-pod design on a site with neither is named, not modelled.

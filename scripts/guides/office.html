@@ -606,7 +606,7 @@ html,body{margin:0}
     <figure class="dev"><div class="bz"><img src="shots/office-hub.png" width="780" height="1560" alt="The hex hub on Home"></div><figcaption><b>Home.</b> Tap a hexagon.</figcaption></figure>
     <div>
       <ul class="hl tight">
-        <li><span class="hx"><span>◷</span></span><p><b>Today</b>, in the middle. Everything that needs a person today: customer requests, orders you may price or accept, POs to review, follow-ups that are due. Tap it to jump to the list.</p></li>
+        <li><span class="hx"><span>◷</span></span><p><b>Today</b>, in the middle. What needs you today, <b>Start here</b> first: requests, prices, invoices to issue, POs, follow-ups due. Tap it for the list.</p></li>
         <li><span class="hx"><span>▤</span></span><p><b>Sales.</b> Orders to price and accept, customer requests to answer, company POs to review. An order waiting on ClearSky or on an administrator is listed with who it waits on, never counted.</p></li>
         <li><span class="hx"><span>◉</span></span><p><b>Customers.</b> Every customer account (page 8). The number is follow-ups due and people asking to join.</p></li>
         <li><span class="hx"><span>⚙</span></span><p><b>Plant.</b> Work orders: late, on hold, in build.</p></li>
@@ -618,7 +618,7 @@ html,body{margin:0}
         <figure class="dev crop"><div class="bz"><img src="shots/office-hub-panels.png" width="780" height="1560" alt="A hub's panel under the hub"></div></figure>
         <div>
           <h2>Tap a hexagon, its panel opens</h2>
-          <p style="font-size:10.3pt;margin:0">Under the hub: first the live list (tap a line to open it), then <b>Work it</b>, every screen for that part of the business. Tap another hexagon to switch. Below the panels, Home lists what needs a person, then money and the plant.</p>
+          <p style="font-size:10.3pt;margin:0">Under the hub: first the live list (tap a line to open it), then <b>Open</b>, every screen for that part of the business. Tap another hexagon to switch. Below the panels, Home lists what needs a person, then money and the plant.</p>
         </div>
       </div>
     </div>
@@ -667,7 +667,7 @@ html,body{margin:0}
     <div>
       <figure class="dev"><div class="bz"><img src="shots/office-order.png" width="780" height="1560" alt="An order open in the Orders tab"></div></figure>
       <h2 style="margin-top:12px">Orders</h2>
-      <p style="font-size:10.3pt">Every order with its customer, stage, total and balance. Open one for its lines, money, build, shipment and the customer's requests (type the answer, <span class="k">Answer &amp; close</span>). Invoicing on your own paper? Mark each invoice <span class="k">Issued</span> and <span class="k">Received</span> here; corrections: Accounting (page 12).</p>
+      <p style="font-size:10.3pt">Every order on one path, <b>Price → Deposit → Build → Final payment → Ship → Deliver → On site</b>. Open one: the guide names the next thing and lights it (a customer request first: <span class="k">Answer &amp; close</span>). Your own paper? <span class="k">Record invoice</span>, <span class="k">Record payment</span>; corrections: Accounting (page 12).</p>
     </div>
     <div>
       <figure class="dev"><div class="bz"><img src="shots/office-sites.png" width="780" height="1560" alt="The Sites tab"></div></figure>
@@ -731,22 +731,22 @@ html,body{margin:0}
 <!-- ═══ 12 · ACCOUNTING ══════════════════════════════════════════════ -->
 <section class="sheet"><div class="body">
   <div class="kick">Money · on the desktop</div>
-  <h1>Accounting: is the money in?</h1>
+  <h1>Accounting: the next step</h1>
   <div class="rule"></div>
-  <p class="lead" style="margin-bottom:12px">For the orders your company invoices itself. In the desktop office, <b>Money → Accounting</b> (or <span class="k">Correct or void in Accounting</span> on an order): every invoice, what has really been received, what is late. Your owner or an administrator makes the changes; each keeps who, when and why.</p>
+  <p class="lead" style="margin-bottom:12px">For the orders your company invoices itself. <b>Money → Accounting</b> is one list: the order, and the next step (deposit due, final payment due, or paid). The invoice number and a correction sit under <b>Invoice details</b>. An owner or an administrator records the money.</p>
   <div class="g2" style="gap:.2in">
-    <figure class="wide"><img src="shots/desktop-accounting.png" width="1280" height="800" alt="Accounting with one invoice open: the Payment box"><figcaption>Tap an order: its invoice opens, <b>Payment</b> on top.</figcaption></figure>
-    <figure class="wide"><img src="shots/desktop-accounting-void.png" width="1280" height="800" alt="Mark as not received: the reason, keep building on the PO or hold the order"><figcaption><b>Mark as not received</b> on a deposit in the plant.</figcaption></figure>
+    <figure class="wide"><img src="shots/desktop-accounting.png" width="1280" height="800" alt="Accounting with one invoice open: Final payment due, and Record the payment"><figcaption>Tap an order. Its invoice opens under the totals and names the next step, with one button.</figcaption></figure>
+    <figure class="wide"><img src="shots/desktop-accounting-void.png" width="1280" height="800" alt="This payment did not arrive: the reason, keep building on the PO or hold the order"><figcaption><b>This payment did not arrive</b>, on a deposit the plant is already building.</figcaption></figure>
   </div>
 
-  <h2 class="mt">The Payment box, and the buttons under it</h2>
+  <h2 class="mt">One button, and Invoice details</h2>
   <table class="tr">
-    <tr><th>Mark as received</th><td>The money has landed. It opens <b>Record payment</b> with the balance filled in: check the amount and the day it arrived, type the bank's reference (ACH or wire), then <span class="k">Record payment</span>. The box turns green: <b>Received</b>. That is what accounting has seen, not bank clearance.</td></tr>
-    <tr><th>Mark as not received</th><td>The money never came, or came back. Say why, then <span class="k">Void payment</span>. Voiding keeps it: the payment stays on the invoice, struck through, with who, when and why, and the invoice goes back to what was really received. Several payments: <b>Last payment not received</b>, or <span class="k">Void</span> on one.</td></tr>
-    <tr><th>Keep building on the PO, or Hold</th><td>Asked when the plant is already building on that payment. <b>Keep building on the PO</b> records a release on the customer's PO: the plant carries on, the deposit shows as open. <b>Hold the order</b>: the plant's scans refuse it until the payment is recorded or it is released on the PO. Shipping still needs the money either way.</td></tr>
-    <tr><th>Record payment</th><td>Any amount, for a part payment; more than the invoice is refused. A voided reference is recorded again only if you tick that the money really landed and say why.</td></tr>
-    <tr><th>Edit invoice</th><td>Its number, date and due date, with a reason (clear the due date to follow the order's terms). Amounts come from the approved price and are never edited.</td></tr>
-    <tr><th>Also here</th><td><span class="k">Record invoice issued</span>, <span class="k">Release on PO</span>, filters, aging, <span class="k">Export CSV</span>. An order billed through ClearSky's QuickBooks is shown only: it reconciles there. In the app, an order's Money marks <b>Issued</b> and <b>Received</b> (page 9).</td></tr>
+    <tr><th>Record the payment</th><td>The money has landed. Check the amount, the day and the bank's reference, then <span class="k">Record payment</span>. The row reads <b>Deposit received</b> or <b>Paid in full</b>. That is what accounting has seen, not bank clearance.</td></tr>
+    <tr><th>Record the invoice</th><td>Not issued yet: your number and the date. A blank due date follows the order's terms. When nothing is open, the button is <b>Open the order</b>.</td></tr>
+    <tr><th>This payment did not arrive</th><td>Under <b>Invoice details</b>. Say why, then <span class="k">Void payment</span>. The payment stays, struck through, and the invoice goes back to what was really received.</td></tr>
+    <tr><th>Keep building, or hold</th><td>Asked when the plant is already building on that payment. <b>Keep building on the PO</b> records a release. <b>Hold the order</b>: scans refuse it until the money is recorded. Shipping still needs the money either way.</td></tr>
+    <tr><th>Correct the invoice</th><td>Under <b>Invoice details</b>: number, date and due date, with a reason. Amounts come from the approved price. <span class="k">Let the plant start</span> releases before the deposit.</td></tr>
+    <tr><th>Folded away</th><td><b>Filter and export</b>, <b>How late</b>, <b>By customer</b>, and <b>Where invoices are sent</b>. An order billed through ClearSky's QuickBooks is shown only.</td></tr>
   </table>
 </div></section>
 

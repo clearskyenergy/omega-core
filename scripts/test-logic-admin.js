@@ -16,7 +16,7 @@ var FD = require('./_lib/firestore-double'), DB = FD.DB, mock = FD.mock;
 
 var db, users = {}, claims = {}, links = [], mails = [];
 var A = { db: function () { return db; }, safeOrg: function (v) { return /^[a-z0-9-]+(\.[a-z0-9-]+)+$/.test(v || '') ? v : ''; }, httpError: function (s, m) { var e = new Error(m); e.status = s; return e; },
-  authenticate: async function (r) { return r.caller; }, handler: function (f) { return f; }, orgOf: function (e) { return String(e).toLowerCase().split('@')[1] || ''; },
+  authenticate: async function (r) { return r.caller; }, handler: function (f) { return f; }, orgOf: function (e) { return String(e).toLowerCase().split('@')[1] || ''; }, isPersonalEmail: function (e) { return require('../api/_lib/public-domains').indexOf(String(e || '').toLowerCase().split('@')[1] || '') >= 0; },
   canActInOrg: async function (c, o) { return c.staff || c.orgId === o; }, isTenantAdmin: async function (c, o) { return c.staff || (c.orgId === o && c.tenantAdmin === true); },
   FieldValue: function () { return { serverTimestamp: function () { return 'TS'; }, arrayUnion: function () { return Array.prototype.slice.call(arguments); } }; },
   init: function () { return { auth: function () { return {

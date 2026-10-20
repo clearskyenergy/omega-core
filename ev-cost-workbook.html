@@ -508,7 +508,6 @@ window.permitFromSubtotal=permitFromSubtotal;
 /* Standard line items that appear on every job and should never need
    retyping. Prices are editable; the point is that they auto-populate. */
 /* STANDARD_ITEMS: on the server (api/_lib/ev-pricebook.js, 2026-10-13). */
-window.STANDARD_ITEMS=STANDARD_ITEMS;
 
 /* L2_BASELINE: on the server (api/_lib/ev-pricebook.js, 2026-10-13). */
 
@@ -2945,7 +2944,39 @@ var RATE_CARD = {
    the National Grid jobs fit. Pure, so the export prices it for the form being written and
    scripts/tests/tesma.js pins it. `card` is RATE_CARD; its `_designFlat` and
    `_designPerPort` are the Rate settings overrides. */
-/* designRate: on the server (api/_lib/ev-pricebook.js). */
+/* designRate itself stays on the page: buildModel is synchronous and prices
+   design for the form being WRITTEN, which is not always the form on screen,
+   so it cannot wait on the server's rates answer (that answer is priced for
+   the on-screen form). Removing this function in the 2026-10-13 server move
+   left buildModel calling a name the page no longer defined, and every
+   Eversource export died on it ("designRate is not defined", 2026-10-18).
+   This is the server's function verbatim (api/_lib/ev-pricebook.js);
+   scripts/tests/tesma.js pins the two together. */
+function designRate(form, ports, card){
+  card=card||{};
+  var flat = (form && form.designFlat) ? (num(card._designFlat) || num(form.designFlat)) : 0;
+  if(flat) return { qty:1, unit:'LS', mat:0, lab:r2(flat),
+                    note:'flat per site — '+(form.short||form.utility||'this program') };
+  ports=num(ports);
+  return ports>0 ? { qty:ports, unit:'EA', mat:0,
+                     lab:(num(card._designPerPort)||1000)*ports,
+                     note:ports+' ports × design & engineering' } : null;
+}
+/* The card buildModel prices design from: RATE_CARD plus the Rate settings
+   design overrides, applied the way the server's cardWith applies them.
+   Only an override actually set in the panel rides on the card, so with no
+   override the flat figure is the form's own `designFlat` and the per-port
+   figure is the $1,000 default, exactly as the server prices it. (The Rate
+   settings defaults the panel displays are NOT read here: its $2,000 flat
+   is a display default, not a price.) */
+function _designCard(){
+  var c={}, k;
+  for(k in RATE_CARD) if(RATE_CARD.hasOwnProperty(k)) c[k]=RATE_CARD[k];
+  var o=(typeof RATE_OVERRIDES!=='undefined' && RATE_OVERRIDES) || {};
+  if(o._designFlat) c._designFlat=num(o._designFlat.lab!=null ? o._designFlat.lab : o._designFlat.mat);
+  if(o._design) c._designPerPort=num(o._design.lab!=null ? o._design.lab : o._design.mat);
+  return c;
+}
 
 /* ═══ THE PRICE BOOKS RUN ON THE SERVER (2026-10-13) ═══════════════════
    The rate card, the Level 2 baseline, the standard items and the National
@@ -3569,7 +3600,7 @@ function buildModel(form, noFloor){
        a flat-rate form gets its flat figure even when another program's
        sheet is exported in the same run. */
     if(form.designFlat && l.row==='design' && !l.pinned && (l.src==='standard' || l.baseline)){
-      var _dr=designRate(form, DATA.plugs, RATE_CARD);
+      var _dr=designRate(form, DATA.plugs, _designCard());
       if(_dr){ mm=r2(_dr.mat)*mk; ll=r2(_dr.lab)*mk; }
     }
     fp=Math.max(0, Math.min(100, num(l.fp)))/100;

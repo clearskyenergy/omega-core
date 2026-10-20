@@ -79,8 +79,21 @@ service cloud.firestore {
          userOrg() return 'ConcordEnergyUSA.com', which fails every
          case-sensitive comparison against the record's lowercase orgId —
          so ONE user in a tenant is refused while the rest work. The storage
-         rules already fold case; this was the missing half. */
-      return orgAlias(request.auth.token.email.split('@')[1].lower());
+         rules already fold case; this was the missing half.
+
+         A PERSONAL ADDRESS IS HOMED BY THE orgId CLAIM (2026-10-14, Tommy:
+         "if there is an individual that is just them they need to be able
+         to do that"). A workspace keyed gmail.com would hold every Gmail
+         user, so one made for a person on a public provider is keyed by its
+         slug, and that person's home is the custom claim api/set-role.js
+         mints through logic-members.change() — Admin SDK only, set for the
+         tenant's own domain or a personal address, never a staff or partner
+         address. isAdmin() below still judges staff by the verified email,
+         never this claim. api/_lib/admin.js and verify-token.js read the
+         claim first the same way; scripts/tests/thomeclaim.js holds it. */
+      return request.auth.token.get('orgId', '') != ''
+           ? request.auth.token.orgId
+           : orgAlias(request.auth.token.email.split('@')[1].lower());
     }
 
     /* ── ACTING IN A TENANT ──────────────────────────────────────────────
@@ -536,6 +549,25 @@ service cloud.firestore {
     // that opens the customer's view and the acceptance record never reach
     // a browser directly, staff browsers included.
     match /subscription_proposals/{proposalId} {
+      allow read, write: if false;
+    }
+
+    // Customer quotes (Omega Prime, 2026-10-17): a seller's proposal to its
+    // own customer — the link key's sha256, the cost and margin behind the
+    // price, the history. Admin SDK only, through /api/customer-quote: the
+    // customer reads it through the key-checked door, the seller through its
+    // projection. events/ and sends/ fall to the default deny (no {path=**}
+    // wildcard names them; never name one private, recipients, offers or
+    // fin_views).
+    match /customer_quotes/{quoteId} {
+      allow read, write: if false;
+    }
+
+    // Hosting-capacity cache (api/hosting-capacity.js): a utility's published
+    // figures per ~11 m cell, the territory answer and resolved service
+    // names. Admin SDK only; a browser that could write it could put a
+    // circuit's room on any site.
+    match /hosting_cache/{id} {
       allow read, write: if false;
     }
 
@@ -1631,6 +1663,36 @@ service cloud.firestore {
         return request.resource.data.get('orgsInvolved', []) == collabRoster()
             && request.resource.data.orgId == resource.data.orgId;
       }
+      /* ── A DRAWING IS WRITTEN ONLY BY AN EDITOR THAT SAYS WHO SAVED IT ──
+         (2026-10-15, Tommy, the third time: "it reverted to an old map
+         again".) The editor's own guard (saveProject's transaction and the
+         live watch, 2026-10-14) stops a stale tab from writing over a newer
+         save — but only a tab running THAT code. A tab left open from before
+         it shipped has no guard, no watch, and autosaves the drawing it
+         holds the moment it is touched; the record came back as the old
+         map while the tab read "Saved". The client cannot reach a tab that
+         is not running its code; the rules can. Every save the current
+         editor makes carries savedBy { email, tab, ua, at } (a string tab,
+         a numeric at). An update that touches the DRAWING without one is an
+         editor from before the guard, and is refused: nothing is lost (the
+         drawing is still in that tab), and the person reloads. A patch that
+         leaves the drawing alone — Assign's owner fields, a validation
+         record, the stage, a rollup — is not a drawing write and carries
+         nothing new. */
+      function drawingKeys() {
+        return ['elements', 'shapes', 'docTabs', 'geoShapes', 'geoElements', 'conduits', 'geoConduits', 'supplyLinks', 'trench', 'annotations'];
+      }
+      function touchesDrawing() {
+        return request.resource.data.diff(resource.data).affectedKeys().hasAny(drawingKeys().toSet());
+      }
+      function savedByCurrentEditor() {
+        return request.resource.data.get('savedBy', {}) is map
+            && request.resource.data.savedBy.get('tab', 0) is string
+            && request.resource.data.savedBy.tab != ''
+            && request.resource.data.savedBy.get('at', '') is number
+            && request.resource.data.get('savedBy', {}) != resource.data.get('savedBy', {});
+      }
+      function drawingWriteAllowed() { return !touchesDrawing() || savedByCurrentEditor(); }
 
       allow read: if request.auth != null
                   && (
@@ -1649,6 +1711,7 @@ service cloud.firestore {
                       || isOmegaStaff()
                     );
       allow update: if request.auth != null && packageWrite(userOrg(), 'editor')
+                    && drawingWriteAllowed()
                     && (
                       (
                         (
@@ -2352,6 +2415,11 @@ service cloud.firestore {
        by the endpoints in a transaction. A browser that could write it would
        reset its own allowance. Stated, like the lines above. */
     match /omega_orgs/{orgId}/geocode_usage/{usageId} { allow read, write: if false; }
+    /* A workspace's customer-quote sends and Omega Logic hand-offs per day
+       (api/customer-quote.js, api/_lib/prime-order.js), counted in a
+       transaction. A browser that could write it would reset its own limit.
+       Stated, like the lines above. */
+    match /omega_orgs/{orgId}/quote_counters/{counterId} { allow read, write: if false; }
     /* Packaged usage counters (Phase 7): one document per billing cycle,
        counted by the producing endpoints in a transaction and idempotent by
        client id (the events subcollection). A browser that could write it

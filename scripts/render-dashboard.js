@@ -556,7 +556,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var r = await SWEEP.run(p, {
       views: [{ name: 'dashboard', enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],
       scope: '#app',
-      skip: '[onclick*="signOut"], #ows-signout',
+      skip: '[onclick*="signOut"], #ows-signout, [data-row="signout"]',
       inner: '.acct-overlay.show button, #sw.sw-open button',
       last: '.pin-btn.remove, .db-remove, #acct-av-remove',
       overlays: DASH_OVERLAYS,

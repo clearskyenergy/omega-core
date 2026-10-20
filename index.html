@@ -2752,6 +2752,7 @@ window._omegaReady = function(){
      the rule for where "home" is for this person (omega_orgs.shell =
      'workspace', or ?home=workspace on this browser). The rule lives in that
      file so this page, the workspace and the legacy pages cannot disagree. -->
+<script src="/omega-experience.js"></script>
 <script src="/omega-workspace-shell.js"></script>
 <!-- ONE New Project dialog for every page that has one. There were two,
      behind the same button and the same function names, and they wrote
@@ -3658,6 +3659,7 @@ function renderDashboard(){
    Each project doc may carry: stage (STAGE_KEYS), bessKwh (number),
    capex (number), incentive (number), annualRevenue (number),
    utility, program, nextAction. Missing stage defaults to 'candidate'. */
+var sitePlanProjectIds = {};
 async function computeLiveRollup(){
   if (!currentUser){ renderKpis(PLACEHOLDER_KPIS); renderPipeline(PLACEHOLDER_PIPELINE); renderPortfolioTable(PLACEHOLDER_ROWS); renderWidgets(PLACEHOLDER_KPIS, PLACEHOLDER_PIPELINE); renderActivityFeed(null); return; }
   try {
@@ -3678,6 +3680,7 @@ async function computeLiveRollup(){
     var unownedCount = 0;   // projects with no ownerEmail (legacy) — surfaced under Company view
     snap.forEach(function(doc){
       var d = doc.data();
+      sitePlanProjectIds[doc.id] = d.editor === 'v2';
       // Per-user scope: "mine" shows only this user's projects; "company" shows all.
       // Legacy projects with no ownerEmail are treated as company-wide (claimable).
       var owner = (d.ownerEmail||'').toLowerCase();
@@ -5439,7 +5442,7 @@ function openProject(id) {
   // page load (window.OMEGA_WORKSPACE does NOT survive navigation).
   var ws = window.OMEGA_WORKSPACE;
   var slug = (ws && ws.allowedDomain) ? String(ws.allowedDomain).split('.')[0] : '';
-  var url = '/editor.html?id=' + encodeURIComponent(id);
+  var url = (sitePlanProjectIds[id] ? '/editor-v2?id=' : '/editor.html?id=') + encodeURIComponent(id);
   if (slug) { url += '&org=' + encodeURIComponent(slug); }
   window.location.href = url;
 }

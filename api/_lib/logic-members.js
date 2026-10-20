@@ -179,9 +179,12 @@ async function change(o) {
     }
     return out;
   }
-  /* Sign-in claims are set only for the tenant's own people: rewriting a
-     staff member's or a partner's claims would move THEIR home workspace. */
-  out.claims = A.orgOf(m.email) === o.orgId;
+  /* Sign-in claims are set only for the tenant's own people, and for a
+     person on a PERSONAL address (gmail.com…), whose home IS this claim:
+     there is no domain to key a workspace on (the rules' userOrg() reads the
+     claim first). Rewriting a staff member's or a partner's claims would
+     move THEIR home workspace. */
+  out.claims = A.orgOf(m.email) === o.orgId || A.isPersonalEmail(m.email);
   if (out.claims) await auth.setCustomUserClaims(u.uid, Object.assign({}, u.customClaims || {}, { orgId: o.orgId, role: m.role }));
   var link = null, made = { error: null, note: null };
   if (account === 'created' || m.sendMail) { made = await resetLink(auth, m.email, o.host, o.path); link = made.link; }

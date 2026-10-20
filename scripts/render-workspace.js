@@ -295,6 +295,9 @@ var srv = http.createServer(function (req, res) {
   if (u.indexOf('/api/') === 0) {
     apiCalls.push(req.method + ' ' + u);
     if (u === '/api/workspace-team') return json({ manage: true, assignable: ['member', 'viewer', 'admin'], people: [], limited: false });
+    /* Customer quotes (Today's rows, the Quote Desk tab): none on these
+       fixtures, so Today and its fourth KPI read as they did. */
+    if (u === '/api/customer-quote' && !post) return json({ quotes: [] });
     if (u === '/api/events') return post ? json({ accepted: 0 }, 202) : json({ enabled: false, sampleRate: 0, termsOk: true, excluded: false });
     if (u === '/api/package-access' && !post) return json(PACKAGE_VIEW || { packaged: false });
     if (u === '/api/offerings' && !post) return json(OFFERINGS.view(BOOK.proposed(), 'proposed'));
@@ -1358,7 +1361,8 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var r = await SWEEP.run(p, {
       views: SWEEP_VIEWS, scope: '#content', chrome: '#side-nav, #topbar, .ows-tabs',
       clickable: '.next .row[data-row], [data-need], [data-opt]',
-      skip: '#ows-signout', inner: '.ows-row',
+      /* never sign the visitor out: the rail's button and the Settings drawer's row (2026-10-14: the sweep clicked the row, sign-out redirected to login twice, the second time 600 ms later under the next control, and the loading screen it raised hid every control after it) */
+      skip: '#ows-signout, [data-row="signout"]', inner: '.ows-row',
       overlays: '#ows-overlay, #new-proj-modal.on, #ows-menu, #omega-package-menu, #ot-modal, body.ows-rail-open',
       reveal: phone ? [{ within: '#side-nav', open: async function (pg) { if (!(await pg.evaluate(function () { return document.body.classList.contains('ows-rail-open'); }))) await pg.click('#ows-burger'); } }] : [],
       forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },
@@ -1432,10 +1436,21 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       var all = await p.evaluate(function () { return { cards: document.querySelectorAll('#market-grid .mkt-card').length, want: +((document.querySelector('#mkt-filters button .cnt') || {}).textContent || -1) }; });
       ok(name + ': each category filter shows exactly its own tools, and All brings every card back', chips.length > 2 && filt.every(function (f) { return f.on && f.sections === 1 && f.cards === f.want; }) && all.cards === all.want, { filt: filt.filter(function (f) { return !(f.on && f.sections === 1 && f.cards === f.want); }), all: all });
     }
+    /* a project Omega Prime made links back into Prime and to its proposal's
+       Track (projects/{id}.prime, 2026-10-17: "this is so vital") */
+    if (page === '/projects.html') {
+      var pr = await p.evaluate(function () {
+        var row = Array.prototype.filter.call(document.querySelectorAll('.pt-row'), function (r) { return /Quarry Road/.test(r.textContent); })[0];
+        var a = row ? row.querySelectorAll('.pt-prime a') : [];
+        return { prime: a[0] ? a[0].getAttribute('href') : null, quote: a[1] ? a[1].getAttribute('href') : null, words: a[1] ? a[1].textContent : '',
+          others: document.querySelectorAll('.pt-prime').length };
+      });
+      ok(name + ': the project Prime made links back into Prime and to Track on its proposal, and no other row does', pr.prime === '/omega-prime?id=p-quarry' && pr.quote === '/omega-prime?id=p-quarry&step=track&quote=qt-0a1b2c3d4e5f6a7b' && /^Proposal viewed · /.test(pr.words) && pr.others === 1, pr);
+    }
     var r = await SWEEP.run(p, {
       views: [{ name: page.replace(/^\/|\.html$/g, ''), enter: async function (pg) { await pg.evaluate(function () { window.scrollTo(0, 0); }); } }],
       scope: '#main', chrome: '#side-nav, #topbar, .ows-tabs',
-      skip: '#ows-signout, [onclick*="signOut"], #mkt-filters button', inner: '.ows-row',
+      skip: '#ows-signout, [data-row="signout"], [onclick*="signOut"], #mkt-filters button', inner: '.ows-row',
       overlays: '#ows-overlay, #new-proj-modal.on, #ows-menu, #omega-package-menu, #ot-modal, #upgrade-modal, .tb-nav.open, body.ows-rail-open',
       reveal: phone ? [{ within: '#side-nav', open: async function (pg) { if (!(await pg.evaluate(function () { return document.body.classList.contains('ows-rail-open'); }))) await pg.click('#ows-burger'); } }] : [],
       forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu', 'upgrade-modal'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); var n = document.querySelector('.tb-nav'); if (n) n.classList.remove('open'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },
@@ -1903,6 +1918,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
         var MX = siteCrmModel().summary, mIrr = (MX.irr * 100).toFixed(2) + '%', mCost = '$' + (MX.totalProjectCost / 1e6).toFixed(2) + 'M';
         ok(name + ': the register wears the workspace shell (rail, switcher topbar, phone tab bar) and lists the live sites with the compute model\'s after-tax IRR (positive first; the fixture\'s is negative, so the Positive IRR card reads 0), total project cost and Funded state, with Site Map, Atlas, Deck and the deal as hand-offs; an unsized site reads Not run and Not sent; the archived one is not listed', pf.shell && pf.rows.length === 2 && rv.name === 'Riverside Garage' && rv.irr === mIrr && rv.capital === mCost && rv.funding === 'Funded' && rv.pods === '3' && rv.status === 'In editor' && rv.power === '300 kW' && rv.links.join('|') === '/editor.html?id=p-riverside|/grid-atlas.html?q=1%20Embarcadero%20W%2C%20Oakland%2C%20CA%2C%2094607|/site-crm.html?site=s-riverside#deck|/finance#deal=f-riverside&tab=market' && mp.irr === 'Not run' && mp.funding === 'Not sent' && mp.power === '250 kW' && mp.links.join('|') === '/grid-atlas.html?q=Austin%2C%20TX' && pf.stats === 'grid' && pf.sites === '2' && pf.pfN === '0' && pf.fin === '1 funded' && !pf.bar && !pf.archivedShown, { pf: pf, want: { irr: mIrr, cost: mCost } });
         await p.click('.pf-tr.body[data-id="s-riverside"] .t-name'); await wait(400);
+        if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'portfolio-panel-1366.png'), fullPage: false });
         var dr = await p.evaluate(function () { var d = document.querySelector('.ows-drawer'); return d ? { title: d.querySelector('h2').textContent, text: d.innerText.replace(/\s+/g, ' '), full: (d.querySelector('a.ows-row') || {}).getAttribute ? d.querySelector('a.ows-row').getAttribute('href') : null, acts: Array.prototype.map.call(d.querySelectorAll('#dr-acts button'), function (b) { return b.textContent.trim(); }) } : null; });
         ok(name + ': a row opens the side panel with the compute model (after-tax IRR, total project cost, structure, verdict), the capital request read Funded by the partner, the pod pro forma, the Grid Atlas and deck links, the actions and a link to the full record', !!dr && dr.title === 'Riverside Garage' && dr.text.indexOf(mIrr) >= 0 && /after-tax IRR, 10-year term/.test(dr.text) && dr.text.indexOf(mCost) >= 0 && /Own and operate/.test(dr.text) && /Funded/.test(dr.text) && /accepted by Ridgeline Capital on 2026-10-11/.test(dr.text) && /0\.53%/.test(dr.text) && /month 59/.test(dr.text) && /Open at this address/.test(dr.text) && /Open the deck/.test(dr.text) && dr.full === '/site-crm.html?site=s-riverside' && dr.acts.indexOf('Export term sheet') >= 0 && dr.acts.indexOf('Open in Site Map') >= 0 && dr.acts.indexOf('Re-run compute model') >= 0, dr);
         await p.keyboard.press('Escape'); await wait(200);
@@ -1926,6 +1942,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
         await p.waitForFunction(function () { return !!document.querySelector('#site-head h1'); }, null, { timeout: 6000 }).catch(function () {});
         var sc = await p.evaluate(function () { return { h1: (document.querySelector('#site-head h1') || {}).textContent, shell: document.body.classList.contains('ows') && !!document.querySelector('#side-nav.ows-rail') && !!document.querySelector('#topbar.ows-top'), tabs: Array.prototype.map.call(document.querySelectorAll('#tabs .tab'), function (b) { return b.textContent; }), old: !!document.querySelector('.tb-nav') }; });
         ok(name + ': the site record wears the same shell, with Portfolio current, opens on the site and reads Funded in its head', sc.shell && sc.h1 === 'Riverside Garage' && sc.tabs.indexOf('Pro forma') >= 0 && sc.tabs.indexOf('Investor deck & capital') >= 0 && !sc.old, sc);
+        if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'site-crm-overview-1366.png'), fullPage: true });
         await p.click('#tabs .tab[data-t="deck"]');
         await p.waitForFunction(function () { return !!document.querySelector('#deck-box .pf-frame'); }, null, { timeout: 8000 }).catch(function () {});
         var dk = await p.evaluate(function () {

@@ -40,6 +40,7 @@
 'use strict';
 var T = require('./bess-tariff');
 var V = require('./value-stack');
+var Rates = require('./utility-rates');
 /* The NextNRG Microgrid Controller's dispatch uplift: ONE rule, applied
    here because this is the ONE dispatch (api/_lib/nextnrg.js). */
 var NN = require('./nextnrg');
@@ -105,8 +106,10 @@ var STATE_MARKET = {
   HI: 'HI', AK: 'AK', PR: 'PR'
 };
 /* Prefix refinements where a state straddles two markets. */
+/* ComEd's PJM flag is utility-rates.isComedZip, not a second ZIP range:
+   a range of 600–611 cannot grow when a prefix is added to the rate book
+   without also swallowing Rock Island. */
 var ZIP3_MARKET = [
-  [600, 611, 'PJM', 'ComEd (northern Illinois)'],
   [640, 649, 'SPP', 'Evergy (Kansas City)'],
   [790, 791, 'SPP', 'Xcel/SPS (Texas Panhandle)'],
   [798, 799, 'WEST', 'El Paso Electric'],
@@ -147,11 +150,13 @@ function locate(zip, marketOverride) {
   }
   var inferred = true;
   if (marketOverride && has(MARKETS, marketOverride)) { market = marketOverride; inferred = false; }
+  var comed = Rates.isComedZip(z.zip);
+  if (comed && inferred) { market = 'PJM'; area = area || 'ComEd (northern Illinois)'; }
   var nyc = state === 'NY' && ((z.z3 >= 100 && z.z3 <= 104) || (z.z3 >= 110 && z.z3 <= 116));
   return {
     ok: true, zip: z.zip, state: state, market: market, marketName: MARKETS[market],
     area: area || (nyc ? 'Con Edison (New York City)' : null), nyc: nyc,
-    comed: state === 'IL' && z.z3 >= 600 && z.z3 <= 611,
+    comed: comed,
     climate: STATE_CLIMATE[state] || 'mixed',
     solarYield: SOLAR_YIELD[state] || 1250,
     marketInferred: inferred

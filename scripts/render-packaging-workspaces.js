@@ -261,7 +261,7 @@ async function run() {
       ok(await page.locator('[data-module-card="plansets"]').textContent().then(function (t) { return t.indexOf('AI Render') >= 0; }), 'AI Render belongs only to Plan Sets');
       await page.screenshot({ path: path.join(output, 'lite-modules-' + theme + '.png') });
       await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).click();
-      await page.evaluate(function () { var item = OmegaCommands.list().filter(function (it) { return it.module === 'plansets' && /plot/i.test(it.name); })[0]; if (!item) throw new Error('Missing Plan Sets discovery'); OmegaCommands.run(item.name); });
+      await page.evaluate(function () { var item = OmegaCommands.list().filter(function (it) { return it.module === 'plansets' && /plan set|plot/i.test(it.name); })[0]; if (!item) throw new Error('Missing Plan Sets discovery'); OmegaCommands.run(item.name); });
       ok(await page.locator('[data-module-card="plansets"]').count() === 1, 'Ctrl+K/Jarvis unowned command opens module card');
       ok((await page.locator('#omega-package-menu').textContent()).indexOf('Build your own experience') < 0, 'opened on a Site Map module, the Omega Logic sentence is not said');
       await page.evaluate(function () { OmegaPackageMenu.close(); });

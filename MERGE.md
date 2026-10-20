@@ -1,5 +1,82 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Omega Prime → Omega Teleios (2026-10-17)
+
+Tommy: Prime must print a quote, use Clean Cell's units (FENECON out), carry
+what was drawn into Site Map exactly, be saved and resumable, send a tracked
+proposal in the tenant's own name, and on approval hand the order to the
+workspace's own Omega Logic, ending at Omega Teleios; outside ComEd the
+circuit step must read the real utility. What changed, and where it lives:
+- **Site Map, exactly as drawn.** `omega-prime-handoff.js` no longer opens
+  the Guided Build. On `omega:project-rendered` (dispatched as `doRender`'s
+  last line, after `_loadReady`/`_watchRecord`) it builds `prime.layout` (v2;
+  a v1 sketch is upgraded with `OmegaPrimeProject.upgrade`) with the editor's
+  own functions: a zonebox for the BESS area, `_evAdd` evgear
+  bess/xfmr/disco/service at Prime's centres (`_geoLat/_geoLng`) and true
+  footprints (minW/minH 4), `autoWireConduit` RMC-AC pad legs and the PVC-UG
+  service run trenched on Prime's L, all one `omegaHistBatch`, marked
+  `fromPrime`/`primeRole`, then `saveProject()`. Four editor hooks:
+  `_loadProject` keeps `S.prime` (read only) and resets `S.primeBuild`;
+  `saveProject`'s update branch writes only `prime.builtAt`/`prime.builtHash`;
+  `_ppCollectFleet` carries `catalogKey`/`mfr` (the R60 prices at its catalog
+  price, not $85/kWh; a Guided Build element keeps its old keying);
+  `omega-prime-project.js` loads before the handoff. The Guided Build is the
+  fallback only (`from=prime`, nothing placed). `OmegaPrimeHandoff.rebuild()`
+  draws again into an emptied drawing. `scripts/tests/tprimetransfer.js`.
+- **One unit rule**: `OmegaPrimeProject.unitFor` (the list's entry by key, the
+  snapshot Prime saved, a shipped constant by key — `PP.R60`, `PP.XXL` — then
+  the battery entry) is what Prime, the quote server and the handoff resolve
+  a record's unit through, so a v1 sketch upgrades to the same layout in all
+  three. A unit at its maker's reference size is a block marked
+  `primeFootprint:'reference'`; one with no size at all is a 2 ft marker
+  (`primeFootprint:'none'`, `primeMarkFt`; `_elFootprintFt` sizes it).
+  `#omega-prime-nav` in `#portal-nav` carries the Omega Prime link, the
+  proposal's status and **Rebuild from Omega Prime** (an empty or partial
+  drawing, or Prime's layout changed since the build).
+  Pre-existing, not changed here: the unified anchor engine replaces
+  `_geoReprojectAll`, so `omegaRescaleElements` never runs on a map move and
+  placed gear keeps its build-zoom pixel size when the rep zooms out.
+- **Prime no longer loads `omega-comed-layers.js`**: its circuit is the
+  national `/api/hosting-capacity`. Site Finder and the editor's Grid panel
+  still use the ComEd module (moving the panel onto the door is next).
+- Still different engines: Prime's Run is `/api/price-site`; Site Map's Run
+  is `editor-cost`. The proposal is priced by the former, from Prime's layout.
+
+## Omega Prime sets up the real project (2026-10-16)
+
+Tommy: "it does the set up and system like the artifact sandbox". Omega
+Prime (`omega-prime.html`, from #327) screened a site and drew a sketch that
+was lost at "Open in Site Map" (`/editor?addr=` only), judged the circuit
+in the page with its own thresholds, and named one unit. Now: the unit list
+is the tenant's own products then the XXL; the verdict is `/api/grid-verdict`
+through the new shared client `omega-grid-verdict.js` (the Grid panel moved
+onto it, so the two never answer twice); a Load step reads the rate book for
+the ZIP and the bill's peaks; moving into design creates the project
+(`omega-prime-project.js`) and the sketch and Run update it as `prime.*`,
+never a drawing key; Site Map opens it with `?from=prime`
+(`omega-prime-handoff.js`: the unit filled from the editor's own catalog,
+the Guided Build opened, no forged elements). Held by
+`scripts/tests/tomegaprime.js` and `scripts/render-omega-prime.js`.
+
+## Grid Atlas built into Site Map: the Grid panel (2026-10-16)
+
+Tommy, of the FENECON demo flow: "that's how the Grid Atlas should work, and
+we should have the Grid Atlas built into the editor" (`docs/GUIDED-SITE-FLOW.md`).
+Analyze › **Grid Check** (`rb-grid-panel`, injected beside `rb-gridatlas`,
+Omega Grid's in `api/_lib/modules.js` IDS) opens `omega-grid-panel.js`: the
+site point and the Guided Build's battery, the nearest substation from the
+Grid Atlas SERVICE the pre-screen already calls (no second lookup), the
+circuit at the parcel from `omega-comed-layers.js` `probePoint` (the editor
+now loads that module; no copy pasted), and the verdict from the new
+`POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated like
+`/api/grid-atlas`): the eligibility rules are server-side from the first
+line. `S.grid` — set by the pre-screen and never persisted until now — is
+in `saveProject()`'s allowlist (lists cut to ten, undefined when absent so a
+save never blanks it) and restored on load; the pre-screen keeps the panel's
+`substation`/`circuit`/`verdict` when it re-measures the same point. Not
+done: drawing `LAYERS` on Site Map's Google basemap, and the Run / RFQ /
+Helios intake reading `grid.circuit`. Held by `scripts/tests/tgridverdict.js`.
+
 ## Trace Boundary and Fence & Tie are Compute's (2026-10-13)
 
 Tommy, of the Draw tab's Select group: "trace boundary and fence & tie is
@@ -3720,3 +3797,67 @@ mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
 rate beside the project's blended $/W. Held by
 `scripts/tests/teditorcost.js` (solar by mount; the page collector with
 and without the skid).
+
+## 2026-10-17 — CAD and 3D Site Plan integration preview
+
+`codex/editor-v2-integration` combines the current #339 CAD branch with
+#351's 3D view and main. The CAD branch's newer Firebase sign-in and guided
+build handling are retained. The original Site Map remains separate.
+3D component pricing moved from `omega-editor-v2-3d.js` to
+`api/_lib/editor-v2-component-cost.js`, using the existing editor cost book.
+`api/editor-v2-component-cost.js` authenticates and checks the estimate
+entitlement through package-access before returning a figure. The card
+shows an unavailable/sign-in message instead of silently pricing locally.
+`test:editor-v2`, `test:editor-v2-3d`, and `check:editor-v2` cover the combined
+branch. This remains a review preview: saves are browser-local; permit/SLD
+hooks need their separate workstream, and browser screening thresholds still
+need the broader server-side screening integration before production.
+Browser verification also fixed the obstruction hatch path (Canvas restore
+restores clipping, not the current path), marked missing terrain as flat,
+and pinned 3D beside Outputs/Run so it stays visible without ribbon scrolling.
+The experience registry marks editor-v2 present but previewOnly: direct review
+URLs work while saved-project links keep the canonical editor. Presence alone
+must not redirect a saved Firestore project into a browser-only draft editor.
+
+## 2026-10-17 — Separate Site Plan customer trial
+
+Site Plan is a separate `siteplantrial` tool at `/editor-v2`. It does not
+replace Site Map, and the experience router remains previewOnly. The projects
+list sends only `editor: 'v2'` records to it; the original editor remains the
+route for all existing drawings. No old editor files or projects are retired.
+
+Workspace saves use the signed-in Firebase token and the existing `projects`
+rules. New records use a create precondition (never overwrite an existing ID);
+updates use a transaction and `savedBy.at` revision, preserve ownership/JDA
+rosters and lifecycle fields, and refuse non-v2 drawings. Local saves remain
+available. The separate permit/SLD branch (#359) supplies review sheets and
+PDF/DXF outputs from the same document.
+
+Prime receives the saved ID, address, coordinates, org and editor version; its
+return link preserves the trial editor. Marketplace submission uses the
+existing fin_profiles/fin_projects rules and a deterministic listing ID. A
+repeat updates descriptive fields only, preserving awards, offers and status.
+The UI requires a deliberate marketplace submission; a save is not a listing.
+BOM quote requests use `/api/rfq`, with vendor routing and Logic order creation
+on the server. Only published catalog matches become orders; unmatched lines
+are reported. Trial feedback is stored on the existing project, not a new
+collection. The workspace and marketplace test doubles never write live data.
+## 2026-10-17 — OMEGA journey integration preview
+
+Design-to-order routing remains in `api/_lib/design-order.js` and
+`api/_lib/design-place.js`. No pricing, dispatch or eligibility math moved into
+the browser. Plant and Accounting render the existing server-computed
+`office-stage.path()` through `OmegaLogicTheme.pathBar`. Plant receives only
+step/state/label/position, without financial amounts or action permissions.
+See `docs/OMEGA-JOURNEY-QA.md` for fixture scope and verification limits.
+Trial navigation is also preserved from both workspace dashboards and the
+project list, while all classic records retain their original routes. The
+trial is appended to the tool catalog so existing starter ordering stays put.
+Guided-build, optional 3D configuration, and tile proxy calls now authenticate
+and check package access before producing work or using the tile key.
+The trial output panel now accepts verified electrical and sheet details,
+marks those changes dirty, and retains them in the saved document. Closing
+and immediately reopening Outputs no longer loses its export session. A
+Chromium check exercises workspace save/reopen, these inputs, and downloads
+a real permit PDF using isolated fixtures. Site qualification decisions also
+survive project restore. No classic editor source was changed.
