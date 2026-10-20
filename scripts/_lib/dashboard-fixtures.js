@@ -88,7 +88,11 @@ function northstar(host) {
      deal sent to the finance marketplace nine days ago that ClearSky has
      not published (api/dealroom-open.js writes this shape; the sponsor
      reads it by developerUid) */
-  docs['projects/p-quarry'] = { orgId: org, orgsInvolved: [org], name: 'Quarry Road', type: 'bess', stage: 'candidate', address: '14 Quarry Rd, Lowell, MA', utility: 'National Grid', createdAt: ago(2), updatedAt: ago(2) };
+  /* made in Omega Prime: its proposal is out and has been opened (the server's
+     mirror, prime.quote), so the Projects list and In flight link back into
+     Prime and to Track (2026-10-17) */
+  docs['projects/p-quarry'] = { orgId: org, orgsInvolved: [org], name: 'Quarry Road', type: 'bess', stage: 'candidate', address: '14 Quarry Rd, Lowell, MA', utility: 'National Grid', createdAt: ago(2), updatedAt: ago(2),
+    prime: { v: 2, step: 'track', quote: { id: 'qt-0a1b2c3d4e5f6a7b', quoteNo: 'NORTHS-Q-20261017-QR1', status: 'viewed', rev: 1, sentAt: '2026-10-16T15:00:00.000Z', decidedAt: null } } };
   docs['fin_projects/fin-maple'] = { name: 'Maple Yard Storage', address: 'Maple Yard', state: 'MA', mw: 4, capexUsd: 6400000, stage: 'package', status: 'review', awardedTo: null, developerUid: uid, orgName: 'Northstar Development',
     sourceProjectId: 'p-maple', room: { state: 'ordered', forOrg: '', forOrgId: '', history: [] }, createdAt: ago(9), updatedAt: ago(9) };
   /* a request for quote from the Riverside BOM: two vendors asked, one has

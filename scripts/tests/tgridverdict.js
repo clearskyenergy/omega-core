@@ -8,7 +8,11 @@
  * load carrying `grid`, the pre-screen keeping the panel's answer for the
  * same point, and the whole path run in a VM: the real omega-comed-layers.js
  * probing a fake hosting service, the real panel posting into the real
- * engine, and grid.substation / grid.circuit / grid.verdict landing on S. */
+ * engine, and grid.substation / grid.circuit / grid.verdict landing on S.
+ * 2026-10-17: the national additions (an unpublished queue is never 0, a
+ * netted queue is not netted twice, a band is judged at its low end, a
+ * one-direction figure never reads as storage), with the ComEd sentence
+ * pinned byte for byte. */
 'use strict';
 var assert = require('node:assert/strict'), fs = require('fs'), path = require('path'), vm = require('vm');
 var ROOT = path.join(__dirname, '../..'), count = 0;
@@ -39,6 +43,38 @@ assert.equal(GV.judge({ unit: XXL, circuit: { publishedKw: 2600, queuedKw: 0, ad
 assert.equal(GV.judge({ unit: { kw: 30000 }, substation: { name: 'X', kv: 12, km: 0.5 } }).substation.state, 'risk', '30 MW on a 12 kV substation is light'); count++;
 assert.equal(GV.judge({ unit: XXL, substation: { name: 'X', kv: null, km: 3 } }).substation.chip, 'Moderate run · voltage not on record'); count++;
 assert.equal(GV.judge({ unit: XXL, substation: { name: 'X', kv: 69, km: 20 } }).substation.state, 'risk', 'a long run'); count++;
+
+/* ── the national additions (2026-10-17), all back-compatible ────────── */
+/* the ComEd sentence, byte for byte, when the queue is a number */
+assert.equal(a.verdict.say, 'Circuit F0297 has about 10,725 kW of room: 15,620 kW published, less 4,895 kW already queued. The 2.5 MW unit fits with 8,217 kW to spare.'); count++;
+assert.equal(a.circuit.queueNetted, false); assert.equal(a.circuit.basis, null); assert.equal(a.circuit.band, null); count += 3;
+/* a queue nobody published is unknown, never 0 */
+var nq = GV.judge({ unit: XXL, circuit: { id: 'NJ0748', publishedKw: 5000, queuedKw: null, addressResolved: true } });
+assert.equal(nq.circuit.queuedKw, null); assert.equal(nq.circuit.netKw, 5000); count += 2;
+assert.match(nq.verdict.say, /^Circuit NJ0748 has about 5,000 kW of room: 5,000 kW published; no queue is published with this figure, so nothing was subtracted\. The 2\.5 MW unit fits/); count++;
+assert.equal(GV.judge({ unit: XXL, circuit: { publishedKw: 5000, addressResolved: true } }).circuit.queuedKw, null, 'an absent queue is not invented either'); count++;
+/* a figure already net of its queue is not netted twice */
+var nn = GV.judge({ unit: XXL, circuit: { id: 'NEB8001', publishedKw: 4875, queuedKw: 125, queueNetted: true, addressResolved: true } });
+assert.equal(nn.circuit.netKw, 4875); assert.equal(nn.circuit.queueNetted, true); count += 2;
+assert.match(nn.verdict.say, /^Circuit NEB8001 has about 4,875 kW of room: 4,875 kW published, net of the queue as published \(125 kW queued\)\./); count++;
+/* a band is judged at its low end, never the high */
+var nb = GV.judge({ unit: XXL, circuit: { publishedKw: null, queuedKw: null, band: { minKw: 0, maxKw: 100, text: 'Less than 100 kW AC' }, addressResolved: true } });
+assert.equal(nb.circuit.publishedKw, 0); assert.equal(nb.verdict.key, 'study'); assert.deepEqual(nb.circuit.band, { minKw: 0, maxKw: 100, text: 'Less than 100 kW AC' }); count += 3;
+assert.match(nb.verdict.say, /published as a band of 0–100 kW, judged at its low end/); count++;
+assert.match(GV.judge({ unit: { kw: 300 }, circuit: { band: { minKw: 7500, maxKw: null }, queuedKw: null, basis: 'load', addressResolved: true } }).verdict.say, /band of 7,500 kW or more/); count++;
+/* a one-direction figure for a battery: judged, never read as storage */
+var ng = GV.judge({ unit: XXL, circuit: { id: '05_14_31L1', publishedKw: 7000, queuedKw: 0, basis: 'gen', addressResolved: true } });
+assert.equal(ng.verdict.key, 'fits'); assert.equal(ng.circuit.direction, 'gen-only'); count += 2;
+assert.match(ng.verdict.say, /Published for generation \(export\) only; the charging side is not published for this circuit, so this is not a storage figure\.$/); count++;
+assert.ok(GV.judge({ unit: XXL, circuit: { publishedKw: 7000, queuedKw: 0, basis: 'gen', mode: 'export', addressResolved: true } }).verdict.say.indexOf('not a storage figure') < 0, 'an export project is not told about the charging side'); count++;
+/* the other side IS published but did not answer this time: said so, never "not published" */
+var nm = GV.judge({ unit: XXL, circuit: { publishedKw: 7000, queuedKw: 0, basis: 'gen', sideUnanswered: true, addressResolved: true } });
+assert.match(nm.verdict.say, /Only the generation \(export\) side answered for this circuit; the charging side did not this time, so this is not a storage figure yet\.$/); assert.equal(nm.circuit.direction, 'gen-only'); count += 2;
+assert.ok(nm.verdict.say.indexOf('is not published') < 0, 'a side that did not answer is never called unpublished'); count++;
+assert.match(GV.judge({ unit: XXL, circuit: { publishedKw: 7500, queuedKw: null, basis: 'load', addressResolved: true } }).verdict.say, /Published for load \(charging\) only; the export side is not published for this circuit/); count++;
+assert.ok(GV.judge({ unit: XXL, circuit: { publishedKw: 7000, queuedKw: 0, basis: 'storage', addressResolved: true } }).verdict.say.indexOf('Published for') < 0, 'a storage figure carries no caveat'); count++;
+assert.equal(GV.judge({ unit: XXL, circuit: { publishedKw: 7000, queuedKw: 0, basis: 'nonsense' } }).circuit.basis, null, 'basis is an allowlist'); count++;
+assert.equal(GV.judge({ unit: XXL, circuit: { publishedKw: 700, source: 'x'.repeat(200) } }).circuit.source.length, 80, 'truncated like every field'); count++;
 
 /* ── the door ───────────────────────────────────────────────────────── */
 var ep = read('api/grid-verdict.js');

@@ -7,10 +7,20 @@
    customer's engineer proposing to build their own tool is exactly who
    would copy it (2026-10-12). It is the curated part, so it moved here
    first. Pure, ES5, no I/O. lookup() answers ONE record, never the table,
-   and never the ZIP prefixes a record covers. */
+   and never the ZIP prefixes a record covers.
+
+   2026-10-17 (DESIGN C6 / r12 A7): the serving utility is now identified at
+   the POINT by the territory and hosting layers (api/hosting-capacity.js),
+   so byEia() answers for that utility's EIA id and the ZIP prefix is the
+   fallback. The ZIP book itself was shadowed in four places — Rhode Island
+   ZIPs (028, 029) listed under National Grid MA, UI's New Haven and
+   Bridgeport ZIPs (065, 066) under Eversource CT, MidAmerican's Quad Cities
+   (612) and Ameren's downstate ZIPs (614, 620, 622-624) under ComEd — and is
+   now ONE ZIP3 index: a prefix belongs to one record, and a second claim
+   fails the test (_overlaps). */
 'use strict';
 var IL_UTILITY_RATES = {
-  // ComEd (Northern IL) -- zip prefixes 600-606, 610-614, 620, 622-624
+  // ComEd (Northern IL) -- zip prefixes 600-611, 613 (Rockford, Chicago, Kankakee, the Illinois Valley)
   comed: {
     name: 'ComEd (Northern Illinois)',
     demandRate: 19.85,
@@ -25,7 +35,7 @@ var IL_UTILITY_RATES = {
        is Ameren) and is not claimed here. */
     zips: ['600','601','602','603','604','605','606','607','608','609','610','611']
   },
-  // Ameren Illinois (Central/Southern IL)
+  // Ameren Illinois (Central/Southern IL) -- incl. Galesburg/Macomb (614), Alton/Belleville/East St Louis (620, 622), Quincy (623), Effingham (624)
   ameren: {
     name: 'Ameren Illinois',
     demandRate: 14.22,
@@ -36,7 +46,7 @@ var IL_UTILITY_RATES = {
     ratchet: 0.65,
     zips: ['614','615','616','617','618','619','620','621','622','623','624','625','626','627','628','629']
   },
-  // MidAmerican Energy (Rock Island/western IL)
+  // MidAmerican Energy (Rock Island/Moline/East Moline, the Illinois Quad Cities)
   midamerican: {
     name: 'MidAmerican Energy',
     demandRate: 12.50,
@@ -47,7 +57,7 @@ var IL_UTILITY_RATES = {
     ratchet: 0.60,
     zips: ['612']
   },
-  // Eversource CT -- zip prefixes 060-069
+  // Eversource CT -- zip prefixes 060-064, 067-069 (065 New Haven and 066 Bridgeport are UI's; 064 is mixed and stays here)
   eversource_ct: {
     name: 'Eversource Energy (Connecticut)',
     demandRate: 25.49,        // Transmission $11.27 + Local Delivery $14.22/kW blended
@@ -60,7 +70,7 @@ var IL_UTILITY_RATES = {
        064 is mixed and stays here. */
     zips: ['060','061','062','063','064','067','068','069']
   },
-  // Eversource MA -- zip prefixes 010-027
+  // Eversource MA -- zip prefixes 010-027 except Worcester (016, National Grid)
   eversource_ma: {
     name: 'Eversource Energy (Massachusetts)',
     demandRate: 18.74,
@@ -69,13 +79,9 @@ var IL_UTILITY_RATES = {
     tou: true,
     peakWindow: 'On-peak: 8AM-8PM weekdays Jun-Sep',
     ratchet: 0.0,
-    zips: ['010','011','012','013','014','015','016','017','018','019','020','021','022','023','024','025','026','027']
+    zips: ['010','011','012','013','014','015','017','018','019','020','021','022','023','024','025','026','027']
   },
-  /* National Grid Massachusetts shares 010–027 with Eversource, so a ZIP3
-     cannot name it without stealing Eversource's prefixes. 028–029 are
-     Rhode Island (Rhode Island Energy), not Massachusetts, and are not
-     listed. The row stays so the count of detailed utilities does not
-     pretend the company was dropped. */
+  // National Grid MA -- Worcester (016). 028 and 029 are Rhode Island ZIPs (Rhode Island Energy, the state record)
   ngrid_ma: {
     name: 'National Grid (Massachusetts)',
     demandRate: 17.20,
@@ -84,7 +90,7 @@ var IL_UTILITY_RATES = {
     tou: true,
     peakWindow: 'On-peak: 8AM-8PM weekdays',
     ratchet: 0.0,
-    zips: []
+    zips: ['016']
   },
   /* Prefixes are every Indiana ZIP3. I&M serves the north and east
      (South Bend, Fort Wayne); Indianapolis is AES Indiana, the northwest
@@ -100,7 +106,7 @@ var IL_UTILITY_RATES = {
     ratchet: 0.60,
     zips: ['460','461','462','463','464','465','466','467','468','469','470','471','472','473','474','475','476','477','478','479']
   },
-  // UI (United Illuminating) CT
+  // UI (United Illuminating) CT -- New Haven (065), Bridgeport (066)
   ui_ct: {
     name: 'United Illuminating (Connecticut)',
     demandRate: 22.15,
@@ -109,7 +115,7 @@ var IL_UTILITY_RATES = {
     tou: false,
     peakWindow: 'On-peak: 8AM-8PM weekdays',
     ratchet: 0.0,
-    zips: ['064','065','066']
+    zips: ['065','066']
   },
 };
 
@@ -211,6 +217,19 @@ function fromState(state) {
   if (!u) return null;
   return record('state:' + st, u, { _state: st, _stateResolved: true });
 }
+/* ONE ZIP3 index over the detailed books; a prefix claimed twice is kept
+   by its first claim and reported by _overlaps() (the test fails on it). */
+var ZIP3 = {}, OVERLAPS = [];
+(function () {
+  var k, i;
+  for (k in IL_UTILITY_RATES) {
+    if (!IL_UTILITY_RATES.hasOwnProperty(k)) continue;
+    for (i = 0; i < IL_UTILITY_RATES[k].zips.length; i++) {
+      var z3 = IL_UTILITY_RATES[k].zips[i];
+      if (ZIP3[z3]) OVERLAPS.push(z3 + ': ' + ZIP3[z3] + ' and ' + k); else ZIP3[z3] = k;
+    }
+  }
+})();
 function isComedZip(zip) {
   var z = String(zip || '').replace(/\D/g, '');
   if (z.length < 3) return false;
@@ -219,16 +238,40 @@ function isComedZip(zip) {
 function lookup(zip) {
   var z = String(zip || '').replace(/\D/g, '');
   if (z.length < 3) return record('comed', IL_UTILITY_RATES.comed, { _default: true });
-  var p3 = z.slice(0, 3), p2 = z.slice(0, 2), k;
-  for (k in IL_UTILITY_RATES) {
-    if (!IL_UTILITY_RATES.hasOwnProperty(k)) continue;
-    var r = IL_UTILITY_RATES[k], i;
-    for (i = 0; i < r.zips.length; i++) { if (p3.indexOf(r.zips[i]) === 0 || p2 === r.zips[i]) return record(k, r); }
-  }
+  var k = ZIP3[z.slice(0, 3)];
+  if (k) return record(k, IL_UTILITY_RATES[k]);
   var st = stateForZip(z), byState = st ? fromState(st) : null;
   if (byState) return byState;
   return record('comed', IL_UTILITY_RATES.comed, { _fallback: true, _fallbackNote: 'No utility on file for ZIP ' + z + ' -- showing ComEd defaults' });
 }
-module.exports = { lookup: lookup, fromState: fromState, stateForZip: stateForZip, isComedZip: isComedZip,
+
+/* By the serving utility's EIA id, the way the territory and hosting
+   layers name it (api/_lib/hosting-sources.js holds the ids). A utility
+   with a detailed book answers from it; one that IS its state's primary
+   answers from the state record; any other known utility answers with ITS
+   name and the state's planning rates, said so (_rateNote) — never another
+   utility's name over its rates. opts: { display, state, zip }. Returns
+   null when the id is not one the caller can name (then the ZIP decides). */
+var EIA_BOOK = { '4110': 'comed', '56697': 'ameren', '12341': 'midamerican', '4176': 'eversource_ct', '54913': 'eversource_ma',
+  '11804': 'ngrid_ma', '13206': 'ngrid_ma', '19497': 'ui_ct', '9324': 'aep_in' };
+var EIA_STATE_PRIMARY = { '13214': 'RI', '803': 'AZ', '14328': 'CA', '6452': 'FL', '7801': 'FL', '7140': 'GA', '15477': 'NJ' };
+function byEia(eia, opts) {
+  opts = opts || {};
+  var id = String(eia == null ? '' : eia).replace(/\D/g, '').slice(0, 8);
+  if (!id) return null;
+  if (EIA_BOOK[id]) return record(EIA_BOOK[id], IL_UTILITY_RATES[EIA_BOOK[id]], { eiaId: id, _source: 'eia' });
+  if (EIA_STATE_PRIMARY[id]) {
+    var p = EIA_STATE_PRIMARY[id];
+    return record('state:' + p, STATE_PRIMARY_UTILITY[p], { eiaId: id, _source: 'eia', _state: p });
+  }
+  var st = String(opts.state || '').toUpperCase().slice(0, 2);
+  if (!STATE_PRIMARY_UTILITY[st] && opts.zip) st = stateForZip(opts.zip) || '';
+  var base = STATE_PRIMARY_UTILITY[st], display = String(opts.display || '').trim().slice(0, 80);
+  if (!base || !display) return null;
+  return record('eia:' + id, base, { name: display, eiaId: id, _source: 'state', _state: st, _stateResolved: true, ratesFrom: base.name,
+    _rateNote: 'No rate book for ' + display + ' yet; these are ' + st + ' planning rates (' + base.name + ').' });
+}
+module.exports = { lookup: lookup, byEia: byEia, fromState: fromState, stateForZip: stateForZip, isComedZip: isComedZip,
+  _overlaps: function () { return OVERLAPS.slice(); },
   _count: { detailed: Object.keys(IL_UTILITY_RATES).length, states: Object.keys(STATE_PRIMARY_UTILITY).length },
   _tables: { detailed: IL_UTILITY_RATES, states: STATE_PRIMARY_UTILITY, zip3: ZIP3_STATE } };

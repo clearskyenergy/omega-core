@@ -9,6 +9,11 @@
   "shell": "default",
   "status": "active",
   "receivesFullBom": false,
+  "brands": [
+    "cleancell us",
+    "cleancell",
+    "clean cell"
+  ],
   "requiredTools": [
     "financing",
     "batterysizer"

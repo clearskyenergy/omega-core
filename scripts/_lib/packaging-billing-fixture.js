@@ -36,15 +36,21 @@ function profile(org, companyName) {
 }
 /* A tenant mid-cycle on a paid package: signed up 2026-08-20, billed on the
  * 20th, the current cycle's subscription invoice paid. `keys`/`plan` are what
- * they bought (the subscription record) and what is switched on. */
+ * they bought (the subscription record) and what is switched on.
+ * The paid cycle is the one holding TODAY by the clock the caller runs on:
+ * the render checks run on the real clock, and a cycle fixed at 2026-09-20
+ * fell due on 2026-10-20, after which the server (rightly) refused every
+ * addition while "the renewal is being issued" (plan-change.js, addons.js:
+ * nextInvoiceOn <= today). A test that freezes Date.now gets that day's
+ * cycle, as it always did (2026-09-26 → 2026-09-20 to 2026-10-20). */
 function seedPaidTenant(db, o) {
-  var book = o.book || enabledBook(), cycle = R.cycle('2026-09-20', 20), keys = M.normalize(o.keys), now = Date.now();
+  var book = o.book || enabledBook(), now = Date.now(), cycle = R.cycle(R.iso(now), 20), keys = M.normalize(o.keys);
   db.seed('pricebook/' + book.version, book);
   db.seed('omega_orgs/' + o.org, { name: o.name || 'Clean Cell · fixture', status: 'active', packagingSandbox: true, signedUpAt: SIGNUP, domains: o.domains || ['fixture.example'] });
   db.seed('omega_orgs/' + o.org + '/billing/current', Object.assign({ packaged: true, packagingState: 'paid', modules: keys, plan: o.plan, billingDay: 20, interval: 'monthly', qboCustomerId: 'C-fixture', qboRealmId: 'fixture',
     pricebookVersion: book.version, subscriptionStartedAt: Date.parse(SIGNUP), firstInvoiceOn: '2026-08-20', nextInvoiceOn: cycle.end, serviceFeeNextOn: '2027-08-20', paidThrough: cycle.end, accessUntil: now + 30 * 86400000, builders: 3, viewers: 10,
     subscription: { modules: keys, plan: o.plan, interval: 'monthly', builders: 3, viewers: 10, since: Date.parse(SIGNUP) } }, M.resolve(keys)));
-  db.seed('omega_orgs/' + o.org + '/billing/current/invoices/2026-09-20', { date: '2026-09-20', period: { start: '2026-09-20', end: cycle.end }, modules: keys, plan: o.plan, lines: [], subtotalCents: 1, totalCents: 1, state: 'paid', paidCents: 1, qboInvoiceId: 'I-paid', qboCustomerId: 'C-fixture', marker: 'OMEGA subscription fixture', pricebookVersion: book.version });
+  db.seed('omega_orgs/' + o.org + '/billing/current/invoices/' + cycle.start, { date: cycle.start, period: { start: cycle.start, end: cycle.end }, modules: keys, plan: o.plan, lines: [], subtotalCents: 1, totalCents: 1, state: 'paid', paidCents: 1, qboInvoiceId: 'I-paid', qboCustomerId: 'C-fixture', marker: 'OMEGA subscription fixture', pricebookVersion: book.version });
   if (o.profile) db.seed('omega_orgs/' + o.org + '/billing/profile', o.profile);
   if (o.member) db.seed('omega_orgs/' + o.org + '/members/' + o.member, { role: 'owner', status: 'active' });
   return cycle;
