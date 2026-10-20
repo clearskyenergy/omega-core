@@ -8,11 +8,14 @@ process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBo
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture'), B = require('../api/_lib/pricebook'), M = require('../api/_lib/modules');
 var R = require('../api/_lib/proration'), P = require('../api/_lib/subscription-pricing');
-/* THE CLOCK IS REAL. The paid fixture is billed on the 20th and the server
-   prorates a change to the next 20th from today, so what "today" costs and
-   which usage cycle is current move every midnight; the expectations below
-   are computed by the same library, never a figure copied from one day. */
-var CYCLE = R.cycle(R.iso(Date.now()), 20);
+/* THE CLOCK IS REAL. The paid fixture is seeded around today (the
+   fixture's todayCycle(): a billing day that is never today's date, so the
+   renewal is never "being issued today") and the server prorates a change
+   to its next billing date, so what "today" costs and which usage cycle is
+   current move every midnight; the expectations below are computed by the
+   same library, never a figure copied from one day. */
+var TODAY = H.todayCycle(), CYCLE = TODAY.cycle;
+function ordinal(d) { var s = ['th', 'st', 'nd', 'rd'], v = d % 100; return d + (s[(v - 20) % 10] || s[v] || s[0]); }
 /* 'YYYY-MM-DD' as the menu prints it: "Oct 20, 2026" */
 function longDay(iso) { var d = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso); return ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][+d[2] - 1] + ' ' + (+d[3]) + ', ' + d[1]; }
 
@@ -25,7 +28,7 @@ F.mock('../api/_lib/mail', { templates: { signupReceived: async function () {}, 
 H.mockQbo(function () { invoices++; }, qbo);
 var routes = { '/api/tenant-package': require('../api/tenant-package'), '/api/package-catalog': require('../api/package-catalog'), '/api/billing-profile': require('../api/billing-profile'), '/api/tenant-signup': require('../api/tenant-signup'), '/api/plan-change': require('../api/plan-change'), '/api/subscription-proposal': require('../api/subscription-proposal'), '/api/usage': require('../api/usage'), '/api/offerings': require('../api/offerings') };
 /* Phase 5: a tenant whose current cycle is already paid, seen by its owner. */
-function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan }); }
+function seedPaid(keys, plan, staff) { seed(keys, staff); H.seedPaidTenant(db, { org: org, keys: keys, plan: plan, today: TODAY }); }
 function seed(keys, staff) {
   db = new F.DB(); db.serial = true; var book = B.proposed(); book.enabled = true; book.qbo.realmId = 'fixture'; db.seed('pricebook/' + book.version, book);
   db.seed('omega_orgs/' + org, { name: 'Clean Cell · fixture', status: 'pending', packagingSandbox: true, signedUpAt: Date.now() - 86400000, domains: ['fixture.example'] });
@@ -266,7 +269,7 @@ async function run() {
     await adlg.getByRole('button', { name: 'Opt in', exact: true }).waitFor();
     check(aoInvoices()[0].state === 'cancelled' && !(aoBill().addOns.live || []).length, 'Cancel request withdraws the unpaid purchase (addon-cancel with its id): nothing is on and nothing is charged');
     db.seed('omega_orgs/' + org + '/billing/current', { tier: 'enterprise', addons: [], toolOverrides: {}, paymentProvider: 'stripe',
-      addOns: { modules: ['logic-office'], live: ['logic-office'], state: 'paid', billingDay: 20, nextInvoiceOn: CYCLE.end, paidThrough: CYCLE.end, accessUntil: Date.now() + 30 * 86400000, pending: [] } });
+      addOns: { modules: ['logic-office'], live: ['logic-office'], state: 'paid', billingDay: TODAY.billingDay, nextInvoiceOn: CYCLE.end, paidThrough: CYCLE.end, accessUntil: Date.now() + 30 * 86400000, pending: [] } });
     await openAddOn('logic-office', { single: true }, { 'logic-office': 'held' });
     await adlg.getByRole('button', { name: 'Opt out', exact: true }).waitFor();
     check((await adlg.locator('.opm-badge').textContent()) === '● On your plan' && /Added to your plan by card · renews on /.test(await adlg.textContent()), 'an add-on on by card: On your plan, and the day it renews');
@@ -371,7 +374,7 @@ async function run() {
       var quoteText = await pp.locator('[data-subscribe="siteintel"]').textContent();
       /* Field at $1,299/month becomes $2,250/month with Site Intel (the same figures the text carries): the difference, prorated over the days left. */
       var todayCents = Math.round((225000 - 129900) * CYCLE.remainingDays / CYCLE.days);
-      check(quoteText.indexOf(P.money(todayCents) + ' today (' + CYCLE.remainingDays + ' of ' + CYCLE.days + ' days left') >= 0 && quoteText.indexOf('on the 20th') >= 0 && quoteText.indexOf('(up from $1,299/month)') >= 0, 'server quote prorated to the billing date: ' + quoteText);
+      check(quoteText.indexOf(P.money(todayCents) + ' today (' + CYCLE.remainingDays + ' of ' + CYCLE.days + ' days left') >= 0 && quoteText.indexOf('on the ' + ordinal(TODAY.billingDay)) >= 0 && quoteText.indexOf('(up from $1,299/month)') >= 0, 'server quote prorated to the billing date: ' + quoteText);
       check(quoteText.indexOf('service fee') >= 0, 'plan change discloses the service fee change');
       await capture(pp, 'your-plan-quote-' + theme5);
       await pp.locator('[data-subscribe="siteintel"]').getByRole('button', { name: 'Opt in and pay' }).click();

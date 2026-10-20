@@ -7,6 +7,9 @@ process.env.PACKAGING_PROVIDER = 'quickbooks'; /* these checks drive the QuickBo
 var fs = require('fs'), path = require('path'), http = require('http'), assert = require('assert');
 var M = require('../api/_lib/modules'), X = require('../api/_lib/package-access');
 var F = require('./_lib/firestore-double'), H = require('./_lib/packaging-billing-fixture');
+/* the paid tenant is seeded around today (the fixture's todayCycle): a cycle
+   fixed to the 20th left no Opt in and pay on 2026-10-20, a renewal day */
+var TODAY = H.todayCycle();
 var ROOT = path.join(__dirname, '..'), output = process.env.WORKSPACE_SHOTS || path.join(ROOT, 'docs/screenshots/packaging-phase-3');
 var output5 = process.env.WORKSPACE_SHOTS || path.join(ROOT, 'docs/screenshots/packaging-phase-5');
 /* Phase 5: while `live` is set, /api/package-access and /api/plan-change are
@@ -270,7 +273,7 @@ async function run() {
       // gallery. Pay first (a sandbox change invoice, nothing switched on), cancel,
       // then a $0 addition inside the tier that switches on at once and shows
       // its tools. The browser only displays what the server returned.
-      db = new F.DB(); db.serial = true; H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: M.starters().ev, plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user' });
+      db = new F.DB(); db.serial = true; H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: M.starters().ev, plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user', today: TODAY });
       caller = { uid: 'fixture-user', staff: false, email: 'designer@' + LIVE_ORG, orgId: LIVE_ORG, role: 'owner', claims: { email_verified: true } }; live = true; sandboxInvoices = 0;
       var owned = M.normalize(M.starters().ev), storageAllowed = function () { var el = document.getElementById('rb-valuestack'); return !!el && OmegaCaps.allowedElement(el) && !el.classList.contains('omega-gated-hidden'); };
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
@@ -312,7 +315,7 @@ async function run() {
       await page.locator('#omega-package-menu').getByRole('button', { name: 'Close', exact: true }).first().click();
       // A smaller Field package with room under its cap: the next addition is
       // included in what they already pay for.
-      db = new F.DB(); db.serial = true; H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: ['lite', 'evrebates', 'estimate'], plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user' });
+      db = new F.DB(); db.serial = true; H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: ['lite', 'evrebates', 'estimate'], plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user', today: TODAY });
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
       ok(await page.evaluate(storageAllowed) === false, 'Storage tools are still gated on the smaller package');
       await page.locator('#omega-package-tab').click();
@@ -405,7 +408,7 @@ async function run() {
       var BILLING = 'omega_orgs/' + LIVE_ORG + '/billing/current';
       async function billing(patch) { var cur = (await db.doc(BILLING).get()).data(); db.seed(BILLING, Object.assign({}, cur, patch)); }
       db = new F.DB(); db.serial = true; qbo.paid = false; sandboxInvoices = 0;
-      H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: M.starters().ev, plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user' });
+      H.seedPaidTenant(db, { org: LIVE_ORG, name: 'Packaging preview', keys: M.starters().ev, plan: 'field', profile: H.profile(LIVE_ORG, 'Packaging preview'), member: 'fixture-user', today: TODAY });
       await page.evaluate(function (v) { OmegaCaps.setPackage(v); OmegaCaps.apply('standard'); }, await liveProjection());
       var intelAllowed = function () { return OmegaCaps.allowedCommand('', 'openScorePanel()') && OmegaCaps.allowedCommand('rb-parcel-screen', ''); };
       ok(await page.evaluate(intelAllowed) === false, 'Omega Intel is gated before it is paid for');
