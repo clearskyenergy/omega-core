@@ -1,0 +1,270 @@
+{
+  "source": "lazard",
+  "url": "https://www.lazard.com/media/5tlbhyla/lazards-lcoeplus-june-2025-_vf.pdf",
+  "priorUrl": "https://www.lazard.com/media/xemfey0k/lazards-lcoeplus-june-2024-_vf.pdf",
+  "published": "2025-06",
+  "priorPublished": "2024-06",
+  "dollarYear": null,
+  "read": "2026-10-18",
+  "threshold": 0.05,
+  "ok": true,
+  "records": [
+    {
+      "edition": "18.0",
+      "technology": "pv.community",
+      "low": 1600,
+      "high": 3300,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "pv.utility",
+      "low": 1150,
+      "high": 1600,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "geothermal",
+      "low": 5000,
+      "high": 6460,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "wind.onshore",
+      "low": 1900,
+      "high": 2300,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "wind.offshore",
+      "low": 3450,
+      "high": 6550,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "storage.hybrid.inverter",
+      "low": 19,
+      "high": 50,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "storage.hybrid.exclInverter",
+      "low": 122,
+      "high": 313,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "gas.peaking",
+      "low": 1150,
+      "high": 1450,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "nuclear",
+      "low": 9020,
+      "high": 14820,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "coal",
+      "low": 3405,
+      "high": 7210,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "gas.ccgt",
+      "low": 1200,
+      "high": 1600,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "storage.utility.2h.dc",
+      "low": 113,
+      "high": 244,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "storage.utility.4h.dc",
+      "low": 107,
+      "high": 232,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "storage.ci.dc",
+      "low": 238,
+      "high": 445,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "18.0",
+      "technology": "storage.residential.dc",
+      "low": 721,
+      "high": 1338,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "pv.residential",
+      "low": 2300,
+      "high": 4150,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "pv.community",
+      "low": 1300,
+      "high": 2900,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "pv.utility",
+      "low": 850,
+      "high": 1400,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "geothermal",
+      "low": 4860,
+      "high": 6280,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "wind.onshore",
+      "low": 1300,
+      "high": 1900,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "wind.offshore",
+      "low": 3750,
+      "high": 5750,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "storage.hybrid.inverter",
+      "low": 30,
+      "high": 60,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "storage.hybrid.exclInverter",
+      "low": 249,
+      "high": 421,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "gas.peaking",
+      "low": 700,
+      "high": 1150,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "nuclear",
+      "low": 8765,
+      "high": 14400,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "coal",
+      "low": 3310,
+      "high": 7005,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "gas.ccgt",
+      "low": 850,
+      "high": 1300,
+      "unit": "$/kW",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "storage.utility.1h.dc",
+      "low": 220,
+      "high": 311,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "storage.utility.2h.dc",
+      "low": 159,
+      "high": 282,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "storage.utility.4h.dc",
+      "low": 160,
+      "high": 282,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "storage.ci.dc",
+      "low": 318,
+      "high": 430,
+      "unit": "$/kWh",
+      "page": null
+    },
+    {
+      "edition": "17.0",
+      "technology": "storage.residential.dc",
+      "low": 984,
+      "high": 1406,
+      "unit": "$/kWh",
+      "page": null
+    }
+  ],
+  "note": "Ranges as printed. No midpoint. No dollar year is printed on the assumption pages. The illustrative single figure on the sample calculation page is not a published range and is not stored. The PDF is not stored. Lazard's footer limits redistribution of the material; this snapshot cites the capital-cost ranges and the URL."
+}

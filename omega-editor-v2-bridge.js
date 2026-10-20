@@ -171,7 +171,7 @@
     scopes = scopesOf(doc);
     takeoff = D.summary(doc);
     zoom = Math.round(G.zoomForScale(doc.anchor.lat, PPF));
-    return {
+    var out = {
       schema: 'omega.project/1',
       editor: 'v2',
       projectId: doc.projectId,
@@ -202,6 +202,16 @@
       takeoff: takeoff,
       editorV2: D.serialize(doc)
     };
+    var cost = doc.costRun, vs = doc.valueStack;
+    if (cost && cost.total > 0) {
+      out.capex = cost.total;
+      out.capexAt = cost.at || null;
+      out.capexSource = 'site-plan';
+      if (takeoff.bessKw > 0) { out.bessKw = takeoff.bessKw; out.bessKwh = takeoff.bessKwh; }
+      if (vs && vs.incentiveUsd != null) out.incentive = vs.incentiveUsd;
+      if (vs && vs.owner != null) out.annualRevenue = vs.owner;
+    }
+    return out;
   }
 
   /* A drawing write into projects/{id} is refused without savedBy.
@@ -232,7 +242,7 @@
       doc.assignment = read;
       return doc;
     }
-    throw new Error('This project has no Site Plan drawing to open.');
+    throw new Error('This project has no Omega Maximus drawing to open.');
   }
 
   var api = {

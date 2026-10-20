@@ -448,7 +448,12 @@ async function run() {
   try {
     await S.reconcile(db, orgId, now, {});
     equal(db.data.get(root + '/billing/current/invoices/change-old').state, 'paid', 'a payment on an invoice from the earlier book is still applied');
-    await refused(function () { return S.issue(db, orgId, Date.parse(bill().nextInvoiceOn + 'T12:00:00Z'), {}); }, /price book/);
+    /* ...and the next renewal is still ISSUED, on the workspace's own book (Tommy, 2026-10-20: a new
+       book never moves an existing subscription; package-billing issuable, tbookpin) */
+    var due = bill().nextInvoiceOn;
+    await S.issue(db, orgId, Date.parse(due + 'T12:00:00Z'), {});
+    var renewal = db.data.get(root + '/billing/current/invoices/' + due);
+    equal(!!renewal && renewal.pricebookVersion, bookNow, 'the renewal is issued under the workspace\'s own earlier book');
   } finally { B.VERSION = bookNow; }
   /* a stale verdict never overwrites a newer one: another reconcile paid it while this one failed on its side */
   seed(ev, 'field'); receipts = {}; failures = {};

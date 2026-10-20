@@ -1,0 +1,52 @@
+{
+  "source": "state-dot",
+  "url": "https://data.texas.gov/dataset/Bid-Tabulations/de7b-7dna",
+  "api": "https://data.texas.gov/resource/de7b-7dna.json",
+  "read": "2026-10-18",
+  "threshold": 0.05,
+  "ok": true,
+  "records": {
+    "txdot": [
+      {
+        "code": "618-7030",
+        "description": "CONDT (PVC) (SCH 40) (2\")",
+        "bookLine": "el.conduit.ft",
+        "n": 285,
+        "quantity": 1182638,
+        "unit": "LF",
+        "weightedAverage": 13.3048,
+        "price": 13.3,
+        "firstLet": "2024-10-01",
+        "lastLet": "2026-10-07"
+      },
+      {
+        "code": "618-7036",
+        "description": "CONDT (PVC) (SCH 40) (3\")",
+        "bookLine": null,
+        "n": 132,
+        "quantity": 678285,
+        "unit": "LF",
+        "weightedAverage": 15.5526,
+        "price": null,
+        "firstLet": "2024-10-01",
+        "lastLet": "2026-10-07"
+      },
+      {
+        "code": "618-7040",
+        "description": "CONDT (PVC) (SCH 40) (4\")",
+        "bookLine": null,
+        "n": 100,
+        "quantity": 135221,
+        "unit": "LF",
+        "weightedAverage": 24.5327,
+        "price": null,
+        "firstLet": "2024-10-01",
+        "lastLet": "2026-10-07"
+      }
+    ],
+    "idot": "IDOT Pay Item Report with Awarded Prices is an email subscription (webapps.dot.illinois.gov). It was not fetched. A third-party bid page was not used.",
+    "caltrans": "Caltrans Contract Cost Data did not return an electrical-conduit weighted average in the pages read. Irrigation and drainage pipe items were not used."
+  },
+  "method": "Quantity-weighted mean of rank-1 unit prices on the official bid tabs. Not a TxDOT-published precomputed average. Rank 2 and later bids are excluded.",
+  "note": "Item 618 is installed conduit, including excavation and backfill, per the TxDOT specification. It is not a bare material price and it is not escalated with the conduit PPI."
+}

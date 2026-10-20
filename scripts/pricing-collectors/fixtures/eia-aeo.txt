@@ -1,0 +1,10 @@
+cc.single|Combined-cycle, single-shaft|627|875|875|3.39|15.75
+cc.multi|Combined-cycle, multi-shaft|1227|824|824|3.46|12.31
+cc.ccs95|Combined-cycle with 95% CCS|543|2245|2469|5.13|25.17
+ct.aero|Combustion turbine, aeroderivative|211|1522|1522|5.79|9.70
+ct.frame|Combustion turbine, industrial frame|419|791|791|4.05|6.97
+fuelcell|Fuel cells|10|7447|7896|0.70|36.67
+hydrogen|Hydrogen turbine|237|823|823|5.36|8.34
+dg.base|Distributed generation, base|2|1743|1743|10.25|23.06
+dg.peak|Distributed generation, peak|1|2093|2093|10.25|23.06
+battery.4h|Battery storage, four-hour lithium-ion|150|1580|1580|0|40.62

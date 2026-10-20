@@ -100,7 +100,7 @@
     paper.text(m + 0.08, top + 0.32, 7, meta.address || 'Address not on the project', 'start', MUTED);
     paper.text(m + 0.08, top + 0.48, 7, 'Customer: ' + (meta.customer || 'Not named'), 'start', INK);
     paper.text(m + 0.08, top + 0.66, 6.5, meta.status, 'start', meta.ready ? MUTED : [0.62, 0.18, 0.18]);
-    paper.text(m + 0.08, top + 0.84, 6.5, 'OMEGA Site Plan  ·  Not a sealed drawing', 'start', MUTED);
+    paper.text(m + 0.08, top + 0.84, 6.5, 'Omega Maximus  ·  Not a sealed drawing', 'start', MUTED);
     paper.text(mid + 0.08, top + 0.2, 9, meta.title, 'start', INK);
     paper.text(mid + 0.08, top + 0.4, 7, meta.sizeName, 'start', MUTED);
     paper.text(mid2 + 0.08, top + 0.16, 8, meta.number, 'start', NAVY);

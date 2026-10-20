@@ -165,7 +165,7 @@ var count = 0; async function test(n, f) { await f(); count++; console.log('PASS
     /* the book's own validation: a "-proposed" version is never the production company's, and a production book names its realm */
     var PB = require('../api/_lib/pricebook');
     assert.throws(function () { var b = H.enabledBook(); b.version = '2026-10-proposed'; b.qbo.env = 'production'; b.qbo.realmId = '9130000000000000'; PB.validate(b); }, /sign the values off/);
-    assert.equal(PB.VERSION, '2026-10', 'the release version is signed off (2026-09-26)'); assert.ok(!/-proposed$/.test(PB.VERSION));
+    assert.equal(PB.VERSION, '2026-11', 'the release version is signed off (2026-09-26; 2026-11 adds Omega Maximus, 2026-10-20)'); assert.ok(!/-proposed$/.test(PB.VERSION));
     assert.throws(function () { var b = H.enabledBook(); b.version = '2026-10'; b.qbo.env = 'production'; b.qbo.realmId = null; PB.validate(b); }, /names the production realm/);
     assert.throws(function () { var b = H.enabledBook(); b.qbo.env = 'staging'; PB.validate(b); }, /sandbox or production/);
   });

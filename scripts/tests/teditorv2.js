@@ -237,7 +237,8 @@ check(appSrc.indexOf('applyGuidedBuild') >= 0, 'a guided build is applied on the
 var resizeFn = appSrc.slice(appSrc.indexOf('function resize()'), appSrc.indexOf('function screenToWorld'));
 check(resizeFn.indexOf('cv.width') >= 0 && resizeFn.indexOf('requestDraw()') > resizeFn.indexOf('cv.width'), 'resizing the canvas schedules a redraw');
 var runFn = appSrc.slice(appSrc.indexOf('function runNumbers()'), appSrc.indexOf('function invokeHook'));
-check(runFn.indexOf('afterChange') < 0 && runFn.indexOf('setMeta') < 0 && runFn.indexOf('runEdit = editSeq') >= 0, 'Run records the pass without an undo or a dirty flag');
+check(runFn.indexOf('afterChange') < 0 && runFn.indexOf('setMeta') < 0 && runFn.indexOf('runEdit = editSeq') >= 0, 'Run is never an undo step of its own');
+check(runFn.indexOf('OmegaEditorV2Run') >= 0 && runFn.indexOf('dirty = true') >= 0 && runFn.indexOf('scheduleRecovery()') >= 0, 'Run keeps its answers on the drawing and marks it unsaved, so they are saved with it');
 check(page.indexOf('id="editor"') < 0, 'preview does not reuse the Site Map root');
 check(fs.readFileSync(path.join(__dirname, '../../editor.html'), 'utf8').indexOf('omega-editor-v2') < 0, 'Site Map does not load the preview');
 

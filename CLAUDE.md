@@ -1663,6 +1663,62 @@ the verdict engine and never merges.
 Terms: the reads are public services; legal sign-off on each `termsNote`
 before relying on them commercially.
 
+## Omega Maximus — the editor maximum (2026-10-20)
+
+**Omega Maximus** (Tommy, 2026-10-20: "we will call this tool Omega Maximus
+for editor maximum") is the CAD editor at `/editor-v2` (`editor-v2.html`,
+`omega-editor-v2-*.js`), beside Site Map, which it does not change. It was
+built as "Site Plan" (handoff `OMEGA-EDITOR-V2-HANDOFF.md`); the keys stay
+(`siteplantrial`, the `editor-v2` files and route, the `omega.design/1`
+document, `editor: 'v2'` on a project), so saved projects and links keep
+working; only what a person reads says Omega Maximus.
+
+- **A module at $1,299/month** (Tommy: "maximus is a module that is $1299 a
+  month"): `maximus` in `api/_lib/modules.js` (Advanced shelf, tool
+  `siteplantrial`), no longer part of Omega Design. Price book **2026-11**
+  sells it (`EXPLICIT.maximus = 129900`); 2026-10 is used and never
+  repriced, so a module carries `since` and a book covers at least the
+  modules sold as of its version (`pricebook.soldIn`, `sells`); every
+  price read skips or refuses a module its book does not sell.
+  **Existing subscriptions keep their book** (Tommy, 2026-10-20): the
+  billing guard issues under the current book or the workspace's own pinned
+  book when that is enabled and a release version (`package-billing
+  issuable`, `scripts/tests/tbookpin.js`), so a workspace on 2026-10 renews
+  at its prices; staff move it onto 2026-11 by activating it there (until
+  then Maximus is not on its book). **Release it from `/admin/pricebook.html`**
+  after the deploy: Seed (the code's book, switched off, on the company of
+  the newest enabled release book, only with the dry run's hash, never over a
+  stored book: `pricebook-enable.seed`) then Enable; no admin key on a
+  laptop (`scripts/seed-pricebook.js` still works with one). Between deploy
+  and Enable a legacy add-on and a pay-now signup wait; on QuickBooks,
+  `module:maximus` via Bind.
+  On a legacy plan the tool
+  is Enterprise-level (a trial tries it, Standard and Deluxe buy the add-on,
+  which switches `toolOverrides.siteplantrial` on).
+- **One access rule** for its doors: `package-access.withModuleAnyPlan(caller,
+  'maximus')`, a package by `modules[]`, a legacy plan by `addons.held`
+  (the Modules page's rule), staff pass. Guided builds, 3D config and
+  tiles, the component cost and the solar design ask it first;
+  `GET /api/maximus-access` gives the page the same answer, and a signed-in
+  workspace without it sees the price and Opt in (`/workspace#module-maximus`).
+- **Run** (`omega-editor-v2-run.js`) prices the drawing on `/api/cost-rollup`,
+  runs `/api/value-stack` on that cost and the solar year when an array is
+  drawn; answers are kept on the drawing with the drawing they answered
+  (stale is said), saved with it, never an undo step, and carried onto the
+  project as `capex`, `capexAt`, `capexSource: 'site-plan'`, `incentive`,
+  `annualRevenue`, `bessKw`, `bessKwh`. Every figure says screening.
+- **Parcel lines** (`omega-editor-v2-parcels.js`): the ONE parcel list or
+  Regrid's tiles through `/api/parcel-tiles`, the parcel at the site point
+  through `/api/parcel` (once a point, twelve a page), Use as site boundary
+  for the lot line; reference only, the owner never shown.
+- Outputs is the right-hand panel; the canvas resizes only when its size
+  changes (a tab change once blanked the drawing); panels rebuild only when
+  what they show changed (a rebuild between press and release drops a click).
+- Tests: `npm run test:editor-v2` (incl. `teditorv2run`, `teditorv2parcels`),
+  `scripts/tests/tmaximusaccess.js`, `npm run check:editor-v2` (the drawing
+  through every tab, Outputs, Run on the real engines, Find address,
+  parcels, the lock). The launch branch is `siteplan/launch` (PR #366).
+
 ## VPP Earnings Simulator (2026-09-29)
 
 `vpp-earnings.html` (`vppsim`, Finance cell) is INCLUDED WITH EVERY ACCOUNT

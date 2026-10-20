@@ -3,7 +3,8 @@
 var assert = require('assert'), fs = require('fs'), M = require('../api/_lib/modules'), count = 0;
 function check(v, message) { assert(v, message); count++; }
 var all = M.catalog(), exceptions = M.notSold(), tools = require('../omega-tools').catalog();
-check(all.length === 19, 'nineteen modules');
+check(all.length === 20, 'twenty modules (Omega Maximus joined from price book 2026-11)');
+check(M.get('maximus').tools.join() === 'siteplantrial' && M.get('maximus').since === '2026-11' && M.get('lite').tools.indexOf('siteplantrial') < 0, 'Omega Maximus is its own module, not part of Omega Design');
 tools.forEach(function (t) {
   var owners = all.concat(exceptions).filter(function (m) { return m.tools.indexOf(t.key) >= 0; });
   check(owners.length === 1, 'registry ownership: ' + t.key);

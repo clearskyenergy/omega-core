@@ -281,6 +281,7 @@ function quote(c, rows, input, now, staff) {
   var renewalDue = inCycle && !!a.nextInvoiceOn && a.nextInvoiceOn <= today;
   var add = closure(function (k) { return held(orgId, b, k, now); }, wanted(input.add));
   if (!add.length) fail('Already on your plan', 409);
+  add.forEach(function (k) { if (!B.sells(book, k)) fail(M.get(k).name + ' is not on price book ' + book.version + '.', 409); });
   var day = inCycle ? a.billingDay : new Date(now).getUTCDate(), cycle = R.cycle(today, day);
   var before = price(inCycle ? have : [], book), after = price((inCycle ? have : []).concat(add), book);
   var lines = inCycle ? deltaLines(before, after, add, book, cycle.remainingDays, cycle.days) : after.lines.map(function (l) { return Object.assign({}, l); });

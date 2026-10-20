@@ -1,6 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  *
- * omega-editor-v2-app.js — the Site Plan preview.
+ * omega-editor-v2-app.js — Omega Maximus ("editor maximum"; Site Plan while it
+ * was built), the editor beside Site Map at /editor-v2.
  *
  * Drawing state lives in omega-editor-v2-doc.js. This file is the page:
  * the canvas, the command line, save-on-this-computer, and the customer
@@ -21,6 +22,10 @@
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
   var tiles = {}, mapNote = '', recoverTimer = 0, section = 'design';
+  /* Parcel lines: their own tiles over the photo, the point the card is
+     about (the site point, or the map centre when asked), the source the
+     tiles were built from, and the anchor last looked up. */
+  var ptiles = {}, parcelSrc = '', parcelAt = null, parcelCard = true, parcelKey = '';
   var PROJECTS = 'omega.editorV2.projects';
 
   var POINT_TOOL = {
@@ -70,6 +75,13 @@
       return;
     }
     state = D.createState(sample());
+    if (root.OmegaEditorV2Solar && root.OmegaEditorV2Solar.attach) {
+      root.OmegaEditorV2Solar.attach({
+        getDoc: function () { return state.doc; },
+        setMeta: function (meta) { D.setMeta(state, meta); afterChange(); },
+        setStatus: setStatus
+      });
+    }
     bind();
     resize();
     fit(false);
@@ -88,6 +100,10 @@
       });
     }
     if (!recovering) setStatus('Sample site loaded.');
+    checkAccess();
+    if (root.OmegaEditorV2Auth && root.OmegaEditorV2Auth.onSignIn) root.OmegaEditorV2Auth.onSignIn(function () { checkAccess(); });
+    /* Parcel lines are a view setting this browser remembers. */
+    if (root.OmegaEditorV2Parcels && root.OmegaEditorV2Parcels.remembered()) setParcels(true);
     var projectParam = /[?&]id=([A-Za-z0-9_-]+)/.exec(location.search);
     if (projectParam && !recovering) loadWorkspace(projectParam[1]);
     if (root.OmegaEditorV2Hooks) root.OmegaEditorV2Hooks.register('funding', function () { pushMarketplace(); return true; });
@@ -164,10 +180,6 @@
     });
     $('btn-save').addEventListener('click', saveWorkspace);
     $('btn-local-save').addEventListener('click', saveLocal);
-    $('btn-prime').addEventListener('click', function () { handoff('prime'); });
-    $('btn-logic').addEventListener('click', function () { handoff('logic'); });
-    $('btn-marketplace').addEventListener('click', pushMarketplace);
-    $('btn-quote').addEventListener('click', quoteDialog);
     $('btn-feedback').addEventListener('click', sendFeedback);
     $('btn-open').addEventListener('click', openDialog);
     $('btn-new').addEventListener('click', function () { confirmDirty(blank); });
@@ -178,6 +190,11 @@
     for (var s = 0; s < stages.length; s++) stages[s].addEventListener('click', function () { setSection(this.getAttribute('data-stage')); });
     $('next-action').addEventListener('click', function () { nextStep().run(); });
     $('site-yes').addEventListener('click', siteYes);
+    /* the site address, the first thing on the Site tab: Enter or the button
+       (kept from taking the field's focus, so its first click lands) */
+    $('site-address-go').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); locate(this.value); } });
+    $('site-address-find').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    $('site-address-find').addEventListener('click', function () { locate($('site-address-go').value); });
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
     $('build-cancel').addEventListener('click', function () {
@@ -197,6 +214,11 @@
     var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook],[data-build],[data-output]');
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
     $('analyze-close').addEventListener('click', function () { setSection('design'); });
+    $('outputs-close').addEventListener('click', function () { setSection('design'); });
+    $('parcel-detail-close').addEventListener('click', function () { parcelCard = false; paintParcelCard(); });
+    $('parcel-use').addEventListener('click', useParcel);
+    $('parcel-here').addEventListener('click', parcelHere);
+    if (root.OmegaEditorV2Parcels) root.OmegaEditorV2Parcels.onChange(function () { layoutMap(); paintParcelCard(); requestDraw(); });
     if ($('grid-detail-close') && root.OmegaEditorV2Grid) {
       $('grid-detail-close').addEventListener('click', function () { root.OmegaEditorV2Grid.hideCard(); paintGridCard(); });
     }
@@ -227,16 +249,6 @@
         if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
       });
     }
-    document.addEventListener('click', function (ev) {
-      var menu = $('outputs-menu');
-      if (!menu || menu.hidden) return;
-      var node = ev.target;
-      while (node) {
-        if (node.id === 'outputs-menu' || node.id === 'btn-outputs') return;
-        node = node.parentNode;
-      }
-      toggleOutputs(false);
-    });
     var cv = $('cv');
     cv.addEventListener('pointerdown', onDown);
     cv.addEventListener('pointermove', onMove);
@@ -285,10 +297,7 @@
     if (hook) { invokeHook(hook); return; }
     if (tl) setTool(tl);
     else if (eq) setEquip(eq);
-    else if (act) {
-      if (act !== 'outputs') toggleOutputs(false);
-      runAct(act);
-    }
+    else if (act) runAct(act);
   }
 
   function setTool(name) {
@@ -342,7 +351,7 @@
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
     else if (act === 'paste') paste();
-    else if (act === 'outputs') toggleOutputs();
+    else if (act === 'outputs') setSection(section === 'outputs' ? 'design' : 'outputs');
     else if (act === 'run') runNumbers();
     else if (act === 'quote') setSection('funding');
     else if (act === 'view3d') open3d();
@@ -489,7 +498,6 @@
   }
 
   function cancel() {
-    if ($('outputs-menu') && !$('outputs-menu').hidden) { toggleOutputs(false); return; }
     if ($('grid-detail') && !$('grid-detail').hidden && root.OmegaEditorV2Grid) {
       root.OmegaEditorV2Grid.hideCard();
       paintGridCard();
@@ -685,7 +693,10 @@
     tool = 'select';
     fit(false);
     refresh();
-    setStatus('New project. Nothing is saved until you press Save.');
+    /* a new project starts where a site starts: its address */
+    setSection('site');
+    if ($('site-address-go')) $('site-address-go').focus();
+    setStatus('New project. Type the site address, then Find on the map. Nothing is saved until you press Save.');
   }
 
   /* ── pointer ───────────────────────────────────────────────────────── */
@@ -694,11 +705,18 @@
     cssW = stage.clientWidth || 1;
     cssH = stage.clientHeight || 1;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var cv = $('cv');
-    cv.width = Math.round(cssW * dpr);
-    cv.height = Math.round(cssH * dpr);
+    var cv = $('cv'), w = Math.round(cssW * dpr), h = Math.round(cssH * dpr);
     layoutMap();
-    requestDraw();
+    /* Setting a canvas size clears it, even to the same size. A section
+       change or a closed dialog used to clear the drawing here and leave the
+       repaint to a later frame, so it read as gone (handoff A1). Resize only
+       when the size changes, and repaint at once when it does. */
+    if (cv.width !== w || cv.height !== h) {
+      cv.width = w;
+      cv.height = h;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      draw();
+    } else requestDraw();
   }
   function screenToWorld(sx, sy) {
     return {
@@ -912,6 +930,29 @@
     layoutMap();
     requestDraw();
   }
+  /* Zoom to some entities with room around them (a placed build). */
+  function fitTo(ids) {
+    var want = {}, i, b, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
+    for (i = 0; i < (ids || []).length; i++) want[ids[i]] = 1;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      if (!want[state.doc.entities[i].id]) continue;
+      b = G.boundsOf(state.doc.entities[i]);
+      if (!isFinite(b.minX) || !isFinite(b.maxY)) continue;
+      any = true;
+      if (b.minX < minX) minX = b.minX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.maxY > maxY) maxY = b.maxY;
+    }
+    if (!any) { fit(false); return; }
+    var pad = Math.max(40, Math.max(maxX - minX, maxY - minY) * 0.75);
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    view.cx = (minX + maxX) / 2;
+    view.cy = (minY + maxY) / 2;
+    view.pxPerFt = Math.max(0.02, Math.min(cssW / (maxX - minX || 1), cssH / (maxY - minY || 1)));
+    layoutMap();
+    requestDraw();
+  }
   function fit(announce) {
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b, any = false;
     for (i = 0; i < state.doc.entities.length; i++) {
@@ -946,6 +987,7 @@
     if (!mapOn) { ctx.fillStyle = '#E4E1D8'; ctx.fillRect(0, 0, cssW, cssH); }
     drawGrid(ctx);
     if (root.OmegaEditorV2Grid) root.OmegaEditorV2Grid.draw(ctx, worldToScreen);
+    if (root.OmegaEditorV2Parcels) root.OmegaEditorV2Parcels.draw(ctx, worldToScreen, state.doc.anchor);
     drawEntities(ctx, false);
     drawDraft(ctx);
     drawSelection(ctx);
@@ -1194,7 +1236,7 @@
   /* ── map ───────────────────────────────────────────────────────────── */
   function layoutMap() {
     var host = $('map');
-    if (!mapOn) { host.style.display = 'none'; mapNote = ''; return; }
+    if (!mapOn) { host.style.display = 'none'; mapNote = ''; layoutParcels(null); return; }
     host.style.display = 'block';
     var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt));
     if (z < 14) z = 14;
@@ -1220,6 +1262,7 @@
     if (count > 24) {
       mapNote = 'Zoom in to load aerial imagery.';
       host.style.display = 'none';
+      layoutParcels(null);
       return;
     }
     mapNote = '';
@@ -1232,6 +1275,7 @@
       if (!tiles[k]) tiles[k] = loadTile(need[k], k);
       placeTile(tiles[k]);
     }
+    layoutParcels(need);
   }
   function latLngToTile(lat, lng, z) {
     var n = Math.pow(2, z);
@@ -1253,29 +1297,36 @@
     img.draggable = false;
     var node = { img: img, spec: spec, ready: false, failed: false };
     img.onload = function () { node.ready = true; requestDraw(); };
-    img.onerror = function () { node.failed = true; mapNote = 'Aerial imagery did not load. The drawing is still to scale.'; };
+    img.onerror = function () { node.failed = true; img.style.visibility = 'hidden'; mapNote = 'Aerial imagery did not load. The drawing is still to scale.'; };
     img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + spec.z + '/' + spec.y + '/' + spec.x;
     $('map').appendChild(img);
     return node;
   }
-  function placeTile(node) {
-    var nw = tileNW(node.spec.x, node.spec.y, node.spec.z);
-    var se = tileNW(node.spec.x + 1, node.spec.y + 1, node.spec.z);
+  function placeTile(node) { placeBox(node.img, node.spec); }
+  /* One web-mercator tile's box on the screen, for the photo and the
+     parcel lines alike. */
+  function placeBox(el, spec) {
+    var nw = tileNW(spec.x, spec.y, spec.z);
+    var se = tileNW(spec.x + 1, spec.y + 1, spec.z);
     var a = worldToScreen(G.latLngToFt(nw.lat, nw.lng, state.doc.anchor));
     var b = worldToScreen(G.latLngToFt(se.lat, se.lng, state.doc.anchor));
-    node.img.style.left = Math.min(a.x, b.x) + 'px';
-    node.img.style.top = Math.min(a.y, b.y) + 'px';
-    node.img.style.width = Math.abs(b.x - a.x) + 'px';
-    node.img.style.height = Math.abs(b.y - a.y) + 'px';
+    el.style.left = Math.min(a.x, b.x) + 'px';
+    el.style.top = Math.min(a.y, b.y) + 'px';
+    el.style.width = Math.abs(b.x - a.x) + 'px';
+    el.style.height = Math.abs(b.y - a.y) + 'px';
   }
 
   /* ── panels ────────────────────────────────────────────────────────── */
   function refresh() {
+    followParcelAnchor();
+    var siteAddr = $('site-address-go');
+    if (siteAddr && document.activeElement !== siteAddr) siteAddr.value = /^sample parcel$/i.test(state.doc.address || '') ? '' : (state.doc.address || '');
     refreshTakeoff();
     refreshCustomer();
     refreshLayers();
     refreshProps(false);
     paintGridCard();
+    paintParcelCard();
     saveLabel();
     $('project-name').value = state.doc.name || '';
     paintNext();
@@ -1332,8 +1383,16 @@
     $('customer-btn').title = s.linked ? 'Linked to customer ' + s.customerId : 'No CRM id yet';
     if (state.doc.clientDrift) setStatus('The project list still has a different customer name. Saving the customer here will make them match.', true);
   }
+  /* Rebuilt only when something it shows changed: a rebuild between a
+     button's press and its release drops the click (the blur of a field
+     being saved refreshes the panels). */
+  var layerSig = '';
   function refreshLayers() {
     var host = $('layers');
+    var Grid = root.OmegaEditorV2Grid, Pc = root.OmegaEditorV2Parcels;
+    var sig = JSON.stringify(state.doc.layers) + '|' + (Grid && Grid.enabled() ? 1 : 0) + '|' + (Pc && Pc.enabled() ? 1 : 0);
+    if (sig === layerSig && host.firstChild) return;
+    layerSig = sig;
     host.innerHTML = '';
     var i, layer, line, mark, name, eye, lock;
     for (i = 0; i < state.doc.layers.length; i++) {
@@ -1362,6 +1421,161 @@
       host.appendChild(line);
     }
     appendGridLayer(host);
+    appendParcelLayer(host);
+  }
+  function appendParcelLayer(host) {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var line = document.createElement('div');
+    line.className = 'layer';
+    line.id = 'layer-parcels';
+    var mark = document.createElement('i');
+    mark.className = 'swatch';
+    mark.style.background = P.INK;
+    var name = document.createElement('span');
+    name.textContent = 'Parcel lines';
+    var eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'btn quiet';
+    eye.id = 'layer-parcels-toggle';
+    eye.textContent = P.enabled() ? 'Hide' : 'Show';
+    eye.setAttribute('aria-pressed', P.enabled() ? 'true' : 'false');
+    eye.addEventListener('click', function () { setParcels(!P.enabled()); });
+    line.appendChild(mark); line.appendChild(name); line.appendChild(eye);
+    var grid = $('layer-grid-atlas');
+    if (grid && grid.parentNode === host) host.insertBefore(line, grid.nextSibling);
+    else if (host.firstChild) host.insertBefore(line, host.firstChild);
+    else host.appendChild(line);
+  }
+
+  /* ── Omega Maximus is a module ─────────────────────────────────────────
+     A signed-in workspace that has not bought it sees the price and Opt in
+     instead of the editor. Every Maximus door on the server refuses it
+     either way (package-access withModuleAnyPlan); this only says so up
+     front. Signed out, nothing is asked: the server features ask for a
+     sign-in themselves. */
+  function checkAccess() {
+    var Auth = root.OmegaEditorV2Auth;
+    if (!Auth || typeof Auth.idToken !== 'function' || typeof root.fetch !== 'function') return;
+    Auth.idToken().then(function (tok) {
+      if (!tok) return null;
+      return root.fetch('/api/maximus-access', { headers: { Authorization: 'Bearer ' + tok } }).then(function (r) {
+        return r.ok ? r.json() : null;
+      });
+    }).then(function (a) {
+      var el = $('maximus-lock');
+      if (!el || !a) return;
+      if (a.held !== false) { el.hidden = true; return; }
+      $('maximus-lock-copy').textContent = a.reason || 'Omega Maximus is not on this workspace\'s plan.';
+      $('maximus-lock-price').textContent = a.price ? 'Omega Maximus is ' + a.price + '.' : '';
+      if (a.optIn && /^\/[A-Za-z0-9#/_-]*$/.test(a.optIn)) $('maximus-lock-optin').setAttribute('href', a.optIn);
+      el.hidden = false;
+    }, function () {});
+  }
+
+  /* ── parcel lines (omega-editor-v2-parcels.js) ─────────────────────── */
+  function setParcels(on) {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    parcelCard = true;
+    parcelAt = null;
+    parcelKey = on ? anchorKey() : '';
+    if (on && !mapOn) { mapOn = true; pressed('map', true); }
+    P.setEnabled(on, state.doc.anchor);
+    refreshLayers();
+    layoutMap();
+    paintParcelCard();
+    requestDraw();
+  }
+  function anchorKey() {
+    var a = state.doc.anchor || {};
+    return (+a.lat).toFixed(5) + ',' + (+a.lng).toFixed(5);
+  }
+  /* A new site point (an address found, a project opened) is looked up once. */
+  function followParcelAnchor() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P || !P.enabled()) return;
+    var k = anchorKey();
+    if (k === parcelKey) return;
+    parcelKey = k;
+    parcelAt = null;
+    parcelCard = true;
+    P.lookup(state.doc.anchor.lat, state.doc.anchor.lng);
+  }
+  function parcelPoint() {
+    return parcelAt || { lat: +state.doc.anchor.lat, lng: +state.doc.anchor.lng };
+  }
+  function paintParcelCard() {
+    var el = $('parcel-detail'), P = root.OmegaEditorV2Parcels;
+    if (!el || !P) return;
+    var at = parcelPoint(), card = P.card(at.lat, at.lng);
+    el.hidden = !(card.visible && parcelCard);
+    if (el.hidden) return;
+    $('parcel-detail-title').textContent = card.title;
+    var body = $('parcel-detail-body'), i, p;
+    body.innerHTML = '';
+    if (parcelAt) { p = document.createElement('p'); p.className = 'src'; p.textContent = 'At the map centre.'; body.appendChild(p); }
+    for (i = 0; i < card.lines.length; i++) {
+      p = document.createElement('p');
+      if (card.lines[i].source) p.className = 'src';
+      p.textContent = card.lines[i].text;
+      body.appendChild(p);
+    }
+    var use = $('parcel-use');
+    use.hidden = !card.parcel || parcelUsed(card.parcel);
+    $('parcel-here').disabled = !!card.busy;
+  }
+  function parcelUsed(rec) {
+    var i, e;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      e = state.doc.entities[i];
+      if (e.parcel && rec && e.parcel.apn && e.parcel.apn === rec.apn && e.parcel.source === rec.source) return true;
+    }
+    return false;
+  }
+  function useParcel() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var at = parcelPoint(), rec = P.foundAt(at.lat, at.lng);
+    var ent = rec ? P.toEntity(rec, state.doc.anchor) : null;
+    if (!ent) { setStatus('Look up a parcel first.', true); return; }
+    D.add(state, ent);
+    afterChange();
+    paintParcelCard();
+    setStatus('The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.');
+  }
+  function parcelHere() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var c = G.ftToLatLng(view.cx, view.cy, state.doc.anchor);
+    parcelAt = { lat: c.lat, lng: c.lng };
+    parcelCard = true;
+    P.lookup(c.lat, c.lng);
+    paintParcelCard();
+  }
+  function layoutParcels(need) {
+    var host = $('map-parcels'), P = root.OmegaEditorV2Parcels, k, t;
+    if (!host) return;
+    if (!need || !P || !P.enabled()) { host.style.display = 'none'; return; }
+    host.style.display = 'block';
+    var src = P.source();
+    if (src !== parcelSrc) {
+      for (k in ptiles) if (ptiles.hasOwnProperty(k) && ptiles[k].el && ptiles[k].el.parentNode) ptiles[k].el.parentNode.removeChild(ptiles[k].el);
+      ptiles = {};
+      parcelSrc = src;
+    }
+    for (k in ptiles) if (ptiles.hasOwnProperty(k) && !need[k]) {
+      if (ptiles[k].el && ptiles[k].el.parentNode) ptiles[k].el.parentNode.removeChild(ptiles[k].el);
+      delete ptiles[k];
+    }
+    for (k in need) if (need.hasOwnProperty(k)) {
+      if (!ptiles[k]) {
+        t = P.tileNode(need[k]);
+        ptiles[k] = { el: t, spec: need[k] };
+        if (t) host.appendChild(t);
+      }
+      if (ptiles[k].el) placeBox(ptiles[k].el, need[k]);
+    }
   }
   function appendGridLayer(host) {
     var Grid = root.OmegaEditorV2Grid;
@@ -1458,15 +1672,23 @@
     propSig = sig;
     var host = $('props');
     host.innerHTML = '';
-    field(host, 'Address', state.doc.address || '', function (v) {
+    var addr = field(host, 'Address', state.doc.address || '', function (v) {
+      if (v === (state.doc.address || '')) return;
       D.setMeta(state, { address: v }); afterChange();
+    });
+    addr.id = 'site-address';
+    addr.placeholder = 'Street, city, state ZIP — or latitude, longitude';
+    /* Enter finds the site. Find address keeps the field focused on press:
+       a blur saves the address, which rebuilt this panel and dropped the
+       button before its click landed, so the first click found nothing. */
+    addr.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); locate(addr.value); }
     });
     var find = document.createElement('button');
     find.type = 'button'; find.className = 'btn'; find.textContent = 'Find address';
-    find.addEventListener('click', function () {
-      var input = host.querySelector('input');
-      locate(input ? input.value : '');
-    });
+    find.id = 'site-find';
+    find.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    find.addEventListener('click', function () { locate(addr.value); });
     host.appendChild(find);
     field(host, 'Grid (ft)', String(state.doc.gridFt || 5), function (v) {
       var n = parseFloat(v);
@@ -1616,13 +1838,12 @@
     }
   }
   function sendFeedback() {
-    var message=window.prompt('What worked, or what should we improve in Site Plan?');
+    var message=window.prompt('What worked, or what should we improve in Omega Maximus?');
     if(!message || !message.trim()) return;
     saveWorkspace().then(function(ok){if(ok)return root.OmegaEditorV2Workspace.feedback(state.doc,message).then(function(){setStatus('Feedback saved with your project. Thank you.');});})
       .catch(function(e){setStatus(e.message,true);});
   }
   function quoteDialog() {
-    toggleOutputs(false);
     var dlg=document.createElement('dialog'), form=document.createElement('form'), title=document.createElement('h2');
     title.textContent='Review the bill of materials';form.appendChild(title);
     var info=document.createElement('p');info.textContent='Enter the published SKU for each item you want quoted. Only checked lines are sent. Pricing and supplier routing happen in OMEGA.';form.appendChild(info);
@@ -1737,7 +1958,7 @@
     cloud.addEventListener('click', function () {
       cloud.disabled=true; cloud.textContent='Loading workspace…';
       root.OmegaEditorV2Workspace.list().then(function (items) {
-        cloud.textContent=items.length ? 'Workspace projects' : 'No Site Plan projects in this workspace yet.';
+        cloud.textContent=items.length ? 'Workspace projects' : 'No Omega Maximus projects in this workspace yet.';
         items.forEach(function (item) {
           var li=document.createElement('li'), b=document.createElement('button'); b.type='button'; b.textContent=item.name||item.id;
           b.onclick=function(){ $('dlg-open').close(); confirmDirty(function(){loadWorkspace(item.id);}); }; li.appendChild(b); list.prepend(li);
@@ -1892,7 +2113,7 @@
           state = D.createState(D.restore(json));
           dirty = true; fit(false); refresh();
           setStatus('Opened the drawing.');
-        } else setStatus('That JSON is not a Site Plan or a project record.', true);
+        } else setStatus('That JSON is not an Omega Maximus drawing or a project record.', true);
       } catch (err) { setStatus('Could not read that file. Use a project JSON or a DXF.', true); }
     };
     reader.readAsText(file);
@@ -1982,7 +2203,6 @@
   }
 
   function setSection(name) {
-    if (name === 'outputs') { toggleOutputs(true); return; }
     var allowed = { site: 1, design: 1, analyze: 1, outputs: 1, funding: 1 };
     if (!allowed[name]) return;
     section = name;
@@ -2004,7 +2224,11 @@
       }
     }
     if (name === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
-    if (name === 'outputs' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showOutputs(state);
+    pressed('outputs', name === 'outputs');
+    if (root.OmegaEditorV2Outputs) {
+      if (name === 'outputs') root.OmegaEditorV2Outputs.panel(outputsApi());
+      else root.OmegaEditorV2Outputs.hidePanel();
+    }
     if (name === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
     paintNext();
     resize();
@@ -2057,8 +2281,11 @@
       pxPerFt: view.pxPerFt,
       onPlaced: function (res) {
         afterChange();
-        fit(true);
-        setStatus((res.summary && res.summary.line) || 'Build placed.');
+        /* the view goes to the build, which is selected, and says where it is */
+        fitTo(res.ids);
+        setStatus(((res.summary && res.summary.line) || 'Build placed.') +
+          (res.onLot === false ? ' The lot had no clear ground for it, so it is just beside the lot: drag it into place.' : '') +
+          ' It is selected: drag to move it.');
         notifyDrawn();
       }
     };
@@ -2067,7 +2294,6 @@
     var Bld = root.OmegaEditorV2Build;
     if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
     setSection('design');
-    toggleOutputs(false);
     var ctx = placedCtx();
     if (typeof preferred === 'string' && preferred) ctx.preferred = preferred;
     Bld.open(state, ctx);
@@ -2080,16 +2306,7 @@
       if (H.listeners(names[i])) invokeHook(names[i], { reason: 'build' });
     }
   }
-  function toggleOutputs(force) {
-    var menu = $('outputs-menu');
-    if (!menu) return;
-    var open = force === true ? true : force === false ? false : menu.hidden;
-    menu.hidden = !open;
-    var btn = $('btn-outputs');
-    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
   function previewOutput(kind) {
-    toggleOutputs(false);
     var An = root.OmegaEditorV2Analyze;
     var R = root.OmegaEditorV2Reports;
     var Design = root.OmegaEditorV2Design;
@@ -2162,13 +2379,49 @@
       'Not on the drawing: ' + (gaps || 'nothing listed') + '.\n\n' +
       'Open builds the sheet from this reading. A missing detail stays blank.';
   }
+  /* Run asks the server for the cost, the value stack and the solar year
+     (omega-editor-v2-run.js) and keeps the answers on the drawing. */
+  var running = false;
   function runNumbers() {
-    var An = root.OmegaEditorV2Analyze;
+    var An = root.OmegaEditorV2Analyze, Run = root.OmegaEditorV2Run;
     if (!An) { setStatus('Analyze is not loaded.', true); return; }
-    var pi = An.assess(state);
-    runEdit = editSeq;
     setSection('analyze');
-    setStatus(pi.decision + ' · ' + pi.score + ' / 100, from the drawing.');
+    if (!Run) { setStatus('Run did not load. Refresh the page.', true); return; }
+    if (running) return;
+    running = true;
+    var btn = $('btn-run');
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+    if (An.running) An.running(true);
+    setStatus('Running the cost, the value stack and the solar year on the server…');
+    function finish() {
+      running = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
+      if (An.running) An.running(false);
+    }
+    Run.run(state.doc).then(function (out) {
+      finish();
+      var keys = Object.keys(out.fields || {}), k;
+      /* The answers belong to this drawing: kept on it and saved with it
+         (unsaved until then), never an undo step of their own. An edit
+         after the run carries them in its snapshot; Analyze says when the
+         drawing has moved on (OmegaEditorV2Run.isStale). */
+      if (keys.length) {
+        for (k = 0; k < keys.length; k++) state.doc[keys[k]] = out.fields[keys[k]];
+        dirty = true;
+        refresh();
+        scheduleRecovery();
+      }
+      runEdit = editSeq;
+      An.show(state);
+      if (out.notes && out.notes.all) { setStatus(out.notes.all, !out.signedOut); return; }
+      var pi = An.assess(state), vs = state.doc.valueStack, bits = [pi.decision + ' · ' + pi.score + ' / 100'];
+      if (state.doc.costTotal > 0) bits.push('installed $' + Math.round(state.doc.costTotal).toLocaleString());
+      if (vs && vs.irr != null) bits.push('IRR ' + (vs.irr * 100).toFixed(1) + '%');
+      setStatus(bits.join(' · ') + '. Screening, not a quote.');
+    }, function (err) {
+      finish();
+      setStatus((err && err.message) || 'Run did not finish. Try again.', true);
+    });
   }
   function invokeHook(name, extra) {
     var H = root.OmegaEditorV2Hooks;
@@ -2206,15 +2459,17 @@
     setStatus('Drawings follow the guided build.');
     return next;
   }
-  function openOutputs(which) {
-    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
-    toggleOutputs(false);
-    OmegaEditorV2Outputs.open({
+  /* Outputs is the right-hand panel. Preview opens the sheet dialog. */
+  function outputsApi() {
+    return {
       doc: state.doc,
-      which: which === 'sld' ? 'sld' : (which === 'permit' ? 'set' : 'list'),
       download: download,
       updateMeta: function (patch) { D.setMeta(state, patch); afterChange(); },
       fileBase: fileBase,
+      bom: function () { previewOutput('bom'); },
+      quote: quoteDialog,
+      handoff: handoff,
+      funding: function () { setSection('funding'); },
       drawing: {
         png: exportPng,
         pdf: exportPdf,
@@ -2222,8 +2477,18 @@
         json: exportJson,
         importFile: function () { $('file-import').click(); }
       }
-    });
+    };
+  }
+  /* openOutputs() is the panel; 'permit' or 'sld' also opens that preview. */
+  function openOutputs(which) {
+    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
+    if (section !== 'outputs') setSection('outputs');
+    if (which !== 'permit' && which !== 'sld') return;
+    var api = outputsApi();
+    api.which = which === 'sld' ? 'sld' : 'set';
+    api.fromPanel = true;
+    OmegaEditorV2Outputs.open(api);
   }
 
-  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, VERSION: 'editor-v2-app/3' };
+  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, VERSION: 'editor-v2-app/4' };
 })(typeof window !== 'undefined' ? window : global);

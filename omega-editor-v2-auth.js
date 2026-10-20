@@ -66,6 +66,13 @@
     });
   }
 
+  /* Who to tell when a person signs in on this page (the access check). */
+  var signedInListeners = [];
+  function onSignIn(fn) { if (typeof fn === 'function') signedInListeners.push(fn); }
+  function told(u) {
+    if (u) for (var i = 0; i < signedInListeners.length; i++) { try { signedInListeners[i](u); } catch (e) {} }
+    return u;
+  }
   function signIn() {
     return whenReady().then(function () {
       if (!ensure()) return Promise.reject(new Error('Sign-in is unavailable. Check the connection and refresh.'));
@@ -73,7 +80,7 @@
       provider.addScope('email');
       provider.addScope('profile');
       return auth.signInWithPopup(provider).then(function (result) {
-        return (result && result.user) || auth.currentUser;
+        return told((result && result.user) || auth.currentUser);
       }, function (err) {
         var code = err && err.code;
         if (code === 'auth/popup-blocked' || code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request') {
@@ -93,6 +100,7 @@
   var api = {
     idToken: idToken,
     signIn: signIn,
+    onSignIn: onSignIn,
     whenReady: whenReady,
     projectId: function () { var c = cfg(); return c && c.projectId ? c.projectId : ''; },
     VERSION: 'editor-v2-auth/1'
