@@ -45,7 +45,8 @@ var keys = {};
 HS.ENTRIES.forEach(function (e) {
   ok(/^[a-z0-9-]+$/.test(e.key) && !keys[e.key], 'a unique key: ' + e.key); keys[e.key] = true;
   ok(e.display && Array.isArray(e.eiaIds) && Array.isArray(e.states) && e.states.length, e.key + ' names, ids, states');
-  ok(STATUS.indexOf(e.status) >= 0, e.key + ' status'); eq(e.verifiedAt, '2026-10-17', e.key + ' verified on');
+  ok(STATUS.indexOf(e.status) >= 0, e.key + ' status');
+  ok(e.verifiedAt === HS.VERIFIED_AT || (e.verifiedAt === HS.AZ_VERIFIED_AT && e.states.indexOf('AZ') >= 0), e.key + ' verified on ' + e.verifiedAt);
   ok(typeof e.note === 'string' && e.note.length > 20, e.key + ' says something plain');
   ok(e.terms, e.key + ' terms');
   e.eiaIds.forEach(function (id) { ok(/^\d{1,6}$/.test(id), e.key + ' EIA id ' + id); });
@@ -112,6 +113,61 @@ eq(HS.forCandidate({ eiaId: '40299', type: 'COOPERATIVE', state: 'NJ' }, ['NJ'])
 eq(HS.forCandidate({ eiaId: '9726', type: 'INVESTOR OWNED', state: 'OH' }, ['NJ']).key, 'jcpl', 'an EIA id still answers where the national layer tags JCP&L "OH"');
 ok(HS.ENTRIES.every(function (e) { return !e.group || e.type === 'group'; }), 'only a group entry carries a group');
 deq(HS.statesAt(41.88, -87.63), ['IL']); deq(HS.statesAt(31.97, -99.9), [], 'Texas is outside the nine');
+
+/* ── Arizona, utility by utility (2026-10-20, docs/HOSTING-ARIZONA.md) ─
+   No Arizona utility publishes distribution hosting capacity: each entry is
+   checked on 2026-10-20, says so in plain words, and hands the person the
+   route its utility offers instead and its own pages. */
+var AZE = HS.ENTRIES.filter(function (e) { return e.states.indexOf('AZ') >= 0; });
+AZE.forEach(function (e) {
+  eq(e.verifiedAt, HS.AZ_VERIFIED_AT, e.key + ' checked again on 2026-10-20');
+  eq(e.status, 'none', e.key + ': nothing is published in Arizona');
+  eq(e.publishes.gen || e.publishes.load || e.publishes.storage, false, e.key + ' publishes nothing');
+  if (e.type !== 'group') ok((/^https:\/\//.test(e.viewerUrl || '') || e.noPage === true) && e.route, e.key + ' links its own page (or says it has none) and names its route');
+});
+ok(/no new load unless no other utility can serve/.test(HS.byKey('scip').route) && /11 May 2026/.test(HS.byKey('scip').note), 'SCIP\'s 2026 notice: no new load where another utility can serve');
+ok(/no generation or storage in parallel/.test(HS.byKey('wickenburg').note) && /cannot run on the town/.test(HS.byKey('wickenburg').note), 'Wickenburg takes nothing in parallel: a battery is told so');
+['40355', '2469', '19016', '8139', '13961', '12191'].forEach(function (id) {
+  eq(HS.byEia(id), null, id + ': a region-sized water district stays out of the registry, so it reads as a water district, never a point\'s utility'); });
+eq(HS.byKey('ajo').noPage, true, 'Ajo has no website: said, never a made-up page');
+ok(/R14-2-2616/.test(HS.byKey('morenci').route) && /R14-2-2616/.test(HS.byKey('ajo').route), 'Morenci and Ajo are on the ACC\'s list');
+ok(/Yuma/.test(HS.byKey('wmidd').note) && /reservation/.test(HS.byKey('cra-es').note), 'the two region-sized district polygons say where they overreach');
+['aps', 'tep', 'unse'].forEach(function (k) { ok(/R14-2-2616/.test(HS.byKey(k).route) && /R14-2-2616/.test(HS.byKey(k).note), k + ' answers a Pre-Application Report under the ACC\'s rule'); });
+ok(!/R14-2-2616/.test(HS.byKey('srp').route) && /not under the ACC/.test(HS.byKey('srp').note) && /Screen A/.test(HS.byKey('srp').route), 'SRP is not under the ACC\'s rules: its own Screen A');
+/* every co-op is on the ACC's list of regulated utilities (2024-07-01), so
+   the rule is theirs whatever their manual says; a tribal utility is not */
+['trico', 'ssvec', 'navopache', 'mohave', 'graham-county', 'duncan-valley', 'columbus-az', 'garkane-az', 'dixie-az'].forEach(function (k) {
+  var e = HS.byKey(k); ok(e && e.type === 'coop' && /R14-2-2616/.test(e.route) && /R14-2-2616/.test(e.note), k + ': an ACC-regulated co-op answers a Pre-Application Report'); });
+['ntua', 'gricua', 'toua', 'aha-macav'].forEach(function (k) {
+  var e = HS.byKey(k); ok(e && e.type === 'tribal' && /not under the ACC/.test(e.note) && !/R14-2-2616/.test(e.route), k + ': a tribal utility is not under the ACC\'s rules'); });
+ok(/\$125/.test(HS.byKey('ssvec').route), 'SSVEC\'s own fee for the report'); ok(/sign-in/.test(HS.byKey('garkane-az').note) && /asset map/.test(HS.byKey('garkane-az').note), 'Garkane\'s map: assets, not capacity, now behind a sign-in');
+eq(HS.forCandidate({ eiaId: '58123', type: 'NOT AVAILABLE', state: 'AZ' }, ['AZ', 'CA']).key, 'aha-macav'); eq(HS.forCandidate({ eiaId: '58123', type: 'NOT AVAILABLE' }, ['CA']).key, 'aha-macav', 'Fort Mojave across the river too');
+eq(HS.forCandidate({ eiaId: '4071', type: 'COOPERATIVE' }, []), null, 'Columbus in New Mexico is not researched');
+eq(HS.forCandidate({ eiaId: '999995', type: 'COOPERATIVE', state: 'AZ' }, ['AZ']).key, 'az-coops', 'an Arizona co-op the list does not name falls to the group');
+ok(/transmission/.test(HS.byKey('srp').note), 'SRP\'s OASIS study is said to be transmission-level, never a site\'s circuit');
+eq(HS.byKey('srp').check.url, 'https://www.srpnet.com/about/service-area-territory', 'SRP\'s own address lookup');
+ok(/^https:\/\/apsc\.maps\.arcgis\.com\/apps\/View\/index\.html\?appid=/.test(HS.byKey('aps').check.url), 'APS\'s own Service Areas Viewer');
+ok(/never queries it/.test(HS.byKey('srp').termsNote) && /never queries it/.test(HS.byKey('aps').termsNote), 'the licences say why neither boundary layer is read');
+eq(HS.byEia('12351').key, 'mesa'); eq(HS.byKey('mesa').display, 'City of Mesa');
+ok(/Electric_Service_Area\.pdf$/.test(HS.byKey('mesa').check.url), 'the city\'s own service-area map');
+/* what a person is handed: words, a route, pages — never a service */
+deq(Object.keys(HS.publication(HS.byKey('aps'))).sort(), ['check', 'link', 'route', 'says', 'status', 'verifiedAt']);
+eq(HS.publication(HS.byKey('aps')).says, 'publishes no hosting capacity'); eq(HS.publication(HS.byKey('comed')).says, 'publishes hosting capacity');
+eq(HS.publication(HS.byKey('georgia-power')).says, 'publishes hosting capacity to registered users only');
+deq(HS.publication(null), { status: 'unknown', says: 'not researched by OMEGA', route: null, link: null, check: null, verifiedAt: null }, 'an unknown utility is never guessed');
+HS.ENTRIES.forEach(function (e) {
+  var p = HS.publication(e);
+  [p.link, p.check].forEach(function (l) { if (l) ok(/^https:\/\//.test(l.url) && !/\/rest\/services\/|FeatureServer|MapServer/.test(l.url) && l.label, e.key + ' hands a page, never a service: ' + l.url); });
+});
+/* the licences: SRP's boundary may be used only by SRP's own web app, APS's
+   only inside ArcGIS Online, and APS's DG_Locations carries meters */
+var regSrc = read('api/_lib/hosting-sources.js') + read('api/_lib/utility-territory.js');
+ok(['ICaY8VX3lsUsMBRl', 'SRP_PSA', 'wF9gckwE55J0Ayag', 'CCN_ServiceTerritory', 'DG_Locations/'].every(function (s) { return regSrc.indexOf(s) < 0; }), 'neither SRP\'s nor APS\'s own boundary layer is in the code');
+/* geometry: inside or out, and how far the edge is */
+var eIn = HS.edgeOf(ring(40, -75, 100), 40, -75); eq(eIn.inside, true); ok(Math.abs(eIn.edgeM - 100) < 1, 'well inside: 100 m to the edge');
+var eOut = HS.edgeOf(ring(40 + 150 / 111320, -75, 100), 40, -75); eq(eOut.inside, false); ok(Math.abs(eOut.edgeM - 50) < 1, '50 m outside');
+var eHole = HS.edgeOf({ rings: ring(40, -75, 100).rings.concat(ring(40, -75, 30).rings) }, 40, -75); eq(eHole.inside, false, 'a hole is outside'); ok(Math.abs(eHole.edgeM - 30) < 1);
+eq(HS.edgeOf({ paths: [[[-75, 40], [-74.9, 40.1]]] }, 40, -75), null, 'a line is not an area'); eq(HS.edgeOf(null, 40, -75), null);
 
 /* ComEd is named through comed-service, never pasted */
 var src = read('api/_lib/hosting-sources.js');
@@ -362,6 +418,15 @@ eq(UT._t.mapGa({ Utility_Name: 'Jackson EMC', Utility_Type: 'EMC', CLASSIFICA: '
 deq(UT._t.mapMa({ ELEC: 'Westfield Gas and Electric Light Department, Eversource Energy (NSTAR Electric)' }).map(function (c) { return c.eiaId; }), [null, '54913'], 'a split town names both');
 eq(UT._t.mapFl2019({ ID: '7801', NAME: 'GULF POWER CO' }).eiaId, '6452'); eq(UT._t.mapLee({ type: 'LCEC' }).eiaId, '10857');
 ok(UT._t.pointUrl(UT.NATIONAL[0], 41.88, -87.63).indexOf('Electricity_Rates_H3_Res5/FeatureServer/7/query?') > 0);
+/* the City of Mesa's own electric service area (2026-10-20): asked inside
+   Mesa's box only, as an envelope 40 m across with its polygon back */
+var MSA = UT.SERVICE_AREAS.filter(function (l) { return l.key === 'mesa-electric-service-area'; })[0];
+ok(MSA && MSA.utility.eiaId === '12351' && MSA.nearM === 40 && MSA.states[0] === 'AZ', 'the city\'s own map names the City of Mesa');
+var mau = UT._t.areaUrl(MSA, 33.4152, -111.8329);
+ok(mau.indexOf('https://gis.mesaaz.gov/mesaaz/rest/services/Geocortex/GCX_ExploreMesa/MapServer/13/query?') === 0 && /returnGeometry=true/.test(mau) && /outSR=4326/.test(mau) && /geometryType=esriGeometryEnvelope/.test(mau), mau);
+eq(UT._t.cautionOf('16572', {}), 'Salt River Project\'s boundary encloses Arizona Public Service and City of Mesa islands that the public territory maps cannot separate; confirm the utility with the customer\'s bill.');
+eq(UT._t.cautionOf('16572', { '12351': true }), 'Salt River Project\'s boundary encloses Arizona Public Service islands that the public territory maps cannot separate; confirm the utility with the customer\'s bill.', 'an island the city\'s own map settles leaves the caution');
+eq(UT._t.cautionOf('803', {}), null);
 
 /* ── the door, end to end on a fake network and a fake Firestore ────── */
 function Esri(rows) { return { features: rows.map(function (r) { return { attributes: { NAME: r[1], Utility_ID: r[0], TYPE: r[2], STATE: r[3] || '', HOLDING_CO: r[1], Total_Customer_Count_2024: r[4] || null, Shape__Area: r[5] || null } }; }) }; }
@@ -406,6 +471,8 @@ tests.push(function () {
     eq(r.territory.confident, false, 'a rival with no map keeps the answer unconfident'); eq(r.territory.evidence, 'hosting-layer');
     ok(/The territory maps also name Rock Energy Cooperative here; confirm the utility with a bill/.test(r.note), r.note);
     deq(r.territory.candidates.map(function (c) { return c.registryKey; }), ['rock-energy', 'comed']);
+    deq(r.territory.candidates.map(function (c) { return c.hosting.says; }), ['publishes no hosting capacity', 'publishes hosting capacity'], 'every candidate says what its utility publishes');
+    eq(r.territory.candidates[1].hosting.link.url, CS.REFERER, 'with its own page');
     eq(r.best, 0); eq(r.circuits[0].id, 'R6514'); eq(r.body.publishedKw, 420); eq(r.body.basis, 'storage'); eq(r.body.addressResolved, true);
     eq(r.verdict.verdict.key, 'fits'); eq(r.verdict.circuit.netKw, 420); eq(r.verdict.substation.name, 'TSS165');
     eq(r.source.key, 'comed'); eq(r.source.layer, /services\/([^/]+)\/FeatureServer/.exec(CS.SERVICE)[1] + ' layer 75'); eq(r.source.refreshed, '2026-08-31');
@@ -442,22 +509,71 @@ tests.push(function () {
     ok(r.territory.candidates.filter(function (c) { return c.weak; }).length === r.territory.candidates.length - 1);
     eq(r.circuits.length, 0); eq(r.best, null); eq(r.body, null); eq(r.verdict.verdict.key, 'study'); ok(/R14-2-2616/.test(r.note)); eq(r.verify.viewerUrl, 'https://www.aps.com/dg');
     ok(!n.calls.some(function (c) { return /aps\.com/.test(c.url); }), 'nothing is asked of a utility that publishes nothing');
+    ok(!n.calls.some(function (c) { return /GCX_ExploreMesa/.test(c.url); }), 'outside Mesa\'s box the city\'s map is never asked');
+    var aps = r.territory.candidates[0].hosting;
+    ok(/R14-2-2616/.test(aps.route) && /Service Areas Viewer/.test(aps.check.label) && aps.link.url === 'https://www.aps.com/dg', 'APS: its route, its own lookup and its page');
   });
 });
-/* Downtown Mesa (Tommy's 29 W Main St, 2026-10-17): the point is inside the
-   city, so the city's own utility is a candidate, not a stand-in to discard;
-   SRP's boundary encloses City of Mesa and APS islands, so nothing is confident */
+/* Downtown Mesa (Tommy's 29 W Main St; 2026-10-17, then 2026-10-20): the
+   City of Mesa's own electric service area map puts the point 1.5 km inside
+   the city's area, so the city serves it, with confidence; SRP's boundary
+   (which encloses the island) is weak there, and its caution does not apply */
 var MESA_ROWS = [['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 9.1e9], ['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9],
   ['5729', 'ELECTRICAL DIST NO8 MARICOPA', 'POLITICAL SUBDIVISION', 'AZ', 695, 3.4e10], ['19016', 'TONOPAH IRRIGATION DISTRICT', 'NOT AVAILABLE', 'AZ', null, 3.4e10]];
+var MESA_ESA = /GCX_ExploreMesa\/MapServer\/13\/query/, MESA_PT = { lat: 33.4152, lng: -111.8329 };
+function mesaArea(dLatM, halfM) { return { features: [F({ FACILITYID: 'ELSA2' }, ring(MESA_PT.lat + dLatM / 111320, MESA_PT.lng, halfM))] }; }
+function who(r, id) { return r.territory.candidates.filter(function (c) { return c.eiaId === id; })[0]; }
 tests.push(function () {
-  var n = net([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Mesa'])]]);
-  return H.run({ lat: 33.4152, lng: -111.8329, unit: UNIT }, deps(n)).then(function (r) {
-    eq(r.territory.confident, false, 'downtown Mesa is never answered with confidence');
-    var mesa = r.territory.candidates.filter(function (c) { return c.eiaId === '12351'; })[0], srp = r.territory.candidates.filter(function (c) { return c.eiaId === '16572'; })[0];
-    eq(mesa.weak, false, 'the city\'s own utility stays a candidate when the point is inside the city'); eq(mesa.display, 'City of Mesa');
-    ok(/serves part of the city/.test(mesa.why)); eq(srp.weak, false);
-    ok(/encloses Arizona Public Service and City of Mesa islands/.test(r.territory.caution)); ok(/encloses Arizona Public Service and City of Mesa islands/.test(r.note));
-    eq(r.coverage, 'no-public-map'); eq(r.verdict.verdict.key, 'study'); ok(!/ComEd/.test(JSON.stringify(r)), 'no ComEd wording outside ComEd');
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Mesa'])], [MESA_ESA, mesaArea(0, 1500)]]);
+  return H.run({ lat: MESA_PT.lat, lng: MESA_PT.lng, unit: UNIT }, deps(n)).then(function (r) {
+    eq(r.territory.confident, true, 'the city\'s own map settles downtown Mesa'); eq(r.coverage, 'no-public-map');
+    eq(r.utility.key, 'mesa'); eq(r.utility.display, 'City of Mesa'); eq(r.utility.eiaId, '12351');
+    var mesa = who(r, '12351'), srp = who(r, '16572');
+    eq(mesa.weak, false); eq(mesa.fromState, true); ok(/inside its own electric service area \(the city's map\)/.test(mesa.why), mesa.why);
+    eq(srp.weak, true); ok(/the point is inside the City of Mesa's own electric service area/.test(srp.why), srp.why);
+    eq(r.territory.candidates[0].eiaId, '12351', 'the city leads the list');
+    eq(r.territory.caution, null); ok(!/islands/.test(r.note), 'SRP\'s caution does not apply where the city\'s own map answered');
+    ok(/publishes no hosting capacity/.test(r.note) && /Electric_Service_Area\.pdf/.test(mesa.hosting.check.url), r.note);
+    eq(mesa.hosting.says, 'publishes no hosting capacity'); eq(srp.hosting.check.url, 'https://www.srpnet.com/about/service-area-territory');
+    eq(r.verdict.verdict.key, 'study'); ok(!/ComEd/.test(JSON.stringify(r)), 'no ComEd wording outside ComEd');
+    ok(r.tried.some(function (t) { return t.source === 'mesa-electric-service-area' && /^inside \(1500 m from the edge\)$/.test(t.outcome); }), r.tried);
+    var asked = n.calls.filter(function (c) { return MESA_ESA.test(c.url); });
+    ok(asked.length === 1 && /returnGeometry=true/.test(asked[0].url) && /geometryType=esriGeometryEnvelope/.test(asked[0].url), 'the city\'s map is asked once, an envelope with its polygon');
+    ok(/City of Mesa's electric service area/.test(r.territory.source), r.territory.source);
+  });
+});
+/* 20 m inside the city's line: a geocoded address can land a lot over, so
+   the city leads but nothing is confident, and both islands stay in SRP's caution */
+tests.push(function () {
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Mesa'])], [MESA_ESA, mesaArea(1520, 1500)]]);
+  return H.run({ lat: MESA_PT.lat, lng: MESA_PT.lng, unit: UNIT }, deps(n)).then(function (r) {
+    eq(r.territory.confident, false, 'on the edge of the city\'s area nothing is confident'); eq(r.utility.key, 'mesa', 'the city\'s own map still leads');
+    ok(/within 40 m of the edge/.test(who(r, '12351').why)); eq(who(r, '16572').weak, false);
+    ok(/encloses Arizona Public Service and City of Mesa islands/.test(r.note), r.note);
+  });
+});
+/* Mesa Riverview (in the city, outside its electric area): the city's own
+   map says no, so SRP leads and the caution names APS's islands alone */
+tests.push(function () {
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Mesa'])], [MESA_ESA, { features: [] }]]);
+  return H.run({ lat: 33.437, lng: -111.865, unit: UNIT }, deps(n)).then(function (r) {
+    eq(r.utility.key, 'srp'); eq(r.territory.confident, false, 'SRP\'s APS islands keep it unconfident');
+    var mesa = who(r, '12351');
+    eq(mesa.weak, true); ok(/outside the City of Mesa's own electric service area/.test(mesa.why), mesa.why);
+    ok(/encloses Arizona Public Service islands/.test(r.note) && !/City of Mesa islands/.test(r.note), r.note);
+    eq(r.verify.viewerUrl.indexOf('https://www.srpnet.com/'), 0);
+  });
+});
+/* the city's map down: said in the note, and the answer is never kept */
+tests.push(function () {
+  var db = fakeDb();
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Mesa'])], [MESA_ESA, err('timeout')]]);
+  return H.run({ lat: MESA_PT.lat, lng: MESA_PT.lng, unit: UNIT }, deps(n, db)).then(function (r) {
+    eq(r.territory.confident, false); eq(r.territory.partial, true);
+    ok(/The City of Mesa's own service-area map did not answer/.test(r.note), r.note);
+    eq(who(r, '12351').weak, false, 'without its map the city stays a candidate inside the city'); ok(/serves part of the city/.test(who(r, '12351').why));
+    ok(/encloses Arizona Public Service and City of Mesa islands/.test(r.note));
+    ok(!db.writes.some(function (w) { return /_territory__/.test(w); }), 'a territory answer missing the city\'s map is never kept');
   });
 });
 /* East Mesa, outside the city's place: City of Mesa is a stand-in there, SRP leads, still never confident */
@@ -465,8 +581,9 @@ tests.push(function () {
   var n = net([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Gilbert'])]]);
   return H.run({ lat: 33.3528, lng: -111.789, unit: UNIT }, deps(n)).then(function (r) {
     eq(r.utility.key, 'srp'); eq(r.territory.confident, false, 'SRP\'s islands keep it unconfident');
-    eq(r.territory.candidates.filter(function (c) { return c.eiaId === '12351'; })[0].weak, true, 'outside Mesa the city polygon is a stand-in');
+    eq(who(r, '12351').weak, true, 'outside Mesa the city polygon is a stand-in');
     ok(/islands/.test(r.note)); eq(r.verify.viewerUrl.indexOf('https://www.srpnet.com/'), 0);
+    ok(n.calls.some(function (c) { return MESA_ESA.test(c.url); }), 'inside Mesa\'s box the city\'s map is asked');
   });
 });
 /* Panama City: the national layer says Duke alone; the 2019 Florida IOU layer says Gulf Power, now FPL */

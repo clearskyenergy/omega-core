@@ -16,7 +16,8 @@
  *   - a units sanity check on the kW it produced (a figure over 100 MW on a
  *     distribution circuit means a unit read twice; every figure under 10
  *     from an MW source means a unit not converted).
- * Then each territory layer at a point in its state.
+ * Then each territory layer at a point in its state, and each utility's own
+ * service area (the City of Mesa's) at a point well inside it.
  *
  *   node scripts/check-hosting-sources.js              every source
  *   node scripts/check-hosting-sources.js comed,ace    some of them
@@ -109,6 +110,22 @@ var TERRITORY_POINTS = [
   { layer: UT.STATE_LAYERS[0], at: [40.7357, -74.1724] }, { layer: UT.STATE_LAYERS[1], at: [34.0655, -117.6505] }, { layer: UT.STATE_LAYERS[2], at: [39.8105, -120.4694] },
   { layer: UT.STATE_LAYERS[3], at: [34.2238, -84.17047] }, { layer: UT.STATE_LAYERS[4], at: [42.2626, -71.8023] }, { layer: UT.STATE_LAYERS[5], at: [30.1588, -85.6602] },
   { layer: UT.STATE_LAYERS[6], at: [26.5629, -81.9495] }, { layer: UT.PLACES, at: [41.7731, -88.1477] }];
+/* a utility's own service area: asked as the door asks it (an envelope with
+   the polygon back), at a point well inside it, and must say so */
+var AREA_POINTS = [{ layer: UT.SERVICE_AREAS[0], at: [33.415046, -111.832441], want: 'inside' }];
+function checkAreas() {
+  return AREA_POINTS.reduce(function (p, t) {
+    return p.then(function () {
+      var t0 = Date.now(), lat = t.at[0], lng = t.at[1];
+      return H.liveFetchJson(UT._t.areaUrl(t.layer, lat, lng), { timeoutMs: 30000 }).then(function (j) {
+        var f = (j && j.features) || [], e = f.map(function (x) { return HS.edgeOf(x.geometry, lat, lng); }).filter(Boolean)[0] || null;
+        var got = !f.length ? 'outside' : !e ? 'no polygon' : (e.edgeM < t.layer.nearM ? 'edge' : (e.inside ? 'inside' : 'outside'));
+        console.log('  ' + pad(t.layer.key, 26) + ' ' + (j && j.error ? 'ERROR service error' : got + (e ? ' (' + Math.round(e.edgeM) + ' m from the edge)' : '')) + ' · ' + (Date.now() - t0) + ' ms');
+        if ((j && j.error) || got !== t.want) failures++;
+      }, function (err) { console.log('  ' + pad(t.layer.key, 26) + ' ERROR ' + (err && err.blocked ? 'blocked' : (err && err.name === 'AbortError' ? 'timeout' : err && err.message))); failures++; });
+    });
+  }, Promise.resolve());
+}
 function checkTerritory() {
   console.log('\nterritory layers');
   return TERRITORY_POINTS.reduce(function (p, t) {
@@ -128,7 +145,7 @@ function checkTerritory() {
 var list = HS.ENTRIES.filter(function (e) { return e.status === 'verified' && (!only.length || only.indexOf(e.key) >= 0); });
 console.log('hosting sources ' + HS.VERSION + ' · ' + list.length + ' verified entries at their test points\n');
 list.reduce(function (p, e) { return p.then(function () { return checkEntry(e); }); }, Promise.resolve())
-  .then(function () { return noTerritory || only.length ? null : checkTerritory(); })
+  .then(function () { return noTerritory || only.length ? null : checkTerritory().then(checkAreas); })
   .then(function () {
     console.log('\n' + (failures ? failures + ' source(s) need a look' : 'every source answered at its test point with the fields it reads'));
     process.exit(failures ? 1 : 0);

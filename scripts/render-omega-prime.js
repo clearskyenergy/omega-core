@@ -31,11 +31,13 @@
  *             once Omega Logic is on; the ladder and the three links
  *   Phone     390 px: the resumed Track and the reopened proposal, its form
  *             filled from the saved quote, no sideways scroll
- *   Mesa      29 W Main St, Mesa AZ: the territory layers name Salt River
- *             Project, Arizona Public Service and the City of Mesa; downtown
- *             Mesa is inside the city, so City of Mesa leads, SRP is named
- *             beside it with its islands caution, nothing is confident, and
- *             no ComEd wording appears anywhere
+ *   Mesa      29 W Main St, Mesa AZ: the national layer names Salt River
+ *             Project, Arizona Public Service and the City of Mesa; the
+ *             city's own electric service area map (2026-10-20) puts the
+ *             point inside it, so the City of Mesa is named with confidence,
+ *             the list says who serves the point and what it publishes
+ *             (nothing), SRP and the rest fold away with the reason, the
+ *             city's own pages are linked, and no ComEd wording appears
  * Every outside service is answered from a fixture; the one thing fetched
  * is Leaflet, from cdnjs as the page loads it (LEAFLET_DIR serves a local
  * copy, as scripts/test-sitefinder-ui.js does). PRIME_SHOTS=<dir> saves a
@@ -64,7 +66,7 @@ F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: 
   canActInOrg: async function (c, org) { return c.staff || c.orgId === org; },
   billingOf: async function (org) { var s = await DB.doc('omega_orgs/' + org + '/billing/current').get(); return s.exists ? s.data() : { tier: 'standard', addons: [], toolOverrides: {} }; },
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; } });
-var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service');
+var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service'), HS = require('../api/_lib/hosting-sources');
 var QUOTE = require('../api/customer-quote'), BRANDING = require('../api/tenant-branding'), RATES = require('../api/utility-rates'), PRICE = require('../api/price-site');
 var PP = require('../omega-prime-project.js');
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium;
@@ -111,10 +113,13 @@ function netFor(lat, lng) {
       ? Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1100000, 3e10], ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])
       : Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL']]));
     if (/tigerweb/.test(url)) return Promise.resolve(mesa ? { features: [{ attributes: { NAME: 'Mesa city', BASENAME: 'Mesa' } }] } : { features: [] });
+    /* the City of Mesa's own electric service area: 1.5 km around downtown */
+    if (mesa && /GCX_ExploreMesa\/MapServer\/13\/query/.test(url)) return Promise.resolve({ features: [{ attributes: { FACILITYID: 'ELSA2' }, geometry: square(MESA.lat, MESA.lng, 1500) }] });
     if (url.indexOf(CS.SERVICE) === 0) return Promise.resolve(JSON.parse(JSON.stringify(COMED)));
     return Promise.resolve({ features: [] });
   };
 }
+function square(lat, lng, m) { var a = m / 111320, b = m / (111320 * Math.cos(lat * Math.PI / 180)); return { rings: [[[lng - b, lat - a], [lng + b, lat - a], [lng + b, lat + a], [lng - b, lat + a], [lng - b, lat - a]]] }; }
 var SUBS = { features: [
   { attributes: { NAME: 'Crawford', MAX_VOLT: 138, MIN_VOLT: 12, LINES: 6, STATUS: 'IN SERVICE', OWNER: 'Commonwealth Edison' }, geometry: { x: -87.6150, y: 41.8210 } },
   { attributes: { NAME: 'Fisk', MAX_VOLT: 345, STATUS: 'IN SERVICE', OWNER: 'Commonwealth Edison' }, geometry: { x: -87.6500, y: 41.8500 } }] };
@@ -703,14 +708,46 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var mc = await until(m, function () { var t = document.getElementById('sfRes').textContent; return /City of Mesa/.test(t) && /Next/.test(t) ? t : null; });
     var mh = calls.hosting[calls.hosting.length - 1] || {};
     ok('Mesa: one question to the national door at the point', Math.abs(mh.lat - MESA.lat) < 1e-6 && mh.substation && mh.substation.name === 'Mesa Downtown', mh);
-    ok('Mesa: the city\'s own utility leads, SRP and APS beside it, confirm with the bill', !!mc && /City of Mesa/.test(mc) && /Salt River Project/.test(mc) && /More than one utility is mapped/.test(mc) && /Arizona Public Service/.test(mc) && /encloses Arizona Public Service and City of Mesa islands/.test(mc) && /bill/.test(mc), mc && mc.slice(0, 900));
-    ok('Mesa: it says no figure is published, and nothing is judged as if it were', /publishes hosting capacity/.test(mc) && /Needs a study/.test(mc) && /Mesa Downtown/.test(mc), mc && mc.slice(0, 900));
+    /* 2026-10-20: the city's own electric service area map puts 29 W Main St
+       inside it, so the City of Mesa is named with confidence; the list says
+       who serves the point and what it publishes, and the utilities the
+       national map also draws there fold away with the reason */
+    var who = await m.evaluate(function () {
+      var w = document.getElementById('sfWho');
+      if (!w) return null;
+      return { head: w.querySelector('b').textContent, items: [].map.call(w.querySelectorAll(':scope > ul > li'), function (li) { return li.textContent; }),
+        folded: [].map.call(w.querySelectorAll('details li'), function (li) { return li.textContent; }), open: !!(w.querySelector('details') || {}).open,
+        links: [].map.call(w.querySelectorAll(':scope > ul > li a'), function (a) { return { href: a.getAttribute('href'), text: a.textContent, target: a.getAttribute('target'), rel: a.getAttribute('rel') }; }) };
+    });
+    ok('Mesa: the city\'s own map names the City of Mesa, and only it serves the point', !!who && who.head === 'Who serves this point' && who.items.length === 1 && /^City of Mesa/.test(who.items[0]) &&
+      /inside its own electric service area \(the city's map\)/.test(who.items[0]) && /Publishes no hosting capacity/.test(who.items[0]), who);
+    ok('Mesa: Salt River Project and the rest are on the national map but not this point, each with its reason, folded away',
+      !!who && who.open === false && who.folded.some(function (t) { return /^Salt River Project \(the point is inside the City of Mesa's own electric service area/.test(t); }) && !/More than one utility is mapped/.test(mc) && !/islands/.test(mc), who && who.folded);
+    ok('Mesa: the city\'s own service-area map to check it, opened in a new tab', !!who && who.links.some(function (l) { return /Electric_Service_Area\.pdf$/.test(l.href) && l.target === '_blank' && /noopener/.test(l.rel); }), who && who.links);
+    ok('Mesa: it says no figure is published, and nothing is judged as if it were', /City of Mesa publishes no hosting capacity/.test(mc) && /Needs a study/.test(mc) && /Mesa Downtown/.test(mc), mc && mc.slice(0, 900));
     var mv = await m.$eval('#sf-verify', function (a) { return { href: a.getAttribute('href'), text: a.textContent }; }).then(null, function () { return null; });
-    ok('Mesa: no utility map is offered for a city utility that publishes none', mv === null, mv);
+    ok('Mesa: the link is the city\'s own page, never a hosting map that does not exist', !!mv && mv.href === HS.byKey('mesa').viewerUrl, mv);
     ok('Mesa: the pill names the City of Mesa', /^City of Mesa · publishes no hosting capacity$/.test(await text(m, '#utilPill')), await text(m, '#utilPill'));
+    ok('Mesa: the guide says what is published and that nothing is guessed', /City of Mesa publishes no hosting capacity/.test(await text(m, '#gT')), await text(m, '#gT'));
     var body1 = await m.evaluate(function () { return document.body.innerText; });
     ok('Mesa: no ComEd wording anywhere, and never "outside … territory"', !/ComEd/i.test(body1) && !/outside .*territory/i.test(body1), (body1.match(/.{0,60}(ComEd|territory).{0,60}/gi) || []));
     await shot(m, 'prime-10-mesa-circuit');
+    /* the same answer on a 390 px phone: the panel ends above the floating
+       guide and scrolls inside, nothing runs sideways, and Next is reachable */
+    await m.setViewportSize({ width: 390, height: 844 });
+    await m.waitForTimeout(300);
+    var ph = await m.evaluate(function () {
+      var r = document.getElementById('sfRes'), g = document.getElementById('guide'), n = document.getElementById('sf-tomap');
+      n.scrollIntoView({ block: 'nearest' });
+      var rb = r.getBoundingClientRect(), gb = g.getBoundingClientRect(), nb = n.getBoundingClientRect();
+      var hit = document.elementFromPoint(nb.left + nb.width / 2, nb.top + nb.height / 2);
+      return { sideways: document.documentElement.scrollWidth > innerWidth + 1 || r.scrollWidth > r.clientWidth + 1, aboveGuide: rb.bottom <= gb.top + 1,
+        next: hit === n || n.contains(hit), inside: rb.left >= 0 && rb.right <= innerWidth };
+    });
+    ok('Mesa on a 390 px phone: the panel sits above the guide, nothing sideways, Next is reachable', ph.aboveGuide && !ph.sideways && ph.next && ph.inside, ph);
+    await shot(m, 'prime-10b-mesa-circuit-phone');
+    await m.setViewportSize({ width: 1440, height: 900 });
+    await m.waitForTimeout(200);
     await m.click('#sf-tomap');
     await until(m, function () { return /City of Mesa/.test(document.getElementById('ldRates').textContent) ? true : null; });
     var mr = calls.rates[calls.rates.length - 1] || {};

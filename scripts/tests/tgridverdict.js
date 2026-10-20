@@ -144,23 +144,37 @@ var asked = [];
 function network(routes) {
   return function (url) {
     asked.push(url);
-    for (var i = 0; i < routes.length; i++) if (routes[i][0].test(url)) return Promise.resolve(JSON.parse(JSON.stringify(routes[i][1])));
+    for (var i = 0; i < routes.length; i++) if (routes[i][0].test(url)) {
+      if (routes[i][1] instanceof Error) return Promise.reject(routes[i][1]);
+      return Promise.resolve(JSON.parse(JSON.stringify(routes[i][1])));
+    }
     return Promise.resolve({ features: [] });
   };
 }
+/* the City of Mesa's own electric service area (2026-10-20): a polygon
+   1.5 km around downtown, as the city's map answers at 29 W Main St */
+var MESA_AREA = /GCX_ExploreMesa\/MapServer\/13\/query/;
+function square(lat, lng, m) { var a = m / 111320, b = m / (111320 * Math.cos(lat * Math.PI / 180)); return { rings: [[[lng - b, lat - a], [lng + b, lat - a], [lng + b, lat + a], [lng - b, lat + a], [lng - b, lat - a]]] }; }
 var COMED_AT = new RegExp('^' + CS.SERVICE.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '/' + CS.ATTRIB_LAYER + '/query\\?');
 var FEATURE = { attributes: { Feeder: 'F0297', SS_N: 'Crawford TSS 21', BESS_HC: 15620, PV_HC_kW: 15620, EV_HC_kW: 16100, Feeder_Q: 4895, Queue_RD: '09/30/2026' } };
 var CHICAGO = { lat: 41.81522, lng: -87.62261, address: '3400 S Federal St, Chicago, IL',
   sub: { name: 'Crawford', voltageKv: 138, distanceKm: 1.2, owner: 'ComEd' },
   net: network([[/Electricity_Rates_H3_Res5/, Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL', 4130749, 6.1e10]])],
     [/tigerweb/, Places(['Chicago'])], [COMED_AT, { features: [FEATURE] }]]) };
-/* downtown Mesa (Tommy's 29 W Main St, 2026-10-17): the territory layers
-   name the City of Mesa, Salt River Project and Arizona Public Service, and
-   none of them publishes hosting capacity */
+/* downtown Mesa (Tommy's 29 W Main St; 2026-10-17, then 2026-10-20): the
+   national layer names the City of Mesa, Salt River Project and Arizona
+   Public Service; the city's own electric service area map puts the point
+   well inside the city's area, so the City of Mesa serves it, and none of
+   them publishes hosting capacity. MESA_DOWN: the city's map did not answer,
+   so every utility on the national map is named and the bill decides. */
+var MESA_ROWS = [['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10],
+  ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]];
 var MESA = { lat: 33.4152, lng: -111.8329, address: '29 W Main St, Mesa, AZ 85201',
   sub: { name: 'Mesa Downtown', voltageKv: 69, distanceKm: 0.62, owner: 'Salt River Project' },
-  net: network([[/Electricity_Rates_H3_Res5/, Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10],
-    ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])], [/tigerweb/, Places(['Mesa'])]]) };
+  net: network([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Mesa'])],
+    [MESA_AREA, { features: [{ attributes: { FACILITYID: 'ELSA2' }, geometry: square(33.4152, -111.8329, 1500) }] }]]) };
+var MESA_DOWN = { lat: MESA.lat, lng: MESA.lng, address: MESA.address, sub: MESA.sub,
+  net: network([[/Electricity_Rates_H3_Res5/, Esri(MESA_ROWS)], [/tigerweb/, Places(['Mesa'])], [MESA_AREA, new Error('the city\'s map is down')]]) };
 
 var HERE = CHICAGO, DOOR = { canned: null, fail: null }, fetched = [], posted = [];
 var S = { bessList: [{ mfr: 'FENECON', model: 'Industrial XXL', kw: '2508', kwh: '5015', qty: '1' }] };
@@ -285,17 +299,26 @@ idle().then(function () {
     assert.deepEqual(p, { lat: 33.4152, lng: -111.8329, unit: XXL_BODY, substation: { name: 'Mesa Downtown', kv: 69, km: 0.62 }, mode: 'storage' }, 'Mesa: one question at the point'); count++;
     assert.ok(!asked.slice(mark).some(function (u) { return COMED_AT.test(u); }), 'ComEd is never asked in Arizona'); count++;
     var m = P.hosting();
-    assert.equal(m.utility.display, 'City of Mesa'); assert.equal(m.coverage, 'no-public-map'); assert.equal(m.territory.confident, false); count += 3;
+    assert.equal(m.utility.display, 'City of Mesa'); assert.equal(m.coverage, 'no-public-map'); assert.equal(m.territory.confident, true, 'the city\'s own map settles downtown Mesa'); count += 3;
     var h2 = panelEl.innerHTML;
     assert.match(h2, /font-weight:700">City of Mesa<\/div><div style="font-size:11px;color:var\(--sub,#64748B\)">publishes no hosting capacity</, 'the city\'s own utility, and what it publishes'); count++;
-    assert.match(h2, /More than one utility is mapped at this point\./); assert.match(h2, /<li>City of Mesa — the one read here<\/li>/); count += 2;
-    assert.match(h2, /<li>Salt River Project<\/li>/); assert.match(h2, /<li>Arizona Public Service<\/li>/); assert.match(h2, /Confirm the utility with the customer’s bill\./); count += 3;
-    assert.match(h2, /encloses Arizona Public Service and City of Mesa islands/, 'the server\'s caution, in its words'); count++;
+    assert.ok(h2.indexOf('More than one utility') < 0 && h2.indexOf('islands') < 0, 'one utility, answered with confidence: no list, no SRP caution'); count++;
+    assert.match(h2, /City of Mesa publishes no hosting capacity/, 'the server\'s note, in its words'); count++;
     assert.match(h2, /Needs a study/); assert.match(h2, /Mesa Downtown/); assert.match(h2, /29 W Main St, Mesa, AZ 85201/); count += 3;
-    assert.ok(h2.indexOf('data-gp="verify"') < 0, 'no map offered for a city utility that publishes none'); count++;
+    assert.ok(h2.indexOf('data-gp="verify" href="' + esc(HS.byKey('mesa').viewerUrl) + '"') >= 0, 'the link is the city\'s own page, never a hosting map that does not exist'); count++;
     assert.ok(!/comed|feeder_q/i.test(h2), 'no ComEd word anywhere in Arizona'); count++;
     assert.equal(S.grid.lat, 33.4152); assert.equal(S.grid.circuit, null, 'no circuit, none recorded'); assert.equal(S.grid.verdict.key, 'study'); count += 3;
     assert.equal(S.grid.substation.name, 'Mesa Downtown'); count++;
+    /* the city's map down: every utility on the national map named, the bill decides */
+    HERE = MESA_DOWN; P.run(true);
+    return idle();
+  }).then(function () {
+    var m = P.hosting(), h3 = panelEl.innerHTML;
+    assert.equal(m.utility.display, 'City of Mesa'); assert.equal(m.territory.confident, false); count += 2;
+    assert.match(h3, /More than one utility is mapped at this point\./); assert.match(h3, /<li>City of Mesa — the one read here<\/li>/); count += 2;
+    assert.match(h3, /<li>Salt River Project<\/li>/); assert.match(h3, /<li>Arizona Public Service<\/li>/); assert.match(h3, /Confirm the utility with the customer’s bill\./); count += 3;
+    assert.match(h3, /encloses Arizona Public Service and City of Mesa islands/, 'the server\'s caution, in its words'); count++;
+    assert.match(h3, /The City of Mesa’s own service-area map did not answer|The City of Mesa&#39;s own service-area map did not answer/, 'the city\'s map down, said'); count++;
   });
 }).then(function () {
   /* ── the queue and side words follow the answer ── */
