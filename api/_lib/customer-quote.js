@@ -182,7 +182,7 @@ function unitOf(u) {
   function n(v) { var x = num(v); return x == null ? null : x; }
   return { key: str(u.key, 120), sku: str(u.sku, 100), mfr: str(u.mfr, 80), model: str(u.model, 200), name: str(u.name || u.model, 200), short: str(u.short, 60),
     kw: n(u.kw), kwh: n(u.kwh), kwhApprox: u.kwhApprox === true, usable: n(u.usable), hours: n(u.hours),
-    lFt: n(u.lFt), wFt: n(u.wFt), hFt: n(u.hFt), footprint: ['catalog', 'rep', 'none'].indexOf(u.footprint) >= 0 ? u.footprint : (n(u.lFt) && n(u.wFt) ? 'catalog' : 'none'),
+    lFt: n(u.lFt), wFt: n(u.wFt), hFt: n(u.hFt), footprint: ['catalog', 'reference', 'rep', 'none'].indexOf(u.footprint) >= 0 ? u.footprint : (n(u.lFt) && n(u.wFt) ? 'catalog' : 'none'),
     chem: str(u.chem, 80), inv: str(u.inv, 200), incPcs: u.incPcs === true, incXfmr: u.incXfmr === true, incDisco: u.incDisco === true,
     xfmr: str(u.xfmr, 200), disco: str(u.disco, 200), caveat: str(u.caveat, 600), source: str(u.source, 30), vendorOrgId: str(u.vendorOrgId, 253) || null };
 }
@@ -192,7 +192,7 @@ function box(b) { return b && isObj(b) ? { c: pt(b.c), lFt: num(b.lFt), wFt: num
 function geometry(l) {
   l = isObj(l) ? l : {};
   var a = isObj(l.area) ? l.area : null, cd = isObj(l.conduit) ? l.conduit : null, unit = box(l.unit);
-  if (unit && l.unit) unit.footprint = ['catalog', 'rep', 'none'].indexOf(l.unit.footprint) >= 0 ? l.unit.footprint : null;
+  if (unit && l.unit) unit.footprint = ['catalog', 'reference', 'rep', 'none'].indexOf(l.unit.footprint) >= 0 ? l.unit.footprint : null;
   return { v: num(l.v) || 1,
     area: a ? { s: num(a.s), w: num(a.w), n: num(a.n), e: num(a.e), wFt: num(a.wFt), hFt: num(a.hFt), sqft: num(a.sqft) } : null,
     unit: unit, xfmr: box(l.xfmr), disco: box(l.disco), poi: pt(l.poi),

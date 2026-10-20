@@ -71,11 +71,20 @@ assert.equal(LG.sku, 'CC-LGJP2-1000'); assert.equal(C290.sku, 'CC290-125'); asse
 assert.equal(LG.kw, 1000); assert.equal(LG.kwh, 2294); assert.equal(LG.usable, null, 'the 2000 kWh modeled figure is not usable kWh'); assert.equal(LG.hours, 2.294); count += 4;
 assert.match(LG.caveat, /modeled usable ONLY/); assert.match(LG.caveat, /^Planning specification, verify before release\./); count += 2;
 assert.equal(SM.kwhApprox, true, 'the Smart Module\'s ~2 MWh keeps its "~"'); assert.match(SM.note, /~2,000 kWh/); assert.equal(LG.kwhApprox, false); count += 3;
-assert.equal(LG.footprint, 'none'); assert.equal(LG.lFt, null); assert.equal(LG.wFt, null); assert.equal(SM.footprint, 'none'); count += 4;
-/* a footprint the maker has not RELEASED is not one (main, #337): the
-   CC290/125's figures are its cabinet alone, its PCS beside it to be
-   confirmed, so it is unknown until the rep types the submittal's */
-assert.equal(C290.footprint, 'none'); assert.equal(C290.lFt, null); assert.equal(C290.wFt, null); assert.equal(C290.hFt, 7.71, 'the cabinet height is still the brochure\'s'); count += 4;
+/* a footprint the maker has not RELEASED is drawn at its REFERENCE size
+   (2026-10-20, Tommy, of a CC290/125 placed as a point where FENECON's
+   unit draws a block: "it does it for fenecon unit but not on cleancell get
+   that fixed"): the CC290/125 at its reference cabinet, the LG JP-2 and
+   the Smart Module, whose brochure names a 20 ft container, as one
+   (20 × 8 ft, PP.CONTAINER_20); 'reference', never 'catalog' */
+assert.equal(LG.footprint, 'reference'); assert.equal(LG.lFt, 20); assert.equal(LG.wFt, 8); count += 3;
+assert.equal(SM.footprint, 'reference'); assert.equal(SM.lFt, 20); assert.equal(SM.wFt, 8); count += 3;
+assert.deepEqual(PP.CONTAINER_20, { lFt: BC['FENECON-IND-XXL'] ? DIMS['FENECON-IND-XXL'].lf : 20, wFt: BC['FENECON-IND-XXL'] ? DIMS['FENECON-IND-XXL'].wf : 8 }, 'a 20 ft container as editor.html draws the XXL\'s'); count++;
+assert.equal(C290.footprint, 'reference'); assert.equal(C290.lFt, 4.36); assert.equal(C290.wFt, 3.94); assert.equal(C290.hFt, 7.71, 'the cabinet height is still the brochure\'s'); count += 4;
+assert.match(C290.caveat, /cabinet reference ONLY; separate PCS footprint to confirm/, 'and it says the PCS is still to confirm'); count++;
+var NODIMS = PP.fromEntry('X-NONE', { mfr: 'Acme', model: 'Box', kw: 100, kwh: 200, dimensionsStatus: 'pending-release', dims: 'to confirm' });
+assert.equal(NODIMS.footprint, 'none'); assert.equal(NODIMS.lFt, null, 'no figure and no named container: still unknown, never a guess'); count += 2;
+assert.equal(PP.snapshot(C290).footprint, 'reference', 'a reference size survives the snapshot'); count++;
 var REL = PP.fromEntry('X-REL', { mfr: 'CleanCell US', model: 'Released', kw: 100, kwh: 200, widthFt: 3.94, depthFt: 4.36, dimensionsStatus: 'released' });
 assert.equal(REL.footprint, 'catalog'); assert.equal(REL.lFt, 4.36, 'a released footprint: long axis first, 2 dp'); assert.equal(REL.wFt, 3.94); count += 3;
 assert.equal(C290.weightLb, Math.round(2900 * 2.20462)); assert.equal(C290.weightBasis, 'reference'); assert.equal(LG.weightLb, null); assert.equal(LG.weightBasis, ''); count += 4;
@@ -130,14 +139,17 @@ assert.equal(PP.pathFt([{ lat: 1, lng: 2 }]), null); assert.equal(PP.pathFt([{ l
 var C = { lat: 41.81522, lng: -87.62261 };
 function offFt(a, b) { return PP.pathFt([a, b]); }
 var gLG = PP.arrange(LG, C);
-assert.deepEqual(gLG.unit, { c: C, lFt: null, wFt: null, rotDeg: 0, footprint: 'none' }, 'no footprint released: a marked point'); count++;
+assert.deepEqual(gLG.unit, { c: C, lFt: 20, wFt: 8, rotDeg: 0, footprint: 'reference' }, 'the LG JP-2 is a block at its 20 ft container reference size'); count++;
+var gNone = PP.arrange(NODIMS, C);
+assert.deepEqual(gNone.unit, { c: C, lFt: null, wFt: null, rotDeg: 0, footprint: 'none' }, 'no size at all: a marked point'); count++;
+near(offFt(C, gNone.xfmr.c), 0 + 5 + 4, 0.05, 'transformer: 5 ft clear of a 0 ft unit');
 assert.ok(gLG.xfmr && gLG.disco, 'the LG JP-2 has a transformer and a disconnect drawn'); count++;
 assert.equal(gLG.xfmr.c.lat, C.lat); assert.equal(gLG.disco.c.lat, C.lat); assert.ok(gLG.xfmr.c.lng > C.lng && gLG.disco.c.lng > gLG.xfmr.c.lng, 'the gear runs east'); count += 3;
-near(offFt(C, gLG.xfmr.c), 0 + 5 + 4, 0.05, 'transformer: 5 ft clear of a 0 ft unit');
-near(offFt(C, gLG.disco.c), 5 + 8 + 5 + 1.5, 0.05, 'disconnect: 5 ft clear of the transformer');
+near(offFt(C, gLG.xfmr.c), 10 + 5 + 4, 0.05, 'transformer: 5 ft clear of the 20 ft block');
+near(offFt(C, gLG.disco.c), 10 + 5 + 8 + 5 + 1.5, 0.05, 'disconnect: 5 ft clear of the transformer');
 assert.deepEqual([gLG.xfmr.lFt, gLG.xfmr.wFt, gLG.xfmr.rotDeg, gLG.disco.lFt, gLG.disco.wFt, gLG.disco.rotDeg], [8, 8, 0, 3, 4, 0]); count++;
 var g290 = PP.arrange(C290, C);
-near(offFt(C, g290.xfmr.c), 0 + 5 + 4, 0.05, 'CC290/125 (footprint not released): the transformer sits 5 ft clear of the marked point');
+near(offFt(C, g290.xfmr.c), 4.36 / 2 + 5 + 4, 0.05, 'CC290/125 at its reference cabinet: the transformer sits 5 ft clear of the block');
 near(offFt(g290.xfmr.c, g290.disco.c) - 4 - 1.5, 5, 0.05, 'and the disconnect clears the transformer by 5 ft');
 var g60 = PP.arrange(R6, C);
 assert.equal(g60.xfmr, null, 'the R60 integrates its transformer: none is drawn'); assert.ok(g60.disco, 'its site disconnect is'); count += 2;
@@ -148,9 +160,9 @@ assert.equal(both.xfmr, null); assert.equal(both.disco, null); assert.equal(PP.f
 var xOnly = PP.arrange({ key: 'Y', incDisco: true }, C);
 assert.equal(PP.feed(xOnly), xOnly.xfmr); assert.equal(PP.feed(gLG), gLG.disco); assert.equal(PP.feed(null), null); count += 3;
 assert.equal(PP.arrange(LG, null), null); count++;
-var repLG = PP.repFootprint(LG, 8, 20);
-assert.equal(repLG.footprint, 'rep'); assert.equal(repLG.lFt, 20); assert.equal(repLG.wFt, 8); assert.equal(LG.footprint, 'none', 'the list\'s unit is untouched'); count += 4;
-near(offFt(C, PP.arrange(repLG, C).xfmr.c), 10 + 5 + 4, 0.05, 'a footprint the rep typed is drawn at size');
+var repLG = PP.repFootprint(LG, 10, 30);
+assert.equal(repLG.footprint, 'rep'); assert.equal(repLG.lFt, 30); assert.equal(repLG.wFt, 10); assert.equal(LG.footprint, 'reference', 'the list\'s unit is untouched'); count += 4;
+near(offFt(C, PP.arrange(repLG, C).xfmr.c), 15 + 5 + 4, 0.05, 'a footprint the rep typed is drawn at size, over the reference one');
 
 var AREA = { s: 41.8151, w: -87.6227, n: 41.8153, e: -87.6225 };
 var st = { unit: LG, area: AREA, unitAt: C, poi: { lat: 41.81561, lng: -87.6231 }, conduit: true };

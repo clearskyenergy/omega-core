@@ -205,9 +205,10 @@ function primeDoc(unit, st) {
 }
 var CCK = 'CLEANCELL-CC290-125-REV-H';
 var CC290_REF = PP.units(null, CC.entries()).filter(function (u) { return u.key === CCK; })[0];
-/* its brochure footprint is the cabinet alone, not RELEASED (main, #337), so
-   the rep types the submittal's L × W: the same unit, drawn at that size */
-ok(CC290_REF && CC290_REF.footprint === 'none' && CC290_REF.incXfmr === false && CC290_REF.incDisco === false, 'the CC290 has no released footprint and needs a transformer and a disconnect');
+/* its brochure footprint is the cabinet alone, not RELEASED, so it is drawn
+   at that REFERENCE size (2026-10-20) until the rep types the submittal's
+   L × W: the same unit, drawn at that size */
+ok(CC290_REF && CC290_REF.footprint === 'reference' && CC290_REF.lFt === 4.36 && CC290_REF.wFt === 3.94 && CC290_REF.incXfmr === false && CC290_REF.incDisco === false, 'the CC290 is at its reference cabinet size and needs a transformer and a disconnect');
 var CC290 = PP.repFootprint(CC290_REF, 4.36, 3.94);
 ok(CC290.footprint === 'rep' && CC290.lFt === 4.36 && CC290.wFt === 3.94, 'the rep\'s submittal footprint');
 var R60 = PP.snapshot(PP.R60);
@@ -315,9 +316,11 @@ var R60 = PP.snapshot(PP.R60);
   ok(f.elIds.indexOf(u.id) >= 0, 'the built unit is claimed by the fleet');
 })();
 
-/* ═══ 1b · a unit whose maker released no footprint: a small marker ═
-   The LG JP-2 (Prime's first unit) and the Smart Module have no released
-   footprint; Prime places each as a point with its transformer 5 ft clear.
+/* ═══ 1b · a unit with no size at all: a small marker ════════════════
+   A battery whose maker released no figures and names no container has
+   no footprint; Prime places it as a point with its transformer 5 ft clear.
+   (The LG JP-2 and the Smart Module were such units until 2026-10-20; they
+   are now drawn at their 20 ft container reference size, 1c below.)
    Site Map draws a 2 ft marker at true scale with the gear's floor, never
    the editor's 10 x 5 ft symbol on its 28 x 20 px floor (which overlapped
    the transformer by 5.2 ft at zoom 19), and the editor's own zoom rescale
@@ -325,9 +328,13 @@ var R60 = PP.snapshot(PP.R60);
    so at every zoom (review prime-editor:2). */
 (function () {
   var list = PP.units(null, CC.entries());
-  ['CLEANCELL-LGJP2-1000-REV-H', 'CLEANCELL-SM-1000-REV-H'].forEach(function (key) {
-    var unit = list.filter(function (u) { return u.key === key; })[0];
-    eq(unit.footprint, 'none', key + ' has no released footprint');
+  var NONE = {
+    'ACME-BOXA-1000': PP.fromEntry('ACME-BOXA-1000', { mfr: 'Acme', model: 'Box A', kw: 1000, kwh: 2000, _incPCS: true, dimensionsStatus: 'pending-release', dims: 'enclosure to confirm' }),
+    'ACME-BOXB-1000': PP.fromEntry('ACME-BOXB-1000', { mfr: 'Acme', model: 'Box B', kw: 1000, kwh: 2000, dimensionsStatus: 'pending-release', dims: 'enclosure to confirm' })
+  };
+  ['ACME-BOXA-1000', 'ACME-BOXB-1000'].forEach(function (key) {
+    var unit = NONE[key];
+    eq(unit.footprint, 'none', key + ' has no size at all');
     var E = editor();
     E.map(SITE.lat, SITE.lng, 19);                 /* the zoom a Prime record opens at */
     var d = primeDoc(unit), L = d.prime.layout;
@@ -363,7 +370,7 @@ var R60 = PP.snapshot(PP.R60);
   });
   /* 29 W Main St, Mesa AZ: at zoom 19 the 4 px floor would be 3.2 ft, so the
      marker's floor is 3 px there — never over 3 ft where it is built */
-  var MESA = { lat: 33.4152, lng: -111.8315 }, LGM = list[0];
+  var MESA = { lat: 33.4152, lng: -111.8315 }, LGM = NONE['ACME-BOXA-1000'];
   var E = editor();
   E.map(MESA.lat, MESA.lng, 19);
   var dm = JSON.parse(JSON.stringify(PP.projectDoc({ addr: '29 W Main St, Mesa, AZ 85201', lat: MESA.lat, lng: MESA.lng, step: 'map', unit: LGM,
@@ -376,6 +383,28 @@ var R60 = PP.snapshot(PP.R60);
   ok(mu.x + mu.w < mx.x, 'clear of the transformer');
   E.zoom(21);
   ok(Math.abs(mu.w - Math.round(2 * E.S.pxPerFt)) <= 1 && mu.x + mu.w < mx.x, 'and at zoom 21, 2 ft across, still clear');
+
+  /* ═══ 1c · the Clean Cell units at their REFERENCE size: a block ════
+     2026-10-20, Tommy, of the CC290/125 at 29 W Main St, Mesa: "it does it
+     for fenecon unit but not on cleancell get that fixed". The LG JP-2 and
+     the Smart Module (a 20 ft container, by the brochure) and the CC290/125
+     (its reference cabinet) are blocks at that size in Prime and in Site
+     Map, marked 'reference', the banner saying to confirm the size. */
+  [['CLEANCELL-LGJP2-1000-REV-H', 20, 8], ['CLEANCELL-SM-1000-REV-H', 20, 8], ['CLEANCELL-CC290-125-REV-H', 4.36, 3.94]].forEach(function (row) {
+    var unit = list.filter(function (u) { return u.key === row[0]; })[0];
+    eq(unit.footprint, 'reference', row[0] + ' is at its reference size');
+    var Er = editor();
+    Er.map(MESA.lat, MESA.lng, 19);
+    var dr = JSON.parse(JSON.stringify(PP.projectDoc({ addr: '29 W Main St, Mesa, AZ 85201', lat: MESA.lat, lng: MESA.lng, step: 'map', unit: unit,
+      area: box(MESA, 60, 30), unitAt: MESA, poi: off(MESA, 70, -45), conduit: true }, WHO, null)));
+    eq(dr.prime.layout.unit.lFt, row[1]); eq(dr.prime.layout.unit.wFt, row[2]); eq(dr.prime.layout.unit.footprint, 'reference', 'Prime draws the block at that size');
+    Er.sb.__CC = CC; Er.run('__CC.mergeInto(BESS_CATALOG);');
+    Er.load(dr); Er.render('p1'); Er.flush();
+    var ru = Er.S.elements.filter(function (e) { return e.primeRole === 'bess'; })[0], rx = Er.S.elements.filter(function (e) { return e.primeRole === 'xfmr'; })[0];
+    ok(ru && ru.lf === row[1] && ru.wf === row[2] && ru.primeFootprint === 'reference', row[0] + ': Site Map builds the block at the reference size, marked so', ru && { lf: ru.lf, wf: ru.wf, fp: ru.primeFootprint });
+    ok(Math.abs(ru.w - Math.max(4, Math.round(row[1] * Er.S.pxPerFt))) <= 1 && ru.x + ru.w < rx.x, row[0] + ': at true scale, clear of the transformer');
+    ok(/drawn at the maker\u2019s reference size; confirm it on the submittal/.test(Er.calls.banner[Er.calls.banner.length - 1]), row[0] + ': the banner says so');
+  });
 })();
 
 /* ═══ 2 · the R60: no transformer; priced by its key ═══════════════ */

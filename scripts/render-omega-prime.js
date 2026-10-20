@@ -254,7 +254,8 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     ok('no FENECON anywhere on the list or the page', listed && !listed.some(function (t) { return /fenecon/i.test(t); }) && !/fenecon/i.test(await p.content()));
     await p.selectOption('#unitSel', '1');
     var lg = await p.evaluate(function () { return { fp: !document.getElementById('fpBox').hidden, card: document.getElementById('unitCard').textContent }; });
-    ok('a unit whose maker released no footprint asks for the submittal\'s L × W; its card names the source, the caveat and the pages', lg.fp && /footprint not released/.test(lg.card) && /Planning specification/.test(lg.card) && /Rev H/.test(lg.card) && /p\. 4, 8/.test(lg.card), lg);
+    ok('a unit whose maker released no footprint is drawn at its reference size (the LG JP-2: a 20 ft container) and still asks for the submittal\'s L × W; its card names the source, the caveat and the pages',
+      lg.fp && /20 × 8 ft reference size, confirm on the submittal/.test(lg.card) && /Planning specification/.test(lg.card) && /Rev H/.test(lg.card) && /p\. 4, 8/.test(lg.card), lg);
     await p.fill('#fpL', '40'); await p.fill('#fpW', '10');
     ok('the typed footprint is the unit\'s', /40 × 10 ft from the submittal/.test(await text(p, '#unitCard')), await text(p, '#unitCard'));
     await p.selectOption('#unitSel', '0');
@@ -660,6 +661,10 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var m = await mctx.newPage(); watch(m, errs);
     await m.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
     await until(m, function () { var s = document.getElementById('unitSel'); return s && s.options.length >= 5 ? true : null; });
+    /* the unit Tommy placed there (2026-10-20): the CC290/125 */
+    var c290i = await m.evaluate(function () { var o = [].filter.call(document.getElementById('unitSel').options, function (x) { return /CC290\/125/.test(x.textContent); })[0]; return o ? o.value : null; });
+    await m.selectOption('#unitSel', c290i);
+    ok('Mesa: the CC290/125 is offered at its reference cabinet size', /4\.36 × 3\.94( × 7\.71)? ft reference size, confirm on the submittal/.test(await text(m, '#unitCard')), await text(m, '#unitCard'));
     await m.fill('#addr', '29 W Main St, Mesa, AZ 85201');
     await m.click('#go');
     await m.waitForSelector('#s-atlas.on');
@@ -690,6 +695,20 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var md = await storeOf(m), mp = projectsIn(md).map(function (k) { return md.docs[k]; })[0] || {};
     ok('Mesa: the project keeps the utility the territory named', mp.prime && mp.prime.hosting && mp.prime.hosting.utility && mp.prime.hosting.utility.display === 'City of Mesa' && mp.prime.hosting.coverage === 'no-public-map', mp.prime && mp.prime.hosting);
     await shot(m, 'prime-11-mesa-load');
+    /* Tommy's case (2026-10-20, "it does it for fenecon unit but not on
+       cleancell get that fixed"): the CC290/125 placed at 29 W Main St,
+       Mesa is a block at its reference cabinet size, never a marked point */
+    await m.click('#ld-tomap');
+    await m.waitForSelector('#s-map.on');
+    var mb = await m.$eval('#edMap', function (e) { var r = e.getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height }; });
+    var mx0 = mb.x + mb.w / 2, my0 = mb.y + mb.h / 2;
+    await m.click('#ed-area');
+    await m.mouse.move(mx0 - 180, my0 - 90); await m.mouse.down(); await m.mouse.move(mx0 + 40, my0 - 10, { steps: 6 }); await m.mouse.move(mx0 + 180, my0 + 90, { steps: 6 }); await m.mouse.up();
+    await m.click('#ed-place'); await m.mouse.click(mx0 - 60, my0);
+    var placed = await until(m, function () { var t = [].map.call(document.querySelectorAll('#edMap .leaflet-tooltip'), function (e) { return e.textContent; }).join(' | '); return /CC290\/125 · /.test(t) ? t : null; });
+    ok('Mesa: the CC290/125 is placed as a block at its reference cabinet size, with its transformer and disconnect, never a marked point', !!placed && /CC290\/125 · 4\.36×3\.94 ft \(reference\)/.test(placed) && /XFMR/.test(placed) && /DISC/.test(placed) && !/footprint not/.test(placed), placed);
+    await m.waitForTimeout(700);                     /* the zoom to the area settles, and the labels with it */
+    await shot(m, 'prime-12-mesa-cc290-block');
     await m.close();
 
     /* ── a create that failed is made again: as the work goes on, and by

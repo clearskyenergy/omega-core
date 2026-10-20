@@ -1458,9 +1458,14 @@ Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
   charging, Solar, Compute and Microgrid (main #348) list the editor's own
   catalogs through `PP.forType`; a unit that is not a battery
   (`PP.screenable`) is quote required, sized in Site Map: named utility,
-  nothing judged, priced or built as a battery. A unit with
-  no released footprint asks the rep for the submittal's L × W, else it is a
-  marked point; never a generic container.
+  nothing judged, priced or built as a battery. A unit whose maker has
+  not released its footprint is drawn at its REFERENCE size (2026-10-20,
+  Tommy: "it does it for fenecon unit but not on cleancell get that
+  fixed"): the CC290/125's reference cabinet, a 20 × 8 ft container where
+  the brochure names one (LG JP-2, Smart Module), `footprint: 'reference'`,
+  said to be confirmed on the submittal everywhere it shows; the rep's
+  typed submittal size replaces it; a unit with no figure at all stays a
+  marked point.
 - **The record.** The project is CREATED at Start (`projectDoc`) and the
   address becomes `/omega-prime?id=`; every change after is one debounced
   dotted `patch()` (`prime.*`, `grid.<part>`, `load`; never a drawing key;
