@@ -171,8 +171,9 @@ and 2026-10-17, when it moved onto the national door (gap 6).
    the same verdict engine. Omega Prime, the Site Map Grid panel and Site
    Plan's Grid Atlas layer all ask it through `omega-grid-verdict.js` and
    draw every case the same way:
-   the utility's name, every candidate when the territory is not confident,
-   where the power comes from, the provenance and the utility's own map,
+   the utility's name, who may serve the point and what each publishes
+   wherever no figure is read or more than one utility is mapped (one list,
+   `GV.whoServes`, since 2026-10-20), where the power comes from, the provenance and the utility's own map,
    with the queue words following the answer (subtracted, already netted,
    or not published). The editor no longer loads the ComEd module.
 7. **New.** A "Send to Site Map" button on the standalone Site Finder's
