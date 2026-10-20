@@ -16,6 +16,46 @@ never a drawing key; Site Map opens it with `?from=prime`
 the Guided Build opened, no forged elements). Held by
 `scripts/tests/tomegaprime.js` and `scripts/render-omega-prime.js`.
 
+## Equipment keeps its true footprint through a zoom (2026-10-17)
+
+Found by the Omega Prime transfer (clearskyenergy/omega-core#354; Tommy, of
+the transfer: "it all needs to match"): a drawing built at true footprints
+matched at the zoom it was built at and drifted as soon as the rep zoomed.
+`omegaRescaleElements` (ELEMENT ZOOM SCALING), which redraws equipment from
+its footprint in feet, was a wrapper on `window._geoReprojectAll`, and the
+unified anchor engine's `standDown()` replaces that whole chain at boot, so
+it never ran (0 calls in Chromium). A second scaler, OmegaGeo (EAGER
+GEO-ANCHORING), sized gear instead, from a ground size it read off the
+PIXELS: a unit held at its 28 px floor read back as a 10 ft transformer, and
+when the first map move after placing was a zoom it divided the old zoom's
+pixels by the new scale (a 500 kWh BESS stamped 20.4 ft, drawn 112 px at
+zoom 21 where its 8 ft is 44), every unit on a 22 px floor, so Prime's gear
+5 ft apart overlapped zoomed out. Now:
+- the anchor engine's `run()` sizes equipment itself, after every element
+  is on its anchor, through `omegaRescaleElementsOnce` (once per animation
+  frame; a document that is not painting, at most every 250 ms), and the
+  wrapper `standDown` discarded is gone: one caller, one place;
+- the floor a unit keeps at every zoom is the one it was placed with, in
+  `omegaRescaleElements`: `el.minW/minH` (`_evAdd`'s 28 x 20 / 14 x 12,
+  Omega Prime's 4 px), else Insert's drop floor (`OmegaInsert.floorPx`,
+  22 x 10, now one constant in that module), else 10 x 8;
+- OmegaGeo leaves equipment with a footprint (`omegaElementFootprint`, the
+  one rule) to the rescale, in `stampSizes` / `rescale` / `syncDom`, and
+  stamps its footprint as its ground size (`_geoWFt`, read by the takeoff
+  and the GeoJSON export); it still sizes what has no footprint;
+- a width typed in the properties panel (`uP('w')`) is recorded in feet as
+  the drag-resize path records it, or the reconnected rescale would put the
+  old size back; a selected unit keeps its outline when it is redrawn.
+Held by `scripts/render-element-zoom.js` (in `check:pages`; the real editor
+in Chromium on a new Maps double, `scripts/_lib/gmaps-double.js`: guided-
+build, Prime and Insert gear through zooms 17–22, every box its footprint x
+pxPerFt within a pixel or its placement floor, centred on its anchor, the
+size moving with the position before the map is idle, never two rescales in
+a frame; Prime's 2 ft marker, `primeFootprint: 'none'`, once #354 is in) and
+`scripts/tests/telementzoom.js`. Not changed: equipment with no footprint
+(a unit saved before `_evAdd` recorded one, a BESS assembly, a text note)
+is still OmegaGeo's, whose stamp has the same stale-zoom fault.
+
 ## Grid Atlas built into Site Map: the Grid panel (2026-10-16)
 
 Tommy, of the FENECON demo flow: "that's how the Grid Atlas should work, and
