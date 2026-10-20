@@ -211,6 +211,20 @@ warranty live):
   the `/api/grid-verdict` engine), asked through `omega-grid-verdict.js`,
   the client Site Map's Grid panel uses too. The page's own thresholds are
   gone.
+- **Substations:** the public HIFLD layer Grid Atlas reads names about
+  half its records by a number alone (38,479 `UNKNOWN…` of 75,328 on
+  2026-10-20, the nearest to 29 W Main St, Mesa among them). Prime shows
+  `UNKNOWN307104` as "Unnamed substation (HIFLD 307104)" and an unnamed
+  tap, `TAP302679`, as "Unnamed tap (HIFLD 302679)"
+  (`omega-prime-project.js` `subName`) on the map, in the inspector, the
+  Circuit panel and the Design panel; a real name is shown as it is. The
+  record (`prime.sub`, `grid.substation`) and the hosting door keep the
+  name HIFLD gave. HIFLD's not-available figure, -999999, is never printed
+  as a voltage or a line count.
+- **The Circuit panel and the guide:** while the guide sits in its corner
+  the panel ends above it and scrolls inside, so a long list of utilities
+  (twelve at downtown Mesa when the city's own map does not answer, ten of
+  them folded) never puts Next under the guide.
 - **Load:** the utility's planning rates for the address's ZIP
   (`/api/utility-rates`) and the twelve monthly peaks off the bill, typed
   or pasted; skippable, never filled in.
@@ -231,6 +245,10 @@ warranty live):
   total), terms; previewed, printed (with the site plan on satellite
   imagery) and sent by email or link from the seller's own letterhead
   (`api/customer-quote.js`, `omega-quote-deck.js`, the public `quote.html`).
+  Its circuit line names the circuit as the Circuit step does: the
+  utility's own circuit id first, any other name the source gives it only
+  beside it, then the substation (ComEd: "Circuit: L5131 (queue report
+  F1978) · substation S0711", never the queue-report number first).
   The Quote Desk's Customer quotes tab tracks every one. On the rep's side
   of the step (never on the deck), main's **Send to the OEM** opens the
   maker's purchase order through `POST /api/rfq`, as Site Map's BOM does:
@@ -273,7 +291,9 @@ its own style, the phone stylesheet and `omega-prime-pwa.js`; the script
 writes the manifest link, the icons and the iOS tags while the page is
 still parsing. The installed icon opens `/omega-prime`. The worker caches
 the shell only and does not cache `/api/` or Firebase auth. Phone layout
-is `omega-prime-mobile.css`.
+is `omega-prime-mobile.css`. Its text-field rule (16 px, 44 px tall, full
+width) leaves a radio or a checkbox its own size, and the row it sits in is
+the tap target (the Proposal's Price radios, 2026-10-20).
 
 **Every project type** (main #348): EV charging, Solar, Compute and
 Microgrid list the editor's own catalogs (`omega-site-catalogs.js`, held

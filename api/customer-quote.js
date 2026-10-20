@@ -144,11 +144,21 @@ function runInputOf(unit, layout) {
 }
 function clean(o) { var out = {}; Object.keys(o || {}).forEach(function (k) { if (o[k] !== undefined && o[k] !== null) out[k] = o[k]; }); return out; }
 function sourceHash(project) { var pr = project.prime || {}; return Q.layoutHash(pr.layout || {}) + ':' + str(pr.unitKey || (pr.unit && pr.unit.key) || '', 120); }
+/* The circuit as the Circuit step names it ("Circuit L5131 · substation
+   S0711"): the utility's own circuit id first, the source's other name for
+   it only beside it (ComEd's queue-report number, "queue report F1978"),
+   then its substation. A source with no id leads with its name ("nearest
+   transformer point"). */
+function circuitLine(c) {
+  if (!c || typeof c !== 'object') return str(c, 160);
+  var id = str(c.id || c.feeder, 60), name = str(c.name, 60), sub = str(c.substation, 60);
+  return [(id || name) + (id && name && name !== id ? ' (' + name + ')' : ''), sub ? 'substation ' + sub : ''].filter(Boolean).join(' · ');
+}
 function siteOf(project) {
   var pr = project.prime || {}, s = pr.site || {}, h = pr.hosting || {}, g = project.grid || {}, ms = project.mapState || {};
   var util = h.utility && typeof h.utility === 'object' ? (h.utility.display || h.utility.name || '') : (h.utility || '');
-  var c = h.circuit, circ = c && typeof c === 'object' ? [c.name || c.id, c.substation].filter(Boolean).join(' · ') : (c || '');
-  if (!circ && g.circuit) circ = typeof g.circuit === 'object' ? (g.circuit.feeder || g.circuit.name || g.circuit.id || '') : g.circuit;
+  var circ = circuitLine(h.circuit);
+  if (!circ && g.circuit) circ = circuitLine(g.circuit);
   var address = s.addr || s.label || project.address || project.name || '';
   return { address: str(address, 400), lat: isFinite(+s.lat) ? +s.lat : (isFinite(+ms.lat) ? +ms.lat : null), lng: isFinite(+s.lng) ? +s.lng : (isFinite(+ms.lng) ? +ms.lng : null),
     zip: str(s.zip, 10) || (PP.zipOf ? PP.zipOf(address) : ''), utility: str(util, 160), circuit: str(circ, 160) };
