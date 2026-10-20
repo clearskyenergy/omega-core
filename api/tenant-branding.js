@@ -6,7 +6,12 @@
    for every registered hostname so the sign-in page can paint before auth.
 
    Body: { orgId, name?, logoUrl?, colors?, exportBrand?, defaultLayout?,
-           whiteLabel? }
+           company?, whiteLabel? }
+
+   company is the seller's letterhead a customer quote prints (legal name,
+   address, phone, email, website): the tenant's own, validated key by key
+   by api/_lib/deck-brand.js cleanCompany() (null clears it). It stays on
+   omega_orgs: publicRecord() never copies it into tenant_public.
 
    ── TWO CLASSES OF FIELD, AND WHY THEY ARE NOT THE SAME ──────────────────
    name/logoUrl/colors/exportBrand are the TENANT's identity. A tenant admin
@@ -36,8 +41,11 @@ var A = require('./_lib/admin');
 /* WL_PUBLIC lives in ONE place — three writers mirror this block and CLAUDE.md
    already records what three copies of one decision cost with orgAlias(). */
 var publicRecord = require('./_lib/whitelabel').publicRecord;
+var DECK = require('./_lib/deck-brand');
 
-var ALLOWED = ['name', 'logoUrl', 'colors', 'exportBrand', 'defaultLayout'];
+var ALLOWED = ['name', 'logoUrl', 'colors', 'exportBrand', 'defaultLayout', 'company'];
+/* Fields cleaned before they are stored; the rest are stored as sent. */
+var CLEAN = { company: DECK.cleanCompany };
 var STAFF_ONLY = ['whiteLabel'];
 
 module.exports = A.handler(function (req) {
@@ -60,7 +68,7 @@ module.exports = A.handler(function (req) {
       var db = A.db(), FV = A.FieldValue();
       var ref = db.collection('omega_orgs').doc(orgId);
       var patch = { updatedAt: FV.serverTimestamp() };
-      ALLOWED.forEach(function (k) { if (b[k] !== undefined) patch[k] = b[k]; });
+      ALLOWED.forEach(function (k) { if (b[k] !== undefined) patch[k] = CLEAN[k] ? CLEAN[k](b[k]) : b[k]; });
       STAFF_ONLY.forEach(function (k) { if (b[k] !== undefined) patch[k] = b[k]; });
 
       return ref.set(patch, { merge: true }).then(function () { return ref.get(); }).then(function (s) {

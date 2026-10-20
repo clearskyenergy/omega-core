@@ -1,0 +1,315 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Proposal</title>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     quote.html — the customer's copy of a seller's proposal (Omega Prime).
+
+     Opened from the seller's email or link: /quote?id=<quoteId>&key=<key>.
+     The key is the credential and nothing else is asked for. The page reads
+     GET /api/customer-quote?id=&key= (the customer view, built key by key on
+     the server; every dollar arrives formatted) and draws the one deck,
+     omega-quote-deck.js, that the seller previewed and printed.
+
+     The customer may Approve (name, title, email and an "I agree" box; the
+     page sends the snapshot it was shown, so a proposal edited after it was
+     opened cannot be approved by mistake), Decline (a reason is optional),
+     Ask a question, or Print / Save as PDF. Approval prices nothing and
+     orders nothing here: the server records it and hands the order to the
+     manufacturer, where a person prices and accepts it.
+
+     PUBLIC, LIKE proposal.html: no sign-in, no tenant runtime, no loading
+     mark. WHITE-LABEL SAFE: the page shows the seller's name, logo and
+     colour and the seller's attribution line when the server sends one,
+     and no platform name or mark of its own. The referrer policy keeps the
+     key in this address from riding out to a logo host in a Referer header.
+     A view is counted by the server on the script's own read, never on the
+     page load, so a mail scanner fetching the HTML does not count.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+  :root{--ink:#14171A;--paper:#EEF1F5;--panel:#fff;--line:#DCE3EA;--sub:#5B6672;--accent:#2B5FA8;--bad:#B3261E;--ok:#1F6B3F}
+  @media (prefers-color-scheme:dark){:root{--ink:#E7EEF5;--paper:#0F1720;--panel:#16212C;--line:#2A3946;--sub:#9FB3C4;--bad:#F2847A;--ok:#7FD1A2}}
+  *{box-sizing:border-box}[hidden]{display:none!important}
+  html,body{margin:0}
+  body{background:var(--paper);color:var(--ink);font:400 15px/1.5 Inter,system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;-webkit-text-size-adjust:100%}
+  .bar{position:sticky;top:0;z-index:5;display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;background:var(--panel);border-bottom:1px solid var(--line)}
+  .who{display:flex;align-items:center;gap:10px;min-width:0}.who img{max-height:30px;max-width:140px;width:auto;height:auto}
+  .who b{font-size:15px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chip{display:inline-block;padding:2px 10px;border-radius:999px;font:600 12px/1.7 inherit;background:rgba(43,95,168,.12);color:var(--accent)}
+  .chip.ok{background:rgba(31,107,63,.14);color:var(--ok)}.chip.bad{background:rgba(179,38,30,.12);color:var(--bad)}.chip.none{background:rgba(91,102,114,.14);color:var(--sub)}
+  .sp{flex:1}
+  .btn{display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:0 18px;border-radius:9px;border:1px solid var(--line);background:var(--panel);
+       font:600 14px inherit;color:var(--ink);cursor:pointer;text-decoration:none}
+  .btn.p{background:var(--accent);border-color:var(--accent);color:#fff}.btn:disabled{opacity:.55;cursor:not-allowed}
+  main{max-width:calc(8.5in + 32px);margin:0 auto;padding:18px 16px 64px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px 18px;margin:0 0 16px}
+  .card h2{font-size:17px;margin:0 0 10px}
+  .notice{border-radius:12px;padding:14px 16px;margin:0 0 16px;border:1px solid var(--line);background:var(--panel);font-weight:600}
+  .notice.ok{border-color:rgba(31,107,63,.35);color:var(--ok)}.notice.bad{border-color:rgba(179,38,30,.35);color:var(--bad)}
+  .notice span{display:block;font-weight:400;color:var(--sub);margin-top:4px}
+  .sum{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px}.sum .t{font-size:22px;font-weight:800;color:var(--accent);font-variant-numeric:tabular-nums}
+  .sum .m{flex:1 1 220px;min-width:0;color:var(--sub);font-size:14px}.sum .btn{margin-left:auto}
+  #deck{margin:0 0 16px}.empty{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:48px 20px;text-align:center;color:var(--sub)}
+  .seg{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 14px}
+  .seg button{min-height:40px;padding:0 14px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--ink);font:600 13.5px inherit;cursor:pointer}
+  .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  label{display:block;font-size:13px;font-weight:600;color:var(--sub);margin:0 0 10px}
+  input[type=text],input[type=email],textarea{display:block;width:100%;margin-top:4px;padding:10px 12px;border:1px solid var(--line);border-radius:9px;background:var(--panel);color:var(--ink);font:400 16px inherit}
+  textarea{resize:vertical;min-height:84px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .agree{display:flex;gap:10px;align-items:flex-start;font-weight:500;color:var(--ink);font-size:14px;line-height:1.45;margin:6px 0 14px}
+  .agree input{width:20px;height:20px;margin:1px 0 0;flex:0 0 auto}
+  .sub{color:var(--sub);font-size:14px;margin:0 0 12px}
+  .msg{min-height:20px;margin-top:12px;font-size:14px}.msg.bad{color:var(--bad)}.msg.good{color:var(--ok)}
+  @media (max-width:640px){.two{grid-template-columns:1fr}.sum .btn{margin-left:0;width:100%}.bar .btn{min-height:38px;padding:0 12px;font-size:13px}main{padding:12px 10px 48px}}
+  @page{size:letter;margin:.55in .6in}
+  @media print{.bar,#notice,#summary,#act,#parts{display:none!important}html,body{background:#fff}main{max-width:none;padding:0}.oqd-doc{box-shadow:none!important;padding:0!important;max-width:none!important}}
+</style>
+</head>
+<body>
+<header class="bar">
+  <div class="who"><img id="logo" alt="" hidden><b id="seller">Proposal</b></div>
+  <span class="chip" id="state" hidden></span>
+  <span class="sp"></span>
+  <button class="btn" id="print" type="button" hidden>Print / Save as PDF</button>
+</header>
+<main>
+  <div class="notice" id="notice" role="status" hidden></div>
+  <section class="card" id="summary" hidden></section>
+  <nav class="seg parts" id="parts" aria-label="Parts of this proposal" hidden>
+    <button type="button" data-part="proposal" class="on">Proposal</button>
+    <button type="button" data-part="quote">Quote</button>
+    <button type="button" data-part="sitemap">Site map</button>
+  </nav>
+  <div id="deck"><div class="empty">Loading your proposal…</div></div>
+  <section class="card" id="act" hidden>
+    <h2>Your decision</h2>
+    <div class="seg">
+      <button type="button" id="tab-approve" class="on">Approve</button>
+      <button type="button" id="tab-decline">Decline</button>
+      <button type="button" id="tab-question">Ask a question</button>
+    </div>
+    <div id="pane-approve">
+      <p class="sub" id="ap-text">Approving records your acceptance of this proposal as shown above.</p>
+      <div class="two">
+        <label>Your name<input type="text" id="ap-name" autocomplete="name"></label>
+        <label>Title (optional)<input type="text" id="ap-title" autocomplete="organization-title"></label>
+      </div>
+      <label>Email (optional)<input type="email" id="ap-email" autocomplete="email"></label>
+      <label class="agree"><input type="checkbox" id="ap-agree"><span id="ap-agree-text">I approve this proposal as shown.</span></label>
+      <button class="btn p" type="button" id="ap-go">Approve this proposal</button>
+    </div>
+    <div id="pane-decline" hidden>
+      <p class="sub">Declining tells the seller you will not go ahead with this proposal. A reason is welcome and never required.</p>
+      <label>Reason (optional)<textarea id="dc-reason" rows="3"></textarea></label>
+      <button class="btn" type="button" id="dc-go">Decline this proposal</button>
+    </div>
+    <div id="pane-question" hidden>
+      <p class="sub" id="qn-text-help">Your question goes to the person who prepared this proposal.</p>
+      <label>Your question<textarea id="qn-text" rows="3"></textarea></label>
+      <label>Your email for the answer (optional)<input type="email" id="qn-email" autocomplete="email"></label>
+      <button class="btn" type="button" id="qn-go">Send question</button>
+    </div>
+    <div class="msg" id="msg" role="status" aria-live="polite"></div>
+  </section>
+</main>
+<script src="/omega-quote-deck.js"></script>
+<script>
+/* ES5. The key in the address is the only credential; the server decides
+   everything (whether the proposal is open, expiry, the snapshot match). */
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+  function qp(k) { var m = new RegExp('[?&]' + k + '=([^&#]*)').exec(location.search || ''); try { return m ? decodeURIComponent(m[1]) : ''; } catch (e) { return ''; } }
+  var ID = qp('id'), KEY = qp('key'), VIEW = null, BUSY = false, CSS = false, PANE = 'approve';
+  /* the three parts of the one link (omega-quote-deck.js PARTS; Tommy,
+     2026-10-17: "send a site map and a proposal"): the proposal, its quote and
+     its site map, each drawn and printed on its own; #sitemap / #quote in the
+     address opens that part (the email's site map link) */
+  var PARTS = ['proposal', 'quote', 'sitemap'], PART = partFromHash();
+  function partFromHash() { var h = String(location.hash || '').replace(/^#/, ''); return PARTS.indexOf(h) >= 0 ? h : 'proposal'; }
+  var PRINT_WORDS = { proposal: 'Print the proposal', quote: 'Print the quote', sitemap: 'Print the site map' };
+  var DOOR = '/api/customer-quote';
+  function D() { return window.OmegaQuoteDeck; }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+  function trim(v) { return String(v == null ? '' : v).replace(/^\s+|\s+$/g, ''); }
+  function obj(v) { return v && typeof v === 'object' ? v : {}; }
+  function ms(v) { if (v == null || v === '') return null; if (typeof v === 'number') return v; if (typeof v === 'string') { var t = Date.parse(v); return isNaN(t) ? null : t; } if (v.seconds != null) return v.seconds * 1000; if (v._seconds != null) return v._seconds * 1000; return null; }
+  function date(v) { return D() ? D().date(v) : ''; }
+  function setMsg(t, bad) { var m = $('msg'); m.textContent = t || ''; m.className = 'msg' + (t ? (bad ? ' bad' : ' good') : ''); }
+  function seller(v) { var s = obj(v.seller); return { name: trim(s.name) || trim(obj(s.company).legalName), rep: trim(obj(s.rep).name), repEmail: trim(obj(s.rep).email), accent: s.accent, logo: s.logoUrl }; }
+  function asker(v) { var s = seller(v); return s.rep || s.name || 'the seller'; }
+  /* open = the customer can still decide; the server is the judge, this only decides what to offer */
+  /* a valid-until DATE (YYYY-MM-DD) is a calendar day, read from its parts
+     (never parsed as an instant): it lasts to the end of that UTC day, as
+     the server holds it; an instant given for it is taken as it is */
+  function until(v) { var m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); return m ? Date.UTC(+m[1], +m[2] - 1, +m[3]) + 86400000 - 1 : ms(v); }
+  function open(v) { var t = until(v.validUntil); return (v.status === 'sent' || v.status === 'viewed') && !(t && t < Date.now()); }
+  function statusOf(v) { return v.status === 'sent' || v.status === 'viewed' ? (open(v) ? 'open' : 'expired') : v.status; }
+  var CHIP = { open: ['Awaiting your decision', ''], approved: ['Approved', 'ok'], declined: ['Declined', 'bad'], expired: ['Expired', 'none'], withdrawn: ['Withdrawn', 'none'] };
+
+  function fail(text) {
+    VIEW = null;
+    $('deck').innerHTML = '<div class="empty">' + esc(text) + '</div>';
+    $('act').hidden = true; $('summary').hidden = true; $('print').hidden = true; $('notice').hidden = true; $('state').hidden = true;
+  }
+  function paintSeller(v) {
+    var s = seller(v), logo = D() ? D().safeUrl(s.logo) : '';
+    $('seller').textContent = s.name || 'Proposal';
+    if (logo) { $('logo').src = logo; $('logo').alt = s.name; $('logo').hidden = false; } else $('logo').hidden = true;
+    var root = document.documentElement;
+    if (root && root.style && root.style.setProperty && typeof s.accent === 'string' && /^#[0-9a-f]{6}$/i.test(s.accent)) root.style.setProperty('--accent', s.accent);
+    if (D()) document.title = D().titleOf(v);
+  }
+  function notice(v, st) {
+    var s = seller(v), d = obj(v.decision), by = obj(d.approvedBy), n = $('notice'), html = '', cls = '';
+    var who = esc(s.rep || s.name || 'the seller') + (s.repEmail ? ' (' + esc(s.repEmail) + ')' : '');
+    if (st === 'approved') { cls = 'ok'; html = 'Approved' + (trim(by.name) ? ' by ' + esc(trim(by.name)) : '') + (date(d.approvedAt) ? ' on ' + esc(date(d.approvedAt)) : '') + '.<span>' + esc(s.name || 'The seller') + ' has your approval and will be in touch about next steps. You can print or save this copy.</span>'; }
+    else if (st === 'declined') { cls = 'bad'; html = 'You declined this proposal' + (date(d.declinedAt) ? ' on ' + esc(date(d.declinedAt)) : '') + '.<span>Thank you for letting ' + esc(s.name || 'the seller') + ' know. To revisit it, contact ' + who + '.</span>'; }
+    else if (st === 'expired') { html = 'This proposal expired' + (date(v.validUntil) ? ' on ' + esc(date(v.validUntil)) : '') + '.<span>It can no longer be approved online. Ask ' + who + ' for a current one.</span>'; }
+    else if (st === 'withdrawn') { html = 'This proposal was withdrawn by ' + esc(s.name || 'the seller') + '.<span>Its terms are no longer on offer. Ask ' + who + ' for the current proposal.</span>'; }
+    n.className = 'notice' + (cls ? ' ' + cls : ''); n.innerHTML = html; n.hidden = !html;
+  }
+  function summary(v) {
+    var p = obj(v.price), total = typeof p.total === 'string' ? trim(p.total) : '', bits = [];
+    if (date(v.validUntil)) bits.push('Valid until ' + esc(date(v.validUntil)));
+    if (trim(v.quoteNo)) bits.push('Quote ' + esc(trim(v.quoteNo)) + (v.rev != null ? ' rev ' + esc(v.rev) : ''));
+    $('summary').innerHTML = '<div class="sum">' + (total ? '<span class="t">' + esc(total) + '</span>' : '<span class="t">Price to be confirmed</span>')
+      + '<span class="m">' + bits.join(' · ') + '</span><a class="btn p" href="#act">Review and decide</a></div>';
+  }
+  function agreeText(v) {
+    var s = seller(v), c = obj(v.customer), total = typeof obj(v.price).total === 'string' ? trim(v.price.total) : '';
+    return 'I approve proposal ' + (trim(v.quoteNo) || '') + (v.rev != null ? ' revision ' + v.rev : '') + (trim(c.company) ? ' for ' + trim(c.company) : '')
+      + (total ? ', at the total price of ' + total : '') + ', on the terms shown above, and ask ' + (s.name || 'the seller') + ' to proceed.';
+  }
+  function draw(v) {
+    VIEW = v;
+    var st = statusOf(v), chip = CHIP[st] || [String(v.status || ''), 'none'];
+    if (!CSS && D() && document.head) { var css = document.createElement('style'); css.textContent = D().css(); document.head.appendChild(css); CSS = true; }
+    paintSeller(v);
+    $('state').textContent = chip[0]; $('state').className = 'chip' + (chip[1] ? ' ' + chip[1] : ''); $('state').hidden = !chip[0];
+    notice(v, st);
+    if (st === 'withdrawn') $('deck').innerHTML = '<div class="empty">This proposal is no longer available to review.</div>';
+    else $('deck').innerHTML = D() ? D().body(v, { part: PART }) : '<div class="empty">The proposal could not be drawn. Reload the page.</div>';
+    $('print').hidden = st === 'withdrawn';
+    $('print').textContent = PRINT_WORDS[PART];
+    paintParts(st === 'withdrawn');
+    /* open: the whole decision; expired: a question is still welcome (the
+       server takes one on an expired quote), approving is not */
+    var live = st === 'open', ask = live || st === 'expired';
+    $('summary').hidden = !live; $('act').hidden = !ask;
+    $('tab-approve').hidden = !live; $('tab-decline').hidden = !live;
+    if (live) { summary(v); $('ap-agree-text').textContent = agreeText(v); }
+    if (ask) {
+      $('qn-text-help').textContent = (live ? '' : 'This proposal can no longer be approved online, but you can still ask about it. ') + 'Your question goes to ' + asker(v) + ', who prepared this proposal, and the answer comes back by email.';
+      showPane(live ? PANE : 'question');
+    }
+  }
+  function paintParts(off) {
+    var bar = $('parts'); if (!bar) return;
+    bar.hidden = !!off;
+    var bs = bar.querySelectorAll ? bar.querySelectorAll('button[data-part]') : [];
+    for (var i = 0; i < bs.length; i++) bs[i].className = bs[i].getAttribute('data-part') === PART ? 'on' : '';
+  }
+  function setPart(k) {
+    if (PARTS.indexOf(k) < 0 || k === PART) return;
+    PART = k;
+    /* the key stays in the address; only the part after # changes */
+    try { if (window.history && history.replaceState) history.replaceState(null, '', location.pathname + location.search + (k === 'proposal' ? '' : '#' + k)); } catch (e) { /* the part is still drawn */ }
+    if (VIEW) draw(VIEW);
+  }
+  function showPane(k) {
+    PANE = k;
+    ['approve', 'decline', 'question'].forEach(function (p) { $('pane-' + p).hidden = p !== k; $('tab-' + p).className = p === k ? 'on' : ''; });
+    setMsg('');
+  }
+  function busy(on, btn) { BUSY = on; ['ap-go', 'dc-go', 'qn-go'].forEach(function (b) { $(b).disabled = on; }); if (btn && on) $(btn).disabled = true; }
+  function post(body) {
+    return fetch(DOOR, { method: 'POST', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) { if (!r.ok) { var e = new Error(j.error || (r.status === 429 ? 'Too many tries. Wait a minute and try again.' : 'That did not go through. Try again.')); e.status = r.status; throw e; } return j; }); });
+  }
+  function after(j, words) {
+    busy(false);
+    /* the decision is said at the top of the page: take the reader there */
+    if (typeof window.scrollTo === 'function') { try { window.scrollTo(0, 0); } catch (e) { /* no scrolling here */ } }
+    if (j && j.quote) { draw(j.quote); setMsg(words); return; }
+    setMsg(words); load();
+  }
+  function refused(e) {
+    busy(false);
+    setMsg((e && e.message ? e.message : 'That did not go through.') + (e && e.status === 409 ? ' Reload this page to see the current version.' : ''), true);
+  }
+  function approve() {
+    if (BUSY || !VIEW) return;
+    var name = trim($('ap-name').value), title = trim($('ap-title').value), email = trim($('ap-email').value);
+    if (!name) { setMsg('Type your name to approve.', true); return; }
+    if (!$('ap-agree').checked) { setMsg('Tick the box to agree to the proposal as shown.', true); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMsg('Check the email address, or leave it blank.', true); return; }
+    busy(true, 'ap-go'); setMsg('Recording your approval…');
+    var body = { action: 'approve', id: ID, key: KEY, name: name, agree: true, snapshot: VIEW.snapshot };
+    if (title) body.title = title;
+    if (email) body.email = email;
+    post(body)
+      .then(function (j) { after(j, 'Thank you. Your approval is recorded.'); }, refused);
+  }
+  function decline() {
+    if (BUSY || !VIEW) return;
+    if (!window.confirm('Decline this proposal? ' + (seller(VIEW).name || 'The seller') + ' will be told.')) return;
+    busy(true, 'dc-go'); setMsg('Sending…');
+    post({ action: 'decline', id: ID, key: KEY, reason: trim($('dc-reason').value) })
+      .then(function (j) { after(j, 'Your answer is recorded.'); }, refused);
+  }
+  function ask() {
+    if (BUSY || !VIEW) return;
+    var text = trim($('qn-text').value), email = trim($('qn-email').value), body = { action: 'question', id: ID, key: KEY, message: text };
+    if (!text) { setMsg('Write your question first.', true); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMsg('Check the email address, or leave it blank.', true); return; }
+    if (email) body.email = email;
+    busy(true, 'qn-go'); setMsg('Sending…');
+    post(body).then(function () {
+      busy(false); $('qn-text').value = '';
+      setMsg('Your question was sent to ' + asker(VIEW) + '. The answer comes back by email.');
+    }, refused);
+  }
+  function printIt() {
+    var deck = D();
+    if (VIEW && deck && deck.print(VIEW, { part: PART })) return;
+    window.print();
+  }
+  function load() {
+    return fetch(DOOR + '?id=' + encodeURIComponent(ID) + '&key=' + encodeURIComponent(KEY), { cache: 'no-store' })
+      .then(function (r) { return r.json().then(function (j) { return j || {}; }, function () { return {}; }).then(function (j) { return { r: r, j: j }; }); })
+      .then(function (x) {
+        if (x.r.status === 404) return fail('This proposal is not available. The link may have been replaced by a newer one or withdrawn; ask the person who sent it for a current link.');
+        if (x.r.status === 429) return fail('Too many requests from this connection. Wait a minute and reload the page.');
+        if (!x.r.ok || !x.j.quote) return fail(x.j.error || 'The proposal could not be loaded. Reload the page to try again.');
+        if (x.j.quote.status === 'draft') return fail('This proposal is not available yet.');
+        draw(x.j.quote);
+      }, function () { fail('The proposal could not be loaded. Check your connection and reload the page.'); });
+  }
+
+  $('tab-approve').addEventListener('click', function () { showPane('approve'); });
+  $('tab-decline').addEventListener('click', function () { showPane('decline'); });
+  $('tab-question').addEventListener('click', function () { showPane('question'); });
+  $('ap-go').addEventListener('click', approve);
+  $('dc-go').addEventListener('click', decline);
+  $('qn-go').addEventListener('click', ask);
+  $('print').addEventListener('click', printIt);
+  (function () {
+    var bar = $('parts'), bs = bar && bar.querySelectorAll ? bar.querySelectorAll('button[data-part]') : [];
+    for (var i = 0; i < bs.length; i++) (function (b) { b.addEventListener('click', function () { setPart(b.getAttribute('data-part')); }); })(bs[i]);
+  })();
+  window.addEventListener('hashchange', function () { var k = partFromHash(); if (k !== PART) { PART = k; if (VIEW) draw(VIEW); } });
+  window.OmegaQuotePage = { approve: approve, decline: decline, ask: ask, print: printIt, reload: load, part: setPart };
+
+  if (!/^[A-Za-z0-9_-]{4,64}$/.test(ID) || !/^[A-Za-z0-9_-]{16,128}$/.test(KEY)) { fail('This link is incomplete. Open the proposal from the email you received, or ask the person who sent it for the link.'); return; }
+  load();
+})();
+</script>
+</body>
+</html>

@@ -1,5 +1,47 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Omega Prime → Omega Teleios (2026-10-17)
+
+Tommy: Prime must print a quote, use Clean Cell's units (FENECON out), carry
+what was drawn into Site Map exactly, be saved and resumable, send a tracked
+proposal in the tenant's own name, and on approval hand the order to the
+workspace's own Omega Logic, ending at Omega Teleios; outside ComEd the
+circuit step must read the real utility. What changed, and where it lives:
+- **Site Map, exactly as drawn.** `omega-prime-handoff.js` no longer opens
+  the Guided Build. On `omega:project-rendered` (dispatched as `doRender`'s
+  last line, after `_loadReady`/`_watchRecord`) it builds `prime.layout` (v2;
+  a v1 sketch is upgraded with `OmegaPrimeProject.upgrade`) with the editor's
+  own functions: a zonebox for the BESS area, `_evAdd` evgear
+  bess/xfmr/disco/service at Prime's centres (`_geoLat/_geoLng`) and true
+  footprints (minW/minH 4), `autoWireConduit` RMC-AC pad legs and the PVC-UG
+  service run trenched on Prime's L, all one `omegaHistBatch`, marked
+  `fromPrime`/`primeRole`, then `saveProject()`. Four editor hooks:
+  `_loadProject` keeps `S.prime` (read only) and resets `S.primeBuild`;
+  `saveProject`'s update branch writes only `prime.builtAt`/`prime.builtHash`;
+  `_ppCollectFleet` carries `catalogKey`/`mfr` (the R60 prices at its catalog
+  price, not $85/kWh; a Guided Build element keeps its old keying);
+  `omega-prime-project.js` loads before the handoff. The Guided Build is the
+  fallback only (`from=prime`, nothing placed). `OmegaPrimeHandoff.rebuild()`
+  draws again into an emptied drawing. `scripts/tests/tprimetransfer.js`.
+- **One unit rule**: `OmegaPrimeProject.unitFor` (the list's entry by key, the
+  snapshot Prime saved, a shipped constant by key — `PP.R60`, `PP.XXL` — then
+  the battery entry) is what Prime, the quote server and the handoff resolve
+  a record's unit through, so a v1 sketch upgrades to the same layout in all
+  three. A unit at its maker's reference size is a block marked
+  `primeFootprint:'reference'`; one with no size at all is a 2 ft marker
+  (`primeFootprint:'none'`, `primeMarkFt`; `_elFootprintFt` sizes it).
+  `#omega-prime-nav` in `#portal-nav` carries the Omega Prime link, the
+  proposal's status and **Rebuild from Omega Prime** (an empty or partial
+  drawing, or Prime's layout changed since the build).
+  Pre-existing, not changed here: the unified anchor engine replaces
+  `_geoReprojectAll`, so `omegaRescaleElements` never runs on a map move and
+  placed gear keeps its build-zoom pixel size when the rep zooms out.
+- **Prime no longer loads `omega-comed-layers.js`**: its circuit is the
+  national `/api/hosting-capacity`. Site Finder and the editor's Grid panel
+  still use the ComEd module (moving the panel onto the door is next).
+- Still different engines: Prime's Run is `/api/price-site`; Site Map's Run
+  is `editor-cost`. The proposal is priced by the former, from Prime's layout.
+
 ## Omega Prime sets up the real project (2026-10-16)
 
 Tommy: "it does the set up and system like the artifact sandbox". Omega
