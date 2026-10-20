@@ -29,13 +29,13 @@
  *   Track     the customer opens and approves (the door's public branch);
  *             the order is refused (no Omega Logic) in plain words, retried
  *             once Omega Logic is on; the ladder and the three links
+ *   Unit      (run after Mesa) a site saved on FENECON's XXL, opened in a
+ *             workspace whose list does not offer it: the Proposal step
+ *             asks for the unit to quote from that list (the server's word,
+ *             GET ?projectId=), Preview and Save held; the choice keeps the
+ *             drawing, is patched onto the record, then priced and saved
  *   Phone     390 px: the resumed Track and the reopened proposal, its form
  *             filled from the saved quote, no sideways scroll
- *   Unit      a site saved on FENECON's XXL, opened in a workspace whose list
- *             does not offer it: the Proposal step asks for the unit to
- *             quote from that list (the server's word, GET ?projectId=),
- *             Preview and Save held; the choice keeps the drawing, is
- *             patched onto the record, then priced and saved
  *   Mesa      29 W Main St, Mesa AZ: the territory layers name Salt River
  *             Project, Arizona Public Service and the City of Mesa; downtown
  *             Mesa is inside the city, so City of Mesa leads, SRP is named
