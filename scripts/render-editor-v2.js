@@ -115,6 +115,18 @@ var server = http.createServer(function(req,res) {
     var pdf=await downloaded; var pdfPath=await pdf.path();
     assert(fs.readFileSync(pdfPath).subarray(0,4).toString()==='%PDF','permit output is a real PDF');
     await page.evaluate(function(){OmegaEditorV2Outputs.close();});
+    /* A typed address is found on the FIRST click of Find address (the blur
+       that saves the field used to rebuild the panel under the click), and
+       on Enter. Coordinates need no network. */
+    await page.click('#stages [data-stage="design"]');
+    await page.fill('#site-address','33.41541, -111.83264');
+    await page.click('#site-find');
+    await page.waitForFunction(function(){return /Anchor set/.test(document.getElementById('status').textContent);},null,{timeout:5000});
+    assert(await page.evaluate(function(){var e=document.getElementById('site-address');return !!e;}),'the address field is still there after Find address');
+    await page.fill('#site-address','33.30600, -112.07400');
+    await page.press('#site-address','Enter');
+    await page.waitForFunction(function(){return document.getElementById('site-address').value==='33.30600, -112.07400'&&/Anchor set/.test(document.getElementById('status').textContent);},null,{timeout:5000});
+    assert.strictEqual(await page.evaluate(function(){return document.title;}),'Omega Maximus','the page is Omega Maximus');
     assert.deepStrictEqual(errors,[]);
     console.log(JSON.stringify({passed:true,mode:first.mode,triangles:first.triangles,shots:out,externalServices:'offline: fallback verified'}));
   } finally {if(browser) await browser.close(); server.close();}

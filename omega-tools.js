@@ -550,7 +550,7 @@
       orgs:['clearsky-usa.com','csebuilders.com'],
       icon:'M9 11l3 3L22 4M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11' }
   ];
-  SEED_TOOLS.push({ key:'siteplantrial', name:'Site Plan · customer trial', category:'design',
+  SEED_TOOLS.push({ key:'siteplantrial', name:'Omega Maximus · customer trial', category:'design',
       desc:'Try the new CAD and 3D tool. Save projects, review outputs and send feedback. Site Map remains available.',
       file:'/editor-v2', badge:'trial', tier:TIER.STANDARD,
       icon:'M3 3h18v18H3zM3 9h18M9 9v12' });

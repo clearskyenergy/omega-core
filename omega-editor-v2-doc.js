@@ -362,7 +362,7 @@
 
   function serialize(doc) { return clone(doc); }
   function restore(raw) {
-    if (!raw || raw.schema !== SCHEMA) throw new Error('This file is not an OMEGA Site Plan.');
+    if (!raw || raw.schema !== SCHEMA) throw new Error('This file is not an Omega Maximus drawing.');
     var doc = create(raw);
     doc.projectId = raw.projectId || doc.projectId;
     doc.entities = clone(raw.entities || []);

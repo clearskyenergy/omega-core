@@ -242,7 +242,7 @@
       doc.assignment = read;
       return doc;
     }
-    throw new Error('This project has no Site Plan drawing to open.');
+    throw new Error('This project has no Omega Maximus drawing to open.');
   }
 
   var api = {

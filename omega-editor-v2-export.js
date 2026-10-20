@@ -196,7 +196,7 @@
     text(margin, pageH - margin - 20, 9, (doc.address || 'No address') + '   ·   ' + (summary.solarKwDc || 0) + ' kW-DC solar   ·   ' + (summary.bessKw || 0) + ' kW storage');
     var cust = (doc.assignment && doc.assignment.customerName) || 'No customer yet';
     text(margin, pageH - margin - 32, 9, 'Customer: ' + cust);
-    text(margin, margin + 18, 8, 'OMEGA Site Plan preview. Scale is fitted to the sheet. Dimensions on the drawing are in feet.');
+    text(margin, margin + 18, 8, 'Omega Maximus preview. Scale is fitted to the sheet. Dimensions on the drawing are in feet.');
     text(margin, margin + 8, 8, 'Project ' + (doc.projectId || '') + '   ·   Not a permit set.');
 
     var stream = cmds.join('\n');

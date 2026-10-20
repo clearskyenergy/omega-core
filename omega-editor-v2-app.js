@@ -1,6 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  *
- * omega-editor-v2-app.js — the Site Plan preview.
+ * omega-editor-v2-app.js — Omega Maximus ("editor maximum"; Site Plan while it
+ * was built), the editor beside Site Map at /editor-v2.
  *
  * Drawing state lives in omega-editor-v2-doc.js. This file is the page:
  * the canvas, the command line, save-on-this-computer, and the customer
@@ -1421,15 +1422,22 @@
     propSig = sig;
     var host = $('props');
     host.innerHTML = '';
-    field(host, 'Address', state.doc.address || '', function (v) {
+    var addr = field(host, 'Address', state.doc.address || '', function (v) {
       D.setMeta(state, { address: v }); afterChange();
+    });
+    addr.id = 'site-address';
+    addr.placeholder = 'Street, city, state ZIP — or latitude, longitude';
+    /* Enter finds the site. Find address keeps the field focused on press:
+       a blur saves the address, which rebuilt this panel and dropped the
+       button before its click landed, so the first click found nothing. */
+    addr.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); locate(addr.value); }
     });
     var find = document.createElement('button');
     find.type = 'button'; find.className = 'btn'; find.textContent = 'Find address';
-    find.addEventListener('click', function () {
-      var input = host.querySelector('input');
-      locate(input ? input.value : '');
-    });
+    find.id = 'site-find';
+    find.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    find.addEventListener('click', function () { locate(addr.value); });
     host.appendChild(find);
     field(host, 'Grid (ft)', String(state.doc.gridFt || 5), function (v) {
       var n = parseFloat(v);
@@ -1579,7 +1587,7 @@
     }
   }
   function sendFeedback() {
-    var message=window.prompt('What worked, or what should we improve in Site Plan?');
+    var message=window.prompt('What worked, or what should we improve in Omega Maximus?');
     if(!message || !message.trim()) return;
     saveWorkspace().then(function(ok){if(ok)return root.OmegaEditorV2Workspace.feedback(state.doc,message).then(function(){setStatus('Feedback saved with your project. Thank you.');});})
       .catch(function(e){setStatus(e.message,true);});
@@ -1699,7 +1707,7 @@
     cloud.addEventListener('click', function () {
       cloud.disabled=true; cloud.textContent='Loading workspace…';
       root.OmegaEditorV2Workspace.list().then(function (items) {
-        cloud.textContent=items.length ? 'Workspace projects' : 'No Site Plan projects in this workspace yet.';
+        cloud.textContent=items.length ? 'Workspace projects' : 'No Omega Maximus projects in this workspace yet.';
         items.forEach(function (item) {
           var li=document.createElement('li'), b=document.createElement('button'); b.type='button'; b.textContent=item.name||item.id;
           b.onclick=function(){ $('dlg-open').close(); confirmDirty(function(){loadWorkspace(item.id);}); }; li.appendChild(b); list.prepend(li);
@@ -1854,7 +1862,7 @@
           state = D.createState(D.restore(json));
           dirty = true; fit(false); refresh();
           setStatus('Opened the drawing.');
-        } else setStatus('That JSON is not a Site Plan or a project record.', true);
+        } else setStatus('That JSON is not an Omega Maximus drawing or a project record.', true);
       } catch (err) { setStatus('Could not read that file. Use a project JSON or a DXF.', true); }
     };
     reader.readAsText(file);
