@@ -1507,7 +1507,20 @@ panel moves (kept per browser, docked on a phone):
   the brochure names one (LG JP-2, Smart Module), `footprint: 'reference'`,
   said to be confirmed on the submittal everywhere it shows; the rep's
   typed submittal size replaces it; a unit with no figure at all stays a
-  marked point.
+  marked point. **A proposal quotes only a unit the list offers**
+  (2026-10-20, from the ClearSky workspace: Preview on a site set up on the
+  XXL before 2026-10-17 answered "not in your workspace’s list any more;
+  choose it again in Omega Prime", and a started site has no picker): a
+  site keeps the unit it was drawn with (`PP.unitFor`), but
+  `PP.offered(list, unit)` (the list's entry by key, else the same SKU, its
+  own figures) is the ONE rule the quote door's preview, save and send and
+  the order hand-off (`prime-order`) resolve it by. `GET
+  /api/customer-quote?projectId=` returns `unit {offered, choices}` and
+  Prime's Proposal step then asks for the unit to quote from that list,
+  Preview, Save and Send held, the drawing kept (area, unit point, service
+  point, conduit; the gear placed for the new unit, the circuit asked again
+  for it), patched with `unitChanged`; a proposal saved on the old unit then
+  reads as changed and is saved again before it goes out.
 - **The record.** The project is CREATED at Start (`projectDoc`) and the
   address becomes `/omega-prime?id=`; every change after is one debounced
   dotted `patch()` (`prime.*`, `grid.<part>`, `load`; never a drawing key;

@@ -7,7 +7,10 @@
  * against the seller's published products, and — when the seller has not
  * published it — ordered as a REFERENCE line resolved on the server from
  * the seller's own battery list (never from what the quote record says
- * about it), marked { reference, mfr } with procure{} naming its maker; a
+ * about it) by the quote door's own rule (Q.offered), so a battery the list
+ * no longer offers (FENECON's XXL outside FENECON) is refused in the door's
+ * words while FENECON orders its own, marked { reference, mfr } with
+ * procure{} naming its maker; a
  * battery the seller publishes is a normal line; one order per revision
  * (a deterministic id); the daily cap; the end client stamped on an
  * admitted account; the seller's own approved price on its own order, never
@@ -35,6 +38,7 @@ F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: 
   canActInOrg: async function (c, org) { return c.staff || c.orgId === org; },
   FieldValue: function () { return { serverTimestamp: function () { return 'TS'; } }; } });
 var PO = require('../api/_lib/prime-order'), P = require('../api/_lib/logic-policy'), Q = require('../api/_lib/customer-quote'); var Cu = require('../api/_lib/custody');
+var PP = require('../omega-prime-project.js');
 
 var NOW = Date.parse('2026-10-17T15:00:00Z');
 var SELLER = 'sunwave.energy', MFR = 'cleancell.us';
@@ -100,7 +104,21 @@ async function run() {
 
   /* ── the battery, from the seller's own list ── */
   reset();
-  await refused(function () { return PO.create(DB, { quote: quote({ unit: { key: 'NOT-A-UNIT', sku: 'NOPE-1' } }), now: NOW }); }, 409, /not in Sunwave Energy’s battery list/, 'a battery the seller’s list does not hold is never ordered');
+  await refused(function () { return PO.create(DB, { quote: quote({ unit: { key: 'NOT-A-UNIT', sku: 'NOPE-1' } }), now: NOW }); }, 409, /^The battery \(NOT-A-UNIT\) is not on Sunwave Energy’s battery list any more/, 'a battery the seller’s list does not hold is never ordered');
+  /* ONE rule with the quote door (Q.offered = omega-prime-project.js
+     offered()): a quote saved on FENECON's XXL before it left every list
+     but FENECON's (2026-10-17) is refused in the words the door uses, and
+     told where to choose the unit; the same product under another key is
+     the list's own entry */
+  var poSrc = require('fs').readFileSync(require.resolve('../api/_lib/prime-order'), 'utf8');
+  ok(Q.offered === PP.offered && /var unit = Q\.offered\(Q\.unitsFor\(org, ctx\.org, sf\), q\.unit\);/.test(poSrc) && !/function unitFrom|u\.key === key/.test(poSrc) && !('unitFrom' in PO), 'the hand-off resolves the battery by the door’s own rule, with no lookup of its own');
+  var xxlQuote = quote({ unit: Q.unitOf(PP.XXL) });
+  var ex = await refused(function () { return PO.create(DB, { quote: xxlQuote, now: NOW }); }, 409, null, 'the XXL outside FENECON is never ordered');
+  eq(ex.message, 'The FENECON Industrial XXL is not on Sunwave Energy’s battery list any more, so its order line could not be checked. Choose the unit on Omega Prime’s Proposal step (the drawing is kept), save the proposal and send it again.', 'in the door’s words, naming where to choose');
+  ok(ex.plain === true && orders().length === 0, 'a plain refusal the quote keeps; no order');
+  var rekeyed = await PO.create(DB, { quote: quote({ unit: Object.assign({}, quote().unit, { key: 'SUNWAVE-SM-OLD', sku: 'cc-sm-1000' }) }), now: NOW });
+  eq(DB.data.get('orders/' + rekeyed.orderId).items[0].sku, 'CC-SM-1000', 'the same product under another key is the list’s own entry, by its own SKU');
+  reset();
   await refused(function () { return PO.create(DB, { quote: quote({ site: { address: 'somewhere near the river' }, customer: { name: 'Dana', company: 'Riverside' } }), now: NOW }); }, 409, /street, city, state and ZIP/, 'an address the order check cannot read');
   DB.seed('omega_orgs/' + SELLER + '/storefront/config', { products: [Object.assign({}, PRODUCT, { active: false })] });
   await refused(function () { return PO.create(DB, { quote: quote(), now: NOW }); }, 409, /lists CC-SM-1000 but not as an orderable product/, 'a SKU the seller switched off is refused, never re-added as a reference');
@@ -182,6 +200,15 @@ async function run() {
   var oo = DB.data.get('orders/' + own.orderId);
   ok(oo.orgId === MFR && oo.items[0].reference === true && oo.procure === null, 'unpublished, it is a reference line on its own order, and not bought in');
   ok(Cu.boughtIn(oo, oo.items[0].sku) === null, 'custody agrees: a maker’s own unpublished unit is never called bought in');
+
+  /* ── FENECON's own workspace: its XXL is on its list, so it is ordered,
+     its own (not bought in), a reference line until it publishes it ── */
+  reset();
+  onLogic('fenecon.com', 'FENECON');
+  DB.seed('omega_orgs/fenecon.com/storefront/config', { products: [] });
+  var fen = await PO.create(DB, { quote: quote({ orgId: 'fenecon.com', unit: Q.unitOf(PP.XXL), seller: { name: 'FENECON', rep: { name: 'Fen', email: 'rep@fenecon.com' } } }), now: NOW });
+  var fo = DB.data.get('orders/' + fen.orderId);
+  ok(fo.orgId === 'fenecon.com' && fo.items[0].sku === 'FENECON-IND-XXL' && fo.items[0].reference === true && fo.procure === null && fo.prime.unit.key === 'FENECON-IND-XXL', 'FENECON orders its own XXL: a reference line on its own order, not bought in');
 
   /* ── the office prices and accepts it through the workflow's own step ── */
   reset();
