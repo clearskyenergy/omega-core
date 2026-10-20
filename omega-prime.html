@@ -102,6 +102,8 @@ button{font:inherit;color:inherit}
 #guide .gh{background:var(--rail);color:#fff;padding:9px 14px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
 #guide .gh span{font-family:var(--mono);color:var(--teal);letter-spacing:.06em}
 #guide .gh button{all:unset;cursor:pointer;color:var(--rail-dim);font-size:12px}
+#guide .gh{cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+#guide.drag .gh{cursor:grabbing}#guide.moved{right:auto;bottom:auto}
 #guide .gb{padding:12px 14px 14px}
 #guide h4{margin:0 0 6px;font-size:15px}
 #guide p{margin:0 0 8px;color:var(--ink2);line-height:1.5}
@@ -147,6 +149,10 @@ button{font:inherit;color:inherit}
 .cont{display:flex;justify-content:space-between;gap:10px;align-items:center;border:1px solid var(--line);border-radius:6px;padding:9px 12px;text-decoration:none;color:var(--ink);background:#fff;font-size:13px}
 .cont:hover{border-color:var(--brand)}.cont span{color:var(--ink2);font-size:12px;white-space:nowrap}
 .cont b{font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.controw{display:flex;gap:6px;align-items:stretch}.controw .cont{flex:1;min-width:0}
+.contdel{all:unset;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:0 10px;font-size:12px;color:var(--ink2);display:flex;align-items:center;background:#fff}
+.contdel:hover{border-color:#B3261E;color:#B3261E}.contdel:focus-visible{outline:2px solid var(--acc);outline-offset:1px}.contdel[aria-disabled]{opacity:.5;cursor:default}
+.contkeep{font-size:11px;color:var(--ink3);display:flex;align-items:center;padding:0 6px;white-space:nowrap}
 /* grid atlas */
 #s-atlas{background:#0d1b2a;color:var(--ga-ink)}
 .drawer{width:290px;flex:none;background:var(--ga-panel);border-right:1px solid var(--ga-line);display:flex;flex-direction:column;overflow:auto}
@@ -376,7 +382,7 @@ button{font:inherit;color:inherit}
           <div class="fld" style="margin-top:14px"><label for="ld-peaks">Monthly peak demand from the bill (kW, January to December)</label>
             <textarea id="ld-peaks" rows="3" placeholder="e.g. 1,420  1,388  1,402  1,510  1,690  1,840  1,910  1,880  1,720  1,560  1,450  1,430"></textarea></div>
           <div id="ldOut" class="note"></div>
-          <button class="primary" id="ld-tomap">Design it in Site Map →</button>
+          <button class="primary" id="ld-tomap">Next: design the site →</button>
           <p class="note" id="ldSave"></p>
         </div>
       </div>
@@ -384,7 +390,7 @@ button{font:inherit;color:inherit}
 
     <!-- SITE MAP -->
     <section class="screen" id="s-map">
-      <div class="rbtabs"><span class="proj" id="edTitle">Site Map</span><span class="t">Draw</span></div>
+      <div class="rbtabs"><span class="proj" id="edTitle">Design</span><span class="t">Draw</span></div>
       <div class="ribbon">
         <div class="grp"><div class="gi">
           <button class="rb" id="ed-area"><svg viewBox="0 0 24 24"><rect x="4" y="6" width="16" height="12" stroke-dasharray="3 2"/></svg>BESS area</button>
@@ -431,7 +437,7 @@ button{font:inherit;color:inherit}
         </div>
         <div class="pq-col">
           <div class="pq-tools"><b id="pqNo">The proposal</b><span class="pq-prints"><button class="ghost" id="pq-print" aria-disabled="true" title="The whole proposal, as the customer receives it">Print proposal</button><button class="ghost" id="pq-print-quote" data-part="quote" aria-disabled="true" title="The priced summary on its own">Quote</button><button class="ghost" id="pq-print-sitemap" data-part="sitemap" aria-disabled="true" title="The site map you drew, on its own page">Site map</button></span></div>
-          <div class="pq-deck" id="pqDeck"><div class="ph">Type the customer, then press <b>Preview</b>: the proposal is priced on the server from this site's map and drawn here as the customer will see it.</div></div>
+          <div class="pq-deck" id="pqDeck"><div class="ph">Type the customer, then press <b>Preview</b>: the proposal is priced on the server from the design you drew here in Prime, and drawn as the customer will see it.</div></div>
         </div>
         <aside class="pq-col pq-rep" id="pqRep"></aside>
       </div>
@@ -489,8 +495,11 @@ button{font:inherit;color:inherit}
   /* a stored time (a Timestamp, millis, an ISO string) → "Oct 17, 2026". A
      date-only value (YYYY-MM-DD, a proposal's valid-until) is a calendar
      day, read from its parts: parsed as an instant it is UTC midnight, the
-     evening before west of UTC. */
-  function ymdOf(v) { var m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})$/.exec(v); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; }
+     evening before west of UTC. So is a day the Track ladder carries as
+     midnight UTC (custody's shipped, delivered, received and commissioned
+     days, api/_lib/teleios.js): 2026-10-20, "Shipped Sep 28" read Sep 27
+     in Chicago. */
+  function ymdOf(v) { var m = typeof v === 'string' && /^(\d{4})-(\d{2})-(\d{2})(?:T00:00:00(?:\.0+)?Z)?$/.exec(v); return m ? { y: +m[1], m: +m[2] - 1, d: +m[3] } : null; }
   function day(v) {
     var t = null, p = ymdOf(v);
     if (p) t = new Date(p.y, p.m, p.d).getTime();
@@ -610,7 +619,7 @@ button{font:inherit;color:inherit}
     run: null, runFin: null, runErr: '', runOld: null,
     projectId: null, orgId: '', who: null, saveErr: '', unsaved: false,
     editedInSiteMap: false, editedAt: null, builtAt: null, builtHash: '' };
-  var SCREENS = [['start', 'Site'], ['atlas', 'Grid Atlas'], ['circuit', 'Circuit'], ['load', 'Load'], ['map', 'Site Map'], ['quote', 'Proposal'], ['track', 'Track']];
+  var SCREENS = [['start', 'Site'], ['atlas', 'Grid Atlas'], ['circuit', 'Circuit'], ['load', 'Load'], ['map', 'Design'], ['quote', 'Proposal'], ['track', 'Track']];
   var KEYS = SCREENS.map(function (s) { return s[0]; });
   var seen = { start: 1 }, cur = 'start';
   /* every step up to k is open on the path; the furthest one open */
@@ -661,8 +670,8 @@ button{font:inherit;color:inherit}
     }
     if (cur === 'load') {
       if (!S.rates && !S.ratesErr) return { t: 'What does the site pay for demand?', p: 'Reading the utility\'s planning rates for this site.', a: 'Wait for the rates', tg: null };
-      if (!S.load || !S.load.peakKw) return { t: 'The bill\'s peaks', p: 'Type or paste the twelve monthly peak kW from the utility bill. Skip if you do not have it yet.', a: 'Enter the peaks, or press Design it in Site Map', tg: '#ld-peaks' };
-      return { t: 'Demand, priced', p: (bat() ? 'The demand charge the battery works against.' : 'What the site pays for demand.') + ' Next the unit goes on the site.', a: 'Press Design it in Site Map', tg: '#ld-tomap' };
+      if (!S.load || !S.load.peakKw) return { t: 'The bill\'s peaks', p: 'Type or paste the twelve monthly peak kW from the utility bill. Skip if you do not have it yet.', a: 'Enter the peaks, or press Next: design the site', tg: '#ld-peaks' };
+      return { t: 'Demand, priced', p: (bat() ? 'The demand charge the battery works against.' : 'What the site pays for demand.') + ' Next the unit goes on the site.', a: 'Press Next: design the site', tg: '#ld-tomap' };
     }
     if (cur === 'map') {
       if (!bat()) return { t: 'Sized in Site Map', p: 'The ' + UNIT.short + ' is not priced by the battery cost model. Quote required — Site Map sizes it. Sketch the site here if it helps.', a: 'Press Proposal, or keep sketching the site', tg: '#ed-quote' };
@@ -679,7 +688,7 @@ button{font:inherit;color:inherit}
         ? { t: 'Save the site first', p: 'A proposal is kept with a saved site, and this one is not saved yet' + (S.saveErr ? ' (' + S.saveErr + ')' : '') + '.', a: 'Press Save this site', tg: '#pq-make' }
         : { t: 'Save the site first', p: 'A proposal is kept with a saved site. Sign in and start the site again to keep it.', a: '', tg: null };
       if (QS.loading) return { t: 'The proposal', p: 'Looking for the proposal already written for this site.', a: 'Wait a moment', tg: null };
-      if (!QS.view) return { t: 'Who is it for?', p: 'Type the customer and your margin. Preview prices it on the server from this site’s map.', a: 'Fill in the customer, then press Preview', tg: $('#pq-name').value || $('#pq-company').value ? '#pq-preview' : '#pq-name' };
+      if (!QS.view) return { t: 'Who is it for?', p: 'Type the customer and your margin. Preview prices it on the server from the design you drew here.', a: 'Fill in the customer, then press Preview', tg: $('#pq-name').value || $('#pq-company').value ? '#pq-preview' : '#pq-name' };
       if (!QS.view.id) return { t: 'Save it', p: 'Saved, the proposal is kept with this site’s map and in the Quote Desk.', a: 'Press Save', tg: '#pq-save' };
       if (stale()) return { t: 'The design changed', p: 'The map or the battery changed since this proposal was priced. Save it again to re-price it before it goes out.', a: 'Press Save again', tg: '#pq-resave' };
       if (QS.saved && QS.saved.status === 'draft') return { t: 'Send it', p: 'Email it to the customer, or copy a link to share yourself. Every send is tracked.', a: 'Press Email it, or Copy a link', tg: QS.saved.customer && QS.saved.customer.email ? '#pq-send-email' : '#pq-link' };
@@ -699,6 +708,46 @@ button{font:inherit;color:inherit}
     if (g.tg) { var t = $(g.tg); if (t) t.classList.add('pulse'); }
   }
   $('#gMin').onclick = function () { var g = $('#guide'); g.classList.toggle('min'); this.textContent = g.classList.contains('min') ? 'Show' : 'Hide'; };
+  /* the guide moves (2026-10-20, Tommy: "this panel needs to be able to be
+     moved"): dragged by its header, kept inside the screen, kept where it was
+     put in this browser; a double-click puts it back in its corner. On a
+     phone it is docked under the screen and does not move. */
+  (function () {
+    var g = $('#guide'), h = g && g.querySelector('.gh'), KEY = 'omega-prime:guide-at', d = null, at = null;
+    var docked = window.matchMedia ? matchMedia('(max-width: 760px)') : { matches: false };
+    if (!h) return;
+    function box() { var s = $('#stage'); return s ? s.getBoundingClientRect() : { left: 0, top: 0, width: innerWidth, height: innerHeight }; }
+    function place(x, y) {
+      var b = box();
+      x = Math.max(0, Math.min(x, b.width - g.offsetWidth)); y = Math.max(0, Math.min(y, b.height - h.offsetHeight));
+      g.style.left = x + 'px'; g.style.top = y + 'px'; g.classList.add('moved');
+      at = { x: x, y: y };
+    }
+    function corner() { g.classList.remove('moved'); g.style.left = ''; g.style.top = ''; }
+    function fit() { if (docked.matches) corner(); else if (at) place(at.x, at.y); }
+    h.title = 'Drag to move · double-click to put it back';
+    h.addEventListener('pointerdown', function (e) {
+      if (docked.matches || e.button !== 0 || (e.target.closest && e.target.closest('button'))) return;
+      var r = g.getBoundingClientRect(), b = box();
+      d = { dx: e.clientX - r.left, dy: e.clientY - r.top, bx: b.left, by: b.top };
+      g.classList.add('drag'); try { h.setPointerCapture(e.pointerId); } catch (e2) {}
+      e.preventDefault();
+    });
+    h.addEventListener('pointermove', function (e) { if (d) place(e.clientX - d.bx - d.dx, e.clientY - d.by - d.dy); });
+    function end() {
+      if (!d) return;
+      d = null; g.classList.remove('drag');
+      try { if (at) localStorage.setItem(KEY, JSON.stringify(at)); } catch (e) {}
+    }
+    h.addEventListener('pointerup', end); h.addEventListener('pointercancel', end);
+    h.addEventListener('dblclick', function (e) {
+      if (e.target.closest && e.target.closest('button')) return;
+      at = null; corner(); try { localStorage.removeItem(KEY); } catch (e2) {}
+    });
+    try { var saved = JSON.parse(localStorage.getItem(KEY) || 'null'); if (saved && isFinite(saved.x) && isFinite(saved.y)) at = { x: +saved.x, y: +saved.y }; } catch (e) {}
+    fit();
+    addEventListener('resize', fit);
+  })();
   function banner(text, ok) { var b = $('#banner'); b.hidden = !text; b.textContent = text || ''; b.className = ok ? 'ok' : ''; setTimeout(function () { [gaMap, sfMap, edMap].forEach(function (m) { if (m) m.invalidateSize(); }); }, 30); }
 
   /* ── geo helpers ──────────────────────────────────────────────────── */
@@ -746,7 +795,7 @@ button{font:inherit;color:inherit}
   $('#addr').onkeydown = function (e) { if (e.key === 'Enter') $('#go').click(); };
   function siteLines() {
     $('#wsLine').innerHTML = 'Omega Prime · <b>' + esc(S.addr) + '</b>';
-    $('#gaAddr').textContent = S.geoLabel || S.addr; $('#edTitle').textContent = 'Site Map · ' + S.addr;
+    $('#gaAddr').textContent = S.geoLabel || S.addr; $('#edTitle').textContent = 'Design · ' + S.addr;
   }
   $('#go').onclick = function () {
     var q = $('#addr').value.trim(), b = this, er = $('#startErr');
@@ -765,7 +814,7 @@ button{font:inherit;color:inherit}
          made again as the work goes on (flushSave), or by Save this site. */
       ensureProject().then(null, function (e) {
         S.saveBanner = true;
-        banner(signedIn() ? 'This site is not saved yet (' + e.message + '). Omega Prime tries again as you go; Save this site on the Site Map step tries now.' : e.message);
+        banner(signedIn() ? 'This site is not saved yet (' + e.message + '). Omega Prime tries again as you go; Save this site on the Design step tries now.' : e.message);
       });
       show('atlas');
     });
@@ -773,7 +822,7 @@ button{font:inherit;color:inherit}
 
   /* Continue a site: the workspace's Prime projects, newest first — the
      query projects.html runs (orgId), filtered to those Prime started. */
-  var STEP_WORDS = { start: 'Site', atlas: 'Grid Atlas', circuit: 'Circuit', load: 'Load', map: 'Site Map', quote: 'Proposal', track: 'Track' };
+  var STEP_WORDS = { start: 'Site', atlas: 'Grid Atlas', circuit: 'Circuit', load: 'Load', map: 'Design', quote: 'Proposal', track: 'Track' };
   function ms(v) { if (!v) return 0; if (typeof v.toMillis === 'function') return v.toMillis(); if (typeof v === 'number') return v; var t = Date.parse(v); return isFinite(t) ? t : 0; }
   function listSites(org) {
     if (!org) return;
@@ -784,12 +833,37 @@ button{font:inherit;color:inherit}
       rows = rows.slice(0, 8);
       if (!rows.length) return;
       $('#contList').innerHTML = rows.map(function (r) {
-        var p = r.d.prime, u = p.unit || {};
-        return '<a class="cont" href="/omega-prime?id=' + encodeURIComponent(r.id) + '"><b>' + esc((p.site && p.site.addr) || r.d.address || r.d.name || 'Untitled site') + '</b><span>' +
-          esc([STEP_WORDS[p.step] || '', u.short || '', p.quote && p.quote.status ? 'proposal ' + p.quote.status : '', day(r.at)].filter(Boolean).join(' · ')) + '</span></a>';
+        var p = r.d.prime, u = p.unit || {}, name = (p.site && p.site.addr) || r.d.address || r.d.name || 'Untitled site';
+        return '<div class="controw"><a class="cont" href="/omega-prime?id=' + encodeURIComponent(r.id) + '"><b>' + esc(name) + '</b><span>' +
+          esc([STEP_WORDS[p.step] || '', u.short || '', p.quote && p.quote.status ? 'proposal ' + p.quote.status : '', day(r.at)].filter(Boolean).join(' · ')) + '</span></a>' +
+          (deletable(p) ? '<button class="contdel" type="button" data-id="' + esc(r.id) + '" data-name="' + esc(name) + '" title="Delete this site" aria-label="Delete ' + esc(name) + '">Delete</button>'
+            : '<span class="contkeep" title="Its proposal went to the customer, or it has an order: it is kept.">Kept</span>') + '</div>';
       }).join('');
+      [].forEach.call(document.querySelectorAll('#contList .contdel'), function (b) {
+        b.onclick = function () { if (!b.getAttribute('aria-disabled')) deleteSite(b.getAttribute('data-id'), b.getAttribute('data-name'), b); };
+      });
       $('#cont').hidden = false; guide();
     }, function () {});
+  }
+
+  /* Delete a site from the list (2026-10-20, Tommy: "need to be able to
+     delete these things as well"): the project itself, by the rule the
+     Projects page deletes with (firestore.rules: its own workspace, its
+     maker or staff). A site whose proposal went to the customer (sent,
+     viewed or approved) or that has an order is kept: the customer's link
+     and the order stand on it. */
+  function deletable(p) { var q = p && p.quote && p.quote.status; return !!p && !p.order && ['sent', 'viewed', 'approved'].indexOf(q) < 0; }
+  function deleteSite(id, name, btn) {
+    if (!window.confirm('Delete "' + name + '"?\n\nThe site, its drawing and its Omega Prime steps are removed for everyone in the workspace. This cannot be undone.')) return;
+    btn.setAttribute('aria-disabled', 'true'); btn.textContent = 'Deleting…';
+    firebase.firestore().collection('projects').doc(id).delete().then(function () {
+      var row = btn.parentNode; if (row && row.parentNode) row.parentNode.removeChild(row);
+      if (!$('#contList').children.length) $('#cont').hidden = true;
+      toast('Deleted: ' + name + '.'); guide();
+    }, function (e) {
+      btn.removeAttribute('aria-disabled'); btn.textContent = 'Delete';
+      toast(e && e.code === 'permission-denied' ? 'Only the site’s own workspace, with the design tools, can delete it.' : 'It could not be deleted: ' + ((e && e.message) || e));
+    });
   }
 
   /* ── GRID ATLAS: the public services Grid Atlas itself reads ──────── */
@@ -1291,7 +1365,6 @@ button{font:inherit;color:inherit}
       if (wq && /^[A-Za-z0-9_-]{4,64}$/.test(wq)) { QS.want = wq; if (!ask) ask = 'track'; }
       if (KEYS.indexOf(ask) > 0) to = seen[ask] ? ask : furthest();
       if (ask || wq) { try { history.replaceState(null, '', '/omega-prime?id=' + encodeURIComponent(id)); } catch (e) {} }
-      if (S.editedInSiteMap) banner('Edited in Site Map since ' + (day(S.editedAt) || 'it was set up') + ': Site Map’s drawing is the design of record; this is Prime’s own sketch of the site.', true);
       show(to);
       SV.dirty = false;
     }, function (e) { er.style.color = ''; er.textContent = 'The site could not be opened: ' + ((e && e.message) || e); });
@@ -1454,12 +1527,15 @@ button{font:inherit;color:inherit}
       /* a button, not a link: no browser route (a middle-click, Open link in
          new tab) can reach Site Map around the pending save; toEditor() */
       proj = '<div class="sec"><h6>Project</h6><button class="primary" id="toEditor" type="button" data-href="' + esc(editorHref()) + '" title="Ctrl- or middle-click opens it in a new tab">Open the project in Site Map</button><div id="saveLine" class="empty" style="margin-top:6px"></div>';
-      if (S.builtAt) proj += '<div class="flag ok">Built in Site Map on ' + esc(day(S.builtAt)) + '.</div>';
-      if (S.builtAt && S.builtHash && L0 && L0.hash !== S.builtHash) proj += '<div class="flag">Changed in Prime since it went to Site Map. Site Map keeps what it built; redraw it there to match.</div>';
-      if (S.editedInSiteMap) proj += '<div class="flag ok">Edited in Site Map since ' + esc(day(S.editedAt) || 'it was set up') + '.</div>';
+      /* the proposal is priced from THIS design; Site Map is where the
+         detailed engineering drawing is made from it (2026-10-20, Tommy: "the
+         site map editor is for our detailed engineering drawings") */
+      if (S.builtAt) proj += '<div class="flag ok">Sent to Site Map for engineering on ' + esc(day(S.builtAt)) + '. The proposal is priced from the design here.</div>';
+      if (S.builtAt && S.builtHash && L0 && L0.hash !== S.builtHash) proj += '<div class="flag">Changed here since it went to Site Map. The proposal follows this design; Site Map keeps its engineering drawing until you rebuild it there.</div>';
+      if (S.editedInSiteMap && !S.builtAt) proj += '<div class="flag ok">Opened in Site Map for engineering on ' + esc(day(S.editedAt) || 'a later day') + '. The proposal is priced from the design here.</div>';
       else if (!bat()) proj += '<div class="empty" style="margin-top:6px">Site Map opens it at the site; the ' + esc(UNIT.short) + ' is sized there (quote required).</div>';
       else if (!S.unitAt) proj += '<div class="empty" style="margin-top:6px">Site Map opens it with the unit ready for the BESS Guided Build.</div>';
-      else proj += '<div class="empty" style="margin-top:6px">Site Map draws exactly this: the area, the unit, its gear, the service and the conduit.</div>';
+      else proj += '<div class="empty" style="margin-top:6px">For the detailed engineering drawing: Site Map starts from exactly this design — the area, the unit, its gear, the service and the conduit.</div>';
       proj += '</div>';
     } else if (S.saveErr) {
       /* the create failed: say why, and (signed in) make it again from here */

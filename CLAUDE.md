@@ -1468,7 +1468,13 @@ editor it needs to transfer over what we drew … save this process … send a
 simple proposal out that matches the tenant's details … track them … if it
 gets approved then it goes to omega logic to be fulfilled and when it is
 fulfilled … Omega Teleios (which means complete)"). `omega-prime.html` runs
-Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
+Site → Grid Atlas → Circuit → Load → Design → Proposal → Track. **Prime's
+own drawing (Design) is what the proposal is priced from**; Site Map is the
+detailed engineering editor a design is sent to, never its design of record
+(2026-10-20, Tommy: "this should come from the prime editor we used … the
+site map editor is for our detailed engineering drawings"). A site with no
+proposal out and no order can be deleted from *Continue a site*; the guide
+panel moves (kept per browser, docked on a phone):
 - **Units.** `omega-prime-project.js units()`: the workspace's own products
   (a `PLACEHOLDER SPEC` row dropped), then Clean Cell's Rev H reference units
   biggest first (LG JP-2, Smart Module, CC290/125, through
