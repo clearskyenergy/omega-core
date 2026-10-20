@@ -1090,34 +1090,26 @@ button{font:inherit;color:inherit}
      its utility offers instead of a map, and its own pages), drawn as it
      comes; nothing is judged here. Shown wherever no figure was read and
      wherever more than one utility is mapped; the utilities the maps name
-     that cannot be the point's fold away below, each with its reason. */
+     that cannot be the point's fold away below, each with its reason. The
+     words and the order are the one client's (GV.whoServes), which Site
+     Map's Grid panel and Site Plan's Grid Atlas layer draw too. */
   function candidatesBlock(res) {
-    var t = res.territory;
-    if (!t || !t.candidates || !t.candidates.length) return '';
-    if (res.coverage === 'read' && (t.confident || t.candidates.length < 2)) return '';
-    var chosen = res.utility && res.utility.eiaId, strong = [], weak = [];
-    t.candidates.forEach(function (c) { (c.weak ? weak : strong).push(c); });
-    var shown = strong.length ? strong : weak, folded = strong.length ? weak : [];
-    var many = !t.confident && t.candidates.length > 1;
-    var mine = res.verify && res.verify.viewerUrl;
+    var w = GV && GV.whoServes ? GV.whoServes(res) : null;
+    if (!w) return '';
     function item(c) {
-      var h = c.hosting || {}, links = [];
-      [h.link, h.check].forEach(function (l) {
-        var u = l && safeHref(l.url);
-        if (u && !(l === h.link && u === mine && c.eiaId === chosen)) links.push('<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(l.label) + ' ↗</a>');
-      });
-      var says = h.says ? h.says.charAt(0).toUpperCase() + h.says.slice(1) : '';
-      /* the utility read here already has its full note above: its route is not said twice */
-      var route = h.route && !(c.eiaId && c.eiaId === chosen && res.note) ? '. Instead: ' + esc(h.route) : '';
-      return '<li><b>' + esc(c.display || c.name) + '</b>' + (many && c.eiaId && c.eiaId === chosen ? ' — the one read here' : '') +
-        (c.why && !c.weak ? '<div class="why">' + esc(c.why) + '</div>' : '') +
-        (says ? '<div class="pub">' + esc(says) + route + '.</div>' : '') +
-        (links.length ? '<div class="lnk">' + links.join('') + '</div>' : '') + '</li>';
+      var links = c.links.map(function (l) {
+        var u = safeHref(l.url);
+        return u ? '<a href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(l.label) + ' ↗</a>' : '';
+      }).join('');
+      return '<li><b>' + esc(c.name) + '</b>' + esc(c.mark) +
+        (c.why ? '<div class="why">' + esc(c.why) + '</div>' : '') +
+        (c.says ? '<div class="pub">' + esc(c.says) + '</div>' : '') +
+        (links ? '<div class="lnk">' + links + '</div>' : '') + '</li>';
     }
-    return '<div class="cands" id="sfWho">' + (many ? '<b>More than one utility is mapped at this point.</b>' : '<b>Who serves this point</b>') +
-      '<ul>' + shown.map(item).join('') + '</ul>' + (many ? 'Confirm the utility with the customer’s bill.' : '') +
-      (folded.length ? '<details><summary>Also on the territory maps, not this point (' + folded.length + ')</summary><ul>' + folded.map(function (c) {
-        return '<li>' + esc(c.display || c.name) + ' <span class="empty">(' + esc(c.why || 'a weak match') + ')</span></li>';
+    return '<div class="cands" id="sfWho"><b>' + esc(w.head) + '</b>' +
+      '<ul>' + w.items.map(item).join('') + '</ul>' + esc(w.confirm) +
+      (w.fold ? '<details><summary>' + esc(w.fold.title) + '</summary><ul>' + w.fold.items.map(function (c) {
+        return '<li>' + esc(c.name) + ' <span class="empty">(' + esc(c.why) + ')</span></li>';
       }).join('') + '</ul></details>' : '') + '</div>';
   }
   /* where the power comes from: the circuit, its substation and voltage, and

@@ -172,6 +172,10 @@ At 29 W Main St, Mesa (live, 2026-10-20):
   the stand-ins, each with its reason (folded away).
 - **Needs a study:** no figure is judged as if it were published.
 
+Site Map's Grid panel and Site Plan's Grid Atlas layer show the same list,
+in the same words and order: all three draw `GV.whoServes`
+(`omega-grid-verdict.js`).
+
 In Phoenix the answer is Arizona Public Service, with its Pre-Application
 route and its Service Areas Viewer. In Tucson it is Tucson Electric Power,
 the same way. Where SRP leads, the answer is not confident, because of
