@@ -2063,7 +2063,10 @@ button{font:inherit;color:inherit}
     $('#trCards').innerHTML =
       '<a class="card" id="tr-desk" href="/rfq.html#customer-' + encodeURIComponent(q.id) + '"><b>Quote Desk</b><span>This proposal with every other one: sent, viewed, approved; resend or withdraw it there.</span></a>' +
       logicCard +
-      '<a class="card" id="tr-teleios" href="/logic-custody.html?org=' + encodeURIComponent(custodyOrg) + '"><b>Omega Teleios</b><span>Every unit bound to its site, and its warranty live: complete.</span></a>';
+      /* a bought-in unit with no warranty on file: the card opens its passport, where the office records the maker's warranty */
+      (l && l.need && l.need.kind === 'maker-warranty' && l.need.serial
+        ? '<a class="card" id="tr-teleios" data-need="maker-warranty" href="/logic-custody.html?org=' + encodeURIComponent(custodyOrg) + '&serial=' + encodeURIComponent(l.need.serial) + '#passport"><b>Omega Teleios</b><span>Put the maker’s warranty on file for ' + esc(l.need.sku || l.need.serial) + ' (' + esc(l.need.serial) + '), bought in from ' + esc(l.need.mfr || 'its maker') + ': its unit passport in Omega Logic.</span></a>'
+        : '<a class="card" id="tr-teleios" href="/logic-custody.html?org=' + encodeURIComponent(custodyOrg) + '"><b>Omega Teleios</b><span>Every unit bound to its site, and its warranty live: complete.</span></a>');
     var rb = $('#tr-retry');
     if (rb) rb.onclick = function () {
       rb.setAttribute('aria-disabled', 'true'); rb.textContent = 'Sending…';
@@ -2095,6 +2098,7 @@ button{font:inherit;color:inherit}
     var mine = !!(q.handoff && q.handoff.orderId && q.handoff.org === wsOrg());
     if (c === 'ordered') return inLogic({ t: 'Approved', p: q.handoff && q.handoff.orderId && !mine ? 'The order is in ' + mfr + '’s Omega Logic.' : 'The order goes to your workspace’s Omega Logic to be fulfilled.', a: 'Press Refresh', tg: '#tr-refresh' });
     if (c === 'priced' || c === 'accepted' || c === 'released' || c === 'building' || c === 'ready') return inLogic({ t: 'In Omega Logic', p: (mine ? 'Your office prices it, the plant builds it and it is readied for shipping in Omega Logic' : mfr + ' prices, builds and readies it in its Omega Logic') + '. The ladder follows the order by itself.', a: 'Open Omega Logic', tg: '#tr-logic' });
+    if (c === 'teleios' && l.need && l.need.kind === 'maker-warranty') return { t: 'Put the maker’s warranty on file', p: 'On site. ' + (l.need.sku || 'The battery') + ' is bought in from ' + (l.need.mfr || 'its maker') + ', so its warranty is the maker’s: record what the maker confirmed on the unit passport, and Omega Teleios follows.', a: 'Open the unit passport', tg: '#tr-teleios' };
     if (c === 'shipped' || c === 'delivered' || c === 'received' || c === 'onsite' || c === 'teleios') return { t: 'On its way to the site', p: 'Delivered, received and bound to the site, the units’ warranties go live: that is Omega Teleios.', a: 'Open Omega Teleios', tg: '#tr-teleios' };
     return { t: 'Track', p: 'Where the proposal and its order are.', a: 'Press Refresh', tg: '#tr-refresh' };
   }

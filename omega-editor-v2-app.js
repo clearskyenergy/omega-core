@@ -1402,7 +1402,15 @@
       row = card.lines[i];
       p = document.createElement('p');
       if (row.source) p.className = 'src';
-      p.textContent = row.text;
+      /* the utility's own map, from the hosting answer: https only, new tab */
+      if (row.href && /^https:\/\/[^\s"'<>]+$/i.test(String(row.href))) {
+        var a = document.createElement('a');
+        a.href = row.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        a.textContent = row.text + ' ↗';
+        p.appendChild(a);
+      } else p.textContent = row.text;
       body.appendChild(p);
     }
   }

@@ -484,7 +484,10 @@ function views(state) {
     if (/serial=/.test(q)) {
       var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { status: 404, error: 'Serial not found' };
       var c = Cu.custodyOf(u), site = state.sites.filter(function (s) { return s.id === c.siteId; })[0], rb = units.filter(function (x) { return x.serial === c.replacedBy; })[0], rs = units.filter(function (x) { return x.serial === c.replaces; })[0];
-      return { brand: brand, unit: unitView(u, now), product: prodOf(u.sku) ? { sku: u.sku, name: prodOf(u.sku).name, coverage: Cu.templatesOf(prodOf(u.sku)) } : null, site: site || null, events: (state.custodyEvents[serial] || []).slice().reverse(), scans: [], replacedBy: rb ? unitView(rb, now) : null, replaces: rs ? unitView(rs, now) : null, moves: Cu.MOVES, states: Cu.STATES };
+      var uo = u.orderId ? state.orders.filter(function (x) { return x.id === u.orderId; })[0] || null : null, ro = rs && rs.orderId ? state.orders.filter(function (x) { return x.id === rs.orderId; })[0] || null : null;
+      var ubi = Cu.boughtInUnit(u, uo, ro), bo = Cu.boughtIn(uo, u.sku) ? uo : ro;   /* bought in on its own order, or through the unit it replaced */
+      return { brand: brand, unit: unitView(u, now), product: prodOf(u.sku) ? { sku: u.sku, name: prodOf(u.sku).name, coverage: Cu.templatesOf(prodOf(u.sku)) } : null, site: site || null,
+        boughtIn: ubi ? Object.assign({ orderId: bo.id, orderNo: bo.orderNo || u.orderNo || null }, ubi) : null, canRecordWarranty: ['owner', 'admin'].indexOf(teamActor()) >= 0, events: (state.custodyEvents[serial] || []).slice().reverse(), scans: [], replacedBy: rb ? unitView(rb, now) : null, replaces: rs ? unitView(rs, now) : null, moves: Cu.MOVES, states: Cu.STATES };
     }
     if (/site=/.test(q)) { var sid = decodeURIComponent((/site=([^&]*)/.exec(q) || [])[1] || ''), sd = state.sites.filter(function (s) { return s.id === sid; })[0]; if (!sd) return { status: 404, error: 'Site not found' }; var here = units.filter(function (u) { return Cu.custodyOf(u).siteId === sid; }); return { brand: brand, site: sd, units: here.map(function (u) { return unitView(u, now); }), exceptions: Cu.exceptions(here, cat, now), limited: false }; }
     if (/view=exceptions/.test(q)) return { brand: brand, exceptions: Cu.exceptions(units, cat, now), sampled: units.length, limited: false };
@@ -1035,6 +1038,17 @@ function post(state, path, query, b, who) {
       if (tr.duplicate) return { ok: true, action: 'duplicate', serial: tu.serial, custody: Cu.custodyOf(tu) };
       patchUnit(tu, tr.patch); logEvent(tu.serial, tr.event); return { ok: true, action: 'detail', serial: tu.serial, changed: tr.event.fields, custody: Cu.custodyOf(tu) };
     }
+    /* the maker's warranty on a bought-in unit, as api/logic-custody.js: an owner or administrator, this unit or every unit of its SKU on its order */
+    if (b.action === 'maker-warranty') {
+      if (['owner', 'admin'].indexOf(V.teamActor(who)) < 0) return err(403, 'The workspace owner or an administrator records a maker’s warranty');
+      var wu = unitBy(String(b.serial || '').trim()); if (!wu) return err(404, 'Serial is not registered');
+      var wo0 = wu.orderId ? order(wu.orderId) || null : null, wr0 = Cu.custodyOf(wu).replaces ? unitBy(Cu.custodyOf(wu).replaces) : null;
+      var wbi = Cu.boughtInUnit(wu, wo0, wr0 && wr0.orderId ? order(wr0.orderId) || null : null), wt = [], wskip = [], wdone = [], wsame = [];
+      try { wt.push({ u: wu, r: Cu.makerWarranty(wu, b, who, now, wbi) }); } catch (e) { return err(e.status || 400, e.message); }
+      if (b.scope === 'order' && wbi && Cu.boughtIn(wo0, wu.sku)) state.units.filter(function (x) { return x !== wu && x.shipUnit && x.orderId === wu.orderId && x.sku === wu.sku && x.inventoryStatus !== 'void'; }).forEach(function (x) { try { wt.push({ u: x, r: Cu.makerWarranty(x, b, who, now, wbi) }); } catch (e) { wskip.push({ serial: x.serial, why: e.message }); } });
+      wt.forEach(function (t) { if (t.r.duplicate) { wsame.push(t.u.serial); return; } patchUnit(t.u, t.r.patch); logEvent(t.u.serial, t.r.event); wdone.push(t.u.serial); });
+      return { ok: true, action: 'maker-warranty', serial: wu.serial, applied: wdone, unchanged: wsame, skipped: wskip, say: Cu.makerSay(wdone, wsame, wskip, b.clear === true), makerWarranty: Cu.custodyOf(wu).makerWarranty || null };
+    }
     if (b.action === 'confirm' || b.action === 'destination') {
       var xu = unitBy(String(b.serial || '').trim()); if (!xu) return err(404, 'Serial is not registered');
       var xs = b.siteId ? siteBy(b.siteId) : null; if (b.action === 'destination' && b.siteId && !xs) return err(404, 'Site not found');
@@ -1054,6 +1068,7 @@ function post(state, path, query, b, who) {
         var c0 = Cu.custodyOf(cu), rc = Cu.custodyOf(ru), old = Cu.coverageWithInheritance(V.CATALOG.filter(function (p) { return p.sku === cu.sku; })[0], cu, now).map(function (cv) { return Object.assign({}, cv, { serial: cu.serial }); });
         var apr = Cu.apply(cu, 'replace', cb, who, now, method); patchUnit(cu, apr.patch); logEvent(cu.serial, apr.event);
         var rp = { 'custody.status': c0.status === 'rma_open' && c0.siteId ? 'assigned' : 'received', 'custody.custodian': c0.siteId ? 'site' : 'customer', 'custody.siteId': c0.siteId || null, 'custody.siteName': c0.siteName || null, 'custody.position': c0.position || '', 'custody.customerId': c0.customerId || cu.customerId || null, 'custody.replaces': cu.serial, 'custody.receivedAt': rc.receivedAt || now.slice(0, 10), 'custody.assignedAt': c0.siteId ? now.slice(0, 10) : null, 'custody.inheritedCoverage': Cu.inherited(old), 'custody.updatedAt': now, 'custody.updatedBy': who };
+        if (c0.makerWarranty && !rc.makerWarranty) rp['custody.makerWarranty'] = c0.makerWarranty;   /* a bought-in unit's maker's warranty goes with it, as api/logic-custody.js */
         patchUnit(ru, rp); logEvent(ru.serial, { type: 'replacement-of', from: rc.status, to: rp['custody.status'], replaces: cu.serial, siteId: c0.siteId || null, by: who, at: now, method: method });
         return { ok: true, serial: cu.serial, replacementSerial: ru.serial, siteId: c0.siteId || null, inherited: rp['custody.inheritedCoverage'] };
       }

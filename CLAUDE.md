@@ -796,6 +796,24 @@ is not built.
   library, and written only as sites plus one `destination()` per unit by
   the four list actions on `api/my-sites.js` and `api/logic-custody.js` —
   the server recomputes the plan, the preview is the confirmation.
+  **A bought-in unit's warranty is the maker's, recorded on the unit**
+  (2026-10-17, Tommy approved the design: owners and administrators only,
+  the maker's word required): a battery the workspace buys in and has not
+  published (Omega Prime's `procure`; `custody.boughtIn(order, sku)` is the
+  ONE test, prime-order's own, so a `{reference:true}` line alone is a
+  maker's own unpublished unit, never bought in; `boughtInUnit` lets an RMA
+  replacement off another order through the unit it replaced) has no
+  catalog template, and publishing it would put it on the public
+  storefront. The office's
+  owner or administrator records `custody.makerWarranty` (terms, the
+  maker's HTTPS document or confirmation, who and when; never a status) on
+  the passport through `api/logic-custody.js` `maker-warranty`
+  (`custody.makerWarranty`, one unit or `scope: 'order'`, a custody event
+  each, one audit row); `templatesOf(product, unit)` reads it as one more
+  template (id `maker`) after the catalog's, so every coverage reader, Omega
+  Teleios included, sees it with no reader of its own; `replace` carries it
+  to the replacement. The customer sees the warranty and its document,
+  never the maker's confirmation.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
 - **An order's freight plan is DERIVED, and Accept plans through the
   ledger's own planner.** `api/_lib/freight.js` (pure, ES5, bundled) reads
@@ -1410,19 +1428,39 @@ editor"; `docs/GUIDED-SITE-FLOW.md`). Analyze › Grid Check
 (`rb-grid-panel`, Omega Grid's, beside Grid Atlas) is `omega-grid-panel.js`:
 the project's site point and the BESS Guided Build's unit (never typed),
 the nearest substation from the Grid Atlas service the pre-screen already
-calls (`OmegaGridPrescreen`, `/api/grid-atlas`), the circuit at the parcel
-from `omega-comed-layers.js` `probePoint` (the ONE ComEd module, loaded by
-the editor; never pasted), NET of the feeder's queued DER first, and the
+calls (`OmegaGridPrescreen`, `/api/grid-atlas`), then the serving utility
+and the circuit at the parcel from the national door Omega Prime asks
+(2026-10-17: `GV.hosting` → `POST /api/hosting-capacity` with the point,
+the unit and that substation; National hosting capacity, below), NET of the
+queue where the utility publishes one beside a gross figure, and the
 verdict — Fits / Fits only smaller / Needs a study, and the substation's
-chip — from `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated as
-`/api/grid-atlas` is; every threshold is server-side). `S.grid` carries the
-service's measurement plus `substation`, `circuit` and `verdict`, rides
-`saveProject()`'s allowlist (with `savedBy`), is restored on load, and the
-pre-screen keeps the panel's answer when it re-measures the same point.
-`scripts/tests/tgridverdict.js`. The standalone Grid Atlas and Site Finder
-stay for prospecting many sites. Both the panel and Omega Prime ask through
-ONE client, `omega-grid-verdict.js` (request, `/api/grid-verdict`, and the
-`grid.*` record shape). **Omega Prime sets up the real project** (2026-10-16,
+chip — in the same answer from `api/_lib/grid-verdict.js` (gated as
+`/api/grid-atlas` is; every threshold is server-side). Every coverage case
+is drawn as Prime draws it (the utility's name, every candidate when the
+territory is not confident, where the power comes from, the provenance and
+the door's request log, the utility's own map), the queue and side words
+follow the answer (`queueNetted`, `basis`, a null `queuedKw` is "not
+published", never 0), the panel names no utility of its own, and the
+editor no longer loads `omega-comed-layers.js` (the Site Finder's). A door
+that does not answer is said and records nothing. `S.grid` carries the
+service's measurement plus `substation`, `circuit` and `verdict`
+(`GV.fromHosting`, the record Prime writes), rides `saveProject()`'s
+allowlist (with `savedBy`), is restored on load, and the pre-screen keeps
+the panel's answer when it re-measures the same point.
+`scripts/tests/tgridverdict.js` (the real door on a fake network: ComEd's
+sentence byte for byte, Mesa AZ). **Site Plan's Grid Atlas layer**
+(`omega-editor-v2-grid.js` in `editor-v2.html`) asks the same door the same
+way: no routing by state in the browser (Illinois outside ComEd is asked
+too, where it once was not), its card's lines drawn from the answer with
+the utility's own map as an https link, and `editor-v2.html` no longer loads
+the ComEd module; `scripts/tests/tgridlayer.js` runs it on the real door.
+`scripts/render-grid-panel.js` (in `check:pages`) holds both in Chromium:
+Site Map's Grid Check at ComEd, Mesa and on a 390 px phone, and Site Plan's
+layer at its Phoenix sample. The standalone Grid Atlas and Site Finder stay for
+prospecting many sites. Both the panel and Omega Prime ask through ONE
+client, `omega-grid-verdict.js` (the national door, `/api/grid-verdict`,
+the coverage words `COVERAGE`, and the `grid.*` record shape). **Omega
+Prime sets up the real project** (2026-10-16,
 Tommy: "it does the set up and system like the artifact sandbox"), and
 **carries it all the way to Omega Teleios** (2026-10-17, Tommy: "print a
 quote … cleancell's bess specs … remove fenecon … when we open in site map
@@ -1512,7 +1550,11 @@ Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
 - **Track.** `api/_lib/teleios.js ladder()` (derived at read time from
   `office-stage`, `portal.milestoneOf`, custody/coverage; no price): Proposal
   (saved, sent, viewed, approved) → Omega Logic → Delivery → **Omega
-  Teleios** (on site, every warranty live). Its Omega Logic link is
+  Teleios** (on site, every warranty live: at least one on file for every
+  unit). A bought-in battery with none is held and named in `need {serial,
+  sku, mfr}`; Track's Omega Teleios card opens that unit's passport
+  (`/logic-custody.html?org=&serial=#passport`), where the office records
+  the maker's warranty (custody, above). Its Omega Logic link is
   `/omega-logic?org=<the workspace you are in>&order=<id>#orders`. The Quote
   Desk's third tab, Customer quotes (`rfq.html#customer`,
   `#customer-<id>`), lists them on `GET /api/customer-quote?list=1`; Today

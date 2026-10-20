@@ -1,5 +1,49 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Site Map's Grid panel on the national door (2026-10-17)
+
+Tommy: "it should not just run comed information if its outside of comed it
+needs to look via api for the utility details." Prime already asked the
+national door; Site Map's Grid panel still asked `OmegaComEdLayers`, so a
+site outside ComEd read "no map" in the editor and its real utility in
+Prime. Now `omega-grid-panel.js` `circuit()` asks `GV.hosting` (`POST
+/api/hosting-capacity`) with the site point, the Guided Build's unit and the
+Grid Atlas service's nearest substation, and draws every coverage case the
+way Prime's circuit step does: the utility's name, every candidate when the
+territory is not confident (downtown Mesa: the City of Mesa beside Salt
+River Project and APS), where the power comes from, the provenance with the
+door's request log, and the utility's own map. The queue and side words
+follow the answer (`queueNetted`, `basis`, a null `queuedKw`); ComEd keeps
+its sentence byte for byte. `S.grid` is written through `GV.fromHosting`,
+the record Prime writes. The coverage words are in the client
+(`OmegaGridVerdict.COVERAGE`, Prime's words; `tgridverdict.js` holds
+Prime's own copy to them). Gone with the probe: the panel's circuit picker
+(the door judges the nearest circuit with a published figure and the panel
+lists the others) and `omega-comed-layers.js` from `editor.html` (nothing
+else there used it). The client keeps `circuitBody()`, `ask()` and
+`fields()` for a page that still reads ComEd's probe itself. A
+door that does not answer is said and records nothing. Held by
+`scripts/tests/tgridverdict.js` (the real panel, client and door's `run()`
+on a fake network) and `scripts/render-grid-panel.js` (in `check:pages`:
+the real editor's Grid Check at ComEd and Mesa, and on a 390 px phone).
+
+Site Plan's Grid Atlas layer (`omega-editor-v2-grid.js`, from main's Site
+Plan trial) followed in the same PR. It routed in the browser: ComEd's probe
+inside ComEd, nothing for the rest of Illinois, and for any other state a
+`POST /api/hosting-capacity` expecting a `{covered, empty, circuit, say}`
+answer no endpoint gave; on #354's door it would have read every non-ComEd
+site as "No open hosting layer". Now it is one `GV.hosting` with the
+drawing's point, battery and feeding substation, its card's lines are drawn
+from the answer (utility and coverage, candidates, the circuit with the
+queue words the answer calls for, the server's note, where the power comes
+from, the utility's own map as an https link the card renderer now draws),
+its own token path and `omega-comed-layers.js` are gone from Site Plan, and
+the client keeps `circuitSourceLine`/`hostingSourceLine`, `circuitBody`,
+`ask` and `fields` for Prime v2 (#346). `scripts/tests/tgridlayer.js` runs
+it on the real door (ComEd, Mesa, Springfield IL, a failed door);
+`teditorv2auth.js` holds the one token path; `render-grid-panel.js` covers
+it in Chromium.
+
 ## Omega Prime → Omega Teleios (2026-10-17)
 
 Tommy: Prime must print a quote, use Clean Cell's units (FENECON out), carry
@@ -37,8 +81,8 @@ circuit step must read the real utility. What changed, and where it lives:
   `_geoReprojectAll`, so `omegaRescaleElements` never runs on a map move and
   placed gear keeps its build-zoom pixel size when the rep zooms out.
 - **Prime no longer loads `omega-comed-layers.js`**: its circuit is the
-  national `/api/hosting-capacity`. Site Finder and the editor's Grid panel
-  still use the ComEd module (moving the panel onto the door is next).
+  national `/api/hosting-capacity`. The editor's Grid panel followed it onto
+  the door (below); the Site Finder still uses the ComEd module.
 - Still different engines: Prime's Run is `/api/price-site`; Site Map's Run
   is `editor-cost`. The proposal is priced by the former, from Prime's layout.
 
@@ -67,7 +111,8 @@ Omega Grid's in `api/_lib/modules.js` IDS) opens `omega-grid-panel.js`: the
 site point and the Guided Build's battery, the nearest substation from the
 Grid Atlas SERVICE the pre-screen already calls (no second lookup), the
 circuit at the parcel from `omega-comed-layers.js` `probePoint` (the editor
-now loads that module; no copy pasted), and the verdict from the new
+then loaded that module; no copy pasted; since 2026-10-17 the national door,
+above), and the verdict from the new
 `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated like
 `/api/grid-atlas`): the eligibility rules are server-side from the first
 line. `S.grid` — set by the pre-screen and never persisted until now — is

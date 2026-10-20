@@ -88,10 +88,12 @@ should be a **panel in Site Map**, not a separate page the rep leaves for.
   `grid.circuit {utility, id, publishedKw, queuedKw, netKw, at, source}`,
   `grid.verdict`. The Run, the RFQ and the Helios intake read these
   instead of asking again.
-- **One layer registry.** Grid Atlas's `LAYERS` and the ComEd layers
-  (`omega-comed-layers.js`) are loaded by the panel as they are by the
-  pages; never a second copy pasted into `editor.html`
+- **One registry, server-side.** The panel asks the national door Omega
+  Prime asks (`POST /api/hosting-capacity` on `api/_lib/hosting-sources.js`
+  and `api/_lib/utility-territory.js`), so no utility's map, URL or field
+  is in the browser and nothing is pasted into `editor.html`
   (`docs/EDITOR-IP-AUDIT-2026-10-12.md` already counts what lives there).
+  Grid Atlas's `LAYERS` stay the pages' own.
 - **The verdict is server-side.** "Fits / smaller / study" is
   eligibility logic and belongs in `/api/` per the IP rule; the browser
   sends the circuit figures and the unit, and renders the answer.
@@ -123,16 +125,17 @@ should be a **panel in Site Map**, not a separate page the rep leaves for.
 ## Gaps between today and the target
 
 Updated 2026-10-16, when the Grid panel landed (Analyze › **Grid Check**,
-`omega-grid-panel.js`, beside Grid Atlas; `scripts/tests/tgridverdict.js`).
+`omega-grid-panel.js`, beside Grid Atlas; `scripts/tests/tgridverdict.js`),
+and 2026-10-17, when it moved onto the national door (gap 6).
 
 1. **Closed for one site.** The substation card, the circuit at the parcel
    and the verdict are a Site Map panel: it reads the project's site point
    and the battery from the BESS Guided Build (`S.bessList`, else the model
    picked in `#bm-catalog`), takes the nearest substation from the Grid
    Atlas service the Analyze pre-screen already calls (`/api/grid-atlas`,
-   the same mirrors as `LAYERS.substations`), and the circuit from
-   `OmegaComEdLayers.probePoint` (the one ComEd module, loaded by the
-   editor, nothing pasted). Still open: the panel draws nothing on the map —
+   the same mirrors as `LAYERS.substations`), and the serving utility and
+   the circuit from the national door (gap 6), nothing pasted. Still open:
+   the panel draws nothing on the map —
    Site Map's basemap is Google, and Grid Atlas's `LAYERS` and the ComEd
    hosting polygons draw on Leaflet, so drawing them "under the drawing"
    needs either a Google-Maps renderer for the same registry or `LAYERS`
@@ -151,20 +154,27 @@ Updated 2026-10-16, when the Grid panel landed (Analyze › **Grid Check**,
    Finder's "Min. hosting" filter is still typed.
 5. **Closed on the record.** `grid.substation {name, kv, miles, km, chip,
    state}`, `grid.circuit {utility, id, substation, publishedKw, queuedKw,
-   netKw, headroomKw, addressResolved, grain, at, source}` and
+   netKw, headroomKw, addressResolved, grain, at, source, basis,
+   queueNetted, band, utilityKey, eiaId, coverage, ledgerId}` (a null
+   `queuedKw` is a queue not published, never 0; `GV.fromHosting`) and
    `grid.verdict {key, label, say, unitKw, unitName, version, at}` ride
    `saveProject()`'s allowlist (with `savedBy`), are restored on load, and
    a re-measure of the same point keeps them. Still open: the Run, the RFQ
    and the Helios intake do not yet READ `grid.circuit` / `grid.verdict`.
-6. **Closed in Omega Prime; open in the panel** (2026-10-17). Hosting
+6. **Closed in Omega Prime and in the panel** (2026-10-17). Hosting
    capacity is national: `POST /api/hosting-capacity` names the serving
    utility at the point (state layers, the EIA-861 national layer, Census
    places), reads its published map where one exists (15 sources across
    IL, NJ, CA, CT, MA and RI), says plainly where none is published (all of
    Florida and Arizona, Georgia Power behind an account), links the
    utility's own map or interconnection page to check it, and judges with
-   the same verdict engine. Omega Prime asks it; the Site Map Grid panel
-   still asks `OmegaComEdLayers.probePoint` and moves onto the door next.
+   the same verdict engine. Omega Prime, the Site Map Grid panel and Site
+   Plan's Grid Atlas layer all ask it through `omega-grid-verdict.js` and
+   draw every case the same way:
+   the utility's name, every candidate when the territory is not confident,
+   where the power comes from, the provenance and the utility's own map,
+   with the queue words following the answer (subtracted, already netted,
+   or not published). The editor no longer loads the ComEd module.
 7. **New.** A "Send to Site Map" button on the standalone Site Finder's
    card (carrying the site, circuit and verdict onto a project) is not
    built; the editor panel answers for a project already open.
@@ -195,9 +205,10 @@ warranty live):
   and Site Map all say to confirm it on the submittal; the rep's typed
   submittal L × W (`'rep'`) replaces it. A unit with no figure at all is
   `'none'`, a marked point.
-- **Circuit verdict:** the server's (`/api/grid-verdict`), asked through
-  `omega-grid-verdict.js`, the client Site Map's Grid panel uses too. The
-  page's own thresholds are gone.
+- **Circuit verdict:** the server's (`/api/hosting-capacity`, judged by
+  the `/api/grid-verdict` engine), asked through `omega-grid-verdict.js`,
+  the client Site Map's Grid panel uses too. The page's own thresholds are
+  gone.
 - **Load:** the utility's planning rates for the address's ZIP
   (`/api/utility-rates`) and the twelve monthly peaks off the bill, typed
   or pasted; skippable, never filled in.
@@ -225,7 +236,11 @@ warranty live):
   estimate, no customer.
 - **Track:** the ladder from saved to Omega Teleios
   (`api/_lib/teleios.js`), with the Quote Desk, the workspace's own Omega
-  Logic (the order) and the custody record one press away.
+  Logic (the order) and the custody record one press away. A battery the
+  workspace buys in from its maker reaches Omega Teleios once the office
+  records the maker's warranty on its unit passport; until then Track says
+  so and its Omega Teleios card opens that passport
+  (`docs/LOGISTICS-CUSTODY.md`, *The maker's warranty on a bought-in unit*).
 
 **The record, v2 (2026-10-17).** `omega-prime-project.js` is the pure
 half every reader shares: `units()` (above), `arrange()` (the unit long
