@@ -3796,3 +3796,67 @@ mount at its rate, and the Results rail adds *Solar $/W*, the solar's own
 rate beside the project's blended $/W. Held by
 `scripts/tests/teditorcost.js` (solar by mount; the page collector with
 and without the skid).
+
+## 2026-10-17 — CAD and 3D Site Plan integration preview
+
+`codex/editor-v2-integration` combines the current #339 CAD branch with
+#351's 3D view and main. The CAD branch's newer Firebase sign-in and guided
+build handling are retained. The original Site Map remains separate.
+3D component pricing moved from `omega-editor-v2-3d.js` to
+`api/_lib/editor-v2-component-cost.js`, using the existing editor cost book.
+`api/editor-v2-component-cost.js` authenticates and checks the estimate
+entitlement through package-access before returning a figure. The card
+shows an unavailable/sign-in message instead of silently pricing locally.
+`test:editor-v2`, `test:editor-v2-3d`, and `check:editor-v2` cover the combined
+branch. This remains a review preview: saves are browser-local; permit/SLD
+hooks need their separate workstream, and browser screening thresholds still
+need the broader server-side screening integration before production.
+Browser verification also fixed the obstruction hatch path (Canvas restore
+restores clipping, not the current path), marked missing terrain as flat,
+and pinned 3D beside Outputs/Run so it stays visible without ribbon scrolling.
+The experience registry marks editor-v2 present but previewOnly: direct review
+URLs work while saved-project links keep the canonical editor. Presence alone
+must not redirect a saved Firestore project into a browser-only draft editor.
+
+## 2026-10-17 — Separate Site Plan customer trial
+
+Site Plan is a separate `siteplantrial` tool at `/editor-v2`. It does not
+replace Site Map, and the experience router remains previewOnly. The projects
+list sends only `editor: 'v2'` records to it; the original editor remains the
+route for all existing drawings. No old editor files or projects are retired.
+
+Workspace saves use the signed-in Firebase token and the existing `projects`
+rules. New records use a create precondition (never overwrite an existing ID);
+updates use a transaction and `savedBy.at` revision, preserve ownership/JDA
+rosters and lifecycle fields, and refuse non-v2 drawings. Local saves remain
+available. The separate permit/SLD branch (#359) supplies review sheets and
+PDF/DXF outputs from the same document.
+
+Prime receives the saved ID, address, coordinates, org and editor version; its
+return link preserves the trial editor. Marketplace submission uses the
+existing fin_profiles/fin_projects rules and a deterministic listing ID. A
+repeat updates descriptive fields only, preserving awards, offers and status.
+The UI requires a deliberate marketplace submission; a save is not a listing.
+BOM quote requests use `/api/rfq`, with vendor routing and Logic order creation
+on the server. Only published catalog matches become orders; unmatched lines
+are reported. Trial feedback is stored on the existing project, not a new
+collection. The workspace and marketplace test doubles never write live data.
+## 2026-10-17 — OMEGA journey integration preview
+
+Design-to-order routing remains in `api/_lib/design-order.js` and
+`api/_lib/design-place.js`. No pricing, dispatch or eligibility math moved into
+the browser. Plant and Accounting render the existing server-computed
+`office-stage.path()` through `OmegaLogicTheme.pathBar`. Plant receives only
+step/state/label/position, without financial amounts or action permissions.
+See `docs/OMEGA-JOURNEY-QA.md` for fixture scope and verification limits.
+Trial navigation is also preserved from both workspace dashboards and the
+project list, while all classic records retain their original routes. The
+trial is appended to the tool catalog so existing starter ordering stays put.
+Guided-build, optional 3D configuration, and tile proxy calls now authenticate
+and check package access before producing work or using the tile key.
+The trial output panel now accepts verified electrical and sheet details,
+marks those changes dirty, and retains them in the saved document. Closing
+and immediately reopening Outputs no longer loses its export session. A
+Chromium check exercises workspace save/reopen, these inputs, and downloads
+a real permit PDF using isolated fixtures. Site qualification decisions also
+survive project restore. No classic editor source was changed.

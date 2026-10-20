@@ -1,6 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
 'use strict';
 var A = require('./_lib/admin'), X = require('./_lib/logic-access'), P = require('./_lib/logic-policy');
+var Dsgn = require('./_lib/design-order');
 var W = require('./_lib/logic-workflow'), Q = require('./_lib/qbo'), S = require('./_lib/office-stage'), R = require('./_lib/receivables');
 function clean(v, n) { return String(v || '').trim().slice(0, n || 200); }
 function links(org, key) {
@@ -81,7 +82,8 @@ module.exports = A.handler(async function (req, res) {
           lastError: o.logic.lastError || null, paymentException: o.logic.paymentException || null,
           creditRelease: o.logic.creditRelease || null, paymentHold: o.logic.paymentHold || null,
           payout: owner ? o.logic.payout : null } : null, shipment: o.shipment || null,
-        requests: Array.isArray(o.requests) ? o.requests.slice(-20) : [] };
+        requests: Array.isArray(o.requests) ? o.requests.slice(-20) : [],
+        design: Dsgn.view(o), shipTo: Dsgn.shipTo(o) };
     });
     /* OFF-02: the money tiles are the receivables ledger's own totals — the
        same rows() and totals() Accounting prints — never a sum the page

@@ -11,12 +11,18 @@ by the URL. Office navigation links the catalog, URL Generator and plant manager
 - `/logic-urls`: customer walkthrough, customer login, licensed design studio,
   and the existing public battery-sizer key/embed. No station tokens or office
   credentials are included. Allow the actual website origin in Website installation.
-- `/plant/work-orders`: the work-order board — a filterable grid (line, stage,
-  priority, target date, progress, ready units, holds, next operation, assignee)
-  with a location/stage tree, column filters, CSV/print, and a per-order detail
-  card: step progress, operations checklist, activity feed derived from the
-  units' scan/test/hold evidence, audited manager edits (line, priority, target
-  date, assignee, notes), parts required vs registered, services and units.
+- `/plant/work-orders`: the work-order board. The office menu is the only
+  navigation. The filter on the page is Late, On hold, In progress, and
+  Ready to ship. Line, stage, priority, target date, and units at each
+  operation sit behind More filters. Register serials is the one action;
+  print, export, and refresh sit in the overflow. The card opens as a
+  drawer and leads with the customer and project, what is being built, the
+  ship-to, percent complete, and what is blocking it. Operation steps stay
+  collapsed. The purchase order is read live by `api/_lib/plant-source.js`
+  (customer and project by name, PO number, ship-to, named lines). A project
+  id is kept on the record and is not the label. Prices and email do not
+  cross. Holds, failed tests, the activity feed, audited assignment, parts,
+  issued components, the materials shortfall, services, and units follow.
   Progress is computed in `api/_lib/plant-board.js`, never in the browser.
 - `/plant/manager`: the plant board — Today, Needs a person (stuck, held,
   quiet benches, exceptions from `api/_lib/plant-attention.js`), the station

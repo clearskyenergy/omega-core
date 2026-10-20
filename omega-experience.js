@@ -33,11 +33,13 @@
   'use strict';
   var STORAGE = 'omega-experience';
   var ROUTED = 'omega-experience-routed';
-  /* landed flips in the same change that adds the page. The test reads
+  /* previewOnly pages are directly reviewable, but cannot take over saved
+     projects until their persistence is integrated.
+     landed flips in the same change that adds the page. The test reads
      the tree, so a merged twin fails until this flag is true. */
   var ROUTES = [
     { key: 'workspace', classic: '/workspace', v2: '/workspace-v2', landed: true },
-    { key: 'editor', classic: '/editor.html', v2: '/editor-v2', landed: false },
+    { key: 'editor', classic: '/editor.html', v2: '/editor-v2', landed: true, previewOnly: true },
     { key: 'portfolio', classic: '/portfolio.html', v2: '/portfolio-v2', landed: false },
     { key: 'prime', classic: '/omega-prime.html', v2: '/omega-prime-v2', landed: false },
     { key: 'finance', classic: '/finance', v2: '/finance-v2', landed: false, alias: ['/portals/finance'] }
@@ -124,7 +126,7 @@
   function href(key, experience) {
     var r = routeByKey(key);
     if (!r) return '';
-    if (experience === 'v2' && r.landed) return r.v2;
+    if (experience === 'v2' && r.landed && !r.previewOnly) return r.v2;
     return r.classic;
   }
 
@@ -144,7 +146,7 @@
     qi = s.indexOf('?');
     if (qi >= 0) { search = s.slice(qi); s = s.slice(0, qi); }
     route = routeFor(s);
-    if (!route || !route.landed || !onClassic(route, s)) return hrefIn;
+    if (!route || !route.landed || route.previewOnly || !onClassic(route, s)) return hrefIn;
     if (route.key === 'workspace' && classicView(hash)) return hrefIn;
     if ((experience || 'v2') !== 'v2') return hrefIn;
     return route.v2 + search + hash;
@@ -161,6 +163,7 @@
     var search = stripUi(o.search);
     var hash = o.hash || '';
     if (onClassic(route, o.path) && exp === 'v2') {
+      if (route.previewOnly) return '';
       if (route.key === 'workspace' && classicView(hash)) return '';
       return route.v2 + search + hash;
     }

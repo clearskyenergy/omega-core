@@ -196,7 +196,8 @@ function can(key) { var t = T.byKey(key); return !!t && !(WS && WS.pendingApprov
 function holds(part) { return !!WS && HUB.holdsLogic({ modules: WS.modules, addons: WS.addons, addOns: WS.addOns }, part); }
 function projectHref(id) {
   var slug = WS && WS.allowedDomain ? String(WS.allowedDomain).split('.')[0] : '';
-  var base = (window.OmegaExperience && OmegaExperience.href('editor', 'v2')) || '/editor.html';
+  var project = DATA.projects.filter(function(p){return p.id === id;})[0];
+  var base = project && project.editor === 'v2' ? '/editor-v2' : '/editor.html';
   return base + (base.indexOf('?') >= 0 ? '&' : '?') + 'id=' + encodeURIComponent(id) + (slug ? '&org=' + encodeURIComponent(slug) : '');
 }
 function classicHomeHref() {

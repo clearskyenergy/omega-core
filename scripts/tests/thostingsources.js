@@ -901,7 +901,15 @@ tests.push(function () {
   }).then(function () {
     eq(posted[1].url, '/api/hosting-capacity?coverage=1'); eq(posted[1].opts.method, 'GET');
     var client = read('omega-grid-verdict.js');
-    ['SMALLEST_OFFER_KW', 'THIN_SHARE', 'maxKm', 'minKv', 'Allowable_PV_kW', 'BESS_HC', 'MAXGENMW_TXT'].forEach(function (t) { ok(client.indexOf(t) < 0, 'no rule or field in the browser client: ' + t); });
+    ['SMALLEST_OFFER_KW', 'THIN_SHARE', 'maxKm', 'minKv'].forEach(function (t) { ok(client.indexOf(t) < 0, 'no rule in the browser client: ' + t); });
+    /* a utility's field is never READ in the browser: the server maps it.
+       main's provenance sentence (circuitSourceLine) may name ComEd's
+       BESS_HC and Feeder_Q in words, never as a key or a property */
+    ['Allowable_PV_kW', 'BESS_HC', 'MAXGENMW_TXT', 'Feeder_Q'].forEach(function (t) {
+      ok(!new RegExp('[.\\[]\\s*[\'"]?' + t + '\\b|[\'"]' + t + '[\'"]\\s*[\\]:]|\\b' + t + '\\s*:').test(client), 'no field read in the browser client: ' + t);
+    });
+    var probe = 'var a = x.BESS_HC; b = y["Feeder_Q"]; c = { MAXGENMW_TXT: 1 };';
+    ok(['BESS_HC', 'Feeder_Q', 'MAXGENMW_TXT'].every(function (t) { return new RegExp('[.\\[]\\s*[\'"]?' + t + '\\b|[\'"]' + t + '[\'"]\\s*[\\]:]|\\b' + t + '\\s*:').test(probe); }), 'and the check catches a read, a quoted key and an object key');
   });
 });
 

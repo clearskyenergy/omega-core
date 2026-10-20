@@ -63,7 +63,9 @@ assert.ok(/<span class="pt-chip order">Omega Logic · PRM-1<\/span>/.test(theirs
 assert.match(pj, /<div class="pt-addr">\$\{esc\(p\.address\|\|'—'\)\}<\/div>\$\{primeCell\(p\)\}<\/div>/, 'every row carries its Prime cell'); count++;
 assert.match(pj, /<option value="prime">Made in Omega Prime<\/option>/); assert.match(pj, /if \(sort === 'prime'\) filtered = filtered\.filter\(p => !!primeOf\(p\)\);/); count += 2;
 assert.match(pj, /String\(pq\.quoteNo\|\|''\)\.toLowerCase\(\)\.includes\(q\)/, 'search finds a project by its proposal number'); count++;
-assert.match(pj, /function openProject\(id\) \{ window\.location\.href = '\/editor\.html\?id='\+id; \}/, 'the row itself still opens Site Map'); count++;
+/* the row itself still opens Site Map: the classic editor, or /editor-v2
+   for a record marked editor: 'v2' (main, Editor v2) */
+assert.match(pj, /function openProject\(id\) \{ const p = allProjects\.find\(p => p\.id === id\); window\.location\.href = \(p && p\.editor === 'v2' \? '\/editor-v2\?id=' : '\/editor\.html\?id='\) \+ encodeURIComponent\(id\); \}/, 'the row itself still opens Site Map'); count++;
 
 /* ── workspace.html ────────────────────────────────────────────────────── */
 var ws = read('workspace.html');

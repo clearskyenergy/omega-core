@@ -211,6 +211,9 @@ async function context(browser, base, calls, external, viewport) {
       if (calls.dropSend && body && body.action === 'send') { calls.dropSend = false; return r.abort('failed'); }
       return json(out.status, out.body);
     }
+    /* Send to the OEM (main's design order): the door's answer stood in;
+       what matters here is what the page sends it */
+    if (u.pathname === '/api/rfq') { calls.rfq.push(body); return json(200, { ok: true, rfqId: 'rfq-1', recipients: [], orders: [{ orderNo: 'CC-PO-1001', orgName: 'Clean Cell', sameWorkspace: false }], unmatched: [] }); }
     calls.other.push(u.pathname);
     return json(503, { error: 'offline' });
   });
@@ -236,7 +239,7 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
 (async function () {
   await new Promise(function (r) { srv.listen(0, HOST, r); });
   var base = 'http://' + HOST + ':' + srv.address().port, external = [], errs = [];
-  var calls = { hosting: [], rates: [], price: [], priced: [], quote: [], quoteOut: [], branding: [], editor: [], other: [], onEditor: null, dropSend: false };
+  var calls = { hosting: [], rates: [], price: [], priced: [], quote: [], quoteOut: [], branding: [], editor: [], other: [], rfq: [], onEditor: null, dropSend: false };
   var browser = await chromium.launch({ executablePath: process.env.CHROME || chromium.executablePath() });
   var pid = '';
   try {
@@ -339,7 +342,9 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
        in the debounce lands before Site Map is even asked for ── */
     await p.click('#ed-conduit');
     var nm = (await storeOf(p)).log.length, atOpen = null;
-    calls.onEditor = async function () { if (!atOpen) { var s = await storeOf(p); atOpen = { n: s.log.length, last: s.log[s.log.length - 1] || {} }; } };
+    /* the last write to the PROJECT since the click: the runtime's own writes
+       (the once-per-load presence on team_members) may land beside it */
+    calls.onEditor = async function () { if (!atOpen) { var s = await storeOf(p), mine = s.log.slice(nm).filter(function (w) { return /^projects\//.test(w.path || ''); }); atOpen = { n: s.log.length, last: mine[mine.length - 1] || {} }; } };
     var tabP = ctx.waitForEvent('page');
     await p.click('#toEditor', { button: 'middle' });
     var tab = await tabP;
@@ -433,6 +438,14 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var sd = calls.quote.filter(function (c) { return c.body && c.body.action === 'send'; })[0] || {};
     ok('Copy a link sends with a fresh send id and shows the link once', /\/quote\?id=qt-[a-f0-9]{16}&key=[a-f0-9]{48}$/.test(link1 || '') && /^snd_[a-z0-9]+$/.test(sd.body && sd.body.sendId || '') && sd.body.deliver === 'link', { link: link1, send: sd.body });
     ok('the proposal reads sent', /Sent · not opened yet/.test(await text(p, '#pqState')), await text(p, '#pqState'));
+    /* Send to the OEM (main's design order), on the rep's side of the step */
+    ok('Send to the OEM is on the rep\'s side, never on the customer\'s deck', !!(await p.$('#pqRep #q-oem')) && !(await p.$('#pqDeck #q-oem')));
+    await p.click('#q-oem');
+    var oemMsg = await until(p, function () { var m = document.getElementById('qOemMsg'); return m && /CC-PO-1001/.test(m.textContent) ? m.textContent : null; });
+    var rq = calls.rfq[0] || {}, spo = (await storeOf(p)).docs['projects/' + pid].prime;
+    ok('it opens the purchase order through /api/rfq: this project, the unit by its maker\'s SKU, the Run\'s estimate, and no customer',
+      !!oemMsg && rq.projectId === pid && rq.bom && rq.bom[0].sku === spo.unit.sku && rq.bom[0].manufacturer === spo.unit.mfr && rq.estimateUsd === spo.run.totalUsd &&
+      Object.keys(rq).sort().join(',') === 'address,bom,estimateUsd,projectId,toOrgIds,zip' && JSON.stringify(rq).indexOf('Riverside') < 0, { msg: oemMsg, body: rq });
     await shot(p, 'prime-06-proposal');
 
     /* the design changes: the proposal says so, and is saved again */
