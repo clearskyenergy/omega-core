@@ -265,12 +265,14 @@
       }).then(function (res) {
         return res.json().then(function (body) {
           var text = bearerText(body);
-          if (res.status === 401 || res.status === 403 || /bearer/i.test(text)) return { ok: false, needSignIn: true };
+          /* signed out asks for a sign-in; any other refusal says why (a
+             plan without Omega Maximus, a build its package does not hold) */
+          if (res.status === 401 || /bearer/i.test(text) || (res.status === 403 && (!text || /sign in/i.test(text)))) return { ok: false, needSignIn: true };
           if (!res.ok) return { ok: false, reason: text || 'The build did not run.' };
           return body;
         }, function () {
-          if (res.status === 401 || res.status === 403) return { ok: false, needSignIn: true };
-          return { ok: false, reason: 'The build did not run.' };
+          if (res.status === 401) return { ok: false, needSignIn: true };
+          return { ok: false, reason: res.status === 403 ? 'This workspace cannot place that build.' : 'The build did not run.' };
         });
       }, function () {
         return { ok: false, reason: 'The build service is not reachable. Try again in a moment.' };

@@ -16,7 +16,7 @@ var server = http.createServer(function(req,res) {
     var base = 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch({headless:true, args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
     var page = await browser.newPage({viewport:{width:1440,height:1000}}), errors=[];
-    var runServer = require('./_lib/editor-v2-server.js').create({zip:'85042'}), parcelPosts = 0;
+    var runServer = require('./_lib/editor-v2-server.js').create({zip:'85042'}), parcelPosts = 0, buildPosts = [];
     page.on('pageerror', function(e) { errors.push(e.message); });
     var stored = {};
     function decoded(v) { if(v.mapValue)return unpack(v.mapValue.fields);if(v.arrayValue)return(v.arrayValue.values||[]).map(decoded);if('nullValue'in v)return null;return v.stringValue!==undefined?v.stringValue:v.doubleValue!==undefined?v.doubleValue:v.booleanValue; }
@@ -39,6 +39,8 @@ var server = http.createServer(function(req,res) {
       if(url.includes('/api/cost-rollup')||url.includes('/api/value-stack')) return runServer.answer(url,route.request().postDataJSON()).then(function(r){return route.fulfill({status:r.status,json:r.json});});
       /* Parcel lines: no Regrid on this server; the parcel under a point is a
          100 ft lot around it, in /api/parcel's own shape */
+      /* the eight guided builds: the REAL planner (api/_lib/guided-build.js) */
+      if(url.includes('/api/guided-build')) { var gq=route.request().postDataJSON()||{}; buildPosts.push(gq.builder); return route.fulfill({json:require('../api/_lib/guided-build').plan(String(gq.builder||''),gq.input||{})}); }
       if(url.includes('/api/parcel-tiles')) return route.fulfill({json:{ok:false,reason:'not-configured'}});
       if(url.includes('/api/parcel')) { parcelPosts++; var q=route.request().postDataJSON(), dl=100/364000/2, dg=dl/Math.cos(q.lat*Math.PI/180);
         return route.fulfill({json:{ok:true,ring:[[q.lat-dl,q.lng-dg],[q.lat-dl,q.lng+dg],[q.lat+dl,q.lng+dg],[q.lat+dl,q.lng-dg]],apn:'TEST-1',owner:'Not shown',acres:0.23,county:'Maricopa County, AZ',source:'maricopa'}}); }
@@ -149,6 +151,24 @@ var server = http.createServer(function(req,res) {
     await page.screenshot({path:path.join(out,'parcels.png')});
     await page.click('#layer-parcels-toggle');
     assert(await page.evaluate(function(){return document.getElementById('parcel-detail').hidden&&getComputedStyle(document.getElementById('map-parcels')).display==='none';}),'off, the lines and the card go');
+    /* The eight guided builds, end to end (Tommy, 2026-10-20: "make sure the
+       guided builds work"): each opens its dialog, asks the real planner,
+       lands on clear ground, and the view goes to it, selected. */
+    var builds=['der','autolayout','bess','topology','l2','dcfc','compute','engineering'];
+    buildPosts.length=0;
+    for (var bi=0; bi<builds.length; bi++) {
+      var bid=builds[bi];
+      await page.click('#stages [data-stage="design"]');
+      await page.click('[data-build="'+bid+'"]');
+      await page.waitForFunction(function(){return document.getElementById('dlg-build').open;},null,{timeout:5000});
+      await page.click('#build-place');
+      await page.waitForFunction(function(){return !document.getElementById('dlg-build').open||!!document.getElementById('build-error').textContent;},null,{timeout:10000});
+      var placedState=await page.evaluate(function(){return {open:document.getElementById('dlg-build').open,err:document.getElementById('build-error').textContent,status:document.getElementById('status').textContent};});
+      assert(!placedState.open&&!placedState.err,bid+' places: '+JSON.stringify(placedState));
+      assert(/It is selected: drag to move it\./.test(placedState.status),bid+' says where it is: '+placedState.status);
+      if (bid==='bess') await page.screenshot({path:path.join(out,'build-bess.png')});
+    }
+    assert.deepStrictEqual(buildPosts,builds,'each build asked the planner once: '+buildPosts.join());
     assert.deepStrictEqual(errors,[]);
     /* Omega Maximus is a module: a signed-in workspace that has not bought it
        sees the price and Opt in; one that has sees the editor. The sign-in
