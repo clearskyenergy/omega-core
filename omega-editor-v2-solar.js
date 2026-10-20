@@ -121,8 +121,9 @@
 
   function ask(body) {
     var headers = { 'Content-Type': 'application/json' };
-    var user = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
-    var tokenP = user ? user.getIdToken() : Promise.resolve('');
+    var Auth = root.OmegaEditorV2Auth;
+    var user = !Auth && root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
+    var tokenP = Auth ? Auth.idToken() : (user ? user.getIdToken() : Promise.resolve(''));
     return tokenP.then(function (token) {
       if (token) headers.Authorization = 'Bearer ' + token;
       return fetch('/api/solar-design', { method: 'POST', headers: headers, body: JSON.stringify(body) });
@@ -224,10 +225,20 @@
     if (ctx.setStatus) ctx.setStatus(s.kwDc + ' kW-DC · ' + Math.round(s.specificYield) + ' kWh/kW · P90 ' + Math.round(s.p90).toLocaleString() + ' kWh.');
   }
 
+  /* The report opens from Run › Generation (open()). attach() keeps the
+     editor's context; a menu, when one is passed, also gets an item. */
+  var attached = null;
+  function open() {
+    if (!attached) return false;
+    show(attached);
+    return true;
+  }
   function attach(ctx) {
     if (typeof document === 'undefined') return;
-    var menu = (ctx && ctx.menu) || $('outputs-menu');
-    if (!menu || menu.querySelector('[data-solar-report]')) return;
+    attached = ctx || null;
+    var menu = ctx && ctx.menu;
+    if (!menu) { ensureDialog(); return; }
+    if (menu.querySelector('[data-solar-report]')) return;
     var btn = document.createElement('button');
     btn.type = 'button';
     btn.setAttribute('role', 'menuitem');
@@ -246,5 +257,5 @@
     ensureDialog();
   }
 
-  root.OmegaEditorV2Solar = { attach: attach, payload: payload, VERSION: 'editor-v2-solar/1' };
+  root.OmegaEditorV2Solar = { attach: attach, open: open, payload: payload, VERSION: 'editor-v2-solar/2' };
 })(typeof window !== 'undefined' ? window : global);

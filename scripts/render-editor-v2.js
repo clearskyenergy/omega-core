@@ -40,6 +40,24 @@ var server = http.createServer(function(req,res) {
     await page.waitForFunction(function() { return !!window.OmegaEditorV2View3D; });
     fs.mkdirSync(out,{recursive:true});
     await page.screenshot({path:path.join(out,'plan.png')});
+    /* Handoff A1: the drawing stays through every section and a cancelled
+       build. Inked canvas pixels, before and after. */
+    var inked=function(){var c=document.getElementById('cv'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,n=0;for(var i=3;i<d.length;i+=16)if(d[i]>0)n++;return n;};
+    var ink0=await page.evaluate(inked);assert(ink0>500,'the sample site is drawn: '+ink0);
+    /* Read straight after each step, with no wait for a frame: the drawing
+       must never be blank in between. */
+    var still=async function(step){var n=await page.evaluate(inked);assert(n>=ink0*0.9,'the drawing is still on the canvas after '+step+': '+ink0+' → '+n);};
+    for (var st of ['site','analyze','outputs','funding','design']) {
+      await page.click('#stages [data-stage="'+st+'"]');
+      assert.strictEqual(await page.evaluate(function(){return document.getElementById('app').getAttribute('data-section');}),st,'the '+st+' tab opens');
+      if (st==='outputs') assert(await page.evaluate(function(){return !document.getElementById('side-outputs').hidden&&!!document.getElementById('btn-permit');}),'the Outputs tab opens its panel');
+      await still('the '+st+' tab');
+    }
+    await page.click('[data-build="bess"]');await page.waitForFunction(function(){return document.getElementById('dlg-build').open;});await still('opening a build');
+    await page.click('#build-cancel');await page.waitForFunction(function(){return !document.getElementById('dlg-build').open;});await still('Cancel on a build');
+    await page.click('[data-build="bess"]');await page.waitForFunction(function(){return document.getElementById('dlg-build').open;});
+    await page.keyboard.press('Escape');await page.waitForFunction(function(){return !document.getElementById('dlg-build').open;});await still('Escape on a build');
+    await page.click('#btn-outputs');await still('the Outputs button');await page.click('#outputs-close');await still('closing Outputs');
     await page.evaluate(function(){OmegaEditorV2Auth.idToken=function(){return Promise.resolve('offline-test-token');};});
     await page.click('#btn-3d');
     await page.waitForFunction(function(){return OmegaEditorV2View3D.isOpen();});
@@ -77,7 +95,7 @@ var server = http.createServer(function(req,res) {
     await page.getByText('Electrical and sheet details',{exact:true}).click();
     assert.strictEqual(await page.getByLabel('Utility',{exact:true}).inputValue(),'Customer trial test utility');
     var downloaded=page.waitForEvent('download');
-    await page.getByRole('button',{name:'Export',exact:true}).first().click();
+    await page.click('#out-permit-pdf');
     var pdf=await downloaded; var pdfPath=await pdf.path();
     assert(fs.readFileSync(pdfPath).subarray(0,4).toString()==='%PDF','permit output is a real PDF');
     await page.evaluate(function(){OmegaEditorV2Outputs.close();});

@@ -79,7 +79,7 @@
     /* A guided build's electrical record, title-block facts and kind
        travel with the document. Dropping them on restore would make the
        next permit set forget what the build just wrote. */
-    ['screen','billKwh','billName','costTotal','revenueYear1','netCost','siteScreen','designVerified','valueStack','grid','milestones','costLines','state','city','zip'].forEach(function (key) {
+    ['screen','billKwh','billName','costTotal','revenueYear1','netCost','siteScreen','designVerified','valueStack','grid','milestones','costLines','solarDesign','state','city','zip'].forEach(function (key) {
       if (seed[key] !== undefined) doc[key] = clone(seed[key]);
     });
     if (seed.electrical) doc.electrical = clone(seed.electrical);

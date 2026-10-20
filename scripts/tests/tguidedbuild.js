@@ -200,14 +200,19 @@ check(builds.join() === 'data-build="der",data-build="autolayout",data-build="be
 check(ribbon.indexOf('id="build-group"') < ribbon.indexOf('<h2>Edit</h2>'), 'Build is the group before Edit');
 check(page.indexOf('Start with a guided build') >= 0, 'a blank site says to start with a guided build');
 check(page.indexOf('id="btn-run"') > page.indexOf('id="btn-outputs"') && page.indexOf('id="ribbon-end"') > page.indexOf('<h2>View</h2>'), 'Run sits at the right end, beside Outputs');
-var menu = page.slice(page.indexOf('id="outputs-menu"'), page.indexOf('id="workspace"'));
-check(menu.indexOf('Permit set') >= 0 && menu.indexOf('One-line') >= 0 && menu.indexOf('PNG / PDF / DXF') >= 0, 'the Outputs menu is the drawings');
-check(menu.indexOf('BOM') < 0 && menu.indexOf('ROM report') < 0 && menu.indexOf('Value stack') < 0 && menu.indexOf('IRR') < 0 && menu.indexOf('Investment memo') < 0 && menu.indexOf('Funding') < 0, 'reports stay out of the Outputs menu');
+/* Outputs is the right-hand panel (handoff A4), never a dropdown: the drawings
+   and the engineering, each ready or not with a one-click export. */
+var outSrc = fs.readFileSync(path.join(ROOT, 'omega-editor-v2-outputs.js'), 'utf8');
+var panelSrc = outSrc.slice(outSrc.indexOf('function renderPanel()'), outSrc.indexOf('function preview('));
+check(page.indexOf('id="outputs-menu"') < 0 && page.indexOf('id="side-outputs"') >= 0 && page.indexOf('id="outputs-close"') >= 0 && page.indexOf('aria-controls="side-outputs"') >= 0, 'Outputs opens the side panel, not a dropdown');
+check(panelSrc.indexOf('Permit set + plot plan') >= 0 && panelSrc.indexOf('One-line') >= 0 && panelSrc.indexOf('Bill of materials') >= 0 && panelSrc.indexOf('Drawing file') >= 0 && panelSrc.indexOf('checksBlock') >= 0, 'the Outputs panel is the drawings, the BOM and the checks');
+check(panelSrc.indexOf('ROM report') < 0 && panelSrc.indexOf('Value stack') < 0 && panelSrc.indexOf('IRR') < 0 && panelSrc.indexOf('Investment memo') < 0, 'reports stay out of the Outputs panel');
+check(page.indexOf('id="btn-feedback"') > page.indexOf('<header') && page.indexOf('id="btn-feedback"') < page.indexOf('</header>'), 'trial feedback is in the header');
 check(fs.readFileSync(path.join(ROOT, 'omega-editor-v2-analyze.js'), 'utf8').indexOf('Reports') >= 0, 'reports are listed from the Analyze panel');
 check(page.indexOf('id="analyze-close"') >= 0, 'Analyze can close back to the drawing');
 check((page.match(/data-act="png"/g) || []).length === 0, 'PNG, PDF, and DXF are not their own ribbon buttons');
-check(page.indexOf('id="btn-3d"') >= 0 && page.indexOf('id="btn-permit"') >= 0 && page.indexOf('id="btn-sld"') >= 0, '3D, permit set, and single-line have a button');
-check(page.indexOf('data-hook="permit"') >= 0 && page.indexOf('id="outputs-menu"') >= 0, 'permit set lives in the Outputs menu');
+check(page.indexOf('id="btn-3d"') >= 0 && panelSrc.indexOf("'btn-permit'") >= 0 && panelSrc.indexOf("'btn-sld'") >= 0, '3D, permit set, and single-line have a button');
+check(panelSrc.indexOf("'btn-quote'") >= 0 && panelSrc.indexOf("'btn-prime'") >= 0 && panelSrc.indexOf("'btn-logic'") >= 0 && panelSrc.indexOf("'out-funding'") >= 0, 'the quote and the hand-offs sit in the Outputs panel');
 check(page.indexOf('api/_lib/guided-build') < 0, 'the page does not ship the planner');
 check(page.indexOf('id="next-action"') >= 0 && page.indexOf('id="site-yes"') >= 0 && page.indexOf('id="build-place"') >= 0, 'the core loop has one control per step');
 var editor = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');

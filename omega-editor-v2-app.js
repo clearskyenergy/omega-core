@@ -72,7 +72,6 @@
     state = D.createState(sample());
     if (root.OmegaEditorV2Solar && root.OmegaEditorV2Solar.attach) {
       root.OmegaEditorV2Solar.attach({
-        menu: $('outputs-menu'),
         getDoc: function () { return state.doc; },
         setMeta: function (meta) { D.setMeta(state, meta); afterChange(); },
         setStatus: setStatus
@@ -172,10 +171,6 @@
     });
     $('btn-save').addEventListener('click', saveWorkspace);
     $('btn-local-save').addEventListener('click', saveLocal);
-    $('btn-prime').addEventListener('click', function () { handoff('prime'); });
-    $('btn-logic').addEventListener('click', function () { handoff('logic'); });
-    $('btn-marketplace').addEventListener('click', pushMarketplace);
-    $('btn-quote').addEventListener('click', quoteDialog);
     $('btn-feedback').addEventListener('click', sendFeedback);
     $('btn-open').addEventListener('click', openDialog);
     $('btn-new').addEventListener('click', function () { confirmDirty(blank); });
@@ -205,6 +200,7 @@
     var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook],[data-build],[data-output]');
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
     $('analyze-close').addEventListener('click', function () { setSection('design'); });
+    $('outputs-close').addEventListener('click', function () { setSection('design'); });
     if ($('grid-detail-close') && root.OmegaEditorV2Grid) {
       $('grid-detail-close').addEventListener('click', function () { root.OmegaEditorV2Grid.hideCard(); paintGridCard(); });
     }
@@ -235,16 +231,6 @@
         if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
       });
     }
-    document.addEventListener('click', function (ev) {
-      var menu = $('outputs-menu');
-      if (!menu || menu.hidden) return;
-      var node = ev.target;
-      while (node) {
-        if (node.id === 'outputs-menu' || node.id === 'btn-outputs') return;
-        node = node.parentNode;
-      }
-      toggleOutputs(false);
-    });
     var cv = $('cv');
     cv.addEventListener('pointerdown', onDown);
     cv.addEventListener('pointermove', onMove);
@@ -293,10 +279,7 @@
     if (hook) { invokeHook(hook); return; }
     if (tl) setTool(tl);
     else if (eq) setEquip(eq);
-    else if (act) {
-      if (act !== 'outputs') toggleOutputs(false);
-      runAct(act);
-    }
+    else if (act) runAct(act);
   }
 
   function setTool(name) {
@@ -350,7 +333,7 @@
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
     else if (act === 'paste') paste();
-    else if (act === 'outputs') toggleOutputs();
+    else if (act === 'outputs') setSection(section === 'outputs' ? 'design' : 'outputs');
     else if (act === 'run') runNumbers();
     else if (act === 'quote') setSection('funding');
     else if (act === 'view3d') open3d();
@@ -497,7 +480,6 @@
   }
 
   function cancel() {
-    if ($('outputs-menu') && !$('outputs-menu').hidden) { toggleOutputs(false); return; }
     if ($('grid-detail') && !$('grid-detail').hidden && root.OmegaEditorV2Grid) {
       root.OmegaEditorV2Grid.hideCard();
       paintGridCard();
@@ -702,11 +684,18 @@
     cssW = stage.clientWidth || 1;
     cssH = stage.clientHeight || 1;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var cv = $('cv');
-    cv.width = Math.round(cssW * dpr);
-    cv.height = Math.round(cssH * dpr);
+    var cv = $('cv'), w = Math.round(cssW * dpr), h = Math.round(cssH * dpr);
     layoutMap();
-    requestDraw();
+    /* Setting a canvas size clears it, even to the same size. A section
+       change or a closed dialog used to clear the drawing here and leave the
+       repaint to a later frame, so it read as gone (handoff A1). Resize only
+       when the size changes, and repaint at once when it does. */
+    if (cv.width !== w || cv.height !== h) {
+      cv.width = w;
+      cv.height = h;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      draw();
+    } else requestDraw();
   }
   function screenToWorld(sx, sy) {
     return {
@@ -1596,7 +1585,6 @@
       .catch(function(e){setStatus(e.message,true);});
   }
   function quoteDialog() {
-    toggleOutputs(false);
     var dlg=document.createElement('dialog'), form=document.createElement('form'), title=document.createElement('h2');
     title.textContent='Review the bill of materials';form.appendChild(title);
     var info=document.createElement('p');info.textContent='Enter the published SKU for each item you want quoted. Only checked lines are sent. Pricing and supplier routing happen in OMEGA.';form.appendChild(info);
@@ -1956,7 +1944,6 @@
   }
 
   function setSection(name) {
-    if (name === 'outputs') { toggleOutputs(true); return; }
     var allowed = { site: 1, design: 1, analyze: 1, outputs: 1, funding: 1 };
     if (!allowed[name]) return;
     section = name;
@@ -1978,7 +1965,11 @@
       }
     }
     if (name === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
-    if (name === 'outputs' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showOutputs(state);
+    pressed('outputs', name === 'outputs');
+    if (root.OmegaEditorV2Outputs) {
+      if (name === 'outputs') root.OmegaEditorV2Outputs.panel(outputsApi());
+      else root.OmegaEditorV2Outputs.hidePanel();
+    }
     if (name === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
     paintNext();
     resize();
@@ -2041,7 +2032,6 @@
     var Bld = root.OmegaEditorV2Build;
     if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
     setSection('design');
-    toggleOutputs(false);
     var ctx = placedCtx();
     if (typeof preferred === 'string' && preferred) ctx.preferred = preferred;
     Bld.open(state, ctx);
@@ -2054,16 +2044,7 @@
       if (H.listeners(names[i])) invokeHook(names[i], { reason: 'build' });
     }
   }
-  function toggleOutputs(force) {
-    var menu = $('outputs-menu');
-    if (!menu) return;
-    var open = force === true ? true : force === false ? false : menu.hidden;
-    menu.hidden = !open;
-    var btn = $('btn-outputs');
-    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
   function previewOutput(kind) {
-    toggleOutputs(false);
     var An = root.OmegaEditorV2Analyze;
     var R = root.OmegaEditorV2Reports;
     var Design = root.OmegaEditorV2Design;
@@ -2180,15 +2161,17 @@
     setStatus('Drawings follow the guided build.');
     return next;
   }
-  function openOutputs(which) {
-    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
-    toggleOutputs(false);
-    OmegaEditorV2Outputs.open({
+  /* Outputs is the right-hand panel. Preview opens the sheet dialog. */
+  function outputsApi() {
+    return {
       doc: state.doc,
-      which: which === 'sld' ? 'sld' : (which === 'permit' ? 'set' : 'list'),
       download: download,
       updateMeta: function (patch) { D.setMeta(state, patch); afterChange(); },
       fileBase: fileBase,
+      bom: function () { previewOutput('bom'); },
+      quote: quoteDialog,
+      handoff: handoff,
+      funding: function () { setSection('funding'); },
       drawing: {
         png: exportPng,
         pdf: exportPdf,
@@ -2196,7 +2179,17 @@
         json: exportJson,
         importFile: function () { $('file-import').click(); }
       }
-    });
+    };
+  }
+  /* openOutputs() is the panel; 'permit' or 'sld' also opens that preview. */
+  function openOutputs(which) {
+    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
+    if (section !== 'outputs') setSection('outputs');
+    if (which !== 'permit' && which !== 'sld') return;
+    var api = outputsApi();
+    api.which = which === 'sld' ? 'sld' : 'set';
+    api.fromPanel = true;
+    OmegaEditorV2Outputs.open(api);
   }
 
   root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, VERSION: 'editor-v2-app/4' };

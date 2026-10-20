@@ -142,18 +142,16 @@
   #grid-detail p { margin: 6px 0 0; font-size: 13px; line-height: 1.35; }
   #grid-detail .src { color: var(--muted); font-size: 12px; }
   #grid-detail .panel-head { margin-bottom: 4px; }
-  #outputs-menu {
-    position: absolute; z-index: 8; right: 12px;
-    top: calc(var(--header) + var(--banner) + var(--ribbon) - 6px);
-    display: flex; flex-direction: column; gap: 2px; min-width: 260px; padding: 6px;
-    background: var(--white); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
-  }
-  #outputs-menu[hidden] { display: none; }
-  #outputs-menu button {
-    text-align: left; border: 0; background: transparent; border-radius: 6px;
-    padding: 8px 10px; font-weight: 650; font-size: 13px;
-  }
-  #outputs-menu button:hover { background: var(--accent-soft); }
+  #side-outputs .out-panel-row { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 0; }
+  #side-outputs .out-panel-row h3 { font-size: 13px; }
+  #side-outputs .out-note { font-size: 12px; line-height: 1.4; }
+  #side-outputs .out-status { font-size: 13px; }
+  #side-outputs .out-details { margin: 10px 0 0; }
+  #side-outputs .out-details summary { cursor: pointer; font-weight: 700; font-size: 13px; }
+  #side-outputs .out-fields { grid-template-columns: 1fr; }
+  .out-checks { margin: 6px 0 0; padding: 0 0 0 16px; font-size: 12px; }
+  .out-checks li { margin: 0 0 6px; }
+  .out-checks li.is-block strong { color: var(--danger); }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
   .panel-head h2 { margin: 0; }
   .fold { border: 1px solid var(--hair); border-radius: 8px; margin: 0 0 8px; background: var(--white); }
@@ -280,6 +278,7 @@
       <button type="button" class="btn" id="btn-open">Open</button>
       <button type="button" class="btn primary" id="btn-save">Save to workspace</button>
       <button type="button" class="btn" id="btn-local-save">Save here</button>
+      <button type="button" class="btn quiet" id="btn-feedback">Feedback</button>
       <button type="button" class="btn quiet" id="btn-help">Help</button>
       <button type="button" class="btn quiet side-toggle" id="btn-side" aria-expanded="false">Details</button>
     </div>
@@ -355,21 +354,9 @@
   </div>
     <div class="group" data-stage="always" id="ribbon-end"><div class="row">
       <button type="button" data-hook="view3d" id="btn-3d">3D</button>
-      <button type="button" id="btn-outputs" data-act="outputs" aria-expanded="false" aria-controls="outputs-menu">Outputs</button>
+      <button type="button" id="btn-outputs" data-act="outputs" aria-pressed="false" aria-controls="side-outputs">Outputs</button>
       <button type="button" id="btn-run" data-act="run">Run</button>
     </div><h2>Results</h2></div>
-  </div>
-  <div id="outputs-menu" hidden role="menu" aria-label="Outputs">
-    <button type="button" role="menuitem" id="btn-prime">Open in OMEGA Prime</button>
-    <button type="button" role="menuitem" id="btn-quote">Request a quote in Logic</button>
-    <button type="button" role="menuitem" id="btn-feedback">Send trial feedback</button>
-    <button type="button" role="menuitem" id="btn-logic">Open in Logic</button>
-    <button type="button" role="menuitem" id="btn-marketplace">Submit to marketplace</button>
-    <button type="button" role="menuitem" data-output="permit" data-hook="permit" id="btn-permit">Permit set + plot plan</button>
-    <button type="button" role="menuitem" data-output="sld" data-hook="sld" id="btn-sld">One-line</button>
-    <button type="button" role="menuitem" data-output="drawing">PNG / PDF / DXF</button>
-    <button type="button" role="menuitem" data-act="json">Project file</button>
-    <button type="button" role="menuitem" data-act="import">Import a drawing</button>
   </div>
   <div id="workspace">
     <nav id="tools" aria-label="Tools">
@@ -435,7 +422,10 @@
         <div id="analyze-body"></div>
       </div>
       <div id="side-outputs" hidden>
-        <h2>Outputs</h2>
+        <div class="panel-head">
+          <h2>Outputs</h2>
+          <button type="button" class="btn quiet" id="outputs-close">Close</button>
+        </div>
         <div id="outputs-body"></div>
       </div>
       <div id="side-funding" hidden>

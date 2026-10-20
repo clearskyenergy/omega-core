@@ -51,7 +51,8 @@
       valueStack: doc.valueStack || null,
       grid: liveGrid() || doc.grid || null,
       milestones: doc.milestones || null,
-      costLines: doc.costLines || null
+      costLines: doc.costLines || null,
+      solar: doc.solarDesign || null
     };
   }
 
@@ -202,9 +203,25 @@
     bill.appendChild(fileLabel);
     bill.appendChild(el('p', null, 'The file name is kept on the project. The tariff is read on the server, not in this panel.'));
 
-    var gen = fold(host, 'Generation', false);
+    var gen = fold(host, 'Generation', !!facts.solar);
     gen.appendChild(el('p', null, (facts.solarKw || 0) + ' kW-DC on the drawing' + (facts.solarKwAc ? (', about ' + facts.solarKwAc + ' kW-AC.') : '.')));
-    gen.appendChild(el('p', null, 'Source: the arrays on the drawing. An annual kWh figure needs a weather run, and none is stored here.'));
+    var sd = facts.solar;
+    if (sd && sd.acKwh > 0) {
+      gen.appendChild(el('p', null, 'Year 1 ' + Math.round(sd.acKwh).toLocaleString() + ' kWh AC · ' + Math.round(sd.specificYield || 0).toLocaleString() + ' kWh/kW' +
+        (sd.p90 > 0 ? (' · P50 ' + Math.round(sd.p50).toLocaleString() + ' / P90 ' + Math.round(sd.p90).toLocaleString() + ' kWh') : '') + '.'));
+      gen.appendChild(el('p', null, 'Source: the solar design run' + (sd.at ? (' on ' + String(sd.at).slice(0, 10)) : '') + ' (' + (sd.kwDc || 0) + ' kW-DC). A screening estimate, not a production guarantee. Run it again after the drawing changes.'));
+    } else {
+      gen.appendChild(el('p', null, 'Source: the arrays on the drawing. An annual kWh figure needs the solar design run, and none is stored yet.'));
+    }
+    if (root.OmegaEditorV2Solar && root.OmegaEditorV2Solar.open) {
+      var solarBtn = document.createElement('button');
+      solarBtn.type = 'button';
+      solarBtn.className = 'btn';
+      solarBtn.id = 'btn-solar-report';
+      solarBtn.textContent = sd ? 'Solar design report' : 'Run the solar design';
+      solarBtn.addEventListener('click', function () { root.OmegaEditorV2Solar.open(); });
+      gen.appendChild(solarBtn);
+    }
     if (facts.billKwh != null && facts.solarKw > 0) {
       gen.appendChild(el('p', null, 'The bill\'s annual use is ' + Math.round(facts.billKwh).toLocaleString() + ' kWh. Solar kWh is not estimated from the nameplate.'));
     }
@@ -236,7 +253,7 @@
 
     var R = root.OmegaEditorV2Reports;
     var reports = fold(host, 'Reports', false);
-    reports.appendChild(el('p', null, 'Each report is built from the drawing as it is now. A figure that is not on the drawing is left blank. The permit set and the one-line are in the Outputs menu.'));
+    reports.appendChild(el('p', null, 'Each report is built from the drawing as it is now. A figure that is not on the drawing is left blank. The permit set and the one-line are in Outputs.'));
     if (R && R.list) {
       var kinds = R.list(), ri, rbtn;
       for (ri = 0; ri < kinds.length; ri++) {
@@ -260,25 +277,6 @@
     if (!Object.keys(fields).length) { if (done) done(false); return; }
     root.OmegaEditorV2Doc.setMeta(state, fields);
     if (done) done(true);
-  }
-
-  function showOutputs(state) {
-    if (typeof document === 'undefined') return;
-    var host = document.getElementById('outputs-body');
-    if (!host) return;
-    var R = root.OmegaEditorV2Reports;
-    host.innerHTML = '';
-    host.appendChild(el('p', null, 'Each report is built from the drawing as it is now. A figure that is not on the drawing is left blank.'));
-    var list = R.list(), i, btn;
-    for (i = 0; i < list.length; i++) {
-      btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'btn';
-      btn.textContent = list[i].title;
-      btn.setAttribute('data-report', list[i].id);
-      btn.addEventListener('click', function () { download(state, this.getAttribute('data-report')); });
-      host.appendChild(btn);
-    }
   }
 
   function download(state, kind) {
@@ -330,7 +328,6 @@
       return assess(state.doc, D.summary(state.doc));
     },
     show: show,
-    showOutputs: showOutputs,
     showFunding: showFunding,
     readBill: readBill,
     download: download,
