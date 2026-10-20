@@ -922,6 +922,29 @@
     layoutMap();
     requestDraw();
   }
+  /* Zoom to some entities with room around them (a placed build). */
+  function fitTo(ids) {
+    var want = {}, i, b, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
+    for (i = 0; i < (ids || []).length; i++) want[ids[i]] = 1;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      if (!want[state.doc.entities[i].id]) continue;
+      b = G.boundsOf(state.doc.entities[i]);
+      if (!isFinite(b.minX) || !isFinite(b.maxY)) continue;
+      any = true;
+      if (b.minX < minX) minX = b.minX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.maxY > maxY) maxY = b.maxY;
+    }
+    if (!any) { fit(false); return; }
+    var pad = Math.max(40, Math.max(maxX - minX, maxY - minY) * 0.75);
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    view.cx = (minX + maxX) / 2;
+    view.cy = (minY + maxY) / 2;
+    view.pxPerFt = Math.max(0.02, Math.min(cssW / (maxX - minX || 1), cssH / (maxY - minY || 1)));
+    layoutMap();
+    requestDraw();
+  }
   function fit(announce) {
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b, any = false;
     for (i = 0; i < state.doc.entities.length; i++) {
@@ -2222,8 +2245,11 @@
       pxPerFt: view.pxPerFt,
       onPlaced: function (res) {
         afterChange();
-        fit(true);
-        setStatus((res.summary && res.summary.line) || 'Build placed.');
+        /* the view goes to the build, which is selected, and says where it is */
+        fitTo(res.ids);
+        setStatus(((res.summary && res.summary.line) || 'Build placed.') +
+          (res.onLot === false ? ' The lot had no clear ground for it, so it is just beside the lot: drag it into place.' : '') +
+          ' It is selected: drag to move it.');
         notifyDrawn();
       }
     };

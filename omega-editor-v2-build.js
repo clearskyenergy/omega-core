@@ -32,6 +32,115 @@
     return { ok: true, ids: ids, summary: plan.summary || null };
   }
 
+  /* ── Where a planned build goes ─────────────────────────────────────
+     The planner lays a build out from one point; on a drawn site that point
+     can sit under the arrays (the sample's lot is full of tables), so the
+     build was placed but read as nothing. The plan is moved, whole, to the
+     first clear spot on the lot that holds it: every array table, piece of
+     equipment and obstruction already drawn stays clear by CLEAR ft, and
+     the lot line holds it. With no such spot it goes just beside the lot,
+     where it can be seen and dragged in. An array the plan lays (Auto
+     layout) is its boundary's, so it never moves. */
+  var CLEAR = 6;
+  function shiftable(e) { return e && e.type !== 'array'; }
+  function footprint(list) {
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b;
+    for (i = 0; i < list.length; i++) {
+      if (!shiftable(list[i])) continue;
+      b = G.boundsOf(list[i]);
+      if (!isFinite(b.minX) || !isFinite(b.maxY)) continue;
+      if (b.minX < minX) minX = b.minX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.maxY > maxY) maxY = b.maxY;
+    }
+    return isFinite(minX) ? { minX: minX, minY: minY, maxX: maxX, maxY: maxY } : null;
+  }
+  /* What is already on the ground: array tables, equipment, obstructions,
+     fences, conduit and blocks. The lot lines and the notes do not block. */
+  function taken(doc, boundaryId) {
+    var out = [], list = doc.entities || [], i, j, e, lay, b, host;
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if (e.id === boundaryId || e.type === 'dim' || e.type === 'text' || e.type === 'callout') continue;
+      if (e.type === 'array') {
+        lay = D.arrayLayout(doc, e);
+        if (lay && lay.ok && lay.tables && lay.tables.length && !lay.densityOnly) {
+          for (j = 0; j < lay.tables.length; j++) out.push({ minX: lay.tables[j].x, minY: lay.tables[j].y, maxX: lay.tables[j].x + lay.tables[j].w, maxY: lay.tables[j].y + lay.tables[j].h });
+        } else {
+          host = e.boundaryId ? D.find(doc, e.boundaryId) : e;
+          b = host ? G.boundsOf(host) : null;
+          if (b && isFinite(b.minX)) out.push(b);
+        }
+        continue;
+      }
+      if ((e.type === 'polygon' || e.type === 'rect') && e.layer === 'site') continue;
+      b = G.boundsOf(e);
+      if (isFinite(b.minX) && isFinite(b.maxY)) out.push(b);
+    }
+    return out;
+  }
+  function spotFor(doc, size, site) {
+    var occ = taken(doc, site.boundaryId), ring = site.boundary, k;
+    if (!ring || ring.length < 3) return { x: site.origin.x, y: site.origin.y, onLot: false };
+    var bb = G.bbox(ring), W = bb.maxX - bb.minX, H = bb.maxY - bb.minY;
+    var cell = Math.max(4, Math.max(W, H) / 160);
+    var nx = Math.max(1, Math.ceil(W / cell)), ny = Math.max(1, Math.ceil(H / cell));
+    var cw = Math.ceil((size.w + 2 * CLEAR) / cell), ch = Math.ceil((size.h + 2 * CLEAR) / cell);
+    if (cw <= nx && ch <= ny) {
+      var busy = new Array(nx * ny), i, j, r, i0, i1, j0, j1;
+      for (j = 0; j < ny; j++) for (i = 0; i < nx; i++) {
+        busy[j * nx + i] = G.pointInPoly(bb.minX + (i + 0.5) * cell, bb.minY + (j + 0.5) * cell, ring) ? 0 : 1;
+      }
+      for (k = 0; k < occ.length; k++) {
+        r = occ[k];
+        i0 = Math.max(0, Math.floor((r.minX - CLEAR - bb.minX) / cell)); i1 = Math.min(nx - 1, Math.floor((r.maxX + CLEAR - bb.minX) / cell));
+        j0 = Math.max(0, Math.floor((r.minY - CLEAR - bb.minY) / cell)); j1 = Math.min(ny - 1, Math.floor((r.maxY + CLEAR - bb.minY) / cell));
+        for (j = j0; j <= j1; j++) for (i = i0; i <= i1; i++) busy[j * nx + i] = 1;
+      }
+      /* summed area: a window is clear when it holds no busy cell */
+      var sum = new Array((nx + 1) * (ny + 1));
+      for (i = 0; i <= nx; i++) sum[i] = 0;
+      for (j = 1; j <= ny; j++) {
+        sum[j * (nx + 1)] = 0;
+        for (i = 1; i <= nx; i++) sum[j * (nx + 1) + i] = busy[(j - 1) * nx + (i - 1)] + sum[(j - 1) * (nx + 1) + i] + sum[j * (nx + 1) + i - 1] - sum[(j - 1) * (nx + 1) + i - 1];
+      }
+      for (j = 0; j + ch <= ny; j++) for (i = 0; i + cw <= nx; i++) {
+        var n = sum[(j + ch) * (nx + 1) + (i + cw)] - sum[j * (nx + 1) + (i + cw)] - sum[(j + ch) * (nx + 1) + i] + sum[j * (nx + 1) + i];
+        if (!n) return { x: bb.minX + i * cell + CLEAR, y: bb.minY + j * cell + CLEAR, onLot: true };
+      }
+    }
+    /* beside the lot, above anything already put there */
+    var x = bb.maxX + 30, y = bb.minY, box, hit, tries;
+    for (tries = 0; tries < 40; tries++) {
+      box = { minX: x - CLEAR, minY: y - CLEAR, maxX: x + size.w + CLEAR, maxY: y + size.h + CLEAR };
+      hit = null;
+      for (k = 0; k < occ.length && !hit; k++) if (occ[k].minX < box.maxX && occ[k].maxX > box.minX && occ[k].minY < box.maxY && occ[k].maxY > box.minY) hit = occ[k];
+      if (!hit) break;
+      y = hit.maxY + CLEAR + 1;
+    }
+    return { x: x, y: y, onLot: false };
+  }
+  function shift(e, dx, dy) {
+    function pt(p) { if (p && isFinite(p.x) && isFinite(p.y)) { p.x = Math.round((p.x + dx) * 10) / 10; p.y = Math.round((p.y + dy) * 10) / 10; } }
+    var i;
+    if (isFinite(e.x) && isFinite(e.y)) { e.x = Math.round((e.x + dx) * 10) / 10; e.y = Math.round((e.y + dy) * 10) / 10; }
+    if (Array.isArray(e.pts)) for (i = 0; i < e.pts.length; i++) pt(e.pts[i]);
+    pt(e.a); pt(e.b); pt(e.target); pt(e.anchor);
+  }
+  /* The plan moved, whole, to its spot. Returns where it went. */
+  function situate(doc, plan, site) {
+    G = G || root.OmegaEditorV2Geom;
+    var all = [].concat(plan.equipment || [], plan.conduits || [], plan.notes || []);
+    var fp = footprint(all);
+    if (!fp) return { moved: false, onLot: true };
+    var spot = spotFor(doc, { w: fp.maxX - fp.minX, h: fp.maxY - fp.minY }, site);
+    var dx = spot.x - fp.minX, dy = spot.y - fp.minY, i;
+    if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) return { moved: false, onLot: spot.onLot };
+    for (i = 0; i < all.length; i++) if (shiftable(all[i])) shift(all[i], dx, dy);
+    return { moved: true, onLot: spot.onLot, dx: dx, dy: dy };
+  }
+
   function contextOf(doc, pxPerFt) {
     G = G || root.OmegaEditorV2Geom;
     var best = null, bestA = -1, exclusions = [], i, e, b, ring, area;
@@ -336,11 +445,13 @@
           return;
         }
         clearDraft();
+        var where = situate(state.doc, plan, site);
         var placed = place(state, plan);
         if (!placed.ok) {
           document.getElementById('build-error').textContent = placed.reason;
           return;
         }
+        placed.onLot = where.onLot;
         dlg.close();
         if (ctx && ctx.onPlaced) ctx.onPlaced(placed);
       });
@@ -374,7 +485,7 @@
   }
 
   var api = {
-    place: place, contextOf: contextOf, open: open, suggest: suggest,
+    place: place, contextOf: contextOf, situate: situate, spotFor: spotFor, open: open, suggest: suggest,
     ask: ask, solarAcOf: solarAcOf, clearDraft: clearDraft, resume: resume,
     VERSION: 'editor-v2-build/2'
   };
