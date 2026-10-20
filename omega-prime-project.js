@@ -59,6 +59,14 @@
   var GAP_FT = 5;                        /* clear gap between bodies in Prime's row */
   var XFMR_FT = { lFt: 8, wFt: 8 };      /* generic symbols, not a maker's spec */
   var DISCO_FT = { lFt: 3, wFt: 4 };     /* 3 ft east–west × 4 ft north–south */
+  /* a 20 ft container as this codebase draws one (editor.html's XXL row and
+     its 20 ft compute container): the planning size of a unit whose brochure
+     names a 20 ft container and releases no figures */
+  var CONTAINER_20 = { lFt: 20, wFt: 8 };
+  /* how a footprint is known: the maker's released figures, its reference
+     figures (not released: confirm on the submittal), or the submittal's,
+     typed by the rep; anything else is unknown ('none') */
+  var FOOTPRINTS = ['catalog', 'reference', 'rep'];
   var STEPS = ['start', 'atlas', 'circuit', 'load', 'map', 'quote', 'track'];
 
   /* Clean Cell's reference units, biggest first, the integrated package
@@ -175,7 +183,7 @@
       else if (v === undefined) v = (k === 'usable' || k === 'lFt' || k === 'wFt' || k === 'hFt' || k === 'weightLb' || k === 'vendorOrgId') ? null : '';
       o[k] = v;
     }
-    if (o.footprint !== 'catalog' && o.footprint !== 'rep') o.footprint = 'none';
+    if (FOOTPRINTS.indexOf(o.footprint) < 0) o.footprint = 'none';
     return o;
   }
 
@@ -183,8 +191,8 @@
      One converter for the workspace's own products (OmegaBessProducts
      .load() entries: toCatalogEntry's shape, plus `integrates{}` if a raw
      product is passed) and Clean Cell's reference entries (entries()). A
-     footprint the maker has not released stays unknown — 'none' — and is
-     never replaced by a generic container. */
+     footprint the maker has not released is its REFERENCE footprint, said
+     so wherever it is shown; one with no figure at all stays unknown. */
   function fromEntry(key, e, o) {
     o = o || {};
     if (!e || !(num(e.kw) && num(e.kwh))) return null;
@@ -192,12 +200,21 @@
     var mfr = str(e.mfr || e.brand), model = str(e.model || e.name || key);
     var short = shortOf(model, mfr);
     var w = num(e.widthFt), d = num(e.depthFt), h = num(e.heightFt);
-    /* A footprint the maker has not RELEASED is not a footprint (main, #337):
-       the CC290/125's figures are its cabinet alone, with the PCS beside it to
-       be confirmed, and the other two are pending release. It is left unknown,
-       so the rep types the submittal's L × W or it is placed as a marked
-       point; never a pad the system does not fit on. */
-    if (e.dimensionsStatus && e.dimensionsStatus !== 'released') { w = null; d = null; }
+    /* A footprint the maker has not RELEASED is drawn at its REFERENCE size
+       (2026-10-20, Tommy, of a CC290/125 placed as a point where FENECON's
+       unit draws a block: "it does it for fenecon unit but not on cleancell
+       get that fixed"). The maker's own reference figures — the CC290/125's
+       cabinet, its PCS beside it to be confirmed — or, where the brochure
+       names only a 20 ft container (the LG JP-2; the Smart Module's
+       enclosure), a 20 × 8 ft container. It is 'reference', never
+       'catalog': every reader says to confirm it on the submittal, and a
+       footprint the rep types from the submittal replaces it. (main #337
+       left these unknown, and a point on the map is not a battery.) */
+    var fp = 'catalog';
+    if (e.dimensionsStatus && e.dimensionsStatus !== 'released') {
+      fp = 'reference';
+      if (!(w && d) && /\b20\s*ft\b/i.test(str(e.dims))) { w = CONTAINER_20.wFt; d = CONTAINER_20.lFt; }
+    }
     var wkg = num(e.weightKg), wlb = num(e.weightLb);
     var weightLb = wlb ? Math.round(wlb) : (wkg ? Math.round(wkg * 2.20462) : null);
     var ac = str(e.ac);
@@ -217,7 +234,7 @@
       key: key, kind: 'bess', sku: str(e.sku) || key, mfr: mfr, model: model, name: nameOf(mfr, short), short: short,
       kw: kw, kwh: kwh, kwhApprox: approx, usable: num(e.usable), hours: num(e.dur) || r2(kwh / kw),
       lFt: w && d ? r2(Math.max(w, d)) : null, wFt: w && d ? r2(Math.min(w, d)) : null, hFt: h ? r2(h) : null,
-      footprint: w && d ? 'catalog' : 'none',
+      footprint: w && d ? fp : 'none',
       weightLb: weightLb, weightBasis: weightLb ? (e.weightStatus === 'reference' ? 'reference' : 'datasheet') : '',
       ac: ac, chem: str(e.chem || e.chemistry), inv: str(e.inv),
       incPcs: incPcs, incXfmr: e._incXfmr === true || ig.xfmr === true, incDisco: e._incDisco === true || ig.disco === true,
@@ -542,7 +559,7 @@
     var at = ll(c);
     if (!at) return null;
     unit = unit || {};
-    var fp = unit.footprint === 'catalog' || unit.footprint === 'rep' ? unit.footprint
+    var fp = FOOTPRINTS.indexOf(unit.footprint) >= 0 ? unit.footprint
       : (unit.footprint == null && num(unit.lFt) && num(unit.wFt) ? 'catalog' : 'none');
     var lF = fp !== 'none' ? num(unit.lFt) : null, wF = fp !== 'none' ? num(unit.wFt) : null;
     if (!lF || !wF) { lF = null; wF = null; fp = 'none'; }
@@ -802,8 +819,10 @@
     for (i = 0; i < list.length && !hit; i++) if (list[i] && key && list[i].key === key) hit = list[i];
     if (hit) {
       var o = snapshot(hit);
-      if (o.footprint === 'none' && snap && snap.footprint === 'rep') o = repFootprint(o, snap.lFt, snap.wFt);
-      else if (o.footprint === 'none' && p.layout && p.layout.unit && p.layout.unit.footprint === 'rep') o = repFootprint(o, p.layout.unit.lFt, p.layout.unit.wFt);
+      /* the submittal's size the rep typed outranks a reference or unknown one */
+      var open = o.footprint === 'none' || o.footprint === 'reference';
+      if (open && snap && snap.footprint === 'rep') o = repFootprint(o, snap.lFt, snap.wFt);
+      else if (open && p.layout && p.layout.unit && p.layout.unit.footprint === 'rep') o = repFootprint(o, p.layout.unit.lFt, p.layout.unit.wFt);
       return o;
     }
     if (snap && ((num(snap.kw) && num(snap.kwh)) || snap.kind !== 'bess')) return snap;
@@ -845,7 +864,7 @@
     fromEntry: fromEntry, units: units, snapshot: snapshot, repFootprint: repFootprint, isPlaceholder: isPlaceholder,
     bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
     primeType: primeType, forType: forType, screenable: screenable, typeOf: typeOf, orgId: orgId, linkQuery: linkQuery,
-    ftToDeg: ftToDeg, pathFt: pathFt, arrange: arrange, feed: feed, conduitPath: conduitPath, area: area,
+    FOOTPRINTS: FOOTPRINTS, CONTAINER_20: CONTAINER_20, ftToDeg: ftToDeg, pathFt: pathFt, arrange: arrange, feed: feed, conduitPath: conduitPath, area: area,
     hash: hash, fnv1a: fnv1a, layout: layout, upgrade: upgrade,
     runInput: runInput, runRecord: runRecord, sub: subOf, projectDoc: projectDoc, patch: patch, unitFor: unitFor, restore: restore };
   root.OmegaPrimeProject = P;

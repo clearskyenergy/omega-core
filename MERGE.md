@@ -27,7 +27,8 @@ circuit step must read the real utility. What changed, and where it lives:
   snapshot Prime saved, a shipped constant by key — `PP.R60`, `PP.XXL` — then
   the battery entry) is what Prime, the quote server and the handoff resolve
   a record's unit through, so a v1 sketch upgrades to the same layout in all
-  three. A unit with no released footprint is a 2 ft marker
+  three. A unit at its maker's reference size is a block marked
+  `primeFootprint:'reference'`; one with no size at all is a 2 ft marker
   (`primeFootprint:'none'`, `primeMarkFt`; `_elFootprintFt` sizes it).
   `#omega-prime-nav` in `#portal-nav` carries the Omega Prime link, the
   proposal's status and **Rebuild from Omega Prime** (an empty or partial

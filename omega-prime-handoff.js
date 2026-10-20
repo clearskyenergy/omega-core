@@ -38,11 +38,12 @@
    offered, made by PP.units() from this page's catalog: so a v1 sketch (a
    unit point only, replayed through arrange()) draws the same here as in
    Prime and in the proposal's Run (review, 2026-10-17: a v1 FENECON XXL
-   record was a 20 ft container here and a point in Prime). A unit whose
-   maker released no footprint (the LG JP-2, the Smart Module) is a small
-   MARKER, MARK_FT across (never over 3 ft where it is built), inside the
-   5 ft clear gap Prime left — never the editor's 10 x 5 ft symbol on its
-   28 x 20 px floor.
+   record was a 20 ft container here and a point in Prime). A unit drawn at
+   its maker's REFERENCE size (the Clean Cell units, 2026-10-20) is a block
+   at that size, marked primeFootprint 'reference'. A unit with no size at
+   all is a small MARKER, MARK_FT across (never over 3 ft where it is
+   built), inside the 5 ft clear gap Prime left — never the editor's
+   10 x 5 ft symbol on its 28 x 20 px floor.
 
    Never twice (prime.builtAt, or a build already on this canvas), never
    over a drawing (elements, shapes, conduits, trench runs, a second
@@ -361,7 +362,7 @@
     var kva = Math.round(kw / 0.95 / 50) * 50;
     var svcA = Math.round(kw * 1000 / (480 * 1.732) / 0.95 * 1.25);
     var model = ((b.mfr || u.mfr || '') + ' ' + (b.model || u.model || '')).replace(/^\s+|\s+$/g, '');
-    var M = { area: null, bess: null, xfmr: null, disco: null, service: null, conduits: [], unknownFootprint: false };
+    var M = { area: null, bess: null, xfmr: null, disco: null, service: null, conduits: [], unknownFootprint: false, referenceFootprint: false };
     /* every point must land on the canvas before anything is drawn */
     var pts = [G.unit.c, G.xfmr && G.xfmr.c, G.disco && G.disco.c, G.poi].concat(G.area ? [{ lat: G.area.n, lng: G.area.w }, { lat: G.area.s, lng: G.area.e }] : [],
       G.conduit && G.conduit.pts ? G.conduit.pts : []).filter(Boolean);
@@ -378,6 +379,9 @@
         var w = Math.max(MIN_PX, Math.round(g.lFt * ppf)), h = Math.max(MIN_PX, Math.round(g.wFt * ppf));
         el.w = w; el.h = h; el.aspect = h / w; el.x = c.x - w / 2; el.y = c.y - h / 2;
         el.lf = +g.lFt; el.wf = +g.wFt; el.minW = MIN_PX; el.minH = MIN_PX;
+        /* the maker's reference size, not a released one: drawn at it, and
+           said so (prime-project.js fromEntry) */
+        if (g.footprint === 'reference') el.primeFootprint = 'reference';
       } else {
         /* the maker released no footprint: a small MARKER, never a container.
            MARK_FT across at true scale, its floor the gear's 4 px or less (never
@@ -444,6 +448,7 @@
       e.bessModel = model; e.bessUnitModel = model; e.bessPlaceholder = false;
       e.catalogKey = b.catalogKey || u.key || null; e.bessMfr = b.mfr || u.mfr || '';
       if (e.primeFootprint === 'none') M.unknownFootprint = true;
+      if (e.primeFootprint === 'reference') M.referenceFootprint = true;
       M.bess = e;
       if (G.xfmr) M.xfmr = gear('xfmr', G.xfmr, 'Step-Up Transformer', kva + ' kVA pad-mount · 480V→MV step-up', 'xfmr');
       if (G.disco) M.disco = gear('disco', G.disco, 'AC Disconnect', 'Service-rated AC disconnect · ' + svcA + 'A / 480V · NEMA 3R', 'disco');
@@ -471,7 +476,8 @@
     var name = (u.name || model || 'the unit');
     call(E.banner, 'wiz', 'Built from Omega Prime: ' + name + (parts.length ? ', ' + parts.join(', ') : '') +
       (M.conduits.length ? ' and ' + M.conduits.length + ' conduit run' + (M.conduits.length === 1 ? '' : 's') : '') + ', as drawn.' +
-      (M.unknownFootprint ? ' The maker has not released this unit’s footprint, so it is a marked symbol; enter the submittal’s size.' : ''));
+      (M.unknownFootprint ? ' The maker has not released this unit’s footprint, so it is a marked symbol; enter the submittal’s size.' : '') +
+      (M.referenceFootprint ? ' It is drawn at the maker’s reference size; confirm it on the submittal.' : ''));
     note(E, 'info', 'built ' + name + ' from Prime’s layout ' + (G.hash || '') + '.');
     dropParam(E);
     return M;
