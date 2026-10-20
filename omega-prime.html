@@ -377,7 +377,7 @@ table.bom tr.fen td{background:#FFF3E8}
     $('#unitCard').innerHTML = '<b>' + esc(UNIT.name) + '</b>' + esc(UNIT.note) + ' \u00b7 ' + (UNIT.tenant ? 'your product list' : 'quote required') +
       (UNIT.ref ? ' \u00b7 planning specification, verify before release' : '') +
       (UNIT.quote && UNIT.kind !== 'bess' ? ' \u00b7 sized in Site Map' : '') +
-      (UNIT.lFt ? '' : ' \u00b7 footprint not on file: Site Map places it');
+      (UNIT.lFt ? '' : ' \u00b7 dimensions pending; map symbol is not to scale');
     var us = $('#unitSel2'); if (us) us.textContent = UNIT.name + ' \u2014 ' + UNIT.note;
   }
   function showType(key, keepUnit) {
@@ -449,7 +449,7 @@ table.bom tr.fen td{background:#FFF3E8}
     if (cur === 'map') {
       if (!PP.screenable(UNIT)) return { t: 'Sized in Site Map', p: 'This unit is not priced by the battery cost model. Quote required — Site Map sizes it.', a: 'Press Quote, or keep sketching the site', tg: '#ed-quote' };
       if (!S.area) return { t: 'Mark the area', p: 'Draw the area the unit may use on the satellite image.', a: 'Press the area tool, then drag on the map', tg: '#ed-area' };
-      if (!S.placed) return { t: 'Place the unit', p: UNIT.lFt ? 'The ' + UNIT.short + ' drops into the area at its true ' + UNIT.lFt + ' \u00d7 ' + UNIT.wFt + ' ft footprint, with its transformer and disconnect.' : 'This product\u2019s footprint is not on file, so it is marked as a point; Site Map places it at size.', a: 'Press Place unit, then click inside the area', tg: '#ed-place' };
+      if (!S.placed) return { t: 'Place the unit', p: UNIT.lFt ? 'The ' + UNIT.short + ' drops into the area at its true ' + UNIT.lFt + ' \u00d7 ' + UNIT.wFt + ' ft footprint, with its transformer and disconnect.' : 'This product\u2019s dimensions are pending. Place its visible equipment symbol on the map; it is not to scale.', a: 'Press Place unit, then click inside the area', tg: '#ed-place' };
       if (!S.poi) return { t: 'The utility service', p: 'Mark where the site\'s utility service is: the point of interconnection.', a: 'Press Service / POI, then click it on the map', tg: '#ed-poi' };
       if (!S.conduitFt) return { t: 'Run conduit', p: 'The run from the disconnect to the service, measured on the map.', a: 'Press Conduit run', tg: '#ed-conduit' };
       if (!S.run) return { t: 'Run', p: 'The OMEGA cost model prices the installation on the server, from what is drawn.', a: 'Press Run', tg: '#ed-run' };
@@ -849,12 +849,18 @@ table.bom tr.fen td{background:#FFF3E8}
       L_unit.eachLayer(function (l) { if (!(l instanceof L.Tooltip)) L_unit.removeLayer(l); });
       var c = e.latlng, d = ftToDeg(c.lat, 1), lF = UNIT.lFt || 0, wF = UNIT.wFt || 0;
       S.unitAt = { lat: c.lat, lng: c.lng };
-      if (lF) {
+      if (lF > 0 && wF > 0) {
         var unit = box(c.lat, c.lng, lF, wF);
         L.rectangle(unit, { color: '#E2701B', weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95 }).addTo(L_unit).bindTooltip(esc(UNIT.short) + ' \u00b7 ' + lF + '\u00d7' + wF + ' ft', { permanent: true, direction: 'bottom', className: 'eqlbl' });
         for (var k = 1; k < 5; k++) { var x = c.lng - lF / 2 * d.dLng + k * lF / 5 * d.dLng; L.polyline([[unit[0][0], x], [unit[1][0], x]], { color: '#c9c9c4', weight: 1 }).addTo(L_unit); }
       } else {
-        L.circleMarker(c, { radius: 8, color: '#E2701B', weight: 2.5, fillColor: '#f4f4f2', fillOpacity: .95 }).addTo(L_unit).bindTooltip(esc(UNIT.short) + ' \u00b7 footprint not on file', { permanent: true, direction: 'bottom', className: 'eqlbl' });
+        // A fixed-size symbol marks the placement without claiming a physical footprint.
+        var symbol = '<svg xmlns="http://www.w3.org/2000/svg" width="72" height="44" viewBox="0 0 72 44" aria-hidden="true">' +
+          '<rect x="2" y="2" width="68" height="40" rx="4" fill="#f4f4f2" stroke="#E2701B" stroke-width="3"/>' +
+          '<path d="M24 4v36M48 4v36M8 9h10M8 13h10M54 9h10M54 13h10" fill="none" stroke="#647887" stroke-width="2"/>' +
+          '<path d="M38 9l-9 15h7l-2 11 10-16h-8z" fill="#E2701B"/></svg>';
+        L.marker(c, { title: UNIT.name + ' (not to scale)', icon: L.divIcon({ className: 'prime-unit-symbol', html: symbol, iconSize: [72, 44], iconAnchor: [36, 22] }) })
+          .addTo(L_unit).bindTooltip(esc(UNIT.short) + ' \u00b7 not to scale', { permanent: true, direction: 'left', offset: [-40, 0], className: 'eqlbl' });
       }
       var xLng = c.lng + (lF / 2 + 9) * d.dLng, dLng2 = c.lng + (lF / 2 + 18) * d.dLng;
       L.polyline([[c.lat, c.lng + (lF || 0) / 2 * d.dLng], [c.lat, xLng - 4 * d.dLng]], { color: '#ffd23f', weight: 2 }).addTo(L_unit);
