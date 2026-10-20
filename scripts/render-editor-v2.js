@@ -16,7 +16,7 @@ var server = http.createServer(function(req,res) {
     var base = 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch({headless:true, args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
     var page = await browser.newPage({viewport:{width:1440,height:1000}}), errors=[];
-    var runServer = require('./_lib/editor-v2-server.js').create({zip:'85042'});
+    var runServer = require('./_lib/editor-v2-server.js').create({zip:'85042'}), parcelPosts = 0;
     page.on('pageerror', function(e) { errors.push(e.message); });
     var stored = {};
     function decoded(v) { if(v.mapValue)return unpack(v.mapValue.fields);if(v.arrayValue)return(v.arrayValue.values||[]).map(decoded);if('nullValue'in v)return null;return v.stringValue!==undefined?v.stringValue:v.doubleValue!==undefined?v.doubleValue:v.booleanValue; }
@@ -37,6 +37,11 @@ var server = http.createServer(function(req,res) {
       if(url.includes('/api/editor-v2-3d-config')) return route.fulfill({json:{photorealistic:false}});
       /* Run: the real cost engine and the real value-stack handler */
       if(url.includes('/api/cost-rollup')||url.includes('/api/value-stack')) return runServer.answer(url,route.request().postDataJSON()).then(function(r){return route.fulfill({status:r.status,json:r.json});});
+      /* Parcel lines: no Regrid on this server; the parcel under a point is a
+         100 ft lot around it, in /api/parcel's own shape */
+      if(url.includes('/api/parcel-tiles')) return route.fulfill({json:{ok:false,reason:'not-configured'}});
+      if(url.includes('/api/parcel')) { parcelPosts++; var q=route.request().postDataJSON(), dl=100/364000/2, dg=dl/Math.cos(q.lat*Math.PI/180);
+        return route.fulfill({json:{ok:true,ring:[[q.lat-dl,q.lng-dg],[q.lat-dl,q.lng+dg],[q.lat+dl,q.lng+dg],[q.lat+dl,q.lng-dg]],apn:'TEST-1',owner:'Not shown',acres:0.23,county:'Maricopa County, AZ',source:'maricopa'}}); }
       return route.abort();
     });
     await page.goto(base+'/editor-v2.html');
@@ -127,6 +132,23 @@ var server = http.createServer(function(req,res) {
     await page.press('#site-address','Enter');
     await page.waitForFunction(function(){return document.getElementById('site-address').value==='33.30600, -112.07400'&&/Anchor set/.test(document.getElementById('status').textContent);},null,{timeout:5000});
     assert.strictEqual(await page.evaluate(function(){return document.title;}),'Omega Maximus','the page is Omega Maximus');
+    /* Parcel lines: the layer comes on over the photo, the parcel under the
+       site point is looked up once, and Use as site boundary makes it the
+       drawing's lot line. */
+    await page.click('#layer-parcels-toggle');
+    await page.waitForFunction(function(){var c=document.getElementById('parcel-detail');return c&&!c.hidden&&/APN TEST-1/.test(c.innerText);},null,{timeout:10000}).catch(async function(e){
+      var d=await page.evaluate(function(){var c=document.getElementById('parcel-detail');return {hidden:c&&c.hidden,text:c&&c.innerText,status:document.getElementById('status').textContent,on:OmegaEditorV2Parcels.enabled(),last:OmegaEditorV2Parcels.status()};});
+      throw new Error('parcel card: '+JSON.stringify(d)+' posts='+parcelPosts);
+    });
+    var parcelText=await page.locator('#parcel-detail').innerText();
+    assert(/Maricopa County, AZ/.test(parcelText)&&/tax map, not a survey/.test(parcelText)&&parcelText.indexOf('Not shown')<0,'the card names the county layer, says reference only, and never the owner');
+    assert(await page.evaluate(function(){return getComputedStyle(document.getElementById('map-parcels')).display==='block'&&document.querySelectorAll('#map-parcels .pt').length>0;}),'the county lines are laid over the photo');
+    await page.click('#parcel-use');
+    await page.waitForFunction(function(){return /lot line now \(APN TEST-1\)/.test(document.getElementById('status').textContent)&&document.getElementById('parcel-use').hidden;},null,{timeout:5000});
+    assert.strictEqual(parcelPosts,1,'the parcel under the site point is looked up once');
+    await page.screenshot({path:path.join(out,'parcels.png')});
+    await page.click('#layer-parcels-toggle');
+    assert(await page.evaluate(function(){return document.getElementById('parcel-detail').hidden&&getComputedStyle(document.getElementById('map-parcels')).display==='none';}),'off, the lines and the card go');
     assert.deepStrictEqual(errors,[]);
     console.log(JSON.stringify({passed:true,mode:first.mode,triangles:first.triangles,shots:out,externalServices:'offline: fallback verified'}));
   } finally {if(browser) await browser.close(); server.close();}

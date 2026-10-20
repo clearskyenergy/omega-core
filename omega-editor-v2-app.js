@@ -22,6 +22,10 @@
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
   var tiles = {}, mapNote = '', recoverTimer = 0, section = 'design';
+  /* Parcel lines: their own tiles over the photo, the point the card is
+     about (the site point, or the map centre when asked), the source the
+     tiles were built from, and the anchor last looked up. */
+  var ptiles = {}, parcelSrc = '', parcelAt = null, parcelCard = true, parcelKey = '';
   var PROJECTS = 'omega.editorV2.projects';
 
   var POINT_TOOL = {
@@ -96,6 +100,8 @@
       });
     }
     if (!recovering) setStatus('Sample site loaded.');
+    /* Parcel lines are a view setting this browser remembers. */
+    if (root.OmegaEditorV2Parcels && root.OmegaEditorV2Parcels.remembered()) setParcels(true);
     var projectParam = /[?&]id=([A-Za-z0-9_-]+)/.exec(location.search);
     if (projectParam && !recovering) loadWorkspace(projectParam[1]);
     if (root.OmegaEditorV2Hooks) root.OmegaEditorV2Hooks.register('funding', function () { pushMarketplace(); return true; });
@@ -202,6 +208,10 @@
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
     $('analyze-close').addEventListener('click', function () { setSection('design'); });
     $('outputs-close').addEventListener('click', function () { setSection('design'); });
+    $('parcel-detail-close').addEventListener('click', function () { parcelCard = false; paintParcelCard(); });
+    $('parcel-use').addEventListener('click', useParcel);
+    $('parcel-here').addEventListener('click', parcelHere);
+    if (root.OmegaEditorV2Parcels) root.OmegaEditorV2Parcels.onChange(function () { layoutMap(); paintParcelCard(); requestDraw(); });
     if ($('grid-detail-close') && root.OmegaEditorV2Grid) {
       $('grid-detail-close').addEventListener('click', function () { root.OmegaEditorV2Grid.hideCard(); paintGridCard(); });
     }
@@ -944,6 +954,7 @@
     if (!mapOn) { ctx.fillStyle = '#E4E1D8'; ctx.fillRect(0, 0, cssW, cssH); }
     drawGrid(ctx);
     if (root.OmegaEditorV2Grid) root.OmegaEditorV2Grid.draw(ctx, worldToScreen);
+    if (root.OmegaEditorV2Parcels) root.OmegaEditorV2Parcels.draw(ctx, worldToScreen, state.doc.anchor);
     drawEntities(ctx, false);
     drawDraft(ctx);
     drawSelection(ctx);
@@ -1192,7 +1203,7 @@
   /* ── map ───────────────────────────────────────────────────────────── */
   function layoutMap() {
     var host = $('map');
-    if (!mapOn) { host.style.display = 'none'; mapNote = ''; return; }
+    if (!mapOn) { host.style.display = 'none'; mapNote = ''; layoutParcels(null); return; }
     host.style.display = 'block';
     var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt));
     if (z < 14) z = 14;
@@ -1218,6 +1229,7 @@
     if (count > 24) {
       mapNote = 'Zoom in to load aerial imagery.';
       host.style.display = 'none';
+      layoutParcels(null);
       return;
     }
     mapNote = '';
@@ -1230,6 +1242,7 @@
       if (!tiles[k]) tiles[k] = loadTile(need[k], k);
       placeTile(tiles[k]);
     }
+    layoutParcels(need);
   }
   function latLngToTile(lat, lng, z) {
     var n = Math.pow(2, z);
@@ -1251,29 +1264,34 @@
     img.draggable = false;
     var node = { img: img, spec: spec, ready: false, failed: false };
     img.onload = function () { node.ready = true; requestDraw(); };
-    img.onerror = function () { node.failed = true; mapNote = 'Aerial imagery did not load. The drawing is still to scale.'; };
+    img.onerror = function () { node.failed = true; img.style.visibility = 'hidden'; mapNote = 'Aerial imagery did not load. The drawing is still to scale.'; };
     img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + spec.z + '/' + spec.y + '/' + spec.x;
     $('map').appendChild(img);
     return node;
   }
-  function placeTile(node) {
-    var nw = tileNW(node.spec.x, node.spec.y, node.spec.z);
-    var se = tileNW(node.spec.x + 1, node.spec.y + 1, node.spec.z);
+  function placeTile(node) { placeBox(node.img, node.spec); }
+  /* One web-mercator tile's box on the screen, for the photo and the
+     parcel lines alike. */
+  function placeBox(el, spec) {
+    var nw = tileNW(spec.x, spec.y, spec.z);
+    var se = tileNW(spec.x + 1, spec.y + 1, spec.z);
     var a = worldToScreen(G.latLngToFt(nw.lat, nw.lng, state.doc.anchor));
     var b = worldToScreen(G.latLngToFt(se.lat, se.lng, state.doc.anchor));
-    node.img.style.left = Math.min(a.x, b.x) + 'px';
-    node.img.style.top = Math.min(a.y, b.y) + 'px';
-    node.img.style.width = Math.abs(b.x - a.x) + 'px';
-    node.img.style.height = Math.abs(b.y - a.y) + 'px';
+    el.style.left = Math.min(a.x, b.x) + 'px';
+    el.style.top = Math.min(a.y, b.y) + 'px';
+    el.style.width = Math.abs(b.x - a.x) + 'px';
+    el.style.height = Math.abs(b.y - a.y) + 'px';
   }
 
   /* ── panels ────────────────────────────────────────────────────────── */
   function refresh() {
+    followParcelAnchor();
     refreshTakeoff();
     refreshCustomer();
     refreshLayers();
     refreshProps(false);
     paintGridCard();
+    paintParcelCard();
     saveLabel();
     $('project-name').value = state.doc.name || '';
     paintNext();
@@ -1330,8 +1348,16 @@
     $('customer-btn').title = s.linked ? 'Linked to customer ' + s.customerId : 'No CRM id yet';
     if (state.doc.clientDrift) setStatus('The project list still has a different customer name. Saving the customer here will make them match.', true);
   }
+  /* Rebuilt only when something it shows changed: a rebuild between a
+     button's press and its release drops the click (the blur of a field
+     being saved refreshes the panels). */
+  var layerSig = '';
   function refreshLayers() {
     var host = $('layers');
+    var Grid = root.OmegaEditorV2Grid, Pc = root.OmegaEditorV2Parcels;
+    var sig = JSON.stringify(state.doc.layers) + '|' + (Grid && Grid.enabled() ? 1 : 0) + '|' + (Pc && Pc.enabled() ? 1 : 0);
+    if (sig === layerSig && host.firstChild) return;
+    layerSig = sig;
     host.innerHTML = '';
     var i, layer, line, mark, name, eye, lock;
     for (i = 0; i < state.doc.layers.length; i++) {
@@ -1360,6 +1386,136 @@
       host.appendChild(line);
     }
     appendGridLayer(host);
+    appendParcelLayer(host);
+  }
+  function appendParcelLayer(host) {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var line = document.createElement('div');
+    line.className = 'layer';
+    line.id = 'layer-parcels';
+    var mark = document.createElement('i');
+    mark.className = 'swatch';
+    mark.style.background = P.INK;
+    var name = document.createElement('span');
+    name.textContent = 'Parcel lines';
+    var eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'btn quiet';
+    eye.id = 'layer-parcels-toggle';
+    eye.textContent = P.enabled() ? 'Hide' : 'Show';
+    eye.setAttribute('aria-pressed', P.enabled() ? 'true' : 'false');
+    eye.addEventListener('click', function () { setParcels(!P.enabled()); });
+    line.appendChild(mark); line.appendChild(name); line.appendChild(eye);
+    var grid = $('layer-grid-atlas');
+    if (grid && grid.parentNode === host) host.insertBefore(line, grid.nextSibling);
+    else if (host.firstChild) host.insertBefore(line, host.firstChild);
+    else host.appendChild(line);
+  }
+
+  /* ── parcel lines (omega-editor-v2-parcels.js) ─────────────────────── */
+  function setParcels(on) {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    parcelCard = true;
+    parcelAt = null;
+    parcelKey = on ? anchorKey() : '';
+    if (on && !mapOn) { mapOn = true; pressed('map', true); }
+    P.setEnabled(on, state.doc.anchor);
+    refreshLayers();
+    layoutMap();
+    paintParcelCard();
+    requestDraw();
+  }
+  function anchorKey() {
+    var a = state.doc.anchor || {};
+    return (+a.lat).toFixed(5) + ',' + (+a.lng).toFixed(5);
+  }
+  /* A new site point (an address found, a project opened) is looked up once. */
+  function followParcelAnchor() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P || !P.enabled()) return;
+    var k = anchorKey();
+    if (k === parcelKey) return;
+    parcelKey = k;
+    parcelAt = null;
+    parcelCard = true;
+    P.lookup(state.doc.anchor.lat, state.doc.anchor.lng);
+  }
+  function parcelPoint() {
+    return parcelAt || { lat: +state.doc.anchor.lat, lng: +state.doc.anchor.lng };
+  }
+  function paintParcelCard() {
+    var el = $('parcel-detail'), P = root.OmegaEditorV2Parcels;
+    if (!el || !P) return;
+    var at = parcelPoint(), card = P.card(at.lat, at.lng);
+    el.hidden = !(card.visible && parcelCard);
+    if (el.hidden) return;
+    $('parcel-detail-title').textContent = card.title;
+    var body = $('parcel-detail-body'), i, p;
+    body.innerHTML = '';
+    if (parcelAt) { p = document.createElement('p'); p.className = 'src'; p.textContent = 'At the map centre.'; body.appendChild(p); }
+    for (i = 0; i < card.lines.length; i++) {
+      p = document.createElement('p');
+      if (card.lines[i].source) p.className = 'src';
+      p.textContent = card.lines[i].text;
+      body.appendChild(p);
+    }
+    var use = $('parcel-use');
+    use.hidden = !card.parcel || parcelUsed(card.parcel);
+    $('parcel-here').disabled = !!card.busy;
+  }
+  function parcelUsed(rec) {
+    var i, e;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      e = state.doc.entities[i];
+      if (e.parcel && rec && e.parcel.apn && e.parcel.apn === rec.apn && e.parcel.source === rec.source) return true;
+    }
+    return false;
+  }
+  function useParcel() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var at = parcelPoint(), rec = P.foundAt(at.lat, at.lng);
+    var ent = rec ? P.toEntity(rec, state.doc.anchor) : null;
+    if (!ent) { setStatus('Look up a parcel first.', true); return; }
+    D.add(state, ent);
+    afterChange();
+    paintParcelCard();
+    setStatus('The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.');
+  }
+  function parcelHere() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var c = G.ftToLatLng(view.cx, view.cy, state.doc.anchor);
+    parcelAt = { lat: c.lat, lng: c.lng };
+    parcelCard = true;
+    P.lookup(c.lat, c.lng);
+    paintParcelCard();
+  }
+  function layoutParcels(need) {
+    var host = $('map-parcels'), P = root.OmegaEditorV2Parcels, k, t;
+    if (!host) return;
+    if (!need || !P || !P.enabled()) { host.style.display = 'none'; return; }
+    host.style.display = 'block';
+    var src = P.source();
+    if (src !== parcelSrc) {
+      for (k in ptiles) if (ptiles.hasOwnProperty(k) && ptiles[k].el && ptiles[k].el.parentNode) ptiles[k].el.parentNode.removeChild(ptiles[k].el);
+      ptiles = {};
+      parcelSrc = src;
+    }
+    for (k in ptiles) if (ptiles.hasOwnProperty(k) && !need[k]) {
+      if (ptiles[k].el && ptiles[k].el.parentNode) ptiles[k].el.parentNode.removeChild(ptiles[k].el);
+      delete ptiles[k];
+    }
+    for (k in need) if (need.hasOwnProperty(k)) {
+      if (!ptiles[k]) {
+        t = P.tileNode(need[k]);
+        ptiles[k] = { el: t, spec: need[k] };
+        if (t) host.appendChild(t);
+      }
+      if (ptiles[k].el) placeBox(ptiles[k].el, need[k]);
+    }
   }
   function appendGridLayer(host) {
     var Grid = root.OmegaEditorV2Grid;
@@ -1431,6 +1587,7 @@
     var host = $('props');
     host.innerHTML = '';
     var addr = field(host, 'Address', state.doc.address || '', function (v) {
+      if (v === (state.doc.address || '')) return;
       D.setMeta(state, { address: v }); afterChange();
     });
     addr.id = 'site-address';
