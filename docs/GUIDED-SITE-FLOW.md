@@ -168,8 +168,9 @@ and 2026-10-17, when it moved onto the national door (gap 6).
    IL, NJ, CA, CT, MA and RI), says plainly where none is published (all of
    Florida and Arizona, Georgia Power behind an account), links the
    utility's own map or interconnection page to check it, and judges with
-   the same verdict engine. Omega Prime and the Site Map Grid panel both
-   ask it through `omega-grid-verdict.js` and draw every case the same way:
+   the same verdict engine. Omega Prime, the Site Map Grid panel and Site
+   Plan's Grid Atlas layer all ask it through `omega-grid-verdict.js` and
+   draw every case the same way:
    the utility's name, every candidate when the territory is not confident,
    where the power comes from, the provenance and the utility's own map,
    with the queue words following the answer (subtracted, already netted,

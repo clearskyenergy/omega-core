@@ -3,17 +3,19 @@
    omega-grid-verdict.js  ·  the ONE browser client of POST /api/grid-verdict
                              and POST /api/hosting-capacity
    --------------------------------------------------------------------------
-   Site Map's Grid panel (omega-grid-panel.js) and Omega Prime
-   (omega-prime.html) ask the same question — does the circuit under this
-   parcel have room for this unit? — and must never answer it two ways. Both
-   ask the national door here (hosting(), 2026-10-17), which names the
+   Site Map's Grid panel (omega-grid-panel.js), Site Plan's Grid Atlas layer
+   (omega-editor-v2-grid.js) and Omega Prime (omega-prime.html) ask the same
+   question — does the circuit under this parcel have room for this unit? —
+   and must never answer it two ways. All three ask the national door here
+   (hosting(), 2026-10-17), which names the
    serving utility, its coverage and its circuit together, and write the
    answer onto a project here in one shape — grid.substation, grid.circuit,
    grid.verdict (docs/GUIDED-SITE-FLOW.md) — through fromHosting(), with the
    source named from the answer rather than assumed to be ComEd's. The
    verdict itself is the server's (api/_lib/grid-verdict.js); nothing in
-   this file judges anything. circuitBody(), ask() and fields() are the
-   ComEd-probe path, kept for a page that still reads ComEd's map itself.
+   this file judges anything. circuitBody(), ask(), fields() and the two
+   source lines below are the ComEd-probe path, kept for a page that still
+   reads ComEd's map itself (Prime v2, #346).
 
    ES5. No dependencies beyond fetch and, for ask(), the Firebase compat
    auth already on the page.
@@ -152,7 +154,9 @@
   }
 
   /* The sentences Prime v2 prints under the circuit (omega-prime-v2.js
-     circuitSourceLine and hostingSourceLine). One wording, both pages. */
+     circuitSourceLine and hostingSourceLine), for the ComEd-probe path.
+     Site Plan's layer moved onto the door and words its source from the
+     door's answer. */
   function circuitSourceLine(verdict, probe) {
     var row = probe && probe.rows ? probe.rows[0] : null;
     var a = verdict || {};

@@ -1430,9 +1430,15 @@ service's measurement plus `substation`, `circuit` and `verdict`
 allowlist (with `savedBy`), is restored on load, and the pre-screen keeps
 the panel's answer when it re-measures the same point.
 `scripts/tests/tgridverdict.js` (the real door on a fake network: ComEd's
-sentence byte for byte, Mesa AZ) and `scripts/render-grid-panel.js` (in
-`check:pages`: the real editor's Grid Check at ComEd and Mesa, and on a
-390 px phone). The standalone Grid Atlas and Site Finder stay for
+sentence byte for byte, Mesa AZ). **Site Plan's Grid Atlas layer**
+(`omega-editor-v2-grid.js` in `editor-v2.html`) asks the same door the same
+way: no routing by state in the browser (Illinois outside ComEd is asked
+too, where it once was not), its card's lines drawn from the answer with
+the utility's own map as an https link, and `editor-v2.html` no longer loads
+the ComEd module; `scripts/tests/tgridlayer.js` runs it on the real door.
+`scripts/render-grid-panel.js` (in `check:pages`) holds both in Chromium:
+Site Map's Grid Check at ComEd, Mesa and on a 390 px phone, and Site Plan's
+layer at its Phoenix sample. The standalone Grid Atlas and Site Finder stay for
 prospecting many sites. Both the panel and Omega Prime ask through ONE
 client, `omega-grid-verdict.js` (the national door, `/api/grid-verdict`,
 the coverage words `COVERAGE`, and the `grid.*` record shape). **Omega

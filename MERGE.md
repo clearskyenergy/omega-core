@@ -27,6 +27,23 @@ door that does not answer is said and records nothing. Held by
 on a fake network) and `scripts/render-grid-panel.js` (in `check:pages`:
 the real editor's Grid Check at ComEd and Mesa, and on a 390 px phone).
 
+Site Plan's Grid Atlas layer (`omega-editor-v2-grid.js`, from main's Site
+Plan trial) followed in the same PR. It routed in the browser: ComEd's probe
+inside ComEd, nothing for the rest of Illinois, and for any other state a
+`POST /api/hosting-capacity` expecting a `{covered, empty, circuit, say}`
+answer no endpoint gave; on #354's door it would have read every non-ComEd
+site as "No open hosting layer". Now it is one `GV.hosting` with the
+drawing's point, battery and feeding substation, its card's lines are drawn
+from the answer (utility and coverage, candidates, the circuit with the
+queue words the answer calls for, the server's note, where the power comes
+from, the utility's own map as an https link the card renderer now draws),
+its own token path and `omega-comed-layers.js` are gone from Site Plan, and
+the client keeps `circuitSourceLine`/`hostingSourceLine`, `circuitBody`,
+`ask` and `fields` for Prime v2 (#346). `scripts/tests/tgridlayer.js` runs
+it on the real door (ComEd, Mesa, Springfield IL, a failed door);
+`teditorv2auth.js` holds the one token path; `render-grid-panel.js` covers
+it in Chromium.
+
 ## Omega Prime → Omega Teleios (2026-10-17)
 
 Tommy: Prime must print a quote, use Clean Cell's units (FENECON out), carry

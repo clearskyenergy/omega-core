@@ -15,6 +15,10 @@
  *           Project and APS, "publishes no hosting capacity", the server's
  *           caution, Needs a study, no ComEd word and no map invented
  *   phone   390 px: the panel inside the screen, nothing scrolled sideways
+ *   Site Plan  editor-v2.html's Grid Atlas layer on the same door: the
+ *           sample parcel in Phoenix names Arizona Public Service, says
+ *           what it publishes in the server's words, links its own page,
+ *           and the page loads no ComEd module
  * Fails on a page error, any browser request to the ComEd-only module, its
  * proxy or ComEd's service, or a panel off the screen. SHOT_DIR keeps the
  * screenshots (a temp folder by default).
@@ -47,10 +51,13 @@ function Esri(rows) { return { features: rows.map(function (r) { return { attrib
 var COMED = { features: [
   { attributes: { Feeder: 'F0297', SS_N: 'Crawford TSS 21', BESS_HC: 15620, PV_HC_kW: 15620, EV_HC_kW: 16100, Feeder_Q: 4895, Queue_RD: '09/30/2026' } },
   { attributes: { Feeder: 'F0301', SS_N: 'Crawford TSS 21', BESS_HC: 900, PV_HC_kW: 900, EV_HC_kW: 2400, Feeder_Q: 100, Queue_RD: '09/30/2026' } }] };
-/* the territory layers and the utility's map, as the door asks them */
+/* the territory layers and the utility's map, as the door asks them:
+   Chicago, Mesa, and Site Plan's sample parcel in Phoenix */
 function netFor(lng) {
-  var mesa = lng < -100;
+  var mesa = lng < -100, phoenix = lng < -112;
   return function (url) {
+    if (phoenix && /Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(Esri([['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]]));
+    if (phoenix && /tigerweb/.test(url)) return Promise.resolve({ features: [{ attributes: { NAME: 'Phoenix city', BASENAME: 'Phoenix' } }] });
     if (/Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(mesa
       ? Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 3e10], ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])
       : Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL', 4130749, 6.1e10]]));
@@ -154,6 +161,58 @@ function answered(p, re, ms) {
     return new RegExp(src).test(el.textContent) ? el.textContent : null;
   }, re.source, { timeout: ms || 20000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
 }
+/* Site Plan (editor-v2.html): its Grid Atlas layer asks the same door on
+   the Site Plan session; the public substation and transmission layers are
+   answered here, as the page asks them */
+async function sitePlan(browser, base, calls, errs) {
+  var ctx = await browser.newContext({ viewport: { width: 1440, height: 1000 } });
+  var p = await ctx.newPage(), mark = calls.hosting.length;
+  p.on('pageerror', function (e) { errs.push('site plan: ' + e.message); });
+  await p.route('**/*', async function (r) {
+    var url = r.request().url();
+    if (url.indexOf(base) === 0 && url.indexOf('/api/') < 0) {
+      if (/\/omega-comed-layers\.js/.test(url)) calls.comedModule++;
+      return r['continue']();
+    }
+    if (url.indexOf(base + '/api/hosting-capacity') === 0) {
+      var b = r.request().postDataJSON();
+      calls.hosting.push({ body: b, auth: r.request().headers().authorization || '' });
+      var res = await H.run({ lat: b.lat, lng: b.lng, unit: b.unit, substation: b.substation, mode: b.mode },
+        { db: function () { return null; }, now: Date.now, fetchJson: netFor(b.lng), log: function () {} });
+      return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(res) });
+    }
+    if (/Substations\/FeatureServer\/0\/query/i.test(url)) return r.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ features: [{ attributes: { NAME: 'Ocotillo', MAX_VOLT: 69, OWNER: 'Arizona Public Service' }, geometry: { x: -112.068, y: 33.309 } }] }) });
+    if (/Transmission_Lines\/FeatureServer\/0\/query/i.test(url)) return r.fulfill({ status: 200, contentType: 'application/json',
+      body: JSON.stringify({ features: [{ attributes: { VOLTAGE: 230, OWNER: 'Arizona Public Service', ID: 'T1' }, geometry: { paths: [[[-112.08, 33.30], [-112.06, 33.31]]] } }] }) });
+    if (url.indexOf(base + '/api/editor-v2-3d-config') === 0) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ photorealistic: false }) });
+    if (url.indexOf(base + '/api/editor-v2-component-cost') === 0) return r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(require('../api/_lib/editor-v2-component-cost')(r.request().postDataJSON())) });
+    calls.external.push(url.slice(0, 160));
+    return r.abort();
+  });
+  await p.goto(base + '/editor-v2.html', { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await p.waitForFunction(function () { return !!window.OmegaEditorV2Grid && !!window.OmegaEditorV2Auth && !!document.getElementById('layer-grid-atlas-toggle'); }, null, { timeout: 60000 });
+  /* the Site Plan session's token, as a signed-in visitor has it */
+  var noComEd = await p.evaluate(function () { window.OmegaEditorV2Auth.idToken = function () { return Promise.resolve('site-plan-token'); }; return typeof window.OmegaComEdLayers === 'undefined'; });
+  await p.click('#layer-grid-atlas-toggle');
+  var text = await p.waitForFunction(function () {
+    var d = document.getElementById('grid-detail'), b = document.getElementById('grid-detail-body');
+    return d && !d.hidden && b && /Serving utility/.test(b.textContent) ? b.innerText : null;
+  }, null, { timeout: 20000 }).then(function (h) { return h.jsonValue(); }, function () { return null; });
+  var links = await p.$$eval('#grid-detail-body a', function (as) { return as.map(function (a) { return { href: a.getAttribute('href'), target: a.target, rel: a.rel, text: a.textContent }; }); });
+  var h = calls.hosting[mark] || { body: {} };
+  ok('Site Plan: the Grid Atlas layer asks the national door once, on the Site Plan session', calls.hosting.length === mark + 1 && h.auth === 'Bearer site-plan-token', calls.hosting.slice(mark));
+  ok('Site Plan: at the drawing\'s point, with its battery and the feeding substation',
+    Math.abs(h.body.lat - 33.306) < 1e-9 && h.body.unit && h.body.unit.kw > 0 && h.body.substation && h.body.substation.name === 'Ocotillo' && h.body.mode === 'storage', h.body);
+  ok('Site Plan: the card names the utility and what it publishes, in the server\'s words', !!text && /Serving utility: Arizona Public Service · publishes no hosting capacity/.test(text) &&
+    /R14-2-2616/.test(text) && /Needs a study/.test(text), text);
+  ok('Site Plan: its own page is a link, https, in a new tab', links.length === 1 && links[0].href === 'https://www.aps.com/dg' && links[0].target === '_blank' && /noopener/.test(links[0].rel), links);
+  ok('Site Plan: no ComEd module and no ComEd word', noComEd && !/comed/i.test(text || ''), { noComEd: noComEd });
+  var f = await shot(p, 'site-plan-grid');
+  await ctx.close();
+  return f;
+}
+
 async function shot(p, name) {
   /* the loading mark has faded, so the shot is of the page */
   var gone = await p.waitForFunction(function () { return !document.getElementById('omega-splash'); }, null, { timeout: 8000 }).then(function () { return true; }, function () { return false; });
@@ -240,6 +299,10 @@ async function shot(p, name) {
     ok('phone: the panel answers and sits inside the screen, nothing sideways', !!t3 && box.l >= 0 && box.r <= box.w && box.sw <= box.cw + 1, box);
     shots.push(await shot(q, 'grid-panel-phone'));
     await e2.ctx.close();
+
+    /* ── Site Plan: the same door, on the Site Plan session ── */
+    shots.push(await sitePlan(browser, base, calls, errs));
+    ok('nothing in either editor loaded the ComEd-only module', calls.comedModule === 0, calls.comedModule);
 
     ok('no page error', errs.length === 0, errs.slice(0, 6));
   } catch (err) {
