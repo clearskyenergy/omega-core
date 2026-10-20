@@ -5,8 +5,11 @@
  * The layer list and the line reading live in omega-grid-layers.js. The
  * circuit verdict is POST /api/grid-verdict, asked through
  * omega-grid-verdict.js. ComEd at the parcel is omega-comed-layers.js.
- * Any other state is POST /api/hosting-capacity. This file does not carry
- * a service URL, and it does not decide whether a unit fits.
+ * Any other state is POST /api/hosting-capacity, the national door, through
+ * the same client: it names the serving utility, reads what that utility
+ * publishes and judges the circuit itself, so its answer is the record and
+ * the verdict is never asked twice. This file does not carry a service URL,
+ * and it does not decide whether a unit fits.
  *
  * The layer is off until it is switched on. Nothing it reads is written
  * onto the drawing.
@@ -195,16 +198,15 @@
     };
   }
 
-  function sourceLine(kind, server, probe, hosting) {
+  function sourceLine(kind, server, probe) {
     var GV = verdict();
     if (kind === 'comed' && GV && GV.circuitSourceLine) return GV.circuitSourceLine(server, probe);
-    if (kind === 'hosting' && GV && GV.hostingSourceLine) return GV.hostingSourceLine(hosting, server);
     var line = 'No hosting map answered at this parcel.';
     if (server && server.version) line += ' Verdict: OMEGA grid verdict (' + server.version + ').';
     return line;
   }
 
-  function applyAnswer(server, kind, probe, hosting) {
+  function applyAnswer(server, kind, probe) {
     if (!server || !server.verdict) return null;
     var GV = verdict();
     var at = new Date().toISOString();
@@ -219,7 +221,7 @@
       }
     };
     if (rec.verdict && !rec.verdict.at) rec.verdict.at = at;
-    rec.sourceLine = sourceLine(kind, server, kind === 'comed' ? probe : null, kind === 'hosting' ? hosting : null);
+    rec.sourceLine = sourceLine(kind, server, kind === 'comed' ? probe : null);
     rec.kind = kind || 'none';
     return rec;
   }
@@ -286,51 +288,18 @@
     return String(a.lat) + ',' + String(a.lng);
   }
 
-  function token() {
-    var Auth = root.OmegaEditorV2Auth;
-    if (Auth && typeof Auth.idToken === 'function') {
-      return Auth.idToken().then(function (t) {
-        if (t) return t;
-        return Promise.reject(new Error('Sign in to check the grid.'));
-      });
-    }
-    try {
-      var u = root.firebase && root.firebase.auth && root.firebase.auth().currentUser;
-      if (u) return u.getIdToken();
-    } catch (e) {}
-    return Promise.reject(new Error('Sign in to check the grid.'));
+  /* The door's answer is already judged (api/hosting-capacity.js runs the
+     grid verdict on what it read), so it becomes the record as it is. */
+  function hostingRecord(res) {
+    var GV = verdict();
+    var rec = GV && GV.fromHosting ? GV.fromHosting(res) : null;
+    if (!rec) return null;
+    rec.sourceLine = GV.hostingAnswerLine ? GV.hostingAnswerLine(res) : String((res && res.note) || '');
+    rec.kind = 'hosting';
+    return rec;
   }
 
-  function firstJson(urls, cb) {
-    function next(i) {
-      if (!urls || i >= urls.length) { cb(null); return; }
-      var req;
-      try { req = root.fetch(urls[i]); }
-      catch (e) { next(i + 1); return; }
-      req.then(function (r) { return r && r.ok ? r.json() : null; }).then(function (j) {
-        if (j && j.features && j.features.length) cb(j);
-        else next(i + 1);
-      }, function () { next(i + 1); });
-    }
-    next(0);
-  }
-
-  function postHosting(lat, lng, st, cb) {
-    token().then(function (tok) {
-      return root.fetch('/api/hosting-capacity', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok },
-        body: JSON.stringify({ lat: lat, lng: lng, state: st })
-      });
-    }).then(function (r) {
-      return r.json()['catch'](function () { return {}; }).then(function (j) {
-        if (!r.ok) throw new Error((j && j.error) || ('Hosting answered ' + r.status));
-        cb(null, j);
-      });
-    }, function (e) { cb(e); });
-  }
-
-  function readCircuit(doc, cb) {
+  function readCircuit(doc, summary, cb) {
     var anchor = doc.anchor || {};
     var lat = num(anchor.lat), lng = num(anchor.lng);
     var route = routeOf(lat, lng, doc.address);
@@ -348,13 +317,14 @@
       return;
     }
     if (route === 'hosting') {
-      postHosting(lat, lng, stateOf(doc.address), function (err, j) {
-        if (err) { cb('hosting', null, null, err.message || 'The hosting service did not answer.'); return; }
-        if (!j || !j.covered || j.empty || !j.circuit) {
-          cb('hosting', null, j, (j && j.say) || 'No open hosting layer for this state.');
-          return;
-        }
-        cb('hosting', j.circuit, j, '');
+      var GV = verdict();
+      if (!GV || !GV.hosting) { cb('hosting', null, null, 'The grid verdict client did not load.'); return; }
+      var sub = scene && scene.feeding;
+      GV.hosting({ lat: lat, lng: lng, unit: unitOf(summary), substation: sub ? { name: sub.name, kv: sub.kv, km: sub.km } : null }).then(function (res) {
+        var rec = hostingRecord(res);
+        cb('hosting', null, res, rec ? '' : ((res && res.note) || 'No hosting answer came back for this point.'), rec);
+      }, function (err) {
+        cb('hosting', null, null, (err && err.message) || 'The hosting service did not answer.');
       });
       return;
     }
@@ -372,7 +342,7 @@
     var body = verdictBody(unitOf(summary), scene && scene.feeding, circuit);
     GV.ask(body).then(function (server) {
       if (ticket !== seq) return;
-      answer = applyAnswer(server, kind, probe, kind === 'hosting' ? probe : null);
+      answer = applyAnswer(server, kind, probe);
       note = status || '';
       notify();
     }, function (err) {
@@ -405,8 +375,9 @@
       scene = sceneFrom(subsJson, linesJson, anchor);
       note = (scene.substations.length || scene.lines.length) ? '' : 'The public substation services did not answer. Try again in a minute.';
       notify();
-      readCircuit(doc, function (kind, circuit, probe, status) {
+      readCircuit(doc, summary, function (kind, circuit, probe, status, judged) {
         if (ticket !== seq) return;
+        if (kind === 'hosting') { answer = judged || null; note = status || ''; notify(); return; }
         askVerdict(ticket, doc, summary, kind, circuit, probe, status);
       });
     }
@@ -497,6 +468,8 @@
     hit: hit,
     verdictBody: verdictBody,
     applyAnswer: applyAnswer,
+    hostingRecord: hostingRecord,
+    readCircuit: readCircuit,
     summaryLines: summaryLines,
     featureLines: featureLines,
     enabled: function () { return enabled; },
@@ -524,7 +497,7 @@
       cardOpen = false;
       loadedKey = '';
     },
-    VERSION: 'editor-v2-grid/1'
+    VERSION: 'editor-v2-grid/2'
   };
   root.OmegaEditorV2Grid = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

@@ -75,9 +75,9 @@ function tokenFn(src) {
   var i = src.indexOf('function token()');
   return src.slice(i, i + 700);
 }
-var gridSrc = tokenFn(fs.readFileSync(path.join(ROOT, 'omega-editor-v2-grid.js'), 'utf8'));
+var gridFull = fs.readFileSync(path.join(ROOT, 'omega-editor-v2-grid.js'), 'utf8');
 var verdictSrc = tokenFn(fs.readFileSync(path.join(ROOT, 'omega-grid-verdict.js'), 'utf8'));
-check(gridSrc.indexOf('OmegaEditorV2Auth') >= 0 && gridSrc.indexOf('currentUser') >= 0, 'hosting capacity uses the Site Plan session, then the page session');
+check(gridFull.indexOf('function token(') < 0 && gridFull.indexOf('GV.hosting(') >= 0 && gridFull.indexOf('/api/hosting-capacity\'') < 0, 'hosting capacity goes through the shared client, which signs in with the Site Plan session');
 check(verdictSrc.indexOf('OmegaEditorV2Auth') >= 0 && verdictSrc.indexOf('Sign in to check the grid.') >= 0 && verdictSrc.indexOf('currentUser') >= 0, 'the shared verdict client prefers Site Plan auth when it is on the page');
 
 var editor = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');

@@ -17,6 +17,7 @@ require(path.join(ROOT, 'omega-editor-v2-doc.js'));
 require(path.join(ROOT, 'omega-editor-v2-design.js'));
 
 if (!global.OmegaComEdLayers) global.OmegaComEdLayers = require(path.join(ROOT, 'omega-comed-layers.js')).OmegaComEdLayers;
+if (!global.OmegaGridVerdict) global.OmegaGridVerdict = require(path.join(ROOT, 'omega-grid-verdict.js')).OmegaGridVerdict;
 
 var Grid = global.OmegaEditorV2Grid;
 var GL = global.OmegaGridLayers;
@@ -106,4 +107,51 @@ check(JSON.stringify(model).indexOf('480') < 0, 'the parity note does not invent
 var editor = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
 check(editor.indexOf('omega-editor-v2-grid') < 0, 'Site Map does not load this layer');
 
-console.log('tgridlayer: ' + n + ' checks passed');
+/* Any other state: the national door (api/hosting-capacity.js) names the
+   utility, reads what it publishes and judges the circuit. Site Plan keeps
+   that answer as the record and never asks the verdict twice. The answers
+   below are in the door's own shape (compose()). */
+var GVc = global.OmegaGridVerdict;
+var unit500 = Grid.unitOf({ bessKw: 500, bessKwh: 1000 });
+var pgeCircuit = { utility: 'Pacific Gas and Electric', id: 'F-1101', substation: 'Oakland', publishedKw: 1500, queuedKw: 0, addressResolved: false, grain: 'line section' };
+var readAnswer = { version: 'test', point: { lat: 34.05, lng: -118.25 }, coverage: 'read',
+  utility: { key: 'pge', display: 'Pacific Gas and Electric', eiaId: '14328' },
+  source: { key: 'pge-grip', label: 'PG&E published hosting capacity', grain: 'line section', refreshed: '2026-09-30', addressResolved: false, distanceM: 40 },
+  circuits: [{ id: 'F-1101', name: 'Feeder 1101', substation: 'Oakland', basis: 'storage', publishedKw: 1500, queuedKw: 0 }], best: 0, body: pgeCircuit,
+  verdict: Judge.judge({ unit: unit500, substation: null, circuit: pgeCircuit }),
+  note: 'Pacific Gas and Electric publishes hosting capacity; this is its figure for the nearest line section, 40 m from the point. A screening figure: Pacific Gas and Electric decides in its interconnection review.' };
+var recRead = Grid.hostingRecord(readAnswer);
+check(recRead && recRead.kind === 'hosting' && recRead.verdict.key === readAnswer.verdict.verdict.key && recRead.verdict.label === 'Fits', 'the door\'s judged answer is the record');
+check(recRead.circuit && recRead.circuit.id === 'F-1101' && recRead.circuit.utility === 'Pacific Gas and Electric' && recRead.circuit.netKw === 1500, 'the circuit and its utility come from the answer');
+check(recRead.sourceLine.indexOf('Source: PG&E published hosting capacity, refreshed 2026-09-30.') === 0 && recRead.sourceLine.indexOf('A screening figure') > 0 && recRead.sourceLine.indexOf(readAnswer.verdict.version) > 0, 'the source line is the answer\'s own words and the verdict version');
+check(recRead.sourceLine.indexOf('ComEd') < 0 && recRead.sourceLine.indexOf('undefined') < 0, 'it claims no other map and prints nothing undefined');
+var noMap = { version: 'test', coverage: 'no-public-map', utility: { key: 'mesa', display: 'City of Mesa Electric' }, source: null, circuits: [], best: null, body: null,
+  verdict: Judge.judge({ unit: unit500, substation: null, circuit: null }), note: 'City of Mesa Electric does not publish hosting capacity; ask its interconnection team.' };
+var recNone = Grid.hostingRecord(noMap);
+check(recNone && recNone.circuit === null && recNone.verdict.label === 'Needs a study', 'a utility with no public map is a study, with no circuit recorded');
+var noneBlob = Grid.summaryLines(scene, recNone, '').map(function (r) { return r.text; }).join('\n');
+check(noneBlob.indexOf('City of Mesa Electric does not publish hosting capacity') >= 0 && noneBlob.indexOf('kW net') < 0, 'the card says who serves the point and invents no figure');
+check(Grid.hostingRecord(null) === null, 'no answer, no record');
+
+/* readCircuit sends the point and the battery to the door once, through the
+   shared client, and does not ask /api/grid-verdict again. */
+var asked = [], verdictAsks = 0, realHosting = GVc.hosting, realAsk = GVc.ask;
+var la = D.create({ name: 'LA', anchor: { lat: 34.05, lng: -118.25 }, address: '1 Main St, Los Angeles, CA 90001' });
+GVc.hosting = function (b) { asked.push(b); return Promise.resolve(readAnswer); };
+GVc.ask = function () { verdictAsks++; return Promise.reject(new Error('not expected')); };
+new Promise(function (resolve) {
+  Grid.readCircuit(la, { bessKw: 500, bessKwh: 1000 }, function (kind, circuit, probe, status, judged) { resolve({ kind: kind, status: status, judged: judged }); });
+}).then(function (got) {
+  check(asked.length === 1 && asked[0].lat === 34.05 && asked[0].lng === -118.25 && asked[0].unit.kw === 500 && asked[0].unit.kwh === 1000, 'the door is asked once, with the point and the battery');
+  check(got.kind === 'hosting' && got.judged && got.judged.verdict.label === 'Fits' && got.status === '', 'its judged answer comes back as the record');
+  check(verdictAsks === 0, 'the verdict is not asked a second time');
+  GVc.hosting = function () { return Promise.reject(new Error('Sign in to check the grid.')); };
+  return new Promise(function (resolve) {
+    Grid.readCircuit(la, {}, function (kind, circuit, probe, status, judged) { resolve({ kind: kind, status: status, judged: judged }); });
+  });
+}).then(function (got) {
+  check(got.kind === 'hosting' && !got.judged && got.status === 'Sign in to check the grid.', 'a refused request says why and records nothing');
+  GVc.hosting = realHosting; GVc.ask = realAsk;
+  console.log('tgridlayer: ' + n + ' checks passed');
+}).catch(function (e) { GVc.hosting = realHosting; GVc.ask = realAsk; console.error(e); process.exit(1); });
+

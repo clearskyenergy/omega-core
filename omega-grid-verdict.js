@@ -168,9 +168,23 @@
       + ' Verdict: OMEGA grid verdict (' + ((verdict && verdict.version) || '') + ').' + asked;
   }
 
+  /* The sentence under the national door's answer (Site Plan's Grid Atlas
+     card). It is the door's own note, which already names the utility, the
+     source, the grain and the distance and says it is a screening figure,
+     with the source label and the verdict version in front of and behind
+     it. Nothing here is added that the answer does not say. hostingSourceLine
+     above is the older screen's wording, kept for a page that passes one. */
+  function hostingAnswerLine(res) {
+    if (!res) return '';
+    var s = hostingSummary(res), src = s.source, v = res.verdict || null, line = s.note || '';
+    if (src && src.label) line = 'Source: ' + src.label + (src.refreshed ? ', refreshed ' + src.refreshed : '') + '.' + (line ? ' ' + line : '');
+    if (v && v.version) line += (line ? ' ' : '') + 'Verdict: OMEGA grid verdict (' + v.version + ').';
+    return line;
+  }
+
   root.OmegaGridVerdict = {
     circuitBody: circuitBody, ask: ask, fields: fields,
     hosting: hosting, coverage: coverage, fromHosting: fromHosting, hostingSummary: hostingSummary,
-    circuitSourceLine: circuitSourceLine, hostingSourceLine: hostingSourceLine
+    circuitSourceLine: circuitSourceLine, hostingSourceLine: hostingSourceLine, hostingAnswerLine: hostingAnswerLine
   };
 })(typeof window !== 'undefined' ? window : this);
