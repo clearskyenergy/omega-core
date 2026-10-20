@@ -171,8 +171,9 @@ and 2026-10-17, when it moved onto the national door (gap 6).
    the same verdict engine. Omega Prime, the Site Map Grid panel and Site
    Plan's Grid Atlas layer all ask it through `omega-grid-verdict.js` and
    draw every case the same way:
-   the utility's name, every candidate when the territory is not confident,
-   where the power comes from, the provenance and the utility's own map,
+   the utility's name, who may serve the point and what each publishes
+   wherever no figure is read or more than one utility is mapped (one list,
+   `GV.whoServes`, since 2026-10-20), where the power comes from, the provenance and the utility's own map,
    with the queue words following the answer (subtracted, already netted,
    or not published). The editor no longer loads the ComEd module.
 7. **New.** A "Send to Site Map" button on the standalone Site Finder's
@@ -183,7 +184,9 @@ and 2026-10-17, when it moved onto the national door (gap 6).
 
 Tommy: "it does the set up and system like the artifact sandbox."
 `omega-prime.html` now runs Site → Grid Atlas → Circuit → **Load** →
-Site Map → **Proposal** → **Track** and ends in a real project, a
+**Design** (Prime's own drawing, which the proposal is priced from; Site
+Map is the detailed engineering editor it can be sent to) → **Proposal** →
+**Track** and ends in a real project, a
 proposal the customer approves online, and the order in the workspace's
 own Omega Logic, followed to **Omega Teleios** (complete: on site, every
 warranty live):
@@ -204,11 +207,29 @@ warranty live):
   JP-2 and the Smart Module, whose brochure names one. Prime, the proposal
   and Site Map all say to confirm it on the submittal; the rep's typed
   submittal L × W (`'rep'`) replaces it. A unit with no figure at all is
-  `'none'`, a marked point.
+  `'none'`, a marked point. A site keeps the unit it was drawn with, but a
+  proposal quotes only one the workspace's list offers (`PP.offered`, the
+  rule the quote door and the order hand-off share, 2026-10-20): a site set
+  up on the XXL before it left every list but FENECON's opens the Proposal
+  step on a choice of unit from the list, with the drawing kept.
 - **Circuit verdict:** the server's (`/api/hosting-capacity`, judged by
   the `/api/grid-verdict` engine), asked through `omega-grid-verdict.js`,
   the client Site Map's Grid panel uses too. The page's own thresholds are
   gone.
+- **Substations:** the public HIFLD layer Grid Atlas reads names about
+  half its records by a number alone (38,479 `UNKNOWN…` of 75,328 on
+  2026-10-20, the nearest to 29 W Main St, Mesa among them). Prime shows
+  `UNKNOWN307104` as "Unnamed substation (HIFLD 307104)" and an unnamed
+  tap, `TAP302679`, as "Unnamed tap (HIFLD 302679)"
+  (`omega-prime-project.js` `subName`) on the map, in the inspector, the
+  Circuit panel and the Design panel; a real name is shown as it is. The
+  record (`prime.sub`, `grid.substation`) and the hosting door keep the
+  name HIFLD gave. HIFLD's not-available figure, -999999, is never printed
+  as a voltage or a line count.
+- **The Circuit panel and the guide:** while the guide sits in its corner
+  the panel ends above it and scrolls inside, so a long list of utilities
+  (twelve at downtown Mesa when the city's own map does not answer, ten of
+  them folded) never puts Next under the guide.
 - **Load:** the utility's planning rates for the address's ZIP
   (`/api/utility-rates`) and the twelve monthly peaks off the bill, typed
   or pasted; skippable, never filled in.
@@ -229,6 +250,10 @@ warranty live):
   total), terms; previewed, printed (with the site plan on satellite
   imagery) and sent by email or link from the seller's own letterhead
   (`api/customer-quote.js`, `omega-quote-deck.js`, the public `quote.html`).
+  Its circuit line names the circuit as the Circuit step does: the
+  utility's own circuit id first, any other name the source gives it only
+  beside it, then the substation (ComEd: "Circuit: L5131 (queue report
+  F1978) · substation S0711", never the queue-report number first).
   The Quote Desk's Customer quotes tab tracks every one. On the rep's side
   of the step (never on the deck), main's **Send to the OEM** opens the
   maker's purchase order through `POST /api/rfq`, as Site Map's BOM does:
@@ -271,7 +296,9 @@ its own style, the phone stylesheet and `omega-prime-pwa.js`; the script
 writes the manifest link, the icons and the iOS tags while the page is
 still parsing. The installed icon opens `/omega-prime`. The worker caches
 the shell only and does not cache `/api/` or Firebase auth. Phone layout
-is `omega-prime-mobile.css`.
+is `omega-prime-mobile.css`. Its text-field rule (16 px, 44 px tall, full
+width) leaves a radio or a checkbox its own size, and the row it sits in is
+the tap target (the Proposal's Price radios, 2026-10-20).
 
 **Every project type** (main #348): EV charging, Solar, Compute and
 Microgrid list the editor's own catalogs (`omega-site-catalogs.js`, held

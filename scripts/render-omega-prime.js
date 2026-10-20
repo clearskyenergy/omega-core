@@ -29,13 +29,30 @@
  *   Track     the customer opens and approves (the door's public branch);
  *             the order is refused (no Omega Logic) in plain words, retried
  *             once Omega Logic is on; the ladder and the three links
+ *   Unit      (run after Mesa) a site saved on FENECON's XXL, opened in a
+ *             workspace whose list does not offer it: the Proposal step
+ *             asks for the unit to quote from that list (the server's word,
+ *             GET ?projectId=), Preview and Save held; the choice keeps the
+ *             drawing, is patched onto the record, then priced and saved
  *   Phone     390 px: the resumed Track and the reopened proposal, its form
  *             filled from the saved quote, no sideways scroll
- *   Mesa      29 W Main St, Mesa AZ: the territory layers name Salt River
- *             Project, Arizona Public Service and the City of Mesa; downtown
- *             Mesa is inside the city, so City of Mesa leads, SRP is named
- *             beside it with its islands caution, nothing is confident, and
- *             no ComEd wording appears anywhere
+ *   Mesa      29 W Main St, Mesa AZ: the national layer names Salt River
+ *             Project, Arizona Public Service and the City of Mesa; the
+ *             city's own electric service area map (2026-10-20) puts the
+ *             point inside it, so the City of Mesa is named with confidence,
+ *             the list says who serves the point and what it publishes
+ *             (nothing), SRP and the rest fold away with the reason, the
+ *             city's own pages are linked, and no ComEd wording appears
+ *   Mesa live (run before Mesa) downtown Mesa as the live services answered
+ *             on 2026-10-20: twelve utilities on the national layer and the
+ *             city's own map down, so the panel lists two and folds ten; at
+ *             1440 × 900, the fold open, a real mouse click on Next reaches
+ *             Next, never the floating guide; HIFLD's UNKNOWN307104 and
+ *             TAP302679 read as words on the map, in the inspector, the
+ *             circuit panel and the Design panel, its -999999 is never
+ *             printed, and the record and the door keep the raw name
+ *   Radios    (in Phone) the Proposal's Price radios and its checkbox are
+ *             drawn under 30 px, their words beside them, on a 44 px row
  * Every outside service is answered from a fixture; the one thing fetched
  * is Leaflet, from cdnjs as the page loads it (LEAFLET_DIR serves a local
  * copy, as scripts/test-sitefinder-ui.js does). PRIME_SHOTS=<dir> saves a
@@ -64,8 +81,9 @@ F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: 
   canActInOrg: async function (c, org) { return c.staff || c.orgId === org; },
   billingOf: async function (org) { var s = await DB.doc('omega_orgs/' + org + '/billing/current').get(); return s.exists ? s.data() : { tier: 'standard', addons: [], toolOverrides: {} }; },
   FieldValue: function () { return { serverTimestamp: function () { return Date.now(); } }; } });
-var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service');
+var H = require('../api/hosting-capacity')._helpers, CS = require('../api/_lib/comed-service'), HS = require('../api/_lib/hosting-sources');
 var QUOTE = require('../api/customer-quote'), BRANDING = require('../api/tenant-branding'), RATES = require('../api/utility-rates'), PRICE = require('../api/price-site');
+var QL = require('../api/_lib/customer-quote');
 var PP = require('../omega-prime-project.js');
 var chromium = require(process.env.PLAYWRIGHT || 'playwright').chromium;
 
@@ -107,20 +125,47 @@ var COMED = { features: [
 function netFor(lat, lng) {
   var mesa = lng < -100;
   return function (url) {
+    if (mesa && MESA_LIVE) {
+      if (/Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(Esri(MESA_12));
+      if (/GCX_ExploreMesa\/MapServer\/13\/query/.test(url)) { var down = new Error('timeout'); down.name = 'AbortError'; return Promise.reject(down); }
+    }
     if (/Electricity_Rates_H3_Res5/.test(url)) return Promise.resolve(mesa
       ? Esri([['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1100000, 3e10], ['803', 'ARIZONA PUBLIC SERVICE CO', 'INVESTOR OWNED', 'AZ', 1400037, 1.3e11]])
       : Esri([['4110', 'COMMONWEALTH EDISON CO', 'INVESTOR OWNED', 'IL']]));
     if (/tigerweb/.test(url)) return Promise.resolve(mesa ? { features: [{ attributes: { NAME: 'Mesa city', BASENAME: 'Mesa' } }] } : { features: [] });
+    /* the City of Mesa's own electric service area: 1.5 km around downtown */
+    if (mesa && /GCX_ExploreMesa\/MapServer\/13\/query/.test(url)) return Promise.resolve({ features: [{ attributes: { FACILITYID: 'ELSA2' }, geometry: square(MESA.lat, MESA.lng, 1500) }] });
     if (url.indexOf(CS.SERVICE) === 0) return Promise.resolve(JSON.parse(JSON.stringify(COMED)));
     return Promise.resolve({ features: [] });
   };
 }
+function square(lat, lng, m) { var a = m / 111320, b = m / (111320 * Math.cos(lat * Math.PI / 180)); return { rings: [[[lng - b, lat - a], [lng + b, lat - a], [lng + b, lat + a], [lng - b, lat + a], [lng - b, lat - a]]] }; }
 var SUBS = { features: [
   { attributes: { NAME: 'Crawford', MAX_VOLT: 138, MIN_VOLT: 12, LINES: 6, STATUS: 'IN SERVICE', OWNER: 'Commonwealth Edison' }, geometry: { x: -87.6150, y: 41.8210 } },
   { attributes: { NAME: 'Fisk', MAX_VOLT: 345, STATUS: 'IN SERVICE', OWNER: 'Commonwealth Edison' }, geometry: { x: -87.6500, y: 41.8500 } }] };
 var SUBS_MESA = { features: [
   { attributes: { NAME: 'Mesa Downtown', MAX_VOLT: 69, MIN_VOLT: 12, LINES: 4, STATUS: 'IN SERVICE', OWNER: 'Salt River Project' }, geometry: { x: -111.8270, y: 33.4190 } },
   { attributes: { NAME: 'Kyrene', MAX_VOLT: 230, STATUS: 'IN SERVICE', OWNER: 'Salt River Project' }, geometry: { x: -111.9300, y: 33.3600 } }] };
+/* downtown Mesa as the live services answered it on 2026-10-20 (MESA_LIVE):
+   the national layer's twelve polygons (the City of Mesa, Salt River
+   Project, then water and irrigation districts and county-sized
+   stand-ins), the city's own service-area map not answering, and HIFLD's
+   own records for the substations nearest: an unnamed substation, a named
+   one, an unnamed tap. The nearest one's voltage and lines are HIFLD's
+   not-available figure, -999999, as 12,667 of its unnamed substations
+   carry it (this one's live record says 69 kV). */
+var MESA_LIVE = false;
+var MESA_12 = [['12351', 'CITY OF MESA - (AZ)', 'MUNICIPAL', 'AZ', 18101, 4.3e9], ['16572', 'SALT RIVER PROJECT', 'POLITICAL SUBDIVISION', 'AZ', 1166094, 9.1e9],
+  ['5729', 'ELECTRICAL DIST NO8 MARICOPA', 'POLITICAL SUBDIVISION', 'AZ', 695, 3.4e10], ['19016', 'TONOPAH IRRIGATION DISTRICT', 'NOT AVAILABLE', 'AZ', null, 3.4e10],
+  ['40355', 'MARICOPA COUNTY M W C DIST #1', 'NOT AVAILABLE', 'AZ', null, 3.4e10], ['2469', 'BUCKEYE WATER C&D DISTRICT', 'NOT AVAILABLE', 'AZ', null, 3.4e10],
+  ['8139', 'HARQUAHALA VALLEY PWR DISTRICT', 'NOT AVAILABLE', 'AZ', null, 3.4e10], ['13961', 'OCOTILLO WATER CONSERV. DIST.', 'NOT AVAILABLE', 'AZ', null, 3.4e10],
+  ['30518', 'ELECTRICAL DISTRICT NO 3 PINAL COUNTY', 'POLITICAL SUBDIVISION', 'AZ', 4060, 3.4e10], ['65261', 'GILA RIVER INDIAN UTILITY AUTHORITY (GRICUA)', 'COOPERATIVE', 'AZ', 3433, 5.4e10],
+  ['14543', "TOHONO O'ODHAM UTILITY AUTHORITY", 'NOT AVAILABLE', 'AZ', null, 8.7e10], ['19604', 'USBIA-SAN CARLOS PROJECT', 'FEDERAL', 'AZ', 13341, 1.2e11]];
+var SUBS_MESA_LIVE = { features: [
+  { attributes: { NAME: 'UNKNOWN307104', ID: '307104', MAX_VOLT: -999999, MIN_VOLT: -999999, LINES: -999999, STATUS: 'IN SERVICE', TYPE: 'SUBSTATION', OWNER: null }, geometry: { x: -111.83608561, y: 33.40917638 } },
+  { attributes: { NAME: 'LEWIS', ID: '302371', MAX_VOLT: 69, MIN_VOLT: 69, LINES: 2, STATUS: 'IN SERVICE', TYPE: 'SUBSTATION', OWNER: null }, geometry: { x: -111.82948849, y: 33.42270797 } },
+  { attributes: { NAME: 'TAP302679', ID: '302679', MAX_VOLT: 69, MIN_VOLT: 69, LINES: 3, STATUS: 'IN SERVICE', TYPE: 'TAP', OWNER: null }, geometry: { x: -111.848301, y: 33.422373 } },
+  { attributes: { NAME: 'UNKNOWN303782', ID: '303782', MAX_VOLT: 69, MIN_VOLT: 69, LINES: 2, STATUS: 'IN SERVICE', TYPE: 'SUBSTATION', OWNER: null }, geometry: { x: -111.84994066, y: 33.41104038 } }] };
 var TX = { features: [{ attributes: { VOLTAGE: 138 }, geometry: { paths: [[[-87.66, 41.80], [-87.60, 41.83]]] } }] };
 var TX_MESA = { features: [{ attributes: { VOLTAGE: 230 }, geometry: { paths: [[[-111.90, 33.40], [-111.80, 33.43]]] } }] };
 var PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=', 'base64');
@@ -177,7 +222,7 @@ async function context(browser, base, calls, external, viewport) {
       if (/mesa/i.test(decodeURIComponent(url))) return json({ result: { addressMatches: [{ matchedAddress: '29 W MAIN ST, MESA, AZ, 85201', coordinates: { x: MESA.lng, y: MESA.lat } }] } });
       return json({ result: { addressMatches: [{ matchedAddress: '3400 S FEDERAL ST, CHICAGO, IL, 60616', coordinates: { x: SITE.lng, y: SITE.lat } }] } });
     }
-    if (/Substations\/FeatureServer\/0\/query|substations\/FeatureServer\/0\/query/i.test(url)) return json(geomMesa() ? SUBS_MESA : SUBS);
+    if (/Substations\/FeatureServer\/0\/query|substations\/FeatureServer\/0\/query/i.test(url)) return json(geomMesa() ? (MESA_LIVE ? SUBS_MESA_LIVE : SUBS_MESA) : SUBS);
     if (/Transmission_Lines\/FeatureServer\/0\/query/.test(url)) return json(geomMesa() ? TX_MESA : TX);
     if (/arcgisonline\.com/.test(url)) return r.fulfill({ status: 200, contentType: 'image/png', body: PNG });
     external.push(url.slice(0, 140)); return r.abort();
@@ -387,7 +432,11 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     ok('the path is open to where it was left', ['start', 'atlas', 'circuit', 'load', 'map'].every(function (k) { return rs.seen.indexOf(k) >= 0; }), rs.seen);
     ok('resuming writes nothing', rs.writes === 0, rs.writes);
     var bn = await text(p, '#banner');
-    ok('a project Site Map has saved says so: edited in Site Map since, built in Site Map on', /^Edited in Site Map since Oct/.test(bn) && /Built in Site Map on Oct/.test(rs.side) && !/Changed in Prime/.test(rs.side), { banner: bn, side: rs.side.slice(0, 400) });
+    /* Site Map is the engineering editor, never "the design of record" over
+       Prime's own (2026-10-20, Tommy): no banner says so; the side panel says
+       the proposal is priced from the design here */
+    ok('a project Site Map has built says it went there for engineering, and that the proposal is priced from the design here', !/design of record/.test(bn) && !/Edited in Site Map/.test(bn) &&
+      /Sent to Site Map for engineering on Oct/.test(rs.side) && /The proposal is priced from the design here/.test(rs.side) && !/Changed here since/.test(rs.side), { banner: bn, side: rs.side.slice(0, 400) });
     await p.click('#path button[data-step="circuit"]');
     var circ2 = await until(p, function () { var t = document.getElementById('sfRes').textContent; return /Circuit F0297/.test(t) ? t : null; });
     ok('the circuit step shows the saved answer without asking again', !!circ2 && /As checked/.test(circ2) && /10,725 kW/.test(circ2) && calls.hosting.length === 1, { calls: calls.hosting.length, circ: circ2 && circ2.slice(0, 200) });
@@ -455,7 +504,7 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     await p.click('#ed-conduit'); await p.click('#ed-run');
     await until(p, function () { return document.getElementById('ed-run').classList.contains('done') ? true : null; });
     await p.click('#ed-quote');
-    ok('changed in Prime after Site Map built it: the side panel says so', /Changed in Prime since it went to Site Map/.test(await text(p, '#edSide')), (await text(p, '#edSide')).slice(0, 400));
+    ok('changed in Prime after Site Map built it: the side panel says so, and that the proposal follows this design', /Changed here since it went to Site Map\. The proposal follows this design/.test(await text(p, '#edSide')), (await text(p, '#edSide')).slice(0, 400));
     var staleTxt = await until(p, function () { var e = document.getElementById('pqStale'); return e ? e.textContent : null; });
     ok('a proposal priced before the design changed says so plainly and offers Save again', !!staleTxt && /design changed/.test(staleTxt), staleTxt);
     await p.click('#pq-resave');
@@ -564,13 +613,50 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var form = await p.evaluate(function () { function v(id) { return document.getElementById(id).value; } return { name: v('pq-name'), company: v('pq-company'), markup: v('pq-markup'), pay: v('pq-pay'), deck: !!document.querySelector('#pqDeck .oqd'), no: document.getElementById('pqNo').textContent, doc: document.documentElement.scrollWidth, scr: document.getElementById('s-quote').scrollWidth }; });
     ok('reopened, the proposal screen loads the project\'s latest quote into the form', form.name === 'Dana Ruiz' && form.company === 'Riverside Cold Chain' && form.markup === '20' && /balance on energisation/.test(form.pay) && form.deck && /revision 2/.test(form.no), form);
     ok('and fits the phone', form.doc <= 390 && form.scr <= 390, form);
+    /* the Price radios and the checkbox keep a radio's size on a phone: the
+       phone's text-field rule once caught them, drew 44 px circles and
+       squeezed "Margin % on the Run's cost" into a column (2026-10-20) */
+    var rad = await p.evaluate(function () {
+      function box(e) { var r = e.getBoundingClientRect(); return { w: Math.round(r.width), h: Math.round(r.height) }; }
+      function words(id) { var n = document.getElementById(id).nextSibling, g = document.createRange(); g.selectNodeContents(n); return box(g); }
+      return { markup: box(document.getElementById('pq-mode-markup')), total: box(document.getElementById('pq-mode-total')), show: box(document.getElementById('pq-show')),
+        markupWords: words('pq-mode-markup'), totalWords: words('pq-mode-total'), row: box(document.getElementById('pq-mode-markup').parentNode) };
+    });
+    ok('on a phone the Price radios and the checkbox are drawn at their own size, under 30 px, not a text field\'s',
+      [rad.markup, rad.total, rad.show].every(function (b) { return b.w > 0 && b.w < 30 && b.h < 30; }), rad);
+    ok('and their words get the row beside them, two lines at most (they had 57 px and four lines), on a row tall enough to tap',
+      rad.markupWords.w > 120 && rad.markupWords.h < 40 && rad.totalWords.w > 60 && rad.totalWords.h < 40 && rad.row.h >= 44, rad);
     await shot(p, 'prime-09-phone-proposal');
     await p.setViewportSize({ width: 1440, height: 900 });
 
     /* ── the start screen lists the site to continue ── */
+    /* and a second, older site with no proposal, to delete (2026-10-20,
+       Tommy: "need to be able to delete these things as well") */
+    await p.evaluate(function (o) { window.__firebaseDouble.store.docs['projects/p-old-sketch'] = { orgId: o, uid: 'rep-1', name: '1 Test St, Mesa, AZ 85201', address: '1 Test St, Mesa, AZ 85201', type: 'bess', elements: [],
+      prime: { v: 2, step: 'map', savedAt: 1700000000000, site: { addr: '1 Test St, Mesa, AZ 85201' }, unit: { short: 'R60' } } }; }, ORG);
     await p.goto(base + '/omega-prime', { waitUntil: 'domcontentloaded' });
-    var cont = await until(p, function () { var c = document.getElementById('cont'); return c && !c.hidden ? [].map.call(document.querySelectorAll('#contList a'), function (a) { return a.getAttribute('href') + ' ' + a.textContent; }) : null; });
-    ok('"Continue a site" lists the workspace\'s Prime projects', cont && cont.length === 1 && cont[0].indexOf('/omega-prime?id=' + pid) === 0 && /3400 S Federal St/.test(cont[0]) && /approved/.test(cont[0]), cont);
+    var cont = await until(p, function () { var c = document.getElementById('cont'); return c && !c.hidden && document.querySelectorAll('#contList a').length === 2 ? [].map.call(document.querySelectorAll('#contList a'), function (a) { return a.getAttribute('href') + ' ' + a.textContent; }) : null; });
+    ok('"Continue a site" lists the workspace\'s Prime projects', cont && cont.length === 2 && cont[0].indexOf('/omega-prime?id=' + pid) === 0 && /3400 S Federal St/.test(cont[0]) && /approved/.test(cont[0]) && /1 Test St/.test(cont[1]), cont);
+    var rowsC = await p.$$eval('#contList .controw', function (rs) { return rs.map(function (r) { return { del: !!r.querySelector('.contdel'), kept: !!r.querySelector('.contkeep') }; }); });
+    ok('a site whose proposal went to the customer is kept; one with none can be deleted', rowsC.length === 2 && rowsC[0].kept && !rowsC[0].del && rowsC[1].del && !rowsC[1].kept, rowsC);
+    /* the page asks with window.confirm; answered yes here, the question kept */
+    await p.evaluate(function () { window.__asked = ''; window.confirm = function (m) { window.__asked = m; return true; }; });
+    await p.click('#contList .contdel');
+    var goneC = await until(p, function () { return document.querySelectorAll('#contList .controw').length === 1 && !window.__firebaseDouble.store.docs['projects/p-old-sketch'] ? true : null; });
+    var asked = await p.evaluate(function () { return window.__asked; });
+    ok('Delete asks first, then removes the project and its row', !!goneC && /Delete "1 Test St, Mesa, AZ 85201"\?/.test(asked) && /cannot be undone/.test(asked) && !!(await storeOf(p)).docs['projects/' + pid], asked);
+    /* the guide moves by its header, stays where it was put in this browser,
+       and a double-click puts it back (2026-10-20, Tommy: "this panel needs
+       to be able to be moved") */
+    var gh = await p.$eval('#guide .gh', function (e) { var r = e.getBoundingClientRect(), g = document.getElementById('guide').getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2, left: g.left, top: g.top }; });
+    await p.mouse.move(gh.x, gh.y); await p.mouse.down(); await p.mouse.move(gh.x - 300, gh.y - 200, { steps: 8 }); await p.mouse.up();
+    var movedG = await p.evaluate(function () { var g = document.getElementById('guide'), r = g.getBoundingClientRect(); return { moved: g.classList.contains('moved'), x: r.left, y: r.top, saved: localStorage.getItem('omega-prime:guide-at') }; });
+    ok('the guide moves by its header, and this browser keeps where it was put', movedG.moved && Math.abs(movedG.x - (gh.left - 300)) < 3 && Math.abs(movedG.y - (gh.top - 200)) < 3 && !!movedG.saved, { before: gh, after: movedG });
+    await p.reload({ waitUntil: 'domcontentloaded' });
+    var backG = await until(p, function () { var g = document.getElementById('guide'); if (!g || !g.classList.contains('moved')) return null; var r = g.getBoundingClientRect(); return { x: r.left, y: r.top }; });
+    ok('a reload keeps it there', !!backG && Math.abs(backG.x - movedG.x) < 3 && Math.abs(backG.y - movedG.y) < 3, backG);
+    await p.dblclick('#guide .gh span');
+    ok('a double-click puts it back in its corner', await p.evaluate(function () { var g = document.getElementById('guide'); return !g.classList.contains('moved') && !g.style.left && !localStorage.getItem('omega-prime:guide-at'); }));
 
     /* ── a second proposal on the site: listed with the first, newest first;
        a total with cents survives a reload and a re-save; &step= and
@@ -656,6 +742,72 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     ok('sent again, the door answers with the reason in plain words (the first order is live)', !!nh2 && /Cancel or close that order in Omega Logic/.test(nh2), nh2);
     await p.close();
 
+    /* ── downtown Mesa as the live services answered it (2026-10-20):
+       twelve utilities on the national layer, the city's own map down, and
+       HIFLD's unnamed substations nearest. At 1440 × 900 the circuit
+       panel's list runs long, and the floating guide must never take the
+       click meant for Next (it did: a real click on Next landed on the
+       guide); HIFLD's numbers read as words wherever a substation is named,
+       and the record keeps the name HIFLD gave ── */
+    MESA_LIVE = true;
+    var lctx = await context(browser, base, calls, external);
+    var lv = await lctx.newPage(); watch(lv, errs);
+    await lv.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
+    await until(lv, function () { var s = document.getElementById('unitSel'); return s && s.options.length >= 5 ? true : null; });
+    await lv.fill('#addr', '29 W Main St, Mesa, AZ 85201');
+    await lv.click('#go');
+    await lv.waitForSelector('#s-atlas.on');
+    await until(lv, function () { return /substations within/.test(document.getElementById('gaStat').textContent); });
+    await lv.click('#ly-sub'); await lv.click('.subicon.near');
+    var insp = await until(lv, function () { var h = document.querySelector('#gaInsp h5'), d = document.querySelector('#gaInsp .kv'); return h && d ? { head: h.textContent, kv: d.textContent } : null; });
+    ok('Grid Atlas: HIFLD\'s unnamed substation is named in words with its number in the inspector, and its -999999 is "not published"',
+      insp.head === 'Unnamed substation (HIFLD 307104)' && /Voltagenot published/.test(insp.kv) && /Lines in—/.test(insp.kv) && !/999999/.test(insp.kv), insp);
+    var labels = await lv.$$eval('#gaMap .leaflet-tooltip', function (es) { return es.map(function (e) { return e.textContent; }); });
+    ok('and on the map: the three nearest labelled, the unnamed tap in words too, a real name as it is',
+      ['Unnamed substation (HIFLD 307104)', 'LEWIS', 'Unnamed tap (HIFLD 302679)'].every(function (t) { return labels.indexOf(t) >= 0; }) && !labels.some(function (t) { return /UNKNOWN|TAP\d/.test(t); }), labels);
+    await lv.click('#ga-go');
+    var lc = await until(lv, function () { var t = document.getElementById('sfRes').textContent; return /City of Mesa/.test(t) && /Next/.test(t) ? t : null; });
+    var lw = await lv.evaluate(function () {
+      var w = document.getElementById('sfWho');
+      return w ? { head: w.querySelector('b').textContent, shown: w.querySelectorAll(':scope > ul > li').length, folded: w.querySelectorAll('details li').length, fold: (w.querySelector('summary') || {}).textContent || '' } : null;
+    });
+    ok('twelve utilities: the two that may serve the point listed, the ten water districts and county-sized stand-ins folded under one line',
+      !!lw && /More than one utility is mapped/.test(lw.head) && lw.shown === 2 && lw.folded === 10 && /\(10\)$/.test(lw.fold), lw);
+    ok('the circuit panel names the nearest substation in words and prints no voltage HIFLD does not have',
+      /Nearest substation \(Grid Atlas\)Unnamed substation \(HIFLD 307104\)0\.5 mi/.test(lc) && !/999999|UNKNOWN307104/.test(lc), lc.slice(lc.indexOf('Nearest substation') - 20, lc.indexOf('Nearest substation') + 120));
+    /* the fold opened, as a rep checking every name would: the longest the
+       panel gets. Next is scrolled into the panel's view and clicked with
+       the mouse, where a person would click it. */
+    await lv.click('#sfWho summary');
+    var room = await lv.evaluate(function () {
+      var r = document.getElementById('sfRes'), g = document.getElementById('guide'), n = document.getElementById('sf-tomap');
+      n.scrollIntoView({ block: 'nearest' });
+      var rb = r.getBoundingClientRect(), gb = g.getBoundingClientRect(), nb = n.getBoundingClientRect();
+      var x = Math.round(nb.left + nb.width / 2), y = Math.round(nb.top + nb.height / 2), hit = document.elementFromPoint(x, y);
+      return { x: x, y: y, scrolls: r.scrollHeight > r.clientHeight + 1, panelBottom: Math.round(rb.bottom), guideTop: Math.round(gb.top), corner: !g.classList.contains('moved'),
+        onNext: !!hit && (hit === n || n.contains(hit)), hit: hit ? (hit.id || hit.className || hit.tagName) : null, inGuide: !!hit && g.contains(hit) };
+    });
+    ok('at 1440 × 900 the long panel scrolls inside itself and ends above the guide in its corner', room.scrolls && room.corner && room.panelBottom <= room.guideTop, room);
+    await shot(lv, 'prime-10a-mesa-live-circuit');
+    await lv.mouse.click(room.x, room.y);
+    var landed = await lv.waitForSelector('#s-load.on', { timeout: 4000 }).then(function () { return true; }, function () { return false; });
+    ok('a real mouse click on "Next: the site\'s load" reaches Next, never the guide, and the load step opens', landed && room.onNext && !room.inGuide, room);
+    if (!landed) await lv.$eval('#sf-tomap', function (b) { b.click(); });
+    await until(lv, function () { return /City of Mesa/.test(document.getElementById('ldRates').textContent) ? true : null; });
+    await lv.click('#ld-tomap');
+    await lv.waitForSelector('#s-map.on');
+    var sideSub = await until(lv, function () { var r = [].filter.call(document.querySelectorAll('#edSide .spec tr'), function (tr) { return /Nearest substation/.test(tr.textContent); })[0]; return r ? r.textContent : null; });
+    ok('the Design side panel names it the same way', sideSub === 'Nearest substationUnnamed substation (HIFLD 307104) · 0.5 mi', sideSub);
+    await lv.waitForTimeout(800);
+    var lst = await storeOf(lv), lrec = projectsIn(lst).map(function (k) { return lst.docs[k]; })[0] || {}, lask = calls.hosting[calls.hosting.length - 1] || {};
+    ok('the record and the door keep the name HIFLD gave', !!(lrec.prime && lrec.prime.sub && lrec.prime.sub.name === 'UNKNOWN307104' && lrec.grid && lrec.grid.substation && lrec.grid.substation.name === 'UNKNOWN307104' &&
+      lask.substation && lask.substation.name === 'UNKNOWN307104'), { sub: lrec.prime && lrec.prime.sub, grid: lrec.grid && lrec.grid.substation, asked: lask.substation });
+    var lall = await lv.evaluate(function () { return [].map.call(document.querySelectorAll('.screen, .leaflet-tooltip'), function (e) { return e.textContent; }).join(' '); });
+    ok('and no screen, shown or not, says UNKNOWN or TAP and a number', !/UNKNOWN\s*\d|TAP\d/.test(lall), (lall.match(/.{0,40}(UNKNOWN|TAP)\d.{0,40}/g) || []));
+    await shot(lv, 'prime-10a-mesa-live-design');
+    await lv.close();
+    MESA_LIVE = false;
+
     /* ── Mesa, Arizona: the utility named, never one utility's words ── */
     var mctx = await context(browser, base, calls, external);
     var m = await mctx.newPage(); watch(m, errs);
@@ -675,14 +827,46 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     var mc = await until(m, function () { var t = document.getElementById('sfRes').textContent; return /City of Mesa/.test(t) && /Next/.test(t) ? t : null; });
     var mh = calls.hosting[calls.hosting.length - 1] || {};
     ok('Mesa: one question to the national door at the point', Math.abs(mh.lat - MESA.lat) < 1e-6 && mh.substation && mh.substation.name === 'Mesa Downtown', mh);
-    ok('Mesa: the city\'s own utility leads, SRP and APS beside it, confirm with the bill', !!mc && /City of Mesa/.test(mc) && /Salt River Project/.test(mc) && /More than one utility is mapped/.test(mc) && /Arizona Public Service/.test(mc) && /encloses Arizona Public Service and City of Mesa islands/.test(mc) && /bill/.test(mc), mc && mc.slice(0, 900));
-    ok('Mesa: it says no figure is published, and nothing is judged as if it were', /publishes hosting capacity/.test(mc) && /Needs a study/.test(mc) && /Mesa Downtown/.test(mc), mc && mc.slice(0, 900));
+    /* 2026-10-20: the city's own electric service area map puts 29 W Main St
+       inside it, so the City of Mesa is named with confidence; the list says
+       who serves the point and what it publishes, and the utilities the
+       national map also draws there fold away with the reason */
+    var who = await m.evaluate(function () {
+      var w = document.getElementById('sfWho');
+      if (!w) return null;
+      return { head: w.querySelector('b').textContent, items: [].map.call(w.querySelectorAll(':scope > ul > li'), function (li) { return li.textContent; }),
+        folded: [].map.call(w.querySelectorAll('details li'), function (li) { return li.textContent; }), open: !!(w.querySelector('details') || {}).open,
+        links: [].map.call(w.querySelectorAll(':scope > ul > li a'), function (a) { return { href: a.getAttribute('href'), text: a.textContent, target: a.getAttribute('target'), rel: a.getAttribute('rel') }; }) };
+    });
+    ok('Mesa: the city\'s own map names the City of Mesa, and only it serves the point', !!who && who.head === 'Who serves this point' && who.items.length === 1 && /^City of Mesa/.test(who.items[0]) &&
+      /inside its own electric service area \(the city's map\)/.test(who.items[0]) && /Publishes no hosting capacity/.test(who.items[0]), who);
+    ok('Mesa: Salt River Project and the rest are on the national map but not this point, each with its reason, folded away',
+      !!who && who.open === false && who.folded.some(function (t) { return /^Salt River Project \(the point is inside the City of Mesa's own electric service area/.test(t); }) && !/More than one utility is mapped/.test(mc) && !/islands/.test(mc), who && who.folded);
+    ok('Mesa: the city\'s own service-area map to check it, opened in a new tab', !!who && who.links.some(function (l) { return /Electric_Service_Area\.pdf$/.test(l.href) && l.target === '_blank' && /noopener/.test(l.rel); }), who && who.links);
+    ok('Mesa: it says no figure is published, and nothing is judged as if it were', /City of Mesa publishes no hosting capacity/.test(mc) && /Needs a study/.test(mc) && /Mesa Downtown/.test(mc), mc && mc.slice(0, 900));
     var mv = await m.$eval('#sf-verify', function (a) { return { href: a.getAttribute('href'), text: a.textContent }; }).then(null, function () { return null; });
-    ok('Mesa: no utility map is offered for a city utility that publishes none', mv === null, mv);
+    ok('Mesa: the link is the city\'s own page, never a hosting map that does not exist', !!mv && mv.href === HS.byKey('mesa').viewerUrl, mv);
     ok('Mesa: the pill names the City of Mesa', /^City of Mesa · publishes no hosting capacity$/.test(await text(m, '#utilPill')), await text(m, '#utilPill'));
+    ok('Mesa: the guide says what is published and that nothing is guessed', /City of Mesa publishes no hosting capacity/.test(await text(m, '#gT')), await text(m, '#gT'));
     var body1 = await m.evaluate(function () { return document.body.innerText; });
     ok('Mesa: no ComEd wording anywhere, and never "outside … territory"', !/ComEd/i.test(body1) && !/outside .*territory/i.test(body1), (body1.match(/.{0,60}(ComEd|territory).{0,60}/gi) || []));
     await shot(m, 'prime-10-mesa-circuit');
+    /* the same answer on a 390 px phone: the panel ends above the floating
+       guide and scrolls inside, nothing runs sideways, and Next is reachable */
+    await m.setViewportSize({ width: 390, height: 844 });
+    await m.waitForTimeout(300);
+    var ph = await m.evaluate(function () {
+      var r = document.getElementById('sfRes'), g = document.getElementById('guide'), n = document.getElementById('sf-tomap');
+      n.scrollIntoView({ block: 'nearest' });
+      var rb = r.getBoundingClientRect(), gb = g.getBoundingClientRect(), nb = n.getBoundingClientRect();
+      var hit = document.elementFromPoint(nb.left + nb.width / 2, nb.top + nb.height / 2);
+      return { sideways: document.documentElement.scrollWidth > innerWidth + 1 || r.scrollWidth > r.clientWidth + 1, aboveGuide: rb.bottom <= gb.top + 1,
+        next: hit === n || n.contains(hit), inside: rb.left >= 0 && rb.right <= innerWidth };
+    });
+    ok('Mesa on a 390 px phone: the panel sits above the guide, nothing sideways, Next is reachable', ph.aboveGuide && !ph.sideways && ph.next && ph.inside, ph);
+    await shot(m, 'prime-10b-mesa-circuit-phone');
+    await m.setViewportSize({ width: 1440, height: 900 });
+    await m.waitForTimeout(200);
     await m.click('#sf-tomap');
     await until(m, function () { return /City of Mesa/.test(document.getElementById('ldRates').textContent) ? true : null; });
     var mr = calls.rates[calls.rates.length - 1] || {};
@@ -710,6 +894,103 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     await m.waitForTimeout(700);                     /* the zoom to the area settles, and the labels with it */
     await shot(m, 'prime-12-mesa-cc290-block');
     await m.close();
+
+    /* ── a site saved on a battery the workspace's list no longer offers
+       (2026-10-20, Tommy, from the ClearSky workspace: Preview answered "The
+       battery on this project (FENECON-IND-XXL) is not in your workspace’s
+       list any more; choose it again in Omega Prime, then quote", and a
+       started site has no unit picker). The Proposal step takes the
+       server's word (GET ?projectId= unit), asks for the unit to quote from
+       the workspace's own list with Preview and Save held, and the choice
+       keeps the drawing: the record names it, and it is priced ── */
+    var xctx = await context(browser, base, calls, external);
+    var xp = await xctx.newPage(); watch(xp, errs);
+    await xp.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
+    await until(xp, function () { var s = document.getElementById('unitSel'); return s && s.options.length >= 5 ? true : null; });
+    /* as Prime v2 kept it once an older site (v1: the XXL for every
+       workspace) was resumed after 2026-10-17: the XXL snapshotted on it */
+    var XC = { lat: SITE.lat + 0.002, lng: SITE.lng - 0.002 }, XID = 'p-legacy-xxl';
+    var XA = { s: XC.lat - 0.00025, w: XC.lng - 0.0004, n: XC.lat + 0.00025, e: XC.lng + 0.0004 }, XPOI = { lat: XC.lat + 0.0004, lng: XC.lng + 0.0007 };
+    var xdoc = PP.projectDoc({ addr: '3300 S Federal St, Chicago, IL 60616', lat: XC.lat, lng: XC.lng, geoSrc: 'U.S. Census geocoder', geoLabel: '3300 S FEDERAL ST, CHICAGO, IL, 60616', step: 'quote',
+      unit: PP.XXL, area: XA, unitAt: XC, poi: XPOI, conduit: true,
+      /* its circuit judged against the XXL's 2,508 kW */
+      hosting: { utility: { key: 'comed', display: 'ComEd', eiaId: 4110 }, coverage: 'read', circuit: { id: 'F0297', name: 'F0297', substation: 'Crawford TSS 21' } },
+      grid: { lat: XC.lat, lng: XC.lng, circuit: { utility: 'ComEd', id: 'F0297', netKw: 10725 }, verdict: { key: 'fits', label: 'Fits', unitKw: 2508, unitName: 'FENECON Industrial XXL' }, source: 'omega-prime' } },
+      { uid: 'rep-1', email: REP.email, name: 'Clean Cell Rep', orgId: ORG }, 1700000000000);
+    var XL0 = xdoc.prime.layout;
+    await xp.evaluate(function (a) { window.__firebaseDouble.store.docs['projects/' + a.id] = a.doc; }, { id: XID, doc: JSON.parse(JSON.stringify(xdoc)) });
+    var nPost = calls.quote.filter(function (c) { return c.body && c.body.projectId === XID; }).length;
+    await xp.goto(base + '/omega-prime?id=' + XID + '&step=quote', { waitUntil: 'domcontentloaded' });
+    await xp.waitForSelector('#s-quote.on', { timeout: 10000 });
+    var ask = await until(xp, function () {
+      var b = document.getElementById('pqUnit');
+      return b && !b.hidden ? { why: document.getElementById('pqUnitWhy').textContent, opts: [].map.call(document.getElementById('pq-unit-sel').options, function (o) { return o.textContent; }),
+        card: document.getElementById('pqUnitCard').textContent, pv: document.getElementById('pq-preview').getAttribute('aria-disabled'), sv: document.getElementById('pq-save').getAttribute('aria-disabled'),
+        guide: document.getElementById('gT').textContent, pulse: !!document.querySelector('#pq-unit-use.pulse') } : null;
+    });
+    ok('the Proposal step says the site\'s XXL is not on the workspace\'s list and asks for the unit to quote, the drawing kept', !!ask && /^The FENECON Industrial XXL on this site is not on Clean Cell’s battery list, so it cannot be quoted here\./.test(ask.why) && /The drawing is kept/.test(ask.why), ask);
+    ok('from the workspace\'s own list: its product, then Clean Cell\'s units and the R60, no XXL', !!ask && ask.opts.length === 5 && /^Clean Cell CC-2000/.test(ask.opts[0]) && /LG JP-2/.test(ask.opts[1]) && /R60/.test(ask.opts[4]) && !ask.opts.some(function (t) { return /xxl|fenecon/i.test(t); }) && /20 × 8 ft/.test(ask.card), ask && ask.opts);
+    ok('Preview and Save wait for it, and the guide points at it', !!ask && ask.pv === 'true' && ask.sv === 'true' && ask.guide === 'Choose the unit to quote' && ask.pulse, ask);
+    await shot(xp, 'prime-13-unit-ask');
+    await xp.setViewportSize({ width: 390, height: 844 });
+    var xw = await xp.evaluate(function () { return { doc: document.documentElement.scrollWidth, scr: document.getElementById('s-quote').scrollWidth, box: Math.round(document.getElementById('pqUnit').getBoundingClientRect().right) }; });
+    ok('the chooser fits a 390 px phone, no sideways scroll', xw.doc <= 390 && xw.scr <= 390 && xw.box <= 390, xw);
+    await xp.setViewportSize({ width: 1440, height: 900 });
+    /* pressed anyway (through the DOM: Playwright will not click a control marked disabled) */
+    await xp.$eval('#pq-preview', function (b) { b.click(); }); await xp.$eval('#pq-save', function (b) { b.click(); });
+    await xp.waitForTimeout(400);
+    ok('nothing is priced or kept before a unit is chosen', calls.quote.filter(function (c) { return c.body && c.body.projectId === XID; }).length === nPost);
+    await xp.fill('#pq-name', 'Dana Ruiz'); await xp.fill('#pq-company', 'Riverside Cold Chain');
+    await xp.selectOption('#pq-unit-sel', '0');
+    await xp.click('#pq-unit-use');
+    var xdeck = await until(xp, function () { var d = document.querySelector('#pqDeck .oqd'); return d ? d.textContent : null; });
+    var xpv = calls.quoteOut.filter(function (c) { return c.body && c.body.action === 'preview' && c.body.projectId === XID; });
+    var xst = await storeOf(xp), xd = xst.docs['projects/' + XID] || {}, XL = (xd.prime || {}).layout || {};
+    ok('the choice is on the record: the unit, its battery entry, the drawing kept (the area, where the unit stands, the service point, the conduit to it)',
+      xd.prime && xd.prime.unitKey === 'CLEANCELL-CC-2000' && xd.prime.unit && xd.prime.unit.key === 'CLEANCELL-CC-2000' && xd.bessList && xd.bessList[0].catalogKey === 'CLEANCELL-CC-2000' &&
+      JSON.stringify(XL.area) === JSON.stringify(XL0.area) && JSON.stringify(XL.unit && XL.unit.c) === JSON.stringify(XL0.unit.c) && JSON.stringify(XL.poi) === JSON.stringify(XL0.poi) &&
+      XL.unitKey === 'CLEANCELL-CC-2000' && XL.conduit && XL.conduit.pts[2].lat === XPOI.lat && XL.hash === PP.hash(XL), { prime: xd.prime && { unitKey: xd.prime.unitKey, layout: XL }, bess: xd.bessList });
+    ok('then it is priced on the server, from the chosen unit: one preview, after the patch landed', xpv.length === 1 && xpv[0].status === 200 && !!xdeck && /Quoted by Clean Cell/.test(xdeck) && /CC-2000/.test(xdeck) && !/fenecon|xxl/i.test(xdeck), { n: xpv.length, status: xpv[0] && xpv[0].status, deck: xdeck && xdeck.slice(0, 300) });
+    var after = await xp.evaluate(function () { return { hidden: document.getElementById('pqUnit').hidden, pv: document.getElementById('pq-preview').getAttribute('aria-disabled'), unit: document.getElementById('unitSel2').textContent }; });
+    ok('the chooser is gone, Preview and Save are back, and the design names the chosen unit', after.hidden && after.pv === null && /^Clean Cell CC-2000/.test(after.unit), after);
+    var rejudged = await until(xp, function (id) { var d = window.__firebaseDouble.store.docs['projects/' + id], v = d && d.grid && d.grid.verdict; return v && v.unitName === 'Clean Cell CC-2000' ? v : null; }, XID);
+    var hq = calls.hosting[calls.hosting.length - 1] || {};
+    ok('the circuit verdict, judged for the XXL, is asked again for the chosen unit and kept on the record', !!rejudged && rejudged.unitKw === 1000 && rejudged.key === 'fits' && hq.unit && hq.unit.kw === 1000 && hq.unit.name === 'Clean Cell CC-2000', { verdict: rejudged, asked: hq.unit });
+    await xp.click('#pq-save');
+    await until(xp, function () { return /· revision 1$/.test(document.getElementById('pqNo').textContent) ? true : null; });
+    var xq = ''; DB.data.forEach(function (v, k) { if (/^customer_quotes\/qt-[a-f0-9]{16}$/.test(k) && v.projectId === XID) xq = k; });
+    var xr = DB.data.get(xq) || {};
+    ok('and saved: the proposal names the chosen unit, on the drawing kept', !!xq && xr.unit && xr.unit.key === 'CLEANCELL-CC-2000' && xr.layoutHash === XL.hash + ':CLEANCELL-CC-2000', { q: xq, unit: xr.unit && xr.unit.key, hash: xr.layoutHash });
+    await shot(xp, 'prime-14-unit-chosen');
+    /* the same, with a proposal already saved on the XXL: it is held, never
+       offered to send, until the unit is chosen; then it reads as changed,
+       and Save again makes its next revision on the chosen unit */
+    var XID2 = 'p-legacy-xxl-q', XQ = 'qt-00000000000000a1', xdoc2 = JSON.parse(JSON.stringify(xdoc));
+    xdoc2.name = xdoc2.address = xdoc2.prime.site.addr = '3310 S Federal St, Chicago, IL 60616';
+    var xq0 = QL.compose({ id: XQ, orgId: ORG, projectId: XID2, quoteNo: 'CLEANC-Q-20261016-000A1', rev: 1, status: 'draft', customer: { name: 'Dana Ruiz', company: 'Riverside Cold Chain' },
+      pricing: { mode: 'markup', markupPct: 20 }, terms: {}, unit: PP.XXL, layout: XL0, site: { address: xdoc2.address },
+      cost: QL.costOf({ total: { lo: 1900000, base: 2000000, hi: 2100000 }, divisions: [{ id: 'eq', name: 'Equipment', base: 2000000 }] }, {}),
+      seller: { name: 'Clean Cell', rep: { name: 'Clean Cell Rep', email: REP.email } } }, 1700000000000);
+    DB.seed('customer_quotes/' + XQ, Object.assign(xq0, { createdAt: 1700000000000, createdBy: REP.email, updatedAt: 1700000000000, updatedBy: REP.email, acceptance: null, snapshot: null, mailState: null, handoff: null, history: [], questions: [], layoutHash: XL0.hash + ':' + PP.XXL.key }));
+    var xp2 = await xctx.newPage(); watch(xp2, errs);
+    await xp2.goto(base + '/omega-prime.html', { waitUntil: 'domcontentloaded' });
+    await xp2.evaluate(function (a) { window.__firebaseDouble.store.docs['projects/' + a.id] = a.doc; }, { id: XID2, doc: xdoc2 });
+    await xp2.goto(base + '/omega-prime?id=' + XID2 + '&step=quote', { waitUntil: 'domcontentloaded' });
+    await xp2.waitForSelector('#s-quote.on', { timeout: 10000 });
+    var held = await until(xp2, function () {
+      var f = document.getElementById('pqUnitHeld');
+      return f && !document.getElementById('pqUnit').hidden && /revision 1/.test(document.getElementById('pqNo').textContent) ? { text: f.textContent, send: !!(document.getElementById('pq-send-email') || document.getElementById('pq-link')), name: document.getElementById('pq-name').value } : null;
+    });
+    ok('a proposal already saved on the XXL is held: never offered to send until the unit is chosen', !!held && /on the FENECON Industrial XXL, which is not on the list, so it cannot be sent/.test(held.text) && !held.send && held.name === 'Dana Ruiz', held);
+    await xp2.selectOption('#pq-unit-sel', '0'); await xp2.click('#pq-unit-use');
+    var restale = await until(xp2, function () { var s = document.getElementById('pqStale'), d = document.querySelector('#pqDeck .oqd'); return s && d && /CC-2000/.test(d.textContent) ? { stale: s.textContent, guide: document.getElementById('gT').textContent } : null; });
+    ok('chosen, it is priced on the chosen unit and the saved proposal reads as changed, to be saved again', !!restale && /design changed/.test(restale.stale) && restale.guide === 'The design changed', restale);
+    await xp2.click('#pq-resave');
+    await until(xp2, function () { return /· revision 2$/.test(document.getElementById('pqNo').textContent) ? true : null; });
+    var xr2 = DB.data.get('customer_quotes/' + XQ) || {};
+    ok('saved again: its next revision, on the chosen unit and the drawing kept', xr2.rev === 2 && xr2.unit && xr2.unit.key === 'CLEANCELL-CC-2000' && xr2.layoutHash === (((await storeOf(xp2)).docs['projects/' + XID2] || {}).prime || {}).layout.hash + ':CLEANCELL-CC-2000', { rev: xr2.rev, unit: xr2.unit && xr2.unit.key });
+    await xp2.close();
+    await xp.close();
 
     /* ── a create that failed is made again: as the work goes on, and by
        Save this site; the record then holds everything done so far ── */

@@ -976,7 +976,16 @@ toast, phone tab bar); a page never builds its own rail. The hub is
 six cells from `OMEGATools.isUnlocked()` — showing a cell is never access —
 and `scripts/tests/tworkspacehub.js` asserts every key it names against the
 real catalogs. Every tool tile is Live, Locked or Soon by that same rule;
-a locked tile explains, never hides. Today is `omega-workspace-today.js`
+a locked tile explains, never hides. **A hex's side panel lists its core
+tools; an area's `extras` wait in Settings** (2026-10-20, Tommy, of
+Design's optimizer, power flow, discovery and conductor sizing: "hide
+these … in settings a panel that allows us to hide or show the extra
+tools in the hex"): `OmegaWorkspaceHub.items` / `hidden` / `choices` read
+the person's own `dashboard_layouts/{org}__{uid}.workspace.hubTools`
+over the area's default, the panel ends with "N more tools hidden" →
+Settings › Tools in the hub (`#hub-tools`). Presentation only: the ring
+is still the plan's and All tools still lists everything. A side panel's
+page row wears the rail's own icon (`OmegaWorkspaceShell.iconFor`). Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
 unsized. Never a second copy of those rules in a page. A legacy plan more
@@ -1436,9 +1445,10 @@ queue where the utility publishes one beside a gross figure, and the
 verdict — Fits / Fits only smaller / Needs a study, and the substation's
 chip — in the same answer from `api/_lib/grid-verdict.js` (gated as
 `/api/grid-atlas` is; every threshold is server-side). Every coverage case
-is drawn as Prime draws it (the utility's name, every candidate when the
-territory is not confident, where the power comes from, the provenance and
-the door's request log, the utility's own map), the queue and side words
+is drawn as Prime draws it (the utility's name, who may serve the point
+wherever no figure is read or more than one utility is mapped, where the
+power comes from, the provenance and the door's request log, the utility's
+own map), the queue and side words
 follow the answer (`queueNetted`, `basis`, a null `queuedKw` is "not
 published", never 0), the panel names no utility of its own, and the
 editor no longer loads `omega-comed-layers.js` (the Site Finder's). A door
@@ -1451,15 +1461,21 @@ the panel's answer when it re-measures the same point.
 sentence byte for byte, Mesa AZ). **Site Plan's Grid Atlas layer**
 (`omega-editor-v2-grid.js` in `editor-v2.html`) asks the same door the same
 way: no routing by state in the browser (Illinois outside ComEd is asked
-too, where it once was not), its card's lines drawn from the answer with
-the utility's own map as an https link, and `editor-v2.html` no longer loads
+too, where it once was not), its card's lines drawn from the answer (the
+same who-serves list, a line each, what cannot be the point's in a fold)
+with the utility's own map as an https link, and `editor-v2.html` no longer loads
 the ComEd module; `scripts/tests/tgridlayer.js` runs it on the real door.
 `scripts/render-grid-panel.js` (in `check:pages`) holds both in Chromium:
-Site Map's Grid Check at ComEd, Mesa and on a 390 px phone, and Site Plan's
-layer at its Phoenix sample. The standalone Grid Atlas and Site Finder stay for
+Site Map's Grid Check at ComEd, Mesa (and with the city's map down) and on
+a 390 px phone, and Site Plan's layer at its Phoenix sample and at Mesa, on
+a desktop and a 390 px phone. The standalone Grid Atlas and Site Finder stay for
 prospecting many sites. Both the panel and Omega Prime ask through ONE
 client, `omega-grid-verdict.js` (the national door, `/api/grid-verdict`,
-the coverage words `COVERAGE`, and the `grid.*` record shape). **Omega
+the coverage words `COVERAGE`, the `grid.*` record shape, and who may serve
+the point, `whoServes`: each utility with what it publishes, the route it
+offers instead and its own pages, the ones that cannot be the point's
+folded with their reason; 2026-10-20, held word for word to Prime's own
+`candidatesBlock` by `tgridverdict.js`, `tgridlayer.js` and the render check). **Omega
 Prime sets up the real project** (2026-10-16,
 Tommy: "it does the set up and system like the artifact sandbox"), and
 **carries it all the way to Omega Teleios** (2026-10-17, Tommy: "print a
@@ -1468,7 +1484,13 @@ editor it needs to transfer over what we drew … save this process … send a
 simple proposal out that matches the tenant's details … track them … if it
 gets approved then it goes to omega logic to be fulfilled and when it is
 fulfilled … Omega Teleios (which means complete)"). `omega-prime.html` runs
-Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
+Site → Grid Atlas → Circuit → Load → Design → Proposal → Track. **Prime's
+own drawing (Design) is what the proposal is priced from**; Site Map is the
+detailed engineering editor a design is sent to, never its design of record
+(2026-10-20, Tommy: "this should come from the prime editor we used … the
+site map editor is for our detailed engineering drawings"). A site with no
+proposal out and no order can be deleted from *Continue a site*; the guide
+panel moves (kept per browser, docked on a phone):
 - **Units.** `omega-prime-project.js units()`: the workspace's own products
   (a `PLACEHOLDER SPEC` row dropped), then Clean Cell's Rev H reference units
   biggest first (LG JP-2, Smart Module, CC290/125, through
@@ -1485,7 +1507,20 @@ Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
   the brochure names one (LG JP-2, Smart Module), `footprint: 'reference'`,
   said to be confirmed on the submittal everywhere it shows; the rep's
   typed submittal size replaces it; a unit with no figure at all stays a
-  marked point.
+  marked point. **A proposal quotes only a unit the list offers**
+  (2026-10-20, from the ClearSky workspace: Preview on a site set up on the
+  XXL before 2026-10-17 answered "not in your workspace’s list any more;
+  choose it again in Omega Prime", and a started site has no picker): a
+  site keeps the unit it was drawn with (`PP.unitFor`), but
+  `PP.offered(list, unit)` (the list's entry by key, else the same SKU, its
+  own figures) is the ONE rule the quote door's preview, save and send and
+  the order hand-off (`prime-order`) resolve it by. `GET
+  /api/customer-quote?projectId=` returns `unit {offered, choices}` and
+  Prime's Proposal step then asks for the unit to quote from that list,
+  Preview, Save and Send held, the drawing kept (area, unit point, service
+  point, conduit; the gear placed for the new unit, the circuit asked again
+  for it), patched with `unitChanged`; a proposal saved on the old unit then
+  reads as changed and is saved again before it goes out.
 - **The record.** The project is CREATED at Start (`projectDoc`) and the
   address becomes `/omega-prime?id=`; every change after is one debounced
   dotted `patch()` (`prime.*`, `grid.<part>`, `load`; never a drawing key;
@@ -1589,7 +1624,22 @@ utility's own process named. ComEd is read only through `comed-service.js`.
 EIA-861 national layer, Census places); the wire is the candidate whose
 published map answers at the point; overlaps are never answered with
 confidence (`ISLANDS`: SRP's boundary encloses APS and City of Mesa islands;
-a city's own utility stays a candidate when the point is inside the city).
+a city's own utility stays a candidate when the point is inside the city)
+unless the utility's OWN service-area map settles the point
+(`SERVICE_AREAS`, 2026-10-20, Tommy's 29 W Main St: the City of Mesa's
+electric service area off the city's GIS, asked with its polygon; 40 m or
+more inside names the City of Mesa with confidence, nearer the edge it is a
+candidate, outside its stand-in is weak and SRP's caution names APS's
+islands alone). SRP's and APS's own boundary layers are licensed to their
+own apps and are never asked; a person gets each utility's own lookup.
+Arizona is checked utility by utility in `docs/HOSTING-ARIZONA.md`: no
+Arizona utility publishes distribution hosting capacity; the ACC-regulated
+ones answer a Pre-Application Report (A.A.C. R14-2-2616), SRP screens
+inside its own review. Every candidate in the door's answer carries what its
+utility publishes (`HS.publication`: the words, the `route` it offers
+instead of a map, its own page and `check` lookup), and Prime's Circuit step,
+Site Map's Grid panel and Site Plan's layer list them wherever no figure is
+read or more than one utility is mapped (`GV.whoServes`, the one list).
 `POST /api/hosting-capacity` judges with `grid-verdict` in-process (a null
 queue is "not published", a netted queue is not subtracted twice, a
 generation-only figure for a battery says so; a side that did not answer is
@@ -1988,6 +2038,22 @@ tenant. Treat it that way.
   rollup) needs nothing. A refused save loses nothing: the drawing is still
   in that tab, and the person reloads. Rules deploy by hand
   (`firebase deploy --only firestore:rules`). `scripts/tests/tsaveguard.js`.
+- **Equipment is drawn from its footprint in feet, by ONE pass** (2026-10-17,
+  found by the Prime transfer: the rescale had never run). The anchor
+  engine's `run()` (UNIFIED ANCHORING) calls `omegaRescaleElementsOnce` once
+  per frame, about each centre, on the floor the unit was placed with
+  (`minW/minH`, else Insert's `OmegaInsert.floorPx`); OmegaGeo leaves
+  anything `omegaElementFootprint` claims. Code that sets a unit's size by
+  hand records it in feet (`lf/wf`) or the next pass undoes it. What has no
+  footprint stays OmegaGeo's, stamped at the scale it was DRAWN at (on
+  `zoom_changed`, before anything resizes; 2026-10-20), and the anchor engine
+  centres on `_elRenderSize`, as every stamper does.
+  `standDown()` replaces `window._geoReprojectAll` at boot and every wrapper
+  hung on it before then goes with it (that is how the rescale, and the
+  orphan sweep, were lost): a pass that must follow the map belongs in
+  `run()`. `npm run
+  check:element-zoom` zooms the real editor on `scripts/_lib/gmaps-double.js`;
+  `scripts/tests/telementzoom.js`.
 - Parcel layers: `omega-parcel-sources.js` is the ONE list of public county
   and state parcel services. The editor's View › Parcel Lines draws them on
   the map and `api/parcel.js` asks the same counties for a point; a county
