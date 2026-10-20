@@ -608,6 +608,9 @@ module.exports = { FIELDS: FIELDS, FREIGHT_CLASSES: FREIGHT_CLASSES, LIMITS: LIM
                                              interconnection details
      storefront/config.products[].coverage  templates per SKU; warrantyYears
                                              is the default template
+     plant_units/{…}.custody.makerWarranty  the maker's warranty the office
+                                             recorded on a BOUGHT-IN unit:
+                                             one more template, never public
    Pure: no Firestore, no clock except the `now` handed in. */
 'use strict';
 var A = require('api/_lib/admin.js');
@@ -798,13 +801,32 @@ function state(unit, value, body, by, now, method) {
    Templates come off the catalog product; the product's warrantyYears is
    the default template when it carries none. A unit's coverage is DERIVED
    from its custody dates every time it is read, never stored, so a
-   corrected commissioning date corrects the warranty with it. */
+   corrected commissioning date corrects the warranty with it.
+   A unit the workspace buys in from its maker has no catalog product (it
+   is not published); the maker's warranty the office recorded on the unit
+   (makerWarranty() below) is one more template here, after the catalog's,
+   so every reader that hands the unit in — the passport, the register,
+   exceptions, the customer's app, Omega Teleios — sees the same warranty. */
 var TRIGGERS = ['ship', 'delivery', 'commissioning', 'earliest_of'];
-function templatesOf(product) {
+var MAKER_ID = 'maker';
+function templatesOf(product, unit) {
   product = product || {};
   var list = Array.isArray(product.coverage) ? product.coverage.filter(function (t) { return t && t.id; }) : [];
   if (!list.length && Number(product.warrantyYears) > 0) list = [{ id: 'warranty', type: 'warranty', provider: 'oem', termMonths: Math.round(Number(product.warrantyYears) * 12), trigger: 'ship', capMonths: null, metrics: null, docUrl: '' }];
+  var mk = unit ? makerTemplate(unit) : null;
+  if (mk && !list.some(function (t) { return t.id === MAKER_ID; })) list = list.concat([mk]);
   return list;
+}
+/* the recorded maker's warranty as a template: read back through the same
+   limits template() wrote it under, so a record that does not hold them is
+   no warranty rather than a wrong date */
+function makerTemplate(unit) {
+  var m = custodyOf(unit).makerWarranty;
+  if (!m || typeof m !== 'object') return null;
+  var term = Number(m.termMonths), cap = m.capMonths == null ? null : Number(m.capMonths);
+  if (!Number.isInteger(term) || term < 1 || term > 600 || TRIGGERS.indexOf(m.trigger) < 0) return null;
+  if (m.trigger === 'earliest_of' && !(Number.isInteger(cap) && cap > 0)) return null;
+  return { id: MAKER_ID, type: 'warranty', provider: clean(m.provider, 80) || 'maker', termMonths: term, trigger: m.trigger, capMonths: m.trigger === 'earliest_of' ? cap : null, metrics: null, docUrl: clean(m.docUrl, 600) };
 }
 function template(t) {
   t = t || {};
@@ -830,7 +852,7 @@ function startOf(t, c, shippedFallback) {
 }
 function coverageOf(product, unit, now, shippedFallback) {
   var c = custodyOf(unit), today = String(now).slice(0, 10);
-  return templatesOf(product).map(function (t) {
+  return templatesOf(product, unit).map(function (t) {
     var start = c.status === 'replaced' ? null : startOf(t, c, shippedFallback), end = start ? addMonths(start, t.termMonths) : null, status;
     var why = null;
     if (c.status === 'replaced') status = 'transferred';
@@ -852,6 +874,75 @@ function coverageWithInheritance(product, unit, now, shippedFallback) {
   if (!inh.length) return own;
   var today = String(now).slice(0, 10);
   return own.map(function (cv) { var h = inh.filter(function (x) { return x.templateId === cv.templateId; })[0]; if (!h) return cv; return Object.assign({}, cv, { startDate: h.startDate, endDate: h.endDate, status: !c.siteId ? 'pending' : (today > h.endDate ? 'expired' : 'active'), why: !c.siteId ? 'no site assigned' : null, inheritedFrom: h.inheritedFrom }); });
+}
+
+/* ── the maker's warranty on a bought-in unit ──────────────────────────
+   A unit the workspace buys from its maker — its order's procure names the
+   SKU, as Omega Prime writes it (api/_lib/prime-order.js) — has no catalog
+   template, and publishing the product to give it one would put it on the
+   public storefront. The office records what the MAKER warrants instead,
+   on the unit, with where it came from: the maker's warranty document or
+   the maker's confirmation (Clean Cell, for one, confirms its warranty per
+   project), never a bare claim. Terms and provenance only: templatesOf()
+   reads them as one more template and coverageOf() derives the status.
+
+   boughtIn(order, sku) is the ONE test of "bought in" (api/_lib/teleios.js
+   asks it too), prime-order's own: procure names the SKU. A { reference:
+   true } line alone is a product the seller makes and has not published (a
+   maker's own unit), never bought in; its warranty belongs on its catalog. */
+function boughtIn(order, sku) {
+  var s = clean(sku, 100); if (!order || typeof order !== 'object' || !s) return null;
+  var pr = order.procure && typeof order.procure === 'object' && clean(order.procure.sku, 100) === s ? order.procure : null;
+  if (!pr) return null;
+  var line = (Array.isArray(order.items) ? order.items : []).filter(function (it) { return it && it.reference === true && clean(it.sku, 100) === s; })[0] || null;
+  return { sku: s, mfr: clean(pr.mfr, 80) || clean(line && line.mfr, 80), model: clean(pr.model, 200) };
+}
+/* a unit is bought in when its own order buys its SKU in, or — a
+   replacement under RMA, often stock off another order — when the order of
+   the unit it replaces (custody.replaces) does: what the passport and the
+   door ask, so the unit Omega Teleios names can always take the record */
+function boughtInUnit(unit, order, replacedOrder) {
+  var sku = unit && unit.sku;
+  return boughtIn(order, sku) || (custodyOf(unit).replaces ? boughtIn(replacedOrder, sku) : null);
+}
+var TRIGGER_WORDS = { ship: 'shipment', delivery: 'delivery', commissioning: 'commissioning', earliest_of: 'commissioning or shipment plus the cap, whichever is first' };
+var MAKER_KEYS = ['provider', 'termMonths', 'trigger', 'capMonths', 'docUrl', 'reference'];
+function makerWords(m) { return m.provider + ': ' + m.termMonths + ' months from ' + (TRIGGER_WORDS[m.trigger] || m.trigger) + (m.trigger === 'earliest_of' ? ' (' + m.capMonths + ' months)' : '') + (m.reference ? ' · ' + m.reference : '') + (m.docUrl ? ' · document on file' : ''); }
+/* record, correct or clear (body.clear + a reason) the maker's warranty on
+   one unit. `bought` is boughtIn() for the unit's order; a unit that already
+   carries a record (a replacement took its original's) may be corrected or
+   cleared without one. Returns { patch, event, before, after } or
+   { duplicate } when nothing would change. */
+function makerWarranty(unit, body, by, now, bought) {
+  var c = custodyOf(unit), b = body || {}, had = c.makerWarranty && typeof c.makerWarranty === 'object' ? c.makerWarranty : null;
+  if (!unit || !unit.shipUnit) throw fail(400, 'Only a shipping unit carries a warranty; a component travels with its assembly');
+  if (unit.inventoryStatus === 'void') throw fail(409, 'That serial was voided at registration (a typo the plant corrected); use the real serial');
+  if (!bought && !had) throw fail(409, 'A maker’s warranty is recorded only for a unit its order buys in from the maker. A product this workspace makes or publishes carries its warranty on the catalog product (Coverage templates).');
+  if (c.status === 'replaced') throw fail(409, 'This unit was replaced by ' + (c.replacedBy || 'another unit') + ' and its warranty went with it: record the maker’s warranty on ' + (c.replacedBy || 'the replacement'));
+  if (b.clear === true) {
+    if (!had) return { duplicate: true, patch: {}, event: null, before: null, after: null };
+    var why = clean(b.reason, 500); if (why.length < 5) throw fail(400, 'Say why the maker’s warranty comes off this unit (5 characters or more)');
+    return { patch: { 'custody.makerWarranty': null, 'custody.updatedAt': now, 'custody.updatedBy': by },
+      event: { type: 'maker-warranty-removed', from: c.status, to: c.status, by: by, at: now, method: 'manual', note: why }, before: had, after: null };
+  }
+  var provider = clean(bought && bought.mfr, 80) || clean(had && had.provider, 80) || clean(b.provider, 80);
+  if (!provider) throw fail(400, 'Name the maker that gives the warranty');
+  var t = template({ id: MAKER_ID, type: 'warranty', provider: provider, termMonths: Number(b.termMonths), trigger: b.trigger, capMonths: b.capMonths, docUrl: b.docUrl });
+  var reference = clean(b.reference, 300);
+  if (!t.docUrl && reference.length < 5) throw fail(400, 'Add the maker’s warranty document (an HTTPS link) or the maker’s confirmation (its number, or who confirmed it and when; 5 characters or more): a warranty goes on file from the maker’s word, never assumed');
+  var rec = { provider: provider, termMonths: t.termMonths, trigger: t.trigger, capMonths: t.trigger === 'earliest_of' ? t.capMonths : null, docUrl: t.docUrl, reference: reference,
+    recordedBy: by, recordedAt: now, orderId: (unit.orderId != null ? String(unit.orderId) : '') || (had && had.orderId) || null };
+  if (had && MAKER_KEYS.every(function (k) { return String(had[k] == null ? '' : had[k]) === String(rec[k] == null ? '' : rec[k]); })) return { duplicate: true, patch: {}, event: null, before: had, after: had };
+  return { patch: { 'custody.makerWarranty': rec, 'custody.updatedAt': now, 'custody.updatedBy': by },
+    event: { type: had ? 'maker-warranty-corrected' : 'maker-warranty', from: c.status, to: c.status, by: by, at: now, method: 'manual', note: makerWords(rec).slice(0, 500) }, before: had, after: rec };
+}
+/* what the office is told after a record or a removal over one or more units */
+function makerSay(applied, unchanged, skipped, off) {
+  var n = (applied || []).length, same = (unchanged || []).length, sk = skipped || [];
+  var say = n ? 'The maker’s warranty is ' + (off ? 'off ' : 'on file for ') + n + ' unit' + (n === 1 ? '' : 's') : (off ? 'No maker’s warranty was on file to take off' : 'Already on file with these terms');
+  if (n && same) say += '; ' + same + ' already ' + (off ? 'had none' : 'had it');
+  if (sk.length) say += '; ' + sk.length + ' left out (' + sk[0].serial + ': ' + sk[0].why + ')';
+  return say + '.';
 }
 
 /* ── exceptions: the gaps that lose warranty claims ────────────────────── */
@@ -1492,6 +1583,7 @@ function planResult(pl, applied, skipped) {
 module.exports = { STATUSES: STATUSES, STATES: STATES, MOVES: MOVES, LABELS: LABELS, TRIGGERS: TRIGGERS, COLUMNS: COLUMNS, TEMPLATE_HEADERS: TEMPLATE_HEADERS, MAX_ROWS: MAX_ROWS,
   custodyOf: custodyOf, label: label, serial: serial, day: day, judge: judge, apply: apply, state: state, destination: destination, confirm: confirm, confirmation: confirmation, detail: detail, DETAIL_FIELDS: DETAIL_FIELDS, REGISTER_COLUMNS: REGISTER_COLUMNS, registerRow: registerRow,
   templatesOf: templatesOf, template: template, coverageOf: coverageOf, coverageWithInheritance: coverageWithInheritance, inherited: inherited, addMonths: addMonths,
+  MAKER_ID: MAKER_ID, makerTemplate: makerTemplate, boughtIn: boughtIn, boughtInUnit: boughtInUnit, makerWarranty: makerWarranty, makerWords: makerWords, makerSay: makerSay,
   exceptions: exceptions, reconcile: reconcile, csvTemplate: csvTemplate, csvRows: csvRows, parseCsv: parseCsv, guessMapping: guessMapping, mapRow: mapRow, plan: plan, siteKey: siteKey, site: site, siteId: siteId,
   MAX_SITE_ROWS: MAX_SITE_ROWS, MAX_PLAN_UNITS: MAX_PLAN_UNITS, MAX_SITE_TEXT: MAX_SITE_TEXT, MAX_SITE_LINE: MAX_SITE_LINE, US_STATES: US_STATES, stateCode: stateCode, addressKey: addressKey, samePlace: samePlace, naturalCompare: naturalCompare, oneLine: oneLine, splitAddress: splitAddress, checkSiteRow: checkSiteRow,
   trimEnd: trimEnd, unitTail: unitTail, unText: unText, parseSiteList: parseSiteList, matchSites: matchSites, sitesPreview: sitesPreview, toLocate: toLocate, withGeo: withGeo, siteListInputs: siteListInputs, placeSites: placeSites,
@@ -5820,7 +5912,10 @@ function views(state) {
     if (/serial=/.test(q)) {
       var serial = decodeURIComponent((/serial=([^&]*)/.exec(q) || [])[1] || ''), u = units.filter(function (x) { return x.serial === serial; })[0]; if (!u) return { status: 404, error: 'Serial not found' };
       var c = Cu.custodyOf(u), site = state.sites.filter(function (s) { return s.id === c.siteId; })[0], rb = units.filter(function (x) { return x.serial === c.replacedBy; })[0], rs = units.filter(function (x) { return x.serial === c.replaces; })[0];
-      return { brand: brand, unit: unitView(u, now), product: prodOf(u.sku) ? { sku: u.sku, name: prodOf(u.sku).name, coverage: Cu.templatesOf(prodOf(u.sku)) } : null, site: site || null, events: (state.custodyEvents[serial] || []).slice().reverse(), scans: [], replacedBy: rb ? unitView(rb, now) : null, replaces: rs ? unitView(rs, now) : null, moves: Cu.MOVES, states: Cu.STATES };
+      var uo = u.orderId ? state.orders.filter(function (x) { return x.id === u.orderId; })[0] || null : null, ro = rs && rs.orderId ? state.orders.filter(function (x) { return x.id === rs.orderId; })[0] || null : null;
+      var ubi = Cu.boughtInUnit(u, uo, ro), bo = Cu.boughtIn(uo, u.sku) ? uo : ro;   /* bought in on its own order, or through the unit it replaced */
+      return { brand: brand, unit: unitView(u, now), product: prodOf(u.sku) ? { sku: u.sku, name: prodOf(u.sku).name, coverage: Cu.templatesOf(prodOf(u.sku)) } : null, site: site || null,
+        boughtIn: ubi ? Object.assign({ orderId: bo.id, orderNo: bo.orderNo || u.orderNo || null }, ubi) : null, canRecordWarranty: ['owner', 'admin'].indexOf(teamActor()) >= 0, events: (state.custodyEvents[serial] || []).slice().reverse(), scans: [], replacedBy: rb ? unitView(rb, now) : null, replaces: rs ? unitView(rs, now) : null, moves: Cu.MOVES, states: Cu.STATES };
     }
     if (/site=/.test(q)) { var sid = decodeURIComponent((/site=([^&]*)/.exec(q) || [])[1] || ''), sd = state.sites.filter(function (s) { return s.id === sid; })[0]; if (!sd) return { status: 404, error: 'Site not found' }; var here = units.filter(function (u) { return Cu.custodyOf(u).siteId === sid; }); return { brand: brand, site: sd, units: here.map(function (u) { return unitView(u, now); }), exceptions: Cu.exceptions(here, cat, now), limited: false }; }
     if (/view=exceptions/.test(q)) return { brand: brand, exceptions: Cu.exceptions(units, cat, now), sampled: units.length, limited: false };
@@ -6371,6 +6466,17 @@ function post(state, path, query, b, who) {
       if (tr.duplicate) return { ok: true, action: 'duplicate', serial: tu.serial, custody: Cu.custodyOf(tu) };
       patchUnit(tu, tr.patch); logEvent(tu.serial, tr.event); return { ok: true, action: 'detail', serial: tu.serial, changed: tr.event.fields, custody: Cu.custodyOf(tu) };
     }
+    /* the maker's warranty on a bought-in unit, as api/logic-custody.js: an owner or administrator, this unit or every unit of its SKU on its order */
+    if (b.action === 'maker-warranty') {
+      if (['owner', 'admin'].indexOf(V.teamActor(who)) < 0) return err(403, 'The workspace owner or an administrator records a maker’s warranty');
+      var wu = unitBy(String(b.serial || '').trim()); if (!wu) return err(404, 'Serial is not registered');
+      var wo0 = wu.orderId ? order(wu.orderId) || null : null, wr0 = Cu.custodyOf(wu).replaces ? unitBy(Cu.custodyOf(wu).replaces) : null;
+      var wbi = Cu.boughtInUnit(wu, wo0, wr0 && wr0.orderId ? order(wr0.orderId) || null : null), wt = [], wskip = [], wdone = [], wsame = [];
+      try { wt.push({ u: wu, r: Cu.makerWarranty(wu, b, who, now, wbi) }); } catch (e) { return err(e.status || 400, e.message); }
+      if (b.scope === 'order' && wbi && Cu.boughtIn(wo0, wu.sku)) state.units.filter(function (x) { return x !== wu && x.shipUnit && x.orderId === wu.orderId && x.sku === wu.sku && x.inventoryStatus !== 'void'; }).forEach(function (x) { try { wt.push({ u: x, r: Cu.makerWarranty(x, b, who, now, wbi) }); } catch (e) { wskip.push({ serial: x.serial, why: e.message }); } });
+      wt.forEach(function (t) { if (t.r.duplicate) { wsame.push(t.u.serial); return; } patchUnit(t.u, t.r.patch); logEvent(t.u.serial, t.r.event); wdone.push(t.u.serial); });
+      return { ok: true, action: 'maker-warranty', serial: wu.serial, applied: wdone, unchanged: wsame, skipped: wskip, say: Cu.makerSay(wdone, wsame, wskip, b.clear === true), makerWarranty: Cu.custodyOf(wu).makerWarranty || null };
+    }
     if (b.action === 'confirm' || b.action === 'destination') {
       var xu = unitBy(String(b.serial || '').trim()); if (!xu) return err(404, 'Serial is not registered');
       var xs = b.siteId ? siteBy(b.siteId) : null; if (b.action === 'destination' && b.siteId && !xs) return err(404, 'Site not found');
@@ -6390,6 +6496,7 @@ function post(state, path, query, b, who) {
         var c0 = Cu.custodyOf(cu), rc = Cu.custodyOf(ru), old = Cu.coverageWithInheritance(V.CATALOG.filter(function (p) { return p.sku === cu.sku; })[0], cu, now).map(function (cv) { return Object.assign({}, cv, { serial: cu.serial }); });
         var apr = Cu.apply(cu, 'replace', cb, who, now, method); patchUnit(cu, apr.patch); logEvent(cu.serial, apr.event);
         var rp = { 'custody.status': c0.status === 'rma_open' && c0.siteId ? 'assigned' : 'received', 'custody.custodian': c0.siteId ? 'site' : 'customer', 'custody.siteId': c0.siteId || null, 'custody.siteName': c0.siteName || null, 'custody.position': c0.position || '', 'custody.customerId': c0.customerId || cu.customerId || null, 'custody.replaces': cu.serial, 'custody.receivedAt': rc.receivedAt || now.slice(0, 10), 'custody.assignedAt': c0.siteId ? now.slice(0, 10) : null, 'custody.inheritedCoverage': Cu.inherited(old), 'custody.updatedAt': now, 'custody.updatedBy': who };
+        if (c0.makerWarranty && !rc.makerWarranty) rp['custody.makerWarranty'] = c0.makerWarranty;   /* a bought-in unit's maker's warranty goes with it, as api/logic-custody.js */
         patchUnit(ru, rp); logEvent(ru.serial, { type: 'replacement-of', from: rc.status, to: rp['custody.status'], replaces: cu.serial, siteId: c0.siteId || null, by: who, at: now, method: method });
         return { ok: true, serial: cu.serial, replacementSerial: ru.serial, siteId: c0.siteId || null, inherited: rp['custody.inheritedCoverage'] };
       }

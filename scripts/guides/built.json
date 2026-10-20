@@ -6,7 +6,7 @@
       "office-hub-panels.png": "2b2aba30bdb1c39bc3c2dff6a61f6992bd86a596f10dd327724dbb28279fbe83",
       "office-customers.png": "47317f44a1c60c9f7234fcf73e389f34890c564b4613ef31040801c6168245a4",
       "office-account.png": "d6984f3bf0480b69c2ec0290a4e9941f40747c64862626162a1a397b2d47eb8b",
-      "office-activity.png": "28f94344a7742dc1364d2a39c255a2ec931eb8694b2b5a50548863dc9243be87",
+      "office-activity.png": "ea907270c0e430a1238a5b2aee91d64d321b28f5617024ffd8cbc90f0d93d754",
       "office-documents.png": "d81ebd9cd4613ad6a2bd1862c7e14014b9dff58bc21a6adb641ce13433ce4323",
       "office-order.png": "2bca4a45a8e19fb7a04f28c700f783f984bf00c7ce78096572f7e68d22ae96e2",
       "office-sites.png": "296ade2260bd433e288573e125a1f87913f9d22200e8b10c40b9641e0f09f760",
@@ -19,20 +19,20 @@
       "desktop-accounting-void.png": "8f0d41a8f802908e7381b25648a7f78b207b47a01871c717220cf45d12e32eb2",
       "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
       "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
-      "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-      "customer-app.png": "5474595e0721186d9b9348432d8bd7f76ea115136f6e0f21866568327098e62a"
+      "desktop-freight.png": "6362a0ea18d88f40f227cf2340815516cfb979957392e1e0621af36fae9fc915",
+      "customer-app.png": "4ba363642c69d16a33601d1ffd5fb30ce695893ef569ee758d5baeabe2bb25b1"
     },
     "guides": {
       "office.html": "7eb8a3919a67499803b949a0640a1169e1328a1e890bf9b4ce8987bb2e92083b"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "d1faf4dcac5a6a87a3d2b19d3865a5fe9e9c090e5d0a123fe944a0d2f5a4ddae"
+    "sha256": "b5033451c54750a38f84fc0d3c1489fe8095d4cb16d63de10e4c5f5a9b4b1d4b"
   },
   "Omega-Logic-Customer-App.pdf": {
     "shots": {
       "customer-signin.png": "36af8fdec393b617461dfa7b25da83739467be1525984867e1b16c574d93bf9f",
-      "customer-home.png": "53b8058c024e5475f7d53bafaff743dd72427c34a8889db8fccb6eaf79218669",
-      "customer-pos.png": "eb0db014c653421571d55cf071517826139f0bb8717dba13a9eacd7a87021514",
+      "customer-home.png": "6e3dfe95e3acc20d9870148fffe474186350ce75b67a6939c6aab1a0a28f5b61",
+      "customer-pos.png": "cf53c89e59137f00ac87fd74116523c7f47e61d7eb9102cfed4e48e813eb0636",
       "customer-sites.png": "7daae5f90132cf4458a398c8ff0464f36d16a6c795d12a2f1f09a59463f242d6",
       "customer-sites-2.png": "4109c46dd21fa2f9fb58d8a05f8afd976783ee00aadb3a0f76c3763243a8b3b8",
       "customer-sitelist.png": "89c0da6a59fa92f139ab0fa59e8e764b9e10ce3a9c757a6934178eb55e8eae8a",
@@ -43,7 +43,7 @@
       "customer.html": "e871a3be2b299bffbfcb50e2dfa841f2f7cedaca8a949461013d3a2b955c68c1"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "5be2774a34d82f6a5374f088c3e3d4a102b13b4c6391359619be726881da04a4"
+    "sha256": "97aff3647038a31f4bc075d84b2ec88b76eda86be80db5cab43ace2e9b1175f4"
   },
   "Omega-Logic-Office-App.pdf": {
     "shots": {
@@ -52,7 +52,7 @@
       "office-hub-panels.png": "2b2aba30bdb1c39bc3c2dff6a61f6992bd86a596f10dd327724dbb28279fbe83",
       "office-customers.png": "47317f44a1c60c9f7234fcf73e389f34890c564b4613ef31040801c6168245a4",
       "office-account.png": "d6984f3bf0480b69c2ec0290a4e9941f40747c64862626162a1a397b2d47eb8b",
-      "office-activity.png": "28f94344a7742dc1364d2a39c255a2ec931eb8694b2b5a50548863dc9243be87",
+      "office-activity.png": "ea907270c0e430a1238a5b2aee91d64d321b28f5617024ffd8cbc90f0d93d754",
       "office-documents.png": "d81ebd9cd4613ad6a2bd1862c7e14014b9dff58bc21a6adb641ce13433ce4323",
       "office-order.png": "2bca4a45a8e19fb7a04f28c700f783f984bf00c7ce78096572f7e68d22ae96e2",
       "office-sites.png": "296ade2260bd433e288573e125a1f87913f9d22200e8b10c40b9641e0f09f760",
@@ -65,14 +65,14 @@
       "desktop-accounting-void.png": "8f0d41a8f802908e7381b25648a7f78b207b47a01871c717220cf45d12e32eb2",
       "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
       "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
-      "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-      "customer-app.png": "5474595e0721186d9b9348432d8bd7f76ea115136f6e0f21866568327098e62a"
+      "desktop-freight.png": "6362a0ea18d88f40f227cf2340815516cfb979957392e1e0621af36fae9fc915",
+      "customer-app.png": "4ba363642c69d16a33601d1ffd5fb30ce695893ef569ee758d5baeabe2bb25b1"
     },
     "guides": {
       "office.html": "7eb8a3919a67499803b949a0640a1169e1328a1e890bf9b4ce8987bb2e92083b"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "d1faf4dcac5a6a87a3d2b19d3865a5fe9e9c090e5d0a123fe944a0d2f5a4ddae"
+    "sha256": "b5033451c54750a38f84fc0d3c1489fe8095d4cb16d63de10e4c5f5a9b4b1d4b"
   },
   "Omega-Logic-Phone-Apps.pdf": {
     "shots": {
@@ -81,7 +81,7 @@
       "office-hub-panels.png": "2b2aba30bdb1c39bc3c2dff6a61f6992bd86a596f10dd327724dbb28279fbe83",
       "office-customers.png": "47317f44a1c60c9f7234fcf73e389f34890c564b4613ef31040801c6168245a4",
       "office-account.png": "d6984f3bf0480b69c2ec0290a4e9941f40747c64862626162a1a397b2d47eb8b",
-      "office-activity.png": "28f94344a7742dc1364d2a39c255a2ec931eb8694b2b5a50548863dc9243be87",
+      "office-activity.png": "ea907270c0e430a1238a5b2aee91d64d321b28f5617024ffd8cbc90f0d93d754",
       "office-documents.png": "d81ebd9cd4613ad6a2bd1862c7e14014b9dff58bc21a6adb641ce13433ce4323",
       "office-order.png": "2bca4a45a8e19fb7a04f28c700f783f984bf00c7ce78096572f7e68d22ae96e2",
       "office-sites.png": "296ade2260bd433e288573e125a1f87913f9d22200e8b10c40b9641e0f09f760",
@@ -94,8 +94,8 @@
       "desktop-accounting-void.png": "8f0d41a8f802908e7381b25648a7f78b207b47a01871c717220cf45d12e32eb2",
       "desktop-price.png": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
       "desktop-team.png": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
-      "desktop-freight.png": "d0c05d786d54698d88bf0388ed3f149f33d61fbb8020a1806c22c3c6c6bda649",
-      "customer-app.png": "5474595e0721186d9b9348432d8bd7f76ea115136f6e0f21866568327098e62a",
+      "desktop-freight.png": "6362a0ea18d88f40f227cf2340815516cfb979957392e1e0621af36fae9fc915",
+      "customer-app.png": "4ba363642c69d16a33601d1ffd5fb30ce695893ef569ee758d5baeabe2bb25b1",
       "plant-work.png": "e21f167afa03bb9f4959144f73f2bd26aa311685d28e074fbb73198d87b38b84",
       "bench-type.png": "85a6aa2cf31e5a27a197a12e5bbe7891f6ecb50223aab3e04731afe39284e1bd",
       "bench.png": "da303a7a6f49b1e7a52447f821b35f3bae5a7e04a07ffb2ee0c841b7c80b9277",
@@ -103,8 +103,8 @@
       "plant-register.png": "dcee2b18dbb7a03ef3f53ccbcd911eac102b9f29e7147da33a3fb61d86cbbbd4",
       "plant-unit.png": "67ab7a59e05396f425ad13e9bd82166ae48d63d2499d044a9ae9331fe0a7ae26",
       "customer-signin.png": "36af8fdec393b617461dfa7b25da83739467be1525984867e1b16c574d93bf9f",
-      "customer-home.png": "53b8058c024e5475f7d53bafaff743dd72427c34a8889db8fccb6eaf79218669",
-      "customer-pos.png": "eb0db014c653421571d55cf071517826139f0bb8717dba13a9eacd7a87021514",
+      "customer-home.png": "6e3dfe95e3acc20d9870148fffe474186350ce75b67a6939c6aab1a0a28f5b61",
+      "customer-pos.png": "cf53c89e59137f00ac87fd74116523c7f47e61d7eb9102cfed4e48e813eb0636",
       "customer-sites.png": "7daae5f90132cf4458a398c8ff0464f36d16a6c795d12a2f1f09a59463f242d6",
       "customer-sites-2.png": "4109c46dd21fa2f9fb58d8a05f8afd976783ee00aadb3a0f76c3763243a8b3b8",
       "customer-sitelist.png": "89c0da6a59fa92f139ab0fa59e8e764b9e10ce3a9c757a6934178eb55e8eae8a",
@@ -117,7 +117,7 @@
       "customer.html": "e871a3be2b299bffbfcb50e2dfa841f2f7cedaca8a949461013d3a2b955c68c1"
     },
     "build": "afd0d369bdd7734fd018f81592996678281894072306eadce463755ea2871054",
-    "sha256": "3e8c8b6513fe995fced2cd8c0356b32affc100c068b81b215005b601ae59f3eb"
+    "sha256": "9d2574f4b2c7d384c61a221a65b56a6e60e8e6a97f8d42fc46ca73659792a5a9"
   },
   "Omega-Logic-Plant-App.pdf": {
     "shots": {

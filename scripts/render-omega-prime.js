@@ -516,6 +516,27 @@ function until(p, fn, arg, ms) { return p.waitForFunction(fn, arg, { timeout: ms
     await shot(p, 'prime-07-track');
     await p.waitForTimeout(800);
 
+    /* ── a bought-in battery on site with no warranty on file (2026-10-17):
+       the ladder names the unit, the Teleios card opens its passport in
+       Omega Logic and the guide says to record the maker's warranty; once
+       it is on the unit (custody.js makerWarranty), it is Omega Teleios ── */
+    var o0 = DB.data.get('orders/' + h2.orderId), bsku = o0.items[0].sku, dAgo = function (n) { return new Date(Date.now() - n * 864e5).toISOString().slice(0, 10); };
+    DB.seed('orders/' + h2.orderId, Object.assign({}, o0, { procure: { mfr: 'CleanCell US', mfrOrgId: null, sku: bsku, model: 'Smart Module' } }));
+    var ONSITE = { status: 'assigned', siteId: 'site_lake', siteName: 'Lake St', shippedAt: dAgo(9), deliveredAt: dAgo(7), receivedAt: dAgo(7), assignedAt: dAgo(6) };
+    function onSite(custody) { DB.seed('plant_units/' + ORG + '__PRM-0001', { orgId: ORG, orderId: h2.orderId, serial: 'PRM-0001', sku: bsku, shipUnit: true, at: 'ready', custody: custody }); }
+    onSite(ONSITE);
+    await p.click('#tr-refresh');
+    var need = await until(p, function () { var a = document.getElementById('tr-teleios'); return a && a.getAttribute('data-need') === 'maker-warranty' ? { href: a.getAttribute('href'), text: a.textContent, guide: document.getElementById('gT').textContent } : null; });
+    ok('a bought-in battery on site, no warranty on file: the Teleios card opens its unit passport, and the guide says to record the maker’s warranty', !!need && need.href === '/logic-custody.html?org=' + ORG + '&serial=PRM-0001#passport' && /bought in from CleanCell US/.test(need.text) && need.guide === 'Put the maker’s warranty on file', need);
+    onSite(Object.assign({}, ONSITE, { makerWarranty: { provider: 'CleanCell US', termMonths: 120, trigger: 'ship', capMonths: null, docUrl: '', reference: 'CC-W-2291 by email', recordedBy: REP.email, recordedAt: new Date().toISOString(), orderId: h2.orderId } }));
+    await p.click('#tr-refresh');
+    var fin = await until(p, function () { var a = document.getElementById('tr-teleios'), c = document.getElementById('trChip'); return a && !a.getAttribute('data-need') && c && c.textContent === 'Omega Teleios' ? { href: a.getAttribute('href'), guide: document.getElementById('gT').textContent } : null; });
+    ok('the maker’s warranty on file: Omega Teleios, complete, and the card is the custody record again', !!fin && fin.href === '/logic-custody.html?org=' + ORG && fin.guide === 'Omega Teleios: complete', fin);
+    /* the rest of the scenario runs on the order as it was */
+    DB.data.delete('plant_units/' + ORG + '__PRM-0001'); DB.seed('orders/' + h2.orderId, o0);
+    await p.click('#tr-refresh');
+    await until(p, function () { var a = document.getElementById('tr-teleios'), c = document.querySelector('#trLadder .st.current'); return a && !a.getAttribute('data-need') && c && c.getAttribute('data-step') === 'priced' ? true : null; });
+
     /* ── Phone, resumed: Track, then the proposal reopened ── */
     await p.setViewportSize({ width: 390, height: 844 });
     await p.goto(base + '/omega-prime?id=' + pid, { waitUntil: 'domcontentloaded' });

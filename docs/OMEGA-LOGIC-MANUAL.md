@@ -346,6 +346,20 @@ Logic nor ClearSky; `Omega-Logic-Phone-Apps.pdf` is the three back to back.
   starts it (ship, delivery, commissioning, or the earliest of commissioning
   and ship plus a cap); a unit's coverage is worked out from these every
   time it is shown and is *pending* until the unit is bound to a site.
+  **The maker's warranty on a bought-in battery.** A battery you buy from
+  its maker and have not put in your catalog (an Omega Prime order of
+  another maker's unit) has no template, so Omega Teleios waits for its
+  warranty. Open the unit's passport (Omega Prime's Track opens it for
+  you): it says *Bought in from …* and *not on file*. An owner or
+  administrator enters what the maker confirmed: the months, what starts
+  it, and the maker's warranty document (an HTTPS link) or its confirmation
+  (its number, or who confirmed it and when; one of the two is required).
+  *Every … on this order* (ticked) records it on every unit of that product
+  on the order; press it again for a unit registered later. The warranty
+  then counts like any other, from the custody dates, and shows in the
+  register, your customer's app (with the maker's name and document, never
+  the confirmation) and Omega Teleios. *Correct* keeps what it was in the
+  history; *Take it off* needs a reason.
   Design and the honest list: `docs/LOGISTICS-CUSTODY.md`.
 - **Many sites at once** (*Sites & custody* → *Many sites at once*): when a
   customer's PO lists its sites in an email or a sheet.
@@ -1076,6 +1090,10 @@ sample does not answer.
   against the custody dates, bound to a site) and never stored; a claim
   starts from the customer's warranty request on the order, and an RMA is
   recorded on the unit under Sites & custody.
+- Reading a maker's own warranty from its workspace: a bought-in battery's
+  maker's warranty is entered by your office from the maker's word (the
+  passport), one warranty per unit, and a unit registered later is added by
+  recording it again.
 - Containers and pallets, lots, an installer login, onward resale between
   tenants, site-level SLAs, photos or GPS at commissioning, carrier webhooks
   and offline scanning (`docs/LOGISTICS-CUSTODY.md` has the list).

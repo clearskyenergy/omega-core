@@ -89,6 +89,44 @@ var NOW = '2026-09-05T12:00:00Z';
     var p = Cat.product({ sku: 'CC-1', name: 'One', kind: 'product', category: 'bess', coverage: [{ id: 'W-1', type: 'warranty', termMonths: 120, trigger: 'ship' }] }); assert.equal(p.coverage[0].id, 'w-1');
     assert.throws(function () { Cat.product({ sku: 'CC-1', name: 'One', kind: 'product', category: 'bess', coverage: [{ id: 'a', termMonths: 1, trigger: 'ship' }, { id: 'a', termMonths: 1, trigger: 'ship' }] }); }, /used twice/);
   });
+  await test('the maker’s warranty on a bought-in unit: one more template after the catalog’s, recorded only from the maker’s word', function () {
+    var BO = { items: [{ sku: 'NX-500', qty: 2, reference: true, mfr: 'Northwind Batteries' }], procure: { mfr: 'Northwind Batteries', mfrOrgId: null, sku: 'NX-500', model: 'NX 500' } };
+    var bi = C.boughtIn(BO, 'NX-500'); assert.deepEqual(bi, { sku: 'NX-500', mfr: 'Northwind Batteries', model: 'NX 500' });
+    assert.equal(C.boughtIn(BO, 'CC-C215'), null); assert.equal(C.boughtIn({ items: [{ sku: 'NX-500', qty: 1 }] }, 'NX-500'), null, 'a line the seller makes is not bought in');
+    assert.equal(C.boughtIn({ items: [{ sku: 'NX-500', qty: 1, reference: true, mfr: 'Northwind Batteries' }], procure: null }, 'NX-500'), null, 'a reference line with no procure is the seller’s own unpublished product (prime-order.js), not bought in');
+    assert.equal(C.boughtIn({ procure: { sku: 'NX-500', mfr: 'Northwind Batteries' } }, 'NX-500').mfr, 'Northwind Batteries', 'procure alone says bought in');
+    assert.equal(C.boughtIn({ items: [{ sku: 'NX-500', reference: true, mfr: 'Northwind Batteries' }], procure: { sku: 'NX-500', mfr: '' } }, 'NX-500').mfr, 'Northwind Batteries', 'the maker’s name off the line when procure has none');
+    assert.equal(C.boughtInUnit(unit('R2', { sku: 'NX-500', custody: { replaces: 'R1' } }), { items: [] }, BO).mfr, 'Northwind Batteries', 'a replacement off another order: bought in through the order of the unit it replaced');
+    assert.equal(C.boughtInUnit(unit('R3', { sku: 'NX-500', custody: {} }), { items: [] }, BO), null, 'a unit that replaced nothing is judged on its own order alone');
+    var u = unit('B1', { sku: 'NX-500', custody: { status: 'assigned', siteId: 's', shippedAt: '2026-08-01', receivedAt: '2026-08-10' } });
+    assert.throws(function () { C.makerWarranty(u, { termMonths: 120, trigger: 'ship' }, 'boss', NOW, bi); }, /never assumed/, 'no document and no confirmation: refused');
+    assert.throws(function () { C.makerWarranty(u, { termMonths: 120, trigger: 'ship', reference: 'ok' }, 'boss', NOW, bi); }, /5 characters/, 'a confirmation of a word or two is not one');
+    assert.throws(function () { C.makerWarranty(u, { termMonths: 120, trigger: 'ship', docUrl: 'http://maker.example/w.pdf' }, 'boss', NOW, bi); }, /HTTPS/);
+    assert.throws(function () { C.makerWarranty(u, { termMonths: 0, trigger: 'ship', reference: 'NW-W-0042' }, 'boss', NOW, bi); }, /1–600/);
+    assert.throws(function () { C.makerWarranty(u, { termMonths: 120, trigger: 'earliest_of', reference: 'NW-W-0042' }, 'boss', NOW, bi); }, /capMonths/);
+    assert.throws(function () { C.makerWarranty(unit('Q', { custody: {} }), { termMonths: 120, trigger: 'ship', reference: 'NW-W-0042' }, 'boss', NOW, null); }, /only for a unit its order buys in/, 'a unit the seller makes: refused, its catalog holds the warranty');
+    assert.throws(function () { C.makerWarranty(unit('M', { shipUnit: false }), { termMonths: 120, trigger: 'ship', reference: 'NW-W-0042' }, 'boss', NOW, bi); }, /component/);
+    assert.throws(function () { C.makerWarranty(unit('V', { inventoryStatus: 'void' }), { termMonths: 120, trigger: 'ship', reference: 'NW-W-0042' }, 'boss', NOW, bi); }, /voided/);
+    var r = C.makerWarranty(u, { termMonths: 120, trigger: 'earliest_of', capMonths: 18, reference: 'NW-W-0042 (J. Moss, 2026-08-02)', provider: 'Somebody else' }, 'boss', NOW, bi);
+    assert.equal(r.patch['custody.makerWarranty'].provider, 'Northwind Batteries', 'the maker is the order’s, not a typed name');
+    assert.deepEqual(Object.keys(r.patch['custody.makerWarranty']).sort(), ['capMonths', 'docUrl', 'orderId', 'provider', 'recordedAt', 'recordedBy', 'reference', 'termMonths', 'trigger'], 'terms and provenance only: no status is stored');
+    assert.equal(r.event.type, 'maker-warranty'); assert.match(r.event.note, /^Northwind Batteries: 120 months from commissioning or shipment plus the cap, whichever is first \(18 months\) · NW-W-0042/);
+    u.custody.makerWarranty = r.after;
+    var cov = C.coverageWithInheritance(undefined, u, NOW); assert.equal(cov.length, 1); assert.deepEqual([cov[0].templateId, cov[0].type, cov[0].provider, cov[0].status, cov[0].why], ['maker', 'warranty', 'Northwind Batteries', 'pending', 'starts 2028-02-01 unless commissioned first']);
+    u.custody.commissionedAt = '2026-09-01'; cov = C.coverageOf(null, u, NOW); assert.deepEqual([cov[0].status, cov[0].startDate, cov[0].endDate], ['active', '2026-09-01', '2036-09-01'], 'derived from the custody dates, like any template');
+    assert.equal(C.makerWarranty(u, { termMonths: 120, trigger: 'earliest_of', capMonths: 18, reference: 'NW-W-0042 (J. Moss, 2026-08-02)' }, 'boss2', NOW, bi).duplicate, true, 'the same terms again change nothing');
+    var fix = C.makerWarranty(u, { termMonths: 96, trigger: 'commissioning', reference: 'NW-W-0042 rev 2' }, 'boss', NOW, bi); assert.equal(fix.event.type, 'maker-warranty-corrected'); assert.equal(fix.before.termMonths, 120);
+    assert.throws(function () { C.makerWarranty(u, { clear: true, reason: 'no' }, 'boss', NOW, bi); }, /Say why/);
+    var off = C.makerWarranty(u, { clear: true, reason: 'recorded on the wrong order' }, 'boss', NOW, null); assert.equal(off.patch['custody.makerWarranty'], null); assert.equal(off.event.type, 'maker-warranty-removed');
+    assert.equal(C.makerWarranty(unit('Z', { custody: {} }), { clear: true, reason: 'nothing here' }, 'boss', NOW, bi).duplicate, true);
+    assert.throws(function () { C.makerWarranty(unit('R', { custody: { status: 'replaced', replacedBy: 'R2', makerWarranty: r.after } }), { termMonths: 12, trigger: 'ship', reference: 'NW-W-0042' }, 'boss', NOW, bi); }, /record the maker’s warranty on R2/);
+    /* the catalog's own templates first; a catalog template already called 'maker' wins */
+    var both = C.templatesOf({ warrantyYears: 10 }, u); assert.deepEqual(both.map(function (t) { return t.id; }), ['warranty', 'maker']);
+    assert.deepEqual(C.templatesOf({ coverage: [{ id: 'maker', type: 'warranty', termMonths: 12, trigger: 'ship' }] }, u).map(function (t) { return t.termMonths; }), [12]);
+    assert.equal(C.templatesOf({ warrantyYears: 10 }).length, 1, 'a product alone: its own templates');
+    assert.equal(C.makerTemplate(unit('X', { custody: { makerWarranty: { provider: 'N', termMonths: 12, trigger: 'someday' } } })), null, 'a record that does not hold the limits is no warranty, not a wrong date');
+    assert.equal(C.makerTemplate(unit('X', { custody: { makerWarranty: { provider: 'N', termMonths: 12, trigger: 'earliest_of' } } })), null);
+  });
   await test('receiving reconciles expected against scanned: shorts, overages, damaged, duplicates', function () {
     var r = C.reconcile(['A', 'B', 'C'], ['A', { serial: 'B', condition: 'damaged' }, 'D', 'A']);
     assert.deepEqual(r, { received: ['A'], damaged: ['B'], short: ['C'], overage: ['D'], duplicate: ['A'], complete: false });
@@ -244,6 +282,79 @@ var NOW = '2026-09-05T12:00:00Z';
     var sla = c.unit.coverage.filter(function (x) { return x.id === 'uptime'; })[0]; assert.equal(sla.from, tomorrow, 'the SLA starts on a date that can be true');
     /* the office's record (an import of history, the load) is judged by the office, not refused here */
     assert.doesNotThrow(function () { C.apply(unit('S011', { custody: { status: 'in_transit', shippedAt: '2026-08-01' } }), 'receive', { at: '2026-07-30' }, 'pm@cleancell.us', NOW, 'import'); });
+  });
+  console.log('\nthe maker’s warranty on a bought-in unit');
+  var BOSS = { uid: 'boss', email: 'boss@cleancell.us', orgId: ORG, claims: { email_verified: true } };
+  db.seed(O + '/members/boss', { email: 'boss@cleancell.us', role: 'admin', status: 'active' });
+  db.seed('orders/o7', { orgId: ORG, orderNo: 'PRM-20260901-7A7A7A', status: 'in_fulfilment', source: 'prime', customerId: 'company_riverside', customer: { email: 'ops@riverside.example', name: 'Riverside Cold Chain' },
+    items: [{ sku: 'NX-500', name: 'Northwind NX 500', kind: 'product', qty: 3, reference: true, mfr: 'Northwind Batteries' }], procure: { mfr: 'Northwind Batteries', mfrOrgId: null, sku: 'NX-500', model: 'NX 500' } });
+  function bought(serial, custody) { db.seed('plant_units/' + ORG + '__' + serial, unit(serial, { sku: 'NX-500', orderId: 'o7', orderNo: 'PRM-20260901-7A7A7A', custody: custody })); }
+  bought('NX001', { status: 'assigned', siteId: siteId, siteName: 'Bakersfield yard', shippedAt: '2026-08-20', receivedAt: '2026-08-25', customerId: 'company_riverside' });
+  bought('NX002', { status: 'received', shippedAt: '2026-08-20', receivedAt: '2026-08-25', customerId: 'company_riverside' });
+  var TERMS = { action: 'maker-warranty', serial: 'NX001', termMonths: 120, trigger: 'ship', reference: 'NW-W-0042, J. Moss by email 2026-08-02', docUrl: 'https://northwind.example/warranty/nx-500.pdf' };
+  await test('the passport says a unit is bought in, and who may record its maker’s warranty', async function () {
+    var p = await get({ serial: 'NX001' });
+    assert.deepEqual(p.boughtIn, { orderId: 'o7', orderNo: 'PRM-20260901-7A7A7A', sku: 'NX-500', mfr: 'Northwind Batteries', model: 'NX 500' }); assert.equal(p.product, null, 'the product is in no catalog');
+    assert.deepEqual(p.unit.coverage, [], 'nothing on file yet'); assert.equal(p.canRecordWarranty, false, 'a member reads it');
+    assert.equal((await get({ serial: 'NX001' }, BOSS)).canRecordWarranty, true, 'an administrator records it');
+    assert.equal((await get({ serial: 'S009' })).boughtIn, null, 'a unit the workspace makes is not bought in');
+  });
+  await test('only an owner or administrator records it, only for a bought-in unit, only from the maker’s word', async function () {
+    await rejects(post(TERMS), 403, /owner or an administrator/);
+    await rejects(post(Object.assign({}, TERMS, { serial: 'S009' }), BOSS), 409, /only for a unit its order buys in/);
+    await rejects(post(Object.assign({}, TERMS, { reference: '', docUrl: '' }), BOSS), 400, /never assumed/);
+    await rejects(post(Object.assign({}, TERMS, { serial: 'NOPE1' }), BOSS), 404, /not registered/);
+    assert.equal(db.data.get('plant_units/' + ORG + '__NX001').custody.makerWarranty, undefined, 'a refusal writes nothing');
+  });
+  await test('recorded on the unit: the passport, the customer’s app and the register read the same warranty; the confirmation stays in the office', async function () {
+    var r = await post(TERMS, BOSS); assert.deepEqual([r.applied, r.unchanged, r.skipped], [['NX001'], [], []]); assert.match(r.say, /on file for 1 unit/);
+    var rec = db.data.get('plant_units/' + ORG + '__NX001').custody.makerWarranty; assert.equal(rec.provider, 'Northwind Batteries'); assert.equal(rec.recordedBy, 'boss@cleancell.us'); assert.equal(rec.orderId, 'o7');
+    var p = await get({ serial: 'NX001' }); assert.deepEqual([p.unit.coverage[0].templateId, p.unit.coverage[0].status, p.unit.coverage[0].startDate, p.unit.coverage[0].endDate, p.unit.coverage[0].provider], ['maker', 'active', '2026-08-20', '2036-08-20', 'Northwind Batteries']);
+    var ev = p.events.filter(function (e) { return e.type === 'maker-warranty'; }); assert.equal(ev.length, 1); assert.match(ev[0].note, /NW-W-0042/); assert.equal(ev[0].by, 'boss@cleancell.us');
+    var au = Array.from(db.data.keys()).filter(function (k) { return k.indexOf('omega_audit/') === 0 && db.data.get(k).action === 'custody-maker-warranty'; }).map(function (k) { return db.data.get(k); });
+    assert.equal(au.length, 1); assert.deepEqual(au[0].units, [{ serial: 'NX001', before: null }]); assert.equal(au[0].after.termMonths, 120);
+    var mine = await cget(), nx = mine.units.filter(function (u) { return u.serial === 'NX001'; })[0];
+    assert.deepEqual([nx.coverage[0].provider, nx.coverage[0].status, nx.coverage[0].until, nx.coverage[0].docUrl], ['Northwind Batteries', 'active', '2036-08-20', 'https://northwind.example/warranty/nx-500.pdf'], 'the customer sees the maker’s warranty and its document');
+    assert.ok(JSON.stringify(mine).indexOf('NW-W-0042') < 0, 'and never the maker’s confirmation, which is the office’s record');
+    var reg = (await get({ view: 'register' })).rows.filter(function (x) { return x.serial === 'NX001'; })[0]; assert.deepEqual([reg.warrantyStatus, reg.warrantyFrom, reg.warrantyUntil], ['active', '2026-08-20', '2036-08-20']);
+    var again = await post(TERMS, BOSS); assert.deepEqual(again.applied, []); assert.deepEqual(again.unchanged, ['NX001']); assert.match(again.say, /Already on file/);
+  });
+  await test('every unit of its SKU on the order at once; a unit registered later is added by pressing again', async function () {
+    var r = await post(Object.assign({}, TERMS, { scope: 'order' }), BOSS); assert.deepEqual(r.applied, ['NX002']); assert.deepEqual(r.unchanged, ['NX001']);
+    var au2 = Array.from(db.data.keys()).filter(function (k) { return k.indexOf('omega_audit/') === 0 && db.data.get(k).action === 'custody-maker-warranty'; }).map(function (k) { return db.data.get(k); });
+    assert.deepEqual(au2[au2.length - 1].units, [{ serial: 'NX002', before: null }], 'the audit names the unit written and what it had, never the one left as it was');
+    assert.equal((await get({ serial: 'NX002' })).unit.coverage[0].status, 'pending', 'on file, and pending until NX002 is at a site');
+    bought('NX003', {});
+    var r2 = await post(Object.assign({}, TERMS, { serial: 'NX002', scope: 'order' }), BOSS); assert.deepEqual(r2.applied, ['NX003']); assert.deepEqual(r2.unchanged.sort(), ['NX001', 'NX002']);
+    assert.equal(db.data.get('plant_units/' + ORG + '__S001').custody.makerWarranty, undefined, 'never a unit on another order');
+  });
+  await test('corrected with its before, and taken off with a reason', async function () {
+    var fix = await post(Object.assign({}, TERMS, { serial: 'NX003', termMonths: 96, trigger: 'commissioning' }), BOSS); assert.deepEqual(fix.applied, ['NX003']);
+    var p = await get({ serial: 'NX003' }); assert.ok(p.events.some(function (e) { return e.type === 'maker-warranty-corrected'; })); assert.equal(p.unit.coverage[0].why, 'waiting for commissioning');
+    await rejects(post({ action: 'maker-warranty', serial: 'NX003', clear: true }, BOSS), 400, /Say why/);
+    var off = await post({ action: 'maker-warranty', serial: 'NX003', clear: true, reason: 'the maker withdrew the confirmation' }, BOSS); assert.deepEqual(off.applied, ['NX003']); assert.equal(off.makerWarranty, null);
+    assert.deepEqual((await get({ serial: 'NX003' })).unit.coverage, [], 'off: no warranty on file again');
+    var au = Array.from(db.data.keys()).filter(function (k) { return k.indexOf('omega_audit/') === 0 && db.data.get(k).action === 'custody-maker-warranty-removed'; }).map(function (k) { return db.data.get(k); });
+    assert.equal(au.length, 1); assert.equal(au[0].units[0].serial, 'NX003'); assert.equal(au[0].units[0].before.termMonths, 96); assert.equal(au[0].after, null); assert.equal(au[0].reason, 'the maker withdrew the confirmation');
+  });
+  await test('an RMA replacement carries the maker’s warranty and its remaining term', async function () {
+    await post({ action: 'move', move: 'commission', serial: 'NX001', at: '2026-09-01' }, BOSS); await post({ action: 'move', move: 'rma-open', serial: 'NX001', reason: 'cell fault' }, BOSS);
+    db.seed('plant_units/' + ORG + '__NX009', unit('NX009', { sku: 'NX-500', orderId: null, orderNo: null, customerId: null, inventoryStatus: 'available', custody: { status: 'received', shippedAt: '2026-09-20', receivedAt: '2026-09-25' } }));
+    await post({ action: 'replace', serial: 'NX001', replacementSerial: 'NX009' }, BOSS);
+    var r9 = await get({ serial: 'NX009' }); assert.equal(r9.unit.custody.makerWarranty.provider, 'Northwind Batteries');
+    assert.deepEqual([r9.unit.coverage[0].templateId, r9.unit.coverage[0].status, r9.unit.coverage[0].startDate, r9.unit.coverage[0].endDate, r9.unit.coverage[0].inheritedFrom], ['maker', 'active', '2026-08-20', '2036-08-20', 'NX001'], 'the remaining term, not a fresh one');
+    assert.equal((await get({ serial: 'NX001' })).unit.coverage[0].status, 'transferred');
+    var fix9 = await post(Object.assign({}, TERMS, { serial: 'NX009', reference: 'NW-W-0042 (replacement NX009)' }), BOSS); assert.deepEqual(fix9.applied, ['NX009'], 'a replacement off the order corrects its own record');
+  });
+  await test('replaced before anything was on file: the replacement off another order takes the record through the unit it replaced', async function () {
+    bought('NX004', { status: 'commissioned', siteId: siteId, siteName: 'Bakersfield yard', shippedAt: '2026-08-20', receivedAt: '2026-08-25', commissionedAt: '2026-09-02', customerId: 'company_riverside' });
+    await post({ action: 'move', move: 'rma-open', serial: 'NX004', reason: 'BMS fault' }, BOSS);
+    db.seed('plant_units/' + ORG + '__NX011', unit('NX011', { sku: 'NX-500', orderId: 'stock-26', orderNo: null, customerId: null, inventoryStatus: 'available', custody: { status: 'received', shippedAt: '2026-09-20', receivedAt: '2026-09-25' } }));
+    await post({ action: 'replace', serial: 'NX004', replacementSerial: 'NX011' }, BOSS);
+    var p = await get({ serial: 'NX011' }, BOSS); assert.equal(p.boughtIn && p.boughtIn.orderNo, 'PRM-20260901-7A7A7A', 'the passport offers it through the order of the unit it replaced'); assert.deepEqual(p.unit.coverage, []);
+    var r = await post(Object.assign({}, TERMS, { serial: 'NX011', scope: 'order' }), BOSS); assert.deepEqual(r.applied, ['NX011'], 'only itself: it is not on that order');
+    var cov = (await get({ serial: 'NX011' })).unit.coverage; assert.deepEqual([cov[0].templateId, cov[0].status, cov[0].startDate], ['maker', 'active', '2026-09-20'], 'nothing was on file to inherit: its own dates');
+    await rejects(post(Object.assign({}, TERMS, { serial: 'NX004' }), BOSS), 409, /record the maker’s warranty on NX011/);
   });
   console.log('\n' + count + ' custody checks passed\n');
 })().catch(function (e) { console.error('FAIL', e); process.exit(1); });

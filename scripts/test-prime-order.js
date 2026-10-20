@@ -34,7 +34,7 @@ function safeOrg(v) { var s = String(v == null ? '' : v).trim().toLowerCase(); r
 F.mock('../api/_lib/admin', { handler: function (fn) { return fn; }, httpError: httpError, db: function () { return DB; }, safeOrg: safeOrg,
   canActInOrg: async function (c, org) { return c.staff || c.orgId === org; },
   FieldValue: function () { return { serverTimestamp: function () { return 'TS'; } }; } });
-var PO = require('../api/_lib/prime-order'), P = require('../api/_lib/logic-policy'), Q = require('../api/_lib/customer-quote');
+var PO = require('../api/_lib/prime-order'), P = require('../api/_lib/logic-policy'), Q = require('../api/_lib/customer-quote'); var Cu = require('../api/_lib/custody');
 
 var NOW = Date.parse('2026-10-17T15:00:00Z');
 var SELLER = 'sunwave.energy', MFR = 'cleancell.us';
@@ -127,6 +127,7 @@ async function run() {
   ok(o.orgId === SELLER && o.orgName === 'Sunwave Energy' && o.status === 'new' && o.source === 'prime' && o.pricing === null && !o.logic, 'new, unpriced, in the seller’s own office');
   eq(o.items, [{ sku: 'CC-SM-1000', name: 'CleanCell US Smart Module - 1 MW / 2 MWh (non-BABA)', kind: 'product', qty: 1, reference: true, mfr: 'CleanCell US' }], 'the line: the quoted battery as a reference product, marked with its maker, from the server’s list');
   eq(o.procure, { mfr: 'CleanCell US', mfrOrgId: null, sku: 'CC-SM-1000', model: 'Smart Module - 1 MW / 2 MWh (non-BABA)' }, 'procure: the office knows the battery is bought in');
+  eq(Cu.boughtIn(o, 'CC-SM-1000'), { sku: 'CC-SM-1000', mfr: 'CleanCell US', model: 'Smart Module - 1 MW / 2 MWh (non-BABA)' }, 'and custody’s ONE test reads it as bought in: its passport offers the maker’s warranty');
   ok(JSON.stringify(o).indexOf('FORGED') < 0 && JSON.stringify(o).indexOf('Evil') < 0 && JSON.stringify(o).indexOf('evil.example') < 0, 'nothing the quote record says about the battery’s maker or name reaches the order');
   eq(o.customer, { name: 'Dana Ruiz', email: 'dana@riverside.co', company: 'Riverside Cold Chain', phone: '312-555-0110', address: { line1: '1200 W Lake St', city: 'Chicago', state: 'IL', zip: '60607' }, notes: '' }, 'the buyer is the end client the rep typed');
   ok(o.customerId === 'acct1' && DB.data.get('omega_orgs/' + SELLER + '/customers/acct1').hasOrders === true, 'stamped on the account that admitted them; the account has orders');
@@ -170,6 +171,7 @@ async function run() {
   var pub = await PO.create(DB, { quote: quote(), now: NOW }), po1 = DB.data.get('orders/' + pub.orderId);
   eq(po1.items, [{ sku: 'CC-SM-1000', name: 'Sunwave Smart Module 1 MW / 2 MWh', kind: 'product', qty: 1 }], 'the seller’s published product is the line, under its own name, unmarked');
   ok(pub.reference === false && po1.procure === null, 'not a reference; the seller’s own product is not bought in');
+  ok(Cu.boughtIn(po1, 'CC-SM-1000') === null, 'custody agrees: its warranty is the catalog’s');
 
   /* ── a maker selling its own battery (Clean Cell's own workspace) ── */
   reset();
@@ -179,6 +181,7 @@ async function run() {
   var own = await PO.create(DB, { quote: quote({ orgId: MFR, unit: ccSm, seller: { name: 'Clean Cell', rep: { name: 'Casey', email: 'casey@cleancell.us' } } }), now: NOW });
   var oo = DB.data.get('orders/' + own.orderId);
   ok(oo.orgId === MFR && oo.items[0].reference === true && oo.procure === null, 'unpublished, it is a reference line on its own order, and not bought in');
+  ok(Cu.boughtIn(oo, oo.items[0].sku) === null, 'custody agrees: a maker’s own unpublished unit is never called bought in');
 
   /* ── the office prices and accepts it through the workflow's own step ── */
   reset();

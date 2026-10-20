@@ -217,7 +217,11 @@ warranty live):
   The Quote Desk's Customer quotes tab tracks every one.
 - **Track:** the ladder from saved to Omega Teleios
   (`api/_lib/teleios.js`), with the Quote Desk, the workspace's own Omega
-  Logic (the order) and the custody record one press away.
+  Logic (the order) and the custody record one press away. A battery the
+  workspace buys in from its maker reaches Omega Teleios once the office
+  records the maker's warranty on its unit passport; until then Track says
+  so and its Omega Teleios card opens that passport
+  (`docs/LOGISTICS-CUSTODY.md`, *The maker's warranty on a bought-in unit*).
 
 **The record, v2 (2026-10-17).** `omega-prime-project.js` is the pure
 half every reader shares: `units()` (above), `arrange()` (the unit long

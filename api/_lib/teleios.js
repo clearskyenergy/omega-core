@@ -42,7 +42,10 @@
    Complete means delivered, on site and under warranty: every unit standing
    for the order carries AT LEAST ONE warranty on file, and every one of
    them is live. A unit with none on file (a bought-in battery whose maker's
-   warranty this workspace never recorded) holds Teleios and says so.
+   warranty this workspace never recorded) holds Teleios and says so; the
+   office records the maker's warranty on that unit's passport in Omega
+   Logic (custody.js makerWarranty, read by the same coverage engine), and
+   `need` names the unit so Track opens its passport.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var S = require('./office-stage'), Pt = require('./portal'), C = require('./custody');
@@ -124,7 +127,7 @@ function serviceSay(u) {
 function ladder(o) {
   o = o || {};
   var q = o.quote || {}, order = o.order || null, units = shipping(o.units), products = Array.isArray(o.products) ? o.products : [];
-  var now = nowIso(o.now), acc = q.acceptance || {}, done = {}, note = {}, off = null;
+  var now = nowIso(o.now), acc = q.acceptance || {}, done = {}, note = {}, off = null, need = null;
   var mine = order ? (!!q.orgId && order.orgId === q.orgId) : true;
   var who = mine ? 'your' : str(o.office || o.manufacturer || (q.unit && q.unit.mfr) || 'the manufacturer', 80) + '’s';
 
@@ -183,11 +186,9 @@ function ladder(o) {
        one of them live. An empty list is NOT "every warranty live": a
        bought-in battery whose maker's warranty this workspace never
        recorded (its SKU is not in the catalog, or the product names no
-       coverage) holds Teleios and says so. ── */
+       coverage, and nothing is on the unit) holds Teleios and says where
+       to record it. ── */
     var by = {}; products.forEach(function (p) { if (p && p.sku) by[p.sku] = p; });
-    var bought = {};   /* SKUs ordered as bought-in reference lines → their maker */
-    (Array.isArray(order.items) ? order.items : []).forEach(function (it) { if (it && it.reference === true && it.sku) bought[it.sku] = str(it.mfr, 80) || bought[it.sku] || ''; });
-    if (order.procure && order.procure.sku && !Object.prototype.hasOwnProperty.call(bought, order.procure.sku)) bought[order.procure.sku] = str(order.procure.mfr, 80);
     var services = Array.isArray(order.items) && order.items.length > 0 && order.items.every(function (it) { return it && it.kind === 'service'; });
     var starts = [], waiting = null, missing = null, covered = n > 0;
     held.forEach(function (u) {
@@ -202,9 +203,11 @@ function ladder(o) {
     });
     var live = onsite && covered;
     if ((services && order.status === 'complete') || live) done.teleios = latest(starts) || done.onsite || iso(order.updatedAt) || true;
-    var sku = missing ? str(missing.sku, 100) : '', isBought = !!missing && Object.prototype.hasOwnProperty.call(bought, missing.sku);
-    note.teleios = missing ? 'No warranty on file for ' + (sku || 'this unit') + (isBought ? ': it is bought in' + (bought[missing.sku] ? ' from ' + bought[missing.sku] : '') + ', and the maker’s warranty is not on file in this workspace' : '')
+    var sku = missing ? str(missing.sku, 100) : '', bi = missing ? C.boughtIn(order, missing.sku) : null;
+    note.teleios = missing ? 'No warranty on file for ' + (sku || 'this unit') + (bi ? ': it is bought in' + (bi.mfr ? ' from ' + bi.mfr : '') + '; record the maker’s warranty on its unit passport in Omega Logic' : '')
       : waiting ? 'On site; the warranty is ' + str(waiting, 120) : 'On site; the warranty starts when the site is bound';
+    /* the unit to open: Track links its passport, where the warranty is recorded */
+    if (bi && missing.serial && !off) need = { kind: 'maker-warranty', serial: str(missing.serial, 100), sku: sku, mfr: bi.mfr || null };
 
     /* a unit the custody rules flag (lost, damaged, in transit too long…) is
        said on the step it holds back; the words are custody's own, no money */
@@ -229,7 +232,7 @@ function ladder(o) {
     return { key: s.key, label: s.label, phase: s.phase, state: state, at: at, note: n2 };
   });
   if (complete) steps[steps.length - 1].note = 'Delivered, on site and under warranty' + (note.service ? ' · ' + note.service : '');
-  return { steps: steps, current: complete ? 'teleios' : KEYS[Math.min(reached + 1, KEYS.length - 1)], complete: complete, off: off };
+  return { steps: steps, current: complete ? 'teleios' : KEYS[Math.min(reached + 1, KEYS.length - 1)], complete: complete, off: off, need: complete ? null : need };
 }
 
 /* The one line a list row shows (the Quote Desk, Today): where the quote IS

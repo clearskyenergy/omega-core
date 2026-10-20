@@ -852,6 +852,37 @@ function ok(name, cond, detail) { if (!cond) { fails++; console.log('FAIL ' + na
     ok('the office sees what the customer declared, confirms it, and the passport says who confirmed and when', rows.length === 1 && /CC418-26-44192/.test(rows[0]) && /Riverside yard · assigned to site/.test(rows[0]) && after === 0 && /confirmed at Riverside yard by demo@cleancell.us/.test(pass) && /confirm · assigned → assigned/.test(pass), [rows, after, pass.slice(0, 400)]);
     return { declared: rows.length, after: after };
   });
+  /* the maker's warranty on a bought-in unit (custody.js makerWarranty): an
+     order that buys a battery in from its maker (procure, as Omega Prime
+     writes it) and two of its units, put in the sample for this check only */
+  var MW_ORDER = { id: 'o_bought', orderNo: 'PRM-20261017-B0B0B0', status: 'in_fulfilment', createdAt: '2026-10-01T10:00:00Z', customerId: 'company_riverside', customer: { name: 'Dana Ops', company: 'Riverside Cold Chain', email: 'ops@riverside.example' },
+    items: [{ sku: 'NW-500', name: 'Northwind NW-500', kind: 'product', qty: 2, reference: true, mfr: 'Northwind Batteries' }], procure: { mfr: 'Northwind Batteries', mfrOrgId: null, sku: 'NW-500', model: 'NW-500' } };
+  var MW_UNITS = [{ serial: 'NW500-0001', sku: 'NW-500', shipUnit: true, at: 'ready', inventoryStatus: 'allocated', unitType: 'cabinet', orderId: 'o_bought', orderNo: MW_ORDER.orderNo, customerId: 'company_riverside', custody: { status: 'assigned', siteId: 'site_company-riverside-riverside-yard-93307', siteName: 'Riverside yard', shippedAt: '2026-10-05', receivedAt: '2026-10-08', assignedAt: '2026-10-08', customerId: 'company_riverside' } },
+    { serial: 'NW500-0002', sku: 'NW-500', shipUnit: true, at: 'ready', inventoryStatus: 'allocated', unitType: 'cabinet', orderId: 'o_bought', orderNo: MW_ORDER.orderNo, customerId: 'company_riverside', custody: { status: 'received', shippedAt: '2026-10-05', receivedAt: '2026-10-08', customerId: 'company_riverside' } }];
+  STATE.orders.push(MW_ORDER); MW_UNITS.forEach(function (u) { STATE.units.push(u); });
+  await check('custody-maker-warranty', '/logic-custody.html?org=cleancell.us&serial=NW500-0001', async function (p) {
+    await p.waitForSelector('#mw-h', { timeout: 8000 });
+    var before = await p.$eval('#unit', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var capHidden = await p.$eval('#mw-cap-l', function (e) { return getComputedStyle(e).display === 'none'; });
+    var box = await p.$eval('#mw-all', function (e) { var r = e.getBoundingClientRect(), l = e.parentNode.getBoundingClientRect(); return { w: Math.round(r.width), inline: r.top < l.top + 24 }; });
+    ok('a bought-in unit’s passport: bought in from its maker on its order, no warranty on file, the form to record it', /Bought in from Northwind Batteries on order PRM-20261017-B0B0B0/.test(before) && /not on file/.test(before) && /No coverage template/.test(before) && !!(await p.$('#mw-all:checked')) && capHidden && box.w < 40 && box.inline, [before.slice(0, 400), capHidden, box]);
+    await p.fill('#mw-months', '120'); await p.selectOption('#mw-trigger', 'earliest_of');
+    var capShown = await p.$eval('#mw-cap-l', function (e) { return getComputedStyle(e).display !== 'none'; });
+    await p.selectOption('#mw-trigger', 'ship'); await p.click('#mw-go'); await p.waitForTimeout(500);
+    var refused = await p.$eval('#status', function (e) { return { text: e.textContent, bad: e.className.indexOf('error') >= 0 }; });
+    ok('  without the maker’s document or confirmation it is refused, in words; the cap shows only for earliest-of', capShown && refused.bad && /never assumed/.test(refused.text) && !STATE.units[STATE.units.length - 2].custody.makerWarranty, refused);
+    await p.fill('#mw-ref', 'NW-W-0042, J. Moss by email'); await p.fill('#mw-doc', 'https://northwind.example/warranty/nw-500.pdf'); await p.click('#mw-go');
+    await p.waitForFunction(function () { var e = document.getElementById('mw-on'), s = document.getElementById('status'); return e && /on file/.test(e.textContent) && !/not on file/.test(e.textContent) && /on file for/.test(s.textContent); }, null, { timeout: 8000 }).catch(function () {});
+    var after = await p.$eval('#unit', function (e) { return e.textContent.replace(/\s+/g, ' ').trim(); });
+    var st = await p.$eval('#status', function (e) { return e.textContent; });
+    var doc = await p.$eval('#mw-on a', function (a) { return { href: a.getAttribute('href'), target: a.getAttribute('target'), rel: a.getAttribute('rel') }; });
+    ok('  recorded for both units on the order: the warranty is active at the site, the record says who, the history says what', /on file for 2 units/.test(st) && /maker’s warranty/.test(after) && /active/.test(after) && /2026-10-05/.test(after) && /2036-10-05/.test(after) && /Northwind Batteries · 120 months from shipment · NW-W-0042/.test(after) && /recorded by demo@cleancell.us/.test(after) && /maker warranty/.test(after) && doc.href === 'https://northwind.example/warranty/nw-500.pdf' && doc.rel === 'noopener' && /Correct the maker’s warranty/.test(after), [st, after.slice(0, 600), doc]);
+    var two = STATE.units.filter(function (u) { return u.orderId === 'o_bought'; }).map(function (u) { return u.custody.makerWarranty && u.custody.makerWarranty.termMonths; });
+    ok('  both units of its SKU on the order carry it', two.join(',') === '120,120', two);
+    return { st: st };
+  });
+  /* the sample goes back to what every later check counts */
+  STATE.orders.splice(STATE.orders.indexOf(MW_ORDER), 1); MW_UNITS.forEach(function (u) { STATE.units.splice(STATE.units.indexOf(u), 1); delete STATE.custodyEvents[u.serial]; });
   await check('register', '/logic-register.html?org=cleancell.us', async function (p) {
     await p.waitForTimeout(700);
     var nav = await p.$eval('.logic-nav a[aria-current="page"]', function (e) { return e.textContent.trim(); });

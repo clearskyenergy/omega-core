@@ -796,6 +796,24 @@ is not built.
   library, and written only as sites plus one `destination()` per unit by
   the four list actions on `api/my-sites.js` and `api/logic-custody.js` —
   the server recomputes the plan, the preview is the confirmation.
+  **A bought-in unit's warranty is the maker's, recorded on the unit**
+  (2026-10-17, Tommy approved the design: owners and administrators only,
+  the maker's word required): a battery the workspace buys in and has not
+  published (Omega Prime's `procure`; `custody.boughtIn(order, sku)` is the
+  ONE test, prime-order's own, so a `{reference:true}` line alone is a
+  maker's own unpublished unit, never bought in; `boughtInUnit` lets an RMA
+  replacement off another order through the unit it replaced) has no
+  catalog template, and publishing it would put it on the public
+  storefront. The office's
+  owner or administrator records `custody.makerWarranty` (terms, the
+  maker's HTTPS document or confirmation, who and when; never a status) on
+  the passport through `api/logic-custody.js` `maker-warranty`
+  (`custody.makerWarranty`, one unit or `scope: 'order'`, a custody event
+  each, one audit row); `templatesOf(product, unit)` reads it as one more
+  template (id `maker`) after the catalog's, so every coverage reader, Omega
+  Teleios included, sees it with no reader of its own; `replace` carries it
+  to the replacement. The customer sees the warranty and its document,
+  never the maker's confirmation.
   Design and what is not built: `docs/LOGISTICS-CUSTODY.md`.
 - **An order's freight plan is DERIVED, and Accept plans through the
   ledger's own planner.** `api/_lib/freight.js` (pure, ES5, bundled) reads
@@ -1507,7 +1525,11 @@ Site → Grid Atlas → Circuit → Load → Site Map → Proposal → Track:
 - **Track.** `api/_lib/teleios.js ladder()` (derived at read time from
   `office-stage`, `portal.milestoneOf`, custody/coverage; no price): Proposal
   (saved, sent, viewed, approved) → Omega Logic → Delivery → **Omega
-  Teleios** (on site, every warranty live). Its Omega Logic link is
+  Teleios** (on site, every warranty live: at least one on file for every
+  unit). A bought-in battery with none is held and named in `need {serial,
+  sku, mfr}`; Track's Omega Teleios card opens that unit's passport
+  (`/logic-custody.html?org=&serial=#passport`), where the office records
+  the maker's warranty (custody, above). Its Omega Logic link is
   `/omega-logic?org=<the workspace you are in>&order=<id>#orders`. The Quote
   Desk's third tab, Customer quotes (`rfq.html#customer`,
   `#customer-<id>`), lists them on `GET /api/customer-quote?list=1`; Today
