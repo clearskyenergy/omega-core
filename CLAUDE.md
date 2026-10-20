@@ -1635,9 +1635,13 @@ working; only what a person reads says Omega Maximus.
   book when that is enabled and a release version (`package-billing
   issuable`, `scripts/tests/tbookpin.js`), so a workspace on 2026-10 renews
   at its prices; staff move it onto 2026-11 by activating it there (until
-  then Maximus is not on its book). **Seed 2026-11
-  (`scripts/seed-pricebook.js --live --realm=…`, from this tree) and enable
-  it before deploying**; on QuickBooks, `module:maximus` via `qbo-items`.
+  then Maximus is not on its book). **Release it from `/admin/pricebook.html`**
+  after the deploy: Seed (the code's book, switched off, on the company of
+  the newest enabled release book, only with the dry run's hash, never over a
+  stored book: `pricebook-enable.seed`) then Enable; no admin key on a
+  laptop (`scripts/seed-pricebook.js` still works with one). Between deploy
+  and Enable a legacy add-on and a pay-now signup wait; on QuickBooks,
+  `module:maximus` via Bind.
   On a legacy plan the tool
   is Enterprise-level (a trial tries it, Standard and Deluxe buy the add-on,
   which switches `toolOverrides.siteplantrial` on).

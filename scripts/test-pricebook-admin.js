@@ -44,6 +44,34 @@ async function run() {
   ok(e.ok && db.data.get('pricebook/' + book.version).enabled === true, 'enable turns the book on');
   ok(Array.from(db.data.keys()).filter(function (k) { return /^omega_orgs\/clearsky-usa\.com\/admin_audit\//.test(k); }).length === 2, 'both actions audited');
   s = await api({ method: 'GET', caller: staff }, res); ok(s.enabled === true, 'status reads enabled');
+
+  /* Seeding the next release from the page (2026-11 added Omega Maximus,
+     2026-10-20): no admin key on a laptop. The stored release book before it
+     is enabled and frozen on the production company; the new one is written
+     switched off, on that company, only with the hash the dry run showed,
+     and never over a stored book. */
+  db = new F.DB(); db.serial = true;
+  var prior = B.proposed(); prior.version = '2026-10'; delete prior.modules.maximus;
+  prior.qbo.env = 'production'; prior.qbo.realmId = '9130357601798616'; prior.enabled = true; prior.frozen = true; prior.usedAt = 1;
+  B.validate(prior); db.seed('pricebook/2026-10', prior);
+  var newer = B.proposed(); newer.version = '2026-12-proposed'; newer.enabled = true; db.seed('pricebook/2026-12-proposed', newer);
+  await assert.rejects(function () { return api({ method: 'POST', caller: tenant, body: { action: 'seed', expectedHash: 'x' } }, res); }, /staff only/i); count++;
+  s = await api({ method: 'GET', caller: staff }, res);
+  ok(s.seeded === false && s.version === B.VERSION && s.enabled === false, 'status says the release book is not stored yet');
+  ok(s.seed.from === '2026-10' && s.seed.qboEnv === 'production' && s.seed.qboRealm === '9130357601798616', 'it follows the newest enabled release book and its company, never a -proposed one');
+  ok(s.seed.added.join() === 'maximus' && s.seed.repriced.length === 0, 'and says what it adds (Omega Maximus) and that nothing is repriced');
+  await assert.rejects(function () { return api({ method: 'POST', caller: staff, body: { action: 'seed', expectedHash: 'not-the-hash' } }, res); }, /dry run/); count++;
+  ok(!db.data.get('pricebook/' + B.VERSION), 'a wrong hash writes nothing');
+  var seeded = await api({ method: 'POST', caller: staff, body: { action: 'seed', expectedHash: s.seed.expectedHash } }, res);
+  var written = db.data.get('pricebook/' + B.VERSION);
+  ok(seeded.ok && seeded.seeded === true && written && written.enabled === false && written.frozen === false, 'seed writes the release book, switched off');
+  ok(written.qbo.env === 'production' && written.qbo.realmId === '9130357601798616' && written.modules.maximus.priceCents === 129900, 'on the production company, with Omega Maximus at $1,299');
+  ok(JSON.stringify(db.data.get('pricebook/2026-10')) === JSON.stringify(prior), 'the book before it is untouched');
+  var again = await api({ method: 'POST', caller: staff, body: { action: 'seed', expectedHash: s.seed.expectedHash } }, res);
+  ok(again.unchanged === true && JSON.stringify(db.data.get('pricebook/' + B.VERSION)) === JSON.stringify(written), 'seeding again changes nothing');
+  s = await api({ method: 'GET', caller: staff }, res);
+  ok(s.seeded === true && s.version === B.VERSION && s.enabled === false && s.bookRealm === '9130357601798616', 'then the page shows the stored book, ready to enable');
+  ok(Array.from(db.data.keys()).filter(function (k) { return /^omega_orgs\/clearsky-usa\.com\/admin_audit\//.test(k); }).length === 2, 'the seed is audited');
   console.log('Price book admin: ' + count + ' passed; no network.');
 }
 run().catch(function (e) { console.error(e); process.exitCode = 1; });

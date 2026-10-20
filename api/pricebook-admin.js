@@ -1,5 +1,6 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  * GET  /api/pricebook-admin                         status of the current book
+ * POST /api/pricebook-admin {action:'seed', expectedHash}  write the code's book (disabled)
  * POST /api/pricebook-admin {action:'bind'}         bind QuickBooks items by name
  * POST /api/pricebook-admin {action:'enable', expectedHash}
  * ClearSky staff only (a VERIFIED clearsky-usa.com token: caller.staff).
@@ -20,12 +21,13 @@ module.exports = A.handler(async function (req, res) {
   if (Object.keys(body).some(function (k) { return ['action', 'expectedHash'].indexOf(k) < 0; })) throw A.httpError(400, 'Unsupported field');
   var result;
   try {
-    if (body.action === 'bind') result = await E.bind(db);
+    if (body.action === 'seed') result = await E.seed(db, true, String(body.expectedHash || ''));
+    else if (body.action === 'bind') result = await E.bind(db);
     else if (body.action === 'enable') result = await E.enable(db, true, String(body.expectedHash || ''));
-    else throw A.httpError(400, 'action must be bind or enable');
+    else throw A.httpError(400, 'action must be seed, bind or enable');
   } catch (e) { if (!e.status || e.status >= 500) e.status = 409; throw e; }
   await db.collection('omega_orgs').doc('clearsky-usa.com').collection('admin_audit').add({
     action: 'pricebook-' + body.action, version: result.version, by: caller.email || caller.uid, at: Date.now(),
-    now: body.action === 'enable' ? { enabled: true } : { items: Object.keys(result.items || {}).length } });
+    now: body.action === 'enable' ? { enabled: true } : body.action === 'seed' ? { seeded: !!result.seeded, from: result.from || null, added: result.added || [] } : { items: Object.keys(result.items || {}).length } });
   return Object.assign({ ok: true }, result);
 });
