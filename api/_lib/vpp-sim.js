@@ -631,7 +631,7 @@ var PROGRAMS = [
   { id: 'ca.elrp', name: 'Emergency Load Reduction Program (ELRP)', markets: ['CAISO'], group: 'ca-dr',
     segments: SEGMENTS, kind: 'event', perKwh: 2.00, events: 12, hours: 4, win: [16, 21],
     bank: { paidBy: 'the utility, under the CPUC\u2019s ELRP budget', vehicle: 'enrolment through an A.6 VPP aggregator', tenor: 'programme year; paid per called event' },
-    ref: 'CPUC ELRP pays $2/kWh of incremental reduction in called events (4–9 pm, May–October, at most 60 called hours a year); residential batteries enrol through an A.6 VPP aggregator. The pilot is authorized through 2027 (D.23-12-005). Event count varies with the summer — 12 four-hour events is a planning year.' },
+    ref: 'CPUC ELRP pays $2/kWh of incremental reduction in called events (4–9 pm, May–October, at most 60 called hours a year); residential batteries enrol through an A.6 VPP aggregator. The pilot is authorized through 2027 (D.23-12-005); a proposed decision in R.25-09-004 (filed 25 September 2026, not yet voted) would carry only the VPP and EV-aggregator sub-groups through 2029 and close the general non-residential sub-group after 2027 outside SDG&E — the rate is unchanged. Event count varies with the summer — 12 four-hour events is a planning year.' },
   { id: 'ca.dsgs', exportOk: true, name: 'Demand Side Grid Support (DSGS) Option 3', markets: ['CAISO'], group: 'ca-dr',
     segments: ['residential', 'commercial'], kind: 'capacity', perKwYear: 62.10, minHours: 2,
     bank: { paidBy: 'the CEC (state programme funds)', vehicle: 'DSGS aggregator agreement', tenor: 'summer season (May\u2013Oct), re-enrolled yearly' },
