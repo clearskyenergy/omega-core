@@ -1,0 +1,81 @@
+{
+  "ready": true,
+  "score": 60,
+  "sourceKw": 93,
+  "loadKw": 0,
+  "sourceA": 117.7,
+  "interconnect": {
+    "method": "100",
+    "ok": true,
+    "cite": "NEC 2023 705.12(B)(1)",
+    "sumA": 547
+  },
+  "transformer": null,
+  "circuits": [
+    {
+      "id": "src-pv-1",
+      "role": "pv",
+      "kw": 93,
+      "volts": 480,
+      "phases": 3,
+      "currentA": 117.7,
+      "designA": 147.2,
+      "ocpdA": 150,
+      "spec": "1/0 AWG Cu",
+      "egc": "6",
+      "lengthFt": 44,
+      "dropPct": 0.2,
+      "cite": "NEC 2023 690.8(A), 690.8(B)(1), 690.9",
+      "error": ""
+    }
+  ],
+  "checks": [
+    {
+      "id": "content",
+      "ok": true,
+      "severity": "info",
+      "cite": ""
+    },
+    {
+      "id": "vd-src-pv-1",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 210.19(A)(1) Informational Note No. 4; 215.2(A)(1) Informational Note No. 2"
+    },
+    {
+      "id": "nec705",
+      "ok": true,
+      "severity": "info",
+      "cite": "NEC 2023 705.12(B)(1)"
+    },
+    {
+      "id": "strings",
+      "ok": false,
+      "severity": "review",
+      "cite": "NEC 2023 690.7, 690.8(A)(1)(a)"
+    },
+    {
+      "id": "fire-access",
+      "ok": false,
+      "severity": "review",
+      "cite": "IFC 503"
+    },
+    {
+      "id": "seal",
+      "ok": false,
+      "severity": "info",
+      "cite": ""
+    }
+  ],
+  "spacing": {
+    "minUnitFt": null,
+    "minLineFt": null,
+    "minBuildingFt": null
+  },
+  "placardCites": [
+    "NEC 2023 705.10",
+    "NEC 2023 690.56(B)",
+    "NEC 2023 690.56(C)",
+    "NEC 2023 110.16; NFPA 70E"
+  ]
+}

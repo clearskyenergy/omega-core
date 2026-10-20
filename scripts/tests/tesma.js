@@ -194,5 +194,28 @@ ok(/function render\(\)\{ syncCivil\(\); syncDesign\(\); syncPermit\(\);/.test(h
 ok(/form\.designFlat && l\.row==='design' && !l\.pinned/.test(html), 'buildModel prices design for the form being written');
 ok(/\(LINES\[i\]\.row==='permit'\|\|LINES\[i\]\.row==='design'\) && \(field==='mat'\|\|field==='lab'\)\) LINES\[i\]\.pinned=true/.test(html), 'a typed-over design figure is pinned');
 
+/* ── 5. the page defines designRate itself ────────────────────────────── */
+/* buildModel calls designRate synchronously during an export, where this
+   sandbox cannot inject the server's copy. The 2026-10-13 server move took
+   the definition off the page and left the call, so every Eversource
+   export threw "designRate is not defined" (a Concord Energy export,
+   2026-10-18). Extract the page's own pair and pin them to the server's
+   numbers, overrides included. */
+console.log('5. the page\u2019s own designRate, pinned to the server\u2019s');
+ok(/designRate\(form, DATA\.plugs, _designCard\(\)\)/.test(html), 'buildModel hands designRate the override card');
+const pageCtx = { DATA:{}, EDITOR_FLEET:null, console, RATE_CARD:{}, RATE_OVERRIDES:{} };
+vm.createContext(pageCtx);
+vm.runInContext(grab('num') + '\n' + grab('r2') + '\n' + grab('designRate') + '\n' + grab('_designCard'), pageCtx);
+ok(typeof pageCtx.designRate === 'function', 'the page defines designRate itself');
+function sameRate(a, b){ return !!a && !!b && a.qty === b.qty && a.unit === b.unit && a.mat === b.mat && a.lab === b.lab && a.note === b.note; }
+ok(sameRate(pageCtx.designRate(MA, 10, pageCtx._designCard()), P.designRate(MA, 10, {})), 'page = server: Eversource MA flat');
+ok(sameRate(pageCtx.designRate(CT, 10, pageCtx._designCard()), P.designRate(CT, 10, {})), 'page = server: per port elsewhere');
+pageCtx.RATE_OVERRIDES = { _designFlat:{ lab:2500 } };
+ok(sameRate(pageCtx.designRate(MA, 10, pageCtx._designCard()), P.designRate(MA, 10, { _designFlat:2500 })), 'page = server: the flat override rides on the card');
+pageCtx.RATE_OVERRIDES = { _design:{ lab:1200 } };
+ok(sameRate(pageCtx.designRate(CT, 4, pageCtx._designCard()), P.designRate(CT, 4, { _designPerPort:1200 })), 'page = server: the per-port override rides on the card');
+pageCtx.RATE_OVERRIDES = {};
+ok(pageCtx.designRate(CT, 0, pageCtx._designCard()) === null, 'page: no ports, no per-port design line');
+
 console.log(fails ? '\n' + fails + ' FAILED' : '\nall passed');
 process.exit(fails ? 1 : 0);

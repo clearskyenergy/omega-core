@@ -214,7 +214,11 @@ warranty live):
   total), terms; previewed, printed (with the site plan on satellite
   imagery) and sent by email or link from the seller's own letterhead
   (`api/customer-quote.js`, `omega-quote-deck.js`, the public `quote.html`).
-  The Quote Desk's Customer quotes tab tracks every one.
+  The Quote Desk's Customer quotes tab tracks every one. On the rep's side
+  of the step (never on the deck), main's **Send to the OEM** opens the
+  maker's purchase order through `POST /api/rfq`, as Site Map's BOM does:
+  this address, the unit by its maker's SKU, the Run's lines and its
+  estimate, no customer.
 - **Track:** the ladder from saved to Omega Teleios
   (`api/_lib/teleios.js`), with the Quote Desk, the workspace's own Omega
   Logic (the order) and the custody record one press away.

@@ -732,6 +732,9 @@ button{font:inherit;color:inherit}
        project type, org the project's workspace (Omega Logic's link; the
        safe id, never a raw value). */
     var pid = qp('project'); if (pid && /^[A-Za-z0-9_-]{1,64}$/.test(pid)) S.editorProjectId = pid;
+    /* main (Editor v2): ?editor=v2 opens the project in /editor-v2, as a
+       record marked editor: 'v2' does (projects.html openProject) */
+    S.editorVersion = qp('editor') === 'v2' ? 'v2' : 'classic';
     var lat = parseFloat(qp('lat')), lng = parseFloat(qp('lng'));
     if (q && isFinite(lat) && isFinite(lng) && Math.abs(lat) <= 90 && Math.abs(lng) <= 180) S.handed = { addr: q.replace(/^\s+|\s+$/g, ''), lat: lat, lng: lng };
     var org = PP.orgId(qp('org')); if (org) S.linkOrg = org;
@@ -1253,6 +1256,7 @@ button{font:inherit;color:inherit}
       S.type = T; UNITS = list; paintTypes();
       er.hidden = true;
       S.projectId = id; S.orgId = d.orgId || wsOrg();
+      if (d.editor === 'v2') S.editorVersion = 'v2';
       S.addr = R.addr; S.lat = R.lat; S.lng = R.lng; S.geoSrc = R.geoSrc; S.geoLabel = R.geoLabel; S.zip = R.zip;
       if (R.unit) {
         var hit = null; UNITS.forEach(function (u) { if (u.key === R.unit.key) hit = u; });
@@ -1424,7 +1428,10 @@ button{font:inherit;color:inherit}
   };
   $('#ed-quote').onclick = function () { if (this.classList.contains('dis')) return; show('quote'); };
 
-  function editorHref() { return S.projectId ? '/editor.html?id=' + encodeURIComponent(S.projectId) + (S.unitAt && bat() ? '' : '&from=prime') : '/editor?addr=' + encodeURIComponent(S.addr); }
+  function editorHref() {
+    if (S.projectId && S.editorVersion === 'v2') return '/editor-v2?id=' + encodeURIComponent(S.projectId) + '&from=prime';
+    return S.projectId ? '/editor.html?id=' + encodeURIComponent(S.projectId) + (S.unitAt && bat() ? '' : '&from=prime') : '/editor?addr=' + encodeURIComponent(S.addr);
+  }
   function side() {
     if (!$('#edSide')) return;
     var u = servingUtility(), gv = S.grid && S.grid.verdict, gc = S.grid && S.grid.circuit;
@@ -1539,7 +1546,7 @@ button{font:inherit;color:inherit}
      link or Open named); list: every proposal on the site, newest first;
      tr: another one Track is drawing ({quote, ladder}), else null; want: a
      quote a link named (&quote=), taken when the list is read */
-  var QS = { saved: null, view: null, ladder: null, loadedFor: '', loading: false, busy: false, sendId: null, sendKey: '', link: '', mail: '', isAdmin: null, coOpen: false, savedHash: '', err: '',
+  var QS = { saved: null, view: null, ladder: null, loadedFor: '', loading: false, busy: false, sendId: null, sendKey: '', link: '', mail: '', isAdmin: null, coOpen: false, savedHash: '', err: '', oem: null,
     list: [], tr: null, want: '', logic: null };
   var D = window.OmegaQuoteDeck || null;
   function injectDeckCss() {
@@ -1658,10 +1665,57 @@ button{font:inherit;color:inherit}
     $('#pqDeck').innerHTML = '<div class="ph" id="pqOther"><b>Quote required.</b> The ' + esc(UNIT.name) + ' (' + esc(UNIT.note) + ') is sized in Site Map. ' +
       'A Prime proposal prices a battery installation on the OMEGA cost model, and this unit is not one: size it and price it in Site Map.</div>';
     $('#pqRep').innerHTML = '<div class="pq-box"><h6>Sized in Site Map</h6><div class="sub">Quote required for the ' + esc(UNIT.short) + '.</div>' +
-      (S.projectId ? '<div class="pq-acts"><button class="primary" id="pq-editor" type="button">Open the project in Site Map</button></div>' : '<div class="sub">Sign in and start the site to keep it as a project.</div>') + '</div>';
+      (S.projectId ? '<div class="pq-acts"><button class="primary" id="pq-editor" type="button">Open the project in Site Map</button></div>' : '<div class="sub">Sign in and start the site to keep it as a project.</div>') + '</div>' + oemBox();
     status('');
     var b = $('#pq-editor'); if (b) b.onclick = function () { toEditor(false); };
+    wireOem();
     guide();
+  }
+  /* Send to the OEM (main, the design order): one step from this site to a
+     purchase order in the maker's own workspace — the same POST /api/rfq the
+     Site Map BOM sends. The unit is the order line, by its maker's SKU; the
+     Run's lines ride along and stay off the order until a catalog publishes
+     them. No customer is on it, so it sits on the rep's side of the
+     Proposal step, beside the proposal the customer gets. */
+  function oemBox() {
+    var o = QS.oem || {}, mk = UNIT.mfr || 'the maker';
+    return '<div class="pq-box" id="pqOem"><h6>The unit from ' + esc(mk) + '</h6>' +
+      '<div class="sub">Send to the OEM opens the purchase order in ' + esc(mk) + '’s workspace with this address, the ' + esc(UNIT.short) + (S.run ? ', the Run’s lines and its estimate' : '') + '. No customer is on it.</div>' +
+      '<div class="pq-acts"><button class="ghost" id="q-oem" type="button"' + (o.busy ? ' aria-disabled="true"' : '') + '>' + (o.busy ? 'Sending…' : 'Send to the OEM') + '</button></div>' +
+      '<div class="sub" id="qOemMsg">' + (o.html || '') + '</div></div>';
+  }
+  function wireOem() { var b = $('#q-oem'); if (b) b.onclick = function () { if (!this.getAttribute('aria-disabled')) sendToOem(); }; }
+  function redrawOem() {
+    var el = $('#pqOem'); if (!el) return;
+    var t = document.createElement('div'); t.innerHTML = oemBox();
+    el.parentNode.replaceChild(t.firstChild, el); wireOem();
+  }
+  function sendToOem() {
+    function done(html) { QS.oem = { busy: false, html: html }; redrawOem(); }
+    function say(t) { done(esc(t)); }
+    var u = null; try { u = firebase.auth().currentUser; } catch (e) {}
+    if (!u) { say('Sign in first: the purchase order has to carry who it is from.'); return; }
+    QS.oem = { busy: true, html: '' }; redrawOem();
+    ensureProject().then(function (id) { return flushSave().then(function () { return id; }); }).then(function (id) {
+      var bom = [{ sku: UNIT.sku || UNIT.key || '', description: UNIT.name || '', qty: 1, unit: 'ea', manufacturer: UNIT.mfr || '' }];
+      ((S.run && S.run.divisions) || []).forEach(function (d) {
+        if (d && d.base > 0) bom.push({ sku: '', description: d.name || '', qty: 1, unit: 'lot', manufacturer: '' });
+      });
+      var body = { projectId: id, address: S.addr || '', zip: S.zip || PP.zipOf(S.geoLabel) || PP.zipOf(S.addr) || '',
+        toOrgIds: [], bom: bom, estimateUsd: S.run && S.run.totalUsd != null ? S.run.totalUsd : null };
+      return u.getIdToken().then(function (tok) {
+        return fetch('/api/rfq', { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + tok }, body: JSON.stringify(body) });
+      }).then(function (r) { return r.json().then(function (j) { return { ok: r.ok, j: j || {} }; }, function () { return { ok: false, j: {} }; }); });
+    }).then(function (res) {
+      var j = res.j, orders = j.orders || [];
+      if (!res.ok) { say(j.detail || j.error || 'The purchase order could not be opened.'); return; }
+      if (!orders.length) { say('Nothing on this quote is a published product yet, so no purchase order was opened.' + (j.skipped ? ' ' + j.skipped + '.' : '')); return; }
+      done(orders.map(function (o) {
+        var label = esc(o.orderNo || 'The order');
+        if (o.sameWorkspace && /^\/[^\s"'<>]*$/.test(String(o.href || ''))) return '<a href="' + esc(o.href) + '">' + label + '</a> is open in your workspace.';
+        return label + ' opened in ' + esc(o.orgName || 'the OEM') + '’s workspace.';
+      }).join(' '));
+    }, function (e) { say((e && e.message) || 'Save the site first, then send it.'); });
   }
   /* the workspace's owner or administrator may give it its company details */
   function checkAdmin() {
@@ -1732,7 +1786,7 @@ button{font:inherit;color:inherit}
   var STATUS_WORDS = { draft: 'Draft · not sent', sent: 'Sent · not opened yet', viewed: 'Viewed by the customer', approved: 'Approved', declined: 'Declined', expired: 'Expired', withdrawn: 'Withdrawn' };
   function drawRep() {
     var v = QS.view, q = QS.saved, h = '';
-    if (!v) { $('#pqRep').innerHTML = '<div class="pq-box"><h6>For you only</h6><div class="sub">The cost behind the price and your margin show here once it is previewed. They never print on the proposal.</div></div>' + listHtml('pq'); wireList('#pqList'); return; }
+    if (!v) { $('#pqRep').innerHTML = '<div class="pq-box"><h6>For you only</h6><div class="sub">The cost behind the price and your margin show here once it is previewed. They never print on the proposal.</div></div>' + oemBox() + listHtml('pq'); wireList('#pqList'); wireOem(); return; }
     var i = v.internal || {}, c = i.cost || {};
     h += '<div class="pq-box"><h6>For you only · never on the proposal</h6>' +
       '<div class="sub">Price to the customer</div><div class="k" id="pqSell">' + esc(i.sell || (v.price && v.price.total) || '—') + '</div>' +
@@ -1762,10 +1816,11 @@ button{font:inherit;color:inherit}
       h += '<div class="pq-acts"><a class="ghost" id="pq-desk" href="/rfq.html#customer-' + encodeURIComponent(q.id) + '">Quote Desk</a><button class="primary dark" id="pq-track">Track →</button></div>';
     }
     h += '</div>';
+    h += oemBox();
     h += listHtml('pq');
     h += sellerBox(v);
     $('#pqRep').innerHTML = h;
-    wireList('#pqList');
+    wireList('#pqList'); wireOem();
     var b;
     if ((b = $('#pq-resave'))) b.onclick = save;
     /* #pq-email is the customer's address field; the send button is its own id */
