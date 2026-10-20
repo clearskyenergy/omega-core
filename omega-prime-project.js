@@ -36,6 +36,9 @@
      runInput()     what /api/price-site is sent, computed ONE way for the
                     page and the server's quote
      zipOf(), peaks()   reading an address and a bill's monthly peaks
+     subName()      a substation's name as shown: HIFLD's 'UNKNOWN307104'
+                    reads "Unnamed substation (HIFLD 307104)"; the record
+                    keeps the raw name
      primeType()    an editor project-type word folded onto Prime's five
                     (bess, ev, solar, compute, microgrid), main #348
      forType()      the unit list for a project type: the battery list
@@ -699,6 +702,20 @@
     return { name: str(s.name), kv: fin(s.kv), minkv: fin(s.minkv), owner: str(s.owner), status: str(s.status),
       lines: fin(s.lines), lat: fin(s.lat), lng: fin(s.lng), mi: fin(s.mi != null ? s.mi : s.miles) };
   }
+  /* A substation's name as Prime shows it. HIFLD names about half its
+     records by a number alone (38,479 'UNKNOWN…' of 75,328 on 2026-10-20,
+     the nearest to 29 W Main St, Mesa among them): 'UNKNOWN307104' is an
+     unnamed substation, 'TAP302679' an unnamed tap on a line (HIFLD's TYPE
+     says TAP). They read as words with HIFLD's number kept; a real name,
+     even one that starts the same way ('TAPIA 1102'), is shown as it is.
+     Display only: the record keeps the name HIFLD gave (subOf). */
+  function subName(name) {
+    var s = str(name).replace(/^\s+|\s+$/g, ''), m = /^UNKNOWN\s*(\d*)$/i.exec(s);
+    if (m) return 'Unnamed substation' + (m[1] ? ' (HIFLD ' + m[1] + ')' : '');
+    m = /^TAP\s*(\d*)$/i.exec(s);
+    if (m) return 'Unnamed tap' + (m[1] ? ' (HIFLD ' + m[1] + ')' : '');
+    return s;
+  }
   function siteOf(st) {
     var label = str(st.geoLabel || st.addr);
     return { lat: fin(st.lat), lng: fin(st.lng), label: label, src: str(st.geoSrc),
@@ -886,7 +903,7 @@
 
   var P = { HERO: HERO, STEPS: STEPS, UNIT_KEYS: UNIT_KEYS, R60: R60, XXL: XXL,
     fromEntry: fromEntry, units: units, snapshot: snapshot, repFootprint: repFootprint, isPlaceholder: isPlaceholder,
-    bessEntry: bessEntry, zipOf: zipOf, peaks: peaks,
+    bessEntry: bessEntry, zipOf: zipOf, peaks: peaks, subName: subName,
     primeType: primeType, forType: forType, screenable: screenable, typeOf: typeOf, orgId: orgId, linkQuery: linkQuery,
     FOOTPRINTS: FOOTPRINTS, CONTAINER_20: CONTAINER_20, ftToDeg: ftToDeg, pathFt: pathFt, arrange: arrange, feed: feed, conduitPath: conduitPath, area: area,
     hash: hash, fnv1a: fnv1a, layout: layout, upgrade: upgrade,

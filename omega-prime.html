@@ -19,7 +19,9 @@
   Nothing on this page is sample data:
     • the address is geocoded (Census, then OpenStreetMap);
     • substations and transmission come from the same public services Grid
-      Atlas reads (EIA/HIFLD/FEMA mirrors, first that answers);
+      Atlas reads (EIA/HIFLD/FEMA mirrors, first that answers); HIFLD's
+      unnamed records ('UNKNOWN307104', 'TAP302679') are shown in words with
+      their number (PP.subName), the record keeping the raw name;
     • the serving utility, its PUBLISHED hosting capacity and the verdict
       are the server's (POST /api/hosting-capacity through
       omega-grid-verdict.js GV.hosting): the utility is named from the
@@ -947,7 +949,7 @@ button{font:inherit;color:inherit}
     gaSubs.clearLayers();
     subRows.forEach(function (s, k) {
       var m = L.marker([s.lat, s.lng], { icon: L.divIcon({ className: '', html: '<div class="subicon' + (k === 0 ? ' near pulse' : '') + '"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) });
-      m.bindTooltip(esc(s.name), { permanent: k < 3, direction: 'right', className: 'lbl', offset: [10, 0] });
+      m.bindTooltip(esc(PP.subName(s.name)), { permanent: k < 3, direction: 'right', className: 'lbl', offset: [10, 0] });
       m.on('click', function () { openSub(s, k === 0); });
       gaSubs.addLayer(m);
     });
@@ -977,8 +979,8 @@ button{font:inherit;color:inherit}
   function drawInsp() {
     if (!inspSub) return;
     var s = inspSub.s, kv = s.kv && s.kv > 0 ? s.kv + (s.minkv && s.minkv > 0 && s.minkv !== s.kv ? ' / ' + s.minkv : '') + ' kV' : 'not published';
-    $('#gaInsp').innerHTML = '<h5>' + esc(s.name) + '</h5><div class="sub">Substation' + (s.owner ? ' · ' + esc(s.owner) : '') + (inspSub.nearest ? ' · nearest to the site' : '') + '</div>' +
-      '<dl class="kv"><dt>Voltage</dt><dd>' + esc(kv) + '</dd><dt>Distance to site</dt><dd>' + s.mi.toFixed(2) + ' mi</dd><dt>Lines in</dt><dd>' + (s.lines || '—') + '</dd><dt>Status</dt><dd>' + esc(s.status || '—') + '</dd>' +
+    $('#gaInsp').innerHTML = '<h5>' + esc(PP.subName(s.name)) + '</h5><div class="sub">Substation' + (s.owner ? ' · ' + esc(s.owner) : '') + (inspSub.nearest ? ' · nearest to the site' : '') + '</div>' +
+      '<dl class="kv"><dt>Voltage</dt><dd>' + esc(kv) + '</dd><dt>Distance to site</dt><dd>' + s.mi.toFixed(2) + ' mi</dd><dt>Lines in</dt><dd>' + (s.lines > 0 ? s.lines : '—') + '</dd><dt>Status</dt><dd>' + esc(s.status || '—') + '</dd>' +
       '<dt>Serving utility</dt><dd id="gaInspUtil">' + esc(utilText()) + '</dd></dl>' +
       '<span class="chip">' + s.mi.toFixed(1) + ' mi · ' + esc(kv) + '</span><br>' +
       '<button class="nextbtn" id="ga-go">Check the circuit →</button>';
@@ -1055,7 +1057,7 @@ button{font:inherit;color:inherit}
       sfMap = L.map('sfMap').setView([S.lat, S.lng], 17); esriImagery().addTo(sfMap);
       L.marker([S.lat, S.lng], { icon: siteIcon() }).addTo(sfMap).bindTooltip('Site', { permanent: true, direction: 'top', className: 'lbl', offset: [0, -10] });
       if (S.sub && S.sub.lat != null) {
-        L.marker([S.sub.lat, S.sub.lng], { icon: L.divIcon({ className: '', html: '<div class="subicon near"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(sfMap).bindTooltip(esc(S.sub.name), { permanent: true, direction: 'right', className: 'lbl', offset: [10, 0] });
+        L.marker([S.sub.lat, S.sub.lng], { icon: L.divIcon({ className: '', html: '<div class="subicon near"></div>', iconSize: [18, 18], iconAnchor: [9, 9] }) }).addTo(sfMap).bindTooltip(esc(PP.subName(S.sub.name)), { permanent: true, direction: 'right', className: 'lbl', offset: [10, 0] });
         L.polyline([[S.lat, S.lng], [S.sub.lat, S.sub.lng]], { color: '#f6c36a', weight: 1.5, dashArray: '4 4' }).addTo(sfMap);
       }
     }
@@ -1099,7 +1101,7 @@ button{font:inherit;color:inherit}
   function kw(v) { return v == null || !isFinite(v) ? '—' : fmt(v) + ' kW'; }
   function subBlock() {
     if (!S.sub) return '';
-    return '<h6>Nearest substation (Grid Atlas)</h6><dl class="lkv"><dt>' + esc(S.sub.name) + '</dt><dd>' + (S.sub.kv ? esc(S.sub.kv) + ' kV · ' : '') + (S.sub.mi != null ? S.sub.mi.toFixed(1) + ' mi' : '') + '</dd></dl>';
+    return '<h6>Nearest substation (Grid Atlas)</h6><dl class="lkv"><dt>' + esc(PP.subName(S.sub.name)) + '</dt><dd>' + (S.sub.kv > 0 ? esc(S.sub.kv) + ' kV · ' : '') + (S.sub.mi != null ? S.sub.mi.toFixed(1) + ' mi' : '') + '</dd></dl>';
   }
   /* Who may serve this point and what each publishes: the server's list
      (the territory's candidates, each with the registry's words, the route
@@ -1135,7 +1137,7 @@ button{font:inherit;color:inherit}
     function row(k, v) { if (v !== '' && v != null) rows.push('<dt>' + esc(k) + '</dt><dd>' + esc(v) + '</dd>'); }
     if (c) {
       row('Circuit', c.id + (c.name && c.name !== c.id ? ' · ' + c.name : ''));
-      row('Substation', c.substation || (S.sub ? S.sub.name + ' (nearest, Grid Atlas)' : ''));
+      row('Substation', c.substation || (S.sub ? PP.subName(S.sub.name) + ' (nearest, Grid Atlas)' : ''));
       row('Voltage', c.kv != null ? c.kv + ' kV' : '');
       row('Upstream transformer', up.transformerKw != null ? kw(up.transformerKw) : '');
       row('Upstream bank', up.bankKw != null ? kw(up.bankKw) : '');
@@ -1567,7 +1569,7 @@ button{font:inherit;color:inherit}
       (gv ? '<tr><td>Grid verdict</td><td>' + esc(gv.label) + '</td></tr>' : '') +
       (S.load && S.load.demandRate != null ? '<tr><td>Demand rate</td><td>$' + S.load.demandRate.toFixed(2) + ' / kW-mo</td></tr>' : '') +
       (S.load && S.load.peakKw ? '<tr><td>Peak demand</td><td>' + fmt(S.load.peakKw) + ' kW</td></tr>' : '') +
-      (S.sub ? '<tr><td>Nearest substation</td><td>' + esc(S.sub.name) + (S.sub.mi != null ? ' · ' + S.sub.mi.toFixed(1) + ' mi' : '') + '</td></tr>' : '') +
+      (S.sub ? '<tr><td>Nearest substation</td><td>' + esc(PP.subName(S.sub.name)) + (S.sub.mi != null ? ' · ' + S.sub.mi.toFixed(1) + ' mi' : '') + '</td></tr>' : '') +
       (S.area ? '<tr><td>' + areaWord() + '</td><td>' + fmt(S.area.wFt) + ' × ' + fmt(S.area.hFt) + ' ft · ' + fmt(S.area.sqft) + ' sq ft</td></tr>' : '');
     var L0 = S.unitAt ? layoutNow() : null;
     if (L0 && L0.conduitFt) h += '<tr><td>Conduit</td><td>' + fmt(L0.conduitFt) + ' ft</td></tr>';
