@@ -83,6 +83,11 @@
   #app[data-section="funding"] .group[data-stage~="funding"] { display: flex; }
   .quiet-block { border: 1px solid var(--hair); border-radius: 8px; padding: 10px; margin: 0 0 10px; background: var(--panel); }
   .quiet-block h3 { margin: 0 0 6px; font-size: 13px; }
+  #run-head .run-stale { color: var(--danger); font-weight: 650; }
+  #run-head .run-note { color: var(--muted); }
+  #run-head .btn { margin-top: 4px; }
+  .fold-sub { margin: 4px 0 6px; font-size: 12px; }
+  .fold-sub summary { cursor: pointer; color: var(--muted); }
   .quiet-block p, #outputs-body > p, #funding-body p { margin: 0 0 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
   .score-num { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
   .stream { font-size: 12px; margin: 0 0 6px; }
@@ -581,6 +586,7 @@
 <script src="omega-editor-v2-outputs.js"></script>
 <script src="omega-editor-v2-workspace.js"></script>
 <script src="omega-editor-v2-solar.js"></script>
+<script src="omega-editor-v2-run.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>
 </body>

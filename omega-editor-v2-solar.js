@@ -207,22 +207,43 @@
     $('solar-body').textContent = rep.text || '';
     $('solar-detail').hidden = false;
     $('solar-run').textContent = 'Run again';
-    if (ctx.setMeta) {
-      ctx.setMeta({
-        solarDesign: {
-          version: rep.version,
-          kwDc: s.kwDc,
-          kwAc: s.kwAc,
-          acKwh: s.acKwh,
-          specificYield: s.specificYield,
-          p50: s.p50,
-          p90: s.p90,
-          perWdc: rep.pricing ? rep.pricing.perWdc : null,
-          at: new Date().toISOString()
-        }
-      });
-    }
+    if (ctx.setMeta) ctx.setMeta({ solarDesign: metaOf(rep) });
     if (ctx.setStatus) ctx.setStatus(s.kwDc + ' kW-DC · ' + Math.round(s.specificYield) + ' kWh/kW · P90 ' + Math.round(s.p90).toLocaleString() + ' kWh.');
+  }
+
+  /* What the project keeps from a run: the year, the yield and the price,
+     never the 8,760 or the module corners. */
+  function metaOf(rep) {
+    var s = (rep && rep.summary) || {};
+    return {
+      version: rep && rep.version || null,
+      kwDc: s.kwDc,
+      kwAc: s.kwAc,
+      acKwh: s.acKwh,
+      specificYield: s.specificYield,
+      p50: s.p50,
+      p90: s.p90,
+      perWdc: rep && rep.pricing ? rep.pricing.perWdc : null,
+      at: new Date().toISOString()
+    };
+  }
+
+  /* Run's road: the same request with the default module and inverter, no
+     dialog. Resolves { ok, meta, error } and never rejects. */
+  function design(doc) {
+    var body = payload(doc);
+    delete body.assumedHeight;
+    if (body.lat == null || body.lon == null) return Promise.resolve({ ok: false, error: 'Set the site point on the map to run the solar design.' });
+    if (!body.boundary || body.boundary.length < 3) return Promise.resolve({ ok: false, error: 'Draw a closed boundary to run the solar design.' });
+    return ask(body).then(function (res) {
+      if (!res.ok || !res.body || res.body.ok === false) {
+        var msg = (res.body && (res.body.reason || res.body.error)) || 'The solar design did not run.';
+        if (res.status === 401 || res.status === 403) msg = 'Sign in to run the solar design.';
+        if (res.status === 0) msg = 'The solar design did not answer. Check the connection and run again.';
+        return { ok: false, error: msg };
+      }
+      return { ok: true, meta: metaOf(res.body) };
+    });
   }
 
   /* The report opens from Run › Generation (open()). attach() keeps the
@@ -257,5 +278,5 @@
     ensureDialog();
   }
 
-  root.OmegaEditorV2Solar = { attach: attach, open: open, payload: payload, VERSION: 'editor-v2-solar/2' };
+  root.OmegaEditorV2Solar = { attach: attach, open: open, design: design, payload: payload, VERSION: 'editor-v2-solar/2' };
 })(typeof window !== 'undefined' ? window : global);

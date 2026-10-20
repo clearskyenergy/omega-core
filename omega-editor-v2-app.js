@@ -2117,13 +2117,49 @@
       'Not on the drawing: ' + (gaps || 'nothing listed') + '.\n\n' +
       'Open builds the sheet from this reading. A missing detail stays blank.';
   }
+  /* Run asks the server for the cost, the value stack and the solar year
+     (omega-editor-v2-run.js) and keeps the answers on the drawing. */
+  var running = false;
   function runNumbers() {
-    var An = root.OmegaEditorV2Analyze;
+    var An = root.OmegaEditorV2Analyze, Run = root.OmegaEditorV2Run;
     if (!An) { setStatus('Analyze is not loaded.', true); return; }
-    var pi = An.assess(state);
-    runEdit = editSeq;
     setSection('analyze');
-    setStatus(pi.decision + ' · ' + pi.score + ' / 100, from the drawing.');
+    if (!Run) { setStatus('Run did not load. Refresh the page.', true); return; }
+    if (running) return;
+    running = true;
+    var btn = $('btn-run');
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+    if (An.running) An.running(true);
+    setStatus('Running the cost, the value stack and the solar year on the server…');
+    function finish() {
+      running = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
+      if (An.running) An.running(false);
+    }
+    Run.run(state.doc).then(function (out) {
+      finish();
+      var keys = Object.keys(out.fields || {}), k;
+      /* The answers belong to this drawing: kept on it and saved with it
+         (unsaved until then), never an undo step of their own. An edit
+         after the run carries them in its snapshot; Analyze says when the
+         drawing has moved on (OmegaEditorV2Run.isStale). */
+      if (keys.length) {
+        for (k = 0; k < keys.length; k++) state.doc[keys[k]] = out.fields[keys[k]];
+        dirty = true;
+        refresh();
+        scheduleRecovery();
+      }
+      runEdit = editSeq;
+      An.show(state);
+      if (out.notes && out.notes.all) { setStatus(out.notes.all, !out.signedOut); return; }
+      var pi = An.assess(state), vs = state.doc.valueStack, bits = [pi.decision + ' · ' + pi.score + ' / 100'];
+      if (state.doc.costTotal > 0) bits.push('installed $' + Math.round(state.doc.costTotal).toLocaleString());
+      if (vs && vs.irr != null) bits.push('IRR ' + (vs.irr * 100).toFixed(1) + '%');
+      setStatus(bits.join(' · ') + '. Screening, not a quote.');
+    }, function (err) {
+      finish();
+      setStatus((err && err.message) || 'Run did not finish. Try again.', true);
+    });
   }
   function invokeHook(name, extra) {
     var H = root.OmegaEditorV2Hooks;

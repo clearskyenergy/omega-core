@@ -16,6 +16,7 @@ var server = http.createServer(function(req,res) {
     var base = 'http://127.0.0.1:' + server.address().port;
     browser = await chromium.launch({headless:true, args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
     var page = await browser.newPage({viewport:{width:1440,height:1000}}), errors=[];
+    var runServer = require('./_lib/editor-v2-server.js').create({zip:'85042'});
     page.on('pageerror', function(e) { errors.push(e.message); });
     var stored = {};
     function decoded(v) { if(v.mapValue)return unpack(v.mapValue.fields);if(v.arrayValue)return(v.arrayValue.values||[]).map(decoded);if('nullValue'in v)return null;return v.stringValue!==undefined?v.stringValue:v.doubleValue!==undefined?v.doubleValue:v.booleanValue; }
@@ -34,6 +35,8 @@ var server = http.createServer(function(req,res) {
       if(url.startsWith(base) && !url.includes('/api/')) return route.continue();
       if(url.includes('/api/editor-v2-component-cost')) return route.fulfill({json:require('../api/_lib/editor-v2-component-cost')(route.request().postDataJSON())});
       if(url.includes('/api/editor-v2-3d-config')) return route.fulfill({json:{photorealistic:false}});
+      /* Run: the real cost engine and the real value-stack handler */
+      if(url.includes('/api/cost-rollup')||url.includes('/api/value-stack')) return runServer.answer(url,route.request().postDataJSON()).then(function(r){return route.fulfill({status:r.status,json:r.json});});
       return route.abort();
     });
     await page.goto(base+'/editor-v2.html');
@@ -59,6 +62,19 @@ var server = http.createServer(function(req,res) {
     await page.keyboard.press('Escape');await page.waitForFunction(function(){return !document.getElementById('dlg-build').open;});await still('Escape on a build');
     await page.click('#btn-outputs');await still('the Outputs button');await page.click('#outputs-close');await still('closing Outputs');
     await page.evaluate(function(){OmegaEditorV2Auth.idToken=function(){return Promise.resolve('offline-test-token');};});
+    /* Run prices the drawing and runs the value stack on the server, and
+       Analyze shows what came back, labelled as screening. */
+    await page.click('#btn-run');
+    await page.waitForFunction(function(){var h=document.getElementById('run-head');return h&&/^Run on /.test(h.textContent);},null,{timeout:30000});
+    var analyzed=await page.evaluate(function(){return {body:document.getElementById('analyze-body').innerText,status:document.getElementById('status').textContent,doc:{cost:OmegaEditorV2Analyze.factsFrom?null:null}};});
+    assert(/Cost estimate/.test(analyzed.body)&&/\$[\d,]{5,}/.test(analyzed.body),'Analyze shows the installed estimate from the cost engine');
+    assert(/Demand charges avoided/.test(analyzed.body)&&/computed|planning/.test(analyzed.body),'Analyze shows the value-stack streams with their tier');
+    assert(/\d+\.\d%/.test(analyzed.body)&&/Bankable case/.test(analyzed.body)||/No IRR[\s\S]*no IRR is shown/.test(analyzed.body),'Analyze shows the IRR with the bankable case, or says why there is none');
+    assert(/screening estimate, not a quote/i.test(analyzed.body)&&/Screening, not a quote/.test(analyzed.status),'every figure is labelled screening');
+    assert(/solar design did not answer/i.test(analyzed.body),'the solar run that could not answer says so');
+    assert.deepStrictEqual(runServer.calls.map(function(c){return c.path;}),['/api/cost-rollup','/api/value-stack'],'Run asks the cost engine and the value stack once each');
+    await page.screenshot({path:path.join(out,'run.png')});
+    await page.click('#stages [data-stage="design"]');
     await page.click('#btn-3d');
     await page.waitForFunction(function(){return OmegaEditorV2View3D.isOpen();});
     await page.waitForFunction(function(){return OmegaEditorV2View3D.debug().triangles > 0;});
