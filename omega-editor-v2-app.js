@@ -199,6 +199,7 @@
     $('site-address-find').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
     $('site-address-find').addEventListener('click', function () { locate($('site-address-go').value); });
     $('site-parcels').addEventListener('click', function () { var P = root.OmegaEditorV2Parcels; if (P) setParcels(!P.enabled()); });
+    $('site-buildings').addEventListener('click', function () { findBuildings(false); });
     $('dlg-market').addEventListener('close', onMarketClose);
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
@@ -356,6 +357,7 @@
     else if (act === 'json') exportJson();
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
+    else if (act === 'delete') erase();
     else if (act === 'paste') paste();
     else if (act === 'outputs') setSection(section === 'outputs' ? 'design' : 'outputs');
     else if (act === 'run') runNumbers();
@@ -1712,7 +1714,53 @@
     afterChange();
     fitTo([ent.id], 0.08);
     paintParcelCard();
-    setStatus('The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.');
+    var said = 'The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.';
+    setStatus(said);
+    /* and the buildings already on it, said after the lot line */
+    findBuildings(true, said);
+  }
+  /* ── the buildings on the lot (omega-editor-v2-buildings.js) ──────────
+     The lot is the biggest polygon or rectangle on the site layer (the one
+     a guided build takes); without one, there is nothing to look on. The
+     footprints are added as obstructions in one step: Undo takes them back. */
+  var buildingsSeq = 0;
+  function lotRing() {
+    var list = state.doc.entities, best = null, bestA = -1, i, e, b, a;
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if ((e.type !== 'polygon' && e.type !== 'rect') || e.layer !== 'site') continue;
+      b = G.boundsOf(e); a = (b.maxX - b.minX) * (b.maxY - b.minY);
+      if (a > bestA) { bestA = a; best = e; }
+    }
+    var ring = best ? G.ringOf(best) : null;
+    return ring ? ring.map(function (p) { var ll = G.ftToLatLng(p.x, p.y, state.doc.anchor); return [ll.lat, ll.lng]; }) : null;
+  }
+  function findBuildings(auto, lead) {
+    var B = root.OmegaEditorV2Buildings, ring = lotRing(), seq = ++buildingsSeq, btn = $('site-buildings');
+    lead = lead ? lead + ' ' : '';
+    if (!B) return;
+    if (!ring) { if (!auto) setStatus('Set the lot line first: Show parcel lines, then Use as site boundary, or draw it.', true); return; }
+    if (btn) btn.disabled = true;
+    if (!auto) setStatus('Looking for the buildings on the lot\u2026');
+    var anchor = { lat: +state.doc.anchor.lat, lng: +state.doc.anchor.lng };
+    B.find(ring).then(function (r) {
+      if (btn) btn.disabled = false;
+      if (seq !== buildingsSeq || anchor.lat !== +state.doc.anchor.lat || anchor.lng !== +state.doc.anchor.lng) return;
+      var add = B.toEntities(r.buildings, state.doc.anchor, state.doc.entities);
+      if (add.length) {
+        var doc = D.clone(state.doc), ids = [];
+        add.forEach(function (e) { e.id = D.uid('e'); doc.entities.push(e); ids.push(e.id); });
+        D.commit(state, doc, []);
+        afterChange();
+        requestDraw();
+      }
+      if (r.buildings.length && !add.length) { if (!auto) setStatus('The buildings on the lot are already drawn.'); return; }
+      if (!r.buildings.length && r.reason && r.reason !== 'none') { setStatus(lead + r.reason + ' Draw buildings with Obstruction.', !auto); return; }
+      setStatus(lead + B.describe(r.buildings, r.source || ''));
+    }, function () {
+      if (btn) btn.disabled = false;
+      setStatus(lead + 'The building footprints did not answer. Draw buildings with Obstruction.', !auto);
+    });
   }
   function parcelHere() {
     var P = root.OmegaEditorV2Parcels;
@@ -2691,6 +2739,8 @@
     var a = state.doc.anchor || {}, sel = [], i, e;
     for (i = 0; i < state.selection.length; i++) { e = D.find(state.doc, state.selection[i]); if (e && e.label) sel.push(String(e.label).trim()); }
     return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel, icons: iconsOn,
+      entities: state.doc.entities.length, selection: state.selection.length,
+      buildings: state.doc.entities.filter(function (x) { return x.type === 'obstruction' && x.building; }).map(function (x) { return { heightFt: x.building.heightFt, source: x.building.source, use: x.building.use }; }),
       map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote, source: mapAt.source || 'esri' } : null };
   }
 

@@ -1745,6 +1745,20 @@ working; only what a person reads says Omega Maximus.
   the one map from an equipment key. Off by default, remembered by this
   browser (`omegaMaximusIcons`); a box under 6 px keeps its plain fill.
   `teditorv2icons.js`; `check:editor-v2` turns it on and off.
+- **The buildings on the lot come with it** (Tommy, 2026-10-21: "generate
+  on the parcel for the address the building … useful especially for the
+  3d"): `omega-editor-v2-buildings.js` reads FEMA's USA Structures (every US
+  structure over about 450 sq ft, its use and its height) for the lot's box,
+  else OpenStreetMap's buildings, keeps those whose middle is on the lot and
+  adds each as an Obstruction with `building{ heightFt, use, areaSqFt,
+  source, year, id }`, in one step (Undo takes them back), never twice and
+  never over one already drawn. It runs by itself after Use as site
+  boundary (said after the lot line) and from the Site tab's Find
+  buildings. Guided builds keep off them; 3D stands each at its source's
+  height (the 51st Avenue warehouse: 8.85 m, 29 ft), a hand-drawn
+  obstruction at the default it always had. Read, never invented: no
+  height says so. `teditorv2buildings.js`; `check:editor-v2` runs it on a
+  stand-in FEMA answer.
 - **Names never on one another** (Tommy: "clean up how you show the guided
   build"): `drawNames` paints every name after the shapes: text, callouts,
   dimensions and array notes where they belong; a box's name inside it when

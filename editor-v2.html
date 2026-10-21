@@ -347,6 +347,9 @@
     <div class="group" data-stage="always"><div class="row">
       <button type="button" data-act="undo" title="Undo (Ctrl+Z)">Undo</button>
       <button type="button" data-act="redo" title="Redo (Ctrl+Y)">Redo</button>
+      <button type="button" data-act="delete" title="Delete what is selected (Delete). Undo brings it back.">Delete</button>
+      <button type="button" data-act="copy" title="Copy what is selected (Ctrl+C)">Copy</button>
+      <button type="button" data-act="paste" title="Paste the copy, 10 ft over (Ctrl+V)">Paste</button>
     </div><h2>Edit</h2></div>
     <div class="group" data-stage="design"><div class="row">
       <button type="button" data-tool="line">Line</button>
@@ -463,6 +466,13 @@
             <button type="button" class="btn" id="site-parcels" aria-pressed="false">Show parcel lines</button>
           </div>
           <p class="hint">Parcel lines are the county's lot lines over the photo. Pick the lot, then Use as site boundary.</p>
+        </div>
+        <div class="quiet-block" id="site-buildings-block">
+          <h3>Buildings on the lot</h3>
+          <p>Found from FEMA's building footprints (with their heights), else OpenStreetMap, when the lot line is set. Each is an obstruction: builds keep off it, and 3D raises it to height.</p>
+          <div class="row-actions">
+            <button type="button" class="btn" id="site-buildings">Find buildings</button>
+          </div>
         </div>
         <div class="quiet-block">
           <h3>Does this site work?</h3>
@@ -672,6 +682,7 @@
 <script src="omega-parcel-sources.js"></script>
 <script src="omega-editor-v2-satellite.js"></script>
 <script src="omega-editor-v2-icons.js"></script>
+<script src="omega-editor-v2-buildings.js"></script>
 <script src="omega-editor-v2-parcels.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>

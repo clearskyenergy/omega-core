@@ -42,6 +42,9 @@ var server = http.createServer(function(req,res) {
       /* the eight guided builds: the REAL planner (api/_lib/guided-build.js) */
       if(url.includes('/api/guided-build')) { var gq=route.request().postDataJSON()||{}; buildPosts.push(gq.builder); return route.fulfill({json:require('../api/_lib/guided-build').plan(String(gq.builder||''),gq.input||{})}); }
       if(url.includes('/api/parcel-tiles')) return route.fulfill({json:{ok:false,reason:'not-configured'}});
+      /* FEMA's building footprints: one 40 ft building in the middle of the lot asked about, 6.1 m tall */
+      if(url.includes('USA_Structures_View')) { var gq=new URL(url).searchParams.get('geometry').split(',').map(Number), cx=(gq[0]+gq[2])/2, cy=(gq[1]+gq[3])/2, hl=20/364000, hg=hl/Math.cos(cy*Math.PI/180);
+        return route.fulfill({json:{features:[{attributes:{BUILD_ID:77,OCC_CLS:'Commercial',PRIM_OCC:'Retail',HEIGHT:6.1,SQFEET:1600,SOURCE:'NGA',PROD_DATE:1412467200000},geometry:{rings:[[[cx-hg,cy-hl],[cx+hg,cy-hl],[cx+hg,cy+hl],[cx-hg,cy+hl],[cx-hg,cy-hl]]]}}]}}); }
       if(url.includes('/api/parcel')) { parcelPosts++; var q=route.request().postDataJSON(), dl=100/364000/2, dg=dl/Math.cos(q.lat*Math.PI/180);
         return route.fulfill({json:{ok:true,ring:[[q.lat-dl,q.lng-dg],[q.lat-dl,q.lng+dg],[q.lat+dl,q.lng+dg],[q.lat+dl,q.lng-dg]],apn:'TEST-1',owner:'Not shown',acres:0.23,county:'Maricopa County, AZ',source:'maricopa'}}); }
       return route.abort();
@@ -181,6 +184,18 @@ var server = http.createServer(function(req,res) {
       if (bid==='bess') await page.screenshot({path:path.join(out,'build-bess.png')});
     }
     assert.deepStrictEqual(buildPosts,builds,'each build asked the planner once: '+buildPosts.join());
+    /* The Edit bar (Tommy, 2026-10-21: "an edit bar here for deleting things
+       and undoing and re doing"): Copy and Paste the build just placed,
+       Delete it, Undo and Redo, all from the ribbon on any tab */
+    var ed=async function(act){await page.click('[data-act="'+act+'"]');await page.waitForTimeout(80);return page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});};
+    var e0=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});
+    assert(e0.sel>0,'the last build is selected: '+JSON.stringify(e0));
+    await ed('copy'); var e1=await ed('paste');
+    assert(e1.n===e0.n+e0.sel&&e1.sel===e0.sel,'Paste adds the copy and selects it: '+JSON.stringify([e0,e1]));
+    var e2=await ed('delete');
+    assert(e2.n===e0.n&&e2.sel===0,'Delete takes away what is selected: '+JSON.stringify(e2));
+    var e3=await ed('undo'), e4=await ed('redo');
+    assert(e3.n===e1.n&&e4.n===e0.n,'Undo brings it back, Redo takes it away again: '+JSON.stringify([e3,e4]));
     /* Send to funding asks on the page (a browser popup is answered "no",
        unseen, by an embedded browser); Cancel submits nothing. */
     var dialogs=[]; page.on('dialog',function(d){dialogs.push(d.message());d.dismiss();});
@@ -230,6 +245,13 @@ var server = http.createServer(function(req,res) {
     assert.strictEqual(await page.innerText('#site-parcels'),'Hide parcel lines','the switch says what it will do next');
     await page.click('#parcel-use');
     await page.waitForFunction(function(){return /lot line now/.test(document.getElementById('status').textContent);},null,{timeout:5000});
+    /* the buildings already on the lot come with it, from FEMA's footprints, at their height */
+    await page.waitForFunction(function(){return /Found 1 building on the lot \(FEMA USA Structures, 2014\): commercial · retail, 20 ft tall\./.test(document.getElementById('status').textContent);},null,{timeout:10000});
+    assert(/lot line now/.test(await page.evaluate(function(){return document.getElementById('status').textContent;})),'the lot line is still said first');
+    assert.deepStrictEqual(await page.evaluate(function(){return OmegaEditorV2App.debug().buildings;}),[{heightFt:20,source:'FEMA USA Structures (NGA)',use:'Commercial · Retail'}],'the building is an obstruction with its height, its source and its use');
+    await page.click('#site-buildings');
+    await page.waitForFunction(function(){return /already drawn/.test(document.getElementById('status').textContent);},null,{timeout:10000});
+    assert.strictEqual(await page.evaluate(function(){return OmegaEditorV2App.debug().buildings.length;}),1,'Find buildings again adds nothing twice');
     var lot=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {view:d.view};});
     var lotAcross=lot.view.w/lot.view.pxPerFt;
     assert(lotAcross<400&&Math.abs(lot.view.cx)<20&&Math.abs(lot.view.cy)<20,'Use as site boundary zooms to the 100 ft lot: '+JSON.stringify(lot.view));
