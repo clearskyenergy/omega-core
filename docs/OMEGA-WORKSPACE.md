@@ -570,7 +570,13 @@ still draws the hex hub. Who is sent there is the release switch in
 person or `?ui=v2` says otherwise. `omega-workspace-v2.js` is the
 presentation: it does not re-rank Today.
 
-The eight steps are the job, each a door that already exists. Arrive
+The eight steps are the job, each a door that already exists. Beside the
+Next card, the same hex Omega Logic draws (`omega-hexhub.js`, not a
+second copy) is Where to?: Design in the centre, then Customers,
+Projects, Prime, Quotes, Marketplace and Orders. A count on a cell is a
+number the page already holds (the design queue, the project list, quotes
+waiting). Track stays the last step and the In motion section — the hub
+is seven cells. Arrive
 (Plan & billing), Customer (the Omega Logic customer accounts when that
 module is on, otherwise Site Finder, with Portfolio beside it), Project
 (New project, and the projects list), Design (the oldest unfinished site

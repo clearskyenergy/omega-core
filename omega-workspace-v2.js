@@ -313,6 +313,36 @@
     return { now: nowKey, steps: steps, focus: focus };
   }
 
+  /* The same seven-cell hub Omega Logic draws (omega-hexhub.js). items[0]
+     is the centre. A count is only a number this page already holds.
+     Track stays the last journey card and the In motion section: the
+     honeycomb is seven cells, and Marketplace is the door that row does
+     not already name. */
+  function badge(n) { n = Number(n) || 0; return n > 0 ? String(n) : ''; }
+  function stepOf(j, key) {
+    var s = null;
+    (j.steps || []).forEach(function (x) { if (x.key === key) s = x; });
+    return s || {};
+  }
+  function hub(ctx) {
+    ctx = ctx || {};
+    var j = journey(ctx);
+    var office = !!ctx.logicOffice;
+    var projects = (ctx.projects || []).length;
+    var queue = (ctx.needsSize || 0) + (ctx.needsDesign || 0);
+    var prime = openTool(ctx, 'omegaprime') || FILES.omegaprime;
+    var order = stepOf(j, 'order');
+    return [
+      { key: 'design', label: 'Design', icon: '\u25A7', hint: 'Site Map', href: stepOf(j, 'design').href || FILES.projects, badge: badge(queue) },
+      { key: 'customers', label: 'Customers', icon: '\u25CC', hint: office ? 'accounts' : 'sites', href: stepOf(j, 'customer').href || customersHref(ctx), badge: '' },
+      { key: 'projects', label: 'Projects', icon: '\u25A5', hint: 'all sites', href: FILES.projects, badge: badge(projects) },
+      { key: 'prime', label: 'Prime', icon: '\u25B8', hint: 'guided', href: prime, badge: '' },
+      { key: 'quotes', label: 'Quotes', icon: '\u25A4', hint: 'desk', href: FILES.quotes, badge: badge(ctx.quotesWaiting) },
+      { key: 'market', label: 'Market', icon: '\u25C8', hint: 'tools', href: '/marketplace.html', badge: '' },
+      { key: 'orders', label: 'Orders', icon: '\u25D7', hint: office ? 'Logic' : 'quote', href: order.href || (office ? FILES.orders : FILES.quotes), badge: '' }
+    ];
+  }
+
   function hiddenNav() {
     return [
       { divider: 'sn-jv-divider', label: 'Joint development', labelId: 'sn-jv-label', hidden: true },
@@ -409,11 +439,12 @@
       trackMore: Math.max(0, tracked.length - show),
       more: ctx.more || 0,
       nav: nav(ctx),
-      tabs: tabs(ctx)
+      tabs: tabs(ctx),
+      hub: hub(ctx)
     };
   }
 
-  var API = { home: home, present: present, journey: journey, track: track, nav: nav, tabs: tabs, suggest: suggest, norm: norm, greet: greet, statusLine: statusLine, heldReviews: heldReviews, FILES: FILES, customerOf: customerOf };
+  var API = { home: home, present: present, journey: journey, hub: hub, track: track, nav: nav, tabs: tabs, suggest: suggest, norm: norm, greet: greet, statusLine: statusLine, heldReviews: heldReviews, FILES: FILES, customerOf: customerOf };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceV2 = API;
 })(typeof window !== 'undefined' ? window : null);
