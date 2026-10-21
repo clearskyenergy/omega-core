@@ -209,6 +209,7 @@
   }
   #tools .tool { width: 100%; text-align: left; padding: 7px 8px; }
   #stage { position: relative; min-width: 0; min-height: 0; background: var(--paper); overflow: hidden; }
+  #gsat { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: none; transform-origin: 50% 50%; pointer-events: none; }
   #map { position: absolute; inset: 0; pointer-events: none; }
   #map img { position: absolute; display: block; }
   #map::after { content: ""; position: absolute; inset: 0; background: rgba(255,255,255,.12); pointer-events: none; }
@@ -387,6 +388,7 @@
       <button type="button" data-act="snap-grid" aria-pressed="true">Grid</button>
       <button type="button" data-act="snap-end" aria-pressed="true">Endpoint</button>
       <button type="button" data-act="ortho" aria-pressed="false">Ortho</button>
+      <button type="button" data-act="icons" aria-pressed="false" title="Draw the equipment as what it is: a BESS as a container, a transformer, a charger">Icons</button>
       <button type="button" data-act="zoom-ext">Fit</button>
     </div><h2>View</h2></div>
   </div>
@@ -410,6 +412,7 @@
       <button type="button" class="tool" data-act="erase">Erase</button>
     </nav>
     <div id="stage">
+      <div id="gsat" aria-hidden="true"></div>
       <div id="map" aria-hidden="true"></div>
       <div id="map-parcels" aria-hidden="true"></div>
       <canvas id="cv" aria-label="Site drawing. Use the command line to draw by typing."></canvas>
@@ -667,6 +670,8 @@
 <script src="omega-editor-v2-solar.js"></script>
 <script src="omega-editor-v2-run.js"></script>
 <script src="omega-parcel-sources.js"></script>
+<script src="omega-editor-v2-satellite.js"></script>
+<script src="omega-editor-v2-icons.js"></script>
 <script src="omega-editor-v2-parcels.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>

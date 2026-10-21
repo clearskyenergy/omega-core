@@ -1720,16 +1720,31 @@ working; only what a person reads says Omega Maximus.
   (`SITE_VIEW_FT`, 700 ft; it opened on one roof) and a drawing that moved
   with it whole; the Site tab's own **Show parcel lines** is the same layer
   as Layers' switch; Use as site boundary zooms to the lot.
-- **The photo at any zoom** (Tommy, 2026-10-20: "i cant see the map if im
-  zoomed out"): tiles are picked at the screen's own pixels (a Retina screen
-  gets the next level, sharp), and past the tiles the screen holds at their
-  own size `layoutMap` steps one level coarser at a time, down to county
-  scale (`PHOTO_MIN_Z` 12), instead of going blank (it hid the photo past 24
-  tiles: a 12-acre lot read "Zoom in"). Esri's World Imagery has nothing
-  past level 19 here (`PHOTO_MAX_Z`; level 20 answers "Map data not yet
-  available"), so closer than about 0.3 m a pixel the photo is soft; Site
-  Map is sharper there because it is Google's satellite (the browser Maps
-  key, billed per load), a decision not yet taken for Maximus.
+- **The photo is Google's satellite** (Tommy, 2026-10-20: "switch to google
+  satellite"): `omega-editor-v2-satellite.js` puts a Maps JavaScript API
+  satellite map (the browser key, `config.js googleMapsKey`, the same key
+  as Site Map's built-in default, with the Settings › API Keys override
+  `omegaMapsKey` first; one map load a page, moving it free) under the
+  drawing and moves it to the editor's own view (centre and scale,
+  `camera()`); it takes no input. Past the deepest imagery at the site
+  (`MaxZoomService`, 21 here) it is magnified by CSS one level, then hands
+  over. Esri's tiles stay under it (hidden) for the PNG export and show
+  whenever Google cannot (no key, a refused key, offline): `layoutMap` picks
+  them at the screen's own pixels and steps coarser down to county scale
+  (`PHOTO_MIN_Z` 12) instead of going blank (it hid the photo past 24
+  tiles: "i cant see the map if im zoomed out"); Esri has nothing past
+  level 19 here (`PHOTO_MAX_Z`). The scale bar sits above Google's logo;
+  nothing copies or exports Google's imagery. `teditorv2satellite.js`,
+  and `check:editor-v2` holds the offline fallback.
+- **View › Icons** (Tommy: "a toggle in view that allows us to do icons on
+  the items like for instance the bess … should be a bess container"):
+  `omega-editor-v2-icons.js` draws each piece inside its own box (centre,
+  rotation, size) as what it is from above: the BESS a container (ribbed
+  roof, doors, roof-top cooling unit), a transformer's fins and coils,
+  switchgear's sections, a charger's pedestal, and the rest; `kindOf` is
+  the one map from an equipment key. Off by default, remembered by this
+  browser (`omegaMaximusIcons`); a box under 6 px keeps its plain fill.
+  `teditorv2icons.js`; `check:editor-v2` turns it on and off.
 - **Names never on one another** (Tommy: "clean up how you show the guided
   build"): `drawNames` paints every name after the shapes: text, callouts,
   dimensions and array notes where they belong; a box's name inside it when
