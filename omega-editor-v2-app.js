@@ -104,6 +104,9 @@
     if (root.OmegaEditorV2Auth && root.OmegaEditorV2Auth.onSignIn) root.OmegaEditorV2Auth.onSignIn(function () { checkAccess(); });
     /* Parcel lines are a view setting this browser remembers. */
     if (root.OmegaEditorV2Parcels && root.OmegaEditorV2Parcels.remembered()) setParcels(true);
+    /* Icons too; and Google's satellite starts under the drawing */
+    setIcons(rememberedIcons());
+    if (root.OmegaEditorV2Satellite) root.OmegaEditorV2Satellite.start($('gsat'), function () { layoutMap(); requestDraw(); });
     var projectParam = /[?&]id=([A-Za-z0-9_-]+)/.exec(location.search);
     if (projectParam && !recovering) loadWorkspace(projectParam[1]);
     if (root.OmegaEditorV2Hooks) root.OmegaEditorV2Hooks.register('funding', function () { pushMarketplace(); return true; });
@@ -196,6 +199,7 @@
     $('site-address-find').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
     $('site-address-find').addEventListener('click', function () { locate($('site-address-go').value); });
     $('site-parcels').addEventListener('click', function () { var P = root.OmegaEditorV2Parcels; if (P) setParcels(!P.enabled()); });
+    $('site-buildings').addEventListener('click', function () { findBuildings(false); });
     $('dlg-market').addEventListener('close', onMarketClose);
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
@@ -346,12 +350,14 @@
     else if (act === 'snap-grid') { snaps.grid = !snaps.grid; pressed('snap-grid', snaps.grid); }
     else if (act === 'snap-end') { toggleOsnap(); }
     else if (act === 'ortho') { snaps.angle = !snaps.angle; pressed('ortho', snaps.angle); setStatus(snaps.angle ? 'Ortho on.' : 'Ortho off.'); }
+    else if (act === 'icons') { setIcons(!iconsOn); setStatus(iconsOn ? 'Icons on: each piece is drawn as what it is.' : 'Icons off: each piece is its outline.'); }
     else if (act === 'png') exportPng();
     else if (act === 'pdf') exportPdf();
     else if (act === 'dxf') exportDxf();
     else if (act === 'json') exportJson();
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
+    else if (act === 'delete') erase();
     else if (act === 'paste') paste();
     else if (act === 'outputs') setSection(section === 'outputs' ? 'design' : 'outputs');
     else if (act === 'run') runNumbers();
@@ -393,6 +399,15 @@
     }
     mark3d(true);
     setStatus('3D. Drag to look around the site. Type 2D to return to the plan.');
+  }
+  /* Icons: a view setting this browser remembers */
+  var iconsOn = false, ICONS_PREF = 'omegaMaximusIcons';
+  function rememberedIcons() { try { return root.localStorage.getItem(ICONS_PREF) === '1'; } catch (e) { return false; } }
+  function setIcons(on) {
+    iconsOn = !!on;
+    try { root.localStorage.setItem(ICONS_PREF, iconsOn ? '1' : '0'); } catch (e) { /* this visit only */ }
+    pressed('icons', iconsOn);
+    requestDraw();
   }
   function pressed(act, on) {
     var nodes = document.querySelectorAll('[data-act="' + act + '"]');
@@ -1075,12 +1090,19 @@
       var c = worldToScreen({ x: e.x, y: e.y });
       ctx.beginPath(); ctx.arc(c.x, c.y, e.r * view.pxPerFt, 0, Math.PI * 2); ctx.stroke();
     } else if (e.type === 'rect' || e.type === 'equip' || e.type === 'parking') {
-      poly(ctx, G.rectCorners(e), true);
-      /* gear reads on the photo: a firmer fill and line than a lot or a stall */
-      ctx.globalAlpha = e.type === 'equip' ? 0.32 : 0.04;
-      ctx.fill(); ctx.globalAlpha = 1;
-      if (e.type === 'equip') ctx.lineWidth = 1.8;
-      ctx.stroke();
+      if (e.type === 'equip' && iconsOn && root.OmegaEditorV2Icons && root.OmegaEditorV2Icons.draw(ctx, e, worldToScreen({ x: e.x, y: e.y }), view.pxPerFt)) {
+        /* the icon, then the outline in the layer's colour */
+        poly(ctx, G.rectCorners(e), true);
+        ctx.lineWidth = 1.4;
+        ctx.stroke();
+      } else {
+        poly(ctx, G.rectCorners(e), true);
+        /* gear reads on the photo: a firmer fill and line than a lot or a stall */
+        ctx.globalAlpha = e.type === 'equip' ? 0.32 : 0.04;
+        ctx.fill(); ctx.globalAlpha = 1;
+        if (e.type === 'equip') ctx.lineWidth = 1.8;
+        ctx.stroke();
+      }
       if (e.label) nameBox(ctx, e);
     } else if (e.type === 'text') label(ctx, { x: e.x, y: e.y }, e.text || '');
     else if (e.type === 'callout') {
@@ -1320,20 +1342,22 @@
     var px = 120, ft = px / view.pxPerFt, nice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000], i, use = 10;
     for (i = 0; i < nice.length; i++) if (Math.abs(nice[i] - ft) < Math.abs(use - ft)) use = nice[i];
     var w = use * view.pxPerFt;
+    /* above Google's logo when its photo is under the drawing */
+    var b = cssH - (mapAt && mapAt.source === 'google' ? 30 : 0);
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.fillRect(12, cssH - 36, w + 16, 24);
+    ctx.fillRect(12, b - 36, w + 16, 24);
     ctx.strokeStyle = '#16202B';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(20, cssH - 22); ctx.lineTo(20 + w, cssH - 22);
-    ctx.moveTo(20, cssH - 26); ctx.lineTo(20, cssH - 18);
-    ctx.moveTo(20 + w, cssH - 26); ctx.lineTo(20 + w, cssH - 18);
+    ctx.moveTo(20, b - 22); ctx.lineTo(20 + w, b - 22);
+    ctx.moveTo(20, b - 26); ctx.lineTo(20, b - 18);
+    ctx.moveTo(20 + w, b - 26); ctx.lineTo(20 + w, b - 18);
     ctx.stroke();
     ctx.fillStyle = '#16202B';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(G.formatFeet(use), 20 + w / 2, cssH - 28);
+    ctx.fillText(G.formatFeet(use), 20 + w / 2, b - 28);
     ctx.textAlign = 'left';
     var nx = cssW - 36, ny = 36;
     ctx.beginPath();
@@ -1380,23 +1404,27 @@
      2026-10-20: "i cant see the map if im zoomed out"). */
   var PHOTO_MIN_Z = 12, PHOTO_MAX_Z = 19;
   function layoutMap() {
-    var host = $('map');
-    if (!mapOn) { host.style.display = 'none'; mapNote = ''; mapAt = null; layoutParcels(null); return; }
+    var host = $('map'), Sat = root.OmegaEditorV2Satellite;
+    if (!mapOn) { host.style.display = 'none'; if (Sat) Sat.hide(); mapNote = ''; mapAt = null; layoutParcels(null); return; }
+    /* Google's satellite where it can (sharp to the deepest level it has),
+       Esri's tiles under it for the PNG export and wherever Google cannot */
+    var google = !!(Sat && Sat.frame(G.ftToLatLng(view.cx, view.cy, state.doc.anchor), view.pxPerFt, cssW, cssH, state.doc.anchor));
     host.style.display = 'block';
+    host.style.visibility = google ? 'hidden' : 'visible';
     var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt * dpr));
     if (z < PHOTO_MIN_Z) z = PHOTO_MIN_Z;
     if (z > PHOTO_MAX_Z) z = PHOTO_MAX_Z;
     var most = (Math.ceil(cssW * dpr / 256) + 3) * (Math.ceil(cssH * dpr / 256) + 3), set = tilesFor(z);
     while (set.count > most && z > PHOTO_MIN_Z) { z--; set = tilesFor(z); }
     if (set.count > most) {
-      mapNote = 'Zoom in to load aerial imagery.';
-      mapAt = { z: z, tiles: 0 };
+      mapNote = google ? '' : 'Zoom in to load aerial imagery.';
+      mapAt = { z: z, tiles: 0, source: google ? 'google' : 'esri' };
       host.style.display = 'none';
       layoutParcels(null);
       return;
     }
     mapNote = '';
-    mapAt = { z: z, tiles: set.count };
+    mapAt = { z: z, tiles: set.count, source: google ? 'google' : 'esri' };
     var need = set.need, k;
     for (k in tiles) if (tiles.hasOwnProperty(k) && !need[k]) {
       if (tiles[k].img.parentNode) tiles[k].img.parentNode.removeChild(tiles[k].img);
@@ -1686,7 +1714,53 @@
     afterChange();
     fitTo([ent.id], 0.08);
     paintParcelCard();
-    setStatus('The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.');
+    var said = 'The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.';
+    setStatus(said);
+    /* and the buildings already on it, said after the lot line */
+    findBuildings(true, said);
+  }
+  /* ── the buildings on the lot (omega-editor-v2-buildings.js) ──────────
+     The lot is the biggest polygon or rectangle on the site layer (the one
+     a guided build takes); without one, there is nothing to look on. The
+     footprints are added as obstructions in one step: Undo takes them back. */
+  var buildingsSeq = 0;
+  function lotRing() {
+    var list = state.doc.entities, best = null, bestA = -1, i, e, b, a;
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if ((e.type !== 'polygon' && e.type !== 'rect') || e.layer !== 'site') continue;
+      b = G.boundsOf(e); a = (b.maxX - b.minX) * (b.maxY - b.minY);
+      if (a > bestA) { bestA = a; best = e; }
+    }
+    var ring = best ? G.ringOf(best) : null;
+    return ring ? ring.map(function (p) { var ll = G.ftToLatLng(p.x, p.y, state.doc.anchor); return [ll.lat, ll.lng]; }) : null;
+  }
+  function findBuildings(auto, lead) {
+    var B = root.OmegaEditorV2Buildings, ring = lotRing(), seq = ++buildingsSeq, btn = $('site-buildings');
+    lead = lead ? lead + ' ' : '';
+    if (!B) return;
+    if (!ring) { if (!auto) setStatus('Set the lot line first: Show parcel lines, then Use as site boundary, or draw it.', true); return; }
+    if (btn) btn.disabled = true;
+    if (!auto) setStatus('Looking for the buildings on the lot\u2026');
+    var anchor = { lat: +state.doc.anchor.lat, lng: +state.doc.anchor.lng };
+    B.find(ring).then(function (r) {
+      if (btn) btn.disabled = false;
+      if (seq !== buildingsSeq || anchor.lat !== +state.doc.anchor.lat || anchor.lng !== +state.doc.anchor.lng) return;
+      var add = B.toEntities(r.buildings, state.doc.anchor, state.doc.entities);
+      if (add.length) {
+        var doc = D.clone(state.doc), ids = [];
+        add.forEach(function (e) { e.id = D.uid('e'); doc.entities.push(e); ids.push(e.id); });
+        D.commit(state, doc, []);
+        afterChange();
+        requestDraw();
+      }
+      if (r.buildings.length && !add.length) { if (!auto) setStatus('The buildings on the lot are already drawn.'); return; }
+      if (!r.buildings.length && r.reason && r.reason !== 'none') { setStatus(lead + r.reason + ' Draw buildings with Obstruction.', !auto); return; }
+      setStatus(lead + B.describe(r.buildings, r.source || ''));
+    }, function () {
+      if (btn) btn.disabled = false;
+      setStatus(lead + 'The building footprints did not answer. Draw buildings with Obstruction.', !auto);
+    });
   }
   function parcelHere() {
     var P = root.OmegaEditorV2Parcels;
@@ -2664,8 +2738,10 @@
   function debug() {
     var a = state.doc.anchor || {}, sel = [], i, e;
     for (i = 0; i < state.selection.length; i++) { e = D.find(state.doc, state.selection[i]); if (e && e.label) sel.push(String(e.label).trim()); }
-    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel,
-      map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote } : null };
+    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel, icons: iconsOn,
+      entities: state.doc.entities.length, selection: state.selection.length,
+      buildings: state.doc.entities.filter(function (x) { return x.type === 'obstruction' && x.building; }).map(function (x) { return { heightFt: x.building.heightFt, source: x.building.source, use: x.building.use }; }),
+      map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote, source: mapAt.source || 'esri' } : null };
   }
 
   root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, debug: debug, VERSION: 'editor-v2-app/5' };

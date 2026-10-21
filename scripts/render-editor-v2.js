@@ -42,12 +42,18 @@ var server = http.createServer(function(req,res) {
       /* the eight guided builds: the REAL planner (api/_lib/guided-build.js) */
       if(url.includes('/api/guided-build')) { var gq=route.request().postDataJSON()||{}; buildPosts.push(gq.builder); return route.fulfill({json:require('../api/_lib/guided-build').plan(String(gq.builder||''),gq.input||{})}); }
       if(url.includes('/api/parcel-tiles')) return route.fulfill({json:{ok:false,reason:'not-configured'}});
+      /* FEMA's building footprints: one 40 ft building in the middle of the lot asked about, 6.1 m tall */
+      if(url.includes('USA_Structures_View')) { var gq=new URL(url).searchParams.get('geometry').split(',').map(Number), cx=(gq[0]+gq[2])/2, cy=(gq[1]+gq[3])/2, hl=20/364000, hg=hl/Math.cos(cy*Math.PI/180);
+        return route.fulfill({json:{features:[{attributes:{BUILD_ID:77,OCC_CLS:'Commercial',PRIM_OCC:'Retail',HEIGHT:6.1,SQFEET:1600,SOURCE:'NGA',PROD_DATE:1412467200000},geometry:{rings:[[[cx-hg,cy-hl],[cx+hg,cy-hl],[cx+hg,cy+hl],[cx-hg,cy+hl],[cx-hg,cy-hl]]]}}]}}); }
       if(url.includes('/api/parcel')) { parcelPosts++; var q=route.request().postDataJSON(), dl=100/364000/2, dg=dl/Math.cos(q.lat*Math.PI/180);
         return route.fulfill({json:{ok:true,ring:[[q.lat-dl,q.lng-dg],[q.lat-dl,q.lng+dg],[q.lat+dl,q.lng+dg],[q.lat+dl,q.lng-dg]],apn:'TEST-1',owner:'Not shown',acres:0.23,county:'Maricopa County, AZ',source:'maricopa'}}); }
       return route.abort();
     });
     await page.goto(base+'/editor-v2.html');
     await page.waitForFunction(function() { return !!window.OmegaEditorV2View3D; });
+    /* the OMEGA mark holds the page until it is known (at most 4 s); nothing
+       is clickable under it, so wait for it rather than for a slow screenshot */
+    await page.waitForFunction(function(){return !document.documentElement.classList.contains('omega-loading');},null,{timeout:20000});
     fs.mkdirSync(out,{recursive:true});
     await page.screenshot({path:path.join(out,'plan.png')});
     /* Handoff A1: the drawing stays through every section and a cancelled
@@ -178,6 +184,18 @@ var server = http.createServer(function(req,res) {
       if (bid==='bess') await page.screenshot({path:path.join(out,'build-bess.png')});
     }
     assert.deepStrictEqual(buildPosts,builds,'each build asked the planner once: '+buildPosts.join());
+    /* The Edit bar (Tommy, 2026-10-21: "an edit bar here for deleting things
+       and undoing and re doing"): Copy and Paste the build just placed,
+       Delete it, Undo and Redo, all from the ribbon on any tab */
+    var ed=async function(act){await page.click('[data-act="'+act+'"]');await page.waitForTimeout(80);return page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});};
+    var e0=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});
+    assert(e0.sel>0,'the last build is selected: '+JSON.stringify(e0));
+    await ed('copy'); var e1=await ed('paste');
+    assert(e1.n===e0.n+e0.sel&&e1.sel===e0.sel,'Paste adds the copy and selects it: '+JSON.stringify([e0,e1]));
+    var e2=await ed('delete');
+    assert(e2.n===e0.n&&e2.sel===0,'Delete takes away what is selected: '+JSON.stringify(e2));
+    var e3=await ed('undo'), e4=await ed('redo');
+    assert(e3.n===e1.n&&e4.n===e0.n,'Undo brings it back, Redo takes it away again: '+JSON.stringify([e3,e4]));
     /* Send to funding asks on the page (a browser popup is answered "no",
        unseen, by an embedded browser); Cancel submits nothing. */
     var dialogs=[]; page.on('dialog',function(d){dialogs.push(d.message());d.dismiss();});
@@ -188,6 +206,19 @@ var server = http.createServer(function(req,res) {
     await page.waitForFunction(function(){return !document.getElementById('dlg-market').open;});
     assert(!/Submitting|Submitted/.test(await page.evaluate(function(){return document.getElementById('status').textContent;})),'Cancel submits nothing');
     assert.deepStrictEqual(dialogs,[],'no browser popup is raised');
+    /* View › Icons: each piece drawn as what it is, the switch remembered;
+       off again, the plain boxes come back */
+    var canvasSum=function(){var c=document.getElementById('cv'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,h=0;for(var i=0;i<d.length;i+=7)h=(h*31+d[i])>>>0;return h;};
+    await page.click('#stages [data-stage="site"]');
+    var plainSum=await page.evaluate(canvasSum);
+    await page.click('[data-act="icons"]');
+    await page.waitForTimeout(150);
+    var iconState=await page.evaluate(function(){return {on:OmegaEditorV2App.debug().icons,pressed:document.querySelector('[data-act="icons"]').getAttribute('aria-pressed'),kept:localStorage.getItem('omegaMaximusIcons')};});
+    assert.deepStrictEqual(iconState,{on:true,pressed:'true',kept:'1'},'Icons turns on and this browser keeps it: '+JSON.stringify(iconState));
+    assert.notStrictEqual(await page.evaluate(canvasSum),plainSum,'with Icons on the equipment is drawn differently');
+    await page.click('[data-act="icons"]');
+    await page.waitForTimeout(150);
+    assert.strictEqual(await page.evaluate(canvasSum),plainSum,'off again, the drawing is exactly as it was');
     /* A new project: Find on the map opens on the block around the point
        (it opened on one roof, 280 ft across), the photo is laid at that
        scale (past 24 tiles it used to go blank), the Site tab's own switch
@@ -202,7 +233,11 @@ var server = http.createServer(function(req,res) {
     var framed=await page.evaluate(function(){return OmegaEditorV2App.debug();});
     var across=framed.view.w/framed.view.pxPerFt;
     assert(across>=600&&across<=800&&Math.abs(framed.view.cx)<1&&Math.abs(framed.view.cy)<1,'Find opens about 700 ft across, centred on the point: '+JSON.stringify(framed.view));
-    assert(framed.map&&framed.map.tiles>24&&framed.map.z>=14&&framed.map.z<=19,'the photo is laid at that scale, past the old 24-tile cap: '+JSON.stringify(framed.map));
+    assert(framed.map&&framed.map.tiles>24&&framed.map.z>=12&&framed.map.z<=19,'the photo is laid at that scale, past the old 24-tile cap: '+JSON.stringify(framed.map));
+    /* Google's satellite cannot load on this offline server: the editor says
+       why and keeps Esri's tiles, with no error */
+    var sat=await page.evaluate(function(){return {state:OmegaEditorV2Satellite.state(),reason:OmegaEditorV2Satellite.reason(),source:OmegaEditorV2App.debug().map.source,shown:getComputedStyle(document.getElementById('gsat')).display};});
+    assert(sat.state==='failed'&&/Esri/.test(sat.reason)&&sat.source==='esri'&&sat.shown==='none','offline, Google steps aside and the photo is Esri\'s: '+JSON.stringify(sat));
     assert.strictEqual(await page.evaluate(function(){return getComputedStyle(document.getElementById('map')).display;}),'block','the photo layer is shown');
     assert.strictEqual(await page.innerText('#site-parcels'),'Show parcel lines','the Site tab offers the parcel lines');
     await page.click('#site-parcels');
@@ -210,6 +245,13 @@ var server = http.createServer(function(req,res) {
     assert.strictEqual(await page.innerText('#site-parcels'),'Hide parcel lines','the switch says what it will do next');
     await page.click('#parcel-use');
     await page.waitForFunction(function(){return /lot line now/.test(document.getElementById('status').textContent);},null,{timeout:5000});
+    /* the buildings already on the lot come with it, from FEMA's footprints, at their height */
+    await page.waitForFunction(function(){return /Found 1 building on the lot \(FEMA USA Structures, 2014\): commercial · retail, 20 ft tall\./.test(document.getElementById('status').textContent);},null,{timeout:10000});
+    assert(/lot line now/.test(await page.evaluate(function(){return document.getElementById('status').textContent;})),'the lot line is still said first');
+    assert.deepStrictEqual(await page.evaluate(function(){return OmegaEditorV2App.debug().buildings;}),[{heightFt:20,source:'FEMA USA Structures (NGA)',use:'Commercial · Retail'}],'the building is an obstruction with its height, its source and its use');
+    await page.click('#site-buildings');
+    await page.waitForFunction(function(){return /already drawn/.test(document.getElementById('status').textContent);},null,{timeout:10000});
+    assert.strictEqual(await page.evaluate(function(){return OmegaEditorV2App.debug().buildings.length;}),1,'Find buildings again adds nothing twice');
     var lot=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {view:d.view};});
     var lotAcross=lot.view.w/lot.view.pxPerFt;
     assert(lotAcross<400&&Math.abs(lot.view.cx)<20&&Math.abs(lot.view.cy)<20,'Use as site boundary zooms to the 100 ft lot: '+JSON.stringify(lot.view));
