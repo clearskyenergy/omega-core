@@ -256,7 +256,7 @@
       state: "IL", comed: false,
       perKwh: 250, resPerKwh: 300,
       energyCap: IL_REBATE_CAP,
-      tier: "published", asOf: "Ameren Rider CGR tariff (effective 2025-04-21) and Rider SD VPP (effective 2026-07-16); read 2026-10-13",
+      tier: "published", asOf: "Ameren Rider CGR tariff (effective 2025-04-21) and Rider SD VPP (effective 2026-07-16); read 2026-10-21",
       ref: "Illinois' DG rebate on Ameren Illinois' own tariff (Rider CGR — Customer "
          + "Generation & Storage Rebate, Ill. C.C. No. 1, 2nd Revised Sheet No. 59.003, "
          + "effective 21 April 2025): an additional $250 per kWh of nameplate storage "
@@ -334,6 +334,30 @@
          + "VPP pilots. Held at planning-grade because the FY27 rates are relayed "
          + "from the portal-gated FOA, not read from it — the FY26 round (also "
          + "30% / $150k) closed 5 June 2026 once funds ran out."
+    },
+    {
+      id: "de.dnrec.pilot", utility: "DNREC (Delmarva Power territory)", name: "Delaware Solar + Storage Pilot grant",
+      state: "DE", nonresidential: true,
+      perKwh: 200, capUsd: 30000,
+      tier: "published", asOf: "DNREC Solar + Storage Pilot Program Guidelines and Incentives, effective 2026-08-11; read 2026-10-21",
+      ref: "Delaware DNREC's Solar + Storage Pilot (an extension of the Green Energy "
+         + "Program): $200 per kWh of nameplate storage capacity for a commercial "
+         + "system, up to $30,000 (a certified diverse business $225/kWh to $35,000, "
+         + "a non-profit $250/kWh to $40,000, residential $250/kWh to $6,000), no "
+         + "hardware size cap, and no grant may exceed 50% of the eligible storage "
+         + "cost. The pilot's own guidance replaces this.",
+      url: "https://documents.dnrec.delaware.gov/energy/office/gep/Solar-and-Storage-Pilot-Program-Incentives-and-Guidance.pdf",
+      conditions: "Delmarva Power & Light customers only, behind the meter and owned "
+         + "by the applicant. The storage rides WITH SOLAR under the Green Energy "
+         + "Program: a new solar-plus-storage installation, or storage added to a "
+         + "solar system that took the GEP solar rebate and was interconnected "
+         + "within the last 12 months — storage on older solar, or without solar, "
+         + "is ineligible. The battery must take DPL interconnection (approval no "
+         + "more than a year before applying), enrol in a DPL Active Dispatch "
+         + "programme for 10 years, island in an outage, and carry a 10-year "
+         + "warranty. Applications go through the Green Grant Delaware portal; the "
+         + "$30,000 maximum and the 50%-of-cost limit make this a small grant on a "
+         + "C&I system."
     }
   ];
 
