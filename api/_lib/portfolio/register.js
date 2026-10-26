@@ -286,7 +286,7 @@ function make(deps) {
       need(scope, 'archive');
       var ar = await siteRef(scope, b.siteId);
       if (Number(b.expectedRevision) !== ar.data.revision) throw err(409, 'This site changed since you opened it; reload');
-      await ar.ref.set({ lifecycleStatus: b.restore ? 'active' : 'archived', archived: !b.restore, archivedAt: b.restore ? null : now, revision: ar.data.revision + 1, updatedAt: now }, { merge: true });
+      await ar.ref.set(Object.assign(BR.archiveState(!b.restore), { archivedAt: b.restore ? null : now, revision: ar.data.revision + 1, updatedAt: now }), { merge: true });
       await audit(scope, caller, b.restore ? 'site-restore' : 'site-archive', { siteId: ar.data.siteId });
       return { ok: true };
     }

@@ -59,6 +59,8 @@
 
    Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
      site-archive / site-restore    hide from, or return to, the register
+                                    (archived and lifecycleStatus, both
+                                    doors' fields; the revision moves)
      site-delete                    permanent; workspace admin
      site-set-status { status }     the stage word on each site
      site-tag { add[], remove[] }   tags added and taken off
@@ -126,7 +128,7 @@ var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA =
    pro forma charges for a skid on the design (the Site Map cost run never
    counts the skid: it is ClearSky's, on its own meter) */
 var OC = require('./_lib/omega-core');
-var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge');
+var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge'), AS = require('./_lib/portfolio/assets');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
 var PARTNER_DAILY_CAP = 25;
 
@@ -295,6 +297,7 @@ function sentFields(input) {
 }
 function siteView(id, s) {
   s = s || {};
+  var life = BR.lifecycleOf(s);
   return {
     id: id, name: s.name || '', city: s.city || '', state: s.state || '', address: BR.addressLine(s),
     installedKw: s.installedKw == null ? null : Number(s.installedKw),
@@ -325,8 +328,17 @@ function siteView(id, s) {
     latestModel: s.latestModel || null,
     projectId: s.projectId || null, projectAt: C.iso(s.projectAt),
     finProjectId: s.finProjectId || null, finProjectAt: C.iso(s.finProjectAt), finProjectStatus: s.finProjectStatus || null,
-    archived: s.archived === true, archivedAt: C.iso(s.archivedAt),
+    archived: life === 'archived', archivedAt: C.iso(s.archivedAt), lifecycleStatus: life,
     partners: s.partners || null, revision: s.revision || 1,
+    /* what the register keeps on the same record (api/_lib/portfolio/
+       register.js), named one by one: the power evidence the Power & bills
+       tab reads, the import's attention flags, the pipeline, the portfolios
+       the site is in, and the compute agreement's stamp */
+    powerEvidence: s.powerEvidence && typeof s.powerEvidence === 'object' ? s.powerEvidence : null,
+    flags: Array.isArray(s.flags) ? s.flags : [],
+    crm: s.crm && typeof s.crm === 'object' ? s.crm : null,
+    portfolioIds: Array.isArray(s.portfolioIds) ? s.portfolioIds : [],
+    computeAgreement: s.computeAgreement && typeof s.computeAgreement === 'object' ? s.computeAgreement : null,
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
     siteScopes: Array.isArray(s.siteScopes) ? s.siteScopes : [],
     latestDesign: s.latestDesign && typeof s.latestDesign === 'object' ? s.latestDesign : null,
@@ -408,7 +420,7 @@ var handler = A.handler(async function (req, res) {
     var q = root.collection('sites').orderBy('__name__').limit(LIST_CAP + 1);
     if (b.startAfter) q = root.collection('sites').orderBy('__name__').startAfter(b.startAfter).limit(LIST_CAP + 1);
     var snap = await q.get(), withArchived = b.archived === '1' || b.archived === 'true' || b.archived === true;
-    var sites = snap.docs.filter(function (d) { return withArchived || (d.data() || {}).archived !== true; })
+    var sites = snap.docs.filter(function (d) { return withArchived || BR.lifecycleOf(d.data()) !== 'archived'; })
       .slice(0, LIST_CAP).map(function (d) { return siteView(d.id, d.data()); });
     await capitalJoin(db, sites);
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
@@ -522,16 +534,30 @@ var handler = A.handler(async function (req, res) {
     return db.runTransaction(async function (tx) {
       var cur = id ? await tx.get(cref) : null;
       if (id && !cur.exists) throw A.httpError(404, 'That site is not in this workspace');
-      var doc;
+      var doc, entered = [];
       if (id) {
         var curD = cur.data() || {}, patchD = Object.assign({}, input, { updatedAt: now, updatedBy: by });
         /* the lease terms patch the commercial block, never replace it */
         if (input.commercial) patchD.commercial = Object.assign({}, curD.commercial && typeof curD.commercial === 'object' ? curD.commercial : {}, input.commercial);
         if (curD.address && typeof curD.address === 'object') patchD.address = Object.assign({}, curD.address, { street: input.address || null, city: input.city || curD.address.city || null, state: input.state || curD.address.state || null, zip: input.zip || curD.address.zip || null });
+        /* THE FACT FOLLOWS THE FIELD (2026-10-25). On a record the register
+           keeps facts for, a mapped field this edit changes (the nameplate,
+           the peak, the meter, the term, the rent, the share) is that fact,
+           entered by this person: kind manual, which the register's import
+           treats as a conflict, never a silent overwrite, and which its
+           next write (flatten) carries instead of the old value. The form
+           enters values; reviewing one is the register's own step
+           (field-review), so nothing saved here reads as reviewed. A record
+           with no facts yet derives them from these fields when read. */
+        if (curD.facts && typeof curD.facts === 'object') {
+          var reg = BR.normalize(cref.id, curD);
+          entered = BR.factEdits(reg, input);
+          if (entered.length) { var withFacts = AS.enterFacts(reg, entered, { actor: by, now: now, canReview: false }); patchD.facts = withFacts.facts; patchD.revision = withFacts.revision; }
+        }
         doc = Object.assign({}, curD, patchD); tx.update(cref, patchD);
       }
       else { doc = Object.assign({ orgId: org }, input, { archived: false, createdAt: now, createdBy: by }); tx.create(cref, doc); }
-      audit(tx, db, 'sitecrm-site-save', org, cref.id, by, now, { created: !id, site: input });
+      audit(tx, db, 'sitecrm-site-save', org, cref.id, by, now, { created: !id, site: input, facts: entered.map(function (e) { return e.fact; }) });
       return { ok: true, id: cref.id, site: siteView(cref.id, doc), note: id ? 'Site saved.' : 'Site added.' };
     });
   }
@@ -595,8 +621,11 @@ var handler = A.handler(async function (req, res) {
       rows.forEach(function (rw) {
         var patch = null;
         if (action === 'site-delete') batch2.delete(rw.ref);
-        else if (action === 'site-archive') patch = { archived: true, archivedAt: now, archivedBy: by };
-        else if (action === 'site-restore') patch = { archived: false, restoredAt: now, restoredBy: by };
+        /* both doors' fields (site-bridge.archiveState), and the revision the
+           register's own archive moves, so a page or an import undo holding
+           the old one cannot write the site back to active */
+        else if (action === 'site-archive') patch = Object.assign(BR.archiveState(true), { archivedAt: now, archivedBy: by, revision: (rw.data.revision || 1) + 1 });
+        else if (action === 'site-restore') patch = Object.assign(BR.archiveState(false), { restoredAt: now, restoredBy: by, revision: (rw.data.revision || 1) + 1 });
         else if (action === 'site-set-status') patch = { status: st };
         else {
           var tags = (Array.isArray(rw.data.tags) ? rw.data.tags : []).filter(function (t) { return dropTags.indexOf(t) < 0; });

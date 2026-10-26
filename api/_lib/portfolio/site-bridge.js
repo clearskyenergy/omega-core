@@ -16,6 +16,12 @@
                             fields derived from the facts, archived from the
                             lifecycle, projectId from the links), on top of
                             the register's own fields
+     factEdits(doc, flat) → what an edit of the flat fields (the site
+                            record's Save) says of the facts, so the CRM
+                            writes the fact with the field
+     lifecycleOf(doc)     → whether the site is archived, the one reading
+                            both doors use; archiveState(bool) is the pair an
+                            archive or a restore writes
 
    Rules: a fact is never invented — a flat field that is null makes no fact,
    a missing fact leaves the flat field alone; the reported peak from the
@@ -23,7 +29,8 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
-/* fact key ↔ flat field; a boolean fact keeps its tri-state */
+/* fact key ↔ flat field (the lease terms: their key under the record's
+   commercial block) ↔ unit; a boolean fact keeps its tri-state */
 var MAP = [
   ['installedChargerKw', 'installedKw', 'kW'],
   ['reportedPowerKw', 'reportedPeakKw', 'kW'],
@@ -31,12 +38,25 @@ var MAP = [
   ['shaRemainingYears', 'termYearsRemaining', 'years'],
   ['utility', 'utility', null],
   ['rateSchedule', 'rateSchedule', null],
-  ['monthlyRentUsd', null, 'USD/month'],
-  ['revShare', null, 'fraction'],
-  ['revSharePerKwh', null, 'USD/kWh']
+  ['monthlyRentUsd', null, 'USD/month', 'rentMonthly'],
+  ['revShare', null, 'fraction', 'revenueShare'],
+  ['revSharePerKwh', null, 'USD/kWh', 'kwhShare']
 ];
 function num(v) { if (v === null || v === undefined || v === '') return null; var n = Number(v); return isFinite(n) ? n : null; }
 function has(v) { return v !== null && v !== undefined && v !== ''; }
+
+/* The CRM keeps `archived`, the register `lifecycleStatus`; an archive or a
+   restore through either door writes both (archiveState). Where they
+   disagree, the register page's bulk archive or restore moved `archived`
+   alone (before 2026-10-25): that flag is the last thing a person did to
+   the site, so it wins, and the register's next write carries it into both. */
+function lifecycleOf(d) {
+  d = d || {};
+  if (d.archived === true) return 'archived';
+  if (d.archived === false && d.lifecycleStatus === 'archived') return 'active';
+  return d.lifecycleStatus || 'active';
+}
+function archiveState(archived) { return { archived: archived === true, lifecycleStatus: archived === true ? 'archived' : 'active' }; }
 
 function normalize(id, data) {
   data = data || {};
@@ -44,7 +64,7 @@ function normalize(id, data) {
   d.siteId = d.siteId || id;
   d.name = d.name || '';
   d.revision = d.revision || 1;
-  d.lifecycleStatus = d.lifecycleStatus || (d.archived === true ? 'archived' : 'active');
+  d.lifecycleStatus = lifecycleOf(d);
   d.flags = Array.isArray(d.flags) ? d.flags : [];
   d.externalSiteIds = d.externalSiteIds || {};
   d.portfolioIds = Array.isArray(d.portfolioIds) ? d.portfolioIds : [];
@@ -61,9 +81,9 @@ function normalize(id, data) {
       if (m[0] === 'reportedPowerKw' && d.peakUnresolved) d.facts[m[0]].reviewStatus = 'needs_definition_review';
     });
     var cm = d.commercial || {};
-    if (has(cm.rentMonthly)) d.facts.monthlyRentUsd = { value: num(cm.rentMonthly), unit: 'USD/month', kind: 'supplied', raw: String(cm.rentMonthly), source: { profile: 'site-crm', field: 'commercial.rentMonthly' }, reviewStatus: 'unreviewed' };
-    if (has(cm.revenueShare)) d.facts.revShare = { value: num(cm.revenueShare), unit: 'fraction', kind: 'supplied', raw: String(cm.revenueShare), source: { profile: 'site-crm', field: 'commercial.revenueShare' }, reviewStatus: 'unreviewed' };
-    if (has(cm.kwhShare)) d.facts.revSharePerKwh = { value: num(cm.kwhShare), unit: 'USD/kWh', kind: 'supplied', raw: String(cm.kwhShare), source: { profile: 'site-crm', field: 'commercial.kwhShare' }, reviewStatus: 'unreviewed' };
+    MAP.forEach(function (m) {
+      if (m[3] && has(cm[m[3]])) d.facts[m[0]] = { value: num(cm[m[3]]), unit: m[2], kind: 'supplied', raw: String(cm[m[3]]), source: { profile: 'site-crm', field: 'commercial.' + m[3] }, reviewStatus: 'unreviewed' };
+    });
     if (d.screening && d.screening.pods != null && !d.opportunity) d.opportunity = { legacyProxy: { scenario: d.screening.label || 'EVCS legacy proxy v1', kind: 'proxied', status: 'screened', pods: num(d.screening.pods), screenKw: num(d.screening.screenKw), reserveKw: num(d.screening.reserveKw), itKw: num(d.screening.pods) == null ? null : num(d.screening.pods) * 75, facilityKw: num(d.screening.pods) == null ? null : num(d.screening.pods) * 90, legacyHistoricalPods: num(d.screening.pods), caveat: d.screening.note || null } };
   }
   d.links = d.links && typeof d.links === 'object' ? d.links : {};
@@ -82,16 +102,38 @@ function flatten(doc) {
   if (fv('utility') !== undefined) out.utility = fv('utility');
   if (typeof a === 'object' && a) { if (a.city) out.city = a.city; if (a.state) out.state = a.state; if (a.zip) out.zip = String(a.zip); }
   var cm = Object.assign({}, d.commercial || {});
-  if (fv('monthlyRentUsd') !== undefined) cm.rentMonthly = fv('monthlyRentUsd');
-  if (fv('revShare') !== undefined) cm.revenueShare = fv('revShare');
-  if (fv('revSharePerKwh') !== undefined) cm.kwhShare = fv('revSharePerKwh');
+  MAP.forEach(function (m) { if (m[3] && fv(m[0]) !== undefined) cm[m[3]] = fv(m[0]); });
   if (Object.keys(cm).length) out.commercial = cm;
   var lp = d.opportunity && d.opportunity.legacyProxy;
   if (lp) out.screening = { label: lp.scenario || 'EVCS legacy proxy v1', screenKw: lp.screenKw == null ? null : lp.screenKw, pods: lp.pods == null ? null : lp.pods, reserveKw: lp.reserveKw == null ? null : lp.reserveKw, note: lp.caveat || null, status: lp.status || null };
-  out.archived = d.lifecycleStatus === 'archived';
+  /* a register write never undoes an archive: the lifecycle is read the one way and written with the flag */
+  out.lifecycleStatus = lifecycleOf(d); out.archived = out.lifecycleStatus === 'archived';
   if (d.links && d.links.projectId) out.projectId = d.links.projectId;
   out.flags = Array.isArray(d.flags) ? d.flags : [];
   return out;
+}
+
+/* What an edit of the flat fields says of the facts (the site record's
+   Save, api/site-crm.js site-save): one entry { fact, value, unit } for
+   each mapped field the edit SENDS whose value is not the fact's. A field
+   not sent says nothing; a blank where there is no fact makes none (unknown
+   stays unknown); a blank over a fact is the person clearing it. */
+function factEdits(doc, flat) {
+  var f = (doc && doc.facts) || {}, cm = (flat && flat.commercial) || {}, out = [];
+  flat = flat || {};
+  MAP.forEach(function (m) {
+    var v = m[1] ? flat[m[1]] : cm[m[3]];
+    if (v === undefined) return;
+    var value = m[0] === 'evcsOwnsMeter' ? (v === true ? true : v === false ? false : null) : !has(v) ? null : m[2] ? num(v) : String(v);
+    var cur = f[m[0]], was = cur && cur.value !== undefined ? cur.value : null;
+    if (cur ? sameValue(was, value) : value === null) return;
+    out.push({ fact: m[0], value: value, unit: m[2] });
+  });
+  return out;
+}
+function sameValue(a, b) {
+  if (a == null || b == null) return a == null && b == null;
+  return typeof a === 'number' || typeof b === 'number' ? Number(a) === Number(b) : a === b;
 }
 
 /* the street line, whichever shape the record holds */
@@ -107,4 +149,4 @@ function zipFromAddress(a) {
   if (!m && !/\b(?:box|suite|ste|unit|apt|#)\s*\d{5}/i.test(t)) m = /(\d{5})(?:-\d{4})?\s*(?:,?\s*(?:USA|US|United States))?\s*$/i.exec(t);
   return m ? m[1] : null;
 }
-module.exports = { normalize: normalize, flatten: flatten, addressLine: addressLine, zipFromAddress: zipFromAddress, MAP: MAP };
+module.exports = { normalize: normalize, flatten: flatten, factEdits: factEdits, lifecycleOf: lifecycleOf, archiveState: archiveState, addressLine: addressLine, zipFromAddress: zipFromAddress, MAP: MAP };

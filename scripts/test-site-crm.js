@@ -22,6 +22,13 @@
        only by the endpoint; the path is never taken from the request
      · the EVCS intake is imported by the register (scripts/tests/
        tportfolioassets.js); the one mapping lives there
+     · the register and the site record are one document through one door:
+       a reload of the site record carries what the register saved on it
+       (power evidence, flags, pipeline, lifecycle, portfolios); an edit of
+       a mapped field writes its fact too, kind manual, so the register's
+       next write keeps it and an import that disagrees is a conflict; an
+       archive or restore writes archived and lifecycleStatus together and
+       no register write, import or undo brings an archived site back
      · the pro forma reproduces the workbook case (tolerance 1e-7), reports
        "Not defined" when there is no IRR root (never 0%), and stores each
        run as an immutable scenario
@@ -61,6 +68,49 @@ async function rejects(p, status, re) { try { await p; } catch (e) { assert.equa
 function b64(s) { return Buffer.from(s).toString('base64'); }
 var PDF = b64('%PDF-1.4\n1 0 obj << >> endobj\n%%EOF');
 function audits(action) { var out = []; db.data.forEach(function (v, k) { if (k.indexOf('omega_audit/') === 0 && (!action || v.action === action)) out.push(v); }); return out; }
+
+/* THE ONE DOOR, as api/site-crm.js mounts it (REG.owns(req) → the register,
+   else the site CRM), with the register built on THIS store: its own client
+   ignores undefined, as production's regDb() does, while the site CRM's
+   refuses it. The register and the site record are two doors onto one
+   document, and what one wrote must survive the other's next write. */
+var AS = require('../api/_lib/portfolio/assets'), EVCS = require('../api/_lib/portfolio/evcs'), CSV = require('../api/_lib/portfolio/csv');
+function regDb(d) { var v = Object.create(d); v.ignoreUndefined = true; Object.defineProperty(v, 'seq', { get: function () { return d.seq; }, set: function (n) { d.seq = n; } }); return v; }
+var register = siteCrm.register._make({ A: Object.assign({}, A, { billingOf: async function () { return { tier: 'standard', addons: [], toolOverrides: {} }; } }),
+  db: function () { return regDb(db); }, bucket: function () { return bucket; }, authenticate: async function (r) { return r.caller; }, now: function () { return '2026-10-20T15:00:00.000Z'; } });
+function door(method, body, caller) {
+  var req = { method: method, body: method === 'POST' ? Object.assign({ org: ORG }, body) : undefined, query: method === 'GET' ? Object.assign({ org: ORG }, body || {}) : {}, caller: caller };
+  return siteCrm.register.owns(req) ? register(req, res()) : siteCrm.handler(req, res());
+}
+/* an EVCS site intake as the register's import reads it (api/_lib/portfolio/evcs.js), one row a location */
+function intake(rows) {
+  return Buffer.from(CSV.stringify([EVCS.COLUMNS.map(function (c) { return c.header; })].concat(rows.map(function (r) {
+    return EVCS.COLUMNS.map(function (c) { return r[c.key] == null ? '' : r[c.key]; });
+  }))));
+}
+async function importSites(caller, rows, accept) {
+  var p = await door('POST', { action: 'import-preview', fileName: 'intake.csv', base64: intake(rows).toString('base64') }, caller);
+  if (p.alreadyCommitted) return { preview: p, commit: null };
+  return { preview: p, commit: await door('POST', { action: 'import-commit', importId: p.importId, planHash: p.planHash, acceptConflicts: accept || [] }, caller) };
+}
+var HARBOR = { locationId: '901', name: 'Harbor Garage', street: '1 Harbor Way', city: 'Oakland', state: 'CA', zip: '94607', installedChargerKw: 100, reportedPowerKw: 80, evcsOwnsMeter: 'TRUE', shaRemainingYears: 7, monthlyRentUsd: 500, revShare: 6 };
+var MILL = { locationId: '902', name: 'Mill Street Lot', street: '40 Mill St', city: 'Eugene', state: 'OR', zip: '97401', installedChargerKw: 60, reportedPowerKw: 95 };
+function siteOf(loc) { return AS.canonicalSiteId(ORG, 'evcs', loc.locationId); }
+function stored(id) { return db.data.get(O + '/sites/' + id); }
+/* what the site record's Save site facts posts (site-crm.html wireEditForm):
+   every field, as the page shows it, with the person's changes on top */
+function editForm(s, change) {
+  var cm = s.commercial || {};
+  function v(x) { return x == null ? null : x; }
+  return Object.assign({ action: 'site-save', id: s.id, name: s.name, city: s.city || null, state: s.state || null, address: s.address || null, zip: s.zip, hostType: s.hostType,
+    status: s.status || null, notes: s.notes || null, siteScopes: s.siteScopes, tags: s.tags, meters: s.meters,
+    installedKw: s.installedKw, reportedPeakKw: s.reportedPeakKw, meterOwned: s.meterOwned, termYearsRemaining: s.termYearsRemaining,
+    availablePowerMw: s.availablePowerMw, serviceCapacityKw: s.serviceCapacityKw, existingPeakKw: s.existingPeakKw, powerPricePerKwh: s.powerPricePerKwh,
+    ppaRatePerKwh: s.ppaRatePerKwh, ppaEscalatorPct: s.ppaEscalatorPct, ppaTermYears: s.ppaTermYears, ppaPriceSchedule: s.ppaPriceSchedule || [], ppaYear1Kwh: s.ppaYear1Kwh,
+    itcEnergyCommunity: s.itcEnergyCommunity, itcDomesticContent: s.itcDomesticContent,
+    rentPerKwMonth: v(cm.rentPerKwMonth), rentMonthly: v(cm.rentMonthly), rentEscalatorPct: v(cm.rentEscalatorPct), revenueShare: v(cm.revenueShare), computePricePerGpuHour: v(cm.computePricePerGpuHour),
+    annualUsageKwh: s.annualUsageKwh, monthlyUsageKwh: Array.isArray(s.monthlyUsageKwh) ? s.monthlyUsageKwh.join(',') : null, usageNotes: s.usageNotes }, change || {});
+}
 var count = 0; async function test(name, fn) { seed(); await fn(); count++; console.log('PASS ' + name); }
 async function quietly(fn) { var was = console.error; console.error = function () {}; try { return await fn(); } finally { console.error = was; } }
 
@@ -849,6 +899,159 @@ function seed() {
     var ed = fs.readFileSync(path.join(__dirname, '..', 'editor.html'), 'utf8');
     assert.match(ed, /function omegaSiteDesignPush\(\)/); assert.match(ed, /action:'design-sync', ids:\[S\.siteId\], source:'editor'/); assert.match(ed, /S\.siteId\s*=\s*\(typeof d\.siteId==='string'/); assert.match(ed, /omegaSiteDesignPush\(\); \}catch\(_e\)\{\}/);
   });
+  console.log('\nthe register and the site record: one document, two doors');
+  await test('a reload of the site record keeps what the register saved on it: the power evidence the Power & bills tab reads, the flags, the pipeline, the lifecycle, the portfolios', async function () {
+    await importSites(PM, [HARBOR, MILL]);
+    var sid = siteOf(HARBOR), opened = (await door('GET', { site: sid }, PM)).site;
+    var pe = await door('POST', { action: 'power-evidence', siteId: sid, expectedRevision: opened.revision, limits: { approvedImport: { kw: 400, source: 'utility letter 2026-09-12' } }, required: ['approvedImport'], baselineKw: 150, reserveKw: 20, topologyConfirmed: true }, BOSS);
+    assert.equal(pe.powerEvidence.verifiedKw, 230);
+    /* the page's Save reloads the record (site-crm.html load(true)) */
+    var s = (await door('GET', { site: sid }, PM)).site;
+    assert.ok(s.powerEvidence, 'the saved power evidence is on the reloaded site record (the Power & bills tab reads DATA.site.powerEvidence)');
+    assert.deepEqual(s.powerEvidence.limits.approvedImport, { kw: 400, source: 'utility letter 2026-09-12', evidenceFileId: null });
+    assert.equal(s.powerEvidence.baseline.kw, 150); assert.equal(s.powerEvidence.reserveKw, 20); assert.equal(s.powerEvidence.topologyConfirmed, true);
+    assert.equal(s.powerEvidence.verifiedKw, 230); assert.equal(s.powerEvidence.headroom.bindingLimit, 'approvedImport'); assert.equal(s.powerEvidence.fit.pods, 2);
+    assert.equal(s.powerEvidence.classification.level, 'proxy');
+    assert.equal(s.revision, opened.revision + 1, 'the next save names the revision the power evidence moved it to');
+    /* the pipeline, the portfolios, the compute desk's stamp and the import's attention flags ride on the same record */
+    await door('POST', { action: 'crm-link', siteId: sid, stage: 'qualifying' }, PM);
+    var pf = await door('POST', { action: 'portfolio-save', name: 'West coast', add: [sid] }, PM);
+    stored(sid).computeAgreement = { id: 'ca_901', state: 'requested', at: '2026-10-20T15:00:00.000Z' };
+    s = (await door('GET', { site: sid }, PM)).site;
+    assert.equal(s.crm.stage, 'qualifying'); assert.equal(s.crm.owner, 'pm@evcs.com');
+    assert.deepEqual(s.portfolioIds, [pf.portfolioId]);
+    assert.deepEqual(s.computeAgreement, { id: 'ca_901', state: 'requested', at: '2026-10-20T15:00:00.000Z' });
+    assert.equal(s.lifecycleStatus, 'active'); assert.equal(s.archived, false);
+    assert.deepEqual(s.flags.map(function (f) { return f.code; }), ['POWER_DEFINITION_CONFLICT', 'UTILITY_MISSING', 'TARIFF_MISSING', 'SWITCHGEAR_MISSING']);
+    var mill = (await door('GET', { site: siteOf(MILL) }, PM)).site;
+    assert.deepEqual(mill.flags.filter(function (f) { return f.severity === 'review'; }).map(function (f) { return f.code; }), ['POWER_DEFINITION_CONFLICT', 'POWER_EXCEEDS_INSTALLED']);
+    assert.ok(mill.flags.some(function (f) { return f.code === 'METER_UNKNOWN'; }));
+    /* the register's list is the same view, site by site */
+    var row = (await door('GET', {}, PM)).sites.filter(function (x) { return x.id === sid; })[0];
+    assert.equal(row.powerEvidence.verifiedKw, 230); assert.equal(row.crm.stage, 'qualifying'); assert.deepEqual(row.portfolioIds, [pf.portfolioId]); assert.equal(row.lifecycleStatus, 'active');
+    /* a site the register never wrote has the empty shapes, never undefined */
+    var bare = (await door('GET', { site: SITE }, PM)).site;
+    assert.equal(bare.powerEvidence, null); assert.deepEqual(bare.flags, []); assert.equal(bare.crm, null);
+    assert.equal(bare.lifecycleStatus, 'active'); assert.deepEqual(bare.portfolioIds, []); assert.equal(bare.computeAgreement, null);
+    /* the explicit list, never the record spread: nothing the page does not read crosses */
+    assert.equal(s.facts, undefined); assert.equal(s.opportunity, undefined); assert.equal(s.sourceRefs, undefined);
+    /* and the page reads them in the shape the register keeps */
+    var sc = fs.readFileSync(path.join(__dirname, '..', 'site-crm.html'), 'utf8');
+    assert.match(sc, /pe = s\.powerEvidence \|\| \{\}/);
+    assert.match(sc, /flagged\(s, 'POWER_EXCEEDS_INSTALLED'\)/); assert.match(sc, /flagged\(s, 'METER_UNKNOWN'\) && s\.meterOwned == null/);
+    assert.ok(!/s\.flags\.peakExceedsInstalled|s\.flags\.meterUnknown/.test(sc), 'the flags are the register’s list of codes, not the retired import script’s object');
+  });
+  await test('an edit on the site record is the register’s fact too: entered by the person, kind manual, so the next register write keeps it and an import that disagrees is a conflict', async function () {
+    await importSites(PM, [HARBOR, MILL]);
+    var sid = siteOf(HARBOR), was = stored(sid);
+    assert.equal(was.facts.installedChargerKw.kind, 'supplied'); assert.equal(was.facts.monthlyRentUsd.value, 500);
+    /* the person changes the nameplate and the rent on Save site facts; the form sends every other field as shown */
+    var page = (await door('GET', { site: sid }, PM)).site;
+    await door('POST', editForm(page, { installedKw: 150, rentMonthly: 900 }), PM);
+    /* the register's next write on the site, a review of a field the edit never touched */
+    var rv = await door('POST', { action: 'field-review', siteId: sid, field: 'utility', value: 'PG&E', reason: 'From the bill', expectedRevision: stored(sid).revision }, BOSS);
+    assert.equal(rv.ok, true);
+    var after = (await door('GET', { site: sid }, PM)).site;
+    assert.equal(after.installedKw, 150, 'the register’s write did not put the old nameplate back');
+    assert.equal(after.commercial.rentMonthly, 900, 'nor the old rent');
+    assert.equal(after.reportedPeakKw, 80); assert.equal(after.meterOwned, true); assert.equal(after.termYearsRemaining, 7); assert.equal(after.commercial.revenueShare, 0.06);
+    /* the facts: entered by the person, kind manual; what was only re-sent stays as the import supplied it */
+    var f = stored(sid).facts;
+    assert.equal(f.installedChargerKw.value, 150); assert.equal(f.installedChargerKw.kind, 'manual'); assert.equal(f.installedChargerKw.source.enteredBy, 'pm@evcs.com');
+    assert.equal(f.installedChargerKw.reviewStatus, 'entered_unreviewed'); assert.equal(f.installedChargerKw.unit, 'kW');
+    assert.equal(AS.protectedFact(f.installedChargerKw), true, 'the register’s conflict rule protects it'); assert.equal(AS.protectedFact(f.reportedPowerKw), false);
+    assert.equal(f.installedChargerKw.metricDefinition, 'aggregate_installed_charger_nameplate', 'the definition the import gave the figure is carried over');
+    assert.equal(f.installedChargerKw.previous[0].value, 100); assert.equal(f.installedChargerKw.previous[0].kind, 'supplied');
+    assert.equal(f.monthlyRentUsd.value, 900); assert.equal(f.monthlyRentUsd.kind, 'manual'); assert.equal(f.monthlyRentUsd.unit, 'USD/month');
+    ['reportedPowerKw', 'evcsOwnsMeter', 'shaRemainingYears', 'revShare'].forEach(function (k) { assert.equal(f[k].kind, 'supplied', k + ' was only re-sent'); });
+    assert.equal(f.utility.reviewStatus, 'reviewed');
+    assert.equal(rv.revision, was.revision + 2, 'the edit moved the revision as every register write does, so a page holding the old one is refused');
+    assert.ok(audits('sitecrm-site-save').some(function (a) { return a.siteId === sid && a.facts.join() === 'installedChargerKw,monthlyRentUsd'; }), 'the audit row names the facts entered');
+    /* the same file again does not overwrite the edit: each disagreement is a conflict a reviewer decides */
+    var again = await door('POST', { action: 'import-preview', fileName: 'intake.csv', base64: intake([HARBOR, MILL]).toString('base64') }, PM);
+    assert.deepEqual(again.conflicts.map(function (c) { return [c.siteId, c.field, c.from, c.to]; }).sort(), [[sid, 'installedChargerKw', 150, 100], [sid, 'monthlyRentUsd', 900, 500]]);
+    assert.equal(again.counts.conflicts, 2); assert.equal(again.counts.updated, 0);
+    await door('POST', { action: 'import-commit', importId: again.importId, planHash: again.planHash }, PM);
+    var kept = (await door('GET', { site: sid }, PM)).site;
+    assert.equal(kept.installedKw, 150); assert.equal(kept.commercial.rentMonthly, 900);
+    /* an administrator's edit is an entry too: the definition question on the reported peak stays open until the register's review */
+    var mid = siteOf(MILL), mill = (await door('GET', { site: mid }, BOSS)).site;
+    assert.equal(mill.peakUnresolved, true);
+    await door('POST', editForm(mill, { reportedPeakKw: 55, termYearsRemaining: 4 }), BOSS);
+    var mf = stored(mid).facts;
+    assert.equal(mf.reportedPowerKw.value, 55); assert.equal(mf.reportedPowerKw.kind, 'manual'); assert.equal(mf.reportedPowerKw.reviewStatus, 'entered_unreviewed'); assert.equal(mf.reportedPowerKw.source.enteredBy, 'boss@evcs.com');
+    assert.equal(mf.reportedPowerKw.metricDefinition, 'unresolved_reported_peak_or_active_interval_p95');
+    assert.equal(mf.shaRemainingYears.value, 4, 'a field the import left blank is entered as a fact of its own');
+    assert.equal(mf.evcsOwnsMeter, undefined, 'a meter still unknown makes no fact');
+    await door('POST', { action: 'field-review', siteId: mid, field: 'utility', value: 'EWEB', expectedRevision: stored(mid).revision }, BOSS);
+    mill = (await door('GET', { site: mid }, PM)).site;
+    assert.equal(mill.reportedPeakKw, 55); assert.equal(mill.termYearsRemaining, 4); assert.equal(mill.meterOwned, null); assert.equal(mill.peakUnresolved, true);
+    /* a field cleared over a fact is the person's blank, kept as such */
+    await door('POST', editForm(mill, { termYearsRemaining: null }), PM);
+    assert.equal(stored(mid).facts.shaRemainingYears.value, null); assert.equal(stored(mid).facts.shaRemainingYears.kind, 'manual');
+    await door('POST', { action: 'field-review', siteId: mid, field: 'rateSchedule', value: 'GS-2', expectedRevision: stored(mid).revision }, BOSS);
+    assert.equal((await door('GET', { site: mid }, PM)).site.termYearsRemaining, null, 'the cleared term did not come back');
+    /* a save that changes no mapped field writes no fact and leaves the revision alone */
+    var r0 = stored(sid).revision, f0 = JSON.stringify(stored(sid).facts);
+    await door('POST', editForm(kept, { notes: 'gate code 4417' }), PM);
+    assert.equal(stored(sid).revision, r0); assert.equal(JSON.stringify(stored(sid).facts), f0); assert.equal(stored(sid).notes, 'gate code 4417');
+    /* a record the register keeps no facts for derives them from its fields when read, so an edit there needs none */
+    var bare = (await door('GET', { site: SITE }, PM)).site;
+    await door('POST', editForm(bare, { installedKw: 120 }), PM);
+    assert.equal(stored(SITE).facts, undefined);
+    await door('POST', { action: 'field-review', siteId: SITE, field: 'utility', value: 'LADWP', expectedRevision: (await door('GET', { site: SITE }, PM)).site.revision }, BOSS);
+    assert.equal((await door('GET', { site: SITE }, PM)).site.installedKw, 120);
+  });
+  await test('an archive on the register page archives the site in the register too, and no register write brings it back; restore returns it to both', async function () {
+    await importSites(PM, [HARBOR, MILL]);
+    var sid = siteOf(HARBOR), r0 = stored(sid).revision;
+    await door('POST', { action: 'site-archive', ids: [sid] }, PM);
+    var view = await door('GET', { view: JSON.stringify({ pageSize: 500 }) }, PM);
+    assert.equal(view.rows.some(function (r) { return r.siteId === sid; }), false, 'the register no longer lists a site the register page archived');
+    assert.equal(view.excluded.archived, 1); assert.equal(view.summary.properties.sites, 2);
+    assert.equal(stored(sid).archived, true); assert.equal(stored(sid).lifecycleStatus, 'archived');
+    assert.equal(stored(sid).revision, r0 + 1, 'an archive moves the revision, as the register’s own archive does');
+    /* the register's next writes on the site: a review, then an import that changes it */
+    await door('POST', { action: 'field-review', siteId: sid, field: 'utility', value: 'PG&E', expectedRevision: stored(sid).revision }, BOSS);
+    await importSites(PM, [Object.assign({}, HARBOR, { reportedPowerKw: 85 }), MILL]);
+    assert.equal(stored(sid).facts.reportedPowerKw.value, 85, 'the import did write the site');
+    assert.equal(stored(sid).archived, true, 'the register’s writes did not undo the archive'); assert.equal(stored(sid).lifecycleStatus, 'archived');
+    assert.equal((await door('GET', {}, PM)).sites.some(function (x) { return x.id === sid; }), false, 'the register page still hides it');
+    var listed = (await door('GET', { archived: '1' }, PM)).sites.filter(function (x) { return x.id === sid; })[0];
+    assert.equal(listed.archived, true); assert.equal(listed.lifecycleStatus, 'archived');
+    /* restore returns it to both doors, and the next register write keeps it there */
+    await door('POST', { action: 'site-restore', ids: [sid] }, PM);
+    assert.equal(stored(sid).archived, false); assert.equal(stored(sid).lifecycleStatus, 'active');
+    await door('POST', { action: 'field-review', siteId: sid, field: 'rateSchedule', value: 'B-19', expectedRevision: stored(sid).revision }, BOSS);
+    assert.equal(stored(sid).archived, false); assert.equal(stored(sid).lifecycleStatus, 'active');
+    assert.equal((await door('GET', { view: JSON.stringify({ pageSize: 500 }) }, PM)).rows.some(function (r) { return r.siteId === sid; }), true);
+    assert.equal((await door('GET', {}, PM)).sites.some(function (x) { return x.id === sid; }), true);
+    /* undoing an import after the site was archived skips it rather than restoring an active copy */
+    var up = await importSites(PM, [Object.assign({}, HARBOR, { reportedPowerKw: 90 }), MILL]);
+    await door('POST', { action: 'site-archive', ids: [sid] }, PM);
+    var undo = await door('POST', { action: 'import-undo', importId: up.commit.importId }, PM);
+    assert.equal(undo.applied, 0); assert.equal(undo.skipped[0].siteId, sid);
+    assert.equal(stored(sid).archived, true); assert.equal(stored(sid).lifecycleStatus, 'archived'); assert.equal(stored(sid).facts.reportedPowerKw.value, 90);
+  });
+  await test('a site the register page archived before both fields were written reads archived in both doors and stays archived; one restored before then reads active', async function () {
+    await importSites(PM, [HARBOR, MILL]);
+    /* as the register page's bulk archive and restore left a record before 2026-10-25: the CRM's flag moved, the register's lifecycle did not */
+    var a = siteOf(HARBOR), m = siteOf(MILL);
+    Object.assign(stored(a), { archived: true, archivedAt: '2026-10-18T12:00:00.000Z', lifecycleStatus: 'active' });
+    Object.assign(stored(m), { archived: false, restoredAt: '2026-10-19T12:00:00.000Z', lifecycleStatus: 'archived' });
+    var view = await door('GET', { view: JSON.stringify({ pageSize: 500 }) }, PM);
+    assert.deepEqual(view.rows.map(function (r) { return r.siteId; }).filter(function (x) { return x === a || x === m; }), [m]);
+    var BR = require('../api/_lib/portfolio/site-bridge');
+    assert.equal(BR.flatten(BR.normalize(a, stored(a))).archived, true, 'flatten never undoes an archive');
+    assert.equal(BR.flatten(BR.normalize(m, stored(m))).archived, false);
+    await door('POST', { action: 'field-review', siteId: a, field: 'utility', value: 'PG&E', expectedRevision: stored(a).revision }, BOSS);
+    await door('POST', { action: 'field-review', siteId: m, field: 'utility', value: 'EWEB', expectedRevision: stored(m).revision }, BOSS);
+    assert.equal(stored(a).archived, true); assert.equal(stored(a).lifecycleStatus, 'archived');
+    assert.equal(stored(m).archived, false); assert.equal(stored(m).lifecycleStatus, 'active');
+    var crm = (await door('GET', {}, PM)).sites.map(function (x) { return x.id; });
+    assert.equal(crm.indexOf(a), -1); assert.ok(crm.indexOf(m) >= 0);
+  });
+
   console.log('\naudit');
   await test('every write is audited', async function () {
     await call('POST', { site: SITE, action: 'log', type: 'note', subject: 'n' }, PM);

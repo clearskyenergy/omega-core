@@ -225,6 +225,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) + (lm.auto ? ' \u00b7 from the design' : '') + (lm.host && lm.host.noRevenue ? ' \u00b7 <b style="color:#B45309">the host\u2019s system has no revenue on record: enter the PPA</b>' : '') : s.designModel && s.designModel.missing ? 'the model needs what the design card names' : s.latestDesign ? 'runs by itself from the design' : 'run the compute model';
     return '<div class="fact"><div class="k">Capital</div><div class="v">' + v + '</div><div class="n">' + n + '</div></div>';
   }
+  /* the import's attention flags on the record, as the register keeps them: a list of codes (api/_lib/portfolio/evcs.js) */
+  function flagged(s, code) { return (s.flags || []).some(function (f) { return f && f.code === code; }); }
   /* ── overview ── */
   function renderOverview() {
     var s = DATA.site, sc = s.screening || {}, cm = s.commercial || {};
@@ -249,8 +251,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="assume">The PPA the host\u2019s solar + storage is sold under: the compute model prices the host\u2019s system on it, so the IRR and the capital request are the whole project\u2019s. Enter the contract\u2019s own price table and its expected first-year production, and each year is priced as the contract reads (a bank can check it line by line); a rate and an escalator stand in without them. No PPA on record means the host\u2019s system earns the Site Map run\u2019s revenue, or nothing, and the model says so.</div>' +
       '</div><div class="card"><h3>Attention</h3>' +
       '<div class="li-body">' + (open ? '<span class="pill pill-warn">' + open + ' open follow-up' + (open > 1 ? 's' : '') + '</span>' : 'No open follow-ups.') + '</div>' +
-      ((s.flags && s.flags.peakExceedsInstalled) ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
-      ((s.flags && s.flags.meterUnknown) ? '<div class="li-body" style="margin-top:8px">Meter ownership ' + needsVer() + '.</div>' : '') +
+      (flagged(s, 'POWER_EXCEEDS_INSTALLED') ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
+      (flagged(s, 'METER_UNKNOWN') && s.meterOwned == null ? '<div class="li-body" style="margin-top:8px">Meter ownership ' + needsVer() + '.</div>' : '') +
       '</div></div>' +
       '<div class="grid2">' + usageCardHtml(s, fact) + (CANEDIT ? '<div class="card"><h3>Edit site facts</h3>' + editFormHtml(s) + '</div>' : '<div></div>') + '</div>';
     wireEditForm();

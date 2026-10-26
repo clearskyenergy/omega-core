@@ -212,13 +212,32 @@ function planUndo(importRecord, current) {
 }
 
 /* ── Field review (optimistic concurrency) ───────────────────────────── */
+/* A value a person ENTERED: kind manual, so planImport's conflict rule keeps
+   a later file from overwriting it; who entered it; reviewed only when the
+   person may review (ctx.canReview); the old value kept as history and the
+   definition the import gave the figure carried over unless redefined. */
+function enteredFact(old, input, ctx) {
+  var nf = { value: input.value, unit: input.unit || (old && old.unit) || null, kind: 'manual', raw: input.value == null ? null : String(input.value), source: { enteredBy: ctx.actor, reason: clean(input.reason, 300) || null }, importedAt: null, reviewStatus: ctx.canReview ? 'reviewed' : 'entered_unreviewed', reviewedBy: ctx.canReview ? ctx.actor : null, reviewedAt: ctx.canReview ? ctx.now : null, enteredAt: ctx.now };
+  if (old) { ['metricDefinition', 'measurementScope', 'observedPeriod', 'note'].forEach(function (k) { if (old[k] && !input.redefine) nf[k] = old[k]; }); nf.previous = [{ value: old.value, kind: old.kind, reviewStatus: old.reviewStatus, source: old.source || null }].concat(old.previous || []).slice(0, 5); }
+  return nf;
+}
+/* Several values entered in one edit (the site record's Save site facts,
+   read through site-bridge.factEdits): each the entry reviewField makes,
+   and one revision for the edit. Plain data on the way out: the site CRM's
+   Firestore client refuses an undefined, which the register's ignores. */
+function enterFacts(doc, entries, ctx) {
+  var out = JSON.parse(JSON.stringify(doc));
+  out.facts = out.facts || {};
+  (entries || []).forEach(function (e) { out.facts[e.fact] = enteredFact(out.facts[e.fact] || null, { value: e.value, unit: e.unit }, ctx); });
+  out.revision = (doc.revision || 1) + 1; out.updatedAt = ctx.now;
+  return JSON.parse(JSON.stringify(out));
+}
 function reviewField(doc, field, input, ctx) {
   if (!/^[A-Za-z][A-Za-z0-9_]{0,40}$/.test(field)) fail(400, 'Unknown field');
   if (input.expectedRevision == null || Number(input.expectedRevision) !== doc.revision) fail(409, 'This site changed since you opened it (revision ' + doc.revision + '). Reload and review again.');
   var out = JSON.parse(JSON.stringify(doc)), old = out.facts[field] || null, nf;
   if (input.hasOwnProperty('value')) {
-    nf = { value: input.value, unit: input.unit || (old && old.unit) || null, kind: 'manual', raw: input.value == null ? null : String(input.value), source: { enteredBy: ctx.actor, reason: clean(input.reason, 300) || null }, importedAt: null, reviewStatus: ctx.canReview ? 'reviewed' : 'entered_unreviewed', reviewedBy: ctx.canReview ? ctx.actor : null, reviewedAt: ctx.canReview ? ctx.now : null, enteredAt: ctx.now };
-    if (old) { ['metricDefinition', 'measurementScope', 'observedPeriod', 'note'].forEach(function (k) { if (old[k] && !input.redefine) nf[k] = old[k]; }); nf.previous = [{ value: old.value, kind: old.kind, reviewStatus: old.reviewStatus, source: old.source || null }].concat(old.previous || []).slice(0, 5); }
+    nf = enteredFact(old, input, ctx);
   } else {
     if (!old) fail(404, 'No value to review for ' + field);
     var st = String(input.reviewStatus || '');
@@ -388,5 +407,5 @@ function cleanTask(t) {
 }
 
 module.exports = { derivedChildren: derivedChildren, cleanAgreement: cleanAgreement, cleanEquipment: cleanEquipment, cleanTask: cleanTask, EQUIPMENT_CATEGORIES: EQUIPMENT_CATEGORIES, AGREEMENT_TYPES: AGREEMENT_TYPES, SCHEMA_VERSION: SCHEMA_VERSION, MAX_SITES: MAX_SITES, canonicalSiteId: canonicalSiteId, safeNamespace: safeNamespace, readUpload: readUpload, siteDocFrom: siteDocFrom,
-  planImport: planImport, applyPlan: applyPlan, planUndo: planUndo, reviewField: reviewField, normalizeView: normalizeView, applyView: applyView, summary: summary, coverage: coverage,
+  planImport: planImport, applyPlan: applyPlan, planUndo: planUndo, reviewField: reviewField, enterFacts: enterFacts, protectedFact: protectedFact, normalizeView: normalizeView, applyView: applyView, summary: summary, coverage: coverage,
   csvSafe: csvSafe, exportCsv: exportCsv, capabilities: capabilities, CAPS: CAPS, sha: sha, factVal: factVal, meterState: meterState };
