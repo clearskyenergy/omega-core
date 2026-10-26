@@ -25,7 +25,7 @@
   'use strict';
   var FT_PER_M = 3.280839895;
   var MAX_OVERZOOM = 2;              /* one level of CSS magnification */
-  var state = 'off', reason = '', map = null, host = null, maxZ = 20, maxAt = '', listeners = [], w0 = 0, h0 = 0;
+  var state = 'off', reason = '', map = null, host = null, maxZ = 20, maxAt = '', listeners = [], w0 = 0, h0 = 0, tilesIn = false;
 
   /* the browser Maps key: a machine's override first, as Site Map reads it */
   function key() {
@@ -88,6 +88,11 @@
           disableDefaultUI: true, gestureHandling: 'none', keyboardShortcuts: false, clickableIcons: false,
           isFractionalZoomEnabled: true, backgroundColor: '#E4E1D8'
         });
+        /* whether the photo in view has finished loading (a render waits on it) */
+        if (map.addListener) {
+          map.addListener('bounds_changed', function () { tilesIn = false; });
+          map.addListener('tilesloaded', function () { tilesIn = true; });
+        }
         state = 'ready';
         emit();
       } catch (e) { fail('Google Maps did not start, so the photo is Esri’s.'); }
@@ -125,6 +130,7 @@
   root.OmegaEditorV2Satellite = {
     key: key, zoomFor: zoomFor, camera: camera, start: start, frame: frame, hide: hide,
     state: function () { return state; }, reason: function () { return reason; }, maxZoom: function () { return maxZ; },
+    tilesLoaded: function () { return state === 'ready' && tilesIn; },
     VERSION: 'editor-v2-satellite/1'
   };
 })(typeof window !== 'undefined' ? window : global);

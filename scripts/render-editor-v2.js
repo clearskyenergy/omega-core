@@ -300,6 +300,18 @@ var server = http.createServer(function(req,res) {
     var lot=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {view:d.view};});
     var lotAcross=lot.view.w/lot.view.pxPerFt;
     assert(lotAcross<400&&Math.abs(lot.view.cx)<20&&Math.abs(lot.view.cy)<20,'Use as site boundary zooms to the 100 ft lot: '+JSON.stringify(lot.view));
+    /* on a site with nothing built, "Start with a guided build" is never
+       painted over a build in hand, and comes back when it is put away */
+    var promptShown=function(){return page.evaluate(function(){return !document.getElementById('build-prompt').hidden;});};
+    assert(await promptShown(),'a lot with nothing built asks for a guided build');
+    await page.click('[data-build="bess"]');
+    await page.waitForFunction(function(){return document.getElementById('dlg-build').open;},null,{timeout:5000});
+    await page.click('#build-place');
+    await page.waitForFunction(function(){return !document.getElementById('dlg-build').open&&!!OmegaEditorV2App.debug().held;},null,{timeout:10000});
+    assert(!(await promptShown()),'the prompt steps aside for the build in hand');
+    await page.keyboard.press('Escape');
+    assert(await promptShown()&&!(await page.evaluate(function(){return OmegaEditorV2App.debug().held;})),'put away, the prompt is back');
+    await page.click('#stages [data-stage="site"]');
     await page.click('#site-parcels');
     assert.strictEqual(await page.innerText('#site-parcels'),'Show parcel lines','and the switch turns them off again');
     assert.deepStrictEqual(errors,[]);

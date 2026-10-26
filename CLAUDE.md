@@ -1787,7 +1787,10 @@ working; only what a person reads says Omega Maximus.
   as the server laid it, on that clear spot; it follows the pointer a grid
   step at a time, R or a right-click turns it a quarter about its middle,
   a click puts it down under the pointer, Enter on the clear spot, Esc puts
-  it away and nothing is drawn. Moving and turning are the build module's
+  it away and nothing is drawn; a finger (no pointer to follow) taps to move
+  it and taps it to put it down. Once moved or turned, the clear spot it was
+  offered stays drawn (white dashes on a dark edge, read on any photo), and
+  "Start with a guided build" is never painted over it. Moving and turning are the build module's
   `movePlan` (a copy, through the geometry's own `rotateEntity`); red means
   a unit would stand on gear, an array table or a building, judged by their
   real outlines (`solids`, `clashes`: an L-shaped building does not claim
@@ -1807,6 +1810,12 @@ working; only what a person reads says Omega Maximus.
   photo, the address search, the county parcel and the 3D ground are the
   public services the page calls; the parcel, planner, cost, value-stack and
   solar answers are the real server code; its figures come from the run).
+  The photo is Google's, as the page shows it, waited on through
+  `OmegaEditorV2Satellite.tilesLoaded()` and credited on the page with the
+  map's own "Imagery ©" line; Icons is on; the BESS build is put down on
+  the spot it was offered (Enter) and the DCFC build moved by hand to the
+  frontage, turned with R and clicked down, each asserted clear of the
+  building and inside the lot line.
   It needs the network, so it is retaken by running it after an editor
   change, like the Site Map guide; the cover mark is
   `scripts/guides/assets/omega-glow.jpg`.

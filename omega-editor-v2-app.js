@@ -308,7 +308,7 @@
   }
 
   function setTool(name) {
-    held = null;
+    if (held) { held = null; paintBuildPrompt(); }
     tool = name;
     equipKey = null;
     draft = name === 'offset' ? { mode: 'offset', pts: [] } : null;
@@ -318,7 +318,7 @@
     $('cmd').focus();
   }
   function setEquip(key) {
-    held = null;
+    if (held) { held = null; paintBuildPrompt(); }
     tool = 'equip';
     equipKey = key;
     draft = null;
@@ -795,8 +795,20 @@
       return;
     }
     if (ev.button !== 0) return;
-    /* a held build goes down where it is, under the pointer */
-    if (held) { heldFollow(eventPoint(ev)); heldDrop(false); return; }
+    /* a held build goes down where it is, under the pointer; a finger has
+       no pointer to follow, so a tap moves it there and a tap on it puts
+       it down */
+    if (held) {
+      var at = eventPoint(ev);
+      if (ev.pointerType === 'touch' || ev.pointerType === 'pen') {
+        var hb = planBox(heldPlan()), tol = 12 / (view.pxPerFt || 1);
+        if (!hb || at.x < hb.minX - tol || at.x > hb.maxX + tol || at.y < hb.minY - tol || at.y > hb.maxY + tol) { heldFollow(at); requestDraw(); return; }
+        heldDrop(false);
+        return;
+      }
+      heldFollow(at); heldDrop(false);
+      return;
+    }
     var raw = eventPoint(ev);
     var sn = snapOf(raw, ev);
     lastSnap = sn;
@@ -2529,7 +2541,8 @@
   }
   function paintBuildPrompt() {
     var el = $('build-prompt');
-    if (el) el.hidden = !canvasBlank();
+    /* never over a build in hand */
+    if (el) el.hidden = !canvasBlank() || !!held;
   }
   function placedCtx() {
     return {
@@ -2564,7 +2577,8 @@
      clear spot found for it, follows the pointer on the grid, R or a
      right-click turns it a quarter, a click puts it down where it is,
      Enter puts it on the clear spot, Esc puts it away and nothing is
-     drawn. Red: a unit would stand on gear, a table or a building. */
+     drawn; a finger taps to move it and taps it to put it down. Red: a
+     unit would stand on gear, a table or a building. */
   var HELD_SAY = 'Move it where you want it and click to put it down. R or right-click turns it, Enter puts it on the clear spot found for it, Esc puts it away.';
   function holdBuild(plan, where, commit, opts) {
     var Bld = root.OmegaEditorV2Build, c = Bld && Bld.centreOf(plan);
@@ -2576,6 +2590,7 @@
     try { if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur(); } catch (err) { /* nothing focused */ }
     frameHeld();
     heldSay();
+    paintBuildPrompt();
     requestDraw();
   }
   function heldPlan() {
@@ -2605,6 +2620,7 @@
     var h = held;
     if (!h) return;
     held = null;
+    paintBuildPrompt();
     if (h.state !== state) { setStatus('The drawing changed, so the build was put away. Guided build makes it again.', true); requestDraw(); return; }
     var res = h.commit(suggested ? 0 : h.dx, suggested ? 0 : h.dy, h.turns);
     if (!res || !res.ok) setStatus((res && res.reason) || 'The build could not be put down.', true);
@@ -2612,11 +2628,12 @@
   }
   function heldAway(quiet) {
     held = null;
+    paintBuildPrompt();
     if (!quiet) setStatus('Put away. Nothing was drawn; Guided build makes it again.');
     requestDraw();
   }
   function heldKey(ev) {
-    if (ev.ctrlKey || ev.metaKey || ev.altKey) return false;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || view3dOpen()) return false;
     if (ev.key === 'Escape') { ev.preventDefault(); heldAway(); return true; }
     if (ev.key === 'Enter') { ev.preventDefault(); heldDrop(true); return true; }
     if ((ev.key === 'r' || ev.key === 'R') && !(ev.target && ev.target.id === 'cmd')) { ev.preventDefault(); heldTurn(); return true; }
@@ -2656,21 +2673,32 @@
     }
     layoutMap();
   }
+  /* a dashed box around a build, with a dark edge under it so it reads on
+     bright concrete and dark asphalt alike */
   function outlineBox(ctx, b, color, dash) {
     var a = worldToScreen({ x: b.minX, y: b.maxY }), z = worldToScreen({ x: b.maxX, y: b.minY });
     ctx.save();
+    ctx.strokeStyle = 'rgba(15,23,32,.55)';
+    ctx.lineWidth = 3.5;
+    ctx.strokeRect(a.x - 6, a.y - 6, z.x - a.x + 12, z.y - a.y + 12);
     ctx.strokeStyle = color;
-    ctx.lineWidth = 1.5;
+    ctx.lineWidth = 1.75;
     ctx.setLineDash(dash);
     ctx.strokeRect(a.x - 6, a.y - 6, z.x - a.x + 12, z.y - a.y + 12);
     ctx.restore();
   }
+  /* the clear spot it was offered, as it was offered (not turned) */
+  function heldHome() {
+    if (held.homeBox === undefined) held.homeBox = planBox(root.OmegaEditorV2Build.movePlan(held.plan, 0, 0, 0));
+    return held.homeBox;
+  }
   function drawHeld(ctx) {
     if (!held) return;
-    if (held.state !== state) { held = null; return; }
+    if (held.state !== state) { held = null; paintBuildPrompt(); return; }
     var plan = heldPlan(), list = [].concat(plan.conduits || [], plan.equipment || []), b = planBox(plan), i;
     /* the clear spot found for it, while the build is somewhere else */
-    if (b && (held.dx || held.dy)) outlineBox(ctx, { minX: b.minX - held.dx, minY: b.minY - held.dy, maxX: b.maxX - held.dx, maxY: b.maxY - held.dy }, 'rgba(22,32,43,.5)', [3, 4]);
+    var home = b && (held.dx || held.dy || held.turns) ? heldHome() : null;
+    if (home) outlineBox(ctx, home, '#FFFFFF', [3, 4]);
     ctx.save();
     ctx.globalAlpha = 0.8;
     names = { fixed: [], boxes: [] };
@@ -2914,7 +2942,8 @@
     for (i = 0; i < state.selection.length; i++) { e = D.find(state.doc, state.selection[i]); if (e && e.label) sel.push(String(e.label).trim()); }
     return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel, icons: iconsOn,
       entities: state.doc.entities.length, selection: state.selection.length,
-      held: held ? { turns: held.turns, dx: held.dx, dy: held.dy, clash: held.clash || 0, units: (held.plan.equipment || []).length } : null,
+      held: held ? { turns: held.turns, dx: held.dx, dy: held.dy, clash: held.clash || 0, units: (held.plan.equipment || []).length,
+        at: { x: held.c.x + held.dx, y: held.c.y + held.dy }, clear: { x: held.c.x, y: held.c.y } } : null,
       placed: selectedGear(),
       buildings: state.doc.entities.filter(function (x) { return x.type === 'obstruction' && x.building; }).map(function (x) { return { heightFt: x.building.heightFt, source: x.building.source, use: x.building.use }; }),
       map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote, source: mapAt.source || 'esri' } : null };
