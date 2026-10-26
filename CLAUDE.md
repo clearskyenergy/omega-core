@@ -1399,6 +1399,37 @@ workspace render check's portfolio flow. `docs/PORTFOLIO-ASSET-MANAGER-PLAN.md`
 carries the fold-in status and the go-live steps (deploy the rules by hand
 first; verify the EVCS org exists before seeding; no accounts are made).
 
+**Compute-site diligence is switched on for ONE workspace** (2026-10-25,
+Solela Capital, `solelacapital.com`; Thomas: "this is only for Solela, so
+you can market that it's Solela Capital"). The switch is
+`billing/current.toolOverrides['portfolio-diligence'] === true`, literally,
+staff-written by `scripts/enable-portfolio-diligence.js` (a dry run unless
+`--apply --confirm-org`; it also stages the staff-written `whiteLabel`
+through `whitelabel.js publicRecord()`). The workspace's own lists (intake
+types, host deals, exclusions, the offtake partner, term and fee, the
+target deal, the removal window) are `billing/current.portfolioDiligence`,
+never core. `api/_lib/portfolio/diligence.js` is the ONE rule (pure):
+stages brought in → screened → Earmarked → LOI sent → offtake → MSA →
+confirmed, or passed with a reason; seven gates, where screened is public
+data only and confirmed needs a document on the site's Files; four control
+routes and the term check; free power is the service less the MEASURED
+peak, never the nameplate. It lives on `sites/{id}.diligence`, written only
+through `api/site-crm.js` (`portfolio/diligence-door.js`, each change
+audited `sitecrm-diligence-*`): any editor acts, a member included; a
+viewer reads. Economics is never typed: the door runs `compute-contract.js
+contractCase` on the offtake's own terms, and the card's price slider is
+its ladder. `grid-screen.js` screens sites through grid-atlas,
+network-proximity and hosting-capacity (gates move to screened, never
+confirmed; carrier names need `FCC_BB_KEY`). `loi-package.js` sends ONE
+package to the offtake partner (Lightsmith in `partners.js`,
+`LIGHTSMITH_ENERGY_EMAIL`; 409 without it), never IRR, capex or price. Off,
+the answers carry no `diligence` and the pages draw nothing new; on, the
+pages print the workspace's own name (`D.brandOf`, never a literal).
+`omega-portfolio-diligence.js` draws it on `portfolio.html` and
+`site-crm.html`. `docs/PORTFOLIO-DILIGENCE.md`; held by `tdiligence.js`,
+`tgridscreen.js`, `tloipackage.js`, `tdiligencedoor.js`, `test-site-crm.js`
+and `check:workspace`.
+
 ## Helios Intake (2026-09-30)
 
 **Helios Energy Advisors' first-pass checklist, filled from the project and

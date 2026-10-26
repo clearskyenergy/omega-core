@@ -140,6 +140,8 @@
     </div>
   </div>
   <div id="msg"></div>
+  <!-- the compute-site diligence (omega-portfolio-diligence.js): drawn only when the register's answer carries it, i.e. the workspace's switch is on -->
+  <div id="dg" style="display:none;margin-bottom:4px"></div>
   <div class="pf-stats" id="stats" style="display:none">
     <div class="pf-stat"><div class="k">Sites</div><div class="v" id="c-sites">–</div><div class="n" id="c-sites-n">in this workspace's register</div></div>
     <div class="pf-stat"><div class="k">Positive IRR</div><div class="v" id="c-pf">–</div><div class="n" id="c-pf-n">sites whose case returns more than it costs</div></div>
@@ -205,6 +207,7 @@
 <script src="/omega-whitelabel.js"></script>
 <script src="/omega-workspace-shell.js"></script>
 <script src="/omega-newproject.js"></script>
+<script src="/omega-portfolio-diligence.js"></script>
 <script>
 (function () {
   'use strict';
@@ -218,6 +221,8 @@
   var ORG = '', WS = null, USER = null, SITES = [], NEXT = null, CANEDIT = false, CANADMIN = false, LOADED = false;
   /* the point of the register: the positive IRRs first (Tommy, 2026-10-11) */
   var SEL = {}, LAST_CLICK = null, SORT = { key: 'irr', dir: 'desc' }, OPEN = null;
+  /* the compute-site diligence: the answer's own block (null where the workspace's switch is off) and its mounted register */
+  var DILIG = null, DGR = null;
   var STATUSES = ['In editor', 'Funding', 'Development', 'Operating', 'On hold'];
   function byId(id) { return document.getElementById(id); }
 
@@ -632,9 +637,11 @@
       (CANEDIT ? '<button type="button" data-act="proforma">' + (lp ? 'Re-run pods from power' : 'Size pods from power') + '</button>' : '') +
       '<button type="button" data-act="irr">Export IRR</button><button type="button" data-act="agreement">Export term sheet</button>' +
       (CANEDIT ? '<button type="button" class="danger" data-act="' + (s.archived ? 'restore' : 'archive') + '">' + (s.archived ? 'Restore' : 'Archive') + '</button>' : '') + '</div>';
+    if (DILIG && s.diligence) html = '<div id="dr-dg"><div class="pf-loading"><div class="spin"></div>Loading the diligence…</div></div>' + html;
     S.drawer({ eyebrow: 'Site' + (s.archived ? ' · archived' : ''), title: s.name || 'Unnamed site', sub: (s.externalSiteIds && Object.keys(s.externalSiteIds).length ? Object.keys(s.externalSiteIds).map(function (k) { return k + ' ' + s.externalSiteIds[k]; }).join(' · ') : s.id), html: html,
       rows: [{ key: 'full', name: 'Open the full record', sub: 'Contacts, activity, documents, every scenario', href: siteHref(s), icon: S.ICON.file, cta: 'Open' }],
       ready: function (aside) {
+        if (DILIG && s.diligence) mountDiligenceCard(aside, s.id);
         Array.prototype.forEach.call(aside.querySelectorAll('#dr-acts [data-act]'), function (b) {
           b.addEventListener('click', function () {
             var a = b.getAttribute('data-act'); SEL = {}; SEL[s.id] = true;
@@ -654,7 +661,9 @@
   }
 
   /* ── loading ────────────────────────────────────────────────────────── */
-  function load(keep, more) {
+  /* keep: keep the table while it loads; more: the next page; stay: leave the
+     side panel as it is (the diligence card answers its own changes) */
+  function load(keep, more, stay) {
     if (!more) { if (!keep) byId('tbl').innerHTML = '<div class="pf-loading"><div class="spin"></div>Loading the register…</div>'; }
     var url = '/api/site-crm?org=' + encodeURIComponent(ORG) + (byId('f-archived').checked ? '&archived=1' : '') + (more && NEXT ? '&startAfter=' + encodeURIComponent(NEXT) : '');
     return api(url).then(function (j) {
@@ -663,9 +672,38 @@
       CANEDIT = j.canEdit !== false; CANADMIN = j.canArchive === true;
       Object.keys(SEL).forEach(function (id) { if (!SITES.some(function (s) { return s.id === id; })) delete SEL[id]; });
       renderStats(); render(); LOADED = true;
-      if (OPEN && byId('ows-overlay')) openDrawer(OPEN);
+      renderDiligence(j);
+      if (OPEN && byId('ows-overlay') && !stay) openDrawer(OPEN);
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
     }).catch(function (e) { msg(e.message); byId('tbl').innerHTML = '<div class="pf-empty"><b>Could not load the register.</b>' + esc(e.message) + '</div>'; try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {} });
+  }
+  /* ── the compute-site diligence (the approved mockup): the strip, the
+     tally under the workspace's name, the pipeline and its keys; and the
+     workspace's name on the page. Nothing is drawn where it is off. */
+  function renderDiligence(j) {
+    DILIG = j && j.diligence ? j.diligence : null;
+    var box = byId('dg');
+    if (!DILIG || !window.OmegaDiligence) { box.style.display = 'none'; if (DGR) { DGR.destroy(); DGR = null; } return; }
+    box.style.display = '';
+    var brand = DILIG.brand || {};
+    if (brand.name) { document.querySelector('.pf-head h1').textContent = brand.name; document.title = brand.name + ' · Portfolio'; }
+    var data = { sites: SITES, diligence: DILIG };
+    if (DGR) DGR.update(data);
+    else DGR = OmegaDiligence.mountRegister(box, { data: data, post: post, reload: function () { return load(true); }, openSite: openDrawer, msg: msg, canEdit: CANEDIT });
+  }
+  /* the next site to look at from the card: the register's order, passed sites left out */
+  function nextSite(id) {
+    var live = SITES.filter(function (s) { return s.diligence && s.diligence.stage !== 'passed' && !s.archived; }), i = live.map(function (s) { return s.id; }).indexOf(id);
+    return live.length ? live[(i + 1) % live.length].id : null;
+  }
+  function mountDiligenceCard(aside, id) {
+    var box = aside.querySelector('#dr-dg'); if (!box || !window.OmegaDiligence) return;
+    api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(id)).then(function (j) {
+      if (!j.diligence) { box.innerHTML = ''; return; }
+      /* a change answers with the card's new view, so the reload refreshes the register behind it and leaves the panel (and the card's last word) as it is */
+      OmegaDiligence.mountCard(box, { site: j.site, diligence: j.diligence, files: j.files || [], post: post, msg: msg, canEdit: CANEDIT,
+        reload: function () { return load(true, false, true); }, next: function () { var n = nextSite(id); if (n) openDrawer(n); } });
+    }).catch(function (e) { box.innerHTML = '<div class="pf-msg err">' + esc(e.message) + '</div>'; });
   }
   byId('btn-more').addEventListener('click', function () { load(true, true); });
   ['q', 'f-state', 'f-status', 'f-meter', 'f-pf', 'f-kind'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });

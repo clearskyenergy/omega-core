@@ -10,16 +10,25 @@
    environment variable wins, else the deal room's own list
    (fin_settings/dealroom.orgs.<key>), else nothing is mailed and the page
    says so. Pure: recipients() reads what it is given.
+
+   Lightsmith Energy is a compute-offtake partner (2026-10-25): it finds the
+   buyer of the compute and takes its fee from compute revenue. It is sent
+   ONE package for many sites (api/_lib/portfolio/loi-package.js, the
+   diligence's Send LOI package), never the one-site mail, so it carries
+   loiPackage. Its fee and term are a workspace's own diligence config,
+   never here.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 
 var PARTNERS = {
   terra: { key: 'terra', name: 'Terra Energy', role: 'solar', asks: 'a solar package and detail for the site', env: 'TERRA_ENERGY_EMAIL', settings: 'terra', funds: 'Terra usually arranges the funding of its own package; it is one of the partners, not the capital request.' },
-  helios: { key: 'helios', name: 'Helios Energy Advisors', role: 'capital', asks: 'a first-pass financing review', env: 'HELIOS_INTAKE_EMAIL', settings: 'helios', funds: 'The Helios intake (Site Map › Output) carries the full form; this sends the site facts.' }
+  helios: { key: 'helios', name: 'Helios Energy Advisors', role: 'capital', asks: 'a first-pass financing review', env: 'HELIOS_INTAKE_EMAIL', settings: 'helios', funds: 'The Helios intake (Site Map › Output) carries the full form; this sends the site facts.' },
+  lightsmith: { key: 'lightsmith', name: 'Lightsmith Energy', role: 'offtake', asks: 'compute offtake for the sites: a buyer, a term and a price, to a letter of intent', env: 'LIGHTSMITH_ENERGY_EMAIL', settings: 'lightsmith', loiPackage: true,
+    funds: 'Lightsmith finds the buyer of the compute and is paid from compute revenue; it is the offtake partner, not the capital request.' }
 };
 function valid(a) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(a || '').trim()); }
 function get(key) { return Object.prototype.hasOwnProperty.call(PARTNERS, key) ? PARTNERS[key] : null; }
-function list() { return Object.keys(PARTNERS).map(function (k) { var p = PARTNERS[k]; return { key: p.key, name: p.name, role: p.role, asks: p.asks, funds: p.funds }; }); }
+function list() { return Object.keys(PARTNERS).map(function (k) { var p = PARTNERS[k]; return { key: p.key, name: p.name, role: p.role, asks: p.asks, funds: p.funds, loiPackage: p.loiPackage === true }; }); }
 /* recipients(partner, env, settings) → { to: [], source } */
 function recipients(partner, env, settings) {
   env = env || {}; settings = settings || {};
