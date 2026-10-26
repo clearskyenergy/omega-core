@@ -123,4 +123,45 @@ check(plain.inside && ne.inside && mid.inside, 'every placement stays inside the
 check(dist(ne, { x: 520, y: 330 }) < dist(plain, { x: 520, y: 330 }) - 150, 'looking at the north-east corner puts it there: ' + JSON.stringify({ ne: ne, plain: plain }));
 check(dist(mid, { x: 300, y: 200 }) < 80, 'looking at the middle of the lot puts it in the middle: ' + JSON.stringify(mid));
 
+/* 7. In hand (Tommy, 2026-10-21: "it is just auto placing it, it should
+   work almost identical to how the other function does"): the editor holds
+   the plan; it moves whole and turns a quarter at a time about its middle,
+   the plan itself untouched; what it would stand on is judged by real
+   outlines; and it goes down where it was put. */
+var h = lot(600, 400, 0), hsite = Bld.contextOf(h.doc, 6);
+var hplan = GB.plan('bess', { mode: 'btm', kw: 1000, hours: 2, origin: hsite.origin, pxPerFt: 6 });
+Bld.situate(h.doc, hplan, hsite);
+var keep = JSON.stringify(hplan), c0 = Bld.centreOf(hplan);
+check(Bld.movable(hplan) && c0 && c0.w > c0.h, 'a BESS build is a row that can be moved: ' + JSON.stringify(c0));
+var moved = Bld.movePlan(hplan, 40, -25, 0);
+check(JSON.stringify(hplan) === keep, 'moving makes a copy: the plan is untouched');
+check(moved.equipment.every(function (e, i) { return Math.abs(e.x - hplan.equipment[i].x - 40) < 1e-9 && Math.abs(e.y - hplan.equipment[i].y + 25) < 1e-9; }), 'every unit moves by the same 40, -25 ft');
+check(moved.conduits.every(function (cd, i) { return cd.pts.every(function (q, k) { return Math.abs(q.x - hplan.conduits[i].pts[k].x - 40) < 1e-9 && Math.abs(q.y - hplan.conduits[i].pts[k].y + 25) < 1e-9; }); }), 'its conduit moves with it');
+var turned = Bld.movePlan(hplan, 0, 0, 1), c1 = Bld.centreOf(turned);
+check(Math.abs(c1.x - c0.x) < 0.2 && Math.abs(c1.y - c0.y) < 0.2 && Math.abs(c1.w - c0.h) < 0.2 && Math.abs(c1.h - c0.w) < 0.2, 'a quarter turn keeps its middle and stands the row on end: ' + JSON.stringify(c1));
+check(turned.equipment.every(function (e) { return e.rot === 90; }), 'each unit is turned 90° with it');
+check(turned.equipment.every(function (e) { return Math.round(e.x * 10) === e.x * 10 && Math.round(e.y * 10) === e.y * 10; }), 'a turned unit sits on whole tenths of a foot');
+var round = Bld.movePlan(hplan, 0, 0, 4);
+check(JSON.stringify(round.equipment.map(function (e) { return [e.x, e.y, e.rot % 360]; })) === JSON.stringify(hplan.equipment.map(function (e) { return [e.x, e.y, e.rot % 360]; })), 'four quarter turns bring it back');
+check(Bld.movePlan(hplan, 0, 0, -1).equipment[0].rot === 270, 'a turn the other way is three quarters');
+/* standing on something: an L-shaped building claims its walls, not its yard */
+var Lbuilding = { id: D.uid('e'), type: 'obstruction', layer: 'obstruction', closed: true, label: 'Building',
+  pts: [{ x: 200, y: 100 }, { x: 400, y: 100 }, { x: 400, y: 140 }, { x: 240, y: 140 }, { x: 240, y: 300 }, { x: 200, y: 300 }] };
+h.doc.entities.push(Lbuilding);
+var unit = function (x, y, w, hh) { return { ok: true, equipment: [{ type: 'equip', key: 'bess', label: 'BESS', x: x, y: y, w: w, h: hh, rot: 0 }], conduits: [], notes: [] }; };
+check(Bld.clashes(h.doc, unit(300, 120, 20, 8)) === 1, 'a BESS on the building\'s wing stands on it');
+check(Bld.clashes(h.doc, unit(320, 220, 20, 8)) === 0, 'in the yard the L wraps it is clear (its box would have said otherwise)');
+check(Bld.clashes(h.doc, unit(200, 200, 20, 8)) === 1 && Bld.clashes(h.doc, unit(191, 200, 20, 8)) === 1, 'half over a wall, or a foot over it, is on it');
+check(Bld.clashes(h.doc, unit(190, 200, 20, 8)) === 0, 'touching the wall is not standing on it');
+h.doc.entities.push({ id: D.uid('e'), type: 'conduit', layer: 'conduit', pts: [{ x: 0, y: 50 }, { x: 600, y: 50 }] });
+check(Bld.clashes(h.doc, unit(100, 50, 20, 8)) === 0, 'conduit under it is not in the way');
+var sol = Bld.solids(h.doc);
+check(Bld.clashes(h.doc, unit(300, 120, 20, 8), sol) === 1 && sol.length === 1, 'what is in the way is read once and asked again (one building here)');
+/* where it goes down: inside the lot, or not */
+check(Bld.onLotAll(Bld.movePlan(hplan, 40, 25, 0), hsite.boundary) === true && Bld.onLotAll(moved, hsite.boundary) === false && Bld.onLotAll(Bld.movePlan(hplan, 1000, 0, 0), hsite.boundary) === false,
+  'it says when it went down off the lot (25 ft south of a row 10 ft in is over the line)');
+var hst = D.createState(h.doc), put = Bld.place(hst, Bld.movePlan(hplan, 40, -25, 1));
+var got = hst.doc.entities.filter(function (e) { return put.ids.indexOf(e.id) >= 0 && e.type === 'equip'; });
+check(put.ok && got.length === hplan.equipment.length && got.every(function (e) { return e.rot === 90; }) && hst.selection.join() === put.ids.join(), 'put down turned and moved, as one group, selected');
+
 console.log('teditorv2place: ' + n + ' checks passed');

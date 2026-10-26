@@ -167,23 +167,68 @@ var server = http.createServer(function(req,res) {
     await page.click('#layer-parcels-toggle');
     assert(await page.evaluate(function(){return document.getElementById('parcel-detail').hidden&&getComputedStyle(document.getElementById('map-parcels')).display==='none';}),'off, the lines and the card go');
     /* The eight guided builds, end to end (Tommy, 2026-10-20: "make sure the
-       guided builds work"): each opens its dialog, asks the real planner,
-       lands on clear ground, and the view goes to it, selected. */
+       guided builds work"): each opens its dialog, asks the real planner and
+       comes back IN HAND on the clear spot found for it (Tommy, 2026-10-21:
+       "it is just auto placing it, it should work almost identical to how
+       the other function does"); Enter puts it down there, selected. An
+       Auto layout array is its lot's and goes straight down. */
     var builds=['der','autolayout','bess','topology','l2','dcfc','compute','engineering'];
+    var heldOf=function(){return page.evaluate(function(){return OmegaEditorV2App.debug().held;});};
     buildPosts.length=0;
     for (var bi=0; bi<builds.length; bi++) {
       var bid=builds[bi];
       await page.click('#stages [data-stage="design"]');
       await page.click('[data-build="'+bid+'"]');
       await page.waitForFunction(function(){return document.getElementById('dlg-build').open;},null,{timeout:5000});
+      var n0=await page.evaluate(function(){return OmegaEditorV2App.debug().entities;});
       await page.click('#build-place');
       await page.waitForFunction(function(){return !document.getElementById('dlg-build').open||!!document.getElementById('build-error').textContent;},null,{timeout:10000});
-      var placedState=await page.evaluate(function(){return {open:document.getElementById('dlg-build').open,err:document.getElementById('build-error').textContent,status:document.getElementById('status').textContent};});
-      assert(!placedState.open&&!placedState.err,bid+' places: '+JSON.stringify(placedState));
+      var heldState=await page.evaluate(function(){return {open:document.getElementById('dlg-build').open,err:document.getElementById('build-error').textContent,status:document.getElementById('status').textContent,held:OmegaEditorV2App.debug().held,n:OmegaEditorV2App.debug().entities};});
+      assert(!heldState.open&&!heldState.err,bid+' comes back from the planner: '+JSON.stringify(heldState));
+      if (bid!=='autolayout') {
+        assert(heldState.held&&heldState.held.units>0&&heldState.n===n0,bid+' is in hand and nothing is drawn yet: '+JSON.stringify(heldState));
+        assert(/click to put it down/.test(heldState.status),bid+' says how to put it down: '+heldState.status);
+        if (bid==='bess') await page.screenshot({path:path.join(out,'build-held.png')});
+        await page.keyboard.press('Enter');
+      }
+      var placedState=await page.evaluate(function(){return {status:document.getElementById('status').textContent,held:OmegaEditorV2App.debug().held,n:OmegaEditorV2App.debug().entities,sel:OmegaEditorV2App.debug().selection};});
+      assert(!placedState.held&&placedState.n>n0&&placedState.sel>0,bid+' is put down, selected: '+JSON.stringify(placedState));
       assert(/It is selected: drag to move it\./.test(placedState.status),bid+' says where it is: '+placedState.status);
       if (bid==='bess') await page.screenshot({path:path.join(out,'build-bess.png')});
     }
     assert.deepStrictEqual(buildPosts,builds,'each build asked the planner once: '+buildPosts.join());
+    /* By hand: it follows the pointer, R turns it a quarter, a click puts it
+       down under the pointer; Esc puts one away and nothing is drawn. */
+    var cvBox=await page.locator('#cv').boundingBox();
+    var held=async function(){
+      await page.click('[data-build="bess"]');
+      await page.waitForFunction(function(){return document.getElementById('dlg-build').open;},null,{timeout:5000});
+      await page.click('#build-place');
+      await page.waitForFunction(function(){return !document.getElementById('dlg-build').open&&!!OmegaEditorV2App.debug().held;},null,{timeout:10000});
+    };
+    await held();
+    var nHeld=await page.evaluate(function(){return OmegaEditorV2App.debug().entities;});
+    await page.keyboard.press('Escape');
+    var away=await page.evaluate(function(){return {held:OmegaEditorV2App.debug().held,n:OmegaEditorV2App.debug().entities,status:document.getElementById('status').textContent};});
+    assert(!away.held&&away.n===nHeld&&/Put away\. Nothing was drawn/.test(away.status),'Esc puts it away and draws nothing: '+JSON.stringify(away));
+    await held();
+    var px=cvBox.x+cvBox.width*0.3, py=cvBox.y+cvBox.height*0.35;
+    await page.mouse.move(px-40,py-30); await page.mouse.move(px,py,{steps:4});
+    var h1=await heldOf();
+    await page.keyboard.press('r');
+    var h2=await heldOf();
+    assert(h1&&h2&&(h1.dx||h1.dy)&&h2.turns===1&&h2.dx===h1.dx&&h2.dy===h1.dy,'it follows the pointer, and R turns it where it is: '+JSON.stringify([h1,h2]));
+    await page.click('#cv',{button:'right',position:{x:px-cvBox.x,y:py-cvBox.y}});
+    var h3=await heldOf();
+    assert(h3&&h3.turns===2,'a right-click turns it again: '+JSON.stringify(h3));
+    await page.keyboard.press('r'); await page.keyboard.press('r'); await page.keyboard.press('r');
+    var where=await page.evaluate(function(a){var d=OmegaEditorV2App.debug(),v=d.view;return {x:v.cx+(a.x-v.w/2)/v.pxPerFt,y:v.cy+(v.h/2-a.y)/v.pxPerFt};},{x:px-cvBox.x,y:py-cvBox.y});
+    await page.mouse.click(px,py);
+    var down=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {held:d.held,sel:d.selection,status:document.getElementById('status').textContent,view:d.view};});
+    assert(!down.held&&down.sel>0&&/It is selected/.test(down.status),'a click puts it down: '+JSON.stringify(down));
+    var gear=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return d.placed;});
+    assert(gear&&Math.abs(gear.cx-where.x)<=5.01&&Math.abs(gear.cy-where.y)<=5.01&&gear.rot.every(function(r){return r===90;}),'it went down under the pointer, on the grid, turned a quarter: '+JSON.stringify({gear:gear,pointer:where}));
+    await page.screenshot({path:path.join(out,'build-by-hand.png')});
     /* The Edit bar (Tommy, 2026-10-21: "an edit bar here for deleting things
        and undoing and re doing"): Copy and Paste the build just placed,
        Delete it, Undo and Redo, all from the ribbon on any tab */

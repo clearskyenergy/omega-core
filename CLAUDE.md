@@ -1781,6 +1781,22 @@ working; only what a person reads says Omega Maximus.
   first from the lot's south-west corner; inside the lot line, clear of the
   obstructions (by their extent) and of what is placed, beside the lot when
   there is no room (`scripts/tests/teditorv2place.js` §6).
+- **And you put it down** (Tommy, 2026-10-21: "it is just auto placing it,
+  it should work almost identical to how the other function does"): the
+  plan comes back IN HAND (`ctx.hold` → the editor's `holdBuild`), laid out
+  as the server laid it, on that clear spot; it follows the pointer a grid
+  step at a time, R or a right-click turns it a quarter about its middle,
+  a click puts it down under the pointer, Enter on the clear spot, Esc puts
+  it away and nothing is drawn. Moving and turning are the build module's
+  `movePlan` (a copy, through the geometry's own `rotateEntity`); red means
+  a unit would stand on gear, an array table or a building, judged by their
+  real outlines (`solids`, `clashes`: an L-shaped building does not claim
+  its yard; touching is not standing on); put down, it is one group,
+  selected, and the status says if it stands on something or crosses the
+  lot line. An array bound to its lot (Auto layout) goes straight down. The
+  ribbon's single unit shows the same box and icon under the pointer before
+  its click. `teditorv2place.js` §7; `check:editor-v2` holds, moves, turns,
+  drops and puts one away.
 - **Never a browser popup to confirm**: the Claude app's browser pane (and a
   kiosk) answers `window.confirm` "no" without showing it, so a button that
   asked that way did nothing (2026-10-20, the price book's Seed). Send to
