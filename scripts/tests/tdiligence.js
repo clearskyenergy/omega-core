@@ -20,7 +20,8 @@ var FILES = ['f_willserve', 'f_ia', 'f_quote', 'f_deed', 'f_pa', 'f_lease', 'f_a
 
 var passed = 0, failed = 0, queue = [];
 function test(name, fn) { queue.push([name, fn]); }
-function ctx(site, extra) { return Object.assign({ site: site, config: CFG, now: NOW, by: OWNER, role: 'owner', canReview: true, files: FILES, agreements: [] }, extra || {}); }
+/* the workspace's one person is a MEMBER (2026-10-25): every change is made as one */
+function ctx(site, extra) { return Object.assign({ site: site, config: CFG, now: NOW, by: OWNER, role: 'member', canEdit: true, files: FILES, agreements: [] }, extra || {}); }
 function apply(site, action, input, extra) { var r = D.change(site.diligence, action, input, ctx(site, extra)); if (!r.unchanged) site.diligence = r.diligence; return r; }
 function view(site, extra) { return D.view(site, Object.assign({ config: CFG, now: NOW, files: FILES, agreements: [] }, extra || {})); }
 function refused(fn, status, re) {
@@ -114,18 +115,17 @@ test('D05 the call: pursue takes it to Pursue, a pass needs a reason, a reopened
   s.diligence.history.forEach(function (h) { assert.equal(h.by, OWNER); assert.equal(h.at, NOW); assert.equal(h.what, 'decision'); });
 });
 
-test('D06 exclusions: a recorded residential or amenity-only value passes the site by rule, derived and never stored; only the owner reverses it, with a reason; a corrected fact lifts it', function () {
+test('D06 exclusions: a recorded residential or amenity-only value passes the site by rule, derived and never stored; an editor (a member too) reverses it only with a reason, kept with who; a viewer cannot; a corrected fact lifts it', function () {
   var s = chargerSite({ hostType: 'multifamily' }), v = view(s);
   assert.equal(v.stage, 'passed'); assert.equal(v.decision.choice, 'pass'); assert.equal(v.decision.by, 'rule');
   assert.deepEqual(v.decision.auto, { rule: 'residential', label: 'Residential charging', field: 'hostType', value: 'multifamily' });
   assert.equal(v.decision.reason, 'Solela does not take residential charging sites'); assert.equal(code(v)[0], 'EXCLUDED');
   assert.equal(s.diligence, undefined, 'nothing is written by reading');
-  refused(function () { apply(s, 'decide', { choice: 'pursue', reason: 'We want this one' }, { role: 'admin' }); }, 403, /Only the workspace owner/);
-  refused(function () { apply(s, 'decide', { choice: 'pursue', reason: 'We want this one' }, { role: 'member' }); }, 403);
-  refused(function () { apply(s, 'decide', { choice: 'pursue' }); }, 400, /Reversing an exclusion needs a reason/);
+  refused(function () { apply(s, 'decide', { choice: 'pursue', reason: 'We want this one' }, { role: 'viewer', canEdit: false }); }, 403, /read the diligence/);
+  refused(function () { apply(s, 'decide', { choice: 'pursue' }); }, 400, /excluded \(residential charging\): reversing an exclusion needs a reason/);
   refused(function () { apply(s, 'stage', { stage: 'screened' }); }, 409, /passed/);
   var r = apply(s, 'decide', { choice: 'pursue', reason: 'Commercial garage on a house meter; not residential charging' });
-  assert.deepEqual(r.event.overrides, ['residential']); assert.equal(s.diligence.exclusionOverrides.residential.by, OWNER);
+  assert.deepEqual(r.event.overrides, ['residential']); assert.equal(s.diligence.exclusionOverrides.residential.by, OWNER); assert.equal(s.diligence.exclusionOverrides.residential.role, 'member');
   assert.equal(s.diligence.exclusionOverrides.residential.field, 'hostType');
   v = view(s); assert.equal(v.stage, 'pursue'); assert.equal(v.decision.choice, 'pursue'); assert.equal(v.exclusions[0].overridden.reason, 'Commercial garage on a house meter; not residential charging');
   apply(s, 'chargers', { count: 12 });
@@ -157,8 +157,8 @@ test('D07 the stages: each forward move is earned, a jump checks every step it s
   apply(s, 'gate', { gate: 'fiber', state: 'fails', value: { reason: 'No carrier within 5 miles' } });
   apply(s, 'stage', { stage: 'screened' });
   assert.equal(s.diligence.stage, 'screened', 'a failing gate is still screened');
-  refused(function () { apply(s, 'stage', { stage: 'pursue' }); }, 409, /Pursue is the call/);
-  refused(function () { apply(s, 'stage', { stage: 'loi-sent' }); }, 409, /^Pursue: /);
+  refused(function () { apply(s, 'stage', { stage: 'pursue' }); }, 409, /Earmarking is the call/);
+  refused(function () { apply(s, 'stage', { stage: 'loi-sent' }); }, 409, /^Earmarked: /);
   apply(s, 'decide', { choice: 'pursue' });
   refused(function () { apply(s, 'stage', { stage: 'loi-sent' }); }, 409, /LOI as sent/);
   apply(s, 'offtake', { loiStatus: 'sent' });
@@ -179,7 +179,7 @@ test('D07 the stages: each forward move is earned, a jump checks every step it s
 });
 
 /* ── the gates ────────────────────────────────────────────────────────── */
-test('D08 the gates: screened is public data only; confirmed needs a document of the gate\'s kind ON the site\'s Files and an owner or admin; fails needs a reason; economics is never set by hand', function () {
+test('D08 the gates: screened is public data only; confirmed needs a document of the gate\'s kind ON the site\'s Files, and a member may confirm; fails needs a reason; economics is never set by hand', function () {
   var s = chargerSite();
   refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'screened' }); }, 400, /public data only/);
   refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'screened', source: { kind: 'counterparty', name: 'The seller says so' } }); }, 400, /public data only/);
@@ -193,7 +193,7 @@ test('D08 the gates: screened is public data only; confirmed needs a document of
   refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'confirmed', value: { carrier: 'Zayo' }, evidenceFileId: 'f_nowhere', source: doc('carrier-quote') }); }, 409, /not on this site/);
   refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'confirmed', value: { carrier: 'Zayo' }, evidenceFileId: 'f_archived', source: doc('carrier-quote') }); }, 409, /archived/);
   refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'confirmed', value: { carrier: 'Zayo' }, evidenceFileId: 'f_pending', source: doc('carrier-quote') }); }, 409, /finish uploading/);
-  refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'confirmed', value: { carrier: 'Zayo' }, evidenceFileId: 'f_quote', source: doc('carrier-quote') }, { canReview: false }); }, 403, /owner or an administrator/);
+  refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'confirmed', value: { carrier: 'Zayo' }, evidenceFileId: 'f_quote', source: doc('carrier-quote') }, { role: 'viewer', canEdit: false }); }, 403, /read the diligence but not change it/);
   refused(function () { apply(s, 'gate', { gate: 'fiber', state: 'confirmed', evidenceFileId: 'f_quote', source: doc('carrier-quote') }); }, 400, /Name the carrier/);
   apply(s, 'gate', { gate: 'fiber', state: 'confirmed', value: { carrier: 'Zayo', mrcUsd: 1850 }, evidenceFileId: 'f_quote', source: doc('carrier-quote') });
   fib = s.diligence.gates.fiber;
@@ -291,7 +291,7 @@ test('D11 control: each route is confirmed by its own paper, and the facts the p
   apply(own, 'control', { route: 'own' });
   refused(function () { apply(own, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_deed', source: doc('deed') }); }, 400, /owner entity/);
   apply(own, 'control', { own: { entity: 'Solela Sites I LLC' } });
-  refused(function () { apply(own, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_lease', source: doc('lease') }); }, 400, /Signed lease does not confirm control by ownership: that is the deed/);
+  refused(function () { apply(own, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_lease', source: doc('lease') }); }, 400, /Signed lease does not confirm site control by ownership: that is the deed/);
   apply(own, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_deed', source: doc('deed') });
   assert.equal(view(own).control.term.perpetual, true); assert.equal(view(own).control.term.ok, true);
   /* buy: the signed purchase agreement puts it under contract; the deed closes it */
@@ -324,7 +324,7 @@ test('D11 control: each route is confirmed by its own paper, and the facts the p
   apply(tk, 'control', { route: 'takeover', takeover: { currentHost: 'Host Account 7', termLeftYears: 9, termAsOf: '2026-10-01', revenueSharePct: 6, consentToAssign: 'requested', amendment: 'drafted', equipmentAtTermEnd: 'host' } });
   var flagsTk = code(view(tk));
   ['CONSENT_NEEDED', 'HOST_AGREEMENT_CHARGING_ONLY', 'EQUIPMENT_REVERTS_TO_HOST'].forEach(function (c) { assert.ok(flagsTk.indexOf(c) >= 0, c); });
-  refused(function () { apply(tk, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_assign', source: doc('amendment') }); }, 400, /does not confirm control by a takeover of the host agreement: that is the assignment of the site host agreement, with the amendment beside it/);
+  refused(function () { apply(tk, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_assign', source: doc('amendment') }); }, 400, /does not confirm site control by a takeover of the host agreement: that is the assignment of the site host agreement, with the amendment beside it/);
   refused(function () { apply(tk, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_assign', source: doc('assignment') }); }, 400, /Attach the amendment/);
   refused(function () { apply(tk, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_assign', source: doc('assignment'), value: { amendmentFileId: 'f_archived' } }); }, 409, /archived/);
   refused(function () { apply(tk, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_assign', source: doc('assignment'), value: { amendmentFileId: 'f_amend' } }); }, 409, /consent to assign/);
@@ -425,25 +425,53 @@ test('D13 the offtake: the workspace defaults fill what the site has not set and
 });
 
 /* ── economics ────────────────────────────────────────────────────────── */
-var CASE = { output: { sizing: { units: 2, gpus: 96, byChipset: [] }, returns: { projectIrrPct: 31.4, roiPct: 188, paybackMonths: 26, projectMultiple: 2.88 }, priceFor: { 25: 1.98, 30: 2.21, 55: 3.4 }, notes: ['Contract case'] },
-  input: { chipset: 'h200', units: 2, unitCostUsd: 764000, contract: { termMonths: 72, pricePerGpuHour: 2.35, takeOrPayPct: 80, escalatorPct: 0, partner: { name: 'Lightsmith Energy', feePct: 10 } }, site: { route: 'lease', rentMonthly: 4500 } }, at: '2026-10-25T14:00:00.000Z' };
-test('D14 economics is read off the record that computed it: the compute model or the pod pro forma as screening, the contract case confirming only on the confirmed terms', function () {
+/* the contract case's own output shape (api/_lib/compute-contract.js, PR #381): percents are percents, the terms echoed, capex its own total */
+var CASE = { output: { ok: true, priced: true, model: 'compute-contract-v1', needs: [], chipset: { key: 'h100', name: 'NVIDIA H100', gpusPerNode: 8, nodeKw: 12.5 },
+    partner: { name: 'Lightsmith Energy', feePct: 10, stated: true, verified: false }, contract: { termMonths: 72, pricePerGpuHour: 2.35, takeOrPayPct: 80, escalatorPct: 0, merchant: false },
+    site: { route: 'lease', rentMonthly: 4500, rentEscalatorPct: 2.5, revenueSharePct: 0 },
+    sizing: { units: 2, gpus: 96, itKw: 150, facilityKw: 180, basis: 'availableKw', availableKw: 780,
+      byChipset: [{ key: 'h100', name: 'NVIDIA H100', gpusPerUnit: 48, units: 2, gpus: 96, itKwPerUnit: 75, facilityKwPerUnit: 90 }, { key: 'b200', name: 'NVIDIA B200', gpusPerUnit: 32, units: 2, gpus: 64, itKwPerUnit: 75, facilityKwPerUnit: 90 }] },
+    capex: { unitCostUsd: 764000, unitCostSource: 'recorded', units: 2, equipment: 1528000, land: 0, total: 1528000 },
+    returns: { projectIrrPct: 31.4, equityIrrPct: 44.2, roiPct: 188, paybackMonths: 26, equityPaybackMonths: 22, projectMultiple: 2.88, equityMultiple: 3.4, irrWithoutFeePct: 40.1, revenuePerYear: 1900000, partnerFeePerYear: 190000 },
+    priceFor: { 25: 1.98, 30: 2.21, 55: 3.4 }, priceForPayback: { 24: 2.45 },
+    ladder: [{ price: 1.4, projectIrrPct: 10.13, paybackMonths: 58, projectMultiple: 1.34, roiPct: 34, irrWithoutFeePct: 23.09, revenuePerYear: 1130000, partnerFeePerYear: 113000 },
+      { price: 2.0, projectIrrPct: 54.17, paybackMonths: 26, projectMultiple: 2.89, roiPct: 189, irrWithoutFeePct: 73.31, revenuePerYear: 1620000, partnerFeePerYear: 162000 },
+      { price: 2.6, projectIrrPct: 102.19, paybackMonths: 17, projectMultiple: 4.44, roiPct: 344, irrWithoutFeePct: 131.86, revenuePerYear: 2100000, partnerFeePerYear: 210000 }],
+    ladderBasis: { centre: 2.35, centreBasis: 'contract', step: 0.05, points: 3 }, notes: ['Contract case'], disclaimer: 'Screening, not a return promise' },
+  input: { chipset: 'h100', availableKw: 780, contract: { termMonths: 72, pricePerGpuHour: 2.35, takeOrPayPct: 80, partner: { name: 'Lightsmith Energy', feePct: 10 } }, site: { route: 'lease', rentMonthly: 4500 } }, at: '2026-10-25T14:00:00.000Z' };
+function unpriced() { var c = JSON.parse(JSON.stringify(CASE)); c.output.priced = false; c.output.returns = null; c.output.contract.pricePerGpuHour = null; c.output.needs = ['contract.pricePerGpuHour']; return c; }
+test('D14 economics is read off the record that computed it: screening figures read screened, the contract case on the offtake\'s own terms working, confirmed only on the confirmed offtake and control', function () {
   var none = view(chargerSite());
   assert.equal(none.gates.economics.state, 'open'); assert.equal(none.economics.source, null); assert.equal(none.economics.irrPct, null);
   var m = chargerSite({ latestModel: { irr: 0.1834, moic: 2.4, paybackYears: 3.5, termYears: 10, totalProjectCost: 1820000, skid: { units: 2 }, pods: 2, gpus: 96, at: '2026-10-20T00:00:00.000Z', modelId: 'm_1' } });
   var v = view(m);
   assert.equal(v.economics.source, 'compute-model'); assert.equal(v.economics.irrPct, 18.34); assert.equal(v.economics.roiPct, 140); assert.equal(v.economics.paybackMonths, 42);
   assert.equal(v.economics.units, 2); assert.equal(v.economics.unitsLabel, 'Omega-Core skids'); assert.equal(v.economics.capexUsd, 1820000);
-  assert.equal(v.gates.economics.state, 'working'); assert.equal(v.gates.economics.derived, true);
+  assert.equal(v.gates.economics.state, 'screened'); assert.equal(v.gates.economics.derived, true);
   var pf = view(chargerSite({ latestProforma: { projectIrrDefined: true, projectIrrAnnual: 0.221, paybackMonth: 30, pods: 3, investorCapital: 2100000, itKw: 225 } }));
-  assert.equal(pf.economics.source, 'pod-proforma'); assert.equal(pf.economics.irrPct, 22.1); assert.equal(pf.economics.roiPct, null); assert.equal(pf.economics.computeKw, 225);
+  assert.equal(pf.economics.source, 'pod-proforma'); assert.equal(pf.economics.irrPct, 22.1); assert.equal(pf.economics.roiPct, null); assert.equal(pf.economics.computeKw, 225); assert.equal(pf.gates.economics.state, 'screened');
   assert.equal(view(chargerSite({ latestProforma: { projectIrrDefined: false, projectIrrAnnual: null, pods: 1 } })).economics.irrPct, null, 'an IRR not defined is not a number');
-  /* the contract case: working until the offtake and control are confirmed and it ran on the contract's own terms */
+  /* the contract case, as it answers */
   var s = chargerSite();
   var e = D.view(s, { config: CFG, now: NOW, kase: CASE });
-  assert.equal(e.economics.source, 'contract-case'); assert.equal(e.economics.irrPct, 31.4); assert.equal(e.economics.capexUsd, 1528000); assert.deepEqual(e.economics.priceFor, CASE.output.priceFor);
-  assert.equal(e.gates.economics.state, 'working'); assert.ok(/offtake is confirmed/.test(e.gates.economics.note));
+  assert.equal(e.economics.source, 'contract-case'); assert.equal(e.economics.irrPct, 31.4); assert.equal(e.economics.capexUsd, 1528000, 'the case\'s own capex total');
+  assert.equal(e.economics.computeKw, 150); assert.equal(e.economics.units, 2); assert.equal(e.economics.irrWithoutFeePct, 40.1); assert.equal(e.economics.partnerFeePerYear, 190000);
+  assert.deepEqual(e.economics.chipset, { key: 'h100', name: 'NVIDIA H100' }); assert.deepEqual(e.economics.byChipset.map(function (x) { return x.key + ':' + x.gpus; }), ['h100:96', 'b200:64']);
+  assert.deepEqual(e.economics.priceFor, CASE.output.priceFor);
+  assert.equal(e.gates.economics.state, 'screened', 'a case not on the offtake\'s own terms is a screen'); assert.ok(/none agreed yet/.test(e.gates.economics.note), e.gates.economics.note);
+  /* the price slider: the server's rows, each with where it sits against the partner's stated band */
+  assert.deepEqual(e.ladder.map(function (x) { return x.band; }), ['below', 'inside', 'above']);
+  assert.equal(e.ladder[1].bandWords, 'Inside Lightsmith Energy’s 25–55% range (as stated, unverified)'); assert.equal(e.ladder[1].roiPct, 189); assert.equal(e.ladder[1].partnerFeePerYear, 162000);
+  assert.equal(e.band.position, 'inside');
+  assert.equal(D.view(s, { config: D.normalizeConfig(null), now: NOW, kase: CASE }).ladder[0].band, null, 'no stated band configured, none drawn');
+  /* no contract price yet: the ladder still shows the range */
+  var u = D.view(s, { config: CFG, now: NOW, kase: unpriced() });
+  assert.equal(u.economics.irrPct, null); assert.equal(u.economics.priced, false); assert.deepEqual(u.economics.needs, ['contract.pricePerGpuHour']);
+  assert.equal(u.gates.economics.state, 'screened'); assert.ok(/ladder shows the range/.test(u.gates.economics.note)); assert.equal(u.ladder.length, 3);
+  /* on the offtake's own terms: working, then confirmed with the offtake and control */
   apply(s, 'offtake', { offtaker: { name: 'Buyer A' }, status: 'executed', pricePerGpuHour: 2.35, takeOrPayPct: 80 });
+  e = D.view(s, { config: CFG, now: NOW, kase: CASE });
+  assert.equal(e.gates.economics.state, 'working'); assert.ok(/offtake is confirmed and control is confirmed/.test(e.gates.economics.note), e.gates.economics.note);
   apply(s, 'gate', { gate: 'offtake', state: 'confirmed', evidenceFileId: 'f_offtake', source: doc('offtake-contract') });
   apply(s, 'control', { route: 'own', own: { entity: 'Solela Sites I LLC' } });
   apply(s, 'gate', { gate: 'control', state: 'confirmed', evidenceFileId: 'f_deed', source: doc('deed') });
@@ -452,7 +480,7 @@ test('D14 economics is read off the record that computed it: the compute model o
   apply(s, 'offtake', { pricePerGpuHour: 2.5 });
   apply(s, 'gate', { gate: 'offtake', state: 'confirmed', evidenceFileId: 'f_offtake', source: doc('offtake-contract') });
   e = D.view(s, { config: CFG, now: NOW, kase: CASE });
-  assert.equal(e.gates.economics.state, 'working'); assert.ok(/contract price/.test(e.gates.economics.note));
+  assert.equal(e.gates.economics.state, 'screened'); assert.ok(/not on the contract price/.test(e.gates.economics.note));
   assert.ok(!s.diligence.gates.economics, 'the economics gate is never stored');
 });
 
@@ -567,6 +595,82 @@ test('D19 the enable script: an offline dry run by default that writes nowhere; 
   assert.ok(src.indexOf("if (CONFIRM !== ORG) throw") < src.indexOf("require('./_lib/live-admin')"), 'the refusal comes before any credential is touched');
   assert.ok(/omega_orgs\/' \+ org \+ ' does not exist/.test(src) && /billing\/current does not exist/.test(src), 'refuses a missing workspace or billing record');
   assert.ok(fs.readFileSync(path.join(ROOT, '.vercelignore'), 'utf8').split('\n').indexOf('tenants/*/portfolio-diligence.json') >= 0, 'the seed is kept off the site');
+});
+
+/* ── the approved mockup's card ───────────────────────────────────────── */
+/* a screen as grid-screen.js answers: a usable point, a 69 kV substation, the FCC key unset */
+function screenOf(extra) {
+  return Object.assign({ v: 1, at: NOW, complete: true, located: { lat: 41.6, lng: -93.6, precision: 'exact', resolvedAddress: '1 Main St, Des Moines, IA', usable: true, approximate: false },
+    power: { substation: 'Bondurant', kv: 69, distanceMi: 1.4, owner: 'MidAmerican' },
+    fiber: { carriers: [], carriersRead: false, carriersStatus: 'needs-key', carriersNote: 'carrier names need the FCC key', symmetric1g: null, symmetricCount: null, lateralMi: 2.1, lateralTo: 'carrier facility DSM-1', carrierHotel: 'Des Moines IX', carrierHotelMi: 6, verdict: 'plausible' },
+    hosting: { coverage: 'none', note: 'MidAmerican does not publish hosting capacity' }, utility: { name: 'MidAmerican Energy', key: 'midamerican', eiaId: null, basis: 'zip' },
+    sources: { substations: 'HIFLD', peeringdb: 'PeeringDB', utility: 'the rate book, by ZIP' }, notes: [], errors: [] }, extra || {});
+}
+test('D21 the screen lands: power screened on the substation, fiber only on carriers read at the address, interconnection only on a published hosting figure; a person\'s own state stands; never confirmed', function () {
+  var s = chargerSite();
+  var r = apply(s, 'screen', { screen: screenOf() });
+  assert.deepEqual(r.event.moved, ['power']); assert.equal(s.diligence.gates.power.state, 'screened'); assert.equal(s.diligence.gates.power.source.kind, 'public'); assert.equal(s.diligence.gates.power.source.screen, true);
+  assert.equal(D.gateOf(s.diligence, 'fiber').state, 'open', 'no carriers read: the carrier hotel alone is not a fiber screen');
+  assert.equal(D.gateOf(s.diligence, 'interconnection').state, 'open', 'a utility alone is not a screen of the interconnection');
+  assert.equal(s.diligence.screen.power.kv, 69); assert.equal(s.diligence.screen.fiber.carrierHotelMi, 6);
+  assert.ok(code(view(s)).indexOf('FCC_KEY_MISSING') >= 0);
+  /* with the key: carriers read, 1 Gbps symmetric; and a published load hosting figure */
+  var withKey = screenOf({ fiber: { carriers: ['Lumen', 'Zayo', 'Mediacom'], carriersRead: true, carriersStatus: 'read', carriersNote: null, symmetric1g: true, symmetricCount: 2, lateralMi: 0, carrierHotel: 'Des Moines IX', carrierHotelMi: 6 },
+    hosting: { coverage: 'read', loadKw: 2100, storageKw: 1800, circuit: 'Feeder 12', substation: 'Bondurant', kv: 13.2, source: 'MidAmerican hosting capacity map' }, utility: { name: 'MidAmerican Energy', key: 'midamerican', basis: 'territory' } });
+  apply(s, 'gate', { gate: 'power', state: 'working', value: { note: 'Asked the utility for the service record' } });
+  r = apply(s, 'screen', { screen: withKey });
+  assert.deepEqual(r.event.moved.sort(), ['fiber', 'interconnection']);
+  assert.equal(s.diligence.gates.power.state, 'working', 'a gate a person took further is never moved back by the screen');
+  assert.deepEqual(s.diligence.gates.fiber.value.carriers, ['Lumen', 'Zayo', 'Mediacom']); assert.equal(s.diligence.gates.fiber.value.symmetric1g, true);
+  assert.equal(s.diligence.gates.interconnection.value.utility, 'MidAmerican Energy');
+  /* a hand screen stands against a later automatic one; the screen refreshes only its own */
+  var h = chargerSite();
+  apply(h, 'gate', { gate: 'fiber', state: 'screened', source: { kind: 'public', name: 'Carrier’s own lit-building list' }, value: { carriers: ['Windstream'] } });
+  apply(h, 'screen', { screen: withKey });
+  assert.equal(h.diligence.gates.fiber.source.name, 'Carrier’s own lit-building list'); assert.deepEqual(h.diligence.gates.fiber.value.carriers, ['Windstream']);
+  /* an approximate point screens nothing; the record keeps what it found */
+  var a = chargerSite();
+  r = apply(a, 'screen', { screen: screenOf({ located: { lat: 41.6, lng: -93.6, precision: 'area', usable: false, approximate: true } }) });
+  assert.deepEqual(r.event.moved, []); assert.equal(D.gateOf(a.diligence, 'power').state, 'open'); assert.equal(a.diligence.screen.power.substation, 'Bondurant');
+  /* the screen never confirms, and its record is bounded */
+  D.GATES.forEach(function (g) { assert.notEqual(D.gateOf(s.diligence, g).state, 'confirmed'); });
+  var big = screenOf({ fiber: { carriers: new Array(80).join('x,').split(','), carriersRead: true }, notes: new Array(40).join('n,').split(',') });
+  assert.ok(D.cleanScreen(big).fiber.carriers.length <= 30); assert.ok(D.cleanScreen(big).notes.length <= 10);
+  refused(function () { apply(a, 'screen', {}); }, 400, /No screen/);
+});
+
+test('D22 the Diligence card: one sentence a gate, where it came from, and the next thing to do; the state words and short names of the mockup', function () {
+  var s = screenedAndPursued(chargerSite({ serviceCapacityKw: 800, existingPeakKw: 350, installedKw: 600 }));
+  apply(s, 'screen', { screen: screenOf() });
+  var v = view(s), L = v.lines;
+  assert.equal(L.power.sentence, '800 kW service, 350 kW peak, so 450 kW free · 69 kV substation 1.4 mi'); assert.equal(L.power.sources, 'Site facts · Grid Atlas');
+  assert.equal(L.interconnection.sentence, 'Will-serve not requested · utility found from the ZIP: MidAmerican Energy');
+  assert.equal(L.interconnection.action.key, 'log-will-serve'); assert.equal(L.interconnection.action.label, 'Log will-serve request');
+  assert.equal(L.interconnection.action.task.subject, 'Request a will-serve letter from MidAmerican Energy'); assert.deepEqual(L.interconnection.action.moves, { gate: 'interconnection', state: 'working' });
+  assert.equal(L.fiber.sentence, 'Carrier names need the FCC key · carrier hotel 6 mi · lateral about 2.1 mi to carrier facility DSM-1'); assert.equal(L.fiber.sources, 'PeeringDB · confirm with a carrier quote');
+  assert.equal(L.control.sentence, 'How the site comes under control is not chosen'); assert.equal(L.control.action.key, 'control-form');
+  assert.equal(L.chips.sentence, 'Chips not chosen · allocation not requested · ~36 weeks'); assert.equal(L.chips.sources, 'Lead time from Lightsmith Energy, unverified');
+  assert.equal(L.offtake.sentence, 'Lightsmith Energy LOI not sent · 6-year term · 10% fee · offtaker and price pending'); assert.equal(L.offtake.sources, 'Lightsmith Energy');
+  assert.equal(L.offtake.action.key, 'loi-package'); assert.equal(L.offtake.action.label, 'Send LOI package to Lightsmith Energy');
+  /* the mockup's other rows, once the facts are in */
+  apply(s, 'control', { route: 'lease', lease: { rentMonthlyUsd: 11250, termYears: 15, computePermitted: true, startDate: '2026-11-01' } });
+  apply(s, 'gate', { gate: 'chips', state: 'screened', source: { kind: 'model', name: 'The contract case sizing' }, value: { chipset: 'H100', gpus: 288 } });
+  v = view(s); L = v.lines;
+  assert.equal(L.control.sentence, 'Lease: $11k a month, 15 years · compute permitted · control to 2041-11-01'); assert.equal(L.control.sources, 'Agreements');
+  assert.equal(L.chips.sentence, 'H100 · 288 GPUs · allocation not requested · ~36 weeks');
+  assert.equal(v.gates.chips.stateLabel, 'Chosen', 'chips screened on the sizing read Chosen'); assert.equal(v.gates.chips.short, 'Chip');
+  refused(function () { apply(s, 'gate', { gate: 'power', state: 'screened', source: { kind: 'model', name: 'x' } }); }, 400, /public data only/, 'only chips may rest on the sizing');
+  refused(function () { apply(s, 'gate', { gate: 'chips', state: 'screened', source: { kind: 'model', name: 'x' }, value: { chipset: null } }); }, 400, /Name the chips/);
+  apply(s, 'gate', { gate: 'interconnection', state: 'working' });
+  v = view(s);
+  assert.equal(v.gates.interconnection.stateLabel, 'In progress'); assert.equal(v.lines.interconnection.action, null, 'in progress: nothing more to log');
+  assert.deepEqual(D.GATES.map(function (g) { return v.gates[g].short; }), ['Pwr', 'IX', 'Fbr', 'Ctl', 'Chip', 'Off', '$']);
+  assert.equal(D.STAGE_LABEL.pursue, 'Earmarked'); assert.equal(D.CALL_LABEL.pursue, 'Earmark');
+  /* sizing chips, one a chipset, from the contract case; the chosen one marked */
+  var c = D.view(s, { config: CFG, now: NOW, kase: CASE });
+  assert.deepEqual(c.sizing.byChipset.map(function (x) { return x.name + (x.chosen ? '*' : ''); }), ['NVIDIA H100*', 'NVIDIA B200']);
+  assert.equal(c.sizing.words, 'Size from power · 450 kW is 2 skids');
+  Object.keys(c.lines).forEach(function (k) { [c.lines[k].sentence, c.lines[k].sources].forEach(function (w) { assert.ok(w == null || !/undefined|NaN|null/.test(w), k + ': ' + w); }); });
 });
 
 /* ── the rule that matters most, mutation-tested ──────────────────────── */

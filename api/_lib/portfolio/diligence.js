@@ -29,22 +29,32 @@
                 confirmed (the offtake partner's own order: sites, LOI,
                 offtake, MSA, site survey, confirmed), or passed. A forward
                 move is earned (requirement()); a move back needs a note;
-                pursue and pass are the CALL (decide()), not a drag.
+                pursue and pass are the CALL (decide()), not a drag. The
+                approved mockup's words: pursue reads Earmarked, the call
+                Earmark (STAGE_LABEL, CALL_LABEL); the keys are unchanged.
      decision   { choice: pursue|pass, reason, by, at }. Pursue = take the
                 site under control. A pass needs a reason.
+     WHO        every change is any editor's: owner, admin or member (the
+                door's edit capability); a viewer only reads. Nothing is held
+                back for an owner (2026-10-25: the workspace's one person is
+                a member). The switch is staff's.
      gates      power · interconnection · fiber · control · chips · offtake
                 · economics, each { state, value{}, source, evidenceFileId,
                 by, at }:
                   open       nothing checked yet
-                  screened   PUBLIC data only (source.kind 'public')
-                  working    in hand with a counterparty
+                  screened   PUBLIC data only (source.kind 'public'; chips
+                             may rest on the sizing, and read Chosen)
+                  working    in hand with a counterparty (In progress)
                   confirmed  a DOCUMENT on the site's Files, of a kind the
                              gate names (CONFIRMED_BY; the control route's
-                             own for control), and an owner or admin's word
+                             own for control)
                   fails      with a reason
                 Economics is never a person's word: it follows the economics
                 on file (economicsGate), confirmed only by the contract case
                 run on the confirmed offtake and control terms.
+     screen     the Grid Atlas screen (grid-screen.js), landed by the
+                system's own change('screen'): gates to screened, never to
+                confirmed, never past a person's own state.
      control    { route: own|buy|lease|takeover, … } the route's own terms.
                 The paper is the register's agreements subcollection
                 (assets.js; AGREEMENT_TYPES below join its list when the door
@@ -62,7 +72,7 @@
      history[]  every change, capped; omega_audit is the door's.
 
    DERIVED AT READ TIME, NEVER STORED: an exclusion's automatic pass (a rule
-   of the workspace's config matched on a RECORDED value; the owner reverses
+   of the workspace's config matched on a RECORDED value; an editor reverses
    it with a reason, kept as an override), the headroom, the control term
    check (control must outlast the offtake term plus the removal window), the
    economics gate, a confirmation whose document left the Files, and the next
@@ -76,13 +86,20 @@ var P = require('./power');
 var FLAG = 'portfolio-diligence', CONFIG_KEY = 'portfolioDiligence', VERSION = 1;
 var STAGES = ['brought-in', 'screened', 'pursue', 'loi-sent', 'offtake', 'msa', 'confirmed'];
 var PASSED = 'passed';
-var STAGE_LABEL = { 'brought-in': 'Brought in', screened: 'Screened', pursue: 'Pursue', 'loi-sent': 'LOI sent', offtake: 'Offtake', msa: 'MSA', confirmed: 'Confirmed', passed: 'Passed' };
-var STAGE_HINT = { 'brought-in': 'New, not yet checked', screened: 'Power, interconnection and fiber screened', pursue: 'Take it under control', 'loi-sent': 'The LOI is with the offtake partner',
+/* the words are the approved mockup's (2026-10-25): the pursue stage reads
+   Earmarked and the call Earmark; the keys stay as the data model names them */
+var STAGE_LABEL = { 'brought-in': 'Brought in', screened: 'Screened', pursue: 'Earmarked', 'loi-sent': 'LOI sent', offtake: 'Offtake', msa: 'MSA', confirmed: 'Confirmed', passed: 'Passed' };
+var CALL_LABEL = { pursue: 'Earmark', pass: 'Pass', reopen: 'Reopen' };
+var STAGE_HINT = { 'brought-in': 'New, not yet checked', screened: 'Power, interconnection and fiber screened', pursue: 'Earmarked to take under control', 'loi-sent': 'The LOI is with the offtake partner',
   offtake: 'An offtaker on agreed terms', msa: 'The offtake contract signed', confirmed: 'Every gate on its document and the site surveyed', passed: 'Not taken, with the reason' };
 var GATES = ['power', 'interconnection', 'fiber', 'control', 'chips', 'offtake', 'economics'];
-var GATE_LABEL = { power: 'Power', interconnection: 'Interconnection', fiber: 'Fiber', control: 'Control', chips: 'Chips', offtake: 'Offtake', economics: 'Economics' };
+var GATE_LABEL = { power: 'Power', interconnection: 'Interconnection', fiber: 'Fiber', control: 'Site control', chips: 'Chips', offtake: 'Offtake', economics: 'Economics' };
+var GATE_SHORT = { power: 'Pwr', interconnection: 'IX', fiber: 'Fbr', control: 'Ctl', chips: 'Chip', offtake: 'Off', economics: '$' };
 var GATE_STATES = ['open', 'screened', 'working', 'confirmed', 'fails'];
-var STATE_LABEL = { open: 'Open', screened: 'Screened', working: 'Working', confirmed: 'Confirmed', fails: 'Fails' };
+var STATE_LABEL = { open: 'Open', screened: 'Screened', working: 'In progress', confirmed: 'Confirmed', fails: 'Fails' };
+/* a gate's own word for a state, where the mockup has one: chips screened on the sizing are Chosen */
+var GATE_STATE_LABEL = { chips: { screened: 'Chosen' } };
+function stateLabel(k, st) { return GATE_STATE_LABEL[k] && GATE_STATE_LABEL[k][st] || STATE_LABEL[st]; }
 /* the gates a site is screened on before it is called screened */
 var SCREEN_GATES = ['power', 'interconnection', 'fiber'];
 var SOURCE_KINDS = ['public', 'counterparty', 'document', 'model', 'internal'];
@@ -126,6 +143,8 @@ var POWER_PATHS = ['existing-service', 'new-service', 'interconnection'];
 /* the recorded values an exclusion rule may name */
 var MATCH_FIELDS = ['hostType', 'locationType', 'tags', 'chargers.use', 'intakeType'];
 var ACTIONS = ['decide', 'stage', 'gate', 'control', 'offtake', 'chargers', 'profile', 'survey'];
+/* the system's own change, never a person's request: the Grid Atlas screen landing (grid-screen.js) */
+var SYSTEM_ACTIONS = ['screen'];
 var HISTORY_CAP = 200, NOTE_MIN = 5;
 
 /* ── small validators: each throws an Error carrying .status ───────────── */
@@ -371,7 +390,7 @@ function requirement(stage, d, ctx) {
     var still = SCREEN_GATES.filter(function (k) { return gateOf(d, k).state === 'open'; });
     return still.length ? 'Screen ' + list(still.map(function (k) { return GATE_LABEL[k].toLowerCase(); })) + ' first' : null;
   }
-  if (stage === 'pursue') return d.decision && d.decision.choice === 'pursue' ? null : 'Pursue is the call: decide to pursue the site (take it under control)';
+  if (stage === 'pursue') return d.decision && d.decision.choice === 'pursue' ? null : 'Earmarking is the call: earmark the site to take it under control';
   if (stage === 'loi-sent') return off.loiStatus === 'sent' || off.loiStatus === 'signed' ? null : 'Record the LOI as sent first';
   if (stage === 'offtake') {
     if (!(off.offtaker && off.offtaker.name)) return 'Name the offtaker first';
@@ -402,10 +421,11 @@ function decide(d, input, ctx) {
     d.stage = PASSED;
   } else {
     if (active.length) {
-      /* the workspace's own rule passed it; only the owner reverses that */
-      if (ctx.role !== 'owner') throw fail(403, 'This site is excluded (' + list(active.map(function (x) { return x.label.toLowerCase(); })) + '). Only the workspace owner can reverse an exclusion.');
-      if (reason.length < NOTE_MIN) throw fail(400, 'Reversing an exclusion needs a reason (' + NOTE_MIN + ' characters or more)');
-      active.forEach(function (x) { d.exclusionOverrides[x.key] = { by: ctx.by || null, at: ctx.now, reason: reason, field: x.field, value: x.value }; overrides.push(x.key); });
+      /* the workspace's own rule passed it: reversing it is said, with a
+         reason, and kept with who reversed it (any editor of the workspace;
+         2026-10-25, the main session: its one person is a member) */
+      if (reason.length < NOTE_MIN) throw fail(400, 'This site is excluded (' + list(active.map(function (x) { return x.label.toLowerCase(); })) + '): reversing an exclusion needs a reason (' + NOTE_MIN + ' characters or more)');
+      active.forEach(function (x) { d.exclusionOverrides[x.key] = { by: ctx.by || null, role: ctx.role || null, at: ctx.now, reason: reason, field: x.field, value: x.value }; overrides.push(x.key); });
     }
     if (choice === 'pursue') {
       if (!overrides.length && d.decision && d.decision.choice === 'pursue') return null;
@@ -429,7 +449,7 @@ function moveStage(d, input, ctx) {
   if (!to) throw fail(400, 'Which stage?');
   var note = text(input.note, 500, 'Note', { multiline: true });
   var dec = decisionOf(d, activeExclusions(ctx.site || {}, d, ctx.config)), from = stageOf(d, dec);
-  if (from === PASSED) throw fail(409, 'This site is passed: reopen it or pursue it first');
+  if (from === PASSED) throw fail(409, 'This site is passed: reopen it or earmark it first');
   if (to === from) return null;
   var fi = STAGES.indexOf(from), ti = STAGES.indexOf(to), extra = null;
   if (ti > fi) {
@@ -491,7 +511,6 @@ function confirmWords(k, d) { return k === 'control' ? ROUTES[d.control.route].w
 /* the CONFIRMED rule: the document is on the site's Files, it is a kind
    that confirms this gate, and the facts the gate rests on agree with it */
 function confirmCheck(k, d, value, src, fileId, ctx) {
-  if (ctx.canReview !== true) throw fail(403, 'Confirming a gate needs the workspace owner or an administrator');
   if (k === 'control' && !(d.control && d.control.route)) throw fail(409, 'Choose how the site comes under control first: own, buy, lease or take over the host agreement');
   var docs = docsFor(k, d), words = confirmWords(k, d), what = GATE_LABEL[k].toLowerCase() + (k === 'control' ? ' by ' + ROUTES[d.control.route].noun : '');
   if (!fileId) throw fail(400, 'Confirmed needs the document on the site’s Files: ' + words);
@@ -532,7 +551,8 @@ function setGate(d, input, ctx) {
   var value = merge(prev.value, extend(GATE_VALUE[k](v), { note: optText(v.note, 1000, 'Note', true), reason: optText(v.reason, 500, 'Reason', true) }));
   var src = input.source === undefined ? prev.source : sourceInput(input.source);
   var fileId = input.evidenceFileId === undefined ? prev.evidenceFileId : optId(input.evidenceFileId, 'Document');
-  if (state === 'screened' && !(src && src.kind === 'public')) throw fail(400, 'Screened is public data only: name the public source (a map, a registry, a public record)');
+  if (state === 'screened' && !(src && (src.kind === 'public' || (k === 'chips' && src.kind === 'model')))) throw fail(400, k === 'chips' ? 'Chosen chips rest on public specs or the sizing: name the source' : 'Screened is public data only: name the public source (a map, a registry, a public record)');
+  if (state === 'screened' && k === 'chips' && !value.chipset) throw fail(400, 'Name the chips chosen');
   if (state === 'fails' && !(value.reason && value.reason.length >= NOTE_MIN)) throw fail(400, 'A failing gate needs a reason (' + NOTE_MIN + ' characters or more)');
   if (state === 'confirmed') confirmCheck(k, d, value, src, fileId, ctx);
   else if (fileId && fileId !== prev.evidenceFileId) fileCheck(ctx.files, fileId);
@@ -665,15 +685,63 @@ function setSurvey(d, input, ctx) {
   return event(ctx, 'survey', prev.state || 'open', next.state, next.note || null);
 }
 
+/* ── the Grid Atlas screen lands (grid-screen.js computes it, server-side) ─
+   Stored as diligence.screen; it moves a gate to SCREENED only from open
+   (or refreshes one it screened before), with a public source, and never
+   touches a gate a person has taken further: working, confirmed and fails
+   stand. Power on the nearest substation at a usable point; interconnection
+   only on a published hosting figure at the point (a utility alone is not
+   a screen of it); fiber only on carriers read at the address (a carrier
+   hotel or a lateral estimate alone is not). */
+function sNum(v, max) { var n = v == null || v === '' ? NaN : Number(v); return isFinite(n) && Math.abs(n) <= (max || 1e9) ? n : null; }
+function sStr(v, n) { return v == null ? null : (String(v).replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n || 160) || null); }
+function cleanScreen(x) {
+  var lo = x.located || null, pw = x.power || null, fb = x.fiber || null, ho = x.hosting || null, ut = x.utility || null, src = x.sources || {};
+  return { v: 1, at: sStr(x.at, 40), complete: x.complete === true,
+    located: lo ? { lat: sNum(lo.lat, 90), lng: sNum(lo.lng, 180), precision: sStr(lo.precision, 20), resolvedAddress: sStr(lo.resolvedAddress, 300), usable: lo.usable === true, approximate: lo.approximate === true, note: sStr(lo.note, 200) } : null,
+    power: pw ? { substation: sStr(pw.substation, 120), kv: sNum(pw.kv, 2000), distanceMi: sNum(pw.distanceMi, 1000), owner: sStr(pw.owner, 120) } : null,
+    fiber: fb ? { carriers: (Array.isArray(fb.carriers) ? fb.carriers : []).map(function (c) { return sStr(c, 80); }).filter(Boolean).slice(0, 30), carriersRead: fb.carriersRead === true,
+      carriersStatus: sStr(fb.carriersStatus, 20), carriersNote: sStr(fb.carriersNote, 200), symmetric1g: fb.symmetric1g === true ? true : fb.symmetric1g === false ? false : null, symmetricCount: sNum(fb.symmetricCount, 100),
+      lateralMi: sNum(fb.lateralMi, 1000), lateralTo: sStr(fb.lateralTo, 160), carrierHotel: sStr(fb.carrierHotel, 120), carrierHotelMi: sNum(fb.carrierHotelMi, 1000), verdict: sStr(fb.verdict, 20) } : null,
+    hosting: ho ? { coverage: sStr(ho.coverage, 40), loadKw: sNum(ho.loadKw, 1e7), storageKw: sNum(ho.storageKw, 1e7), circuit: sStr(ho.circuit, 80), substation: sStr(ho.substation, 120), kv: sNum(ho.kv, 2000),
+      basis: sStr(ho.basis, 160), refreshed: sStr(ho.refreshed, 40), source: sStr(ho.source, 160), note: sStr(ho.note, 300) } : null,
+    utility: ut ? { name: sStr(ut.name, 120), key: sStr(ut.key, 40), eiaId: sStr(ut.eiaId, 12), basis: ut.basis === 'territory' ? 'territory' : 'zip' } : null,
+    sources: { substations: sStr(src.substations, 160), fcc: sStr(src.fcc, 80), peeringdb: sStr(src.peeringdb, 80), hosting: sStr(src.hosting, 160), utility: sStr(src.utility, 80) },
+    notes: (Array.isArray(x.notes) ? x.notes : []).map(function (n) { return sStr(n, 300); }).filter(Boolean).slice(0, 10),
+    errors: (Array.isArray(x.errors) ? x.errors : []).map(function (e) { return { source: sStr(e && e.source, 40), message: sStr(e && e.message, 300) }; }).slice(0, 10) };
+}
+function setScreen(d, input, ctx) {
+  if (!input.screen || typeof input.screen !== 'object') throw fail(400, 'No screen to record');
+  var sc = cleanScreen(input.screen), usable = !!(sc.located && sc.located.usable), moved = [], asOf = dayOf(sc.at);
+  d.screen = sc;
+  /* the screen moves a gate from open, and refreshes one it screened itself
+     (source.screen); a gate a person screened by hand keeps their source */
+  function move(k, ok, name, patch) {
+    var g = gateOf(d, k);
+    if (!ok || !(g.state === 'open' || (g.state === 'screened' && g.source && g.source.screen === true))) return;
+    d.gates[k] = { state: 'screened', value: merge(g.value, patch || {}), source: { kind: 'public', doc: null, name: name, ref: null, asOf: asOf, screen: true }, evidenceFileId: g.evidenceFileId || null, by: ctx.by || null, at: ctx.now };
+    if (g.state === 'open') moved.push(k);
+  }
+  move('power', usable && !!(sc.power && sc.power.substation), 'Grid Atlas: the nearest substation' + (sc.sources.substations ? ' (' + sc.sources.substations + ')' : ''));
+  var ic = gateOf(d, 'interconnection').value;
+  move('interconnection', usable && !!(sc.hosting && sc.hosting.coverage === 'read'), (sc.hosting && sc.hosting.source) || 'The utility’s hosting capacity map', { utility: ic.utility ? undefined : (sc.utility ? sc.utility.name : undefined) });
+  move('fiber', usable && !!(sc.fiber && sc.fiber.carriersRead), 'FCC broadband data' + (sc.sources.peeringdb ? ' and PeeringDB' : ''),
+    sc.fiber ? { carriers: sc.fiber.carriers, symmetric1g: sc.fiber.symmetric1g, lateralMi: sc.fiber.lateralMi } : null);
+  return event(ctx, 'screen', null, moved, sc.errors.length ? sc.errors.map(function (e) { return e.source + ': ' + e.message; }).join('; ') : null, { moved: moved });
+}
+
 /* ONE change to one site's diligence. Pure: the next record and the event,
    which the door writes in one transaction with its omega_audit row; a
    change that changes nothing answers unchanged and nothing is written.
    ctx: { site (the register's normalized site), config (normalizeConfig),
    files (the site's Files: [{ id, uploadState, archived }]), agreements
-   (the site's agreements), role, canReview, by, now } */
+   (the site's agreements), role, canEdit, by, now }. Every change is any
+   editor's (owner, admin or member: the door's edit capability); a viewer
+   only reads. No change is held back for an owner or an administrator. */
 function change(stored, action, input, ctx) {
   ctx = ctx || {};
   if (!ctx.now) throw fail(500, 'change() is handed now');
+  if (ctx.canEdit === false) throw fail(403, 'Your role in this workspace can read the diligence but not change it');
   var d = current(stored), ev;
   input = input && typeof input === 'object' ? input : {};
   if (action === 'decide') ev = decide(d, input, ctx);
@@ -684,6 +752,7 @@ function change(stored, action, input, ctx) {
   else if (action === 'chargers') ev = setChargers(d, input, ctx);
   else if (action === 'profile') ev = setProfile(d, input, ctx);
   else if (action === 'survey') ev = setSurvey(d, input, ctx);
+  else if (action === 'screen') ev = setScreen(d, input, ctx);
   else throw fail(400, 'Unknown diligence action');
   if (!ev) return { diligence: current(stored), event: null, unchanged: true };
   if (!d.createdAt) d.createdAt = ctx.now;
@@ -832,24 +901,34 @@ function controlTerm(site, d, ctx) {
 }
 
 /* ── economics: read off the record that computed it, never recomputed ─── */
-/* the contract case (contractCase(input), being built beside this) mapped
-   to the figures the register shows; capex is units × the unit cost it ran on */
+/* The contract case (api/_lib/compute-contract.js contractCase, PR #381)
+   mapped to what the register and the Diligence tab draw. Its percents are
+   percents (53.1), its terms are read off its own echo (output.contract),
+   capex is its own total; returns is null until the contract has a price,
+   and the ladder (the price slider's rows) and the sizing by chipset come
+   through as the server computed them, so the page does no arithmetic. */
+function nOf(v) { return v == null || v === '' || !isFinite(Number(v)) ? null : Number(v); }
 function economicsFromCase(output, input, at) {
-  var r = (output && output.returns) || {}, s = (output && output.sizing) || {}, inp = input || {}, k = inp.contract || {};
-  var units = s.units != null && isFinite(Number(s.units)) ? Number(s.units) : null;
-  return { source: 'contract-case', label: 'Contract case', irrPct: r.projectIrrPct == null ? null : Number(r.projectIrrPct), irrBasis: 'project IRR on the contract terms',
-    roiPct: r.roiPct == null ? null : Number(r.roiPct), paybackMonths: r.paybackMonths == null ? null : Number(r.paybackMonths), multiple: r.projectMultiple == null ? null : Number(r.projectMultiple),
-    units: units, unitsLabel: 'units', gpus: s.gpus == null ? null : Number(s.gpus), computeKw: null,
-    capexUsd: units != null && inp.unitCostUsd != null && isFinite(Number(inp.unitCostUsd)) ? units * Number(inp.unitCostUsd) : null,
-    priceFor: output && output.priceFor || null, notes: output && output.notes || null,
-    inputs: { termMonths: k.termMonths == null ? null : Number(k.termMonths), pricePerGpuHour: k.pricePerGpuHour == null ? null : Number(k.pricePerGpuHour), takeOrPayPct: k.takeOrPayPct == null ? null : Number(k.takeOrPayPct),
-      feePct: k.partner && k.partner.feePct != null ? Number(k.partner.feePct) : null, route: inp.site && inp.site.route || null },
+  var o = output || {}, r = o.returns || null, s = o.sizing || {}, inp = input || {}, k = o.contract || inp.contract || {}, cap = o.capex || {};
+  var units = nOf(s.units), unitCost = nOf(cap.unitCostUsd != null ? cap.unitCostUsd : inp.unitCostUsd);
+  return { source: 'contract-case', label: 'Contract case', priced: o.priced === true && !!r, needs: Array.isArray(o.needs) ? o.needs.slice() : [],
+    irrPct: r ? nOf(r.projectIrrPct) : null, irrBasis: 'project IRR over the contract term', equityIrrPct: r ? nOf(r.equityIrrPct) : null,
+    roiPct: r ? nOf(r.roiPct) : null, paybackMonths: r ? nOf(r.paybackMonths) : null, multiple: r ? nOf(r.projectMultiple) : null,
+    irrWithoutFeePct: r ? nOf(r.irrWithoutFeePct) : null, revenuePerYear: r ? nOf(r.revenuePerYear) : null, partnerFeePerYear: r ? nOf(r.partnerFeePerYear) : null,
+    units: units, unitsLabel: 'Omega-Core skids', gpus: nOf(s.gpus), computeKw: nOf(s.itKw),
+    chipset: o.chipset ? { key: o.chipset.key || null, name: o.chipset.name || null } : (inp.chipset ? { key: String(inp.chipset), name: null } : null),
+    byChipset: Array.isArray(s.byChipset) ? s.byChipset.map(function (x) { return { key: x.key, name: x.name, units: nOf(x.units), gpus: nOf(x.gpus), gpusPerUnit: nOf(x.gpusPerUnit), itKwPerUnit: nOf(x.itKwPerUnit) }; }) : [],
+    capexUsd: nOf(cap.total) != null ? nOf(cap.total) : (units != null && unitCost != null ? units * unitCost : null),
+    ladder: Array.isArray(o.ladder) ? o.ladder.slice() : null, ladderBasis: o.ladderBasis || null, priceFor: o.priceFor || null, priceForPayback: o.priceForPayback || null,
+    notes: o.notes || null, disclaimer: o.disclaimer || null, partner: o.partner ? { name: o.partner.name || null, feePct: nOf(o.partner.feePct) } : null,
+    inputs: { termMonths: nOf(k.termMonths), pricePerGpuHour: nOf(k.pricePerGpuHour), takeOrPayPct: nOf(k.takeOrPayPct), feePct: o.partner ? nOf(o.partner.feePct) : (k.partner ? nOf(k.partner.feePct) : null),
+      route: (o.site && o.site.route) || (inp.site && inp.site.route) || null },
     at: at || null };
 }
 function economicsOf(site, kase) {
   site = site || {};
   var dsn = site.latestDesign && site.latestDesign.compute, designKw = dsn && dsn.kwIt > 0 ? Number(dsn.kwIt) : null;
-  if (kase && kase.output) { var e = economicsFromCase(kase.output, kase.input, kase.at); e.computeKw = designKw; return e; }
+  if (kase && kase.output) { var e = economicsFromCase(kase.output, kase.input, kase.at); if (e.computeKw == null) e.computeKw = designKw; return e; }
   var lm = site.latestModel;
   if (lm && (lm.irr != null || lm.totalProjectCost != null)) {
     return { source: 'compute-model', label: 'Compute model (screening)', irrPct: lm.irr == null ? null : round(lm.irr * 100, 2), irrBasis: 'after-tax IRR over ' + (lm.termYears || 10) + ' years',
@@ -865,28 +944,147 @@ function economicsOf(site, kase) {
   }
   return { source: null, label: 'No economics on file', irrPct: null, irrBasis: null, roiPct: null, paybackMonths: null, multiple: null, units: null, unitsLabel: null, gpus: null, computeKw: designKw, capexUsd: null, at: null };
 }
-/* The economics gate: open with nothing on file; working on screening
-   figures; confirmed only by the contract case run on the confirmed
-   offtake and control and the offtake's own terms. Never set by hand. */
+/* The economics gate, never set by hand (2026-10-25, the approved mockup's
+   colours): open with nothing on file; SCREENED on screening figures (the
+   compute model, the pod case, or a contract case not on the offtake's
+   own terms: a screen of the figures, not public data); WORKING when the
+   contract case runs on the offtake's own price, term and take-or-pay but
+   the offtake or control is not yet confirmed; CONFIRMED only by the
+   contract case on the confirmed offtake and control. */
 function economicsGate(econ, d, ctx) {
   ctx = ctx || {};
   var g = { key: 'economics', label: GATE_LABEL.economics, derived: true, evidenceFileId: null, by: null, at: econ.at || null,
     value: { source: econ.source, irrPct: econ.irrPct, roiPct: econ.roiPct, paybackMonths: econ.paybackMonths }, source: econ.source ? { kind: 'model', doc: null, name: econ.label, ref: null, asOf: dayOf(econ.at) } : null };
-  function as(state, note) { return extend(g, { state: state, stateLabel: STATE_LABEL[state], note: note }); }
+  function as(state, note) { return extend(g, { short: GATE_SHORT.economics, state: state, stateLabel: STATE_LABEL[state], note: note }); }
   if (!econ.source) return as('open', 'No economics on file yet');
-  if (econ.source !== 'contract-case') return as('working', 'Screening figures (' + econ.label + '); the contract case on the confirmed offtake and control confirms it');
-  var off = offtakeOf(d, ctx.config), inp = econ.inputs || {}, missing = [];
+  if (econ.source !== 'contract-case') return as('screened', 'Screening figures (' + econ.label + '); the contract case on the offtake’s own terms takes it further');
+  if (!econ.priced) return as('screened', econ.ladder && econ.ladder.length ? 'No contract price yet: the price ladder shows the range' : 'No contract price yet');
+  var off = offtakeOf(d, ctx.config), inp = econ.inputs || {}, onTerms = [];
+  if (off.pricePerGpuHour == null || inp.pricePerGpuHour == null || Math.abs(inp.pricePerGpuHour - off.pricePerGpuHour) > 1e-6) onTerms.push('the contract price');
+  if (off.termYears != null && (inp.termMonths == null || Math.round(off.termYears * 12) !== Math.round(inp.termMonths))) onTerms.push('the contract term');
+  if (off.takeOrPayPct != null && (inp.takeOrPayPct == null || Math.abs(inp.takeOrPayPct - off.takeOrPayPct) > 1e-6)) onTerms.push('the take-or-pay');
+  if (onTerms.length) return as('screened', 'The contract case at ' + (inp.pricePerGpuHour != null ? '$' + inp.pricePerGpuHour + '/GPU-hour' : 'a price') + ', not on ' + list(onTerms) + (off.pricePerGpuHour == null ? ' (none agreed yet)' : ''));
+  var missing = [];
   if (effState(d, 'offtake', ctx) !== 'confirmed') missing.push('the offtake is confirmed');
   if (effState(d, 'control', ctx) !== 'confirmed') missing.push('control is confirmed');
-  if (off.pricePerGpuHour == null) missing.push('the contract price is recorded');
-  else if (inp.pricePerGpuHour == null || Math.abs(inp.pricePerGpuHour - off.pricePerGpuHour) > 1e-6) missing.push('the case runs on the contract price');
-  if (off.termYears != null && (inp.termMonths == null || Math.round(off.termYears * 12) !== Math.round(inp.termMonths))) missing.push('the case runs on the contract term');
-  if (off.takeOrPayPct != null && (inp.takeOrPayPct == null || Math.abs(inp.takeOrPayPct - off.takeOrPayPct) > 1e-6)) missing.push('the case runs on the take-or-pay');
-  return missing.length ? as('working', 'Confirmed once ' + list(missing)) : as('confirmed', 'The contract case on the confirmed terms');
+  return missing.length ? as('working', 'On the offtake’s own terms; confirmed once ' + list(missing)) : as('confirmed', 'The contract case on the confirmed terms');
+}
+/* Where an IRR sits against the offtake partner's STATED return band (the
+   workspace's config, never a constant; unverified, and said so). */
+function bandOf(irrPct, cfg) {
+  var st = cfg && cfg.offtake && cfg.offtake.stated, rp = st && st.returnPct;
+  if (irrPct == null || !rp || rp.length < 2) return null;
+  var lo = Math.min(rp[0], rp[1]), hi = Math.max(rp[0], rp[1]), who = (st.by || (cfg.offtake.partner && cfg.offtake.partner.name) || 'the partner') + '’s';
+  var pos = irrPct < lo ? 'below' : irrPct > hi ? 'above' : 'inside';
+  return { position: pos, lo: lo, hi: hi, verified: st.verified === true, words: (pos === 'below' ? 'Below ' : pos === 'above' ? 'Above ' : 'Inside ') + who + ' ' + lo + '–' + hi + '% range' + (st.verified === true ? '' : ' (as stated, unverified)') };
+}
+/* The price slider's rows, each with its band, ready to draw: the server
+   computed every figure (the contract case's ladder) */
+function ladderOf(econ, cfg) {
+  if (!econ || !Array.isArray(econ.ladder)) return null;
+  return econ.ladder.map(function (x) {
+    var irr = nOf(x.projectIrrPct), b = bandOf(irr, cfg);
+    return { price: nOf(x.price), projectIrrPct: irr, paybackMonths: nOf(x.paybackMonths), projectMultiple: nOf(x.projectMultiple), roiPct: nOf(x.roiPct), irrWithoutFeePct: nOf(x.irrWithoutFeePct),
+      revenuePerYear: nOf(x.revenuePerYear), partnerFeePerYear: nOf(x.partnerFeePerYear), band: b ? b.position : null, bandWords: b ? b.words : null };
+  });
 }
 
 /* ── what the pages draw ───────────────────────────────────────────────── */
 function label(entries, k) { var e = (entries || []).filter(function (x) { return x.key === k; })[0]; return e ? e.label : null; }
+function fmt(n) { return n == null ? null : Number(n).toLocaleString('en-US', { maximumFractionDigits: 1 }); }
+function money(n) { if (n == null || !isFinite(n)) return null; var a = Math.abs(n); return (n < 0 ? '-$' : '$') + (a >= 1e6 ? (a / 1e6).toFixed(2) + 'M' : a >= 1e3 ? Math.round(a / 1e3) + 'k' : String(Math.round(a))); }
+function fileName(files, id) { var f = (Array.isArray(files) ? files : []).filter(function (x) { return x && x.id === id; })[0]; return f ? (f.name || null) : null; }
+/* One gate as the Diligence card draws it (the approved mockup): one
+   sentence of what is known, the line of where it came from, and the one
+   thing to do next where there is one ({ key, label, task, moves }: the
+   door logs the task and moves the gate to In progress). Every part that
+   is not on the record says so. */
+function linesOf(v, d, site, cfg, files) {
+  var out = {}, sc = d.screen || null, pw = v.power, off = v.offtake, econ = v.economics, partner = off.partner ? off.partner.name : null;
+  var util = (gateOf(d, 'interconnection').value.utility) || (sc && sc.utility ? sc.utility.name : null), utilBasis = sc && sc.utility ? sc.utility.basis : null;
+  function g(k) { return v.gates[k]; }
+  /* power */
+  var p = [], ps = [];
+  if (pw.path === 'new-service') p.push(pw.willServeKw != null ? 'A new service on a will-serve for ' + fmt(pw.willServeKw) + ' kW' : 'A new service: no will-serve figure yet');
+  else if (pw.path === 'interconnection') p.push(pw.approvedImportKw != null ? 'An approved interconnection: ' + fmt(pw.approvedImportKw) + ' kW import' : 'An interconnection: no approved import figure yet');
+  else {
+    p.push((pw.serviceKw != null ? fmt(pw.serviceKw) + ' kW service' : 'Service capacity not on file') + ', ' + (pw.peakKw != null ? fmt(pw.peakKw) + ' kW peak' : 'no measured peak') +
+      (pw.headroomKw != null ? ', so ' + fmt(pw.headroomKw) + ' kW free' : pw.nameplateKw != null && pw.peakKw == null ? ' (the ' + fmt(pw.nameplateKw) + ' kW nameplate is not a peak), so free power is unknown' : ', so free power is unknown'));
+  }
+  if (sc && sc.power && sc.located && sc.located.usable) p.push((sc.power.kv != null ? fmt(sc.power.kv) + ' kV substation ' : 'substation ') + (sc.power.distanceMi != null ? fmt(sc.power.distanceMi) + ' mi' : '(distance not given)'));
+  if (pw.serviceKw != null || pw.peakKw != null) ps.push('Site facts');
+  if (sc && sc.power) ps.push('Grid Atlas');
+  out.power = { sentence: p.join(' · '), sources: ps.join(' · ') || null, action: null };
+  /* interconnection */
+  var ix = g('interconnection'), iv = ix.value || {}, i = [], isrc = [], hosting = sc && sc.hosting && sc.hosting.coverage === 'read' ? sc.hosting : null;
+  if (ix.state === 'confirmed') i.push((iv.kind === 'interconnection-agreement' ? 'Interconnection agreement' : 'Will-serve') + ' on file' + (iv.approvedImportKw != null ? ': ' + fmt(iv.approvedImportKw) + ' kW import' : '') + (iv.utility ? ' from ' + iv.utility : ''));
+  else if (ix.state === 'working') i.push('Will-serve requested' + (iv.studyStatus && iv.studyStatus !== 'none' ? ' · study ' + iv.studyStatus : '') + (iv.utility ? ' · ' + iv.utility : ''));
+  else if (ix.state === 'fails') i.push('Fails: ' + (iv.reason || ''));
+  else i.push('Will-serve not requested');
+  if (hosting && ix.state !== 'confirmed') { i.push((util ? util + ' hosting map: ' : 'Hosting map: ') + (hosting.loadKw != null ? fmt(hosting.loadKw) + ' kW of load hosting' : 'no load figure') + (hosting.circuit ? ' on ' + hosting.circuit : '') + (hosting.substation ? ' (' + hosting.substation + ')' : '')); isrc.push(hosting.source || 'Hosting capacity map'); }
+  else if (util && ix.state !== 'confirmed') i.push(utilBasis === 'zip' ? 'utility found from the ZIP: ' + util : util + ' serves the point');
+  else if (!util && ix.state === 'open') i.push('utility not found yet');
+  if (ix.evidenceFileId) isrc.push(fileName(files, ix.evidenceFileId) || 'document on file');
+  out.interconnection = { sentence: i.join(' · '), sources: isrc.join(' · ') || null,
+    action: ix.state === 'open' || ix.state === 'screened' ? { key: 'log-will-serve', label: 'Log will-serve request', task: { subject: 'Request a will-serve letter from ' + (util || 'the utility'), evidence: DOCS['will-serve'] }, moves: { gate: 'interconnection', state: 'working' } } : null };
+  /* fiber */
+  var fg = g('fiber'), fv = fg.value || {}, sf = sc && sc.fiber ? sc.fiber : null, f = [], fs = [];
+  var carriers = fv.carriers && fv.carriers.length ? fv.carriers : sf && sf.carriersRead ? sf.carriers : [];
+  if (fg.state === 'confirmed') f.push((fv.carrier || 'Carrier') + ' quote on file' + (fv.mrcUsd != null ? ': ' + money(fv.mrcUsd) + ' a month' : '') + (fv.nrcUsd != null ? ', ' + money(fv.nrcUsd) + ' to build' : ''));
+  else if (fg.state === 'fails') f.push('Fails: ' + (fv.reason || ''));
+  else if (carriers.length) { var symN = sf && sf.carriersRead && sf.symmetricCount != null ? sf.symmetricCount : null; f.push(carriers.length + ' fiber carrier' + (carriers.length === 1 ? '' : 's') + ' serve' + (carriers.length === 1 ? 's' : '') + ' the address' + (symN != null ? ', ' + symN + ' offer' + (symN === 1 ? 's' : '') + ' 1 Gbps symmetric' : fv.symmetric1g === true ? ', 1 Gbps symmetric offered' : fv.symmetric1g === false ? ', no 1 Gbps symmetric' : '')); }
+  else if (sf && sf.carriersNote) f.push(sf.carriersNote.charAt(0).toUpperCase() + sf.carriersNote.slice(1));
+  else f.push(fg.state === 'working' ? 'Carrier quote requested' : 'Not screened yet');
+  if (fg.state === 'working' && carriers.length) f.push('carrier quote requested');
+  if (sf && sf.carrierHotelMi != null) f.push('carrier hotel ' + fmt(sf.carrierHotelMi) + ' mi');
+  if (sf && sf.lateralMi != null && !carriers.length) f.push('lateral about ' + fmt(sf.lateralMi) + ' mi' + (sf.lateralTo ? ' to ' + sf.lateralTo : ''));
+  if (sf && sf.carriersRead) fs.push('FCC broadband data');
+  if (sf && sf.carrierHotel) fs.push('PeeringDB');
+  if (fg.evidenceFileId) fs.push(fileName(files, fg.evidenceFileId) || 'quote on file');
+  else if (fg.state !== 'fails') fs.push('confirm with a carrier quote');
+  out.fiber = { sentence: f.join(' · '), sources: fs.join(' · '),
+    action: fg.state === 'open' || fg.state === 'screened' ? { key: 'log-carrier-quote', label: 'Log carrier quote request', task: { subject: 'Request a fiber quote' + (carriers.length ? ' from ' + carriers.slice(0, 3).join(', ') : ''), evidence: DOCS['carrier-quote'] }, moves: { gate: 'fiber', state: 'working' } } : null };
+  /* site control */
+  var c = d.control || {}, t = v.control.term, cg = g('control'), cl = [], cs = [];
+  if (!c.route) cl.push('How the site comes under control is not chosen');
+  else if (c.route === 'own') cl.push('Owned' + (c.own && c.own.entity ? ' by ' + c.own.entity : ' (owner entity not recorded)'));
+  else if (c.route === 'buy') { var b = c.buy || {}; cl.push('Buying' + (b.priceUsd != null ? ' for ' + money(b.priceUsd) : '') + (b.closingDate ? ', closing ' + b.closingDate : '') + (cg.state === 'confirmed' ? (cg.source && cg.source.doc === 'deed' ? ' · closed' : ' · under contract') : '')); if (b.contingencies) cl.push('contingencies: ' + b.contingencies); }
+  else if (c.route === 'lease') { var l = c.lease || {}; cl.push('Lease' + (l.rentMonthlyUsd != null ? ': ' + money(l.rentMonthlyUsd) + ' a month' : '') + (l.termYears != null ? ', ' + fmt(l.termYears) + ' years' : '') + (l.computePermitted === true ? ' · compute permitted' : l.computePermitted === false ? ' · compute NOT permitted' : ' · compute not recorded')); }
+  else { var tk = c.takeover || {}; cl.push('Taking over ' + (tk.currentHost ? tk.currentHost + '’s' : 'the') + ' host agreement · consent to assign ' + (tk.consentToAssign || 'unknown') + ' · amendment ' + (tk.amendment || 'none')); }
+  if (c.route && !t.perpetual && t.end) cl.push(t.ok === false ? 'control ends ' + t.end + ', ' + t.shortMonths + ' months short of the offtake term plus removal' : 'control to ' + t.end);
+  if (c.route) cs.push('Agreements');
+  if (cg.evidenceFileId) cs.push(fileName(files, cg.evidenceFileId) || 'document on file');
+  out.control = { sentence: cl.join(' · '), sources: cs.join(' · ') || null, action: !c.route ? { key: 'control-form', label: 'Choose how to take control' } : null };
+  /* chips */
+  var hg = g('chips'), hv = hg.value || {}, chipName = hv.chipset || (econ.chipset ? econ.chipset.name || econ.chipset.key : null), gpus = hv.gpus != null ? hv.gpus : econ.gpus;
+  var lead = hv.leadWeeks != null ? hv.leadWeeks : null, stated = off.stated && off.stated.cardLeadWeeks != null ? off.stated.cardLeadWeeks : null, h = [], hs = [];
+  h.push(chipName ? chipName : 'Chips not chosen');
+  if (gpus != null) h.push(fmt(gpus) + ' GPUs');
+  h.push(hg.state === 'confirmed' ? 'allocation on file' : hg.state === 'working' ? 'allocation requested' : 'allocation not requested');
+  if (lead != null) h.push('~' + fmt(lead) + ' weeks'); else if (stated != null) { h.push('~' + fmt(stated) + ' weeks'); hs.push('Lead time from ' + (off.stated.by || partner || 'the partner') + (off.stated.verified ? '' : ', unverified')); }
+  if (hg.evidenceFileId) hs.push(fileName(files, hg.evidenceFileId) || 'allocation on file');
+  out.chips = { sentence: h.join(' · '), sources: hs.join(' · ') || null,
+    action: hg.state === 'open' || hg.state === 'screened' ? { key: 'log-allocation', label: 'Log allocation request', task: { subject: 'Request an allocation' + (chipName ? ' of ' + chipName : ''), evidence: DOCS['chip-allocation'] }, moves: { gate: 'chips', state: 'working' } } : null };
+  /* offtake */
+  var o = [], og = g('offtake');
+  o.push((partner ? partner + ' LOI ' : 'LOI ') + ({ none: 'not sent', drafted: 'drafted', sent: 'sent', signed: 'signed', declined: 'declined' }[off.loiStatus] || 'not sent'));
+  if (off.termYears != null) o.push(fmt(off.termYears) + '-year term');
+  if (off.feePct != null && off.partner) o.push(fmt(off.feePct) + '% fee');
+  o.push(off.offtaker && off.offtaker.name ? off.offtaker.name + (off.pricePerGpuHour != null ? ' at $' + off.pricePerGpuHour + '/GPU-hour' : ', price pending') : off.pricePerGpuHour != null ? 'offtaker pending, $' + off.pricePerGpuHour + '/GPU-hour' : 'offtaker and price pending');
+  if (og.state === 'confirmed') o.push('contract on file');
+  out.offtake = { sentence: o.join(' · '), sources: partner || null, action: v.stage === 'pursue' && (off.loiStatus === 'none' || off.loiStatus === 'drafted') && off.partner ? { key: 'loi-package', label: 'Send LOI package' + (partner ? ' to ' + partner : '') } : null };
+  /* economics: its block, one line */
+  out.economics = { sentence: econ.irrPct != null ? fmt(econ.irrPct) + '% ' + (econ.irrBasis || 'IRR') + (econ.paybackMonths != null ? ' · payback ' + econ.paybackMonths + ' months' : '') : (econ.source === 'contract-case' && !econ.priced ? 'No contract price yet: the ladder shows the range' : 'No economics on file'),
+    sources: econ.label || null, action: null };
+  return out;
+}
+/* What the site sizes to by chipset, from the contract case, the chosen one marked */
+function sizingOf(v, d) {
+  var econ = v.economics, chosen = (gateOf(d, 'chips').value.chipset || (econ.chipset && (econ.chipset.name || econ.chipset.key)) || '').toLowerCase();
+  var rows = (econ.byChipset || []).map(function (x) { return { key: x.key, name: x.name, units: x.units, gpus: x.gpus, chosen: !!chosen && (String(x.key || '').toLowerCase() === chosen || String(x.name || '').toLowerCase() === chosen || (econ.chipset && x.key === econ.chipset.key)) }; });
+  var free = v.power.availableKw;
+  return { availableKw: free, units: econ.units, words: free != null && econ.units != null ? 'Size from power · ' + fmt(free) + ' kW is ' + econ.units + ' ' + (econ.unitsLabel === 'Omega-Core skids' ? 'skid' + (econ.units === 1 ? '' : 's') : 'unit' + (econ.units === 1 ? '' : 's')) : null, byChipset: rows };
+}
 /* One site, everything the Diligence tab draws. ctx: { config, files?,
    agreements?, kase?, now } */
 function view(site, ctx) {
@@ -898,7 +1096,7 @@ function view(site, ctx) {
   GATES.forEach(function (k) {
     if (k === 'economics') { gates[k] = economicsGate(econ, d, c2); return; }
     var g = gateOf(d, k), gone = evidenceGone(g, ctx.files), st = gone ? 'working' : g.state;
-    gates[k] = extend({ key: k, label: GATE_LABEL[k] }, g, { state: st, stateLabel: STATE_LABEL[st], storedState: g.state, confirmedBy: docsFor(k, d) });
+    gates[k] = extend({ key: k, label: GATE_LABEL[k], short: GATE_SHORT[k] }, g, { state: st, stateLabel: stateLabel(k, st), storedState: g.state, confirmedBy: docsFor(k, d) });
     if (gone) flags.push({ code: 'EVIDENCE_GONE', gate: k, message: GATE_LABEL[k] + ' was confirmed by a document no longer on the site’s Files' });
     if (st === 'fails') flags.push({ code: 'GATE_FAILS', gate: k, message: GATE_LABEL[k] + ' fails: ' + (g.value.reason || '') });
   });
@@ -906,17 +1104,22 @@ function view(site, ctx) {
   if (active.length) flags.unshift({ code: 'EXCLUDED', message: 'Passed by the workspace’s exclusions: ' + active.map(function (x) { return x.label + ' (' + x.field + ' is ' + x.value + ')'; }).join('; ') });
   if (off.defaulted.length) flags.push({ code: 'OFFTAKE_DEFAULTS', message: 'Offtake ' + off.defaulted.map(function (k) { return k === 'termYears' ? 'term' : k === 'feePct' ? 'fee' : k; }).join(' and ') + ' from the workspace default' });
   var partnerRec = off.partner && site.partners && site.partners[off.partner.key] ? site.partners[off.partner.key] : null;
-  return {
+  var out = {
     enabled: true, v: VERSION, stage: stage, stageLabel: STAGE_LABEL[stage], storedStage: d.stage, passedFrom: d.passedFrom,
     decision: dec, intakeType: d.intakeType, intakeLabel: label(cfg.intakeTypes, d.intakeType), hostDeal: d.hostDeal, hostDealLabel: label(cfg.hostDeals, d.hostDeal),
     chargers: extend({}, d.chargers || {}, { nameplateKw: np.kw, nameplateSource: np.source }),
-    gates: gates, power: power, control: extend({}, d.control || {}, { term: term }), offtake: off, economics: econ, survey: d.survey,
+    gates: gates, power: power, control: extend({}, d.control || {}, { term: term }), offtake: off, economics: econ, survey: d.survey, screen: d.screen || null,
+    ladder: ladderOf(econ, cfg), band: bandOf(econ.irrPct, cfg),
     exclusions: ex, partnerRecord: partnerRec, next: nextStep(stage, d, c2),
     flags: flags.concat(power.flags, term.flags), history: d.history.slice(-50).reverse(), updatedAt: d.updatedAt || null, updatedBy: d.updatedBy || null
   };
+  if (d.screen && d.screen.fiber && d.screen.fiber.carriersStatus === 'needs-key') out.flags.push({ code: 'FCC_KEY_MISSING', message: 'Carrier names need the FCC key (FCC_BB_KEY) on this deployment' });
+  out.lines = linesOf(out, d, site, cfg, ctx.files);
+  out.sizing = sizingOf(out, d);
+  return out;
 }
 function nextStep(stage, d, ctx) {
-  if (stage === PASSED) return { stage: null, label: null, requirement: null, ready: false, note: 'Passed: reopen it or pursue it to take it up again' };
+  if (stage === PASSED) return { stage: null, label: null, requirement: null, ready: false, note: 'Passed: reopen it or earmark it to take it up again' };
   var i = STAGES.indexOf(stage);
   if (i === STAGES.length - 1) return { stage: null, label: null, requirement: null, ready: false, note: 'Confirmed' };
   var to = STAGES[i + 1], why = requirement(to, d, ctx);
@@ -930,7 +1133,8 @@ function row(site, ctx) {
   var fib = v.gates.fiber.value || {}, chips = v.gates.chips.value || {};
   return { siteId: site.siteId || site.id || null, stage: v.stage, stageLabel: v.stageLabel,
     decision: v.decision ? { choice: v.decision.choice, reason: v.decision.reason, auto: !!v.decision.auto, by: v.decision.by, at: v.decision.at } : null,
-    gates: g, intakeType: v.intakeType, hostDeal: v.hostDeal, headroomKw: v.power.headroomKw, availableKw: v.power.availableKw, powerPath: v.power.path, peakSource: v.power.peakSource, nameplateKw: v.power.nameplateKw,
+    gates: g, intakeType: v.intakeType, hostDeal: v.hostDeal, headroomKw: v.power.headroomKw, availableKw: v.power.availableKw, freeKw: v.power.availableKw, powerPath: v.power.path, peakSource: v.power.peakSource, nameplateKw: v.power.nameplateKw,
+    screenedAt: v.screen ? v.screen.at : null, screenComplete: v.screen ? v.screen.complete === true : false,
     carrier: fib.carrier || null, carriers: fib.carriers || [], chipset: chips.chipset || null, route: v.control.route || null, termOk: v.control.term.ok, termShortMonths: v.control.term.shortMonths,
     loiStatus: v.offtake.loiStatus, offtaker: v.offtake.offtaker ? v.offtake.offtaker.name : null, offtakeTermYears: v.offtake.termYears,
     irrPct: v.economics.irrPct, roiPct: v.economics.roiPct, economicsSource: v.economics.source, units: v.economics.units, unitsLabel: v.economics.unitsLabel,
@@ -984,7 +1188,7 @@ function filterRows(rows, f) {
 /* The vocabulary the pages draw from, so no page keeps its own copy */
 function schema(cfg) {
   cfg = cfg || normalizeConfig(null);
-  return { flag: FLAG, stages: STAGES.slice(), passed: PASSED, stageLabels: copy(STAGE_LABEL), stageHints: copy(STAGE_HINT), gates: GATES.slice(), gateLabels: copy(GATE_LABEL), gateStates: GATE_STATES.slice(), stateLabels: copy(STATE_LABEL),
+  return { flag: FLAG, stages: STAGES.slice(), passed: PASSED, stageLabels: copy(STAGE_LABEL), callLabels: copy(CALL_LABEL), stageHints: copy(STAGE_HINT), gates: GATES.slice(), gateLabels: copy(GATE_LABEL), gateShort: copy(GATE_SHORT), gateStates: GATE_STATES.slice(), stateLabels: copy(STATE_LABEL), gateStateLabels: copy(GATE_STATE_LABEL),
     sourceKinds: SOURCE_KINDS.slice(), docs: copy(DOCS), confirmedBy: copy(CONFIRMED_BY), routes: copy(ROUTES), loi: LOI.slice(), offtakeStatus: OFFTAKE_STATUS.slice(),
     chargerStatus: CHARGER_STATUS.slice(), chargerUse: CHARGER_USE.slice(), peakSources: PEAK_SOURCES.slice(), consent: CONSENT.slice(), amendment: AMENDMENT.slice(),
     equipmentAtTermEnd: EQUIPMENT_END.slice(), survey: SURVEY.slice(), powerPaths: POWER_PATHS.slice(),
@@ -993,8 +1197,8 @@ function schema(cfg) {
 }
 
 module.exports = {
-  FLAG: FLAG, CONFIG_KEY: CONFIG_KEY, VERSION: VERSION, STAGES: STAGES, PASSED: PASSED, STAGE_LABEL: STAGE_LABEL, STAGE_HINT: STAGE_HINT, POWER_PATHS: POWER_PATHS, GATES: GATES, GATE_LABEL: GATE_LABEL,
-  GATE_STATES: GATE_STATES, STATE_LABEL: STATE_LABEL, SCREEN_GATES: SCREEN_GATES, SOURCE_KINDS: SOURCE_KINDS, DOCS: DOCS, CONFIRMED_BY: CONFIRMED_BY,
+  FLAG: FLAG, CONFIG_KEY: CONFIG_KEY, VERSION: VERSION, STAGES: STAGES, PASSED: PASSED, STAGE_LABEL: STAGE_LABEL, CALL_LABEL: CALL_LABEL, STAGE_HINT: STAGE_HINT, POWER_PATHS: POWER_PATHS, GATES: GATES, GATE_LABEL: GATE_LABEL,
+  GATE_STATES: GATE_STATES, STATE_LABEL: STATE_LABEL, GATE_SHORT: GATE_SHORT, GATE_STATE_LABEL: GATE_STATE_LABEL, SYSTEM_ACTIONS: SYSTEM_ACTIONS, SCREEN_GATES: SCREEN_GATES, SOURCE_KINDS: SOURCE_KINDS, DOCS: DOCS, CONFIRMED_BY: CONFIRMED_BY,
   ROUTES: ROUTES, ROUTE_KEYS: ROUTE_KEYS, AGREEMENT_TYPES: AGREEMENT_TYPES, LOI: LOI, OFFTAKE_STATUS: OFFTAKE_STATUS, CHARGER_STATUS: CHARGER_STATUS,
   CHARGER_USE: CHARGER_USE, PEAK_SOURCES: PEAK_SOURCES, CONSENT: CONSENT, AMENDMENT: AMENDMENT, EQUIPMENT_END: EQUIPMENT_END, SURVEY: SURVEY,
   MATCH_FIELDS: MATCH_FIELDS, ACTIONS: ACTIONS, HISTORY_CAP: HISTORY_CAP, NOTE_MIN: NOTE_MIN,
@@ -1002,5 +1206,5 @@ module.exports = {
   exclusionsFor: exclusionsFor, activeExclusions: activeExclusions, current: current, gateOf: gateOf, decisionOf: decisionOf, stageOf: stageOf,
   requirement: requirement, change: change, offtakerInput: offtakerInput, headroom: headroom, measuredPeak: measuredPeak, serviceOf: serviceOf,
   controlTerm: controlTerm, offtakeOf: offtakeOf, economicsOf: economicsOf, economicsFromCase: economicsFromCase, economicsGate: economicsGate,
-  view: view, row: row, pipeline: pipeline, tally: tally, filterRows: filterRows, schema: schema, addMonths: addMonths
+  view: view, row: row, pipeline: pipeline, tally: tally, filterRows: filterRows, schema: schema, addMonths: addMonths, bandOf: bandOf, ladderOf: ladderOf, cleanScreen: cleanScreen
 };
