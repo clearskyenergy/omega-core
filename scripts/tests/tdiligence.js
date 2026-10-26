@@ -563,7 +563,10 @@ test('D18 the enable patch: the flag on with every other override kept, the seed
   var p = D.enablePatch(billing, SEED);
   assert.equal(p.changed, true); assert.equal(p.flagWas, null);
   assert.deepEqual(p.toolOverrides, { 'portfolio-assets': true, editor: false, 'portfolio-diligence': true });
-  assert.deepEqual(p.added, ['intakeTypes', 'hostDeals', 'exclusions', 'offtake', 'target', 'removalMonths']);
+  assert.deepEqual(p.added, ['intakeTypes', 'hostDeals', 'exclusions', 'offtake', 'target', 'removalMonths', 'unit']);
+  /* the live upgrade: a workspace already holding the first six gets exactly the new key added */
+  var six = {}; ['intakeTypes', 'hostDeals', 'exclusions', 'offtake', 'target', 'removalMonths'].forEach(function (k) { six[k] = p.config[k]; });
+  assert.deepEqual(D.enablePatch({ toolOverrides: { 'portfolio-diligence': true }, portfolioDiligence: six }, SEED).added, ['unit']);
   var after = Object.assign({}, billing, { toolOverrides: p.toolOverrides, portfolioDiligence: p.config });
   var again = D.enablePatch(after, SEED);
   assert.equal(again.changed, false); assert.deepEqual(again.added, []);
@@ -747,6 +750,41 @@ test('D24 clients: the acquisition paperwork ladder NDA \u2192 MSA \u2192 LOI \u
   /* the vocabulary rides the schema, so no page keeps its own copy */
   var sch = D.schema(CFG);
   assert.deepEqual(sch.clientSteps, D.CLIENT_STEPS); assert.equal(sch.clientStateLabels.none, 'Not started'); assert.equal(sch.clientStepTone.signed, 'confirmed'); assert.equal(sch.clientStepTone.declined, 'fails');
+});
+
+test('D25 no contract price yet: the IRR at the chip\u2019s PUBLIC reference (the ladder\u2019s own centre), marked as such, rides the economics, the row, the gate\u2019s note and the card\u2019s line \u2014 and gives way to the contract case\u2019s own IRR the moment a price is set', function () {
+  var un = { output: { ok: true, priced: false, chipset: { key: 'h100', name: 'NVIDIA H100' }, contract: { termMonths: 72, pricePerGpuHour: null, takeOrPayPct: 80 },
+    partner: { name: 'Lightsmith Energy', feePct: 10 }, sizing: { units: 2, gpus: 96, itKw: 150, byChipset: [] }, capex: { total: 1528000 }, returns: null,
+    ladder: [{ price: 2.4, projectIrrPct: 48.9, paybackMonths: 28 }, { price: 2.45, projectIrrPct: 50.1, paybackMonths: 27 }, { price: 2.5, projectIrrPct: 51.2, paybackMonths: 27 }],
+    ladderBasis: { centre: 2.45, centreBasis: 'spot', referencePricePerGpuHour: 2.46 } }, input: { availableKw: 450 }, at: NOW };
+  var e = D.economicsFromCase(un.output, un.input, NOW);
+  assert.equal(e.irrPct, null, 'the contract case\u2019s own IRR stays null until a price is set');
+  assert.deepEqual(e.irrAt, { pct: 50.1, price: 2.45, basis: 'spot', paybackMonths: 27, words: 'at the chip\u2019s public spot reference ($2.45/GPU-hour) \u2014 no contract price set' });
+  var site = chargerSite({ serviceCapacityKw: 800, existingPeakKw: 350 }), v = view(site, { kase: un });
+  assert.equal(v.gates.economics.note, 'No contract price yet: the figures read at the chip\u2019s public spot reference ($2.45/GPU-hour)');
+  assert.equal(v.lines.economics.sentence, '50.1% project IRR at the chip\u2019s public spot reference ($2.45/GPU-hour) \u2014 no contract price set');
+  var row = D.row(site, { config: CFG, now: NOW, kase: un });
+  assert.equal(row.irrPct, null); assert.equal(row.irrAtPct, 50.1); assert.equal(row.irrAtBasis, 'spot'); assert.equal(row.irrAtPrice, 2.45);
+  /* priced: the reference figure goes, the contract case\u2019s own IRR stands */
+  var pr = D.row(site, { config: CFG, now: NOW, kase: CASE });
+  assert.equal(pr.irrAtPct, null); assert.equal(pr.irrPct, 31.4);
+  /* a ladder centred on a CONTRACT price, or screening figures, never read as a public reference */
+  assert.equal(D.economicsFromCase(Object.assign({}, un.output, { ladderBasis: { centre: 2.45, centreBasis: 'contract' } }), {}, NOW).irrAt, null);
+  assert.equal(D.row(chargerSite({ latestModel: { irr: 0.12, totalProjectCost: 900000, at: NOW } }), { config: CFG, now: NOW }).irrAtPct, null);
+  /* the deal's own UNIT rides the workspace config (the Lightsmith 1 MW container), validated whole */
+  assert.equal(CFG.unit.label, '1 MW container'); assert.equal(CFG.unit.kw, 1000); assert.equal(CFG.unit.gpus, 504); assert.equal(CFG.unit.costUsd, 35000000); assert.equal(CFG.unit.chipset, 'gb200');
+  assert.equal(D.normalizeConfig({}).unit, null, 'no unit configured: the skid as before');
+  refused(function () { D.validateConfig({ unit: { label: 'x', kw: 1000, gpus: 10, costUsd: 99, racks: 7, rackCostUsd: 5000000 } }); }, 400, /racks × rackCostUsd/);
+  refused(function () { D.validateConfig({ unit: { label: 'x', kw: 1000, gpus: 10, costUsd: 100, itKw: 2000 } }); }, 400, /itKw cannot exceed/);
+  refused(function () { D.validateConfig({ unit: { kw: 1000 } }); }, 400, /unit needs label, kw, gpus and costUsd/);
+  /* a case sized in the unit wears the unit's own word everywhere the pages read */
+  var uc = { output: { ok: true, priced: true, chipset: { key: 'gb200', name: 'NVIDIA GB200 NVL72' }, contract: { termMonths: 72, pricePerGpuHour: 4.71, takeOrPayPct: 80 },
+    sizing: { units: 1, gpus: 504, itKw: 819, unit: { label: '1 MW container', word: 'container', kw: 1000, gpus: 504, racks: 7 }, byChipset: [{ key: 'gb200', name: 'NVIDIA GB200 NVL72', units: 1, gpus: 504 }] },
+    capex: { total: 35000000 }, returns: { projectIrrPct: 29.97, roiPct: 105.9, paybackMonths: 37, projectMultiple: 2.06 } }, input: { availableKw: 1150 }, at: NOW };
+  var eu = D.economicsFromCase(uc.output, uc.input, NOW);
+  assert.equal(eu.unitsLabel, 'containers'); assert.equal(eu.units, 1); assert.equal(eu.capexUsd, 35000000);
+  var su = D.view(chargerSite({ serviceCapacityKw: 1500, existingPeakKw: 350 }), { config: CFG, now: NOW, kase: uc });
+  assert.equal(su.sizing.words, 'Size from power · 1,150 kW is 1 container');
 });
 
 /* ── the rule that matters most, mutation-tested ──────────────────────── */

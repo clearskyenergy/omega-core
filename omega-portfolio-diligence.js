@@ -110,7 +110,7 @@
   function freeLine(r) {
     var p = [];
     p.push(r.freeKw != null ? fmt(r.freeKw, 0) + ' kW free' : 'free power unknown');
-    if (r.units != null) p.push(r.units + ' ' + (r.unitsLabel === 'Omega-Core skids' ? 'skid' : r.unitsLabel === 'pods' ? 'pod' : 'unit') + (r.units === 1 ? '' : 's'));
+    if (r.units != null) p.push(r.units + ' ' + (r.unitsLabel === 'Omega-Core skids' ? 'skid' : r.unitsLabel === 'pods' ? 'pod' : String(r.unitsLabel || 'units').replace(/s$/, '')) + (r.units === 1 ? '' : 's'));
     return p.join(' · ');
   }
   /* the tally's line: a figure no earmarked site has is said to be missing, never summed to zero; one some sites lack says on how many it rests */
@@ -118,7 +118,7 @@
     var p = [t.sites + ' site' + (t.sites === 1 ? '' : 's') + ' ' + esc((sch.stageLabels.pursue || '').toLowerCase())], lack = [];
     if (t.sites) {
       p.push(t.availableKnown ? esc(fmt(t.availableMw, 2)) + ' MW' : 'power not known');
-      p.push(t.unitsKnown ? t.units + ' ' + (t.unitLabels && t.unitLabels.length === 1 && t.unitLabels[0] === 'Omega-Core skids' ? 'skid' : 'unit') + (t.units === 1 ? '' : 's') : 'not sized');
+      p.push(t.unitsKnown ? t.units + ' ' + (t.unitLabels && t.unitLabels.length === 1 ? (t.unitLabels[0] === 'Omega-Core skids' ? 'skid' : String(t.unitLabels[0] || 'units').replace(/s$/, '')) : 'unit') + (t.units === 1 ? '' : 's') : 'not sized');
       p.push(t.capexKnown ? '<b>' + esc(moneyM(t.capexUsd)) + '</b> capex' : 'capex not modelled');
       if (t.availableKnown && t.availableKnown < t.sites) lack.push('power on ' + t.availableKnown + ' of ' + t.sites);
       if (t.unitsKnown && t.unitsKnown < t.sites) lack.push('sized on ' + t.unitsKnown + ' of ' + t.sites);
@@ -133,11 +133,17 @@
      Promise, openSite(id), msg(text, ok), canEdit }) */
   function mountRegister(el, opts) {
     style();
-    var B = binder(el), st = { data: opts.data, stage: '', gate: '', cur: 0, passing: null, confirmLoi: false, screening: null, stop: false, client: '', editClient: null };
+    var B = binder(el), st = { data: opts.data, stage: '', gate: '', cur: 0, passing: null, confirmLoi: false, screening: null, stop: false, client: '', editClient: null, q: '', archived: !!opts.data.archived };
     el.classList.add('odg');
     function D() { return st.data.diligence; }
     function rows() {
-      var list = (st.data.sites || []).filter(function (s) { return s.diligence && !s.archived; });
+      var list = (st.data.sites || []).filter(function (s) { return s.diligence && (st.archived || !s.archived); });
+      if (st.q) {
+        var needle = st.q.toLowerCase();
+        list = list.filter(function (s) {
+          return [s.name, s.city, s.state, s.id, s.address, (s.tags || []).join(' '), s.diligence.clientName].filter(Boolean).join(' ').toLowerCase().indexOf(needle) >= 0;
+        });
+      }
       if (st.client === 'none') list = list.filter(function (s) { return !s.diligence.clientId; });
       else if (st.client) list = list.filter(function (s) { return s.diligence.clientId === st.client; });
       if (st.stage === 'live') list = list.filter(function (s) { return s.diligence.stage !== 'passed'; });
@@ -170,6 +176,8 @@
       h += '<div class="odg-card" style="margin-top:12px"><div class="odg-pipe-head"><div class="odg-lb">' + esc(csel ? csel.name + '\u2019s sites' : st.client === 'none' ? 'Sites under no client yet' : (brand.name ? brand.name + ' pipeline' : 'Pipeline')) + ' · ' + list.length + ' of ' + all.length + ' site' + (all.length === 1 ? '' : 's') + (st.client ? ' · <a data-act="cl-clear" style="cursor:pointer;text-decoration:underline">Every client</a>' : '') + '</div><div class="odg-tools">' +
         '<select aria-label="Stage" data-f="stage"><option value="">Any stage</option><option value="live"' + (st.stage === 'live' ? ' selected' : '') + '>Not passed</option>' + sch.stages.concat([sch.passed]).map(function (s) { return '<option value="' + esc(s) + '"' + (st.stage === s ? ' selected' : '') + '>' + esc(sch.stageLabels[s]) + '</option>'; }).join('') + '</select>' +
         '<select aria-label="Gate" data-f="gate"><option value="">Any gate</option>' + ['any'].concat(sch.gates).map(function (g) { return sch.gateStates.map(function (s) { var v = g + ':' + s; return '<option value="' + esc(v) + '"' + (st.gate === v ? ' selected' : '') + '>' + esc((g === 'any' ? 'Any gate' : sch.gateLabels[g]) + ': ' + sch.stateLabels[s]) + '</option>'; }).join(''); }).join('') + '</select>' +
+        '<input class="odg-in" data-f="q" type="search" value="' + esc(st.q) + '" placeholder="Search site, city, tag…" aria-label="Search sites" style="width:170px">' +
+        '<label class="odg-lb" style="display:flex;gap:4px;align-items:center;white-space:nowrap"><input type="checkbox" data-arch' + (st.archived ? ' checked' : '') + '> Archived</label>' +
         (opts.canEdit ? '<button type="button" class="odg-btn" data-act="screen"' + (st.screening ? ' disabled' : '') + '>Screen with Grid Atlas</button>' : '') + '</div></div>';
       if (st.screening) h += '<div class="odg-m" style="margin-bottom:8px">' + esc(st.screening) + ' <button type="button" class="odg-btn sm" data-act="screen-stop">Stop</button></div>';
       h += '<div class="odg-rg hd odg-lb"><span>Site</span><span>' + sch.gates.map(function (g) { return '<span class="odg-g odg-gh" title="' + esc(sch.gateLabels[g]) + '">' + esc((sch.gateShort && sch.gateShort[g]) || g) + '</span>'; }).join('') + '</span><span>IRR</span><span>Stage</span></div>';
@@ -178,8 +186,9 @@
         var r = s.diligence, loc = [s.city, s.state].filter(Boolean).join(', ');
         h += '<div class="odg-rg' + (i === st.cur ? ' cur' : '') + '" data-row="' + i + '" data-id="' + esc(s.id) + '"><div><div class="nm" data-act="open">' + esc(s.name || 'Site') + (loc ? '<span class="odg-lb" style="font-weight:400"> · ' + esc(loc) + '</span>' : '') + '</div><div class="odg-lb">' + esc(freeLine(r)) + (r.clientName && st.client !== r.clientId ? ' · ' + esc(r.clientName) : '') + '</div></div>' +
           '<div>' + sch.gates.map(function (g) { return chip(g, r.gates[g], sch); }).join('') + '</div>' +
-          '<div>' + (r.irrPct != null ? esc(fmt(r.irrPct, 0)) + '%' : '<span class="odg-lb">—</span>') + '</div><div>' + stageCell(s, r, sch, brand) + '</div></div>';
+          '<div>' + (r.irrPct != null ? esc(fmt(r.irrPct, 0)) + '%' : r.irrAtPct != null ? '<span title="' + esc('At the chip\u2019s public ' + (r.irrAtBasis || 'spot') + ' reference' + (r.irrAtPrice != null ? ', $' + r.irrAtPrice + '/GPU-hour' : '') + ' \u2014 no contract price set') + '">' + esc(fmt(r.irrAtPct, 0)) + '%<span class="odg-lb"> at ' + esc(r.irrAtBasis === 'on-demand' ? 'on-demand' : 'spot') + '</span></span>' : '<span class="odg-lb">—</span>') + '</div><div>' + stageCell(s, r, sch, brand) + '</div></div>';
       });
+      if (st.data.more && opts.loadMore) h += '<div style="text-align:center;margin-top:8px"><button type="button" class="odg-btn" data-act="more">Load more sites</button></div>';
       h += '<div class="odg-legend">Legend: green ' + esc(sch.stateLabels.confirmed) + ' (document) · amber ' + esc(sch.stateLabels.working) + ' · blue ' + esc(sch.stateLabels.screened) + ' (public data) · grey ' + esc(sch.stateLabels.open) + ' · red ' + esc(sch.stateLabels.fails) + ' · J/K next, E ' + esc((sch.callLabels.pursue || '').toLowerCase()) + ', P pass</div></div>';
       el.innerHTML = h;
     }
@@ -246,6 +255,7 @@
       return body;
     }
     function stageCell(s, r, sch, brand) {
+      if (s.archived) return '<span class="odg-pill odg-op">Archived</span>';
       if (st.passing === s.id) return '<div><input class="odg-in" data-pass-reason style="width:100%" placeholder="Why pass? (5+ characters)" aria-label="Reason to pass"><div style="margin-top:4px"><button type="button" class="odg-btn sm pri" data-act="pass-go">Pass</button> <button type="button" class="odg-btn sm" data-act="pass-cancel">Cancel</button></div></div>';
       if (r.stage === 'passed') return stagePill('passed', sch, brand, true) + '<div class="odg-lb" style="font-size:11px">' + esc((r.decision && r.decision.reason) || '') + '</div>';
       if ((r.stage === 'brought-in' || r.stage === 'screened') && opts.canEdit) return '<button type="button" class="odg-btn sm" data-act="earmark">' + esc(sch.callLabels.pursue) + '</button>';
@@ -301,6 +311,7 @@
       else if (a === 'loi-send') { var note = val(el, '#odg-loi-note'); st.confirmLoi = false; render(); act(opts.post('diligence-loi', { note: note || undefined })); }
       else if (a === 'screen') screen();
       else if (a === 'screen-stop') { st.stop = true; }
+      else if (a === 'more' && opts.loadMore) { b.disabled = true; opts.loadMore(); }
       else if (a === 'cl-new') { st.editClient = st.editClient === 'new' ? null : 'new'; render(); var nf = qs(el, 'form[data-form="client"] input[name="name"]'); if (nf) nf.focus(); }
       else if (a === 'cl-cancel') { st.editClient = null; render(); }
       else if (a === 'cl-clear') { st.client = ''; st.cur = 0; render(); }
@@ -327,8 +338,19 @@
       act(opts.post('diligence-client', clientBody(f)).then(function (j) { st.editClient = j && j.portfolioId && f.getAttribute('data-pid') ? st.editClient : null; return j; }), 'Client saved.');
     });
     B.on('change', function (e) {
-      var f = e.target.getAttribute && e.target.getAttribute('data-f'); if (!f) return;
+      if (e.target.hasAttribute && e.target.hasAttribute('data-arch')) {
+        st.archived = e.target.checked;
+        if (opts.setArchived) opts.setArchived(st.archived); else render();
+        return;
+      }
+      var f = e.target.getAttribute && e.target.getAttribute('data-f'); if (!f || f === 'q') return;
       st[f] = e.target.value; st.cur = 0; render();
+    });
+    B.on('input', function (e) {
+      if (!(e.target.getAttribute && e.target.getAttribute('data-f') === 'q')) return;
+      st.q = e.target.value; st.cur = 0; render();
+      var qi = qs(el, '[data-f="q"]');
+      if (qi) { qi.focus(); try { qi.setSelectionRange(qi.value.length, qi.value.length); } catch (x) {} }
     });
     B.on('keydown', function (e) { if (e.key === 'Enter' && e.target.hasAttribute && e.target.hasAttribute('data-pass-reason')) { e.preventDefault(); doPass(); } if (e.key === 'Escape' && st.passing) { st.passing = null; render(); } });
     /* J/K next and previous, E earmark, P pass, Enter open: anywhere on the page but a field */

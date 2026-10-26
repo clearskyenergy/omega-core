@@ -34,7 +34,8 @@ function world(opts) {
       contract: { termMonths: input.contract.termMonths, pricePerGpuHour: input.contract.pricePerGpuHour == null ? null : input.contract.pricePerGpuHour, takeOrPayPct: 100 }, partner: { name: 'Lightsmith Energy', feePct: 10 },
       sizing: { units: Math.floor((input.availableKw || 75) / 75), gpus: 48 * Math.floor((input.availableKw || 75) / 75), itKw: 75 * Math.floor((input.availableKw || 75) / 75), byChipset: [] },
       capex: { total: 764000 * Math.floor((input.availableKw || 75) / 75) }, returns: input.contract && input.contract.pricePerGpuHour != null ? { projectIrrPct: 54.2, roiPct: 189, paybackMonths: 26, projectMultiple: 2.89 } : null,
-      ladder: o && o.ladder === false ? null : [{ price: 2, projectIrrPct: 54.2 }] }; },
+      ladder: o && o.ladder === false ? null : [{ price: 2, projectIrrPct: 54.2, paybackMonths: 26 }],
+      ladderBasis: { centre: 2, centreBasis: input.contract && input.contract.pricePerGpuHour != null ? 'contract' : 'spot', referencePricePerGpuHour: 2 } }; },
     handlers: function () {
       return { atlas: function () { calls.atlas++; return Promise.resolve({ status: 200, body: { lat: 41.6, lng: -93.6, geocode: { precision: 'exact' }, substations: [{ name: 'Bondurant', distanceKm: 2.25, voltageKv: 69 }], sources: { substations: 'HIFLD' } } }); },
         network: function () { calls.network++; return Promise.resolve({ status: 200, body: { fcc: { status: 'skipped', providers: [] }, facilities: { status: 'ok', nearestMajor: { name: 'DSM IX', mi: 6 } }, fiber: { lateral: { mi: 2.1, to: 'DSM IX' } } } }); },
@@ -109,9 +110,16 @@ test('Q05 the register: a row a site, the pipeline strip and the tally under the
   var docs = ['s1', 's2'].map(function (id) { return { id: id, data: function () { return w.site(id); } }; }), j = await w.door.registerJoin(w.ctx({}), docs);
   assert.equal(j.rows.s1.stage, 'pursue'); assert.equal(j.rows.s2.stage, 'brought-in'); assert.equal(j.rows.s1.freeKw, 450);
   var n = {}; j.pipeline.forEach(function (x) { n[x.stage] = x.count; }); assert.equal(n.pursue, 1); assert.equal(n['brought-in'], 1);
+  /* no contract price: the register's fast path keeps the ladder, so the column reads the IRR at spot, marked */
+  assert.equal(j.rows.s1.irrPct, null); assert.equal(j.rows.s1.irrAtPct, 54.2); assert.equal(j.rows.s1.irrAtBasis, 'spot');
   assert.equal(j.tally.sites, 1); assert.equal(j.tally.target.minUsd, 25000000); assert.equal(j.brand.name, 'Solela Capital');
-  assert.ok(w.calls.cases.every(function (c) { return !c.opts || c.opts.ladder === false || c.opts.ladder === undefined; }));
-  assert.ok(w.calls.cases.some(function (c) { return c.opts && c.opts.ladder === false; }), 'the register asks for no ladder');
+  assert.ok(w.calls.cases.every(function (c) { return !(c.opts && c.opts.ladder === false); }), 'unpriced: every register case keeps its ladder, where the at-spot figure lives');
+  /* once a price is set, the register's fast path asks that site's case for no ladder, and its own IRR replaces the reference */
+  await w.post({ action: 'diligence-offtake', site: 's2', pricePerGpuHour: 2 });
+  var b4 = w.calls.cases.length, jp = await w.door.registerJoin(w.ctx({}), docs);
+  assert.ok(w.calls.cases.slice(b4).some(function (c) { return c.input.contract.pricePerGpuHour === 2 && c.opts && c.opts.ladder === false; }), 'a priced site asks for no ladder');
+  assert.ok(w.calls.cases.slice(b4).some(function (c) { return c.input.contract.pricePerGpuHour == null && !(c.opts && c.opts.ladder === false); }), 'an unpriced one keeps it');
+  assert.equal(jp.rows.s2.irrPct, 54.2); assert.equal(jp.rows.s2.irrAtPct, null);
   /* the case runs only where a figure needs it: the page's rows, and an earmarked site off the page for the tally; never a site that is neither */
   w.db.seed(O + '/sites/s3', { name: 'Third site', serviceCapacityKw: 2000, existingPeakKw: 500 });
   var before = w.calls.cases.length, j2 = await w.door.registerJoin(w.ctx({}), [{ id: 's2', data: function () { return w.site('s2'); } }]);
