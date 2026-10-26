@@ -1,0 +1,56 @@
+{
+  "_note": "Solela Capital's own lists for the compute-site due diligence (api/_lib/portfolio/diligence.js). scripts/enable-portfolio-diligence.js is the only reader: it validates this file and writes it to omega_orgs/solelacapital.com/billing/current.portfolioDiligence, never over a key the workspace already holds. Kept off the site by .vercelignore (it carries a partner's commercial terms), as billing.json is. Keys beginning with _ are notes and are never written.",
+  "_sources": "Intake types from solelacapital.com (overbuilt commercial service, operating and dark EV charging sites, stranded interconnections, half-built projects); the offtake partner's terms as Lightsmith Energy states them, UNVERIFIED (2026-10-25).",
+  "intakeTypes": [
+    { "key": "overbuilt-service", "label": "Overbuilt commercial service" },
+    { "key": "operating-charging", "label": "Operating charging site" },
+    { "key": "dark-charging", "label": "Dark charging site" },
+    { "key": "stranded-interconnection", "label": "Stranded interconnection" },
+    { "key": "half-built", "label": "Half-built project" },
+    { "key": "portfolio-estate", "label": "Portfolio / estate" }
+  ],
+  "hostDeals": [
+    { "key": "ground-lease", "label": "Ground lease" },
+    { "key": "revenue-share", "label": "Revenue share" },
+    { "key": "hybrid", "label": "Hybrid" }
+  ],
+  "exclusions": [
+    {
+      "key": "residential",
+      "label": "Residential charging",
+      "reason": "Solela does not take residential charging sites",
+      "match": [
+        { "field": "chargers.use", "in": ["residential"] },
+        { "field": "hostType", "in": ["multifamily"] },
+        { "field": "locationType", "in": ["residential", "multifamily", "multi-family", "apartment", "apartments", "condominium", "condo", "single family", "single-family", "hoa"] },
+        { "field": "tags", "in": ["residential", "multifamily"] }
+      ]
+    },
+    {
+      "key": "amenity-only",
+      "label": "Amenity-only charging",
+      "reason": "Solela does not take amenity-only charging sites",
+      "match": [
+        { "field": "chargers.use", "in": ["amenity"] },
+        { "field": "tags", "in": ["amenity", "amenity-only"] }
+      ]
+    }
+  ],
+  "offtake": {
+    "partner": { "key": "lightsmith", "name": "Lightsmith Energy" },
+    "termYears": 6,
+    "feePct": 10,
+    "stated": {
+      "by": "Lightsmith Energy",
+      "verified": false,
+      "termYears": 6,
+      "returnPct": [25, 55],
+      "paybackYears": 2,
+      "cardLeadWeeks": 36,
+      "order": ["sites", "LOI", "offtake", "MSA", "site survey", "confirmed"],
+      "note": "As Lightsmith states them; not verified"
+    }
+  },
+  "target": { "label": "Lightsmith's target deal", "minUsd": 25000000, "maxUsd": 35000000 },
+  "removalMonths": 6
+}
