@@ -122,6 +122,13 @@ function utilityByZip(zip) {
   if (!rec || rec._default || rec._fallback || String(rec.key || '').indexOf('state:') === 0) return null;
   return { name: str(rec.name, 120), key: str(rec.key, 40), eiaId: null, basis: 'zip' };
 }
+/* a handed-in call that throws or rejects is an answer too, never an escape */
+function safe(fn, body) {
+  return new Promise(function (resolve) {
+    try { Promise.resolve(fn(body)).then(resolve, function (e) { resolve({ status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }); }); }
+    catch (e) { resolve({ status: e && e.status || 502, body: { error: String(e && e.message || e).slice(0, 200) } }); }
+  });
+}
 function zipOf(site) { var a = site && site.address && typeof site.address === 'object' ? site.address : {}; return a.zip || (site && site.zip) || null; }
 
 /* ── one phase of one site (the door's job step) ───────────────────────────
@@ -137,7 +144,7 @@ function step(site, prior, deps, opts) {
   if (!s.phase) {
     var loc = locationOf(site);
     if (loc.error) { s.errors.push({ source: 'location', message: loc.error }); s.phase = 'done'; s.at = now; return Promise.resolve({ screen: finish(s, site), phase: 'grid', done: true }); }
-    return Promise.resolve(deps.atlas(loc.lat != null ? { lat: loc.lat, lng: loc.lng, radiusKm: 25 } : { address: loc.address, radiusKm: 25 })).then(function (r) {
+    return safe(deps.atlas, loc.lat != null ? { lat: loc.lat, lng: loc.lng, radiusKm: 25 } : { address: loc.address, radiusKm: 25 }).then(function (r) {
       var a = fromAtlas(r);
       if (!a.ok) { s.errors.push({ source: 'grid-atlas', message: a.error }); s.phase = 'done'; s.at = now; return { screen: finish(s, site), phase: 'grid', done: true }; }
       s.located = a.located; s.power = a.power; s.sources.substations = a.source;
@@ -150,8 +157,8 @@ function step(site, prior, deps, opts) {
   }
   if (s.phase === 'grid') {
     var pt = { lat: s.located.lat, lng: s.located.lng }, fcc = deps.fcc || {}, spendFcc = !!fcc.keySet, overBudget = spendFcc && !(num(fcc.left) > 0);
-    var net = overBudget ? Promise.resolve({ status: 0, body: { error: 'skipped' } }) : Promise.resolve(deps.network(pt));
-    var host = Promise.resolve(deps.hosting({ lat: pt.lat, lng: pt.lng, mode: 'load', unit: { kw: num(opts.unitKw) > 0 ? num(opts.unitKw) : 75, kwh: 0, name: 'Compute load' } }));
+    var net = overBudget ? Promise.resolve({ status: 0, body: { error: 'skipped' } }) : safe(deps.network, pt);
+    var host = safe(deps.hosting, { lat: pt.lat, lng: pt.lng, mode: 'load', unit: { kw: num(opts.unitKw) > 0 ? num(opts.unitKw) : 75, kwh: 0, name: 'Compute load' } });
     return Promise.all([net, host]).then(function (rr) {
       var n = overBudget ? null : fromNetwork(rr[0]), h = fromHosting(rr[1]);
       if (overBudget) { s.fiber = { carriers: [], carriersRead: false, carriersStatus: 'limit', carriersNote: 'the FCC lookups for today are used up: carrier names on the next run', symmetric1g: null, lateralMi: null, carrierHotel: null, carrierHotelMi: null }; }

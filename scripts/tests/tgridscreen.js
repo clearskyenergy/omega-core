@@ -114,6 +114,10 @@ test('G05 one site in two phases: the grid, then fiber and hosting in parallel a
   var approx = stubs({ atlas: function () { return Promise.resolve(atlasOk({ geocode: { precision: 'area', note: 'ZIP centroid' } })); } });
   whole = await G.run(SITE, approx.deps, { now: NOW });
   assert.equal(approx.calls.network.length, 0); assert.ok(/matched only approximately/.test(whole.notes[0]));
+  /* a handler that throws, or rejects, is an answer too */
+  var boom = stubs({ hosting: function () { throw new Error('boom'); }, network: function () { return Promise.reject(Object.assign(new Error('nope'), { status: 403 })); } });
+  whole = await G.run(SITE, boom.deps, { now: NOW });
+  assert.deepEqual(whole.errors.map(function (e) { return e.source; }).sort(), ['hosting-capacity', 'network-proximity']); assert.equal(whole.power.kv, 138);
   /* nothing to locate */
   whole = await G.run({ name: 'No address' }, stubs().deps, { now: NOW });
   assert.equal(whole.errors[0].source, 'location');
