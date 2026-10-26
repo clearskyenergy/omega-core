@@ -8,7 +8,13 @@ Those are gone. What stands:
 - **One collection set:** `omega_orgs/{org}/sites/{siteId}` (the site CRM's
   record) carries the register's facts, flags, revision and lifecycle beside
   the flat fields the CRM reads (`api/_lib/portfolio/site-bridge.js` is the
-  one bridge); the register's own records sit beside it as `site_imports`,
+  one bridge). Both doors keep the one record in step (2026-10-25): the site
+  record's view carries the register's power evidence, flags, pipeline,
+  lifecycle and portfolios; an edit of a mapped field there writes its fact
+  (kind manual, so a later import is a conflict, never a silent overwrite);
+  an archive or a restore through either door writes `archived` and
+  `lifecycleStatus` together (`lifecycleOf`, `archiveState`) and no register
+  write undoes it. The register's own records sit beside it as `site_imports`,
   `site_views`, `site_portfolios`, `site_analyses`, `site_envelopes`,
   `site_allocations`, `site_handoffs`, `site_results`, `site_bills`,
   `site_assumption_sets`, `site_packages`, `site_submissions`, `site_jobs`
