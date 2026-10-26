@@ -80,7 +80,7 @@
    named, never a default dressed as a fact.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
-var P = require('./power');
+var P = require('./power'), WL = require('../whitelabel');
 
 /* ── the vocabulary: the data model (a workspace's own lists are config) ── */
 var FLAG = 'portfolio-diligence', CONFIG_KEY = 'portfolioDiligence', VERSION = 1;
@@ -1185,6 +1185,17 @@ function filterRows(rows, f) {
     return true;
   });
 }
+/* The name the diligence prints (2026-10-25, Thomas: "this is only for
+   Solela, so you can market that it's Solela Capital"): the white label's
+   platform name where it is on (api/_lib/whitelabel.js isOn, the one rule),
+   else the workspace record's own name, else its id. Never a literal here:
+   the switch is what keeps the diligence to one workspace. */
+function brandOf(org, orgId) {
+  org = org || {};
+  var wl = org.whiteLabel || null, on = WL.isOn(wl);
+  return { name: on ? String(wl.platformName) : (org.name || orgId || null), shortName: on && wl.shortName ? String(wl.shortName) : null,
+    source: on ? 'white-label' : org.name ? 'workspace' : 'org id' };
+}
 /* The vocabulary the pages draw from, so no page keeps its own copy */
 function schema(cfg) {
   cfg = cfg || normalizeConfig(null);
@@ -1206,5 +1217,5 @@ module.exports = {
   exclusionsFor: exclusionsFor, activeExclusions: activeExclusions, current: current, gateOf: gateOf, decisionOf: decisionOf, stageOf: stageOf,
   requirement: requirement, change: change, offtakerInput: offtakerInput, headroom: headroom, measuredPeak: measuredPeak, serviceOf: serviceOf,
   controlTerm: controlTerm, offtakeOf: offtakeOf, economicsOf: economicsOf, economicsFromCase: economicsFromCase, economicsGate: economicsGate,
-  view: view, row: row, pipeline: pipeline, tally: tally, filterRows: filterRows, schema: schema, addMonths: addMonths, bandOf: bandOf, ladderOf: ladderOf, cleanScreen: cleanScreen
+  view: view, row: row, pipeline: pipeline, tally: tally, filterRows: filterRows, schema: schema, addMonths: addMonths, bandOf: bandOf, ladderOf: ladderOf, cleanScreen: cleanScreen, brandOf: brandOf
 };

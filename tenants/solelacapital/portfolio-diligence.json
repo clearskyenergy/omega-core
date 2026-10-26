@@ -52,5 +52,7 @@
     }
   },
   "target": { "label": "Lightsmith's target deal", "minUsd": 25000000, "maxUsd": 35000000 },
-  "removalMonths": 6
+  "removalMonths": 6,
+  "_whiteLabel": "What the platform is called in this workspace (2026-10-25, Thomas: \"this is only for Solela, so you can market that it's Solela Capital\"). Staff-written; the script adds a key only where omega_orgs/{org}.whiteLabel has none and mirrors tenant_public through api/_lib/whitelabel.js publicRecord(). No `enabled`: that opens the public storefront, a separate sale. No `attribution`: absent is 'powered-by', and removing our name is a decision somebody writes down.",
+  "whiteLabel": { "platformName": "Solela Capital", "shortName": "Solela" }
 }

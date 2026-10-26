@@ -66,12 +66,12 @@ test('D02 the workspace\'s own lists live in its config: core names none of them
   assert.equal(v.offtake.partner, undefined); assert.deepEqual(v.offtake.defaulted, []);
 });
 
-test('D03 pure ES5 with no clock: no arrow, template, let/const/class/async, Object.assign or Date.now; it requires power.js and nothing else', function () {
+test('D03 pure ES5 with no clock: no arrow, template, let/const/class/async, Object.assign or Date.now; it requires power.js and the white-label rule, nothing else', function () {
   var c = stripComments(SRC);
   assert.ok(c.indexOf('=>') < 0, 'arrow'); assert.ok(c.indexOf('`') < 0, 'template literal');
   assert.ok(!/\b(const|let|class|async|await)\s/.test(c), 'ES2015 keyword');
   assert.ok(c.indexOf('Object.assign') < 0, 'Object.assign'); assert.ok(c.indexOf('Date.now(') < 0, 'Date.now'); assert.ok(!/new Date\(\s*\)/.test(c), 'new Date()');
-  assert.deepEqual(c.match(/require\([^)]*\)/g), ["require('./power')"]);
+  assert.deepEqual(c.match(/require\([^)]*\)/g), ["require('./power')", "require('../whitelabel')"], 'the register\u2019s headroom contract and the one white-label rule, nothing else');
   assert.ok(SRC.indexOf('© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.') > 0);
   refused(function () { D.change(null, 'decide', { choice: 'pursue' }, { site: {}, config: CFG, by: OWNER }); }, 500, /now/);
 });
@@ -595,6 +595,16 @@ test('D19 the enable script: an offline dry run by default that writes nowhere; 
   assert.ok(src.indexOf("if (CONFIRM !== ORG) throw") < src.indexOf("require('./_lib/live-admin')"), 'the refusal comes before any credential is touched');
   assert.ok(/omega_orgs\/' \+ org \+ ' does not exist/.test(src) && /billing\/current does not exist/.test(src), 'refuses a missing workspace or billing record');
   assert.ok(fs.readFileSync(path.join(ROOT, '.vercelignore'), 'utf8').split('\n').indexOf('tenants/*/portfolio-diligence.json') >= 0, 'the seed is kept off the site');
+  /* the white label: staged the staff way, mirrored through the one allowlist, never `enabled` (the storefront is sold apart) */
+  assert.deepEqual(out.write.whiteLabel, { platformName: 'Solela Capital', shortName: 'Solela' }); assert.equal(out.firstRun.whiteLabel.on, true);
+  assert.deepEqual(out.write.tenantPublic.whiteLabel, require('../../api/_lib/whitelabel').pickPublic(out.write.whiteLabel)); assert.ok(/not written/.test(out.write.tenantPublic.status));
+  assert.deepEqual(out.secondRun.whiteLabel.added, [], 'a second run adds nothing'); assert.equal(require('../../api/_lib/storefront').storefrontEntitled({}, out.write.whiteLabel), false, 'naming the platform does not open the storefront');
+  var tmp = path.join(require('os').tmpdir(), 'tdiligence-seed-' + process.pid + '.json');
+  fs.writeFileSync(tmp, JSON.stringify(Object.assign({}, SEED, { whiteLabel: { platformName: 'X', enabled: true } })));
+  try { var en = run(['--org', 'solelacapital.com', '--seed', tmp]); assert.equal(en.status, 2); assert.ok(/whiteLabel.enabled opens the public storefront/.test(en.stderr), en.stderr);
+    fs.writeFileSync(tmp, JSON.stringify(Object.assign({}, SEED, { whiteLabel: { platformName: 'X', markUrl: 'https://x' } })));
+    var mk = run(['--org', 'solelacapital.com', '--seed', tmp]); assert.equal(mk.status, 2); assert.ok(/not a key this script stages/.test(mk.stderr)); }
+  finally { try { fs.unlinkSync(tmp); } catch (e) {} }
 });
 
 /* ── the approved mockup's card ───────────────────────────────────────── */
@@ -673,12 +683,20 @@ test('D22 the Diligence card: one sentence a gate, where it came from, and the n
   Object.keys(c.lines).forEach(function (k) { [c.lines[k].sentence, c.lines[k].sources].forEach(function (w) { assert.ok(w == null || !/undefined|NaN|null/.test(w), k + ': ' + w); }); });
 });
 
+test('D23 the name it prints is the workspace\u2019s: the white label\u2019s platform name where it is on, else the record\u2019s name; never a literal in core', function () {
+  assert.deepEqual(D.brandOf({ name: 'Solela Capital' }, 'solelacapital.com'), { name: 'Solela Capital', shortName: null, source: 'workspace' });
+  assert.deepEqual(D.brandOf({ name: 'Solela Capital LLC', whiteLabel: { platformName: 'Solela Capital', shortName: 'Solela' } }, 'solelacapital.com'), { name: 'Solela Capital', shortName: 'Solela', source: 'white-label' });
+  assert.equal(D.brandOf({ name: 'Solela Capital LLC', whiteLabel: { platformName: 'Solela Capital', enabled: false } }).name, 'Solela Capital LLC', 'a white label switched off is not the name');
+  assert.deepEqual(D.brandOf(null, 'solelacapital.com'), { name: 'solelacapital.com', shortName: null, source: 'org id' });
+  assert.ok(stripComments(SRC).indexOf('Solela') < 0);
+});
+
 /* ── the rule that matters most, mutation-tested ──────────────────────── */
 test('D20 mutation: with the document check cut out of the library, a confirmation on a document that is not on the Files gets through — the suite above refuses it', function () {
   var cut = SRC.replace(/function fileCheck\(files, id\) \{[\s\S]*?\n\}/, 'function fileCheck() { return {}; }');
   assert.notEqual(cut, SRC, 'the guard was found to cut');
   var mod = { exports: {} };
-  vm.runInNewContext(cut, { module: mod, exports: mod.exports, require: function (p) { if (p === './power') return P; throw new Error('unexpected require ' + p); } }, { filename: 'diligence-mutant.js' });
+  vm.runInNewContext(cut, { module: mod, exports: mod.exports, require: function (p) { if (p === './power') return P; if (p === '../whitelabel') return require('../../api/_lib/whitelabel'); throw new Error('unexpected require ' + p); } }, { filename: 'diligence-mutant.js' });
   var M = mod.exports, s = chargerSite();
   var r = M.change(null, 'gate', { gate: 'fiber', state: 'confirmed', value: { carrier: 'Zayo' }, evidenceFileId: 'f_nowhere', source: doc('carrier-quote') }, ctx(s));
   assert.equal(r.diligence.gates.fiber.state, 'confirmed', 'the mutant accepts it');
