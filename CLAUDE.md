@@ -1372,7 +1372,14 @@ server-side gates and ONE private submission, the CRM pipeline and the
 widget. ONE collection set: the register's facts, flags, revision and
 lifecycle live on the CRM's `sites/{id}` record beside the flat fields
 (`site-bridge.js` normalize / flatten is the one bridge; `address` is one
-object, `addressLine()` reads either shape), its own records beside it as
+object, `addressLine()` reads either shape; since 2026-10-25 an edit of a
+mapped field on the site record writes its fact too, `factEdits` →
+`assets.enterFacts`, kind manual and entered unreviewed, so a later import
+that disagrees is a conflict and a register write never puts the old value
+back; `lifecycleOf` is both doors' one reading of an archive, and every
+archive and restore writes `archived` and `lifecycleStatus` together and
+moves the revision; `siteView` names each register field it carries),
+its own records beside it as
 `site_*` (all stated in the rules), every write in `omega_audit`. ONE EVCS
 importer: the intake profile through import-preview / import-commit and
 `scripts/seed-evcs-portfolio.js` (dry run offline; `--apply` refuses
