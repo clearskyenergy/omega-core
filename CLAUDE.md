@@ -1425,7 +1425,17 @@ package to the offtake partner (Lightsmith in `partners.js`,
 `LIGHTSMITH_ENERGY_EMAIL`; 409 without it), never IRR, capex or price. Off,
 the answers carry no `diligence` and the pages draw nothing new; on, the
 pages print the workspace's own name (`D.brandOf`, never a literal).
-`omega-portfolio-diligence.js` draws it on `portfolio.html` and
+**A CLIENT is who a batch of sites comes from** (2026-10-26, Thomas: "i
+want to know that we have an nda with then an msa an loi terms sent
+contracts etc so we can aquire the sites"): a register portfolio
+(`site_portfolios`, membership `portfolioIds[]` on the site — ONE grouping,
+never a second) carrying the acquisition ladder NDA → MSA → LOI → Term
+sheet → Contract, each step recorded (state, date, link, note; signed needs
+its date), written only by `diligence-client` and assigned by
+`diligence-assign` (one client a site; other portfolio uses untouched); the
+register joins each client with its own strip and tally, a site from a
+client without a signed NDA is flagged, and the pages scope to a client's
+batch. `omega-portfolio-diligence.js` draws it on `portfolio.html` and
 `site-crm.html`. `docs/PORTFOLIO-DILIGENCE.md`; held by `tdiligence.js`,
 `tgridscreen.js`, `tloipackage.js`, `tdiligencedoor.js`, `test-site-crm.js`
 and `check:workspace`.

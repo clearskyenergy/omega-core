@@ -46,7 +46,8 @@
   /* the narrow layout: a phone, or the card in a side panel on any screen
      (fit() gives the element .odg-narrow from its own width) */
   var NARROW = '.odg-strip{grid-template-columns:repeat(4,minmax(0,1fr))}.odg-rg{grid-template-columns:minmax(0,1fr) 92px;grid-template-areas:"s st" "c c";row-gap:6px}.odg-rg>div:nth-child(1){grid-area:s}.odg-rg>div:nth-child(2){grid-area:c}.odg-rg>div:nth-child(3){display:none}.odg-rg>div:nth-child(4){grid-area:st;text-align:right}.odg-rg.hd{display:none}' +
-    '.odg-gt{grid-template-columns:minmax(0,1fr) auto}.odg-gt>div:nth-child(3){grid-column:1/-1}.odg-tiles{grid-template-columns:1fr 1fr}';
+    '.odg-gt{grid-template-columns:minmax(0,1fr) auto}.odg-gt>div:nth-child(3){grid-column:1/-1}.odg-tiles{grid-template-columns:1fr 1fr}' +
+    '.odg-cs{grid-template-columns:repeat(2,minmax(0,1fr))}.odg-cs b{grid-column:1/-1}';
   function scoped(rules, pre) { return rules.replace(/(^|\})([^{}]+)\{/g, function (m, b, sel) { return b + sel.split(',').map(function (x) { return pre + ' ' + x.trim(); }).join(',') + '{'; }); }
   var CSS = [
     '.odg{--odg-ok:var(--ows-green-soft,#E3F4EA);--odg-ok-i:var(--ows-green,#1E7A4C);--odg-wk:var(--ows-amber-soft,#FBEFD9);--odg-wk-i:var(--ows-amber,#8A5A0B);--odg-sc:var(--ows-brand-soft,#E3F1F8);--odg-sc-i:var(--ows-brand-ink,#0B4F73);--odg-op:var(--ows-sunk,#F1F3F5);--odg-op-i:var(--ows-ink2,#5B6672);--odg-no:#FCEBEB;--odg-no-i:#8B2A1E;font-family:"DM Sans",system-ui,sans-serif;color:var(--ows-ink,#14171A)}',
@@ -68,6 +69,10 @@
     '.odg-rg{display:grid;grid-template-columns:minmax(0,1fr) 244px 54px 120px;gap:10px;align-items:center;padding:9px 6px;border-top:1px solid var(--ows-line,#E4E8EC);font-size:13px;border-radius:8px}',
     '.odg-rg.hd{border-top:none;padding-top:0}.odg-rg.cur{background:var(--ows-brand-soft,#E3F1F8)}.odg-rg .nm{font-weight:600;cursor:pointer}.odg-rg .nm:hover{text-decoration:underline}',
     '.odg-legend{margin-top:8px;font-size:11px;color:var(--ows-ink2,#5B6672)}',
+    '.odg-cl-head{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px}',
+    '.odg-cl{display:flex;flex-wrap:wrap;gap:4px 12px;align-items:center;padding:9px 6px;border-top:1px solid var(--ows-line,#E4E8EC);border-radius:8px;font-size:13px}',
+    '.odg-cs{grid-column:1/-1;display:grid;grid-template-columns:84px 130px 150px minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}',
+    '.odg-cl.sel{background:var(--ows-brand-soft,#E3F1F8)}.odg-cl .nm{font-weight:600;cursor:pointer}.odg-cl .nm:hover{text-decoration:underline}.odg-cl .nx{flex-basis:100%;font-size:12px;color:var(--ows-ink2,#5B6672);padding-left:2px}',
     '.odg-in{border:1px solid var(--ows-line,#E4E8EC);border-radius:8px;padding:6px 8px;font:inherit;font-size:13px;background:var(--ows-paper,#fff);color:inherit;box-sizing:border-box;max-width:100%}',
     '.odg-gt{display:grid;grid-template-columns:118px 96px minmax(0,1fr);gap:10px;align-items:start;padding:9px 0;border-top:1px solid var(--ows-line,#E4E8EC);font-size:13px}',
     '.odg-gt .src{font-size:12px;color:var(--ows-ink2,#5B6672);margin-top:2px}.odg-gt a{color:var(--ows-brand-ink,#0B4F73);cursor:pointer;text-decoration:underline}',
@@ -128,27 +133,31 @@
      Promise, openSite(id), msg(text, ok), canEdit }) */
   function mountRegister(el, opts) {
     style();
-    var B = binder(el), st = { data: opts.data, stage: '', gate: '', cur: 0, passing: null, confirmLoi: false, screening: null, stop: false };
+    var B = binder(el), st = { data: opts.data, stage: '', gate: '', cur: 0, passing: null, confirmLoi: false, screening: null, stop: false, client: '', editClient: null };
     el.classList.add('odg');
     function D() { return st.data.diligence; }
     function rows() {
       var list = (st.data.sites || []).filter(function (s) { return s.diligence && !s.archived; });
+      if (st.client === 'none') list = list.filter(function (s) { return !s.diligence.clientId; });
+      else if (st.client) list = list.filter(function (s) { return s.diligence.clientId === st.client; });
       if (st.stage === 'live') list = list.filter(function (s) { return s.diligence.stage !== 'passed'; });
       else if (st.stage) list = list.filter(function (s) { return s.diligence.stage === st.stage; });
       if (st.gate) { var g = st.gate.split(':'); list = list.filter(function (s) { var gs = s.diligence.gates || {}; return g[0] === 'any' ? Object.keys(gs).some(function (k) { return gs[k] === g[1]; }) : gs[g[0]] === g[1]; }); }
       return list;
     }
     function render() {
-      var d = D(), sch = d.schema, brand = d.brand || {}, t = d.tally, list = rows(), all = (st.data.sites || []).filter(function (s) { return s.diligence && !s.archived; });
+      var d = D(), sch = d.schema, brand = d.brand || {}, list = rows(), all = (st.data.sites || []).filter(function (s) { return s.diligence && !s.archived; });
       if (st.cur >= list.length) st.cur = Math.max(0, list.length - 1);
-      var counts = {}; (d.pipeline || []).forEach(function (x) { counts[x.stage] = x.count; });
+      /* a chosen client scopes the strip and the tally to its own batch (the server computed both per client) */
+      var csel = clientOf(st.client), t = csel ? csel.tally : d.tally;
+      var counts = {}; ((csel ? csel.pipeline : d.pipeline) || []).forEach(function (x) { counts[x.stage] = x.count; });
       var h = '<div class="odg-strip" role="group" aria-label="Stages">' + sch.stages.concat([sch.passed]).map(function (s) {
         return '<button type="button" class="odg-st' + (s === 'pursue' ? ' hot' : '') + (st.stage === s ? ' sel' : '') + '" data-stage="' + esc(s) + '"><span class="odg-lb" style="font-size:11px">' + esc(sch.stageLabels[s]) + '</span><b>' + (counts[s] || 0) + '</b></button>';
       }).join('') + '</div>';
       /* the tally, under the workspace's own name */
       var tg = t.target, maxUsd = tg ? Math.max(tg.maxUsd, t.capexUsd || 0) : Math.max(t.capexUsd || 0, 1), partner = sch.config && sch.config.offtake && sch.config.offtake.partner;
       var earm = all.filter(function (s) { return s.diligence.stage === 'pursue'; }).length;
-      h += '<div class="odg-card" style="margin-top:12px"><div class="odg-tally-top"><h3>' + esc(brand.name || 'Pipeline') + '</h3><div style="font-size:13px">' + tallyLine(t, sch) + '</div></div>';
+      h += '<div class="odg-card" style="margin-top:12px"><div class="odg-tally-top"><h3>' + esc(csel ? (brand.name ? brand.name + ' · ' : '') + csel.name : (brand.name || 'Pipeline')) + '</h3><div style="font-size:13px">' + tallyLine(t, sch) + '</div></div>';
       if (tg) h += '<div class="odg-bar" aria-hidden="true"><div class="band" style="left:' + (tg.minUsd / maxUsd * 100).toFixed(1) + '%;width:' + ((tg.maxUsd - tg.minUsd) / maxUsd * 100).toFixed(1) + '%"></div><div class="fill" style="width:' + Math.min(100, (t.capexUsd || 0) / maxUsd * 100).toFixed(1) + '%"></div></div>' +
         '<div style="display:flex;justify-content:space-between" class="odg-lb"><span>$0</span><span>' + esc(tg.label) + ' ' + esc(moneyM(tg.minUsd).replace(/M$/, '')) + '–' + esc(moneyM(tg.maxUsd)) + '</span></div>';
       h += '<div class="odg-row-acts">' + (partner && opts.canEdit ? '<button type="button" class="odg-btn" data-act="loi"' + (earm ? '' : ' disabled title="Earmark sites first"') + '>Send LOI package to ' + esc(partner.name) + '</button>' : '') +
@@ -156,8 +165,9 @@
       if (st.confirmLoi) h += '<div class="odg-m" style="margin-top:10px">Send <b>' + earm + ' ' + esc((sch.stageLabels.pursue || '').toLowerCase()) + ' site' + (earm === 1 ? '' : 's') + '</b> to ' + esc(partner ? partner.name : '') + ' in one LOI package? It carries each site’s power, compute, chips, fiber and control, never your IRR or capex, with you in copy.' +
         '<textarea class="odg-in" id="odg-loi-note" rows="2" style="width:100%;margin-top:8px" placeholder="A note for the partner (optional)"></textarea><div class="odg-row-acts"><button type="button" class="odg-btn pri" data-act="loi-send">Send the package</button><button type="button" class="odg-btn" data-act="loi-cancel">Cancel</button></div></div>';
       h += '</div>';
+      h += clientsCard(d, sch, list);
       /* the pipeline */
-      h += '<div class="odg-card" style="margin-top:12px"><div class="odg-pipe-head"><div class="odg-lb">' + esc((brand.name ? brand.name + ' pipeline' : 'Pipeline')) + ' · ' + list.length + ' of ' + all.length + ' site' + (all.length === 1 ? '' : 's') + '</div><div class="odg-tools">' +
+      h += '<div class="odg-card" style="margin-top:12px"><div class="odg-pipe-head"><div class="odg-lb">' + esc(csel ? csel.name + '\u2019s sites' : st.client === 'none' ? 'Sites under no client yet' : (brand.name ? brand.name + ' pipeline' : 'Pipeline')) + ' · ' + list.length + ' of ' + all.length + ' site' + (all.length === 1 ? '' : 's') + (st.client ? ' · <a data-act="cl-clear" style="cursor:pointer;text-decoration:underline">Every client</a>' : '') + '</div><div class="odg-tools">' +
         '<select aria-label="Stage" data-f="stage"><option value="">Any stage</option><option value="live"' + (st.stage === 'live' ? ' selected' : '') + '>Not passed</option>' + sch.stages.concat([sch.passed]).map(function (s) { return '<option value="' + esc(s) + '"' + (st.stage === s ? ' selected' : '') + '>' + esc(sch.stageLabels[s]) + '</option>'; }).join('') + '</select>' +
         '<select aria-label="Gate" data-f="gate"><option value="">Any gate</option>' + ['any'].concat(sch.gates).map(function (g) { return sch.gateStates.map(function (s) { var v = g + ':' + s; return '<option value="' + esc(v) + '"' + (st.gate === v ? ' selected' : '') + '>' + esc((g === 'any' ? 'Any gate' : sch.gateLabels[g]) + ': ' + sch.stateLabels[s]) + '</option>'; }).join(''); }).join('') + '</select>' +
         (opts.canEdit ? '<button type="button" class="odg-btn" data-act="screen"' + (st.screening ? ' disabled' : '') + '>Screen with Grid Atlas</button>' : '') + '</div></div>';
@@ -166,12 +176,74 @@
       if (!list.length) h += '<div class="odg-lb" style="padding:14px 6px">' + (all.length ? 'No site matches these filters.' : 'No sites yet: import or register sites above.') + '</div>';
       list.forEach(function (s, i) {
         var r = s.diligence, loc = [s.city, s.state].filter(Boolean).join(', ');
-        h += '<div class="odg-rg' + (i === st.cur ? ' cur' : '') + '" data-row="' + i + '" data-id="' + esc(s.id) + '"><div><div class="nm" data-act="open">' + esc(s.name || 'Site') + (loc ? '<span class="odg-lb" style="font-weight:400"> · ' + esc(loc) + '</span>' : '') + '</div><div class="odg-lb">' + esc(freeLine(r)) + '</div></div>' +
+        h += '<div class="odg-rg' + (i === st.cur ? ' cur' : '') + '" data-row="' + i + '" data-id="' + esc(s.id) + '"><div><div class="nm" data-act="open">' + esc(s.name || 'Site') + (loc ? '<span class="odg-lb" style="font-weight:400"> · ' + esc(loc) + '</span>' : '') + '</div><div class="odg-lb">' + esc(freeLine(r)) + (r.clientName && st.client !== r.clientId ? ' · ' + esc(r.clientName) : '') + '</div></div>' +
           '<div>' + sch.gates.map(function (g) { return chip(g, r.gates[g], sch); }).join('') + '</div>' +
           '<div>' + (r.irrPct != null ? esc(fmt(r.irrPct, 0)) + '%' : '<span class="odg-lb">—</span>') + '</div><div>' + stageCell(s, r, sch, brand) + '</div></div>';
       });
       h += '<div class="odg-legend">Legend: green ' + esc(sch.stateLabels.confirmed) + ' (document) · amber ' + esc(sch.stateLabels.working) + ' · blue ' + esc(sch.stateLabels.screened) + ' (public data) · grey ' + esc(sch.stateLabels.open) + ' · red ' + esc(sch.stateLabels.fails) + ' · J/K next, E ' + esc((sch.callLabels.pursue || '').toLowerCase()) + ', P pass</div></div>';
       el.innerHTML = h;
+    }
+    function clientOf(pid) { return ((D().clients) || []).filter(function (x) { return x.id === pid; })[0] || null; }
+    /* the clients: who the sites come from, each with its acquisition
+       paperwork (NDA → MSA → LOI → Term sheet → Contract), its batch's
+       numbers and the one next thing \u2014 the order of operations: get the
+       paperwork in place while the diligence picks their sites */
+    function clientsCard(d, sch, list) {
+      var cs = d.clients || [];
+      if (!cs.length && !opts.canEdit) return '';
+      var h = '<div class="odg-card" style="margin-top:12px"><div class="odg-cl-head"><div class="odg-lb">Clients · who the sites come from</div>' +
+        (opts.canEdit ? '<button type="button" class="odg-btn sm" data-act="cl-new">+ New client</button>' : '') + '</div>';
+      if (st.editClient === 'new') h += clientForm(null, sch);
+      if (!cs.length) h += '<div class="odg-lb" style="padding:10px 6px">No clients yet. A client is who a batch of sites comes from; its NDA, MSA, LOI, term sheet and contract are recorded here, and its sites are assigned to it.</div>';
+      cs.forEach(function (x) {
+        var pursued = 0; (x.pipeline || []).forEach(function (pc) { if (pc.stage === 'pursue') pursued = pc.count; });
+        var cnt = [x.sites + ' site' + (x.sites === 1 ? '' : 's')];
+        if (x.sites) { cnt.push(pursued + ' ' + (sch.stageLabels.pursue || '').toLowerCase()); if (x.tally && x.tally.availableKnown) cnt.push(fmt(x.tally.availableMw, 2) + ' MW'); if (x.tally && x.tally.capexKnown) cnt.push(moneyM(x.tally.capexUsd)); }
+        h += '<div class="odg-cl' + (st.client === x.id ? ' sel' : '') + '" data-client="' + esc(x.id) + '"><span class="nm" data-act="cl-filter">' + esc(x.name) + '</span><span>' +
+          (x.client.steps || []).map(function (sp) { return '<span class="odg-g odg-' + (TONE[sp.tone] || 'op') + '" title="' + esc(sp.label + ': ' + sp.stateLabel + (sp.date ? ' ' + sp.date : '') + (sp.note ? ' \u2014 ' + sp.note : '')) + '">' + esc(sp.label) + '</span>'; }).join('') + '</span>' +
+          '<span class="odg-lb">' + esc(cnt.join(' · ')) + '</span>' +
+          (opts.canEdit ? '<button type="button" class="odg-btn sm" data-act="cl-edit">' + (st.editClient === x.id ? 'Close' : 'Edit') + '</button>' : '') +
+          '<span class="nx">' + esc(x.client.next ? 'Next: ' + x.client.next.words : 'Paperwork complete' + (x.sites ? '' : ' \u2014 assign sites')) + '</span></div>';
+        if (st.editClient === x.id) h += clientForm(x, sch);
+      });
+      if (d.unassigned) h += '<div class="odg-cl" data-client="none"><span class="nm" data-act="cl-filter">' + d.unassigned + ' site' + (d.unassigned === 1 ? '' : 's') + ' under no client yet</span>' + (st.client === 'none' ? '<span class="odg-lb">shown below</span>' : '') + '</div>';
+      return h + '</div>';
+    }
+    function clientForm(x, sch) {
+      var c = x ? x.client : { name: '', contact: {}, steps: (sch.clientSteps || []).map(function (k) { return { key: k, label: sch.clientStepLabels[k], state: 'none', date: null, ref: null, note: null }; }) };
+      var h = '<form data-form="client" data-pid="' + esc(x ? x.id : '') + '" class="odg-form" style="background:var(--ows-sunk,#F1F3F5);padding:10px;border-radius:10px;margin:6px 0">' +
+        '<label>Client name<input class="odg-in" name="name" value="' + esc(x ? x.name : '') + '" required></label>' +
+        '<label>Company<input class="odg-in" name="company" value="' + esc(c.company || '') + '"></label>' +
+        '<label>Contact<input class="odg-in" name="contactName" value="' + esc(c.contact && c.contact.name || '') + '"></label>' +
+        '<label>Contact email<input class="odg-in" name="contactEmail" value="' + esc(c.contact && c.contact.email || '') + '"></label>' +
+        '<label>Contact phone<input class="odg-in" name="contactPhone" value="' + esc(c.contact && c.contact.phone || '') + '"></label>' +
+        '<label style="grid-column:1/-1">Notes<input class="odg-in" name="notes" value="' + esc(c.notes || '') + '"></label>';
+      h += '<div style="grid-column:1/-1" class="odg-lb">The paperwork, in order. Signed needs its date; a link says where the document lives.</div>';
+      (c.steps || []).forEach(function (sp) {
+        h += '<div class="odg-cs"><b style="font-size:12.5px">' + esc(sp.label) + '</b>' +
+          '<select class="odg-in" name="st_' + sp.key + '" aria-label="' + esc(sp.label) + ' state">' + (sch.clientStepStates || []).map(function (ss) { return '<option value="' + ss + '"' + (sp.state === ss ? ' selected' : '') + '>' + esc(sch.clientStateLabels[ss]) + '</option>'; }).join('') + '</select>' +
+          '<input class="odg-in" type="date" name="dt_' + sp.key + '" value="' + esc(sp.date || '') + '" aria-label="' + esc(sp.label) + ' date">' +
+          '<input class="odg-in" name="rf_' + sp.key + '" value="' + esc(sp.ref || '') + '" placeholder="Link to the document" aria-label="' + esc(sp.label) + ' link">' +
+          '<input class="odg-in" name="nt_' + sp.key + '" value="' + esc(sp.note || '') + '" placeholder="Note" aria-label="' + esc(sp.label) + ' note"></div>';
+      });
+      if (x) {
+        var mine = (st.data.sites || []).filter(function (s2) { return s2.diligence && !s2.archived && s2.diligence.clientId === x.id; });
+        var free = (st.data.sites || []).filter(function (s2) { return s2.diligence && !s2.archived && s2.diligence.clientId !== x.id; });
+        h += '<div style="grid-column:1/-1"><div class="odg-lb" style="margin-bottom:4px">' + esc(x.name) + '\u2019s sites</div>' +
+          (mine.length ? mine.map(function (s2) { return '<span class="odg-pill odg-op" style="margin:0 4px 4px 0">' + esc(s2.name || s2.id) + ' <a data-act="cl-unassign" data-site="' + esc(s2.id) + '" title="Take it off this client" style="cursor:pointer">\u00d7</a></span>'; }).join('') : '<span class="odg-lb">None yet.</span>') +
+          '<div class="odg-row-acts"><select class="odg-in" data-cl-site aria-label="Site to assign"><option value="">Assign a site\u2026</option>' + free.map(function (s2) { return '<option value="' + esc(s2.id) + '">' + esc(s2.name || s2.id) + (s2.diligence.clientName ? ' (' + s2.diligence.clientName + ')' : '') + '</option>'; }).join('') + '</select>' +
+          '<button type="button" class="odg-btn sm" data-act="cl-add-site">Add</button>' +
+          (free.filter(function (s2) { return !s2.diligence.clientId; }).length ? '<button type="button" class="odg-btn sm" data-act="cl-add-unassigned">Add every unassigned site (' + free.filter(function (s2) { return !s2.diligence.clientId; }).length + ')</button>' : '') + '</div></div>';
+      }
+      h += '<div style="grid-column:1/-1" class="odg-row-acts"><button type="submit" class="odg-btn pri">' + (x ? 'Save client' : 'Create client') + '</button><button type="button" class="odg-btn" data-act="cl-cancel">Cancel</button></div></form>';
+      return h;
+    }
+    function clientBody(f) {
+      var g = function (k) { var y = f.elements[k]; return y ? y.value : undefined; }, n = function (v) { return v === '' ? null : v; };
+      var body = { name: g('name'), company: n(g('company')), contactName: n(g('contactName')), contactEmail: n(g('contactEmail')), contactPhone: n(g('contactPhone')), notes: n(g('notes')), steps: {} };
+      ((D().schema.clientSteps) || []).forEach(function (k) { if (f.elements['st_' + k]) body.steps[k] = { state: g('st_' + k), date: n(g('dt_' + k)), ref: n(g('rf_' + k)), note: n(g('nt_' + k)) }; });
+      var pid = f.getAttribute('data-pid'); if (pid) body.portfolioId = pid;
+      return body;
     }
     function stageCell(s, r, sch, brand) {
       if (st.passing === s.id) return '<div><input class="odg-in" data-pass-reason style="width:100%" placeholder="Why pass? (5+ characters)" aria-label="Reason to pass"><div style="margin-top:4px"><button type="button" class="odg-btn sm pri" data-act="pass-go">Pass</button> <button type="button" class="odg-btn sm" data-act="pass-cancel">Cancel</button></div></div>';
@@ -202,7 +274,12 @@
           st.screening = 'Screening with Grid Atlas: ' + job.done + ' of ' + job.total + ' sites done…'; render();
           return opts.post('diligence-screen-step', { jobId: job.id }).then(function (r) {
             job = r.job;
-            if (job.status === 'complete') { st.screening = null; opts.msg('Screened ' + job.done + ' site' + (job.done === 1 ? '' : 's') + (job.failed ? '; ' + job.failed + ' could not be located' : '') + '. Gates move to screened only on public data; nothing is confirmed by a screen.', true); return opts.reload(); }
+            if (job.status === 'complete') {
+              st.screening = null;
+              var bad = (job.failedIds || []).map(function (id) { var sx = (st.data.sites || []).filter(function (y) { return y.id === id; })[0]; return sx ? sx.name || id : id; });
+              opts.msg('Screened ' + job.done + ' site' + (job.done === 1 ? '' : 's') + (bad.length ? '. Could not locate ' + bad.join(', ') + ' \u2014 add the address on the site record, then screen again' : job.failed ? '; ' + job.failed + ' could not be located' : '') + '. Gates move to screened only on public data; nothing is confirmed by a screen.', true);
+              return opts.reload();
+            }
             return next();
           });
         })();
@@ -224,6 +301,30 @@
       else if (a === 'loi-send') { var note = val(el, '#odg-loi-note'); st.confirmLoi = false; render(); act(opts.post('diligence-loi', { note: note || undefined })); }
       else if (a === 'screen') screen();
       else if (a === 'screen-stop') { st.stop = true; }
+      else if (a === 'cl-new') { st.editClient = st.editClient === 'new' ? null : 'new'; render(); var nf = qs(el, 'form[data-form="client"] input[name="name"]'); if (nf) nf.focus(); }
+      else if (a === 'cl-cancel') { st.editClient = null; render(); }
+      else if (a === 'cl-clear') { st.client = ''; st.cur = 0; render(); }
+      else if (a === 'cl-edit' || a === 'cl-filter') {
+        var cl = e.target.closest('[data-client]'), cid = cl ? cl.getAttribute('data-client') : null; if (!cid) return;
+        if (a === 'cl-edit') { st.editClient = st.editClient === cid ? null : cid; render(); }
+        else { st.client = st.client === cid ? '' : cid; st.cur = 0; render(); }
+      }
+      else if (a === 'cl-unassign') { var us = b.getAttribute('data-site'); if (us) act(opts.post('diligence-assign', { portfolioId: null, site: us })); }
+      else if (a === 'cl-add-site') {
+        var sel2 = qs(el, '[data-cl-site]'), fc = e.target.closest('form[data-form="client"]');
+        if (sel2 && sel2.value && fc) act(opts.post('diligence-assign', { portfolioId: fc.getAttribute('data-pid'), site: sel2.value }));
+        else opts.msg('Choose the site to assign first.');
+      }
+      else if (a === 'cl-add-unassigned') {
+        var fc2 = e.target.closest('form[data-form="client"]');
+        var ids2 = (st.data.sites || []).filter(function (s2) { return s2.diligence && !s2.archived && !s2.diligence.clientId; }).map(function (s2) { return s2.id; });
+        if (fc2 && ids2.length) act(opts.post('diligence-assign', { portfolioId: fc2.getAttribute('data-pid'), sites: ids2 }));
+      }
+    });
+    B.on('submit', function (e) {
+      var f = e.target.closest('form[data-form="client"]'); if (!f || !el.contains(f)) return;
+      e.preventDefault();
+      act(opts.post('diligence-client', clientBody(f)).then(function (j) { st.editClient = j && j.portfolioId && f.getAttribute('data-pid') ? st.editClient : null; return j; }), 'Client saved.');
     });
     B.on('change', function (e) {
       var f = e.target.getAttribute && e.target.getAttribute('data-f'); if (!f) return;
@@ -286,6 +387,10 @@
       if (v.decision && v.decision.choice === 'pass') h += '<div class="odg-m" style="margin-top:8px"><b style="font-size:13px;display:inline">Passed' + (v.decision.auto ? ' by the workspace’s exclusion' : '') + ':</b> ' + esc(v.decision.reason || '') +
         (v.decision.auto ? ' <span class="odg-lb">(' + esc(v.decision.auto.field) + ' is ' + esc(v.decision.auto.value) + ')</span>' + (opts.canEdit ? '<div class="odg-row-acts"><input class="odg-in" data-reverse-reason style="flex:1;min-width:200px" placeholder="Why reverse the exclusion? (5+ characters)"><button type="button" class="odg-btn" data-act="reverse">Reverse and ' + esc(sch.callLabels.pursue.toLowerCase()) + '</button></div>' : '') : '') + '</div>';
       if (v.next && v.next.stage) h += '<div class="odg-lb" style="margin-top:6px">Next: ' + esc(v.next.label) + (v.next.requirement ? ' — ' + esc(v.next.requirement) : (opts.canEdit ? ' <button type="button" class="odg-btn sm" data-act="advance">Move to ' + esc(v.next.label) + '</button>' : '')) + '</div>';
+      /* the client whose site this is: the acquisition paperwork beside the site */
+      if (v.client) h += '<div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:4px 8px;align-items:center;font-size:12.5px"><span class="odg-lb">From</span><b>' + esc(v.client.name) + '</b><span>' +
+        (v.client.steps || []).map(function (sp) { return '<span class="odg-g odg-' + (TONE[sp.tone] || 'op') + '" title="' + esc(sp.label + ': ' + sp.stateLabel + (sp.date ? ' ' + sp.date : '')) + '">' + esc(sp.label) + '</span>'; }).join('') + '</span>' +
+        (v.client.next ? '<span class="odg-lb">' + esc(v.client.next.words) + '</span>' : '') + '</div>';
       h += noteHtml();
       /* a row a gate */
       h += '<div style="margin-top:8px">';
@@ -348,7 +453,9 @@
     }
     function forms(v, sch) {
       var cfg = sch.config || {}, c = v.control || {}, o = v.offtake || {}, ch = v.chargers || {}, sv = v.survey || {}, h = '';
-      h += '<details class="odg-det"><summary>Site profile</summary><form data-form="profile" class="odg-form">' + select('intakeType', 'Intake type', cfg.intakeTypes || [], v.intakeType || '') + select('hostDeal', 'Host deal', cfg.hostDeals || [], v.hostDeal || '') + '<div style="grid-column:1/-1"><button type="submit" class="odg-btn pri">Save</button></div></form></details>';
+      h += '<details class="odg-det"><summary>Site profile' + (v.client ? ' · ' + esc(v.client.name) : '') + '</summary><form data-form="profile" class="odg-form">' + select('intakeType', 'Intake type', cfg.intakeTypes || [], v.intakeType || '') + select('hostDeal', 'Host deal', cfg.hostDeals || [], v.hostDeal || '') +
+        (Array.isArray(st.d.clients) && st.d.clients.length ? '<label>Client (who the site comes from)<select class="odg-in" data-card-client><option value="">\u2014</option>' + st.d.clients.map(function (x) { return '<option value="' + esc(x.id) + '"' + (v.client && v.client.id === x.id ? ' selected' : '') + '>' + esc(x.name) + '</option>'; }).join('') + '</select></label>' : '') +
+        '<div style="grid-column:1/-1"><button type="submit" class="odg-btn pri">Save</button></div></form></details>';
       h += '<details class="odg-det"><summary>Chargers</summary><form data-form="chargers" class="odg-form">' + field('count', 'Chargers', ch.count) + field('kw', 'Nameplate (kW)', ch.kw) + select('status', 'Status', sch.chargerStatus, ch.status || '') + field('network', 'Network', ch.network) + select('use', 'Use', sch.chargerUse, ch.use || '') +
         field('peakKw', 'Measured peak (kW)', ch.peak && ch.peak.kw) + select('peakSource', 'Measured by', sch.peakSources, ch.peak && ch.peak.source || '') + field('peakPeriod', 'Period', ch.peak && ch.peak.period) + '<div style="grid-column:1/-1" class="odg-lb">The nameplate is never subtracted: free power is the service less the measured peak.</div><div style="grid-column:1/-1"><button type="submit" class="odg-btn pri">Save chargers</button></div></form></details>';
       var r = c.route || '', rf = '<form data-form="control" class="odg-form">' + select('route', 'Route', sch.routeKeys || Object.keys(sch.routes).map(function (k) { return { key: k, label: sch.routes[k].label }; }), r);
@@ -397,6 +504,12 @@
     B.on('submit', function (e) { var f = e.target.closest('form[data-form]'); if (!f) return; e.preventDefault(); submit(f); });
     B.on('change', function (e) {
       if (e.target.id === 'odg-px') return;
+      if (e.target.hasAttribute && e.target.hasAttribute('data-card-client')) {
+        opts.post('diligence-assign', { site: opts.site.id, portfolioId: e.target.value || null })
+          .then(function (j) { say(j && j.note ? j.note : 'Saved.', true); if (opts.remount) opts.remount(); else if (opts.reload) opts.reload(true); })
+          .catch(function (e2) { say(e2.message); });
+        return;
+      }
       var f = e.target.closest('form[data-form="control"]'); if (f && e.target.name === 'route') { st.d.view.control = Object.assign({}, st.d.view.control, { route: e.target.value || null }); st.edit = 'control-form'; render(); }
     });
     /* the slider moves through the server's rows; only the figures beside it are drawn again, so a drag is never cut */

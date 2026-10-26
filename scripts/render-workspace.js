@@ -277,11 +277,17 @@ function siteCrmSites() {
    Solela Capital seed) and its white label's name; a change is the rule's
    own change() kept for the flow, so a flow sees what it did. */
 var DLIB = require('../api/_lib/portfolio/diligence');
-var DLG = { on: false, state: {}, posts: [], now: '2026-10-25T15:00:00.000Z',
+var DLG = { on: false, state: {}, posts: [], portfolios: {}, assign: {}, pseq: 0, now: '2026-10-25T15:00:00.000Z',
   config: DLIB.normalizeConfig(DLIB.validateConfig(JSON.parse(fs.readFileSync(path.join(ROOT, 'tenants/solelacapital/portfolio-diligence.json'), 'utf8')))),
   brand: DLIB.brandOf({ name: 'Solela Capital LLC', whiteLabel: { platformName: 'Solela Capital', shortName: 'Solela' } }, 'solelacapital.com') };
 var DLG_ACT = { 'diligence-decide': 'decide', 'diligence-stage': 'stage', 'diligence-gate': 'gate', 'diligence-control': 'control', 'diligence-offtake': 'offtake', 'diligence-chargers': 'chargers', 'diligence-profile': 'profile', 'diligence-survey': 'survey' };
-function dlgSite(s) { return Object.assign({}, s, { siteId: s.id, diligence: DLG.state[s.id] }); }
+function dlgSite(s) { return Object.assign({}, s, { siteId: s.id, diligence: DLG.state[s.id], portfolioIds: DLG.assign[s.id] || [] }); }
+function dlgClients() { return Object.keys(DLG.portfolios).map(function (id) { return { id: id, data: DLG.portfolios[id] }; }); }
+function dlgClientOf(site) {
+  var ids = DLG.assign[site.id] || [];
+  for (var i = 0; i < ids.length; i++) if (DLG.portfolios[ids[i]]) return { id: ids[i], record: DLG.portfolios[ids[i]] };
+  return null;
+}
 function dlgPost(b, all) {
   DLG.posts.push(b);
   if (DLG_ACT[b.action]) {
@@ -291,7 +297,28 @@ function dlgPost(b, all) {
     try { r = DLIB.change(DLG.state[s.id], DLG_ACT[b.action], input, { site: dlgSite(s), config: DLG.config, files: [], agreements: [], role: 'member', canEdit: true, by: 'ann@northstar.example', now: DLG.now }); }
     catch (e) { return { __status: e.status || 400, error: e.message }; }
     if (!r.unchanged) DLG.state[s.id] = r.diligence;
-    return { ok: true, unchanged: r.unchanged === true, event: r.event || null, diligence: DLIB.view(dlgSite(s), { config: DLG.config, now: DLG.now, files: [] }) };
+    return { ok: true, unchanged: r.unchanged === true, event: r.event || null, diligence: DLIB.view(dlgSite(s), { config: DLG.config, now: DLG.now, files: [], client: dlgClientOf(s) }) };
+  }
+  if (b.action === 'diligence-client') {
+    var pid = b.portfolioId || null;
+    if (pid && !DLG.portfolios[pid]) return { __status: 404, error: 'No such client' };
+    var cr;
+    try { cr = DLIB.clientChange(pid ? DLG.portfolios[pid] : null, b, { creating: !pid, by: 'ann@northstar.example', now: DLG.now }); }
+    catch (e) { return { __status: e.status || 400, error: e.message }; }
+    if (!pid) { DLG.pseq++; pid = 'cl_' + DLG.pseq; }
+    if (!cr.unchanged) DLG.portfolios[pid] = { name: cr.name, diligence: cr.diligence };
+    return { ok: true, unchanged: cr.unchanged === true, portfolioId: pid, client: DLIB.clientView(DLG.portfolios[pid]) };
+  }
+  if (b.action === 'diligence-assign') {
+    var sids = (b.site ? [b.site] : []).concat(b.sites || []), done = 0;
+    if (b.portfolioId && !DLG.portfolios[b.portfolioId]) return { __status: 404, error: 'No such client' };
+    sids.forEach(function (sid) {
+      var cur = (DLG.assign[sid] || []).filter(function (x) { return !DLG.portfolios[x]; });
+      if (b.portfolioId) cur.push(b.portfolioId);
+      DLG.assign[sid] = cur; done++;
+    });
+    return { ok: true, portfolioId: b.portfolioId || null, assigned: done, kept: 0, missing: [],
+      note: b.portfolioId ? done + ' site' + (done === 1 ? '' : 's') + ' under ' + DLG.portfolios[b.portfolioId].name + '.' : done + ' site' + (done === 1 ? '' : 's') + ' taken off their client.' };
   }
   if (b.action === 'diligence-screen-start') return { ok: true, job: { id: 'dscr_fixture', kind: 'diligence-screen', status: 'complete', total: 0, done: 0, failed: 0 }, skippedFresh: b.ids || [] };
   if (b.action === 'diligence-screen-step') return { ok: true, job: { id: b.jobId, status: 'complete', total: 0, done: 0, failed: 0 } };
@@ -310,14 +337,20 @@ function siteCrmRoute(method, qs, body) {
   if (method === 'GET' && qs.site && qs.model === '1') { var Mm = siteCrmModel(); return qs.site === 's-riverside' ? { model: { id: Mm.id, input: Mm.input, basis: Mm.basis, result: Mm.result, summary: Mm.summary, label: 'Fixture', createdAt: '2026-10-10T16:00:00.000Z' }, brand: { name: 'Northstar Development', accent: '#2B5FA8', platform: 'ClearSky-OMEGA' } } : { model: null }; }
   if (method === 'GET' && qs.site) { var one = all.filter(function (x) { return x.id === qs.site; })[0]; if (!one) return { __status: 404, error: 'Site not found' };
     var ones = { site: one, contacts: [], activity: [], followUps: [], files: [], proforma: [], canEdit: true, canArchive: true, limited: false, diligence: null };
-    if (DLG.on) ones.diligence = { view: DLIB.view(dlgSite(one), { config: DLG.config, now: DLG.now, files: [] }), schema: DLIB.schema(DLG.config), brand: DLG.brand };
+    if (DLG.on) ones.diligence = { view: DLIB.view(dlgSite(one), { config: DLG.config, now: DLG.now, files: [], client: dlgClientOf(one) }), schema: DLIB.schema(DLG.config), brand: DLG.brand,
+      clients: dlgClients().map(function (x) { return { id: x.id, name: x.data.name }; }) };
     return ones; }
   if (method === 'GET') {
     var reg = { org: CURRENT_FX ? CURRENT_FX.org : 'northstar.example', sites: all.filter(function (x) { return qs.archived === '1' || !x.archived; }), archivedIncluded: qs.archived === '1', canEdit: true, canArchive: true, next: null, limited: false, diligence: null };
     if (DLG.on) {
-      var rows = all.filter(function (x) { return !x.archived; }).map(function (x) { return DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now }); });
-      reg.sites.forEach(function (x) { x.diligence = DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now }); });
-      reg.diligence = { pipeline: DLIB.pipeline(rows), tally: DLIB.tally(rows, DLG.config), counted: rows.length, limited: false, schema: DLIB.schema(DLG.config), brand: DLG.brand };
+      var rows = all.filter(function (x) { return !x.archived; }).map(function (x) { return DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now, client: dlgClientOf(x) }); });
+      reg.sites.forEach(function (x) { x.diligence = DLIB.row(dlgSite(x), { config: DLG.config, now: DLG.now, client: dlgClientOf(x) }); });
+      var clcards = dlgClients().map(function (x) {
+        var mine = rows.filter(function (r) { return r.clientId === x.id; });
+        return { id: x.id, name: x.data.name, client: DLIB.clientView(x.data), sites: mine.length, pipeline: DLIB.pipeline(mine), tally: DLIB.tally(mine, DLG.config) };
+      });
+      reg.diligence = { pipeline: DLIB.pipeline(rows), tally: DLIB.tally(rows, DLG.config), counted: rows.length, limited: false, schema: DLIB.schema(DLG.config), brand: DLG.brand,
+        clients: clcards, unassigned: rows.filter(function (r) { return !r.clientId; }).length };
     }
     return reg;
   }
@@ -1965,10 +1998,32 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     await p.click('#dg [data-act="screen"]'); await wait(600);
     var e3 = await read();
     ok(name + ': Screen with Grid Atlas asks the door for the listed sites (diligence-screen-start) and says what it found', DLG.posts.some(function (x) { return x.action === 'diligence-screen-start' && x.ids && x.ids.length === 2; }) && /screened in the last week/.test(e3.msg), { msg: e3.msg });
+    /* clients: who the sites come from — create one with its paperwork, assign the batch in one post, scope the page to it */
+    await p.click('#dg [data-act="cl-new"]'); await wait(200);
+    await p.fill('#dg form[data-form="client"] input[name="name"]', 'Acme Charging');
+    await p.selectOption('#dg form[data-form="client"] select[name="st_nda"]', 'signed');
+    await p.fill('#dg form[data-form="client"] input[name="dt_nda"]', '2026-10-20');
+    await p.selectOption('#dg form[data-form="client"] select[name="st_msa"]', 'sent');
+    await p.fill('#dg form[data-form="client"] input[name="dt_msa"]', '2026-10-22');
+    await p.click('#dg form[data-form="client"] button[type="submit"]'); await wait(900);
+    var cp = DLG.posts.filter(function (x) { return x.action === 'diligence-client'; })[0] || {};
+    var cl1 = await p.evaluate(function () { var r = document.querySelector('#dg .odg-cl[data-client]'); return r ? { name: r.querySelector('.nm').textContent, tones: Array.prototype.map.call(r.querySelectorAll('.odg-g'), function (g) { return g.className.replace('odg-g odg-', ''); }).join(','), next: (r.querySelector('.nx') || {}).textContent || '' } : null; });
+    ok(name + ': + New client records the paperwork in one post (NDA signed with its date, MSA sent), the row wears the five steps in the gates’ own tones and says the one next thing in the notes’ order', !!cp.steps && cp.name === 'Acme Charging' && cp.steps.nda.state === 'signed' && cp.steps.nda.date === '2026-10-20' && !!cl1 && cl1.name === 'Acme Charging' && cl1.tones === 'ok,sc,op,op,op' && /Next: Get the MSA signed \(sent 2026-10-22\)/.test(cl1.next), { post: cp, row: cl1 });
+    await p.click('#dg .odg-cl[data-client] [data-act="cl-edit"]'); await wait(250);
+    await p.click('#dg [data-act="cl-add-unassigned"]'); await wait(900);
+    var ap = DLG.posts.filter(function (x) { return x.action === 'diligence-assign'; })[0] || {};
+    var asg = await p.evaluate(function () { return { subs: Array.prototype.map.call(document.querySelectorAll('#dg .odg-rg[data-id] > div:first-child > .odg-lb'), function (x) { return x.textContent; }), none: !!document.querySelector('#dg .odg-cl[data-client="none"]') }; });
+    ok(name + ': Add every unassigned site assigns the batch in ONE post, each pipeline row then names its client, and the under-no-client row goes', !!ap.sites && ap.sites.length === 2 && asg.subs.length === 2 && asg.subs.every(function (t) { return /Acme Charging/.test(t); }) && !asg.none, { post: ap, rows: asg });
+    await p.click('#dg .odg-cl[data-client] .nm'); await wait(250);
+    var scoped = await p.evaluate(function () { return { head: (document.querySelector('#dg .odg-pipe-head .odg-lb') || {}).textContent || '', h3: (document.querySelector('#dg .odg-tally-top h3') || {}).textContent || '', rows: document.querySelectorAll('#dg .odg-rg[data-id]').length }; });
+    await p.click('#dg [data-act="cl-clear"]'); await wait(200);
+    ok(name + ': a client scopes the page to its own batch — the tally wears its name and the pipeline lists its sites — and Every client clears it', new RegExp('Acme Charging\u2019s sites · 2 of 2').test(scoped.head) && /Acme Charging/.test(scoped.h3) && scoped.rows === 2, scoped);
     /* the site's card in the side panel */
     await p.click('#dg .odg-rg[data-id="' + second + '"] .nm'); await wait(900);
     var card = await p.evaluate(function () { var c = document.querySelector('.ows-drawer #dr-dg .odg-card'); return c ? { rows: c.querySelectorAll('.odg-gt').length, text: c.innerText.replace(/\s+/g, ' '), next: !!c.querySelector('[data-act="next"]'), update: c.querySelectorAll('[data-act="gate-edit"]').length } : null; });
     ok(name + ': a site opens its card in the side panel: the stage pill in the workspace\u2019s name, Pass and Next site, six gate rows with their sentences and an Update each, and the economics', !!card && card.rows === 6 && /Earmarked · Solela Capital/.test(card.text) && /Pass/.test(card.text) && card.next && card.update === 6 && /250 kW free/.test(card.text) && /Economics/.test(card.text), card && { rows: card.rows, text: card.text.slice(0, 260), next: card.next, update: card.update });
+    var cardClient = await p.evaluate(function () { var c = document.querySelector('.ows-drawer #dr-dg'); var sel = c ? c.querySelector('[data-card-client]') : null; return { from: c ? /From\s*Acme Charging/.test(c.innerText.replace(/\s+/g, ' ')) : false, chips: c ? c.querySelectorAll('.odg-g').length : 0, sel: sel ? sel.value : null, opts: sel ? sel.options.length : 0 }; });
+    ok(name + ': the card says whose site it is — From Acme Charging with the five paperwork steps — and the profile’s Client select holds it', cardClient.from && cardClient.chips === 5 && !!cardClient.sel && cardClient.opts === 2, cardClient);
     await p.click('.ows-drawer #dr-dg [data-act="gate-edit"][data-gate="fiber"]'); await wait(200);
     await p.selectOption('.ows-drawer #dr-dg form[data-form="gate"] select[name="state"]', 'screened');
     await p.selectOption('.ows-drawer #dr-dg form[data-form="gate"] select[name="srcKind"]', 'public');
@@ -1994,7 +2049,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
   async function flow(page, current, opts) {
     opts = opts || {};
     if (ONLY && !ONLY.test('flow')) return;
-    DLG.on = opts.diligence === true; DLG.state = {}; DLG.posts = [];
+    DLG.on = opts.diligence === true; DLG.state = {}; DLG.posts = []; DLG.portfolios = {}; DLG.assign = {}; DLG.pseq = 0;
     if (page === '/marketplace.html') { CURRENT_FX = ns; PACKAGE_VIEW = null; STORE.posts = []; }
     var errs = [], ctx = await browser.newContext({ viewport: { width: 1366, height: 900 } });
     await ctx.route(/^https?:\/\/(?!127\.0\.0\.1)/, function (r) { var url = r.request().url(); if (/gstatic\.com\/firebasejs/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: '' }); if (/Chart\.js/.test(url)) return r.fulfill({ status: 200, contentType: 'text/javascript', body: 'window.Chart=function(){};window.Chart.register=function(){};' }); return r.fulfill({ status: 200, contentType: 'text/css', body: '' }); });

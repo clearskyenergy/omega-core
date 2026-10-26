@@ -992,6 +992,114 @@ function ladderOf(econ, cfg) {
   });
 }
 
+
+/* ââ Clients â where the sites come from (2026-10-26) ââââââââââââââââââââââ
+   Thomas brings in BATCHES of sites from large clients (the sellers and
+   hosts he acquires from), and needs to see, per client, whether the
+   acquisition paperwork is in place while diligence runs on their sites:
+   NDA → MSA → LOI → Term sheet → Contract, in that order (his
+   compute-lease notes, 2026-10-25: sites come first; the paperwork makes
+   them acquirable). This is the SUPPLY side’s ladder — the client whose
+   sites they are — distinct from the per-site stages, which follow the
+   offtake partner’s order.
+
+   A client IS a register portfolio (site_portfolios/{id}, membership as
+   portfolioIds[] on each site — the grouping the register already has and
+   the rules already close to browsers), carrying a `diligence` block this
+   module shapes and only the door writes. Each step is RECORDED — state,
+   date, link, note, who and when — with a link to where the document
+   lives; the platform holds no client-level files (the honest list). A
+   site belongs to ONE client; the register’s other portfolio uses are
+   never touched. */
+var CLIENT_STEPS = ['nda', 'msa', 'loi', 'terms', 'contract'];
+var CLIENT_STEP_LABEL = { nda: 'NDA', msa: 'MSA', loi: 'LOI', terms: 'Term sheet', contract: 'Contract' };
+var CLIENT_STEP_ASK = { nda: 'so they can share their site data', msa: 'the master terms of working together', loi: 'the intent to acquire their sites',
+  terms: 'the commercial terms for the sites picked', contract: 'the signed purchase or lease contracts' };
+var CLIENT_STEP_STATES = ['none', 'drafted', 'sent', 'signed', 'declined'];
+var CLIENT_STATE_LABEL = { none: 'Not started', drafted: 'Drafted', sent: 'Sent', signed: 'Signed', declined: 'Declined' };
+/* drawn with the gates' own tones, so both ladders read the same way */
+var CLIENT_STEP_TONE = { none: 'open', drafted: 'working', sent: 'screened', signed: 'confirmed', declined: 'fails' };
+
+function clientStepOf(x) {
+  x = x && typeof x === 'object' ? x : {};
+  return { state: CLIENT_STEP_STATES.indexOf(x.state) >= 0 ? x.state : 'none', date: typeof x.date === 'string' ? x.date : null,
+    ref: typeof x.ref === 'string' ? x.ref : null, note: typeof x.note === 'string' ? x.note : null, by: x.by || null, at: x.at || null };
+}
+function normalizeClient(record) {
+  record = record || {};
+  var d = record.diligence && typeof record.diligence === 'object' ? copy(record.diligence) : {}, steps = {};
+  CLIENT_STEPS.forEach(function (k) { steps[k] = clientStepOf(d.steps ? d.steps[k] : null); });
+  var ct = d.contact && typeof d.contact === 'object' ? d.contact : {};
+  return { name: typeof record.name === 'string' ? record.name : '', company: typeof d.company === 'string' ? d.company : null,
+    contact: { name: typeof ct.name === 'string' ? ct.name : null, email: typeof ct.email === 'string' ? ct.email : null, phone: typeof ct.phone === 'string' ? ct.phone : null },
+    notes: typeof d.notes === 'string' ? d.notes : null, steps: steps,
+    history: Array.isArray(d.history) ? d.history : [], updatedAt: d.updatedAt || null, updatedBy: d.updatedBy || null };
+}
+function clientRef(v, label) {
+  var ref = optText(v, 500, label);
+  if (ref && /^[a-z][a-z0-9+.-]*:/i.test(ref) && !/^https?:\/\//i.test(ref)) throw fail(400, label + ' must be an http(s) address');
+  return ref;
+}
+function keepOr(nv, old) { return nv === undefined ? old : nv; }
+/* ONE change to one client: identity and any of the steps together, pure.
+   ctx: { creating, by, now }. Returns { name, diligence, events, unchanged };
+   the door writes record.name + record.diligence and audits the events. */
+function clientChange(record, input, ctx) {
+  input = input || {}; ctx = ctx || {};
+  var cur = normalizeClient(record), events = [];
+  var name = input.name === undefined ? undefined : text(input.name, 120, 'The client’s name', { required: true });
+  if (ctx.creating && !has(name)) throw fail(400, 'Name the client');
+  var email = optText(input.contactEmail, 160, 'Contact email');
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw fail(400, 'Contact email is not an address');
+  var idy = { company: keepOr(optText(input.company, 160, 'Company'), cur.company),
+    contact: { name: keepOr(optText(input.contactName, 120, 'Contact name'), cur.contact.name), email: keepOr(email, cur.contact.email), phone: keepOr(optText(input.contactPhone, 40, 'Contact phone'), cur.contact.phone) },
+    notes: keepOr(optText(input.notes, 2000, 'Notes', true), cur.notes) };
+  var nextName = keepOr(name, cur.name);
+  var idyChanged = JSON.stringify(idy) !== JSON.stringify({ company: cur.company, contact: cur.contact, notes: cur.notes }) || nextName !== cur.name;
+  if (idyChanged && !ctx.creating) events.push(event(ctx, 'client', null, null, 'details updated'));
+  if (ctx.creating) events.push(event(ctx, 'client', null, null, 'client created'));
+  var steps = {}, inSteps = input.steps && typeof input.steps === 'object' ? input.steps : {};
+  Object.keys(inSteps).forEach(function (k) { if (CLIENT_STEPS.indexOf(k) < 0) throw fail(400, 'Unknown paperwork step ' + k + ' (the steps are ' + CLIENT_STEPS.join(', ') + ')'); });
+  CLIENT_STEPS.forEach(function (k) {
+    var was = cur.steps[k], inp = inSteps[k], L = CLIENT_STEP_LABEL[k];
+    if (!inp || typeof inp !== 'object') { steps[k] = was; return; }
+    var st = inp.state === undefined ? was.state : pick(inp.state, CLIENT_STEP_STATES, L);
+    if (st === null) st = 'none';
+    var nx = { state: st, date: keepOr(day(inp.date, L + ' date'), was.date), ref: keepOr(clientRef(inp.ref, L + ' link'), was.ref), note: keepOr(optText(inp.note, 500, L + ' note'), was.note), by: was.by, at: was.at };
+    if (nx.state === 'signed' && !nx.date) throw fail(400, L + ' signed needs its date (YYYY-MM-DD)');
+    if (nx.state === 'declined' && !nx.note) throw fail(400, 'Say why the ' + L + ' was declined (the note)');
+    if (nx.state === was.state && nx.date === was.date && nx.ref === was.ref && nx.note === was.note) { steps[k] = was; return; }
+    nx.by = ctx.by || null; nx.at = ctx.now;
+    events.push(event(ctx, 'client:' + k, was.state, nx.state, nx.note || null, nx.date ? { date: nx.date } : null));
+    steps[k] = nx;
+  });
+  if (!events.length) return { name: cur.name, diligence: record && record.diligence, unchanged: true, events: [] };
+  var d = { v: 1, company: idy.company, contact: idy.contact, notes: idy.notes, steps: steps,
+    history: cur.history.concat(events).slice(-HISTORY_CAP), updatedAt: ctx.now, updatedBy: ctx.by || null };
+  return { name: nextName, diligence: d, events: events, unchanged: false };
+}
+/* The one next thing with this client, in the notes' order */
+function clientNext(steps) {
+  for (var i = 0; i < CLIENT_STEPS.length; i++) {
+    var k = CLIENT_STEPS[i], st = steps[k], L = CLIENT_STEP_LABEL[k];
+    if (st.state === 'signed') continue;
+    if (st.state === 'declined') return { step: k, words: L + ' declined' + (st.note ? ': ' + st.note : '') + ' — renegotiate or pass on the batch' };
+    return { step: k, words: st.state === 'none' ? 'Draft the ' + L + ' — ' + CLIENT_STEP_ASK[k] : st.state === 'drafted' ? 'Send the ' + L : 'Get the ' + L + ' signed' + (st.date ? ' (sent ' + st.date + ')' : '') };
+  }
+  return null;
+}
+/* One client as the pages draw it */
+function clientView(record) {
+  var c = normalizeClient(record), steps = CLIENT_STEPS.map(function (k) {
+    var st = c.steps[k];
+    return extend({ key: k, label: CLIENT_STEP_LABEL[k], ask: CLIENT_STEP_ASK[k], stateLabel: CLIENT_STATE_LABEL[st.state], tone: CLIENT_STEP_TONE[st.state] }, st);
+  });
+  return { name: c.name, company: c.company, contact: c.contact, notes: c.notes, steps: steps,
+    signed: steps.filter(function (x) { return x.state === 'signed'; }).length, next: clientNext(c.steps),
+    history: c.history.slice(-20).reverse(), updatedAt: c.updatedAt, updatedBy: c.updatedBy };
+}
+
+
 /* ── what the pages draw ───────────────────────────────────────────────── */
 function label(entries, k) { var e = (entries || []).filter(function (x) { return x.key === k; })[0]; return e ? e.label : null; }
 function fmt(n) { return n == null ? null : Number(n).toLocaleString('en-US', { maximumFractionDigits: 1 }); }
@@ -1134,6 +1242,14 @@ function view(site, ctx) {
     flags: flags.concat(power.flags, term.flags), history: d.history.slice(-50).reverse(), updatedAt: d.updatedAt || null, updatedBy: d.updatedBy || null
   };
   if (d.screen && d.screen.fiber && d.screen.fiber.carriersStatus === 'needs-key') out.flags.push({ code: 'FCC_KEY_MISSING', message: 'Carrier names need the FCC key (FCC_BB_KEY) on this deployment' });
+  /* the client whose site this is: the paperwork beside the site, and an NDA
+     not signed is said on every site held from them */
+  if (ctx.client && ctx.client.record) {
+    var cvw = clientView(ctx.client.record);
+    out.client = extend({ id: ctx.client.id || null }, cvw);
+    var nda0 = cvw.steps[0];
+    if (nda0.state !== 'signed') out.flags.push({ code: 'CLIENT_NDA', message: 'No signed NDA with ' + (cvw.name || 'the client') + ' on file' + (nda0.state === 'sent' ? (nda0.date ? ' (sent ' + nda0.date + ', not signed)' : ' (sent, not signed)') : '') });
+  } else out.client = null;
   out.lines = linesOf(out, d, site, cfg, ctx.files);
   out.sizing = sizingOf(out, d);
   return out;
@@ -1157,6 +1273,7 @@ function row(site, ctx) {
     screenedAt: v.screen ? v.screen.at : null, screenComplete: v.screen ? v.screen.complete === true : false,
     carrier: fib.carrier || null, carriers: fib.carriers || [], chipset: chips.chipset || null, route: v.control.route || null, termOk: v.control.term.ok, termShortMonths: v.control.term.shortMonths,
     loiStatus: v.offtake.loiStatus, offtaker: v.offtake.offtaker ? v.offtake.offtaker.name : null, offtakeTermYears: v.offtake.termYears,
+    clientId: ctx && ctx.client ? ctx.client.id || null : null, clientName: ctx && ctx.client && ctx.client.record ? ctx.client.record.name || null : null,
     irrPct: v.economics.irrPct, roiPct: v.economics.roiPct, economicsSource: v.economics.source, units: v.economics.units, unitsLabel: v.economics.unitsLabel,
     computeKw: v.economics.computeKw, capexUsd: v.economics.capexUsd, flags: v.flags.map(function (f) { return f.code; }), next: v.next };
 }
@@ -1223,6 +1340,7 @@ function schema(cfg) {
     sourceKinds: SOURCE_KINDS.slice(), docs: copy(DOCS), confirmedBy: copy(CONFIRMED_BY), routes: copy(ROUTES), loi: LOI.slice(), offtakeStatus: OFFTAKE_STATUS.slice(),
     chargerStatus: CHARGER_STATUS.slice(), chargerUse: CHARGER_USE.slice(), peakSources: PEAK_SOURCES.slice(), consent: CONSENT.slice(), amendment: AMENDMENT.slice(),
     equipmentAtTermEnd: EQUIPMENT_END.slice(), survey: SURVEY.slice(), powerPaths: POWER_PATHS.slice(),
+    clientSteps: CLIENT_STEPS.slice(), clientStepLabels: copy(CLIENT_STEP_LABEL), clientStepAsks: copy(CLIENT_STEP_ASK), clientStepStates: CLIENT_STEP_STATES.slice(), clientStateLabels: copy(CLIENT_STATE_LABEL), clientStepTone: copy(CLIENT_STEP_TONE),
     config: { intakeTypes: cfg.intakeTypes, hostDeals: cfg.hostDeals, exclusions: cfg.exclusions.map(function (x) { return { key: x.key, label: x.label, reason: x.reason }; }),
       offtake: cfg.offtake, target: cfg.target, removalMonths: cfg.removalMonths } };
 }
@@ -1237,5 +1355,7 @@ module.exports = {
   exclusionsFor: exclusionsFor, activeExclusions: activeExclusions, current: current, gateOf: gateOf, decisionOf: decisionOf, stageOf: stageOf,
   requirement: requirement, change: change, offtakerInput: offtakerInput, headroom: headroom, measuredPeak: measuredPeak, serviceOf: serviceOf,
   controlTerm: controlTerm, offtakeOf: offtakeOf, economicsOf: economicsOf, economicsFromCase: economicsFromCase, economicsGate: economicsGate,
-  view: view, row: row, pipeline: pipeline, tally: tally, filterRows: filterRows, schema: schema, addMonths: addMonths, bandOf: bandOf, ladderOf: ladderOf, cleanScreen: cleanScreen, brandOf: brandOf
+  view: view, row: row, pipeline: pipeline, tally: tally, filterRows: filterRows, schema: schema, addMonths: addMonths, bandOf: bandOf, ladderOf: ladderOf, cleanScreen: cleanScreen, brandOf: brandOf,
+  CLIENT_STEPS: CLIENT_STEPS, CLIENT_STEP_LABEL: CLIENT_STEP_LABEL, CLIENT_STEP_ASK: CLIENT_STEP_ASK, CLIENT_STEP_STATES: CLIENT_STEP_STATES, CLIENT_STATE_LABEL: CLIENT_STATE_LABEL, CLIENT_STEP_TONE: CLIENT_STEP_TONE,
+  normalizeClient: normalizeClient, clientChange: clientChange, clientView: clientView, clientNext: clientNext
 };

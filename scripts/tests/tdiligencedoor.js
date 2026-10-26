@@ -181,6 +181,54 @@ test('Q07 the LOI package: no address is 409 and nothing mailed; with one, ONE m
   await rejects(c.post({ action: 'diligence-loi' }), 429, /At most 5 LOI packages a day/);
 });
 
+test('Q09 clients: a member records the paperwork in one call, audited; one client a site, the register\u2019s other portfolios untouched; each client joins the register with its own strip and tally; the site\u2019s view and card choices carry it', async function () {
+  var w = world();
+  /* a register portfolio that is NOT a client stays what it was */
+  w.db.seed(O + '/site_portfolios/p_plain', { name: 'Texas saved set', createdAt: NOW, createdBy: 'x' });
+  w.db.seed(O + '/sites/s1', Object.assign({}, w.site('s1'), { portfolioIds: ['p_plain'] }));
+  var mk = await w.post({ action: 'diligence-client', name: 'Acme Charging', company: 'Acme Charging LLC', contactEmail: 'pat@acme.example', steps: { nda: { state: 'signed', date: '2026-10-20' }, msa: { state: 'sent', date: '2026-10-22' } } });
+  assert.equal(mk.ok, true); assert.ok(mk.portfolioId); assert.equal(mk.client.name, 'Acme Charging'); assert.equal(mk.client.signed, 1);
+  var a1 = w.audits('sitecrm-diligence-client'); assert.equal(a1.length, 1); assert.ok(/client:nda:signed/.test(a1[0].what), a1[0].what);
+  var pid = mk.portfolioId;
+  assert.equal((await w.post({ action: 'diligence-client', portfolioId: pid, steps: { msa: { state: 'sent', date: '2026-10-22' } } })).unchanged, true);
+  assert.equal(w.audits('sitecrm-diligence-client').length, 1, 'a repeat writes nothing');
+  await rejects(w.post({ action: 'diligence-client', name: 'X' }, { canEdit: false }), 403, /read the diligence/);
+  await rejects(w.post({ action: 'diligence-client', portfolioId: 'nope', steps: {} }), 404, /No such client/);
+  await rejects(w.post({ action: 'diligence-client', portfolioId: 'p_plain', name: 'Y' }), 409, /not a client/);
+  /* assign: one client a site; the plain portfolio membership is kept */
+  var as1 = await w.post({ action: 'diligence-assign', portfolioId: pid, sites: ['s1', 's2'] });
+  assert.equal(as1.assigned, 2); assert.ok(/under Acme Charging/.test(as1.note));
+  assert.deepEqual(w.site('s1').portfolioIds, ['p_plain', pid]);
+  var mk2 = await w.post({ action: 'diligence-client', name: 'Northgate REIT' }), pid2 = mk2.portfolioId;
+  await w.post({ action: 'diligence-assign', portfolioId: pid2, site: 's1' });
+  assert.deepEqual(w.site('s1').portfolioIds, ['p_plain', pid2], 'reassigned: the old client pid goes, the plain portfolio stays');
+  await rejects(w.post({ action: 'diligence-assign', portfolioId: pid, site: 'ghost' }), 404, /Site not found/);
+  var bulk = await w.post({ action: 'diligence-assign', portfolioId: pid, sites: ['s1', 'ghost'] });
+  assert.deepEqual(bulk.missing, ['ghost'], 'a bulk assignment skips and names what is not there');
+  await w.post({ action: 'diligence-assign', portfolioId: null, sites: ['s2'] });
+  assert.deepEqual(w.site('s2').portfolioIds, [], 'taken off their client');
+  await w.post({ action: 'diligence-decide', site: 's1', choice: 'pursue' });
+  /* the register: rows carry the client; each client joins with its own strip and tally; the unassigned are counted */
+  var docs = ['s1', 's2'].map(function (id) { return { id: id, data: function () { return w.site(id); } }; }), j = await w.door.registerJoin(w.ctx({}), docs);
+  assert.equal(j.rows.s1.clientId, pid); assert.equal(j.rows.s1.clientName, 'Acme Charging'); assert.equal(j.rows.s2.clientId, null);
+  assert.equal(j.unassigned, 1);
+  var acme = j.clients.filter(function (x) { return x.id === pid; })[0];
+  assert.equal(acme.sites, 1); assert.equal(acme.client.next.step, 'msa');
+  var n = {}; acme.pipeline.forEach(function (x) { n[x.stage] = x.count; }); assert.equal(n.pursue, 1);
+  assert.equal(acme.tally.sites, 1);
+  assert.ok(!j.clients.some(function (x) { return x.id === 'p_plain'; }), 'a plain portfolio is not a client card');
+  /* one site: the view carries the client and the NDA stands; the card gets the choosable clients */
+  var g = await w.door.siteView(w.ctx({}), w.db.collection('omega_orgs').doc(ORG).collection('sites').doc('s1'), w.site('s1'));
+  assert.equal(g.view.client.name, 'Acme Charging');
+  assert.ok(g.view.flags.every(function (f) { return f.code !== 'CLIENT_NDA'; }), 'NDA signed: no flag');
+  assert.deepEqual(g.clients.map(function (x) { return x.name; }).sort(), ['Acme Charging', 'Northgate REIT']);
+  var g2 = await w.door.siteView(w.ctx({}), w.db.collection('omega_orgs').doc(ORG).collection('sites').doc('s2'), w.site('s2'));
+  assert.equal(g2.view.client, null);
+  /* a change answers with the client riding the view */
+  var ch = await w.post({ action: 'diligence-profile', site: 's1', hostDeal: 'ground-lease' });
+  assert.equal(ch.diligence.client.name, 'Acme Charging');
+});
+
 test('Q08 the chip key the contract case reads, from what a person typed', function () {
   assert.equal(DOOR.chipKey('NVIDIA H100'), 'h100'); assert.equal(DOOR.chipKey('H200'), 'h200'); assert.equal(DOOR.chipKey('GB200 NVL72'), 'gb200nvl72'); assert.equal(DOOR.chipKey(''), null);
   var src = fs.readFileSync(path.join(ROOT, 'api/_lib/portfolio/diligence-door.js'), 'utf8');

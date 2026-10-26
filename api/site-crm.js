@@ -67,8 +67,14 @@
           the Grid Atlas screen, a phase of a site a step
      POST diligence-loi { ids?, note? }  ONE LOI package to the workspace's
           offtake partner, then each site to LOI sent
-     GET  (one site) diligence: { view, schema, brand }; (the register)
-          diligence: { pipeline, tally, schema, brand } and a row a site
+     GET  (one site) diligence: { view, schema, brand, clients }; (the
+          register) diligence: { pipeline, tally, clients, unassigned,
+          schema, brand } and a row a site
+     POST diligence-client { portfolioId?, name, …, steps }  a CLIENT (who
+          a batch of sites comes from, a register portfolio) and its
+          acquisition paperwork: NDA → MSA → LOI → Term sheet → Contract
+     POST diligence-assign { portfolioId|null, site|sites }  its sites;
+          one client a site, other portfolio uses untouched
 
    Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
      site-archive / site-restore    hide from, or return to, the register
@@ -443,7 +449,7 @@ var handler = A.handler(async function (req, res) {
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
       limited: snap.docs.length > LIST_CAP,
-      diligence: dj ? { pipeline: dj.pipeline, tally: dj.tally, counted: dj.counted, limited: dj.limited, schema: dj.schema, brand: dj.brand } : null };
+      diligence: dj ? { pipeline: dj.pipeline, tally: dj.tally, counted: dj.counted, limited: dj.limited, clients: dj.clients, unassigned: dj.unassigned, schema: dj.schema, brand: dj.brand } : null };
   }
 
   var action = String(b.action || 'read');

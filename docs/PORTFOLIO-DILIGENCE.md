@@ -299,6 +299,56 @@ false result), the gate shows the site's `latestModel`, else its
 `{ state: open|scheduled|done, date, fileId, note }`. A survey is done only
 when its report is on the Files.
 
+## Clients — who the sites come from (2026-10-26)
+
+Thomas brings in **batches of sites from large clients** (the sellers and
+hosts he acquires from) and needs to see, per client, whether the
+acquisition paperwork is in place while diligence runs on their sites:
+**NDA → MSA → LOI → Term sheet → Contract**, in that order (his
+compute-lease notes, 2026-10-25: sites come first; the paperwork makes them
+acquirable). This is the SUPPLY side's ladder — the client whose sites they
+are — distinct from the per-site stages, which follow the offtake partner's
+order.
+
+- **A client IS a register portfolio** (`site_portfolios/{id}`, membership
+  as `portfolioIds[]` on each site — the grouping the register already has,
+  and the rules already close the collection to browsers), carrying a
+  `diligence` block only the door writes. One system of grouping, not two.
+- **Each step is recorded**: state (Not started · Drafted · Sent · Signed ·
+  Declined), date, a link to where the document lives, a note, who and
+  when. Signed needs its date; declined needs its why; a link must be
+  http(s). Steps are drawn with the gates' own tones, so both ladders read
+  the same way, and `clientNext` names the one next thing in the notes'
+  order ("Get the MSA signed (sent 2026-10-22)").
+- **The door**: `diligence-client` (create, or update identity and any of
+  the steps in ONE transaction, audited `sitecrm-diligence-client`;
+  updating a plain register portfolio is refused — it is not a client) and
+  `diligence-assign` (one site or up to 500; **one client a site** — a
+  reassignment removes the old client's membership and never touches the
+  register's other portfolio uses; audited). Any editor acts, a member
+  included; a viewer reads.
+- **The register answer** carries `diligence.clients[]` — each client with
+  its paperwork view, its site count, and its own `pipeline` and `tally` —
+  plus `diligence.unassigned`. Each row carries `clientId`/`clientName`.
+- **The pages**: a Clients card between the tally and the pipeline — one
+  row per client with the five paperwork chips, the batch's numbers and
+  the next step; clicking a client scopes the strip, the tally and the
+  pipeline to its batch ("Acme Charging's sites · 12 of 40"); the edit form
+  records the paperwork and assigns sites ("Add every unassigned site" for
+  a freshly imported batch); each pipeline row names its client. The site
+  card says "From <client>" with the chips, and the Site profile's Client
+  select reassigns it.
+- **The NDA stands on every site**: a site held from a client whose NDA is
+  not signed carries the flag "No signed NDA with <client> on file" (and
+  "(sent <date>, not signed)" where it went out). The other steps inform
+  and never block.
+
+The journey, end to end: **create the client → record the NDA → import
+their CSV → Add every unassigned site → Screen with Grid Atlas → earmark
+the good ones (E) → LOI package to the offtake partner → MSA → survey →
+confirmed**, with the client's own contract ladder visible beside it the
+whole way.
+
 ## The Grid Atlas screen (`grid-screen.js`)
 
 `screen.js` beside it is the customer portfolio's BESS screening
@@ -522,6 +572,11 @@ and edit capability are the door's as for every other action.
   sites keep interconnection Open after a screen, with the utility named.
 
 **Limits of the checks**
+- **A client's documents are recorded, not held.** Each paperwork step
+  carries a link to where the NDA or MSA lives (a drive, a data room); the
+  platform stores no client-level file and verifies nothing behind the
+  link. Site-level evidence (the will-serve, the lease) stays on the
+  site's own Files, checked as before.
 - **Lightsmith's stated terms are unverified.** They are recorded and shown
   as stated. They band the slider and give the lead time, and are never
   used as figures.
@@ -542,7 +597,10 @@ and edit capability are the door's as for every other action.
 - **The contract case is computed on read, never stored.** At Solela's size
   this is well under a second; a register of thousands of earmarked sites
   would want it stored.
-- **No bulk triage.** The keys act on one site at a time.
+- **No bulk triage.** The keys act on one site at a time ("Add every
+  unassigned site" is the one batch action, and it only assigns).
+- **A client's batch numbers count the first 2,000 sites**, like the strip
+  and the tally.
 - **No mail beyond the LOI package**, and no notifications.
 - **No rules change.** Sites are Admin SDK only.
 - **Colleague auto-join is not locked** for `solelacapital.com` (decided for

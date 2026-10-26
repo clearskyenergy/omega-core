@@ -33,7 +33,7 @@ var D = require('./diligence'), G = require('./grid-screen'), L = require('./loi
 
 var CHANGE = { 'diligence-decide': 'decide', 'diligence-stage': 'stage', 'diligence-gate': 'gate', 'diligence-control': 'control', 'diligence-offtake': 'offtake',
   'diligence-chargers': 'chargers', 'diligence-profile': 'profile', 'diligence-survey': 'survey' };
-var ACTIONS = Object.keys(CHANGE).concat(['diligence-screen-start', 'diligence-screen-step', 'diligence-loi']);
+var ACTIONS = Object.keys(CHANGE).concat(['diligence-screen-start', 'diligence-screen-step', 'diligence-loi', 'diligence-client', 'diligence-assign']);
 var SCREEN_IDS_CAP = 200, SCREEN_FRESH_DAYS = 7, SITE_SCAN = 2000;
 
 function owns(action) { return ACTIONS.indexOf(String(action || '')) >= 0; }
@@ -78,6 +78,71 @@ function make(deps) {
     catch (e) { return null; }
   }
   function viewCtx(s, extra) { return Object.assign({ config: s.config, now: deps.now() }, extra || {}); }
+  /* the register's portfolios; a CLIENT is one carrying the diligence paperwork block */
+  async function portfoliosOf(c) {
+    var ps = await c.root.collection('site_portfolios').limit(200).get();
+    return ps.docs.map(function (d) { return { id: d.id, data: d.data() || {} }; });
+  }
+  function clientsOnly(ps) { return ps.filter(function (p) { return p.data.diligence && typeof p.data.diligence === 'object'; }); }
+  function clientOf(site, clients) {
+    var ids = Array.isArray(site.portfolioIds) ? site.portfolioIds : [];
+    for (var i = 0; i < clients.length; i++) if (ids.indexOf(clients[i].id) >= 0) return { id: clients[i].id, record: clients[i].data };
+    return null;
+  }
+  function mustEdit(c) { if (c.canEdit === false) throw fail(403, 'Your role in this workspace can read the diligence but not change it'); }
+
+  /* ── one client: identity and its paperwork steps, one transaction ───── */
+  async function clientAct(c, s) {
+    mustEdit(c);
+    var pid = c.b.portfolioId ? String(c.b.portfolioId) : null;
+    if (pid && !/^[A-Za-z0-9_-]{1,120}$/.test(pid)) throw fail(400, 'Client id is not valid');
+    var ref = pid ? c.root.collection('site_portfolios').doc(pid) : c.root.collection('site_portfolios').doc();
+    var out = await c.db.runTransaction(async function (tx) {
+      var snap = await tx.get(ref), creating = !snap.exists;
+      if (pid && creating) throw fail(404, 'No such client');
+      if (!creating && !(snap.data() || {}).diligence) throw fail(409, 'That portfolio is not a client (it has no paperwork record); make a new client instead');
+      var r = D.clientChange(creating ? null : snap.data(), c.b, { creating: creating, by: c.by, now: deps.now() });
+      if (r.unchanged) return { ok: true, unchanged: true, portfolioId: ref.id, client: D.clientView(snap.data()) };
+      var rec = Object.assign(creating ? { createdAt: deps.now(), createdBy: c.by } : snap.data(), { name: r.name, updatedAt: deps.now(), diligence: plain(r.diligence) });
+      if (creating) tx.create(ref, plain(rec)); else tx.set(ref, plain(rec));
+      tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-diligence-client', orgId: c.org, portfolioId: ref.id, by: c.by, at: deps.now(),
+        what: r.events.map(function (e) { return e.what + (e.to ? ':' + e.to : ''); }).join(', ').slice(0, 300), created: creating }));
+      return { ok: true, unchanged: false, portfolioId: ref.id, client: D.clientView(rec) };
+    });
+    return out;
+  }
+  /* ── sites to a client: ONE client a site; the register's other portfolio
+     memberships are never touched. portfolioId null takes them off theirs. */
+  async function assign(c, s) {
+    mustEdit(c);
+    var one = c.b.site ? [String(c.b.site)] : [], many = Array.isArray(c.b.sites) ? c.b.sites.map(String) : [];
+    var ids = one.concat(many).filter(function (x, i, a) { return /^[A-Za-z0-9_.-]{1,120}$/.test(x) && a.indexOf(x) === i; });
+    if (!ids.length) throw fail(400, 'Which sites?');
+    if (ids.length > 500) throw fail(400, 'At most 500 sites an assignment');
+    var pid = c.b.portfolioId === null || c.b.portfolioId === undefined || c.b.portfolioId === '' ? null : String(c.b.portfolioId);
+    var ps = await portfoliosOf(c), clients = clientsOnly(ps), clientIds = clients.map(function (x) { return x.id; });
+    var target = pid ? clients.filter(function (x) { return x.id === pid; })[0] : null;
+    if (pid && !target) throw fail(404, 'No such client');
+    var assigned = 0, kept = 0, missing = [];
+    for (var i = 0; i < ids.length; i++) {
+      var sref = c.root.collection('sites').doc(ids[i]);
+      var res = await c.db.runTransaction(async function (tx) {
+        var snap = await tx.get(sref);
+        if (!snap.exists) return 'missing';
+        var cur = Array.isArray((snap.data() || {}).portfolioIds) ? snap.data().portfolioIds : [];
+        var next = cur.filter(function (p) { return clientIds.indexOf(p) < 0; });
+        if (pid) next.push(pid);
+        if (JSON.stringify(next) === JSON.stringify(cur)) return 'kept';
+        tx.set(sref, { portfolioIds: next }, { merge: true });
+        return 'assigned';
+      });
+      if (res === 'missing') { if (!many.length) throw fail(404, 'Site not found'); missing.push(ids[i]); }
+      else if (res === 'kept') kept++; else assigned++;
+    }
+    if (assigned) await c.db.collection('omega_audit').doc().create(plain({ action: 'sitecrm-diligence-assign', orgId: c.org, portfolioId: pid, by: c.by, at: deps.now(), sites: assigned }));
+    return { ok: true, portfolioId: pid, assigned: assigned, kept: kept, missing: missing,
+      note: pid ? assigned + ' site' + (assigned === 1 ? '' : 's') + ' under ' + ((target.data || {}).name || 'the client') + '.' : assigned + ' site' + (assigned === 1 ? '' : 's') + ' taken off their client.' };
+  }
 
   /* ── one change to one site ──────────────────────────────────────────── */
   async function change(c, s, action, input) {
@@ -85,6 +150,7 @@ function make(deps) {
     var ref = c.root.collection('sites').doc(c.site), files = filesOf(await kids(ref, 'files')), agreements = await kids(ref, 'agreements');
     var before = await ref.get(); if (!before.exists) throw fail(404, 'Site not found');
     var kase = caseFor(BR.normalize(ref.id, before.data()), s.config);
+    var klient = clientOf(BR.normalize(ref.id, before.data()), clientsOnly(await portfoliosOf(c)));
     return c.db.runTransaction(async function (tx) {
       var snap = await tx.get(ref); if (!snap.exists) throw fail(404, 'Site not found');
       var site = BR.normalize(ref.id, snap.data() || {});
@@ -94,7 +160,7 @@ function make(deps) {
         tx.create(c.db.collection('omega_audit').doc(), plain({ action: 'sitecrm-diligence-' + action, orgId: c.org, siteId: ref.id, by: c.by, at: deps.now(), what: r.event.what, from: r.event.from, to: r.event.to, note: r.event.note || null }));
         site.diligence = r.diligence;
       }
-      return { ok: true, unchanged: r.unchanged === true, event: r.event || null, diligence: D.view(site, viewCtx(s, { files: files, agreements: agreements, kase: kase })) };
+      return { ok: true, unchanged: r.unchanged === true, event: r.event || null, diligence: D.view(site, viewCtx(s, { files: files, agreements: agreements, kase: kase, client: klient })) };
     });
   }
 
@@ -119,7 +185,10 @@ function make(deps) {
     await c.db.collection('omega_audit').doc().create({ action: 'sitecrm-diligence-screen-start', orgId: c.org, by: c.by, at: deps.now(), jobId: jid, sites: job.total, skippedFresh: fresh.length });
     return { ok: true, job: summary(job), skippedFresh: fresh };
   }
-  function summary(j) { return { id: j.id, status: j.status, total: j.total, done: j.done, failed: j.failed, kind: j.kind }; }
+  function summary(j) {
+    var items = j.items || {}, bad = Object.keys(items).filter(function (k) { return items[k].status === 'failed'; });
+    return { id: j.id, status: j.status, total: j.total, done: j.done, failed: j.failed, kind: j.kind, failedIds: bad.slice(0, 20) };
+  }
   async function screenStep(c, s) {
     var jref = c.root.collection('site_jobs').doc(String(c.b.jobId || '')), js = await jref.get();
     if (!js.exists || js.data().kind !== 'diligence-screen') throw fail(404, 'Screen not found');
@@ -208,6 +277,8 @@ function make(deps) {
   async function post(c) {
     var s = await scope(c), action = String(c.b.action || '');
     if (CHANGE[action]) { var input = Object.assign({}, c.b); delete input.org; delete input.site; delete input.action; return change(c, s, CHANGE[action], input); }
+    if (action === 'diligence-client') return clientAct(c, s);
+    if (action === 'diligence-assign') return assign(c, s);
     if (action === 'diligence-screen-start') return screenStart(c, s);
     if (action === 'diligence-screen-step') return screenStep(c, s);
     if (action === 'diligence-loi') return loi(c, s);
@@ -219,7 +290,9 @@ function make(deps) {
     if (!D.enabled(billing)) return null;
     var cfg = D.configOf(billing), orgDoc = await c.root.get(), site = BR.normalize(ref.id, data || {});
     var files = filesOf(await kids(ref, 'files')), agreements = await kids(ref, 'agreements'), kase = caseFor(site, cfg);
-    return { view: D.view(site, { config: cfg, now: deps.now(), files: files, agreements: agreements, kase: kase }), schema: D.schema(cfg), brand: D.brandOf(orgDoc.exists ? orgDoc.data() : null, c.org) };
+    var clients = clientsOnly(await portfoliosOf(c)), klient = clientOf(site, clients);
+    return { view: D.view(site, { config: cfg, now: deps.now(), files: files, agreements: agreements, kase: kase, client: klient }), schema: D.schema(cfg), brand: D.brandOf(orgDoc.exists ? orgDoc.data() : null, c.org),
+      clients: clients.map(function (x) { return { id: x.id, name: x.data.name || x.id }; }) };
   }
   /* the register's GET: a row a site of the page; the strip and the tally
      over the WHOLE register (the list pages by 200), archived sites left
@@ -231,13 +304,15 @@ function make(deps) {
     var billing = await billingOf(c.root);
     if (!D.enabled(billing)) return null;
     var cfg = D.configOf(billing), orgDoc = await c.root.get(), rows = {}, cache = {};
+    var clients = clientsOnly(await portfoliosOf(c));
     function rowOf(id, data, onPage) {
       var hit = cache[id];
       if (hit && (hit.cased || !onPage)) return hit;
-      var site = BR.normalize(id, data || {}), r = D.row(site, { config: cfg, now: deps.now() }), cased = false;
+      var site = BR.normalize(id, data || {}), klient = clientOf(site, clients);
+      var r = D.row(site, { config: cfg, now: deps.now(), client: klient }), cased = false;
       if (onPage || (r.stage !== 'passed' && r.decision && r.decision.choice === 'pursue')) {
         cased = true; var kase = caseFor(site, cfg, { ladder: false });
-        if (kase) r = D.row(site, { config: cfg, now: deps.now(), kase: kase });
+        if (kase) r = D.row(site, { config: cfg, now: deps.now(), kase: kase, client: klient });
       }
       cache[id] = { row: r, cased: cased, archived: site.lifecycleStatus === 'archived' };
       return cache[id];
@@ -245,7 +320,13 @@ function make(deps) {
     docs.forEach(function (d) { rows[d.id] = rowOf(d.id, typeof d.data === 'function' ? d.data() : d, true).row; });
     var all = await c.root.collection('sites').limit(SITE_SCAN + 1).get(), list = [];
     all.docs.slice(0, SITE_SCAN).forEach(function (d) { var r = rowOf(d.id, d.data(), false); if (!r.archived) list.push(r.row); });
+    /* each client beside its own batch: the paperwork, and the batch's strip and tally */
+    var clientCards = clients.map(function (x) {
+      var mine = list.filter(function (r) { return r.clientId === x.id; });
+      return { id: x.id, name: x.data.name || x.id, client: D.clientView(x.data), sites: mine.length, pipeline: D.pipeline(mine), tally: D.tally(mine, cfg) };
+    });
     return { rows: rows, pipeline: D.pipeline(list), tally: D.tally(list, cfg), counted: list.length, limited: all.docs.length > SITE_SCAN,
+      clients: clientCards, unassigned: list.filter(function (r) { return !r.clientId; }).length,
       schema: D.schema(cfg), brand: D.brandOf(orgDoc.exists ? orgDoc.data() : null, c.org) };
   }
   return { post: post, siteView: siteView, registerJoin: registerJoin, caseFor: caseFor };
