@@ -31,6 +31,8 @@
 .pf-head .sub{color:var(--ows-ink2);font-size:13.5px;margin-top:4px;max-width:720px}
 .pf-head .acts{display:flex;gap:8px;flex-wrap:wrap}
 .pf-stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+/* the diligence pipeline IS the register where the switch is on: one list (body.dg-one, set by renderDiligence) */
+.dg-one #stats,.dg-one .pf-tools,.dg-one #bar,.dg-one #tbl,.dg-one #more,.dg-one .pf-foot{display:none!important}
 .pf-stat{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:14px 16px;box-shadow:var(--ows-shadow)}
 .pf-stat .k{font:500 10.5px "DM Mono",monospace;letter-spacing:.08em;text-transform:uppercase;color:var(--ows-ink3)}
 .pf-stat .v{font:600 24px/1.1 Poppins,"DM Sans",sans-serif;margin-top:6px;font-variant-numeric:tabular-nums}
@@ -683,13 +685,16 @@
   function renderDiligence(j) {
     DILIG = j && j.diligence ? j.diligence : null;
     var box = byId('dg');
+    document.body.classList.toggle('dg-one', !!DILIG);   /* one list: the pipeline IS the register while the switch is on */
     if (!DILIG || !window.OmegaDiligence) { box.style.display = 'none'; if (DGR) { DGR.destroy(); DGR = null; } return; }
     box.style.display = '';
     var brand = DILIG.brand || {};
     if (brand.name) { document.querySelector('.pf-head h1').textContent = brand.name; document.title = brand.name + ' · Portfolio'; }
-    var data = { sites: SITES, diligence: DILIG };
+    var data = { sites: SITES, diligence: DILIG, more: !!NEXT, archived: byId('f-archived').checked };
     if (DGR) DGR.update(data);
-    else DGR = OmegaDiligence.mountRegister(box, { data: data, post: post, reload: function () { return load(true); }, openSite: openDrawer, msg: msg, canEdit: CANEDIT });
+    else DGR = OmegaDiligence.mountRegister(box, { data: data, post: post, reload: function () { return load(true); }, openSite: openDrawer, msg: msg, canEdit: CANEDIT,
+      loadMore: function () { return load(true, true); },
+      setArchived: function (v) { byId('f-archived').checked = !!v; return load(); } });
   }
   /* the next site to look at from the card: the register's order, passed sites left out */
   function nextSite(id) {

@@ -66,7 +66,11 @@ function make(deps) {
     var v = D.view(site, { config: cfg, now: deps.now() }), off = v.offtake, c = (site.diligence && site.diligence.control) || {}, chips = (v.gates.chips.value || {});
     var kw = v.power.availableKw, units = chips.units > 0 ? chips.units : null;
     if (!(kw > 0) && !units) return null;
-    var input = { chipset: chipKey(chips.chipset) || undefined, availableKw: kw > 0 ? kw : undefined, units: units || undefined,
+    /* no contract price yet: keep the ladder even where the caller asked it off — the at-reference figure (the register's IRR column) lives in it */
+    if (off.pricePerGpuHour == null) opts = null;
+    var u = cfg.unit || null;
+    var input = { chipset: chipKey(chips.chipset) || (u && u.chipset) || undefined, availableKw: kw > 0 ? kw : undefined, units: units || undefined,
+      unit: u ? { label: u.label, word: u.word, kw: u.kw, gpus: u.gpus, itKw: u.itKw != null ? u.itKw : undefined, racks: u.racks != null ? u.racks : undefined, rackCostUsd: u.rackCostUsd != null ? u.rackCostUsd : undefined, costUsd: u.costUsd } : undefined,
       contract: { termMonths: off.termYears != null ? Math.round(off.termYears * 12) : undefined, pricePerGpuHour: off.pricePerGpuHour != null ? off.pricePerGpuHour : undefined,
         takeOrPayPct: off.takeOrPayPct != null ? off.takeOrPayPct : undefined, partner: off.partner === false ? false : off.partner ? { name: off.partner.name, feePct: off.feePct != null ? off.feePct : undefined } : undefined },
       site: { route: c.route || undefined } };

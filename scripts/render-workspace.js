@@ -1983,6 +1983,14 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       d.shown && d.h1 === 'Solela Capital' && d.title === 'Solela Capital · Portfolio' && d.strip.join('|') === 'Brought in=2|Screened=0|Earmarked=0|LOI sent=0|Offtake=0|MSA=0|Confirmed=0|Passed=0' &&
       /^Solela Capital/.test(d.tally) && /0 sites/.test(d.tally) && d.band && d.loi && d.loi.text === 'Send LOI package to Lightsmith Energy' && d.loi.disabled && d.view === 'Open Solela Capital view' && d.head === 'Solela Capital pipeline · 2 of 2 sites' &&
       d.rows.length === 2 && d.rows.every(function (r) { return r.chips === 7 && r.stage === 'Earmark'; }) && mp.tones === 'op,op,op,op,op,op,op' && rv.tones === 'op,op,op,op,op,op,sc' && mp.sub === '250 kW free' && rv.sub === 'free power unknown · 3 pods' && rv.irr === '-2%' && /J\/K next, E earmark, P pass/.test(d.legend), d);
+    /* ONE list (Thomas, 2026-10-26: "two places for the sites... it should all be one for solela") */
+    var one = await p.evaluate(function () { return { dgOne: document.body.classList.contains('dg-one'), stats: getComputedStyle(document.getElementById('stats')).display, tbl: getComputedStyle(document.getElementById('tbl')).display, foot: getComputedStyle(document.querySelector('.pf-foot')).display }; });
+    ok(name + ': ONE list — with the diligence on, the classic stats, filters, bulk bar and table stand down and the pipeline IS the register', one.dgOne && one.stats === 'none' && one.tbl === 'none' && one.foot === 'none', one);
+    await p.fill('#dg [data-f="q"]', 'maple'); await wait(250);
+    var q1 = await p.evaluate(function () { return { rows: document.querySelectorAll('#dg .odg-rg[data-id]').length, focus: document.activeElement === document.querySelector('#dg [data-f="q"]') }; });
+    await p.fill('#dg [data-f="q"]', ''); await wait(250);
+    var q0 = await p.evaluate(function () { return document.querySelectorAll('#dg .odg-rg[data-id]').length; });
+    ok(name + ': the pipeline carries the search — typing filters the rows without losing the cursor, clearing brings them back', q1.rows === 1 && q1.focus && q0 === 2, { q1: q1, q0: q0 });
     /* the keys: J to the next row, E to earmark it; K back, P to pass it with a reason, typed on the page */
     var second = d.rows[1].id, first = d.rows[0].id;
     await p.mouse.click(5, 5); await p.keyboard.press('j'); await wait(100); await p.keyboard.press('e'); await wait(800);

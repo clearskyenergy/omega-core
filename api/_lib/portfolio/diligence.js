@@ -285,12 +285,27 @@ function readConfig(raw, problems) {
     else target = { label: cfgText(tg.label, 80) || 'Target deal', minUsd: lo, maxUsd: hi };
   }
   var term = off.termYears == null ? null : cfgNum(off.termYears, 0.5, 40), fee = off.feePct == null ? null : cfgNum(off.feePct, 0, 100), removal = raw.removalMonths == null ? null : cfgNum(raw.removalMonths, 0, 120);
+  /* the compute unit the deal deploys (the partner's hardware: Lightsmith's
+     1 MW container of GPU racks), every figure the workspace's own; absent
+     means the Omega-Core skid as before */
+  var un = raw.unit && typeof raw.unit === 'object' ? raw.unit : null, unit = null;
+  if (un) {
+    var ukw = cfgNum(un.kw, 1, 1000000), ugpus = cfgNum(un.gpus, 1, 1000000), ucost = cfgNum(un.costUsd, 1, 1e10);
+    var ulabel = cfgText(un.label, 80), uword = cfgText(un.word, 30) || 'unit', uchip = cfgKey(un.chipset);
+    var uit = un.itKw == null ? null : cfgNum(un.itKw, 1, 1000000), uracks = un.racks == null ? null : cfgNum(un.racks, 1, 1000), urack = un.rackCostUsd == null ? null : cfgNum(un.rackCostUsd, 1, 1e9);
+    var umods = Array.isArray(un.modularKw) ? un.modularKw.map(function (x) { return cfgNum(x, 1, 1000000); }).filter(function (x) { return x != null; }).slice(0, 10) : [];
+    if (ukw == null || ugpus == null || ucost == null || !ulabel) problems.push('unit needs label, kw, gpus and costUsd');
+    else if (un.racks != null && uracks == null) problems.push('unit.racks must be 1 to 1000');
+    else if (uracks != null && urack != null && Math.abs(uracks * urack - ucost) > 0.5) problems.push('unit.costUsd must equal racks \u00d7 rackCostUsd (' + uracks + ' \u00d7 ' + urack + ' \u2260 ' + ucost + ')');
+    else if (uit != null && uit > ukw) problems.push('unit.itKw cannot exceed unit.kw');
+    else unit = { label: ulabel, word: uword, chipset: uchip || null, kw: ukw, gpus: Math.floor(ugpus), itKw: uit, racks: uracks == null ? null : Math.floor(uracks), rackCostUsd: urack, costUsd: ucost, modularKw: umods, note: cfgText(un.note, 300) || null };
+  }
   if (off.termYears != null && term == null) problems.push('offtake.termYears must be 0.5 to 40');
   if (off.feePct != null && fee == null) problems.push('offtake.feePct must be 0 to 100');
   if (raw.removalMonths != null && removal == null) problems.push('removalMonths must be 0 to 120');
   return { intakeTypes: cfgEntries(raw.intakeTypes, 'intakeTypes', problems), hostDeals: cfgEntries(raw.hostDeals, 'hostDeals', problems),
     exclusions: cfgExclusions(raw.exclusions, problems), offtake: { partner: partner, termYears: term, feePct: fee, stated: cfgStated(off.stated) },
-    target: target, removalMonths: removal };
+    target: target, removalMonths: removal, unit: unit };
 }
 /* lenient: what the door reads (a bad entry is dropped and named) */
 function normalizeConfig(raw) { var p = [], c = readConfig(raw, p); c.problems = p; return c; }
@@ -918,15 +933,29 @@ function economicsFromCase(output, input, at) {
     irrPct: r ? nOf(r.projectIrrPct) : null, irrBasis: 'project IRR over the contract term', equityIrrPct: r ? nOf(r.equityIrrPct) : null,
     roiPct: r ? nOf(r.roiPct) : null, paybackMonths: r ? nOf(r.paybackMonths) : null, multiple: r ? nOf(r.projectMultiple) : null,
     irrWithoutFeePct: r ? nOf(r.irrWithoutFeePct) : null, revenuePerYear: r ? nOf(r.revenuePerYear) : null, partnerFeePerYear: r ? nOf(r.partnerFeePerYear) : null,
-    units: units, unitsLabel: 'Omega-Core skids', gpus: nOf(s.gpus), computeKw: nOf(s.itKw),
+    units: units, unitsLabel: s.unit && s.unit.word ? s.unit.word + 's' : 'Omega-Core skids', unit: s.unit || null, gpus: nOf(s.gpus), computeKw: nOf(s.itKw),
     chipset: o.chipset ? { key: o.chipset.key || null, name: o.chipset.name || null } : (inp.chipset ? { key: String(inp.chipset), name: null } : null),
     byChipset: Array.isArray(s.byChipset) ? s.byChipset.map(function (x) { return { key: x.key, name: x.name, units: nOf(x.units), gpus: nOf(x.gpus), gpusPerUnit: nOf(x.gpusPerUnit), itKwPerUnit: nOf(x.itKwPerUnit) }; }) : [],
     capexUsd: nOf(cap.total) != null ? nOf(cap.total) : (units != null && unitCost != null ? units * unitCost : null),
     ladder: Array.isArray(o.ladder) ? o.ladder.slice() : null, ladderBasis: o.ladderBasis || null, priceFor: o.priceFor || null, priceForPayback: o.priceForPayback || null,
+    irrAt: irrAtRef(o),
     notes: o.notes || null, disclaimer: o.disclaimer || null, partner: o.partner ? { name: o.partner.name || null, feePct: nOf(o.partner.feePct) } : null,
     inputs: { termMonths: nOf(k.termMonths), pricePerGpuHour: nOf(k.pricePerGpuHour), takeOrPayPct: nOf(k.takeOrPayPct), feePct: o.partner ? nOf(o.partner.feePct) : (k.partner ? nOf(k.partner.feePct) : null),
       route: (o.site && o.site.route) || (inp.site && inp.site.route) || null },
     at: at || null };
+}
+/* While no contract price is set, the case's figures at the chip's PUBLIC
+   reference price (the ladder's own centre: spot, else on-demand), marked
+   as such — never in place of the contract case's own IRR (Thomas,
+   2026-10-26: "show the IRR at spot until a price is set"). */
+function irrAtRef(o) {
+  var lb = o.ladderBasis, L = o.ladder;
+  if (o.priced || !lb || !Array.isArray(L) || !L.length || !lb.centreBasis || lb.centreBasis === 'contract') return null;
+  var best = L[0];
+  L.forEach(function (r) { if (Math.abs(r.price - lb.centre) < Math.abs(best.price - lb.centre)) best = r; });
+  if (best.projectIrrPct == null) return null;
+  return { pct: nOf(best.projectIrrPct), price: nOf(best.price), basis: lb.centreBasis, paybackMonths: nOf(best.paybackMonths),
+    words: 'at the chip’s public ' + lb.centreBasis + ' reference ($' + best.price + '/GPU-hour) — no contract price set' };
 }
 function economicsOf(site, kase) {
   site = site || {};
@@ -937,15 +966,15 @@ function economicsOf(site, kase) {
     return { source: 'compute-model', label: 'Compute model (screening)', irrPct: lm.irr == null ? null : round(lm.irr * 100, 2), irrBasis: 'after-tax IRR over ' + (lm.termYears || 10) + ' years',
       roiPct: lm.moic == null ? null : round((lm.moic - 1) * 100, 1), paybackMonths: lm.paybackYears == null ? null : Math.round(lm.paybackYears * 12), multiple: lm.moic == null ? null : lm.moic,
       units: lm.skid && lm.skid.units != null ? lm.skid.units : (lm.pods == null ? null : lm.pods), unitsLabel: lm.skid ? 'Omega-Core skids' : 'pods', gpus: lm.gpus == null ? null : lm.gpus,
-      computeKw: designKw, capexUsd: lm.totalProjectCost == null ? null : lm.totalProjectCost, at: lm.at || null, modelId: lm.modelId || null };
+      computeKw: designKw, capexUsd: lm.totalProjectCost == null ? null : lm.totalProjectCost, at: lm.at || null, modelId: lm.modelId || null, irrAt: null };
   }
   var lp = site.latestProforma;
   if (lp) {
     return { source: 'pod-proforma', label: 'Pod pro forma (screening)', irrPct: lp.projectIrrDefined && lp.projectIrrAnnual != null ? round(lp.projectIrrAnnual * 100, 2) : null, irrBasis: 'project IRR, 60 months, pre-tax, unlevered',
       roiPct: null, paybackMonths: lp.paybackMonth == null ? null : lp.paybackMonth, multiple: null, units: lp.pods == null ? null : lp.pods, unitsLabel: 'pods', gpus: null,
-      computeKw: lp.itKw != null ? lp.itKw : designKw, capexUsd: lp.investorCapital == null ? null : lp.investorCapital, at: lp.at || null, scenarioId: lp.scenarioId || null };
+      computeKw: lp.itKw != null ? lp.itKw : designKw, capexUsd: lp.investorCapital == null ? null : lp.investorCapital, at: lp.at || null, scenarioId: lp.scenarioId || null, irrAt: null };
   }
-  return { source: null, label: 'No economics on file', irrPct: null, irrBasis: null, roiPct: null, paybackMonths: null, multiple: null, units: null, unitsLabel: null, gpus: null, computeKw: designKw, capexUsd: null, at: null };
+  return { source: null, label: 'No economics on file', irrPct: null, irrBasis: null, roiPct: null, paybackMonths: null, multiple: null, units: null, unitsLabel: null, gpus: null, computeKw: designKw, capexUsd: null, at: null, irrAt: null };
 }
 /* The economics gate, never set by hand (2026-10-25, the approved mockup's
    colours): open with nothing on file; SCREENED on screening figures (the
@@ -961,7 +990,7 @@ function economicsGate(econ, d, ctx) {
   function as(state, note) { return extend(g, { short: GATE_SHORT.economics, state: state, stateLabel: STATE_LABEL[state], note: note }); }
   if (!econ.source) return as('open', 'No economics on file yet');
   if (econ.source !== 'contract-case') return as('screened', 'Screening figures from ' + ({ 'compute-model': 'the compute model', 'pod-proforma': 'the pod pro forma' }[econ.source] || 'a screening model') + '; the contract case on the offtake’s own terms takes it further');
-  if (!econ.priced) return as('screened', econ.ladder && econ.ladder.length ? 'No contract price yet: the price ladder shows the range' : 'No contract price yet');
+  if (!econ.priced) return as('screened', econ.irrAt ? 'No contract price yet: the figures read ' + econ.irrAt.words.replace(' — no contract price set', '') : econ.ladder && econ.ladder.length ? 'No contract price yet: the price ladder shows the range' : 'No contract price yet');
   var off = offtakeOf(d, ctx.config), inp = econ.inputs || {}, onTerms = [];
   if (off.pricePerGpuHour == null || inp.pricePerGpuHour == null || Math.abs(inp.pricePerGpuHour - off.pricePerGpuHour) > 1e-6) onTerms.push('the contract price');
   if (off.termYears != null && (inp.termMonths == null || Math.round(off.termYears * 12) !== Math.round(inp.termMonths))) onTerms.push('the contract term');
@@ -1202,7 +1231,7 @@ function linesOf(v, d, site, cfg, files) {
   mine('offtake', o, osrc);
   out.offtake = { sentence: o.join(' · '), sources: osrc.join(' · ') || null, action: v.stage === 'pursue' && (off.loiStatus === 'none' || off.loiStatus === 'drafted') && off.partner ? { key: 'loi-package', label: 'Send LOI package' + (partner ? ' to ' + partner : '') } : null };
   /* economics: its block, one line */
-  out.economics = { sentence: econ.irrPct != null ? fmt(econ.irrPct) + '% ' + (econ.irrBasis || 'IRR') + (econ.paybackMonths != null ? ' · payback ' + econ.paybackMonths + ' months' : '') : (econ.source === 'contract-case' && !econ.priced ? 'No contract price yet: the ladder shows the range' : 'No economics on file'),
+  out.economics = { sentence: econ.irrPct != null ? fmt(econ.irrPct) + '% ' + (econ.irrBasis || 'IRR') + (econ.paybackMonths != null ? ' · payback ' + econ.paybackMonths + ' months' : '') : econ.irrAt ? fmt(econ.irrAt.pct) + '% project IRR ' + econ.irrAt.words : (econ.source === 'contract-case' && !econ.priced ? 'No contract price yet: the ladder shows the range' : 'No economics on file'),
     sources: econ.label || null, action: null };
   return out;
 }
@@ -1211,7 +1240,8 @@ function sizingOf(v, d) {
   var econ = v.economics, chosen = (gateOf(d, 'chips').value.chipset || (econ.chipset && (econ.chipset.name || econ.chipset.key)) || '').toLowerCase();
   var rows = (econ.byChipset || []).map(function (x) { return { key: x.key, name: x.name, units: x.units, gpus: x.gpus, chosen: !!chosen && (String(x.key || '').toLowerCase() === chosen || String(x.name || '').toLowerCase() === chosen || (econ.chipset && x.key === econ.chipset.key)) }; });
   var free = v.power.availableKw;
-  return { availableKw: free, units: econ.units, words: free != null && econ.units != null ? 'Size from power · ' + fmt(free) + ' kW is ' + econ.units + ' ' + (econ.unitsLabel === 'Omega-Core skids' ? 'skid' + (econ.units === 1 ? '' : 's') : 'unit' + (econ.units === 1 ? '' : 's')) : null, byChipset: rows };
+  var uw = econ.unitsLabel === 'Omega-Core skids' ? 'skid' : String(econ.unitsLabel || 'units').replace(/s$/, '');
+  return { availableKw: free, units: econ.units, words: free != null && econ.units != null ? 'Size from power · ' + fmt(free) + ' kW is ' + econ.units + ' ' + uw + (econ.units === 1 ? '' : 's') : null, byChipset: rows };
 }
 /* One site, everything the Diligence tab draws. ctx: { config, files?,
    agreements?, kase?, now } */
@@ -1274,7 +1304,8 @@ function row(site, ctx) {
     carrier: fib.carrier || null, carriers: fib.carriers || [], chipset: chips.chipset || null, route: v.control.route || null, termOk: v.control.term.ok, termShortMonths: v.control.term.shortMonths,
     loiStatus: v.offtake.loiStatus, offtaker: v.offtake.offtaker ? v.offtake.offtaker.name : null, offtakeTermYears: v.offtake.termYears,
     clientId: ctx && ctx.client ? ctx.client.id || null : null, clientName: ctx && ctx.client && ctx.client.record ? ctx.client.record.name || null : null,
-    irrPct: v.economics.irrPct, roiPct: v.economics.roiPct, economicsSource: v.economics.source, units: v.economics.units, unitsLabel: v.economics.unitsLabel,
+    irrPct: v.economics.irrPct, irrAtPct: v.economics.irrAt ? v.economics.irrAt.pct : null, irrAtBasis: v.economics.irrAt ? v.economics.irrAt.basis : null, irrAtPrice: v.economics.irrAt ? v.economics.irrAt.price : null,
+    roiPct: v.economics.roiPct, economicsSource: v.economics.source, units: v.economics.units, unitsLabel: v.economics.unitsLabel,
     computeKw: v.economics.computeKw, capexUsd: v.economics.capexUsd, flags: v.flags.map(function (f) { return f.code; }), next: v.next };
 }
 function pipeline(rows) {

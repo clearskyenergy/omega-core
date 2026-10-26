@@ -2,17 +2,44 @@
   "_note": "Solela Capital's own lists for the compute-site due diligence (api/_lib/portfolio/diligence.js). scripts/enable-portfolio-diligence.js is the only reader: it validates this file and writes it to omega_orgs/solelacapital.com/billing/current.portfolioDiligence, never over a key the workspace already holds. Kept off the site by .vercelignore (it carries a partner's commercial terms), as billing.json is. Keys beginning with _ are notes and are never written.",
   "_sources": "Intake types from solelacapital.com (overbuilt commercial service, operating and dark EV charging sites, stranded interconnections, half-built projects); the offtake partner's terms as Lightsmith Energy states them, UNVERIFIED (2026-10-25).",
   "intakeTypes": [
-    { "key": "overbuilt-service", "label": "Overbuilt commercial service" },
-    { "key": "operating-charging", "label": "Operating charging site" },
-    { "key": "dark-charging", "label": "Dark charging site" },
-    { "key": "stranded-interconnection", "label": "Stranded interconnection" },
-    { "key": "half-built", "label": "Half-built project" },
-    { "key": "portfolio-estate", "label": "Portfolio / estate" }
+    {
+      "key": "overbuilt-service",
+      "label": "Overbuilt commercial service"
+    },
+    {
+      "key": "operating-charging",
+      "label": "Operating charging site"
+    },
+    {
+      "key": "dark-charging",
+      "label": "Dark charging site"
+    },
+    {
+      "key": "stranded-interconnection",
+      "label": "Stranded interconnection"
+    },
+    {
+      "key": "half-built",
+      "label": "Half-built project"
+    },
+    {
+      "key": "portfolio-estate",
+      "label": "Portfolio / estate"
+    }
   ],
   "hostDeals": [
-    { "key": "ground-lease", "label": "Ground lease" },
-    { "key": "revenue-share", "label": "Revenue share" },
-    { "key": "hybrid", "label": "Hybrid" }
+    {
+      "key": "ground-lease",
+      "label": "Ground lease"
+    },
+    {
+      "key": "revenue-share",
+      "label": "Revenue share"
+    },
+    {
+      "key": "hybrid",
+      "label": "Hybrid"
+    }
   ],
   "exclusions": [
     {
@@ -20,10 +47,40 @@
       "label": "Residential charging",
       "reason": "Solela does not take residential charging sites",
       "match": [
-        { "field": "chargers.use", "in": ["residential"] },
-        { "field": "hostType", "in": ["multifamily"] },
-        { "field": "locationType", "in": ["residential", "multifamily", "multi-family", "apartment", "apartments", "condominium", "condo", "single family", "single-family", "hoa"] },
-        { "field": "tags", "in": ["residential", "multifamily"] }
+        {
+          "field": "chargers.use",
+          "in": [
+            "residential"
+          ]
+        },
+        {
+          "field": "hostType",
+          "in": [
+            "multifamily"
+          ]
+        },
+        {
+          "field": "locationType",
+          "in": [
+            "residential",
+            "multifamily",
+            "multi-family",
+            "apartment",
+            "apartments",
+            "condominium",
+            "condo",
+            "single family",
+            "single-family",
+            "hoa"
+          ]
+        },
+        {
+          "field": "tags",
+          "in": [
+            "residential",
+            "multifamily"
+          ]
+        }
       ]
     },
     {
@@ -31,28 +88,76 @@
       "label": "Amenity-only charging",
       "reason": "Solela does not take amenity-only charging sites",
       "match": [
-        { "field": "chargers.use", "in": ["amenity"] },
-        { "field": "tags", "in": ["amenity", "amenity-only"] }
+        {
+          "field": "chargers.use",
+          "in": [
+            "amenity"
+          ]
+        },
+        {
+          "field": "tags",
+          "in": [
+            "amenity",
+            "amenity-only"
+          ]
+        }
       ]
     }
   ],
   "offtake": {
-    "partner": { "key": "lightsmith", "name": "Lightsmith Energy" },
+    "partner": {
+      "key": "lightsmith",
+      "name": "Lightsmith Energy"
+    },
     "termYears": 6,
     "feePct": 10,
     "stated": {
       "by": "Lightsmith Energy",
       "verified": false,
       "termYears": 6,
-      "returnPct": [25, 55],
+      "returnPct": [
+        25,
+        55
+      ],
       "paybackYears": 2,
       "cardLeadWeeks": 36,
-      "order": ["sites", "LOI", "offtake", "MSA", "site survey", "confirmed"],
+      "order": [
+        "sites",
+        "LOI",
+        "offtake",
+        "MSA",
+        "site survey",
+        "confirmed"
+      ],
       "note": "As Lightsmith states them; not verified"
     }
   },
-  "target": { "label": "Lightsmith's target deal", "minUsd": 25000000, "maxUsd": 35000000 },
+  "target": {
+    "label": "Lightsmith's target deal",
+    "minUsd": 25000000,
+    "maxUsd": 35000000
+  },
   "removalMonths": 6,
   "_whiteLabel": "What the platform is called in this workspace (2026-10-25, Thomas: \"this is only for Solela, so you can market that it's Solela Capital\"). Staff-written; the script adds a key only where omega_orgs/{org}.whiteLabel has none and mirrors tenant_public through api/_lib/whitelabel.js publicRecord(). No `enabled`: that opens the public storefront, a separate sale. No `attribution`: absent is 'powered-by', and removing our name is a decision somebody writes down.",
-  "whiteLabel": { "platformName": "Solela Capital", "shortName": "Solela" }
+  "whiteLabel": {
+    "platformName": "Solela Capital",
+    "shortName": "Solela"
+  },
+  "unit": {
+    "label": "1 MW container",
+    "word": "container",
+    "chipset": "gb200",
+    "kw": 1000,
+    "itKw": 819,
+    "gpus": 504,
+    "racks": 7,
+    "rackCostUsd": 5000000,
+    "costUsd": 35000000,
+    "modularKw": [
+      35,
+      350,
+      1000
+    ],
+    "note": "Max's side's compute comes in 35 kW, 350 kW and 1 MW modulars; the 1 MW container is 7 GPU racks at $5M a rack (the compute-lease notes, 2026-10-25). Sizing and pricing run on the 1 MW container; the smaller modulars are listed, not packed."
+  }
 }

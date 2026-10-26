@@ -349,6 +349,23 @@ the good ones (E) → LOI package to the offtake partner → MSA → survey →
 confirmed**, with the client's own contract ladder visible beside it the
 whole way.
 
+## The compute unit — the deal's own hardware (2026-10-26)
+
+Thomas's compute-lease notes: compute comes in **35 kW, 350 kW and 1 MW
+modulars**, and the 1 MW container is **7 GPU racks at $5M a rack** ($35M).
+`portfolioDiligence.unit` (a top-level config key, so the enable script
+adds it to a stored record on a re-run) carries the deal's unit — label,
+word, chipset, kW at the meter, IT kW, GPUs, racks, rack cost, cost, and
+the modular list. The engine (`compute-contract.js`) takes it as
+`input.unit`: sizing and the capital run on the unit's own figures, the
+cross-chipset shelf stands down (one row, the unit as given), and every
+note says the unit's words. A config without a unit keeps the Omega-Core
+skid exactly as before. `unit.costUsd` must equal racks × rackCostUsd when
+both are given; nothing is invented — the engine's chipset-scaled estimate
+for 504 GB200s ($26.5–37.1M) is printed beside the recorded $35M as the
+market check. The smaller modulars are **listed, not packed**: sizing runs
+on the one configured unit (the honest list).
+
 ## The Grid Atlas screen (`grid-screen.js`)
 
 `screen.js` beside it is the customer portfolio's BESS screening
@@ -524,6 +541,24 @@ and edit capability are the door's as for every other action.
   pass in `check:workspace` (the register's strip, tally, keys, screen and
   side panel; the site record's tab; a press is one post; a 390 px phone).
 
+## A sample site (`scripts/seed-sample-site.js`)
+
+The sample is the notes' **1 MW example**: 1,150 kW free carries one 1 MW
+container (7 racks, $35M, 504 GB200s), and the solved contract price —
+$4.71/GPU-hour for ≈30% over the 6-year term — is printed beside
+CoreWeave's public GB200 on-demand rate (44.9% of it) and the notes' own
+anchors, tensions included. `--again` replaces the sample (it is one).
+
+One clearly-marked sample site ("Sample: …", tag `sample`) showing the
+journey mid-flight with a REAL engine IRR: the script solves the contract
+price on the engine's own ladder until it answers the asked figure (~30%)
+on the workspace's own offtake terms, composes the diligence through the
+library's change() rules, and writes once with an audit row. It is left at
+Screened — never Earmarked — so it cannot enter the tally or an LOI
+package by itself; an existing site is never overwritten; archive it from
+the register when done. Dry run by default; `--apply --confirm-org`
+writes. Seeded for solelacapital.com on 2026-10-26.
+
 ## Switching it on
 
 1. Create the workspace in the master console (**New tenant**). Done
@@ -555,12 +590,16 @@ and edit capability are the door's as for every other action.
 ## What is not built (honest list)
 
 **Data not on hand yet**
-- **No IRR before a contract price.** The register's IRR is the contract
-  case at the offtake's own price; until one is set it reads — (the card's
-  slider shows the range about the chip's public spot reference). A site's
-  compute-model IRR is shown only where the case cannot run. Whether the
-  column should show the IRR at the spot reference, marked as such, is
-  Thomas's call.
+- **Before a contract price, the IRR reads at the chip's public reference,
+  marked** (Thomas, 2026-10-26: "show the IRR at spot until a price is
+  set"): the register's column shows the case's figure at the ladder's own
+  centre — the chip's public spot price, else its on-demand price — as
+  "30% at spot" with the price in the title, and the card's economics line
+  and gate note say the same (`economics.irrAt`, `irrAtRef()`). The moment
+  a price is set, the contract case's own IRR replaces it and the mark
+  goes. A chip with no public reference still reads —, and a screening
+  figure (compute model, pod case) is never dressed as a reference. A
+  site's compute-model IRR is shown only where the case cannot run.
 - **Purchase terms, consent to assign and the end-of-term equipment** live
   on `diligence.control`; the agreement records carry the paper
   (`assets.js` now knows `deed`, `purchase_agreement`, `assignment` and

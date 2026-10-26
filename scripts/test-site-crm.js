@@ -1057,7 +1057,8 @@ function seed() {
   function diligenceOn() {
     db.seed(O + '/billing/current', { tier: 'enterprise', toolOverrides: { 'portfolio-diligence': true }, portfolioDiligence: require('../api/_lib/portfolio/diligence').validateConfig(DSEED) });
     db.seed(O, { name: 'EVCS', status: 'active', whiteLabel: { platformName: 'EVCS Sites', shortName: 'EVCS' }, domains: ['evcs.clearskyomega.com'] });
-    Object.assign(stored(SITE), { serviceCapacityKw: 800, existingPeakKw: 350, address: '1 Hub Rd', zip: '90012' });
+    /* container-scale power: the Solela seed sizes in the 1 MW container, so 1,500 kW service less the 350 kW peak carries one */
+    Object.assign(stored(SITE), { serviceCapacityKw: 1500, existingPeakKw: 350, address: '1 Hub Rd', zip: '90012' });
   }
   await test('switched off (the default): every diligence action is 403 and the GETs carry no diligence, so the pages draw nothing new', async function () {
     await rejects(call('POST', { site: SITE, action: 'diligence-decide', choice: 'pursue' }, PM), 403, /not switched on/);
@@ -1076,9 +1077,14 @@ function seed() {
     var reg = await call('GET', {}, PM);
     assert.equal(reg.diligence.brand.name, 'EVCS Sites'); assert.equal(reg.diligence.tally.sites, 1); assert.equal(reg.diligence.schema.stageLabels.pursue, 'Earmarked');
     var row = reg.sites.filter(function (s) { return s.id === SITE; })[0].diligence;
-    assert.equal(row.stage, 'pursue'); assert.equal(row.freeKw, 450); assert.equal(row.route, 'lease');
+    assert.equal(row.stage, 'pursue'); assert.equal(row.freeKw, 1150); assert.equal(row.route, 'lease');
+    assert.equal(row.units, 1); assert.equal(row.unitsLabel, 'containers', 'sized in the config\u2019s own unit');
+    assert.equal(row.capexUsd, 35000000, 'the container\u2019s cost, 7 racks at $5M');
+    /* the real engine, no contract price set: the column's figure is the IRR at the chip's public spot reference, marked, never the case's own */
+    /* GB200 has no public spot rate, so the reference is CoreWeave's on-demand and the column says so */
+    assert.equal(row.irrPct, null); assert.ok(isFinite(row.irrAtPct) && row.irrAtPct > 0, 'IRR at the reference: ' + row.irrAtPct); assert.equal(row.irrAtBasis, 'on-demand'); assert.ok(row.irrAtPrice > 0);
     var one = await call('GET', { site: SITE }, VIEWER);
-    assert.equal(one.diligence.view.stage, 'pursue'); assert.ok(one.diligence.view.lines.power.sentence.indexOf('so 450 kW free') > 0, one.diligence.view.lines.power.sentence); assert.equal(one.diligence.view.economics.source, 'contract-case', 'the contract case on main runs on the site’s power');
+    assert.equal(one.diligence.view.stage, 'pursue'); assert.ok(one.diligence.view.lines.power.sentence.indexOf('so 1,150 kW free') > 0, one.diligence.view.lines.power.sentence); assert.equal(one.diligence.view.economics.source, 'contract-case', 'the contract case on main runs on the site’s power');
   });
   await test('confirmed needs a document on the site’s own Files: refused without one, confirmed with the one uploaded through the site record', async function () {
     diligenceOn();

@@ -1417,8 +1417,15 @@ peak, never the nameplate. It lives on `sites/{id}.diligence`, written only
 through `api/site-crm.js` (`portfolio/diligence-door.js`, each change
 audited `sitecrm-diligence-*`): any editor acts, a member included; a
 viewer reads. Economics is never typed: the door runs `compute-contract.js
-contractCase` on the offtake's own terms, and the card's price slider is
-its ladder. `grid-screen.js` screens sites through grid-atlas,
+contractCase` on the offtake's own terms, the card's price slider is its
+ladder, and until a contract price is set the register's IRR is the case's
+figure at the chip's public reference, marked "at spot" (`irrAt`). The
+deal's own hardware is `portfolioDiligence.unit` (Lightsmith's 1 MW
+container, 7 GPU racks at $5M: the compute-lease notes), which the engine
+takes as `input.unit` — sizing and capital on the unit's own figures, the
+skid untouched without one. With the switch on the pipeline IS the one
+register list (`body.dg-one`: the classic stats, filters, bulk bar and
+table stand down; search, archived and load-more fold into the pipeline). `grid-screen.js` screens sites through grid-atlas,
 network-proximity and hosting-capacity (gates move to screened, never
 confirmed; carrier names need `FCC_BB_KEY`). `loi-package.js` sends ONE
 package to the offtake partner (Lightsmith in `partners.js`,
