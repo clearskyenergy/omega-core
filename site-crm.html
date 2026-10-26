@@ -111,6 +111,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     <button class="tab" data-t="proforma">Pro forma</button>
     <button class="tab" data-t="power">Power &amp; bills</button>
     <button class="tab" data-t="deck">Investor deck &amp; capital</button>
+    <button class="tab" data-t="diligence" id="tab-diligence" style="display:none">Diligence</button>
   </div>
   <div class="tabpane active" id="pane-overview"></div>
   <div class="tabpane" id="pane-contacts"></div>
@@ -119,6 +120,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   <div class="tabpane" id="pane-proforma"></div>
   <div class="tabpane" id="pane-power"></div>
   <div class="tabpane" id="pane-deck"></div>
+  <!-- the compute-site diligence (omega-portfolio-diligence.js), only where the workspace's switch is on -->
+  <div class="tabpane" id="pane-diligence"></div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -135,6 +138,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
 <script src="/omega-newproject.js"></script>
 <!-- the investor deck is the BESS Pro Forma's own (proforma-logic.js); every figure on it is the finance engine's -->
 <script src="/proforma-logic.js"></script>
+<script src="/omega-portfolio-diligence.js"></script>
 <script>
 (function () {
   'use strict';
@@ -193,7 +197,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function renderHead() {
     var s = DATA.site;
     document.getElementById('crumb-site').textContent = s.name || 'Site';
-    document.title = (s.name || 'Site') + ' · ClearSky-OMEGA';
+    /* the workspace's own name where the diligence carries it (its white label, else its record), else the platform's */
+    document.title = (s.name || 'Site') + ' · ' + (DATA.diligence && DATA.diligence.brand && DATA.diligence.brand.name ? DATA.diligence.brand.name : 'ClearSky-OMEGA');
     var meter = s.meterOwned === true ? '<span class="pill pill-ok">Meter owned</span>'
       : s.meterOwned === false ? '<span class="pill pill-no">No meter</span>'
       : '<span class="pill pill-unk">Meter: needs verification</span>';
@@ -1016,15 +1021,30 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (t === 'proforma') renderProforma();
     if (t === 'power') renderPower();
     if (t === 'deck') renderDeck();
+    if (t === 'diligence') renderDiligence();
+  }
+  /* the site's diligence card: the answer's own view, drawn by the shared
+     module; the tab exists only when the answer carries it. Drawn once: a
+     reload hands the card the new answer, so an open form and its last
+     word stay and its listeners are never added twice */
+  var DGC = null;
+  function renderDiligence() {
+    var pane = document.getElementById('pane-diligence');
+    if (!DATA || !DATA.diligence || !window.OmegaDiligence) { if (DGC) { DGC.destroy(); DGC = null; } pane.innerHTML = ''; return; }
+    if (DGC) { DGC.update(DATA.diligence, DATA.site, DATA.files || []); return; }
+    DGC = OmegaDiligence.mountCard(pane, { site: DATA.site, diligence: DATA.diligence, files: DATA.files || [], canEdit: CANEDIT, msg: function (t, ok) { msg(esc(t), ok); },
+      post: function (action, extra) { return api('/api/site-crm', { method: 'POST', json: Object.assign({ org: ORG, action: action }, extra || {}) }); },
+      reload: function () { return load(true); }, next: null });
   }
   function load(keepTab) {
     msg('');
     api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(SITE)).then(function (j) {
       DATA = j; CANEDIT = !!j.canEdit; CANARCHIVE = !!j.canArchive;
+      document.getElementById('tab-diligence').style.display = j.diligence ? '' : 'none';
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
       renderHead();
       if (j.autoModel && j.autoModel.latestModel) { var am = j.autoModel.latestModel; msg('The compute model ran by itself on the Site Map design: ' + (am.title || am.pods + ' unit(s)') + ', after-tax IRR ' + irrPct(am.irr) + ', total project cost ' + money(am.totalProjectCost) + '.', true); }
-      showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : window.location.hash === '#power' ? 'power' : 'overview'));
+      showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : window.location.hash === '#power' ? 'power' : window.location.hash === '#diligence' && j.diligence ? 'diligence' : 'overview'));
     }).catch(function (e) {
       document.getElementById('site-head').innerHTML = '<div class="err">' + esc(e.message) + '</div>';
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {}

@@ -223,15 +223,28 @@ function make(deps) {
   }
   /* the register's GET: a row a site of the page; the strip and the tally
      over the WHOLE register (the list pages by 200), archived sites left
-     out; null where the switch is off */
+     out; null where the switch is off. The contract case (about 10 ms a
+     site) runs only where a figure needs it: each row on the page, and an
+     earmarked site off it, whose units and capex the tally sums; the strip
+     needs stages only */
   async function registerJoin(c, docs) {
     var billing = await billingOf(c.root);
     if (!D.enabled(billing)) return null;
     var cfg = D.configOf(billing), orgDoc = await c.root.get(), rows = {}, cache = {};
-    function rowOf(id, data) { if (!cache[id]) { var site = BR.normalize(id, data || {}); cache[id] = { row: D.row(site, { config: cfg, now: deps.now(), kase: caseFor(site, cfg, { ladder: false }) }), archived: site.lifecycleStatus === 'archived' }; } return cache[id]; }
-    docs.forEach(function (d) { rows[d.id] = rowOf(d.id, typeof d.data === 'function' ? d.data() : d).row; });
+    function rowOf(id, data, onPage) {
+      var hit = cache[id];
+      if (hit && (hit.cased || !onPage)) return hit;
+      var site = BR.normalize(id, data || {}), r = D.row(site, { config: cfg, now: deps.now() }), cased = false;
+      if (onPage || (r.stage !== 'passed' && r.decision && r.decision.choice === 'pursue')) {
+        cased = true; var kase = caseFor(site, cfg, { ladder: false });
+        if (kase) r = D.row(site, { config: cfg, now: deps.now(), kase: kase });
+      }
+      cache[id] = { row: r, cased: cased, archived: site.lifecycleStatus === 'archived' };
+      return cache[id];
+    }
+    docs.forEach(function (d) { rows[d.id] = rowOf(d.id, typeof d.data === 'function' ? d.data() : d, true).row; });
     var all = await c.root.collection('sites').limit(SITE_SCAN + 1).get(), list = [];
-    all.docs.slice(0, SITE_SCAN).forEach(function (d) { var r = rowOf(d.id, d.data()); if (!r.archived) list.push(r.row); });
+    all.docs.slice(0, SITE_SCAN).forEach(function (d) { var r = rowOf(d.id, d.data(), false); if (!r.archived) list.push(r.row); });
     return { rows: rows, pipeline: D.pipeline(list), tally: D.tally(list, cfg), counted: list.length, limited: all.docs.length > SITE_SCAN,
       schema: D.schema(cfg), brand: D.brandOf(orgDoc.exists ? orgDoc.data() : null, c.org) };
   }

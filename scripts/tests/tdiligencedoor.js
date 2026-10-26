@@ -112,6 +112,13 @@ test('Q05 the register: a row a site, the pipeline strip and the tally under the
   assert.equal(j.tally.sites, 1); assert.equal(j.tally.target.minUsd, 25000000); assert.equal(j.brand.name, 'Solela Capital');
   assert.ok(w.calls.cases.every(function (c) { return !c.opts || c.opts.ladder === false || c.opts.ladder === undefined; }));
   assert.ok(w.calls.cases.some(function (c) { return c.opts && c.opts.ladder === false; }), 'the register asks for no ladder');
+  /* the case runs only where a figure needs it: the page's rows, and an earmarked site off the page for the tally; never a site that is neither */
+  w.db.seed(O + '/sites/s3', { name: 'Third site', serviceCapacityKw: 2000, existingPeakKw: 500 });
+  var before = w.calls.cases.length, j2 = await w.door.registerJoin(w.ctx({}), [{ id: 's2', data: function () { return w.site('s2'); } }]);
+  var sized = w.calls.cases.slice(before).map(function (c) { return c.input.availableKw; }).sort(function (x, y) { return x - y; });
+  assert.deepEqual(sized, [375, 450], 's2 on the page (375 kW free) and the earmarked s1 (450 kW) are cased; s3 (1,500 kW), neither, is not');
+  assert.equal(j2.tally.sites, 1); assert.equal(j2.tally.capexUsd, 764000 * 6, 'the earmarked site off the page still carries its capex into the tally'); assert.equal(j2.tally.units, 6);
+  var m = {}; j2.pipeline.forEach(function (x) { m[x.stage] = x.count; }); assert.equal(m['brought-in'], 2, 'the strip counts every site, cased or not');
 });
 
 test('Q06 the Grid Atlas screen: a job a phase at a time; the screen lands and power reads screened; a fresh screen is not run again; the FCC count when the key is set', async function () {

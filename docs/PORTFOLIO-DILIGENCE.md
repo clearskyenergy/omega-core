@@ -14,24 +14,30 @@ This adds a due-diligence workflow to Portfolio & Assets so that one person
 can move fast through incoming sites, check each one and mark the ones to
 take under control. It is **switched on for one workspace**. Every other
 workspace keeps today's portfolio, unchanged. Thomas approved the layout on
-2026-10-25 (the mockup in *What the pages will draw*).
+2026-10-25 (the mockup in *What the pages draw*).
 
 | File | What it is |
 |---|---|
 | `api/_lib/portfolio/diligence.js` | the rule: pure, ES5, no Firestore, no clock |
 | `api/_lib/portfolio/grid-screen.js` | the Grid Atlas screen (see below) |
 | `api/_lib/portfolio/loi-package.js` | the LOI package (see below) |
+| `api/_lib/portfolio/diligence-door.js` | the door's diligence actions and reads, mounted by `api/site-crm.js` |
+| `omega-portfolio-diligence.js` | the pages' one drawing of it (ES5), on `portfolio.html` and `site-crm.html` |
+| `scripts/enable-portfolio-diligence.js` | the staff switch, a dry run by default |
 
 `api/site-crm.js` stays the one door that writes the record. The suites
-`tdiligence.js` (22 cases), `tgridscreen.js` (8) and `tloipackage.js` (6) run
-in `npm test` through `npm run test:portfolio`.
+`tdiligence.js` (23 cases), `tgridscreen.js` (8), `tloipackage.js` (6) and
+`tdiligencedoor.js` (8, the door on the Firestore double) run in `npm test`
+through `npm run test:portfolio`; `scripts/test-site-crm.js` holds the door
+end to end, and `npm run check:workspace` draws both pages with the switch
+off and on.
 
-**Where this stands (2026-10-25).** Built: the three libraries, Lightsmith in
-`api/_lib/partners.js`, the tests, the enable script and this note. **Not
-wired yet:** the door actions, the pages and their render check. They touch
-the same files as the open "portfolio site-record data bugs" fix
-(clearskyenergy/omega-core#382), so they land after it. The contract case is
-open as clearskyenergy/omega-core#381.
+**Where this stands (2026-10-25).** Built and wired: the libraries, the door
+actions and reads, both pages, Lightsmith in `api/_lib/partners.js`, the
+four new agreement types in `assets.js`, the contract case
+(`api/_lib/compute-contract.js`, merged in clearskyenergy/omega-core#381),
+the enable script, the tests and the render pass. Nothing is on until staff
+run the enable script for `solelacapital.com` after the deploy.
 
 ## The switch, and who may act
 
@@ -281,8 +287,12 @@ So the page does no arithmetic.
 | working | the contract case on the offtake's own price, term and take-or-pay, before the offtake and control are confirmed |
 | confirmed | the contract case on the confirmed offtake and control |
 
-Until the case is wired, the gate shows the site's `latestModel`, else its
-`latestProforma`.
+The door runs the case on what the site's diligence holds (`caseFor`: the
+power for compute, the chips chosen, the offtake's price, term, take-or-pay
+and partner, the control route's rent, share or price). Where it cannot run
+(no power figure and no units chosen: a case sized on nothing would be a
+false result), the gate shows the site's `latestModel`, else its
+`latestProforma`, as screening figures.
 
 ### The site survey
 
@@ -364,21 +374,27 @@ LOI as sent and moves each site to LOI sent by the diligence's own rules,
 and returns the `partners.<key>` record. Nothing moves if nothing was
 mailed. There are at most 100 sites a package and 5 packages a day.
 
-## What the pages will draw (the approved mockup)
+## What the pages draw (the approved mockup)
 
-The rows in the mockup are samples. The pages show real data only. The
-pages draw this only when the server's answer says diligence is on.
+The rows in the mockup were samples. The pages show real data only, and
+draw this only when the server's answer says diligence is on; otherwise the
+register reads "Portfolio & Assets" and the site record has no Diligence
+tab, exactly as before.
 
 - **Stage strip:** a count for each of Brought in, Screened, Earmarked, LOI
   sent, Offtake, MSA and Confirmed (`D.pipeline`).
 - **Tally card**, under the workspace's own name (`D.tally`):
   - the earmarked sites, MW, skids and capex;
   - a bar against the target band from config;
-  - **Send LOI package to** *partner*;
+  - **Send LOI package to** *partner*, confirmed on the page (never a
+    browser popup);
   - **Open** *workspace* **view** (the earmarked sites only).
 
-  Each sum says how many sites it covers.
+  A figure no earmarked site has reads as missing ("not sized", "capex not
+  modelled"), never as zero; one that some sites lack says on how many it
+  rests.
 - **Pipeline table:**
+  - the header names the gates by their short names, one over each chip;
   - the site with "N kW free · N skids";
   - the seven chips in their colours;
   - the IRR (contract case, else the screening figure);
@@ -395,16 +411,29 @@ pages draw this only when the server's answer says diligence is on.
   - the economics block: the contract-price slider over the server's
     `ladder`, showing project IRR, payback, cash multiple and ROI over the
     term, the band sentence, and capex, revenue a year, partner fee a year
-    and IRR without the fee.
+    and IRR without the fee. A drag redraws only the figures, and **Use $X
+    as the LOI price** writes it to the offtake;
+  - the forms: site profile (intake type, host deal), chargers (with the
+    measured peak and who measured it), site control by route, offtake and
+    site survey.
+
+  A gate a person set by hand says so and names their source ("Screened on
+  FCC National Broadband Map, carriers not named"), and their note ends its
+  sentence. The card lays itself out by its own width, so in the side panel
+  each sentence has the row's whole width on any screen.
 
 `D.schema(config)` carries the vocabulary, so no page keeps its own copy.
+`omega-portfolio-diligence.js` decides nothing: every word and figure is
+the answer's. A second mount on the same element replaces the first (its
+listeners go with it), and the site record keeps one card and hands it each
+reload's answer, so a press is always one post.
 
-**Land first** what Thomas will use first (the main session's order): the
-intake type, the chargers, the four control routes, the seven gates, and
-Earmark/Pass, in the register and on the site record. Then, in the same PR:
-the stage strip, the tally, the screen, the LOI package and the keys.
+## The door
 
-## The door (planned)
+`api/_lib/portfolio/diligence-door.js` (`make(deps)`; `live()` binds the
+real handlers, mail and the contract case). `api/site-crm.js` routes
+`diligence-*` to it after its own access check, so the caller's workspace
+and edit capability are the door's as for every other action.
 
 - **Actions**: `POST /api/site-crm { org, site, action:
   'diligence-<decide|stage|gate|control|offtake|chargers|profile|survey>', … }`.
@@ -431,13 +460,19 @@ the stage strip, the tally, the screen, the LOI package and the keys.
   The one-site `send-to-partner` refuses a partner with `loiPackage`.
 - **A gate's next action**: logs the task (the site CRM's `log`, type
   task, on Today) and applies the gate move.
-- **One site**: `GET ?site=` adds `diligence: D.view(…)` with the Files,
-  agreements and contract case, plus `schema`.
-- **The register list** adds a row per site (`D.row`), plus `pipeline` and
-  `tally`.
-- **Tests** in `scripts/test-site-crm.js`: switched off → 403; a member
-  writes and it is audited; confirmed without a document refused; a viewer
-  refused. `check:workspace` gets a render pass.
+- **One site**: `GET ?site=` adds `diligence { view, schema, brand }`: the
+  view with the Files, agreements and contract case (with its ladder).
+- **The register list** adds a row per site (`D.row`) and
+  `diligence { pipeline, tally, counted, limited, schema, brand }`. The
+  strip and the tally count the whole register (up to 2,000 sites, said by
+  `limited`), not one page. The contract case (about 10 ms a site, without
+  its ladder) runs only for the page's rows and the earmarked sites the
+  tally sums.
+- **Tests**: `scripts/test-site-crm.js` (switched off → 403; a member writes
+  and it is audited; confirmed without a document refused; a viewer
+  refused), `tdiligencedoor.js` on the Firestore double, and the render
+  pass in `check:workspace` (the register's strip, tally, keys, screen and
+  side panel; the site record's tab; a press is one post; a 390 px phone).
 
 ## Switching it on
 
@@ -469,19 +504,17 @@ the stage strip, the tally, the screen, the LOI package and the keys.
 
 ## What is not built (honest list)
 
-**Wiring**
-- **The door, the pages and the render check.** These are the actions,
-  views, job and package send above, the `test-site-crm.js` cases, the
-  `check:workspace` pass and the CLAUDE.md paragraph. They wait for #382 to
-  land on main.
-- **The new agreement types and fields in `assets.js`.** The types
-  `deed`, `purchase_agreement`, `assignment` and `amendment` are not yet in
-  its list. Purchase terms, consent and the end-of-term equipment live on
-  `diligence.control`.
-
 **Data not on hand yet**
-- **The contract case** is not on main. Until it is, economics is screening
-  figures, the slider has no ladder, and Confirmed is unreachable.
+- **No IRR before a contract price.** The register's IRR is the contract
+  case at the offtake's own price; until one is set it reads — (the card's
+  slider shows the range about the chip's public spot reference). A site's
+  compute-model IRR is shown only where the case cannot run. Whether the
+  column should show the IRR at the spot reference, marked as such, is
+  Thomas's call.
+- **Purchase terms, consent to assign and the end-of-term equipment** live
+  on `diligence.control`; the agreement records carry the paper
+  (`assets.js` now knows `deed`, `purchase_agreement`, `assignment` and
+  `amendment`) but not those fields.
 - **Carrier names** need `FCC_BB_KEY` in Vercel. Without it fiber stays
   Open after a screen, with the carrier hotel and the lateral estimate
   shown and the key named.
@@ -506,6 +539,9 @@ the stage strip, the tally, the screen, the LOI package and the keys.
   reconciled.
 
 **Not changed**
+- **The contract case is computed on read, never stored.** At Solela's size
+  this is well under a second; a register of thousands of earmarked sites
+  would want it stored.
 - **No bulk triage.** The keys act on one site at a time.
 - **No mail beyond the LOI package**, and no notifications.
 - **No rules change.** Sites are Admin SDK only.

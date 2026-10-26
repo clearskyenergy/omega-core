@@ -807,6 +807,9 @@ function headroom(site, d) {
     approvedImportKw: ic.approvedImportKw != null ? ic.approvedImportKw : null, availableKw: null, availableBasis: null, candidates: pk.candidates, flags: flags };
   if (np.typedKw != null && np.recordKw != null && Math.abs(np.typedKw - np.recordKw) > Math.max(1, np.recordKw * 0.01)) flags.push({ code: 'NAMEPLATE_DIFFERS', message: 'The chargers’ nameplate here (' + np.typedKw + ' kW) differs from the site record (' + np.recordKw + ' kW)' });
   if (c.status === 'dark') flags.push({ code: 'DARK_CHARGERS', message: 'The chargers are dark: a recent peak does not include them; switched back on, their load comes off this headroom' });
+  /* the record's "available power" is a figure somebody entered: named, never counted as free power */
+  var entered = flatNum(site, 'availablePowerMw');
+  if (entered != null) { out.enteredAvailableKw = entered * 1000; flags.push({ code: 'AVAILABLE_AS_ENTERED', message: 'The record says ' + Math.round(entered * 1000) + ' kW available (as entered); free power here is the service less a measured peak' }); }
   if (svc && svc.differ) flags.push({ code: 'SERVICE_FIGURES_DIFFER', message: 'The service figures on record disagree: ' + svc.candidates.map(function (x) { return x.kw + ' kW (' + x.source + ')'; }).join(', ') });
   (function existingService() {
     if (!svc) { if (out.path === 'existing-service') flags.push({ code: 'NO_SERVICE', message: 'No service capacity on record: the headroom is unknown' }); out.reason = 'NO_SERVICE'; return; }
@@ -957,7 +960,7 @@ function economicsGate(econ, d, ctx) {
     value: { source: econ.source, irrPct: econ.irrPct, roiPct: econ.roiPct, paybackMonths: econ.paybackMonths }, source: econ.source ? { kind: 'model', doc: null, name: econ.label, ref: null, asOf: dayOf(econ.at) } : null };
   function as(state, note) { return extend(g, { short: GATE_SHORT.economics, state: state, stateLabel: STATE_LABEL[state], note: note }); }
   if (!econ.source) return as('open', 'No economics on file yet');
-  if (econ.source !== 'contract-case') return as('screened', 'Screening figures (' + econ.label + '); the contract case on the offtake’s own terms takes it further');
+  if (econ.source !== 'contract-case') return as('screened', 'Screening figures from ' + ({ 'compute-model': 'the compute model', 'pod-proforma': 'the pod pro forma' }[econ.source] || 'a screening model') + '; the contract case on the offtake’s own terms takes it further');
   if (!econ.priced) return as('screened', econ.ladder && econ.ladder.length ? 'No contract price yet: the price ladder shows the range' : 'No contract price yet');
   var off = offtakeOf(d, ctx.config), inp = econ.inputs || {}, onTerms = [];
   if (off.pricePerGpuHour == null || inp.pricePerGpuHour == null || Math.abs(inp.pricePerGpuHour - off.pricePerGpuHour) > 1e-6) onTerms.push('the contract price');
@@ -1003,6 +1006,15 @@ function linesOf(v, d, site, cfg, files) {
   var out = {}, sc = d.screen || null, pw = v.power, off = v.offtake, econ = v.economics, partner = off.partner ? off.partner.name : null;
   var util = (gateOf(d, 'interconnection').value.utility) || (sc && sc.utility ? sc.utility.name : null), utilBasis = sc && sc.utility ? sc.utility.basis : null;
   function g(k) { return v.gates[k]; }
+  /* what a person recorded on a gate by hand: the source they named (a
+     screen's own source is the screen's line) leads its sources, and their
+     note ends its sentence */
+  function own(k) { var s0 = g(k).source; return s0 && s0.name && s0.screen !== true ? s0.name : null; }
+  function mine(k, words, sources) {
+    var o = own(k), note = g(k).value && g(k).value.note;
+    if (note && g(k).state !== 'fails') words.push(note);
+    if (o && sources.indexOf(o) < 0) sources.unshift(o);
+  }
   /* power */
   var p = [], ps = [];
   if (pw.path === 'new-service') p.push(pw.willServeKw != null ? 'A new service on a will-serve for ' + fmt(pw.willServeKw) + ' kW' : 'A new service: no will-serve figure yet');
@@ -1014,6 +1026,7 @@ function linesOf(v, d, site, cfg, files) {
   if (sc && sc.power && sc.located && sc.located.usable) p.push((sc.power.kv != null ? fmt(sc.power.kv) + ' kV substation ' : 'substation ') + (sc.power.distanceMi != null ? fmt(sc.power.distanceMi) + ' mi' : '(distance not given)'));
   if (pw.serviceKw != null || pw.peakKw != null) ps.push('Site facts');
   if (sc && sc.power) ps.push('Grid Atlas');
+  mine('power', p, ps);
   out.power = { sentence: p.join(' · '), sources: ps.join(' · ') || null, action: null };
   /* interconnection */
   var ix = g('interconnection'), iv = ix.value || {}, i = [], isrc = [], hosting = sc && sc.hosting && sc.hosting.coverage === 'read' ? sc.hosting : null;
@@ -1025,6 +1038,7 @@ function linesOf(v, d, site, cfg, files) {
   else if (util && ix.state !== 'confirmed') i.push(utilBasis === 'zip' ? 'utility found from the ZIP: ' + util : util + ' serves the point');
   else if (!util && ix.state === 'open') i.push('utility not found yet');
   if (ix.evidenceFileId) isrc.push(fileName(files, ix.evidenceFileId) || 'document on file');
+  mine('interconnection', i, isrc);
   out.interconnection = { sentence: i.join(' · '), sources: isrc.join(' · ') || null,
     action: ix.state === 'open' || ix.state === 'screened' ? { key: 'log-will-serve', label: 'Log will-serve request', task: { subject: 'Request a will-serve letter from ' + (util || 'the utility'), evidence: DOCS['will-serve'] }, moves: { gate: 'interconnection', state: 'working' } } : null };
   /* fiber */
@@ -1034,7 +1048,7 @@ function linesOf(v, d, site, cfg, files) {
   else if (fg.state === 'fails') f.push('Fails: ' + (fv.reason || ''));
   else if (carriers.length) { var symN = sf && sf.carriersRead && sf.symmetricCount != null ? sf.symmetricCount : null; f.push(carriers.length + ' fiber carrier' + (carriers.length === 1 ? '' : 's') + ' serve' + (carriers.length === 1 ? 's' : '') + ' the address' + (symN != null ? ', ' + symN + ' offer' + (symN === 1 ? 's' : '') + ' 1 Gbps symmetric' : fv.symmetric1g === true ? ', 1 Gbps symmetric offered' : fv.symmetric1g === false ? ', no 1 Gbps symmetric' : '')); }
   else if (sf && sf.carriersNote) f.push(sf.carriersNote.charAt(0).toUpperCase() + sf.carriersNote.slice(1));
-  else f.push(fg.state === 'working' ? 'Carrier quote requested' : 'Not screened yet');
+  else f.push(fg.state === 'working' ? 'Carrier quote requested' : fg.state === 'screened' ? 'Screened' + (own('fiber') ? ' on ' + own('fiber') : '') + ', carriers not named' : 'Not screened yet');
   if (fg.state === 'working' && carriers.length) f.push('carrier quote requested');
   if (sf && sf.carrierHotelMi != null) f.push('carrier hotel ' + fmt(sf.carrierHotelMi) + ' mi');
   if (sf && sf.lateralMi != null && !carriers.length) f.push('lateral about ' + fmt(sf.lateralMi) + ' mi' + (sf.lateralTo ? ' to ' + sf.lateralTo : ''));
@@ -1042,6 +1056,7 @@ function linesOf(v, d, site, cfg, files) {
   if (sf && sf.carrierHotel) fs.push('PeeringDB');
   if (fg.evidenceFileId) fs.push(fileName(files, fg.evidenceFileId) || 'quote on file');
   else if (fg.state !== 'fails') fs.push('confirm with a carrier quote');
+  mine('fiber', f, fs);
   out.fiber = { sentence: f.join(' · '), sources: fs.join(' · '),
     action: fg.state === 'open' || fg.state === 'screened' ? { key: 'log-carrier-quote', label: 'Log carrier quote request', task: { subject: 'Request a fiber quote' + (carriers.length ? ' from ' + carriers.slice(0, 3).join(', ') : ''), evidence: DOCS['carrier-quote'] }, moves: { gate: 'fiber', state: 'working' } } : null };
   /* site control */
@@ -1054,6 +1069,7 @@ function linesOf(v, d, site, cfg, files) {
   if (c.route && !t.perpetual && t.end) cl.push(t.ok === false ? 'control ends ' + t.end + ', ' + t.shortMonths + ' months short of the offtake term plus removal' : 'control to ' + t.end);
   if (c.route) cs.push('Agreements');
   if (cg.evidenceFileId) cs.push(fileName(files, cg.evidenceFileId) || 'document on file');
+  mine('control', cl, cs);
   out.control = { sentence: cl.join(' · '), sources: cs.join(' · ') || null, action: !c.route ? { key: 'control-form', label: 'Choose how to take control' } : null };
   /* chips */
   var hg = g('chips'), hv = hg.value || {}, chipName = hv.chipset || (econ.chipset ? econ.chipset.name || econ.chipset.key : null), gpus = hv.gpus != null ? hv.gpus : econ.gpus;
@@ -1063,6 +1079,7 @@ function linesOf(v, d, site, cfg, files) {
   h.push(hg.state === 'confirmed' ? 'allocation on file' : hg.state === 'working' ? 'allocation requested' : 'allocation not requested');
   if (lead != null) h.push('~' + fmt(lead) + ' weeks'); else if (stated != null) { h.push('~' + fmt(stated) + ' weeks'); hs.push('Lead time from ' + (off.stated.by || partner || 'the partner') + (off.stated.verified ? '' : ', unverified')); }
   if (hg.evidenceFileId) hs.push(fileName(files, hg.evidenceFileId) || 'allocation on file');
+  mine('chips', h, hs);
   out.chips = { sentence: h.join(' · '), sources: hs.join(' · ') || null,
     action: hg.state === 'open' || hg.state === 'screened' ? { key: 'log-allocation', label: 'Log allocation request', task: { subject: 'Request an allocation' + (chipName ? ' of ' + chipName : ''), evidence: DOCS['chip-allocation'] }, moves: { gate: 'chips', state: 'working' } } : null };
   /* offtake */
@@ -1072,7 +1089,10 @@ function linesOf(v, d, site, cfg, files) {
   if (off.feePct != null && off.partner) o.push(fmt(off.feePct) + '% fee');
   o.push(off.offtaker && off.offtaker.name ? off.offtaker.name + (off.pricePerGpuHour != null ? ' at $' + off.pricePerGpuHour + '/GPU-hour' : ', price pending') : off.pricePerGpuHour != null ? 'offtaker pending, $' + off.pricePerGpuHour + '/GPU-hour' : 'offtaker and price pending');
   if (og.state === 'confirmed') o.push('contract on file');
-  out.offtake = { sentence: o.join(' · '), sources: partner || null, action: v.stage === 'pursue' && (off.loiStatus === 'none' || off.loiStatus === 'drafted') && off.partner ? { key: 'loi-package', label: 'Send LOI package' + (partner ? ' to ' + partner : '') } : null };
+  var osrc = partner ? [partner] : [];
+  if (og.evidenceFileId) osrc.push(fileName(files, og.evidenceFileId) || 'contract on file');
+  mine('offtake', o, osrc);
+  out.offtake = { sentence: o.join(' · '), sources: osrc.join(' · ') || null, action: v.stage === 'pursue' && (off.loiStatus === 'none' || off.loiStatus === 'drafted') && off.partner ? { key: 'loi-package', label: 'Send LOI package' + (partner ? ' to ' + partner : '') } : null };
   /* economics: its block, one line */
   out.economics = { sentence: econ.irrPct != null ? fmt(econ.irrPct) + '% ' + (econ.irrBasis || 'IRR') + (econ.paybackMonths != null ? ' · payback ' + econ.paybackMonths + ' months' : '') : (econ.source === 'contract-case' && !econ.priced ? 'No contract price yet: the ladder shows the range' : 'No economics on file'),
     sources: econ.label || null, action: null };

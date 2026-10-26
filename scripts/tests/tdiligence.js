@@ -657,7 +657,7 @@ test('D22 the Diligence card: one sentence a gate, where it came from, and the n
   assert.equal(L.interconnection.sentence, 'Will-serve not requested · utility found from the ZIP: MidAmerican Energy');
   assert.equal(L.interconnection.action.key, 'log-will-serve'); assert.equal(L.interconnection.action.label, 'Log will-serve request');
   assert.equal(L.interconnection.action.task.subject, 'Request a will-serve letter from MidAmerican Energy'); assert.deepEqual(L.interconnection.action.moves, { gate: 'interconnection', state: 'working' });
-  assert.equal(L.fiber.sentence, 'Carrier names need the FCC key · carrier hotel 6 mi · lateral about 2.1 mi to carrier facility DSM-1'); assert.equal(L.fiber.sources, 'PeeringDB · confirm with a carrier quote');
+  assert.equal(L.fiber.sentence, 'Carrier names need the FCC key · carrier hotel 6 mi · lateral about 2.1 mi to carrier facility DSM-1'); assert.equal(L.fiber.sources, 'Grid Atlas · PeeringDB · confirm with a carrier quote', 'the source the person named leads');
   assert.equal(L.control.sentence, 'How the site comes under control is not chosen'); assert.equal(L.control.action.key, 'control-form');
   assert.equal(L.chips.sentence, 'Chips not chosen · allocation not requested · ~36 weeks'); assert.equal(L.chips.sources, 'Lead time from Lightsmith Energy, unverified');
   assert.equal(L.offtake.sentence, 'Lightsmith Energy LOI not sent · 6-year term · 10% fee · offtaker and price pending'); assert.equal(L.offtake.sources, 'Lightsmith Energy');
@@ -681,6 +681,16 @@ test('D22 the Diligence card: one sentence a gate, where it came from, and the n
   assert.deepEqual(c.sizing.byChipset.map(function (x) { return x.name + (x.chosen ? '*' : ''); }), ['NVIDIA H100*', 'NVIDIA B200']);
   assert.equal(c.sizing.words, 'Size from power · 450 kW is 2 skids');
   Object.keys(c.lines).forEach(function (k) { [c.lines[k].sentence, c.lines[k].sources].forEach(function (w) { assert.ok(w == null || !/undefined|NaN|null/.test(w), k + ': ' + w); }); });
+  /* a gate a person screened by hand says so, names their source and ends on their note: never "Not screened yet" */
+  var hs = chargerSite();
+  apply(hs, 'gate', { gate: 'fiber', state: 'screened', source: { kind: 'public', name: 'County GIS fiber map' }, value: { note: 'Two conduits on the frontage' } });
+  apply(hs, 'gate', { gate: 'power', state: 'screened', source: { kind: 'public', name: 'Utility map' } });
+  var hv = view(hs);
+  assert.equal(hv.lines.fiber.sentence, 'Screened on County GIS fiber map, carriers not named · Two conduits on the frontage');
+  assert.equal(hv.lines.fiber.sources, 'County GIS fiber map · confirm with a carrier quote');
+  assert.equal(hv.lines.power.sources, 'Utility map · Site facts');
+  /* the screening figures' note names its model once */
+  assert.equal(D.view(chargerSite({ latestModel: { irr: 0.12, totalProjectCost: 900000, at: NOW } }), { config: CFG, now: NOW }).gates.economics.note, 'Screening figures from the compute model; the contract case on the offtake\u2019s own terms takes it further');
 });
 
 test('D23 the name it prints is the workspace\u2019s: the white label\u2019s platform name where it is on, else the record\u2019s name; never a literal in core', function () {
