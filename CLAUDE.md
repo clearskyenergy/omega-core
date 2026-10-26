@@ -1736,15 +1736,18 @@ working; only what a person reads says Omega Maximus.
   level 19 here (`PHOTO_MAX_Z`). The scale bar sits above Google's logo;
   nothing copies or exports Google's imagery. `teditorv2satellite.js`,
   and `check:editor-v2` holds the offline fallback.
-- **View › Icons** (Tommy: "a toggle in view that allows us to do icons on
-  the items like for instance the bess … should be a bess container"):
-  `omega-editor-v2-icons.js` draws each piece inside its own box (centre,
-  rotation, size) as what it is from above: the BESS a container (ribbed
-  roof, doors, roof-top cooling unit), a transformer's fins and coils,
-  switchgear's sections, a charger's pedestal, and the rest; `kindOf` is
-  the one map from an equipment key. Off by default, remembered by this
-  browser (`omegaMaximusIcons`); a box under 6 px keeps its plain fill.
-  `teditorv2icons.js`; `check:editor-v2` turns it on and off.
+- **View › Icons** (Tommy, 2026-10-21: "a function that puts the icons or
+  images of the units like we had in the first editor"): each unit keeps its
+  box, its true footprint, and gets Site Map's own icon on the middle of it
+  (the BESS's battery cabinets, the transformer, the charger, the utility
+  pole), the box's size on screen from 22 to 72 px, upright, with the name
+  under it as on Site Map. The pictures are `omega-equipment-icons.js`,
+  WRITTEN from editor.html's `const ICONS` by
+  `scripts/build-equipment-icons.js` (editor.html is not edited from here);
+  never edit it by hand: `teditorv2icons.js` runs the builder's `--check`
+  and fails when Site Map's icons move on. `omega-editor-v2-icons.js`
+  `iconOf` is the ONE map from a Maximus equipment key to a Site Map icon.
+  Off by default, remembered by this browser (`omegaMaximusIcons`).
 - **The buildings on the lot come with it** (Tommy, 2026-10-21: "generate
   on the parcel for the address the building … useful especially for the
   3d"): `omega-editor-v2-buildings.js` reads FEMA's USA Structures (every US

@@ -1090,19 +1090,14 @@
       var c = worldToScreen({ x: e.x, y: e.y });
       ctx.beginPath(); ctx.arc(c.x, c.y, e.r * view.pxPerFt, 0, Math.PI * 2); ctx.stroke();
     } else if (e.type === 'rect' || e.type === 'equip' || e.type === 'parking') {
-      if (e.type === 'equip' && iconsOn && root.OmegaEditorV2Icons && root.OmegaEditorV2Icons.draw(ctx, e, worldToScreen({ x: e.x, y: e.y }), view.pxPerFt)) {
-        /* the icon, then the outline in the layer's colour */
-        poly(ctx, G.rectCorners(e), true);
-        ctx.lineWidth = 1.4;
-        ctx.stroke();
-      } else {
-        poly(ctx, G.rectCorners(e), true);
-        /* gear reads on the photo: a firmer fill and line than a lot or a stall */
-        ctx.globalAlpha = e.type === 'equip' ? 0.32 : 0.04;
-        ctx.fill(); ctx.globalAlpha = 1;
-        if (e.type === 'equip') ctx.lineWidth = 1.8;
-        ctx.stroke();
-      }
+      poly(ctx, G.rectCorners(e), true);
+      /* gear reads on the photo: a firmer fill and line than a lot or a stall */
+      ctx.globalAlpha = e.type === 'equip' ? (iconsOn ? 0.2 : 0.32) : 0.04;
+      ctx.fill(); ctx.globalAlpha = 1;
+      if (e.type === 'equip') ctx.lineWidth = 1.8;
+      ctx.stroke();
+      /* View › Icons: the unit's Site Map icon on its footprint */
+      if (e.type === 'equip' && iconsOn && root.OmegaEditorV2Icons) root.OmegaEditorV2Icons.draw(ctx, e, worldToScreen({ x: e.x, y: e.y }), view.pxPerFt, requestDraw);
       if (e.label) nameBox(ctx, e);
     } else if (e.type === 'text') label(ctx, { x: e.x, y: e.y }, e.text || '');
     else if (e.type === 'callout') {
@@ -1217,6 +1212,9 @@
   function placeName(ctx, b, taken, gear) {
     var full = String(b.e.label).trim(), short = shortName(full), tries = [], i, j, w, spots, r;
     var cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    /* with Icons on, the name sits under the unit's icon, as on Site Map */
+    var Ic = iconsOn && b.e.type === 'equip' && root.OmegaEditorV2Icons, half = Ic ? Ic.size(b.e, view.pxPerFt) / 2 : 0;
+    var top = Math.min(b.y0, cy - half), bottom = Math.max(b.y1, cy + half), left = Math.min(b.x0, cx - half), right = Math.max(b.x1, cx + half);
     tries.push([full, true]);
     if (short && short !== full) tries.push([short, true]);
     tries.push([full, false]);
@@ -1224,8 +1222,10 @@
     for (i = 0; i < tries.length; i++) {
       w = ctx.measureText(tries[i][0]).width + 8;
       spots = [];
-      if (b.x1 - b.x0 >= w && b.y1 - b.y0 >= 16) spots.push([cx, cy, true]);
-      spots.push([cx, b.y0 - 11, false], [cx, b.y1 + 11, false], [b.x1 + 4 + w / 2, cy, false], [b.x0 - 4 - w / 2, cy, false]);
+      if (!Ic && b.x1 - b.x0 >= w && b.y1 - b.y0 >= 16) spots.push([cx, cy, true]);
+      if (Ic) spots.push([cx, bottom + 11, false], [cx, top - 11, false]);
+      else spots.push([cx, top - 11, false], [cx, bottom + 11, false]);
+      spots.push([right + 4 + w / 2, cy, false], [left - 4 - w / 2, cy, false]);
       for (j = 0; j < spots.length; j++) {
         r = tagAt(ctx, spots[j][0], spots[j][1], tries[i][0]);
         if (overlaps(r, taken)) continue;

@@ -1,75 +1,66 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  *
- * View › Icons (omega-editor-v2-icons.js; Tommy, 2026-10-20: "a toggle in
- * view that allows us to do icons on the items like for instance the bess
- * … should be a bess container"). Every kind of equipment a guided build or
- * the ribbon places has its own icon; each is drawn inside the piece's own
- * box (its centre, its rotation, its size); a box too small on screen keeps
- * its plain fill; and the BESS is a container: ribbed roof, doors, the
- * cooling unit on the roof. Drawn here into a recording canvas.
+ * View › Icons (omega-editor-v2-icons.js; Tommy, 2026-10-21: "a function
+ * that puts the icons or images of the units like we had in the first
+ * editor"). The pictures are Site Map's own: omega-equipment-icons.js is
+ * written from editor.html's ICONS by scripts/build-equipment-icons.js and
+ * must match it; every kind a build or the ribbon places has its icon; the
+ * icon sits on the middle of the unit's box at the box's size on screen
+ * (22 to 72 px), once its picture has loaded.
  */
 'use strict';
 var assert = require('assert');
 var fs = require('fs');
 var path = require('path');
+var child = require('child_process');
 global.window = global;
 var ROOT = path.join(__dirname, '..', '..');
-require('../../omega-editor-v2-icons.js');
-var I = global.OmegaEditorV2Icons;
 
 var n = 0;
 function check(cond, msg) { assert.ok(cond, msg); n++; }
 
-/* a canvas that records what is drawn */
-function recorder() {
-  var log = [], m = [];
-  function rec(name) { return function () { log.push([name].concat([].slice.call(arguments))); }; }
-  var ctx = {
-    log: log, lineWidth: 1, strokeStyle: '', fillStyle: '', lineJoin: '', lineCap: '',
-    save: function () { m.push(1); log.push(['save']); }, restore: function () { m.pop(); log.push(['restore']); },
-    translate: rec('translate'), rotate: rec('rotate'), scale: rec('scale'),
-    beginPath: rec('beginPath'), moveTo: rec('moveTo'), lineTo: rec('lineTo'), rect: rec('rect'), arc: rec('arc'), closePath: rec('closePath'),
-    fill: rec('fill'), stroke: rec('stroke'), setLineDash: rec('setLineDash')
-  };
-  ctx.depth = function () { return m.length; };
-  return ctx;
-}
-function count(ctx, op) { return ctx.log.filter(function (l) { return l[0] === op; }).length; }
+/* 1. the copy is Site Map's library, as editor.html has it today */
+var built = child.spawnSync(process.execPath, [path.join(ROOT, 'scripts/build-equipment-icons.js'), '--check'], { encoding: 'utf8' });
+check(built.status === 0, 'omega-equipment-icons.js matches editor.html\'s ICONS: ' + (built.stderr || built.stdout).trim());
+require('../../omega-equipment-icons.js');
+var LIB = global.OmegaEquipmentIcons;
+check(LIB.keys().length >= 30 && /^<svg /.test(LIB.SVG.bess) && /^<svg /.test(LIB.SVG.charger) && /^<svg /.test(LIB.SVG.util_poi), 'its ' + LIB.keys().length + ' icons are SVG, the BESS, the charger and the utility pole among them');
 
-/* 1. every kind a build or the ribbon places has an icon of its own */
+/* a stand-in for the browser's Image */
+var made = [];
+global.Image = function () { this.onload = null; this.src = ''; made.push(this); };
+require('../../omega-editor-v2-icons.js');
+var I = global.OmegaEditorV2Icons;
+
+/* 2. every kind a build or the ribbon places has its own icon */
 var placed = fs.readFileSync(path.join(ROOT, 'api/_lib/guided-build.js'), 'utf8').match(/key: *'([a-z_-]+)'/g).map(function (s) { return /'([^']+)'/.exec(s)[1]; });
 var ribbon = (fs.readFileSync(path.join(ROOT, 'editor-v2.html'), 'utf8').match(/data-equip="([a-z_-]+)"/g) || []).map(function (s) { return /"([^"]+)"/.exec(s)[1]; });
-var keys = placed.concat(ribbon).filter(function (k, i, a) { return a.indexOf(k) === i; });
-check(keys.length >= 10, 'the builds and the ribbon place ' + keys.length + ' kinds');
-keys.forEach(function (k) { check(I.kindOf({ key: k }) !== 'other', k + ' has its own icon: ' + I.kindOf({ key: k })); });
-check(I.kindOf({ key: 'equip', label: 'BESS container' }) === 'bess' && I.kindOf({ key: '', label: 'DCFC 3' }) === 'charger', 'a piece without a known key is read by its name');
-
-/* 2. each icon is drawn, in the piece's own box, and leaves the canvas as it found it */
-I.KINDS.forEach(function (kind) {
-  var key = kind === 'other' ? 'mystery' : Object.keys({ bess: 1, pcs: 1, transformer: 1, panel: 1, disco: 1, meter: 1, poi: 1, charger: 1, ems: 1, ups: 1, racks: 1, cooling: 1, genset: 1, fuelcell: 1, substation: 1, pv: 1 }).filter(function (k) { return I.kindOf({ key: k }) === kind; })[0];
-  var ctx = recorder(), ok = I.draw(ctx, { key: key, x: 10, y: 20, w: 20, h: 8, rot: 30 }, { x: 300, y: 200 }, 4);
-  check(ok && count(ctx, 'fill') + count(ctx, 'stroke') >= 2, kind + ' is drawn');
-  check(ctx.depth() === 0 && count(ctx, 'save') === count(ctx, 'restore'), kind + ' restores the canvas');
-  var t = ctx.log.filter(function (l) { return l[0] === 'translate'; })[0], r = ctx.log.filter(function (l) { return l[0] === 'rotate'; })[0], s = ctx.log.filter(function (l) { return l[0] === 'scale'; })[0];
-  check(t[1] === 300 && t[2] === 200 && Math.abs(r[1] + Math.PI / 6) < 1e-9 && s[1] === 4 && s[2] === -4, kind + ' is drawn at the piece\'s centre, turned with it, to its scale');
+placed.concat(ribbon).filter(function (k, i, a) { return a.indexOf(k) === i; }).forEach(function (k) {
+  var id = I.iconOf({ key: k });
+  check(id !== 'jbox' && LIB.SVG[id], k + ' has Site Map\'s icon "' + id + '"');
 });
+check(I.iconOf({ key: 'bess' }) === 'bess' && I.iconOf({ key: 'transformer' }) === 'xfmr' && I.iconOf({ key: 'poi' }) === 'util_poi' && I.iconOf({ key: 'charger' }) === 'charger', 'the BESS, a transformer, the point of interconnection and a charger are Site Map\'s');
+check(I.iconOf({ key: '', label: 'DCFC 3' }) === 'charger' && I.iconOf({ key: 'mystery' }) === 'jbox', 'a unit is read by its name when its key is unknown, else a junction box');
 
-/* 3. too small on screen: the plain box stays */
-check(I.draw(recorder(), { key: 'bess', w: 20, h: 8 }, { x: 0, y: 0 }, 0.5) === false, 'a box under 6 px across keeps its plain fill');
-check(I.draw(recorder(), { key: 'bess', w: 0, h: 8 }, { x: 0, y: 0 }, 4) === false, 'and a box with no size draws nothing');
+/* 3. the size: the box on screen, between 22 and 72 px */
+check(I.size({ w: 28, h: 10 }, 3) === 30, 'a 28 by 10 ft BESS at 3 px a foot: a 30 px icon');
+check(I.size({ w: 4, h: 3 }, 3) === 22 && I.size({ w: 60, h: 60 }, 3) === 72, 'never under 22 px or over 72 px');
 
-/* 4. the BESS is a container: the roof's ribs, two door leaves, the fan */
-var b = recorder();
-I.draw(b, { key: 'bess', x: 0, y: 0, w: 40, h: 8, rot: 0 }, { x: 0, y: 0 }, 5);
-check(count(b, 'moveTo') >= 14, 'a 40 ft container has its ribbed roof: ' + count(b, 'moveTo') + ' strokes');
-check(count(b, 'arc') >= 1 && count(b, 'rect') >= 4, 'and its doors, its cooling unit and fan');
-var tall = recorder();
-I.draw(tall, { key: 'bess', x: 0, y: 0, w: 8, h: 40, rot: 0 }, { x: 0, y: 0 }, 5);
-check(tall.log.filter(function (l) { return l[0] === 'rotate'; }).length === 2, 'drawn along its long side whichever way the box is set');
+/* 4. drawn on the middle of the box, once the picture has loaded */
+var calls = [], ctx = { drawImage: function () { calls.push([].slice.call(arguments, 1)); } }, ready = 0;
+var e = { key: 'bess', x: 0, y: 0, w: 28, h: 10, rot: 30 };
+check(I.draw(ctx, e, { x: 300, y: 200 }, 3, function () { ready++; }) === false && calls.length === 0, 'nothing is drawn before the picture loads');
+var img = made[made.length - 1];
+check(/^data:image\/svg\+xml;charset=utf-8,/.test(img.src) && decodeURIComponent(img.src).indexOf('<svg width="128" height="128"') > 0, 'the picture is Site Map\'s SVG, drawn large enough to stay sharp');
+img.onload();
+check(ready === 1, 'the drawing is asked to repaint when it loads');
+check(I.draw(ctx, e, { x: 300, y: 200 }, 3) === true && JSON.stringify(calls[0]) === JSON.stringify([285, 185, 30, 30]), 'then the 30 px icon sits on the middle of the box, upright: ' + JSON.stringify(calls[0]));
+check(I.draw(ctx, { key: 'bess', w: 0, h: 10 }, { x: 0, y: 0 }, 3) === false, 'a unit with no size gets no icon');
 
-/* 5. the page: the toggle in View, the script before the editor */
+/* 5. the page: Icons in View, the library before the drawing before the editor */
 var page = fs.readFileSync(path.join(ROOT, 'editor-v2.html'), 'utf8');
 check(/data-act="icons" aria-pressed="false"[^>]*>Icons</.test(page), 'View has an Icons switch, off until it is pressed');
-check(page.indexOf('omega-editor-v2-icons.js') > 0 && page.indexOf('omega-editor-v2-icons.js') < page.indexOf('omega-editor-v2-app.js'), 'the icons load before the editor');
+var a = page.indexOf('omega-equipment-icons.js'), b = page.indexOf('omega-editor-v2-icons.js'), c = page.indexOf('omega-editor-v2-app.js');
+check(a > 0 && a < b && b < c, 'the icon library loads before the icons, and both before the editor');
 
 console.log('teditorv2icons: ' + n + ' checks passed');
