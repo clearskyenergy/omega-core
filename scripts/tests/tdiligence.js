@@ -701,6 +701,54 @@ test('D23 the name it prints is the workspace\u2019s: the white label\u2019s pla
   assert.ok(stripComments(SRC).indexOf('Solela') < 0);
 });
 
+test('D24 clients: the acquisition paperwork ladder NDA \u2192 MSA \u2192 LOI \u2192 Term sheet \u2192 Contract, recorded with date, link and note; signed needs its date, declined its why; the one next thing in that order; the NDA said on every site held from them', function () {
+  assert.deepEqual(D.CLIENT_STEPS, ['nda', 'msa', 'loi', 'terms', 'contract']);
+  assert.deepEqual(D.CLIENT_STEPS.map(function (k) { return D.CLIENT_STEP_LABEL[k]; }), ['NDA', 'MSA', 'LOI', 'Term sheet', 'Contract']);
+  refused(function () { D.clientChange(null, {}, { creating: true, by: OWNER, now: NOW }); }, 400, /Name the client/);
+  var r = D.clientChange(null, { name: 'Acme Charging', company: 'Acme Charging LLC', contactName: 'Pat Lee', contactEmail: 'pat@acme.example', steps: { nda: { state: 'sent', date: '2026-10-20' } } }, { creating: true, by: OWNER, now: NOW });
+  assert.equal(r.unchanged, false); assert.equal(r.name, 'Acme Charging'); assert.equal(r.diligence.steps.nda.state, 'sent'); assert.equal(r.diligence.steps.nda.by, OWNER);
+  assert.deepEqual(r.events.map(function (e) { return e.what; }), ['client', 'client:nda']);
+  var rec = { name: r.name, diligence: r.diligence };
+  /* the one next thing follows the notes' order: get the sent NDA signed, then draft the MSA */
+  var v = D.clientView(rec);
+  assert.equal(v.next.step, 'nda'); assert.equal(v.next.words, 'Get the NDA signed (sent 2026-10-20)');
+  assert.equal(v.steps[0].tone, 'screened'); assert.equal(v.steps[0].stateLabel, 'Sent'); assert.equal(v.signed, 0);
+  refused(function () { D.clientChange(rec, { steps: { nda: { state: 'signed', date: null } } }, { by: OWNER, now: NOW }); }, 400, /signed needs its date/);
+  refused(function () { D.clientChange(rec, { steps: { loi: { state: 'declined' } } }, { by: OWNER, now: NOW }); }, 400, /why the LOI was declined/);
+  refused(function () { D.clientChange(rec, { steps: { msa: { state: 'sent', ref: 'ftp://x' } } }, { by: OWNER, now: NOW }); }, 400, /http\(s\)/);
+  refused(function () { D.clientChange(rec, { steps: { paperwork: { state: 'sent' } } }, { by: OWNER, now: NOW }); }, 400, /Unknown paperwork step/);
+  refused(function () { D.clientChange(rec, { contactEmail: 'not-an-address' }, { by: OWNER, now: NOW }); }, 400, /not an address/);
+  assert.equal(D.clientChange(rec, {}, { by: OWNER, now: NOW }).unchanged, true, 'nothing sent changes nothing');
+  assert.equal(D.clientChange(rec, { steps: { nda: { state: 'sent', date: '2026-10-20' } } }, { by: OWNER, now: NOW }).unchanged, true, 'the same state again changes nothing');
+  var r2 = D.clientChange(rec, { steps: { nda: { state: 'signed', date: '2026-10-24', ref: 'https://drive.example/nda.pdf' } } }, { by: OWNER, now: '2026-10-26T00:00:00.000Z' });
+  rec = { name: rec.name, diligence: r2.diligence };
+  v = D.clientView(rec);
+  assert.equal(v.signed, 1); assert.equal(v.next.step, 'msa'); assert.ok(/Draft the MSA/.test(v.next.words), v.next.words);
+  /* every step signed: nothing next */
+  var all = rec;
+  ['msa', 'loi', 'terms', 'contract'].forEach(function (k) { var st = {}; st[k] = { state: 'signed', date: '2026-10-25' }; all = { name: all.name, diligence: D.clientChange(all, { steps: st }, { by: OWNER, now: NOW }).diligence }; });
+  assert.equal(D.clientView(all).next, null);
+  /* a declined step is named with its why */
+  var dec = D.clientChange(rec, { steps: { msa: { state: 'declined', note: 'They want exclusivity' } } }, { by: OWNER, now: NOW });
+  assert.ok(/MSA declined: They want exclusivity/.test(D.clientView({ name: 'Acme', diligence: dec.diligence }).next.words));
+  /* the site's view carries the client, and an NDA not signed is a flag on every site held from them */
+  var site = chargerSite(), sent = { id: 'p1', record: { name: 'Acme Charging', diligence: r.diligence } };
+  var sv = view(site, { client: sent });
+  assert.equal(sv.client.name, 'Acme Charging'); assert.equal(sv.client.steps.length, 5);
+  assert.ok(code(sv).indexOf('CLIENT_NDA') >= 0);
+  assert.ok(sv.flags.filter(function (f) { return f.code === 'CLIENT_NDA'; })[0].message === 'No signed NDA with Acme Charging on file (sent 2026-10-20, not signed)');
+  var sv2 = view(site, { client: { id: 'p1', record: rec } });
+  assert.ok(code(sv2).indexOf('CLIENT_NDA') < 0, 'signed: no flag');
+  assert.equal(view(site, {}).client, null);
+  /* the row carries the client for the pipeline's filter and chip */
+  var row = D.row(site, { config: CFG, now: NOW, client: sent });
+  assert.equal(row.clientId, 'p1'); assert.equal(row.clientName, 'Acme Charging');
+  assert.equal(D.row(site, { config: CFG, now: NOW }).clientId, null);
+  /* the vocabulary rides the schema, so no page keeps its own copy */
+  var sch = D.schema(CFG);
+  assert.deepEqual(sch.clientSteps, D.CLIENT_STEPS); assert.equal(sch.clientStateLabels.none, 'Not started'); assert.equal(sch.clientStepTone.signed, 'confirmed'); assert.equal(sch.clientStepTone.declined, 'fails');
+});
+
 /* ── the rule that matters most, mutation-tested ──────────────────────── */
 test('D20 mutation: with the document check cut out of the library, a confirmation on a document that is not on the Files gets through — the suite above refuses it', function () {
   var cut = SRC.replace(/function fileCheck\(files, id\) \{[\s\S]*?\n\}/, 'function fileCheck() { return {}; }');

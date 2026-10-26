@@ -700,9 +700,9 @@
     var box = aside.querySelector('#dr-dg'); if (!box || !window.OmegaDiligence) return;
     api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(id)).then(function (j) {
       if (!j.diligence) { box.innerHTML = ''; return; }
-      /* a change answers with the card's new view, so the reload refreshes the register behind it and leaves the panel (and the card's last word) as it is */
+      /* a change answers with the card's new view, so the reload refreshes the register behind it and leaves the panel (and the card's last word) as it is; an assign re-mounts the card on the fresh answer */
       OmegaDiligence.mountCard(box, { site: j.site, diligence: j.diligence, files: j.files || [], post: post, msg: msg, canEdit: CANEDIT,
-        reload: function () { return load(true, false, true); }, next: function () { var n = nextSite(id); if (n) openDrawer(n); } });
+        reload: function () { return load(true, false, true); }, remount: function () { load(true, false, true); mountDiligenceCard(aside, id); }, next: function () { var n = nextSite(id); if (n) openDrawer(n); } });
     }).catch(function (e) { box.innerHTML = '<div class="pf-msg err">' + esc(e.message) + '</div>'; });
   }
   byId('btn-more').addEventListener('click', function () { load(true, true); });

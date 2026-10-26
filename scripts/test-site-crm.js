@@ -1102,6 +1102,24 @@ function seed() {
     assert.equal(stored(SITE).diligence.stage, 'loi-sent'); assert.equal(stored(SITE).partners.lightsmith.packageId, r.packageId); assert.equal(audits('sitecrm-diligence-loi').length, 1);
   });
 
+  await test('clients: a member records a client\u2019s paperwork and assigns sites through the one door; the register joins each client with its own batch; the plain register portfolio stays what it was', async function () {
+    diligenceOn();
+    var mk = await call('POST', { action: 'diligence-client', name: 'Acme Charging', steps: { nda: { state: 'signed', date: '2026-10-20' } } }, PM);
+    assert.ok(mk.portfolioId); assert.equal(mk.client.signed, 1); assert.equal(audits('sitecrm-diligence-client').length, 1);
+    await rejects(call('POST', { action: 'diligence-client', name: 'X' }, VIEWER), 403);
+    var as1 = await call('POST', { action: 'diligence-assign', portfolioId: mk.portfolioId, site: SITE }, PM);
+    assert.equal(as1.assigned, 1);
+    assert.deepEqual(stored(SITE).portfolioIds, [mk.portfolioId]);
+    var reg = await call('GET', {}, PM);
+    var row = reg.sites.filter(function (x) { return x.id === SITE; })[0].diligence;
+    assert.equal(row.clientName, 'Acme Charging');
+    var card = reg.diligence.clients.filter(function (x) { return x.id === mk.portfolioId; })[0];
+    assert.equal(card.sites, 1); assert.equal(card.client.next.step, 'msa');
+    var one = await call('GET', { site: SITE }, PM);
+    assert.equal(one.diligence.view.client.name, 'Acme Charging');
+    assert.deepEqual(one.diligence.clients.map(function (x) { return x.name; }), ['Acme Charging']);
+  });
+
   console.log('\naudit');
   await test('every write is audited', async function () {
     await call('POST', { site: SITE, action: 'log', type: 'note', subject: 'n' }, PM);

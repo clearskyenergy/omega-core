@@ -1034,7 +1034,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (DGC) { DGC.update(DATA.diligence, DATA.site, DATA.files || []); return; }
     DGC = OmegaDiligence.mountCard(pane, { site: DATA.site, diligence: DATA.diligence, files: DATA.files || [], canEdit: CANEDIT, msg: function (t, ok) { msg(esc(t), ok); },
       post: function (action, extra) { return api('/api/site-crm', { method: 'POST', json: Object.assign({ org: ORG, action: action }, extra || {}) }); },
-      reload: function () { return load(true); }, next: null });
+      reload: function () { return load(true); }, remount: function () { load(true); }, next: null });
   }
   function load(keepTab) {
     msg('');
