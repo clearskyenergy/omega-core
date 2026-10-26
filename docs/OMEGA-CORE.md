@@ -298,9 +298,12 @@ and the notes say so. A figure outside its range is set aside and named in
 
 It returns `sizing`, `capex`, `debt`, `returns`, `lines`, `totals`,
 `bankability` (the model's), `priceFor`, `priceForPayback`, `solved[]`,
-`needs[]` and `notes[]`. `returns` is `projectIrrPct`, `equityIrrPct`,
-`roiPct`, `paybackMonths`, `equityPaybackMonths`, `projectMultiple` and
-`equityMultiple`; **`roiPct` is the project cash multiple − 1 over the term**.
+`ladder[]`, `ladderBasis`, `needs[]` and `notes[]`. `returns` is
+`projectIrrPct`, `equityIrrPct`, `roiPct`, `paybackMonths`,
+`equityPaybackMonths`, `projectMultiple`, `equityMultiple`,
+`irrWithoutFeePct` (the same case at a 0% fee), `revenuePerYear` and
+`partnerFeePerYear` (the term's totals over its years). **`roiPct` is the
+project cash multiple − 1 over the term**.
 `lines` is one row per contract year: revenue (contracted, merchant), partner
 fee, power, site cost (rent + revenue share), opex (everything else), EBITDA,
 debt service, residual and the project and equity cash flows. `priceFor`
@@ -311,6 +314,21 @@ the equity put in at month 0, as the project IRR dates the capital. The
 model's own figure dates month 1 at month 0 and reads higher (335.9% against
 260.9% on the pinned case).
 
+**The price ladder** is for the Solela portfolio's contract-price slider,
+which reads it and computes no return of its own. `ladder[]` gives, at each
+step, `{ price, projectIrrPct, paybackMonths, projectMultiple, roiPct,
+irrWithoutFeePct, revenuePerYear, partnerFeePerYear }`, each from the same
+function that gives `returns`, so the point at the contract price IS the
+answer. It runs ±40% around the contract price given. With no price, it runs
+around the chipset's reference price: its public spot price, else its
+on-demand price, which is site-model's precedence. An H100 is then $2.46 and
+the ladder $1.50–$3.40. A chipset with neither has no ladder until a price is
+given. The step is the finest of $0.05 and $0.10 that keeps it to 41 points,
+coarsening to $0.25 and up only for a price over about $5. The points are
+centred on the price, so the price given is always one of them.
+`ladderBasis` says the centre, its basis, the step and the range;
+`opts.ladder: false` skips it (about 5 of the 14 ms a call).
+
 **The pinned case** (H100, one skid, $2.00, 72 months, 10% fee, 80% LTC as
 typed, $11,250 a month rising 2.5%): **53.10% project IRR, payback month 26**.
 30% needs **$1.6884** and pays back in month 36; a 24-month payback needs
@@ -318,7 +336,10 @@ typed, $11,250 a month rising 2.5%): **53.10% project IRR, payback month 26**.
 contract price. The first engine run's figures (54.17% at $2.00, 24.91% at
 $1.60, 30% at $1.67) reproduce exactly with the rent escalator typed as 0.025.
 The model's lease reads that as 0.025% a year, so the rent never rose. With
-the rent rising 2.5% the same prices give 53.10%, 23.47% and 28.64%.
+the rent rising 2.5% the same prices give 53.10%, 23.47% and 28.64%. The
+ladder table sent with the slider request has the same reading: $1.40 / $2.00
+/ $2.60 at 10.13% / 54.17% / 102.19%. At 2.5% those prices give 8.32% /
+53.10% / 101.39%; both are pinned.
 
 ⚠ **The recorded price against the cards.** The notes and `capex` set the
 recorded $764,000 beside the model's chipset-scaled estimate for 48 H100s:

@@ -101,6 +101,8 @@ function r2(v) { return v == null ? null : round(v, 2); }
 function fmt(n) { return String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
 function usd(n) { return '$' + fmt(n); }
 function gpuHr(p, d) { return '$' + p.toFixed(d == null ? 2 : d); }
+/* a price as written: to the cent when it is whole cents, else to 0.01¢ */
+function gpuHrAsIs(p) { return gpuHr(p, Math.abs(p - round(p, 2)) < 1e-9 ? 2 : 4); }
 function extend(a, b) { Object.keys(b).forEach(function (k) { a[k] = b[k]; }); return a; }
 function yes(v) { return v === true || v === 'true' || v === 1 || v === '1' || v === 'yes'; }
 function plural(n, one, many) { return n + ' ' + (n === 1 ? one : (many || one + 's')); }
@@ -132,6 +134,30 @@ function equityIrrPct(cf) {
   var x = CM.irr(flows);
   return x == null ? null : round(x * 100, 2);
 }
+/* roiPct: the project cash multiple − 1 over the term (cash from operations
+   + residual ÷ capital − 1) — one rule for the answer and every ladder point */
+function roiOf(cf, capital) { return capital > 0 ? round(((cf.totals.fcf + cf.totals.residual) / capital - 1) * 100, 2) : null; }
+
+/* ── the contract-price LADDER: a slider's points (2026-10-25) ────────────
+   The Solela portfolio's contract-price slider reads these and computes no
+   return of its own. ±40% around the contract price given, else around the
+   chipset's reference price (its public spot price, else its on-demand
+   price: site-model's precedence); the finest of $0.05 and $0.10 that keeps
+   it to 41 points (coarser, $0.25 up, only for a price over about $5), and
+   centred on the price so the price given is itself a point. */
+var LADDER = { spanPct: 40, steps: [0.05, 0.10, 0.25, 0.50, 1, 2.5, 5], maxPoints: 41 };
+function referencePrice(c) {
+  var s = CM.gpuPrice(c, 'spot'), d = CM.gpuPrice(c, 'on-demand');
+  return s != null ? { price: s, basis: 'spot' } : d != null ? { price: d, basis: 'on-demand' } : null;
+}
+function ladderGrid(centre) {
+  var half = centre * LADDER.spanPct / 100, last = LADDER.steps[LADDER.steps.length - 1];
+  for (var i = 0; i < LADDER.steps.length; i++) {
+    var n = Math.floor(half / LADDER.steps[i] + 1e-9);
+    if (2 * n + 1 <= LADDER.maxPoints) return { step: LADDER.steps[i], n: n };
+  }
+  return { step: last, n: (LADDER.maxPoints - 1) / 2 };
+}
 
 /* ═══════════════════════════════════════════════════════════════════════════
    contractCase(input, opts)
@@ -143,7 +169,8 @@ function equityIrrPct(cf) {
      site { route own|buy|lease|takeover, purchasePriceUsd, landResidualPct,
             rentMonthly | rentPerKwMonth, rentEscalatorPct, revenueSharePct },
      debt { the skid model's block }, operating { the skid model's figures }
-   opts: { months: true } adds the monthly rows. */
+   opts: { months: true } adds the monthly rows; { ladder: false } skips the
+   contract-price ladder (a slider's points, on by default). */
 function contractCase(input, opts) {
   input = obj(input); opts = obj(opts);
   var notes = [], needs = [];
@@ -352,7 +379,16 @@ function contractCase(input, opts) {
   var lease = site.rentMonthly > 0 ? { monthly: site.rentMonthly, escalatorPct: site.rentEscalatorPct, source: site.rentSource } : null;
   var deal = { price: price || 0, takeOrPay: top / 100, escalator: esc / 100, merchant: merchant, merchantPrice: merchant ? spot : 0,
                fee: partner.feePct / 100, revenueShare: site.revenueSharePct / 100, residualUsd: residualUsd };
-  function at(p) { var d = extend({}, deal); d.price = p; return CM.cashFlow(c, capSite, capex.total, IS, lease, d); }
+  function at(p, noFee) { var d = extend({}, deal); d.price = p; if (noFee) d.fee = 0; return CM.cashFlow(c, capSite, capex.total, IS, lease, d); }
+  /* the figures a price gives: the answer's and each ladder point's, one rule */
+  var years = term / 12;
+  function figuresAt(p, cf) {
+    cf = cf || at(p);
+    var nf = deal.fee > 0 ? at(p, true) : cf;
+    return { price: p, projectIrrPct: cf.returns.projectIrrPct, paybackMonths: cf.returns.projectPaybackMonth, projectMultiple: cf.returns.projectCashMultiple,
+             roiPct: roiOf(cf, capex.total), irrWithoutFeePct: nf.returns.projectIrrPct,
+             revenuePerYear: Math.round(cf.totals.revenue / years), partnerFeePerYear: Math.round(cf.totals.partnerFee / years) };
+  }
 
   var out = {
     build: BUILD, model: 'compute-contract-v1', ok: true, priced: false, needs: needs,
@@ -365,7 +401,7 @@ function contractCase(input, opts) {
                  fixedOpexMonthlyPerUnit: I.fixedOpexMonthly, fixedOpexEscalationPct: I.fixedOpexEscalationPct, priceChangePct: I.priceChangePct },
     sizing: sizing, capex: capex,
     debt: null, returns: null, lines: null, totals: null, bankability: null,
-    priceFor: null, priceForPayback: null, solved: [],
+    priceFor: null, priceForPayback: null, solved: [], ladder: null, ladderBasis: null,
     notes: notes,
     disclaimer: 'Planning estimate on the Omega Core skid model’s own figures, not an offer or an underwriting. The contract price, term and take-or-pay '
       + 'are what an offtaker signs; Lightsmith Energy’s terms are as stated and unverified; no taxes; the cards’ value at the end is an assumption; '
@@ -416,6 +452,26 @@ function contractCase(input, opts) {
     + (s30.paybackMonths ? 'month ' + s30.paybackMonths : 'more than the term') + '; a ' + pb + '-month payback needs ' + gpuHr(sPb.price, 4) + ' (a ' + sPb.projectIrrPct
     + '% project IRR). ' + (sPb.price > s30.price ? 'The two are not the same contract price.' : 'Both hold at the higher of the two prices.'));
 
+  /* ── the ladder: the same figures at each step of a contract-price slider ── */
+  if (opts.ladder !== false) {
+    var ref = price != null ? { price: price, basis: 'contract' } : referencePrice(c);
+    if (!ref) notes.push('No contract price and no public reference price for the ' + c.name + ', so there is no price ladder; a contract price centres one.');
+    else {
+      var g = ladderGrid(ref.price), centre = price != null ? price : round(Math.round(ref.price / g.step) * g.step, 4);
+      out.ladder = [];
+      for (var k = -g.n; k <= g.n; k++) { var lp = round(centre + k * g.step, 4); if (lp > 0) out.ladder.push(figuresAt(lp)); }
+      var lo = out.ladder[0].price, hi = out.ladder[out.ladder.length - 1].price;
+      out.ladderBasis = { centre: centre, centreBasis: ref.basis, referencePricePerGpuHour: ref.basis === 'contract' ? null : r2(ref.price),
+                          step: g.step, spanPct: LADDER.spanPct, points: out.ladder.length, from: lo, to: hi,
+                          words: out.ladder.length + ' contract prices from ' + gpuHr(lo) + ' to ' + gpuHr(hi) + ' a GPU-hour in ' + gpuHr(g.step) + ' steps, '
+                            + (ref.basis === 'contract' ? 'about the contract price, ' + gpuHrAsIs(price)
+                                                        : 'about the ' + c.name + '’s public ' + ref.basis + ' reference, ' + gpuHrAsIs(ref.price) + ' (no contract price given)')
+                            + ', each on the same engine as the answer' };
+      if (ref.basis !== 'contract') notes.push('The price ladder is centred on the ' + c.name + '’s public ' + ref.basis + ' reference (' + gpuHrAsIs(ref.price)
+        + ' a GPU-hour), ' + gpuHr(lo) + '–' + gpuHr(hi) + '; a contract price centres it there instead.');
+    }
+  }
+
   if (price == null) {
     needs.push('contract.pricePerGpuHour');
     notes.push('The contract price per GPU-hour (contract.pricePerGpuHour) is needed for a priced answer; the sizing and the price each return needs (priceFor) are given without it.');
@@ -423,18 +479,21 @@ function contractCase(input, opts) {
   }
 
   /* ── the priced answer ── */
-  var cf = at(price);
+  var cf = at(price), fig = figuresAt(price, cf);
   var put = cf.debt.initialEquity;
   out.priced = true;
   out.debt = cf.debt;
   out.returns = {
-    projectIrrPct: cf.returns.projectIrrPct,
+    projectIrrPct: fig.projectIrrPct,
     equityIrrPct: equityIrrPct(cf),
-    roiPct: capex.total > 0 ? round(((cf.totals.fcf + cf.totals.residual) / capex.total - 1) * 100, 2) : null,
-    paybackMonths: cf.returns.projectPaybackMonth,
+    roiPct: fig.roiPct,
+    paybackMonths: fig.paybackMonths,
     equityPaybackMonths: cf.returns.equityPaybackMonth,
-    projectMultiple: cf.returns.projectCashMultiple,
+    projectMultiple: fig.projectMultiple,
     equityMultiple: cf.returns.equityCashMultiple,
+    irrWithoutFeePct: fig.irrWithoutFeePct,
+    revenuePerYear: fig.revenuePerYear,
+    partnerFeePerYear: fig.partnerFeePerYear,
     roiBasis: 'project cash multiple − 1 over the ' + term + '-month term: (cash from operations + residual) ÷ capital − 1'
   };
   out.lines = cf.years.map(function (y, i) {

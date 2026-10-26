@@ -22,6 +22,10 @@
      9 · a figure out of range is set aside and named; every default named;
          nothing a tenant reads names a source; the price is read, not typed
     10 · ES5 and the header
+    11 · the contract-price ladder: the point at the price given is the
+         answer, the IRR without the fee is a 0% run, it rises with price,
+         ±40% in $0.05 / $0.10 steps within 41 points, centred on the
+         chipset's reference price when no price is given
 
      node scripts/tests/tcomputecontract.js */
 'use strict';
@@ -299,6 +303,78 @@ ok(!/for \(var m = 1; m <= /.test(src) && !/function cashFlow/.test(src), 'no mo
 ok(!/onDemandNode|spotNode|gpusPerNode:\s*\d/.test(src), 'no chipset library of its own');
 ok(/require\('\.\/omega-compute-model'\)/.test(src) && /require\('\.\/omega-core'\)/.test(src), 'it reads the skid model and the product record');
 eq(typeof CC.contractCase, 'function', 'contractCase is the export the portfolio wires to');
+
+/* ═══ 11 · the contract-price ladder (a slider's points) ══════════════ */
+/* The Solela portfolio's contract-price slider reads these and computes no
+   return of its own (2026-10-25). */
+var LD = P.ladder || [], LB = P.ladderBasis || {};
+function pointAt(L, p) { return (L || []).filter(function (x) { return Math.abs(x.price - p) < 1e-9; })[0]; }
+var LKEYS = ['projectIrrPct', 'paybackMonths', 'projectMultiple', 'roiPct', 'irrWithoutFeePct', 'revenuePerYear', 'partnerFeePerYear'];
+ok(Array.isArray(LD) && LD.length && LD.every(function (x) { return ['price'].concat(LKEYS).every(function (k) { return k in x; }); }), 'every point carries the price and the seven figures');
+eq(LB.centre, 2, 'centred on the contract price given');
+eq(LB.step, 0.05, 'in $0.05 steps');
+eq(LD.length, 33, '±40% of $2.00 in $0.05 steps is 33 points');
+eq(LD[0].price + '…' + LD[LD.length - 1].price, '1.2…2.8', 'from $1.20 to $2.80');
+ok(LD.length <= 41, 'never more than 41 points');
+var MID = pointAt(LD, 2);
+LKEYS.forEach(function (k) { eq(MID && MID[k], P.returns[k], 'the point at the given price is the main result: ' + k); });
+[LD[0], LD[6], LD[16], LD[25], LD[32]].forEach(function (pt) {
+  var z = pin(function (p) { p.contract.pricePerGpuHour = pt.price; p.contract.partner.feePct = 0; });
+  eq(pt.irrWithoutFeePct, z.returns.projectIrrPct, '$' + pt.price.toFixed(2) + ': the IRR without the fee is the case run at a 0% fee');
+  var w = pin(function (p) { p.contract.pricePerGpuHour = pt.price; });
+  eq(pt.projectIrrPct + '/' + pt.paybackMonths + '/' + pt.roiPct, w.returns.projectIrrPct + '/' + w.returns.paybackMonths + '/' + w.returns.roiPct, '$' + pt.price.toFixed(2) + ': the point is the case run at that price');
+});
+eq(P.returns.irrWithoutFeePct, pin(function (p) { p.contract.partner.feePct = 0; }).returns.projectIrrPct, 'the main result\'s IRR without the fee is the 0% run too');
+var rising = { price: true, projectIrrPct: true, irrWithoutFeePct: true, projectMultiple: true, roiPct: true, revenuePerYear: true, partnerFeePerYear: true }, payback = true, feeCosts = true;
+for (var li = 1; li < LD.length; li++) {
+  Object.keys(rising).forEach(function (k) { if (!(LD[li][k] > LD[li - 1][k])) rising[k] = false; });
+  if (LD[li].paybackMonths != null && LD[li - 1].paybackMonths != null && LD[li].paybackMonths > LD[li - 1].paybackMonths) payback = false;
+  if (LD[li - 1].paybackMonths != null && LD[li].paybackMonths == null) payback = false;
+}
+LD.forEach(function (x) { if (!(x.irrWithoutFeePct > x.projectIrrPct)) feeCosts = false; });
+Object.keys(rising).forEach(function (k) { ok(rising[k], 'the ladder rises with price: ' + k + ' at every step'); });
+ok(payback, 'and the payback never lengthens as the price rises');
+ok(feeCosts, 'the fee costs return at every price');
+near(MID.partnerFeePerYear, MID.revenuePerYear * 0.1, 1, 'the fee a year is 10% of the revenue a year');
+near(MID.revenuePerYear, P.totals.revenue / 6, 3, 'revenue a year is the term\'s revenue over its six years');
+var ESC = pin(function (p) { p.contract.escalatorPct = 3; });
+near(ESC.returns.revenuePerYear, ESC.totals.revenue / 6, 3, 'under an escalating price too: the average a year, not year 1');
+ok(ESC.returns.revenuePerYear > ESC.lines[0].revenue, 'which is more than year 1 when the price steps up');
+eq(pointAt(LD, 1.2).paybackMonths, null, 'a price that never pays back inside the term says so with null, never a month');
+/* the reference table sent with the request (one H100 skid, $764k, 72 months,
+   10%, 80% LTC, $11,250 a month) reproduces with the rent escalator read as
+   0.025% — the same slip as the first run — and at the stated 2.5% reads lower */
+var SLIP = pin(function (p) { p.site.rentEscalatorPct = 0.025; }).ladder;
+[[1.4, 10.13, 58, 1.34, 23.09], [2, 54.17, 26, 2.89, 73.31], [2.6, 102.19, 17, 4.44, 131.86]].forEach(function (t) {
+  var x = pointAt(SLIP, t[0]);
+  eq(x && [x.projectIrrPct, x.paybackMonths, x.projectMultiple, x.irrWithoutFeePct].join('/'), t.slice(1).join('/'), '$' + t[0].toFixed(2) + ' with the escalator read as 0.025%: the table sent');
+});
+[[1.4, 8.32, 60, 1.27, 21.61], [2, 53.1, 26, 2.82, 72.38], [2.6, 101.39, 17, 4.38, 131.14]].forEach(function (t) {
+  var x = pointAt(LD, t[0]);
+  eq(x && [x.projectIrrPct, x.paybackMonths, x.projectMultiple, x.irrWithoutFeePct].join('/'), t.slice(1).join('/'), '$' + t[0].toFixed(2) + ' with the rent rising 2.5% as stated');
+});
+var NPL = NP.ladderBasis || {}, NPLD = NP.ladder || [];
+eq(NPL.centreBasis, 'spot', 'no contract price: centred on the chipset\'s public spot reference');
+eq(NPL.referencePricePerGpuHour, Math.round(spot * 100) / 100, 'the H100\'s, $2.46');
+eq(NPL.centre, 2.45, 'rounded to the step');
+eq(NPLD.length && NPLD[0].price + '…' + NPLD[NPLD.length - 1].price, '1.5…3.4', 'so an H100 runs $1.50–$3.40');
+ok(NPLD.length > 0 && NPLD.length <= 41 && NPLD.every(function (x) { return x.price >= spot * 0.6 - 1e-9 && x.price <= spot * 1.4 + 1e-9; }), 'inside ±40% of the reference, at most 41 points');
+ok(has(NP, /price ladder is centred on the NVIDIA HGX H100’s public spot reference/), 'and the notes say what it is centred on');
+var GHL = CC.contractCase({ chipset: 'gh200' });
+eq(GHL.ladderBasis && GHL.ladderBasis.centreBasis, 'on-demand', 'a chipset with no spot price centres on its on-demand price');
+ok(!!GHL.ladderBasis && /\$6\.50 \(no contract price given\)/.test(GHL.ladderBasis.words), 'written as the price it is, $6.50');
+var G3 = CC.contractCase({ chipset: 'gb300' });
+eq(G3.ladder, null, 'a chipset with no public price and no contract price has no ladder');
+ok(has(G3, /no price ladder/), 'said so');
+ok((CC.contractCase({ chipset: 'gb300', contract: { pricePerGpuHour: 9 } }).ladder || []).length > 0, 'and a contract price gives it one');
+var HI = CC.contractCase({ contract: { pricePerGpuHour: 6 } }).ladderBasis;
+ok(!!HI && HI.points <= 41 && HI.step === 0.25 && HI.from === 3.75 && HI.to === 8.25, 'over about $5 the step coarsens ($0.25) to keep ±40% within 41 points', JSON.stringify(HI));
+eq((CC.contractCase({ contract: { pricePerGpuHour: 4 } }).ladderBasis || {}).step, 0.1, 'a $4 price is in $0.10 steps');
+var ODD = pin(function (p) { p.contract.pricePerGpuHour = 2.03; });
+ok(pointAt(ODD.ladder, 2.03) && pointAt(ODD.ladder, 2.03).projectIrrPct === ODD.returns.projectIrrPct, 'a price off the $0.05 grid is still a point, and is still the answer');
+eq(CC.contractCase(PIN, { ladder: false }).ladder, null, 'opts.ladder: false skips it');
+eq(JSON.stringify(CC.contractCase(PIN, { ladder: false }).returns), JSON.stringify(P.returns), 'and changes nothing else');
+eq(CC.contractCase({ availableKw: 70, contract: { pricePerGpuHour: 2 } }).ladder, null, 'no skid, no ladder');
 
 /* ═══ 10 · ES5 and the header ═════════════════════════════════════════ */
 var code = src.replace(/\/\*[\s\S]*?\*\//g, '');
