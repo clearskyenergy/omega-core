@@ -221,16 +221,19 @@ function make(deps) {
     var files = filesOf(await kids(ref, 'files')), agreements = await kids(ref, 'agreements'), kase = caseFor(site, cfg);
     return { view: D.view(site, { config: cfg, now: deps.now(), files: files, agreements: agreements, kase: kase }), schema: D.schema(cfg), brand: D.brandOf(orgDoc.exists ? orgDoc.data() : null, c.org) };
   }
-  /* the register's GET: a row a site, the strip and the tally; null where off */
+  /* the register's GET: a row a site of the page; the strip and the tally
+     over the WHOLE register (the list pages by 200), archived sites left
+     out; null where the switch is off */
   async function registerJoin(c, docs) {
     var billing = await billingOf(c.root);
     if (!D.enabled(billing)) return null;
-    var cfg = D.configOf(billing), orgDoc = await c.root.get(), rows = {}, list = [];
-    docs.forEach(function (d) {
-      var site = BR.normalize(d.id, typeof d.data === 'function' ? d.data() : d), row = D.row(site, { config: cfg, now: deps.now(), kase: caseFor(site, cfg, { ladder: false }) });
-      rows[d.id] = row; if (!site.archived) list.push(row);
-    });
-    return { rows: rows, pipeline: D.pipeline(list), tally: D.tally(list, cfg), schema: D.schema(cfg), brand: D.brandOf(orgDoc.exists ? orgDoc.data() : null, c.org) };
+    var cfg = D.configOf(billing), orgDoc = await c.root.get(), rows = {}, cache = {};
+    function rowOf(id, data) { if (!cache[id]) { var site = BR.normalize(id, data || {}); cache[id] = { row: D.row(site, { config: cfg, now: deps.now(), kase: caseFor(site, cfg, { ladder: false }) }), archived: site.lifecycleStatus === 'archived' }; } return cache[id]; }
+    docs.forEach(function (d) { rows[d.id] = rowOf(d.id, typeof d.data === 'function' ? d.data() : d).row; });
+    var all = await c.root.collection('sites').limit(SITE_SCAN + 1).get(), list = [];
+    all.docs.slice(0, SITE_SCAN).forEach(function (d) { var r = rowOf(d.id, d.data()); if (!r.archived) list.push(r.row); });
+    return { rows: rows, pipeline: D.pipeline(list), tally: D.tally(list, cfg), counted: list.length, limited: all.docs.length > SITE_SCAN,
+      schema: D.schema(cfg), brand: D.brandOf(orgDoc.exists ? orgDoc.data() : null, c.org) };
   }
   return { post: post, siteView: siteView, registerJoin: registerJoin, caseFor: caseFor };
 }
