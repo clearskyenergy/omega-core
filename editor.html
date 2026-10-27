@@ -109928,10 +109928,17 @@ button[style*="linear-gradient"][aria-disabled="true"]{
           ? (el.querySelector('.rbtn') || el) : el;
         el.classList.toggle('omg-keep', matches(probe));
       }
-      /* A panel with nothing left in it is just a stray caption. */
+      /* A panel with nothing left in it is just a stray caption. The
+         address cell is the one panel with no .rbtn to keep — it holds the
+         field that loads the site map, which is exactly what a designer is
+         here to do, and it was always visible in Designer when it was a
+         bare box this culling never saw. Name it, or wrapping it as a
+         panel silently took the address away (and timed out the prime
+         handoff's fill). */
       var panels = document.querySelectorAll('#ribbon .rpanel');
       for (i = 0; i < panels.length; i++) {
         panels[i].classList.toggle('omg-empty',
+          !panels[i].classList.contains('omega-addr-cell') &&
           panels[i].querySelectorAll('.omg-keep').length === 0);
       }
       var tabs = document.querySelectorAll('#ribbon-tabs .rtab, #ribbon-tab-menu .rtm-item');
