@@ -98,6 +98,7 @@ rfqs/{id}/recipients/{vendorOrgId}    # each vendor's slice + quote
 omega_orgs/{orgId}.whiteLabel         # what the PLATFORM is called here
 omega_orgs/{orgId}/storefront/config  # published products + copy + cost basis
 omega_orgs/{orgId}/storefront/counters# the durable daily order limit
+intake_links/{il_…}                   # a shareable OSA site-intake link (Admin SDK only; docs/AGENT-CONNECTOR.md §4)
 embed_keys/{omega_pk_…}               # a publishable key = ONE installation
 embed_configs/{id}                    # a designer's published quote, snapshot
 orders/{id}                           # tenant sells, ClearSky fulfils

@@ -1010,6 +1010,14 @@ pre.raw{background:#F5F7F9;border-radius:7px;padding:11px;font-size:11px;overflo
             <th class="num">Size</th><th>Suggested stage</th><th></th></tr></thead>
           <tbody id="inbox-rows"></tbody></table></div>
       </div>
+      <div class="card" id="intake-card" style="display:none">
+        <div class="card-h"><h2>Intake links</h2>
+          <button class="btn-x" style="margin-left:auto" onclick="newIntakeLink()">New link</button></div>
+        <div class="card-b" style="padding-bottom:12px"><div id="intake-note"></div></div>
+        <div class="tbl-wrap"><table>
+          <thead><tr><th>Link</th><th>Credited to</th><th class="num">Sites</th><th>Status</th><th></th></tr></thead>
+          <tbody id="intake-rows"></tbody></table></div>
+      </div>
       <div class="card"><div class="card-b">
         <div class="sec-note" style="margin-top:0">Adoption asks one question the source
           record cannot answer: <b>who brought it</b>. A marketplace listing knows who
@@ -1458,6 +1466,7 @@ function refresh(manual){
        assignee dropdown needs them (see optUsers). The rules already decide
        who may read them; asking is not a grant. */
     if ((A.can('approve_any') || A.can('write_deal')) && !S.invites.length) loadInvites();
+    if (canMakeIntakeLinks() && !S.intakeLoaded) loadIntakeLinks();
     /* Point the logo and the Portal button at THIS person's own tenant. Runs
        here because A.me() is resolved by now; harmless to repeat. */
     resolveHome();
@@ -1591,7 +1600,7 @@ function render(){
   renderBanners(); renderDash(); renderPipeline(); renderPartners(); renderJD();
   renderFunding(); renderSupply(); renderInbox(); renderWork();
   renderMatrix(); renderPipelineWidget(); renderBoard(); renderVerify(); renderDesign();
-  renderSettings(); renderStaff(); renderInvites(); renderViewSwitch(); renderBuyer();
+  renderSettings(); renderStaff(); renderInvites(); renderIntakeLinks(); renderViewSwitch(); renderBuyer();
   renderUsers(); renderOrgs(); renderCounts();
   if(S.openId) renderDrawer();
 }
@@ -5093,6 +5102,82 @@ function doResendInvite(email){
    osa.clearskyomega.com; served from omega-core the same expression names a
    URL that 404s, and it was going into invitations. */
 function osaUrl(){ return location.origin + location.pathname; }
+
+/* ── INTAKE LINKS ─────────────────────────────────────────────────────
+   A link anyone can open to submit a site: /site-intake?l=il_…  Each
+   submission lands here at Referred, credited to the org the link was made
+   for, channel "Intake link". The browser never writes intake_links (the
+   rules close it); /api/site-intake makes, lists and closes them and checks
+   the role again (api/_lib/intake-links.js). The JV's agent can make the
+   same links through /api/agent/intake-links. */
+function canMakeIntakeLinks(){
+  return A.can('approve_any') || A.can('approve_scoped') || A.can('approve_own_org');
+}
+function loadIntakeLinks(){
+  S.intakeLoaded = true;
+  return apiPost('/api/site-intake', { action:'list' }).then(function(j){
+    S.intakeLinks = (j && j.links) || []; S.intakeErr = ''; renderIntakeLinks();
+  }, function(e){ S.intakeLinks = []; S.intakeErr = (e && e.message) || 'Could not load the links'; renderIntakeLinks(); });
+}
+function renderIntakeLinks(){
+  var card = document.getElementById('intake-card'); if(!card) return;
+  if(!canMakeIntakeLinks()){ card.style.display='none'; return; }
+  card.style.display='';
+  var links = S.intakeLinks || [];
+  document.getElementById('intake-note').innerHTML = S.intakeErr
+    ? '<div class="banner warn">'+esc(S.intakeErr)+'</div>'
+    : '<div class="banner info">Send a link to anyone — a landowner, a broker, a partner. They fill in '
+      + 'one form (with a Google Earth file if they have one) and the site lands in the pipeline at '
+      + '<b>Referred</b>, credited to the organisation on the link. You are emailed each one. A link '
+      + 'reads nothing back; close it here when it has done its job.</div>';
+  document.getElementById('intake-rows').innerHTML = links.length ? links.map(function(l){
+    var status = l.revoked ? 'Closed' : (l.active ? 'Open' : 'Expired');
+    return '<tr><td><div class="t-name">'+esc(l.label)+'</div>'
+      + '<div class="t-sub mono" style="font-size:11.5px;word-break:break-all">'+esc(l.url)+'</div></td>'
+      + '<td>'+esc(l.partnerName || A.orgName(l.orgId) || l.orgId)+'</td>'
+      + '<td class="num">'+esc(String(l.count||0))+'</td>'
+      + '<td>'+esc(status)+'</td>'
+      + '<td>'+(l.active ? '<button class="btn-x" onclick="copyIntakeLink(\''+esc(l.id)+'\')">Copy</button> '
+      + '<button class="btn-x danger" onclick="closeIntakeLink(\''+esc(l.id)+'\')">Close</button>' : '')+'</td></tr>';
+  }).join('') : '<tr><td colspan="5" class="t-sub">No links yet. <b>New link</b> makes one.</td></tr>';
+}
+function copyIntakeLink(id){
+  var l = (S.intakeLinks||[]).filter(function(x){ return x.id===id; })[0]; if(!l) return;
+  var done = function(){ toast('Link copied'); };
+  if(navigator.clipboard && navigator.clipboard.writeText)
+    navigator.clipboard.writeText(l.url).then(done, function(){ toast('Copy it from the row: '+l.url); });
+  else toast('Copy it from the row: '+l.url);
+}
+function newIntakeLink(){
+  var pick = A.can('approve_any') || A.can('approve_scoped');
+  var fields = [
+    {key:'label',type:'text',label:'What is this link for',required:true,
+      value:'', placeholder:'e.g. Landowner outreach — West Texas'}
+  ];
+  if(pick) fields.push({key:'org',type:'orgpick',label:'Credit the sites to (email domain)',required:true,
+      options:optOrgs(), value:String((A.me&&A.me()&&A.me().orgId)||''),
+      validate:function(v){ return A.validateDomain(v); }});
+  else fields.push({type:'static',html:'Sites that come in through it are credited to your organisation.'});
+  Forms.open({ title:'New intake link', fields:fields, submitLabel:'Make the link' }).then(function(v){
+    if(!v) return;
+    var body = { action:'create', label:v.label };
+    if(v.org){ body.org = v.org; body.partnerName = A.orgName(v.org) || ''; }
+    apiPost('/api/site-intake', body).then(function(j){
+      S.intakeLinks = [j.link].concat(S.intakeLinks||[]); renderIntakeLinks();
+      copyIntakeLink(j.link.id);
+    })['catch'](function(e){ toast((e&&e.message)||'Could not make the link',true); });
+  });
+}
+function closeIntakeLink(id){
+  Forms.confirm({ title:'Close this link?',
+    fields:[{type:'static',html:'Anyone who opens it will be told it is closed. Sites already submitted stay in the pipeline.'}],
+    submitLabel:'Close the link'
+  }).then(function(ok){
+    if(!ok) return;
+    apiPost('/api/site-intake', { action:'revoke', id:id }).then(function(){ toast('Closed'); return loadIntakeLinks(); })
+     ['catch'](function(e){ toast((e&&e.message)||'Could not close the link',true); });
+  });
+}
 
 function doRevokeInvite(email){
   Forms.confirm({ title:'Withdraw the invitation?', intro:email,

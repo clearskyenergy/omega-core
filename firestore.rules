@@ -3826,6 +3826,21 @@ service cloud.firestore {
     }
 
     /* ════════════════════════════════════════════════════════════════════════
+       INTAKE LINKS  —  intake_links/{il_…}                     ← SERVER ONLY
+       ════════════════════════════════════════════════════════════════════════
+       A shareable site-intake link for the OSA portfolio: the id IS the link
+       (/site-intake?l=il_…), so a browser that could read this collection
+       could list every live link and file sites through any of them. Body:
+       orgId, partnerName, label, active, expiresAt, dailyCap, count, day,
+       dayCount, notify, createdBy. Written and read ONLY by api/site-intake.js
+       and api/agent/intake-links.js through the Admin SDK
+       (api/_lib/intake-links.js is the rule). Explicit, for the reason
+       agent_keys gives. */
+    match /intake_links/{linkId} {
+      allow read, write: if false;
+    }
+
+    /* ════════════════════════════════════════════════════════════════════════
        THE SALES DATABASE  —  sales_*                           ← SERVER ONLY
        ════════════════════════════════════════════════════════════════════════
        ClearSky's own book: prospects (companies and the people at them,
