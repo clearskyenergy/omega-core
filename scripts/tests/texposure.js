@@ -20,8 +20,17 @@ function ok(name, fn){
   try { fn(); console.log('  ✓ ' + name); }
   catch (e) { fails++; console.log('  ✗ ' + name + '\n      ' + e.message); }
 }
-const QUOTE = { name:'Gotion', dcPerKwh:113, basis:'quote', date:'2026-08-28',
-                expires:'2026-10-27', incoterm:'EXW Manteno, IL',
+/* The quote's dates are relative to the run, never fixed: a quote that
+   names its own expiry stops counting as evidence ON that date (the
+   model's rule, which is right), so a hard-coded expiry fell into the
+   past on 2026-10-27 and failed CI on every branch — the same way a
+   fixed due date did on 2026-10-15. Thirty days old, thirty days left:
+   valid, and nowhere near the 180-day staleness rule. */
+const iso = ms => new Date(ms).toISOString().slice(0, 10);
+const QUOTE = { name:'Gotion', dcPerKwh:113, basis:'quote',
+                date: iso(Date.now() - 30 * 86400000),
+                expires: iso(Date.now() + 30 * 86400000),
+                incoterm:'EXW Manteno, IL',
                 model:'5 MWh DC block', blockMwh:5 };
 function priced(kw, extra){
   const v = Object.assign({}, QUOTE, extra || {});
