@@ -304,6 +304,29 @@ editor's autopilot runs as the map/parcel/roads/score pass on the loaded
 project until core dispatches that mode to the modular build. There is no
 server-side queue in this repository, so nothing designs itself unattended.
 
+**The canonical register is converted, not re-typed.** The whole portfolio
+lives in one workbook (the OSA Canonical Portfolio and Specialist Queue, tab
+*Project Register*), and `scripts/osa-register-to-referrals.js` turns that tab
+into the referral CSVs this importer already reads — one file per partner,
+`Ref` set to the canonical Project ID so a corrected re-export is an update
+rather than a second copy. Three things it will not do, each for the reason
+§2 gives:
+
+- **It reads the template's field list out of `ingest-data.js`** rather than
+  carrying a copy. A renamed header would not fail, it would land as a blank
+  column, and nobody would see it.
+- **It dry-runs its own output through the real `buildRows`** before writing a
+  file, so a refusal or a warning appears at the terminal rather than in front
+  of somebody at the import dialog.
+- **It never guesses attribution.** A row whose Portfolio Tag has no verified
+  email domain goes to `needs-attribution.csv` and nowhere else. The domains it
+  does know come from the workbook's own JV Status Cadence tab.
+
+The upload itself stays the reviewed browser action described above. The
+register's unknowns are sentences, not blanks ("UNKNOWN — do not apply the
+below-1-MW floor until …"), so no row carries a size: the batch default is
+the one place a size is decided, which is what §8 wanted it for.
+
 ## 9 · What this still does not do
 
 Worth saying out loud, because each is a decision rather than an omission.
