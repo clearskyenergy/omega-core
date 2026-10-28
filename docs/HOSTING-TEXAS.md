@@ -64,7 +64,7 @@ never from memory.
 | Utility | EIA id (proven at) | Publishes hosting capacity | What it offers instead | Its own pages (fetched 2026-10-28) |
 |---|---|---|---|---|
 | Oncor Electric Delivery | 44372 (Dallas, Lewisville, Garland, Denton, Georgetown) | No — its developer page offers "prescreen options and project classification"; no map, no layer | Pre-screen, then an interconnection application under 16 TAC §25.211/§25.212; large DG (~500 kW–10 MW+) takes a detailed impact study, about 9–12 months; dg@oncor.com | [Energy system developers](https://www.oncor.com/us/en/home/smart-energy/renewables-solar-and-more/energy-system-developers.html) · [For installers](https://www.oncor.com/us/en/home/smart-energy/renewables-solar-and-more/for-installers.html) |
-| CenterPoint Energy Houston Electric | 8901 (Houston) | No — told the PUCT so in Docket 56211 (June 2024): "not actively pursuing development of a hosting capacity map … the Company does offer a pre-screen in lieu of a hosting capacity map to any prospective customers" ([56211_284_1401104.PDF](https://interchange.puc.texas.gov/Documents/56211_284_1401104.PDF), RFI EDF-RF103-03) | Pre-screen on request, DER application under 16 TAC §25.211/§25.212 | [Builders & developers](https://www.centerpointenergy.com/en-us/for-business/industry/builders-developers) (its DG pages are JS-routed; the docket PDF is the proof) |
+| CenterPoint Energy Houston Electric | 8901 (Houston) | No — told the PUCT so in Docket 56211 (June 2024): "not actively pursuing development of a hosting capacity map … the Company does offer a pre-screen in lieu of a hosting capacity map to any prospective customers" ([56211_284_1401104.PDF](https://interchange.puc.texas.gov/Documents/56211_284_1401104.PDF), RFI EDF-RFI03-03) | Pre-screen on request, DER application under 16 TAC §25.211/§25.212 | [Builders & developers](https://www.centerpointenergy.com/en-us/for-business/industry/builders-developers) (its DG pages are JS-routed; the docket PDF is the proof) |
 | AEP Texas | 20404 (North: Abilene) and 3278 (Central: Corpus Christi, Harlingen) — the layer carries both pre-merger companies, each tagged with AEP's "OK" state code | No | Interconnection application through PowerClerk; DER Team, San Angelo: DER_AEPTexas@aep.com, 361-881-5333 | [Generating equipment](https://www.aeptexas.com/business/builders/generating-equipment) |
 | Texas-New Mexico Power (TNMP) | 40051 (Dallas, Lewisville, Garland, Denton — its polygon overlaps Oncor's across the Metroplex) | No | Interconnection application under 16 TAC §25.211/§25.212 | [Interconnecting](https://www.tnmp.com/customers/interconnecting) |
 | Lubbock Power & Light | 11292 ("CITY OF LUBBOCK - (TX)" at Lubbock) | No | Interconnection agreement filed with City of Lubbock Utilities (customerrelations@mylubbock.us). In ERCOT retail choice since March–April 2024 (ERCOT notice [M-B022724-02](https://www.ercot.com/services/comm/mkt_notices/M-B022724-02)); LP&L stays the wires company | lpandl.com — **bot-walled**: lpandl.com answers scripts with a 301 to the city's LP&L page (mylubbock.us/358), which answers Cloudflare 403; verified only to the redirect. A person's browser opens both normally |
@@ -189,6 +189,11 @@ same list (`GV.whoServes`).
   MSA licence governs the PUCT-edited copies its own public viewer serves.
   Cleared, they become the Texas `STATE_LAYERS` authority and settle the
   metros (the one open fix for the Dallas headline).
+- **Austin's open-data portal carries an `austin_energy_service_area`
+  boundary** (city-published, surfaced via data.texas.gov) — a candidate
+  `SERVICE_AREAS` authority for Austin on the City of Mesa pattern, found by
+  the adversarial verification on 2026-10-28. Check its licence first; a
+  scout follow-up, and it would settle Austin-area attribution.
 - **LP&L's pages** refuse scripted reads (Cloudflare on lpandl.com and
   mylubbock.us); verified to the 301 redirect only. A person's browser is
   fine. Re-check on a future run.

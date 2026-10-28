@@ -116,6 +116,7 @@ eq(HS.forCandidate({ eiaId: '9726', type: 'INVESTOR OWNED', state: 'OH' }, ['NJ'
 ok(HS.ENTRIES.every(function (e) { return !e.group || e.type === 'group'; }), 'only a group entry carries a group');
 deq(HS.statesAt(41.88, -87.63), ['IL']); deq(HS.statesAt(31.97, -99.9), ['TX'], 'Texas is researched since 2026-10-28');
 deq(HS.statesAt(31.7619, -106.485), ['TX'], 'El Paso is inside Texas\'s padded box'); deq(HS.statesAt(39.74, -104.99), [], 'Denver is outside the ten');
+deq(HS.statesAt(32.3199, -106.7637), [], 'Las Cruces is outside it: EPE\'s New Mexico side is the NMPRC\'s, never answered with Texas\'s rules');
 
 /* ── Arizona, utility by utility (2026-10-20, docs/HOSTING-ARIZONA.md) ─
    No Arizona utility publishes distribution hosting capacity: each entry is
@@ -188,6 +189,8 @@ eq(HS.byEia('5701').key, 'epe-tx'); eq(HS.byEia('17718').key, 'sps'); eq(HS.byEi
 eq(HS.byEia('1015').key, 'austin-energy'); eq(HS.byEia('16604').key, 'cps-energy');
 eq(HS.byEia('14626').key, 'tx-coops', 'Pedernales'); eq(HS.byEia('5078').key, 'tx-coops', 'CoServ (Denton County EC)'); eq(HS.byEia('11501').key, 'tx-coops', 'Magic Valley');
 eq(HS.byEia('6958').key, 'tx-munis', 'Garland'); eq(HS.byEia('5063').key, 'tx-munis', 'Denton');
+eq(HS.byEia('6173').key, 'tx-coops', 'Fannin County EC: typed NOT AVAILABLE on the layer, named so it never reads as a water district');
+eq(HS.byEia('1287').key, 'tx-munis', 'the City of Bartlett\'s electric: same, the Coleman County precedent');
 /* the layer tags AEP Texas's rows with AEP's Ohio state code: the EIA id still answers in Texas */
 eq(HS.forCandidate({ eiaId: '3278', type: 'INVESTOR OWNED', state: 'OK' }, ['TX']).key, 'aep-texas');
 eq(HS.forCandidate({ eiaId: '999994', type: 'COOPERATIVE', state: 'TX' }, ['TX']).key, 'tx-coops', 'a Texas co-op the list does not name falls to the group');

@@ -84,7 +84,7 @@ var CS = require('./comed-service');
    2026-10-28: Texas utility by utility (docs/HOSTING-TEXAS.md): every entry
    is `none`, each with the route its utility offers instead and the PUCT's
    own public boundary viewer as the person's check. */
-var VERSION = 'hosting-sources-2026-10-28';
+var VERSION = 'hosting-sources-2026-10-28.1';   /* .1: adversarial verification — TX box west of Las Cruces, Fannin County EC and the City of Bartlett named */
 var VERIFIED_AT = '2026-10-17';
 var AZ_VERIFIED_AT = '2026-10-20';
 var TX_VERIFIED_AT = '2026-10-28';
@@ -98,7 +98,7 @@ var STATE_BOX = {
   IL: [36.92, -91.57, 42.56, -86.97], FL: [24.34, -87.69, 31.05, -79.92], GA: [30.31, -85.66, 35.05, -80.79],
   NJ: [38.88, -75.61, 41.41, -73.84], AZ: [31.28, -114.87, 37.05, -108.99], CA: [32.48, -124.53, 42.06, -114.08],
   CT: [40.93, -73.78, 42.10, -71.74], MA: [41.19, -73.56, 42.94, -69.88], RI: [41.10, -71.96, 42.07, -71.07],
-  TX: [25.6, -107.0, 36.6, -93.4]
+  TX: [25.6, -106.70, 36.6, -93.4]   /* west bound east of Las Cruces: EPE's New Mexico side is the NMPRC's, not the PUCT's (El Paso, -106.485, stays inside) */
 };
 
 /* ── parse rules ─────────────────────────────────────────────────────── */
@@ -904,7 +904,7 @@ var ENTRIES = [
       route: 'LP&L\'s interconnection agreement, filed with City of Lubbock Utilities customer service (customerrelations@mylubbock.us)',
       check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
   none('epe-tx', 'El Paso Electric', ['5701'], ['TX'], 'IOU', 'https://www.epelectric.com/residential/rooftop-solar/texas-interconnection-of-facilities-up-to-10-mw',
-    'El Paso Electric publishes no hosting capacity (far west Texas, WECC, outside ERCOT; it also serves New Mexico). It publishes a public DG interconnection QUEUE (applications by status), which is not capacity and is not read as a figure. Texas interconnection of facilities up to 10 MW is by application under the PUCT\'s rules; its distribution interconnection page carries the process. The national layer draws Rio Grande Electric Cooperative over the city of El Paso, where El Paso Electric is the likelier utility; confirm with the bill.',
+    'El Paso Electric publishes no hosting capacity (far west Texas, WECC, outside ERCOT; it also serves southern New Mexico, where interconnection is under the NMPRC\'s rules, not the PUCT\'s — this entry answers only in Texas). It publishes a public DG interconnection QUEUE (applications by status), which is not capacity and is not read as a figure. Texas interconnection of facilities up to 10 MW is by application under the PUCT\'s rules; its distribution interconnection page carries the process. The national layer draws Rio Grande Electric Cooperative over the city of El Paso, where El Paso Electric is the likelier utility; confirm with the bill.',
     { legal: 'El Paso Electric Company', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'El Paso Electric\'s Texas interconnection page',
       route: 'an interconnection application to EPE (facilities up to 10 MW) under the PUCT\'s rules; its public queue shows applications, not capacity',
       check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
@@ -933,12 +933,12 @@ var ENTRIES = [
     { legal: 'City of San Antonio (CPS Energy)', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'CPS Energy\'s distributed generation page',
       route: 'a DG interconnection application under CPS Energy\'s Distributed Generation Manual (DG@cpsenergy.com, 210-353-2700)',
       check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
-  none('tx-munis', 'Texas municipal utilities', ['6958', '5063', '7129', '3940'], ['TX'], 'group', 'https://tppa.com/member-utilities/',
+  none('tx-munis', 'Texas municipal utilities', ['6958', '5063', '7129', '3940', '1287'], ['TX'], 'group', 'https://tppa.com/member-utilities/',
     'No Texas municipal utility publishes hosting capacity (Garland, Denton, Bryan, Georgetown, New Braunfels, College Station and the rest); contact the city utility\'s engineering or interconnection office. New Braunfels Utilities is missing from the national territory layer at its own city, so a New Braunfels point can read as its neighbours; confirm with the bill.',
     { verifiedAt: TX_VERIFIED_AT, viewerLabel: 'the Texas Public Power Association\'s member list',
       route: 'the city utility\'s own interconnection application and engineering review',
       group: { states: ['TX'], types: ['MUNICIPAL', 'POLITICAL SUBDIVISION', 'STATE'] } }),
-  none('tx-coops', 'Texas electric cooperatives', ['14626', '5078', '1892', '11501', '18976', '8620', '6182', '16638', '16627', '13830', '27369', '3938', '4262', '19159', '20948', '10009', '1175', '7752', '16057', '16063', '19579', '16461', '11364', '17561', '16146', '12452', '1273'], ['TX'], 'group', 'https://texas-ec.org/about/member-directory/',
+  none('tx-coops', 'Texas electric cooperatives', ['14626', '5078', '1892', '11501', '18976', '8620', '6182', '16638', '16627', '13830', '27369', '3938', '4262', '19159', '20948', '10009', '1175', '7752', '16057', '16063', '19579', '16461', '11364', '17561', '16146', '12452', '1273', '6173'], ['TX'], 'group', 'https://texas-ec.org/about/member-directory/',
     'No Texas cooperative publishes hosting capacity (Pedernales, CoServ (Denton County EC), Bluebonnet, Magic Valley, Guadalupe Valley and the rest were checked); ask the co-op\'s own engineering review. The co-ops\' polygons on the national territory layer overlap the metros, so a co-op named beside a TDU inside a city is confirmed with the bill or the PUCT\'s viewer.',
     { verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Texas Electric Cooperatives\' member directory',
       route: 'the cooperative\'s own interconnection application and engineering review',
