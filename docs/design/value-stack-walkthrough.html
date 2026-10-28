@@ -1,0 +1,764 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- Companion to value-stack-funnel.html, described in docs/VALUE-STACK-FUNNEL.md.
+     Published privately as a claude.ai artifact; docs/ is not deployed.
+     Printing it (Chrome, Save as PDF) gives value-stack-walkthrough.pdf:
+     three 11 x 17 in landscape sheets, laid out by the @media print rules. -->
+<title>OMEGA Value Stack Walkthrough</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. */
+:root{
+  --page:#F5F4F0; --paper:#FFFFFF; --ink:#14171A; --ink-2:#48545F; --ink-3:#66727E;
+  --line:rgba(20,23,26,.13); --line-2:rgba(20,23,26,.34);
+  --omega:#2B5FA8; --omega-soft:#E6EEF9; --omega-faint:#F4F7FC;
+  --dvpp:#6250C4; --dvpp-soft:#F1EEFB;
+  --est:#8F5E0E; --est-soft:#FBF0DA;
+  --no:#6F7B86; --no-soft:#EDEFF1;
+  --pub-fill:#16895A; --pub-text:#FFFFFF;
+  --plan-fill:#C77A00; --plan-text:#14171A;
+  --band-fill:#E3A94F; --band-text:#14171A;
+  --grid-a:rgba(43,95,168,.075); --grid-b:rgba(43,95,168,.03);
+  --display:"Archivo","Helvetica Neue",Arial,sans-serif;
+  --body:"Inter",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:"IBM Plex Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --page:#0E151D; --paper:#15202B; --ink:#E6ECF2; --ink-2:#B0BCC8; --ink-3:#8E9BA8;
+    --line:rgba(230,236,242,.13); --line-2:rgba(230,236,242,.36);
+    --omega:#8DB3EC; --omega-soft:rgba(141,179,236,.14); --omega-faint:rgba(141,179,236,.05);
+    --dvpp:#B6ABF7; --dvpp-soft:rgba(182,171,247,.10);
+    --est:#E9B45E; --est-soft:rgba(233,180,94,.13);
+    --no:#9AA6B2; --no-soft:rgba(154,166,178,.12);
+    --pub-fill:#2A9A68; --pub-text:#0E151D;
+    --plan-fill:#BF7C14; --plan-text:#0E151D;
+    --band-fill:#7F551A; --band-text:#F3E7D2;
+    --grid-a:rgba(141,179,236,.06); --grid-b:rgba(141,179,236,.025);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --page:#0E151D; --paper:#15202B; --ink:#E6ECF2; --ink-2:#B0BCC8; --ink-3:#8E9BA8;
+  --line:rgba(230,236,242,.13); --line-2:rgba(230,236,242,.36);
+  --omega:#8DB3EC; --omega-soft:rgba(141,179,236,.14); --omega-faint:rgba(141,179,236,.05);
+  --dvpp:#B6ABF7; --dvpp-soft:rgba(182,171,247,.10);
+  --est:#E9B45E; --est-soft:rgba(233,180,94,.13);
+  --no:#9AA6B2; --no-soft:rgba(154,166,178,.12);
+  --pub-fill:#2A9A68; --pub-text:#0E151D;
+  --plan-fill:#BF7C14; --plan-text:#0E151D;
+  --band-fill:#7F551A; --band-text:#F3E7D2;
+  --grid-a:rgba(141,179,236,.06); --grid-b:rgba(141,179,236,.025);
+}
+
+*,*::before,*::after{box-sizing:border-box}
+body{
+  margin:0; color:var(--ink); font-family:var(--body); font-size:15px; line-height:1.55;
+  background-color:var(--page);
+  background-image:
+    linear-gradient(var(--grid-a) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-a) 1px,transparent 1px),
+    linear-gradient(var(--grid-b) 1px,transparent 1px),
+    linear-gradient(90deg,var(--grid-b) 1px,transparent 1px);
+  background-size:120px 120px,120px 120px,24px 24px,24px 24px;
+}
+.sheet{max-width:1180px; margin-inline:auto; padding-inline:16px; padding-block:28px 64px; display:grid; gap:48px}
+@media (min-width:720px){ .sheet{padding-inline:28px} }
+
+h1,h2,h3{font-family:var(--display); text-wrap:balance; margin:0; color:var(--ink)}
+h1{font-size:clamp(30px,5vw,46px); font-weight:800; letter-spacing:-.015em; line-height:1.04}
+h2{font-size:clamp(21px,2.6vw,26px); font-weight:700; letter-spacing:-.01em; line-height:1.15}
+h3{font-size:16px; font-weight:700; line-height:1.25}
+p{margin:0}
+.eyebrow,.label{font-family:var(--mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3)}
+code{font-family:var(--mono); font-size:.92em}
+
+/* ── title block, drawn like the one on a drawing sheet ─────────────── */
+.titleblock{display:grid; grid-template-columns:minmax(0,1fr); border:1.5px solid var(--ink); background:var(--paper)}
+@media (min-width:860px){ .titleblock{grid-template-columns:minmax(0,1fr) 300px} }
+.tb-main{padding:26px 24px 24px; display:grid; gap:12px; align-content:start}
+.tb-main .lede{font-size:17px; line-height:1.5; color:var(--ink-2); max-width:62ch}
+.tb-meta{margin:0; display:grid; grid-template-columns:1fr 1fr; border-top:1px solid var(--line-2)}
+@media (min-width:860px){ .tb-meta{grid-template-columns:1fr; border-top:0; border-left:1px solid var(--line-2)} }
+.tb-meta div{padding:11px 16px; border-bottom:1px solid var(--line); display:grid; gap:2px}
+.tb-meta div:nth-child(odd){border-right:1px solid var(--line)}
+.tb-meta div:nth-last-child(-n+2){border-bottom:0}
+@media (min-width:860px){
+  .tb-meta div:nth-child(odd){border-right:0}
+  .tb-meta div:nth-last-child(-n+2){border-bottom:1px solid var(--line)}
+  .tb-meta div:last-child{border-bottom:0}
+}
+.tb-meta dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3)}
+.tb-meta dd{margin:0; font-size:14px; font-weight:600}
+
+.thesis{display:grid; gap:12px; max-width:72ch}
+.thesis p{font-size:16px; color:var(--ink-2)}
+.thesis strong{color:var(--ink); font-weight:600}
+.agenda{border:1.5px solid var(--dvpp); background:var(--dvpp-soft); padding:12px 14px; display:grid; gap:6px}
+.agenda .label{color:var(--dvpp)}
+.agenda ul{margin:0; padding-left:18px; display:grid; gap:4px; font-size:14px; color:var(--ink-2)}
+
+section{display:grid; gap:18px}
+.section-head{display:grid; gap:6px; max-width:74ch}
+.section-head p{color:var(--ink-2)}
+
+/* ── figures ────────────────────────────────────────────────────────── */
+figure{margin:0; display:grid; gap:12px}
+.fig-frame{background:var(--paper); border:1px solid var(--line-2); overflow-x:auto; -webkit-overflow-scrolling:touch}
+.fig-frame svg{display:block; width:100%; height:auto}
+#flows .fig-frame svg{min-width:1040px}
+figcaption{font-size:13.5px; color:var(--ink-2); max-width:86ch}
+figcaption b{color:var(--ink); font-weight:600}
+.scroll-hint{display:none; font-family:var(--mono); font-size:11px; color:var(--ink-3)}
+@media (max-width:1080px){ .scroll-hint{display:block} }
+
+.legend{display:flex; flex-wrap:wrap; gap:10px 22px; font-size:13px; color:var(--ink-2); align-items:center}
+.legend > span{display:inline-flex; align-items:center; gap:8px}
+.sw{display:inline-block; width:26px; height:14px; flex:none}
+.sw.applied{border:1.5px solid var(--omega); background:var(--omega-soft)}
+.sw.open{border:1.5px dashed var(--omega); background:var(--paper)}
+.sw.dv{border:1.5px dashed var(--dvpp); background:var(--dvpp-soft)}
+.sw.pub{background:var(--pub-fill); border-radius:2px}
+.sw.plan{background:var(--plan-fill); border-radius:2px}
+.sw.band{background:var(--band-fill); border-radius:2px}
+.legend .t{font-family:var(--mono); font-size:11.5px; color:var(--ink-3)}
+
+/* SVG parts, styled from the page so both themes work */
+.f-step{fill:var(--paper); stroke:var(--omega); stroke-width:1.4}
+.f-step.key{stroke-width:2.4}
+.f-applied{fill:var(--omega-soft); stroke:var(--omega); stroke-width:1.4}
+.f-open{fill:var(--paper); stroke:var(--omega); stroke-width:1.4; stroke-dasharray:7 5}
+.f-lane{fill:var(--omega-faint); stroke:var(--omega); stroke-width:1}
+.f-plane{fill:var(--dvpp-soft); stroke:var(--dvpp); stroke-width:1.1; stroke-dasharray:6 5}
+.f-span{fill:var(--paper); stroke:var(--dvpp); stroke-width:1.4}
+.f-span.pre{stroke-dasharray:6 4}
+.f-span.open{stroke:var(--ink-2); stroke-dasharray:4 4}
+.ln-o{stroke:var(--omega); stroke-width:1.6; fill:none}
+.ln-d{stroke:var(--dvpp); stroke-width:1.4; fill:none; stroke-dasharray:5 5}
+.ah-o{fill:var(--omega)}
+.t-lane{font-family:var(--mono); font-size:12px; font-weight:600; letter-spacing:.09em; fill:var(--omega)}
+.t-lane.dv{fill:var(--dvpp)}
+.t-num{font-family:var(--mono); font-size:12px; font-weight:600; fill:var(--omega)}
+.t-title{font-family:var(--display); font-size:14.5px; font-weight:700; fill:var(--ink)}
+.t-small{font-family:var(--body); font-size:12px; fill:var(--ink-2)}
+.t-ask{font-family:var(--body); font-size:12px; font-weight:600; fill:var(--ink)}
+.t-surf{font-family:var(--mono); font-size:10.5px; fill:var(--ink-3)}
+.t-today{font-family:var(--mono); font-size:10.5px; fill:var(--ink-3)}
+.t-rm{font-family:var(--mono); font-size:10.5px; fill:var(--ink-2)}
+.t-out{font-family:var(--mono); font-size:11px; fill:var(--omega)}
+.t-tag{font-family:var(--mono); font-size:10.5px; fill:var(--dvpp)}
+.t-arrow{font-family:var(--mono); font-size:11px; fill:var(--omega)}
+.t-note{font-family:var(--mono); font-size:11px; fill:var(--ink-3)}
+.t-mark{font-family:var(--mono); font-size:11px; fill:var(--dvpp)}
+/* the sample-site chart */
+.c-grid{stroke:var(--line); stroke-width:1}
+.c-base{stroke:var(--ink-3); stroke-width:1}
+.c-pub{fill:var(--pub-fill)} .c-plan{fill:var(--plan-fill)} .c-band{fill:var(--band-fill)}
+.c-lab-pub{font-family:var(--body); font-size:11px; font-weight:500; fill:var(--pub-text)}
+.c-lab-plan{font-family:var(--body); font-size:11px; font-weight:500; fill:var(--plan-text)}
+.c-lab-band{font-family:var(--body); font-size:11px; font-weight:500; fill:var(--band-text)}
+.c-bar{font-family:var(--body); font-size:12px; fill:var(--ink)}
+.c-tot{font-family:var(--body); font-size:12px; font-weight:600; fill:var(--ink); paint-order:stroke; stroke:var(--paper); stroke-width:4px; stroke-linejoin:round}
+.c-tick{font-family:var(--mono); font-size:10.5px; fill:var(--ink-3)}
+.c-ann{font-family:var(--body); font-size:12px; fill:var(--ink-2)}
+.c-brk{stroke:var(--ink-3); stroke-width:1; fill:none}
+.c-seg:hover{opacity:.85}
+
+/* ── the sample site ────────────────────────────────────────────────── */
+.sample-top{display:grid; gap:18px; grid-template-columns:minmax(0,1fr); align-items:start}
+@media (min-width:900px){ .sample-top{grid-template-columns:300px minmax(0,1fr)} }
+.site-card{margin:0; border:1.5px solid var(--ink); background:var(--paper); display:grid}
+.site-card .sc-head{padding:12px 14px; border-bottom:1px solid var(--line-2); display:grid; gap:2px}
+.site-card .sc-head b{font-family:var(--display); font-size:16px}
+.site-card .sc-head span{font-size:12.5px; color:var(--ink-3)}
+.site-card dl{margin:0; display:grid}
+.site-card dl div{padding:8px 14px; border-bottom:1px solid var(--line); display:grid; gap:1px}
+.site-card dl div:last-child{border-bottom:0}
+.site-card dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3)}
+.site-card dd{margin:0; font-size:13.5px; font-weight:500}
+.flow1{list-style:none; margin:0; padding:0; display:grid; gap:10px; grid-template-columns:minmax(0,1fr)}
+@media (min-width:640px){ .flow1{grid-template-columns:repeat(3,minmax(0,1fr))} }
+@media (min-width:1000px){ .flow1{grid-template-columns:repeat(6,minmax(0,1fr))} }
+.flow1 li{background:var(--paper); border:1px solid var(--line-2); padding:11px 12px 12px; display:grid; gap:5px; align-content:start}
+.flow1 .n{font-family:var(--mono); font-size:11px; font-weight:600; letter-spacing:.06em; color:var(--omega)}
+.flow1 b{font-family:var(--display); font-size:14.5px}
+.flow1 p{font-size:13px; color:var(--ink-2)}
+.subhead{font-family:var(--mono); font-size:11px; letter-spacing:.09em; text-transform:uppercase; color:var(--omega); font-weight:600}
+.num{font-variant-numeric:tabular-nums; white-space:nowrap}
+.tier{font-family:var(--mono); font-size:11px; padding:1px 6px; border-radius:2px; white-space:nowrap}
+.tier.pub{background:var(--pub-fill); color:var(--pub-text)}
+.tier.plan{background:var(--plan-fill); color:var(--plan-text)}
+
+/* ── tables ─────────────────────────────────────────────────────────── */
+.table-wrap{overflow-x:auto; -webkit-overflow-scrolling:touch; background:var(--paper); border:1px solid var(--line-2)}
+table{border-collapse:collapse; width:100%; font-size:13.5px; font-variant-numeric:tabular-nums}
+th,td{text-align:left; vertical-align:top; padding:10px 12px; border-bottom:1px solid var(--line)}
+thead th{font-family:var(--mono); font-size:10.5px; letter-spacing:.09em; text-transform:uppercase; color:var(--ink-3); font-weight:500; border-bottom:1px solid var(--line-2)}
+tbody tr:last-child th,tbody tr:last-child td{border-bottom:0}
+tbody th{font-family:var(--display); font-size:14.5px; font-weight:700}
+tbody th small{display:block; font-family:var(--body); font-weight:400; font-size:12px; color:var(--ink-3)}
+.contract{min-width:1000px}
+.contract td:first-child{white-space:nowrap; font-weight:600}
+.roles{min-width:860px}
+.roles tbody th{width:170px; font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--ink-3); font-weight:500}
+.roles thead th{font-family:var(--display); font-size:15px; letter-spacing:0; text-transform:none; color:var(--ink); font-weight:700}
+.roles thead th small{display:block; font-family:var(--mono); font-size:10.5px; letter-spacing:.06em; text-transform:uppercase; color:var(--dvpp); font-weight:500}
+.walk{min-width:900px}
+.walk tbody th{white-space:nowrap}
+.confirm{font-family:var(--mono); font-size:10.5px; color:var(--dvpp); white-space:nowrap}
+.dv-id{font-family:var(--mono); font-weight:600; color:var(--dvpp); margin-right:6px}
+
+.notes{display:grid; gap:8px; max-width:84ch}
+.notes p{font-size:13.5px; color:var(--ink-2)}
+
+/* ── the combination check ──────────────────────────────────────────── */
+.check{background:var(--paper); border:1.5px solid var(--ink); display:grid}
+.check .ck-head{padding:14px 16px; border-bottom:1px solid var(--line-2); display:grid; gap:4px}
+.check .ck-head p{font-size:14px; color:var(--ink-2)}
+.check .ck-body{display:grid; grid-template-columns:minmax(0,1fr)}
+@media (min-width:900px){ .check .ck-body{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)} }
+.check .ck-now{padding:14px 16px; display:grid; gap:10px; align-content:start; border-bottom:1px solid var(--line)}
+@media (min-width:900px){ .check .ck-now{border-bottom:0; border-right:1px solid var(--line)} }
+.check .ck-now p{font-size:13.5px; color:var(--ink-2)}
+.check .ck-now p b{color:var(--ink)}
+.check ol{margin:0; padding:14px 16px 14px 36px; display:grid; gap:9px; font-size:13.5px; color:var(--ink-2)}
+.check ol b{color:var(--ink)}
+.check .ck-prop{padding:12px 16px; border-top:1px solid var(--line-2); background:var(--dvpp-soft); font-size:13.5px; color:var(--ink-2)}
+.check .ck-prop b{color:var(--ink)}
+
+footer{border-top:1.5px solid var(--ink); padding-top:14px; display:flex; flex-wrap:wrap; gap:8px 24px; justify-content:space-between; font-size:12.5px; color:var(--ink-3)}
+footer .mono{font-family:var(--mono); font-size:11.5px}
+
+/* ── print: three 11 × 17 in landscape sheets, the format of a drawing set ──
+   The wrapper only exists for print; on screen it is display:contents, so
+   the page lays out exactly as it would without it. */
+.sheet-1{display:contents}
+@page{
+  size:17in 11in;
+  margin:.45in .5in .6in;
+  @bottom-left{content:"ClearSky OMEGA · Value Stack Walkthrough · companion to the Value Stack Funnel · Discussion draft for DividendVPP and Lightsmith Energy · 28 September 2026";font-family:"IBM Plex Mono",monospace;font-size:7.5pt;color:#66727E}
+  @bottom-right{content:"Sheet " counter(page) " of " counter(pages) "   ·   © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.";font-family:"IBM Plex Mono",monospace;font-size:7.5pt;color:#66727E}
+}
+@media print{
+  :root,:root:not([data-theme="light"]),:root[data-theme="dark"]{
+    color-scheme:light;
+    --page:#FFFFFF; --paper:#FFFFFF; --ink:#14171A; --ink-2:#48545F; --ink-3:#66727E;
+    --line:rgba(20,23,26,.13); --line-2:rgba(20,23,26,.34);
+    --omega:#2B5FA8; --omega-soft:#E6EEF9; --omega-faint:#F4F7FC;
+    --dvpp:#6250C4; --dvpp-soft:#F1EEFB;
+    --est:#8F5E0E; --est-soft:#FBF0DA;
+    --no:#6F7B86; --no-soft:#EDEFF1;
+    --pub-fill:#16895A; --pub-text:#FFFFFF;
+    --plan-fill:#C77A00; --plan-text:#14171A;
+    --band-fill:#E3A94F; --band-text:#14171A;
+  }
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:#FFFFFF;font-size:13px}
+  .sheet{display:block;max-width:none;padding:0}
+  footer,.scroll-hint{display:none!important}
+  h1{font-size:40px}
+  h2{font-size:22px}
+  section{gap:10px}
+  .section-head,.notes,figcaption{max-width:none}
+  .section-head p{font-size:13px}
+  .table-wrap{overflow:visible}
+  .contract,.roles,.walk{min-width:0}
+  table{font-size:12.5px}
+  th,td{padding:5px 10px}
+  tbody th{font-size:13.5px}
+  tr{break-inside:avoid}
+  .notes p{font-size:12px}
+
+  /* sheet 1: the title block and thesis beside the two flows */
+  .sheet-1{display:grid;grid-template-columns:3.2in minmax(0,1fr);grid-template-rows:auto auto auto auto 1fr;
+           column-gap:.35in;row-gap:.18in;height:9.85in;align-items:start;break-after:page}
+  .sheet-1>.titleblock{grid-column:1;grid-row:1;grid-template-columns:minmax(0,1fr)}
+  .sheet-1 .tb-main{padding:16px 16px 14px;gap:9px}
+  .sheet-1 .tb-main .lede{font-size:14px}
+  .sheet-1 .tb-meta{grid-template-columns:1fr 1fr;border-left:0;border-top:1px solid var(--line-2)}
+  .sheet-1 .tb-meta div{border-bottom:1px solid var(--line);border-right:0;padding:8px 12px}
+  .sheet-1 .tb-meta div:nth-child(odd){border-right:1px solid var(--line)}
+  .sheet-1 .tb-meta div:nth-last-child(-n+2){border-bottom:0}
+  .sheet-1 .tb-meta dd{font-size:12.5px}
+  .sheet-1>.thesis{grid-column:1;grid-row:2 / span 4}
+  .sheet-1 .thesis p{font-size:13.5px}
+  .sheet-1>.agenda{grid-column:2;grid-row:5;padding:9px 14px 10px}
+  .sheet-1 .agenda ul{grid-template-columns:repeat(5,minmax(0,1fr));gap:4px 22px;font-size:12px}
+  .sheet-1 figure{display:contents}
+  .sheet-1 .fig-frame{grid-column:2;grid-row:1 / span 2;overflow:visible}
+  .sheet-1 .fig-frame svg{min-width:0}
+  .sheet-1 .legend{grid-column:2;grid-row:3;font-size:12px}
+  .sheet-1 figcaption{grid-column:2;grid-row:4;font-size:12px}
+
+  /* sheet 2: the sample site */
+  #sample .sample-top{grid-template-columns:4.2in minmax(0,1fr);gap:.3in}
+  .site-card .sc-head{padding:9px 12px}
+  .site-card dl{grid-template-columns:1fr 1fr}
+  .site-card dl div{padding:6px 12px;border-bottom:1px solid var(--line)}
+  .site-card dl div:nth-child(odd){border-right:1px solid var(--line)}
+  .site-card dl div:nth-last-child(-n+2){border-bottom:0}
+  .site-card dd{font-size:12.5px}
+  #sample figure{gap:6px}
+  #sample .fig-frame svg{max-height:2.2in}
+  #sample figcaption,#sample .legend{font-size:12px}
+  .flow1{grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+  .flow1 li{padding:8px 10px 9px;gap:3px;break-inside:avoid}
+  .flow1 p{font-size:11.5px;line-height:1.45}
+  .walk{table-layout:fixed}
+  .walk thead th:nth-child(1){width:1.8in}
+  .walk thead th:nth-child(2){width:6.2in}
+  .walk td,.walk th{padding:4px 10px}
+
+  /* sheet 3: the partners */
+  #partners{break-before:page}
+  .roles{table-layout:fixed}
+  .roles thead th:nth-child(1){width:1.6in}
+  .roles td,.roles th{padding:4px 10px}
+  .contract{table-layout:fixed}
+  .contract thead th:nth-child(1){width:1.4in}
+  .contract thead th:nth-child(2){width:1.6in}
+  .contract thead th:nth-child(3){width:2.3in}
+  .contract thead th:nth-child(4){width:6.1in}
+  .contract td{padding:4px 10px}
+  .check .ck-head{padding:10px 14px}
+  .check .ck-now{padding:10px 14px;gap:6px}
+  .check ol{padding:10px 14px 10px 32px}
+  .check .ck-prop{padding:8px 14px}
+  .check .ck-body{grid-template-columns:minmax(0,1fr) minmax(0,1.5fr)}
+  .check .ck-now{border-bottom:0;border-right:1px solid var(--line)}
+  .check .ck-now p,.check ol,.check .ck-prop{font-size:12px}
+  .roles,.contract{font-size:12px}
+  .check ol{gap:6px}
+
+}
+</style>
+</head>
+<body>
+<main class="sheet">
+
+  <div class="sheet-1">
+  <header class="titleblock">
+    <div class="tb-main">
+      <p class="eyebrow">ClearSky OMEGA · companion document</p>
+      <h1>Value Stack Walkthrough</h1>
+      <p class="lede">A companion to the Value Stack Funnel: the two flows drawn separately, one sample site walked through both, and what to confirm with DividendVPP and Lightsmith.</p>
+    </div>
+    <dl class="tb-meta">
+      <div><dt>Prepared for</dt><dd>DividendVPP (Molecule Systems) · Lightsmith Energy</dd></div>
+      <div><dt>Prepared by</dt><dd>ClearSky Energy Solutions</dd></div>
+      <div><dt>Status</dt><dd>Discussion draft</dd></div>
+      <div><dt>Date</dt><dd>28 September 2026</dd></div>
+    </dl>
+  </header>
+
+  <div class="thesis">
+    <p><strong>Two flows, one project.</strong> Flow 1 is our business process, from site intake and screening through the customer proposal and handoff. Flow 2 is step 4 of it: how the value stack is built, from site and utility inputs through eligible programs, the forecast and dispatch assumptions to portfolio reporting.</p>
+    <p>Today the number a customer sees rests on the inputs, a regional forecast and a ten-year cash flow. Program eligibility, dispatch and the check that revenue streams can be combined are <strong>not yet applied to it</strong>. That is where DividendVPP and Lightsmith come in, and where we need to agree who does what.</p>
+  </div>
+
+  <!-- ═══ FIGURE 1 — THE TWO FLOWS ═══ -->
+  <figure id="flows">
+    <div class="fig-frame">
+      <svg viewBox="0 0 1320 740" role="img" aria-label="Two flows. Flow 1, our business process: site intake, screening, design, value stack, customer proposal, handoff. Step 4, value stack, expands into flow 2, the value stacking process: site and utility inputs, eligible programs, forecast, dispatch assumptions with the check that streams can be combined, and portfolio reporting. Flow 2 returns the stack and cash flow to the customer proposal; realized results return from operations to portfolio reporting. A partner lane shows Lightsmith Energy's dispatch optimization pre-sale and in operation, Molecule Systems and DividendVPP's coverage and terms pre-sale and enrollment, dispatch execution and verified events in operation, and a combination check with no owner named. Two markers ask whether the VPP role begins pre-sale or at enrollment.">
+        <defs>
+          <marker id="ah-o" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" class="ah-o"/></marker>
+        </defs>
+
+        <!-- ── FLOW 1 · OUR BUSINESS PROCESS ── -->
+        <text x="12" y="19" class="t-lane">1 · OUR BUSINESS PROCESS</text>
+
+        <rect x="12" y="30" width="196" height="140" class="f-step"/>
+        <text x="24" y="52" class="t-title"><tspan class="t-num">1</tspan>  Site intake</text>
+        <text x="24" y="71" class="t-surf">Project Intake</text>
+        <text x="24" y="92" class="t-small">address, customer and</text>
+        <text x="24" y="108" class="t-small">twelve months of bills</text>
+        <text x="24" y="124" class="t-small">come in; a project opens</text>
+        <text x="24" y="154" class="t-out">→ a project</text>
+
+        <rect x="232" y="30" width="196" height="140" class="f-step"/>
+        <text x="244" y="52" class="t-title"><tspan class="t-num">2</tspan>  Screening</text>
+        <text x="244" y="71" class="t-surf">Site Finder · Pre-Qualify</text>
+        <text x="244" y="92" class="t-small">grid capacity, the</text>
+        <text x="244" y="108" class="t-small">interconnection path, a</text>
+        <text x="244" y="124" class="t-small">first price and value</text>
+        <text x="244" y="154" class="t-out">→ a site worth designing</text>
+
+        <rect x="452" y="30" width="196" height="140" class="f-step"/>
+        <text x="464" y="52" class="t-title"><tspan class="t-num">3</tspan>  Design</text>
+        <text x="464" y="71" class="t-surf">Site Map editor</text>
+        <text x="464" y="92" class="t-small">the battery placed on the</text>
+        <text x="464" y="108" class="t-small">map; kW, kWh and cost</text>
+        <text x="464" y="124" class="t-small">come from the drawing</text>
+        <text x="464" y="154" class="t-out">→ the system as drawn</text>
+
+        <rect x="672" y="30" width="196" height="140" class="f-step key"/>
+        <text x="684" y="52" class="t-title"><tspan class="t-num">4</tspan>  Value stack</text>
+        <text x="684" y="71" class="t-surf">Value Stack · Cost &amp; ROI</text>
+        <text x="684" y="92" class="t-small">what the system earns,</text>
+        <text x="684" y="108" class="t-small">stream by stream, year</text>
+        <text x="684" y="124" class="t-small">by year</text>
+        <text x="684" y="154" class="t-out">→ flow 2, below</text>
+
+        <rect x="892" y="30" width="196" height="140" class="f-step"/>
+        <text x="904" y="52" class="t-title"><tspan class="t-num">5</tspan>  Customer proposal</text>
+        <text x="904" y="71" class="t-surf">Proposal · Pro Forma</text>
+        <text x="904" y="92" class="t-small">installed cost, rebates</text>
+        <text x="904" y="108" class="t-small">and tax credit, payback</text>
+        <text x="904" y="124" class="t-small">and IRR</text>
+        <text x="904" y="154" class="t-out">→ a preliminary proposal</text>
+
+        <rect x="1112" y="30" width="196" height="140" class="f-step"/>
+        <text x="1124" y="52" class="t-title"><tspan class="t-num">6</tspan>  Handoff</text>
+        <text x="1124" y="71" class="t-surf">Marketplace · Quote Desk</text>
+        <text x="1124" y="92" class="t-small">financing listing and</text>
+        <text x="1124" y="108" class="t-small">equipment RFQs; VPP</text>
+        <text x="1124" y="124" class="t-small">enrollment after build</text>
+        <text x="1124" y="154" class="t-out">→ funded, built, enrolled</text>
+
+        <path d="M210,100 H230" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M430,100 H450" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M650,100 H670" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M870,100 H890" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M1090,100 H1110" class="ln-o" marker-end="url(#ah-o)"/>
+
+        <!-- step 4 expands into flow 2; flow 2 feeds the proposal; operations feed reporting -->
+        <path d="M770,170 V212" class="ln-o" marker-end="url(#ah-o)"/>
+        <text x="780" y="198" class="t-arrow">step 4, in detail</text>
+        <path d="M964,252 V174" class="ln-o" marker-end="url(#ah-o)"/>
+        <text x="974" y="198" class="t-arrow">stack + cash flow</text>
+        <path d="M1200,172 V250" class="ln-o" marker-end="url(#ah-o)"/>
+        <text x="1210" y="198" class="t-arrow">realized results</text>
+
+        <!-- ── FLOW 2 · VALUE STACKING PROCESS ── -->
+        <rect x="12" y="214" width="1296" height="248" class="f-lane"/>
+        <text x="26" y="238" class="t-lane">2 · VALUE STACKING PROCESS<tspan class="t-note" dx="12">step 4 of flow 1, in detail</tspan></text>
+
+        <rect x="26" y="252" width="236" height="196" class="f-applied"/>
+        <text x="38" y="276" class="t-title"><tspan class="t-num">A</tspan>  Site &amp; utility inputs</text>
+        <text x="38" y="298" class="t-small">market and utility from the</text>
+        <text x="38" y="314" class="t-small">address; tariff and bills, or</text>
+        <text x="38" y="330" class="t-small">an 8,760-hour load; the</text>
+        <text x="38" y="346" class="t-small">battery as drawn, meter side</text>
+        <text x="38" y="388" class="t-today">today · ZIP → market; bill typed</text>
+
+        <rect x="284" y="252" width="236" height="196" class="f-open"/>
+        <text x="296" y="276" class="t-title"><tspan class="t-num">B</tspan>  Eligible programs</text>
+        <text x="296" y="298" class="t-small">programs this site can enter,</text>
+        <text x="296" y="314" class="t-small">by market, meter side, size</text>
+        <text x="296" y="330" class="t-small">and route to market; one-time</text>
+        <text x="296" y="346" class="t-small">incentives, with conditions</text>
+        <text x="296" y="370" class="t-rm">removes · what can't be entered</text>
+        <text x="296" y="388" class="t-today">today · screening panel only</text>
+        <text x="296" y="412" class="t-tag">D2 coverage · D3 terms:</text>
+        <text x="296" y="428" class="t-tag">DividendVPP (confirm)</text>
+
+        <rect x="542" y="252" width="236" height="196" class="f-applied"/>
+        <text x="554" y="276" class="t-title"><tspan class="t-num">C</tspan>  Forecast</text>
+        <text x="554" y="298" class="t-small">what each program pays, year</text>
+        <text x="554" y="314" class="t-small">by year: published prices,</text>
+        <text x="554" y="330" class="t-small">program rates, hourly price</text>
+        <text x="554" y="346" class="t-small">curves by node</text>
+        <text x="554" y="388" class="t-today">today · regional rates; VPP typed</text>
+        <text x="554" y="412" class="t-tag">D1 forecasts: DividendVPP</text>
+        <text x="554" y="428" class="t-tag">or Lightsmith? (confirm)</text>
+
+        <rect x="800" y="252" width="236" height="196" class="f-open"/>
+        <text x="812" y="276" class="t-title"><tspan class="t-num">D</tspan>  Dispatch assumptions</text>
+        <text x="812" y="298" class="t-small">how the battery actually runs:</text>
+        <text x="812" y="314" class="t-small">hours, cycles, state of</text>
+        <text x="812" y="330" class="t-small">charge, event days</text>
+        <text x="812" y="346" class="t-ask">+ can the streams combine?</text>
+        <text x="812" y="370" class="t-rm">removes · double-counting</text>
+        <text x="812" y="388" class="t-today">today · streams simply added</text>
+        <text x="812" y="412" class="t-tag">D4 hourly schedule: Lightsmith</text>
+        <text x="812" y="428" class="t-tag">check owner: to decide</text>
+
+        <rect x="1058" y="252" width="236" height="196" class="f-open"/>
+        <text x="1070" y="276" class="t-title"><tspan class="t-num">E</tspan>  Portfolio reporting</text>
+        <text x="1070" y="298" class="t-small">each site's expected stack by</text>
+        <text x="1070" y="314" class="t-small">stream, rolled across sites;</text>
+        <text x="1070" y="330" class="t-small">once running, realized</text>
+        <text x="1070" y="346" class="t-small">against expected</text>
+        <text x="1070" y="388" class="t-today">today · per site, not saved</text>
+        <text x="1070" y="412" class="t-tag">D5 verified events: Molecule</text>
+        <text x="1070" y="428" class="t-tag">(confirm)</text>
+
+        <path d="M264,350 H282" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M522,350 H540" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M780,350 H798" class="ln-o" marker-end="url(#ah-o)"/>
+        <path d="M1038,350 H1056" class="ln-o" marker-end="url(#ah-o)"/>
+
+        <!-- ── WHERE THE PARTNERS COME IN ── -->
+        <rect x="12" y="478" width="1296" height="230" class="f-plane"/>
+        <text x="26" y="502" class="t-lane dv">3 · WHERE THE PARTNERS COME IN · TO CONFIRM</text>
+
+        <text x="26" y="538" class="t-title">Lightsmith Energy</text>
+        <text x="26" y="556" class="t-surf">dispatch optimization layer</text>
+        <rect x="542" y="516" width="494" height="52" class="f-span pre"/>
+        <text x="556" y="537" class="t-small">① pre-sale: a forecast and an hourly schedule for the proposal?</text>
+        <text x="556" y="555" class="t-tag">D1 forecasts?  D4 hourly schedule</text>
+        <rect x="1058" y="516" width="236" height="52" class="f-span"/>
+        <text x="1072" y="537" class="t-small">in operation: the best-paying</text>
+        <text x="1072" y="555" class="t-tag">program for each site, each hour</text>
+
+        <text x="26" y="602" class="t-title">Molecule Systems</text>
+        <text x="26" y="620" class="t-surf">DividendVPP · VPP software stack</text>
+        <rect x="284" y="580" width="236" height="52" class="f-span pre"/>
+        <text x="298" y="601" class="t-small">coverage and terms by</text>
+        <text x="298" y="619" class="t-tag">market (D2, D3)</text>
+        <rect x="1058" y="580" width="236" height="52" class="f-span"/>
+        <text x="1072" y="601" class="t-small">② enrollment, dispatch</text>
+        <text x="1072" y="619" class="t-tag">execution, verified events (D5)</text>
+
+        <text x="26" y="666" class="t-title">Combination check</text>
+        <text x="26" y="684" class="t-surf">no owner named yet</text>
+        <rect x="800" y="644" width="236" height="52" class="f-span open"/>
+        <text x="814" y="665" class="t-ask">who checks the streams combine?</text>
+        <text x="814" y="683" class="t-surf">rules owner · optimizer · OMEGA</text>
+
+        <path d="M531,252 V704" class="ln-d"/>
+        <text x="531" y="726" text-anchor="middle" class="t-mark">① VPP role begins pre-sale?</text>
+        <path d="M1047,252 V704" class="ln-d"/>
+        <text x="1047" y="726" text-anchor="middle" class="t-mark">② …or at enrollment, after build?</text>
+      </svg>
+    </div>
+    <p class="scroll-hint">Scroll sideways for the rest of both flows →</p>
+    <div class="legend" aria-hidden="true">
+      <span><i class="sw applied"></i>applied to the number a customer sees today</span>
+      <span><i class="sw open"></i>not yet applied to that number</span>
+      <span><i class="sw dv"></i>partner role, to confirm</span>
+      <span><span class="t">today ·</span>how OMEGA does it now</span>
+      <span><span class="t">removes ·</span>value the step takes out</span>
+    </div>
+    <figcaption><b>Figure 1.</b> Flow 1 is how a project moves through ClearSky; flow 2 is its step 4, in detail. Partner roles are drawn where we think they sit and are to be confirmed, including where the VPP role begins: ① pre-sale, so the proposal carries partner numbers, or ② only once the asset is enrolled. Every partner exchange would run server to server between OMEGA's <code>/api</code> and theirs, and no customer identity leaves OMEGA before the customer accepts.</figcaption>
+  </figure>
+  <div class="agenda">
+    <p class="label">For the meeting</p>
+    <ul>
+      <li>Walk the sample site through both flows.</li>
+      <li>Lightsmith: confirm the inputs you take and the outputs you return.</li>
+      <li>Decide where the VPP role begins: ① pre-sale, or ② at enrollment.</li>
+      <li>Name who checks that revenue streams can be combined, and where the rules live.</li>
+      <li>DividendVPP: coverage and terms by market, and a sample forecast export.</li>
+    </ul>
+  </div>
+  </div>
+
+  <!-- ═══ THE SAMPLE SITE ═══ -->
+  <section id="sample" aria-labelledby="sample-h">
+    <div class="section-head">
+      <h2 id="sample-h">One sample site, through both flows</h2>
+      <p>For walking the flows in the meeting. The site is illustrative; the Year-1 figures are what OMEGA's server-side screening model returns for it (the ComEd / PJM scenario), each labeled with where it comes from.</p>
+    </div>
+    <div class="sample-top">
+      <div class="site-card">
+        <div class="sc-head"><b>Sample site</b><span>illustrative, for the walkthrough</span></div>
+        <dl>
+          <div><dt>Site</dt><dd>C&amp;I building, Chicago, IL; peak demand above 1 MW</dd></div>
+          <div><dt>Utility · market</dt><dd>ComEd · PJM, ComEd zone</dd></div>
+          <div><dt>Meter side</dt><dd>Behind the meter</dd></div>
+          <div><dt>Battery</dt><dd>1,000 kW / 4,000 kWh, 4-hour</dd></div>
+          <div><dt>Bills</dt><dd>Twelve months, to replace the screening demand band</dd></div>
+          <div><dt>Route to market</dt><dd>To confirm in the meeting</dd></div>
+        </dl>
+      </div>
+      <figure id="sample-stack">
+        <div class="fig-frame">
+          <svg viewBox="0 0 760 214" role="img" aria-label="Horizontal stacked bars of the sample site's Year-1 value stack. As screened, with all streams added: PJM capacity 69,989 dollars (published), utility VPP 150,000 (planning), demand charges 96,000 to 168,000 (planning), total 316 to 388 thousand dollars. If PJM capacity and the VPP program cannot both count the same 1 MW: keeping the VPP gives 246 to 318 thousand; keeping capacity gives 166 to 238 thousand.">
+            <text x="210" y="16" class="c-ann">same 1 MW, same summer peak hours: can both be paid?</text>
+            <path d="M210,30 V23 H457.5 V30" class="c-brk"/>
+
+            <path d="M322.5,32 V178 M435,32 V178 M547.5,32 V178 M660,32 V178" class="c-grid"/>
+
+            <text x="4" y="51" class="c-bar">As screened, all added</text>
+            <rect x="210" y="36" width="77.7" height="22" class="c-seg c-pub"><title>PJM capacity · $69,989 · published: 590 kW accredited (4-hour class, 59%) × $325/MW-day</title></rect>
+            <rect x="289.7" y="36" width="166.8" height="22" class="c-seg c-plan"><title>Utility VPP · $150,000 · planning figure: $150/kW-year; ComEd's program is still before the ICC</title></rect>
+            <rect x="458.5" y="36" width="106" height="22" class="c-seg c-plan"><title>Demand charges avoided · $96,000 at the low end of the $8–14/kW-month screening band</title></rect>
+            <path d="M566.5,36 H642.5 Q646.5,36 646.5,40 V54 Q646.5,58 642.5,58 H566.5 Z" class="c-seg c-band"><title>Top of the demand band · up to $72,000 more at $14/kW-month</title></path>
+            <text x="248.9" y="51" text-anchor="middle" class="c-lab-pub">capacity</text>
+            <text x="373.1" y="51" text-anchor="middle" class="c-lab-plan">utility VPP</text>
+            <text x="511.5" y="51" text-anchor="middle" class="c-lab-plan">demand charges</text>
+            <text x="606.5" y="51" text-anchor="middle" class="c-lab-band">top of band</text>
+            <text x="654" y="51" class="c-tot">$316k–$388k</text>
+
+            <text x="4" y="107" class="c-bar">If not both: keep the VPP</text>
+            <rect x="210" y="92" width="167.75" height="22" class="c-seg c-plan"><title>Utility VPP · $150,000 · planning figure</title></rect>
+            <rect x="379.75" y="92" width="106" height="22" class="c-seg c-plan"><title>Demand charges avoided · $96,000, low end of the band</title></rect>
+            <path d="M487.75,92 H563.75 Q567.75,92 567.75,96 V110 Q567.75,114 563.75,114 H487.75 Z" class="c-seg c-band"><title>Top of the demand band · up to $72,000 more</title></path>
+            <text x="293.9" y="107" text-anchor="middle" class="c-lab-plan">utility VPP</text>
+            <text x="432.75" y="107" text-anchor="middle" class="c-lab-plan">demand charges</text>
+            <text x="527.75" y="107" text-anchor="middle" class="c-lab-band">top of band</text>
+            <text x="576" y="107" class="c-tot">$246k–$318k</text>
+
+            <text x="4" y="163" class="c-bar">If not both: keep capacity</text>
+            <rect x="210" y="148" width="77.7" height="22" class="c-seg c-pub"><title>PJM capacity · $69,989 · published</title></rect>
+            <rect x="289.7" y="148" width="106" height="22" class="c-seg c-plan"><title>Demand charges avoided · $96,000, low end of the band</title></rect>
+            <path d="M397.7,148 H473.7 Q477.7,148 477.7,152 V166 Q477.7,170 473.7,170 H397.7 Z" class="c-seg c-band"><title>Top of the demand band · up to $72,000 more</title></path>
+            <text x="248.9" y="163" text-anchor="middle" class="c-lab-pub">capacity</text>
+            <text x="342.7" y="163" text-anchor="middle" class="c-lab-plan">demand charges</text>
+            <text x="437.7" y="163" text-anchor="middle" class="c-lab-band">top of band</text>
+            <text x="486" y="163" class="c-tot">$166k–$238k</text>
+
+            <path d="M210,32 V178" class="c-base"/>
+            <text x="210" y="196" text-anchor="middle" class="c-tick">$0</text>
+            <text x="322.5" y="196" text-anchor="middle" class="c-tick">$100k</text>
+            <text x="435" y="196" text-anchor="middle" class="c-tick">$200k</text>
+            <text x="547.5" y="196" text-anchor="middle" class="c-tick">$300k</text>
+            <text x="660" y="196" text-anchor="middle" class="c-tick">$400k a year</text>
+          </svg>
+        </div>
+        <div class="legend">
+          <span><i class="sw pub"></i>published price</span>
+          <span><i class="sw plan"></i>planning figure</span>
+          <span><i class="sw band"></i>top of the demand band</span>
+        </div>
+        <figcaption><b>Figure 2.</b> The sample site's Year-1 stack as OMEGA's screening model returns it, and what it becomes if PJM capacity and the utility VPP program can't both count the same 1 MW. Colors show where a figure comes from, not which stream it is.</figcaption>
+      </figure>
+    </div>
+
+    <p class="subhead">Flow 1, for this site</p>
+    <ol class="flow1">
+      <li><span class="n">1 · Site intake</span><p>The address, the customer and twelve months of bills come in through Project Intake; a project opens.</p></li>
+      <li><span class="n">2 · Screening</span><p>Site Finder prices it on the ComEd / PJM screening scenario; Grid Pre-Qualify checks the ComEd interconnection path.</p></li>
+      <li><span class="n">3 · Design</span><p>A 1 MW / 4 MWh battery is placed on the site map, behind the meter.</p></li>
+      <li><span class="n">4 · Value stack</span><p>Flow 2, below: the figures in the chart above.</p></li>
+      <li><span class="n">5 · Customer proposal</span><p>Installed cost, the ComEd rebate and the tax credit, payback and IRR, marked preliminary until verified.</p></li>
+      <li><span class="n">6 · Handoff</span><p>A financing marketplace listing and equipment RFQs; VPP enrollment after build.</p></li>
+    </ol>
+
+    <p class="subhead">Flow 2, for this site</p>
+    <div class="table-wrap">
+      <table class="walk">
+        <thead><tr><th scope="col">Step</th><th scope="col">What goes in</th><th scope="col">What comes out</th></tr></thead>
+        <tbody>
+          <tr><th scope="row">A · Inputs</th>
+            <td>ComEd, PJM (ComEd zone); behind the meter; 1,000 kW for 4 hours. Until the bills are read, the model uses a demand-charge band of $8–14 per kW-month.</td>
+            <td>The market, meter side and size that decide which programs exist for this site.</td></tr>
+          <tr><th scope="row">B · Eligible programs</th>
+            <td>PJM's 4-hour storage class; the utility VPP program (ComEd's is still before the ICC); the ComEd storage rebate; the federal tax credit.</td>
+            <td>PJM capacity, accredited at 59%; demand charges avoided; the utility VPP. One-time: the rebate at $250/kWh, which needs a paired DG facility and Rate BESH, and the 30% tax credit, which needs prevailing wage. Route to market: to confirm.</td></tr>
+          <tr><th scope="row">C · Forecast</th>
+            <td>PJM's 2028/29 capacity auction at $325/MW-day; the demand-charge band; a $150/kW-year planning figure for the VPP.</td>
+            <td><span class="num">$69,989</span> capacity <span class="tier pub">published</span> · <span class="num">$96,000–$168,000</span> demand charges <span class="tier plan">planning</span> · <span class="num">$150,000</span> utility VPP <span class="tier plan">planning</span>. Added: <span class="num">$315,989–$387,989</span> a year. One-time rebate: <span class="num">$1,000,000</span>.</td></tr>
+          <tr><th scope="row">D · Dispatch assumptions</th>
+            <td>All three streams want the battery in the same summer peak hours, and a 4-hour battery makes one full discharge a day.</td>
+            <td>The combination check. If the same 1 MW can't earn PJM capacity and the VPP program at once, the stack falls to <span class="num">$246k–$318k</span> or <span class="num">$166k–$238k</span>. Nothing checks this today.</td></tr>
+          <tr><th scope="row">E · Portfolio reporting</th>
+            <td>The site's expected stack by stream and its ten-year cash flow.</td>
+            <td>Rolled into the portfolio; once running, realized revenue per stream reported against this expectation.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ═══ THE PARTNERS ═══ -->
+  <section id="partners" aria-labelledby="partners-h">
+    <div class="section-head">
+      <h2 id="partners-h">Lightsmith and DividendVPP: what to confirm</h2>
+      <p>What OMEGA has on record for each partner, and what we need each to confirm: the inputs they take, the outputs they return, where their VPP role begins, and who checks that revenue streams can actually be combined.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="roles">
+        <thead><tr><th scope="col"><span class="label">Partner</span></th><th scope="col">Lightsmith Energy<small>dispatch optimization layer</small></th><th scope="col">Molecule Systems · DividendVPP<small>VPP software stack</small></th></tr></thead>
+        <tbody>
+          <tr><th scope="row">On record in OMEGA</th>
+            <td>Cross-program optimization, so each site is in the best-paying program available each hour.</td>
+            <td>AERA integrates the devices; each dispatch event is executed and verified by telemetry. A control and optimization layer, not a curtailment provider: a route to market sits underneath it.</td></tr>
+          <tr><th scope="row">Takes from OMEGA <span class="confirm">confirm</span></th>
+            <td>The asset (kW, kWh, round-trip efficiency, warranty cycles), an 8,760-hour load, the tariff, the node, and the eligible programs and enrollments. No customer name or address.</td>
+            <td>The commissioned asset and telemetry access, the programs chosen, and the customer's acceptance.</td></tr>
+          <tr><th scope="row">Returns to OMEGA <span class="confirm">confirm</span></th>
+            <td>An hourly program schedule and dispatch plan, forecast revenue per stream, and the value forgone where streams collide.</td>
+            <td>Coverage and terms by market (D2, D3); enrollment status; verified events and realized revenue by program (D5). A price forecast, if the "DividendVPP forecast" deck type is theirs (D1).</td></tr>
+          <tr><th scope="row">VPP role begins <span class="confirm">decide</span></th>
+            <td>① Pre-sale, so the proposal carries its forecast and schedule; or ② only once the asset is enrolled.</td>
+            <td>At enrollment, after build. Coverage and terms shape the proposal before that.</td></tr>
+          <tr><th scope="row">Terms <span class="confirm">confirm</span></th>
+            <td>None on record.</td>
+            <td>Our tools assume different shares; we need one figure per market and program.</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="check">
+      <div class="ck-head">
+        <h3>Who checks that revenue streams can actually be combined?</h3>
+        <p>Today, no one. OMEGA's revenue model adds the streams, and no program's rules on combining them are held anywhere in OMEGA.</p>
+      </div>
+      <div class="ck-body">
+        <div class="ck-now">
+          <p><b>On the sample site</b>, PJM capacity (<span class="num">$69,989</span>) and the utility VPP (<span class="num">$150,000</span>) would both count the same 1 MW in the same summer peak hours, and managing the demand charge needs the battery at the monthly peak as well.</p>
+          <p>Whether the same kW can be paid twice is a program rule, not a modeling choice. The answer moves this site's stack by <b>$70k to $150k a year</b>.</p>
+        </div>
+        <ol>
+          <li><b>The market participant of record</b>, the aggregator or program operator, owns each program's combination rules, because the program holds them to it.</li>
+          <li><b>Lightsmith's optimizer</b> enforces the rules hour by hour, choosing one program for an hour where two can't combine.</li>
+          <li><b>OMEGA</b> applies the rules before a stack reaches a proposal: a stream the rules exclude isn't added, and the proposal says which combination it assumes.</li>
+        </ol>
+      </div>
+      <p class="ck-prop"><b>Proposed:</b> the participant of record owns the rules, Lightsmith enforces them in dispatch, and OMEGA applies them in the stack. <b>To decide in the meeting:</b> the named owner, and where the rules table lives.</p>
+    </div>
+
+    <div class="section-head">
+      <h3>What each point would send, and in what shape</h3>
+      <p>D1 to D5 are the five points from the Value Stack Funnel, placed here on the value stacking steps. Enrollment would follow the partner route OMEGA already runs for equipment vendors: the vendor sees an anonymous opportunity (state, utility, size, stage), and the customer's identity is released only when the customer accepts.</p>
+    </div>
+    <div class="table-wrap">
+      <table class="contract">
+        <thead>
+          <tr><th scope="col">Point</th><th scope="col">From <span class="confirm">confirm</span></th><th scope="col">What</th><th scope="col">Shape OMEGA needs</th><th scope="col">Where it lands</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><span class="dv-id">D1</span>Rates &amp; forecasts</td>
+            <td>DividendVPP or Lightsmith</td>
+            <td>Rates for the programs you enroll assets in; hourly price forecasts</td>
+            <td>Rate, unit (per kW-year, per kW-summer, per event), program, utility, source and effective date. Forecasts as 8,760 hourly rows per product per settlement point, unit declared ($/MWh or $/MW-h), negative prices kept, a vintage label.</td>
+            <td>Step C. Fills the VPP line, typed in today, and the program and capacity rates, each with its source. A forecast becomes a price deck locked to its vintage.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D2</span>Coverage</td>
+            <td>DividendVPP, with the route to market</td>
+            <td>Markets, utilities and programs you can enroll into</td>
+            <td>Per program: market, utility territory, behind or in front of the meter, minimum kW, telemetry, season.</td>
+            <td>Step B. Which streams the route reaches, resolved by utility territory rather than by state.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D3</span>Terms</td>
+            <td>DividendVPP, with the route to market</td>
+            <td>Platform fee or revenue share</td>
+            <td>Per market and program, with any minimums.</td>
+            <td>Step B. What stays with the owner on this route.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D4</span>Dispatch</td>
+            <td>Lightsmith</td>
+            <td>A co-optimized hourly schedule</td>
+            <td>Request: kW, kWh, round-trip efficiency, warranty cycles, 8,760-hour load, tariff, node, and no customer name or address. Response: hourly charge, discharge and state of charge; revenue per stream; value forgone.</td>
+            <td>Step D. An hourly run on one state of charge instead of streams added together: the number a lender funds.</td>
+          </tr>
+          <tr>
+            <td><span class="dv-id">D5</span>Verification</td>
+            <td>Molecule (telemetry)</td>
+            <td>A figure you stand behind; verified events once running</td>
+            <td>Verification ID, date, the assumptions behind it, and how long it holds; each event's telemetry once enrolled.</td>
+            <td>Steps D and E. Replaces the "~ Estimate" badge and travels with the project to reports, the pro forma and the financing listing.</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <footer>
+    <span>ClearSky Energy Solutions · Companion to the Value Stack Funnel, which carries the market table, the editor click path and the rules. Editor figures are planning grade until verified.</span>
+    <span class="mono">© 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.</span>
+  </footer>
+</main>
+</body>
+</html>
