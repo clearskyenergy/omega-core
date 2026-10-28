@@ -103,7 +103,16 @@ function mapLee(a) {
   return null;
 }
 /* `authority`: the layer is the state's (or county's) own answer, so a
-   national polygon it does not name is weak at this point. */
+   national polygon it does not name is weak at this point.
+   TEXAS has no layer here on purpose (2026-10-28, docs/HOSTING-TEXAS.md):
+   the PUCT's own certificated service-area layers (IOU, MUNI and COOP_DIST,
+   behind its public Electric Service Area Boundaries Viewer) each carry a
+   licence limiting use to holders of a Master Service Agreement with Platts,
+   so OMEGA never queries them — the SRP/APS rule. Texas points stand on the
+   national layer, whose co-op polygons overlap the metros (three co-ops over
+   downtown Dallas, CPS's polygon over New Braunfels, New Braunfels Utilities
+   missing at its own city), so a Texas metro answer lists candidates and is
+   not confident; a person gets the PUCT's viewer (the registry's `check`). */
 var STATE_LAYERS = [
   { key: 'njdep-territories', states: ['NJ'], authority: true, label: 'NJDEP electric utility territories',
     url: 'https://mapsdep.nj.gov/arcgis/rest/services/Features/Utilities/MapServer/10', outFields: ['OBJECTID', 'NAME', 'LABEL', 'TYPE'], map: mapNj },

@@ -402,7 +402,7 @@ function noteFor(coverage, entry, util, ctx) {
       return (entry && entry.note ? entry.note + ' ' : '') + 'OMEGA does not read it; open the utility\'s page to register.';
     case 'not-wired':
       return entry ? who + ': ' + (entry.note || 'a published map that OMEGA has not wired yet.') :
-        who + ' is outside the utilities OMEGA has researched (IL, FL, GA, NJ, AZ, CA, CT, MA, RI); the DOE atlas lists the hosting capacity maps utilities publish.';
+        who + ' is outside the utilities OMEGA has researched (' + HS.STATES.join(', ') + '); the DOE atlas lists the hosting capacity maps utilities publish.';
     case 'unreachable':
       return who + '\'s hosting capacity service did not answer (' + (ctx.why || 'it failed') + '). Try again in a minute, or open its map.';
     default:
