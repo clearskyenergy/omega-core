@@ -11,7 +11,11 @@
    circuit. Every figure here was checked live on 2026-10-17 (the research
    and its adversarial verification are the source; where they disagreed the
    verification won); Arizona was checked again, utility by utility, on
-   2026-10-20 (docs/HOSTING-ARIZONA.md: the list, the links, the terms). Pure
+   2026-10-20 (docs/HOSTING-ARIZONA.md: the list, the links, the terms);
+   Texas was added, utility by utility, on 2026-10-28 (docs/HOSTING-TEXAS.md:
+   no Texas utility publishes distribution hosting capacity, and the PUCT's
+   own service-area layers are licensed to Platts MSA holders, so they are
+   never queried). Pure
    CommonJS, ES5, no I/O: the door (api/hosting-capacity.js) does the asking.
 
    WHY IT IS SERVER-ONLY. ComEd answers only with its own viewer's Referer,
@@ -76,11 +80,15 @@ var CS = require('./comed-service');
    one cut short by the time budget is ever kept.
    2026-10-20: Arizona utility by utility, and the City of Mesa's own
    service-area map in the territory (a cached territory answer for a Mesa
-   point predates it). */
-var VERSION = 'hosting-sources-2026-10-20.1';
+   point predates it).
+   2026-10-28: Texas utility by utility (docs/HOSTING-TEXAS.md): every entry
+   is `none`, each with the route its utility offers instead and the PUCT's
+   own public boundary viewer as the person's check. */
+var VERSION = 'hosting-sources-2026-10-28.1';   /* .1: adversarial verification — TX box west of Las Cruces, Fannin County EC and the City of Bartlett named */
 var VERIFIED_AT = '2026-10-17';
 var AZ_VERIFIED_AT = '2026-10-20';
-var STATES = ['IL', 'FL', 'GA', 'NJ', 'AZ', 'CA', 'CT', 'MA', 'RI'];
+var TX_VERIFIED_AT = '2026-10-28';
+var STATES = ['IL', 'FL', 'GA', 'NJ', 'AZ', 'CA', 'CT', 'MA', 'RI', 'TX'];
 var MODES = ['storage', 'export', 'load'];
 var DOE_ATLAS = 'https://www.energy.gov/eere/us-atlas-electric-distribution-system-hosting-capacity-maps';
 
@@ -89,7 +97,8 @@ var DOE_ATLAS = 'https://www.energy.gov/eere/us-atlas-electric-distribution-syst
 var STATE_BOX = {
   IL: [36.92, -91.57, 42.56, -86.97], FL: [24.34, -87.69, 31.05, -79.92], GA: [30.31, -85.66, 35.05, -80.79],
   NJ: [38.88, -75.61, 41.41, -73.84], AZ: [31.28, -114.87, 37.05, -108.99], CA: [32.48, -124.53, 42.06, -114.08],
-  CT: [40.93, -73.78, 42.10, -71.74], MA: [41.19, -73.56, 42.94, -69.88], RI: [41.10, -71.96, 42.07, -71.07]
+  CT: [40.93, -73.78, 42.10, -71.74], MA: [41.19, -73.56, 42.94, -69.88], RI: [41.10, -71.96, 42.07, -71.07],
+  TX: [25.6, -106.70, 36.6, -93.4]   /* west bound east of Las Cruces: EPE's New Mexico side is the NMPRC's, not the PUCT's (El Paso, -106.485, stays inside) */
 };
 
 /* ── parse rules ─────────────────────────────────────────────────────── */
@@ -856,7 +865,84 @@ var ENTRIES = [
     note: 'Section hosting capacity in MW on three-phase lines; single and two phase sections carry the feeder but no section figure. The layers are stored in RI State Plane, so results are asked for in WGS84. National Grid\'s older RISDP services predate PPL\'s refresh and are not read.' },
   none('pascoag', 'Pascoag Utility District', ['14537'], ['RI'], 'muni', null, 'Pascoag Utility District publishes no hosting capacity; interconnection goes through the district and the RI PUC.'),
   none('biud', 'Block Island Utility District', ['1857'], ['RI'], 'public', null,
-    'Block Island Utility District publishes no hosting capacity; the PUC caps net metering at 10% of the island\'s peak load.')
+    'Block Island Utility District publishes no hosting capacity; the PUC caps net metering at 10% of the island\'s peak load.'),
+
+  /* ═══ TEXAS: nothing is published anywhere in the state (checked utility
+     by utility on 2026-10-28; docs/HOSTING-TEXAS.md). The PUCT has no
+     hosting-capacity rule: interconnection is 16 TAC §25.211 / §25.212
+     (adopted 1999, Project 21220), its staff's 2023 workshop on requiring
+     hosting capacity analysis (Project 54233) adopted nothing, and DOE's
+     atlas (July 2025) lists no Texas utility. In the ERCOT retail-choice
+     areas the WIRES company (the TDU) answers interconnection, never the
+     retail provider on the bill. The PUCT's own service-area layers (IOU,
+     MUNI, COOP_DIST) carry a licence limiting use to Platts MSA holders, so
+     OMEGA never queries them (utility-territory.js); each entry hands the
+     person the PUCT's own public boundary viewer instead. ═══ */
+  none('oncor', 'Oncor Electric Delivery', ['44372'], ['TX'], 'IOU', 'https://www.oncor.com/us/en/home/smart-energy/renewables-solar-and-more/energy-system-developers.html',
+    'Oncor publishes no hosting capacity map; its own developer page offers "prescreen options and project classification" instead. A large DG project (about 500 kW to 10 MW and above) takes a detailed impact study, about 9-12 months; smaller systems apply through Oncor\'s portal (dg@oncor.com) under 16 TAC §25.211/§25.212. Oncor is the wires company (TDU): in its retail-choice territory the retail provider on the bill is not the interconnecting utility.',
+    { legal: 'Oncor Electric Delivery Company LLC', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Oncor\'s energy system developers page',
+      route: 'Oncor\'s pre-screen and interconnection application under 16 TAC §25.211/§25.212 (dg@oncor.com; a large project\'s impact study runs about 9-12 months)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('centerpoint', 'CenterPoint Energy Houston Electric', ['8901'], ['TX'], 'IOU', 'https://www.centerpointenergy.com/en-us/for-business/industry/builders-developers',
+    'CenterPoint publishes no hosting capacity map and told the PUCT so (Docket 56211, June 2024): it is "not actively pursuing development of a hosting capacity map" and "does offer a pre-screen in lieu of a hosting capacity map to any prospective customers that would like to interconnect". Interconnection is 16 TAC §25.211/§25.212 and CenterPoint\'s DER application tariff. CenterPoint is the wires company (TDU) in retail-choice Houston.',
+    { legal: 'CenterPoint Energy Houston Electric, LLC', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'CenterPoint\'s builders and developers page',
+      route: 'CenterPoint\'s pre-screen (offered in lieu of a hosting capacity map) and DER interconnection application under 16 TAC §25.211/§25.212',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('aep-texas', 'AEP Texas', ['20404', '3278'], ['TX'], 'IOU', 'https://www.aeptexas.com/business/builders/generating-equipment',
+    'AEP Texas publishes no hosting capacity map; interconnection is an application through its PowerClerk portal to its Distributed Energy Resource Team in San Angelo (DER_AEPTexas@aep.com, 361-881-5333) under 16 TAC §25.211/§25.212. The national territory layer still carries its two pre-merger companies: AEP Texas Central (EIA 3278, Corpus Christi and the Valley) and AEP Texas North (EIA 20404, Abilene), both tagged with AEP\'s Ohio state code. AEP Texas is the wires company (TDU) in its retail-choice territory.',
+    { legal: 'AEP Texas Inc.', holding: 'AEP', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'AEP Texas\'s generating equipment page',
+      route: 'an interconnection application through AEP Texas\'s PowerClerk (DER_AEPTexas@aep.com, 361-881-5333) under 16 TAC §25.211/§25.212',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('tnmp', 'Texas-New Mexico Power', ['40051'], ['TX'], 'IOU', 'https://www.tnmp.com/customers/interconnecting',
+    'TNMP publishes no hosting capacity map; its interconnecting page is the way in, under 16 TAC §25.211/§25.212. Its territory is scattered (parts of the Gulf Coast, west Texas and the Dallas-Fort Worth fringe), so its polygon on the national layer overlaps Oncor\'s; confirm the wires company with the bill or the PUCT\'s viewer. TNMP is the wires company (TDU) in its retail-choice territory.',
+    { legal: 'Texas-New Mexico Power Company', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'TNMP\'s interconnecting page',
+      route: 'an interconnection application to TNMP under 16 TAC §25.211/§25.212 (its interconnecting page)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('lpl', 'Lubbock Power & Light', ['11292'], ['TX'], 'muni', 'https://lpandl.com/',
+    'Lubbock Power & Light publishes no hosting capacity. It moved its retail customers to ERCOT competition between March and April 2024 (ERCOT\'s own notice) and stays the wires company; a distributed generation interconnection agreement is filed with City of Lubbock Utilities customer service (customerrelations@mylubbock.us). Its sites (lpandl.com and the city\'s) refuse scripted reads, so OMEGA verified the address only to its redirect to the city\'s LP&L page on 2026-10-28; a person\'s browser opens it normally.',
+    { legal: 'City of Lubbock (Lubbock Power & Light)', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Lubbock Power & Light\'s page',
+      route: 'LP&L\'s interconnection agreement, filed with City of Lubbock Utilities customer service (customerrelations@mylubbock.us)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('epe-tx', 'El Paso Electric', ['5701'], ['TX'], 'IOU', 'https://www.epelectric.com/residential/rooftop-solar/texas-interconnection-of-facilities-up-to-10-mw',
+    'El Paso Electric publishes no hosting capacity (far west Texas, WECC, outside ERCOT; it also serves southern New Mexico, where interconnection is under the NMPRC\'s rules, not the PUCT\'s — this entry answers only in Texas). It publishes a public DG interconnection QUEUE (applications by status), which is not capacity and is not read as a figure. Texas interconnection of facilities up to 10 MW is by application under the PUCT\'s rules; its distribution interconnection page carries the process. The national layer draws Rio Grande Electric Cooperative over the city of El Paso, where El Paso Electric is the likelier utility; confirm with the bill.',
+    { legal: 'El Paso Electric Company', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'El Paso Electric\'s Texas interconnection page',
+      route: 'an interconnection application to EPE (facilities up to 10 MW) under the PUCT\'s rules; its public queue shows applications, not capacity',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('sps', 'Southwestern Public Service (Xcel Energy)', ['17718'], ['TX'], 'IOU', 'https://www.xcelenergy.com/working_with_us/how_to_interconnect',
+    'Southwestern Public Service (Xcel Energy; the Panhandle and South Plains, SPP, outside ERCOT) publishes no hosting capacity for its Texas system: Xcel\'s hosting capacity maps cover Minnesota and Colorado only (DOE\'s atlas, July 2025, and the TSPA\'s own PUCT filing in Project 54233 say the same). Interconnection is through Xcel\'s application process.',
+    { legal: 'Southwestern Public Service Company', holding: 'Xcel Energy', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Xcel Energy\'s interconnection page',
+      route: 'Xcel Energy\'s interconnection application for SPS (its hosting capacity maps cover Minnesota and Colorado only)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('swepco', 'SWEPCO', ['17698'], ['TX'], 'IOU', 'https://www.swepco.com/business/builders/generating-equipment',
+    'SWEPCO (Southwestern Electric Power Company; northeast Texas around Longview and Texarkana, SPP, outside ERCOT) publishes no hosting capacity map. Its generating equipment page names AEP\'s Distributed Generation Coordinator (dgcoordinator@aep.com) as the way in.',
+    { legal: 'Southwestern Electric Power Company', holding: 'AEP', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'SWEPCO\'s generating equipment page',
+      route: 'an interconnection application to AEP\'s Distributed Generation Coordinator (dgcoordinator@aep.com)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('entergy-tx', 'Entergy Texas', ['55937'], ['TX'], 'IOU', 'https://www.entergytexas.com/net-metering',
+    'Entergy Texas (southeast Texas around Beaumont, Conroe and The Woodlands; MISO, outside ERCOT) publishes no hosting capacity map. Interconnection and billing are Schedule SQF (to 100 kW) or LQF above it, with distributed-scale interconnection governed by Schedule IPODG, which can take a pre-interconnection study; applications go through Entergy\'s interconnection portal.',
+    { legal: 'Entergy Texas, Inc.', holding: 'Entergy', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Entergy Texas\'s net metering page',
+      route: 'Schedule SQF (to 100 kW) or LQF with a pre-interconnection study under Schedule IPODG, through Entergy\'s interconnection portal',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('austin-energy', 'Austin Energy', ['1015'], ['TX'], 'muni', 'https://austinenergy.com/green-power/solar-solutions',
+    'Austin Energy publishes no hosting capacity. A system interconnects by application under its own DG interconnection guide (its contractors\' guide is public); the city\'s utility is outside ERCOT retail choice, so Austin Energy is both the wires company and the supplier.',
+    { legal: 'City of Austin (Austin Energy)', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Austin Energy\'s solar page',
+      route: 'an interconnection application to Austin Energy under its DG interconnection guide',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('cps-energy', 'CPS Energy', ['16604'], ['TX'], 'muni', 'https://www.cpsenergy.com/content/corporate/en/construction-and-renovation/distributed-generation.html',
+    'CPS Energy (San Antonio) publishes no hosting capacity. A DG system interconnects by application under its Distributed Generation Manual (being revised in 2024 to add battery storage, microgrids and ERCOT requirements; DG@cpsenergy.com, 210-353-2700). The city\'s utility is outside ERCOT retail choice.',
+    { legal: 'City of San Antonio (CPS Energy)', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'CPS Energy\'s distributed generation page',
+      route: 'a DG interconnection application under CPS Energy\'s Distributed Generation Manual (DG@cpsenergy.com, 210-353-2700)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('tx-munis', 'Texas municipal utilities', ['6958', '5063', '7129', '3940', '1287'], ['TX'], 'group', 'https://tppa.com/member-utilities/',
+    'No Texas municipal utility publishes hosting capacity (Garland, Denton, Bryan, Georgetown, New Braunfels, College Station and the rest); contact the city utility\'s engineering or interconnection office. New Braunfels Utilities is missing from the national territory layer at its own city, so a New Braunfels point can read as its neighbours; confirm with the bill.',
+    { verifiedAt: TX_VERIFIED_AT, viewerLabel: 'the Texas Public Power Association\'s member list',
+      route: 'the city utility\'s own interconnection application and engineering review',
+      group: { states: ['TX'], types: ['MUNICIPAL', 'POLITICAL SUBDIVISION', 'STATE'] } }),
+  none('tx-coops', 'Texas electric cooperatives', ['14626', '5078', '1892', '11501', '18976', '8620', '6182', '16638', '16627', '13830', '27369', '3938', '4262', '19159', '20948', '10009', '1175', '7752', '16057', '16063', '19579', '16461', '11364', '17561', '16146', '12452', '1273', '6173'], ['TX'], 'group', 'https://texas-ec.org/about/member-directory/',
+    'No Texas cooperative publishes hosting capacity (Pedernales, CoServ (Denton County EC), Bluebonnet, Magic Valley, Guadalupe Valley and the rest were checked); ask the co-op\'s own engineering review. The co-ops\' polygons on the national territory layer overlap the metros, so a co-op named beside a TDU inside a city is confirmed with the bill or the PUCT\'s viewer.',
+    { verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Texas Electric Cooperatives\' member directory',
+      route: 'the cooperative\'s own interconnection application and engineering review',
+      group: { states: ['TX'], types: ['COOPERATIVE'] } })
 ];
 
 /* Territory polygons that are never a point's retail utility: one or a
@@ -1151,7 +1237,7 @@ var GRAIN_WORDS = { circuit: "the utility's circuit at the address", 'grid-cell'
   transformer: 'the nearest transformer point', 'line-section': 'the nearest line section', 'line-segment': 'the nearest line segment', parcel: 'the parcel' };
 
 module.exports = {
-  VERSION: VERSION, VERIFIED_AT: VERIFIED_AT, AZ_VERIFIED_AT: AZ_VERIFIED_AT, STATES: STATES, MODES: MODES, ENTRIES: ENTRIES, NEVER: NEVER, DOE_ATLAS: DOE_ATLAS,
+  VERSION: VERSION, VERIFIED_AT: VERIFIED_AT, AZ_VERIFIED_AT: AZ_VERIFIED_AT, TX_VERIFIED_AT: TX_VERIFIED_AT, STATES: STATES, MODES: MODES, ENTRIES: ENTRIES, NEVER: NEVER, DOE_ATLAS: DOE_ATLAS,
   SEASONS: SEASONS, GRAIN_WORDS: GRAIN_WORDS, STATE_BOX: STATE_BOX, SAYS: SAYS,
   byKey: byKey, byEia: byEia, statesAt: statesAt, forCandidate: forCandidate, layersFor: layersFor,
   arcgisQuery: arcgisQuery, comedQuery: comedQuery, comedHeaders: comedHeaders, envelioParcel: envelioParcel, envelioSidebar: envelioSidebar,

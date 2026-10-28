@@ -56,6 +56,25 @@
           assumption-set-import, scenario-run, portfolio-irr,
           package-prepare, package-submit, crm-link, activity-log,
           job-start, job-step, job-cancel
+   THE COMPUTE-SITE DILIGENCE (api/_lib/portfolio/diligence-door.js on
+   diligence.js, grid-screen.js and loi-package.js; switched on for a
+   workspace only by billing/current.toolOverrides['portfolio-diligence']
+   === true, 403 everywhere else) answers through this door too:
+     POST diligence-decide | -stage | -gate | -control | -offtake |
+          -chargers | -profile | -survey { site, … }  any editor, a member
+          included; the site's diligence only, audited
+     POST diligence-screen-start { ids } / diligence-screen-step { jobId }
+          the Grid Atlas screen, a phase of a site a step
+     POST diligence-loi { ids?, note? }  ONE LOI package to the workspace's
+          offtake partner, then each site to LOI sent
+     GET  (one site) diligence: { view, schema, brand, clients }; (the
+          register) diligence: { pipeline, tally, clients, unassigned,
+          schema, brand } and a row a site
+     POST diligence-client { portfolioId?, name, …, steps }  a CLIENT (who
+          a batch of sites comes from, a register portfolio) and its
+          acquisition paperwork: NDA → MSA → LOI → Term sheet → Contract
+     POST diligence-assign { portfolioId|null, site|sites }  its sites;
+          one client a site, other portfolio uses untouched
 
    Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
      site-archive / site-restore    hide from, or return to, the register
@@ -129,6 +148,7 @@ var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA =
    counts the skid: it is ClearSky's, on its own meter) */
 var OC = require('./_lib/omega-core');
 var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge'), AS = require('./_lib/portfolio/assets');
+var DG = require('./_lib/portfolio/diligence-door');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
 var PARTNER_DAILY_CAP = 25;
 
@@ -420,17 +440,23 @@ var handler = A.handler(async function (req, res) {
     var q = root.collection('sites').orderBy('__name__').limit(LIST_CAP + 1);
     if (b.startAfter) q = root.collection('sites').orderBy('__name__').startAfter(b.startAfter).limit(LIST_CAP + 1);
     var snap = await q.get(), withArchived = b.archived === '1' || b.archived === 'true' || b.archived === true;
-    var sites = snap.docs.filter(function (d) { return withArchived || BR.lifecycleOf(d.data()) !== 'archived'; })
-      .slice(0, LIST_CAP).map(function (d) { return siteView(d.id, d.data()); });
+    var listed = snap.docs.filter(function (d) { return withArchived || BR.lifecycleOf(d.data()) !== 'archived'; }).slice(0, LIST_CAP);
+    var sites = listed.map(function (d) { return siteView(d.id, d.data()); });
     await capitalJoin(db, sites);
+    /* the diligence, where the switch is on: a row a site, the strip and the tally (null elsewhere, and the page draws nothing new) */
+    var dj = await DG.registerJoin({ db: db, org: org, root: root, caller: caller, by: by }, listed);
+    if (dj) sites.forEach(function (s) { s.diligence = dj.rows[s.id] || null; });
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
-      limited: snap.docs.length > LIST_CAP };
+      limited: snap.docs.length > LIST_CAP,
+      diligence: dj ? { pipeline: dj.pipeline, tally: dj.tally, counted: dj.counted, limited: dj.limited, clients: dj.clients, unassigned: dj.unassigned, schema: dj.schema, brand: dj.brand } : null };
   }
 
   var action = String(b.action || 'read');
   var adminOnly = action === 'file-archive' || action === 'contact-archive';
   var who = await access(caller, org, adminOnly ? 'admin' : req.method === 'POST' ? 'write' : 'read');
+  /* the diligence's own actions: an editor's (the write access above), the door's 403 where the switch is off */
+  if (req.method === 'POST' && DG.owns(action)) return DG.post({ db: db, org: org, root: root, caller: caller, by: by, b: b, site: b.site ? C.recordId(b.site, 'Site') : null, canEdit: who.edit, req: req });
   var BULK = BULK_ACTIONS.indexOf(action) >= 0;
   if (!b.site && action !== 'site-save' && action !== 'site-import' && !BULK) throw A.httpError(400, 'Which site?');
   var sid = b.site ? C.recordId(b.site, 'Site') : null;
@@ -512,8 +538,11 @@ var handler = A.handler(async function (req, res) {
     catch (e) { console.error('[site-crm] design sync', e && e.message); }
     var siteOut = siteView(sid, site.data); await capitalJoin(db, [siteOut]);
     var dsgOut = siteOut.latestDesign;
+    /* the diligence, where the switch is on (null elsewhere): the view the Diligence tab draws, the vocabulary and the name */
+    var dilig = await DG.siteView({ db: db, org: org, root: root, caller: caller, by: by }, siteRef, site.data);
     return {
       site: siteOut,
+      diligence: dilig,
       /* the Omega-Core skid's facts for a page whose design carries one: the product record's, never a page's own */
       skid: dsgOut && dsgOut.compute && dsgOut.compute.omegaCoreUnits > 0 ? SM.skidFacts() : null,
       autoModel: auto && auto.ran ? { modelId: auto.ran.modelId, latestModel: auto.ran.summary } : null,
@@ -742,7 +771,9 @@ var handler = A.handler(async function (req, res) {
        day's count held on a counter no rule opens, the sender in copy. */
     if (action === 'send-to-partner') {
       var partner = PARTNERS.get(String(b.partner || ''));
-      if (!partner) throw A.httpError(400, 'Which partner? ' + PARTNERS.list().map(function (p) { return p.key + ' (' + p.name + ')'; }).join(', '));
+      if (!partner) throw A.httpError(400, 'Which partner? ' + PARTNERS.list().filter(function (p) { return !p.loiPackage; }).map(function (p) { return p.key + ' (' + p.name + ')'; }).join(', '));
+      /* an offtake partner takes ONE package for many sites (the diligence's diligence-loi), never this one-site mail */
+      if (partner.loiPackage) throw A.httpError(400, partner.name + ' takes one LOI package for the earmarked sites, from the diligence (Send LOI package), not the one-site mail');
       var settingsDoc = await db.collection('fin_settings').doc('dealroom').get(), rcpt = PARTNERS.recipients(partner, process.env, settingsDoc.exists ? settingsDoc.data() : null);
       if (!rcpt.to.length) throw A.httpError(409, partner.name + ' has no address on this deployment (' + partner.env + ', or fin_settings/dealroom.orgs.' + partner.settings + '). Nothing was sent.');
       var orgRecP = await root.get(), orgNmP = orgRecP.exists ? ((orgRecP.data() || {}).name || org) : org, day = now.slice(0, 10), noteP = C.text(b.note, 1000, 'Note', { multiline: true });

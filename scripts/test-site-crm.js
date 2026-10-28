@@ -1052,6 +1052,80 @@ function seed() {
     assert.equal(crm.indexOf(a), -1); assert.ok(crm.indexOf(m) >= 0);
   });
 
+  console.log('\nthe compute-site diligence (switched on for one workspace)');
+  var DSEED = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'tenants/solelacapital/portfolio-diligence.json'), 'utf8'));
+  function diligenceOn() {
+    db.seed(O + '/billing/current', { tier: 'enterprise', toolOverrides: { 'portfolio-diligence': true }, portfolioDiligence: require('../api/_lib/portfolio/diligence').validateConfig(DSEED) });
+    db.seed(O, { name: 'EVCS', status: 'active', whiteLabel: { platformName: 'EVCS Sites', shortName: 'EVCS' }, domains: ['evcs.clearskyomega.com'] });
+    /* container-scale power: the Solela seed sizes in the 1 MW container, so 1,500 kW service less the 350 kW peak carries one */
+    Object.assign(stored(SITE), { serviceCapacityKw: 1500, existingPeakKw: 350, address: '1 Hub Rd', zip: '90012' });
+  }
+  await test('switched off (the default): every diligence action is 403 and the GETs carry no diligence, so the pages draw nothing new', async function () {
+    await rejects(call('POST', { site: SITE, action: 'diligence-decide', choice: 'pursue' }, PM), 403, /not switched on/);
+    await rejects(call('POST', { action: 'diligence-loi' }, PM), 403, /not switched on/);
+    assert.equal((await call('GET', { site: SITE }, PM)).diligence, null);
+    var reg = await call('GET', {}, PM); assert.equal(reg.diligence, null); assert.equal(reg.sites[0].diligence, undefined);
+    assert.equal(stored(SITE).diligence, undefined);
+  });
+  await test('switched on: a MEMBER earmarks and edits, a viewer reads and cannot write, every change audited; the register carries the strip, the tally and the name', async function () {
+    diligenceOn();
+    var r = await call('POST', { site: SITE, action: 'diligence-decide', choice: 'pursue' }, PM);
+    assert.equal(r.diligence.stage, 'pursue'); assert.equal(r.diligence.stageLabel, 'Earmarked');
+    assert.equal(stored(SITE).diligence.decision.by, 'pm@evcs.com'); assert.equal(audits('sitecrm-diligence-decide').length, 1);
+    await rejects(call('POST', { site: SITE, action: 'diligence-gate', gate: 'power', state: 'working' }, VIEWER), 403);
+    await call('POST', { site: SITE, action: 'diligence-control', route: 'lease', lease: { rentMonthlyUsd: 11250, termYears: 15, startDate: '2026-11-01', computePermitted: true } }, PM);
+    var reg = await call('GET', {}, PM);
+    assert.equal(reg.diligence.brand.name, 'EVCS Sites'); assert.equal(reg.diligence.tally.sites, 1); assert.equal(reg.diligence.schema.stageLabels.pursue, 'Earmarked');
+    var row = reg.sites.filter(function (s) { return s.id === SITE; })[0].diligence;
+    assert.equal(row.stage, 'pursue'); assert.equal(row.freeKw, 1150); assert.equal(row.route, 'lease');
+    assert.equal(row.units, 1); assert.equal(row.unitsLabel, 'containers', 'sized in the config\u2019s own unit');
+    assert.equal(row.capexUsd, 35000000, 'the container\u2019s cost, 7 racks at $5M');
+    /* the real engine, no contract price set: the column's figure is the IRR at the chip's public spot reference, marked, never the case's own */
+    /* GB200 has no public spot rate, so the reference is CoreWeave's on-demand and the column says so */
+    assert.equal(row.irrPct, null); assert.ok(isFinite(row.irrAtPct) && row.irrAtPct > 0, 'IRR at the reference: ' + row.irrAtPct); assert.equal(row.irrAtBasis, 'on-demand'); assert.ok(row.irrAtPrice > 0);
+    var one = await call('GET', { site: SITE }, VIEWER);
+    assert.equal(one.diligence.view.stage, 'pursue'); assert.ok(one.diligence.view.lines.power.sentence.indexOf('so 1,150 kW free') > 0, one.diligence.view.lines.power.sentence); assert.equal(one.diligence.view.economics.source, 'contract-case', 'the contract case on main runs on the site’s power');
+  });
+  await test('confirmed needs a document on the site’s own Files: refused without one, confirmed with the one uploaded through the site record', async function () {
+    diligenceOn();
+    await rejects(call('POST', { site: SITE, action: 'diligence-gate', gate: 'power', state: 'confirmed', value: { willServeKw: 750 }, source: { kind: 'document', doc: 'will-serve' } }, PM), 400, /document on the site/);
+    await rejects(call('POST', { site: SITE, action: 'diligence-gate', gate: 'power', state: 'confirmed', value: { willServeKw: 750 }, evidenceFileId: 'f_nowhere', source: { kind: 'document', doc: 'will-serve' } }, PM), 409, /not on this site/);
+    var up = await call('POST', { site: SITE, action: 'file-upload', file: { name: 'will-serve.pdf', base64: PDF }, category: 'contract' }, PM);
+    var r = await call('POST', { site: SITE, action: 'diligence-gate', gate: 'power', state: 'confirmed', value: { willServeKw: 750 }, evidenceFileId: up.id, source: { kind: 'document', doc: 'will-serve' } }, PM);
+    assert.equal(r.diligence.gates.power.state, 'confirmed'); assert.equal(audits('sitecrm-diligence-gate').length, 1);
+  });
+  await test('the LOI package: Lightsmith takes it, never the one-site mail; no address is 409 and nothing mailed; with one, ONE mail and the site to LOI sent', async function () {
+    diligenceOn();
+    await call('POST', { site: SITE, action: 'diligence-decide', choice: 'pursue' }, PM);
+    await rejects(call('POST', { action: 'send-to-partner', ids: [SITE], partner: 'lightsmith' }, PM), 400, /one LOI package/);
+    MAILS = [];
+    await rejects(call('POST', { action: 'diligence-loi' }, PM), 409, /no address on this deployment/);
+    assert.equal(MAILS.length, 0);
+    db.seed('fin_settings/dealroom', { orgs: { lightsmith: ['deals@lightsmith.example'] } });
+    var r = await call('POST', { action: 'diligence-loi', note: 'First site' }, PM);
+    assert.equal(r.status, 'sent'); assert.deepEqual(r.moved, [SITE]); assert.equal(MAILS.length, 1); assert.equal(MAILS[0].to, 'deals@lightsmith.example'); assert.equal(MAILS[0].opts.cc, 'pm@evcs.com');
+    assert.ok(/^\[EVCS Sites\] LOI package for Lightsmith Energy: 1 site/.test(MAILS[0].subject), MAILS[0].subject);
+    assert.equal(stored(SITE).diligence.stage, 'loi-sent'); assert.equal(stored(SITE).partners.lightsmith.packageId, r.packageId); assert.equal(audits('sitecrm-diligence-loi').length, 1);
+  });
+
+  await test('clients: a member records a client\u2019s paperwork and assigns sites through the one door; the register joins each client with its own batch; the plain register portfolio stays what it was', async function () {
+    diligenceOn();
+    var mk = await call('POST', { action: 'diligence-client', name: 'Acme Charging', steps: { nda: { state: 'signed', date: '2026-10-20' } } }, PM);
+    assert.ok(mk.portfolioId); assert.equal(mk.client.signed, 1); assert.equal(audits('sitecrm-diligence-client').length, 1);
+    await rejects(call('POST', { action: 'diligence-client', name: 'X' }, VIEWER), 403);
+    var as1 = await call('POST', { action: 'diligence-assign', portfolioId: mk.portfolioId, site: SITE }, PM);
+    assert.equal(as1.assigned, 1);
+    assert.deepEqual(stored(SITE).portfolioIds, [mk.portfolioId]);
+    var reg = await call('GET', {}, PM);
+    var row = reg.sites.filter(function (x) { return x.id === SITE; })[0].diligence;
+    assert.equal(row.clientName, 'Acme Charging');
+    var card = reg.diligence.clients.filter(function (x) { return x.id === mk.portfolioId; })[0];
+    assert.equal(card.sites, 1); assert.equal(card.client.next.step, 'msa');
+    var one = await call('GET', { site: SITE }, PM);
+    assert.equal(one.diligence.view.client.name, 'Acme Charging');
+    assert.deepEqual(one.diligence.clients.map(function (x) { return x.name; }), ['Acme Charging']);
+  });
+
   console.log('\naudit');
   await test('every write is audited', async function () {
     await call('POST', { site: SITE, action: 'log', type: 'note', subject: 'n' }, PM);

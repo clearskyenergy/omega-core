@@ -80,7 +80,9 @@ var LIMITS = {
   takeOrPayPct: [0, 100], escalatorPct: [-10, 10], feePct: [0, 50],
   purchasePriceUsd: [1, 100000000], rentEscalatorPct: [0, RC.entered.maxEscalatorPct], revenueSharePct: [0, 60],
   rentPerKwMonth: [RC.entered.minMonthly / RC.computeKwPerSkid, RC.entered.maxMonthly / RC.computeKwPerSkid],
-  residualPct: [0, CM.LIMITS.residualPct[1] * 100], landResidualPct: [0, 200]
+  residualPct: [0, CM.LIMITS.residualPct[1] * 100], landResidualPct: [0, 200],
+  /* a CUSTOM unit (a whole container of racks) costs more than one skid ever could */
+  customUnitCostUsd: [10000, 1000000000]
 };
 /* the skid model's operating figures a caller may set (read by its own
    readInputs, with its ranges); the contract owns the rest */
@@ -224,31 +226,55 @@ function contractCase(input, opts) {
     + round(dd.balloonPct * 100, 1) + '% balloon at maturity, a ' + round(dd.feePct * 100, 1) + '% fee and a ' + dd.reserveMonths + '-month reserve (funded, not released), against a '
     + dd.targetDscr + 'x DSCR target' + (debtDefaults.length ? '; ' + (debtDefaults.length === 7 ? 'all' : debtDefaults.length + ' of those') + ' the skid model’s defaults' : '') + '.');
 
-  /* ── sizing: whole skids, on the model's own capacity rule ── */
-  var one = CM.capacity(c, I);
-  var unitsTyped = figure(input.units, LIMITS.units, 'A skid count', notes, given(input.availableKw) ? 'the power decides.' : 'one skid is used.');
-  if (unitsTyped != null && unitsTyped !== Math.floor(unitsTyped)) { notes.push('A skid count of ' + unitsTyped + ' is read as ' + Math.floor(unitsTyped) + ' whole skids.'); unitsTyped = Math.floor(unitsTyped); }
-  var kw = figure(input.availableKw, LIMITS.availableKw, 'Available power (kW)', notes, unitsTyped != null ? 'the skid count is used.' : 'one skid is used.');
+  /* ── sizing: whole skids on the model's own capacity rule, or the CUSTOM
+     UNIT the caller's deal deploys (input.unit: label, kw at the meter,
+     gpus, itKw?, racks?, costUsd?, word?) — the hardware is the deal's own
+     (2026-10-26, the Solela/Lightsmith container: 7 GPU racks in 1 MW),
+     never invented here: every figure is the caller's, said back. ── */
+  var one = CM.capacity(c, I), U = null;
+  if (input.unit && typeof input.unit === 'object') {
+    var uKw = figure(input.unit.kw, [1, 200000], 'The unit\u2019s power (kW)', notes, 'the Omega-Core skid is used.');
+    var uGpus = figure(input.unit.gpus, [1, 100000], 'The unit\u2019s GPU count', notes, 'the Omega-Core skid is used.');
+    if (uKw != null && uGpus != null) {
+      var uIt = figure(input.unit.itKw, [1, 200000], 'The unit\u2019s IT load (kW)', notes, 'the unit\u2019s own power rating stands in.');
+      var uRacks = figure(input.unit.racks, [1, 1000], 'The unit\u2019s rack count', notes, 'left off.');
+      U = { label: String(input.unit.label || 'custom unit').slice(0, 80), word: String(input.unit.word || 'unit').slice(0, 30),
+            kw: uKw, gpus: Math.floor(uGpus), itKw: uIt != null ? uIt : uKw, racks: uRacks != null ? Math.floor(uRacks) : null,
+            costUsd: figure(input.unit.costUsd, LIMITS.customUnitCostUsd, 'The unit\u2019s cost', notes, 'the capital falls back as below.') };
+      one = { nodes: U.racks, gpus: U.gpus, installedKw: U.itKw, facilityKw: U.kw };
+      notes.push('The unit is the deal\u2019s own: ' + U.label + ' \u2014 ' + fmt(U.kw) + ' kW at the meter, ' + plural(U.gpus, c.name + ' GPU')
+        + (U.racks ? ' in ' + plural(U.racks, 'rack') : '') + '; the Omega-Core skid model stands aside.');
+    } else notes.push('A custom unit needs both its kW and its GPU count; the Omega-Core skid is used.');
+  }
+  var UW = U ? U.word : 'skid';
+  var unitsTyped = figure(input.units, LIMITS.units, 'A ' + UW + ' count', notes, given(input.availableKw) ? 'the power decides.' : 'one ' + UW + ' is used.');
+  if (unitsTyped != null && unitsTyped !== Math.floor(unitsTyped)) { notes.push('A ' + UW + ' count of ' + unitsTyped + ' is read as ' + Math.floor(unitsTyped) + ' whole ' + UW + 's.'); unitsTyped = Math.floor(unitsTyped); }
+  var kw = figure(input.availableKw, LIMITS.availableKw, 'Available power (kW)', notes, unitsTyped != null ? 'the ' + UW + ' count is used.' : 'one ' + UW + ' is used.');
   function fits(cap) { return cap.facilityKw > 0 ? Math.floor(kw / cap.facilityKw + 1e-9) : 0; }
   var units, basis;
   if (kw != null) {
     var fit = fits(one);
     units = unitsTyped != null ? Math.min(unitsTyped, fit) : fit;
     basis = 'availableKw';
-    if (unitsTyped != null && fit < unitsTyped) notes.push(fmt(kw) + ' kW carries ' + fit + ' of the ' + unitsTyped + ' skids asked; the case is priced on ' + fit + '.');
-    else if (unitsTyped == null) notes.push('Sized on the power: ' + fmt(kw) + ' kW ÷ ' + one.facilityKw + ' kW a skid at the meter (' + one.nodes + ' nodes × '
+    if (unitsTyped != null && fit < unitsTyped) notes.push(fmt(kw) + ' kW carries ' + fit + ' of the ' + unitsTyped + ' ' + UW + 's asked; the case is priced on ' + fit + '.');
+    else if (unitsTyped == null) notes.push(U ? 'Sized on the power: ' + fmt(kw) + ' kW ÷ ' + fmt(one.facilityKw) + ' kW a ' + U.label + ' at the meter = ' + plural(fit, UW) + '.'
+      : 'Sized on the power: ' + fmt(kw) + ' kW ÷ ' + one.facilityKw + ' kW a skid at the meter (' + one.nodes + ' nodes × '
       + c.nodeKw + ' kW × PUE ' + I.pue + ') = ' + plural(fit, 'skid') + '.');
-    if (units > 0) notes.push('That is the compute’s own draw: each skid’s R60 recharging can add up to ' + OC.PRODUCT.battery.kw + ' kW (a '
+    if (U && fit === 0) notes.push('The ' + U.label + ' needs ' + fmt(U.kw) + ' kW at the meter; ' + fmt(kw) + ' kW carries none. The case is priced on 0.');
+    if (units > 0 && !U) notes.push('That is the compute’s own draw: each skid’s R60 recharging can add up to ' + OC.PRODUCT.battery.kw + ' kW (a '
       + OC.PRODUCT.meter.peakKw + ' kW planning peak a skid), which the controller must cap on this power.');
   } else if (unitsTyped != null) { units = unitsTyped; basis = 'units'; }
-  else { units = 1; basis = 'default'; notes.push('One skid: neither a skid count nor the available power was given.'); }
-  var byChipset = CM.CHIPSETS.map(function (k) {
-    var ck = CM.capacity(k, I), n = kw != null ? fits(ck) : units;
-    if (kw != null && unitsTyped != null) n = Math.min(n, unitsTyped);
-    return { key: k.key, name: k.name, gpusPerUnit: ck.gpus, units: n, gpus: n * ck.gpus, itKwPerUnit: ck.installedKw, facilityKwPerUnit: ck.facilityKw };
-  });
+  else { units = 1; basis = 'default'; notes.push('One ' + UW + ': neither a ' + UW + ' count nor the available power was given.'); }
+  /* a custom unit is the deal's hardware: the cross-chipset shelf does not apply — one row, the unit as given */
+  var byChipset = U ? [{ key: c.key, name: c.name, gpusPerUnit: U.gpus, units: units, gpus: units * U.gpus, itKwPerUnit: U.itKw, facilityKwPerUnit: U.kw }]
+    : CM.CHIPSETS.map(function (k) {
+      var ck = CM.capacity(k, I), n = kw != null ? fits(ck) : units;
+      if (kw != null && unitsTyped != null) n = Math.min(n, unitsTyped);
+      return { key: k.key, name: k.name, gpusPerUnit: ck.gpus, units: n, gpus: n * ck.gpus, itKwPerUnit: ck.installedKw, facilityKwPerUnit: ck.facilityKw };
+    });
   var sizing = { units: units, gpus: units * one.gpus, itKw: r2(units * one.installedKw), facilityKw: r2(units * one.facilityKw), basis: basis,
                  availableKw: kw, perUnit: { nodes: one.nodes, gpus: one.gpus, itKw: one.installedKw, facilityKw: one.facilityKw, itCeilingKw: I.itLoadKw },
+                 unit: U ? { label: U.label, word: U.word, kw: U.kw, gpus: U.gpus, racks: U.racks } : null,
                  byChipset: byChipset };
 
   /* ── the contract ── */
@@ -339,9 +365,15 @@ function contractCase(input, opts) {
   }
 
   /* ── the capital ── */
-  var cost = figure(input.unitCostUsd, LIMITS.unitCostUsd, 'A unit cost', notes, 'the Omega-Core system cost as recorded is used.');
+  var cost = figure(input.unitCostUsd, U ? LIMITS.customUnitCostUsd : LIMITS.unitCostUsd, 'A unit cost', notes, U && U.costUsd != null ? 'the unit\u2019s own recorded cost is used.' : 'the Omega-Core system cost as recorded is used.');
   var B = OC.PRODUCT.systemCostBreakdown;
   var dyn = CM.dynamicCapex(c, one.gpus);
+  if (cost == null && U && U.costUsd != null) {
+    cost = U.costUsd;
+    notes.push('The capital is ' + usd(cost) + ' a ' + U.label + ', as the deal records it' + (U.racks && input.unit.rackCostUsd ? ' (' + plural(U.racks, 'GPU rack') + ' at ' + usd(num(input.unit.rackCostUsd)) + ' a rack)' : '')
+      + '. The skid model\u2019s chipset-scaled estimate for ' + one.gpus + ' ' + c.name + ' GPUs is ' + usd(dyn.low) + '\u2013' + usd(dyn.high)
+      + ' a unit (mid ' + usd(dyn.mid) + '): confirm the recorded price covers the GPUs before relying on these returns.');
+  }
   if (cost == null) {
     cost = OC.PRODUCT.systemCostUsd;
     notes.push('The capital is ' + usd(cost) + ' a skid, the Omega-Core system cost on record: ' + B.map(function (b) { return b.label + ', ' + usd(b.usd); }).join('; ')

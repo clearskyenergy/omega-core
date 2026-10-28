@@ -98,6 +98,7 @@ rfqs/{id}/recipients/{vendorOrgId}    # each vendor's slice + quote
 omega_orgs/{orgId}.whiteLabel         # what the PLATFORM is called here
 omega_orgs/{orgId}/storefront/config  # published products + copy + cost basis
 omega_orgs/{orgId}/storefront/counters# the durable daily order limit
+intake_links/{il_…}                   # a shareable OSA site-intake link (Admin SDK only; docs/AGENT-CONNECTOR.md §4)
 embed_keys/{omega_pk_…}               # a publishable key = ONE installation
 embed_configs/{id}                    # a designer's published quote, snapshot
 orders/{id}                           # tenant sells, ClearSky fulfils
@@ -1398,6 +1399,54 @@ test:portfolio` (the draft's T01–T35 re-homed; T26 pinned offline) and the
 workspace render check's portfolio flow. `docs/PORTFOLIO-ASSET-MANAGER-PLAN.md`
 carries the fold-in status and the go-live steps (deploy the rules by hand
 first; verify the EVCS org exists before seeding; no accounts are made).
+
+**Compute-site diligence is switched on for ONE workspace** (2026-10-25,
+Solela Capital, `solelacapital.com`; Thomas: "this is only for Solela, so
+you can market that it's Solela Capital"). The switch is
+`billing/current.toolOverrides['portfolio-diligence'] === true`, literally,
+staff-written by `scripts/enable-portfolio-diligence.js` (a dry run unless
+`--apply --confirm-org`; it also stages the staff-written `whiteLabel`
+through `whitelabel.js publicRecord()`). The workspace's own lists (intake
+types, host deals, exclusions, the offtake partner, term and fee, the
+target deal, the removal window) are `billing/current.portfolioDiligence`,
+never core. `api/_lib/portfolio/diligence.js` is the ONE rule (pure):
+stages brought in → screened → Earmarked → LOI sent → offtake → MSA →
+confirmed, or passed with a reason; seven gates, where screened is public
+data only and confirmed needs a document on the site's Files; four control
+routes and the term check; free power is the service less the MEASURED
+peak, never the nameplate. It lives on `sites/{id}.diligence`, written only
+through `api/site-crm.js` (`portfolio/diligence-door.js`, each change
+audited `sitecrm-diligence-*`): any editor acts, a member included; a
+viewer reads. Economics is never typed: the door runs `compute-contract.js
+contractCase` on the offtake's own terms, the card's price slider is its
+ladder, and until a contract price is set the register's IRR is the case's
+figure at the chip's public reference, marked "at spot" (`irrAt`). The
+deal's own hardware is `portfolioDiligence.unit` (Lightsmith's 1 MW
+container, 7 GPU racks at $5M: the compute-lease notes), which the engine
+takes as `input.unit` — sizing and capital on the unit's own figures, the
+skid untouched without one. With the switch on the pipeline IS the one
+register list (`body.dg-one`: the classic stats, filters, bulk bar and
+table stand down; search, archived and load-more fold into the pipeline). `grid-screen.js` screens sites through grid-atlas,
+network-proximity and hosting-capacity (gates move to screened, never
+confirmed; carrier names need `FCC_BB_KEY`). `loi-package.js` sends ONE
+package to the offtake partner (Lightsmith in `partners.js`,
+`LIGHTSMITH_ENERGY_EMAIL`; 409 without it), never IRR, capex or price. Off,
+the answers carry no `diligence` and the pages draw nothing new; on, the
+pages print the workspace's own name (`D.brandOf`, never a literal).
+**A CLIENT is who a batch of sites comes from** (2026-10-26, Thomas: "i
+want to know that we have an nda with then an msa an loi terms sent
+contracts etc so we can aquire the sites"): a register portfolio
+(`site_portfolios`, membership `portfolioIds[]` on the site — ONE grouping,
+never a second) carrying the acquisition ladder NDA → MSA → LOI → Term
+sheet → Contract, each step recorded (state, date, link, note; signed needs
+its date), written only by `diligence-client` and assigned by
+`diligence-assign` (one client a site; other portfolio uses untouched); the
+register joins each client with its own strip and tally, a site from a
+client without a signed NDA is flagged, and the pages scope to a client's
+batch. `omega-portfolio-diligence.js` draws it on `portfolio.html` and
+`site-crm.html`. `docs/PORTFOLIO-DILIGENCE.md`; held by `tdiligence.js`,
+`tgridscreen.js`, `tloipackage.js`, `tdiligencedoor.js`, `test-site-crm.js`
+and `check:workspace`.
 
 ## Helios Intake (2026-09-30)
 

@@ -376,6 +376,30 @@ eq(CC.contractCase(PIN, { ladder: false }).ladder, null, 'opts.ladder: false ski
 eq(JSON.stringify(CC.contractCase(PIN, { ladder: false }).returns), JSON.stringify(P.returns), 'and changes nothing else');
 eq(CC.contractCase({ availableKw: 70, contract: { pricePerGpuHour: 2 } }).ladder, null, 'no skid, no ladder');
 
+/* ═══ 12 · a CUSTOM UNIT: the deal's own hardware (Lightsmith's 1 MW
+       container, 7 GPU racks), every figure the caller's, the skid model
+       standing aside — and the skid path untouched without one ═══ */
+var U1 = { label: '1 MW container', word: 'container', kw: 1000, gpus: 504, itKw: 819, racks: 7, rackCostUsd: 5000000, costUsd: 35000000 };
+var CU = CC.contractCase({ chipset: 'gb200', availableKw: 1150, unit: U1, contract: { termMonths: 72, pricePerGpuHour: 4.71, takeOrPayPct: 80, partner: { name: 'Lightsmith Energy', feePct: 10 } }, site: {} }, { ladder: false });
+eq(CU.sizing.units, 1, 'unit: 1,150 kW carries one 1 MW container');
+eq(CU.sizing.gpus, 504, 'unit: the GPUs are the unit\u2019s own');
+eq(CU.sizing.facilityKw, 1000, 'unit: the facility draw is the unit\u2019s rating');
+eq(CU.sizing.unit && CU.sizing.unit.label, '1 MW container', 'unit: echoed on the sizing');
+eq(CU.sizing.byChipset.length, 1, 'unit: the cross-chipset shelf does not apply \u2014 one row, the unit as given');
+eq(CU.capex.total, 35000000, 'unit: the capital is the unit\u2019s recorded cost');
+ok(CU.returns && CU.returns.projectIrrPct > 25 && CU.returns.projectIrrPct < 35, 'unit: priced on the unit\u2019s own figures (' + (CU.returns && CU.returns.projectIrrPct) + '%)');
+ok(CU.notes.some(function (n) { return /1 MW container at the meter = 1 container/.test(n); }), 'unit: sized in the unit\u2019s own words');
+ok(CU.notes.some(function (n) { return /7 GPU racks at \$5,000,000 a rack/.test(n); }), 'unit: the rack build-up said back');
+var CU2 = CC.contractCase({ chipset: 'gb200', availableKw: 1150, unit: U1, unitCostUsd: 40000000, contract: { pricePerGpuHour: 4.71 }, site: {} }, { ladder: false });
+eq(CU2.capex.total, 40000000, 'unit: an entered unit cost still wins');
+eq(CU2.capex.unitCostSource, 'entered', 'and says so');
+var CU0 = CC.contractCase({ chipset: 'gb200', availableKw: 450, unit: U1, contract: { pricePerGpuHour: 4.71 }, site: {} }, { ladder: false });
+eq(CU0.sizing.units, 0, 'unit: 450 kW carries no container');
+ok(CU0.notes.some(function (n) { return /needs 1,000 kW at the meter; 450 kW carries none/.test(n); }), 'and the power it needs is named');
+var CUX = CC.contractCase({ availableKw: 450, unit: { label: 'half a unit', kw: 1000 }, contract: { pricePerGpuHour: 2 }, site: {} }, { ladder: false });
+ok(CUX.notes.some(function (n) { return /A custom unit needs both its kW and its GPU count; the Omega-Core skid is used/.test(n); }), 'unit: half a unit falls back to the skid, named');
+eq(CUX.sizing.byChipset.length > 1, true, 'and the chipset shelf is back');
+
 /* ═══ 10 · ES5 and the header ═════════════════════════════════════════ */
 var code = src.replace(/\/\*[\s\S]*?\*\//g, '');
 ok(!/=>|\bconst\b|\blet\b|`|Object\.assign|\.includes\(|\.find\(|\bclass\b/.test(code), 'the module is ES5');

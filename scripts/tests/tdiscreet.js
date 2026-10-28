@@ -262,6 +262,11 @@ ok('★ the notes, the billing and the product CSV are NOT served', ignored(CC +
    { notes: ignored(CC + 'NOTES.md'), billing: ignored(CC + 'billing.json'), csv: ignored(CC + 'products.csv') });
 ok('the files whitelabel-setup.html fetches and the icons the manifests link ARE served',
    !ignored(CC + 'tenant.json') && !ignored(CC + 'products.json') && !ignored(CC + 'icons/customer-192.png'));
+/* a workspace's diligence lists carry an offtake partner's terms
+   (scripts/enable-portfolio-diligence.js is their only reader) */
+var SC = 'tenants/solelacapital/';
+ok('★ a workspace\'s diligence seed is NOT served, and its folder serves nothing', ignored(SC + 'portfolio-diligence.json') && ignored('tenants/anyone/portfolio-diligence.json') &&
+   !files.some(function (f) { return f.indexOf(SC) === 0; }), files.filter(function (f) { return f.indexOf(SC) === 0; }));
 var ccServed = files.filter(function (f) { return f.indexOf(CC) === 0; });
 ok('the served folder is tenant.json, products.json and icons/, nothing else (a new file there is a decision)',
    ccServed.every(function (f) { return f === CC + 'tenant.json' || f === CC + 'products.json' || /^tenants\/cleancell\/icons\/[\w-]+\.svg$/.test(f); }), ccServed);

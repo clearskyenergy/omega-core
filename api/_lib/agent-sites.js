@@ -37,8 +37,10 @@
    the deploy would then 500 with "Cannot find module" on the first call.
    vercel.json also lists the file under includeFiles for api/agent/*. */
 var SI = require('../../omega-site-intel.js');
+var KMZ = require('./kmz');
 
 var MAX_RING_POINTS = 2000;
+var MAX_KMZ_B64 = 6 * 1024 * 1024;
 
 function num(v) { if (v === '' || v == null) return null; var n = Number(v); return isFinite(n) ? n : null; }
 function str(v) { return String(v == null ? '' : v).trim(); }
@@ -139,14 +141,15 @@ function outline_centroid(intake) {
    Returns { outline, grid } or { error }. */
 function outlineFromInput(site, meta) {
   meta = meta || {};
-  if (site.kml) return outlineFromKML(String(site.kml), site.name, { source: 'agent-kml', fileName: site.fileName || 'agent.kml', by: meta.by, targetMw: num(site.sizeMw) });
+  var prefix = meta.prefix || 'agent';
+  if (site.kml) return outlineFromKML(String(site.kml), site.name, { source: prefix + '-kml', fileName: site.fileName || (prefix + '.kml'), by: meta.by, targetMw: num(site.sizeMw) });
   var raw = site.outline && !Array.isArray(site.outline) ? site.outline.ring : site.outline;
   if (raw == null) return { outline: null, grid: null };
   var ring = toRing(raw);
   if (!ring) return { error: 'outline must be a polygon of at least 3 [lng,lat] points, at most ' + MAX_RING_POINTS };
   return { outline: {
     ring: ring, acres: Math.round(SI.geo.areaAcres(ring) * 10) / 10, statedAcres: num(site.acres),
-    centroid: centroidOf(ring), source: 'agent', fileName: '', tracedAt: stamp(), by: str(meta.by).slice(0, 120),
+    centroid: centroidOf(ring), source: prefix, fileName: '', tracedAt: stamp(), by: str(meta.by).slice(0, 120),
     features: [], flags: []
   }, grid: null };
 }
@@ -176,6 +179,7 @@ function summary(id, d) {
     projectType: d.projectType || '',
     partnerOrg: lower(o.partnerOrg),
     partnerName: o.partnerName || '',
+    channel: o.channel || '',
     sizeMw: num(d.sizeMw),
     sizeMwh: num(d.sizeMwh),
     acres: acresOf(d),
@@ -229,11 +233,13 @@ function filterAndSort(sites, q) {
   var minAcres = num(q.minAcres), minMw = num(q.minMw), stage = lower(q.stage), state = str(q.state).toUpperCase();
   var since = q.since ? Date.parse(q.since) : NaN, includeDead = q.includeDead === true || q.includeDead === 'true' || q.includeDead === '1';
   var outlineOnly = q.hasOutline === true || q.hasOutline === 'true' || q.hasOutline === '1';
+  var channel = lower(q.channel);
   var out = sites.filter(function (s) {
     if (!includeDead && DEAD_STAGES.indexOf(s.stage) >= 0) return false;
     if (stage && s.stage !== stage) return false;
     if (state && s.state !== state) return false;
     if (outlineOnly && !s.hasOutline) return false;
+    if (channel && lower(s.channel) !== channel) return false;
     if (minAcres != null && !(s.acres != null && s.acres >= minAcres)) return false;
     if (minMw != null && !(s.sizeMw != null && s.sizeMw >= minMw)) return false;
     if (!isNaN(since) && !(s.updatedAt && Date.parse(s.updatedAt) >= since)) return false;
@@ -284,21 +290,24 @@ function validateSite(raw) {
 }
 
 /* A brand-new deal, field for field what Portfolio.create() writes, plus the
-   outline and the agent's fingerprint. `caller` is the agent key's holder. */
-function newDealDoc(site, caller, outline, grid, batch) {
+   outline and the agent's fingerprint. `caller` is the agent key's holder.
+   `door` names the way in when it is not the agent's key: { channel, said }
+   (the intake link: channel 'Intake link', said 'Submitted through …'). */
+function newDealDoc(site, caller, outline, grid, batch, door) {
   var partnerOrg = lower(caller.orgId), by = caller.label || 'agent';
+  door = door || { channel: 'Agent', said: 'Site uploaded by ' + by + ' (agent key).', note: 'Uploaded by ' + by };
   var doc = {
     schemaVersion: 1,
     name: site.name, address: site.address, state: site.state,
     clientOrgId: '', intakeId: '', importBatch: batch || '', projectId: '', verificationIds: [],
     origination: {
       partnerOrg: partnerOrg, partnerName: caller.partnerName || '', contactName: site.contactName || '',
-      contactEmail: site.contactEmail || '', referredAt: stamp(), channel: 'Agent',
+      contactEmail: site.contactEmail || '', referredAt: stamp(), channel: door.channel,
       agreementRef: '', feeBasis: '', feeUsd: null, locked: false
     },
     originationHistory: [], participants: [],
     stage: 'referred',
-    stageHistory: [{ at: stamp(), from: '', to: 'referred', by: by, note: 'Uploaded by ' + by }],
+    stageHistory: [{ at: stamp(), from: '', to: 'referred', by: by, note: door.note }],
     projectType: site.projectType || '',
     siteNotes: site.notes || '',
     categories: [], sizeMw: site.sizeMw, sizeMwh: site.sizeMwh, capexUsd: null,
@@ -308,7 +317,7 @@ function newDealDoc(site, caller, outline, grid, batch) {
                listedAt: null, committedAt: null, closedAt: null, draws: [] },
     build: { ntpAt: null, codAt: null, epcOrg: '', note: '' },
     bom: [], notes: [],
-    activity: [entry('created', 'Site uploaded by ' + by + ' (agent key).', by)],
+    activity: [entry('created', door.said, by)],
     externalIds: site.externalId ? { agent: site.externalId } : {},
     orgsInvolved: [partnerOrg],
     createdAt: stamp(), updatedAt: stamp()
@@ -372,10 +381,29 @@ function matchExisting(site, existing) {
   return byExt || byKey || null;
 }
 
+/* The outline of one uploaded site, from KMZ bytes (base64), KML text or a
+   ring: the ONE reader for every door that takes a site from outside (the
+   agent's uploadSites, the shareable intake form). `prefix` names the door
+   on the outline's source ('agent' → 'agent-kmz' / 'agent-kml'). Returns
+   { outline, grid } or { error }. */
+function uploadOutline(site, by, prefix) {
+  prefix = prefix || 'agent';
+  if (site.kmzBase64) {
+    if (typeof site.kmzBase64 !== 'string' || site.kmzBase64.length > MAX_KMZ_B64) return { error: 'kmzBase64 too large' };
+    var buf;
+    try { buf = Buffer.from(site.kmzBase64, 'base64'); } catch (e) { return { error: 'kmzBase64 is not base64' }; }
+    var kml;
+    try { kml = KMZ.isZip(buf) ? KMZ.kmlFromKMZ(buf) : buf.toString('utf8'); }
+    catch (e) { return { error: 'could not open the KMZ: ' + e.message }; }
+    return outlineFromKML(kml, site.name, { source: prefix + '-kmz', fileName: site.fileName || (prefix + '.kmz'), by: by, targetMw: site.sizeMw });
+  }
+  return outlineFromInput(site, { by: by, prefix: prefix });
+}
+
 module.exports = {
   num: num, normKey: normKey, toRing: toRing, centroidOf: centroidOf, stateFromAddress: stateFromAddress,
   outlineFromKML: outlineFromKML, outlineFromInput: outlineFromInput, gridRecord: gridRecord,
   summary: summary, detail: detail, kmlSite: kmlSite, filterAndSort: filterAndSort,
-  validateSite: validateSite, newDealDoc: newDealDoc, updateDoc: updateDoc, matchExisting: matchExisting,
-  MAX_RING_POINTS: MAX_RING_POINTS, DEAD_STAGES: DEAD_STAGES, SI: SI
+  validateSite: validateSite, uploadOutline: uploadOutline, newDealDoc: newDealDoc, updateDoc: updateDoc, matchExisting: matchExisting,
+  MAX_RING_POINTS: MAX_RING_POINTS, MAX_KMZ_B64: MAX_KMZ_B64, DEAD_STAGES: DEAD_STAGES, SI: SI
 };

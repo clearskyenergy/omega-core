@@ -358,7 +358,8 @@ function capabilities(role, staff) { if (staff) return CAPS.owner.slice(); retur
 /* ── Children an import implies (deterministic IDs, never overwrite a
    person's edits: the gateway writes these only when absent). ────────── */
 var EQUIPMENT_CATEGORIES = ['ev_charger', 'bess', 'solar', 'compute', 'switchgear', 'transformer', 'meter', 'controls', 'other'];
-var AGREEMENT_TYPES = ['site_host_agreement', 'lease', 'license', 'loa', 'easement', 'utility_service', 'interconnection', 'offtake', 'other'];
+/* deed, purchase_agreement, assignment and amendment are the diligence's control routes' paper (diligence.js AGREEMENT_TYPES) */
+var AGREEMENT_TYPES = ['site_host_agreement', 'lease', 'license', 'loa', 'easement', 'utility_service', 'interconnection', 'offtake', 'deed', 'purchase_agreement', 'assignment', 'amendment', 'other'];
 function derivedChildren(doc) {
   var v = function (k) { return factVal(doc, k); }, src = function (k) { return doc.facts[k] ? doc.facts[k].source : null; }, out = { agreements: [], equipment: [], tasks: [] };
   if (doc.facts.shaTermYears || doc.facts.shaRemainingYears || doc.facts.monthlyRentUsd || doc.facts.revShare || doc.facts.revSharePerKwh || doc.facts.hostAccount) {
