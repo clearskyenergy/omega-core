@@ -46,7 +46,8 @@ HS.ENTRIES.forEach(function (e) {
   ok(/^[a-z0-9-]+$/.test(e.key) && !keys[e.key], 'a unique key: ' + e.key); keys[e.key] = true;
   ok(e.display && Array.isArray(e.eiaIds) && Array.isArray(e.states) && e.states.length, e.key + ' names, ids, states');
   ok(STATUS.indexOf(e.status) >= 0, e.key + ' status');
-  ok(e.verifiedAt === HS.VERIFIED_AT || (e.verifiedAt === HS.AZ_VERIFIED_AT && e.states.indexOf('AZ') >= 0), e.key + ' verified on ' + e.verifiedAt);
+  ok(e.verifiedAt === HS.VERIFIED_AT || (e.verifiedAt === HS.AZ_VERIFIED_AT && e.states.indexOf('AZ') >= 0)
+    || (e.verifiedAt === HS.TX_VERIFIED_AT && e.states.indexOf('TX') >= 0), e.key + ' verified on ' + e.verifiedAt);
   ok(typeof e.note === 'string' && e.note.length > 20, e.key + ' says something plain');
   ok(e.terms, e.key + ' terms');
   e.eiaIds.forEach(function (id) { ok(/^\d{1,6}$/.test(id), e.key + ' EIA id ' + id); });
@@ -76,7 +77,8 @@ var NAMED = {
   'Florida Public Utilities': 'fpu', 'JEA': 'jea', 'OUC': 'ouc', 'municipals and co-ops': ['fl-munis', 'fl-coops'], 'Georgia Power': 'georgia-power',
   'EMCs (co-ops)': 'ga-emcs', 'municipals': 'ga-munis', 'PSE&G': 'pseg', 'JCP&L': 'jcpl', 'Atlantic City Electric': 'ace', 'Rockland Electric': 'reco',
   'APS': 'aps', 'Tucson Electric Power': 'tep', 'SRP': 'srp', 'PG&E': 'pge', 'SCE': 'sce', 'SDG&E': 'sdge', 'Eversource CT': 'eversource-ct',
-  'United Illuminating': 'ui', 'Eversource': 'eversource-ma', 'National Grid': 'ngrid-ma', 'Unitil': 'unitil-ma', 'Rhode Island Energy': 'ri-energy' };
+  'United Illuminating': 'ui', 'Eversource': 'eversource-ma', 'National Grid': 'ngrid-ma', 'Unitil': 'unitil-ma', 'Rhode Island Energy': 'ri-energy',
+  'Oncor': 'oncor', 'CenterPoint Energy': 'centerpoint', 'AEP Texas': 'aep-texas', 'TNMP': 'tnmp', 'Austin Energy': 'austin-energy', 'CPS Energy': 'cps-energy', 'co-ops': 'tx-coops' };
 HS.STATES.forEach(function (st) {
   var m = new RegExp('\\b' + st + ":\\{utils:\\[([^\\]]*)\\]").exec(jur);
   ok(m, st + ' is in the editor\'s jurisdiction table');
@@ -112,7 +114,8 @@ eq(HS.forCandidate({ eiaId: '999997', type: 'COOPERATIVE', state: 'NJ' }, ['NJ']
 eq(HS.forCandidate({ eiaId: '40299', type: 'COOPERATIVE', state: 'NJ' }, ['NJ']).key, 'sussex-rec');
 eq(HS.forCandidate({ eiaId: '9726', type: 'INVESTOR OWNED', state: 'OH' }, ['NJ']).key, 'jcpl', 'an EIA id still answers where the national layer tags JCP&L "OH"');
 ok(HS.ENTRIES.every(function (e) { return !e.group || e.type === 'group'; }), 'only a group entry carries a group');
-deq(HS.statesAt(41.88, -87.63), ['IL']); deq(HS.statesAt(31.97, -99.9), [], 'Texas is outside the nine');
+deq(HS.statesAt(41.88, -87.63), ['IL']); deq(HS.statesAt(31.97, -99.9), ['TX'], 'Texas is researched since 2026-10-28');
+deq(HS.statesAt(31.7619, -106.485), ['TX'], 'El Paso is inside Texas\'s padded box'); deq(HS.statesAt(39.74, -104.99), [], 'Denver is outside the ten');
 
 /* ── Arizona, utility by utility (2026-10-20, docs/HOSTING-ARIZONA.md) ─
    No Arizona utility publishes distribution hosting capacity: each entry is
@@ -163,6 +166,49 @@ HS.ENTRIES.forEach(function (e) {
    only inside ArcGIS Online, and APS's DG_Locations carries meters */
 var regSrc = read('api/_lib/hosting-sources.js') + read('api/_lib/utility-territory.js');
 ok(['ICaY8VX3lsUsMBRl', 'SRP_PSA', 'wF9gckwE55J0Ayag', 'CCN_ServiceTerritory', 'DG_Locations/'].every(function (s) { return regSrc.indexOf(s) < 0; }), 'neither SRP\'s nor APS\'s own boundary layer is in the code');
+
+/* ── Texas, utility by utility (2026-10-28, docs/HOSTING-TEXAS.md) ─
+   No Texas utility publishes distribution hosting capacity (no PUCT rule,
+   no DOE atlas entry, no utility map): each entry is checked on 2026-10-28,
+   says so plainly, and hands the person the route its utility offers
+   instead, its own pages and the PUCT's own public boundary viewer. */
+var TXE = HS.ENTRIES.filter(function (e) { return e.states.indexOf('TX') >= 0; });
+ok(TXE.length >= 13, TXE.length + ' Texas entries');
+TXE.forEach(function (e) {
+  eq(e.verifiedAt, HS.TX_VERIFIED_AT, e.key + ' checked on 2026-10-28');
+  eq(e.status, 'none', e.key + ': nothing is published in Texas');
+  eq(e.publishes.gen || e.publishes.load || e.publishes.storage, false, e.key + ' publishes nothing');
+  ok(/^https:\/\//.test(e.viewerUrl || '') && e.route, e.key + ' links its own page and names its route');
+  if (e.type !== 'group') ok(e.check && /experience\.arcgis\.com/.test(e.check.url) && /PUCT/.test(e.check.label), e.key + ' hands the PUCT\'s own boundary viewer');
+});
+/* the EIA ids, each proven at a live point of the national layer on 2026-10-28 */
+eq(HS.byEia('44372').key, 'oncor'); eq(HS.byEia('8901').key, 'centerpoint'); eq(HS.byEia('40051').key, 'tnmp'); eq(HS.byEia('11292').key, 'lpl');
+eq(HS.byEia('3278').key, 'aep-texas', 'AEP Texas Central\'s legacy id'); eq(HS.byEia('20404').key, 'aep-texas', 'AEP Texas North\'s legacy id');
+eq(HS.byEia('5701').key, 'epe-tx'); eq(HS.byEia('17718').key, 'sps'); eq(HS.byEia('17698').key, 'swepco'); eq(HS.byEia('55937').key, 'entergy-tx');
+eq(HS.byEia('1015').key, 'austin-energy'); eq(HS.byEia('16604').key, 'cps-energy');
+eq(HS.byEia('14626').key, 'tx-coops', 'Pedernales'); eq(HS.byEia('5078').key, 'tx-coops', 'CoServ (Denton County EC)'); eq(HS.byEia('11501').key, 'tx-coops', 'Magic Valley');
+eq(HS.byEia('6958').key, 'tx-munis', 'Garland'); eq(HS.byEia('5063').key, 'tx-munis', 'Denton');
+/* the layer tags AEP Texas's rows with AEP's Ohio state code: the EIA id still answers in Texas */
+eq(HS.forCandidate({ eiaId: '3278', type: 'INVESTOR OWNED', state: 'OK' }, ['TX']).key, 'aep-texas');
+eq(HS.forCandidate({ eiaId: '999994', type: 'COOPERATIVE', state: 'TX' }, ['TX']).key, 'tx-coops', 'a Texas co-op the list does not name falls to the group');
+eq(HS.forCandidate({ eiaId: '999993', type: 'MUNICIPAL', state: 'TX' }, ['TX']).key, 'tx-munis');
+eq(HS.forCandidate({ eiaId: '999992', type: 'COOPERATIVE', state: 'OK' }, ['TX']), null, 'an Oklahoma co-op inside Texas\'s box gets no Texas words');
+/* the routes: the TDUs answer under 16 TAC §25.211/§25.212, never a map */
+['oncor', 'centerpoint', 'aep-texas', 'tnmp'].forEach(function (k) { ok(/25\.211/.test(HS.byKey(k).route || HS.byKey(k).note), k + ' names the PUCT\'s interconnection rule'); });
+ok(/pre-screen in lieu of a hosting capacity map/.test(HS.byKey('centerpoint').note) && /56211/.test(HS.byKey('centerpoint').note), 'CenterPoint\'s own docket answer is quoted');
+ok(/prescreen options/.test(HS.byKey('oncor').note), 'Oncor\'s own page offers a pre-screen');
+ok(/Minnesota and Colorado only/.test(HS.byKey('sps').note), 'Xcel\'s maps are other states\'; SPS\'s Texas system has none');
+ok(/QUEUE/.test(HS.byKey('epe-tx').note) && /not capacity/.test(HS.byKey('epe-tx').note), 'EPE\'s public queue is never read as capacity');
+ok(/likelier utility/.test(HS.byKey('epe-tx').note), 'Rio Grande EC\'s polygon over the city of El Paso says where it overreaches');
+ok(/wires company/.test(HS.byKey('oncor').note) && /retail provider/.test(HS.byKey('oncor').note), 'retail choice: the TDU answers, never the provider on the bill');
+ok(/March and April 2024/.test(HS.byKey('lpl').note) && /stays the wires company/.test(HS.byKey('lpl').note), 'LP&L is in ERCOT retail choice and keeps the wires');
+ok(/refuse scripted reads/.test(HS.byKey('lpl').note), 'LP&L\'s bot wall is said, never papered over');
+ok(/IPODG/.test(HS.byKey('entergy-tx').route), 'Entergy Texas\'s own schedule');
+ok(/Distributed Generation Manual/.test(HS.byKey('cps-energy').route), 'CPS\'s own manual');
+ok(/New Braunfels Utilities is missing/.test(HS.byKey('tx-munis').note), 'a muni the national layer misses is said');
+/* the PUCT's own boundary layers are licensed to Platts MSA holders and are never queried */
+ok(regSrc.indexOf('N6Lzvtb46cpxThhu') < 0, 'the PUCT\'s Platts-licensed service is not in the code');
+ok(/Platts/.test(regSrc), 'and the licence is recorded where the layer would have been wired');
 /* geometry: inside or out, and how far the edge is */
 var eIn = HS.edgeOf(ring(40, -75, 100), 40, -75); eq(eIn.inside, true); ok(Math.abs(eIn.edgeM - 100) < 1, 'well inside: 100 m to the edge');
 var eOut = HS.edgeOf(ring(40 + 150 / 111320, -75, 100), 40, -75); eq(eOut.inside, false); ok(Math.abs(eOut.edgeM - 50) < 1, '50 m outside');
@@ -732,12 +778,61 @@ tests.push(function () {
     eq(HS.resolveFromWebmap({ operationalLayers: [{ url: 'https://evil.example.com/arcgis/rest/services/PHI_Hosting_Capacity9_9_2099/FeatureServer/4' }] }, HS.byKey('ace').layers[0].resolve.match), null, 'only an ArcGIS Online host is ever followed');
   });
 });
-/* outside the nine states, and outside every territory */
+/* Dallas (2026-10-28): the national layer names Oncor, TNMP and three co-op
+   polygons drawn over the metro (the live rows of 2026-10-28); no Texas
+   utility publishes a map and the PUCT's own boundary layers are licence-
+   blocked, so every candidate is listed, nothing is confident, and no
+   figure is invented. The smallest polygon (a co-op) leads the list — the
+   bill or the PUCT's viewer decides (docs/HOSTING-TEXAS.md). */
+var DALLAS_ROWS = [['18976', 'TRINITY VALLEY ELEC COOP INC', 'COOPERATIVE', 'TX', 88305, 2.0e10], ['8620', 'HILCO ELECTRIC COOPERATIVE, INC.', 'COOPERATIVE', 'TX', 35322, 1.68e10],
+  ['6182', 'FARMERS ELECTRIC COOP, INC - (TX)', 'COOPERATIVE', 'TX', 100359, 2.85e10], ['40051', 'TEXAS-NEW MEXICO POWER CO', 'INVESTOR OWNED', 'TX', null, 1.67e11],
+  ['44372', 'ONCOR ELECTRIC DELIVERY COMPANY LLC', 'INVESTOR OWNED', 'TX', null, 3.0e11]];
 tests.push(function () {
-  var n = net([[/Electricity_Rates_H3_Res5/, Esri([['44372', 'ONCOR ELECTRIC DELIVERY COMPANY LLC', 'INVESTOR OWNED', 'TX', 4e6, 1e11]])]]);
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri(DALLAS_ROWS)], [/tigerweb/, Places(['Dallas'])]]);
   return H.run({ lat: 32.7767, lng: -96.797, unit: UNIT }, deps(n)).then(function (r) {
-    eq(r.coverage, 'not-wired'); eq(r.utility.display, 'Oncor Electric Delivery Company LLC'); eq(r.verify.viewerUrl, HS.DOE_ATLAS); ok(/outside the utilities OMEGA has researched/.test(r.note));
-    ok(!n.calls.some(function (c) { return /tigerweb/.test(c.url); }), 'no place lookup outside the nine states');
+    eq(r.coverage, 'no-public-map'); eq(r.territory.confident, false, 'overlapping polygons with no authority layer: never confident');
+    eq(r.circuits.length, 0); eq(r.best, null); eq(r.body, null); eq(r.verdict.verdict.key, 'study', 'no figure is invented anywhere in Texas');
+    var keys = r.territory.candidates.map(function (c) { return c.registryKey; });
+    ok(keys.indexOf('oncor') >= 0 && keys.indexOf('tnmp') >= 0 && keys.indexOf('tx-coops') >= 0, 'Oncor, TNMP and the co-ops are all named: ' + keys);
+    var on = r.territory.candidates.filter(function (c) { return c.registryKey === 'oncor'; })[0];
+    eq(on.hosting.says, 'publishes no hosting capacity'); ok(/25\.211/.test(on.hosting.route), 'Oncor\'s route rides with it');
+    ok(/experience\.arcgis\.com/.test(on.hosting.check.url), 'and the PUCT\'s own boundary viewer');
+    ok(/confirm the utility with a bill/.test(r.note), r.note);
+    ok(!n.calls.some(function (c) { return /oncor\.com|N6Lzvtb46cpxThhu/.test(c.url); }), 'nothing is asked of a utility that publishes nothing, and never the PUCT\'s Platts-licensed layers');
+  });
+});
+/* Lewisville: the CoServ (Denton County EC) seam beside Oncor and TNMP —
+   a seam point lists both sides and never answers one with confidence */
+tests.push(function () {
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri([['4262', 'COOKE COUNTY ELEC COOP ASSN', 'COOPERATIVE', 'TX', 17997, 1.75e10], ['5078', 'DENTON COUNTY ELEC COOP, INC', 'COOPERATIVE', 'TX', 323783, 2.06e10],
+    ['19159', 'TRI-COUNTY ELECTRIC COOP, INC (TX)', 'COOPERATIVE', 'TX', 139316, 5.23e10], ['20948', 'WISE ELECTRIC COOP INC', 'COOPERATIVE', 'TX', 26734, 2.48e10],
+    ['40051', 'TEXAS-NEW MEXICO POWER CO', 'INVESTOR OWNED', 'TX', null, 1.67e11], ['44372', 'ONCOR ELECTRIC DELIVERY COMPANY LLC', 'INVESTOR OWNED', 'TX', null, 3.0e11]])],
+    [/tigerweb/, Places(['Lewisville'])]]);
+  return H.run({ lat: 33.0462, lng: -96.9942, unit: UNIT }, deps(n)).then(function (r) {
+    eq(r.territory.confident, false, 'the CoServ/Oncor seam is never answered with confidence');
+    var keys = r.territory.candidates.map(function (c) { return c.registryKey; });
+    ok(keys.indexOf('tx-coops') >= 0 && keys.indexOf('oncor') >= 0, 'both sides of the seam are listed');
+    ok(/confirm the utility with a bill/.test(r.note), r.note);
+  });
+});
+/* Beaumont: Entergy Texas alone on the layer — one strong candidate, so the
+   answer is confident, and it says plainly what Entergy offers instead */
+tests.push(function () {
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri([['55937', 'ENTERGY TEXAS INC.', 'INVESTOR OWNED', 'TX', 519216, 8.36e10]])], [/tigerweb/, Places(['Beaumont'])]]);
+  return H.run({ lat: 30.0802, lng: -94.1266, unit: UNIT }, deps(n)).then(function (r) {
+    eq(r.coverage, 'no-public-map'); eq(r.utility.key, 'entergy-tx'); eq(r.utility.display, 'Entergy Texas'); eq(r.utility.eiaId, '55937');
+    eq(r.territory.confident, true, 'Entergy Texas is the one candidate at Beaumont');
+    eq(r.verdict.verdict.key, 'study'); ok(/IPODG/.test(r.note), r.note); ok(/entergytexas\.com/.test(r.verify.viewerUrl));
+    ok(!/ComEd/.test(JSON.stringify(r)), 'no ComEd wording in Texas');
+  });
+});
+/* outside the covered states, and outside every territory */
+tests.push(function () {
+  var n = net([[/Electricity_Rates_H3_Res5/, Esri([['15466', 'PUBLIC SERVICE CO OF COLORADO', 'INVESTOR OWNED', 'CO', 1500000, 1e11]])]]);
+  return H.run({ lat: 39.7392, lng: -104.9903, unit: UNIT }, deps(n)).then(function (r) {
+    eq(r.coverage, 'not-wired'); eq(r.utility.display, 'Public Service CO of Colorado'); eq(r.verify.viewerUrl, HS.DOE_ATLAS); ok(/outside the utilities OMEGA has researched/.test(r.note));
+    ok(/IL, FL, GA, NJ, AZ, CA, CT, MA, RI, TX/.test(r.note), 'the note names the ten states off the registry, never a stale copy');
+    ok(!n.calls.some(function (c) { return /tigerweb/.test(c.url); }), 'no place lookup outside the covered states');
   }).then(function () {
     var o = net([[/Electricity_Rates_H3_Res5/, { features: [] }]]);
     return H.run({ lat: 25.0, lng: -70.0, unit: UNIT }, deps(o)).then(function (r) { eq(r.coverage, 'outside'); eq(r.utility, null); eq(r.verdict.verdict.key, 'study'); });
