@@ -24,7 +24,10 @@ var path = require('path');
 var ROOT = path.join(__dirname, '..');
 var OUT = path.join(ROOT, 'omega-equipment-icons.js');
 
-/* the icon library, as editor.html defines it, drawn at 60 px */
+/* the icon library, as editor.html defines it, drawn at 60 px. Comments go:
+   Maximus loads each icon as image/svg+xml, an XML parse, and a "--"
+   inside an authoring comment is illegal XML that drops the icon in
+   silence (Site Map's pole, fixed there 2026-10-28) */
 function library() {
   var html = fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8');
   var at = html.indexOf('const ICONS={');
@@ -35,7 +38,7 @@ function library() {
   var ICONS = (new Function(src + '\nreturn ICONS;'))();
   var out = {};
   Object.keys(ICONS).forEach(function (k) {
-    var svg = String(ICONS[k](60)).replace(/\s*\n\s*/g, ' ').trim();
+    var svg = String(ICONS[k](60)).replace(/<!--[\s\S]*?-->/g, '').replace(/\s*\n\s*/g, ' ').trim();
     if (!/^<svg[\s>]/.test(svg)) throw new Error('icon ' + k + ' is not an SVG');
     out[k] = svg;
   });

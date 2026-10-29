@@ -25,6 +25,7 @@ check(built.status === 0, 'omega-equipment-icons.js matches editor.html\'s ICONS
 require('../../omega-equipment-icons.js');
 var LIB = global.OmegaEquipmentIcons;
 check(LIB.keys().length >= 30 && /^<svg /.test(LIB.SVG.bess) && /^<svg /.test(LIB.SVG.charger) && /^<svg /.test(LIB.SVG.util_poi), 'its ' + LIB.keys().length + ' icons are SVG, the BESS, the charger and the utility pole among them');
+check(LIB.keys().every(function (k) { return LIB.SVG[k].indexOf('<!--') < 0; }), 'no icon carries a comment: each loads as XML, where a "--" in one drops the icon');
 
 /* a stand-in for the browser's Image */
 var made = [];
