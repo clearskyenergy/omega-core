@@ -6213,24 +6213,24 @@ const ICONS={
     ${[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>`<line x1="${i*5}" y1="52" x2="${i*5+4}" y2="57" stroke="#5C3D11" stroke-width="0.6" opacity="0.5"/>`).join('')}
     <!-- Pole base flange / ground plate -->
     <rect x="24" y="50" width="12" height="3" rx="0.5" fill="#3D2800" stroke="#5C3D11" stroke-width="0.8"/>
-    <!-- Main pole shaft -- tapered wood pole -->
+    <!-- Main pole shaft: tapered wood pole -->
     <polygon points="26,4 34,4 33,51 27,51" fill="url(#wood-${s})" stroke="#4A2C00" stroke-width="1.2"/>
     <!-- Pole outer edge highlight (simulate round pole) -->
     <line x1="26" y1="4" x2="27" y2="51" stroke="rgba(255,200,100,.15)" stroke-width="1.5" stroke-linecap="round"/>
-    <!-- Step bolts (climbing steps) -- right side -->
+    <!-- Step bolts (climbing steps), right side -->
     ${[15,22,29,36,43].map(y=>`
       <rect x="33" y="${y-0.8}" width="5" height="1.6" rx="0.5" fill="#888" stroke="#666" stroke-width="0.4"/>
       <circle cx="37.5" cy="${y}" r="0.8" fill="#AAA"/>
     `).join('')}
     <!-- Cross-arm (horizontal member) -->
     <rect x="8" y="9" width="44" height="4" rx="1" fill="#5C3A10" stroke="#3D2800" stroke-width="1.2"/>
-    <!-- Cross-arm hardware -- through-bolt in center -->
+    <!-- Cross-arm hardware: through-bolt in center -->
     <rect x="28.5" y="7" width="3" height="8" rx="0.5" fill="#888" stroke="#666" stroke-width="0.5"/>
     <circle cx="30" cy="11" r="1.8" fill="#777" stroke="#555" stroke-width="0.5"/>
     <!-- Cross-arm braces (diagonal) -->
     <line x1="27" y1="13" x2="14" y2="10" stroke="#3D2800" stroke-width="1" stroke-linecap="round"/>
     <line x1="33" y1="13" x2="46" y2="10" stroke="#3D2800" stroke-width="1" stroke-linecap="round"/>
-    <!-- Insulators (glass/porcelain pin insulators) -- 3 across cross-arm -->
+    <!-- Insulators (glass/porcelain pin insulators), 3 across cross-arm -->
     ${[[13,9],[30,9],[47,9]].map(([ix,iy])=>`
       <rect x="${ix-2}" y="${iy-3}" width="4" height="5" rx="1" fill="#8BAABF" stroke="#5A7A8A" stroke-width="0.7"/>
       <ellipse cx="${ix}" cy="${iy-3}" rx="2.5" ry="1" fill="#B8CDD8" stroke="#5A7A8A" stroke-width="0.5"/>
@@ -9561,7 +9561,11 @@ function renderEl(el){
               fill="none" stroke="${_padK.edge}" stroke-width="3"/>
       </svg>`;
     })() : '';
-    inner=`${_pad}<div class="elbody eq-node" style="width:${sz}px;transform:rotate(${el.rot||0}deg);position:relative;z-index:1">
+    /* The palette charger carries its mounting too, through the same
+       helper the guided-build renderer uses. */
+    let _eqMount='';
+    try{ if(window.OmegaEVMount) _eqMount=OmegaEVMount.overlay(el, sz, sz); }catch(_e){}
+    inner=`${_pad}${_eqMount}<div class="elbody eq-node" style="width:${sz}px;transform:rotate(${el.rot||0}deg);position:relative;z-index:1">
       ${fn(sz)}
     </div>
     ${(!el.hideLabel && el.eqId !== 'bollard') ? `<div class="eq-lbl-wrap" data-lid="${el.id}" style="position:absolute;left:${sz/2+ldx}px;top:${sz/2+ldy}px;transform:translate(-50%,0);cursor:grab;z-index:10;pointer-events:auto">
@@ -9632,7 +9636,12 @@ function renderEl(el){
         + '<rect x="1.5" y="1.5" width="'+(_pw2-3)+'" height="'+(_ph2-3)+'" rx="3" fill="none" stroke="'+_padK.edge+'" stroke-width="3"/>'
         + '</svg>';
     }
-    inner=_evPad+'<div class="elbody evgear-node" style="position:relative;z-index:1;width:'+gw+'px;height:'+gh+'px;transform:rotate('+(el.rot||0)+'deg)'+flip+';transform-origin:center">'
+    /* HOW IT IS MOUNTED, ON THE DRAWING. Between the bollard island and
+       the cabinet: the island is the stall footprint, the mount is the
+       thing the cabinet is fixed to. */
+    var _evMount='';
+    try{ if(window.OmegaEVMount) _evMount=OmegaEVMount.overlay(el, gw, gh); }catch(_e){}
+    inner=_evPad+_evMount+'<div class="elbody evgear-node" style="position:relative;z-index:1;width:'+gw+'px;height:'+gh+'px;transform:rotate('+(el.rot||0)+'deg)'+flip+';transform-origin:center">'
       + _gearHtml + '</div>'
       + ((!el.hideLabel) ? '<div class="eq-lbl-wrap" data-lid="'+el.id+'" style="position:absolute;left:'+(gw/2+(el.lblDx||0))+'px;top:'+(gh+(el.lblDy||6))+'px;transform:translate(-50%,0);cursor:grab;z-index:10;pointer-events:auto">'
         + '<button class="lbl-hide-btn" onclick="event.stopPropagation();toggleElLabel(\''+el.id+'\')" title="Hide label" style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(100,100,120,.8);border:none;color:rgba(255,255,255,.7);font-size:9px;line-height:1;cursor:pointer;padding:0;display:none;align-items:center;justify-content:center;z-index:20">x</button>'
@@ -9785,6 +9794,56 @@ function showProps(id){
       var _s=document.getElementById('p-evfuture-sum');
       if(_s) _s.textContent=OmegaEVFuture.summary();
     } else if(_row){ _row.style.display='none'; }
+  }catch(_e){}
+
+  /* ── MOUNTING ──────────────────────────────────────────────────────
+     Which chargers stand on a pedestal and which hang off the building.
+     Beside the future-proof row and for the same reason: this is a thing
+     a charger IS, so it belongs in the panel that opens when you click
+     one, not behind a ribbon button somebody has to know about. */
+  try{
+    var _mf=document.getElementById('pf');
+    var _mrow=document.getElementById('p-evmount-row');
+    var _isMnt = window.OmegaEVMount && OmegaEVMount.isCharger(el);
+    if(_mf && _isMnt){
+      if(!_mrow){
+        _mrow=document.createElement('div');
+        _mrow.id='p-evmount-row';
+        _mrow.style.cssText='margin:8px 0;padding:8px 10px;background:rgba(215,222,230,.06);'
+          +'border:1px solid rgba(215,222,230,.22);border-radius:7px';
+        _mrow.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:5px">Mounting</div>'
+          +'<div style="display:flex;gap:6px">'
+          +'<button type="button" data-mount="pedestal" class="evmnt-b" style="flex:1;padding:6px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">Pedestal</button>'
+          +'<button type="button" data-mount="wall" class="evmnt-b" style="flex:1;padding:6px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">Wall</button>'
+          +'</div>'
+          +'<div style="font-size:9px;color:var(--sub);margin-top:5px;line-height:1.45">'
+          +'Drawn on the site map and split out in the legend, so the sheet says which units '
+          +'stand on a pedestal and which are fixed to the building.</div>'
+          +'<div id="p-evmount-sum" style="font-size:9px;color:var(--sub);margin-top:5px"></div>';
+        _mf.appendChild(_mrow);
+        _mrow.querySelectorAll('.evmnt-b').forEach(function(b){
+          b.addEventListener('click',function(){
+            var cur=S.elements.find(function(x){return x.id===S.sel;});
+            if(!cur) return;
+            OmegaEVMount.setMount(cur, this.getAttribute('data-mount'));
+            OmegaEVMount.refresh();
+            showProps(S.sel);
+          });
+        });
+      }
+      _mrow.style.display='block';
+      var _cm=OmegaEVMount.mountOf(el);
+      _mrow.querySelectorAll('.evmnt-b').forEach(function(b){
+        var on=b.getAttribute('data-mount')===_cm;
+        b.style.background = on ? 'var(--accent)' : 'var(--surface)';
+        b.style.color      = on ? '#0B1622' : 'var(--text)';
+        b.style.border     = '1px solid '+(on ? 'var(--accent)' : 'var(--border)');
+      });
+      var _ms=document.getElementById('p-evmount-sum');
+      if(_ms) _ms.textContent = OmegaEVMount.isDual(el)
+        ? ('This placement is one dual-port pedestal carrying ' + (el.units||2) + ' units. ' + OmegaEVMount.summary())
+        : OmegaEVMount.summary();
+    } else if(_mrow){ _mrow.style.display='none'; }
   }catch(_e){}
 
   /* DCFC size + shared-trench controls, for chargers only. */
@@ -19145,11 +19204,28 @@ function renderLegend(){
            double-count the same object. */
         if(e && e.id!=null && _fleetElIds[e.id]) return;
         var id=e.eqId||e.evKind||'jbox';
+        /* ── THE KEY DECIDES THE SYMBOL, SO IT MUST BE THE DRAWN ONE ─────
+           renderEl draws a service flagged svcPedestal with ICONS.svcped —
+           its own pedestal symbol — but the key here fell through to the
+           evKind, 'service', so the legend drew the utility-service glyph
+           and called it "Utility Service". Two different symbols for one
+           object on the same sheet is exactly what a reviewer queries.
+           A pedestal placed from Insert is already eqId 'svcped'; this
+           makes the guided-build one agree with it, which also merges the
+           two placement paths into a single row. */
+        if(e.type==='evgear' && e.evKind==='service' && e.svcPedestal) id='svcped';
         /* A future-proofed stall is not a charger the customer owns. Give it
            its own legend key so two installed and two future read as exactly
            that, instead of collapsing into one row of four. */
         try {
           if(window.OmegaEVFuture && OmegaEVFuture.isCharger(e) && OmegaEVFuture.isFuture(e)) id = id + '__future';
+        } catch(_e){}
+        /* ── WHICH ONES HANG ON THE WALL ─────────────────────────────────
+           A job mixes mounting types and the key has to say so, or eight
+           identical rows leave the installer guessing. Same device under
+           two mountings is two rows, each carrying its own symbol. */
+        try {
+          if(window.OmegaEVMount && OmegaEVMount.isCharger(e)) id = id + '__mnt-' + OmegaEVMount.key(e);
         } catch(_e){}
         /* EQ chargers carry no evModel, so record the catalog label for the
            future row too or it prints a raw id. */
@@ -19210,16 +19286,34 @@ function renderLegend(){
         /* Last resort: never print a raw snake_case id at a customer. */
         return String(k).replace(/[_-]+/g,' ').replace(/\b\w/g,function(c){ return c.toUpperCase(); });
       }
-      var _isFut=/__future$/.test(id);
-      var _base=_isFut ? id.replace(/__future$/,'') : id;
-      if(_isFut && !eq) eq=(typeof EQ!=='undefined')?EQ.find(x=>x.id===_base):null;
+      /* Strip EVERY marker to get back to the catalogue id. These stack --
+         a future-proofed wall-mounted stall carries both -- so an anchored
+         "__future$" test stopped matching the moment a second marker was
+         appended after it, and the row fell back to a raw id and a junction
+         box icon. Order-independent, and the base is what the catalogue,
+         the icon table and DC_CATALOG are all looked up with. */
+      var _mntK=(/__mnt-([a-z]+)/.exec(id)||[])[1]||null;
+      var _isFut=/__future/.test(id);
+      var _base=id.replace(/__mnt-[a-z]+/,'').replace(/__future/,'');
+      if(_base!==id && !eq) eq=(typeof EQ!=='undefined')?EQ.find(x=>x.id===_base):null;
+      if(_base!==id && !dc) dc=(typeof DC_CATALOG!=='undefined')?DC_CATALOG[_base]:null;
       var label=(ev&&ev.label) ? ev.label
               : (eq ? eq.label
               : (dc ? (dc.model||dc.label||_prettyId(_base))
               : _prettyId(_base)));
       /* Say it on the drawing, not just in the estimate: a reviewer reading
          the legend has to be able to see which stalls are being built. */
+      if(_mntK && window.OmegaEVMount) label += ' \u2014 ' + OmegaEVMount.label(_mntK);
       if(_isFut) label += ' \u2014 future (conduit and breaker only)';
+      /* The key's symbol is the symbol on the map: the mounting swatch for
+         a charger, the catalogue icon for everything else. Resolved off the
+         BASE id, never the marked one, or every marked row prints a
+         junction box. */
+      var ico=null;
+      try{
+        if(_mntK && window.OmegaEVMount) ico=OmegaEVMount.swatch(_mntK,16);
+        else ico=((typeof ICONS!=='undefined' && ICONS[_base]) ? ICONS[_base] : ICONS.jbox)(16);
+      }catch(_e){ try{ ico=ICONS.jbox(16); }catch(_x){ ico=''; } }
       /* The same physical item can arrive under two ids — a battery placed as
          'acblock' in one build and 'bess' in another both read "BESS AC Block".
          Merge on the printed label so the legend lists equipment, not ids. */
@@ -19247,13 +19341,13 @@ function renderLegend(){
         if(!_lblSeen[label].sub && sub) _lblSeen[label].sub = sub;
         return;
       }
-      _lblSeen[label] = { id:id, label:label, qty:(counts[id]||0), sub:sub, order:_lblOrder.length };
+      _lblSeen[label] = { id:id, ico:ico, label:label, qty:(counts[id]||0), sub:sub, order:_lblOrder.length };
       _lblOrder.push(label);
     });
 
     _lblOrder.forEach(function(lb){
       var G=_lblSeen[lb];
-      eqRows+='<div class="li"><div class="li-ico">'+((ICONS[G.id]||ICONS.jbox)(16))+'</div>'
+      eqRows+='<div class="li"><div class="li-ico">'+(G.ico||'')+'</div>'
         +'<span class="li-txt">'+G.label+(G.qty>1?(' \u00d7'+G.qty):'')+(G.sub||'')+'</span></div>';
       eqCount+=G.qty;
     });
@@ -28473,6 +28567,22 @@ async function _preCaptureNormalize(el) {
       // If the SVG has no explicit viewBox, give it one matching its box so the
       // rasterized image keeps the same coordinate space.
       if(!clone.getAttribute('viewBox')){ clone.setAttribute('viewBox','0 0 '+w+' '+h); }
+      /* ── A COMMENT CAN TAKE THE WHOLE SYMBOL OFF THE SHEET ───────────
+         The serialized clone is handed to an <img> as image/svg+xml, which
+         is parsed as XML — and XML forbids "--" INSIDE a comment. The HTML
+         parser accepts it, so the icon is perfect on screen and the drawing
+         looks right while you work; it is only the export that silently
+         loses it, because the Image() just fires onerror and we return.
+         That is what hid the utility pole: an authoring note reading
+         "Step bolts (climbing steps) -- right side". The comments carry
+         nothing visual, so strip them rather than trusting every future
+         edit to avoid a double hyphen. */
+      try{
+        var _cw = document.createTreeWalker(clone, NodeFilter.SHOW_COMMENT, null, false);
+        var _dead = [], _cn;
+        while((_cn = _cw.nextNode())) _dead.push(_cn);
+        _dead.forEach(function(n){ if(n.parentNode) n.parentNode.removeChild(n); });
+      }catch(e){}
       var svgStr = new XMLSerializer().serializeToString(clone);
       var url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
       var drawn = await new Promise(function(resolve){
@@ -28561,6 +28671,13 @@ async function _preCaptureNormalize(el) {
      often enough to be unreliable. Rasterize them the same way. */
   var padSvgs = el.querySelectorAll('svg.ev-bollard-pad');
   for(var pi=0; pi<padSvgs.length; pi++){ await _rasterizeSvgInPlace(padSvgs[pi]); }
+
+  /* The mounting symbol (wall bracket / pedestal base plate) sits beside
+     the cabinet in the same way the bollard island does, so it needs the
+     same treatment -- it is the one thing on the sheet that says which
+     chargers hang off the wall and which stand on a pedestal. */
+  var mountSvgs = el.querySelectorAll('svg.ev-mount');
+  for(var mi=0; mi<mountSvgs.length; mi++){ await _rasterizeSvgInPlace(mountSvgs[mi]); }
 
   // The whole conduit + trench layer (single big SVG) — rasterize as one image
   // so every polyline, trench band, label and vertex lands on the export.
@@ -61011,6 +61128,219 @@ var EVRENDER = {
 };
 /* Footprint (ft) for realistic scaling. Falls back to sensible defaults. */
 try{ window.EVRENDER = EVRENDER; }catch(e){}
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  HOW A CHARGER IS MOUNTED
+ *  ---------------------------------------------------------------------
+ *  A job mixes mounting types: a pair of units share one dual-port floor
+ *  pedestal in the drive aisle while the rest hang off the building wall.
+ *  The drawing had no way to say that. Every charger drew as the same
+ *  free-standing cabinet, so the sheet showed eight identical units and
+ *  the mounting lived only in somebody's email — which is precisely the
+ *  detail an AHJ and the installer both need off the plan.
+ *
+ *  Mounting is a SITE decision, not a model property: most Level 2 units
+ *  ship with both a wall bracket and a pedestal kit (their own spec lines
+ *  read "wall/pedestal"). So it is a per-element field, defaulted from the
+ *  catalogue and changed on the element.
+ *
+ *    el.mount === 'wall'      wall-mounted, bracket on the building face
+ *    el.mount === 'pedestal'  floor pedestal (the default)
+ *    el.units  > 1            that pedestal carries two units, dual-port
+ *
+ *  THE SYMBOLS ARE TOLD APART BY FORM, NOT COLOUR. These sheets print as
+ *  "Technical (black on white)" for permit sets and go through a B&W
+ *  plotter; a distinction carried by hue alone disappears there. A wall
+ *  mount is the hatched wall face with brackets, a pedestal is a base
+ *  plate with anchor bolts — both read at any size, in any style.
+ * ══════════════════════════════════════════════════════════════════════ */
+var OmegaEVMount = (function(){
+  'use strict';
+  var INK = '#D7DEE6', DEEP = '#0E1620';
+
+  function isCharger(e){
+    return !!(e && ((e.type==='evgear' && e.evKind==='charger') ||
+                    (e.type==='eq' && e.eqId==='charger')));
+  }
+  /* The stored value wins. With nothing stored, a catalogue entry that
+     ships as a dual floor pedestal is one, and everything else defaults to
+     a pedestal — which is what the drawing already drew, so an existing
+     project opens looking exactly as it did before this shipped. */
+  function mountOf(e){
+    if(!e) return 'pedestal';
+    var m = String(e.mount||'').toLowerCase();
+    if(m==='wall'||m==='pedestal') return m;
+    return 'pedestal';
+  }
+  function isDual(e){ return !!(e && (e.units>1 || e.pedestal)); }
+  function setMount(e, m){
+    if(!e) return;
+    e.mount = (String(m).toLowerCase()==='wall') ? 'wall' : 'pedestal';
+  }
+  /* The legend key, so wall and pedestal units land on rows of their own
+     instead of collapsing into one "EV Charger x8". */
+  function key(e){ return mountOf(e)==='wall' ? 'wall' : (isDual(e) ? 'dual' : 'pedestal'); }
+  function label(k){
+    return k==='wall' ? 'wall-mounted'
+         : k==='dual' ? 'dual-port pedestal'
+         : 'pedestal-mounted';
+  }
+
+  /* ── THE PLAN SYMBOL ───────────────────────────────────────────────
+     Drawn in the element's own box plus a margin, UNDER the cabinet, so
+     the unit itself is untouched and anything already drawn on it (the
+     photo render, the future-proof colouring) still shows. */
+  /* How far the mount sticks out past the cabinet on every side. The
+     caller needs this to place the overlay, so it is derived once here
+     rather than guessed twice. */
+  function margin(w, h){
+    w = Math.max(8, Math.round(w||40)); h = Math.max(8, Math.round(h||w));
+    return Math.max(4, Math.round(Math.min(w,h)*0.30));
+  }
+  function symbol(kind, w, h, dual){
+    w = Math.max(8, Math.round(w||40)); h = Math.max(8, Math.round(h||w));
+    var m  = margin(w, h);   /* margin for the mount */
+    var W  = w + m*2, H = h + m*2;
+    var s  = '<svg class="ev-mount" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" '
+           + 'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">';
+    if(kind==='wall'){
+      /* The building face runs along the back edge: a heavy line with the
+         solid side hatched, which is how a wall reads on any plan, and two
+         short brackets tying the cabinet to it. */
+      var wy = m*0.42, t = Math.max(2, m*0.26);
+      s += '<rect x="'+(m*0.3)+'" y="'+wy+'" width="'+(W-m*0.6)+'" height="'+t+'" fill="'+INK+'"/>';
+      var n = Math.max(3, Math.round(W/Math.max(5,m*0.75)));
+      for(var i=0;i<n;i++){
+        var x0 = m*0.3 + (W-m*0.6)*(i/n);
+        s += '<line x1="'+x0+'" y1="'+wy+'" x2="'+(x0 - m*0.34)+'" y2="'+(wy - m*0.34)+'" '
+           + 'stroke="'+INK+'" stroke-width="'+Math.max(1,t*0.42)+'" opacity=".75"/>';
+      }
+      [0.34, 0.66].forEach(function(f){
+        s += '<rect x="'+(W*f - t*0.7)+'" y="'+(wy+t)+'" width="'+(t*1.4)+'" height="'+(m - wy - t + 2)+'" '
+           + 'fill="'+INK+'" opacity=".9"/>';
+      });
+    } else {
+      /* A base plate under the cabinet with anchor bolts at its corners.
+         A dual pedestal is ONE plate carrying both units, so it is drawn
+         as one plate with a centre post between the two port positions —
+         the thing that tells a reviewer two cabinets share one footing. */
+      var px = m*0.45, py = m*0.45;
+      var pw = W - px*2, ph = H - py*2;
+      s += '<rect x="'+px+'" y="'+py+'" width="'+pw+'" height="'+ph+'" rx="'+Math.max(2,m*0.22)+'" '
+         + 'fill="'+DEEP+'" fill-opacity=".45" stroke="'+INK+'" stroke-width="'+Math.max(1.4,m*0.17)+'"/>';
+      var r = Math.max(1.3, m*0.17);
+      [[px+r*2.2, py+r*2.2],[px+pw-r*2.2, py+r*2.2],
+       [px+r*2.2, py+ph-r*2.2],[px+pw-r*2.2, py+ph-r*2.2]].forEach(function(p){
+        s += '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+r+'" fill="none" stroke="'+INK+'" '
+           + 'stroke-width="'+Math.max(1,m*0.12)+'"/>';
+      });
+      if(dual){
+        /* THE MARKER HAS TO LIVE WHERE THE CABINET IS NOT. Drawn across the
+           middle of the plate it was perfect and invisible: the cabinet
+           renders over the mount, so a single and a dual pedestal came out
+           as the same picture — which is the one distinction being asked
+           for. Run the divider the full height of the plate so it reads in
+           the exposed band above and below the unit, and put a port mark in
+           that band for each of the two units sharing the footing. */
+        s += '<line x1="'+(W/2)+'" y1="'+py+'" x2="'+(W/2)+'" y2="'+(py+ph)+'" '
+           + 'stroke="'+INK+'" stroke-width="'+Math.max(1.6,m*0.2)+'" stroke-dasharray="'+(m*0.5)+' '+(m*0.34)+'"/>';
+        var pr = Math.max(1.4, m*0.19), by = py+ph-pr-Math.max(1,m*0.1);
+        [W*0.5-pw*0.22, W*0.5+pw*0.22].forEach(function(cx){
+          s += '<circle cx="'+cx+'" cy="'+by+'" r="'+pr+'" fill="'+INK+'"/>';
+        });
+      }
+    }
+    return s + '</svg>';
+  }
+  /* The legend swatch: the same two forms at badge size, around a stub
+     cabinet, so the key and the map carry one symbol between them. */
+  /* A dual pedestal is drawn in the key as what it is: ONE plate under TWO
+     cabinets. Carrying the distinction on a dashed line alone made the two
+     pedestal rows indistinguishable at 16px, which is the size the key is
+     actually read at. */
+  function swatch(k, size){
+    var s2 = size||16, dual = (k==='dual');
+    var h = Math.round(s2*0.52), w = Math.round(s2*(dual?0.66:0.42));
+    var m  = Math.max(2, Math.round(Math.min(Math.round(s2*0.42),h)*0.30));
+    var W  = w + m*2, H = h + m*2;
+    var sc = s2/Math.max(W,H);
+    var cabs;
+    if(dual){
+      var cw = (w - m*0.5)/2;
+      cabs = '<rect x="'+m+'" y="'+m+'" width="'+cw+'" height="'+h+'" rx="1.5" fill="#37424f" stroke="#8b98a5" stroke-width="1.1"/>'
+           + '<rect x="'+(m+cw+m*0.5)+'" y="'+m+'" width="'+cw+'" height="'+h+'" rx="1.5" fill="#37424f" stroke="#8b98a5" stroke-width="1.1"/>';
+    } else {
+      cabs = '<rect x="'+m+'" y="'+m+'" width="'+w+'" height="'+h+'" rx="1.5" fill="#37424f" stroke="#8b98a5" stroke-width="1.2"/>';
+    }
+    return '<svg width="'+s2+'" height="'+s2+'" viewBox="0 0 '+s2+' '+s2+'" xmlns="http://www.w3.org/2000/svg">'
+      + '<g transform="translate('+((s2-W*sc)/2)+','+((s2-H*sc)/2)+') scale('+sc+')">'
+      + symbol(k==='wall'?'wall':'pedestal', w, h, dual).replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'')
+      + cabs + '</g></svg>';
+  }
+
+  function counts(){
+    var out = { wall:0, pedestal:0, dual:0, dualUnits:0, total:0 };
+    try{
+      (S.elements||[]).forEach(function(e){
+        if(!isCharger(e)) return;
+        var n = (e.type==='evgear' && e.units>1) ? e.units : 1;
+        out.total += n;
+        var k = key(e);
+        if(k==='wall') out.wall += n;
+        else if(k==='dual'){ out.dual += 1; out.dualUnits += n; }
+        else out.pedestal += n;
+      });
+    }catch(e){}
+    return out;
+  }
+  function summary(){
+    var c = counts();
+    if(!c.total) return 'No EV chargers on the drawing.';
+    var bits = [];
+    if(c.dualUnits) bits.push(c.dualUnits+' on '+c.dual+' dual-port pedestal'+(c.dual===1?'':'s'));
+    if(c.pedestal)  bits.push(c.pedestal+' pedestal-mounted');
+    if(c.wall)      bits.push(c.wall+' wall-mounted');
+    return bits.join(' · ');
+  }
+  /* Redraw only the chargers, then the key. Same shape as the future-proof
+     module's refresh, and for the same reason: re-rendering drops the
+     selection class the renderer does not own. */
+  function refresh(){
+    try{
+      (S.elements||[]).forEach(function(e){
+        if(isCharger(e) && typeof _reRenderEl==='function'){ try{ _reRenderEl(e.id); }catch(x){} }
+      });
+      var sel = (typeof S!=='undefined') ? S.sel : null;
+      if(sel){ var n=document.querySelector('[data-elid="'+sel+'"]'); if(n) n.classList.add('sel'); }
+    }catch(e){}
+    try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
+    try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
+    try{ if(typeof _setSaved==='function') _setSaved('unsaved'); }catch(e){}
+  }
+
+  /* The overlay as renderEl drops it in: positioned, rotated with the unit
+     and inert. Both renderers call this, so the two placement paths — the
+     Insert palette and a guided build — cannot drift apart again.
+
+     The offset and the rotation go on the <svg> ITSELF, not on a wrapper
+     div, because that is what the export's rasterizer reads when it swaps
+     the symbol for a canvas (it prefers the SVG's own declared left/top
+     over a measured rect, which for a rotated element is the rotated
+     bounding box). A wrapper would put the raster back in the corner. */
+  function overlay(el, w, h){
+    if(!isCharger(el)) return '';
+    var m = margin(w, h);
+    return symbol(mountOf(el), w, h, isDual(el)).replace('<svg ',
+      '<svg style="position:absolute;left:'+(-m)+'px;top:'+(-m)+'px;'
+      + 'transform:rotate('+(+el.rot||0)+'deg);transform-origin:center;'
+      + 'pointer-events:none;z-index:0" ');
+  }
+
+  return { isCharger:isCharger, mountOf:mountOf, setMount:setMount, isDual:isDual,
+           key:key, label:label, symbol:symbol, swatch:swatch, margin:margin,
+           overlay:overlay, counts:counts, summary:summary, refresh:refresh };
+})();
+try{ window.OmegaEVMount = OmegaEVMount; }catch(e){}
 var EV_FOOTPRINT = {
   /* OMEGA PATCH 14 -- data-centre plant. */
   substation:{ lf:40.0, wf:30.0 },
