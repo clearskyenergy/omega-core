@@ -56,9 +56,30 @@
           assumption-set-import, scenario-run, portfolio-irr,
           package-prepare, package-submit, crm-link, activity-log,
           job-start, job-step, job-cancel
+   THE COMPUTE-SITE DILIGENCE (api/_lib/portfolio/diligence-door.js on
+   diligence.js, grid-screen.js and loi-package.js; switched on for a
+   workspace only by billing/current.toolOverrides['portfolio-diligence']
+   === true, 403 everywhere else) answers through this door too:
+     POST diligence-decide | -stage | -gate | -control | -offtake |
+          -chargers | -profile | -survey { site, … }  any editor, a member
+          included; the site's diligence only, audited
+     POST diligence-screen-start { ids } / diligence-screen-step { jobId }
+          the Grid Atlas screen, a phase of a site a step
+     POST diligence-loi { ids?, note? }  ONE LOI package to the workspace's
+          offtake partner, then each site to LOI sent
+     GET  (one site) diligence: { view, schema, brand, clients }; (the
+          register) diligence: { pipeline, tally, clients, unassigned,
+          schema, brand } and a row a site
+     POST diligence-client { portfolioId?, name, …, steps }  a CLIENT (who
+          a batch of sites comes from, a register portfolio) and its
+          acquisition paperwork: NDA → MSA → LOI → Term sheet → Contract
+     POST diligence-assign { portfolioId|null, site|sites }  its sites;
+          one client a site, other portfolio uses untouched
 
    Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
      site-archive / site-restore    hide from, or return to, the register
+                                    (archived and lifecycleStatus, both
+                                    doors' fields; the revision moves)
      site-delete                    permanent; workspace admin
      site-set-status { status }     the stage word on each site
      site-tag { add[], remove[] }   tags added and taken off
@@ -126,7 +147,8 @@ var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA =
    pro forma charges for a skid on the design (the Site Map cost run never
    counts the skid: it is ClearSky's, on its own meter) */
 var OC = require('./_lib/omega-core');
-var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge');
+var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge'), AS = require('./_lib/portfolio/assets');
+var DG = require('./_lib/portfolio/diligence-door');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
 var PARTNER_DAILY_CAP = 25;
 
@@ -295,6 +317,7 @@ function sentFields(input) {
 }
 function siteView(id, s) {
   s = s || {};
+  var life = BR.lifecycleOf(s);
   return {
     id: id, name: s.name || '', city: s.city || '', state: s.state || '', address: BR.addressLine(s),
     installedKw: s.installedKw == null ? null : Number(s.installedKw),
@@ -325,8 +348,17 @@ function siteView(id, s) {
     latestModel: s.latestModel || null,
     projectId: s.projectId || null, projectAt: C.iso(s.projectAt),
     finProjectId: s.finProjectId || null, finProjectAt: C.iso(s.finProjectAt), finProjectStatus: s.finProjectStatus || null,
-    archived: s.archived === true, archivedAt: C.iso(s.archivedAt),
+    archived: life === 'archived', archivedAt: C.iso(s.archivedAt), lifecycleStatus: life,
     partners: s.partners || null, revision: s.revision || 1,
+    /* what the register keeps on the same record (api/_lib/portfolio/
+       register.js), named one by one: the power evidence the Power & bills
+       tab reads, the import's attention flags, the pipeline, the portfolios
+       the site is in, and the compute agreement's stamp */
+    powerEvidence: s.powerEvidence && typeof s.powerEvidence === 'object' ? s.powerEvidence : null,
+    flags: Array.isArray(s.flags) ? s.flags : [],
+    crm: s.crm && typeof s.crm === 'object' ? s.crm : null,
+    portfolioIds: Array.isArray(s.portfolioIds) ? s.portfolioIds : [],
+    computeAgreement: s.computeAgreement && typeof s.computeAgreement === 'object' ? s.computeAgreement : null,
     externalSiteIds: s.externalSiteIds || {}, tags: s.tags || [],
     siteScopes: Array.isArray(s.siteScopes) ? s.siteScopes : [],
     latestDesign: s.latestDesign && typeof s.latestDesign === 'object' ? s.latestDesign : null,
@@ -408,17 +440,23 @@ var handler = A.handler(async function (req, res) {
     var q = root.collection('sites').orderBy('__name__').limit(LIST_CAP + 1);
     if (b.startAfter) q = root.collection('sites').orderBy('__name__').startAfter(b.startAfter).limit(LIST_CAP + 1);
     var snap = await q.get(), withArchived = b.archived === '1' || b.archived === 'true' || b.archived === true;
-    var sites = snap.docs.filter(function (d) { return withArchived || (d.data() || {}).archived !== true; })
-      .slice(0, LIST_CAP).map(function (d) { return siteView(d.id, d.data()); });
+    var listed = snap.docs.filter(function (d) { return withArchived || BR.lifecycleOf(d.data()) !== 'archived'; }).slice(0, LIST_CAP);
+    var sites = listed.map(function (d) { return siteView(d.id, d.data()); });
     await capitalJoin(db, sites);
+    /* the diligence, where the switch is on: a row a site, the strip and the tally (null elsewhere, and the page draws nothing new) */
+    var dj = await DG.registerJoin({ db: db, org: org, root: root, caller: caller, by: by }, listed);
+    if (dj) sites.forEach(function (s) { s.diligence = dj.rows[s.id] || null; });
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
-      limited: snap.docs.length > LIST_CAP };
+      limited: snap.docs.length > LIST_CAP,
+      diligence: dj ? { pipeline: dj.pipeline, tally: dj.tally, counted: dj.counted, limited: dj.limited, clients: dj.clients, unassigned: dj.unassigned, schema: dj.schema, brand: dj.brand } : null };
   }
 
   var action = String(b.action || 'read');
   var adminOnly = action === 'file-archive' || action === 'contact-archive';
   var who = await access(caller, org, adminOnly ? 'admin' : req.method === 'POST' ? 'write' : 'read');
+  /* the diligence's own actions: an editor's (the write access above), the door's 403 where the switch is off */
+  if (req.method === 'POST' && DG.owns(action)) return DG.post({ db: db, org: org, root: root, caller: caller, by: by, b: b, site: b.site ? C.recordId(b.site, 'Site') : null, canEdit: who.edit, req: req });
   var BULK = BULK_ACTIONS.indexOf(action) >= 0;
   if (!b.site && action !== 'site-save' && action !== 'site-import' && !BULK) throw A.httpError(400, 'Which site?');
   var sid = b.site ? C.recordId(b.site, 'Site') : null;
@@ -500,8 +538,11 @@ var handler = A.handler(async function (req, res) {
     catch (e) { console.error('[site-crm] design sync', e && e.message); }
     var siteOut = siteView(sid, site.data); await capitalJoin(db, [siteOut]);
     var dsgOut = siteOut.latestDesign;
+    /* the diligence, where the switch is on (null elsewhere): the view the Diligence tab draws, the vocabulary and the name */
+    var dilig = await DG.siteView({ db: db, org: org, root: root, caller: caller, by: by }, siteRef, site.data);
     return {
       site: siteOut,
+      diligence: dilig,
       /* the Omega-Core skid's facts for a page whose design carries one: the product record's, never a page's own */
       skid: dsgOut && dsgOut.compute && dsgOut.compute.omegaCoreUnits > 0 ? SM.skidFacts() : null,
       autoModel: auto && auto.ran ? { modelId: auto.ran.modelId, latestModel: auto.ran.summary } : null,
@@ -522,16 +563,30 @@ var handler = A.handler(async function (req, res) {
     return db.runTransaction(async function (tx) {
       var cur = id ? await tx.get(cref) : null;
       if (id && !cur.exists) throw A.httpError(404, 'That site is not in this workspace');
-      var doc;
+      var doc, entered = [];
       if (id) {
         var curD = cur.data() || {}, patchD = Object.assign({}, input, { updatedAt: now, updatedBy: by });
         /* the lease terms patch the commercial block, never replace it */
         if (input.commercial) patchD.commercial = Object.assign({}, curD.commercial && typeof curD.commercial === 'object' ? curD.commercial : {}, input.commercial);
         if (curD.address && typeof curD.address === 'object') patchD.address = Object.assign({}, curD.address, { street: input.address || null, city: input.city || curD.address.city || null, state: input.state || curD.address.state || null, zip: input.zip || curD.address.zip || null });
+        /* THE FACT FOLLOWS THE FIELD (2026-10-25). On a record the register
+           keeps facts for, a mapped field this edit changes (the nameplate,
+           the peak, the meter, the term, the rent, the share) is that fact,
+           entered by this person: kind manual, which the register's import
+           treats as a conflict, never a silent overwrite, and which its
+           next write (flatten) carries instead of the old value. The form
+           enters values; reviewing one is the register's own step
+           (field-review), so nothing saved here reads as reviewed. A record
+           with no facts yet derives them from these fields when read. */
+        if (curD.facts && typeof curD.facts === 'object') {
+          var reg = BR.normalize(cref.id, curD);
+          entered = BR.factEdits(reg, input);
+          if (entered.length) { var withFacts = AS.enterFacts(reg, entered, { actor: by, now: now, canReview: false }); patchD.facts = withFacts.facts; patchD.revision = withFacts.revision; }
+        }
         doc = Object.assign({}, curD, patchD); tx.update(cref, patchD);
       }
       else { doc = Object.assign({ orgId: org }, input, { archived: false, createdAt: now, createdBy: by }); tx.create(cref, doc); }
-      audit(tx, db, 'sitecrm-site-save', org, cref.id, by, now, { created: !id, site: input });
+      audit(tx, db, 'sitecrm-site-save', org, cref.id, by, now, { created: !id, site: input, facts: entered.map(function (e) { return e.fact; }) });
       return { ok: true, id: cref.id, site: siteView(cref.id, doc), note: id ? 'Site saved.' : 'Site added.' };
     });
   }
@@ -595,8 +650,11 @@ var handler = A.handler(async function (req, res) {
       rows.forEach(function (rw) {
         var patch = null;
         if (action === 'site-delete') batch2.delete(rw.ref);
-        else if (action === 'site-archive') patch = { archived: true, archivedAt: now, archivedBy: by };
-        else if (action === 'site-restore') patch = { archived: false, restoredAt: now, restoredBy: by };
+        /* both doors' fields (site-bridge.archiveState), and the revision the
+           register's own archive moves, so a page or an import undo holding
+           the old one cannot write the site back to active */
+        else if (action === 'site-archive') patch = Object.assign(BR.archiveState(true), { archivedAt: now, archivedBy: by, revision: (rw.data.revision || 1) + 1 });
+        else if (action === 'site-restore') patch = Object.assign(BR.archiveState(false), { restoredAt: now, restoredBy: by, revision: (rw.data.revision || 1) + 1 });
         else if (action === 'site-set-status') patch = { status: st };
         else {
           var tags = (Array.isArray(rw.data.tags) ? rw.data.tags : []).filter(function (t) { return dropTags.indexOf(t) < 0; });
@@ -713,7 +771,9 @@ var handler = A.handler(async function (req, res) {
        day's count held on a counter no rule opens, the sender in copy. */
     if (action === 'send-to-partner') {
       var partner = PARTNERS.get(String(b.partner || ''));
-      if (!partner) throw A.httpError(400, 'Which partner? ' + PARTNERS.list().map(function (p) { return p.key + ' (' + p.name + ')'; }).join(', '));
+      if (!partner) throw A.httpError(400, 'Which partner? ' + PARTNERS.list().filter(function (p) { return !p.loiPackage; }).map(function (p) { return p.key + ' (' + p.name + ')'; }).join(', '));
+      /* an offtake partner takes ONE package for many sites (the diligence's diligence-loi), never this one-site mail */
+      if (partner.loiPackage) throw A.httpError(400, partner.name + ' takes one LOI package for the earmarked sites, from the diligence (Send LOI package), not the one-site mail');
       var settingsDoc = await db.collection('fin_settings').doc('dealroom').get(), rcpt = PARTNERS.recipients(partner, process.env, settingsDoc.exists ? settingsDoc.data() : null);
       if (!rcpt.to.length) throw A.httpError(409, partner.name + ' has no address on this deployment (' + partner.env + ', or fin_settings/dealroom.orgs.' + partner.settings + '). Nothing was sent.');
       var orgRecP = await root.get(), orgNmP = orgRecP.exists ? ((orgRecP.data() || {}).name || org) : org, day = now.slice(0, 10), noteP = C.text(b.note, 1000, 'Note', { multiline: true });

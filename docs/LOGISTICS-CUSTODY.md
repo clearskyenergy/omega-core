@@ -25,7 +25,7 @@ is a block on it and an append-only subcollection under it.
 | Event log | `plant_units/{…}/custody_events/{auto}` — append-only, never edited |
 | Shipment / ASN | the order's `delivery.legs[]` (existed; `api/logic-logistics.js`) |
 | Site | `omega_orgs/{org}/sites/{siteId}` — new |
-| Coverage template | `storefront/config.products[].coverage[]` on the catalog product; `warrantyYears` is the default template |
+| Coverage template | `storefront/config.products[].coverage[]` on the catalog product; `warrantyYears` is the default template; a bought-in unit's maker's warranty is recorded on the unit (`custody.makerWarranty`, *Coverage* below) |
 | Coverage instance | **derived at read time** from the template and the unit's custody dates — never stored |
 | Container / pallet | not modelled (see *Not built*) |
 | Lot | not modelled; a lot carries no coverage, so nothing here needs it |
@@ -575,6 +575,63 @@ commissioning" clause. A replacement inherits the remaining term
 The customer portal's warranty line (product years × ship date) is unchanged
 and agrees with the default template.
 
+### The maker's warranty on a bought-in unit (2026-10-17)
+
+A battery the workspace buys from its maker and has not published (a
+reseller's Clean Cell unit, ordered through Omega Prime as a reference line
+with `order.procure`) is in no catalog, so no template covers it, and
+publishing it to give it one would put it on the public storefront. Clean
+Cell's brochure says its warranty "requires confirmation", so nothing is
+assumed either. Omega Teleios (`api/_lib/teleios.js`) waits for it.
+
+The office records what the **maker** warrants, on the unit:
+
+- **Where.** `plant_units/{org__serial}.custody.makerWarranty` `{ provider,
+  termMonths, trigger, capMonths, docUrl, reference, recordedBy, recordedAt,
+  orderId }`: the terms and where they came from, never a status, beside
+  `inheritedCoverage` in the same block. Admin SDK only (`plant_units`
+  refuses every browser write); never on the storefront, never public.
+- **One engine.** `custody.js templatesOf(product, unit)` is the catalog's
+  templates (or the `warrantyYears` default), then the unit's recorded
+  maker's warranty as one more warranty template (id `maker`; a catalog
+  template already called `maker` wins). `coverageOf` derives pending,
+  active and expired from the custody dates exactly as for a catalog
+  template, so the passport, the fleet register, exceptions, the customer's
+  Sites & equipment and Omega Teleios all read the same warranty.
+- **Bought in.** `custody.js boughtIn(order, sku)` is the one test, the
+  order writer's own (`api/_lib/prime-order.js`): `order.procure` names the
+  SKU. A `{ reference: true }` line with no `procure` is a product the
+  seller makes and has not published (a maker's own unit), never bought in:
+  its warranty belongs on its own catalog product.
+- **The door.** `POST /api/logic-custody { action: 'maker-warranty',
+  serial, termMonths, trigger, capMonths?, docUrl?, reference?, scope? }`
+  (`custody.js makerWarranty`): an owner or administrator of the workspace
+  (or the ClearSky owner), the people who may change the catalog's
+  templates; only a unit its order buys in, a replacement under RMA whose
+  replaced unit's order does (`boughtInUnit`: stock off another order, so
+  the unit Omega Teleios names can always take the record), or a unit
+  already carrying a record; the terms through custody's own `template()`;
+  the maker's word required, a document link (HTTPS) or the maker's
+  confirmation (5+ characters: its number, or who confirmed it and when);
+  the maker is the order's. `scope: 'order'` writes every registered
+  shipping unit of that SKU on the unit's own order in one transaction (200
+  at most; a replacement off another order is only itself);
+  a unit already carrying the same terms is left as it is, so a unit
+  registered later is added by pressing again. A correction keeps its
+  before; `clear: true` with a reason takes it off. Every unit written gets
+  a custody event (`maker-warranty`, `maker-warranty-corrected`,
+  `maker-warranty-removed`) and the call one `omega_audit` row with what it
+  was and is.
+- **RMA.** `replace` copies the original's record onto the replacement (if
+  it has none), so the inherited remaining term has its template there.
+- **Screens.** The unit passport (*Sites & custody*) says *Bought in from
+  … on order …*, shows the record (or *not on file*) and, for an owner or
+  administrator, the form; a member reads it. Omega Teleios's held note
+  says where to record it, and its `need { serial, sku, mfr }` makes Prime's
+  Track open that unit's passport. The customer's app shows the warranty
+  with the maker's name and document link; the maker's confirmation is the
+  office's record and never leaves it.
+
 ## Intake
 
 - **Manual** — the passport on the custody page, one serial.
@@ -654,6 +711,19 @@ and agrees with the default template.
   the owning org's or the verified customer's).
 - Site-level SLAs, photos and GPS at commissioning, printed labels beyond the
   plant's own, carrier webhooks, offline scanning.
+- The maker's warranty on a bought-in unit:
+  - it is recorded by the office from the maker's word; nothing reads the
+    maker's own workspace (`procure.mfrOrgId` is null for every reseller's
+    Clean Cell unit today, and Clean Cell publishes no products). A maker
+    that publishes its coverage could later prefill the form, never stand
+    in for the record;
+  - one warranty per unit (no maker's SLA or performance guarantee), and no
+    per-model record: a unit registered after the recording is added by
+    pressing again (Omega Teleios names it);
+  - a maker's own unpublished unit (a reference line with no `procure`)
+    still needs its product, with its warranty, in its own catalog;
+  - the customer portal's order-level warranty line (product years × ship
+    date) stays the catalog's; the unit-level coverage carries the maker's.
 - Freight plan:
   - no carrier API, booking, rate shopping or tracking, and no email to
     carriers: the office sends the quote request and types back the prices;
@@ -716,7 +786,9 @@ and agrees with the default template.
   - the PDF guides (`/guides/*.pdf`) were not re-shot for these screens.
 
 Tests: `scripts/test-custody.js` (library, office endpoint, customer
-endpoint, replacement and import) and `scripts/test-site-list.js` (the list
+endpoint, replacement and import, and the maker's warranty on a bought-in
+unit: who, which units, the maker's word, the customer's view, the register,
+the RMA) and `scripts/test-site-list.js` (the list
 parser and its time bounds, matching, the spread, both endpoints' four
 actions, the geocoding allowance, a unit on another account, an apply over
 200 writes; fictional addresses only) in the `test:logic` chain; `npm run

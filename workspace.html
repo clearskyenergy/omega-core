@@ -634,13 +634,18 @@ function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, 
 function hubFlags() { var b = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null, o = b && b.toolOverrides || {}; return { 'portfolio-assets': o['portfolio-assets'] !== false }; }
 function hubCtx() {
   var pa = WS.packageAccess, packaged = !!(pa && pa.packaged), canOpen = function (k) { return open(tool(k)); };
-  if (packaged) return { canOpen: canOpen, tool: tool, modules: WS.modules || [], addons: WS.addons || [], addOns: [], hideMarketplace: !!WS.hideMarketplace, packaged: true, tierLevel: WS.tierLevel, visible: function (k) { var t = tool(k); return !!t && T.isVisible(t, WS); } };
+  if (packaged) return { canOpen: canOpen, tool: tool, modules: WS.modules || [], addons: WS.addons || [], addOns: [], hideMarketplace: !!WS.hideMarketplace, packaged: true, tierLevel: WS.tierLevel, visible: function (k) { var t = tool(k); return !!t && T.isVisible(t, WS); }, hubTools: hubTools() };
   var c = HUB.legacyCtx({ tools: T, ws: WS, billing: WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null, caps: window.OmegaCaps, canOpen: canOpen,
     who: { email: ME, emailVerified: !!(USER && USER.emailVerified === true), orgId: WS.orgId } });
   /* the hub's own fields for a legacy workspace, as compose() has always read them */
-  c.modules = WS.modules || []; c.hideMarketplace = !!WS.hideMarketplace;
+  c.modules = WS.modules || []; c.hideMarketplace = !!WS.hideMarketplace; c.hubTools = hubTools();
   return c;
 }
+/* the tools this person chose to show or hide in the hub's side panels
+   (Settings › Tools in the hub), kept beside the Customize switches on
+   dashboard_layouts/{org}__{uid}.workspace.hubTools; absent is the hub's
+   default (an area's extras hidden) */
+function hubTools() { var h = DATA.prefs && DATA.prefs.hubTools; return h && typeof h === 'object' ? h : {}; }
 function href(t) { return T.hrefFor(t, WS); }
 function launch(t) {
   if (!t) return;
@@ -1184,10 +1189,13 @@ function post(e) {
 function areaDrawer(key) {
   var a = null; HUB.AREAS.forEach(function (x) { if (x.key === key) a = x; }); if (!a) return;
   var rows = HUB.items(key, hubCtx()).map(function (r) {
-    if (r.page) return { key: 'p:' + r.href, name: r.name, sub: r.sub, href: r.href, icon: S.ICON.projects, onClick: r.href.charAt(0) === '#' ? function () { S.closeDrawer(); go(r.href.slice(1)); } : null };
+    if (r.page) return { key: 'p:' + r.href, name: r.name, sub: r.sub, href: r.href, icon: (S.iconFor && S.iconFor(r.href)) || S.ICON.projects, onClick: r.href.charAt(0) === '#' ? function () { S.closeDrawer(); go(r.href.slice(1)); } : null };
     var t = tool(r.key); return { key: r.key, name: r.name, sub: r.sub, locked: r.locked, icon: toolIcon(t), href: r.locked ? null : (t.action ? null : href(t)), onClick: function () { S.closeDrawer(); launch(t); } };
   });
   if (key === 'projects') rows = rows.concat(DATA.projects.slice(0, 6).map(function (p) { return { key: 'proj:' + p.id, name: p.name || 'Untitled', sub: (STAGE_LABEL[p.stage] || 'Candidate') + ' · ' + ago(p.updatedAt || p.createdAt), icon: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>', onClick: function () { openProject(p.id); } }; }));
+  /* what this person hid from the panel stays one click away (Settings › Tools in the hub) */
+  var off = HUB.hidden(key, hubCtx());
+  if (off.length) rows.push({ key: 'hub-hidden', name: off.length + ' more tool' + (off.length === 1 ? '' : 's') + ' hidden', sub: off.map(function (r) { return r.name; }).join(' · '), icon: S.ICON.settings, cta: 'Show', onClick: function () { hubToolsDrawer(key); } });
   var why = a.always ? 'Every workspace has this.' : a.logic ? 'Shown because this workspace holds Omega Logic ' + esc(a.label) + '.' : 'Shown because at least one of these tools is open on your plan. A locked one says what carries it.';
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: a.icon + ' ' + a.label, sub: a.hint, rows: rows, note: why + ' Showing a link is never access: every tool checks the same plan.', onLocked: function (r) { S.closeDrawer(); lockedDrawer(tool(r.key)); } });
 }
@@ -1816,7 +1824,8 @@ function settingsDrawer() {
   var html = '<div class="field"><label for="set-name">Display name</label><input id="set-name" value="' + esc(who()) + '" maxlength="60"></div><div class="kv"><div><span>Email</span><span>' + esc(ME) + '</span></div><div><span>Workspace</span><span>' + esc(WS.orgId) + '</span></div><div><span>Role</span><span>' + esc(WS.role || 'member') + '</span></div></div>';
   var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName },
     /* on a phone, Me is where Plan & billing lives (the tab bar has no room for it) */
-    { key: 'billing', name: 'Plan & billing', sub: planName() + ' · what is due and your invoices', icon: S.ICON.billing, cta: 'Open', onClick: function () { S.closeDrawer(); openBilling(); } }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'signout', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];   /* data-row="signout": the render checks' click sweeps never sign the visitor out (2026-10-14) */
+    { key: 'billing', name: 'Plan & billing', sub: planName() + ' · what is due and your invoices', icon: S.ICON.billing, cta: 'Open', onClick: function () { S.closeDrawer(); openBilling(); } },
+    { key: 'hub-tools', name: 'Tools in the hub', sub: 'Show or hide the extra tools each hex lists', icon: S.ICON.tools, cta: 'Choose', onClick: function () { hubToolsDrawer(); } }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'signout', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];   /* data-row="signout": the render checks' click sweeps never sign the visitor out (2026-10-14) */
   S.drawer({ eyebrow: 'Account', title: 'Settings', html: html, rows: rows });
 }
 function saveName() {
@@ -1896,8 +1905,41 @@ function loadWorkspacePeople() {
 function customizeDrawer() {
   var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['pulse', 'Omega pulse', 'What the whole platform did this week, counts only.'], ['portfolio', 'Portfolio & assets', 'Your sites, customer pipeline, follow-ups and what needs review.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Customize your home', sub: 'Your plan sets the hub. You choose what else is around it. Saved for you.', html: '<div>' + opts.map(function (o) { return '<div class="opt"><div><b>' + esc(o[1]) + '</b><small>' + esc(o[2]) + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (P[o[0]] ? 'true' : 'false') + '" data-opt="' + o[0] + '" aria-label="' + esc(o[1]) + '"></button></div>'; }).join('') + '</div>', ready: function (el) {
-    Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); DATA.prefs = p; renderToday(); renderAround(); savePrefs(p); }); });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); var keep = hubTools(); DATA.prefs = p; if (Object.keys(keep).length) DATA.prefs.hubTools = keep; renderToday(); renderAround(); savePrefs(prefs()); }); });
   } });
+}
+/* Settings › Tools in the hub (Tommy, 2026-10-20: "hide these … in
+   settings a panel that allows us to hide or show the extra tools in the
+   hex"): a switch for every tool each cell of this person's ring lists,
+   an area's extras off until shown (OmegaWorkspaceHub.choices, the ONE
+   rule the side panel reads). Saved for this person only. Hiding is
+   presentation: All tools still lists everything and every tool checks
+   the plan. A tool in two cells is one switch, mirrored. */
+function hubToolsDrawer(focus) {
+  var groups = HUB.choices(hubCtx());
+  if (focus) groups = groups.filter(function (g) { return g.key === focus; }).concat(groups.filter(function (g) { return g.key !== focus; }));
+  var html = groups.length ? groups.map(function (g) {
+    return '<div class="hub-group" data-group="' + esc(g.key) + '"><div class="eyebrow" style="margin-top:14px">' + esc(g.icon + ' ' + g.label) + '</div>' + g.tools.map(function (t) {
+      return '<div class="opt"><div><b>' + esc(t.name) + '</b><small>' + esc(t.sub) + (t.locked ? ' · not on your plan' : '') + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (t.shown ? 'true' : 'false') + '" data-tool="' + esc(t.key) + '" aria-label="Show ' + esc(t.name) + ' in ' + esc(g.label) + '"></button></div>';
+    }).join('') + '</div>';
+  }).join('') : '<div class="ows-note">No hex lists tools on your plan yet.</div>';
+  var rows = Object.keys(hubTools()).length ? [{ key: 'hub-reset', name: 'Restore the defaults', sub: 'Every tool shown except the extras', icon: S.ICON.tools, cta: 'Restore', onClick: function () { DATA.prefs = DATA.prefs || {}; delete DATA.prefs.hubTools; saveHubTools(null); hubToolsDrawer(focus); S.toast('Hub tools restored'); } }] : [];
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Tools in the hub', sub: 'Choose what each hex lists. A hidden tool is still under All tools. Saved for you.', html: html, rows: rows, ready: function (el) {
+    Array.prototype.forEach.call(el.querySelectorAll('[data-tool]'), function (b) { b.addEventListener('click', function () {
+      var k = b.getAttribute('data-tool'), on = b.getAttribute('aria-checked') !== 'true', h = {}, cur = hubTools();
+      Object.keys(cur).forEach(function (x) { h[x] = cur[x]; }); h[k] = on;
+      DATA.prefs = DATA.prefs || {}; DATA.prefs.hubTools = h;
+      Array.prototype.forEach.call(el.querySelectorAll('[data-tool="' + k + '"]'), function (x) { x.setAttribute('aria-checked', on ? 'true' : 'false'); });
+      saveHubTools(h);
+    }); });
+  } });
+}
+var hubSaveT;
+function saveHubTools(h) {
+  clearTimeout(hubSaveT); hubSaveT = setTimeout(function () {
+    if (!USER) return;
+    db.collection('dashboard_layouts').doc(WS.orgId + '__' + USER.uid).set({ workspace: { hubTools: h || firebase.firestore.FieldValue['delete']() }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
+  }, 500);
 }
 var saveT;
 function savePrefs(p) {
@@ -1921,7 +1963,7 @@ function returnHome() {
 function route() {
   var h = (window.location.hash || '').slice(1);
   if (!h || h === 'home') { returnHome(); return; }
-  if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer();
+  if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer(); else if (h === 'hub-tools') hubToolsDrawer();
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
   else if (h.indexOf('module-') === 0) focusModule(h.slice(7));
   else if (h === 'plans') focusPlans();

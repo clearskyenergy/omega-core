@@ -13,7 +13,18 @@
 
      OmegaWorkspaceHub.compose(ctx)  → { centre, ring: [area × ≤6] }
      OmegaWorkspaceHub.items(key, ctx) → the area's entries for the side panel
+     OmegaWorkspaceHub.hidden(key, ctx) → the tools this person hid from it
+     OmegaWorkspaceHub.choices(ctx)   → Settings › Tools in the hub: every
+                                        tool each cell of the ring can list
      OmegaWorkspaceHub.AREAS          → the table, for the test
+
+   An area's `extras` are tools its side panel leaves out until the person
+   shows them (Tommy, 2026-10-20, of Design's optimizer, power flow,
+   discovery and conductor sizing: "hide these … in settings a panel that
+   allows us to hide or show the extra tools in the hex"). ctx.hubTools
+   ({ toolKey: bool }, the person's own choice) wins over that default.
+   Presentation only: a hidden tool is still under All tools, the cell is
+   still the plan's, and every tool still checks the plan.
 
    and what a workspace holds of each module, the ONE rule every surface
    asks (the Modules page, Plan & billing, the marketplace, the editor's
@@ -42,7 +53,7 @@
     { key: 'orders',   label: 'Orders',   icon: '◷', hint: 'office', logic: 'logic-office',    pages: [['Orders', 'Price, accept, invoice', '/omega-logic#orders'], ['Customers', 'Accounts and people', '/portals/customer/admin.html'], ['Office app', 'On a phone', '/office/app']] },
     { key: 'plant',    label: 'Plant',    icon: '⚙', hint: 'build',  logic: 'logic-plant',     pages: [['Work order board', 'What to build', '/plant/work-orders.html'], ['Plant board', 'Live station map', '/plant/manager.html'], ['Plant app', 'The bench', '/plant/app']] },
     { key: 'deliver',  label: 'Deliver',  icon: '➜', hint: 'ship, custody', logic: 'logic-logistics', pages: [['Shipping & receiving', 'Loads and lanes', '/logic-logistics.html'], ['Sites & custody', 'Where every unit is', '/logic-custody.html']] },
-    { key: 'design',   label: 'Design',   icon: '▧', hint: 'Site Map, sandbox', tools: ['omegaprime', 'editor', 'siteplantrial', 'sandbox', 'siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'] },
+    { key: 'design',   label: 'Design',   icon: '▧', hint: 'Site Map, sandbox', tools: ['omegaprime', 'editor', 'siteplantrial', 'sandbox', 'siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'], extras: ['siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'] },
     { key: 'grid',     label: 'Grid',     icon: '⌗', hint: 'capacity, screen', tools: ['gridatlas', 'interconnect', 'comedcap', 'sitefinder', 'interconnectstudy'] },
     { key: 'money',    label: 'Finance',  icon: '$',      hint: 'capital, size, model', also: ['financing'], tools: ['batterysizer', 'valuestack', 'vppsim', 'computeproforma', 'isocalc', 'proforma', 'dcfc', 'apartment', 'fleet', 'investment', 'costestimator'] },
     { key: 'sales',    label: 'Sales',    icon: '▤', hint: 'screen, propose, estimate', tools: ['sales', 'spatco_ev', 'evcostwb', 'computelease', 'parcelscreening', 'bessscreening'], subjects: [{ key: 'screening', name: 'Screening', sub: 'Parcel and BESS portfolio screening', href: '/screening.html', tools: ['parcelscreening', 'bessscreening'] }] },
@@ -90,19 +101,40 @@
     var a = byKey(key); if (!a) return [];
     ctx = ctx || {};
     var out = (a.pages || []).map(function (p) { return { name: p[0], sub: p[1], href: p[2], page: true }; });
-    var grouped = [];
-    (a.subjects || []).forEach(function (s) {
-      grouped = grouped.concat(s.tools || []);
-      out.push({ key: s.key, name: s.name, sub: s.sub, href: s.href, page: true, subject: true });
-    });
+    (a.subjects || []).forEach(function (s) { out.push({ key: s.key, name: s.name, sub: s.sub, href: s.href, page: true, subject: true }); });
     var open = [], locked = [];
-    (a.also || []).concat(a.tools || []).forEach(function (k) {
-      if (grouped.indexOf(k) >= 0) return;
-      var t = ctx.tool ? ctx.tool(k) : null; if (!t || t.soon) return;
-      var row = { key: k, name: t.name, sub: t.blurb || t.desc || '', locked: !(ctx.canOpen && ctx.canOpen(k)) };
-      (row.locked ? locked : open).push(row);
-    });
+    toolRows(a, ctx).forEach(function (row) { if (row.shown) (row.locked ? locked : open).push(row); });
     return out.concat(open, locked);
+  }
+  /* is a tool listed in an area's side panel for this person: their own
+     choice first, else everything but the area's extras */
+  function shown(area, k, ctx) {
+    var p = ctx && ctx.hubTools;
+    if (p && typeof p[k] === 'boolean') return p[k];
+    return !has(area.extras, k);
+  }
+  /* every tool an area's panel could list (a subject's tools sit under the
+     subject's page), with the catalog's name, locked or open, and shown */
+  function toolRows(a, ctx) {
+    var grouped = [], seen = {}, out = [];
+    (a.subjects || []).forEach(function (s) { grouped = grouped.concat(s.tools || []); });
+    (a.also || []).concat(a.tools || []).forEach(function (k) {
+      if (grouped.indexOf(k) >= 0 || seen[k]) return; seen[k] = true;
+      var t = ctx.tool ? ctx.tool(k) : null; if (!t || t.soon) return;
+      out.push({ key: k, name: t.name, sub: t.blurb || t.desc || '', locked: !(ctx.canOpen && ctx.canOpen(k)), extra: has(a.extras, k), shown: shown(a, k, ctx) });
+    });
+    return out;
+  }
+  function hidden(key, ctx) {
+    var a = byKey(key); if (!a) return [];
+    return toolRows(a, ctx || {}).filter(function (r) { return !r.shown; });
+  }
+  /* Settings › Tools in the hub: the cells this person's ring holds, each
+     with every tool its panel could list and whether it is shown */
+  function choices(ctx) {
+    ctx = ctx || {};
+    return compose(ctx).ring.map(function (a) { return { key: a.key, label: a.label, icon: a.icon, tools: toolRows(a, ctx) }; })
+      .filter(function (g) { return g.tools.length > 0; });
   }
   /* ── DOES THIS WORKSPACE HOLD A MODULE? One rule for the Modules page,
      the marketplace store and the master console (Tommy, 2026-09-27: every
@@ -469,7 +501,7 @@
     else if (opts.admin === false && card.action && card.action.kind !== 'billing') { card.action = card.action.kind === 'pay' ? card.action : null; card.secondary = null; card.adminLine = 'An owner or administrator of ' + co + ' changes modules.'; }
     return card;
   }
-  var API = { AREAS: AREAS, compose: compose, items: items, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, moduleCard: moduleCard,
+  var API = { AREAS: AREAS, compose: compose, items: items, hidden: hidden, choices: choices, moduleState: moduleState, moduleTools: moduleTools, moduleEditor: moduleEditor, moduleNote: moduleNote, moduleCard: moduleCard,
     editorCtx: editorCtx, capsFor: capsFor, legacyCtx: legacyCtx, liveAddOns: liveAddOns, storefront: storefront, holdsLogic: holdsLogic, shortDay: shortDay, RING_MAX: RING_MAX };
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
   if (root) root.OmegaWorkspaceHub = API;

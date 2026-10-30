@@ -9,7 +9,7 @@ var Mode = require('./packaging-mode');
 function fail(message) { var e = new Error(message); e.status = 409; throw e; }
 function items(book) {
   B.validate(book);
-  var out = M.catalog().map(function (m) { return { key: 'module:' + m.key, name: m.name, priceCents: book.modules[m.key].priceCents }; });
+  var out = M.catalog().filter(function (m) { return B.sells(book, m.key); }).map(function (m) { return { key: 'module:' + m.key, name: m.name, priceCents: book.modules[m.key].priceCents }; });
   Object.keys(book.plans).forEach(function (k) { out.push({ key: 'plan:' + k, name: book.plans[k].name, priceCents: book.plans[k].priceCents }); });
   out.push({ key: 'logic-bundle', name: book.logicBundle.name, priceCents: book.logicBundle.priceCents });
   ['builder', 'viewer'].forEach(function (k) { out.push({ key: 'login:' + k, name: 'Additional ' + k + ' logins', priceCents: book.logins[k + 'Cents'] }); });

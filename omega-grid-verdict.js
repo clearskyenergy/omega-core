@@ -3,16 +3,22 @@
    omega-grid-verdict.js  ·  the ONE browser client of POST /api/grid-verdict
                              and POST /api/hosting-capacity
    --------------------------------------------------------------------------
-   Site Map's Grid panel (omega-grid-panel.js) and Omega Prime
-   (omega-prime.html) ask the same question — does the circuit under this
-   parcel have room for this unit? — and must never answer it two ways. Both
-   build the request here, send it here, and write the answer onto a project
-   here, in one shape: grid.substation, grid.circuit, grid.verdict
-   (docs/GUIDED-SITE-FLOW.md). The verdict itself is the server's
-   (api/_lib/grid-verdict.js); nothing in this file judges anything. The
-   national door (2026-10-17) answers utility, coverage and circuit
-   together; fromHosting() turns that answer into the same record, with the
-   source named from the answer rather than assumed to be ComEd's.
+   Site Map's Grid panel (omega-grid-panel.js), Site Plan's Grid Atlas layer
+   (omega-editor-v2-grid.js) and Omega Prime (omega-prime.html) ask the same
+   question — does the circuit under this parcel have room for this unit? —
+   and must never answer it two ways. All three ask the national door here
+   (hosting(), 2026-10-17), which names the
+   serving utility, its coverage and its circuit together, and write the
+   answer onto a project here in one shape — grid.substation, grid.circuit,
+   grid.verdict (docs/GUIDED-SITE-FLOW.md) — through fromHosting(), with the
+   source named from the answer rather than assumed to be ComEd's. Where no
+   figure is read, or more than one utility is mapped, all three list who
+   may serve the point and what each publishes through whoServes(), in the
+   same words and order. The verdict itself is the server's
+   (api/_lib/grid-verdict.js); nothing in this file judges anything.
+   circuitBody(), ask(), fields() and the two source lines below are the
+   ComEd-probe path, kept for a page that still reads ComEd's map itself
+   (Prime v2, #346).
 
    ES5. No dependencies beyond fetch and, for ask(), the Firebase compat
    auth already on the page.
@@ -97,8 +103,56 @@
   function hosting(body) { return call('POST', '/api/hosting-capacity', body); }
   function coverage() { return call('GET', '/api/hosting-capacity?coverage=1', null); }
 
-  /* The door's answer → the same grid record fields() makes (substation,
-     circuit, verdict), with the source named from the answer, not assumed. */
+  /* The words a page shows beside the utility's name for each coverage case
+     (the answer's `note` is the full sentence, always the server's). Omega
+     Prime's words, so Site Map's Grid panel never names a case another way;
+     scripts/tests/tgridverdict.js holds Prime's copy to this one. */
+  var COVERAGE = { read: 'hosting capacity', 'none-here': 'no circuit mapped at this point', 'no-public-map': 'publishes no hosting capacity',
+    'account-required': 'map behind an account', 'not-wired': 'map not read by OMEGA yet', unreachable: 'map did not answer', outside: 'no utility on record' };
+
+  /* Who may serve this point and what each publishes (2026-10-20): the
+     door's own list, territory.candidates, each with the registry's words,
+     the route its utility offers instead of a map and its own pages
+     (api/_lib/hosting-sources.js publication()). Omega Prime's Circuit step,
+     Site Map's Grid panel and Site Plan's layer each draw this one answer in
+     their own markup, so the words and the order are the same on all three.
+     Drawn as it comes; nothing is judged here. null where a figure was read
+     and only one utility is mapped. Otherwise the strong candidates are
+     listed (the weak ones when nothing else is mapped), and the ones the
+     maps name that cannot be the point's fold away, each with its reason. A
+     link is https only. The page's own "Check it on …" link already carries
+     the read utility's page, so that page is not repeated here, and the
+     read utility's route is not either: the note above already says it. */
+  var WHO = { one: 'Who serves this point', many: 'More than one utility is mapped at this point.', here: ' — the one read here',
+    confirm: 'Confirm the utility with the customer’s bill.', fold: 'Also on the territory maps, not this point', weak: 'a weak match', instead: '. Instead: ' };
+  function https(u) { return /^https:\/\/[^\s"'<>]+$/i.test(String(u || '')) ? String(u) : ''; }
+  function whoServes(res) {
+    var t = res && res.territory;
+    if (!t || !t.candidates || !t.candidates.length) return null;
+    if (res.coverage === 'read' && (t.confident || t.candidates.length < 2)) return null;
+    var chosen = res.utility && res.utility.eiaId, strong = [], weak = [];
+    t.candidates.forEach(function (c) { (c.weak ? weak : strong).push(c); });
+    var shown = strong.length ? strong : weak, folded = strong.length ? weak : [];
+    var many = !t.confident && t.candidates.length > 1;
+    var mine = res.verify && res.verify.viewerUrl;
+    function item(c) {
+      var h = c.hosting || {}, links = [];
+      [h.link, h.check].forEach(function (l) {
+        var u = l && https(l.url);
+        if (u && !(l === h.link && u === mine && c.eiaId === chosen)) links.push({ url: u, label: l.label || '' });
+      });
+      var says = h.says ? h.says.charAt(0).toUpperCase() + h.says.slice(1) : '';
+      var route = h.route && !(c.eiaId && c.eiaId === chosen && res.note) ? WHO.instead + h.route : '';
+      return { name: c.display || c.name || '', mark: many && c.eiaId && c.eiaId === chosen ? WHO.here : '',
+               why: c.why && !c.weak ? c.why : '', says: says ? says + route + '.' : '', links: links };
+    }
+    return { many: many, head: many ? WHO.many : WHO.one, items: shown.map(item), confirm: many ? WHO.confirm : '',
+             fold: folded.length ? { title: WHO.fold + ' (' + folded.length + ')',
+                                     items: folded.map(function (c) { return { name: c.display || c.name || '', why: c.why || WHO.weak }; }) } : null };
+  }
+
+  /* The door's answer → the project's grid record (substation, circuit,
+     verdict), with the source named from the answer, not assumed. */
   function fromHosting(res, at) {
     if (!res || !res.verdict || !res.verdict.verdict) return null;
     at = at || new Date().toISOString();
@@ -144,7 +198,9 @@
   }
 
   /* The sentences Prime v2 prints under the circuit (omega-prime-v2.js
-     circuitSourceLine and hostingSourceLine). One wording, both pages. */
+     circuitSourceLine and hostingSourceLine), for the ComEd-probe path.
+     Site Plan's layer moved onto the door and words its source from the
+     door's answer. */
   function circuitSourceLine(verdict, probe) {
     var row = probe && probe.rows ? probe.rows[0] : null;
     var a = verdict || {};
@@ -170,7 +226,7 @@
 
   root.OmegaGridVerdict = {
     circuitBody: circuitBody, ask: ask, fields: fields,
-    hosting: hosting, coverage: coverage, fromHosting: fromHosting, hostingSummary: hostingSummary,
+    hosting: hosting, coverage: coverage, fromHosting: fromHosting, hostingSummary: hostingSummary, COVERAGE: COVERAGE, whoServes: whoServes,
     circuitSourceLine: circuitSourceLine, hostingSourceLine: hostingSourceLine
   };
 })(typeof window !== 'undefined' ? window : this);

@@ -1,6 +1,7 @@
 /* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
  *
- * omega-editor-v2-app.js — the Site Plan preview.
+ * omega-editor-v2-app.js — Omega Maximus ("editor maximum"; Site Plan while it
+ * was built), the editor beside Site Map at /editor-v2.
  *
  * Drawing state lives in omega-editor-v2-doc.js. This file is the page:
  * the canvas, the command line, save-on-this-computer, and the customer
@@ -20,7 +21,11 @@
   var draft = null, drag = null, box = null, pan = null, space = false;
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
-  var tiles = {}, mapNote = '', recoverTimer = 0, section = 'design';
+  var tiles = {}, mapNote = '', mapAt = null, recoverTimer = 0, section = 'design';
+  /* Parcel lines: their own tiles over the photo, the point the card is
+     about (the site point, or the map centre when asked), the source the
+     tiles were built from, and the anchor last looked up. */
+  var ptiles = {}, parcelSrc = '', parcelAt = null, parcelCard = true, parcelKey = '';
   var PROJECTS = 'omega.editorV2.projects';
 
   var POINT_TOOL = {
@@ -70,6 +75,13 @@
       return;
     }
     state = D.createState(sample());
+    if (root.OmegaEditorV2Solar && root.OmegaEditorV2Solar.attach) {
+      root.OmegaEditorV2Solar.attach({
+        getDoc: function () { return state.doc; },
+        setMeta: function (meta) { D.setMeta(state, meta); afterChange(); },
+        setStatus: setStatus
+      });
+    }
     bind();
     resize();
     fit(false);
@@ -88,6 +100,10 @@
       });
     }
     if (!recovering) setStatus('Sample site loaded.');
+    checkAccess();
+    if (root.OmegaEditorV2Auth && root.OmegaEditorV2Auth.onSignIn) root.OmegaEditorV2Auth.onSignIn(function () { checkAccess(); });
+    /* Parcel lines are a view setting this browser remembers. */
+    if (root.OmegaEditorV2Parcels && root.OmegaEditorV2Parcels.remembered()) setParcels(true);
     var projectParam = /[?&]id=([A-Za-z0-9_-]+)/.exec(location.search);
     if (projectParam && !recovering) loadWorkspace(projectParam[1]);
     if (root.OmegaEditorV2Hooks) root.OmegaEditorV2Hooks.register('funding', function () { pushMarketplace(); return true; });
@@ -164,10 +180,6 @@
     });
     $('btn-save').addEventListener('click', saveWorkspace);
     $('btn-local-save').addEventListener('click', saveLocal);
-    $('btn-prime').addEventListener('click', function () { handoff('prime'); });
-    $('btn-logic').addEventListener('click', function () { handoff('logic'); });
-    $('btn-marketplace').addEventListener('click', pushMarketplace);
-    $('btn-quote').addEventListener('click', quoteDialog);
     $('btn-feedback').addEventListener('click', sendFeedback);
     $('btn-open').addEventListener('click', openDialog);
     $('btn-new').addEventListener('click', function () { confirmDirty(blank); });
@@ -178,6 +190,13 @@
     for (var s = 0; s < stages.length; s++) stages[s].addEventListener('click', function () { setSection(this.getAttribute('data-stage')); });
     $('next-action').addEventListener('click', function () { nextStep().run(); });
     $('site-yes').addEventListener('click', siteYes);
+    /* the site address, the first thing on the Site tab: Enter or the button
+       (kept from taking the field's focus, so its first click lands) */
+    $('site-address-go').addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); locate(this.value); } });
+    $('site-address-find').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    $('site-address-find').addEventListener('click', function () { locate($('site-address-go').value); });
+    $('site-parcels').addEventListener('click', function () { var P = root.OmegaEditorV2Parcels; if (P) setParcels(!P.enabled()); });
+    $('dlg-market').addEventListener('close', onMarketClose);
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
     $('build-cancel').addEventListener('click', function () {
@@ -197,6 +216,11 @@
     var buttons = document.querySelectorAll('[data-tool],[data-act],[data-equip],[data-hook],[data-build],[data-output]');
     for (var i = 0; i < buttons.length; i++) buttons[i].addEventListener('click', onButton);
     $('analyze-close').addEventListener('click', function () { setSection('design'); });
+    $('outputs-close').addEventListener('click', function () { setSection('design'); });
+    $('parcel-detail-close').addEventListener('click', function () { parcelCard = false; paintParcelCard(); });
+    $('parcel-use').addEventListener('click', useParcel);
+    $('parcel-here').addEventListener('click', parcelHere);
+    if (root.OmegaEditorV2Parcels) root.OmegaEditorV2Parcels.onChange(function () { layoutMap(); paintParcelCard(); requestDraw(); });
     if ($('grid-detail-close') && root.OmegaEditorV2Grid) {
       $('grid-detail-close').addEventListener('click', function () { root.OmegaEditorV2Grid.hideCard(); paintGridCard(); });
     }
@@ -227,16 +251,6 @@
         if (section === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
       });
     }
-    document.addEventListener('click', function (ev) {
-      var menu = $('outputs-menu');
-      if (!menu || menu.hidden) return;
-      var node = ev.target;
-      while (node) {
-        if (node.id === 'outputs-menu' || node.id === 'btn-outputs') return;
-        node = node.parentNode;
-      }
-      toggleOutputs(false);
-    });
     var cv = $('cv');
     cv.addEventListener('pointerdown', onDown);
     cv.addEventListener('pointermove', onMove);
@@ -285,10 +299,7 @@
     if (hook) { invokeHook(hook); return; }
     if (tl) setTool(tl);
     else if (eq) setEquip(eq);
-    else if (act) {
-      if (act !== 'outputs') toggleOutputs(false);
-      runAct(act);
-    }
+    else if (act) runAct(act);
   }
 
   function setTool(name) {
@@ -342,7 +353,7 @@
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
     else if (act === 'paste') paste();
-    else if (act === 'outputs') toggleOutputs();
+    else if (act === 'outputs') setSection(section === 'outputs' ? 'design' : 'outputs');
     else if (act === 'run') runNumbers();
     else if (act === 'quote') setSection('funding');
     else if (act === 'view3d') open3d();
@@ -489,7 +500,6 @@
   }
 
   function cancel() {
-    if ($('outputs-menu') && !$('outputs-menu').hidden) { toggleOutputs(false); return; }
     if ($('grid-detail') && !$('grid-detail').hidden && root.OmegaEditorV2Grid) {
       root.OmegaEditorV2Grid.hideCard();
       paintGridCard();
@@ -685,7 +695,10 @@
     tool = 'select';
     fit(false);
     refresh();
-    setStatus('New project. Nothing is saved until you press Save.');
+    /* a new project starts where a site starts: its address */
+    setSection('site');
+    if ($('site-address-go')) $('site-address-go').focus();
+    setStatus('New project. Type the site address, then Find on the map. Nothing is saved until you press Save.');
   }
 
   /* ── pointer ───────────────────────────────────────────────────────── */
@@ -694,11 +707,18 @@
     cssW = stage.clientWidth || 1;
     cssH = stage.clientHeight || 1;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    var cv = $('cv');
-    cv.width = Math.round(cssW * dpr);
-    cv.height = Math.round(cssH * dpr);
+    var cv = $('cv'), w = Math.round(cssW * dpr), h = Math.round(cssH * dpr);
     layoutMap();
-    requestDraw();
+    /* Setting a canvas size clears it, even to the same size. A section
+       change or a closed dialog used to clear the drawing here and leave the
+       repaint to a later frame, so it read as gone (handoff A1). Resize only
+       when the size changes, and repaint at once when it does. */
+    if (cv.width !== w || cv.height !== h) {
+      cv.width = w;
+      cv.height = h;
+      if (raf) { cancelAnimationFrame(raf); raf = 0; }
+      draw();
+    } else requestDraw();
   }
   function screenToWorld(sx, sy) {
     return {
@@ -912,6 +932,30 @@
     layoutMap();
     requestDraw();
   }
+  /* Zoom to some entities with room around them: a placed build gets three
+     quarters of its size on each side, a lot line (padRatio) a little. */
+  function fitTo(ids, padRatio) {
+    var want = {}, i, b, minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, any = false;
+    for (i = 0; i < (ids || []).length; i++) want[ids[i]] = 1;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      if (!want[state.doc.entities[i].id]) continue;
+      b = G.boundsOf(state.doc.entities[i]);
+      if (!isFinite(b.minX) || !isFinite(b.maxY)) continue;
+      any = true;
+      if (b.minX < minX) minX = b.minX;
+      if (b.minY < minY) minY = b.minY;
+      if (b.maxX > maxX) maxX = b.maxX;
+      if (b.maxY > maxY) maxY = b.maxY;
+    }
+    if (!any) { fit(false); return; }
+    var pad = Math.max(40, Math.max(maxX - minX, maxY - minY) * (padRatio == null ? 0.75 : padRatio));
+    minX -= pad; minY -= pad; maxX += pad; maxY += pad;
+    view.cx = (minX + maxX) / 2;
+    view.cy = (minY + maxY) / 2;
+    view.pxPerFt = Math.max(0.02, Math.min(cssW / (maxX - minX || 1), cssH / (maxY - minY || 1)));
+    layoutMap();
+    requestDraw();
+  }
   function fit(announce) {
     var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, i, b, any = false;
     for (i = 0; i < state.doc.entities.length; i++) {
@@ -946,6 +990,7 @@
     if (!mapOn) { ctx.fillStyle = '#E4E1D8'; ctx.fillRect(0, 0, cssW, cssH); }
     drawGrid(ctx);
     if (root.OmegaEditorV2Grid) root.OmegaEditorV2Grid.draw(ctx, worldToScreen);
+    if (root.OmegaEditorV2Parcels) root.OmegaEditorV2Parcels.draw(ctx, worldToScreen, state.doc.anchor);
     drawEntities(ctx, false);
     drawDraft(ctx);
     drawSelection(ctx);
@@ -999,10 +1044,14 @@
   }
   function drawEntities(ctx, exporting) {
     var i;
-    for (i = 0; i < state.doc.entities.length; i++) {
-      if (!visible(state.doc.entities[i])) continue;
-      drawOne(ctx, state.doc.entities[i], exporting);
-    }
+    names = { fixed: [], boxes: [] };
+    try {
+      for (i = 0; i < state.doc.entities.length; i++) {
+        if (!visible(state.doc.entities[i])) continue;
+        drawOne(ctx, state.doc.entities[i], exporting);
+      }
+      drawNames(ctx, names);
+    } finally { names = null; }
   }
   function poly(ctx, pts, close) {
     if (!pts || !pts.length) return;
@@ -1027,9 +1076,12 @@
       ctx.beginPath(); ctx.arc(c.x, c.y, e.r * view.pxPerFt, 0, Math.PI * 2); ctx.stroke();
     } else if (e.type === 'rect' || e.type === 'equip' || e.type === 'parking') {
       poly(ctx, G.rectCorners(e), true);
-      ctx.globalAlpha = e.type === 'equip' ? 0.14 : 0.04;
-      ctx.fill(); ctx.globalAlpha = 1; ctx.stroke();
-      if (e.label) label(ctx, { x: e.x, y: e.y }, e.label);
+      /* gear reads on the photo: a firmer fill and line than a lot or a stall */
+      ctx.globalAlpha = e.type === 'equip' ? 0.32 : 0.04;
+      ctx.fill(); ctx.globalAlpha = 1;
+      if (e.type === 'equip') ctx.lineWidth = 1.8;
+      ctx.stroke();
+      if (e.label) nameBox(ctx, e);
     } else if (e.type === 'text') label(ctx, { x: e.x, y: e.y }, e.text || '');
     else if (e.type === 'callout') {
       poly(ctx, [e.target, e.anchor], false); ctx.stroke();
@@ -1058,7 +1110,113 @@
     for (s = -cssH; s < cssW + cssH; s += 8) { ctx.moveTo(s, 0); ctx.lineTo(s - cssH, cssH); }
     ctx.stroke();
   }
+  /* ── names, painted after every shape and never on one another ──────
+     A guided build's gear stands a few feet apart, and each name used to
+     be painted on its own box in drawing order, so the next one covered
+     the last ("B Step-u AC Utility point…"; Tommy, 2026-10-20: "clean up
+     how you show the guided build"). Text, callouts, dimensions and array
+     notes stay where they belong; a box's name goes inside it when it
+     fits, else just above, below or beside it, in full or in short (XFMR,
+     SWGR, POI), clear of the other names and gear; else it is left off at
+     this zoom (zoom in, or select it: the Properties panel names it). The
+     selected and the biggest are named first. */
+  var names = null;
+  var SHORT_NAMES = {
+    'utility point of interconnection': 'POI', 'point of interconnection': 'POI', 'point of connection': 'POC',
+    'step-up transformer': 'XFMR', 'step-down transformer': 'XFMR', 'service transformer': 'XFMR', 'utility transformer': 'XFMR',
+    'utility service transformer': 'XFMR', 'transformer': 'XFMR', 'solid-state transformer': 'SST',
+    'switchgear': 'SWGR', 'main switchgear': 'SWGR', 'mv switchgear': 'MV SWGR', 'ac disconnect': 'DISC',
+    'static transfer switch': 'STS', 'standby generator': 'GEN', 'revenue meter': 'M', 'meter': 'M', 'panelboard': 'PNL',
+    'pcs / inverter skid': 'PCS', 'solar inverter': 'INV', 'pv inverter': 'INV', 'ems cabinet': 'EMS', 'bess container': 'BESS',
+    'bess ac block': 'BESS', 'battery': 'BESS', 'cooling plant': 'COOL', 'compute racks': 'RACKS', 'der collector': 'COLL', 'grid substation': 'SUB'
+  };
+  function shortName(text) {
+    var t = String(text || '').trim(), m = /^(.*?)\s+([A-Z]|\d+)$/.exec(t), base = m ? m[1] : t, tail = m ? m[2] : '';
+    var k = SHORT_NAMES[base.toLowerCase()];
+    if (k) return k + (tail ? ' ' + tail : '');
+    if (/^dcfc$/i.test(base) && tail) return 'D' + tail;
+    if (/^level 2$/i.test(base) && tail) return 'L' + tail;
+    return t.length > 10 ? t.slice(0, 8) + '\u2026' : '';
+  }
+  function nameBox(ctx, e) {
+    if (!names) { label(ctx, { x: e.x, y: e.y }, e.label); return; }
+    names.boxes.push(e);
+  }
+  function tagAt(ctx, cx, cy, text) {
+    var w = ctx.measureText(text).width + 8;
+    return { x0: cx - w / 2, y0: cy - 8, x1: cx + w / 2, y1: cy + 8, cx: cx, cy: cy, text: text };
+  }
+  function paintTag(ctx, r) {
+    ctx.fillStyle = 'rgba(255,255,255,.9)';
+    ctx.fillRect(r.x0, r.y0, r.x1 - r.x0, r.y1 - r.y0);
+    ctx.fillStyle = '#16202B';
+    ctx.fillText(r.text, r.cx, r.cy);
+  }
+  function overlaps(r, list, skip) {
+    for (var i = 0; i < list.length; i++) {
+      if (list[i] === skip) continue;
+      if (r.x0 < list[i].x1 && r.x1 > list[i].x0 && r.y0 < list[i].y1 && r.y1 > list[i].y0) return true;
+    }
+    return false;
+  }
+  function drawNames(ctx, q) {
+    var taken = [], boxes = [], sel = {}, i, k, e, c, s, b, r;
+    for (i = 0; i < state.selection.length; i++) sel[state.selection[i]] = 1;
+    ctx.save();
+    ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    for (i = 0; i < q.fixed.length; i++) {
+      s = worldToScreen(q.fixed[i].p);
+      r = tagAt(ctx, s.x, s.y, q.fixed[i].text);
+      paintTag(ctx, r);
+      taken.push(r);
+    }
+    for (i = 0; i < q.boxes.length; i++) {
+      e = q.boxes[i];
+      c = G.rectCorners(e);
+      b = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity, e: e };
+      for (k = 0; k < c.length; k++) {
+        s = worldToScreen(c[k]);
+        if (s.x < b.x0) b.x0 = s.x; if (s.x > b.x1) b.x1 = s.x;
+        if (s.y < b.y0) b.y0 = s.y; if (s.y > b.y1) b.y1 = s.y;
+      }
+      if (b.x1 < -60 || b.x0 > cssW + 60 || b.y1 < -20 || b.y0 > cssH + 20) continue;
+      if (b.x1 - b.x0 < 3 && b.y1 - b.y0 < 3) continue;
+      b.pri = (sel[e.id] ? 1e9 : 0) + (b.x1 - b.x0) * (b.y1 - b.y0);
+      boxes.push(b);
+    }
+    boxes.sort(function (a, z) { return z.pri - a.pri; });
+    /* the gear the names keep off: small boxes, not a lot drawn as a rectangle */
+    var gear = boxes.filter(function (g) { return g.e.type === 'equip' && g.x1 - g.x0 < 240 && g.y1 - g.y0 < 240; });
+    for (i = 0; i < boxes.length; i++) placeName(ctx, boxes[i], taken, gear);
+    ctx.restore();
+  }
+  function placeName(ctx, b, taken, gear) {
+    var full = String(b.e.label).trim(), short = shortName(full), tries = [], i, j, w, spots, r;
+    var cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    tries.push([full, true]);
+    if (short && short !== full) tries.push([short, true]);
+    tries.push([full, false]);
+    if (short && short !== full) tries.push([short, false]);
+    for (i = 0; i < tries.length; i++) {
+      w = ctx.measureText(tries[i][0]).width + 8;
+      spots = [];
+      if (b.x1 - b.x0 >= w && b.y1 - b.y0 >= 16) spots.push([cx, cy, true]);
+      spots.push([cx, b.y0 - 11, false], [cx, b.y1 + 11, false], [b.x1 + 4 + w / 2, cy, false], [b.x0 - 4 - w / 2, cy, false]);
+      for (j = 0; j < spots.length; j++) {
+        r = tagAt(ctx, spots[j][0], spots[j][1], tries[i][0]);
+        if (overlaps(r, taken)) continue;
+        if (tries[i][1] && !spots[j][2] && overlaps(r, gear, b)) continue;
+        paintTag(ctx, r);
+        taken.push(r);
+        return true;
+      }
+    }
+    return false;
+  }
   function label(ctx, p, text) {
+    if (names) { if (text) names.fixed.push({ p: p, text: text }); return; }
     var s = worldToScreen(p);
     ctx.save();
     ctx.font = '12px ' + getComputedStyle(document.body).fontFamily;
@@ -1192,15 +1350,10 @@
   }
 
   /* ── map ───────────────────────────────────────────────────────────── */
-  function layoutMap() {
-    var host = $('map');
-    if (!mapOn) { host.style.display = 'none'; mapNote = ''; return; }
-    host.style.display = 'block';
-    var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt));
-    if (z < 14) z = 14;
-    if (z > 19) z = 19;
+  /* The tiles a view needs at zoom z, with a tile's margin all round. */
+  function tilesFor(z) {
     var corners = [screenToWorld(0, 0), screenToWorld(cssW, 0), screenToWorld(0, cssH), screenToWorld(cssW, cssH)];
-    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, i, ll, t, key;
+    var minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity, i, ll, t, x, y;
     for (i = 0; i < corners.length; i++) {
       ll = G.ftToLatLng(corners[i].x, corners[i].y, state.doc.anchor);
       t = latLngToTile(ll.lat, ll.lng, z);
@@ -1209,21 +1362,42 @@
       if (t.y < minY) minY = t.y;
       if (t.y > maxY) maxY = t.y;
     }
-    var need = {}, count = 0, x, y;
+    var need = {}, count = 0;
     for (x = minX - 1; x <= maxX + 1; x++) {
       for (y = minY - 1; y <= maxY + 1; y++) {
-        key = z + '/' + y + '/' + x;
-        need[key] = { z: z, x: x, y: y };
+        need[z + '/' + y + '/' + x] = { z: z, x: x, y: y };
         count++;
       }
     }
-    if (count > 24) {
+    return { need: need, count: count };
+  }
+  /* The photo at the scale drawn, at the screen's own pixels (a Retina
+     screen gets the next zoom level, so the photo is sharp). Zoomed out past
+     what the screen holds in tiles at their own size, it steps one level
+     coarser at a time (each level halves the tiles across), down to county
+     scale, so a whole lot keeps its photo: it used to go blank past 24
+     tiles, and a 12-acre lot read "Zoom in to load aerial imagery" (Tommy,
+     2026-10-20: "i cant see the map if im zoomed out"). */
+  var PHOTO_MIN_Z = 12, PHOTO_MAX_Z = 19;
+  function layoutMap() {
+    var host = $('map');
+    if (!mapOn) { host.style.display = 'none'; mapNote = ''; mapAt = null; layoutParcels(null); return; }
+    host.style.display = 'block';
+    var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt * dpr));
+    if (z < PHOTO_MIN_Z) z = PHOTO_MIN_Z;
+    if (z > PHOTO_MAX_Z) z = PHOTO_MAX_Z;
+    var most = (Math.ceil(cssW * dpr / 256) + 3) * (Math.ceil(cssH * dpr / 256) + 3), set = tilesFor(z);
+    while (set.count > most && z > PHOTO_MIN_Z) { z--; set = tilesFor(z); }
+    if (set.count > most) {
       mapNote = 'Zoom in to load aerial imagery.';
+      mapAt = { z: z, tiles: 0 };
       host.style.display = 'none';
+      layoutParcels(null);
       return;
     }
     mapNote = '';
-    var k;
+    mapAt = { z: z, tiles: set.count };
+    var need = set.need, k;
     for (k in tiles) if (tiles.hasOwnProperty(k) && !need[k]) {
       if (tiles[k].img.parentNode) tiles[k].img.parentNode.removeChild(tiles[k].img);
       delete tiles[k];
@@ -1232,6 +1406,7 @@
       if (!tiles[k]) tiles[k] = loadTile(need[k], k);
       placeTile(tiles[k]);
     }
+    layoutParcels(need);
   }
   function latLngToTile(lat, lng, z) {
     var n = Math.pow(2, z);
@@ -1253,29 +1428,37 @@
     img.draggable = false;
     var node = { img: img, spec: spec, ready: false, failed: false };
     img.onload = function () { node.ready = true; requestDraw(); };
-    img.onerror = function () { node.failed = true; mapNote = 'Aerial imagery did not load. The drawing is still to scale.'; };
+    img.onerror = function () { node.failed = true; img.style.visibility = 'hidden'; mapNote = 'Aerial imagery did not load. The drawing is still to scale.'; };
     img.src = 'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/' + spec.z + '/' + spec.y + '/' + spec.x;
     $('map').appendChild(img);
     return node;
   }
-  function placeTile(node) {
-    var nw = tileNW(node.spec.x, node.spec.y, node.spec.z);
-    var se = tileNW(node.spec.x + 1, node.spec.y + 1, node.spec.z);
+  function placeTile(node) { placeBox(node.img, node.spec); }
+  /* One web-mercator tile's box on the screen, for the photo and the
+     parcel lines alike. */
+  function placeBox(el, spec) {
+    var nw = tileNW(spec.x, spec.y, spec.z);
+    var se = tileNW(spec.x + 1, spec.y + 1, spec.z);
     var a = worldToScreen(G.latLngToFt(nw.lat, nw.lng, state.doc.anchor));
     var b = worldToScreen(G.latLngToFt(se.lat, se.lng, state.doc.anchor));
-    node.img.style.left = Math.min(a.x, b.x) + 'px';
-    node.img.style.top = Math.min(a.y, b.y) + 'px';
-    node.img.style.width = Math.abs(b.x - a.x) + 'px';
-    node.img.style.height = Math.abs(b.y - a.y) + 'px';
+    el.style.left = Math.min(a.x, b.x) + 'px';
+    el.style.top = Math.min(a.y, b.y) + 'px';
+    el.style.width = Math.abs(b.x - a.x) + 'px';
+    el.style.height = Math.abs(b.y - a.y) + 'px';
   }
 
   /* ── panels ────────────────────────────────────────────────────────── */
   function refresh() {
+    followParcelAnchor();
+    var siteAddr = $('site-address-go');
+    if (siteAddr && document.activeElement !== siteAddr) siteAddr.value = /^sample parcel$/i.test(state.doc.address || '') ? '' : (state.doc.address || '');
     refreshTakeoff();
     refreshCustomer();
     refreshLayers();
     refreshProps(false);
     paintGridCard();
+    paintParcelCard();
+    paintSiteParcels();
     saveLabel();
     $('project-name').value = state.doc.name || '';
     paintNext();
@@ -1332,8 +1515,16 @@
     $('customer-btn').title = s.linked ? 'Linked to customer ' + s.customerId : 'No CRM id yet';
     if (state.doc.clientDrift) setStatus('The project list still has a different customer name. Saving the customer here will make them match.', true);
   }
+  /* Rebuilt only when something it shows changed: a rebuild between a
+     button's press and its release drops the click (the blur of a field
+     being saved refreshes the panels). */
+  var layerSig = '';
   function refreshLayers() {
     var host = $('layers');
+    var Grid = root.OmegaEditorV2Grid, Pc = root.OmegaEditorV2Parcels;
+    var sig = JSON.stringify(state.doc.layers) + '|' + (Grid && Grid.enabled() ? 1 : 0) + '|' + (Pc && Pc.enabled() ? 1 : 0);
+    if (sig === layerSig && host.firstChild) return;
+    layerSig = sig;
     host.innerHTML = '';
     var i, layer, line, mark, name, eye, lock;
     for (i = 0; i < state.doc.layers.length; i++) {
@@ -1362,6 +1553,173 @@
       host.appendChild(line);
     }
     appendGridLayer(host);
+    appendParcelLayer(host);
+  }
+  function appendParcelLayer(host) {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var line = document.createElement('div');
+    line.className = 'layer';
+    line.id = 'layer-parcels';
+    var mark = document.createElement('i');
+    mark.className = 'swatch';
+    mark.style.background = P.INK;
+    var name = document.createElement('span');
+    name.textContent = 'Parcel lines';
+    var eye = document.createElement('button');
+    eye.type = 'button';
+    eye.className = 'btn quiet';
+    eye.id = 'layer-parcels-toggle';
+    eye.textContent = P.enabled() ? 'Hide' : 'Show';
+    eye.setAttribute('aria-pressed', P.enabled() ? 'true' : 'false');
+    eye.addEventListener('click', function () { setParcels(!P.enabled()); });
+    line.appendChild(mark); line.appendChild(name); line.appendChild(eye);
+    var grid = $('layer-grid-atlas');
+    if (grid && grid.parentNode === host) host.insertBefore(line, grid.nextSibling);
+    else if (host.firstChild) host.insertBefore(line, host.firstChild);
+    else host.appendChild(line);
+  }
+
+  /* ── Omega Maximus is a module ─────────────────────────────────────────
+     A signed-in workspace that has not bought it sees the price and Opt in
+     instead of the editor. Every Maximus door on the server refuses it
+     either way (package-access withModuleAnyPlan); this only says so up
+     front. Signed out, nothing is asked: the server features ask for a
+     sign-in themselves. */
+  function checkAccess() {
+    var Auth = root.OmegaEditorV2Auth;
+    if (!Auth || typeof Auth.idToken !== 'function' || typeof root.fetch !== 'function') return;
+    Auth.idToken().then(function (tok) {
+      if (!tok) return null;
+      return root.fetch('/api/maximus-access', { headers: { Authorization: 'Bearer ' + tok } }).then(function (r) {
+        return r.ok ? r.json() : null;
+      });
+    }).then(function (a) {
+      var el = $('maximus-lock');
+      if (!el || !a) return;
+      if (a.held !== false) { el.hidden = true; return; }
+      $('maximus-lock-copy').textContent = a.reason || 'Omega Maximus is not on this workspace\'s plan.';
+      $('maximus-lock-price').textContent = a.price ? 'Omega Maximus is ' + a.price + '.' : '';
+      if (a.optIn && /^\/[A-Za-z0-9#/_-]*$/.test(a.optIn)) $('maximus-lock-optin').setAttribute('href', a.optIn);
+      el.hidden = false;
+    }, function () {});
+  }
+
+  /* ── parcel lines (omega-editor-v2-parcels.js) ─────────────────────── */
+  function setParcels(on) {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    parcelCard = true;
+    parcelAt = null;
+    parcelKey = on ? anchorKey() : '';
+    if (on && !mapOn) { mapOn = true; pressed('map', true); }
+    P.setEnabled(on, state.doc.anchor);
+    refreshLayers();
+    layoutMap();
+    paintParcelCard();
+    paintSiteParcels();
+    requestDraw();
+  }
+  /* The Site tab's own switch for the same layer, beside Find on the map. */
+  function paintSiteParcels() {
+    var b = $('site-parcels'), P = root.OmegaEditorV2Parcels;
+    if (!b) return;
+    b.hidden = !P;
+    if (!P) return;
+    var on = P.enabled();
+    b.textContent = on ? 'Hide parcel lines' : 'Show parcel lines';
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  }
+  function anchorKey() {
+    var a = state.doc.anchor || {};
+    return (+a.lat).toFixed(5) + ',' + (+a.lng).toFixed(5);
+  }
+  /* A new site point (an address found, a project opened) is looked up once. */
+  function followParcelAnchor() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P || !P.enabled()) return;
+    var k = anchorKey();
+    if (k === parcelKey) return;
+    parcelKey = k;
+    parcelAt = null;
+    parcelCard = true;
+    P.lookup(state.doc.anchor.lat, state.doc.anchor.lng);
+  }
+  function parcelPoint() {
+    return parcelAt || { lat: +state.doc.anchor.lat, lng: +state.doc.anchor.lng };
+  }
+  function paintParcelCard() {
+    var el = $('parcel-detail'), P = root.OmegaEditorV2Parcels;
+    if (!el || !P) return;
+    var at = parcelPoint(), card = P.card(at.lat, at.lng);
+    el.hidden = !(card.visible && parcelCard);
+    if (el.hidden) return;
+    $('parcel-detail-title').textContent = card.title;
+    var body = $('parcel-detail-body'), i, p;
+    body.innerHTML = '';
+    if (parcelAt) { p = document.createElement('p'); p.className = 'src'; p.textContent = 'At the map centre.'; body.appendChild(p); }
+    for (i = 0; i < card.lines.length; i++) {
+      p = document.createElement('p');
+      if (card.lines[i].source) p.className = 'src';
+      p.textContent = card.lines[i].text;
+      body.appendChild(p);
+    }
+    var use = $('parcel-use');
+    use.hidden = !card.parcel || parcelUsed(card.parcel);
+    $('parcel-here').disabled = !!card.busy;
+  }
+  function parcelUsed(rec) {
+    var i, e;
+    for (i = 0; i < state.doc.entities.length; i++) {
+      e = state.doc.entities[i];
+      if (e.parcel && rec && e.parcel.apn && e.parcel.apn === rec.apn && e.parcel.source === rec.source) return true;
+    }
+    return false;
+  }
+  function useParcel() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var at = parcelPoint(), rec = P.foundAt(at.lat, at.lng);
+    var ent = rec ? P.toEntity(rec, state.doc.anchor) : null;
+    if (!ent) { setStatus('Look up a parcel first.', true); return; }
+    D.add(state, ent);
+    afterChange();
+    fitTo([ent.id], 0.08);
+    paintParcelCard();
+    setStatus('The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.');
+  }
+  function parcelHere() {
+    var P = root.OmegaEditorV2Parcels;
+    if (!P) return;
+    var c = G.ftToLatLng(view.cx, view.cy, state.doc.anchor);
+    parcelAt = { lat: c.lat, lng: c.lng };
+    parcelCard = true;
+    P.lookup(c.lat, c.lng);
+    paintParcelCard();
+  }
+  function layoutParcels(need) {
+    var host = $('map-parcels'), P = root.OmegaEditorV2Parcels, k, t;
+    if (!host) return;
+    if (!need || !P || !P.enabled()) { host.style.display = 'none'; return; }
+    host.style.display = 'block';
+    var src = P.source();
+    if (src !== parcelSrc) {
+      for (k in ptiles) if (ptiles.hasOwnProperty(k) && ptiles[k].el && ptiles[k].el.parentNode) ptiles[k].el.parentNode.removeChild(ptiles[k].el);
+      ptiles = {};
+      parcelSrc = src;
+    }
+    for (k in ptiles) if (ptiles.hasOwnProperty(k) && !need[k]) {
+      if (ptiles[k].el && ptiles[k].el.parentNode) ptiles[k].el.parentNode.removeChild(ptiles[k].el);
+      delete ptiles[k];
+    }
+    for (k in need) if (need.hasOwnProperty(k)) {
+      if (!ptiles[k]) {
+        t = P.tileNode(need[k]);
+        ptiles[k] = { el: t, spec: need[k] };
+        if (t) host.appendChild(t);
+      }
+      if (ptiles[k].el) placeBox(ptiles[k].el, need[k]);
+    }
   }
   function appendGridLayer(host) {
     var Grid = root.OmegaEditorV2Grid;
@@ -1399,12 +1757,46 @@
     $('grid-detail-title').textContent = card.title || 'Grid Atlas';
     var body = $('grid-detail-body');
     body.innerHTML = '';
-    var i, p, row;
+    var i, j, p, row, fold, sum;
     for (i = 0; i < card.lines.length; i++) {
       row = card.lines[i];
+      /* the utilities the territory maps name that cannot be the point's:
+         one fold, each with its reason (the grid layer's who-serves list) */
+      if (row.fold) {
+        fold = document.createElement('details');
+        fold.className = 'who-fold';
+        sum = document.createElement('summary');
+        sum.textContent = row.text;
+        fold.appendChild(sum);
+        for (j = 0; j < row.fold.length; j++) {
+          p = document.createElement('p');
+          p.textContent = row.fold[j].text;
+          fold.appendChild(p);
+        }
+        body.appendChild(fold);
+        continue;
+      }
       p = document.createElement('p');
       if (row.source) p.className = 'src';
-      p.textContent = row.text;
+      else if (row.who) p.className = 'who-' + row.who;
+      /* the utility's own map, from the hosting answer: https only, new tab */
+      if (row.href && /^https:\/\/[^\s"'<>]+$/i.test(String(row.href))) {
+        var a = document.createElement('a'), words = String(row.text), cut = words.search(/\S+$/), tail = document.createElement('span');
+        a.href = row.href;
+        a.target = '_blank';
+        a.rel = 'noopener';
+        /* the last word stays beside the arrow, so a ↗ never starts a line */
+        tail.style.whiteSpace = 'nowrap';
+        tail.textContent = (cut < 0 ? '' : words.slice(cut)) + ' ↗';
+        a.appendChild(document.createTextNode(cut < 0 ? words : words.slice(0, cut)));
+        a.appendChild(tail);
+        p.appendChild(a);
+      } else if (row.bold && String(row.text).indexOf(row.bold) === 0) {
+        var b = document.createElement('b');
+        b.textContent = row.bold;
+        p.appendChild(b);
+        p.appendChild(document.createTextNode(String(row.text).slice(row.bold.length)));
+      } else p.textContent = row.text;
       body.appendChild(p);
     }
   }
@@ -1424,15 +1816,23 @@
     propSig = sig;
     var host = $('props');
     host.innerHTML = '';
-    field(host, 'Address', state.doc.address || '', function (v) {
+    var addr = field(host, 'Address', state.doc.address || '', function (v) {
+      if (v === (state.doc.address || '')) return;
       D.setMeta(state, { address: v }); afterChange();
+    });
+    addr.id = 'site-address';
+    addr.placeholder = 'Street, city, state ZIP — or latitude, longitude';
+    /* Enter finds the site. Find address keeps the field focused on press:
+       a blur saves the address, which rebuilt this panel and dropped the
+       button before its click landed, so the first click found nothing. */
+    addr.addEventListener('keydown', function (ev) {
+      if (ev.key === 'Enter') { ev.preventDefault(); locate(addr.value); }
     });
     var find = document.createElement('button');
     find.type = 'button'; find.className = 'btn'; find.textContent = 'Find address';
-    find.addEventListener('click', function () {
-      var input = host.querySelector('input');
-      locate(input ? input.value : '');
-    });
+    find.id = 'site-find';
+    find.addEventListener('mousedown', function (ev) { ev.preventDefault(); });
+    find.addEventListener('click', function () { locate(addr.value); });
     host.appendChild(find);
     field(host, 'Grid (ft)', String(state.doc.gridFt || 5), function (v) {
       var n = parseFloat(v);
@@ -1544,11 +1944,25 @@
     }
     D.setMeta(state, { anchor: { lat: lat, lng: lng }, address: address || state.doc.address });
     afterChange();
+    /* show where it landed: an empty drawing opens on the block around the
+       point (it used to open on one roof, 280 ft across); a drawing that
+       moved with it is shown whole over its new photo */
+    if (!state.doc.entities.length) frameAround(0, 0, SITE_VIEW_FT);
+    else fit(false);
     if (root.OmegaEditorV2Grid && root.OmegaEditorV2Grid.enabled()) {
       gridFit = false;
       root.OmegaEditorV2Grid.reload(state.doc, D.summary(state.doc));
     }
     setStatus('Anchor set. The aerial photo is scaled to this latitude.');
+  }
+  /* A view about `ft` feet across, centred on a point of the drawing. */
+  var SITE_VIEW_FT = 700;
+  function frameAround(x, y, ft) {
+    view.cx = x;
+    view.cy = y;
+    view.pxPerFt = Math.max(0.02, Math.min(cssW / ft, cssH / (ft * 0.6)));
+    layoutMap();
+    requestDraw();
   }
 
   function writeCoords(p, kind) {
@@ -1582,13 +1996,12 @@
     }
   }
   function sendFeedback() {
-    var message=window.prompt('What worked, or what should we improve in Site Plan?');
+    var message=window.prompt('What worked, or what should we improve in Omega Maximus?');
     if(!message || !message.trim()) return;
     saveWorkspace().then(function(ok){if(ok)return root.OmegaEditorV2Workspace.feedback(state.doc,message).then(function(){setStatus('Feedback saved with your project. Thank you.');});})
       .catch(function(e){setStatus(e.message,true);});
   }
   function quoteDialog() {
-    toggleOutputs(false);
     var dlg=document.createElement('dialog'), form=document.createElement('form'), title=document.createElement('h2');
     title.textContent='Review the bill of materials';form.appendChild(title);
     var info=document.createElement('p');info.textContent='Enter the published SKU for each item you want quoted. Only checked lines are sent. Pricing and supplier routing happen in OMEGA.';form.appendChild(info);
@@ -1644,8 +2057,18 @@
   function handoff(target) {
     saveWorkspace().then(function (ok) { if (ok) location.href = root.OmegaEditorV2Workspace.href(state.doc, target); });
   }
+  /* Asked on the page, never in a browser popup: an embedded browser (the
+     Claude app's pane, a kiosk) answers window.confirm "no" without showing
+     it, and the button did nothing. */
   function pushMarketplace() {
-    if (!window.confirm('Submit this project to the financing marketplace? Approved marketplace partners can browse the listing.')) return;
+    var dlg = $('dlg-market');
+    dlg.returnValue = '';
+    dlg.showModal();
+  }
+  function onMarketClose() {
+    if ($('dlg-market').returnValue === 'submit') submitMarketplace();
+  }
+  function submitMarketplace() {
     saveWorkspace().then(function (ok) {
       if (!ok) return;
       setStatus('Submitting to marketplace…');
@@ -1703,7 +2126,7 @@
     cloud.addEventListener('click', function () {
       cloud.disabled=true; cloud.textContent='Loading workspace…';
       root.OmegaEditorV2Workspace.list().then(function (items) {
-        cloud.textContent=items.length ? 'Workspace projects' : 'No Site Plan projects in this workspace yet.';
+        cloud.textContent=items.length ? 'Workspace projects' : 'No Omega Maximus projects in this workspace yet.';
         items.forEach(function (item) {
           var li=document.createElement('li'), b=document.createElement('button'); b.type='button'; b.textContent=item.name||item.id;
           b.onclick=function(){ $('dlg-open').close(); confirmDirty(function(){loadWorkspace(item.id);}); }; li.appendChild(b); list.prepend(li);
@@ -1858,7 +2281,7 @@
           state = D.createState(D.restore(json));
           dirty = true; fit(false); refresh();
           setStatus('Opened the drawing.');
-        } else setStatus('That JSON is not a Site Plan or a project record.', true);
+        } else setStatus('That JSON is not an Omega Maximus drawing or a project record.', true);
       } catch (err) { setStatus('Could not read that file. Use a project JSON or a DXF.', true); }
     };
     reader.readAsText(file);
@@ -1948,7 +2371,6 @@
   }
 
   function setSection(name) {
-    if (name === 'outputs') { toggleOutputs(true); return; }
     var allowed = { site: 1, design: 1, analyze: 1, outputs: 1, funding: 1 };
     if (!allowed[name]) return;
     section = name;
@@ -1970,7 +2392,11 @@
       }
     }
     if (name === 'analyze' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.show(state);
-    if (name === 'outputs' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showOutputs(state);
+    pressed('outputs', name === 'outputs');
+    if (root.OmegaEditorV2Outputs) {
+      if (name === 'outputs') root.OmegaEditorV2Outputs.panel(outputsApi());
+      else root.OmegaEditorV2Outputs.hidePanel();
+    }
     if (name === 'funding' && root.OmegaEditorV2Analyze) root.OmegaEditorV2Analyze.showFunding(state);
     paintNext();
     resize();
@@ -2021,10 +2447,15 @@
   function placedCtx() {
     return {
       pxPerFt: view.pxPerFt,
+      /* a build lands on the clear ground nearest the middle of the view */
+      prefer: function () { return { x: view.cx, y: view.cy }; },
       onPlaced: function (res) {
         afterChange();
-        fit(true);
-        setStatus((res.summary && res.summary.line) || 'Build placed.');
+        /* the view goes to the build, which is selected, and says where it is */
+        fitTo(res.ids);
+        setStatus(((res.summary && res.summary.line) || 'Build placed.') +
+          (res.onLot === false ? ' The lot had no clear ground for it, so it is just beside the lot: drag it into place.' : '') +
+          ' It is selected: drag to move it.');
         notifyDrawn();
       }
     };
@@ -2033,7 +2464,6 @@
     var Bld = root.OmegaEditorV2Build;
     if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
     setSection('design');
-    toggleOutputs(false);
     var ctx = placedCtx();
     if (typeof preferred === 'string' && preferred) ctx.preferred = preferred;
     Bld.open(state, ctx);
@@ -2046,16 +2476,7 @@
       if (H.listeners(names[i])) invokeHook(names[i], { reason: 'build' });
     }
   }
-  function toggleOutputs(force) {
-    var menu = $('outputs-menu');
-    if (!menu) return;
-    var open = force === true ? true : force === false ? false : menu.hidden;
-    menu.hidden = !open;
-    var btn = $('btn-outputs');
-    if (btn) btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
   function previewOutput(kind) {
-    toggleOutputs(false);
     var An = root.OmegaEditorV2Analyze;
     var R = root.OmegaEditorV2Reports;
     var Design = root.OmegaEditorV2Design;
@@ -2128,13 +2549,49 @@
       'Not on the drawing: ' + (gaps || 'nothing listed') + '.\n\n' +
       'Open builds the sheet from this reading. A missing detail stays blank.';
   }
+  /* Run asks the server for the cost, the value stack and the solar year
+     (omega-editor-v2-run.js) and keeps the answers on the drawing. */
+  var running = false;
   function runNumbers() {
-    var An = root.OmegaEditorV2Analyze;
+    var An = root.OmegaEditorV2Analyze, Run = root.OmegaEditorV2Run;
     if (!An) { setStatus('Analyze is not loaded.', true); return; }
-    var pi = An.assess(state);
-    runEdit = editSeq;
     setSection('analyze');
-    setStatus(pi.decision + ' · ' + pi.score + ' / 100, from the drawing.');
+    if (!Run) { setStatus('Run did not load. Refresh the page.', true); return; }
+    if (running) return;
+    running = true;
+    var btn = $('btn-run');
+    if (btn) { btn.disabled = true; btn.textContent = 'Running…'; }
+    if (An.running) An.running(true);
+    setStatus('Running the cost, the value stack and the solar year on the server…');
+    function finish() {
+      running = false;
+      if (btn) { btn.disabled = false; btn.textContent = 'Run'; }
+      if (An.running) An.running(false);
+    }
+    Run.run(state.doc).then(function (out) {
+      finish();
+      var keys = Object.keys(out.fields || {}), k;
+      /* The answers belong to this drawing: kept on it and saved with it
+         (unsaved until then), never an undo step of their own. An edit
+         after the run carries them in its snapshot; Analyze says when the
+         drawing has moved on (OmegaEditorV2Run.isStale). */
+      if (keys.length) {
+        for (k = 0; k < keys.length; k++) state.doc[keys[k]] = out.fields[keys[k]];
+        dirty = true;
+        refresh();
+        scheduleRecovery();
+      }
+      runEdit = editSeq;
+      An.show(state);
+      if (out.notes && out.notes.all) { setStatus(out.notes.all, !out.signedOut); return; }
+      var pi = An.assess(state), vs = state.doc.valueStack, bits = [pi.decision + ' · ' + pi.score + ' / 100'];
+      if (state.doc.costTotal > 0) bits.push('installed $' + Math.round(state.doc.costTotal).toLocaleString());
+      if (vs && vs.irr != null) bits.push('IRR ' + (vs.irr * 100).toFixed(1) + '%');
+      setStatus(bits.join(' · ') + '. Screening, not a quote.');
+    }, function (err) {
+      finish();
+      setStatus((err && err.message) || 'Run did not finish. Try again.', true);
+    });
   }
   function invokeHook(name, extra) {
     var H = root.OmegaEditorV2Hooks;
@@ -2172,15 +2629,17 @@
     setStatus('Drawings follow the guided build.');
     return next;
   }
-  function openOutputs(which) {
-    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
-    toggleOutputs(false);
-    OmegaEditorV2Outputs.open({
+  /* Outputs is the right-hand panel. Preview opens the sheet dialog. */
+  function outputsApi() {
+    return {
       doc: state.doc,
-      which: which === 'sld' ? 'sld' : (which === 'permit' ? 'set' : 'list'),
       download: download,
       updateMeta: function (patch) { D.setMeta(state, patch); afterChange(); },
       fileBase: fileBase,
+      bom: function () { previewOutput('bom'); },
+      quote: quoteDialog,
+      handoff: handoff,
+      funding: function () { setSection('funding'); },
       drawing: {
         png: exportPng,
         pdf: exportPdf,
@@ -2188,8 +2647,26 @@
         json: exportJson,
         importFile: function () { $('file-import').click(); }
       }
-    });
+    };
+  }
+  /* openOutputs() is the panel; 'permit' or 'sld' also opens that preview. */
+  function openOutputs(which) {
+    if (!root.OmegaEditorV2Outputs) { setStatus('Outputs did not load.', true); return; }
+    if (section !== 'outputs') setSection('outputs');
+    if (which !== 'permit' && which !== 'sld') return;
+    var api = outputsApi();
+    api.which = which === 'sld' ? 'sld' : 'set';
+    api.fromPanel = true;
+    OmegaEditorV2Outputs.open(api);
   }
 
-  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, VERSION: 'editor-v2-app/3' };
+  /* What the checks read: the view and the photo's tiles. Read-only. */
+  function debug() {
+    var a = state.doc.anchor || {}, sel = [], i, e;
+    for (i = 0; i < state.selection.length; i++) { e = D.find(state.doc, state.selection[i]); if (e && e.label) sel.push(String(e.label).trim()); }
+    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel,
+      map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote } : null };
+  }
+
+  root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, debug: debug, VERSION: 'editor-v2-app/5' };
 })(typeof window !== 'undefined' ? window : global);

@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"><script src="/omega-splash.js?v=1"></script>
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>OMEGA Site Plan</title>
+<title>Omega Maximus</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath fill='%231F4E79' d='M16 2 28 9v14L16 30 4 23V9z'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -83,7 +83,13 @@
   #app[data-section="funding"] .group[data-stage~="funding"] { display: flex; }
   .quiet-block { border: 1px solid var(--hair); border-radius: 8px; padding: 10px; margin: 0 0 10px; background: var(--panel); }
   .quiet-block h3 { margin: 0 0 6px; font-size: 13px; }
+  #run-head .run-stale { color: var(--danger); font-weight: 650; }
+  #run-head .run-note { color: var(--muted); }
+  #run-head .btn { margin-top: 4px; }
+  .fold-sub { margin: 4px 0 6px; font-size: 12px; }
+  .fold-sub summary { cursor: pointer; color: var(--muted); }
   .quiet-block p, #outputs-body > p, #funding-body p { margin: 0 0 6px; color: var(--muted); font-size: 12px; line-height: 1.4; }
+  .quiet-block p.hint { margin: 8px 0 0; }
   .score-num { font-size: 22px; font-weight: 800; letter-spacing: -.02em; margin: 0 0 4px; }
   .stream { font-size: 12px; margin: 0 0 6px; }
   .stream-fill { display: block; height: 4px; background: var(--accent); border-radius: 2px; margin-top: 2px; }
@@ -138,22 +144,52 @@
     border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 10px 12px;
   }
   #grid-detail[hidden] { display: none; }
+  #map-parcels { position: absolute; inset: 0; pointer-events: none; }
+  #map-parcels .pt { position: absolute; opacity: .9; }
+  #map-parcels .pt img, #map-parcels .pt canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; }
+  #parcel-detail {
+    position: absolute; z-index: 4; right: 12px; bottom: 12px; width: 300px; max-width: calc(100% - 24px);
+    max-height: calc(100% - 56px); overflow: auto; background: var(--panel); color: var(--ink);
+    border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow); padding: 10px 12px;
+  }
+  #parcel-detail[hidden] { display: none; }
+  #maximus-lock { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(15, 23, 42, .55); }
+  #maximus-lock[hidden] { display: none; }
+  #maximus-lock .lock-card { width: min(460px, 100%); background: var(--white); color: var(--ink); border-radius: 12px; box-shadow: var(--shadow); padding: 22px 24px; }
+  #maximus-lock h2 { margin: 0 0 8px; font-size: 20px; }
+  #maximus-lock p { margin: 0 0 10px; line-height: 1.45; }
+  #maximus-lock #maximus-lock-price { font-weight: 700; font-size: 16px; }
+  #maximus-lock .lock-note { color: var(--muted); font-size: 13px; }
+  #maximus-lock .row-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; }
+  #maximus-lock a.btn { text-decoration: none; display: inline-flex; align-items: center; }
+  #maximus-lock a.btn:not(.primary) { color: var(--ink); }
+  #parcel-detail h2 { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); margin: 0; }
+  #parcel-detail p { margin: 6px 0 0; font-size: 13px; line-height: 1.35; }
+  #parcel-detail .src { color: var(--muted); font-size: 12px; }
+  #parcel-detail .row-actions { margin-top: 8px; display: flex; gap: 6px; flex-wrap: wrap; }
   #grid-detail h2 { font-size: 13px; letter-spacing: 0; text-transform: none; color: var(--ink); }
   #grid-detail p { margin: 6px 0 0; font-size: 13px; line-height: 1.35; }
   #grid-detail .src { color: var(--muted); font-size: 12px; }
   #grid-detail .panel-head { margin-bottom: 4px; }
-  #outputs-menu {
-    position: absolute; z-index: 8; right: 12px;
-    top: calc(var(--header) + var(--banner) + var(--ribbon) - 6px);
-    display: flex; flex-direction: column; gap: 2px; min-width: 260px; padding: 6px;
-    background: var(--white); border: 1px solid var(--line); border-radius: 8px; box-shadow: var(--shadow);
-  }
-  #outputs-menu[hidden] { display: none; }
-  #outputs-menu button {
-    text-align: left; border: 0; background: transparent; border-radius: 6px;
-    padding: 8px 10px; font-weight: 650; font-size: 13px;
-  }
-  #outputs-menu button:hover { background: var(--accent-soft); }
+  #grid-detail .who-head { margin-top: 10px; padding-top: 8px; border-top: 1px solid var(--line); font-weight: 650; }
+  #grid-detail .who-name { margin-top: 8px; }
+  #grid-detail .who-why, #grid-detail .who-says, #grid-detail .who-link { margin-top: 2px; padding-left: 10px; font-size: 12px; overflow-wrap: anywhere; }
+  #grid-detail .who-why { color: var(--muted); }
+  #grid-detail .who-link a { font-weight: 600; }
+  #grid-detail .who-confirm { font-size: 12px; }
+  #grid-detail details.who-fold { margin-top: 8px; color: var(--muted); font-size: 12px; }
+  #grid-detail details.who-fold summary { cursor: pointer; }
+  #grid-detail details.who-fold p { font-size: 12px; padding-left: 10px; overflow-wrap: anywhere; }
+  #side-outputs .out-panel-row { flex-direction: column; align-items: stretch; gap: 8px; padding: 10px 0; }
+  #side-outputs .out-panel-row h3 { font-size: 13px; }
+  #side-outputs .out-note { font-size: 12px; line-height: 1.4; }
+  #side-outputs .out-status { font-size: 13px; }
+  #side-outputs .out-details { margin: 10px 0 0; }
+  #side-outputs .out-details summary { cursor: pointer; font-weight: 700; font-size: 13px; }
+  #side-outputs .out-fields { grid-template-columns: 1fr; }
+  .out-checks { margin: 6px 0 0; padding: 0 0 0 16px; font-size: 12px; }
+  .out-checks li { margin: 0 0 6px; }
+  .out-checks li.is-block strong { color: var(--danger); }
   .panel-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 8px; }
   .panel-head h2 { margin: 0; }
   .fold { border: 1px solid var(--hair); border-radius: 8px; margin: 0 0 8px; background: var(--white); }
@@ -266,7 +302,7 @@
   <header>
     <div class="brand">
       <svg width="28" height="28" viewBox="0 0 32 32" aria-hidden="true"><path fill="#1F4E79" d="M16 2 28 9v14L16 30 4 23V9z"/><path fill="#fff" d="M16 8 22 11.5v7L16 22l-6-3.5v-7z"/></svg>
-      <div><strong>OMEGA</strong><span>Site Plan</span></div>
+      <div><strong>OMEGA</strong><span>Maximus</span></div>
     </div>
     <span class="pill">Customer trial</span>
     <input id="project-name" aria-label="Project name" value="Untitled site" maxlength="120">
@@ -280,6 +316,7 @@
       <button type="button" class="btn" id="btn-open">Open</button>
       <button type="button" class="btn primary" id="btn-save">Save to workspace</button>
       <button type="button" class="btn" id="btn-local-save">Save here</button>
+      <button type="button" class="btn quiet" id="btn-feedback">Feedback</button>
       <button type="button" class="btn quiet" id="btn-help">Help</button>
       <button type="button" class="btn quiet side-toggle" id="btn-side" aria-expanded="false">Details</button>
     </div>
@@ -355,21 +392,9 @@
   </div>
     <div class="group" data-stage="always" id="ribbon-end"><div class="row">
       <button type="button" data-hook="view3d" id="btn-3d">3D</button>
-      <button type="button" id="btn-outputs" data-act="outputs" aria-expanded="false" aria-controls="outputs-menu">Outputs</button>
+      <button type="button" id="btn-outputs" data-act="outputs" aria-pressed="false" aria-controls="side-outputs">Outputs</button>
       <button type="button" id="btn-run" data-act="run">Run</button>
     </div><h2>Results</h2></div>
-  </div>
-  <div id="outputs-menu" hidden role="menu" aria-label="Outputs">
-    <button type="button" role="menuitem" id="btn-prime">Open in OMEGA Prime</button>
-    <button type="button" role="menuitem" id="btn-quote">Request a quote in Logic</button>
-    <button type="button" role="menuitem" id="btn-feedback">Send trial feedback</button>
-    <button type="button" role="menuitem" id="btn-logic">Open in Logic</button>
-    <button type="button" role="menuitem" id="btn-marketplace">Submit to marketplace</button>
-    <button type="button" role="menuitem" data-output="permit" data-hook="permit" id="btn-permit">Permit set + plot plan</button>
-    <button type="button" role="menuitem" data-output="sld" data-hook="sld" id="btn-sld">One-line</button>
-    <button type="button" role="menuitem" data-output="drawing">PNG / PDF / DXF</button>
-    <button type="button" role="menuitem" data-act="json">Project file</button>
-    <button type="button" role="menuitem" data-act="import">Import a drawing</button>
   </div>
   <div id="workspace">
     <nav id="tools" aria-label="Tools">
@@ -386,8 +411,20 @@
     </nav>
     <div id="stage">
       <div id="map" aria-hidden="true"></div>
+      <div id="map-parcels" aria-hidden="true"></div>
       <canvas id="cv" aria-label="Site drawing. Use the command line to draw by typing."></canvas>
       <p id="build-prompt" hidden>Start with a guided build</p>
+      <div id="parcel-detail" hidden>
+        <div class="panel-head">
+          <h2 id="parcel-detail-title">Parcel lines</h2>
+          <button type="button" class="btn quiet" id="parcel-detail-close">Close</button>
+        </div>
+        <div id="parcel-detail-body"></div>
+        <div class="row-actions">
+          <button type="button" class="btn primary" id="parcel-use" hidden>Use as site boundary</button>
+          <button type="button" class="btn" id="parcel-here">Look up at the map centre</button>
+        </div>
+      </div>
       <div id="grid-detail" hidden>
         <div class="panel-head">
           <h2 id="grid-detail-title">Grid Atlas</h2>
@@ -414,6 +451,16 @@
       </div>
       <div id="side-site" hidden>
         <h2>Site</h2>
+        <div class="quiet-block" id="site-address-block">
+          <h3>Site address</h3>
+          <p>Type the street address, or latitude, longitude. The map and the drawing move there.</p>
+          <label class="field">Address <input id="site-address-go" autocomplete="street-address" placeholder="Street, city, state ZIP — or latitude, longitude"></label>
+          <div class="row-actions">
+            <button type="button" class="btn primary" id="site-address-find">Find on the map</button>
+            <button type="button" class="btn" id="site-parcels" aria-pressed="false">Show parcel lines</button>
+          </div>
+          <p class="hint">Parcel lines are the county's lot lines over the photo. Pick the lot, then Use as site boundary.</p>
+        </div>
         <div class="quiet-block">
           <h3>Does this site work?</h3>
           <p>Yes opens a guided build. No keeps the drawing and records why.</p>
@@ -435,7 +482,10 @@
         <div id="analyze-body"></div>
       </div>
       <div id="side-outputs" hidden>
-        <h2>Outputs</h2>
+        <div class="panel-head">
+          <h2>Outputs</h2>
+          <button type="button" class="btn quiet" id="outputs-close">Close</button>
+        </div>
         <div id="outputs-body"></div>
       </div>
       <div id="side-funding" hidden>
@@ -449,6 +499,20 @@
     <div id="status" role="status" aria-live="polite">Select an object, or type LINE.</div>
     <div id="coords">E — ft &nbsp; N — ft</div>
   </footer>
+</div>
+
+<div id="maximus-lock" hidden role="dialog" aria-modal="true" aria-labelledby="maximus-lock-title">
+  <div class="lock-card">
+    <h2 id="maximus-lock-title">Omega Maximus</h2>
+    <p id="maximus-lock-copy">Omega Maximus is not on this workspace's plan.</p>
+    <p id="maximus-lock-price"></p>
+    <p class="lock-note">The editor maximum: CAD site design on the parcel and the photo, guided builds, Run (installed cost, value stack, IRR), the permit set, the one-line and 3D. Site Map stays on your plan.</p>
+    <div class="row-actions">
+      <a class="btn primary" id="maximus-lock-optin" href="/workspace#module-maximus">Opt in</a>
+      <a class="btn" href="/editor">Open Site Map</a>
+      <a class="btn quiet" href="/workspace">Workspace</a>
+    </div>
+  </div>
 </div>
 
 <dialog id="dlg-customer" aria-labelledby="cust-title">
@@ -509,6 +573,17 @@
       <button type="submit" class="btn" value="cancel">Cancel</button>
       <button type="submit" class="btn" value="discard">Don't save</button>
       <button type="submit" class="btn primary" value="save">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<dialog id="dlg-market" aria-labelledby="market-title">
+  <form method="dialog" class="sheet">
+    <h2 id="market-title">Submit to the financing marketplace?</h2>
+    <p>Approved marketplace partners can browse the listing. The project is saved to the workspace first.</p>
+    <div class="row-actions">
+      <button type="submit" class="btn" value="cancel">Cancel</button>
+      <button type="submit" class="btn primary" value="submit">Submit</button>
     </div>
   </form>
 </dialog>
@@ -580,7 +655,6 @@
 <script src="omega-editor-v2-analyze.js"></script>
 <script src="omega-grid-layers.js"></script>
 <script src="omega-grid-verdict.js"></script>
-<script src="omega-comed-layers.js"></script>
 <script src="omega-editor-v2-grid.js"></script>
 <script src="omega-editor-v2-3d.js"></script>
 <script src="omega-editor-v2-electrical.js"></script>
@@ -590,6 +664,10 @@
 <script src="omega-editor-v2-aerial.js"></script>
 <script src="omega-editor-v2-outputs.js"></script>
 <script src="omega-editor-v2-workspace.js"></script>
+<script src="omega-editor-v2-solar.js"></script>
+<script src="omega-editor-v2-run.js"></script>
+<script src="omega-parcel-sources.js"></script>
+<script src="omega-editor-v2-parcels.js"></script>
 <script src="omega-editor-v2-app.js"></script>
 <script>OmegaEditorV2App.boot();</script>
 </body>

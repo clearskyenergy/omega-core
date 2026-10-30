@@ -73,6 +73,31 @@ ok('a row carries the catalog\'s name', rows.every(function (r) { return r.name 
 ok('Projects panel names In flight and its page', (function (r) { return r[0].href === '#flight' && r[1].href === '/projects.html'; })(HUB.items('projects', ctxFor({ orgId: 'x' }))));
 ok('an unknown area is empty', HUB.items('nope', ctxFor({})).length === 0);
 
+/* 3b · the extras (Tommy, 2026-10-20: "hide these … in settings a panel
+   that allows us to hide or show the extra tools in the hex"): an area's
+   extras leave its panel until the person shows them; their own choice
+   wins either way; Settings lists every tool of every cell in the ring */
+HUB.AREAS.forEach(function (a) { (a.extras || []).forEach(function (k) { ok('area ' + a.key + ' extra ' + k + ' is one of its own tools', (a.tools || []).indexOf(k) >= 0); }); });
+var EXTRAS = ['siteoptimizer', 'powerflow', 'sitediscovery', 'conductorsizing'];
+var DESIGN = HUB.AREAS.filter(function (a) { return a.key === 'design'; })[0], CORE = DESIGN.tools.filter(function (k) { return EXTRAS.indexOf(k) < 0; });
+ok('Design keeps Site Map and the sandbox among its core tools', CORE.indexOf('editor') >= 0 && CORE.indexOf('sandbox') >= 0, CORE);
+var pro = ctxFor({ orgId: 'x', tierLevel: 3 });
+var design = HUB.items('design', pro).map(function (r) { return r.key; });
+ok('Design lists its core tools (Site Map, the sandbox) and none of its extras, by default', design.join() === CORE.join(), design);
+ok('the extras are what Design hides by default', HUB.hidden('design', pro).map(function (r) { return r.key; }).join() === EXTRAS.join(), HUB.hidden('design', pro));
+var shownOne = HUB.items('design', ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { powerflow: true } })).map(function (r) { return r.key; });
+ok('a person who shows an extra gets it in the panel', shownOne.join() === CORE.concat('powerflow').join(), shownOne);
+var hidCore = HUB.items('design', ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { sandbox: false } })).map(function (r) { return r.key; });
+ok('a person may hide a tool that is not an extra', hidCore.join() === CORE.filter(function (k) { return k !== 'sandbox'; }).join() && HUB.hidden('design', ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { sandbox: false } })).length === EXTRAS.length + 1, hidCore);
+var stdShown = HUB.items('design', ctxFor({ orgId: 'x', tierLevel: 1 }, { hubTools: { siteoptimizer: true } }));
+ok('a shown extra the plan does not open is listed locked, last', stdShown[stdShown.length - 1].key === 'siteoptimizer' && stdShown[stdShown.length - 1].locked, stdShown);
+ok('hiding never changes the ring: the plan composes the hub', HUB.compose(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { editor: false, sandbox: false } })).ring.map(function (a) { return a.key; }).join() === ent.ring.map(function (a) { return a.key; }).join());
+var ch = HUB.choices(pro), chDesign = ch.filter(function (g) { return g.key === 'design'; })[0];
+ok('Settings lists the cells of the ring that list tools, in ring order', ch.map(function (g) { return g.key; }).join() === ent.ring.filter(function (a) { return HUB.items(a.key, pro).some(function (r) { return !r.page; }) || HUB.hidden(a.key, pro).length; }).map(function (a) { return a.key; }).join(), ch.map(function (g) { return g.key; }));
+ok('Settings lists every Design tool, the extras switched off', chDesign && chDesign.tools.map(function (t) { return t.key + (t.shown ? '' : ':off'); }).join() === DESIGN.tools.map(function (k) { return k + (EXTRAS.indexOf(k) >= 0 ? ':off' : ''); }).join(), chDesign);
+ok('Settings follows the person\'s choice', HUB.choices(ctxFor({ orgId: 'x', tierLevel: 3 }, { hubTools: { powerflow: true } })).filter(function (g) { return g.key === 'design'; })[0].tools.filter(function (t) { return t.key === 'powerflow'; })[0].shown === true);
+ok('a subject\'s tools sit under the subject, never as their own switch', !HUB.choices(pro).some(function (g) { return g.key === 'sales' && g.tools.some(function (t) { return t.key === 'parcelscreening'; }); }));
+
 /* 4 · does a workspace hold a module: the one rule the Modules page and
    the marketplace store share */
 var MODS = {}; M.catalog().forEach(function (m) { MODS[m.key] = m; });
@@ -192,7 +217,9 @@ function holds(ctx, want) { return M.catalog().filter(function (m) { return HUB.
 ok('Standard holds Omega Design, Omega EV and Omega Permits', holds(core, 'held') === 'lite,evrebates,permitting', holds(core, 'held'));
 ok('Standard is partly on nine modules', holds(core, 'part') === 'gridatlas,storage,estimate,plansets,siteintel,engineering,finance,compute,sitefinder', holds(core, 'part'));
 ok('Deluxe holds nine and is partly on four', holds(perf, 'held') === 'lite,gridatlas,storage,estimate,evrebates,plansets,ops,permitting,sitefinder' && holds(perf, 'part') === 'siteintel,engineering,finance,compute', [holds(perf, 'held'), holds(perf, 'part')]);
-ok('a trial holds Omega Design, Omega EV, Omega Permits and Omega Sites', holds(trial, 'held') === 'lite,evrebates,permitting,sitefinder', holds(trial, 'held'));
+/* a trial's tool level is Enterprise's, so it tries Omega Maximus (an Enterprise-level tool on a legacy plan) before buying it */
+ok('a trial holds Omega Design, Omega EV, Omega Maximus, Omega Permits and Omega Sites', holds(trial, 'held') === 'lite,evrebates,maximus,permitting,sitefinder', holds(trial, 'held'));
+ok('Standard and Deluxe buy Omega Maximus; Enterprise holds it', HUB.moduleState(MODS.maximus, core) === 'ask' && HUB.moduleState(MODS.maximus, perf) === 'ask' && HUB.moduleState(MODS.maximus, ent) === 'held', [HUB.moduleState(MODS.maximus, core), HUB.moduleState(MODS.maximus, perf), HUB.moduleState(MODS.maximus, ent)].join());
 
 /* 5b · editorCtx: the ONE mirror of OmegaCaps.read() every surface asks,
    pure (it asks canWith and never sets the library's own state) */

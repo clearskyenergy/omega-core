@@ -1,0 +1,217 @@
+<!doctype html>
+<!-- © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential. -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>Submit a site</title>
+<!-- ═══════════════════════════════════════════════════════════════════════
+     site-intake.html — the shareable site-intake form.
+
+     Opened from a link an OSA administrator, ClearSky or the JV's agent made:
+     /site-intake?l=il_…  The link id is the only credential; nothing else is
+     asked for and nobody signs in. The page asks GET /api/site-intake?l= if
+     the link is still open, then posts ONE site (with a Google Earth KMZ/KML
+     when the person has one) to POST /api/site-intake, which files it into
+     the portfolio at stage referred (api/_lib/intake-links.js is the rule).
+
+     PUBLIC, LIKE quote.html: no Firebase, no tenant runtime, no loading mark,
+     no platform name. The referrer policy keeps the link id in this address
+     from riding out in a Referer header. ES5, no build step.
+     ═══════════════════════════════════════════════════════════════════════ -->
+<style>
+:root{
+  --bg:#F4F6FA; --card:#FFFFFF; --ink:#0F1B2D; --muted:#5B6B82; --line:#D9E0EA;
+  --accent:#00838F; --accent-ink:#FFFFFF; --bad:#B42318; --bad-bg:#FEF3F2; --ok-bg:#ECFDF3; --ok:#067647;
+  --field:#FFFFFF;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0A1628; --card:#0F1F38; --ink:#E5EEF7; --muted:#8BA3C4; --line:#22354F;
+    --accent:#00A9A4; --accent-ink:#04121F; --bad:#FDA29B; --bad-bg:#3A1414; --ok-bg:#0E2E22; --ok:#75E0A7;
+    --field:#0B1930;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0A1628; --card:#0F1F38; --ink:#E5EEF7; --muted:#8BA3C4; --line:#22354F;
+  --accent:#00A9A4; --accent-ink:#04121F; --bad:#FDA29B; --bad-bg:#3A1414; --ok-bg:#0E2E22; --ok:#75E0A7;
+  --field:#0B1930;
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.wrap{max-width:680px;margin:0 auto;padding:28px 16px 48px}
+h1{font-size:24px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px;margin-bottom:16px}
+.card h2{font-size:15px;margin:0 0 12px;letter-spacing:.01em}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.grid .full{grid-column:1/-1}
+@media (max-width:560px){ .grid{grid-template-columns:1fr} }
+label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+label .opt{font-weight:400;color:var(--muted)}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--field);border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+textarea{min-height:90px;resize:vertical}
+input:focus,select:focus,textarea:focus{outline:2px solid var(--accent);outline-offset:0;border-color:transparent}
+.hint{font-size:12.5px;color:var(--muted);margin-top:4px}
+.drop{border:1.5px dashed var(--line);border-radius:10px;padding:16px;text-align:center;color:var(--muted);cursor:pointer}
+.drop.has{border-style:solid;color:var(--ink)}
+.drop input{display:none}
+.btn{display:inline-block;background:var(--accent);color:var(--accent-ink);border:0;border-radius:10px;padding:12px 22px;font:inherit;font-weight:700;cursor:pointer}
+.btn[disabled]{opacity:.6;cursor:default}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--line)}
+.msg{border-radius:10px;padding:12px 14px;margin-bottom:16px}
+.msg.bad{background:var(--bad-bg);color:var(--bad)}
+.msg.ok{background:var(--ok-bg);color:var(--ok)}
+.hp{position:absolute;left:-9999px;width:1px;height:1px;overflow:hidden}
+.foot{font-size:12.5px;color:var(--muted);margin-top:8px}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Submit a site</h1>
+  <p class="sub" id="to">Tell us about a site and we will take a look.</p>
+
+  <div class="msg bad" id="closed" hidden></div>
+
+  <form id="f" novalidate hidden>
+    <div class="msg bad" id="err" hidden></div>
+
+    <div class="card">
+      <h2>About you</h2>
+      <div class="grid">
+        <div><label for="sn">Your name</label><input id="sn" autocomplete="name" required maxlength="120"></div>
+        <div><label for="se">Email</label><input id="se" type="email" autocomplete="email" required maxlength="160"></div>
+        <div><label for="sc">Company <span class="opt">(optional)</span></label><input id="sc" autocomplete="organization" maxlength="120"></div>
+        <div><label for="sp">Phone <span class="opt">(optional)</span></label><input id="sp" type="tel" autocomplete="tel" maxlength="40"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>The site</h2>
+      <div class="grid">
+        <div class="full"><label for="nm">Site name</label><input id="nm" required maxlength="160" placeholder="e.g. Smith Ranch, north parcel"></div>
+        <div class="full"><label for="ad">Address <span class="opt">(or coordinates, or a map file below)</span></label>
+          <input id="ad" maxlength="300" autocomplete="street-address" placeholder="Street, city, state ZIP"></div>
+        <div><label for="la">Latitude <span class="opt">(optional)</span></label><input id="la" inputmode="decimal" placeholder="32.4487"></div>
+        <div><label for="ln">Longitude <span class="opt">(optional)</span></label><input id="ln" inputmode="decimal" placeholder="-99.7331"></div>
+        <div><label for="ac">Acres <span class="opt">(optional)</span></label><input id="ac" inputmode="decimal"></div>
+        <div><label for="mw">Size, MW <span class="opt">(optional)</span></label><input id="mw" inputmode="decimal"></div>
+        <div class="full"><label for="pt">Project type <span class="opt">(optional)</span></label>
+          <select id="pt">
+            <option value="">Not sure</option>
+            <option value="solar">Solar</option>
+            <option value="bess">Battery storage</option>
+            <option value="solar_bess">Solar + storage</option>
+            <option value="compute">Data center / compute</option>
+            <option value="powergen">Power generation</option>
+            <option value="microgrid">Microgrid</option>
+            <option value="dcfc">EV charging</option>
+          </select></div>
+        <div class="full"><label>Google Earth file <span class="opt">(optional, .kmz or .kml, up to 3 MB)</span></label>
+          <label class="drop" id="drop"><input type="file" id="file" accept=".kmz,.kml,application/vnd.google-earth.kmz,application/vnd.google-earth.kml+xml">
+            <span id="dropt">Choose the parcel outline you drew in Google Earth</span></label>
+          <div class="hint">An outline lets us measure the acreage and check the nearest lines and substations.</div></div>
+        <div class="full"><label for="nt">Anything else <span class="opt">(optional)</span></label>
+          <textarea id="nt" maxlength="2000" placeholder="Ownership, zoning, utility, timing, what you know about the grid nearby…"></textarea></div>
+      </div>
+      <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" tabindex="-1" autocomplete="off"></div>
+    </div>
+
+    <button class="btn" id="go" type="submit">Submit the site</button>
+    <p class="foot">What you send is shared with the team that sent you this link. It is screened, not a commitment by anyone.</p>
+  </form>
+
+  <div id="done" hidden>
+    <div class="msg ok" id="donet"></div>
+    <button class="btn ghost" id="again" type="button">Submit another site</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  'use strict';
+  var MAX = 3 * 1024 * 1024;
+  var link = (function(){ var m = /[?&]l=([^&#]+)/.exec(location.search); return m ? decodeURIComponent(m[1]) : ''; })();
+  var file = null;   /* { name, kml? , b64? } */
+  function $(id){ return document.getElementById(id); }
+  function v(id){ return String($(id).value || '').replace(/^\s+|\s+$/g, ''); }
+  function num(id){ var s = v(id); if(!s) return null; var n = Number(s.replace(/,/g, '')); return isFinite(n) ? n : NaN; }
+  function show(id, on){ $(id).hidden = !on; }
+  function closed(t){ $('closed').textContent = t; show('closed', true); show('f', false); }
+  function err(t){ $('err').textContent = t; show('err', !!t); if(t) $('err').scrollIntoView({ block:'center' }); }
+
+  function req(method, body){
+    return fetch('/api/site-intake' + (method === 'GET' ? '?l=' + encodeURIComponent(link) : ''), {
+      method: method, headers: body ? { 'Content-Type':'application/json' } : {},
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function(r){
+      return r.json()['catch'](function(){ return {}; }).then(function(j){
+        if(!r.ok) { var e = new Error((j && j.error) || ('Something went wrong (' + r.status + ').')); e.status = r.status; throw e; }
+        return j;
+      });
+    });
+  }
+
+  if(!link){ closed('This page needs the full link you were sent. Ask whoever sent it to send it again.'); return; }
+  req('GET').then(function(j){
+    if(j.to) $('to').textContent = 'Tell ' + j.to + ' about a site and they will take a look.';
+    show('f', true);
+  }, function(e){ closed(e.message.charAt(0).toUpperCase() + e.message.slice(1) + '.'); });
+
+  $('file').addEventListener('change', function(){
+    var f = this.files && this.files[0];
+    file = null; $('drop').className = 'drop'; $('dropt').textContent = 'Choose the parcel outline you drew in Google Earth';
+    if(!f) return;
+    if(!/\.km[lz]$/i.test(f.name)){ err('The map file must be a .kmz or .kml from Google Earth.'); this.value = ''; return; }
+    if(f.size > MAX){ err('That file is over 3 MB. Save just the parcel outline from Google Earth and try again.'); this.value = ''; return; }
+    err('');
+    var rd = new FileReader(), isKml = /\.kml$/i.test(f.name);
+    rd.onload = function(){
+      file = isKml ? { name: f.name, kml: String(rd.result || '') }
+                   : { name: f.name, b64: String(rd.result || '').replace(/^data:[^,]*,/, '') };
+      $('drop').className = 'drop has'; $('dropt').textContent = f.name;
+    };
+    rd.onerror = function(){ err('That file could not be read. Try saving it again from Google Earth.'); };
+    if(isKml) rd.readAsText(f); else rd.readAsDataURL(f);
+  });
+
+  $('f').addEventListener('submit', function(ev){
+    ev.preventDefault(); err('');
+    var lat = num('la'), lng = num('ln'), acres = num('ac'), mw = num('mw');
+    if(!v('sn')) return err('Please give your name.');
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(v('se'))) return err('Please give a valid email address.');
+    if(!v('nm')) return err('Please give the site a name.');
+    if(isNaN(lat) || isNaN(lng) || isNaN(acres) || isNaN(mw)) return err('Latitude, longitude, acres and MW must be numbers.');
+    if((lat === null) !== (lng === null)) return err('Give both latitude and longitude, or neither.');
+    if(!v('ad') && lat === null && !file) return err('Give an address, coordinates or a Google Earth file so we can find the site.');
+    var site = { name: v('nm'), address: v('ad'), lat: lat, lng: lng, acres: acres, sizeMw: mw,
+                 projectType: $('pt').value, notes: v('nt') };
+    if(file){ site.fileName = file.name; if(file.kml != null) site.kml = file.kml; else site.kmzBase64 = file.b64; }
+    var btn = $('go'); btn.disabled = true; btn.textContent = 'Sending…';
+    req('POST', { l: link, website: v('website'),
+                  submitter: { name: v('sn'), email: v('se'), company: v('sc'), phone: v('sp') }, site: site })
+      .then(function(j){
+        var t = 'Thank you — we have your site' + (j.reference ? ' (reference ' + j.reference + ')' : '') + '.';
+        if(j.outline && j.acres != null) t += ' We measured about ' + Math.round(j.acres).toLocaleString() + ' acres from your file.';
+        t += ' Someone will be in touch at ' + v('se') + '.';
+        $('donet').textContent = t; show('f', false); show('done', true); window.scrollTo(0, 0);
+      }, function(e){
+        if(e.status === 410){ closed(e.message.charAt(0).toUpperCase() + e.message.slice(1) + '.'); return; }
+        err(e.message.charAt(0).toUpperCase() + e.message.slice(1) + '.');
+      })
+      .then(function(){ btn.disabled = false; btn.textContent = 'Submit the site'; });
+  });
+
+  $('again').addEventListener('click', function(){
+    ['nm','ad','la','ln','ac','mw','nt'].forEach(function(id){ $(id).value = ''; });
+    $('pt').value = ''; $('file').value = ''; file = null;
+    $('drop').className = 'drop'; $('dropt').textContent = 'Choose the parcel outline you drew in Google Earth';
+    show('done', false); show('f', true); $('nm').focus();
+  });
+})();
+</script>
+</body>
+</html>

@@ -1,11 +1,11 @@
 {
   "bench-type.png": {
     "sha256": "85a6aa2cf31e5a27a197a12e5bbe7891f6ecb50223aab3e04731afe39284e1bd",
-    "takenAt": "2026-10-18T03:17:34.198Z",
+    "takenAt": "2026-10-20T11:20:48.204Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-scan.js": "d24779bbb5b4c242954591771ebd646087d4daef823c9ef8b35c20e2f67a3d96",
@@ -14,11 +14,11 @@
   },
   "bench.png": {
     "sha256": "da303a7a6f49b1e7a52447f821b35f3bae5a7e04a07ffb2ee0c841b7c80b9277",
-    "takenAt": "2026-10-18T03:17:33.475Z",
+    "takenAt": "2026-10-20T11:20:47.621Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-scan.js": "d24779bbb5b4c242954591771ebd646087d4daef823c9ef8b35c20e2f67a3d96",
@@ -26,12 +26,12 @@
     }
   },
   "customer-app.png": {
-    "sha256": "4ba363642c69d16a33601d1ffd5fb30ce695893ef569ee758d5baeabe2bb25b1",
-    "takenAt": "2026-10-18T03:17:07.032Z",
+    "sha256": "0fb5a1f36db81c4bd9fea3f72f4d278fef39832671e99691cb645d8f1a4a3a06",
+    "takenAt": "2026-10-20T11:20:28.526Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -45,11 +45,11 @@
   },
   "customer-design.png": {
     "sha256": "7976ecd722433e187f8d3fdbe2d9b7adf42db7b4e7450226f3b5e17cdbe06ae3",
-    "takenAt": "2026-10-18T03:17:49.421Z",
+    "takenAt": "2026-10-20T11:21:01.550Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -62,12 +62,12 @@
     }
   },
   "customer-home.png": {
-    "sha256": "cc4f97927a5b684683034036b05b11cfb4ecbf7ab40631a64ab9d6763d6b77fc",
-    "takenAt": "2026-10-18T03:18:17.512Z",
+    "sha256": "6e3dfe95e3acc20d9870148fffe474186350ce75b67a6939c6aab1a0a28f5b61",
+    "takenAt": "2026-10-20T11:20:53.806Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -81,11 +81,11 @@
   },
   "customer-orders.png": {
     "sha256": "4ef9b23425629537ff6192e461fcfbd040f0ba4d3fdfc7195945dee257fde48c",
-    "takenAt": "2026-10-18T03:17:50.941Z",
+    "takenAt": "2026-10-20T11:21:03.041Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -98,12 +98,12 @@
     }
   },
   "customer-pos.png": {
-    "sha256": "eb0db014c653421571d55cf071517826139f0bb8717dba13a9eacd7a87021514",
-    "takenAt": "2026-10-18T03:17:52.736Z",
+    "sha256": "cf53c89e59137f00ac87fd74116523c7f47e61d7eb9102cfed4e48e813eb0636",
+    "takenAt": "2026-10-20T11:21:04.854Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -117,11 +117,11 @@
   },
   "customer-signin.png": {
     "sha256": "36af8fdec393b617461dfa7b25da83739467be1525984867e1b16c574d93bf9f",
-    "takenAt": "2026-10-18T03:18:18.881Z",
+    "takenAt": "2026-10-20T11:20:55.138Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -135,11 +135,11 @@
   },
   "customer-sitelist-send.png": {
     "sha256": "08e8d217bcc13c2cd7c77635b54da7f58e1da829e508aaa37c799a4364ea238d",
-    "takenAt": "2026-10-18T03:17:47.929Z",
+    "takenAt": "2026-10-20T11:21:00.061Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -153,11 +153,11 @@
   },
   "customer-sitelist.png": {
     "sha256": "89c0da6a59fa92f139ab0fa59e8e764b9e10ce3a9c757a6934178eb55e8eae8a",
-    "takenAt": "2026-10-18T03:17:45.379Z",
+    "takenAt": "2026-10-20T11:20:57.540Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -171,11 +171,11 @@
   },
   "customer-sites-2.png": {
     "sha256": "4109c46dd21fa2f9fb58d8a05f8afd976783ee00aadb3a0f76c3763243a8b3b8",
-    "takenAt": "2026-10-18T03:17:57.446Z",
+    "takenAt": "2026-10-20T11:21:09.593Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -189,11 +189,11 @@
   },
   "customer-sites.png": {
     "sha256": "7daae5f90132cf4458a398c8ff0464f36d16a6c795d12a2f1f09a59463f242d6",
-    "takenAt": "2026-10-18T03:17:55.018Z",
+    "takenAt": "2026-10-20T11:21:07.204Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -207,11 +207,11 @@
   },
   "desktop-accounting-void.png": {
     "sha256": "9ab71d49dc1db512c9aa6c253eea471bb675fc1af289554d95e699bf8f139676",
-    "takenAt": "2026-10-18T03:17:15.870Z",
+    "takenAt": "2026-10-20T11:20:33.646Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "logic-accounting.html": "22d11fd8e12345bc5e9204e026bc94cc7fb09c13cffd3ad741672a829502378b",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
@@ -220,11 +220,11 @@
   },
   "desktop-accounting.png": {
     "sha256": "1daadaadc53016193325fbaab4fa21b33ec5e33629a543a2796a675eb48bc1cd",
-    "takenAt": "2026-10-18T03:17:13.332Z",
+    "takenAt": "2026-10-20T11:20:32.148Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "logic-accounting.html": "22d11fd8e12345bc5e9204e026bc94cc7fb09c13cffd3ad741672a829502378b",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
@@ -233,11 +233,11 @@
   },
   "desktop-freight.png": {
     "sha256": "963a4f102d21e67db4389b9916a07664f5adaa07fff4fae213fb760b3e4d63b3",
-    "takenAt": "2026-10-18T03:17:27.486Z",
+    "takenAt": "2026-10-20T11:20:42.377Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "logic-logistics.html": "bf27080bb9afdfb3ac1b7ae53167da6125cfe148c99051aa9749516cc627b116",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -249,12 +249,12 @@
     }
   },
   "desktop-office.png": {
-    "sha256": "513c592d8586ad1f51423e0e812a3c6045186bfcfd8ae95da5956502bf5480cb",
-    "takenAt": "2026-10-18T03:17:01.258Z",
+    "sha256": "38a4f47cb22988fa0a4af47f0242b45435463ad47eb0f5ab692e42435348eb41",
+    "takenAt": "2026-10-20T11:20:26.931Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -266,11 +266,11 @@
   },
   "desktop-price.png": {
     "sha256": "08cd0a7a86f955a95e460e3faf5923334a6fadc8b19a28258e279d1d8134b359",
-    "takenAt": "2026-10-18T03:17:10.762Z",
+    "takenAt": "2026-10-20T11:20:30.794Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
@@ -281,13 +281,13 @@
     }
   },
   "desktop-sites-list.png": {
-    "sha256": "8a3e0dacd6d8d8742083a37760dbd59b15c2c81bd5e3d568df789aab4d882a0b",
-    "takenAt": "2026-10-18T03:17:19.518Z",
+    "sha256": "01383c8700f37424c05dfaf14125ea39fca476e4fe8fbf7dc2bdd0119300fbee",
+    "takenAt": "2026-10-20T11:20:36.618Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
-      "logic-custody.html": "c218979beb230ea20aa0b7d5b0ee80776dc16358e43f459c94c39f05fff59269",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
+      "logic-custody.html": "ef86feb03542e526e1313d711be163dce2e4d13cc746888f2025793652f80673",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-scan.js": "d24779bbb5b4c242954591771ebd646087d4daef823c9ef8b35c20e2f67a3d96",
@@ -296,12 +296,12 @@
   },
   "desktop-sites-send.png": {
     "sha256": "6439be0c2df6bf255484d1264e71eadcdfefbd62f49d911290162ce892ca1b89",
-    "takenAt": "2026-10-18T03:17:23.920Z",
+    "takenAt": "2026-10-20T11:20:39.300Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
-      "logic-custody.html": "c218979beb230ea20aa0b7d5b0ee80776dc16358e43f459c94c39f05fff59269",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
+      "logic-custody.html": "ef86feb03542e526e1313d711be163dce2e4d13cc746888f2025793652f80673",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-scan.js": "d24779bbb5b4c242954591771ebd646087d4daef823c9ef8b35c20e2f67a3d96",
@@ -310,11 +310,11 @@
   },
   "desktop-team.png": {
     "sha256": "0e5c91f3da3b28da2bee68984ee29f206862d9a5d16605e3b2a6aa3bba3ee4f7",
-    "takenAt": "2026-10-18T03:17:17.521Z",
+    "takenAt": "2026-10-20T11:20:34.960Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "logic-team.html": "0a9b694354e3eac65b74b71542c84cd0b47b3d227ebf917c1a606b22d8bd3200",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
@@ -323,11 +323,11 @@
   },
   "office-account.png": {
     "sha256": "d6984f3bf0480b69c2ec0290a4e9941f40747c64862626162a1a397b2d47eb8b",
-    "takenAt": "2026-10-18T03:16:34.506Z",
+    "takenAt": "2026-10-20T11:20:11.606Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -341,11 +341,11 @@
   },
   "office-activity.png": {
     "sha256": "28f94344a7742dc1364d2a39c255a2ec931eb8694b2b5a50548863dc9243be87",
-    "takenAt": "2026-10-18T03:16:36.803Z",
+    "takenAt": "2026-10-20T11:20:13.241Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -359,11 +359,11 @@
   },
   "office-customers.png": {
     "sha256": "47317f44a1c60c9f7234fcf73e389f34890c564b4613ef31040801c6168245a4",
-    "takenAt": "2026-10-18T03:16:31.282Z",
+    "takenAt": "2026-10-20T11:20:10.000Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -377,11 +377,11 @@
   },
   "office-documents.png": {
     "sha256": "d81ebd9cd4613ad6a2bd1862c7e14014b9dff58bc21a6adb641ce13433ce4323",
-    "takenAt": "2026-10-18T03:16:40.805Z",
+    "takenAt": "2026-10-20T11:20:15.570Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -395,11 +395,11 @@
   },
   "office-hub-panels.png": {
     "sha256": "2b2aba30bdb1c39bc3c2dff6a61f6992bd86a596f10dd327724dbb28279fbe83",
-    "takenAt": "2026-10-18T03:16:29.226Z",
+    "takenAt": "2026-10-20T11:20:08.473Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -412,12 +412,12 @@
     }
   },
   "office-hub.png": {
-    "sha256": "df43f2088068a70f160d4fceb2660f5586c053733976d61e73eb0047e22a6423",
-    "takenAt": "2026-10-18T03:16:25.740Z",
+    "sha256": "f6bbe303b32d332ec95b8ede0f0e5c0286f7433e70de04170b27905cdc26ef5f",
+    "takenAt": "2026-10-20T11:20:06.083Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -431,11 +431,11 @@
   },
   "office-menu.png": {
     "sha256": "2c81e4199995e325741c7c6f347577a796e0a40e5ca42f2024afb517dcefb09d",
-    "takenAt": "2026-10-18T03:16:49.880Z",
+    "takenAt": "2026-10-20T11:20:21.167Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -449,11 +449,11 @@
   },
   "office-order.png": {
     "sha256": "2bca4a45a8e19fb7a04f28c700f783f984bf00c7ce78096572f7e68d22ae96e2",
-    "takenAt": "2026-10-18T03:16:43.214Z",
+    "takenAt": "2026-10-20T11:20:17.106Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -467,11 +467,11 @@
   },
   "office-passport.png": {
     "sha256": "285b5e817c0a348764966f22def7ddeaf723c5bf5c9637f7830a55513a7ad5a9",
-    "takenAt": "2026-10-18T03:16:55.573Z",
+    "takenAt": "2026-10-20T11:20:25.355Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -485,11 +485,11 @@
   },
   "office-scan.png": {
     "sha256": "d4373bc611d1b8e041754aac87c5a0287c31fd6a2fe223f01e9a47e17011fd2a",
-    "takenAt": "2026-10-18T03:16:52.938Z",
+    "takenAt": "2026-10-20T11:20:23.473Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -503,11 +503,11 @@
   },
   "office-sites.png": {
     "sha256": "296ade2260bd433e288573e125a1f87913f9d22200e8b10c40b9641e0f09f760",
-    "takenAt": "2026-10-18T03:16:47.898Z",
+    "takenAt": "2026-10-20T11:20:19.666Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "office/app.html": "ed03ae11039b7e09ab01d8c0c41d59cf56df88bf9aa86b67ebccf32c965dbb22",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-hexhub.js": "eaace96f9fca1fa46b41f6841fc721255cd8bf89b8baf7ec7f13a0a18ae8c8e1",
@@ -523,11 +523,11 @@
   },
   "plant-register.png": {
     "sha256": "dcee2b18dbb7a03ef3f53ccbcd911eac102b9f29e7147da33a3fb61d86cbbbd4",
-    "takenAt": "2026-10-18T03:17:39.910Z",
+    "takenAt": "2026-10-20T11:20:52.186Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
       "omega-logic-theme.js": "520744be55bfa620d295534d1c97104acb398e9f124dbb7aa7a49dc090b7b2be",
       "omega-splash.js": "9903c4cada8e1b3831cc5f82431970a6015b5c3bd321315ea3eebbdfdb8c555f",
@@ -536,11 +536,11 @@
   },
   "plant-test.png": {
     "sha256": "e089438d6d49f781fb7a854dcfecd1b03fca746d98dafef76f143cab94a3784a",
-    "takenAt": "2026-10-18T03:17:36.502Z",
+    "takenAt": "2026-10-20T11:20:50.596Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
@@ -551,11 +551,11 @@
   },
   "plant-today.png": {
     "sha256": "080a7047bf6ec42a61985e6ba0a652a94d1f9392530094e3df4577f81e464a81",
-    "takenAt": "2026-10-18T03:18:14.313Z",
+    "takenAt": "2026-10-20T11:20:43.813Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
@@ -566,11 +566,11 @@
   },
   "plant-unit.png": {
     "sha256": "67ab7a59e05396f425ad13e9bd82166ae48d63d2499d044a9ae9331fe0a7ae26",
-    "takenAt": "2026-10-18T03:17:32.439Z",
+    "takenAt": "2026-10-20T11:20:46.791Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",
@@ -580,12 +580,12 @@
     }
   },
   "plant-work.png": {
-    "sha256": "e21f167afa03bb9f4959144f73f2bd26aa311685d28e074fbb73198d87b38b84",
-    "takenAt": "2026-10-18T03:18:15.904Z",
+    "sha256": "4ca2dce7cb8a23a304e5411362904aa09ffb8956351c9b29e0e3f3aa7237d5f9",
+    "takenAt": "2026-10-20T11:20:45.338Z",
     "tree": ".",
-    "commit": "137ea775",
+    "commit": "207e26fc",
     "sources": {
-      "app-sandbox/sandbox.js": "7561456017099f5423fb4ee859f183699a49f25e4a5d3b19ed112daf1b13498f",
+      "app-sandbox/sandbox.js": "4af6c156a58c43af5ebce3d0a9f59e6b0d7a933375a195c70869653dd38b17cd",
       "omega-auth-errors.js": "c40b541186168bc44263dd51df2b6adcb03622c6178b90789beef48d96094125",
       "omega-logic-signin.js": "c117290ed0482f5d4641fc0e1e288393117602ed8e5398dd09763de5fee5d730",
       "omega-logic-theme.css": "c3cb0c3ff83956d0c0e2c5fc80f82d5476e958aea55cae89d2acaccaa268cebc",

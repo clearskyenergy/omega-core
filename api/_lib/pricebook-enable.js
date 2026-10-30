@@ -14,6 +14,12 @@
  *           line, so enable() needs the Stripe mode (a test key, or a live key
  *           under PACKAGING_LIVE=true; a -proposed book never live), not a
  *           binding or the QuickBooks guard.
+ * seed()    writes the code's book (B.VERSION) when it is not stored yet,
+ *           disabled, on the QuickBooks company of the newest enabled release
+ *           book (so 2026-11 is on 2026-10's company), never over a stored
+ *           version (B.seed refuses a different one), and only with the hash
+ *           the dry run showed. So releasing a new book (2026-11 added Omega
+ *           Maximus, Tommy 2026-10-20) needs no admin key on a laptop.
  * bind()    the item sync against the company the mode names, finding each
  *           item by its exact name (never creating one that exists), with the
  *           income account and taxability read off the existing Lite item so
@@ -24,11 +30,50 @@ var B = require('./pricebook'), I = require('./qbo-items'), Mode = require('./pa
 function fail(m, s) { var e = new Error(m); e.status = s || 409; throw e; }
 function hash(book) { return crypto.createHash('sha256').update(B.stable(book)).digest('hex'); }
 function missing(book) { var have = (book.qbo && book.qbo.items) || {}; return I.items(book).filter(function (i) { return !have[i.key]; }).map(function (i) { return i.key; }); }
+/* The newest enabled release book, the company a new book follows. */
+async function previous(db) {
+  var snap = await db.collection('pricebook').get(), best = null;
+  snap.forEach(function (d) {
+    var b = d.data() || {};
+    if (b.version === B.VERSION || b.enabled !== true || /-proposed$/.test(b.version || '')) return;
+    if (!best || String(b.version) > String(best.version)) best = b;
+  });
+  return best;
+}
+/* The book seed() would write, and what it adds to the one before it. */
+async function plan(db) {
+  var book = B.proposed(), prior = await previous(db);
+  if (prior && prior.qbo && prior.qbo.env) { book.qbo.env = prior.qbo.env; book.qbo.realmId = prior.qbo.realmId || null; }
+  B.validate(book);
+  var added = prior ? Object.keys(book.modules).filter(function (k) { return !(prior.modules || {})[k]; }) : Object.keys(book.modules);
+  var repriced = prior ? Object.keys(book.modules).filter(function (k) { return prior.modules && prior.modules[k] && prior.modules[k].priceCents !== book.modules[k].priceCents; }) : [];
+  return { book: book, prior: prior, added: added, repriced: repriced };
+}
+async function seed(db, apply, expectedHash) {
+  var stored = await db.doc('pricebook/' + B.VERSION).get();
+  if (stored.exists) return { version: B.VERSION, seeded: true, unchanged: true };
+  var p = await plan(db), h = hash(p.book);
+  var out = { dryRun: !apply, version: p.book.version, from: p.prior ? p.prior.version : null, qboEnv: p.book.qbo.env, qboRealm: p.book.qbo.realmId ? String(p.book.qbo.realmId) : null,
+    added: p.added, repriced: p.repriced, expectedHash: h };
+  if (!apply) return out;
+  if (expectedHash !== h) fail('Review the current dry run and supply its hash');
+  await B.seed(db, p.book, true);
+  out.seeded = true;
+  return out;
+}
 async function status(db, deps) {
   deps = deps || { Q: require('./qbo') };
-  var book = await B.load(db, B.VERSION), conn = await deps.Q.load();
+  var book;
+  try { book = await B.load(db, B.VERSION); }
+  catch (e) {
+    if (!/not seeded/i.test(String(e && e.message))) throw e;
+    var s = await seed(db, false), conn0 = await deps.Q.load();
+    return { version: B.VERSION, seeded: false, enabled: false, provider: Mode.provider(), mode: Mode.live() ? 'live' : Mode.open() ? Mode.env() : 'off',
+      connection: conn0 ? { env: conn0.env || null, realmId: conn0.realmId ? String(conn0.realmId) : null } : null, seed: s };
+  }
+  var conn = await deps.Q.load();
   var gaps = missing(book);
-  return { version: book.version, enabled: !!book.enabled, frozen: !!book.frozen, used: book.usedAt != null, provider: Mode.provider(),
+  return { version: book.version, seeded: true, enabled: !!book.enabled, frozen: !!book.frozen, used: book.usedAt != null, provider: Mode.provider(),
     mode: Mode.live() ? 'live' : Mode.open() ? Mode.env() : 'off', bookEnv: book.qbo && book.qbo.env, bookRealm: book.qbo && book.qbo.realmId ? String(book.qbo.realmId) : null,
     connection: conn ? { env: conn.env || null, realmId: conn.realmId ? String(conn.realmId) : null } : null,
     items: { total: I.items(book).length, bound: I.items(book).length - gaps.length, missing: gaps },
@@ -69,4 +114,4 @@ async function bind(db, deps) {
   if (!found) fail('None of the book\'s item names exist in the connected QuickBooks company');
   return I.sync(db, book, { apply: true, noCreate: true, realmId: realm, incomeAccountId: String(found.IncomeAccountRef.value), taxable: found.Taxable === true }, deps);
 }
-module.exports = { status: status, enable: enable, bind: bind, missing: missing, hash: hash };
+module.exports = { status: status, seed: seed, plan: plan, enable: enable, bind: bind, missing: missing, hash: hash };

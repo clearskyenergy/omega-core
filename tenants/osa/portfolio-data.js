@@ -2587,6 +2587,8 @@
     'adoptedAt','importBatch','externalIds','projectType','prescreen',
     'discardReason','discardedAt','discardedBy','links','reevaluateReason',
     'siteNotes','energy','design',
+    /* written by /api/site-intake: which shareable link a site came through */
+    'intake',
     /* written by /api/agent/sites and by the KMZ button below: the traced ring */
     'outline','acres','grid','leaseScreen'];
   function unmapped(deal) {

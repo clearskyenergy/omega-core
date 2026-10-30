@@ -111,6 +111,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     <button class="tab" data-t="proforma">Pro forma</button>
     <button class="tab" data-t="power">Power &amp; bills</button>
     <button class="tab" data-t="deck">Investor deck &amp; capital</button>
+    <button class="tab" data-t="diligence" id="tab-diligence" style="display:none">Diligence</button>
   </div>
   <div class="tabpane active" id="pane-overview"></div>
   <div class="tabpane" id="pane-contacts"></div>
@@ -119,6 +120,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   <div class="tabpane" id="pane-proforma"></div>
   <div class="tabpane" id="pane-power"></div>
   <div class="tabpane" id="pane-deck"></div>
+  <!-- the compute-site diligence (omega-portfolio-diligence.js), only where the workspace's switch is on -->
+  <div class="tabpane" id="pane-diligence"></div>
 </div>
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -135,6 +138,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
 <script src="/omega-newproject.js"></script>
 <!-- the investor deck is the BESS Pro Forma's own (proforma-logic.js); every figure on it is the finance engine's -->
 <script src="/proforma-logic.js"></script>
+<script src="/omega-portfolio-diligence.js"></script>
 <script>
 (function () {
   'use strict';
@@ -193,7 +197,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
   function renderHead() {
     var s = DATA.site;
     document.getElementById('crumb-site').textContent = s.name || 'Site';
-    document.title = (s.name || 'Site') + ' · ClearSky-OMEGA';
+    /* the workspace's own name where the diligence carries it (its white label, else its record), else the platform's */
+    document.title = (s.name || 'Site') + ' · ' + (DATA.diligence && DATA.diligence.brand && DATA.diligence.brand.name ? DATA.diligence.brand.name : 'ClearSky-OMEGA');
     var meter = s.meterOwned === true ? '<span class="pill pill-ok">Meter owned</span>'
       : s.meterOwned === false ? '<span class="pill pill-no">No meter</span>'
       : '<span class="pill pill-unk">Meter: needs verification</span>';
@@ -225,6 +230,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     var n = cap && cap.funded ? 'accepted by ' + esc(cap.awardedToOrg || 'a capital partner') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting' : lm ? 'total project cost \u00b7 after-tax IRR ' + esc(irrPct(lm.irr)) + (lm.auto ? ' \u00b7 from the design' : '') + (lm.host && lm.host.noRevenue ? ' \u00b7 <b style="color:#B45309">the host\u2019s system has no revenue on record: enter the PPA</b>' : '') : s.designModel && s.designModel.missing ? 'the model needs what the design card names' : s.latestDesign ? 'runs by itself from the design' : 'run the compute model';
     return '<div class="fact"><div class="k">Capital</div><div class="v">' + v + '</div><div class="n">' + n + '</div></div>';
   }
+  /* the import's attention flags on the record, as the register keeps them: a list of codes (api/_lib/portfolio/evcs.js) */
+  function flagged(s, code) { return (s.flags || []).some(function (f) { return f && f.code === code; }); }
   /* ── overview ── */
   function renderOverview() {
     var s = DATA.site, sc = s.screening || {}, cm = s.commercial || {};
@@ -249,8 +256,8 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="assume">The PPA the host\u2019s solar + storage is sold under: the compute model prices the host\u2019s system on it, so the IRR and the capital request are the whole project\u2019s. Enter the contract\u2019s own price table and its expected first-year production, and each year is priced as the contract reads (a bank can check it line by line); a rate and an escalator stand in without them. No PPA on record means the host\u2019s system earns the Site Map run\u2019s revenue, or nothing, and the model says so.</div>' +
       '</div><div class="card"><h3>Attention</h3>' +
       '<div class="li-body">' + (open ? '<span class="pill pill-warn">' + open + ' open follow-up' + (open > 1 ? 's' : '') + '</span>' : 'No open follow-ups.') + '</div>' +
-      ((s.flags && s.flags.peakExceedsInstalled) ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
-      ((s.flags && s.flags.meterUnknown) ? '<div class="li-body" style="margin-top:8px">Meter ownership ' + needsVer() + '.</div>' : '') +
+      (flagged(s, 'POWER_EXCEEDS_INSTALLED') ? '<div class="li-body" style="margin-top:8px"><span class="pill pill-warn">Reported peak exceeds installed kW</span> — surfaced, not clamped.</div>' : '') +
+      (flagged(s, 'METER_UNKNOWN') && s.meterOwned == null ? '<div class="li-body" style="margin-top:8px">Meter ownership ' + needsVer() + '.</div>' : '') +
       '</div></div>' +
       '<div class="grid2">' + usageCardHtml(s, fact) + (CANEDIT ? '<div class="card"><h3>Edit site facts</h3>' + editFormHtml(s) + '</div>' : '<div></div>') + '</div>';
     wireEditForm();
@@ -1014,15 +1021,30 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     if (t === 'proforma') renderProforma();
     if (t === 'power') renderPower();
     if (t === 'deck') renderDeck();
+    if (t === 'diligence') renderDiligence();
+  }
+  /* the site's diligence card: the answer's own view, drawn by the shared
+     module; the tab exists only when the answer carries it. Drawn once: a
+     reload hands the card the new answer, so an open form and its last
+     word stay and its listeners are never added twice */
+  var DGC = null;
+  function renderDiligence() {
+    var pane = document.getElementById('pane-diligence');
+    if (!DATA || !DATA.diligence || !window.OmegaDiligence) { if (DGC) { DGC.destroy(); DGC = null; } pane.innerHTML = ''; return; }
+    if (DGC) { DGC.update(DATA.diligence, DATA.site, DATA.files || []); return; }
+    DGC = OmegaDiligence.mountCard(pane, { site: DATA.site, diligence: DATA.diligence, files: DATA.files || [], canEdit: CANEDIT, msg: function (t, ok) { msg(esc(t), ok); },
+      post: function (action, extra) { return api('/api/site-crm', { method: 'POST', json: Object.assign({ org: ORG, action: action }, extra || {}) }); },
+      reload: function () { return load(true); }, remount: function () { load(true); }, next: null });
   }
   function load(keepTab) {
     msg('');
     api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(SITE)).then(function (j) {
       DATA = j; CANEDIT = !!j.canEdit; CANARCHIVE = !!j.canArchive;
+      document.getElementById('tab-diligence').style.display = j.diligence ? '' : 'none';
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (e) {}
       renderHead();
       if (j.autoModel && j.autoModel.latestModel) { var am = j.autoModel.latestModel; msg('The compute model ran by itself on the Site Map design: ' + (am.title || am.pods + ' unit(s)') + ', after-tax IRR ' + irrPct(am.irr) + ', total project cost ' + money(am.totalProjectCost) + '.', true); }
-      showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : window.location.hash === '#power' ? 'power' : 'overview'));
+      showTab(keepTab ? TAB : (window.location.hash === '#deck' ? 'deck' : window.location.hash === '#power' ? 'power' : window.location.hash === '#diligence' && j.diligence ? 'diligence' : 'overview'));
     }).catch(function (e) {
       document.getElementById('site-head').innerHTML = '<div class="err">' + esc(e.message) + '</div>';
       try { if (window.OmegaSplash) OmegaSplash.done(); } catch (x) {}

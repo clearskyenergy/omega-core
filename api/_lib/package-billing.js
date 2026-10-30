@@ -38,10 +38,22 @@ var live = Mode.live;
 /* reading (reconcile): an invoice issued under an earlier price book is
    still read back after the next book is released; only ISSUING needs the
    current version. Without this every existing workspace's payment would be
-   refused (and a webhook acknowledged) the day VERSION is renamed. */
+   refused (and a webhook acknowledged) the day VERSION is renamed.
+   ...or the workspace's OWN book (Tommy, 2026-10-20, when 2026-11 added
+   Omega Maximus: existing subscriptions keep their book). A packaged
+   workspace pinned to an enabled release book keeps renewing, changing and
+   paying at the prices it bought; a new book never moves it. Staff move it
+   onto the newest book by activating it there. A new package, a legacy
+   plan's add-ons and anything under a -proposed book still need the
+   current version. */
+function issuable(c) {
+  if (c.book.version === B.VERSION) return true;
+  var pinned = !!(c.billing && c.billing.packaged === true && c.billing.pricebookVersion === c.book.version);
+  return pinned && c.book.enabled === true && !/-proposed$/.test(c.book.version);
+}
 function guard(c, rail, reading) {
   if (process.env.PACKAGING_BILLING_ENABLED !== 'true') fail('Packaging billing is disabled');
-  var provider = rail || D.providerOf(c.billing), current = reading || c.book.version === B.VERSION;
+  var provider = rail || D.providerOf(c.billing), current = reading || issuable(c);
   if (Mode.live(provider)) {
     if (provider === 'stripe') {
       if (!c.book.enabled || !current || /-proposed$/.test(c.book.version)) fail('An enabled release price book is required to bill live through Stripe');

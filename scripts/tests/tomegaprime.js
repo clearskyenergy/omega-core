@@ -11,11 +11,16 @@
  *   - arrange(), feed(), conduitPath(), pathFt() and layout v2 (C2): the
  *     gear row and its integration flags, the editor's own ground length,
  *     the hash, v1 → v2;
+ *   - subName(): HIFLD's unnamed substations and taps ('UNKNOWN307104',
+ *     'TAP302679') shown in words with their number, everywhere the page
+ *     names a substation, the record and the door keeping the raw name;
  *   - projectDoc(), patch(), restore(), runInput() (C3): the record a
  *     project is created and resumed with, touching no drawing key beyond
  *     the empty arrays a new project starts with; unitFor(), the ONE rule
  *     for the unit a record resumes with (Prime, the quote server, Site
- *     Map), which knows the shipped R60 and XXL by key;
+ *     Map), which knows the shipped R60 and XXL by key; offered(), the ONE
+ *     rule for whether the workspace's list offers it (the quote server
+ *     and the order hand-off), and a unit chosen again with the drawing kept;
  *   - omega-prime.html holds no verdict rule and no price arithmetic: it asks
  *     the national hosting door through the one client (omega-grid-verdict.js
  *     hosting / fromHosting / hostingSummary), lists units through PP.units
@@ -122,6 +127,16 @@ assert.deepEqual(keysOf(PP.units({ orgId: 'fenecon.com', owner: ['fenecon'] }, R
 /* the readers */
 assert.equal(PP.zipOf('3400 S Federal St, Chicago, IL, 60616'), '60616'); assert.equal(PP.zipOf('12 Main St, Joliet IL 60435-1234'), '60435'); assert.equal(PP.zipOf('no zip here'), ''); count += 3;
 assert.deepEqual(PP.peaks('1,420  1,388\n1402, 1510 kW'), [1420, 1388, 1402, 1510]); assert.equal(PP.peaks('1 2 3 4 5 6 7 8 9 10 11 12 13 14').length, 12); assert.deepEqual(PP.peaks(''), []); count += 3;
+/* a substation's name as shown: HIFLD's unnamed records (the nearest to
+   29 W Main St, Mesa is UNKNOWN307104; the third, TAP302679) read as words
+   with HIFLD's number kept; a real name, even one that starts the same way,
+   is shown as it is; subOf keeps the raw name on the record */
+[['UNKNOWN307104', 'Unnamed substation (HIFLD 307104)'], ['unknown 12', 'Unnamed substation (HIFLD 12)'], ['UNKNOWN', 'Unnamed substation'], [' UNKNOWN307104 ', 'Unnamed substation (HIFLD 307104)'],
+ ['TAP302679', 'Unnamed tap (HIFLD 302679)'], ['TAP', 'Unnamed tap'],
+ ['LEWIS', 'LEWIS'], ['TAPIA 1102', 'TAPIA 1102'], ['UNKNOWN RIDGE', 'UNKNOWN RIDGE'], ['Crawford TSS 21', 'Crawford TSS 21'], ['', ''], [null, ''], [undefined, '']].forEach(function (c) {
+  assert.equal(PP.subName(c[0]), c[1], 'subName(' + JSON.stringify(c[0]) + ')'); count++;
+});
+assert.equal(PP.sub({ name: 'UNKNOWN307104', kv: -999999, mi: 0.49 }).name, 'UNKNOWN307104', 'the record keeps the name HIFLD gave'); count++;
 
 /* ── 2 · arrangement, ground length, layout v2 ──────────────────────── */
 var R = 6378137, RAD = Math.PI / 180, FTM = 3.280839895;
@@ -447,6 +462,41 @@ near(PP.pathFt([rX.layout.unit.c, rX.layout.disco.c]), 10 + 5 + 8 + 5 + 1.5, 0.0
 assert.deepEqual(PP.restore(JSON.parse(JSON.stringify(v1x)), [fenXxl]).layout, rX.layout, 'the same layout in FENECON\'s workspace and in any other'); count++;
 assert.equal(PP.runInput(rX.unit, rX.layout).poiFt, Math.round(rX.layout.conduit.ft), 'and the same Run input'); count++;
 
+/* ── 4b · is it on the list? ONE rule, PP.offered(list, unit) ──────────
+   unitFor() resumes a record with its unit wherever it is opened; a
+   PROPOSAL offers the unit to a customer, so the quote server prices, and
+   the order hand-off orders, only the list's own entry: by key, else the
+   same product under another key (units() keeps one entry per SKU). The
+   XXL a record kept from before 2026-10-17 is on no workspace's list but
+   FENECON's (2026-10-20, Tommy, from the ClearSky workspace: "The battery
+   on this project (FENECON-IND-XXL) is not in your workspace’s list any
+   more; choose it again in Omega Prime, then quote", with no way to). */
+assert.equal(PP.offered(noTenant, LG), noTenant[0], 'by key: the list\'s own entry, not a copy'); count++;
+var forgedLG = Object.assign({}, LG, { kw: 99999, kwh: 1, mfr: 'Evil Batteries', name: 'FORGED', vendorOrgId: 'evil.example' });
+assert.equal(PP.offered(noTenant, forgedLG), noTenant[0], 'what a record says about its unit only names which one: the figures are the list\'s'); count++;
+var rekeyed = Object.assign(PP.snapshot(SM), { key: 'SUNWAVE-SM-OLD' });
+assert.equal(PP.offered(noTenant, rekeyed), noTenant[1], 'the same product under another key: its SKU'); count++;
+assert.equal(PP.offered(noTenant, { key: '', sku: 'cc sm 1000' }), noTenant[1], 'the SKU read as units() reads it, case and punctuation aside'); count++;
+assert.equal(PP.offered(noTenant, { key: 'CC-R60' }), noTenant[3], 'a key alone'); count++;
+assert.equal(PP.offered(noTenant, PP.XXL), null, 'the XXL is on no generic workspace\'s list'); count++;
+assert.equal(PP.offered(noTenant, PP.unitFor(v1x, noTenant)), null, 'nor is the XXL a v1 record resumes with'); count++;
+assert.equal(PP.offered([fenXxl].concat(noTenant), PP.unitFor(v1x, [fenXxl])), fenXxl, 'FENECON\'s own list offers it'); count++;
+assert.equal(PP.offered(noTenant, { key: 'GONE' }), null); assert.equal(PP.offered(noTenant, null), null); assert.equal(PP.offered(null, LG), null); assert.equal(PP.offered(noTenant, {}), null); count += 4;
+/* the rep chooses a unit the list offers (the Proposal step): the page's
+   own state keeps the area, where the unit stands, the service point and
+   the conduit, and PP.layout places the new unit's gear; the patch names it */
+var kx = PP.restore(JSON.parse(JSON.stringify(v1x)), noTenant), LK = kx.layout, pick = noTenant[0];
+var swap = { addr: base.addr, lat: C.lat, lng: C.lng, step: 'quote', unit: pick, area: LK.area, unitAt: LK.unit.c, poi: LK.poi, conduit: !!LK.conduit };
+var LS = PP.layout(swap);
+assert.deepEqual(LS.area, LK.area); assert.deepEqual(LS.unit.c, LK.unit.c); assert.deepEqual(LS.poi, LK.poi); count += 3;
+assert.ok(LS.conduit && LS.conduit.pts[2].lat === LK.poi.lat && LS.conduit.pts[2].lng === LK.poi.lng, 'the conduit still runs to the service point'); count++;
+assert.equal(LS.unitKey, LGK); assert.equal(LS.unit.lFt, 20); assert.equal(LS.unit.footprint, 'reference'); assert.ok(LS.hash && LS.hash !== LK.hash, 'a new layout, its own hash'); count += 4;
+near(PP.pathFt([LS.unit.c, LS.xfmr.c]), 10 + 5 + 4, 0.05, 'the chosen unit\'s transformer 5 ft clear of it');
+var swapP = PP.patch(swap, who, 'TS', { unitChanged: true });
+assert.equal(swapP['prime.unitKey'], LGK); assert.deepEqual(swapP['prime.unit'], pick); assert.equal(swapP.bessList[0].catalogKey, LGK, 'the battery entry Site Map reads follows it'); count += 3;
+assert.equal(PP.offered(noTenant, PP.unitFor({ prime: { unitKey: swapP['prime.unitKey'], unit: swapP['prime.unit'] } }, noTenant)), noTenant[0], 'and the record now names a unit the list offers'); count++;
+assert.ok(!('bessList' in PP.patch(swap, who, 'TS', { unitChanged: true, editedInSiteMap: true })), 'once Site Map has saved, its battery list is its own'); count++;
+
 /* ── the page ───────────────────────────────────────────────────────── */
 var pg = read('omega-prime.html');
 var js = pg.slice(pg.lastIndexOf('<script>'), pg.lastIndexOf('</script>'));
@@ -458,6 +508,14 @@ assert.match(js, /var f = GV && S\.hosting \? GV\.fromHosting\(S\.hosting\) : nu
 assert.match(js, /S\.hostingSum = GV\.hostingSummary\(res\)/, 'prime.hosting is the client\'s hostingSummary'); count++;
 assert.ok(js.indexOf('GV.ask(') < 0 && js.indexOf('GV.circuitBody(') < 0 && js.indexOf('probePoint') < 0 && js.indexOf('OmegaComEdLayers') < 0, 'the one-utility probe is gone'); count++;
 assert.ok(pg.indexOf('omega-comed-layers.js') < 0, 'omega-comed-layers.js is not loaded'); count++;
+/* every substation name the page draws goes through PP.subName (the map
+   labels, the inspector, the circuit panel, the Design side panel); the
+   door is asked with the raw name, and HIFLD's -999999 is never printed */
+assert.equal((js.match(/PP\.subName\(/g) || []).length, 6, 'six places draw a substation name, each through PP.subName'); count++;
+assert.ok(!/esc\((s|S\.sub)\.name\)|S\.sub\.name \+ '/.test(js), 'no substation name is drawn raw'); count++;
+assert.match(js, /substation: S\.sub \? \{ name: S\.sub\.name, kv: S\.sub\.kv,/, 'the door is asked with the name HIFLD gave'); count++;
+assert.match(js, /\(S\.sub\.kv > 0 \? esc\(S\.sub\.kv\) \+ ' kV · ' : ''\)/, 'a voltage HIFLD does not have (-999999) is not printed'); count++;
+assert.match(js, /<dt>Lines in<\/dt><dd>' \+ \(s\.lines > 0 \? s\.lines : '—'\)/, 'nor a line count it does not have'); count++;
 /* the shared modules, in order: the products, Clean Cell's catalog, the grid client, Prime's pure half, the deck */
 var order = ['/omega-bess-products.js', '/omega-cleancell-catalog.js?v=20261010-revh2', '/omega-site-catalogs.js', '/omega-grid-verdict.js', '/omega-prime-project.js', '/omega-quote-deck.js'].map(function (f) { return pg.indexOf('<script src="' + f + '"></script>'); });
 assert.ok(order.every(function (i, k) { return i > 0 && (k === 0 || i > order[k - 1]); }), 'the shared modules load in order: ' + order.join(',')); count++;
@@ -480,7 +538,8 @@ assert.ok(js.indexOf('95,000') < 0 && js.indexOf('unitWords(UNIT)') > 0, 'the gu
 /* the record: created at Start by projectDoc, every change after a PP.patch */
 assert.match(js, /db\.collection\('projects'\)\.add\(PP\.projectDoc\(docState\('start'\), w, FV\.serverTimestamp\(\)\)\)/); count++;
 assert.match(js, /history\.replaceState\(null, '', '\/omega-prime\?id=' \+ encodeURIComponent\(ref\.id\)\)/); count++;
-assert.match(js, /var p = PP\.patch\(docState\(\), S\.who \|\| \{\}, FV\.serverTimestamp\(\), \{ grid: parts, editedInSiteMap: S\.editedInSiteMap \}\);/); count++;
+assert.match(js, /var p = PP\.patch\(docState\(\), S\.who \|\| \{\}, FV\.serverTimestamp\(\), \{ grid: parts, editedInSiteMap: S\.editedInSiteMap, unitChanged: swapped \}\);/); count++;
+assert.match(js, /var parts = SV\.grid, swapped = SV\.unitChanged; SV\.grid = \{\}; SV\.unitChanged = false;/); assert.match(js, /if \(swapped\) SV\.unitChanged = true;/, 'a refused patch keeps the unit change for the next one'); count += 2;
 assert.match(js, /\.doc\(S\.projectId\)\.update\(p\)/); count++;
 assert.equal((js.match(/\.update\(/g) || []).length, 1, 'one write path after the create: the patch'); count++;
 assert.ok(!/\.set\(|updatedAt:/.test(js), 'no whole-document write and no updatedAt of its own (PP.patch decides it)'); count++;
@@ -508,6 +567,20 @@ assert.match(js, /flushSave\(\)\.then\(function \(\) \{\s*if \(SV\.state === 'er
 assert.match(js, /fetch\('\/api\/customer-quote' \+ \(query \? '\?' \+ query : ''\), o\)/); count++;
 assert.match(js, /cq\('POST', formBody\('preview'\)\)/); assert.match(js, /cq\('POST', formBody\('save'\)\)/); assert.match(js, /action: 'send', id: q\.id, sendId: QS\.sendId, deliver: deliver/); count += 3;
 assert.match(js, /'projectId=' \+ encodeURIComponent\(S\.projectId\)/, 'the screen reopens the project\'s latest quote'); count++;
+/* the unit to quote (2026-10-20): the server's word on it (GET ?projectId=
+   unit, the rule the door and the hand-off run), never the page's own; a
+   chooser on the Proposal step with Preview and Save held until a unit is
+   chosen; the choice is the page's ordinary patch, the conduit kept */
+assert.match(pg, /<div class="pq-unit" id="pqUnit" hidden>/); assert.match(pg, /<select id="pq-unit-sel" class="unitpick"/); assert.match(pg, /<button class="primary" id="pq-unit-use" type="button">Quote this unit<\/button>/); count += 3;
+assert.equal((js.match(/QS\.list = sortRows\(j\.quotes\); askUnit\(j\.unit\);/g) || []).length, 2, 'opening the step and every re-read take the server\'s word on the unit'); count++;
+assert.match(js, /function preview\(\) \{\s*if \(QS\.busy \|\| QS\.unit\) return;/); assert.match(js, /function save\(\) \{\s*if \(QS\.busy \|\| QS\.unit\) return;/); count += 2;
+assert.match(js, /if \(QS\.busy \|\| QS\.unit\) b\.setAttribute\('aria-disabled', 'true'\)/, 'Preview and Save wait for the unit'); count++;
+assert.match(js, /function refusedNow\(e\) \{ busy\(false\); status\(e\.message, true\); if \(e\.status === 409\) loadList\(\); \}/, 'a refusal reads the server\'s word on the unit again'); count++;
+assert.match(js, /function useUnit\(\) \{[\s\S]{0,900}SV\.unitChanged = true; QS\.unit = null;[\s\S]{0,300}changed\(true\);/, 'the choice patches the record, the conduit kept'); count++;
+assert.match(js, /if \(QS\.saved && QS\.saved\.id && !QS\.savedHash\) QS\.savedHash = sourceKey\(\);\s*BASE = c; UNIT = c;/, 'a proposal saved on the old unit then reads as changed'); count++;
+assert.match(js, /if \(S\.hosting \|\| S\.hostingSum\) \{ S\.hosting = null; askHosting\(\)\['catch'\]\(function \(\) \{\}\); \}/, 'and a circuit judged for the old unit is asked again for the new one'); count++;
+assert.match(js, /else if \(QS\.unit\) h \+= '<div class="flag" id="pqUnitHeld">/, 'and while the unit is still to be chosen, a saved proposal is never offered to send'); count++;
+assert.ok(!/PP\.offered\(/.test(js) && !/PP\.units\(/.test(js.slice(js.indexOf('function askUnit('), js.indexOf('function useUnit('))), 'the page never judges the list itself'); count++;
 assert.match(js, /D\.body\(v\)/); assert.match(js, /D\.print\(QS\.view\)/); assert.match(js, /st\.textContent = D\.css\(\)/); count += 3;
 assert.match(js, /fetch\('\/api\/tenant-branding', \{ method: 'POST'[\s\S]{0,200}JSON\.stringify\(\{ orgId: wsOrg\(\), company: co \}\)/); count++;
 assert.ok(!/markupPct \* |\* \(1 \+|sellCents|marginCents/.test(js), 'the page does no arithmetic on the price: the server does'); count++;
@@ -515,7 +588,7 @@ assert.ok(!/markupPct \* |\* \(1 \+|sellCents|marginCents/.test(js), 'the page d
 assert.match(js, /return '\/omega-logic\?org=' \+ encodeURIComponent\(ws\) \+ '&order=' \+ encodeURIComponent\(h\.orderId\) \+ '#orders';/); assert.match(js, /return '\/omega-logic\?org=' \+ encodeURIComponent\(ws\);/); count += 2;
 assert.match(js, /var ws = wsOrg\(\)/); assert.match(js, /function wsOrg\(\) \{ return S\.orgId \|\| \(S\.who && S\.who\.orgId\) \|\| ''; \}/); count += 2;
 assert.match(js, /\/rfq\.html#customer-' \+ encodeURIComponent\(q\.id\)/); assert.match(js, /\/logic-custody\.html\?org=' \+ encodeURIComponent\(custodyOrg\)/); assert.match(js, /action: 'handoff', id: q\.id/); count += 3;
-assert.match(pg, /\['start', 'Site'\], \['atlas', 'Grid Atlas'\], \['circuit', 'Circuit'\], \['load', 'Load'\], \['map', 'Site Map'\], \['quote', 'Proposal'\], \['track', 'Track'\]/, 'the path bar'); count++;
+assert.match(pg, /\['start', 'Site'\], \['atlas', 'Grid Atlas'\], \['circuit', 'Circuit'\], \['load', 'Load'\], \['map', 'Design'\], \['quote', 'Proposal'\], \['track', 'Track'\]/, 'the path bar'); count++;
 assert.ok(!/=>|`|\bconst\s|\blet\s|\basync\s/.test(js), 'the page script is ES5'); count++;
 /* main #348 on this page: every project type, Site Map's link read, a
    unit that is not a battery carried through as quote required, Omega
@@ -542,6 +615,33 @@ assert.match(js, /if \(S\.projectId && S\.editorVersion === 'v2'\) return '\/edi
 assert.match(js, /fetch\('\/api\/rfq', \{ method: 'POST'/); assert.match(js, /sku: UNIT\.sku \|\| UNIT\.key \|\| ''/); assert.match(js, /estimateUsd: S\.run && S\.run\.totalUsd != null \? S\.run\.totalUsd : null/); count += 3;
 assert.ok(js.indexOf("+ oemBox() + listHtml('pq')") > 0 && js.indexOf('h += oemBox();') > 0 && /'<\/div>' \+ oemBox\(\);/.test(js), 'Send to the OEM sits on the rep\'s side, battery or not'); count++;
 assert.ok(!/q-oem|api\/rfq/.test(read('omega-quote-deck.js')), 'never on the customer\'s deck'); count++;
+/* Prime's own drawing step is "Design", and the proposal is priced from it:
+   Site Map is the detailed engineering editor, never "the design of record"
+   over Prime's (2026-10-20, Tommy) */
+assert.ok(pg.indexOf('design of record') < 0 && pg.indexOf('Design it in Site Map') < 0 && pg.indexOf("from this site's map") < 0, 'the proposal is priced from the design here'); count++;
+assert.match(pg, /from the design you drew here in Prime/); assert.match(js, /\$\('#edTitle'\)\.textContent = 'Design · ' \+ S\.addr;/); count += 2;
+/* Delete on "Continue a site" (2026-10-20, Tommy: "need to be able to delete
+   these things as well"): the project itself, asked first, never a site a
+   customer has a proposal from or that has an order */
+assert.match(js, /function deletable\(p\) \{ var q = p && p\.quote && p\.quote\.status; return !!p && !p\.order && \['sent', 'viewed', 'approved'\]\.indexOf\(q\) < 0; \}/); count++;
+assert.match(js, /if \(!window\.confirm\('Delete "' \+ name \+ '"\?/); assert.match(js, /firebase\.firestore\(\)\.collection\('projects'\)\.doc\(id\)\.delete\(\)/); count += 2;
+assert.equal((js.match(/\.delete\(\)/g) || []).length, 1, 'one delete on the page: the site, asked first'); count++;
+/* the guide moves (2026-10-20, Tommy: "this panel needs to be able to be
+   moved"), kept in this browser, docked on a phone */
+assert.match(js, /KEY = 'omega-prime:guide-at'/); assert.match(js, /h\.addEventListener\('pointerdown'/); assert.match(js, /matchMedia\('\(max-width: 760px\)'\)/); assert.match(pg, /#guide\.moved\{right:auto;bottom:auto\}/); count += 4;
+/* a calendar day stays that day in every time zone: the ladder carries
+   custody's days as midnight UTC, and Track read "Shipped Sep 27" in
+   Chicago for a unit shipped on Sep 28 (2026-10-20). The page's own reader,
+   run under real time zones west and east of UTC. */
+var dayFns = pg.slice(pg.indexOf('function ymdOf('), pg.indexOf('/* a valid-until DATE'));
+function daysIn(tz) {
+  return JSON.parse(require('child_process').execFileSync(process.execPath, ['-e', dayFns + ';process.stdout.write(JSON.stringify([day("2026-09-28T00:00:00.000Z"), day("2026-09-28"), day("2026-09-28T15:00:00.000Z"), day("2026-10-06T00:00:00Z")]))'],
+    { env: Object.assign({}, process.env, { TZ: tz }) }).toString());
+}
+['America/Chicago', 'America/Phoenix', 'Pacific/Honolulu', 'UTC', 'Asia/Tokyo'].forEach(function (tz) {
+  /* a real instant (3 pm UTC) still reads in local time: past midnight in Tokyo */
+  assert.deepEqual(daysIn(tz), ['Sep 28, 2026', 'Sep 28, 2026', tz === 'Asia/Tokyo' ? 'Sep 29, 2026' : 'Sep 28, 2026', 'Oct 6, 2026'], 'a ladder day is its calendar day in ' + tz); count++;
+});
 assert.match(ed, /<script src="\/omega-grid-panel\.js"><\/script>[\s\S]{0,400}<script src="\/omega-prime-handoff\.js"><\/script>/); count++;
 
 /* The Site Map hand-off's VM checks moved to scripts/tests/tprimetransfer.js (2026-10-17). */

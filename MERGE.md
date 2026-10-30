@@ -1,5 +1,105 @@
 # MERGE.md — how omega-core was assembled from 16 legacy repos
 
+## Who serves this point, on all three surfaces (2026-10-20)
+
+Prime's Circuit step lists who may serve a point and what each utility
+publishes (below). Site Map's Grid panel and Site Plan's Grid Atlas layer
+still listed names only, and only when the territory was not confident.
+The list's rule and its words moved out of `omega-prime.html` into the one
+client: `omega-grid-verdict.js` `whoServes(res)` returns:
+
+- the heading;
+- each strong candidate: its name (" — the one read here" when more than
+  one is mapped), why the maps name it, what its utility publishes and the
+  route it offers instead, and its own pages, https only. The read
+  utility's page and route are never given twice;
+- the bill line;
+- the candidates that cannot be the point's, in a fold with their reasons.
+
+Prime's `candidatesBlock`, the panel's `candidates()` and the layer's
+`whoLines()` each draw it in their own markup, so the words and the order
+are the same on all three. Prime's output is byte for byte what it was. No
+page carries a word of the list. Site Plan's card painter learned a bold
+name and a fold, and a link's last word stays beside its ↗. Held by
+`tgridverdict.js` and `tgridlayer.js` (downtown Mesa, the city's map down,
+Springfield, every coverage case, each against Prime's own
+`candidatesBlock` cut out of the page) and by `render-grid-panel.js`
+(both editors, on a desktop and a 390 px phone).
+
+## Arizona, utility by utility, and the City of Mesa's own map (2026-10-20)
+
+Tommy's 29 W Main St, Mesa read "outside ComEd's territory" on production
+(the ComEd-only Circuit step #354 replaced). The national door named the
+City of Mesa beside SRP and APS and could never be sure. Now:
+
+- Arizona is checked utility by utility from primary sources
+  (`docs/HOSTING-ARIZONA.md`). No Arizona utility publishes distribution
+  hosting capacity, so nothing new is read as a figure. Each registry entry
+  says so plainly, names the `route` its utility offers instead (an ACC
+  Pre-Application Report under R14-2-2616, SRP's own Screen A, Mesa's
+  interconnection application) and links its own pages and, where it has
+  one, its own address lookup (`check`).
+- `utility-territory.js` `SERVICE_AREAS` asks a utility's OWN service-area
+  map where its terms allow a point lookup. Today that is the City of
+  Mesa's, from the city's GIS, asked with its polygon. 40 m or more inside
+  names the City of Mesa with confidence; on the edge it is a candidate;
+  outside, its stand-in is weak and SRP's caution names APS's islands
+  alone. SRP's and APS's own boundary layers are licensed to their own apps
+  and are never asked.
+- The door's candidates each carry what their utility publishes
+  (`HS.publication`). Prime's Circuit step lists them, "Who serves this
+  point", wherever no figure is read, and folds the polygons that are not
+  the point's utility away with the reason. Its panel now ends above the
+  floating guide, so Next is never under it.
+
+Site Map's Grid panel and Site Plan's layer draw the same door: downtown
+Mesa now reads the City of Mesa with confidence there too. Their tests keep
+a "city's map down" case for the many-utilities rendering.
+
+## Site Map's Grid panel on the national door (2026-10-17)
+
+Tommy: "it should not just run comed information if its outside of comed it
+needs to look via api for the utility details." Prime already asked the
+national door; Site Map's Grid panel still asked `OmegaComEdLayers`, so a
+site outside ComEd read "no map" in the editor and its real utility in
+Prime. Now `omega-grid-panel.js` `circuit()` asks `GV.hosting` (`POST
+/api/hosting-capacity`) with the site point, the Guided Build's unit and the
+Grid Atlas service's nearest substation, and draws every coverage case the
+way Prime's circuit step does: the utility's name, every candidate when the
+territory is not confident (downtown Mesa: the City of Mesa beside Salt
+River Project and APS), where the power comes from, the provenance with the
+door's request log, and the utility's own map. The queue and side words
+follow the answer (`queueNetted`, `basis`, a null `queuedKw`); ComEd keeps
+its sentence byte for byte. `S.grid` is written through `GV.fromHosting`,
+the record Prime writes. The coverage words are in the client
+(`OmegaGridVerdict.COVERAGE`, Prime's words; `tgridverdict.js` holds
+Prime's own copy to them). Gone with the probe: the panel's circuit picker
+(the door judges the nearest circuit with a published figure and the panel
+lists the others) and `omega-comed-layers.js` from `editor.html` (nothing
+else there used it). The client keeps `circuitBody()`, `ask()` and
+`fields()` for a page that still reads ComEd's probe itself. A
+door that does not answer is said and records nothing. Held by
+`scripts/tests/tgridverdict.js` (the real panel, client and door's `run()`
+on a fake network) and `scripts/render-grid-panel.js` (in `check:pages`:
+the real editor's Grid Check at ComEd and Mesa, and on a 390 px phone).
+
+Site Plan's Grid Atlas layer (`omega-editor-v2-grid.js`, from main's Site
+Plan trial) followed in the same PR. It routed in the browser: ComEd's probe
+inside ComEd, nothing for the rest of Illinois, and for any other state a
+`POST /api/hosting-capacity` expecting a `{covered, empty, circuit, say}`
+answer no endpoint gave; on #354's door it would have read every non-ComEd
+site as "No open hosting layer". Now it is one `GV.hosting` with the
+drawing's point, battery and feeding substation, its card's lines are drawn
+from the answer (utility and coverage, candidates, the circuit with the
+queue words the answer calls for, the server's note, where the power comes
+from, the utility's own map as an https link the card renderer now draws),
+its own token path and `omega-comed-layers.js` are gone from Site Plan, and
+the client keeps `circuitSourceLine`/`hostingSourceLine`, `circuitBody`,
+`ask` and `fields` for Prime v2 (#346). `scripts/tests/tgridlayer.js` runs
+it on the real door (ComEd, Mesa, Springfield IL, a failed door);
+`teditorv2auth.js` holds the one token path; `render-grid-panel.js` covers
+it in Chromium.
+
 ## Omega Prime → Omega Teleios (2026-10-17)
 
 Tommy: Prime must print a quote, use Clean Cell's units (FENECON out), carry
@@ -37,8 +137,8 @@ circuit step must read the real utility. What changed, and where it lives:
   `_geoReprojectAll`, so `omegaRescaleElements` never runs on a map move and
   placed gear keeps its build-zoom pixel size when the rep zooms out.
 - **Prime no longer loads `omega-comed-layers.js`**: its circuit is the
-  national `/api/hosting-capacity`. Site Finder and the editor's Grid panel
-  still use the ComEd module (moving the panel onto the door is next).
+  national `/api/hosting-capacity`. The editor's Grid panel followed it onto
+  the door (below); the Site Finder still uses the ComEd module.
 - Still different engines: Prime's Run is `/api/price-site`; Site Map's Run
   is `editor-cost`. The proposal is priced by the former, from Prime's layout.
 
@@ -58,6 +158,90 @@ never a drawing key; Site Map opens it with `?from=prime`
 the Guided Build opened, no forged elements). Held by
 `scripts/tests/tomegaprime.js` and `scripts/render-omega-prime.js`.
 
+## Equipment keeps its true footprint through a zoom (2026-10-17)
+
+Found by the Omega Prime transfer (clearskyenergy/omega-core#354; Tommy, of
+the transfer: "it all needs to match"): a drawing built at true footprints
+matched at the zoom it was built at and drifted as soon as the rep zoomed.
+`omegaRescaleElements` (ELEMENT ZOOM SCALING), which redraws equipment from
+its footprint in feet, was a wrapper on `window._geoReprojectAll`, and the
+unified anchor engine's `standDown()` replaces that whole chain at boot, so
+it never ran (0 calls in Chromium). A second scaler, OmegaGeo (EAGER
+GEO-ANCHORING), sized gear instead, from a ground size it read off the
+PIXELS: a unit held at its 28 px floor read back as a 10 ft transformer, and
+when the first map move after placing was a zoom it divided the old zoom's
+pixels by the new scale (a 500 kWh BESS stamped 20.4 ft, drawn 112 px at
+zoom 21 where its 8 ft is 44), every unit on a 22 px floor, so Prime's gear
+5 ft apart overlapped zoomed out. Now:
+- the anchor engine's `run()` sizes equipment itself, after every element
+  is on its anchor, through `omegaRescaleElementsOnce` (once per animation
+  frame; a document that is not painting, at most every 250 ms), and the
+  wrapper `standDown` discarded is gone: one caller, one place;
+- the floor a unit keeps at every zoom is the one it was placed with, in
+  `omegaRescaleElements`: `el.minW/minH` (`_evAdd`'s 28 x 20 / 14 x 12,
+  Omega Prime's 4 px), else Insert's drop floor (`OmegaInsert.floorPx`,
+  22 x 10, now one constant in that module), else 10 x 8;
+- OmegaGeo leaves equipment with a footprint (`omegaElementFootprint`, the
+  one rule) to the rescale, in `stampSizes` / `rescale` / `syncDom`, and
+  stamps its footprint as its ground size (`_geoWFt`, read by the takeoff
+  and the GeoJSON export); it still sizes what has no footprint;
+- a size set by hand is recorded in feet, or the reconnected rescale would
+  put the old size back on the next pass: a width typed in the properties
+  panel (`uP('w')`, as the drag-resize path already did), a DCFC unit typed
+  in feet (`OmegaDCFC.setUnitFt`, which kept it only in `evFtL/evFtW`, now
+  also read first by `_elFootprintFt` for projects saved before), a unit
+  scaled in the 3D site view (`applyModelEdit`), and a battery the
+  multi-piece Solar + Storage build sizes to its rating (it kept `_evAdd`'s
+  unrated 10 x 5 ft); a selected unit keeps its outline when it is redrawn.
+Held by `scripts/render-element-zoom.js` (in `check:pages`; the real editor
+in Chromium on a new Maps double, `scripts/_lib/gmaps-double.js`: guided-
+build, Prime and Insert gear through zooms 17–22, every box its footprint x
+pxPerFt within a pixel or its placement floor, centred on its anchor, the
+size moving with the position before the map is idle, never two rescales in
+a frame; Prime's 2 ft marker, `primeFootprint: 'none'`, once #354 is in) and
+`scripts/tests/telementzoom.js`. Not changed: equipment with no footprint
+(a unit saved before `_evAdd` recorded one, a BESS assembly, a text note)
+is still OmegaGeo's, whose stamp has the same stale-zoom fault.
+
+## Gear with no footprint recorded on it, through a zoom (2026-10-20)
+
+The follow-up #363 left. What carries no footprint of its own is drawn from
+the pixels it was placed at, and three things got that wrong:
+- **OmegaGeo stamped at the wrong scale.** Its ground size (`_geoWFt`) is
+  pixels over a scale, taken 750 ms after an idle, so when the first map
+  move after placing something was a zoom it divided the old zoom's pixels
+  by the new zoom's scale: a BESS assembly placed at zoom 20 and first moved
+  by a zoom-in was recorded at half its size and never grew. OmegaGeo now
+  keeps the scale the drawing was last drawn at (`drawnP`, from every idle)
+  and, on `zoom_changed`, before anything resizes, stamps what is still
+  unstamped at it (`stampAt`, which the settled-view stamp also uses).
+- **The anchor engine centred on the wrong height.** `_elAnchorPt` and
+  `setAnchor` took `(h||w)`, so a BESS assembly, which carries no `h` and
+  draws `0.55 w` deep, was pulled `0.225 w` off its ground point on every
+  pass (90 px at 400 px, more at every zoom-in). They use `_elRenderSize`,
+  the one definition every stamper uses.
+- **Gear that knows its kind but recorded no footprint.** A guided-build unit
+  saved before `_evAdd` recorded `lf/wf` (2026-09-16) takes its kind's
+  `EV_FOOTPRINT` (a rated battery its rating's, `_bessFootprint`) on `_evAdd`'s
+  floors, so it draws as one placed today; never a unit with
+  `primeFootprint: 'none'`. An Insert item placed past Insert's `addEl` hook
+  (a charger's own bollards) takes `OmegaInsert.footprint`: `_elFootprintFt`
+  asked for a global `footprintOf` that never existed. The Level 2 and DCFC
+  build bollards record the floor they are placed on (14 / 10 px), so the
+  rescale no longer holds them at Insert's 22.
+Also, the orphan sweep (`omegaSweepGhosts`) was a one-shot wrapper on
+`window._geoReprojectAll` that `standDown()` discarded too; the anchor
+engine's `run()` calls it again (`omegaSweepGhostsSoon`, at most every
+500 ms; it reads the whole document). Held by `scripts/render-element-zoom.js`
+(a BESS assembly placed once OmegaGeo has armed and first moved by a zoom,
+a charger and a 2 MWh battery saved without footprints, an Insert charger's
+bollard, a Level 2 bollard, an orphan node; 3739 checks; it fails on #363
+alone at the assembly's 90 px offset, and without the pre-zoom stamp at 400
+where 800 px is due) and `scripts/tests/telementzoom.js`. Not changed:
+OmegaGeo still sizes on the map's idle rather than the zoom, and still holds
+what it sizes at 22 px; the single-BESS guided build still places an unrated
+10 x 5 ft unit whatever the rating.
+
 ## Grid Atlas built into Site Map: the Grid panel (2026-10-16)
 
 Tommy, of the FENECON demo flow: "that's how the Grid Atlas should work, and
@@ -67,7 +251,8 @@ Omega Grid's in `api/_lib/modules.js` IDS) opens `omega-grid-panel.js`: the
 site point and the Guided Build's battery, the nearest substation from the
 Grid Atlas SERVICE the pre-screen already calls (no second lookup), the
 circuit at the parcel from `omega-comed-layers.js` `probePoint` (the editor
-now loads that module; no copy pasted), and the verdict from the new
+then loaded that module; no copy pasted; since 2026-10-17 the national door,
+above), and the verdict from the new
 `POST /api/grid-verdict` (`api/_lib/grid-verdict.js`, gated like
 `/api/grid-atlas`): the eligibility rules are server-side from the first
 line. `S.grid` — set by the pre-screen and never persisted until now — is

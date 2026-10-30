@@ -10,8 +10,13 @@
    units, which layers must be read together, and how a raw row becomes a
    circuit. Every figure here was checked live on 2026-10-17 (the research
    and its adversarial verification are the source; where they disagreed the
-   verification won). Pure CommonJS, ES5, no I/O: the door
-   (api/hosting-capacity.js) does the asking.
+   verification won); Arizona was checked again, utility by utility, on
+   2026-10-20 (docs/HOSTING-ARIZONA.md: the list, the links, the terms);
+   Texas was added, utility by utility, on 2026-10-28 (docs/HOSTING-TEXAS.md:
+   no Texas utility publishes distribution hosting capacity, and the PUCT's
+   own service-area layers are licensed to Platts MSA holders, so they are
+   never queried). Pure
+   CommonJS, ES5, no I/O: the door (api/hosting-capacity.js) does the asking.
 
    WHY IT IS SERVER-ONLY. ComEd answers only with its own viewer's Referer,
    which a browser cannot set; Eversource's navigator and National Grid's
@@ -30,6 +35,14 @@
      account    published only to registered users; OMEGA never reads it.
      none       no hosting capacity is published; say so and link the
                 utility's own process.
+
+   WHAT A PERSON IS HANDED (publication(): the list the circuit step draws
+   of every utility that may serve the point) is the status in words, the
+   `route` the utility offers instead of a map (an Arizona Pre-Application
+   Report, a co-op's engineering review), its own page (`viewerUrl`) and,
+   where the utility publishes one for people, its own address lookup
+   (`check`: SRP's, APS's Service Areas Viewer, Mesa's service-area map).
+   Pages a person opens, never a service URL or a field.
 
    NORMALISATION (pinned by scripts/tests/thostingsources.js)
      units     everything leaves here in kW. MW × 1000; a kVA figure (LADWP)
@@ -64,10 +77,18 @@ var CS = require('./comed-service');
    .2 (2026-10-17, review): Rockland's feeder queue is context, a JCP&L band
    survives storage mode, ACE's restriction caps after the queue, a group
    answers only for a utility of its own state, and no partial reading or
-   one cut short by the time budget is ever kept. */
-var VERSION = 'hosting-sources-2026-10-17.2';
+   one cut short by the time budget is ever kept.
+   2026-10-20: Arizona utility by utility, and the City of Mesa's own
+   service-area map in the territory (a cached territory answer for a Mesa
+   point predates it).
+   2026-10-28: Texas utility by utility (docs/HOSTING-TEXAS.md): every entry
+   is `none`, each with the route its utility offers instead and the PUCT's
+   own public boundary viewer as the person's check. */
+var VERSION = 'hosting-sources-2026-10-28.1';   /* .1: adversarial verification — TX box west of Las Cruces, Fannin County EC and the City of Bartlett named */
 var VERIFIED_AT = '2026-10-17';
-var STATES = ['IL', 'FL', 'GA', 'NJ', 'AZ', 'CA', 'CT', 'MA', 'RI'];
+var AZ_VERIFIED_AT = '2026-10-20';
+var TX_VERIFIED_AT = '2026-10-28';
+var STATES = ['IL', 'FL', 'GA', 'NJ', 'AZ', 'CA', 'CT', 'MA', 'RI', 'TX'];
 var MODES = ['storage', 'export', 'load'];
 var DOE_ATLAS = 'https://www.energy.gov/eere/us-atlas-electric-distribution-system-hosting-capacity-maps';
 
@@ -76,7 +97,8 @@ var DOE_ATLAS = 'https://www.energy.gov/eere/us-atlas-electric-distribution-syst
 var STATE_BOX = {
   IL: [36.92, -91.57, 42.56, -86.97], FL: [24.34, -87.69, 31.05, -79.92], GA: [30.31, -85.66, 35.05, -80.79],
   NJ: [38.88, -75.61, 41.41, -73.84], AZ: [31.28, -114.87, 37.05, -108.99], CA: [32.48, -124.53, 42.06, -114.08],
-  CT: [40.93, -73.78, 42.10, -71.74], MA: [41.19, -73.56, 42.94, -69.88], RI: [41.10, -71.96, 42.07, -71.07]
+  CT: [40.93, -73.78, 42.10, -71.74], MA: [41.19, -73.56, 42.94, -69.88], RI: [41.10, -71.96, 42.07, -71.07],
+  TX: [25.6, -106.70, 36.6, -93.4]   /* west bound east of Las Cruces: EPE's New Mexico side is the NMPRC's, not the PUCT's (El Paso, -106.485, stays inside) */
 };
 
 /* ── parse rules ─────────────────────────────────────────────────────── */
@@ -177,6 +199,20 @@ function distanceM(geom, lat, lng) {
     if (line.length === 1) best = Math.min(best, Math.sqrt(Math.pow(line[0][0] - p[0], 2) + Math.pow(line[0][1] - p[1], 2)));
   }
   return isFinite(best) ? best : null;
+}
+/* A service-area polygon at a point: is the point inside it (the odd rule,
+   so a hole is outside), and how far is the nearest edge? A geocoded
+   address can land a lot over, so a point near the edge is not the same
+   answer as one well inside (utility-territory.js SERVICE_AREAS). */
+function edgeOf(geom, lat, lng) {
+  if (!geom || !geom.rings || !geom.rings.length) return null;
+  var p = xy(lat, [lng, lat]), odd = false, best = Infinity, i, k;
+  for (i = 0; i < geom.rings.length; i++) {
+    var ring = geom.rings[i].map(function (c) { return xy(lat, [c[0], c[1]]); });
+    if (inRing(p, ring)) odd = !odd;
+    for (k = 1; k < ring.length; k++) best = Math.min(best, segDist(p, ring[k - 1], ring[k]));
+  }
+  return isFinite(best) ? { inside: odd, edgeM: best } : null;
 }
 function envelope(lat, lng, m) {
   var dLat = m / M_PER_DEG, dLng = m / (M_PER_DEG * Math.cos(lat * Math.PI / 180));
@@ -553,19 +589,168 @@ var ENTRIES = [
   none('sussex-rec', 'Sussex Rural Electric Cooperative', ['40299'], ['NJ'], 'coop', 'https://www.sussexrec.com/interconnection',
     'Sussex REC publishes no hosting capacity; a system over 100 kW may need an independent engineering assessment. It is supplied by JCP&L\'s 34.5 kV ties.'),
 
-  /* ═══ ARIZONA: nothing is published anywhere in the state ═══ */
+  /* ═══ ARIZONA: nothing is published anywhere in the state (checked
+     utility by utility on 2026-10-20; docs/HOSTING-ARIZONA.md). The ACC's
+     interconnection rules (A.A.C. R14-2-2601 ff., in force 2020-02-25)
+     give the regulated utilities a screen instead of a map: Screen A
+     (R14-2-2615) caps a circuit at 15% of its annual peak or its "circuit
+     hosting capacity limit", whichever is greater, and a Pre-Application
+     Report (R14-2-2616) returns, within 21 calendar days and from data the
+     utility already has, the total, allocated, queued and available
+     capacity in MW of the substation bus or bank and the circuit likely to
+     serve the site. SRP, the cities, the districts and the tribal utilities
+     are not under those rules. ═══ */
   none('aps', 'Arizona Public Service', ['803'], ['AZ'], 'IOU', 'https://www.aps.com/dg',
-    'APS publishes no hosting capacity. Under A.A.C. R14-2-2616 a Pre-Application Report returns the circuit and substation bus or bank capacity (total, allocated, queued, available, in MW) within 21 calendar days.'),
+    'APS publishes no hosting capacity map or data; its engineers compute a circuit\'s hosting capacity inside their own review (Screen A). Ask APS for a Pre-Application Report under A.A.C. R14-2-2616 (its form goes to renewables@aps.com): the circuit and the substation bus or bank capacity, total, allocated, queued and available, in MW, within 21 calendar days.',
+    { legal: 'Arizona Public Service Company', holding: 'Pinnacle West', verifiedAt: AZ_VERIFIED_AT,
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (renewables@aps.com): the circuit and substation capacity in MW within 21 days',
+      check: { url: 'https://apsc.maps.arcgis.com/apps/View/index.html?appid=edc55ca7fa254b528433ef1fe66d72af', label: 'APS\'s Service Areas Viewer' },
+      terms: 'display-only', termsNote: 'APS\'s CC&N service-territory layer is licensed for use inside ArcGIS Online only, so OMEGA never queries it; a person is sent to APS\'s own Service Areas Viewer to confirm the point. Its public DG_Locations layer carries meters and addresses and is never a source.' }),
   none('srp', 'Salt River Project', ['16572'], ['AZ'], 'public', 'https://www.srpnet.com/doing-business/builders-developers-contractors/info-commercial-solar-contractors',
-    'SRP computes hosting capacity internally and does not publish it; the route is SRP\'s PowerClerk application (SRP is not under the ACC pre-application rule).'),
+    'SRP publishes no distribution hosting capacity. Its Distributed Generation Interconnection Handbook (revised 2026-04-08) screens each application against the minimum hosting capacity of the most limited section of the circuit (Screen A), computed by SRP; there is no pre-application report, and the route is SRP\'s PowerClerk application or an SRP solar representative, (602) 236-4663. The Hosting Capacity Study SRP posts on its OASIS is for transmission-level generation, not a site\'s circuit. SRP is not under the ACC\'s rules.',
+    { legal: 'Salt River Project Agricultural Improvement and Power District', verifiedAt: AZ_VERIFIED_AT,
+      viewerLabel: 'SRP\'s page for commercial solar installers',
+      route: 'SRP\'s own review (Screen A of its DG Interconnection Handbook), through its PowerClerk application',
+      check: { url: 'https://www.srpnet.com/about/service-area-territory', label: 'SRP\'s service-area lookup' },
+      terms: 'no-use', termsNote: 'SRP\'s boundary layer may be used only by SRP\'s own web app (its licence: "Data may not be distributed outside SRP"), so OMEGA never queries it; a person is sent to SRP\'s own address lookup.' }),
   none('tep', 'Tucson Electric Power', ['24211'], ['AZ'], 'IOU', 'https://www.tep.com/dgir-requirements/',
-    'TEP publishes no hosting capacity (it sets it on minimum daytime load). A Pre-Application Report under R14-2-2616 gives the circuit\'s capacity in MW within 21 days.'),
+    'TEP publishes no hosting capacity: it sets a circuit\'s hosting capacity on the circuit\'s minimum daytime load over the last twelve months, measured at the substation, and the DG saturation maps its FAQ mentions are not linked from its interconnection pages. Ask TEP for a Pre-Application Report under A.A.C. R14-2-2616 (renewables@tep.com): the circuit\'s capacity in MW within 21 days.',
+    { legal: 'Tucson Electric Power Company', holding: 'UNS Energy (Fortis)', verifiedAt: AZ_VERIFIED_AT,
+      viewerLabel: 'TEP\'s interconnection requirements',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (renewables@tep.com): the circuit\'s capacity in MW within 21 days',
+      check: { url: 'https://www.tep.com/service-territory/', label: 'TEP\'s service territory map' } }),
+  /* The point's utility comes from the city's OWN map (utility-territory.js
+     SERVICE_AREAS): about 5.4 sq mi around and including downtown; SRP
+     serves the rest of the city. */
+  none('mesa', 'City of Mesa', ['12351'], ['AZ'], 'muni', 'https://www.mesaaz.gov/Utilities/Energy/Electric/Solar-Program',
+    'City of Mesa publishes no hosting capacity. Its electric utility serves about 5.4 square miles around and including downtown (the city\'s own service-area map); Salt River Project serves the rest of the city. A system connects by application to Mesa Electric Utility, accepted before it is installed, then an interconnection agreement and a permission-to-operate letter; a commercial system over 50 kW goes through the city\'s Large Commercial Solar Program. Ask Mesa Energy Resources, 480-644-3683, about the circuit.',
+    { legal: 'City of Mesa Electric Utility (Energy Resources)', verifiedAt: AZ_VERIFIED_AT,
+      viewerLabel: 'the City of Mesa\'s solar interconnection page',
+      route: 'an interconnection application to Mesa Electric Utility (Energy Resources, 480-644-3683)',
+      check: { url: 'https://gis.mesaaz.gov/energy/serviceareas/Electric_Service_Area.pdf', label: 'the City of Mesa\'s electric service area map' },
+      terms: 'review', termsNote: 'The electric service area is a public layer of the city\'s own Explore Mesa map service. The city\'s open-data terms allow reuse with credit to the city, but its website policy is non-commercial, and neither names this service. OMEGA asks it about one point at a time, never copies it, names the city as the source and links the city\'s own map; get counsel\'s sign-off before relying on it commercially.' }),
   none('unse', 'UNS Electric', ['19728'], ['AZ'], 'IOU', 'https://www.uesaz.com/dgir-requirements/',
-    'UNS Electric publishes no hosting capacity; a Pre-Application Report under R14-2-2616 is the route.'),
-  none('az-coops', 'Arizona electric cooperatives', ['18280', '19189', '13318', '21538', '7456', '5438', '4071', '6957', '40165'], ['AZ'], 'group', null,
-    'No Arizona cooperative publishes hosting capacity; the ACC-regulated co-ops answer a Pre-Application Report under R14-2-2616.', { group: { states: ['AZ'], types: ['COOPERATIVE'] } }),
-  none('az-public', 'Arizona public power, districts and tribal utilities', ['13314', '30518', '12351', '15048', '15049', '16538', '14373', '25060', '14543', '65261', '12919', '176', '25866', '19604', '3990', '18805', '56535', '8700', '20618', '58123', '6753', '5729'], ['AZ'], 'group', null,
-    'No Arizona municipal, district or tribal utility publishes hosting capacity; ask the utility. Many of these territory polygons are county-sized stand-ins, so confirm the utility with the person.', { group: { states: ['AZ'], types: ['MUNICIPAL', 'POLITICAL SUBDIVISION', 'STATE'] } }),
+    'UNS Electric publishes no hosting capacity: it sets a circuit\'s hosting capacity on minimum daytime load, and a supplemental review under R14-2-2620 costs $500 and takes up to 21 days. Ask for a Pre-Application Report under A.A.C. R14-2-2616 (renewables@uesaz.com).',
+    { legal: 'UNS Electric, Inc.', holding: 'UNS Energy (Fortis)', verifiedAt: AZ_VERIFIED_AT,
+      viewerLabel: 'UNS Electric\'s interconnection requirements',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (renewables@uesaz.com)' }),
+  /* The co-ops are all on the ACC's list of regulated electric utilities
+     (2024-07-01), so its Pre-Application Report is theirs to answer whatever
+     their own manual says; none publishes a capacity figure. */
+  none('trico', 'Trico Electric Cooperative', ['19189'], ['AZ'], 'coop', 'https://trico.coop/sustainable-programs/solar/',
+    'Trico Electric Cooperative publishes no hosting capacity: its Interconnection Manual (approved 2021) screens a circuit at 15% of its annual peak or the circuit hosting capacity limit, and publishes no limit. As an ACC-regulated co-op it answers a Pre-Application Report under A.A.C. R14-2-2616; its manual also offers a pre-application meeting. Apply through Trico\'s PowerClerk (sunwatts@trico.coop, 520-744-2944).',
+    { legal: 'Trico Electric Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Trico\'s solar interconnection page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (sunwatts@trico.coop, 520-744-2944)' }),
+  none('ssvec', 'Sulphur Springs Valley Electric Cooperative', ['18280'], ['AZ'], 'coop', 'https://ssvec.org/sites/renewable/',
+    'SSVEC publishes no hosting capacity. Its 2026 Interconnection Requirements (ACC docket E-01575A-24-0246) offer a Pre-Application Report under A.A.C. R14-2-2616 for a $125 data review fee, asked for on its DG interconnection application; the circuit hosting capacity limit in Screen A is SSVEC\'s own and is not published. SunWatts program, (520) 458-4691.',
+    { legal: 'Sulphur Springs Valley Electric Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'SSVEC\'s renewable interconnection page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 ($125, asked for on its DG interconnection application)' }),
+  none('navopache', 'Navopache Electric Cooperative', ['13318'], ['AZ'], 'coop', 'https://navopache.org/dg-interconnection-information-3/',
+    'Navopache Electric Cooperative publishes no hosting capacity: its DG Interconnection Manual (2022) carries Screen A with no published limit and offers a pre-application meeting. As an ACC-regulated co-op it answers a Pre-Application Report under A.A.C. R14-2-2616. Energy Services, 928-368-5118.',
+    { legal: 'Navopache Electric Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Navopache\'s DG interconnection page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (Energy Services, 928-368-5118)' }),
+  none('mohave', 'Mohave Electric Cooperative', ['21538'], ['AZ'], 'coop', 'https://www.mohaveelectric.com/energy-solutions/renewable-energy/sunwatts-renewable-energy-program/',
+    'Mohave Electric Cooperative publishes no hosting capacity (no map, no layer and no capacity page). As an ACC-regulated co-op it answers a Pre-Application Report under A.A.C. R14-2-2616; its SunWatts program page is the way in.',
+    { legal: 'Mohave Electric Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Mohave Electric\'s SunWatts page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (through its SunWatts program)' }),
+  none('graham-county', 'Graham County Electric Cooperative', ['7456'], ['AZ'], 'coop', 'https://gce.coop/energy-efficiency/solar-renewable-energy/',
+    'Graham County Electric Cooperative publishes no hosting capacity (no map, no layer and no capacity page). As an ACC-regulated co-op it answers a Pre-Application Report under A.A.C. R14-2-2616; its solar page is the way in.',
+    { legal: 'Graham County Electric Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Graham County Electric\'s solar page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (through its solar program)' }),
+  none('duncan-valley', 'Duncan Valley Electric Cooperative', ['5438'], ['AZ'], 'coop', 'https://dvec.org/renewable-energy-0',
+    'Duncan Valley Electric Cooperative publishes no hosting capacity; its Interconnection Manual (filed with the ACC in 2021) commits to the timelines of A.A.C. R14-2-2616 to 2623, so a Pre-Application Report is the route. 928-359-2503.',
+    { legal: 'Duncan Valley Electric Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Duncan Valley Electric\'s renewable energy page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (928-359-2503)' }),
+  none('columbus-az', 'Columbus Electric Cooperative', ['4071'], ['AZ'], 'coop', 'https://columbusco-op.org/net-meteringinterconnections',
+    'Columbus Electric Cooperative (New Mexico, serving southeast Arizona) publishes no hosting capacity; the interconnection queue it posts each month lists the substation and feeder of each application, not capacity. In Arizona it is ACC-regulated, so a Pre-Application Report under A.A.C. R14-2-2616 is the route.',
+    { legal: 'Columbus Electric Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Columbus Electric\'s net metering and interconnection page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (through its interconnection page)' }),
+  none('garkane-az', 'Garkane Energy', ['6957'], ['AZ'], 'coop', 'https://garkaneenergy.com/interconnection-application',
+    'Garkane Energy publishes no hosting capacity. Its public map shows its lines, transformers and service area with no capacity on them (DOE\'s atlas lists it as an asset map), and the copy on its own website now asks for a sign-in. In Arizona the ACC governs its interconnection (its own manual says so), so a Pre-Application Report under A.A.C. R14-2-2616 is the route.',
+    { legal: 'Garkane Energy Cooperative, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Garkane\'s interconnection application',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (Garkane\'s interconnection application)',
+      check: { url: 'https://garkane.maps.arcgis.com/apps/View/index.html?appid=60f986f187b24dfe96cb6593b2e8d3af', label: 'Garkane\'s service area map' } }),
+  none('dixie-az', 'Dixie Power (Dixie Escalante REA)', ['40165'], ['AZ'], 'coop', 'https://www.dixiepower.com/services/new-construction-2/',
+    'Dixie Power publishes no hosting capacity and posts no interconnection manual or DG page. In Arizona it is ACC-regulated, so a Pre-Application Report under A.A.C. R14-2-2616 is the route; ask Dixie Power, 866-673-3297.',
+    { legal: 'Dixie Escalante Rural Electric Association, Inc.', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Dixie Power\'s new construction page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (866-673-3297)' }),
+  /* tribal utilities: not under the ACC (its own electric page says so) */
+  none('ntua', 'Navajo Tribal Utility Authority', ['13314'], ['AZ'], 'tribal', 'https://www.ntua.com/assets/ntua-distributed-generation-interconnection-policy.pdf',
+    'NTUA publishes no hosting capacity. Its DG Interconnection Policy (2023) covers systems under 700 kW (larger ones case by case) and studies each one itself before interconnection, without a fee for a pre-certified unit that exports no more than 15% of a radial feeder\'s load and adds no more than 25% of its short-circuit current. NTUA is not under the ACC\'s rules.',
+    { legal: 'Navajo Tribal Utility Authority', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'NTUA\'s DG Interconnection Policy',
+      route: 'a pre-interconnection study by NTUA under its DG Interconnection Policy' }),
+  none('gricua', 'Gila River Indian Community Utility Authority', ['65261'], ['AZ'], 'tribal', 'https://gricua.net/new-service-requirements/solar/',
+    'GRICUA publishes no hosting capacity; it posts its solar applications and checklists, under and over 50 kW. It is not under the ACC\'s rules; 520-796-0600.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'GRICUA\'s solar requirements', route: 'GRICUA\'s solar application (520-796-0600)' }),
+  none('toua', 'Tohono O\'odham Utility Authority', ['14543'], ['AZ'], 'tribal', 'https://toua.net/electric/',
+    'TOUA publishes no hosting capacity; its Schedule DG covers systems under 700 kW AC and cites a DG procedures manual that is not posted. It is not under the ACC\'s rules; (520) 383-2236.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'TOUA\'s electric page', route: 'TOUA\'s own review under its Schedule DG ((520) 383-2236)' }),
+  none('aha-macav', 'Aha Macav Power Service', ['58123'], ['AZ', 'CA'], 'tribal', 'https://ahamacav.com/commercial-service/',
+    'Aha Macav Power Service (Fort Mojave) publishes no hosting capacity; its staff and engineers plan a commercial project with the customer. It is not under the ACC\'s rules; (928) 768-2200.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Aha Macav\'s commercial service page', route: 'Aha Macav\'s commercial service team ((928) 768-2200)' }),
+  /* public power, districts, BIA systems and two small companies. Morenci
+     and Ajo are on the ACC's list; the rest are not under its rules. Every
+     one of these was already a known candidate (the public group below), so
+     naming it changes no territory answer; the region-sized stand-ins that
+     are not known stay weak as water districts. */
+  none('ed3', 'Electrical District No. 3 (Pinal County)', ['30518'], ['AZ'], 'district', 'https://www.ed3online.org/accounts-programs/distributed-generation-resources-including-solar',
+    'ED3 publishes no hosting capacity. A system up to 2 MW goes through its Small Generator Interconnection Policy (Fast-Track or Study), 2 to 20 MW through its Study Process, and some need a System Engineering Analysis of ED3\'s ability to take more generation, at the customer\'s cost. ED3 is not under the ACC\'s rules; dg@ed-3.org.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'ED3\'s distributed generation page',
+      route: 'ED3\'s own review under its Small Generator Interconnection Policy (dg@ed-3.org)' }),
+  none('ed2', 'Electrical District No. 2 (Pinal County)', ['15048'], ['AZ'], 'district', 'https://ed2.com/resources/solar/',
+    'ED2 publishes no hosting capacity and offers no net metering; a solar application goes to solarapps@ed2.com for its review. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'ED2\'s solar page', route: 'ED2\'s own review (solarapps@ed2.com)' }),
+  none('ed4', 'Electrical District No. 4 (Pinal County)', ['15049'], ['AZ'], 'district', 'https://ed4.biz/connect-service/',
+    'ED4 publishes no hosting capacity; its Solar Application Package is on its service page (info@ed4.com, (520) 466-7336). It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'ED4\'s service page', route: 'ED4\'s Solar Application Package (info@ed4.com)' }),
+  none('hohokam', 'Hohokam Irrigation and Drainage District', ['8700'], ['AZ'], 'district', 'https://hohokamthepowerofchoice.com/solar-qa/',
+    'Hohokam Irrigation and Drainage District sells power at retail and publishes no hosting capacity; its solar questions and answers are on its own page. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Hohokam\'s solar Q&A', route: 'Hohokam\'s own review (its solar Q&A)' }),
+  none('wmidd', 'Wellton-Mohawk Irrigation and Drainage District', ['25060'], ['AZ'], 'district', 'https://www.wmidd.org/solar-information.html',
+    'Wellton-Mohawk Irrigation and Drainage District holds the power franchise in the Wellton-Mohawk Valley and publishes no hosting capacity. Its national territory polygon covers all of Yuma County, so in the city of Yuma Arizona Public Service is the likelier utility; confirm it with the bill. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Wellton-Mohawk\'s solar information', route: 'Wellton-Mohawk\'s own review (its solar information page)' }),
+  none('scip', 'San Carlos Irrigation Project (BIA)', ['19604'], ['AZ'], 'federal', 'https://www.bia.gov/scip/solar',
+    'SCIP publishes no hosting capacity. Since 11 May 2026 it adds no new service, line extension or load unless no other utility can serve the site (its public notice), and caps solar at 10 kW DC. It is not under the ACC\'s rules; scipsolar@bia.gov.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'SCIP\'s solar page', route: 'no new load unless no other utility can serve the site (its 2026 notice)' }),
+  none('cra-es', 'Colorado River Agency Electrical Services (BIA)', ['3990'], ['AZ'], 'federal', 'https://www.bia.gov/services/colorado-river-agency-electrical',
+    'BIA\'s Colorado River Agency Electrical Services serves homes, businesses and irrigation inside the Colorado River Indian Tribes\' reservation (Parker) and publishes no hosting capacity or DG page. Its national territory polygon is far larger than the reservation, so outside it confirm the utility with the bill. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'the Colorado River Agency\'s electrical services page', route: 'the agency\'s own review (its electrical services page)' }),
+  none('page-utility', 'Page Utility Enterprises', ['14373'], ['AZ'], 'muni', 'https://pageutility.com/services-rates/',
+    'Page Utility Enterprises publishes no hosting capacity; its Solar Interconnection Agreement is on its services and rates page. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Page Utility\'s services and rates', route: 'its Solar Interconnection Agreement' }),
+  none('safford', 'City of Safford', ['16538'], ['AZ'], 'muni', 'https://www.cityofsafford.us/227/Electricity',
+    'City of Safford publishes no hosting capacity; its Electric Division handles solar and net metering, (928) 432-4221. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Safford\'s electric page', route: 'its Electric Division ((928) 432-4221)' }),
+  none('thatcher', 'Town of Thatcher', ['18805'], ['AZ'], 'muni', 'https://www.thatcher.az.gov/residents/utilities-billing',
+    'Town of Thatcher publishes no hosting capacity; its distributed generation guidelines are on its utilities page. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Thatcher\'s utilities page', route: 'its distributed generation guidelines' }),
+  none('wickenburg', 'Town of Wickenburg', ['20618'], ['AZ'], 'muni', 'https://wickenburgaz.gov/DocumentCenter/View/7706/Wickenburg-Grid-Solar-App-and-APS-Agmt-combined',
+    'Town of Wickenburg publishes no hosting capacity, and its grid takes no generation or storage in parallel: an alternate source connects only through a break-before-make (open transition) transfer switch (its agreement, rev. 2022). A grid-tied battery or solar system cannot run on the town\'s grid. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Wickenburg\'s non-parallel interconnect agreement', route: 'its non-parallel interconnect agreement only (nothing runs in parallel with the town\'s grid)' }),
+  none('williams', 'City of Williams', ['56535'], ['AZ'], 'muni', 'https://www.williamsaz.gov/departments_and_services/building_department',
+    'City of Williams publishes no hosting capacity; its Solar Policy is on its building department page. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Williams\'s building department (Solar Policy)', route: 'its Solar Policy' }),
+  none('fredonia', 'Town of Fredonia', ['6753'], ['AZ'], 'muni', 'https://www.fredoniaaz.gov/utilities',
+    'Town of Fredonia publishes no hosting capacity; ask its utilities office. It is not under the ACC\'s rules.',
+    { verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Fredonia\'s utilities page', route: 'its utilities office' }),
+  none('morenci', 'Morenci Water & Electric', ['12919'], ['AZ'], 'IOU', 'https://www.morencitown.com/MWE',
+    'Morenci Water & Electric publishes no hosting capacity and posts no solar or interconnection page. It is ACC-regulated, so a Pre-Application Report under A.A.C. R14-2-2616 is the route; MWESupport@fmi.com.',
+    { legal: 'Morenci Water and Electric Company', verifiedAt: AZ_VERIFIED_AT, viewerLabel: 'Morenci Water & Electric\'s page',
+      route: 'a Pre-Application Report under A.A.C. R14-2-2616 (MWESupport@fmi.com)' }),
+  none('ajo', 'Ajo Improvement Company', ['176'], ['AZ'], 'IOU', null,
+    'Ajo Improvement Company publishes no hosting capacity and has no website of its own. It is ACC-regulated (docket E-01025A), so a Pre-Application Report under A.A.C. R14-2-2616 is the route; ask the company.',
+    { verifiedAt: AZ_VERIFIED_AT, noPage: true, route: 'a Pre-Application Report under A.A.C. R14-2-2616 (ask the company)' }),
+  none('az-coops', 'Arizona electric cooperatives', [], ['AZ'], 'group', null,
+    'No Arizona cooperative publishes hosting capacity (each was checked on 2026-10-20); an ACC-regulated co-op answers a Pre-Application Report under A.A.C. R14-2-2616.',
+    { verifiedAt: AZ_VERIFIED_AT, group: { states: ['AZ'], types: ['COOPERATIVE'] } }),
+  /* Ak-Chin (no utility website found) and Electrical District No. 8 (none
+     reached) stay here by id; the region-sized water districts the national
+     layer also draws (Buckeye, Tonopah, Harquahala, Ocotillo, Maricopa Water
+     District, McMullen Valley) stay out on purpose, so they read as water
+     districts and never as a point's utility */
+  none('az-public', 'Arizona public power, districts and tribal utilities', ['25866', '5729'], ['AZ'], 'group', null,
+    'No Arizona municipal, district or tribal utility publishes hosting capacity (each was checked on 2026-10-20); ask the utility. Many of these territory polygons are county-sized stand-ins, so confirm the utility with the person.',
+    { verifiedAt: AZ_VERIFIED_AT, group: { states: ['AZ'], types: ['MUNICIPAL', 'POLITICAL SUBDIVISION', 'STATE', 'TRIBAL'] } }),
 
   /* ═══ CALIFORNIA ═══ */
   { key: 'pge', display: 'PG&E', legal: 'Pacific Gas and Electric Company', eiaIds: ['14328'], holding: 'PG&E Corporation', states: ['CA'], type: 'IOU',
@@ -610,7 +795,8 @@ var ENTRIES = [
   none('bear-valley', 'Bear Valley Electric Service', [], ['CA'], 'IOU', null, 'Bear Valley Electric Service publishes no hosting capacity.', { names: ['bear valley'] }),
   none('ca-pous', 'California public utilities', [], ['CA'], 'group', null,
     'California\'s municipal utilities (Silicon Valley Power, Anaheim, Riverside, Pasadena, Burbank, Glendale, Roseville and the rest) publish no hosting capacity; ask the utility. Silicon Valley Power serves Santa Clara\'s data-centre load.', { group: { states: ['CA'], types: ['MUNICIPAL', 'POLITICAL SUBDIVISION', 'STATE'] } }),
-  none('ca-coops', 'California cooperatives and tribal utilities', ['15308', '18260', '19840', '58123'], ['CA'], 'group', null,
+  /* Aha Macav (Fort Mojave, 58123) has its own entry since 2026-10-20 (Arizona) */
+  none('ca-coops', 'California cooperatives and tribal utilities', ['15308', '18260', '19840'], ['CA'], 'group', null,
     'California\'s co-ops and tribal utilities publish no hosting capacity; ask the utility.', { group: { states: ['CA'], types: ['COOPERATIVE', 'TRIBAL'] } }),
 
   /* ═══ CONNECTICUT ═══ */
@@ -679,7 +865,84 @@ var ENTRIES = [
     note: 'Section hosting capacity in MW on three-phase lines; single and two phase sections carry the feeder but no section figure. The layers are stored in RI State Plane, so results are asked for in WGS84. National Grid\'s older RISDP services predate PPL\'s refresh and are not read.' },
   none('pascoag', 'Pascoag Utility District', ['14537'], ['RI'], 'muni', null, 'Pascoag Utility District publishes no hosting capacity; interconnection goes through the district and the RI PUC.'),
   none('biud', 'Block Island Utility District', ['1857'], ['RI'], 'public', null,
-    'Block Island Utility District publishes no hosting capacity; the PUC caps net metering at 10% of the island\'s peak load.')
+    'Block Island Utility District publishes no hosting capacity; the PUC caps net metering at 10% of the island\'s peak load.'),
+
+  /* ═══ TEXAS: nothing is published anywhere in the state (checked utility
+     by utility on 2026-10-28; docs/HOSTING-TEXAS.md). The PUCT has no
+     hosting-capacity rule: interconnection is 16 TAC §25.211 / §25.212
+     (adopted 1999, Project 21220), its staff's 2023 workshop on requiring
+     hosting capacity analysis (Project 54233) adopted nothing, and DOE's
+     atlas (July 2025) lists no Texas utility. In the ERCOT retail-choice
+     areas the WIRES company (the TDU) answers interconnection, never the
+     retail provider on the bill. The PUCT's own service-area layers (IOU,
+     MUNI, COOP_DIST) carry a licence limiting use to Platts MSA holders, so
+     OMEGA never queries them (utility-territory.js); each entry hands the
+     person the PUCT's own public boundary viewer instead. ═══ */
+  none('oncor', 'Oncor Electric Delivery', ['44372'], ['TX'], 'IOU', 'https://www.oncor.com/us/en/home/smart-energy/renewables-solar-and-more/energy-system-developers.html',
+    'Oncor publishes no hosting capacity map; its own developer page offers "prescreen options and project classification" instead. A large DG project (about 500 kW to 10 MW and above) takes a detailed impact study, about 9-12 months; smaller systems apply through Oncor\'s portal (dg@oncor.com) under 16 TAC §25.211/§25.212. Oncor is the wires company (TDU): in its retail-choice territory the retail provider on the bill is not the interconnecting utility.',
+    { legal: 'Oncor Electric Delivery Company LLC', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Oncor\'s energy system developers page',
+      route: 'Oncor\'s pre-screen and interconnection application under 16 TAC §25.211/§25.212 (dg@oncor.com; a large project\'s impact study runs about 9-12 months)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('centerpoint', 'CenterPoint Energy Houston Electric', ['8901'], ['TX'], 'IOU', 'https://www.centerpointenergy.com/en-us/for-business/industry/builders-developers',
+    'CenterPoint publishes no hosting capacity map and told the PUCT so (Docket 56211, June 2024): it is "not actively pursuing development of a hosting capacity map" and "does offer a pre-screen in lieu of a hosting capacity map to any prospective customers that would like to interconnect". Interconnection is 16 TAC §25.211/§25.212 and CenterPoint\'s DER application tariff. CenterPoint is the wires company (TDU) in retail-choice Houston.',
+    { legal: 'CenterPoint Energy Houston Electric, LLC', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'CenterPoint\'s builders and developers page',
+      route: 'CenterPoint\'s pre-screen (offered in lieu of a hosting capacity map) and DER interconnection application under 16 TAC §25.211/§25.212',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('aep-texas', 'AEP Texas', ['20404', '3278'], ['TX'], 'IOU', 'https://www.aeptexas.com/business/builders/generating-equipment',
+    'AEP Texas publishes no hosting capacity map; interconnection is an application through its PowerClerk portal to its Distributed Energy Resource Team in San Angelo (DER_AEPTexas@aep.com, 361-881-5333) under 16 TAC §25.211/§25.212. The national territory layer still carries its two pre-merger companies: AEP Texas Central (EIA 3278, Corpus Christi and the Valley) and AEP Texas North (EIA 20404, Abilene), both tagged with AEP\'s Ohio state code. AEP Texas is the wires company (TDU) in its retail-choice territory.',
+    { legal: 'AEP Texas Inc.', holding: 'AEP', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'AEP Texas\'s generating equipment page',
+      route: 'an interconnection application through AEP Texas\'s PowerClerk (DER_AEPTexas@aep.com, 361-881-5333) under 16 TAC §25.211/§25.212',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('tnmp', 'Texas-New Mexico Power', ['40051'], ['TX'], 'IOU', 'https://www.tnmp.com/customers/interconnecting',
+    'TNMP publishes no hosting capacity map; its interconnecting page is the way in, under 16 TAC §25.211/§25.212. Its territory is scattered (parts of the Gulf Coast, west Texas and the Dallas-Fort Worth fringe), so its polygon on the national layer overlaps Oncor\'s; confirm the wires company with the bill or the PUCT\'s viewer. TNMP is the wires company (TDU) in its retail-choice territory.',
+    { legal: 'Texas-New Mexico Power Company', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'TNMP\'s interconnecting page',
+      route: 'an interconnection application to TNMP under 16 TAC §25.211/§25.212 (its interconnecting page)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('lpl', 'Lubbock Power & Light', ['11292'], ['TX'], 'muni', 'https://lpandl.com/',
+    'Lubbock Power & Light publishes no hosting capacity. It moved its retail customers to ERCOT competition between March and April 2024 (ERCOT\'s own notice) and stays the wires company; a distributed generation interconnection agreement is filed with City of Lubbock Utilities customer service (customerrelations@mylubbock.us). Its sites (lpandl.com and the city\'s) refuse scripted reads, so OMEGA verified the address only to its redirect to the city\'s LP&L page on 2026-10-28; a person\'s browser opens it normally.',
+    { legal: 'City of Lubbock (Lubbock Power & Light)', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Lubbock Power & Light\'s page',
+      route: 'LP&L\'s interconnection agreement, filed with City of Lubbock Utilities customer service (customerrelations@mylubbock.us)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('epe-tx', 'El Paso Electric', ['5701'], ['TX'], 'IOU', 'https://www.epelectric.com/residential/rooftop-solar/texas-interconnection-of-facilities-up-to-10-mw',
+    'El Paso Electric publishes no hosting capacity (far west Texas, WECC, outside ERCOT; it also serves southern New Mexico, where interconnection is under the NMPRC\'s rules, not the PUCT\'s — this entry answers only in Texas). It publishes a public DG interconnection QUEUE (applications by status), which is not capacity and is not read as a figure. Texas interconnection of facilities up to 10 MW is by application under the PUCT\'s rules; its distribution interconnection page carries the process. The national layer draws Rio Grande Electric Cooperative over the city of El Paso, where El Paso Electric is the likelier utility; confirm with the bill.',
+    { legal: 'El Paso Electric Company', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'El Paso Electric\'s Texas interconnection page',
+      route: 'an interconnection application to EPE (facilities up to 10 MW) under the PUCT\'s rules; its public queue shows applications, not capacity',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('sps', 'Southwestern Public Service (Xcel Energy)', ['17718'], ['TX'], 'IOU', 'https://www.xcelenergy.com/working_with_us/how_to_interconnect',
+    'Southwestern Public Service (Xcel Energy; the Panhandle and South Plains, SPP, outside ERCOT) publishes no hosting capacity for its Texas system: Xcel\'s hosting capacity maps cover Minnesota and Colorado only (DOE\'s atlas, July 2025, and the TSPA\'s own PUCT filing in Project 54233 say the same). Interconnection is through Xcel\'s application process.',
+    { legal: 'Southwestern Public Service Company', holding: 'Xcel Energy', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Xcel Energy\'s interconnection page',
+      route: 'Xcel Energy\'s interconnection application for SPS (its hosting capacity maps cover Minnesota and Colorado only)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('swepco', 'SWEPCO', ['17698'], ['TX'], 'IOU', 'https://www.swepco.com/business/builders/generating-equipment',
+    'SWEPCO (Southwestern Electric Power Company; northeast Texas around Longview and Texarkana, SPP, outside ERCOT) publishes no hosting capacity map. Its generating equipment page names AEP\'s Distributed Generation Coordinator (dgcoordinator@aep.com) as the way in.',
+    { legal: 'Southwestern Electric Power Company', holding: 'AEP', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'SWEPCO\'s generating equipment page',
+      route: 'an interconnection application to AEP\'s Distributed Generation Coordinator (dgcoordinator@aep.com)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('entergy-tx', 'Entergy Texas', ['55937'], ['TX'], 'IOU', 'https://www.entergytexas.com/net-metering',
+    'Entergy Texas (southeast Texas around Beaumont, Conroe and The Woodlands; MISO, outside ERCOT) publishes no hosting capacity map. Interconnection and billing are Schedule SQF (to 100 kW) or LQF above it, with distributed-scale interconnection governed by Schedule IPODG, which can take a pre-interconnection study; applications go through Entergy\'s interconnection portal.',
+    { legal: 'Entergy Texas, Inc.', holding: 'Entergy', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Entergy Texas\'s net metering page',
+      route: 'Schedule SQF (to 100 kW) or LQF with a pre-interconnection study under Schedule IPODG, through Entergy\'s interconnection portal',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('austin-energy', 'Austin Energy', ['1015'], ['TX'], 'muni', 'https://austinenergy.com/green-power/solar-solutions',
+    'Austin Energy publishes no hosting capacity. A system interconnects by application under its own DG interconnection guide (its contractors\' guide is public); the city\'s utility is outside ERCOT retail choice, so Austin Energy is both the wires company and the supplier.',
+    { legal: 'City of Austin (Austin Energy)', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Austin Energy\'s solar page',
+      route: 'an interconnection application to Austin Energy under its DG interconnection guide',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('cps-energy', 'CPS Energy', ['16604'], ['TX'], 'muni', 'https://www.cpsenergy.com/content/corporate/en/construction-and-renovation/distributed-generation.html',
+    'CPS Energy (San Antonio) publishes no hosting capacity. A DG system interconnects by application under its Distributed Generation Manual (being revised in 2024 to add battery storage, microgrids and ERCOT requirements; DG@cpsenergy.com, 210-353-2700). The city\'s utility is outside ERCOT retail choice.',
+    { legal: 'City of San Antonio (CPS Energy)', verifiedAt: TX_VERIFIED_AT, viewerLabel: 'CPS Energy\'s distributed generation page',
+      route: 'a DG interconnection application under CPS Energy\'s Distributed Generation Manual (DG@cpsenergy.com, 210-353-2700)',
+      check: { url: 'https://experience.arcgis.com/experience/a097c23753814128aba0de41bbd729cd', label: 'the PUCT\'s electric service area boundaries viewer' } }),
+  none('tx-munis', 'Texas municipal utilities', ['6958', '5063', '7129', '3940', '1287'], ['TX'], 'group', 'https://tppa.com/member-utilities/',
+    'No Texas municipal utility publishes hosting capacity (Garland, Denton, Bryan, Georgetown, New Braunfels, College Station and the rest); contact the city utility\'s engineering or interconnection office. New Braunfels Utilities is missing from the national territory layer at its own city, so a New Braunfels point can read as its neighbours; confirm with the bill.',
+    { verifiedAt: TX_VERIFIED_AT, viewerLabel: 'the Texas Public Power Association\'s member list',
+      route: 'the city utility\'s own interconnection application and engineering review',
+      group: { states: ['TX'], types: ['MUNICIPAL', 'POLITICAL SUBDIVISION', 'STATE'] } }),
+  none('tx-coops', 'Texas electric cooperatives', ['14626', '5078', '1892', '11501', '18976', '8620', '6182', '16638', '16627', '13830', '27369', '3938', '4262', '19159', '20948', '10009', '1175', '7752', '16057', '16063', '19579', '16461', '11364', '17561', '16146', '12452', '1273', '6173'], ['TX'], 'group', 'https://texas-ec.org/about/member-directory/',
+    'No Texas cooperative publishes hosting capacity (Pedernales, CoServ (Denton County EC), Bluebonnet, Magic Valley, Guadalupe Valley and the rest were checked); ask the co-op\'s own engineering review. The co-ops\' polygons on the national territory layer overlap the metros, so a co-op named beside a TDU inside a city is confirmed with the bill or the PUCT\'s viewer.',
+    { verifiedAt: TX_VERIFIED_AT, viewerLabel: 'Texas Electric Cooperatives\' member directory',
+      route: 'the cooperative\'s own interconnection application and engineering review',
+      group: { states: ['TX'], types: ['COOPERATIVE'] } })
 ];
 
 /* Territory polygons that are never a point's retail utility: one or a
@@ -946,6 +1209,21 @@ function body(entry, source, c, mode) {
     grain: (source && source.grainWords) || entry.grain, source: source ? source.label : entry.display, mode: mode || 'storage' };
 }
 
+/* What a utility that may serve the point publishes, for the list the
+   circuit step draws beside the answer: the status in words, the route it
+   offers instead of a map, and the pages a person opens (its own page and,
+   where it has one, its own address lookup). A candidate the registry does
+   not know is said to be unresearched, never guessed. */
+var SAYS = { verified: 'publishes hosting capacity', metadata: 'publishes a hosting capacity layer OMEGA has not proven',
+  candidate: 'publishes a layer whose units OMEGA has not proven', account: 'publishes hosting capacity to registered users only',
+  none: 'publishes no hosting capacity' };
+function publication(entry) {
+  if (!entry) return { status: 'unknown', says: 'not researched by OMEGA', route: null, link: null, check: null, verifiedAt: null };
+  return { status: entry.status, says: SAYS[entry.status] || entry.status, route: entry.route || null,
+    link: entry.viewerUrl ? { url: entry.viewerUrl, label: entry.viewerLabel || entry.display + '\'s page' } : null,
+    check: entry.check ? { url: entry.check.url, label: entry.check.label } : null, verifiedAt: entry.verifiedAt || null };
+}
+
 /* GET ?coverage=1: who is covered and how, never a URL or a field. */
 function coverage() {
   return ENTRIES.map(function (e) {
@@ -959,12 +1237,12 @@ var GRAIN_WORDS = { circuit: "the utility's circuit at the address", 'grid-cell'
   transformer: 'the nearest transformer point', 'line-section': 'the nearest line section', 'line-segment': 'the nearest line segment', parcel: 'the parcel' };
 
 module.exports = {
-  VERSION: VERSION, VERIFIED_AT: VERIFIED_AT, STATES: STATES, MODES: MODES, ENTRIES: ENTRIES, NEVER: NEVER, DOE_ATLAS: DOE_ATLAS,
-  SEASONS: SEASONS, GRAIN_WORDS: GRAIN_WORDS, STATE_BOX: STATE_BOX,
+  VERSION: VERSION, VERIFIED_AT: VERIFIED_AT, AZ_VERIFIED_AT: AZ_VERIFIED_AT, TX_VERIFIED_AT: TX_VERIFIED_AT, STATES: STATES, MODES: MODES, ENTRIES: ENTRIES, NEVER: NEVER, DOE_ATLAS: DOE_ATLAS,
+  SEASONS: SEASONS, GRAIN_WORDS: GRAIN_WORDS, STATE_BOX: STATE_BOX, SAYS: SAYS,
   byKey: byKey, byEia: byEia, statesAt: statesAt, forCandidate: forCandidate, layersFor: layersFor,
   arcgisQuery: arcgisQuery, comedQuery: comedQuery, comedHeaders: comedHeaders, envelioParcel: envelioParcel, envelioSidebar: envelioSidebar,
-  webmapData: webmapData, resolveFromWebmap: resolveFromWebmap,
-  normalize: normalize, body: body, coverage: coverage,
+  webmapData: webmapData, resolveFromWebmap: resolveFromWebmap, edgeOf: edgeOf,
+  normalize: normalize, body: body, coverage: coverage, publication: publication,
   _t: { num: num, kwString: kwString, toKw: toKw, band: band, list: list, kvOf: kvOf, dateOf: dateOf, distanceM: distanceM, envelope: envelope,
         readEnvelio: readEnvelio, partsOf: partsOf }
 };

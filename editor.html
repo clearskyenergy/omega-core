@@ -190,10 +190,10 @@ function openOmegaCore(){
 <script src="/omega-core-qualify.js"></script>
 <!-- Grid Atlas built into Site Map (docs/GUIDED-SITE-FLOW.md, 2026-10-16):
      the Grid panel reads the site point and the Guided Build's unit, takes
-     the nearest substation from the Grid Atlas service, the circuit from the
-     utility's own hosting map through the ONE ComEd layer module (the Site
-     Finder's), and the verdict from api/grid-verdict. Nothing pasted here. -->
-<script src="/omega-comed-layers.js"></script>
+     the nearest substation from the Grid Atlas service, and asks the
+     national door (api/hosting-capacity, 2026-10-17) Omega Prime asks for
+     the serving utility, its published hosting capacity and the verdict.
+     Nothing pasted here; the ComEd layer module is the Site Finder's. -->
 <script src="/omega-grid-verdict.js"></script>
 <script src="/omega-grid-panel.js"></script>
 <script src="/omega-editor-features.js"></script>
@@ -309,7 +309,7 @@ body{font-family:'IBM Plex Sans',sans-serif;background:var(--bg);color:var(--tex
 .logo svg{height:26px}
 .logo-t{color:var(--text);font-size:15px;font-weight:700;letter-spacing:.5px}
 .logo-t span{color:var(--accent)} /* tg2026:D1FCEE6924ECB1F5 */
-#pname{background:transparent;border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:5px;font-size:12px;width:180px;font-family:inherit}
+#pname{background:transparent;border:1px solid var(--border);color:var(--text);padding:4px 10px;border-radius:5px;font-size:12px;width:180px;font-family:inherit;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .sp{flex:1}
 .btn{border:none;padding:5px 11px;border-radius:5px;cursor:pointer;font-size:11px;font-weight:600;display:flex;align-items:center;gap:4px;font-family:inherit;transition:all .12s;white-space:nowrap}
 .btn-ghost{background:var(--hover);color:var(--text)}
@@ -657,11 +657,19 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
   font-size:11px; user-select:none;
 }
 #o2-tb.o2-hidden{ display:none }
-.o2-row{ display:flex; align-items:stretch; gap:0; min-height:28px; flex-wrap:wrap }
+.o2-row{
+  display:flex; align-items:stretch; gap:0; min-height:28px;
+  /* One row, always: wrapping used to drop Pitch/Axial onto a ragged
+     second line at laptop widths. Overflow scrolls, like the ribbon. */
+  flex-wrap:nowrap; overflow-x:auto; overflow-y:hidden;
+  -webkit-overflow-scrolling:touch; scrollbar-width:thin;
+}
+.o2-row::-webkit-scrollbar{ height:4px }
+.o2-row::-webkit-scrollbar-thumb{ background:var(--border); border-radius:2px }
 .o2-row1{ border-bottom:1px solid var(--border) }
 .o2-cls{
   display:flex; align-items:center; gap:5px; padding:0 12px; cursor:pointer;
-  color:var(--sub); border-right:1px solid var(--border); white-space:nowrap;
+  color:var(--sub); border-right:1px solid var(--hairline); white-space:nowrap;
   font-weight:600; letter-spacing:.02em; background:transparent;
   border-top:2px solid transparent;
 }
@@ -672,7 +680,7 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
 .o2-spacer{ flex:1 }
 .o2-verb{
   display:flex; align-items:center; gap:5px; padding:0 10px; cursor:pointer;
-  color:var(--sub); background:transparent; border:none; border-right:1px solid var(--border);
+  color:var(--sub); background:transparent; border:none; border-right:1px solid var(--hairline);
   font-family:inherit; font-size:10.5px; font-weight:600; white-space:nowrap;
 }
 .o2-verb:hover:not(:disabled){ color:var(--text); background:var(--hover) }
@@ -680,7 +688,7 @@ table.e3-tbl tr.e3-arch td{ opacity:.45 }
 .o2-verb.o2-danger:hover:not(:disabled){ color:#E88; background:rgba(200,106,106,.10) }
 .o2-fld{
   display:flex; align-items:center; gap:5px; padding:0 10px;
-  border-right:1px solid var(--border); color:var(--sub); font-size:10px; white-space:nowrap;
+  border-right:1px solid var(--hairline); color:var(--sub); font-size:10px; white-space:nowrap;
 }
 .o2-fld input{
   width:52px; background:var(--surface); border:1px solid var(--border);
@@ -2572,7 +2580,15 @@ window.onerror = function(msg, src, line, col, err) {
       <div class="rpanel-cap">Workspace</div>
     </div>
   </div>
-  <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
+  <!-- The address is a captioned panel like every other ribbon group, so it
+       shares the ribbon's rhythm instead of reading as a box pasted over it.
+       hideEmptyPanels() leaves it alone because it holds no .rbtn. -->
+  <div class="rpanel omega-addr-cell">
+    <div class="rpanel-body">
+      <div class="omega-addr" title="Type a site address and press Enter to load the satellite map there"><span class="omega-addr-ico">◎</span><input id="omega-addr-in" type="text" placeholder="Site address…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter'){event.preventDefault();omegaLoadMap();}"><button type="button" id="omega-addr-go" onclick="omegaLoadMap()">Load</button></div>
+    </div>
+    <div class="rpanel-cap">Site Address</div>
+  </div>
 </div>
 <div id="omega-merged-park" hidden>
   <button class="rbtn omega-gated-hidden" data-omega-dupe="1" hidden onclick="openRpPanel('summary')" title="Site map summary — kept on Estimate"><span class="rb-ico">▤</span><span class="rb-lbl">Summary</span></button>
@@ -2799,9 +2815,12 @@ function _rbFlyArm(){
     if(t && (t.closest && (t.closest('.rb-flyout')||t.closest('.rbtn-caret')))) return;
     rbCloseFlys();
   }, true);
-  /* fixed-positioned flyouts don't track the ribbon; close them if it scrolls/resizes */
+  /* fixed-positioned flyouts don't track the ribbon; close them if it
+     scrolls/resizes. The scroller is the active .ribbon-page (the #ribbon
+     grid itself never scrolls) and scroll events do not bubble, so listen
+     in the capture phase to hear the page's scroll from here. */
   var rib=document.getElementById('ribbon');
-  if(rib) rib.addEventListener('scroll', rbCloseFlys, {passive:true});
+  if(rib) rib.addEventListener('scroll', rbCloseFlys, {passive:true, capture:true});
   window.addEventListener('resize', rbCloseFlys);
 }
 
@@ -6194,24 +6213,24 @@ const ICONS={
     ${[0,1,2,3,4,5,6,7,8,9,10,11].map(i=>`<line x1="${i*5}" y1="52" x2="${i*5+4}" y2="57" stroke="#5C3D11" stroke-width="0.6" opacity="0.5"/>`).join('')}
     <!-- Pole base flange / ground plate -->
     <rect x="24" y="50" width="12" height="3" rx="0.5" fill="#3D2800" stroke="#5C3D11" stroke-width="0.8"/>
-    <!-- Main pole shaft -- tapered wood pole -->
+    <!-- Main pole shaft: tapered wood pole -->
     <polygon points="26,4 34,4 33,51 27,51" fill="url(#wood-${s})" stroke="#4A2C00" stroke-width="1.2"/>
     <!-- Pole outer edge highlight (simulate round pole) -->
     <line x1="26" y1="4" x2="27" y2="51" stroke="rgba(255,200,100,.15)" stroke-width="1.5" stroke-linecap="round"/>
-    <!-- Step bolts (climbing steps) -- right side -->
+    <!-- Step bolts (climbing steps), right side -->
     ${[15,22,29,36,43].map(y=>`
       <rect x="33" y="${y-0.8}" width="5" height="1.6" rx="0.5" fill="#888" stroke="#666" stroke-width="0.4"/>
       <circle cx="37.5" cy="${y}" r="0.8" fill="#AAA"/>
     `).join('')}
     <!-- Cross-arm (horizontal member) -->
     <rect x="8" y="9" width="44" height="4" rx="1" fill="#5C3A10" stroke="#3D2800" stroke-width="1.2"/>
-    <!-- Cross-arm hardware -- through-bolt in center -->
+    <!-- Cross-arm hardware: through-bolt in center -->
     <rect x="28.5" y="7" width="3" height="8" rx="0.5" fill="#888" stroke="#666" stroke-width="0.5"/>
     <circle cx="30" cy="11" r="1.8" fill="#777" stroke="#555" stroke-width="0.5"/>
     <!-- Cross-arm braces (diagonal) -->
     <line x1="27" y1="13" x2="14" y2="10" stroke="#3D2800" stroke-width="1" stroke-linecap="round"/>
     <line x1="33" y1="13" x2="46" y2="10" stroke="#3D2800" stroke-width="1" stroke-linecap="round"/>
-    <!-- Insulators (glass/porcelain pin insulators) -- 3 across cross-arm -->
+    <!-- Insulators (glass/porcelain pin insulators), 3 across cross-arm -->
     ${[[13,9],[30,9],[47,9]].map(([ix,iy])=>`
       <rect x="${ix-2}" y="${iy-3}" width="4" height="5" rx="1" fill="#8BAABF" stroke="#5A7A8A" stroke-width="0.7"/>
       <ellipse cx="${ix}" cy="${iy-3}" rx="2.5" ry="1" fill="#B8CDD8" stroke="#5A7A8A" stroke-width="0.5"/>
@@ -9542,7 +9561,11 @@ function renderEl(el){
               fill="none" stroke="${_padK.edge}" stroke-width="3"/>
       </svg>`;
     })() : '';
-    inner=`${_pad}<div class="elbody eq-node" style="width:${sz}px;transform:rotate(${el.rot||0}deg);position:relative;z-index:1">
+    /* The palette charger carries its mounting too, through the same
+       helper the guided-build renderer uses. */
+    let _eqMount='';
+    try{ if(window.OmegaEVMount) _eqMount=OmegaEVMount.overlay(el, sz, sz); }catch(_e){}
+    inner=`${_pad}${_eqMount}<div class="elbody eq-node" style="width:${sz}px;transform:rotate(${el.rot||0}deg);position:relative;z-index:1">
       ${fn(sz)}
     </div>
     ${(!el.hideLabel && el.eqId !== 'bollard') ? `<div class="eq-lbl-wrap" data-lid="${el.id}" style="position:absolute;left:${sz/2+ldx}px;top:${sz/2+ldy}px;transform:translate(-50%,0);cursor:grab;z-index:10;pointer-events:auto">
@@ -9563,23 +9586,12 @@ function renderEl(el){
     // (mirror across trench) and rotate for field-accurate placement.
     var gw=el.w||60, gh=el.h||Math.round(gw*(el.aspect||0.72));
     wrap.style.width=gw+'px'; wrap.style.height=gh+'px';
-    var _EVR=(typeof EVRENDER!=='undefined')?EVRENDER:(window.EVRENDER||{});
-    var rf=(_EVR[el.evKind]||_EVR.service||function(w,h){return '<svg width="'+w+'" height="'+(h||w)+'" viewBox="0 0 40 40"><rect x="2" y="2" width="36" height="36" rx="3" fill="#37424f" stroke="#8b98a5" stroke-width="1.5"/></svg>';});
     var flip=el.flip?' scaleX(-1)':'';
-    // Chargers: if the selected DCFC model shipped a real photo (evImg), render
-    // that PNG to scale instead of the synthetic vector cabinet.
-    var _gearHtml;
-    if(el.evKind==='charger' && el.evImg){
-      _gearHtml='<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;object-fit:contain;display:block" draggable="false">';
-    } else {
-      var _visuals=window.OmegaEquipmentVisuals;
-      var _gearKind=el.evKind==='service'?'meter':el.evKind;
-      if(el.evKind==='service' && el.svcPedestal && ICONS.svcped)
-        _gearHtml=ICONS.svcped(Math.min(gw,gh||gw));   /* a service pedestal wears its own symbol */
-      else if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
-        _gearHtml=_visuals.symbol(_gearKind,gw,gh);
-      else _gearHtml=rf(gw,gh);
-    }
+    /* The symbol is omegaGearSymbol's to choose — the ONE rule the legend
+       asks too, so the plan and the key cannot draw different artwork for
+       the same object (the product photo, the service pedestal, the
+       catalogue's metered gear, else the plan view) . */
+    var _gearHtml=omegaGearSymbol(el,gw,gh);
     /* Bollard protection pad. The earlier version of this only ran in the
        type==='eq' branch, but guided builds place chargers as type
        'evgear' with the role on .evKind -- so it never appeared on the
@@ -9613,7 +9625,12 @@ function renderEl(el){
         + '<rect x="1.5" y="1.5" width="'+(_pw2-3)+'" height="'+(_ph2-3)+'" rx="3" fill="none" stroke="'+_padK.edge+'" stroke-width="3"/>'
         + '</svg>';
     }
-    inner=_evPad+'<div class="elbody evgear-node" style="position:relative;z-index:1;width:'+gw+'px;height:'+gh+'px;transform:rotate('+(el.rot||0)+'deg)'+flip+';transform-origin:center">'
+    /* HOW IT IS MOUNTED, ON THE DRAWING. Between the bollard island and
+       the cabinet: the island is the stall footprint, the mount is the
+       thing the cabinet is fixed to. */
+    var _evMount='';
+    try{ if(window.OmegaEVMount) _evMount=OmegaEVMount.overlay(el, gw, gh); }catch(_e){}
+    inner=_evPad+_evMount+'<div class="elbody evgear-node" style="position:relative;z-index:1;width:'+gw+'px;height:'+gh+'px;transform:rotate('+(el.rot||0)+'deg)'+flip+';transform-origin:center">'
       + _gearHtml + '</div>'
       + ((!el.hideLabel) ? '<div class="eq-lbl-wrap" data-lid="'+el.id+'" style="position:absolute;left:'+(gw/2+(el.lblDx||0))+'px;top:'+(gh+(el.lblDy||6))+'px;transform:translate(-50%,0);cursor:grab;z-index:10;pointer-events:auto">'
         + '<button class="lbl-hide-btn" onclick="event.stopPropagation();toggleElLabel(\''+el.id+'\')" title="Hide label" style="position:absolute;top:-6px;right:-6px;width:14px;height:14px;border-radius:50%;background:rgba(100,100,120,.8);border:none;color:rgba(255,255,255,.7);font-size:9px;line-height:1;cursor:pointer;padding:0;display:none;align-items:center;justify-content:center;z-index:20">x</button>'
@@ -9768,6 +9785,56 @@ function showProps(id){
     } else if(_row){ _row.style.display='none'; }
   }catch(_e){}
 
+  /* ── MOUNTING ──────────────────────────────────────────────────────
+     Which chargers stand on a pedestal and which hang off the building.
+     Beside the future-proof row and for the same reason: this is a thing
+     a charger IS, so it belongs in the panel that opens when you click
+     one, not behind a ribbon button somebody has to know about. */
+  try{
+    var _mf=document.getElementById('pf');
+    var _mrow=document.getElementById('p-evmount-row');
+    var _isMnt = window.OmegaEVMount && OmegaEVMount.isCharger(el);
+    if(_mf && _isMnt){
+      if(!_mrow){
+        _mrow=document.createElement('div');
+        _mrow.id='p-evmount-row';
+        _mrow.style.cssText='margin:8px 0;padding:8px 10px;background:rgba(215,222,230,.06);'
+          +'border:1px solid rgba(215,222,230,.22);border-radius:7px';
+        _mrow.innerHTML='<div style="font-size:11px;font-weight:700;color:var(--text);margin-bottom:5px">Mounting</div>'
+          +'<div style="display:flex;gap:6px">'
+          +'<button type="button" data-mount="pedestal" class="evmnt-b" style="flex:1;padding:6px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">Pedestal</button>'
+          +'<button type="button" data-mount="wall" class="evmnt-b" style="flex:1;padding:6px 4px;border-radius:6px;cursor:pointer;font-size:10px;font-weight:700">Wall</button>'
+          +'</div>'
+          +'<div style="font-size:9px;color:var(--sub);margin-top:5px;line-height:1.45">'
+          +'Drawn on the site map and split out in the legend, so the sheet says which units '
+          +'stand on a pedestal and which are fixed to the building.</div>'
+          +'<div id="p-evmount-sum" style="font-size:9px;color:var(--sub);margin-top:5px"></div>';
+        _mf.appendChild(_mrow);
+        _mrow.querySelectorAll('.evmnt-b').forEach(function(b){
+          b.addEventListener('click',function(){
+            var cur=S.elements.find(function(x){return x.id===S.sel;});
+            if(!cur) return;
+            OmegaEVMount.setMount(cur, this.getAttribute('data-mount'));
+            OmegaEVMount.refresh();
+            showProps(S.sel);
+          });
+        });
+      }
+      _mrow.style.display='block';
+      var _cm=OmegaEVMount.mountOf(el);
+      _mrow.querySelectorAll('.evmnt-b').forEach(function(b){
+        var on=b.getAttribute('data-mount')===_cm;
+        b.style.background = on ? 'var(--accent)' : 'var(--surface)';
+        b.style.color      = on ? '#0B1622' : 'var(--text)';
+        b.style.border     = '1px solid '+(on ? 'var(--accent)' : 'var(--border)');
+      });
+      var _ms=document.getElementById('p-evmount-sum');
+      if(_ms) _ms.textContent = OmegaEVMount.isDual(el)
+        ? ('This placement is one dual-port pedestal carrying ' + (el.units||2) + ' units. ' + OmegaEVMount.summary())
+        : OmegaEVMount.summary();
+    } else if(_mrow){ _mrow.style.display='none'; }
+  }catch(_e){}
+
   /* DCFC size + shared-trench controls, for chargers only. */
   try{ if(window._dcfcProps) window._dcfcProps(el); }catch(_e){}
 }
@@ -9793,6 +9860,14 @@ function uP(k,v){
         el._geoWFt = el.w/S.pxPerFt;
         if(el.h>0) el._geoHFt = el.h/S.pxPerFt;
         el._domW = el.w;
+        /* and the footprint in FEET the zoom rescale draws equipment at
+           (omegaRescaleElements), as the drag-resize path writes it, or the
+           next pass puts the old size back */
+        if(el.type==='eq' || el.type==='evgear' || el.type==='bess-asm'){
+          var _uh = el.type==='evgear' ? Math.round(el.w*(el.aspect||0.72))
+                  : el.type==='bess-asm' ? Math.round(el.w*0.55) : ((+el.h>0) ? +el.h : el.w);
+          el.lf = el.w/S.pxPerFt; el.wf = _uh/S.pxPerFt; el._ppfAtPlace = S.pxPerFt;
+        }
       }
     }catch(e){}
     const bd=dom.querySelector('.elbody');if(bd){bd.style.width=v+'px';bd.style.minWidth=v+'px';}
@@ -19093,7 +19168,7 @@ function renderLegend(){
 
   /* Placed equipment, grouped with counts (bollards etc. collapse). */
   try{
-    var counts={}, evMeta={}, _lblSeen={}, _lblOrder=[];
+    var counts={}, evMeta={}, _rowEl={}, _lblSeen={}, _lblOrder=[];
     /* 'eq' is the Insert-palette equipment. Guided builds place 'evgear' via
        _evAdd — the meter bank, outdoor panel, switchgear and every charger.
        Filtering to 'eq' alone meant an entire guided build produced a legend
@@ -19118,11 +19193,28 @@ function renderLegend(){
            double-count the same object. */
         if(e && e.id!=null && _fleetElIds[e.id]) return;
         var id=e.eqId||e.evKind||'jbox';
+        /* ── THE KEY DECIDES THE SYMBOL, SO IT MUST BE THE DRAWN ONE ─────
+           renderEl draws a service flagged svcPedestal with ICONS.svcped —
+           its own pedestal symbol — but the key here fell through to the
+           evKind, 'service', so the legend drew the utility-service glyph
+           and called it "Utility Service". Two different symbols for one
+           object on the same sheet is exactly what a reviewer queries.
+           A pedestal placed from Insert is already eqId 'svcped'; this
+           makes the guided-build one agree with it, which also merges the
+           two placement paths into a single row. */
+        if(e.type==='evgear' && e.evKind==='service' && e.svcPedestal) id='svcped';
         /* A future-proofed stall is not a charger the customer owns. Give it
            its own legend key so two installed and two future read as exactly
            that, instead of collapsing into one row of four. */
         try {
           if(window.OmegaEVFuture && OmegaEVFuture.isCharger(e) && OmegaEVFuture.isFuture(e)) id = id + '__future';
+        } catch(_e){}
+        /* ── WHICH ONES HANG ON THE WALL ─────────────────────────────────
+           A job mixes mounting types and the key has to say so, or eight
+           identical rows leave the installer guessing. Same device under
+           two mountings is two rows, each carrying its own symbol. */
+        try {
+          if(window.OmegaEVMount && OmegaEVMount.isCharger(e)) id = id + '__mnt-' + OmegaEVMount.key(e);
         } catch(_e){}
         /* EQ chargers carry no evModel, so record the catalog label for the
            future row too or it prints a raw id. */
@@ -19130,6 +19222,12 @@ function renderLegend(){
            chargers under the charger row, and the pedestal on its own row. */
         counts[id]=(counts[id]||0)+((e.type==='evgear' && e.units>1) ? e.units : 1);
         if(e.type==='evgear' && e.pedestal) counts['evpedestal']=(counts['evpedestal']||0)+1;
+        /* Keep the first element behind each row. The key cannot ask
+           omegaGearSymbol what this thing draws without the thing itself:
+           the symbol turns on the element's own fields (its product photo,
+           the pedestal flag, the catalogue reference), none of which
+           survive in a bare id. */
+        if(!_rowEl[id]) _rowEl[id]=e;
         /* Keep the real unit name and rating so the legend reads
            "Autel MaxiCharger AC Ultra", not "charger". */
         if(e.type==='evgear' && !evMeta[id]){
@@ -19183,16 +19281,43 @@ function renderLegend(){
         /* Last resort: never print a raw snake_case id at a customer. */
         return String(k).replace(/[_-]+/g,' ').replace(/\b\w/g,function(c){ return c.toUpperCase(); });
       }
-      var _isFut=/__future$/.test(id);
-      var _base=_isFut ? id.replace(/__future$/,'') : id;
-      if(_isFut && !eq) eq=(typeof EQ!=='undefined')?EQ.find(x=>x.id===_base):null;
+      /* Strip EVERY marker to get back to the catalogue id. These stack --
+         a future-proofed wall-mounted stall carries both -- so an anchored
+         "__future$" test stopped matching the moment a second marker was
+         appended after it, and the row fell back to a raw id and a junction
+         box icon. Order-independent, and the base is what the catalogue,
+         the icon table and DC_CATALOG are all looked up with. */
+      var _mntK=(/__mnt-([a-z]+)/.exec(id)||[])[1]||null;
+      var _isFut=/__future/.test(id);
+      var _base=id.replace(/__mnt-[a-z]+/,'').replace(/__future/,'');
+      if(_base!==id && !eq) eq=(typeof EQ!=='undefined')?EQ.find(x=>x.id===_base):null;
+      if(_base!==id && !dc) dc=(typeof DC_CATALOG!=='undefined')?DC_CATALOG[_base]:null;
       var label=(ev&&ev.label) ? ev.label
               : (eq ? eq.label
               : (dc ? (dc.model||dc.label||_prettyId(_base))
               : _prettyId(_base)));
       /* Say it on the drawing, not just in the estimate: a reviewer reading
          the legend has to be able to see which stalls are being built. */
+      if(_mntK && window.OmegaEVMount) label += ' \u2014 ' + OmegaEVMount.label(_mntK);
       if(_isFut) label += ' \u2014 future (conduit and breaker only)';
+      /* The key's symbol is the symbol on the map: the mounting swatch for
+         a charger, the catalogue icon for everything else. Resolved off the
+         BASE id, never the marked one, or every marked row prints a
+         junction box. */
+      /* ── THE KEY DRAWS WHAT THE MAP DREW ─────────────────────────────
+         A charger keeps its mounting swatch, which is what tells a
+         pedestal pair from the wall-mounted units. Everything a guided
+         build placed asks omegaGearSymbol — the SAME call renderEl makes
+         — so the outdoor panel, the meter bank, the switchgear and the
+         service pedestal are the artwork that is actually on the plan.
+         Only the Insert palette's own equipment falls through to ICONS,
+         which is what renderEl draws for those. */
+      var ico=null, _rel=_rowEl[id];
+      try{
+        if(_mntK && window.OmegaEVMount) ico=OmegaEVMount.swatch(_mntK,16);
+        else if(_rel && _rel.type==='evgear') ico=omegaGearSymbol(_rel,16,16);
+        else ico=((typeof ICONS!=='undefined' && ICONS[_base]) ? ICONS[_base] : ICONS.jbox)(16);
+      }catch(_e){ try{ ico=ICONS.jbox(16); }catch(_x){ ico=''; } }
       /* The same physical item can arrive under two ids — a battery placed as
          'acblock' in one build and 'bess' in another both read "BESS AC Block".
          Merge on the printed label so the legend lists equipment, not ids. */
@@ -19220,13 +19345,13 @@ function renderLegend(){
         if(!_lblSeen[label].sub && sub) _lblSeen[label].sub = sub;
         return;
       }
-      _lblSeen[label] = { id:id, label:label, qty:(counts[id]||0), sub:sub, order:_lblOrder.length };
+      _lblSeen[label] = { id:id, ico:ico, label:label, qty:(counts[id]||0), sub:sub, order:_lblOrder.length };
       _lblOrder.push(label);
     });
 
     _lblOrder.forEach(function(lb){
       var G=_lblSeen[lb];
-      eqRows+='<div class="li"><div class="li-ico">'+((ICONS[G.id]||ICONS.jbox)(16))+'</div>'
+      eqRows+='<div class="li"><div class="li-ico">'+(G.ico||'')+'</div>'
         +'<span class="li-txt">'+G.label+(G.qty>1?(' \u00d7'+G.qty):'')+(G.sub||'')+'</span></div>';
       eqCount+=G.qty;
     });
@@ -28446,6 +28571,22 @@ async function _preCaptureNormalize(el) {
       // If the SVG has no explicit viewBox, give it one matching its box so the
       // rasterized image keeps the same coordinate space.
       if(!clone.getAttribute('viewBox')){ clone.setAttribute('viewBox','0 0 '+w+' '+h); }
+      /* ── A COMMENT CAN TAKE THE WHOLE SYMBOL OFF THE SHEET ───────────
+         The serialized clone is handed to an <img> as image/svg+xml, which
+         is parsed as XML — and XML forbids "--" INSIDE a comment. The HTML
+         parser accepts it, so the icon is perfect on screen and the drawing
+         looks right while you work; it is only the export that silently
+         loses it, because the Image() just fires onerror and we return.
+         That is what hid the utility pole: an authoring note reading
+         "Step bolts (climbing steps) -- right side". The comments carry
+         nothing visual, so strip them rather than trusting every future
+         edit to avoid a double hyphen. */
+      try{
+        var _cw = document.createTreeWalker(clone, NodeFilter.SHOW_COMMENT, null, false);
+        var _dead = [], _cn;
+        while((_cn = _cw.nextNode())) _dead.push(_cn);
+        _dead.forEach(function(n){ if(n.parentNode) n.parentNode.removeChild(n); });
+      }catch(e){}
       var svgStr = new XMLSerializer().serializeToString(clone);
       var url = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgStr)));
       var drawn = await new Promise(function(resolve){
@@ -28534,6 +28675,13 @@ async function _preCaptureNormalize(el) {
      often enough to be unreliable. Rasterize them the same way. */
   var padSvgs = el.querySelectorAll('svg.ev-bollard-pad');
   for(var pi=0; pi<padSvgs.length; pi++){ await _rasterizeSvgInPlace(padSvgs[pi]); }
+
+  /* The mounting symbol (wall bracket / pedestal base plate) sits beside
+     the cabinet in the same way the bollard island does, so it needs the
+     same treatment -- it is the one thing on the sheet that says which
+     chargers hang off the wall and which stand on a pedestal. */
+  var mountSvgs = el.querySelectorAll('svg.ev-mount');
+  for(var mi=0; mi<mountSvgs.length; mi++){ await _rasterizeSvgInPlace(mountSvgs[mi]); }
 
   // The whole conduit + trench layer (single big SVG) — rasterize as one image
   // so every polyline, trench band, label and vertex lands on the export.
@@ -34939,24 +35087,28 @@ function _o2VerbsClass(key){
   h += _o2Btn('\u2699 Edit group', 'o2EditGroup()', n>0, 'Open the editor for this class');
   h += _o2Btn('\u2715 Delete', 'o2Delete()', !!one, 'Delete the selected item', true);
 
-  /* Axial / Pitch live fields — only meaningful for solar arrays. */
+  /* Axial / Pitch live fields — only meaningful for solar arrays, so the
+     two number boxes exist only while one is selected. Rendering them
+     disabled-and-empty BESIDE the "select an array" hint read as a broken
+     control and widened the bar for nothing. o2ApplyGeom() already
+     null-guards both ids. */
   var solarSel = _o2SelectedSolar();
-  var dis = solarSel ? '' : ' disabled';
-  h += '<div class="o2-fld">'
-     +   '<span title="Row-to-row spacing, centre to centre">Pitch</span>'
-     +   '<input id="o2-pitch" type="number" step="0.5" min="0"'+dis
-     +     ' value="'+(solarSel && solarSel.pitchFt ? (+solarSel.pitchFt).toFixed(1) : '')+'"'
-     +     ' onchange="o2ApplyGeom()" onkeydown="if(event.key===\'Enter\')o2ApplyGeom()">'
-     +   '<span>ft</span>'
-     + '</div>';
-  h += '<div class="o2-fld">'
-     +   '<span title="Table width along the row axis">Axial</span>'
-     +   '<input id="o2-axial" type="number" step="0.5" min="0"'+dis
-     +     ' value="'+(solarSel && solarSel.tableWft ? (+solarSel.tableWft).toFixed(1) : '')+'"'
-     +     ' onchange="o2ApplyGeom()" onkeydown="if(event.key===\'Enter\')o2ApplyGeom()">'
-     +   '<span>ft</span>'
-     + '</div>';
-  if(!solarSel){
+  if(solarSel){
+    h += '<div class="o2-fld">'
+       +   '<span title="Row-to-row spacing, centre to centre">Pitch</span>'
+       +   '<input id="o2-pitch" type="number" step="0.5" min="0"'
+       +     ' value="'+(solarSel.pitchFt ? (+solarSel.pitchFt).toFixed(1) : '')+'"'
+       +     ' onchange="o2ApplyGeom()" onkeydown="if(event.key===\'Enter\')o2ApplyGeom()">'
+       +   '<span>ft</span>'
+       + '</div>';
+    h += '<div class="o2-fld">'
+       +   '<span title="Table width along the row axis">Axial</span>'
+       +   '<input id="o2-axial" type="number" step="0.5" min="0"'
+       +     ' value="'+(solarSel.tableWft ? (+solarSel.tableWft).toFixed(1) : '')+'"'
+       +     ' onchange="o2ApplyGeom()" onkeydown="if(event.key===\'Enter\')o2ApplyGeom()">'
+       +   '<span>ft</span>'
+       + '</div>';
+  } else {
     h += '<div class="o2-fld" style="border-right:none;opacity:.6">'
        +   '<span>Select an array to edit spacing</span></div>';
   }
@@ -60980,6 +61132,271 @@ var EVRENDER = {
 };
 /* Footprint (ft) for realistic scaling. Falls back to sensible defaults. */
 try{ window.EVRENDER = EVRENDER; }catch(e){}
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  ONE OBJECT, ONE SYMBOL
+ *  ---------------------------------------------------------------------
+ *  A thing on the plan and its row in the key must be the SAME drawing.
+ *  They were not, because each side picked its own artwork: renderEl ran
+ *  a four-way branch (a charger's product photo, the service pedestal,
+ *  OmegaEquipmentVisuals for the metered gear, else EVRENDER's plan view)
+ *  while renderLegend reached straight into ICONS by id. For an outdoor
+ *  panel that meant a grey cabinet on the map and a green badge in the
+ *  key (Menachem, 172 Summer St, 2026-10-29: "the outdoor panel
+ *  disconnect is still not the same icon"), and the service pedestal was
+ *  the same fault one branch over, patched there rather than here.
+ *
+ *  So the branch lives in ONE function and both callers ask it. A symbol
+ *  added to either table, or a new rule for picking one, reaches the map
+ *  and the key together or not at all.
+ *
+ *  Sized by the caller: the map passes the element's own footprint in
+ *  pixels, the key passes its 16px swatch. Everything these tables return
+ *  carries a viewBox, so both scale from the same source.
+ * ══════════════════════════════════════════════════════════════════════ */
+function omegaGearSymbol(el, w, h){
+  if(!el) return '';
+  w = Math.max(2, Math.round(w||40)); h = Math.max(2, Math.round(h||w));
+  var ICO = (typeof ICONS!=='undefined') ? ICONS : (window.ICONS||{});
+  var EVR = (typeof EVRENDER!=='undefined') ? EVRENDER : (window.EVRENDER||{});
+  var vis = window.OmegaEquipmentVisuals;
+  /* A charger whose model shipped a real photo is drawn as that photo. */
+  if(el.evKind==='charger' && el.evImg)
+    return '<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;'
+         + 'object-fit:contain;display:block" draggable="false">';
+  /* A service on a freestanding pedestal wears the pedestal, not a meter. */
+  if(el.evKind==='service' && el.svcPedestal && ICO.svcped)
+    return ICO.svcped(Math.min(w,h));
+  /* Gear that answers to a real product reference: the meter bank, and the
+     outdoor panel when the catalogue recognises it. */
+  var kind = (el.evKind==='service') ? 'meter' : el.evKind;
+  if(vis && (kind==='meter' || (kind==='panel' && vis.resolve(el,'panel')))){
+    try{ return vis.symbol(kind,w,h); }catch(e){}
+  }
+  /* Otherwise the plan view, and a plain cabinet for a role with none. */
+  if(typeof EVR[el.evKind]==='function'){
+    try{ return EVR[el.evKind](w,h); }catch(e){}
+  }
+  if(typeof EVR.service==='function'){
+    try{ return EVR.service(w,h); }catch(e){}
+  }
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">'
+       + '<rect x="2" y="2" width="36" height="36" rx="3" fill="#37424f" stroke="#8b98a5" stroke-width="1.5"/></svg>';
+}
+try{ window.omegaGearSymbol = omegaGearSymbol; }catch(e){}
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  HOW A CHARGER IS MOUNTED
+ *  ---------------------------------------------------------------------
+ *  A job mixes mounting types: a pair of units share one dual-port floor
+ *  pedestal in the drive aisle while the rest hang off the building wall.
+ *  The drawing had no way to say that. Every charger drew as the same
+ *  free-standing cabinet, so the sheet showed eight identical units and
+ *  the mounting lived only in somebody's email — which is precisely the
+ *  detail an AHJ and the installer both need off the plan.
+ *
+ *  Mounting is a SITE decision, not a model property: most Level 2 units
+ *  ship with both a wall bracket and a pedestal kit (their own spec lines
+ *  read "wall/pedestal"). So it is a per-element field, defaulted from the
+ *  catalogue and changed on the element.
+ *
+ *    el.mount === 'wall'      wall-mounted, bracket on the building face
+ *    el.mount === 'pedestal'  floor pedestal (the default)
+ *    el.units  > 1            that pedestal carries two units, dual-port
+ *
+ *  THE SYMBOLS ARE TOLD APART BY FORM, NOT COLOUR. These sheets print as
+ *  "Technical (black on white)" for permit sets and go through a B&W
+ *  plotter; a distinction carried by hue alone disappears there. A wall
+ *  mount is the hatched wall face with brackets, a pedestal is a base
+ *  plate with anchor bolts — both read at any size, in any style.
+ * ══════════════════════════════════════════════════════════════════════ */
+var OmegaEVMount = (function(){
+  'use strict';
+  var INK = '#D7DEE6', DEEP = '#0E1620';
+
+  function isCharger(e){
+    return !!(e && ((e.type==='evgear' && e.evKind==='charger') ||
+                    (e.type==='eq' && e.eqId==='charger')));
+  }
+  /* The stored value wins. With nothing stored, a catalogue entry that
+     ships as a dual floor pedestal is one, and everything else defaults to
+     a pedestal — which is what the drawing already drew, so an existing
+     project opens looking exactly as it did before this shipped. */
+  function mountOf(e){
+    if(!e) return 'pedestal';
+    var m = String(e.mount||'').toLowerCase();
+    if(m==='wall'||m==='pedestal') return m;
+    return 'pedestal';
+  }
+  function isDual(e){ return !!(e && (e.units>1 || e.pedestal)); }
+  function setMount(e, m){
+    if(!e) return;
+    e.mount = (String(m).toLowerCase()==='wall') ? 'wall' : 'pedestal';
+  }
+  /* The legend key, so wall and pedestal units land on rows of their own
+     instead of collapsing into one "EV Charger x8". */
+  function key(e){ return mountOf(e)==='wall' ? 'wall' : (isDual(e) ? 'dual' : 'pedestal'); }
+  function label(k){
+    return k==='wall' ? 'wall-mounted'
+         : k==='dual' ? 'dual-port pedestal'
+         : 'pedestal-mounted';
+  }
+
+  /* ── THE PLAN SYMBOL ───────────────────────────────────────────────
+     Drawn in the element's own box plus a margin, UNDER the cabinet, so
+     the unit itself is untouched and anything already drawn on it (the
+     photo render, the future-proof colouring) still shows. */
+  /* How far the mount sticks out past the cabinet on every side. The
+     caller needs this to place the overlay, so it is derived once here
+     rather than guessed twice. */
+  function margin(w, h){
+    w = Math.max(8, Math.round(w||40)); h = Math.max(8, Math.round(h||w));
+    return Math.max(4, Math.round(Math.min(w,h)*0.30));
+  }
+  function symbol(kind, w, h, dual){
+    w = Math.max(8, Math.round(w||40)); h = Math.max(8, Math.round(h||w));
+    var m  = margin(w, h);   /* margin for the mount */
+    var W  = w + m*2, H = h + m*2;
+    var s  = '<svg class="ev-mount" width="'+W+'" height="'+H+'" viewBox="0 0 '+W+' '+H+'" '
+           + 'xmlns="http://www.w3.org/2000/svg" aria-hidden="true">';
+    if(kind==='wall'){
+      /* The building face runs along the back edge: a heavy line with the
+         solid side hatched, which is how a wall reads on any plan, and two
+         short brackets tying the cabinet to it. */
+      var wy = m*0.42, t = Math.max(2, m*0.26);
+      s += '<rect x="'+(m*0.3)+'" y="'+wy+'" width="'+(W-m*0.6)+'" height="'+t+'" fill="'+INK+'"/>';
+      var n = Math.max(3, Math.round(W/Math.max(5,m*0.75)));
+      for(var i=0;i<n;i++){
+        var x0 = m*0.3 + (W-m*0.6)*(i/n);
+        s += '<line x1="'+x0+'" y1="'+wy+'" x2="'+(x0 - m*0.34)+'" y2="'+(wy - m*0.34)+'" '
+           + 'stroke="'+INK+'" stroke-width="'+Math.max(1,t*0.42)+'" opacity=".75"/>';
+      }
+      [0.34, 0.66].forEach(function(f){
+        s += '<rect x="'+(W*f - t*0.7)+'" y="'+(wy+t)+'" width="'+(t*1.4)+'" height="'+(m - wy - t + 2)+'" '
+           + 'fill="'+INK+'" opacity=".9"/>';
+      });
+    } else {
+      /* A base plate under the cabinet with anchor bolts at its corners.
+         A dual pedestal is ONE plate carrying both units, so it is drawn
+         as one plate with a centre post between the two port positions —
+         the thing that tells a reviewer two cabinets share one footing. */
+      var px = m*0.45, py = m*0.45;
+      var pw = W - px*2, ph = H - py*2;
+      s += '<rect x="'+px+'" y="'+py+'" width="'+pw+'" height="'+ph+'" rx="'+Math.max(2,m*0.22)+'" '
+         + 'fill="'+DEEP+'" fill-opacity=".45" stroke="'+INK+'" stroke-width="'+Math.max(1.4,m*0.17)+'"/>';
+      var r = Math.max(1.3, m*0.17);
+      [[px+r*2.2, py+r*2.2],[px+pw-r*2.2, py+r*2.2],
+       [px+r*2.2, py+ph-r*2.2],[px+pw-r*2.2, py+ph-r*2.2]].forEach(function(p){
+        s += '<circle cx="'+p[0]+'" cy="'+p[1]+'" r="'+r+'" fill="none" stroke="'+INK+'" '
+           + 'stroke-width="'+Math.max(1,m*0.12)+'"/>';
+      });
+      if(dual){
+        /* THE MARKER HAS TO LIVE WHERE THE CABINET IS NOT. Drawn across the
+           middle of the plate it was perfect and invisible: the cabinet
+           renders over the mount, so a single and a dual pedestal came out
+           as the same picture — which is the one distinction being asked
+           for. Run the divider the full height of the plate so it reads in
+           the exposed band above and below the unit, and put a port mark in
+           that band for each of the two units sharing the footing. */
+        s += '<line x1="'+(W/2)+'" y1="'+py+'" x2="'+(W/2)+'" y2="'+(py+ph)+'" '
+           + 'stroke="'+INK+'" stroke-width="'+Math.max(1.6,m*0.2)+'" stroke-dasharray="'+(m*0.5)+' '+(m*0.34)+'"/>';
+        var pr = Math.max(1.4, m*0.19), by = py+ph-pr-Math.max(1,m*0.1);
+        [W*0.5-pw*0.22, W*0.5+pw*0.22].forEach(function(cx){
+          s += '<circle cx="'+cx+'" cy="'+by+'" r="'+pr+'" fill="'+INK+'"/>';
+        });
+      }
+    }
+    return s + '</svg>';
+  }
+  /* The legend swatch: the same two forms at badge size, around a stub
+     cabinet, so the key and the map carry one symbol between them. */
+  /* A dual pedestal is drawn in the key as what it is: ONE plate under TWO
+     cabinets. Carrying the distinction on a dashed line alone made the two
+     pedestal rows indistinguishable at 16px, which is the size the key is
+     actually read at. */
+  function swatch(k, size){
+    var s2 = size||16, dual = (k==='dual');
+    var h = Math.round(s2*0.52), w = Math.round(s2*(dual?0.66:0.42));
+    var m  = Math.max(2, Math.round(Math.min(Math.round(s2*0.42),h)*0.30));
+    var W  = w + m*2, H = h + m*2;
+    var sc = s2/Math.max(W,H);
+    var cabs;
+    if(dual){
+      var cw = (w - m*0.5)/2;
+      cabs = '<rect x="'+m+'" y="'+m+'" width="'+cw+'" height="'+h+'" rx="1.5" fill="#37424f" stroke="#8b98a5" stroke-width="1.1"/>'
+           + '<rect x="'+(m+cw+m*0.5)+'" y="'+m+'" width="'+cw+'" height="'+h+'" rx="1.5" fill="#37424f" stroke="#8b98a5" stroke-width="1.1"/>';
+    } else {
+      cabs = '<rect x="'+m+'" y="'+m+'" width="'+w+'" height="'+h+'" rx="1.5" fill="#37424f" stroke="#8b98a5" stroke-width="1.2"/>';
+    }
+    return '<svg width="'+s2+'" height="'+s2+'" viewBox="0 0 '+s2+' '+s2+'" xmlns="http://www.w3.org/2000/svg">'
+      + '<g transform="translate('+((s2-W*sc)/2)+','+((s2-H*sc)/2)+') scale('+sc+')">'
+      + symbol(k==='wall'?'wall':'pedestal', w, h, dual).replace(/^<svg[^>]*>/,'').replace(/<\/svg>$/,'')
+      + cabs + '</g></svg>';
+  }
+
+  function counts(){
+    var out = { wall:0, pedestal:0, dual:0, dualUnits:0, total:0 };
+    try{
+      (S.elements||[]).forEach(function(e){
+        if(!isCharger(e)) return;
+        var n = (e.type==='evgear' && e.units>1) ? e.units : 1;
+        out.total += n;
+        var k = key(e);
+        if(k==='wall') out.wall += n;
+        else if(k==='dual'){ out.dual += 1; out.dualUnits += n; }
+        else out.pedestal += n;
+      });
+    }catch(e){}
+    return out;
+  }
+  function summary(){
+    var c = counts();
+    if(!c.total) return 'No EV chargers on the drawing.';
+    var bits = [];
+    if(c.dualUnits) bits.push(c.dualUnits+' on '+c.dual+' dual-port pedestal'+(c.dual===1?'':'s'));
+    if(c.pedestal)  bits.push(c.pedestal+' pedestal-mounted');
+    if(c.wall)      bits.push(c.wall+' wall-mounted');
+    return bits.join(' · ');
+  }
+  /* Redraw only the chargers, then the key. Same shape as the future-proof
+     module's refresh, and for the same reason: re-rendering drops the
+     selection class the renderer does not own. */
+  function refresh(){
+    try{
+      (S.elements||[]).forEach(function(e){
+        if(isCharger(e) && typeof _reRenderEl==='function'){ try{ _reRenderEl(e.id); }catch(x){} }
+      });
+      var sel = (typeof S!=='undefined') ? S.sel : null;
+      if(sel){ var n=document.querySelector('[data-elid="'+sel+'"]'); if(n) n.classList.add('sel'); }
+    }catch(e){}
+    try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
+    try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
+    try{ if(typeof _setSaved==='function') _setSaved('unsaved'); }catch(e){}
+  }
+
+  /* The overlay as renderEl drops it in: positioned, rotated with the unit
+     and inert. Both renderers call this, so the two placement paths — the
+     Insert palette and a guided build — cannot drift apart again.
+
+     The offset and the rotation go on the <svg> ITSELF, not on a wrapper
+     div, because that is what the export's rasterizer reads when it swaps
+     the symbol for a canvas (it prefers the SVG's own declared left/top
+     over a measured rect, which for a rotated element is the rotated
+     bounding box). A wrapper would put the raster back in the corner. */
+  function overlay(el, w, h){
+    if(!isCharger(el)) return '';
+    var m = margin(w, h);
+    return symbol(mountOf(el), w, h, isDual(el)).replace('<svg ',
+      '<svg style="position:absolute;left:'+(-m)+'px;top:'+(-m)+'px;'
+      + 'transform:rotate('+(+el.rot||0)+'deg);transform-origin:center;'
+      + 'pointer-events:none;z-index:0" ');
+  }
+
+  return { isCharger:isCharger, mountOf:mountOf, setMount:setMount, isDual:isDual,
+           key:key, label:label, symbol:symbol, swatch:swatch, margin:margin,
+           overlay:overlay, counts:counts, summary:summary, refresh:refresh };
+})();
+try{ window.OmegaEVMount = OmegaEVMount; }catch(e){}
 var EV_FOOTPRINT = {
   /* OMEGA PATCH 14 -- data-centre plant. */
   substation:{ lf:40.0, wf:30.0 },
@@ -66058,7 +66475,7 @@ window.OmegaBuild = {
     autelPriceBook: function(){ return typeof _evBook==='function'; },   /* the book is the server's; the reader is here */
     solarInEstimate:function(){ return typeof omegaSolarCost==='function'; },
     elRenderCenter: function(){ return typeof _elRenderSize==='function'; },
-    elementZoomScale:function(){ return typeof omegaRescaleElements==='function'; },
+    elementZoomScale:function(){ return typeof omegaRescaleElements==='function' && typeof omegaRescaleElementsOnce==='function'; },
     ghostSweep:function(){ return typeof omegaSweepGhosts==='function'; },
     conduitDrag:function(){ return typeof _cdDragStart==='function'; },
     pvDetailView:function(){ return typeof _pvDrawModules==='function'; },
@@ -66122,8 +66539,11 @@ try{ console.info('[omega/build] '+OMEGA_BUILD.id+' \u00b7 built '+OMEGA_BUILD.b
  *  the map pulled back. Position was anchored, size was not.
  *
  *  This rebuilds pixel size from the stored footprint in feet, about the
- *  element's CENTRE so nothing walks across the drawing, and runs from
- *  the same reprojection the anchor engine drives.
+ *  element's CENTRE so nothing walks across the drawing, and runs inside
+ *  the anchor engine's pass (UNIFIED ANCHORING, run()), once per frame.
+ *  It used to be a wrapper on window._geoReprojectAll, and the anchor
+ *  engine's standDown() replaces that whole chain, so from boot onward it
+ *  never ran: every guided-build unit kept the pixels it was placed at.
  * ═══════════════════════════════════════════════════════════════════ */
 function _elFootprintFt(el){
   if(!el) return null;
@@ -66142,8 +66562,35 @@ function _elFootprintFt(el){
     try{ var _cm=EVC_L2[el.catalogId]; lf=+_cm.lf||0; wf=+_cm.wf||0;
          if(!(el.minW>0) && _cm.minW) el.minW=_cm.minW; if(!(el.minH>0) && _cm.minH) el.minH=_cm.minH; }catch(e){}
   }
-  if(!(lf>0) && typeof footprintOf==='function' && el.eqId){
-    try{ var f=footprintOf(el.eqId); if(f){ lf=+f.lf||0; wf=+f.wf||0; } }catch(e){}
+  /* A unit size typed in feet (the DCFC panel's OmegaDCFC.setUnitFt) is the
+     footprint, over whatever the unit was placed with: one saved before
+     setUnitFt also wrote lf/wf carries it only here. */
+  if(+el.evFtL>0 && +el.evFtW>0){ lf=+el.evFtL; wf=+el.evFtW; }
+  /* An Insert item records its footprint as it lands (OmegaInsert's addEl
+     hook); one placed past that hook (a charger's own bollards) or before it
+     existed names only its kind, and Insert's table answers for it. (This
+     asked for a global footprintOf, which never existed: that table lives
+     inside OmegaInsert.) */
+  if(!(lf>0) && el.type==='eq' && el.eqId && typeof window!=='undefined' && window.OmegaInsert && typeof window.OmegaInsert.footprint==='function'){
+    try{ var f=window.OmegaInsert.footprint(el.eqId); if(f){ lf=+f.lf||0; wf=+f.wf||0; } }catch(e){}
+  }
+  /* A guided-build unit placed before _evAdd recorded its footprint
+     (2026-09-16) names only its kind: it takes that kind's footprint, a rated
+     battery's from its own rating (EV_FOOTPRINT keeps 10 x 5 ft for an
+     unrated one), on the floors _evAdd records, so it draws as one placed
+     today does. Never a unit whose maker released no footprint
+     (primeFootprint 'none'): that is a marker, not a 10 x 5 ft battery. */
+  if(!(lf>0) && el.type==='evgear' && el.evKind && el.primeFootprint!=='none' && typeof EV_FOOTPRINT!=='undefined'){
+    try{
+      var _kwh=+el.bessKwh||+el.bgbKwh||0, _kw=+el.bessKw||+el.bgbKw||0;
+      var _kf=(el.evKind==='bess' && (_kwh>0 || _kw>0) && typeof _bessFootprint==='function') ? _bessFootprint(_kwh, _kw) : EV_FOOTPRINT[el.evKind];
+      if(_kf && +_kf.lf>0){
+        lf=+_kf.lf; wf=(+_kf.wf>0)?+_kf.wf:lf*0.72;
+        var _sm=(lf<=4 && wf<=4);           /* _evAdd's floors: small kit 14 x 12, else 28 x 20 */
+        if(!(el.minW>0)) el.minW=Math.max(_sm?14:28, +(_kf.minW||0));
+        if(!(el.minH>0)) el.minH=Math.max(_sm?12:20, +(_kf.minH||0));
+      }
+    }catch(e){}
   }
   if(!(lf>0) && el._ppfAtPlace>0 && el.w>0){
     lf = el.w/el._ppfAtPlace;
@@ -66157,6 +66604,8 @@ function _elFootprintFt(el){
 function omegaRescaleElements(){
   var ppf = +(S && S.pxPerFt) || 0;
   if(!(ppf>0)) return 0;
+  /* Insert records no floor on what it drops: OmegaInsert.floorPx is it */
+  var insFloor = (window.OmegaInsert && window.OmegaInsert.floorPx) || null;
   var n=0;
   (S.elements||[]).forEach(function(el){
     if(!el) return;
@@ -66168,10 +66617,14 @@ function omegaRescaleElements(){
        still derive one later. */
     if(!(el._ppfAtPlace>0)) el._ppfAtPlace = ppf;
 
-    /* The element's own floor (set by _evAdd, same as at placement) so a
-       symbol never drops below legible or balloons past its footprint. */
-    var wantW = Math.max((+el.minW>0)?+el.minW:10, Math.round(f.lf*ppf));
-    var wantH = Math.max((+el.minH>0)?+el.minH:8,  Math.round(f.wf*ppf));
+    /* The floor it was PLACED with, so it reads at every zoom as it did when
+       it was drawn: el.minW / el.minH where the placer recorded them
+       (_evAdd's, a catalog unit's, Omega Prime's 4 px), else the floor Insert
+       drops an Insert item at, else 10 x 8. A symbol never drops below
+       legible or balloons past its footprint. */
+    var fl = (el.type==='eq' && insFloor) ? insFloor : { w:10, h:8 };
+    var wantW = Math.max((+el.minW>0)?+el.minW:fl.w, Math.round(f.lf*ppf));
+    var wantH = Math.max((+el.minH>0)?+el.minH:fl.h, Math.round(f.wf*ppf));
     if(Math.abs((el.w||0)-wantW) <= 1 && Math.abs((el.h||0)-wantH) <= 1) return;
 
     /* Grow about the centre. The geo anchor is the centre too, so this
@@ -66183,30 +66636,45 @@ function omegaRescaleElements(){
     el.x=c.x-wantW/2; el.y=c.y-wantH/2;
     n++;
     try{ if(typeof renderEl==='function') renderEl(el); }catch(e){}
+    /* renderEl draws a fresh node and the outline is selEl()'s: a selected
+       unit keeps its handles through a zoom */
+    try{ if(S.sel===el.id){ var _n=document.querySelector('.cel[data-elid="'+el.id+'"]'); if(_n) _n.classList.add('sel'); } }catch(e){}
   });
   return n;
 }
 window.omegaRescaleElements = omegaRescaleElements;
 
-/* Run it as part of reprojection. Wrapping rather than editing the engine
-   keeps this independent of which anchoring generation is live. */
-(function(){
-  var tries=0;
-  var iv=setInterval(function(){
-    if(++tries>200){ clearInterval(iv); return; }
-    var f=window._geoReprojectAll;
-    if(typeof f!=='function' || f.__omegaElScale) return;
-    clearInterval(iv);
-    var wrapped=function(){
-      var r=f.apply(this, arguments);
-      try{ omegaRescaleElements(); }catch(e){}
-      return r;
-    };
-    wrapped.__omegaElScale=true;
-    window._geoReprojectAll=wrapped;
-    try{ console.info('[omega/elscale] element footprints now rescale with zoom'); }catch(e){}
-  }, 60);
-})();
+/* What omegaRescaleElements sizes, by its own test above (equipment of
+   those three types whose footprint in FEET is known), for OmegaGeo (EAGER
+   GEO-ANCHORING) to leave alone, so no element has two scalers. OmegaGeo
+   sizes everything else from the pixels it was drawn at.
+   scripts/tests/telementzoom.js holds the two tests to one answer. */
+function omegaElementFootprint(el){
+  if(!el || (el.type!=='eq' && el.type!=='evgear' && el.type!=='bess-asm')) return null;
+  return _elFootprintFt(el);
+}
+window.omegaElementFootprint = omegaElementFootprint;
+
+/* ONCE PER FRAME. The anchor engine's run() is the one caller, and it fires
+   on four map events, its own timer and every request to reproject, so an
+   idle alone lands three passes in one frame. The first sizes everything;
+   the rest of that frame would find nothing to change, so they skip.
+   A document that is not painting (no animation frames) runs it at most
+   every 250 ms instead of never again. */
+var _elScaleFrame = { ran:false, at:0, armed:false };
+function omegaRescaleElementsOnce(){
+  var now = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+  if(_elScaleFrame.ran && now-_elScaleFrame.at < 250) return 0;
+  _elScaleFrame.ran = true; _elScaleFrame.at = now;
+  if(!_elScaleFrame.armed){
+    _elScaleFrame.armed = true;
+    (window.requestAnimationFrame || function(f){ return setTimeout(f, 16); })(function(){
+      _elScaleFrame.armed = false; _elScaleFrame.ran = false;
+    });
+  }
+  return window.omegaRescaleElements();
+}
+window.omegaRescaleElementsOnce = omegaRescaleElementsOnce;
 
 /* ═══════════════════════════════════════════════════════════════════
  *  ORPHAN SWEEP
@@ -66268,24 +66736,19 @@ window.omegaSweepGhosts = omegaSweepGhosts;
 
 /* Run it after reprojection -- the pass most likely to have drawn late --
    and once more a beat after load, when the async render paths have
-   settled. Wrapping keeps this independent of which anchoring generation
-   is live. */
-(function(){
-  var tries=0;
-  var iv=setInterval(function(){
-    if(++tries>200){ clearInterval(iv); return; }
-    var f=window._geoReprojectAll;
-    if(typeof f!=='function' || f.__omegaGhost) return;
-    clearInterval(iv);
-    var wrapped=function(){
-      var r=f.apply(this, arguments);
-      try{ omegaSweepGhosts({quiet:true}); }catch(e){}
-      return r;
-    };
-    wrapped.__omegaGhost=true;
-    window._geoReprojectAll=wrapped;
-  }, 60);
-})();
+   settled (the load does that itself). The anchor engine's run() calls
+   this on every pass, as it does the element rescale: the wrapper this
+   used to be on window._geoReprojectAll went when standDown() replaced
+   that chain, so it had not run after a reprojection since. It reads the
+   whole document, so at most once every 500 ms. */
+var _ghostSweptAt = 0;
+function omegaSweepGhostsSoon(){
+  var now = (window.performance && window.performance.now) ? window.performance.now() : Date.now();
+  if(_ghostSweptAt && now-_ghostSweptAt < 500) return null;
+  _ghostSweptAt = now;
+  return omegaSweepGhosts({ quiet:true });
+}
+window.omegaSweepGhostsSoon = omegaSweepGhostsSoon;
 
 /* ── BNZ panel ─────────────────────────────────────────────────────
    Opens on the selected shape. Rect (zone box) is the fast path;
@@ -67490,8 +67953,10 @@ function _l2Bollards(el, idx){
      readable on the printed sheet without pretending the post is bigger
      than it is. The pad hatch behind it still carries the real footprint. */
   var r=Math.max(14, Math.round((window.OmegaScale?OmegaScale.pxPerFt():(S.pxPerFt||6))*0.5));
+  /* minW/minH: the zoom rescale keeps a symbol on the floor it was placed
+     with, and an Insert item records none (it would take Insert's 22 px) */
   addEl({ type:'eq', eqId:'bollard', label:'', spec:'',
-          x:Math.round(b.cx+b.hw+10-r/2), y:Math.round(b.cy-r/2), w:r, rot:0 });
+          x:Math.round(b.cx+b.hw+10-r/2), y:Math.round(b.cy-r/2), w:r, rot:0, minW:14, minH:14 });
 }
 window._l2Bollards=_l2Bollards;
 
@@ -67500,7 +67965,7 @@ function _dcfcBollards(el){
   if(!el) return; var b=_elBox(el); if(!b) return;
   var off=b.hw+8; var pts=[[-off,-off],[off,-off],[off,off],[-off,off]];
   for(var i=0;i<pts.length;i++){
-    addEl({ type:'eq', eqId:'bollard', label:'', spec:'', x:Math.round(b.cx+pts[i][0]-5), y:Math.round(b.cy+pts[i][1]-5), w:10, rot:0 });
+    addEl({ type:'eq', eqId:'bollard', label:'', spec:'', x:Math.round(b.cx+pts[i][0]-5), y:Math.round(b.cy+pts[i][1]-5), w:10, rot:0, minW:10, minH:10 });
   }
 }
 function _dcfcFinish(){
@@ -69619,7 +70084,11 @@ function placeBgbAt(p){
       /* Resize to the rating now that we know it. */
       try{
         var _fp=_bessFootprint(BGB.kwh, BGB.kw), _d=_evPx('bess', _fp);
-        if(_d && _d.w){ el.w=_d.w; el.h=_d.h; }
+        /* and record it as the footprint: the zoom rescale draws a unit at
+           lf/wf, which _evAdd set to the unrated 10 x 5 ft, so a rated
+           battery was put back to that on the next pass. (Every rating's
+           footprint is over 4 ft, so _evAdd's 28 x 20 floor still holds.) */
+        if(_d && _d.w){ el.w=_d.w; el.h=_d.h; el.aspect=_d.h/_d.w; el.lf=+_fp.lf; el.wf=+_fp.wf; }
       }catch(e){}
     }
     if(_isBessNode){
@@ -76314,8 +76783,21 @@ window._crmToastModal=_crmToastModal;
 
      Deliberately below that 28: a symbol is one glyph, whereas a row of
      chargers held to 28 would start overlapping its neighbours at the
-     spacing a real parking bay gives them. */
+     spacing a real parking bay gives them.
+
+     ONLY FOR WHAT HAS NO FOOTPRINT. Equipment whose footprint in feet is
+     known (every guided-build unit, an Insert item, Omega Prime's units) is
+     sized from it by omegaRescaleElements, with the floor it was placed
+     with. This scaler records a ground size from PIXELS: a unit held at its
+     28 px floor read back as a 10 ft transformer, and when the first map
+     move after placing was a zoom it divided the old zoom's pixels by the
+     new zoom's scale, a BESS twice its size from then on. Two scalers on
+     one element also fight every pass. So stampSizes(), rescale() and
+     syncDom() leave those elements to the footprint (owned()). */
   var TICK=200, MIN_PX=22, scaling=false, wrapped=false, orig=null;
+  function owned(el){
+    try{ return (typeof window.omegaElementFootprint==='function') ? window.omegaElementFootprint(el) : null; }catch(e){ return null; }
+  }
 
   function live(){ try{ return typeof _liveMapState==='function' ? _liveMapState() : null; }catch(e){ return null; } }
   /* S is declared `const S={...}` and _gmap is `let _gmap=null`. Top-level
@@ -76354,7 +76836,7 @@ window._crmToastModal=_crmToastModal;
 
      Two rules: never before the project has finished loading, and never
      until the view has been still for a moment. */
-  var lastIdle = 0;
+  var lastIdle = 0, drawnP = null;           /* drawnP: the scale the drawing was last drawn at (hook()) */
   function settled(){ return lastIdle && (Date.now() - lastIdle) > 700; }
 
   function anchor(force){
@@ -76400,19 +76882,36 @@ window._crmToastModal=_crmToastModal;
     if(!live()) return;
     (s.elements||[]).forEach(function(el){
       if(el._geoLat==null) return;
+      /* its footprint IS its ground size (the takeoff and the GeoJSON
+         export read these), never pixels over a scale */
+      var fp=owned(el);
+      if(fp){ el._geoWFt=fp.lf; el._geoHFt=fp.wf; }
+    });
+    stampAt(p);
+  }
+  /* Record the ground size of every anchored element that has none yet and no
+     footprint, from its pixels over p, which must be the scale those pixels
+     were DRAWN at. */
+  function stampAt(p){
+    var s=S_(); if(!s || !(p>0)) return 0;
+    var n=0;
+    (s.elements||[]).forEach(function(el){
+      if(el._geoLat==null || owned(el)) return;
       if(el._geoWFt==null && el.w>0){
         var wf = el.w/p;
-        if(wf >= 0.5 && wf <= 200) el._geoWFt = wf;
+        if(wf >= 0.5 && wf <= 200){ el._geoWFt = wf; n++; }
       }
       if(el._geoHFt==null && el.h>0){
         var hf = el.h/p;
         if(hf >= 0.5 && hf <= 200) el._geoHFt = hf;
       }
     });
+    return n;
   }
   function rescale(){
     var s=S_(), p=ppf(); if(!s||!p) return;
     (s.elements||[]).forEach(function(el){
+      if(owned(el)) return;            /* sized from its footprint, in the anchor pass */
       /* MIN_PX keeps a far zoom-out from reducing equipment to a sub-pixel
          speck: below a few pixels an icon carries no information, and a
          marker you can still see and click beats a mathematically correct
@@ -76425,6 +76924,7 @@ window._crmToastModal=_crmToastModal;
     var s=S_(); if(!s) return;
     (s.elements||[]).forEach(function(el){
       if(el._geoWFt==null && el._geoHFt==null) return;
+      if(owned(el)) return;            /* omegaRescaleElements redraws it */
       var d=document.querySelector('[data-elid="'+el.id+'"]');
       if(!d) return;
       /* Setting the wrapper's width is not enough. An 'eq' icon is an SVG
@@ -76550,8 +77050,23 @@ window._crmToastModal=_crmToastModal;
       if(_gmap.__omegaAnchorHooked) return true;
       /* Anchor BEFORE the view moves, while pixels still mean something. */
       google.maps.event.addListener(_gmap,'dragstart',function(){ anchor(true); });
+      /* And size before a ZOOM moves it. stampSizes() runs 750 ms after an
+         idle and divides by the scale of that moment, so when the first map
+         move after placing something was a zoom it divided the old zoom's
+         pixels by the new zoom's scale: a BESS assembly placed at zoom 20 and
+         first stamped after a zoom-out to 19 recorded twice its size and drew
+         twice its size from then on. zoom_changed arrives with the map at
+         the new zoom already, so drawnP keeps the scale of the view the
+         drawing was last at, and what is still unstamped is stamped at it
+         before anything resizes. */
+      drawnP = ppf();
+      google.maps.event.addListener(_gmap,'zoom_changed',function(){
+        try{ if(live()) stampAt(drawnP); }catch(e){}
+        drawnP = ppf();
+      });
       google.maps.event.addListener(_gmap,'idle',function(){
         lastIdle = Date.now();
+        drawnP = ppf();
         /* Debounced: only stamp if the view is still still. */
         setTimeout(function(){ anchor(); }, 750);
       });
@@ -77316,13 +77831,20 @@ window._crmToastModal=_crmToastModal;
   #omega-addr-go:disabled{ opacity:.5; cursor:default; }
   /* Docked left: full width of the column, stacked. */
   body.omega-dock-left .omega-addr{
-    margin:4px 6px; min-width:0; width:calc(100% - 12px); flex-wrap:wrap;
+    margin:0; min-width:0; width:100%; flex-wrap:wrap;
   }
   body.omega-dock-left #omega-addr-in{ font-size:11.5px; }
 
-  /* The address sits on the right of the ribbon on every tab. The tool
-     page scrolls beside it, so a wide Build tab does not push Load off
-     the screen. Dock Left stacks it at the top of the column. */
+  /* The address sits on the right of the ribbon on every tab, framed as a
+     captioned panel (.omega-addr-cell is an .rpanel) so it shares the
+     ribbon's own rhythm instead of reading as a slab pasted over it. The
+     tool page scrolls BESIDE it, so a wide Build tab does not push Load
+     off the screen. #ribbon itself no longer scrolls under this grid: the
+     active page is the scroller, so the edge fades, the thin scrollbar
+     and the touch behaviour that used to sit on #ribbon (see its base
+     rule) live here now — without them a clipped tab just sliced buttons
+     in half against the address panel with nothing saying "this scrolls".
+     Dock Left stacks the cell at the top of the column. */
   #ribbon{
     display:grid;
     grid-template-columns:minmax(0,1fr) auto;
@@ -77330,20 +77852,50 @@ window._crmToastModal=_crmToastModal;
     align-items:stretch;
   }
   #ribbon > .ribbon-page{ grid-column:1; grid-row:1; min-width:0; }
-  #ribbon > .ribbon-page.active{ overflow-x:auto; overflow-y:hidden; }
-  #ribbon > .omega-addr{
+  #ribbon > .ribbon-page.active{
+    overflow-x:auto; overflow-y:hidden;
+    -webkit-overflow-scrolling:touch;
+    overscroll-behavior-x:contain;
+    background:
+      linear-gradient(to right, var(--bg) 30%, rgba(0,0,0,0)) left center,
+      linear-gradient(to left,  var(--bg) 30%, rgba(0,0,0,0)) right center,
+      radial-gradient(farthest-side at 0 50%, rgba(0,0,0,.28), rgba(0,0,0,0)) left center,
+      radial-gradient(farthest-side at 100% 50%, rgba(0,0,0,.28), rgba(0,0,0,0)) right center;
+    background-repeat:no-repeat;
+    background-size:40px 100%, 40px 100%, 16px 100%, 16px 100%;
+    background-attachment:local, local, scroll, scroll;
+  }
+  #ribbon > .ribbon-page.active::-webkit-scrollbar{ height:5px; }
+  #ribbon > .ribbon-page.active::-webkit-scrollbar-thumb{ background:var(--border); border-radius:3px; }
+  @media (pointer:coarse){
+    #ribbon > .ribbon-page.active{ scroll-snap-type:x proximity; }
+    #ribbon > .ribbon-page.active::-webkit-scrollbar{ height:7px; }
+  }
+  #ribbon > .omega-addr-cell{
     grid-column:2; grid-row:1;
-    align-self:stretch; justify-content:center;
-    margin:0; border-radius:0; min-width:220px;
-    border-left:1px solid var(--border);
-    background:var(--bg); z-index:4;
+    min-width:248px; max-width:340px;
+    border-left:1px solid var(--border); border-right:none;
+    background:var(--bg);
   }
-  body.omega-dock-left #ribbon > .omega-addr{
-    order:-1; position:static; grid-column:auto; grid-row:auto;
-    width:calc(100% - 12px); min-width:0; margin:4px 6px;
-    border-left:none; border-radius:5px; align-self:stretch;
+  #ribbon > .omega-addr-cell .rpanel-body{ align-items:center; }
+  #ribbon > .omega-addr-cell .omega-addr{ flex:1 1 auto; min-width:0; margin:0 2px; }
+  body.omega-dock-left #ribbon > .omega-addr-cell{
+    order:-1; width:100%; min-width:0; max-width:none;
+    border-left:none;
   }
-  body.omega-dock-left #ribbon > .ribbon-page.active{ overflow:visible; }
+  body.omega-dock-left #ribbon > .ribbon-page.active{ overflow:visible; background:none; }
+  /* Small tablets / split screens: a fixed right-hand cell would eat a
+     third of the width, so the strip goes back to the pre-grid behaviour —
+     #ribbon itself is the scroller again (its base rule still carries the
+     fades, the snap and the scrollbar) and the address panel rides at the
+     end of the strip. Phones (≤520px) have their own two-row layout in
+     the mobile block further down, which must win below 521px. */
+  @media (min-width:521px) and (max-width:768px){
+    #ribbon{ display:flex; }
+    #ribbon > .ribbon-page{ min-width:max-content; }
+    #ribbon > .ribbon-page.active{ overflow:visible; background:none; }
+    #ribbon > .omega-addr-cell{ min-width:220px; max-width:260px; border-right:1px solid var(--border); }
+  }
 </style>
 <script>
 
@@ -79696,10 +80248,15 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     -webkit-mask-image:none;
             mask-image:none;
   }
-  #ribbon > .omega-addr{
-    grid-column:1; grid-row:1; width:auto; min-width:0; margin:4px 8px 0;
-    align-self:stretch;
+  /* The address cell collapses to its bare pill, full width above the
+     strip — the caption is a desktop nicety and here it would cost a row. */
+  #ribbon > .omega-addr-cell{
+    grid-column:1; grid-row:1; width:auto; min-width:0; max-width:none;
+    margin:4px 8px 0; padding:0; align-self:stretch;
+    border-left:none; border-right:none; background:none;
   }
+  #ribbon > .omega-addr-cell .rpanel-cap{ display:none; }
+  #ribbon > .omega-addr-cell .omega-addr{ width:100%; margin:0; }
   #ribbon > .ribbon-page{ grid-row:2; }
   #ribbon > .ribbon-page.active{
     -webkit-overflow-scrolling:touch;
@@ -80814,9 +81371,19 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
      screen for as long as the button is held.
 
      Use the same centre convention as everyone else and the delta is zero
-     when nothing has moved, which is what it was always supposed to be. */
+     when nothing has moved, which is what it was always supposed to be.
+
+     And the same SIZE: _elRenderSize, the one definition every stamper
+     uses. (h||w) took a BESS assembly, which carries no h and draws 0.55 w
+     tall, as a square, so each pass pulled it 0.225 w off the point it was
+     stamped at (90 px for a 400 px assembly), further at every zoom-in. */
+  function _elSz(o){
+    try{ if(typeof _elRenderSize==='function') return _elRenderSize(o); }catch(e){}
+    return { w:(o.w||60), h:(o.h||o.w||60) };
+  }
   function _elAnchorPt(o){
-    return { x:o.x + ((o.w||60)/2), y:o.y + ((o.h||o.w||60)/2), __xy:true };
+    var z=_elSz(o);
+    return { x:o.x + z.w/2, y:o.y + z.h/2, __xy:true };
   }
   function anchorOf(o){
     /* Callout: the label (anchor) is the primary reference point for the
@@ -80833,7 +81400,7 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     if(o.pts && o.pts.length && o.pts[0]){ /* pts move with the bulk shift */ }
     if(o.cx!=null && o.cy!=null){ o.cx=x; o.cy=y; return; }
     if(typeof o.x==='number' && typeof o.y==='number' && !(o.pts&&o.pts.length)){
-      o.x=x-((o.w||60)/2); o.y=y-((o.h||o.w||60)/2);
+      var z=_elSz(o); o.x=x-z.w/2; o.y=y-z.h/2;
     }
   }
 
@@ -81303,6 +81870,14 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
       }
       if((s._trenches||[]).length && typeof _dcfcRenderTrenches==='function'
          && (trMoved || !document.getElementById('dcfc-trenches'))){ try{ _dcfcRenderTrenches(); }catch(e){} }
+      /* And the SIZE, now each element sits on its anchor: equipment with
+         a footprint in feet is redrawn at it (ELEMENT ZOOM SCALING), about
+         each centre, once per frame. It was a wrapper on the chain that
+         standDown() replaces, so until this pass called it, it never ran. */
+      try{ if(typeof window.omegaRescaleElementsOnce==='function') window.omegaRescaleElementsOnce(); }catch(e){}
+      /* and nothing stays drawn that the model no longer has (ORPHAN SWEEP),
+         whose hook on that chain went the same way; at most every 500 ms */
+      try{ if(typeof window.omegaSweepGhostsSoon==='function') window.omegaSweepGhostsSoon(); }catch(e){}
       dedupeElements();
     } finally { busy=false; }
     return changed;
@@ -81341,7 +81916,9 @@ if (_omPrevOmegaSite) { Object.keys(_omPrevOmegaSite).forEach(function (k) {
     if(stoodDown) return;
     stoodDown=true;
     /* _geoReprojectAll moved pts on its own schedule. With one owner it
-       must not also run, or the two disagree by a frame. */
+       must not also run, or the two disagree by a frame. Whatever had
+       wrapped it by now goes with it: that is how the element rescale was
+       lost, and why run() sizes equipment itself (see the end of run()). */
     if(typeof window._geoReprojectAll==='function' && !window._geoReprojectAll.__omegaOff){
       var orig=window._geoReprojectAll;
       window._geoReprojectAll=function(){ return run(); };
@@ -91492,6 +92069,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
   var TAG = '[omega/insert]';
 
+  /* The floor an Insert item drops at, in px: width, then the height the
+     anchor centres on. True to scale above it. The zoom rescale holds an
+     Insert item at the same floor (omegaRescaleElements, OmegaInsert.floorPx),
+     so tiny kit stays the size it was dropped at. */
+  var MIN_W = 22, MIN_H = 10;
+
   /* lf = length along the front, wf = depth, in FEET.
      Sourced from UTILITY_CATALOG where it exists, otherwise from typical
      cut sheets. Every one is a real object you can check. */
@@ -91547,7 +92130,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
          2 px — correct, and impossible to see or click. CAD symbols carry a
          minimum display size for exactly this reason; large equipment stays
          true, small equipment clamps so it stays usable. */
-      if (p) return Math.max(22, Math.round(f.lf * p));
+      if (p) return Math.max(MIN_W, Math.round(f.lf * p));
       /* Uncalibrated: still scale RELATIVE sizes off the real footprint so
          a transformer is visibly bigger than a junction box. */
       return Math.max(18, Math.round(14 + f.lf * 3.2));
@@ -91572,7 +92155,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
             if (el.lf == null) el.lf = f.lf;
             if (el.wf == null) el.wf = f.wf;
             var p = ppf();
-            if (p && el.h == null) el.h = Math.max(10, Math.round(f.wf * p));
+            if (p && el.h == null) el.h = Math.max(MIN_H, Math.round(f.wf * p));
           }
         }
       } catch (e) {}
@@ -91593,12 +92176,12 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
       var f = footprintOf(el.eqId); if (!f) return;
       if (el.lf == null) el.lf = f.lf;
       if (el.wf == null) el.wf = f.wf;
-      var want = p ? Math.max(22, Math.round(f.lf * p)) : Math.max(18, Math.round(14 + f.lf * 3.2));
+      var want = p ? Math.max(MIN_W, Math.round(f.lf * p)) : Math.max(18, Math.round(14 + f.lf * 3.2));
       if (Math.abs((el.w || 0) - want) > 1) {
         /* grow about the centre so nothing jumps across the drawing */
         var cx = el.x + (el.w || 60) / 2, cy = el.y + (el.h || el.w || 60) / 2;
         el.w = want;
-        el.h = p ? Math.max(10, Math.round(f.wf * p)) : Math.max(12, Math.round(10 + f.wf * 3.2));
+        el.h = p ? Math.max(MIN_H, Math.round(f.wf * p)) : Math.max(12, Math.round(10 + f.wf * 3.2));
         el.x = cx - el.w / 2; el.y = cy - el.h / 2;
         n++;
         try { if (typeof renderEl === 'function') renderEl(el); } catch (e) {}
@@ -91623,6 +92206,7 @@ if (_omPrevOmegaTrench) { Object.keys(_omPrevOmegaTrench).forEach(function (k) {
 
   window.OmegaInsert = {
     footprint: footprintOf,
+    floorPx: { w: MIN_W, h: MIN_H },
     rescaleExisting: rescaleExisting,
 
     list: function () {
@@ -109730,10 +110314,17 @@ button[style*="linear-gradient"][aria-disabled="true"]{
           ? (el.querySelector('.rbtn') || el) : el;
         el.classList.toggle('omg-keep', matches(probe));
       }
-      /* A panel with nothing left in it is just a stray caption. */
+      /* A panel with nothing left in it is just a stray caption. The
+         address cell is the one panel with no .rbtn to keep — it holds the
+         field that loads the site map, which is exactly what a designer is
+         here to do, and it was always visible in Designer when it was a
+         bare box this culling never saw. Name it, or wrapping it as a
+         panel silently took the address away (and timed out the prime
+         handoff's fill). */
       var panels = document.querySelectorAll('#ribbon .rpanel');
       for (i = 0; i < panels.length; i++) {
         panels[i].classList.toggle('omg-empty',
+          !panels[i].classList.contains('omega-addr-cell') &&
           panels[i].querySelectorAll('.omg-keep').length === 0);
       }
       var tabs = document.querySelectorAll('#ribbon-tabs .rtab, #ribbon-tab-menu .rtm-item');
@@ -148705,6 +149296,14 @@ function applyModelEdit(id,change){
   var old=elementBox(ref), factor=change.scale==null?1:change.scale;
   ref.w=old.w*factor;
   if(ref.type==='evgear')ref.h=old.h*factor;
+  /* The footprint scales with it: the zoom rescale draws equipment from its
+     feet (omegaRescaleElements), so pixels scaled alone were put back on the
+     next pass. Whichever of the feet fields the unit carries. (A unit whose
+     maker released no footprint is a marker of no size of its own and keeps
+     it.) */
+  if(factor!==1){
+   ['lf','wf','evFtL','evFtW'].forEach(function(k){if(+ref[k]>0)ref[k]=+ref[k]*factor;});
+  }
   ref.x=old.x+dx+(old.w-ref.w)/2;
   ref.y=old.y+dy+(old.h-elementBox(ref).h)/2;
   // Catalog-based 3D dimensions scale from their original footprint.
@@ -156495,6 +157094,10 @@ function setUnitFt(el, lengthFt, widthFt){
   var W = Math.max(0.5, +widthFt || unitFt(el).w);
   /* Record the specified size first so it survives the drawing floor. */
   el.evFtL = L; el.evFtW = W;
+  /* It is the unit's footprint from now on: the zoom rescale draws equipment
+     at lf/wf on its own floor (omegaRescaleElements), so a size kept only in
+     evFtL/evFtW was put back to the catalogue's on the next pass. */
+  el.lf = L; el.wf = W; el.minW = 12; el.minH = 10;
   el.w = Math.max(12, Math.round(L * p));
   el.h = Math.max(10, Math.round(W * p));
   el.aspect = el.h / el.w;
