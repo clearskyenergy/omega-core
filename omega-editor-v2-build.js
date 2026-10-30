@@ -139,6 +139,115 @@
     if (Array.isArray(e.pts)) for (i = 0; i < e.pts.length; i++) pt(e.pts[i]);
     pt(e.a); pt(e.b); pt(e.target); pt(e.anchor);
   }
+  /* ── a build the person puts down (Tommy, 2026-10-21: "it is just auto
+     placing it, it should work almost identical to how the other function
+     does"): the plan starts on the suggested clear spot, then follows the
+     pointer, moved by (dx, dy) and turned a quarter at a time about its
+     middle. Arrays bound to the lot do not move. */
+  function centreOf(plan) {
+    G = G || root.OmegaEditorV2Geom;
+    var fp = footprint([].concat(plan.equipment || [], plan.conduits || [], plan.notes || []));
+    return fp ? { x: (fp.minX + fp.maxX) / 2, y: (fp.minY + fp.maxY) / 2, w: fp.maxX - fp.minX, h: fp.maxY - fp.minY } : null;
+  }
+  /* the plan turned a quarter at a time about its middle (the geometry's own
+     rotateEntity), then moved by (dx, dy); a fresh copy, the plan untouched */
+  function movePlan(plan, dx, dy, turns) {
+    G = G || root.OmegaEditorV2Geom;
+    var p = JSON.parse(JSON.stringify(plan)), c = centreOf(p), n = (((turns || 0) % 4) + 4) % 4, lists = ['equipment', 'conduits', 'notes'], i, k, e;
+    for (k = 0; k < lists.length; k++) {
+      if (!p[lists[k]]) continue;
+      for (i = 0; i < p[lists[k]].length; i++) {
+        e = p[lists[k]][i];
+        if (!shiftable(e)) continue;
+        if (c && n) { e = G.rotateEntity(e, c, 90 * n); roundAll(e); }
+        if (dx || dy) shift(e, dx, dy);
+        p[lists[k]][i] = e;
+      }
+    }
+    return p;
+  }
+  /* a turned unit sits on whole tenths of a foot, as a moved one does */
+  function roundAll(e) {
+    function r(v) { return Math.round(v * 10) / 10; }
+    function pt(q) { if (q && isFinite(q.x) && isFinite(q.y)) { q.x = r(q.x); q.y = r(q.y); } }
+    var i;
+    if (isFinite(e.x) && isFinite(e.y)) { e.x = r(e.x); e.y = r(e.y); }
+    if (Array.isArray(e.pts)) for (i = 0; i < e.pts.length; i++) pt(e.pts[i]);
+    pt(e.a); pt(e.b); pt(e.target); pt(e.anchor);
+  }
+  function movable(plan) {
+    var all = [].concat(plan.equipment || [], plan.conduits || []), i;
+    for (i = 0; i < all.length; i++) if (shiftable(all[i])) return true;
+    return false;
+  }
+  /* What a unit cannot stand on: gear, array tables and obstructions (a
+     building found on the lot, a tree line), by their real outlines, never
+     their boxes, so an L-shaped building does not claim its yard. Conduit,
+     fences, setbacks and notes are not in the way. */
+  function solids(doc) {
+    D = D || root.OmegaEditorV2Doc;
+    G = G || root.OmegaEditorV2Geom;
+    var out = [], list = doc.entities || [], i, j, e, r, lay, t, host;
+    function add(ring) { if (ring && ring.length >= 3) out.push({ ring: ring, bb: G.bbox(ring) }); }
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if (e.type === 'equip') add(G.rectCorners(e));
+      else if (e.type === 'obstruction') add(G.ringOf(e));
+      else if (e.type === 'array') {
+        lay = D.arrayLayout(doc, e);
+        if (lay && lay.ok && lay.tables && lay.tables.length && !lay.densityOnly) {
+          for (j = 0; j < lay.tables.length; j++) {
+            t = lay.tables[j];
+            add([{ x: t.x, y: t.y }, { x: t.x + t.w, y: t.y }, { x: t.x + t.w, y: t.y + t.h }, { x: t.x, y: t.y + t.h }]);
+          }
+        } else if (lay && lay.ok) {
+          host = e.boundaryId ? D.find(doc, e.boundaryId) : e;
+          add(host ? G.ringOf(host) : null);
+        }
+      }
+    }
+    return out;
+  }
+  function overlapsRing(a, b) {
+    var i, j;
+    for (i = 0; i < a.length; i++) if (G.pointInPoly(a[i].x, a[i].y, b)) return true;
+    for (i = 0; i < b.length; i++) if (G.pointInPoly(b[i].x, b[i].y, a)) return true;
+    for (i = 0; i < a.length; i++) for (j = 0; j < b.length; j++) {
+      if (G.segmentsIntersect(a[i], a[(i + 1) % a.length], b[j], b[(j + 1) % b.length])) return true;
+    }
+    return false;
+  }
+  /* How many of the plan's units would stand on something already drawn.
+     A unit that only touches its neighbour does not count. `list` is
+     solids(doc), read once by a caller that asks on every move. */
+  function clashes(doc, plan, list) {
+    G = G || root.OmegaEditorV2Geom;
+    list = list || solids(doc);
+    var eq = plan.equipment || [], n = 0, i, k, r, bb;
+    for (i = 0; i < eq.length; i++) {
+      if (eq[i].type !== 'equip' || !(eq[i].w > 0.3 && eq[i].h > 0.3)) continue;
+      r = G.rectCorners({ x: eq[i].x, y: eq[i].y, w: eq[i].w - 0.2, h: eq[i].h - 0.2, rot: eq[i].rot });
+      bb = G.bbox(r);
+      for (k = 0; k < list.length; k++) {
+        if (bb.minX >= list[k].bb.maxX || bb.maxX <= list[k].bb.minX || bb.minY >= list[k].bb.maxY || bb.maxY <= list[k].bb.minY) continue;
+        if (overlapsRing(r, list[k].ring)) { n++; break; }
+      }
+    }
+    return n;
+  }
+  /* every piece inside the lot line */
+  function onLotAll(plan, ring) {
+    G = G || root.OmegaEditorV2Geom;
+    if (!ring || ring.length < 3) return true;
+    var list = plan.equipment || [], i, b;
+    for (i = 0; i < list.length; i++) {
+      if (list[i].type !== 'equip') continue;
+      b = G.boundsOf(list[i]);
+      if (!G.pointInPoly(b.minX, b.minY, ring) || !G.pointInPoly(b.maxX, b.maxY, ring) || !G.pointInPoly(b.minX, b.maxY, ring) || !G.pointInPoly(b.maxX, b.minY, ring)) return false;
+    }
+    return true;
+  }
+
   /* The plan moved, whole, to its spot. Returns where it went. */
   function situate(doc, plan, site) {
     G = G || root.OmegaEditorV2Geom;
@@ -460,6 +569,22 @@
         }
         clearDraft();
         var where = situate(state.doc, plan, site);
+        if (ctx && typeof ctx.hold === 'function' && movable(plan)) {
+          dlg.close();
+          ctx.hold(plan, where, function (dx, dy, turns) {
+            var moved = movePlan(plan, dx, dy, turns);
+            var hits = clashes(state.doc, moved);
+            var done = place(state, moved);
+            if (done.ok) {
+              done.held = true;
+              done.clashes = hits;
+              done.onLot = onLotAll(moved, site.boundary);
+              if (ctx.onPlaced) ctx.onPlaced(done);
+            }
+            return done;
+          }, { boundaryId: site.boundaryId, boundary: site.boundary });
+          return;
+        }
         var placed = place(state, plan);
         if (!placed.ok) {
           document.getElementById('build-error').textContent = placed.reason;
@@ -488,6 +613,8 @@
     var next = {
       pxPerFt: ctx && ctx.pxPerFt,
       onPlaced: ctx && ctx.onPlaced,
+      hold: ctx && ctx.hold,
+      prefer: ctx && ctx.prefer,
       draft: draft,
       builder: draft && draft.builder
     };
@@ -500,8 +627,9 @@
 
   var api = {
     place: place, contextOf: contextOf, situate: situate, spotFor: spotFor, open: open, suggest: suggest,
+    centreOf: centreOf, movePlan: movePlan, movable: movable, clashes: clashes, solids: solids, onLotAll: onLotAll,
     ask: ask, solarAcOf: solarAcOf, clearDraft: clearDraft, resume: resume,
-    VERSION: 'editor-v2-build/2'
+    VERSION: 'editor-v2-build/3'
   };
   root.OmegaEditorV2Build = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;

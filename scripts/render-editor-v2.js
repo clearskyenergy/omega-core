@@ -42,12 +42,18 @@ var server = http.createServer(function(req,res) {
       /* the eight guided builds: the REAL planner (api/_lib/guided-build.js) */
       if(url.includes('/api/guided-build')) { var gq=route.request().postDataJSON()||{}; buildPosts.push(gq.builder); return route.fulfill({json:require('../api/_lib/guided-build').plan(String(gq.builder||''),gq.input||{})}); }
       if(url.includes('/api/parcel-tiles')) return route.fulfill({json:{ok:false,reason:'not-configured'}});
+      /* FEMA's building footprints: one 40 ft building in the middle of the lot asked about, 6.1 m tall */
+      if(url.includes('USA_Structures_View')) { var gq=new URL(url).searchParams.get('geometry').split(',').map(Number), cx=(gq[0]+gq[2])/2, cy=(gq[1]+gq[3])/2, hl=20/364000, hg=hl/Math.cos(cy*Math.PI/180);
+        return route.fulfill({json:{features:[{attributes:{BUILD_ID:77,OCC_CLS:'Commercial',PRIM_OCC:'Retail',HEIGHT:6.1,SQFEET:1600,SOURCE:'NGA',PROD_DATE:1412467200000},geometry:{rings:[[[cx-hg,cy-hl],[cx+hg,cy-hl],[cx+hg,cy+hl],[cx-hg,cy+hl],[cx-hg,cy-hl]]]}}]}}); }
       if(url.includes('/api/parcel')) { parcelPosts++; var q=route.request().postDataJSON(), dl=100/364000/2, dg=dl/Math.cos(q.lat*Math.PI/180);
         return route.fulfill({json:{ok:true,ring:[[q.lat-dl,q.lng-dg],[q.lat-dl,q.lng+dg],[q.lat+dl,q.lng+dg],[q.lat+dl,q.lng-dg]],apn:'TEST-1',owner:'Not shown',acres:0.23,county:'Maricopa County, AZ',source:'maricopa'}}); }
       return route.abort();
     });
     await page.goto(base+'/editor-v2.html');
     await page.waitForFunction(function() { return !!window.OmegaEditorV2View3D; });
+    /* the OMEGA mark holds the page until it is known (at most 4 s); nothing
+       is clickable under it, so wait for it rather than for a slow screenshot */
+    await page.waitForFunction(function(){return !document.documentElement.classList.contains('omega-loading');},null,{timeout:20000});
     fs.mkdirSync(out,{recursive:true});
     await page.screenshot({path:path.join(out,'plan.png')});
     /* Handoff A1: the drawing stays through every section and a cancelled
@@ -161,23 +167,80 @@ var server = http.createServer(function(req,res) {
     await page.click('#layer-parcels-toggle');
     assert(await page.evaluate(function(){return document.getElementById('parcel-detail').hidden&&getComputedStyle(document.getElementById('map-parcels')).display==='none';}),'off, the lines and the card go');
     /* The eight guided builds, end to end (Tommy, 2026-10-20: "make sure the
-       guided builds work"): each opens its dialog, asks the real planner,
-       lands on clear ground, and the view goes to it, selected. */
+       guided builds work"): each opens its dialog, asks the real planner and
+       comes back IN HAND on the clear spot found for it (Tommy, 2026-10-21:
+       "it is just auto placing it, it should work almost identical to how
+       the other function does"); Enter puts it down there, selected. An
+       Auto layout array is its lot's and goes straight down. */
     var builds=['der','autolayout','bess','topology','l2','dcfc','compute','engineering'];
+    var heldOf=function(){return page.evaluate(function(){return OmegaEditorV2App.debug().held;});};
     buildPosts.length=0;
     for (var bi=0; bi<builds.length; bi++) {
       var bid=builds[bi];
       await page.click('#stages [data-stage="design"]');
       await page.click('[data-build="'+bid+'"]');
       await page.waitForFunction(function(){return document.getElementById('dlg-build').open;},null,{timeout:5000});
+      var n0=await page.evaluate(function(){return OmegaEditorV2App.debug().entities;});
       await page.click('#build-place');
       await page.waitForFunction(function(){return !document.getElementById('dlg-build').open||!!document.getElementById('build-error').textContent;},null,{timeout:10000});
-      var placedState=await page.evaluate(function(){return {open:document.getElementById('dlg-build').open,err:document.getElementById('build-error').textContent,status:document.getElementById('status').textContent};});
-      assert(!placedState.open&&!placedState.err,bid+' places: '+JSON.stringify(placedState));
+      var heldState=await page.evaluate(function(){return {open:document.getElementById('dlg-build').open,err:document.getElementById('build-error').textContent,status:document.getElementById('status').textContent,held:OmegaEditorV2App.debug().held,n:OmegaEditorV2App.debug().entities};});
+      assert(!heldState.open&&!heldState.err,bid+' comes back from the planner: '+JSON.stringify(heldState));
+      if (bid!=='autolayout') {
+        assert(heldState.held&&heldState.held.units>0&&heldState.n===n0,bid+' is in hand and nothing is drawn yet: '+JSON.stringify(heldState));
+        assert(/click to put it down/.test(heldState.status),bid+' says how to put it down: '+heldState.status);
+        if (bid==='bess') await page.screenshot({path:path.join(out,'build-held.png')});
+        await page.keyboard.press('Enter');
+      }
+      var placedState=await page.evaluate(function(){return {status:document.getElementById('status').textContent,held:OmegaEditorV2App.debug().held,n:OmegaEditorV2App.debug().entities,sel:OmegaEditorV2App.debug().selection};});
+      assert(!placedState.held&&placedState.n>n0&&placedState.sel>0,bid+' is put down, selected: '+JSON.stringify(placedState));
       assert(/It is selected: drag to move it\./.test(placedState.status),bid+' says where it is: '+placedState.status);
       if (bid==='bess') await page.screenshot({path:path.join(out,'build-bess.png')});
     }
     assert.deepStrictEqual(buildPosts,builds,'each build asked the planner once: '+buildPosts.join());
+    /* By hand: it follows the pointer, R turns it a quarter, a click puts it
+       down under the pointer; Esc puts one away and nothing is drawn. */
+    var cvBox=await page.locator('#cv').boundingBox();
+    var held=async function(){
+      await page.click('[data-build="bess"]');
+      await page.waitForFunction(function(){return document.getElementById('dlg-build').open;},null,{timeout:5000});
+      await page.click('#build-place');
+      await page.waitForFunction(function(){return !document.getElementById('dlg-build').open&&!!OmegaEditorV2App.debug().held;},null,{timeout:10000});
+    };
+    await held();
+    var nHeld=await page.evaluate(function(){return OmegaEditorV2App.debug().entities;});
+    await page.keyboard.press('Escape');
+    var away=await page.evaluate(function(){return {held:OmegaEditorV2App.debug().held,n:OmegaEditorV2App.debug().entities,status:document.getElementById('status').textContent};});
+    assert(!away.held&&away.n===nHeld&&/Put away\. Nothing was drawn/.test(away.status),'Esc puts it away and draws nothing: '+JSON.stringify(away));
+    await held();
+    var px=cvBox.x+cvBox.width*0.3, py=cvBox.y+cvBox.height*0.35;
+    await page.mouse.move(px-40,py-30); await page.mouse.move(px,py,{steps:4});
+    var h1=await heldOf();
+    await page.keyboard.press('r');
+    var h2=await heldOf();
+    assert(h1&&h2&&(h1.dx||h1.dy)&&h2.turns===1&&h2.dx===h1.dx&&h2.dy===h1.dy,'it follows the pointer, and R turns it where it is: '+JSON.stringify([h1,h2]));
+    await page.click('#cv',{button:'right',position:{x:px-cvBox.x,y:py-cvBox.y}});
+    var h3=await heldOf();
+    assert(h3&&h3.turns===2,'a right-click turns it again: '+JSON.stringify(h3));
+    await page.keyboard.press('r'); await page.keyboard.press('r'); await page.keyboard.press('r');
+    var where=await page.evaluate(function(a){var d=OmegaEditorV2App.debug(),v=d.view;return {x:v.cx+(a.x-v.w/2)/v.pxPerFt,y:v.cy+(v.h/2-a.y)/v.pxPerFt};},{x:px-cvBox.x,y:py-cvBox.y});
+    await page.mouse.click(px,py);
+    var down=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {held:d.held,sel:d.selection,status:document.getElementById('status').textContent,view:d.view};});
+    assert(!down.held&&down.sel>0&&/It is selected/.test(down.status),'a click puts it down: '+JSON.stringify(down));
+    var gear=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return d.placed;});
+    assert(gear&&Math.abs(gear.cx-where.x)<=5.01&&Math.abs(gear.cy-where.y)<=5.01&&gear.rot.every(function(r){return r===90;}),'it went down under the pointer, on the grid, turned a quarter: '+JSON.stringify({gear:gear,pointer:where}));
+    await page.screenshot({path:path.join(out,'build-by-hand.png')});
+    /* The Edit bar (Tommy, 2026-10-21: "an edit bar here for deleting things
+       and undoing and re doing"): Copy and Paste the build just placed,
+       Delete it, Undo and Redo, all from the ribbon on any tab */
+    var ed=async function(act){await page.click('[data-act="'+act+'"]');await page.waitForTimeout(80);return page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});};
+    var e0=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});
+    assert(e0.sel>0,'the last build is selected: '+JSON.stringify(e0));
+    await ed('copy'); var e1=await ed('paste');
+    assert(e1.n===e0.n+e0.sel&&e1.sel===e0.sel,'Paste adds the copy and selects it: '+JSON.stringify([e0,e1]));
+    var e2=await ed('delete');
+    assert(e2.n===e0.n&&e2.sel===0,'Delete takes away what is selected: '+JSON.stringify(e2));
+    var e3=await ed('undo'), e4=await ed('redo');
+    assert(e3.n===e1.n&&e4.n===e0.n,'Undo brings it back, Redo takes it away again: '+JSON.stringify([e3,e4]));
     /* Send to funding asks on the page (a browser popup is answered "no",
        unseen, by an embedded browser); Cancel submits nothing. */
     var dialogs=[]; page.on('dialog',function(d){dialogs.push(d.message());d.dismiss();});
@@ -188,6 +251,19 @@ var server = http.createServer(function(req,res) {
     await page.waitForFunction(function(){return !document.getElementById('dlg-market').open;});
     assert(!/Submitting|Submitted/.test(await page.evaluate(function(){return document.getElementById('status').textContent;})),'Cancel submits nothing');
     assert.deepStrictEqual(dialogs,[],'no browser popup is raised');
+    /* View › Icons: each piece drawn as what it is, the switch remembered;
+       off again, the plain boxes come back */
+    var canvasSum=function(){var c=document.getElementById('cv'),d=c.getContext('2d').getImageData(0,0,c.width,c.height).data,h=0;for(var i=0;i<d.length;i+=7)h=(h*31+d[i])>>>0;return h;};
+    await page.click('#stages [data-stage="site"]');
+    var plainSum=await page.evaluate(canvasSum);
+    await page.click('[data-act="icons"]');
+    await page.waitForTimeout(150);
+    var iconState=await page.evaluate(function(){return {on:OmegaEditorV2App.debug().icons,pressed:document.querySelector('[data-act="icons"]').getAttribute('aria-pressed'),kept:localStorage.getItem('omegaMaximusIcons')};});
+    assert.deepStrictEqual(iconState,{on:true,pressed:'true',kept:'1'},'Icons turns on and this browser keeps it: '+JSON.stringify(iconState));
+    assert.notStrictEqual(await page.evaluate(canvasSum),plainSum,'with Icons on the equipment is drawn differently');
+    await page.click('[data-act="icons"]');
+    await page.waitForTimeout(150);
+    assert.strictEqual(await page.evaluate(canvasSum),plainSum,'off again, the drawing is exactly as it was');
     /* A new project: Find on the map opens on the block around the point
        (it opened on one roof, 280 ft across), the photo is laid at that
        scale (past 24 tiles it used to go blank), the Site tab's own switch
@@ -202,7 +278,11 @@ var server = http.createServer(function(req,res) {
     var framed=await page.evaluate(function(){return OmegaEditorV2App.debug();});
     var across=framed.view.w/framed.view.pxPerFt;
     assert(across>=600&&across<=800&&Math.abs(framed.view.cx)<1&&Math.abs(framed.view.cy)<1,'Find opens about 700 ft across, centred on the point: '+JSON.stringify(framed.view));
-    assert(framed.map&&framed.map.tiles>24&&framed.map.z>=14&&framed.map.z<=19,'the photo is laid at that scale, past the old 24-tile cap: '+JSON.stringify(framed.map));
+    assert(framed.map&&framed.map.tiles>24&&framed.map.z>=12&&framed.map.z<=19,'the photo is laid at that scale, past the old 24-tile cap: '+JSON.stringify(framed.map));
+    /* Google's satellite cannot load on this offline server: the editor says
+       why and keeps Esri's tiles, with no error */
+    var sat=await page.evaluate(function(){return {state:OmegaEditorV2Satellite.state(),reason:OmegaEditorV2Satellite.reason(),source:OmegaEditorV2App.debug().map.source,shown:getComputedStyle(document.getElementById('gsat')).display};});
+    assert(sat.state==='failed'&&/Esri/.test(sat.reason)&&sat.source==='esri'&&sat.shown==='none','offline, Google steps aside and the photo is Esri\'s: '+JSON.stringify(sat));
     assert.strictEqual(await page.evaluate(function(){return getComputedStyle(document.getElementById('map')).display;}),'block','the photo layer is shown');
     assert.strictEqual(await page.innerText('#site-parcels'),'Show parcel lines','the Site tab offers the parcel lines');
     await page.click('#site-parcels');
@@ -210,9 +290,28 @@ var server = http.createServer(function(req,res) {
     assert.strictEqual(await page.innerText('#site-parcels'),'Hide parcel lines','the switch says what it will do next');
     await page.click('#parcel-use');
     await page.waitForFunction(function(){return /lot line now/.test(document.getElementById('status').textContent);},null,{timeout:5000});
+    /* the buildings already on the lot come with it, from FEMA's footprints, at their height */
+    await page.waitForFunction(function(){return /Found 1 building on the lot \(FEMA USA Structures, 2014\): commercial · retail, 20 ft tall\./.test(document.getElementById('status').textContent);},null,{timeout:10000});
+    assert(/lot line now/.test(await page.evaluate(function(){return document.getElementById('status').textContent;})),'the lot line is still said first');
+    assert.deepStrictEqual(await page.evaluate(function(){return OmegaEditorV2App.debug().buildings;}),[{heightFt:20,source:'FEMA USA Structures (NGA)',use:'Commercial · Retail'}],'the building is an obstruction with its height, its source and its use');
+    await page.click('#site-buildings');
+    await page.waitForFunction(function(){return /already drawn/.test(document.getElementById('status').textContent);},null,{timeout:10000});
+    assert.strictEqual(await page.evaluate(function(){return OmegaEditorV2App.debug().buildings.length;}),1,'Find buildings again adds nothing twice');
     var lot=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {view:d.view};});
     var lotAcross=lot.view.w/lot.view.pxPerFt;
     assert(lotAcross<400&&Math.abs(lot.view.cx)<20&&Math.abs(lot.view.cy)<20,'Use as site boundary zooms to the 100 ft lot: '+JSON.stringify(lot.view));
+    /* on a site with nothing built, "Start with a guided build" is never
+       painted over a build in hand, and comes back when it is put away */
+    var promptShown=function(){return page.evaluate(function(){return !document.getElementById('build-prompt').hidden;});};
+    assert(await promptShown(),'a lot with nothing built asks for a guided build');
+    await page.click('[data-build="bess"]');
+    await page.waitForFunction(function(){return document.getElementById('dlg-build').open;},null,{timeout:5000});
+    await page.click('#build-place');
+    await page.waitForFunction(function(){return !document.getElementById('dlg-build').open&&!!OmegaEditorV2App.debug().held;},null,{timeout:10000});
+    assert(!(await promptShown()),'the prompt steps aside for the build in hand');
+    await page.keyboard.press('Escape');
+    assert(await promptShown()&&!(await page.evaluate(function(){return OmegaEditorV2App.debug().held;})),'put away, the prompt is back');
+    await page.click('#stages [data-stage="site"]');
     await page.click('#site-parcels');
     assert.strictEqual(await page.innerText('#site-parcels'),'Show parcel lines','and the switch turns them off again');
     assert.deepStrictEqual(errors,[]);

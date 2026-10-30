@@ -29,7 +29,13 @@ window.CLEARSKY_CONFIG = {
   platformName: 'ClearSky-OMEGA',
   upgradeEmail: 'dev@clearsky-usa.com',
   supportEmail: 'dev@clearsky-usa.com',
-  hub: 'https://app.clearskyomega.com'
+  hub: 'https://app.clearskyomega.com',
+  /* The browser Google Maps key: Omega Maximus's satellite photo
+     (omega-editor-v2-satellite.js). The same public browser key as Site
+     Map's built-in default (editor.html _CFG.googleMapsKey); Settings › API
+     Keys (localStorage omegaMapsKey) overrides both. Google restricts and
+     bills it by the key's own settings, not this file. */
+  googleMapsKey: 'AIzaSyAoVBrt4ECPs2t93pscAG1jH-srTEUSUqo'
 };
 
 /* An Omega Logic app installed on an iPhone home screen signs in THROUGH

@@ -6,14 +6,16 @@
    It runs /editor-v2 (Omega Maximus) in Chromium from a local port and walks
    one site the way a designer does: New, the site address, Find on the map,
    the county's parcel lines, Use as site boundary, the building marked as an
-   obstruction, Does this site work? → a BESS build in the yard, a DCFC build
-   on the front lot, Run, Outputs (the permit set and the one-line), 3D, Save
-   to workspace, Funding — and what a workspace without the module sees.
-   Everything a screenshot shows comes from the run:
-     · the aerial photo (Esri World Imagery), the address search (OpenStreetMap
-       Nominatim), the county parcel layer, the permit set's photo (USGS
-       National Map) and the 3D ground (USGS 3DEP) are the public services the
-       page itself calls;
+   obstruction, View › Icons, Does this site work? → a BESS build in hand,
+   put down on the yard it was offered, a DCFC build moved to the frontage,
+   turned with R and clicked down, Run, Outputs (the permit set and the
+   one-line), 3D, Save to workspace, Funding — and what a workspace without
+   the module sees. Everything a screenshot shows comes from the run:
+     · the aerial photo (Google's satellite through the Maps JavaScript API on
+       the page's own key, Esri World Imagery under it, credited on the page
+       as the map credits it), the address search (OpenStreetMap Nominatim),
+       the county parcel layer, the permit set's photo (USGS National Map) and
+       the 3D ground (USGS 3DEP) are the public services the page itself calls;
      · /api/parcel is the REAL handler, asking the county itself;
      · /api/guided-build is the REAL planner, /api/cost-rollup the REAL cost
        engine, /api/value-stack the REAL handler (scripts/_lib/editor-v2-server.js),
@@ -116,6 +118,7 @@ async function capture(browser) {
     if (/^https:\/\/(basemap|elevation)\.nationalmap\.gov\//.test(url)) return route.continue();
     if (/^https:\/\/services\d*\.arcgis\.com\//.test(url)) return route.continue();
     if (/^https:\/\/fonts\.(googleapis|gstatic)\.com\//.test(url)) return route.continue();
+    if (/^https:\/\/(maps\.googleapis\.com|maps\.gstatic\.com|khms\d*\.googleapis\.com|khms\d*\.google\.com)\//.test(url)) return route.continue();
     /* the save: an in-memory store in Firestore's own write shape */
     if (url.indexOf('/__workspace-fixture') >= 0) { var q = new URL(url).searchParams, id = q.get('id'); return route.fulfill({ json: id ? (stored['projects/' + id] || null) : stored }); }
     if (url.indexOf('firestore.googleapis.com') >= 0) {
@@ -140,11 +143,44 @@ async function capture(browser) {
 
   async function photoReady() {
     await page.waitForFunction(function () {
+      var d = OmegaEditorV2App.debug();
+      if (d.map && d.map.source === 'google') return OmegaEditorV2Satellite.tilesLoaded();
       var imgs = document.querySelectorAll('#map img'); if (!imgs.length) return false;
       for (var i = 0; i < imgs.length; i++) if (imgs[i].style.visibility !== 'hidden' && !imgs[i].complete) return false;
       return true;
     }, null, { timeout: 30000 });
-    await page.waitForTimeout(500);
+    await page.waitForTimeout(700);
+  }
+  /* where a point of the drawing is on the page, and a crop around it */
+  async function screenOf(pt) {
+    var d = await view(), c = await page.locator('#cv').boundingBox();
+    return { x: c.x + d.view.w / 2 + (pt.x - d.view.cx) * d.view.pxPerFt, y: c.y + d.view.h / 2 - (pt.y - d.view.cy) * d.view.pxPerFt };
+  }
+  async function boxAround(pt, w, h) {
+    var s = await screenOf(pt), c = await page.locator('#cv').boundingBox();
+    return { x: Math.max(c.x, Math.min(c.x + c.width - w, s.x - w / 2)), y: Math.max(c.y, Math.min(c.y + c.height - h, s.y - h / 2)), width: w, height: h };
+  }
+  /* the wheel over a point of the drawing, to about `target` px a foot; the
+     point stays under the pointer, so a build in hand stays where it is */
+  async function zoomAt(pt, target) {
+    for (var i = 0; i < 40; i++) {
+      var d = await view();
+      if (Math.abs(Math.log(d.view.pxPerFt / target)) <= Math.log(1.12) / 2) break;
+      var s = await screenOf(pt);
+      await page.mouse.move(s.x, s.y);
+      await page.mouse.wheel(0, d.view.pxPerFt < target ? -100 : 100);
+      await page.waitForTimeout(40);
+    }
+  }
+  /* wait for the build to come back from the planner, in hand */
+  async function inHand(what) {
+    await page.waitForFunction(function () { return (!document.getElementById('dlg-build').open && !!OmegaEditorV2App.debug().held) || !!document.getElementById('build-error').textContent; }, null, { timeout: 15000 });
+    var h = (await view()).held;
+    assert(h && h.units >= 4, 'the ' + what + ' build is in hand: ' + JSON.stringify(h) + ' ' + await status());
+    return h;
+  }
+  function putDown(st, what) {
+    assert(/It is selected: drag to move it\./.test(st) && !/stands? on something|outside the lot line/.test(st), 'the ' + what + ' build is put down, on clear ground on the lot: ' + st);
   }
   async function snap(name, clip, onPage) {
     var file = path.join(SHOTS, name + '.jpg');
@@ -220,6 +256,11 @@ async function capture(browser) {
     /* the building outline is in feet from this point: a search that moved it would misplace the outline */
     assert(feetApart(d.anchor, SITE.at) < 25, 'the address search still lands where the outline was measured from: ' + JSON.stringify(d.anchor));
     facts.findView = d;
+    facts.imagery = await page.evaluate(function () {
+      var d = OmegaEditorV2App.debug();
+      if (d.map && d.map.source === 'google') { var m = /Imagery ©[^\n]*/.exec(document.getElementById('gsat').innerText || ''); return 'Google satellite' + (m ? ' (' + m[0].replace(/\s+Terms.*$/, '').trim() + ')' : ''); }
+      return 'Esri World Imagery';
+    });
     await snap('02-found', await canvasBox());
   });
   /* 3. Show parcel lines (the Site tab's switch): the county's lines, and the
@@ -260,6 +301,9 @@ async function capture(browser) {
     await page.waitForTimeout(300);
     await snap('05-obstruction', await canvasBox());
   });
+  /* View › Icons: each unit drawn as Site Map's icon on its footprint */
+  await page.click('[data-act="icons"]');
+  assert((await view()).icons === true, 'Icons is on');
   /* 6. Look at the yard, then Does this site work? Yes: the guided builds */
   await panTo(YARD);
   await step('choose', async function () {
@@ -277,17 +321,25 @@ async function capture(browser) {
     facts.bessFields = await page.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('#build-fields label'), function (l) { return l.innerText.replace(/\s+/g, ' ').trim(); }); });
     await snap('07-bess-form', await boxOf('#dlg-build', 8));
     await page.click('#build-place');
-    await page.waitForFunction(function () { return !document.getElementById('dlg-build').open || !!document.getElementById('build-error').textContent; }, null, { timeout: 15000 });
-    var st = await page.evaluate(function () { return { open: document.getElementById('dlg-build').open, err: document.getElementById('build-error').textContent, status: document.getElementById('status').textContent }; });
-    assert(!st.open && !st.err && /It is selected: drag to move it\./.test(st.status), 'the BESS build is placed: ' + JSON.stringify(st));
-    facts.bessStatus = st.status;
-    var d = await view();
-    facts.bessParts = d.selected;
-    assert(Math.abs(d.view.cx - YARD.x) < 160 && Math.abs(d.view.cy - YARD.y) < 120, 'it landed in the yard, where the view was: ' + JSON.stringify(d.view));
-    await zoomOutTo(3.4);
+    var h = await inHand('BESS');
+    assert(!h.clash && Math.abs(h.clear.x - YARD.x) < 160 && Math.abs(h.clear.y - YARD.y) < 120, 'it is offered on clear ground in the yard, where the view was: ' + JSON.stringify(h));
+    facts.bessHeld = await status();
+    /* the pointer on it, so it stays on the spot it was offered */
+    var s = await screenOf(h.at);
+    await page.mouse.move(s.x, s.y);
+    await zoomAt(h.at, 3.4);
+    await photoReady();
+    h = (await view()).held;
+    assert(h && !h.dx && !h.dy, 'it is still on the spot it was offered: ' + JSON.stringify(h));
+    await snap('08-bess-held', await boxAround(h.at, 840, 380));
+    await page.keyboard.press('Enter');
+    var st = await status();
+    putDown(st, 'BESS');
+    facts.bessStatus = st;
+    facts.bessParts = (await view()).selected;
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
-    await snap('08-bess-placed', await canvasBox(840, 360));
+    await snap('08-bess-placed', await boxAround(h.at, 840, 380));
   });
   /* 8. Fit, look at the front lot, and a second build from the ribbon: DCFC */
   await page.click('#stages [data-stage="site"]');
@@ -300,17 +352,27 @@ async function capture(browser) {
     facts.dcfcLead = await page.innerText('#build-lead');
     facts.dcfcFields = await page.evaluate(function () { return Array.prototype.map.call(document.querySelectorAll('#build-fields label'), function (l) { return l.innerText.replace(/\s+/g, ' ').trim(); }); });
     await page.click('#build-place');
-    await page.waitForFunction(function () { return !document.getElementById('dlg-build').open || !!document.getElementById('build-error').textContent; }, null, { timeout: 15000 });
-    var st = await page.evaluate(function () { return { open: document.getElementById('dlg-build').open, err: document.getElementById('build-error').textContent, status: document.getElementById('status').textContent }; });
-    assert(!st.open && !st.err && /It is selected: drag to move it\./.test(st.status), 'the DCFC build is placed: ' + JSON.stringify(st));
-    facts.dcfcStatus = st.status;
-    var d = await view();
-    facts.dcfcParts = d.selected;
-    assert(Math.abs(d.view.cx - FRONT.x) < 160 && Math.abs(d.view.cy - FRONT.y) < 200, 'it landed on the front lot, where the view was: ' + JSON.stringify(d.view));
-    await zoomOutTo(3.4);
+    var h = await inHand('DCFC');
+    /* by hand: to the frontage, then R turns it to run along 51st Avenue */
+    var s = await screenOf(FRONT);
+    await page.mouse.move(s.x - 80, s.y + 50);
+    await page.mouse.move(s.x, s.y, { steps: 8 });
+    await page.keyboard.press('r');
+    h = (await view()).held;
+    assert(h.turns === 1 && Math.abs(h.at.x - FRONT.x) <= 2.6 && Math.abs(h.at.y - FRONT.y) <= 2.6 && !h.clash, 'it follows the pointer to the frontage and turns, standing on nothing: ' + JSON.stringify(h));
+    facts.dcfcHeld = await status();
+    await zoomAt(FRONT, 2.9);
+    await photoReady();
+    await snap('09-dcfc-held', await boxAround(FRONT, 840, 420));
+    s = await screenOf(FRONT);
+    await page.mouse.click(s.x, s.y);
+    var st = await status();
+    putDown(st, 'DCFC');
+    facts.dcfcStatus = st;
+    facts.dcfcParts = (await view()).selected;
     await page.keyboard.press('Escape');
     await page.waitForTimeout(200);
-    await snap('09-dcfc-placed', await canvasBox(840, 360));
+    await snap('09-dcfc-placed', await boxAround(FRONT, 840, 420));
   });
   /* 9. Fit: the whole site */
   await step('fit', async function () {
@@ -514,12 +576,12 @@ function guideHtml(img, f) {
     '</div><p class="foot">ClearSky-OMEGA · Omega Maximus · Guide · October 2026</p></section>';
 
   var p2 = page('Omega Maximus', '<h1>From an address to a permit set</h1>' +
-    '<p>Omega Maximus is the full site editor. You type an address, set the lot line from the county\'s parcel, mark what is in the way, and let a guided build lay out the equipment. Run prices the drawing and works out the value stack and the IRR on the server. Outputs turns the same drawing into a permit set, a one-line, a bill of materials and a 3D view, and Save puts it in your workspace as a project.</p>' +
+    '<p>Omega Maximus is the full site editor. You type an address, set the lot line from the county\'s parcel, mark what is in the way, and let a guided build lay out the equipment, then put it down where you want it. Run prices the drawing and works out the value stack and the IRR on the server. Outputs turns the same drawing into a permit set, a one-line, a bill of materials and a 3D view, and Save puts it in your workspace as a project.</p>' +
     '<p>This guide walks one site from start to finish: a warehouse on 51st Avenue in west Phoenix, ' + esc(acres) + ' acres on Maricopa County\'s parcel layer.</p>' +
     cards([['Find', 'Type the address. The editor opens on the block around it, on the aerial photo.'], ['Lot line', 'Show the county\'s parcel lines and use the parcel as the lot line.'],
-      ['Mark', 'Draw what is in the way as an obstruction. Builds keep clear of it.'], ['Build', 'Pick a guided build. It lands on clear ground where you are looking.'],
+      ['Mark', 'Draw what is in the way as an obstruction. Builds keep clear of it.'], ['Build', 'Pick a guided build. It comes in hand on clear ground: put it down where you want it.'],
       ['Run', 'Installed cost, value stack and IRR, from the server.'], ['Hand over', 'Permit set, one-line, BOM and 3D. Save it, send it to funding.']]) +
-    shot('10-site', 'The site in this guide, built: the warehouse marked as an obstruction (red), a ' + esc(take.kw) + ' kW / ' + esc(take.kwh) + ' kWh battery in the yard to the north, and ' + esc(take.chargers) + ' fast chargers (' + esc(take.chargerKw) + ' kW in all) on the lot along 51st Avenue. The takeoff on the right counts what is on the drawing.', 'wide'));
+    shot('10-site', 'The site in this guide, built: the warehouse marked as an obstruction (red), a ' + esc(take.kw) + ' kW / ' + esc(take.kwh) + ' kWh battery in the yard to the north, and ' + esc(take.chargers) + ' fast chargers (' + esc(take.chargerKw) + ' kW in all) on the lot along 51st Avenue. The takeoff on the right counts what is on the drawing. Imagery: ' + esc(f.imagery || '') + '.', 'wide'));
 
   var p3 = page('Step 1 · Find the site', '<h1>Find the site</h1><div class="two narrowpic"><div>' +
     '<p>Open Omega Maximus from your workspace: <b>Design › Omega Maximus</b>, or go to <b>/editor-v2</b>.</p>' +
@@ -527,7 +589,7 @@ function guideHtml(img, f) {
     '<p>The map moves there and opens on the block around the point, about 700 feet across, on the aerial photo, scaled to the latitude. The drawing is in feet from that point.</p>' +
     callout('Nothing is saved until you press <b>Save to workspace</b>. A drawing in progress is kept on this computer, and the editor offers it back if the tab closes.') +
     '</div><div>' + shot('01-address-panel', 'The Site tab.', 'panel') + '</div></div>' +
-    shot('02-found', 'Find on the map: the block around ' + esc(SITE.address) + ', on the aerial photo.', 'wide'));
+    shot('02-found', 'Find on the map: the block around ' + esc(SITE.address) + ', on the aerial photo (' + esc(f.imagery || '') + ').', 'wide'));
 
   var p4 = page('Step 2 · Set the lot line', '<h1>Set the lot line</h1>' +
     '<p><b>Show parcel lines</b>, beside Find on the map, draws the county\'s lot lines over the photo and looks up the parcel under the site point. The card names it: <b>APN ' + esc(parcel.apn) + ' · ' + esc(acres) + ' acres · ' + esc(parcel.county) + '</b>. It never shows the owner. The lines come from ' + SOURCES.length + ' public county and state parcel layers, and from Regrid where a workspace has it.</p>' +
@@ -538,7 +600,7 @@ function guideHtml(img, f) {
   var p5 = page('Step 3 · Mark what is in the way', '<h1>Mark what is in the way</h1>' +
     '<p>A guided build cannot see the photo. Draw anything it must not sit on with <b>Obstruction</b> in the Site group: click its corners, and Enter closes it. A building, a pond, an easement. <b>Setback</b> and <b>Fence</b> draw the other limits.</p>' +
     '<p>The command line under the drawing takes points as well as clicks: <b>x,y</b> in feet from the site point, <b>@dx,dy</b> from the last point, or a distance and an angle (<b>40&lt;90</b>). The warehouse here was traced that way, from its outline in OpenStreetMap.</p>' +
-    shot('05-obstruction', 'The warehouse marked as an obstruction (red): no build will be placed on it.', 'wide'));
+    shot('05-obstruction', 'The warehouse marked as an obstruction (red): no build will be placed on it. Imagery: ' + esc(f.imagery || '') + '.', 'wide'));
 
   var p6 = page('Step 4 · Pick a guided build', '<h1>Pick a guided build</h1>' +
     '<p><b>Does this site work?</b> on the Site tab asks the first question. <b>Yes</b> opens the guided builds. <b>No</b> keeps the drawing and records what is in the way, in your words. Every build is also on the ribbon, on every tab.</p>' +
@@ -546,12 +608,14 @@ function guideHtml(img, f) {
     '<table class="list">' + builds.map(function (b) { return '<tr><td>' + esc(b[0]) + '</td><td>' + esc(b[1]) + '</td></tr>'; }).join('') + '</table>' +
     '<p class="small">The plan is made on the server from the lot line, the obstructions and the numbers in the form. Nothing about how a build is laid out runs in the browser.</p>');
 
-  var p7 = page('Step 4 · Place it', '<h1>Place it where you are looking</h1>' +
-    '<p><b>Place on the site</b> puts the build on clear ground inside the lot line, nearest the middle of your view, clear of the obstructions and of anything already placed. So look where you want it first: move the map until that spot is in the middle, then place the build. If the lot has no room, it goes just beside it, and the status bar says so.</p>' +
-    '<p>When it lands, the view goes to it and it is selected: drag it to move it, and <b>Undo</b> takes it back.</p>' +
-    shot('08-bess-placed', 'The BESS build in the yard north of the warehouse: ' + esc(parts(f.bessParts)) + ', with the conduit between them. The status bar said: <i>' + esc(f.bessStatus || '') + '</i>', 'wide') +
-    shot('09-dcfc-placed', 'The DCFC build on the lot along 51st Avenue, beside the warehouse (red): ' + esc(parts(f.dcfcParts)) + '. <i>' + esc(f.dcfcStatus || '') + '</i>', 'wide') +
-    '<p class="small">Each name sits inside its box when it fits, else just beside it, in short form (XFMR, SWGR, POI) when space is tight; no name is drawn over another. Zoom in, or select a piece, to see the rest.</p>');
+  var p7 = page('Step 4 · Put it down', '<h1>Put it where you want it</h1>' +
+    '<p><b>Place on the site</b> hands you the build, laid out as the server planned it, on the clear ground nearest the middle of your view: inside the lot line, clear of the obstructions and of anything already placed. It follows the mouse a grid step at a time. <b>R</b>, or a right-click, turns it a quarter turn. A <b>click</b> puts it down where it is; <b>Enter</b> puts it on the clear spot it was offered; <b>Esc</b> puts it away and nothing is drawn.</p>' +
+    '<div class="two">' + shot('08-bess-held', 'In hand: the BESS build on the clear ground it was offered in the yard north of the warehouse (dashed).') +
+      shot('08-bess-placed', 'Enter put it there: ' + esc(parts(f.bessParts)) + ', with the conduit between them.') + '</div>' +
+    '<div class="two">' + shot('09-dcfc-held', 'The DCFC build moved by hand to the frontage on 51st Avenue and turned with R to run along it. The faint outline is the spot it was offered.') +
+      shot('09-dcfc-placed', 'A click put it down: ' + esc(parts(f.dcfcParts)) + '.') + '</div>' +
+    callout('The outline turns <b>red</b> when a unit would stand on something already drawn: a building, an array table, other equipment. You can still put it down, and the status bar says so: drag it clear, or <b>Undo</b>.') +
+    '<p class="small">Put down, the build is one group and selected: drag it to move it. <b>View › Icons</b>, on here, draws each unit as Site Map\'s icon on its footprint, with its name beside it, in short form (XFMR, SWGR, POI) when space is tight; no name is drawn over another. Aerial imagery: ' + esc(f.imagery || '') + '.</p>');
 
   var linesHtml = run.lines.map(function (l) { return '<tr><td>' + esc(l.name) + '</td><td class="r">$' + esc(l.amount) + '</td></tr>'; }).join('');
   var streamsHtml = run.streams.map(function (s) { return '<tr><td>' + esc(s.name) + '</td><td class="r">$' + esc(s.amount) + ' / yr</td><td class="tier">' + esc(s.tier) + '</td></tr>'; }).join('');

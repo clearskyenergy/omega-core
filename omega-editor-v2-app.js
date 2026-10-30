@@ -18,7 +18,7 @@
   var snaps = { grid: true, endpoint: true, midpoint: true, edge: true, angle: false };
   var view = { cx: 200, cy: 140, pxPerFt: 1.5 };
   var gridView = null, gridFit = false;
-  var draft = null, drag = null, box = null, pan = null, space = false;
+  var draft = null, drag = null, box = null, pan = null, space = false, held = null;
   var clipboard = null, pasteN = 0, lastSnap = null, cursor = null;
   var raf = 0, cssW = 1, cssH = 1, dpr = 1, propSig = '';
   var tiles = {}, mapNote = '', mapAt = null, recoverTimer = 0, section = 'design';
@@ -104,6 +104,9 @@
     if (root.OmegaEditorV2Auth && root.OmegaEditorV2Auth.onSignIn) root.OmegaEditorV2Auth.onSignIn(function () { checkAccess(); });
     /* Parcel lines are a view setting this browser remembers. */
     if (root.OmegaEditorV2Parcels && root.OmegaEditorV2Parcels.remembered()) setParcels(true);
+    /* Icons too; and Google's satellite starts under the drawing */
+    setIcons(rememberedIcons());
+    if (root.OmegaEditorV2Satellite) root.OmegaEditorV2Satellite.start($('gsat'), function () { layoutMap(); requestDraw(); });
     var projectParam = /[?&]id=([A-Za-z0-9_-]+)/.exec(location.search);
     if (projectParam && !recovering) loadWorkspace(projectParam[1]);
     if (root.OmegaEditorV2Hooks) root.OmegaEditorV2Hooks.register('funding', function () { pushMarketplace(); return true; });
@@ -196,6 +199,7 @@
     $('site-address-find').addEventListener('mousedown', function (ev) { ev.preventDefault(); });
     $('site-address-find').addEventListener('click', function () { locate($('site-address-go').value); });
     $('site-parcels').addEventListener('click', function () { var P = root.OmegaEditorV2Parcels; if (P) setParcels(!P.enabled()); });
+    $('site-buildings').addEventListener('click', function () { findBuildings(false); });
     $('dlg-market').addEventListener('close', onMarketClose);
     $('site-no').addEventListener('click', function () { $('site-no-box').hidden = false; $('site-reason').focus(); });
     $('site-reason-save').addEventListener('click', siteNoSave);
@@ -259,6 +263,7 @@
     cv.addEventListener('wheel', onWheel, { passive: false });
     cv.addEventListener('contextmenu', function (ev) {
       ev.preventDefault();
+      if (held) { heldTurn(); return; }
       if (draft && (draft.mode === 'polyline' || draft.mode === 'fence' || draft.mode === 'conduit' || draft.mode === 'obstruction')) finishChain(false);
     });
     $('dlg-confirm').addEventListener('close', onConfirmClose);
@@ -303,6 +308,7 @@
   }
 
   function setTool(name) {
+    if (held) { held = null; paintBuildPrompt(); }
     tool = name;
     equipKey = null;
     draft = name === 'offset' ? { mode: 'offset', pts: [] } : null;
@@ -312,6 +318,7 @@
     $('cmd').focus();
   }
   function setEquip(key) {
+    if (held) { held = null; paintBuildPrompt(); }
     tool = 'equip';
     equipKey = key;
     draft = null;
@@ -346,12 +353,14 @@
     else if (act === 'snap-grid') { snaps.grid = !snaps.grid; pressed('snap-grid', snaps.grid); }
     else if (act === 'snap-end') { toggleOsnap(); }
     else if (act === 'ortho') { snaps.angle = !snaps.angle; pressed('ortho', snaps.angle); setStatus(snaps.angle ? 'Ortho on.' : 'Ortho off.'); }
+    else if (act === 'icons') { setIcons(!iconsOn); setStatus(iconsOn ? 'Icons on: each piece is drawn as what it is.' : 'Icons off: each piece is its outline.'); }
     else if (act === 'png') exportPng();
     else if (act === 'pdf') exportPdf();
     else if (act === 'dxf') exportDxf();
     else if (act === 'json') exportJson();
     else if (act === 'import') $('file-import').click();
     else if (act === 'copy') copySel();
+    else if (act === 'delete') erase();
     else if (act === 'paste') paste();
     else if (act === 'outputs') setSection(section === 'outputs' ? 'design' : 'outputs');
     else if (act === 'run') runNumbers();
@@ -394,6 +403,15 @@
     mark3d(true);
     setStatus('3D. Drag to look around the site. Type 2D to return to the plan.');
   }
+  /* Icons: a view setting this browser remembers */
+  var iconsOn = false, ICONS_PREF = 'omegaMaximusIcons';
+  function rememberedIcons() { try { return root.localStorage.getItem(ICONS_PREF) === '1'; } catch (e) { return false; } }
+  function setIcons(on) {
+    iconsOn = !!on;
+    try { root.localStorage.setItem(ICONS_PREF, iconsOn ? '1' : '0'); } catch (e) { /* this visit only */ }
+    pressed('icons', iconsOn);
+    requestDraw();
+  }
   function pressed(act, on) {
     var nodes = document.querySelectorAll('[data-act="' + act + '"]');
     for (var i = 0; i < nodes.length; i++) nodes[i].setAttribute('aria-pressed', on ? 'true' : 'false');
@@ -411,6 +429,7 @@
       if (tag !== 'INPUT' && tag !== 'TEXTAREA') { space = true; ev.preventDefault(); }
     }
     if (fieldTyping(ev) && ev.target.id !== 'cmd') return;
+    if (held && heldKey(ev)) return;
     var meta = ev.ctrlKey || ev.metaKey;
     if (meta && (ev.key === 'z' || ev.key === 'Z') && !ev.shiftKey) {
       if (ev.target.id === 'cmd' && $('cmd').value) return;
@@ -446,6 +465,8 @@
     return t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT';
   }
   function onCommandKey(ev) {
+    /* a held build: Esc puts it away, Enter on an empty line puts it down */
+    if (held && (ev.key === 'Escape' || (ev.key === 'Enter' && !$('cmd').value.trim()))) { heldKey(ev); ev.stopPropagation(); return; }
     if (ev.key === 'Enter') { ev.preventDefault(); submit($('cmd').value); $('cmd').value = ''; }
     else if (ev.key === 'Escape') {
       ev.preventDefault();
@@ -500,6 +521,7 @@
   }
 
   function cancel() {
+    if (held) { heldAway(); return; }
     if ($('grid-detail') && !$('grid-detail').hidden && root.OmegaEditorV2Grid) {
       root.OmegaEditorV2Grid.hideCard();
       paintGridCard();
@@ -773,6 +795,20 @@
       return;
     }
     if (ev.button !== 0) return;
+    /* a held build goes down where it is, under the pointer; a finger has
+       no pointer to follow, so a tap moves it there and a tap on it puts
+       it down */
+    if (held) {
+      var at = eventPoint(ev);
+      if (ev.pointerType === 'touch' || ev.pointerType === 'pen') {
+        var hb = planBox(heldPlan()), tol = 12 / (view.pxPerFt || 1);
+        if (!hb || at.x < hb.minX - tol || at.x > hb.maxX + tol || at.y < hb.minY - tol || at.y > hb.maxY + tol) { heldFollow(at); requestDraw(); return; }
+        heldDrop(false);
+        return;
+      }
+      heldFollow(at); heldDrop(false);
+      return;
+    }
     var raw = eventPoint(ev);
     var sn = snapOf(raw, ev);
     lastSnap = sn;
@@ -836,6 +872,7 @@
       writeCoords(raw, null);
       return;
     }
+    if (held) { heldFollow(raw); writeCoords(raw, null); requestDraw(); return; }
     var sn = snapOf(raw, ev);
     lastSnap = sn;
     writeCoords(sn.point, sn.kind);
@@ -992,6 +1029,8 @@
     if (root.OmegaEditorV2Grid) root.OmegaEditorV2Grid.draw(ctx, worldToScreen);
     if (root.OmegaEditorV2Parcels) root.OmegaEditorV2Parcels.draw(ctx, worldToScreen, state.doc.anchor);
     drawEntities(ctx, false);
+    drawHeld(ctx);
+    drawEquipGhost(ctx);
     drawDraft(ctx);
     drawSelection(ctx);
     drawSnap(ctx);
@@ -1062,6 +1101,7 @@
     if (close) ctx.closePath();
   }
   function drawOne(ctx, e) {
+    var base = ctx.globalAlpha;
     ctx.save();
     ctx.lineWidth = e.type === 'dim' ? 1 : 1.4;
     ctx.strokeStyle = layerColor(e);
@@ -1077,10 +1117,12 @@
     } else if (e.type === 'rect' || e.type === 'equip' || e.type === 'parking') {
       poly(ctx, G.rectCorners(e), true);
       /* gear reads on the photo: a firmer fill and line than a lot or a stall */
-      ctx.globalAlpha = e.type === 'equip' ? 0.32 : 0.04;
-      ctx.fill(); ctx.globalAlpha = 1;
+      ctx.globalAlpha = base * (e.type === 'equip' ? (iconsOn ? 0.2 : 0.32) : 0.04);
+      ctx.fill(); ctx.globalAlpha = base;
       if (e.type === 'equip') ctx.lineWidth = 1.8;
       ctx.stroke();
+      /* View › Icons: the unit's Site Map icon on its footprint */
+      if (e.type === 'equip' && iconsOn && root.OmegaEditorV2Icons) root.OmegaEditorV2Icons.draw(ctx, e, worldToScreen({ x: e.x, y: e.y }), view.pxPerFt, requestDraw);
       if (e.label) nameBox(ctx, e);
     } else if (e.type === 'text') label(ctx, { x: e.x, y: e.y }, e.text || '');
     else if (e.type === 'callout') {
@@ -1091,8 +1133,8 @@
     } else if (e.type === 'obstruction') {
       poly(ctx, e.pts, true);
       ctx.save(); ctx.clip();
-      ctx.globalAlpha = 0.18; ctx.fill();
-      ctx.globalAlpha = 0.45; hatch(ctx); ctx.restore();
+      ctx.globalAlpha = base * 0.18; ctx.fill();
+      ctx.globalAlpha = base * 0.45; hatch(ctx); ctx.restore();
       /* Canvas paths are not saved/restored: hatch replaced the polygon. */
       poly(ctx, e.pts, true);
       ctx.setLineDash([5, 4]); ctx.stroke();
@@ -1195,6 +1237,9 @@
   function placeName(ctx, b, taken, gear) {
     var full = String(b.e.label).trim(), short = shortName(full), tries = [], i, j, w, spots, r;
     var cx = (b.x0 + b.x1) / 2, cy = (b.y0 + b.y1) / 2;
+    /* with Icons on, the name sits under the unit's icon, as on Site Map */
+    var Ic = iconsOn && b.e.type === 'equip' && root.OmegaEditorV2Icons, half = Ic ? Ic.size(b.e, view.pxPerFt) / 2 : 0;
+    var top = Math.min(b.y0, cy - half), bottom = Math.max(b.y1, cy + half), left = Math.min(b.x0, cx - half), right = Math.max(b.x1, cx + half);
     tries.push([full, true]);
     if (short && short !== full) tries.push([short, true]);
     tries.push([full, false]);
@@ -1202,8 +1247,10 @@
     for (i = 0; i < tries.length; i++) {
       w = ctx.measureText(tries[i][0]).width + 8;
       spots = [];
-      if (b.x1 - b.x0 >= w && b.y1 - b.y0 >= 16) spots.push([cx, cy, true]);
-      spots.push([cx, b.y0 - 11, false], [cx, b.y1 + 11, false], [b.x1 + 4 + w / 2, cy, false], [b.x0 - 4 - w / 2, cy, false]);
+      if (!Ic && b.x1 - b.x0 >= w && b.y1 - b.y0 >= 16) spots.push([cx, cy, true]);
+      if (Ic) spots.push([cx, bottom + 11, false], [cx, top - 11, false]);
+      else spots.push([cx, top - 11, false], [cx, bottom + 11, false]);
+      spots.push([right + 4 + w / 2, cy, false], [left - 4 - w / 2, cy, false]);
       for (j = 0; j < spots.length; j++) {
         r = tagAt(ctx, spots[j][0], spots[j][1], tries[i][0]);
         if (overlaps(r, taken)) continue;
@@ -1320,20 +1367,22 @@
     var px = 120, ft = px / view.pxPerFt, nice = [1, 2, 5, 10, 20, 50, 100, 200, 500, 1000], i, use = 10;
     for (i = 0; i < nice.length; i++) if (Math.abs(nice[i] - ft) < Math.abs(use - ft)) use = nice[i];
     var w = use * view.pxPerFt;
+    /* above Google's logo when its photo is under the drawing */
+    var b = cssH - (mapAt && mapAt.source === 'google' ? 30 : 0);
     ctx.save();
     ctx.fillStyle = 'rgba(255,255,255,.9)';
-    ctx.fillRect(12, cssH - 36, w + 16, 24);
+    ctx.fillRect(12, b - 36, w + 16, 24);
     ctx.strokeStyle = '#16202B';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(20, cssH - 22); ctx.lineTo(20 + w, cssH - 22);
-    ctx.moveTo(20, cssH - 26); ctx.lineTo(20, cssH - 18);
-    ctx.moveTo(20 + w, cssH - 26); ctx.lineTo(20 + w, cssH - 18);
+    ctx.moveTo(20, b - 22); ctx.lineTo(20 + w, b - 22);
+    ctx.moveTo(20, b - 26); ctx.lineTo(20, b - 18);
+    ctx.moveTo(20 + w, b - 26); ctx.lineTo(20 + w, b - 18);
     ctx.stroke();
     ctx.fillStyle = '#16202B';
     ctx.font = '11px sans-serif';
     ctx.textAlign = 'center';
-    ctx.fillText(G.formatFeet(use), 20 + w / 2, cssH - 28);
+    ctx.fillText(G.formatFeet(use), 20 + w / 2, b - 28);
     ctx.textAlign = 'left';
     var nx = cssW - 36, ny = 36;
     ctx.beginPath();
@@ -1380,23 +1429,27 @@
      2026-10-20: "i cant see the map if im zoomed out"). */
   var PHOTO_MIN_Z = 12, PHOTO_MAX_Z = 19;
   function layoutMap() {
-    var host = $('map');
-    if (!mapOn) { host.style.display = 'none'; mapNote = ''; mapAt = null; layoutParcels(null); return; }
+    var host = $('map'), Sat = root.OmegaEditorV2Satellite;
+    if (!mapOn) { host.style.display = 'none'; if (Sat) Sat.hide(); mapNote = ''; mapAt = null; layoutParcels(null); return; }
+    /* Google's satellite where it can (sharp to the deepest level it has),
+       Esri's tiles under it for the PNG export and wherever Google cannot */
+    var google = !!(Sat && Sat.frame(G.ftToLatLng(view.cx, view.cy, state.doc.anchor), view.pxPerFt, cssW, cssH, state.doc.anchor));
     host.style.display = 'block';
+    host.style.visibility = google ? 'hidden' : 'visible';
     var z = Math.round(G.zoomForScale(state.doc.anchor.lat, view.pxPerFt * dpr));
     if (z < PHOTO_MIN_Z) z = PHOTO_MIN_Z;
     if (z > PHOTO_MAX_Z) z = PHOTO_MAX_Z;
     var most = (Math.ceil(cssW * dpr / 256) + 3) * (Math.ceil(cssH * dpr / 256) + 3), set = tilesFor(z);
     while (set.count > most && z > PHOTO_MIN_Z) { z--; set = tilesFor(z); }
     if (set.count > most) {
-      mapNote = 'Zoom in to load aerial imagery.';
-      mapAt = { z: z, tiles: 0 };
+      mapNote = google ? '' : 'Zoom in to load aerial imagery.';
+      mapAt = { z: z, tiles: 0, source: google ? 'google' : 'esri' };
       host.style.display = 'none';
       layoutParcels(null);
       return;
     }
     mapNote = '';
-    mapAt = { z: z, tiles: set.count };
+    mapAt = { z: z, tiles: set.count, source: google ? 'google' : 'esri' };
     var need = set.need, k;
     for (k in tiles) if (tiles.hasOwnProperty(k) && !need[k]) {
       if (tiles[k].img.parentNode) tiles[k].img.parentNode.removeChild(tiles[k].img);
@@ -1686,7 +1739,53 @@
     afterChange();
     fitTo([ent.id], 0.08);
     paintParcelCard();
-    setStatus('The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.');
+    var said = 'The parcel is the lot line now' + (rec.apn ? ' (APN ' + rec.apn + ')' : '') + '. It is a tax map, not a survey: confirm it before you design to it.';
+    setStatus(said);
+    /* and the buildings already on it, said after the lot line */
+    findBuildings(true, said);
+  }
+  /* ── the buildings on the lot (omega-editor-v2-buildings.js) ──────────
+     The lot is the biggest polygon or rectangle on the site layer (the one
+     a guided build takes); without one, there is nothing to look on. The
+     footprints are added as obstructions in one step: Undo takes them back. */
+  var buildingsSeq = 0;
+  function lotRing() {
+    var list = state.doc.entities, best = null, bestA = -1, i, e, b, a;
+    for (i = 0; i < list.length; i++) {
+      e = list[i];
+      if ((e.type !== 'polygon' && e.type !== 'rect') || e.layer !== 'site') continue;
+      b = G.boundsOf(e); a = (b.maxX - b.minX) * (b.maxY - b.minY);
+      if (a > bestA) { bestA = a; best = e; }
+    }
+    var ring = best ? G.ringOf(best) : null;
+    return ring ? ring.map(function (p) { var ll = G.ftToLatLng(p.x, p.y, state.doc.anchor); return [ll.lat, ll.lng]; }) : null;
+  }
+  function findBuildings(auto, lead) {
+    var B = root.OmegaEditorV2Buildings, ring = lotRing(), seq = ++buildingsSeq, btn = $('site-buildings');
+    lead = lead ? lead + ' ' : '';
+    if (!B) return;
+    if (!ring) { if (!auto) setStatus('Set the lot line first: Show parcel lines, then Use as site boundary, or draw it.', true); return; }
+    if (btn) btn.disabled = true;
+    if (!auto) setStatus('Looking for the buildings on the lot\u2026');
+    var anchor = { lat: +state.doc.anchor.lat, lng: +state.doc.anchor.lng };
+    B.find(ring).then(function (r) {
+      if (btn) btn.disabled = false;
+      if (seq !== buildingsSeq || anchor.lat !== +state.doc.anchor.lat || anchor.lng !== +state.doc.anchor.lng) return;
+      var add = B.toEntities(r.buildings, state.doc.anchor, state.doc.entities);
+      if (add.length) {
+        var doc = D.clone(state.doc), ids = [];
+        add.forEach(function (e) { e.id = D.uid('e'); doc.entities.push(e); ids.push(e.id); });
+        D.commit(state, doc, []);
+        afterChange();
+        requestDraw();
+      }
+      if (r.buildings.length && !add.length) { if (!auto) setStatus('The buildings on the lot are already drawn.'); return; }
+      if (!r.buildings.length && r.reason && r.reason !== 'none') { setStatus(lead + r.reason + ' Draw buildings with Obstruction.', !auto); return; }
+      setStatus(lead + B.describe(r.buildings, r.source || ''));
+    }, function () {
+      if (btn) btn.disabled = false;
+      setStatus(lead + 'The building footprints did not answer. Draw buildings with Obstruction.', !auto);
+    });
   }
   function parcelHere() {
     var P = root.OmegaEditorV2Parcels;
@@ -2442,27 +2541,192 @@
   }
   function paintBuildPrompt() {
     var el = $('build-prompt');
-    if (el) el.hidden = !canvasBlank();
+    /* never over a build in hand */
+    if (el) el.hidden = !canvasBlank() || !!held;
   }
   function placedCtx() {
     return {
       pxPerFt: view.pxPerFt,
-      /* a build lands on the clear ground nearest the middle of the view */
+      /* a build starts on the clear ground nearest the middle of the view */
       prefer: function () { return { x: view.cx, y: view.cy }; },
+      /* and is held there for the person to put down (holdBuild) */
+      hold: holdBuild,
       onPlaced: function (res) {
         afterChange();
-        /* the view goes to the build, which is selected, and says where it is */
-        fitTo(res.ids);
-        setStatus(((res.summary && res.summary.line) || 'Build placed.') +
-          (res.onLot === false ? ' The lot had no clear ground for it, so it is just beside the lot: drag it into place.' : '') +
-          ' It is selected: drag to move it.');
+        var say = (res.summary && res.summary.line) || 'Build placed.';
+        if (res.held) {
+          /* put down by hand: the view stays where the person put it */
+          if (res.clashes) say += ' ' + (res.clashes === 1 ? 'One unit stands' : res.clashes + ' units stand') + ' on something already drawn: drag it clear, or Undo and put it down again.';
+          else if (res.onLot === false) say += ' Part of it is outside the lot line: drag it in, or Undo and put it down again.';
+        } else {
+          /* the view goes to the build, which is selected, and says where it is */
+          fitTo(res.ids);
+          if (res.onLot === false) say += ' The lot had no clear ground for it, so it is just beside the lot: drag it into place.';
+        }
+        setStatus(say + ' It is selected: drag to move it.');
         notifyDrawn();
       }
     };
   }
+
+  /* ── a guided build in hand ──────────────────────────────────────────
+     Tommy, 2026-10-21: "when i do the guided build it is just auto placing
+     it, it should work almost identical to how the other function does".
+     The server's plan comes back laid out as one piece (the boxes, their
+     conduit and their names) and the editor HOLDS it: it starts on the
+     clear spot found for it, follows the pointer on the grid, R or a
+     right-click turns it a quarter, a click puts it down where it is,
+     Enter puts it on the clear spot, Esc puts it away and nothing is
+     drawn; a finger taps to move it and taps it to put it down. Red: a
+     unit would stand on gear, a table or a building. */
+  var HELD_SAY = 'Move it where you want it and click to put it down. R or right-click turns it, Enter puts it on the clear spot found for it, Esc puts it away.';
+  function holdBuild(plan, where, commit, opts) {
+    var Bld = root.OmegaEditorV2Build, c = Bld && Bld.centreOf(plan);
+    if (!c) { commit(0, 0, 0); return; }
+    draft = null; drag = null; box = null;
+    if (tool !== 'select') { tool = 'select'; equipKey = null; paintTools(); }
+    held = { plan: plan, commit: commit, opts: opts || {}, where: where || {}, state: state, c: c, dx: 0, dy: 0, turns: 0, key: null, said: '' };
+    /* keys go to the drawing, not the button that opened the dialog */
+    try { if (document.activeElement && document.activeElement !== document.body && document.activeElement.blur) document.activeElement.blur(); } catch (err) { /* nothing focused */ }
+    frameHeld();
+    heldSay();
+    paintBuildPrompt();
+    requestDraw();
+  }
+  function heldPlan() {
+    var Bld = root.OmegaEditorV2Build, k = held.dx + '|' + held.dy + '|' + held.turns, fresh = false;
+    if (held.key !== k) { held.key = k; held.at = Bld.movePlan(held.plan, held.dx, held.dy, held.turns); fresh = true; }
+    if (held.solidsOf !== state.doc) { held.solidsOf = state.doc; held.solids = Bld.solids(state.doc); fresh = true; }
+    if (fresh) held.clash = Bld.clashes(state.doc, held.at, held.solids);
+    return held.at;
+  }
+  /* the build's middle on the pointer, a whole grid step at a time */
+  function heldFollow(p) {
+    if (!held || !G.finitePoint(p)) return;
+    var g = state.doc.gridFt || 5, dx = p.x - held.c.x, dy = p.y - held.c.y;
+    if (snaps.grid) { dx = Math.round(dx / g) * g; dy = Math.round(dy / g) * g; }
+    else { dx = Math.round(dx * 10) / 10; dy = Math.round(dy * 10) / 10; }
+    if (dx === held.dx && dy === held.dy) return;
+    held.dx = dx; held.dy = dy;
+    heldSay();
+  }
+  function heldTurn() {
+    if (!held) return;
+    held.turns = (held.turns + 1) % 4;
+    heldSay();
+    requestDraw();
+  }
+  function heldDrop(suggested) {
+    var h = held;
+    if (!h) return;
+    held = null;
+    paintBuildPrompt();
+    if (h.state !== state) { setStatus('The drawing changed, so the build was put away. Guided build makes it again.', true); requestDraw(); return; }
+    var res = h.commit(suggested ? 0 : h.dx, suggested ? 0 : h.dy, h.turns);
+    if (!res || !res.ok) setStatus((res && res.reason) || 'The build could not be put down.', true);
+    requestDraw();
+  }
+  function heldAway(quiet) {
+    held = null;
+    paintBuildPrompt();
+    if (!quiet) setStatus('Put away. Nothing was drawn; Guided build makes it again.');
+    requestDraw();
+  }
+  function heldKey(ev) {
+    if (ev.ctrlKey || ev.metaKey || ev.altKey || view3dOpen()) return false;
+    if (ev.key === 'Escape') { ev.preventDefault(); heldAway(); return true; }
+    if (ev.key === 'Enter') { ev.preventDefault(); heldDrop(true); return true; }
+    if ((ev.key === 'r' || ev.key === 'R') && !(ev.target && ev.target.id === 'cmd')) { ev.preventDefault(); heldTurn(); return true; }
+    return false;
+  }
+  function heldSay() {
+    heldPlan();
+    var line = (held.plan.summary && held.plan.summary.line) || 'Guided build.', say;
+    if (held.clash) say = 'Red: ' + (held.clash === 1 ? 'a unit' : held.clash + ' units') + ' would stand on something already drawn here. Move it clear, or click to put it down anyway. Esc puts it away.';
+    else if (held.where.onLot === false && !held.dx && !held.dy) say = line + ' No clear ground on the lot fits it whole, so it waits just beside the lot. ' + HELD_SAY;
+    else say = line + ' ' + HELD_SAY;
+    if (say !== held.said) { held.said = say; setStatus(say); }
+  }
+  function planBox(plan) {
+    var list = [].concat(plan.equipment || [], plan.conduits || []), i, b, out = { minX: Infinity, minY: Infinity, maxX: -Infinity, maxY: -Infinity };
+    for (i = 0; i < list.length; i++) {
+      if (list[i].type === 'array') continue;
+      b = G.boundsOf(list[i]);
+      if (!isFinite(b.minX) || !isFinite(b.maxY)) continue;
+      if (b.minX < out.minX) out.minX = b.minX; if (b.minY < out.minY) out.minY = b.minY;
+      if (b.maxX > out.maxX) out.maxX = b.maxX; if (b.maxY > out.maxY) out.maxY = b.maxY;
+    }
+    return isFinite(out.minX) ? out : null;
+  }
+  /* the held build in view, big enough to see where it goes */
+  function frameHeld() {
+    var b = planBox(heldPlan());
+    if (!b) return;
+    var a = worldToScreen({ x: b.minX, y: b.maxY }), z = worldToScreen({ x: b.maxX, y: b.minY }), big = Math.max(z.x - a.x, z.y - a.y);
+    var seen = a.x >= 20 && a.y >= 20 && z.x <= cssW - 20 && z.y <= cssH - 20;
+    if (seen && big >= 60) return;
+    view.cx = (b.minX + b.maxX) / 2;
+    view.cy = (b.minY + b.maxY) / 2;
+    if (big < 60 || big > Math.min(cssW, cssH) * 0.8) {
+      var w = Math.max(b.maxX - b.minX, 10), h = Math.max(b.maxY - b.minY, 10);
+      view.pxPerFt = Math.max(0.02, Math.min(80, Math.min(cssW / (w * 3), cssH / (h * 3))));
+    }
+    layoutMap();
+  }
+  /* a dashed box around a build, with a dark edge under it so it reads on
+     bright concrete and dark asphalt alike */
+  function outlineBox(ctx, b, color, dash) {
+    var a = worldToScreen({ x: b.minX, y: b.maxY }), z = worldToScreen({ x: b.maxX, y: b.minY });
+    ctx.save();
+    ctx.strokeStyle = 'rgba(15,23,32,.55)';
+    ctx.lineWidth = 3.5;
+    ctx.strokeRect(a.x - 6, a.y - 6, z.x - a.x + 12, z.y - a.y + 12);
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1.75;
+    ctx.setLineDash(dash);
+    ctx.strokeRect(a.x - 6, a.y - 6, z.x - a.x + 12, z.y - a.y + 12);
+    ctx.restore();
+  }
+  /* the clear spot it was offered, as it was offered (not turned) */
+  function heldHome() {
+    if (held.homeBox === undefined) held.homeBox = planBox(root.OmegaEditorV2Build.movePlan(held.plan, 0, 0, 0));
+    return held.homeBox;
+  }
+  function drawHeld(ctx) {
+    if (!held) return;
+    if (held.state !== state) { held = null; paintBuildPrompt(); return; }
+    var plan = heldPlan(), list = [].concat(plan.conduits || [], plan.equipment || []), b = planBox(plan), i;
+    /* the clear spot found for it, while the build is somewhere else */
+    var home = b && (held.dx || held.dy || held.turns) ? heldHome() : null;
+    if (home) outlineBox(ctx, home, '#FFFFFF', [3, 4]);
+    ctx.save();
+    ctx.globalAlpha = 0.8;
+    names = { fixed: [], boxes: [] };
+    try {
+      for (i = 0; i < list.length; i++) if (list[i].type !== 'array') drawOne(ctx, list[i]);
+      drawNames(ctx, names);
+    } finally { names = null; }
+    ctx.restore();
+    if (b) outlineBox(ctx, b, held.clash ? '#B42318' : '#2B5FA8', [6, 4]);
+  }
+  /* the ribbon's unit under the pointer before it is placed, as it will be */
+  function drawEquipGhost(ctx) {
+    if (held || tool !== 'equip' || !equipKey || !cursor) return;
+    var spec = D.EQUIP[equipKey], p = lastSnap ? lastSnap.point : cursor;
+    if (!spec || !G.finitePoint(p)) return;
+    var e = { type: 'equip', layer: 'equipment', key: equipKey, label: spec.label, x: p.x, y: p.y, w: spec.w, h: spec.h, rot: 0 };
+    ctx.save();
+    ctx.globalAlpha = 0.7;
+    names = { fixed: [], boxes: [] };
+    try { drawOne(ctx, e); drawNames(ctx, names); } finally { names = null; }
+    ctx.restore();
+    outlineBox(ctx, G.boundsOf(e), '#2B5FA8', [6, 4]);
+  }
+
   function openBuild(preferred) {
     var Bld = root.OmegaEditorV2Build;
     if (!Bld) { setStatus('Guided build is not loaded.', true); return; }
+    if (held) heldAway(true);
     setSection('design');
     var ctx = placedCtx();
     if (typeof preferred === 'string' && preferred) ctx.preferred = preferred;
@@ -2660,12 +2924,29 @@
     OmegaEditorV2Outputs.open(api);
   }
 
+  /* the middle of what is selected and how its units are turned */
+  function selectedGear() {
+    var list = [], rot = [], i, e, b;
+    for (i = 0; i < state.selection.length; i++) {
+      e = D.find(state.doc, state.selection[i]);
+      if (!e || e.type === 'array') continue;
+      list.push(e);
+      if (e.type === 'equip') rot.push(+e.rot || 0);
+    }
+    b = list.length ? planBox({ equipment: list }) : null;
+    return b ? { cx: (b.minX + b.maxX) / 2, cy: (b.minY + b.maxY) / 2, rot: rot } : null;
+  }
   /* What the checks read: the view and the photo's tiles. Read-only. */
   function debug() {
     var a = state.doc.anchor || {}, sel = [], i, e;
     for (i = 0; i < state.selection.length; i++) { e = D.find(state.doc, state.selection[i]); if (e && e.label) sel.push(String(e.label).trim()); }
-    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel,
-      map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote } : null };
+    return { view: { cx: view.cx, cy: view.cy, pxPerFt: view.pxPerFt, w: cssW, h: cssH }, anchor: { lat: +a.lat, lng: +a.lng }, selected: sel, icons: iconsOn,
+      entities: state.doc.entities.length, selection: state.selection.length,
+      held: held ? { turns: held.turns, dx: held.dx, dy: held.dy, clash: held.clash || 0, units: (held.plan.equipment || []).length,
+        at: { x: held.c.x + held.dx, y: held.c.y + held.dy }, clear: { x: held.c.x, y: held.c.y } } : null,
+      placed: selectedGear(),
+      buildings: state.doc.entities.filter(function (x) { return x.type === 'obstruction' && x.building; }).map(function (x) { return { heightFt: x.building.heightFt, source: x.building.source, use: x.building.use }; }),
+      map: mapAt ? { z: mapAt.z, tiles: mapAt.tiles, note: mapNote, source: mapAt.source || 'esri' } : null };
   }
 
   root.OmegaEditorV2App = { boot: boot, applyGuidedBuild: applyGuidedBuild, openOutputs: openOutputs, debug: debug, VERSION: 'editor-v2-app/5' };

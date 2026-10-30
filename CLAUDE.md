@@ -1776,16 +1776,48 @@ working; only what a person reads says Omega Maximus.
   (`SITE_VIEW_FT`, 700 ft; it opened on one roof) and a drawing that moved
   with it whole; the Site tab's own **Show parcel lines** is the same layer
   as Layers' switch; Use as site boundary zooms to the lot.
-- **The photo at any zoom** (Tommy, 2026-10-20: "i cant see the map if im
-  zoomed out"): tiles are picked at the screen's own pixels (a Retina screen
-  gets the next level, sharp), and past the tiles the screen holds at their
-  own size `layoutMap` steps one level coarser at a time, down to county
-  scale (`PHOTO_MIN_Z` 12), instead of going blank (it hid the photo past 24
-  tiles: a 12-acre lot read "Zoom in"). Esri's World Imagery has nothing
-  past level 19 here (`PHOTO_MAX_Z`; level 20 answers "Map data not yet
-  available"), so closer than about 0.3 m a pixel the photo is soft; Site
-  Map is sharper there because it is Google's satellite (the browser Maps
-  key, billed per load), a decision not yet taken for Maximus.
+- **The photo is Google's satellite** (Tommy, 2026-10-20: "switch to google
+  satellite"): `omega-editor-v2-satellite.js` puts a Maps JavaScript API
+  satellite map (the browser key, `config.js googleMapsKey`, the same key
+  as Site Map's built-in default, with the Settings › API Keys override
+  `omegaMapsKey` first; one map load a page, moving it free) under the
+  drawing and moves it to the editor's own view (centre and scale,
+  `camera()`); it takes no input. Past the deepest imagery at the site
+  (`MaxZoomService`, 21 here) it is magnified by CSS one level, then hands
+  over. Esri's tiles stay under it (hidden) for the PNG export and show
+  whenever Google cannot (no key, a refused key, offline): `layoutMap` picks
+  them at the screen's own pixels and steps coarser down to county scale
+  (`PHOTO_MIN_Z` 12) instead of going blank (it hid the photo past 24
+  tiles: "i cant see the map if im zoomed out"); Esri has nothing past
+  level 19 here (`PHOTO_MAX_Z`). The scale bar sits above Google's logo;
+  nothing copies or exports Google's imagery. `teditorv2satellite.js`,
+  and `check:editor-v2` holds the offline fallback.
+- **View › Icons** (Tommy, 2026-10-21: "a function that puts the icons or
+  images of the units like we had in the first editor"): each unit keeps its
+  box, its true footprint, and gets Site Map's own icon on the middle of it
+  (the BESS's battery cabinets, the transformer, the charger, the utility
+  pole), the box's size on screen from 22 to 72 px, upright, with the name
+  under it as on Site Map. The pictures are `omega-equipment-icons.js`,
+  WRITTEN from editor.html's `const ICONS` by
+  `scripts/build-equipment-icons.js` (editor.html is not edited from here);
+  never edit it by hand: `teditorv2icons.js` runs the builder's `--check`
+  and fails when Site Map's icons move on. `omega-editor-v2-icons.js`
+  `iconOf` is the ONE map from a Maximus equipment key to a Site Map icon.
+  Off by default, remembered by this browser (`omegaMaximusIcons`).
+- **The buildings on the lot come with it** (Tommy, 2026-10-21: "generate
+  on the parcel for the address the building … useful especially for the
+  3d"): `omega-editor-v2-buildings.js` reads FEMA's USA Structures (every US
+  structure over about 450 sq ft, its use and its height) for the lot's box,
+  else OpenStreetMap's buildings, keeps those whose middle is on the lot and
+  adds each as an Obstruction with `building{ heightFt, use, areaSqFt,
+  source, year, id }`, in one step (Undo takes them back), never twice and
+  never over one already drawn. It runs by itself after Use as site
+  boundary (said after the lot line) and from the Site tab's Find
+  buildings. Guided builds keep off them; 3D stands each at its source's
+  height (the 51st Avenue warehouse: 8.85 m, 29 ft), a hand-drawn
+  obstruction at the default it always had. Read, never invented: no
+  height says so. `teditorv2buildings.js`; `check:editor-v2` runs it on a
+  stand-in FEMA answer.
 - **Names never on one another** (Tommy: "clean up how you show the guided
   build"): `drawNames` paints every name after the shapes: text, callouts,
   dimensions and array notes where they belong; a box's name inside it when
@@ -1798,6 +1830,25 @@ working; only what a person reads says Omega Maximus.
   first from the lot's south-west corner; inside the lot line, clear of the
   obstructions (by their extent) and of what is placed, beside the lot when
   there is no room (`scripts/tests/teditorv2place.js` §6).
+- **And you put it down** (Tommy, 2026-10-21: "it is just auto placing it,
+  it should work almost identical to how the other function does"): the
+  plan comes back IN HAND (`ctx.hold` → the editor's `holdBuild`), laid out
+  as the server laid it, on that clear spot; it follows the pointer a grid
+  step at a time, R or a right-click turns it a quarter about its middle,
+  a click puts it down under the pointer, Enter on the clear spot, Esc puts
+  it away and nothing is drawn; a finger (no pointer to follow) taps to move
+  it and taps it to put it down. Once moved or turned, the clear spot it was
+  offered stays drawn (white dashes on a dark edge, read on any photo), and
+  "Start with a guided build" is never painted over it. Moving and turning are the build module's
+  `movePlan` (a copy, through the geometry's own `rotateEntity`); red means
+  a unit would stand on gear, an array table or a building, judged by their
+  real outlines (`solids`, `clashes`: an L-shaped building does not claim
+  its yard; touching is not standing on); put down, it is one group,
+  selected, and the status says if it stands on something or crosses the
+  lot line. An array bound to its lot (Auto layout) goes straight down. The
+  ribbon's single unit shows the same box and icon under the pointer before
+  its click. `teditorv2place.js` §7; `check:editor-v2` holds, moves, turns,
+  drops and puts one away.
 - **Never a browser popup to confirm**: the Claude app's browser pane (and a
   kiosk) answers `window.confirm` "no" without showing it, so a button that
   asked that way did nothing (2026-10-20, the price book's Seed). Send to
@@ -1808,6 +1859,12 @@ working; only what a person reads says Omega Maximus.
   photo, the address search, the county parcel and the 3D ground are the
   public services the page calls; the parcel, planner, cost, value-stack and
   solar answers are the real server code; its figures come from the run).
+  The photo is Google's, as the page shows it, waited on through
+  `OmegaEditorV2Satellite.tilesLoaded()` and credited on the page with the
+  map's own "Imagery ©" line; Icons is on; the BESS build is put down on
+  the spot it was offered (Enter) and the DCFC build moved by hand to the
+  frontage, turned with R and clicked down, each asserted clear of the
+  building and inside the lot line.
   It needs the network, so it is retaken by running it after an editor
   change, like the Site Map guide; the cover mark is
   `scripts/guides/assets/omega-glow.jpg`.
