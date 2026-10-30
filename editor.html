@@ -9586,23 +9586,12 @@ function renderEl(el){
     // (mirror across trench) and rotate for field-accurate placement.
     var gw=el.w||60, gh=el.h||Math.round(gw*(el.aspect||0.72));
     wrap.style.width=gw+'px'; wrap.style.height=gh+'px';
-    var _EVR=(typeof EVRENDER!=='undefined')?EVRENDER:(window.EVRENDER||{});
-    var rf=(_EVR[el.evKind]||_EVR.service||function(w,h){return '<svg width="'+w+'" height="'+(h||w)+'" viewBox="0 0 40 40"><rect x="2" y="2" width="36" height="36" rx="3" fill="#37424f" stroke="#8b98a5" stroke-width="1.5"/></svg>';});
     var flip=el.flip?' scaleX(-1)':'';
-    // Chargers: if the selected DCFC model shipped a real photo (evImg), render
-    // that PNG to scale instead of the synthetic vector cabinet.
-    var _gearHtml;
-    if(el.evKind==='charger' && el.evImg){
-      _gearHtml='<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;object-fit:contain;display:block" draggable="false">';
-    } else {
-      var _visuals=window.OmegaEquipmentVisuals;
-      var _gearKind=el.evKind==='service'?'meter':el.evKind;
-      if(el.evKind==='service' && el.svcPedestal && ICONS.svcped)
-        _gearHtml=ICONS.svcped(Math.min(gw,gh||gw));   /* a service pedestal wears its own symbol */
-      else if(_visuals && (_gearKind==='meter' || (_gearKind==='panel' && _visuals.resolve(el,'panel'))))
-        _gearHtml=_visuals.symbol(_gearKind,gw,gh);
-      else _gearHtml=rf(gw,gh);
-    }
+    /* The symbol is omegaGearSymbol's to choose — the ONE rule the legend
+       asks too, so the plan and the key cannot draw different artwork for
+       the same object (the product photo, the service pedestal, the
+       catalogue's metered gear, else the plan view) . */
+    var _gearHtml=omegaGearSymbol(el,gw,gh);
     /* Bollard protection pad. The earlier version of this only ran in the
        type==='eq' branch, but guided builds place chargers as type
        'evgear' with the role on .evKind -- so it never appeared on the
@@ -19179,7 +19168,7 @@ function renderLegend(){
 
   /* Placed equipment, grouped with counts (bollards etc. collapse). */
   try{
-    var counts={}, evMeta={}, _lblSeen={}, _lblOrder=[];
+    var counts={}, evMeta={}, _rowEl={}, _lblSeen={}, _lblOrder=[];
     /* 'eq' is the Insert-palette equipment. Guided builds place 'evgear' via
        _evAdd — the meter bank, outdoor panel, switchgear and every charger.
        Filtering to 'eq' alone meant an entire guided build produced a legend
@@ -19233,6 +19222,12 @@ function renderLegend(){
            chargers under the charger row, and the pedestal on its own row. */
         counts[id]=(counts[id]||0)+((e.type==='evgear' && e.units>1) ? e.units : 1);
         if(e.type==='evgear' && e.pedestal) counts['evpedestal']=(counts['evpedestal']||0)+1;
+        /* Keep the first element behind each row. The key cannot ask
+           omegaGearSymbol what this thing draws without the thing itself:
+           the symbol turns on the element's own fields (its product photo,
+           the pedestal flag, the catalogue reference), none of which
+           survive in a bare id. */
+        if(!_rowEl[id]) _rowEl[id]=e;
         /* Keep the real unit name and rating so the legend reads
            "Autel MaxiCharger AC Ultra", not "charger". */
         if(e.type==='evgear' && !evMeta[id]){
@@ -19309,9 +19304,18 @@ function renderLegend(){
          a charger, the catalogue icon for everything else. Resolved off the
          BASE id, never the marked one, or every marked row prints a
          junction box. */
-      var ico=null;
+      /* ── THE KEY DRAWS WHAT THE MAP DREW ─────────────────────────────
+         A charger keeps its mounting swatch, which is what tells a
+         pedestal pair from the wall-mounted units. Everything a guided
+         build placed asks omegaGearSymbol — the SAME call renderEl makes
+         — so the outdoor panel, the meter bank, the switchgear and the
+         service pedestal are the artwork that is actually on the plan.
+         Only the Insert palette's own equipment falls through to ICONS,
+         which is what renderEl draws for those. */
+      var ico=null, _rel=_rowEl[id];
       try{
         if(_mntK && window.OmegaEVMount) ico=OmegaEVMount.swatch(_mntK,16);
+        else if(_rel && _rel.type==='evgear') ico=omegaGearSymbol(_rel,16,16);
         else ico=((typeof ICONS!=='undefined' && ICONS[_base]) ? ICONS[_base] : ICONS.jbox)(16);
       }catch(_e){ try{ ico=ICONS.jbox(16); }catch(_x){ ico=''; } }
       /* The same physical item can arrive under two ids — a battery placed as
@@ -61128,6 +61132,58 @@ var EVRENDER = {
 };
 /* Footprint (ft) for realistic scaling. Falls back to sensible defaults. */
 try{ window.EVRENDER = EVRENDER; }catch(e){}
+
+/* ══════════════════════════════════════════════════════════════════════
+ *  ONE OBJECT, ONE SYMBOL
+ *  ---------------------------------------------------------------------
+ *  A thing on the plan and its row in the key must be the SAME drawing.
+ *  They were not, because each side picked its own artwork: renderEl ran
+ *  a four-way branch (a charger's product photo, the service pedestal,
+ *  OmegaEquipmentVisuals for the metered gear, else EVRENDER's plan view)
+ *  while renderLegend reached straight into ICONS by id. For an outdoor
+ *  panel that meant a grey cabinet on the map and a green badge in the
+ *  key (Menachem, 172 Summer St, 2026-10-29: "the outdoor panel
+ *  disconnect is still not the same icon"), and the service pedestal was
+ *  the same fault one branch over, patched there rather than here.
+ *
+ *  So the branch lives in ONE function and both callers ask it. A symbol
+ *  added to either table, or a new rule for picking one, reaches the map
+ *  and the key together or not at all.
+ *
+ *  Sized by the caller: the map passes the element's own footprint in
+ *  pixels, the key passes its 16px swatch. Everything these tables return
+ *  carries a viewBox, so both scale from the same source.
+ * ══════════════════════════════════════════════════════════════════════ */
+function omegaGearSymbol(el, w, h){
+  if(!el) return '';
+  w = Math.max(2, Math.round(w||40)); h = Math.max(2, Math.round(h||w));
+  var ICO = (typeof ICONS!=='undefined') ? ICONS : (window.ICONS||{});
+  var EVR = (typeof EVRENDER!=='undefined') ? EVRENDER : (window.EVRENDER||{});
+  var vis = window.OmegaEquipmentVisuals;
+  /* A charger whose model shipped a real photo is drawn as that photo. */
+  if(el.evKind==='charger' && el.evImg)
+    return '<img src="'+el.evImg+'" alt="charger" style="width:100%;height:100%;'
+         + 'object-fit:contain;display:block" draggable="false">';
+  /* A service on a freestanding pedestal wears the pedestal, not a meter. */
+  if(el.evKind==='service' && el.svcPedestal && ICO.svcped)
+    return ICO.svcped(Math.min(w,h));
+  /* Gear that answers to a real product reference: the meter bank, and the
+     outdoor panel when the catalogue recognises it. */
+  var kind = (el.evKind==='service') ? 'meter' : el.evKind;
+  if(vis && (kind==='meter' || (kind==='panel' && vis.resolve(el,'panel')))){
+    try{ return vis.symbol(kind,w,h); }catch(e){}
+  }
+  /* Otherwise the plan view, and a plain cabinet for a role with none. */
+  if(typeof EVR[el.evKind]==='function'){
+    try{ return EVR[el.evKind](w,h); }catch(e){}
+  }
+  if(typeof EVR.service==='function'){
+    try{ return EVR.service(w,h); }catch(e){}
+  }
+  return '<svg width="'+w+'" height="'+h+'" viewBox="0 0 40 40" xmlns="http://www.w3.org/2000/svg">'
+       + '<rect x="2" y="2" width="36" height="36" rx="3" fill="#37424f" stroke="#8b98a5" stroke-width="1.5"/></svg>';
+}
+try{ window.omegaGearSymbol = omegaGearSymbol; }catch(e){}
 
 /* ══════════════════════════════════════════════════════════════════════
  *  HOW A CHARGER IS MOUNTED
