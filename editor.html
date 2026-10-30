@@ -2221,6 +2221,7 @@ window.onerror = function(msg, src, line, col, err) {
             <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',_bessRunPanel)" title="Checklist of the standard BESS run designations (DC CABLE RUN 1, AC CABLE RUN 1-9...) — shows what's drawn vs pending and arms the tool for the next one"><span class="fi-ico">📋</span> BESS Cable Run Schedule…</button>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',_cdOpenTab)"><span class="fi-ico">Σ</span> LF Estimate</button>
             <button class="rb-fly-item omega-gated-hidden" data-omega-feature="reanchor" data-omega-home="fly:fly-cond" hidden onclick="rbFlyDo('fly-cond',_geoRepairAndReport)" title="Checks every conduit, trench, shape and equipment item against the map and re-anchors any whose stored ground position no longer matches where it is drawn — so nothing drifts or snaps back on the next pan or zoom"><span class="fi-ico">⚓</span> Re-anchor Drawing to Map</button>
+            <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',omegaTidyRuns)" title="Re-route every equipment-to-equipment run at right angles between the gear as it is placed NOW — the fix for runs stretched into diagonals across the site after equipment was rearranged. Trench legs and BESS cluster runs keep their own routing. Undo restores the old routes."><span class="fi-ico">&#8988;</span> Straighten Runs</button>
             <div class="rb-fly-head">Auto-Route</div>
             <button class="rb-fly-item" onclick="rbFlyDo('fly-cond',function(){wireAllBessToHub()})" title="Home-run every BESS pad to the EMS/hub — one run per service, edge to edge"><span class="fi-ico">⇉</span> Wire All BESS &rarr; Hub</button>
             <div class="rb-fly-head">Drawing Style</div>
@@ -10544,11 +10545,26 @@ window._elBoxSize=_elBoxSize;
 function _elPort(id, towardPt){
   var el=null;
   try{ el=S.elements.find(function(e){return e.id===id;}); }catch(e){}
-  if(!el) return null;
-  /* Same box as _elCenter, or a run leaves from an edge the equipment does
-     not actually have. */
-  var _b=_elBoxSize(el), w=_b.w, h=_b.h;
-  var cx=(+el.x||0)+w/2, cy=(+el.y||0)+h/2;
+  var cx, cy, w, h;
+  if(el){
+    /* Same box as _elCenter, or a run leaves from an edge the equipment does
+       not actually have. */
+    var _b=_elBoxSize(el); w=_b.w; h=_b.h;
+    cx=(+el.x||0)+w/2; cy=(+el.y||0)+h/2;
+  } else {
+    /* Shapes host conduit too (a run bonded to a solar ARRAY is exactly what
+       the guided PV build makes); same box _elCenter reads for them. */
+    try{
+      var sh=(S.shapes||[]).find(function(s){ return s && s.id===id; });
+      if(sh && typeof _elBox==='function'){
+        var bb=_elBox(sh);
+        if(bb && isFinite(bb.cx) && isFinite(bb.cy)){
+          cx=bb.cx; cy=bb.cy; w=(bb.hw||0)*2; h=(bb.hh||0)*2;
+        }
+      }
+    }catch(e){}
+    if(cx==null) return null;
+  }
   if(!towardPt) return {x:cx,y:cy};
   var dx=towardPt.x-cx, dy=towardPt.y-cy;
   if(Math.abs(dx)>=Math.abs(dy)) return { x:cx+(dx>=0?w/2:-w/2), y:cy };
@@ -18016,7 +18032,13 @@ function _cvMove(x,y){
      modifier cannot change mid-gesture. */
   var _lastI=c.pts.length-1;
   var _slot = (i===0) ? '_fromOff' : (i===_lastI ? '_toOff' : null);
-  var _eid  = (i===0) ? (c.fromId||c.fromElId) : (i===_lastI ? (c.toId||c.toElId) : null);
+  /* An endpoint's bond may be explicit (pts[i].elId — the guided builds) or
+     implicit (fromElId/toElId). Both record the same offset: without the
+     pt.elId term a guided-build end fell to the interior-detach branch
+     below, lost its bond on the first nudge, and the weld pass never moved
+     it with its equipment again. */
+  var _eid  = (i===0) ? (c.pts[i].elId||c.fromId||c.fromElId)
+            : (i===_lastI ? (c.pts[i].elId||c.toId||c.toElId) : null);
   if(_cvDrag.detach){
     if(c.pts[i].elId) delete c.pts[i].elId;
     if(i===0){ c.fromId=null; c.fromElId=null; delete c._fromOff; }
@@ -18063,6 +18085,10 @@ function _cvEnd(){
     }catch(e){}
     return false;
   }
+  /* A route the person set by hand is theirs: the automatic re-route that
+     follows equipment around (updateAttached → _orthoRoute) must not
+     rebuild it. Straighten Runs, being an explicit request, clears it. */
+  c._userRouted=true;
   _cvRestamp(c);
   try{ if(window.OmegaReanchor) OmegaReanchor(c.id); }catch(e){}
   try{ if(typeof _updateConduitSchedule==='function') _updateConduitSchedule(); }catch(e){}
@@ -18982,11 +19008,35 @@ function updateAttached(elId){
        every nudge (Thomas, 160 S Main St, 2026-09-16). To move the trench
        itself, drag the run's own points. */
     if(c.evRun && c.pts && c.pts.length>1 && c.pts[0] && c.pts[0].elId===elId) return;
+    /* A run the guided build laid (derCollector) that nobody hand-routed is
+       re-ROUTED between its equipment, not stretched. Snapping only the
+       bonded ends to the moved gear left every interior bend at the spot
+       the gear was FIRST placed, so rearranging a site swept its runs into
+       diagonals across the whole drawing (SAFT, 13575 Waterworks St,
+       2026-10-28). A route the person edited keeps their bends. */
+    if(c.derCollector && !c._userRouted && c.pts && c.pts.length>1
+       && typeof _orthoRoute==='function' && typeof _condEndIds==='function'){
+      const ids=_condEndIds(c);
+      if(ids.a && ids.b && ids.a!==ids.b && (ids.a===elId || ids.b===elId)){
+        if(_orthoRoute(c)){ updCondStat(); return; }
+      }
+    }
+    /* An END keeps its recorded displacement from the centre (the same
+       _fromOff/_toOff the weld pass reads), so a re-routed exit point is
+       not yanked back to dead centre every time its equipment moves. */
+    const lastI=c.pts.length-1;
+    const _off=(slot)=>{ const o=c[slot], p=(S.pxPerFt>0)?S.pxPerFt:0;
+      return (o && typeof o.fx==='number' && p>0) ? {x:o.fx*p,y:o.fy*p} : {x:0,y:0}; };
     // Update any point tagged with this elId
-    c.pts=c.pts.map(p=>{if(p.elId===elId){ch=true;return{...p,x:center.x,y:center.y};}return p;});
+    c.pts=c.pts.map((p,pi)=>{
+      if(p.elId!==elId) return p;
+      ch=true;
+      const o=(pi===0)?_off('_fromOff'):(pi===lastI?_off('_toOff'):{x:0,y:0});
+      return {...p,x:center.x+o.x,y:center.y+o.y};
+    });
     // Also update first/last point if fromElId/toElId matches
-    if(!ch&&c.fromElId===elId){c.pts[0]={...c.pts[0],x:center.x,y:center.y};ch=true;}
-    if(c.toElId===elId){const l=c.pts.length-1;c.pts[l]={...c.pts[l],x:center.x,y:center.y};ch=true;}
+    if(!ch&&c.fromElId===elId){const o=_off('_fromOff');c.pts[0]={...c.pts[0],x:center.x+o.x,y:center.y+o.y};ch=true;}
+    if(c.toElId===elId){const o=_off('_toOff');const l=c.pts.length-1;c.pts[l]={...c.pts[l],x:center.x+o.x,y:center.y+o.y};ch=true;}
     if(ch){
       let px=0;for(let i=1;i<c.pts.length;i++)px+=Math.hypot(c.pts[i].x-c.pts[i-1].x,c.pts[i].y-c.pts[i-1].y);
       c.pxLen=px;c.ftLen=S.pxPerFt?+(px/S.pxPerFt).toFixed(1):px;
@@ -19004,6 +19054,92 @@ function updateAttached(elId){
   });
   if(typeof updateArrowsForEl==='function')updateArrowsForEl(elId);
 }
+
+/* The two pieces of equipment a run is bonded to — explicit (pts[].elId,
+   what the guided builds write) or implicit (fromId/fromElId, toId/toElId). */
+function _condEndIds(c){
+  if(!c || !c.pts || !c.pts.length) return {a:null,b:null};
+  var lastI=c.pts.length-1;
+  return { a:(c.pts[0]&&c.pts[0].elId)||c.fromId||c.fromElId||null,
+           b:(c.pts[lastI]&&c.pts[lastI].elId)||c.toId||c.toElId||null };
+}
+window._condEndIds=_condEndIds;
+
+/* Rebuild a bonded run as a clean right-angle route between its equipment
+   AS PLACED NOW: out of the facing edge, one turn, in. The ends keep their
+   bonds and record the edge exit as the standing offset the weld pass and
+   updateAttached both read, so the route survives pan, zoom and the next
+   equipment move instead of degrading back into a diagonal. */
+function _orthoRoute(c){
+  var ids=_condEndIds(c);
+  if(!ids.a || !ids.b || ids.a===ids.b) return false;
+  var ca=(typeof _elCenter==='function')?_elCenter(ids.a):null;
+  var cb=(typeof _elCenter==='function')?_elCenter(ids.b):null;
+  if(!ca || !cb) return false;
+  var A=(typeof _elPort==='function'?_elPort(ids.a, cb):null)||ca;
+  var B=(typeof _elPort==='function'?_elPort(ids.b, ca):null)||cb;
+  var ppf=(S.pxPerFt>0)?S.pxPerFt:6;
+  var pts;
+  if(Math.abs(B.x-A.x)<=ppf*2 || Math.abs(B.y-A.y)<=ppf*2){
+    pts=[{x:A.x,y:A.y},{x:B.x,y:B.y}];           /* already in line: straight */
+  } else if(Math.abs(A.x-ca.x)>Math.abs(A.y-ca.y)){
+    /* leaves by a side edge: run out horizontally, one turn, drop in */
+    pts=[{x:A.x,y:A.y},{x:B.x,y:A.y},{x:B.x,y:B.y}];
+  } else {
+    pts=[{x:A.x,y:A.y},{x:A.x,y:B.y},{x:B.x,y:B.y}];
+  }
+  pts[0].elId=ids.a; pts[pts.length-1].elId=ids.b;
+  c.pts=pts;
+  if(S.pxPerFt>0){
+    c._fromOff={ fx:(A.x-ca.x)/S.pxPerFt, fy:(A.y-ca.y)/S.pxPerFt };
+    c._toOff  ={ fx:(B.x-cb.x)/S.pxPerFt, fy:(B.y-cb.y)/S.pxPerFt };
+  }
+  var px=0; for(var i=1;i<c.pts.length;i++) px+=Math.hypot(c.pts[i].x-c.pts[i-1].x,c.pts[i].y-c.pts[i-1].y);
+  c.pxLen=px; c.ftLen=S.pxPerFt?+(px/S.pxPerFt).toFixed(1):px;
+  /* Rebuilt pts need a rebuilt anchor, and the footage is truest measured
+     on the ground — the same order _cvRestamp uses. */
+  try{ if(typeof _geoRestampOne==='function') _geoRestampOne(c); }catch(e){}
+  try{
+    var gft=(typeof _condGroundFt==='function')?_condGroundFt(c):null;
+    if(gft!=null) c.ftLen=gft;
+  }catch(e){}
+  try{ var g=document.querySelector('[data-cid="'+c.id+'"]'); if(g&&g.parentNode)g.parentNode.removeChild(g); }catch(e){}
+  try{ if(typeof renderConduit==='function') renderConduit(c); }catch(e){}
+  return true;
+}
+window._orthoRoute=_orthoRoute;
+
+/* STRAIGHTEN RUNS — the cleanup for a drawing whose equipment was rearranged
+   under runs built earlier: every equipment-to-equipment run is re-routed at
+   right angles between the gear as it stands now. Managed routes keep their
+   own geometry: a trench leg (evRun) is the dig as drawn, and the BESS
+   cluster / spine / MV runs are re-laid by their own router (Cluster Tools,
+   Wire All BESS → Hub). An explicit request outranks a hand route, so
+   _userRouted is cleared — Undo restores the old routes. */
+function omegaTidyRuns(){
+  var n=0, managed=0;
+  (S.conduits||[]).forEach(function(c){
+    if(!c || !c.pts || c.pts.length<2) return;
+    if(c.evRun || c.cluster || c.spine || c.tap || c.mv || c.chainFromEms){ managed++; return; }
+    var ids=_condEndIds(c);
+    if(!ids.a || !ids.b) return;
+    if(_orthoRoute(c)){ delete c._userRouted; n++; }
+  });
+  if(n){
+    try{ if(typeof updCondStat==='function') updCondStat(); }catch(e){}
+    try{ if(typeof renderLegend==='function') renderLegend(); }catch(e){}
+    try{ if(typeof updateSummaryPanel==='function') updateSummaryPanel(); }catch(e){}
+    try{ if(typeof _updateConduitSchedule==='function') _updateConduitSchedule(); }catch(e){}
+    try{ if(typeof pushHist==='function') pushHist(); }catch(e){}
+  }
+  if(typeof showBanner==='function'){
+    showBanner('cond', n
+      ? ' Straightened '+n+' run'+(n===1?'':'s')+' — re-routed at right angles between the equipment as placed now. Undo restores the old routes.'
+      : ' No equipment-to-equipment runs to straighten.'+(managed?' Trench legs and BESS cluster runs keep their own routing — Cluster Tools re-lays those.':''));
+  }
+  return n;
+}
+window.omegaTidyRuns=omegaTidyRuns;
 
 function midPts(pts){
   if(pts.length===1)return pts[0];
@@ -41254,15 +41390,22 @@ function _geoReprojectAll(){
         for(var pi=0; pi<c.pts.length; pi++){
           var pt=c.pts[pi];
           var eid = pt && pt.elId;          /* explicit attachment */
-          var slot = null;                  /* where the offset is kept */
-          if(!eid && pi===0)      { eid = c.fromId || c.fromElId || null; slot='_fromOff'; }
-          if(!eid && pi===lastI)  { eid = c.toId   || c.toElId   || null; slot='_toOff'; }
+          /* An ENDPOINT keeps a recorded offset whether its bond is explicit
+             (pt.elId — what the guided builds write) or implicit
+             (c.fromElId/toElId). Welding an explicit end to the centre threw
+             away the displacement _cvMove records when the person drags the
+             yellow point, so the end snapped home on the next map move and
+             the run could never be re-routed where it meets its equipment.
+             Only an INTERIOR point with elId is a tap welded to the centre. */
+          var slot = (pi===0) ? '_fromOff' : (pi===lastI ? '_toOff' : null);
+          if(!eid && slot) eid = (pi===0) ? (c.fromId || c.fromElId || null)
+                                          : (c.toId   || c.toElId   || null);
           if(!eid) continue;
           var ctr=_elCenter(eid);
           if(!ctr) continue;
 
           if(!slot){
-            /* Point carries its own elId: it IS the attachment, no offset. */
+            /* Interior point carrying an elId: a tap, welded to the centre. */
             pt.x=ctr.x; pt.y=ctr.y;
             continue;
           }
