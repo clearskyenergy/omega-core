@@ -319,7 +319,7 @@
       id: "ny.nyserda.retail", utility: "NYSERDA", name: "NYSERDA Retail Energy Storage Incentive",
       state: "NY", nonresidential: true,
       perKwh: 175, perKwhNyc: 75, maxKwh: 20000,
-      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-10-31",
+      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-11-04",
       ref: "NYSERDA Retail Energy Storage Incentive (MWh-block design under the "
          + "2024–2030 implementation plan): the open blocks pay $175 per kWh upstate "
          + "(Block 5) and $75 per kWh in New York City (Block 10, opened 23 April "
@@ -334,9 +334,9 @@
          + "so check the dashboard. A Retail Inclusive block of $350 per kWh for "
          + "critical facilities in disadvantaged communities opened 13 April 2026. "
          + "Upstate's next block is already staged on the dashboard at $150 per kWh "
-         + "(Block 6, $58.5M, not yet open); New York City's Block 10 was 61% "
-         + "subscribed on 2026-10-31 and filling fast, with no further NYC block "
-         + "staged."
+         + "(Block 6, $58.5M, not yet open); New York City's Block 10 was 71% "
+         + "subscribed on 2026-11-04 ($8.8M of $30M left) and filling fast, with "
+         + "no further NYC block staged."
     },
     {
       id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
