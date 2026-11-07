@@ -294,7 +294,7 @@
       id: "ca.sgip.storage", utility: "PG&E / SCE / SoCalGas / SDG&E (SGIP)", name: "California SGIP, large-scale storage",
       state: "CA", nonresidential: true,
       perKwh: 250, perKwhItc: 180,
-      tier: "planning", asOf: "Step 5 rates; ratepayer budget closed to new applications 2025-12-30 (CPUC D.25-12-003); read 2026-10-31",
+      tier: "planning", asOf: "Step 5 rates; ratepayer budget closed to new applications 2025-12-30 (CPUC D.25-12-003); read 2026-11-07",
       ref: "CPUC Self-Generation Incentive Program, large-scale storage (over 10 kW), "
          + "Step 5: $0.25/Wh, or $0.18/Wh for projects claiming the federal ITC — the "
          + "rates paying the already-submitted queue. The large-scale storage "
@@ -308,7 +308,7 @@
          + "reserved funding were terminated), implemented by the programme "
          + "administrators' joint advice letter of 5 January 2026 under CPUC "
          + "Decision 25-12-003. The funds selfgenca.com still lists (roughly $12M "
-         + "at PG&E, about $2M each at SCE, SoCalGas and SDG&E as of 2026-10-31) "
+         + "at PG&E, about $2M each at SCE, SoCalGas and SDG&E as of 2026-11-07) "
          + "pay already-submitted applications only — a project in the queue is "
          + "paid at its step's rate; a NEW project cannot claim this programme. "
          + "Only the AB 209 residential equity budgets remain open (to 30 June "
@@ -319,7 +319,7 @@
       id: "ny.nyserda.retail", utility: "NYSERDA", name: "NYSERDA Retail Energy Storage Incentive",
       state: "NY", nonresidential: true,
       perKwh: 175, perKwhNyc: 75, maxKwh: 20000,
-      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-11-04",
+      tier: "published", asOf: "open blocks on NYSERDA's dashboard, read 2026-11-07",
       ref: "NYSERDA Retail Energy Storage Incentive (MWh-block design under the "
          + "2024–2030 implementation plan): the open blocks pay $175 per kWh upstate "
          + "(Block 5) and $75 per kWh in New York City (Block 10, opened 23 April "
@@ -335,14 +335,14 @@
          + "critical facilities in disadvantaged communities opened 13 April 2026. "
          + "Upstate's next block is already staged on the dashboard at $150 per kWh "
          + "(Block 6, $58.5M, not yet open); New York City's Block 10 was 71% "
-         + "subscribed on 2026-11-04 ($8.8M of $30M left) and filling fast, with "
+         + "subscribed, $8.8M of $30M left, on the dashboard through 2026-11-07, with "
          + "no further NYC block staged."
     },
     {
       id: "md.rces.grant", utility: "Maryland Energy Administration", name: "Maryland RCES storage grant",
       state: "MD", nonresidential: true,
       pctOfCost: 0.30, capUsd: 150000,
-      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-10-31",
+      tier: "planning", asOf: "FY2027 round open (FOA issued 2026-09-24); read 2026-11-07",
       ref: "Maryland Energy Administration Residential and Commercial Energy Storage "
          + "(RCES) grant: 30% of total installed cost, up to $150,000 for a commercial "
          + "system (FY27 figures as relayed from the FOA — confirm in the FOA itself "
@@ -350,8 +350,8 @@
          + "since the end of 2024.",
       url: "https://energy.maryland.gov/Pages/Energy-Storage-Grant-Program.aspx",
       conditions: "First-come grants from a small annual budget. The FY27 round is "
-         + "OPEN: up to $4M anticipated, 22.81% of the budget requested and 6.92% "
-         + "reserved as of MEA's 2026-10-26 posting, applications due 31 May 2027 or "
+         + "OPEN: up to $4M anticipated, 24.57% of the budget requested and 10.45% "
+         + "reserved as of MEA's 2026-11-02 posting, applications due 31 May 2027 or "
          + "until funds exhaust, and FY27 prioritises systems enrolling in utility "
          + "VPP pilots. Held at planning-grade because the FY27 rates are relayed "
          + "from the portal-gated FOA, not read from it — the FY26 round (also "
