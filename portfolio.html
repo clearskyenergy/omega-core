@@ -544,7 +544,18 @@
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; a.setAttribute('data-leave', ''); document.body.appendChild(a); a.click();
     setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 800);
   }
-  byId('btn-export').addEventListener('click', function () { downloadCsv(filtered(), 'portfolio-sites-'); });
+  /* an empty register: the export answers with the blank import template —
+     the Import sites mapper's own fields — instead of only a refusal, so the
+     sheet to fill in and bring back is one click away. Filters hiding every
+     site, or a register that failed to load, keep the plain refusal. */
+  function downloadTemplate() {
+    saveBlob(new Blob([imTemplateHeaders().map(function (h) { return csvCell(h); }).join(',') + '\n'], { type: 'text/csv;charset=utf-8' }), 'portfolio-import-template.csv');
+    S.toast('Nothing is registered yet, so this is the blank import template: one row per site, then Import sites reads it back in.');
+  }
+  byId('btn-export').addEventListener('click', function () {
+    if (LOADED && !SITES.length) { downloadTemplate(); return; }
+    downloadCsv(filtered(), 'portfolio-sites-');
+  });
   /* one PDF per site, from the server, in turn; the file is named by the server */
   function exportAgreements(rows) {
     if (!rows.length) return;
@@ -791,6 +802,7 @@
   auth.onAuthStateChanged(function (u) { onAuth(u, 0); });
 
   /* ── site import: CSV/XLSX into this workspace only ─────────────────── */
+  /* ▶ imTemplate */
   var IMFIELDS = [
     { key: 'name', label: 'Site name *', syn: ['name', 'sitename', 'site'] },
     { key: 'city', label: 'City', syn: ['city', 'town'] },
@@ -798,19 +810,27 @@
     { key: 'address', label: 'Address', syn: ['address', 'street'] },
     { key: 'status', label: 'Status', syn: ['status', 'stage'] },
     { key: 'installedKw', label: 'Installed kW', syn: ['installedkw', 'installed', 'nameplatekw', 'nameplate'] },
-    { key: 'reportedPeakKw', label: 'Reported peak kW', syn: ['peakkw', 'reportedpeak', 'peak'] },
+    { key: 'reportedPeakKw', label: 'Reported peak kW', syn: ['peakkw', 'reportedpeak', 'reportedpeakkw', 'peak'] },
     { key: 'meterOwned', label: 'Meter owned (yes/no)', syn: ['meterowned', 'meter', 'meterownership'] },
     { key: 'termYearsRemaining', label: 'Term years remaining', syn: ['termyearsremaining', 'term', 'yearsremaining'] },
     { key: 'availablePowerMw', label: 'Available power (MW)', syn: ['availablepowermw', 'availablemw', 'availablepower'] },
     { key: 'serviceCapacityKw', label: 'Service capacity (kW)', syn: ['servicecapacitykw', 'servicekw', 'servicecapacity'] },
-    { key: 'existingPeakKw', label: 'Existing peak (kW)', syn: ['existingpeak'] },
-    { key: 'powerPricePerKwh', label: 'Power price ($/kWh)', syn: ['powerpriceperkwh', 'powerprice'] },
+    { key: 'existingPeakKw', label: 'Existing peak (kW)', syn: ['existingpeak', 'existingpeakkw'] },
+    { key: 'powerPricePerKwh', label: 'Power price ($/kWh)', syn: ['powerpriceperkwh', 'powerpricekwh', 'powerprice'] },
     { key: 'annualUsageKwh', label: 'Annual usage (kWh)', syn: ['annualusagekwh', 'annualkwh', 'annualusage'] },
     { key: 'externalId', label: 'External ID (optional)', syn: ['externalid', 'siteid', 'id'] }
   ];
-  var IMHEAD = [], IMDATA = [];
   function imNorm(h) { return String(h == null ? '' : h).toLowerCase().replace(/[^a-z0-9]/g, ''); }
   function imAutoMap(h) { var n = imNorm(h); for (var i = 0; i < IMFIELDS.length; i++) if (IMFIELDS[i].syn.indexOf(n) >= 0) return IMFIELDS[i].key; return ''; }
+  /* the blank sheet Download CSV hands back when the register is empty: each
+     header is its field's label without the asides, and every one must map
+     back onto its own field by imAutoMap, so the filled-in sheet comes home
+     through Import sites with no hand-mapping (tportfoliotemplate.js). */
+  function imTemplateHeaders() {
+    return IMFIELDS.map(function (f) { return f.label.replace(/ \*$| \(yes\/no\)| \(optional\)/g, ''); });
+  }
+  /* ◀ imTemplate */
+  var IMHEAD = [], IMDATA = [];
   function imMsg(html, ok) { byId('im-msg').innerHTML = html ? '<div class="pf-msg ' + (ok ? 'ok' : 'err') + '" style="margin:0 0 12px">' + html + '</div>' : ''; }
   function parseCSV(text) {
     var rows = [], row = [], field = '', inQ = false, i, c;
