@@ -265,8 +265,17 @@ ok('the files whitelabel-setup.html fetches and the icons the manifests link ARE
 /* a workspace's diligence lists carry an offtake partner's terms
    (scripts/enable-portfolio-diligence.js is their only reader) */
 var SC = 'tenants/solelacapital/';
-ok('★ a workspace\'s diligence seed is NOT served, and its folder serves nothing', ignored(SC + 'portfolio-diligence.json') && ignored('tenants/anyone/portfolio-diligence.json') &&
-   !files.some(function (f) { return f.indexOf(SC) === 0; }), files.filter(function (f) { return f.indexOf(SC) === 0; }));
+ok('★ a workspace\'s diligence seed is NOT served', ignored(SC + 'portfolio-diligence.json') && ignored('tenants/anyone/portfolio-diligence.json'));
+/* its white label (2026-11-09): the block the staging script reads is not
+   served either (the site reads it off the record); what IS served is the
+   brand folder, the workspace's own one-colour logo artwork, because the
+   mark on its pages is a URL. Nothing else: a new file there is a decision. */
+var scServed = files.filter(function (f) { return f.indexOf(SC) === 0; });
+ok('★ a workspace\'s white-label seed is NOT served, and its folder serves its logo artwork and nothing else', ignored(SC + 'white-label.json') && ignored('tenants/anyone/white-label.json') &&
+   scServed.length > 0 && scServed.every(function (f) { return /^tenants\/solelacapital\/brand\/solela-(logo-horizontal|logo-stacked|monogram)-(white|black)\.svg$/.test(f); }), scServed);
+/* the artwork is paths and nothing that runs or fetches: an SVG is a document a browser will open */
+var svgBad = scServed.filter(function (f) { return /<script|<foreignObject|href=|\son[a-z]+=|<image|<use|url\(/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')); });
+ok('★ the served logo artwork carries no script, link or external reference', !svgBad.length, svgBad);
 var ccServed = files.filter(function (f) { return f.indexOf(CC) === 0; });
 ok('the served folder is tenant.json, products.json and icons/, nothing else (a new file there is a decision)',
    ccServed.every(function (f) { return f === CC + 'tenant.json' || f === CC + 'products.json' || /^tenants\/cleancell\/icons\/[\w-]+\.svg$/.test(f); }), ccServed);

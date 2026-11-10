@@ -919,7 +919,9 @@ the workspace's own name on it: no storefront, no product list, no embed.
 1. **The brand, in the tenant's folder.** `tenants/solelacapital/brand/`
    holds the logo kit as it was supplied (horizontal, stacked and monogram,
    each in white and black; one colour, vector). `white-label.json` beside
-   it is the block: the platform name and short name, the mark for dark
+   it (kept off the site by `.vercelignore`: only the staging script reads
+   it; `tdiscreet.js` holds that the folder serves the logo artwork and
+   nothing else) is the block: the platform name and short name, the mark for dark
    chrome (the white monogram: it also becomes the tab icon), the accent
    (their brass, `#C4A572`) and the ink (`#08090A`), the support address,
    and `attribution: 'powered-by'`.
