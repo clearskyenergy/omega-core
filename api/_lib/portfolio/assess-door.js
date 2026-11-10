@@ -152,7 +152,7 @@ function make(deps) {
     snaps.forEach(function (s) {
       if (!s.exists) throw fail(404, 'Not in this workspace’s register: ' + s.id);
       var sc = (s.data().assessment || {}).screen;
-      if (sc && sc.complete && sc.at && sc.at > cutoff && c.b.force !== true) { fresh.push(s.id); return; }
+      if (sc && sc.complete && sc.located && sc.at && sc.at > cutoff && c.b.force !== true) { fresh.push(s.id); return; }
       items[s.id] = { status: 'pending' };
     });
     var keys = Object.keys(items), jid = 'ascr_' + day(deps.now()).replace(/-/g, '') + '_' + hash(keys.sort().join(',') + '|' + c.by), jref = c.root.collection('site_jobs').doc(jid), ex = await jref.get();
@@ -455,8 +455,11 @@ function live() {
   return make({ A: A, now: function () { return new Date().toISOString(); }, env: process.env,
     handlers: function (req) {
       var headers = (req && req.headers) || {};
-      function bind(path, timeout) { return function (body) { return G.invoke(require(path), { method: 'POST', headers: headers, body: body, query: {} }, timeout); }; }
-      return { atlas: bind('../../grid-atlas', G.TIMEOUT.grid), network: bind('../../network-proximity', G.TIMEOUT.network), hosting: bind('../../hosting-capacity', G.TIMEOUT.hosting), parcel: bind('../../parcel', PARCEL_TIMEOUT) };
+      /* each handler is named in a LITERAL require: the deploy bundles a function from the requires it can read,
+         and a path held in a variable is not one (2026-11-09: every production screen answered "Cannot find module") */
+      function bind(load, timeout) { return function (body) { return G.invoke(load(), { method: 'POST', headers: headers, body: body, query: {} }, timeout); }; }
+      return { atlas: bind(function () { return require('../../grid-atlas'); }, G.TIMEOUT.grid), network: bind(function () { return require('../../network-proximity'); }, G.TIMEOUT.network),
+        hosting: bind(function () { return require('../../hosting-capacity'); }, G.TIMEOUT.hosting), parcel: bind(function () { return require('../../parcel'); }, PARCEL_TIMEOUT) };
     } });
 }
 var instance = null;

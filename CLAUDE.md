@@ -1492,7 +1492,10 @@ figures are `billing/current.portfolioAssessment`, never constants in core.
 the numbers from what is on file), `assess-screen-start` / `-step` (a job on
 `site_jobs`: the Grid Atlas screen's two phases by `grid-screen.js`, then
 `api/parcel.js` under the point, every handler in-process with the caller's
-headers so each keeps its own plan gate; the assessment again on what was
+headers so each keeps its own plan gate (each named in a LITERAL `require`
+and its data files on `api/site-crm.js` in `vercel.json`, or the deploy
+leaves it out: `scripts/tests/tscreenbundle.js`; a screen that located
+nothing is never kept as fresh); the assessment again on what was
 found; where the diligence is on, the same screen lands on
 `diligence.screen` by its own rule), `assess-check` (a readiness mark),
 `assess-approve` (APPROVE FOR PRE-DEVELOPMENT, one use or a hybrid: the

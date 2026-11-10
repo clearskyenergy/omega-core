@@ -432,11 +432,16 @@ rests on has changed since it ran (`inputHash`); the page marks it and
    atlas (the point and the substation). Phase two is fiber and the hosting
    figure in parallel, then the parcel under the point, then the assessment
    again. The page runs four jobs at a time.
-3. A screen under a week old is kept (`force` re-screens). Stop pauses;
-   Run again resumes the same job.
+3. A screen under a week old that LOCATED the site is kept (`force`
+   re-screens); one that located nothing learnt nothing and runs again.
+   Stop pauses; Run again resumes the same job.
 
 Every handler is invoked in-process with the caller's own headers, so each
-runs its own sign-in and plan gate. A screen the plan does not carry is an
+runs its own sign-in and plan gate. Each is named in a LITERAL `require`
+in the door, and `vercel.json` carries the fiber inventory with
+`api/site-crm.js`: the deploy bundles a function from the requires it can
+read, and a path held in a variable left every production screen answering
+"Cannot find module" (2026-11-09; `scripts/tests/tscreenbundle.js`). A screen the plan does not carry is an
 error on the record, never a failed run. Where the compute-site diligence
 is switched on for the workspace, the same screen also lands on
 `diligence.screen` by the diligence's own rule.

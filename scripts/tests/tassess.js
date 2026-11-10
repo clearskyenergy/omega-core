@@ -431,6 +431,8 @@ test('D03 a screen that cannot answer is an answer: the atlas down fails the sit
   var w = world({ atlasDown: true }), st = await w.post({ action: 'assess-screen-start', ids: ['s1'] }), r = await w.post({ action: 'assess-screen-step', jobId: st.job.id });
   assert.equal(r.item.status, 'failed'); assert.deepStrictEqual(r.item.errors, ['grid-atlas']); assert.equal(w.calls.parcel, 0);
   assert.equal(w.site('s1').assessment.screen.located, null); assert.equal(w.site('s1').assessment.result.power.availableKw, 1500);
+  /* a screen that located nothing learnt nothing: the next Run screens the site again instead of keeping it a week */
+  var retry = await w.post({ action: 'assess-screen-start', ids: ['s1'] }); assert.deepStrictEqual(retry.skippedFresh, []); assert.equal(retry.job.total, 1);
   var m = world({ parcelMiss: true }), s2 = await m.post({ action: 'assess-screen-start', ids: ['s1', 's3'] });
   await m.post({ action: 'assess-screen-step', jobId: s2.job.id }); await m.post({ action: 'assess-screen-step', jobId: s2.job.id });
   assert.equal(m.site('s1').assessment.parcel.ok, false); assert.ok(/no parcel record/.test(m.site('s1').assessment.parcel.reason));

@@ -178,7 +178,7 @@ function make(deps) {
       var snap = await c.root.collection('sites').doc(ids[i]).get();
       if (!snap.exists) throw fail(404, 'Not in this workspace’s register: ' + ids[i]);
       var sc = snap.data() && snap.data().diligence && snap.data().diligence.screen;
-      if (sc && sc.complete && sc.at && sc.at > cutoff && c.b.force !== true) { fresh.push(ids[i]); continue; }
+      if (sc && sc.complete && sc.located && sc.at && sc.at > cutoff && c.b.force !== true) { fresh.push(ids[i]); continue; }
       items[ids[i]] = { status: 'pending' };
     }
     var jid = 'dscr_' + day(deps.now()).replace(/-/g, '') + '_' + hash(Object.keys(items).sort().join(',') + '|' + c.by), jref = c.root.collection('site_jobs').doc(jid), ex = await jref.get();
@@ -344,8 +344,10 @@ function live() {
     kwPerUnit: OC.RATE_CARD && OC.RATE_CARD.computeKwPerSkid,
     handlers: function (req) {
       var headers = (req && req.headers) || {};
-      function bind(path, timeout) { return function (body) { return G.invoke(require(path), { method: 'POST', headers: headers, body: body, query: {} }, timeout); }; }
-      return { atlas: bind('../../grid-atlas', G.TIMEOUT.grid), network: bind('../../network-proximity', G.TIMEOUT.network), hosting: bind('../../hosting-capacity', G.TIMEOUT.hosting) };
+      /* literal requires, so the deploy bundles the handlers with this function (a path in a variable is not traced) */
+      function bind(load, timeout) { return function (body) { return G.invoke(load(), { method: 'POST', headers: headers, body: body, query: {} }, timeout); }; }
+      return { atlas: bind(function () { return require('../../grid-atlas'); }, G.TIMEOUT.grid), network: bind(function () { return require('../../network-proximity'); }, G.TIMEOUT.network),
+        hosting: bind(function () { return require('../../hosting-capacity'); }, G.TIMEOUT.hosting) };
     } });
 }
 var instance = null;
