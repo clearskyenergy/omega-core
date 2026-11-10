@@ -123,5 +123,13 @@ Run.run(doc).then(function (out) {
   var page = fs.readFileSync(path.join(ROOT, 'editor-v2.html'), 'utf8');
   check(page.indexOf('omega-editor-v2-run.js') > page.indexOf('omega-editor-v2-solar.js') && page.indexOf('omega-editor-v2-run.js') < page.indexOf('omega-editor-v2-app.js'), 'the page loads Run before the app');
   check(fs.readFileSync(path.join(ROOT, 'editor.html'), 'utf8').indexOf('omega-editor-v2-run') < 0, 'Site Map is unchanged');
+  /* a run's time is shown on the person's own clock; the record keeps UTC
+     (2026-11-09: an evening run in Phoenix read "Run on 2026-11-10 03:47") */
+  process.env.TZ = 'America/Phoenix';
+  var When = require('../../omega-editor-v2-analyze.js').when, utc = '2026-11-10T03:47:12.000Z';
+  check(When.minute(utc) === '2026-11-09 20:47' && When.day(utc) === '2026-11-09', 'an evening run in Phoenix reads that evening, not tomorrow at 3 am: ' + When.minute(utc));
+  process.env.TZ = 'America/New_York';
+  check(When.minute(utc) === '2026-11-09 22:47', 'and in New York, 22:47 the same evening: ' + When.minute(utc));
+  check(When.minute('') === '' && When.day('not a date') === 'not a date', 'no time on file prints none, and never "Invalid Date"');
   console.log('teditorv2run: ' + n + ' checks passed');
 }).catch(function (e) { console.error(e); process.exit(1); });
