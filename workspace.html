@@ -97,6 +97,9 @@ body.refused #refused{display:block}body.refused #content{display:none}
 #hub .hexhub svg{margin-top:auto;margin-bottom:auto}
 #hub .held{position:relative;display:flex;gap:6px;flex-wrap:wrap;margin:8px 4px 0}
 #hub .held .ows-chip{background:rgba(255,255,255,.06);border-color:rgba(255,255,255,.12);color:#C9D6E2}#hub .held .ows-chip.on{background:rgba(47,227,200,.12);color:#2FE3C8}
+/* Hub settings, the last chip under the hub (Tommy, 2026-10-21: "put a settings tab for the hex right in this bottom area") */
+#hub .held .hub-set{cursor:pointer;font:inherit;font-size:12px;margin-left:auto;color:#2FE3C8;background:rgba(47,227,200,.08);border-color:rgba(47,227,200,.35)}#hub .held .hub-set svg{width:13px;height:13px;flex:none}
+#hub .held .hub-set:hover,#hub .held .hub-set:focus-visible{background:rgba(47,227,200,.18);border-color:#2FE3C8;outline:none}
 .today{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);padding:18px 20px;display:flex;flex-direction:column;gap:14px;min-width:0}
 .today .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}.today h2{font-size:18px}.today .sub{color:var(--ows-ink2);font-size:13px;margin-top:2px}
 .kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
@@ -249,6 +252,11 @@ body.ows a.bh-mod{color:#EAF7FB}a.bh-mod:hover{background:rgba(255,255,255,.12)}
 .people{display:flex;flex-direction:column;gap:8px}.people .pr{display:flex;align-items:center;gap:10px;font-size:13px}.people .pr .av{width:28px;height:28px;font-size:11px}.people .pr small{display:block;color:var(--ows-ink3);font-size:11.5px}.people .pr>div{min-width:0}
 .post{display:flex;gap:8px}.post input{flex:1;min-width:0;border:1px solid var(--ows-line);border-radius:10px;padding:8px 10px;font:inherit;background:var(--ows-sunk)}
 .opt{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:center;padding:12px 0;border-bottom:1px solid var(--ows-line)}.opt b{display:block;font-weight:600}.opt small{color:var(--ows-ink2);font-size:12px;display:block;line-height:1.4}
+.hub-count{font-size:12.5px;color:var(--ows-ink2);margin:2px 0 2px}.hub-count b{font:500 13px "DM Mono",monospace;color:var(--ows-ink)}
+.hub-group{border:1px solid var(--ows-line);border-radius:12px;padding:0 12px;margin-top:10px}.hub-group.focus{border-color:var(--ows-teal-d)}.hub-group>.opt{border-bottom:0}
+.hub-group .hub-cell b{display:flex;align-items:center;gap:8px}.hub-group .hx-ic{width:22px;height:24px;display:inline-grid;place-items:center;flex:none;clip-path:polygon(50% 0,100% 25%,100% 75%,50% 100%,0 75%,0 25%);background:var(--ows-teal-soft);color:var(--ows-teal-d);font-size:12px}
+.hub-group .hub-tools{border-top:1px solid var(--ows-line);padding-left:10px}.hub-group .hub-tools .opt{padding:10px 0}.hub-group .hub-tools .opt:last-child{border-bottom:0}.hub-group .pages{padding:10px 0;font-size:12px;color:var(--ows-ink2);border-bottom:1px solid var(--ows-line)}.hub-group .pages:last-child{border-bottom:0}
+.hub-group.off .hub-tools{display:none}.hub-group.off .hub-cell b{color:var(--ows-ink2)}.hub-group.off .hx-ic{background:var(--ows-sunk);color:var(--ows-ink3)}
 .tg{width:42px;height:24px;border-radius:999px;background:var(--ows-line2);position:relative;transition:background .15s;flex:none}.tg::after{content:"";position:absolute;top:3px;left:3px;width:18px;height:18px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.2)}.tg[aria-checked="true"]{background:var(--ows-teal-d)}.tg[aria-checked="true"]::after{left:21px}
 .pulse .spark{width:100%;height:44px;display:block}.pulse .spark path{fill:none;stroke:var(--ows-teal-d);stroke-width:2}.pulse .spark .fill{fill:var(--ows-teal-soft);stroke:none}
 .pulse a.stat.go{color:inherit;text-decoration:none;display:block}.pulse a.stat.go:hover{border-color:var(--ows-teal-d)}.pulse .insight a{color:var(--ows-teal-d);font-weight:600}
@@ -634,11 +642,11 @@ function open(t) { return !!t && !(WS && WS.pendingApproval) && T.isUnlocked(t, 
 function hubFlags() { var b = WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null, o = b && b.toolOverrides || {}; return { 'portfolio-assets': o['portfolio-assets'] !== false }; }
 function hubCtx() {
   var pa = WS.packageAccess, packaged = !!(pa && pa.packaged), canOpen = function (k) { return open(tool(k)); };
-  if (packaged) return { canOpen: canOpen, tool: tool, modules: WS.modules || [], addons: WS.addons || [], addOns: [], hideMarketplace: !!WS.hideMarketplace, packaged: true, tierLevel: WS.tierLevel, visible: function (k) { var t = tool(k); return !!t && T.isVisible(t, WS); }, hubTools: hubTools() };
+  if (packaged) return { canOpen: canOpen, tool: tool, modules: WS.modules || [], addons: WS.addons || [], addOns: [], hideMarketplace: !!WS.hideMarketplace, packaged: true, tierLevel: WS.tierLevel, visible: function (k) { var t = tool(k); return !!t && T.isVisible(t, WS); }, hubTools: hubTools(), hubCells: hubCells() };
   var c = HUB.legacyCtx({ tools: T, ws: WS, billing: WS.billing || (window.OmegaTenant && OmegaTenant.billing) || null, caps: window.OmegaCaps, canOpen: canOpen,
     who: { email: ME, emailVerified: !!(USER && USER.emailVerified === true), orgId: WS.orgId } });
   /* the hub's own fields for a legacy workspace, as compose() has always read them */
-  c.modules = WS.modules || []; c.hideMarketplace = !!WS.hideMarketplace; c.hubTools = hubTools();
+  c.modules = WS.modules || []; c.hideMarketplace = !!WS.hideMarketplace; c.hubTools = hubTools(); c.hubCells = hubCells();
   return c;
 }
 /* the tools this person chose to show or hide in the hub's side panels
@@ -646,6 +654,9 @@ function hubCtx() {
    dashboard_layouts/{org}__{uid}.workspace.hubTools; absent is the hub's
    default (an area's extras hidden) */
 function hubTools() { var h = DATA.prefs && DATA.prefs.hubTools; return h && typeof h === 'object' ? h : {}; }
+/* and the hexes they chose around Today (Hub settings), beside it as
+   workspace.hubCells; absent is the plan's ring */
+function hubCells() { var h = DATA.prefs && DATA.prefs.hubCells; return h && typeof h === 'object' ? h : null; }
 function href(t) { return T.hrefFor(t, WS); }
 function launch(t) {
   if (!t) return;
@@ -744,8 +755,11 @@ function renderHub() {
 function paintHeld() {
   var hb = byId('hub').querySelector('.hexhub'); if (!hb) return;
   var d = hb.querySelector('.held'), held = heldChips();
-  if (!d) { d = document.createElement('div'); d.className = 'held'; hb.appendChild(d); }
-  d.innerHTML = held;
+  if (!d) {
+    d = document.createElement('div'); d.className = 'held'; hb.appendChild(d);
+    d.addEventListener('click', function (e) { if (e.target.closest && e.target.closest('[data-hub-settings]')) hubToolsDrawer(); });
+  }
+  d.innerHTML = held + '<button class="ows-chip hub-set" type="button" data-hub-settings title="Choose the hexes around Today and the tools each one lists">' + S.ICON.settings + 'Hub settings</button>';
 }
 function planName() { var pa = WS.packageAccess, b = (window.OmegaTenant && OmegaTenant.billing) || {}; if (WS.viewAs) return (WS.modules || []).indexOf('lite') >= 0 && (WS.modules || []).length === 1 ? 'Lite' : 'Lite + modules'; if (pa && pa.packaged) return b.plan || 'Packaged'; return WS.accountTier || (WS.tierLevel >= 3 ? 'Enterprise' : WS.tierLevel === 2 ? 'Pro' : WS.tierLevel === 1 ? 'Field' : 'Plan'); }
 function heldChips() {
@@ -1825,7 +1839,7 @@ function settingsDrawer() {
   var rows = [{ key: 'save', name: 'Save name', sub: 'Shown to your team and on projects you own', icon: S.ICON.me, cta: 'Save', onClick: saveName },
     /* on a phone, Me is where Plan & billing lives (the tab bar has no room for it) */
     { key: 'billing', name: 'Plan & billing', sub: planName() + ' · what is due and your invoices', icon: S.ICON.billing, cta: 'Open', onClick: function () { S.closeDrawer(); openBilling(); } },
-    { key: 'hub-tools', name: 'Tools in the hub', sub: 'Show or hide the extra tools each hex lists', icon: S.ICON.tools, cta: 'Choose', onClick: function () { hubToolsDrawer(); } }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'signout', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];   /* data-row="signout": the render checks' click sweeps never sign the visitor out (2026-10-14) */
+    { key: 'hub-tools', name: 'Hub settings', sub: 'The hexes around Today and the tools each one lists', icon: S.ICON.tools, cta: 'Choose', onClick: function () { hubToolsDrawer(); } }, { key: 'classic', name: 'Classic dashboard', sub: 'Go back to the previous home on this browser', href: '/?home=classic', icon: S.ICON.home, cta: 'Switch' }, { key: 'signout', name: 'Sign out', sub: ME, icon: S.ICON.settings, cta: 'Sign out', onClick: S.signOut }];   /* data-row="signout": the render checks' click sweeps never sign the visitor out (2026-10-14) */
   S.drawer({ eyebrow: 'Account', title: 'Settings', html: html, rows: rows });
 }
 function saveName() {
@@ -1905,40 +1919,71 @@ function loadWorkspacePeople() {
 function customizeDrawer() {
   var P = prefs(), opts = [['presence', 'Who is here', 'Teammates in the workspace and what they have open.'], ['feed', 'Workspace feed', 'Saved projects and messages from your team.'], ['pulse', 'Omega pulse', 'What the whole platform did this week, counts only.'], ['portfolio', 'Portfolio & assets', 'Your sites, customer pipeline, follow-ups and what needs review.'], ['partners', 'Partners on your projects', 'Vendors and joint development partners acting on your projects.'], ['guides', 'Guides', 'Short guides for the tools you hold.']];
   S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Customize your home', sub: 'Your plan sets the hub. You choose what else is around it. Saved for you.', html: '<div>' + opts.map(function (o) { return '<div class="opt"><div><b>' + esc(o[1]) + '</b><small>' + esc(o[2]) + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (P[o[0]] ? 'true' : 'false') + '" data-opt="' + o[0] + '" aria-label="' + esc(o[1]) + '"></button></div>'; }).join('') + '</div>', ready: function (el) {
-    Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); var keep = hubTools(); DATA.prefs = p; if (Object.keys(keep).length) DATA.prefs.hubTools = keep; renderToday(); renderAround(); savePrefs(prefs()); }); });
+    Array.prototype.forEach.call(el.querySelectorAll('[data-opt]'), function (t) { t.addEventListener('click', function () { var k = t.getAttribute('data-opt'), p = prefs(); p[k] = !p[k]; t.setAttribute('aria-checked', p[k] ? 'true' : 'false'); var keepT = hubTools(), keepC = hubCells(); DATA.prefs = p; if (Object.keys(keepT).length) DATA.prefs.hubTools = keepT; if (keepC) DATA.prefs.hubCells = keepC; renderToday(); renderAround(); savePrefs(prefs()); }); });
   } });
 }
-/* Settings › Tools in the hub (Tommy, 2026-10-20: "hide these … in
-   settings a panel that allows us to hide or show the extra tools in the
-   hex"): a switch for every tool each cell of this person's ring lists,
-   an area's extras off until shown (OmegaWorkspaceHub.choices, the ONE
-   rule the side panel reads). Saved for this person only. Hiding is
-   presentation: All tools still lists everything and every tool checks
-   the plan. A tool in two cells is one switch, mirrored. */
+/* Hub settings (Tommy, 2026-10-20: "hide these … in settings a panel
+   that allows us to hide or show the extra tools in the hex"; 2026-10-21:
+   "do this for all of them … put a settings tab for the hex right in this
+   bottom area"): every hex this workspace holds, each with a switch that
+   puts it around Today (six at most) and a switch for every tool it lists,
+   an area's extras off until shown (OmegaWorkspaceHub.choices, the ONE rule
+   the ring and the side panel read). Opened from the chip under the hub,
+   Settings, or a side panel's "N more tools hidden". Saved for this person
+   only. Presentation: a hex the plan does not hold is never offered, All
+   tools still lists everything and every tool checks the plan. A tool in
+   two hexes is one switch, mirrored. */
 function hubToolsDrawer(focus) {
-  var groups = HUB.choices(hubCtx());
-  if (focus) groups = groups.filter(function (g) { return g.key === focus; }).concat(groups.filter(function (g) { return g.key !== focus; }));
-  var html = groups.length ? groups.map(function (g) {
-    return '<div class="hub-group" data-group="' + esc(g.key) + '"><div class="eyebrow" style="margin-top:14px">' + esc(g.icon + ' ' + g.label) + '</div>' + g.tools.map(function (t) {
+  var groups = HUB.choices(hubCtx()), ring = groups.filter(function (g) { return g.inRing; }), more = groups.filter(function (g) { return !g.inRing; });
+  if (focus) { var f = function (list) { return list.filter(function (g) { return g.key === focus; }).concat(list.filter(function (g) { return g.key !== focus; })); }; ring = f(ring); more = f(more); }
+  var group = function (g) {
+    var listed = g.tools.filter(function (t) { return t.shown; }).length;
+    var body = (g.pages.length ? '<div class="pages">Opens ' + esc(g.pages.join(' · ')) + '</div>' : '') + g.tools.map(function (t) {
       return '<div class="opt"><div><b>' + esc(t.name) + '</b><small>' + esc(t.sub) + (t.locked ? ' · not on your plan' : '') + '</small></div><button class="tg" type="button" role="switch" aria-checked="' + (t.shown ? 'true' : 'false') + '" data-tool="' + esc(t.key) + '" aria-label="Show ' + esc(t.name) + ' in ' + esc(g.label) + '"></button></div>';
-    }).join('') + '</div>';
-  }).join('') : '<div class="ows-note">No hex lists tools on your plan yet.</div>';
-  var rows = Object.keys(hubTools()).length ? [{ key: 'hub-reset', name: 'Restore the defaults', sub: 'Every tool shown except the extras', icon: S.ICON.tools, cta: 'Restore', onClick: function () { DATA.prefs = DATA.prefs || {}; delete DATA.prefs.hubTools; saveHubTools(null); hubToolsDrawer(focus); S.toast('Hub tools restored'); } }] : [];
-  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Tools in the hub', sub: 'Choose what each hex lists. A hidden tool is still under All tools. Saved for you.', html: html, rows: rows, ready: function (el) {
-    Array.prototype.forEach.call(el.querySelectorAll('[data-tool]'), function (b) { b.addEventListener('click', function () {
+    }).join('');
+    return '<div class="hub-group' + (g.inRing ? '' : ' off') + (g.key === focus ? ' focus' : '') + '" data-group="' + esc(g.key) + '">'
+      + '<div class="opt hub-cell"><div><b><span class="hx-ic" aria-hidden="true">' + esc(g.icon) + '</span>' + esc(g.label) + '</b><small>' + esc(g.hint) + '<span class="hub-listed">' + (g.tools.length ? ' · ' + listed + ' of ' + g.tools.length + ' tools listed' : '') + '</span></small></div>'
+      + '<button class="tg" type="button" role="switch" aria-checked="' + (g.inRing ? 'true' : 'false') + '" data-cell="' + esc(g.key) + '" aria-label="Show ' + esc(g.label) + ' in the hub"></button></div>'
+      + (body ? '<div class="hub-tools">' + body + '</div>' : '') + '</div>';
+  };
+  var html = '<div class="hub-count"><b id="hub-n">' + ring.length + '</b> of ' + HUB.RING_MAX + ' hexes around Today. Today is always in the middle.</div>'
+    + ring.map(group).join('')
+    + (more.length ? '<div class="eyebrow" style="margin-top:18px">More hexes on your plan</div>' + more.map(group).join('') : '');
+  var rows = Object.keys(hubTools()).length || hubCells() ? [{ key: 'hub-reset', name: 'Restore the defaults', sub: 'Your plan\'s hexes, every tool listed except the extras', icon: S.ICON.tools, cta: 'Restore', onClick: function () { DATA.prefs = DATA.prefs || {}; delete DATA.prefs.hubTools; delete DATA.prefs.hubCells; saveHub('hubTools', null); saveHub('hubCells', null); renderHub(); hubToolsDrawer(focus); S.toast('Hub restored to your plan\'s'); } }] : [];
+  S.drawer({ eyebrow: WS.clientName || WS.orgId, title: 'Hub settings', sub: 'Choose the hexes around Today and the tools each one lists. A hidden tool is still under All tools. Saved for you.', html: html, rows: rows, ready: function (el) {
+    var each = function (sel, fn) { Array.prototype.forEach.call(el.querySelectorAll(sel), fn); };
+    var recount = function () {
+      each('.hub-group', function (g) { var t = g.querySelectorAll('[data-tool]'), on = g.querySelectorAll('[data-tool][aria-checked="true"]').length, s = g.querySelector('.hub-listed'); if (s && t.length) s.textContent = ' · ' + on + ' of ' + t.length + ' tools listed'; });
+      var n = el.querySelector('#hub-n'); if (n) n.textContent = String(el.querySelectorAll('[data-cell][aria-checked="true"]').length);
+    };
+    each('[data-cell]', function (b) { b.addEventListener('click', function () {
+      var k = b.getAttribute('data-cell'), on = b.getAttribute('aria-checked') !== 'true', h = {}, cur = hubCells() || {};
+      if (on && el.querySelectorAll('[data-cell][aria-checked="true"]').length >= HUB.RING_MAX) { S.toast('The hub holds ' + HUB.RING_MAX + ' around Today. Turn one off first.'); return; }
+      Object.keys(cur).forEach(function (x) { h[x] = cur[x]; }); h[k] = on;
+      DATA.prefs = DATA.prefs || {}; DATA.prefs.hubCells = h;
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
+      var g = b.closest('.hub-group'); if (g) g.classList.toggle('off', !on);
+      recount(); renderHub(); saveHub('hubCells', h);
+    }); });
+    each('[data-tool]', function (b) { b.addEventListener('click', function () {
       var k = b.getAttribute('data-tool'), on = b.getAttribute('aria-checked') !== 'true', h = {}, cur = hubTools();
       Object.keys(cur).forEach(function (x) { h[x] = cur[x]; }); h[k] = on;
       DATA.prefs = DATA.prefs || {}; DATA.prefs.hubTools = h;
-      Array.prototype.forEach.call(el.querySelectorAll('[data-tool="' + k + '"]'), function (x) { x.setAttribute('aria-checked', on ? 'true' : 'false'); });
-      saveHubTools(h);
+      each('[data-tool="' + k + '"]', function (x) { x.setAttribute('aria-checked', on ? 'true' : 'false'); });
+      recount(); saveHub('hubTools', h);
     }); });
+    var fo = focus && el.querySelector('.hub-group.focus'); if (fo && fo.scrollIntoView) fo.scrollIntoView({ block: 'nearest' });
   } });
 }
-var hubSaveT;
-function saveHubTools(h) {
+/* one write for whatever changed in the last half second: hubTools and
+   hubCells on the person's own layout, null deletes the field */
+var hubSaveT, HUB_PENDING = {};
+function saveHub(field, h) {
+  HUB_PENDING[field] = h;
   clearTimeout(hubSaveT); hubSaveT = setTimeout(function () {
+    var w = {}; Object.keys(HUB_PENDING).forEach(function (f) { w[f] = HUB_PENDING[f] || firebase.firestore.FieldValue['delete'](); }); HUB_PENDING = {};
     if (!USER) return;
-    db.collection('dashboard_layouts').doc(WS.orgId + '__' + USER.uid).set({ workspace: { hubTools: h || firebase.firestore.FieldValue['delete']() }, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
+    db.collection('dashboard_layouts').doc(WS.orgId + '__' + USER.uid).set({ workspace: w, updatedAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true })['catch'](function () {});
   }, 500);
 }
 var saveT;
@@ -1963,7 +2008,7 @@ function returnHome() {
 function route() {
   var h = (window.location.hash || '').slice(1);
   if (!h || h === 'home') { returnHome(); return; }
-  if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer(); else if (h === 'hub-tools') hubToolsDrawer();
+  if (h === 'billing') openBilling(); else if (h === 'settings') settingsDrawer(); else if (h === 'customize') customizeDrawer(); else if (h === 'hub-tools' || h === 'hub-settings') hubToolsDrawer();
   else if (h.indexOf('area-') === 0) areaDrawer(h.slice(5));
   else if (h.indexOf('module-') === 0) focusModule(h.slice(7));
   else if (h === 'plans') focusPlans();

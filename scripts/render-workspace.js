@@ -751,7 +751,7 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     ok('northstar: the Design panel lists Site Map and the sandbox, its extras one row away', drawer && /Design/.test(drawer.title) && drawer.rows.indexOf('editor') >= 0 && drawer.rows.indexOf('sandbox') >= 0 && drawer.rows[drawer.rows.length - 1] === 'hub-hidden' && !drawer.rows.some(function (r) { return /^(siteoptimizer|powerflow|sitediscovery|conductorsizing)/.test(r); }), drawer);
     await p.click('.ows-drawer .ows-row[data-row="hub-hidden"]'); await wait(300);
     var ht = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, first: (e.querySelector('.hub-group') || {}).getAttribute && e.querySelector('.hub-group').getAttribute('data-group'), off: Array.prototype.filter.call(e.querySelectorAll('.hub-group[data-group="design"] [data-tool]'), function (b) { return b.getAttribute('aria-checked') === 'false'; }).map(function (b) { return b.getAttribute('data-tool'); }) }; }).catch(function () { return null; });
-    ok('northstar: Show opens Tools in the hub on Design, its extras switched off', ht && ht.title === 'Tools in the hub' && ht.first === 'design' && ht.off.join() === 'siteoptimizer,powerflow,sitediscovery,conductorsizing', ht);
+    ok('northstar: Show opens Hub settings on Design, its extras switched off', ht && ht.title === 'Hub settings' && ht.first === 'design' && ht.off.join() === 'siteoptimizer,powerflow,sitediscovery,conductorsizing', ht);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-tools-settings.png') });
     await p.click('.ows-drawer .hub-group[data-group="design"] [data-tool="siteoptimizer"]'); await wait(900);
     var hubSaved = await p.evaluate(function () { return window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path) && w.data.workspace && w.data.workspace.hubTools; }).map(function (w) { return { path: w.path, hubTools: w.data.workspace.hubTools, feed: w.data.workspace.feed }; }); });
@@ -761,6 +761,30 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     var shownNow = await p.$$eval('.ows-drawer .ows-row', function (r) { return r.map(function (x) { return x.getAttribute('data-row') + (x.classList.contains('locked') ? ':locked' : ''); }); });
     ok('northstar: the extra shown is listed, locked on Standard, the rest still behind the row', shownNow.join() === drawer.rows.slice(0, -1).concat('siteoptimizer:locked', 'hub-hidden').join(), shownNow);
     if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-design-panel.png') });
+    await p.keyboard.press('Escape'); await wait(200);
+    /* Hub settings is the last chip under the hub, and every hex is a switch (Tommy, 2026-10-21: "do this for all of them … put a settings tab for the hex right in this bottom area") */
+    var chip = await p.evaluate(function () { var c = document.querySelector('#hub .held [data-hub-settings]'), held = document.querySelector('#hub .held'); return c ? { last: held.lastElementChild === c, text: c.textContent.trim(), tag: c.tagName } : null; });
+    ok('northstar: Hub settings is a button, the last chip under the hub', chip && chip.last && chip.text === 'Hub settings' && chip.tag === 'BUTTON', chip);
+    var ringBefore = await p.$$eval('#hub .hx[data-hub]', function (h) { return h.map(function (x) { return x.getAttribute('data-hub'); }); });
+    await p.click('#hub .held [data-hub-settings]'); await wait(300);
+    var hs = await p.$eval('.ows-drawer', function (e) { return { title: e.querySelector('h2').textContent, n: (e.querySelector('#hub-n') || {}).textContent, cells: Array.prototype.map.call(e.querySelectorAll('[data-cell]'), function (b) { return b.getAttribute('data-cell') + (b.getAttribute('aria-checked') === 'true' ? '' : ':off'); }) }; }).catch(function () { return null; });
+    var ringNow = ringBefore.filter(function (k) { return k !== 'today'; });
+    ok('northstar: the chip opens Hub settings with a switch for every hex in the ring, on, and the count', hs && hs.title === 'Hub settings' && hs.n === String(ringNow.length) && hs.cells.slice(0, ringNow.length).join() === ringNow.join(), { hs: hs, ring: ringNow });
+    if (shotsAt) await p.screenshot({ path: path.join(shotsAt, 'hub-settings.png') });
+    var offKey = ringNow.filter(function (k) { return k !== 'projects' && k !== 'team'; })[0];
+    await p.click('.ows-drawer [data-cell="' + offKey + '"]'); await wait(900);
+    var afterOff = await p.evaluate(function (k) { return { ring: Array.prototype.map.call(document.querySelectorAll('#hub .hx[data-hub]'), function (x) { return x.getAttribute('data-hub'); }), off: document.querySelector('.ows-drawer .hub-group[data-group="' + k + '"]').classList.contains('off'), n: document.querySelector('.ows-drawer #hub-n').textContent, saved: window.__firebaseDouble.store.log.filter(function (w) { return /^dashboard_layouts\//.test(w.path) && w.data.workspace && w.data.workspace.hubCells; }).map(function (w) { return w.data.workspace.hubCells; }) }; }, offKey);
+    ok('northstar: a hex switched off leaves the hub at once and is saved for the person', afterOff.ring.indexOf(offKey) < 0 && afterOff.ring.length === ringBefore.length - 1 && afterOff.off && afterOff.n === String(ringNow.length - 1) && afterOff.saved.length === 1 && afterOff.saved[0][offKey] === false, afterOff);
+    await p.click('.ows-drawer [data-cell="' + offKey + '"]'); await wait(900);
+    var afterOn = await p.$$eval('#hub .hx[data-hub]', function (h) { return h.map(function (x) { return x.getAttribute('data-hub'); }); });
+    ok('northstar: switched back on, it returns to its place', afterOn.join() === ringBefore.join(), { before: ringBefore, after: afterOn });
+    var spare = await p.$eval('.ows-drawer', function (e) { var b = e.querySelector('.hub-group.off [data-cell]'); return b ? b.getAttribute('data-cell') : null; });
+    if (ringNow.length >= 6 && spare) {
+      await p.click('.ows-drawer [data-cell="' + spare + '"]'); await wait(300);
+      var refused = await p.evaluate(function (k) { return { on: document.querySelector('.ows-drawer [data-cell="' + k + '"]').getAttribute('aria-checked'), toast: (document.getElementById('ows-toast') || {}).textContent || '' }; }, spare);
+      ok('northstar: a seventh hex is refused and says why', refused.on === 'false' && /holds 6 around Today/.test(refused.toast), refused);
+    }
+    if (shotsAt) { await p.evaluate(function () { var g = document.querySelector('.ows-drawer .hub-group.off'); if (g) g.scrollIntoView({ block: 'center' }); }); await wait(150); await p.screenshot({ path: path.join(shotsAt, 'hub-settings-more.png') }); }
     await p.keyboard.press('Escape'); await wait(200);
     /* a page row wears the rail's own icon (Tommy, 2026-10-20: "icons need to match") */
     await p.click('#hub .hx[data-hub="projects"]'); await wait(300);

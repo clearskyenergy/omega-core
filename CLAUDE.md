@@ -983,8 +983,15 @@ these … in settings a panel that allows us to hide or show the extra
 tools in the hex"): `OmegaWorkspaceHub.items` / `hidden` / `choices` read
 the person's own `dashboard_layouts/{org}__{uid}.workspace.hubTools`
 over the area's default, the panel ends with "N more tools hidden" →
-Settings › Tools in the hub (`#hub-tools`). Presentation only: the ring
-is still the plan's and All tools still lists everything. A side panel's
+Hub settings (`#hub-tools`). **The hexes are the person's to choose too**
+(2026-10-21, Tommy: "do this for all of them … put a settings tab for the
+hex right in this bottom area"): Hub settings is the last chip under the
+hub (and a row in Settings) and lists EVERY cell the plan holds, in the
+ring or not, each a switch with its tools' switches under it;
+`workspace.hubCells` (`compose`'s `ctx.hubCells`) takes a cell out or puts
+one in, never past six, never a cell the plan does not earn, a cell left
+unchosen keeping the plan's place. Presentation only: All tools still
+lists everything and every tool checks the plan. A side panel's
 page row wears the rail's own icon (`OmegaWorkspaceShell.iconFor`). Today is `omega-workspace-today.js`
 (pure, ranked, `scripts/tests/tworkspacetoday.js`): the account, to-dos,
 both ends of the Quote Desk, the referral inbox, projects ready, stalled or
