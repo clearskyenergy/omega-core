@@ -219,6 +219,21 @@
   .eia-t .nm{flex:1}
   .eia-t .val{font-family:var(--mono);font-size:10.5px;color:var(--muted);text-align:right}
   .eia-t .val b{color:var(--ink);font-weight:600}
+/* ── Print = the DD report. The map is a screen tool; what goes in the deal
+   folder is the Site Analysis panel with the due-diligence checklist. ── */
+@media print{
+  #map,#topbar,#status,#baseSwitch,#eiaPanel,#sideTabs,#settingsShell,
+  #projectControl,#fiberRouteControls,#fiberEvidenceHost,.x{display:none !important}
+  html,body{background:#fff !important;color:#111 !important;height:auto !important;overflow:visible !important}
+  #rail,#panel{position:static !important;width:100% !important;max-width:100% !important;
+    height:auto !important;max-height:none !important;overflow:visible !important;
+    background:#fff !important;color:#111 !important;border:0 !important;box-shadow:none !important}
+  .p-b{max-height:none !important;overflow:visible !important;color:#111 !important}
+  #panel .nm,#panel .ti{color:#111 !important}
+  #panel .meta,#panel .hint,#panel .coord{color:#444 !important}
+  #panel .sec{color:#333 !important;border-color:#ccc !important}
+  #panel .row{border-color:#e4e4e4 !important;page-break-inside:avoid}
+}
 </style>
 </head>
 <body>
@@ -293,6 +308,7 @@
 <script src="/config.js"></script>
 <script src="/omega-tools.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="/grid-atlas-dd.js"></script>
 <script>
 (function(){
 "use strict";
@@ -1377,7 +1393,11 @@ var catCollapsed={generation:true, connectivity:true, market:true, site:true, lo
 /* ---------- Quick-view PRESETS: one click selects the right layer set ----------
    Each preset lists the layer keys to turn ON (all others turn OFF). */
 var PRESETS=[
-  {key:"bess", name:"BESS", icon:"▮", layers:["substations","transmission","osm_subs","utility_terr","iso_rto"]},
+  /* dd: a key in GridAtlasDD.PROFILES (grid-atlas-dd.js). Choosing the
+     profile turns its layers on AND adds the due-diligence checklist to the
+     pin analysis — auto items judged from the loaded layers, open items
+     carrying the evidence a lender asks for. */
+  {key:"bess", name:"BESS", icon:"▮", dd:"bess", layers:["substations","transmission","osm_subs","utility_terr","iso_rto","flood"]},
   {key:"solar", name:"Solar", icon:"☀", layers:["substations","transmission","plants","eia_plants","utility_terr"]},
   {key:"solarbess", name:"Solar+BESS", icon:"⌁", layers:["substations","transmission","plants","eia_plants","osm_subs","utility_terr","iso_rto"]},
   /* GAS IS ON THIS PRESET NOW. A compute campus that cannot get its full
@@ -1387,8 +1407,9 @@ var PRESETS=[
      "Gas pipeline (microgrid)" row, but not on the preset for the one
      project type that most often needs it — so it had to be switched on by
      hand every time, by somebody who already knew to look. */
-  {key:"datacenter", name:"Data Center", icon:"▤", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","subsea","water","flood","gas","utility_terr","iso_rto"]},
+  {key:"datacenter", name:"Data Center / Compute", icon:"▤", dd:"compute", layers:["substations","transmission","eia_plants","pf_inventory","pf_routes","fiber","fiber_licensed","dc_registry","ixp","colo","subsea","water","flood","gas","utility_terr","iso_rto"]},
   {key:"ev", name:"EV Charging", icon:"⌁", layers:["substations","ev","osm_subs","utility_terr"]},
+  {key:"supercharger", name:"Tesla Supercharger", icon:"⚡", dd:"supercharger", layers:["substations","transmission","osm_subs","ev","utility_terr","flood"]},
   {key:"der", name:"DER", icon:"◇", layers:["substations","transmission","osm_subs","osm_plants","bess","utility_terr","ba_area"]},
   {key:"derdata", name:"DER + Data", icon:"◈", layers:["substations","transmission","osm_subs","eia_plants","pf_inventory","fiber","fiber_verified","water","flood","utility_terr","iso_rto","ba_area"]},
   /* Connectivity on its own: the question "how much fiber is at this point"
@@ -1521,12 +1542,16 @@ function updateRailCounts(){
 
 /* ---------- Pin + proximity analysis ---------- */
 var pinLatLng=null, pinMarker=null, pinMode=true;
+var ddItKw=1000, lastDD=null; /* compute profile's selected IT load / last DD report for export */
 var pinBtn=document.getElementById("pinBtn");
 pinBtn.onclick=function(){ pinMode=!pinMode; pinBtn.className="modechip"+(pinMode?" on":"");
   document.getElementById("map").className=pinMode?"pin-drop":""; };
 document.getElementById("map").className="pin-drop";
 
 map.on("click",function(e){ if(pinMode) dropPin(e.latlng); });
+/* The fiber evidence panel (omega-fiber-atlas.js) calls this after a server
+   screen so an open due-diligence checklist absorbs the result in place. */
+window.__gaReanalyze=function(){ if(pinLatLng) analyze(pinLatLng); };
 
 function dropPin(ll){
   pinLatLng=ll;
@@ -1903,6 +1928,75 @@ function analyze(ll){
        'style="color:var(--amp);font-size:12px;text-decoration:none;border:1px solid var(--amp);border-radius:6px;padding:6px 10px;display:inline-block">↳ '+esc(portal.label)+'</a></div>';
   }
 
+  /* ── Due Diligence checklist — only when the chosen profile carries one.
+     The judgement lives in grid-atlas-dd.js; everything measured here is
+     handed over as an evidence object, with null meaning never measured
+     (layer off), which the companion renders as "—", not as a reading. */
+  lastDD=null;
+  var ddKey=null;
+  for(var ddp=0;ddp<PRESETS.length;ddp++){ if(PRESETS[ddp].key===activePreset&&PRESETS[ddp].dd) ddKey=PRESETS[ddp].dd; }
+  if(ddKey && window.GridAtlasDD && GridAtlasDD.PROFILES[ddKey]){
+    var ddProf=GridAtlasDD.PROFILES[ddKey];
+    var ddMw=ddProf.defaultMw;
+    if(ddKey==='compute') ddMw=Math.round(ddItKw*(ddProf.facilityFactor||1.25))/1000;
+    var mwLow = lineV>=500?1000: lineV>=345?500: lineV>=230?200: lineV>=115?50: lineV>=69?10: lineV>0?2: null;
+    var fsRaw=window.__gaFiberScreen||null;
+    var fsEv=(fsRaw&&fsRaw.counts_in_radius)?{routes:fsRaw.counts_in_radius.routes||0,
+      facilities:fsRaw.counts_in_radius.facilities||0,
+      radiusKm:(fsRaw.query&&fsRaw.query.radius_km)||25}:null;
+    var ddEv={
+      subMeasured: !!(LAYERS.substations.on||LAYERS.osm_subs.on),
+      txMeasured: !!LAYERS.transmission.on,
+      subKm: sub?sub.km:null,
+      subName: sub?(subL.label(sub.f.props)||""):null,
+      subKv: subV||null,
+      txKm: tx?tx.km:null, txKv: txV2||null,
+      lineKvMax: lineV||null, mwBand: mwBand, mwLow: mwLow,
+      utilityMeasured: !!LAYERS.utility_terr.on, utility: uName||null,
+      isoMeasured: !!LAYERS.iso_rto.on, iso: iso?LAYERS.iso_rto.label(iso.props):null,
+      evMeasured: !!LAYERS.ev.on, evWithin15: evN, dcWithin40: dcN,
+      fiberMeasured: fiberLayersOn, fiberKm: fiber?fiber.km:null, fiberScreen: fsEv,
+      floodMeasured: !!LAYERS.flood.on, inFlood: !!inFlood,
+      floodZone: floodF?(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):null,
+      waterMeasured: !!LAYERS.water.on, waterKm: water?water.km:null,
+      gasMeasured: !!LAYERS.gas.on, gasKm: gasNear?gasNear.km:null,
+      ixpColoMeasured: !!(LAYERS.ixp.on||LAYERS.colo.on), ixp60: ixpN, colo60: coloN,
+      subCount40: subCount, plantMW40: Math.round(plantMW),
+      targetMw: ddMw
+    };
+    var dd=GridAtlasDD.run(ddKey, ddEv);
+    lastDD={ generated:new Date().toISOString(), lat:ll.lat, lng:ll.lng,
+             profile:ddKey, targetMw:ddMw, evidence:ddEv, report:dd };
+    var rdBand=dd.readiness==null?"var(--muted)":dd.readiness>=70?"var(--ok)":dd.readiness>=45?"var(--warn)":"var(--bad)";
+    h+='<div class="sec">⛭ Due Diligence — '+esc(dd.title)+'</div>';
+    if(ddKey==='compute'&&ddProf.loadOptions){
+      h+='<div style="display:flex;align-items:center;gap:8px;margin:2px 0 6px">'+
+         '<span class="hint" style="margin:0">IT load</span>'+
+         '<select id="ddLoadSel" style="background:var(--panel2,#16222e);color:var(--ink);border:1px solid var(--line);border-radius:6px;font:inherit;font-size:11px;padding:3px 6px">';
+      for(var lo=0;lo<ddProf.loadOptions.length;lo++){
+        var op=ddProf.loadOptions[lo];
+        h+='<option value="'+op.itKw+'"'+(op.itKw===ddItKw?' selected':'')+'>'+esc(op.label)+'</option>';
+      }
+      h+='</select><span class="hint" style="margin:0">≈ '+ddMw+' MW facility</span></div>';
+    }
+    h+='<div class="score" style="margin-top:2px"><span class="n" style="color:'+rdBand+';font-size:26px">'+(dd.readiness==null?"—":dd.readiness)+'</span><span class="lab">/ 100 mapped screen · '+dd.tally.open+' evidence items open</span></div>';
+    h+='<div class="bar"><span style="width:'+(dd.readiness==null?0:dd.readiness)+'%;background:'+rdBand+'"></span></div>';
+    h+='<div class="hint" style="margin:5px 0 6px;color:'+rdBand+'">'+esc(dd.verdict)+'</div>';
+    h+='<div class="hint" style="margin:0 0 6px;color:var(--muted)">'+esc(dd.note)+'</div>';
+    for(var sx=0;sx<dd.sections.length;sx++){
+      var ssec=dd.sections[sx];
+      h+='<div class="sec" style="font-size:10px;opacity:.85">'+esc(ssec.name)+'</div>';
+      for(var ix=0;ix<ssec.items.length;ix++) h+=ddRow(ssec.items[ix]);
+    }
+    /* queue routing beside the hosting-capacity portal the panel already shows */
+    var qp=isoQueuePortal(ddEv.iso);
+    if(qp) h+='<div style="margin:8px 0 2px"><a href="'+esc(qp.url)+'" target="_blank" rel="noopener" style="color:var(--amp);font-size:12px;text-decoration:none;border:1px solid var(--amp);border-radius:6px;padding:6px 10px;display:inline-block">↳ '+esc(qp.label)+'</a></div>';
+    h+='<div style="display:flex;gap:8px;margin:8px 0 2px">'+
+       '<span id="ddExport" style="color:var(--amp);font-size:12px;cursor:pointer;border:1px solid var(--amp);border-radius:6px;padding:6px 10px">⇩ Download DD report</span>'+
+       '<span id="ddPrint" style="color:var(--ink);font-size:12px;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:6px 10px">⎙ Print</span></div>';
+    h+='<div class="hint" style="margin:6px 0 0;color:var(--muted)">'+esc(dd.disclaimer)+'</div>';
+  }
+
   h+='<div class="sec">Notes</div>';
   h+='<div class="hint">Interconnect score weights substation distance (42%), transmission distance (33%), and voltage class (25%). '+
      'Coverage depends on active layers and map extent — enable a layer and it feeds the score automatically. '+
@@ -1911,6 +2005,22 @@ function analyze(ll){
   document.getElementById("pBody").innerHTML=h;
   var cc=document.getElementById("copyc");
   if(cc) cc.onclick=function(){ copy(ll.lat.toFixed(6)+","+ll.lng.toFixed(6)); cc.textContent="copied"; };
+  var dls=document.getElementById("ddLoadSel");
+  if(dls) dls.onchange=function(){ ddItKw=+dls.value||1000; analyze(ll); };
+  var dex=document.getElementById("ddExport");
+  if(dex) dex.onclick=function(){
+    if(!lastDD) return;
+    try{
+      var blob=new Blob([JSON.stringify(lastDD,null,2)],{type:"application/json"});
+      var a=document.createElement("a");
+      a.href=URL.createObjectURL(blob);
+      a.download="grid-atlas-dd-"+lastDD.profile+"-"+ll.lat.toFixed(4)+"_"+ll.lng.toFixed(4)+".json";
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
+      setTimeout(function(){ URL.revokeObjectURL(a.href); },4000);
+    }catch(e){}
+  };
+  var dpr=document.getElementById("ddPrint");
+  if(dpr) dpr.onclick=function(){ window.print(); };
   fetchBroadbandAtPoint(ll); // live FCC service check, fills #bbRow async
 }
 
@@ -1989,6 +2099,39 @@ function utilityPortal(name, ll){
   return null;
 }
 
+/* ── Due-diligence rendering (GridAtlasDD, grid-atlas-dd.js) ─────────────
+   The checklist judgement is the companion file's; this is only paint.
+   Status words stay honest: OK is a mapped reading, VERIFY means a human
+   confirms it, RISK is a measured adverse reading, EVIDENCE is an open
+   checklist item nobody has produced yet, — means never measured. */
+var DD_STYLE={ pass:["var(--ok)","OK"], conditional:["var(--warn)","VERIFY"],
+               risk:["var(--bad)","RISK"], open:["var(--amp)","EVIDENCE"],
+               unknown:["var(--muted)","—"] };
+function ddRow(it){
+  var s=DD_STYLE[it.status]||DD_STYLE.unknown;
+  return '<div class="row" style="align-items:flex-start">'+
+    '<span class="ic" style="background:'+s[0]+';margin-top:4px"></span>'+
+    '<div class="main"><div class="nm">'+esc(it.label)+(it.value?' <span style="color:var(--muted);font-weight:400">· '+esc(it.value)+'</span>':'')+'</div>'+
+    '<div class="meta" style="white-space:normal">'+esc(it.note)+'</div></div>'+
+    '<div class="dist" style="color:'+s[0]+';font-size:9px;letter-spacing:.06em">'+s[1]+'</div></div>';
+}
+/* ISO/RTO → interconnection queue, the companion of utilityPortal()'s
+   hosting-capacity links. Queue position is diligence evidence the public
+   map cannot read; this routes to where it lives. */
+function isoQueuePortal(name){
+  var n=(name||"").toLowerCase();
+  var Q=[
+    [/pjm/, "PJM interconnection queue", "https://www.pjm.com/planning/service-requests/serial-service-request-status"],
+    [/miso|midcontinent/, "MISO interconnection queue", "https://www.misoenergy.org/planning/resource-utility-interconnection/GI_Queue/"],
+    [/ercot|texas/, "ERCOT interconnection (GIS reports)", "https://www.ercot.com/gridinfo/resource"],
+    [/caiso|california/, "CAISO interconnection queue", "https://www.caiso.com/generation-transmission/generation/generator-interconnection"],
+    [/nyiso|new york/, "NYISO interconnection queue", "https://www.nyiso.com/interconnections"],
+    [/iso-?ne|new england/, "ISO-NE interconnection queue", "https://www.iso-ne.com/system-planning/interconnection-service/"],
+    [/spp|southwest power/, "SPP generator interconnection", "https://www.spp.org/engineering/generator-interconnection/"]
+  ];
+  for(var i=0;i<Q.length;i++){ if(Q[i][0].test(n)) return {label:Q[i][1], url:Q[i][2]}; }
+  return null;
+}
 function dcFactor(name,score,detail){
   score=Math.max(0,Math.min(100,Math.round(score)));
   var c=score>=70?"var(--ok)":score>=45?"var(--warn)":"var(--bad)";
