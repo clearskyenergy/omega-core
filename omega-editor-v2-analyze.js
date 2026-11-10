@@ -129,6 +129,20 @@
   function usd(v) { return v == null || !isFinite(+v) ? '—' : '$' + Math.round(+v).toLocaleString(); }
   function pct(v) { return v == null || !isFinite(+v) ? '—' : (+v * 100).toFixed(1) + '%'; }
 
+  /* A run's time on this person's own clock. The record keeps UTC, and an
+     evening run in Arizona read as tomorrow's date at 3 in the morning. */
+  function two(n) { return (n < 10 ? '0' : '') + n; }
+  function localDay(iso) {
+    var d = new Date(iso);
+    if (!iso || isNaN(d.getTime())) return String(iso || '').slice(0, 10);
+    return d.getFullYear() + '-' + two(d.getMonth() + 1) + '-' + two(d.getDate());
+  }
+  function localMinute(iso) {
+    var d = new Date(iso);
+    if (!iso || isNaN(d.getTime())) return String(iso || '').slice(0, 16).replace('T', ' ');
+    return localDay(iso) + ' ' + two(d.getHours()) + ':' + two(d.getMinutes());
+  }
+
   /* What Run did, whether the drawing has moved on since, and Run itself. */
   function runHeader(host, state) {
     var Run = root.OmegaEditorV2Run, last = state.doc.lastRun, box = el('div', 'quiet-block');
@@ -137,8 +151,8 @@
     else if (!last) box.appendChild(el('p', null, 'Run prices the drawing and runs the value stack and the solar year on the server. Until then a price, a tariff and an IRR stay blank.'));
     else {
       var stale = Run && Run.isStale ? Run.isStale(state.doc, last) : false;
-      box.appendChild(el('p', stale ? 'run-stale' : null, stale ? 'The drawing changed since the last run (' + String(last.at || '').slice(0, 16).replace('T', ' ') + '). Run again for numbers that match it.'
-        : 'Run on ' + String(last.at || '').slice(0, 16).replace('T', ' ') + '. Screening figures, not a quote.'));
+      box.appendChild(el('p', stale ? 'run-stale' : null, stale ? 'The drawing changed since the last run (' + localMinute(last.at) + '). Run again for numbers that match it.'
+        : 'Run on ' + localMinute(last.at) + '. Screening figures, not a quote.'));
       var notes = last.notes || {}, k;
       for (k in notes) if (notes.hasOwnProperty(k) && notes[k]) box.appendChild(el('p', 'run-note', notes[k]));
     }
@@ -160,7 +174,7 @@
     for (i = 0; i < (cr.lines || []).length; i++) c.appendChild(el('p', null, cr.lines[i].label + '  ' + usd(cr.lines[i].usd)));
     if (cr.contPct != null) c.appendChild(el('p', null, 'Includes ' + cr.contPct + '% contingency.'));
     if (cr.benchmark) c.appendChild(el('p', null, 'The battery is priced at the benchmark rate because no model is named on the drawing.'));
-    c.appendChild(el('p', null, 'Source: the platform cost engine, the same one Site Map\'s Run uses' + (cr.at ? ', ' + String(cr.at).slice(0, 10) : '') + '. A screening estimate, not a quote.'));
+    c.appendChild(el('p', null, 'Source: the platform cost engine, the same one Site Map\'s Run uses' + (cr.at ? ', ' + localDay(cr.at) : '') + '. A screening estimate, not a quote.'));
   }
 
   function show(state) {
@@ -221,7 +235,7 @@
         for (i = 0; i < vsr.missing.length; i++) nc.appendChild(el('p', null, vsr.missing[i]));
         vs.appendChild(nc);
       }
-      vs.appendChild(el('p', null, 'Source: ' + (vsr.source || 'the value-stack run stored on this project') + (vsr.at ? ', ' + String(vsr.at).slice(0, 10) : '') + '. A screening estimate, not a quote.'));
+      vs.appendChild(el('p', null, 'Source: ' + (vsr.source || 'the value-stack run stored on this project') + (vsr.at ? ', ' + localDay(vsr.at) : '') + '. A screening estimate, not a quote.'));
     } else vs.appendChild(el('p', null, facts.bessKw > 0 ? 'Run computes the streams on the server from the battery, the tariff and the programmes open at the site.' : 'No value stack without a battery.'));
 
     var grid = fold(host, 'Grid check', false);
@@ -261,7 +275,7 @@
     if (sd && sd.acKwh > 0) {
       gen.appendChild(el('p', null, 'Year 1 ' + Math.round(sd.acKwh).toLocaleString() + ' kWh AC · ' + Math.round(sd.specificYield || 0).toLocaleString() + ' kWh/kW' +
         (sd.p90 > 0 ? (' · P50 ' + Math.round(sd.p50).toLocaleString() + ' / P90 ' + Math.round(sd.p90).toLocaleString() + ' kWh') : '') + '.'));
-      gen.appendChild(el('p', null, 'Source: the solar design run' + (sd.at ? (' on ' + String(sd.at).slice(0, 10)) : '') + ' (' + (sd.kwDc || 0) + ' kW-DC). A screening estimate, not a production guarantee. Run it again after the drawing changes.'));
+      gen.appendChild(el('p', null, 'Source: the solar design run' + (sd.at ? (' on ' + localDay(sd.at)) : '') + ' (' + (sd.kwDc || 0) + ' kW-DC). A screening estimate, not a production guarantee. Run it again after the drawing changes.'));
     } else {
       gen.appendChild(el('p', null, 'Source: the arrays on the drawing. An annual kWh figure needs the solar design run, and none is stored yet.'));
     }
@@ -396,7 +410,8 @@
       }
     },
     download: download,
-    VERSION: 'editor-v2-analyze/2'
+    when: { day: localDay, minute: localMinute },
+    VERSION: 'editor-v2-analyze/3'
   };
   root.OmegaEditorV2Analyze = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
