@@ -1448,6 +1448,61 @@ batch. `omega-portfolio-diligence.js` draws it on `portfolio.html` and
 `tgridscreen.js`, `tloipackage.js`, `tdiligencedoor.js`, `test-site-crm.js`
 and `check:workspace`.
 
+## Site assessment (2026-11-09)
+
+**Run a portfolio and see what each site carries** (Tommy: "when i upload a
+portfolio it then would run all these numbers … i should be able to select
+run … the goal is to get sites shovel ready … lock up land that is
+energized and has capacity"). `api/_lib/portfolio/assess.js` is the ONE
+rule, pure: **power** (the lower of the service and `transformerKva` × 0.8
+continuous, less a peak on file: `measured`; a figure entered: `entered`;
+no peak on file: a `ceiling`, said everywhere and never called free
+capacity; an unresolved reported peak is never subtracted and no peak is
+never a zero peak), the **compute shelf** (75 kW, 350 kW, 1 MW and 1.77 MW
+of IT at IT × PUE at the meter, the largest that fits, its return from the
+ONE contract engine `compute-contract.js` at the chip's public reference,
+marked), a **battery** (`assess-bess.js`: the grid value stack, ten years,
+taxes and the incentive-swept loan; its set is a PJM ComEd reference and
+`market.fit` says zone | market | reference, the rebate Illinois only; no
+net investment is a null IRR with the reason, never a number), **fast
+charging** (`assess-supercharger.js`: whole posts at 150 kW, never under
+four, the state's indicative price and electricity cost, XIRR at year
+ends), the **readiness checklist** (49 items, eight sections: Open,
+Screened from public data or an imported fact, Evidence on file by a
+person's mark; the shovel-ready score counts evidence alone) and the
+verifications that move the answer most. The three uses are ALTERNATIVES on
+the whole free capacity, never a stack. Both engines are pinned to the cent
+against the models they carry (`scripts/tests/tassess.js` E01, E03);
+nothing a tenant reads names a source workbook, and a workspace's own
+figures are `billing/current.portfolioAssessment`, never constants in core.
+`assess-door.js` is mounted on `api/site-crm.js`: `assess-run` (50 a call,
+the numbers from what is on file), `assess-screen-start` / `-step` (a job on
+`site_jobs`: the Grid Atlas screen's two phases by `grid-screen.js`, then
+`api/parcel.js` under the point, every handler in-process with the caller's
+headers so each keeps its own plan gate; the assessment again on what was
+found; where the diligence is on, the same screen lands on
+`diligence.screen` by its own rule), `assess-check` (a readiness mark),
+`assess-approve` (APPROVE FOR PRE-DEVELOPMENT, one use or a hybrid: the
+decision, status Pre-development, the project kinds onto `siteScopes`;
+`[]` withdraws) and `GET ?site=&assessment=1`. It writes
+`sites/{id}.assessment` only (and status and scopes on an approval), never
+the facts, revision or `updatedAt`; a row is `stale` when a fact it rests on
+changed (`inputHash`). `portfolioPartner` is who a site comes from (Francis
+Energy, EVCS): the import dialog, a column, `site-set-partner` in bulk, the
+site record; the register filters by partner, state and free capacity.
+`site-import` UPDATES a site a row names by its External ID
+(`externalSiteIds.import`; the non-blank cells only, never the tags, a
+site kept as facts refused), so a corrected sheet never duplicates.
+`portfolio.html` Runs on a selection, on every site shown and after every
+import by itself (numbers first, then four screening jobs at a time, Stop
+pauses), turns its table to Site · Status · Power · Compute · Battery ·
+Charging · Ready · Capital once any site is assessed, and the side panel
+carries the card (`omega-portfolio-assess.js`, which computes nothing).
+Send to Terra is off the bar (the door's action stays). Held by
+`tassess.js`, `scripts/test-site-crm.js` and `check:workspace`'s
+`flow /portfolio.html (assessment)` on the real library.
+`docs/PORTFOLIO-ASSESSMENT.md` carries the design and the honest list.
+
 ## Helios Intake (2026-09-30)
 
 **Helios Energy Advisors' first-pass checklist, filled from the project and
