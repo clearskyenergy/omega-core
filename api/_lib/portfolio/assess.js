@@ -30,7 +30,7 @@
                    public reference price, marked as such
      bess          a grid-participation battery on the same free power
                    (assess-bess.js): size, capital, ten years, IRR and NPV
-     supercharger  fast-charging posts on the same free power
+     supercharger  fast-charging dispensers on the same free power
                    (assess-supercharger.js): posts, capital, fifteen years
      readiness     the compute site-readiness checklist (eight sections),
                    each item Open, Screened (public data or an imported
@@ -434,7 +434,7 @@ function recommendOf(compute, bess, sup) {
   var fits = [];
   if (compute && compute.fits) fits.push({ use: 'compute', label: 'Compute', size: compute.chosen ? (compute.chosen.units > 1 ? compute.chosen.units + ' × ' : '') + compute.chosen.label : null, irrPct: compute.economics && compute.economics.ok ? compute.economics.irrPct : null });
   if (bess && bess.ok) fits.push({ use: 'bess', label: 'Battery storage', size: fmt(bess.sizing.kw) + ' kW / ' + fmt(bess.sizing.kwh) + ' kWh', irrPct: bess.returns.irrPct, noNetInvestment: bess.returns.noNetInvestment === true });
-  if (sup && sup.ok) fits.push({ use: 'supercharger', label: 'Fast charging', size: sup.sizing.posts + ' posts', irrPct: sup.returns.irrPct });
+  if (sup && sup.ok) fits.push({ use: 'supercharger', label: 'Fast charging', size: sup.sizing.posts + ' dispensers', irrPct: sup.returns.irrPct });
   var best = null; fits.forEach(function (f) { if (f.irrPct != null && (!best || f.irrPct > best.irrPct)) best = f; });
   return { fits: fits, best: best ? best.use : null,
     words: !fits.length ? 'Nothing fits the power on file' : best ? best.label + ' shows the highest screening return (' + best.irrPct + '%); the three are on different bases, so compare them in the detail' : fits.map(function (f) { return f.label; }).join(', ') + ' fit' };
@@ -576,7 +576,7 @@ function fundingRequest(result, usesIn) {
     if (u === 'compute') { if (!(c.fits && c.chosen && ce.ok)) throw fail(400, 'Compute does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Compute', size: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label + ' ' + (c.chosen.klassLabel || ''), capexUsd: ce.capexUsd, irrPct: ce.irrPct, irrBasis: ce.irrBasis || null }); }
     if (u === 'bess' && pair) { lines.push({ use: u, label: 'Battery storage', size: fmt(pair.bess.kw) + ' kW / ' + fmt(pair.bess.kwh) + ' kWh on the ' + fmt(pair.leftKw) + ' kW the pod leaves', capexUsd: pair.bess.capexUsd, irrPct: pair.bess.irrPct, irrBasis: pair.bess.irrBasis || null }); return; }
     if (u === 'bess') { if (!b.ok) throw fail(400, 'A battery does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Battery storage', size: fmt(b.sizing.kw) + ' kW / ' + fmt(b.sizing.kwh) + ' kWh', capexUsd: b.capex.total, irrPct: b.returns.irrPct, irrBasis: b.returns.irrBasis || null }); }
-    if (u === 'supercharger') { if (!s.ok) throw fail(400, 'Fast charging does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Fast charging', size: s.sizing.posts + ' posts', capexUsd: s.capex.total, irrPct: s.returns.irrPct, irrBasis: s.returns.irrBasis || null }); }
+    if (u === 'supercharger') { if (!s.ok) throw fail(400, 'Fast charging does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Fast charging', size: s.sizing.posts + ' dispensers', capexUsd: s.capex.total, irrPct: s.returns.irrPct, irrBasis: s.returns.irrBasis || null }); }
   });
   var one = lines.length === 1;
   return { uses: uses, hybrid: !one, paired: !!pair, label: lines.map(function (l) { return l.label; }).join(' + '), lines: lines, amountUsd: one ? lines[0].capexUsd : pair ? Math.round(lines[0].capexUsd + lines[1].capexUsd) : null,

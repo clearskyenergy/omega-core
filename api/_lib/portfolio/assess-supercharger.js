@@ -1,14 +1,14 @@
 /* ═══════════════════════════════════════════════════════════════════════════
-   api/_lib/portfolio/assess-supercharger.js — fast-charging posts bought
+   api/_lib/portfolio/assess-supercharger.js — fast-charging dispensers bought
    and hosted on a site's FREE capacity: the capital, fifteen years of cash
    and the return
    © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
 
-   PURE, ES5, no clock, no Firestore. The host buys the posts and their
+   PURE, ES5, no clock, no Firestore. The host buys the dispensers and their
    installation, sets the price a kWh, pays for the electricity, pays the
    charger's maker a service fee on every kWh, and keeps the rest. This is
    the site-host return calculation the maker publishes for prospective
-   hosts, carried as it computes: energy sold = posts × kWh a post a day ×
+   hosts, carried as it computes: energy sold = dispensers × kWh a dispenser a day ×
    365, growing with utilisation; revenue on the energy delivered after the
    line loss; electricity and the service fee on the energy drawn; rent
    escalating; a flat tax on the year's earnings; returns dated at each
@@ -18,14 +18,19 @@
    · The price a kWh and the levelised electricity cost (supply and demand
      charges together) are the state's INDICATIVE figures from the maker's
      table unless typed. They are estimates, not a tariff and not a quote.
-   · Utilisation is kWh delivered per post per day (low 150, medium 325,
+   · Utilisation is kWh delivered per dispenser per day (low 150, medium 325,
      high 450) growing 7% a year; the service fee and the rent grow 3%.
    · The federal credit and any incentive are OFF unless asked for.
-   · SIZING is this platform's, not the maker's: posts = the free capacity
-     ÷ the planning draw a post (SIZING.kwPerPost, one power cabinet's
-     1,200 kW across eight posts), never fewer than the programme's four.
-     A site that cannot carry four is answered "does not fit", never sized
-     down to an order nobody can place.
+   · SIZING is this platform's, not the maker's: the maker sells
+     Superchargers in sets of 4, 8 or 12 dispensers (SIZING.sets; 2026-11-10,
+     Tommy: "tesla only sells things in 4,8, and 12 stalls"; "they are
+     called dispensers not posts"), so the answer is the LARGEST SET the free
+     capacity carries at the planning draw a dispenser (SIZING.kwPerPost, one
+     power cabinet's 1,200 kW across eight), never a count between sets. A
+     site that cannot carry four is answered "does not fit", never sized
+     down to an order nobody can place. A count typed by a person is taken
+     as typed. The keys keep their names (posts, kwPerPost): saved answers
+     and settings read them.
    Indicative only: nothing here is the maker's prediction or an offer.
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
@@ -42,15 +47,15 @@ var STATES = {
   SC: [0.177, 0.51], SD: [0.332, 0.46], TN: [0.240, 0.49], TX: [0.124, 0.51], UT: [0.223, 0.47], VT: [0.238, 0.47], VA: [0.091, 0.55], WA: [0.119, 0.49],
   DC: [0.327, 0.61], WV: [0.375, 0.53], WI: [0.249, 0.50], WY: [0.266, 0.59]
 };
-var INSTALL = { low: 25000, avg: 40000, high: 50000 };        /* turnkey installation a post */
-var UTILIZATION = { low: 150, medium: 325, high: 450 };       /* kWh a post a day */
+var INSTALL = { low: 25000, avg: 40000, high: 50000 };        /* turnkey installation a dispenser */
+var UTILIZATION = { low: 150, medium: 325, high: 450 };       /* kWh a dispenser a day */
 var SET = {
   years: 15, bomPerPost: 50000, pedestalUsd: 425, pedestals: false, installCase: 'avg', utilizationCase: 'medium',
   serviceFeePerKwh: 0.10, annualRentUsd: 0, federalCredit: false, federalCreditPct: 0.30, incentiveUsd: 0, additionalIncentiveUsd: 0,
   lossPct: 0.02, discountRate: 0.10, taxRate: 0.20,
   electricityEscalation: 0, priceEscalation: 0, rentEscalation: 0.03, utilizationGrowth: 0.07, serviceFeeEscalation: 0.03
 };
-var SIZING = { kwPerPost: 150, minPosts: 4, maxPosts: 40, basis: 'one power cabinet’s 1,200 kW across eight posts' };
+var SIZING = { kwPerPost: 150, minPosts: 4, maxPosts: 12, sets: [4, 8, 12], basis: 'one power cabinet’s 1,200 kW across eight dispensers' };
 
 function num(v) { return v == null || v === '' || !isFinite(Number(v)) ? null : Number(v); }
 function r2(v) { return v == null ? null : Math.round(v * 100) / 100; }
@@ -67,14 +72,18 @@ function xirr(flows, days) {
   return (lo + hi) / 2;
 }
 
-/* how many posts the free capacity carries */
+/* how many dispensers the free capacity carries: the largest set the maker sells that fits */
 function sizePosts(availableKw, sizing) {
   var S = sizing || SIZING, kw = num(availableKw);
-  if (kw == null) return { posts: null, fits: false, reason: 'No free capacity on file to size posts on' };
-  var n = Math.min(S.maxPosts, Math.floor(kw / S.kwPerPost + 1e-9));
-  if (n < S.minPosts) return { posts: 0, fits: false, needKw: S.minPosts * S.kwPerPost,
-    reason: fmt(kw) + ' kW does not carry the ' + S.minPosts + '-post minimum (' + fmt(S.minPosts * S.kwPerPost) + ' kW at ' + S.kwPerPost + ' kW a post)' };
-  return { posts: n, fits: true, drawKw: n * S.kwPerPost, basis: fmt(kw) + ' kW ÷ ' + S.kwPerPost + ' kW a post (' + S.basis + ')' + (n === S.maxPosts ? ', held at ' + S.maxPosts : '') };
+  if (kw == null) return { posts: null, fits: false, reason: 'No free capacity on file to size dispensers on' };
+  var sets = Array.isArray(S.sets) && S.sets.length ? S.sets.map(Number).filter(function (x) { return x > 0; }).sort(function (a, b) { return a - b; }) : null;
+  var carried = Math.floor(kw / S.kwPerPost + 1e-9), min = sets ? sets[0] : S.minPosts, n = Math.min(S.maxPosts, carried);
+  if (sets) { n = 0; sets.forEach(function (x) { if (x <= carried) n = x; }); }
+  if (n < min) return { posts: 0, fits: false, needKw: min * S.kwPerPost,
+    reason: fmt(kw) + ' kW does not carry the ' + min + '-dispenser minimum (' + fmt(min * S.kwPerPost) + ' kW at ' + S.kwPerPost + ' kW a dispenser)' };
+  return { posts: n, fits: true, drawKw: n * S.kwPerPost, sets: sets || null,
+    basis: sets ? 'the largest set of ' + sets.join(', ').replace(/, ([^,]*)$/, ' or $1') + ' dispensers that ' + fmt(kw) + ' kW carries at ' + S.kwPerPost + ' kW a dispenser (' + S.basis + ')' + (carried > n ? '; ' + fmt(kw - n * S.kwPerPost) + ' kW is left over' : '')
+      : fmt(kw) + ' kW ÷ ' + S.kwPerPost + ' kW a dispenser (' + S.basis + ')' + (n === S.maxPosts ? ', held at ' + S.maxPosts : '') };
 }
 
 /* input: { state, posts | availableKw, startYear, pricePerKwh?, electricityPerKwh?, kwhPerPostDay?,
@@ -90,7 +99,7 @@ function superchargerCase(input) {
   var posts = num(input.posts), sized = null;
   if (posts == null) { sized = sizePosts(input.availableKw, S); if (!sized.fits) return { ok: false, version: VERSION, reason: sized.reason, needKw: sized.needKw || null, sizing: sized, notes: notes }; posts = sized.posts; }
   posts = Math.floor(posts);
-  if (!(posts >= 1)) return { ok: false, version: VERSION, reason: 'No posts to price', notes: notes };
+  if (!(posts >= 1)) return { ok: false, version: VERSION, reason: 'No dispensers to price', notes: notes };
 
   var price = num(input.pricePerKwh), elec = num(input.electricityPerKwh);
   if (price == null) { if (!row) return { ok: false, version: VERSION, reason: st ? 'No indicative charging price on file for ' + st : 'The site’s state is not on file, so there is no price or electricity cost to use', notes: notes };
@@ -98,9 +107,9 @@ function superchargerCase(input) {
   if (elec == null) { if (!row) return { ok: false, version: VERSION, reason: 'No levelised electricity cost on file for ' + (st || 'this site'), notes: notes };
     elec = row[0]; notes.push('Electricity: $' + elec.toFixed(3) + ' a kWh levelised (supply and demand charges), the indicative figure for ' + st + ', not the site’s tariff.'); }
   var util = num(input.kwhPerPostDay);
-  if (util == null) { util = UTILIZATION[A.utilizationCase] || UTILIZATION.medium; notes.push('Utilisation: ' + util + ' kWh a post a day (the ' + (UTILIZATION[A.utilizationCase] ? A.utilizationCase : 'medium') + ' case), growing ' + Math.round(A.utilizationGrowth * 100) + '% a year. Use the site’s own where it is known.'); }
+  if (util == null) { util = UTILIZATION[A.utilizationCase] || UTILIZATION.medium; notes.push('Utilisation: ' + util + ' kWh a dispenser a day (the ' + (UTILIZATION[A.utilizationCase] ? A.utilizationCase : 'medium') + ' case), growing ' + Math.round(A.utilizationGrowth * 100) + '% a year. Use the site’s own where it is known.'); }
   var install = num(input.installPerPost);
-  if (install == null) { install = INSTALL[A.installCase] || INSTALL.avg; notes.push('Installation: $' + fmt(install) + ' a post (the ' + (INSTALL[A.installCase] ? A.installCase : 'avg') + ' case of $' + fmt(INSTALL.low) + '–$' + fmt(INSTALL.high) + '); it varies by property.'); }
+  if (install == null) { install = INSTALL[A.installCase] || INSTALL.avg; notes.push('Installation: $' + fmt(install) + ' a dispenser (the ' + (INSTALL[A.installCase] ? A.installCase : 'avg') + ' case of $' + fmt(INSTALL.low) + '–$' + fmt(INSTALL.high) + '); it varies by property.'); }
   if (!A.annualRentUsd) notes.push('No site rent is counted; set one where the host is paid.');
 
   var years = Math.min(30, Math.max(1, Math.floor(A.years))), y0 = Math.floor(num(input.startYear) || 2027);
@@ -122,7 +131,7 @@ function superchargerCase(input) {
   notes.push('Indicative only: these are planning figures, not the charger maker’s prediction or an offer, and the price and electricity cost are state estimates.');
   return {
     ok: true, version: VERSION,
-    sizing: { posts: posts, kwPerPost: S.kwPerPost, drawKw: posts * S.kwPerPost, basis: sized ? sized.basis : 'the post count given' },
+    sizing: { posts: posts, kwPerPost: S.kwPerPost, drawKw: posts * S.kwPerPost, basis: sized ? sized.basis : 'the dispenser count given' },
     inputs: { state: st || null, pricePerKwh: price, electricityPerKwh: elec, kwhPerPostDay: util, installPerPost: install, bomPerPost: A.bomPerPost, serviceFeePerKwh: A.serviceFeePerKwh, annualRentUsd: A.annualRentUsd, years: years, startYear: y0 },
     capex: { equipment: r2(creditFactor * equipment), installation: r2(install * posts), total: r2(capex), perPost: r2(capex / posts) },
     year1: { kwh: rows[0].kwh, revenue: rows[0].revenue, earningsBeforeTax: rows[0].earningsBeforeTax, cashFlow: rows[0].cashFlow },

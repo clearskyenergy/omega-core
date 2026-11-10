@@ -1475,7 +1475,10 @@ marked), a **battery** (`assess-bess.js`: the grid value stack, ten years,
 taxes and the incentive-swept loan; its set is a PJM ComEd reference and
 `market.fit` says zone | market | reference, the rebate Illinois only; no
 net investment is a null IRR with the reason, never a number), **fast
-charging** (`assess-supercharger.js`: whole posts at 150 kW, never under
+charging** (`assess-supercharger.js`: the largest set of 4, 8 or 12 dispensers the
+free capacity carries at 150 kW each, `SIZING.sets`, since 2026-11-10 —
+Tommy: "tesla only sells things in 4,8, and 12 stalls", "they are called
+dispensers not posts"; the keys stay `posts` — never under
 four, the state's indicative price and electricity cost, XIRR at year
 ends), the **readiness checklist** (49 items, eight sections: Open,
 Screened from public data or an imported fact, Evidence on file by a

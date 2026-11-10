@@ -1183,7 +1183,7 @@ function seed() {
     assert.equal(ran.ran, 1); assert.equal(ran.sized, 1);
     var a = stored(made.id).assessment.result;
     assert.equal(a.power.limitKw, 1200); assert.equal(a.power.availableKw, 1000); assert.equal(a.power.basis, 'measured'); assert.equal(a.power.transformerKva, 1500);
-    assert.equal(a.compute.chosen.key, 'm750'); assert.equal(a.compute.chosen.units, 1); assert.equal(a.compute.chosen.klassLabel, 'Nano pod'); assert.equal(a.supercharger.sizing.posts, 6); assert.equal(a.bess.sizing.kwh, 4000);   /* one right-sized pod, never two 350s */
+    assert.equal(a.compute.chosen.key, 'm750'); assert.equal(a.compute.chosen.units, 1); assert.equal(a.compute.chosen.klassLabel, 'Nano pod'); assert.equal(a.supercharger.sizing.posts, 4, 'six dispensers of power is the set of four'); assert.equal(a.bess.sizing.kwh, 4000);   /* one right-sized pod, never two 350s */
     await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, VIEWER), 403);
     await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, RIVAL), 403);
     var list = await call('GET', {}, PM), row = list.sites.filter(function (x) { return x.id === made.id; })[0];

@@ -92,12 +92,16 @@ test('E06 the charging case’s switches, each against the calculator’s own fo
   var no = T.superchargerCase({ state: 'NE', posts: 4, startYear: 2027, assumptions: { installCase: 'high', utilizationCase: 'low' } });
   near(no.returns.preTaxIrrPct, -4.86); near(no.returns.irrPct, -7.2); near(no.returns.npv, -292024.46); assert.equal(no.returns.paybackYears, null);
 });
-test('E04 fast charging sized on the power: whole posts at the planning draw, never under the four-post minimum, the state’s indicative figures said', function () {
+test('E04 fast charging sized on the power: the largest set of 4, 8 or 12 dispensers the free capacity carries, never a count between sets or under four, the state’s indicative figures said', function () {
   var c = T.superchargerCase({ state: 'OK', availableKw: 800, startYear: 2027 });
-  assert.ok(c.ok); assert.equal(c.sizing.posts, 5); assert.equal(c.inputs.pricePerKwh, 0.51); assert.equal(c.inputs.electricityPerKwh, 0.166); assert.equal(c.inputs.kwhPerPostDay, 325);
+  assert.ok(c.ok); assert.equal(c.sizing.posts, 4); assert.ok(/largest set of 4, 8 or 12 dispensers/.test(c.sizing.basis)); assert.ok(/200 kW is left over/.test(c.sizing.basis)); assert.equal(c.inputs.pricePerKwh, 0.51); assert.equal(c.inputs.electricityPerKwh, 0.166); assert.equal(c.inputs.kwhPerPostDay, 325);
   assert.ok(c.notes.some(function (n) { return /indicative figure for OK/.test(n); }));
   var no = T.superchargerCase({ state: 'OK', availableKw: 240, startYear: 2027 });
-  assert.equal(no.ok, false); assert.ok(/does not carry the 4-post minimum \(600 kW/.test(no.reason)); assert.equal(no.needKw, 600);
+  assert.equal(no.ok, false); assert.ok(/does not carry the 4-dispenser minimum \(600 kW/.test(no.reason)); assert.equal(no.needKw, 600);
+  /* the maker's sets (2026-11-10): 7 dispensers' worth of power is a set of 4, 11 is 8, 12 and anything over is 12; a count a person types is taken as typed */
+  [[599, 0], [600, 4], [1050, 4], [1199, 4], [1200, 8], [1799, 8], [1800, 12], [9000, 12]].forEach(function (x) { assert.equal(T.sizePosts(x[0]).posts, x[1], x[0] + ' kW'); });
+  assert.deepStrictEqual(T.SIZING.sets, [4, 8, 12]); assert.equal(T.superchargerCase({ state: 'OK', posts: 6, startYear: 2027 }).sizing.posts, 6);
+  assert.equal(T.sizePosts(1050, { kwPerPost: 150, minPosts: 4, maxPosts: 40, basis: 'x' }).posts, 7, 'a workspace whose settings carry no sets is sized as before');
   assert.equal(T.superchargerCase({ availableKw: 800 }).ok, false);          /* no state: no price to use, said */
   assert.equal(T.superchargerCase({ state: 'OK' }).ok, false);               /* no power */
   assert.equal(T.sizePosts(100000).posts, T.SIZING.maxPosts);
@@ -395,7 +399,7 @@ test('D01 Run: every chosen site assessed from its facts, stored on the site, on
   var w = world(), r = await w.post({ action: 'assess-run', ids: ['s1', 's2', 's3', 'gone'] });
   assert.equal(r.ran, 3); assert.equal(r.sized, 2); assert.deepStrictEqual(r.missing, ['gone']); assert.ok(/3 sites assessed; 1 with no power figure/.test(r.note));
   var s1 = w.site('s1'), a = s1.assessment;
-  assert.equal(a.result.power.availableKw, 1500); assert.equal(a.result.power.basis, 'ceiling'); assert.equal(a.result.compute.chosen.key, 'm1000'); assert.equal(a.result.supercharger.sizing.posts, 10); assert.equal(a.by, PAT.email); assert.equal(a.at, NOW);
+  assert.equal(a.result.power.availableKw, 1500); assert.equal(a.result.power.basis, 'ceiling'); assert.equal(a.result.compute.chosen.key, 'm1000'); assert.equal(a.result.supercharger.sizing.posts, 8); assert.equal(a.by, PAT.email); assert.equal(a.at, NOW);
   assert.equal(s1.revision, 2); assert.equal(s1.updatedAt, '2026-11-01T00:00:00.000Z'); assert.equal(s1.serviceCapacityKw, 1500);
   assert.equal(w.site('s2').assessment.result.power.availableKw, 80); assert.equal(w.site('s2').assessment.result.power.basis, 'measured'); assert.equal(w.site('s2').assessment.result.compute.fits, false);
   assert.equal(w.site('s3').assessment.result.power.availableKw, null);

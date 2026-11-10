@@ -23,7 +23,7 @@ again on what they found.
 |---|---|
 | `api/_lib/portfolio/assess.js` | the rule: power, the compute shelf, the readiness checklist and score, the verifications, the approval. Pure, ES5, no clock |
 | `api/_lib/portfolio/assess-bess.js` | a grid-participation battery on the free power: ten years, IRR, NPV, taxes, the incentive-swept loan |
-| `api/_lib/portfolio/assess-supercharger.js` | fast-charging posts on the free power: fifteen years, the site-host return |
+| `api/_lib/portfolio/assess-supercharger.js` | fast-charging dispensers on the free power, in the maker's sets of 4, 8 or 12: fifteen years, the site-host return |
 | `api/_lib/portfolio/assess-door.js` | the actions and reads, mounted by `api/site-crm.js` |
 | `omega-portfolio-assess.js` | the pages' one drawing of it (ES5): the row's cells and the side panel's card |
 | `scripts/tests/tassess.js` | 20 cases: both engines to the cent, the library, the door on the Firestore double |
@@ -161,10 +161,13 @@ the IRR is null with the reason, never a large number.
 
 ### Fast charging: the site-host return
 
-Posts = free kW ÷ 150 kW a post (one power cabinet's 1,200 kW across eight
-posts), never fewer than four: a site that cannot carry four is "does not
-fit", with the 600 kW it would need. Price and levelised electricity cost
-are the state's indicative figures; utilisation is 325 kWh a post a day
+Dispensers = the largest set of 4, 8 or 12 (what the maker sells; Tommy,
+2026-11-10) that the free kW carries at 150 kW a dispenser (one power
+cabinet's 1,200 kW across eight). Never a count between sets and never
+fewer than four: a site that cannot carry four is "does not fit", with the
+600 kW it would need. A workspace's own `supercharger.sizing.sets` replaces
+the sets; the keys keep the name `posts`. Price and levelised electricity cost
+are the state's indicative figures; utilisation is 325 kWh a dispenser a day
 growing 7% a year; the maker's service fee and the rent escalate 3%.
 Returns are dated at each year end (XIRR / XNPV).
 
