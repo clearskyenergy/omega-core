@@ -70,6 +70,17 @@ var PARTNER = {
   feePct: 10,
   termMonths: 72,
   stated: { returnPct: [25, 30, 55], conservativeReturnPct: 30, paybackMonths: 24, cardsLeadWeeks: 36, collateralLtcPct: 80 },
+  /* What they showed for ONE MEGAWATT of compute (2026-11-09, Tommy: "for
+     1mW of compute its a 35m investement and … it would genreate about 26m
+     a year and cost 4m in utility"), as STATED and UNVERIFIED like the rest
+     of this record. The hardware behind the $35M is the compute-lease
+     notes' container: 7 GPU racks at $5M, 504 GB200s. The revenue is a
+     figure, not a contract: the offtake is not confirmed. The utility
+     figure is theirs for their case; a site's own is its energy at its own
+     rate (the site assessment reads the rate book for the ZIP), and both
+     are shown. Read only by a workspace whose settings ask for the
+     partner's basis (portfolio/assess.js); nothing else prices on it. */
+  reference: { perMw: { capexUsd: 35000000, revenueUsdYear: 26000000, utilityUsdYear: 4000000, gpus: 504, racks: 7, chipset: 'gb200' } },
   verified: false
 };
 var ROUTES = ['own', 'buy', 'lease', 'takeover'];
