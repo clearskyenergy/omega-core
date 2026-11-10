@@ -34,6 +34,8 @@
      dcWithin40                     data centers within 40 km
      fiberMeasured, fiberKm         nearest mapped fiber route
      fiberScreen {routes, facilities, radiusKm}   last /api/fiber-screen
+     bdcMeasured, bdcBlockFiber[], bdcHexFiber[]  FCC BDC provider names
+     zoning { local, state }        reported zoning & legislation readings
      floodMeasured, inFlood, floodZone            FEMA NFHL at the pin
      waterMeasured, waterKm         nearest mapped surface water
      gasMeasured, gasKm             nearest gas transmission line
@@ -105,6 +107,33 @@
     return conditional(v, 'No published route in radius — coverage is partial; absence of a record is not absence of fiber. Carrier RFI required.');
   }
 
+  /* The FCC Broadband Data Collection at the pin (omega-fiber-confirm.js):
+     NAMED providers reporting fiber in the site's census block or hex.
+     Self-reported mass-market availability — it names who to ask and never
+     stands in for the carrier's quote, so its best reading is conditional
+     on the RFI, and "none reported" is a build expectation, not a refusal. */
+  function ckBdc(ev) {
+    if (!ev.bdcMeasured) return unknown('FCC provider lookup not answered yet (it runs by itself at the pin).');
+    var b = ev.bdcBlockFiber || [], h = ev.bdcHexFiber || [];
+    if (b.length) return pass(b.slice(0, 3).join(', ') + (b.length > 3 ? ' +' + (b.length - 3) : ''), 'Report fiber in the site’s own census block (FCC BDC, self-reported). These are the RFI targets — dedicated symmetrical service is still the carrier’s quote to give.');
+    if (h.length) return conditional(h.slice(0, 3).join(', ') + (h.length > 3 ? ' +' + (h.length - 3) : ''), 'Fiber reported in the surrounding hex but not the site’s block — a short lateral is likely. Send the RFI.');
+    var n = ev.bdcNearFiber || [];
+    if (n.length) return conditional(n.slice(0, 3).join(', ') + (n.length > 3 ? ' +' + (n.length - 3) : ''), 'Fiber reported within ~1.5 km but not in the site’s own block or hex — a lateral build is the question. Send the RFI.');
+    return conditional('none reported', 'No provider reports fiber in the block, the hex or within ~1.5 km. Expect a build: RFI the incumbent, the nearest route operators and the regional carriers.');
+  }
+
+  /* Zoning & legislation as REPORTED for the pin's county and state
+     (omega-zoning-watch.js judges; the page hands the two readings over as
+     ev.zoning). There is no pass on these rows: a tracker that found
+     nothing has cleared nothing, and its coverage is incomplete. */
+  function ckZoning(which) {
+    return function (ev) {
+      var z = ev.zoning && ev.zoning[which];
+      if (!z) return unknown('Zoning tracker not answered yet (it reads the county from the FCC lookup at the pin).');
+      return { status: z.status, value: z.value || '', note: z.note || '' };
+    };
+  }
+
   /* ── profile definitions ──────────────────────────────────────────────────
      Each item: { id, label, auto: function(ev) } or { id, label, evidence }.
      An item with `evidence` is OPEN until a human attaches that evidence —
@@ -129,6 +158,8 @@
       { key: 'site', name: 'Site & host', items: [
         { id: 'sc-host', label: 'Host site agreement / site control', evidence: 'executed lease, license or easement with the property owner covering stalls, equipment pad and trench routes for the operating term' },
         { id: 'sc-lay',  label: 'Stall layout & circulation', evidence: 'layout for 12–16 stalls with ADA-compliant stalls, drive-in/out clearance, lighting and trench run to the equipment pad' },
+        { id: 'sc-zl',   label: 'Reported local restrictions (county)', auto: ckZoning('local') },
+        { id: 'sc-zs',   label: 'Reported state legislation', auto: ckZoning('state') },
         { id: 'sc-zone', label: 'Zoning / local permits', evidence: 'confirmation EV charging is a permitted or accessory use; electrical and building permit path with the AHJ' },
         { id: 'sc-amen', label: '24/7 amenities & access', evidence: 'restrooms, food and lighting within a short walk; site accessible 24/7 without gates' }
       ]},
@@ -181,6 +212,8 @@
       { key: 'site', name: 'Site & safety', items: [
         { id: 'bs-flood', label: 'FEMA flood zone', auto: ckFlood },
         { id: 'bs-ctl',  label: 'Site control', evidence: 'ownership, lease or option covering the BESS pad, access and the interconnection route for the operating term' },
+        { id: 'bs-zl',   label: 'Reported local restrictions (county)', auto: ckZoning('local') },
+        { id: 'bs-zs',   label: 'Reported state legislation', auto: ckZoning('state') },
         { id: 'bs-ahj',  label: 'Zoning & AHJ pre-application', evidence: 'zoning allowance for energy storage; AHJ pre-app covering NFPA 855 setbacks, UL 9540A documentation and the fire-safety narrative' },
         { id: 'bs-noise', label: 'Noise at the property line', evidence: 'inverter/HVAC noise estimate against the local ordinance; a noise study where residential is adjacent' },
         { id: 'bs-fire', label: 'Fire access & water', evidence: 'apparatus access route and water supply or accepted alternative agreed with the fire authority' }
@@ -216,6 +249,8 @@
         { id: 'cp-cons',  label: 'Third-party consents', evidence: 'required consents from landowners, lenders or other stakeholders' }
       ]},
       { key: 'zoning', name: '2 · Zoning & Land Use', items: [
+        { id: 'cp-zl',    label: 'Reported local restrictions (county)', auto: ckZoning('local') },
+        { id: 'cp-zs',    label: 'Reported state legislation', auto: ckZoning('state') },
         { id: 'cp-zone',  label: 'Zoning designation & permitted use', evidence: 'current zoning designation and confirmation modular data center / industrial / compute use is allowed by right or via special permit' },
         { id: 'cp-var',   label: 'Variances / conditional use', evidence: 'status of any required variances, conditional use permits or rezoning' },
         { id: 'cp-set',   label: 'Setbacks & coverage', evidence: 'setback, height, lot coverage and impervious-surface compliance for the container and support equipment' },
@@ -257,6 +292,12 @@
       { key: 'fiber', name: '6 · Connectivity', items: [
         { id: 'cp-fr',   label: 'Mapped fiber route proximity', auto: ckFiberRoute },
         { id: 'cp-fs',   label: 'Published route evidence (server screen)', auto: ckFiberScreen },
+        { id: 'cp-bdc',  label: 'Carriers reporting fiber at the site (FCC)', auto: ckBdc },
+        { id: 'cp-ilec', label: 'Incumbent telephone company of record', auto: function (ev) {
+            if (!ev.bdcMeasured) return unknown('FCC lookup not answered yet (it runs by itself at the pin).');
+            if (ev.ilec) return pass(ev.ilec, 'The carrier of record at this address (FCC study area) — always on the RFI list for dedicated fiber, whoever else is named.');
+            return conditional('not resolved', 'No FCC study area at this point — identify the local telephone company by address.');
+          } },
         { id: 'cp-px',   label: 'Peering / colo context', auto: function (ev) {
             if (!ev.ixpColoMeasured) return unknown('Enable IXP + Colo layers for market context.');
             return pass((ev.ixp60 || 0) + ' IXP · ' + (ev.colo60 || 0) + ' colo within 60 km', 'Interconnection market context only — not a substitute for the carrier quote.');

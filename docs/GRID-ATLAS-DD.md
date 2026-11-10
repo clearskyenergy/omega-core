@@ -46,6 +46,10 @@ Same discipline as `analyze()`'s `wScore` and `api/grid-atlas.js`:
   `window.__gaFiberScreen` and pokes `window.__gaReanalyze()`, so an open
   checklist absorbs the server screen the moment it lands. Serviceability
   stays UNCONFIRMED in the wording either way.
+- §6 also carries two rows from the FCC lookup at the pin
+  (`omega-fiber-confirm.js`): *Carriers reporting fiber at the site* and
+  *Incumbent telephone company of record*. The whole confirmation ladder,
+  the carrier RFI and the verification package are `docs/FIBER-CONFIRMATION.md`.
 - `isoQueuePortal()` (beside `utilityPortal()`) routes to the seven
   ISO/RTO interconnection queues — queue position is evidence the public
   map cannot read, so the panel links to where it lives.

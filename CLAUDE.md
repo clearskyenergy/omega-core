@@ -1777,6 +1777,64 @@ NextNRG group, and in NextNRG's own workspace every array and battery
 (`vendorOrg`, stamped by `cost-rollup.js` off the caller). The Run's lines
 ride the record (`capexLines`). `docs/NEXTNRG-MICROGRID.md`.
 
+## Grid Atlas — due diligence and fiber confirmation (2026-11-09)
+
+**A project profile is a checklist, not only a layer set** (Tommy: "upgrade
+the gridatlas to make it better for doing due dillegence on a tesla
+supercahrger site, a bess site, and a compute site use the site readiness
+checklist"). `grid-atlas-dd.js` (ES5, pure; `scripts/tests/tgridatlasdd.js`)
+holds three: Tesla Supercharger, BESS, and Data Center / Compute — the last
+IS the Solela / Francis Energy *Site Readiness Checklist, 1 MW Modular AI
+Compute*, its eight sections in its order and its own evidence wording. A
+preset carries `dd`; `analyze()` hands the pin's measurements over as one
+evidence object and draws the answer; a profile survives a manual layer
+toggle. The honesty rule is the page's own: **unknown** is a layer never
+consulted (never a zero, never averaged), **open** is evidence a person must
+produce, and pass / conditional / risk are given only on a measured reading
+— every capacity pass still says NOT confirmed. `docs/GRID-ATLAS-DD.md`.
+
+**Fiber is confirmed on a ladder, never merged** (Tommy: "ways we can go and
+confirm the fiber … know on an address the fiber provider and the telecom
+details and all things needed to get fiber verification"):
+`omega-fiber-confirm.js` (ES5; `scripts/tests/tfiberconfirm.js`) — Mapped
+(route geometry), Reported (the FCC Broadband Data Collection names a
+provider with fiber in the site's census block, hex, or ~1.5 km ring),
+Quoted, Confirmed. Public data reaches Reported and no further; nothing in
+the platform marks a carrier document in hand. The same lookup reads the
+incumbent telephone company of record (FCC study areas). The panel's
+*◈ Confirm fiber* shows the telecom facts, the ordered carriers to ask with
+why, the nine-item verification package, and copies an RFI and a
+verification brief that wear no platform or tenant name.
+`scripts/fiber-confirm-portfolio.js` runs a portfolio sheet (deal data:
+output to `work/`, never committed; a town-centre geocode is marked
+APPROXIMATE). `docs/FIBER-CONFIRMATION.md`.
+
+**The route inventory grows through a vetted registry**
+(`scripts/import-state-fiber.js`, then ALWAYS
+`scripts/import-published-fiber.js`): a layer is bundled only if a public
+agency published it or it is a carrier's own published network map —
+never a contractor upload, a locate export, a design export or internal
+plant left shared ("reachable without a token is not published"), and
+never customer drops. High-volume sources are tiled per carrier, status and
+0.1° cell; geometry is the publisher's at six decimals; a line whose
+medium the provider did not state is labelled so. `docs/FIBER-STATE-EXPANSION.md`.
+
+**Zoning & legislation is REPORTED, never a legal status** (Tommy, of a
+competitor's tracker: "take this site and find out what we can use" — the
+idea was used; no compiled commercial tracker is ever a source).
+`omega-zoning-watch.js` (ES5, pure; `scripts/tests/tzoningwatch.js`) reads
+`data/zoning/measures.json` — hand-curated, a source link, publisher and
+read date on every record — for the pin's COUNTY (the FCC census block's
+first five digits) and state, by project type. The judge has **no pass**:
+rows are risk, conditional or unknown; "none on file" is conditional and
+says the coverage is incomplete; an in-force measure past its reported
+expiry reads "expiry date passed — confirm"; chamber passage is `pending`.
+The pin gives the county, never the municipality, so a city's measure is
+said to apply inside that city, and the searched address only ORDERS the
+list. Records are edited by hand with the source open;
+`scripts/check-zoning-measures.js` asks whether the links still answer.
+`docs/ZONING-LEGISLATION.md`.
+
 ## Event Layer — usage telemetry (step one, 2026-09-23)
 
 Runbook and catalogue: `docs/EVENT-LAYER.md`. `omega-events.js` (injected by
