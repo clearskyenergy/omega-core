@@ -208,7 +208,13 @@
     overflow: auto;
   }
   #tools .tool { width: 100%; text-align: left; padding: 7px 8px; }
-  #stage { position: relative; min-width: 0; min-height: 0; background: var(--paper); overflow: hidden; }
+  /* The stage never scrolls. The photo's tiles reach past it, so under
+     overflow:hidden anything that scrolls a piece of it into view (a
+     keyboard focus, text selected and dragged past the edge, find in page)
+     slid the drawing, the photo and the cards out of place until a reload.
+     clip makes no scroll container; hidden is for a browser without it,
+     where the editor's own scroll listener puts it back at once. */
+  #stage { position: relative; min-width: 0; min-height: 0; background: var(--paper); overflow: hidden; overflow: clip; }
   #gsat { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: none; transform-origin: 50% 50%; pointer-events: none; }
   #map { position: absolute; inset: 0; pointer-events: none; }
   #map img { position: absolute; display: block; }

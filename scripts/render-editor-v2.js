@@ -164,6 +164,23 @@ var server = http.createServer(function(req,res) {
     await page.waitForFunction(function(){return /lot line now \(APN TEST-1\)/.test(document.getElementById('status').textContent)&&document.getElementById('parcel-use').hidden;},null,{timeout:5000});
     assert.strictEqual(parcelPosts,1,'the parcel under the site point is looked up once');
     await page.screenshot({path:path.join(out,'parcels.png')});
+    /* The stage never scrolls. The photo's and the county's tiles reach past
+       it, so a piece of it scrolled into view (a keyboard focus, text
+       selected and dragged past the edge, a tool that centres a button
+       before it clicks it) used to slide the drawing, the photo and the
+       cards out of place until a reload. */
+    var slid=await page.evaluate(function(){
+      var s=document.getElementById('stage'),c=document.getElementById('cv');
+      document.getElementById('parcel-here').scrollIntoView({block:'center',inline:'center'}); s.scrollLeft=200; s.scrollTop=150;
+      var r=c.getBoundingClientRect(),q=s.getBoundingClientRect();
+      return {left:s.scrollLeft,top:s.scrollTop,dx:Math.round(r.left-q.left),dy:Math.round(r.top-q.top)};
+    });
+    assert(slid.left===0&&slid.top===0&&slid.dx===0&&slid.dy===0,'a button centred in view does not slide the drawing: '+JSON.stringify(slid));
+    /* and where a browser has no overflow:clip, the editor puts a scroll back */
+    var moved=await page.evaluate(function(){var s=document.getElementById('stage');s.style.overflow='hidden';s.scrollLeft=200;s.scrollTop=150;return s.scrollLeft>0||s.scrollTop>0;});
+    assert(moved,'under overflow:hidden the stage can be scrolled (its tiles reach past it), which is what clip prevents');
+    await page.waitForFunction(function(){var s=document.getElementById('stage');return s.scrollLeft===0&&s.scrollTop===0;},null,{timeout:3000});
+    await page.evaluate(function(){document.getElementById('stage').style.overflow='';});
     await page.click('#layer-parcels-toggle');
     assert(await page.evaluate(function(){return document.getElementById('parcel-detail').hidden&&getComputedStyle(document.getElementById('map-parcels')).display==='none';}),'off, the lines and the card go');
     /* The eight guided builds, end to end (Tommy, 2026-10-20: "make sure the
@@ -229,18 +246,35 @@ var server = http.createServer(function(req,res) {
     var gear=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return d.placed;});
     assert(gear&&Math.abs(gear.cx-where.x)<=5.01&&Math.abs(gear.cy-where.y)<=5.01&&gear.rot.every(function(r){return r===90;}),'it went down under the pointer, on the grid, turned a quarter: '+JSON.stringify({gear:gear,pointer:where}));
     await page.screenshot({path:path.join(out,'build-by-hand.png')});
+    /* The ribbon is longer than the window: a mouse wheel rolls along it to
+       View and its Icons switch, and back */
+    var rolled=await page.evaluate(function(){
+      var rb=document.getElementById('ribbon-main'),ic=document.querySelector('[data-act="icons"]');
+      function seen(){var a=ic.getBoundingClientRect(),b=rb.getBoundingClientRect();return a.left>=b.left&&a.right<=b.right;}
+      rb.scrollLeft=0;
+      var out={longer:rb.scrollWidth>rb.clientWidth,before:seen()};
+      for(var i=0;i<12;i++)rb.dispatchEvent(new WheelEvent('wheel',{deltaY:240,bubbles:true,cancelable:true}));
+      out.after=seen();out.at=rb.scrollLeft;
+      for(i=0;i<12;i++)rb.dispatchEvent(new WheelEvent('wheel',{deltaY:-240,bubbles:true,cancelable:true}));
+      out.back=rb.scrollLeft;
+      return out;
+    });
+    assert(rolled.longer&&!rolled.before&&rolled.after&&rolled.at>0&&rolled.back===0,'the wheel rolls the ribbon to Icons and back: '+JSON.stringify(rolled));
     /* The Edit bar (Tommy, 2026-10-21: "an edit bar here for deleting things
        and undoing and re doing"): Copy and Paste the build just placed,
        Delete it, Undo and Redo, all from the ribbon on any tab */
-    var ed=async function(act){await page.click('[data-act="'+act+'"]');await page.waitForTimeout(80);return page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});};
+    var ed=async function(act){await page.click('[data-act="'+act+'"]');await page.waitForTimeout(80);return page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection,said:document.getElementById('status').textContent};});};
     var e0=await page.evaluate(function(){var d=OmegaEditorV2App.debug();return {n:d.entities,sel:d.selection};});
     assert(e0.sel>0,'the last build is selected: '+JSON.stringify(e0));
     await ed('copy'); var e1=await ed('paste');
     assert(e1.n===e0.n+e0.sel&&e1.sel===e0.sel,'Paste adds the copy and selects it: '+JSON.stringify([e0,e1]));
+    assert(/pasted, 10 ft over\. They are selected/.test(e1.said),'Paste says what it did: '+e1.said);
     var e2=await ed('delete');
-    assert(e2.n===e0.n&&e2.sel===0,'Delete takes away what is selected: '+JSON.stringify(e2));
+    assert(e2.n===e0.n&&e2.sel===0&&e2.said==='Erased.','Delete takes away what is selected: '+JSON.stringify(e2));
     var e3=await ed('undo'), e4=await ed('redo');
     assert(e3.n===e1.n&&e4.n===e0.n,'Undo brings it back, Redo takes it away again: '+JSON.stringify([e3,e4]));
+    /* the status bar never keeps saying "Erased." over what Undo brought back */
+    assert(/^Undone\./.test(e3.said)&&/^Redone\./.test(e4.said),'Undo and Redo each say what they did: '+JSON.stringify([e3.said,e4.said]));
     /* Send to funding asks on the page (a browser popup is answered "no",
        unseen, by an embedded browser); Cancel submits nothing. */
     var dialogs=[]; page.on('dialog',function(d){dialogs.push(d.message());d.dismiss();});

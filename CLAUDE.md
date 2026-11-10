@@ -1878,8 +1878,13 @@ working; only what a person reads says Omega Maximus.
   buildings. Guided builds keep off them; 3D stands each at its source's
   height (the 51st Avenue warehouse: 8.85 m, 29 ft), a hand-drawn
   obstruction at the default it always had. Read, never invented: no
-  height says so. `teditorv2buildings.js`; `check:editor-v2` runs it on a
-  stand-in FEMA answer.
+  height says so. The FEMA query carries NO paging parameter: since 2026-11
+  its service never answers one that does (`resultRecordCount`; the same box
+  without it answers in a third of a second), so every lookup waited out its
+  limit and found nothing. Each service gets 12 s, and a lookup that fails
+  says who did not answer, never that neither has a building.
+  `teditorv2buildings.js`; `check:editor-v2` runs it on a stand-in FEMA
+  answer.
 - **Names never on one another** (Tommy: "clean up how you show the guided
   build"): `drawNames` paints every name after the shapes: text, callouts,
   dimensions and array notes where they belong; a box's name inside it when
@@ -1911,6 +1916,22 @@ working; only what a person reads says Omega Maximus.
   ribbon's single unit shows the same box and icon under the pointer before
   its click. `teditorv2place.js` §7; `check:editor-v2` holds, moves, turns,
   drops and puts one away.
+- **The stage never scrolls** (2026-11-09, found walking a real site): the
+  photo's and the county's tiles reach past `#stage`, so under
+  `overflow: hidden` anything that scrolled a piece of it into view (a
+  keyboard focus, text selected and dragged past the edge, a tool that
+  centres a button before it clicks) slid the drawing, the photo and the
+  cards out of place until a reload. `#stage` is `overflow: clip` (no scroll
+  container at all), and the editor puts a scroll back where a browser has
+  no clip; `check:editor-v2` holds both.
+- **The ribbon and what it says**: the ribbon is one strip, longer than a
+  laptop is wide, and a mouse wheel rolls along it (View and its Icons
+  switch are at the far end). Edit (Undo, Redo, Delete, Copy, Paste) is on
+  every tab and each says what it did, so the status bar never keeps
+  "Erased." over what Undo brought back. A run's time is shown on the
+  viewer's own clock (`OmegaEditorV2Analyze.when`; the record keeps UTC, and
+  an evening run read as tomorrow at 3 am). 3D reads HIFLD's unknown voltage
+  (-999999) as a line with no figure, never "-999999 kV".
 - **Never a browser popup to confirm**: the Claude app's browser pane (and a
   kiosk) answers `window.confirm` "no" without showing it, so a button that
   asked that way did nothing (2026-10-20, the price book's Seed). Send to

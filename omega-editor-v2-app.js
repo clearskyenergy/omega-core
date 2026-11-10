@@ -261,6 +261,18 @@
     cv.addEventListener('pointerup', onUp);
     cv.addEventListener('pointerleave', function () { cursor = null; requestDraw(); });
     cv.addEventListener('wheel', onWheel, { passive: false });
+    /* The ribbon is one long strip, longer than a laptop is wide: a mouse
+       wheel rolls along it (a trackpad already swipes sideways), so View and
+       its Icons switch are a roll away, not hidden past the edge. */
+    $('ribbon-main').addEventListener('wheel', function (ev) {
+      var rb = $('ribbon-main'), dy = ev.deltaMode === 1 ? ev.deltaY * 32 : ev.deltaY, was = rb.scrollLeft;
+      if (ev.ctrlKey || ev.shiftKey || !dy || Math.abs(ev.deltaY) <= Math.abs(ev.deltaX) || rb.scrollWidth <= rb.clientWidth) return;
+      rb.scrollLeft = was + dy;
+      if (rb.scrollLeft !== was) ev.preventDefault();
+    }, { passive: false });
+    /* the stage never scrolls (editor-v2.html #stage): where the browser
+       has no overflow:clip, a scroll is put back at once */
+    $('stage').addEventListener('scroll', function () { var st = $('stage'); if (st.scrollLeft || st.scrollTop) { st.scrollLeft = 0; st.scrollTop = 0; } });
     cv.addEventListener('contextmenu', function (ev) {
       ev.preventDefault();
       if (held) { heldTurn(); return; }
@@ -336,8 +348,9 @@
   }
 
   function runAct(act) {
-    if (act === 'undo') { if (D.undo(state)) afterChange(); else setStatus('Nothing to undo.'); }
-    else if (act === 'redo') { if (D.redo(state)) afterChange(); else setStatus('Nothing to redo.'); }
+    /* each says what it did: the line before it ("Erased.") is no longer true */
+    if (act === 'undo') { if (D.undo(state)) { afterChange(); setStatus('Undone. Redo puts it back.'); } else setStatus('Nothing to undo.'); }
+    else if (act === 'redo') { if (D.redo(state)) { afterChange(); setStatus('Redone.'); } else setStatus('Nothing to redo.'); }
     else if (act === 'erase') erase();
     else if (act === 'array') fillArray();
     else if (act === 'group') doGroup();
@@ -707,6 +720,7 @@
     doc.entities = doc.entities.concat(copies);
     D.commit(state, doc, copies.map(function (ent) { return ent.id; }));
     afterChange();
+    setStatus(copies.length + ' pasted, ' + 10 * pasteN + ' ft over. ' + (copies.length === 1 ? 'It is selected: drag to move it.' : 'They are selected: drag to move them.'));
   }
 
   function blank() {

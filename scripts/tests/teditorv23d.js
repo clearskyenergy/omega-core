@@ -257,6 +257,13 @@ for (i = 0; i < grid.wires.length; i++) if (grid.wires[i].label === '69 kV') cro
 check(crossed, 'a transmission line that crosses the parcel is kept');
 check(grid.yard && grid.yard.x >= 0 && grid.yard.x <= 200 && grid.yard.y >= 0 && grid.yard.y <= 120, 'an off-site substation sits on the edge of the model');
 check(grid.yard.label.indexOf('RUPPERS') >= 0, 'the substation keeps its published name');
+/* A line near the site that does not cross it is named too. HIFLD writes an
+   unknown voltage as -999999, which read "-999999 kV" on a real site
+   (802 S 51st Ave, Phoenix, 2026-11-09): no figure is "Line", never a number. */
+var nearby = function (v) { return { geometry: { paths: [[ll(-400, 600), ll(900, 600)]] }, attributes: { VOLTAGE: v, SUB_1: 'WEST PHOENIX', SUB_2: 'LINCOLN STREET' } }; };
+var labelsOf = function (v) { return V.placeGrid([nearby(v)], null, builtScene, { minX: 0, minY: 0, maxX: 200, maxY: 120 }, built.anchor).wires.map(function (w) { return w.label; }); };
+check(labelsOf(230).join() === '230 kV', 'the nearest published line that does not cross the parcel carries its voltage: ' + labelsOf(230).join());
+check(labelsOf(-999999).join() === 'Line' && labelsOf(0).join() === 'Line' && labelsOf(undefined).join() === 'Line', 'an unknown voltage is a line with no figure, never "-999999 kV": ' + labelsOf(-999999).join());
 
 /* True vertical scale. A side-on 16.9% grade is 16.9% on screen, and
    doubling the picture does not double the slope the Run reads. */
