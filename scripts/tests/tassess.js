@@ -132,6 +132,16 @@ test('A04 compute: the shelf is 75, 150, 350, 500 and 750 kW and 1 MW of IT at t
   assert.deepStrictEqual(A.MODULARS.map(function (m) { return m.itKw; }), [75, 150, 350, 500, 750, 1000]);
   var c = A.computeOf({ availableKw: 1500, basis: 'measured' }, cfg, {});
   assert.deepStrictEqual(c.shelf.map(function (s) { return s.meterKw; }), [90, 180, 420, 600, 900, 1200]);
+  /* beside the pod: a battery on what it leaves (the same battery engine on the kW left), so the pod and that battery are a pair that fits */
+  var pr = A.assess({ address: { state: 'OK', zip: '74834' }, transformerKva: 500 }, { now: NOW });
+  assert.equal(pr.pairing.leftKw, 220); assert.equal(pr.pairing.bess.kw, 220); assert.equal(pr.pairing.bess.kwh, 880); near(pr.pairing.bess.irrPct, B.bessCase({ powerKw: 220, state: 'OK' }).returns.irrPct); assert.equal(pr.bess.sizing.kw, 400);
+  assert.ok(/Beside the 150 kW Nano pod, the 220 kW it leaves carries a 220 kW \/ 880 kWh battery/.test(pr.pairing.words));
+  assert.equal(A.assess({ state: 'OK', transformerKva: 750 }, { now: NOW }).pairing, null);            /* a 500 kW pod uses all 600 kW */
+  assert.equal(A.assess({ state: 'OK', serviceCapacityKw: 100 }, { now: NOW }).pairing, null);         /* 10 kW left: nothing worth a pad */
+  /* submitted for funding as compute + battery, that pair is one amount */
+  var pcfg = A.configOf({ portfolioAssessment: { funding: { mode: 'committee', members: [{ name: 'B', email: 'b@x.co' }] } } });
+  var pq = A.fundingRequest(pr, ['bess', 'compute']); assert.equal(pq.paired, true); assert.equal(pq.amountUsd, Math.round(pr.compute.economics.capexUsd + pr.pairing.bess.capexUsd)); assert.ok(/on the 220 kW the pod leaves/.test(pq.lines[1].size)); assert.ok(/one amount/.test(pq.words));
+  assert.equal(A.fundingRequest(pr, ['bess']).amountUsd, pr.bess.capex.total); assert.equal(A.fundingRequest(pr, ['compute', 'bess', 'supercharger'].slice(0, 2).concat([])).paired, true); assert.ok(pcfg.funding);
   /* 400 kW was four 75 kW skids; it is one 150 kW pod (a 350 needs 420 kW at the meter), with 220 kW left */
   var four = A.computeOf({ availableKw: 400, basis: 'ceiling' }, cfg, {}); assert.equal(four.chosen.key, 'm150'); assert.equal(four.chosen.units, 1); assert.equal(four.chosen.leftKw, 220);
   assert.equal(four.chosen.coolingKw, 30); assert.ok(/30 kW of the 180 kW at the meter is the chiller, pumps and losses/.test(four.cooling.words)); assert.ok(/One pod and its chiller.*not on file/.test(four.space.words));

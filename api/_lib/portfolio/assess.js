@@ -487,6 +487,25 @@ function upgradeView(u, power, cfg, site) {
       irrPct: e.ok ? e.irrPct : null, priceBasis: e.ok ? e.priceBasis : null, capexUsd: e.ok ? e.capexUsd : null } : null };
 }
 
+/* BESIDE THE POD: A BATTERY ON WHAT IT LEAVES (2026-11-09, Tommy, of a
+   400 kW site that had read four 75 kW skids: "it should just be a 150kW
+   compute and then allow us to maybe put a bess on their or request for
+   more xfrmr power"). One right-sized pod seldom uses the whole free power;
+   the same battery engine answers a battery of the kW left, so the pod and
+   that battery together are a pair that fits, where the three whole-capacity
+   uses stay alternatives. Under PAIR_MIN_KW there is nothing worth a pad. */
+var PAIR_MIN_KW = 50;
+function pairingOf(compute, site, st, power, cfg) {
+  var ch = compute && compute.fits ? compute.chosen : null;
+  if (!ch || !(ch.leftKw >= PAIR_MIN_KW)) return null;
+  var b = B.bessCase({ powerKw: ch.leftKw, state: st, utility: power.utility || site.utility || null, assumptions: cfg.bess });
+  if (!b.ok) return null;
+  var pod = (ch.units > 1 ? ch.units + ' × ' : '') + ch.label + ' ' + ch.klassLabel, ret = b.returns.noNetInvestment ? 'no net capital' : b.returns.irrPct != null ? b.returns.irrPct + '%' : 'no return shown';
+  return { leftKw: ch.leftKw, pod: pod,
+    bess: { kw: b.sizing.kw, kwh: b.sizing.kwh, capexUsd: b.capex.total, netCapexUsd: b.capex.net, irrPct: b.returns.irrPct, noNetInvestment: b.returns.noNetInvestment === true, irrBasis: b.returns.irrBasis, npv: b.returns.npv, marketFit: b.market.fit },
+    words: 'Beside the ' + pod + ', the ' + fmt(ch.leftKw) + ' kW it leaves carries a ' + fmt(b.sizing.kw) + ' kW / ' + fmt(b.sizing.kwh) + ' kWh battery (' + ret + (b.market.fit !== 'zone' ? ', at reference rates' : '') + '). The pod and this battery together fit the free power; the battery above is sized on all of it by itself.' };
+}
+
 /* THE UPGRADE TO ASK FOR (2026-11-09, Tommy: "we should also be requesting
    for anything not 1mW for a utility upgrade"): a site that is sized and
    does not carry the 1 MW Micro pod says what the utility would have to add
@@ -534,14 +553,17 @@ function fundingRequest(result, usesIn) {
   if (!uses.length) throw fail(400, 'Say what the funding is for: compute, a battery, fast charging, or more than one');
   uses.sort(function (a, b) { return keys.indexOf(a) - keys.indexOf(b); });
   var r = result || {}, c = r.compute || {}, ce = c.economics || {}, b = r.bess || {}, s = r.supercharger || {}, lines = [];
+  /* compute with a battery, and nothing else: the pod and the battery on what it leaves, a pair that fits and so has one amount */
+  var pair = uses.length === 2 && uses[0] === 'compute' && uses[1] === 'bess' && r.pairing ? r.pairing : null;
   uses.forEach(function (u) {
     if (u === 'compute') { if (!(c.fits && c.chosen && ce.ok)) throw fail(400, 'Compute does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Compute', size: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label + ' ' + (c.chosen.klassLabel || ''), capexUsd: ce.capexUsd, irrPct: ce.irrPct, irrBasis: ce.irrBasis || null }); }
+    if (u === 'bess' && pair) { lines.push({ use: u, label: 'Battery storage', size: fmt(pair.bess.kw) + ' kW / ' + fmt(pair.bess.kwh) + ' kWh on the ' + fmt(pair.leftKw) + ' kW the pod leaves', capexUsd: pair.bess.capexUsd, irrPct: pair.bess.irrPct, irrBasis: pair.bess.irrBasis || null }); return; }
     if (u === 'bess') { if (!b.ok) throw fail(400, 'A battery does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Battery storage', size: fmt(b.sizing.kw) + ' kW / ' + fmt(b.sizing.kwh) + ' kWh', capexUsd: b.capex.total, irrPct: b.returns.irrPct, irrBasis: b.returns.irrBasis || null }); }
     if (u === 'supercharger') { if (!s.ok) throw fail(400, 'Fast charging does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Fast charging', size: s.sizing.posts + ' posts', capexUsd: s.capex.total, irrPct: s.returns.irrPct, irrBasis: s.returns.irrBasis || null }); }
   });
   var one = lines.length === 1;
-  return { uses: uses, hybrid: !one, label: lines.map(function (l) { return l.label; }).join(' + '), lines: lines, amountUsd: one ? lines[0].capexUsd : null,
-    words: one ? null : 'Each use is sized on the whole free capacity by itself, so a hybrid has no single amount: the committee sees each line.' };
+  return { uses: uses, hybrid: !one, paired: !!pair, label: lines.map(function (l) { return l.label; }).join(' + '), lines: lines, amountUsd: one ? lines[0].capexUsd : pair ? Math.round(lines[0].capexUsd + lines[1].capexUsd) : null,
+    words: one ? null : pair ? 'The pod, and a battery on the ' + fmt(pair.leftKw) + ' kW it leaves: the two fit the free power together, so this is one amount.' : 'Each use is sized on the whole free capacity by itself, so a hybrid has no single amount: the committee sees each line.' };
 }
 /* action: submit | decide | withdraw. ctx: { by, now, config, result, screened, canEdit } */
 function fundingChange(cur, action, input, ctx) {
@@ -604,11 +626,12 @@ function assess(site, ctx) {
   var year = ctx.now ? Number(String(ctx.now).slice(0, 4)) + 1 : null;
   var sup = power.availableKw != null ? T.superchargerCase({ state: st, availableKw: power.availableKw, startYear: year, assumptions: cfg.supercharger.assumptions, sizing: cfg.supercharger.sizing }) : { ok: false, reason: 'No power figure to size posts on' };
   var upgrade = upgradeView(ctx.upgrade, power, cfg, site), upgradeAdvice = upgradeAdviceOf(power, compute, cfg, site, upgrade);
+  var pairing = pairingOf(compute, site, st, power, cfg);
   var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel, upgrade: upgrade };
   var readiness = readinessOf(c, ctx.marks), verify = verificationsOf(c, readiness);
   var grade = { A: 'Sized on a limit and a peak on file', B: 'Sized on a figure entered by hand', C: 'Sized on a ceiling: the site’s peak is not on file', D: 'Not sized: no power figure on file' }[power.grade];
   return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg, ctx.upgrade),
-    power: power, compute: compute, upgrade: upgrade, upgradeAdvice: upgradeAdvice, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
+    power: power, compute: compute, pairing: pairing, upgrade: upgrade, upgradeAdvice: upgradeAdvice, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
     confidence: { grade: power.grade, words: grade, screened: !!(screen && screen.complete), parcel: !!(parcel && parcel.ok) },
     note: 'Compute, the battery and fast charging are each sized on the whole free capacity by itself: they are alternatives, not a stack.' };
 }
@@ -636,6 +659,6 @@ function listView(a, site, ctx) {
 
 module.exports = { VERSION: VERSION, CONFIG_KEY: CONFIG_KEY, CONTINUOUS: CONTINUOUS, MODULARS: MODULARS, CHECKLIST: CHECKLIST, ITEM_KEYS: ITEM_KEYS, CHECK_STATES: CHECK_STATES,
   USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf, klassOf: klassOf, rateOf: rateOf, referenceOf: referenceOf,
-  UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView, upgradeAdviceOf: upgradeAdviceOf,
+  PAIR_MIN_KW: PAIR_MIN_KW, pairingOf: pairingOf, UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView, upgradeAdviceOf: upgradeAdviceOf,
   FUND_STATES: FUND_STATES, committeeMember: committeeMember, fundingRequest: fundingRequest, fundingChange: fundingChange, fundingView: fundingView, fundingInfo: fundingInfo,
   configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };

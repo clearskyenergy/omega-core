@@ -1515,7 +1515,8 @@ the same day, each in Tommy's words in the doc:
   under 1 MW of IT) and 1 MW (the Micro pod), the largest single unit the
   power carries, never a row of 75s; only the Micro pod repeats. The
   chiller's power is inside the PUE and said (`compute.cooling`); the pad is
-  not modelled and says so.
+  not modelled and says so. Beside the pod the answer carries `pairing`: a
+  battery on the kW the pod leaves, the one hybrid that is modelled.
 - **Electricity is the site's**: its own price, else the rate book for its
   ZIP (`rateOf`), never one flat default for every site.
 - **Compute on the offtake partner's figures** only where the workspace asks

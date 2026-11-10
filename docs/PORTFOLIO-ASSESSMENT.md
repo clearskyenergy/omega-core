@@ -87,6 +87,17 @@ chiller and service clearances, so four 75s are four pads where one 350 is
 one. Only the 1 MW Micro pod repeats, in whole megawatts. 400 kW of free
 power is one 150 kW Nano pod with 220 kW left, not four skids.
 
+**Beside the pod: a battery on what it leaves.** Tommy, of a 400 kW site
+that had read four 75 kW skids: "it should just be a 150kW compute and then
+allow us to maybe put a bess on their or request for more xfrmr power". One
+right-sized pod seldom uses the whole free power, so the answer carries
+`pairing`: the same battery engine on the kW the pod leaves (220 kW / 880
+kWh beside a 150 kW pod on 400 kW), where 50 kW or more is left. The pod
+and that battery together fit the free power, so submitted for funding as
+compute + battery they are one amount; the three whole-capacity uses stay
+alternatives. The other road, more transformer power, is the upgrade to ask
+for below.
+
 **The chiller** is in the answer twice. Its power is inside the PUE: the
 answer says how much of the meter load is cooling (`compute.cooling`: "30 kW
 of the 180 kW at the meter is the chiller, pumps and losses"). Its space is
@@ -406,8 +417,9 @@ in how the three are read side by side, and it is on the honest list below.
 - **Compute is priced at a public reference, with no site cost.** A
   contract price, rent and the offtake terms belong to the diligence's
   contract case.
-- **A hybrid is approved, not modelled.** Each use is sized on the whole
-  capacity; nothing splits the power between two.
+- **Only one pair is modelled**: the pod with a battery on what it leaves.
+  Any other hybrid is approved, not modelled: each use is sized on the whole
+  capacity and nothing splits the power between them.
 - **Fast-charging sizing is a planning rule** (150 kW a post, four minimum)
   and the state price and electricity cost are indicative.
 
