@@ -152,7 +152,13 @@ var pmrem=new T.PMREMGenerator(renderer),env=pmrem.fromScene(room);scene.environ
 var dead=false,raf=0,last=0,state='idle',energy=0,target=0,paused=false,solid=true,object=null,mixer=null,actions=[],activeAction=null,headBone=null,headRest=null,shoulders=[],bones=0,materials=[],phase=0,nextGesture=0,lastClip=-1,yaw=0,drag=null,rig=null,heading=0,maskMouth=[],maskGlow=[],figureGlow=[],glowColor=opts.glow?new T.Color(opts.glow[0],opts.glow[1],opts.glow[2]):null;
 var motion=createMotion(),reduced=root.matchMedia&&root.matchMedia('(prefers-reduced-motion: reduce)').matches;
 var manager=new T.LoadingManager();manager.setURLModifier(function(url){if(/^blob:|^data:/i.test(url))return url;throw new Error('Use a self-contained GLB with embedded textures');});var loader=new T.GLTFLoader(manager);
-function chooseClip(){if(!actions.length)return;var pattern=state==='speaking'?/talk|speak|gesture|explain/i:state==='walk'?/walk/i:/idle|stand|breath/i;var found=actions.filter(function(a){return pattern.test(a.getClip().name);});if(!found.length){if(activeAction){activeAction.stop();activeAction=null;}nextGesture=phase+4;return;}var index=Math.floor(Math.random()*found.length);if(found.length>1&&index===lastClip)index=(index+1)%found.length;lastClip=index;var action=found[index];if(action!==activeAction){action.reset().setEffectiveWeight(1).play();if(activeAction)activeAction.crossFadeTo(action,.45,false);activeAction=action;}nextGesture=phase+4+Math.random()*4;}
+function chooseClip(){if(!actions.length)return;var pattern=state==='speaking'?/talk|speak|gesture|explain/i:state==='walk'?/walk/i:/idle|stand|breath/i;var found=actions.filter(function(a){return pattern.test(a.getClip().name);});
+/* A figure whose GLB carries only an authored idle freezes mid-speech here:
+   no talk clip matched, so the idle was STOPPED and the model went rigid.
+   opts.idleFallback keeps the authored idle running instead — no talk clip
+   is not no clip. Off (the default), behaviour is unchanged. */
+if(!found.length&&opts.idleFallback){var idlePattern=/idle|stand|breath/i;found=actions.filter(function(a){return idlePattern.test(a.getClip().name);});}
+if(!found.length){if(activeAction){activeAction.stop();activeAction=null;}nextGesture=phase+4;return;}var index=Math.floor(Math.random()*found.length);if(found.length>1&&index===lastClip)index=(index+1)%found.length;lastClip=index;var action=found[index];if(action!==activeAction){action.reset().setEffectiveWeight(1).play();if(activeAction)activeAction.crossFadeTo(action,.45,false);activeAction=action;}nextGesture=phase+4+Math.random()*4;}
 var ready=Promise.resolve(source).then(function(bytes){return new Promise(function(resolve,reject){
 if(dead){resolve({cancelled:true});return;}
 loader.parse(bytes,'',function(gltf){if(dead){disposeObject(gltf.scene);return;}object=gltf.scene;

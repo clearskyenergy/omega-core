@@ -14,8 +14,9 @@
      OmegaWorkspaceHub.compose(ctx)  → { centre, ring: [area × ≤6] }
      OmegaWorkspaceHub.items(key, ctx) → the area's entries for the side panel
      OmegaWorkspaceHub.hidden(key, ctx) → the tools this person hid from it
-     OmegaWorkspaceHub.choices(ctx)   → Settings › Tools in the hub: every
-                                        tool each cell of the ring can list
+     OmegaWorkspaceHub.choices(ctx)   → Hub settings: every cell this
+                                        workspace holds, in the ring or
+                                        not, and every tool each can list
      OmegaWorkspaceHub.AREAS          → the table, for the test
 
    An area's `extras` are tools its side panel leaves out until the person
@@ -23,8 +24,13 @@
    discovery and conductor sizing: "hide these … in settings a panel that
    allows us to hide or show the extra tools in the hex"). ctx.hubTools
    ({ toolKey: bool }, the person's own choice) wins over that default.
-   Presentation only: a hidden tool is still under All tools, the cell is
-   still the plan's, and every tool still checks the plan.
+   The cells are the person's to choose too (Tommy, 2026-10-21: "do this
+   for all of them … a settings tab for the hex"): ctx.hubCells
+   ({ areaKey: bool }) takes a cell out of the ring or puts one the plan
+   holds in, never past six; a cell left unchosen keeps the plan's place.
+   Presentation only: a cell the plan does not earn never appears, a
+   hidden tool is still under All tools, and every tool still checks the
+   plan.
 
    and what a workspace holds of each module, the ONE rule every surface
    asks (the Modules page, Plan & billing, the marketplace, the editor's
@@ -83,14 +89,30 @@
     if (area.market) return true;
     return openTools(area, ctx).length > 0;
   }
-  function compose(ctx) {
-    ctx = ctx || {};
+  /* the plan's own ring: Projects first, Team last, the rest by priority
+     in between */
+  function planRing(ctx) {
     var ring = [], fill = [];
     AREAS.forEach(function (a) { if (a.centre || !earns(a, ctx)) return; (a.always ? ring : fill).push(a); });
-    /* Projects first, Team last, the rest by priority in between */
     var first = ring.filter(function (a) { return a.key === 'projects'; }), last = ring.filter(function (a) { return a.key !== 'projects'; });
     var room = RING_MAX - first.length - last.length;
-    return { centre: byKey('today'), ring: first.concat(fill.slice(0, Math.max(0, room)), last).slice(0, RING_MAX) };
+    return first.concat(fill.slice(0, Math.max(0, room)), last).slice(0, RING_MAX);
+  }
+  /* the ring this person sees: the plan's, with their own choice of cells
+     (ctx.hubCells) over it. A cell they chose comes before one the plan
+     placed when six is too few; Projects stays first and Team last */
+  function compose(ctx) {
+    ctx = ctx || {};
+    var plan = planRing(ctx), p = ctx.hubCells, inPlan = {};
+    if (!p || typeof p !== 'object') return { centre: byKey('today'), ring: plan };
+    plan.forEach(function (a) { inPlan[a.key] = true; });
+    var on = function (a) { return typeof p[a.key] === 'boolean' ? p[a.key] : !!inPlan[a.key]; };
+    var held = AREAS.filter(function (a) { return !a.centre && earns(a, ctx) && on(a); });
+    var head = held.filter(function (a) { return a.key === 'projects'; }), tail = held.filter(function (a) { return a.always && a.key !== 'projects'; });
+    var mid = held.filter(function (a) { return !a.always; }), room = Math.max(0, RING_MAX - head.length - tail.length);
+    var keep = mid.filter(function (a) { return p[a.key] === true; }).concat(mid.filter(function (a) { return p[a.key] !== true; })).slice(0, room);
+    mid = mid.filter(function (a) { return keep.indexOf(a) >= 0; });
+    return { centre: byKey('today'), ring: head.concat(mid, tail).slice(0, RING_MAX) };
   }
   /* the side panel's rows for an area: pages first, then its tools with
      the catalog's own name and link, locked ones last and marked. `also`
@@ -129,12 +151,18 @@
     var a = byKey(key); if (!a) return [];
     return toolRows(a, ctx || {}).filter(function (r) { return !r.shown; });
   }
-  /* Settings › Tools in the hub: the cells this person's ring holds, each
-     with every tool its panel could list and whether it is shown */
+  /* Hub settings: every cell this workspace holds — the ring first, in
+     ring order, then the ones the plan holds that are not in it — each with
+     its pages, every tool its panel could list and whether it is shown */
   function choices(ctx) {
     ctx = ctx || {};
-    return compose(ctx).ring.map(function (a) { return { key: a.key, label: a.label, icon: a.icon, tools: toolRows(a, ctx) }; })
-      .filter(function (g) { return g.tools.length > 0; });
+    var ring = compose(ctx).ring, inRing = {};
+    ring.forEach(function (a) { inRing[a.key] = true; });
+    var more = AREAS.filter(function (a) { return !a.centre && !inRing[a.key] && earns(a, ctx); });
+    return ring.concat(more).map(function (a) {
+      return { key: a.key, label: a.label, icon: a.icon, hint: a.hint, inRing: !!inRing[a.key], always: !!a.always,
+        pages: (a.pages || []).map(function (x) { return x[0]; }).concat((a.subjects || []).map(function (x) { return x.name; })), tools: toolRows(a, ctx) };
+    });
   }
   /* ── DOES THIS WORKSPACE HOLD A MODULE? One rule for the Modules page,
      the marketplace store and the master console (Tommy, 2026-09-27: every

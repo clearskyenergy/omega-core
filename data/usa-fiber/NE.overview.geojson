@@ -1,1 +1,1 @@
-{"type":"FeatureCollection","features":[]}
+{"type":"FeatureCollection","features":[{"type":"Feature","bbox":[-95.798215,39.949532,-95.788222,40.00069],"geometry":{"type":"LineString","coordinates":[[-95.798215,40.00069],[-95.788658,39.989675],[-95.788222,39.949532]]},"properties":{"id":"zayo-all-fiber-e4c090dd4f02a090","sourceId":"zayo-all-fiber","category":"unknown","states":["KS","NE"],"routeStatus":"Publisher status: Own","carrier":"Zayo"}}]}
