@@ -347,8 +347,11 @@ function listView(a, site, ctx) {
   if (!a || typeof a !== 'object') return null;
   if (!a.result) return a.decision && a.decision.status === 'approved' ? { notRun: true, decision: { status: 'approved', uses: a.decision.uses || [], label: a.decision.label || null, by: a.decision.by || null, at: a.decision.at || null, note: a.decision.note || null } } : null;
   var r = JSON.parse(JSON.stringify(a.result)), cfg = ctx && ctx.config || configOf(null);
-  if (r.bess) delete r.bess.projections;
-  if (r.supercharger) delete r.supercharger.projections;
+  /* only what the row and the card draw: the notes, the streams, the loan, the shelf and the limits ride on the one-site view */
+  if (r.bess) { delete r.bess.projections; delete r.bess.notes; delete r.bess.revenue; delete r.bess.debt; delete r.bess.energyAtEnd; }
+  if (r.supercharger) { delete r.supercharger.projections; delete r.supercharger.notes; }
+  if (r.compute) { delete r.compute.shelf; if (r.compute.economics) delete r.compute.economics.notes; }
+  if (r.power) { delete r.power.limits; delete r.power.verify; }
   if (r.readiness) r.readiness.sections = r.readiness.sections.map(function (s) { return { key: s.key, label: s.label, done: s.done, of: s.of }; });
   r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg);
   r.decision = a.decision && a.decision.status === 'approved' ? { status: 'approved', uses: a.decision.uses || [], label: a.decision.label || null, by: a.decision.by || null, at: a.decision.at || null, note: a.decision.note || null } : null;
