@@ -281,6 +281,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
     return '<div class="card"><h3>Power &amp; usage</h3>' +
       fact('Available power', s.availablePowerMw != null ? s.availablePowerMw + ' MW' : null) +
       fact('Service capacity', s.serviceCapacityKw != null ? Number(s.serviceCapacityKw).toLocaleString('en-US') + ' kW' : null) +
+      fact('Transformer', s.transformerKva != null ? Number(s.transformerKva).toLocaleString('en-US') + ' kVA' : null) +
       fact('Existing peak', s.existingPeakKw != null ? Number(s.existingPeakKw).toLocaleString('en-US') + ' kW' : null) +
       fact('Power price', s.powerPricePerKwh != null ? '$' + s.powerPricePerKwh + '/kWh' : null) +
       fact('Annual usage', s.annualUsageKwh != null ? Number(s.annualUsageKwh).toLocaleString('en-US') + ' kWh' : null) +
@@ -379,6 +380,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         return '<label class="ef-kind"><input type="checkbox" id="ef-kind-' + esc(k.key) + '" value="' + esc(k.key) + '"' + ((s.siteScopes || []).indexOf(k.key) >= 0 ? ' checked' : '') + '> ' + esc(k.label) + '</label>';
       }).join('') + '</div>' +
       txtIn('ef-status', 'Status', s.status) +
+      txtIn('ef-portfolioPartner', 'Portfolio partner (the company the site comes from)', s.portfolioPartner) +
       txtIn('ef-tags', 'Tags (comma-separated)', (s.tags || []).join(', ')) + txtIn('ef-meters', 'Meter IDs (comma-separated; a bill must name one)', (s.meters || []).join(', ')) + '</div><div>' +
       numIn('ef-installedKw', 'Installed chargers (kW)', s.installedKw) + numIn('ef-reportedPeakKw', 'Reported peak (kW)', s.reportedPeakKw) +
       '<label class="fl">Meter owned</label><select id="ef-meterOwned" class="inline" style="width:100%">' +
@@ -389,6 +391,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
       '<div class="grid2"><div>' +
       numIn('ef-availablePowerMw', 'Available power (MW)', s.availablePowerMw, '0.01') +
       numIn('ef-serviceCapacityKw', 'Service capacity (kW)', s.serviceCapacityKw) +
+      numIn('ef-transformerKva', 'Transformer (kVA; the assessment sizes on 80% of it, less the site\u2019s peak)', s.transformerKva) +
       numIn('ef-existingPeakKw', 'Existing peak (kW)', s.existingPeakKw) +
       numIn('ef-powerPricePerKwh', 'Power price ($/kWh)', s.powerPricePerKwh, '0.001') +
       numIn('ef-ppaRatePerKwh', 'PPA rate, year one ($/kWh; the host\u2019s solar + storage is sold under it)', s.ppaRatePerKwh, '0.0001') +
@@ -433,7 +436,7 @@ input[type=text],input[type=number],input[type=date],select,textarea{font-size:1
         installedKw: num('ef-installedKw'), reportedPeakKw: num('ef-reportedPeakKw'),
         meterOwned: mv === '' ? null : mv === 'true',
         termYearsRemaining: num('ef-termYearsRemaining'),
-        availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'),
+        availablePowerMw: num('ef-availablePowerMw'), serviceCapacityKw: num('ef-serviceCapacityKw'), transformerKva: num('ef-transformerKva'), portfolioPartner: str('ef-portfolioPartner'),
         existingPeakKw: num('ef-existingPeakKw'), powerPricePerKwh: num('ef-powerPricePerKwh'),
         ppaRatePerKwh: num('ef-ppaRatePerKwh'), ppaEscalatorPct: num('ef-ppaEscalatorPct'), ppaTermYears: num('ef-ppaTermYears'),
         ppaPriceSchedule: str('ef-ppaPriceSchedule') || [], ppaYear1Kwh: num('ef-ppaYear1Kwh'),

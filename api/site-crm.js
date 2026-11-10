@@ -76,6 +76,22 @@
      POST diligence-assign { portfolioId|null, site|sites }  its sites;
           one client a site, other portfolio uses untouched
 
+   THE SITE ASSESSMENT (api/_lib/portfolio/assess-door.js on assess.js,
+   assess-bess.js and assess-supercharger.js) answers through this door too:
+     POST assess-run { ids }            what each site's free power carries:
+          the compute shelf, a battery, fast charging, each with its return,
+          and the shovel-ready score (50 a call)
+     POST assess-screen-start { ids } / assess-screen-step { jobId }
+          the Grid Atlas and parcel screens, a phase of a site a step, the
+          assessment again on what they found
+     POST assess-check { site, item, state, note? }   a readiness item marked
+     POST assess-approve { ids | site, uses[], note? }  approved for
+          pre-development (compute, bess, supercharger or a hybrid)
+     GET  ?site=&assessment=1           the whole answer, with its tables
+     (the register's rows carry `assessment`, without the tables)
+     site-set-partner { ids, partner }  the PORTFOLIO PARTNER the sites come
+          from (the company they were bought or taken over from)
+
    Bulk actions take { ids: [siteId, …] } (at most 200) and answer per site:
      site-archive / site-restore    hide from, or return to, the register
                                     (archived and lifecycleStatus, both
@@ -149,13 +165,15 @@ var SM = require('./_lib/site-model'), CS = require('./_lib/compute-site'), PA =
 var OC = require('./_lib/omega-core');
 var REG = require('./_lib/portfolio/register'), BR = require('./_lib/portfolio/site-bridge'), AS = require('./_lib/portfolio/assets');
 var DG = require('./_lib/portfolio/diligence-door');
+/* the site assessment: what the free power carries and what each use returns */
+var ASD = require('./_lib/portfolio/assess-door');
 var PARTNERS = require('./_lib/partners'), mail = require('./_lib/mail');
 var PARTNER_DAILY_CAP = 25;
 
 var EDITORS = ['owner', 'admin', 'member'], ADMINS = ['owner', 'admin'];
 var LIST_CAP = 200, FOLLOW_SCAN = 2000, FOLLOW_CAP = 200, SCAN = 500;
 var PROFORMA_CAP = 25, BULK_CAP = 200;
-var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk', 'design-sync'];
+var BULK_ACTIONS = ['site-archive', 'site-restore', 'site-delete', 'site-set-status', 'site-set-partner', 'site-tag', 'send-to-editor', 'send-to-finance', 'send-to-partner', 'proforma-bulk', 'site-model-bulk', 'design-sync'];
 var MODEL_BULK_CAP = 10, PLATFORM = 'ClearSky-OMEGA';
 
 /* level: 'read' | 'write' | 'admin'. The caller's org comes from the verified
@@ -268,6 +286,12 @@ function siteInput(b) {
     termYearsRemaining: optNum(b.termYearsRemaining, 'Remaining term (years)', 0, 99),
     availablePowerMw: optNum(b.availablePowerMw, 'Available power (MW)', 0, 100000),
     serviceCapacityKw: optNum(b.serviceCapacityKw, 'Service capacity (kW)', 0, 100000000),
+    /* the transformer's own rating (2026-11-09): the assessment's limit is
+       kVA × 0.8 continuous; never derived from the service figure */
+    transformerKva: optNum(b.transformerKva, 'Transformer (kVA)', 0, 1000000),
+    /* who the site comes from: the company it was bought or taken over
+       from (Francis Energy, EVCS…); the register filters on it */
+    portfolioPartner: b.portfolioPartner === undefined ? undefined : C.text(b.portfolioPartner, 80, 'Portfolio partner'),
     existingPeakKw: optNum(b.existingPeakKw, 'Existing peak kW', 0, 100000000),
     powerPricePerKwh: optNum(b.powerPricePerKwh, 'Power price ($/kWh)', 0, 10),
     /* the PPA the host's solar + storage is sold under (NextNRG's executed
@@ -328,6 +352,8 @@ function siteView(id, s) {
     termYearsRemaining: s.termYearsRemaining == null ? null : Number(s.termYearsRemaining),
     availablePowerMw: s.availablePowerMw == null ? null : Number(s.availablePowerMw),
     serviceCapacityKw: s.serviceCapacityKw == null ? null : Number(s.serviceCapacityKw),
+    transformerKva: s.transformerKva == null ? null : Number(s.transformerKva),
+    portfolioPartner: s.portfolioPartner || null,
     existingPeakKw: s.existingPeakKw == null ? null : Number(s.existingPeakKw),
     powerPricePerKwh: s.powerPricePerKwh == null ? null : Number(s.powerPricePerKwh),
     ppaRatePerKwh: s.ppaRatePerKwh == null ? null : Number(s.ppaRatePerKwh),
@@ -446,6 +472,9 @@ var handler = A.handler(async function (req, res) {
     /* the diligence, where the switch is on: a row a site, the strip and the tally (null elsewhere, and the page draws nothing new) */
     var dj = await DG.registerJoin({ db: db, org: org, root: root, caller: caller, by: by }, listed);
     if (dj) sites.forEach(function (s) { s.diligence = dj.rows[s.id] || null; });
+    /* the assessment, where one has run: the row a site, without its yearly tables */
+    var aj = await ASD.listJoin({ root: root }, listed);
+    sites.forEach(function (s) { s.assessment = aj[s.id] || null; });
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
       limited: snap.docs.length > LIST_CAP,
@@ -457,6 +486,8 @@ var handler = A.handler(async function (req, res) {
   var who = await access(caller, org, adminOnly ? 'admin' : req.method === 'POST' ? 'write' : 'read');
   /* the diligence's own actions: an editor's (the write access above), the door's 403 where the switch is off */
   if (req.method === 'POST' && DG.owns(action)) return DG.post({ db: db, org: org, root: root, caller: caller, by: by, b: b, site: b.site ? C.recordId(b.site, 'Site') : null, canEdit: who.edit, req: req });
+  /* the assessment's own actions: an editor's (the write access above) */
+  if (req.method === 'POST' && ASD.owns(action)) return ASD.post({ db: db, org: org, root: root, caller: caller, by: by, b: b, site: b.site ? C.recordId(b.site, 'Site') : null, canEdit: who.edit, req: req });
   var BULK = BULK_ACTIONS.indexOf(action) >= 0;
   if (!b.site && action !== 'site-save' && action !== 'site-import' && !BULK) throw A.httpError(400, 'Which site?');
   var sid = b.site ? C.recordId(b.site, 'Site') : null;
@@ -473,6 +504,9 @@ var handler = A.handler(async function (req, res) {
     if (!f || f.archived === true) throw A.httpError(404, 'Document not found');
     return stream(res, org, sid, f);
   }
+
+  /* ── the whole assessment of one site, recomputed on what is on file ── */
+  if (req.method === 'GET' && (b.assessment === '1' || b.assessment === 'true')) return { site: { id: sid, name: site.data.name || '' }, assessment: await ASD.fullView({ root: root }, siteRef, site.data) };
 
   /* ── the SPV term sheet: composed from the record and the latest scenario,
      rendered on the way out, never stored as a fact. A DRAFT every time. */
@@ -642,8 +676,9 @@ var handler = A.handler(async function (req, res) {
     if (missing.length) throw A.httpError(404, 'Not in this workspace’s register: ' + missing.slice(0, 5).join(', '));
     var rows = picked.map(function (s) { return { id: s.id, ref: s.ref, data: s.data() || {} }; });
 
-    if (action === 'site-archive' || action === 'site-restore' || action === 'site-delete' || action === 'site-set-status' || action === 'site-tag') {
+    if (action === 'site-archive' || action === 'site-restore' || action === 'site-delete' || action === 'site-set-status' || action === 'site-set-partner' || action === 'site-tag') {
       var st = action === 'site-set-status' ? C.text(b.status, 60, 'Status', { required: true }) : null;
+      var partnerName = action === 'site-set-partner' ? C.text(b.partner, 80, 'Portfolio partner') : null;
       var addTags = action === 'site-tag' ? tagList(b.add) : [], dropTags = action === 'site-tag' ? tagList(b.remove) : [];
       if (action === 'site-tag' && !addTags.length && !dropTags.length) throw A.httpError(400, 'Name a tag to add or remove');
       var batch2 = db.batch();
@@ -656,6 +691,7 @@ var handler = A.handler(async function (req, res) {
         else if (action === 'site-archive') patch = Object.assign(BR.archiveState(true), { archivedAt: now, archivedBy: by, revision: (rw.data.revision || 1) + 1 });
         else if (action === 'site-restore') patch = Object.assign(BR.archiveState(false), { restoredAt: now, restoredBy: by, revision: (rw.data.revision || 1) + 1 });
         else if (action === 'site-set-status') patch = { status: st };
+        else if (action === 'site-set-partner') patch = { portfolioPartner: partnerName || null };
         else {
           var tags = (Array.isArray(rw.data.tags) ? rw.data.tags : []).filter(function (t) { return dropTags.indexOf(t) < 0; });
           addTags.forEach(function (t) { if (tags.indexOf(t) < 0) tags.push(t); });
@@ -663,7 +699,7 @@ var handler = A.handler(async function (req, res) {
         }
         if (patch) batch2.update(rw.ref, Object.assign(patch, { updatedAt: now, updatedBy: by }));
         batch2.create(db.collection('omega_audit').doc(),
-          { action: 'sitecrm-' + action, orgId: org, siteId: rw.id, by: by, at: now, status: st, add: addTags, remove: dropTags, was: action === 'site-delete' ? rw.data : null });
+          { action: 'sitecrm-' + action, orgId: org, siteId: rw.id, by: by, at: now, status: st, partner: partnerName, add: addTags, remove: dropTags, was: action === 'site-delete' ? rw.data : null });
       });
       await batch2.commit();
       var n2 = rows.length;
@@ -671,6 +707,7 @@ var handler = A.handler(async function (req, res) {
         : action === 'site-archive' ? n2 + ' site(s) archived. They are kept on record; Show archived lists them.'
         : action === 'site-restore' ? n2 + ' site(s) back on the register.'
         : action === 'site-set-status' ? n2 + ' site(s) moved to "' + st + '".'
+        : action === 'site-set-partner' ? (partnerName ? n2 + ' site(s) under ' + partnerName + '.' : n2 + ' site(s) taken off their portfolio partner.')
         : n2 + ' site(s) tagged.';
       return { ok: true, count: n2, ids: rows.map(function (rw) { return rw.id; }), note: note2 };
     }

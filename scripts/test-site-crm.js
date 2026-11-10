@@ -1134,5 +1134,35 @@ function seed() {
     ['sitecrm-log', 'sitecrm-proforma-run'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
   });
 
+  console.log('\nthe site assessment, through the door');
+  await test('Run, approve and the partner go through the one door: a member acts, a viewer and a rival are refused, the register carries the row without its tables, one site carries them all', async function () {
+    var made = await call('POST', { action: 'site-save', name: 'Yard One', city: 'Chandler', state: 'OK', address: '1812 E 1st St', transformerKva: 1500, existingPeakKw: 200, portfolioPartner: 'Francis Energy' }, PM);
+    assert.equal(made.site.transformerKva, 1500); assert.equal(made.site.portfolioPartner, 'Francis Energy');
+    assert.equal(stored(made.id).transformerKva, 1500);
+    /* a save that does not send them leaves them alone */
+    await call('POST', { action: 'site-save', id: made.id, name: 'Yard One', city: 'Chandler', state: 'OK' }, PM);
+    assert.equal(stored(made.id).transformerKva, 1500); assert.equal(stored(made.id).portfolioPartner, 'Francis Energy');
+    await rejects(call('POST', { action: 'site-save', name: 'Bad', transformerKva: -5 }, PM), 400, /Transformer/);
+    var ran = await call('POST', { action: 'assess-run', ids: [made.id] }, PM);
+    assert.equal(ran.ran, 1); assert.equal(ran.sized, 1);
+    var a = stored(made.id).assessment.result;
+    assert.equal(a.power.limitKw, 1200); assert.equal(a.power.availableKw, 1000); assert.equal(a.power.basis, 'measured'); assert.equal(a.power.transformerKva, 1500);
+    assert.equal(a.compute.chosen.key, 'm350'); assert.equal(a.compute.chosen.units, 2); assert.equal(a.supercharger.sizing.posts, 6); assert.equal(a.bess.sizing.kwh, 4000);
+    await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, VIEWER), 403);
+    await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, RIVAL), 403);
+    var list = await call('GET', {}, PM), row = list.sites.filter(function (x) { return x.id === made.id; })[0];
+    assert.equal(row.assessment.power.availableKw, 1000); assert.equal(row.assessment.stale, false); assert.ok(!row.assessment.bess.projections); assert.equal(row.portfolioPartner, 'Francis Energy');
+    assert.equal(list.sites.filter(function (x) { return x.id === SITE; })[0].assessment, null);
+    var full = await call('GET', { site: made.id, assessment: '1' }, VIEWER);
+    assert.equal(full.assessment.result.bess.projections.length, 10); assert.equal(full.assessment.result.readiness.total, 49);
+    var ap = await call('POST', { action: 'assess-approve', site: made.id, uses: ['compute', 'supercharger'] }, PM);
+    assert.equal(ap.label, 'Compute + Fast charging'); assert.equal(stored(made.id).status, 'Pre-development'); assert.deepEqual(stored(made.id).siteScopes, ['compute', 'dcfc']);
+    var pt = await call('POST', { action: 'site-set-partner', ids: [made.id, SITE], partner: 'EVCS' }, PM);
+    assert.match(pt.note, /2 site\(s\) under EVCS/); assert.equal(stored(made.id).portfolioPartner, 'EVCS'); assert.equal(stored(SITE).portfolioPartner, 'EVCS');
+    await call('POST', { action: 'site-set-partner', ids: [SITE], partner: '' }, PM); assert.equal(stored(SITE).portfolioPartner, null);
+    var acts = audits().map(function (x) { return x.action; });
+    ['sitecrm-assess-run', 'sitecrm-assess-approve', 'sitecrm-site-set-partner'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
+  });
+
   console.log('\n' + count + ' tests passed.');
 })().catch(function (e) { console.error('FAIL', e); process.exit(1); });

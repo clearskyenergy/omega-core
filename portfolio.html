@@ -63,6 +63,13 @@
 /* the register */
 .pf-table{background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:var(--ows-r);overflow:hidden;box-shadow:var(--ows-shadow)}
 .pf-tr{display:grid;grid-template-columns:34px minmax(180px,2fr) minmax(100px,1fr) 104px 86px 50px 82px 92px 128px 150px;gap:8px;padding:11px 14px;border-bottom:1px solid var(--ows-line);align-items:center;min-height:52px}
+.pf-table.am{overflow-x:auto}
+.pf-table.am .pf-tr{grid-template-columns:34px minmax(190px,2fr) 118px 150px 108px 100px 84px 120px 92px;min-width:1060px}
+.pf-run{display:none;background:var(--ows-paper);border:1px solid var(--ows-line);border-radius:12px;padding:12px 14px;margin-bottom:10px;box-shadow:var(--ows-shadow);font-size:13px}
+.pf-run.on{display:block}.pf-run .rw{display:flex;gap:12px;align-items:center;flex-wrap:wrap}.pf-run .bar{flex:1;min-width:160px;height:8px;border-radius:5px;background:var(--ows-sunk);overflow:hidden}.pf-run .bar i{display:block;height:100%;width:0;background:var(--ows-brand);border-radius:5px;transition:width .3s}
+.pf-run .n{font-size:12px;color:var(--ows-ink2);margin-top:6px}
+.pf-sum{font-size:12.5px;color:var(--ows-ink2);margin:0 2px 8px;display:none}.pf-sum b{color:var(--ows-ink)}
+.pf-bar button.run{background:#fff;color:var(--ows-brand-ink);font-weight:700;border-color:#fff}.pf-bar button.run:hover{background:#E8F1FB}
 .pf-tr.head{font:500 10.5px "DM Mono",monospace;letter-spacing:.06em;text-transform:uppercase;color:var(--ows-ink3);background:#FAFBFC;min-height:40px;position:sticky;top:0}
 .pf-tr.head .sort{cursor:pointer;user-select:none;white-space:nowrap}
 .pf-tr.head .sort:hover{color:var(--ows-brand)}
@@ -112,6 +119,10 @@
   /* a phone keeps the checkbox, the site, its status and its IRR */
   .pf-tr{grid-template-columns:34px minmax(120px,2fr) 72px 64px 72px}
   .pf-tr>div:nth-child(3),.pf-tr>div:nth-child(5),.pf-tr>div:nth-child(6),.pf-tr>div:nth-child(8),.pf-tr>div:nth-child(10){display:none}
+  /* the assessed register on a phone: the checkbox, the site, its power, its compute and how ready it is */
+  .pf-table.am .pf-tr{grid-template-columns:34px minmax(120px,2fr) 84px 78px 62px;min-width:0}
+  .pf-table.am .pf-tr>div:nth-child(5),.pf-table.am .pf-tr>div:nth-child(8){display:block}
+  .pf-table.am .pf-tr>div:nth-child(7),.pf-table.am .pf-tr>div:nth-child(9){display:none}
   .pf-stats{grid-template-columns:1fr 1fr}
   .dr-facts{grid-template-columns:1fr 1fr}
 }
@@ -134,14 +145,17 @@
 <body>
 <main id="main">
   <div class="pf-head">
-    <div><h1>Portfolio &amp; Assets</h1><div class="sub">Your register of energy sites: what each site is, who owns the meter, how much term is left, and what the pro forma says. Select sites to open them in Site Map, send them to the finance marketplace, run the pro forma, or export the IRR and the SPV term sheet.</div></div>
+    <div><h1>Portfolio &amp; Assets</h1><div class="sub">Your register of energy sites: what each site is, who owns the meter, how much term is left, and what the pro forma says. Select sites and press <b>Run</b> to size compute, a battery and fast charging on each site's free power, with each one's return, the Grid Atlas and parcel screens, and how close the site is to shovel ready; then approve the good ones for pre-development.</div></div>
     <div class="acts">
+      <button class="ows-pill" id="btn-run" type="button" title="Assess every site shown: the free power, compute, a battery and fast charging with their returns, then the Grid Atlas and parcel screens">Run all sites</button>
       <button class="ows-pill" id="btn-import" type="button">Import sites</button>
       <button class="ows-pill" id="btn-export" type="button">Download CSV</button>
       <button class="ows-pill primary" id="btn-add" type="button">+ Register site</button>
     </div>
   </div>
   <div id="msg"></div>
+  <!-- a run in progress: the numbers first, then the screens a site at a time -->
+  <div class="pf-run" id="run" role="status" aria-live="polite"><div class="rw"><b id="run-text">Running…</b><div class="bar"><i id="run-bar"></i></div><button class="ows-pill" id="run-stop" type="button">Stop</button></div><div class="n" id="run-note"></div></div>
   <!-- the compute-site diligence (omega-portfolio-diligence.js): drawn only when the register's answer carries it, i.e. the workspace's switch is on -->
   <div id="dg" style="display:none;margin-bottom:4px"></div>
   <div class="pf-stats" id="stats" style="display:none">
@@ -149,7 +163,7 @@
     <div class="pf-stat"><div class="k">Positive IRR</div><div class="v" id="c-pf">–</div><div class="n" id="c-pf-n">sites whose case returns more than it costs</div></div>
     <div class="pf-stat"><div class="k">In Site Map</div><div class="v" id="c-editor">–</div><div class="n" id="c-editor-n">sites with a project in the editor</div></div>
     <div class="pf-stat"><div class="k">Capital</div><div class="v" id="c-fin">–</div><div class="n" id="c-fin-n">sites sent to the finance marketplace</div></div>
-    <div class="pf-stat"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n">meter unknown or term not provided</div></div>
+    <div class="pf-stat"><div class="k">Needs verification</div><div class="v" id="c-unk">–</div><div class="n" id="c-unk-n">meter unknown or term not provided</div></div>
   </div>
   <div class="pf-tools">
     <label class="pf-search"><span>⌕</span><input id="q" type="search" placeholder="Search name, city, address, tag or site ID…" autocomplete="off" aria-label="Search sites"></label>
@@ -158,14 +172,18 @@
     <select class="pf-sel" id="f-meter" aria-label="Meter"><option value="">Meter: any</option><option value="yes">Meter owned</option><option value="no">No meter</option><option value="unk">Unknown</option></select>
     <select class="pf-sel" id="f-pf" aria-label="Pro forma"><option value="">Pro forma: any</option><option value="yes">Run</option><option value="no">Not run</option></select>
     <select class="pf-sel" id="f-kind" aria-label="Project type"><option value="">Any type</option></select>
+    <select class="pf-sel" id="f-partner" aria-label="Portfolio partner"><option value="">Any partner</option></select>
+    <select class="pf-sel" id="f-cap" aria-label="Free capacity"><option value="">Any capacity</option><option value="90">≥ 90 kW · a 75 kW unit</option><option value="420">≥ 420 kW · a 350 kW unit</option><option value="600">≥ 600 kW · four posts</option><option value="1200">≥ 1.2 MW · a 1 MW unit</option><option value="2124">≥ 2.1 MW · a 1.77 MW unit</option><option value="none">No power on file</option></select>
     <label class="pf-toggle"><input type="checkbox" id="f-archived"> Show archived</label>
   </div>
   <div class="pf-bar" id="bar" role="toolbar" aria-label="Selected sites">
     <span class="count"><span id="selcount">0 selected</span><small id="selall-wrap" style="display:none">· <a id="selall">select all <span id="selall-n"></span></a></small></span>
+    <button type="button" id="ba-run" class="run" title="Assess each selected site: the free power and the transformer, compute, a battery and fast charging with their returns, then the Grid Atlas and parcel screens and the shovel-ready score">Run</button>
+    <span class="menu"><button type="button" id="ba-approve" aria-haspopup="true" title="Approve the selected sites for pre-development: one use or a hybrid">Approve for pre-dev ▾</button></span>
+    <span class="menu"><button type="button" id="ba-partner" aria-haspopup="true" title="The company these sites come from">Partner ▾</button></span>
     <button type="button" id="ba-editor" title="One Site Map project per site; a site that already has one opens it">Open in Site Map</button>
     <button type="button" id="ba-design" title="Read each site's Site Map project (the units, chargers, battery, solar and the cost run) and run the compute model on it by itself, so the IRR follows the design. An Omega-Core skid runs on its own meter and its own numbers.">Sync Site Map</button>
     <button type="button" id="ba-finance" title="One deal per site on the finance marketplace">Send to marketplace</button>
-    <button type="button" id="ba-terra" title="Mail the site facts and figures to Terra Energy for a solar package and detail">Send to Terra (solar)</button>
     <button type="button" id="ba-model" title="The Compute Site Pro Forma on each site, from its service, chargers, usage and pods; ten at a time">Run compute model</button>
     <span class="menu"><button type="button" id="ba-proforma" aria-haspopup="true">Pod pro forma ▾</button></span>
     <span class="menu"><button type="button" id="ba-status" aria-haspopup="true">Set status ▾</button></span>
@@ -179,9 +197,10 @@
     <span class="sp"></span>
     <button type="button" class="x" id="ba-clear" aria-label="Clear selection">×</button>
   </div>
+  <div class="pf-sum" id="am-sum"></div>
   <div class="pf-table" id="tbl"><div class="pf-loading"><div class="spin"></div>Loading the register…</div></div>
   <div class="pf-more" id="more" style="display:none"><button class="ows-pill" id="btn-more" type="button">Load more sites</button></div>
-  <div class="pf-foot">Unknown values show as <i>Not provided</i> or <i>Needs verification</i>, never as zeros. Reported peak kW is an unresolved workbook statistic, flagged on each site, never approved capacity. IRR figures are the site's latest stored pro forma scenario under its named assumption set: screening results, not a return promise.</div>
+  <div class="pf-foot">Unknown values show as <i>Not provided</i> or <i>Needs verification</i>, never as zeros. Reported peak kW is an unresolved workbook statistic, flagged on each site, never approved capacity. IRR figures are the site's latest stored pro forma scenario under its named assumption set: screening results, not a return promise. An assessment sizes compute, a battery and fast charging each on the whole free capacity by itself (alternatives, never a stack); a size marked <i>ceiling</i> rests on a limit with no site peak on file, and a return marked <i>at spot</i> or <i>ref</i> is priced at a public reference, not a contract or the site's own market.</div>
 </main>
 
 <div class="pf-modal" id="import-modal" role="dialog" aria-label="Import sites">
@@ -190,6 +209,7 @@
     <div class="sub">Upload a CSV or XLSX of your sites. A workbook is read on the server: the EVCS intake is recognised by its headers, the EVCS model package enriches the sites it names, and any other sheet is matched by its headers, with a preview of what changes (and what a reviewed value would conflict with) before anything is written. A CSV in this page's template maps column by column. Every site lands in <b>this workspace only</b>.</div>
     <div id="im-msg"></div>
     <div class="row"><input type="file" id="im-file" accept=".csv,.xlsx,.xls,.txt"><span class="t-mut" id="im-filename"></span></div>
+    <div class="row"><label for="im-partner" style="font-size:13px;font-weight:600">Portfolio partner</label><input type="text" id="im-partner" maxlength="80" placeholder="Who these sites come from: the seller, host or operator" style="flex:1;min-width:220px;border:1px solid var(--ows-line2);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px"><span class="t-mut">set on every row of a CSV that names none; the register filters on it</span></div>
     <div id="im-map" class="im-map"></div>
     <div id="im-preview" class="im-prev" style="margin-top:12px"></div>
     <div id="im-history"></div>
@@ -210,6 +230,7 @@
 <script src="/omega-workspace-shell.js"></script>
 <script src="/omega-newproject.js"></script>
 <script src="/omega-portfolio-diligence.js"></script>
+<script src="/omega-portfolio-assess.js"></script>
 <script>
 (function () {
   'use strict';
@@ -225,7 +246,9 @@
   var SEL = {}, LAST_CLICK = null, SORT = { key: 'irr', dir: 'desc' }, OPEN = null;
   /* the compute-site diligence: the answer's own block (null where the workspace's switch is off) and its mounted register */
   var DILIG = null, DGR = null;
-  var STATUSES = ['In editor', 'Funding', 'Development', 'Operating', 'On hold'];
+  /* the site assessment: its drawing, whether any row carries one (the table then shows it), and a run in progress */
+  var PA = window.OmegaPortfolioAssess, AMODE = false, RUN = null;
+  var STATUSES = ['In editor', 'Pre-development', 'Funding', 'Development', 'Operating', 'On hold'];
   function byId(id) { return document.getElementById(id); }
 
   /* ── the chrome, before anyone is known ─────────────────────────────── */
@@ -280,7 +303,11 @@
   }
   function atlasHref(s) { var addr = [s.address, s.city, s.state, s.zip].filter(Boolean).join(', '); return '/grid-atlas.html' + (addr ? '?q=' + encodeURIComponent(addr) : ''); }
   function deckHref(s) { return siteHref(s) + '#deck'; }
+  function partnerOf(s) { return s.portfolioPartner || (s.diligence && s.diligence.clientName) || ''; }
+  function asOf(s) { return s.assessment && !s.assessment.notRun ? s.assessment : null; }
   function availKw(s) {
+    /* the assessment's own answer once it has run: the server's rule, with its basis */
+    var ap = asOf(s) && s.assessment.power; if (ap && ap.availableKw != null) return { kw: Number(ap.availableKw), basis: ap.basis === 'ceiling' ? 'a ceiling: no site peak on file' : ap.basis === 'measured' ? 'limit − peak' : 'as entered' };
     if (s.availablePowerMw != null) return { kw: Number(s.availablePowerMw) * 1000, basis: 'as entered' };
     if (s.serviceCapacityKw != null && s.existingPeakKw != null) return { kw: Math.max(0, Number(s.serviceCapacityKw) - Number(s.existingPeakKw)), basis: 'service − peak' };
     return { kw: null, basis: null };
@@ -313,10 +340,13 @@
   /* ── filters, sort, render ──────────────────────────────────────────── */
   function filtered() {
     var q = byId('q').value.trim().toLowerCase(), st = byId('f-state').value, mt = byId('f-meter').value, pf = byId('f-pf').value, ss = byId('f-status').value, kd = byId('f-kind').value;
+    var pn = byId('f-partner').value, cp = byId('f-cap').value;
     var rows = SITES.filter(function (s) {
       if (kd && (s.siteScopes || []).indexOf(kd) < 0) return false;
+      if (pn && (pn === '(none)' ? partnerOf(s) !== '' : partnerOf(s) !== pn)) return false;
+      if (cp) { var ak = availKw(s).kw; if (cp === 'none' ? ak != null : !(ak != null && ak >= Number(cp))) return false; }
       if (q) {
-        var ids = s.externalSiteIds || {}, hay = [s.name, s.city, s.state, s.address, s.status, (s.tags || []).join(' '), s.id].concat(Object.keys(ids).map(function (k) { return ids[k]; })).join(' ').toLowerCase();
+        var ids = s.externalSiteIds || {}, hay = [s.name, s.city, s.state, s.address, s.status, partnerOf(s), (s.tags || []).join(' '), s.id].concat(Object.keys(ids).map(function (k) { return ids[k]; })).join(' ').toLowerCase();
         if (hay.indexOf(q) < 0) return false;
       }
       if (st && s.state !== st) return false;
@@ -334,6 +364,11 @@
       if (k === 'capital') return costOf(s);
       if (k === 'funding') return s.capital ? (s.capital.funded ? 3 : s.capital.status === 'draft' ? 1 : 2) : 0;
       if (k === 'power') return availKw(s).kw;
+      var a = asOf(s);
+      if (k === 'compute') return a && a.compute && a.compute.economics ? a.compute.economics.irrPct : null;
+      if (k === 'bess') return a && a.bess && a.bess.ok ? (a.bess.returns.noNetInvestment ? 1e6 : a.bess.returns.irrPct) : null;
+      if (k === 'charge') return a && a.supercharger && a.supercharger.ok ? a.supercharger.returns.irrPct : null;
+      if (k === 'ready') return a && a.readiness ? a.readiness.pct * 1000 + a.readiness.screenedPct : null;
       if (k === 'location') return [s.state, s.city].filter(Boolean).join(' ').toLowerCase();
       if (k === 'status') return (s.status || '').toLowerCase();
       return String(s.name || '').toLowerCase();
@@ -354,13 +389,34 @@
     SITES.forEach(function (s) { if (s.state) states[s.state] = true; if (s.status) statuses[s.status] = true; });
     fillSelect('f-state', Object.keys(states).sort(), 'All states');
     fillSelect('f-status', Object.keys(statuses).sort(), 'Any status');
+    var partners = {}, noPartner = false, curPartner = byId('f-partner').value; SITES.forEach(function (s) { var pn = partnerOf(s); if (pn) partners[pn] = true; else noPartner = true; });
+    fillSelect('f-partner', Object.keys(partners).sort(), 'Any partner');
+    if (Object.keys(partners).length && noPartner) { var np = document.createElement('option'); np.value = '(none)'; np.textContent = 'No partner set'; if (curPartner === '(none)') np.selected = true; byId('f-partner').appendChild(np); }
+    /* the assessed register: once any site has been run, the table shows what each site carries (by free capacity first) */
+    var wasAm = AMODE; AMODE = !!PA && SITES.some(function (s) { return !!s.assessment; });
+    if (AMODE && !wasAm && SORT.key === 'irr') SORT = { key: 'power', dir: 'desc' };
+    byId('tbl').classList.toggle('am', AMODE); amSummary();
     var rows = filtered(), el = byId('tbl');
     if (!rows.length) {
       el.innerHTML = '<div class="pf-empty"><b>' + (SITES.length ? 'No sites match.' : 'No sites yet.') + '</b>' + (SITES.length ? 'Clear a filter or search for something else.' : (CANEDIT ? 'Register the first one, or import a spreadsheet of your sites.' : 'Nothing has been registered in this workspace.')) + '</div>';
       bar(); return;
     }
     function th(label, key, extra) { return '<div class="sort' + (extra ? ' ' + extra : '') + '" data-sort="' + key + '"' + (SORT.key === key ? ' data-dir="' + SORT.dir + '"' : '') + '>' + label + '</div>'; }
-    el.innerHTML = '<div class="pf-tr head"><div class="selrow"><input type="checkbox" id="sel-all" aria-label="Select every site shown"></div>' +
+    if (AMODE) el.innerHTML = '<div class="pf-tr head"><div class="selrow"><input type="checkbox" id="sel-all" aria-label="Select every site shown"></div>' +
+      th('Site', 'name') + th('Status', 'status') + th('Power', 'power') + th('Compute', 'compute') + th('Battery', 'bess') + th('Charging', 'charge') + th('Ready', 'ready') + th('Capital', 'funding') + '</div>' +
+      rows.map(function (s) {
+        var c = PA.cells(s.assessment), av = availKw(s), loc = [s.city, s.state].filter(Boolean).join(', '), ids = s.externalSiteIds || {}, idKey = Object.keys(ids)[0];
+        var sub = [loc, partnerOf(s), idKey ? ids[idKey] : ''].filter(Boolean).join(' · ') || 'Location not provided';
+        return '<div class="pf-tr body' + (SEL[s.id] ? ' sel' : '') + (s.archived ? ' archived' : '') + '" data-id="' + esc(s.id) + '" role="button" tabindex="0">' +
+          '<div class="selrow"><input type="checkbox" class="sel-one" value="' + esc(s.id) + '"' + (SEL[s.id] ? ' checked' : '') + ' aria-label="Select ' + esc(s.name || 'site') + '"></div>' +
+          '<div><div class="t-name">' + esc(s.name || 'Unnamed site') + '</div><div class="t-sub">' + esc(sub) + '</div></div>' +
+          '<div>' + statusPill(s) + '</div>' +
+          '<div class="t-num">' + (c.power || (av.kw != null ? esc(Math.round(av.kw).toLocaleString('en-US')) + ' kW' : '<span class="t-mut">–</span>')) + '</div>' +
+          '<div class="t-num">' + (s.latestModel && s.latestModel.irr != null ? '<b title="The compute model on this site">' + esc(pct(Number(s.latestModel.irr), 1)) + '</b><div class="pa-sub">compute model</div>' : c.compute) + '</div>' +
+          '<div class="t-num">' + c.bess + '</div><div class="t-num">' + c.charge + '</div><div class="t-num">' + c.ready + '</div>' +
+          '<div>' + capitalPill(s) + '</div></div>';
+      }).join('');
+    else el.innerHTML = '<div class="pf-tr head"><div class="selrow"><input type="checkbox" id="sel-all" aria-label="Select every site shown"></div>' +
       th('Site', 'name') + th('Location', 'location') + th('Status', 'status') + th('Power', 'power') + '<div>Pods</div>' + th('IRR', 'irr') + th('Project cost', 'capital') + th('Capital', 'funding') + '<div>Hand-offs</div></div>' +
       rows.map(function (s) {
         var lp = s.latestProforma || null, irr = irrOf(s), av = availKw(s), loc = [s.city, s.state].filter(Boolean).join(', ');
@@ -406,7 +462,81 @@
     byId('c-pf').textContent = pos; byId('c-pf-n').textContent = pf ? pos + ' of ' + pf + ' modelled · ' + money(cap) + ' project cost' : 'run the compute model to find them';
     var designed = live.filter(function (s) { return s.latestDesign; }).length, costed = live.filter(function (s) { return s.latestDesign && s.latestDesign.capex != null; }).length;
     byId('c-editor').textContent = ed; if (byId('c-editor-n')) byId('c-editor-n').textContent = designed ? designed + ' drawn · ' + costed + ' with a cost run' : 'sites with a project in the editor'; byId('c-fin').textContent = funded ? funded + ' funded' : fin; byId('c-fin-n').textContent = funded ? money(fundedUsd) + ' accepted · ' + fin + ' sent to the marketplace' : 'sites sent to the finance marketplace'; byId('c-unk').textContent = unkN;
+    /* once sites are assessed, "needs verification" is the power: sized on a ceiling, or not sized at all */
+    var assessed = live.filter(asOf);
+    if (assessed.length) {
+      var soft = assessed.filter(function (s) { var g = (s.assessment.confidence || {}).grade; return g === 'C' || g === 'D'; }).length, good = assessed.filter(function (s) { return s.assessment.recommend && s.assessment.recommend.best; }).length;
+      byId('c-unk').textContent = soft; byId('c-unk-n').textContent = 'of ' + assessed.length + ' assessed: sized on a ceiling, or no power on file';
+      if (!pf) { byId('c-pf').textContent = good; byId('c-pf-n').textContent = good + ' of ' + assessed.length + ' assessed carry a use with a positive screening return'; }
+    }
   }
+  function amSummary() {
+    var el = byId('am-sum'), live = SITES.filter(function (s) { return !s.archived && asOf(s); });
+    if (!AMODE || !live.length) { el.style.display = 'none'; return; }
+    var kw = 0, comp = 0, bess = 0, chg = 0, appr = 0, scr = 0;
+    live.forEach(function (s) { var a = s.assessment; if (a.power && a.power.availableKw) kw += a.power.availableKw; if (a.compute && a.compute.fits) comp++; if (a.bess && a.bess.ok) bess++; if (a.supercharger && a.supercharger.ok) chg++; if (a.decision) appr++; if (a.screenAt) scr++; });
+    el.style.display = 'block';
+    el.innerHTML = '<b>' + live.length + '</b> assessed · <b>' + esc(PA.kwWord(kw)) + '</b> of capacity on file · compute fits <b>' + comp + '</b> · a battery <b>' + bess + '</b> · fast charging <b>' + chg + '</b> · screened <b>' + scr + '</b> · approved for pre-development <b>' + appr + '</b>';
+  }
+
+  /* ── Run: the numbers on every chosen site at once, then the screens a
+     site at a time (Tommy, 2026-11-09: "i should be able to select run and
+     it will run all the sites and it produces the numbers for me and runs
+     these screens"). The numbers land first, in chunks, from the facts on
+     file; the Grid Atlas and parcel screens follow as a job the page steps,
+     four at a time, each site assessed again on what its screen found.
+     Stop pauses it; Run again resumes (a screen under a week old is kept). */
+  function chunks(a, n) { var out = []; for (var i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out; }
+  function paintRun() {
+    var el = byId('run'); el.classList.toggle('on', !!RUN); if (!RUN) return;
+    var numbers = RUN.phase === 'numbers', done = numbers ? RUN.assessed : RUN.screened + RUN.fresh;
+    byId('run-text').textContent = RUN.stop ? 'Stopping…' : numbers ? 'Sizing and pricing ' + RUN.assessed + ' of ' + RUN.total + ' sites…' : 'Screening ' + Math.min(done, RUN.total) + ' of ' + RUN.total + ' sites: Grid Atlas, fiber, the utility, the parcel…';
+    byId('run-bar').style.width = Math.min(100, RUN.total ? done / RUN.total * 100 : 100) + '%';
+    byId('run-note').textContent = numbers ? 'The numbers come first, from the facts on file.' : 'The numbers are in' + (RUN.sized < RUN.assessed ? ' (' + (RUN.assessed - RUN.sized) + ' site(s) have no power figure to size on)' : '') + '. The screens take a few seconds a site; you can keep working, and closing the page pauses them.' + (RUN.failed ? ' ' + RUN.failed + ' could not be located or read so far.' : '');
+  }
+  function runAssessment(ids) {
+    if (!PA) return Promise.resolve();
+    if (!ids.length) { msg('No sites to run.'); return Promise.resolve(); }
+    if (RUN) { msg('A run is already going. Wait for it, or press Stop.'); return Promise.resolve(); }
+    RUN = { total: ids.length, assessed: 0, sized: 0, phase: 'numbers', screened: 0, fresh: 0, failed: 0, stop: false, errors: [] };
+    msg(''); paintRun();
+    var p = Promise.resolve();
+    chunks(ids, 50).forEach(function (part) { p = p.then(function () { if (RUN.stop) return null; return post('assess-run', { ids: part }).then(function (j) { RUN.assessed += j.ran || 0; RUN.sized += j.sized || 0; paintRun(); }); }); });
+    return p.then(function () { return load(true); }).then(function () {
+      if (RUN.stop) return null;
+      RUN.phase = 'screens'; paintRun();
+      var queue = chunks(ids, 25), steps = 0;
+      function worker() {
+        if (RUN.stop || !queue.length) return Promise.resolve();
+        var part = queue.shift();
+        return post('assess-screen-start', { ids: part }).then(function (j) {
+          var job = j.job, seen = 0, bad = 0;
+          RUN.fresh += (j.skippedFresh || []).length;
+          function tally() { var now = (job.done || 0) + (job.failed || 0); RUN.screened += now - seen; RUN.failed += (job.failed || 0) - bad; seen = now; bad = job.failed || 0; paintRun(); }
+          function step() {
+            if (RUN.stop || job.status === 'complete' || job.status === 'cancelled') return Promise.resolve();
+            return post('assess-screen-step', { jobId: job.id }).then(function (r) { job = r.job; tally(); if (++steps % 12 === 0 && !byId('ows-overlay')) load(true); return step(); });
+          }
+          tally(); return step();
+        }).catch(function (e) { RUN.errors.push(e.message); }).then(worker);
+      }
+      return Promise.all([worker(), worker(), worker(), worker()]);
+    }).catch(function (e) { RUN.errors.push(e.message); }).then(function () {
+      var r = RUN; RUN = null; paintRun();
+      return load(true).then(function () {
+        var words = r.assessed + ' site(s) assessed' + (r.sized < r.assessed ? ' (' + (r.assessed - r.sized) + ' with no power figure on file)' : '') + '.' +
+          (r.phase === 'screens' ? ' Screens: ' + (r.screened - r.failed) + ' read' + (r.fresh ? ', ' + r.fresh + ' already fresh' : '') + (r.failed ? ', ' + r.failed + ' could not be located or read' : '') + '.' : '') +
+          (r.stop ? ' Stopped: Run again picks up where it left off.' : '') + (r.errors.length ? ' ' + r.errors[0] : '');
+        msg(words, !r.errors.length); S.toast(r.stop ? 'Run stopped.' : 'Run finished.');
+      });
+    });
+  }
+  byId('run-stop').addEventListener('click', function () { if (RUN) { RUN.stop = true; paintRun(); } });
+  byId('btn-run').addEventListener('click', function () {
+    var rows = filtered().filter(function (s) { return !s.archived; });
+    if (!rows.length) { msg('No sites to run. Register or import some first.'); return; }
+    runAssessment(rows.map(function (s) { return s.id; }));
+  });
 
   /* ── the selection and its bar ─────────────────────────────────────── */
   function selected() { return SITES.filter(function (s) { return SEL[s.id]; }); }
@@ -438,9 +568,15 @@
     m.innerHTML = items.map(function (it, i) { return it.hd ? '<div class="hd">' + esc(it.hd) + '</div>' : '<button type="button" role="menuitem" data-i="' + i + '">' + esc(it.label) + (it.sub ? '<small>' + esc(it.sub) + '</small>' : '') + '</button>'; }).join('');
     btn.parentNode.appendChild(m);
     Array.prototype.forEach.call(m.querySelectorAll('button'), function (b) { b.addEventListener('click', function () { closeMenus(); items[Number(b.getAttribute('data-i'))].run(); }); });
-    setTimeout(function () { document.addEventListener('click', function h(e) { if (!m.contains(e.target) && e.target !== btn) { closeMenus(); document.removeEventListener('click', h); } }); }, 0);
+    /* ONE outside-click listener, the open menu's: a listener left behind by a menu closed another way (Escape, an item, a second menu) used to close the next menu the moment it opened */
+    var h = function (e) { if (!m.contains(e.target) && e.target !== btn) closeMenus(); };
+    setTimeout(function () { if (m.parentNode) { MENU_OFF = h; document.addEventListener('click', h); } }, 0);
   }
-  function closeMenus() { Array.prototype.forEach.call(document.querySelectorAll('.pf-menu'), function (m) { m.parentNode.removeChild(m); }); }
+  var MENU_OFF = null;
+  function closeMenus() {
+    if (MENU_OFF) { document.removeEventListener('click', MENU_OFF); MENU_OFF = null; }
+    Array.prototype.forEach.call(document.querySelectorAll('.pf-menu'), function (m) { m.parentNode.removeChild(m); });
+  }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeMenus(); });
 
   /* every action is the server's; the answer is said and the register re-read */
@@ -460,6 +596,28 @@
       if (one && one.projectId) window.location.href = '/editor.html?id=' + encodeURIComponent(one.projectId);
     });
   });
+  byId('ba-run').addEventListener('click', function () { runAssessment(selected().filter(function (s) { return !s.archived; }).map(function (s) { return s.id; })); });
+  byId('ba-approve').addEventListener('click', function () {
+    function go(uses) { return function () { act('assess-approve', { uses: uses }); }; }
+    menu(this, [{ hd: 'Approve for pre-development' },
+      { label: 'Compute', sub: 'The modular compute unit the site carries', run: go(['compute']) },
+      { label: 'Battery storage', sub: 'The grid-participation battery', run: go(['bess']) },
+      { label: 'Fast charging', sub: 'The Supercharger posts the site hosts', run: go(['supercharger']) },
+      { hd: 'A hybrid' },
+      { label: 'Compute + battery', run: go(['compute', 'bess']) },
+      { label: 'Compute + fast charging', run: go(['compute', 'supercharger']) },
+      { label: 'Battery + fast charging', run: go(['bess', 'supercharger']) },
+      { label: 'All three', run: go(['compute', 'bess', 'supercharger']) },
+      { hd: 'Undo' },
+      { label: 'Withdraw the approval', run: function () { act('assess-approve', { uses: [] }); } }]);
+  });
+  byId('ba-partner').addEventListener('click', function () {
+    var names = {}; SITES.forEach(function (s) { if (s.portfolioPartner) names[s.portfolioPartner] = true; });
+    var items = [{ hd: 'These sites come from' }].concat(Object.keys(names).sort().map(function (nm) { return { label: nm, run: function () { act('site-set-partner', { partner: nm }); } }; }));
+    items.push({ label: 'Another partner…', sub: 'The company the sites were bought or taken over from', run: function () { var nm = window.prompt('Portfolio partner (the company these sites come from):'); if (nm && nm.trim()) act('site-set-partner', { partner: nm.trim().slice(0, 80) }); } });
+    items.push({ label: 'Clear the partner', run: function () { act('site-set-partner', { partner: '' }); } });
+    menu(this, items);
+  });
   byId('ba-design').addEventListener('click', function () { act('design-sync', null, null); });
   byId('ba-finance').addEventListener('click', function () {
     var sel = selected(), withPf = sel.filter(function (s) { return s.latestProforma && s.latestProforma.investorCapital > 0; }).length;
@@ -469,10 +627,6 @@
     var sel = selected();
     if (sel.length > 10) { msg('Run the compute model on up to 10 sites at a time.'); return; }
     act('site-model-bulk', null, null);
-  });
-  byId('ba-terra').addEventListener('click', function () {
-    var sel = selected();
-    act('send-to-partner', { partner: 'terra' }, 'Send ' + sel.length + ' site(s) to Terra Energy for a solar package?\n\nThey receive the site facts, the compute case on file and a link to the record, with you in copy. No bills, contacts or documents are sent.');
   });
   byId('ba-proforma').addEventListener('click', function () {
     menu(this, [
@@ -502,6 +656,25 @@
   function csvCell(v) { if (v == null) return ''; var s = String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
   var CSV_COLS = [
     ['Site name', 'name'], ['City', 'city'], ['State', 'state'], ['Address', 'address'], ['Status', 'status'],
+    ['Portfolio partner', function (s) { return partnerOf(s); }],
+    ['Transformer (kVA)', 'transformerKva'],
+    ['Free power (kW)', function (s) { var a = asOf(s); return a && a.power && a.power.availableKw != null ? a.power.availableKw : ''; }],
+    ['Free power: basis', function (s) { var a = asOf(s); return a && a.power ? (a.power.basis || 'not on file') : ''; }],
+    ['Compute unit', function (s) { var a = asOf(s), c = a && a.compute; return c ? (c.fits && c.chosen ? (c.chosen.units > 1 ? c.chosen.units + ' x ' : '') + c.chosen.label : 'no fit') : ''; }],
+    ['Compute: IRR at the public reference price', function (s) { var a = asOf(s), e = a && a.compute && a.compute.economics; return e && e.irrPct != null ? e.irrPct + '%' : ''; }],
+    ['Compute: capital ($)', function (s) { var a = asOf(s), e = a && a.compute && a.compute.economics; return e && e.capexUsd != null ? Math.round(e.capexUsd) : ''; }],
+    ['Battery (kW)', function (s) { var a = asOf(s); return a && a.bess && a.bess.ok ? a.bess.sizing.kw : ''; }],
+    ['Battery (kWh)', function (s) { var a = asOf(s); return a && a.bess && a.bess.ok ? a.bess.sizing.kwh : ''; }],
+    ['Battery: project IRR', function (s) { var a = asOf(s), b = a && a.bess; return b && b.ok ? (b.returns.noNetInvestment ? 'no net investment' : b.returns.irrPct != null ? b.returns.irrPct + '%' : 'n/a') : ''; }],
+    ['Battery: NPV ($)', function (s) { var a = asOf(s), b = a && a.bess; return b && b.ok ? Math.round(b.returns.npv) : ''; }],
+    ['Battery: market basis', function (s) { var a = asOf(s), b = a && a.bess; return b && b.ok && b.market ? b.market.fit : ''; }],
+    ['Fast charging: posts', function (s) { var a = asOf(s), t = a && a.supercharger; return t ? (t.ok ? t.sizing.posts : 'no fit') : ''; }],
+    ['Fast charging: after-tax IRR', function (s) { var a = asOf(s), t = a && a.supercharger; return t && t.ok && t.returns.irrPct != null ? t.returns.irrPct + '%' : ''; }],
+    ['Fast charging: NPV ($)', function (s) { var a = asOf(s), t = a && a.supercharger; return t && t.ok ? Math.round(t.returns.npv) : ''; }],
+    ['Shovel ready: evidence on file (%)', function (s) { var a = asOf(s); return a && a.readiness ? a.readiness.pct : ''; }],
+    ['Shovel ready: screened (%)', function (s) { var a = asOf(s); return a && a.readiness ? a.readiness.screenedPct : ''; }],
+    ['Approved for pre-development', function (s) { return s.assessment && s.assessment.decision ? s.assessment.decision.label : ''; }],
+    ['Verify next', function (s) { var a = asOf(s); return a && a.verify && a.verify.length ? a.verify[0].label : ''; }],
     ['Tags', function (s) { return (s.tags || []).join('; '); }],
     ['Installed kW', 'installedKw'], ['Reported peak kW', 'reportedPeakKw'],
     ['Meter owned', function (s) { return s.meterOwned == null ? '' : (s.meterOwned ? 'yes' : 'no'); }],
@@ -585,6 +758,8 @@
     var irr = lp && lp.investorIrrDefined && lp.investorIrrAnnual != null ? Number(lp.investorIrrAnnual) : null;
     function fact(k, v, n) { return '<div class="dr-fact"><div class="k">' + esc(k) + '</div><div class="v">' + (v == null || v === '' ? '<span class="t-mut">Not provided</span>' : v) + '</div>' + (n ? '<div class="n">' + esc(n) + '</div>' : '') + '</div>'; }
     var lm = s.latestModel, cap = s.capital, html = '';
+    /* the assessment first: what the site's free power carries, each use's return, the approval and the shovel-ready score */
+    if (PA) html += '<div class="dr-sec">Assessment' + (partnerOf(s) ? ' \u00b7 ' + esc(partnerOf(s)) : '') + '</div>' + PA.card(s, s.assessment, { canEdit: CANEDIT });
     if (lm) {
       var v = lm.verdict || {};
       var hst = lm.host || null;
@@ -606,7 +781,7 @@
     html += '<div class="dr-sec">Capital request</div><div class="dr-facts">' +
       fact('Request', costOf(s) != null ? esc(money(costOf(s))) : null, lm ? 'total project cost' : lp ? 'investor capital, pods' : 'run the compute model') +
       fact('Marketplace', cap && cap.funded ? '<span class="pill pill-funded">Funded</span>' : cap ? capitalPill(s) : s.finProjectId ? 'Sent' : '<span class="t-mut">Not sent</span>', cap && cap.funded ? 'accepted by ' + (cap.awardedToOrg || 'a capital partner') + (cap.awardedAt ? ' on ' + String(cap.awardedAt).slice(0, 10) : '') : cap && cap.offerCount ? cap.offerCount + ' offer(s) waiting for your answer' : cap && cap.status === 'open' ? 'open to capital partners, no offer yet' : '') +
-      fact('Terra Energy (solar)', s.partners && s.partners.terra ? '<span class="pill pill-ok">Sent</span>' : '<span class="t-mut">Not sent</span>', s.partners && s.partners.terra ? 'solar package asked for on ' + String(s.partners.terra.sentAt || '').slice(0, 10) : 'a solar package and detail, funded by Terra') + '</div>';
+      (s.partners && s.partners.terra ? fact('Terra Energy (solar)', '<span class="pill pill-ok">Sent</span>', 'solar package asked for on ' + String(s.partners.terra.sentAt || '').slice(0, 10)) : '') + '</div>';
     html += '<div class="dr-sec">Pod pro forma</div>';
     if (lp) {
       html += '<div class="dr-irr"><div class="big">' + (irr != null ? '<b>' + esc(pct(irr)) + '</b><span>investor IRR, annualised \u00b7 the pod case alone: 60 months, pre-tax, unlevered, no exit value' + (lp.designHash ? ', on the units placed' : '') + '</span>' : '<b class="undef">Not defined</b><span>no IRR root in the cash flows</span>') + '</div>' +
@@ -645,7 +820,6 @@
     html += '<div class="dr-acts" id="dr-acts">' +
       (CANEDIT ? '<button type="button" class="primary" data-act="editor">' + (s.projectId ? 'Open in Site Map' : 'Open in Site Map') + '</button>' : '') +
       (CANEDIT ? '<button type="button" data-act="finance">' + (s.finProjectId ? 'Marketplace deal' : 'Send to marketplace') + '</button>' : '') +
-      (CANEDIT ? '<button type="button" data-act="terra">' + (s.partners && s.partners.terra ? 'Send to Terra again' : 'Send to Terra (solar)') + '</button>' : '') +
       (CANEDIT ? '<button type="button" data-act="model">' + (lm ? 'Re-run compute model' : 'Run compute model') + '</button>' : '') +
       (CANEDIT ? '<button type="button" data-act="proforma">' + (lp ? 'Re-run pods from power' : 'Size pods from power') + '</button>' : '') +
       '<button type="button" data-act="irr">Export IRR</button><button type="button" data-act="agreement">Export term sheet</button>' +
@@ -655,12 +829,20 @@
       rows: [{ key: 'full', name: 'Open the full record', sub: 'Contacts, activity, documents, every scenario', href: siteHref(s), icon: S.ICON.file, cta: 'Open' }],
       ready: function (aside) {
         if (DILIG && s.diligence) mountDiligenceCard(aside, s.id);
+        if (PA) PA.wire(aside, s, { canEdit: CANEDIT,
+          run: function (id) { S.closeDrawer(); runAssessment([id]).then(function () { openDrawer(id); }); },
+          approve: function (id, uses) { post('assess-approve', { site: id, uses: uses }).then(function (j) { S.toast(j.note || 'Done.'); return load(true); }).then(function () { openDrawer(id); }).catch(function (e) { msg(e.message); }); },
+          full: function (id) { return api('/api/site-crm?org=' + encodeURIComponent(ORG) + '&site=' + encodeURIComponent(id) + '&assessment=1'); },
+          check: function (id, item, state, note) { return post('assess-check', { site: id, item: item, state: state, note: note }).then(function (j) {
+            /* the row follows the mark without re-reading the register (a re-read would close the checklist) */
+            if (s.assessment && s.assessment.readiness) { var rr = j.readiness; s.assessment.readiness = { total: rr.total, applicable: rr.applicable, done: rr.done, screened: rr.screened, open: rr.open, pct: rr.pct, screenedPct: rr.screenedPct, label: rr.label, sections: rr.sections.map(function (x) { return { key: x.key, label: x.label, done: x.done, of: x.of }; }) }; s.assessment.verify = j.verify; render(); }
+            return j; }); },
+          error: function (e) { S.toast(e.message); } });
         Array.prototype.forEach.call(aside.querySelectorAll('#dr-acts [data-act]'), function (b) {
           b.addEventListener('click', function () {
             var a = b.getAttribute('data-act'); SEL = {}; SEL[s.id] = true;
             if (a === 'editor') { if (s.projectId) { window.location.href = editorHref(s); return; } S.closeDrawer(); byId('ba-editor').click(); }
             else if (a === 'finance') { if (s.finProjectId) { window.location.href = dealHref(s); return; } S.closeDrawer(); byId('ba-finance').click(); }
-            else if (a === 'terra') { S.closeDrawer(); byId('ba-terra').click(); }
             else if (a === 'model') { S.closeDrawer(); act('site-model-bulk', null, null, function (j) { if (j.failed && j.failed.length) msg(j.failed[0].error + ' Open the full record to add it.'); openDrawer(s.id); }); }
             else if (a === 'proforma') { S.closeDrawer(); act('proforma-bulk', { sizeFromPower: true, label: 'Sized from power' }, null, function () { openDrawer(s.id); }); }
             else if (a === 'irr') downloadCsv([s], 'irr-' + (s.name || s.id).replace(/[^A-Za-z0-9]+/g, '-') + '-');
@@ -722,7 +904,7 @@
     }).catch(function (e) { box.innerHTML = '<div class="pf-msg err">' + esc(e.message) + '</div>'; });
   }
   byId('btn-more').addEventListener('click', function () { load(true, true); });
-  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf', 'f-kind'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
+  ['q', 'f-state', 'f-status', 'f-meter', 'f-pf', 'f-kind', 'f-partner', 'f-cap'].forEach(function (id) { byId(id).addEventListener(id === 'q' ? 'input' : 'change', render); });
   byId('f-archived').addEventListener('change', function () { load(); });
   byId('btn-add').addEventListener('click', openRegister);
 
@@ -809,12 +991,14 @@
     { key: 'state', label: 'State', syn: ['state', 'province'] },
     { key: 'address', label: 'Address', syn: ['address', 'street'] },
     { key: 'status', label: 'Status', syn: ['status', 'stage'] },
+    { key: 'portfolioPartner', label: 'Portfolio partner', syn: ['portfoliopartner', 'partner', 'seller', 'acquiredfrom', 'client'] },
     { key: 'installedKw', label: 'Installed kW', syn: ['installedkw', 'installed', 'nameplatekw', 'nameplate'] },
     { key: 'reportedPeakKw', label: 'Reported peak kW', syn: ['peakkw', 'reportedpeak', 'reportedpeakkw', 'peak'] },
     { key: 'meterOwned', label: 'Meter owned (yes/no)', syn: ['meterowned', 'meter', 'meterownership'] },
     { key: 'termYearsRemaining', label: 'Term years remaining', syn: ['termyearsremaining', 'term', 'yearsremaining'] },
     { key: 'availablePowerMw', label: 'Available power (MW)', syn: ['availablepowermw', 'availablemw', 'availablepower'] },
     { key: 'serviceCapacityKw', label: 'Service capacity (kW)', syn: ['servicecapacitykw', 'servicekw', 'servicecapacity'] },
+    { key: 'transformerKva', label: 'Transformer (kVA)', syn: ['transformerkva', 'transformer', 'kva', 'xfmrkva', 'transformersize'] },
     { key: 'existingPeakKw', label: 'Existing peak (kW)', syn: ['existingpeak', 'existingpeakkw'] },
     { key: 'powerPricePerKwh', label: 'Power price ($/kWh)', syn: ['powerpriceperkwh', 'powerpricekwh', 'powerprice'] },
     { key: 'annualUsageKwh', label: 'Annual usage (kWh)', syn: ['annualusagekwh', 'annualkwh', 'annualusage'] },
@@ -900,6 +1084,9 @@
         if (key === 'meterOwned') obj[key] = /^(y|yes|true|1|owned)$/i.test(v) ? true : (/^(n|no|false|0)$/i.test(v) ? false : null); else obj[key] = v;
       }
       if (empty) continue;
+      /* the partner typed on the dialog stands on every row that names none */
+      var dlgPartner = byId('im-partner') ? byId('im-partner').value.trim() : '';
+      if (dlgPartner && !obj.portfolioPartner) obj.portfolioPartner = dlgPartner.slice(0, 80);
       if (ext) obj.externalSiteIds = { import: ext };
       rows.push(obj);
     }
@@ -945,7 +1132,9 @@
     if (REG_PREVIEW && REG_PREVIEW.importId) {
       imMsg('Importing\u2026', true); byId('im-go').disabled = true;
       post('import-commit', { importId: REG_PREVIEW.importId, planHash: REG_PREVIEW.planHash, acceptConflicts: [] }).then(function (j) {
-        imMsg('<b>' + esc(j.written) + ' site(s) written</b> (' + esc((j.counts || {}).created || 0) + ' new, ' + esc((j.counts || {}).updated || 0) + ' updated). Reviewed values were kept.', true); REG_PREVIEW = null; registerImports(); load(true);
+        imMsg('<b>' + esc(j.written) + ' site(s) written</b> (' + esc((j.counts || {}).created || 0) + ' new, ' + esc((j.counts || {}).updated || 0) + ' updated). Reviewed values were kept.', true); REG_PREVIEW = null; registerImports();
+        /* an import runs itself: every site not yet assessed */
+        load(true).then(function () { var fresh = SITES.filter(function (s) { return !s.archived && !s.assessment; }).map(function (s) { return s.id; }); if (fresh.length) { byId('import-modal').classList.remove('on'); runAssessment(fresh); } });
       }).catch(function (e) { imMsg(esc(e.message)); byId('im-go').disabled = false; });
       return;
     }
@@ -955,7 +1144,9 @@
     imMsg('Importing ' + rows.length + ' site(s)…', true); byId('im-go').disabled = true;
     post('site-import', { rows: rows }).then(function (j) {
       if (j.ok === false) imMsg('<b>Nothing was written.</b> Fix the flagged rows and re-import:<br>' + (j.errors || []).map(function (e) { return 'Row ' + e.row + ': ' + esc(e.error); }).join('<br>') + (j.errorCount > (j.errors || []).length ? '<br>…and ' + (j.errorCount - j.errors.length) + ' more.' : ''));
-      else { imMsg('<b>' + j.imported + ' site(s) imported</b> into this workspace.', true); load(true); }
+      else { imMsg('<b>' + j.imported + ' site(s) imported</b> into this workspace.', true);
+        /* an import runs itself (Tommy, 2026-11-09: "when i upload a portfolio it then would run all these numbers") */
+        load(true).then(function () { if (j.ids && j.ids.length) { byId('import-modal').classList.remove('on'); runAssessment(j.ids); } }); }
       byId('im-go').disabled = false;
     }).catch(function (e) { imMsg(esc(e.message)); byId('im-go').disabled = false; });
   });
