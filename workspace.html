@@ -486,9 +486,9 @@ window.showApp = function (user) {
   render();
   load();
   loadPulse(); loadPortfolio();
-  OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); render(); logicSection(); });
+  OmegaTenant.onEntitlements(function (ws) { if (ws) { WS = applyViewAs(ws); window.OMEGA_WORKSPACE = WS; askViewAs(); } S.paint({ ws: WS, user: USER, displayName: who(), plan: planName() }); repaintIfChanged(); logicSection(); });
   /* a later look (a module added to the plan, a paid invoice) arrives here: the rail's Omega Logic group follows too */
-  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; render(); logicSection(); } });
+  window.addEventListener('omega:entitlements', function (e) { if (e.detail) { WS = applyViewAs(e.detail); window.OMEGA_WORKSPACE = WS; repaintIfChanged(); logicSection(); } });
   route();
 };
 /* The terms gate wraps showApp NOW, not on its next 50 ms poll: a signed-in
@@ -712,8 +712,23 @@ function seenAt(m) {
 function presence(m) { var s = (Date.now() - seenAt(m)) / 60000; return s < 15 ? 'on' : s < 1440 ? 'away' : 'off'; }
 
 /* ── render ─────────────────────────────────────────────────────────────── */
+/* The entitlements the page last painted, as text: the runtime keeps ONE
+   workspace object and changes it in place, so only a copy can say what was
+   on the screen. */
+var PAINTED = null;
+function entSig(ws) { try { return JSON.stringify(ws); } catch (e) { return null; } }
+/* A look at the plan that says what the page already shows repaints nothing.
+   omega-tenant.js asks a packaged plan again every minute and fires the
+   entitlements whatever came back, and a repaint rebuilds every panel: on
+   every packaged workspace, once a minute, it shut the fold a person had
+   open on All tools and took the keyboard's place on the page with it
+   (2026-11-09, found by the click sweep: five locked Finance tiles folded
+   away under it one run in three). A changed answer (a module paid for, a
+   plan that lapsed) repaints as before; one that cannot be compared does too. */
+function repaintIfChanged() { var sig = entSig(WS); if (sig === null || sig !== PAINTED) render(); }
 function render() {
   if (!WS) return;
+  PAINTED = entSig(WS);
   TODAY_CACHE = null;
   renderNotice(); renderHub(); renderToday(); renderTools(); renderModules(); renderFlight(); renderAround();
   if (byId('content').getAttribute('data-view') === 'billing') renderBilling();

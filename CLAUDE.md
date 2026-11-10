@@ -1206,7 +1206,17 @@ level into each drawer), and on Projects and the store, and fails on an
 error, a dialog put into the page flow instead of over it, a reload in
 disguise, an overlay Escape leaves open, a link, new tab or held page the
 site does not serve, or a control something covers (`--only sweep` runs
-just those; `check:dashboard` sweeps index.html the same way). A rail or
+just those; `check:dashboard` sweeps index.html the same way). **A look
+at the plan that changes nothing repaints nothing** (2026-11-09):
+`omega-tenant.js` asks a packaged plan again every 60 s and fires the
+entitlements whatever came back, so the workspace repaints on that event
+only when the answer differs from what it painted (`repaintIfChanged`,
+`PAINTED`); a full repaint once a minute shut the fold a person had open on
+All tools and dropped the keyboard's place, and left "sweep lite" five
+controls short whenever the minute fell inside the Finance fold. Scenario
+`lite reread` holds it both ways (unchanged: nothing moves; Omega Storage
+paid for: its tools open), and a short count now names what was left out
+and what hid it (`hidden[]`, beside `skipped[]`). A rail or
 tab link to the page you are on scrolls to its top (the shell's
 `stayHere`, for pages that do not route their own links), and the store
 judges modules against the BOUND workspace, never `resolveWorkspace()`'s

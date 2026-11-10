@@ -1501,7 +1501,9 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
       forceClose: function (pg) { return pg.evaluate(function () { ['ows-overlay', 'ows-menu', 'omega-package-menu'].forEach(function (id) { var e = document.getElementById(id); if (e) e.remove(); }); var m = document.getElementById('new-proj-modal'); if (m) m.classList.remove('on'); document.documentElement.classList.remove('omega-np-open'); document.body.classList.remove('ows-rail-open'); }); },
       served: SERVED
     });
-    ok(name + ': every control on every view was clicked or read (' + r.clicks + ' clicked, ' + r.read.length + ' read, of ' + r.controls + ')', r.controls > 30 && r.clicks + r.read.length >= r.controls - r.problems.filter(function (x) { return x.kind === 'click'; }).length && !r.skipped.length, r.skipped.slice(0, 8));
+    ok(name + ': every control on every view was clicked or read (' + r.clicks + ' clicked, ' + r.read.length + ' read, of ' + r.controls + ')', r.controls > 30 && r.clicks + r.read.length >= r.controls - r.problems.filter(function (x) { return x.kind === 'click'; }).length && !r.skipped.length,
+      /* name what was left out and why: redrawn before its turn (skipped), or listed and not showing at its turn (hidden, with what hides it) */
+      { skipped: r.skipped.slice(0, 12), hidden: r.hidden.slice(0, 12) });
     var kinds = {}; r.problems.forEach(function (x) { (kinds[x.kind] = kinds[x.kind] || []).push(x.control + ' — ' + x.detail); });
     ['error', 'flow', 'offscreen', 'sideways', 'reload', 'escape', 'link', 'click'].forEach(function (k) {
       var what = { error: 'no click throws or logs an error', flow: 'no click puts anything into the page flow (a dialog, a panel) instead of over it', offscreen: 'every panel a click opens is inside the screen', sideways: 'no click makes the page scroll sideways', reload: 'a click that stays on the page never reloads it or raises the loading screen', escape: 'Escape closes whatever a click opened', link: 'every link and every page a click goes to is one the site serves', click: 'every control can be clicked (nothing covers it)' }[k];
@@ -1694,6 +1696,45 @@ var STRAY = /\b(NaN|undefined|null|\[object Object\])\b/;
     return {};
   } });
   STORE.pkg = pkgDefault(); STORE.posts = [];
+
+  /* ══ 5e′. A LOOK AT THE PLAN THAT CHANGES NOTHING REPAINTS NOTHING
+     (2026-11-09) — omega-tenant.js asks a packaged plan again every 60 s
+     (cut to 1.5 s here) and fires the entitlements whatever came back. The
+     workspace answered every one with a full repaint, which shut the fold a
+     person had open on All tools and dropped the keyboard's place: "sweep
+     lite" came up five controls short one run in three, whenever the minute
+     fell inside the Finance fold. An unchanged answer leaves the page as it
+     is; a changed one (Omega Storage paid for) still repaints. ══ */
+  var lr = FX.lite(HOST), lrb = lr.docs['omega_orgs/' + lr.org + '/billing/current'];
+  await scenario('lite reread', lr, { url: '/workspace#tools', init: function () {
+    var st = window.setTimeout;
+    window.setTimeout = function (fn, ms) { var a = Array.prototype.slice.call(arguments); if (ms === 60000) a[1] = 1500; return st.apply(window, a); };
+  }, steps: async function (p) {
+    function looks() { return apiCalls.filter(function (c) { return c === 'GET /api/package-access'; }).length; }
+    async function after(n) { var n0 = looks(), t0 = Date.now(); while (looks() < n0 + n && Date.now() - t0 < 12000) await wait(200); await wait(400); return looks() - n0; }
+    /* a person reading what other plans carry: the Finance fold open, the keyboard on a locked tile inside it */
+    var set = await p.evaluate(function () {
+      var t = document.querySelector('#tools-body details.more [data-tool="batterysizer"]'); if (!t) return null;
+      var d = t.closest('details'); d.open = true; t.focus(); t.setAttribute('data-kept', '1');
+      return { open: d.open, focused: document.activeElement === t, locked: t.classList.contains('locked') };
+    });
+    var n = await after(2);
+    var kept = await p.evaluate(function () {
+      var t = document.querySelector('#tools-body [data-tool="batterysizer"]'), d = t && t.closest('details');
+      return { same: !!t && t.getAttribute('data-kept') === '1', open: !!d && d.open, focused: !!t && document.activeElement === t };
+    });
+    ok('lite reread: two looks at an unchanged plan leave All tools as it was (the same tile, its fold still open, the keyboard still on it)', !!set && set.open && set.focused && set.locked && n >= 2 && kept.same && kept.open && kept.focused, { set: set, looks: n, kept: kept });
+    /* the plan changes: the next look repaints, and what was paid for opens */
+    lrb.modules = ['lite', 'storage']; lrb.subscription.modules = ['lite', 'storage'];
+    PACKAGE_VIEW = require('../api/_lib/package-access').project({ staff: false, claims: { email_verified: true } }, lrb, lr.docs['omega_orgs/' + lr.org], lr.docs['omega_orgs/' + lr.org + '/members/uid-lite-owner'], Date.now());
+    await after(2);
+    var now = await p.evaluate(function () {
+      var t = document.querySelector('#tools-body [data-tool="batterysizer"]');
+      return { live: !!t && t.classList.contains('live'), redrawn: !!t && !t.hasAttribute('data-kept') };
+    });
+    ok('lite reread: a plan that changed repaints: Omega Storage, paid for, opens its tools on All tools', now.live && now.redrawn, now);
+    return {};
+  } });
 
   /* ══ 5f. NORTHSTAR WITH REQUESTS THE PLAN HAS ALREADY ANSWERED (reviews
      #10, #12) — a legacy Standard plan invoiced by ClearSky with $5,000 due
