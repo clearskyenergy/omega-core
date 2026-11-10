@@ -186,7 +186,9 @@ going to have our partner ask for more power".
 A mark a person makes: the power asked for at the meter (a shelf unit's, or
 a figure), who is asking (the site's portfolio partner unless named), and
 where it stands: **requested → granted or declined**, or withdrawn. It must
-ask for more than the limit on file.
+ask for more than the limit on file. For a unit, the ask is the limit plus
+what the FREE power is short by, and what it "would carry" is judged on
+what would be free after it.
 
 **It changes no size.** The free power stays the fact on file; the answer
 carries `upgrade` beside it: the request, the kW it adds, and the compute it
@@ -195,6 +197,19 @@ recorded on the site, and every size then follows from that fact. While it
 is requested it is first on *Verify next*, and the interconnection item of
 the checklist reads Screened with the request. The row shows "↑ 1.2 MW
 upgrade requested" under the power, and the capacity filter lists them.
+
+**The upgrade to ask for.** Tommy, 2026-11-09: "we should also be
+requesting for anything not 1mW for a utility upgrade". Every sized site
+that does not carry the 1 MW Micro pod carries `upgradeAdvice`, derived and
+never stored: what 1,200 kW free is short by (on top of the service, so a
+site whose own load takes 150 kW of it is asked for 1,350 kW), what the
+next size up needs (eleven 500 kVA sites of one intake are 20 kW short of a
+350 kW pod), and the compute that would follow. The row reads "↑ ask +800
+kW for 1 MW" in amber until somebody marks the request, the capacity filter
+lists *Under 1 MW · upgrade to request*, and *Utility upgrade ▾ → A 1 MW
+Micro pod* marks the whole selection at once (a site that already carries
+it is refused by name). It is advice: nothing has been asked of a utility
+until a person marks it, and a site with no power figure has none.
 
 ### The funding list
 

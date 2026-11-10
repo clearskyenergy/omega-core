@@ -74,6 +74,8 @@
     var unsized = p.availableKw == null, needs = '<span class="pa-warn" title="No service, transformer or available-power figure is on file for this site, so nothing was sized. It was not judged: record the transformer’s kVA (or the service) and run it again.">Needs power</span>';
     var up = a.upgrade || null;
     if (up && p.availableKw != null) power += '<div class="pa-sub ' + (up.status === 'declined' ? 'pa-warn' : 'pa-blue') + '" title="' + esc(up.words || '') + '">↑ ' + esc(kwWord(up.targetKw)) + ' upgrade ' + esc(UP_WORD[up.status] || up.status) + '</div>';
+    var adv = !up ? a.upgradeAdvice || null : null;
+    if (adv) power += '<div class="pa-sub pa-warn" title="' + esc(adv.words || '') + '">↑ ask +' + esc(kwWord(adv.shortKw)) + ' for 1 MW</div>';
     var c = a.compute || {}, ce = c.economics || {}, pf = ce.proforma || null, compute = c.fits && c.chosen
       ? '<b title="' + esc(c.words || '') + '">' + esc((c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label) + '</b>' + (c.chosen.klassLabel ? '<span class="pa-k" title="' + esc(c.chosen.klassLabel) + ': ' + (c.chosen.klass === 'micro' ? '1 MW of IT and up' : 'under 1 MW of IT') + '">' + esc(c.chosen.klass === 'micro' ? 'Micro' : 'Nano') + '</span>' : '') +
         '<div class="pa-sub" title="' + esc((ce.irrBasis || '') + (pf && pf.asStated ? '. On ' + pf.partner + '’s own utility figure: ' + pct(pf.asStated.irrPct) : '')) + '">' + (ce.irrPct != null ? esc(pct(ce.irrPct)) + (ce.basis === 'partner' ? ' · partner ref' : ' at ' + esc(ce.priceBasis || 'reference')) : 'no reference price') + '</div>'
@@ -145,9 +147,9 @@
       '<div class="n">On ' + esc(pf.partner) + '’s figures, stated and unverified' + (st && pf.utilityBasis === 'site' ? '. With their own utility figure (' + esc(money(st.utilityPerYear)) + ' a year): ' + esc(pct(st.irrPct)) + ', payback ' + esc(st.paybackMonths) + ' months' : '') + '.</div>';
   }
   /* a utility-side upgrade request: where it stands, what it would carry, and the mark */
-  function upgradeHtml(a, o) {
-    var up = a.upgrade || null, c = a.compute || {}, more = (c.shelf || []).filter(function (u) { return !u.fits; });
-    if (!up && !(o.canEdit && more.length)) return '';
+  function upgradeHtml(a, o) { /* the mark where there is one; else the upgrade to ask for (derived), and the way to mark it */
+    var up = a.upgrade || null, adv = a.upgradeAdvice || null, c = a.compute || {}, more = (c.shelf || []).filter(function (u) { return !u.fits; }).reverse();   /* the largest first: the 1 MW Micro pod is the ask */
+    if (!up && !adv && !(o.canEdit && more.length)) return '';
     var h = '<div class="dr-sec" style="margin:2px 0 0">Utility-side upgrade</div><div class="pa-box' + (up ? ' on' : '') + '" id="pa-upgrade">';
     if (up) {
       h += '<div>' + esc(up.words || '') + '</div>';
@@ -157,7 +159,9 @@
       if (o.canEdit) h += '<div class="a">' + (up.status !== 'granted' ? '<button type="button" class="pa-btn" data-pa-up="granted">Mark granted</button>' : '') + (up.status !== 'declined' ? '<button type="button" class="pa-btn" data-pa-up="declined">Mark declined</button>' : '') +
         (up.status !== 'requested' ? '<button type="button" class="pa-btn" data-pa-up="requested">Back to requested</button>' : '') + '<button type="button" class="pa-btn" data-pa-up="withdrawn">Withdraw</button></div>';
     } else {
-      h += '<div>Ask the utility for more power than the site has, to carry a larger compute unit. This marks the request; it changes no size until the utility grants it.</div>' +
+      h += (adv ? '<div>' + esc(adv.words) + '</div>' + (adv.compute && adv.compute.irrPct != null ? '<div style="margin-top:4px">With the ' + esc(adv.label) + ': ' + esc(pct(adv.compute.irrPct)) + (adv.compute.priceBasis ? ' ' + (adv.compute.priceBasis === 'partner ref' ? 'on the partner’s figures' : 'at ' + esc(adv.compute.priceBasis)) : '') + (adv.compute.capexUsd ? ' · capital ' + esc(money(adv.compute.capexUsd)) : '') + '</div>' : '')
+        : '<div>Ask the utility for more power than the site has, to carry a larger compute unit.</div>') + (o.canEdit ? '<div style="color:var(--ows-ink2);margin-top:4px">Marking it records that the partner is asking; it changes no size until the utility grants it.</div>' : '');
+      if (o.canEdit && more.length) h +=
         '<div class="a"><select data-pa-up-unit aria-label="The unit the upgrade is for">' + more.map(function (u) { return '<option value="' + esc(u.key) + '">' + esc(u.label + ' ' + (u.klassLabel || '') + ' · ' + n0(u.meterKw) + ' kW at the meter') + '</option>'; }).join('') + '<option value="">Another figure…</option></select>' +
         '<input type="number" min="1" step="1" data-pa-up-kw placeholder="kW at the meter" aria-label="Power asked for at the meter, kW" style="width:130px;display:none">' +
         '<input type="text" maxlength="80" data-pa-up-by placeholder="Who is asking (the partner)" aria-label="Who is asking the utility" value="' + esc(o.partner || '') + '" style="flex:1;min-width:120px">' +
@@ -307,7 +311,7 @@
     /* power */
     h += '<h2>Power and grid</h2>' + kv([['Free power', p.availableKw != null ? '<b>' + esc(kwWord(p.availableKw)) + '</b> (' + esc(p.basis || '') + ')' : 'Not on file'], ['How it is read', esc(p.words || '')], ['Transformer', p.transformerKva ? esc(n0(p.transformerKva)) + ' kVA' : 'kVA not on file'], ['Service', p.serviceCapacityKw ? esc(n0(p.serviceCapacityKw)) + ' kW' : null],
       ['Site peak', p.peakKw != null ? esc(n0(p.peakKw)) + ' kW (' + esc(p.peakBasis || '') + ')' : 'Not on file'], ['Utility', p.utility ? esc(p.utility) : null], ['Nearest substation', p.substation && p.substation.name ? esc(p.substation.name) + (p.substation.kv ? ', ' + esc(p.substation.kv) + ' kV' : '') + (p.substation.distanceMi != null ? ', ' + esc(p.substation.distanceMi) + ' mi' : '') : null],
-      ['Published load hosting', p.hosting ? esc(n0(p.hosting.loadKw)) + ' kW' + (p.hosting.circuit ? ' on ' + esc(p.hosting.circuit) : '') : null], ['Utility-side upgrade', up ? esc(up.words) + (up.compute ? ' With it: ' + esc(up.compute.label) + ' of IT' + (up.compute.irrPct != null ? ', ' + esc(pct(up.compute.irrPct)) : '') + '.' : '') : null]]) +
+      ['Published load hosting', p.hosting ? esc(n0(p.hosting.loadKw)) + ' kW' + (p.hosting.circuit ? ' on ' + esc(p.hosting.circuit) : '') : null], ['Utility-side upgrade', up ? esc(up.words) + (up.compute ? ' With it: ' + esc(up.compute.label) + ' of IT' + (up.compute.irrPct != null ? ', ' + esc(pct(up.compute.irrPct)) : '') + '.' : '') : res.upgradeAdvice ? esc(res.upgradeAdvice.words) + (res.upgradeAdvice.compute && res.upgradeAdvice.compute.irrPct != null ? ' With the ' + esc(res.upgradeAdvice.label) + ': ' + esc(pct(res.upgradeAdvice.compute.irrPct)) + '.' : '') : null]]) +
       (p.flags && p.flags.length ? '<ul class="flag">' + p.flags.map(function (f) { return '<li>' + esc(f) + '</li>'; }).join('') + '</ul>' : '');
     /* compute */
     h += '<h2>Compute' + (c.chosen && c.chosen.klassLabel ? ' · ' + esc(c.chosen.klassLabel) : '') + '</h2>';

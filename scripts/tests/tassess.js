@@ -245,6 +245,15 @@ test('A12 a utility-side upgrade request: the power asked for (a shelf unit’s,
   var gr = A.upgradeOf(up, { status: 'granted' }, { by: 'ann', now: NOW }); assert.equal(gr.status, 'granted'); assert.equal(gr.targetKw, 1200); assert.equal(gr.requestedBy, 'pat'); assert.equal(gr.history.length, 2);
   var rg = A.assess(site, { now: NOW, upgrade: gr }); assert.equal(rg.power.availableKw, 600); assert.ok(/Record the new service/.test(rg.upgrade.words)); assert.equal(rg.verify[0].key, 'upgrade-record');
   var wd = A.upgradeOf(gr, { status: 'withdrawn' }, ctx); assert.equal(A.assess(site, { now: NOW, upgrade: wd }).upgrade, null); assert.equal(wd.history.length, 3);
+  /* THE UPGRADE TO ASK FOR is derived for every sized site under 1 MW, and is never a mark: what 1 MW is short by, what the next size up needs, the compute that would follow */
+  var adv = A.assess({ address: { state: 'OK', zip: '74834' }, transformerKva: 500 }, { now: NOW }).upgradeAdvice;          /* 400 kW: one 150 kW pod today */
+  assert.equal(adv.unit, 'm1000'); assert.equal(adv.needKw, 1200); assert.equal(adv.shortKw, 800); assert.equal(adv.targetKw, 1200); assert.equal(adv.next.unit, 'm350'); assert.equal(adv.next.shortKw, 20); assert.ok(adv.compute.irrPct > 0);
+  assert.ok(/400 kW carries a 150 kW Nano pod today.*800 kW more.*20 kW more would already carry a 350 kW Nano pod.*Nothing has been asked of the utility yet/.test(adv.words));
+  var peaky = A.assess({ state: 'OK', transformerKva: 750, existingPeakKw: 150 }, { now: NOW }).upgradeAdvice; assert.equal(peaky.shortKw, 750); assert.equal(peaky.targetKw, 1350);   /* the site's own load is on the same service */
+  assert.equal(A.assess({ state: 'OK', transformerKva: 1500 }, { now: NOW }).upgradeAdvice, null);          /* it carries the Micro pod */
+  assert.equal(A.assess({ state: 'OK' }, { now: NOW }).upgradeAdvice, null);                               /* not sized: its power first */
+  assert.equal(r.upgradeAdvice, null); assert.equal(A.assess(site, { now: NOW, upgrade: wd }).upgradeAdvice.shortKw, 600);   /* a mark replaces the advice; withdrawn, it is back */
+  assert.equal(A.upgradeOf(null, { unit: 'm1000' }, { limitKw: 600, availableKw: 450 }).targetKw, 1350);
   /* the row is stale when the mark changes, and carries it */
   var stored = { result: r, upgrade: up }; assert.equal(A.listView(stored, site, {}).stale, false); assert.equal(A.listView(stored, site, {}).upgrade.targetKw, 1200); assert.equal(A.listView({ result: r, upgrade: gr }, site, {}).stale, true);
 });
@@ -383,9 +392,10 @@ test('D07 the reads: the register’s row carries no yearly table; one site’s 
 test('D08 a utility-side upgrade request through the door: marked on one site or many, the answer assessed again with what it would carry, audited; a figure the site already has is refused per site; a viewer refused', async function () {
   var w = world(); await w.post({ action: 'assess-run', ids: ['s1', 's2'] });
   var r = await w.post({ action: 'assess-upgrade', site: 's2', unit: 'm350', note: 'ask Francis' });
-  assert.equal(r.status, 'requested'); assert.equal(r.upgrade.targetKw, 420); assert.equal(r.upgrade.compute.label, '350 kW'); assert.ok(/marked as requested on 1 site/.test(r.note));
-  var s2 = w.site('s2'); assert.equal(s2.assessment.upgrade.status, 'requested'); assert.equal(s2.assessment.result.upgrade.targetKw, 420); assert.equal(s2.assessment.result.power.availableKw, 80); assert.equal(s2.revision, 1);
-  assert.equal(w.audits('sitecrm-assess-upgrade').length, 1); assert.equal(w.audits('sitecrm-assess-upgrade')[0].targetKw, 420);
+  assert.equal(r.status, 'requested'); assert.equal(r.upgrade.targetKw, 460); assert.equal(r.upgrade.compute.label, '350 kW');   /* 420 kW free on top of the 40 kW the site already draws */ assert.ok(/marked as requested on 1 site/.test(r.note));
+  var s2 = w.site('s2'); assert.equal(s2.assessment.upgrade.status, 'requested'); assert.equal(s2.assessment.result.upgrade.targetKw, 460); assert.equal(s2.assessment.result.power.availableKw, 80); assert.equal(s2.revision, 1);
+  assert.equal(w.audits('sitecrm-assess-upgrade').length, 1); assert.equal(w.audits('sitecrm-assess-upgrade')[0].targetKw, 460);
+  assert.equal(w.site('s1').assessment.result.upgradeAdvice, null); assert.equal(w.site('s2').assessment.result.upgradeAdvice, null);   /* s1 carries the Micro pod; s2 has its mark */
   var many = await w.post({ action: 'assess-upgrade', ids: ['s1', 's2', 'gone'], targetKw: 1300 });      /* s1 already has 1,500 kW: refused by name; s2 moves to 1,300 */
   assert.equal(many.count, 1); assert.equal(many.refused.length, 2); assert.ok(/Williams Food \(The site already has 1,500 kW on file/.test(many.note)); assert.equal(w.site('s2').assessment.upgrade.targetKw, 1300);
   await rejects(w.post({ action: 'assess-upgrade', site: 's1', targetKw: 1300 }), 400, /already has 1,500 kW/);

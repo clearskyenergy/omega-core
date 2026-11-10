@@ -1525,7 +1525,10 @@ the same day, each in Tommy's words in the doc:
   contract engine twice (this site's electricity, and their utility figure)
   and both shown. The revenue is a figure, never a contract.
 - **A utility-side upgrade request is a mark** (`assess-upgrade`): it sizes
-  nothing today; what it would carry rides beside the answer.
+  nothing today; what it would carry rides beside the answer. Every sized
+  site under 1 MW carries the upgrade TO ASK FOR (`upgradeAdvice`, derived:
+  what 1,200 kW free is short by, and the next size up), never a mark until
+  a person makes it.
 - **The funding list** (`portfolioAssessment.funding`, a committee named by
   staff through `scripts/set-portfolio-assessment.js`): there the finance
   marketplace stands down (`send-to-finance` is 409), a site is screened,

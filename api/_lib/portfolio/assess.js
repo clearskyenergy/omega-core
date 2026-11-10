@@ -457,7 +457,9 @@ function upgradeOf(cur, input, ctx) {
     if (input.unit != null && input.unit !== '') {
       var m = MODULARS.filter(function (x) { return x.key === String(input.unit); })[0];
       if (!m) throw fail(400, 'That is not a unit on the compute shelf');
-      target = Math.round(m.itKw * (ctx.pue || CM.DEFAULTS.pue)); unit = m.key;
+      var need = Math.round(m.itKw * (ctx.pue || CM.DEFAULTS.pue));
+      /* the unit needs `need` kW FREE: where the site's own load already takes part of the limit, the ask is the limit plus what is short */
+      target = ctx.limitKw != null && ctx.availableKw != null ? Math.max(need, Math.round(ctx.limitKw + Math.max(0, need - ctx.availableKw))) : need; unit = m.key;
     } else target = num(input.targetKw);
     if (target == null && live) { target = live.targetKw; unit = live.unit || null; }
     if (!(target >= 1 && target <= 200000)) throw fail(400, 'Say how much power is being asked for at the meter (kW), or pick the unit it is for');
@@ -473,7 +475,9 @@ function upgradeOf(cur, input, ctx) {
 function upgradeView(u, power, cfg, site) {
   if (!u || typeof u !== 'object' || u.status === 'withdrawn' || !(num(u.targetKw) > 0)) return null;
   var target = num(u.targetKw), from = power.limitKw, add = from != null ? Math.max(0, r2(target - from)) : null;
-  var c = computeOf({ availableKw: target, basis: 'upgrade' }, cfg, site), e = c.economics || {};
+  /* what it would carry is judged on what would be FREE: the new service less the load the site already puts on it */
+  var used = from != null && power.availableKw != null ? Math.max(0, from - power.availableKw) : 0;
+  var c = computeOf({ availableKw: Math.max(0, r2(target - used)), basis: 'upgrade' }, cfg, site), e = c.economics || {};
   var ask = 'a utility-side upgrade to ' + fmt(target) + ' kW' + (add != null ? ' (' + fmt(add) + ' kW more than the ' + fmt(from) + ' kW limit on file)' : ''), who = u.askedBy ? ', asked for by ' + u.askedBy : '';
   var words = u.status === 'requested' ? 'Requested: ' + ask + who + '. Nothing is sized on it until the utility grants it.'
     : u.status === 'granted' ? 'Granted: ' + ask + who + '. Record the new service on the site so every size follows from it.'
@@ -481,6 +485,30 @@ function upgradeView(u, power, cfg, site) {
   return { status: u.status, targetKw: target, fromKw: from, addKw: add, unit: u.unit || null, askedBy: u.askedBy || null, note: u.note || null, requestedBy: u.requestedBy || null, requestedAt: u.requestedAt || null, by: u.by || null, at: u.at || null, words: words,
     compute: c.fits && c.chosen ? { label: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label, klass: c.chosen.klass, klassLabel: c.chosen.klassLabel, meterKw: c.chosen.meterKw, words: c.words,
       irrPct: e.ok ? e.irrPct : null, priceBasis: e.ok ? e.priceBasis : null, capexUsd: e.ok ? e.capexUsd : null } : null };
+}
+
+/* THE UPGRADE TO ASK FOR (2026-11-09, Tommy: "we should also be requesting
+   for anything not 1mW for a utility upgrade"): a site that is sized and
+   does not carry the 1 MW Micro pod says what the utility would have to add
+   for it, and what the next size up needs, with the compute that would
+   follow. It is advice, DERIVED, never a mark: nothing has been asked of
+   anybody until a person marks the request (assess-upgrade), one site or
+   the whole selection at once. A site with no power figure has none: it
+   needs its power on file first. */
+function upgradeAdviceOf(power, compute, cfg, site, mark) {
+  if (mark || power.availableKw == null) return null;
+  var goal = MODULARS[MODULARS.length - 1], chosen = compute.chosen || null;
+  if (chosen && chosen.key === goal.key) return null;
+  var shelf = compute.shelf || [], g = shelf.filter(function (u) { return u.key === goal.key; })[0]; if (!g) return null;
+  var free = power.availableKw, short = Math.max(0, r2(g.meterKw - free)), target = power.limitKw != null ? Math.round(power.limitKw + short) : g.meterKw;
+  var next = shelf.filter(function (u) { return !u.fits && u.key !== goal.key; })[0] || null, nextShort = next ? Math.max(0, r2(next.meterKw - free)) : null;
+  var c = computeOf({ availableKw: g.meterKw, basis: 'upgrade' }, cfg, site), e = c.economics || {};
+  var has = chosen ? 'carries a ' + chosen.label + ' ' + chosen.klassLabel + ' today' : 'carries no pod today';
+  return { unit: goal.key, label: goal.label + ' ' + g.klassLabel, needKw: g.meterKw, shortKw: short, targetKw: target,
+    next: next && nextShort > 0 ? { unit: next.key, label: next.label + ' ' + next.klassLabel, needKw: next.meterKw, shortKw: nextShort } : null,
+    compute: e.ok ? { irrPct: e.irrPct, priceBasis: e.priceBasis, capexUsd: e.capexUsd } : null,
+    words: 'To request: ' + fmt(free) + ' kW ' + has + '. A ' + goal.label + ' ' + g.klassLabel + ' needs ' + fmt(g.meterKw) + ' kW free at the meter, ' + fmt(short) + ' kW more' + (power.limitKw != null ? ' (a ' + fmt(target) + ' kW service)' : '') +
+      (next && nextShort > 0 ? '; ' + fmt(nextShort) + ' kW more would already carry a ' + next.label + ' ' + next.klassLabel : '') + '. Nothing has been asked of the utility yet.' };
 }
 
 /* ── THE FUNDING LIST (2026-11-09, Tommy: "we dont need to send to the
@@ -575,12 +603,12 @@ function assess(site, ctx) {
   var bess = power.availableKw > 0 ? B.bessCase({ powerKw: power.availableKw, state: st, utility: power.utility || site.utility || null, assumptions: cfg.bess }) : { ok: false, reason: power.availableKw === 0 ? 'Nothing is free on the limit and peak on file' : 'No power figure to size a battery on' };
   var year = ctx.now ? Number(String(ctx.now).slice(0, 4)) + 1 : null;
   var sup = power.availableKw != null ? T.superchargerCase({ state: st, availableKw: power.availableKw, startYear: year, assumptions: cfg.supercharger.assumptions, sizing: cfg.supercharger.sizing }) : { ok: false, reason: 'No power figure to size posts on' };
-  var upgrade = upgradeView(ctx.upgrade, power, cfg, site);
+  var upgrade = upgradeView(ctx.upgrade, power, cfg, site), upgradeAdvice = upgradeAdviceOf(power, compute, cfg, site, upgrade);
   var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel, upgrade: upgrade };
   var readiness = readinessOf(c, ctx.marks), verify = verificationsOf(c, readiness);
   var grade = { A: 'Sized on a limit and a peak on file', B: 'Sized on a figure entered by hand', C: 'Sized on a ceiling: the site’s peak is not on file', D: 'Not sized: no power figure on file' }[power.grade];
   return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg, ctx.upgrade),
-    power: power, compute: compute, upgrade: upgrade, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
+    power: power, compute: compute, upgrade: upgrade, upgradeAdvice: upgradeAdvice, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
     confidence: { grade: power.grade, words: grade, screened: !!(screen && screen.complete), parcel: !!(parcel && parcel.ok) },
     note: 'Compute, the battery and fast charging are each sized on the whole free capacity by itself: they are alternatives, not a stack.' };
 }
@@ -608,6 +636,6 @@ function listView(a, site, ctx) {
 
 module.exports = { VERSION: VERSION, CONFIG_KEY: CONFIG_KEY, CONTINUOUS: CONTINUOUS, MODULARS: MODULARS, CHECKLIST: CHECKLIST, ITEM_KEYS: ITEM_KEYS, CHECK_STATES: CHECK_STATES,
   USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf, klassOf: klassOf, rateOf: rateOf, referenceOf: referenceOf,
-  UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView,
+  UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView, upgradeAdviceOf: upgradeAdviceOf,
   FUND_STATES: FUND_STATES, committeeMember: committeeMember, fundingRequest: fundingRequest, fundingChange: fundingChange, fundingView: fundingView, fundingInfo: fundingInfo,
   configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };
