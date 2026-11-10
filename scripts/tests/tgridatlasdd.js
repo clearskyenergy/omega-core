@@ -130,4 +130,17 @@ var scPreset = html.match(/\{key:"supercharger"[^}]*\}/);
 ok(scPreset && ['substations', 'ev', 'utility_terr', 'flood'].every(function (l) { return scPreset[0].indexOf('"' + l + '"') >= 0; }),
    'supercharger preset loads the layers its own checks read');
 
+/* ── 6 · easy to use (2026-11-09, Tommy: "it needs to be easy to use") ─── */
+ok(/<!--GLANCE-->/.test(html) && /class="glance"/.test(html) && /At a glance/.test(html), 'the answer for the pin comes first, as an at-a-glance card');
+ok(/h=h\.replace\('<!--GLANCE-->',function\(\)/.test(html), 'the card is placed with a function, so a "$" in a carrier name is not a pattern');
+ok(/collapseSections\(\);/.test(html) && /function collapseSections\(\)/.test(html) && /var secOpen=\{\}/.test(html), 'detail sections collapse, and what is open is remembered across re-renders');
+ok(/data-jump=/.test(html) && /function openSection\(key\)/.test(html), 'a line of the card opens the section it summarises');
+ok(/\.secbody\{display:block !important\}/.test(html), 'the printed report shows every section, open or not');
+ok(/<details id="fiberTools">/.test(html), 'the fiber map tools are folded to one line above the answer');
+ok(/optgroup label="Site due diligence/.test(html) && /What are you siting\?/.test(html), 'the profile choice leads with the due-diligence checklists, in plain words');
+ok(/\[\?&\]profile=/.test(html), 'a link can open on a checklist (?profile=compute|bess|supercharger)');
+ok(/function fetchArc\(key,cb,envOverride\)/.test(html) && /function pinGridEnsure\(ll\)/.test(html) && /pinGridEnsure\(ll\);/.test(html),
+   'the pin looks around itself for the nearest substation and line, whatever the zoom');
+ok(/LAYERS\.substations\.on\?pg\.subs:\[\]/.test(html), 'and a layer switched off is still not asked — off stays "not measured"');
+
 console.log('tgridatlasdd: ' + n + ' checks passed');

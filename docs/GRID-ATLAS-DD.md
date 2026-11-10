@@ -57,6 +57,31 @@ Same discipline as `analyze()`'s `wScore` and `api/grid-atlas.js`:
   and ⎙ Print — an `@media print` sheet turns the Site Analysis panel into
   the report and drops the map chrome.
 
+## Easy to use (2026-11-09)
+
+The pin analysis had grown to a dozen sections in a narrow rail, under two
+fiber filter panels (Tommy: "it needs to be easy to use"). Now:
+
+- **At a glance comes first.** One card under the coordinates: Power,
+  Fiber, Zoning & legislation, Flood and the Checklist in a line each, then
+  *Next* (who to send the carrier request to, which planning department to
+  ask, which utility portal to open) and the things to copy or download.
+  It makes no new judgement — every line repeats a reading made below, and
+  "not measured" stays "not measured".
+- **Detail sections are closed until asked for.** A line of the card opens
+  and scrolls to the section it summarises; any header toggles; *Show all
+  details* opens everything. What is open is remembered across the
+  re-renders `analyze()` does as layers answer. Print shows every section.
+- **The fiber map tools are one folded line** above the answer (open on the
+  Fiber profile).
+- **"What are you siting?"** leads with the three due-diligence checklists;
+  layer-only presets are grouped beneath.
+- **A link can open on the answer**: `?q=<address>&profile=compute|bess|supercharger`.
+- **The pin looks around itself.** Layers load for the visible map only and
+  an address search zooms to a few blocks, so Power read "not measured"
+  until somebody zoomed out. One fetch per pin now asks the grid sources for
+  ~33 km around the point. A layer switched off is still not asked.
+
 ## Held by
 
 `scripts/tests/tgridatlasdd.js` (in `npm test`): the eight compute

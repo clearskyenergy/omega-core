@@ -1791,7 +1791,14 @@ evidence object and draws the answer; a profile survives a manual layer
 toggle. The honesty rule is the page's own: **unknown** is a layer never
 consulted (never a zero, never averaged), **open** is evidence a person must
 produce, and pass / conditional / risk are given only on a measured reading
-— every capacity pass still says NOT confirmed. `docs/GRID-ATLAS-DD.md`.
+— every capacity pass still says NOT confirmed. **The answer comes first**
+(Tommy: "it needs to be easy to use"): an *At a glance* card (power, fiber,
+zoning, flood, checklist, next steps) leads the pin analysis and makes no
+judgement of its own; every detail section is closed until asked for
+(`collapseSections`, `secOpen` remembered across re-renders, print opens
+all); the pin fetches grid infrastructure around ITSELF (`pinGridEnsure`)
+so the answer never depends on the zoom; `?profile=` opens on a checklist.
+`docs/GRID-ATLAS-DD.md`.
 
 **Fiber is confirmed on a ladder, never merged** (Tommy: "ways we can go and
 confirm the fiber … know on an address the fiber provider and the telecom

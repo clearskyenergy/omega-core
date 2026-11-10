@@ -167,6 +167,38 @@
   .empty{text-align:center;color:var(--dim);padding:40px 16px}
   .empty .big{font-size:26px;margin-bottom:10px}
   .empty .t{font-size:13px;color:var(--muted);line-height:1.5}
+  .empty .step{text-align:left;margin:8px auto;max-width:260px}
+  .empty .step b{display:inline-block;width:20px;height:20px;line-height:20px;text-align:center;border-radius:50%;border:1px solid var(--line);color:var(--ink);font-size:11px;margin-right:8px}
+  /* the fiber tools, folded to one line */
+  #fiberTools{border-bottom:1px solid var(--line)}
+  #fiberTools summary{cursor:pointer;padding:10px 16px;font-size:12px;color:var(--muted);list-style:none}
+  #fiberTools summary::-webkit-details-marker{display:none}
+  #fiberTools summary:before{content:"▸";margin-right:7px;color:var(--dim);font-size:10px}
+  #fiberTools[open] summary:before{content:"▾"}
+  /* AT A GLANCE — the answer for the pin, before any detail */
+  .glance{border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:10px 0 6px;background:rgba(255,255,255,.035)}
+  .glance .gt{font:10px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:4px}
+  .grow{display:flex;gap:9px;align-items:flex-start;padding:7px 0;border-top:1px solid var(--line);cursor:pointer}
+  .grow.first{border-top:0}
+  .grow:hover .gk{text-decoration:underline}
+  .grow .gd{width:8px;height:8px;border-radius:50%;margin-top:5px;flex:0 0 8px}
+  .grow .gm{flex:1;min-width:0}
+  .grow .gk{font-size:12px;font-weight:600;color:var(--ink)}
+  .grow .gv{font-size:11px;color:var(--muted);line-height:1.45}
+  .grow .go{color:var(--dim);font-size:12px;margin-top:1px}
+  .gnext{margin:8px 0 2px;padding-top:8px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);line-height:1.55}
+  .gnext b{color:var(--ink)}
+  .gnext ol{margin:4px 0 0 16px;padding:0}
+  .gbtns{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .gbtn{font-size:11px;cursor:pointer;border:1px solid var(--line);border-radius:6px;padding:6px 9px;color:var(--ink);-webkit-user-select:none;user-select:none}
+  .gbtn.pri{border-color:var(--amp);color:var(--amp)}
+  .gall{font-size:11px;color:var(--dim);margin:8px 0 0;cursor:pointer}
+  /* every detail section opens and closes; closed until asked for */
+  .sec.tog{cursor:pointer;display:flex;align-items:center;gap:7px;padding:9px 0;margin:0;border-top:1px solid var(--line)}
+  .sec.tog:before{content:"▾";font-size:10px;color:var(--dim)}
+  .sec.tog.shut:before{content:"▸"}
+  .sec.tog:hover{color:var(--ink)}
+  .secbody{padding-bottom:8px}
 
   /* legend / status bottom-left */
   #status{position:absolute;left:354px;bottom:12px;z-index:1100;font-family:var(--mono);font-size:10px;
@@ -223,7 +255,11 @@
    folder is the Site Analysis panel with the due-diligence checklist. ── */
 @media print{
   #map,#topbar,#status,#baseSwitch,#eiaPanel,#sideTabs,#settingsShell,
-  #projectControl,#fiberRouteControls,#fiberEvidenceHost,.x{display:none !important}
+  #projectControl,#fiberTools,#fiberRouteControls,#fiberEvidenceHost,.x,.gbtns,.gall{display:none !important}
+  .secbody{display:block !important}   /* the printed report shows every section, open or not */
+  .sec.tog:before{content:"" !important}
+  .glance{background:#fff !important;border-color:#ccc !important}
+  .grow .gk{color:#111 !important}.grow .gv,.gnext{color:#444 !important}
   html,body{background:#fff !important;color:#111 !important;height:auto !important;overflow:visible !important}
   #rail,#panel{position:static !important;width:100% !important;max-width:100% !important;
     height:auto !important;max-height:none !important;overflow:visible !important;
@@ -273,13 +309,24 @@
 
 <div id="panel">
   <div class="p-h"><span class="dot"></span><span class="ti">Site Analysis</span><span class="x" id="pClose">✕</span></div>
-  <div id="projectControl"><label for="projectSelect">Screen for</label><select id="projectSelect" aria-label="Project type"></select></div>
-  <div id="fiberRouteControls"></div>
-  <div id="fiberEvidenceHost"></div>
+  <div id="projectControl"><label for="projectSelect">What are you siting?</label><select id="projectSelect" aria-label="Project type"></select></div>
+  <!-- The fiber map filters and the server route check are tools for one
+       job; folded to a line so the answer for the pin is the first thing
+       under the profile, not three screens down. Open on the Fiber profile. -->
+  <details id="fiberTools">
+    <summary>Fiber routes on the map · filters and route check</summary>
+    <div id="fiberRouteControls"></div>
+    <div id="fiberEvidenceHost"></div>
+  </details>
   <div class="p-b" id="pBody">
     <div class="empty">
       <div class="big">◎</div>
-      <div class="t">Choose a project type, then drop a pin anywhere on the map. Grid Atlas keeps fiber evidence, interconnection proximity, and data-center context together without implying service availability.</div>
+      <div class="t">
+        <div class="step"><b>1</b> Choose what you are siting above.</div>
+        <div class="step"><b>2</b> Search an address, or click the map to drop a pin.</div>
+        <div class="step"><b>3</b> Read the answer here: power, fiber, zoning and what to do next.</div>
+        <div style="margin-top:10px;font-size:11px;color:var(--dim)">Everything shown is a screening read from public data. It tells you who to ask; it confirms nothing by itself.</div>
+      </div>
     </div>
   </div>
 </div>
@@ -1073,9 +1120,12 @@ function status(msg,loading){ stTxt.textContent=msg; stEl.className=loading?"loa
    Walks a fallback chain of endpoints (L2.urls[]), so a dead mirror auto-recovers
    to the next. This is the reliability layer: HIFLD's official portal was
    decommissioned 8/25/2025, so grid layers rely on redundant public mirrors. */
-function fetchArc(key,cb){
+function fetchArc(key,cb,envOverride){
+  /* envOverride: ask around a POINT instead of the visible map — the pin
+     analysis uses it so the nearest substation is found however far in the
+     map is zoomed (pinGridEnsure) */
   var L2=LAYERS[key], b=map.getBounds();
-  var env=b.getWest()+","+b.getSouth()+","+b.getEast()+","+b.getNorth();
+  var env=envOverride||(b.getWest()+","+b.getSouth()+","+b.getEast()+","+b.getNorth());
   var where=L2.where?encodeURIComponent(L2.where):"1%3D1";
   var qs="/query?f=geojson&where="+where+"&outFields=*&returnGeometry=true"+
     "&geometryType=esriGeometryEnvelope&inSR=4326&outSR=4326&spatialRel=esriSpatialRelIntersects"+
@@ -1445,17 +1495,24 @@ function applyPreset(p){
   buildRail(); updateRailCounts(); renderProjectSelect();
   loadVisible();
   status("Preset: "+p.name+" — "+p.layers.length+" layers on",false);
+  var ft=document.getElementById("fiberTools");
+  if(ft&&p.key==="fiber") ft.open=true;      /* the Fiber profile IS the fiber tools */
   /* the profile changes what the pin analysis asks (its DD checklist, the
      RFI's wording) — re-read at once, not when the slowest layer answers */
   if(pinLatLng) analyze(pinLatLng);
 }
 function renderProjectSelect(){
   var el=document.getElementById("projectSelect"); if(!el) return;
-  var h='<option value="">Choose project profile…</option>';
+  /* the three that run a due-diligence checklist lead, named for what they
+     answer; the rest are map layer sets and are grouped as that */
+  var h='<option value="">Choose one…</option>', g1='', g2='';
   for(var i=0;i<PRESETS.length;i++){
     var p=PRESETS[i];
-    h+='<option value="'+p.key+'"'+(activePreset===p.key?' selected':'')+'>'+p.icon+'  '+p.name+'</option>';
+    var o='<option value="'+p.key+'"'+(activePreset===p.key?' selected':'')+'>'+p.icon+'  '+p.name+'</option>';
+    if(p.dd) g1+=o; else g2+=o;
   }
+  h+='<optgroup label="Site due diligence — full checklist">'+g1+'</optgroup>'+
+     '<optgroup label="Map layers only">'+g2+'</optgroup>';
   el.innerHTML=h;
   el.onchange=function(){
     var key=el.value, p=null;
@@ -1566,6 +1623,24 @@ var ddItKw=1000, lastDD=null; /* compute profile's selected IT load / last DD re
    asked for; data undefined = not answered, null = looked and the point is
    in no block or hex; err = the lookup failed, which is not a reading. */
 var bdcState={k:null,data:undefined,err:null,loading:false};
+/* THE PIN LOOKS AROUND ITSELF. Layers load for the visible map only, and an
+   address search zooms to a few blocks — so the nearest substation was
+   "not in view" and Power read "not measured" until somebody zoomed out
+   (2026-11-09, Tommy: "it needs to be easy to use"). One fetch per pin asks
+   the same grid sources for ~33 km around the point (lines ~17 km); the
+   analysis reads them beside whatever the map has loaded. A layer that is
+   switched off is still not asked: off stays "not measured". */
+var pinGrid={k:null,subs:[],lines:[],loading:false,done:0};
+function pinGridKey(ll){ return bdcKey(ll)+"|"+(LAYERS.substations.on?1:0)+(LAYERS.transmission.on?1:0); }
+function pinGridEnsure(ll){
+  var k=pinGridKey(ll); if(pinGrid.k===k) return;
+  pinGrid={k:k,subs:[],lines:[],loading:true,done:0};
+  var c=Math.cos(ll.lat*Math.PI/180)||1;
+  function box(d){ return (ll.lng-d/c)+","+(ll.lat-d)+","+(ll.lng+d/c)+","+(ll.lat+d); }
+  function fin(){ if(pinGrid.k!==k) return; if(++pinGrid.done>=2){ pinGrid.loading=false; if(pinLatLng&&pinGridKey(pinLatLng)===k) analyze(pinLatLng); } }
+  if(LAYERS.substations.on) fetchArc("substations",function(f){ if(pinGrid.k===k) pinGrid.subs=f||[]; fin(); },box(0.3)); else fin();
+  if(LAYERS.transmission.on) fetchArc("transmission",function(f){ if(pinGrid.k===k) pinGrid.lines=f||[]; fin(); },box(0.15)); else fin();
+}
 var lastSearch=null, lastConfirm=null; /* the searched address / the last confirmation block (for Copy RFI) */
 /* the zoning & legislation tracker (omega-zoning-watch.js): fetched once,
    from this origin; a failure is kept and said, never retried in a loop */
@@ -1677,11 +1752,13 @@ function containingFeature(ll,feats){
 }
 
 function analyze(ll){
-  var sub=nearestPoint(ll,cache.substations,LAYERS.substations);
+  pinGridEnsure(ll);
+  var pg=(pinGrid.k===pinGridKey(ll))?pinGrid:{subs:[],lines:[],loading:false};
+  var sub=nearestPoint(ll,(cache.substations||[]).concat(LAYERS.substations.on?pg.subs:[]),LAYERS.substations);
   if(sub) sub.src="substations";
   var subOsm=nearestPoint(ll,cache.osm_subs,LAYERS.osm_subs);
   if(subOsm&&(!sub||subOsm.km<sub.km)){ sub=subOsm; sub.src="osm_subs"; } // OSM independent fallback/refiner
-  var tx=nearestLine(ll,cache.transmission);
+  var tx=nearestLine(ll,(cache.transmission||[]).concat(LAYERS.transmission.on?pg.lines:[]));
   var plant=nearestPoint(ll,cache.plants,LAYERS.plants);
   var dcN=within(ll,cache.datacenters,40);
   var evN=within(ll,cache.ev,15);
@@ -1713,7 +1790,8 @@ function analyze(ll){
   h+='<div class="coord">'+ll.lat.toFixed(5)+', '+ll.lng.toFixed(5)+
      '  ·  <span style="color:var(--amp);cursor:pointer" id="copyc">copy</span></div>';
 
-  h+='<div class="sec">Interconnect Score</div>';
+  h+='<!--GLANCE-->';
+  h+='<div class="sec" data-k="interconnect">Interconnect Score</div>';
   h+='<div class="score"><span class="n" style="color:'+band+'">'+score+'</span><span class="lab">/ 100</span></div>';
   h+='<div class="bar"><span style="width:'+score+'%;background:'+band+'"></span></div>';
   h+='<div class="hint" style="margin:6px 0 2px;color:'+band+'">'+verdict+'</div>';
@@ -1922,7 +2000,7 @@ function analyze(ll){
       brief:OmegaFiberConfirm.brief(cfSite, cfEv, {gbps:10,minGbps:5}) };
     var CF_STYLE={ yes:["var(--ok)","YES"], near:["var(--warn)","NEARBY"], no:["var(--muted)","NONE"],
                    open:["var(--amp)","TO DO"], unknown:["var(--muted)","—"] };
-    h+='<div class="sec">◈ Confirm fiber</div>';
+    h+='<div class="sec" data-k="fiber">◈ Confirm fiber</div>';
     h+='<div class="hint" style="margin:2px 0 6px;color:'+(cfLad.reached===2?"var(--ok)":cfLad.reached===1?"var(--warn)":"var(--muted)")+'">'+esc(cfLad.summary)+'</div>';
     for(var cg=0;cg<cfLad.rungs.length;cg++){
       var rg=cfLad.rungs[cg], st=CF_STYLE[rg.status]||CF_STYLE.unknown;
@@ -2030,7 +2108,7 @@ function analyze(ll){
      its own. A threshold that let the single most common gap through would
      have been a threshold in name only. */
   if(dcMissWeight>=20){ dcBand="var(--muted)"; dcVerdict="Partial read — "+dcMissWeight+"% of the weight is unmeasured"; }
-  h+='<div class="sec">◆ Data Center Site Report</div>';
+  h+='<div class="sec" data-k="dc">◆ Data Center Site Report</div>';
   h+='<div class="score"><span class="n" style="color:'+dcBand+'">'+(dcScore==null?"—":dcScore)+'</span><span class="lab">/ 100 DC suitability'+(dcMissing.length?" · partial":"")+'</span></div>';
   h+='<div class="bar"><span style="width:'+(dcScore==null?0:dcScore)+'%;background:'+dcBand+'"></span></div>';
   h+='<div class="hint" style="margin:6px 0 8px;color:'+dcBand+'">'+dcVerdict+'</div>';
@@ -2055,13 +2133,14 @@ function analyze(ll){
   // rough deliverable-capacity band by highest nearby voltage class (screening only)
   var mwBand = lineV>=500?"1,000+ MW":lineV>=345?"500–1,000 MW":lineV>=230?"200–600 MW":
                lineV>=115?"50–200 MW":lineV>=69?"10–60 MW":lineV>0?"<10 MW (distribution)":"unknown";
-  var subCount=within(ll,cache.substations,40)+within(ll,cache.osm_subs,40);
+  /* the larger of what the map has loaded and what the pin found around itself — the same substations, never added together */
+  var subCount=Math.max(within(ll,cache.substations,40),within(ll,LAYERS.substations.on?pg.subs:[],40))+within(ll,cache.osm_subs,40);
   var plantMW=0,plantN=0;
   (cache.eia_plants||[]).forEach(function(f){ if(f.geom&&f.geom.type==="Point"){
     var c=f.geom.coordinates; if(haversine(ll.lat,ll.lng,c[1],c[0])<=40){ plantN++; plantMW+=(f.bubbleMw||0);} }});
   var gasNear=nearestLine(ll,cache.gas);
 
-  h+='<div class="sec">⚡ Available Power Estimate</div>';
+  h+='<div class="sec" data-k="power">⚡ Available Power Estimate</div>';
   h+='<div class="score" style="margin-top:2px"><span class="n" style="font-size:22px;color:var(--amp)">'+esc(mwBand)+'</span></div>';
   h+='<div class="hint" style="margin:3px 0 8px;color:var(--muted)">Screening band from highest nearby voltage ('+(lineV||"?")+' kV). NOT confirmed capacity.</div>';
   h+=infoRow(LAYERS.substations.color,"Highest voltage nearby",sub?(subV?subV+" kV substation":"voltage not published"):"no substation",lineV?lineV+" kV":"—");
@@ -2109,7 +2188,7 @@ function analyze(ll){
         /* the address the person searched, while the pin still stands on it */
         placeHint:(lastSearch&&haversine(ll.lat,ll.lng,lastSearch.lat,lastSearch.lng)<=3)?lastSearch.text:"" });
       var Z_STYLE={ risk:["var(--bad)","REPORTED"], conditional:["var(--warn)","VERIFY"], unknown:["var(--muted)","—"] };
-      h+='<div class="sec">⚖ Zoning &amp; legislation — as reported</div>';
+      h+='<div class="sec" data-k="zoning">⚖ Zoning &amp; legislation — as reported</div>';
       h+='<div class="hint" style="margin:2px 0 6px;color:var(--muted)">'+
          esc(zF?((bdc.block.county||"County "+zF.county)+", "+zF.state):"County not resolved yet")+
          (zSubject?" · "+esc(OmegaZoningWatch.SUBJECT[zSubject]):" · all project types")+
@@ -2181,7 +2260,7 @@ function analyze(ll){
                verificationPackage:lastConfirm.pack, telecom:bdc||null}:null,
              zoning: zj?{rows:zj.rows,local:zj.local,state:zj.state,asOf:zj.asOf,disclaimer:zj.disclaimer}:null };
     var rdBand=dd.readiness==null?"var(--muted)":dd.readiness>=70?"var(--ok)":dd.readiness>=45?"var(--warn)":"var(--bad)";
-    h+='<div class="sec">⛭ Due Diligence — '+esc(dd.title)+'</div>';
+    h+='<div class="sec" data-k="dd">⛭ Due Diligence — '+esc(dd.title)+'</div>';
     if(ddKey==='compute'&&ddProf.loadOptions){
       h+='<div style="display:flex;align-items:center;gap:8px;margin:2px 0 6px">'+
          '<span class="hint" style="margin:0">IT load</span>'+
@@ -2198,7 +2277,7 @@ function analyze(ll){
     h+='<div class="hint" style="margin:0 0 6px;color:var(--muted)">'+esc(dd.note)+'</div>';
     for(var sx=0;sx<dd.sections.length;sx++){
       var ssec=dd.sections[sx];
-      h+='<div class="sec" style="font-size:10px;opacity:.85">'+esc(ssec.name)+'</div>';
+      h+='<div class="sec sub" style="font-size:10px;opacity:.85">'+esc(ssec.name)+'</div>';
       for(var ix=0;ix<ssec.items.length;ix++) h+=ddRow(ssec.items[ix]);
     }
     /* queue routing beside the hosting-capacity portal the panel already shows */
@@ -2215,7 +2294,69 @@ function analyze(ll){
      'Coverage depends on active layers and map extent — enable a layer and it feeds the score automatically. '+
      'Public data (HIFLD / EIA / OSM); confirm hosting capacity with the utility before siting.</div>';
 
+  /* ── AT A GLANCE ───────────────────────────────────────────────────────
+     The panel had grown to a dozen sections in a narrow rail (2026-11-09,
+     Tommy: "it needs to be easy to use"). The answer for the pin comes
+     first — power, fiber, zoning, the checklist — in a line each, then what
+     to do next and the things to copy. Every detail section below it is
+     closed until asked for; a line here opens the section it summarises.
+     Nothing here is a new judgement: each line repeats a reading made
+     above, in its own words, and "not measured" stays "not measured". */
+  var G_C={ok:"var(--ok)",warn:"var(--warn)",bad:"var(--bad)",off:"var(--muted)",info:"var(--amp)"};
+  function gRow(c,k,v,key,first){ return '<div class="grow'+(first?' first':'')+'" data-jump="'+key+'"><span class="gd" style="background:'+G_C[c]+'"></span>'+
+    '<div class="gm"><div class="gk">'+esc(k)+'</div><div class="gv">'+esc(v)+'</div></div><span class="go">›</span></div>'; }
+  var g='<div class="glance"><div class="gt">At a glance</div>';
+  var gPowerSeen=!!(sub||tx);
+  g+=gRow(!gPowerSeen?"off":score>=70?"ok":score>=45?"warn":"bad","Power",
+     !gPowerSeen?(pg.loading?"Finding the nearest substation and line…"
+         :(LAYERS.substations.on||LAYERS.transmission.on)?"No substation within ~30 km or line within ~15 km in the public data — a long extension; ask the utility."
+         :"Not measured — choose what you are siting so the grid layers load.")
+       :verdict+(sub?" · substation "+fmtKm(sub.km)+(subV?" ("+subV+" kV)":""):"")+" · capacity is the utility's to confirm","power",true);
+  if(typeof cfLad!=="undefined"&&cfLad){
+    g+=gRow(cfLad.reached===2?"ok":cfLad.reached===1?"warn":"off","Fiber",
+       bdcState.loading?"Asking the FCC data who serves this address…"
+         :(cfLad.reached===2?"Carrier named"+(cfCar.length?": "+cfCar[0].name+(cfCar.length>1?" and "+(cfCar.length-1)+" more to ask":""):"")
+           :cfLad.reached===1?"Route mapped nearby"+(cfKm!=null?" ("+fmtKm(cfKm)+")":"")+", no carrier named yet"
+           :"Nothing found yet — not evidence of absence")+" · not confirmed until a carrier quotes","fiber");
+  }
+  if(zj){
+    var gz=zj.rows.local;
+    g+=gRow(gz.status==="risk"?"bad":gz.status==="conditional"?(/none on file/.test(gz.value)?"off":"warn"):"off","Zoning & legislation",
+       gz.status==="unknown"?gz.note:(gz.value.charAt(0).toUpperCase()+gz.value.slice(1))+(zj.local.length?" — "+zj.local[0].jurisdiction:"")+" · as reported, not verified","zoning");
+  }
+  if(LAYERS.flood.on) g+=gRow(inFlood?"bad":"ok","Flood",inFlood?"In a mapped FEMA flood hazard zone "+(floodF.props.FLD_ZONE||floodF.props.fld_zone||""):"Not in a mapped special flood hazard area at this point","dc");
+  if(lastDD&&lastDD.report){
+    var gdd=lastDD.report;
+    g+=gRow(gdd.readiness==null?"off":gdd.readiness>=70?"ok":gdd.readiness>=45?"warn":"bad","Checklist — "+gdd.title,
+       (gdd.readiness==null?"Nothing measured yet":gdd.readiness+" / 100 on what the map can read")+" · "+gdd.tally.open+" items need documents"+(gdd.tally.risk?" · "+gdd.tally.risk+" flagged":""),"dd");
+  }
+  var gNext=[];
+  if(typeof cfCar!=="undefined"&&cfCar&&cfCar.length) gNext.push("Send the carrier request to <b>"+esc(cfCar[0].name)+"</b> — copy it below.");
+  if(zj&&zj.rows.local.status==="risk"&&zj.local.length) gNext.push("Ask the planning department about <b>"+esc(zj.local[0].jurisdiction)+"</b>: "+esc(zj.local[0].title)+".");
+  if(uName) gNext.push("Check service and hosting capacity with <b>"+esc(uName)+"</b>"+(portal?' — <a href="'+esc(portal.url)+'" target="_blank" rel="noopener" style="color:var(--amp)">open its portal ↗</a>':"")+".");
+  else if(gPowerSeen) gNext.push("Identify the serving utility and ask about capacity at this address.");
+  if(!ddKey) gNext.push("Choose what you are siting (top of this panel) to get the full checklist.");
+  if(gNext.length){ g+='<div class="gnext"><b>Next</b><ol>'; for(var gn=0;gn<gNext.length&&gn<4;gn++) g+='<li>'+gNext[gn]+'</li>'; g+='</ol></div>'; }
+  g+='<div class="gbtns">'+
+     (lastConfirm?'<span class="gbtn pri" id="gRfi">⧉ Copy carrier request</span><span class="gbtn" id="gBrief">⧉ Copy fiber brief</span>':'')+
+     (lastDD?'<span class="gbtn" id="gExport">⇩ Download report</span>':'')+
+     '<span class="gbtn" id="gPrint">⎙ Print</span></div>';
+  g+='<div class="gall" id="gAll">Show all details ▾</div></div>';
+  h=h.replace('<!--GLANCE-->',function(){ return g; });   /* a function: a "$" in a carrier's name is not a pattern */
+
   document.getElementById("pBody").innerHTML=h;
+  collapseSections();
+  var gj=document.querySelectorAll("#pBody .grow");
+  for(var gi=0;gi<gj.length;gi++) gj[gi].onclick=(function(k){ return function(){ openSection(k); }; })(gj[gi].getAttribute("data-jump"));
+  var gAll=document.getElementById("gAll");
+  if(gAll){
+    gAll.textContent=secAllOpen()?"Hide all details ▴":"Show all details ▾";
+    gAll.onclick=function(){ setAllSections(!secAllOpen()); gAll.textContent=secAllOpen()?"Hide all details ▴":"Show all details ▾"; };
+  }
+  var gR=document.getElementById("gRfi"); if(gR) gR.onclick=function(){ if(lastConfirm){ copy(lastConfirm.rfi); gR.textContent="✓ Copied — paste into an email"; } };
+  var gB=document.getElementById("gBrief"); if(gB) gB.onclick=function(){ if(lastConfirm){ copy(lastConfirm.brief); gB.textContent="✓ Copied"; } };
+  var gP=document.getElementById("gPrint"); if(gP) gP.onclick=function(){ window.print(); };
+  var gE=document.getElementById("gExport"); if(gE) gE.onclick=function(){ var b=document.getElementById("ddExport"); if(b&&b.onclick) b.onclick(); };
   var cc=document.getElementById("copyc");
   if(cc) cc.onclick=function(){ copy(ll.lat.toFixed(6)+","+ll.lng.toFixed(6)); cc.textContent="copied"; };
   var cfc=document.getElementById("cfCopy");
@@ -2321,6 +2462,39 @@ function utilityPortal(name, ll){
    Status words stay honest: OK is a mapped reading, VERIFY means a human
    confirms it, RISK is a measured adverse reading, EVIDENCE is an open
    checklist item nobody has produced yet, — means never measured. */
+/* ── Sections open and close ─────────────────────────────────────────────
+   analyze() writes the panel as one string and runs again whenever a layer
+   answers, so what is open is remembered by section key, not by the DOM. */
+var secOpen={};
+function secKey(el){ return el.getAttribute("data-k")||String(el.textContent||"").toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"").slice(0,32); }
+function collapseSections(){
+  var body=document.getElementById("pBody"); if(!body) return;
+  var kids=[].slice.call(body.childNodes), cur=null;
+  for(var i=0;i<kids.length;i++){
+    var k=kids[i], isSec=k.nodeType===1&&/(^| )sec( |$)/.test(k.className)&&!/(^| )sub( |$)/.test(k.className);
+    if(isSec){
+      var key=secKey(k); k.setAttribute("data-k",key);
+      k.className+=" tog"+(secOpen[key]?"":" shut");
+      cur=document.createElement("div"); cur.className="secbody"; cur.setAttribute("data-body",key);
+      cur.style.display=secOpen[key]?"":"none";
+      body.insertBefore(cur,k.nextSibling);
+      k.onclick=(function(kk){ return function(){ setSection(kk,!secOpen[kk]); }; })(key);
+    } else if(cur){ cur.appendChild(k); }
+  }
+}
+function setSection(key,open){
+  secOpen[key]=!!open;
+  var hd=document.querySelector('#pBody .sec.tog[data-k="'+key+'"]'), bd=document.querySelector('#pBody .secbody[data-body="'+key+'"]');
+  if(hd) hd.className=hd.className.replace(/ shut/g,"")+(open?"":" shut");
+  if(bd) bd.style.display=open?"":"none";
+}
+function openSection(key){
+  setSection(key,true);
+  var hd=document.querySelector('#pBody .sec.tog[data-k="'+key+'"]'), host=document.getElementById("panel");
+  if(hd&&host) host.scrollTop=hd.getBoundingClientRect().top-host.getBoundingClientRect().top+host.scrollTop-8;
+}
+function secAllOpen(){ var hs=document.querySelectorAll("#pBody .sec.tog"); if(!hs.length) return false; for(var i=0;i<hs.length;i++){ if(/ shut/.test(hs[i].className)) return false; } return true; }
+function setAllSections(open){ var hs=document.querySelectorAll("#pBody .sec.tog"); for(var i=0;i<hs.length;i++) setSection(hs[i].getAttribute("data-k"),open); }
 var DD_STYLE={ pass:["var(--ok)","OK"], conditional:["var(--warn)","VERIFY"],
                risk:["var(--bad)","RISK"], open:["var(--amp)","EVIDENCE"],
                unknown:["var(--muted)","—"] };
@@ -2461,6 +2635,14 @@ buildRail(); updateRailCounts();
 buildPresets();
 // A state deep link opens the requested route map without unrelated grid symbols.
 if(/[?&]state=[a-z]{2}(?:&|$)/i.test(window.location.search))applyPreset(PRESETS.filter(function(p){return p.key==='fiber';})[0]);
+/* ?profile=compute|bess|supercharger opens on that checklist, so a link from
+   a site record lands on the answer instead of on a blank choice */
+(function(){
+  var m=String(window.location.search||"").match(/[?&]profile=([a-z]+)/i); if(!m) return;
+  var want=m[1].toLowerCase(), hit=null;
+  for(var i=0;i<PRESETS.length;i++){ if(PRESETS[i].key===want||PRESETS[i].dd===want) hit=hit||PRESETS[i]; }
+  if(hit) applyPreset(hit);
+})();
 
 /* ── FIBER EVIDENCE CONTROL ───────────────────────────────────────────────
    Hands the bundled public route inventory to /omega-fiber-atlas.js. Its
