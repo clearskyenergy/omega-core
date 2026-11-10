@@ -64,7 +64,7 @@ var auth = require('./_lib/verify-token');
 /* Bumped whenever this file changes. Stamped into every response including
    errors, for the same reason grid-atlas.js carries one: the last round of
    confusion was entirely "which version of this is actually running". */
-var BUILD = '2026-09-18.compute-lease-v1.brand';
+var BUILD = '2026-11-09.compute-lease-v1.site-economics';
 
 /* ═══════════════════════════════════════════════════════════════════════════
    THE RATE CARD  ⚠ seed values — see the header
@@ -834,6 +834,30 @@ module.exports = function (req, res) {
     });
   }).then(function (a) {
     var body = (req.body && typeof req.body === 'object') ? req.body : {};
+
+    /* ── action: site-economics ─────────────────────────────────────────
+       The editor's Compute + Site Economics panel (omega-site-economics.js)
+       posts the drawing's assumptions here; the model is
+       api/_lib/site-economics.js and lives server-side for the same reason
+       the rate card above does. A trial plan is refused: the indicative
+       lease figure is a paid capability (Standard and above), while a
+       packaged caller was already judged by withToken("compute") and staff
+       pass as everywhere. An invalid assumption (pue, computeRate,
+       hostSharePct) is the CALLER's error and comes back 400 with the
+       model's own words, never a 500. */
+    if (body.action === 'site-economics') {
+      if (!a.caller.staff && !a.packageAccess) {
+        var t = String(a.tier || (a.billing && a.billing.tier) || '').toLowerCase();
+        if (!t || t === 'trial')
+          throw auth.httpError(403, 'Site economics needs a paid plan (Standard and above).');
+      }
+      var out;
+      try { out = require('./_lib/site-economics').evaluate(body); }
+      catch (se) { throw auth.httpError(400, String((se && se.message) || se).slice(0, 200)); }
+      out.model = 'site-economics/1'; out.build = BUILD;
+      return res.status(200).json(out);
+    }
+
     if (!body.rep || typeof body.rep !== 'object')
       throw auth.httpError(400, 'rep:{} is required — the answers the rep captured. '
         + 'Send {} for a site with nothing known and every gate comes back unconfirmed, which is the honest answer.');
