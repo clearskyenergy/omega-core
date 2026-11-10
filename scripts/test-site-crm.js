@@ -1134,6 +1134,32 @@ function seed() {
     ['sitecrm-log', 'sitecrm-proforma-run'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
   });
 
+  console.log('\nthe CSV import updates by ID');
+  await test('a row whose External ID names a site already here updates it: non-blank cells only, never a duplicate; an ID twice in a file and a site the workbook import keeps are refused, nothing written', async function () {
+    var first = await call('POST', { action: 'site-import', rows: [
+      { name: 'Godfather Pizza', city: 'Enid', state: 'OK', serviceCapacityKw: '500', termYearsRemaining: '7.3', externalSiteIds: { import: 'FE-001' } },
+      { name: 'Homeland', city: 'Henryetta', state: 'OK', externalSiteIds: { import: 'FE-002' } }] }, PM);
+    assert.equal(first.created, 2); assert.equal(first.updated, 0);
+    var id1 = first.ids[0], n0 = 0; db.data.forEach(function (v, k) { if (/^omega_orgs\/evcs\.com\/sites\/[^/]+$/.test(k)) n0++; });
+    await call('POST', { action: 'site-tag', ids: [id1], add: ['priority'] }, PM);
+    var again = await call('POST', { action: 'site-import', rows: [
+      { name: 'Godfather Pizza', city: '', state: 'OK', serviceCapacityKw: '', transformerKva: '500', existingPeakKw: '120', portfolioPartner: 'Francis Energy', externalSiteIds: { import: 'FE-001' } },
+      { name: 'A New One', city: 'Tulsa', state: 'OK', externalSiteIds: { import: 'FE-900' } }] }, PM);
+    assert.equal(again.created, 1); assert.equal(again.updated, 1); assert.equal(again.ids[0], id1); assert.match(again.note, /1 site\(s\) added and 1 already here updated by their ID/);
+    var n1 = 0; db.data.forEach(function (v, k) { if (/^omega_orgs\/evcs\.com\/sites\/[^/]+$/.test(k)) n1++; });
+    assert.equal(n1, n0 + 1, 'one new site, no duplicate');
+    var s1 = stored(id1);
+    assert.equal(s1.transformerKva, 500); assert.equal(s1.existingPeakKw, 120); assert.equal(s1.portfolioPartner, 'Francis Energy');
+    assert.equal(s1.city, 'Enid', 'a blank cell is no change'); assert.equal(s1.serviceCapacityKw, 500, 'a blank cell never clears'); assert.equal(s1.termYearsRemaining, 7.3);
+    assert.deepEqual(s1.tags, ['priority'], 'the sheet carries no tags: they stay'); assert.equal(s1.createdBy, PM.email); assert.equal(s1.updatedBy, PM.email);
+    assert.ok(audits('sitecrm-import').some(function (x) { return x.siteId === id1 && x.updated === true && x.fields.indexOf('transformerKva') >= 0; }));
+    var twice = await call('POST', { action: 'site-import', rows: [{ name: 'X', externalSiteIds: { import: 'FE-7' } }, { name: 'Y', externalSiteIds: { import: 'FE-7' } }] }, PM);
+    assert.equal(twice.ok, false); assert.match(twice.errors[0].error, /on row 1 too/);
+    db.data.get(O + '/sites/' + id1).facts = { utility: { value: 'OG&E' } };
+    var kept = await call('POST', { action: 'site-import', rows: [{ name: 'Godfather Pizza', transformerKva: '750', externalSiteIds: { import: 'FE-001' } }] }, PM);
+    assert.equal(kept.ok, false); assert.match(kept.errors[0].error, /kept by the workbook import/); assert.equal(stored(id1).transformerKva, 500);
+  });
+
   console.log('\nthe site assessment, through the door');
   await test('Run, approve and the partner go through the one door: a member acts, a viewer and a rival are refused, the register carries the row without its tables, one site carries them all', async function () {
     var made = await call('POST', { action: 'site-save', name: 'Yard One', city: 'Chandler', state: 'OK', address: '1812 E 1st St', transformerKva: 1500, existingPeakKw: 200, portfolioPartner: 'Francis Energy' }, PM);

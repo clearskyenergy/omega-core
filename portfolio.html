@@ -206,7 +206,7 @@
 <div class="pf-modal" id="import-modal" role="dialog" aria-label="Import sites">
   <div class="box">
     <h2>Import sites</h2>
-    <div class="sub">Upload a CSV or XLSX of your sites. A workbook is read on the server: the EVCS intake is recognised by its headers, the EVCS model package enriches the sites it names, and any other sheet is matched by its headers, with a preview of what changes (and what a reviewed value would conflict with) before anything is written. A CSV in this page's template maps column by column. Every site lands in <b>this workspace only</b>.</div>
+    <div class="sub">Upload a CSV or XLSX of your sites. A workbook is read on the server: the EVCS intake is recognised by its headers, the EVCS model package enriches the sites it names, and any other sheet is matched by its headers, with a preview of what changes (and what a reviewed value would conflict with) before anything is written. A CSV in this page's template maps column by column; a row whose <b>External ID</b> names a site already here updates it (the cells that carry something), so a corrected sheet never duplicates. Every site lands in <b>this workspace only</b>.</div>
     <div id="im-msg"></div>
     <div class="row"><input type="file" id="im-file" accept=".csv,.xlsx,.xls,.txt"><span class="t-mut" id="im-filename"></span></div>
     <div class="row"><label for="im-partner" style="font-size:13px;font-weight:600">Portfolio partner</label><input type="text" id="im-partner" maxlength="80" placeholder="Who these sites come from: the seller, host or operator" style="flex:1;min-width:220px;border:1px solid var(--ows-line2);border-radius:8px;padding:7px 10px;font:inherit;font-size:13px"><span class="t-mut">set on every row of a CSV that names none; the register filters on it</span></div>
@@ -1144,7 +1144,7 @@
     imMsg('Importing ' + rows.length + ' site(s)…', true); byId('im-go').disabled = true;
     post('site-import', { rows: rows }).then(function (j) {
       if (j.ok === false) imMsg('<b>Nothing was written.</b> Fix the flagged rows and re-import:<br>' + (j.errors || []).map(function (e) { return 'Row ' + e.row + ': ' + esc(e.error); }).join('<br>') + (j.errorCount > (j.errors || []).length ? '<br>…and ' + (j.errorCount - j.errors.length) + ' more.' : ''));
-      else { imMsg('<b>' + j.imported + ' site(s) imported</b> into this workspace.', true);
+      else { imMsg('<b>' + esc(j.note || (j.imported + ' site(s) imported into this workspace.')) + '</b>', true);
         /* an import runs itself (Tommy, 2026-11-09: "when i upload a portfolio it then would run all these numbers") */
         load(true).then(function () { if (j.ids && j.ids.length) { byId('import-modal').classList.remove('on'); runAssessment(j.ids); } }); }
       byId('im-go').disabled = false;

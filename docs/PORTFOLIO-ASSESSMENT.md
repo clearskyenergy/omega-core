@@ -139,7 +139,9 @@ answer: the call is a person's.
 `portfolioPartner` on the site: the company the site comes from (Francis
 Energy, EVCS). Set on the import dialog for every row of a CSV, by a
 *Portfolio partner* column, in bulk from the bar (`site-set-partner`), or
-on the site record. The register filters by partner, by state and by free
+on the site record. To add facts to sites already imported (the
+transformer's kVA, a peak, the partner), re-import the sheet with the same
+External IDs: `site-import` updates by ID. The register filters by partner, by state and by free
 capacity, and sorts by free power first once sites are assessed.
 
 ## The record: `omega_orgs/{org}/sites/{id}.assessment`
@@ -235,10 +237,12 @@ workbook.
   stale; a person presses Run.
 - **Pre-development makes no project.** It sets the status and the project
   kinds; *Open in Site Map* makes the project.
-- **A CSV import always creates sites.** Re-importing the same sheet makes
-  duplicates; changing imported facts is the site record's form or the
-  workbook import, which matches by ID. The dialog's partner is applied to
-  a CSV only.
+- **A CSV row updates a site only by its External ID.** A row whose
+  External ID names a site already here updates it (the cells that carry
+  something; a blank cell is no change), so a corrected sheet does not
+  duplicate. A row with no External ID always creates a site, and a site
+  the workbook import keeps as facts is refused by name. The dialog's
+  partner is applied to a CSV only.
 - **In a diligence workspace the pipeline is the register**, so the
   assessed table is not drawn there; the side panel carries the card.
 - **No module sells it yet.** Any workspace with the register may run it;

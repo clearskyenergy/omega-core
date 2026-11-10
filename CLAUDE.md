@@ -1490,6 +1490,9 @@ the facts, revision or `updatedAt`; a row is `stale` when a fact it rests on
 changed (`inputHash`). `portfolioPartner` is who a site comes from (Francis
 Energy, EVCS): the import dialog, a column, `site-set-partner` in bulk, the
 site record; the register filters by partner, state and free capacity.
+`site-import` UPDATES a site a row names by its External ID
+(`externalSiteIds.import`; the non-blank cells only, never the tags, a
+site kept as facts refused), so a corrected sheet never duplicates.
 `portfolio.html` Runs on a selection, on every site shown and after every
 import by itself (numbers first, then four screening jobs at a time, Stop
 pauses), turns its table to Site · Status · Power · Compute · Battery ·

@@ -19,7 +19,9 @@
                        annualUsageKwh, monthlyUsageKwh[12],
                        usageNotes, externalSiteIds, status, tags, notes }
      site-import     { rows: [ site-save-shaped, … ] }  bulk register,
-                       at most 500 rows; all-or-nothing validation
+                       at most 500 rows; all-or-nothing validation; a row
+                       whose externalSiteIds.import names a site already
+                       here UPDATES it (the non-blank cells only)
      contact-save    { id?, name, title, email, phone, notes, primary }
      contact-archive { id }                               workspace admin
      log             { type, subject, body, at?, contactId?, followUpAt? }
@@ -641,9 +643,49 @@ var handler = A.handler(async function (req, res) {
     if (importErrors.length)
       return { ok: false, imported: 0, errorCount: importErrors.length, errors: importErrors.slice(0, 25),
         note: 'Fix the flagged rows and re-import. Nothing was written.' };
-    var ids = [], batch = db.batch(), wn = 0;
+    /* A ROW THAT NAMES A SITE ALREADY HERE UPDATES IT (2026-11-09): the
+       sheet's own ID (externalSiteIds.import) is the match. Before this a
+       corrected sheet — the transformer's kVA, a peak, the partner added —
+       duplicated every site it named. An update takes only the cells that
+       carry something (a blank cell is "no change", never a clearing) and
+       never the tags or kinds the sheet does not carry; a site the
+       workbook import keeps as facts is refused by name (its facts would
+       win over the flat fields on the next read), and so is an ID twice in
+       one file. Still all-or-nothing. */
+    var wanted = {}, known = {};
+    prepared.forEach(function (r, i) {
+      var k = r.externalSiteIds && r.externalSiteIds.import; if (!k) return;
+      if (wanted[k] != null) importErrors.push({ row: i + 1, error: 'External ID "' + k + '" is on row ' + (wanted[k] + 1) + ' too: one row a site' });
+      else wanted[k] = i;
+    });
+    if (Object.keys(wanted).length && !importErrors.length) {
+      var have = await root.collection('sites').limit(FOLLOW_SCAN).get();
+      have.docs.forEach(function (d) { var v = d.data() || {}, k = v.externalSiteIds && v.externalSiteIds.import; if (k && wanted[k] != null && !known[k]) known[k] = d; });
+      Object.keys(known).forEach(function (k) { if (known[k].data().facts && typeof known[k].data().facts === 'object') importErrors.push({ row: wanted[k] + 1, error: '"' + (known[k].data().name || k) + '" is kept by the workbook import: change it on the site record, or re-import the workbook' }); });
+    }
+    if (importErrors.length)
+      return { ok: false, imported: 0, errorCount: importErrors.length, errors: importErrors.slice(0, 25),
+        note: 'Fix the flagged rows and re-import. Nothing was written.' };
+    var ids = [], batch = db.batch(), wn = 0, updatedN = 0;
     async function flush() { await batch.commit(); batch = db.batch(); wn = 0; }
     for (var bi = 0; bi < prepared.length; bi++) {
+      var extKey = prepared[bi].externalSiteIds && prepared[bi].externalSiteIds.import, hit = extKey ? known[extKey] : null;
+      if (hit) {
+        var raw = rows[bi] || {}, cur = hit.data() || {}, patchI = {};
+        Object.keys(prepared[bi]).forEach(function (k) {
+          if (k === 'externalSiteIds' || k === 'tags' || k === 'siteScopes' || k === 'meters' || k === 'commercial') return;
+          if (raw[k] === undefined || raw[k] === null || raw[k] === '') return;
+          patchI[k] = prepared[bi][k];
+        });
+        if (Array.isArray(raw.tags) && raw.tags.length) patchI.tags = prepared[bi].tags;
+        patchI.externalSiteIds = Object.assign({}, cur.externalSiteIds || {}, prepared[bi].externalSiteIds);
+        batch.update(hit.ref, Object.assign(patchI, { updatedAt: now, updatedBy: by }));
+        batch.create(db.collection('omega_audit').doc(),
+          { action: 'sitecrm-import', orgId: org, siteId: hit.id, by: by, at: now, source: 'site-import', name: cur.name || prepared[bi].name, updated: true, fields: Object.keys(patchI).filter(function (k) { return k !== 'updatedAt' && k !== 'updatedBy' && k !== 'externalSiteIds'; }) });
+        ids.push(hit.id); wn += 2; updatedN++;
+        if (wn >= 400) await flush();
+        continue;
+      }
       var bref = root.collection('sites').doc();
       var bdoc = Object.assign({ orgId: org }, prepared[bi],
         { archived: false, createdAt: now, createdBy: by, source: 'site-import' });
@@ -654,8 +696,8 @@ var handler = A.handler(async function (req, res) {
       if (wn >= 400) await flush();
     }
     await batch.commit();
-    return { ok: true, imported: prepared.length, ids: ids,
-      note: prepared.length + ' site(s) imported into this workspace.' };
+    return { ok: true, imported: prepared.length, created: prepared.length - updatedN, updated: updatedN, ids: ids,
+      note: (prepared.length - updatedN) + ' site(s) added' + (updatedN ? ' and ' + updatedN + ' already here updated by their ID' : '') + ' in this workspace.' };
   }
 
   /* ── bulk site actions ──────────────────────────────────────────────────
