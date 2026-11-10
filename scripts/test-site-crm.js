@@ -1183,7 +1183,7 @@ function seed() {
     assert.equal(ran.ran, 1); assert.equal(ran.sized, 1);
     var a = stored(made.id).assessment.result;
     assert.equal(a.power.limitKw, 1200); assert.equal(a.power.availableKw, 1000); assert.equal(a.power.basis, 'measured'); assert.equal(a.power.transformerKva, 1500);
-    assert.equal(a.compute.chosen.key, 'm350'); assert.equal(a.compute.chosen.units, 2); assert.equal(a.supercharger.sizing.posts, 6); assert.equal(a.bess.sizing.kwh, 4000);
+    assert.equal(a.compute.chosen.key, 'm750'); assert.equal(a.compute.chosen.units, 1); assert.equal(a.compute.chosen.klassLabel, 'Nano pod'); assert.equal(a.supercharger.sizing.posts, 6); assert.equal(a.bess.sizing.kwh, 4000);   /* one right-sized pod, never two 350s */
     await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, VIEWER), 403);
     await rejects(call('POST', { action: 'assess-run', ids: [made.id] }, RIVAL), 403);
     var list = await call('GET', {}, PM), row = list.sites.filter(function (x) { return x.id === made.id; })[0];
@@ -1198,6 +1198,47 @@ function seed() {
     await call('POST', { action: 'site-set-partner', ids: [SITE], partner: '' }, PM); assert.equal(stored(SITE).portfolioPartner, null);
     var acts = audits().map(function (x) { return x.action; });
     ['sitecrm-assess-run', 'sitecrm-assess-approve', 'sitecrm-site-set-partner'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
+  });
+
+  await test('a utility-side upgrade mark, the funding list and the marketplace guard through the one door: a withdrawal puts the status back; no committee, no list; with one, a site is screened, submitted, and decided by a committee member alone, and never listed on the marketplace', async function () {
+    var made = await call('POST', { action: 'site-save', name: 'Yard Two', city: 'Enid', state: 'OK', zip: '73701', address: '1 Main St', transformerKva: 750, portfolioPartner: 'Francis Energy' }, PM);
+    await call('POST', { action: 'site-set-status', ids: [made.id], status: 'Operating' }, PM);
+    await call('POST', { action: 'assess-run', ids: [made.id] }, PM);
+    /* approve, then withdraw: the status the site had comes back */
+    await call('POST', { action: 'assess-approve', site: made.id, uses: ['compute'] }, PM); assert.equal(stored(made.id).status, 'Pre-development');
+    await call('POST', { action: 'assess-approve', site: made.id, uses: [] }, PM); assert.equal(stored(made.id).status, 'Operating');
+    /* the upgrade: marked, carried on the row, never a size */
+    var up = await call('POST', { action: 'assess-upgrade', site: made.id, unit: 'm1000' }, PM);
+    assert.equal(up.upgrade.targetKw, 1200); assert.equal(up.upgrade.addKw, 600); assert.equal(up.upgrade.askedBy, 'Francis Energy'); assert.equal(up.upgrade.compute.klassLabel, 'Micro pod');
+    var row0 = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0];
+    assert.equal(row0.assessment.upgrade.status, 'requested'); assert.equal(row0.assessment.power.availableKw, 600); assert.equal(row0.assessment.compute.chosen.key, 'm500'); assert.equal(row0.assessment.stale, false);
+    assert.equal(row0.assessment.compute.economics.electricity.source, 'zip');
+    await rejects(call('POST', { action: 'assess-upgrade', site: made.id, unit: 'm350' }, PM), 400, /already has 600 kW/);
+    await rejects(call('POST', { action: 'assess-upgrade', site: made.id, unit: 'm1000' }, VIEWER), 403);
+    /* no committee named: no funding list, and the marketplace is the road */
+    assert.equal((await call('GET', {}, PM)).funding, null);
+    await rejects(call('POST', { action: 'assess-fund-submit', site: made.id, uses: ['compute'] }, PM), 409, /no funding list/);
+    /* the workspace names its committee (staff-written settings) */
+    var bpath = O + '/billing/current', before = db.data.get(bpath);
+    db.seed(bpath, Object.assign({}, before || {}, { portfolioAssessment: { funding: { mode: 'committee', name: 'Finance committee', members: [{ name: 'The Boss', email: BOSS.email }] } } }));
+    try {
+      var asPm = await call('GET', {}, PM), asBoss = await call('GET', {}, BOSS);
+      assert.deepEqual(asPm.funding, { mode: 'committee', name: 'Finance committee', members: ['The Boss'], canDecide: false }); assert.equal(asBoss.funding.canDecide, true);
+      await rejects(call('POST', { action: 'send-to-finance', ids: [made.id] }, PM), 409, /funds its own sites/); assert.equal(stored(made.id).finProjectId, undefined);
+      await rejects(call('POST', { action: 'assess-fund-submit', site: made.id, uses: ['compute'] }, PM), 409, /Screen the site first/);
+      var cur = stored(made.id); db.seed(O + '/sites/' + made.id, Object.assign({}, cur, { assessment: Object.assign({}, cur.assessment, { screen: { complete: true, at: new Date().toISOString(), located: { usable: true }, errors: [] } }) }));
+      var sub = await call('POST', { action: 'assess-fund-submit', site: made.id, uses: ['compute'], note: 'first' }, PM);
+      assert.equal(sub.funding.status, 'submitted'); assert.equal(sub.funding.lines[0].size, '500 kW Nano pod'); assert.ok(sub.funding.amountUsd > 0);
+      await rejects(call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved' }, PM), 403, /decided by Finance committee \(The Boss\)/);
+      await rejects(call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved' }, STAFF), 403);
+      await rejects(call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved' }, who('boss', ORG, { claims: {} })), 403, /Confirm your email/);
+      var dec = await call('POST', { action: 'assess-fund-decide', site: made.id, decision: 'approved', note: 'go' }, BOSS);
+      assert.equal(dec.funding.status, 'approved'); assert.equal(dec.funding.decision.name, 'The Boss');
+      var row = (await call('GET', {}, PM)).sites.filter(function (x) { return x.id === made.id; })[0]; assert.equal(row.assessment.funding.status, 'approved'); assert.equal(row.assessment.confidence.screened, true);
+      var full = await call('GET', { site: made.id, assessment: '1' }, VIEWER); assert.equal(full.assessment.funding.status, 'approved'); assert.equal(full.assessment.fundingHistory.length, 2); assert.equal(full.assessment.result.upgrade.status, 'requested');
+      var acts = audits().map(function (x) { return x.action; });
+      ['sitecrm-assess-upgrade', 'sitecrm-assess-fund-submit', 'sitecrm-assess-fund-decide'].forEach(function (x) { assert.ok(acts.indexOf(x) >= 0, 'missing audit ' + x); });
+    } finally { if (before) db.seed(bpath, before); else db.data.delete(bpath); }
   });
 
   console.log('\n' + count + ' tests passed.');

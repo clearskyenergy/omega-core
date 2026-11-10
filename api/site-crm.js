@@ -481,6 +481,8 @@ var handler = A.handler(async function (req, res) {
     var aj = await ASD.listJoin({ root: root }, listed);
     sites.forEach(function (s) { s.assessment = aj[s.id] || null; });
     return { org: org, sites: sites, archivedIncluded: withArchived, canEdit: reader.edit, canArchive: reader.admin,
+      /* the funding list, where the workspace funds its own sites: the committee's names and whether this person decides (null elsewhere) */
+      funding: await ASD.info({ root: root, caller: caller, by: by }),
       next: snap.docs.length > LIST_CAP ? snap.docs[LIST_CAP - 1].id : null,
       limited: snap.docs.length > LIST_CAP,
       diligence: dj ? { pipeline: dj.pipeline, tally: dj.tally, counted: dj.counted, limited: dj.limited, clients: dj.clients, unassigned: dj.unassigned, schema: dj.schema, brand: dj.brand } : null };
@@ -576,11 +578,15 @@ var handler = A.handler(async function (req, res) {
     try { await syncDesign(db, org, site, now); auto = await designModel(db, org, site, { caller: caller, root: root, by: by }, now); }
     catch (e) { console.error('[site-crm] design sync', e && e.message); }
     var siteOut = siteView(sid, site.data); await capitalJoin(db, [siteOut]);
+    /* a workspace that funds its own sites: the committee's names, and this site's place on the funding list (null elsewhere) */
+    var fundInfo = await ASD.info({ root: root, caller: caller, by: by });
+    if (fundInfo) siteOut.assessment = (await ASD.listJoin({ root: root }, [{ id: sid, data: function () { return site.data; } }]))[sid] || null;
     var dsgOut = siteOut.latestDesign;
     /* the diligence, where the switch is on (null elsewhere): the view the Diligence tab draws, the vocabulary and the name */
     var dilig = await DG.siteView({ db: db, org: org, root: root, caller: caller, by: by }, siteRef, site.data);
     return {
       site: siteOut,
+      funding: fundInfo,
       diligence: dilig,
       /* the Omega-Core skid's facts for a page whose design carries one: the product record's, never a page's own */
       skid: dsgOut && dsgOut.compute && dsgOut.compute.omegaCoreUnits > 0 ? SM.skidFacts() : null,
@@ -828,6 +834,8 @@ var handler = A.handler(async function (req, res) {
        DRAFT only the sponsor sees, finished in the portal. Idempotent as
        the editor hand-off is. */
     if (action === 'send-to-finance') {
+      /* a workspace that funds its own sites never lists one on the marketplace: its funding list is the road */
+      if (await ASD.fundingMode({ root: root })) throw A.httpError(409, 'This workspace funds its own sites: submit them to its finance committee (Submit for funding), not the finance marketplace');
       var orgRec = await root.get(), orgNm = orgRec.exists ? ((orgRec.data() || {}).name || org) : org;
       var madeF = [], FVf = A.FieldValue();
       for (var fi = 0; fi < rows.length; fi++) {

@@ -1394,7 +1394,10 @@ to the address in `TERRA_ENERGY_EMAIL` or `fin_settings/dealroom.orgs.terra`
 (never a constant; none → refused, nothing mailed), the sender in copy,
 recorded on the site (`partners.terra`) and in `partner_requests`, 25 a
 workspace a day; Terra funds its own package and is a partner, not the
-capital request. Held by `scripts/test-site-crm.js`, `npm run
+capital request. **The pages no longer offer it** (2026-11-09, Tommy:
+"remove all send to terra"): the Terra card on the site record and the
+register's Terra marks are gone; the door's `send-to-partner` and its test
+remain, uncalled by any page. Held by `scripts/test-site-crm.js`, `npm run
 test:portfolio` (the draft's T01–T35 re-homed; T26 pinned offline) and the
 workspace render check's portfolio flow. `docs/PORTFOLIO-ASSET-MANAGER-PLAN.md`
 carries the fold-in status and the go-live steps (deploy the rules by hand
@@ -1502,6 +1505,42 @@ Send to Terra is off the bar (the door's action stays). Held by
 `tassess.js`, `scripts/test-site-crm.js` and `check:workspace`'s
 `flow /portfolio.html (assessment)` on the real library.
 `docs/PORTFOLIO-ASSESSMENT.md` carries the design and the honest list.
+
+**The site assessment** (2026-11-09, `docs/PORTFOLIO-ASSESSMENT.md`;
+`api/_lib/portfolio/assess.js` and its door `assess-door.js` on
+`api/site-crm.js`, drawn by `omega-portfolio-assess.js`) sizes compute, a
+battery and fast charging on each site's free power. Rules that came later
+the same day, each in Tommy's words in the doc:
+- **One right-sized pod a site**: 75, 150, 350, 500, 750 kW (Nano pods,
+  under 1 MW of IT) and 1 MW (the Micro pod), the largest single unit the
+  power carries, never a row of 75s; only the Micro pod repeats. The
+  chiller's power is inside the PUE and said (`compute.cooling`); the pad is
+  not modelled and says so.
+- **Electricity is the site's**: its own price, else the rate book for its
+  ZIP (`rateOf`), never one flat default for every site.
+- **Compute on the offtake partner's figures** only where the workspace asks
+  (`portfolioAssessment.compute.basis: 'partner'`): Lightsmith's stated
+  $35M / $26M a year / $4M utility for 1 MW is ONE record,
+  `compute-contract.js PARTNER.reference`, unverified, run through the one
+  contract engine twice (this site's electricity, and their utility figure)
+  and both shown. The revenue is a figure, never a contract.
+- **A utility-side upgrade request is a mark** (`assess-upgrade`): it sizes
+  nothing today; what it would carry rides beside the answer.
+- **The funding list** (`portfolioAssessment.funding`, a committee named by
+  staff through `scripts/set-portfolio-assessment.js`): there the finance
+  marketplace stands down (`send-to-finance` is 409), a site is screened,
+  submitted (`assess-fund-submit`) and decided by a committee member on a
+  VERIFIED address alone (`assess-fund-decide`; staff are refused too). Core
+  names nobody.
+- **A withdrawn approval puts the site's status back** (`statusBefore`).
+- **The diligence report** is the page's print of `GET ?assessment=1`
+  (`OmegaPortfolioAssess.report`), from a hidden frame.
+- The battery and fast-charging engines were checked against their source
+  models and against an independent evaluation of those models' formulas
+  (`tassess.js` E05, E06): a change in either engine's arithmetic fails
+  there. The three returns are on three bases, each said.
+Held by `scripts/tests/tassess.js`, `scripts/test-site-crm.js` and the
+`flow /portfolio.html (funding list)` pass of `check:workspace`.
 
 ## Helios Intake (2026-09-30)
 

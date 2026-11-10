@@ -49,19 +49,38 @@
    ═══════════════════════════════════════════════════════════════════════════ */
 'use strict';
 var B = require('./assess-bess'), T = require('./assess-supercharger');
-var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence');
+var CM = require('../omega-compute-model'), CC = require('../compute-contract'), D = require('./diligence'), UR = require('../utility-rates');
 
 var VERSION = 1, CONFIG_KEY = 'portfolioAssessment', CONTINUOUS = 0.8;
 /* the modular shelf, by IT load. The 75 kW unit is the Omega-Core skid as the
    platform records it; the larger ones are whole nodes of the chosen chip in
-   that IT budget, priced at the engine's chipset-scaled midpoint. */
+   that IT budget, priced at the engine's chipset-scaled midpoint.
+   ONE POD A SITE, RIGHT-SIZED (2026-11-09, Tommy: "i dont want to do a model
+   of putting more 75 pods on their i want it to be sized by 75, 150, 350,
+   500, 750, and 1mW primairly this is because of spacing and we need to
+   alo account for chillers"): the largest single unit the power carries is
+   the answer, never a row of small ones — every pod brings its own chiller
+   and service clearances, so four 75s are four pads where one 350 is one.
+   Only the 1 MW Micro pod repeats, in whole megawatts, on a site that
+   carries more than one. The chiller's power is inside the PUE: what is
+   checked against the free power is IT × PUE at the meter, and the answer
+   says how much of that is cooling. The pad itself (the pod, its chiller,
+   the clearances) is the maker's figure and is not on file: said, never
+   guessed. */
 var MODULARS = [
   { key: 'm75', itKw: 75, label: '75 kW', skid: true },
+  { key: 'm150', itKw: 150, label: '150 kW' },
   { key: 'm350', itKw: 350, label: '350 kW' },
-  { key: 'm1000', itKw: 1000, label: '1 MW' },
-  { key: 'm1770', itKw: 1770, label: '1.77 MW' }
+  { key: 'm500', itKw: 500, label: '500 kW' },
+  { key: 'm750', itKw: 750, label: '750 kW' },
+  { key: 'm1000', itKw: 1000, label: '1 MW', repeats: true }
 ];
 var COMPUTE_TERM_MONTHS = 72;
+/* NANO AND MICRO (2026-11-09, Tommy: "we have Nano Pods which are anything
+   sub 1mW and then 1mW and up are micro"): the class is the unit's IT load,
+   nothing else. */
+var MICRO_FROM_KW = 1000;
+function klassOf(itKw) { return itKw < MICRO_FROM_KW ? { key: 'nano', label: 'Nano pod' } : { key: 'micro', label: 'Micro pod' }; }
 
 function num(v) { return v == null || v === '' || !isFinite(Number(v)) ? null : Number(v); }
 function r2(v) { return v == null ? null : Math.round(v * 100) / 100; }
@@ -73,12 +92,26 @@ function stateOf(site) { var a = site.address && typeof site.address === 'object
 /* the workspace's own settings (billing/current.portfolioAssessment): read
    leniently — a wrong shape is no setting */
 function configOf(billing) {
-  var raw = obj(billing && billing[CONFIG_KEY]), c = obj(raw.compute);
+  var raw = obj(billing && billing[CONFIG_KEY]), c = obj(raw.compute), ref = obj(c.reference), fu = obj(raw.funding);
+  function within(v, lo, hi) { var n = num(v); return n != null && n >= lo && n <= hi ? n : null; }
+  /* the funding list: a workspace that funds its own sites names who decides */
+  var members = [];
+  (Array.isArray(fu.members) ? fu.members : []).slice(0, 20).forEach(function (m) {
+    m = obj(m); var email = String(m.email || '').toLowerCase().trim();
+    if (!/^[^@\s<>"']+@[^@\s<>"']+\.[a-z]{2,}$/.test(email) || members.some(function (x) { return x.email === email; })) return;
+    members.push({ name: clean(m.name, 80) || email.split('@')[0], email: email });
+  });
   return { bess: obj(raw.bess), supercharger: { assumptions: obj(obj(raw.supercharger).assumptions), sizing: obj(obj(raw.supercharger).sizing) },
     compute: { chipset: typeof c.chipset === 'string' ? c.chipset : null, pue: num(c.pue) > 1 && num(c.pue) < 2.5 ? num(c.pue) : null,
       partnerName: typeof c.partnerName === 'string' ? c.partnerName.slice(0, 80) : null, partnerFeePct: num(c.partnerFeePct) >= 0 && num(c.partnerFeePct) <= 50 ? num(c.partnerFeePct) : null,
-      termMonths: num(c.termMonths) >= 12 && num(c.termMonths) <= 240 ? Math.floor(num(c.termMonths)) : null } };
+      termMonths: num(c.termMonths) >= 12 && num(c.termMonths) <= 240 ? Math.floor(num(c.termMonths)) : null,
+      /* 'partner': a Nano or Micro pod is priced on the offtake partner's stated per-megawatt figures (compute-contract.js PARTNER.reference), each replaceable here */
+      basis: c.basis === 'partner' ? 'partner' : null,
+      reference: { capexUsdPerMw: within(ref.capexUsdPerMw, 1e5, 5e8), revenueUsdPerMwYear: within(ref.revenueUsdPerMwYear, 1e4, 5e8), utilityUsdPerMwYear: within(ref.utilityUsdPerMwYear, 0, 5e8),
+        gpusPerMw: within(ref.gpusPerMw, 1, 1e5), racksPerMw: within(ref.racksPerMw, 1, 1000), chipset: typeof ref.chipset === 'string' && CM.chipset(ref.chipset) ? ref.chipset : null } },
+    funding: fu.mode === 'committee' && members.length ? { mode: 'committee', name: clean(fu.name, 60) || 'Finance committee', members: members } : null };
 }
+function clean(v, n) { return typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) || null : null; }
 
 /* ── power: the limit, the peak, what is free ──────────────────────────── */
 function powerOf(site, screen) {
@@ -123,6 +156,25 @@ function powerOf(site, screen) {
   return out;
 }
 
+/* ── what electricity costs HERE (2026-11-09, Tommy: "that utility cost is
+   different for every zip code"): the site's own price where one is on
+   file, else the rate book's planning figures for its ZIP (else its state)
+   on a flat load — energy plus the demand charge spread over every hour.
+   null where nothing places the site: the engine's own default is then
+   used and said. ── */
+function zipOf(site) { var a = site && site.address && typeof site.address === 'object' ? site.address : {}, z = String(a.zip || (site && site.zip) || '').trim(); return /^\d{5}/.test(z) ? z.slice(0, 5) : null; }
+function rateOf(site) {
+  var own = num(site && site.powerPricePerKwh);
+  if (own != null && own > 0) return { perKwh: own, source: 'site', utility: null, words: 'the site’s own power price, $' + own + ' a kWh' };
+  var zip = zipOf(site), st = stateOf(site), rec = null, by = null;
+  try { if (zip) { rec = UR.lookup(zip); by = 'zip'; } if (!rec && st) { rec = UR.fromState(st); by = 'state'; } } catch (e) { rec = null; }
+  var energy = rec ? num(rec.energyRate) : null, demand = rec ? num(rec.demandRate) || 0 : 0;
+  if (!(energy > 0)) return null;
+  var per = Math.round((energy + demand * 12 / 8760) * 10000) / 10000;
+  return { perKwh: per, source: by, utility: rec.name || null, energyRate: energy, demandRate: demand,
+    words: (rec.name || 'The serving utility') + '’s planning rates for ' + (by === 'zip' ? 'ZIP ' + zip : st) + ': $' + energy + ' a kWh plus $' + demand + ' a kW-month of demand, $' + per + ' a kWh on a flat load. A planning figure, not the site’s tariff' };
+}
+
 /* ── compute: the shelf on the free power, and the chosen unit's return ── */
 var econCache = {};
 function unitFor(m, chip, pue) {
@@ -130,39 +182,100 @@ function unitFor(m, chip, pue) {
   var nodes = Math.floor(m.itKw * (1 - overhead) / chip.nodeKw + 1e-9), gpus = nodes * chip.gpusPerNode, installed = nodes * chip.nodeKw;
   return { label: m.label + ' modular', word: 'modular', kw: r2(installed * pue), itKw: r2(installed), gpus: gpus, costUsd: CM.dynamicCapex(chip, gpus).mid };
 }
+/* the offtake partner's reference, per megawatt of IT: the stated figures, each replaceable by the workspace's own */
+function referenceOf(cfg) {
+  var P = CC.PARTNER, b = P.reference.perMw, o = cfg.compute.reference || {};
+  return { name: cfg.compute.partnerName || P.name, feePct: cfg.compute.partnerFeePct != null ? cfg.compute.partnerFeePct : P.feePct, verified: false,
+    capexUsdPerMw: o.capexUsdPerMw || b.capexUsd, revenueUsdPerMwYear: o.revenueUsdPerMwYear || b.revenueUsdYear, utilityUsdPerMwYear: o.utilityUsdPerMwYear != null ? o.utilityUsdPerMwYear : b.utilityUsdYear,
+    gpusPerMw: o.gpusPerMw || b.gpus, racksPerMw: o.racksPerMw || (o.gpusPerMw ? null : b.racks), chipset: o.chipset || b.chipset,
+    own: ['capexUsdPerMw', 'revenueUsdPerMwYear', 'utilityUsdPerMwYear', 'gpusPerMw'].filter(function (k) { return o[k] != null; }) };
+}
+function musd(n) { return '$' + (Math.round(n / 1e4) / 100) + 'M'; }
+/* A COMPUTE PRO FORMA ON WHAT THE OFFTAKE PARTNER SHOWED (2026-11-09, Tommy:
+   "a compute pro forma that goes off of what lightsmith energy showed us …
+   for 1mW of compute its a 35m investement and … about 26m a year and cost
+   4m in utility … but that utility cost is diffeernt for every zip code and
+   we need to understand what the offtake is"). The unit is that reference
+   scaled by its IT load; the revenue is the stated figure as a take-or-pay
+   price a GPU-hour, so the ONE contract engine runs it (its monthly cash,
+   its partner fee, its other operating lines, its IRR). It runs twice: on
+   this site's electricity, and on the partner's own utility figure, and
+   both are answered. Nothing here is a contract or a quote. */
+function partnerCase(m, units, cfg, REF, rate, term) {
+  var chip = CM.chipset(REF.chipset) || CM.chipset(CM.DEFAULTS.chipset), pue = cfg.compute.pue || CM.DEFAULTS.pue, up = CM.readInputs({ chipset: chip.key }).uptime;
+  var mw = m.itKw / 1000, k = klassOf(m.itKw), gpus = Math.floor(REF.gpusPerMw * mw + 1e-9), kw = r2(m.itKw * pue), cost = Math.round(REF.capexUsdPerMw * mw), revenue = REF.revenueUsdPerMwYear * mw;
+  if (!(gpus >= 1) || !(cost > 0) || !(revenue > 0)) return { ok: false, reason: 'The partner reference does not size a ' + m.label + ' unit' };
+  var unit = { label: m.label + ' ' + k.label, word: 'pod', kw: kw, itKw: m.itKw, gpus: gpus, costUsd: cost }, racks = REF.racksPerMw ? REF.racksPerMw * mw : null;
+  if (racks && Math.abs(racks - Math.round(racks)) < 1e-9) { unit.racks = Math.round(racks); unit.rackCostUsd = cost / unit.racks; }
+  var kwhYear = kw * 8760 * up, price = revenue / (gpus * 8760 * up), statedElec = REF.utilityUsdPerMwYear * mw / kwhYear;
+  function run(elec) {
+    var input = { chipset: chip.key, units: units, unit: unit, contract: { termMonths: term, pricePerGpuHour: price, partner: REF.feePct > 0 ? { name: REF.name, feePct: REF.feePct } : false }, site: { route: 'own' }, operating: { electricity: elec } };
+    var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
+    return out && out.ok !== false && out.priced && out.returns && out.lines && out.lines.length ? out : null;
+  }
+  var here = rate ? run(rate.perKwh) : null, stated = run(statedElec), main = here || stated;
+  if (!main) return { ok: false, reason: 'The compute engine could not price this unit on the partner’s figures' };
+  var y1 = main.lines[0], sy = stated ? stated.lines[0] : null, notes = [];
+  notes.push(REF.name + '’s figures are as stated and unverified: ' + musd(REF.capexUsdPerMw) + ' of capital and about ' + musd(REF.revenueUsdPerMwYear) + ' of revenue a year for 1 MW of compute, with about ' + musd(REF.utilityUsdPerMwYear) + ' a year of utility' +
+    (REF.own.length ? ' (' + REF.own.length + ' of those figures are this workspace’s own).' : '.'));
+  if (mw !== 1) notes.push('This ' + m.label + ' ' + k.label + ' is that 1 MW reference scaled by its IT load (× ' + mw + '): ' + musd(cost) + ' of capital' + (unit.racks ? '' : ', not whole racks') + '. Its own price is not on file.');
+  notes.push('Revenue is the stated figure, not a contract: the offtake (who buys, at what price, for how long) is not confirmed. It is the same as $' + price.toFixed(2) + ' a GPU-hour, take-or-pay, on ' + fmt(gpus * units) + ' ' + chip.name + ' GPUs.');
+  notes.push(here ? 'Utility is this site’s own: ' + fmt(kwhYear * units) + ' kWh a year at $' + rate.perKwh + ' a kWh (' + rate.words + '), rising 3% a year. ' + REF.name + '’s ' + musd(REF.utilityUsdPerMwYear * mw * units) + ' would be $' + statedElec.toFixed(3) + ' a kWh on the same energy: either a dearer market or more than energy. Ask what it covers.'
+    : 'Utility is ' + REF.name + '’s stated figure (' + musd(REF.utilityUsdPerMwYear * mw * units) + ' a year, $' + statedElec.toFixed(3) + ' a kWh on this unit’s energy): no ZIP, state or power price is on file to price this site’s own.');
+  notes.push('Beyond the stated figures the engine counts network and storage, other variable costs, fixed operating costs and a maintenance reserve (' + musd(y1.opex) + ' in year one)' + (REF.feePct > 0 ? ', and ' + REF.name + '’s ' + REF.feePct + '% of compute revenue (' + musd(y1.partnerFee) + ' a year).' : '.'));
+  notes.push('The return is the project IRR on monthly cash over the ' + term + '-month term, annualised, before tax and without debt. No site rent, purchase or host share is in the case.');
+  return { ok: true, basis: 'partner', chipset: { key: chip.key, name: chip.name }, gpus: main.sizing.gpus, itKw: main.sizing.itKw, capexUsd: main.totals.capital, termMonths: term,
+    irrPct: main.returns.projectIrrPct, irrBasis: 'project IRR over ' + term + ' months on ' + REF.name + '’s stated figures' + (here ? ', electricity at this site’s rate' : ', utility as stated'),
+    pricePerGpuHour: Math.round(price * 10000) / 10000, priceBasis: 'partner ref', paybackMonths: main.returns.paybackMonths,
+    proforma: { partner: REF.name, verified: false, reference: { capexUsdPerMw: REF.capexUsdPerMw, revenueUsdPerMwYear: REF.revenueUsdPerMwYear, utilityUsdPerMwYear: REF.utilityUsdPerMwYear, feePct: REF.feePct },
+      capexUsd: main.totals.capital, revenuePerYear: y1.revenue, partnerFeePerYear: y1.partnerFee, utilityPerYear: y1.power, utilityBasis: here ? 'site' : 'stated', kwhPerYear: Math.round(kwhYear * units),
+      otherOperatingPerYear: y1.opex, ebitdaPerYear: y1.ebitda, irrWithoutFeePct: main.returns.irrWithoutFeePct,
+      asStated: stated ? { utilityPerYear: sy.power, electricityPerKwh: Math.round(statedElec * 10000) / 10000, ebitdaPerYear: sy.ebitda, irrPct: stated.returns.projectIrrPct, paybackMonths: stated.returns.paybackMonths } : null },
+    notes: notes };
+}
 function computeEconomics(m, units, cfg, site) {
+  var rate = rateOf(site), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS, partner = cfg.compute.basis === 'partner' && !m.skid, REF = partner ? referenceOf(cfg) : null;
   var chip = CM.chipset(cfg.compute.chipset || CM.DEFAULTS.chipset) || CM.chipset(CM.DEFAULTS.chipset), pue = cfg.compute.pue || CM.DEFAULTS.pue;
-  var elec = num(site && site.powerPricePerKwh), term = cfg.compute.termMonths || COMPUTE_TERM_MONTHS;
-  var key = [m.key, units, chip.key, pue, elec, term, cfg.compute.partnerFeePct, cfg.compute.partnerName].join('|');
+  var key = [m.key, units, chip.key, pue, rate ? rate.perKwh + rate.words : null, term, cfg.compute.partnerFeePct, cfg.compute.partnerName, REF ? JSON.stringify(REF) : ''].join('|');
   if (econCache[key]) return econCache[key];
-  var input = { chipset: chip.key, units: units, contract: { termMonths: term, partner: cfg.compute.partnerFeePct != null ? { name: cfg.compute.partnerName || 'the offtake partner', feePct: cfg.compute.partnerFeePct } : false }, site: { route: 'own' }, operating: {} };
-  if (cfg.compute.pue) input.operating.pue = cfg.compute.pue;
-  if (elec != null && elec > 0) input.operating.electricity = elec;
-  if (!m.skid) input.unit = unitFor(m, chip, pue);
-  var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
-  if (!out || out.ok === false) return { ok: false, reason: 'The compute engine could not price this unit' };
-  var e = D.economicsFromCase(out, input, null), at = e.irrAt, notes = [];
-  notes.push(m.skid ? 'The 75 kW unit is the Omega-Core skid at its recorded system cost.' : 'Capital is the engine’s chipset-scaled midpoint for ' + fmt(e.gpus) + ' ' + chip.name + ' GPUs, an estimate, not a quote.');
-  notes.push(at ? 'Priced at the chip’s public ' + at.basis + ' reference ($' + at.price + ' a GPU-hour): no contract price is set, so this is a screening figure.' : 'The chip has no public reference price, so no return is shown until a contract price is set.');
-  notes.push('No site rent, purchase or host share is in the case' + (cfg.compute.partnerFeePct != null ? '; the offtake partner’s ' + cfg.compute.partnerFeePct + '% fee is.' : ', and no partner fee.'));
-  var res = { ok: true, chipset: { key: chip.key, name: chip.name }, gpus: e.gpus, itKw: e.computeKw, capexUsd: e.capexUsd, termMonths: term,
-    irrPct: at ? at.pct : null, irrBasis: at ? 'project IRR at the public ' + at.basis + ' reference, $' + at.price + ' a GPU-hour' : null, pricePerGpuHour: at ? at.price : null, priceBasis: at ? at.basis : null,
-    paybackMonths: at ? at.paybackMonths : null, notes: notes };
+  var res;
+  if (partner) res = partnerCase(m, units, cfg, REF, rate, term);
+  else {
+    var input = { chipset: chip.key, units: units, contract: { termMonths: term, partner: cfg.compute.partnerFeePct != null ? { name: cfg.compute.partnerName || 'the offtake partner', feePct: cfg.compute.partnerFeePct } : false }, site: { route: 'own' }, operating: {} };
+    if (cfg.compute.pue) input.operating.pue = cfg.compute.pue;
+    if (rate) input.operating.electricity = rate.perKwh;
+    if (!m.skid) input.unit = unitFor(m, chip, pue);
+    var out; try { out = CC.contractCase(input, {}); } catch (e) { out = null; }
+    if (!out || out.ok === false) return { ok: false, reason: 'The compute engine could not price this unit' };
+    var e = D.economicsFromCase(out, input, null), at = e.irrAt, notes = [];
+    notes.push(m.skid ? 'The 75 kW unit is the Omega-Core skid at its recorded system cost.' : 'Capital is the engine’s chipset-scaled midpoint for ' + fmt(e.gpus) + ' ' + chip.name + ' GPUs, an estimate, not a quote.');
+    notes.push(at ? 'Priced at the chip’s public ' + at.basis + ' reference ($' + at.price + ' a GPU-hour): no contract price is set, so this is a screening figure.' : 'The chip has no public reference price, so no return is shown until a contract price is set.');
+    notes.push(rate ? 'Electricity: ' + rate.words + '.' : 'Electricity is the engine’s default ($' + CM.DEFAULTS.electricity + ' a kWh): no ZIP, state or power price is on file for this site.');
+    notes.push('The return is the project IRR on monthly cash over the ' + term + '-month term, annualised, before tax and without debt.');
+    notes.push('No site rent, purchase or host share is in the case' + (cfg.compute.partnerFeePct != null ? '; the offtake partner’s ' + cfg.compute.partnerFeePct + '% fee is.' : ', and no partner fee.'));
+    res = { ok: true, basis: 'spot', chipset: { key: chip.key, name: chip.name }, gpus: e.gpus, itKw: e.computeKw, capexUsd: e.capexUsd, termMonths: term,
+      irrPct: at ? at.pct : null, irrBasis: at ? 'project IRR at the public ' + at.basis + ' reference, $' + at.price + ' a GPU-hour' : null, pricePerGpuHour: at ? at.price : null, priceBasis: at ? at.basis : null,
+      paybackMonths: at ? at.paybackMonths : null, notes: notes };
+  }
+  if (res.ok) res.electricity = rate ? { perKwh: rate.perKwh, source: rate.source, utility: rate.utility } : { perKwh: null, source: 'default', utility: null };
   if (Object.keys(econCache).length > 400) econCache = {};   /* a site's own power price is in the key */
   econCache[key] = res;
   return res;
 }
 function computeOf(power, cfg, site) {
   var pue = cfg.compute.pue || CM.DEFAULTS.pue, kw = power.availableKw;
-  var shelf = MODULARS.map(function (m) { var need = Math.round(m.itKw * pue); return { key: m.key, label: m.label, itKw: m.itKw, meterKw: need, fits: kw != null && kw >= need, units: kw != null ? Math.floor(kw / need + 1e-9) : 0 }; });
+  var shelf = MODULARS.map(function (m) { var need = Math.round(m.itKw * pue), k = klassOf(m.itKw), n = kw != null ? Math.floor(kw / need + 1e-9) : 0; return { key: m.key, label: m.label, klass: k.key, klassLabel: k.label, itKw: m.itKw, meterKw: need, coolingKw: need - m.itKw, fits: kw != null && kw >= need, units: m.repeats ? n : Math.min(n, 1) }; });
   var out = { pue: pue, shelf: shelf, chosen: null, fits: false, basis: power.basis, words: null };
   if (kw == null) { out.words = 'No power figure to size compute on'; return out; }
   var pick = null; shelf.forEach(function (s) { if (s.fits) pick = s; });
   if (!pick) { out.words = fmt(kw) + ' kW does not carry the smallest unit (' + shelf[0].label + ' of IT needs ' + fmt(shelf[0].meterKw) + ' kW at the meter)'; out.needKw = shelf[0].meterKw; return out; }
   var m = MODULARS.filter(function (x) { return x.key === pick.key; })[0], units = pick.units;
   out.fits = true;
-  out.chosen = { key: pick.key, label: pick.label, units: units, itKw: pick.itKw * units, meterKw: pick.meterKw * units, leftKw: r2(kw - pick.meterKw * units) };
-  out.words = (units > 1 ? units + ' × ' : '') + pick.label + ' of IT (' + fmt(out.chosen.meterKw) + ' kW at the meter at PUE ' + pue + ') on ' + fmt(kw) + ' kW' + (power.basis === 'ceiling' ? ', a ceiling' : ' free');
+  out.chosen = { key: pick.key, label: pick.label, klass: pick.klass, klassLabel: pick.klassLabel, units: units, itKw: pick.itKw * units, meterKw: pick.meterKw * units, coolingKw: pick.coolingKw * units, leftKw: r2(kw - pick.meterKw * units) };
+  out.words = (units > 1 ? units + ' × ' : '') + pick.label + ' of IT (' + fmt(out.chosen.meterKw) + ' kW at the meter at PUE ' + pue + ') on ' + fmt(kw) + ' kW' + (power.basis === 'ceiling' ? ', a ceiling' : power.basis === 'upgrade' ? ' after the upgrade' : ' free');
+  /* the chiller, in power and in space */
+  out.cooling = { kw: out.chosen.coolingKw, words: fmt(out.chosen.coolingKw) + ' kW of the ' + fmt(out.chosen.meterKw) + ' kW at the meter is the chiller, pumps and losses (PUE ' + pue + '); ' + fmt(out.chosen.itKw) + ' kW reaches the IT' };
+  out.space = { pods: units, words: (units > 1 ? units + ' pods, each with its own chiller' : 'One pod and its chiller') + ' on the site: the pad (the pod, the chiller and the service clearances) is the maker’s figure and is not on file. Confirm it fits before the site is approved' };
   out.economics = computeEconomics(m, units, cfg, site);
   return out;
 }
@@ -244,9 +357,11 @@ function evidenceFor(key, c) {
     if (p.availableKw != null) return hint(c.compute.words);
     return hint(p.words);
   }
+  if (key === 'power-interconnection' && c.upgrade && c.upgrade.status === 'requested') return scr('A utility-side upgrade to ' + fmt(c.upgrade.targetKw) + ' kW is requested' + (c.upgrade.askedBy ? ' through ' + c.upgrade.askedBy : '') + '; the utility’s answer is not on file', 'Site record');
   if (key === 'power-interconnection' && p.hosting) return scr('The utility publishes ' + fmt(p.hosting.loadKw) + ' kW of load hosting' + (p.hosting.circuit ? ' on circuit ' + p.hosting.circuit : '') + '; no application is on file', p.hosting.source || 'Utility hosting capacity');
   if (key === 'power-net' && p.transformerKva) return scr(fmt(p.transformerKva) + ' kVA × ' + CONTINUOUS + ' continuous = ' + fmt(p.transformerKva * CONTINUOUS) + ' kW, before the site’s own load', 'Site record');
   if (key === 'power-evidence' && p.substation && p.substation.name) return scr('Nearest substation: ' + p.substation.name + (p.substation.kv ? ', ' + p.substation.kv + ' kV' : '') + (p.substation.distanceMi != null ? ', ' + p.substation.distanceMi + ' mi' : '') + (p.utility ? ' · ' + p.utility : '') + '; a will-serve letter is the evidence', 'Grid Atlas');
+  if (key === 'physical-area' && num(pa.acres) == null && c.compute.fits && c.compute.space) return hint(c.compute.space.words);
   if (key === 'physical-area' && num(pa.acres) != null) return scr('Parcel of ' + r2(num(pa.acres)) + ' acres on the parcel record; a level pad is not confirmed', 'Parcel record');
   if (f) {
     if (key === 'conn-fiber') { if (f.carriersRead && f.carriers && f.carriers.length) return scr(f.carriers.length + ' carrier' + (f.carriers.length === 1 ? '' : 's') + ' at the address' + (f.symmetric1g === true ? ', 1 Gbps symmetric offered' : f.symmetric1g === false ? ', no 1 Gbps symmetric service read' : ''), 'FCC broadband data'); if (f.carriersNote) return hint('Fiber not read: ' + f.carriersNote + (f.lateralMi != null ? ' · lateral estimate ' + f.lateralMi + ' mi' : '')); }
@@ -277,6 +392,8 @@ function readinessOf(c, marks) {
 /* the verifications that would move the answer most, power first */
 function verificationsOf(c, readiness) {
   var out = c.power.verify.slice(), sc = c.screen || null, pa = c.parcel || null, f = sc && sc.fiber;
+  if (c.upgrade && c.upgrade.status === 'requested') out.unshift({ key: 'upgrade', label: 'Follow the utility-side upgrade request (' + fmt(c.upgrade.targetKw) + ' kW' + (c.upgrade.askedBy ? ', asked for by ' + c.upgrade.askedBy : '') + '): get the utility’s written answer, its cost and its schedule' });
+  if (c.upgrade && c.upgrade.status === 'granted') out.unshift({ key: 'upgrade-record', label: 'The upgrade to ' + fmt(c.upgrade.targetKw) + ' kW is marked granted: record the new service or transformer on the site so every size follows' });
   function open(key) { var hit = null; readiness.sections.forEach(function (s) { s.items.forEach(function (i) { if (i.key === key) hit = i; }); }); return hit && hit.state !== 'done' && hit.state !== 'na'; }
   if (sc && sc.located && sc.located.approximate) out.push({ key: 'address', label: 'Confirm the address: it matched only approximately, so nothing was screened on it' });
   if (open('power-evidence')) out.push({ key: 'will-serve', label: 'Ask the utility for a will-serve letter for the load' + (c.power.utility ? ' (' + c.power.utility + ')' : '') });
@@ -318,14 +435,139 @@ function decisionOf(input, ctx) {
     by: ctx.by || null, at: ctx.now || null, note: note || null };
 }
 
-/* the facts the answer rests on: a change in any of them makes it stale */
-function inputHashOf(site, screen, parcel, cfg) {
-  site = site || {};
-  return hash(JSON.stringify([VERSION, B.VERSION, T.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
-    num(site.availablePowerMw), stateOf(site), num(site.powerPricePerKwh), num(site.termYearsRemaining), screen ? screen.at || null : null, parcel ? parcel.at || null : null, cfg || null]));
+/* ── A UTILITY-SIDE UPGRADE REQUEST (2026-11-09, Tommy: "a way to mark the
+   site that we are requesting a utiltiy side upgrade to support the larger
+   compute offtake. meaning that we are going to have our partner ask for
+   more power"). A mark a person makes: the power asked for at the meter,
+   who is asking, and where it stands (requested, granted, declined). It
+   never changes what is sized today: the free power stays the fact on
+   file, and the compute the upgrade WOULD carry rides beside it, said as
+   such. Granted is still a mark: the new service is recorded on the site,
+   and the sizes follow from that fact. ── */
+var UPGRADE_STATES = ['requested', 'granted', 'declined', 'withdrawn'];
+function fail(status, message) { var e = new Error(message); e.status = status; return e; }
+/* cur: the stored record or null. input: { status?, targetKw?, unit?, askedBy?, note? }. ctx: { by, now, limitKw, partner, pue } */
+function upgradeOf(cur, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : null;
+  var status = String(input.status || 'requested').toLowerCase().trim();
+  if (UPGRADE_STATES.indexOf(status) < 0) throw fail(400, 'An upgrade request is requested, granted, declined or withdrawn');
+  var live = cur && cur.status !== 'withdrawn' ? cur : null, target = null, unit = null;
+  if (status !== 'requested' && !live) throw fail(409, 'There is no upgrade request on this site to mark ' + status);
+  if (status === 'requested') {
+    if (input.unit != null && input.unit !== '') {
+      var m = MODULARS.filter(function (x) { return x.key === String(input.unit); })[0];
+      if (!m) throw fail(400, 'That is not a unit on the compute shelf');
+      target = Math.round(m.itKw * (ctx.pue || CM.DEFAULTS.pue)); unit = m.key;
+    } else target = num(input.targetKw);
+    if (target == null && live) { target = live.targetKw; unit = live.unit || null; }
+    if (!(target >= 1 && target <= 200000)) throw fail(400, 'Say how much power is being asked for at the meter (kW), or pick the unit it is for');
+    if (ctx.limitKw != null && target <= ctx.limitKw) throw fail(400, 'The site already has ' + fmt(ctx.limitKw) + ' kW on file: an upgrade asks for more than that');
+  } else { target = live.targetKw; unit = live.unit || null; }
+  var note = clean(input.note, 500), askedBy = clean(input.askedBy, 80) || (live && live.askedBy) || clean(ctx.partner, 80) || null;
+  var history = (cur && Array.isArray(cur.history) ? cur.history : []).concat([{ status: status, targetKw: target, by: ctx.by || null, at: ctx.now || null, note: note }]).slice(-20);
+  return { status: status, targetKw: target, unit: unit, askedBy: askedBy, note: note || (status === 'requested' && live ? live.note || null : null),
+    requestedBy: status === 'requested' && !live ? ctx.by || null : (live && live.requestedBy) || ctx.by || null, requestedAt: status === 'requested' && !live ? ctx.now || null : (live && live.requestedAt) || ctx.now || null,
+    by: ctx.by || null, at: ctx.now || null, history: history };
+}
+/* what the answer says of it: the request, and the compute it would carry */
+function upgradeView(u, power, cfg, site) {
+  if (!u || typeof u !== 'object' || u.status === 'withdrawn' || !(num(u.targetKw) > 0)) return null;
+  var target = num(u.targetKw), from = power.limitKw, add = from != null ? Math.max(0, r2(target - from)) : null;
+  var c = computeOf({ availableKw: target, basis: 'upgrade' }, cfg, site), e = c.economics || {};
+  var ask = 'a utility-side upgrade to ' + fmt(target) + ' kW' + (add != null ? ' (' + fmt(add) + ' kW more than the ' + fmt(from) + ' kW limit on file)' : ''), who = u.askedBy ? ', asked for by ' + u.askedBy : '';
+  var words = u.status === 'requested' ? 'Requested: ' + ask + who + '. Nothing is sized on it until the utility grants it.'
+    : u.status === 'granted' ? 'Granted: ' + ask + who + '. Record the new service on the site so every size follows from it.'
+    : 'Declined: ' + ask + who + '. The site stays on the power it has.';
+  return { status: u.status, targetKw: target, fromKw: from, addKw: add, unit: u.unit || null, askedBy: u.askedBy || null, note: u.note || null, requestedBy: u.requestedBy || null, requestedAt: u.requestedAt || null, by: u.by || null, at: u.at || null, words: words,
+    compute: c.fits && c.chosen ? { label: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label, klass: c.chosen.klass, klassLabel: c.chosen.klassLabel, meterKw: c.chosen.meterKw, words: c.words,
+      irrPct: e.ok ? e.irrPct : null, priceBasis: e.ok ? e.priceBasis : null, capexUsd: e.ok ? e.capexUsd : null } : null };
 }
 
-/* site: the flat record (site-bridge flatten). ctx: { screen, parcel, marks, config, now } */
+/* ── THE FUNDING LIST (2026-11-09, Tommy: "we dont need to send to the
+   marketplace we are funding these sites so we essentially need to send
+   this to a list that we can approve for funding or not and it needs to be
+   screened first then approved by our finance committe"). A workspace that
+   funds its own sites names its committee in its settings
+   (portfolioAssessment.funding); there the finance marketplace stands down
+   and a site goes: screened → submitted → approved or declined by a member
+   of the committee. Pure: the door reads the record and the settings and
+   enforces who may do what. ── */
+var FUND_STATES = ['submitted', 'approved', 'declined', 'withdrawn'];
+function committeeMember(cfg, email) {
+  var f = cfg && cfg.funding, e = String(email || '').toLowerCase().trim();
+  if (!f || !e) return null;
+  return f.members.filter(function (m) { return m.email === e; })[0] || null;
+}
+function committeeWords(cfg) { var f = cfg && cfg.funding; return f ? f.name + ' (' + f.members.map(function (m) { return m.name; }).join(', ') + ')' : 'the finance committee'; }
+/* what is asked for: the uses named, each with its size, capital and screening return off the assessment */
+function fundingRequest(result, usesIn) {
+  var keys = USES.map(function (u) { return u.key; }), raw = Array.isArray(usesIn) ? usesIn : (usesIn == null || usesIn === '' ? [] : String(usesIn).split(',')), uses = [];
+  raw.forEach(function (u) { u = String(u).trim().toLowerCase(); if (!u) return; if (keys.indexOf(u) < 0) throw fail(400, '"' + u + '" is not compute, bess or supercharger'); if (uses.indexOf(u) < 0) uses.push(u); });
+  if (!uses.length) throw fail(400, 'Say what the funding is for: compute, a battery, fast charging, or more than one');
+  uses.sort(function (a, b) { return keys.indexOf(a) - keys.indexOf(b); });
+  var r = result || {}, c = r.compute || {}, ce = c.economics || {}, b = r.bess || {}, s = r.supercharger || {}, lines = [];
+  uses.forEach(function (u) {
+    if (u === 'compute') { if (!(c.fits && c.chosen && ce.ok)) throw fail(400, 'Compute does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Compute', size: (c.chosen.units > 1 ? c.chosen.units + ' × ' : '') + c.chosen.label + ' ' + (c.chosen.klassLabel || ''), capexUsd: ce.capexUsd, irrPct: ce.irrPct, irrBasis: ce.irrBasis || null }); }
+    if (u === 'bess') { if (!b.ok) throw fail(400, 'A battery does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Battery storage', size: fmt(b.sizing.kw) + ' kW / ' + fmt(b.sizing.kwh) + ' kWh', capexUsd: b.capex.total, irrPct: b.returns.irrPct, irrBasis: b.returns.irrBasis || null }); }
+    if (u === 'supercharger') { if (!s.ok) throw fail(400, 'Fast charging does not fit this site on the power on file, so there is no figure to fund'); lines.push({ use: u, label: 'Fast charging', size: s.sizing.posts + ' posts', capexUsd: s.capex.total, irrPct: s.returns.irrPct, irrBasis: s.returns.irrBasis || null }); }
+  });
+  var one = lines.length === 1;
+  return { uses: uses, hybrid: !one, label: lines.map(function (l) { return l.label; }).join(' + '), lines: lines, amountUsd: one ? lines[0].capexUsd : null,
+    words: one ? null : 'Each use is sized on the whole free capacity by itself, so a hybrid has no single amount: the committee sees each line.' };
+}
+/* action: submit | decide | withdraw. ctx: { by, now, config, result, screened, canEdit } */
+function fundingChange(cur, action, input, ctx) {
+  input = input || {}; ctx = ctx || {}; cur = cur && typeof cur === 'object' ? cur : null;
+  var cfg = ctx.config, f = cfg && cfg.funding, status = cur ? cur.status : null, note = clean(input.note, 500);
+  if (!f) throw fail(409, 'This workspace has no funding list: it sends a site’s capital request to the finance marketplace');
+  function hist(st) { return (cur && Array.isArray(cur.history) ? cur.history : []).concat([{ status: st, by: ctx.by || null, at: ctx.now || null, note: note }]).slice(-30); }
+  if (action === 'submit') {
+    if (ctx.canEdit === false) throw fail(403, 'Your role in this workspace can read the funding list but not submit to it');
+    if (!ctx.result) throw fail(409, 'Run the assessment first: there is nothing to put in front of ' + f.name.toLowerCase());
+    if (!ctx.screened) throw fail(409, 'Screen the site first: the Grid Atlas and parcel screens have not finished on it, and ' + f.name.toLowerCase() + ' sees screened sites only');
+    if (status === 'approved') throw fail(409, 'Funding is already approved on this site; ' + f.name.toLowerCase() + ' changes its own decision');
+    var req = fundingRequest(ctx.result, input.uses);
+    return { status: 'submitted', uses: req.uses, hybrid: req.hybrid, label: req.label, lines: req.lines, amountUsd: req.amountUsd, words: req.words, note: note,
+      submittedBy: ctx.by || null, submittedAt: ctx.now || null, decision: null, history: hist('submitted') };
+  }
+  if (action === 'withdraw') {
+    if (ctx.canEdit === false) throw fail(403, 'Your role in this workspace can read the funding list but not change it');
+    if (status !== 'submitted') throw fail(409, status === 'approved' || status === 'declined' ? 'The committee has decided on this site; only ' + committeeWords(cfg) + ' changes that' : 'This site is not on the funding list');
+    return Object.assign({}, cur, { status: 'withdrawn', decision: null, history: hist('withdrawn') });
+  }
+  if (action === 'decide') {
+    var member = committeeMember(cfg, ctx.by);
+    if (!member) throw fail(403, 'Funding is decided by ' + committeeWords(cfg) + '. You can submit a site; you cannot approve or decline it');
+    var d = String(input.decision || '').toLowerCase().trim();
+    if (d !== 'approved' && d !== 'declined') throw fail(400, 'A decision is approved or declined');
+    if (status !== 'submitted' && status !== 'approved' && status !== 'declined') throw fail(409, 'This site has not been submitted for funding');
+    if (d === 'declined' && !(note && note.length >= 3)) throw fail(400, 'Say why it is declined: the person who submitted it reads the reason');
+    return Object.assign({}, cur, { status: d, decision: { status: d, by: ctx.by || null, name: member.name, at: ctx.now || null, note: note }, history: hist(d) });
+  }
+  throw fail(400, 'Unknown funding action');
+}
+/* the row's and the card's view of it */
+function fundingView(fd) {
+  if (!fd || typeof fd !== 'object' || FUND_STATES.indexOf(fd.status) < 0 || fd.status === 'withdrawn') return null;
+  var d = fd.decision && typeof fd.decision === 'object' ? fd.decision : null;
+  return { status: fd.status, uses: fd.uses || [], label: fd.label || null, lines: Array.isArray(fd.lines) ? fd.lines : [], amountUsd: fd.amountUsd == null ? null : fd.amountUsd, words: fd.words || null, note: fd.note || null,
+    submittedBy: fd.submittedBy || null, submittedAt: fd.submittedAt || null, decision: d ? { status: d.status, by: d.by || null, name: d.name || null, at: d.at || null, note: d.note || null } : null };
+}
+/* what the pages may know of the list: the committee's names, never an address */
+function fundingInfo(cfg, email) {
+  var f = cfg && cfg.funding;
+  return f ? { mode: f.mode, name: f.name, members: f.members.map(function (m) { return m.name; }), canDecide: !!committeeMember(cfg, email) } : null;
+}
+
+/* the facts the answer rests on: a change in any of them makes it stale */
+function inputHashOf(site, screen, parcel, cfg, upgrade) {
+  site = site || {};
+  var up = upgrade && typeof upgrade === 'object' && upgrade.status !== 'withdrawn' ? [upgrade.status, num(upgrade.targetKw), upgrade.askedBy || null] : null;
+  return hash(JSON.stringify([VERSION, B.VERSION, T.VERSION, num(site.transformerKva), num(site.serviceCapacityKw), num(site.existingPeakKw), num(site.reportedPeakKw), site.peakUnresolved === true,
+    num(site.availablePowerMw), stateOf(site), zipOf(site), num(site.powerPricePerKwh), num(site.termYearsRemaining), screen ? screen.at || null : null, parcel ? parcel.at || null : null, cfg || null, up]));
+}
+
+/* site: the flat record (site-bridge flatten). ctx: { screen, parcel, marks, config, now, upgrade } */
 function assess(site, ctx) {
   site = site || {}; ctx = ctx || {};
   var cfg = ctx.config || configOf(null), screen = ctx.screen || null, parcel = ctx.parcel || null, st = stateOf(site);
@@ -333,11 +575,12 @@ function assess(site, ctx) {
   var bess = power.availableKw > 0 ? B.bessCase({ powerKw: power.availableKw, state: st, utility: power.utility || site.utility || null, assumptions: cfg.bess }) : { ok: false, reason: power.availableKw === 0 ? 'Nothing is free on the limit and peak on file' : 'No power figure to size a battery on' };
   var year = ctx.now ? Number(String(ctx.now).slice(0, 4)) + 1 : null;
   var sup = power.availableKw != null ? T.superchargerCase({ state: st, availableKw: power.availableKw, startYear: year, assumptions: cfg.supercharger.assumptions, sizing: cfg.supercharger.sizing }) : { ok: false, reason: 'No power figure to size posts on' };
-  var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel };
+  var upgrade = upgradeView(ctx.upgrade, power, cfg, site);
+  var c = { site: site, power: power, compute: compute, screen: screen, parcel: parcel, upgrade: upgrade };
   var readiness = readinessOf(c, ctx.marks), verify = verificationsOf(c, readiness);
   var grade = { A: 'Sized on a limit and a peak on file', B: 'Sized on a figure entered by hand', C: 'Sized on a ceiling: the site’s peak is not on file', D: 'Not sized: no power figure on file' }[power.grade];
-  return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg),
-    power: power, compute: compute, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
+  return { v: VERSION, at: ctx.now || null, inputHash: inputHashOf(site, screen, parcel, cfg, ctx.upgrade),
+    power: power, compute: compute, upgrade: upgrade, bess: bess, supercharger: sup, recommend: recommendOf(compute, bess, sup), readiness: readiness, verify: verify,
     confidence: { grade: power.grade, words: grade, screened: !!(screen && screen.complete), parcel: !!(parcel && parcel.ok) },
     note: 'Compute, the battery and fast charging are each sized on the whole free capacity by itself: they are alternatives, not a stack.' };
 }
@@ -350,10 +593,12 @@ function listView(a, site, ctx) {
   /* only what the row and the card draw: the notes, the streams, the loan, the shelf and the limits ride on the one-site view */
   if (r.bess) { delete r.bess.projections; delete r.bess.notes; delete r.bess.revenue; delete r.bess.debt; delete r.bess.energyAtEnd; }
   if (r.supercharger) { delete r.supercharger.projections; delete r.supercharger.notes; }
-  if (r.compute) { delete r.compute.shelf; if (r.compute.economics) delete r.compute.economics.notes; }
+  if (r.compute) { r.compute.shelf = (r.compute.shelf || []).map(function (u) { return { key: u.key, label: u.label, klassLabel: u.klassLabel, meterKw: u.meterKw, fits: u.fits }; }); if (r.compute.economics) delete r.compute.economics.notes; if (r.compute.space) delete r.compute.space; }
+  if (r.upgrade && r.upgrade.compute) delete r.upgrade.compute.words;
   if (r.power) { delete r.power.limits; delete r.power.verify; }
   if (r.readiness) r.readiness.sections = r.readiness.sections.map(function (s) { return { key: s.key, label: s.label, done: s.done, of: s.of }; });
-  r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg);
+  r.stale = r.inputHash !== inputHashOf(site, a.screen || null, a.parcel || null, cfg, a.upgrade || null);
+  r.funding = fundingView(a.funding);
   r.decision = a.decision && a.decision.status === 'approved' ? { status: 'approved', uses: a.decision.uses || [], label: a.decision.label || null, by: a.decision.by || null, at: a.decision.at || null, note: a.decision.note || null } : null;
   r.screenAt = a.screen && a.screen.at || null; r.parcelAt = a.parcel && a.parcel.at || null; r.by = a.by || null;
   r.located = a.screen && a.screen.located ? { precision: a.screen.located.precision || null, approximate: a.screen.located.approximate === true } : null;
@@ -362,5 +607,7 @@ function listView(a, site, ctx) {
 }
 
 module.exports = { VERSION: VERSION, CONFIG_KEY: CONFIG_KEY, CONTINUOUS: CONTINUOUS, MODULARS: MODULARS, CHECKLIST: CHECKLIST, ITEM_KEYS: ITEM_KEYS, CHECK_STATES: CHECK_STATES,
-  USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf,
+  USES: USES, PREDEV_STATUS: PREDEV_STATUS, recommendOf: recommendOf, decisionOf: decisionOf, klassOf: klassOf, rateOf: rateOf, referenceOf: referenceOf,
+  UPGRADE_STATES: UPGRADE_STATES, upgradeOf: upgradeOf, upgradeView: upgradeView,
+  FUND_STATES: FUND_STATES, committeeMember: committeeMember, fundingRequest: fundingRequest, fundingChange: fundingChange, fundingView: fundingView, fundingInfo: fundingInfo,
   configOf: configOf, powerOf: powerOf, computeOf: computeOf, readinessOf: readinessOf, verificationsOf: verificationsOf, inputHashOf: inputHashOf, assess: assess, listView: listView, stateOf: stateOf };
