@@ -263,19 +263,20 @@ ok('★ the notes, the billing and the product CSV are NOT served', ignored(CC +
 ok('the files whitelabel-setup.html fetches and the icons the manifests link ARE served',
    !ignored(CC + 'tenant.json') && !ignored(CC + 'products.json') && !ignored(CC + 'icons/customer-192.png'));
 /* a workspace's diligence lists carry an offtake partner's terms
-   (scripts/enable-portfolio-diligence.js is their only reader) */
+   (scripts/enable-portfolio-diligence.js is their only reader). The one
+   thing the folder serves is the logo pack the white label's markUrl
+   points at (2026-11-09, as cleancell serves its icons): logos carry no
+   terms, and any OTHER file appearing there is still a decision. */
 var SC = 'tenants/solelacapital/';
-ok('★ a workspace\'s diligence seed is NOT served', ignored(SC + 'portfolio-diligence.json') && ignored('tenants/anyone/portfolio-diligence.json'));
-/* its white label (2026-11-09): the block the staging script reads is not
-   served either (the site reads it off the record); what IS served is the
-   brand folder, the workspace's own one-colour logo artwork, because the
-   mark on its pages is a URL. Nothing else: a new file there is a decision. */
 var scServed = files.filter(function (f) { return f.indexOf(SC) === 0; });
-ok('★ a workspace\'s white-label seed is NOT served, and its folder serves its logo artwork and nothing else', ignored(SC + 'white-label.json') && ignored('tenants/anyone/white-label.json') &&
-   scServed.length > 0 && scServed.every(function (f) { return /^tenants\/solelacapital\/brand\/solela-(logo-horizontal|logo-stacked|monogram)-(white|black)\.svg$/.test(f); }), scServed);
-/* the artwork is paths and nothing that runs or fetches: an SVG is a document a browser will open */
+ok('★ a workspace\'s diligence seed is NOT served, and its folder serves only the logo pack', ignored(SC + 'portfolio-diligence.json') && ignored('tenants/anyone/portfolio-diligence.json') &&
+   scServed.length > 0 && scServed.every(function (f) { return /^tenants\/solelacapital\/logos\/[\w-]+\.svg$/.test(f); }), scServed);
+/* its white-label seed (2026-11-09): the block scripts/set-white-label.js
+   stages is not served either; the site reads the brand off the record */
+ok('★ a workspace\'s white-label seed is NOT served', ignored(SC + 'white-label.json') && ignored('tenants/anyone/white-label.json'));
+/* the logo pack is paths and nothing that runs or fetches: an SVG is a document a browser will open */
 var svgBad = scServed.filter(function (f) { return /<script|<foreignObject|href=|\son[a-z]+=|<image|<use|url\(/i.test(fs.readFileSync(path.join(ROOT, f), 'utf8')); });
-ok('★ the served logo artwork carries no script, link or external reference', !svgBad.length, svgBad);
+ok('★ the served logo pack carries no script, link or external reference', !svgBad.length, svgBad);
 var ccServed = files.filter(function (f) { return f.indexOf(CC) === 0; });
 ok('the served folder is tenant.json, products.json and icons/, nothing else (a new file there is a decision)',
    ccServed.every(function (f) { return f === CC + 'tenant.json' || f === CC + 'products.json' || /^tenants\/cleancell\/icons\/[\w-]+\.svg$/.test(f); }), ccServed);

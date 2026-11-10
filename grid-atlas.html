@@ -2681,5 +2681,35 @@ window.addEventListener("resize",function(){ map.invalidateSize(); });
 <script src="/omega-fiber-atlas.js"></script>
 <script src="/omega-published-fiber.js"></script>
 <script src="/omega-demo.js" defer></script>
+<script>
+/* © 2025–2026 ClearSky Energy Solutions LLC. Proprietary and Confidential.
+   The white label on a page with NO tenant runtime (this page starts no
+   Firebase, by design — see the fiber note above): the world-readable
+   tenant_public record for this HOSTNAME says what the platform is called
+   here (api/_lib/whitelabel.js is the one allowlist that fills it). On an
+   unregistered host, or any failure, the page keeps our name. Paint only:
+   nothing about access changes. */
+(function () {
+  try {
+    fetch('https://firestore.googleapis.com/v1/projects/clearsky-portal/databases/(default)/documents/tenant_public/' + encodeURIComponent(location.hostname.toLowerCase()))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        var wl = d && d.fields && d.fields.whiteLabel && d.fields.whiteLabel.mapValue && d.fields.whiteLabel.mapValue.fields;
+        if (!wl) return;
+        if (wl.enabled && wl.enabled.booleanValue === false) return;
+        var name = wl.platformName && wl.platformName.stringValue;
+        if (!name) return;
+        var t = document.querySelector('.tb-logo-txt'); if (t) t.textContent = name;
+        var img = document.querySelector('.tb-omega');
+        if (img) {
+          var mk = wl.markUrl && wl.markUrl.stringValue;
+          if (mk) { img.src = mk; img.alt = name; } else { img.style.display = 'none'; }
+        }
+        document.title = document.title.replace('ClearSky-OMEGA', name);
+        var port = document.querySelector('.tb-portal'); if (port) port.textContent = '';
+      })['catch'](function () {});
+  } catch (e) {}
+})();
+</script>
 </body>
 </html>

@@ -916,15 +916,19 @@ tenant hostname is worth doing before launch.
 Tommy: "we are making a solelacapital white label version". One codebase,
 the workspace's own name on it: no storefront, no product list, no embed.
 
-1. **The brand, in the tenant's folder.** `tenants/solelacapital/brand/`
-   holds the logo kit as it was supplied (horizontal, stacked and monogram,
+1. **The brand, in the tenant's folder.** `tenants/solelacapital/logos/`
+   holds the logo pack as it was supplied (horizontal, stacked and monogram,
    each in white and black; one colour, vector). `white-label.json` beside
    it (kept off the site by `.vercelignore`: only the staging script reads
-   it; `tdiscreet.js` holds that the folder serves the logo artwork and
-   nothing else) is the block: the platform name and short name, the mark for dark
-   chrome (the white monogram: it also becomes the tab icon), the accent
-   (their brass, `#C4A572`) and the ink (`#08090A`), the support address,
-   and `attribution: 'powered-by'`.
+   it; `tdiscreet.js` holds that the folder serves the logo pack and
+   nothing else) is the rest of the block: the mark for dark chrome (the
+   white monogram: it also becomes the tab icon), the accent (their brass,
+   `#C4A572`), the ink (`#08090A`) and the support address. It does NOT
+   carry `attribution`: whether ClearSky's name shows is decided in one
+   place, the `whiteLabel` block of `portfolio-diligence.json` (`'none'`
+   for Solela, 2026-11-09), which `enable-portfolio-diligence.js` stages;
+   `docs/SOLELA-WHITELABEL.md` is that runbook, and this script is its
+   step 3 (the mark) without the console.
 2. **Stage it**: `node scripts/set-white-label.js --org <org>` is an
    offline dry run; `--apply --confirm-org <org>` writes
    `omega_orgs/{org}.whiteLabel` (a key the record already holds stands

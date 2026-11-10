@@ -238,7 +238,10 @@
             var note = doc.entities[c];
             if (note.type === 'callout' && note.target && G.pointInPoly(note.target.x, note.target.y, ring) && note.text) name = note.text;
           }
-          prisms.push({ id: e.id, kind: 'building', label: name, ring: ring, h: /building/i.test(name) ? 18 : 12, color: '#C4B49A' });
+          /* a building found on the lot stands at the height its source gives */
+          var bh = e.building && +e.building.heightFt > 0 ? +e.building.heightFt : 0;
+          if (e.building && name === 'Obstruction') name = 'Building' + (e.building.use ? ' \u00b7 ' + e.building.use : '');
+          prisms.push({ id: e.id, kind: 'building', label: name, ring: ring, h: bh || (/building/i.test(name) ? 18 : 12), color: '#C4B49A', source: e.building ? e.building.source : null });
           growRing(ring);
         } else if ((e.type === 'polygon' || e.type === 'rect') && ring && e.layer === 'site') {
           lines.push({ id: e.id, kind: 'parcel', pts: ring.concat([ring[0]]), color: '#1F4E79' });
@@ -2383,7 +2386,8 @@
           var t = l2 < 1e-9 ? 0 : clamp(((center.x - a.x) * dx + (center.y - a.y) * dy) / l2, 0, 1);
           var x = a.x + t * dx, y = a.y + t * dy;
           var d = Math.sqrt((x - center.x) * (x - center.x) + (y - center.y) * (y - center.y));
-          if (d < bestD) { bestD = d; bestPt = { x: x, y: y }; bestKv = feats[i].attributes && +feats[i].attributes.VOLTAGE || 0; bestEnds = feats[i].attributes; }
+          /* HIFLD writes an unknown voltage as -999999: no figure, never "-999999 kV" */
+          if (d < bestD) { bestD = d; bestPt = { x: x, y: y }; bestKv = feats[i].attributes && +feats[i].attributes.VOLTAGE; if (!(bestKv > 0)) bestKv = 0; bestEnds = feats[i].attributes; }
         }
       }
       if (bestPt && bestD < 3 * 5280) {
